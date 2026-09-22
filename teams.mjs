@@ -69,7 +69,7 @@ export function parsePlan(text, { seats, lead, max = DEFAULTS.max, fallback = {}
     if (pieces.length >= max) break;
   }
   if (pieces.length === 1) return { pieces, why: String(j.why || '').slice(0, 200), solo: true }; // the lead named one desk: that desk does it, the lead writes it up
-  if (!pieces.length) return { pieces: [{ agent: lead.id, title: String(fallback.title || fallback.text || 'The task').slice(0, 90), text: String(fallback.text || '') }], why: '', solo: true };
+  if (!pieces.length) return { pieces: [{ agent: lead.id, title: String(fallback.title || fallback.text || 'La tarea').slice(0, 90), text: String(fallback.text || '') }], why: '', solo: true };
   return { pieces, why: String(j.why || '').slice(0, 200), solo: false };
 }
 

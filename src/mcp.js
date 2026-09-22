@@ -139,7 +139,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     // the group label — this is what names the dock "CONNECTORS" at every zoom
     const conn = document.createElement('div');
     conn.className = 'connl';
-    conn.innerHTML = `<span class="dot" style="background:${DEPTS[dept].chip}"></span>CONNECTORS`;
+    conn.innerHTML = `<span class="dot" style="background:${DEPTS[dept].chip}"></span>CONECTORES`;
     hud.appendChild(conn);
     docks[dept] = {
       anchor, conn,
@@ -162,15 +162,15 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
   const topconn = document.getElementById('topconn');
   const topImgs = {};
   if (topconn) {
-    topconn.innerHTML = `<span class="tc-lab"><span class="dot"></span>CONNECTED TO</span>`;
+    topconn.innerHTML = `<span class="tc-lab"><span class="dot"></span>CONECTADO A</span>`;
     uniqKeys.forEach((k, i) => {
       const img = document.createElement('img');
       img.src = LOGOS[k].img;
       img.alt = img.title = LOGOS[k].name;
       if (STATUS[k] && STATUS[k] !== 'connected') { // real list: a server that is there but not usable
         img.classList.add('off', 'st-' + STATUS[k]);
-        img.title = LOGOS[k].name + ' — ' + (k === 'chrome' && STATUS[k] === 'pending' ? 'Claude in Chrome extension not paired on this machine — run `claude --chrome` once, then restart the office' // V3.2 (16 Sep)
-          : ({ 'needs-auth': 'needs authentication (run claude, then /mcp)', failed: 'failed to connect', pending: 'connecting…', denied: 'connected · blocked for agents in office.config.json' }[STATUS[k]] || STATUS[k]));
+        img.title = LOGOS[k].name + ' — ' + (k === 'chrome' && STATUS[k] === 'pending' ? 'Extensión Claude in Chrome no vinculada en esta máquina — ejecuta `claude --chrome` una vez, luego reinicia la oficina' // V3.2 (16 Sep)
+          : ({ 'needs-auth': 'necesita autenticación (ejecuta claude, luego /mcp)', failed: 'no se pudo conectar', pending: 'conectando…', denied: 'conectado · bloqueado para los agentes en office.config.json' }[STATUS[k]] || STATUS[k]));
       }
       img.style.setProperty('--d', (0.15 + i * 0.09) + 's'); // staggered pop-in on load
       img.addEventListener('animationend', (e) => { if (e.animationName === 'tcin') img.classList.add('in'); });
@@ -181,7 +181,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     if (LIVE && !uniqKeys.length) { // honest empty state — nothing is wired until the user connects something
       const none = document.createElement('span');
       none.className = 'tc-none';
-      none.textContent = 'nothing yet — connect in claude.ai or run: claude mcp add';
+      none.textContent = 'nada aún — conecta en claude.ai o ejecuta: claude mcp add';
       topconn.appendChild(none);
     }
   }
@@ -283,7 +283,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
   const topmodels = document.getElementById('topmodels');
   const modelImgs = {};
   if (topmodels) {
-    topmodels.innerHTML = `<span class="tc-lab"><span class="dot"></span>RUNS HEADLESS ON</span>`;
+    topmodels.innerHTML = `<span class="tc-lab"><span class="dot"></span>OPERA CON</span>`;
     Object.keys(MODELS).forEach((k, i) => {
       const img = document.createElement('img');
       img.src = LOGOS[k].img;
@@ -323,14 +323,14 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     const bar = (lab, x) => { if (!x) return ''; const cls = x.percent >= 90 ? 'c' : x.percent >= 75 ? 'w' : ''; return `<span>${lab}</span><span class="ub"><i class="${cls}" style="width:${x.percent}%"></i></span><b>${x.percent >= 100 ? 'LIMIT' : x.percent + '%'}</b>`; };
     if (u && u.ok && u.source === 'claude') {
       usageEl.className = 'tm-usage';
-      usageEl.innerHTML = bar('SESSION', u.session) + (u.session && u.week ? '<span class="sep">·</span>' : '') + bar('WEEK', u.week);
-      usageEl.title = `Your Claude plan, as Claude Code shows it. Session resets ${when(u.session && u.session.resetsAt)} · week resets ${when(u.week && u.week.resetsAt)}.`;
+      usageEl.innerHTML = bar('SESIÓN', u.session) + (u.session && u.week ? '<span class="sep">·</span>' : '') + bar('SEMANA', u.week);
+      usageEl.title = `Tu plan de Claude, como lo muestra Claude Code. La sesión se reinicia ${when(u.session && u.session.resetsAt)} · la semana se reinicia ${when(u.week && u.week.resetsAt)}.`;
     } else if (u && u.ok && u.source === 'office') {
       const w = u.window || {}; const n = w.tokens || 0; const tok = n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n);
       usageEl.className = 'tm-usage off';
-      usageEl.innerHTML = `<span>THIS WINDOW</span><b>${tok}</b><span>TOKENS</span><span class="sep">·</span><b>${w.runs || 0}</b><span>RUNS</span>` + (w.resetsAt ? `<span class="sep">·</span><span>RESETS</span><b>${new Date(w.resetsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</b>` : '');
-      usageEl.title = `Claude's usage gauge is unavailable (${u.reason || 'no answer'}). This is the office's own count for the current five-hour window.`;
-    } else { usageEl.className = 'tm-usage off'; usageEl.innerHTML = '<span>USAGE UNAVAILABLE</span>'; usageEl.title = (u && u.reason) || ''; }
+      usageEl.innerHTML = `<span>ESTA VENTANA</span><b>${tok}</b><span>TOKENS</span><span class="sep">·</span><b>${w.runs || 0}</b><span>EJECUCIONES</span>` + (w.resetsAt ? `<span class="sep">·</span><span>SE REINICIA</span><b>${new Date(w.resetsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</b>` : '');
+      usageEl.title = `El medidor de uso de Claude no está disponible (${u.reason || 'sin respuesta'}). Este es el conteo propio de la oficina para la ventana actual de cinco horas.`;
+    } else { usageEl.className = 'tm-usage off'; usageEl.innerHTML = '<span>USO NO DISPONIBLE</span>'; usageEl.title = (u && u.reason) || ''; }
   }
   function modelPulse(k, strong = false) {
     if (!modelImgs[k]) return; // a tile that has gone (ChatGPT in a live office) has no wire to pulse
@@ -360,7 +360,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
           for (const [k, img] of Object.entries(topImgs)) img.style.display = BY_DEPT[f].includes(k) ? '' : 'none';
           topconn.classList.add('focus');
           topconn.querySelector('.tc-lab').innerHTML =
-            `<span class="dot" style="background:${DEPTS[f].chip}"></span>${DEPTS[f].short} · CONNECTED TO`;
+            `<span class="dot" style="background:${DEPTS[f].chip}"></span>${DEPTS[f].short} · CONECTADO A`;
         }
       } else {
         topconn.style.opacity = wireA;
@@ -368,7 +368,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
         if (stripDept !== null) {
           for (const img of Object.values(topImgs)) img.style.display = '';
           topconn.classList.remove('focus');
-          topconn.querySelector('.tc-lab').innerHTML = `<span class="dot"></span>CONNECTED TO`;
+          topconn.querySelector('.tc-lab').innerHTML = `<span class="dot"></span>CONECTADO A`;
         }
       }
       stripDept = f;
@@ -627,8 +627,8 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     if (!item) return;
     pulse(item, now, 0.3);
     const idle = Math.max(0, Math.round((now - item.lastActive) / 1000));
-    tip.innerHTML = `<b>${item.name}</b> MCP<br><span class="t-live">● ${STATUS[item.key] || 'connected'}</span> · ` +
-      `${DEPTS[item.dept].short.toLowerCase()} · ${idle < 2 ? 'active now' : 'active ' + idle + 's ago'}`;
+    tip.innerHTML = `<b>${item.name}</b> MCP<br><span class="t-live">● ${STATUS[item.key] || 'conectado'}</span> · ` +
+      `${DEPTS[item.dept].short.toLowerCase()} · ${idle < 2 ? 'activo ahora' : 'activo hace ' + idle + 's'}`;
     tip.style.left = Math.min(x + 14, innerWidth - 190) + 'px';
     tip.style.top = (y - 10) + 'px';
     tip.classList.add('on');

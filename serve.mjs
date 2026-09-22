@@ -225,9 +225,9 @@ async function route(dept, text) {
 function agentSystem(a, index, read, { extra = '', words = 260 } = {}) {
   const d = DEPTS[a.department];
   return `You are ${a.name}, ${a.role || 'an agent'}, in the ${d.name} department of ${cfg.name}. ${a.does}\n${agentBrief(a)}` + (extra ? `\n${extra}\n` : '') +
-    'Write the finished deliverable itself, not a description of what you would do. Plain text: a short heading, then short sections or bullets. ' +
-    `At most ${words} words unless a skill or the owner\'s instructions set a different shape — those win. No preamble, no sign-off. Ground it in the company notes below; where a fact is missing, make a reasonable assumption and mark it (assumed). ` +
-    'If you used a tool, say so in one line at the end ("Used: Gmail — searched the client thread").\n\n' +
+    'Escribe el entregable terminado en sí, no una descripción de lo que harías. Texto plano: un encabezado corto, luego secciones cortas o viñetas. ' +
+    `Como máximo ${words} palabras, salvo que una skill o las instrucciones del dueño indiquen otra forma — eso prevalece. Sin preámbulo, sin despedida. Apóyalo en las notas de la empresa de abajo; donde falte un dato, haz una suposición razonable y márcala (assumed). ` +
+    'Si usaste una herramienta, dilo en una línea al final ("Used: Gmail — searched the client thread").\n\n' +
     `${mcp.promptText(a.tools)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
 }
 const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. End with one line saying exactly what will go out when approved (or that nothing needs to).'
@@ -334,8 +334,8 @@ async function chat(agentId, text, history) {
     'You are talking to the owner. Answer as this agent, in first person, briefly (under 120 words unless asked for detail), plainly, no hype. ' +
     'Use the company notes; say when something is not in them. If the owner asks you to look something up, use your tools. Nothing outbound is sent without the owner\'s explicit say-so.\n\n' +
     `${mcp.promptText(a.tools)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nRELEVANT NOTES\n${contextText(index, read)}\n\nYOUR RECENT TASKS\n${mine || '—'}`;
-  const convo = (history || []).slice(-8).map(m => `${m.who === 'user' ? 'Owner' : a.name}: ${m.text}`).join('\n');
-  const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Owner: ${text}\n${a.name}:`, { maxTokens: 1200, model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
+  const convo = (history || []).slice(-8).map(m => `${m.who === 'user' ? 'Dueño' : a.name}: ${m.text}`).join('\n');
+  const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${a.name}:`, { maxTokens: 1200, model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
   return { reply, read, tools: toolKeys(tools), used: mcp.namesOf(tools) };
 }
 
@@ -403,13 +403,13 @@ async function makeRoutine({ dept, text, when, agent, needsOk, model, effort }) 
   let taskText = String(text || '').trim(), w = when, parsed = null;
   if (!w) {
     parsed = parseWhen(taskText);
-    if (!parsed) return { error: 'No schedule in that sentence. Say when: "every weekday at 8am, …", "Mondays 9am, …", "every hour 9-5, …".', noSchedule: true };
-    if (parsed.needsDay) return { error: 'Which day? Say "every Monday …" or "Mon and Thu …".', needsDay: true };
-    if (parsed.needsTime) return { error: 'What time? Say "… at 8am" or "… at 17:30".', needsTime: true };
+    if (!parsed) return { error: 'No hay horario en esa frase. Di cuándo: "every weekday at 8am, …", "Mondays 9am, …", "every hour 9-5, …".', noSchedule: true };
+    if (parsed.needsDay) return { error: '¿Qué día? Di "every Monday …" o "Mon and Thu …".', needsDay: true };
+    if (parsed.needsTime) return { error: '¿A qué hora? Di "… at 8am" o "… at 17:30".', needsTime: true };
     w = parsed.when; taskText = parsed.text;
   }
-  if (!validWhen(w)) return { error: 'That schedule is not complete.' };
-  if (!taskText) return { error: 'What should happen? The sentence has a time but no task.' };
+  if (!validWhen(w)) return { error: 'Ese horario no está completo.' };
+  if (!taskText) return { error: '¿Qué debe pasar? La frase tiene hora pero no tarea.' };
   loadRoutines();
   const r = await route(dept, taskText);
   const a = agent && AGENTS.find(x => x.id === agent && x.department === dept) ? agent : r.agent;
@@ -427,23 +427,23 @@ async function routinesChat(a, text) {
   const cmd = /^\s*(pause|stop|resume|start|unpause|delete|remove|run)\b\s*(?:the\s+)?(.*?)\s*[.!]?$/i.exec(t);
   if (cmd && allowed && !parseWhen(t)) {
     const list = loadRoutines(); const words = cmd[2].replace(/\s+(routine|one)$/i, ''); const r = routines.matchRoutine(list, dept, words);
-    if (!r) return { reply: (list.some(x => x.dept === dept) ? 'Which one? ' : '') + routines.listText(list, dept, AGENTS) };
+    if (!r) return { reply: (list.some(x => x.dept === dept) ? '¿Cuál? ' : '') + routines.listText(list, dept, AGENTS) };
     const verb = cmd[1].toLowerCase();
-    if (verb === 'run') { const task = fire(r, { by: 'you' }); return { reply: `Running "${r.title}" now — ${r.agent === a.id ? 'I have it' : agentName(r.agent) + ' has it'}. It lands in the panel${r.needsOk ? ' and waits for your OK before anything is sent' : ''}.`, task }; }
-    if (/pause|stop/.test(verb)) { editRoutine(r.id, { paused: true }); return { reply: `Paused "${r.title}". It stays on the timetable; say "resume ${r.title.toLowerCase()}" to start it again.` }; }
-    if (/resume|start|unpause/.test(verb)) { const n = editRoutine(r.id, { paused: false }); return { reply: `"${r.title}" is back on — next ${untilText(n.nextAt)}.` }; }
-    if (/delete|remove/.test(verb)) { removeRoutine(r.id); return { reply: `Deleted "${r.title}". It is off the timetable.` }; }
+    if (verb === 'run') { const task = fire(r, { by: 'you' }); return { reply: `Ejecutando "${r.title}" ahora — ${r.agent === a.id ? 'yo me encargo' : agentName(r.agent) + ' se encarga'}. Llega al panel${r.needsOk ? ' y espera tu visto bueno antes de enviar nada' : ''}.`, task }; }
+    if (/pause|stop/.test(verb)) { editRoutine(r.id, { paused: true }); return { reply: `Pausada "${r.title}". Sigue en el horario; di "resume ${r.title.toLowerCase()}" para activarla de nuevo.` }; }
+    if (/resume|start|unpause/.test(verb)) { const n = editRoutine(r.id, { paused: false }); return { reply: `"${r.title}" vuelve a estar activa — próxima ejecución ${untilText(n.nextAt)}.` }; }
+    if (/delete|remove/.test(verb)) { removeRoutine(r.id); return { reply: `Eliminada "${r.title}". Fuera del horario.` }; }
   }
   const p = parseWhen(t);
   if (!p) return null;
   if (!allowed) return { reply: routines.refusal(dept) };
-  if (p.needsDay) return { reply: 'Which day? Say it again with the day: "every Monday at 9am, …".' };
-  if (p.needsTime) return { reply: `What time? Say it again with the time, e.g. "every weekday at 8am, ${p.text ? p.text.slice(0, 60) : '…'}".` };
-  if (!p.text) return { reply: 'I have the time but not the task. Say it again with what should happen.' };
+  if (p.needsDay) return { reply: '¿Qué día? Dilo de nuevo con el día: "every Monday at 9am, …".' };
+  if (p.needsTime) return { reply: `¿A qué hora? Dilo de nuevo con la hora, p. ej. "every weekday at 8am, ${p.text ? p.text.slice(0, 60) : '…'}".` };
+  if (!p.text) return { reply: 'Tengo la hora pero no la tarea. Dilo de nuevo con lo que debe pasar.' };
   const made = await makeRoutine({ dept, text: p.text, when: p.when, agent: a.lead ? undefined : a.id });
   if (made.error) return { reply: made.error };
-  const r = made.routine, who = r.agent === a.id ? 'I have it' : `${agentName(r.agent)} has it`;
-  return { reply: `Done. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${who}.${made.guessed ? ` I took "${made.guessed}" as ${r.when.at}; say a time to change it.` : ''} ${r.needsOk ? 'Anything to send waits for your OK first.' : 'It only reads, so it will not wait for you.'} Next run ${untilText(r.nextAt)}. Say "routines" to see the list, "pause ${r.title.toLowerCase()}" to stop it.`, routine: r };
+  const r = made.routine, who = r.agent === a.id ? 'yo me encargo' : `${agentName(r.agent)} se encarga`;
+  return { reply: `Listo. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${who}.${made.guessed ? ` Tomé "${made.guessed}" como ${r.when.at}; di una hora para cambiarlo.` : ''} ${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno primero.' : 'Solo lee, así que no te esperará.'} Próxima ejecución ${untilText(r.nextAt)}. Di "routines" para ver la lista, "pause ${r.title.toLowerCase()}" para detenerla.`, routine: r };
 }
 
 /* ---------- http ---------- */
@@ -519,7 +519,7 @@ const server = http.createServer(async (req, res) => {
       const { feedback } = m[2] === 'reject' ? await body(req) : {};
       const note = String(feedback || '').trim();
       console.log(`${m[2] === 'approve' ? '✅' : '↩'} ${task.id} ${m[2] === 'approve' ? 'approved — ' + agentName(task.agent) + ' is sending' : 'sent back: ' + note.slice(0, 80)}`);
-      enqueue(() => runServerTask(task.id, m[2] === 'approve' ? { approve: true } : { feedback: note || 'Not this. Rework it.' }))
+      enqueue(() => runServerTask(task.id, m[2] === 'approve' ? { approve: true } : { feedback: note || 'No es esto. Retrabájalo.' }))
         .then(t => { if (m[2] === 'reject' && note && t && !t.error) { const a = AGENTS.find(x => x.id === t.agent); return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); }); } })
         .catch(e => console.warn('approval:', e.message));
       return json(res, 200, { ok: true, id: task.id, state: 'doing' });

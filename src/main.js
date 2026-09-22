@@ -1,6 +1,7 @@
 // Agents Office v2 — Three.js isometric office with zoom-driven LOD
 // Far: clean pods + agent counts (Image 1 read). Near: diorama with 3D people + holo screens (Image 2 read).
 import * as THREE from 'three';
+import './i18n.js'; // FASE 1 (20 Sep 2026): sistema i18n central (es por defecto); los textos visibles ya están traducidos directo al español, el wiring total a t() queda para fase 2
 import { TOKENS, DEPTS, DEPT_KEYS, AGENTS, LAYOUT, WORKLINES, APPROVAL_ASKS, APPROVAL_BY_AGENT } from './data.js';
 import { hasScreens, makeScreen } from './screens.js'; // live screens (14 Sep): no-op without window.SCREENS
 import { V1, FILE_GEN, STATS, KPIS, P, rnd, ri, person, money } from './v1data.js';
@@ -323,28 +324,28 @@ const kv = id => KPIS.find(k => k.id === id).val;
 let brainNotes = brain.state.notes;
 const BB_ROWS = profileRows() || {
   emails: [
-    ['EMAILS SENT', () => STATS.emailsSent],
-    ['REPLIES DRAFTED', () => STATS.drafts]],
+    ['CORREOS ENVIADOS', () => STATS.emailsSent],
+    ['RESPUESTAS REDACTADAS', () => STATS.drafts]],
   delivery: [
-    ['REPORTS SENT', () => STATS.reports],
-    ['ON TRACK', () => STATS.onTrack + ' / ' + STATS.projects]],
+    ['INFORMES ENVIADOS', () => STATS.reports],
+    ['EN CURSO', () => STATS.onTrack + ' / ' + STATS.projects]],
   sales: [
-    ['CALLS S·A·J', () => STATS.spencer + '·' + STATS.arwin + '·' + STATS.jack],
-    ['NEW MANAGERS', () => STATS.managers],
-    ['AUTO-ONBOARDED', () => STATS.autoOnb]],
+    ['LLAMADAS S·A·J', () => STATS.spencer + '·' + STATS.arwin + '·' + STATS.jack],
+    ['NUEVOS GERENTES', () => STATS.managers],
+    ['INCORPORADOS AUTO.', () => STATS.autoOnb]],
   marketing: [
-    ['NEW INSIGHTS', () => STATS.insMkt],
-    ['COST PER USER', () => '$' + Math.round(STATS.cpa)]],
+    ['NUEVAS IDEAS', () => STATS.insMkt],
+    ['COSTO POR USUARIO', () => '$' + Math.round(STATS.cpa)]],
   ops: [
-    ['PROPOSALS MADE', () => Math.round(kv('proposals'))],
-    ['NEW INSIGHTS', () => STATS.insOps]],
+    ['PROPUESTAS HECHAS', () => Math.round(kv('proposals'))],
+    ['NUEVAS IDEAS', () => STATS.insOps]],
   fin: [
-    ['INVOICES ISSUED', () => Math.round(kv('invoices'))],
-    ['BILLS PAID', () => STATS.billsPaid]],
+    ['FACTURAS EMITIDAS', () => Math.round(kv('invoices'))],
+    ['CUENTAS PAGADAS', () => STATS.billsPaid]],
   brain: [
-    ['NOTES INDEXED', () => brainNotes.toLocaleString('en-NZ')]],
+    ['NOTAS INDEXADAS', () => brainNotes.toLocaleString('es-PA')]],
 };
-if (PROFILE && !BB_ROWS.brain) BB_ROWS.brain = [['NOTES INDEXED', () => brainNotes.toLocaleString('en-NZ')]];
+if (PROFILE && !BB_ROWS.brain) BB_ROWS.brain = [['NOTAS INDEXADAS', () => brainNotes.toLocaleString('es-PA')]];
 for (const k of [...DEPT_KEYS, 'brain']) {
   const dept = DEPTS[k];
   const n = AGENTS.filter(a => a.dept === k).length;
@@ -352,11 +353,11 @@ for (const k of [...DEPT_KEYS, 'brain']) {
   b.className = 'badge';
   b.innerHTML = `
     <div class="b-name"><span class="dot" style="background:${dept.chip}"></span>${dept.short}<span class="live"></span></div>
-    <div class="b-count">${k === 'brain' ? '<span class="b-num">∞</span><span class="b-lab">KNOWLEDGE</span>' : `<span class="b-num">${n}</span><span class="b-lab">AGENTS</span>`}</div>
+    <div class="b-count">${k === 'brain' ? '<span class="b-num">∞</span><span class="b-lab">CONOCIMIENTO</span>' : `<span class="b-num">${n}</span><span class="b-lab">AGENTES</span>`}</div>
     <div class="b-metrics">${BB_ROWS[k].map((row, i) => `
       <div class="m-row"><span class="m-lab">${row[0]}</span><span class="m-val" data-m="${k}-${i}">${row[1]()}</span></div>`).join('')}
     </div>
-    <div class="b-appr" style="display:none">⚠ <span class="ap-n">1</span> WAITING APPROVAL</div>`;
+    <div class="b-appr" style="display:none">⚠ <span class="ap-n">1</span> EN ESPERA DE APROBACIÓN</div>`;
   b.addEventListener('click', (e) => {
     if (e.target.closest('.b-appr')) { zoomToApproval(k); e.stopPropagation(); }
     else if (e.target.closest('.b-tasks') && tasks) { tasks.openFor(k); e.stopPropagation(); }
@@ -364,9 +365,9 @@ for (const k of [...DEPT_KEYS, 'brain']) {
   });
   if (k === 'brain') { // V3.6: a small tag names the etched floor and opens the graph (the big card stays retired)
     b.className = 'badge brainTag';
-    b.innerHTML = `<div class="b-name"><span class="dot" style="background:${dept.chip}"></span>THE BRAIN<b>${brain.state.notes.toLocaleString('en-NZ')}</b>NOTES</div>`;
+    b.innerHTML = `<div class="b-name"><span class="dot" style="background:${dept.chip}"></span>EL CEREBRO<b>${brain.state.notes.toLocaleString('es-PA')}</b>NOTAS</div>`;
     b.onclick = (e) => { e.stopPropagation(); brain.open(); };
-    b.title = 'open the Brain (G)';
+    b.title = 'abrir el Cerebro (G)';
   }
   hud.appendChild(b);
   deptRT[k].badge = b;
@@ -598,7 +599,7 @@ function ensureChat(id) {
   const v = R[id].v1;
   chatHist[id] = [
     { who: 'agent', text: v.greeting },
-    { who: 'work', i: '⏺', text: 'session attached — live work stream below' },
+    { who: 'work', i: '⏺', text: 'sesión conectada — trabajo en vivo aquí abajo' },
   ];
   if (FILE_GEN[id] && !(tasks && tasks.isLive())) chatHist[id].push({ who: 'file', ...FILE_GEN[id]() }); // demo-only sample file; a live office shows real deliverables
 }
@@ -621,12 +622,12 @@ function renderChat(id) {
       </div>`;
     if (m.who === 'appr') return `
       <div class="m-appr" data-i="${i}">
-        <div class="a-who">needs your approval</div>
+        <div class="a-who">necesita tu visto bueno</div>
         <div class="a-ask">${esc(m.text)}</div>
         ${m.mock ? `<div class="a-mock">${m.mock}</div>` : ''}
         ${m.pending
-          ? '<div class="a-btns"><button class="a-yes">APPROVE</button><button class="a-no">REJECT</button></div>'
-          : `<div class="a-done">${m.approved ? '✓ Approved' : '✗ Rejected'} by AJ</div>`}
+          ? '<div class="a-btns"><button class="a-yes">APROBAR</button><button class="a-no">RECHAZAR</button></div>'
+          : `<div class="a-done">${m.approved ? '✓ Aprobado' : '✗ Rechazado'} por AJ</div>`}
       </div>`;
     return '';
   }).join('');
@@ -640,9 +641,9 @@ function renderChat(id) {
 }
 function renderActivity(id) {
   const r = R[id], v = r.v1;
-  const task = rnd(v.tasks || ['Working through the queue'])
+  const task = rnd(v.tasks || ['Revisando la cola de trabajo'])
     .replace('{co}', rnd(P.co)).replace('{person}', person()).replace('{count}', ri(3, 9));
-  document.getElementById('mNow').innerHTML = `NOW &nbsp;<b>${esc(task)}</b>`;
+  document.getElementById('mNow').innerHTML = `AHORA &nbsp;<b>${esc(task)}</b>`;
   document.getElementById('mStats').innerHTML = (v.stats || []).map(([l, val]) => `
     <div class="st"><div class="st-l">${esc(l)}</div><div class="st-v">${esc(String(typeof val === 'function' ? val() : val))}</div></div>`).join('');
   const chip = DEPTS[r.a.dept].chip;
@@ -729,11 +730,11 @@ function buildDeptRail(k) {
   rh.classList.remove('show');
   rh.innerHTML = `
     <div class="b-name"><span class="dot" style="background:${dept.chip}"></span>${dept.name}<span class="live"></span></div>
-    <div class="b-count"><span class="b-num">${n}</span><span class="b-lab">AGENTS</span></div>
+    <div class="b-count"><span class="b-num">${n}</span><span class="b-lab">AGENTES</span></div>
     <div class="b-metrics">${BB_ROWS[k].map((row, i) => `
       <div class="m-row"><span class="m-lab">${row[0]}</span><span class="m-val" data-rm="${k}-${i}">${row[1]()}</span></div>`).join('')}</div>
     ${tasks ? tasks.rowHTML(k) : ''}
-    <div class="b-appr" style="display:${stuckIn(k).length ? 'flex' : 'none'}">⚠ <span class="ap-n">${stuckIn(k).length}</span> WAITING APPROVAL</div>`;
+    <div class="b-appr" style="display:${stuckIn(k).length ? 'flex' : 'none'}">⚠ <span class="ap-n">${stuckIn(k).length}</span> EN ESPERA DE APROBACIÓN</div>`;
   const trow = rh.querySelector('.b-tasks');
   if (trow) trow.addEventListener('click', () => tasks.toggle());
   rh.querySelector('.b-appr').addEventListener('click', () => {
@@ -831,31 +832,31 @@ function sendChat(text) {
   const low = text.toLowerCase();
   setTimeout(() => {
     if (tasks && tasks.pendingReject(id)) { tasks.rejectLive(id, text); return; } // V3.5: the line after REJECT is the note the agent reworks with
-    if (r.state === 'stuck' && /\b(approve|reject)\b/.test(low)) {
-      resolveApproval(id, /approve/.test(low));
+    if (r.state === 'stuck' && /\b(approve|reject|aprobar|aprobado|apruebo|rechazar|rechazo)\b/.test(low)) {
+      resolveApproval(id, /(approve|aprobar|aprobado|apruebo)/.test(low));
       return;
     }
     const rv = tasks && tasks.isLive() && text.match(/^\s*revise\s*[:\-–]\s*(.+)$/i); // LIVE: "revise: …" re-runs the last deliverable
-    if (rv && tasks.revise(id, rv[1].trim())) { chatPush(id, { who: 'agent', text: 'On it — revising now. It will land here when it is ready.' }); return; }
+    if (rv && tasks.revise(id, rv[1].trim())) { chatPush(id, { who: 'agent', text: 'En eso — revisando ahora. Caerá aquí cuando esté listo.' }); return; }
     const tr = tasks && tasks.handleChat(id, text); // "add task: …" / "what's on the board"
     if (tr) { chatPush(id, { who: 'agent', text: tr }); return; }
     if (tasks && tasks.isLive()) { // LIVE: a real conversation with the agent, grounded in the brain
-      chatPush(id, { who: 'work', i: '…', text: `${r.a.name} is thinking` });
+      chatPush(id, { who: 'work', i: '…', text: `${r.a.name} está pensando` });
       fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ agent: id, text, history: chatHist[id].filter(m => m.who === 'user' || m.who === 'agent').slice(-8) }) })
         .then(async res => { if (!res.ok) throw new Error((await res.json()).error || res.statusText); return res.json(); })
         .then(j => {
-          const h = chatHist[id]; const k = h.findIndex(m => m.who === 'work' && m.text === `${r.a.name} is thinking`); if (k >= 0) h.splice(k, 1);
+          const h = chatHist[id]; const k = h.findIndex(m => m.who === 'work' && m.text === `${r.a.name} está pensando`); if (k >= 0) h.splice(k, 1);
           chatPush(id, { who: 'agent', text: j.reply });
           if (j.routines && tasks.refresh) tasks.refresh(); // a routine was set, paused, run or deleted in chat
           if (j.read) for (const n of j.read.slice(0, 2)) brain.readNote(id, n);
           if (j.tools && j.tools.length) mcp.onToolsUsed(id, j.tools);
         })
-        .catch(e => chatPush(id, { who: 'agent', text: `I couldn't reach Claude (${e.message}).` }));
+        .catch(e => chatPush(id, { who: 'agent', text: `No pude contactar a Claude (${e.message}).` }));
       return;
     }
     const hit = (r.v1.chat || []).find(c => c.k.some(k => low.includes(k)));
-    const reply = hit ? rnd(hit.r) : rnd(r.v1.fallback || ['On it.']);
+    const reply = hit ? rnd(hit.r) : rnd(r.v1.fallback || ['En eso.']);
     chatPush(id, { who: 'agent', text: reply });
   }, 450 + Math.random() * 500);
 }
@@ -868,7 +869,7 @@ document.getElementById('mIn').addEventListener('keydown', (e) => {
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function ago(ts) {
   const m = Math.round((Date.now() - ts) / 60000);
-  return m < 1 ? 'now' : m < 60 ? m + 'm ago' : Math.round(m / 60) + 'h ago';
+  return m < 1 ? 'ahora' : m < 60 ? 'hace ' + m + ' min' : 'hace ' + Math.round(m / 60) + ' h';
 }
 
 /* ---------- approval mockups — show AJ exactly what he's approving ---------- */
@@ -877,60 +878,60 @@ function mockupFor(id) {
   const pm = profileMockup(R[id].a.dept, R[id].ask, R[id].a.name, esc); if (pm) return pm; // INDUSTRY PROFILE: the trade's own document, or a cover sheet for this ask
   switch (id) {
     case 'apay': return `<div class="mk mk-doc">
-      <div class="d-brand">INVOICE AUDIT — #218</div>
-      <div class="d-title">Design contractor</div>
-      <div class="d-line"><span>Invoiced</span><b>14 hrs × $110 = $1,540</b></div>
-      <div class="d-line"><span>Contract rate</span><b>$85/hr (signed 12 Mar)</b></div>
-      <div class="d-line"><span>Variance</span><b>+$350 ⚠</b></div>
-      <div class="d-line"><span>Scope</span><b>matches the brief ✓</b></div>
-      <div class="d-p">Hours and scope check out — only the rate is off, and there's no signed variation covering it. Recommend holding payment and querying the rate before it's paid.</div></div>`;
+      <div class="d-brand">AUDITORÍA DE FACTURA — #218</div>
+      <div class="d-title">Contratista de diseño</div>
+      <div class="d-line"><span>Facturado</span><b>14 hrs × $110 = $1,540</b></div>
+      <div class="d-line"><span>Tarifa de contrato</span><b>$85/hora (firmado 12 mar)</b></div>
+      <div class="d-line"><span>Diferencia</span><b>+$350 ⚠</b></div>
+      <div class="d-line"><span>Alcance</span><b>coincide con el brief ✓</b></div>
+      <div class="d-p">Las horas y el alcance cuadran — solo la tarifa está mal, y no hay variación firmada que la cubra. Recomiendo retener el pago y aclarar la tarifa antes de pagar.</div></div>`;
     case 'piper': return `<div class="mk mk-doc">
-      <div class="d-brand">AGENTS OFFICE — PROPOSAL</div>
+      <div class="d-brand">AGENTS OFFICE — PROPUESTA</div>
       <div class="d-title">Ridgeline Property Group</div>
-      <div class="d-line"><span>Seats</span><b>12</b></div>
+      <div class="d-line"><span>Puestos</span><b>12</b></div>
       <div class="d-line"><span>Plan</span><b>Growth</b></div>
-      <div class="d-line"><span>Price</span><b>$1,080/mo · 12-mo lock</b></div>
-      <div class="d-p">Proof point: Auckland roofing co — 0 → 40 tracked calls/week in 14 days. Sign-online link included.</div></div>`;
+      <div class="d-line"><span>Precio</span><b>$1,080/mes con bloqueo 12 meses</b></div>
+      <div class="d-p">Prueba: roofing en Auckland — 0 → 40 llamadas rastreadas/semana en 14 días. Enlace de firma en línea incluido.</div></div>`;
     case 'bill': return `<div class="mk mk-doc">
-      <div class="d-brand">REFUND VERIFICATION</div>
+      <div class="d-brand">VERIFICACIÓN DE REEMBOLSO</div>
       <div class="d-title">Harbour City Roofing — $680</div>
-      <div class="d-line"><span>Reason</span><b>double payment, two cards</b></div>
-      <div class="d-line"><span>Txn #1 / #2</span><b>verified ✓ / duplicate ✓</b></div>
-      <div class="d-line"><span>Account</span><b>14 months, good standing</b></div>
-      <div class="d-p">Legit case. Above my $500 limit — releases the moment you approve.</div></div>`;
+      <div class="d-line"><span>Motivo</span><b>pago doble, dos tarjetas</b></div>
+      <div class="d-line"><span>Txn #1 / #2</span><b>verificada ✓ / duplicada ✓</b></div>
+      <div class="d-line"><span>Cuenta</span><b>14 meses, en regla</b></div>
+      <div class="d-p">Caso legítimo. Supera mi límite de $500 — se libera en cuanto apruebes.</div></div>`;
     case 'iggy': return `<div class="mk-phone">
       <div class="ph-handle"></div>
-      <div class="ph-hook">“calls before 10am are a trap”</div>
-      <div class="ph-sub">connect rates nearly double 10:00–11:30am — across 40,000 dials</div>
-      <div class="ph-ui"><span>♥ 2.4k</span><span>💬 118</span><span>↗ share</span></div></div>`;
+      <div class="ph-hook">"llamar antes de las 10am es una trampa"</div>
+      <div class="ph-sub">la conexión casi se duplica 10:00—11:30am — en 40,000 llamadas</div>
+      <div class="ph-ui"><span>♥ 2.4k</span><span>💬 118</span><span>↗ compartir</span></div></div>`;
     case 'ada': return `<div class="mk mk-ad">
-      <div class="ad-head"><div class="ad-av"></div><div><div class="ad-who">sahni.ai</div><div class="ad-sp">Sponsored</div></div></div>
-      <div class="ad-text">Cold call anxiety? Your first 5 dials decide your whole day…</div>
-      <div class="ad-media" style="background:linear-gradient(135deg, ${chip}55, ${chip}22)">“the 10am rule — call when they answer”</div>
-      <div class="ad-foot"><span class="ad-hl">Start your free trial</span><span class="ad-cta">SIGN UP</span></div>
-      <div class="ad-stat">CPA $29 · best performer · scaling to $180/day</div></div>`;
+      <div class="ad-head"><div class="ad-av"></div><div><div class="ad-who">sahni.ai</div><div class="ad-sp">Patrocinado</div></div></div>
+      <div class="ad-text">¿Ansiedad al llamar en frío? Tus primeras 5 llamadas deciden tu día…</div>
+      <div class="ad-media" style="background:linear-gradient(135deg, ${chip}55, ${chip}22)">"la regla de las 10am — llama cuando contestan"</div>
+      <div class="ad-foot"><span class="ad-hl">Empieza tu prueba gratis</span><span class="ad-cta">REGÍSTRATE</span></div>
+      <div class="ad-stat">CPA $29 · mejor rendimiento · escalando a $180/día</div></div>`;
     case 'newt': return `<div class="mk mk-mail">
-      <div class="ml-lab">SUBJECT A</div><div class="ml-sub">calls before 10am are a trap</div>
-      <div class="ml-lab">SUBJECT B</div><div class="ml-sub">we looked at 40,000 calls — call at this time</div>
-      <div class="ml-body">  before 10am ...... 11% connect
-  10:00–11:30 ...... 21% connect
-  after 4pm ........ 9% connect
+      <div class="ml-lab">ASUNTO A</div><div class="ml-sub">llamar antes de las 10am es una trampa</div>
+      <div class="ml-lab">ASUNTO B</div><div class="ml-sub">analizamos 40,000 llamadas — llama a esta hora</div>
+      <div class="ml-body">  antes de las 10am ...... 11% conecta
+  10:00—11:30 ...... 21% conecta
+  después de las 4pm ........ 9% conecta
 
-→ 3,400 subscribers · CTA: reply "10AM"</div></div>`;
+→ 3,400 suscriptores · CTA: responde "10AM"</div></div>`;
     case 'scout': return `<div class="mk mk-doc">
-      <div class="d-brand">OPPORTUNITY MEMO</div>
-      <div class="d-title">CallForge +8% price rise</div>
-      <div class="d-line"><span>Window</span><b>2–3 weeks</b></div>
-      <div class="d-line"><span>Play</span><b>comparison page + retargeting</b></div>
-      <div class="d-line"><span>Briefed</span><b>META ADS · PROPOSALS</b></div>
-      <div class="d-p">Their G2 reviews already flag value-for-money. Talk-track: 12-month price lock.</div></div>`;
+      <div class="d-brand">MEMO DE OPORTUNIDAD</div>
+      <div class="d-title">CallForge sube precios +8%</div>
+      <div class="d-line"><span>Ventana</span><b>2—3 semanas</b></div>
+      <div class="d-line"><span>Jugada</span><b>página comparativa + retargeting</b></div>
+      <div class="d-line"><span>Informados</span><b>META ADS · PROPUESTAS</b></div>
+      <div class="d-p">Sus reseñas en G2 ya marcan el precio. Argumento: bloqueo de precio 12 meses.</div></div>`;
     case 'enzo': return `<div class="mk mk-doc">
-      <div class="d-brand">PURCHASE ORDER</div>
-      <div class="d-title">FullEnrich — 500 credits</div>
-      <div class="d-line"><span>Cost</span><b>$250 ($0.50/credit)</b></div>
-      <div class="d-line"><span>Current balance</span><b>38 credits — out tomorrow</b></div>
-      <div class="d-line"><span>Burn rate</span><b>~90/week</b></div>
-      <div class="d-p">Same card as last month. Without credits, enrichment stops and the Sales Lead runs dry.</div></div>`;
+      <div class="d-brand">ORDEN DE COMPRA</div>
+      <div class="d-title">FullEnrich — 500 créditos</div>
+      <div class="d-line"><span>Costo</span><b>$250 ($0.50/crédito)</b></div>
+      <div class="d-line"><span>Saldo actual</span><b>38 créditos — se acaban mañana</b></div>
+      <div class="d-line"><span>Consumo</span><b>~90/semana</b></div>
+      <div class="d-p">Misma tarjeta del mes pasado. Sin créditos, el enriquecimiento se detiene y el Sales Lead se queda seco.</div></div>`;
     default: {
       // generic: render the agent's own deliverable in a document frame
       if (!FILE_GEN[id]) return '';
@@ -977,8 +978,8 @@ function resolveApproval(id, approved) {
   if (tasks) tasks.onResolve(id, approved);
   chatPush(id, {
     who: 'agent',
-    text: approved ? '✓ Approved — actioning it now. I\'ll log the result in my activity.'
-                   : '✗ Understood — parked. I\'ll adjust and come back with a better version.',
+    text: approved ? '✓ Aprobado — manos a la obra. Registraré el resultado en mi actividad.'
+                   : '✗ Entendido — en pausa. Lo ajustaré y volveré con una mejor versión.',
   });
   syncApprovals();
 }
@@ -1328,7 +1329,7 @@ function tickLOD() {
 function tickClock() {
   const d = new Date();
   document.getElementById('clock').textContent =
-    d.toLocaleTimeString('en-NZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    d.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 setInterval(tickClock, 1000); tickClock();
 
@@ -1359,9 +1360,9 @@ function applyRoster(agents) {
     r.pill.innerHTML = (r.a.lead ? '<span class="star">★</span>' : '') + esc(a.name);
     r.v1 = r.v1 || {};
     r.v1.role = a.role || r.v1.role || ''; r.v1.tagline = a.does || r.v1.tagline || '';
-    r.v1.greeting = `${a.does || 'I am ' + a.name + '.'} Give me a task in the bar on the right, or ask me something here.` +
-      (a.interviewer && a.setUp === false ? ` Nothing in this department is yours yet: say "set up" and I will ask you five questions about how it works here, then write it down for the team.` : '');
-    r.v1.chips = a.interviewer && a.setUp === false ? ['set up', 'What can you do for me?', 'What tools can you use?'] : ['What are you working on?', 'What can you do for me?', 'What tools can you use?'];
+    r.v1.greeting = `${a.does || 'Soy ' + a.name + '.'} Dame una tarea en la barra de la derecha, o pregúntame algo aquí.` +
+      (a.interviewer && a.setUp === false ? ` Aún nada de este departamento es tuyo: escribe "set up" y te haré cinco preguntas sobre cómo funciona aquí, luego lo anotaré para el equipo.` : '');
+    r.v1.chips = a.interviewer && a.setUp === false ? ['set up', '¿Qué puedes hacer por mí?', '¿Qué herramientas puedes usar?'] : ['¿En qué estás trabajando?', '¿Qué puedes hacer por mí?', '¿Qué herramientas puedes usar?'];
     if (chatHist[a.id] && chatHist[a.id][0] && chatHist[a.id][0].who === 'agent') chatHist[a.id][0].text = r.v1.greeting;
     if (modalOpen === a.id) openAgentRail(a.id, modalTab, false);
   }

@@ -7,3 +7,7 @@ office.agents.local.json
 brain/Agents Office/
 .DS_Store
 *.backup-*
+
+# Logs del servidor local (no se suben)
+server.log
+server.err.log

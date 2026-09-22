@@ -44,10 +44,10 @@ export function applyData({ DEPTS, AGENTS, BILLBOARDS, APPROVAL_ASKS, APPROVAL_B
   for (const a of AGENTS) { const p = PROFILE.agents[a.id]; if (p && p.name) a.name = p.name; }
   for (const k of Object.keys(APPROVAL_BY_AGENT)) delete APPROVAL_BY_AGENT[k]; // the dept pool is the profile's voice
   if (WORKLINES.brain) WORKLINES.brain = [
-    '▸ ' + (PROFILE.company || 'the company') + ' notes indexed',
-    '▸ ' + ((PROFILE.graph && PROFILE.graph.notes) || 0) + ' notes · ' + ((PROFILE.graph && PROFILE.graph.links && PROFILE.graph.links.length) || 0) + ' links',
-    '▸ read: ' + ((PROFILE.graph && PROFILE.graph.nodes && PROFILE.graph.nodes[0] && PROFILE.graph.nodes[0].id) || 'index'),
-    '▸ agents reading the Brain',
+    '▸ ' + (PROFILE.company || 'la empresa') + ' notas indexadas',
+    '▸ ' + ((PROFILE.graph && PROFILE.graph.notes) || 0) + ' notas · ' + ((PROFILE.graph && PROFILE.graph.links && PROFILE.graph.links.length) || 0) + ' enlaces',
+    '▸ lectura: ' + ((PROFILE.graph && PROFILE.graph.nodes && PROFILE.graph.nodes[0] && PROFILE.graph.nodes[0].id) || 'índice'),
+    '▸ agentes leyendo el Cerebro',
   ];
 }
 
@@ -63,31 +63,31 @@ export function applyV1({ P, V1, FILE_GEN, clockStr }) {
   const slugf = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
   for (const v of V1) {
     const p = PROFILE.agents[v.id]; if (!p) continue;
-    const tasks = (p.tasks && p.tasks.length ? p.tasks : ['Working through the queue']).slice();
+    const tasks = (p.tasks && p.tasks.length ? p.tasks : ['Revisando la cola de trabajo']).slice();
     const tools = toolNames(p.tools);
     const does = p.does || '';
     const doc = (PROFILE.documents || {})[v.dept] || null;
     v.name = p.name || v.name; v.role = p.role || v.role; v.tagline = does || v.tagline;
     v.tasks = tasks;
     v.ev = [
-      ...tasks.map((t, i) => ({ i: ['▸', '✓', '⏱'][i % 3], t: () => (i % 3 === 1 ? 'Done: ' : '') + fillVars(t, W), p: 3 })),
-      { i: '📚', t: () => `Read "${(PROFILE.graph && PROFILE.graph.nodes && PROFILE.graph.nodes.length) ? rnd(PROFILE.graph.nodes).id : 'index'}" in the Brain before starting`, brain: true, p: 1 },
-      ...(tools.length ? [{ i: '🔌', t: () => `Pulled what it needed from ${rnd(tools)}`, p: 2 }] : []),
+      ...tasks.map((t, i) => ({ i: ['▸', '✓', '⏱'][i % 3], t: () => (i % 3 === 1 ? 'Hecho: ' : '') + fillVars(t, W), p: 3 })),
+      { i: '📚', t: () => `Leer "${(PROFILE.graph && PROFILE.graph.nodes && PROFILE.graph.nodes.length) ? rnd(PROFILE.graph.nodes).id : 'índice'}" en el Cerebro antes de empezar`, brain: true, p: 1 },
+      ...(tools.length ? [{ i: '🔌', t: () => `Tomó lo que necesitaba de ${rnd(tools)}`, p: 2 }] : []),
     ];
     const seed = [...v.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
     const sr = i => ((seed * (i + 3) * 2654435761) >>> 0) % 100;
-    v.stats = [['Done this week', () => 8 + sr(1) % 30], ['In progress', () => 1 + sr(2) % 3], ['Waiting on you', () => sr(3) % 3], ['Avg turnaround', () => (9 + sr(4) % 40) + ' min']];
-    v.chartLbl = 'Tasks done — last 7 days';
+    v.stats = [['Hecho esta semana', () => 8 + sr(1) % 30], ['En curso', () => 1 + sr(2) % 3], ['En espera de ti', () => sr(3) % 3], ['Tiempo prom. de respuesta', () => (9 + sr(4) % 40) + ' min']];
+    v.chartLbl = 'Tareas hechas — últimos 7 días';
     v.chart = [0, 1, 2, 3, 4, 5, 6].map(i => 4 + sr(i + 5) % 14);
-    v.greeting = p.greeting || `${p.name ? titleCase(p.name) : 'I'} here. ${does} Ask me what is on my desk, or give me a task in the bar on the right.`;
+    v.greeting = p.greeting || `${p.name ? titleCase(p.name) : 'Yo'} aquí. ${does} Pregúntame qué tengo en mi escritorio, o dame una tarea en la barra de la derecha.`;
     v.chat = [
-      { k: ['desk', 'today', 'working', 'doing', 'on', 'what'], r: [`On my desk right now: ${tasks.map(t => fillVars(t, W)).join('; ')}.`] },
-      { k: ['waiting', 'need', 'approve', 'ok', 'sign'], r: [`${sr(3) % 3 || 'Nothing'} waiting on you from me${sr(3) % 3 ? ': ' + fillVars(tasks[0], W) + '. It is in the panel on the right.' : ' at the moment.'}`] },
-      { k: ['tool', 'use', 'system', 'software', 'connect'], r: [tools.length ? `I work in ${tools.join(' and ')}. I read freely; I only send, post or change anything outside this office when you tell me to.` : 'I work from the Brain and the office inbox. I only send or change anything when you tell me to.'] },
-      { k: ['how', 'why', 'rule', 'brain'], r: [`I read the Brain first, every task: the notes for ${(PROFILE.company || 'the company')} say how we do it here. Then I do the work and put it in the panel for you.`] },
+      { k: ['desk', 'today', 'working', 'doing', 'on', 'what', 'escritorio', 'hoy', 'haciendo', 'trabajando', 'qué'], r: [`En mi escritorio ahora mismo: ${tasks.map(t => fillVars(t, W)).join('; ')}.`] },
+      { k: ['waiting', 'need', 'approve', 'ok', 'sign', 'espera', 'necesito', 'aprueba', 'firma'], r: [`${sr(3) % 3 || 'Nada'} en espera de ti de mi parte${sr(3) % 3 ? ': ' + fillVars(tasks[0], W) + '. Está en el panel de la derecha.' : ' por el momento.'}`] },
+      { k: ['tool', 'use', 'system', 'software', 'connect', 'herramienta', 'usas', 'sistema', 'conectar'], r: [tools.length ? `Trabajo en ${tools.join(' y ')}. Leo libremente; solo envío, publico o cambio algo fuera de esta oficina cuando me lo pides.` : 'Trabajo desde el Cerebro y la bandeja de la oficina. Solo envío o cambio algo cuando me lo pides.'] },
+      { k: ['how', 'why', 'rule', 'brain', 'cómo', 'como', 'por qué', 'porque', 'regla', 'cerebro'], r: [`Primero leo el Cerebro en cada tarea: las notas de ${(PROFILE.company || 'la empresa')} dicen cómo lo hacemos aquí. Luego hago el trabajo y lo pongo en el panel para ti.`] },
     ];
-    v.fallback = [`I ${lc1(does) || 'work in ' + v.role}. Ask what is on my desk, what is waiting on you, or which tools I use.`, `Try "${(p.chips || [])[0] || 'What is on your desk?'}" or "${(p.chips || [])[1] || 'What is waiting on me?'}".`];
-    v.chips = (p.chips && p.chips.length ? p.chips : ["What's on your desk?", "What's waiting on me?", 'Which tools do you use?']).slice(0, 3);
+    v.fallback = [`${lc1(does) ? 'Yo ' + lc1(does) : 'Trabajo en ' + v.role}. Pregunta qué tengo en mi escritorio, qué está en espera de ti, o qué herramientas uso.`, `Prueba con "${(p.chips || [])[0] || '¿Qué tienes en tu escritorio?'}" o "${(p.chips || [])[1] || '¿Qué está en espera de mí?'}".`];
+    v.chips = (p.chips && p.chips.length ? p.chips : ['¿Qué tienes en tu escritorio?', '¿Qué está en espera de mí?', '¿Qué herramientas usas?']).slice(0, 3);
   }
   for (const k of Object.keys(FILE_GEN)) delete FILE_GEN[k];
   for (const v of V1) {
@@ -96,8 +96,8 @@ export function applyV1({ P, V1, FILE_GEN, clockStr }) {
     if (!doc) continue;
     FILE_GEN[v.id] = () => ({
       icon: '📄', name: slugf(doc.title) + '-' + clockStr().replace(':', '') + '.md',
-      meta: 'draft · waiting for your OK · click to view',
-      content: `${doc.title}\n${PROFILE.company || ''}\n\n${(doc.lines || []).join('\n')}\n\n${doc.total ? 'Total: ' + doc.total + '\n\n' : ''}Prepared by ${p.name || v.name}. Nothing goes out until you approve it.`,
+      meta: 'borrador · esperando tu visto bueno · clic para ver',
+      content: `${doc.title}\n${PROFILE.company || ''}\n\n${(doc.lines || []).join('\n')}\n\n${doc.total ? 'Total: ' + doc.total + '\n\n' : ''}Preparado por ${p.name || v.name}. Nada sale hasta que lo apruebes.`,
     });
   }
 }

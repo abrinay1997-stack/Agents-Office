@@ -36,14 +36,14 @@ export function parseUsage(j) {
 
 export async function fetchUsage() {
   const token = readToken();
-  if (!token) return { ok: false, reason: 'no Claude Code login found on this machine' };
+  if (!token) return { ok: false, reason: 'no se encontró sesión de Claude Code en esta máquina' };
   try {
     const r = await fetch(ENDPOINT, { headers: { Authorization: 'Bearer ' + token, 'anthropic-beta': 'oauth-2025-04-20', Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
-    if (!r.ok) return { ok: false, reason: `Claude's usage endpoint answered ${r.status}` };
+    if (!r.ok) return { ok: false, reason: `el endpoint de uso de Claude respondió ${r.status}` };
     const u = parseUsage(await r.json());
-    if (!u) return { ok: false, reason: "Claude's usage endpoint answered in a shape the office does not know" };
+    if (!u) return { ok: false, reason: 'El endpoint de uso de Claude respondió en un formato que la oficina no reconoce' };
     return { ok: true, source: 'claude', ...u };
-  } catch (e) { return { ok: false, reason: e.name === 'TimeoutError' ? "Claude's usage endpoint timed out" : e.message }; }
+  } catch (e) { return { ok: false, reason: e.name === 'TimeoutError' ? 'el endpoint de uso de Claude tardó demasiado' : e.message }; }
 }
 
 /* ---------- the office's own count (underneath): tokens this five-hour window ---------- */

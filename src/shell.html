@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <title>Agents Office v3 (Beta)</title>
@@ -1053,7 +1053,7 @@
   <div id="topconn"></div>
   <span class="sp"></span>
   <div id="topmodels"></div>
-  <button id="topCal" title="the calendar — tasks and routines on their days (P)">◷ CALENDAR</button>
+  <button id="topCal" title="el calendario — tareas y rutinas en sus días (P)">◷ CALENDARIO</button>
   <span id="topAppr" style="display:none">⚠ <span>0</span></span>
   <span id="clock">—</span>
 </div>
@@ -1077,14 +1077,14 @@
     <div id="mRt" class="mrt" hidden></div>
     <div class="mtabs">
       <button data-tab="chat" class="on">CHAT</button>
-      <button data-tab="activity">ACTIVITY</button>
+      <button data-tab="activity">ACTIVIDAD</button>
     </div>
     <div id="mChat" class="mpane">
       <div id="mMsgs"></div>
       <div id="mChips"></div>
       <div class="mInput">
-        <input id="mIn" placeholder="Message this agent… (add task: … · every weekday at 8am, … · approve / reject)" autocomplete="off">
-        <button id="mSend">SEND</button>
+        <input id="mIn" placeholder="Escríbele a este agente… (agregar tarea: … · cada día hábil a las 8am, … · aprobar / rechazar)" autocomplete="off">
+        <button id="mSend">ENVIAR</button>
       </div>
     </div>
     <div id="mAct" class="mpane" style="display:none">
@@ -1096,29 +1096,29 @@
   </div>
   </div>
 </div>
-<button id="overviewBtn">◂ OVERVIEW</button>
+<button id="overviewBtn">◂ VISTA GENERAL</button>
 <!-- V3.6: the full-screen Brain graph (G · click the pod · the panel strip) -->
 <div id="brainOv">
   <canvas id="bvCv"></canvas>
-  <div class="bv-top"><input id="bvSearch" placeholder="Search the Brain…" autocomplete="off" spellcheck="false"><div id="bvChips"></div></div>
-  <div class="bv-brand">THE BRAIN <small id="bvMeta"></small></div>
+  <div class="bv-top"><input id="bvSearch" placeholder="Buscar en el Cerebro…" autocomplete="off" spellcheck="false"><div id="bvChips"></div></div>
+  <div class="bv-brand">EL CEREBRO <small id="bvMeta"></small></div>
   <div class="bv-pane" id="bvPane"></div>
-  <div class="bv-foot">Esc closes · scroll zooms · drag pans · click a note to read it</div>
-  <button id="bvClose" title="close (Esc)">✕</button>
+  <div class="bv-foot">Esc cierra · scroll acerca · arrastrar mueve · clic en una nota para leerla</div>
+  <button id="bvClose" title="cerrar (Esc)">✕</button>
 </div>
 <!-- V3.2.1 (16 Sep 2026): the CALENDAR — P. Tasks and routines on the days they belong to; click a day to schedule -->
 <div id="calOv">
   <div class="cv-band">
-    <div class="cv-brand">CALENDAR <small id="cvCo"></small></div>
-    <div class="cv-seg"><button data-v="week">WEEK</button><button data-v="month" class="on">MONTH</button></div>
-    <div class="cv-nav"><button id="cvPrev" title="previous (←)">‹</button><div id="cvTitle"></div><button id="cvNext" title="next (→)">›</button><button id="cvToday" title="today (T)">TODAY</button></div>
+    <div class="cv-brand">CALENDARIO <small id="cvCo"></small></div>
+    <div class="cv-seg"><button data-v="week">SEMANA</button><button data-v="month" class="on">MES</button></div>
+    <div class="cv-nav"><button id="cvPrev" title="anterior (←)">‹</button><div id="cvTitle"></div><button id="cvNext" title="siguiente (→)">›</button><button id="cvToday" title="hoy (T)">HOY</button></div>
     <div class="cv-sp"></div>
-    <div class="cv-keys"><b>←</b> <b>→</b> move · <b>W</b> <b>M</b> view · <b>T</b> today · <b>Esc</b> close</div>
-    <button id="cvClose" title="close (Esc · P)">✕</button>
+    <div class="cv-keys"><b>←</b> <b>→</b> mover · <b>W</b> <b>M</b> vista · <b>T</b> hoy · <b>Esc</b> cerrar</div>
+    <button id="cvClose" title="cerrar (Esc · P)">✕</button>
   </div>
-  <div class="cv-tools"><input id="cvSearch" placeholder="Search tasks and routines…" autocomplete="off" spellcheck="false"><div id="cvChips"></div><div class="cv-sp"></div><div class="cv-stats" id="cvStats"></div></div>
+  <div class="cv-tools"><input id="cvSearch" placeholder="Buscar tareas y rutinas…" autocomplete="off" spellcheck="false"><div id="cvChips"></div><div class="cv-sp"></div><div class="cv-stats" id="cvStats"></div></div>
   <div class="cv-body">
-    <aside class="cv-rail"><div class="cv-rail-h">ROUTINES <b id="cvRtN">0</b></div><div id="cvRail"></div><div class="cv-rail-foot">Click any day to schedule a task for it, or switch on REPEAT to start a routine from that date. Click a routine here to see only its days.</div></aside>
+    <aside class="cv-rail"><div class="cv-rail-h">RUTINAS <b id="cvRtN">0</b></div><div id="cvRail"></div><div class="cv-rail-foot">Haz clic en un día para programar una tarea, o activa REPETIR para iniciar una rutina desde esa fecha. Haz clic en una rutina para ver solo sus días.</div></aside>
     <div class="cv-wrap"><div class="cv-dow" id="cvDow"></div><div class="cv-grid month" id="cvGrid"></div></div>
   </div>
   <div id="cvPop" hidden></div>
@@ -1127,27 +1127,27 @@
 <div id="tpanel">
   <div class="tp-cmd">
     <div class="tp-r1">
-      <button class="tp-dd" title="department"><span class="dot"></span><span class="tp-ddn">MARKETING</span></button>
+      <button class="tp-dd" title="departamento"><span class="dot"></span><span class="tp-ddn">MARKETING</span></button>
       <div class="tp-menu"></div>
-      <textarea class="tp-in" rows="1" placeholder="Type a task…" autocomplete="off" spellcheck="false"></textarea>
-      <button class="tp-big-btn" title="open the big editor (⌘⇧E)">⤢</button>
+      <textarea class="tp-in" rows="1" placeholder="Escribe una tarea…" autocomplete="off" spellcheck="false"></textarea>
+      <button class="tp-big-btn" title="abrir el editor grande (⌘⇧E)">⤢</button>
     </div>
     <div class="tp-r2">
-      <select class="tp-model" title="which model runs this (the office default unless you change it)"></select>
-      <select class="tp-effort" title="how hard it thinks: Auto is the model's own level (Opus runs at high); Low to Max as Claude Code names them"></select>
-      <button class="tp-rep" title="repeat on a schedule (or just say when: every weekday at 8am, …)">REPEAT</button>
-      <button class="tp-team" title="a team: the department lead splits the task across its desks, they work at the same time, the lead writes the final (or just say “as a team”)">TEAM</button>
+      <select class="tp-model" title="qué modelo ejecuta esto (el predeterminado de la oficina salvo que lo cambies)"></select>
+      <select class="tp-effort" title="qué tanto piensa: Auto es el nivel propio del modelo (Opus corre en alto); de Bajo a Máx como los nombra Claude Code"></select>
+      <button class="tp-rep" title="repetir en un horario (o solo di cuándo: cada día hábil a las 8am, …)">REPETIR</button>
+      <button class="tp-team" title="un equipo: el líder del departamento reparte la tarea entre sus escritorios, trabajan al mismo tiempo, el líder escribe el final (o solo di “en equipo”)">EQUIPO</button>
       <span class="sp"></span>
-      <button class="tp-add">ADD</button>
+      <button class="tp-add">AGREGAR</button>
     </div>
   </div>
   <div class="tp-rep-row" hidden>
-    <select class="tp-cad" title="how often"></select>
-    <input type="time" class="tp-at" value="08:00" title="at what time (this machine's clock)">
-    <label class="tp-ok" title="the result waits for your approval before anything is sent"><input type="checkbox" class="tp-okc" checked> needs my OK</label>
+    <select class="tp-cad" title="cada cuánto"></select>
+    <input type="time" class="tp-at" value="08:00" title="a qué hora (el reloj de esta máquina)">
+    <label class="tp-ok" title="el resultado espera tu aprobación antes de enviarse"><input type="checkbox" class="tp-okc" checked> necesita mi visto bueno</label>
   </div>
   <div class="tp-hint"></div>
-  <div class="tp-head"><span class="tp-lab">TASK STATUS <span class="tp-mode" hidden></span></span><span class="tp-scope">WHOLE OFFICE</span></div>
+  <div class="tp-head"><span class="tp-lab">ESTADO DE TAREAS <span class="tp-mode" hidden></span></span><span class="tp-scope">TODA LA OFICINA</span></div>
   <div class="tp-chips"></div>
   <div class="tp-next" hidden></div>
   <div class="tp-rows"></div>
@@ -1155,15 +1155,15 @@
 <!-- V3.7: the big editor — the task box with room for a brief -->
 <div id="tpBig">
   <div class="tb-box">
-    <div class="tb-head"><span class="lab">TASK FOR</span><span class="dot"></span><span class="tb-dept">MARKETING</span><span class="sp"></span><button class="tb-close" title="close (Esc)">✕</button></div>
-    <textarea class="tb-in" placeholder="Write the task, or a whole brief…" autocomplete="off" spellcheck="false"></textarea>
-    <div class="tb-foot"><div class="tp-hint tb-hint"></div><span class="kb"><b>⌘↵</b> adds · <b>Esc</b> closes</span><button class="tp-add tb-add">ADD</button></div>
+    <div class="tb-head"><span class="lab">TAREA PARA</span><span class="dot"></span><span class="tb-dept">MARKETING</span><span class="sp"></span><button class="tb-close" title="cerrar (Esc)">✕</button></div>
+    <textarea class="tb-in" placeholder="Escribe la tarea, o un informe completo…" autocomplete="off" spellcheck="false"></textarea>
+    <div class="tb-foot"><div class="tp-hint tb-hint"></div><span class="kb"><b>⌘↵</b> agrega · <b>Esc</b> cierra</span><button class="tp-add tb-add">AGREGAR</button></div>
   </div>
 </div>
 <div id="zoomCtl">
-  <button id="zIn" title="zoom in (+)">+</button>
-  <button id="zOut" title="zoom out (−)">−</button>
-  <button id="zHome" title="overview (0)">⌂</button>
+  <button id="zIn" title="acercar (+)">+</button>
+  <button id="zOut" title="alejar (−)">−</button>
+  <button id="zHome" title="vista general (0)">⌂</button>
 </div>
 <!--APP-->
 </body>

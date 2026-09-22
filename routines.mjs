@@ -135,10 +135,11 @@ export function askLine(task) {
 /** The "routines" list a lead reads back in chat. */
 export function listText(list, dept, agents) {
   const mine = list.filter(r => r.dept === dept);
-  if (!mine.length) return `Nothing on the ${NAMES[dept]} timetable yet. Give me one with a time in it — "every weekday at 8am, …" — and I will put it on.`;
+  const DNAMES = { emails: 'Correos', fin: 'Contabilidad', sales: 'Ventas' };
+  if (!mine.length) return `Todavía no hay nada en el horario de ${DNAMES[dept] || dept}. Dame una con hora — "every weekday at 8am, …" — y la anoto.`;
   const name = id => agents.find(a => a.id === id)?.name || id;
-  return `${NAMES[dept]} routines:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${name(r.agent)}${r.paused ? ' · PAUSED' : ''}${r.needsOk ? ' · waits for your OK' : ' · read-only'}`).join('\n') +
-    `\n\nSay "pause …", "resume …", "run … now" or "delete …" with a few words from the name.`;
+  return `Rutinas de ${DNAMES[dept] || dept}:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${name(r.agent)}${r.paused ? ' · PAUSADA' : ''}${r.needsOk ? ' · en espera de tu visto bueno' : ' · read-only'}`).join('\n') +
+    `\n\nDi "pause …", "resume …", "run … now" o "delete …" con algunas palabras del nombre.`;
 }
 
 /** Match "pause the monday one" / "run inbox triage now" to a routine in the department by word overlap. */

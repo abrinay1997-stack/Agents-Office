@@ -13,7 +13,9 @@
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const WORD_TIMES = { noon: '12:00', midday: '12:00', lunchtime: '12:30', midnight: '00:00', morning: '08:00', mornings: '08:00', afternoon: '14:00', afternoons: '14:00', evening: '17:00', evenings: '17:00', night: '20:00', nights: '20:00' };
+const DAYS_ES_PL = ['domingos', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados'];
+const SHORT_ES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const WORD_TIMES = { noon: '12:00', midday: '12:00', lunchtime: '12:30', midnight: '00:00', morning: '08:00', mornings: '08:00', afternoon: '14:00', afternoons: '14:00', evening: '17:00', evenings: '17:00', night: '20:00', nights: '20:00', 'mediodía': '12:00', mediodia: '12:00', medianoche: '00:00', 'mañana': '08:00', manana: '08:00', 'mañanas': '08:00', mananas: '08:00', tarde: '14:00', tardes: '14:00', noche: '20:00', noches: '20:00' };
 const pad = n => String(n).padStart(2, '0');
 const hhmm = (h, m = 0) => `${pad(h)}:${pad(m)}`;
 
@@ -27,20 +29,29 @@ function clock(h, m, ap) { // 8 → 08:00 · 8pm → 20:00 · 12am → 00:00 · 
 // one time in the sentence: "at 8", "at 8:30am", "8am", "08:00", "at noon", "in the morning"
 const T_RE = /\b(?:at\s+)?(\d{1,2})(?::(\d{2}))\s*(am|pm|a\.m\.|p\.m\.)?\b|\bat\s+(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)?\b|\b(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)\b/i;
 function findTime(s) {
-  const m = T_RE.exec(s);
+  let m = /\ba\s+las?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b/i.exec(s);
+  if (m) {
+    const ap = (m[3] || '').replace(/\./g, '').toLowerCase() || null;
+    const at = clock(m[1], m[2], ap);
+    if (at) return { at, span: [m.index, m.index + m[0].length], guessed: false };
+  }
+  m = T_RE.exec(s);
   if (m) {
     const ap = (m[3] || m[5] || m[7] || '').replace(/\./g, '').toLowerCase() || null;
     const at = m[1] !== undefined ? clock(m[1], m[2], ap) : m[4] !== undefined ? clock(m[4], 0, ap) : clock(m[6], 0, ap);
     if (at) return { at, span: [m.index, m.index + m[0].length], guessed: false };
   }
-  const w = /\b(?:at\s+|in\s+the\s+|every\s+|each\s+)?(noon|midday|lunchtime|midnight|mornings?|afternoons?|evenings?|nights?)\b/i.exec(s);
-  if (w) { const word = w[1].toLowerCase(); return { at: WORD_TIMES[word], span: [w.index, w.index + w[0].length], guessed: !/^(noon|midday|midnight)$/.test(word), word }; }
+  const w = /\b(?:at\s+|in\s+the\s+|every\s+|each\s+|a\s+la\s+|en\s+la\s+|por\s+la\s+|cada\s+|al\s+)?(noon|midday|lunchtime|midnight|mornings?|afternoons?|evenings?|nights?|mediod[ií]a|medianoche|mañana|manana|mañanas|mananas|tardes?|noches?)\b/i.exec(s);
+  if (w) { const word = w[1].toLowerCase(); return { at: WORD_TIMES[word], span: [w.index, w.index + w[0].length], guessed: !/^(noon|midday|midnight|mediod[ií]a|medianoche)$/.test(word), word }; }
   return null;
 }
+const DAYS_ES = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
 function dayIndex(word) {
-  const w = word.toLowerCase().replace(/s$/, '');
+  const w = word.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/s$/, '');
   const i = DAYS.findIndex(d => d.startsWith(w.slice(0, 3)));
-  return w.length >= 3 && i >= 0 ? i : -1;
+  if (w.length >= 3 && i >= 0) return i;
+  const j = DAYS_ES.findIndex(d => d.startsWith(w.slice(0, 3)));
+  return w.length >= 3 && j >= 0 ? j : -1;
 }
 const cut = (s, span) => (s.slice(0, span[0]) + ' ' + s.slice(span[1]));
 function tidy(s) { // the task text with the schedule taken out
@@ -52,14 +63,14 @@ export function parseWhen(input) {
   const src = String(input || '');
   let s = src, m;
   // every N minutes (filming cadence — accepted, never offered)
-  if ((m = /\bevery\s+(\d+)\s*(?:min|mins|minutes?)\b/i.exec(s))) {
-    return { when: { kind: 'minutes', every: Math.max(1, +m[1]) }, text: tidy(cut(s, [m.index, m.index + m[0].length])) };
+  if ((m = /\b(?:every\s+(\d+)\s*(?:min|mins|minutes?)|cada\s+(\d+)\s*(?:min|minutos?))\b/i.exec(s))) {
+    return { when: { kind: 'minutes', every: Math.max(1, +(m[1] || m[2])) }, text: tidy(cut(s, [m.index, m.index + m[0].length])) };
   }
   // hourly · every N hours · every hour between 9 and 5 · every hour 9am-5pm on weekdays
-  if ((m = /\b(?:hourly|every\s+(\d+\s+)?hours?|each\s+hour|once\s+an\s+hour)\b/i.exec(s))) {
-    const when = { kind: 'hourly', every: Math.max(1, +(m[1] || 1)) };
+  if ((m = /\b(?:hourly|every\s+(\d+\s+)?hours?|each\s+hour|once\s+an\s+hour|cada\s+hora|cada\s+(\d+\s+)?horas?)\b/i.exec(s))) {
+    const when = { kind: 'hourly', every: Math.max(1, +(m[1] || m[2] || 1)) };
     s = cut(s, [m.index, m.index + m[0].length]);
-    const w = /\b(?:between|from)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:and|to|-|–|until|till)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i.exec(s);
+    const w = /\b(?:between|from|de|desde|entre)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:and|to|-|–|until|till|a|al|hasta|y)\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i.exec(s);
     if (w) {
       let a = clock(w[1], w[2], w[3] ? w[3].toLowerCase() : null), b = clock(w[4], w[5], w[6] ? w[6].toLowerCase() : null);
       if (a && b) {
@@ -68,43 +79,43 @@ export function parseWhen(input) {
         if (b > a) { when.from = a; when.to = b; s = cut(s, [w.index, w.index + w[0].length]); }
       }
     }
-    if ((m = /\b(?:on\s+)?(?:week\s?days|working\s+days|business\s+days|mon(?:day)?\s*(?:-|–|to)\s*fri(?:day)?)\b/i.exec(s))) { when.weekdaysOnly = true; s = cut(s, [m.index, m.index + m[0].length]); }
+    if ((m = /\b(?:on\s+)?(?:week\s?days|working\s+days|business\s+days|mon(?:day)?\s*(?:-|–|to)\s*fri(?:day)?|d[ií]as?\s+h[aá]bil(?:es)?|entre\s+semana|lun(?:es)?\s*(?:-|–|a|al|to)\s*vie(?:rnes)?)\b/i.exec(s))) { when.weekdaysOnly = true; s = cut(s, [m.index, m.index + m[0].length]); }
     return { when, text: tidy(s) };
   }
   // weekdays
-  if ((m = /\b(?:every|each|on|all)?\s*(?:week\s?days?|working\s+days?|business\s+days?|mon(?:day)?\s*(?:-|–|to|through)\s*fri(?:day)?)\b/i.exec(s))) {
+  if ((m = /\b(?:every|each|on|all|cada|los|todos?\s+los?)?\s*(?:week\s?days?|working\s+days?|business\s+days?|mon(?:day)?\s*(?:-|–|to|through)\s*fri(?:day)?|d[ií]as?\s+h[aá]bil(?:es)?|entre\s+semana|lun(?:es)?\s*(?:-|–|a|al|to|through)\s*vie(?:rnes)?)\b/i.exec(s))) {
     s = cut(s, [m.index, m.index + m[0].length]);
     const t = findTime(s); if (t) s = cut(s, t.span);
     return { when: { kind: 'weekdays', at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), guessWord: t && t.word, needsTime: !t };
   }
   // weekends
-  if ((m = /\b(?:every|each|on|at)?\s*(?:the\s+)?weekends?\b/i.exec(s))) {
+  if ((m = /\b(?:every|each|on|at|cada|los|el|todos?\s+los?)?\s*(?:the\s+|el\s+)?(?:weekends?|fin(?:es)?\s+de\s+semana)\b/i.exec(s))) {
     s = cut(s, [m.index, m.index + m[0].length]);
     const t = findTime(s); if (t) s = cut(s, t.span);
     return { when: { kind: 'weekly', days: [6, 0], at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), guessWord: t && t.word, needsTime: !t };
   }
-  // named days: every monday · mondays · on mon and thu · every tuesday and friday · each friday
+  // named days: every monday · mondays · on mon and thu · every tuesday and friday · each friday · cada lunes · los lun y mié
   {
-    const re = /\b(?:every|each|on|all|every\s+other)?\s*((?:(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?)(?:\s*(?:,|and|&|\+)\s*(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?)*)\b/i;
+    const re = /\b(?:every|each|on|all|every\s+other|cada|los|las|el|todos?\s+los?)?\s*((?:(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?|dom(?:ingo)?s?|lun(?:es)?|mar(?:tes)?|mi[eé](?:rcoles)?|jue(?:ves)?|vie(?:rnes)?|s[aá]b(?:ado)?s?)(?:\s*(?:,|\by\b|\be\b|and|&|\+)\s*(?:(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?|dom(?:ingo)?s?|lun(?:es)?|mar(?:tes)?|mi[eé](?:rcoles)?|jue(?:ves)?|vie(?:rnes)?|s[aá]b(?:ado)?s?))*)\b/i;
     if ((m = re.exec(s))) {
-      const days = [...new Set(m[1].split(/\s*(?:,|and|&|\+)\s*/).map(dayIndex).filter(i => i >= 0))];
+      const days = [...new Set(m[1].split(/\s*(?:,|\by\b|\be\b|and|&|\+)\s*/).map(dayIndex).filter(i => i >= 0))];
       if (days.length) {
         s = cut(s, [m.index, m.index + m[0].length]);
         const t = findTime(s); if (t) s = cut(s, t.span);
-        s = s.replace(/\b(?:every|each)\s+week\b/i, ' ').replace(/\bweekly\b/i, ' ');
+        s = s.replace(/\b(?:every|each|cada)\s+(?:week|semana)\b/i, ' ').replace(/\b(?:weekly|semanal(?:mente)?)\b/i, ' ');
         return { when: { kind: 'weekly', days: days.sort((a, b) => a - b), at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), guessWord: t && t.word, needsTime: !t };
       }
     }
   }
   // weekly with no day named → ask for the day
-  if ((m = /\b(?:weekly|every\s+week|once\s+a\s+week|each\s+week)\b/i.exec(s))) {
+  if ((m = /\b(?:weekly|every\s+week|once\s+a\s+week|each\s+week|semanal(?:mente)?|cada\s+semana|una\s+vez\s+(?:por|a\s+la)\s+semana)\b/i.exec(s))) {
     s = cut(s, [m.index, m.index + m[0].length]);
     const t = findTime(s); if (t) s = cut(s, t.span);
     return { when: { kind: 'weekly', days: [], at: t ? t.at : null }, text: tidy(s), needsDay: true, needsTime: !t };
   }
   // daily: every day · daily · each day · every morning (time word doubles as the cadence)
-  if ((m = /\b(?:daily|every\s+day|each\s+day|once\s+a\s+day|every\s+(?:morning|afternoon|evening|night)|each\s+(?:morning|afternoon|evening|night))\b/i.exec(s))) {
-    const word = /(morning|afternoon|evening|night)/i.exec(m[0]);
+  if ((m = /\b(?:daily|every\s+day|each\s+day|once\s+a\s+day|every\s+(?:morning|afternoon|evening|night)|each\s+(?:morning|afternoon|evening|night)|a?\s*diario|cada\s+d[ií]a|todos\s+los\s+d[ií]as|una\s+vez\s+al\s+d[ií]a|cada\s+(?:mañana|manana|tarde|noche)|todas?\s+las?\s+(?:mañanas|mananas|tardes|noches))\b/i.exec(s))) {
+    const word = /(morning|afternoon|evening|night|mañana|manana|tardes?|noches?)/i.exec(m[0]);
     s = cut(s, [m.index, m.index + m[0].length]);
     const t = findTime(s);
     if (t) s = cut(s, t.span);
@@ -127,7 +138,7 @@ export function fromPicker(cadence, at, start) {
 }
 const startMs = when => when && /^\d{4}-\d{2}-\d{2}$/.test(when.start || '') ? new Date(when.start + 'T00:00:00').getTime() : null;
 /** "12 Oct" — a short date for the words the office says back. */
-export const shortDate = ts => { const d = new Date(ts); return `${d.getDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]}`; };
+export const shortDate = ts => { const d = new Date(ts); return `${d.getDate()} ${['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][d.getMonth()]}`; };
 
 /** A schedule → the words the office says back. */
 export function describe(when) {
@@ -137,17 +148,17 @@ export function describe(when) {
   return base && s && s > Date.now() ? `${base} · from ${shortDate(s)}` : base;
 }
 function describeBase(when) {
-  const at = when.at ? ' · ' + when.at : '';
+  const at = when.at ? ' a las ' + when.at : '';
   switch (when.kind) {
-    case 'minutes': return `every ${when.every} min`;
-    case 'hourly': return (when.every > 1 ? `every ${when.every} hours` : 'every hour') + (when.from ? ` ${when.from}–${when.to}` : '') + (when.weekdaysOnly ? ' · weekdays' : '');
-    case 'daily': return 'every day' + at;
-    case 'weekdays': return 'every weekday' + at;
+    case 'minutes': return `cada ${when.every} min`;
+    case 'hourly': return (when.every > 1 ? `cada ${when.every} horas` : 'cada hora') + (when.from ? ` de ${when.from} a ${when.to}` : '') + (when.weekdaysOnly ? ' · días hábiles' : '');
+    case 'daily': return 'todos los días' + at;
+    case 'weekdays': return 'cada día hábil' + at;
     case 'weekly': {
       const d = (when.days || []);
-      if (d.length === 7) return 'every day' + at;
-      if (d.length === 2 && d.includes(0) && d.includes(6)) return 'weekends' + at;
-      return (d.length === 1 ? DAYS[d[0]][0].toUpperCase() + DAYS[d[0]].slice(1) + 's' : d.map(i => SHORT[i]).join(', ')) + at;
+      if (d.length === 7) return 'todos los días' + at;
+      if (d.length === 2 && d.includes(0) && d.includes(6)) return 'fines de semana' + at;
+      return (d.length === 1 ? DAYS_ES_PL[d[0]] : d.map(i => SHORT_ES[i]).join(', ')) + at;
     }
   }
   return '';
@@ -204,16 +215,16 @@ export function occurrences(when, from, to, limit = 400) {
 export function untilText(ts, now = Date.now()) {
   if (!ts) return '—';
   const ms = ts - now;
-  if (ms <= 0) return 'now';
+  if (ms <= 0) return 'ahora';
   const m = Math.round(ms / 60000);
-  if (m < 1) return 'in under a minute';
-  if (m < 60) return `in ${m} min`;
+  if (m < 1) return 'en menos de un minuto';
+  if (m < 60) return `en ${m} min`;
   const d = new Date(ts), today = new Date(now);
   const sameDay = d.toDateString() === today.toDateString();
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
   const t = hhmm(d.getHours(), d.getMinutes());
-  if (sameDay) return `at ${t}`;
-  if (d.toDateString() === tomorrow.toDateString()) return `tomorrow ${t}`;
-  return `${SHORT[d.getDay()]} ${t}`;
+  if (sameDay) return `a las ${t}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `mañana ${t}`;
+  return `${SHORT_ES[d.getDay()]} ${t}`;
 }
 export const DAY_NAMES = DAYS;

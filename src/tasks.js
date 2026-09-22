@@ -31,41 +31,41 @@ const SEGMENTS = ['roofing', 'HVAC', 'dental', 'logistics', 'fitness', 'property
 
 // generic-business task pool per agent (AJ: generic business, not TerriTool-flavoured)
 const POOL = {
-  elead: ['Review the overnight inbox, route 40 emails', 'Tone pass on 6 client replies', 'Weekly inbox summary for AJ', 'Update the reply templates', 'Escalate 2 threads to AJ'],
-  cmail: ['Reply to the {co} scope question', 'Send the kickoff summary to {co}', 'Answer 9 client emails from overnight', 'Draft the price-increase notice', 'Chase {co} for the brief sign-off'],
-  imail: ['Triage 14 internal emails', 'Circulate the weekly numbers', 'Reply to the team about the Q3 plan', 'Summarise the 40-message thread', 'Book the client review in the calendar'],
-  vmail: ['Summarise the vendor SLA revision', 'Reply to the SMS provider about the plan tier', 'Request a quote from the print vendor', 'Chase the hosting vendor on the outage report', 'Confirm the vendor renewal date'],
-  kmail: ['Answer the designer’s invoice query', 'Send the brief to the copywriter', 'Confirm the contractor’s hours for the week', 'Chase the developer for the estimate', 'Reply to the video contractor about the deadline'],
-  lexi:  ['Review overnight enrichment before the reps see it', "Build today's call lists", 'Chase {n} deals quiet past 14 days', 'Prep the weekly pipeline review', 'Tighten the ICP with Prospector'],
-  enzo:  ['Enrich {n} overnight signups', 'Verify mobiles on the AU batch', 'Backfill company size on 12 leads', 'Score the morning batch for the Sales Lead', 'Re-run 3 failed enrichments'],
-  ilm:   ['Qualify {n} inbound leads from the website', 'Route 6 hot leads to the reps', 'Reply to {co} within the hour', 'Book a discovery call with {co}', 'Clean the inbound queue, 12 duplicates'],
-  pros:  ['Mine {n} {segment} companies for outbound', 'Score 40 prospects against the ICP', "Build tomorrow's cold-call list", 'Cross-check new finds against customers', 'Verify mobiles on the new batch'],
-  piper: ['Proposal for the 40-seat prospect', 'Update the Growth-plan proposal template', 'Pricing options for {co}', 'Proposal follow-up pack for {co}', 'Sign-online link for the {co} proposal'],
-  folo:  ['Follow up {n} quotes sent last week', 'Re-engage 8 cold leads', 'Log call outcomes into the CRM', 'Send the 14-day nudge to quiet deals', 'Book a demo for {co}'],
-  mlead: ["Review the week's content before it ships", 'Shift $50/day into the winning ad', 'Set next week’s reel line-up', 'Weekly marketing summary for AJ', 'Brief Research on the {segment} angle'],
-  riley: ['Morning scan: 49 sources', 'Weekly competitor pricing scan', 'Pull 3 stats for the newsletter', 'Trend brief for the Sales Lead', 'Read 6 buyer reviews for angles'],
-  newt:  ['Draft the September newsletter', 'A/B subject lines for issue 32', 'Log issue 31 numbers', 'Rebuild the welcome sequence, email 2', 'Clean 40 bounced subscribers'],
-  gfx:   ['Quote-card set for the pricing page', 'Story + square exports, brand kit', 'Thumbnail for the "10am rule" reel', 'Carousel cover, 3 options', 'Resize the ad creative to 4:5'],
-  ada:   ['Refresh the fatigued ad set', 'Launch 4 variants of "cold call anxiety"', 'Pull the daily spend report', 'Shift $50/day into the winner', 'Exclude existing customers from targeting'],
-  iggy:  ['Write the hook for the carousel', 'Log hook performance to the playbook', 'Schedule 3 posts for the week', 'Reply to 14 DMs', 'Cut the caption on the "10am rule" reel'],
-  vid:   ['Render the "10am rule" reel, captions on', 'Cut a 15 s teaser from the demo', 'Re-render ad variants in 4:5', 'Caption pass on the webinar clip', 'Colour + captions on the founder reel', 'Render the 45 s demo cut'],
-  olead: ["Review the week's contracts and flags", 'Chase {n} open vendor renewals', 'Prioritise Intel’s findings', 'Weekly operations summary for AJ', 'Prep the board pack sections'],
-  scout: ['Competitor pricing page diff', 'G2 review scan for the top 3 rivals', 'Opportunity memo: rival price rise', 'Market map refresh, Q3', 'Watch the rival launch page'],
-  legal: ['Review the amended MSA, 2 clauses', 'Contractor agreement for the designer', 'Privacy policy annual check', 'Redline the {co} terms', 'Check the price-lock clause'],
-  comply:['AU regulation page changed, diffing', 'Consent wording audit on the forms', 'Data retention check, 3 systems', 'Quarterly compliance checklist', 'Cookie banner review'],
-  report:['Weekly board pack, 6 sections', 'Monthly KPI roll-up', 'Churn cohort report for the Brain', 'Delivery SLA report', 'Rep activity summary'],
-  dash:  ['Refresh the sales dashboard', 'Add the delivery on-track tile', 'Fix the revenue chart, wrong period', 'Build the inbox response-time view', 'Weekly dashboard health check'],
-  alead: ["Review the week's cash position", 'Approve the contractor payment run', 'Prep the month-end pack', 'Vendor rate review', 'Cash forecast, next 8 weeks'],
-  invo:  ['Issue {n} invoices for the week', 'Chase 3 overdue invoices', 'Credit note for {co}', 'Invoice {co} $840', 'Reminder 2 of 3 to {co}'],
-  apay:  ["Match today's card charges", 'Audit contractor invoice #218 vs contract', 'Schedule the contractor payments', 'Flag a subscription overlap', 'Check the SMS provider plan tier'],
-  recon: ['Reconcile 14 payments, 2 flagged', 'Month-end bank reconciliation', 'Match Stripe payouts to invoices', 'Clear 2 unmatched fees', 'Tie out the card statement'],
-  dlead: ['Review 12 live projects for risk', 'Weekly delivery summary for AJ', 'Re-plan the {co} timeline', 'Approve the {co} handover', 'Staff the {co} project'],
-  pco:   ['Update the {co} project plan', 'Move 3 milestones after the scope change', 'Chase 2 overdue client sign-offs', 'Schedule the {co} review', 'Log this week’s hours per project'],
-  qa:    ['QA the {co} website handover', 'Check the {co} report pack for errors', 'Test the client portal login flow', 'Proof the asset set, brand rules', 'Regression pass on the booking form'],
-  crep:  ['September status report for {co}', 'Monthly report pack, 14 clients', 'Add the results section to the {co} report', 'Send the {co} report, 2 flags', 'Chart the {co} lead numbers'],
-  cass:  ['Sync the {co} assets to the portal', 'Organise the {co} asset library', 'Export the logo set, 4 formats', 'Archive the finished {co} files', 'Tag 60 assets by campaign'],
-  dasst: ['Draft the {co} social templates', 'Resize the {co} banners, 6 sizes', 'Mock up the {co} landing page', 'Prepare the {co} brand sheet', 'Design the {co} report cover'],
-  ona:   ['Kickoff call prep for {co}', 'Onboarding checklist for {co}', 'Set up the {co} client portal', 'Walk {co} through the first report', 'Day-7 check-in with {co}'],
+  elead: ['Revisar la bandeja nocturna, derivar 40 correos', 'Revisar el tono de 6 respuestas a clientes', 'Resumen semanal de la bandeja para AJ', 'Actualizar las plantillas de respuesta', 'Escalar 2 hilos a AJ'],
+  cmail: ['Responder la pregunta de alcance de {co}', 'Enviar el resumen de arranque a {co}', 'Responder 9 correos de clientes de la noche', 'Redactar el aviso de aumento de precios', 'Pedir a {co} la aprobación del brief'],
+  imail: ['Clasificar 14 correos internos', 'Circular los números semanales', 'Responder al equipo sobre el plan Q3', 'Resumir el hilo de 40 mensajes', 'Agendar la revisión con el cliente en el calendario'],
+  vmail: ['Resumir la revisión del SLA del proveedor', 'Responder al proveedor de SMS sobre el nivel del plan', 'Pedir una cotización al proveedor de impresión', 'Pedir al proveedor de hosting el reporte de la caída', 'Confirmar la fecha de renovación del proveedor'],
+  kmail: ['Responder la consulta de factura del diseñador', 'Enviar el brief al redactor', 'Confirmar las horas semanales del contratista', 'Pedir al desarrollador la estimación', 'Responder al contratista de video sobre la fecha límite'],
+  lexi:  ['Revisar el enriquecimiento nocturno antes de que lo vean los reps', 'Armar las listas de llamadas de hoy', 'Dar seguimiento a {n} negocios quietos hace 14 días', 'Preparar la revisión semanal del pipeline', 'Ajustar el ICP con Prospector'],
+  enzo:  ['Enriquecer {n} registros nocturnos', 'Verificar móviles del lote AU', 'Completar tamaño de empresa en 12 leads', 'Calificar el lote matutino para el líder de ventas', 'Repetir 3 enriquecimientos fallidos'],
+  ilm:   ['Calificar {n} leads entrantes del sitio web', 'Derivar 6 leads calientes a los reps', 'Responder a {co} en menos de una hora', 'Agendar una llamada de descubrimiento con {co}', 'Limpiar la cola entrante, 12 duplicados'],
+  pros:  ['Buscar {n} empresas de {segment} para outbound', 'Calificar 40 prospectos contra el ICP', 'Armar la lista de llamadas en frío de mañana', 'Comparar hallazgos nuevos con clientes actuales', 'Verificar móviles del lote nuevo'],
+  piper: ['Propuesta para el prospecto de 40 puestos', 'Actualizar la plantilla de propuesta del plan Growth', 'Opciones de precios para {co}', 'Paquete de seguimiento de propuesta para {co}', 'Enlace de firma en línea para la propuesta de {co}'],
+  folo:  ['Dar seguimiento a {n} cotizaciones de la semana pasada', 'Retomar 8 leads fríos', 'Registrar resultados de llamadas en el CRM', 'Enviar el recordatorio de 14 días a negocios quietos', 'Agendar una demo para {co}'],
+  mlead: ['Revisar el contenido semanal antes de publicarlo', 'Mover $50/día al anuncio ganador', 'Definir la parrilla de reels de la próxima semana', 'Resumen semanal de marketing para AJ', 'Pedir a Research el ángulo de {segment}'],
+  riley: ['Monitoreo matutino: 49 fuentes', 'Monitoreo semanal de precios de la competencia', 'Conseguir 3 datos para el newsletter', 'Brief de tendencias para el líder de ventas', 'Leer 6 reseñas de compradores para ángulos'],
+  newt:  ['Redactar el newsletter de septiembre', 'Asuntos A/B para la edición 32', 'Registrar los números de la edición 31', 'Rehacer la secuencia de bienvenida, correo 2', 'Limpiar 40 suscriptores rebotados'],
+  gfx:   ['Set de tarjetas de cita para la página de precios', 'Exports de historia + cuadrado, kit de marca', 'Miniatura para el reel de "la regla de las 10am"', 'Portada de carrusel, 3 opciones', 'Redimensionar la creatividad del anuncio a 4:5'],
+  ada:   ['Refrescar el set de anuncios fatigado', 'Lanzar 4 variantes de "ansiedad de llamadas en frío"', 'Sacar el reporte diario de gasto', 'Mover $50/día al ganador', 'Excluir clientes actuales de la segmentación'],
+  iggy:  ['Escribir el gancho del carrusel', 'Registrar el rendimiento de ganchos en el playbook', 'Programar 3 publicaciones de la semana', 'Responder 14 mensajes directos', 'Recortar el texto del reel de "la regla de las 10am"'],
+  vid:   ['Renderizar el reel de "la regla de las 10am", con subtítulos', 'Cortar un teaser de 15 s de la demo', 'Re-renderizar variantes de anuncios en 4:5', 'Pasada de subtítulos al clip del webinar', 'Color + subtítulos al reel del fundador', 'Renderizar el corte demo de 45 s'],
+  olead: ['Revisar los contratos y alertas de la semana', 'Dar seguimiento a {n} renovaciones abiertas de proveedores', 'Priorizar los hallazgos de Intel', 'Resumen semanal de operaciones para AJ', 'Preparar las secciones del board pack'],
+  scout: ['Comparar la página de precios de la competencia', 'Revisar reseñas G2 de los 3 rivales principales', 'Memo de oportunidad: alza de precios del rival', 'Actualizar el mapa de mercado, Q3', 'Vigilar la página de lanzamiento del rival'],
+  legal: ['Revisar el MSA modificado, 2 cláusulas', 'Contrato del diseñador como contratista', 'Revisión anual de la política de privacidad', 'Marcar en rojo los términos de {co}', 'Revisar la cláusula de precio fijo'],
+  comply:['La página de regulación AU cambió, comparando', 'Auditoría de textos de consentimiento en los formularios', 'Revisión de retención de datos, 3 sistemas', 'Checklist trimestral de compliance', 'Revisión del banner de cookies'],
+  report:['Board pack semanal, 6 secciones', 'Consolidado mensual de KPIs', 'Reporte de cohortes de churn para el Brain', 'Reporte de SLA de entregas', 'Resumen de actividad de los reps'],
+  dash:  ['Actualizar el dashboard de ventas', 'Agregar el tile de entregas a tiempo', 'Corregir el gráfico de ingresos, período equivocado', 'Crear la vista de tiempos de respuesta de la bandeja', 'Chequeo semanal del dashboard'],
+  alead: ['Revisar la posición de caja de la semana', 'Aprobar el pago a contratistas', 'Preparar el paquete de cierre de mes', 'Revisión de tarifas de proveedores', 'Pronóstico de caja, próximas 8 semanas'],
+  invo:  ['Emitir {n} facturas de la semana', 'Cobrar 3 facturas vencidas', 'Nota de crédito para {co}', 'Facturar a {co} $840', 'Recordatorio 2 de 3 a {co}'],
+  apay:  ['Conciliar los cargos de tarjeta de hoy', 'Auditar la factura #218 del contratista vs contrato', 'Programar los pagos a contratistas', 'Marcar una suscripción duplicada', 'Revisar el nivel del plan del proveedor de SMS'],
+  recon: ['Conciliar 14 pagos, 2 marcados', 'Conciliación bancaria de fin de mes', 'Cruzar pagos de Stripe con facturas', 'Aclarar 2 cargos sin conciliar', 'Cuadrar el estado de cuenta de la tarjeta'],
+  dlead: ['Revisar 12 proyectos activos por riesgo', 'Resumen semanal de entregas para AJ', 'Replanificar el cronograma de {co}', 'Aprobar la entrega de {co}', 'Asignar personal al proyecto de {co}'],
+  pco:   ['Actualizar el plan del proyecto de {co}', 'Mover 3 hitos tras el cambio de alcance', 'Pedir 2 aprobaciones vencidas del cliente', 'Agendar la revisión de {co}', 'Registrar las horas semanales por proyecto'],
+  qa:    ['QA a la entrega del sitio de {co}', 'Revisar el paquete de reportes de {co} por errores', 'Probar el login del portal del cliente', 'Corregir el set de assets, reglas de marca', 'Pasada de regresión al formulario de reservas'],
+  crep:  ['Reporte de estado de septiembre para {co}', 'Paquete mensual de reportes, 14 clientes', 'Agregar la sección de resultados al reporte de {co}', 'Enviar el reporte de {co}, 2 alertas', 'Graficar los números de leads de {co}'],
+  cass:  ['Sincronizar los assets de {co} al portal', 'Organizar la biblioteca de assets de {co}', 'Exportar el set de logos, 4 formatos', 'Archivar los archivos terminados de {co}', 'Etiquetar 60 assets por campaña'],
+  dasst: ['Borrador de plantillas sociales de {co}', 'Redimensionar los banners de {co}, 6 tamaños', 'Maquetar la landing page de {co}', 'Preparar la hoja de marca de {co}', 'Diseñar la portada del reporte de {co}'],
+  ona:   ['Preparar la llamada de arranque de {co}', 'Checklist de onboarding para {co}', 'Configurar el portal del cliente de {co}', 'Acompañar a {co} en su primer reporte', 'Check-in día 7 con {co}'],
 };
 
 // keywords that route a typed task to the right agent inside the chosen department
@@ -92,23 +92,23 @@ const KEYS = {
 
 // handoff chains — one piece of work passing desk to desk (the multi-agent story)
 const CHAINS = [
-  [['mlead', 'Set next week’s reel line-up'], ['riley', 'Research angles for the line-up'], ['iggy', 'Write the hooks for the line-up']],
-  [['legal', 'Review the amended {co} MSA'], ['olead', 'Decide on the {co} clause, escalate if needed']],
-  [['riley', 'Research hook angles for the next reel'], ['iggy', 'Write the reel script from the research'], ['vid', 'Cut and render the reel, captions on']],
-  [['gfx', 'Creative for the new {segment} ad set'], ['ada', 'Launch the {segment} ad set, 4 variants']],
-  [['pros', 'Build a {segment} prospect list'], ['ilm', 'Qualify the {segment} list, route the hot ones'], ['lexi', 'Review the routed leads with the reps']],
-  [['enzo', 'Enrich the overnight signups'], ['ilm', 'Route the enriched batch to the reps']],
-  [['ilm', 'Qualified lead: {co} wants a quote'], ['piper', 'Proposal for {co}'], ['legal', 'Check the {co} terms']],
-  [['piper', 'Proposal accepted by {co}'], ['ona', 'Onboard {co}: kickoff call'], ['pco', 'Set up the {co} project plan']],
-  [['cmail', 'Scope change request from {co}'], ['pco', 'Re-plan the {co} milestones'], ['crep', 'Update the {co} status report']],
-  [['dasst', 'Draft the {co} asset set'], ['qa', 'QA the {co} asset set'], ['cass', 'Publish the {co} assets to the portal']],
-  [['scout', 'Rival pricing change detected, memo'], ['piper', 'Update the proposal pricing table']],
-  [['invo', "Issue this week's invoices"], ['recon', 'Match payments to the new invoices']],
-  [['report', 'Monthly KPI roll-up'], ['dash', 'Refresh the KPI dashboard'], ['alead', 'Fold the KPIs into the month-end pack']],
-  [['vmail', 'Vendor quote received for {co}'], ['apay', 'Check the vendor quote against budget']],
-  [['kmail', 'Contractor invoice query from the designer'], ['apay', 'Audit the contractor invoice vs contract']],
-  [['imail', 'Team asks for the Q3 numbers'], ['dash', 'Refresh the Q3 dashboard']],
-  [['crep', 'September report ready for {co}'], ['cmail', 'Send the {co} report with a summary']],
+  [['mlead', 'Definir la parrilla de reels de la próxima semana'], ['riley', 'Investigar ángulos para la parrilla'], ['iggy', 'Escribir los ganchos de la parrilla']],
+  [['legal', 'Revisar el MSA modificado de {co}'], ['olead', 'Decidir sobre la cláusula de {co}, escalar si hace falta']],
+  [['riley', 'Investigar ángulos de gancho para el próximo reel'], ['iggy', 'Escribir el guion del reel desde la investigación'], ['vid', 'Cortar y renderizar el reel, con subtítulos']],
+  [['gfx', 'Creatividad para el nuevo set de anuncios de {segment}'], ['ada', 'Lanzar el set de anuncios de {segment}, 4 variantes']],
+  [['pros', 'Armar una lista de prospectos de {segment}'], ['ilm', 'Calificar la lista de {segment}, derivar los calientes'], ['lexi', 'Revisar los leads derivados con los reps']],
+  [['enzo', 'Enriquecer los registros nocturnos'], ['ilm', 'Derivar el lote enriquecido a los reps']],
+  [['ilm', 'Lead calificado: {co} quiere una cotización'], ['piper', 'Propuesta para {co}'], ['legal', 'Revisar los términos de {co}']],
+  [['piper', 'Propuesta aceptada por {co}'], ['ona', 'Onboarding de {co}: llamada de arranque'], ['pco', 'Armar el plan del proyecto de {co}']],
+  [['cmail', 'Solicitud de cambio de alcance de {co}'], ['pco', 'Replanificar los hitos de {co}'], ['crep', 'Actualizar el reporte de estado de {co}']],
+  [['dasst', 'Borrador del set de assets de {co}'], ['qa', 'QA al set de assets de {co}'], ['cass', 'Publicar los assets de {co} en el portal']],
+  [['scout', 'Cambio de precios del rival detectado, memo'], ['piper', 'Actualizar la tabla de precios de la propuesta']],
+  [['invo', 'Emitir las facturas de esta semana'], ['recon', 'Cruzar los pagos con las facturas nuevas']],
+  [['report', 'Consolidado mensual de KPIs'], ['dash', 'Actualizar el dashboard de KPIs'], ['alead', 'Sumar los KPIs al paquete de cierre de mes']],
+  [['vmail', 'Cotización de proveedor recibida para {co}'], ['apay', 'Revisar la cotización del proveedor contra el presupuesto']],
+  [['kmail', 'Consulta de factura del diseñador como contratista'], ['apay', 'Auditar la factura del contratista vs contrato']],
+  [['imail', 'El equipo pide los números del Q3'], ['dash', 'Actualizar el dashboard del Q3']],
+  [['crep', 'Reporte de septiembre listo para {co}'], ['cmail', 'Enviar el reporte de {co} con un resumen']],
 ];
 
 applyTasks({ POOL, KEYS, CHAINS, SEGMENTS, AGENTS }); // INDUSTRY PROFILE (12 Sep 2026): per-industry demo file; no-op otherwise
@@ -117,15 +117,15 @@ function vars() { return { co: rnd(P.co), n: ri(6, 40), segment: rnd(SEGMENTS) }
 function timeStr(ts) {
   return new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
 }
-function span(ms) { // "4 min" · "1 h 12 m" · "3 h"
+function span(ms) { // "4 min" · "1 h 12 min" · "3 h"
   const m = Math.max(0, Math.round(ms / 60000));
-  if (m < 1) return 'just now';
+  if (m < 1) return 'ahora mismo';
   if (m < 60) return m + ' min';
   const h = Math.floor(m / 60), r = m % 60;
-  return r ? `${h} h ${r} m` : `${h} h`;
+  return r ? `${h} h ${r} min` : `${h} h`;
 }
 const agentOf = id => AGENTS.find(a => a.id === id);
-const STATE_LABEL = { next: 'Backlog', doing: 'In progress', waiting: 'Waiting', done: 'Done', sched: 'Scheduled', scheduled: 'Scheduled' }; // scheduled (V3.2.1): a task with a date, not yet fired
+const STATE_LABEL = { next: 'Pendientes', doing: 'En curso', waiting: 'En espera', done: 'Listo', sched: 'Programado', scheduled: 'Programado' }; // scheduled (V3.2.1): a task with a date, not yet fired
 
 export function initTasks(ctx) {
   const { R, deptRT, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent,
@@ -193,8 +193,8 @@ export function initTasks(ctx) {
     doneCount[t.dept]++;
     const r = R[t.agent];
     spawnEmote(r, '✓');
-    feedPush(r, '✓', 'Done: ' + t.title);
-    if (chatHist[t.agent]) chatPush(t.agent, { who: 'work', i: '✓', text: 'done — ' + t.title });
+    feedPush(r, '✓', 'Listo: ' + t.title);
+    if (chatHist[t.agent]) chatPush(t.agent, { who: 'work', i: '✓', text: 'listo — ' + t.title });
     if (t.live) deliver(t); // the real deliverable lands in the agent's chat; the server already wrote the note
     else if (t.piece) { if (R[t.leadId]) { spawnEmote(R[t.leadId], '📋'); feedPush(R[t.leadId], '📋', `Piece in from ${agentOf(t.agent).name}: ${t.title}`); } } // demo: the piece walks back to the lead
     // demo: finished work becomes a note in the Brain — always for tasks you added, a quarter of the rest
@@ -213,15 +213,15 @@ export function initTasks(ctx) {
     const a = agentOf(t.agent);
     if (t.piece) { // V3.2 (16 Sep): a teammate's piece — in their own chat, then it walks back to the lead
       const L = agentOf(t.leadId), parent = tasks.find(x => x.id === t.parent);
-      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `my piece · passed to ${L ? L.name : 'the lead'} · ${timeStr(t.doneAt)} · click to view`, content: t.result });
-      if (!t.error) chatPush(t.agent, { who: 'agent', text: `My piece of "${parent ? parent.title : t.title}" is done and with ${L ? L.name : 'the lead'}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}.` });
+      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'the lead'} · ${timeStr(t.doneAt)} · click to view`, content: t.result });
+      if (!t.error) chatPush(t.agent, { who: 'agent', text: `Mi parte de "${parent ? parent.title : t.title}" está lista y con ${L ? L.name : 'the lead'}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}.` });
       feedPush(R[t.agent], '📄', `Piece done → ${L ? L.name : 'lead'}: ${t.title}`);
       if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Piece in from ${a.name}: ${t.title}`); }
       return;
     }
     chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md',
-      meta: `${t.error ? 'could not complete' : t.approved ? 'sent after your OK · saved to your brain' : 'delivered · saved to your brain'} · ${timeStr(t.doneAt)} · click to view`, content: t.result });
-    if (!t.error) chatPush(t.agent, { who: 'agent', text: `Done — "${t.title}"${t.routine ? ` (routine, ${t.when}${t.late ? ', ran late' : ''})` : ''} is ready above${t.team?.members?.length ? ` — the team was ${membersText(t)} and me` : ''}${t.read && t.read.length ? ` (I read ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}. Say "revise: …" and I'll change it.` });
+      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)} · click to view`, content: t.result });
+    if (!t.error) chatPush(t.agent, { who: 'agent', text: `Listo — "${t.title}"${t.routine ? ` (routine, ${t.when}${t.late ? ', se atrasó' : ''})` : ''} está lista arriba${t.team?.members?.length ? ` — the team was ${membersText(t)} and me` : ''}${t.read && t.read.length ? ` (I read ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}. Di "revise: …" y la cambio.` });
     feedPush(R[t.agent], '📄', `Delivered: ${t.title}`);
     if (brain && t.read) for (const n of t.read.slice(0, 2)) brain.readNote(t.agent, n);
   }
@@ -264,10 +264,10 @@ export function initTasks(ctx) {
 
   /* ---------- badge rows (far-zoom layer): DOING · NEXT · DONE per pod ---------- */
   function rowHTML(k) {
-    return `<div class="b-tasks" data-tkrow="${k}" title="show ${DEPTS[k].short} in the task panel">
-      <span>DOING<b data-tk="${k}-doing">${deptTasks(k, 'doing').length}</b></span>
-      <span>NEXT<b data-tk="${k}-next">${deptTasks(k, 'next').length}</b></span>
-      <span>DONE<b data-tk="${k}-done">${doneCount[k]}</b></span></div>`;
+    return `<div class="b-tasks" data-tkrow="${k}" title="mostrar ${DEPTS[k].short} en el panel de tareas">
+      <span>EN CURSO<b data-tk="${k}-doing">${deptTasks(k, 'doing').length}</b></span>
+      <span>PRÓXIMO<b data-tk="${k}-next">${deptTasks(k, 'next').length}</b></span>
+      <span>LISTO<b data-tk="${k}-done">${doneCount[k]}</b></span></div>`;
   }
   for (const k of DEPT_KEYS) deptRT[k].apprRow.insertAdjacentHTML('beforebegin', rowHTML(k));
   function syncBadges() {
@@ -329,7 +329,7 @@ export function initTasks(ctx) {
   };
   // the REPEAT picker (B1): cadence + time; "needs my OK" defaults on (D1)
   let repeat = false;
-  P_.cad.innerHTML = [['weekdays', 'Every weekday'], ['daily', 'Every day'], ['mon', 'Mondays'], ['tue', 'Tuesdays'], ['wed', 'Wednesdays'], ['thu', 'Thursdays'], ['fri', 'Fridays'], ['sat', 'Saturdays'], ['sun', 'Sundays'], ['hourly', 'Every hour, 9–5, weekdays']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  P_.cad.innerHTML = [['weekdays', 'Cada día hábil'], ['daily', 'Todos los días'], ['mon', 'lunes'], ['tue', 'martes'], ['wed', 'miércoles'], ['thu', 'jueves'], ['fri', 'viernes'], ['sat', 'sábados'], ['sun', 'domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
   P_.rep.addEventListener('click', () => { repeat = !repeat; P_.rep.classList.toggle('on', repeat); P_.repRow.hidden = !repeat; updateHint(); if (repeat) P_.input.focus(); });
   P_.cad.addEventListener('change', () => { P_.at.disabled = P_.cad.value === 'hourly'; updateHint(); });
   P_.at.addEventListener('change', updateHint);
@@ -354,7 +354,7 @@ export function initTasks(ctx) {
     P_.ddName.textContent = DEPTS[k].short;
     P_.ddDot.style.background = DEPTS[k].chip;
     B_.dept.textContent = DEPTS[k].name.toUpperCase(); B_.dot.style.background = DEPTS[k].chip;
-    P_.input.placeholder = `Type a task for ${DEPTS[k].name.toLowerCase()}…`;
+    P_.input.placeholder = `Escribe una tarea para ${DEPTS[k].name.toLowerCase()}…`;
     updateHint();
   }
   // routing: keywords → the right agent in the chosen dept; fallback = the dept lead (or first agent)
@@ -376,23 +376,23 @@ export function initTasks(ctx) {
     if (rt) { // a routine in the making: say the schedule back before Add is pressed
       if (!RT_DEPTS.includes(dept)) { P_.hint.innerHTML = `<span class="tp-amber">${esc(rtRefuse(dept))}</span>`; P_.hint.className = 'tp-hint on'; return; }
       const { agent: ra } = route(dept, rt.text || text);
-      const need = rt.needsDay ? 'which day? say "every Monday …"' : rt.needsTime ? 'what time? add "at 8am"' : null;
-      P_.hint.innerHTML = `<span class="tp-av" style="border-color:${DEPTS[ra.dept].chip};background:${DEPTS[ra.dept].chip}55">⏱</span>Routine · <b>${esc(describe(rt.when) || 'every week')}</b>` +
-        (need ? ` · <span class="tp-amber">${need}</span>` : live ? ' · Claude names the agent when you press Add' : ` · goes to <b>${ra.name}</b>`) + (rt.guessed ? ` · "${esc(rt.guessWord)}" taken as ${rt.when.at}` : '');
+      const need = rt.needsDay ? '¿qué día? di "cada lunes …"' : rt.needsTime ? '¿a qué hora? agrega "a las 8"' : null;
+      P_.hint.innerHTML = `<span class="tp-av" style="border-color:${DEPTS[ra.dept].chip};background:${DEPTS[ra.dept].chip}55">⏱</span>Rutina · <b>${esc(describe(rt.when) || 'every week')}</b>` +
+        (need ? ` · <span class="tp-amber">${need}</span>` : live ? ' · Claude elige al agente cuando presionas Agregar' : ` · va a <b>${ra.name}</b>`) + (rt.guessed ? ` · "${esc(rt.guessWord)}" tomado como ${rt.when.at}` : '');
       P_.hint.innerHTML += pickBit('routine');
       P_.hint.className = 'tp-hint on'; return;
     }
     if (asTeam(text)) { // a team in the making: the lead, and how many desks
       const L = leadOf(dept), chip = DEPTS[dept].chip;
-      P_.hint.innerHTML = `<span class="tp-av" style="border-color:${chip};background:${chip}55">⚑</span>Team · <b>${L.name}</b> splits it across up to ${teamsCfg.max} desks, they work at the same time, the lead writes the final` + pickBit('task');
+      P_.hint.innerHTML = `<span class="tp-av" style="border-color:${chip};background:${chip}55">⚑</span>Equipo · <b>${L.name}</b> lo reparte en hasta ${teamsCfg.max} escritorios, trabajan al mismo tiempo, el lead escribe el final` + pickBit('task');
       P_.hint.className = 'tp-hint on'; return;
     }
     const { agent: a, matched } = route(dept, text);
     const busy = agentTasks(a.id, 'doing').length > 0 || R[a.id].state === 'stuck';
     const chip = DEPTS[a.dept].chip;
     P_.hint.innerHTML = `<span class="tp-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span>` +
-      (live ? `Probably <b>${a.name}</b> · Claude confirms when you press Add`
-            : `Goes to <b>${a.name}</b> · ${busy ? 'starts after their current job' : 'starts straight away'}${matched ? '' : ' · say more and I’ll pick a specialist'}`) +
+      (live ? `Probablemente <b>${a.name}</b> · Claude lo confirma cuando presionas Agregar`
+            : `Va a <b>${a.name}</b> · ${busy ? 'empieza después de su trabajo actual' : 'empieza de inmediato'}${matched ? '' : ' · cuenta más y elijo un especialista'}`) +
       pickBit('task');
     P_.hint.className = 'tp-hint on';
   }
@@ -423,7 +423,7 @@ export function initTasks(ctx) {
       const text = title, k = dept;
       P_.input.value = ''; P_.input.disabled = true; P_.add.disabled = true;
       const team = asTeam(text);
-      say(team ? `Routing through Claude — <b>${leadOf(k).name}</b> is reading it for the team…` : `Routing through Claude — ${DEPTS[k].name.toLowerCase()} is reading it…`, 'busy');
+      say(team ? `Pasando por Claude — <b>${leadOf(k).name}</b> lo está leyendo para el equipo…` : `Pasando por Claude — ${DEPTS[k].name.toLowerCase()} lo está leyendo…`, 'busy');
       try {
         const mdl = chosenModel();
         const r = await fetch(API + '/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, model: mdl || undefined, effort: effortSend(), team: team || undefined }) });
@@ -433,10 +433,10 @@ export function initTasks(ctx) {
           team: st.team ? { lead: st.team.lead, members: [] } : undefined });
         resetModel(); resetTeam();
         touch(t, 'added'); spawnEmote(R[t.agent], st.team ? '⚑' : '📋');
-        say(st.team ? `Added — <b>${agentOf(t.agent).name}</b> has it and is splitting it across the team` : `Added — <b>${agentOf(t.agent).name}</b> has it${st.why ? ' · ' + esc(st.why) : ''}`);
+        say(st.team ? `Agregado — <b>${agentOf(t.agent).name}</b> lo tiene y lo está repartiendo en el equipo` : `Agregado — <b>${agentOf(t.agent).name}</b> lo tiene${st.why ? ' · ' + esc(st.why) : ''}`);
         setTimeout(() => { if (!P_.input.value) P_.hint.classList.remove('on'); }, 7000);
       } catch (e) {
-        say(`Claude couldn't take it (${esc(e.message)}). Kept it on the board.`, 'err');
+        say(`Claude no pudo tomarlo (${esc(e.message)}). Quedó en el tablero.`, 'err');
         const { agent: a } = route(k, text); addTask(a.id, text, 'you');
       }
       P_.input.disabled = false; P_.add.disabled = false; P_.input.blur(); // hand the keys back to the office
@@ -446,7 +446,7 @@ export function initTasks(ctx) {
       const t = addTeamDemo(dept, title);
       const mdl = chosenModel(); t.modelUsed = mdl || officeModel; t.modelFrom = mdl ? 'task' : 'office'; const ef = effortUsedFor(t.modelUsed); t.effortUsed = ef.effort || ''; t.effortFrom = ef.from;
       resetModel(); resetTeam(); P_.input.value = ''; updateHint();
-      say(`Added — <b>${agentOf(t.agent).name}</b> has it with ${esc(membersText(t))}.`); setTimeout(updateHint, 3200); P_.input.blur();
+      say(`Agregado — <b>${agentOf(t.agent).name}</b> lo tiene con ${esc(membersText(t))}.`); setTimeout(updateHint, 3200); P_.input.blur();
       return;
     }
     const { agent: a } = route(dept, title);
@@ -454,8 +454,8 @@ export function initTasks(ctx) {
     if (t) { const mdl = chosenModel(); t.modelUsed = mdl || officeModel; t.modelFrom = mdl ? 'task' : 'office'; const ef = effortUsedFor(t.modelUsed); t.effortUsed = ef.effort || ''; t.effortFrom = ef.from; }
     resetModel();
     P_.input.value = ''; updateHint();
-    if (t) { say(`Added — <b>${a.name}</b> has it.`); setTimeout(updateHint, 2600); P_.input.blur(); }
-    else say(`<b>${a.name}</b> already has five queued — let one finish first.`);
+    if (t) { say(`Agregado — <b>${a.name}</b> lo tiene.`); setTimeout(updateHint, 2600); P_.input.blur(); }
+    else say(`<b>${a.name}</b> ya tiene cinco en cola — deja que termine una primero.`);
   }
   /* ---------- V3.2 (16 Sep) demo teams: the same moves on a timer ---------- */
   function addTeamDemo(k, title) {
@@ -473,19 +473,19 @@ export function initTasks(ctx) {
   async function submitRoutine(rt, raw) {
     const k = dept;
     if (!RT_DEPTS.includes(k)) { say(`<span class="tp-amber">${esc(rtRefuse(k))}</span>`, 'err'); return; }
-    if (rt.needsDay) { say('Which day? Say "every Monday …" or "Mon and Thu …".', 'err'); return; }
-    if (rt.needsTime) { say('What time? Add "at 8am" or "at 17:30", or press REPEAT and pick one.', 'err'); return; }
+    if (rt.needsDay) { say('¿Qué día? Di "cada lunes …" o "lun y jue …".', 'err'); return; }
+    if (rt.needsTime) { say('¿A qué hora? Agrega "a las 8" o "a las 17:30", o presiona REPETIR y elige una.', 'err'); return; }
     const text = (rt.text || raw).trim().replace(/[.!]+$/, '');
-    if (!text) { say('What should happen? The sentence has a time but no task.', 'err'); return; }
+    if (!text) { say('¿Qué debe pasar? La frase tiene hora pero no tarea.', 'err'); return; }
     if (live) {
       P_.input.disabled = true; P_.add.disabled = true;
-      say('Setting the routine — Claude is naming the agent…', 'busy');
+      say('Programando la rutina — Claude está eligiendo al agente…', 'busy');
       try {
         const r = await fetch(API + '/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, when: rt.when, needsOk: rt.picker ? P_.okc.checked : undefined, model: chosenModel() || undefined, effort: effortSend() }) });
         const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
         setRoutines([...routines.filter(x => x.id !== j.routine.id), j.routine]);
         const a = agentOf(j.routine.agent);
-        say(`Routine set — <b>${a.name}</b> · ${esc(j.routine.desc)} · next ${esc(untilText(j.routine.nextAt))}${j.routine.needsOk ? ' · waits for your OK' : ' · read-only, no OK needed'}${j.guessed ? ` · "${esc(j.guessed)}" taken as ${j.routine.when.at}` : ''}`);
+        say(`Rutina programada — <b>${a.name}</b> · ${esc(j.routine.desc)} · próxima ${esc(untilText(j.routine.nextAt))}${j.routine.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${j.guessed ? ` · "${esc(j.guessed)}" taken as ${j.routine.when.at}` : ''}`);
         P_.input.value = ''; resetModel(); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${j.routine.title} (${j.routine.desc})`);
         filter = 'sched'; render(true); poll();
       } catch (e) { say(`Claude couldn't set it (${esc(e.message)}).`, 'err'); }
@@ -495,7 +495,7 @@ export function initTasks(ctx) {
     const { agent: a } = route(k, text);
     const r = addRoutine(k, a.id, text, rt.when, rt.picker ? P_.okc.checked : guessOk(text));
     r.model = chosenModel() || undefined; r.effort = effortSend(); resetModel();
-    P_.input.value = ''; say(`Routine set — <b>${a.name}</b> · ${esc(r.desc)} · next ${esc(untilText(r.nextAt))}${r.needsOk ? ' · waits for your OK' : ' · read-only'}`);
+    P_.input.value = ''; say(`Rutina programada — <b>${a.name}</b> · ${esc(r.desc)} · próxima ${esc(untilText(r.nextAt))}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}`);
     spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${r.title} (${r.desc})`); filter = 'sched'; render(true); P_.input.blur(); setTimeout(updateHint, 5000);
   }
   function guessOk(text) { const t = text.toLowerCase(); return /\b(send|reply|chase|nudge|remind|post|publish|pay|book|draft|message|email)\b/.test(t) || !/\b(list|summari[sz]e|triage|tell me|what|report|match|reconcile|qualify|review|check|read|find|flag|count)\b/.test(t); }
@@ -516,7 +516,7 @@ export function initTasks(ctx) {
     if (live) {
       if (act === 'delete') await fetch(`${API}/routines/${rid}`, { method: 'DELETE' }).catch(() => {});
       else { const j = await post(`/routines/${rid}/${act}`); if (act === 'run' && j && j.task) reconcile(j.task); }
-      if (act === 'run') { spawnEmote(R[r.agent], '⏱'); feedPush(R[r.agent], '⏱', `Run now: ${r.title}`); }
+      if (act === 'run') { spawnEmote(R[r.agent], '⏱'); feedPush(R[r.agent], '⏱', `Ejecutar ahora: ${r.title}`); }
       await poll(); return;
     }
     if (act === 'delete') routines.splice(routines.indexOf(r), 1);
@@ -542,8 +542,8 @@ export function initTasks(ctx) {
     const n = nextOf(mine);
     el.className = 'mrt' + (railExp ? ' exp' : '');
     el.innerHTML = `<div class="mrt-h"><span>⏱ ${mine.length} routine${mine.length > 1 ? 's' : ''}${n ? ' · next <b>' + esc(untilText(n.nextAt)) + '</b>' : ' · all paused'}</span><span class="car">▸</span></div>
-      <div class="mrt-l">${mine.map(r => `<div class="mrt-r" data-rid="${r.id}"><span>${esc(r.title)}</span><small>${esc(r.desc)} · ${modelName(r.model || officeModel)} · ${r.paused ? 'paused' : 'next ' + esc(untilText(r.nextAt))} · ${r.needsOk ? 'waits for your OK' : 'read-only'}</small>
-        <div class="tp-act"><button class="run" data-act="run">RUN NOW</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'RESUME' : 'PAUSE'}</button><button data-act="delete">DELETE</button></div></div>`).join('')}</div>`;
+      <div class="mrt-l">${mine.map(r => `<div class="mrt-r" data-rid="${r.id}"><span>${esc(r.title)}</span><small>${esc(r.desc)} · ${modelName(r.model || officeModel)} · ${r.paused ? 'paused' : 'next ' + esc(untilText(r.nextAt))} · ${r.needsOk ? 'en espera de tu visto bueno' : 'solo lectura'}</small>
+        <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>`).join('')}</div>`;
     el.querySelector('.mrt-h').addEventListener('click', () => { railExp = !railExp; el.classList.toggle('exp', railExp); });
     el.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); rtAct(b.closest('[data-rid]').dataset.rid, b.dataset.act); }));
   }
@@ -624,16 +624,16 @@ export function initTasks(ctx) {
     }
   }
   function askApproval(t) { // D1: the draft lands in the chat with APPROVE / REJECT and the agent stands and waves
-    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `draft · waiting for your OK · ${timeStr(t.changedAt)} · click to view`, content: t.draft || t.result });
-    chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" is ready — approve to send it, reject to tell me what to change.`, pending: true, live: true });
-    feedPush(R[t.agent], '⏸', `Waiting for your OK: ${t.title}`);
+    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `borrador · en espera de tu visto bueno · ${timeStr(t.changedAt)} · clic para ver`, content: t.draft || t.result });
+    chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" está lista — aprueba para enviarla, rechaza para decirme qué cambiar.`, pending: true, live: true });
+    feedPush(R[t.agent], '⏸', `En espera de tu visto bueno: ${t.title}`);
     if (setStuck) setStuck(t.agent, t.ask, t.sid);
   }
   const pendingFeedback = {}; // agentId → sid after REJECT: the owner's next chat line is the note
   function resolveLive(agentId, approved) { // APPROVE / REJECT on a live draft (main.js calls this instead of the demo onResolve)
     const t = tasks.find(x => x.live && x.agent === agentId && x.state === 'waiting'); if (!t) return false;
-    if (approved) { post(`/tasks/${t.sid}/approve`); toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Approved — sending it now. It lands here when it is done.' }); }
-    else { pendingFeedback[agentId] = t.sid; chatPush(agentId, { who: 'agent', text: 'Understood. What should change? Tell me here and I will redo it — it comes back for your OK.' }); }
+    if (approved) { post(`/tasks/${t.sid}/approve`); toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' }); }
+    else { pendingFeedback[agentId] = t.sid; chatPush(agentId, { who: 'agent', text: 'Entendido. ¿Qué debería cambiar? Dímelo aquí y lo rehago — vuelve para tu visto bueno.' }); }
     return true;
   }
   const pendingReject = agentId => !!pendingFeedback[agentId];
@@ -699,7 +699,7 @@ export function initTasks(ctx) {
     return t;
   }
   // chips: filters with live counts
-  const CHIPS = [['all', 'All'], ['sched', 'Scheduled'], ['next', 'Backlog'], ['doing', 'In progress'], ['waiting', 'Waiting'], ['done', 'Done']];
+  const CHIPS = [['all', 'Todas'], ['sched', 'Programadas'], ['next', 'Pendientes'], ['doing', 'En curso'], ['waiting', 'En espera'], ['done', 'Listas']];
   function chipsHTML() {
     const scope = scoped();
     const cnt = st => st === 'all' ? scope.length : st === 'sched' ? scopedRoutines().length + scope.filter(t => t.state === 'scheduled').length : scope.filter(t => t.state === st).length;
@@ -719,19 +719,19 @@ export function initTasks(ctx) {
       case 'next': {
         const src = t.piece ? `team piece from ${agentOf(t.leadId)?.name || 'the lead'}` : t.routine ? `routine · ${t.when}${t.late ? ' · <span class="tp-late">late · was due ' + timeStr(t.due) + '</span>' : ''}` : t.by === 'you' ? (t.live ? 'added by you · live' : 'added by you') : t.last === 'handoff' && t.from ? `from ${agentOf(t.from).name}` : t.revised ? 'sent back to revise' : 'from the Brain';
         const w = now - t.addedAt;
-        return `${who} · ${w < 60000 ? 'just added' : 'waiting ' + span(w)} · ${src}${teamBit(t)}${modelBit(t)}`;
+        return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)} · ${src}${teamBit(t)}${modelBit(t)}`;
       }
-      case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · sending with Claude' : t.team?.members?.length ? ' · leading the team with Claude' : ' · working with Claude') : t.agent === 'vid' ? ' · rendering' : t.teamHold ? ' · waiting on the pieces' : ''}${t.routine ? ' · routine' : ''}${teamBit(t)}${modelBit(t)}`;
-      case 'waiting': return `<span class="tp-amber">waiting ${span(now - t.changedAt)} for your tick</span> · ${who}${t.routine ? ' · routine draft' : ''}${teamBit(t)}${modelBit(t)}`;
-      case 'scheduled': return `${who} · runs ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · waits for your OK' : ''}${teamBit(t)}${modelBit(t)}`;
-      case 'done': return `${who} · done ${timeStr(t.doneAt)}${t.approved ? (t.live ? ' · sent after your OK' : ' · approved') : ''}${t.late ? ' · <span class="tp-late">ran late</span>' : ''}${teamBit(t)}${modelBit(t)}${t.live ? (t.error ? ' · <span class="tp-amber">failed</span>' : ' · <span class="tp-res">result ready →</span>') : ''}`;
+      case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · rendering' : t.teamHold ? ' · waiting on the pieces' : ''}${t.routine ? ' · routine' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · routine draft' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'scheduled': return `${who} · se ejecuta ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · en espera de tu visto bueno' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'done': return `${who} · lista ${timeStr(t.doneAt)}${t.approved ? (t.live ? ' · enviada tras tu visto bueno' : ' · aprobada') : ''}${t.late ? ' · <span class="tp-late">se atrasó</span>' : ''}${teamBit(t)}${modelBit(t)}${t.live ? (t.error ? ' · <span class="tp-amber">failed</span>' : ' · <span class="tp-res">result ready →</span>') : ''}`;
     }
     return who;
   }
   function rowHTMLp(t) {
     const pct = Math.round(t.progress * 100);
     const chip = `<span class="tp-st ${t.state}">${t.state === 'doing' ? `<span data-pct="${t.id}">${pct}%</span>` : t.state === 'scheduled' ? '◷' : STATE_LABEL[t.state]}</span>`;
-    const bar = t.state === 'doing' ? `<div class="tp-bar"><i data-bar="${t.id}" style="width:${pct}%"></i></div>` : t.state === 'scheduled' ? `<div class="tp-act"><button data-act="cancel">CANCEL</button><button data-act="calendar">CALENDAR</button></div>` : '';
+    const bar = t.state === 'doing' ? `<div class="tp-bar"><i data-bar="${t.id}" style="width:${pct}%"></i></div>` : t.state === 'scheduled' ? `<div class="tp-act"><button data-act="cancel">CANCELAR</button><button data-act="calendar">CALENDAR</button></div>` : '';
     return `<div class="tp-row ${t.state}${t.last === 'handoff' ? ' handoff' : ''}${t.live ? ' live' : ''}${t.piece ? ' piece' : ''}" data-id="${t.id}" data-dept="${t.dept}" data-agent="${t.agent}">
       ${chip}<div class="tp-body"><div class="tp-t">${t.routine || t.state === 'scheduled' ? '⏱ ' : ''}${t.team?.members?.length ? '⚑ ' : ''}${esc(t.title)}</div><div class="tp-m">${metaFor(t)}</div>${bar}</div>
       <span class="tp-ago" data-ago="${t.id}">${span(Date.now() - t.changedAt)}</span></div>`;
@@ -740,14 +740,14 @@ export function initTasks(ctx) {
     const a = agentOf(r.agent);
     return `<div class="tp-row sched${r.paused ? ' paused' : ''}" data-id="r:${r.id}" data-rid="${r.id}" data-dept="${r.dept}" data-agent="${r.agent}">
       <span class="tp-st sched">⏱</span>
-      <div class="tp-body"><div class="tp-t">${esc(r.title)}</div><div class="tp-m">${esc(r.desc)} · ${a.name} · ${modelName(r.model || officeModel)}${r.needsOk ? ' · waits for your OK' : ' · read-only'}${r.lastAt ? ' · last ' + timeStr(r.lastAt) + (r.lastLate ? ' <span class="tp-late">late</span>' : '') : ''}</div>
-      <div class="tp-act"><button class="run" data-act="run">RUN NOW</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'RESUME' : 'PAUSE'}</button><button data-act="delete">DELETE</button></div></div>
-      <span class="tp-ago" data-rago="${r.id}">${r.paused ? 'PAUSED' : esc(untilText(r.nextAt))}</span></div>`;
+      <div class="tp-body"><div class="tp-t">${esc(r.title)}</div><div class="tp-m">${esc(r.desc)} · ${a.name} · ${modelName(r.model || officeModel)}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${r.lastAt ? ' · last ' + timeStr(r.lastAt) + (r.lastLate ? ' <span class="tp-late">late</span>' : '') : ''}</div>
+      <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>
+      <span class="tp-ago" data-rago="${r.id}">${r.paused ? 'PAUSADA' : esc(untilText(r.nextAt))}</span></div>`;
   }
   function renderNext() { // C1: the next-up strip under the chips
     const n = nextOf(scopedRoutines());
     P_.next.hidden = !n;
-    if (n) P_.next.innerHTML = `<span class="lab">NEXT ⏱</span><span class="nx">${esc(untilText(n.nextAt))}</span><span class="tt">${esc(n.title)} · ${agentOf(n.agent).name}</span>`;
+    if (n) P_.next.innerHTML = `<span class="lab">PRÓXIMA ⏱</span><span class="nx">${esc(untilText(n.nextAt))}</span><span class="tt">${esc(n.title)} · ${agentOf(n.agent).name}</span>`;
   }
   function rects() {
     const m = {};
@@ -773,8 +773,8 @@ export function initTasks(ctx) {
       .sort((a, b) => b.changedAt - a.changedAt).slice(0, 60);
     const before = structural ? {} : rects();
     P_.rows.innerHTML = filter === 'sched'
-      ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || `<div class="tp-empty">No routines yet. Type one with a time in it — "every weekday at 8am, …" — or press REPEAT. Press <b>P</b> for the calendar to schedule a task for a date.${RT_DEPTS.includes(dept) ? '' : ' Routines: Emails, Accounting and Sales this release.'}</div>`)
-      : (list.map(rowHTMLp).join('') || `<div class="tp-empty">Nothing here right now.</div>`);
+      ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — "cada día hábil a las 8, …" — o presiona REPETIR. Presiona <b>P</b> para el calendario…${RT_DEPTS.includes(dept) ? '' : ' Rutinas: Correos, Contabilidad y Ventas en esta versión.'}</div>`)
+      : (list.map(rowHTMLp).join('') || `<div class="tp-empty">Nada aquí por ahora.</div>`);
     renderNext();
     P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtAct(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'cancel') cancelScheduled(tasks.find(t => String(t.id) === row.dataset.id)); else if (b.dataset.act === 'calendar' && calendar) calendar.open(); }));
     P_.rows.querySelectorAll('.tp-row.waiting').forEach(n => n.addEventListener('click', () => zoomToApproval(n.dataset.dept)));
@@ -798,7 +798,7 @@ export function initTasks(ctx) {
       const el = P_.rows.querySelector(`[data-ago="${t.id}"]`);
       if (el) el.textContent = span(now - t.changedAt);
     }
-    for (const r of routines) { const el = P_.rows.querySelector(`[data-rago="${r.id}"]`); if (el) el.textContent = r.paused ? 'PAUSED' : untilText(r.nextAt, now); }
+    for (const r of routines) { const el = P_.rows.querySelector(`[data-rago="${r.id}"]`); if (el) el.textContent = r.paused ? 'PAUSADA' : untilText(r.nextAt, now); }
     renderNext();
     // waiting / backlog metas carry a duration too — cheap to re-render those lines
     P_.rows.querySelectorAll('.tp-row.waiting .tp-m, .tp-row.next .tp-m').forEach(m => {
@@ -818,11 +818,11 @@ export function initTasks(ctx) {
     const pct = Math.round(t.progress * 100);
     const av = `<span class="tk-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span>`;
     let meta;
-    if (t.state === 'done') meta = `<span class="tk-tick">✓</span><span>${a.name}</span><span class="tk-pct">${t.approved ? 'APPROVED · ' : ''}${t.modelUsed ? modelName(t.modelUsed).toUpperCase() + ' · ' : ''}${timeStr(t.doneAt)}</span>`;
-    else if (t.state === 'waiting') meta = `${av}<span>${a.name}</span><span class="tk-chip">WAITING ${span(Date.now() - t.changedAt).toUpperCase()}</span>`;
-    else if (t.state === 'doing') meta = `${av}<span>${a.name}</span><span class="tk-pct" data-pct="${t.id}">${t.agent === 'vid' ? 'RENDER · ' : ''}${pct}%</span>`;
+    if (t.state === 'done') meta = `<span class="tk-tick">✓</span><span>${a.name}</span><span class="tk-pct">${t.approved ? 'APROBADO · ' : ''}${t.modelUsed ? modelName(t.modelUsed).toUpperCase() + ' · ' : ''}${timeStr(t.doneAt)}</span>`;
+    else if (t.state === 'waiting') meta = `${av}<span>${a.name}</span><span class="tk-chip">EN ESPERA ${span(Date.now() - t.changedAt).toUpperCase()}</span>`;
+    else if (t.state === 'doing') meta = `${av}<span>${a.name}</span><span class="tk-pct" data-pct="${t.id}">${t.agent === 'vid' ? 'RENDERIZANDO · ' : ''}${pct}%</span>`;
     else if (t.state === 'scheduled') meta = `${av}<span>${a.name}</span><span class="tk-pct">${esc(untilText(t.dueAt).toUpperCase())}</span>`;
-    else meta = `${av}<span>${a.name}</span><span class="tk-pct">${span(Date.now() - t.addedAt).toUpperCase()} IN BACKLOG</span>`;
+    else meta = `${av}<span>${a.name}</span><span class="tk-pct">${span(Date.now() - t.addedAt).toUpperCase()} EN PENDIENTES</span>`;
     return `<div class="tk ${t.state === 'scheduled' ? 'sched scheduled' : t.state}${t.revised ? ' rev' : ''}" data-id="${t.id}" data-dept="${t.dept}">
       <div class="tk-t">${t.routine || t.state === 'scheduled' ? '⏱ ' : ''}${t.team?.members?.length ? '⚑ ' : t.piece ? '↳ ' : ''}${esc(t.title)}</div><div class="tk-m">${meta}</div>
       ${t.state === 'doing' ? `<div class="tk-bar"><i data-bar="${t.id}" style="width:${pct}%"></i></div>` : ''}</div>`;
@@ -837,15 +837,15 @@ export function initTasks(ctx) {
   function cardHTMLr(r) { // C1: a SCHEDULED card on the company board
     const a = agentOf(r.agent), chip = DEPTS[r.dept].chip;
     return `<div class="tk sched${r.paused ? ' paused' : ''}" data-rid="${r.id}" data-dept="${r.dept}"><div class="tk-t">⏱ ${esc(r.title)}</div>
-      <div class="tk-m"><span class="tk-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span><span>${a.name} · ${modelName(r.model || officeModel).toUpperCase()}</span><span class="tk-pct">${r.paused ? 'PAUSED' : esc(untilText(r.nextAt).toUpperCase())}</span></div></div>`;
+      <div class="tk-m"><span class="tk-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span><span>${a.name} · ${modelName(r.model || officeModel).toUpperCase()}</span><span class="tk-pct">${r.paused ? 'PAUSADA' : esc(untilText(r.nextAt).toUpperCase())}</span></div></div>`;
   }
-  const COLS = [['sched', 'SCHEDULED'], ['next', 'BACKLOG'], ['doing', 'IN PROGRESS'], ['waiting', 'WAITING ON APPROVAL'], ['done', 'DONE']];
+  const COLS = [['sched', 'PROGRAMADAS'], ['next', 'PENDIENTES'], ['doing', 'EN CURSO'], ['waiting', 'EN ESPERA DE APROBACIÓN'], ['done', 'LISTAS']];
   function companyHTML() {
     const tot = st => DEPT_KEYS.reduce((s, k) => s + deptTasks(k, st).length, 0);
     const doneAll = DEPT_KEYS.reduce((s, k) => s + doneCount[k], 0);
     return `<div class="bd-head">
         <span class="b-name"><span class="bd-title">Agents Office</span>Today's board</span>
-        <span class="bd-stats"><span>SCHEDULED<b>${routines.length + tot('scheduled')}</b></span><span>IN PROGRESS<b>${tot('doing')}</b></span><span>BACKLOG<b>${tot('next')}</b></span><span>WAITING<b>${tot('waiting')}</b></span><span>DONE<b>${doneAll}</b></span></span></div>
+        <span class="bd-stats"><span>PROGRAMADAS<b>${routines.length + tot('scheduled')}</b></span><span>EN CURSO<b>${tot('doing')}</b></span><span>PENDIENTES<b>${tot('next')}</b></span><span>EN ESPERA<b>${tot('waiting')}</b></span><span>LISTAS<b>${doneAll}</b></span></span></div>
       <div class="bd-lanes"><div class="lh"></div>${COLS.map(([, lab]) => `<div class="lh">${lab}</div>`).join('')}
       ${DEPT_KEYS.map(k => {
         const d = DEPTS[k], n = AGENTS.filter(a => a.dept === k).length;
@@ -899,17 +899,17 @@ export function initTasks(ctx) {
       if (/^\s*(routines?|schedule|timetable)\s*\??\s*$/i.test(text)) {
         if (!RT_DEPTS.includes(k0)) return rtRefuse(k0);
         const mine = deptRoutines(k0).sort(byNext);
-        return mine.length ? `${RT_NAMES[k0]} routines:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${agentOf(r.agent).name}${r.paused ? ' · PAUSED' : ''}`).join('\n') : `Nothing on the ${RT_NAMES[k0]} timetable yet. Give me one with a time in it — "every weekday at 8am, …".`;
+        return mine.length ? `${RT_NAMES[k0]} rutinas:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${agentOf(r.agent).name}${r.paused ? ' · PAUSADA' : ''}`).join('\n') : `Nada en el horario de ${RT_NAMES[k0]} todavía. Dame una con hora — "cada día hábil a las 8, …" — y la anoto.`;
       }
       const p = parseWhen(text);
       if (p) {
         if (!RT_DEPTS.includes(k0)) return rtRefuse(k0);
-        if (p.needsDay) return 'Which day? Say it again with the day: "every Monday at 9am, …".';
-        if (p.needsTime) return 'What time? Say it again with the time, e.g. "every weekday at 8am, …".';
-        if (!p.text) return 'I have the time but not the task. Say it again with what should happen.';
+        if (p.needsDay) return '¿Qué día? Dilo de nuevo con el día: "cada lunes a las 9, …".';
+        if (p.needsTime) return '¿A qué hora? Dilo de nuevo con la hora, ej. "cada día hábil a las 8, …".';
+        if (!p.text) return 'Tengo la hora pero no la tarea. Dilo de nuevo con lo que debe pasar.';
         const to = a0.lead ? route(k0, p.text).agent.id : agentId;
         const r = addRoutine(k0, to, p.text, p.when, guessOk(p.text));
-        return `Done. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${to === agentId ? 'I have it' : agentOf(to).name + ' has it'}. ${r.needsOk ? 'Anything to send waits for your OK first.' : 'It only reads, so it will not wait for you.'} Next run ${untilText(r.nextAt)}. Say "routines" to see the list.`;
+        return `Listo. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${to === agentId ? 'la tengo' : agentOf(to).name + ' la tiene'}. ${r.needsOk ? 'Todo lo que haya que enviar espera tu visto bueno primero.' : 'Solo lee, así que no te esperará.'} Próxima ejecución ${untilText(r.nextAt)}. Di "routines" para ver la lista.`;
       }
     }
     const m = text.match(/^\s*(?:add\s+(?:a\s+)?(?:new\s+)?task|new\s+task|task|todo)\s*[:\-–—]?\s*(.+)$/i);
@@ -920,16 +920,16 @@ export function initTasks(ctx) {
       const { agent: a, matched } = route(k, title);
       const to = matched ? a.id : agentId;
       const t = addTask(to, title, 'you');
-      if (!t) return `${agentOf(to).name} already has five queued — let one finish first, or give it to someone else in ${DEPTS[k].short}.`;
+      if (!t) return `${agentOf(to).name} ya tiene cinco en cola — deja que termine una primero, o dásela a alguien más en ${DEPTS[k].short}.`;
       const busy = agentTasks(to, 'doing').length > 0;
-      const who = to === agentId ? "I've got it" : `${agentOf(to).name} has it`;
-      return `Added to the ${DEPTS[k].short} backlog — ${who}, ${busy ? 'up next after the current job' : 'starting now'}. It's in the task panel on the right.`;
+      const who = to === agentId ? 'lo tengo' : `${agentOf(to).name} lo tiene`;
+      return `Agregado a los pendientes de ${DEPTS[k].short} — ${who}, ${busy ? 'sigue después del trabajo actual' : 'empezando ahora'}. Está en el panel de tareas a la derecha.`;
     }
     if (/\b(board|what'?s next|next up|what are (you|we) (all )?(doing|working))\b/i.test(text)) {
       const list = st => byState(k, st).slice(0, 3).map(t => `• ${t.title} (${agentOf(t.agent).name})`).join('\n');
       const doing = list('doing'), next = list('next'), waiting = list('waiting');
-      return `${DEPTS[k].name} right now:\n\nIN PROGRESS\n${doing || '—'}\n\nBACKLOG\n${next || '—'}` +
-        (waiting ? `\n\nWAITING ON YOU\n${waiting}` : '') + `\n\nDone today: ${doneCount[k]}. Say "add task: …" to put something on the list.`;
+      return `${DEPTS[k].name} ahora mismo:\n\nEN CURSO\n${doing || '—'}\n\nPENDIENTES\n${next || '—'}` +
+        (waiting ? `\n\nEN ESPERA POR TI\n${waiting}` : '') + `\n\nListas hoy: ${doneCount[k]}. Di "add task: …" para poner algo en la lista.`;
     }
     return null;
   }
@@ -973,20 +973,20 @@ export function initTasks(ctx) {
 
   /* ---------- V3.2.1 (16 Sep 2026): the CALENDAR (P) — tasks and routines on their days; click a day to schedule ---------- */
   async function createScheduled({ dept: k, text, at, model }) { // a task for a date: live → the server routes it now and runs it then; demo → session-only
-    if (!(at > Date.now())) return { ok: false, error: 'Pick a time that is still ahead.' };
+    if (!(at > Date.now())) return { ok: false, error: 'Elige una hora que aún esté por venir.' };
     if (live) {
       try {
         const r = await fetch(API + '/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, at, model: normModel(model) || undefined, team: asTeam(text) || undefined }) });
         const st = await r.json(); if (!r.ok) throw new Error(st.error || r.statusText);
         const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, why: st.why, by: 'you', live: true, sid: st.id, state: 'scheduled', dueAt: st.dueAt, needsOk: !!st.needsOk, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', team: st.team ? { lead: st.team.lead, members: [] } : undefined });
-        touch(t, 'scheduled'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Scheduled for ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
+        touch(t, 'scheduled'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Programada para ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
         return { ok: true, task: t };
       } catch (e) { return { ok: false, error: e.message }; }
     }
     const { agent: a } = route(k, text);
     const title = (text.charAt(0).toUpperCase() + text.slice(1)).slice(0, 90);
     const t = mk({ agent: a.id, title, text, by: 'you', state: 'scheduled', dueAt: at, needsOk: guessOk(text), modelUsed: normModel(model) || officeModel, modelFrom: model ? 'task' : 'office' });
-    touch(t, 'scheduled'); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Scheduled for ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${title}`);
+    touch(t, 'scheduled'); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Programada para ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${title}`);
     return { ok: true, task: t };
   }
   async function createRoutineAt({ dept: k, text, when, needsOk, model }) { // a routine from a date (when.start)

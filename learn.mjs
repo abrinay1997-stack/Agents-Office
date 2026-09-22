@@ -10,11 +10,11 @@ import path from 'node:path';
 export const dir = brainPath => path.join(brainPath, 'Agents Office', 'feedback');
 const file = (brainPath, id) => path.join(dir(brainPath), id + '.md');
 const MAX_RULES = 15; // the most recent standing rules an agent carries into a task
-const HEAD = (a) => `# Corrections for ${a.name} (${a.id})\n\n` +
-  'Every time the owner sends this agent\'s work back, the correction lands here. Lines under\n' +
-  '"Standing rules" are read by this agent before every task and chat turn. Edit freely: reword a\n' +
-  'rule, delete a line to unlearn it, move a one-off up to make it a rule. When a rule is really a\n' +
-  'process, put it in a skill (SKILLS.md).\n\n## Standing rules\n\n## One-offs\n';
+const HEAD = (a) => `# Correcciones para ${a.name} (${a.id})\n\n` +
+  'Cada vez que el dueño devuelve el trabajo de este agente, la corrección queda aquí. Las líneas bajo\n' +
+  '"Standing rules" las lee este agente antes de cada tarea y cada turno de chat. Edita libremente: cambia\n' +
+  'una regla, borra una línea para desaprenderla, sube un caso puntual para volverlo regla. Cuando una regla sea en realidad un\n' +
+  'proceso, ponla en una skill (SKILLS.md).\n\n## Standing rules\n\n## One-offs\n';
 
 /** Read the file → { rules: [...], oneOffs: [...] } (each a line without the leading "- "). */
 export function read(brainPath, id) {
@@ -53,11 +53,11 @@ export function record(brainPath, agent, task, feedback, verdict) {
 
 /** Ask Claude whether a correction is a one-off or a standing rule. `ask(system, user)` → text. */
 export async function classify(ask, agent, task, feedback) {
-  const system = 'You sort an owner\'s feedback on an AI agent\'s work. Return ONLY a JSON object, no prose, no code fences.';
-  const user = `Agent: ${agent.name} — ${agent.role}. ${agent.does}\nTask: ${task?.title || ''}\nOwner's feedback: "${feedback}"\n\n` +
-    'Is this a ONE-OFF (about this task, this client, this draft only) or a STANDING RULE (a preference the owner will want applied to every future piece of this kind of work)?\n' +
-    'Signals of a standing rule: "always", "never", "from now on", "we don\'t", a format or tone preference, a red line. Signals of a one-off: a fact about this client, a change to this draft only, "this time", "here".\n' +
-    'Return: {"standing": true|false, "rule": "<if standing: the preference as ONE short imperative sentence, general, no client or project names; else empty string>"}';
+  const system = 'Clasificas la retroalimentación del dueño sobre el trabajo de un agente de IA. Devuelve SOLO un objeto JSON, sin texto adicional, sin bloques de código.';
+  const user = `Agente: ${agent.name} — ${agent.role}. ${agent.does}\nTarea: ${task?.title || ''}\nRetroalimentación del dueño: "${feedback}"\n\n` +
+    '¿Es un CASO PUNTUAL (sobre esta tarea, este cliente, este borrador solamente) o una REGLA PERMANENTE (una preferencia que el dueño querrá aplicar a cada trabajo futuro de este tipo)?\n' +
+    'Señales de una regla permanente: "siempre", "nunca", "de ahora en adelante", "nosotros no", una preferencia de formato o tono, un límite claro. Señales de un caso puntual: un dato sobre este cliente, un cambio solo para este borrador, "esta vez", "aquí".\n' +
+    'Devuelve: {"standing": true|false, "rule": "<si es permanente: la preferencia como UNA frase corta en imperativo, general, sin nombres de clientes ni proyectos; si no, cadena vacía>"}';
   try {
     const j = JSON.parse((await ask(system, user, { maxTokens: 200, timeout: 60000 })).replace(/```json|```/g, '').trim());
     return { standing: !!j.standing && !!j.rule, rule: String(j.rule || '').trim() };
@@ -68,6 +68,6 @@ export async function classify(ask, agent, task, feedback) {
 export function promptText(brainPath, agent) {
   const { rules } = read(brainPath, agent.id); if (!rules.length) return '';
   const recent = rules.slice(-MAX_RULES).map(r => '- ' + r.replace(/^\d{4}-\d{2}-\d{2}\s*·\s*/, '').replace(/\s*←\s*".*$/, ''));
-  return 'LESSONS — what the owner corrected before. Apply every one of these, every time, without being asked:\n' + recent.join('\n');
+  return 'LESSONS — lo que el dueño corrigió antes. Aplica cada una de estas, siempre, sin que te lo pidan:\n' + recent.join('\n');
 }
 export const count = (brainPath, id) => read(brainPath, id).rules.length;

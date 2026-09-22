@@ -14,11 +14,11 @@ const SKIP = /^\s*(skip|pass|next)\s*[.!]?\s*$/i;
 const DONE = /^\s*(done|finish|that'?s\s+(it|all|enough)|enough)\s*[.!]?\s*$/i;
 
 export const QUESTIONS = [
-  { k: 'what', q: d => `First: what does ${d} actually do here, in your words? What comes in, what goes out, and who is it for?` },
-  { k: 'job', q: d => `Walk me through the one ${d.toLowerCase()} job you do most often, start to finish. Where does it start, what do you check, what does the finished thing look like?` },
-  { k: 'good', q: () => `What does a good result look like? If you have one you were happy with, paste it in or describe it. If you have a template, describe its sections.` },
-  { k: 'never', q: () => `What must never happen? Red lines, things that always wait for you, anything that has gone wrong before and must not again.` },
-  { k: 'tools', q: () => `Which tools or systems do we use for this, and who are the people involved (clients, suppliers, staff, a bookkeeper)? Say "skip" if nothing comes to mind.` },
+  { k: 'what', q: d => `Primero: ¿qué hace ${d} realmente aquí, en tus palabras? ¿Qué entra, qué sale y para quién es?` },
+  { k: 'job', q: d => `Cuéntame el trabajo de ${d.toLowerCase()} que haces con más frecuencia, de principio a fin. ¿Dónde empieza, qué revisas, cómo se ve cuando está terminado?` },
+  { k: 'good', q: () => `¿Cómo se ve un buen resultado? Si tienes uno que te haya gustado, pégalo o descríbelo. Si tienes una plantilla, describe sus secciones.` },
+  { k: 'never', q: () => `¿Qué no debe pasar nunca? Límites claros, cosas que siempre te esperan a ti, algo que haya salido mal antes y no deba repetirse.` },
+  { k: 'tools', q: () => `¿Qué herramientas o sistemas usamos para esto y quiénes participan (clientes, proveedores, personal, un contador)? Di "skip" si no se te ocurre nada.` },
 ];
 
 export const stateFile = dataDir => path.join(dataDir, 'interviews.json');
@@ -45,9 +45,9 @@ export async function handle(text, ctx) {
     st[dept] = { step: 0, answers: [], startedAt: Date.now() }; save(dataDir, st);
     return { reply: `Good. Five questions about how ${d} works here, one at a time. Answer in plain words, as much or as little as you like. "skip" skips one, "done" finishes early, "cancel" throws it all away. Nothing is written down until the end, and then I will tell you exactly what I wrote and where.\n\n${progress(0, d)}` };
   }
-  if (CANCEL.test(text)) { delete st[dept]; save(dataDir, st); return { reply: `Cancelled. Nothing was written. Say "set up" whenever you want to start again.` }; }
+  if (CANCEL.test(text)) { delete st[dept]; save(dataDir, st); return { reply: `Cancelado. No se escribió nada. Di "set up" cuando quieras empezar de nuevo.` }; }
   let finish = false;
-  if (DONE.test(text)) { if (!cur.answers.some(Boolean)) { delete st[dept]; save(dataDir, st); return { reply: `Nothing to write yet. Say "set up" when you have a few minutes.` }; } finish = true; }
+  if (DONE.test(text)) { if (!cur.answers.some(Boolean)) { delete st[dept]; save(dataDir, st); return { reply: `Todavía no hay nada que anotar. Di "set up" cuando tengas unos minutos.` }; } finish = true; }
   else { cur.answers.push(SKIP.test(text) ? '' : String(text).trim()); cur.step = cur.answers.length; if (cur.step >= QUESTIONS.length) finish = true; }
   if (!finish) { save(dataDir, st); return { reply: `Noted.\n\n${progress(cur.step, d)}` }; }
   delete st[dept]; save(dataDir, st); // whatever happens next, the interview is over
@@ -67,7 +67,7 @@ export async function handle(text, ctx) {
 export async function writeUp(answers, ctx) {
   const { dept, deptName: d, lead, agents, connected = [], brainPath, ask, business = '' } = ctx;
   const roster = agents.map(a => `- ${a.id} · ${a.name}${a.lead ? ' (lead)' : ''} · ${a.role} · ${a.does}`).join('\n');
-  const system = `You turn an owner's interview answers into working instructions for the AI agents of the ${d} department of ${business || 'their business'}. Return ONLY a JSON object, no prose, no code fences.`;
+  const system = `Conviertes las respuestas de la entrevista del dueño en instrucciones de trabajo para los agentes de IA del departamento de ${d} de ${business || 'su negocio'}. Devuelve SOLO un objeto JSON, sin texto adicional, sin bloques de código.`;
   const user = `Agents in ${d} (id · name · role · what they do):\n${roster}\n\nConnected tools: ${connected.join(', ') || 'none'}\n\nThe owner's answers:\n` +
     answers.map(x => `Q: ${x.q}\nA: ${x.a}`).join('\n\n') + '\n\n' +
     'Write:\n' +
