@@ -92,7 +92,7 @@ function deptsFor(name, key) {
 }
 function make(name, target, status) {
   const key = logoKey(name);
-  return { id: toolId(name), name: display(name), key, status, target: target || '', source: /^claude\.ai\s/i.test(name) ? 'claude.ai' : 'local',
+  return { id: toolId(name), raw: name, name: display(name), key, status, target: target || '', source: /^claude\.ai\s/i.test(name) ? 'claude.ai' : 'local',
     depts: deptsFor(name, key), tools: [] };
 }
 export function parseList(text) {
@@ -124,17 +124,35 @@ const withBrowser = list => { const rest = list.filter(s => s.id !== BROWSER); r
 export const browserOn = () => cfgBrowser;
 export function cliArgs() { return cfgBrowser ? ['--chrome'] : ['--no-chrome']; } // explicit both ways: the login's "enabled by default" must not decide for the office
 
-export function discover({ timeout = 45000 } = {}) {
+// `claude mcp list` checks every server's health before it prints anything: with ~27 connectors that is ~40 s, so a
+// busy machine ran past the old 45 s limit and the bar was left with Chrome alone. The last good list is kept in
+// data/mcp-cache.json and shown at once on start; a slow or failed check never replaces a known list with less.
+let cacheFile = null;
+export function useCache(file) {
+  cacheFile = file;
+  try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); if (Array.isArray(j.servers) && j.servers.length && !servers.length) { servers = withBrowser(j.servers.map(x => make(x.raw || x.name, x.target, x.status))); discoveredAt = j.at || 0; } } catch {}
+  return servers.length;
+}
+export function discover({ timeout = 120000 } = {}) {
   return new Promise(resolve => {
     const env = { ...process.env }; delete env.CLAUDECODE;
     let out = '', done = false;
-    const finish = list => { if (done) return; done = true; if (list) { servers = withBrowser(list); discoveredAt = Date.now(); } resolve(servers); };
+    const finish = (list, complete) => {
+      if (done) return; done = true;
+      const known = servers.filter(s => s.id !== BROWSER).length;
+      if (list && (complete ? list.length : list.length >= known)) { // a partial answer never shrinks what the bar already knew
+        const prev = new Map(servers.map(s => [s.id, s]));
+        servers = withBrowser(list.map(s => { const o = prev.get(s.id); return o && o.tools?.length ? { ...s, tools: o.tools } : s; })); discoveredAt = Date.now();
+        if (cacheFile && complete && list.length) try { fs.writeFileSync(cacheFile, JSON.stringify({ at: discoveredAt, servers: list.map(s => ({ raw: s.raw, name: s.name, target: s.target, status: s.status })) })); } catch {}
+      }
+      resolve(servers);
+    };
     let p;
-    try { p = spawn(CLAUDE_BIN, ['mcp', 'list'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch { return finish([]); }
-    const timer = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} finish(parseList(out)); }, timeout);
+    try { p = spawn(CLAUDE_BIN, ['mcp', 'list'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch { return finish(null); }
+    const timer = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} finish(parseList(out), false); }, timeout);
     p.stdout.on('data', d => { out += d; }); p.stderr.on('data', d => { out += d; });
-    p.on('error', () => { clearTimeout(timer); finish([]); });
-    p.on('close', () => { clearTimeout(timer); finish(parseList(out)); });
+    p.on('error', () => { clearTimeout(timer); finish(null); });
+    p.on('close', () => { clearTimeout(timer); finish(parseList(out), true); });
   });
 }
 // a run's `system init` event lists the servers the agent actually got, with live status + tool names
