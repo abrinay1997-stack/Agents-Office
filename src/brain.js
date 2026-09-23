@@ -10,11 +10,13 @@ import { BRAIN as BRAIN0 } from './braingraph.js';
 import { PROFILE } from './profile.js';
 const BRAIN = (PROFILE && PROFILE.graph && PROFILE.graph.nodes && PROFILE.graph.nodes.length) ? PROFILE.graph : BRAIN0; // INDUSTRY PROFILE: the demo company's own graph
 import { AGENTS } from './data.js';
+import { mdToHtml, escHTML } from './md.js';
 
 const GROUP_COL = {
   '40-Marketing': '#E69393', '50-Products': '#98A5EF', '60-Sales': '#EADC8F', '70-Delivery': '#8FD3F4',
   '10-Business': '#BFA2E3', '00-Meta': '#F2B33D', '90-Skills': '#5ADEB7', '30-Customers': '#D1DECD',
   '95-Agents': '#B0ADA3', '80-Finance': '#A9B6F0', '05-Inbox': '#B0ADA3',
+  '20-Brand': '#F0A868', '50-Emails': '#7FC8A9', '90-Operations': '#C7B8A1', 'Agents Office': '#5ADEB7',
 };
 const GROUP_NAME = g => g.replace(/^\d\d-/, '');
 // which folders each department reads from (and writes into)
@@ -168,8 +170,12 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     adj = nodes.map(() => new Set()); for (const [a, b] of links) { adj[a].add(b); adj[b].add(a); }
     byId = new Map(nodes.map(n => [n.id, n.i])); hubs = nodes.slice(0, 8);
     floorPos = new Map((g.floor || []).map(([x, y], i) => [i, { x, y }]));
-    state.notes = g.notes; sel = null;
-    etch(); updateStrip();
+    state.notes = g.notes;
+    const keepSel = sel && sel.id; sel = null; hover = null; // indices changed: the old objects point at other notes now
+    refreshGroups();
+    if (openNow) { meta.textContent = metaText(); chips(); if (keepSel && byId.has(keepSel)) select(nodes[byId.get(keepSel)]); else if (!pane.querySelector('.bv-undo')) pane.innerHTML = EMPTY; }
+    const tag = document.querySelector('.brainTag .b-name b'); if (tag) tag.textContent = state.notes.toLocaleString('es-PA');
+    etch(); updateStrip(); dirty();
   }
   // LIVE: an agent read a named note (the server tells us which) — glint it if it is on the floor
   function readNote(agentId, name) {
@@ -196,7 +202,7 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     }
     for (let i = fx.length - 1; i >= 0; i--) {
       const f = fx[i], k = (now - f.born) / 2000;
-      if (k >= 1) { scene.remove(f.sprite); if (f.line) scene.remove(f.line); fx.splice(i, 1); continue; }
+      if (k >= 1) { scene.remove(f.sprite); f.sprite.material.dispose(); if (f.line) { scene.remove(f.line); f.line.geometry.dispose(); f.line.material.dispose(); } fx.splice(i, 1); continue; } // dispose: a removed object keeps its GPU buffers otherwise
       const a = k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85;
       f.sprite.material.opacity = a; const sc = 1.2 + k * 1.6; f.sprite.scale.set(sc, sc, 1);
       if (f.line) f.line.material.opacity = 0.85 * a;
@@ -219,7 +225,7 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     if (!strip) return;
     strip.querySelector('.tb-count').textContent = state.notes.toLocaleString('en-NZ');
     const lr = strip.querySelector('.tb-last');
-    lr.innerHTML = state.lastRead ? `Última lectura <b>${esc(state.lastRead.note)}</b> por ${esc(state.lastRead.agent)} · ${timeStr(state.lastRead.ts)}` : `${BRAIN.links.length} enlaces wiki · nada leído aún`;
+    lr.innerHTML = state.lastRead ? `Última lectura <b>${esc(state.lastRead.note)}</b> por ${esc(state.lastRead.agent)} · ${timeStr(state.lastRead.ts)}` : `${links.length} enlaces wiki · nada leído aún`;
     strip.querySelector('.tb-new').textContent = state.newToday ? `+${state.newToday} nota${state.newToday > 1 ? 's' : ''} hoy` : '';
   }
   updateStrip();
@@ -230,28 +236,33 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
   const search = document.getElementById('bvSearch'); const chipsEl = document.getElementById('bvChips');
   const pane = document.getElementById('bvPane'); const meta = document.getElementById('bvMeta');
   let openNow = false, k = 1.2, tx = 0, ty = 0, hover = null, sel = null, drag = null, match = null, freshOnly = false;
-  const groups = [...new Set(nodes.map(n => n.g))].sort();
-  const on = new Set(groups);
+  let groups = [], off = new Set(); // groups switched OFF are remembered, so a folder that appears later starts visible
+  function refreshGroups() { groups = [...new Set(nodes.map(n => n.g))].sort(); }
+  refreshGroups();
+  const on = { has: g => !off.has(g) };
+  const freshCount = () => nodes.filter(n => n.fresh).length;
   function chips() {
-    chipsEl.innerHTML = groups.map(g => `<button class="bv-chip${on.has(g) ? ' on' : ''}" data-g="${g}"><i style="background:${GROUP_COL[g] || '#B0ADA3'}"></i>${GROUP_NAME(g)}</button>`).join('') +
-      `<button class="bv-chip live${freshOnly ? ' on' : ''}" data-g="__fresh">Nuevas hoy · ${state.newToday}</button>`;
+    chipsEl.innerHTML = groups.map(g => `<button class="bv-chip${on.has(g) ? ' on' : ''}" data-g="${escHTML(g)}" aria-pressed="${on.has(g)}"><i style="background:${GROUP_COL[g] || '#B0ADA3'}"></i>${escHTML(GROUP_NAME(g))}</button>`).join('') +
+      `<button class="bv-chip live${freshOnly ? ' on' : ''}" data-g="__fresh" aria-pressed="${freshOnly}">Nuevas hoy · ${freshCount()}</button>`;
   }
   chipsEl.addEventListener('click', e => {
     const b = e.target.closest('.bv-chip'); if (!b) return;
-    if (b.dataset.g === '__fresh') freshOnly = !freshOnly; else on.has(b.dataset.g) ? on.delete(b.dataset.g) : on.add(b.dataset.g);
-    chips();
+    if (b.dataset.g === '__fresh') freshOnly = !freshOnly; else off.has(b.dataset.g) ? off.delete(b.dataset.g) : off.add(b.dataset.g);
+    chips(); dirty();
   });
-  search.addEventListener('input', () => { const q = search.value.trim().toLowerCase(); match = q ? new Set(nodes.filter(n => n.id.toLowerCase().includes(q)).map(n => n.i)) : null; });
+  search.addEventListener('input', () => { const q = search.value.trim().toLowerCase(); match = q ? new Set(nodes.filter(n => n.id.toLowerCase().includes(q)).map(n => n.i)) : null; dirty(); });
   search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { search.value = ''; match = null; search.blur(); } });
   const visible = n => on.has(n.g) && (!freshOnly || n.fresh);
-  function S() { return Math.min(bcv.clientWidth, bcv.clientHeight) * 0.44 * k; }
-  function sx(n) { return bcv.clientWidth * 0.42 + n.x * S() + tx; }
-  function sy(n) { return bcv.clientHeight * 0.5 + n.y * S() + ty; }
+  let CW = 1, CH = 1; // the canvas size, read once per frame (reading clientWidth per node forced thousands of layouts a frame)
+  function measure() { CW = bcv.clientWidth || 1; CH = bcv.clientHeight || 1; }
+  function S() { return Math.min(CW, CH) * 0.44 * k; }
+  function sx(n) { return CW * (reading ? 0.34 : 0.42) + n.x * S() + tx; }
+  function sy(n) { return CH * 0.5 + n.y * S() + ty; }
   bcv.addEventListener('mousemove', e => {
-    if (drag) { tx += e.clientX - drag.x; ty += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY }; drag.moved = true; return; }
-    let best = null, bd = 12;
+    if (drag) { tx += e.clientX - drag.x; ty += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY }; drag.moved = true; dirty(); return; }
+    let best = null, bd = 12; measure();
     for (const n of nodes) { if (!visible(n)) continue; const d = Math.hypot(sx(n) - e.clientX, sy(n) - e.clientY); if (d < bd) { bd = d; best = n; } }
-    hover = best; bcv.style.cursor = best ? 'pointer' : 'grab';
+    if (best !== hover) { hover = best; dirty(); } bcv.style.cursor = best ? 'pointer' : 'grab';
   });
   bcv.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, moved: false }; });
   addEventListener('mouseup', e => { if (!drag) return; const moved = drag.moved; drag = null; if (!moved && hover && openNow) select(hover); });
@@ -259,23 +270,74 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     e.preventDefault(); e.stopPropagation();
     const f = Math.exp(-e.deltaY * 0.0025); const nk = Math.max(0.5, Math.min(7, k * f)); const r = nk / k;
     const cx = bcv.clientWidth * 0.42, cy = bcv.clientHeight * 0.5;
-    tx = (tx + cx - e.clientX) * r + e.clientX - cx; ty = (ty + cy - e.clientY) * r + e.clientY - cy; k = nk;
+    tx = (tx + cx - e.clientX) * r + e.clientX - cx; ty = (ty + cy - e.clientY) * r + e.clientY - cy; k = nk; dirty();
   }, { passive: false });
-  function select(n) {
-    sel = n;
-    const out = [...adj[n.i]].map(i => nodes[i]).sort((a, b) => b.d - a.d);
-    const rd = state.reads.get(n.id), wr = state.written.get(n.id);
-    pane.innerHTML = `<h3>${esc(n.id)}</h3><div class="bv-path"><i style="background:${GROUP_COL[n.g] || '#B0ADA3'}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${n.fresh ? ' · <span class="bv-g">nueva hoy</span>' : ''}</div>` +
-      (wr ? `<div class="bv-lab">Escrito por</div><p>${esc(wr.agent)} · ${timeStr(wr.ts)} · de la tarea “${esc(wr.task)}”</p>` : '') +
-      (rd ? `<div class="bv-lab">Última lectura por</div><p>${esc(rd.agent)} · ${timeStr(rd.ts)}</p>` : '') +
-      `<div class="bv-lab">Enlaces · ${out.length}</div>` + out.slice(0, 18).map(o => `<div class="bv-lk" data-i="${o.i}">${esc(o.id)}</div>`).join('') +
-      (out.length > 18 ? `<div class="bv-more">+${out.length - 18} más</div>` : '');
-    pane.querySelectorAll('.bv-lk').forEach(el => el.addEventListener('click', () => { const t = nodes[+el.dataset.i]; select(t); centre(t); }));
+  const SERVED = location.protocol.startsWith('http');
+  const EMPTY = '<div class="bv-empty">Haz clic en una nota para leerla. Pasa el cursor para ver sus vecinas.</div>';
+  let reading = false, readSeq = 0;
+  // front matter → the little facts line (who wrote it, when, with what)
+  function frontFacts(text) {
+    const m = /^---\n([\s\S]*?)\n---/.exec(String(text).replace(/\r\n?/g, '\n')); if (!m) return '';
+    const f = Object.fromEntries(m[1].split('\n').map(l => /^([\w-]+):\s*(.*)$/.exec(l)).filter(Boolean).map(x => [x[1], x[2].trim()])); // split at the FIRST colon: «done: 2026-…T05:15:54Z»
+    const when = f.done ? new Date(f.done).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const bits = [f.agent && `Escrito por <b>${escHTML(f.agent)}</b>`, f.department && escHTML(f.department), when, f.model && `modelo ${escHTML(f.model)}`, f.tools && `usó ${escHTML(f.tools)}`, f.approved && 'aprobado por ti'].filter(Boolean);
+    return bits.length ? `<div class="bv-facts">${bits.join(' · ')}</div>` : '';
   }
-  function centre(n) { tx = -n.x * S(); ty = -n.y * S(); }
+  function select(n) {
+    sel = n; dirty();
+    const out = [...adj[n.i]].map(i => nodes[i]).sort((a, b) => b.d - a.d);
+    const rd = state.reads.get(n.id);
+    const linksHTML = `<div class="bv-lab">Enlaces · ${out.length}</div>` + out.slice(0, 18).map(o => `<button type="button" class="bv-lk" data-i="${o.i}">${esc(o.id)}</button>`).join('') +
+      (out.length > 18 ? `<div class="bv-more">+${out.length - 18} más</div>` : '');
+    pane.classList.toggle('reading', SERVED); reading = SERVED;
+    pane.innerHTML = `<h3>${esc(n.id)}</h3><div class="bv-path"><i style="background:${GROUP_COL[n.g] || '#B0ADA3'}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${n.fresh ? ' · <span class="bv-g">nueva hoy</span>' : ''}</div>` +
+      (rd ? `<div class="bv-lab">Última lectura por</div><p>${esc(rd.agent)} · ${timeStr(rd.ts)}</p>` : '') +
+      (SERVED ? '<div class="bv-note" aria-live="polite"><div class="bv-loading">Abriendo la nota…</div></div>' : '') + `<div class="bv-links">${linksHTML}</div>`;
+    pane.scrollTop = 0;
+    if (!SERVED) return; // the file-opened demo has no notes to read
+    const seq = ++readSeq;
+    fetch('/api/note?id=' + encodeURIComponent(n.id)).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(({ ok, j }) => {
+      if (seq !== readSeq || sel !== n) return; // another note was clicked meanwhile
+      const box = pane.querySelector('.bv-note'); if (!box) return;
+      if (!ok) { box.innerHTML = `<p class="bv-err">No pude abrir esta nota: ${esc(j.error || 'error')}.</p>`; return; }
+      box.innerHTML = frontFacts(j.text) + `<div class="bv-md md">${mdToHtml(j.text, { front: true })}</div>` + (j.cut ? '<p class="bv-err">La nota es muy larga: se muestran los primeros 200.000 caracteres.</p>' : '') +
+        `<div class="bv-actions">${j.deletable ? '<button type="button" class="bv-btn bv-trash">Mover a la papelera</button>' : ''}<button type="button" class="bv-btn bv-copy">Copiar texto</button></div>`;
+      box.querySelector('.bv-copy').addEventListener('click', e => copyText(j.text.replace(/^---\n[\s\S]*?\n---\n?/, ''), e.currentTarget));
+      const tr = box.querySelector('.bv-trash'); if (tr) tr.addEventListener('click', () => trash(n.id, tr));
+    }).catch(() => { const box = pane.querySelector('.bv-note'); if (box && seq === readSeq) box.innerHTML = '<p class="bv-err">Sin conexión con la oficina: no pude abrir la nota.</p>'; });
+  }
+  function copyText(t, btn) {
+    const done = () => { const o = btn.textContent; btn.textContent = 'Copiado ✓'; setTimeout(() => { btn.textContent = o; }, 1400); };
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(done, () => { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); done(); } catch {} a.remove(); });
+  }
+  async function trash(id, btn) {
+    if (!confirm(`¿Mover «${id}» a la papelera?\n\nVa a «Agents Office/.papelera» dentro del cerebro: sale del grafo y los agentes dejan de leerla. Puedes deshacerlo.`)) return;
+    btn.disabled = true; btn.textContent = 'Moviendo…';
+    try {
+      const r = await fetch('/api/note/trash', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'error');
+      sel = null; reading = false; pane.classList.remove('reading');
+      pane.innerHTML = `<div class="bv-undo"><p>«${esc(id)}» está en la papelera.</p><button type="button" class="bv-btn">Deshacer</button></div>`;
+      pane.querySelector('.bv-undo button').addEventListener('click', async e => {
+        e.currentTarget.disabled = true;
+        try { const r2 = await fetch('/api/note/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file: j.trashed }) }); const j2 = await r2.json(); if (!r2.ok) throw new Error(j2.error); pane.innerHTML = EMPTY; setGraph(j2.graph); const b = byId.get(j2.name); if (b != null) select(nodes[b]); }
+        catch (err) { pane.innerHTML = `<p class="bv-err">No pude restaurarla: ${esc(err.message)}</p>`; }
+      });
+      setGraph(j.graph);
+    } catch (e) { btn.disabled = false; btn.textContent = 'Mover a la papelera'; alert('No se pudo mover: ' + e.message); }
+  }
+  pane.addEventListener('click', e => { // links inside the pane: the neighbour list and the [[wiki]] links in the text
+    const lk = e.target.closest('.bv-lk'); if (lk) { const t = nodes[+lk.dataset.i]; if (t) { select(t); centre(t); } return; }
+    const w = e.target.closest('.md-wiki'); if (w) { const i = byId.get(w.dataset.note); if (i != null) { select(nodes[i]); centre(nodes[i]); } else w.classList.add('missing'); }
+  });
+  pane.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.md-wiki')) { e.preventDefault(); e.target.click(); } });
+  function centre(n) { measure(); tx = -n.x * S(); ty = -n.y * S(); dirty(); }
+  let raf = 0;
+  function dirty() { if (openNow && !raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); } // one frame, only when something changed
   function draw() {
     if (!openNow) return;
-    const dpr = devicePixelRatio || 1, Wd = bcv.clientWidth, Hd = bcv.clientHeight;
+    measure();
+    const dpr = devicePixelRatio || 1, Wd = CW, Hd = CH;
     if (bcv.width !== Math.round(Wd * dpr)) { bcv.width = Math.round(Wd * dpr); bcv.height = Math.round(Hd * dpr); }
     bctx.setTransform(dpr, 0, 0, dpr, 0, 0); bctx.clearRect(0, 0, Wd, Hd);
     const focus = hover || sel; const hi = focus ? new Set([focus.i, ...adj[focus.i]]) : null;
@@ -299,22 +361,24 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
       if (label) { bctx.fillStyle = dim ? 'rgba(232,230,223,.35)' : '#E8E6DF'; bctx.fillText(n.id, x + r + 4, y); }
       bctx.globalAlpha = 1;
     }
-    requestAnimationFrame(draw);
   }
   let owner = PROFILE && PROFILE.company ? String(PROFILE.company).toUpperCase() : 'TUS NOTAS'; // V3.1: the business name when served (was hard-coded to one company); INDUSTRY PROFILE: the demo company
-  function setOwner(name) { owner = String(name || 'TUS NOTAS').toUpperCase(); if (openNow) meta.textContent = `${owner} · ${state.notes.toLocaleString('en-NZ')} NOTAS · ${links.length} ENLACES`; }
+  const metaText = () => `${owner} · ${state.notes.toLocaleString('es-PA')} NOTAS · ${links.length} ENLACES`;
+  function setOwner(name) { owner = String(name || 'TUS NOTAS').toUpperCase(); if (openNow) meta.textContent = metaText(); }
+  let opener = null;
   function open() {
     if (openNow) return;
-    openNow = true; ov.classList.add('on'); document.body.classList.add('brainOpen');
-    meta.textContent = `${owner} · ${state.notes.toLocaleString('en-NZ')} NOTAS · ${links.length} ENLACES`;
-    chips(); if (!sel) pane.innerHTML = '<div class="bv-empty">Haz clic en una nota para leerla. Pasa el cursor para ver sus vecinas.</div>';
-    requestAnimationFrame(draw);
+    openNow = true; opener = document.activeElement; ov.classList.add('on'); document.body.classList.add('brainOpen');
+    meta.textContent = metaText();
+    chips(); if (!sel) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); }
+    dirty(); setTimeout(() => search.focus({ preventScroll: true }), 50);
   }
-  function close() { if (!openNow) return; openNow = false; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); }
+  function close() { if (!openNow) return; openNow = false; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   function toggle() { openNow ? close() : open(); }
   document.getElementById('bvClose').addEventListener('click', close);
-  addEventListener('resize', () => { if (openNow) draw(); });
+  addEventListener('resize', dirty);
 
   function setTheme(dark) { INK = dark ? '236,234,227' : '21,20,20'; etch(); }
-  return { read, readNote, write, setGraph, setTheme, setOwner, setQuiet, tick, open, close, toggle, isOpen: () => openNow, state, get nodes() { return nodes; }, get links() { return links; } };
+  function show(id) { const i = byId.get(id); if (i == null) return false; open(); select(nodes[i]); centre(nodes[i]); return true; } // open the Brain on one note (a [[link]] in the chat)
+  return { show, read, readNote, write, setGraph, setTheme, setOwner, setQuiet, tick, open, close, toggle, isOpen: () => openNow, state, get nodes() { return nodes; }, get links() { return links; } };
 }

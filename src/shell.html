@@ -996,7 +996,56 @@
   #bvClose {
     position: absolute; right: 22px; top: 18px; transform: translate(0, -2px); margin-right: -6px; display: none;
   }
-  #brainOv.on #bvClose { display: none; } /* Esc and the pod both close; the brand stays clean */
+  #brainOv.on #bvClose { display: grid; } /* a visible way out, not only Esc */
+  #bvClose { place-items: center; width: 36px; height: 36px; border-radius: 10px; margin: 0; transform: none; top: 14px;
+    background: #181B24; border: 1px solid rgba(253,255,248,.18); color: #E8E6DF; font-size: 16px; cursor: pointer; }
+  #bvClose:hover { border-color: rgba(253,255,248,.5); }
+  .bv-brand { right: 72px; }
+  /* the reader: the pane widens when a note is open */
+  .bv-pane { transition: width .35s var(--ease); scrollbar-width: thin; scrollbar-color: #3A3F4E transparent; }
+  .bv-pane::-webkit-scrollbar { display: block; width: 8px; } .bv-pane::-webkit-scrollbar-thumb { background: #3A3F4E; border-radius: 8px; }
+  .bv-pane.reading { width: min(620px, 46vw); }
+  #brainOv:has(.bv-pane.reading) .bv-top { max-width: calc(100vw - min(620px, 46vw) - 70px); }
+  .bv-top { max-width: calc(100vw - 420px); }
+  .bv-facts { font-size: 12px; line-height: 1.5; color: #A9A7A0; margin: 2px 0 14px; }
+  .bv-facts b { color: #E8E6DF; font-weight: 600; }
+  .bv-note { border-top: 1px solid rgba(253,255,248,.1); padding-top: 12px; margin-top: 4px; }
+  .bv-loading, .bv-err { font-size: 13px; color: #A9A7A0; font-style: italic; }
+  .bv-err { color: #F2A38F; font-style: normal; }
+  .bv-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0 6px; }
+  .bv-btn { font-family: var(--ui); font-size: 12px; letter-spacing: .04em; padding: 8px 14px; border-radius: 99px; cursor: pointer;
+    background: none; color: #E8E6DF; border: 1px solid rgba(253,255,248,.25); }
+  .bv-btn:hover { border-color: rgba(253,255,248,.6); }
+  .bv-btn.bv-trash { color: #F2A38F; border-color: rgba(242,163,143,.45); }
+  .bv-btn:disabled { opacity: .5; cursor: default; }
+  .bv-undo p { font-size: 14px; line-height: 1.5; color: #E8E6DF; margin: 6px 0 12px; }
+  .bv-links { border-top: 1px solid rgba(253,255,248,.1); margin-top: 16px; }
+  .bv-lk { display: block; background: none; border: 0; text-align: left; font-family: var(--ui); width: 100%; }
+  .bv-lab, .bv-path, .bv-foot, .bv-more { font-size: 11px; color: #A9A7A0; }
+  .bv-chip { font-size: 11px; color: #A9A7A0; }
+  /* rendered Markdown (src/md.js) — shared by the Brain reader and the chat */
+  .md { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+  .md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+  .md p, .md ul, .md ol, .md blockquote, .md pre, .md .md-tbl { margin: 0 0 .7em; }
+  .md h3, .md h4, .md h5, .md h6, .md h7, .md h8 { font-family: var(--ui); font-weight: 700; line-height: 1.3; margin: 1em 0 .4em; }
+  .md h3 { font-size: 1.12em; } .md h4 { font-size: 1.03em; } .md h5, .md h6 { font-size: .95em; }
+  .md ul, .md ol { padding-left: 1.3em; } .md li { margin: .2em 0; } .md li > ul { margin: .2em 0 0; }
+  .md strong { font-weight: 700; }
+  .md code { font-family: Menlo, Consolas, monospace; font-size: .88em; padding: .1em .35em; border-radius: 5px; background: rgba(127,127,127,.16); }
+  .md pre { padding: 10px 12px; border-radius: 8px; overflow-x: auto; background: rgba(127,127,127,.14); }
+  .md pre code { padding: 0; background: none; font-size: .85em; line-height: 1.5; }
+  .md blockquote { border-left: 3px solid rgba(127,127,127,.4); padding-left: 10px; opacity: .9; }
+  .md hr { border: 0; border-top: 1px solid rgba(127,127,127,.3); margin: 1em 0; }
+  .md a { color: #2B6BEB; text-decoration: underline; text-underline-offset: 2px; }
+  .md .md-wiki { color: #2B6BEB; text-decoration: none; cursor: pointer; border-bottom: 1px dotted currentColor; }
+  .md .md-wiki.missing { opacity: .5; cursor: default; }
+  .md .md-assumed { font-size: .85em; color: #8A6414; }
+  .md-tbl { overflow-x: auto; } .md table { border-collapse: collapse; font-size: .92em; min-width: 60%; }
+  .md th, .md td { border: 1px solid rgba(127,127,127,.3); padding: 5px 8px; text-align: left; vertical-align: top; }
+  .md th { background: rgba(127,127,127,.1); font-weight: 600; }
+  .md-foot { display: flex; flex-wrap: wrap; gap: 6px; margin-top: .9em; padding-top: .6em; border-top: 1px dashed rgba(127,127,127,.3); }
+  .md-foot span { font-size: 11.5px; line-height: 1.4; padding: 3px 9px; border-radius: 99px; background: rgba(127,127,127,.12); opacity: .85; }
+  .bv-md { color: #DAD8D0; } .bv-md a, .bv-md .md-wiki { color: #9DB4FF; } .bv-md .md-assumed { color: #E8C06A; }
 
 
   /* ---------- DARK MODE (6 Sep 2026) — tokens first, then the surfaces that were hard-coded white ---------- */
@@ -1098,13 +1147,13 @@
 </div>
 <button id="overviewBtn">◂ VISTA GENERAL</button>
 <!-- V3.6: the full-screen Brain graph (G · click the pod · the panel strip) -->
-<div id="brainOv">
+<div id="brainOv" role="dialog" aria-modal="true" aria-label="El Cerebro: tus notas">
   <canvas id="bvCv"></canvas>
-  <div class="bv-top"><input id="bvSearch" placeholder="Buscar en el Cerebro…" autocomplete="off" spellcheck="false"><div id="bvChips"></div></div>
+  <div class="bv-top"><input id="bvSearch" placeholder="Buscar en el Cerebro…" aria-label="Buscar una nota" autocomplete="off" spellcheck="false"><div id="bvChips"></div></div>
   <div class="bv-brand">EL CEREBRO <small id="bvMeta"></small></div>
-  <div class="bv-pane" id="bvPane"></div>
+  <div class="bv-pane" id="bvPane" aria-label="Nota seleccionada"></div>
   <div class="bv-foot">Esc cierra · scroll acerca · arrastrar mueve · clic en una nota para leerla</div>
-  <button id="bvClose" title="cerrar (Esc)">✕</button>
+  <button id="bvClose" type="button" title="Cerrar (Esc)" aria-label="Cerrar el Cerebro"><span aria-hidden="true">✕</span></button>
 </div>
 <!-- V3.2.1 (16 Sep 2026): the CALENDAR — P. Tasks and routines on the days they belong to; click a day to schedule -->
 <div id="calOv">
