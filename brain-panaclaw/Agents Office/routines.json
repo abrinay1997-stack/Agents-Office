@@ -6,29 +6,12 @@
       "agent": "elead",
       "title": "Revisar la bandeja y decirme qué necesita de mí hoy",
       "text": "Revisa los correos de las últimas 24 horas con el skill triage-correo y dime qué necesita mi decisión, qué hay que contestar y qué avisos de plataformas llegaron. Solo lectura.",
-      "when": { "kind": "weekdays", "at": "09:00" },
+      "when": {
+        "kind": "weekdays",
+        "at": "09:00"
+      },
       "needsOk": false,
-      "paused": true
-    },
-    {
-      "id": "seguimientos-lunes",
-      "dept": "sales",
-      "agent": "folo",
-      "title": "Preparar los seguimientos de prospectos que se quedaron callados",
-      "text": "Busca en el correo a quien pidió precio o recibió una propuesta la semana pasada y no volvió a escribir, y prepara un solo mensaje de seguimiento para cada uno según la nota seguimiento. No envíes nada.",
-      "when": { "kind": "weekly", "days": [1], "at": "09:30" },
-      "needsOk": true,
-      "paused": true
-    },
-    {
-      "id": "cobros-pendientes",
-      "dept": "fin",
-      "agent": "invo",
-      "title": "Listar los cobros pendientes y redactar los recordatorios",
-      "text": "Lista los cobros pendientes (segundas mitades y mensualidades) con el skill cobros, en dos tablas separadas, y redacta un recordatorio para cada uno. No envíes nada.",
-      "when": { "kind": "weekly", "days": [1], "at": "10:00" },
-      "needsOk": true,
-      "paused": true
+      "paused": false
     }
   ]
 }
