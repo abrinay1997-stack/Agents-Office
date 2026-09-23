@@ -75,12 +75,28 @@ export function load(brainPath, agents) {
   return { routines, problems, path: p, exists: fs.existsSync(p) };
 }
 
+// write-then-rename: a crash mid-write never leaves the owner's file half written
+function writeAtomic(p, text) { const tmp = p + '.tmp'; fs.writeFileSync(tmp, text); fs.renameSync(tmp, p); }
+
 export function save(brainPath, routines) {
   const p = file(brainPath);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const clean = routines.map(r => ({ id: r.id, dept: r.dept, agent: r.agent, title: r.title, text: r.text, when: r.when, needsOk: r.needsOk, paused: r.paused, ...(r.model ? { model: r.model } : {}), ...(r.effort ? { effort: r.effort } : {}), ...(r.plan ? { plan: r.plan } : {}) }));
-  fs.writeFileSync(p, JSON.stringify({ routines: clean }, null, 2) + '\n');
+  const clean = routines.map(r => ({ id: r.id, dept: r.dept, agent: r.agent, title: r.title, text: r.text, when: r.when, needsOk: r.needsOk, paused: r.paused, ...(r.team ? { team: true } : {}), ...(r.model ? { model: r.model } : {}), ...(r.effort ? { effort: r.effort } : {}), ...(r.plan ? { plan: r.plan } : {}) }));
+  writeAtomic(p, JSON.stringify({ routines: clean }, null, 2) + '\n');
   return p;
+}
+
+/** Edit one routine in the file AS IT IS ON DISK — routines the validator left out, and fields it does not
+ *  know, stay untouched. patch = null removes it; a value of '' or undefined deletes that key. false if not found. */
+export function patchFile(brainPath, id, patch) {
+  const p = file(brainPath); const doc = readJSON(p, null);
+  const list = Array.isArray(doc) ? doc : Array.isArray(doc?.routines) ? doc.routines : null;
+  const i = list ? list.findIndex(r => r && r.id === id) : -1;
+  if (i < 0) return false;
+  if (patch === null) list.splice(i, 1);
+  else for (const [k, v] of Object.entries(patch)) { if (v === undefined || v === '') delete list[i][k]; else list[i][k] = v; }
+  writeAtomic(p, JSON.stringify(Array.isArray(doc) ? { routines: list } : doc, null, 2) + '\n');
+  return true;
 }
 
 /* ---------- run state: data/routines.json → { [id]: { nextAt, lastAt, runs, lastTaskId } } ---------- */

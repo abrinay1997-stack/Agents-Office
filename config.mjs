@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
 function readJSON(p) {
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; }
+  try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
+  catch (e) { if (e.code !== 'ENOENT') console.error(`config: ${path.basename(p)} is not valid JSON and was IGNORED — ${e.message}`); return {}; } // silent, the office would open the wrong brain
 }
 
 export function loadConfig() {

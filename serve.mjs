@@ -35,6 +35,7 @@
 // 'scheduled', `dueAt`; the clock below fires it, marked LATE if the office was off) and a routine
 // can start from a date (`when.start`, src/when.js). Cancel = DELETE /api/tasks/:id.
 import http from 'node:http';
+import zlib from 'node:zlib';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -74,7 +75,7 @@ for (const w of skills.problems) console.warn('skills:', w);
 // the roster's editable fields are re-read too (a brief written by the lead's interview, or by hand, lands without a restart)
 function reloadRoster() {
   const r = loadRoster(BRAIN);
-  for (const a of r.agents) { const cur = AGENTS.find(x => x.id === a.id); if (cur) Object.assign(cur, { name: a.name, role: a.role, does: a.does, tools: a.tools, brief: a.brief }); }
+  for (const a of r.agents) { const cur = AGENTS.find(x => x.id === a.id); if (cur) Object.assign(cur, { name: a.name, role: a.role, does: a.does, tools: a.tools, brief: a.brief, model: a.model, effort: a.effort }); }
   if (r.problems.join() !== roster.problems.join()) for (const w of r.problems) console.warn('agents:', w);
   Object.assign(roster, { problems: r.problems, customised: r.customised, briefed: r.briefed, files: r.files });
 }
@@ -92,7 +93,7 @@ if (process.env.ANTHROPIC_API_KEY) {
 
 /* ---------- storage ---------- */
 const load = () => { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return []; } };
-const save = list => { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(list, null, 2)); };
+const save = list => { fs.mkdirSync(DATA, { recursive: true }); const tmp = FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(list, null, 2)); fs.renameSync(tmp, FILE); }; // write-then-rename: never a half-written tasks.json
 const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 /* ---------- the usage gauge (V3.6, A3): Claude's own numbers, the office's count underneath ---------- */
 const USTATE = usage.loadState(DATA);
@@ -105,7 +106,8 @@ async function getUsage(force) {
   return v;
 }
 function bumpUsage(u) { if (!u) return; Object.assign(USTATE, usage.record(USTATE, u)); usage.saveState(DATA, USTATE); usageCache.stale = true; }
-const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60); // «qué» → «que», not «qu»
+const localDay = ts => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }; // the owner's calendar day, not UTC's
 
 /* ---------- ask Claude ---------- */
 // askX → { text, tools }: tools = the MCP/web tools the agent actually called (for the office to
@@ -118,7 +120,16 @@ function ranOn(mu, want) {
   const fam = normModel(want) || cfg.model;
   return keys.find(k => k.includes(fam)) || keys.filter(k => !/haiku/.test(k)).sort((a, b) => (mu[b].outputTokens || 0) - (mu[a].outputTokens || 0))[0] || keys[0];
 }
-async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null } = {}) { // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+// every `claude` the office started, so a timeout, a restart or Ctrl+C never leaves one behind still sending (Windows: the whole tree, MCP servers included)
+const children = new Set();
+function killTree(p) {
+  if (!p || p.exitCode !== null) return;
+  if (process.platform === 'win32') { try { spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { try { p.kill(); } catch {} } }
+  else try { p.kill('SIGKILL'); } catch {}
+}
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { for (const p of children) killTree(p); process.exit(0); });
+process.on('exit', () => { for (const p of children) killTree(p); });
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null } = {}) { // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
     const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
@@ -126,32 +137,38 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
     return { text: res.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(), tools: [], usage: res.usage, modelId: res.model };
   }
   fs.mkdirSync(CLI_CWD, { recursive: true });
-  const allowed = tools ? mcp.allowedTools() : [];
-  const args = ['-p', user, '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--system-prompt', system,
-    '--disallowedTools', 'Bash,Edit,Write,Read,Glob,Grep,Agent,NotebookEdit,Task' + (allowed.includes('WebFetch') ? '' : ',WebFetch,WebSearch')];
+  const allowed = tools ? mcp.allowedTools(agent) : [];
+  // the system prompt goes in a file and the request on stdin: skills + notes + a revise can pass Windows' 32,767-character command line
+  const sysFile = path.join(CLI_CWD, `system-${nid()}.txt`); fs.writeFileSync(sysFile, system);
+  const args = ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--system-prompt-file', sysFile,
+    '--disallowedTools', ['Bash', 'Edit', 'Write', 'Read', 'Glob', 'Grep', 'Agent', 'NotebookEdit', 'Task', ...(allowed.includes('WebFetch') ? [] : ['WebFetch', 'WebSearch']), ...mcp.disallowedTools(agent, tools)].join(',')];
   if (allowed.length) args.push('--allowedTools', allowed.join(','));
   args.push(...(tools ? mcp.cliArgs() : ['--no-chrome'])); // V3.2 (16 Sep): the owner's Chrome, when tools.browser is on
   args.push(...modelArgs(model, effort));
   const env = { ...process.env }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session
   return new Promise((resolve, reject) => {
-    const p = spawn('claude', args, { cwd: CLI_CWD, env, stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '', err = '', text = '', used = [], gotResult = false, usageOut = null, modelUsed = null;
-    const timer = setTimeout(() => { p.kill('SIGKILL'); reject(new Error(`Claude took longer than ${timeout / 1000} s`)); }, timeout);
+    const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
+    children.add(p);
+    p.stdin.on('error', () => {}); p.stdin.end(user);
+    const cleanup = () => { children.delete(p); fs.rm(sysFile, { force: true }, () => {}); };
+    let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null;
+    const timer = setTimeout(() => { killTree(p); reject(new Error(`Claude took longer than ${timeout / 1000} s`)); }, timeout);
     const feed = line => {
       if (!line.trim()) return;
       let j; try { j = JSON.parse(line); } catch { return; }
       if (j.type === 'system' && j.subtype === 'init') mcp.fromInit(j);
       if (j.type === 'assistant' && j.message?.content) for (const b of j.message.content) if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name);
-      if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); if (j.is_error && !text) text = ''; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); }
+      if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); }
     };
     p.stdout.on('data', d => { out += d; let i; while ((i = out.indexOf('\n')) >= 0) { feed(out.slice(0, i)); out = out.slice(i + 1); } });
     p.stderr.on('data', d => { err += d; });
-    p.on('error', e => { clearTimeout(timer); reject(new Error(e.code === 'ENOENT' ? 'Claude Code is not installed (claude not found on PATH)' : e.message)); });
+    p.on('error', e => { clearTimeout(timer); cleanup(); reject(new Error(e.code === 'ENOENT' ? 'Claude Code is not installed (claude not found on PATH — set CLAUDE_BIN to claude.exe)' : e.message)); });
     p.on('close', code => {
-      clearTimeout(timer); feed(out);
+      clearTimeout(timer); cleanup(); feed(out);
       if (code !== 0 && !gotResult) return reject(new Error(`claude exited ${code}${err ? ': ' + err.trim().slice(0, 300) : ''}`));
       if (!gotResult) { try { text = String(JSON.parse(out).result || '').trim(); } catch { text = out.trim(); } }
       bumpUsage(usageOut);
+      if (isError) return reject(new Error(text || 'Claude reported an error with no message')); // an API error is not a deliverable: never saved as a note
       resolve({ text, tools: used, usage: usageOut, modelId: modelUsed });
     });
   });
@@ -229,7 +246,7 @@ function agentSystem(a, index, read, { extra = '', words = 260 } = {}) {
     'Escribe el entregable terminado en sí, no una descripción de lo que harías. Texto plano: un encabezado corto, luego secciones cortas o viñetas. ' +
     `Como máximo ${words} palabras, salvo que una skill o las instrucciones del dueño indiquen otra forma — eso prevalece. Sin preámbulo, sin despedida. Apóyalo en las notas de la empresa de abajo; donde falte un dato, haz una suposición razonable y márcala (assumed). ` +
     'Si usaste una herramienta, dilo en una línea al final ("Used: Gmail — searched the client thread").\n\n' +
-    `${mcp.promptText(a.tools)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
+    `${mcp.promptText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
 }
 const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. End with one line saying exactly what will go out when approved (or that nothing needs to).'
   : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
@@ -257,7 +274,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
   const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + routineLine + modeLine +
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort });
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a });
   if (!text) throw new Error('Claude returned nothing');
   return { result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from };
 }
@@ -290,7 +307,7 @@ async function runTeam(task, mode) {
       const system = agentSystem(a, index, read, { extra: teams.teamSection({ me: a, lead, pieces: task.team.pieces, nameOf }), words: 220 });
       const user = `Task (the whole request, for context): ${task.title}\nOwner's request: ${task.text}\n\nYOUR PIECE: ${piece.title}\n${piece.text}` + routineLineFor(task) + (mode === 'draft' ? modeLineFor('draft', task) : '');
       const { pick, eff } = pickFor(task, a);
-      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort });
+      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a });
       const { body, messages } = teams.parseMessages(text, ids);
       Object.assign(piece, { result: body || '(empty)', tools: toolKeys(tools), used: mcp.namesOf(tools), read, modelId: ran, error: !text });
       for (const m of messages) task.team.messages.push({ from: a.id, to: m.to === lead.id ? 'lead' : m.to, text: m.text, at: Date.now() });
@@ -309,7 +326,7 @@ async function runTeamLead(task, feedback, mode) {
   const system = agentSystem(lead, index, read, { extra: `TEAM\nYou lead this team. The pieces below were done by your teammates (one of them may be yours). You write the finished deliverable from them.`, words: 450 });
   const user = teams.synthPrompt({ task, pieces: tm.pieces || [], messages: tm.messages || [], nameOf, feedback: mode === 'approve' ? null : feedback }) + routineLineFor(task) + modeLineFor(mode, task);
   const { pick, eff } = pickFor(task, lead);
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000 });
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead });
   if (!text) throw new Error('Claude returned nothing');
   const allTools = [...new Set([...(tm.pieces || []).flatMap(p => p.tools || []), ...toolKeys(tools)])];
   const allUsed = [...new Set([...(tm.pieces || []).flatMap(p => p.used || []), ...mcp.namesOf(tools)])];
@@ -319,7 +336,9 @@ async function runTeamLead(task, feedback, mode) {
 function writeNote(task) { // the deliverable becomes a note in the brain, linked to what was read
   fs.mkdirSync(NOTES_DIR, { recursive: true });
   const a = AGENTS.find(x => x.id === task.agent);
-  const name = `${new Date(task.doneAt).toISOString().slice(0, 10)} ${slug(task.title)}`;
+  const base = `${localDay(task.doneAt)} ${slug(task.title)}`;
+  let name = base; // the same task re-run (a revise) keeps its note; another task with the same title that day gets «-2», never overwrites
+  for (let n = 2; fs.existsSync(path.join(NOTES_DIR, name + '.md')) && !fs.readFileSync(path.join(NOTES_DIR, name + '.md'), 'utf8').includes(`\ntask: ${task.id}\n`); n++) name = `${base}-${n}`;
   const body = `---\nagent: ${a.name}\ndepartment: ${DEPTS[a.department].name}\ntask: ${task.id}\ndone: ${new Date(task.doneAt).toISOString()}${task.used?.length ? '\ntools: ' + task.used.join(', ') : ''}${task.skills?.length ? '\nskills: ' + task.skills.join(', ') : ''}${task.routine ? '\nroutine: ' + task.when + (task.late ? ' (late)' : '') : ''}${task.modelUsed ? '\nmodel: ' + modelName(task.modelUsed) + (task.modelFrom && task.modelFrom !== 'office' ? ' (' + task.modelFrom + ')' : '') : ''}${task.effortUsed ? '\neffort: ' + task.effortUsed + (task.effortFrom && task.effortFrom !== 'model' ? ' (' + task.effortFrom + ')' : '') : ''}${task.approved ? '\napproved: ' + new Date(task.approvedAt).toISOString() : ''}${task.team?.pieces?.length ? '\nteam: ' + task.team.pieces.map(p => nameOf(p.agent)).join(', ') : ''}\n---\n` +
     `# ${task.title}\n\n${task.result}\n\n---\nRead: ${(task.read || []).map(n => `[[${n}]]`).join(' · ') || '—'}\n` + teams.noteExtra(task.team, nameOf);
   fs.writeFileSync(path.join(NOTES_DIR, name + '.md'), body);
@@ -334,9 +353,9 @@ async function chat(agentId, text, history) {
   const system = `You are ${a.name}, ${a.role || 'an agent'}, in the ${d.name} department of ${cfg.name}. ${a.does}\n${agentBrief(a)}` +
     'You are talking to the owner. Answer as this agent, in first person, briefly (under 120 words unless asked for detail), plainly, no hype. ' +
     'Use the company notes; say when something is not in them. If the owner asks you to look something up, use your tools. Nothing outbound is sent without the owner\'s explicit say-so.\n\n' +
-    `${mcp.promptText(a.tools)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nRELEVANT NOTES\n${contextText(index, read)}\n\nYOUR RECENT TASKS\n${mine || '—'}`;
+    `${mcp.promptText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nRELEVANT NOTES\n${contextText(index, read)}\n\nYOUR RECENT TASKS\n${mine || '—'}`;
   const convo = (history || []).slice(-8).map(m => `${m.who === 'user' ? 'Dueño' : a.name}: ${m.text}`).join('\n');
-  const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${a.name}:`, { maxTokens: 1200, model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
+  const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${a.name}:`, { maxTokens: 1200, agent: a, model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
   return { reply, read, tools: toolKeys(tools), used: mcp.namesOf(tools) };
 }
 
@@ -355,7 +374,7 @@ const routinesOut = () => { const list = loadRoutines(); return { routines: list
 const agentName = id => AGENTS.find(a => a.id === id)?.name || id;
 // routine-driven runs go one at a time, so a burst of catch-ups after a long sleep does not spawn five Claude processes at once
 let queue = Promise.resolve();
-const enqueue = fn => { const p = queue.then(fn, fn); queue = p.catch(() => {}); return p; };
+const enqueue = fn => { const p = queue.then(fn, fn); queue = p.catch(e => console.error('run failed:', e.message)); return p; };
 function fire(r, { due = Date.now(), late = false, by = 'routine' } = {}) { // the routine becomes a task and runs here, page or no page
   const task = { id: nid(), dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, due, late, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined };
   const list = load(); list.push(task); save(list);
@@ -381,11 +400,15 @@ async function runServerTask(id, { feedback, approve } = {}) {
   console.log(`${task.error ? '✗' : task.state === 'waiting' ? '⏸' : '✓'} ${task.id} ${task.error ? 'failed' : task.state === 'waiting' ? 'waiting for your OK' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
   return task;
 }
-function tickRoutines() {
-  let list; try { list = loadRoutines(); } catch (e) { console.warn('routines:', e.message); return; }
-  for (const { routine, due, late } of routines.due(list, RSTATE)) fire(routine, { due, late });
-  tickScheduled();
+function tickRoutines() { // the clock never throws: an exception in a setInterval would stop the office
+  try {
+    let list; try { list = loadRoutines(); } catch (e) { console.warn('routines:', e.message); list = null; }
+    if (list) for (const { routine, due, late } of routines.due(list, RSTATE)) fire(routine, { due, late });
+    tickScheduled();
+  } catch (e) { console.error('clock:', e.message); }
 }
+process.on('unhandledRejection', e => console.error('unhandled:', e && e.message || e)); // log it, keep the office up
+process.on('uncaughtException', e => console.error('uncaught:', e && e.stack || e));
 function tickScheduled() { // V3.2.1: a task scheduled for a date fires on its minute — late (once) if the office was off
   const now = Date.now(); let list = load(); let changed = false;
   for (const t of list) {
@@ -397,8 +420,18 @@ function tickScheduled() { // V3.2.1: a task scheduled for a date fires on its m
   if (changed) save(list);
 }
 const uniqueId = (base, list) => { let id = base || 'routine', n = 2; while (list.some(r => r.id === id)) id = `${base}-${n++}`; return id; };
-function editRoutine(id, patch) { const r = rlist.routines.find(x => x.id === id); if (!r) return null; Object.assign(r, patch); routines.save(BRAIN, rlist.routines); return loadRoutines().find(x => x.id === id); }
-function removeRoutine(id) { const n = rlist.routines.length; rlist.routines = rlist.routines.filter(x => x.id !== id); if (rlist.routines.length !== n) routines.save(BRAIN, rlist.routines); loadRoutines(); return rlist.routines.length !== n; }
+// edits go to the file as it is on disk (routines.patchFile): saving the validated list would drop the routines the validator left out, and `team`
+function editRoutine(id, patch) {
+  const r = rlist.routines.find(x => x.id === id); if (!r) return null;
+  if (!routines.patchFile(BRAIN, id, patch)) { Object.assign(r, patch); routines.save(BRAIN, rlist.routines); }
+  if (patch.paused === false && RSTATE[id]) { RSTATE[id].nextAt = 0; routines.saveState(DATA, RSTATE); } // resumed: the next run is from now, not the one it slept through
+  return loadRoutines().find(x => x.id === id);
+}
+function removeRoutine(id) {
+  if (!rlist.routines.some(x => x.id === id)) return false;
+  if (!routines.patchFile(BRAIN, id, null)) { rlist.routines = rlist.routines.filter(x => x.id !== id); routines.save(BRAIN, rlist.routines); }
+  loadRoutines(); return true;
+}
 // a sentence (or the REPEAT picker) → a routine in the brain file. Claude names the agent, the title and whether it needs the OK.
 async function makeRoutine({ dept, text, when, agent, needsOk, model, effort }) {
   let taskText = String(text || '').trim(), w = when, parsed = null;
@@ -448,20 +481,74 @@ async function routinesChat(a, text) {
 }
 
 /* ---------- http ---------- */
-const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
-const body = req => new Promise((resolve, reject) => { let s = ''; req.on('data', d => { s += d; }); req.on('end', () => { try { resolve(s ? JSON.parse(s) : {}); } catch (e) { reject(e); } }); });
+const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+const MAX_BODY = 1 << 20; // 1 MB: a task, a chat turn or a routine is a few KB
+const body = req => new Promise((resolve, reject) => {
+  let s = '', size = 0;
+  req.on('data', d => { size += d.length; if (size > MAX_BODY) { if (s !== null) reject(Object.assign(new Error('request too large'), { status: 413 })); s = null; return; } if (s !== null) s += d; }); // over the limit: stop keeping it, drain the rest, answer 413
+  req.on('end', () => { if (s === null) return; try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('the body is not valid JSON'), { status: 400 })); } });
+});
+// The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
+// a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
+// and a hostile DNS name pointed at 127.0.0.1 is refused by the Host check (DNS rebinding).
+const HOST = cfg.host || '127.0.0.1';
+const LOCAL_NAME = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+function trusted(req) {
+  const host = String(req.headers.host || '');
+  if (!cfg.host && !LOCAL_NAME.test(host)) return 'host';
+  if (req.method === 'GET' || req.method === 'HEAD') return '';
+  const o = req.headers.origin;
+  if (o && o !== 'null') { try { if (new URL(o).host.toLowerCase() !== host.toLowerCase()) return 'origin'; } catch { return 'origin'; } }
+  if ((req.method === 'POST' || req.method === 'PATCH') && req.headers['content-length'] !== '0' && !/^application\/json\b/i.test(req.headers['content-type'] || '')) return 'content-type';
+  return '';
+}
+// the page, gzipped once per build (1.5 MB → ~0.6 MB); re-read when dist/ changes
+let pageCache = { mtime: 0, raw: null, gz: null };
+function page() {
+  const st = fs.statSync(HTML);
+  if (st.mtimeMs !== pageCache.mtime) { const raw = fs.readFileSync(HTML); pageCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }) }; }
+  return pageCache;
+}
+/* ---------- the brain's notes: read one, move an office note to the bin ---------- */
+const TRASH = path.join(NOTES_DIR, '.papelera'); // dot folder: out of the graph, out of the agents' context, hidden in Obsidian
+function noteIndex() { // name → { path, group, office } — the only paths /api/note will ever open (the request never builds a path)
+  const m = new Map();
+  for (const [name, n] of readVault(BRAIN).notes) m.set(name, { path: n.path, group: n.group, office: false });
+  for (const n of readOfficeNotes(BRAIN)) m.set(n.name, { path: n.path, group: 'Agents Office', office: true });
+  return m;
+}
+function insideBrain(p) { // no symlink, and the real path stays inside the brain folder
+  try {
+    if (fs.lstatSync(p).isSymbolicLink()) return false;
+    const rel = path.relative(fs.realpathSync(BRAIN), fs.realpathSync(p));
+    return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+  } catch { return false; }
+}
 
 await rebuildGraph();
-const discovering = mcp.discover().then(l => { console.log(`  connectors: ${l.filter(s => s.status === 'connected').length} connected of ${l.length} (claude mcp list)`); return l; });
+{ // a restart cut these runs short: say so, instead of leaving them «in progress» forever
+  const list = load(); let n = 0;
+  for (const t of list) if (t.state === 'doing') { Object.assign(t, { state: 'done', doneAt: Date.now(), result: 'Se interrumpió: la oficina se reinició mientras el agente trabajaba. Vuelve a lanzarla si la necesitas.', error: true }); n++; }
+  if (n) { save(list); console.log(`  ${n} task${n > 1 ? 's' : ''} interrupted by the restart, marked as failed`); }
+}
+const discovering = mcp.discover().then(async l => {
+  console.log(`  connectors: ${l.filter(s => s.status === 'connected').length} connected of ${l.length} (claude mcp list)`);
+  if (backend === 'claude-cli') { const pr = await mcp.probeTools({ cwd: CLI_CWD }); if (pr) console.log(`  tools: ${pr.tools} in a run${pr.long.length ? ` · ${pr.long.length} with names over 64 characters kept out (the API refuses them)` : ''}`); }
+  return mcp.list();
+});
 const agentsOut = () => { const setup = setupMap(); return AGENTS.map(a => ({ id: a.id, name: a.name, role: a.role, does: a.does, tools: a.tools, brief: a.brief || '', model: a.model || '', effort: a.effort || '', skills: skills.names(a), lessons: learn.count(BRAIN, a.id), department: a.department, lead: a.lead,
   interviewer: leadOf(a.department).id === a.id, setUp: setup[a.department] })); };
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  const why = trusted(req);
+  if (why) { console.warn(`refused ${req.method} ${url.pathname} (${why}: ${why === 'host' ? req.headers.host : why === 'origin' ? req.headers.origin : req.headers['content-type'] || 'none'})`); return json(res, 403, { error: `refused: ${why}` }); }
   try {
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/command-centre-v2.html' || url.pathname === '/dark')) {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-      const page = fs.readFileSync(HTML, 'utf8');
-      return res.end(url.pathname === '/dark' ? page.replace('<body>', '<body class="dark">') : page); // /dark: the same file, opened in dark mode
+      const pc = page();
+      if (url.pathname === '/dark') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(pc.raw.toString('utf8').replace('<body>', '<body class="dark">')); } // /dark: the same file, opened in dark mode
+      const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+      return res.end(gz ? pc.gz : pc.raw);
     }
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, version, backend, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
       agents: agentsOut(), setup: setupMap(), routines: (l => ({ count: l.length, paused: l.filter(r => r.paused).length, depts: routines.ALLOWED }))(loadRoutines()), roster: { customised: roster.customised, briefed: roster.briefed, files: roster.files, problems: roster.problems }, skills: (({ count, shipped, brain, problems }) => ({ count, shipped, brain, problems }))(skills.summary()), tools: backend === 'claude-cli', mcp: mcp.summary(), teams: TEAMS, browser: mcp.summary().browser });
@@ -470,6 +557,32 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/lessons') return json(res, 200, { dir: learn.dir(BRAIN), agents: AGENTS.map(a => ({ id: a.id, name: a.name, ...learn.read(BRAIN, a.id) })).filter(x => x.rules.length || x.oneOffs.length) });
     if (url.pathname === '/api/mcp') { if (url.searchParams.get('refresh') === '1') await mcp.discover(); else await discovering; return json(res, 200, { ...mcp.summary(), tools: backend === 'claude-cli' }); }
     if (url.pathname === '/api/brain') return json(res, 200, graph);
+    if (url.pathname === '/api/note' && req.method === 'GET') { // read one note of the brain, by name (the Brain's reader)
+      const id = url.searchParams.get('id') || ''; const n = noteIndex().get(id);
+      if (!n || !insideBrain(n.path)) return json(res, 404, { error: 'no such note' });
+      const st = fs.statSync(n.path); let text = fs.readFileSync(n.path, 'utf8');
+      const cut = text.length > 200000; if (cut) text = text.slice(0, 200000);
+      return json(res, 200, { name: id, group: n.group, text, cut, size: st.size, modified: st.mtimeMs, deletable: n.office && /\ntask: /.test(text) });
+    }
+    if (url.pathname === '/api/note/trash' && req.method === 'POST') { // an office deliverable → <brain>/Agents Office/.papelera/ (reversible: /api/note/restore, or move it back by hand)
+      const { id } = await body(req); const n = noteIndex().get(String(id || ''));
+      if (!n || !n.office || !insideBrain(n.path)) return json(res, 404, { error: 'solo las notas que escribió la oficina (Agents Office) van a la papelera' });
+      if (!/\ntask: /.test(fs.readFileSync(n.path, 'utf8'))) return json(res, 400, { error: 'esta nota no la escribió un agente: si quieres borrarla, hazlo tú desde la carpeta' });
+      fs.mkdirSync(TRASH, { recursive: true });
+      const dest = path.join(TRASH, `${path.basename(n.path, '.md')}__${Date.now()}.md`);
+      fs.renameSync(n.path, dest);
+      console.log(`🗑 note to the bin: ${id}`);
+      return json(res, 200, { ok: true, trashed: path.basename(dest), graph: await rebuildGraph() });
+    }
+    if (url.pathname === '/api/note/restore' && req.method === 'POST') { // one note back out of the bin
+      const { file } = await body(req); const f = path.basename(String(file || ''));
+      const src = path.join(TRASH, f);
+      if (!/__\d+\.md$/.test(f) || !fs.existsSync(src) || !insideBrain(src)) return json(res, 404, { error: 'no está en la papelera' });
+      const name = f.replace(/__\d+\.md$/, ''); let dest = path.join(NOTES_DIR, name + '.md');
+      for (let n = 2; fs.existsSync(dest); n++) dest = path.join(NOTES_DIR, `${name}-${n}.md`);
+      fs.renameSync(src, dest);
+      return json(res, 200, { ok: true, name: path.basename(dest, '.md'), graph: await rebuildGraph() });
+    }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
     if (url.pathname === '/api/tasks' && req.method === 'GET') return json(res, 200, load());
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
@@ -485,16 +598,22 @@ const server = http.createServer(async (req, res) => {
       const r = loadRoutines().find(x => x.id === rm[1]);
       if (!r) return json(res, 404, { error: 'no such routine' });
       if (req.method === 'DELETE') { removeRoutine(r.id); return json(res, 200, { ok: true, routines: loadRoutines() }); }
-      if (req.method !== 'POST') return json(res, 405, { error: 'POST or DELETE' });
+      if (req.method !== 'POST' && req.method !== 'PATCH') return json(res, 405, { error: 'POST, PATCH or DELETE' });
       if (rm[2] === 'run') return json(res, 200, { ok: true, task: fire(r, { by: 'you' }), routines: loadRoutines() });
       if (rm[2] === 'pause' || rm[2] === 'resume') { editRoutine(r.id, { paused: rm[2] === 'pause' }); return json(res, 200, { ok: true, routines: loadRoutines() }); }
       const b = await body(req); const patch = {};
       if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk; if (typeof b.paused === 'boolean') patch.paused = b.paused;
-      if (typeof b.text === 'string' && b.text.trim()) patch.text = b.text.trim(); if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 90);
-      if (b.when && validWhen(b.when)) patch.when = b.when;
+      if (typeof b.text === 'string') { const t = b.text.trim(); if (!t || t.length > 4000) return json(res, 400, { error: 'el texto de la rutina debe tener entre 1 y 4000 caracteres' }); patch.text = t; }
+      if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 90);
+      if (b.when !== undefined) {
+        if (!validWhen(b.when)) return json(res, 400, { error: 'ese horario no está completo' });
+        if (b.when.start && b.when.start < localDay(Date.now())) return json(res, 400, { error: 'la fecha de inicio ya pasó' });
+        patch.when = b.when;
+      }
+      if (b.agent !== undefined) { const a = AGENTS.find(x => x.id === b.agent && x.department === r.dept); if (!a) return json(res, 400, { error: 'ese agente no está en el departamento de la rutina' }); patch.agent = a.id; }
       if (b.model !== undefined) patch.model = normModel(b.model) || '';
       if (b.effort !== undefined) patch.effort = normEffort(b.effort) || '';
-      editRoutine(r.id, patch); return json(res, 200, { ok: true, routines: loadRoutines() });
+      const out = editRoutine(r.id, patch); return json(res, 200, { ok: true, routine: out, routines: loadRoutines() });
     }
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const { dept, text, model, effort, team, at } = await body(req);
@@ -513,12 +632,39 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, task);
     }
     const m = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(run|revise|approve|reject))?$/);
+    if (m && !m[2] && req.method === 'PATCH') { // edit a task scheduled for a date: move it (at), rewrite it (text), model, effort, OK
+      const b = await body(req);
+      const cur = load().find(t => t.id === m[1]);
+      if (!cur) return json(res, 404, { error: 'no such task' });
+      if (cur.state !== 'scheduled') return json(res, 409, { error: 'solo se edita una tarea programada que aún no empezó' });
+      const patch = {};
+      if (b.at !== undefined) {
+        const at = typeof b.at === 'number' ? b.at : /T\d/.test(String(b.at)) ? Date.parse(b.at) : NaN; // a date with no time would be read as UTC midnight: refused
+        if (!(at > Date.now() - 60000)) return json(res, 400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
+        if (at > Date.now() + 2 * 365 * 864e5) return json(res, 400, { error: 'como mucho dos años adelante' });
+        patch.dueAt = at;
+      }
+      if (typeof b.text === 'string') {
+        const t = b.text.trim(); if (!t || t.length > 4000) return json(res, 400, { error: 'el texto debe tener entre 1 y 4000 caracteres' });
+        if (t !== cur.text) { patch.text = t; if (b.reroute !== false) { const r = await route(cur.dept, t); Object.assign(patch, { title: r.title, plan: r.plan, needsOk: r.needsOk, why: r.why, ...(cur.team ? {} : { agent: r.agent }) }); } }
+      }
+      if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 90);
+      if (b.model !== undefined) patch.model = normModel(b.model) || undefined;
+      if (b.effort !== undefined) patch.effort = normEffort(b.effort) || undefined;
+      if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk;
+      const list = load(); const task = list.find(t => t.id === m[1]); // re-read: routing took a moment and the clock may have fired it
+      if (!task || task.state !== 'scheduled') return json(res, 409, { error: 'la tarea ya empezó mientras la editabas' });
+      Object.assign(task, patch); save(list);
+      console.log(`✎ ${task.id} edited${patch.dueAt ? ' · now ' + untilText(task.dueAt) : ''}${patch.text ? ' · new text' : ''}`);
+      return json(res, 200, task);
+    }
     if (m && req.method === 'POST' && (m[2] === 'approve' || m[2] === 'reject')) { // D1: the owner's tick on a routine's draft
       const task = load().find(t => t.id === m[1]);
       if (!task) return json(res, 404, { error: 'no such task' });
       if (task.state !== 'waiting') return json(res, 400, { error: 'this task is not waiting for your OK' });
       const { feedback } = m[2] === 'reject' ? await body(req) : {};
       const note = String(feedback || '').trim();
+      { const l = load(); const t = l.find(x => x.id === task.id); if (!t || t.state !== 'waiting') return json(res, 409, { error: 'ya se está procesando' }); t.state = 'doing'; t.startedAt = Date.now(); save(l); } // claimed now: a second click (or «aprobar» in chat) cannot send it twice
       console.log(`${m[2] === 'approve' ? '✅' : '↩'} ${task.id} ${m[2] === 'approve' ? 'approved — ' + agentName(task.agent) + ' is sending' : 'sent back: ' + note.slice(0, 80)}`);
       enqueue(() => runServerTask(task.id, m[2] === 'approve' ? { approve: true } : { feedback: note || 'No es esto. Retrabájalo.' }))
         .then(t => { if (m[2] === 'reject' && note && t && !t.error) { const a = AGENTS.find(x => x.id === t.agent); return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); }); } })
@@ -528,6 +674,8 @@ const server = http.createServer(async (req, res) => {
     if (m && req.method === 'POST' && (m[2] === 'run' || m[2] === 'revise')) {
       const list = load(); const task = list.find(t => t.id === m[1]);
       if (!task) return json(res, 404, { error: 'no such task' });
+      if (task.state === 'doing' || task.state === 'scheduled') return json(res, 409, { error: task.state === 'doing' ? 'ya está en curso' : 'está programada: corre sola a su hora' });
+      if (m[2] === 'run' && (task.routine || task.dueAt) && task.state !== 'done') return json(res, 409, { error: 'el reloj de la oficina la está corriendo' }); // server-owned: running it from the page too would run it twice and skip the OK
       const { feedback } = m[2] === 'revise' ? await body(req) : {};
       task.state = 'doing'; task.startedAt = Date.now(); save(list);
       try {
@@ -548,7 +696,12 @@ const server = http.createServer(async (req, res) => {
       }
       return;
     }
-    if (m && req.method === 'DELETE') { save(load().filter(t => t.id !== m[1])); return json(res, 200, { ok: true }); }
+    if (m && req.method === 'DELETE') {
+      const list = load(); const t = list.find(x => x.id === m[1]);
+      if (!t) return json(res, 404, { error: 'no such task' });
+      if (t.state === 'doing') return json(res, 409, { error: 'el agente está trabajando en ella — espera a que termine' }); // deleting it now would lose the run's result
+      save(list.filter(x => x.id !== m[1])); return json(res, 200, { ok: true });
+    }
     if (url.pathname === '/api/chat' && req.method === 'POST') {
       const { agent, text, history } = await body(req);
       if (!text || !String(text).trim()) return json(res, 400, { error: 'empty message' });
@@ -567,9 +720,10 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ...r, interview: false });
     }
     json(res, 404, { error: 'not found' });
-  } catch (e) { console.error(e); json(res, 500, { error: e.message }); }
+  } catch (e) { if (!e.status) console.error(e); if (!res.headersSent) json(res, e.status || 500, { error: e.message }); }
 });
-server.listen(cfg.port, () => {
+server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? `Port ${cfg.port} is already in use — is another office running? Close it, or set PORT.` : e.message); process.exit(1); });
+server.listen(cfg.port, HOST, () => {
   console.log(`Agents Office ${version} → http://localhost:${cfg.port}`);
   console.log(`  business: ${cfg.name}   brain: ${BRAIN} (${graph.notes} notes, ${graph.links.length} links)   claude: ${backend} · ${modelName(cfg.model)}${cfg.effort ? ' · effort ' + cfg.effort : ''} by default (routing on Sonnet)`);
   getUsage(true).then(u => console.log(u.source === 'claude' ? `  usage: session ${u.session?.percent ?? '—'}% · week ${u.week?.percent ?? '—'}% (your Claude plan, as Claude Code shows it)` : `  usage: Claude's gauge unavailable (${u.reason}) — showing the office's own count`)).catch(() => {});

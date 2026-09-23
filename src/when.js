@@ -185,9 +185,9 @@ export function nextRun(when, from = Date.now()) {
   if (when.kind === 'minutes') { const step = when.every * 60000; return Math.floor(from / step) * step + step; }
   if (when.kind === 'hourly') {
     const start = when.from ? mins(when.from) : 0, end = when.to ? mins(when.to) : 24 * 60, step = when.every * 60;
-    const d = new Date(f); d.setSeconds(0, 0); d.setMinutes(0); d.setHours(d.getHours() + 1); // the next whole hour after `from`
+    const d = new Date(f); d.setSeconds(0, 0); d.setMinutes(start % 60); if (d.getTime() <= from) d.setHours(d.getHours() + 1); // the next «:MM» after `from` (MM = the minutes of `from`, 09:30 → every hour at :30)
     for (let i = 0; i < 24 * 8; i++, d.setHours(d.getHours() + 1)) {
-      const dow = d.getDay(), mm = d.getHours() * 60;
+      const dow = d.getDay(), mm = d.getHours() * 60 + d.getMinutes();
       if (when.weekdaysOnly && (dow === 0 || dow === 6)) continue;
       if (mm < start || mm > end) continue;
       if ((mm - start) % step !== 0) continue;
@@ -225,6 +225,7 @@ export function untilText(ts, now = Date.now()) {
   const t = hhmm(d.getHours(), d.getMinutes());
   if (sameDay) return `a las ${t}`;
   if (d.toDateString() === tomorrow.toDateString()) return `mañana ${t}`;
+  if (ms > 6 * 864e5) return `${SHORT_ES[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1} ${t}`; // more than a week out: the date, not just the weekday
   return `${SHORT_ES[d.getDay()]} ${t}`;
 }
 export const DAY_NAMES = DAYS;

@@ -26,3 +26,12 @@
 **Fix aplicado:** Servidor reiniciado. La simulación (siembra, tareas inventadas, `fireAgentEvent`, métricas) corre solo cuando la página se abre como archivo; servida por http muestra solo trabajo real, y las tarjetas cuentan «entregas reales» y «esperan tu OK».
 **Prevención:** Después de cambiar la configuración, el roster o el código del servidor, hay que reiniciarlo: cerrar el proceso de `node serve.mjs` y volver a abrir el .bat.
 **Archivos:** `src/tasks.js:236,963` · `src/main.js:20,349,1025`
+
+## [2026-09-22] — "Claude Code is not installed (claude not found on PATH)" en Windows
+
+**Contexto:** Probar las tareas y el chat de los agentes desde la oficina (con Claude o con Meta Muse Spark).
+**Error:** Todo chat/tarea respondía "No pude contactar a Claude (Claude Code is not installed (claude not found on PATH))"; la barra solo veía 1 conector (Chrome).
+**Causa raíz:** La instalación npm de Claude Code pone `claude.cmd` en el PATH. `child_process.spawn('claude', …)` sin shell no ejecuta `.cmd` en Windows → ENOENT. Usar `shell:true` no sirve: el prompt y el system prompt van como argumentos y cmd.exe los rompería.
+**Fix aplicado:** `CLAUDE_BIN` en `mcp.mjs` busca el `claude.exe` real (`<dir PATH>\node_modules\@anthropic-ai\claude-code\bin\claude.exe`), con override por la variable `CLAUDE_BIN`; `serve.mjs` y `mcp.discover()` lanzan ese binario.
+**Prevención:** En Windows nunca hacer `spawn` de un comando instalado por npm por su nombre; resolver el `.exe` real. Las 10 comprobaciones rojas de `npm run check` (routines/calendar/smoke) son textos esperados en inglés tras la traducción al español, no este fallo.
+**Archivos:** `mcp.mjs:28-40`, `mcp.mjs:133`, `serve.mjs:137`

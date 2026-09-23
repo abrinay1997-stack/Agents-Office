@@ -23,7 +23,14 @@ export const QUESTIONS = [
 ];
 
 export const stateFile = dataDir => path.join(dataDir, 'interviews.json');
-const load = dataDir => { try { return JSON.parse(fs.readFileSync(stateFile(dataDir), 'utf8')); } catch { return {}; } };
+const STALE = 2 * 3600 * 1000; // an interview nobody touched for 2 h is dropped: otherwise every chat with the lead is read as an answer, and its routines commands stop working
+const load = dataDir => {
+  let st; try { st = JSON.parse(fs.readFileSync(stateFile(dataDir), 'utf8')); } catch { return {}; }
+  let dropped = false;
+  for (const [k, v] of Object.entries(st)) if (!v || Date.now() - (v.touchedAt || v.startedAt || 0) > STALE) { delete st[k]; dropped = true; }
+  if (dropped) { try { fs.writeFileSync(stateFile(dataDir), JSON.stringify(st, null, 2)); } catch {} }
+  return st;
+};
 const save = (dataDir, s) => { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(stateFile(dataDir), JSON.stringify(s, null, 2)); };
 export const active = (dataDir, dept) => !!load(dataDir)[dept];
 
@@ -50,6 +57,7 @@ export async function handle(text, ctx) {
   let finish = false;
   if (DONE.test(text)) { if (!cur.answers.some(Boolean)) { delete st[dept]; save(dataDir, st); return { reply: `Todavía no hay nada que anotar. Di "configurar" cuando tengas unos minutos.` }; } finish = true; }
   else { cur.answers.push(SKIP.test(text) ? '' : String(text).trim()); cur.step = cur.answers.length; if (cur.step >= QUESTIONS.length) finish = true; }
+  cur.touchedAt = Date.now();
   if (!finish) { save(dataDir, st); return { reply: `Anotado.\n\n${progress(cur.step, d)}` }; }
   delete st[dept]; save(dataDir, st); // whatever happens next, the interview is over
   const answers = QUESTIONS.map((q, i) => ({ k: q.k, q: q.q(d), a: cur.answers[i] || '' })).filter(x => x.a);

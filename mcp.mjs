@@ -25,6 +25,20 @@ import path from 'node:path';
 
 export const DEPT_KEYS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 
+// the Claude Code executable. On Windows an npm install puts `claude.cmd` on PATH, which Node's spawn
+// cannot run without a shell (ENOENT) — and a shell would mangle the prompts we pass as arguments —
+// so we find the real claude.exe the .cmd points at. CLAUDE_BIN overrides.
+export const CLAUDE_BIN = (() => {
+  if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN;
+  if (process.platform !== 'win32') return 'claude';
+  for (const dir of String(process.env.PATH || '').split(path.delimiter).filter(Boolean)) {
+    for (const f of [path.join(dir, 'claude.exe'), path.join(dir, 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')]) {
+      try { if (fs.statSync(f).isFile()) return f; } catch {}
+    }
+  }
+  return 'claude';
+})();
+
 // known brands → logo key in src/mcplogos.js. Anything else gets a generated tile.
 const ALIASES = {
   gmail: ['gmail', 'googlegmail'], notion: ['notion'], canva: ['canva'], meta: ['metaads', 'meta', 'facebookads', 'facebook'],
@@ -116,7 +130,7 @@ export function discover({ timeout = 45000 } = {}) {
     let out = '', done = false;
     const finish = list => { if (done) return; done = true; if (list) { servers = withBrowser(list); discoveredAt = Date.now(); } resolve(servers); };
     let p;
-    try { p = spawn('claude', ['mcp', 'list'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch { return finish([]); }
+    try { p = spawn(CLAUDE_BIN, ['mcp', 'list'], { env, stdio: ['ignore', 'pipe', 'pipe'] }); } catch { return finish([]); }
     const timer = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} finish(parseList(out)); }, timeout);
     p.stdout.on('data', d => { out += d; }); p.stderr.on('data', d => { out += d; });
     p.on('error', () => { clearTimeout(timer); finish([]); });
@@ -135,24 +149,61 @@ export function fromInit(init) {
     const mine = tools.filter(t => t.startsWith(`mcp__${s.id}__`)).map(t => t.slice(s.id.length + 7));
     if (mine.length) { s.tools = mine; s.status = 'connected'; }
   }
+  for (const t of tools) if (t.length > 64) longTools.add(t);
   discoveredAt = discoveredAt || Date.now();
+}
+// The API refuses a tool whose name is longer than 64 characters ("`name` must be at most 64 characters, got 66") —
+// and one such tool fails the WHOLE run (claude.ai Cloudflare Developer Platform ships several). They are learnt from
+// each run's init event, and from probeTools() at start-up, and are always passed to --disallowedTools.
+const longTools = new Set();
+/** Start `claude -p` just long enough to read its init event (the real tool list), then stop it: no model call is made. */
+export function probeTools({ cwd, timeout = 60000 } = {}) {
+  return new Promise(resolve => {
+    const env = { ...process.env }; delete env.CLAUDECODE;
+    let p; try { fs.mkdirSync(cwd, { recursive: true }); p = spawn(CLAUDE_BIN, ['-p', 'ok', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', ...cliArgs()], { cwd, env, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return resolve(null); }
+    let out = '', done = false;
+    const finish = v => { if (done) return; done = true; clearTimeout(timer); try { p.kill(); } catch {} resolve(v); };
+    const timer = setTimeout(() => finish(null), timeout);
+    p.on('error', () => finish(null)); p.on('close', () => finish(null));
+    p.stdout.on('data', d => {
+      out += d; let i;
+      while ((i = out.indexOf('\n')) >= 0) {
+        const line = out.slice(0, i); out = out.slice(i + 1);
+        let j; try { j = JSON.parse(line); } catch { continue; }
+        if (j.type === 'system' && j.subtype === 'init') { fromInit(j); finish({ tools: (j.tools || []).length, long: [...longTools] }); return; }
+      }
+    });
+  });
 }
 export function list() { return servers; }
 export function usable() { return servers.filter(s => s.status === 'connected' && allowed(s)); }
-export function allowedTools() {
-  const t = usable().map(s => `mcp__${s.id}`);
+// a server reaches an agent when it is usable AND wired to the agent's department (mcp.departments) — or named in the agent's own `tools`
+const forAgent = (s, agent) => !agent || s.browser || s.depts.includes(agent.department) || (agent.tools || []).some(k => k === s.key || norm(k) === norm(s.name));
+export function usableFor(agent) { return usable().filter(s => forAgent(s, agent)); }
+export function allowedTools(agent) {
+  const t = usableFor(agent).map(s => `mcp__${s.id}`);
   if (cfgWeb) t.push('WebSearch', 'WebFetch');
   return t;
+}
+/** Everything the run must not even see: servers denied / not for this desk (so their tools stay out of the prompt), and over-long tool names.
+ *  tools = false (routing, the lessons classifier): every MCP server is left out — a JSON job needs none of them. */
+export function disallowedTools(agent, tools = true) {
+  const ok = new Set(tools ? usableFor(agent).map(s => s.id) : []);
+  const out = servers.filter(s => !ok.has(s.id) && !s.browser).map(s => `mcp__${s.id}`);
+  for (const t of longTools) if (!out.some(x => t.startsWith(x + '__'))) out.push(t);
+  return out;
 }
 export const keyOf = toolName => { const m = /^mcp__(.+?)__/.exec(toolName); if (!m) return null; const s = servers.find(x => x.id === m[1]); return s ? (s.key || s.id) : m[1]; };
 export const namesOf = toolNames => [...new Set(toolNames.map(n => { const m = /^mcp__(.+?)__/.exec(n); if (m) { const s = servers.find(x => x.id === m[1]); return s ? s.name : m[1]; } return n === 'WebSearch' ? 'web search' : n === 'WebFetch' ? 'web fetch' : null; }).filter(Boolean))];
 export function summary() {
-  return { discoveredAt, web: cfgWeb, browser: { on: cfgBrowser, ...browserState() }, servers: servers.map(s => ({ ...s, allowed: allowed(s), denied: denied(s) })) };
+  const mask = t => String(t || '').replace(/([?&][^=&]*(key|token|secret|auth)[^=&]*=)[^&\s]+/gi, '$1***').replace(/(--?[\w-]*(key|token|secret)[\w-]*[= ])\S+/gi, '$1***'); // a server's command line or URL can carry a key
+  return { discoveredAt, web: cfgWeb, browser: { on: cfgBrowser, ...browserState() }, servers: servers.map(s => ({ ...s, target: mask(s.target), allowed: allowed(s), denied: denied(s) })) };
 }
 const browserUsable = () => usable().some(s => s.id === BROWSER);
 // the line an agent reads about its tools
-export function promptText(agentTools = []) {
-  const u = usable().filter(s => s.id !== BROWSER), browser = browserUsable();
+export function promptText(agentOrTools = []) { // an agent (its desk's connectors) — or, as before, just its `tools` list
+  const agent = Array.isArray(agentOrTools) ? null : agentOrTools, agentTools = agent ? agent.tools || [] : agentOrTools;
+  const u = usableFor(agent).filter(s => s.id !== BROWSER), browser = browserUsable();
   if (!u.length && !browser) return cfgWeb ? 'TOOLS\nYou have web search and web fetch. No business connectors are connected yet.' : 'TOOLS\nNone. Work from the notes.';
   const lines = u.map(s => `- ${s.name} (mcp__${s.id}__*)${s.tools.length ? ': ' + s.tools.slice(0, 12).join(', ') + (s.tools.length > 12 ? '…' : '') : ''}`);
   if (browser) lines.push(`- The owner's Chrome browser (mcp__${BROWSER}__*): open tabs, read pages, search, fill forms — on any site the owner is signed in to (their web apps, portals, dashboards)`);
