@@ -17,3 +17,12 @@
 **Fix aplicado:** Brain curado en `brain-panaclaw/`: notas atómicas de menos de 1.800 caracteres con nombres únicos; los procedimientos largos van como skills (6.000 + 8.000 caracteres, que llegan completos).
 **Prevención:** Una nota del brain dice lo esencial en sus primeros 1.200–1.800 caracteres; lo que tenga pasos y plantilla es un skill.
 **Archivos:** `serve.mjs:171-201` · `brain-panaclaw/`
+
+## [2026-09-22] — La oficina real mostraba tareas y cifras inventadas
+
+**Contexto:** Abrir la oficina de PanaClaw con el .bat después de configurarla.
+**Error:** Aparecían 118 tareas de empresas ficticias («Nectar Foods», «Totara Legal») y cifras falsas en las tarjetas («costo por usuario $41»), mezcladas con el trabajo real. Además seguían los nombres viejos, porque el servidor era el proceso anterior a los cambios.
+**Causa raíz:** (1) El .bat reutiliza el servidor si ya responde, así que no cargó la configuración nueva. (2) `tasks.js` siembra una «mañana creíble» y reparte tareas inventadas a los agentes sin trabajo, y `main.js` inventa actividad y métricas, también cuando la página la sirve el servidor real.
+**Fix aplicado:** Servidor reiniciado. La simulación (siembra, tareas inventadas, `fireAgentEvent`, métricas) corre solo cuando la página se abre como archivo; servida por http muestra solo trabajo real, y las tarjetas cuentan «entregas reales» y «esperan tu OK».
+**Prevención:** Después de cambiar la configuración, el roster o el código del servidor, hay que reiniciarlo: cerrar el proceso de `node serve.mjs` y volver a abrir el .bat.
+**Archivos:** `src/tasks.js:236,963` · `src/main.js:20,349,1025`

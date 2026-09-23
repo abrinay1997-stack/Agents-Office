@@ -17,6 +17,7 @@ import { initBrain } from './brain.js';
 import { initHero, HERO } from './hero.js';
 if (HERO) document.body.classList.add('hero'); // the website hero: no Sahni.ai mark or licence line on top of the page that already carries them // sahni.ai/custom hero mode (16 Sep 2026): opt-in via window.HERO, no-op otherwise
 let tasks = null; // V3 task boards — initialised after the rail constants exist
+const SERVED = location.protocol.startsWith('http'); // opened as a file = the demo showcase; served = the owner's real office
 
 /* ---------- renderer / scene / camera ---------- */
 const canvas = document.getElementById('scene');
@@ -346,6 +347,10 @@ const BB_ROWS = profileRows() || {
     ['NOTAS INDEXADAS', () => brainNotes.toLocaleString('es-PA')]],
 };
 if (PROFILE && !BB_ROWS.brain) BB_ROWS.brain = [['NOTAS INDEXADAS', () => brainNotes.toLocaleString('es-PA')]];
+if (SERVED) { // a real office shows real counts, never the demo's invented metrics
+  const realCount = (k, state) => { try { return tasks ? tasks.tasks.filter(t => t.live && t.state === state && (AGENTS.find(a => a.id === t.agent) || {}).dept === k).length : 0; } catch { return 0; } };
+  for (const k of DEPT_KEYS) BB_ROWS[k] = [['ENTREGAS REALES', () => realCount(k, 'done')], ['ESPERAN TU OK', () => realCount(k, 'waiting')]];
+}
 for (const k of [...DEPT_KEYS, 'brain']) {
   const dept = DEPTS[k];
   const n = AGENTS.filter(a => a.dept === k).length;
@@ -1022,6 +1027,7 @@ function weightedEv(evs) {
   return evs[0];
 }
 function fireAgentEvent(seedTs) {
+  if (SERVED) return; // served by the owner's server = a real office: no invented activity in feeds or chats
   const ids = Object.keys(R).filter(id => R[id].v1 && R[id].v1.ev && R[id].state !== 'stuck');
   const r = R[ids[Math.floor(Math.random() * ids.length)]];
   const ev = weightedEv(r.v1.ev);

@@ -11,21 +11,22 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-if not exist "dist\command-centre-v2.html" (
-  echo [1/3] Primera vez: construyendo la oficina...
-  call node build.mjs
-  if errorlevel 1 (
-    echo [ERROR] Fallo la construccion. Revisa los mensajes de arriba.
+echo [1/3] Construyendo la oficina con los ultimos cambios...
+call node build.mjs >nul 2>nul
+if errorlevel 1 (
+  if not exist "dist\command-centre-v2.html" (
+    echo [ERROR] Fallo la construccion. Corre "node build.mjs" para ver el detalle.
     pause
     exit /b 1
   )
+  echo [AVISO] La construccion fallo; se usa la version anterior de la oficina.
 ) else (
-  echo [1/3] Oficina ya construida. OK.
+  echo Oficina construida. OK.
 )
-powershell -NoProfile -Command "try { $r=Invoke-RestMethod -Uri 'http://localhost:4520/api/health' -TimeoutSec 3; if ($r.ok -eq $true) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>nul
-if not errorlevel 1 (
-  echo [2/3] El servidor ya esta corriendo. OK.
-  goto ABRIR
+rem Siempre se reinicia el servidor: si quedo uno prendido de antes, no carga los cambios de configuracion, agentes ni codigo.
+powershell -NoProfile -Command "$c = Get-NetTCPConnection -LocalPort 4520 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1; if ($c) { $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $c.OwningProcess); if ($p -and $p.Name -eq 'node.exe') { Stop-Process -Id $c.OwningProcess -Force; Start-Sleep -Seconds 1; exit 2 } }; exit 0" >nul 2>nul
+if errorlevel 2 (
+  echo [2/3] Habia un servidor de antes: se apago para cargar los ultimos cambios.
 )
 echo [2/3] Prendiendo el servidor en segundo plano...
 start "Agents Office Server" /min cmd /c "node serve.mjs ^>^> server.log 2^>^> server.err.log"

@@ -233,7 +233,7 @@ export function initTasks(ctx) {
   }
 
   /* ---------- seed a believable morning ---------- */
-  {
+  if (!location.protocol.startsWith('http')) { // only the file-opened demo; the owner's served office shows real work only
     const now = performance.now(), wall = Date.now();
     for (const a of AGENTS) {
       const r = R[a.id];
@@ -960,7 +960,7 @@ export function initTasks(ctx) {
         const nx = agentTasks(id, 'next').sort((a, b) => a.addedAt - b.addedAt)[0];
         if (nx) { start(nx, now); r.nextBrainAt = null; }
         else if (!r.nextBrainAt) r.nextBrainAt = now + 6000 + Math.random() * 16000;
-        else if (now > r.nextBrainAt) { r.nextBrainAt = null; brainSend(id); }
+        else if (now > r.nextBrainAt) { r.nextBrainAt = null; if (!location.protocol.startsWith('http')) brainSend(id); } // served: an idle agent stays idle, no invented jobs
       }
     }
     if (now - lastBadge > 400) { syncBadges(); lastBadge = now; }
