@@ -136,6 +136,14 @@ export function fromPicker(cadence, at, start) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(start || '')) w.start = start;
   return w;
 }
+/** The inverse of fromPicker, for the calendar's edit form: { cadence, at, custom } — custom = a schedule the picker cannot show (several weekdays, a custom hourly window), kept as it is unless the owner changes the cadence. */
+export function toPicker(when) {
+  if (!when) return { cadence: 'weekdays', at: '09:00', custom: false };
+  if (when.kind === 'daily' || when.kind === 'weekdays') return { cadence: when.kind, at: when.at, custom: false };
+  if (when.kind === 'weekly' && when.days.length === 1) return { cadence: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][when.days[0]], at: when.at, custom: false };
+  if (when.kind === 'hourly' && when.every === 1 && when.from === '09:00' && when.to === '17:00' && when.weekdaysOnly) return { cadence: 'hourly', at: '09:00', custom: false };
+  return { cadence: 'custom', at: when.at || when.from || '09:00', custom: true };
+}
 const startMs = when => when && /^\d{4}-\d{2}-\d{2}$/.test(when.start || '') ? new Date(when.start + 'T00:00:00').getTime() : null;
 /** "12 Oct" — a short date for the words the office says back. */
 export const shortDate = ts => { const d = new Date(ts); return `${d.getDate()} ${['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][d.getMonth()]}`; };

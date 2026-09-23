@@ -937,6 +937,17 @@
   .cv-dept { max-width: 150px; } .cv-time { font-variant-numeric: tabular-nums; } .cv-model { max-width: 90px; }
   .cv-text { border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 10px; font-family: var(--ui); font-size: 13px; line-height: 1.4; color: var(--ink); background: none; resize: none; outline: none; }
   .cv-text:focus { border-color: var(--ink); }
+  .cv-dept, .cv-time, .cv-model, .cv-cad, .cv-date { font-size: 11px; }
+  .cv-date { font-family: var(--ui); font-weight: 700; color: var(--ink); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 6px 9px; font-variant-numeric: tabular-nums; }
+  .cv-lab { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--grey); margin-top: 4px; }
+  .cv-title { font-family: var(--serif); font-size: 19px; line-height: 1.2; border: 1px solid transparent; border-radius: 8px; padding: 4px 6px; margin: 0 -6px; background: none; color: var(--ink); outline: none; }
+  .cv-title:hover, .cv-title:focus { border-color: var(--hairline); }
+  #cvPop .cv-text { width: 100%; box-sizing: border-box; }
+  .cv-ev[draggable="true"] { cursor: grab; }
+  .cv-ev.cv-dragging { opacity: .4; }
+  #calOv.dragging .cv-day:not(.past) { outline: 1px dashed transparent; }
+  .cv-day.drop { background: color-mix(in srgb, #2B6BEB 10%, transparent); outline: 2px dashed #2B6BEB !important; outline-offset: -3px; }
+  .cv-ev:focus-visible { outline: 2px solid #2B6BEB; outline-offset: 1px; }
   .cv-rep { font-family: var(--ui); font-size: 9px; letter-spacing: .14em; font-weight: 700; border: 1px solid var(--hairline); color: var(--grey); background: none; border-radius: 99px; padding: 6px 10px; cursor: pointer; transition: all .3s var(--ease); }
   .cv-rep.on { background: var(--ink); color: var(--cream); border-color: var(--ink); }
   .cv-ok { font-size: 10.5px; color: var(--grey); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

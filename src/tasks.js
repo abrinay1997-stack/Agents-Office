@@ -514,10 +514,11 @@ export function initTasks(ctx) {
   async function rtAct(rid, act) { // RUN NOW · PAUSE · RESUME · DELETE — from a SCHEDULED row, a board card or the rail strip
     const r = routines.find(x => x.id === rid); if (!r) return;
     if (live) {
-      if (act === 'delete') await fetch(`${API}/routines/${rid}`, { method: 'DELETE' }).catch(() => {});
-      else { const j = await post(`/routines/${rid}/${act}`); if (act === 'run' && j && j.task) reconcile(j.task); }
-      if (act === 'run') { spawnEmote(R[r.agent], '⏱'); feedPush(R[r.agent], '⏱', `Ejecutar ahora: ${r.title}`); }
-      await poll(); return;
+      let err = null;
+      if (act === 'delete') { try { const res = await fetch(`${API}/routines/${rid}`, { method: 'DELETE' }); if (!res.ok) err = (await res.json().catch(() => ({}))).error || res.statusText; } catch (e) { err = 'sin conexión con la oficina'; } }
+      else { const j = await post(`/routines/${rid}/${act}`); if (!j || j.error) err = (j && j.error) || 'sin conexión con la oficina'; else if (act === 'run' && j.task) reconcile(j.task); }
+      if (!err && act === 'run') { spawnEmote(R[r.agent], '⏱'); feedPush(R[r.agent], '⏱', `Ejecutar ahora: ${r.title}`); }
+      await poll(); return err ? { ok: false, error: err } : { ok: true };
     }
     if (act === 'delete') routines.splice(routines.indexOf(r), 1);
     else if (act === 'pause') { r.paused = true; r.nextAt = null; }
@@ -609,7 +610,7 @@ export function initTasks(ctx) {
   }
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
-    if (st.state === 'scheduled') { if (t.state !== 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; touch(t, 'scheduled'); } else if (t.dueAt !== st.dueAt) { t.dueAt = st.dueAt; dirty = true; } return; }
+    if (st.state === 'scheduled') { if (t.state !== 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; touch(t, 'scheduled'); } else if (t.dueAt !== st.dueAt || t.title !== st.title || t.text !== st.text) { Object.assign(t, { dueAt: st.dueAt, title: st.title, text: st.text }); dirty = true; } return; }
     if (t.state === 'scheduled' && st.state !== 'scheduled') { t.state = 'next'; t.addedAt = st.addedAt || Date.now(); t.late = !!st.late; t.due = st.due; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Scheduled task fired: ${t.title}${t.late ? ' (late)' : ''}`); if (calendar) calendar.refresh(); }
     if (st.state === 'doing' && t.state !== 'doing') {
       t.state = 'doing'; t.startedAt = performance.now() - Math.max(0, Date.now() - (st.startedAt || Date.now())); t.progress = 0; t.pausedAt = null; t.running = true; t.ready = false; t.srv = true; t.changedAt = st.startedAt || Date.now(); touch(t, 'started');
@@ -1006,12 +1007,50 @@ export function initTasks(ctx) {
     return { ok: true, routine: r };
   }
   async function cancelScheduled(t) {
-    if (!t || t.state !== 'scheduled') return false;
-    if (live && t.sid) await fetch(`${API}/tasks/${t.sid}`, { method: 'DELETE' }).catch(() => {});
-    tasks.splice(tasks.indexOf(t), 1); dirty = true; feedPush(R[t.agent], '✕', `Cancelled: ${t.title}`);
-    return true;
+    if (!t || t.state !== 'scheduled') return { ok: false, error: 'Ya no está programada.' };
+    if (live && t.sid) { // the card leaves the screen only when the office really dropped it
+      try { const r = await fetch(`${API}/tasks/${t.sid}`, { method: 'DELETE' }); if (!r.ok && r.status !== 404) throw new Error((await r.json().catch(() => ({}))).error || r.statusText); }
+      catch (e) { return { ok: false, error: e.message || 'sin conexión con la oficina' }; }
+    }
+    tasks.splice(tasks.indexOf(t), 1); dirty = true; feedPush(R[t.agent], '✕', `Cancelada: ${t.title}`);
+    return { ok: true };
   }
-  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, rtAct, openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
+  // the calendar's edit and drag: move a scheduled task (at), rewrite it (text), change its model
+  async function updateScheduled(t, patch) {
+    if (!t || t.state !== 'scheduled') return { ok: false, error: 'Solo se edita una tarea que aún no empezó.' };
+    if (patch.at !== undefined && !(patch.at > Date.now())) return { ok: false, error: 'Esa hora ya pasó — elige una que aún esté por venir.' };
+    if (live && t.sid) {
+      try {
+        const r = await fetch(`${API}/tasks/${t.sid}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
+        const st = await r.json(); if (!r.ok) throw new Error(st.error || r.statusText);
+        const moved = st.agent !== t.agent;
+        Object.assign(t, { title: st.title, text: st.text, dueAt: st.dueAt, needsOk: !!st.needsOk, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', plan: st.plan || t.plan });
+        if (moved) t.agent = st.agent;
+        touch(t, 'scheduled'); dirty = true;
+        feedPush(R[t.agent], '✎', `Reprogramada para ${new Date(t.dueAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
+        return { ok: true, task: t };
+      } catch (e) { return { ok: false, error: e.message || 'sin conexión con la oficina' }; }
+    }
+    if (patch.at !== undefined) t.dueAt = patch.at;
+    if (patch.text) { t.text = patch.text; t.title = (patch.text.charAt(0).toUpperCase() + patch.text.slice(1)).slice(0, 90); }
+    if (patch.model !== undefined) { t.model = normModel(patch.model) || undefined; t.modelUsed = t.model || officeModel; }
+    touch(t, 'scheduled'); dirty = true;
+    return { ok: true, task: t };
+  }
+  async function updateRoutine(rid, patch) {
+    const r = routines.find(x => x.id === rid); if (!r) return { ok: false, error: 'Esa rutina ya no existe.' };
+    if (live) {
+      try {
+        const res = await fetch(`${API}/routines/${encodeURIComponent(rid)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
+        const j = await res.json(); if (!res.ok) throw new Error(j.error || res.statusText);
+        setRoutines(j.routines); return { ok: true, routine: routines.find(x => x.id === rid) };
+      } catch (e) { return { ok: false, error: e.message || 'sin conexión con la oficina' }; }
+    }
+    Object.assign(r, patch); if (patch.when) { r.desc = describe(r.when); r.nextAt = r.paused ? null : nextRun(r.when); }
+    syncPills(); dirty = true; if (railAgent) railFor(railAgent);
+    return { ok: true, routine: r };
+  }
+  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
   return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled,
            handleChat, addTask, revise, rowHTML, setDept, tasks, panelWidth: () => panel.offsetWidth, isLive: () => live,
            routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, pendingReject, rejectLive, officeModel: () => officeModel, chosenModel, chosenEffort };
