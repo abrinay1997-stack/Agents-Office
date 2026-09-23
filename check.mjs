@@ -103,9 +103,10 @@ await step('interview: the lead asks five questions, then writes briefs + a skil
     skill: { name: 'Wholesale Quote', description: 'How we quote a wholesale account', agents: ['piper'], body: '# Quoting a wholesale account\nUse this for any quote to a trade customer.\n## Steps\n1. Check the account in 30-Customers.\n## The shape\nFollow template.md.\n## Rules\n- Never discount.', template: '# Quote for {account}\n## Lines\n## Terms' }, try: 'quote Harbour Hardware for 40 units' });
   const ctx = { dept: 'sales', deptName: 'Sales', lead, agents: dept, connected: ['Gmail'], brainPath: brain, dataDir: data, ask: stub, business: 'Test Co' };
   if (await onboard.handle('what are you working on?', ctx) !== null) throw new Error('ordinary chat was captured');
-  const r0 = await onboard.handle('set up', ctx); if (!/Question 1 of 5/.test(r0.reply) || !onboard.active(data, 'sales')) throw new Error('did not start: ' + r0.reply.slice(0, 80));
-  const r1 = await onboard.handle('We sell to trade accounts.', ctx); if (!/Question 2 of 5/.test(r1.reply)) throw new Error('no second question');
-  await onboard.handle('Quoting a wholesale account: check the account, price from the ladder, send.', ctx); await onboard.handle('skip', ctx); await onboard.handle('never discount', ctx);
+  if (await onboard.handle('configurar el Gmail de ventas', ctx) !== null) throw new Error('"configurar …" in ordinary chat was captured');
+  const r0 = await onboard.handle('configurar', ctx); if (!/Pregunta 1 de 5/.test(r0.reply) || !onboard.active(data, 'sales')) throw new Error('did not start: ' + r0.reply.slice(0, 80));
+  const r1 = await onboard.handle('We sell to trade accounts.', ctx); if (!/Pregunta 2 de 5/.test(r1.reply)) throw new Error('no second question');
+  await onboard.handle('Quoting a wholesale account: check the account, price from the ladder, send.', ctx); await onboard.handle('saltar', ctx); await onboard.handle('never discount', ctx);
   const r5 = await onboard.handle('Gmail and our bookkeeper', ctx);
   if (onboard.active(data, 'sales')) throw new Error('interview still active after the last answer');
   if (!r5.wrote || r5.wrote.briefs.length !== 2 || !r5.wrote.skill || r5.wrote.skill.name !== 'wholesale-quote') throw new Error('write-up wrong: ' + JSON.stringify(r5.wrote));
@@ -115,6 +116,7 @@ await step('interview: the lead asks five questions, then writes briefs + a skil
   if (!w || w.source !== 'brain' || !w.agents.includes('piper') || !w.files.some(f => f.name === 'template.md') || sk.problems.length) throw new Error('skill not loadable: ' + sk.problems);
   if (!onboard.isSetUp(merged.agents, sk, 'sales') || onboard.isSetUp(merged.agents, sk, 'fin')) throw new Error('setUp flag wrong');
   const c = await onboard.handle('set up', ctx); await onboard.handle('cancel', ctx); if (onboard.active(data, 'sales')) throw new Error('cancel did not clear');
+  await onboard.handle('entrevístame', ctx); await onboard.handle('Cancelar.', ctx); if (onboard.active(data, 'sales')) throw new Error('cancelar did not clear');
   fs.rmSync(tmp, { recursive: true, force: true });
   return `5 questions · 2 briefs merged · skill wholesale-quote→piper with template · sales set up, fin not · cancel clears`;
 });

@@ -181,13 +181,14 @@ function businessContext(index) {
 }
 // the notes an agent would read for this task: name/word overlap, department MOC first
 function relevantNotes(index, dept, text, n = 4) {
-  const words = new Set(String(text).toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3));
+  const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); // «página» → «pagina», so Spanish words are not split at the accent
+  const words = new Set(fold(text).split(/[^a-z0-9]+/).filter(w => w.length > 3));
   const mocName = { emails: 'MOC-Emails', sales: 'MOC-Sales', marketing: 'MOC-Marketing', ops: 'MOC-Operations', fin: 'MOC-Finance', delivery: 'MOC-Delivery' }[dept];
   const scored = [];
   for (const [name, txt] of index) {
     if (['CLAUDE', 'index', 'log'].includes(name)) continue;
-    const hay = (name + ' ' + txt.slice(0, 1500)).toLowerCase();
-    let s = 0; for (const w of words) if (hay.includes(w)) s += name.toLowerCase().includes(w) ? 3 : 1;
+    const hay = fold(name + ' ' + txt.slice(0, 1500));
+    let s = 0; for (const w of words) if (hay.includes(w)) s += fold(name).includes(w) ? 3 : 1;
     if (name === mocName) s += 2;
     if (s) scored.push([s, name]);
   }
@@ -580,5 +581,5 @@ server.listen(cfg.port, () => {
   console.log(`  teams: ${TEAMS.enabled ? 'on — TEAM in the bar or "as a team" in the sentence; the lead splits it across up to ' + TEAMS.max + ' desks' : 'off (teams.enabled in office.config.json)'}`);
   const sk = skills.summary(); const setup = setupMap(); const notYet = DEPT_KEYS.filter(k => !setup[k]);
   console.log(`  skills: ${sk.count} (${sk.shipped} shipped in skills/, ${sk.brain} in ${path.join(NOTES_DIR, 'skills')})${sk.problems.length ? '   ⚠ ' + sk.problems.length + ' problem' + (sk.problems.length > 1 ? 's' : '') + ' — see npm run check' : ''}`);
-  console.log(`  set up: ${notYet.length === DEPT_KEYS.length ? 'no department yet — open a lead\'s chat and say "set up"' : notYet.length ? DEPT_KEYS.length - notYet.length + ' of 6 departments (not yet: ' + notYet.map(k => DEPTS[k].name).join(', ') + ')' : 'all six departments'}   lessons: ${learn.dir(BRAIN)}`);
+  console.log(`  set up: ${notYet.length === DEPT_KEYS.length ? 'no department yet — open a lead\'s chat and say "configurar"' : notYet.length ? DEPT_KEYS.length - notYet.length + ' of 6 departments (not yet: ' + notYet.map(k => DEPTS[k].name).join(', ') + ')' : 'all six departments'}   lessons: ${learn.dir(BRAIN)}`);
 });

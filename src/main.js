@@ -1361,8 +1361,8 @@ function applyRoster(agents) {
     r.v1 = r.v1 || {};
     r.v1.role = a.role || r.v1.role || ''; r.v1.tagline = a.does || r.v1.tagline || '';
     r.v1.greeting = `${a.does || 'Soy ' + a.name + '.'} Dame una tarea en la barra de la derecha, o pregúntame algo aquí.` +
-      (a.interviewer && a.setUp === false ? ` Aún nada de este departamento es tuyo: escribe "set up" y te haré cinco preguntas sobre cómo funciona aquí, luego lo anotaré para el equipo.` : '');
-    r.v1.chips = a.interviewer && a.setUp === false ? ['set up', '¿Qué puedes hacer por mí?', '¿Qué herramientas puedes usar?'] : ['¿En qué estás trabajando?', '¿Qué puedes hacer por mí?', '¿Qué herramientas puedes usar?'];
+      (a.interviewer && a.setUp === false ? ` Aún nada de este departamento es tuyo: escribe "configurar" y te haré cinco preguntas sobre cómo funciona aquí, luego lo anotaré para el equipo.` : '');
+    r.v1.chips = a.interviewer && a.setUp === false ? ['configurar','¿Qué puedes hacer por mí?', '¿Qué herramientas puedes usar?'] : ['¿En qué estás trabajando?', '¿Qué puedes hacer por mí?', '¿Qué herramientas puedes usar?'];
     if (chatHist[a.id] && chatHist[a.id][0] && chatHist[a.id][0].who === 'agent') chatHist[a.id][0].text = r.v1.greeting;
     if (modalOpen === a.id) openAgentRail(a.id, modalTab, false);
   }
