@@ -84,6 +84,15 @@ const refreshSkills = () => { reloadRoster(); const s = loadSkills(BRAIN, AGENTS
 const leadOf = dept => AGENTS.find(a => a.department === dept && a.lead) || AGENTS.find(a => a.department === dept);
 const setupMap = () => Object.fromEntries(DEPT_KEYS.map(k => [k, onboard.isSetUp(AGENTS, skills, k)]));
 
+// which model provider the claude CLI talks to: the .bat's option 2 points it at Meta (ANTHROPIC_BASE_URL). In that mode Claude
+// Code does NOT load the claude.ai connectors (Gmail, Canva, Notion, Drive…): they need the Claude login.
+const PROVIDER = (() => {
+  const u = process.env.ANTHROPIC_BASE_URL || '';
+  let host = ''; try { host = u ? new URL(u).hostname : ''; } catch {}
+  if (!host || /(^|\.)anthropic\.com$/.test(host)) return { id: 'anthropic', name: 'Claude', host: host || 'api.anthropic.com' };
+  if (/(^|\.)meta\.ai$/.test(host)) return { id: 'meta', name: 'Meta Muse Spark', host, model: process.env.ANTHROPIC_MODEL || '' };
+  return { id: 'other', name: host, host, model: process.env.ANTHROPIC_MODEL || '' };
+})();
 let backend = 'claude-cli', sdk = null;
 if (process.env.ANTHROPIC_API_KEY) {
   try {
@@ -617,7 +626,8 @@ function autoArchive() {
   if (n) { save(list); console.log(`  ${n} finished task${n > 1 ? 's' : ''} older than 30 days archived`); }
 }
 autoArchive(); setInterval(autoArchive, 6 * 3600 * 1000);
-if (mcp.useCache(path.join(DATA, 'mcp-cache.json'))) console.log('  connectors: showing the last known list while `claude mcp list` checks them (~40 s)');
+if (PROVIDER.id !== 'anthropic') console.log(`  provider: ${PROVIDER.name} (${PROVIDER.host}) — the claude.ai connectors (Gmail, Canva, Notion, Drive…) are not loaded in this mode`);
+/* one list per provider: Meta's has no claude.ai connectors, Claude's does */ if (mcp.useCache(path.join(DATA, `mcp-cache-${PROVIDER.id}.json`))) console.log('  connectors: showing the last known list while `claude mcp list` checks them (~40 s)');
 const discovering = mcp.discover().then(async l => {
   console.log(`  connectors: ${l.filter(s => s.status === 'connected').length} connected of ${l.length} (claude mcp list)`);
   if (backend === 'claude-cli') { const pr = await mcp.probeTools({ cwd: CLI_CWD }); if (pr) console.log(`  tools: ${pr.tools} in a run${pr.long.length ? ` · ${pr.long.length} with names over 64 characters kept out (the API refuses them)` : ''}`); }
@@ -637,7 +647,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
     }
-    if (url.pathname === '/api/health') return json(res, 200, { ok: true, version, backend, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
+    if (url.pathname === '/api/health') return json(res, 200, { ok: true, version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
       agents: agentsOut(), setup: setupMap(), routines: (l => ({ count: l.length, paused: l.filter(r => r.paused).length, depts: routines.ALLOWED }))(loadRoutines()), roster: { customised: roster.customised, briefed: roster.briefed, files: roster.files, problems: roster.problems }, skills: (({ count, shipped, brain, problems }) => ({ count, shipped, brain, problems }))(skills.summary()), tools: backend === 'claude-cli', mcp: mcp.summary(), teams: TEAMS, browser: mcp.summary().browser });
     if (url.pathname === '/api/agents') return json(res, 200, { agents: agentsOut(), problems: roster.problems, files: roster.files });
     if (url.pathname === '/api/skills') return json(res, 200, refreshSkills().summary()); // reloads from disk: edit a skill, hit this, see it
