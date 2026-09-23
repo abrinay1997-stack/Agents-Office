@@ -1,5 +1,6 @@
 // Agents Office v2 — Three.js isometric office with zoom-driven LOD
 // Far: clean pods + agent counts (Image 1 read). Near: diorama with 3D people + holo screens (Image 2 read).
+import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
 import './i18n.js'; // FASE 1 (20 Sep 2026): sistema i18n central (es por defecto); los textos visibles ya están traducidos directo al español, el wiring total a t() queda para fase 2
@@ -514,6 +515,7 @@ addEventListener('pointerup', (e) => {
 addEventListener('keydown', (e) => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; // typing in the bar, the big editor or a menu never fires a hotkey
   if (e.target.isContentEditable || ((e.ctrlKey || e.metaKey || e.altKey) && e.key !== 'Escape')) return; // Ctrl+C, Alt+… belong to the browser and to screen readers
+  if (e.key === 'Escape' && tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
   if (e.key === 'Escape') { if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); } else if (brain.isOpen()) brain.close(); else if (tasks && tasks.isOpen()) tasks.close(); else zoomOut(); }
   else if (e.key === 'p' || e.key === 'P') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
   else if (tasks && tasks.calendar && tasks.calendar.isOpen()) return; // the calendar has its own keys (← → W M T)
@@ -535,6 +537,7 @@ addEventListener('keydown', (e) => {
   }
   else if (e.key === 'v' || e.key === 'V') setCam(!document.body.classList.contains('cam'));
   else if (e.key === 'd' || e.key === 'D') setDark(!darkOn);
+  else if (e.key === 's' || e.key === 'S') subger.toggle(); // the Subgerente's chat
   else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
 
@@ -1419,13 +1422,16 @@ tasks = initTasks({
   brainWrite: (id, title) => brain.write(id, title), brain,
   onLive: (h) => { document.querySelector('#topbar .brand .ver').textContent = 'BETA'; document.title = `${h.name} — Agents Office`; brain.setOwner(h.name); brain.setQuiet(true); applyRoster(h.agents); },
   onTools: (agentId, keys) => mcp.onToolsUsed(agentId, keys),
-  requestApproval, setStuck: setStuckLive,
+  requestApproval, setStuck: setStuckLive, resolveApproval: (id, ok) => resolveApproval(id, ok),
   onUsage: (u) => { if (mcp && mcp.setUsage) mcp.setUsage(u); }, // V3.6: the plan's gauge in the top bar
   getFocused: () => focused, getZoom: () => view.zoom, getFocusDim: () => focusDim,
   toScreen: (p) => toScreen(p), reframe,
 });
 view.target.set(...overviewPos());
 addEventListener('resize', () => { if (!focused && !tween && !HERO) view.target.set(...overviewPos()); });
+const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
+  agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
+document.getElementById('topSub').addEventListener('click', () => subger.toggle());
 const hero = HERO ? initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;
 if (HERO && HERO.target) { view.target.set(...HERO.target); view.zoom = HERO.zoom || view.zoom; }
 

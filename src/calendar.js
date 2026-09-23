@@ -24,17 +24,19 @@ const mondayOf = ts => { const d = new Date(startOfDay(ts)); const k = (d.getDay
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['mon', 'Lunes'], ['tue', 'Martes'], ['wed', 'Miércoles'], ['thu', 'Jueves'], ['fri', 'Viernes'], ['sat', 'Sábados'], ['sun', 'Domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']];
 
 export function initCalendar(ctx) {
-  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
+  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
   const ov = document.getElementById('calOv'); if (!ov) return null;
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
   let openNow = false, view = 'month', anchor = startOfDay(Date.now()), q = '', deptOn = new Set(DEPT_KEYS), showRoutines = true, showDone = true, onlyRoutine = null, popKind = null, lastDept = 'marketing';
-  const MAX = { month: 3, week: 8 };
+  const MAX = { month: 3, week: 8, day: 99 };
+  const HOURS = [6, 22]; // the day view's timeline, 06:00–22:00
   const attr = v => esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // inside title="…": a quote in a title must not end the attribute
   let dragging = null; // { kind: 't' | 'r', id, at } while a card is being dragged — nothing re-renders under it
 
   /* ---------- what is on each day ---------- */
   function range() { // [from, to) of the days on screen
+    if (view === 'day') { const a = startOfDay(anchor); return { from: a, to: a + DAY, days: 1 }; }
     if (view === 'week') { const a = mondayOf(anchor); return { from: a, to: a + 7 * DAY, days: 7 }; }
     const d = new Date(anchor); d.setDate(1); const first = mondayOf(d.getTime()); const rows = Math.ceil((new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() + ((d.getDay() + 6) % 7)) / 7);
     return { from: first, to: first + rows * 7 * DAY, days: rows * 7 };
@@ -51,12 +53,12 @@ export function initCalendar(ctx) {
       else if (t.state === 'waiting' || t.state === 'doing' || t.state === 'next') { if (today >= from && today < to) push({ kind: t.state, at: Math.max(today + 1, Math.min(today + DAY - 1, t.changedAt || Date.now())), title: t.title, dept: t.dept, agent: t.agent, t }); }
     }
     if (showRoutines) for (const r of routines) {
-      if (r.paused || (onlyRoutine && r.id !== onlyRoutine)) continue;
+      if (onlyRoutine && r.id !== onlyRoutine) continue; // paused ones stay, greyed: the timetable is not a guess
       if (!r.when || r.when.kind === 'minutes') continue; // a filming cadence is not a calendar
       const startAt = Math.max(from - 1, Date.now() - 1); // routines are only projected forward: what has run is a done task already
       const occ = occurrences(r.when, startAt, to - 1, 800);
-      if (r.when.kind === 'hourly') { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true }); } }
-      else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r });
+      if (r.when.kind === 'hourly' && view !== 'day') { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
+      else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, paused: r.paused });
     }
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
@@ -68,8 +70,8 @@ export function initCalendar(ctx) {
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
     const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'done' ? `listo ${hm(ev.at)}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
-    const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1);
-    return `<div class="cv-ev ${ev.kind}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
+    const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1 || (view === 'day' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
+    return `<div class="cv-ev ${ev.kind}${ev.paused ? ' paused' : ''}${ev.t?.error ? ' err' : ''}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
       <div class="cv-ev-t">${ev.kind === 'routine' ? '<span class="cv-rt">⏱</span>' : ev.kind === 'done' ? '<span class="cv-tick">✓</span>' : ev.kind === 'sched' ? '<span class="cv-rt">◷</span>' : ev.t?.team?.members?.length ? '<span class="cv-rt">⚑</span>' : ''}${esc(ev.title)}</div>
       <div class="cv-ev-m"><span>${esc(time)}</span>${av(ev.agent)}</div></div>`;
   }
@@ -78,9 +80,9 @@ export function initCalendar(ctx) {
     const { from, to, days } = range();
     const by = events(from, to), today = ymd(new Date());
     const a = new Date(anchor);
-    E.title.innerHTML = view === 'month' ? `${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : (() => { const s = new Date(from), e = new Date(to - DAY); return `${s.getDate()}–${e.getDate()} ${s.getMonth() === e.getMonth() ? MONTHS[e.getMonth()] : MONTHS[s.getMonth()].slice(0, 3) + ' – ' + e.getDate() + ' ' + MONTHS[e.getMonth()]} <small>${e.getFullYear()}</small>`; })();
+    E.title.innerHTML = view === 'day' ? `${a.getDate()} ${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : view === 'month' ? `${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : (() => { const s = new Date(from), e = new Date(to - DAY); return `${s.getDate()}–${e.getDate()} ${s.getMonth() === e.getMonth() ? MONTHS[e.getMonth()] : MONTHS[s.getMonth()].slice(0, 3) + ' – ' + e.getDate() + ' ' + MONTHS[e.getMonth()]} <small>${e.getFullYear()}</small>`; })();
     E.seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
-    E.dow.innerHTML = DOW.map(d => `<div>${d}</div>`).join('');
+    E.dow.innerHTML = view === 'day' ? `<div class="cv-dayname">${['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][a.getDay()]} ${a.getDate()} de ${MONTHS[a.getMonth()].toLowerCase()}</div>` : DOW.map(d => `<div>${d}</div>`).join('');
     E.grid.className = 'cv-grid ' + view; E.grid.style.setProperty('--rows', days / 7);
     let html = '', nDone = 0, nSched = 0, nRt = 0;
     for (let i = 0; i < days; i++) {
@@ -92,11 +94,28 @@ export function initCalendar(ctx) {
         <div class="cv-evs">${list.slice(0, max).map(cardHTML).join('')}${list.length > max ? `<button class="cv-more" data-day="${k}">${list.length - max} más</button>` : ''}</div>
         <div class="cv-num">${view === 'week' ? `<span>${DOW[dow]}</span>` : ''}${d.getDate() === 1 && view === 'month' ? `<span>${MONTHS[d.getMonth()].slice(0, 3)}</span>` : ''}<b>${pad(d.getDate())}</b></div></div>`;
     }
+    if (view === 'day') { // one day, by the hour: drag a card to an hour to change its time
+      const k = ymd(new Date(from)), list = by[k] || [], past = from < startOfDay(Date.now());
+      const nowH = new Date().getHours();
+      let rows = '';
+      for (let h = HOURS[0]; h <= HOURS[1]; h++) {
+        const inHour = list.filter(ev => new Date(ev.at).getHours() === h || (h === HOURS[0] && new Date(ev.at).getHours() < h) || (h === HOURS[1] && new Date(ev.at).getHours() > h));
+        rows += `<div class="cv-hour cv-day${past || (k === today && h < nowH) ? ' past' : ''}${k === today && h === nowH ? ' now' : ''}" data-day="${k}" data-hour="${h}"><div class="cv-h">${pad(h)}:00</div><div class="cv-evs">${inHour.map(cardHTML).join('')}</div></div>`;
+      }
+      html = rows; nDone = list.filter(e => e.kind === 'done').length; nSched = list.filter(e => e.kind === 'sched').length; nRt = list.filter(e => e.kind === 'routine').length;
+      E.grid.className = 'cv-grid day';
+    }
     E.grid.innerHTML = html;
     E.stats.innerHTML = `<span><b>${nRt}</b> rutina ${nRt === 1 ? 'ejecución' : 'ejecuciones'}</span><span><b>${nSched}</b> programadas</span><span><b>${nDone}</b> listas</span>`;
     renderRail(); renderChips();
   }
+  function renderBacklog() { // pending work with no date: drag it onto a day to schedule it
+    const list = (backlog ? backlog() : []).filter(t => deptOn.has(t.dept) && matches(t.title));
+    if (!E.back) { E.back = document.createElement('div'); E.back.className = 'cv-back'; E.rail.parentElement.insertBefore(E.back, E.rail.previousElementSibling); }
+    E.back.innerHTML = `<div class="cv-rail-h">SIN FECHA <b>${list.length}</b></div>` + (list.length ? list.slice(0, 30).map(t => { const a = agentOf(t.agent); return `<div class="cv-bk" draggable="true" data-ev="t:${t.id}" style="--chip:${DEPTS[t.dept].chip}" role="button" tabindex="0" title="Arrástrala a un día para programarla"><div class="cv-r-t">${esc(t.title)}</div><div class="cv-r-m">${esc(a ? a.name : '')} · pendiente</div></div>`; }).join('') : '<div class="cv-empty">Nada pendiente sin fecha.</div>');
+  }
   function renderRail() {
+    renderBacklog();
     const list = routines.slice().sort((x, y) => (x.paused ? Infinity : x.nextAt || Infinity) - (y.paused ? Infinity : y.nextAt || Infinity));
     E.railN.textContent = list.length;
     E.rail.innerHTML = list.length ? list.map(r => { const a = agentOf(r.agent), chip = DEPTS[r.dept].chip; return `<div class="cv-r${r.paused ? ' paused' : ''}${onlyRoutine === r.id ? ' on' : ''}" data-rid="${r.id}" style="--chip:${chip}">
@@ -162,7 +181,7 @@ export function initCalendar(ctx) {
     const [kind, ...rest] = id.split(':');
     if (kind === 't') {
       const t = tasks.find(x => String(x.id) === rest[0]); if (!t) return;
-      if (t.state === 'done') { close(); openAgent(t.agent, 'chat'); return; } // the deliverable lives in the agent's chat
+      if (t.state !== 'scheduled' && openTask) { openTask(t); return; } // done · running · waiting · pending → the task's detail, over the calendar
       const a = agentOf(t.agent);
       popKind = 'event';
       const edit = t.state === 'scheduled';
@@ -243,14 +262,14 @@ export function initCalendar(ctx) {
   function flash(evId) { const el = E.grid.querySelector(`.cv-ev[data-ev^="${evId}"]`); if (el) { el.classList.add('new'); el.scrollIntoView({ block: 'nearest' }); } }
 
   /* ---------- drag a card to another day: a scheduled task moves (same time), a weekly routine changes its weekday ---------- */
-  E.grid.addEventListener('dragstart', e => {
-    const card = e.target.closest('.cv-ev[draggable="true"]'); if (!card) return;
+  ov.addEventListener('dragstart', e => {
+    const card = e.target.closest('.cv-ev[draggable="true"], .cv-bk[draggable="true"]'); if (!card) return;
     const [kind, id, at] = card.dataset.ev.split(':');
     dragging = { kind, id, at: +at || 0 }; closePop();
     e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.dataset.ev);
     card.classList.add('cv-dragging'); ov.classList.add('dragging');
   });
-  E.grid.addEventListener('dragend', () => { E.grid.querySelectorAll('.cv-dragging, .cv-day.drop').forEach(n => n.classList.remove('cv-dragging', 'drop')); ov.classList.remove('dragging'); setTimeout(() => { dragging = null; }, 0); });
+  ov.addEventListener('dragend', () => { E.grid.querySelectorAll('.cv-dragging, .cv-day.drop').forEach(n => n.classList.remove('cv-dragging', 'drop')); ov.classList.remove('dragging'); setTimeout(() => { dragging = null; }, 0); });
   E.grid.addEventListener('dragover', e => {
     if (!dragging) return; const day = e.target.closest('.cv-day'); if (!day) return;
     if (day.classList.contains('past')) { e.dataTransfer.dropEffect = 'none'; return; }
@@ -262,10 +281,18 @@ export function initCalendar(ctx) {
     if (!dragging) return; const day = e.target.closest('.cv-day'); if (!day || day.classList.contains('past')) return;
     e.preventDefault();
     const d = dragging; dragging = null; ov.classList.remove('dragging');
-    const target = new Date(day.dataset.day + 'T00:00:00');
+    const target = new Date(day.dataset.day + 'T00:00:00'), hour = day.dataset.hour !== undefined ? +day.dataset.hour : null;
     if (d.kind === 't') {
       const t = tasks.find(x => String(x.id) === d.id); if (!t) return;
-      const old = new Date(t.dueAt); target.setHours(old.getHours(), old.getMinutes(), 0, 0);
+      if (t.state === 'next') { // from «sin fecha»: it becomes a scheduled task on that day (09:00, or the hour it was dropped on)
+        target.setHours(hour ?? 9, 0, 0, 0);
+        if (target.getTime() <= Date.now()) { render(); E.stats.innerHTML = '<span class="amber">Esa hora ya pasó — suéltala en un día u hora por venir.</span>'; return; }
+        E.stats.innerHTML = '<span>Programando…</span>';
+        const r = act ? await act(t, 'save', { at: target.getTime() }) : { ok: false, error: 'no disponible' };
+        render(); if (!r || !r.ok) E.stats.innerHTML = `<span class="amber">No se pudo programar: ${esc((r && r.error) || 'error')}</span>`; else flash('t:' + t.id);
+        return;
+      }
+      const old = new Date(t.dueAt); target.setHours(hour ?? old.getHours(), hour !== null ? 0 : old.getMinutes(), 0, 0);
       if (target.getTime() === t.dueAt) { render(); return; }
       if (target.getTime() <= Date.now()) { render(); E.stats.innerHTML = `<span class="amber">A esa hora ya pasó hoy — abre la tarea y elige otra hora.</span>`; return; }
       E.stats.innerHTML = '<span>Moviendo…</span>';
@@ -274,7 +301,16 @@ export function initCalendar(ctx) {
       if (!r || !r.ok) E.stats.innerHTML = `<span class="amber">No se pudo mover: ${esc((r && r.error) || 'error')}</span>`; else flash('t:' + t.id);
       return;
     }
-    const r = routines.find(x => x.id === d.id); if (!r || r.when.kind !== 'weekly') { render(); return; }
+    const r = routines.find(x => x.id === d.id); if (!r) { render(); return; }
+    if (hour !== null && r.when.at) { // day view: a routine dropped on another hour runs at that hour from now on
+      const at = `${pad(hour)}:${r.when.at.slice(3)}`;
+      if (at === r.when.at) { render(); return; }
+      if (!confirm(`¿Cambiar «${r.title}» a las ${at}? Cambia todas sus ejecuciones.`)) { render(); return; }
+      const res = await updateRoutine(r.id, { when: { ...r.when, at } }); render();
+      if (!res || !res.ok) E.stats.innerHTML = `<span class="amber">No se pudo mover: ${esc((res && res.error) || 'error')}</span>`;
+      return;
+    }
+    if (r.when.kind !== 'weekly') { render(); return; }
     const from = new Date(d.at).getDay(), to = target.getDay();
     if (from === to) { render(); return; }
     const names = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
@@ -296,6 +332,7 @@ export function initCalendar(ctx) {
   /* ---------- wiring ---------- */
   ov.addEventListener('click', e => {
     const x = e.target.closest('[data-act="close"], .cv-x'); if (x) { closePop(); return; }
+    const bk = e.target.closest('.cv-bk'); if (bk) { const t = tasks.find(x => 't:' + x.id === bk.dataset.ev); if (t && openTask) openTask(t); return; }
     const ev = e.target.closest('.cv-ev'); if (ev) { openEvent(ev.dataset.ev, ev); return; }
     const more = e.target.closest('.cv-more'); if (more) { openMore(more.dataset.day, more.closest('.cv-day')); return; }
     const add = e.target.closest('.cv-add'); if (add) { const cell = add.closest('.cv-day'); openCreate(cell.dataset.day, cell); return; }
@@ -314,12 +351,14 @@ export function initCalendar(ctx) {
   $('#cvClose').addEventListener('click', () => close());
   E.search.addEventListener('input', () => { q = E.search.value.trim().toLowerCase(); render(); });
   E.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { E.search.value = ''; q = ''; E.search.blur(); render(); } });
-  function step(n) { const d = new Date(anchor); if (view === 'week') d.setDate(d.getDate() + 7 * n); else { d.setDate(1); d.setMonth(d.getMonth() + n); } anchor = d.getTime(); closePop(); render(); }
-  ov.addEventListener('keydown', e => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); else if (e.key === 't' || e.key === 'T') { anchor = startOfDay(Date.now()); render(); } else if (e.key === 'w' || e.key === 'W') { view = 'week'; render(); } else if (e.key === 'm' || e.key === 'M') { view = 'month'; render(); } });
+  function step(n) { const d = new Date(anchor); if (view === 'day') d.setDate(d.getDate() + n); else if (view === 'week') d.setDate(d.getDate() + 7 * n); else { d.setDate(1); d.setMonth(d.getMonth() + n); } anchor = d.getTime(); closePop(); render(); }
+  ov.addEventListener('keydown', e => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); else if (e.key === 't' || e.key === 'T') { anchor = startOfDay(Date.now()); render(); } else if (e.key === 'w' || e.key === 'W') { view = 'week'; render(); } else if (e.key === 'm' || e.key === 'M') { view = 'month'; render(); } else if (e.key === 'd' || e.key === 'D') { view = 'day'; render(); } });
+  ov.addEventListener('dblclick', e => { const day = e.target.closest('.cv-day[data-day]'); if (!day || view === 'day' || e.target.closest('.cv-ev')) return; anchor = new Date(day.dataset.day + 'T00:00:00').getTime(); view = 'day'; closePop(); render(); });
 
   let timer = null;
   function open() { if (openNow) return; openNow = true; E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging) render(); }, 30000); }
   function close() { if (!openNow) return; openNow = false; closePop(); ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; }
   function toggle() { openNow ? close() : open(); }
-  return { open, close, toggle, isOpen: () => openNow, refresh: () => { if (openNow && E.pop.hidden && !dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
+  function openAt(ts) { anchor = startOfDay(ts || Date.now()); if (view === 'month' && ts) view = 'week'; if (openNow) { closePop(); render(); } else open(); setTimeout(() => { const el = E.grid.querySelector(`.cv-day[data-day="${ymd(new Date(anchor))}"]`); if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); } }, 60); }
+  return { open, openAt, close, toggle, isOpen: () => openNow, refresh: () => { if (openNow && E.pop.hidden && !dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
 }

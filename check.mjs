@@ -5,6 +5,7 @@
 // loop the Beta was built against: change something, run it, fix what is red, repeat.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { loadConfig, ROOT } from './config.mjs';
 
@@ -339,10 +340,11 @@ else {
       await page.fill('.tp-in', 'as a team, plan the spring outreach push');
       await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true })));
       const pre = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Equipo · LÍDER DE VENTAS/.test(pre)) throw new Error('hint before Add: ' + pre);
-      await page.keyboard.press('Enter'); await page.waitForTimeout(700);
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelectorAll('.tp-row.piece').length >= 2 && [...document.querySelectorAll('.tp-row .tp-t')].some(e => /⚑ As a team, plan the spring/.test(e.textContent)), null, { timeout: 5000 }).catch(() => {}); // the lead's card and its pieces land over a few frames
       const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Agregado — LÍDER DE VENTAS lo tiene con/.test(hint)) throw new Error('hint: ' + hint);
       const n = await page.evaluate(() => ({ lead: [...document.querySelectorAll('.tp-row .tp-t')].filter(e => /⚑ As a team, plan the spring/.test(e.textContent)).length, pieces: document.querySelectorAll('.tp-row.piece').length, chip: [...document.querySelectorAll('.tp-team-chip')].map(e => e.textContent) }));
-      if (n.lead !== 1 || n.pieces < 2 || !n.chip.some(c => /^TEAM [34]$/.test(c)) || !n.chip.includes('PIECE')) throw new Error(JSON.stringify(n));
+      if (n.lead !== 1 || n.pieces < 2 || !n.chip.some(c => /^TEAM [34]$/.test(c)) || !n.chip.includes('PIECE')) throw new Error(JSON.stringify(n) + ' DEBUG ' + JSON.stringify(await page.evaluate(() => ({ rows: [...document.querySelectorAll('.tp-row .tp-t')].slice(0, 6).map(e => e.textContent), filter: document.querySelector('.tp-chip.on')?.textContent, q: document.querySelector('.tp-search')?.value, drawer: !document.getElementById('tdDrawer').hidden, tasks: window.CC.tasks.tasks.filter(t => /spring/.test(t.title)).map(t => t.title + '|' + t.state + '|' + t.dept) }))));
       await page.fill('.tp-in', 'draft the renewal email'); await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true })));
       const plain = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (/Equipo ·/.test(plain)) throw new Error('a plain sentence still reads as a team: ' + plain);
       await page.click('.tp-team'); const on = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Equipo · LÍDER DE VENTAS/.test(on)) throw new Error('the TEAM toggle did not take: ' + on);
@@ -451,10 +453,30 @@ else {
   finally { if (browser) await browser.close(); }
 }
 
+await step('subgerente: a plan is parsed, moved pieces named, bad departments and past dates dropped', async () => {
+  const sb = await import('./sub.mjs'); const { DEPTS } = await import('./src/data.js');
+  const agents = [{ id: 'lexi', department: 'sales', lead: true }, { id: 'piper', department: 'sales' }, { id: 'mlead', department: 'marketing', lead: true }];
+  const future = new Date(Date.now() + 3 * 864e5); const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T10:00`;
+  const p = sb.parsePlan('```json\n' + JSON.stringify({ reply: 'ok', tasks: [
+    { dept: 'sales', title: 'Propuesta', instruction: 'Arma la propuesta', why: 'es venta', owner_said: 'marketing', team: false, at: iso(future) },
+    { dept: 'nowhere', title: 'x', instruction: 'y' },
+    { dept: 'marketing', title: 'Post', instruction: 'Escribe el post', at: '2020-01-01T10:00' }] }) + '\n```', { depts: DEPTS, agents });
+  if (p.tasks.length !== 2) throw new Error('pieces: ' + p.tasks.length);
+  if (p.tasks[0].lead !== 'lexi' || p.tasks[0].ownerSaid !== 'marketing' || !(p.tasks[0].at > Date.now())) throw new Error('first piece: ' + JSON.stringify(p.tasks[0]));
+  if (p.tasks[1].at !== null || p.tasks[1].i !== 1) throw new Error('a past date must become «now»');
+  const bad = sb.parsePlan('no json here', { depts: DEPTS, agents }); if (bad.tasks.length || !bad.reply) throw new Error('prose must come back as a reply');
+  const sys = sb.systemPrompt({ business: 'X', depts: DEPTS, agents, skillsOf: () => [], routineDepts: [], status: '' });
+  if (!/CALENDARIO \(usa estas fechas/.test(sys) || !/lexi/.test(sys)) throw new Error('prompt lacks the calendar or the roster');
+  return '2 pieces · moved from marketing · past date → now · prose → reply';
+});
+
 /* ---------- 3. server smoke ---------- */
 {
   const port = 4600 + Math.floor(Math.random() * 300);
-  const env = { ...process.env, PORT: String(port) };
+  // a throwaway data folder and a COPY of the brain: the test server never reads or writes the owner's tasks, routines or notes
+  const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-check-'));
+  const brainCopy = path.join(sandbox, 'brain'); fs.cpSync(loadConfig().brainPath, brainCopy, { recursive: true });
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   const base = `http://localhost:${port}`;
@@ -619,6 +641,7 @@ else {
     } else ok('live: skipped', 'set CHECK_LIVE=1 to route one task and one chat through Claude');
   }
   srv.kill();
+  setTimeout(() => { try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch {} }, 500); // the throwaway copy goes when the server has let go of it
 }
 
 /* ---------- summary ---------- */

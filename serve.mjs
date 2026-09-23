@@ -51,12 +51,13 @@ import * as onboard from './onboard.mjs';
 import * as routines from './routines.mjs';
 import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
+import * as sub from './sub.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 
 const cfg = loadConfig();
 const HTML = path.join(ROOT, 'dist', 'command-centre-v2.html'); // built by build.mjs; shipped so npm start works without a build
-const DATA = path.join(ROOT, 'data');
+const DATA = process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data'); // AO_DATA: another data folder (npm run check uses a throwaway one, never the owner's)
 const FILE = path.join(DATA, 'tasks.json');
 const BRAIN = cfg.brainPath;
 const NOTES_DIR = path.join(BRAIN, 'Agents Office');
@@ -92,7 +93,23 @@ if (process.env.ANTHROPIC_API_KEY) {
 }
 
 /* ---------- storage ---------- */
-const load = () => { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return []; } };
+// a missing file is an empty office; an unreadable one is NOT (reading it as [] and saving would wipe every task): it is kept aside and the request fails
+const load = () => {
+  let raw; try { raw = fs.readFileSync(FILE, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
+  try { return JSON.parse(raw); } catch {
+    const aside = FILE.replace(/\.json$/, `.unreadable-${Date.now()}.json`); try { fs.copyFileSync(FILE, aside); } catch {}
+    console.error(`tasks.json could not be read — a copy is at ${aside}`); throw new Error('no se pudo leer data/tasks.json (se guardó una copia al lado)');
+  }
+};
+{ // one copy a day of the tasks and the routines file, the last 14 kept: data/backups/
+  const dir = path.join(DATA, 'backups'), day = new Date().toISOString().slice(0, 10);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    for (const [src, name] of [[FILE, 'tasks'], [routines.file(BRAIN), 'routines']]) { const dest = path.join(dir, `${name}-${day}.json`); if (fs.existsSync(src) && !fs.existsSync(dest)) fs.copyFileSync(src, dest); }
+    const all = fs.readdirSync(dir).filter(f => /^(tasks|routines)-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+    for (const kind of ['tasks', 'routines']) { const mine = all.filter(f => f.startsWith(kind + '-')); for (const f of mine.slice(0, -14)) fs.rmSync(path.join(dir, f), { force: true }); }
+  } catch (e) { console.warn('backup:', e.message); }
+}
 const save = list => { fs.mkdirSync(DATA, { recursive: true }); const tmp = FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(list, null, 2)); fs.renameSync(tmp, FILE); }; // write-then-rename: never a half-written tasks.json
 const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 /* ---------- the usage gauge (V3.6, A3): Claude's own numbers, the office's count underneath ---------- */
@@ -122,6 +139,8 @@ function ranOn(mu, want) {
 }
 // every `claude` the office started, so a timeout, a restart or Ctrl+C never leaves one behind still sending (Windows: the whole tree, MCP servers included)
 const children = new Set();
+const runsOf = new Map(); // task id → Set of its claude processes (a team has several)
+const stopping = new Set(); // task ids the owner stopped: their failure reads «stopped by you», not an error
 function killTree(p) {
   if (!p || p.exitCode !== null) return;
   if (process.platform === 'win32') { try { spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { try { p.kill(); } catch {} } }
@@ -129,7 +148,7 @@ function killTree(p) {
 }
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { for (const p of children) killTree(p); process.exit(0); });
 process.on('exit', () => { for (const p of children) killTree(p); });
-async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null } = {}) { // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null } = {}) { // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
     const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
@@ -149,8 +168,9 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   return new Promise((resolve, reject) => {
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
     children.add(p);
+    if (taskId) { if (!runsOf.has(taskId)) runsOf.set(taskId, new Set()); runsOf.get(taskId).add(p); }
     p.stdin.on('error', () => {}); p.stdin.end(user);
-    const cleanup = () => { children.delete(p); fs.rm(sysFile, { force: true }, () => {}); };
+    const cleanup = () => { children.delete(p); if (taskId && runsOf.has(taskId)) { runsOf.get(taskId).delete(p); if (!runsOf.get(taskId).size) runsOf.delete(taskId); } fs.rm(sysFile, { force: true }, () => {}); };
     let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null;
     const timer = setTimeout(() => { killTree(p); reject(new Error(`Claude took longer than ${timeout / 1000} s`)); }, timeout);
     const feed = line => {
@@ -274,7 +294,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
   const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + routineLine + modeLine +
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a });
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id });
   if (!text) throw new Error('Claude returned nothing');
   return { result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from };
 }
@@ -307,7 +327,7 @@ async function runTeam(task, mode) {
       const system = agentSystem(a, index, read, { extra: teams.teamSection({ me: a, lead, pieces: task.team.pieces, nameOf }), words: 220 });
       const user = `Task (the whole request, for context): ${task.title}\nOwner's request: ${task.text}\n\nYOUR PIECE: ${piece.title}\n${piece.text}` + routineLineFor(task) + (mode === 'draft' ? modeLineFor('draft', task) : '');
       const { pick, eff } = pickFor(task, a);
-      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a });
+      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id });
       const { body, messages } = teams.parseMessages(text, ids);
       Object.assign(piece, { result: body || '(empty)', tools: toolKeys(tools), used: mcp.namesOf(tools), read, modelId: ran, error: !text });
       for (const m of messages) task.team.messages.push({ from: a.id, to: m.to === lead.id ? 'lead' : m.to, text: m.text, at: Date.now() });
@@ -326,7 +346,7 @@ async function runTeamLead(task, feedback, mode) {
   const system = agentSystem(lead, index, read, { extra: `TEAM\nYou lead this team. The pieces below were done by your teammates (one of them may be yours). You write the finished deliverable from them.`, words: 450 });
   const user = teams.synthPrompt({ task, pieces: tm.pieces || [], messages: tm.messages || [], nameOf, feedback: mode === 'approve' ? null : feedback }) + routineLineFor(task) + modeLineFor(mode, task);
   const { pick, eff } = pickFor(task, lead);
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead });
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id });
   if (!text) throw new Error('Claude returned nothing');
   const allTools = [...new Set([...(tm.pieces || []).flatMap(p => p.tools || []), ...toolKeys(tools)])];
   const allUsed = [...new Set([...(tm.pieces || []).flatMap(p => p.used || []), ...mcp.namesOf(tools)])];
@@ -357,6 +377,56 @@ async function chat(agentId, text, history) {
   const convo = (history || []).slice(-8).map(m => `${m.who === 'user' ? 'Dueño' : a.name}: ${m.text}`).join('\n');
   const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${a.name}:`, { maxTokens: 1200, agent: a, model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
   return { reply, read, tools: toolKeys(tools), used: mcp.namesOf(tools) };
+}
+
+/* ---------- a new task: the department's routing picks the desk (or the lead takes it as a team) ---------- */
+async function newTask({ dept, text, team = false, at = null, by = 'you', model, effort, extra = {} }) {
+  const r = await route(dept, String(text).trim());
+  const asTeam = TEAMS.enabled && (team === true || teams.intent(text));
+  const task = { id: nid(), dept, agent: asTeam ? leadOf(dept).id : r.agent, title: extra.title || r.title, text: String(text).trim(), plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, state: 'next', addedAt: Date.now(), by,
+    model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: asTeam ? { lead: leadOf(dept).id, asked: by } : undefined, ...extra };
+  if (at) { task.state = 'scheduled'; task.dueAt = at; task.needsOk = r.needsOk; }
+  const list = load(); list.push(task); save(list);
+  console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${at ? ' · scheduled ' + untilText(at) : ''}${by === 'sub' ? ' (via the Subgerente)' : ''}`);
+  return task;
+}
+
+/* ---------- the Subgerente: one chat above the departments (sub.mjs) ---------- */
+async function subChat(text) {
+  const st = sub.load(DATA); refreshSkills();
+  const system = sub.systemPrompt({ business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => DEPTS[k].name), status: sub.statusText(load(), AGENTS, DEPTS) });
+  const convo = st.messages.slice(-10).map(m => `${m.who === 'user' ? 'Dueño' : 'Subgerente'}: ${m.text}${m.plan?.tasks?.length ? ' [repartí: ' + m.plan.tasks.map(t => `${t.title} → ${DEPTS[t.dept].name}${t.state === 'sent' ? ' (enviada)' : t.state === 'skipped' ? ' (descartada)' : ''}`).join('; ') + ']' : ''}`).join('\n');
+  const out = await ask(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\nSubgerente (solo JSON):`, { maxTokens: 3000, timeout: 180000 });
+  const plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
+  const u = sub.message('user', text), m = sub.message('sub', plan.reply || (plan.tasks.length ? 'Así lo repartiría:' : '¿Me das un poco más de detalle?'), plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {});
+  st.messages.push(u, m); sub.save(DATA, st);
+  console.log(`◆ subgerente: ${plan.tasks.length ? plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : 'reply'}`);
+  return { messages: [u, m] };
+}
+async function subSend(msgId, edits) { // the owner pressed SEND: each included piece becomes a task in its department
+  const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId);
+  if (!m || !m.plan) return { error: 'ese plan ya no existe' };
+  const byI = new Map((Array.isArray(edits) ? edits : []).map(e => [e.i, e]));
+  const todo = [];
+  for (const t of m.plan.tasks) {
+    if (t.state !== 'proposed') continue;
+    const e = byI.get(t.i) || {};
+    if (e.include === false) { t.state = 'skipped'; continue; }
+    if (e.dept && DEPTS[e.dept] && e.dept !== 'brain') t.dept = e.dept;
+    if (typeof e.instruction === 'string' && e.instruction.trim()) t.instruction = e.instruction.trim().slice(0, 4000);
+    if (typeof e.team === 'boolean') t.team = e.team;
+    if (e.at === null) t.at = null; else if (typeof e.at === 'number' && e.at > Date.now()) t.at = e.at;
+    todo.push(t);
+  }
+  if (!todo.length) { sub.save(DATA, st); return { ok: true, message: m, tasks: [] }; }
+  const made = await Promise.all(todo.map(t => newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', extra: { title: t.title, sub: { msg: m.id, i: t.i } } })
+    .then(task => { t.state = 'sent'; t.taskId = task.id; t.agent = task.agent; return task; })
+    .catch(err => { t.state = 'failed'; t.error = err.message; return null; })));
+  const st2 = sub.load(DATA); const i = st2.messages.findIndex(x => x.id === m.id); if (i >= 0) st2.messages[i] = m; // re-read: another message may have landed while routing
+  const sent = made.filter(Boolean);
+  st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => DEPTS[t.dept].name))].join(', ')}. Te aviso aquí cómo van.${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
+  sub.save(DATA, st2);
+  return { ok: true, message: m, tasks: sent, messages: st2.messages.slice(-2) };
 }
 
 /* ---------- routines: the office's own clock (V3.5) ---------- */
@@ -394,8 +464,9 @@ async function runServerTask(id, { feedback, approve } = {}) {
     if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = out.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); }
     else { task.state = 'done'; task.doneAt = Date.now(); task.note = writeNote(task); await rebuildGraph(); }
   } catch (e) {
-    Object.assign(task, { state: 'done', doneAt: Date.now(), result: 'Could not complete this task: ' + e.message, error: true });
+    Object.assign(task, { state: 'done', doneAt: Date.now(), result: stopping.has(task.id) ? 'Detenida por ti antes de terminar.' : 'Could not complete this task: ' + e.message, error: true, stopped: stopping.has(task.id) || undefined });
   }
+  stopping.delete(task.id);
   list = load(); const i = list.findIndex(t => t.id === task.id); if (i >= 0) list[i] = task; save(list);
   console.log(`${task.error ? '✗' : task.state === 'waiting' ? '⏸' : '✓'} ${task.id} ${task.error ? 'failed' : task.state === 'waiting' ? 'waiting for your OK' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
   return task;
@@ -517,6 +588,15 @@ function noteIndex() { // name → { path, group, office } — the only paths /a
   for (const n of readOfficeNotes(BRAIN)) m.set(n.name, { path: n.path, group: 'Agents Office', office: true });
   return m;
 }
+function trashNote(t) { // a task's deliverable note → the bin (only a note the office wrote for THIS task)
+  if (!t || !t.note) return null;
+  const n = noteIndex().get(t.note); if (!n || !n.office || !insideBrain(n.path)) return null;
+  if (!fs.readFileSync(n.path, 'utf8').includes(`\ntask: ${t.id}\n`)) return null;
+  fs.mkdirSync(TRASH, { recursive: true });
+  const dest = path.join(TRASH, `${path.basename(n.path, '.md')}__${Date.now()}.md`); fs.renameSync(n.path, dest);
+  console.log(`🗑 note to the bin with its task: ${t.note}`);
+  return path.basename(dest);
+}
 function insideBrain(p) { // no symlink, and the real path stays inside the brain folder
   try {
     if (fs.lstatSync(p).isSymbolicLink()) return false;
@@ -531,6 +611,12 @@ await rebuildGraph();
   for (const t of list) if (t.state === 'doing') { Object.assign(t, { state: 'done', doneAt: Date.now(), result: 'Se interrumpió: la oficina se reinició mientras el agente trabajaba. Vuelve a lanzarla si la necesitas.', error: true }); n++; }
   if (n) { save(list); console.log(`  ${n} task${n > 1 ? 's' : ''} interrupted by the restart, marked as failed`); }
 }
+function autoArchive() {
+  const list = load(), cut = Date.now() - 30 * 864e5; let n = 0;
+  for (const t of list) if (t.state === 'done' && !t.archived && (t.doneAt || 0) < cut) { t.archived = true; t.archivedAt = Date.now(); t.autoArchived = true; n++; }
+  if (n) { save(list); console.log(`  ${n} finished task${n > 1 ? 's' : ''} older than 30 days archived`); }
+}
+autoArchive(); setInterval(autoArchive, 6 * 3600 * 1000);
 const discovering = mcp.discover().then(async l => {
   console.log(`  connectors: ${l.filter(s => s.status === 'connected').length} connected of ${l.length} (claude mcp list)`);
   if (backend === 'claude-cli') { const pr = await mcp.probeTools({ cwd: CLI_CWD }); if (pr) console.log(`  tools: ${pr.tools} in a run${pr.long.length ? ` · ${pr.long.length} with names over 64 characters kept out (the API refuses them)` : ''}`); }
@@ -631,31 +717,73 @@ const server = http.createServer(async (req, res) => {
       console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${dueAt ? ' · scheduled ' + untilText(dueAt) : ''}`);
       return json(res, 200, task);
     }
-    const m = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(run|revise|approve|reject))?$/);
-    if (m && !m[2] && req.method === 'PATCH') { // edit a task scheduled for a date: move it (at), rewrite it (text), model, effort, OK
+    const m = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(run|revise|approve|reject|stop|archive|repeat))?$/);
+    if (m && m[2] === 'stop' && req.method === 'POST') { // the owner stops a running agent: its claude processes (and their MCP servers) are killed
+      const t = load().find(x => x.id === m[1]);
+      if (!t) return json(res, 404, { error: 'no such task' });
+      if (t.state !== 'doing') return json(res, 409, { error: 'no está en curso' });
+      stopping.add(t.id);
+      const ps = runsOf.get(t.id); let n = 0;
+      if (ps) for (const p of ps) { killTree(p); n++; }
+      if (!n) { // nothing running here (the page was about to start it, or a restart lost it): close it now
+        const l = load(); const x = l.find(y => y.id === t.id); Object.assign(x, { state: 'done', doneAt: Date.now(), result: 'Detenida por ti antes de terminar.', error: true, stopped: true }); save(l); stopping.delete(t.id);
+      }
+      console.log(`■ ${t.id} stopped by the owner (${n} process${n === 1 ? '' : 'es'})`);
+      return json(res, 200, { ok: true, killed: n });
+    }
+    if (m && m[2] === 'archive' && req.method === 'POST') { // out of the lists (kept in tasks.json); note: true also moves its note to the bin
+      const b = await body(req); const l = load(); const t = l.find(x => x.id === m[1]);
+      if (!t) return json(res, 404, { error: 'no such task' });
+      if (t.state === 'doing') return json(res, 409, { error: 'el agente está trabajando en ella — detenla primero' });
+      t.archived = b.archived !== false; t.archivedAt = t.archived ? Date.now() : undefined; save(l);
+      const trashed = t.archived && b.note ? trashNote(t) : null;
+      return json(res, 200, { ok: true, task: t, trashed, graph: trashed ? await rebuildGraph() : undefined });
+    }
+    if (m && m[2] === 'repeat' && req.method === 'POST') { // the same work again, as a new task (same agent, same words)
+      const src = load().find(x => x.id === m[1]);
+      if (!src) return json(res, 404, { error: 'no such task' });
+      const t = { id: nid(), dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', state: 'next', addedAt: Date.now(), by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
+        team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id };
+      const l = load(); l.push(t); save(l);
+      console.log(`↻ ${t.id} repeats ${src.id}: ${t.title}`);
+      return json(res, 200, t);
+    }
+    if (m && !m[2] && req.method === 'PATCH') { // edit a task that has not started: rewrite, reassign, move to a date or back, model, effort — or mark it done by hand
       const b = await body(req);
       const cur = load().find(t => t.id === m[1]);
       if (!cur) return json(res, 404, { error: 'no such task' });
-      if (cur.state !== 'scheduled') return json(res, 409, { error: 'solo se edita una tarea programada que aún no empezó' });
+      if (cur.state !== 'scheduled' && cur.state !== 'next') return json(res, 409, { error: 'solo se edita una tarea que aún no empezó' });
+      if (cur.routine && cur.state === 'next') return json(res, 409, { error: 'es una ejecución de rutina: edita la rutina en el calendario' });
       const patch = {};
-      if (b.at !== undefined) {
+      if (b.state === 'done') { // «ya está hecha» — closed by the owner without running
+        const l = load(); const t = l.find(x => x.id === m[1]); if (!t || (t.state !== 'next' && t.state !== 'scheduled')) return json(res, 409, { error: 'ya empezó' });
+        Object.assign(t, { state: 'done', doneAt: Date.now(), result: 'Marcada como hecha por ti, sin ejecutarla.', manual: true }); save(l);
+        return json(res, 200, t);
+      }
+      if (b.agent !== undefined) {
+        const a = AGENTS.find(x => x.id === b.agent); if (!a) return json(res, 400, { error: 'no existe ese agente' });
+        if (cur.team && !a.lead) return json(res, 400, { error: 'una tarea en equipo va al líder del departamento' });
+        patch.agent = a.id; patch.dept = a.department;
+      }
+      if (b.at === null && cur.state === 'scheduled') { patch.state = 'next'; patch.dueAt = undefined; patch.addedAt = Date.now(); } // unscheduled: it goes to the queue now
+      if (b.at !== undefined && b.at !== null) {
         const at = typeof b.at === 'number' ? b.at : /T\d/.test(String(b.at)) ? Date.parse(b.at) : NaN; // a date with no time would be read as UTC midnight: refused
         if (!(at > Date.now() - 60000)) return json(res, 400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
         if (at > Date.now() + 2 * 365 * 864e5) return json(res, 400, { error: 'como mucho dos años adelante' });
-        patch.dueAt = at;
+        patch.dueAt = at; if (cur.state === 'next') { patch.state = 'scheduled'; if (cur.needsOk === undefined) patch.needsOk = routines.guessNeedsOk(cur.text || cur.title); }
       }
       if (typeof b.text === 'string') {
         const t = b.text.trim(); if (!t || t.length > 4000) return json(res, 400, { error: 'el texto debe tener entre 1 y 4000 caracteres' });
-        if (t !== cur.text) { patch.text = t; if (b.reroute !== false) { const r = await route(cur.dept, t); Object.assign(patch, { title: r.title, plan: r.plan, needsOk: r.needsOk, why: r.why, ...(cur.team ? {} : { agent: r.agent }) }); } }
+        if (t !== cur.text) { patch.text = t; if (b.reroute !== false && b.agent === undefined) { const r = await route(patch.dept || cur.dept, t); Object.assign(patch, { title: r.title, plan: r.plan, needsOk: r.needsOk, why: r.why, ...(cur.team ? {} : { agent: r.agent }) }); } }
       }
       if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 90);
       if (b.model !== undefined) patch.model = normModel(b.model) || undefined;
       if (b.effort !== undefined) patch.effort = normEffort(b.effort) || undefined;
       if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk;
-      const list = load(); const task = list.find(t => t.id === m[1]); // re-read: routing took a moment and the clock may have fired it
-      if (!task || task.state !== 'scheduled') return json(res, 409, { error: 'la tarea ya empezó mientras la editabas' });
-      Object.assign(task, patch); save(list);
-      console.log(`✎ ${task.id} edited${patch.dueAt ? ' · now ' + untilText(task.dueAt) : ''}${patch.text ? ' · new text' : ''}`);
+      const list = load(); const task = list.find(t => t.id === m[1]); // re-read: routing took a moment and the clock (or the page) may have started it
+      if (!task || task.state !== cur.state) return json(res, 409, { error: 'la tarea ya empezó mientras la editabas' });
+      Object.assign(task, patch); for (const k of Object.keys(patch)) if (patch[k] === undefined) delete task[k]; save(list);
+      console.log(`✎ ${task.id} edited${patch.dueAt ? ' · now ' + untilText(task.dueAt) : ''}${patch.text ? ' · new text' : ''}${patch.agent ? ' · to ' + patch.agent : ''}${patch.state ? ' · ' + patch.state : ''}`);
       return json(res, 200, task);
     }
     if (m && req.method === 'POST' && (m[2] === 'approve' || m[2] === 'reject')) { // D1: the owner's tick on a routine's draft
@@ -684,8 +812,9 @@ const server = http.createServer(async (req, res) => {
         task.note = writeNote(task);
         await rebuildGraph();
       } catch (e) {
-        Object.assign(task, { state: 'done', doneAt: Date.now(), result: 'Could not complete this task: ' + e.message, error: true });
+        Object.assign(task, { state: 'done', doneAt: Date.now(), result: stopping.has(task.id) ? 'Detenida por ti antes de terminar.' : 'Could not complete this task: ' + e.message, error: true, stopped: stopping.has(task.id) || undefined });
       }
+      stopping.delete(task.id);
       const l2 = load(); const i = l2.findIndex(t => t.id === task.id); if (i >= 0) l2[i] = task; save(l2);
       console.log(`${task.error ? '✗' : '✓'} ${task.id} ${task.error ? 'failed' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
       json(res, 200, task);
@@ -700,8 +829,23 @@ const server = http.createServer(async (req, res) => {
       const list = load(); const t = list.find(x => x.id === m[1]);
       if (!t) return json(res, 404, { error: 'no such task' });
       if (t.state === 'doing') return json(res, 409, { error: 'el agente está trabajando en ella — espera a que termine' }); // deleting it now would lose the run's result
-      save(list.filter(x => x.id !== m[1])); return json(res, 200, { ok: true });
+      save(list.filter(x => x.id !== m[1]));
+      const trashed = url.searchParams.get('note') === '1' ? trashNote(t) : null;
+      return json(res, 200, { ok: true, trashed, graph: trashed ? await rebuildGraph() : undefined });
     }
+    if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, sub.load(DATA));
+    if (url.pathname === '/api/sub/chat' && req.method === 'POST') {
+      const { text } = await body(req);
+      if (!text || !String(text).trim()) return json(res, 400, { error: 'mensaje vacío' });
+      if (String(text).length > 8000) return json(res, 400, { error: 'el mensaje es muy largo (máx. 8000 caracteres)' });
+      return json(res, 200, await subChat(String(text).trim()));
+    }
+    if (url.pathname === '/api/sub/send' && req.method === 'POST') {
+      const { msg, items } = await body(req);
+      const r = await subSend(String(msg || ''), items);
+      return json(res, r.error ? 404 : 200, r);
+    }
+    if (url.pathname === '/api/sub/clear' && req.method === 'POST') { sub.save(DATA, { messages: [] }); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/chat' && req.method === 'POST') {
       const { agent, text, history } = await body(req);
       if (!text || !String(text).trim()) return json(res, 400, { error: 'empty message' });

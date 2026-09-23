@@ -24,7 +24,8 @@ import { DEPTS, AGENTS, DEPT_KEYS } from './data.js';
 import { P, rnd, ri } from './v1data.js';
 import { applyTasks, PROFILE, titleCase } from './profile.js';
 import { parseWhen, describe, nextRun, fromPicker, untilText } from './when.js';
-import { initCalendar } from './calendar.js'; // V3.2.1 (16 Sep 2026): the calendar on P
+import { initCalendar } from './calendar.js';
+import { initDetail } from './detail.js'; // the task detail drawer: every action on a task, from the list, the board and the calendar // V3.2.1 (16 Sep 2026): the calendar on P
 import { MODEL_KEYS, MODELS, DEFAULT_MODEL, modelName, normModel, FROM_TEXT , EFFORT_KEYS, EFFORT_NAME, normEffort, effortName, effortFor } from './models.js';
 
 const SEGMENTS = ['roofing', 'HVAC', 'dental', 'logistics', 'fitness', 'property', 'landscaping', 'legal'];
@@ -129,7 +130,7 @@ const STATE_LABEL = { next: 'Pendientes', doing: 'En curso', waiting: 'En espera
 
 export function initTasks(ctx) {
   const { R, deptRT, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent,
-          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage } = ctx;
+          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage, resolveApproval: onResolveDemo } = ctx;
   // LIVE mode (served by serve.mjs): the bar routes through Claude, agents produce real
   // deliverables saved as notes in the brain, and tasks persist. Opened as a file it stays demo.
   let live = false;
@@ -295,6 +296,16 @@ export function initTasks(ctx) {
     model: panel.querySelector('.tp-model'), effort: panel.querySelector('.tp-effort'),
     bigBtn: panel.querySelector('.tp-big-btn'), team: panel.querySelector('.tp-team'),
   };
+  { // the list's own tools: a search box and «Limpiar listas»
+    const bar = document.createElement('div'); bar.className = 'tp-tools';
+    bar.innerHTML = '<input class="tp-search" type="search" placeholder="Buscar tareas o agentes…" aria-label="Buscar en las tareas" autocomplete="off"><button type="button" class="tp-clear" hidden>Limpiar listas</button>';
+    P_.chips.before(bar);
+    P_.tools = bar; P_.search = bar.querySelector('.tp-search'); P_.clear = bar.querySelector('.tp-clear');
+    P_.search.addEventListener('input', () => { query = P_.search.value.trim(); render(true); });
+    P_.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { P_.search.value = ''; query = ''; render(true); P_.search.blur(); } });
+    P_.clear.addEventListener('click', () => clearDone());
+    P_.rows.addEventListener('keydown', e => { const r = e.target.closest('.tp-row[role="button"]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); r.click(); } });
+  }
   // V3.7: the box grows with the text (one line at rest, six at most) and the big editor mirrors it
   const big = document.getElementById('tpBig');
   const B_ = { in: big.querySelector('.tb-in'), dept: big.querySelector('.tb-dept'), dot: big.querySelector('.tb-head .dot'), hint: big.querySelector('.tb-hint'), add: big.querySelector('.tb-add'), close: big.querySelector('.tb-close') };
@@ -559,8 +570,14 @@ export function initTasks(ctx) {
     try {
       const [rl, tl] = await Promise.all([fetch(API + '/routines').then(r => r.json()), fetch(API + '/tasks').then(r => r.json())]);
       if (Array.isArray(rl.routines)) setRoutines(rl.routines);
-      if (Array.isArray(tl)) for (const st of tl) reconcile(st);
+      if (Array.isArray(tl)) {
+        for (const st of tl) reconcile(st);
+        const keep = new Set(tl.filter(x => !x.archived).map(x => x.id));
+        for (let i = tasks.length - 1; i >= 0; i--) { const t = tasks[i]; if (t.live && t.sid && !t.piece && !keep.has(t.sid) && t.state !== 'doing') { tasks.splice(i, 1); dirty = true; if (detail.current() === t) detail.close(); } }
+        for (const st of tl) { const t = tasks.find(x => x.live && x.sid === st.id); if (t && (t.state === 'next' || t.state === 'scheduled') && st.state === t.state && (t.agent !== st.agent || t.title !== st.title)) { Object.assign(t, { agent: st.agent, dept: agentOf(st.agent).dept, title: st.title, text: st.text }); dirty = true; } }
+      }
       if (calendar) calendar.refresh();
+      detail.refresh();
       if (pollFails >= 3) setOffline(false);
       pollFails = 0;
     } catch (e) { console.warn('office poll:', e.message); if (++pollFails === 3) setOffline(true); }
@@ -575,7 +592,7 @@ export function initTasks(ctx) {
     else say('Conexión recuperada.');
   }
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
-    if (!agentOf(st.agent)) return;
+    if (!agentOf(st.agent) || st.archived) return;
     let t = tasks.find(x => x.live && x.sid === st.id);
     if (!t) {
       t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: st.by === 'routine' ? 'routine' : 'you', live: true, srv: !!(st.routine || st.dueAt), sid: st.id,
@@ -714,16 +731,19 @@ export function initTasks(ctx) {
     return t;
   }
   // chips: filters with live counts
-  const CHIPS = [['all', 'Todas'], ['sched', 'Programadas'], ['next', 'Pendientes'], ['doing', 'En curso'], ['waiting', 'En espera'], ['done', 'Listas']];
+  const CHIPS = [['all', 'Todas'], ['sched', 'Programadas'], ['next', 'Pendientes'], ['doing', 'En curso'], ['waiting', 'En espera'], ['done', 'Listas'], ['error', 'Con error']];
   function chipsHTML() {
     const scope = scoped();
-    const cnt = st => st === 'all' ? scope.length : st === 'sched' ? scopedRoutines().length + scope.filter(t => t.state === 'scheduled').length : scope.filter(t => t.state === st).length;
-    return CHIPS.map(([st, lab]) => `<button class="tp-chip${filter === st ? ' on' : ''}${st === 'waiting' ? ' w' : ''}" data-f="${st}">${lab}<b>${cnt(st)}</b></button>`).join('');
+    const cnt = st => st === 'all' ? scope.length : st === 'sched' ? scopedRoutines().length + scope.filter(t => t.state === 'scheduled').length : st === 'error' ? scope.filter(t => t.state === 'done' && t.error).length : scope.filter(t => t.state === st).length;
+    return CHIPS.filter(([st]) => st !== 'error' || cnt('error') || filter === 'error').map(([st, lab]) => `<button class="tp-chip${filter === st ? ' on' : ''}${st === 'waiting' ? ' w' : ''}${st === 'error' ? ' e' : ''}" data-f="${st}">${lab}<b>${cnt(st)}</b></button>`).join('');
   }
   P_.chips.addEventListener('click', (e) => { const b = e.target.closest('.tp-chip'); if (!b) return; filter = b.dataset.f; render(true); });
+  let query = '';
   function scoped() {
     const f = getFocused();
-    return (f && f !== 'brain') ? tasks.filter(t => t.dept === f) : tasks;
+    const fold = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const q = fold(query);
+    return tasks.filter(t => (!f || f === 'brain' || t.dept === f) && (!q || fold(t.title + ' ' + (t.text || '') + ' ' + (agentOf(t.agent)?.name || '')).includes(q)));
   }
   function scopedRoutines() { const f = getFocused(); return (f && f !== 'brain') ? deptRoutines(f) : routines.slice(); }
   function metaFor(t) {
@@ -746,7 +766,7 @@ export function initTasks(ctx) {
   function rowHTMLp(t) {
     const pct = Math.round(t.progress * 100);
     const chip = `<span class="tp-st ${t.state}">${t.state === 'doing' ? `<span data-pct="${t.id}">${pct}%</span>` : t.state === 'scheduled' ? '◷' : STATE_LABEL[t.state]}</span>`;
-    const bar = t.state === 'doing' ? `<div class="tp-bar"><i data-bar="${t.id}" style="width:${pct}%"></i></div>` : t.state === 'scheduled' ? `<div class="tp-act"><button data-act="cancel">CANCELAR</button><button data-act="calendar">CALENDAR</button></div>` : '';
+    const bar = t.state === 'doing' ? `<div class="tp-bar"><i data-bar="${t.id}" style="width:${pct}%"></i></div>` : t.state === 'scheduled' ? `<div class="tp-act"><button data-act="cancel">CANCELAR</button><button data-act="calendar">CALENDARIO</button></div>` : '';
     return `<div class="tp-row ${t.state}${t.last === 'handoff' ? ' handoff' : ''}${t.live ? ' live' : ''}${t.piece ? ' piece' : ''}" data-id="${t.id}" data-dept="${t.dept}" data-agent="${t.agent}">
       ${chip}<div class="tp-body"><div class="tp-t">${t.routine || t.state === 'scheduled' ? '⏱ ' : ''}${t.team?.members?.length ? '⚑ ' : ''}${esc(t.title)}</div><div class="tp-m">${metaFor(t)}</div>${bar}</div>
       <span class="tp-ago" data-ago="${t.id}">${span(Date.now() - t.changedAt)}</span></div>`;
@@ -784,16 +804,16 @@ export function initTasks(ctx) {
     const f = getFocused();
     P_.scope.textContent = (f && f !== 'brain') ? DEPTS[f].name : 'WHOLE OFFICE';
     P_.chips.innerHTML = chipsHTML();
-    const list = scoped().filter(t => filter === 'all' || t.state === filter)
+    if (P_.tools) { const nd = scoped().filter(t => t.state === 'done').length; P_.clear.hidden = !nd; P_.clear.textContent = `Limpiar listas (${nd})`; }
+    const list = scoped().filter(t => filter === 'all' || (filter === 'error' ? t.state === 'done' && t.error : t.state === filter))
       .sort((a, b) => b.changedAt - a.changedAt).slice(0, 60);
     const before = structural ? {} : rects();
     P_.rows.innerHTML = filter === 'sched'
       ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — "cada día hábil a las 8, …" — o presiona REPETIR. Presiona <b>P</b> para el calendario…${RT_DEPTS.includes(dept) ? '' : ' Rutinas: Correos, Contabilidad y Ventas en esta versión.'}</div>`)
       : (list.map(rowHTMLp).join('') || `<div class="tp-empty">Nada aquí por ahora.</div>`);
     renderNext();
-    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtAct(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'cancel') cancelScheduled(tasks.find(t => String(t.id) === row.dataset.id)); else if (b.dataset.act === 'calendar' && calendar) calendar.open(); }));
-    P_.rows.querySelectorAll('.tp-row.waiting').forEach(n => n.addEventListener('click', () => zoomToApproval(n.dataset.dept)));
-    P_.rows.querySelectorAll('.tp-row.live.done').forEach(n => n.addEventListener('click', () => openAgent && openAgent(n.dataset.agent, 'chat')));
+    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtAct(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
+    P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.tabIndex = 0; n.setAttribute('role', 'button'); n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); }); // every row opens its detail
     if (!structural) flip(before);
   }
   function refreshBars() {
@@ -838,7 +858,8 @@ export function initTasks(ctx) {
     else if (t.state === 'doing') meta = `${av}<span>${a.name}</span><span class="tk-pct" data-pct="${t.id}">${t.agent === 'vid' ? 'RENDERIZANDO · ' : ''}${pct}%</span>`;
     else if (t.state === 'scheduled') meta = `${av}<span>${a.name}</span><span class="tk-pct">${esc(untilText(t.dueAt).toUpperCase())}</span>`;
     else meta = `${av}<span>${a.name}</span><span class="tk-pct">${span(Date.now() - t.addedAt).toUpperCase()} EN PENDIENTES</span>`;
-    return `<div class="tk ${t.state === 'scheduled' ? 'sched scheduled' : t.state}${t.revised ? ' rev' : ''}" data-id="${t.id}" data-dept="${t.dept}">
+    const drag = !t.piece && !t.isAsk && ['next', 'scheduled', 'waiting', 'done'].includes(t.state) && !(t.routine && t.state === 'next');
+    return `<div class="tk ${t.state === 'scheduled' ? 'sched scheduled' : t.state}${t.revised ? ' rev' : ''}${t.error ? ' err' : ''}" data-id="${t.id}" data-dept="${t.dept}" role="button" tabindex="0"${drag ? ' draggable="true"' : ''}>
       <div class="tk-t">${t.routine || t.state === 'scheduled' ? '⏱ ' : ''}${t.team?.members?.length ? '⚑ ' : t.piece ? '↳ ' : ''}${esc(t.title)}</div><div class="tk-m">${meta}</div>
       ${t.state === 'doing' ? `<div class="tk-bar"><i data-bar="${t.id}" style="width:${pct}%"></i></div>` : ''}</div>`;
   }
@@ -859,24 +880,69 @@ export function initTasks(ctx) {
     const tot = st => DEPT_KEYS.reduce((s, k) => s + deptTasks(k, st).length, 0);
     const doneAll = DEPT_KEYS.reduce((s, k) => s + doneCount[k], 0);
     return `<div class="bd-head">
-        <span class="b-name"><span class="bd-title">Agents Office</span>Today's board</span>
+        <span class="b-name"><span class="bd-title">Agents Office</span>Tablero de hoy · arrastra una tarjeta para cambiarla de estado o de departamento</span>
         <span class="bd-stats"><span>PROGRAMADAS<b>${routines.length + tot('scheduled')}</b></span><span>EN CURSO<b>${tot('doing')}</b></span><span>PENDIENTES<b>${tot('next')}</b></span><span>EN ESPERA<b>${tot('waiting')}</b></span><span>LISTAS<b>${doneAll}</b></span></span></div>
       <div class="bd-lanes"><div class="lh"></div>${COLS.map(([, lab]) => `<div class="lh">${lab}</div>`).join('')}
       ${DEPT_KEYS.map(k => {
         const d = DEPTS[k], n = AGENTS.filter(a => a.dept === k).length;
-        return `<div class="ld"><span><span class="dot" style="background:${d.chip}"></span>${d.short}</span><b>${n} agents</b></div>` +
+        return `<div class="ld"><span><span class="dot" style="background:${d.chip}"></span>${d.short}</span><b>${n} agentes</b></div>` +
           COLS.map(([st]) => {
-            const list = st === 'sched' ? [...deptRoutines(k).sort(byNext), ...byState(k, 'scheduled').sort((a, b) => a.dueAt - b.dueAt)] : byState(k, st), show = list.slice(0, 2);
-            return `<div class="lc">${show.map(x => x.state ? cardHTML(x) : cardHTMLr(x)).join('')}${list.length > 2 ? `<div class="more">+${list.length - 2} more</div>` : ''}</div>`;
+            const list = st === 'sched' ? [...deptRoutines(k).sort(byNext), ...byState(k, 'scheduled').sort((a, b) => a.dueAt - b.dueAt)] : byState(k, st), open = expanded.has(k + ':' + st), show = list.slice(0, open ? 40 : 2);
+            return `<div class="lc" data-dept="${k}" data-col="${st}">${show.map(x => x.state ? cardHTML(x) : cardHTMLr(x)).join('')}${list.length > 2 ? `<button type="button" class="more" data-lane="${k}:${st}">${open ? 'ver menos' : `+${list.length - 2} más`}</button>` : ''}</div>`;
           }).join('');
       }).join('')}</div>`;
   }
+  const expanded = new Set(); // lanes opened with «+N más»
+  let boardDrag = null;
   function renderBoard() {
-    if (!board.open) return;
+    if (!board.open || boardDrag) return; // nothing re-renders under a card being dragged
     el.innerHTML = companyHTML();
-    el.querySelectorAll('.tk.waiting').forEach(n => n.addEventListener('click', () => { close(); zoomToApproval(n.dataset.dept); }));
-    el.querySelectorAll('.tk.sched').forEach(n => n.addEventListener('click', () => { close(); filter = 'sched'; openFor(n.dataset.dept); render(true); }));
+    el.querySelectorAll('.tk.sched[data-rid]').forEach(n => n.addEventListener('click', () => { close(); filter = 'sched'; openFor(n.dataset.dept); render(true); }));
   }
+  // one listener for the whole board: a card opens its detail · «+N más» opens the lane · drag moves state or department
+  el.addEventListener('click', e => {
+    const more = e.target.closest('.more[data-lane]'); if (more) { const k = more.dataset.lane; expanded.has(k) ? expanded.delete(k) : expanded.add(k); renderBoard(); return; }
+    const card = e.target.closest('.tk[data-id]'); if (card) openTask(tasks.find(t => String(t.id) === card.dataset.id));
+  });
+  el.addEventListener('keydown', e => { const c = e.target.closest('.tk[data-id]'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); c.click(); } });
+  el.addEventListener('dragstart', e => {
+    const card = e.target.closest('.tk[draggable="true"]'); if (!card) return;
+    boardDrag = tasks.find(t => String(t.id) === card.dataset.id); if (!boardDrag) return;
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.dataset.id); card.classList.add('dragging'); el.classList.add('dragging');
+  });
+  el.addEventListener('dragend', () => { el.querySelectorAll('.dragging, .lc.drop, .lc.nodrop').forEach(n => n.classList.remove('dragging', 'drop', 'nodrop')); el.classList.remove('dragging'); setTimeout(() => { boardDrag = null; renderBoard(); }, 0); });
+  // which moves mean something: the transition → the action it runs
+  function boardMove(t, toCol, toDept) {
+    const from = t.state === 'scheduled' ? 'sched' : t.state;
+    if (toDept !== t.dept) return (t.state === 'next' || t.state === 'scheduled') && toCol === from ? 'reassign' : null;
+    if (from === toCol) return null;
+    if (from === 'next' && toCol === 'sched') return 'schedule';
+    if (from === 'next' && toCol === 'done') return 'done';
+    if (from === 'sched' && toCol === 'next') return 'unschedule';
+    if (from === 'waiting' && toCol === 'done') return 'approve';
+    if (from === 'done' && toCol === 'next') return 'repeat';
+    return null;
+  }
+  el.addEventListener('dragover', e => {
+    if (!boardDrag) return; const lane = e.target.closest('.lc[data-col]'); if (!lane) return;
+    const ok = !!boardMove(boardDrag, lane.dataset.col, lane.dataset.dept);
+    el.querySelectorAll('.lc.drop, .lc.nodrop').forEach(n => { if (n !== lane) n.classList.remove('drop', 'nodrop'); });
+    lane.classList.toggle('drop', ok); lane.classList.toggle('nodrop', !ok);
+    if (ok) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+  });
+  el.addEventListener('drop', async e => {
+    const lane = e.target.closest('.lc[data-col]'); const t = boardDrag; if (!lane || !t) return;
+    e.preventDefault(); boardDrag = null;
+    const move = boardMove(t, lane.dataset.col, lane.dataset.dept); if (!move) return renderBoard();
+    let r = { ok: true };
+    if (move === 'reassign') { const lead = AGENTS.find(a => a.dept === lane.dataset.dept && a.lead); if (!confirm(`¿Pasar «${t.title}» a ${DEPTS[lane.dataset.dept].name}? La toma ${lead.name}, que la da al escritorio correcto.`)) return renderBoard(); r = await act(t, 'save', { agent: lead.id }); }
+    else if (move === 'schedule') { renderBoard(); openTask(t); setTimeout(() => { const d = document.querySelector('#tdDrawer .td-date'); if (d) { d.focus(); if (d.showPicker) try { d.showPicker(); } catch {} } }, 120); return; } // a date is needed: the detail opens on it
+    else if (move === 'done') { if (!confirm(`¿Marcar «${t.title}» como hecha sin ejecutarla?`)) return renderBoard(); r = await act(t, 'done'); }
+    else if (move === 'approve') { if (!confirm(`¿Aprobar «${t.title}»? El agente lo envía.`)) return renderBoard(); r = await act(t, 'approve'); }
+    else r = await act(t, move);
+    renderBoard(); render(true);
+    if (!r || !r.ok) alert('No se pudo: ' + ((r && r.error) || 'error'));
+  });
   function open() {
     board.open = true;
     el.className = 'company';
@@ -1064,8 +1130,78 @@ export function initTasks(ctx) {
     syncPills(); dirty = true; if (railAgent) railFor(railAgent);
     return { ok: true, routine: r };
   }
-  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
-  return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled,
+  /* ---------- actions on one task (the detail drawer, the board, the calendar all come here) ---------- */
+  async function req(method, path, body) {
+    const r = await fetch(API + path, { method, headers: body ? { 'content-type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+  }
+  function applyServer(t, st) { // the server's copy of an edited task → this card
+    const moved = st.agent && st.agent !== t.agent;
+    Object.assign(t, { title: st.title, text: st.text, agent: st.agent || t.agent, dept: agentOf(st.agent || t.agent).dept, needsOk: !!st.needsOk, model: st.model, modelUsed: st.model || t.modelUsed || officeModel, plan: st.plan || t.plan });
+    if (st.state === 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; }
+    else if (st.state === 'next' && t.state === 'scheduled') { t.state = 'next'; delete t.dueAt; t.addedAt = Date.now(); t.srv = false; t.running = false; }
+    else if (st.state === 'done') { t.state = 'done'; t.doneAt = st.doneAt || Date.now(); t.result = st.result; t.manual = !!st.manual; t.progress = 1; }
+    if (moved) spawnEmote(R[t.agent], '📋');
+    touch(t, 'edited');
+  }
+  const removeLocal = t => { const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); dirty = true; if (calendar) calendar.refresh(); };
+  async function act(t, name, p = {}) {
+    const L = live && t.live && t.sid && !t.piece;
+    try {
+      switch (name) {
+        case 'save': case 'unschedule': case 'done': {
+          const body = name === 'unschedule' ? { at: null } : name === 'done' ? { state: 'done' } : p;
+          if (L) applyServer(t, await req('PATCH', `/tasks/${t.sid}`, body));
+          else { // the demo: the same result, on this page only
+            if (body.text) { t.text = body.text; t.title = (body.text.charAt(0).toUpperCase() + body.text.slice(1)).slice(0, 90); }
+            if (body.agent) { t.agent = body.agent; t.dept = agentOf(body.agent).dept; }
+            if (body.at === null) { t.state = 'next'; delete t.dueAt; } else if (body.at) { t.state = 'scheduled'; t.dueAt = body.at; }
+            if (body.model !== undefined) t.model = body.model || undefined;
+            if (body.state === 'done') { t.state = 'done'; t.doneAt = Date.now(); t.progress = 1; t.manual = true; t.result = 'Marcada como hecha por ti, sin ejecutarla.'; }
+            touch(t, 'edited');
+          }
+          break;
+        }
+        case 'stop':
+          if (L) await req('POST', `/tasks/${t.sid}/stop`);
+          else { t.state = 'done'; t.doneAt = Date.now(); t.error = true; t.result = 'Detenida por ti antes de terminar.'; touch(t, 'done'); }
+          if (L) { t.result = 'Deteniendo…'; }
+          break;
+        case 'approve': case 'reject':
+          if (L) {
+            await req('POST', `/tasks/${t.sid}/${name}`, name === 'reject' ? { feedback: p.feedback } : {});
+            toDoing(t); chatPush(t.agent, { who: 'agent', text: name === 'approve' ? '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' : 'En eso — lo rehago con tu nota. Vuelve aquí para tu visto bueno.' });
+          } else if (onResolveDemo) onResolveDemo(t.agent, name === 'approve');
+          break;
+        case 'repeat':
+          if (L) reconcile(await req('POST', `/tasks/${t.sid}/repeat`));
+          else addTask(t.agent, t.title, 'you');
+          break;
+        case 'archive':
+          if (L) { const j = await req('POST', `/tasks/${t.sid}/archive`, { note: !!p.note }); if (j.graph && brain) brain.setGraph(j.graph); }
+          removeLocal(t); return { ok: true, gone: true };
+        case 'delete':
+          if (L) { const j = await req('DELETE', `/tasks/${t.sid}${p.note ? '?note=1' : ''}`); if (j.graph && brain) brain.setGraph(j.graph); }
+          removeLocal(t); return { ok: true, gone: true };
+        default: return { ok: false, error: 'acción desconocida' };
+      }
+      dirty = true; if (calendar) calendar.refresh();
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.message || 'sin conexión con la oficina' }; }
+  }
+  const detail = initDetail({ agentOf, AGENTS, DEPTS, DEPT_KEYS, esc, isLive: () => live, act, openAgent: id => openAgent && openAgent(id, 'chat'),
+    openNote: name => !!(brain && brain.show(name)), openCalendar: ts => calendar && calendar.openAt(ts), modelName, MODEL_KEYS, officeModel: () => officeModel });
+  function openTask(t) { if (t) detail.open(t); }
+  // «Limpiar listas»: every finished task in view leaves the list (archived on the server; notes stay in the Brain)
+  async function clearDone() {
+    const done = scoped().filter(t => t.state === 'done' && !t.piece);
+    if (!done.length || !confirm(`¿Archivar ${done.length} ${done.length === 1 ? 'tarea lista' : 'tareas listas'}? Salen de la lista; sus notas siguen en el Cerebro.`)) return;
+    for (const t of done) await act(t, 'archive', {});
+    render(true);
+  }
+  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
+  return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
+           findBySid: sid => tasks.find(t => t.live && t.sid === sid),
            handleChat, addTask, revise, rowHTML, setDept, tasks, panelWidth: () => panel.offsetWidth, isLive: () => live,
            routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, pendingReject, rejectLive, officeModel: () => officeModel, chosenModel, chosenEffort };
 }
