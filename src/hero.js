@@ -12,11 +12,12 @@
 //   · the story, on a loop: in the front department some agents swallow the others' screens and
 //     grow (7 → 3); while that happens the other departments stand up, their monitors go dark and
 //     a bubble over them says "We're next"; then everything settles back and it plays again
+import * as THREE from 'three'; // imported here, not passed in: a namespace handed around as a value defeats tree-shaking (all of three.js was bundled)
 import { MCP_LOGOS, MCP_BY_DEPT } from './mcplogos.js';
 
 export const HERO = (typeof window !== 'undefined' && window.HERO) ? window.HERO : null;
 
-export function initHero({ THREE, scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy = () => false }) {
+export function initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy = () => false }) {
   const BLUE = 0x6FA0FF, GOLD = 0xF2B33D;
   const FRONT = HERO.front && LAYOUT[HERO.front] ? HERO.front : 'marketing';
   const OTHERS = DEPT_KEYS.filter(k => k !== FRONT);
@@ -40,9 +41,10 @@ export function initHero({ THREE, scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_
   const matBlue = new THREE.MeshBasicMaterial({ color: BLUE, transparent: true, opacity: 0.95, depthTest: false });
   const matGold = new THREE.MeshBasicMaterial({ color: GOLD, transparent: true, opacity: 0.95, depthTest: false });
   const pulses = [];
+  const tailMats = [matBlue, matGold].map(base => [0, 1, 2].map(i => { const m = base.clone(); m.opacity = 0.35 - i * 0.1; return m; })); // shared: one clone per pulse leaked 3 materials every ~0.4 s
   function pulse(points, speed, gold, onDone) {
     const m = new THREE.Mesh(pulseGeo, gold ? matGold : matBlue); m.renderOrder = 5;
-    const tail = [0, 1, 2].map(i => { const t = new THREE.Mesh(pulseGeo, (gold ? matGold : matBlue).clone()); t.material.opacity = 0.35 - i * 0.1; t.scale.setScalar(0.8 - i * 0.18); t.renderOrder = 5; scene.add(t); return t; });
+    const tail = [0, 1, 2].map(i => { const t = new THREE.Mesh(pulseGeo, tailMats[gold ? 1 : 0][i]); t.scale.setScalar(0.8 - i * 0.18); t.renderOrder = 5; scene.add(t); return t; });
     scene.add(m);
     const segs = []; let total = 0;
     for (let i = 1; i < points.length; i++) { const l = points[i].distanceTo(points[i - 1]); segs.push(l); total += l; }
@@ -54,7 +56,7 @@ export function initHero({ THREE, scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_
       let s = p.s, k = 0; while (k < p.segs.length && s > p.segs[k]) { s -= p.segs[k]; k++; }
       if (k >= p.segs.length) { scene.remove(p.m); p.tail.forEach(t => scene.remove(t)); pulses.splice(i, 1); if (p.onDone) p.onDone(); continue; }
       const a = p.points[k], b = p.points[k + 1]; p.m.position.lerpVectors(a, b, s / p.segs[k]);
-      p.hist.unshift(p.m.position.clone()); if (p.hist.length > 9) p.hist.pop();
+      const v = p.hist.length > 9 ? p.hist.pop() : new THREE.Vector3(); p.hist.unshift(v.copy(p.m.position)); // recycled: no new Vector3 per pulse per frame
       p.tail.forEach((t, j) => { const h = p.hist[Math.min(p.hist.length - 1, (j + 1) * 3)]; if (h) t.position.copy(h); });
     }
   }

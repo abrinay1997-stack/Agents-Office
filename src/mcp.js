@@ -12,6 +12,15 @@
 import * as THREE from 'three';
 import { MCP_LOGOS, MCP_BY_DEPT } from './mcplogos.js';
 import { applyAgentTools, profileShared } from './profile.js';
+// a logo's centre on screen, measured at most once a second (and on resize): measuring each logo every frame,
+// between SVG writes, forced ~10 layouts a frame
+const cxCache = new Map(); let cxAt = 0;
+function centreX(el) {
+  const now = performance.now(); if (now - cxAt > 1000) { cxCache.clear(); cxAt = now; }
+  let v = cxCache.get(el); if (v === undefined) { const r = el.getBoundingClientRect(); v = (r.left + r.right) / 2; cxCache.set(el, v); }
+  return v;
+}
+addEventListener('resize', () => cxCache.clear());
 
 // agent → tools they'd plausibly be driving (falls back to any connector in the dept's dock)
 export const AGENT_MCP = {
@@ -386,8 +395,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       // junction depths are staggered per dept so neighbouring fans don't overlap.
       // gmail is EXCLUDED from every fan — it feeds the junctions via its own loom below
       const xs = BY_DEPT[dept].filter(k => !SHARED[k]).map(k => {
-        const r = topImgs[k].getBoundingClientRect();
-        return (r.left + r.right) / 2;
+        return centreX(topImgs[k]);
       });
       if (!xs.length) { // a dept fed only by shared connectors (EMAILS) has no trunk of its own
         w.path.setAttribute('d', ''); w.branch.setAttribute('d', '');
@@ -421,8 +429,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     // trunk-style conduit per using dept, ending at that connector's own socket on the pod
     for (const [key, sh] of Object.entries(shared)) {
       if (!topImgs[key]) continue;
-      const gr = topImgs[key].getBoundingClientRect();
-      const gx = (gr.left + gr.right) / 2, gsy = 50, gjy = sh.jy;
+      const gx = centreX(topImgs[key]), gsy = 50, gjy = sh.jy;
       sh.drop.setAttribute('d', `M ${gx} ${gsy} L ${gx} ${gjy}`);
       sh.offset -= dt * (f ? 13 : 6);
       sh.drop.setAttribute('stroke-dashoffset', sh.offset);
@@ -448,8 +455,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     // model wiring: Claude + ChatGPT logos → the Brain's back edge; they pulse on their own
     for (const [k, m] of Object.entries(mwires)) {
       if (!modelImgs[k]) continue;
-      const r = modelImgs[k].getBoundingClientRect();
-      const mx = (r.left + r.right) / 2, msy = 50;
+      const mx = centreX(modelImgs[k]), msy = 50;
       v3.set(m.port[0], m.port[1], m.port[2]).project(cam);
       const ex = (v3.x * 0.5 + 0.5) * innerWidth, ey = (-v3.y * 0.5 + 0.5) * innerHeight;
       m.path.setAttribute('d', `M ${mx} ${msy} C ${mx} ${msy + (ey - msy) * 0.45}, ${ex + 40} ${ey - (ey - msy) * 0.35}, ${ex} ${ey}`);

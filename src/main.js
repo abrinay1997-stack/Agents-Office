@@ -23,9 +23,10 @@ const SERVED = location.protocol.startsWith('http'); // opened as a file = the d
 /* ---------- renderer / scene / camera ---------- */
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth * devicePixelRatio > 2600 ? 1.5 : 2)); // 4K: antialias on 2× pixels costs more than it shows
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
+renderer.shadowMap.autoUpdate = false; // the shadow pass (2048 VSM + blur over ~700 meshes) is redrawn every 3rd frame, not every frame (see loop)
 
 const scene = new THREE.Scene();
 
@@ -77,7 +78,9 @@ function bezier(t) {
   return ((ay * u + by) * u + cy) * u;
 }
 
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 function flyTo(targetPos, zoom, dur = 800, opts = {}) {
+  if (REDUCED.matches) { dur = 1; opts = { ...opts, arc: 0 }; } // «less motion»: cut, don't fly
   tween = {
     t0: performance.now(), dur,
     fromT: view.target.clone(), toT: new THREE.Vector3(...targetPos),
@@ -317,9 +320,12 @@ function restoreSceneDim() {
 function tickDim(dt) {
   focusDim += (focusDimTarget - focusDim) * (1 - Math.exp(-dt * 5));
   if (focusDimTarget === 0 && focusDim < 0.02 && dimSwapped.length) restoreSceneDim();
+  if (Math.abs(focusDim - dimApplied) < 1e-4 && dimCache.size === dimCount) return; // settled: nothing to recolour this frame
+  dimApplied = focusDim; dimCount = dimCache.size;
   for (const m of dimCache.values())
     m.color.copy(m.userData.baseColor).lerp(m.userData.dimColor, focusDim);
 }
+let dimApplied = -1, dimCount = -1;
 
 /* ---------- department billboards — v1's exact agreed metric rows + amber approval row ---------- */
 const kv = id => KPIS.find(k => k.id === id).val;
@@ -542,7 +548,7 @@ function mix(hex, base, k) { const a = new THREE.Color(hex), b = new THREE.Color
 function setDark(on) {
   darkOn = !!on;
   document.body.classList.toggle('dark', darkOn);
-  restoreSceneDim(); dimCache.clear(); // the dim twins cache base colours — rebuild them for the new palette
+  restoreSceneDim(); for (const m of dimCache.values()) if (m && m.dispose) m.dispose(); dimCache.clear(); // the dim twins cache base colours — rebuild them for the new palette
   scene.traverse(o => {
     if (!o.isMesh || !o.userData.part) return;
     const m = o.material; if (!m.userData.base) m.userData.base = m.color.clone();
@@ -1317,8 +1323,16 @@ function toScreen(p) {
 }
 function smooth(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 
+// sizes are read once and then only when an element actually resizes (ResizeObserver): reading offsetWidth right after
+// writing a transform forced a layout per billboard per frame. Styles are written only when their value changes.
+const sizeOf = new WeakMap();
+const sizeRO = new ResizeObserver(es => { for (const e of es) sizeOf.set(e.target, [e.target.offsetWidth, e.target.offsetHeight]); });
+function box(el) { let s = sizeOf.get(el); if (!s) { s = [el.offsetWidth, el.offsetHeight]; sizeOf.set(el, s); sizeRO.observe(el); } return s; }
+function setS(el, k, v) { const c = el._st || (el._st = {}); if (c[k] !== v) { c[k] = v; el.style[k] = v; } }
+const px = n => Math.round(n * 2) / 2;
 function tickLOD() {
   const z = view.zoom;
+  const panelW = tasks ? tasks.panelWidth() : 400; // one read per frame, before any write
   const detail = smooth(1.75, 2.5, z);
   const pillA = smooth(1.45, 1.85, z); // pills stay on at near — they name the agents
   // billboards persist at every zoom (v1 rule) — slightly larger when far, compact when near
@@ -1327,32 +1341,32 @@ function tickLOD() {
     if (focused === k && k !== 'brain') continue; // this billboard is docked in the rail
     let [sx, sy] = toScreen(d.badgeAnchor);
     // keep billboards fully on screen (camera-readability rule)
-    const bh = d.badge.offsetHeight * badgeScale, bw = d.badge.offsetWidth * badgeScale;
+    const [bw0, bh0] = box(d.badge); const bh = bh0 * badgeScale, bw = bw0 * badgeScale;
     let xf;
     if (d.sideBadge) { // anchored by an edge, vertically centred (emails/sales/fin/delivery)
-      const rightEdge = innerWidth - ((tasks ? tasks.panelWidth() : 400) + 26); // V3.3: never under the panel
+      const rightEdge = innerWidth - (panelW + 26); // V3.3: never under the panel
       sy = clamp(sy, 64 + bh / 2, innerHeight - bh / 2 - 8);
       if (d.sideLeft) { sx = clamp(sx, bw + 8, rightEdge); xf = 'translate(-100%,-50%)'; }
       else { sx = clamp(sx, 8, rightEdge - bw); xf = 'translate(0,-50%)'; }
     } else {
-      const rightEdge = innerWidth - ((tasks ? tasks.panelWidth() : 400) + 26);
+      const rightEdge = innerWidth - (panelW + 26);
       sy = clamp(sy, bh + 64, innerHeight - 12);
       sx = clamp(sx, bw / 2 + 8, rightEdge - bw / 2);
       xf = 'translate(-50%,-100%)';
     }
-    d.badge.style.transform = `translate(${sx}px,${sy}px) ${xf} scale(${badgeScale})`;
-    d.badge.style.opacity = 1 - 0.75 * focusDim; // unfocused boards recede with the scene
-    d.badge.style.pointerEvents = 'auto';
+    setS(d.badge, 'transform', `translate(${px(sx)}px,${px(sy)}px) ${xf} scale(${badgeScale.toFixed(3)})`);
+    setS(d.badge, 'opacity', (1 - 0.75 * focusDim).toFixed(3)); // unfocused boards recede with the scene
+    setS(d.badge, 'pointerEvents', 'auto');
   }
   // name pills stay on at EVERY zoom (AJ's call) — smaller when far, full-size when near
   const pillScale = 0.62 + 0.38 * smooth(1.2, 2.4, z);
   for (const r of Object.values(R)) {
     const p = r.person.position;
-    const [sx, sy] = toScreen(v3.set(p.x, p.y + 5.9 * (r.a.lead ? 1.12 : 1), p.z).clone());
-    r.pill.style.display = 'block';
-    r.pill.style.transform = `translate(${sx}px,${sy}px) translate(-50%,-100%) scale(${pillScale})`;
+    const [sx, sy] = toScreen(v3.set(p.x, p.y + 5.9 * (r.a.lead ? 1.12 : 1), p.z));
+    setS(r.pill, 'display', 'block');
+    setS(r.pill, 'transform', `translate(${px(sx)}px,${px(sy)}px) translate(-50%,-100%) scale(${pillScale.toFixed(3)})`);
     const dimmed = focused && focused !== 'brain' && r.a.dept !== focused;
-    r.pill.style.opacity = dimmed ? 1 - 0.85 * focusDim : 1;
+    setS(r.pill, 'opacity', dimmed ? (1 - 0.85 * focusDim).toFixed(3) : '1');
   }
 }
 
@@ -1411,7 +1425,7 @@ tasks = initTasks({
 });
 view.target.set(...overviewPos());
 addEventListener('resize', () => { if (!focused && !tween && !HERO) view.target.set(...overviewPos()); });
-const hero = HERO ? initHero({ THREE, scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;
+const hero = HERO ? initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;
 if (HERO && HERO.target) { view.target.set(...HERO.target); view.zoom = HERO.zoom || view.zoom; }
 
 /* ---------- boot ---------- */
@@ -1442,8 +1456,16 @@ window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval,
   setCam, setDark, brain, chatPush, connectorReveal: () => mcp.startReveal(performance.now()),
   toggleBoard: () => tasks.toggle(), addTask: (agentId, title) => tasks.addTask(agentId, title), tasks, routines: () => tasks.routines };
 
-let last = performance.now();
+let last = performance.now(), lastFrame = 0, frameN = 0, lastInput = performance.now();
+for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
+const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()); // a full-screen view hides the office
+// Frame budget: full rate while the camera flies or the owner is moving the pointer; 30 fps when the office just lives;
+// 5 fps of simulation and NO drawing while the Brain or the calendar covers it. The tab hidden → the browser stops rAF.
 function loop(now) {
+  requestAnimationFrame(loop);
+  const gap = covered() ? 200 : (tween || now - lastInput < 1500) ? 0 : 1000 / 30 - 3;
+  if (now - lastFrame < gap) return;
+  lastFrame = now;
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   tickTween(now);
   applyCamera();
@@ -1454,7 +1476,8 @@ function loop(now) {
   tasks.tick(now);
   mcp.tick(now, dt, view, camera, focused, focusDim);
   syncOverviewBtn();
+  if (covered()) return;
+  if (++frameN % 3 === 0 || tween) renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
-  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

@@ -436,8 +436,8 @@ export function initTasks(ctx) {
         say(st.team ? `Agregado — <b>${agentOf(t.agent).name}</b> lo tiene y lo está repartiendo en el equipo` : `Agregado — <b>${agentOf(t.agent).name}</b> lo tiene${st.why ? ' · ' + esc(st.why) : ''}`);
         setTimeout(() => { if (!P_.input.value) P_.hint.classList.remove('on'); }, 7000);
       } catch (e) {
-        say(`Claude no pudo tomarlo (${esc(e.message)}). Quedó en el tablero.`, 'err');
-        const { agent: a } = route(k, text); addTask(a.id, text, 'you');
+        say(`No se agregó: ${esc(e.message)}. Tu texto sigue en la caja — inténtalo de nuevo.`, 'err'); // no pretend card: a live office shows only real work
+        P_.input.value = text;
       }
       P_.input.disabled = false; P_.add.disabled = false; P_.input.blur(); // hand the keys back to the office
       return;
@@ -561,8 +561,18 @@ export function initTasks(ctx) {
       if (Array.isArray(rl.routines)) setRoutines(rl.routines);
       if (Array.isArray(tl)) for (const st of tl) reconcile(st);
       if (calendar) calendar.refresh();
-    } catch (e) { console.warn('office poll:', e.message); }
+      if (pollFails >= 3) setOffline(false);
+      pollFails = 0;
+    } catch (e) { console.warn('office poll:', e.message); if (++pollFails === 3) setOffline(true); }
     polling = false;
+  }
+  let pollFails = 0;
+  function setOffline(off) { // the server went away (closed window, crash): say so instead of a green LIVE that lies
+    const mode = panel.querySelector('.tp-mode'); if (!mode) return;
+    mode.classList.toggle('live', !off); mode.classList.toggle('offline', off);
+    mode.textContent = off ? 'SIN CONEXIÓN' : mode.dataset.on || 'LIVE · CLAUDE';
+    if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
+    else say('Conexión recuperada.');
   }
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
     if (!agentOf(st.agent)) return;
@@ -674,7 +684,7 @@ export function initTasks(ctx) {
       live = true; setOfficeModel(h.model); setOfficeEffort(h.effort);
       if (h.teams) { teamsCfg = { enabled: h.teams.enabled !== false, max: h.teams.max || 4 }; P_.team.hidden = !teamsCfg.enabled; }
       const mode = panel.querySelector('.tp-mode');
-      if (mode) { mode.hidden = false; mode.textContent = 'LIVE · ' + (h.backend === 'anthropic-sdk' ? 'CLAUDE API' : 'CLAUDE'); mode.classList.add('live'); mode.title = `${h.name} · ${h.backend} · ${modelName(h.model)} by default · brain: ${h.brain}`; }
+      if (mode) { mode.hidden = false; mode.textContent = mode.dataset.on = 'LIVE · ' + (h.backend === 'anthropic-sdk' ? 'CLAUDE API' : 'CLAUDE'); mode.classList.add('live'); mode.title = `${h.name} · ${h.backend} · ${modelName(h.model)} by default · brain: ${h.brain}`; }
       if (brain) { try { brain.setGraph(await (await fetch(API + '/brain')).json()); } catch {} }
       const list = await (await fetch(API + '/tasks')).json();
       for (const st of list) {
@@ -688,7 +698,7 @@ export function initTasks(ctx) {
       }
       dirty = true;
       if (onLive) onLive(h);
-      await poll(); setInterval(poll, 6000); // V3.5: routines fire on the server's clock — the page keeps up
+      await poll(); setInterval(() => { if (!document.hidden) poll(); }, 6000); addEventListener('visibilitychange', () => { if (!document.hidden) poll(); }); // a hidden tab stops asking; back in view it catches up at once // V3.5: routines fire on the server's clock — the page keeps up
     } catch (e) { console.warn('office server not reachable — running offline:', e.message); }
   }
   connect();
