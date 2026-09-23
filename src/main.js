@@ -513,6 +513,7 @@ addEventListener('pointerup', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; // typing in the bar, the big editor or a menu never fires a hotkey
+  if (e.target.isContentEditable || ((e.ctrlKey || e.metaKey || e.altKey) && e.key !== 'Escape')) return; // Ctrl+C, Alt+… belong to the browser and to screen readers
   if (e.key === 'Escape') { if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); } else if (brain.isOpen()) brain.close(); else if (tasks && tasks.isOpen()) tasks.close(); else zoomOut(); }
   else if (e.key === 'p' || e.key === 'P') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
   else if (tasks && tasks.calendar && tasks.calendar.isOpen()) return; // the calendar has its own keys (← → W M T)
@@ -534,7 +535,7 @@ addEventListener('keydown', (e) => {
   }
   else if (e.key === 'v' || e.key === 'V') setCam(!document.body.classList.contains('cam'));
   else if (e.key === 'd' || e.key === 'D') setDark(!darkOn);
-  else if (e.key === 'w' || e.key === 'W') requestApproval('apay'); // demo cue: Accounts Payable asks for approval
+  else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
 
 // camera mode: mid-tone backdrop for filming the screen (#cam=1 / V toggles)

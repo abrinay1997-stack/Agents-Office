@@ -133,14 +133,14 @@ await step('connectors: claude mcp list parses', async () => {
 await step('routines: plain words become a schedule', async () => {
   const w = await import('./src/when.js');
   const cases = [
-    ['every weekday at 8am, triage the inbox and tell me what needs me', 'every weekday · 08:00', 'triage the inbox and tell me what needs me'],
-    ['Every Monday 9am, list the overdue invoices and draft the reminders', 'Mondays · 09:00', 'list the overdue invoices and draft the reminders'],
-    ["match today's bank lines to invoices, daily at 5:30pm", 'every day · 17:30', "match today's bank lines to invoices"],
-    ['every hour between 9am and 5pm on weekdays, qualify new leads', 'every hour 09:00–17:00 · weekdays', 'qualify new leads'],
-    ['chase quiet deals every tuesday and thursday at 10', 'Tue, Thu · 10:00', 'chase quiet deals'],
-    ['on fridays at 4pm this week\'s cash position', 'Fridays · 16:00', "this week's cash position"],
-    ['every 2 minutes say hello', 'every 2 min', 'say hello'],
-    ['every weekend at noon, check the queue', 'weekends · 12:00', 'check the queue'],
+    ['every weekday at 8am, triage the inbox and tell me what needs me', 'cada día hábil a las 08:00', 'triage the inbox and tell me what needs me'],
+    ['Every Monday 9am, list the overdue invoices and draft the reminders', 'lunes a las 09:00', 'list the overdue invoices and draft the reminders'],
+    ["match today's bank lines to invoices, daily at 5:30pm", 'todos los días a las 17:30', "match today's bank lines to invoices"],
+    ['every hour between 9am and 5pm on weekdays, qualify new leads', 'cada hora de 09:00 a 17:00 · días hábiles', 'qualify new leads'],
+    ['chase quiet deals every tuesday and thursday at 10', 'mar, jue a las 10:00', 'chase quiet deals'],
+    ['on fridays at 4pm this week\'s cash position', 'viernes a las 16:00', "this week's cash position"],
+    ['every 2 minutes say hello', 'cada 2 min', 'say hello'],
+    ['every weekend at noon, check the queue', 'fines de semana a las 12:00', 'check the queue'],
   ];
   for (const [text, desc, task] of cases) {
     const r = w.parseWhen(text); if (!r) throw new Error('no schedule found in: ' + text);
@@ -154,7 +154,7 @@ await step('routines: plain words become a schedule', async () => {
   const d = w.parseWhen('weekly at 3pm list renewals'); if (!d || !d.needsDay) throw new Error('weekly with no day not asked back');
   const now = new Date('2026-09-09T17:05:00').getTime(); // a Wednesday
   const nx = w.nextRun({ kind: 'weekly', days: [1], at: '09:00' }, now); if (new Date(nx).getDay() !== 1 || new Date(nx).getHours() !== 9) throw new Error('Monday 09:00 not next');
-  if (w.untilText(now + 120000, now) !== 'in 2 min' || w.untilText(w.fromPicker('fri', '16:00') && nx, now) !== 'Mon 09:00') throw new Error('countdown text');
+  if (w.untilText(now + 120000, now) !== 'en 2 min' || w.untilText(w.fromPicker('fri', '16:00') && nx, now) !== 'lun 09:00') throw new Error('countdown text');
   return `${cases.length} phrasings · asks back for a missing time or day · "morning" → 08:00 flagged`;
 });
 await step('routines: outside Emails, Accounting and Sales is refused, bad ones named', async () => {
@@ -291,7 +291,7 @@ await step('calendar: a routine can start on a date, and projects forward day by
   const later = w.nextRun({ kind: 'weekdays', at: '08:00', start: '2026-09-28' }, now); if (new Date(later).toDateString() !== 'Mon Sep 28 2026') throw new Error('start ignored: ' + new Date(later));
   const earlier = w.nextRun({ kind: 'weekdays', at: '08:00', start: '2026-09-01' }, now); if (new Date(earlier).toDateString() !== 'Thu Sep 17 2026') throw new Error('a past start changed the next run: ' + new Date(earlier));
   const occ = w.occurrences({ kind: 'weekly', days: [1], at: '09:00', start: '2026-09-28' }, now, now + 30 * 864e5).map(t => new Date(t).getDate()); if (occ.join() !== '28,5,12') throw new Error('occurrences: ' + occ);
-  if (!/from 5 Jan/.test(w.describe({ kind: 'daily', at: '08:00', start: '2099-01-05' })) || /from/.test(w.describe({ kind: 'daily', at: '08:00', start: '2020-01-05' }))) throw new Error('describe start');
+  if (!/desde el 5 Ene/.test(w.describe({ kind: 'daily', at: '08:00', start: '2099-01-05' })) || /desde/.test(w.describe({ kind: 'daily', at: '08:00', start: '2020-01-05' }))) throw new Error('describe start');
   if (w.valid({ kind: 'daily', at: '08:00', start: 'next week' })) throw new Error('a bad start date passed');
   const pk = w.fromPicker('mon', '09:30', '2026-10-05'); if (pk.start !== '2026-10-05' || pk.days[0] !== 1) throw new Error('picker start: ' + JSON.stringify(pk));
   const { validate } = await import('./routines.mjs'); const { loadRoster } = await import('./roster.mjs');
@@ -318,7 +318,7 @@ else {
     await step('smoke: 35 agents at their desks', async () => { const n = await page.evaluate(() => Object.keys(window.CC.R).length); if (n !== 35) throw new Error('agents: ' + n); return n + ' agents'; });
     await step('smoke: six department cards + the Brain tag', async () => {
       const t = await page.evaluate(() => [...document.querySelectorAll('.badge .b-name')].map(e => e.textContent.trim()));
-      for (const k of ['EMAILS', 'SALES', 'MARKETING', 'OPERATIONS', 'FINANCE', 'DELIVERY', 'THE BRAIN']) if (!t.some(x => x.startsWith(k))) throw new Error('missing card ' + k);
+      for (const k of ['CORREOS', 'VENTAS', 'MARKETING', 'OPERACIONES', 'FINANZAS', 'ENTREGAS', 'EL CEREBRO']) if (!t.some(x => x.startsWith(k))) throw new Error('missing card ' + k);
     });
     await step('smoke: task panel has rows and counts', async () => {
       const n = await page.evaluate(() => document.querySelectorAll('.tp-row').length); if (n < 10) throw new Error('rows: ' + n);
@@ -328,7 +328,8 @@ else {
     await step('smoke: command bar adds a task in demo mode', async () => {
       await page.click('.tp-dd'); await page.click('.tp-menu button[data-k="marketing"]');
       await page.fill('.tp-in', 'cut a 15 second teaser from the demo reel'); await page.keyboard.press('Enter'); await page.waitForTimeout(600);
-      const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Added/.test(hint)) throw new Error('hint: ' + hint);
+      const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Agregado/.test(hint)) throw new Error('hint: ' + hint);
+      await page.waitForFunction(() => [...document.querySelectorAll('.tp-row .tp-t')].some(e => /teaser/i.test(e.textContent)), null, { timeout: 4000 }).catch(() => {}); // the panel draws on a later frame; headless frames are slow
       const row = await page.evaluate(() => [...document.querySelectorAll('.tp-row .tp-t')].some(e => /teaser/i.test(e.textContent))); if (!row) throw new Error('row not in the feed');
       return hint.trim().slice(0, 60);
     });
@@ -337,14 +338,14 @@ else {
       await page.click('.tp-dd'); await page.click('.tp-menu button[data-k="sales"]');
       await page.fill('.tp-in', 'as a team, plan the spring outreach push');
       await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true })));
-      const pre = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Team · SALES LEAD/.test(pre)) throw new Error('hint before Add: ' + pre);
+      const pre = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Equipo · LÍDER DE VENTAS/.test(pre)) throw new Error('hint before Add: ' + pre);
       await page.keyboard.press('Enter'); await page.waitForTimeout(700);
-      const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Added — SALES LEAD has it with/.test(hint)) throw new Error('hint: ' + hint);
+      const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Agregado — LÍDER DE VENTAS lo tiene con/.test(hint)) throw new Error('hint: ' + hint);
       const n = await page.evaluate(() => ({ lead: [...document.querySelectorAll('.tp-row .tp-t')].filter(e => /⚑ As a team, plan the spring/.test(e.textContent)).length, pieces: document.querySelectorAll('.tp-row.piece').length, chip: [...document.querySelectorAll('.tp-team-chip')].map(e => e.textContent) }));
       if (n.lead !== 1 || n.pieces < 2 || !n.chip.some(c => /^TEAM [34]$/.test(c)) || !n.chip.includes('PIECE')) throw new Error(JSON.stringify(n));
       await page.fill('.tp-in', 'draft the renewal email'); await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true })));
-      const plain = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (/Team ·/.test(plain)) throw new Error('a plain sentence still reads as a team: ' + plain);
-      await page.click('.tp-team'); const on = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Team · SALES LEAD/.test(on)) throw new Error('the TEAM toggle did not take: ' + on);
+      const plain = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (/Equipo ·/.test(plain)) throw new Error('a plain sentence still reads as a team: ' + plain);
+      await page.click('.tp-team'); const on = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Equipo · LÍDER DE VENTAS/.test(on)) throw new Error('the TEAM toggle did not take: ' + on);
       await page.click('.tp-team'); await page.fill('.tp-in', '');
       return `${hint.trim().slice(0, 70)} · ${n.pieces} piece cards · chips ${[...new Set(n.chip)].join(' ')}`;
     });
@@ -352,17 +353,17 @@ else {
       await page.click('.tp-dd'); await page.click('.tp-menu button[data-k="emails"]');
       await page.fill('.tp-in', 'every weekday at 8am, triage the inbox and tell me what needs me');
       await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true })));
-      await page.waitForFunction(() => /Routine/.test(document.querySelector('.tp-hint').textContent), null, { timeout: 5000 }).catch(() => {});
-      const pre = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Routine/.test(pre) || !/every weekday · 08:00/.test(pre)) throw new Error('hint before Add: ' + pre);
+      await page.waitForFunction(() => /Rutina/.test(document.querySelector('.tp-hint').textContent), null, { timeout: 5000 }).catch(() => {});
+      const pre = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Rutina/.test(pre) || !/cada día hábil a las 08:00/.test(pre)) throw new Error('hint before Add: ' + pre);
       await page.keyboard.press('Enter');
-      await page.waitForFunction(() => /Routine set|couldn/.test(document.querySelector('.tp-hint').textContent), null, { timeout: 5000 }).catch(() => {});
-      const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Routine set/.test(hint)) throw new Error('hint: ' + hint);
+      await page.waitForFunction(() => /Rutina programada|No se pudo/.test(document.querySelector('.tp-hint').textContent), null, { timeout: 5000 }).catch(() => {});
+      const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Rutina programada/.test(hint)) throw new Error('hint: ' + hint);
       await page.waitForTimeout(400);
       const n = await page.evaluate(() => window.CC.routines().length); if (n !== 1) throw new Error('routines: ' + n);
       const row = await page.evaluate(() => [...document.querySelectorAll('.tp-row.sched .tp-t')].some(e => /triage the inbox/i.test(e.textContent))); if (!row) throw new Error('no SCHEDULED row');
-      const strip = await page.evaluate(() => { const e = document.querySelector('.tp-next'); return e.hidden ? '' : e.textContent; }); if (!/NEXT/.test(strip) || !/triage/i.test(strip)) throw new Error('next-up strip: ' + strip);
+      const strip = await page.evaluate(() => { const e = document.querySelector('.tp-next'); return e.hidden ? '' : e.textContent; }); if (!/PRÓXIMA/.test(strip) || !/triage/i.test(strip)) throw new Error('next-up strip: ' + strip);
       await page.keyboard.press('b'); await page.waitForTimeout(600);
-      const col = await page.evaluate(() => [...document.querySelectorAll('#board .lh')].map(e => e.textContent)); if (col[1] !== 'SCHEDULED') throw new Error('board columns: ' + col.join(','));
+      const col = await page.evaluate(() => [...document.querySelectorAll('#board .lh')].map(e => e.textContent)); if (col[1] !== 'PROGRAMADAS') throw new Error('board columns: ' + col.join(','));
       const card = await page.evaluate(() => document.querySelectorAll('#board .tk.sched').length); if (!card) throw new Error('no SCHEDULED card on the board');
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
       await page.evaluate(() => window.CC.tasks.rtAct(window.CC.routines()[0].id, 'run')); await page.waitForTimeout(500);
@@ -379,7 +380,7 @@ else {
       await page.click('.tp-big-btn'); await page.waitForTimeout(300);
       const bigOn = await page.evaluate(() => document.getElementById('tpBig').classList.contains('on') && document.querySelector('.tb-in').value === document.querySelector('.tp-in').value && document.querySelector('.tb-dept').textContent === 'MARKETING'); if (!bigOn) throw new Error('big editor did not open with the text');
       await page.type('.tb-in', ' and more'); await page.waitForTimeout(200);
-      const back = await page.evaluate(() => document.querySelector('.tp-in').value.endsWith(' and more') && /MARKETING LEAD|Goes to|Probably/.test(document.querySelector('.tb-hint').textContent)); if (!back) throw new Error('big editor did not mirror back');
+      const back = await page.evaluate(() => document.querySelector('.tp-in').value.endsWith(' and more') && /LÍDER DE MARKETING|Va a|va a|Probablemente/.test(document.querySelector('.tb-hint').textContent)); if (!back) throw new Error('big editor did not mirror back');
       await page.keyboard.press('Escape'); await page.waitForTimeout(200);
       const bigOff = await page.evaluate(() => !document.getElementById('tpBig').classList.contains('on')); if (!bigOff) throw new Error('Esc did not close the big editor');
       await page.fill('.tp-in', ''); await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true }))); await page.evaluate(() => document.querySelector('.tp-in').blur()); await page.click('.tp-chip[data-f="all"]'); // hand the keys back, feed back to All
@@ -406,7 +407,7 @@ else {
       // a routine from that date: REPEAT on, emails (routines are Emails/Accounting/Sales)
       await page.hover(`.cv-day[data-day="${target}"]`); await page.click(`.cv-day[data-day="${target}"] .cv-add`); await page.waitForTimeout(300);
       await page.selectOption('.cv-dept', 'emails'); await page.fill('.cv-text', 'Send the weekly client update'); await page.click('.cv-rep'); await page.waitForTimeout(200);
-      const hint = await page.$eval('.cv-hint', e => e.textContent); if (!/Routine ·/.test(hint) || !/first run/.test(hint)) throw new Error('routine hint: ' + hint);
+      const hint = await page.$eval('.cv-hint', e => e.textContent); if (!/Rutina ·/.test(hint) || !/primera ejecución/.test(hint)) throw new Error('routine hint: ' + hint);
       await page.click('.cv-go'); await page.waitForTimeout(500);
       const r = await page.evaluate(() => window.CC.tasks.routines.find(x => /weekly client update/i.test(x.title))); if (!r || r.when.start !== target) throw new Error('routine start: ' + JSON.stringify(r && r.when));
       const before = await page.$$eval('.cv-ev.routine', (els, t) => els.filter(x => x.title.startsWith('Send the weekly client update') && x.closest('.cv-day').dataset.day < t).length, target); if (before) throw new Error('the routine shows before its start date');
@@ -440,6 +441,7 @@ else {
       return n + ' notes';
     });
     await step('smoke: approval flow reaches the panel', async () => {
+      await page.evaluate(() => { const all = document.querySelector('.tp-chip[data-f="all"]'); if (all) all.click(); }); // an earlier step leaves the panel on SCHEDULED
       await page.evaluate(() => window.CC.requestApproval('ada'));
       await page.waitForFunction(() => document.querySelectorAll('.tp-row.waiting').length > 0, null, { timeout: 4000 }).catch(() => {}); // the panel renders on the next frame; headless WebGL frames can be slow
       const w = await page.evaluate(() => document.querySelectorAll('.tp-row.waiting').length); if (!w) throw new Error('no waiting row (ada: ' + (await page.evaluate(() => window.CC.R.ada.state)) + ')');
@@ -531,7 +533,7 @@ else {
         const r = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'emails', text: 'every 2 minutes, list what is in the inbox that needs me today' }) });
         const j = await r.json(); if (!r.ok) throw new Error(j.error); const id = j.routine.id;
         try {
-          if (!j.routine.nextAt || j.routine.desc !== 'every 2 min') throw new Error('routine wrong: ' + JSON.stringify(j.routine));
+          if (!j.routine.nextAt || j.routine.desc !== 'cada 2 min') throw new Error('routine wrong: ' + JSON.stringify(j.routine));
           let task = null;
           for (let i = 0; i < 100 && !(task && task.state !== 'next' && task.state !== 'doing'); i++) { await new Promise(r => setTimeout(r, 3000)); task = (await (await fetch(base + '/api/tasks')).json()).find(t => t.routine === id); }
           if (!task) throw new Error('the routine never fired'); if (task.state === 'next' || task.state === 'doing') throw new Error('the routine fired but did not finish in time');
@@ -598,8 +600,8 @@ else {
           const known = await page.evaluate(() => window.CC.tasks.tasks.filter(t => t.live).map(t => t.id));
           await page.click('.tp-dd'); await page.click('.tp-menu button[data-k="marketing"]');
           await page.fill('.tp-in', 'write three hook lines for a reel about why most businesses ignore their inbox'); await page.keyboard.press('Enter');
-          await page.waitForFunction(() => /Added|couldn/i.test(document.querySelector('.tp-hint').textContent), { timeout: 150000 });
-          const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Added/.test(hint)) throw new Error(hint);
+          await page.waitForFunction(() => /Agregado|No se agregó/i.test(document.querySelector('.tp-hint').textContent), { timeout: 150000 });
+          const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Agregado/.test(hint)) throw new Error(hint);
           const mine = await page.evaluate(k => window.CC.tasks.tasks.find(t => t.live && !k.includes(t.id))?.id, known); if (!mine) throw new Error('the new task is not in the panel');
           await page.waitForFunction(id => { const t = window.CC.tasks.tasks.find(x => x.id === id); return t && t.state === 'done'; }, mine, { timeout: 240000 });
           const done = await page.evaluate(id => { const t = window.CC.tasks.tasks.find(x => x.id === id); return { error: t.error, note: t.note, read: t.read }; }, mine);

@@ -371,7 +371,7 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     openNow = true; opener = document.activeElement; ov.classList.add('on'); document.body.classList.add('brainOpen');
     meta.textContent = metaText();
     chips(); if (!sel) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); }
-    dirty(); setTimeout(() => search.focus({ preventScroll: true }), 50);
+    dirty(); setTimeout(() => document.getElementById('bvClose').focus({ preventScroll: true }), 50); // focus inside the dialog, but not the search box: G/Esc must still close it
   }
   function close() { if (!openNow) return; openNow = false; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   function toggle() { openNow ? close() : open(); }

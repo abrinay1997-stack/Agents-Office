@@ -298,7 +298,7 @@ export function initTasks(ctx) {
   // V3.7: the box grows with the text (one line at rest, six at most) and the big editor mirrors it
   const big = document.getElementById('tpBig');
   const B_ = { in: big.querySelector('.tb-in'), dept: big.querySelector('.tb-dept'), dot: big.querySelector('.tb-head .dot'), hint: big.querySelector('.tb-hint'), add: big.querySelector('.tb-add'), close: big.querySelector('.tb-close') };
-  function grow() { P_.input.style.height = '30px'; P_.input.style.height = Math.min(118, Math.max(30, P_.input.scrollHeight)) + 'px'; }
+  function grow() { P_.input.style.height = '30px'; if (!P_.input.value) return; P_.input.style.height = Math.min(118, Math.max(30, P_.input.scrollHeight)) + 'px'; } // empty: one line, even if the placeholder wraps
   function openBig() { B_.in.value = P_.input.value; B_.in.placeholder = P_.input.placeholder; big.classList.add('on'); mirrorHint(); B_.in.focus(); B_.in.setSelectionRange(B_.in.value.length, B_.in.value.length); }
   function closeBig() { if (!big.classList.contains('on')) return; big.classList.remove('on'); grow(); if (P_.input.value) P_.input.focus(); }
   function mirrorHint() { B_.hint.innerHTML = P_.hint.innerHTML; B_.hint.className = P_.hint.className.replace('tp-hint', 'tp-hint tb-hint'); }
@@ -377,7 +377,7 @@ export function initTasks(ctx) {
       if (!RT_DEPTS.includes(dept)) { P_.hint.innerHTML = `<span class="tp-amber">${esc(rtRefuse(dept))}</span>`; P_.hint.className = 'tp-hint on'; return; }
       const { agent: ra } = route(dept, rt.text || text);
       const need = rt.needsDay ? '¿qué día? di "cada lunes …"' : rt.needsTime ? '¿a qué hora? agrega "a las 8"' : null;
-      P_.hint.innerHTML = `<span class="tp-av" style="border-color:${DEPTS[ra.dept].chip};background:${DEPTS[ra.dept].chip}55">⏱</span>Rutina · <b>${esc(describe(rt.when) || 'every week')}</b>` +
+      P_.hint.innerHTML = `<span class="tp-av" style="border-color:${DEPTS[ra.dept].chip};background:${DEPTS[ra.dept].chip}55">⏱</span>Rutina · <b>${esc(describe(rt.when) || 'cada semana')}</b>` +
         (need ? ` · <span class="tp-amber">${need}</span>` : live ? ' · Claude elige al agente cuando presionas Agregar' : ` · va a <b>${ra.name}</b>`) + (rt.guessed ? ` · "${esc(rt.guessWord)}" tomado como ${rt.when.at}` : '');
       P_.hint.innerHTML += pickBit('routine');
       P_.hint.className = 'tp-hint on'; return;
@@ -488,7 +488,7 @@ export function initTasks(ctx) {
         say(`Rutina programada — <b>${a.name}</b> · ${esc(j.routine.desc)} · próxima ${esc(untilText(j.routine.nextAt))}${j.routine.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${j.guessed ? ` · "${esc(j.guessed)}" taken as ${j.routine.when.at}` : ''}`);
         P_.input.value = ''; resetModel(); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${j.routine.title} (${j.routine.desc})`);
         filter = 'sched'; render(true); poll();
-      } catch (e) { say(`Claude couldn't set it (${esc(e.message)}).`, 'err'); }
+      } catch (e) { say(`No se pudo programar (${esc(e.message)}).`, 'err'); }
       P_.input.disabled = false; P_.add.disabled = false; P_.input.blur();
       return;
     }
@@ -526,7 +526,7 @@ export function initTasks(ctx) {
     else if (act === 'run') fireDemo(r, true);
     syncPills(); dirty = true; if (railAgent) railFor(railAgent);
   }
-  const post = (p, b) => fetch(API + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b || {}) }).then(r => r.json()).catch(e => { console.warn('office:', e.message); return null; });
+  const post = (p, b) => fetch(API + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b || {}) }).then(async r => { const j = await r.json().catch(() => ({})); return r.ok ? j : { ...j, error: j.error || r.statusText || 'error' }; }).catch(e => { console.warn('office:', e.message); return null; }); // a 4xx/5xx comes back as { error }
   function syncPills() { // C2: the clock chip on the desk
     for (const id in R) {
       const n = agentRoutines(id).length, pill = R[id].pill; let s = pill.querySelector('.rt');
@@ -643,7 +643,10 @@ export function initTasks(ctx) {
   const pendingFeedback = {}; // agentId → sid after REJECT: the owner's next chat line is the note
   function resolveLive(agentId, approved) { // APPROVE / REJECT on a live draft (main.js calls this instead of the demo onResolve)
     const t = tasks.find(x => x.live && x.agent === agentId && x.state === 'waiting'); if (!t) return false;
-    if (approved) { post(`/tasks/${t.sid}/approve`); toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' }); }
+    if (approved) {
+      toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' });
+      post(`/tasks/${t.sid}/approve`).then(j => { if (!j || j.error) { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(agentId, { who: 'agent', text: `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.` }); } }); // an answer, not a card stuck «doing» forever
+    }
     else { pendingFeedback[agentId] = t.sid; chatPush(agentId, { who: 'agent', text: 'Entendido. ¿Qué debería cambiar? Dímelo aquí y lo rehago — vuelve para tu visto bueno.' }); }
     return true;
   }
@@ -651,7 +654,8 @@ export function initTasks(ctx) {
   function rejectLive(agentId, feedback) {
     const sid = pendingFeedback[agentId]; delete pendingFeedback[agentId];
     const t = tasks.find(x => x.live && x.sid === sid); if (!t) return false;
-    post(`/tasks/${sid}/reject`, { feedback }); toDoing(t); chatPush(agentId, { who: 'agent', text: 'On it — reworking it with your note. It comes back here for your OK.' });
+    toDoing(t); chatPush(agentId, { who: 'agent', text: 'En eso — lo rehago con tu nota. Vuelve aquí para tu visto bueno.' });
+    post(`/tasks/${sid}/reject`, { feedback }).then(j => { if (!j || j.error) { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(agentId, { who: 'agent', text: `No se pudo devolver: ${(j && j.error) || 'sin conexión con la oficina'}.` }); } });
     return true;
   }
   function toDoing(t) { t.state = 'doing'; t.startedAt = performance.now(); t.progress = 0; t.pausedAt = null; t.running = true; t.ready = false; t.srv = true; touch(t, 'started'); }

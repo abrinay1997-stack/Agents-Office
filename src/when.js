@@ -153,7 +153,7 @@ export function describe(when) {
   if (!when) return '';
   const base = describeBase(when);
   const s = startMs(when);
-  return base && s && s > Date.now() ? `${base} · from ${shortDate(s)}` : base;
+  return base && s && s > Date.now() ? `${base} · desde el ${shortDate(s)}` : base;
 }
 function describeBase(when) {
   const at = when.at ? ' a las ' + when.at : '';

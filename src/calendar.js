@@ -66,7 +66,7 @@ export function initCalendar(ctx) {
   const av = (id) => { const a = agentOf(id); const c = a ? DEPTS[a.dept].chip : '#ccc'; return `<i class="cv-av" style="border-color:${c};background:${c}55" title="${attr(a ? a.name : id)}">${esc(a ? a.name[0] : '?')}</i>`; };
   function cardHTML(ev) {
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
-    const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · from .*$/, '') : hm(ev.at)) : ev.kind === 'done' ? `listo ${hm(ev.at)}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
+    const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'done' ? `listo ${hm(ev.at)}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
     const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1);
     return `<div class="cv-ev ${ev.kind}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
