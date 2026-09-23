@@ -62,3 +62,12 @@
 **Fix aplicado:** Aserciones en español, `waitForFunction` en vez de esperas fijas, el test de aprobación vuelve a «TODAS», `grow()` deja la caja en 30 px si está vacía.
 **Prevención:** Al traducir textos de la UI, correr `npm run check` en el mismo cambio; esperar condiciones, no milisegundos.
 **Archivos:** `check.mjs`, `src/tasks.js:301`
+
+## [2026-09-23] — Las pruebas compartían data/ y el cerebro reales con la oficina del dueño
+
+**Contexto:** Probar el Subgerente y `npm run check` mientras la oficina del dueño estaba abierta.
+**Error:** Los servidores de prueba (puerto 4610 y el que lanza `check.mjs`) leían y escribían `data/tasks.json`, `data/routines.json` y `<brain>/Agents Office/routines.json` reales. Entre 08:52 y 09:03 esos archivos quedaron vacíos y no se pudo determinar con certeza qué proceso lo hizo.
+**Causa raíz:** `serve.mjs` tenía `DATA = ROOT/data` fijo; `check.mjs` arrancaba el servidor con el cerebro real. Además `load()` convertía un JSON ilegible en `[]`, que el siguiente `save()` habría escrito encima.
+**Fix aplicado:** `AO_DATA` (carpeta de datos configurable); `check.mjs` arranca su servidor con una carpeta temporal y una COPIA del cerebro; `load()` ya no devuelve `[]` ante un archivo corrupto (guarda una copia y falla); copia diaria en `data/backups/` (14 días).
+**Prevención:** Nunca probar contra los datos del dueño: servidor de prueba siempre con `AO_DATA` y `AO_BRAIN` temporales. Nada que falle al leer debe tratarse como «vacío».
+**Archivos:** `serve.mjs` (DATA, load, backups), `check.mjs` (sandbox del server smoke)

@@ -133,6 +133,10 @@ Agents get only connected servers (plus web when enabled, plus the browser when 
 
 When the owner says "as a team", "get the team on it", "spawn three teammates to …", or presses TEAM in the bar, the department **lead** takes the task and splits it into two to `teams.max` independent pieces on the desks whose `does` or skills fit; the pieces run at the same time, one Claude process each; teammates may leave one-line notes (`@lead: …`, `@<id>: …`) which reach the lead; the lead writes the final from the pieces. This is the office's own build of the shape (lead · teammates · shared piece list · notes) from separate headless Claude sessions — Claude Code's own agent teams only spawn in an interactive terminal, so they are not what runs here. Nothing to write for a team task; it is the same roster, briefs and skills. To make a seat a better teammate, improve its `does` (the lead splits by it) and its skills. A team routine is `"team": true` in `routines.json` with the lead as `agent`.
 
+## The Subgerente (deputy manager)
+
+A chat above the six departments (◆ SUBGERENTE in the bar, key S). The owner writes what needs doing; the Subgerente (`sub.mjs`, page side `src/sub.js`) answers with a distribution plan — department, instructions for the lead, why, a date, one desk or the team — moves pieces the owner put in the wrong department, and sends nothing until the owner presses ENVIAR A LOS JEFES. Each piece then becomes a task through the lead's routing. Its history is `data/subgerente.json`. To change how it distributes, edit the rules in `sub.mjs` → `systemPrompt`; better seat descriptions (`does`) and skills make it route better with no code change.
+
 ## Everything else
 
 - `npm run check` is the loop. Run it after any change to code; fix what is red.
