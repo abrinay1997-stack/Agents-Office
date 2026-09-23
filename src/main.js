@@ -1,5 +1,6 @@
 // Agents Office v2 — Three.js isometric office with zoom-driven LOD
 // Far: clean pods + agent counts (Image 1 read). Near: diorama with 3D people + holo screens (Image 2 read).
+import { mdToHtml } from './md.js';
 import * as THREE from 'three';
 import './i18n.js'; // FASE 1 (20 Sep 2026): sistema i18n central (es por defecto); los textos visibles ya están traducidos directo al español, el wiring total a t() queda para fase 2
 import { TOKENS, DEPTS, DEPT_KEYS, AGENTS, LAYOUT, WORKLINES, APPROVAL_ASKS, APPROVAL_BY_AGENT } from './data.js';
@@ -616,14 +617,18 @@ function chatPush(id, msg) {
 }
 function renderChat(id) {
   const r = R[id];
+  // stay where the owner is reading: follow new messages only if already at the bottom (or the owner just wrote)
+  const last = chatHist[id][chatHist[id].length - 1];
+  const follow = mMsgs.dataset.for !== id || mMsgs.scrollHeight - mMsgs.scrollTop - mMsgs.clientHeight < 60 || (last && last.who === 'user');
+  const keepTop = mMsgs.scrollTop; mMsgs.dataset.for = id;
   mMsgs.innerHTML = chatHist[id].map((m, i) => {
-    if (m.who === 'agent') return `<div class="m-agent">${esc(m.text)}</div>`;
+    if (m.who === 'agent') return `<div class="m-agent"><div class="md">${mdToHtml(m.text)}</div>${m.text && m.text.length > 80 ? `<button type="button" class="m-copy" data-i="${i}" aria-label="Copiar la respuesta">Copiar</button>` : ''}</div>`;
     if (m.who === 'user') return `<div class="m-user">${esc(m.text)}</div>`;
     if (m.who === 'work') return `<div class="m-work"><span class="wi">${m.i || '▸'}</span>${esc(m.text)}</div>`;
     if (m.who === 'file') return `
-      <div class="m-file" data-i="${i}">
-        <div class="f-head"><span>${m.icon}</span><div><div class="f-name">${esc(m.name)}</div><div class="f-meta">${esc(m.meta)}</div></div></div>
-        <pre>${esc(m.content)}</pre>
+      <div class="m-file${m.exp ? ' exp' : ''}" data-i="${i}">
+        <button type="button" class="f-head" aria-expanded="${!!m.exp}"><span aria-hidden="true">${m.icon}</span><div><div class="f-name">${esc(m.name)}</div><div class="f-meta">${esc(m.meta)} · ${m.exp ? 'clic para cerrar' : 'clic para leer'}</div></div></button>
+        ${m.exp ? `<div class="f-body md">${mdToHtml(m.content)}</div><div class="f-acts"><button type="button" class="m-copy" data-i="${i}">Copiar</button></div>` : ''}
       </div>`;
     if (m.who === 'appr') return `
       <div class="m-appr" data-i="${i}">
@@ -632,18 +637,36 @@ function renderChat(id) {
         ${m.mock ? `<div class="a-mock">${m.mock}</div>` : ''}
         ${m.pending
           ? '<div class="a-btns"><button class="a-yes">APROBAR</button><button class="a-no">RECHAZAR</button></div>'
-          : `<div class="a-done">${m.approved ? '✓ Aprobado' : '✗ Rechazado'} por AJ</div>`}
+          : `<div class="a-done">${m.approved ? '✓ Aprobado' : '✗ Rechazado'} por ti</div>`}
       </div>`;
     return '';
   }).join('');
-  mMsgs.querySelectorAll('.m-file').forEach(el =>
-    el.addEventListener('click', () => el.classList.toggle('exp')));
+  mMsgs.querySelectorAll('.m-file .f-head').forEach(el =>
+    el.addEventListener('click', () => { const m = chatHist[id][+el.parentElement.dataset.i]; m.exp = !m.exp; renderChat(id); })); // the open state lives on the message: a new message no longer folds it
   mMsgs.querySelectorAll('.m-appr .a-yes').forEach(el =>
     el.addEventListener('click', () => resolveApproval(id, true)));
   mMsgs.querySelectorAll('.m-appr .a-no').forEach(el =>
     el.addEventListener('click', () => resolveApproval(id, false)));
-  mMsgs.scrollTop = mMsgs.scrollHeight;
+  mMsgs.scrollTop = follow ? mMsgs.scrollHeight : keepTop;
 }
+mMsgs.addEventListener('click', e => {
+  const c = e.target.closest('.m-copy');
+  if (c) { const m = chatHist[modalOpen] && chatHist[modalOpen][+c.dataset.i]; if (m) copyText(m.content || m.text, c); return; }
+  const w = e.target.closest('.md-wiki'); if (w && brain) { if (!brain.show(w.dataset.note)) w.classList.add('missing'); } // [[a note]] in a reply opens it in the Brain
+});
+function copyText(t, btn) {
+  const done = () => { const o = btn.textContent; btn.textContent = 'Copiado ✓'; setTimeout(() => { btn.textContent = o; }, 1400); };
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(done, () => { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); done(); } catch {} a.remove(); });
+}
+// ⤢ widens the chat for long answers; remembered on this browser
+const railEl = document.getElementById('rail');
+try { if (localStorage.getItem('ao.railWide') === '1') document.body.classList.add('railWide'); } catch {}
+document.getElementById('railWide').addEventListener('click', () => {
+  const on = document.body.classList.toggle('railWide');
+  try { localStorage.setItem('ao.railWide', on ? '1' : '0'); } catch {}
+  document.getElementById('railWide').setAttribute('aria-pressed', on);
+  if (focused && focused !== 'brain') { const t = focusTarget(focused); flyTo(t.pos, t.zoom, 500); }
+});
 function renderActivity(id) {
   const r = R[id], v = r.v1;
   const task = rnd(v.tasks || ['Revisando la cola de trabajo'])
@@ -665,7 +688,7 @@ function focusTarget(k, atPos) {
   const boardW = (tasks ? tasks.panelWidth() : 400) + 30; // V3.3: the task panel is always on the right
   const zoom = atPos ? 3.3 : 2.5;
   const pxPerWorld = zoom * innerHeight / (2 * FR);
-  const railW = Math.min(400, innerWidth * 0.92);
+  const railW = railEl.offsetWidth || Math.min(400, innerWidth * 0.92);
   // pod sits in the middle of whatever screen is left: rail on one side, board (if open) on the other
   const shift = ((railW - boardW) / 2 + (boardW ? 0 : 30)) / pxPerWorld;
   const dir = RAIL_SIDE[k] === 'left' ? -shift : shift;
@@ -833,7 +856,7 @@ function sendChat(text) {
   if (!id || !text.trim()) return;
   const r = R[id];
   chatPush(id, { who: 'user', text });
-  document.getElementById('mIn').value = '';
+  const mInEl = document.getElementById('mIn'); mInEl.value = ''; growInput(mInEl);
   const low = text.toLowerCase();
   setTimeout(() => {
     if (tasks && tasks.pendingReject(id)) { tasks.rejectLive(id, text); return; } // V3.5: the line after REJECT is the note the agent reworks with
@@ -868,10 +891,12 @@ function sendChat(text) {
 document.getElementById('mSend').addEventListener('click', () =>
   sendChat(document.getElementById('mIn').value));
 document.getElementById('mIn').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') sendChat(e.target.value);
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendChat(e.target.value); } // Shift+Enter: a new line
   e.stopPropagation();
 });
-function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function growInput(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
+document.getElementById('mIn').addEventListener('input', e => growInput(e.target));
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); } // quotes too: esc() is used inside attributes
 function ago(ts) {
   const m = Math.round((Date.now() - ts) / 60000);
   return m < 1 ? 'ahora' : m < 60 ? 'hace ' + m + ' min' : 'hace ' + Math.round(m / 60) + ' h';
@@ -1414,7 +1439,7 @@ resize();
   syncOverviewBtn();
 }
 window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval, openAgent, view, applyCamera, R, emotes,
-  setCam, setDark, brain, connectorReveal: () => mcp.startReveal(performance.now()),
+  setCam, setDark, brain, chatPush, connectorReveal: () => mcp.startReveal(performance.now()),
   toggleBoard: () => tasks.toggle(), addTask: (agentId, title) => tasks.addTask(agentId, title), tasks, routines: () => tasks.routines };
 
 let last = performance.now();
