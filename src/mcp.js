@@ -119,7 +119,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       tex.colorSpace = THREE.SRGBColorSpace;
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({
         map: glowT, transparent: true, opacity: 0, depthTest: false }));
-      glow.renderOrder = 48;
+      glow.renderOrder = 48; glow.visible = false; // lit only while it pulses
       scene.add(glow);
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
       s.renderOrder = 50;
@@ -700,6 +700,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       it.glow.position.copy(it.sprite.position);
       it.glow.scale.set(base * 2.1 * pop, base * 2.1 * pop, 1);
       it.glow.material.opacity = (pk >= 0 && pk < 1 ? 0.85 * Math.sin(pk * Math.PI) * it.pulseAmp / 0.3 : 0) * dockA;
+      it.glow.visible = it.glow.material.opacity > 0.01; // a halo at opacity 0 still cost a draw call every frame (67 of them)
 
       // per-tile name label, zoomed-in only
       const dimmed = focused && focused !== 'brain' && it.dept !== focused;

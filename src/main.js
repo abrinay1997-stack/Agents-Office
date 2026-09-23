@@ -3,6 +3,7 @@
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import './i18n.js'; // FASE 1 (20 Sep 2026): sistema i18n central (es por defecto); los textos visibles ya están traducidos directo al español, el wiring total a t() queda para fase 2
 import { TOKENS, DEPTS, DEPT_KEYS, AGENTS, LAYOUT, WORKLINES, APPROVAL_ASKS, APPROVAL_BY_AGENT } from './data.js';
 import { hasScreens, makeScreen } from './screens.js'; // live screens (14 Sep): no-op without window.SCREENS
@@ -258,6 +259,40 @@ for (const a of AGENTS) {
     v1: V1.find(x => x.id === a.id), feed: [],
     station, desk, screenSet, // hero mode reaches the monitor and the desk through these
   };
+}
+
+/* PERFORMANCE: the furniture never moves, so it is drawn as ONE mesh per department and material instead of ~12 per
+   desk (~420 draw calls, twice over with shadows, → ~60). Screens stay their own meshes (each has its live texture);
+   people stay separate (they animate). The merged meshes keep userData.dept, so the focus dim still greys a whole
+   department. Hero mode moves and scales single desks, so it keeps the unmerged stations. */
+if (!HERO) mergeStations();
+function mergeStations() {
+  const groups = new Map(); // dept|material|shadow → { material, dept, cast, geos: [] }
+  const drop = [];
+  for (const r of Object.values(R)) {
+    r.station.updateMatrixWorld(true);
+    r.station.traverse(o => {
+      if (!o.isMesh || o.name === 'screen' || Array.isArray(o.material)) return;
+      let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      g.clearGroups(); g.applyMatrix4(o.matrixWorld);
+      for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+      const key = `${r.a.dept}|${o.material.uuid}|${o.castShadow}`;
+      if (!groups.has(key)) groups.set(key, { material: o.material, dept: r.a.dept, cast: o.castShadow, geos: [] });
+      groups.get(key).geos.push(g); drop.push(o);
+    });
+  }
+  let made = 0;
+  for (const { material, dept, cast, geos } of groups.values()) {
+    const merged = mergeGeometries(geos, false);
+    geos.forEach(g => g.dispose());
+    if (!merged) continue;
+    const m = new THREE.Mesh(merged, material);
+    m.castShadow = cast; m.receiveShadow = true; m.userData.dept = dept; m.userData.merged = true;
+    m.matrixAutoUpdate = false; // world-space already
+    scene.add(m); made++;
+  }
+  for (const o of drop) o.parent.remove(o); // the originals leave the scene; the shared geometries stay cached
+  return made;
 }
 
 /* CONNECTORS — per-dept dock of MCP logos with back-and-forth traffic (AJ's spec, 2 Aug rev 2)
@@ -1460,7 +1495,7 @@ resize();
   syncOverviewBtn();
 }
 window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval, openAgent, view, applyCamera, R, emotes,
-  setCam, setDark, brain, chatPush, connectorReveal: () => mcp.startReveal(performance.now()),
+  setCam, setDark, brain, chatPush, renderer, connectorReveal: () => mcp.startReveal(performance.now()),
   toggleBoard: () => tasks.toggle(), addTask: (agentId, title) => tasks.addTask(agentId, title), tasks, routines: () => tasks.routines };
 
 let last = performance.now(), lastFrame = 0, frameN = 0, lastInput = performance.now();

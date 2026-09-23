@@ -34,6 +34,13 @@ export function rboxGeo(w, d, h, r = 0.35) {
   return g;
 }
 
+// every other shape, shared the same way: 35 people and 35 chairs used to upload ~250 identical geometries to the GPU
+const shapeCache = new Map();
+const shared = (key, make) => { if (!shapeCache.has(key)) shapeCache.set(key, make()); return shapeCache.get(key); };
+const capsule = (r, l, c, rs) => shared(`cap|${r}|${l}|${c}|${rs}`, () => new THREE.CapsuleGeometry(r, l, c, rs));
+const sphere = (r, w, h, ...a) => shared(`sph|${r}|${w}|${h}|${a.join('|')}`, () => new THREE.SphereGeometry(r, w, h, ...a));
+const cylinder = (t, b, h, rs) => shared(`cyl|${t}|${b}|${h}|${rs}`, () => new THREE.CylinderGeometry(t, b, h, rs));
+
 export function rbox(w, d, h, color, r) {
   const m = new THREE.Mesh(rboxGeo(w, d, h, r), typeof color === 'string' ? mat(color) : color);
   m.castShadow = true; m.receiveShadow = true;
@@ -125,7 +132,7 @@ export function makeDesk(chip, live) {
   const stand = rbox(0.16, 0.16, 0.45, '#3A3A3E', 0.05); stand.position.set(0, 2.32, -0.9); g.add(stand);
   // keyboard + mug
   const kb = rbox(1.5, 0.5, 0.07, '#EFEFEA', 0.06); kb.position.set(0, 2.22, 0.35); g.add(kb);
-  const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.3, 12), mat(chip));
+  const mug = new THREE.Mesh(cylinder(0.16, 0.14, 0.3, 12), mat(chip));
   mug.position.set(1.9, 2.36, 0.4); mug.castShadow = true; g.add(mug);
   return { group: g, screenSet };
 }
@@ -134,9 +141,9 @@ export function makeChair() {
   const g = new THREE.Group();
   const seat = rbox(1.3, 1.2, 0.22, '#8E998B', 0.35); seat.position.y = 1.25; g.add(seat);
   const back = rbox(1.25, 0.2, 1.35, '#7C8779', 0.3); back.position.set(0, 1.5, 0.62); g.add(back);
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.85, 8), mat('#55555A'));
+  const pole = new THREE.Mesh(cylinder(0.07, 0.07, 0.85, 8), mat('#55555A'));
   pole.position.y = 0.82; g.add(pole);
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.1, 10), mat('#55555A'));
+  const base = new THREE.Mesh(cylinder(0.55, 0.6, 0.1, 10), mat('#55555A'));
   base.position.y = 0.4; base.castShadow = true; g.add(base);
   return g;
 }
@@ -152,26 +159,26 @@ export function makePerson({ hair, skin, chip, lead }) {
   const pantsM = mat('#3E4048', { rough: 0.95 });
 
   const legs = new THREE.Group();
-  const legGeo = new THREE.CapsuleGeometry(0.16 * S, 0.75 * S, 3, 8);
+  const legGeo = capsule(0.16 * S, 0.75 * S, 3, 8);
   const legL = new THREE.Mesh(legGeo, pantsM); legL.position.set(-0.2 * S, 0.6 * S, 0);
   const legR = new THREE.Mesh(legGeo, pantsM); legR.position.set(0.2 * S, 0.6 * S, 0);
   legL.castShadow = legR.castShadow = true;
   legs.add(legL, legR); g.add(legs);
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42 * S, 0.85 * S, 4, 12), shirt);
+  const torso = new THREE.Mesh(capsule(0.42 * S, 0.85 * S, 4, 12), shirt);
   torso.position.y = 1.75 * S; torso.castShadow = true; g.add(torso);
 
   if (lead) { // dept-coloured tie + gold pin (v1 lead rule)
-    const tie = new THREE.Mesh(new THREE.ConeGeometry(0.11 * S, 0.55 * S, 4), mat(chip));
+    const tie = new THREE.Mesh(shared(`cone|${S}`, () => new THREE.ConeGeometry(0.11 * S, 0.55 * S, 4)), mat(chip));
     tie.rotation.x = Math.PI; tie.position.set(0, 1.85 * S, 0.4 * S); g.add(tie);
-    const pin = new THREE.Mesh(new THREE.SphereGeometry(0.06 * S, 8, 8),
+    const pin = new THREE.Mesh(sphere(0.06 * S, 8, 8),
       mat('#E5C158', { metal: 0.8, rough: 0.3, emissive: '#8a6d1f', ei: 0.4 }));
     pin.position.set(0.26 * S, 2.05 * S, 0.38 * S); g.add(pin);
   }
 
-  const armGeo = new THREE.CapsuleGeometry(0.155 * S, 0.62 * S, 3, 8);
-  const armL = new THREE.Mesh(armGeo, shirt); armL.castShadow = true;
-  const armR = new THREE.Mesh(armGeo, shirt); armR.castShadow = true;
+  const armGeo = capsule(0.155 * S, 0.62 * S, 3, 8);
+  const armL = new THREE.Mesh(armGeo, shirt); // arms cast no shadow: theirs sits inside the torso's, and it was 70 shadow draws a frame
+  const armR = new THREE.Mesh(armGeo, shirt);
   const shL = new THREE.Group(); shL.position.set(-0.5 * S, 2.1 * S, 0); armL.position.y = -0.42 * S; shL.add(armL);
   const shR = new THREE.Group(); shR.position.set(0.5 * S, 2.1 * S, 0); armR.position.y = -0.42 * S; shR.add(armR);
   g.add(shL, shR);
@@ -179,10 +186,10 @@ export function makePerson({ hair, skin, chip, lead }) {
   // big-head cartoon proportions (Image 2) — head pivots at the neck so it can turn/nod
   const headG = new THREE.Group();
   headG.position.y = 2.75 * S;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5 * S, 18, 16), skinM);
+  const head = new THREE.Mesh(sphere(0.5 * S, 18, 16), skinM);
   head.position.y = 0.25 * S; head.castShadow = true; headG.add(head);
   const hairMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.54 * S, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairM);
+    sphere(0.54 * S, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairM);
   hairMesh.position.y = 0.31 * S; headG.add(hairMesh);
   g.add(headG);
 
@@ -334,12 +341,12 @@ function roundRect(x, a, b, w, h, r) {
 /* ---------- props ---------- */
 export function makePlant() {
   const g = new THREE.Group();
-  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.42, 0.8, 10), mat('#B96A4B'));
+  const pot = new THREE.Mesh(cylinder(0.55, 0.42, 0.8, 10), mat('#B96A4B'));
   pot.position.y = 0.4; pot.castShadow = true; g.add(pot);
   const foliage = mat('#5F8A5C', { rough: 1 });
   const foliage2 = mat('#6F9B68', { rough: 1 });
   for (let i = 0; i < 5; i++) {
-    const s = new THREE.Mesh(new THREE.SphereGeometry(0.42 + Math.sin(i * 7) * 0.12, 10, 8), i % 2 ? foliage : foliage2);
+    const s = new THREE.Mesh(sphere(0.42 + Math.sin(i * 7) * 0.12, 10, 8), i % 2 ? foliage : foliage2);
     s.position.set(Math.sin(i * 2.4) * 0.35, 1.15 + i * 0.28, Math.cos(i * 2.4) * 0.35);
     s.castShadow = true; g.add(s);
   }
