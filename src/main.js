@@ -1,5 +1,7 @@
 // Agents Office v2 — Three.js isometric office with zoom-driven LOD
 // Far: clean pods + agent counts (Image 1 read). Near: diorama with 3D people + holo screens (Image 2 read).
+import { initSheet } from './agentsheet.js'; // the agent sheet: edit who an agent is from the office
+import { MODEL_KEYS as SHEET_MODELS, modelName as sheetModelName, EFFORT_KEYS as SHEET_EFFORTS } from './models.js';
 import { initStudio } from './studio.js'; // the Estudio: images and video, by hand and by the agents
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
 import { mdToHtml } from './md.js';
@@ -643,7 +645,7 @@ const chatHist = {};
 const rail = document.getElementById('rail');
 const vignette = document.getElementById('vignette');
 const mMsgs = document.getElementById('mMsgs');
-let modalOpen = null, modalTab = 'chat'; // modalOpen = agent id open in the rail slide-over
+let modalOpen = null, modalTab = 'chat', agentSheet = null; // modalOpen = agent id open in the rail slide-over
 // V3.3: the rail docks LEFT for every department — the task panel has the right side
 const RAIL_SIDE = { marketing: 'left', emails: 'left', sales: 'left', ops: 'left', fin: 'left', delivery: 'left' };
 const SCREEN_RIGHT = new THREE.Vector3(1, 0, -1).normalize();
@@ -854,6 +856,7 @@ function flyBillboardIntoRail(k) {
   }, 740);
 }
 function openAgentRail(id, tab = 'chat', fly = true) {
+  if (agentSheet && agentSheet.isOpen() && agentSheet.current() !== id) agentSheet.close(); // another agent: back to its chat
   const r = R[id];
   ensureChat(id);
   modalOpen = id;
@@ -1481,6 +1484,10 @@ addEventListener('resize', () => { if (!focused && !tween && !HERO) view.target.
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
 document.getElementById('topSub').addEventListener('click', () => subger.toggle());
+agentSheet = initSheet({ host: document.getElementById('railAgent'), esc, isLive: () => tasks.isLive(), MODEL_KEYS: SHEET_MODELS, modelName: sheetModelName, EFFORT_KEYS: SHEET_EFFORTS,
+  onSaved: a => { applyRoster([a]); const n = document.querySelector('#railAgent .mh-name'); if (n) n.innerHTML = (a.lead ? '<span class="star">★</span> ' : '') + esc(a.name); },
+  openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); } });
+document.getElementById('railSheet').addEventListener('click', () => { if (!modalOpen) return; agentSheet.isOpen() ? agentSheet.close() : agentSheet.open(modalOpen); });
 { // the connector strip folds behind «CONECTADO A · N ▾» (it filled half the bar and ran into the rest on a laptop screen)
   const tc = document.getElementById('topconn');
   let pref = null; try { pref = localStorage.getItem('ao.connFold'); } catch {}

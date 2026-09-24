@@ -73,3 +73,22 @@ export function loadRoster(brainPath = loadConfig().brainPath) {
   return { agents, problems, customised, briefed: agents.filter(a => a.brief).length, files: sources.filter(p => fs.existsSync(p)).map(label) };
 }
 export const deptName = k => DEPTS[k]?.name || k;
+
+/** Save the owner's edits to one agent (from the office's agent sheet). Written to the roster file that already carries
+ *  this agent with the highest precedence (office.agents.local.json, else <brain>/Agents Office/agents.json, created if
+ *  needed); only the editable fields; validated with the same rules as a hand edit. → { agent, problems, file } */
+export function saveAgent(brainPath, id, patch) {
+  const base = defaults(); if (!base.some(a => a.id === id)) return { problems: [`"${id}" is not one of the 35 seats`] };
+  const has = p => { const d = read(p); return d && !d.__error && Array.isArray(d.agents) && d.agents.some(a => a && a.id === id); };
+  const target = has(LOCAL) ? LOCAL : brainFile(brainPath);
+  const doc = read(target); if (doc && doc.__error) return { problems: [`${path.basename(target)} is not valid JSON — fix it before editing here`] };
+  const d = doc && Array.isArray(doc.agents) ? doc : { agents: [] };
+  let e = d.agents.find(a => a && a.id === id); if (!e) { e = { id }; d.agents.push(e); }
+  for (const k of EDITABLE) if (patch[k] !== undefined) e[k] = patch[k];
+  const check = validate({ agents: [e] }, base).problems;
+  if (check.length) return { problems: check };
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const tmp = target + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(d, null, 2) + '\n'); fs.renameSync(tmp, target);
+  const r = loadRoster(brainPath);
+  return { agent: r.agents.find(a => a.id === id), problems: [], file: target };
+}

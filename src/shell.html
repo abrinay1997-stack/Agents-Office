@@ -1315,6 +1315,35 @@
   body.tpMin #zoomCtl, body.tpMin #overviewBtn.right { right: 56px; transition: right .3s var(--ease); } /* the panel is a tab: the controls follow it to the edge */
   #clock { white-space: nowrap; }
   @media (max-width: 1500px) { #clock { font-size: 16px; } #topStudio, #topSub, #topCal { padding-left: 9px; padding-right: 9px; } }
+
+  /* ---------- the agent sheet (src/agentsheet.js), inside the chat panel ---------- */
+  #railSheet { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; font-size: 14px; flex: none; margin-left: auto; }
+  #railSheet + #railWide { margin-left: 6px; }
+  #railSheet:hover, #railAgent.sheetOpen #railSheet { background: var(--ink); color: var(--cream); }
+  .ag-sheet { position: absolute; inset: 0; z-index: 3; background: var(--cream); border-radius: 16px; display: flex; flex-direction: column; font-family: var(--ui); color: var(--ink); }
+  .ag-sheet[hidden] { display: none; }
+  .ag-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px 10px; border-bottom: 1px solid var(--hairline); flex: none; } .ag-head .sp { flex: 1; }
+  .ag-title { font-family: var(--serif); font-size: 21px; } .ag-title .star { color: #C8A438; font-size: 15px; } .ag-sub { font-size: 12px; color: var(--grey); }
+  .ag-x { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+  .ag-scroll { flex: 1; overflow-y: auto; padding: 8px 14px 20px; }
+  .ag-sec { border-bottom: 1px solid var(--hairline); } .ag-sec > summary { cursor: pointer; list-style: none; padding: 12px 4px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .ag-sec > summary::-webkit-details-marker { display: none; } .ag-sec > summary::before { content: '▸'; font-size: 11px; transition: transform .2s; } .ag-sec[open] > summary::before { transform: rotate(90deg); }
+  .ag-sec > summary b { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: rgba(21,20,20,.07); letter-spacing: 0; }
+  .ag-body { padding: 0 4px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .ag-body label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--grey); } .ag-body label small { font-size: 11px; }
+  .ag-body input, .ag-body textarea, .ag-body select { font-family: var(--ui); font-size: 13.5px; line-height: 1.45; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; color: var(--ink); resize: vertical; }
+  .ag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ag-note { font-size: 12px; color: var(--grey); line-height: 1.45; margin: 0; } .ag-lab { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--grey); margin: 4px 0 0; }
+  .ag-acts { display: flex; align-items: center; gap: 10px; position: sticky; bottom: -20px; background: var(--cream); padding: 10px 0; }
+  .ag-save { font-family: var(--ui); font-size: 11.5px; letter-spacing: .12em; font-weight: 700; padding: 9px 16px; border-radius: 99px; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); cursor: pointer; }
+  .ag-msg { font-size: 12.5px; color: var(--grey); } .ag-msg.bad, .ag-loading.bad { color: #B3261E; } .ag-loading { padding: 20px; font-style: italic; color: var(--grey); }
+  .ag-skill { border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 10px; } .ag-skill summary { cursor: pointer; font-size: 13px; } .ag-skilltext { margin-top: 8px; max-height: 320px; overflow-y: auto; font-size: 12.5px; }
+  .ag-ls { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; } .ag-ls li { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; line-height: 1.45; padding: 6px 8px; border-radius: 8px; background: rgba(21,20,20,.04); } .ag-ls li span { flex: 1; }
+  .ag-forget { border: 0; background: none; color: var(--grey); cursor: pointer; font-size: 12px; } .ag-forget:hover { color: #B3261E; }
+  .ag-stats { display: flex; flex-wrap: wrap; gap: 6px; } .ag-stats span { font-size: 12px; padding: 4px 9px; border-radius: 99px; border: 1px solid var(--hairline); } .ag-stats b { font-weight: 700; }
+  .ag-recent { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; } .ag-recent button { width: 100%; text-align: left; border: 1px solid var(--hairline); background: none; border-radius: 8px; padding: 7px 9px; font-family: var(--ui); font-size: 12.5px; color: var(--ink); cursor: pointer; display: flex; gap: 8px; align-items: center; }
+  .ag-st { font-size: 10.5px; padding: 2px 7px; border-radius: 99px; background: rgba(21,20,20,.07); white-space: nowrap; } .ag-st.done { color: #13705A; } .ag-st.err { color: #B3261E; } .ag-st.waiting { color: #8A6414; } .ag-st.doing { color: #2B6BEB; }
+  body.dark .ag-body input, body.dark .ag-body textarea, body.dark .ag-body select { background: #1E1F24; }
 </style>
 </head>
 <body>
@@ -1346,6 +1375,7 @@
         <div class="mh-name"></div>
         <div class="mh-role"></div>
       </div>
+      <button id="railSheet" type="button" title="Ficha del agente: quién es, instrucciones, skills, lecciones, historial" aria-label="Abrir la ficha del agente"><span aria-hidden="true">✎</span></button>
       <button id="railWide" type="button" title="Ampliar / reducir el chat" aria-label="Ampliar el chat" aria-pressed="false"><span aria-hidden="true">⤢</span></button>
     </div>
     <div class="mh-tag"></div>

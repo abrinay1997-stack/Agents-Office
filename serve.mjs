@@ -44,7 +44,7 @@ import { loadConfig, ROOT } from './config.mjs';
 import { layoutGraph, readVault, readOfficeNotes } from './graph-build.mjs';
 import { DEPTS, DEPT_KEYS } from './src/data.js';
 import * as mcp from './mcp.mjs';
-import { loadRoster } from './roster.mjs';
+import { loadRoster, saveAgent } from './roster.mjs';
 import { loadSkills } from './skills.mjs';
 import * as learn from './learn.mjs';
 import * as onboard from './onboard.mjs';
@@ -686,6 +686,33 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
       agents: agentsOut(), setup: setupMap(), routines: (l => ({ count: l.length, paused: l.filter(r => r.paused).length, depts: routines.ALLOWED }))(loadRoutines()), roster: { customised: roster.customised, briefed: roster.briefed, files: roster.files, problems: roster.problems }, skills: (({ count, shipped, brain, problems }) => ({ count, shipped, brain, problems }))(skills.summary()), tools: backend === 'claude-cli', mcp: mcp.summary(), teams: TEAMS, browser: mcp.summary().browser });
     if (url.pathname === '/api/agents') return json(res, 200, { agents: agentsOut(), problems: roster.problems, files: roster.files });
+    const am = url.pathname.match(/^\/api\/agents\/([a-z0-9_-]+)(?:\/(forget))?$/i);
+    if (am) { // the agent sheet: who the agent is (editable), its skills, its lessons, its record
+      const a = AGENTS.find(x => x.id === am[1]); if (!a) return json(res, 404, { error: 'no such agent' });
+      if (am[2] === 'forget' && req.method === 'POST') { const { line } = await body(req); return learn.forget(BRAIN, a.id, line) ? json(res, 200, { ok: true, lessons: learn.read(BRAIN, a.id) }) : json(res, 404, { error: 'esa línea ya no está' }); }
+      if (req.method === 'PATCH') {
+        const b = await body(req); const patch = {};
+        for (const k of ['name', 'role', 'does', 'brief', 'model', 'effort']) if (typeof b[k] === 'string') patch[k] = b[k];
+        if (Array.isArray(b.tools)) patch.tools = b.tools;
+        const r = saveAgent(BRAIN, a.id, patch);
+        if (r.problems.length) return json(res, 400, { error: r.problems.join(' · ') });
+        refreshSkills(); // re-reads the roster into AGENTS
+        console.log(`✎ agent ${a.id} edited (${Object.keys(patch).join(', ')}) → ${path.relative(ROOT, r.file)}`);
+        return json(res, 200, { ok: true, agent: agentsOut().find(x => x.id === a.id) });
+      }
+      refreshSkills();
+      const mine = load().filter(t => t.agent === a.id || t.team?.pieces?.some(p => p.agent === a.id));
+      const done = mine.filter(t => t.state === 'done'), ok = done.filter(t => !t.error);
+      const dur = ok.filter(t => t.startedAt && t.doneAt).map(t => t.doneAt - t.startedAt);
+      return json(res, 200, {
+        agent: agentsOut().find(x => x.id === a.id),
+        skills: skills.forAgent(a).map(s => ({ name: s.name, description: s.description, source: s.source, text: s.text, files: s.files.map(f => f.name), everyone: s.everyone })),
+        lessons: learn.read(BRAIN, a.id),
+        stats: { done: ok.length, failed: done.length - ok.length, running: mine.filter(t => t.state === 'doing').length, waiting: mine.filter(t => t.state === 'waiting').length, pending: mine.filter(t => t.state === 'next' || t.state === 'scheduled').length, avgMinutes: dur.length ? Math.round(dur.reduce((x, y) => x + y, 0) / dur.length / 60000) : null },
+        recent: mine.filter(t => !t.archived).sort((x, y) => (y.doneAt || y.addedAt || 0) - (x.doneAt || x.addedAt || 0)).slice(0, 10).map(t => ({ id: t.id, title: t.title, state: t.state, error: !!t.error, at: t.doneAt || t.addedAt })),
+        connectors: mcp.usableFor(a).map(x => x.name), studio: STUDIO_DEPTS.includes(a.department),
+      });
+    }
     if (url.pathname === '/api/skills') return json(res, 200, refreshSkills().summary()); // reloads from disk: edit a skill, hit this, see it
     if (url.pathname === '/api/lessons') return json(res, 200, { dir: learn.dir(BRAIN), agents: AGENTS.map(a => ({ id: a.id, name: a.name, ...learn.read(BRAIN, a.id) })).filter(x => x.rules.length || x.oneOffs.length) });
     if (url.pathname === '/api/mcp') { if (url.searchParams.get('refresh') === '1') await mcp.discover(); else if (!mcp.list().some(x => !x.browser)) await discovering; /* a known list answers at once; only a first-ever start waits for claude mcp list */ return json(res, 200, { ...mcp.summary(), tools: backend === 'claude-cli' }); }

@@ -71,3 +71,13 @@ export function promptText(brainPath, agent) {
   return 'LESSONS — lo que el dueño corrigió antes. Aplica cada una de estas, siempre, sin que te lo pidan:\n' + recent.join('\n');
 }
 export const count = (brainPath, id) => read(brainPath, id).rules.length;
+
+/** Forget one line (a standing rule or a one-off) — from the agent sheet's ✕. true if it was there. */
+export function forget(brainPath, id, line) {
+  const p = file(brainPath, id); if (!fs.existsSync(p)) return false;
+  const lines = fs.readFileSync(p, 'utf8').split(/\r?\n/); const want = String(line || '').trim();
+  const i = lines.findIndex(l => { const m = l.match(/^\s*[-*]\s+(.+)$/); return m && m[1].trim() === want; });
+  if (i < 0) return false;
+  lines.splice(i, 1); fs.writeFileSync(p, lines.join('\n'));
+  return true;
+}
