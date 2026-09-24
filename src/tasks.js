@@ -130,7 +130,7 @@ const STATE_LABEL = { next: 'Pendientes', doing: 'En curso', waiting: 'En espera
 
 export function initTasks(ctx) {
   const { R, deptRT, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent,
-          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage, resolveApproval: onResolveDemo } = ctx;
+          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage, resolveApproval: onResolveDemo, reframe } = ctx;
   // LIVE mode (served by serve.mjs): the bar routes through Claude, agents produce real
   // deliverables saved as notes in the brain, and tasks persist. Opened as a file it stays demo.
   let live = false;
@@ -296,6 +296,16 @@ export function initTasks(ctx) {
     model: panel.querySelector('.tp-model'), effort: panel.querySelector('.tp-effort'),
     bigBtn: panel.querySelector('.tp-big-btn'), team: panel.querySelector('.tp-team'),
   };
+  { // the panel folds into a tab on the right edge: the office gets the whole width (remembered)
+    const head = panel.querySelector('.tp-head');
+    const min = document.createElement('button'); min.type = 'button'; min.className = 'tp-min'; min.title = 'Minimizar el panel de tareas'; min.setAttribute('aria-label', 'Minimizar el panel de tareas'); min.textContent = '⇥';
+    head.appendChild(min);
+    const tab = document.createElement('button'); tab.type = 'button'; tab.id = 'tpTab'; tab.setAttribute('aria-label', 'Abrir el panel de tareas'); document.body.appendChild(tab);
+    P_.tab = tab;
+    const setMin = on => { document.body.classList.toggle('tpMin', on); try { localStorage.setItem('ao.tpMin', on ? '1' : '0'); } catch {} if (reframe) reframe(); };
+    min.addEventListener('click', () => setMin(true)); tab.addEventListener('click', () => setMin(false));
+    try { if (localStorage.getItem('ao.tpMin') === '1') document.body.classList.add('tpMin'); } catch {}
+  }
   { // the list's own tools: a search box and «Limpiar listas»
     const bar = document.createElement('div'); bar.className = 'tp-tools';
     bar.innerHTML = '<input class="tp-search" type="search" placeholder="Buscar tareas o agentes…" aria-label="Buscar en las tareas" autocomplete="off"><button type="button" class="tp-clear" hidden>Limpiar listas</button>';
@@ -790,6 +800,7 @@ export function initTasks(ctx) {
     const f = getFocused();
     P_.scope.textContent = (f && f !== 'brain') ? DEPTS[f].name : 'WHOLE OFFICE';
     P_.chips.innerHTML = chipsHTML();
+    if (P_.tab) { const all = tasks.filter(t => !t.piece), c = st => all.filter(t => t.state === st).length; P_.tab.innerHTML = `<span class="tt-l">TAREAS</span>${c('doing') ? `<b class="tt-doing">${c('doing')}</b>` : ''}${c('waiting') ? `<b class="tt-wait">${c('waiting')}</b>` : ''}${c('next') ? `<b>${c('next')}</b>` : ''}`; P_.tab.title = `${c('doing')} en curso · ${c('waiting')} esperan tu OK · ${c('next')} pendientes — clic para abrir`; }
     if (P_.tools) { const nd = scoped().filter(t => t.state === 'done').length; P_.clear.hidden = !nd; P_.clear.textContent = `Limpiar listas (${nd})`; }
     const list = scoped().filter(t => filter === 'all' || (filter === 'error' ? t.state === 'done' && t.error : t.state === filter))
       .sort((a, b) => b.changedAt - a.changedAt).slice(0, 60);
@@ -1188,6 +1199,6 @@ export function initTasks(ctx) {
   const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
   return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
            findBySid: sid => tasks.find(t => t.live && t.sid === sid),
-           handleChat, addTask, revise, rowHTML, setDept, tasks, panelWidth: () => panel.offsetWidth, isLive: () => live,
+           handleChat, addTask, revise, rowHTML, setDept, tasks, panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
            routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, pendingReject, rejectLive, officeModel: () => officeModel, chosenModel, chosenEffort };
 }

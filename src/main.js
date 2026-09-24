@@ -665,6 +665,7 @@ function chatPush(id, msg) {
 }
 function renderChat(id) {
   const r = R[id];
+  document.getElementById('mChips').hidden = chatHist[id].some(m => m.who === 'user'); // suggestions help an empty chat, then give the room back
   // stay where the owner is reading: follow new messages only if already at the bottom (or the owner just wrote)
   const last = chatHist[id][chatHist[id].length - 1];
   const follow = mMsgs.dataset.for !== id || mMsgs.scrollHeight - mMsgs.scrollTop - mMsgs.clientHeight < 60 || (last && last.who === 'user');
@@ -805,7 +806,7 @@ function buildDeptRail(k) {
   const rh = document.getElementById('railHeader');
   rh.classList.remove('show');
   rh.innerHTML = `
-    <div class="b-name"><span class="dot" style="background:${dept.chip}"></span>${dept.name}<span class="live"></span></div>
+    <div class="b-name"><span class="dot" style="background:${dept.chip}"></span>${dept.name}<span class="live"></span><span class="rh-sum">${n} agentes</span><button type="button" class="rh-tog" aria-expanded="false" aria-label="Mostrar u ocultar el resumen del departamento" title="Resumen del departamento">▾</button></div>
     <div class="b-count"><span class="b-num">${n}</span><span class="b-lab">AGENTES</span></div>
     <div class="b-metrics">${BB_ROWS[k].map((row, i) => `
       <div class="m-row"><span class="m-lab">${row[0]}</span><span class="m-val" data-rm="${k}-${i}">${row[1]()}</span></div>`).join('')}</div>
@@ -813,6 +814,10 @@ function buildDeptRail(k) {
     <div class="b-appr" style="display:${stuckIn(k).length ? 'flex' : 'none'}">⚠ <span class="ap-n">${stuckIn(k).length}</span> EN ESPERA DE APROBACIÓN</div>`;
   const trow = rh.querySelector('.b-tasks');
   if (trow) trow.addEventListener('click', () => tasks.toggle());
+  const tog = rh.querySelector('.rh-tog'); // the card folds to one line in the chat; the choice is remembered
+  try { rh.classList.toggle('expanded', localStorage.getItem('ao.rhOpen') === '1'); } catch {}
+  tog.setAttribute('aria-expanded', rh.classList.contains('expanded'));
+  tog.addEventListener('click', e => { e.stopPropagation(); const on = rh.classList.toggle('expanded'); tog.setAttribute('aria-expanded', on); try { localStorage.setItem('ao.rhOpen', on ? '1' : '0'); } catch {} });
   rh.querySelector('.b-appr').addEventListener('click', () => {
     const s = stuckIn(k)[0];
     if (s) openAgentRail(s.a.id);
@@ -857,7 +862,7 @@ function openAgentRail(id, tab = 'chat', fly = true) {
   document.querySelector('#railAgent .mh-name').innerHTML =
     (r.a.lead ? '<span class="star">★ </span>' : '') + r.a.name;
   document.querySelector('#railAgent .mh-role').textContent = `${r.v1.role} · ${dept.name}`;
-  document.querySelector('#railAgent .mh-tag').textContent = r.v1.tagline;
+  { const tag = document.querySelector('#railAgent .mh-tag'); tag.textContent = r.v1.tagline; tag.classList.remove('open'); tag.title = 'clic para ver completo'; tag.onclick = () => tag.classList.toggle('open'); }
   document.getElementById('mChips').innerHTML = (r.v1.chips || []).map(c =>
     `<button>${esc(c)}</button>`).join('');
   document.getElementById('mChips').querySelectorAll('button').forEach(b =>
@@ -1476,6 +1481,15 @@ addEventListener('resize', () => { if (!focused && !tween && !HERO) view.target.
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
 document.getElementById('topSub').addEventListener('click', () => subger.toggle());
+{ // the connector strip folds behind «CONECTADO A · N ▾» (it filled half the bar and ran into the rest on a laptop screen)
+  const tc = document.getElementById('topconn');
+  let pref = null; try { pref = localStorage.getItem('ao.connFold'); } catch {}
+  document.body.classList.toggle('connFold', pref === null ? innerWidth < 1600 : pref === '1');
+  const count = () => { const n = tc.querySelectorAll('img').length; tc.dataset.n = n; const l = tc.querySelector('.tc-lab'); if (l) l.dataset.n = n; };
+  new MutationObserver(count).observe(tc, { childList: true }); count();
+  tc.addEventListener('click', e => { if (!e.target.closest('.tc-lab')) return; const on = document.body.classList.toggle('connFold'); try { localStorage.setItem('ao.connFold', on ? '1' : '0'); } catch {} });
+  tc.title = 'Mostrar u ocultar los conectores';
+}
 const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '' });
 document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
 const hero = HERO ? initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;

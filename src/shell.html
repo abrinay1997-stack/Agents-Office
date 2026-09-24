@@ -1276,6 +1276,45 @@
   /* the Estudio's files inside a chat reply or a deliverable */
   .md .md-media { display: inline-block; margin: 6px 6px 6px 0; } .md .md-media img { max-width: 240px; max-height: 300px; border-radius: 10px; border: 1px solid var(--hairline); display: block; }
   .md .md-video { max-width: 100%; max-height: 320px; border-radius: 10px; display: block; margin: 6px 0; }
+
+  /* ---------- room for the conversation (the chat had 31% of its panel) ---------- */
+  #railHeader .rh-sum { display: none; margin-left: auto; font-size: 11px; letter-spacing: .08em; color: var(--grey); }
+  #railHeader .rh-tog { display: none; width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; font-size: 12px; transition: transform .2s var(--ease); }
+  #rail.agentOpen #railHeader .rh-sum, #rail.agentOpen #railHeader .rh-tog { display: inline-block; }
+  #rail.agentOpen #railHeader:not(.expanded) { padding: 8px 12px; }
+  #rail.agentOpen #railHeader:not(.expanded) > :not(.b-name) { display: none !important; }
+  #rail.agentOpen #railHeader.expanded .rh-tog { transform: rotate(180deg); }
+  #rail .mh-tag { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+  #rail .mh-tag.open { -webkit-line-clamp: unset; display: block; }
+  #mChips[hidden] { display: none; }
+  /* the task detail: its actions stay in reach under a long deliverable */
+  #tdDrawer .td-acts { position: sticky; bottom: -20px; background: var(--cream); margin: 16px -18px 0; padding: 12px 18px 14px; border-top: 1px solid var(--hairline); z-index: 1; }
+  #tdDrawer .td-head { position: sticky; top: -16px; background: var(--cream); margin: -16px -18px 0; padding: 14px 18px 8px; z-index: 1; }
+
+  /* the connector strip, folded */
+  #topconn .tc-lab { cursor: pointer; user-select: none; }
+  #topconn .tc-lab::after { content: ' ▴'; font-size: 9px; color: var(--grey); }
+  body.connFold #topconn .tc-lab::after { content: ' · ' attr(data-n) ' ▾'; }
+  body.connFold #topconn > :not(.tc-lab) { display: none !important; }
+  body.connFold #wires { display: none; }
+  body.connFold #topconn.focus { position: static; transform: none; margin-left: 4px; }
+
+  /* the task panel, minimized to a tab */
+  .tp-min { width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; font-size: 14px; margin-left: 6px; flex: none; }
+  .tp-min:hover { background: var(--ink); color: var(--cream); }
+  #tpanel { transition: transform .3s var(--ease), opacity .3s var(--ease); }
+  body.tpMin #tpanel { transform: translateX(calc(100% + 30px)); opacity: 0; pointer-events: none; }
+  #tpTab { display: none; position: fixed; right: 0; top: 50%; transform: translateY(-50%); z-index: 16; writing-mode: vertical-rl; font-family: var(--ui);
+    padding: 14px 8px; border: 1px solid var(--hairline); border-right: 0; border-radius: 12px 0 0 12px; background: var(--cream); color: var(--ink); cursor: pointer;
+    box-shadow: -8px 0 24px rgba(21,20,20,.1); gap: 8px; align-items: center; }
+  body.tpMin #tpTab { display: flex; }
+  #tpTab .tt-l { font-size: 11px; letter-spacing: .18em; font-weight: 700; }
+  #tpTab b { writing-mode: horizontal-tb; font-size: 11px; min-width: 20px; text-align: center; padding: 2px 5px; border-radius: 99px; background: rgba(21,20,20,.08); }
+  #tpTab b.tt-doing { background: rgba(43,107,235,.15); color: #2B6BEB; } #tpTab b.tt-wait { background: rgba(242,184,75,.25); color: #8A6414; }
+
+  body.tpMin #zoomCtl, body.tpMin #overviewBtn.right { right: 56px; transition: right .3s var(--ease); } /* the panel is a tab: the controls follow it to the edge */
+  #clock { white-space: nowrap; }
+  @media (max-width: 1500px) { #clock { font-size: 16px; } #topStudio, #topSub, #topCal { padding-left: 9px; padding-right: 9px; } }
 </style>
 </head>
 <body>
