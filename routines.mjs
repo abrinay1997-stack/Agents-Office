@@ -4,8 +4,7 @@
 // by a department lead in chat, or by Claude Code). Run state — when each one is next due, when
 // it last ran — lives in data/routines.json so the brain file stays clean config.
 //
-// This release: routines are for Emails, Accounting and Sales only. The other departments get
-// them later; a routine for one of them is refused with a sentence, not an error code.
+// Every department can have routines (24 Sep 2026; the first release had Emails, Accounting and Sales only).
 //
 //   { "id": "inbox-triage", "dept": "emails", "agent": "elead",
 //     "title": "Triage the overnight inbox", "text": "Triage the overnight inbox: what needs me, …",
@@ -18,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, nextRun, valid } from './src/when.js';
 
-export const ALLOWED = ['emails', 'fin', 'sales'];
+export const ALLOWED = ['emails', 'fin', 'sales', 'marketing', 'ops', 'delivery']; // 24 Sep 2026: every department (was emails/fin/sales) — the owner's content work runs on a timetable too
 export const NAMES = { emails: 'Emails', fin: 'Accounting', sales: 'Sales', marketing: 'Marketing', ops: 'Operations', delivery: 'Delivery' };
 export const file = brainPath => path.join(brainPath, 'Agents Office', 'routines.json');
 export const stateFile = dataDir => path.join(dataDir, 'routines.json');
@@ -109,7 +108,8 @@ export function withState(routines, st, now = Date.now()) {
   const out = routines.map(r => {
     const s = st[r.id] || (st[r.id] = {});
     if (!s.nextAt || s.when !== JSON.stringify(r.when)) { s.nextAt = nextRun(r.when, now); s.when = JSON.stringify(r.when); changed = true; }
-    return { ...r, desc: describe(r.when), nextAt: r.paused ? null : s.nextAt, lastAt: s.lastAt || null, runs: s.runs || 0, lastTaskId: s.lastTaskId || null, lastLate: !!s.lastLate };
+    if (Array.isArray(s.skip)) { const keep = s.skip.filter(x => x > now - 864e5); if (keep.length !== s.skip.length) { s.skip = keep; changed = true; } }
+    return { ...r, desc: describe(r.when), skips: s.skip || [], nextAt: r.paused ? null : s.nextAt, lastAt: s.lastAt || null, runs: s.runs || 0, lastTaskId: s.lastTaskId || null, lastLate: !!s.lastLate };
   });
   for (const id of Object.keys(st)) if (!routines.some(r => r.id === id)) { delete st[id]; changed = true; } // deleted routines drop their state
   return { list: out, changed };
@@ -121,7 +121,11 @@ export function due(routines, st, now = Date.now()) {
   for (const r of routines) {
     if (r.paused) continue;
     const s = st[r.id]; if (!s || !s.nextAt) continue;
-    if (s.nextAt <= now) hits.push({ routine: r, due: s.nextAt, late: now - s.nextAt > LATE_AFTER });
+    if (s.nextAt > now) continue;
+    if (Array.isArray(s.skip) && s.skip.includes(s.nextAt)) { // the owner skipped this one run: the clock moves on without firing
+      s.skip = s.skip.filter(x => x !== s.nextAt); s.skippedAt = s.nextAt; s.nextAt = nextRun(r.when, Math.max(now, s.nextAt)); hits.push({ routine: r, skipped: true }); continue;
+    }
+    hits.push({ routine: r, due: s.nextAt, late: now - s.nextAt > LATE_AFTER });
   }
   return hits;
 }

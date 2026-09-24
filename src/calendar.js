@@ -24,7 +24,7 @@ const mondayOf = ts => { const d = new Date(startOfDay(ts)); const k = (d.getDay
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['mon', 'Lunes'], ['tue', 'Martes'], ['wed', 'Miércoles'], ['thu', 'Jueves'], ['fri', 'Viernes'], ['sat', 'Sábados'], ['sun', 'Domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']];
 
 export function initCalendar(ctx) {
-  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
+  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
   const ov = document.getElementById('calOv'); if (!ov) return null;
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
@@ -58,7 +58,7 @@ export function initCalendar(ctx) {
       const startAt = Math.max(from - 1, Date.now() - 1); // routines are only projected forward: what has run is a done task already
       const occ = occurrences(r.when, startAt, to - 1, 800);
       if (r.when.kind === 'hourly' && view !== 'day') { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
-      else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, paused: r.paused });
+      else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, paused: r.paused, skipped: (r.skips || []).includes(at) });
     }
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
@@ -71,7 +71,7 @@ export function initCalendar(ctx) {
     const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'done' ? `listo ${hm(ev.at)}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
     const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1 || (view === 'day' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
-    return `<div class="cv-ev ${ev.kind}${ev.paused ? ' paused' : ''}${ev.t?.error ? ' err' : ''}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
+    return `<div class="cv-ev ${ev.kind}${ev.paused ? ' paused' : ''}${ev.skipped ? ' skipped' : ''}${ev.t?.error ? ' err' : ''}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
       <div class="cv-ev-t">${ev.kind === 'routine' ? '<span class="cv-rt">⏱</span>' : ev.kind === 'done' ? '<span class="cv-tick">✓</span>' : ev.kind === 'sched' ? '<span class="cv-rt">◷</span>' : ev.t?.team?.members?.length ? '<span class="cv-rt">⚑</span>' : ''}${esc(ev.title)}</div>
       <div class="cv-ev-m"><span>${esc(time)}</span>${av(ev.agent)}</div></div>`;
   }
@@ -114,8 +114,17 @@ export function initCalendar(ctx) {
     if (!E.back) { E.back = document.createElement('div'); E.back.className = 'cv-back'; E.rail.parentElement.insertBefore(E.back, E.rail.previousElementSibling); }
     E.back.innerHTML = `<div class="cv-rail-h">SIN FECHA <b>${list.length}</b></div>` + (list.length ? list.slice(0, 30).map(t => { const a = agentOf(t.agent); return `<div class="cv-bk" draggable="true" data-ev="t:${t.id}" style="--chip:${DEPTS[t.dept].chip}" role="button" tabindex="0" title="Arrástrala a un día para programarla"><div class="cv-r-t">${esc(t.title)}</div><div class="cv-r-m">${esc(a ? a.name : '')} · pendiente</div></div>`; }).join('') : '<div class="cv-empty">Nada pendiente sin fecha.</div>');
   }
+  function renderLoad() { // who has how much in the days on screen: tasks and routine runs per agent
+    const { from, to } = range(); const by = events(from, to), n = {};
+    for (const k in by) for (const ev of by[k]) if (!ev.skipped && !ev.paused && ev.kind !== 'done') n[ev.agent] = (n[ev.agent] || 0) + 1;
+    const top = Object.entries(n).sort((a, b) => b[1] - a[1]).slice(0, 8), max = top.length ? top[0][1] : 1;
+    if (!E.load) { E.load = document.createElement('details'); E.load.className = 'cv-load'; E.load.open = true; E.rail.parentElement.appendChild(E.load); }
+    const wasOpen = E.load.open;
+    E.load.innerHTML = `<summary class="cv-rail-h">CARGA ${view === 'day' ? 'DEL DÍA' : view === 'week' ? 'DE LA SEMANA' : 'DEL MES'}</summary>` + (top.length ? top.map(([id, c]) => { const a = agentOf(id); return `<div class="cv-ld"><span>${esc(a ? a.name : id)}</span><i style="width:${Math.round(c / max * 100)}%;background:${a ? DEPTS[a.dept].chip : '#ccc'}"></i><b>${c}</b></div>`; }).join('') : '<div class="cv-empty">Nada por hacer en estos días.</div>');
+    E.load.open = wasOpen;
+  }
   function renderRail() {
-    renderBacklog();
+    renderBacklog(); renderLoad();
     const list = routines.slice().sort((x, y) => (x.paused ? Infinity : x.nextAt || Infinity) - (y.paused ? Infinity : y.nextAt || Infinity));
     E.railN.textContent = list.length;
     E.rail.innerHTML = list.length ? list.map(r => { const a = agentOf(r.agent), chip = DEPTS[r.dept].chip; return `<div class="cv-r${r.paused ? ' paused' : ''}${onlyRoutine === r.id ? ' on' : ''}" data-rid="${r.id}" style="--chip:${chip}">
@@ -230,7 +239,7 @@ export function initCalendar(ctx) {
       <label class="cv-lab">Qué debe pasar</label><textarea class="cv-text" rows="3">${esc(r.text || r.title)}</textarea>
       <div class="cv-row"><select class="cv-cad" aria-label="Cada cuándo">${pk.custom ? `<option value="custom" selected>${esc(r.desc || describe(r.when))}</option>` : ''}${CADENCES.map(([v, l]) => `<option value="${v}"${v === pk.cadence ? ' selected' : ''}>${l}</option>`).join('')}</select><input type="time" class="cv-time" value="${pk.at}" aria-label="Hora"${pk.cadence === 'hourly' ? ' disabled' : ''}>
         <label class="cv-ok"><input type="checkbox" class="cv-okc"${r.needsOk ? ' checked' : ''}> necesita mi visto bueno</label></div>
-      <div class="cv-row"><button class="cv-go" type="button" data-act="save">GUARDAR</button><button class="cv-btn" type="button" data-act="run">EJECUTAR AHORA</button><button class="cv-btn" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button class="cv-btn" type="button" data-act="only">SOLO ESTA</button><span class="sp"></span><button class="cv-btn warn" type="button" data-act="delete">ELIMINAR</button></div>
+      <div class="cv-row"><button class="cv-go" type="button" data-act="save">GUARDAR</button><button class="cv-btn" type="button" data-act="run">EJECUTAR AHORA</button><button class="cv-btn" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button class="cv-btn" type="button" data-act="${(r.skips || []).includes(at) ? 'unskip' : 'skip'}">${(r.skips || []).includes(at) ? 'NO SALTAR' : 'SALTAR ESTA'}</button><button class="cv-btn" type="button" data-act="only">SOLO ESTA</button><span class="sp"></span><button class="cv-btn warn" type="button" data-act="delete">ELIMINAR</button></div>
       <div class="cv-hint" aria-live="polite">${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno.' : 'Solo lee y reporta: no te espera.'}</div>`;
     E.pop.hidden = false; place(E.pop, el);
     const P = { title: E.pop.querySelector('.cv-title'), text: E.pop.querySelector('.cv-text'), cad: E.pop.querySelector('.cv-cad'), time: E.pop.querySelector('.cv-time'), okc: E.pop.querySelector('.cv-okc') };
@@ -250,6 +259,12 @@ export function initCalendar(ctx) {
         b.disabled = true; say('Guardando…');
         const res = await updateRoutine(r.id, patch);
         if (!res || !res.ok) { say((res && res.error) || 'No se pudo guardar.', true); b.disabled = false; return; }
+        closePop(); render(); return;
+      }
+      if (act === 'skip' || act === 'unskip') {
+        if (!(at > Date.now())) { say('Esa ejecución ya pasó.', true); return; }
+        b.disabled = true; const res = await skipRun(r.id, at, act === 'skip');
+        if (!res || !res.ok) { say((res && res.error) || 'No se pudo.', true); b.disabled = false; return; }
         closePop(); render(); return;
       }
       if (act === 'delete' && !confirm(`¿Eliminar la rutina «${r.title}»? Sale del horario para siempre.`)) return;

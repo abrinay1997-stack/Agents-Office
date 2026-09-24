@@ -158,11 +158,12 @@ await step('routines: plain words become a schedule', async () => {
   if (w.untilText(now + 120000, now) !== 'en 2 min' || w.untilText(w.fromPicker('fri', '16:00') && nx, now) !== 'lun 09:00') throw new Error('countdown text');
   return `${cases.length} phrasings · asks back for a missing time or day · "morning" → 08:00 flagged`;
 });
-await step('routines: outside Emails, Accounting and Sales is refused, bad ones named', async () => {
+await step('routines: every department can have them (marketing too), bad ones named', async () => {
   const rt = await import('./routines.mjs'); const { loadRoster } = await import('./roster.mjs'); const agents = loadRoster().agents;
-  const bad = rt.validate({ id: 'x', dept: 'marketing', agent: 'iggy', text: 'post the reel', when: { kind: 'daily', at: '09:00' } }, agents);
-  if (!bad.problems.some(p => /later release/.test(p))) throw new Error('marketing routine not refused: ' + bad.problems);
-  if (!/Emails, Accounting and Sales/.test(rt.refusal('ops'))) throw new Error('refusal sentence');
+  const mk = rt.validate({ id: 'x', dept: 'marketing', agent: 'iggy', text: 'post the reel', when: { kind: 'daily', at: '09:00' } }, agents);
+  if (mk.problems.length) throw new Error('a marketing routine was refused: ' + mk.problems);
+  const nowhere = rt.validate({ id: 'y', dept: 'brain', agent: 'iggy', text: 'x', when: { kind: 'daily', at: '09:00' } }, agents);
+  if (!nowhere.problems.length) throw new Error('a routine for no department was accepted');
   const wrong = rt.validate({ dept: 'fin', agent: 'ghost', text: 'x', when: { kind: 'weekly', days: [] } }, agents);
   if (!wrong.problems.some(p => /no agent/.test(p)) || !wrong.problems.some(p => /not complete/.test(p))) throw new Error('unknown agent / incomplete schedule not named: ' + wrong.problems);
   const cross = rt.validate({ dept: 'fin', agent: 'lexi', text: 'x', when: { kind: 'daily', at: '09:00' } }, agents);
@@ -172,7 +173,7 @@ await step('routines: outside Emails, Accounting and Sales is refused, bad ones 
   const dup = rt.validate({ id: 'triage-the-overnight-inbox', dept: 'emails', agent: 'elead', text: 'x', when: { kind: 'daily', at: '09:00' } }, agents, [good.routine]);
   if (!dup.problems.some(p => /share this id/.test(p))) throw new Error('duplicate id not named');
   if (rt.guessNeedsOk('list the overdue invoices') || !rt.guessNeedsOk('send the reminders') || !rt.guessNeedsOk('draft replies to unanswered client emails')) throw new Error('needs-OK guess');
-  return 'marketing refused · unknown agent, wrong department, incomplete schedule, duplicate id all named · needsOk defaults on';
+  return 'marketing accepted · no department refused · unknown agent, wrong department, incomplete schedule, duplicate id all named · needsOk defaults on';
 });
 await step('routines: due fires once, a missed run catches up marked LATE, then the clock moves on', async () => {
   const rt = await import('./routines.mjs'); const { loadRoster } = await import('./roster.mjs'); const os = await import('node:os');
@@ -372,8 +373,8 @@ else {
       const fired = await page.evaluate(() => window.CC.tasks.tasks.some(t => t.routine && /triage the inbox/i.test(t.title))); if (!fired) throw new Error('RUN NOW did not make a task');
       await page.click('.tp-dd'); await page.click('.tp-menu button[data-k="marketing"]');
       await page.fill('.tp-in', 'every day at 9am post the reel'); await page.keyboard.press('Enter'); await page.waitForTimeout(400);
-      const no = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/later release/.test(no)) throw new Error('marketing not refused: ' + no);
-      const still = await page.evaluate(() => window.CC.routines().length); if (still !== 1) throw new Error('a refused routine was added');
+      const mk = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Rutina programada/.test(mk)) throw new Error('a marketing routine was not set: ' + mk);
+      const two = await page.evaluate(() => window.CC.routines().length); if (two !== 2) throw new Error('routines: ' + two);
       const opts = await page.evaluate(() => [...document.querySelectorAll('.tp-model option')].map(o => o.value).join(',') + '|' + document.querySelector('.tp-model').value); if (opts !== 'sonnet,opus,fable|sonnet') throw new Error('model menu: ' + opts);
       const eff = await page.evaluate(() => [...document.querySelectorAll('.tp-effort option')].map(o => o.value).join(',') + '|' + document.querySelector('.tp-effort').value); if (eff !== ',low,medium,high,xhigh,max|') throw new Error('effort menu: ' + eff);
       // V3.7: the box grows with the text, and the big editor mirrors it both ways
@@ -387,7 +388,7 @@ else {
       const bigOff = await page.evaluate(() => !document.getElementById('tpBig').classList.contains('on')); if (!bigOff) throw new Error('Esc did not close the big editor');
       await page.fill('.tp-in', ''); await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true }))); await page.evaluate(() => document.querySelector('.tp-in').blur()); await page.click('.tp-chip[data-f="all"]'); // hand the keys back, feed back to All
       const rest = await page.evaluate(() => document.querySelector('.tp-in').offsetHeight); if (rest > 34) throw new Error('box did not shrink back: ' + rest + 'px');
-      return 'hint says the schedule · SCHEDULED row + next-up strip + board column · RUN NOW fires · marketing refused · box grows + big editor mirrors';
+      return 'hint says the schedule · SCHEDULED row + next-up strip + board column · RUN NOW fires · marketing routine set · box grows + big editor mirrors';
     });
     await step('smoke: the CALENDAR button and P open the calendar — routines on their days, a task scheduled for a date, a routine from a date (demo)', async () => { // V3.2.1
       await page.click('#topCal'); await page.waitForTimeout(500); // the top-bar button opens it…
@@ -413,14 +414,14 @@ else {
       await page.click('.cv-go'); await page.waitForTimeout(500);
       const r = await page.evaluate(() => window.CC.tasks.routines.find(x => /weekly client update/i.test(x.title))); if (!r || r.when.start !== target) throw new Error('routine start: ' + JSON.stringify(r && r.when));
       const before = await page.$$eval('.cv-ev.routine', (els, t) => els.filter(x => x.title.startsWith('Send the weekly client update') && x.closest('.cv-day').dataset.day < t).length, target); if (before) throw new Error('the routine shows before its start date');
-      // marketing is refused for routines, with the sentence
+      // marketing can have routines too (24 Sep 2026)
       await page.hover(`.cv-day[data-day="${target}"]`); await page.click(`.cv-day[data-day="${target}"] .cv-add`); await page.waitForTimeout(200);
       await page.selectOption('.cv-dept', 'marketing'); await page.click('.cv-rep'); await page.waitForTimeout(150);
-      const refused = await page.$eval('.cv-hint', e => e.textContent); const dis = await page.$eval('.cv-go', e => e.disabled); if (!/later release/.test(refused) || !dis) throw new Error('marketing routine not refused: ' + refused);
+      const mkh = await page.$eval('.cv-hint', e => e.textContent); const dis = await page.$eval('.cv-go', e => e.disabled); if (!/Rutina ·/.test(mkh) || dis) throw new Error('marketing routine not offered: ' + mkh);
       await page.keyboard.press('Escape'); await page.waitForTimeout(150); if (!await page.$eval('#cvPop', e => e.hidden)) throw new Error('Esc did not close the popover');
       await page.click('.cv-seg button[data-v="week"]'); await page.waitForTimeout(300); const wk = await page.$$eval('.cv-day', e => e.length); if (wk !== 7) throw new Error('week cells: ' + wk);
       await page.keyboard.press('Escape'); await page.waitForTimeout(300); if (await page.$eval('#calOv', e => e.classList.contains('on'))) throw new Error('Esc did not close the calendar');
-      return `${cells} cells · ${rt} routine runs on the grid · rail ${rail} · task scheduled for ${target} · routine starts ${target} (none before) · marketing refused · week view 7`;
+      return `${cells} cells · ${rt} routine runs on the grid · rail ${rail} · task scheduled for ${target} · routine starts ${target} (none before) · marketing offered · week view 7`;
     });
     await step('smoke: department focus opens the chat rail', async () => {
       await page.keyboard.press('1'); await page.waitForTimeout(1800);
@@ -468,6 +469,18 @@ await step('subgerente: a plan is parsed, moved pieces named, bad departments an
   const sys = sb.systemPrompt({ business: 'X', depts: DEPTS, agents, skillsOf: () => [], routineDepts: [], status: '' });
   if (!/CALENDARIO \(usa estas fechas/.test(sys) || !/lexi/.test(sys)) throw new Error('prompt lacks the calendar or the roster');
   return '2 pieces · moved from marketing · past date → now · prose → reply';
+});
+
+await step('routines: one run can be skipped — the clock moves on without firing, the next one fires', async () => {
+  const rt = await import('./routines.mjs'); const w = await import('./src/when.js');
+  const r = { id: 'skipme', dept: 'emails', agent: 'elead', title: 'x', text: 'x', when: { kind: 'daily', at: '09:00' }, paused: false };
+  const due = w.nextRun(r.when, Date.now() - 2 * 864e5); // a run two days ago, still pending in the state
+  const st = { skipme: { nextAt: due, when: JSON.stringify(r.when), skip: [due] } };
+  const hits = rt.due([r], st, due + 1000);
+  if (hits.length !== 1 || !hits[0].skipped) throw new Error('the skipped run fired: ' + JSON.stringify(hits));
+  if (!(st.skipme.nextAt > due) || st.skipme.skip.length) throw new Error('the clock did not move on');
+  const again = rt.due([r], st, st.skipme.nextAt + 1000); if (again.length !== 1 || again[0].skipped) throw new Error('the next run did not fire');
+  return 'skipped once · next run fires';
 });
 
 await step('estudio: the free test engine generates, files are stored with their record, paths stay inside', async () => {
@@ -529,13 +542,13 @@ await step('estudio: the free test engine generates, files are stored with their
       return `sales set up: ${up.setup.sales} · lessons dir ${path.basename(r.dir)}`;
     });
     await step('server: /api/routines lists the timetable and names the departments', async () => {
-      const r = await (await fetch(base + '/api/routines')).json(); if (!Array.isArray(r.routines) || JSON.stringify(r.depts) !== '["emails","fin","sales"]') throw new Error(JSON.stringify(r).slice(0, 120));
+      const r = await (await fetch(base + '/api/routines')).json(); if (!Array.isArray(r.routines) || JSON.stringify(r.depts) !== '["emails","fin","sales","marketing","ops","delivery"]') throw new Error(JSON.stringify(r).slice(0, 120));
       if (typeof up.routines?.count !== 'number') throw new Error('health has no routines');
       return `${r.routines.length} routines${r.routines.length ? ' · next ' + (r.routines.filter(x => x.nextAt).sort((a, b) => a.nextAt - b.nextAt)[0]?.title || '—') : ''} · ${path.basename(path.dirname(r.path))}/${path.basename(r.path)}`;
     });
-    await step('server: a routine outside Emails, Accounting and Sales is refused with a sentence', async () => {
-      const r = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'marketing', text: 'every day at 9am post the reel' }) });
-      const j = await r.json(); if (r.status !== 400 || !j.refused || !/later release/.test(j.error)) throw new Error(r.status + ' ' + JSON.stringify(j));
+    await step('server: a routine for no department is refused, a routine with no time is asked back', async () => {
+      const r = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'brain', text: 'every day at 9am post the reel' }) });
+      const j = await r.json(); if (r.status !== 400 || !/unknown department/.test(j.error)) throw new Error(r.status + ' ' + JSON.stringify(j));
       const t = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'emails', text: 'every weekday, triage the inbox' }) });
       const k = await t.json(); if (t.status !== 400 || !k.needsTime) throw new Error('missing time not asked back: ' + JSON.stringify(k));
       const n = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'sales', text: 'chase the quiet deals' }) });

@@ -520,7 +520,10 @@ async function runServerTask(id, { feedback, approve } = {}) {
 function tickRoutines() { // the clock never throws: an exception in a setInterval would stop the office
   try {
     let list; try { list = loadRoutines(); } catch (e) { console.warn('routines:', e.message); list = null; }
-    if (list) for (const { routine, due, late } of routines.due(list, RSTATE)) fire(routine, { due, late });
+    if (list) for (const { routine, due, late, skipped } of routines.due(list, RSTATE)) {
+      if (skipped) { routines.saveState(DATA, RSTATE); console.log(`⏭ ${routine.id} skipped this run (next ${untilText(RSTATE[routine.id].nextAt)})`); continue; }
+      fire(routine, { due, late });
+    }
     tickScheduled();
   } catch (e) { console.error('clock:', e.message); }
 }
@@ -753,7 +756,7 @@ const server = http.createServer(async (req, res) => {
       const r = await makeRoutine({ dept: b.dept, text: b.text, when: b.when, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort });
       return json(res, r.error ? 400 : 200, r);
     }
-    const rm = url.pathname.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume))?$/);
+    const rm = url.pathname.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume|skip|unskip))?$/);
     if (rm) {
       const r = loadRoutines().find(x => x.id === rm[1]);
       if (!r) return json(res, 404, { error: 'no such routine' });
@@ -761,6 +764,13 @@ const server = http.createServer(async (req, res) => {
       if (req.method !== 'POST' && req.method !== 'PATCH') return json(res, 405, { error: 'POST, PATCH or DELETE' });
       if (rm[2] === 'run') return json(res, 200, { ok: true, task: fire(r, { by: 'you' }), routines: loadRoutines() });
       if (rm[2] === 'pause' || rm[2] === 'resume') { editRoutine(r.id, { paused: rm[2] === 'pause' }); return json(res, 200, { ok: true, routines: loadRoutines() }); }
+      if (rm[2] === 'skip' || rm[2] === 'unskip') { // one run of the timetable, by its time (ms): skipped, or back
+        const { at } = await body(req); const t = +at;
+        if (!(t > Date.now())) return json(res, 400, { error: 'esa ejecución ya pasó' });
+        const s = RSTATE[r.id] || (RSTATE[r.id] = {}); s.skip = (s.skip || []).filter(x => x !== t); if (rm[2] === 'skip') s.skip.push(t);
+        routines.saveState(DATA, RSTATE); console.log(`${rm[2] === 'skip' ? '⏭' : '↺'} ${r.id} ${rm[2] === 'skip' ? 'will skip' : 'will run'} ${new Date(t).toLocaleString()}`);
+        return json(res, 200, { ok: true, routines: loadRoutines() });
+      }
       const b = await body(req); const patch = {};
       if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk; if (typeof b.paused === 'boolean') patch.paused = b.paused;
       if (typeof b.text === 'string') { const t = b.text.trim(); if (!t || t.length > 4000) return json(res, 400, { error: 'el texto de la rutina debe tener entre 1 y 4000 caracteres' }); patch.text = t; }
