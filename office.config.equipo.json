@@ -1,0 +1,13 @@
+{
+  "name": "PanaClaw",
+  "brain": "./brain-panaclaw",
+  "mcp": {
+    "allow": [],
+    "deny": ["Netlify", "GoDaddy", "Firebase", "Supabase", "Spotify", "Telegram", "magic"],
+    "departments": {
+      "Metricool": ["marketing"],
+      "Canva": ["marketing", "delivery"],
+      "Resend": ["emails"]
+    }
+  }
+}

@@ -43,6 +43,12 @@ if errorlevel 2 (
   echo Cerebro: CLAUDE
 )
 echo.
+rem Librerias del proyecto: se instalan si faltan (una copia recien bajada) o si el equipo agrego alguna
+powershell -NoProfile -Command "if (!(Test-Path 'node_modules\.package-lock.json') -or ((Get-Item 'package-lock.json').LastWriteTime -gt (Get-Item 'node_modules\.package-lock.json').LastWriteTime)) { exit 2 } else { exit 0 }" >nul 2>nul
+if errorlevel 2 (
+  echo [0/3] Instalando las librerias del proyecto, solo esta vez...
+  call npm install --no-audit --no-fund
+)
 echo [1/3] Construyendo la oficina con los ultimos cambios...
 call node build.mjs >nul 2>nul
 if errorlevel 1 (
