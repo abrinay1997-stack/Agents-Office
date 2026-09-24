@@ -94,7 +94,7 @@ Se unieron los duplicados y cada punto va con su estado.
 50. ✅ [media] «Descartar el plan» mostraba «Enviando a los jefes…». (L40)
 51. ✅ [media] Un fallo al cargar la conversación parecía una conversación vacía; «Nueva conversación» vaciaba la vista aunque fallara. (L41)
 52. ✅ [media] Cada 3 s el lector de pantalla releía toda la conversación. Ahora solo anuncia la respuesta nueva. (A24)
-53. ⏳ [media] La fecha que propone Dimitri para cada pieza no se puede editar ni quitar desde la tarjeta. (L16)
+53. ✅ [media] La fecha que propone Dimitri para cada pieza no se podía editar ni quitar desde la tarjeta. Ahora es un campo de fecha y hora, con ✕ para quitarla («ya»); una hora pasada se rechaza. (L16)
 54. ✅ [media] En la demo (sin servidor), Dimitri intentaba cargar la conversación y daba error.
 
 ## 5. El Cerebro
@@ -107,10 +107,10 @@ Se unieron los duplicados y cada punto va con su estado.
 60. ✅ [media] Los colores por carpeta estaban fijados a la demo: el cerebro real salía gris. Ahora cada carpeta tiene un color estable. (L21)
 61. ✅ [media] Con ciertos filtros el lienzo quedaba vacío sin explicación. (L22)
 62. ✅ [baja] Con una nota abierta, la rueda no acercaba hacia el cursor. (L43)
-63. ⏳ [baja] No hay vista de la papelera de notas, y «Deshacer» desaparece al hacer clic en otra. (L44)
-64. ⏳ [baja] «+N más» enlaces no se puede pulsar. (L45)
-65. ⏳ [baja] Un [[enlace]] a una nota fuera del grafo solo se pone gris, sin decir por qué. (L47)
-66. ⏳ [media] En tablet no se puede arrastrar ni pellizcar el grafo: faltan Pointer Events. (A41)
+63. ✅ [baja] No había vista de la papelera de notas, y «Deshacer» desaparecía al hacer clic en otra. Ahora el Cerebro tiene «🗑 Papelera»: cada nota tirada se ve 30 días, con «Restaurar». (L44)
+64. ✅ [baja] «+N más» enlaces no se podía pulsar. Ahora es un botón que muestra el resto. (L45)
+65. ✅ [baja] Un [[enlace]] a una nota fuera del grafo solo se ponía gris, sin decir por qué. Ahora dice «(no está en el Cerebro)» y explica el motivo al pasar el cursor. (L47)
+66. ✅ [media] En tablet no se podía arrastrar ni pellizcar el grafo. Ahora usa Pointer Events: un dedo arrastra, dos pellizcan, un toque abre la nota. (A41)
 
 ## 6. El Estudio
 
@@ -136,26 +136,26 @@ Se unieron los duplicados y cada punto va con su estado.
 83. ✅ [media] El Cerebro no tenía diseño para pantallas pequeñas. (A14)
 84. ✅ [media] El calendario en pantallas estrechas: ahora se pliega la lista de rutinas y el popover cabe. Parcial: la cuadrícula de 7 días sigue apretada en un teléfono. (A13)
 85. ✅ [media] El tablero en pantallas estrechas: ahora las columnas tienen ancho mínimo y scroll lateral. Parcial. (A15)
-86. ⏳ [media] El tablero queda debajo de «Vista general» y de la marca. (A19)
+86. ✅ [media] El tablero quedaba debajo de «Vista general» y de la marca. Ahora va por encima de todo, con su ✕ para cerrarlo y el nombre del negocio. (A19)
 87. ✅ [baja] El popover del calendario se cortaba en pantallas bajas. (A43)
 
 ## 8. Accesibilidad y teclado
 
-88. ✅ [alta] Las tarjetas de los departamentos no se podían abrir con el teclado. Ahora son botones con Enter/Espacio. Las píldoras de los agentes siguen pendientes. (A7)
+88. ✅ [alta] Las tarjetas de los departamentos no se podían abrir con el teclado. Ahora son botones con Enter/Espacio, y las píldoras de los agentes también (con Tab dentro de su departamento). (A7)
 89. ✅ [alta] En las filas programadas, Enter sobre CANCELAR abría el detalle en vez de cancelar. (A8)
 90. ✅ [media] Faltaban nombres en la caja de tareas, el editor grande y el buscador del calendario; el editor grande no era un diálogo. (A30)
 91. ✅ [media] El chat del agente no se anunciaba (ahora es role="log"). Parcial: todavía se redibuja entero. (A25)
-92. ⏳ [media] El menú de departamento del panel no tiene teclado (flechas, Esc) ni aria-expanded. (A26)
-93. ⏳ [media] Los interruptores REPETIR/EQUIPO y los filtros del panel y del calendario no dicen si están activos (aria-pressed). Ya lo dicen en el Estudio y el Cerebro. (A27)
-94. ⏳ [media] Varios elementos solo responden al clic: rutinas del calendario, «Actividad», los [[enlaces]] fuera del chat. (A31, A32)
+92. ✅ [media] El menú de departamento del panel no tenía teclado ni aria-expanded. Ahora ↓ lo abre, ↑ ↓ Inicio Fin mueven, Enter elige y Esc cierra. (A26)
+93. ✅ [media] Los interruptores REPETIR/EQUIPO y los filtros del panel y del calendario no decían si estaban activos. Ahora llevan aria-pressed, también DÍA/SEMANA/MES. (A27)
+94. ✅ [media] Varios elementos solo respondían al clic: rutinas del calendario, las tareas sin fecha, los [[enlaces]] fuera del chat. Ahora responden a Enter/Espacio, y un [[enlace]] en el detalle o en Dimitri abre su nota. (A31, A32)
 95. ✅ [media] Los anillos de foco convertían los botones redondos en rectángulos. (A45)
 96. ✅ [baja] Con «reducir movimiento» activado, los indicadores de carga quedaban congelados. (A49)
-97. ⏳ [baja] La oficina 3D (el canvas) no tiene una alternativa en texto para lectores de pantalla. (A54)
+97. ✅ [baja] La oficina 3D (el canvas) no tenía alternativa en texto para lectores de pantalla. Ahora la describe y dice cómo moverse con el teclado. (A54)
 
 ## 9. Visual, modo oscuro y textos
 
 98. ✅ [media] En modo oscuro, el ámbar, el verde, el rojo, el azul y el violeta tenían un contraste de 2,3–3,5:1. Ahora tienen versiones claras; también los fondos que desaparecían. (A35, A36)
-99. ✅ [media] Textos en inglés en la interfaz y en los errores del servidor: WHOLE OFFICE, routine, failed, result ready, click to view, Delivered, no such task… Ahora están en español, y las horas en formato local. Parcial: quedan ejemplos en inglés en las respuestas sobre rutinas del chat. (A51, L26–L28, L30, L48, L49)
+99. ✅ [media] Textos en inglés en la interfaz y en los errores del servidor: WHOLE OFFICE, routine, failed, result ready, click to view, Delivered, no such task… Ahora están en español, y las horas en formato local. Completo desde V4.1: las respuestas sobre rutinas del chat usan ejemplos en español y entienden «pausa», «reanuda», «ejecuta» y «elimina»; los avisos de equipo y de rutinas, también en español. (A51, L26–L28, L30, L48, L49)
 100. ✅ [baja] Otros ajustes visuales:
     - las barras de scroll estaban ocultas en las listas y ahora se ven finas (A52);
     - los números que cambian ya no empujan a sus vecinos (A47);

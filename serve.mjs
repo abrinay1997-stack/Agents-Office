@@ -615,27 +615,27 @@ async function makeRoutine({ dept, text, when, agent, needsOk, model, effort }) 
 // B2: a routine said to an agent in chat. The lead routes it inside the department; a specialist takes it on.
 async function routinesChat(a, text) {
   const t = String(text).trim(), dept = a.department, allowed = routines.ALLOWED.includes(dept);
-  if (/^\s*(routines?|schedule|timetable|what(?:'s| is) (?:scheduled|on the (?:schedule|timetable)))\s*\??\s*$/i.test(t)) return { reply: allowed ? routines.listText(loadRoutines(), dept, AGENTS) : routines.refusal(dept) };
-  const cmd = /^\s*(pause|stop|resume|start|unpause|delete|remove|run)\b\s*(?:the\s+)?(.*?)\s*[.!]?$/i.exec(t);
+  if (/^\s*¿?\s*(routines?|schedule|timetable|what(?:'s| is) (?:scheduled|on the (?:schedule|timetable))|rutinas?|horario|qu[eé] (?:hay|tengo) (?:programado|en el horario))\s*\??\s*$/i.test(t)) return { reply: allowed ? routines.listText(loadRoutines(), dept, AGENTS) : routines.refusal(dept) };
+  const cmd = /^\s*(pause|stop|resume|start|unpause|delete|remove|run|pausa|pausar|det[eé]n|detener|reanuda|reanudar|activa|activar|elimina|eliminar|borra|borrar|ejecuta|ejecutar|corre)\b\s*(?:the\s+|la\s+|el\s+)?(?:rutina\s+(?:de\s+)?)?(.*?)\s*(?:now|ahora(?: mismo)?)?\s*[.!]?$/i.exec(t); // V4.1: the Spanish verbs too
   if (cmd && allowed && !parseWhen(t)) {
     const list = loadRoutines(); const words = cmd[2].replace(/\s+(routine|one)$/i, ''); const r = routines.matchRoutine(list, dept, words);
-    if (!r) return { reply: (list.some(x => x.dept === dept) ? '¿Cuál? ' : '') + routines.listText(list, dept, AGENTS) };
-    const verb = cmd[1].toLowerCase();
+    if (!r) return !words || /\b(rutinas?|routines?)\b/i.test(t) ? { reply: (list.some(x => x.dept === dept) ? '¿Cuál? ' : '') + routines.listText(list, dept, AGENTS) } : null; // «borra el segundo párrafo» is a chat, not a routine that does not exist
+    const v0 = cmd[1].toLowerCase(), verb = /^(run|ejecuta|ejecutar|corre)$/.test(v0) ? 'run' : /^(pause|stop|pausa|pausar|det[eé]n|detener)$/.test(v0) ? 'pause' : /^(resume|start|unpause|reanuda|reanudar|activa|activar)$/.test(v0) ? 'resume' : 'delete';
     if (verb === 'run') { const task = fire(r, { by: 'you' }); return { reply: `Ejecutando "${r.title}" ahora — ${r.agent === a.id ? 'yo me encargo' : agentName(r.agent) + ' se encarga'}. Llega al panel${r.needsOk ? ' y espera tu visto bueno antes de enviar nada' : ''}.`, task }; }
-    if (/pause|stop/.test(verb)) { editRoutine(r.id, { paused: true }); return { reply: `Pausada "${r.title}". Sigue en el horario; di "resume ${r.title.toLowerCase()}" para activarla de nuevo.` }; }
+    if (/pause|stop/.test(verb)) { editRoutine(r.id, { paused: true }); return { reply: `Pausada «${r.title}». Sigue en el horario; di «reanuda ${r.title.toLowerCase()}» para activarla de nuevo.` }; }
     if (/resume|start|unpause/.test(verb)) { const n = editRoutine(r.id, { paused: false }); return { reply: `"${r.title}" vuelve a estar activa — próxima ejecución ${untilText(n.nextAt)}.` }; }
     if (/delete|remove/.test(verb)) { removeRoutine(r.id); return { reply: `Eliminada "${r.title}". Fuera del horario.` }; }
   }
   const p = parseWhen(t);
   if (!p) return null;
   if (!allowed) return { reply: routines.refusal(dept) };
-  if (p.needsDay) return { reply: '¿Qué día? Dilo de nuevo con el día: "every Monday at 9am, …".' };
-  if (p.needsTime) return { reply: `¿A qué hora? Dilo de nuevo con la hora, p. ej. "every weekday at 8am, ${p.text ? p.text.slice(0, 60) : '…'}".` };
+  if (p.needsDay) return { reply: '¿Qué día? Dilo de nuevo con el día: «cada lunes a las 9, …».' };
+  if (p.needsTime) return { reply: `¿A qué hora? Dilo de nuevo con la hora, p. ej. «cada día hábil a las 8, ${p.text ? p.text.slice(0, 60) : '…'}».` };
   if (!p.text) return { reply: 'Tengo la hora pero no la tarea. Dilo de nuevo con lo que debe pasar.' };
   const made = await makeRoutine({ dept, text: p.text, when: p.when, agent: a.lead ? undefined : a.id });
   if (made.error) return { reply: made.error };
   const r = made.routine, who = r.agent === a.id ? 'yo me encargo' : `${agentName(r.agent)} se encarga`;
-  return { reply: `Listo. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${who}.${made.guessed ? ` Tomé "${made.guessed}" como ${r.when.at}; di una hora para cambiarlo.` : ''} ${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno primero.' : 'Solo lee, así que no te esperará.'} Próxima ejecución ${untilText(r.nextAt)}. Di "routines" para ver la lista, "pause ${r.title.toLowerCase()}" para detenerla.`, routine: r };
+  return { reply: `Listo. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${who}.${made.guessed ? ` Tomé «${made.guessed}» como las ${r.when.at}; di una hora para cambiarlo.` : ''} ${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno primero.' : 'Solo lee, así que no te esperará.'} Próxima ejecución ${untilText(r.nextAt)}. Di «rutinas» para ver la lista, o «pausa ${r.title.toLowerCase()}» para detenerla.`, routine: r };
 }
 
 /* ---------- http ---------- */
@@ -800,6 +800,11 @@ const server = http.createServer(async (req, res) => {
       fs.renameSync(n.path, dest);
       console.log(`🗑 note to the bin: ${id}`);
       return json(res, 200, { ok: true, trashed: path.basename(dest), graph: await rebuildGraph() });
+    }
+    if (url.pathname === '/api/note/trash' && req.method === 'GET') { // V4.1: what is in the bin (newest first) — the Brain's «Papelera» view
+      let files = []; try { files = fs.readdirSync(TRASH).filter(f => /__\d+\.md$/.test(f)); } catch {}
+      const items = files.map(f => ({ file: f, name: f.replace(/__\d+\.md$/, ''), at: +f.match(/__(\d+)\.md$/)[1] })).sort((a, b) => b.at - a.at).slice(0, 200);
+      return json(res, 200, { items, keepDays: 30 });
     }
     if (url.pathname === '/api/note/restore' && req.method === 'POST') { // one note back out of the bin
       const { file } = await body(req); const f = path.basename(String(file || ''));

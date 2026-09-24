@@ -167,7 +167,8 @@ export function initBrain({ esc }) {
       (ds.length ? `<select class="bv-dept" aria-label="Departamento"><option value="">Todos los departamentos</option>${ds.map(d => `<option${F.dept === d ? ' selected' : ''}>${escHTML(d)}</option>`).join('')}</select>` : '') +
       `<label class="bv-tg"><input type="checkbox" data-k="lone"${F.lone ? ' checked' : ''}> Sin enlaces · ${nodes.filter(x => !x.d).length}</label>` +
       (match ? `<label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo resultados</label>` : '') +
-      `<span class="bv-cnt">${shown} de ${nodes.length} notas</span>${active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : ''}`;
+      `<span class="bv-cnt">${shown} de ${nodes.length} notas</span>${active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : ''}` +
+      (location.protocol.startsWith('http') ? '<button type="button" class="bv-reset bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button>' : '');
     emptyEl.hidden = !(openNow && shown === 0);
   }
   chipsEl.addEventListener('click', e => {
@@ -177,6 +178,7 @@ export function initBrain({ esc }) {
     saveF(); chips(); dirty();
   });
   row2.addEventListener('click', e => {
+    if (e.target.closest('.bv-bin')) return showBin();
     if (e.target.closest('.bv-reset')) return resetF();
     const b = e.target.closest('button[data-k]'); if (b) { F[b.dataset.k] = b.dataset.v; saveF(); chips(); dirty(); }
   });
@@ -232,19 +234,45 @@ export function initBrain({ esc }) {
   function S() { return Math.min(CW, CH) * 0.44 * k; }
   function sx(n) { return CW * (reading ? 0.34 : 0.42) + n.x * S() + tx; }
   function sy(n) { return CH * 0.5 + n.y * S() + ty; }
-  bcv.addEventListener('mousemove', e => {
-    if (drag) { tx += e.clientX - drag.x; ty += e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY }; drag.moved = true; dirty(); return; }
-    let best = null, bd = 12; measure();
-    for (const n of nodes) { if (!visible(n)) continue; const d = Math.hypot(sx(n) - e.clientX, sy(n) - e.clientY); if (d < bd) { bd = d; best = n; } }
-    if (best !== hover) { hover = best; dirty(); } bcv.style.cursor = best ? 'pointer' : 'grab';
+  // V4.1 (audit 66): Pointer Events — the mouse, a pen and a finger drag the graph; two fingers pinch to zoom; a tap opens a note
+  function hoverAt(x, y, reach) {
+    let best = null, bd = reach; measure();
+    for (const n of nodes) { if (!visible(n)) continue; const d = Math.hypot(sx(n) - x, sy(n) - y); if (d < bd) { bd = d; best = n; } }
+    if (best !== hover) { hover = best; dirty(); } return best;
+  }
+  function zoomAt(x, y, nk) { // keep the point under the cursor (or between the fingers) where it is
+    nk = Math.max(0.5, Math.min(7, nk)); const r = nk / k;
+    const cx = bcv.clientWidth * (reading ? 0.34 : 0.42), cy = bcv.clientHeight * 0.5; // the same centre the drawing uses (with a note open it moves left)
+    tx = (tx + cx - x) * r + x - cx; ty = (ty + cy - y) * r + y - cy; k = nk; dirty();
+  }
+  const pts = new Map(); let pinch = null;
+  bcv.addEventListener('pointerdown', e => {
+    try { bcv.setPointerCapture(e.pointerId); } catch {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, k }; drag = null; return; }
+    drag = { x: e.clientX, y: e.clientY, moved: false, touch: e.pointerType !== 'mouse' };
+    if (e.pointerType !== 'mouse') hoverAt(e.clientX, e.clientY, 24); // a finger has no hover: the note under it is the one a tap opens
   });
-  bcv.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, moved: false }; });
-  addEventListener('mouseup', e => { if (!drag) return; const moved = drag.moved; drag = null; if (!moved && hover && openNow) select(hover); });
+  bcv.addEventListener('pointermove', e => {
+    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d); return; }
+    if (drag) {
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < (drag.touch ? 8 : 3)) return; // a small wobble is still a tap
+      tx += dx; ty += dy; drag.x = e.clientX; drag.y = e.clientY; drag.moved = true; dirty(); return;
+    }
+    if (e.pointerType === 'mouse') { const best = hoverAt(e.clientX, e.clientY, 12); bcv.style.cursor = best ? 'pointer' : 'grab'; }
+  });
+  const endPointer = e => {
+    pts.delete(e.pointerId);
+    if (pinch) { if (pts.size < 2) pinch = null; drag = null; return; }
+    if (!drag) return; const moved = drag.moved; drag = null; if (!moved && hover && openNow) select(hover);
+  };
+  bcv.addEventListener('pointerup', endPointer);
+  bcv.addEventListener('pointercancel', e => { pts.delete(e.pointerId); pinch = null; drag = null; });
   bcv.addEventListener('wheel', e => {
     e.preventDefault(); e.stopPropagation();
-    const f = Math.exp(-e.deltaY * 0.0025); const nk = Math.max(0.5, Math.min(7, k * f)); const r = nk / k;
-    const cx = bcv.clientWidth * (reading ? 0.34 : 0.42), cy = bcv.clientHeight * 0.5; // the same centre the drawing uses (with a note open it moves left)
-    tx = (tx + cx - e.clientX) * r + e.clientX - cx; ty = (ty + cy - e.clientY) * r + e.clientY - cy; k = nk; dirty();
+    zoomAt(e.clientX, e.clientY, k * Math.exp(-e.deltaY * 0.0025));
   }, { passive: false });
   const SERVED = location.protocol.startsWith('http');
   const EMPTY = '<div class="bv-empty">Haz clic en una nota para leerla. Pasa el cursor para ver sus vecinas.</div>';
@@ -262,7 +290,7 @@ export function initBrain({ esc }) {
     const out = [...adj[n.i]].map(i => nodes[i]).sort((a, b) => b.d - a.d);
     const rd = state.reads.get(n.id);
     const linksHTML = `<div class="bv-lab">Enlaces · ${out.length}</div>` + out.slice(0, 18).map(o => `<button type="button" class="bv-lk" data-i="${o.i}">${esc(o.id)}</button>`).join('') +
-      (out.length > 18 ? `<div class="bv-more">+${out.length - 18} más</div>` : '');
+      (out.length > 18 ? `<button type="button" class="bv-more" data-all="1">+${out.length - 18} más: verlos todos</button>` : ''); // V4.1 (audit 64): it opens the rest
     pane.classList.toggle('reading', SERVED); reading = SERVED;
     pane.innerHTML = `<h3>${esc(n.id)}</h3><div class="bv-path"><i style="background:${colOf(n.g)}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${n.fresh ? ' · <span class="bv-g">nueva hoy</span>' : ''}</div>` +
       (rd ? `<div class="bv-lab">Última lectura por</div><p>${esc(rd.agent)} · ${timeStr(rd.ts)}</p>` : '') +
@@ -284,6 +312,26 @@ export function initBrain({ esc }) {
     const done = () => { const o = btn.textContent; btn.textContent = 'Copiado ✓'; setTimeout(() => { btn.textContent = o; }, 1400); };
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(done, () => { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); done(); } catch {} a.remove(); });
   }
+  // V4.1 (audit 63): the bin has its own view — «Deshacer» no longer vanishes with the next click: every note thrown away stays here 30 days
+  async function showBin() {
+    sel = null; dirty(); reading = false; pane.classList.remove('reading');
+    pane.innerHTML = '<h3>Papelera</h3><div class="bv-loading">Abriendo la papelera…</div>';
+    try {
+      const r = await fetch('/api/note/trash'); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
+      const day = ts => new Date(ts).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      pane.innerHTML = `<h3>Papelera</h3><div class="bv-path">${j.items.length} ${j.items.length === 1 ? 'nota' : 'notas'} · se quedan ${j.keepDays} días y luego se borran solas</div>` +
+        (j.items.length ? `<div class="bv-bins">${j.items.map(it => `<div class="bv-binrow"><div><b>${esc(it.name)}</b><small>a la papelera el ${esc(day(it.at))}</small></div><button type="button" class="bv-btn bv-restore" data-file="${esc(it.file)}">Restaurar</button></div>`).join('')}</div>`
+          : '<div class="bv-empty">La papelera está vacía.</div>');
+    } catch (e) { pane.innerHTML = `<h3>Papelera</h3><p class="bv-err">No pude abrirla: ${esc(e.message)}</p>`; }
+  }
+  pane.addEventListener('click', async e => {
+    const b = e.target.closest('.bv-restore'); if (!b) return;
+    b.disabled = true; b.textContent = 'Restaurando…';
+    try {
+      const r = await fetch('/api/note/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file: b.dataset.file }) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
+      setGraph(j.graph); const i = byId.get(j.name); if (i != null) { select(nodes[i]); centre(nodes[i]); } else showBin();
+    } catch (err) { b.disabled = false; b.textContent = 'Restaurar'; b.insertAdjacentHTML('afterend', `<small class="bv-err"> ${esc(err.message)}</small>`); }
+  });
   async function trash(id, btn) {
     if (!confirm(`¿Mover «${id}» a la papelera?\n\nVa a «Agents Office/.papelera» dentro del cerebro: sale del grafo y los agentes dejan de leerla. Puedes deshacerlo.`)) return;
     btn.disabled = true; btn.textContent = 'Moviendo…';
@@ -302,7 +350,8 @@ export function initBrain({ esc }) {
   }
   pane.addEventListener('click', e => { // links inside the pane: the neighbour list and the [[wiki]] links in the text
     const lk = e.target.closest('.bv-lk'); if (lk) { const t = nodes[+lk.dataset.i]; if (t) { select(t); centre(t); } return; }
-    const w = e.target.closest('.md-wiki'); if (w) { const i = byId.get(w.dataset.note); if (i != null) { select(nodes[i]); centre(nodes[i]); } else w.classList.add('missing'); }
+    const more = e.target.closest('.bv-more[data-all]'); if (more && sel) { const rest = [...adj[sel.i]].map(i => nodes[i]).sort((a, b) => b.d - a.d).slice(18); more.insertAdjacentHTML('beforebegin', rest.map(o => `<button type="button" class="bv-lk" data-i="${o.i}">${esc(o.id)}</button>`).join('')); const next = more.previousElementSibling; more.remove(); if (next) next.focus({ preventScroll: true }); return; }
+    const w = e.target.closest('.md-wiki'); if (w) { const i = byId.get(w.dataset.note); if (i != null) { select(nodes[i]); centre(nodes[i]); } else { w.classList.add('missing'); w.setAttribute('aria-disabled', 'true'); w.title = 'Esa nota no está en el Cerebro: se borró, se renombró o está fuera de las carpetas que lee la oficina'; if (!w.nextElementSibling || !w.nextElementSibling.classList.contains('md-miss')) w.insertAdjacentHTML('afterend', '<span class="md-miss" role="note"> (no está en el grafo)</span>'); } }
   });
   pane.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.md-wiki')) { e.preventDefault(); e.target.click(); } });
   function centre(n) { measure(); tx = -n.x * S(); ty = -n.y * S(); dirty(); }
@@ -345,7 +394,7 @@ export function initBrain({ esc }) {
     openNow = true; opener = document.activeElement; ov.inert = false; modal.open(ov); ov.classList.add('on'); document.body.classList.add('brainOpen');
     meta.textContent = metaText();
     chips(); if (!sel) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); }
-    dirty(); setTimeout(() => document.getElementById('bvClose').focus({ preventScroll: true }), 50); // focus inside the dialog, but not the search box: G/Esc must still close it
+    dirty(); setTimeout(() => { if (openNow) document.getElementById('bvClose').focus({ preventScroll: true }); }, 50); // focus inside the dialog, but not the search box: G/Esc must still close it
   }
   function close() { if (!openNow) return; openNow = false; modal.close(ov); ov.inert = true; emptyEl.hidden = true; res.hidden = true; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   function toggle() { openNow ? close() : open(); }

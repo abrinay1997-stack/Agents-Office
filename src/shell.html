@@ -535,6 +535,11 @@
   #board.left { left: 18px; top: 110px; } #board.right { right: 18px; top: 110px; } /* below the OVERVIEW button */
   #board.company { left: 50%; width: min(94vw, 1400px); top: 64px; bottom: 12px; padding: 12px 18px 10px; gap: 8px; transform: translate(-50%, 10px) scale(.985); }
   #board.company.on { transform: translate(-50%, 0); }
+  /* V4.1 (audit 86): the open company board sits above «Vista general», the brand and the usage line — they used to cover its corners */
+  #board.company { z-index: 37; } #boardDim { z-index: 36; } /* above the licence line (35) too */
+  #board:focus { outline: none; } /* the window itself takes the focus on open; its controls show the ring */
+  .bd-x { flex: none; order: 3; width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; font-size: 13px; margin-left: 10px; }
+  .bd-x:hover { border-color: var(--ink); }
   #boardDim {
     position: fixed; inset: 0; z-index: 21; pointer-events: none; opacity: 0;
     background: color-mix(in srgb, var(--cream) 62%, transparent);
@@ -987,7 +992,7 @@
     opacity: 0; pointer-events: none; transition: opacity .4s var(--ease);
   }
   #brainOv.on { opacity: 1; pointer-events: auto; }
-  #bvCv { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; }
+  #bvCv { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; } /* V4.1: the page never scrolls or zooms under a finger on the graph: the graph does */
   .bv-top { position: absolute; left: 22px; top: 18px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 62vw; }
   #bvSearch {
     width: 300px; background: #181B24; border: 1px solid rgba(253,255,248,.14); border-radius: 99px; outline: none;
@@ -1022,6 +1027,10 @@
   .bv-lk::before { content: '[['; color: #5C6688; } .bv-lk::after { content: ']]'; color: #5C6688; }
   .bv-lk:hover { color: #E8E6DF; }
   .bv-more { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #8E8C85; padding-top: 6px; }
+  .bv-bins { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+  .bv-binrow { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 8px 10px; border: 1px solid rgba(232,230,223,.14); border-radius: 10px; }
+  .bv-binrow b { display: block; font-weight: 600; font-size: 13px; color: #E8E6DF; word-break: break-word; } .bv-binrow small { font-size: 11px; color: #A9A7A0; }
+  button.bv-more { display: block; background: none; border: 0; padding: 8px 0 2px; font-family: var(--ui); color: #C9C7C0; cursor: pointer; text-decoration: underline dotted; } button.bv-more:hover { color: #E8E6DF; }
   .bv-empty { font-family: var(--serif); font-style: italic; font-size: 16px; color: #8E8C85; padding: 10px 0; }
   .bv-foot { position: absolute; left: 22px; bottom: 18px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #8E8C85; }
   #bvClose {
@@ -1069,7 +1078,8 @@
   .md hr { border: 0; border-top: 1px solid rgba(127,127,127,.3); margin: 1em 0; }
   .md a { color: #2B6BEB; text-decoration: underline; text-underline-offset: 2px; }
   .md .md-wiki { color: #2B6BEB; text-decoration: none; cursor: pointer; border-bottom: 1px dotted currentColor; }
-  .md .md-wiki.missing { opacity: .5; cursor: default; }
+  .md .md-wiki.missing { opacity: .6; cursor: help; border-bottom-style: dashed; }
+  .md .md-miss { font-size: .85em; color: var(--grey); font-style: italic; }
   .md .md-assumed { font-size: .85em; color: #8A6414; }
   .md-tbl { overflow-x: auto; } .md table { border-collapse: collapse; font-size: .92em; min-width: 60%; }
   .md th, .md td { border: 1px solid rgba(127,127,127,.3); padding: 5px 8px; text-align: left; vertical-align: top; }
@@ -1247,6 +1257,12 @@
   .sb-dept { font-family: var(--ui); font-size: 12px; font-weight: 600; padding: 5px 8px; border: 1px solid var(--hairline); border-radius: 99px; background: #fff; color: var(--ink); }
   .sb-team { font-size: 12px; color: var(--grey); display: flex; gap: 4px; align-items: center; }
   .sb-at { font-size: 11.5px; padding: 3px 8px; border-radius: 99px; background: rgba(107,79,184,.1); color: #5A3FA0; } .sb-at.now { background: rgba(21,20,20,.06); color: var(--grey); }
+  .sb-when { display: inline-flex; align-items: center; gap: 4px; }
+  .sb-atl { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; padding: 2px 4px 2px 8px; border-radius: 99px; background: rgba(107,79,184,.1); color: #5A3FA0; }
+  .sb-atin { font: 11.5px var(--ui); color: inherit; background: transparent; border: 0; padding: 1px 2px; max-width: 170px; }
+  .sb-atx { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--hairline); background: none; color: var(--grey); font-size: 10px; cursor: pointer; }
+  .sb-atx:hover { color: var(--ink); border-color: var(--ink); }
+  body.dark .sb-atl { color: #B9A6F5; } body.dark .sb-atin { color-scheme: dark; }
   .sb-moved { font-size: 12px; color: #8A6414; margin-top: 6px; } .sb-why { font-size: 12.5px; color: var(--grey); margin-top: 5px; line-height: 1.45; font-style: italic; }
   .sb-det { margin-top: 6px; } .sb-det summary { font-size: 12px; color: var(--grey); cursor: pointer; }
   .sb-ins { width: 100%; box-sizing: border-box; margin-top: 6px; font-family: var(--ui); font-size: 13px; line-height: 1.45; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; color: var(--ink); resize: vertical; }
@@ -1694,7 +1710,7 @@
 </style>
 </head>
 <body>
-<canvas id="scene"></canvas>
+<canvas id="scene" role="img" aria-label="La oficina en 3D: seis departamentos alrededor del Cerebro y de Dimitri, con sus agentes en sus escritorios. Para moverte con el teclado usa las tarjetas de los departamentos, las teclas 1 a 6, o ? para ver todos los atajos."></canvas>
 <div id="hud"></div>
 <!-- V4 (24 Sep 2026): brand · the connector strip in its own shrinking lane · a fixed dock of icon tools on the right.
      New tools join the dock as one more icon button; nothing in the bar moves when the strip opens or a number changes. -->

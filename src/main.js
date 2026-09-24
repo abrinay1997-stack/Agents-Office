@@ -252,6 +252,9 @@ for (const a of AGENTS) {
   pill.className = 'pill';
   pill.innerHTML = (a.lead ? '<span class="star">★</span>' : '') + a.name;
   pill.addEventListener('click', () => openAgent(a.id, 'chat'));
+  // V4.1 (audit 88): a pill is a button for the keyboard too — reachable with Tab inside its department (35 more stops at the overview would bury the rest)
+  pill.setAttribute('role', 'button'); pill.tabIndex = -1; pill.setAttribute('aria-label', `${a.name}${a.lead ? ', jefe' : ''}: abrir su chat`);
+  pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openAgent(a.id, 'chat'); } });
   hud.appendChild(pill);
 
   R[a.id] = {
@@ -783,8 +786,19 @@ function sendRejectNote(id, m) {
 mMsgs.addEventListener('click', e => {
   const c = e.target.closest('.m-copy');
   if (c) { const m = chatHist[modalOpen] && chatHist[modalOpen][+c.dataset.i]; if (m) copyText(m.content || m.text, c); return; }
-  const w = e.target.closest('.md-wiki'); if (w && brain) { if (!brain.show(w.dataset.note)) w.classList.add('missing'); } // [[a note]] in a reply opens it in the Brain
+  const w = e.target.closest('.md-wiki'); if (w && brain) { if (!brain.show(w.dataset.note)) markMissing(w); } // [[a note]] in a reply opens it in the Brain
 });
+// V4.1 (audit 94, 65): a [[link]] anywhere (the task detail, Dimitri, a card) opens its note, with the keyboard too; one that
+// points at no note says why instead of only turning grey
+function markMissing(w) { w.classList.add('missing'); w.setAttribute('aria-disabled', 'true'); w.title = 'Esa nota no está en el Cerebro: se borró, se renombró o está fuera de las carpetas que lee la oficina'; if (!w.nextElementSibling || !w.nextElementSibling.classList.contains('md-miss')) w.insertAdjacentHTML('afterend', '<span class="md-miss" role="note"> (no está en el Cerebro)</span>'); }
+document.addEventListener('click', e => {
+  const w = e.target.closest && e.target.closest('.md-wiki'); if (!w || w.closest('#mMsgs, #bvPane') || !brain) return;
+  if (w.classList.contains('missing')) return;
+  if (tasks && tasks.detail && tasks.detail.isOpen()) tasks.detail.close();
+  if (subger.isOpen()) subger.close();
+  if (!brain.show(w.dataset.note)) markMissing(w);
+});
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('md-wiki') && !e.target.closest('#bvPane')) { e.preventDefault(); e.target.click(); } });
 function copyText(t, btn) {
   const done = () => { const o = btn.textContent; btn.textContent = 'Copiado ✓'; setTimeout(() => { btn.textContent = o; }, 1400); };
   (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(done, () => { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); done(); } catch {} a.remove(); });
@@ -826,6 +840,7 @@ function focusTarget(k, atPos) {
   return { pos: [base[0] + SCREEN_RIGHT.x * dir, 0, base[2] + SCREEN_RIGHT.z * dir], zoom };
 }
 function enterFocus(k, pendingAgentId) {
+  pillTabs(k === 'brain' ? null : k);
   if (k === 'brain') { // the Brain keeps its plain fly-in (AJ's call)
     focused = 'brain';
     if (tasks) tasks.onFocusChange('brain');
@@ -866,10 +881,11 @@ function enterFocus(k, pendingAgentId) {
   }));
   syncOverviewBtn();
 }
+function pillTabs(k) { for (const r of Object.values(R)) r.pill.tabIndex = k && r.a.dept === k ? 0 : -1; } // only the open department's agents are Tab stops
 function exitFocus(flyOut = true) {
   if (!focused) return;
   const k = focused;
-  focused = null;
+  focused = null; pillTabs(null);
   modalOpen = null;
   if (tasks) tasks.onFocusChange(null);
   focusDimTarget = 0;
@@ -1574,7 +1590,7 @@ function applyRoster(agents) {
   for (const a of agents) {
     const r = R[a.id]; if (!r) continue;
     r.a.name = a.name;
-    r.pill.innerHTML = (r.a.lead ? '<span class="star">★</span>' : '') + esc(a.name);
+    r.pill.innerHTML = (r.a.lead ? '<span class="star">★</span>' : '') + esc(a.name); r.pill.setAttribute('aria-label', `${a.name}${r.a.lead ? ', jefe' : ''}: abrir su chat`);
     r.v1 = r.v1 || {};
     r.v1.role = a.role || r.v1.role || ''; r.v1.tagline = a.does || r.v1.tagline || '';
     r.v1.greeting = `${a.does || 'Soy ' + a.name + '.'} Dame una tarea en la barra de la derecha, o pregúntame algo aquí.` +

@@ -149,7 +149,7 @@ export function initTasks(ctx) {
   const routines = []; let rseq = 1, polling = false, railAgent = null, railExp = false;
   const RT_DEPTS = ['emails', 'fin', 'sales', 'marketing', 'ops', 'delivery']; // every department has routines (24 Sep 2026)
   const RT_NAMES = PROFILE ? Object.fromEntries(Object.entries(PROFILE.pods).map(([k, v]) => [k, titleCase(v)])) : { emails: 'Emails', fin: 'Accounting', sales: 'Sales', marketing: 'Marketing', ops: 'Operations', delivery: 'Delivery' };
-  const rtRefuse = k => `Routines come to ${RT_NAMES[k] || k} in a later release. This release: Emails, Accounting and Sales.`;
+  const rtRefuse = k => `${RT_NAMES[k] || k} todavía no tiene rutinas en esta oficina.`; // every department has them since 24 Sep 2026: only an unknown one lands here
   const deptRoutines = k => routines.filter(r => r.dept === k);
   const agentRoutines = id => routines.filter(r => r.agent === id);
   const nextOf = list => list.filter(r => !r.paused && r.nextAt).sort((a, b) => a.nextAt - b.nextAt)[0];
@@ -203,7 +203,7 @@ export function initTasks(ctx) {
     feedPush(r, '✓', 'Listo: ' + t.title);
     if (chatHist[t.agent]) chatPush(t.agent, { who: 'work', i: '✓', text: 'listo — ' + t.title });
     if (t.live) deliver(t); // the real deliverable lands in the agent's chat; the server already wrote the note
-    else if (t.piece) { if (R[t.leadId]) { spawnEmote(R[t.leadId], '📋'); feedPush(R[t.leadId], '📋', `Piece in from ${agentOf(t.agent).name}: ${t.title}`); } } // demo: the piece walks back to the lead
+    else if (t.piece) { if (R[t.leadId]) { spawnEmote(R[t.leadId], '📋'); feedPush(R[t.leadId], '📋', `Parte recibida de ${agentOf(t.agent).name}: ${t.title}`); } } // demo: the piece walks back to the lead
     // demo: finished work becomes a note in the Brain — always for tasks you added, a quarter of the rest
     else if (brainWrite && (t.by === 'you' || Math.random() < 0.25)) brainWrite(t.agent, t.title);
     touch(t, 'done');
@@ -222,8 +222,8 @@ export function initTasks(ctx) {
       const L = agentOf(t.leadId), parent = tasks.find(x => x.id === t.parent);
       chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)} · clic para verla`, content: t.result });
       if (!t.error) chatPush(t.agent, { who: 'agent', text: `Mi parte de "${parent ? parent.title : t.title}" está lista y con ${L ? L.name : 'the lead'}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}.` });
-      feedPush(R[t.agent], '📄', `Piece done → ${L ? L.name : 'lead'}: ${t.title}`);
-      if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Piece in from ${a.name}: ${t.title}`); }
+      feedPush(R[t.agent], '📄', `Parte lista → ${L ? L.name : 'el jefe'}: ${t.title}`);
+      if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Parte recibida de ${a.name}: ${t.title}`); }
       return;
     }
     chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md',
@@ -371,7 +371,8 @@ export function initTasks(ctx) {
   // the REPEAT picker (B1): cadence + time; "needs my OK" defaults on (D1)
   let repeat = false;
   P_.cad.innerHTML = [['weekdays', 'Cada día hábil'], ['daily', 'Todos los días'], ['mon', 'lunes'], ['tue', 'martes'], ['wed', 'miércoles'], ['thu', 'jueves'], ['fri', 'viernes'], ['sat', 'sábados'], ['sun', 'domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-  P_.rep.addEventListener('click', () => { repeat = !repeat; P_.rep.classList.toggle('on', repeat); P_.repRow.hidden = !repeat; updateHint(); if (repeat) P_.input.focus(); });
+  P_.rep.setAttribute('aria-pressed', 'false'); P_.team.setAttribute('aria-pressed', 'false'); // V4.1 (audit 93): the toggles say whether they are on
+  P_.rep.addEventListener('click', () => { repeat = !repeat; P_.rep.classList.toggle('on', repeat); P_.rep.setAttribute('aria-pressed', repeat); P_.repRow.hidden = !repeat; updateHint(); if (repeat) P_.input.focus(); });
   P_.cad.addEventListener('change', () => { P_.at.disabled = P_.cad.value === 'hourly'; updateHint(); });
   P_.at.addEventListener('change', updateHint);
   [P_.cad, P_.at, P_.okc].forEach(el => el.addEventListener('keydown', e => e.stopPropagation()));
@@ -381,19 +382,42 @@ export function initTasks(ctx) {
   const teamIntent = text => /\b(as a team|team up|team this|get the (whole )?team|the (whole )?team (on|to|should|can)|with the team|(spawn|use|get) (\d+|two|three|four|five|a few|some) teammates?|\d+ teammates|split (it|this|the work) (up|across|between)|teammates|team:|whole department)\b/i.test(text);
   const asTeam = text => teamsCfg.enabled && (teamOn || teamIntent(text));
   const leadOf = k => AGENTS.find(x => x.dept === k && x.lead) || AGENTS.filter(x => x.dept === k)[0];
-  P_.team.addEventListener('click', () => { teamOn = !teamOn; P_.team.classList.toggle('on', teamOn); updateHint(); if (teamOn) P_.input.focus(); });
-  function resetTeam() { teamOn = false; P_.team.classList.remove('on'); }
+  P_.team.addEventListener('click', () => { teamOn = !teamOn; P_.team.classList.toggle('on', teamOn); P_.team.setAttribute('aria-pressed', teamOn); updateHint(); if (teamOn) P_.input.focus(); });
+  function resetTeam() { teamOn = false; P_.team.classList.remove('on'); P_.team.setAttribute('aria-pressed', 'false'); }
   const teamBit = t => t.team?.members?.length ? ` · <span class="tp-team-chip">TEAM ${t.team.members.length + 1}</span>` : t.piece ? ' · <span class="tp-team-chip">PIECE</span>' : '';
   const membersText = t => (t.team?.members || []).map(id => agentOf(id)?.name || id).join(', ');
   let dept = 'marketing', filter = 'all';
-  P_.menu.innerHTML = DEPT_KEYS.map(k => `<button data-k="${k}"><span class="dot" style="background:${DEPTS[k].chip}"></span>${DEPTS[k].name}</button>`).join('');
-  P_.menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { setDept(b.dataset.k); P_.menu.classList.remove('on'); P_.input.focus(); }));
-  P_.dd.addEventListener('click', (e) => { e.stopPropagation(); P_.menu.classList.toggle('on'); });
-  document.addEventListener('click', () => P_.menu.classList.remove('on'));
+  // V4.1 (audit 92): the department menu is a real menu — aria-expanded, ↑ ↓ Home End to move, Enter to pick, Esc or Tab to leave
+  P_.dd.type = 'button'; P_.dd.setAttribute('aria-haspopup', 'menu'); P_.dd.setAttribute('aria-expanded', 'false'); P_.dd.setAttribute('aria-controls', 'tpMenu');
+  P_.menu.id = 'tpMenu'; P_.menu.setAttribute('role', 'menu'); P_.menu.setAttribute('aria-label', 'Departamento de la tarea');
+  P_.menu.innerHTML = DEPT_KEYS.map(k => `<button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-k="${k}"><span class="dot" style="background:${DEPTS[k].chip}"></span>${DEPTS[k].name}</button>`).join('');
+  const menuItems = () => [...P_.menu.querySelectorAll('button')];
+  function menuOpen(on, focusWhich) {
+    P_.menu.classList.toggle('on', on); P_.dd.setAttribute('aria-expanded', on);
+    if (!on) return;
+    const items = menuItems(), cur = items.findIndex(b => b.dataset.k === dept);
+    items.forEach(b => b.setAttribute('aria-checked', b.dataset.k === dept));
+    (items[focusWhich === 'last' ? items.length - 1 : cur >= 0 ? cur : 0]).focus();
+  }
+  P_.menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { setDept(b.dataset.k); menuOpen(false); P_.input.focus(); }));
+  P_.dd.addEventListener('click', (e) => { e.stopPropagation(); menuOpen(!P_.menu.classList.contains('on')); });
+  P_.dd.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); menuOpen(true, e.key === 'ArrowUp' ? 'last' : null); } });
+  P_.menu.addEventListener('keydown', e => {
+    e.stopPropagation();
+    const items = menuItems(), i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); menuOpen(false); P_.dd.focus(); }
+    else if (e.key === 'Tab') menuOpen(false);
+  });
+  document.addEventListener('click', () => { if (P_.menu.classList.contains('on')) menuOpen(false); });
   function setDept(k) {
     dept = k;
     P_.ddName.textContent = DEPTS[k].short;
     P_.ddDot.style.background = DEPTS[k].chip;
+    P_.dd.setAttribute('aria-label', `Departamento: ${DEPTS[k].name}. Cambiar`); P_.dd.title = 'Elige el departamento de la tarea (↓ abre la lista)';
     B_.dept.textContent = DEPTS[k].name.toUpperCase(); B_.dot.style.background = DEPTS[k].chip;
     P_.input.placeholder = `Escribe una tarea para ${DEPTS[k].name.toLowerCase()}…`;
     updateHint();
@@ -517,10 +541,10 @@ export function initTasks(ctx) {
     const L = leadOf(k), others = AGENTS.filter(x => x.dept === k && !x.lead).sort(() => Math.random() - 0.5);
     const picks = others.slice(0, Math.max(2, Math.min(3, teamsCfg.max - 1, others.length)));
     const t = mk({ agent: L.id, title, by: 'you', team: { lead: L.id, members: picks.map(p => p.id) }, teamHold: true });
-    touch(t, 'added'); spawnEmote(R[L.id], '⚑'); feedPush(R[L.id], '⚑', `Team task: ${title} — ${picks.map(p => agentOf(p.id).name).join(', ')}`);
+    touch(t, 'added'); spawnEmote(R[L.id], '⚑'); feedPush(R[L.id], '⚑', `Tarea en equipo: ${title} — ${picks.map(p => agentOf(p.id).name).join(', ')}`);
     for (const p of picks) {
       const c = mk({ agent: p.id, title: `${title} — ${(p.role || 'their').replace(/ Agent$/i, '').toLowerCase()} part`, by: 'team', piece: true, parent: t.id, leadId: L.id, from: L.id });
-      touch(c, 'handoff'); spawnEmote(R[p.id], '📋'); feedPush(R[p.id], '📋', `Team piece from ${L.name}: ${c.title}`);
+      touch(c, 'handoff'); spawnEmote(R[p.id], '📋'); feedPush(R[p.id], '📋', `Parte del equipo de ${L.name}: ${c.title}`);
     }
     return t;
   }
@@ -669,7 +693,7 @@ export function initTasks(ctx) {
       let c = tasks.find(x => x.live && x.sid === sid);
       if (!c) {
         c = mk({ agent: p.agent, title: p.title, text: p.text, by: 'team', live: true, srv: true, sid, piece: true, parent: t.id, leadId: tm.lead, from: tm.lead, addedAt: tm.plannedAt || Date.now(), changedAt: tm.plannedAt || Date.now(), last: 'handoff', running: true });
-        if (!quiet) { spawnEmote(R[p.agent], '📋'); feedPush(R[p.agent], '📋', `Team piece from ${agentOf(tm.lead).name}: ${p.title}`); }
+        if (!quiet) { spawnEmote(R[p.agent], '📋'); feedPush(R[p.agent], '📋', `Parte del equipo de ${agentOf(tm.lead).name}: ${p.title}`); }
         touch(c, 'handoff');
       }
       if (p.state === 'doing' && c.state !== 'doing') { c.state = 'doing'; c.startedAt = performance.now() - Math.max(0, Date.now() - (p.startedAt || Date.now())); c.progress = 0; c.running = true; c.ready = false; c.changedAt = p.startedAt || Date.now(); touch(c, 'started'); }
@@ -683,14 +707,14 @@ export function initTasks(ctx) {
       const key = `${st.id}:${m.from}:${m.to}:${m.at}`; if (seenNotes.has(key)) continue; seenNotes.add(key);
       if (quiet) continue;
       const to = m.to === 'lead' ? tm.lead : m.to, toName = agentOf(to)?.name || m.to;
-      if (R[m.from]) { spawnEmote(R[m.from], '💬'); feedPush(R[m.from], '💬', `Note to ${toName}: ${m.text}`); chatPush(m.from, { who: 'work', i: '💬', text: `note to ${toName}: ${m.text}` }); }
-      if (R[to]) { feedPush(R[to], '📨', `Note from ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `note from ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
+      if (R[m.from]) { spawnEmote(R[m.from], '💬'); feedPush(R[m.from], '💬', `Nota para ${toName}: ${m.text}`); chatPush(m.from, { who: 'work', i: '💬', text: `nota para ${toName}: ${m.text}` }); }
+      if (R[to]) { feedPush(R[to], '📨', `Nota de ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `nota de ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
     }
   }
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
     if (st.state === 'scheduled') { if (t.state !== 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; touch(t, 'scheduled'); } else if (t.dueAt !== st.dueAt || t.title !== st.title || t.text !== st.text) { Object.assign(t, { dueAt: st.dueAt, title: st.title, text: st.text }); dirty = true; } return; }
-    if (t.state === 'scheduled' && st.state !== 'scheduled') { t.state = 'next'; t.addedAt = st.addedAt || Date.now(); t.late = !!st.late; t.due = st.due; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Scheduled task fired: ${t.title}${t.late ? ' (late)' : ''}`); if (calendar) calendar.refresh(); }
+    if (t.state === 'scheduled' && st.state !== 'scheduled') { t.state = 'next'; t.addedAt = st.addedAt || Date.now(); t.late = !!st.late; t.due = st.due; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}${t.late ? ' (atrasada)' : ''}`); if (calendar) calendar.refresh(); }
     if (st.state === 'doing' && t.state !== 'doing') {
       t.state = 'doing'; t.startedAt = performance.now() - Math.max(0, Date.now() - (st.startedAt || Date.now())); t.progress = 0; t.pausedAt = null; t.running = true; t.ready = false; t.srv = true; t.changedAt = st.startedAt || Date.now(); touch(t, 'started');
     } else if (st.state === 'waiting' && t.draftAt !== st.waitingAt) { // a new draft is waiting for the OK (the first, or a rework after REJECT)
@@ -823,7 +847,7 @@ export function initTasks(ctx) {
         const w = now - t.addedAt;
         return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)} · ${src}${teamBit(t)}${modelBit(t)}`;
       }
-      case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · rendering' : t.teamHold ? ' · waiting on the pieces' : ''}${t.routine ? ' · routine' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · renderizando' : t.teamHold ? ' · esperando las partes' : ''}${t.routine ? ' · rutina' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · borrador de rutina' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'scheduled': return `${who} · se ejecuta ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · en espera de tu visto bueno' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'done': return `${who} · lista ${timeStr(t.doneAt)}${t.approved ? (t.live ? ' · enviada tras tu visto bueno' : ' · aprobada') : ''}${t.late ? ' · <span class="tp-late">se atrasó</span>' : ''}${teamBit(t)}${modelBit(t)}${t.live ? (t.error ? ' · <span class="tp-amber">con error</span>' : ' · <span class="tp-res">ver resultado →</span>') : ''}`;
@@ -842,7 +866,7 @@ export function initTasks(ctx) {
     const a = agentOf(r.agent);
     return `<div class="tp-row sched${r.paused ? ' paused' : ''}" data-id="r:${r.id}" data-rid="${r.id}" data-dept="${r.dept}" data-agent="${r.agent}">
       <span class="tp-st sched">⏱</span>
-      <div class="tp-body"><div class="tp-t">${esc(r.title)}</div><div class="tp-m">${esc(r.desc)} · ${a.name} · ${modelName(r.model || officeModel)}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${r.lastAt ? ' · last ' + timeStr(r.lastAt) + (r.lastLate ? ' <span class="tp-late">late</span>' : '') : ''}</div>
+      <div class="tp-body"><div class="tp-t">${esc(r.title)}</div><div class="tp-m">${esc(r.desc)} · ${a.name} · ${modelName(r.model || officeModel)}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${r.lastAt ? ' · última ' + timeStr(r.lastAt) + (r.lastLate ? ' <span class="tp-late">atrasada</span>' : '') : ''}</div>
       <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>
       <span class="tp-ago" data-rago="${r.id}">${r.paused ? 'PAUSADA' : esc(untilText(r.nextAt))}</span></div>`;
   }
@@ -934,16 +958,17 @@ export function initTasks(ctx) {
   const el = document.createElement('div'); el.id = 'board'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Tablero de la empresa'); el.inert = true; document.body.appendChild(el); // closed: inert (audit 23)
   const dim = document.createElement('div'); dim.id = 'boardDim'; dim.setAttribute('data-modal-keep', ''); document.body.appendChild(dim);
   dim.addEventListener('click', close);
+  el.addEventListener('click', e => { if (e.target.closest('.bd-x')) close(); });
   function cardHTML(t) {
     const a = agentOf(t.agent), chip = DEPTS[t.dept].chip;
     const pct = Math.round(t.progress * 100);
     const av = `<span class="tk-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span>`;
     let meta;
     if (t.state === 'done') meta = `<span class="tk-tick">✓</span><span>${a.name}</span><span class="tk-pct">${t.approved ? 'APROBADO · ' : ''}${t.modelUsed ? modelName(t.modelUsed).toUpperCase() + ' · ' : ''}${timeStr(t.doneAt)}</span>`;
-    else if (t.state === 'waiting') meta = `${av}<span>${a.name}</span><span class="tk-chip">EN ESPERA ${span(Date.now() - t.changedAt).toUpperCase()}</span>`;
+    else if (t.state === 'waiting') meta = `${av}<span>${a.name}</span><span class="tk-chip" title="espera tu visto bueno desde hace ${span(Date.now() - t.changedAt)}">${span(Date.now() - t.changedAt)}</span>`;
     else if (t.state === 'doing') meta = `${av}<span>${a.name}</span><span class="tk-pct" data-pct="${t.id}">${t.agent === 'vid' ? 'RENDERIZANDO · ' : ''}${pct}%</span>`;
     else if (t.state === 'scheduled') meta = `${av}<span>${a.name}</span><span class="tk-pct">${esc(untilText(t.dueAt).toUpperCase())}</span>`;
-    else meta = `${av}<span>${a.name}</span><span class="tk-pct">${span(Date.now() - t.addedAt).toUpperCase()} EN PENDIENTES</span>`;
+    else meta = `${av}<span>${a.name}</span><span class="tk-pct" title="en pendientes desde hace ${span(Date.now() - t.addedAt)}">${span(Date.now() - t.addedAt)}</span>`;
     const drag = !t.piece && !t.isAsk && ['next', 'scheduled', 'waiting', 'done'].includes(t.state) && !(t.routine && t.state === 'next');
     return `<div class="tk ${t.state === 'scheduled' ? 'sched scheduled' : t.state}${t.revised ? ' rev' : ''}${t.error ? ' err' : ''}" data-id="${t.id}" data-dept="${t.dept}" role="button" tabindex="0"${drag ? ' draggable="true"' : ''}>
       <div class="tk-t">${t.routine || t.state === 'scheduled' ? '⏱ ' : ''}${t.team?.members?.length ? '⚑ ' : t.piece ? '↳ ' : ''}${esc(t.title)}</div><div class="tk-m">${meta}</div>
@@ -966,7 +991,8 @@ export function initTasks(ctx) {
     const tot = st => DEPT_KEYS.reduce((s, k) => s + deptTasks(k, st).length, 0);
     const doneAll = DEPT_KEYS.reduce((s, k) => s + doneCount[k], 0);
     return `<div class="bd-head">
-        <span class="b-name"><span class="bd-title">Agents Office</span>Tablero de hoy · arrastra una tarjeta para cambiarla de estado o de departamento</span>
+        <span class="b-name"><span class="bd-title">${esc(document.title.replace(/ — Agents Office$/, '') || 'Agents Office')}</span>Tablero de hoy · arrastra una tarjeta para cambiarla de estado o de departamento</span>
+        <button type="button" class="bd-x" aria-label="Cerrar el tablero" title="Cerrar (B o Esc)">✕</button>
         <span class="bd-stats"><span>PROGRAMADAS<b>${routines.length + tot('scheduled')}</b></span><span>EN CURSO<b>${tot('doing')}</b></span><span>PENDIENTES<b>${tot('next')}</b></span><span>EN ESPERA<b>${tot('waiting')}</b></span><span>LISTAS<b>${doneAll}</b></span></span></div>
       <div class="bd-lanes"><div class="lh"></div>${COLS.map(([, lab]) => `<div class="lh">${lab}</div>`).join('')}
       ${DEPT_KEYS.map(k => {
@@ -1064,7 +1090,7 @@ export function initTasks(ctx) {
   function handleChat(agentId, text) {
     if (!live) { // demo: "every weekday at 8am, …" · "routines" (live: the server handles these, so fall through)
       const k0 = R[agentId].a.dept, a0 = R[agentId].a;
-      if (/^\s*(routines?|schedule|timetable)\s*\??\s*$/i.test(text)) {
+      if (/^\s*¿?\s*(routines?|schedule|timetable|rutinas?|horario)\s*\??\s*$/i.test(text)) {
         if (!RT_DEPTS.includes(k0)) return rtRefuse(k0);
         const mine = deptRoutines(k0).sort(byNext);
         return mine.length ? `${RT_NAMES[k0]} rutinas:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${agentOf(r.agent).name}${r.paused ? ' · PAUSADA' : ''}`).join('\n') : `Nada en el horario de ${RT_NAMES[k0]} todavía. Dame una con hora — "cada día hábil a las 8, …" — y la anoto.`;
@@ -1113,7 +1139,7 @@ export function initTasks(ctx) {
   /* ---------- per-frame ---------- */
   function tick(now) {
     if (!live) { const w = Date.now(); for (const r of routines) if (!r.paused && r.nextAt && r.nextAt <= w) fireDemo(r, false); // demo: this page is the clock
-      for (const t of tasks) if (t.state === 'scheduled' && t.dueAt <= w) { t.state = 'next'; t.addedAt = w; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Scheduled task fired: ${t.title}`); } }
+      for (const t of tasks) if (t.state === 'scheduled' && t.dueAt <= w) { t.state = 'next'; t.addedAt = w; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}`); } }
     for (const id in R) {
       const r = R[id];
       if (r.state === 'stuck') continue;
@@ -1173,13 +1199,13 @@ export function initTasks(ctx) {
         const r = await fetch(API + '/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, when, needsOk, model: normModel(model) || undefined }) });
         const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
         setRoutines([...routines.filter(x => x.id !== j.routine.id), j.routine]);
-        const a = agentOf(j.routine.agent); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${j.routine.title} (${j.routine.desc})`);
+        const a = agentOf(j.routine.agent); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${j.routine.title} (${j.routine.desc})`);
         return { ok: true, routine: routines.find(x => x.id === j.routine.id) };
       } catch (e) { return { ok: false, error: e.message }; }
     }
     const { agent: a } = route(k, text);
     const r = addRoutine(k, a.id, text, when, needsOk); r.model = normModel(model) || undefined;
-    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${r.title} (${r.desc})`);
+    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${r.title} (${r.desc})`);
     return { ok: true, routine: r };
   }
   async function cancelScheduled(t) {

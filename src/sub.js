@@ -11,6 +11,7 @@ import { mdToHtml } from './md.js';
 const MODE = { estado: 'Estado de la oficina', analisis: 'Análisis', plan: 'Propuesta de reparto', pregunta: 'Me falta un dato' };
 const STATE = { next: 'pendiente', doing: 'en curso', waiting: 'espera tu visto bueno', done: 'lista', scheduled: 'programada' };
 const when = ts => new Date(ts).toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const toInput = ts => { const d = new Date(ts); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); }; // a local «YYYY-MM-DDTHH:MM» for <input type=datetime-local>
 
 export function initSub(ctx) {
   const { isLive, esc, DEPTS, DEPT_KEYS, findBySid, openTask, afterSend } = ctx;
@@ -35,14 +36,14 @@ export function initSub(ctx) {
     const ed = drafts.get(m.id) || new Map();
     const items = p.tasks.map(t => {
       const e = ed.get(t.i) || {};
-      const dept = e.dept || t.dept, include = e.include !== false, team = e.team ?? t.team;
+      const dept = e.dept || t.dept, include = e.include !== false, team = e.team ?? t.team, at = e.at !== undefined ? e.at : t.at;
       if (t.state === 'proposed') return `<div class="sb-item${include ? '' : ' off'}" data-msg="${m.id}" data-i="${t.i}">
           <label class="sb-inc"><input type="checkbox" class="sb-on"${include ? ' checked' : ''} aria-label="Incluir esta tarea"></label>
           <div class="sb-body">
             <div class="sb-t">${esc(t.title)}</div>
             <div class="sb-row"><select class="sb-dept" aria-label="Departamento">${DEPT_KEYS.map(k => `<option value="${k}"${k === dept ? ' selected' : ''}>${esc(DEPTS[k].name)}</option>`).join('')}</select>
               <label class="sb-team"><input type="checkbox" class="sb-teamc"${team ? ' checked' : ''}> todo el equipo</label>
-              ${t.at ? `<span class="sb-at">◷ ${esc(when(t.at))}</span>` : '<span class="sb-at now">ya</span>'}</div>
+              <span class="sb-when"><label class="sb-atl" title="${at ? 'Se hace el ' + esc(when(at)) : 'Se hace en cuanto lo envíes'}"><span aria-hidden="true">◷</span><input type="datetime-local" class="sb-atin" value="${at ? toInput(at) : ''}" min="${toInput(Date.now())}" aria-label="Cuándo se hace (vacío: en cuanto lo envíes)"></label>${at ? '<button type="button" class="sb-atx" aria-label="Quitar la fecha: se hace en cuanto lo envíes" title="Quitar la fecha">✕</button>' : '<span class="sb-at now">ya</span>'}</span></div>
             ${t.ownerSaid ? `<div class="sb-moved">La moví de ${esc(DEPTS[t.ownerSaid].name)} a ${esc(DEPTS[t.dept].name)}.</div>` : ''}
             ${t.why ? `<div class="sb-why">${esc(t.why)}</div>` : ''}
             <details class="sb-det"><summary>Instrucciones para el jefe</summary><textarea class="sb-ins" rows="4">${esc(e.instruction ?? t.instruction)}</textarea></details>
@@ -105,6 +106,7 @@ export function initSub(ctx) {
     if (e.target.closest('.sb-send')) return send(input.value);
     const go = e.target.closest('.sb-go'); if (go) return dispatch(go.dataset.msg, go);
     const skip = e.target.closest('.sb-skip'); if (skip) { const m = messages.find(x => x.id === skip.dataset.msg); if (m) { for (const t of m.plan.tasks) if (t.state === 'proposed') edit(m.id, t.i).include = false; dispatch(m.id, skip, true); } return; }
+    const atx = e.target.closest('.sb-atx'); if (atx) { const it = atx.closest('.sb-item[data-msg]'); edit(it.dataset.msg, +it.dataset.i).at = null; render(); return; }
     const sent = e.target.closest('.sb-item[data-sid]'); if (sent) { const t = findBySid(sent.dataset.sid); if (t) openTask(t); }
   });
   el.addEventListener('change', e => {
@@ -113,6 +115,11 @@ export function initSub(ctx) {
     if (e.target.classList.contains('sb-on')) d.include = e.target.checked;
     if (e.target.classList.contains('sb-dept')) d.dept = e.target.value;
     if (e.target.classList.contains('sb-teamc')) d.team = e.target.checked;
+    if (e.target.classList.contains('sb-atin')) { // V4.1 (audit 53): the date Dimitri proposed can be changed or removed before SEND
+      const v = e.target.value ? new Date(e.target.value).getTime() : null;
+      if (v && v <= Date.now()) { e.target.setCustomValidity('Esa hora ya pasó: elige una que aún esté por venir.'); e.target.reportValidity(); return; }
+      e.target.setCustomValidity(''); d.at = v;
+    }
     render();
   });
   el.addEventListener('input', e => { if (!e.target.classList.contains('sb-ins')) return; const it = e.target.closest('.sb-item[data-msg]'); edit(it.dataset.msg, +it.dataset.i).instruction = e.target.value; });
@@ -127,7 +134,7 @@ export function initSub(ctx) {
     requestAnimationFrame(() => el.classList.add('on'));
     if (!loaded && isLive()) load(); else render(true); // the demo (opened as a file) has no server to ask
     timer = setInterval(() => { if (!el.contains(document.activeElement) || document.activeElement === input) render(); }, 3000); // sent pieces follow their tasks
-    setTimeout(() => input.focus(), 80);
+    setTimeout(() => { if (document.body.classList.contains('subOpen')) input.focus(); }, 80); // closed again before the timer: no focus in a hidden panel
   }
   function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); /* a focused box inside a hidden panel kept eating the office's keys */ el.classList.remove('on'); document.body.classList.remove('subOpen'); clearInterval(timer); setTimeout(() => { el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden };
