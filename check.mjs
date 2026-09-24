@@ -421,7 +421,7 @@ else {
       await page.selectOption('.cv-dept', 'marketing'); await page.click('.cv-rep'); await page.waitForTimeout(150);
       const mkh = await page.$eval('.cv-hint', e => e.textContent); const dis = await page.$eval('.cv-go', e => e.disabled); if (!/Rutina ·/.test(mkh) || dis) throw new Error('marketing routine not offered: ' + mkh);
       await page.keyboard.press('Escape'); await page.waitForTimeout(150); if (!await page.$eval('#cvPop', e => e.hidden)) throw new Error('Esc did not close the popover');
-      await page.click('.cv-seg button[data-v="week"]'); await page.waitForTimeout(300); const wk = await page.$$eval('.cv-day', e => e.length); if (wk !== 7) throw new Error('week cells: ' + wk);
+      await page.click('.cv-seg button[data-v="week"]'); await page.waitForTimeout(300); const wk = await page.$$eval('.cv-tg-d', e => e.length), slots = await page.$$eval('.cv-slot', e => e.length); if (wk !== 7 || slots !== 7 * 24) throw new Error('week time grid: ' + wk + ' days, ' + slots + ' slots');
       await page.keyboard.press('Escape'); await page.waitForTimeout(300); if (await page.$eval('#calOv', e => e.classList.contains('on'))) throw new Error('Esc did not close the calendar');
       return `${cells} cells · ${rt} routine runs on the grid · rail ${rail} · task scheduled for ${target} · routine starts ${target} (none before) · marketing offered · week view 7`;
     });

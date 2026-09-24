@@ -50,6 +50,9 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.2 (24 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos), con 24 ya arreglados:
+  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea.
+  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono.
 - V4.1 (24 sep, rama `claude/gracious-pascal-aryw2d`):
   - el centro de la oficina sin la red neuronal: solo el icono del Cerebro y Dimitri;
   - los 31 ⏳ de `docs/auditoria-ux-2026-09-24.md`: aprobaciones por borrador, ARCHIVADAS con DESHACER, trampas de foco (`src/modal.js`), hoja de atajos «?», teclado, papelera de notas, tablet;
@@ -64,12 +67,16 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - auditoría de 100 puntos: los 100 arreglados.
 
 **Siguiente, en este orden:**
-1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
+1. Lo que queda abierto en `docs/auditoria-estudio-calendario-2026-09-24.md`. Lo que más molesta:
+   - la agenda del teléfono (B5);
+   - lo que ya pasó en el calendario (B7);
+   - los iconos sin texto de la galería (A20 y A21).
+2. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
    - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);
    - el punto rojo que parpadea en las tarjetas (9).
-2. Probar el Estudio con una key real: Higgsfield `HF_KEY`, Nano Banana `GEMINI_API_KEY` o fal.ai `FAL_KEY`.
-3. Las mejoras que el dueño vaya pidiendo. Una herramienta nueva entra como un botón más en el dock de la barra superior (ver «The top bar»).
+3. Probar el Estudio con una key real: Higgsfield `HF_KEY`, Nano Banana `GEMINI_API_KEY` o fal.ai `FAL_KEY`.
+4. Las mejoras que el dueño vaya pidiendo. Una herramienta nueva entra como un botón más en el dock de la barra superior (ver «The top bar»).
 
 **Reglas de la interfaz (V4.1):**
 - Toda ventana modal nueva llama a `modal.open(el)` al abrirse y a `modal.close(el)` al cerrarse (`src/modal.js`). Mientras está abierta, el resto de la página queda inerte y Tab da la vuelta dentro de ella.

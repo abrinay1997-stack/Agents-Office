@@ -13,6 +13,8 @@ const VAL = { auto: 'Auto', low: 'Baja', medium: 'Media', high: 'Alta', video: '
 const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
 const ROLE = { start: 'Imagen inicial', end: 'Imagen final', reference: 'Referencias', video: 'Video de origen' };
 const ROLE_HELP = { start: 'el video empieza así', end: 'el video termina así', reference: 'tu producto, logo, personaje o estilo', video: 'el video que se cambia o se alarga' };
+// V4.2 (audit A1): an image model's slots are not «el video empieza así» — the same roles, in image words
+const ROLE_IMG = { start: 'Imagen a editar', end: 'Resultado parecido a esta' }, ROLE_IMG_HELP = { start: 'la foto que el modelo cambia', end: 'cómo debería quedar' };
 const I = { // line icons (stroke = currentColor)
   img: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 9"/>',
   vid: '<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
@@ -33,6 +35,7 @@ export function initStudio(ctx) {
       <span class="st-logo">${svg('vid')}</span><div><div class="st-name" id="stTitle">Estudio</div><div class="st-sub">Imágenes y video reales. Sigue generando aunque cierres esta ventana; tus agentes también lo usan.</div></div>
       <span class="sp"></span><div class="st-budget" aria-live="polite"></div><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)">${svg('x')}</button>
     </div>
+    <div class="st-ptabs" role="tablist" aria-label="Estudio"><button type="button" role="tab" data-pt="gen" aria-selected="true">Crear</button><button type="button" role="tab" data-pt="gal" aria-selected="false">Galería <b class="st-ptn"></b></button></div>
     <div class="st-body">
       <section class="st-gen" aria-label="Crear">
         <div class="st-scroll">
@@ -42,7 +45,7 @@ export function initStudio(ctx) {
             <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden role="listbox" aria-label="Modelos"></div></div></div>
           <div class="st-step"><div class="st-h"><b>3</b> Describe lo que quieres <span class="sp"></span><label class="st-batch" title="Varias ideas a la vez: una por línea"><input type="checkbox" class="st-mode"> Varias ideas (una por línea)</label></div>
             <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
-              <div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción (en inglés, que es como mejor lo entienden los motores)">${svg('spark')}<span>Mejorar el prompt</span></button><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span></div></div></div>
+              <div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción (en inglés, que es como mejor lo entienden los motores)">${svg('spark')}<span>Mejorar el prompt</span></button><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span></div></div></div>
           <div class="st-step st-matstep"><div class="st-h"><b>4</b> Material de partida <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
           <div class="st-step"><div class="st-h"><b class="st-n5">5</b> Formato y ajustes</div><div class="st-ratios"></div><div class="st-sets"></div>
             <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
@@ -53,7 +56,9 @@ export function initStudio(ctx) {
         <div class="st-foot">
           <div class="st-qty" role="group" aria-label="Cantidad"><span>Cantidad</span><button type="button" data-d="-1" aria-label="Menos">−</button><output class="st-n">1</output><button type="button" data-d="1" aria-label="Más">+</button></div>
           <button type="button" class="st-go">GENERAR</button>
+          <button type="button" class="st-sum" title="Cambiar el formato y los ajustes (paso 5)"></button>
           <div class="st-est"></div>
+          <div class="st-keyhelp" hidden role="alert"></div>
           <div class="st-msg" aria-live="polite"></div>
         </div>
       </section>
@@ -83,11 +88,21 @@ export function initStudio(ctx) {
   let media = { start: [], end: [], reference: [], video: [] };
 
   const cur = () => models.find(m => m.id === modelOf[kind]) || null;
+  const roleName = (r, m = cur()) => (m && m.kind === 'image' && ROLE_IMG[r]) || ROLE[r];
+  const roleHelp = (r, m = cur()) => (m && m.kind === 'image' && ROLE_IMG_HELP[r]) || ROLE_HELP[r];
   const itemOf = f => items.find(x => x.file === f);
   const src = it => '/media/' + String(it.file || it).split('/').map(encodeURIComponent).join('/');
   const isVid = f => /\.(mp4|webm)$/i.test(f);
   const ar = r => (r && /^\d+:\d+$/.test(r) ? r.replace(':', ' / ') : '');
   const ratioOf = it => (it.w && it.h ? `${it.w} / ${it.h}` : ar(it.ratio) || '');
+  function fieldErr(where, text) { // V4.2 (audit A4): the field that is missing lights up and says so, in view — not a red line at the foot
+    const step = where === 'slot' ? $('.st-matstep') : $('.st-prompt').closest('.st-step');
+    step.classList.add('st-need'); step.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (where === 'slot') { const sl = el.querySelector('.st-slot.need') || el.querySelector('.st-slot'); if (sl) sl.querySelector('button')?.focus({ preventScroll: true }); say(text, true); }
+    else { const fe = $('.st-ferr'); fe.textContent = text; fe.hidden = false; $('.st-prompt').focus({ preventScroll: true }); say(''); }
+    showPane('gen');
+  }
+  function clearFieldErr() { el.querySelectorAll('.st-need').forEach(n => n.classList.remove('st-need')); $('.st-ferr').hidden = true; }
   const say = (t, bad) => { $('.st-msg').textContent = t; $('.st-msg').className = 'st-msg' + (bad ? ' bad' : ''); };
   const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const api = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
@@ -141,7 +156,7 @@ export function initStudio(ctx) {
     $('.st-matstep').hidden = !roles.length; $('.st-n5').textContent = roles.length ? '5' : '4'; // the steps count on without a gap
     $('.st-matstep .st-hn').textContent = (m.needs || []).length ? 'obligatorio' : 'opcional';
     $('.st-slots').innerHTML = roles.map(([r, n]) => `<div class="st-slot${(m.needs || []).includes(r) && !media[r].length ? ' need' : ''}" data-role="${r}">
-        <div class="st-slot-h"><b>${ROLE[r]}</b> <span>${ROLE_HELP[r]}${n > 1 ? ` · ${media[r].length} de ${n}` : ''}</span></div>
+        <div class="st-slot-h"><b>${roleName(r, m)}</b> <span>${roleHelp(r, m)}${n > 1 ? ` · ${media[r].length} de ${n}` : ''}</span></div>
         <div class="st-chips">${media[r].map(f => `<span class="st-chip" data-f="${esc(f)}">${isVid(f) ? `<video src="${src(f)}" muted preload="metadata"></video>` : `<img src="${src(f)}" alt="">`}<button type="button" data-unslot="${esc(f)}" aria-label="Quitar">${svg('x')}</button></span>`).join('')}
           ${media[r].length < n ? `<button type="button" class="st-add" data-slot="${r}">${svg('up')}<span>Subir</span></button><button type="button" class="st-add" data-gpick="${r}">${svg('grid')}<span>De la galería</span></button>` : ''}</div></div>`).join('');
     const s = settingsOf(m), ent = Object.entries(m.settings);
@@ -168,6 +183,8 @@ export function initStudio(ctx) {
     const s = settingsOf(m), per = Number(s.batchSize) || 1, secs = m.seconds || Number(s.duration) || 5;
     const cost = (m.per === 's' ? m.cost * secs : m.cost) * n * per, total = n * per;
     $('.st-est').textContent = `${total} ${kind === 'video' ? (total === 1 ? 'video' : 'videos') : total === 1 ? 'imagen' : 'imágenes'}${m.per === 's' ? ` de ${secs} s` : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}${budget ? ` · te quedan ${budget.left} hoy` : ''}`;
+    const sum = [s.aspectRatio && s.aspectRatio !== 'auto' ? `${s.aspectRatio}${RATIO_USE[s.aspectRatio] ? ' ' + RATIO_USE[s.aspectRatio] : ''}` : s.aspectRatio ? 'formato auto' : '', m.settings.duration ? `${secs} s` : '', s.resolution ? String(s.resolution) : ''].filter(Boolean);
+    $('.st-sum').innerHTML = sum.length ? `${sum.map(esc).join(' · ')} <u>cambiar</u>` : ''; $('.st-sum').hidden = !sum.length;
     $('.st-go').textContent = kind === 'video' ? (total > 1 ? `GENERAR ${total} VIDEOS` : 'GENERAR VIDEO') : total > 1 ? `GENERAR ${total} IMÁGENES` : 'GENERAR IMAGEN';
     $('.st-plen').textContent = $('.st-prompt').value.length > 3000 ? `${$('.st-prompt').value.length}/4000` : '';
     return cost;
@@ -193,9 +210,9 @@ export function initStudio(ctx) {
       </div>
       <div class="st-jacts">${live ? `<button type="button" data-j="cancel">Cancelar</button>` : `<button type="button" data-j="retry" class="pri">Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
   }
-  function card(it, i) {
+  function card(it) {
     const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
-    return `<figure class="st-card${on ? ' sel' : ''}" data-i="${i}" data-f="${esc(it.file)}">
+    return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
       <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}
         ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}${it.fav ? `<span class="st-favb" aria-label="Favorita">${svg('star', 'fill')}</span>` : ''}</button>
@@ -206,27 +223,56 @@ export function initStudio(ctx) {
         ${it.upload ? '' : `<button type="button" data-a="again" aria-label="Repetir con el mismo prompt y ajustes" title="Repetir (mismo prompt y ajustes)">${svg('again')}</button>`}
         <button type="button" data-a="del" aria-label="Mover a la papelera" title="Papelera">${svg('trash')}</button>
       </div>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span><span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${new Date(it.at).toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span></figcaption>
+      <figcaption><span class="st-p">${esc(it.prompt)}</span><span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
     </figure>`;
   }
+  // V4.2 (audit A17 · A18): the gallery is updated in place. A card whose content did not change keeps its node — a playing
+  // preview, the keyboard focus and the scroll survive the 20-second refresh and the 2.5-second job ticks. The cards go into
+  // columns in order, each to the shortest column, so the newest read left to right (CSS columns filled top to bottom).
+  const nodes = new Map(); let layoutSig = '', lastWant = [];
+  const aspect = it => { if (it.w && it.h) return it.h / it.w; const r = String(it.ratio || (it.s && it.s.aspectRatio) || '').split(':').map(Number); return r.length === 2 && r[0] && r[1] ? r[1] / r[0] : 1; };
+  const colCount = () => { const w = $('.st-grid').clientWidth - 36; return w > 0 ? Math.max(1, Math.floor((w + 14) / (230 + 14))) : 0; };
+  function when(ts) { const d = new Date(ts), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; return d.toDateString() === n.toDateString() ? `hoy ${t}` : d.toDateString() === y.toDateString() ? `ayer ${t}` : d.toLocaleDateString('es', { day: 'numeric', month: 'short', ...(d.getFullYear() !== n.getFullYear() ? { year: 'numeric' } : {}) }); }
   function renderGrid() {
     const list = shown(), tj = tileJobs().filter(j => filter === 'all' || (filter === 'you' && j.by !== 'agent') || (filter === 'agent' && j.by === 'agent') || (filter === 'video' && j.kind === 'video'));
     const active = tileJobs().filter(j => j.state !== 'failed').length;
     $('.st-count').textContent = `${list.length} ${list.length === 1 ? 'archivo' : 'archivos'}${list.length !== items.length ? ` de ${items.length}` : ''}${active ? ` · ${active} generándose` : ''}`;
-    const scroll = $('.st-grid').scrollTop;
-    const body = tj.map(jobTile).join('') + list.map(it => card(it, items.indexOf(it))).join(''); // the columns live in an inner box: a multi-column box with a fixed height overflows sideways
-    $('.st-grid').innerHTML = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
-      : body ? `<div class="st-cols">${body}</div>` : `<div class="st-empty">${items.length ? 'Nada con este filtro.' : 'Aún no hay nada. Genera tu primera imagen con el compositor, sube una foto tuya (Subir), o pídesela a un agente de Marketing.'}</div>`;
-    $('.st-grid').scrollTop = scroll;
+    $('.st-ptn').textContent = active ? `· ${active} en curso` : items.length ? String(items.length) : '';
     renderSel();
+    const G = $('.st-grid');
+    const empty = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
+      : !tj.length && !list.length ? `<div class="st-empty">${items.length ? `Nada con este filtro. <button type="button" class="st-all">Ver todo</button>` : 'Aún no hay nada. Genera tu primera imagen con el compositor, sube una foto tuya (Subir), o pídesela a un agente de Marketing.'}</div>` : '';
+    if (empty) { if (G.innerHTML !== empty) G.innerHTML = empty; nodes.clear(); layoutSig = ''; lastWant = []; return; }
+    let root = G.querySelector(':scope > .st-cols'); if (!root) { G.innerHTML = '<div class="st-cols"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
+    const want = [...tj.map(j => ['j:' + j.id, jobTile(j), aspect(j)]), ...list.map(it => ['f:' + it.file, card(it), aspect(it)])];
+    const keep = new Set(), active_ = document.activeElement;
+    for (const [k, html] of want) {
+      keep.add(k); const n = nodes.get(k); if (n && n.html === html) continue;
+      const t = document.createElement('template'); t.innerHTML = html.trim(); const fresh = t.content.firstElementChild;
+      const hadFocus = n && n.el.contains(active_), fsel = hadFocus && active_.dataset && (active_.dataset.a || active_.dataset.j) ? `[data-${active_.dataset.a ? 'a' : 'j'}="${active_.dataset.a || active_.dataset.j}"]` : hadFocus && active_.classList.contains('st-thumb') ? '.st-thumb' : null;
+      if (n) n.el.replaceWith(fresh); nodes.set(k, { html, el: fresh });
+      if (hadFocus) (fsel && fresh.querySelector(fsel) || fresh.querySelector('button'))?.focus({ preventScroll: true }); // a changed card (a star, a tick) keeps the keyboard where it was
+    }
+    for (const [k, n] of nodes) if (!keep.has(k)) { n.el.remove(); nodes.delete(k); }
+    lastWant = want; layout(root);
   }
+  function layout(root, force) {
+    const n = colCount(); if (!n) return; // hidden (a phone on the Crear tab): laid out when it shows
+    const sig = n + '|' + lastWant.map(w => w[0]).join(',');
+    if (!force && sig === layoutSig) return; layoutSig = sig;
+    const cols = [...Array(n)].map(() => { const c = document.createElement('div'); c.className = 'st-col'; return c; }), h = new Array(n).fill(0);
+    for (const [k, , a] of lastWant) { const j = h.indexOf(Math.min(...h)); cols[j].appendChild(nodes.get(k).el); h[j] += a + 0.3; } // 0.3: the caption under each picture
+    root.style.setProperty('--cols', n); root.replaceChildren(...cols);
+  }
+  function relayout() { const root = $('.st-grid > .st-cols'); if (root) layout(root); }
+  if (window.ResizeObserver) new ResizeObserver(() => { if (!el.hidden) relayout(); }).observe($('.st-grid'));
   function renderSel() {
     $('.st-selbar').hidden = !(selecting || sel.size); $('.st-seln').textContent = sel.size ? `${sel.size} ${sel.size === 1 ? 'seleccionada' : 'seleccionadas'}` : 'Toca las que quieras';
     el.classList.toggle('st-selecting', selecting || sel.size > 0);
     $('.st-selbtn').setAttribute('aria-pressed', selecting || sel.size > 0); $('.st-selbtn').classList.toggle('on', selecting || sel.size > 0);
     el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"]').forEach(b => { b.disabled = !sel.size; });
     $('.st-picking').hidden = !picking;
-    if (picking) $('.st-picking').innerHTML = `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${ROLE[picking]}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`;
+    if (picking) $('.st-picking').innerHTML = `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${roleName(picking)}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`;
     el.classList.toggle('st-pickmode', !!picking);
   }
   let loading = null;
@@ -270,13 +316,25 @@ export function initStudio(ctx) {
     let ok = 0;
     for (const p of prompts) {
       try { const r = await api('POST', '/api/media/jobs', { prompt: p, n: qty, kind, model: m.id, settings, media: mediaNow, by: 'you' }); jobs.unshift(r.job); budget = r.budget; ok++; }
-      catch (e) { say(`No se pudo${prompts.length > 1 ? ` (${ok + 1} de ${prompts.length})` : ''}: ${e.message}`, true); if (/tope|key/.test(e.message)) break; }
+      catch (e) { if (/key/i.test(e.message)) { keyHelp(m, e.message); break; } say(`No se pudo${prompts.length > 1 ? ` (${ok + 1} de ${prompts.length})` : ''}: ${e.message}`, true); if (/tope/.test(e.message)) break; }
     }
-    if (ok) say(`${ok === 1 ? 'En marcha' : `${ok} trabajos en marcha`}: ${kind === 'video' ? 'un video tarda unos minutos; ' : ''}aparece en la galería al terminar. Puedes seguir.`);
+    if (ok) { say(`${ok === 1 ? 'En marcha' : `${ok} trabajos en marcha`}: ${kind === 'video' ? 'un video tarda unos minutos; ' : ''}aparece en la galería al terminar. Puedes seguir.`); if (phone()) showPane('gal'); } // on a phone, the new tile is what to look at
     busy = false; $('.st-go').disabled = false;
     renderHead(); renderGrid(); watch();
   }
-  function setKind(k) { if (k === kind) return; kind = k; store.set('kind', kind); openList(false); renderModels(); }
+  function keyHelp(m, message) { // V4.2 (audit A38): what to do, step by step, and a way to keep going now
+    const eng = engines.find(x => x.id === m.engine) || {}, K = $('.st-keyhelp');
+    const test = models.find(x => x.kind === kind && x.engine === 'prueba' && x.on);
+    K.innerHTML = `<b>${esc(m.name)} necesita su key de ${esc(eng.name || m.engineName || 'su servicio')}.</b>
+      <ol><li>Crea la key en ${eng.site ? `<code>${esc(eng.site)}</code>` : 'la web del servicio'} y ponle un límite de gasto.</li>
+      <li>Guárdala en Windows: abre una ventana de comandos y pega ${eng.how ? `<code>${esc(eng.how)}</code>` : 'el comando de «Motores y cómo activarlos»'}.</li>
+      <li>Cierra la oficina y ábrela con el iniciador.</li></ol>
+      <div class="st-kh-row">${test ? `<button type="button" data-kh="test" class="pri">Usar ${esc(test.name)} mientras tanto</button>` : ''}<button type="button" data-kh="engs">Ver los motores</button><button type="button" data-kh="x">Cerrar</button></div>`;
+    K.hidden = false; K.dataset.test = test ? test.id : ''; say('');
+    K.querySelector('button')?.focus({ preventScroll: true });
+    if (!test && message) say(message, true);
+  }
+  function setKind(k) { if (k === kind) return; clearFieldErr(); $('.st-keyhelp').hidden = true; kind = k; store.set('kind', kind); openList(false); renderModels(); }
   function useModelFor(role, want) { // a model of `want` kind that takes `role`: the current one if it does, else the best that is on
     const c = models.find(m => m.id === modelOf[want]);
     if (c && c.on && c.roles[role]) return c;
@@ -288,7 +346,7 @@ export function initStudio(ctx) {
     const m = useModelFor('start', 'video'); if (!m) return say('Ningún modelo de video encendido acepta una imagen inicial.', true);
     kind = 'video'; store.set('kind', kind); modelOf.video = m.id; store.set('model.video', m.id);
     media = { start: [it.file], end: [], reference: [], video: [] };
-    renderModels(); $('.st-prompt').focus();
+    renderModels(); showPane('gen'); $('.st-prompt').focus();
     say(m.engine === 'prueba' ? 'Animar: aún no tienes una key de video (Higgsfield o fal.ai); puedes probar el flujo gratis con «Prueba de video».' : `Animar con ${m.name}: describe el movimiento y pulsa GENERAR.`, m.engine === 'prueba');
   }
   function addMedia(role, f) {
@@ -296,7 +354,7 @@ export function initStudio(ctx) {
     if (role === 'video' ? !isVid(f) : isVid(f)) { say(role === 'video' ? 'Ahí va un video.' : 'Ahí va una imagen, no un video.', true); return false; }
     if (m.engine !== 'prueba' && /\.svg$/i.test(f)) { say('Una tarjeta de prueba no sirve de referencia para un motor real: usa una imagen generada o subida.', true); return false; }
     if (media[role].includes(f)) return true;
-    if (media[role].length >= m.roles[role]) { if (m.roles[role] === 1) media[role] = []; else { say(`${ROLE[role]}: como mucho ${m.roles[role]}.`, true); return false; } }
+    if (media[role].length >= m.roles[role]) { if (m.roles[role] === 1) media[role] = []; else { say(`${roleName(role)}: como mucho ${m.roles[role]}.`, true); return false; } }
     media[role].push(f); renderModel(); return true;
   }
   function useAsRef(it) {
@@ -361,7 +419,7 @@ export function initStudio(ctx) {
         if (role) addMedia(role, r.item.file);
       } catch (e) { say(`«${file.name}»: ${e.message}`, true); }
     }
-    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${role ? ` y puesta en «${ROLE[role]}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); }
+    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${role ? ` y puesta en «${roleName(role)}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); }
   }
 
   /* ---------- the lightbox ---------- */
@@ -402,13 +460,14 @@ export function initStudio(ctx) {
     if (!e.target.closest('.st-mwrap')) openList(false);
     const kb = e.target.closest('[data-kind]'); if (kb) return setKind(kb.dataset.kind);
     if (e.target.closest('.st-mpick')) return openList();
-    const mo = e.target.closest('.st-mo'); if (mo && !mo.disabled) { modelOf[kind] = mo.dataset.id; store.set('model.' + kind, mo.dataset.id); openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; }
+    const mo = e.target.closest('.st-mo'); if (mo && !mo.disabled) { $('.st-keyhelp').hidden = true; modelOf[kind] = mo.dataset.id; store.set('model.' + kind, mo.dataset.id); openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; }
     const arb = e.target.closest('[data-ar]'); if (arb) { setSetting('aspectRatio', arb.dataset.ar); renderModel(); return; }
     const qd = e.target.closest('.st-qty [data-d]'); if (qd) { const max = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8; qty = Math.max(1, Math.min(max, qty + +qd.dataset.d)); estimate(); return; }
     const f = e.target.closest('[data-f]'); if (f && f.closest('.st-tabs')) { filter = f.dataset.f; el.querySelectorAll('.st-tabs [data-f]').forEach(b => { b.classList.toggle('on', b === f); b.setAttribute('aria-pressed', b === f); }); renderGrid(); return; }
     if (e.target.closest('.st-upbtn')) { uploadRole = null; $('.st-file').click(); return; }
     if (e.target.closest('.st-selbtn')) { selecting = !(selecting || sel.size); if (!selecting) sel.clear(); renderGrid(); return; }
     if (e.target.closest('.st-retry')) { load(); return; }
+    if (e.target.closest('.st-all')) { el.querySelector('.st-tabs [data-f="all"]').click(); return; }
     const sl = e.target.closest('[data-slot]'); if (sl) { uploadRole = sl.dataset.slot; $('.st-file').accept = uploadRole === 'video' ? 'video/mp4,video/webm' : 'image/png,image/jpeg,image/webp'; $('.st-file').click(); return; }
     const gp = e.target.closest('[data-gpick]'); if (gp) { picking = gp.dataset.gpick; renderSel(); return; }
     const us = e.target.closest('[data-unslot]'); if (us) { for (const r of Object.keys(media)) media[r] = media[r].filter(x => x !== us.dataset.unslot); renderModel(); return; }
@@ -435,12 +494,20 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-go')) {
       if (!isLive()) return say('El Estudio necesita la oficina real (ábrela con el iniciador).', true);
       const m = cur(); if (!m) return say('Elige un modelo.', true);
-      const miss = (m.needs || []).find(r => !media[r].length); if (miss) return say(`${m.name} necesita «${ROLE[miss]}» (paso 4).`, true);
+      const miss = (m.needs || []).find(r => !media[r].length); if (miss) return fieldErr('slot', `${m.name} necesita «${roleName(miss)}»: súbela o elígela de la galería.`);
       const ps = mode === 'batch' ? lines() : [$('.st-prompt').value.trim()].filter(Boolean);
-      if (!ps.length && !(m.needs || []).includes('video')) { $('.st-prompt').focus(); return say('Escribe qué quieres crear (paso 3).', true); }
+      if (!ps.length && !(m.needs || []).includes('video')) return fieldErr('prompt', mode === 'batch' ? 'Escribe al menos una idea: una por línea.' : 'Escribe qué quieres crear: qué se ve, el estilo, la luz.');
       const c = estimate(); if (c > 1 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}. ¿Generar?`)) return;
       return generate(ps.length ? ps : ['']);
     }
+    const kh = e.target.closest('[data-kh]'); if (kh) {
+      const K = $('.st-keyhelp'); K.hidden = true;
+      if (kh.dataset.kh === 'test' && K.dataset.test) { modelOf[kind] = K.dataset.test; renderPick(); renderModel(); say('Con el motor de prueba: gratis, tarjetas de muestra para ver el flujo. Pulsa GENERAR.'); $('.st-go').focus(); }
+      if (kh.dataset.kh === 'engs') { const d = $('.st-keys'); d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+      return;
+    }
+    if (e.target.closest('.st-sum')) { const st = $('.st-ratios').closest('.st-step'); st.scrollIntoView({ block: 'start', behavior: 'smooth' }); st.classList.add('st-flash'); setTimeout(() => st.classList.remove('st-flash'), 1200); (st.querySelector('.st-ar.on') || st.querySelector('select, button'))?.focus({ preventScroll: true }); return; }
+    const pt = e.target.closest('[data-pt]'); if (pt) { showPane(pt.dataset.pt); return; }
     const jt = e.target.closest('.st-job');
     if (jt) {
       const a = e.target.closest('[data-j]')?.dataset.j, id = jt.dataset.job; if (!a) return;
@@ -452,10 +519,10 @@ export function initStudio(ctx) {
       renderGrid(); watch(); return;
     }
     const cd = e.target.closest('.st-card[data-f]'); if (!cd) return;
-    const it = items[+cd.dataset.i]; if (!it) return;
+    const it = itemOf(cd.dataset.f); if (!it) return;
     if (picking) { // choosing a file for a slot
       e.preventDefault();
-      if (addMedia(picking, it.file)) { const r = picking; picking = null; renderSel(); say(`Puesta en «${ROLE[r]}».`); }
+      if (addMedia(picking, it.file)) { const r = picking; picking = null; renderSel(); say(`Puesta en «${roleName(r)}».`); }
       return;
     }
     const ck = e.target.closest('.st-ck');
@@ -480,6 +547,7 @@ export function initStudio(ctx) {
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); estimate(); }
   });
   el.addEventListener('input', e => {
+    if (e.target.classList.contains('st-prompt')) clearFieldErr();
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value; setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; renderGrid(); return; }
@@ -503,6 +571,13 @@ export function initStudio(ctx) {
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.classList.contains('st-prompt')) { e.preventDefault(); $('.st-go').click(); }
   });
+  const phone = () => matchMedia('(max-width: 760px)').matches;
+  function showPane(p) { // on a phone one pane at a time; on a wider screen both are always there
+    el.dataset.pane = p;
+    el.querySelectorAll('[data-pt]').forEach(b => b.setAttribute('aria-selected', b.dataset.pt === p));
+    if (p === 'gal') relayout();
+  }
+  showPane('gen');
   let timer = null;
   function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
   function close() { if (el.hidden) return; closeLight(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }

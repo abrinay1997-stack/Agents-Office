@@ -22,6 +22,23 @@ const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())
 const hm = ts => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const startOfDay = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
 const mondayOf = ts => { const d = new Date(startOfDay(ts)); const k = (d.getDay() + 6) % 7; d.setDate(d.getDate() - k); return d.getTime(); };
+const DOW_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const DOW_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+// V4.2 (audit B15): dates and times in Spanish, whatever the browser's language — «Friday, September 25 at 08:30 AM» and «09/26/2026» are gone
+const fmtDay = ts => { const d = new Date(ts); return `${DOW_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3).toLowerCase()}`; };
+const fmtLong = ts => { const d = new Date(ts); return `${DOW_LONG[d.getDay()]} ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}, ${hm(ts)}`; };
+function timeOpts(val) { // a 24-hour menu every 15 minutes (plus the value it already has) instead of the browser's «10:05 AM»
+  const set = new Set(); for (let m = 0; m < 1440; m += 15) set.add(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
+  if (val) set.add(val);
+  return [...set].sort().map(v => `<option value="${v}"${v === val ? ' selected' : ''}>${v}</option>`).join('');
+}
+function dateOpts(val) { // the next 120 days, «jue 25 sep», instead of the browser's «09/26/2026»
+  const out = [], t0 = startOfDay(Date.now()); let seen = false;
+  for (let i = 0; i < 120; i++) { const d = new Date(t0); d.setDate(d.getDate() + i); const k = ymd(d); if (k === val) seen = true; out.push(`<option value="${k}"${k === val ? ' selected' : ''}>${i === 0 ? 'hoy · ' : i === 1 ? 'mañana · ' : ''}${fmtDay(d.getTime())}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}</option>`); }
+  if (val && !seen) out.unshift(`<option value="${val}" selected>${fmtDay(new Date(val + 'T00:00:00').getTime())}</option>`);
+  return out.join('');
+}
+const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it sits in the «en marcha» row
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['mon', 'Lunes'], ['tue', 'Martes'], ['wed', 'Miércoles'], ['thu', 'Jueves'], ['fri', 'Viernes'], ['sat', 'Sábados'], ['sun', 'Domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']];
 
 export function initCalendar(ctx) {
@@ -31,7 +48,8 @@ export function initCalendar(ctx) {
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
   let openNow = false, view = 'month', anchor = startOfDay(Date.now()), q = '', deptOn = new Set(DEPT_KEYS), showRoutines = true, showDone = true, onlyRoutine = null, popKind = null, lastDept = 'marketing';
   const MAX = { month: 3, week: 8, day: 99 };
-  const HOURS = [6, 22]; // the day view's timeline, 06:00–22:00
+  // V4.2 (audit B2–B4): the week and the day are one time grid, 00:00–24:00 — the day view used to stop at 06–22 and put a 23:30 task in the 22:00 row
+  let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it)
   const attr = v => esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // inside title="…": a quote in a title must not end the attribute
   let dragging = null; // { kind: 't' | 'r', id, at } while a card is being dragged — nothing re-renders under it
 
@@ -58,7 +76,7 @@ export function initCalendar(ctx) {
       if (!r.when || r.when.kind === 'minutes') continue; // a filming cadence is not a calendar
       const startAt = Math.max(from - 1, Date.now() - 1); // routines are only projected forward: what has run is a done task already
       const occ = occurrences(r.when, startAt, to - 1, 800);
-      if (r.when.kind === 'hourly' && view !== 'day') { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
+      if (r.when.kind === 'hourly' && view === 'month') { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
       else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, paused: r.paused, skipped: (r.skips || []).includes(at) });
     }
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
@@ -67,13 +85,18 @@ export function initCalendar(ctx) {
 
   /* ---------- drawing ---------- */
   const av = (id) => { const a = agentOf(id); const c = a ? DEPTS[a.dept].chip : '#ccc'; return `<i class="cv-av" style="border-color:${c};background:${c}55" title="${attr(a ? a.name : id)}">${esc(a ? a.name[0] : '?')}</i>`; };
-  function cardHTML(ev) {
+  function cardHTML(ev, line) {
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
     const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'done' ? `listo ${hm(ev.at)}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
-    const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1 || (view === 'day' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
+    const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1 || (view !== 'month' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
+    const glyph = ev.kind === 'routine' ? '<span class="cv-rt">⏱</span>' : ev.kind === 'done' ? '<span class="cv-tick">✓</span>' : ev.kind === 'sched' ? '<span class="cv-rt">◷</span>' : ev.t?.team?.members?.length ? '<span class="cv-rt">⚑</span>' : '';
+    if (line) { // V4.2 (audit B1): the month is one line per event — two-line cards were cut in half by the cell
+      const short = ev.kind === 'routine' ? (ev.hourly ? `cada ${ev.r.when.every || 1} h` : hm(ev.at)) : ev.kind === 'done' || ev.kind === 'sched' ? hm(ev.at) : ev.kind === 'doing' ? 'ahora' : ev.kind === 'waiting' ? 'tu OK' : '';
+      return `<div class="cv-ev line ${ev.kind}${ev.paused ? ' paused' : ''}${ev.skipped ? ' skipped' : ''}${ev.t?.error ? ' err' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(time)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">${short ? `<span class="cv-ev-h">${esc(short)}</span>` : ''}<span class="cv-ev-t">${glyph}${esc(ev.title)}</span></div>`;
+    }
     return `<div class="cv-ev ${ev.kind}${ev.paused ? ' paused' : ''}${ev.skipped ? ' skipped' : ''}${ev.t?.error ? ' err' : ''}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
-      <div class="cv-ev-t">${ev.kind === 'routine' ? '<span class="cv-rt">⏱</span>' : ev.kind === 'done' ? '<span class="cv-tick">✓</span>' : ev.kind === 'sched' ? '<span class="cv-rt">◷</span>' : ev.t?.team?.members?.length ? '<span class="cv-rt">⚑</span>' : ''}${esc(ev.title)}</div>
+      <div class="cv-ev-t">${glyph}${esc(ev.title)}</div>
       <div class="cv-ev-m"><span>${esc(time)}</span>${av(ev.agent)}</div></div>`;
   }
   function render() {
@@ -83,32 +106,64 @@ export function initCalendar(ctx) {
     const a = new Date(anchor);
     E.title.innerHTML = view === 'day' ? `${a.getDate()} ${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : view === 'month' ? `${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : (() => { const s = new Date(from), e = new Date(to - DAY); return `${s.getDate()}–${e.getDate()} ${s.getMonth() === e.getMonth() ? MONTHS[e.getMonth()] : MONTHS[s.getMonth()].slice(0, 3) + ' – ' + e.getDate() + ' ' + MONTHS[e.getMonth()]} <small>${e.getFullYear()}</small>`; })();
     E.seg.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === view); b.setAttribute('aria-pressed', b.dataset.v === view); });
+    E.dow.hidden = view !== 'month';
     E.dow.innerHTML = view === 'day' ? `<div class="cv-dayname">${['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][a.getDay()]} ${a.getDate()} de ${MONTHS[a.getMonth()].toLowerCase()}</div>` : DOW.map(d => `<div>${d}</div>`).join('');
     E.grid.className = 'cv-grid ' + view; E.grid.style.setProperty('--rows', days / 7);
     let html = '', nDone = 0, nSched = 0, nRt = 0;
     for (let i = 0; i < days; i++) {
-      const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = by[k] || [], dow = (d.getDay() + 6) % 7;
-      const out = view === 'month' && d.getMonth() !== a.getMonth(), past = ts < startOfDay(Date.now()), max = view === 'month' && days > 35 ? 2 : MAX[view];
+      const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = by[k] || [];
       for (const ev of list) { if (ev.kind === 'done') nDone++; else if (ev.kind === 'sched') nSched++; else if (ev.kind === 'routine') nRt++; }
+    }
+    if (view === 'month') for (let i = 0; i < days; i++) {
+      const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = by[k] || [], dow = (d.getDay() + 6) % 7;
+      const out = d.getMonth() !== a.getMonth(), past = ts < startOfDay(Date.now());
       html += `<div class="cv-day${k === today ? ' today' : ''}${out ? ' out' : ''}${past ? ' past' : ''}${dow >= 5 ? ' wknd' : ''}" data-day="${k}">
+        <div class="cv-num">${d.getDate() === 1 ? `<span>${MONTHS[d.getMonth()].slice(0, 3)}</span>` : ''}<b>${pad(d.getDate())}</b></div>
         <button class="cv-add" type="button" title="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}" aria-label="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}">+</button>
-        <div class="cv-evs">${list.slice(0, max).map(cardHTML).join('')}${list.length > max ? `<button class="cv-more" data-day="${k}">${list.length - max} más</button>` : ''}</div>
-        <div class="cv-num">${view === 'week' ? `<span>${DOW[dow]}</span>` : ''}${d.getDate() === 1 && view === 'month' ? `<span>${MONTHS[d.getMonth()].slice(0, 3)}</span>` : ''}<b>${pad(d.getDate())}</b></div></div>`;
+        <div class="cv-evs">${list.map(ev => cardHTML(ev, true)).join('')}</div></div>`;
     }
-    if (view === 'day') { // one day, by the hour: drag a card to an hour to change its time
-      const k = ymd(new Date(from)), list = by[k] || [], past = from < startOfDay(Date.now());
-      const nowH = new Date().getHours();
-      let rows = '';
-      for (let h = HOURS[0]; h <= HOURS[1]; h++) {
-        const inHour = list.filter(ev => new Date(ev.at).getHours() === h || (h === HOURS[0] && new Date(ev.at).getHours() < h) || (h === HOURS[1] && new Date(ev.at).getHours() > h));
-        rows += `<div class="cv-hour cv-day${past || (k === today && h < nowH) ? ' past' : ''}${k === today && h === nowH ? ' now' : ''}" data-day="${k}" data-hour="${h}"><div class="cv-h">${pad(h)}:00</div><div class="cv-evs">${inHour.map(cardHTML).join('')}</div></div>`;
-      }
-      html = rows; nDone = list.filter(e => e.kind === 'done').length; nSched = list.filter(e => e.kind === 'sched').length; nRt = list.filter(e => e.kind === 'routine').length;
-      E.grid.className = 'cv-grid day';
-    }
+    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', days); html = `<div class="cv-tg">${timeGrid(from, days, by)}</div>`; }
+    const key = view + ':' + from;
+    if (view !== 'month' && key === tgKey) tgScroll = E.grid.scrollTop;
     E.grid.innerHTML = html;
+    if (view === 'month') fitMonth();
+    else if (key === tgKey) E.grid.scrollTop = tgScroll;
+    else { // a new week or day opens on the working hours, or on «now» when today is on screen
+      tgKey = key; const now = new Date(), onScreen = Date.now() >= from && Date.now() < from + days * DAY;
+      const h = onScreen ? Math.max(0, now.getHours() - 1) : 7;
+      const row = E.grid.querySelector(`.cv-tg-h[data-h="${h}"]`), head = E.grid.querySelector('.cv-tg-d');
+      E.grid.scrollTop = row ? row.offsetTop - (head ? head.offsetHeight : 0) - E.grid.querySelector('.cv-tg-c').offsetTop : 0;
+    }
+    if (view === 'month') tgKey = '';
     E.stats.innerHTML = `<span><b>${nRt}</b> ${nRt === 1 ? 'ejecución de rutina' : 'ejecuciones de rutinas'}</span><span><b>${nSched}</b> programadas</span><span><b>${nDone}</b> listas</span>`;
     renderRail(); renderChips();
+  }
+  function timeGrid(from, days, by) { // columns = days, rows = hours; a slot is a drop target and a click schedules at that hour
+    const today = ymd(new Date()), now = new Date();
+    const cols = []; for (let i = 0; i < days; i++) { const ts = from + i * DAY, d = new Date(ts); cols.push({ ts, d, k: ymd(d), list: by[ymd(d)] || [] }); }
+    let html = '<div class="cv-tg-c"></div>' + cols.map(({ d, k }) => `<div class="cv-tg-d${k === today ? ' today' : ''}" data-day="${k}"><span>${days === 1 ? DOW_LONG[d.getDay()] : DOW[(d.getDay() + 6) % 7]}</span><b>${d.getDate()}</b>${days === 1 ? `<span>de ${MONTHS[d.getMonth()].toLowerCase()}</span>` : ''}</div>`).join('');
+    if (cols.some(c => c.list.some(ev => LIVE.includes(ev.kind)))) // work under way has no hour: a row of its own above the grid, never a fake hour
+      html += '<div class="cv-tg-h lv">EN MARCHA</div>' + cols.map(c => `<div class="cv-tg-lv">${c.list.filter(ev => LIVE.includes(ev.kind)).map(ev => cardHTML(ev)).join('')}</div>`).join('');
+    for (let h = 0; h < 24; h++) {
+      html += `<div class="cv-tg-h" data-h="${h}">${pad(h)}:00</div>`;
+      for (const c of cols) {
+        const end = new Date(c.ts); end.setHours(h + 1, 0, 0, 0);
+        const isNow = c.k === today && h === now.getHours(), wk = (c.d.getDay() + 6) % 7 >= 5;
+        const list = c.list.filter(ev => !LIVE.includes(ev.kind) && new Date(ev.at).getHours() === h);
+        html += `<div class="cv-day cv-slot${end.getTime() <= Date.now() ? ' past' : ''}${isNow ? ' now' : ''}${wk ? ' wknd' : ''}" data-day="${c.k}" data-hour="${h}">${isNow ? `<i class="cv-nowline" style="top:${Math.round(now.getMinutes() / 60 * 100)}%" aria-hidden="true"></i>` : ''}<div class="cv-evs">${list.map(ev => cardHTML(ev)).join('')}</div></div>`;
+      }
+    }
+    return html;
+  }
+  function fitMonth() { // as many one-line events as the cell holds, then «+N más» — never a card cut in half
+    for (const cell of E.grid.querySelectorAll('.cv-day')) {
+      const evs = cell.querySelector('.cv-evs'), items = [...evs.querySelectorAll('.cv-ev')];
+      if (!items.length || evs.scrollHeight <= evs.clientHeight + 1) continue;
+      const room = evs.clientHeight - 20; let k = 0;
+      for (const it of items) { if (it.offsetTop + it.offsetHeight <= room) k++; else break; }
+      k = Math.max(1, k); items.slice(k).forEach(n => { n.hidden = true; });
+      evs.insertAdjacentHTML('beforeend', `<button type="button" class="cv-more" data-day="${cell.dataset.day}">+${items.length - k} más</button>`);
+    }
   }
   function renderBacklog() { // pending work with no date: drag it onto a day to schedule it
     const list = (backlog ? backlog() : []).filter(t => deptOn.has(t.dept) && matches(t.title));
@@ -131,7 +186,7 @@ export function initCalendar(ctx) {
     E.rail.innerHTML = list.length ? list.map(r => { const a = agentOf(r.agent), chip = DEPTS[r.dept].chip; return `<div class="cv-r${r.paused ? ' paused' : ''}${onlyRoutine === r.id ? ' on' : ''}" data-rid="${r.id}" style="--chip:${chip}" role="button" tabindex="0" aria-pressed="${onlyRoutine === r.id}" title="Ver solo esta rutina en el calendario">
         <div class="cv-r-t">${esc(r.title)}</div>
         <div class="cv-r-m">${esc(r.desc || describe(r.when))} · ${esc(a ? a.name : r.agent)}</div>
-        <div class="cv-r-n">${r.paused ? '<span class="cv-paused">PAUSADA</span>' : `próxima ${esc(untilText(r.nextAt))}`}${r.needsOk ? ' · en espera de tu visto bueno' : ''}</div></div>`; }).join('')
+        <div class="cv-r-n">${r.paused ? '<span class="cv-paused">PAUSADA</span>' : `próxima ${esc(untilText(r.nextAt))}`}${tasks.some(t => t.routine === r.id && t.state === 'waiting') ? ' · <span class="cv-wait">un borrador espera tu OK</span>' : r.needsOk ? ' · pedirá tu OK' : ' · no te espera'}</div></div>`; }).join('')
       : `<div class="cv-empty">Sin rutinas todavía.<br>Haz clic en un día, escribe lo que debe pasar, activa REPETIR.</div>`;
   }
   function renderChips() {
@@ -151,13 +206,14 @@ export function initCalendar(ctx) {
   function closePop() { if (popKind === 'create') { const tx = E.pop.querySelector('.cv-text'); if (tx) createDraft = tx.value; } E.pop.hidden = true; E.pop.innerHTML = ''; popKind = null; ov.querySelectorAll('.cv-day.sel').forEach(n => n.classList.remove('sel')); }
   function openCreate(dayKey, cell) {
     closePop(); popKind = 'create'; cell.classList.add('sel');
+    const slotH = cell.dataset.hour !== undefined ? +cell.dataset.hour : null; // a click on an hour of the week or the day schedules at that hour
     if (currentDept && DEPT_KEYS.includes(currentDept())) lastDept = currentDept(); // the popover opens on the bar's department
     const d = new Date(dayKey + 'T00:00:00'), past = d.getTime() < startOfDay(Date.now());
     E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">PROGRAMAR PARA</span><b>${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()]}</b><span class="sp"></span><button class="cv-x" data-act="close">✕</button></div>
       ${past ? '<div class="cv-note">Ese día ya pasó — elige hoy o un día posterior.</div>' : ''}
-      <div class="cv-row"><select class="cv-dept">${DEPT_KEYS.map(k => `<option value="${k}"${k === lastDept ? ' selected' : ''}>${DEPTS[k].name}</option>`).join('')}</select><input type="time" class="cv-time" value="${dayKey === ymd(new Date()) ? pad(Math.min(23, new Date().getHours() + 1)) + ':00' : '09:00'}"><select class="cv-model" title="which model runs it"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}">${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>
+      <div class="cv-row"><select class="cv-dept">${DEPT_KEYS.map(k => `<option value="${k}"${k === lastDept ? ' selected' : ''}>${DEPTS[k].name}</option>`).join('')}</select><select class="cv-time" aria-label="Hora">${timeOpts(slotH !== null ? pad(slotH) + ':00' : dayKey === ymd(new Date()) ? pad(Math.min(23, new Date().getHours() + 1)) + ':00' : '09:00')}</select><select class="cv-model" title="Qué modelo la ejecuta" aria-label="Modelo"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}">${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>
       <textarea class="cv-text" rows="3" placeholder="¿Qué debe pasar ese día?" aria-label="Qué debe pasar ese día">${esc(createDraft)}</textarea>${createDraft.trim() ? '<div class="cv-note">Recuperé lo que estabas escribiendo. <button type="button" class="cv-lnk" data-act="forget">Borrarlo</button></div>' : ''}
-      <div class="cv-row"><button class="cv-rep" data-act="rep">REPETIR</button><select class="cv-cad" hidden>${CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><label class="cv-ok" hidden><input type="checkbox" class="cv-okc" checked> necesita mi visto bueno</label><span class="sp"></span><button class="cv-go" data-act="go"${past ? ' disabled' : ''}>AGREGAR</button></div>
+      <div class="cv-row"><button class="cv-rep" data-act="rep">REPETIR</button><select class="cv-cad" hidden aria-label="Cada cuándo">${CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><label class="cv-ok" hidden><input type="checkbox" class="cv-okc" checked> necesita mi visto bueno</label><span class="sp"></span><button class="cv-go" data-act="go"${past ? ' disabled' : ''}>AGREGAR</button></div>
       <div class="cv-hint">${past ? '' : 'Una tarea para este día — se ejecuta a esa hora y aparece en el panel. REPETIR la convierte en rutina desde esta fecha.'}</div>`;
     E.pop.hidden = false; place(E.pop, cell);
     const P = { dept: E.pop.querySelector('.cv-dept'), time: E.pop.querySelector('.cv-time'), model: E.pop.querySelector('.cv-model'), text: E.pop.querySelector('.cv-text'), rep: E.pop.querySelector('.cv-rep'), cad: E.pop.querySelector('.cv-cad'), ok: E.pop.querySelector('.cv-ok'), okc: E.pop.querySelector('.cv-okc'), go: E.pop.querySelector('.cv-go'), hint: E.pop.querySelector('.cv-hint') };
@@ -165,7 +221,7 @@ export function initCalendar(ctx) {
     const hint = () => {
       if (past) return;
       const k = P.dept.value; lastDept = k;
-      if (repeat) { const w = fromPicker(P.cad.value, P.time.value, dayKey); const first = occurrences(w, Date.now(), Date.now() + 400 * DAY, 1)[0]; P.hint.innerHTML = RT_DEPTS.includes(k) ? `Rutina · <b>${esc(describe(w))}</b> · primera ejecución ${esc(first ? new Date(first).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }) + ' ' + hm(first) : '—')}${isLive() ? ' · Claude elige al agente' : ''}` : `<span class="amber">${esc(rtRefuse(k))}</span>`; P.go.disabled = !RT_DEPTS.includes(k); }
+      if (repeat) { const w = fromPicker(P.cad.value, P.time.value, dayKey); const first = occurrences(w, Date.now(), Date.now() + 400 * DAY, 1)[0]; P.hint.innerHTML = RT_DEPTS.includes(k) ? `Rutina · <b>${esc(describe(w))}</b> · primera ejecución ${esc(first ? fmtDay(first) + ' ' + hm(first) : '—')}${isLive() ? ' · Claude elige al agente' : ''}` : `<span class="amber">${esc(rtRefuse(k))}</span>`; P.go.disabled = !RT_DEPTS.includes(k); }
       else { P.hint.innerHTML = `Tarea para <b>${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)} · ${esc(P.time.value)}</b>${isLive() ? ' · Claude elige al agente ahora, la ejecuta después' : ''}`; P.go.disabled = false; }
     };
     P.rep.addEventListener('click', () => { repeat = !repeat; P.rep.classList.toggle('on', repeat); P.cad.hidden = !repeat; P.ok.hidden = !repeat; if (repeat) { const dow = (d.getDay() + 6) % 7; P.cad.value = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][dow]; } hint(); });
@@ -185,6 +241,9 @@ export function initCalendar(ctx) {
       P.text.value = ''; createDraft = ''; closePop(); render();
       const el = E.grid.querySelector(`.cv-ev[data-ev="${repeat ? 'r:' + r.routine.id + ':' : 't:' + r.task.id}"], .cv-ev[data-ev^="${repeat ? 'r:' + r.routine.id + ':' : 't:' + r.task.id}"]`);
       if (el) { el.classList.add('new'); el.scrollIntoView({ block: 'nearest' }); }
+      // V4.2: who got it, said out loud — the popover used to close without telling
+      const who = agentOf(repeat ? r.routine.agent : r.task.agent);
+      if (who) E.stats.innerHTML = `<span class="cv-said">${repeat ? 'Rutina creada' : 'Programada'} · la tiene <b>${esc(who.name)}</b>${r.task && r.task.why && /enrutador/.test(r.task.why) ? ' (el jefe: el enrutador no respondió)' : ''}</span>`;
     }
   }
   const say = (msg, bad) => { const h = E.pop.querySelector('.cv-hint'); if (h) h.innerHTML = bad ? `<span class="amber">${esc(msg)}</span>` : esc(msg); };
@@ -202,7 +261,7 @@ export function initCalendar(ctx) {
         <div class="cv-pop-t">${esc(t.title)}</div>
         <div class="cv-pop-m">${av(t.agent)} ${esc(a ? a.name : '')} · ${esc(DEPTS[t.dept].name)}${edit ? ` · se ejecuta ${esc(untilText(t.dueAt))}` : ''}${t.modelUsed ? ' · ' + esc(modelName(t.modelUsed)) : ''}</div>
         ${edit ? `<label class="cv-lab">Qué debe pasar</label><textarea class="cv-text" rows="3">${esc(t.text || t.title)}</textarea>
-        <div class="cv-row"><input type="date" class="cv-date" value="${ymd(due)}" min="${ymd(new Date())}" aria-label="Día"><input type="time" class="cv-time" value="${hm(due)}" aria-label="Hora"><select class="cv-model" aria-label="Modelo"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}"${t.model === k ? ' selected' : ''}>${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>`
+        <div class="cv-row"><select class="cv-date" aria-label="Día">${dateOpts(ymd(due))}</select><select class="cv-time" aria-label="Hora">${timeOpts(hm(due))}</select><select class="cv-model" aria-label="Modelo"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}"${t.model === k ? ' selected' : ''}>${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>`
         : (t.text && t.text !== t.title ? `<div class="cv-pop-p">${esc(t.text)}</div>` : '')}
         <div class="cv-row">${edit ? '<button class="cv-go" type="button" data-act="save">GUARDAR</button>' : ''}<button class="cv-btn" type="button" data-act="open">ABRIR EL AGENTE</button><span class="sp"></span>${edit ? '<button class="cv-btn warn" type="button" data-act="cancel">CANCELARLA</button>' : ''}</div>
         <div class="cv-hint" aria-live="polite">${edit ? 'Cambia el texto, el día o la hora. También puedes arrastrar la tarjeta a otro día.' : ''}</div>`;
@@ -238,9 +297,9 @@ export function initCalendar(ctx) {
     E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">RUTINA</span><span class="sp"></span><button class="cv-x" type="button" data-act="close" aria-label="Cerrar">✕</button></div>
       <input class="cv-title" value="${attr(r.title)}" aria-label="Título de la rutina" maxlength="90">
       <div class="cv-pop-m">${av(r.agent)} ${esc(a ? a.name : r.agent)} · ${esc(r.desc || describe(r.when))}${r.paused ? ' · <span class="cv-paused">PAUSADA</span>' : ''}</div>
-      <div class="cv-pop-p">Esta ejecución: ${esc(new Date(at).toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}${r.nextAt ? ` · próxima ${esc(untilText(r.nextAt))}` : ''}${r.lastAt ? ` · última vez ${esc(new Date(r.lastAt).toLocaleDateString([], { day: 'numeric', month: 'short' }))}` : ''}</div>
+      <div class="cv-pop-p">Esta ejecución: ${esc(fmtLong(at))}${r.nextAt ? ` · próxima ${esc(untilText(r.nextAt))}` : ''}${r.lastAt ? ` · última vez ${esc(fmtDay(r.lastAt))}` : ''}</div>
       <label class="cv-lab">Qué debe pasar</label><textarea class="cv-text" rows="3">${esc(r.text || r.title)}</textarea>
-      <div class="cv-row"><select class="cv-cad" aria-label="Cada cuándo">${pk.custom ? `<option value="custom" selected>${esc(r.desc || describe(r.when))}</option>` : ''}${CADENCES.map(([v, l]) => `<option value="${v}"${v === pk.cadence ? ' selected' : ''}>${l}</option>`).join('')}</select><input type="time" class="cv-time" value="${pk.at}" aria-label="Hora"${pk.cadence === 'hourly' ? ' disabled' : ''}>
+      <div class="cv-row"><select class="cv-cad" aria-label="Cada cuándo">${pk.custom ? `<option value="custom" selected>${esc(r.desc || describe(r.when))}</option>` : ''}${CADENCES.map(([v, l]) => `<option value="${v}"${v === pk.cadence ? ' selected' : ''}>${l}</option>`).join('')}</select><select class="cv-time" aria-label="Hora"${pk.cadence === 'hourly' ? ' disabled' : ''}>${timeOpts(pk.at)}</select>
         <label class="cv-ok"><input type="checkbox" class="cv-okc"${r.needsOk ? ' checked' : ''}> necesita mi visto bueno</label></div>
       <div class="cv-row"><button class="cv-go" type="button" data-act="save">GUARDAR</button><button class="cv-btn" type="button" data-act="run">EJECUTAR AHORA</button><button class="cv-btn" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button class="cv-btn" type="button" data-act="${(r.skips || []).includes(at) ? 'unskip' : 'skip'}">${(r.skips || []).includes(at) ? 'NO SALTAR' : 'SALTAR ESTA'}</button><button class="cv-btn" type="button" data-act="only">SOLO ESTA</button><span class="sp"></span><button class="cv-btn warn" type="button" data-act="delete">ELIMINAR</button></div>
       <div class="cv-hint" aria-live="polite">${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno.' : 'Solo lee y reporta: no te espera.'}</div>`;
@@ -299,6 +358,9 @@ export function initCalendar(ctx) {
     if (!dragging) return; const day = e.target.closest('.cv-day'); if (!day || day.classList.contains('past')) return;
     e.preventDefault();
     const d = dragging; dragging = null; ov.classList.remove('dragging');
+    await dropOn(day, d);
+  });
+  async function dropOn(day, d) { // the mouse and the finger end here alike
     const target = new Date(day.dataset.day + 'T00:00:00'), hour = day.dataset.hour !== undefined ? +day.dataset.hour : null;
     if (d.kind === 't') {
       const t = tasks.find(x => String(x.id) === d.id); if (!t) return;
@@ -310,7 +372,7 @@ export function initCalendar(ctx) {
         render(); if (!r || !r.ok) E.stats.innerHTML = `<span class="amber">No se pudo programar: ${esc((r && r.error) || 'error')}</span>`; else flash('t:' + t.id);
         return;
       }
-      const old = new Date(t.dueAt); target.setHours(hour ?? old.getHours(), hour !== null ? 0 : old.getMinutes(), 0, 0);
+      const old = new Date(t.dueAt); target.setHours(hour ?? old.getHours(), hour !== null && hour !== old.getHours() ? 0 : old.getMinutes(), 0, 0); // same hour on another day keeps its minutes
       if (target.getTime() === t.dueAt) { render(); return; }
       if (target.getTime() <= Date.now()) { render(); E.stats.innerHTML = `<span class="amber">A esa hora ya pasó hoy — abre la tarea y elige otra hora.</span>`; return; }
       E.stats.innerHTML = '<span>Moviendo…</span>';
@@ -320,23 +382,62 @@ export function initCalendar(ctx) {
       return;
     }
     const r = routines.find(x => x.id === d.id); if (!r) { render(); return; }
-    if (hour !== null && r.when.at) { // day view: a routine dropped on another hour runs at that hour from now on
-      const at = `${pad(hour)}:${r.when.at.slice(3)}`;
-      if (at === r.when.at) { render(); return; }
-      if (!confirm(`¿Cambiar «${r.title}» a las ${at}? Cambia todas sus ejecuciones.`)) { render(); return; }
-      const res = await updateRoutine(r.id, { when: { ...r.when, at } }); render();
-      if (!res || !res.ok) E.stats.innerHTML = `<span class="amber">No se pudo mover: ${esc((res && res.error) || 'error')}</span>`;
-      return;
-    }
-    if (r.when.kind !== 'weekly') { render(); return; }
+    // a routine dropped on the grid can change its hour (the week and the day have hours now) and, if weekly, its weekday — both in one question
+    const when = { ...r.when }, said = [];
+    if (hour !== null && r.when.at && +r.when.at.slice(0, 2) !== hour) { when.at = `${pad(hour)}:${r.when.at.slice(3)}`; said.push(`a las ${when.at}`); }
     const from = new Date(d.at).getDay(), to = target.getDay();
-    if (from === to) { render(); return; }
-    const names = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-    if (!confirm(`¿Mover «${r.title}» de los ${names[from]} a los ${names[to]}? Cambia todas sus ejecuciones.`)) { render(); return; }
-    const res = await updateRoutine(r.id, { when: { ...r.when, days: r.when.days.map(x => x === from ? to : x) } });
+    if (r.when.kind === 'weekly' && from !== to) { when.days = r.when.days.map(x => x === from ? to : x); said.push(`de los ${DOW_LONG[from]} a los ${DOW_LONG[to]}`); }
+    if (!said.length) { render(); return; }
+    if (!confirm(`¿Mover «${r.title}» ${said.join(' y ')}? Cambia todas sus ejecuciones.`)) { render(); return; }
+    const res = await updateRoutine(r.id, { when });
     render();
     if (!res || !res.ok) E.stats.innerHTML = `<span class="amber">No se pudo mover: ${esc((res && res.error) || 'error')}</span>`;
+  }
+
+  /* ---------- V4.2 (audit B28): drag with a finger — a tablet or a phone had no HTML5 drag at all. Hold a card still
+     for a moment, then move it: the page stops scrolling, the day or hour under the finger lights up, lifting drops it. ---------- */
+  let touch = null, eatClick = false;
+  ov.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || touch) return;
+    const card = e.target.closest('.cv-ev[draggable="true"], .cv-bk[draggable="true"]'); if (!card) return;
+    touch = { card, x: e.clientX, y: e.clientY, on: false, ghost: null, over: null };
+    touch.timer = setTimeout(() => {
+      if (!touch) return;
+      const [kind, id, at] = card.dataset.ev.split(':');
+      dragging = { kind, id, at: +at || 0 }; closePop(); touch.on = true;
+      card.classList.add('cv-dragging'); ov.classList.add('dragging');
+      const g = card.cloneNode(true); g.classList.add('cv-ghost'); g.removeAttribute('draggable'); g.style.width = card.offsetWidth + 'px';
+      document.body.appendChild(g); touch.ghost = g; moveGhost(touch.x, touch.y);
+      if (navigator.vibrate) navigator.vibrate(12);
+    }, 380);
   });
+  function moveGhost(x, y) { if (touch && touch.ghost) { touch.ghost.style.left = x + 'px'; touch.ghost.style.top = y + 'px'; } }
+  function endTouch() {
+    if (!touch) return; clearTimeout(touch.timer);
+    if (touch.ghost) touch.ghost.remove();
+    if (touch.on) { eatClick = true; setTimeout(() => { eatClick = false; }, 400); }
+    touch.card.classList.remove('cv-dragging'); ov.classList.remove('dragging'); E.grid.querySelectorAll('.cv-day.drop').forEach(n => n.classList.remove('drop'));
+    touch = null;
+  }
+  ov.addEventListener('pointermove', e => {
+    if (!touch) return;
+    if (!touch.on) { if (Math.hypot(e.clientX - touch.x, e.clientY - touch.y) > 8) { clearTimeout(touch.timer); touch = null; } return; } // a swipe: the page scrolls as always
+    moveGhost(e.clientX, e.clientY);
+    const under = document.elementFromPoint(e.clientX, e.clientY), day = under && under.closest('#cvGrid .cv-day');
+    E.grid.querySelectorAll('.cv-day.drop').forEach(n => { if (n !== day) n.classList.remove('drop'); });
+    touch.over = day && !day.classList.contains('past') ? day : null; if (touch.over) touch.over.classList.add('drop');
+    // near the grid's top or bottom edge, it scrolls under the finger
+    const g = E.grid.getBoundingClientRect(); if (e.clientY < g.top + 40) E.grid.scrollTop -= 12; else if (e.clientY > g.bottom - 40) E.grid.scrollTop += 12;
+  });
+  ov.addEventListener('touchmove', e => { if (touch && touch.on) e.preventDefault(); }, { passive: false }); // holding a card: the finger moves the card, not the page
+  ov.addEventListener('pointerup', async () => {
+    if (!touch) return; const was = touch.on, day = touch.over, d = dragging;
+    endTouch(); dragging = null;
+    if (was && day && d) await dropOn(day, d); else if (was) render();
+  });
+  ov.addEventListener('pointercancel', () => { if (touch) { const was = touch.on; endTouch(); if (was) { dragging = null; render(); } } });
+  ov.addEventListener('contextmenu', e => { if (touch) e.preventDefault(); }); // a long press is a drag here, not the phone's menu
+  ov.addEventListener('click', e => { if (eatClick) { e.stopPropagation(); e.preventDefault(); eatClick = false; } }, true);
   ov.addEventListener('keydown', e => { // a card opens with Enter too
     const card = e.target.closest && e.target.closest('.cv-ev'); if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openEvent(card.dataset.ev, card); }
     const side = e.target.closest && e.target.closest('.cv-r[data-rid], .cv-bk'); if (side && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); side.click(); } // V4.1 (audit 94): the routines on the side and the undated tasks answer the keyboard too
@@ -354,6 +455,7 @@ export function initCalendar(ctx) {
     const bk = e.target.closest('.cv-bk'); if (bk) { const t = tasks.find(x => 't:' + x.id === bk.dataset.ev); if (t && openTask) openTask(t); return; }
     const ev = e.target.closest('.cv-ev'); if (ev) { openEvent(ev.dataset.ev, ev); return; }
     const more = e.target.closest('.cv-more'); if (more) { openMore(more.dataset.day, more.closest('.cv-day')); return; }
+    const dh = e.target.closest('.cv-tg-d'); if (dh && view === 'week') { anchor = new Date(dh.dataset.day + 'T00:00:00').getTime(); view = 'day'; closePop(); render(); return; }
     const add = e.target.closest('.cv-add'); if (add) { const cell = add.closest('.cv-day'); openCreate(cell.dataset.day, cell); return; }
     const rr = e.target.closest('.cv-r'); if (rr) { onlyRoutine = onlyRoutine === rr.dataset.rid ? null : rr.dataset.rid; render(); return; }
     const chip = e.target.closest('.cv-chip'); if (chip) {
@@ -372,10 +474,12 @@ export function initCalendar(ctx) {
   E.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { E.search.value = ''; q = ''; E.search.blur(); render(); } });
   function step(n) { const d = new Date(anchor); if (view === 'day') d.setDate(d.getDate() + n); else if (view === 'week') d.setDate(d.getDate() + 7 * n); else { d.setDate(1); d.setMonth(d.getMonth() + n); } anchor = d.getTime(); closePop(); render(); }
   ov.addEventListener('keydown', e => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); else if (e.key === 't' || e.key === 'T') { anchor = startOfDay(Date.now()); render(); } else if (e.key === 'w' || e.key === 'W') { view = 'week'; render(); } else if (e.key === 'm' || e.key === 'M') { view = 'month'; render(); } else if (e.key === 'd' || e.key === 'D') { view = 'day'; render(); } });
-  ov.addEventListener('dblclick', e => { const day = e.target.closest('.cv-day[data-day]'); if (!day || view === 'day' || e.target.closest('.cv-ev')) return; anchor = new Date(day.dataset.day + 'T00:00:00').getTime(); view = 'day'; closePop(); render(); });
+  ov.addEventListener('dblclick', e => { const day = e.target.closest('.cv-day[data-day]'); if (!day || view !== 'month' || e.target.closest('.cv-ev')) return; anchor = new Date(day.dataset.day + 'T00:00:00').getTime(); view = 'day'; closePop(); render(); });
 
   let timer = null;
   let calOpener = null;
+  let fitT = 0; addEventListener('resize', () => { if (!openNow || view !== 'month') return; clearTimeout(fitT); fitT = setTimeout(() => { if (E.pop.hidden && !dragging) render(); }, 150); }); // the month re-counts what fits
+  $('#cvKeys')?.addEventListener('click', () => dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))); // V4.2 (audit B38): the keys live in the «?» sheet, not in the band
   ov.inert = true; // closed: out of Tab's reach
   function open() { if (openNow) return; openNow = true; calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging) render(); }, 30000); }
   function close() { if (!openNow) return; openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from

@@ -271,7 +271,12 @@ async function route(dept, text) {
     'Pick the single best agent for the owner\'s request — an agent whose skills match the request is the right one — and return ONLY a JSON object — no prose, no code fences.';
   const user = `Department: ${d.name}\nAgents (id · name · role · what they do):\n${rosterText(dept)}\n\nOwner's request: "${text}"\n\n` +
     'Return: {"agent":"<id from the list>","title":"<clean imperative task title, max 70 characters>","plan":["<step>","<step>","<step>"],"eta_minutes":<integer>,"why":"<one short sentence>","needs_ok":<true if doing this involves sending, posting, paying, deleting or changing anything outside this machine; false if it only reads and reports>}';
-  const j = parseJSON(await ask(system, user, { maxTokens: 800, timeout: 150000, model: 'sonnet' })); // routing is a one-line JSON job: always Sonnet
+  let j; // routing is a one-line JSON job: always Sonnet
+  try { j = parseJSON(await ask(system, user, { maxTokens: 800, timeout: 150000, model: 'sonnet' })); }
+  catch (e) { // V4.2 (audit B18): an answer that is not JSON lost the task with «Unexpected end of JSON input» — the lead takes it instead
+    console.warn('router: no usable answer, the lead takes it:', e.message);
+    j = { why: 'El enrutador no dio una respuesta clara: la tiene el jefe del departamento.' };
+  }
   const valid = AGENTS.find(a => a.id === j.agent && a.department === dept);
   const agent = valid ? valid.id : (AGENTS.find(a => a.department === dept && a.lead) || AGENTS.find(a => a.department === dept)).id;
   return { agent, title: String(j.title || text).slice(0, 90), plan: Array.isArray(j.plan) ? j.plan.slice(0, 4).map(String) : [],
