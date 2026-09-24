@@ -52,6 +52,7 @@ import * as routines from './routines.mjs';
 import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
+import * as media from './media.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 
@@ -67,6 +68,10 @@ const RUN_TIMEOUT = Math.max(60, +cfg.timeout || 300) * 1000; // agents with too
 { const m = normModel(cfg.model); if (cfg.model && !m) console.warn(`config: model must be sonnet, opus or fable (got "${cfg.model}") — using ${DEFAULT_MODEL}`); cfg.model = m || DEFAULT_MODEL; } // V3.6: three models, by name
 { const e = normEffort(cfg.effort); if (cfg.effort && !e) console.warn(`config: effort must be low, medium, high, xhigh or max (got "${cfg.effort}") — using the model's own`); cfg.effort = e || ''; } // V3.6.1: the office's effort, empty = the model's own
 mcp.configure(cfg);
+media.configure(cfg, cfg.brainPath, process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data'));
+// the ESTUDIO reaches the agents of these departments as a tool (office.config.json → media.departments; [] = nobody)
+const STUDIO_DEPTS = Array.isArray(cfg.media?.departments) ? cfg.media.departments : ['marketing', 'delivery', 'sales', 'ops'];
+const STUDIO_MCP = path.join(ROOT, 'estudio-mcp.mjs');
 const TEAMS = teams.settings(cfg); // V3.2 (16 Sep): { enabled, max }
 const roster = loadRoster(BRAIN);
 const AGENTS = roster.agents; // id · department · lead · name · role · does · tools · brief
@@ -166,6 +171,8 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   }
   fs.mkdirSync(CLI_CWD, { recursive: true });
   const allowed = tools ? mcp.allowedTools(agent) : [];
+  const studio = tools && agent && STUDIO_DEPTS.includes(agent.department); // images and video for real (media.mjs through estudio-mcp.mjs)
+  if (studio) allowed.push('mcp__estudio');
   // the system prompt goes in a file and the request on stdin: skills + notes + a revise can pass Windows' 32,767-character command line
   const sysFile = path.join(CLI_CWD, `system-${nid()}.txt`); fs.writeFileSync(sysFile, system);
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--system-prompt-file', sysFile,
@@ -173,7 +180,8 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   if (allowed.length) args.push('--allowedTools', allowed.join(','));
   args.push(...(tools ? mcp.cliArgs() : ['--no-chrome'])); // V3.2 (16 Sep): the owner's Chrome, when tools.browser is on
   args.push(...modelArgs(model, effort));
-  const env = { ...process.env }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session
+  if (studio) args.push('--mcp-config', JSON.stringify({ mcpServers: { estudio: { command: process.execPath, args: [STUDIO_MCP], env: { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' } } } }));
+  const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes
   return new Promise((resolve, reject) => {
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
     children.add(p);
@@ -275,7 +283,14 @@ function agentSystem(a, index, read, { extra = '', words = 260 } = {}) {
     'Escribe el entregable terminado en sí, no una descripción de lo que harías. Texto plano: un encabezado corto, luego secciones cortas o viñetas. ' +
     `Como máximo ${words} palabras, salvo que una skill o las instrucciones del dueño indiquen otra forma — eso prevalece. Sin preámbulo, sin despedida. Apóyalo en las notas de la empresa de abajo; donde falte un dato, haz una suposición razonable y márcala (assumed). ` +
     'Si usaste una herramienta, dilo en una línea al final ("Used: Gmail — searched the client thread").\n\n' +
-    `${mcp.promptText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
+    `${mcp.promptText(a)}${studioText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
+}
+function studioText(a) {
+  if (!STUDIO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
+  const on = media.providers().filter(p => p.on && p.id !== 'prueba');
+  return '\n- ESTUDIO (mcp__estudio__*): generar_imagen y generar_video crean imágenes y videos REALES y los guardan en el cerebro. ' +
+    (on.length ? `Motores listos: ${on.map(p => p.name).join(', ')}. ` : 'El dueño aún no puso una key de imagen: solo está el motor «prueba» (una tarjeta de muestra); úsalo solo si la tarea pide probar el Estudio. ') +
+    'Cuando la tarea pida imágenes o video, GENÉRALOS (no entregues solo prompts) y pon en tu entregable las líneas ![…](/media/…) que devuelve la herramienta. Respeta el tope: un lote grande, consulta estado_estudio antes.';
 }
 const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. End with one line saying exactly what will go out when approved (or that nothing needs to).'
   : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
@@ -382,7 +397,7 @@ async function chat(agentId, text, history) {
   const system = `You are ${a.name}, ${a.role || 'an agent'}, in the ${d.name} department of ${cfg.name}. ${a.does}\n${agentBrief(a)}` +
     'You are talking to the owner. Answer as this agent, in first person, briefly (under 120 words unless asked for detail), plainly, no hype. ' +
     'Use the company notes; say when something is not in them. If the owner asks you to look something up, use your tools. Nothing outbound is sent without the owner\'s explicit say-so.\n\n' +
-    `${mcp.promptText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nRELEVANT NOTES\n${contextText(index, read)}\n\nYOUR RECENT TASKS\n${mine || '—'}`;
+    `${mcp.promptText(a)}${studioText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nRELEVANT NOTES\n${contextText(index, read)}\n\nYOUR RECENT TASKS\n${mine || '—'}`;
   const convo = (history || []).slice(-8).map(m => `${m.who === 'user' ? 'Dueño' : a.name}: ${m.text}`).join('\n');
   const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${a.name}:`, { maxTokens: 1200, agent: a, model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
   return { reply, read, tools: toolKeys(tools), used: mcp.namesOf(tools) };
@@ -855,6 +870,27 @@ const server = http.createServer(async (req, res) => {
       const trashed = url.searchParams.get('note') === '1' ? trashNote(t) : null;
       return json(res, 200, { ok: true, trashed, graph: trashed ? await rebuildGraph() : undefined });
     }
+    /* ---------- the Estudio ---------- */
+    if (url.pathname.startsWith('/media/') && req.method === 'GET') { // a generated file (only inside <brain>/Agents Office/media)
+      const f = media.resolve(decodeURIComponent(url.pathname.slice(7)));
+      if (!f) return json(res, 404, { error: 'no such file' });
+      const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm' }[f.split('.').pop().toLowerCase()];
+      res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff', ...(type === 'image/svg+xml' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) });
+      return fs.createReadStream(f).pipe(res);
+    }
+    if (url.pathname === '/api/media' && req.method === 'GET') return json(res, 200, { items: media.list(), budget: media.budget(), providers: media.providers() });
+    if (url.pathname === '/api/media/providers') return json(res, 200, { providers: media.providers(), budget: media.budget(), departments: STUDIO_DEPTS });
+    if (url.pathname === '/api/media/generate' && req.method === 'POST') {
+      const b = await body(req);
+      try {
+        const out = await media.generate({ prompt: b.prompt, n: b.n, ratio: b.ratio, provider: b.provider, kind: b.kind, seconds: b.seconds, by: b.by || 'you', agent: b.agent && AGENTS.some(a => a.id === b.agent) ? b.agent : null, task: b.task || null });
+        console.log(`✦ estudio: ${out.items.length} ${b.kind === 'video' ? 'video' : 'imagen(es)'} · ${b.provider || media.defaultProvider()}${b.agent ? ' · ' + b.agent : ''} · US$${out.cost}`);
+        return json(res, 200, out);
+      } catch (e) { console.warn('estudio:', e.message); return json(res, 400, { error: e.message }); }
+    }
+    const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);
+    if (mm && req.method === 'PATCH') { const b = await body(req); const it = media.update(decodeURIComponent(mm[1]), { ...(typeof b.fav === 'boolean' ? { fav: b.fav } : {}) }); return it ? json(res, 200, it) : json(res, 404, { error: 'no such file' }); }
+    if (mm && req.method === 'DELETE') return media.trash(decodeURIComponent(mm[1])) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'no such file' });
     if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, sub.load(DATA));
     if (url.pathname === '/api/sub/chat' && req.method === 'POST') {
       const { text } = await body(req);
@@ -898,6 +934,7 @@ server.listen(cfg.port, HOST, () => {
   console.log(`  routines: ${rl.length} loaded${rl.some(r => r.paused) ? ' (' + rl.filter(r => r.paused).length + ' paused)' : ''}${nx ? ' · next ' + untilText(nx.nextAt) + ' ' + nx.title.toUpperCase() + ' (' + nx.agent + ')' : ''} · ${rlist.path}`);
   setInterval(tickRoutines, 20000); tickRoutines();
   setInterval(pump, 5000); setTimeout(pump, 1500); // pending work left by a restart, or added while every seat was busy
+  { const on = media.providers().filter(p => p.on && p.id !== 'prueba'); console.log(`  estudio: ${on.length ? on.map(p => p.name).join(', ') : 'no image key yet (only the free «prueba» engine) — setx GEMINI_API_KEY / XAI_API_KEY / OPENAI_API_KEY / FAL_KEY'} · for ${STUDIO_DEPTS.join(', ') || 'nobody'} · ${media.budget().left}/${media.budget().limit} left today`); }
   console.log(`  engine: the server runs every task · ${MAX_RUNS} at once, one per agent (office.config.json → concurrency)`); // the clock: every 20 s; the first tick catches up anything missed while the office was off (once, marked LATE)
   console.log(`  agents: 35 (${roster.customised} customised${roster.briefed ? ', ' + roster.briefed + ' briefed' : ''}${roster.files.length ? ' via ' + roster.files.join(' + ') : ''})   tools: ${backend === 'claude-cli' ? 'connected MCP servers' + (cfg.tools?.web === false ? '' : ' + web') + (mcp.browserOn() ? ' + the owner\'s Chrome (' + (mcp.browserState().installed ? 'extension paired' + (mcp.browserState().device ? ': ' + mcp.browserState().device : '') : 'extension NOT paired — run `claude --chrome` once') + ')' : '') : 'none on the API backend'}`);
   console.log(`  teams: ${TEAMS.enabled ? 'on — TEAM in the bar or "as a team" in the sentence; the lead splits it across up to ' + TEAMS.max + ' desks' : 'off (teams.enabled in office.config.json)'}`);

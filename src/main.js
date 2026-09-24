@@ -1,5 +1,6 @@
 // Agents Office v2 — Three.js isometric office with zoom-driven LOD
 // Far: clean pods + agent counts (Image 1 read). Near: diorama with 3D people + holo screens (Image 2 read).
+import { initStudio } from './studio.js'; // the Estudio: images and video, by hand and by the agents
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
@@ -551,6 +552,7 @@ addEventListener('keydown', (e) => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; // typing in the bar, the big editor or a menu never fires a hotkey
   if (e.target.isContentEditable || ((e.ctrlKey || e.metaKey || e.altKey) && e.key !== 'Escape')) return; // Ctrl+C, Alt+… belong to the browser and to screen readers
   if (e.key === 'Escape' && tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
+  if (e.key === 'Escape' && studio.isOpen()) { studio.close(); return; }
   if (e.key === 'Escape') { if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); } else if (brain.isOpen()) brain.close(); else if (tasks && tasks.isOpen()) tasks.close(); else zoomOut(); }
   else if (e.key === 'p' || e.key === 'P') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
   else if (tasks && tasks.calendar && tasks.calendar.isOpen()) return; // the calendar has its own keys (← → W M T)
@@ -573,6 +575,7 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'v' || e.key === 'V') setCam(!document.body.classList.contains('cam'));
   else if (e.key === 'd' || e.key === 'D') setDark(!darkOn);
   else if (e.key === 's' || e.key === 'S') subger.toggle(); // the Subgerente's chat
+  else if (e.key === 'e' || e.key === 'E') studio.toggle(); // the Estudio
   else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
 
@@ -1473,6 +1476,8 @@ addEventListener('resize', () => { if (!focused && !tween && !HERO) view.target.
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
 document.getElementById('topSub').addEventListener('click', () => subger.toggle());
+const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '' });
+document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
 const hero = HERO ? initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;
 if (HERO && HERO.target) { view.target.set(...HERO.target); view.zoom = HERO.zoom || view.zoom; }
 
@@ -1506,7 +1511,7 @@ window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval,
 
 let last = performance.now(), lastFrame = 0, frameN = 0, lastInput = performance.now();
 for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
-const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()); // a full-screen view hides the office
+const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen'); // a full-screen view hides the office
 // Frame budget: full rate while the camera flies or the owner is moving the pointer; 30 fps when the office just lives;
 // 5 fps of simulation and NO drawing while the Brain or the calendar covers it. The tab hidden → the browser stops rAF.
 function loop(now) {

@@ -470,6 +470,23 @@ await step('subgerente: a plan is parsed, moved pieces named, bad departments an
   return '2 pieces · moved from marketing · past date → now · prose → reply';
 });
 
+await step('estudio: the free test engine generates, files are stored with their record, paths stay inside', async () => {
+  const md = await import('./media.mjs');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-media-'));
+  try {
+    md.configure({ media: { dailyLimit: 5 } }, tmp, path.join(tmp, 'data'));
+    const out = await md.generate({ prompt: 'Fondo oscuro con brillo naranja', n: 2, ratio: '4:5', provider: 'prueba' });
+    if (out.items.length !== 2 || out.cost !== 0) throw new Error('generate: ' + JSON.stringify(out).slice(0, 120));
+    const all = md.list(); if (all.length !== 2 || !all[0].prompt) throw new Error('list: ' + all.length);
+    if (!md.resolve(all[0].file)) throw new Error('resolve a real file');
+    for (const bad of ['../../office.config.json', '2026-09/../../x.png', 'C:/Windows/win.ini', '2026-09/a.exe']) if (md.resolve(bad)) throw new Error('escaped: ' + bad);
+    let refused = ''; try { await md.generate({ prompt: 'x', provider: 'gemini' }); } catch (e) { refused = e.message; }
+    if (!/GEMINI_API_KEY/.test(refused) && !process.env.GEMINI_API_KEY) throw new Error('a provider with no key must say which key: ' + refused);
+    if (!md.trash(all[1].file) || md.list().length !== 1) throw new Error('trash');
+    return `2 test images · record · no path escapes · no key → «${refused.slice(0, 40)}…»`;
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 /* ---------- 3. server smoke ---------- */
 {
   const port = 4600 + Math.floor(Math.random() * 300);

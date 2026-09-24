@@ -11,6 +11,9 @@ const FOOT = /^(used|usado|usé|skills?|read|leí|herramientas|tools)\s*:/i;
 function inline(s) { // s is already escaped
   const kept = []; const keep = html => `\u0000${kept.push(html) - 1}\u0000`; // code and links are finished HTML: no emphasis inside them (a_b_c in a URL)
   s = s.replace(/`([^`\n]+)`/g, (_, c) => keep(`<code>${c}</code>`));
+  // the Estudio's own files only (/media/…): an image, or a video link → a player. Anything else stays text.
+  s = s.replace(/!\[([^\]\n]*)\]\((\/media\/[^\s)"'<>]+)\)/g, (_, alt, u) => keep(`<a class="md-media" href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="${alt}" loading="lazy"></a>`));
+  s = s.replace(/\[([^\]\n]*)\]\((\/media\/[^\s)"'<>]+\.(?:mp4|webm))\)/gi, (_, t, u) => keep(`<video class="md-video" src="${u}" controls preload="metadata" title="${t.replace(/^▶\s*/, '')}"></video>`));
   s = s.replace(/\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g, (_, n) => keep(`<a class="md-wiki" data-note="${n.trim()}" role="button" tabindex="0">${n.trim()}</a>`));
   s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => keep(`<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`));
   s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+[^\s<).,;:!?])/g, (_, pre, u) => pre + keep(`<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`));

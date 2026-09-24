@@ -137,6 +137,10 @@ When the owner says "as a team", "get the team on it", "spawn three teammates to
 
 A chat above the six departments (◆ SUBGERENTE in the bar, key S). The owner writes what needs doing; the Subgerente (`sub.mjs`, page side `src/sub.js`) answers with a distribution plan — department, instructions for the lead, why, a date, one desk or the team — moves pieces the owner put in the wrong department, and sends nothing until the owner presses ENVIAR A LOS JEFES. Each piece then becomes a task through the lead's routing. Its history is `data/subgerente.json`. To change how it distributes, edit the rules in `sub.mjs` → `systemPrompt`; better seat descriptions (`does`) and skills make it route better with no code change.
 
+## The Estudio (images and video)
+
+Real image and video generation, for the owner (✦ ESTUDIO in the bar, key E: one idea × variants, or a batch with one prompt per line) and for the agents: every run of an agent in `media.departments` (default marketing, delivery, sales, ops) gets the `estudio` MCP server (`estudio-mcp.mjs`, passed with `--mcp-config`) with `generar_imagen`, `generar_video`, `estado_estudio`; the agent puts the `![…](/media/…)` lines it gets back into its deliverable, and the chat, the task detail and the Brain show them. Providers live in `media.mjs` and turn on when their key is in the Windows environment — never write a key into a file: `GEMINI_API_KEY` (Nano Banana), `XAI_API_KEY` (Grok), `OPENAI_API_KEY`, `FAL_KEY` (fal.ai: Flux, Kling, Seedance, MiniMax, Wan, LTX — the models open-higgsfield uses; video goes through fal.ai). `prueba` is free and local, for testing. Files: `<brain>/Agents Office/media/YYYY-MM/` with a `.json` record beside each (gitignored). Config in `office.config.json` → `"media": { "dailyLimit": 40, "maxPerRequest": 8, "departments": [...], "models": { "gemini": "…", "fal": "…", "falVideo": "…" } }`. To make an agent use it well, put the house style for prompts in its skill (e.g. `prompts-visuales`); the tool description already tells it to generate rather than hand back prompts.
+
 ## Everything else
 
 - `npm run check` is the loop. Run it after any change to code; fix what is red.
