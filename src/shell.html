@@ -1826,6 +1826,12 @@
   /* B19: «necesita mi visto bueno» only with REPETIR — display:flex beat the hidden attribute; the popover rows wrap instead of hiding a button */
   .cv-ok[hidden], .cv-cad[hidden] { display: none; }
   #cvPop .cv-row { flex-wrap: wrap; row-gap: 6px; } #cvPop .cv-model { max-width: 120px; }
+  /* B16: the routine's title wraps whole; its secondary actions are quiet words on a second row */
+  textarea.cv-title { resize: none; overflow: hidden; width: calc(100% + 12px); box-sizing: border-box; font: inherit; font-family: var(--serif); font-size: 19px; line-height: 1.25; display: block; }
+  .cv-row2 { gap: 4px 14px; padding-top: 2px; border-top: 1px solid var(--cv-line); padding-top: 8px; }
+  .cv-lk { font-family: var(--ui); font-size: 12px; font-weight: 600; background: none; border: 0; padding: 4px 0; color: var(--ink); cursor: pointer; text-decoration: underline; text-decoration-color: var(--hairline); text-underline-offset: 3px; }
+  .cv-lk:hover { text-decoration-color: currentColor; } .cv-lk.warn { color: #B4391E; } body.dark .cv-lk.warn { color: #FF8A7A; }
+  .cv-lk:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
   .cv-r.on .cv-wait { color: inherit; }
 
   /* ================= V4.2 (24 Sep 2026) — the Estudio, see docs/auditoria-estudio-calendario-2026-09-24.md ================= */
@@ -1851,6 +1857,19 @@
   .st-all { font: inherit; background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; color: var(--ink); cursor: pointer; margin-left: 6px; }
   /* A44: on a phone, «Crear | Galería» — one pane at a time, the whole screen for it */
   .st-ptabs { display: none; }
+  /* A41: a job that ends with the Estudio closed — a count on the clapperboard and a note with VER */
+  #topStudio { position: relative; }
+  #topStudio.st-news::after { content: attr(data-n); position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; background: #C43E00; color: #fff; font-family: var(--ui); font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center; border: 2px solid var(--cream); }
+  .st-note { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px); padding: 10px 10px 10px 16px; border-radius: 14px; background: #151414; color: #FDFFF8; font-family: var(--ui); font-size: 13px; box-shadow: 0 16px 40px rgba(0,0,0,.3); }
+  .st-note[hidden] { display: none; }
+  .st-note-go { font-family: var(--ui); font-size: 11.5px; letter-spacing: .12em; font-weight: 700; padding: 7px 12px; border-radius: 99px; border: 0; background: #FDFFF8; color: #151414; cursor: pointer; }
+  .st-note-x { width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: #FDFFF8; display: grid; place-items: center; cursor: pointer; } .st-note-x .ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+  .st-note button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* A2: the enhanced prompt's language, chosen and said; the Spanish reading under an English prompt */
+  .st-lang { font-family: var(--ui); font-size: 12px; color: var(--grey); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 5px 8px; margin-left: 6px; cursor: pointer; }
+  .st-es { font-size: 12.5px; line-height: 1.45; color: var(--grey); margin: 8px 2px 0; padding: 8px 10px; border-left: 3px solid var(--hairline); background: rgba(127,127,127,.06); border-radius: 0 8px 8px 0; }
+  .st-es[hidden] { display: none; }
+  .st-prow { flex-wrap: wrap; row-gap: 6px; } .st-enh, .st-undo-enh { white-space: nowrap; } .st-es b { color: var(--ink); font-weight: 600; }
   /* A20 · A21: the star, one action in words, «⋯» — in a row at the top right; the menu floats above the grid */
   .st-ov { flex-direction: row; align-items: center; gap: 6px; transform: translateY(-3px); }
   .st-card.menu-on .st-ov { opacity: 1; transform: none; }

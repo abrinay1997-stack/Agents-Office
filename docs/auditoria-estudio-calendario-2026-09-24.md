@@ -6,7 +6,7 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 - **Capturas** a 390, 1024 y 1512 px, en claro y en oscuro, en cada estado: selector de modelos, video, selección, visor ampliado, errores, mes, semana, día y las ventanitas.
 - **Lectura completa del código:** `src/studio.js`, `src/calendar.js`, `media.mjs` y las rutas de `serve.mjs`.
 
-**✅ = arreglado** en V4.2 (misma rama, 24 sep): las prioridades de «Por dónde empezar» y algunos vecinos que tocaban el mismo código — 9 del Estudio y 15 del Calendario —, y después la agenda del teléfono (B5), lo que ya pasó (B7) y las acciones de la galería (A20, A21). En total 28; el resto sigue abierto. Cada punto va con su gravedad y con lo que se propone.
+**✅ = arreglado** en V4.2 (misma rama, 24 sep): las prioridades de «Por dónde empezar» y algunos vecinos que tocaban el mismo código — 9 del Estudio y 15 del Calendario —, y después la agenda del teléfono (B5), lo que ya pasó (B7) las acciones de la galería (A20, A21), y luego «Mejorar el prompt» (A2), la ventanita de la rutina (B16) y el aviso con el Estudio cerrado (A41). En total 31; el resto sigue abierto. Cada punto va con su gravedad y con lo que se propone.
 
 **Gravedad:**
 - **alta:** molesta a diario o puede hacer perder trabajo o dinero;
@@ -20,7 +20,7 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 ### A1. Lo que confunde al crear
 
 1. ✅ **[alta] Con un modelo de imagen, el paso 4 habla de video.** Los huecos dicen «Imagen inicial: *el video* empieza así» y «Imagen final: *el video* termina así». Los textos de `ROLE_HELP` sirven solo para video. **Propuesta:** textos según el tipo, p. ej. «Imagen a editar» y «Resultado parecido a esta».
-2. **[alta] «Mejorar el prompt» reescribe en inglés sin avisar antes.** El dueño escribe en español y recibe un párrafo en inglés que quizá no puede revisar. **Propuesta:** decirlo en el botón («Mejorar (lo pasa a inglés)») y mostrar debajo una traducción al español, o dejar elegir el idioma.
+2. ✅ **[alta] «Mejorar el prompt» reescribe en inglés sin avisar antes.** El dueño escribe en español y recibe un párrafo en inglés que quizá no puede revisar. **Propuesta:** decirlo en el botón («Mejorar (lo pasa a inglés)») y mostrar debajo una traducción al español, o dejar elegir el idioma.
 3. ✅ **[alta] El formato y la duración del video quedan escondidos al final.** El paso 5 solo se ve bajando, y el pie («1 video · gratis») no dice ni el formato ni los segundos. Es fácil generar un 16:9 cuando se quería un 9:16. **Propuesta:** el pie resume «9:16 · 5 s · 1 video · US$0,40», y un clic en ese resumen lleva al paso 5.
 4. ✅ **[alta] El error aparece lejos de lo que falla.** «Escribe qué quieres crear (paso 3)» sale en rojo al pie, con el campo del prompt fuera de la vista, y el campo no se marca. **Propuesta:** subir hasta el paso que falla, marcarlo en rojo y poner el mensaje junto a él.
 5. **[media] El motor aparece junto al modelo cuando dice casi lo mismo:** «Prueba de video (gratis) · PRUEBA (GRATIS)». **Propuesta:** mostrar el motor solo si aporta, p. ej. «Kling 3 · Higgsfield».
@@ -68,7 +68,7 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 38. ✅ **[alta] Si un modelo no tiene key, el error solo aparece como texto rojo al pie** («… no tiene key: guárdala en Windows con setx …»). No queda ninguna tarjeta, y el prompt sigue ahí sin saber qué hacer. **Propuesta:** un aviso con el paso a paso y un botón «Usar Prueba mientras tanto».
 39. **[media] Una tarjeta en marcha no tiene barra de progreso ni tiempo estimado,** solo «Generando · 1:23». **Propuesta:** «suele tardar ~2 min» según el modelo.
 40. **[media] «Cancelar» un trabajo no pregunta y no explica si se cobra.** **Propuesta:** decir «Ya se envió al motor: puede cobrarse igual» cuando corresponda.
-41. **[media] Al terminar solo avisa el Estudio abierto.** Con el Estudio cerrado no hay aviso en la oficina (ni el dock ni un toast), aunque «sigue generando aunque cierres». **Propuesta:** un punto en el icono del Estudio del dock y un aviso «3 imágenes listas».
+41. ✅ **[media] Al terminar solo avisa el Estudio abierto.** Con el Estudio cerrado no hay aviso en la oficina (ni el dock ni un toast), aunque «sigue generando aunque cierres». **Propuesta:** un punto en el icono del Estudio del dock y un aviso «3 imágenes listas».
 42. **[baja] Un trabajo fallado desaparece de la vista a los 3 días** sin dejar rastro. **Propuesta:** un historial de trabajos (hechos, fallados y cancelados), con el motivo.
 
 ### A5. Cabecera, tamaños y teclado
@@ -121,7 +121,7 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
     - al crear: «*09:00 AM*».
 
     Mezcla el idioma y el formato del navegador con el de la oficina. **Propuesta:** `es-PA` en todos los textos, y hora de 24 h o «a. m./p. m.» en español.
-16. **[alta] La ventanita de la rutina no cabe:** el título «Preparar los posts de Instagram de la semana» se sale del campo, y la fila de botones se reparte en varias líneas. Dos opciones (Eliminar y «Solo esta») quedan escondidas si no se baja dentro de la ventanita. **Propuesta:** título en un campo de dos líneas; botones Guardar y Ejecutar ahora; el resto en «⋯».
+16. ✅ **[alta] La ventanita de la rutina no cabe:** el título «Preparar los posts de Instagram de la semana» se sale del campo, y la fila de botones se reparte en varias líneas. Dos opciones (Eliminar y «Solo esta») quedan escondidas si no se baja dentro de la ventanita. **Propuesta:** título en un campo de dos líneas; botones Guardar y Ejecutar ahora; el resto en «⋯».
 17. ✅ **[alta] Crear no pide confirmación visual del agente.** Al pulsar AGREGAR, Claude elige al agente en segundo plano y la ventanita se cierra. No se ve a quién le tocó hasta abrir la tarjeta. **Propuesta:** un aviso «Para el viernes 10:05 — lo tiene LÍDER MARKETING · Cambiar».
 18. ✅ **[alta] Si el enrutador de Claude responde mal, crear falla con «Unexpected end of JSON input»** y la tarea se pierde. Visto en la prueba: `route()` hace `parseJSON` y no se recupera. **Propuesta:** si no hay JSON, dársela al jefe del departamento (como con un id desconocido) y decirlo en palabras.
 19. ✅ **[media] «Necesita mi visto bueno» se ve siempre al crear**, aunque solo vale para las rutinas: `hidden` no gana a `display:flex`. Así parece que una tarea de una vez también esperará. **Propuesta:** mostrarlo solo con REPETIR, o que también valga para una tarea programada.

@@ -850,7 +850,7 @@ export function initTasks(ctx) {
       }
       case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · renderizando' : t.teamHold ? ' · esperando las partes' : ''}${t.routine ? ' · rutina' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · borrador de rutina' : ''}${teamBit(t)}${modelBit(t)}`;
-      case 'scheduled': return `${who} · se ejecuta ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · en espera de tu visto bueno' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'scheduled': return `${who} · se ejecuta ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString('es-PA', { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · en espera de tu visto bueno' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'done': return `${who} · lista ${timeStr(t.doneAt)}${t.approved ? (t.live ? ' · enviada tras tu visto bueno' : ' · aprobada') : ''}${t.late ? ' · <span class="tp-late">se atrasó</span>' : ''}${teamBit(t)}${modelBit(t)}${t.live ? (t.error ? ' · <span class="tp-amber">con error</span>' : ' · <span class="tp-res">ver resultado →</span>') : ''}`;
     }
     return who;
@@ -1183,14 +1183,14 @@ export function initTasks(ctx) {
         const r = await fetch(API + '/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, at, model: normModel(model) || undefined, team: asTeam(text) || undefined }) });
         const st = await r.json(); if (!r.ok) throw new Error(st.error || r.statusText);
         const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, why: st.why, by: 'you', live: true, sid: st.id, state: 'scheduled', dueAt: st.dueAt, needsOk: !!st.needsOk, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', team: st.team ? { lead: st.team.lead, members: [] } : undefined });
-        touch(t, 'scheduled'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Programada para ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
+        touch(t, 'scheduled'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Programada para ${new Date(at).toLocaleString('es-PA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
         return { ok: true, task: t };
       } catch (e) { return { ok: false, error: e.message }; }
     }
     const { agent: a } = route(k, text);
     const title = (text.charAt(0).toUpperCase() + text.slice(1)).slice(0, 90);
     const t = mk({ agent: a.id, title, text, by: 'you', state: 'scheduled', dueAt: at, needsOk: guessOk(text), modelUsed: normModel(model) || officeModel, modelFrom: model ? 'task' : 'office' });
-    touch(t, 'scheduled'); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Programada para ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${title}`);
+    touch(t, 'scheduled'); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Programada para ${new Date(at).toLocaleString('es-PA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${title}`);
     return { ok: true, task: t };
   }
   async function createRoutineAt({ dept: k, text, when, needsOk, model }) { // a routine from a date (when.start)
@@ -1230,7 +1230,7 @@ export function initTasks(ctx) {
         Object.assign(t, { title: st.title, text: st.text, dueAt: st.dueAt, needsOk: !!st.needsOk, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', plan: st.plan || t.plan });
         if (moved) t.agent = st.agent;
         touch(t, 'scheduled'); dirty = true;
-        feedPush(R[t.agent], '✎', `Reprogramada para ${new Date(t.dueAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
+        feedPush(R[t.agent], '✎', `Reprogramada para ${new Date(t.dueAt).toLocaleString('es-PA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
         return { ok: true, task: t };
       } catch (e) { return { ok: false, error: e.message || 'sin conexión con la oficina' }; }
     }

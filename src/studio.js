@@ -45,7 +45,8 @@ export function initStudio(ctx) {
             <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden role="listbox" aria-label="Modelos"></div></div></div>
           <div class="st-step"><div class="st-h"><b>3</b> Describe lo que quieres <span class="sp"></span><label class="st-batch" title="Varias ideas a la vez: una por línea"><input type="checkbox" class="st-mode"> Varias ideas (una por línea)</label></div>
             <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
-              <div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción (en inglés, que es como mejor lo entienden los motores)">${svg('spark')}<span>Mejorar el prompt</span></button><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span></div></div></div>
+              <div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span></div>
+              <div class="st-es" hidden><b>En español:</b> <span></span></div></div></div>
           <div class="st-step st-matstep"><div class="st-h"><b>4</b> Material de partida <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
           <div class="st-step"><div class="st-h"><b class="st-n5">5</b> Formato y ajustes</div><div class="st-ratios"></div><div class="st-sets"></div>
             <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
@@ -84,6 +85,7 @@ export function initStudio(ctx) {
   let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
   let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightFrom = null, prevPrompt = null, qty = 1;
   const modelOf = { image: store.get('model.image', ''), video: store.get('model.video', '') };
+  $('.st-lang').value = store.get('lang', 'en') === 'es' ? 'es' : 'en';
   const setsOf = store.get('sets', {}); // model id → its settings
   let media = { start: [], end: [], reference: [], video: [] };
 
@@ -509,11 +511,13 @@ export function initStudio(ctx) {
       const p = $('.st-prompt').value.trim(); if (!p) { $('.st-prompt').focus(); return say('Escribe primero la idea, aunque sea corta.', true); }
       if (!isLive()) return say('Mejorar el prompt necesita la oficina real.', true);
       const b = $('.st-enh'); b.disabled = true; b.querySelector('span').textContent = 'Pensando…';
-      try { const r = await api('POST', '/api/media/enhance', { prompt: p, kind }); prevPrompt = p; $('.st-prompt').value = r.prompt; $('.st-undo-enh').hidden = false; say('Prompt mejorado. Revísalo; «Volver al mío» lo deshace.'); estimate(); }
+      try { const lang = $('.st-lang').value; const r = await api('POST', '/api/media/enhance', { prompt: p, kind, lang }); prevPrompt = p; $('.st-prompt').value = r.prompt; $('.st-undo-enh').hidden = false;
+        const es = $('.st-es'); es.hidden = !(r.lang === 'en' && r.es); es.querySelector('span').textContent = r.es || '';
+        say(r.lang === 'en' ? 'Prompt mejorado, en inglés (los motores lo entienden mejor). Debajo tienes lo que dice en español; «Volver al mío» lo deshace.' : 'Prompt mejorado, en español. «Volver al mío» lo deshace.'); estimate(); }
       catch (err) { say(err.message, true); }
       b.disabled = false; b.querySelector('span').textContent = 'Mejorar el prompt'; return;
     }
-    if (e.target.closest('.st-undo-enh')) { if (prevPrompt != null) $('.st-prompt').value = prevPrompt; prevPrompt = null; $('.st-undo-enh').hidden = true; return; }
+    if (e.target.closest('.st-undo-enh')) { if (prevPrompt != null) $('.st-prompt').value = prevPrompt; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; return; }
     if (e.target.closest('.st-go')) {
       if (!isLive()) return say('El Estudio necesita la oficina real (ábrela con el iniciador).', true);
       const m = cur(); if (!m) return say('Elige un modelo.', true);
@@ -566,12 +570,13 @@ export function initStudio(ctx) {
     if (a === 'ref') useAsRef(it);
   });
   el.addEventListener('change', e => {
+    if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
     if (e.target.classList.contains('st-mode')) { mode = e.target.checked ? 'batch' : 'one'; renderModel(); return; }
     if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); estimate(); }
   });
   el.addEventListener('input', e => {
-    if (e.target.classList.contains('st-prompt')) clearFieldErr();
+    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; }
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value; setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; renderGrid(); return; }
@@ -602,6 +607,40 @@ export function initStudio(ctx) {
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.classList.contains('st-prompt')) { e.preventDefault(); $('.st-go').click(); }
   });
+  /* V4.2 (audit A41): with the Estudio closed, a job that ends still says so — a count on the clapperboard in the dock and a
+     note at the bottom with VER. It «keeps generating when you close it»; now it also tells you when it is done. */
+  let seenAt = Date.now(), unseen = 0, bgT = null, noteT = null;
+  const dock = document.getElementById('topStudio'), dockLabel = dock ? dock.getAttribute('aria-label') : '';
+  const note = document.createElement('div'); note.className = 'st-note'; note.hidden = true; note.setAttribute('role', 'status'); note.setAttribute('data-modal-keep', '');
+  note.innerHTML = `<span></span><button type="button" class="st-note-go">VER</button><button type="button" class="st-note-x" aria-label="Cerrar el aviso">${svg('x')}</button>`;
+  document.body.appendChild(note);
+  const hideNote = () => { note.hidden = true; clearTimeout(noteT); };
+  note.querySelector('.st-note-go').addEventListener('click', () => { hideNote(); open(); });
+  note.querySelector('.st-note-x').addEventListener('click', hideNote);
+  note.addEventListener('mouseenter', () => clearTimeout(noteT)); note.addEventListener('mouseleave', () => { noteT = setTimeout(hideNote, 6000); });
+  function setDock() { if (!dock) return; dock.classList.toggle('st-news', unseen > 0); if (unseen) { dock.dataset.n = unseen > 9 ? '9+' : unseen; dock.setAttribute('aria-label', `${dockLabel} · ${unseen} ${unseen === 1 ? 'nuevo' : 'nuevos'}`); } else { delete dock.dataset.n; dock.setAttribute('aria-label', dockLabel); } }
+  function tellFinished(fresh) {
+    const ok = fresh.filter(j => j.state === 'done'), bad = fresh.filter(j => j.state === 'failed' && !/Cancelado por ti/.test(j.error || ''));
+    const img = ok.filter(j => j.kind !== 'video').reduce((s, j) => s + (j.items ? j.items.length : 1), 0), vid = ok.filter(j => j.kind === 'video').reduce((s, j) => s + (j.items ? j.items.length : 1), 0);
+    const parts = [img && `${img} ${img === 1 ? 'imagen' : 'imágenes'}`, vid && `${vid} ${vid === 1 ? 'video' : 'videos'}`].filter(Boolean);
+    if (!parts.length && !bad.length) return;
+    unseen += img + vid + bad.length; setDock();
+    const agent = ok.find(j => j.by === 'agent');
+    note.querySelector('span').textContent = `Estudio: ${parts.length ? `${parts.join(' y ')} ${img + vid === 1 ? 'lista' : 'listas'}${agent ? ` (de ${agentName(agent.agent) || 'un agente'})` : ''}` : ''}${parts.length && bad.length ? ' · ' : ''}${bad.length ? `${bad.length} no se ${bad.length === 1 ? 'pudo' : 'pudieron'}` : ''}.`;
+    note.hidden = false; clearTimeout(noteT); noteT = setTimeout(hideNote, 12000);
+  }
+  function bgPoll() {
+    clearTimeout(bgT);
+    bgT = setTimeout(async () => {
+      if (el.hidden && isLive() && location.protocol.startsWith('http') && !document.hidden) {
+        try { const r = await api('GET', '/api/media/jobs'); jobs = r.jobs || []; budget = r.budget || budget;
+          const fresh = jobs.filter(j => (j.state === 'done' || j.state === 'failed') && (j.doneAt || 0) > seenAt);
+          if (fresh.length) { seenAt = Math.max(...fresh.map(j => j.doneAt)); tellFinished(fresh); } } catch {}
+      }
+      bgPoll();
+    }, 15000);
+  }
+  bgPoll();
   const phone = () => matchMedia('(max-width: 760px)').matches;
   function showPane(p) { // on a phone one pane at a time; on a wider screen both are always there
     el.dataset.pane = p;
@@ -610,7 +649,7 @@ export function initStudio(ctx) {
   }
   showPane('gen');
   let timer = null;
-  function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
-  function close() { if (el.hidden) return; closeLight(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function open() { if (!el.hidden) return; unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
+  function close() { if (el.hidden) return; seenAt = Date.now(); closeLight(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden };
 }

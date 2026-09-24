@@ -328,15 +328,21 @@ export function initCalendar(ctx) {
     const pk = toPicker(r.when);
     popKind = 'event';
     E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">RUTINA</span><span class="sp"></span><button class="cv-x" type="button" data-act="close" aria-label="Cerrar">✕</button></div>
-      <input class="cv-title" value="${attr(r.title)}" aria-label="Título de la rutina" maxlength="90">
+      <textarea class="cv-title" rows="1" aria-label="Título de la rutina" maxlength="90">${esc(r.title)}</textarea>
       <div class="cv-pop-m">${av(r.agent)} ${esc(a ? a.name : r.agent)} · ${esc(r.desc || describe(r.when))}${r.paused ? ' · <span class="cv-paused">PAUSADA</span>' : ''}</div>
       <div class="cv-pop-p">Esta ejecución: ${esc(fmtLong(at))}${r.nextAt ? ` · próxima ${esc(untilText(r.nextAt))}` : ''}${r.lastAt ? ` · última vez ${esc(fmtDay(r.lastAt))}` : ''}</div>
       <label class="cv-lab">Qué debe pasar</label><textarea class="cv-text" rows="3">${esc(r.text || r.title)}</textarea>
       <div class="cv-row"><select class="cv-cad" aria-label="Cada cuándo">${pk.custom ? `<option value="custom" selected>${esc(r.desc || describe(r.when))}</option>` : ''}${CADENCES.map(([v, l]) => `<option value="${v}"${v === pk.cadence ? ' selected' : ''}>${l}</option>`).join('')}</select><select class="cv-time" aria-label="Hora"${pk.cadence === 'hourly' ? ' disabled' : ''}>${timeOpts(pk.at)}</select>
         <label class="cv-ok"><input type="checkbox" class="cv-okc"${r.needsOk ? ' checked' : ''}> necesita mi visto bueno</label></div>
-      <div class="cv-row"><button class="cv-go" type="button" data-act="save">GUARDAR</button><button class="cv-btn" type="button" data-act="run">EJECUTAR AHORA</button><button class="cv-btn" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button class="cv-btn" type="button" data-act="${(r.skips || []).includes(at) ? 'unskip' : 'skip'}">${(r.skips || []).includes(at) ? 'NO SALTAR' : 'SALTAR ESTA'}</button><button class="cv-btn" type="button" data-act="only">SOLO ESTA</button><span class="sp"></span><button class="cv-btn warn" type="button" data-act="delete">ELIMINAR</button></div>
+      <div class="cv-row"><button class="cv-go" type="button" data-act="save">GUARDAR</button><button class="cv-btn" type="button" data-act="run" title="La ejecuta ya, sin esperar a su hora">EJECUTAR AHORA</button></div>
+      <div class="cv-row cv-row2">${at > Date.now() ? `<button class="cv-lk" type="button" data-act="${(r.skips || []).includes(at) ? 'unskip' : 'skip'}">${(r.skips || []).includes(at) ? 'No saltar esta' : 'Saltar solo esta'}</button>` : ''}<button class="cv-lk" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'Reanudar' : 'Pausar'}</button><button class="cv-lk" type="button" data-act="only" title="El calendario muestra solo esta rutina">Ver solo esta</button><span class="sp"></span><button class="cv-lk warn" type="button" data-act="delete">Eliminar</button></div>
       <div class="cv-hint" aria-live="polite">${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno.' : 'Solo lee y reporta: no te espera.'}</div>`;
     E.pop.hidden = false; place(E.pop, el);
+    // V4.2 (audit B16): the title grows to show itself whole (a long one ran out of its field); the actions sit in two rows, none off-view
+    const fitTitle = () => { const t = E.pop.querySelector('.cv-title'); t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
+    fitTitle(); E.pop.querySelector('.cv-title').addEventListener('input', fitTitle);
+    E.pop.querySelector('.cv-title').addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); }); // one line of text, however it wraps
+    place(E.pop, el);
     const P = { title: E.pop.querySelector('.cv-title'), text: E.pop.querySelector('.cv-text'), cad: E.pop.querySelector('.cv-cad'), time: E.pop.querySelector('.cv-time'), okc: E.pop.querySelector('.cv-okc') };
     E.pop.querySelectorAll('textarea, input, select').forEach(x => x.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePop(); }));
     P.cad.addEventListener('change', () => { P.time.disabled = P.cad.value === 'hourly'; });

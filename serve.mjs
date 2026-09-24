@@ -1036,11 +1036,19 @@ const server = http.createServer(async (req, res) => {
       return res.end(z.buf);
     }
     if (url.pathname === '/api/media/enhance' && req.method === 'POST') { // the owner's idea into a production prompt (Claude, no tools)
-      const { prompt, kind } = await body(req);
+      const { prompt, kind, lang } = await body(req); const en = lang !== 'es';
       const idea = String(prompt || '').trim(); if (!idea) return json(res, 400, { error: 'escribe primero la idea' }); if (idea.length > 3000) return json(res, 400, { error: 'la idea es muy larga' });
       const sys = `Eres director de arte de ${cfg.name}. Convierte la idea del dueño en UN prompt de producción para un motor de ${kind === 'video' ? 'VIDEO: sujeto, acción, movimiento de cámara, ritmo, luz, estilo, sonido si aplica' : 'IMAGEN: sujeto, composición y encuadre, lente, luz, paleta, estilo, fondo'}. ` +
-        'Conserva todo lo que pidió (marca, colores, texto exacto entre comillas si lo pidió); no inventes texto, logos ni personas que no pidió. Escríbelo en inglés (los motores lo entienden mejor), una sola línea, máximo 90 palabras. Devuelve solo el prompt, sin comillas ni explicación.';
-      try { const out = String(await ask(sys, idea, { maxTokens: 600, timeout: 90000 })).trim().replace(/^["'`]+|["'`]+$/g, '').split('\n').filter(Boolean).join(' ').slice(0, 1500); return json(res, 200, { prompt: out }); }
+        'Conserva todo lo que pidió (marca, colores, texto exacto entre comillas si lo pidió); no inventes texto, logos ni personas que no pidió. ' +
+        (en ? 'Escríbelo en inglés (los motores lo entienden mejor), una sola línea, máximo 90 palabras. Devuelve SOLO un objeto JSON, sin bloque de código: {"prompt":"<el prompt en inglés>","es":"<el mismo prompt traducido al español, para que el dueño lo lea>"}.'
+          : 'Escríbelo en español, una sola línea, máximo 90 palabras. Devuelve solo el prompt, sin comillas ni explicación.');
+      const clean = x => String(x || '').trim().replace(/^["'`]+|["'`]+$/g, '').split('\n').filter(Boolean).join(' ').slice(0, 1500);
+      try { // V4.2 (audit A2): it used to turn a Spanish idea into English without a word; now the owner picks, and English comes with its Spanish reading
+        const raw = String(await ask(sys, idea, { maxTokens: 900, timeout: 90000 }));
+        let out = { prompt: clean(raw), es: '' };
+        if (en) { try { const j = parseJSON(raw); if (j && j.prompt) out = { prompt: clean(j.prompt), es: clean(j.es) }; } catch {} }
+        return json(res, 200, { ...out, lang: en ? 'en' : 'es' });
+      }
       catch (e) { return json(res, 502, { error: 'no pude mejorarlo ahora: ' + e.message }); }
     }
     const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);
