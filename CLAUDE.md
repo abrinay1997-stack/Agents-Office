@@ -2,6 +2,72 @@
 
 You are in the Agents Office repo. The owner will most often ask you to change **who the agents are and what they do**, to teach an agent **how a kind of work is done** (a brief or a skill), to put something **on the timetable** (a routine), or to change **which connectors the agents may use**. Do that by editing the JSON files and skill folders described below. Do not touch `src/`, `serve.mjs` or the build for those requests.
 
+## Trabajo en equipo (PanaClaw) — reglas
+
+Esta copia es la oficina de **PanaClaw**. El dueño (Abrinay) y la gente de PanaClaw la mejoran cada uno en su propia computadora y con su propia sesión de Claude Code; **GitHub** (`abrinay1997-stack/Agents-Office`, rama `main`) es lo que los une. Lo que alguien sube, el dueño lo trae con un doble clic y lo ve en su oficina como si se hubiera hecho en su máquina.
+
+**Idioma:** con el dueño y con el equipo de PanaClaw, responde siempre en español.
+
+**Qué viaja por GitHub:**
+- el código;
+- `office.config.equipo.json` (nombre PanaClaw, cerebro `brain-panaclaw`, qué conector usa cada departamento);
+- las notas de empresa de `brain-panaclaw/`;
+- el roster, las rutinas y las skills del cerebro (`brain-panaclaw/Agents Office/agents.json`, `routines.json`, `skills/`);
+- la auditoría y este plan.
+
+**Qué NO viaja (se queda en cada máquina):**
+- `data/` (tareas, historial, trabajos del Estudio);
+- `office.config.local.json` (ajustes de esa máquina, que ganan sobre los del equipo);
+- las entregas y correcciones de los agentes (`brain-panaclaw/Agents Office/*`);
+- las imágenes del Estudio;
+- las keys (variables de entorno de Windows);
+- la sesión de Claude de cada uno.
+
+Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historial de tareas vacío.
+
+**Reglas:**
+1. **Antes de empezar, trae lo último:** `git pull`, o `Actualizar-Oficina.bat`.
+2. **Trabaja en una rama con nombre** (p. ej. `mejora/aprobaciones`) y abre un Pull Request hacia `main`; el dueño lo acepta. Solo sube directo a `main` si el dueño lo pidió.
+3. **Antes de subir:** `npm run check` en verde, y commits en español que digan qué cambió y por qué.
+4. **Nunca subas** keys, `data/`, `office.config.local.json` ni las entregas de los agentes (el `.gitignore` ya lo impide: no lo fuerces). El repositorio puede ser público: lo que viaja lo puede leer cualquiera.
+5. **Al arreglar un punto de la auditoría,** márcalo ✅ en `docs/auditoria-ux-2026-09-24.md` en el mismo commit. Al cambiar algo que el dueño usa, actualiza este archivo y el README.
+6. **Avísense antes de tocar a la vez los archivos grandes:** `src/main.js`, `src/tasks.js`, `src/shell.html`, `serve.mjs`. Son los que más chocan.
+7. **`dist/command-centre-v2.html` y `src/braingraph.js` se regeneran solos** al arrancar. Si chocan, quédate con cualquiera de las dos versiones y reconstruye con `node build.mjs`.
+
+**El dueño, para ver el trabajo del equipo:** doble clic en **`Actualizar-Oficina.bat`**.
+- Guarda primero sus cambios propios (rutinas, agentes, notas) en un commit local, así nunca se pierden.
+- Descarta lo que se regenera solo, trae lo nuevo de GitHub e instala las librerías si cambiaron.
+- Abre la oficina con el iniciador.
+- Si él y el equipo tocaron la misma línea de un archivo, no cambia nada y lo dice. Entonces se le pide a Claude Code en esta carpeta: «combina mis cambios con los del equipo».
+
+**Alguien nuevo del equipo, la primera vez:**
+1. El dueño le da acceso de colaborador en GitHub.
+2. Instala Node 20 o más nuevo, Git y Claude Code, y entra con su propia cuenta.
+3. `git clone https://github.com/abrinay1997-stack/Agents-Office.git`.
+4. Doble clic en `Agents-Office-Abrinay.bat`: instala las librerías la primera vez y abre la oficina ya como PanaClaw.
+5. Para el Estudio usa sus propias keys (en variables de entorno de Windows) o el motor gratis «Prueba».
+
+## Plan y pendientes (al 24 sep 2026)
+
+**Hecho:**
+- motor único en el servidor;
+- Estudio V2 (41 modelos, Higgsfield, trabajos en segundo plano, Animar);
+- barra superior V4 con dock de herramientas;
+- Dimitri con sus cinco modos;
+- filtros y búsqueda del Cerebro;
+- calendario con rutinas en los seis departamentos;
+- ficha del agente;
+- auditoría de 100 puntos, 69 arreglados.
+
+**Siguiente, en este orden:**
+1. Los 31 puntos ⏳ de `docs/auditoria-ux-2026-09-24.md`, empezando por:
+   - el flujo de aprobaciones (31–33): puede aprobar el borrador equivocado;
+   - la vista de archivadas con Deshacer (39);
+   - las trampas de foco de las ventanas (22–24);
+   - la lista de tareas (40–42).
+2. Probar el Estudio con una key real: Higgsfield `HF_KEY`, Nano Banana `GEMINI_API_KEY` o fal.ai `FAL_KEY`.
+3. Las mejoras que el dueño vaya pidiendo. Una herramienta nueva entra como un botón más en el dock de la barra superior (ver «The top bar»).
+
 ## Changing the agents
 
 The roster lives in `office.agents.json` (shipped defaults) and `office.agents.local.json` (the owner's copy, ignored by git). **Always write to `office.agents.local.json`**: if it does not exist, create it with `{"agents": []}` and add only the agents you are changing. Never edit `office.agents.json` unless asked to change the shipped defaults.

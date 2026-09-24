@@ -39,6 +39,34 @@ bottom-left and a licence line along the bottom; leave them in place.
 
 The full list, release by release: [CHANGELOG](CHANGELOG.md).
 
+## Trabajar en equipo (PanaClaw)
+
+Cada persona de PanaClaw mejora la oficina en su propia computadora, con su propia sesión de Claude Code, y sube su trabajo a este repositorio. El dueño lo trae con un doble clic.
+
+1. **Quien trabaja:**
+   - trae lo último (`git pull`);
+   - trabaja en una rama;
+   - deja `npm run check` en verde;
+   - abre un Pull Request hacia `main`.
+2. **El dueño** acepta el Pull Request y hace doble clic en **`Actualizar-Oficina.bat`**. El archivo:
+   - guarda sus cambios propios (rutinas, agentes, notas);
+   - trae lo nuevo e instala librerías si hace falta;
+   - abre la oficina con el iniciador.
+
+   Si dos personas tocaron la misma línea, no cambia nada y lo avisa.
+3. **Qué viaja y qué no:**
+   - Por GitHub va el código, la configuración del equipo (`office.config.equipo.json`), las notas de empresa y el roster, las rutinas y las skills del cerebro.
+   - Cada máquina se queda con `data/` (tareas e historial), `office.config.local.json`, las entregas de los agentes, las imágenes del Estudio y las keys (siempre en variables de entorno de Windows, nunca en un archivo).
+
+Las reglas completas están en [CLAUDE.md](CLAUDE.md), en la sección «Trabajo en equipo»; el Claude de cada persona las lee solo. Lo que queda por hacer está en [docs/auditoria-ux-2026-09-24.md](docs/auditoria-ux-2026-09-24.md).
+
+**¿Solo sirve el `.bat`?**
+- En Windows, `.bat` y `.cmd` son lo mismo y funcionan con doble clic.
+- Un `.ps1` (PowerShell) Windows lo bloquea por defecto al hacerle doble clic.
+- Para un ícono bonito, crea un acceso directo al `.bat` en el escritorio y cámbiale el ícono.
+- En Mac el equivalente es un `.command`; en Linux, un `.sh`.
+- En cualquier sistema también sirve `npm start`.
+
 ## What you need
 
 - macOS or Linux (Windows: works with `npm` commands directly, `./setup` is Bash only)
