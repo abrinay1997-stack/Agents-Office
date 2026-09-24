@@ -113,7 +113,7 @@ export function initStudio(ctx) {
   }
   function renderPick() {
     const m = cur(), b = $('.st-mpick');
-    b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${esc(m.name)}</span><span class="st-mp-eng">${esc(m.engineName)}</span><span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
+    b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${esc(m.name)}</span>${m.engineName && m.engineName.toLowerCase() !== m.name.toLowerCase() ? `<span class="st-mp-eng">${esc(m.engineName)}</span>` : ''}<span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
       : `<span class="st-mp-top"><span class="st-mp-name">Ningún modelo de ${kind === 'video' ? 'video' : 'imagen'} encendido</span><span class="sp"></span><span class="st-mp-caret">▾</span></span><span class="st-mp-note">Abre «Motores y cómo activarlos» abajo.</span>`;
   }
   function renderList(qs = '') {
@@ -216,7 +216,7 @@ export function initStudio(ctx) {
     const scroll = $('.st-grid').scrollTop;
     const body = tj.map(jobTile).join('') + list.map(it => card(it, items.indexOf(it))).join(''); // the columns live in an inner box: a multi-column box with a fixed height overflows sideways
     $('.st-grid').innerHTML = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
-      : body ? `<div class="st-cols">${body}</div>` : `<div class="st-empty">${items.length ? 'Nada con este filtro.' : 'Aún no hay nada. Genera tu primera imagen a la izquierda, sube una foto tuya (Subir), o pídesela a un agente de Marketing.'}</div>`;
+      : body ? `<div class="st-cols">${body}</div>` : `<div class="st-empty">${items.length ? 'Nada con este filtro.' : 'Aún no hay nada. Genera tu primera imagen con el compositor, sube una foto tuya (Subir), o pídesela a un agente de Marketing.'}</div>`;
     $('.st-grid').scrollTop = scroll;
     renderSel();
   }

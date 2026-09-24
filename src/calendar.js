@@ -107,7 +107,7 @@ export function initCalendar(ctx) {
       E.grid.className = 'cv-grid day';
     }
     E.grid.innerHTML = html;
-    E.stats.innerHTML = `<span><b>${nRt}</b> rutina ${nRt === 1 ? 'ejecución' : 'ejecuciones'}</span><span><b>${nSched}</b> programadas</span><span><b>${nDone}</b> listas</span>`;
+    E.stats.innerHTML = `<span><b>${nRt}</b> ${nRt === 1 ? 'ejecución de rutina' : 'ejecuciones de rutinas'}</span><span><b>${nSched}</b> programadas</span><span><b>${nDone}</b> listas</span>`;
     renderRail(); renderChips();
   }
   function renderBacklog() { // pending work with no date: drag it onto a day to schedule it

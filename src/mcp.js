@@ -383,8 +383,8 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     if (modelImgs.chatgpt) { modelImgs.chatgpt.remove(); delete modelImgs.chatgpt; const w = mwires.chatgpt; if (w) { w.path.setAttribute('d', ''); w.dot.setAttribute('opacity', 0); delete mwires.chatgpt; } }
     // V4: the plan's gauge lives in the bottom-left corner, out of the way (it sat in the top bar)
     if (!usageEl) { const dock = document.getElementById('usageDock'); usageEl = document.createElement('span'); usageEl.className = 'tm-usage'; (dock || topmodels).appendChild(usageEl); if (dock) dock.hidden = false; }
-    const when = ts => ts ? new Date(ts).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
-    const bar = (lab, x) => { if (!x) return ''; const cls = x.percent >= 90 ? 'c' : x.percent >= 75 ? 'w' : ''; return `<span>${lab}</span><span class="ub"><i class="${cls}" style="width:${x.percent}%"></i></span><b>${x.percent >= 100 ? 'LIMIT' : x.percent + '%'}</b>`; };
+    const when = ts => ts ? new Date(ts).toLocaleString('es-PA', { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
+    const bar = (lab, x) => { if (!x) return ''; const cls = x.percent >= 90 ? 'c' : x.percent >= 75 ? 'w' : ''; return `<span>${lab}</span><span class="ub"><i class="${cls}" style="width:${x.percent}%"></i></span><b>${x.percent >= 100 ? 'LÍMITE' : x.percent + '%'}</b>`; };
     if (u && u.ok && u.source === 'claude') {
       usageEl.className = 'tm-usage';
       usageEl.innerHTML = bar('SESIÓN', u.session) + (u.session && u.week ? '<span class="sep">·</span>' : '') + bar('SEMANA', u.week);
@@ -392,7 +392,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     } else if (u && u.ok && u.source === 'office') {
       const w = u.window || {}; const n = w.tokens || 0; const tok = n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n);
       usageEl.className = 'tm-usage off';
-      usageEl.innerHTML = `<span>ESTA VENTANA</span><b>${tok}</b><span>TOKENS</span><span class="sep">·</span><b>${w.runs || 0}</b><span>EJECUCIONES</span>` + (w.resetsAt ? `<span class="sep">·</span><span>SE REINICIA</span><b>${new Date(w.resetsAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</b>` : '');
+      usageEl.innerHTML = `<span>ESTA VENTANA</span><b>${tok}</b><span>TOKENS</span><span class="sep">·</span><b>${w.runs || 0}</b><span>EJECUCIONES</span>` + (w.resetsAt ? `<span class="sep">·</span><span>SE REINICIA</span><b>${new Date(w.resetsAt).toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' })}</b>` : '');
       usageEl.title = `El medidor de uso de Claude no está disponible (${u.reason || 'sin respuesta'}). Este es el conteo propio de la oficina para la ventana actual de cinco horas.`;
     } else { usageEl.className = 'tm-usage off'; usageEl.innerHTML = '<span>USO NO DISPONIBLE</span>'; usageEl.title = (u && u.reason) || ''; }
   }
@@ -507,18 +507,10 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
         g.dot.setAttribute('opacity', (f ? 0.85 : 0.45) * wireA);
       }
     }
-    // model wiring: Claude + ChatGPT logos → the Brain's back edge; they pulse on their own
+    // model wiring: V4.1 (24 Sep 2026) — the dashed line from the model's logo into the centre is gone with the rest of the
+    // lines over the Brain (the owner: the centre is the Brain's icon and Dimitri); the logo keeps its own pulse
     for (const [k, m] of Object.entries(mwires)) {
-      if (!modelImgs[k]) continue;
-      const mx = centreX(modelImgs[k]), msy = 50;
-      v3.set(m.port[0], m.port[1], m.port[2]).project(cam);
-      const ex = (v3.x * 0.5 + 0.5) * innerWidth, ey = (-v3.y * 0.5 + 0.5) * innerHeight;
-      m.path.setAttribute('d', `M ${mx} ${msy} C ${mx} ${msy + (ey - msy) * 0.45}, ${ex + 40} ${ey - (ey - msy) * 0.35}, ${ex} ${ey}`);
-      m.offset = (m.offset || 0) - dt * (f ? 13 : 6);
-      m.path.setAttribute('stroke-dashoffset', m.offset);
-      m.path.setAttribute('stroke-opacity', (f ? 0.45 : 0.22) * wireA);
-      m.dot.setAttribute('cx', ex); m.dot.setAttribute('cy', ey);
-      m.dot.setAttribute('opacity', (f ? 0.85 : 0.45) * wireA);
+      if (m.path.getAttribute('d')) { m.path.setAttribute('d', ''); m.dot.setAttribute('opacity', 0); }
     }
     if (now > nextModelPulse) {
       modelPulse(Math.random() < 0.6 ? 'claude' : 'chatgpt');

@@ -505,6 +505,17 @@ else {
       if (await page.evaluate(() => [...document.body.children].some(c => c.inert && c.id === 'tpanel'))) throw new Error('the panel stayed inert after the windows closed');
       return `40 Tabs inside the Estudio · board inert when closed · ${sheet} shortcuts`;
     });
+    await step('smoke: V4.1 — on a phone the whole office fits above the task sheet, with one-line department cards', async () => {
+      const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+      try {
+        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check'); await ph.waitForTimeout(3000);
+        const r = await ph.evaluate(() => { const b = [...document.querySelectorAll('.badge:not(.brainTag)')].map(e => e.getBoundingClientRect()); return { compact: document.body.classList.contains('cardsCompact'), inside: b.every(x => x.left >= 0 && x.right <= innerWidth + 1 && x.bottom <= innerHeight * 0.56), n: b.length, overflow: document.documentElement.scrollWidth > innerWidth }; });
+        if (!r.compact) throw new Error('cards not compact on a phone');
+        if (!r.inside) throw new Error('a department card sits off screen or under the task sheet');
+        if (r.overflow) throw new Error('the page scrolls sideways on a phone');
+        return `${r.n} one-line cards, all above the sheet · no sideways scroll`;
+      } finally { await ph.close(); }
+    });
     await step('smoke: no errors after the run', async () => { if (errors.length) throw new Error(errors[0]); });
   } catch (e) { bad('smoke: browser', e.message); }
   finally { if (browser) await browser.close(); }

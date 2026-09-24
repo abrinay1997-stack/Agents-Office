@@ -16,7 +16,7 @@ const toInput = ts => { const d = new Date(ts); d.setMinutes(d.getMinutes() - d.
 export function initSub(ctx) {
   const { isLive, esc, DEPTS, DEPT_KEYS, findBySid, openTask, afterSend } = ctx;
   let NAME = ctx.name || 'Dimitri';
-  const el = document.createElement('aside'); el.id = 'subOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-labelledby', 'sbName'); el.hidden = true;
+  const el = document.createElement('div'); el.id = 'subOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-labelledby', 'sbName'); el.hidden = true; // a <div>: role=dialog is not allowed on <aside>
   el.innerHTML = `<div class="sb-head"><span class="sb-av" aria-hidden="true">D</span><div class="sb-hd"><div class="sb-name" id="sbName">DIMITRI</div><div class="sb-sub">Tu mano derecha. Pregúntame, pensemos juntos una decisión, o dime qué hay que hacer y lo reparto entre los jefes. Nada sale sin tu OK.</div></div>
       <span class="sp"></span><button type="button" class="sb-clear" title="Empezar una conversación nueva (las tareas enviadas siguen en la oficina)" aria-label="Nueva conversación">＋</button><button type="button" class="sb-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div>
     <div class="sb-msgs" role="log" aria-live="off"></div><div class="sb-live vh" role="status" aria-live="polite"></div>

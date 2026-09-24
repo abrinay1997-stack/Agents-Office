@@ -220,14 +220,14 @@ export function initTasks(ctx) {
     const a = agentOf(t.agent);
     if (t.piece) { // V3.2 (16 Sep): a teammate's piece — in their own chat, then it walks back to the lead
       const L = agentOf(t.leadId), parent = tasks.find(x => x.id === t.parent);
-      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)} · clic para verla`, content: t.result });
+      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)}`, content: t.result });
       if (!t.error) chatPush(t.agent, { who: 'agent', text: `Mi parte de "${parent ? parent.title : t.title}" está lista y con ${L ? L.name : 'the lead'}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}.` });
       feedPush(R[t.agent], '📄', `Parte lista → ${L ? L.name : 'el jefe'}: ${t.title}`);
       if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Parte recibida de ${a.name}: ${t.title}`); }
       return;
     }
     chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md',
-      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)} · clic para verlo`, content: t.result, sid: t.sid });
+      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)}`, content: t.result, sid: t.sid });
     if (quiet) return;
     if (!t.error) chatPush(t.agent, { who: 'agent', text: `Listo — "${t.title}"${t.routine ? ` (rutina, ${t.when}${t.late ? ', se atrasó' : ''})` : ''} está lista arriba${t.team?.members?.length ? ` — el equipo fuimos ${membersText(t)} y yo` : ''}${t.read && t.read.length ? ` (leí ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Usé ${t.used.join(', ')}` : ''}. Di "revisa: …" y la cambio.` });
     feedPush(R[t.agent], '📄', `Entregada: ${t.title}`);
@@ -419,7 +419,7 @@ export function initTasks(ctx) {
     P_.ddDot.style.background = DEPTS[k].chip;
     P_.dd.setAttribute('aria-label', `Departamento: ${DEPTS[k].name}. Cambiar`); P_.dd.title = 'Elige el departamento de la tarea (↓ abre la lista)';
     B_.dept.textContent = DEPTS[k].name.toUpperCase(); B_.dot.style.background = DEPTS[k].chip;
-    P_.input.placeholder = `Escribe una tarea para ${DEPTS[k].name.toLowerCase()}…`;
+    P_.input.placeholder = `Nueva tarea para ${DEPTS[k].short.charAt(0) + DEPTS[k].short.slice(1).toLowerCase()}…`; P_.input.setAttribute('aria-label', `Nueva tarea para ${DEPTS[k].name}`);
     updateHint();
   }
   // routing: keywords → the right agent in the chosen dept; fallback = the dept lead (or first agent)
@@ -728,7 +728,7 @@ export function initTasks(ctx) {
     }
   }
   function askApproval(t) { // D1: the draft lands in the chat with APPROVE / REJECT and the agent stands and waves
-    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `borrador · en espera de tu visto bueno · ${timeStr(t.changedAt)} · clic para ver`, content: t.draft || t.result, sid: t.sid });
+    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `borrador · espera tu visto bueno · ${timeStr(t.changedAt)}`, content: t.draft || t.result, sid: t.sid });
     chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" está lista — aprueba para enviarla, rechaza para decirme qué cambiar.`, pending: true, live: true, sid: t.sid }); // V4.1: the card knows its draft
     feedPush(R[t.agent], '⏸', `En espera de tu visto bueno: ${t.title}`);
     if (setStuck) setStuck(t.agent, t.ask, t.sid);
@@ -989,7 +989,7 @@ export function initTasks(ctx) {
   const COLS = [['sched', 'PROGRAMADAS'], ['next', 'PENDIENTES'], ['doing', 'EN CURSO'], ['waiting', 'EN ESPERA DE APROBACIÓN'], ['done', 'LISTAS']];
   function companyHTML() {
     const tot = st => DEPT_KEYS.reduce((s, k) => s + deptTasks(k, st).length, 0);
-    const doneAll = DEPT_KEYS.reduce((s, k) => s + doneCount[k], 0);
+    const doneAll = DEPT_KEYS.reduce((s, k) => s + doneIn(k), 0); // the live office counts the real list, like LISTO on the cards
     return `<div class="bd-head">
         <span class="b-name"><span class="bd-title">${esc(document.title.replace(/ — Agents Office$/, '') || 'Agents Office')}</span>Tablero de hoy · arrastra una tarjeta para cambiarla de estado o de departamento</span>
         <button type="button" class="bd-x" aria-label="Cerrar el tablero" title="Cerrar (B o Esc)">✕</button>

@@ -47,13 +47,24 @@ const CAM_DIST = 220;
 // along screen-right by half the panel width — the scene sits centred in what is left.
 const OVERVIEW = { base: [-9, 0, -9], zoom: 0.8 }; // (-9,-9) shifts the scene straight DOWN the screen, no sideways drift
 const SR_ = new THREE.Vector3(1, 0, -1).normalize();
-function overviewPos() {
-  const pw = (tasks ? tasks.panelWidth() : 400) + 30;
-  const ppw = OVERVIEW.zoom * innerHeight / (2 * FR);
-  const sh = (pw / 2) / ppw;
-  return [OVERVIEW.base[0] + SR_.x * sh, 0, OVERVIEW.base[2] + SR_.z * sh];
+// V4.1 (24 Sep 2026): the overview fits the room the office really has. The zoom used to follow the window's HEIGHT only,
+// so a phone (tall and narrow) showed a slice of one pod; and under 900 px the panel is a sheet at the bottom, not a
+// column on the right, so the scene is lifted into the top part instead of being pushed sideways.
+function overviewZoom() {
+  const narrow = innerWidth <= 900, sheet = narrow && !document.body.classList.contains('tpMin');
+  const w = innerWidth - (narrow ? 0 : (tasks ? tasks.panelWidth() : 400) + 30), h = (sheet ? innerHeight * 0.54 : innerHeight) - 52;
+  return OVERVIEW.zoom * Math.min(1, (900 * w / 1082) / innerHeight, (900 * h / 848) / innerHeight); // 1512×900 with the panel is the reference: zoom 0.8
 }
-const view = { target: new THREE.Vector3(...overviewPos()), zoom: OVERVIEW.zoom, arc: 0 };
+function overviewPos() {
+  const narrow = innerWidth <= 900, sheet = narrow && !document.body.classList.contains('tpMin');
+  const ppw = overviewZoom() * innerHeight / (2 * FR);
+  const pw = narrow ? 0 : (tasks ? tasks.panelWidth() : 400) + 30;
+  const sh = (pw / 2) / ppw;
+  let x = OVERVIEW.base[0] + SR_.x * sh, z = OVERVIEW.base[2] + SR_.z * sh;
+  if (sheet) { const dy = innerHeight / 2 - (52 + innerHeight * 0.54) / 2, d = dy / (0.545 * ppw) / Math.SQRT2; x += d; z += d; } // screen-down is world (+x,+z), foreshortened by the camera's elevation
+  return [x, 0, z];
+}
+const view = { target: new THREE.Vector3(...overviewPos()), zoom: overviewZoom(), arc: 0 };
 let tween = null;
 const UPV = new THREE.Vector3(0, 1, 0);
 const isoWork = new THREE.Vector3();
@@ -412,8 +423,8 @@ for (const k of [...DEPT_KEYS, 'brain']) {
     <div class="b-metrics">${BB_ROWS[k].map((row, i) => `
       <div class="m-row"><span class="m-lab">${row[0]}</span><span class="m-val" data-m="${k}-${i}">${row[1]()}</span></div>`).join('')}
     </div>
-    <div class="b-appr" style="display:none">⚠ <span class="ap-n">1</span> EN ESPERA DE APROBACIÓN</div>`;
-  if (k !== 'brain') { b.setAttribute('role', 'button'); b.tabIndex = 0; b.setAttribute('aria-label', `${dept.name}: abrir el departamento`); b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zoomToDept(k); } }); }
+    <div class="b-appr" style="display:none">⚠ <span class="ap-n">1</span><span class="ap-l"> EN ESPERA DE APROBACIÓN</span></div>`;
+  if (k !== 'brain') { b.setAttribute('role', 'button'); b.tabIndex = 0; b.title = `${dept.name} · ${n} agentes — abrir el departamento`; b.setAttribute('aria-label', `${dept.name}: abrir el departamento`); b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zoomToDept(k); } }); }
   b.addEventListener('click', (e) => {
     if (e.target.closest('.b-appr')) { zoomToApproval(k); e.stopPropagation(); }
     else if (e.target.closest('.b-tasks') && tasks) { tasks.showDept(k); e.stopPropagation(); }
@@ -450,6 +461,7 @@ for (const k of [...DEPT_KEYS, 'brain']) {
   if (k === 'fin') deptRT[k].sideBadge = true;
   if (k === 'ops') { deptRT[k].sideBadge = true; deptRT[k].sideLeft = true; }
 }
+if (SERVED) setInterval(() => updateBillboards(), 1500); // V4.1: the real office's card counts follow the list (they froze at page load)
 function updateBillboards() {
   for (const k of Object.keys(BB_ROWS)) {
     BB_ROWS[k].forEach((row, i) => {
@@ -507,7 +519,7 @@ addEventListener('wheel', (e) => {
   view.arc = 0;
   const nx = (e.clientX / innerWidth) * 2 - 1, ny = -(e.clientY / innerHeight) * 2 + 1;
   const before = worldAt(nx, ny);
-  view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0032), 0.72, 5.2);
+  view.zoom = clamp(view.zoom * Math.exp(-e.deltaY * 0.0032), Math.min(0.72, overviewZoom()), 5.2);
   applyCamera();
   const after = worldAt(nx, ny);
   if (before && after) view.target.add(before.sub(after));
@@ -676,7 +688,7 @@ canvas.addEventListener('dblclick', (e) => {
 
 // on-screen zoom controls
 function zoomStep(f) {
-  flyTo([view.target.x, 0, view.target.z], clamp(view.zoom * f, 0.72, 5.2), 350);
+  flyTo([view.target.x, 0, view.target.z], clamp(view.zoom * f, Math.min(0.72, overviewZoom()), 5.2), 350);
   if (view.zoom * f < 1.6 && focused) {
     if (focused === 'brain') focused = null; else exitFocus(false);
   }
@@ -690,13 +702,13 @@ function zoomToDept(k) { enterFocus(k); }
 function zoomOut() {
   if (focused && focused !== 'brain') { exitFocus(true); return; }
   focused = null;
-  flyTo(overviewPos(), OVERVIEW.zoom, 550);
+  flyTo(overviewPos(), overviewZoom(), 550);
   syncOverviewBtn();
 }
 document.getElementById('overviewBtn').addEventListener('click', zoomOut);
 function syncOverviewBtn() {
   document.getElementById('overviewBtn').classList.toggle('show',
-    (view.zoom > 1.45 && !(tween && tween.toZ <= OVERVIEW.zoom + 0.05)) || !!focused);
+    (view.zoom > 1.45 && !(tween && tween.toZ <= overviewZoom() + 0.05)) || !!focused);
 }
 
 /* ---------- focus rail: dept billboard + activity rows; agent CHAT & ACTIVITY slide-over ---------- */
@@ -917,7 +929,7 @@ function exitFocus(flyOut = true) {
   setTimeout(() => { if (!focused) rail.style.display = 'none'; }, 650);
   document.getElementById('overviewBtn').classList.remove('right');
   if (k !== 'brain' && deptRT[k] && deptRT[k].badge) deptRT[k].badge.style.display = '';
-  if (flyOut) flyTo(overviewPos(), OVERVIEW.zoom, 700);
+  if (flyOut) flyTo(overviewPos(), overviewZoom(), 700);
   syncOverviewBtn();
 }
 function buildDeptRail(k) {
@@ -931,7 +943,7 @@ function buildDeptRail(k) {
     <div class="b-metrics">${BB_ROWS[k].map((row, i) => `
       <div class="m-row"><span class="m-lab">${row[0]}</span><span class="m-val" data-rm="${k}-${i}">${row[1]()}</span></div>`).join('')}</div>
     ${tasks ? tasks.rowHTML(k) : ''}
-    <div class="b-appr" style="display:${stuckIn(k).length ? 'flex' : 'none'}">⚠ <span class="ap-n">${stuckIn(k).length}</span> EN ESPERA DE APROBACIÓN</div>`;
+    <div class="b-appr" style="display:${stuckIn(k).length ? 'flex' : 'none'}">⚠ <span class="ap-n">${stuckIn(k).length}</span><span class="ap-l"> EN ESPERA DE APROBACIÓN</span></div>`;
   const trow = rh.querySelector('.b-tasks');
   if (trow) trow.addEventListener('click', () => tasks.showDept(k)); // the same as on the pod's card (audit 30)
   const tog = rh.querySelector('.rh-tog'); // the card folds to one line in the chat; the choice is remembered
@@ -1541,13 +1553,26 @@ const sizeRO = new ResizeObserver(es => { for (const e of es) sizeOf.set(e.targe
 function box(el) { let s = sizeOf.get(el); if (!s) { s = [el.offsetWidth, el.offsetHeight]; sizeOf.set(el, s); sizeRO.observe(el); } return s; }
 function setS(el, k, v) { const c = el._st || (el._st = {}); if (c[k] !== v) { c[k] = v; el.style[k] = v; } }
 const px = n => Math.round(n * 2) / 2;
+// V4.1 (24 Sep 2026): when the office has little room (a laptop with the panel open, a tablet, a phone) the department
+// cards fold to one line — name, agents, ⚠ — instead of piling on top of each other and of the pods
+let compactCards = null;
+function syncCompact(panelW) {
+  const area = innerWidth <= 900 ? innerWidth : innerWidth - (document.body.classList.contains('tpMin') ? 40 : panelW + 26);
+  const on = area < 1000 || innerHeight < 660;
+  if (on !== compactCards) { compactCards = on; document.body.classList.toggle('cardsCompact', on); }
+}
 function tickLOD() {
   const z = view.zoom;
   const panelW = tasks ? tasks.panelWidth() : 400; // one read per frame, before any write
+  syncCompact(panelW);
   const detail = smooth(1.75, 2.5, z);
   const pillA = smooth(1.45, 1.85, z); // pills stay on at near — they name the agents
   // billboards persist at every zoom (v1 rule) — slightly larger when far, compact when near
   const badgeScale = 1.02 - 0.3 * smooth(1.2, 2.6, z);
+  // V4.1: under 900 px the panel is a sheet at the BOTTOM, not a column on the right — the cards keep clear of it there
+  // (they used to be pinned to the left edge, and half of them hid under the sheet)
+  const narrow = innerWidth <= 900, sheet = narrow && !document.body.classList.contains('tpMin');
+  const rightEdge = narrow ? innerWidth - 8 : innerWidth - (panelW + 26), bottomEdge = sheet ? innerHeight * 0.54 - 24 : innerHeight - 12;
   for (const [k, d] of Object.entries(deptRT)) {
     if (focused === k && k !== 'brain') continue; // this billboard is docked in the rail
     let [sx, sy] = toScreen(d.badgeAnchor);
@@ -1555,18 +1580,15 @@ function tickLOD() {
     const [bw0, bh0] = box(d.badge); const bh = bh0 * badgeScale, bw = bw0 * badgeScale;
     let xf;
     if (d.sideBadge) { // anchored by an edge, vertically centred (emails/sales/fin/delivery)
-      const rightEdge = innerWidth - (panelW + 26); // V3.3: never under the panel
-      sy = clamp(sy, 64 + bh / 2, innerHeight - bh / 2 - 8);
+      sy = clamp(sy, 64 + bh / 2, bottomEdge - bh / 2 + 4);
       if (d.sideLeft) { sx = clamp(sx, bw + 8, rightEdge); xf = 'translate(-100%,-50%)'; }
       else { sx = clamp(sx, 8, rightEdge - bw); xf = 'translate(0,-50%)'; }
     } else if (k === 'brain') { // the Brain and Dimitri sit centred on the centre pod
-      const rightEdge = innerWidth - (panelW + 26);
-      sy = clamp(sy, bh / 2 + 64, innerHeight - bh / 2 - 12);
+      sy = clamp(sy, bh / 2 + 64, bottomEdge - bh / 2);
       sx = clamp(sx, bw / 2 + 8, rightEdge - bw / 2);
       xf = 'translate(-50%,-50%)';
     } else {
-      const rightEdge = innerWidth - (panelW + 26);
-      sy = clamp(sy, bh + 64, innerHeight - 12);
+      sy = clamp(sy, bh + 64, bottomEdge);
       sx = clamp(sx, bw / 2 + 8, rightEdge - bw / 2);
       xf = 'translate(-50%,-100%)';
     }
@@ -1579,7 +1601,7 @@ function tickLOD() {
   for (const r of Object.values(R)) {
     const p = r.person.position;
     const [sx, sy] = toScreen(v3.set(p.x, p.y + 5.9 * (r.a.lead ? 1.12 : 1), p.z));
-    setS(r.pill, 'display', 'block');
+    setS(r.pill, 'display', z < 0.6 ? 'none' : 'block'); // V4.1: a phone's overview (zoom ≈ 0.3) made them 4-px noise
     setS(r.pill, 'transform', `translate(${px(sx)}px,${px(sy)}px) translate(-50%,-100%) scale(${pillScale.toFixed(3)})`);
     const dimmed = focused && focused !== 'brain' && r.a.dept !== focused;
     setS(r.pill, 'opacity', dimmed ? (1 - 0.85 * focusDim).toFixed(3) : '1');
@@ -1638,7 +1660,7 @@ tasks = initTasks({
   toScreen: (p) => toScreen(p), reframe,
 });
 view.target.set(...overviewPos());
-addEventListener('resize', () => { if (!focused && !tween && !HERO) view.target.set(...overviewPos()); });
+addEventListener('resize', () => { if (!focused && !tween && !HERO) { const atOverview = view.zoom <= 0.82; view.target.set(...overviewPos()); if (atOverview) view.zoom = overviewZoom(); } }); // V4.1: a resized (or rotated) window re-fits the overview
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
 { // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
