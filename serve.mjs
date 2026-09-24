@@ -664,7 +664,15 @@ function autoArchive() {
   for (const t of list) if (t.state === 'done' && !t.archived && (t.doneAt || 0) < cut) { t.archived = true; t.archivedAt = Date.now(); t.autoArchived = true; n++; }
   if (n) { save(list); console.log(`  ${n} finished task${n > 1 ? 's' : ''} older than 30 days archived`); }
 }
-autoArchive(); setInterval(autoArchive, 6 * 3600 * 1000);
+function emptyBins() { // the bins keep 30 days: a note or a file thrown away by mistake can come back within a month, then it goes
+  const cut = Date.now() - 30 * 864e5; let n = 0;
+  for (const bin of [TRASH, path.join(media.dir() || '', '.papelera')]) {
+    if (!bin || !fs.existsSync(bin)) continue;
+    for (const f of fs.readdirSync(bin)) { const p = path.join(bin, f); try { if (fs.statSync(p).mtimeMs < cut) { fs.rmSync(p, { force: true }); n++; } } catch {} }
+  }
+  if (n) console.log(`  ${n} item${n > 1 ? 's' : ''} older than 30 days removed from the bins`);
+}
+autoArchive(); emptyBins(); setInterval(() => { autoArchive(); emptyBins(); }, 6 * 3600 * 1000);
 if (PROVIDER.id !== 'anthropic') console.log(`  provider: ${PROVIDER.name} (${PROVIDER.host}) — the claude.ai connectors (Gmail, Canva, Notion, Drive…) are not loaded in this mode`);
 /* one list per provider: Meta's has no claude.ai connectors, Claude's does */ if (mcp.useCache(path.join(DATA, `mcp-cache-${PROVIDER.id}.json`))) console.log('  connectors: showing the last known list while `claude mcp list` checks them (~40 s)');
 const discovering = mcp.discover().then(async l => {

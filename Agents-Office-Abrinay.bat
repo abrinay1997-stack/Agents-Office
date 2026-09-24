@@ -63,7 +63,7 @@ if errorlevel 2 (
 echo [2/3] Prendiendo el servidor en segundo plano...
 rem Los logs se rotan al pasar 5 MB: guardan titulos de tareas y crecerian sin fin.
 for %%F in (server.log server.err.log) do if exist %%F for %%S in (%%F) do if %%~zS GTR 5000000 move /y %%F %%F.1 >nul
-start "Agents Office Server" /min cmd /c "node serve.mjs ^>^> server.log 2^>^> server.err.log"
+start "Agents Office Server" /min cmd /c "node serve.mjs >> server.log 2>> server.err.log"
 echo Esperando respuesta del servidor ^(hasta 40 segundos^)...
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ok=$false; for ($i=0; $i -lt 20; $i++) { try { $r=Invoke-RestMethod -Uri 'http://localhost:4520/api/health' -TimeoutSec 3; if ($r.ok -eq $true) { $ok=$true; break } } catch {}; Start-Sleep -Seconds 2 }; if ($ok) { exit 0 } else { exit 1 }" >nul 2>nul
 if errorlevel 1 (
