@@ -144,7 +144,7 @@ Se unieron los duplicados y cada punto va con su estado.
 88. ✅ [alta] Las tarjetas de los departamentos no se podían abrir con el teclado. Ahora son botones con Enter/Espacio, y las píldoras de los agentes también (con Tab dentro de su departamento). (A7)
 89. ✅ [alta] En las filas programadas, Enter sobre CANCELAR abría el detalle en vez de cancelar. (A8)
 90. ✅ [media] Faltaban nombres en la caja de tareas, el editor grande y el buscador del calendario; el editor grande no era un diálogo. (A30)
-91. ✅ [media] El chat del agente no se anunciaba (ahora es role="log"). Parcial: todavía se redibuja entero. (A25)
+91. ✅ [media] El chat del agente no se anunciaba (ahora es role="log"). Desde V4.1 un mensaje nuevo se añade al final en vez de redibujar todo el chat: el lector de pantalla oye solo lo nuevo y un archivo abierto o una nota a medio escribir no se tocan. (A25)
 92. ✅ [media] El menú de departamento del panel no tenía teclado ni aria-expanded. Ahora ↓ lo abre, ↑ ↓ Inicio Fin mueven, Enter elige y Esc cierra. (A26)
 93. ✅ [media] Los interruptores REPETIR/EQUIPO y los filtros del panel y del calendario no decían si estaban activos. Ahora llevan aria-pressed, también DÍA/SEMANA/MES. (A27)
 94. ✅ [media] Varios elementos solo respondían al clic: rutinas del calendario, las tareas sin fecha, los [[enlaces]] fuera del chat. Ahora responden a Enter/Espacio, y un [[enlace]] en el detalle o en Dimitri abre su nota. (A31, A32)

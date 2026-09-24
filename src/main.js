@@ -721,8 +721,19 @@ function ensureChat(id) {
 function chatPush(id, msg) {
   ensureChat(id);
   chatHist[id].push(msg);
-  if (chatHist[id].length > 80) chatHist[id].splice(2, 1);
-  if (modalOpen === id && modalTab === 'chat') renderChat(id);
+  const trimmed = chatHist[id].length > 80; if (trimmed) chatHist[id].splice(2, 1);
+  if (modalOpen !== id || modalTab !== 'chat') return;
+  // V4.1 (audit 91): a new message is APPENDED — the log is no longer rebuilt, so a screen reader hears only the new line
+  // and the rest of the chat (an open file, a note being typed) stays exactly as it was
+  if (!trimmed && mMsgs.dataset.for === id && +mMsgs.dataset.n === chatHist[id].length - 1) {
+    const follow = mMsgs.scrollHeight - mMsgs.scrollTop - mMsgs.clientHeight < 60 || msg.who === 'user';
+    mMsgs.insertAdjacentHTML('beforeend', msgHTML(msg, chatHist[id].length - 1));
+    mMsgs.dataset.n = chatHist[id].length;
+    document.getElementById('mChips').hidden = chatHist[id].some(m => m.who === 'user');
+    if (follow) mMsgs.scrollTop = mMsgs.scrollHeight;
+    return;
+  }
+  renderChat(id);
 }
 function renderChat(id) {
   const r = R[id];
@@ -731,10 +742,18 @@ function renderChat(id) {
   const last = chatHist[id][chatHist[id].length - 1];
   const follow = mMsgs.dataset.for !== id || mMsgs.scrollHeight - mMsgs.scrollTop - mMsgs.clientHeight < 60 || (last && last.who === 'user');
   const keepTop = mMsgs.scrollTop; mMsgs.dataset.for = id;
-  mMsgs.innerHTML = chatHist[id].map((m, i) => {
-    if (m.who === 'agent') return `<div class="m-agent"><div class="md">${mdToHtml(m.text)}</div>${m.text && m.text.length > 80 ? `<button type="button" class="m-copy" data-i="${i}" aria-label="Copiar la respuesta">Copiar</button>` : ''}</div>`;
-    if (m.who === 'user') return `<div class="m-user">${esc(m.text)}</div>`;
-    if (m.who === 'work') return `<div class="m-work"><span class="wi">${m.i || '▸'}</span>${esc(m.text)}</div>`;
+  mMsgs.innerHTML = chatHist[id].map(msgHTML).join('');
+  mMsgs.dataset.n = chatHist[id].length;
+  mMsgs.scrollTop = follow ? mMsgs.scrollHeight : keepTop;
+  if (noteFocus && noteFocus.id === id) { // a re-render keeps the note being typed, and the caret in it
+    const ta = mMsgs.querySelector(`.m-appr[data-i="${noteFocus.i}"] .a-note`);
+    if (ta) { ta.focus(); try { ta.setSelectionRange(noteFocus.a, noteFocus.b); } catch {} }
+  }
+}
+function msgHTML(m, i) { // one chat message → its HTML (every message carries data-i: its place in chatHist)
+    if (m.who === 'agent') return `<div class="m-agent" data-i="${i}"><div class="md">${mdToHtml(m.text)}</div>${m.text && m.text.length > 80 ? `<button type="button" class="m-copy" data-i="${i}" aria-label="Copiar la respuesta">Copiar</button>` : ''}</div>`;
+    if (m.who === 'user') return `<div class="m-user" data-i="${i}">${esc(m.text)}</div>`;
+    if (m.who === 'work') return `<div class="m-work" data-i="${i}"><span class="wi">${m.i || '▸'}</span>${esc(m.text)}</div>`;
     if (m.who === 'file') return `
       <div class="m-file${m.exp ? ' exp' : ''}" data-i="${i}">
         <button type="button" class="f-head" aria-expanded="${!!m.exp}"><span aria-hidden="true">${m.icon}</span><div><div class="f-name">${esc(m.name)}</div><div class="f-meta">${esc(m.meta)} · ${m.exp ? 'clic para cerrar' : 'clic para leer'}</div></div></button>
@@ -751,27 +770,30 @@ function renderChat(id) {
               <div class="a-btns"><button type="button" class="a-send">DEVOLVER CON ESTA NOTA</button><button type="button" class="a-cancel">CANCELAR</button></div></div>`
           : '<div class="a-btns"><button type="button" class="a-yes">APROBAR</button><button type="button" class="a-no">RECHAZAR</button></div>'}
       </div>`;
-    return '';
-  }).join('');
-  mMsgs.querySelectorAll('.m-file .f-head').forEach(el =>
-    el.addEventListener('click', () => { const m = chatHist[id][+el.parentElement.dataset.i]; m.exp = !m.exp; renderChat(id); })); // the open state lives on the message: a new message no longer folds it
-  const cardOf = el => chatHist[id][+el.closest('.m-appr').dataset.i];
-  mMsgs.querySelectorAll('.m-appr .a-yes').forEach(el =>
-    el.addEventListener('click', () => resolveApproval(id, true, cardOf(el).sid)));
-  mMsgs.querySelectorAll('.m-appr .a-no').forEach(el =>
-    el.addEventListener('click', () => resolveApproval(id, false, cardOf(el).sid)));
-  mMsgs.querySelectorAll('.m-appr .a-note').forEach(el => {
-    el.addEventListener('input', () => { cardOf(el).note = el.value; });
-    el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendRejectNote(id, cardOf(el)); } else if (e.key === 'Escape') { cardOf(el).rejecting = false; renderChat(id); } });
-  });
-  mMsgs.querySelectorAll('.m-appr .a-send').forEach(el => el.addEventListener('click', () => sendRejectNote(id, cardOf(el))));
-  mMsgs.querySelectorAll('.m-appr .a-cancel').forEach(el => el.addEventListener('click', () => { cardOf(el).rejecting = false; renderChat(id); }));
-  mMsgs.scrollTop = follow ? mMsgs.scrollHeight : keepTop;
-  if (noteFocus && noteFocus.id === id) { // a re-render (a new message) keeps the note being typed, and the caret in it
-    const ta = mMsgs.querySelector(`.m-appr[data-i="${noteFocus.i}"] .a-note`);
-    if (ta) { ta.focus(); try { ta.setSelectionRange(noteFocus.a, noteFocus.b); } catch {} }
-  }
+    return `<div hidden data-i="${i}"></div>`; // an unknown kind still takes its place, so the count stays true
 }
+function refreshMsg(id, m) { // one message changed (a card decided): redraw that message only
+  if (modalOpen !== id || modalTab !== 'chat' || mMsgs.dataset.for !== id) return;
+  const i = chatHist[id].indexOf(m), node = i >= 0 && mMsgs.querySelector(`:scope > [data-i="${i}"]`);
+  if (node) node.outerHTML = msgHTML(m, i); else renderChat(id);
+}
+// the chat's controls answer through ONE listener each (they used to be re-bound on every message)
+const cardOf = el => chatHist[modalOpen] && chatHist[modalOpen][+el.closest('[data-i]').dataset.i];
+mMsgs.addEventListener('click', e => {
+  const id = modalOpen; if (!id) return;
+  const fh = e.target.closest('.m-file .f-head'); if (fh) { const m = cardOf(fh); if (m) { m.exp = !m.exp; renderChat(id); mMsgs.querySelector(`.m-file[data-i="${chatHist[id].indexOf(m)}"] .f-head`)?.focus({ preventScroll: true }); } return; } // the open state lives on the message: a new message no longer folds it
+  const yes = e.target.closest('.m-appr .a-yes'); if (yes) return resolveApproval(id, true, cardOf(yes)?.sid);
+  const no = e.target.closest('.m-appr .a-no'); if (no) return resolveApproval(id, false, cardOf(no)?.sid);
+  const send = e.target.closest('.m-appr .a-send'); if (send) return sendRejectNote(id, cardOf(send));
+  const cancel = e.target.closest('.m-appr .a-cancel'); if (cancel) { const m = cardOf(cancel); if (m) m.rejecting = false; renderChat(id); }
+});
+mMsgs.addEventListener('input', e => { if (e.target.classList.contains('a-note')) { const m = cardOf(e.target); if (m) m.note = e.target.value; } });
+mMsgs.addEventListener('keydown', e => {
+  if (!e.target.classList.contains('a-note')) return;
+  e.stopPropagation(); const id = modalOpen, m = cardOf(e.target); if (!m) return;
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendRejectNote(id, m); }
+  else if (e.key === 'Escape') { m.rejecting = false; noteFocus = null; renderChat(id); }
+});
 let noteFocus = null;
 mMsgs.addEventListener('focusin', e => { if (e.target.classList.contains('a-note')) noteFocus = { id: modalOpen, i: +e.target.closest('.m-appr').dataset.i, a: e.target.selectionStart, b: e.target.selectionEnd }; });
 mMsgs.addEventListener('focusout', e => { if (e.target.classList.contains('a-note') && !e.relatedTarget?.closest?.('.m-appr')) setTimeout(() => { if (!mMsgs.contains(document.activeElement)) noteFocus = null; }, 0); });
@@ -1183,7 +1205,7 @@ function resolveApproval(id, approved, sid) {
   r.ask = null;
   r.warn.visible = false;
   const msg = chatHist[id] && [...chatHist[id]].reverse().find(m => m.who === 'appr' && m.pending);
-  if (msg) { msg.pending = false; msg.approved = approved; }
+  if (msg) { msg.pending = false; msg.approved = approved; refreshMsg(id, msg); }
   // visible reaction in the scene: cheer + ✅, or slump + ❌
   const now = performance.now();
   if (approved) r.cheerUntil = now + 2400; else r.slumpUntil = now + 2600;
