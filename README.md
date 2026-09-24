@@ -26,6 +26,7 @@ bottom-left and a licence line along the bottom; leave them in place.
 
 ## Latest updates
 
+- **V4: order and room to grow** — 24 Sep 2026 · The mouse wheel scrolls every panel again (the 3D view used to take it everywhere). A calm top bar: your business name, the connectors in their own lane with a panel that says which work and which need attention, a fixed dock of icon tools (Estudio, calendar, the task panel's switch). Dimitri, your right hand, sits beside the Brain and talks, reports, analyses — and splits work only when there is work. The Brain filters by folder, date, author and department and searches the text of every note. «el viernes a las 10, …» schedules one task; «cada viernes…» makes a routine. The UX audit: [docs/auditoria-ux-2026-09-24.md](docs/auditoria-ux-2026-09-24.md).
 - **The Estudio (E)** — 24 Sep 2026 · Real images and video, by hand or by the agents: Higgsfield (Soul, Kling 3, Seedance), Nano Banana, GPT Image, Grok and fal.ai, 41 models with their own settings; start/end frames, references and your own uploads; «Animar» turns any image into a video; jobs run in the background and survive a restart; a masonry gallery with multi-select, ZIP and undo. → [The Estudio](#the-estudio-images-and-video-for-real)
 ![The calendar — tasks and routines on their days, a routine being scheduled from a date](assets/readme-calendar.jpg)
 
@@ -366,7 +367,8 @@ every note they read, so your graph grows as the office works.
 | `G` | The Brain graph |
 | `P` | The calendar: tasks and routines on their days; click a day to schedule |
 | `E` | The Estudio: images and video |
-| `S` | The Subgerente: say what needs doing, it splits it across the departments |
+| `S` | Dimitri, your right hand: ask, think a decision through, or say what needs doing and it splits it across the departments |
+| `T` | Show or hide the task panel |
 | `C` | Chat with the department lead |
 | `X` | Send two agents to meet at the Brain |
 | `V` | Full screen view with dimmed lighting |
@@ -397,7 +399,7 @@ first thing to run after any change.
 | `src/models.js` · `usage.mjs` | The three models by name and their CLI flags; the usage gauge (Claude's numbers, the office's own count underneath) |
 | `routines.mjs` · `src/when.js` | Routines: the timetable in `<brain>/Agents Office/routines.json`, plain words → a schedule, the clock and the catch-up (run state in `data/routines.json`) |
 | `media.mjs` · `estudio-mcp.mjs` · `src/studio.js` | The Estudio: engines and the model catalog, background jobs, uploads; the agents' tool; the window |
-| `sub.mjs` · `src/sub.js` | The Subgerente: the distribution plan across departments |
+| `sub.mjs` · `src/sub.js` | Dimitri: chat, status, analysis, and the distribution plan across departments |
 | `SKILLS.md` | The guide to briefs and skills |
 | `CLAUDE.md` | What Claude Code does when you ask it to change agents, write a skill, put a routine on the timetable, or change connectors in this folder |
 | `graph-build.mjs` | Reads your brain folder and lays out the graph |

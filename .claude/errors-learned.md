@@ -90,3 +90,30 @@
 **Prevención:** Parches de más de unas líneas: siempre como archivo, nunca en heredoc.
 **Archivos:** —
 
+## [2026-09-24] — La rueda del ratón no desplazaba ningún panel
+
+**Contexto:** Queja del dueño: «tengo que ir a la barra de scroll y arrastrar; con la ruedita no funciona».
+**Error:** Ningún panel (tareas, detalle, Estudio, calendario, Dimitri) desplazaba con la rueda.
+**Causa raíz:** `src/main.js` tenía `addEventListener('wheel', …, { passive: false })` en `window` con `preventDefault()` para el zoom de la vista 3D, y solo exceptuaba `#rail`. Cada panel nuevo quedaba sin rueda.
+**Fix aplicado:** El zoom solo actúa si el objetivo es el canvas o está dentro de `#hud` (tarjetas y píldoras sobre la escena); en cualquier otro sitio la rueda hace lo normal.
+**Prevención:** Un listener global que cancela un evento del navegador debe decir DÓNDE actúa (lista blanca), nunca dónde no (lista negra). Hay un test de humo que lo comprueba (`dispatchEvent` de un WheelEvent devuelve si se canceló).
+**Archivos:** `src/main.js` (wheel), `check.mjs` (smoke V4)
+
+## [2026-09-24] — Tras cerrar una ventana, los atajos dejaban de funcionar
+
+**Contexto:** Test de humo: S abre Dimitri, Esc lo cierra, B debía abrir el tablero.
+**Error:** B no hacía nada (y de forma intermitente).
+**Causa raíz:** Al cerrar, la ventana se oculta con `hidden` tras una transición, pero el textarea de dentro seguía siendo `document.activeElement`. El handler global ignora las teclas si el foco está en un TEXTAREA.
+**Fix aplicado:** `close()` hace `document.activeElement.blur()` si el foco está dentro (Dimitri, Estudio, detalle).
+**Prevención:** Al ocultar un contenedor, soltar primero el foco que tenga dentro. En los tests, esperar condiciones (`waitForFunction`) y no milisegundos.
+**Archivos:** `src/sub.js`, `src/studio.js`, `src/detail.js` (close)
+
+## [2026-09-24] — Los acentos se rompían al parchear con un heredoc en Windows
+
+**Contexto:** Un script de Python pasado por heredoc en Git Bash para editar `serve.mjs`.
+**Error:** `AssertionError` al buscar texto con «ñ», «→» y «é», aunque el texto existía.
+**Causa raíz:** Python leyó el script desde stdin con la codificación de la consola de Windows (cp1252), no UTF-8, y los caracteres no ASCII llegaron cambiados.
+**Fix aplicado:** Para cambios con acentos, usar la herramienta Edit o un archivo `.py` escrito con Write (que Python lee como UTF-8).
+**Prevención:** Nada con caracteres no ASCII por heredoc en Windows.
+**Archivos:** —
+
