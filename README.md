@@ -26,6 +26,7 @@ bottom-left and a licence line along the bottom; leave them in place.
 
 ## Latest updates
 
+- **The Estudio (E)** — 24 Sep 2026 · Real images and video, by hand or by the agents: Higgsfield (Soul, Kling 3, Seedance), Nano Banana, GPT Image, Grok and fal.ai, 41 models with their own settings; start/end frames, references and your own uploads; «Animar» turns any image into a video; jobs run in the background and survive a restart; a masonry gallery with multi-select, ZIP and undo. → [The Estudio](#the-estudio-images-and-video-for-real)
 ![The calendar — tasks and routines on their days, a routine being scheduled from a date](assets/readme-calendar.jpg)
 
 - **The calendar (P)** — 17 Sep 2026 · Everything on the day it belongs to: finished tasks, today's work, tasks you have scheduled, and every routine projected forward. Click any day to schedule a task for it, or switch on REPEAT to start a routine from that date. A rail lists the routines themselves. Month and week, dark mode too. → [The calendar](#the-calendar-everything-on-the-day-it-belongs-to)
@@ -297,6 +298,22 @@ It needs the Claude Code login (not an API key), the extension paired, and Chrom
 paired yet? The tile is grey and says what to do on hover. `tools.browser: false` in
 `office.config.json` keeps the agents out of the browser altogether (and off the bar).
 
+## The Estudio: images and video, for real
+
+Press **E** (or ✦ ESTUDIO). On the left: image or video, the model, your prompt (✨ rewrites it as a production prompt), the
+frames and references the model takes, and its settings; on the right, everything generated and uploaded, at its true
+shape. Every generation is a background job: close the window, it keeps going; a failed one says why and can be retried.
+
+- **Engines** switch on with a key in your Windows environment, never in a file: `HF_KEY` (Higgsfield, "id:secret"),
+  `GEMINI_API_KEY` (Nano Banana), `OPENAI_API_KEY`, `XAI_API_KEY` (Grok), `FAL_KEY` (fal.ai). Restart the office after
+  setting one. The free *Prueba* engines let you try the whole flow without a key.
+- **Animar** (🎬 on any image) opens a video model that takes a start frame, with the image in it. **⊕** uses an image as a
+  reference (your product, your logo). **⇪ Subir** or drag-and-drop adds your own photos and videos.
+- **The agents** of Marketing, Delivery, Sales and Operations get the Estudio as a tool (`media.departments`). A video an
+  agent starts keeps generating after its run; the office puts it into the deliverable when it is ready.
+- A daily cap (`media.dailyLimit`, a video counts 5) and a cost estimate before anything over a dollar. Put a spending
+  limit on each service's own site as well.
+
 ## Which model, and how much of your plan
 
 Every run names its model. Three, by name: **Sonnet**, **Opus**, **Fable**. Sonnet is the
@@ -348,6 +365,8 @@ every note they read, so your graph grows as the office works.
 | `B` | The company board: every department, scheduled to done |
 | `G` | The Brain graph |
 | `P` | The calendar: tasks and routines on their days; click a day to schedule |
+| `E` | The Estudio: images and video |
+| `S` | The Subgerente: say what needs doing, it splits it across the departments |
 | `C` | Chat with the department lead |
 | `X` | Send two agents to meet at the Brain |
 | `V` | Full screen view with dimmed lighting |
@@ -377,6 +396,8 @@ first thing to run after any change.
 | `onboard.mjs` | The lead's five-question set-up interview; writes briefs and a skill into the brain |
 | `src/models.js` · `usage.mjs` | The three models by name and their CLI flags; the usage gauge (Claude's numbers, the office's own count underneath) |
 | `routines.mjs` · `src/when.js` | Routines: the timetable in `<brain>/Agents Office/routines.json`, plain words → a schedule, the clock and the catch-up (run state in `data/routines.json`) |
+| `media.mjs` · `estudio-mcp.mjs` · `src/studio.js` | The Estudio: engines and the model catalog, background jobs, uploads; the agents' tool; the window |
+| `sub.mjs` · `src/sub.js` | The Subgerente: the distribution plan across departments |
 | `SKILLS.md` | The guide to briefs and skills |
 | `CLAUDE.md` | What Claude Code does when you ask it to change agents, write a skill, put a routine on the timetable, or change connectors in this folder |
 | `graph-build.mjs` | Reads your brain folder and lays out the graph |

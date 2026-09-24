@@ -68,7 +68,7 @@ const RUN_TIMEOUT = Math.max(60, +cfg.timeout || 300) * 1000; // agents with too
 { const m = normModel(cfg.model); if (cfg.model && !m) console.warn(`config: model must be sonnet, opus or fable (got "${cfg.model}") — using ${DEFAULT_MODEL}`); cfg.model = m || DEFAULT_MODEL; } // V3.6: three models, by name
 { const e = normEffort(cfg.effort); if (cfg.effort && !e) console.warn(`config: effort must be low, medium, high, xhigh or max (got "${cfg.effort}") — using the model's own`); cfg.effort = e || ''; } // V3.6.1: the office's effort, empty = the model's own
 mcp.configure(cfg);
-media.configure(cfg, cfg.brainPath, process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data'));
+media.configure(cfg, cfg.brainPath, process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data')); // the jobs hook (onDone) is set once the tasks store exists, below
 // the ESTUDIO reaches the agents of these departments as a tool (office.config.json → media.departments; [] = nobody)
 const STUDIO_DEPTS = Array.isArray(cfg.media?.departments) ? cfg.media.departments : ['marketing', 'delivery', 'sales', 'ops'];
 const STUDIO_MCP = path.join(ROOT, 'estudio-mcp.mjs');
@@ -287,10 +287,12 @@ function agentSystem(a, index, read, { extra = '', words = 260 } = {}) {
 }
 function studioText(a) {
   if (!STUDIO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
-  const on = media.providers().filter(p => p.on && p.id !== 'prueba');
+  const on = media.models().filter(m => m.on && m.engine !== 'prueba');
+  const img = on.filter(m => m.kind === 'image').map(m => m.id), vid = on.filter(m => m.kind === 'video').map(m => m.id);
   return '\n- ESTUDIO (mcp__estudio__*): generar_imagen y generar_video crean imágenes y videos REALES y los guardan en el cerebro. ' +
-    (on.length ? `Motores listos: ${on.map(p => p.name).join(', ')}. ` : 'El dueño aún no puso una key de imagen: solo está el motor «prueba» (una tarjeta de muestra); úsalo solo si la tarea pide probar el Estudio. ') +
-    'Cuando la tarea pida imágenes o video, GENÉRALOS (no entregues solo prompts) y pon en tu entregable las líneas ![…](/media/…) que devuelve la herramienta. Respeta el tope: un lote grande, consulta estado_estudio antes.';
+    (on.length ? `Modelos listos — imagen: ${img.join(', ') || 'ninguno'}; video: ${vid.join(', ') || 'ninguno'}. Si no eliges modelo se usa el del dueño. ` : 'El dueño aún no puso una key de imagen: solo están los motores de «prueba» (tarjetas de muestra); úsalos solo si la tarea pide probar el Estudio. ') +
+    'Cuando la tarea pida imágenes o video, GENÉRALOS (no entregues solo prompts) y pon en tu entregable, tal cual, las líneas que devuelve la herramienta: ![…](/media/…) si ya está, o la línea ⏳ si sigue en proceso (un video tarda minutos; la oficina cambia esa línea por el archivo cuando termine, tú no esperes). ' +
+    'Para animar una imagen o usarla de referencia (un producto, un logo, un personaje) búscala con buscar_en_galeria y pasa su id. Un lote grande: consulta estado_estudio antes (tope diario).';
 }
 const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. End with one line saying exactly what will go out when approved (or that nothing needs to).'
   : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
@@ -507,15 +509,48 @@ async function runServerTask(id, { feedback, approve } = {}) {
     if (approve) { task.result = (task.draft || task.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; task.approved = true; task.approvedAt = Date.now(); }
     else task.result = out.result;
     Object.assign(task, { read: out.read, tools: [...new Set([...(task.tools || []), ...out.tools])], used: [...new Set([...(task.used || []), ...out.used])], skills: out.skills, error: false, modelUsed: out.modelUsed, modelFrom: out.modelFrom, modelId: out.modelId, effortUsed: out.effortUsed, effortFrom: out.effortFrom, ...(out.team ? { team: out.team } : {}) });
-    if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = out.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); }
+    for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) { applyJob(task, j, ['result']); media.markAttached(j.id); } // images an agent made during its run
+    if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = task.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); }
     else { task.state = 'done'; task.doneAt = Date.now(); task.note = writeNote(task); await rebuildGraph(); }
   } catch (e) {
     Object.assign(task, { state: 'done', doneAt: Date.now(), result: stopping.has(task.id) ? 'Detenida por ti antes de terminar.' : 'Could not complete this task: ' + e.message, error: true, stopped: stopping.has(task.id) || undefined });
   }
   stopping.delete(task.id);
   list = load(); const i = list.findIndex(t => t.id === task.id); if (i >= 0) list[i] = task; save(list);
+  setImmediate(() => { for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) attachJob(j); }); // one that finished while this run was being saved
   console.log(`${task.error ? '✗' : task.state === 'waiting' ? '⏸' : '✓'} ${task.id} ${task.error ? 'failed' : task.state === 'waiting' ? 'waiting for your OK' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
   return task;
+}
+/* ---------- the Estudio's jobs → the task that asked for them ---------- */
+// An agent's video keeps generating after its run ends (a video takes minutes, a run has a clock): the agent leaves the line
+// «⏳ … (trabajo <id>)» in its deliverable and, when the job finishes, that line becomes the file — in the task and in its note.
+function mediaLines(j) {
+  if (j.state === 'failed') return [`> ✗ El Estudio no pudo generar «${j.prompt.slice(0, 80)}» (${j.modelName}): ${j.error}`];
+  return j.items.map(f => { const src = '/media/' + f.split('/').map(encodeURIComponent).join('/'); return /\.(mp4|webm)$/i.test(f) ? `[▶ ${path.basename(f)}](${src})` : `![${j.prompt.slice(0, 60).replace(/[[\]()]/g, '')}](${src})`; });
+}
+function applyJob(t, j, fields = ['result', 'draft']) {
+  const lines = mediaLines(j).join('\n'), marker = new RegExp(`^.*\\(trabajo ${j.id}\\).*$`, 'm');
+  let put = false;
+  for (const k of fields) if (typeof t[k] === 'string' && marker.test(t[k])) { t[k] = t[k].replace(marker, lines); put = true; }
+  if (!put) for (const k of fields) if (typeof t[k] === 'string' || k === 'result') t[k] = (t[k] || '') + `\n\n**Del Estudio** (${j.modelName}):\n${lines}`;
+  if (j.items.length) t.media = [...new Set([...(t.media || []), ...j.items])];
+}
+function attachJob(j) {
+  if (!j || !j.task || j.attached || (j.state !== 'done' && j.state !== 'failed')) return;
+  let list; try { list = load(); } catch { return; }
+  const t = list.find(x => x.id === j.task); if (!t) { media.markAttached(j.id); return; }
+  if (t.state === 'doing' || t.state === 'next') return; // the run is still going: runServerTask adds it when it ends
+  applyJob(t, j, t.state === 'waiting' ? ['result', 'draft'] : ['result']);
+  save(list); media.markAttached(j.id);
+  if (t.state === 'done' && t.note) { try { writeNote(t); } catch (e) { console.warn('estudio note:', e.message); } }
+  console.log(`✦ estudio: ${j.state === 'failed' ? 'a failed job' : j.items.length + ' file' + (j.items.length > 1 ? 's' : '')} of ${j.id} added to task ${t.id}`);
+}
+function mediaReq(b, by) { // what the page or an agent may ask the Estudio for
+  const ids = v => (Array.isArray(v) ? v : []).filter(x => typeof x === 'string').slice(0, 30);
+  const m = b.media && typeof b.media === 'object' ? Object.fromEntries(['start', 'end', 'reference', 'video', 'audio'].map(k => [k, ids(b.media[k])]).filter(([, v]) => v.length)) : {};
+  return { prompt: b.prompt, n: b.n, kind: b.kind, model: typeof b.model === 'string' ? b.model : undefined, provider: typeof b.provider === 'string' ? b.provider : undefined, ratio: b.ratio, seconds: b.seconds,
+    settings: b.settings && typeof b.settings === 'object' && !Array.isArray(b.settings) ? b.settings : {}, media: m, by: by || (b.by === 'agent' ? 'agent' : 'you'),
+    agent: b.agent && AGENTS.some(a => a.id === b.agent) ? b.agent : null, task: typeof b.task === 'string' && /^[a-z0-9]{4,20}$/i.test(b.task) ? b.task : null };
 }
 function tickRoutines() { // the clock never throws: an exception in a setInterval would stop the office
   try {
@@ -602,9 +637,9 @@ async function routinesChat(a, text) {
 /* ---------- http ---------- */
 const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
 const MAX_BODY = 1 << 20; // 1 MB: a task, a chat turn or a routine is a few KB
-const body = req => new Promise((resolve, reject) => {
+const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // limit: 1 MB, more only for the Estudio's upload
   let s = '', size = 0;
-  req.on('data', d => { size += d.length; if (size > MAX_BODY) { if (s !== null) reject(Object.assign(new Error('request too large'), { status: 413 })); s = null; return; } if (s !== null) s += d; }); // over the limit: stop keeping it, drain the rest, answer 413
+  req.on('data', d => { size += d.length; if (size > limit) { if (s !== null) reject(Object.assign(new Error('request too large'), { status: 413 })); s = null; return; } if (s !== null) s += d; }); // over the limit: stop keeping it, drain the rest, answer 413
   req.on('end', () => { if (s === null) return; try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('the body is not valid JSON'), { status: 400 })); } });
 });
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
@@ -654,6 +689,8 @@ function insideBrain(p) { // no symlink, and the real path stays inside the brai
 }
 
 await rebuildGraph();
+media.setHooks({ onDone: j => attachJob(j) }); // the Estudio's finished jobs reach their task from now on
+for (const j of media.jobs()) attachJob(j); // and the ones that finished while the office was off or starting
 { // a restart cut these runs short: say so, instead of leaving them «in progress» forever
   const list = load(); let n = 0;
   for (const t of list) if (t.state === 'doing') { Object.assign(t, { state: 'done', doneAt: Date.now(), result: 'Se interrumpió: la oficina se reinició mientras el agente trabajaba. Vuelve a lanzarla si la necesitas.', error: true }); n++; }
@@ -916,26 +953,70 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, trashed, graph: trashed ? await rebuildGraph() : undefined });
     }
     /* ---------- the Estudio ---------- */
-    if (url.pathname.startsWith('/media/') && req.method === 'GET') { // a generated file (only inside <brain>/Agents Office/media)
+    if (url.pathname.startsWith('/media/') && req.method === 'GET') { // a generated file (only inside <brain>/Agents Office/media); ranges, so a video can seek
       const f = media.resolve(decodeURIComponent(url.pathname.slice(7)));
       if (!f) return json(res, 404, { error: 'no such file' });
       const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm' }[f.split('.').pop().toLowerCase()];
-      res.writeHead(200, { 'content-type': type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff', ...(type === 'image/svg+xml' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) });
+      const size = fs.statSync(f).size, head = { 'content-type': type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes', ...(type === 'image/svg+xml' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) };
+      const rg = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (rg && size && (rg[1] !== '' || rg[2] !== '')) {
+        const start = rg[1] === '' ? Math.max(0, size - (+rg[2] || 0)) : +rg[1], end = rg[1] !== '' && rg[2] !== '' ? Math.min(+rg[2], size - 1) : size - 1;
+        if (start > end || start >= size) { res.writeHead(416, { 'content-range': `bytes */${size}` }); return res.end(); }
+        res.writeHead(206, { ...head, 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': end - start + 1 });
+        return fs.createReadStream(f, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { ...head, 'content-length': size });
       return fs.createReadStream(f).pipe(res);
     }
-    if (url.pathname === '/api/media' && req.method === 'GET') return json(res, 200, { items: media.list(), budget: media.budget(), providers: media.providers() });
-    if (url.pathname === '/api/media/providers') return json(res, 200, { providers: media.providers(), budget: media.budget(), departments: STUDIO_DEPTS });
-    if (url.pathname === '/api/media/generate' && req.method === 'POST') {
+    if (url.pathname === '/api/media' && req.method === 'GET') return json(res, 200, { items: media.list(), budget: media.budget(), engines: media.engines(), models: media.models(), jobs: media.jobs(), providers: media.providers(), default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
+    if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
+    if (url.pathname === '/api/media/jobs' && req.method === 'GET') return json(res, 200, { jobs: media.jobs({ task: url.searchParams.get('task') || undefined, active: url.searchParams.get('active') === '1' }), budget: media.budget() });
+    if (url.pathname === '/api/media/jobs' && req.method === 'POST') { // queue one generation; `wait` (ms, max 110 s) answers when it finished or at that time, whichever first
       const b = await body(req);
       try {
-        const out = await media.generate({ prompt: b.prompt, n: b.n, ratio: b.ratio, provider: b.provider, kind: b.kind, seconds: b.seconds, by: b.by || 'you', agent: b.agent && AGENTS.some(a => a.id === b.agent) ? b.agent : null, task: b.task || null });
-        console.log(`✦ estudio: ${out.items.length} ${b.kind === 'video' ? 'video' : 'imagen(es)'} · ${b.provider || media.defaultProvider()}${b.agent ? ' · ' + b.agent : ''} · US$${out.cost}`);
+        const j = media.submit(mediaReq(b));
+        console.log(`✦ estudio: ${j.id} ${j.model} ×${j.n}${j.agent ? ' · ' + j.agent : ''}${j.task ? ' · task ' + j.task : ''}${Object.keys(j.media).length ? ' · with ' + Object.entries(j.media).map(([k, v]) => v.length + ' ' + k).join(', ') : ''}`);
+        const wait = Math.min(110000, Math.max(0, +b.wait || 0));
+        return json(res, 200, { job: wait ? await media.wait(j.id, wait) : j, budget: media.budget() });
+      } catch (e) { return json(res, 400, { error: e.message }); }
+    }
+    const jm = url.pathname.match(/^\/api\/media\/jobs\/([a-z0-9]+)(?:\/(retry|cancel))?$/);
+    if (jm) {
+      if (req.method === 'GET' && !jm[2]) { const w = Math.min(110000, Math.max(0, +url.searchParams.get('wait') || 0)); const j = w ? await media.wait(jm[1], w) : media.job(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); }
+      if (req.method === 'POST' && jm[2] === 'retry') { try { const j = media.retry(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (req.method === 'POST' && jm[2] === 'cancel') { const j = media.cancel(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); }
+      if (req.method === 'DELETE' && !jm[2]) return media.forget(jm[1]) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'ese trabajo sigue en marcha' });
+    }
+    if (url.pathname === '/api/media/generate' && req.method === 'POST') { // V1: generate and wait (kept for scripts)
+      const b = await body(req);
+      try {
+        const out = await media.generate(mediaReq(b));
+        console.log(`✦ estudio: ${out.items.length} ${b.kind === 'video' ? 'video' : 'imagen(es)'} · ${out.job.model}${b.agent ? ' · ' + b.agent : ''} · US$${out.cost}`);
         return json(res, 200, out);
       } catch (e) { console.warn('estudio:', e.message); return json(res, 400, { error: e.message }); }
     }
+    if (url.pathname === '/api/media/upload' && req.method === 'POST') { // the owner's own photo or video (a product, a logo, a face) to use as a reference or a first frame
+      const b = await body(req, 40 << 20);
+      try { const it = media.upload(b); console.log(`✦ estudio: uploaded ${it.file}`); return json(res, 200, { item: it }); } catch (e) { return json(res, 400, { error: e.message }); }
+    }
+    if (url.pathname === '/api/media/restore' && req.method === 'POST') { const b = await body(req); return media.restore(b) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)' }); }
+    if (url.pathname === '/api/media/zip' && req.method === 'POST') {
+      const { ids } = await body(req); const z = media.zip(ids);
+      if (!z.count) return json(res, 404, { error: 'nada que descargar' });
+      res.writeHead(200, { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="estudio-${localDay(Date.now())}.zip"`, 'content-length': z.buf.length, 'x-content-type-options': 'nosniff' });
+      return res.end(z.buf);
+    }
+    if (url.pathname === '/api/media/enhance' && req.method === 'POST') { // the owner's idea into a production prompt (Claude, no tools)
+      const { prompt, kind } = await body(req);
+      const idea = String(prompt || '').trim(); if (!idea) return json(res, 400, { error: 'escribe primero la idea' }); if (idea.length > 3000) return json(res, 400, { error: 'la idea es muy larga' });
+      const sys = `Eres director de arte de ${cfg.name}. Convierte la idea del dueño en UN prompt de producción para un motor de ${kind === 'video' ? 'VIDEO: sujeto, acción, movimiento de cámara, ritmo, luz, estilo, sonido si aplica' : 'IMAGEN: sujeto, composición y encuadre, lente, luz, paleta, estilo, fondo'}. ` +
+        'Conserva todo lo que pidió (marca, colores, texto exacto entre comillas si lo pidió); no inventes texto, logos ni personas que no pidió. Escríbelo en inglés (los motores lo entienden mejor), una sola línea, máximo 90 palabras. Devuelve solo el prompt, sin comillas ni explicación.';
+      try { const out = String(await ask(sys, idea, { maxTokens: 600, timeout: 90000 })).trim().replace(/^["'`]+|["'`]+$/g, '').split('\n').filter(Boolean).join(' ').slice(0, 1500); return json(res, 200, { prompt: out }); }
+      catch (e) { return json(res, 502, { error: 'no pude mejorarlo ahora: ' + e.message }); }
+    }
     const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);
     if (mm && req.method === 'PATCH') { const b = await body(req); const it = media.update(decodeURIComponent(mm[1]), { ...(typeof b.fav === 'boolean' ? { fav: b.fav } : {}) }); return it ? json(res, 200, it) : json(res, 404, { error: 'no such file' }); }
-    if (mm && req.method === 'DELETE') return media.trash(decodeURIComponent(mm[1])) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'no such file' });
+    if (mm && req.method === 'DELETE') { const t = media.trash(decodeURIComponent(mm[1])); return t ? json(res, 200, { ok: true, undo: t }) : json(res, 404, { error: 'no such file' }); }
     if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, sub.load(DATA));
     if (url.pathname === '/api/sub/chat' && req.method === 'POST') {
       const { text } = await body(req);
@@ -979,7 +1060,8 @@ server.listen(cfg.port, HOST, () => {
   console.log(`  routines: ${rl.length} loaded${rl.some(r => r.paused) ? ' (' + rl.filter(r => r.paused).length + ' paused)' : ''}${nx ? ' · next ' + untilText(nx.nextAt) + ' ' + nx.title.toUpperCase() + ' (' + nx.agent + ')' : ''} · ${rlist.path}`);
   setInterval(tickRoutines, 20000); tickRoutines();
   setInterval(pump, 5000); setTimeout(pump, 1500); // pending work left by a restart, or added while every seat was busy
-  { const on = media.providers().filter(p => p.on && p.id !== 'prueba'); console.log(`  estudio: ${on.length ? on.map(p => p.name).join(', ') : 'no image key yet (only the free «prueba» engine) — setx GEMINI_API_KEY / XAI_API_KEY / OPENAI_API_KEY / FAL_KEY'} · for ${STUDIO_DEPTS.join(', ') || 'nobody'} · ${media.budget().left}/${media.budget().limit} left today`); }
+  { const on = media.engines().filter(p => p.on && p.id !== 'prueba'), n = media.models().filter(m => m.on && m.engine !== 'prueba').length, act = media.jobs({ active: true }).length;
+    console.log(`  estudio: ${on.length ? on.map(p => p.name).join(', ') + ` (${n} models)` : 'no key yet (only the free «prueba» engines) — setx HF_KEY / GEMINI_API_KEY / XAI_API_KEY / OPENAI_API_KEY / FAL_KEY'} · for ${STUDIO_DEPTS.join(', ') || 'nobody'} · ${media.budget().left}/${media.budget().limit} left today${act ? ` · ${act} job${act > 1 ? 's' : ''} in progress` : ''}`); }
   console.log(`  engine: the server runs every task · ${MAX_RUNS} at once, one per agent (office.config.json → concurrency)`); // the clock: every 20 s; the first tick catches up anything missed while the office was off (once, marked LATE)
   console.log(`  agents: 35 (${roster.customised} customised${roster.briefed ? ', ' + roster.briefed + ' briefed' : ''}${roster.files.length ? ' via ' + roster.files.join(' + ') : ''})   tools: ${backend === 'claude-cli' ? 'connected MCP servers' + (cfg.tools?.web === false ? '' : ' + web') + (mcp.browserOn() ? ' + the owner\'s Chrome (' + (mcp.browserState().installed ? 'extension paired' + (mcp.browserState().device ? ': ' + mcp.browserState().device : '') : 'extension NOT paired — run `claude --chrome` once') + ')' : '') : 'none on the API backend'}`);
   console.log(`  teams: ${TEAMS.enabled ? 'on — TEAM in the bar or "as a team" in the sentence; the lead splits it across up to ' + TEAMS.max + ' desks' : 'off (teams.enabled in office.config.json)'}`);

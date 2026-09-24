@@ -500,6 +500,62 @@ await step('estudio: the free test engine generates, files are stored with their
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
+await step('estudio: Higgsfield and fal.ai through their queues (a local stand-in: no key, no spend), uploads, resume after a restart', async () => {
+  const md = await import('./media.mjs'); const http = await import('node:http');
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAYAAAC56t6BAAAADklEQVR4nGNgYGD4z4ADAAMFAAHiJVjLAAAAAElFTkSuQmCC', 'base64');
+  const seen = []; let polls = 0;
+  const mock = http.createServer((req, res) => { let b = ''; req.on('data', d => b += d); req.on('end', () => {
+    const u = req.url, body = b && /json/.test(req.headers['content-type'] || '') ? JSON.parse(b) : null; seen.push({ u, auth: req.headers.authorization, body });
+    const j = o => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(o)); };
+    if (u === '/files/generate-upload-url') return j({ public_url: M + '/pub/ref.png', upload_url: M + '/put/ref' });
+    if (u.startsWith('/put/')) return res.end();
+    if (u === '/out.png') { res.writeHead(200, { 'content-type': 'image/png' }); return res.end(PNG); }
+    if (u === '/out.mp4') { res.writeHead(200, { 'content-type': 'video/mp4' }); return res.end(Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(16)])); }
+    const st = u.match(/^\/requests\/(\w+)\/status$/); if (st) { polls++; return st[1].startsWith('nsfw') ? j({ status: 'nsfw' }) : polls % 2 ? j({ status: 'in_progress' }) : j({ status: 'completed', ...(st[1].startsWith('v') ? { video: { url: M + '/out.mp4' } } : { images: [{ url: M + '/out.png' }] }) }); }
+    if (u.startsWith('/q/') && /\/status$/.test(u)) return j({ status: 'COMPLETED' });
+    if (u.startsWith('/q/') && body === null) return j({ video: { url: M + '/out.mp4' } });
+    if (u.startsWith('/q/')) return j({ request_id: 'f1', status_url: M + '/q/r/f1/status', response_url: M + '/q/r/f1' });
+    const id = (body?.prompt?.includes('NSFW') ? 'nsfw' : /video/.test(u) ? 'v' : 'i') + seen.length;
+    j({ request_id: id, status_url: `${M}/requests/${id}/status` });
+  }); });
+  await new Promise(r => mock.listen(0, '127.0.0.1', r)); const M = `http://127.0.0.1:${mock.address().port}`;
+  const keep = {}; const ENV = { HF_KEY: 'id:secret', HF_API_BASE_URL: M, FAL_KEY: 'fal-k', AO_FAL_QUEUE: M + '/q', AO_POLL_MS: '20' };
+  for (const k of Object.keys(ENV)) { keep[k] = process.env[k]; process.env[k] = ENV[k]; }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-media-q-'));
+  try {
+    md.configure({ media: { dailyLimit: 50 } }, tmp, path.join(tmp, 'data'));
+    const up = md.upload({ name: 'producto.png', data: 'data:image/png;base64,' + PNG.toString('base64') });
+    if (!up.upload || up.w !== 2 || up.h !== 3) throw new Error('upload: ' + JSON.stringify(up));
+    let refused = ''; try { md.upload({ name: 'x.png', data: 'data:image/png;base64,' + Buffer.from('<svg onload=alert(1)>').toString('base64') }); } catch (e) { refused = e.message; }
+    if (!refused) throw new Error('a file that is not what it says was accepted');
+    const soul = await md.generate({ model: 'soul-2', prompt: 'retrato', settings: { aspectRatio: '3:4' } });
+    const sb = seen.find(x => x.u === '/higgsfield-ai/soul/v2/standard');
+    if (sb.auth !== 'Key id:secret' || sb.body.batch_size !== 1 || sb.body.aspect_ratio !== '3:4' || sb.body.resolution !== '720p' || sb.body.enhance_prompt !== false || soul.items.length !== 1) throw new Error('Soul 2 body: ' + JSON.stringify(sb.body));
+    const kl = await md.generate({ model: 'kling-3-std', kind: 'video', prompt: 'se acerca', media: { start: [up.file] }, settings: { duration: 7, sound: false } });
+    const kb = seen.find(x => x.u === '/kling-video/v3.0/std/image-to-video');
+    if (!kb || kb.body.image_url !== M + '/pub/ref.png' || kb.body.sound !== 'off' || kb.body.duration !== 7 || kl.items[0].kind !== 'video') throw new Error('Kling 3 from an image: ' + JSON.stringify(kb && kb.body));
+    const fk = await md.generate({ model: 'kling-2.5-fal', kind: 'video', prompt: 'olas', media: { start: [up.file] } });
+    const fb = seen.find(x => x.u === '/q/fal-ai/kling-video/v2.5-turbo/pro/image-to-video');
+    if (!fb || fb.auth !== 'Key fal-k' || !fb.body.image_url.startsWith('data:image/png;base64,') || fk.items.length !== 1) throw new Error('fal video: ' + JSON.stringify(fb && fb.body).slice(0, 120));
+    let blocked = ''; try { await md.generate({ model: 'soul-cinema', prompt: 'NSFW x' }); } catch (e) { blocked = e.message; }
+    if (!/contenido/.test(blocked)) throw new Error('nsfw said: ' + blocked);
+    let needs = ''; try { md.submit({ model: 'dop', kind: 'video', prompt: 'x' }); } catch (e) { needs = e.message; } if (!/imagen inicial/.test(needs)) throw new Error('dop without an image: ' + needs);
+    const pr = await md.generate({ model: 'prueba', prompt: 'tarjeta' });
+    let card = ''; try { md.submit({ model: 'flux-2', prompt: 'x', media: { reference: [pr.items[0].file] } }); } catch (e) { card = e.message; } if (!/tarjeta de prueba/.test(card)) throw new Error('a test card went in as a reference: ' + card);
+    // the office restarted while a video was generating: the job keeps its request id and picks the poll up again
+    const jf = path.join(tmp, 'data', 'media-jobs.json'), jobs = JSON.parse(fs.readFileSync(jf, 'utf8'));
+    jobs.push({ id: 'jresume1', state: 'running', kind: 'video', model: 'kling-3-pro', engine: 'higgsfield', prompt: 'reel', n: 1, s: { duration: 5 }, media: {}, weight: 5, by: 'agent', agent: 'vid', task: 'tk1', at: Date.now(), startedAt: Date.now(), items: [], unit: 0.55, remote: [{ id: 'v9', status: M + '/requests/v9/status' }] });
+    fs.writeFileSync(jf, JSON.stringify(jobs));
+    let doneJob = null; md.configure({ media: { dailyLimit: 50 } }, tmp, path.join(tmp, 'data'), { onDone: j => { doneJob = j; } });
+    const back = await md.wait('jresume1', 10000);
+    if (back.state !== 'done' || back.resumed !== 1 || !doneJob || doneJob.task !== 'tk1') throw new Error('resume: ' + JSON.stringify(back).slice(0, 160));
+    const z = md.zip(md.list().map(i => i.file)); if (z.buf.readUInt32LE(0) !== 0x04034b50 || z.count !== md.list().length) throw new Error('zip');
+    const t = md.trash(up.file); if (!t || md.list().some(i => i.file === up.file) || !md.restore(t) || !md.list().some(i => i.file === up.file)) throw new Error('trash and restore');
+    if (md.restore({ id: '../../office.config.json', bin: ['1-x'] })) throw new Error('restore escaped');
+    return `${md.models().length} models · Soul 2, Kling 3 (image → video, upload to Higgsfield), fal Kling (queue, data URI) · NSFW says why · a video resumes after a restart · ZIP · undo`;
+  } finally { for (const k of Object.keys(ENV)) { if (keep[k] === undefined) delete process.env[k]; else process.env[k] = keep[k]; } mock.close(); fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 /* ---------- 3. server smoke ---------- */
 {
   const port = 4600 + Math.floor(Math.random() * 300);
@@ -568,6 +624,23 @@ await step('estudio: the free test engine generates, files are stored with their
       const b = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'sales', text: 'call the leads', at: 'tomorrowish' }) });
       if (b.status !== 400) throw new Error('bad time accepted');
       return j.error;
+    });
+    await step('server: the Estudio queues a job, a finished one reaches its task, uploads, zips, undoes (free engine only)', async () => {
+      const post = async (p, b) => { const r = await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`${p} ${r.status} ${j.error}`); return j; };
+      const cat = await (await fetch(base + '/api/media/models')).json(); if (cat.models.length < 30 || !cat.engines.some(e => e.id === 'higgsfield')) throw new Error('catalog: ' + cat.models.length);
+      const tf = path.join(sandbox, 'data', 'tasks.json'); let list = []; try { list = JSON.parse(fs.readFileSync(tf, 'utf8')); } catch {}
+      list.push({ id: 'tkstudio1', dept: 'marketing', agent: 'gfx', title: 'Post con imagen', text: 'x', state: 'done', result: 'Aquí va:\n⏳ Estudio: fondo (trabajo PLACEHOLDER)\nFin.', doneAt: Date.now(), addedAt: Date.now() }); fs.mkdirSync(path.dirname(tf), { recursive: true }); fs.writeFileSync(tf, JSON.stringify(list));
+      const { job } = await post('/api/media/jobs', { model: 'prueba', prompt: 'fondo naranja', n: 2, by: 'agent', agent: 'gfx', task: 'tkstudio1', wait: 8000 });
+      if (job.state !== 'done' || job.items.length !== 2) throw new Error('job: ' + JSON.stringify(job).slice(0, 120));
+      await new Promise(r => setTimeout(r, 300));
+      const t = JSON.parse(fs.readFileSync(tf, 'utf8')).find(x => x.id === 'tkstudio1'); if (!t || !/Del Estudio[\s\S]*!\[fondo naranja\]\(\/media\//.test(t.result)) throw new Error('not added to the task: ' + (t && t.result.slice(-120)));
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAYAAAC56t6BAAAADklEQVR4nGNgYGD4z4ADAAMFAAHiJVjLAAAAAElFTkSuQmCC';
+      const { item } = await post('/api/media/upload', { name: 'logo.png', data: 'data:image/png;base64,' + png });
+      const z = await fetch(base + '/api/media/zip', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: [item.file, ...job.items] }) });
+      if (z.headers.get('content-type') !== 'application/zip') throw new Error('zip');
+      const d = await (await fetch(base + '/api/media/item/' + encodeURIComponent(item.file), { method: 'DELETE' })).json(); await post('/api/media/restore', d.undo);
+      const rg = await fetch(base + '/media/' + job.items[0].split('/').map(encodeURIComponent).join('/'), { headers: { range: 'bytes=0-9' } }); if (rg.status !== 206) throw new Error('range ' + rg.status);
+      return `${cat.models.length} models · job → task · upload · ZIP · undo · ranges`;
     });
     await step('server: rejects an empty task', async () => { const r = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"dept":"sales","text":""}' }); if (r.status !== 400) throw new Error('status ' + r.status); });
     if (LIVE) {

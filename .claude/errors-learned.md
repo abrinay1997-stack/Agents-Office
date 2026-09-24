@@ -71,3 +71,22 @@
 **Fix aplicado:** `AO_DATA` (carpeta de datos configurable); `check.mjs` arranca su servidor con una carpeta temporal y una COPIA del cerebro; `load()` ya no devuelve `[]` ante un archivo corrupto (guarda una copia y falla); copia diaria en `data/backups/` (14 días).
 **Prevención:** Nunca probar contra los datos del dueño: servidor de prueba siempre con `AO_DATA` y `AO_BRAIN` temporales. Nada que falle al leer debe tratarse como «vacío».
 **Archivos:** `serve.mjs` (DATA, load, backups), `check.mjs` (sandbox del server smoke)
+
+## [2026-09-24] — La galería en columnas se desbordaba de lado
+
+**Contexto:** Galería «masonry» del Estudio V2 con CSS `columns`.
+**Error:** Barra de desplazamiento horizontal y una tercera columna cortada a la derecha.
+**Causa raíz:** Un contenedor multicolumna con altura fija (`flex: 1` + `overflow-y: auto`) llena cada columna hasta esa altura y crea columnas nuevas hacia el lado en vez de crecer hacia abajo.
+**Fix aplicado:** Las columnas van en una caja interior (`.st-cols`) sin altura; el contenedor con scroll es el de fuera (`.st-grid`, `overflow-x: hidden`).
+**Prevención:** Nunca poner `columns` en el mismo elemento que tiene la altura limitada y el scroll.
+**Archivos:** `src/studio.js` (renderGrid), `src/shell.html` (.st-grid, .st-cols)
+
+## [2026-09-24] — Un heredoc largo rompía el shell de Windows
+
+**Contexto:** Parchear `serve.mjs` con un script de Python pegado en un heredoc de bash.
+**Error:** `unexpected EOF while looking for matching "'"` (el script nunca corrió).
+**Causa raíz:** El bash de Windows (Git Bash) se atraganta con heredocs largos llenos de comillas y backticks.
+**Fix aplicado:** Escribir el script como archivo (herramienta Write) en el scratchpad y ejecutarlo con `python archivo.py`.
+**Prevención:** Parches de más de unas líneas: siempre como archivo, nunca en heredoc.
+**Archivos:** —
+
