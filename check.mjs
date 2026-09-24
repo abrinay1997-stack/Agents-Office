@@ -825,7 +825,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
           if (done.error) throw new Error('task failed');
           await page.waitForTimeout(2500);
           await page.click(`.tp-row[data-id="${mine}"]`); await page.waitForTimeout(2500);
-          const card = await page.evaluate(n => [...document.querySelectorAll('.m-file .f-name')].some(e => e.textContent === n + '.md'), done.note); if (!card) throw new Error('deliverable card not in the chat');
+          const card = await page.evaluate(n => [...document.querySelectorAll('.m-file')].some(e => e.textContent.includes(n + '.md')), done.note); if (!card) throw new Error('deliverable card not in the chat');
           const after = await page.evaluate(() => window.CC.brain.nodes.length);
           const inGraph = await page.evaluate(n => window.CC.brain.nodes.some(x => x.id === n), done.note); // a second run on the same day rewrites the same note, so the count may not grow
           if (after < before || !inGraph) throw new Error(`the new note is not in the brain graph (${before} → ${after}, ${done.note})`);

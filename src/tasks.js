@@ -220,13 +220,13 @@ export function initTasks(ctx) {
     const a = agentOf(t.agent);
     if (t.piece) { // V3.2 (16 Sep): a teammate's piece — in their own chat, then it walks back to the lead
       const L = agentOf(t.leadId), parent = tasks.find(x => x.id === t.parent);
-      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)}`, content: t.result });
+      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', title: t.title, meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)}`, content: t.result });
       if (!t.error) chatPush(t.agent, { who: 'agent', text: `Mi parte de "${parent ? parent.title : t.title}" está lista y con ${L ? L.name : 'the lead'}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}.` });
       feedPush(R[t.agent], '📄', `Parte lista → ${L ? L.name : 'el jefe'}: ${t.title}`);
       if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Parte recibida de ${a.name}: ${t.title}`); }
       return;
     }
-    chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md',
+    chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md', title: t.title,
       meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)}`, content: t.result, sid: t.sid });
     if (quiet) return;
     if (!t.error) chatPush(t.agent, { who: 'agent', text: `Listo — "${t.title}"${t.routine ? ` (rutina, ${t.when}${t.late ? ', se atrasó' : ''})` : ''} está lista arriba${t.team?.members?.length ? ` — el equipo fuimos ${membersText(t)} y yo` : ''}${t.read && t.read.length ? ` (leí ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Usé ${t.used.join(', ')}` : ''}. Di "revisa: …" y la cambio.` });
@@ -728,7 +728,7 @@ export function initTasks(ctx) {
     }
   }
   function askApproval(t) { // D1: the draft lands in the chat with APPROVE / REJECT and the agent stands and waves
-    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `borrador · espera tu visto bueno · ${timeStr(t.changedAt)}`, content: t.draft || t.result, sid: t.sid });
+    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', title: t.title, meta: `borrador · espera tu visto bueno · ${timeStr(t.changedAt)}`, content: t.draft || t.result, sid: t.sid });
     chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" está lista — aprueba para enviarla, rechaza para decirme qué cambiar.`, pending: true, live: true, sid: t.sid }); // V4.1: the card knows its draft
     feedPush(R[t.agent], '⏸', `En espera de tu visto bueno: ${t.title}`);
     if (setStuck) setStuck(t.agent, t.ask, t.sid);

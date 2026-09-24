@@ -433,7 +433,7 @@ for (const k of [...DEPT_KEYS, 'brain']) {
   if (k === 'brain') { // V4 (24 Sep 2026): the centre of the office — the Brain (an animated brain) and, beside it, Dimitri, the owner's right hand
     b.className = 'badge brainTag';
     b.innerHTML = `<button type="button" class="bt-brain" title="Abrir el Cerebro: tus notas (G)" aria-label="Abrir el Cerebro">${BRAIN_ICON}<span class="bt-tx"><span class="bt-t">EL CEREBRO</span><span class="bt-s"><b>${brain.state.notes.toLocaleString('es-PA')}</b> notas</span></span></button>` +
-      `<button type="button" class="bt-dim" title="Hablar con Dimitri, tu mano derecha (S)" aria-label="Abrir el chat con Dimitri"><span class="bt-av" aria-hidden="true">D</span><span class="bt-tx"><span class="bt-t">DIMITRI</span><span class="bt-s">tu mano derecha</span></span></button>`;
+      `<button type="button" class="bt-dim" title="Hablar con Dimitri, tu mano derecha (S) · el punto verde: disponible" aria-label="Abrir el chat con Dimitri"><span class="bt-av" aria-hidden="true">D</span><span class="bt-tx"><span class="bt-t">DIMITRI</span><span class="bt-s">tu mano derecha</span></span></button>`;
     b.onclick = (e) => { e.stopPropagation(); if (e.target.closest('.bt-dim')) subger.toggle(); else if (e.target.closest('.bt-brain')) brain.open(); };
   }
   hud.appendChild(b);
@@ -768,7 +768,7 @@ function msgHTML(m, i) { // one chat message → its HTML (every message carries
     if (m.who === 'work') return `<div class="m-work" data-i="${i}"><span class="wi">${m.i || '▸'}</span>${esc(m.text)}</div>`;
     if (m.who === 'file') return `
       <div class="m-file${m.exp ? ' exp' : ''}" data-i="${i}">
-        <button type="button" class="f-head" aria-expanded="${!!m.exp}"><span aria-hidden="true">${m.icon}</span><div><div class="f-name">${esc(m.name)}</div><div class="f-meta">${esc(m.meta)} · ${m.exp ? 'clic para cerrar' : 'clic para leer'}</div></div></button>
+        <button type="button" class="f-head" aria-expanded="${!!m.exp}"><span aria-hidden="true">${m.icon}</span><div><div class="f-name">${esc(m.title || m.name)}</div><div class="f-meta">${m.title ? `<span class="f-file">${esc(m.name)}</span> · ` : ''}${esc(m.meta)} · ${m.exp ? 'clic para cerrar' : 'clic para leer'}</div></div></button>
         ${m.exp ? `<div class="f-body md">${mdToHtml(m.content)}</div><div class="f-acts"><button type="button" class="m-copy" data-i="${i}">Copiar</button></div>` : ''}
       </div>`;
     if (m.who === 'appr') return `
