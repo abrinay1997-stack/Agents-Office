@@ -50,9 +50,9 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
-- V4.2 (24 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos), con 24 ya arreglados:
-  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea.
-  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono.
+- V4.2 (24 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos), con 28 ya arreglados:
+  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió).
+  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono; en cada tarjeta ★, una acción con texto y el menú «⋯» (la papelera al final).
 - V4.1 (24 sep, rama `claude/gracious-pascal-aryw2d`):
   - el centro de la oficina sin la red neuronal: solo el icono del Cerebro y Dimitri;
   - los 31 ⏳ de `docs/auditoria-ux-2026-09-24.md`: aprobaciones por borrador, ARCHIVADAS con DESHACER, trampas de foco (`src/modal.js`), hoja de atajos «?», teclado, papelera de notas, tablet;
@@ -68,9 +68,9 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 
 **Siguiente, en este orden:**
 1. Lo que queda abierto en `docs/auditoria-estudio-calendario-2026-09-24.md`. Lo que más molesta:
-   - la agenda del teléfono (B5);
-   - lo que ya pasó en el calendario (B7);
-   - los iconos sin texto de la galería (A20 y A21).
+   - «Mejorar el prompt» lo pasa a inglés sin avisar (A2);
+   - la ventanita de la rutina: el título no cabe y hay botones escondidos (B16);
+   - los videos que terminan con el Estudio cerrado no avisan en la oficina (A41).
 2. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
    - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);

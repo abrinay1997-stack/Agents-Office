@@ -1794,6 +1794,35 @@
   /* B33: a draft that is really waiting, in amber; «pedirá tu OK» is only a note */
   .cv-wait { color: #8A6414; font-weight: 700; } body.dark .cv-wait { color: #E8B44A; }
   .cv-said b { color: var(--ink); font-weight: 700; }
+  /* B7: what already happened — a failed run in red, a run that never happened greyed and dashed, a skipped one struck through */
+  .cv-fail { color: #B3261E; margin-right: 4px; } body.dark .cv-fail { color: #FF8A7A; }
+  .cv-ev.done.err { border-left-color: #B3261E; background: color-mix(in srgb, #B3261E 8%, var(--cv-card)); }
+  .cv-ev.run { background: none; border: 1px dashed var(--hairline); border-left: 3px dashed color-mix(in srgb, var(--chip) 60%, transparent); }
+  .cv-ev.run .cv-ev-t, .cv-ev.run .cv-ev-m, .cv-ev.run .cv-ev-h { color: var(--grey); }
+  .cv-ev.run.skipped .cv-ev-t { text-decoration: line-through; }
+  .cv-ev.run.missed .cv-ev-h, .cv-ev.run.missed .cv-ev-m span:first-child { color: #8A6414; font-weight: 600; } body.dark .cv-ev.run.missed .cv-ev-h, body.dark .cv-ev.run.missed .cv-ev-m span:first-child { color: #E8B44A; }
+  /* B5: the agenda — on a phone, a list by day */
+  .cv-seg [data-v="agenda"] { display: none; }
+  .cv-grid.agenda { display: block; overflow-y: auto; padding: 4px 0 20px; }
+  .cv-ag-day { display: block; min-height: 0; overflow: visible; border-right: 0; padding: 10px 14px 12px; }
+  .cv-ag-day.wknd { background: none; }
+  .cv-ag-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--grey); font-weight: 700; }
+  .cv-ag-h b { font-family: var(--serif); font-weight: 400; font-size: 22px; letter-spacing: 0; color: var(--ink); min-width: 28px; }
+  .cv-ag-day.today .cv-ag-h b { background: var(--ink); color: var(--cream); border-radius: 99px; padding: 0 9px; font-size: 18px; } body.dark .cv-ag-day.today .cv-ag-h b { background: #FDFFF8; color: #151414; }
+  .cv-ag-day.today::after { display: none; }
+  .cv-ag-h .sp { flex: 1; } .cv-ag-h .cv-add { position: static; opacity: 1; width: 30px; height: 30px; font-size: 16px; display: inline-block; }
+  .cv-grid.agenda .cv-evs { gap: 6px; overflow: visible; }
+  .cv-grid.agenda .cv-ev { padding: 8px 10px; } .cv-grid.agenda .cv-ev-t { white-space: normal; font-size: 13px; line-height: 1.3; } .cv-grid.agenda .cv-ev-m { font-size: 12px; margin-top: 3px; }
+  @media (max-width: 760px) { /* the phone: views on one row, the dates on the next, the filters in one sliding row, the counts only when they say something */
+    .cv-seg [data-v="agenda"] { display: inline-block; }
+    .cv-seg { width: 100%; } .cv-seg button { flex: 1; padding: 7px 6px; }
+    .cv-nav { width: 100%; } #cvTitle { flex: 1; text-align: center; }
+    .cv-tools { padding: 8px 12px; gap: 8px; }
+    #cvChips { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; max-width: 100%; scrollbar-width: none; padding-bottom: 2px; } #cvChips::-webkit-scrollbar { display: none; }
+    .cv-chip { flex: none; } .cv-sep { flex: none; }
+    .cv-stats span:not(.amber):not(.cv-said) { display: none; }
+    .cv-wrap { padding: 0 8px 24px; }
+  }
   /* B19: «necesita mi visto bueno» only with REPETIR — display:flex beat the hidden attribute; the popover rows wrap instead of hiding a button */
   .cv-ok[hidden], .cv-cad[hidden] { display: none; }
   #cvPop .cv-row { flex-wrap: wrap; row-gap: 6px; } #cvPop .cv-model { max-width: 120px; }
@@ -1822,6 +1851,24 @@
   .st-all { font: inherit; background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; color: var(--ink); cursor: pointer; margin-left: 6px; }
   /* A44: on a phone, «Crear | Galería» — one pane at a time, the whole screen for it */
   .st-ptabs { display: none; }
+  /* A20 · A21: the star, one action in words, «⋯» — in a row at the top right; the menu floats above the grid */
+  .st-ov { flex-direction: row; align-items: center; gap: 6px; transform: translateY(-3px); }
+  .st-card.menu-on .st-ov { opacity: 1; transform: none; }
+  .st-ov .st-op { width: auto; padding: 0 12px 0 9px; gap: 6px; display: inline-flex; align-items: center; font-family: var(--ui); font-size: 12.5px; font-weight: 600; }
+  .st-ov .st-op .ic { width: 16px; height: 16px; }
+  .st-menu { position: fixed; z-index: 70; min-width: 210px; padding: 6px; border-radius: 12px; background: var(--cream); border: 1px solid var(--hairline); box-shadow: 0 16px 40px rgba(21,20,20,.22); display: flex; flex-direction: column; }
+  .st-menu[hidden] { display: none; }
+  .st-menu [role="menuitem"] { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font-family: var(--ui); font-size: 13px; text-align: left; cursor: pointer; text-decoration: none; }
+  .st-menu [role="menuitem"]:hover, .st-menu [role="menuitem"]:focus-visible { background: rgba(127,127,127,.12); outline: none; }
+  .st-menu .warn { color: #B3261E; } body.dark .st-menu .warn { color: #FF8A7A; }
+  .st-menu .ic { width: 17px; height: 17px; } .st-menu .ic.fill { color: #C8A438; }
+  .st-msep { height: 1px; background: var(--hairline); margin: 5px 4px; }
+  @media (hover: hover) { .st-menu .st-mi-t { display: none; } }
+  @media (hover: none) { /* a finger: only «⋯», always there, small, out of the picture's way */
+    .st-ov .st-oi:not(.st-more), .st-ov .st-op { display: none; }
+    .st-ov { opacity: 1; transform: none; }
+    .st-ov .st-more { width: 34px; height: 34px; }
+  }
   @media (max-width: 760px) {
     .st-ptabs { display: flex; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--hairline); flex: none; }
     .st-ptabs button { flex: 1; font-family: var(--ui); font-size: 13px; font-weight: 600; padding: 9px 10px; border-radius: 99px; border: 0; background: none; color: var(--grey); cursor: pointer; }
@@ -1910,7 +1957,7 @@
 <div id="calOv" role="dialog" aria-modal="true" aria-label="Calendario">
   <div class="cv-band">
     <div class="cv-brand">CALENDARIO <small id="cvCo"></small></div>
-    <div class="cv-seg"><button data-v="day">DÍA</button><button data-v="week">SEMANA</button><button data-v="month" class="on">MES</button></div>
+    <div class="cv-seg"><button data-v="agenda">AGENDA</button><button data-v="day">DÍA</button><button data-v="week">SEMANA</button><button data-v="month" class="on">MES</button></div>
     <div class="cv-nav"><button id="cvPrev" type="button" aria-label="Anterior" title="anterior (←)">‹</button><div id="cvTitle"></div><button id="cvNext" type="button" aria-label="Siguiente" title="siguiente (→)">›</button><button id="cvToday" title="hoy (T)">HOY</button></div>
     <div class="cv-sp"></div>
     <button id="cvKeys" type="button" aria-label="Atajos del calendario" title="atajos (?)">?</button>

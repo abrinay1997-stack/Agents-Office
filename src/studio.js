@@ -22,7 +22,7 @@ const I = { // line icons (stroke = currentColor)
   down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
   plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>', again: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
-  x: '<path d="M6 6l12 12M18 6 6 18"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
 };
 const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.st.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.st.' + k, JSON.stringify(v)); } catch {} } };
@@ -212,16 +212,27 @@ export function initStudio(ctx) {
   }
   function card(it) {
     const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
+    // V4.2 (audit A20 · A21): one action in words (Animar an image, Repetir a video), the star, and «⋯» for the rest — the
+    // six unlabelled icons are gone, the bin is last in the menu and apart. On a touch screen only «⋯» shows (st-mi-t: the
+    // star and the main action repeat in the menu there), so the picture is not covered.
+    const primary = !vid ? ['anim', 'Animar', 'Convertirla en video', 'vid'] : !it.upload ? ['again', 'Repetir', 'Otra vez, con el mismo prompt y ajustes', 'again'] : null;
+    const menu = [
+      ['fav', it.fav ? 'Quitar de favoritas' : 'Favorita', 'star', 'st-mi-t', it.fav ? 'fill' : ''],
+      ...(primary ? [[primary[0], primary[1], primary[3], 'st-mi-t']] : []),
+      ...(vid ? [] : [['ref', 'Usar de referencia', 'plus']]),
+      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []),
+      ['dl'], '-', ['del', 'Mover a la papelera', 'trash', 'warn']];
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
       <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}
         ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}${it.fav ? `<span class="st-favb" aria-label="Favorita">${svg('star', 'fill')}</span>` : ''}</button>
       <div class="st-ov" role="group" aria-label="Acciones">
-        <button type="button" data-a="fav" class="${it.fav ? 'on' : ''}" aria-label="${it.fav ? 'Quitar de favoritas' : 'Marcar favorita'}" title="${it.fav ? 'Quitar de favoritas' : 'Favorita'}">${svg('star', it.fav ? 'fill' : '')}</button>
-        <a href="${src(it)}" download aria-label="Descargar" title="Descargar">${svg('down')}</a>
-        ${vid ? '' : `<button type="button" data-a="anim" aria-label="Animar: convertirla en video" title="Animar (convertir en video)">${svg('vid')}</button><button type="button" data-a="ref" aria-label="Usar como referencia" title="Usar como referencia">${svg('plus')}</button>`}
-        ${it.upload ? '' : `<button type="button" data-a="again" aria-label="Repetir con el mismo prompt y ajustes" title="Repetir (mismo prompt y ajustes)">${svg('again')}</button>`}
-        <button type="button" data-a="del" aria-label="Mover a la papelera" title="Papelera">${svg('trash')}</button>
+        <button type="button" data-a="fav" class="st-oi${it.fav ? ' on' : ''}" aria-label="${it.fav ? 'Quitar de favoritas' : 'Marcar favorita'}" title="${it.fav ? 'Quitar de favoritas' : 'Favorita'}">${svg('star', it.fav ? 'fill' : '')}</button>
+        ${primary ? `<button type="button" data-a="${primary[0]}" class="st-op" title="${primary[2]}">${svg(primary[3])}<span>${primary[1]}</span></button>` : ''}
+        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más acciones">${svg('dots')}</button>
+      </div>
+      <div class="st-menu" role="menu" hidden>
+        ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
       <figcaption><span class="st-p">${esc(it.prompt)}</span><span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
     </figure>`;
@@ -455,8 +466,20 @@ export function initStudio(ctx) {
   }
 
   /* ---------- events ---------- */
+  function closeMenus(except) { el.querySelectorAll('.st-menu:not([hidden])').forEach(m => { if (m === except) return; m.hidden = true; m.closest('.st-card')?.classList.remove('menu-on'); m.closest('.st-card')?.querySelector('.st-more')?.setAttribute('aria-expanded', 'false'); }); }
+  function openMenu(card, focusFirst) {
+    const m = card.querySelector('.st-menu'), b = card.querySelector('.st-more'); if (!m || !b) return;
+    if (!m.hidden) { closeMenus(); b.focus(); return; }
+    closeMenus(); m.hidden = false; card.classList.add('menu-on'); b.setAttribute('aria-expanded', 'true');
+    const r = b.getBoundingClientRect(), W = m.offsetWidth, H = m.offsetHeight; // fixed: a card is overflow-hidden and a short banner would cut the menu
+    m.style.left = Math.max(8, Math.min(innerWidth - W - 8, r.right - W)) + 'px';
+    m.style.top = (r.bottom + 6 + H > innerHeight - 8 ? Math.max(8, r.top - H - 6) : r.bottom + 6) + 'px';
+    if (focusFirst) [...m.querySelectorAll('[role="menuitem"]')].find(x => x.offsetParent)?.focus(); // the first one shown (the star and the main action hide in it on a mouse screen)
+  }
+  $('.st-grid').addEventListener('scroll', () => closeMenus(), { passive: true });
   el.addEventListener('click', async e => {
     if (e.target.closest('.st-x')) return close();
+    if (!e.target.closest('.st-more')) closeMenus();
     if (!e.target.closest('.st-mwrap')) openList(false);
     const kb = e.target.closest('[data-kind]'); if (kb) return setKind(kb.dataset.kind);
     if (e.target.closest('.st-mpick')) return openList();
@@ -535,6 +558,7 @@ export function initStudio(ctx) {
     }
     if (e.target.closest('.st-thumb')) return light(shown().indexOf(it));
     const a = e.target.closest('[data-a]')?.dataset.a;
+    if (a === 'menu') { openMenu(cd, e.detail === 0); return; } // opened from the keyboard: the first item takes the focus
     if (a === 'fav') favMany([it.file]);
     if (a === 'del') trashMany([it.file]);
     if (a === 'again') reuse(it);
@@ -563,6 +587,13 @@ export function initStudio(ctx) {
   el.addEventListener('mouseout', e => { const t = e.target.closest('.st-card .st-thumb'); if (t && !t.contains(e.relatedTarget)) { const v = t.querySelector('video'); if (v) { v.pause(); } } });
   el.addEventListener('keydown', e => {
     e.stopPropagation();
+    const om = el.querySelector('.st-menu:not([hidden])');
+    if (om) { // the open «⋯» menu: arrows move, Esc and Tab close it, back on its button
+      const its = [...om.querySelectorAll('[role="menuitem"]')].filter(x => x.offsetParent), i = its.indexOf(document.activeElement), btn = om.closest('.st-card')?.querySelector('.st-more');
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); its[(i + (e.key === 'ArrowDown' ? 1 : -1) + its.length) % its.length]?.focus(); return; }
+      if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); its[e.key === 'Home' ? 0 : its.length - 1]?.focus(); return; }
+      if (e.key === 'Escape' || e.key === 'Tab') { if (e.key === 'Escape') e.preventDefault(); closeMenus(); btn?.focus(); if (e.key === 'Escape') return; }
+    }
     if (!$('.st-light').hidden) { if (e.key === 'Escape') closeLight(); else if (e.key === 'ArrowLeft' && lightIdx > 0) light(lightIdx - 1); else if (e.key === 'ArrowRight' && lightIdx < shown().length - 1) light(lightIdx + 1); return; }
     if (e.key === 'Escape') {
       if (!$('.st-mlist').hidden) { openList(false); $('.st-mpick').focus(); return; }

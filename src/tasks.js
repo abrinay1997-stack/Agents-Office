@@ -666,7 +666,7 @@ export function initTasks(ctx) {
     else say('Conexión recuperada.');
   }
   const fromServer = st => ({ id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
-    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, last: 'done' });
+    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
     if (!agentOf(st.agent) || st.archived || deleting.has(st.id)) return;
     let t = tasks.find(x => x.live && x.sid === st.id);
@@ -775,7 +775,8 @@ export function initTasks(ctx) {
 
         if (st.state === 'done') {
           const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: 'you', live: true, sid: st.id, state: 'done',
-            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, last: 'done' });
+            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, last: 'done',
+            routine: st.routine, when: st.when, due: st.due, late: !!st.late, approved: !!st.approved }); // V4.2: a routine's run stays one — the calendar marks the past by it
           if (st.team) syncTeam(t, st, true);
           deliver(t, true); // quiet: the file card stays in the chat's history; no «Listo» line, feed item or brain spark on every page load
         } else reconcile(st); // next, doing (the server may be running it), waiting for your OK, scheduled for a date — pick it up again
@@ -1381,7 +1382,7 @@ export function initTasks(ctx) {
   toast.addEventListener('pointerleave', () => { if (pendingUndo) { clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), 4000); } });
   toast.addEventListener('focusin', () => clearTimeout(toastTimer));
   addEventListener('pagehide', () => { if (pendingUndo) finishUndo(true); }); // closing the page carries the delete out (keepalive)
-  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
+  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), archivedTasks: () => archived.map(x => x.t), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
   return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
            findBySid: sid => tasks.find(t => t.live && t.sid === sid),
            handleChat, addTask, revise, rowHTML, showDept, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,

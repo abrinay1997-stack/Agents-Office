@@ -6,7 +6,7 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 - **Capturas** a 390, 1024 y 1512 px, en claro y en oscuro, en cada estado: selector de modelos, video, selección, visor ampliado, errores, mes, semana, día y las ventanitas.
 - **Lectura completa del código:** `src/studio.js`, `src/calendar.js`, `media.mjs` y las rutas de `serve.mjs`.
 
-**✅ = arreglado** en V4.2 (misma rama, 24 sep): las prioridades de «Por dónde empezar» y algunos vecinos que tocaban el mismo código — 9 del Estudio y 15 del Calendario. El resto sigue abierto. Cada punto va con su gravedad y con lo que se propone.
+**✅ = arreglado** en V4.2 (misma rama, 24 sep): las prioridades de «Por dónde empezar» y algunos vecinos que tocaban el mismo código — 9 del Estudio y 15 del Calendario —, y después la agenda del teléfono (B5), lo que ya pasó (B7) y las acciones de la galería (A20, A21). En total 28; el resto sigue abierto. Cada punto va con su gravedad y con lo que se propone.
 
 **Gravedad:**
 - **alta:** molesta a diario o puede hacer perder trabajo o dinero;
@@ -41,8 +41,8 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 17. ✅ **[alta] El orden de lectura está roto.** Las columnas de tipo «masonry» (CSS `columns`) ordenan de arriba abajo por columna: lo más nuevo baja por la primera columna y después salta a la segunda. De izquierda a derecha, las fechas quedan desordenadas. **Propuesta:** una cuadrícula que ordene por filas, o masonry con JavaScript por filas.
 18. ✅ **[alta] Cada 20 s la galería entera se redibuja** (`load` → `renderGrid` → `innerHTML`). Mientras algo se genera, cada 2,5 s. Resultado: los videos con la vista previa en marcha vuelven a empezar, se pierde el foco del teclado, parpadea y se descargan las miniaturas otra vez. **Propuesta:** redibujar solo las tarjetas nuevas o cambiadas.
 19. **[media] Las imágenes de un mismo pedido salen como tarjetas sueltas** («logo … (1/2)», «(2/2)»), a veces lejos una de otra. **Propuesta:** agrupar por pedido, con el prompt una sola vez, y «Elegir la mejor» o «Descartar el resto».
-20. **[media] Seis iconos sin texto sobre la imagen al pasar el cursor:** estrella, descargar, claqueta, más, repetir y papelera. La claqueta es «Animar» y el «+» es «Usar de referencia»: no se adivinan. Además, la papelera queda pegada a «Repetir». **Propuesta:** dos o tres acciones visibles con texto, el resto en un menú «⋯», y la papelera separada.
-21. **[media] En pantallas táctiles los seis iconos se ven siempre y tapan media imagen** (en el teléfono, la mitad derecha). **Propuesta:** un menú «⋯» de un toque.
+20. ✅ **[media] Seis iconos sin texto sobre la imagen al pasar el cursor:** estrella, descargar, claqueta, más, repetir y papelera. La claqueta es «Animar» y el «+» es «Usar de referencia»: no se adivinan. Además, la papelera queda pegada a «Repetir». **Propuesta:** dos o tres acciones visibles con texto, el resto en un menú «⋯», y la papelera separada.
+21. ✅ **[media] En pantallas táctiles los seis iconos se ven siempre y tapan media imagen** (en el teléfono, la mitad derecha). **Propuesta:** un menú «⋯» de un toque.
 22. **[media] Las pestañas no dicen cuántos hay:** Favoritas, Tuyas, De agentes, Videos y Subidas. **Propuesta:** el número en cada una, como en el panel de tareas.
 23. **[media] No hay forma de ordenar ni de agrupar por fecha** («Hoy», «Esta semana»), y todo carga de una vez. Con cientos de archivos se vuelve lento y cuesta encontrar algo. **Propuesta:** separadores por día y carga por partes.
 24. **[media] «Tuyas» deja fuera tus propias subidas**, y la búsqueda solo mira el prompt, el modelo y el nombre del archivo, no el agente ni la tarea. **Propuesta:** que «Tuyas» incluya las subidas o se llame «Generadas por ti»; que la búsqueda mire también el agente y la tarea.
@@ -97,9 +97,9 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 2. ✅ **[alta] La vista de semana no tiene horas.** Es una lista por día, sin eje de tiempo, así que no se ven los huecos ni los choques. **Propuesta:** columnas por día con franjas horarias, como en cualquier calendario.
 3. ✅ **[alta] En la vista de día, las tareas de la noche quedan cortadas** (19:13 y 20:10 se ven como una rayita dentro de su fila de 46 px). La vista no salta a la hora actual ni marca «ahora». **Propuesta:** filas que crezcan con su contenido, saltar a la hora actual y una línea roja de «ahora».
 4. ✅ **[alta] La vista de día solo va de 06:00 a 22:00, y lo de fuera se mete sin avisar en la primera o la última fila.** Una rutina a las 05:00 aparece en «06:00» y una tarea a las 23:30 en «22:00». **Propuesta:** 00–24, con scroll a la hora laboral.
-5. **[alta] En el teléfono, la semana no se puede leer:** siete columnas de 45 px, con los títulos partidos letra a letra («P… l… p… d…»). **Propuesta:** en el teléfono, una agenda (lista por días) en lugar de la semana y el mes.
+5. ✅ **[alta] En el teléfono, la semana no se puede leer:** siete columnas de 45 px, con los títulos partidos letra a letra («P… l… p… d…»). **Propuesta:** en el teléfono, una agenda (lista por días) en lugar de la semana y el mes.
 6. ✅ **[media] El número del día va abajo a la derecha,** y las tarjetas empiezan arriba sin fecha a la vista. En días llenos el número queda tapado. **Propuesta:** el número arriba a la izquierda, como en todos los calendarios.
-7. **[media] Lo que ya pasó no se ve:**
+7. ✅ **[media] Lo que ya pasó no se ve:**
     - las rutinas solo se proyectan hacia adelante, así que una ejecución que falló o se saltó en el pasado no aparece;
     - solo salen las tareas terminadas;
     - no se sabe si la rutina de ayer corrió.

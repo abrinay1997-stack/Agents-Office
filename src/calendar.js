@@ -42,7 +42,7 @@ const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['mon', 'Lunes'], ['tue', 'Martes'], ['wed', 'Miércoles'], ['thu', 'Jueves'], ['fri', 'Viernes'], ['sat', 'Sábados'], ['sun', 'Domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']];
 
 export function initCalendar(ctx) {
-  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
+  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
   const ov = document.getElementById('calOv'); if (!ov) return null;
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
@@ -54,7 +54,10 @@ export function initCalendar(ctx) {
   let dragging = null; // { kind: 't' | 'r', id, at } while a card is being dragged — nothing re-renders under it
 
   /* ---------- what is on each day ---------- */
+  const AGENDA_DAYS = 14;
+  const narrow = () => matchMedia('(max-width: 760px)').matches;
   function range() { // [from, to) of the days on screen
+    if (view === 'agenda') { const a = startOfDay(anchor); return { from: a, to: a + AGENDA_DAYS * DAY, days: AGENDA_DAYS }; }
     if (view === 'day') { const a = startOfDay(anchor); return { from: a, to: a + DAY, days: 1 }; }
     if (view === 'week') { const a = mondayOf(anchor); return { from: a, to: a + 7 * DAY, days: 7 }; }
     const d = new Date(anchor); d.setDate(1); const first = mondayOf(d.getTime()); const rows = Math.ceil((new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() + ((d.getDay() + 6) % 7)) / 7);
@@ -74,9 +77,24 @@ export function initCalendar(ctx) {
     if (showRoutines) for (const r of routines) {
       if (onlyRoutine && r.id !== onlyRoutine) continue; // paused ones stay, greyed: the timetable is not a guess
       if (!r.when || r.when.kind === 'minutes') continue; // a filming cadence is not a calendar
-      const startAt = Math.max(from - 1, Date.now() - 1); // routines are only projected forward: what has run is a done task already
+      const startAt = Math.max(from - 1, Date.now() - 1); // forward: the runs to come
       const occ = occurrences(r.when, startAt, to - 1, 800);
-      if (r.when.kind === 'hourly' && view === 'month') { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
+      // V4.2 (audit B7): backward, the runs that should have happened. A run that fired is its task (shown as done ✓ or failed ⚠);
+      // a skipped one says so; one with no task at all, after the routine's first run and while it was not paused, «no corrió».
+      if (from < Date.now() && showRoutines) {
+        const fired = [...tasks, ...(archivedTasks ? archivedTasks() : [])].filter(t => t.routine === r.id && t.due);
+        const first = fired.length ? Math.min(...fired.map(t => t.due)) : Infinity;
+        const past = occurrences(r.when, Math.max(from - 1, first - 1), Math.min(to, Date.now() - 10 * 60e3) - 1, 400);
+        const collapse = r.when.kind === 'hourly' && (view === 'month' || view === 'agenda'), seen = new Set();
+        for (const at of past) {
+          if (fired.some(t => Math.abs(t.due - at) < 90e3)) continue; // it ran: its task is on the calendar already
+          const skipped = (r.skips || []).includes(at);
+          if (r.paused && !skipped) continue; // paused: nobody knows since when — say nothing rather than guess
+          if (collapse) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); }
+          push({ kind: 'run', at, title: r.title, dept: r.dept, agent: r.agent, r, status: skipped ? 'skipped' : 'missed' });
+        }
+      }
+      if (r.when.kind === 'hourly' && (view === 'month' || view === 'agenda')) { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
       else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, paused: r.paused, skipped: (r.skips || []).includes(at) });
     }
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
@@ -87,15 +105,15 @@ export function initCalendar(ctx) {
   const av = (id) => { const a = agentOf(id); const c = a ? DEPTS[a.dept].chip : '#ccc'; return `<i class="cv-av" style="border-color:${c};background:${c}55" title="${attr(a ? a.name : id)}">${esc(a ? a.name[0] : '?')}</i>`; };
   function cardHTML(ev, line) {
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
-    const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'done' ? `listo ${hm(ev.at)}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
+    const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'run' ? `${hm(ev.at)} · ${ev.status === 'skipped' ? 'saltada' : 'no corrió'}` : ev.kind === 'done' ? `${ev.t?.error ? 'falló' : 'listo'} ${hm(ev.at)}${ev.t?.routine ? ' · rutina' : ''}${ev.t?.late ? ' · atrasada' : ''}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
     const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1 || (view !== 'month' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
-    const glyph = ev.kind === 'routine' ? '<span class="cv-rt">⏱</span>' : ev.kind === 'done' ? '<span class="cv-tick">✓</span>' : ev.kind === 'sched' ? '<span class="cv-rt">◷</span>' : ev.t?.team?.members?.length ? '<span class="cv-rt">⚑</span>' : '';
+    const glyph = ev.kind === 'routine' || ev.kind === 'run' ? '<span class="cv-rt">⏱</span>' : ev.kind === 'done' ? (ev.t?.error ? '<span class="cv-fail">⚠</span>' : '<span class="cv-tick">✓</span>') : ev.kind === 'sched' ? '<span class="cv-rt">◷</span>' : ev.t?.team?.members?.length ? '<span class="cv-rt">⚑</span>' : '';
     if (line) { // V4.2 (audit B1): the month is one line per event — two-line cards were cut in half by the cell
-      const short = ev.kind === 'routine' ? (ev.hourly ? `cada ${ev.r.when.every || 1} h` : hm(ev.at)) : ev.kind === 'done' || ev.kind === 'sched' ? hm(ev.at) : ev.kind === 'doing' ? 'ahora' : ev.kind === 'waiting' ? 'tu OK' : '';
-      return `<div class="cv-ev line ${ev.kind}${ev.paused ? ' paused' : ''}${ev.skipped ? ' skipped' : ''}${ev.t?.error ? ' err' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(time)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">${short ? `<span class="cv-ev-h">${esc(short)}</span>` : ''}<span class="cv-ev-t">${glyph}${esc(ev.title)}</span></div>`;
+      const short = ev.kind === 'run' ? (ev.status === 'skipped' ? 'saltada' : 'no corrió') : ev.kind === 'routine' ? (ev.hourly ? `cada ${ev.r.when.every || 1} h` : hm(ev.at)) : ev.kind === 'done' || ev.kind === 'sched' ? hm(ev.at) : ev.kind === 'doing' ? 'ahora' : ev.kind === 'waiting' ? 'tu OK' : '';
+      return `<div class="cv-ev line ${ev.kind}${ev.status ? ' ' + ev.status : ''}${ev.paused ? ' paused' : ''}${ev.skipped ? ' skipped' : ''}${ev.t?.error ? ' err' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(time)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">${short ? `<span class="cv-ev-h">${esc(short)}</span>` : ''}<span class="cv-ev-t">${glyph}${esc(ev.title)}</span></div>`;
     }
-    return `<div class="cv-ev ${ev.kind}${ev.paused ? ' paused' : ''}${ev.skipped ? ' skipped' : ''}${ev.t?.error ? ' err' : ''}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
+    return `<div class="cv-ev ${ev.kind}${ev.status ? ' ' + ev.status : ''}${ev.paused ? ' paused' : ''}${ev.skipped ? ' skipped' : ''}${ev.t?.error ? ' err' : ''}${ev.t?.team?.members?.length ? ' team' : ''}" data-ev="${id}" style="--chip:${chip}" title="${attr(ev.title)} · ${attr(a ? a.name : '')}${ev.status === 'missed' ? ' · no hay tarea de esta ejecución: la oficina estaba cerrada o la tarea se borró' : ''}${drag ? ' · arrastra para moverla' : ''}"${drag ? ' draggable="true"' : ''} role="button" tabindex="0">
       <div class="cv-ev-t">${glyph}${esc(ev.title)}</div>
       <div class="cv-ev-m"><span>${esc(time)}</span>${av(ev.agent)}</div></div>`;
   }
@@ -107,6 +125,7 @@ export function initCalendar(ctx) {
     E.title.innerHTML = view === 'day' ? `${a.getDate()} ${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : view === 'month' ? `${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : (() => { const s = new Date(from), e = new Date(to - DAY); return `${s.getDate()}–${e.getDate()} ${s.getMonth() === e.getMonth() ? MONTHS[e.getMonth()] : MONTHS[s.getMonth()].slice(0, 3) + ' – ' + e.getDate() + ' ' + MONTHS[e.getMonth()]} <small>${e.getFullYear()}</small>`; })();
     E.seg.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === view); b.setAttribute('aria-pressed', b.dataset.v === view); });
     E.dow.hidden = view !== 'month';
+    if (view === 'agenda') { const e = new Date(from + (days - 1) * DAY); E.title.innerHTML = `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 3).toLowerCase()} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3).toLowerCase()} <small>${e.getFullYear()}</small>`; }
     E.dow.innerHTML = view === 'day' ? `<div class="cv-dayname">${['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][a.getDay()]} ${a.getDate()} de ${MONTHS[a.getMonth()].toLowerCase()}</div>` : DOW.map(d => `<div>${d}</div>`).join('');
     E.grid.className = 'cv-grid ' + view; E.grid.style.setProperty('--rows', days / 7);
     let html = '', nDone = 0, nSched = 0, nRt = 0;
@@ -122,11 +141,13 @@ export function initCalendar(ctx) {
         <button class="cv-add" type="button" title="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}" aria-label="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}">+</button>
         <div class="cv-evs">${list.map(ev => cardHTML(ev, true)).join('')}</div></div>`;
     }
+    else if (view === 'agenda') { E.grid.className = 'cv-grid agenda'; html = agendaHTML(from, days, by); }
     else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', days); html = `<div class="cv-tg">${timeGrid(from, days, by)}</div>`; }
     const key = view + ':' + from;
     if (view !== 'month' && key === tgKey) tgScroll = E.grid.scrollTop;
     E.grid.innerHTML = html;
     if (view === 'month') fitMonth();
+    else if (view === 'agenda') { if (key !== tgKey) { tgKey = key; E.grid.scrollTop = 0; } else E.grid.scrollTop = tgScroll; }
     else if (key === tgKey) E.grid.scrollTop = tgScroll;
     else { // a new week or day opens on the working hours, or on «now» when today is on screen
       tgKey = key; const now = new Date(), onScreen = Date.now() >= from && Date.now() < from + days * DAY;
@@ -154,6 +175,18 @@ export function initCalendar(ctx) {
       }
     }
     return html;
+  }
+  function agendaHTML(from, days, by) { // V4.2 (audit B5): on a phone, a list by day — what is on, in order, readable; today always shows
+    const today = ymd(new Date()); let html = '', any = false;
+    for (let i = 0; i < days; i++) {
+      const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = by[k] || [];
+      if (!list.length && k !== today) continue; any = true;
+      const rel = k === today ? 'hoy' : ymd(new Date(Date.now() + DAY)) === k ? 'mañana' : '';
+      html += `<section class="cv-day cv-ag-day${k === today ? ' today' : ''}${ts < startOfDay(Date.now()) ? ' past' : ''}" data-day="${k}">
+        <div class="cv-ag-h"><b>${d.getDate()}</b><span>${DOW_LONG[d.getDay()]}${rel ? ` · ${rel}` : ''}</span><span class="sp"></span><button class="cv-add" type="button" aria-label="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}">+</button></div>
+        <div class="cv-evs">${list.length ? list.map(ev => cardHTML(ev)).join('') : '<div class="cv-empty">Nada para hoy.</div>'}</div></section>`;
+    }
+    return any ? html : '<div class="cv-empty">Nada en estos días.</div>';
   }
   function fitMonth() { // as many one-line events as the cell holds, then «+N más» — never a card cut in half
     for (const cell of E.grid.querySelectorAll('.cv-day')) {
@@ -472,8 +505,8 @@ export function initCalendar(ctx) {
   $('#cvClose').addEventListener('click', () => close());
   E.search.addEventListener('input', () => { q = E.search.value.trim().toLowerCase(); render(); });
   E.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { E.search.value = ''; q = ''; E.search.blur(); render(); } });
-  function step(n) { const d = new Date(anchor); if (view === 'day') d.setDate(d.getDate() + n); else if (view === 'week') d.setDate(d.getDate() + 7 * n); else { d.setDate(1); d.setMonth(d.getMonth() + n); } anchor = d.getTime(); closePop(); render(); }
-  ov.addEventListener('keydown', e => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); else if (e.key === 't' || e.key === 'T') { anchor = startOfDay(Date.now()); render(); } else if (e.key === 'w' || e.key === 'W') { view = 'week'; render(); } else if (e.key === 'm' || e.key === 'M') { view = 'month'; render(); } else if (e.key === 'd' || e.key === 'D') { view = 'day'; render(); } });
+  function step(n) { const d = new Date(anchor); if (view === 'agenda') d.setDate(d.getDate() + AGENDA_DAYS * n); else if (view === 'day') d.setDate(d.getDate() + n); else if (view === 'week') d.setDate(d.getDate() + 7 * n); else { d.setDate(1); d.setMonth(d.getMonth() + n); } anchor = d.getTime(); closePop(); render(); }
+  ov.addEventListener('keydown', e => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); else if (e.key === 't' || e.key === 'T') { anchor = startOfDay(Date.now()); render(); } else if (e.key === 'w' || e.key === 'W') { view = 'week'; render(); } else if (e.key === 'm' || e.key === 'M') { view = 'month'; render(); } else if (e.key === 'a' || e.key === 'A') { view = 'agenda'; render(); } else if (e.key === 'd' || e.key === 'D') { view = 'day'; render(); } });
   ov.addEventListener('dblclick', e => { const day = e.target.closest('.cv-day[data-day]'); if (!day || view !== 'month' || e.target.closest('.cv-ev')) return; anchor = new Date(day.dataset.day + 'T00:00:00').getTime(); view = 'day'; closePop(); render(); });
 
   let timer = null;
@@ -481,7 +514,7 @@ export function initCalendar(ctx) {
   let fitT = 0; addEventListener('resize', () => { if (!openNow || view !== 'month') return; clearTimeout(fitT); fitT = setTimeout(() => { if (E.pop.hidden && !dragging) render(); }, 150); }); // the month re-counts what fits
   $('#cvKeys')?.addEventListener('click', () => dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))); // V4.2 (audit B38): the keys live in the «?» sheet, not in the band
   ov.inert = true; // closed: out of Tab's reach
-  function open() { if (openNow) return; openNow = true; calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging) render(); }, 30000); }
+  function open() { if (openNow) return; openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging) render(); }, 30000); }
   function close() { if (!openNow) return; openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from
   function toggle() { openNow ? close() : open(); }
   function openAt(ts) { anchor = startOfDay(ts || Date.now()); if (view === 'month' && ts) view = 'week'; if (openNow) { closePop(); render(); } else open(); setTimeout(() => { const el = E.grid.querySelector(`.cv-day[data-day="${ymd(new Date(anchor))}"]`); if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); } }, 60); }
