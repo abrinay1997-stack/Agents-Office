@@ -39,7 +39,19 @@ function dateOpts(val) { // the next 120 days, «jue 25 sep», instead of the br
   return out.join('');
 }
 const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it sits in the «en marcha» row
-const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['mon', 'Lunes'], ['tue', 'Martes'], ['wed', 'Miércoles'], ['thu', 'Jueves'], ['fri', 'Viernes'], ['sat', 'Sábados'], ['sun', 'Domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']];
+const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['days', 'Algunos días…'], ['hourly', 'Cada hora, 9–5, días hábiles']];
+const DAY_KEYS = [[1, 'L', 'lunes'], [2, 'M', 'martes'], [3, 'X', 'miércoles'], [4, 'J', 'jueves'], [5, 'V', 'viernes'], [6, 'S', 'sábado'], [0, 'D', 'domingo']];
+// V4.2 (audit B23): «lun, mié, vie» could not be edited — it showed as fixed text; now the days are seven toggles
+const daysHTML = on => `<div class="cv-days" role="group" aria-label="Qué días">${DAY_KEYS.map(([n, l, name]) => `<button type="button" class="cv-dk${on.includes(n) ? ' on' : ''}" data-day-n="${n}" aria-pressed="${on.includes(n)}" aria-label="${name}" title="${name}">${l}</button>`).join('')}</div>`;
+const readDays = root => [...root.querySelectorAll('.cv-dk.on')].map(b => +b.dataset.dayN).sort((a, b) => a - b);
+function pickWhen(cad, at, days, start) { // the menu → a schedule; «Algunos días» with every weekday is «Cada día hábil», with all seven «Todos los días»
+  if (cad !== 'days') return fromPicker(cad, at, start);
+  const t = /^\d{2}:\d{2}$/.test(at || '') ? at : '09:00';
+  let w = days.length === 7 ? { kind: 'daily', at: t } : days.join() === '1,2,3,4,5' ? { kind: 'weekdays', at: t } : { kind: 'weekly', days: days.length ? days : [1], at: t };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(start || '')) w.start = start;
+  return w;
+}
+const cadOf = when => !when ? 'weekdays' : when.kind === 'weekly' ? 'days' : toPicker(when).custom ? 'custom' : toPicker(when).cadence;
 
 export function initCalendar(ctx) {
   const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
@@ -121,7 +133,7 @@ export function initCalendar(ctx) {
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
     const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'run' ? `${hm(ev.at)} · ${ev.status === 'skipped' ? 'saltada' : 'no corrió'}` : ev.kind === 'done' ? `${ev.t?.error ? 'falló' : 'listo'} ${hm(ev.at)}${ev.t?.routine ? ' · rutina' : ''}${ev.t?.late ? ' · atrasada' : ''}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
-    const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' && ev.r.when.days.length === 1 || (view !== 'month' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
+    const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' || (view !== 'month' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
     const glyph = ev.kind === 'routine' || ev.kind === 'run' ? '<span class="cv-rt">⏱</span>' : ev.kind === 'done' ? (ev.t?.error ? '<span class="cv-fail">⚠</span>' : '<span class="cv-tick">✓</span>') : ev.kind === 'sched' ? '<span class="cv-rt">◷</span>' : ev.t?.team?.members?.length ? '<span class="cv-rt">⚑</span>' : '';
     if (line) { // V4.2 (audit B1): the month is one line per event — two-line cards were cut in half by the cell
       const short = ev.kind === 'run' ? (ev.status === 'skipped' ? 'saltada' : 'no corrió') : ev.kind === 'routine' ? (ev.hourly ? `cada ${ev.r.when.every || 1} h` : hm(ev.at)) : ev.kind === 'done' || ev.kind === 'sched' ? hm(ev.at) : ev.kind === 'doing' ? 'ahora' : ev.kind === 'waiting' ? 'tu OK' : '';
@@ -260,18 +272,20 @@ export function initCalendar(ctx) {
       ${past ? '<div class="cv-note">Ese día ya pasó — elige hoy o un día posterior.</div>' : ''}
       <div class="cv-row"><select class="cv-dept">${DEPT_KEYS.map(k => `<option value="${k}"${k === lastDept ? ' selected' : ''}>${DEPTS[k].name}</option>`).join('')}</select><select class="cv-time" aria-label="Hora">${timeOpts(slotH !== null ? pad(slotH) + ':00' : dayKey === ymd(new Date()) ? pad(Math.min(23, new Date().getHours() + 1)) + ':00' : '09:00')}</select><select class="cv-model" title="Qué modelo la ejecuta" aria-label="Modelo"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}">${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>
       <textarea class="cv-text" rows="3" placeholder="¿Qué debe pasar ese día?" aria-label="Qué debe pasar ese día">${esc(createDraft)}</textarea>${createDraft.trim() ? '<div class="cv-note">Recuperé lo que estabas escribiendo. <button type="button" class="cv-lnk" data-act="forget">Borrarlo</button></div>' : ''}
-      <div class="cv-row"><button class="cv-rep" data-act="rep">REPETIR</button><select class="cv-cad" hidden aria-label="Cada cuándo">${CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><label class="cv-ok" hidden><input type="checkbox" class="cv-okc" checked> necesita mi visto bueno</label><span class="sp"></span><button class="cv-go" data-act="go"${past ? ' disabled' : ''}>AGREGAR</button></div>
+      <div class="cv-row"><button class="cv-rep" data-act="rep">REPETIR</button><select class="cv-cad" hidden aria-label="Cada cuándo">${CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><span class="cv-dwrap" hidden>${daysHTML([d.getDay()])}</span><label class="cv-ok" hidden><input type="checkbox" class="cv-okc" checked> necesita mi visto bueno</label><span class="sp"></span><button class="cv-go" data-act="go"${past ? ' disabled' : ''}>AGREGAR</button></div>
       <div class="cv-hint">${past ? '' : 'Una tarea para este día — se ejecuta a esa hora y aparece en el panel. REPETIR la convierte en rutina desde esta fecha.'}</div>`;
     E.pop.hidden = false; place(E.pop, cell);
-    const P = { dept: E.pop.querySelector('.cv-dept'), time: E.pop.querySelector('.cv-time'), model: E.pop.querySelector('.cv-model'), text: E.pop.querySelector('.cv-text'), rep: E.pop.querySelector('.cv-rep'), cad: E.pop.querySelector('.cv-cad'), ok: E.pop.querySelector('.cv-ok'), okc: E.pop.querySelector('.cv-okc'), go: E.pop.querySelector('.cv-go'), hint: E.pop.querySelector('.cv-hint') };
+    const P = { dwrap: E.pop.querySelector('.cv-dwrap'), dept: E.pop.querySelector('.cv-dept'), time: E.pop.querySelector('.cv-time'), model: E.pop.querySelector('.cv-model'), text: E.pop.querySelector('.cv-text'), rep: E.pop.querySelector('.cv-rep'), cad: E.pop.querySelector('.cv-cad'), ok: E.pop.querySelector('.cv-ok'), okc: E.pop.querySelector('.cv-okc'), go: E.pop.querySelector('.cv-go'), hint: E.pop.querySelector('.cv-hint') };
     let repeat = false;
     const hint = () => {
       if (past) return;
       const k = P.dept.value; lastDept = k;
-      if (repeat) { const w = fromPicker(P.cad.value, P.time.value, dayKey); const first = occurrences(w, Date.now(), Date.now() + 400 * DAY, 1)[0]; P.hint.innerHTML = RT_DEPTS.includes(k) ? `Rutina · <b>${esc(describe(w))}</b> · primera ejecución ${esc(first ? fmtDay(first) + ' ' + hm(first) : '—')}${isLive() ? ' · Claude elige al agente' : ''}` : `<span class="amber">${esc(rtRefuse(k))}</span>`; P.go.disabled = !RT_DEPTS.includes(k); }
+      if (P.dwrap) P.dwrap.hidden = !repeat || P.cad.value !== 'days';
+      if (repeat) { const w = pickWhen(P.cad.value, P.time.value, readDays(E.pop), dayKey); const first = occurrences(w, Date.now(), Date.now() + 400 * DAY, 1)[0]; P.hint.innerHTML = RT_DEPTS.includes(k) ? `Rutina · <b>${esc(describe(w))}</b> · primera ejecución ${esc(first ? fmtDay(first) + ' ' + hm(first) : '—')}${isLive() ? ' · Claude elige al agente' : ''}` : `<span class="amber">${esc(rtRefuse(k))}</span>`; P.go.disabled = !RT_DEPTS.includes(k); }
       else { P.hint.innerHTML = `Tarea para <b>${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)} · ${esc(P.time.value)}</b>${isLive() ? ' · Claude elige al agente ahora, la ejecuta después' : ''}`; P.go.disabled = false; }
     };
-    P.rep.addEventListener('click', () => { repeat = !repeat; P.rep.classList.toggle('on', repeat); P.cad.hidden = !repeat; P.ok.hidden = !repeat; if (repeat) { const dow = (d.getDay() + 6) % 7; P.cad.value = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][dow]; } hint(); });
+    P.rep.addEventListener('click', () => { repeat = !repeat; P.rep.classList.toggle('on', repeat); P.cad.hidden = !repeat; P.ok.hidden = !repeat; if (repeat) P.cad.value = 'days'; hint(); });
+    E.pop.querySelectorAll('.cv-dk').forEach(dk => dk.addEventListener('click', () => { dk.classList.toggle('on'); dk.setAttribute('aria-pressed', dk.classList.contains('on')); hint(); }));
     [P.dept, P.time, P.cad, P.model].forEach(el => { el.addEventListener('change', hint); el.addEventListener('keydown', e => e.stopPropagation()); });
     P.text.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } else if (e.key === 'Escape') closePop(); });
     P.go.addEventListener('click', go);
@@ -282,7 +296,7 @@ export function initCalendar(ctx) {
       const k = P.dept.value, model = P.model.value || undefined;
       P.go.disabled = true; P.hint.innerHTML = isLive() ? 'Claude está eligiendo al agente…' : 'Agregando…';
       let r;
-      if (repeat) r = await createRoutine({ dept: k, text, when: fromPicker(P.cad.value, P.time.value, dayKey), needsOk: P.okc.checked, model });
+      if (repeat) r = await createRoutine({ dept: k, text, when: pickWhen(P.cad.value, P.time.value, readDays(E.pop), dayKey), needsOk: P.okc.checked, model });
       else r = await create({ dept: k, text, at: new Date(`${dayKey}T${P.time.value || '09:00'}:00`).getTime(), model });
       if (!r || !r.ok) { P.hint.innerHTML = `<span class="amber">${esc((r && r.error) || 'No se pudo agregar.')}</span>`; P.go.disabled = false; return; }
       P.text.value = ''; createDraft = ''; closePop(); render();
@@ -341,8 +355,9 @@ export function initCalendar(ctx) {
       <div class="cv-pop-m">${av(r.agent)} ${esc(a ? a.name : r.agent)} · ${esc(r.desc || describe(r.when))}${r.paused ? ' · <span class="cv-paused">PAUSADA</span>' : ''}</div>
       <div class="cv-pop-p">Esta ejecución: ${esc(fmtLong(at))}${r.nextAt ? ` · próxima ${esc(untilText(r.nextAt))}` : ''}${r.lastAt ? ` · última vez ${esc(fmtDay(r.lastAt))}` : ''}</div>
       <label class="cv-lab">Qué debe pasar</label><textarea class="cv-text" rows="3">${esc(r.text || r.title)}</textarea>
-      <div class="cv-row"><select class="cv-cad" aria-label="Cada cuándo">${pk.custom ? `<option value="custom" selected>${esc(r.desc || describe(r.when))}</option>` : ''}${CADENCES.map(([v, l]) => `<option value="${v}"${v === pk.cadence ? ' selected' : ''}>${l}</option>`).join('')}</select><select class="cv-time" aria-label="Hora"${pk.cadence === 'hourly' ? ' disabled' : ''}>${timeOpts(pk.at)}</select>
+      <div class="cv-row"><select class="cv-cad" aria-label="Cada cuándo">${cadOf(r.when) === 'custom' ? `<option value="custom" selected>${esc(r.desc || describe(r.when))}</option>` : ''}${CADENCES.map(([v, l]) => `<option value="${v}"${v === cadOf(r.when) ? ' selected' : ''}>${l}</option>`).join('')}</select><select class="cv-time" aria-label="Hora"${pk.cadence === 'hourly' ? ' disabled' : ''}>${timeOpts(pk.at)}</select>
         <label class="cv-ok"><input type="checkbox" class="cv-okc"${r.needsOk ? ' checked' : ''}> necesita mi visto bueno</label></div>
+      <div class="cv-dwrap"${cadOf(r.when) === 'days' ? '' : ' hidden'}>${daysHTML(r.when.kind === 'weekly' ? r.when.days : [new Date(at).getDay()])}</div>
       <div class="cv-row"><button class="cv-go" type="button" data-act="save">GUARDAR</button><button class="cv-btn" type="button" data-act="run" title="La ejecuta ya, sin esperar a su hora">EJECUTAR AHORA</button></div>
       <div class="cv-row cv-row2">${at > Date.now() ? `<button class="cv-lk" type="button" data-act="${(r.skips || []).includes(at) ? 'unskip' : 'skip'}">${(r.skips || []).includes(at) ? 'No saltar esta' : 'Saltar solo esta'}</button>` : ''}<button class="cv-lk" type="button" data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'Reanudar' : 'Pausar'}</button><button class="cv-lk" type="button" data-act="only" title="El calendario muestra solo esta rutina">Ver solo esta</button><span class="sp"></span><button class="cv-lk warn" type="button" data-act="delete">Eliminar</button></div>
       <div class="cv-hint" aria-live="polite">${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno.' : 'Solo lee y reporta: no te espera.'}</div>`;
@@ -354,7 +369,8 @@ export function initCalendar(ctx) {
     place(E.pop, el);
     const P = { title: E.pop.querySelector('.cv-title'), text: E.pop.querySelector('.cv-text'), cad: E.pop.querySelector('.cv-cad'), time: E.pop.querySelector('.cv-time'), okc: E.pop.querySelector('.cv-okc') };
     E.pop.querySelectorAll('textarea, input, select').forEach(x => x.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePop(); }));
-    P.cad.addEventListener('change', () => { P.time.disabled = P.cad.value === 'hourly'; });
+    P.cad.addEventListener('change', () => { P.time.disabled = P.cad.value === 'hourly'; E.pop.querySelector('.cv-dwrap').hidden = P.cad.value !== 'days'; });
+    E.pop.querySelectorAll('.cv-dk').forEach(dk => dk.addEventListener('click', () => { dk.classList.toggle('on'); dk.setAttribute('aria-pressed', dk.classList.contains('on')); }));
     E.pop.querySelectorAll('[data-act]').forEach(b => { if (b.dataset.act === 'close') return; b.addEventListener('click', async () => {
       const act = b.dataset.act;
       if (act === 'only') { onlyRoutine = r.id; closePop(); render(); return; }
@@ -363,7 +379,7 @@ export function initCalendar(ctx) {
         if (title && title !== r.title) patch.title = title;
         if (text && text !== r.text) patch.text = text;
         if (P.okc.checked !== !!r.needsOk) patch.needsOk = P.okc.checked;
-        if (P.cad.value !== 'custom' && (P.cad.value !== pk.cadence || P.time.value !== pk.at)) patch.when = fromPicker(P.cad.value, P.time.value, r.when.start);
+        if (P.cad.value !== 'custom') { const w = pickWhen(P.cad.value, P.time.value, readDays(E.pop), r.when.start); if (JSON.stringify(w) !== JSON.stringify(r.when)) patch.when = w; }
         if (P.cad.value === 'custom' && P.time.value !== pk.at && r.when.at) patch.when = { ...r.when, at: P.time.value };
         if (!Object.keys(patch).length) { closePop(); return; }
         b.disabled = true; say('Guardando…');
@@ -434,12 +450,39 @@ export function initCalendar(ctx) {
     const when = { ...r.when }, said = [];
     if (hour !== null && r.when.at && +r.when.at.slice(0, 2) !== hour) { when.at = `${pad(hour)}:${r.when.at.slice(3)}`; said.push(`a las ${when.at}`); }
     const from = new Date(d.at).getDay(), to = target.getDay();
-    if (r.when.kind === 'weekly' && from !== to) { when.days = r.when.days.map(x => x === from ? to : x); said.push(`de los ${DOW_LONG[from]} a los ${DOW_LONG[to]}`); }
+    if (r.when.kind === 'weekly' && from !== to) { when.days = r.when.days.map(x => x === from ? to : x); const pl = w => /s$/.test(w) ? w : w + 's'; said.push(`de los ${pl(DOW_LONG[from])} a los ${pl(DOW_LONG[to])}`); }
     if (!said.length) { render(); return; }
-    if (!confirm(`¿Mover «${r.title}» ${said.join(' y ')}? Cambia todas sus ejecuciones.`)) { render(); return; }
-    const res = await updateRoutine(r.id, { when });
+    // V4.2 (audit B30): it used to change every run without asking which. Now: this run only (it is skipped and a one-off task
+    // takes its place, same desk, same text), or the routine itself from now on
+    const one = new Date(target); const oh = new Date(d.at); one.setHours(hour ?? oh.getHours(), oh.getMinutes(), 0, 0); // the routine's own minutes, as «siempre» keeps them
+    render();
+    const choice = await askMove(r, day, one.getTime(), said.join(' y '));
+    if (!choice) return;
+    let res;
+    if (choice === 'once') {
+      if (!(d.at > Date.now())) { E.stats.innerHTML = '<span class="amber">Esa ejecución ya pasó.</span>'; return; }
+      if (!(one.getTime() > Date.now())) { E.stats.innerHTML = '<span class="amber">A esa hora ya pasó — elige una por venir.</span>'; return; }
+      res = await create({ dept: r.dept, text: r.text || r.title, at: one.getTime(), model: r.model, agent: r.agent, title: r.title, needsOk: !!r.needsOk });
+      if (res && res.ok) await skipRun(r.id, d.at, true);
+    } else res = await updateRoutine(r.id, { when });
     render();
     if (!res || !res.ok) E.stats.innerHTML = `<span class="amber">No se pudo mover: ${esc((res && res.error) || 'error')}</span>`;
+    else E.stats.innerHTML = `<span class="cv-said">${choice === 'once' ? `Solo esta vez: ${esc(fmtLong(one.getTime()))}. Las demás siguen igual.` : `Movida ${esc(said.join(' y '))}, desde ahora.`}</span>`;
+  }
+  function askMove(r, cell, onceAt, saidText) { // a small question beside the day: this run, every run, or leave it
+    return new Promise(resolve => {
+      closePop(); popKind = 'move';
+      E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">MOVER LA RUTINA</span><span class="sp"></span><button class="cv-x" type="button" data-mv="no" aria-label="Cancelar">✕</button></div>
+        <div class="cv-pop-t">${esc(r.title)}</div>
+        <div class="cv-move"><button type="button" class="cv-go" data-mv="once">Solo esta vez <small>${esc(fmtLong(onceAt))}</small></button>
+        <button type="button" class="cv-btn" data-mv="all">Siempre <small>${esc(saidText)}, todas las ejecuciones</small></button>
+        <button type="button" class="cv-lk" data-mv="no">Dejarla como estaba</button></div>`;
+      E.pop.hidden = false; place(E.pop, cell);
+      const done = v => { E.pop.removeEventListener('click', on, true); closePop(); resolve(v); };
+      const on = e => { const b = e.target.closest('[data-mv]'); if (!b) return; e.stopPropagation(); done(b.dataset.mv === 'no' ? null : b.dataset.mv); };
+      E.pop.addEventListener('click', on, true);
+      E.pop.querySelector('[data-mv="once"]').focus();
+    });
   }
 
   /* ---------- V4.2 (audit B28): drag with a finger — a tablet or a phone had no HTML5 drag at all. Hold a card still

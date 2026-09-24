@@ -1794,6 +1794,17 @@
   /* B33: a draft that is really waiting, in amber; «pedirá tu OK» is only a note */
   .cv-wait { color: #8A6414; font-weight: 700; } body.dark .cv-wait { color: #E8B44A; }
   .cv-said b { color: var(--ink); font-weight: 700; }
+  /* B23: the days of a routine as seven toggles */
+  .cv-dwrap { display: block; } .cv-dwrap[hidden] { display: none; }
+  .cv-days { display: flex; gap: 4px; }
+  .cv-dk { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--hairline); background: none; color: var(--grey); font-family: var(--ui); font-size: 11.5px; font-weight: 700; cursor: pointer; }
+  .cv-dk.on { background: var(--ink); color: var(--cream); border-color: var(--ink); } body.dark .cv-dk.on { background: #FDFFF8; color: #151414; }
+  .cv-dk:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* B30: this run or every run */
+  .cv-move { display: flex; flex-direction: column; gap: 8px; }
+  .cv-move .cv-go, .cv-move .cv-btn { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 12px; }
+  .cv-move small { font-size: 11.5px; letter-spacing: 0; font-weight: 400; text-transform: none; opacity: .85; }
+  .cv-move .cv-lk { align-self: flex-start; }
   .cv-toast { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 46; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 24px); padding: 10px 10px 10px 16px; border-radius: 14px; background: #151414; color: #FDFFF8; font-size: 13px; box-shadow: 0 16px 40px rgba(0,0,0,.3); }
   .cv-toast[hidden] { display: none; }
   .cv-toast button { font-family: var(--ui); font-size: 11.5px; letter-spacing: .12em; font-weight: 700; padding: 7px 12px; border-radius: 99px; border: 0; background: #FDFFF8; color: #151414; cursor: pointer; flex: none; }
@@ -1861,6 +1872,23 @@
   .st-all { font: inherit; background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; color: var(--ink); cursor: pointer; margin-left: 6px; }
   /* A44: on a phone, «Crear | Galería» — one pane at a time, the whole screen for it */
   .st-ptabs { display: none; }
+  /* A23: the gallery in days */
+  .st-days { display: block; }
+  .st-day { font-family: var(--serif); font-weight: 400; font-size: 19px; margin: 18px 0 10px; display: flex; align-items: baseline; gap: 8px; }
+  .st-day:first-child { margin-top: 4px; } .st-day span { font-family: var(--ui); font-size: 12px; color: var(--grey); font-variant-numeric: tabular-nums; }
+  /* A19: one request's pictures in one card */
+  .st-gthumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #151414; }
+  .st-gt { border: 0; padding: 0; background: #151414; cursor: zoom-in; position: relative; display: block; overflow: hidden; aspect-ratio: 1 / 1; }
+  .st-gt img, .st-gt video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .st-gt:hover img, .st-gt:focus-visible img { opacity: .88; } .st-gt:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .st-gmore { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.55); color: #fff; font-family: var(--serif); font-size: 26px; }
+  .st-gacts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .st-gacts button { display: inline-flex; align-items: center; gap: 5px; font-family: var(--ui); font-size: 11.5px; font-weight: 600; padding: 5px 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+  .st-gacts button:hover { border-color: var(--ink); } .st-gacts .ic { width: 14px; height: 14px; }
+  .st-group .st-meta b { color: var(--ink); font-weight: 600; }
+  /* A25: an agent's picture says which task it was for */
+  .st-tchip { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 4px 0 2px; padding: 2px 9px; border-radius: 99px; border: 1px solid var(--hairline); background: none; font-family: var(--ui); font-size: 11.5px; color: var(--ink); cursor: pointer; text-align: left; }
+  button.st-tchip:hover { border-color: var(--ink); } .st-tchip-s { cursor: default; }
   /* A39 · A40: an estimated bar and «suele tardar»; the cancel question in the tile */
   .st-jbar { display: block; width: 70%; height: 4px; border-radius: 99px; background: rgba(127,127,127,.22); overflow: hidden; margin: 8px auto 0; }
   .st-jbar i { display: block; height: 100%; background: #C43E00; border-radius: 99px; transition: width 2.4s linear; }

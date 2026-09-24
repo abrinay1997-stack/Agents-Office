@@ -860,13 +860,14 @@ const server = http.createServer(async (req, res) => {
       const out = editRoutine(r.id, patch); return json(res, 200, { ok: true, routine: out, routines: loadRoutines() });
     }
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
-      const { dept, text, model, effort, team, at } = await body(req);
+      const { dept, text, model, effort, team, at, agent: fixedAgent, title: fixedTitle, needsOk: fixedOk } = await body(req);
       if (!DEPTS[dept] || dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
       if (!text || !String(text).trim()) return json(res, 400, { error: 'la tarea está vacía' });
       const dueAt = at ? (typeof at === 'number' ? at : Date.parse(at)) : null; // V3.2.1: a task for a date
       if (at && !(dueAt > 0)) return json(res, 400, { error: 'at must be a time (ms or ISO)' });
       if (dueAt && dueAt < Date.now() - 60000) return json(res, 400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
-      const r = await route(dept, String(text).trim());
+      const fixed = fixedAgent && AGENTS.find(a => a.id === fixedAgent && a.department === dept); // V4.2 (audit B30): one run of a routine, moved — its own desk, no routing
+      const r = fixed ? { agent: fixed.id, title: String(fixedTitle || text).slice(0, 90), plan: [], eta: 15, why: 'una ejecución de rutina, movida', needsOk: typeof fixedOk === 'boolean' ? fixedOk : routines.guessNeedsOk(text) } : await route(dept, String(text).trim());
       const asTeam = TEAMS.enabled && (team === true || teams.intent(text)); // V3.2 (16 Sep): TEAM in the bar, or "as a team" in the sentence → the lead owns it and splits it
       const task = { id: nid(), dept, agent: asTeam ? leadOf(dept).id : r.agent, title: r.title, text: String(text).trim(), plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, state: 'next', addedAt: Date.now(), by: 'you', model: normModel(model) || undefined, effort: normEffort(effort) || undefined, // model/effort: set on this task (beats routine, agent, office)
         team: asTeam ? { lead: leadOf(dept).id, asked: team === true ? 'you' : 'text' } : undefined };

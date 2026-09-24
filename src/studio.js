@@ -200,7 +200,7 @@ export function initStudio(ctx) {
   function shown() {
     const w = q.toLowerCase();
     return items.filter(it => (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && it.by === 'agent') || (filter === 'you' && it.by !== 'agent' && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload))
-      && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file}`.toLowerCase().includes(w)));
+      && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file} ${it.by === 'agent' ? agentName(it.agent) || '' : ''} ${it.task && ctx.taskTitle ? ctx.taskTitle(it.task) : ''}`.toLowerCase().includes(w)));
   }
   const tileJobs = () => jobs.filter(j => j.state === 'queued' || j.state === 'running' || (j.state === 'failed' && Date.now() - (j.doneAt || j.at) < 3 * 864e5));
   // V4.2 (audit A39): how long this model usually takes — the median of its last finished jobs, else a sensible guess
@@ -246,13 +246,23 @@ export function initStudio(ctx) {
       <div class="st-menu" role="menu" hidden>
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span><span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
+      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
     </figure>`;
   }
   // V4.2 (audit A17 · A18): the gallery is updated in place. A card whose content did not change keeps its node — a playing
   // preview, the keyboard focus and the scroll survive the 20-second refresh and the 2.5-second job ticks. The cards go into
   // columns in order, each to the shortest column, so the newest read left to right (CSS columns filled top to bottom).
   const nodes = new Map(); let layoutSig = '', lastWant = [];
+  const expanded = new Set(); // jobs the owner split into single cards
+  const dayKey = ts => { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+  function dayName(ts) { const d = new Date(ts), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); if (d.toDateString() === n.toDateString()) return 'Hoy'; if (d.toDateString() === y.toDateString()) return 'Ayer'; const s = d.toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long', ...(d.getFullYear() !== n.getFullYear() ? { year: 'numeric' } : {}) }); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function groupCard(its) { // V4.2 (audit A19): «(1/2)» and «(2/2)» of one request, one card: the prompt once, the pictures side by side
+    const f = its[0], n = its.length, vid = f.kind === 'video';
+    const thumbs = its.slice(0, 4).map((it, i) => `<button type="button" class="st-gt" data-gf="${esc(it.file)}" aria-label="Ver ${i + 1} de ${n} en grande"${ratioOf(it) ? ` style="aspect-ratio:${ratioOf(it)}"` : ''}>${isVid(it.file) ? `<video src="${src(it)}" muted preload="metadata" playsinline></video>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}${it.fav ? `<span class="st-favb">${svg('star', 'fill')}</span>` : ''}${i === 3 && n > 4 ? `<span class="st-gmore">+${n - 4}</span>` : ''}</button>`).join('');
+    return `<figure class="st-card st-group" data-g="${esc(f.job)}"><div class="st-gthumbs n${Math.min(n, 4)}">${thumbs}</div>
+      <figcaption><span class="st-p">${esc(f.prompt)}</span>${f.task && f.by === 'agent' ? `<span class="st-tchip st-tchip-s">para: ${esc((ctx.taskTitle && ctx.taskTitle(f.task)) || 'su tarea')}</span>` : ''}<span class="st-meta"><b>${n} ${vid ? 'videos' : 'imágenes'} de un pedido</b> · ${esc(f.by === 'agent' ? (agentName(f.agent) || 'agente') : 'tú')}${f.modelName ? ' · ' + esc(f.modelName) : ''} · ${esc(when(f.at))}</span>
+      <span class="st-gacts"><button type="button" data-ga="split">Ver por separado</button><button type="button" data-ga="zip">${svg('down')} Descargar las ${n}</button></span></figcaption></figure>`;
+  }
   const aspect = it => { if (it.w && it.h) return it.h / it.w; const r = String(it.ratio || (it.s && it.s.aspectRatio) || '').split(':').map(Number); return r.length === 2 && r[0] && r[1] ? r[1] / r[0] : 1; };
   const colCount = () => { const w = $('.st-grid').clientWidth - 36; return w > 0 ? Math.max(1, Math.floor((w + 14) / (230 + 14))) : 0; };
   function when(ts) { const d = new Date(ts), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; return d.toDateString() === n.toDateString() ? `hoy ${t}` : d.toDateString() === y.toDateString() ? `ayer ${t}` : d.toLocaleDateString('es', { day: 'numeric', month: 'short', ...(d.getFullYear() !== n.getFullYear() ? { year: 'numeric' } : {}) }); }
@@ -266,8 +276,15 @@ export function initStudio(ctx) {
     const empty = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
       : !tj.length && !list.length ? `<div class="st-empty">${items.length ? `Nada con este filtro. <button type="button" class="st-all">Ver todo</button>` : 'Aún no hay nada. Genera tu primera imagen con el compositor, sube una foto tuya (Subir), o pídesela a un agente de Marketing.'}</div>` : '';
     if (empty) { if (G.innerHTML !== empty) G.innerHTML = empty; nodes.clear(); layoutSig = ''; lastWant = []; return; }
-    let root = G.querySelector(':scope > .st-cols'); if (!root) { G.innerHTML = '<div class="st-cols"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
-    const want = [...tj.map(j => ['j:' + j.id, jobTile(j), aspect(j)]), ...list.map(it => ['f:' + it.file, card(it), aspect(it)])];
+    let root = G.querySelector(':scope > .st-days'); if (!root) { G.innerHTML = '<div class="st-days"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
+    const flat = selecting || sel.size || picking, byJob = new Map();
+    if (!flat) for (const it of list) if (it.job && !expanded.has(it.job)) byJob.set(it.job, [...(byJob.get(it.job) || []), it]);
+    const want = tj.map(j => ['j:' + j.id, jobTile(j), aspect(j), dayKey(Date.now()), 1, Date.now()]), placed = new Set();
+    for (const it of list) {
+      const g = !flat && it.job && byJob.get(it.job);
+      if (g && g.length > 1) { if (placed.has(it.job)) continue; placed.add(it.job); const a = aspect(g[0]); want.push(['g:' + it.job, groupCard(g), (g.length === 2 ? a / 2 : a) + 0.15, dayKey(it.at), g.length, it.at]); continue; }
+      want.push(['f:' + it.file, card(it), aspect(it), dayKey(it.at), 1, it.at]);
+    }
     const keep = new Set(), active_ = document.activeElement;
     for (const [k, html] of want) {
       keep.add(k); const n = nodes.get(k); if (n && n.html === html) continue;
@@ -281,13 +298,19 @@ export function initStudio(ctx) {
   }
   function layout(root, force) {
     const n = colCount(); if (!n) return; // hidden (a phone on the Crear tab): laid out when it shows
-    const sig = n + '|' + lastWant.map(w => w[0]).join(',');
+    const sig = n + '|' + lastWant.map(w => w[3] + ':' + w[0]).join(',');
     if (!force && sig === layoutSig) return; layoutSig = sig;
-    const cols = [...Array(n)].map(() => { const c = document.createElement('div'); c.className = 'st-col'; return c; }), h = new Array(n).fill(0);
-    for (const [k, , a] of lastWant) { const j = h.indexOf(Math.min(...h)); cols[j].appendChild(nodes.get(k).el); h[j] += a + 0.3; } // 0.3: the caption under each picture
-    root.style.setProperty('--cols', n); root.replaceChildren(...cols);
+    const days = []; for (const w of lastWant) { let d = days.find(x => x.k === w[3]); if (!d) days.push(d = { k: w[3], at: w[5], n: 0, list: [] }); d.list.push(w); d.n += w[4]; }
+    const out = [];
+    for (const d of days) { // V4.2 (audit A23): a heading per day, the day's cards in their own columns
+      const hd = document.createElement('h3'); hd.className = 'st-day'; hd.innerHTML = `${esc(dayName(d.at))} <span>${d.n}</span>`;
+      const cols = [...Array(n)].map(() => { const c = document.createElement('div'); c.className = 'st-col'; return c; }), h = new Array(n).fill(0);
+      for (const [k, , a] of d.list) { const j = h.indexOf(Math.min(...h)); cols[j].appendChild(nodes.get(k).el); h[j] += a + 0.3; } // 0.3: the caption under each picture
+      const box = document.createElement('div'); box.className = 'st-cols'; box.replaceChildren(...cols); out.push(hd, box);
+    }
+    root.replaceChildren(...out);
   }
-  function relayout() { const root = $('.st-grid > .st-cols'); if (root) layout(root); }
+  function relayout() { const root = $('.st-grid > .st-days'); if (root) layout(root); }
   if (window.ResizeObserver) new ResizeObserver(() => { if (!el.hidden) relayout(); }).observe($('.st-grid'));
   function renderSel() {
     $('.st-selbar').hidden = !(selecting || sel.size); $('.st-seln').textContent = sel.size ? `${sel.size} ${sel.size === 1 ? 'seleccionada' : 'seleccionadas'}` : 'Toca las que quieras';
@@ -568,6 +591,14 @@ export function initStudio(ctx) {
       } catch (err) { say(err.message, true); }
       renderGrid(); watch(); return;
     }
+    const gc = e.target.closest('.st-group'); if (gc) {
+      const its = items.filter(x => x.job === gc.dataset.g);
+      const gt = e.target.closest('.st-gt'); if (gt) { const it = itemOf(gt.dataset.gf); if (it) light(shown().indexOf(it)); return; }
+      const ga = e.target.closest('[data-ga]')?.dataset.ga;
+      if (ga === 'split') { expanded.add(gc.dataset.g); renderGrid(); el.querySelector(`.st-card[data-f="${CSS.escape(its[0]?.file || '')}"] .st-thumb`)?.focus(); }
+      if (ga === 'zip') zip(its.map(x => x.file));
+      return;
+    }
     const cd = e.target.closest('.st-card[data-f]'); if (!cd) return;
     const it = itemOf(cd.dataset.f); if (!it) return;
     if (picking) { // choosing a file for a slot
@@ -592,6 +623,7 @@ export function initStudio(ctx) {
     if (a === 'anim') animate(it);
     if (a === 'ref') useAsRef(it);
     if (a === 'vary') vary(it);
+    if (a === 'task' && it.task && ctx.openTask) { close(); ctx.openTask(it.task); } // V4.2 (audit A25)
   });
   el.addEventListener('change', e => {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
