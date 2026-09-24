@@ -115,8 +115,11 @@ const CHAINS = [
 applyTasks({ POOL, KEYS, CHAINS, SEGMENTS, AGENTS }); // INDUSTRY PROFILE (12 Sep 2026): per-industry demo file; no-op otherwise
 function fill(s, v) { return s.replace('{co}', v.co).replace('{n}', v.n).replace('{segment}', v.segment); }
 function vars() { return { co: rnd(P.co), n: ri(6, 40), segment: rnd(SEGMENTS) }; }
-function timeStr(ts) {
-  return new Date(ts).toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' });
+function timeStr(ts) { // today: «7:13 p. m.» · yesterday: «ayer 7:13 p. m.» · before: «lun 22 sep, 7:13 p. m.» (an old card no longer looks like today's)
+  const d = new Date(ts), t = d.toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' });
+  const day = x => { const y = new Date(x); y.setHours(0, 0, 0, 0); return y.getTime(); };
+  const k = Math.round((day(Date.now()) - day(ts)) / 864e5);
+  return k <= 0 ? t : k === 1 ? 'ayer ' + t : d.toLocaleDateString('es-PA', { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + t;
 }
 function span(ms) { // "4 min" · "1 h 12 min" · "3 h"
   const m = Math.max(0, Math.round(ms / 60000));
@@ -130,15 +133,17 @@ const STATE_LABEL = { next: 'Pendientes', doing: 'En curso', waiting: 'En espera
 
 export function initTasks(ctx) {
   const { R, deptRT, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent,
-          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage, resolveApproval: onResolveDemo, reframe } = ctx;
+          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage, resolveApproval: onResolveDemo, reframe, decided, settle } = ctx;
   // LIVE mode (served by serve.mjs): the bar routes through Claude, agents produce real
   // deliverables saved as notes in the brain, and tasks persist. Opened as a file it stays demo.
   let live = false;
   const API = '/api';
-  const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+  const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48); // «Panadería» → «panaderia», not «panader-a»
 
   const tasks = [];
   let seq = 1;
+  const archived = []; // V4.1: { t, at, trashed } newest first — what ARCHIVADAS shows (live: the server's archived tasks too)
+  const deleting = new Set(); // sids deleted on this page whose DELETE waits behind DESHACER: the poll must not bring them back
   // V3.5 routines. Live: the server's list (polled). Demo: session-only, fired by this tick.
   const routines = []; let rseq = 1, polling = false, railAgent = null, railExp = false;
   const RT_DEPTS = ['emails', 'fin', 'sales', 'marketing', 'ops', 'delivery']; // every department has routines (24 Sep 2026)
@@ -210,7 +215,7 @@ export function initTasks(ctx) {
     }
     prune(t.dept);
   }
-  function deliver(t) {
+  function deliver(t, quiet) {
     const a = agentOf(t.agent);
     if (t.piece) { // V3.2 (16 Sep): a teammate's piece — in their own chat, then it walks back to the lead
       const L = agentOf(t.leadId), parent = tasks.find(x => x.id === t.parent);
@@ -221,7 +226,8 @@ export function initTasks(ctx) {
       return;
     }
     chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md',
-      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)} · clic para verlo`, content: t.result });
+      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)} · clic para verlo`, content: t.result, sid: t.sid });
+    if (quiet) return;
     if (!t.error) chatPush(t.agent, { who: 'agent', text: `Listo — "${t.title}"${t.routine ? ` (rutina, ${t.when}${t.late ? ', se atrasó' : ''})` : ''} está lista arriba${t.team?.members?.length ? ` — el equipo fuimos ${membersText(t)} y yo` : ''}${t.read && t.read.length ? ` (leí ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Usé ${t.used.join(', ')}` : ''}. Di "revisa: …" y la cambio.` });
     feedPush(R[t.agent], '📄', `Entregada: ${t.title}`);
     if (brain && t.read) for (const n of t.read.slice(0, 2)) brain.readNote(t.agent, n);
@@ -316,6 +322,12 @@ export function initTasks(ctx) {
     P_.search.addEventListener('input', () => { query = P_.search.value.trim(); render(true); });
     P_.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { P_.search.value = ''; query = ''; render(true); P_.search.blur(); } });
     P_.clear.addEventListener('click', () => clearDone());
+    P_.rows.addEventListener('click', e => {
+      const m = e.target.closest('.tp-more'); if (m) { limit += PAGE; render(true); return; }
+      const c = e.target.closest('.tp-lnk[data-clr]'); if (!c) return;
+      if (c.dataset.clr === 'q') { P_.search.value = ''; query = ''; } else filter = 'all';
+      limit = PAGE; render(true);
+    });
     P_.rows.addEventListener('keydown', e => { if (e.target.closest('button')) return; const r = e.target.closest('.tp-row[role="button"]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); r.click(); } });
   }
   // V3.7: the box grows with the text (one line at rest, six at most) and the big editor mirrors it
@@ -434,6 +446,9 @@ export function initTasks(ctx) {
   B_.add.addEventListener('click', submit);
   B_.close.addEventListener('click', closeBig);
   big.addEventListener('click', (e) => { if (e.target === big) closeBig(); });
+  const SEE_SCHED = '<button type="button" class="tp-lnk" data-f="sched">Ver en PROGRAMADAS</button>';
+  function flashChip(f) { const c = P_.chips.querySelector(`.tp-chip[data-f="${f}"]`); if (c) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } }
+  P_.hint.addEventListener('click', e => { const b = e.target.closest('.tp-lnk[data-f]'); if (b) { filter = b.dataset.f; limit = PAGE; render(true); } });
   function say(html, cls) { P_.hint.innerHTML = html; P_.hint.className = 'tp-hint on' + (cls ? ' ' + cls : ''); grow(); if (big.classList.contains('on')) mirrorHint(); }
   async function submit() {
     let title = P_.input.value.trim().replace(/[.!]+$/, '');
@@ -519,9 +534,9 @@ export function initTasks(ctx) {
         const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
         setRoutines([...routines.filter(x => x.id !== j.routine.id), j.routine]);
         const a = agentOf(j.routine.agent);
-        say(`Rutina programada — <b>${a.name}</b> · ${esc(j.routine.desc)} · próxima ${esc(untilText(j.routine.nextAt))}${j.routine.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${j.guessed ? ` · "${esc(j.guessed)}" taken as ${j.routine.when.at}` : ''}`);
-        P_.input.value = ''; resetModel(); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${j.routine.title} (${j.routine.desc})`);
-        filter = 'sched'; render(true); poll();
+        say(`Rutina programada — <b>${a.name}</b> · ${esc(j.routine.desc)} · próxima ${esc(untilText(j.routine.nextAt))}${j.routine.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${j.guessed ? ` · tomé «${esc(j.guessed)}» como las ${j.routine.when.at}` : ''} ${SEE_SCHED}`);
+        P_.input.value = ''; resetModel(); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${j.routine.title} (${j.routine.desc})`);
+        render(true); flashChip('sched'); poll();
       } catch (e) { say(`No se pudo programar (${esc(e.message)}).`, 'err'); }
       P_.input.disabled = false; P_.add.disabled = false; P_.input.blur();
       return;
@@ -529,8 +544,8 @@ export function initTasks(ctx) {
     const { agent: a } = route(k, text);
     const r = addRoutine(k, a.id, text, rt.when, rt.picker ? P_.okc.checked : guessOk(text));
     r.model = chosenModel() || undefined; r.effort = effortSend(); resetModel();
-    P_.input.value = ''; say(`Rutina programada — <b>${a.name}</b> · ${esc(r.desc)} · próxima ${esc(untilText(r.nextAt))}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}`);
-    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${r.title} (${r.desc})`); filter = 'sched'; render(true); P_.input.blur(); setTimeout(updateHint, 5000);
+    P_.input.value = ''; say(`Rutina programada — <b>${a.name}</b> · ${esc(r.desc)} · próxima ${esc(untilText(r.nextAt))}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'} ${SEE_SCHED}`);
+    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${r.title} (${r.desc})`); render(true); flashChip('sched'); P_.input.blur(); setTimeout(updateHint, 5000);
   }
   function guessOk(text) { const t = text.toLowerCase(); return /\b(send|reply|chase|nudge|remind|post|publish|pay|book|draft|message|email)\b/.test(t) || !/\b(list|summari[sz]e|triage|tell me|what|report|match|reconcile|qualify|review|check|read|find|flag|count)\b/.test(t); }
   function addRoutine(k, agentId, text, when, needsOk) { // demo: session-only
@@ -600,8 +615,9 @@ export function initTasks(ctx) {
       if (Array.isArray(rl.routines)) setRoutines(rl.routines);
       if (Array.isArray(tl)) {
         for (const st of tl) reconcile(st);
-        const keep = new Set(tl.filter(x => !x.archived).map(x => x.id));
-        for (let i = tasks.length - 1; i >= 0; i--) { const t = tasks[i]; if (t.live && t.sid && !t.piece && !keep.has(t.sid) && t.state !== 'doing') { tasks.splice(i, 1); dirty = true; if (detail.current() === t) detail.close(); } }
+        const keep = new Set(tl.filter(x => !x.archived).map(x => x.id)), arch = new Map(tl.filter(x => x.archived).map(x => [x.id, x]));
+        for (let i = tasks.length - 1; i >= 0; i--) { const t = tasks[i]; if (t.live && t.sid && !t.piece && !keep.has(t.sid) && t.state !== 'doing') { tasks.splice(i, 1); dirty = true; if (detail.current() === t) detail.close(); if (arch.has(t.sid) && !archived.some(x => x.t.sid === t.sid)) archived.unshift({ t, at: arch.get(t.sid).archivedAt || Date.now() }); } }
+        for (let i = archived.length - 1; i >= 0; i--) { const sid = archived[i].t.sid; if (sid && keep.has(sid)) { archived.splice(i, 1); dirty = true; } }
         for (const st of tl) { const t = tasks.find(x => x.live && x.sid === st.id); if (t && (t.state === 'next' || t.state === 'scheduled') && st.state === t.state && (t.agent !== st.agent || t.title !== st.title)) { Object.assign(t, { agent: st.agent, dept: agentOf(st.agent).dept, title: st.title, text: st.text }); dirty = true; } }
       }
       if (calendar) calendar.refresh();
@@ -619,8 +635,10 @@ export function initTasks(ctx) {
     if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
     else say('Conexión recuperada.');
   }
+  const fromServer = st => ({ id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
+    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, last: 'done' });
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
-    if (!agentOf(st.agent) || st.archived) return;
+    if (!agentOf(st.agent) || st.archived || deleting.has(st.id)) return;
     let t = tasks.find(x => x.live && x.sid === st.id);
     if (!t) {
       t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: st.by === 'routine' ? 'routine' : 'you', live: true, srv: true, sid: st.id,
@@ -680,27 +698,26 @@ export function initTasks(ctx) {
     }
   }
   function askApproval(t) { // D1: the draft lands in the chat with APPROVE / REJECT and the agent stands and waves
-    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `borrador · en espera de tu visto bueno · ${timeStr(t.changedAt)} · clic para ver`, content: t.draft || t.result });
-    chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" está lista — aprueba para enviarla, rechaza para decirme qué cambiar.`, pending: true, live: true });
+    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `borrador · en espera de tu visto bueno · ${timeStr(t.changedAt)} · clic para ver`, content: t.draft || t.result, sid: t.sid });
+    chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" está lista — aprueba para enviarla, rechaza para decirme qué cambiar.`, pending: true, live: true, sid: t.sid }); // V4.1: the card knows its draft
     feedPush(R[t.agent], '⏸', `En espera de tu visto bueno: ${t.title}`);
     if (setStuck) setStuck(t.agent, t.ask, t.sid);
   }
-  const pendingFeedback = {}; // agentId → sid after REJECT: the owner's next chat line is the note
-  function resolveLive(agentId, approved) { // APPROVE / REJECT on a live draft (main.js calls this instead of the demo onResolve)
-    const t = tasks.find(x => x.live && x.agent === agentId && x.state === 'waiting'); if (!t) return false;
-    if (approved) {
-      toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' });
-      post(`/tasks/${t.sid}/approve`).then(j => { if (!j || j.error) { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(agentId, { who: 'agent', text: `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.` }); } }); // an answer, not a card stuck «doing» forever
-    }
-    else { pendingFeedback[agentId] = t.sid; chatPush(agentId, { who: 'agent', text: 'Entendido. ¿Qué debería cambiar? Dímelo aquí y lo rehago — vuelve para tu visto bueno.' }); }
+  // V4.1 (24 Sep 2026): every decision names its draft (sid). Two drafts from one agent are two cards, and each button acts on its own.
+  const waitingFor = (agentId, sid) => tasks.find(x => x.live && !x.piece && x.agent === agentId && x.state === 'waiting' && (!sid || x.sid === sid));
+  const backToWaiting = (t, text) => { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(t.agent, { who: 'agent', text }); askApproval(t); }; // an answer and a fresh card, not a card stuck «doing» forever
+  function resolveLive(agentId, approved, sid) { // APPROVE on a live draft (REJECT opens the note on the card: rejectLive)
+    const t = waitingFor(agentId, sid); if (!t || !approved) return false;
+    toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' });
+    if (decided) decided(agentId, t.sid, true);
+    post(`/tasks/${t.sid}/approve`).then(j => { if (!j || j.error) backToWaiting(t, `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`); });
     return true;
   }
-  const pendingReject = agentId => !!pendingFeedback[agentId];
-  function rejectLive(agentId, feedback) {
-    const sid = pendingFeedback[agentId]; delete pendingFeedback[agentId];
-    const t = tasks.find(x => x.live && x.sid === sid); if (!t) return false;
+  function rejectLive(agentId, sid, feedback) {
+    const t = waitingFor(agentId, sid); if (!t) return false;
     toDoing(t); chatPush(agentId, { who: 'agent', text: 'En eso — lo rehago con tu nota. Vuelve aquí para tu visto bueno.' });
-    post(`/tasks/${sid}/reject`, { feedback }).then(j => { if (!j || j.error) { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(agentId, { who: 'agent', text: `No se pudo devolver: ${(j && j.error) || 'sin conexión con la oficina'}.` }); } });
+    if (decided) decided(agentId, t.sid, false);
+    post(`/tasks/${t.sid}/reject`, { feedback }).then(j => { if (!j || j.error) backToWaiting(t, `No se pudo devolver: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`); });
     return true;
   }
   function toDoing(t) { t.state = 'doing'; t.startedAt = performance.now(); t.progress = 0; t.pausedAt = null; t.running = true; t.ready = false; t.srv = true; touch(t, 'started'); }
@@ -724,13 +741,16 @@ export function initTasks(ctx) {
       const list = await (await fetch(API + '/tasks')).json();
       for (const st of list) {
         if (!agentOf(st.agent)) continue;
+        if (st.archived) { archived.push({ t: fromServer(st), at: st.archivedAt || st.doneAt || st.addedAt || 0 }); continue; } // out of the list and the chats (it used to come back on every load): in ARCHIVADAS
+
         if (st.state === 'done') {
           const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: 'you', live: true, sid: st.id, state: 'done',
             doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, last: 'done' });
           if (st.team) syncTeam(t, st, true);
-          deliver(t);
+          deliver(t, true); // quiet: the file card stays in the chat's history; no «Listo» line, feed item or brain spark on every page load
         } else reconcile(st); // next, doing (the server may be running it), waiting for your OK, scheduled for a date — pick it up again
       }
+      archived.sort((a, b) => b.at - a.at);
       dirty = true;
       if (onLive) onLive(h);
       await poll(); setInterval(() => { if (!document.hidden) poll(); }, 6000); addEventListener('visibilitychange', () => { if (!document.hidden) poll(); }); // a hidden tab stops asking; back in view it catches up at once // V3.5: routines fire on the server's clock — the page keeps up
@@ -745,13 +765,13 @@ export function initTasks(ctx) {
     return t;
   }
   // chips: filters with live counts
-  const CHIPS = [['all', 'Todas'], ['sched', 'Programadas'], ['next', 'Pendientes'], ['doing', 'En curso'], ['waiting', 'En espera'], ['done', 'Listas'], ['error', 'Con error']];
+  const CHIPS = [['all', 'Todas'], ['sched', 'Programadas'], ['next', 'Pendientes'], ['doing', 'En curso'], ['waiting', 'En espera'], ['done', 'Listas'], ['error', 'Con error'], ['archived', 'Archivadas']];
   function chipsHTML() {
     const scope = scoped();
-    const cnt = st => st === 'all' ? scope.length : st === 'sched' ? scopedRoutines().length + scope.filter(t => t.state === 'scheduled').length : st === 'error' ? scope.filter(t => t.state === 'done' && t.error).length : scope.filter(t => t.state === st).length;
-    return CHIPS.filter(([st]) => st !== 'error' || cnt('error') || filter === 'error').map(([st, lab]) => `<button class="tp-chip${filter === st ? ' on' : ''}${st === 'waiting' ? ' w' : ''}${st === 'error' ? ' e' : ''}" data-f="${st}">${lab}<b>${cnt(st)}</b></button>`).join('');
+    const cnt = st => st === 'all' ? scope.length : st === 'sched' ? scopedRoutines().length + scope.filter(t => t.state === 'scheduled').length : st === 'error' ? scope.filter(t => t.state === 'done' && t.error).length : st === 'archived' ? scopedArchived().length : scope.filter(t => t.state === st).length;
+    return CHIPS.filter(([st]) => !(st === 'error' || st === 'archived') || cnt(st) || filter === st).map(([st, lab]) => `<button type="button" class="tp-chip${filter === st ? ' on' : ''}${st === 'waiting' ? ' w' : ''}${st === 'error' ? ' e' : ''}${st === 'archived' ? ' x' : ''}" data-f="${st}" aria-pressed="${filter === st}">${lab}<b>${cnt(st)}</b></button>`).join('');
   }
-  P_.chips.addEventListener('click', (e) => { const b = e.target.closest('.tp-chip'); if (!b) return; filter = b.dataset.f; render(true); });
+  P_.chips.addEventListener('click', (e) => { const b = e.target.closest('.tp-chip'); if (!b) return; filter = b.dataset.f; limit = PAGE; render(true); });
   let query = '';
   function scoped() {
     const f = getFocused();
@@ -760,6 +780,33 @@ export function initTasks(ctx) {
     return tasks.filter(t => (!f || f === 'brain' || t.dept === f) && (!q || fold(t.title + ' ' + (t.text || '') + ' ' + (agentOf(t.agent)?.name || '')).includes(q)));
   }
   function scopedRoutines() { const f = getFocused(); return (f && f !== 'brain') ? deptRoutines(f) : routines.slice(); }
+  function scopedArchived() {
+    const f = getFocused(), fold = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''), q = fold(query);
+    return archived.filter(e => (!f || f === 'brain' || e.t.dept === f) && (!q || fold(e.t.title + ' ' + (e.t.text || '') + ' ' + (agentOf(e.t.agent)?.name || '')).includes(q)));
+  }
+  function rowHTMLx(e) { // an ARCHIVED row: what it was, who, when it left the list, and the way back
+    const t = e.t, a = agentOf(t.agent);
+    return `<div class="tp-row archived" data-xid="${esc(String(t.sid || t.id))}" data-dept="${t.dept}">
+      <span class="tp-st arch">ARCH.</span>
+      <div class="tp-body"><div class="tp-t">${esc(t.title)}</div><div class="tp-m">${a ? a.name + ' · ' + DEPTS[t.dept].short + ' · ' : ''}archivada ${timeStr(e.at)}${t.error ? ' · <span class="tp-amber">con error</span>' : ''}${e.trashed ? ' · su nota está en la papelera' : ''}</div>
+      <div class="tp-act"><button type="button" data-act="unarchive">DEVOLVER A LA LISTA</button></div></div></div>`;
+  }
+  const PAGE = 60; let limit = PAGE; // V4.1: the list says when it shows only part, and shows more on request
+  function emptyHTML() { // V4.1: an empty list says why — the filter, the search, or truly nothing
+    const f = getFocused(), where = (f && f !== 'brain') ? ` en ${esc(DEPTS[f].name)}` : '';
+    const lab = (CHIPS.find(c => c[0] === filter) || [, ''])[1];
+    if (query) return `<div class="tp-empty">Nada coincide con «${esc(query)}»${filter !== 'all' ? ` en ${esc(lab)}` : ''}${where}.<button type="button" class="tp-lnk" data-clr="q">Borrar la búsqueda</button></div>`;
+    if (filter === 'archived') return `<div class="tp-empty">No hay tareas archivadas${where}.</div>`;
+    if (filter !== 'all') return `<div class="tp-empty">Nada en «${esc(lab)}»${where} por ahora.<button type="button" class="tp-lnk" data-clr="f">Ver todas</button></div>`;
+    return `<div class="tp-empty">Nada aquí por ahora${where}. Escribe arriba qué hay que hacer.</div>`;
+  }
+  // V4.1: the list holds still while the mouse is on it (moved in the last 6 s) — it used to reorder under the cursor and a click opened
+  // another task. The owner's own actions still show at once, and a row with the keyboard focus keeps it across a redraw.
+  let hoverList = false, lastMove = 0, listStale = false, forceList = false;
+  P_.rows.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') { hoverList = true; lastMove = performance.now(); } });
+  P_.rows.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { hoverList = true; lastMove = performance.now(); } });
+  P_.rows.addEventListener('pointerleave', () => { hoverList = false; });
+  const holdList = () => !forceList && hoverList && performance.now() - lastMove < 6000;
   function metaFor(t) {
     const a = agentOf(t.agent), now = Date.now();
     const f = getFocused();
@@ -820,16 +867,22 @@ export function initTasks(ctx) {
     P_.chips.innerHTML = chipsHTML();
     if (P_.tab) { const all = tasks.filter(t => !t.piece), c = st => all.filter(t => t.state === st).length; P_.tab.innerHTML = `<span class="tt-l">TAREAS</span>${c('doing') ? `<b class="tt-doing">${c('doing')}</b>` : ''}${c('waiting') ? `<b class="tt-wait">${c('waiting')}</b>` : ''}${c('next') ? `<b>${c('next')}</b>` : ''}`; P_.tab.title = `${c('doing')} en curso · ${c('waiting')} esperan tu OK · ${c('next')} pendientes — clic para abrir`; }
     if (P_.tools) { const nd = scoped().filter(t => t.state === 'done').length; P_.clear.hidden = !nd; P_.clear.textContent = `Limpiar listas (${nd})`; }
-    const list = scoped().filter(t => filter === 'all' || (filter === 'error' ? t.state === 'done' && t.error : t.state === filter))
-      .sort((a, b) => b.changedAt - a.changedAt).slice(0, 60);
+    const all = filter === 'archived' ? [] : scoped().filter(t => filter === 'all' || (filter === 'error' ? t.state === 'done' && t.error : t.state === filter))
+      .sort((a, b) => b.changedAt - a.changedAt);
+    const list = all.slice(0, limit);
+    const more = all.length > list.length ? `<button type="button" class="tp-more" data-more="1">Se ven ${list.length} de ${all.length}. Mostrar ${Math.min(PAGE, all.length - list.length)} más</button>` : '';
     const before = structural ? {} : rects();
+    const fid = P_.rows.contains(document.activeElement) ? document.activeElement.closest('.tp-row')?.dataset.id : null;
     P_.rows.innerHTML = filter === 'sched'
-      ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — "cada día hábil a las 8, …" — o presiona REPETIR. Presiona <b>P</b> para el calendario…${RT_DEPTS.includes(dept) ? '' : ' Rutinas: Correos, Contabilidad y Ventas en esta versión.'}</div>`)
-      : (list.map(rowHTMLp).join('') || `<div class="tp-empty">Nada aquí por ahora.</div>`);
+      ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || (query ? emptyHTML() : `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — «cada día hábil a las 8, …» — o presiona REPETIR. Presiona <b>P</b> para el calendario.</div>`))
+      : filter === 'archived' ? (scopedArchived().slice(0, limit).map(rowHTMLx).join('') + (scopedArchived().length > limit ? `<button type="button" class="tp-more" data-more="1">Se ven ${limit} de ${scopedArchived().length}. Mostrar más</button>` : '') || emptyHTML())
+      : (list.map(rowHTMLp).join('') + more || emptyHTML());
+    listStale = false; forceList = false;
     renderNext();
-    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
+    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
     P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.tabIndex = 0; n.setAttribute('role', 'button'); n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); }); // every row opens its detail
     if (!structural) flip(before);
+    if (fid) P_.rows.querySelector(`.tp-row[data-id="${CSS.escape(fid)}"]`)?.focus({ preventScroll: true });
   }
   function refreshBars() {
     for (const t of tasks) {
@@ -1068,7 +1121,8 @@ export function initTasks(ctx) {
       }
     }
     if (now - lastBadge > 400) { syncBadges(); lastBadge = now; }
-    if (dirty) { render(false); renderBoard(); dirty = false; }
+    if (dirty) { renderBoard(); dirty = false; if (holdList()) { listStale = true; P_.chips.innerHTML = chipsHTML(); } else render(false); }
+    else if (listStale && !holdList()) render(false);
     else {
       if (now - lastBar > 250) { refreshBars(); lastBar = now; }
       if (now - lastAgo > 15000) { refreshAgo(); lastAgo = now; }
@@ -1167,9 +1221,10 @@ export function initTasks(ctx) {
     if (moved) spawnEmote(R[t.agent], '📋');
     touch(t, 'edited');
   }
-  const removeLocal = t => { const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); dirty = true; if (calendar) calendar.refresh(); };
+  const removeLocal = t => { const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); dirty = true; if (calendar) calendar.refresh(); if (settle && t.state === 'waiting') settle(t.agent); }; // an archived draft takes its ⚠ with it
   async function act(t, name, p = {}) {
     const L = live && t.live && t.sid && !t.piece;
+    forceList = true; // the owner's own action shows at once, mouse on the list or not
     try {
       switch (name) {
         case 'save': case 'unschedule': case 'done': {
@@ -1194,18 +1249,28 @@ export function initTasks(ctx) {
           if (L) {
             await req('POST', `/tasks/${t.sid}/${name}`, name === 'reject' ? { feedback: p.feedback } : {});
             toDoing(t); chatPush(t.agent, { who: 'agent', text: name === 'approve' ? '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' : 'En eso — lo rehago con tu nota. Vuelve aquí para tu visto bueno.' });
+            if (decided) decided(t.agent, t.sid, name === 'approve'); // V4.1: the ⚠, the counters and the chat card follow (they used to stay)
           } else if (onResolveDemo) onResolveDemo(t.agent, name === 'approve');
           break;
         case 'repeat':
           if (L) reconcile(await req('POST', `/tasks/${t.sid}/repeat`));
           else addTask(t.agent, t.title, 'you');
           break;
-        case 'archive':
-          if (L) { const j = await req('POST', `/tasks/${t.sid}/archive`, { note: !!p.note }); if (j.graph && brain) brain.setGraph(j.graph); }
-          removeLocal(t); return { ok: true, gone: true };
-        case 'delete':
-          if (L) { const j = await req('DELETE', `/tasks/${t.sid}${p.note ? '?note=1' : ''}`); if (j.graph && brain) brain.setGraph(j.graph); }
-          removeLocal(t); return { ok: true, gone: true };
+        case 'archive': { // V4.1: it goes to ARCHIVADAS, and the toast offers DESHACER
+          let trashed = null;
+          if (L) { const j = await req('POST', `/tasks/${t.sid}/archive`, { note: !!p.note }); if (j.graph && brain) brain.setGraph(j.graph); trashed = j.trashed || null; }
+          removeLocal(t); archived.unshift({ t, at: Date.now(), trashed });
+          if (!p.quiet) offerUndo(`Archivada: «${esc(short(t.title))}»${trashed ? ' y su nota, a la papelera' : ''}.`, { undo: () => unarchive([t]) });
+          return { ok: true, gone: true };
+        }
+        case 'unarchive':
+          return (await unarchive([t])) ? { ok: true } : { ok: false, error: 'no se pudo devolver a la lista' };
+        case 'delete': { // V4.1: it leaves the list at once; the server deletes it when DESHACER is gone (8 s), or when the page closes
+          removeLocal(t); if (L) deleting.add(t.sid);
+          const commit = () => { if (!L) return; fetch(`${API}/tasks/${t.sid}${p.note ? '?note=1' : ''}`, { method: 'DELETE', keepalive: true }).then(r => r.json()).then(j => { if (j.graph && brain) brain.setGraph(j.graph); }).catch(() => {}).finally(() => deleting.delete(t.sid)); };
+          offerUndo(`Eliminada: «${esc(short(t.title))}»${p.note ? ' (su nota va a la papelera)' : ''}.`, { commit, undo: () => { if (L) deleting.delete(t.sid); if (!tasks.includes(t)) tasks.push(t); dirty = true; if (calendar) calendar.refresh(); if (settle && t.state === 'waiting') settle(t.agent); return true; } });
+          return { ok: true, gone: true };
+        }
         default: return { ok: false, error: 'acción desconocida' };
       }
       dirty = true; if (calendar) calendar.refresh();
@@ -1216,16 +1281,64 @@ export function initTasks(ctx) {
   const detail = initDetail({ agentOf, AGENTS, DEPTS, DEPT_KEYS, esc, isLive: () => live, act, openAgent: id => { leaveOverlays(); if (openAgent) openAgent(id, 'chat'); },
     openNote: name => { leaveOverlays(); return !!(brain && brain.show(name)); }, openCalendar: ts => calendar && calendar.openAt(ts), modelName, MODEL_KEYS, officeModel: () => officeModel });
   function openTask(t) { if (t) detail.open(t); }
-  // «Limpiar listas»: every finished task in view leaves the list (archived on the server; notes stay in the Brain)
+  // «Limpiar listas»: every finished task in view goes to ARCHIVADAS (on the server too; notes stay in the Brain) — with DESHACER, no confirm box
   async function clearDone() {
     const done = scoped().filter(t => t.state === 'done' && !t.piece);
-    if (!done.length || !confirm(`¿Archivar ${done.length} ${done.length === 1 ? 'tarea lista' : 'tareas listas'}? Salen de la lista; sus notas siguen en el Cerebro.`)) return;
-    for (const t of done) await act(t, 'archive', {});
-    render(true);
+    if (!done.length) return;
+    P_.clear.disabled = true;
+    const gone = []; for (const t of done) { const r = await act(t, 'archive', { quiet: true }); if (r && r.ok) gone.push(t); }
+    P_.clear.disabled = false; render(true);
+    if (gone.length) offerUndo(`${gone.length} ${gone.length === 1 ? 'tarea archivada' : 'tareas archivadas'}. Sus notas siguen en el Cerebro; las ves en ARCHIVADAS.`, { undo: () => unarchive(gone) });
+    if (gone.length < done.length) say(`${done.length - gone.length} no se pudieron archivar.`, 'err');
   }
+  /* ---------- V4.1 (24 Sep 2026): ARCHIVADAS, and DESHACER after Archivar, Limpiar listas and Eliminar ---------- */
+  const short = x => { x = String(x || ''); return x.length > 48 ? x.slice(0, 46) + '…' : x; };
+  async function unarchive(list) {
+    let ok = true;
+    for (const t of list) {
+      const e = archived.find(x => x.t === t);
+      try {
+        if (live && t.live && t.sid) {
+          await req('POST', `/tasks/${t.sid}/archive`, { archived: false });
+          if (e && e.trashed) { try { const j = await req('POST', '/note/restore', { file: e.trashed }); if (j.graph && brain) brain.setGraph(j.graph); } catch {} }
+        }
+        if (e) archived.splice(archived.indexOf(e), 1);
+        if (!tasks.includes(t)) tasks.push(t);
+      } catch { ok = false; }
+    }
+    dirty = true; if (calendar) calendar.refresh();
+    return ok;
+  }
+  const toast = document.createElement('div'); toast.className = 'tp-toast'; toast.hidden = true; toast.setAttribute('role', 'status'); document.body.appendChild(toast);
+  let pendingUndo = null, toastTimer = 0;
+  function offerUndo(html, { undo, commit }) { // one toast at a time: a new one commits the previous action
+    if (pendingUndo) finishUndo(true);
+    pendingUndo = { undo, commit };
+    toast.innerHTML = `<span class="tt-x">${html}</span><button type="button" class="tp-undo">DESHACER</button><button type="button" class="tp-tclose" aria-label="Cerrar el aviso">✕</button>`;
+    toast.hidden = false; requestAnimationFrame(() => toast.classList.add('on'));
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), 10000);
+  }
+  function finishUndo(doCommit) {
+    clearTimeout(toastTimer); const u = pendingUndo; pendingUndo = null;
+    if (toast.contains(document.activeElement)) document.activeElement.blur();
+    toast.classList.remove('on'); setTimeout(() => { if (!pendingUndo) toast.hidden = true; }, 260);
+    if (u && doCommit && u.commit) u.commit();
+    return u;
+  }
+  toast.addEventListener('click', async e => {
+    if (e.target.closest('.tp-tclose')) return finishUndo(true);
+    if (!e.target.closest('.tp-undo')) return;
+    const u = finishUndo(false); if (!u || !u.undo) return;
+    forceList = true; const ok = await u.undo(); say(ok === false ? 'No se pudo deshacer.' : 'Deshecho: la tarea volvió a la lista.', ok === false ? 'err' : ''); render(true);
+  });
+  // the toast waits while the pointer or the keyboard is on it (time to read and reach DESHACER)
+  toast.addEventListener('pointerenter', () => clearTimeout(toastTimer));
+  toast.addEventListener('pointerleave', () => { if (pendingUndo) { clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), 4000); } });
+  toast.addEventListener('focusin', () => clearTimeout(toastTimer));
+  addEventListener('pagehide', () => { if (pendingUndo) finishUndo(true); }); // closing the page carries the delete out (keepalive)
   const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
   return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
            findBySid: sid => tasks.find(t => t.live && t.sid === sid),
            handleChat, addTask, revise, rowHTML, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
-           routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, pendingReject, rejectLive, officeModel: () => officeModel, chosenModel, chosenEffort };
+           routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, rejectLive, waitingFor, officeModel: () => officeModel, chosenModel, chosenEffort };
 }

@@ -153,19 +153,17 @@ for (const [key_, L] of Object.entries(LAYOUT)) {
   deptRT[key_] = { group: g, L };
 }
 
-// brain centre (V3.6, AJ 6 Sep 2026): the particle nebula is RETIRED. The vault's wiki-link graph
-// is etched into the pod floor (src/brain.js); reads glint, writes add notes, G opens the full graph.
+// brain centre (V4.1, 24 Sep 2026): no drawing over the pod any more — the Brain's tag and Dimitri stand
+// there alone; reads and writes fire the tag's icon, G opens the full graph (src/brain.js).
 let brain;
 {
   const bg = deptRT.brain.group;
-  brain = initBrain({ scene, brainGroup: bg, getR: () => R, esc: (t) => esc(t), hud, toScreen: (p) => toScreen(p), getCamera: () => camera });
+  brain = initBrain({ esc: (t) => esc(t) });
   const plant = makePlant(); plant.position.set(6.2, 0.12, -5.8); bg.add(plant);
 }
 
-/* the thinking sweep (M4, D): a soft comet orbits the brain; as it passes each dept's
-   azimuth that dept "lights up" — brain particles lean toward its chip colour (handled in
-   makeNeuralBrain) and its billboard gets a chip-coloured glow. Ref: AJ's galaxy video,
-   departments highlighted one at a time. */
+/* the thinking sweep (M4, D): as an invisible hand passes each dept's azimuth that dept's
+   billboard gets a chip-coloured glow — departments highlighted one at a time. */
 const SWEEP_PERIOD = 16000; // ms per full orbit
 const DEPT_AZ = {};
 for (const k of DEPT_KEYS)
@@ -442,7 +440,7 @@ for (const k of [...DEPT_KEYS, 'brain']) {
     sales:     [48, 8.6, -32],     // over the pod's right corner — past the DELIVERY pod's desks and the Sales Lead pill
     ops:       [-13.5, 4, 54],     // side LEFT
     fin:       [43.5, 4, 17],      // side RIGHT
-    brain:     [-5.5, 3.2, -5.5],  // just above the pod's back corner
+    brain:     [0, 0.6, 0],        // V4.1: centred ON the centre pod — the graph that stood there is gone
   };
   deptRT[k].badgeAnchor = new THREE.Vector3(...ANCHOR[k]);
   if (k === 'fin') deptRT[k].sideBadge = true;
@@ -699,23 +697,47 @@ function renderChat(id) {
         ${m.exp ? `<div class="f-body md">${mdToHtml(m.content)}</div><div class="f-acts"><button type="button" class="m-copy" data-i="${i}">Copiar</button></div>` : ''}
       </div>`;
     if (m.who === 'appr') return `
-      <div class="m-appr" data-i="${i}">
-        <div class="a-who">necesita tu visto bueno</div>
+      <div class="m-appr${m.pending ? '' : ' closed'}" data-i="${i}">
+        <div class="a-who">${m.pending ? 'necesita tu visto bueno' : 'visto bueno'}</div>
         <div class="a-ask">${esc(m.text)}</div>
         ${m.mock ? `<div class="a-mock">${m.mock}</div>` : ''}
-        ${m.pending
-          ? '<div class="a-btns"><button class="a-yes">APROBAR</button><button class="a-no">RECHAZAR</button></div>'
-          : `<div class="a-done">${m.approved ? '✓ Aprobado' : '✗ Rechazado'} por ti</div>`}
+        ${!m.pending ? `<div class="a-done">${m.settled ? 'Ya no espera: se resolvió desde el tablero, el detalle u otra ventana' : m.approved ? '✓ Aprobado por ti' : '✗ Devuelto por ti con una nota'}</div>`
+          : m.rejecting ? `<div class="a-rej"><label class="a-rl" for="aRej${i}">¿Qué debe cambiar? El agente lo rehace con tu nota y vuelve a pedirte el visto bueno.</label>
+              <textarea id="aRej${i}" class="a-note" rows="2" placeholder="p. ej.: más corto, sin precios, tono más cercano">${esc(m.note || '')}</textarea>
+              <div class="a-btns"><button type="button" class="a-send">DEVOLVER CON ESTA NOTA</button><button type="button" class="a-cancel">CANCELAR</button></div></div>`
+          : '<div class="a-btns"><button type="button" class="a-yes">APROBAR</button><button type="button" class="a-no">RECHAZAR</button></div>'}
       </div>`;
     return '';
   }).join('');
   mMsgs.querySelectorAll('.m-file .f-head').forEach(el =>
     el.addEventListener('click', () => { const m = chatHist[id][+el.parentElement.dataset.i]; m.exp = !m.exp; renderChat(id); })); // the open state lives on the message: a new message no longer folds it
+  const cardOf = el => chatHist[id][+el.closest('.m-appr').dataset.i];
   mMsgs.querySelectorAll('.m-appr .a-yes').forEach(el =>
-    el.addEventListener('click', () => resolveApproval(id, true)));
+    el.addEventListener('click', () => resolveApproval(id, true, cardOf(el).sid)));
   mMsgs.querySelectorAll('.m-appr .a-no').forEach(el =>
-    el.addEventListener('click', () => resolveApproval(id, false)));
+    el.addEventListener('click', () => resolveApproval(id, false, cardOf(el).sid)));
+  mMsgs.querySelectorAll('.m-appr .a-note').forEach(el => {
+    el.addEventListener('input', () => { cardOf(el).note = el.value; });
+    el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendRejectNote(id, cardOf(el)); } else if (e.key === 'Escape') { cardOf(el).rejecting = false; renderChat(id); } });
+  });
+  mMsgs.querySelectorAll('.m-appr .a-send').forEach(el => el.addEventListener('click', () => sendRejectNote(id, cardOf(el))));
+  mMsgs.querySelectorAll('.m-appr .a-cancel').forEach(el => el.addEventListener('click', () => { cardOf(el).rejecting = false; renderChat(id); }));
   mMsgs.scrollTop = follow ? mMsgs.scrollHeight : keepTop;
+  if (noteFocus && noteFocus.id === id) { // a re-render (a new message) keeps the note being typed, and the caret in it
+    const ta = mMsgs.querySelector(`.m-appr[data-i="${noteFocus.i}"] .a-note`);
+    if (ta) { ta.focus(); try { ta.setSelectionRange(noteFocus.a, noteFocus.b); } catch {} }
+  }
+}
+let noteFocus = null;
+mMsgs.addEventListener('focusin', e => { if (e.target.classList.contains('a-note')) noteFocus = { id: modalOpen, i: +e.target.closest('.m-appr').dataset.i, a: e.target.selectionStart, b: e.target.selectionEnd }; });
+mMsgs.addEventListener('focusout', e => { if (e.target.classList.contains('a-note') && !e.relatedTarget?.closest?.('.m-appr')) setTimeout(() => { if (!mMsgs.contains(document.activeElement)) noteFocus = null; }, 0); });
+mMsgs.addEventListener('keyup', e => { if (noteFocus && e.target.classList.contains('a-note')) { noteFocus.a = e.target.selectionStart; noteFocus.b = e.target.selectionEnd; } });
+function sendRejectNote(id, m) {
+  const note = String(m.note || '').trim();
+  if (!note) { const ta = mMsgs.querySelector(`.m-appr[data-i="${chatHist[id].indexOf(m)}"] .a-note`); if (ta) { ta.focus(); ta.classList.add('need'); } return; }
+  noteFocus = null;
+  if (tasks && tasks.rejectLive(id, m.sid, note)) return;
+  settleLive(id);
 }
 mMsgs.addEventListener('click', e => {
   const c = e.target.closest('.m-copy');
@@ -933,9 +955,9 @@ function sendChat(text) {
   const mInEl = document.getElementById('mIn'); mInEl.value = ''; growInput(mInEl);
   const low = text.toLowerCase();
   setTimeout(() => {
-    if (tasks && tasks.pendingReject(id)) { tasks.rejectLive(id, text); return; } // V3.5: the line after REJECT is the note the agent reworks with
-    if (r.state === 'stuck' && /\b(approve|reject|aprobar|aprobado|apruebo|rechazar|rechazo)\b/.test(low)) {
-      resolveApproval(id, /(approve|aprobar|aprobado|apruebo)/.test(low));
+    if (r.state === 'stuck' && /\b(approve|reject|aprobar|aprobado|apruebo|rechazar|rechazo)\b/.test(low)) { // the newest card still waiting, never an older one
+      const card = [...chatHist[id]].reverse().find(m => m.who === 'appr' && m.pending);
+      resolveApproval(id, /(approve|aprobar|aprobado|apruebo)/.test(low), card && card.sid);
       return;
     }
     const rv = tasks && tasks.isLive() && text.match(/^\s*(?:revise|revisa|revisar|corrige|corregir|cambia)\s*[:\-–]\s*(.+)$/i); // LIVE: "revisa: …" (or "revise:", "corrige:") re-runs the last deliverable
@@ -960,7 +982,7 @@ function sendChat(text) {
     const hit = (r.v1.chat || []).find(c => c.k.some(k => low.includes(k)));
     const reply = hit ? rnd(hit.r) : rnd(r.v1.fallback || ['En eso.']);
     chatPush(id, { who: 'agent', text: reply });
-  }, 450 + Math.random() * 500);
+  }, tasks && tasks.isLive() ? 0 : 450 + Math.random() * 500); // the demo's canned reply «types» for a moment; a real message goes at once
 }
 document.getElementById('mSend').addEventListener('click', () =>
   sendChat(document.getElementById('mIn').value));
@@ -1051,7 +1073,7 @@ function mockupFor(id) {
 function requestApproval(id, ask) {
   const r = R[id];
   if (!r || r.state !== 'working') return;
-  r.state = 'stuck';
+  r.state = 'stuck'; r.stuckAt = Date.now();
   r.ask = ask || APPROVAL_BY_AGENT[id] || sample(APPROVAL_ASKS[r.a.dept], 1)[0];
   r.warn.visible = true;
   const hadChat = !!chatHist[id]; // fresh chats already seed the deliverable card
@@ -1061,14 +1083,45 @@ function requestApproval(id, ask) {
   syncApprovals();
 }
 // V3.5: a routine's draft is waiting for the owner's OK — the agent stands and waves like any approval; the chat already holds the draft card
+// V4.1 (24 Sep 2026): a live draft is known by its task (sid). The ⚠, the counters and the chat cards follow the drafts
+// that are really waiting, so two drafts from one agent never get mixed up and a decision taken anywhere
+// (the chat card, the detail, the board, another window) clears the same things.
 function setStuckLive(id, ask, sid) {
   const r = R[id]; if (!r) return;
-  r.state = 'stuck'; r.ask = ask; r.liveSid = sid; r.warn.visible = true;
+  r.state = 'stuck'; r.ask = ask; r.liveAppr = true; r.warn.visible = true;
   syncApprovals();
 }
-function resolveApproval(id, approved) {
+const liveWaiting = id => tasks ? tasks.tasks.filter(t => t.live && !t.piece && t.agent === id && t.state === 'waiting') : [];
+function settleLive(id) {
+  const r = R[id]; if (!r || !r.liveAppr) return;
+  const w = liveWaiting(id), open = new Set(w.map(t => t.sid));
+  let changed = false;
+  for (const m of chatHist[id] || []) if (m.who === 'appr' && m.pending && m.sid && !open.has(m.sid)) { m.pending = false; m.rejecting = false; m.settled = true; changed = true; }
+  if (w.length) { r.ask = w[0].ask; if (r.state !== 'stuck') { r.state = 'stuck'; r.warn.visible = true; } }
+  else { r.liveAppr = false; r.ask = null; r.warn.visible = false; if (r.state === 'stuck') r.state = 'working'; }
+  if (changed && modalOpen === id && modalTab === 'chat') renderChat(id);
+  syncApprovals();
+}
+function decidedLive(id, sid, approved) { // the owner decided on one draft, wherever: its card shows the decision, the agent reacts
+  const m = (chatHist[id] || []).find(x => x.who === 'appr' && x.sid === sid && x.pending);
+  if (m) { m.pending = false; m.rejecting = false; m.approved = approved; }
+  const r = R[id];
+  if (r) { const now = performance.now(); if (approved) r.cheerUntil = now + 2400; else r.slumpUntil = now + 2600; spawnEmote(r, approved ? '✅' : '❌'); }
+  settleLive(id);
+  if (m && modalOpen === id && modalTab === 'chat') renderChat(id);
+}
+setInterval(() => { for (const id in R) if (R[id].liveAppr) settleLive(id); }, 1500); // a draft approved from another window, archived, or finished on the server
+function resolveApproval(id, approved, sid) {
   const r = R[id];
   if (!r || r.state !== 'stuck') return;
+  if (r.liveAppr) { // live: APPROVE sends that draft; REJECT opens the note on its card (the ⚠ stays until the note goes)
+    const t = tasks && tasks.waitingFor(id, sid);
+    if (!t) { settleLive(id); return; }
+    if (approved) { tasks.resolveLive(id, true, t.sid); return; }
+    const card = (chatHist[id] || []).find(m => m.who === 'appr' && m.pending && m.sid === t.sid);
+    if (card) { card.rejecting = true; if (modalOpen === id && modalTab === 'chat') { renderChat(id); const ta = mMsgs.querySelector(`.m-appr[data-i="${chatHist[id].indexOf(card)}"] .a-note`); if (ta) ta.focus(); } }
+    return;
+  }
   r.state = 'working';
   r.ask = null;
   r.warn.visible = false;
@@ -1078,7 +1131,6 @@ function resolveApproval(id, approved) {
   const now = performance.now();
   if (approved) r.cheerUntil = now + 2400; else r.slumpUntil = now + 2600;
   spawnEmote(r, approved ? '✅' : '❌');
-  if (r.liveSid) { r.liveSid = null; if (tasks) tasks.resolveLive(id, approved); syncApprovals(); return; } // live: APPROVE sends, REJECT asks for the note
   if (tasks) tasks.onResolve(id, approved);
   chatPush(id, {
     who: 'agent',
@@ -1088,34 +1140,47 @@ function resolveApproval(id, approved) {
   syncApprovals();
 }
 function stuckIn(dept) { return Object.values(R).filter(r => r.state === 'stuck' && r.a.dept === dept); }
+const draftsOf = r => r.liveAppr ? Math.max(1, liveWaiting(r.a.id).length) : 1; // live: each waiting draft counts; demo: one ask per agent
+const draftsIn = dept => stuckIn(dept).reduce((n, r) => n + draftsOf(r), 0);
 function syncApprovals() {
   let total = 0;
   for (const k of DEPT_KEYS) {
-    const n = stuckIn(k).length; total += n;
-    deptRT[k].apprRow.style.display = n ? 'flex' : 'none';
-    deptRT[k].apprN.textContent = n;
+    const n = draftsIn(k); total += n;
+    setS(deptRT[k].apprRow, 'display', n ? 'flex' : 'none');
+    if (deptRT[k].apprN.textContent !== String(n)) deptRT[k].apprN.textContent = n;
   }
   const top = document.getElementById('topAppr');
-  top.style.display = total ? 'inline-flex' : 'none';
-  top.querySelector('span').textContent = total;
+  setS(top, 'display', total ? 'inline-flex' : 'none');
+  if (top.querySelector('span').textContent !== String(total)) {
+    top.querySelector('span').textContent = total;
+    const lab = `${total} ${total === 1 ? 'borrador espera' : 'borradores esperan'} tu visto bueno${total > 1 ? ' — clic para ir al siguiente' : ''}`;
+    top.title = lab; top.setAttribute('aria-label', lab);
+  }
   // mirror into the docked rail header + row status tags
   if (focused && focused !== 'brain') {
-    const n = stuckIn(focused).length;
+    const n = draftsIn(focused);
     const rh = document.getElementById('railHeader');
     const ap = rh.querySelector('.b-appr');
     if (ap) { ap.style.display = n ? 'flex' : 'none'; ap.querySelector('.ap-n').textContent = n; }
   }
 }
+function oldestFirst(list) { // the draft that has waited longest goes first
+  const since = r => { const w = r.liveAppr ? liveWaiting(r.a.id) : []; return w.length ? Math.min(...w.map(t => t.changedAt || 0)) : (r.stuckAt || 0); };
+  return list.slice().sort((a, b) => since(a) - since(b));
+}
 function zoomToApproval(dept) {
-  const s = stuckIn(dept)[0];
+  const s = oldestFirst(stuckIn(dept))[0];
   if (!s) { enterFocus(dept); return; }
   if (focused === dept) openAgentRail(s.a.id);
   else enterFocus(dept, s.a.id);
 }
 document.getElementById('topCal').addEventListener('click', () => { if (tasks && tasks.calendar) tasks.calendar.toggle(); }); // V3.2.1: the top-bar calendar button (same as P)
+let apprTurn = 0; // the ⚠ in the bar: the oldest draft first, then each click the next one
 document.getElementById('topAppr').addEventListener('click', () => {
-  const s = Object.values(R).find(r => r.state === 'stuck');
-  if (s) zoomToApproval(s.a.dept);
+  const all = oldestFirst(Object.values(R).filter(r => r.state === 'stuck'));
+  if (!all.length) return;
+  const s = all[apprTurn++ % all.length];
+  if (focused === s.a.dept) openAgentRail(s.a.id); else enterFocus(s.a.dept, s.a.id);
 });
 
 /* ---------- event engine: weighted v1 templates → feed + chat + billboards ---------- */
@@ -1351,7 +1416,6 @@ function tickSim(now, dt) {
   }
   tickEmotes(now, dt);
   tickSweep(now);
-  brain.tick(now);
   // schedule a new approval request now and then — capped so a long unattended demo
   // never ends up with half the office stuck waving (v1 demo-safety rule)
   if (now > nextApprovalAt && !(tasks && tasks.isLive())) { // V3.5: a live office's approvals are real (routine drafts) — no theatre ones
@@ -1416,6 +1480,11 @@ function tickLOD() {
       sy = clamp(sy, 64 + bh / 2, innerHeight - bh / 2 - 8);
       if (d.sideLeft) { sx = clamp(sx, bw + 8, rightEdge); xf = 'translate(-100%,-50%)'; }
       else { sx = clamp(sx, 8, rightEdge - bw); xf = 'translate(0,-50%)'; }
+    } else if (k === 'brain') { // the Brain and Dimitri sit centred on the centre pod
+      const rightEdge = innerWidth - (panelW + 26);
+      sy = clamp(sy, bh / 2 + 64, innerHeight - bh / 2 - 12);
+      sx = clamp(sx, bw / 2 + 8, rightEdge - bw / 2);
+      xf = 'translate(-50%,-50%)';
     } else {
       const rightEdge = innerWidth - (panelW + 26);
       sy = clamp(sy, bh + 64, innerHeight - 12);
@@ -1484,7 +1553,7 @@ tasks = initTasks({
     if (h.deputy) { const t = document.querySelector('.brainTag .bt-dim'); if (t) { t.querySelector('.bt-t').textContent = String(h.deputy).toUpperCase(); t.querySelector('.bt-av').textContent = String(h.deputy).charAt(0).toUpperCase(); t.title = `Hablar con ${h.deputy}, tu mano derecha (S)`; t.setAttribute('aria-label', `Abrir el chat con ${h.deputy}`); } }
     document.title = `${h.name} — Agents Office`; brain.setOwner(h.name); brain.setQuiet(true); applyRoster(h.agents); },
   onTools: (agentId, keys) => mcp.onToolsUsed(agentId, keys),
-  requestApproval, setStuck: setStuckLive, resolveApproval: (id, ok) => resolveApproval(id, ok),
+  requestApproval, setStuck: setStuckLive, resolveApproval: (id, ok) => resolveApproval(id, ok), decided: (id, sid, ok) => decidedLive(id, sid, ok), settle: id => settleLive(id),
   onUsage: (u) => { if (mcp && mcp.setUsage) mcp.setUsage(u); }, // V3.6: the plan's gauge in the top bar
   getFocused: () => focused, getZoom: () => view.zoom, getFocusDim: () => focusDim,
   toScreen: (p) => toScreen(p), reframe,

@@ -236,7 +236,7 @@
   #topStudio:hover, body.studioOpen #topStudio, #topSub:hover, body.subOpen #topSub, #topCal:hover, body.calOpen #topCal { background: var(--ink); color: var(--cream); border-color: var(--ink); }
   body.dark #topCal, body.dark #topSub, body.dark #topStudio { background: #1B1C21; }
   #topAppr {
-    align-items: center; gap: 5px; cursor: pointer;
+    align-items: center; gap: 5px; cursor: pointer; font-family: var(--ui); color: var(--ink);
     font-size: 12px; font-weight: 600; letter-spacing: .06em;
     background: rgba(242,184,75,.18); border: 1px solid rgba(242,184,75,.55);
     border-radius: 99px; padding: 4px 12px;
@@ -403,6 +403,17 @@
   .m-appr .a-no { background: transparent; border: 1px solid var(--hairline); color: var(--ink); }
   .m-appr .a-no:hover { border-color: var(--ink); }
   .m-appr .a-done { font-size: 11px; font-weight: 600; letter-spacing: .06em; }
+  /* V4.1: a decided card steps back; REJECT asks for the note on the card itself */
+  .m-appr.closed { background: transparent; border-color: var(--hairline); }
+  .m-appr.closed .a-who { color: var(--grey); }
+  .m-appr.closed .a-ask { font-size: 14px; color: var(--grey); margin-bottom: 6px; }
+  .m-appr .a-rl { display: block; font-size: 12px; line-height: 1.4; color: var(--ink); margin-bottom: 6px; }
+  .m-appr .a-note { width: 100%; box-sizing: border-box; resize: vertical; min-height: 54px; font: 13px/1.4 var(--ui); color: var(--ink);
+    background: var(--cream); border: 1px solid var(--hairline); border-radius: 8px; padding: 7px 9px; margin-bottom: 8px; }
+  .m-appr .a-note:focus-visible { outline: 2px solid #FF5100; outline-offset: 1px; }
+  .m-appr .a-note.need { border-color: #C94F3D; }
+  .m-appr .a-send { background: var(--ink); color: var(--cream); border: 1px solid var(--ink); }
+  .m-appr .a-cancel { background: transparent; border: 1px solid var(--hairline); color: var(--ink); }
 
   /* approval mockups — a visual of exactly what AJ is approving */
   .a-mock { margin: 2px 0 10px; }
@@ -808,11 +819,6 @@
   .mrt-r .tp-act { margin-top: 3px; }
 
 
-  /* ---------- V3.6: the read pill over a note ("CLIENT EMAILS READ MOC-DELIVERY") ---------- */
-  .readlab { position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap;
-    font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #13705A;
-    background: color-mix(in srgb, var(--cream) 94%, transparent); border: 1px solid rgba(30,144,112,.45);
-    border-radius: 99px; padding: 3px 8px; will-change: transform, opacity; }
   /* ---------- V3.6: the Brain tag over the pod ---------- */
   .badge.brainTag { min-width: 0; padding: 6px 12px 6px 10px; border-radius: 99px; }
   .badge.brainTag .b-name { font-size: 10.5px; letter-spacing: .16em; gap: 6px; white-space: nowrap; }
@@ -1082,7 +1088,7 @@
   body.dark #topbar { background: color-mix(in srgb, var(--cream) 90%, transparent); }
   body.dark .badge, body.dark .pill, body.dark .connl, body.dark .mcp-tip, body.dark #railHeader, body.dark #board, body.dark #tpanel,
   body.dark .tp-cmd, body.dark .tp-menu, body.dark .tk, body.dark .tp-row, body.dark .m-agent, body.dark .m-file, body.dark #mStats .st,
-  body.dark #rail .mInput input, body.dark #rail .mInput textarea, body.dark .mk, body.dark #railAgent, body.dark .tp-brain, body.dark .readlab { background: #1E1F24; color: var(--ink); }
+  body.dark #rail .mInput input, body.dark #rail .mInput textarea, body.dark .mk, body.dark #railAgent, body.dark .tp-brain { background: #1E1F24; color: var(--ink); }
   body.dark .badge, body.dark .pill, body.dark .connl, body.dark .tk, body.dark .tp-row, body.dark .m-agent, body.dark .m-file, body.dark #mStats .st, body.dark .mk, body.dark .tp-cmd { border-color: var(--hairline); }
   body.dark #rail { background: color-mix(in srgb, #15161A 82%, transparent); }
   body.dark #rail.left { box-shadow: 30px 0 80px rgba(0,0,0,.45); }
@@ -1169,6 +1175,30 @@
   .tp-chip.e { color: #B3261E; }
   .tp-row[role="button"] { cursor: pointer; } .tp-row[role="button"]:hover { background: rgba(21,20,20,.03); }
   body.dark .tp-search { background: #1E1F24; }
+  /* V4.1: ARCHIVADAS, «show more», the empty text's way out, and the DESHACER toast */
+  .tp-chip.x { border-style: dashed; }
+  .tp-chip.flash { animation: chipFlash 1.4s var(--ease) 2; }
+  @keyframes chipFlash { 50% { background: rgba(255,81,0,.14); border-color: #FF5100; } }
+  .tp-st.arch { border-style: dotted; color: var(--grey); }
+  .tp-row.archived .tp-t { color: var(--grey); }
+  .tp-lnk { display: inline-block; margin-left: 6px; padding: 2px 0; background: none; border: 0; border-bottom: 1px solid currentColor; font: 600 12px var(--ui); font-style: normal; color: var(--ink); cursor: pointer; }
+  .tp-empty .tp-lnk { display: block; margin: 8px 0 0; }
+  .tp-more { display: block; width: 100%; margin: 8px 0 4px; padding: 9px 10px; border: 1px dashed var(--hairline); border-radius: 10px; background: none; font: 600 11.5px var(--ui); color: var(--ink); cursor: pointer; }
+  .tp-more:hover { border-color: var(--ink); }
+  .tp-toast { position: fixed; left: 50%; bottom: 58px; z-index: 90; display: flex; align-items: center; gap: 10px; max-width: min(560px, calc(100vw - 32px));
+    padding: 10px 10px 10px 16px; border-radius: 14px; background: #151414; color: #F4F1E8; font: 13px/1.35 var(--ui);
+    box-shadow: 0 12px 34px rgba(0,0,0,.28); transform: translate(-50%, 16px); opacity: 0; transition: transform .25s var(--ease), opacity .25s var(--ease); }
+  .tp-toast.on { transform: translate(-50%, 0); opacity: 1; }
+  @media (min-width: 901px) { body:not(.tpMin) .tp-toast { left: calc((100vw - 430px) / 2); max-width: min(520px, calc(100vw - 520px)); } } /* centred on the office, clear of the panel */
+  .tp-toast[hidden] { display: none; }
+  .tp-toast .tt-x { flex: 1; min-width: 0; }
+  .tp-toast .tp-undo { flex: none; padding: 7px 12px; border-radius: 99px; border: 1px solid #FFB08A; background: none; color: #FFB08A; font: 700 11px var(--ui); letter-spacing: .1em; cursor: pointer; }
+  .tp-toast .tp-undo:hover { background: #FFB08A; color: #151414; }
+  .tp-toast .tp-tclose { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 0; background: none; color: #F4F1E8; font-size: 13px; cursor: pointer; }
+  .tp-toast button:focus-visible { outline: 2px solid #FFB08A; outline-offset: 2px; }
+  body.dark .tp-toast { background: #ECEAE3; color: #15161A; } body.dark .tp-toast .tp-tclose { color: #15161A; }
+  body.dark .tp-toast .tp-undo { border-color: #B4391E; color: #B4391E; } body.dark .tp-toast .tp-undo:hover { background: #B4391E; color: #fff; }
+  @media (prefers-reduced-motion: reduce) { .tp-toast { transition: none; } .tp-chip.flash { animation: none; } }
   /* calendar: backlog, day view, paused and failed */
   .cv-back { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
   .cv-bk { background: var(--cv-card); border: 1px solid var(--hairline); border-left: 3px solid var(--chip); border-radius: 12px; padding: 8px 10px; cursor: grab; }
@@ -1650,7 +1680,7 @@
   <div id="topconn"></div>
   <div id="topdock" role="toolbar" aria-label="Herramientas">
     <div id="topmodels"></div>
-    <span id="topAppr" style="display:none" role="button" tabindex="0" title="Esperan tu visto bueno">⚠ <span>0</span></span>
+    <button id="topAppr" type="button" style="display:none" title="Esperan tu visto bueno" aria-label="Esperan tu visto bueno">⚠ <span>0</span></button>
     <button id="topStudio" class="tb-ic" type="button" aria-label="Estudio: imágenes y video" title="Estudio — imágenes y video (E)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></button>
     <button id="topCal" class="tb-ic" type="button" aria-label="Calendario" title="Calendario — tareas y rutinas en sus días (P)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg></button>
     <button id="topPanel" class="tb-ic" type="button" aria-label="Mostrar u ocultar el panel de tareas" aria-pressed="true" title="Panel de tareas (T)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><path d="M15 3.5v17"/><path class="tb-fill" d="M15.5 4h3.5a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-3.5Z"/></svg></button>

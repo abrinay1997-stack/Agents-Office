@@ -23,7 +23,7 @@ export const file = brainPath => path.join(brainPath, 'Agents Office', 'routines
 export const stateFile = dataDir => path.join(dataDir, 'routines.json');
 export const LATE_AFTER = 90 * 1000; // a run more than 90 s past its minute was missed (asleep, or the office was off) → runs once, marked LATE
 
-const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 const readJSON = (p, fallback) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fallback; } };
 
 /** "Routines come to Marketing in a later release. This release: Emails, Accounting, Sales." */
@@ -149,7 +149,7 @@ export function guessNeedsOk(text) {
 
 /** The one-line question the agent asks when a routine's draft is waiting. */
 export function askLine(task) {
-  return `"${task.title}" is done and waiting for your OK — approve to send it, reject to tell me what to change.`;
+  return `«${task.title}» está lista y espera tu visto bueno: aprueba para enviarla, o rechaza y dime qué cambiar.`;
 }
 
 /** The "routines" list a lead reads back in chat. */

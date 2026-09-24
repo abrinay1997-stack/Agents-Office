@@ -1,11 +1,8 @@
-// Agents Office V3.6 — the Brain as an etched floor (AJ, 6 Sep 2026: option B + the panel strip).
-// The particle nebula is gone. The vault's wiki-link graph (src/braingraph.js, baked by
-// graph-build.mjs) is drawn into the floor of the centre pod as faint ink line-work: texture at
-// overview, a graph when you lean in. It moves only when an agent READS (a note glints green and a
-// dashed line runs to the desk for two seconds) or WRITES (a finished task becomes a new note off
-// its department's hub). The Task Status panel carries a small Brain strip — last read, notes
-// added today, Open the Brain — and G / clicking the pod opens the full-screen Obsidian graph.
-import * as THREE from 'three';
+// Agents Office — the Brain. V3.6 (AJ, 6 Sep 2026) drew the vault's wiki-link graph over the centre pod;
+// V4.1 (24 Sep 2026) retires that drawing: the centre shows only the Brain's tag (an animated icon whose
+// synapses fire when an agent reads or writes) and Dimitri. What lives here: the graph data (baked by
+// graph-build.mjs into src/braingraph.js, replaced by the server's live one) and the full-screen
+// Obsidian-style graph that G, the tag or a [[link]] opens.
 import { BRAIN as BRAIN0 } from './braingraph.js';
 import { PROFILE } from './profile.js';
 const BRAIN = (PROFILE && PROFILE.graph && PROFILE.graph.nodes && PROFILE.graph.nodes.length) ? PROFILE.graph : BRAIN0; // INDUSTRY PROFILE: the demo company's own graph
@@ -27,11 +24,11 @@ const DEPT_FOLDERS = {
 };
 let INK = '21,20,20'; // dark mode swaps this for the cream ink (setTheme)
 const GREEN = '#1E9070';
-const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42);
+const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42);
 const timeStr = ts => new Date(ts).toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' });
 const agentOf = id => AGENTS.find(a => a.id === id);
 
-export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCamera }) {
+export function initBrain({ esc }) {
   /* ---------- data ---------- */
   let nodes = BRAIN.nodes.map((n, i) => ({ ...n, i }));
   let links = BRAIN.links.map(([a, b]) => [a, b]);
@@ -51,95 +48,21 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     return cands[0];
   }
 
-  /* ---------- the Brain, as the approved mock shows it ----------
-     The mock's graph faces the camera: an upright ink drawing hovering over the pod (that is what
-     reads as a 3D object in the artifact). So the drawing lives on a camera-facing sprite, 15.4 ×
-     9.2 world units, centred above the slab — the 90 most linked notes in their own compact layout
-     (BRAIN.floor), edges rgba(ink,.224) at W/260, dots rgba(ink,.44) sized (0.8 + √links·0.28)·W/130,
-     the layout squashed to 0.6 vertically as the mock's sq .58 was. Every 6 s the biggest hub
-     pulses green for 2 s — the mock's glint. Colour and names live in the overlay. */
-  const BW = 17, BH = BW * 0.6;            // world size of the billboard
-  const PX = 1024, PY = Math.round(PX * 0.6);
-  const CENTRE = new THREE.Vector3(0, 1.3, 0);   // centred on the slab, as in the mock
-  let floorPos = new Map(BRAIN.floor.map(([x, y], i) => [i, { x, y }]));
-  const onFloor = n => floorPos.has(n.i);
-  const FP = n => floorPos.get(n.i);
-  const cv = document.createElement('canvas'); cv.width = PX; cv.height = PY;
-  const ctx = cv.getContext('2d');
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  const board = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  board.scale.set(BW, BH, 1); board.position.copy(CENTRE); board.renderOrder = 4;
-  board.userData.dept = 'brain';
-  brainGroup.add(board);
-  const FS = PX * 0.64, C = PX / 2, CY = PY / 2;                       // the mock filled its diamond; the sprite clips the spill
-  const P = n => { const f = FP(n); return [C + f.x * FS, CY + f.y * FS * 0.6]; };  // unit → canvas
-  const _r = new THREE.Vector3(), _u = new THREE.Vector3();
-  const W = n => { // unit → world, on the billboard plane (screen right / screen up from the camera)
-    const f = FP(n) || { x: n.x, y: n.y }; const cam = getCamera();
-    _r.setFromMatrixColumn(cam.matrixWorld, 0).normalize(); _u.setFromMatrixColumn(cam.matrixWorld, 1).normalize();
-    return CENTRE.clone().addScaledVector(_r, f.x * 0.64 * BW / 2).addScaledVector(_u, -f.y * 0.64 * 0.6 * BW / 2);
-  };
-  function etch() {
-    ctx.clearRect(0, 0, PX, PY);
-    ctx.lineWidth = PX / 260; ctx.strokeStyle = `rgba(${INK},.224)`;
-    for (const [a, b] of links) {
-      if (!onFloor(nodes[a]) || !onFloor(nodes[b])) continue;
-      const [x1, y1] = P(nodes[a]), [x2, y2] = P(nodes[b]); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    }
-    for (const n of nodes) {
-      if (!onFloor(n)) continue;
-      const [x, y] = P(n); const r = (0.8 + Math.sqrt(n.d) * 0.28) * PX / 130;
-      ctx.fillStyle = n.fresh ? GREEN : `rgba(${INK},.44)`;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
-    }
-    tex.needsUpdate = true;
+  /* ---------- the Brain in the office (V4.1, 24 Sep 2026) ----------
+     The centre of the office shows only the Brain's tag (its animated icon) and Dimitri. The ink
+     graph that hovered over the pod, its glints and the dashed lines to the desks are gone (the
+     owner: «the icon already says memory; the little lines were not pretty»). A read or a write now
+     fires the icon's synapses; the full graph lives behind G. */
+  function fire() {
+    const ic = document.querySelector('.brainTag .brainIc'); if (!ic) return;
+    ic.classList.remove('fire'); void ic.getBoundingClientRect(); ic.classList.add('fire');
   }
-  etch();
-  const pulses = [];
-  let nextPulse = performance.now() + 2500;
-
-  /* ---------- reads: a glint on the note + a dashed line to the desk ---------- */
-  const glintTex = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
-    const g = x.createRadialGradient(64, 64, 4, 64, 64, 60); g.addColorStop(0, 'rgba(30,144,112,1)'); g.addColorStop(0.35, 'rgba(30,144,112,.55)'); g.addColorStop(1, 'rgba(30,144,112,0)');
-    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-  })();
-  const fx = []; // { sprite, line, born }
-  const labels = []; // read pills
-  // the mock's glint: a soft green disc that swells and fades on the note for 2 s
-  function flatPulse(n) {
-    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glintTex, transparent: true, opacity: 0, depthTest: false }));
-    m.position.copy(W(n)); m.renderOrder = 61;
-    scene.add(m);
-    pulses.push({ m, born: performance.now() });
-  }
-  function glint(n, seat, label) {
-    flatPulse(n);
-    const p = W(n);
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glintTex, transparent: true, depthTest: false }));
-    s.position.copy(p); s.scale.set(0.9, 0.9, 1); s.renderOrder = 60;
-    scene.add(s);
-    if (label && hud && toScreen) { // "CLIENT EMAILS READ MOC-DELIVERY" — the mock's little pill
-      const el = document.createElement('div'); el.className = 'readlab'; el.textContent = label; hud.appendChild(el);
-      labels.push({ el, at: p.clone(), born: performance.now() });
-    }
-    let line = null;
-    if (seat) {
-      const geo = new THREE.BufferGeometry().setFromPoints([p.clone(), new THREE.Vector3(seat.x, 2.4, seat.z)]);
-      line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0x1E9070, dashSize: 0.9, gapSize: 0.6, transparent: true, opacity: 0.85, depthTest: false }));
-      line.computeLineDistances(); line.renderOrder = 59;
-      scene.add(line);
-    }
-    fx.push({ sprite: s, line, born: performance.now() });
-  }
-  let quiet = false; // V3.5 (AJ: "the alerts on the Brain are distracting"): a live office shows only REAL reads and writes — no theatre glints, no ambient pulse
+  let quiet = false; // V3.5: a live office shows only REAL reads and writes, never the demo's theatre
   function setQuiet(on) { quiet = !!on; }
   function read(agentId) {
-    const a = agentOf(agentId); if (!a) return;
+    const a = agentOf(agentId); if (!a || quiet) return;
     const n = pickFor(a.dept);
-    const r = getR()[agentId];
-    if (!quiet) glint(n, r && r.seat, `${a.name} leyó ${n.id}`);
+    fire();
     state.lastRead = { note: n.id, agent: a.name, ts: Date.now() };
     state.reads.set(n.id, { agent: a.name, ts: Date.now() });
     updateStrip();
@@ -150,16 +73,15 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     const folder = (DEPT_FOLDERS[a.dept] || ['00-Meta'])[0];
     const hubPool = folderNodes(folder).slice(0, 5); const hub = hubPool.length ? hubPool[Math.floor(Math.random() * hubPool.length)] : hubs[0];
     const id = slug(title) || 'note';
-    if (byId.has(id)) { glint(nodes[byId.get(id)]); return; }
+    fire();
+    if (byId.has(id)) return;
     const ang = Math.random() * Math.PI * 2, dist = 0.10 + Math.random() * 0.06;
     const n = { id, g: folder, d: 1, x: Math.max(-0.95, Math.min(0.95, hub.x + Math.cos(ang) * dist)), y: Math.max(-0.95, Math.min(0.95, hub.y + Math.sin(ang) * dist)), i: nodes.length, fresh: true };
-    const hf = FP(hub) || { x: hub.x, y: hub.y };
-    floorPos.set(n.i, { x: Math.max(-0.98, Math.min(0.98, hf.x + Math.cos(ang) * 0.09)), y: Math.max(-0.98, Math.min(0.98, hf.y + Math.sin(ang) * 0.09)) });
     nodes.push(n); byId.set(id, n.i); adj.push(new Set([hub.i])); adj[hub.i].add(n.i); links.push([hub.i, n.i]); hub.d++;
     state.notes++; state.newToday++;
     state.written.set(id, { agent: a.name, task: title, ts: Date.now() });
-    etch(); glint(n);
-    updateStrip();
+    const tag = document.querySelector('.brainTag .bt-brain b'); if (tag) tag.textContent = state.notes.toLocaleString('es-PA');
+    updateStrip(); if (openNow) dirty();
   }
   // LIVE: replace the graph with the server's (the user's real vault), keeping today's state
   function setGraph(g) {
@@ -169,46 +91,20 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     links = g.links.map(([a, b]) => [a, b]);
     adj = nodes.map(() => new Set()); for (const [a, b] of links) { adj[a].add(b); adj[b].add(a); }
     byId = new Map(nodes.map(n => [n.id, n.i])); hubs = nodes.slice(0, 8);
-    floorPos = new Map((g.floor || []).map(([x, y], i) => [i, { x, y }]));
     state.notes = g.notes;
     const keepSel = sel && sel.id; sel = null; hover = null; // indices changed: the old objects point at other notes now
     refreshGroups();
     if (search.value.trim()) { const q = fold(search.value.trim()); match = new Set(nodes.filter(n => fold(n.id).includes(q) || hits.some(h => h.name === n.id)).map(n => n.i)); } // the indices changed: the search points at the right notes again
     if (openNow) { meta.textContent = metaText(); chips(); if (keepSel && byId.has(keepSel)) sel = nodes[byId.get(keepSel)]; else if (keepSel && !pane.querySelector('.bv-undo')) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); } } // the note being read stays as it is (it used to reload and jump to the top)
     const tag = document.querySelector('.brainTag .bt-brain b'); if (tag) tag.textContent = state.notes.toLocaleString('es-PA');
-    etch(); updateStrip(); dirty();
+    updateStrip(); dirty();
   }
-  // LIVE: an agent read a named note (the server tells us which) — glint it if it is on the floor
+  // LIVE: an agent read a named note (the server tells us which) — the icon's synapses fire together
   function readNote(agentId, name) {
-    const a = agentOf(agentId); const i = byId.get(name);
-    if (!a) return;
-    const ic = document.querySelector('.brainTag .brainIc'); if (ic) { ic.classList.remove('fire'); void ic.getBoundingClientRect(); ic.classList.add('fire'); } // the synapses fire together when an agent reads
-    if (i != null && onFloor(nodes[i])) { const r = getR()[agentId]; glint(nodes[i], r && r.seat, `${a.name} leyó ${name}`); }
+    const a = agentOf(agentId); if (!a) return;
+    fire();
     state.lastRead = { note: name, agent: a.name, ts: Date.now() }; state.reads.set(name, { agent: a.name, ts: Date.now() });
     updateStrip();
-  }
-  function tick(now) {
-    if (now > nextPulse && !quiet) { flatPulse(nodes[0]); nextPulse = now + 6000; } // the mock's 6-second glint on the biggest hub (demo only)
-    for (let i = pulses.length - 1; i >= 0; i--) {
-      const p = pulses[i], k = (now - p.born) / 2000;
-      if (k >= 1) { scene.remove(p.m); p.m.material.dispose(); pulses.splice(i, 1); continue; }
-      const a = Math.sin(k * Math.PI);
-      p.m.material.opacity = 0.55 * a; const r = (0.5 + 0.75 * k) * BW / 130 * 4; p.m.scale.set(r, r, 1);
-    }
-    for (let i = labels.length - 1; i >= 0; i--) {
-      const l = labels[i], k = (now - l.born) / 2600;
-      if (k >= 1) { l.el.remove(); labels.splice(i, 1); continue; }
-      const [sx, sy] = toScreen(l.at);
-      l.el.style.transform = `translate(${sx}px,${sy - 18}px) translate(-50%,-100%)`;
-      l.el.style.opacity = k < 0.1 ? k / 0.1 : k > 0.8 ? (1 - k) / 0.2 : 1;
-    }
-    for (let i = fx.length - 1; i >= 0; i--) {
-      const f = fx[i], k = (now - f.born) / 2000;
-      if (k >= 1) { scene.remove(f.sprite); f.sprite.material.dispose(); if (f.line) { scene.remove(f.line); f.line.geometry.dispose(); f.line.material.dispose(); } fx.splice(i, 1); continue; } // dispose: a removed object keeps its GPU buffers otherwise
-      const a = k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85;
-      f.sprite.material.opacity = a; const sc = 1.2 + k * 1.6; f.sprite.scale.set(sc, sc, 1);
-      if (f.line) f.line.material.opacity = 0.85 * a;
-    }
   }
 
   /* ---------- the panel strip: the door ---------- */
@@ -456,7 +352,7 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
   ov.inert = true; // closed: out of Tab's reach and of screen readers (it stays in the page, faded out)
   addEventListener('resize', dirty);
 
-  function setTheme(dark) { INK = dark ? '236,234,227' : '21,20,20'; etch(); }
+  function setTheme(dark) { INK = dark ? '236,234,227' : '21,20,20'; }
   function show(id) { const i = byId.get(id); if (i == null) return false; open(); select(nodes[i]); centre(nodes[i]); return true; } // open the Brain on one note (a [[link]] in the chat)
-  return { show, read, readNote, write, setGraph, setTheme, setOwner, setQuiet, tick, open, close, toggle, isOpen: () => openNow, state, get nodes() { return nodes; }, get links() { return links; } };
+  return { show, read, readNote, write, setGraph, setTheme, setOwner, setQuiet, open, close, toggle, isOpen: () => openNow, state, get nodes() { return nodes; }, get links() { return links; } };
 }

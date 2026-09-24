@@ -66,9 +66,9 @@ Se unieron los duplicados y cada punto va con su estado.
 
 ## 3. Tareas, aprobaciones y rutinas (lógica)
 
-31. ⏳ [alta] Con dos borradores del mismo agente esperando, APROBAR/RECHAZAR en el chat actúa sobre el primero de la lista, no sobre el que se ve. La tarjeta tiene que guardar el id de su tarea. (L1)
-32. ⏳ [alta] Aprobar desde el detalle o el tablero no limpia el ⚠ del agente, ni el contador, ni la tarjeta del chat. (L2)
-33. ⏳ [alta] RECHAZAR en el chat quita el ⚠ aunque la tarea sigue esperando, y lo siguiente que escribes se toma como corrección. (L7)
+31. ✅ [alta] Con dos borradores del mismo agente esperando, APROBAR/RECHAZAR en el chat actuaba sobre el primero de la lista, no sobre el que se ve. Ahora cada tarjeta guarda el id de su tarea y cada botón actúa sobre la suya. (L1)
+32. ✅ [alta] Aprobar desde el detalle o el tablero no limpiaba el ⚠ del agente, ni el contador, ni la tarjeta del chat. Ahora el ⚠ sigue a los borradores que de verdad esperan, venga la decisión de donde venga (también de otra ventana). (L2)
+33. ✅ [alta] RECHAZAR en el chat quitaba el ⚠ aunque la tarea seguía esperando, y lo siguiente que escribías se tomaba como corrección. Ahora RECHAZAR abre la nota en la propia tarjeta (DEVOLVER CON ESTA NOTA / CANCELAR) y el ⚠ se queda hasta que la nota sale. (L7)
 34. ✅ [alta] «tarea: …» en el chat creaba, en la oficina real, una tarea falsa que solo existía en la página. Ahora va al servidor, y también acepta «agregar tarea:» y «pendiente:». (L3)
 35. ✅ [alta] «El viernes a las 10 publica…» se volvía una rutina SEMANAL. Ahora:
     - un día nombrado una vez es una tarea programada para esa fecha;
@@ -77,16 +77,16 @@ Se unieron los duplicados y cada punto va con su estado.
 36. ✅ [alta] En el chat de un agente, «¿qué hiciste el martes?» respondía «¿A qué hora?» y podía crear una rutina. (L5)
 37. ✅ [alta] ELIMINAR una rutina desde el panel o el chat la borraba sin preguntar, y un fallo no se mostraba. (L11)
 38. ✅ [media] Solo se entendía «revise: …» en inglés. Ahora también «revisa:», «corrige:» y «cambia:». (L25)
-39. ⏳ [media] «Limpiar listas» y «Archivar» no tienen vista de archivadas ni Deshacer, aunque el servidor ya permite desarchivar. (L12)
-40. ⏳ [media] La lista muestra solo 60 tareas sin avisar. (L23)
-41. ⏳ [media] La lista se reordena bajo el cursor y un clic puede abrir otra tarea. (L24)
-42. ⏳ [media] Con un filtro activo, la lista vacía dice «Nada aquí por ahora» sin mencionar el filtro. (L39)
+39. ✅ [media] «Limpiar listas» y «Archivar» no tenían vista de archivadas ni Deshacer. Ahora hay un filtro ARCHIVADAS con «Devolver a la lista» en cada fila, y un aviso con DESHACER (10 s, se pausa con el cursor encima). (L12)
+40. ✅ [media] La lista mostraba solo 60 tareas sin avisar. Ahora dice «Se ven 60 de N» y muestra 60 más al pulsarlo. (L23)
+41. ✅ [media] La lista se reordenaba bajo el cursor y un clic podía abrir otra tarea. Ahora se queda quieta mientras el ratón está sobre ella (y se mueve), y una fila con el foco del teclado lo conserva al redibujarse. (L24)
+42. ✅ [media] Con un filtro activo, la lista vacía decía «Nada aquí por ahora» sin mencionar el filtro. Ahora nombra el filtro o la búsqueda y ofrece «Ver todas» o «Borrar la búsqueda». (L39)
 43. ⏳ [media] «LISTO» y «ENTREGAS REALES» cuentan distinto la misma cosa. (L31)
-44. ⏳ [media] Al abrir la página se vuelven a publicar en los chats las entregas pasadas, incluidas las archivadas. (L37)
-45. ⏳ [media] El ⚠ de arriba cuenta agentes, no borradores, y siempre lleva al primero. (L42)
-46. ⏳ [baja] Crear una rutina cambia el filtro del panel a «Programadas» sin avisar. (L58)
-47. ⏳ [baja] Tras Archivar o Eliminar en el detalle no hay aviso ni Deshacer. (L57)
-48. ⏳ [baja] Se añade una espera artificial de 0,5–1 s antes de enviar un mensaje del chat real. (L59)
+44. ✅ [media] Al abrir la página se volvían a publicar en los chats las entregas pasadas, incluidas las archivadas. Ahora las archivadas no vuelven, y las demás quedan solo como la tarjeta del archivo (sin «Listo», sin aviso en la actividad). (L37)
+45. ✅ [media] El ⚠ de arriba contaba agentes, no borradores, y siempre llevaba al primero. Ahora cuenta borradores y cada clic lleva al siguiente, del que más espera al más nuevo; es un botón de verdad, con su nombre para lectores de pantalla. (L42)
+46. ✅ [baja] Crear una rutina cambiaba el filtro del panel a «Programadas» sin avisar. Ahora el filtro se queda, el chip PROGRAMADAS destella y el aviso trae «Ver en PROGRAMADAS». (L58)
+47. ✅ [baja] Tras Archivar o Eliminar en el detalle no había aviso ni Deshacer. Ahora los dos lo tienen; Eliminar ya no pregunta: la tarea sale al instante y el servidor la borra cuando pasa el DESHACER (o al cerrar la página). (L57)
+48. ✅ [baja] Se añadía una espera artificial de 0,5–1 s antes de enviar un mensaje del chat real. Ahora solo la demo «escribe». (L59)
 
 ## 4. Dimitri
 

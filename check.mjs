@@ -363,6 +363,8 @@ else {
       const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Rutina programada/.test(hint)) throw new Error('hint: ' + hint);
       await page.waitForTimeout(400);
       const n = await page.evaluate(() => window.CC.routines().length); if (n !== 1) throw new Error('routines: ' + n);
+      const kept = await page.evaluate(() => document.querySelector('.tp-chip.on')?.dataset.f); if (kept === 'sched') throw new Error('the panel jumped to SCHEDULED on its own (audit 46)');
+      await page.click('.tp-hint .tp-lnk[data-f="sched"]'); await page.waitForTimeout(300); // «Ver en PROGRAMADAS» in the hint
       const row = await page.evaluate(() => [...document.querySelectorAll('.tp-row.sched .tp-t')].some(e => /triage the inbox/i.test(e.textContent))); if (!row) throw new Error('no SCHEDULED row');
       const strip = await page.evaluate(() => { const e = document.querySelector('.tp-next'); return e.hidden ? '' : e.textContent; }); if (!/PRÓXIMA/.test(strip) || !/triage/i.test(strip)) throw new Error('next-up strip: ' + strip);
       await page.keyboard.press('b'); await page.waitForTimeout(600);
@@ -469,6 +471,24 @@ else {
       await page.evaluate(() => window.CC.requestApproval('ada'));
       await page.waitForFunction(() => document.querySelectorAll('.tp-row.waiting').length > 0, null, { timeout: 4000 }).catch(() => {}); // the panel renders on the next frame; headless WebGL frames can be slow
       const w = await page.evaluate(() => document.querySelectorAll('.tp-row.waiting').length); if (!w) throw new Error('no waiting row (ada: ' + (await page.evaluate(() => window.CC.R.ada.state)) + ')');
+    });
+    await step('smoke: V4.1 — Limpiar listas archives with DESHACER, ARCHIVADAS brings one back, the list says when it is cut', async () => {
+      const click = (sel) => page.click(sel, { timeout: 5000 }).catch(e => { throw new Error(`click ${sel}: ${e.message.split('\n')[0]}`); });
+      await page.evaluate(() => { const s = document.querySelector('.tp-search'); s.value = ''; s.dispatchEvent(new Event('input')); document.querySelector('.tp-chip[data-f="all"]').click(); });
+      const cut = await page.evaluate(() => { const shown = document.querySelectorAll('.tp-row').length, m = document.querySelector('.tp-more'); return { shown, more: m ? m.textContent : '' }; });
+      if (cut.shown >= 60 && !/Se ven 60 de/.test(cut.more)) throw new Error('60 rows and no «show more»: ' + cut.more);
+      await click('.tp-chip[data-f="done"]');
+      const n0 = await page.evaluate(() => document.querySelectorAll('.tp-row.done').length); if (!n0) return 'no finished tasks yet (skipped)';
+      await click('.tp-clear'); await page.waitForFunction(() => !document.querySelector('.tp-toast').hidden, null, { timeout: 4000 });
+      const arch = await page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0)); if (arch < n0) throw new Error(`archived ${arch} of ${n0}`);
+      await click('.tp-undo'); await page.waitForFunction(() => !document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 }).catch(() => {});
+      const left = await page.evaluate(() => document.querySelector('.tp-chip[data-f="archived"]')?.textContent || ''); if (left) throw new Error('DESHACER left ' + left);
+      await click('.tp-clear'); await page.waitForFunction(() => document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 });
+      await click('.tp-chip[data-f="archived"]'); const a1 = await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length);
+      await click('.tp-row.archived button[data-act="unarchive"]'); await page.waitForTimeout(400);
+      const a2 = await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length); if (a2 !== a1 - 1) throw new Error(`unarchive: ${a1} → ${a2}`);
+      await page.evaluate(() => document.querySelector('.tp-chip[data-f="all"]').click());
+      return `${n0} archived · DESHACER brings them back · ARCHIVADAS ${a1} → ${a2}${cut.more ? ' · ' + cut.more : ''}`;
     });
     await step('smoke: no errors after the run', async () => { if (errors.length) throw new Error(errors[0]); });
   } catch (e) { bad('smoke: browser', e.message); }

@@ -121,7 +121,7 @@ export function initDetail(ctx) {
     if (a === 'reject') { const fb = el.querySelector('#tdFb').value.trim(); if (!fb) { el.querySelector('#tdFb').focus(); return msg('Escribe qué debe cambiar.', true); } return run('reject', { feedback: fb }, 'Devuelto: lo rehace con tu nota.'); }
     if (a === 'repeat') return run('repeat', {}, 'Listo: es una tarea nueva en pendientes.');
     if (a === 'archive') { const note = el.querySelector('.td-withnote')?.checked; return run('archive', { note }, 'Archivada.'); }
-    if (a === 'delete') { const note = el.querySelector('.td-withnote')?.checked; if (!confirm(`¿Eliminar «${t.title}»${note ? ' y su nota del Cerebro' : ''}? No se puede deshacer${note ? ' (la nota va a la papelera)' : ''}.`)) return; return run('delete', { note }, 'Eliminada.'); }
+    if (a === 'delete') { const note = el.querySelector('.td-withnote')?.checked; return run('delete', { note }, 'Eliminada.'); } // V4.1: no confirm box — the toast offers DESHACER for 8 s
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
   function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; lastSig = sig(t); el.hidden = false; render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
