@@ -50,6 +50,10 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.1 (24 sep, rama `claude/gracious-pascal-aryw2d`):
+  - el centro de la oficina sin la red neuronal: solo el icono del Cerebro y Dimitri;
+  - los 31 ⏳ de `docs/auditoria-ux-2026-09-24.md`: aprobaciones por borrador, ARCHIVADAS con DESHACER, trampas de foco (`src/modal.js`), hoja de atajos «?», teclado, papelera de notas, tablet;
+  - la auditoría visual de 50 puntos (`docs/auditoria-visual-2026-09-24.md`), con 37 aplicados: tarjetas compactas y encuadre en pantallas estrechas, contraste AA en oscuro, landmarks;
 - motor único en el servidor;
 - Estudio V2 (41 modelos, Higgsfield, trabajos en segundo plano, Animar);
 - barra superior V4 con dock de herramientas;
@@ -57,16 +61,22 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - filtros y búsqueda del Cerebro;
 - calendario con rutinas en los seis departamentos;
 - ficha del agente;
-- auditoría de 100 puntos, 69 arreglados.
+- auditoría de 100 puntos: los 100 arreglados.
 
 **Siguiente, en este orden:**
-1. Los 31 puntos ⏳ de `docs/auditoria-ux-2026-09-24.md`, empezando por:
-   - el flujo de aprobaciones (31–33): puede aprobar el borrador equivocado;
-   - la vista de archivadas con Deshacer (39);
-   - las trampas de foco de las ventanas (22–24);
-   - la lista de tareas (40–42).
+1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
+   - el tamaño de los nombres de los agentes en la vista general (8);
+   - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);
+   - el punto rojo que parpadea en las tarjetas (9).
 2. Probar el Estudio con una key real: Higgsfield `HF_KEY`, Nano Banana `GEMINI_API_KEY` o fal.ai `FAL_KEY`.
 3. Las mejoras que el dueño vaya pidiendo. Una herramienta nueva entra como un botón más en el dock de la barra superior (ver «The top bar»).
+
+**Reglas de la interfaz (V4.1):**
+- Toda ventana modal nueva llama a `modal.open(el)` al abrirse y a `modal.close(el)` al cerrarse (`src/modal.js`). Mientras está abierta, el resto de la página queda inerte y Tab da la vuelta dentro de ella.
+- Todo atajo nuevo va también en la hoja «?» (`keysSheet` en `src/main.js`).
+- Los colores nuevos pasan 4,5:1 en claro y en oscuro.
+- El anillo de foco usa `var(--focus)`.
+- Nada que se vea en la oficina depende del ancho de la ventana sin probarlo a 390 px (teléfono), a 1024 px y a 1512 px.
 
 ## Changing the agents
 
@@ -205,7 +215,7 @@ The owner's right hand, above the six departments: the ◆ tag beside the Brain 
 
 ## The top bar (V4, 24 Sep 2026)
 
-Brand (the business name) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta), approvals ⚠, the Estudio (clapperboard, E), the calendar (P), and the task panel's switch (T). A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key. The plan's usage (session · week) sits in the bottom-left corner.
+Brand (the business name) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta), approvals ⚠ (it counts drafts; each click goes to the next one), the Estudio (clapperboard, E), the calendar (P), the keyboard shortcuts (?), and the task panel's switch (T). A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key. The plan's usage (session · week) sits in the bottom-left corner.
 
 ## The Estudio (images and video)
 

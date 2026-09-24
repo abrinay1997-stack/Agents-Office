@@ -28,6 +28,7 @@ bottom-left and a licence line along the bottom; leave them in place.
 
 ## Latest updates
 
+- **V4.1: a cleaner centre, safer approvals, every screen size** — 24 Sep 2026 · The centre of the office is now the Brain's icon and Dimitri, without the web of lines. Each approval card acts on its own draft; REJECT asks for the note on the card; the ⚠ counts drafts. The panel has ARCHIVADAS and DESHACER. Windows keep the keyboard inside them; `?` lists every key. On a laptop, tablet or phone the department cards fold to one line and the office fits the screen. Dark mode passes AA contrast. The last 31 points of the UX audit are fixed, and a visual audit of 50 more is in [docs/auditoria-visual-2026-09-24.md](docs/auditoria-visual-2026-09-24.md).
 - **V4: order and room to grow** — 24 Sep 2026 · The mouse wheel scrolls every panel again (the 3D view used to take it everywhere). A calm top bar: your business name, the connectors in their own lane with a panel that says which work and which need attention, a fixed dock of icon tools (Estudio, calendar, the task panel's switch). Dimitri, your right hand, sits beside the Brain and talks, reports, analyses — and splits work only when there is work. The Brain filters by folder, date, author and department and searches the text of every note. «el viernes a las 10, …» schedules one task; «cada viernes…» makes a routine. The UX audit: [docs/auditoria-ux-2026-09-24.md](docs/auditoria-ux-2026-09-24.md).
 - **The Estudio (E)** — 24 Sep 2026 · Real images and video, by hand or by the agents: Higgsfield (Soul, Kling 3, Seedance), Nano Banana, GPT Image, Grok and fal.ai, 41 models with their own settings; start/end frames, references and your own uploads; «Animar» turns any image into a video; jobs run in the background and survive a restart; a masonry gallery with multi-select, ZIP and undo. → [The Estudio](#the-estudio-images-and-video-for-real)
 ![The calendar — tasks and routines on their days, a routine being scheduled from a date](assets/readme-calendar.jpg)
@@ -402,7 +403,8 @@ every note they read, so your graph grows as the office works.
 | `C` | Chat with the department lead |
 | `X` | Send two agents to meet at the Brain |
 | `V` | Full screen view with dimmed lighting |
-| `D` | Dark mode. http://localhost:4520/dark opens in it |
+| `D` | Dark mode (remembered on this browser). http://localhost:4520/dark opens in it |
+| `?` | Every key in one sheet (also the keyboard button in the top bar); each line does it |
 | `Esc` | Back |
 
 ## The build loop

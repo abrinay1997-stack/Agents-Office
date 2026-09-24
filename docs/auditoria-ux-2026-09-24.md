@@ -8,7 +8,7 @@ Estos son los 100 problemas más importantes de la oficina: desplazamiento, nave
 
 Se unieron los duplicados y cada punto va con su estado.
 
-**✅ = arreglado en esta ronda** (commits `c69cfd4` y siguientes) · **⏳ = pendiente** · la gravedad va entre corchetes.
+**✅ = arreglado** (commits `c69cfd4` y siguientes; los 31 que quedaban, en V4.1, rama `claude/gracious-pascal-aryw2d`) · **⏳ = pendiente** · la gravedad va entre corchetes.
 
 ## 1. Lo que reportó el dueño
 
@@ -165,4 +165,13 @@ Se unieron los duplicados y cada punto va con su estado.
 
 ---
 
-**Resumen:** 69 arreglados en esta ronda, 31 pendientes. Los pendientes de mayor impacto son el flujo de aprobaciones (31–33), la vista de archivadas con Deshacer (39) y las trampas de foco en las ventanas (22). Van primero en la próxima ronda.
+**Resumen:** los 100 están arreglados. En la primera ronda se arreglaron 69 (V4) y en V4.1 los 31 que quedaban:
+
+- el flujo de aprobaciones por borrador;
+- las archivadas con Deshacer;
+- las trampas de foco y la hoja de atajos;
+- la lista de tareas, el teclado, la papelera de notas, la tablet y el español.
+
+Siguen parciales el 84 y el 85: el calendario y el tablero en un teléfono. Son mucho mejores que antes, pero el calendario pide una vista de agenda (ver `docs/auditoria-visual-2026-09-24.md`, punto 38).
+
+La siguiente revisión, la visual (50 hallazgos, 37 aplicados), está en [auditoria-visual-2026-09-24.md](auditoria-visual-2026-09-24.md).
