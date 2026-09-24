@@ -52,6 +52,19 @@ export function initCalendar(ctx) {
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it)
   const attr = v => esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // inside title="…": a quote in a title must not end the attribute
   let dragging = null; // { kind: 't' | 'r', id, at } while a card is being dragged — nothing re-renders under it
+  // V4.2 (audit B21): cancelling a task or deleting a routine no longer asks «¿seguro?» — it goes at once, with DESHACER for
+  // 8 seconds, and only then reaches the server (closing the calendar, or the next one, sends it straight away)
+  const gone = new Set(); let undoT = null, commitFn = null;
+  const toastEl = document.createElement('div'); toastEl.className = 'cv-toast'; toastEl.hidden = true; toastEl.setAttribute('role', 'status');
+  toastEl.innerHTML = '<span></span><button type="button">DESHACER</button>'; ov.appendChild(toastEl);
+  function flushUndo() { clearTimeout(undoT); undoT = null; toastEl.hidden = true; const f = commitFn; commitFn = null; if (f) f(); }
+  function later(key, label, commit) {
+    flushUndo(); gone.add(key); closePop(); render();
+    commitFn = async () => { const r = await commit(); gone.delete(key); if (openNow) render(); if (r && r.ok === false) { E.stats.innerHTML = `<span class="amber">No se pudo: ${esc(r.error || 'error')}</span>`; } };
+    toastEl.querySelector('span').textContent = label; toastEl.hidden = false;
+    toastEl.querySelector('button').onclick = () => { clearTimeout(undoT); commitFn = null; toastEl.hidden = true; gone.delete(key); render(); E.stats.innerHTML = '<span class="cv-said">Deshecho.</span>'; };
+    undoT = setTimeout(flushUndo, 8000);
+  }
 
   /* ---------- what is on each day ---------- */
   const AGENDA_DAYS = 14;
@@ -68,13 +81,14 @@ export function initCalendar(ctx) {
     const by = {}; const push = ev => { if (!deptOn.has(ev.dept)) return; if (!matches(ev.title + ' ' + (agentOf(ev.agent)?.name || ''))) return; (by[ymd(new Date(ev.at))] ||= []).push(ev); };
     const today = startOfDay(Date.now());
     for (const t of tasks) {
-      if (t.piece) continue; // a team's pieces sit under the lead's card
+      if (t.piece || gone.has('t:' + t.id)) continue; // a team's pieces sit under the lead's card; a cancelled one waits out its DESHACER unseen
       if (onlyRoutine && t.routine !== onlyRoutine) continue;
       if (t.state === 'done') { if (showDone && t.doneAt >= from && t.doneAt < to) push({ kind: 'done', at: t.doneAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'scheduled') { if (t.dueAt >= from && t.dueAt < to) push({ kind: 'sched', at: t.dueAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'waiting' || t.state === 'doing' || t.state === 'next') { if (today >= from && today < to) push({ kind: t.state, at: Math.max(today + 1, Math.min(today + DAY - 1, t.changedAt || Date.now())), title: t.title, dept: t.dept, agent: t.agent, t }); }
     }
     if (showRoutines) for (const r of routines) {
+      if (gone.has('r:' + r.id)) continue;
       if (onlyRoutine && r.id !== onlyRoutine) continue; // paused ones stay, greyed: the timetable is not a guess
       if (!r.when || r.when.kind === 'minutes') continue; // a filming cadence is not a calendar
       const startAt = Math.max(from - 1, Date.now() - 1); // forward: the runs to come
@@ -214,7 +228,7 @@ export function initCalendar(ctx) {
   }
   function renderRail() {
     renderBacklog(); renderLoad();
-    const list = routines.slice().sort((x, y) => (x.paused ? Infinity : x.nextAt || Infinity) - (y.paused ? Infinity : y.nextAt || Infinity));
+    const list = routines.filter(r => !gone.has('r:' + r.id)).sort((x, y) => (x.paused ? Infinity : x.nextAt || Infinity) - (y.paused ? Infinity : y.nextAt || Infinity));
     E.railN.textContent = list.length;
     E.rail.innerHTML = list.length ? list.map(r => { const a = agentOf(r.agent), chip = DEPTS[r.dept].chip; return `<div class="cv-r${r.paused ? ' paused' : ''}${onlyRoutine === r.id ? ' on' : ''}" data-rid="${r.id}" style="--chip:${chip}" role="button" tabindex="0" aria-pressed="${onlyRoutine === r.id}" title="Ver solo esta rutina en el calendario">
         <div class="cv-r-t">${esc(r.title)}</div>
@@ -301,12 +315,7 @@ export function initCalendar(ctx) {
       E.pop.hidden = false; place(E.pop, el);
       E.pop.querySelectorAll('textarea, input, select').forEach(x => x.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePop(); }));
       E.pop.querySelector('[data-act="open"]').addEventListener('click', () => { close(); openAgent(t.agent, 'chat'); });
-      E.pop.querySelector('[data-act="cancel"]')?.addEventListener('click', async e => {
-        if (!confirm(`¿Cancelar «${t.title}»? No se ejecutará.`)) return;
-        e.currentTarget.disabled = true; const r = await cancelTask(t);
-        if (r && r.ok === false) { say('No se pudo cancelar: ' + r.error, true); e.currentTarget.disabled = false; return; }
-        closePop(); render();
-      });
+      E.pop.querySelector('[data-act="cancel"]')?.addEventListener('click', () => later('t:' + t.id, `Cancelada: «${t.title.slice(0, 60)}».`, () => cancelTask(t)));
       E.pop.querySelector('[data-act="save"]')?.addEventListener('click', async e => {
         const btn = e.currentTarget, P = { text: E.pop.querySelector('.cv-text'), date: E.pop.querySelector('.cv-date'), time: E.pop.querySelector('.cv-time'), model: E.pop.querySelector('.cv-model') };
         const text = P.text.value.trim(); if (!text) { P.text.focus(); return; }
@@ -368,7 +377,7 @@ export function initCalendar(ctx) {
         if (!res || !res.ok) { say((res && res.error) || 'No se pudo.', true); b.disabled = false; return; }
         closePop(); render(); return;
       }
-      if (act === 'delete' && !confirm(`¿Eliminar la rutina «${r.title}»? Sale del horario para siempre.`)) return;
+      if (act === 'delete') { later('r:' + r.id, `Rutina eliminada: «${r.title.slice(0, 60)}».`, () => rtAct(r.id, 'delete')); return; }
       b.disabled = true;
       const res = await rtAct(r.id, act);
       if (res && res.ok === false) { say('No se pudo: ' + res.error, true); b.disabled = false; return; }
@@ -521,7 +530,7 @@ export function initCalendar(ctx) {
   $('#cvKeys')?.addEventListener('click', () => dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))); // V4.2 (audit B38): the keys live in the «?» sheet, not in the band
   ov.inert = true; // closed: out of Tab's reach
   function open() { if (openNow) return; openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging) render(); }, 30000); }
-  function close() { if (!openNow) return; openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from
+  function close() { if (!openNow) return; flushUndo(); openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from
   function toggle() { openNow ? close() : open(); }
   function openAt(ts) { anchor = startOfDay(ts || Date.now()); if (view === 'month' && ts) view = 'week'; if (openNow) { closePop(); render(); } else open(); setTimeout(() => { const el = E.grid.querySelector(`.cv-day[data-day="${ymd(new Date(anchor))}"]`); if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); } }, 60); }
   function openRoutine(rid) { // V4.1 (audit 29): a routine clicked on the board opens here, on its next run, with its editor

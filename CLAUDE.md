@@ -50,9 +50,9 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
-- V4.2 (24 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos), con 31 ya arreglados:
-  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió); la ventanita de la rutina con el título entero y todas sus acciones a la vista.
-  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono; en cada tarjeta ★, una acción con texto y el menú «⋯» (la papelera al final); «Mejorar el prompt» dice el idioma (en inglés con su traducción debajo, o en español); con el Estudio cerrado, lo que termina se avisa (número en la claqueta del dock y aviso con VER).
+- V4.2 (24 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos), con 38 ya arreglados:
+  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió); la ventanita de la rutina con el título entero y todas sus acciones a la vista; cancelar una tarea o eliminar una rutina sin pregunta, con DESHACER 8 segundos.
+  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono; en cada tarjeta ★, una acción con texto y el menú «⋯» (la papelera al final); «Mejorar el prompt» dice el idioma (en inglés con su traducción debajo, o en español); con el Estudio cerrado, lo que termina se avisa (número en la claqueta del dock y aviso con VER); cada trabajo en marcha dice cuánto suele tardar (la mediana de ese modelo) con una barra; «Cancelar» en un motor de pago pregunta en la tarjeta si se cobra igual; el visor ampliado dice «3 de 8» y tiene «Variar» (mismo prompt, la imagen como referencia).
 - V4.1 (24 sep, rama `claude/gracious-pascal-aryw2d`):
   - el centro de la oficina sin la red neuronal: solo el icono del Cerebro y Dimitri;
   - los 31 ⏳ de `docs/auditoria-ux-2026-09-24.md`: aprobaciones por borrador, ARCHIVADAS con DESHACER, trampas de foco (`src/modal.js`), hoja de atajos «?», teclado, papelera de notas, tablet;
@@ -68,9 +68,9 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 
 **Siguiente, en este orden:**
 1. Lo que queda abierto en `docs/auditoria-estudio-calendario-2026-09-24.md`. Lo que más molesta:
-   - un trabajo en marcha sin tiempo estimado (A39) y «Cancelar» sin decir si se cobra (A40);
-   - cancelar o eliminar en el calendario pregunta en vez de ofrecer DESHACER (B21);
-   - el visor ampliado: sin posición «3 de 8» y sin «Variar» (A32, A35).
+   - en el Estudio, agrupar las imágenes de un mismo pedido (A19) y separar la galería por días (A23);
+   - en el calendario, preguntar «¿solo esta vez o siempre?» al mover una rutina (B30) y editar los días de una rutina (B23);
+   - la tarjeta de un agente en la galería no dice para qué tarea fue (A25).
 2. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
    - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);

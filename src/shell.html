@@ -1794,6 +1794,10 @@
   /* B33: a draft that is really waiting, in amber; «pedirá tu OK» is only a note */
   .cv-wait { color: #8A6414; font-weight: 700; } body.dark .cv-wait { color: #E8B44A; }
   .cv-said b { color: var(--ink); font-weight: 700; }
+  .cv-toast { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 46; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 24px); padding: 10px 10px 10px 16px; border-radius: 14px; background: #151414; color: #FDFFF8; font-size: 13px; box-shadow: 0 16px 40px rgba(0,0,0,.3); }
+  .cv-toast[hidden] { display: none; }
+  .cv-toast button { font-family: var(--ui); font-size: 11.5px; letter-spacing: .12em; font-weight: 700; padding: 7px 12px; border-radius: 99px; border: 0; background: #FDFFF8; color: #151414; cursor: pointer; flex: none; }
+  .cv-toast button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   /* B7: what already happened — a failed run in red, a run that never happened greyed and dashed, a skipped one struck through */
   .cv-fail { color: #B3261E; margin-right: 4px; } body.dark .cv-fail { color: #FF8A7A; }
   .cv-ev.done.err { border-left-color: #B3261E; background: color-mix(in srgb, #B3261E 8%, var(--cv-card)); }
@@ -1857,6 +1861,15 @@
   .st-all { font: inherit; background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; color: var(--ink); cursor: pointer; margin-left: 6px; }
   /* A44: on a phone, «Crear | Galería» — one pane at a time, the whole screen for it */
   .st-ptabs { display: none; }
+  /* A39 · A40: an estimated bar and «suele tardar»; the cancel question in the tile */
+  .st-jbar { display: block; width: 70%; height: 4px; border-radius: 99px; background: rgba(127,127,127,.22); overflow: hidden; margin: 8px auto 0; }
+  .st-jbar i { display: block; height: 100%; background: #C43E00; border-radius: 99px; transition: width 2.4s linear; }
+  .st-jq { font-size: 12px; line-height: 1.35; color: var(--ink); flex-basis: 100%; }
+  .st-jacts { flex-wrap: wrap; } .st-jacts .warn { color: #B3261E; border-color: rgba(179,38,30,.4); } body.dark .st-jacts .warn { color: #FF8A7A; }
+  /* A32: «3 de 8» with its arrows above the info, none over the picture */
+  .st-lbox .st-lnav { position: static; transform: none; width: 34px; height: 34px; font-size: 20px; line-height: 1; border-radius: 10px; background: none; border: 1px solid var(--hairline); color: var(--ink); }
+  .st-lbox .st-lnav:hover:not(:disabled) { background: var(--ink); color: var(--cream); } .st-lbox .st-lnav:disabled { opacity: .35; cursor: default; }
+  .st-lpos { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12.5px; color: var(--grey); font-variant-numeric: tabular-nums; }
   /* A41: a job that ends with the Estudio closed — a count on the clapperboard and a note with VER */
   #topStudio { position: relative; }
   #topStudio.st-news::after { content: attr(data-n); position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; background: #C43E00; color: #fff; font-family: var(--ui); font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center; border: 2px solid var(--cream); }

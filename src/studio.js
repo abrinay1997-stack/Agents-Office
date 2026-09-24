@@ -203,14 +203,24 @@ export function initStudio(ctx) {
       && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file}`.toLowerCase().includes(w)));
   }
   const tileJobs = () => jobs.filter(j => j.state === 'queued' || j.state === 'running' || (j.state === 'failed' && Date.now() - (j.doneAt || j.at) < 3 * 864e5));
+  // V4.2 (audit A39): how long this model usually takes — the median of its last finished jobs, else a sensible guess
+  function typical(j) {
+    const same = jobs.filter(x => x.model === j.model && x.state === 'done' && x.startedAt && x.doneAt).slice(0, 10).map(x => x.doneAt - x.startedAt).sort((a, b) => a - b);
+    return same.length >= 2 ? same[Math.floor(same.length / 2)] : j.engine === 'prueba' ? 5000 : j.kind === 'video' ? 180000 : 25000;
+  }
+  const approx = ms => ms < 60000 ? `~${Math.max(5, Math.round(ms / 5000) * 5)} s` : `~${Math.round(ms / 60000)} min`;
+  const askCancel = new Set(); // V4.2 (audit A40): a job already sent to a paid engine asks once, in the tile, before it is cancelled
   function jobTile(j) {
     const live = j.state !== 'failed', t = Date.now() - (j.startedAt || j.at);
+    const typ = typical(j), pct = j.state === 'running' ? Math.min(95, Math.round(t / typ * 100)) : 0, slow = j.state === 'running' && t > typ * 1.6;
+    const paid = j.state === 'running' && j.engine !== 'prueba';
     return `<figure class="st-card st-job ${j.state}" data-job="${j.id}">
       <div class="st-jbody" style="aspect-ratio:${ar(j.s && j.s.aspectRatio) || '1 / 1'}">
-        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : j.kind === 'video' ? 'Generando video' : 'Generando'}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)}</span>` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
+        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : j.kind === 'video' ? 'Generando video' : 'Generando'}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)} · ${slow ? 'tarda más de lo normal' : `suele tardar ${approx(typ)}`}</span>${j.state === 'running' ? `<span class="st-jbar" aria-hidden="true"><i style="width:${pct}%"></i></span>` : ''}` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
         <p>${esc(j.prompt)}</p><span class="st-meta">${esc(j.modelName)}${j.by === 'agent' ? ' · ' + esc(agentName(j.agent) || 'agente') : ''}</span>
       </div>
-      <div class="st-jacts">${live ? `<button type="button" data-j="cancel">Cancelar</button>` : `<button type="button" data-j="retry" class="pri">Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
+      <div class="st-jacts">${live ? (askCancel.has(j.id) ? `<span class="st-jq">Ya se envió a ${esc(j.engineName || 'el motor')}: puede cobrarse igual.</span><button type="button" data-j="cancel-yes" class="warn">Cancelar igual</button><button type="button" data-j="cancel-no">Seguir</button>`
+        : `<button type="button" data-j="cancel" title="${j.state === 'queued' ? 'Aún no empezó: no se cobra' : paid ? 'Ya se envió al motor: puede cobrarse igual' : 'Gratis: no se cobra'}">Cancelar</button>`) : `<button type="button" data-j="retry" class="pri">Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
   }
   function card(it) {
     const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
@@ -221,7 +231,7 @@ export function initStudio(ctx) {
     const menu = [
       ['fav', it.fav ? 'Quitar de favoritas' : 'Favorita', 'star', 'st-mi-t', it.fav ? 'fill' : ''],
       ...(primary ? [[primary[0], primary[1], primary[3], 'st-mi-t']] : []),
-      ...(vid ? [] : [['ref', 'Usar de referencia', 'plus']]),
+      ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark'], ['ref', 'Usar de referencia', 'plus']]),
       ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []),
       ['dl'], '-', ['del', 'Mover a la papelera', 'trash', 'warn']];
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}">
@@ -375,7 +385,16 @@ export function initStudio(ctx) {
     if (!m || !m.roles.reference) { m = useModelFor('reference', kind); if (!m && kind === 'video') { kind = 'image'; m = useModelFor('reference', 'image'); } if (!m) return say('Ningún modelo encendido acepta referencias.', true); modelOf[kind] = m.id; store.set('model.' + kind, m.id); renderModels(); }
     if (addMedia('reference', it.file)) say(`Referencia añadida a ${m.name}. Describe qué hacer con ella.`);
   }
-  function reuse(it) {
+  function vary(it) { // V4.2 (audit A35): another take close to this one — its prompt and model, the picture itself as the reference
+    reuse(it, true);
+    let m = cur();
+    if (!m || !m.roles.reference) { m = useModelFor('reference', 'image'); if (!m) return say('Ningún modelo encendido acepta una imagen de referencia para variarla.', true); kind = 'image'; modelOf.image = m.id; store.set('model.image', m.id); renderModels(); }
+    if (!addMedia('reference', it.file)) return;
+    qty = 1; estimate();
+    if (!isLive()) return say('Variar necesita la oficina real.', true);
+    generate([it.prompt || 'una variación de esta imagen']).then(() => { if (!$('.st-msg').classList.contains('bad')) say(`Variando con ${m.name}: mismo prompt, esta imagen como referencia. Aparece en la galería al terminar.`); });
+  }
+  function reuse(it, quiet) {
     const k = it.kind === 'video' || it.wanted === 'video' ? 'video' : 'image';
     kind = k; store.set('kind', kind);
     const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (it.settings) { setsOf[m.id] = { ...it.settings }; store.set('sets', setsOf); } }
@@ -383,7 +402,7 @@ export function initStudio(ctx) {
     for (const r of Object.keys(media)) media[r] = (media[r] || []).filter(f => itemOf(f));
     mode = 'one'; $('.st-mode').checked = false;
     $('.st-prompt').value = it.prompt; renderModels(); $('.st-prompt').focus();
-    say(m ? 'Mismo prompt, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.' : 'Ese modelo no está encendido; elige otro.', !m);
+    if (!quiet) say(m ? 'Mismo prompt, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.' : 'Ese modelo no está encendido; elige otro.', !m);
   }
   let toastT = null;
   function toast(text, undo) {
@@ -443,21 +462,22 @@ export function initStudio(ctx) {
     const setTxt = it.settings ? Object.entries(it.settings).map(([k, v]) => `${LBL[k] || k}: ${typeof v === 'boolean' ? (v ? 'sí' : 'no') : VAL[v] || v}`).join(' · ') : '';
     const used = it.media ? Object.entries(it.media).flatMap(([r, fs]) => fs.map(f => [r, f])) : [];
     L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
-      ${i > 0 ? '<button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)">‹</button>' : ''}${i < list.length - 1 ? '<button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)">›</button>' : ''}
       <div class="st-lmedia">${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}">`}</div>
-      <div class="st-linfo"><p class="st-lp">${esc(it.prompt)}</p>
-      <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${it.by === 'agent' ? esc(agentName(it.agent) || 'agente') : 'tú'}`} · ${new Date(it.at).toLocaleString('es')}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
+      <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${i + 1} de ${list.length}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 ? '' : ' disabled'}>›</button></div>
+      <p class="st-lp">${esc(it.prompt)}</p>
+      <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${it.by === 'agent' ? esc(agentName(it.agent) || 'agente') : 'tú'}`} · ${esc(when(it.at))}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
-      <div class="st-lacts">${it.kind === 'video' ? '' : `<button type="button" data-l="anim" class="pri">${svg('vid')} Animar</button><button type="button" data-l="ref">${svg('plus')} Usar de referencia</button>`}${it.upload ? '' : `<button type="button" data-l="again">${svg('again')} Repetir</button>`}
+      <div class="st-lacts">${it.kind === 'video' ? '' : `<button type="button" data-l="anim" class="pri">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button><button type="button" data-l="ref">${svg('plus')} Usar de referencia</button>`}${it.upload ? '' : `<button type="button" data-l="again">${svg('again')} Repetir</button>`}
         <a href="${src(it)}" download>${svg('down')} Descargar</a><button type="button" data-l="copy">Copiar prompt</button><button type="button" data-l="fav">${svg('star', it.fav ? 'fill' : '')} ${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button><button type="button" data-l="del">${svg('trash')} Papelera</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div></div></div>`;
     L.querySelector('.st-lx').focus();
     L.onclick = e => {
       if (e.target === L || e.target.closest('.st-lx')) return closeLight();
-      if (e.target.closest('.st-lnav.prev')) return light(i - 1);
-      if (e.target.closest('.st-lnav.next')) return light(i + 1);
+      if (e.target.closest('.st-lnav.prev') && i > 0) { light(i - 1); L.querySelector('.st-lnav.prev')?.focus(); return; }
+      if (e.target.closest('.st-lnav.next') && i < list.length - 1) { light(i + 1); L.querySelector('.st-lnav.next')?.focus(); return; }
       const a = e.target.closest('[data-l]')?.dataset.l; if (!a) return;
-      if (a === 'copy') navigator.clipboard?.writeText(it.prompt).then(() => { e.target.closest('button').textContent = 'Copiado ✓'; });
+      if (a === 'copy') { const btn = e.target.closest('button'); (navigator.clipboard ? navigator.clipboard.writeText(it.prompt) : Promise.reject()).then(() => { btn.textContent = 'Copiado ✓'; }, () => { btn.textContent = 'No se pudo copiar'; }).finally(() => setTimeout(() => { if (document.contains(btn)) btn.textContent = 'Copiar prompt'; }, 1600)); }
+      if (a === 'vary') { closeLight(); vary(it); }
       if (a === 'again') { closeLight(); reuse(it); }
       if (a === 'anim') { closeLight(); animate(it); }
       if (a === 'ref') { closeLight(); useAsRef(it); }
@@ -539,7 +559,10 @@ export function initStudio(ctx) {
     if (jt) {
       const a = e.target.closest('[data-j]')?.dataset.j, id = jt.dataset.job; if (!a) return;
       try {
-        if (a === 'cancel') { const r = await api('POST', `/api/media/jobs/${id}/cancel`); jobs = jobs.map(j => j.id === id ? r.job : j); }
+        const jj = jobs.find(x => x.id === id);
+        if (a === 'cancel' && jj && jj.state === 'running' && jj.engine !== 'prueba') { askCancel.add(id); renderGrid(); el.querySelector(`[data-job="${id}"] [data-j="cancel-no"]`)?.focus(); return; }
+        if (a === 'cancel-no') { askCancel.delete(id); renderGrid(); return; }
+        if (a === 'cancel' || a === 'cancel-yes') { askCancel.delete(id); const r = await api('POST', `/api/media/jobs/${id}/cancel`); jobs = jobs.map(j => j.id === id ? r.job : j); say(jj && jj.state === 'queued' ? 'Cancelado antes de empezar: no se cobra.' : 'Cancelado.'); }
         if (a === 'retry') { const r = await api('POST', `/api/media/jobs/${id}/retry`); await api('DELETE', `/api/media/jobs/${id}`).catch(() => {}); jobs = [r.job, ...jobs.filter(j => j.id !== id)]; say('Reintentando…'); }
         if (a === 'forget') { await api('DELETE', `/api/media/jobs/${id}`); jobs = jobs.filter(j => j.id !== id); }
       } catch (err) { say(err.message, true); }
@@ -568,6 +591,7 @@ export function initStudio(ctx) {
     if (a === 'again') reuse(it);
     if (a === 'anim') animate(it);
     if (a === 'ref') useAsRef(it);
+    if (a === 'vary') vary(it);
   });
   el.addEventListener('change', e => {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }

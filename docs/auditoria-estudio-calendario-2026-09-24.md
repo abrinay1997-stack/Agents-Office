@@ -6,7 +6,7 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 - **Capturas** a 390, 1024 y 1512 px, en claro y en oscuro, en cada estado: selector de modelos, video, selección, visor ampliado, errores, mes, semana, día y las ventanitas.
 - **Lectura completa del código:** `src/studio.js`, `src/calendar.js`, `media.mjs` y las rutas de `serve.mjs`.
 
-**✅ = arreglado** en V4.2 (misma rama, 24 sep): las prioridades de «Por dónde empezar» y algunos vecinos que tocaban el mismo código — 9 del Estudio y 15 del Calendario —, y después la agenda del teléfono (B5), lo que ya pasó (B7) las acciones de la galería (A20, A21), y luego «Mejorar el prompt» (A2), la ventanita de la rutina (B16) y el aviso con el Estudio cerrado (A41). En total 31; el resto sigue abierto. Cada punto va con su gravedad y con lo que se propone.
+**✅ = arreglado** en V4.2 (misma rama, 24 sep): las prioridades de «Por dónde empezar» y algunos vecinos que tocaban el mismo código — 9 del Estudio y 15 del Calendario —, y después la agenda del teléfono (B5), lo que ya pasó (B7) las acciones de la galería (A20, A21), y luego «Mejorar el prompt» (A2), la ventanita de la rutina (B16) el aviso con el Estudio cerrado (A41), y por último el tiempo estimado y el aviso al cancelar (A39, A40), el visor ampliado (A32–A35) y DESHACER en el calendario (B21). En total 38; el resto sigue abierto. Cada punto va con su gravedad y con lo que se propone.
 
 **Gravedad:**
 - **alta:** molesta a diario o puede hacer perder trabajo o dinero;
@@ -56,18 +56,18 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 
 ### A3. El visor ampliado
 
-32. **[media] No dice en qué posición estás** («3 de 8») y las flechas ‹ › quedan encima de la imagen. **Propuesta:** el contador arriba y las flechas fuera de la imagen.
-33. **[media] «Copiar prompt» cambia a «Copiado ✓» y se queda así** hasta cerrar. **Propuesta:** que vuelva a su texto a los 1,5 s, como en el chat.
-34. **[media] La fecha sale como «24/9/2026, 21:19:46»,** con segundos y otro formato que el resto de la oficina. **Propuesta:** «jue 24 sep, 9:19 p. m.».
-35. **[media] Falta «Variar»** (otra versión parecida) **y comparar dos lado a lado.** Son las acciones que más se usan después de generar. **Propuesta:** «Variar» genera con la imagen como referencia y el mismo prompt.
+32. ✅ **[media] No dice en qué posición estás** («3 de 8») y las flechas ‹ › quedan encima de la imagen. **Propuesta:** el contador arriba y las flechas fuera de la imagen.
+33. ✅ **[media] «Copiar prompt» cambia a «Copiado ✓» y se queda así** hasta cerrar. **Propuesta:** que vuelva a su texto a los 1,5 s, como en el chat.
+34. ✅ **[media] La fecha sale como «24/9/2026, 21:19:46»,** con segundos y otro formato que el resto de la oficina. **Propuesta:** «jue 24 sep, 9:19 p. m.».
+35. ✅ **[media] Falta «Variar»** (otra versión parecida) **y comparar dos lado a lado.** Son las acciones que más se usan después de generar. **Propuesta:** «Variar» genera con la imagen como referencia y el mismo prompt.
 36. **[baja] Las acciones del visor van en una columna de botones sin jerarquía,** y Papelera tiene el mismo peso que Descargar. **Propuesta:** Descargar y Animar como principales, el resto en «⋯».
 37. **[baja] La descarga baja con un nombre técnico**, no con el prompt. **Propuesta:** que el archivo se llame con el prompt recortado y la fecha.
 
 ### A4. Trabajos en marcha y errores
 
 38. ✅ **[alta] Si un modelo no tiene key, el error solo aparece como texto rojo al pie** («… no tiene key: guárdala en Windows con setx …»). No queda ninguna tarjeta, y el prompt sigue ahí sin saber qué hacer. **Propuesta:** un aviso con el paso a paso y un botón «Usar Prueba mientras tanto».
-39. **[media] Una tarjeta en marcha no tiene barra de progreso ni tiempo estimado,** solo «Generando · 1:23». **Propuesta:** «suele tardar ~2 min» según el modelo.
-40. **[media] «Cancelar» un trabajo no pregunta y no explica si se cobra.** **Propuesta:** decir «Ya se envió al motor: puede cobrarse igual» cuando corresponda.
+39. ✅ **[media] Una tarjeta en marcha no tiene barra de progreso ni tiempo estimado,** solo «Generando · 1:23». **Propuesta:** «suele tardar ~2 min» según el modelo.
+40. ✅ **[media] «Cancelar» un trabajo no pregunta y no explica si se cobra.** **Propuesta:** decir «Ya se envió al motor: puede cobrarse igual» cuando corresponda.
 41. ✅ **[media] Al terminar solo avisa el Estudio abierto.** Con el Estudio cerrado no hay aviso en la oficina (ni el dock ni un toast), aunque «sigue generando aunque cierres». **Propuesta:** un punto en el icono del Estudio del dock y un aviso «3 imágenes listas».
 42. **[baja] Un trabajo fallado desaparece de la vista a los 3 días** sin dejar rastro. **Propuesta:** un historial de trabajos (hechos, fallados y cancelados), con el motivo.
 
@@ -126,7 +126,7 @@ Revisión a fondo de las dos ventanas que faltaban. Se hizo de tres formas:
 18. ✅ **[alta] Si el enrutador de Claude responde mal, crear falla con «Unexpected end of JSON input»** y la tarea se pierde. Visto en la prueba: `route()` hace `parseJSON` y no se recupera. **Propuesta:** si no hay JSON, dársela al jefe del departamento (como con un id desconocido) y decirlo en palabras.
 19. ✅ **[media] «Necesita mi visto bueno» se ve siempre al crear**, aunque solo vale para las rutinas: `hidden` no gana a `display:flex`. Así parece que una tarea de una vez también esperará. **Propuesta:** mostrarlo solo con REPETIR, o que también valga para una tarea programada.
 20. **[media] Los errores salen en la línea de cifras de arriba** (`say` en `E.stats`, p. ej. «No se pudo mover…»), lejos de la ventanita o de la tarjeta. **Propuesta:** el mensaje junto a lo que falló, y un aviso con DESHACER.
-21. **[media] Cancelar una tarea programada pregunta** («¿Cancelar…?») y no ofrece deshacer; eliminar una rutina, igual. **Propuesta:** sin pregunta, con DESHACER, como el panel.
+21. ✅ **[media] Cancelar una tarea programada pregunta** («¿Cancelar…?») y no ofrece deshacer; eliminar una rutina, igual. **Propuesta:** sin pregunta, con DESHACER, como el panel.
 22. **[media] «Ejecutar ahora» no dice qué pasa luego:** si esperará tu OK, ni dónde aparecerá. **Propuesta:** un aviso «En marcha: la ves en EN CURSO y te pedirá el OK».
 23. **[media] El selector de cadencia tiene solo 10 opciones** (diario, días hábiles, un día de la semana, cada hora). Una rutina «lun, mié, vie» aparece como un texto fijo que no se puede editar sin perderla. **Propuesta:** casillas de días (L M X J V S D) y hora; «cada N horas» con desde y hasta.
 24. **[media] El modelo (SONNET) aparece en la ventanita de crear,** pero no el esfuerzo ni EQUIPO, que el panel sí tiene. **Propuesta:** las mismas opciones que el panel, plegadas en «Más».
