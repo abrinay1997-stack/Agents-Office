@@ -23,7 +23,7 @@
 import { DEPTS, AGENTS, DEPT_KEYS } from './data.js';
 import { P, rnd, ri } from './v1data.js';
 import { applyTasks, PROFILE, titleCase } from './profile.js';
-import { parseWhen, describe, nextRun, fromPicker, untilText } from './when.js';
+import { parseWhen, parseOnce, describe, nextRun, fromPicker, untilText } from './when.js';
 import { initCalendar } from './calendar.js';
 import { initDetail } from './detail.js'; // the task detail drawer: every action on a task, from the list, the board and the calendar // V3.2.1 (16 Sep 2026): the calendar on P
 import { MODEL_KEYS, MODELS, DEFAULT_MODEL, modelName, normModel, FROM_TEXT , EFFORT_KEYS, EFFORT_NAME, normEffort, effortName, effortFor } from './models.js';
@@ -116,7 +116,7 @@ applyTasks({ POOL, KEYS, CHAINS, SEGMENTS, AGENTS }); // INDUSTRY PROFILE (12 Se
 function fill(s, v) { return s.replace('{co}', v.co).replace('{n}', v.n).replace('{segment}', v.segment); }
 function vars() { return { co: rnd(P.co), n: ri(6, 40), segment: rnd(SEGMENTS) }; }
 function timeStr(ts) {
-  return new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  return new Date(ts).toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' });
 }
 function span(ms) { // "4 min" · "1 h 12 min" · "3 h"
   const m = Math.max(0, Math.round(ms / 60000));
@@ -214,16 +214,16 @@ export function initTasks(ctx) {
     const a = agentOf(t.agent);
     if (t.piece) { // V3.2 (16 Sep): a teammate's piece — in their own chat, then it walks back to the lead
       const L = agentOf(t.leadId), parent = tasks.find(x => x.id === t.parent);
-      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'the lead'} · ${timeStr(t.doneAt)} · click to view`, content: t.result });
+      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)} · clic para verla`, content: t.result });
       if (!t.error) chatPush(t.agent, { who: 'agent', text: `Mi parte de "${parent ? parent.title : t.title}" está lista y con ${L ? L.name : 'the lead'}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}.` });
       feedPush(R[t.agent], '📄', `Piece done → ${L ? L.name : 'lead'}: ${t.title}`);
       if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Piece in from ${a.name}: ${t.title}`); }
       return;
     }
     chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md',
-      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)} · click to view`, content: t.result });
-    if (!t.error) chatPush(t.agent, { who: 'agent', text: `Listo — "${t.title}"${t.routine ? ` (routine, ${t.when}${t.late ? ', se atrasó' : ''})` : ''} está lista arriba${t.team?.members?.length ? ` — the team was ${membersText(t)} and me` : ''}${t.read && t.read.length ? ` (I read ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}. Di "revise: …" y la cambio.` });
-    feedPush(R[t.agent], '📄', `Delivered: ${t.title}`);
+      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)} · clic para verlo`, content: t.result });
+    if (!t.error) chatPush(t.agent, { who: 'agent', text: `Listo — "${t.title}"${t.routine ? ` (rutina, ${t.when}${t.late ? ', se atrasó' : ''})` : ''} está lista arriba${t.team?.members?.length ? ` — el equipo fuimos ${membersText(t)} y yo` : ''}${t.read && t.read.length ? ` (leí ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Usé ${t.used.join(', ')}` : ''}. Di "revisa: …" y la cambio.` });
+    feedPush(R[t.agent], '📄', `Entregada: ${t.title}`);
     if (brain && t.read) for (const n of t.read.slice(0, 2)) brain.readNote(t.agent, n);
   }
   function brainSend(id) { // the Brain drops a fresh job into the agent's backlog
@@ -296,13 +296,15 @@ export function initTasks(ctx) {
     model: panel.querySelector('.tp-model'), effort: panel.querySelector('.tp-effort'),
     bigBtn: panel.querySelector('.tp-big-btn'), team: panel.querySelector('.tp-team'),
   };
+  let setPanelMin = () => {};
   { // the panel folds into a tab on the right edge: the office gets the whole width (remembered)
     const head = panel.querySelector('.tp-head');
     const min = document.createElement('button'); min.type = 'button'; min.className = 'tp-min'; min.title = 'Minimizar el panel de tareas'; min.setAttribute('aria-label', 'Minimizar el panel de tareas'); min.textContent = '⇥';
     head.appendChild(min);
-    const tab = document.createElement('button'); tab.type = 'button'; tab.id = 'tpTab'; tab.setAttribute('aria-label', 'Abrir el panel de tareas'); document.body.appendChild(tab);
+    const tab = document.createElement('button'); tab.type = 'button'; tab.id = 'tpTab'; tab.title = 'Abrir el panel de tareas (T)'; document.body.appendChild(tab);
     P_.tab = tab;
     const setMin = on => { document.body.classList.toggle('tpMin', on); try { localStorage.setItem('ao.tpMin', on ? '1' : '0'); } catch {} if (reframe) reframe(); };
+    setPanelMin = setMin;
     min.addEventListener('click', () => setMin(true)); tab.addEventListener('click', () => setMin(false));
     try { if (localStorage.getItem('ao.tpMin') === '1') document.body.classList.add('tpMin'); } catch {}
   }
@@ -314,7 +316,7 @@ export function initTasks(ctx) {
     P_.search.addEventListener('input', () => { query = P_.search.value.trim(); render(true); });
     P_.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { P_.search.value = ''; query = ''; render(true); P_.search.blur(); } });
     P_.clear.addEventListener('click', () => clearDone());
-    P_.rows.addEventListener('keydown', e => { const r = e.target.closest('.tp-row[role="button"]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); r.click(); } });
+    P_.rows.addEventListener('keydown', e => { if (e.target.closest('button')) return; const r = e.target.closest('.tp-row[role="button"]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); r.click(); } });
   }
   // V3.7: the box grows with the text (one line at rest, six at most) and the big editor mirrors it
   const big = document.getElementById('tpBig');
@@ -346,7 +348,7 @@ export function initTasks(ctx) {
   const effortUsedFor = (mdl) => effortFor({ task: effortSend(), office: chosenEffort() === 'auto' ? '' : officeEffort, model: mdl }); // what a demo card will show
   const pickBit = (forWhat) => { // the hint's "Opus · High for this task"
     const bits = []; if (modelTouched) bits.push(modelName(P_.model.value)); if (effortTouched) bits.push(effortName(P_.effort.value || ''));
-    return bits.length ? ` · <b>${bits.join(' · ')}</b> for this ${forWhat}` : '';
+    return bits.length ? ` · <b>${bits.join(' · ')}</b> para esta ${forWhat}` : '';
   };
   // the REPEAT picker (B1): cadence + time; "needs my OK" defaults on (D1)
   let repeat = false;
@@ -440,6 +442,17 @@ export function initTasks(ctx) {
     title = title.charAt(0).toUpperCase() + title.slice(1);
     const rt = routineIntent(title);
     if (rt) { await submitRoutine(rt, title); return; }
+    const once = !repeat && parseOnce(title); // «el viernes a las 10 publica…» is ONE task for that date (it used to become a weekly routine)
+    if (once && once.past) { say('Esa hora de hoy ya pasó. Di otra hora, o quítala para que se haga ya.', 'amber'); return; }
+    if (once) {
+      const text = once.text.charAt(0).toUpperCase() + once.text.slice(1);
+      P_.input.value = ''; P_.input.disabled = true; P_.add.disabled = true; say(`Programando para ${new Date(once.at).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}…`, 'busy');
+      const r = await createScheduled({ dept, text, at: once.at, model: chosenModel() });
+      P_.input.disabled = false; P_.add.disabled = false;
+      if (!r.ok) { P_.input.value = title; say(esc(r.error), 'amber'); return; }
+      say(`Programada: <b>${esc(r.task.title)}</b> — ${new Date(once.at).toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${once.guessed ? ' (a las 9:00; di una hora para cambiarla)' : ''}. Está en el calendario (P).`);
+      render(true); return;
+    }
     if (live) {
       const text = title, k = dept;
       P_.input.value = ''; P_.input.disabled = true; P_.add.disabled = true;
@@ -532,6 +545,11 @@ export function initTasks(ctx) {
     if (t) { t.routine = r.id; t.when = r.desc; t.needsOk = r.needsOk; t.modelUsed = r.model || officeModel; t.modelFrom = r.model ? 'routine' : 'office'; spawnEmote(R[r.agent], '⏱'); feedPush(R[r.agent], '⏱', `Routine${manual ? ' (run now)' : ''}: ${r.title}`); }
     r.lastAt = Date.now(); r.runs++; r.nextAt = nextRun(r.when);
   }
+  async function rtActAsk(rid, act) { // from the panel and the chat rail: deleting a routine is asked first (the calendar asks on its own), and a failure is said
+    const r = routines.find(x => x.id === rid); if (!r) return;
+    if (act === 'delete' && !confirm(`¿Eliminar la rutina «${r.title}»? Sale del horario (las tareas que ya hizo se quedan).`)) return;
+    const res = await rtAct(rid, act); if (res && !res.ok) say(`No se pudo: ${esc(res.error)}`, 'amber');
+  }
   async function rtAct(rid, act) { // RUN NOW · PAUSE · RESUME · DELETE — from a SCHEDULED row, a board card or the rail strip
     const r = routines.find(x => x.id === rid); if (!r) return;
     if (live) {
@@ -563,11 +581,11 @@ export function initTasks(ctx) {
     el.hidden = !mine.length; if (!mine.length) { el.innerHTML = ''; return; }
     const n = nextOf(mine);
     el.className = 'mrt' + (railExp ? ' exp' : '');
-    el.innerHTML = `<div class="mrt-h"><span>⏱ ${mine.length} routine${mine.length > 1 ? 's' : ''}${n ? ' · next <b>' + esc(untilText(n.nextAt)) + '</b>' : ' · all paused'}</span><span class="car">▸</span></div>
+    el.innerHTML = `<div class="mrt-h"><span>⏱ ${mine.length} rutina${mine.length > 1 ? 's' : ''}${n ? ' · próxima <b>' + esc(untilText(n.nextAt)) + '</b>' : ' · todas en pausa'}</span><span class="car">▸</span></div>
       <div class="mrt-l">${mine.map(r => `<div class="mrt-r" data-rid="${r.id}"><span>${esc(r.title)}</span><small>${esc(r.desc)} · ${modelName(r.model || officeModel)} · ${r.paused ? 'paused' : 'next ' + esc(untilText(r.nextAt))} · ${r.needsOk ? 'en espera de tu visto bueno' : 'solo lectura'}</small>
         <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>`).join('')}</div>`;
     el.querySelector('.mrt-h').addEventListener('click', () => { railExp = !railExp; el.classList.toggle('exp', railExp); });
-    el.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); rtAct(b.closest('[data-rid]').dataset.rid, b.dataset.act); }));
+    el.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); rtActAsk(b.closest('[data-rid]').dataset.rid, b.dataset.act); }));
   }
   /* ---------- V3.5 live: the page keeps up with a server that runs things on its own ---------- */
   let pollN = 0, usageDue = true;
@@ -609,7 +627,7 @@ export function initTasks(ctx) {
         routine: st.routine, when: st.when, late: !!st.late, due: st.due, needsOk: !!st.needsOk, addedAt: st.addedAt, changedAt: st.addedAt, last: 'added',
         model: st.model, modelUsed: st.modelUsed || st.model || undefined, modelFrom: st.modelFrom || (st.model ? 'task' : undefined), effort: st.effort, effortUsed: st.effortUsed, effortFrom: st.effortFrom });
       if (st.state === 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; t.needsOk = !!st.needsOk; }
-      else if (st.state !== 'done') { spawnEmote(R[t.agent], st.routine ? '⏱' : st.dueAt ? '⏱' : '📋'); if (st.routine) feedPush(R[t.agent], '⏱', `Routine fired: ${t.title}${t.late ? ' (late — was due ' + timeStr(t.due) + ')' : ''}`); else if (st.dueAt) feedPush(R[t.agent], '⏱', `Scheduled task fired: ${t.title}`); }
+      else if (st.state !== 'done') { spawnEmote(R[t.agent], st.routine ? '⏱' : st.dueAt ? '⏱' : '📋'); if (st.routine) feedPush(R[t.agent], '⏱', `Rutina en marcha: ${t.title}${t.late ? ' (atrasada — tocaba a las ' + timeStr(t.due) + ')' : ''}`); else if (st.dueAt) feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}`); }
       touch(t, 'added');
     }
     apply(t, st);
@@ -748,14 +766,14 @@ export function initTasks(ctx) {
     const who = (f && f !== 'brain') ? a.name : `${a.name} · ${DEPTS[t.dept].short}`;
     switch (t.state) {
       case 'next': {
-        const src = t.piece ? `team piece from ${agentOf(t.leadId)?.name || 'the lead'}` : t.routine ? `routine · ${t.when}${t.late ? ' · <span class="tp-late">late · was due ' + timeStr(t.due) + '</span>' : ''}` : t.by === 'you' ? (t.live ? 'added by you · live' : 'added by you') : t.last === 'handoff' && t.from ? `from ${agentOf(t.from).name}` : t.revised ? 'sent back to revise' : 'from the Brain';
+        const src = t.piece ? `parte del equipo de ${agentOf(t.leadId)?.name || 'el líder'}` : t.routine ? `rutina · ${t.when}${t.late ? ' · <span class="tp-late">atrasada · tocaba a las ' + timeStr(t.due) + '</span>' : ''}` : t.by === 'you' ? 'la pediste tú' : t.by === 'sub' ? 'vía Dimitri' : t.last === 'handoff' && t.from ? `de ${agentOf(t.from).name}` : t.revised ? 'devuelta para revisar' : 'del Cerebro';
         const w = now - t.addedAt;
         return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)} · ${src}${teamBit(t)}${modelBit(t)}`;
       }
       case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · rendering' : t.teamHold ? ' · waiting on the pieces' : ''}${t.routine ? ' · routine' : ''}${teamBit(t)}${modelBit(t)}`;
-      case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · routine draft' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · borrador de rutina' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'scheduled': return `${who} · se ejecuta ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · en espera de tu visto bueno' : ''}${teamBit(t)}${modelBit(t)}`;
-      case 'done': return `${who} · lista ${timeStr(t.doneAt)}${t.approved ? (t.live ? ' · enviada tras tu visto bueno' : ' · aprobada') : ''}${t.late ? ' · <span class="tp-late">se atrasó</span>' : ''}${teamBit(t)}${modelBit(t)}${t.live ? (t.error ? ' · <span class="tp-amber">failed</span>' : ' · <span class="tp-res">result ready →</span>') : ''}`;
+      case 'done': return `${who} · lista ${timeStr(t.doneAt)}${t.approved ? (t.live ? ' · enviada tras tu visto bueno' : ' · aprobada') : ''}${t.late ? ' · <span class="tp-late">se atrasó</span>' : ''}${teamBit(t)}${modelBit(t)}${t.live ? (t.error ? ' · <span class="tp-amber">con error</span>' : ' · <span class="tp-res">ver resultado →</span>') : ''}`;
     }
     return who;
   }
@@ -798,7 +816,7 @@ export function initTasks(ctx) {
   }
   function render(structural) {
     const f = getFocused();
-    P_.scope.textContent = (f && f !== 'brain') ? DEPTS[f].name : 'WHOLE OFFICE';
+    P_.scope.textContent = (f && f !== 'brain') ? DEPTS[f].name : 'TODA LA OFICINA';
     P_.chips.innerHTML = chipsHTML();
     if (P_.tab) { const all = tasks.filter(t => !t.piece), c = st => all.filter(t => t.state === st).length; P_.tab.innerHTML = `<span class="tt-l">TAREAS</span>${c('doing') ? `<b class="tt-doing">${c('doing')}</b>` : ''}${c('waiting') ? `<b class="tt-wait">${c('waiting')}</b>` : ''}${c('next') ? `<b>${c('next')}</b>` : ''}`; P_.tab.title = `${c('doing')} en curso · ${c('waiting')} esperan tu OK · ${c('next')} pendientes — clic para abrir`; }
     if (P_.tools) { const nd = scoped().filter(t => t.state === 'done').length; P_.clear.hidden = !nd; P_.clear.textContent = `Limpiar listas (${nd})`; }
@@ -809,7 +827,7 @@ export function initTasks(ctx) {
       ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — "cada día hábil a las 8, …" — o presiona REPETIR. Presiona <b>P</b> para el calendario…${RT_DEPTS.includes(dept) ? '' : ' Rutinas: Correos, Contabilidad y Ventas en esta versión.'}</div>`)
       : (list.map(rowHTMLp).join('') || `<div class="tp-empty">Nada aquí por ahora.</div>`);
     renderNext();
-    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtAct(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
+    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
     P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.tabIndex = 0; n.setAttribute('role', 'button'); n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); }); // every row opens its detail
     if (!structural) flip(before);
   }
@@ -990,8 +1008,16 @@ export function initTasks(ctx) {
         return `Listo. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${to === agentId ? 'la tengo' : agentOf(to).name + ' la tiene'}. ${r.needsOk ? 'Todo lo que haya que enviar espera tu visto bueno primero.' : 'Solo lee, así que no te esperará.'} Próxima ejecución ${untilText(r.nextAt)}. Di "routines" para ver la lista.`;
       }
     }
-    const m = text.match(/^\s*(?:add\s+(?:a\s+)?(?:new\s+)?task|new\s+task|task|todo)\s*[:\-–—]?\s*(.+)$/i);
+    const m = text.match(/^\s*(?:add\s+(?:a\s+)?(?:new\s+)?task|new\s+task|task|todo|(?:agregar|agrega|añade|añadir|nueva)\s+(?:una\s+)?tarea|tarea|pendiente)\s*[:\-–—]\s*(.+)$/i);
     const k = R[agentId].a.dept;
+    if (m && live) { // the real office: the task goes to the server like one typed in the bar (it used to be a page-only task with an invented progress bar)
+      const title = m[1].trim().replace(/[.!]+$/, '');
+      fetch(API + '/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text: title.charAt(0).toUpperCase() + title.slice(1) }) })
+        .then(async r => { const st = await r.json(); if (!r.ok) throw new Error(st.error || r.statusText); return st; })
+        .then(st => { chatPush(agentId, { who: 'agent', text: `Anotada: «${st.title}». ${st.agent === agentId ? 'La tengo yo' : `La tiene ${agentOf(st.agent)?.name || st.agent}`}; está en el panel de tareas.` }); poll(); })
+        .catch(e => chatPush(agentId, { who: 'agent', text: `No pude anotarla: ${e.message}` }));
+      return 'Pasándola a la oficina…';
+    }
     if (m) {
       let title = m[1].trim().replace(/[.!]+$/, '');
       title = title.charAt(0).toUpperCase() + title.slice(1);
@@ -1186,8 +1212,9 @@ export function initTasks(ctx) {
       return { ok: true };
     } catch (e) { return { ok: false, error: e.message || 'sin conexión con la oficina' }; }
   }
-  const detail = initDetail({ agentOf, AGENTS, DEPTS, DEPT_KEYS, esc, isLive: () => live, act, openAgent: id => openAgent && openAgent(id, 'chat'),
-    openNote: name => !!(brain && brain.show(name)), openCalendar: ts => calendar && calendar.openAt(ts), modelName, MODEL_KEYS, officeModel: () => officeModel });
+  const leaveOverlays = () => { if (calendar && calendar.isOpen()) calendar.close(); if (isOpen()) close(); document.getElementById('subOv')?.querySelector('.sb-x')?.click(); }; // «open the chat / the note» from the detail: what sat on top goes, so the destination is seen (it opened underneath)
+  const detail = initDetail({ agentOf, AGENTS, DEPTS, DEPT_KEYS, esc, isLive: () => live, act, openAgent: id => { leaveOverlays(); if (openAgent) openAgent(id, 'chat'); },
+    openNote: name => { leaveOverlays(); return !!(brain && brain.show(name)); }, openCalendar: ts => calendar && calendar.openAt(ts), modelName, MODEL_KEYS, officeModel: () => officeModel });
   function openTask(t) { if (t) detail.open(t); }
   // «Limpiar listas»: every finished task in view leaves the list (archived on the server; notes stay in the Brain)
   async function clearDone() {
@@ -1199,6 +1226,6 @@ export function initTasks(ctx) {
   const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
   return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
            findBySid: sid => tasks.find(t => t.live && t.sid === sid),
-           handleChat, addTask, revise, rowHTML, setDept, tasks, panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
+           handleChat, addTask, revise, rowHTML, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
            routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, pendingReject, rejectLive, officeModel: () => officeModel, chosenModel, chosenEffort };
 }

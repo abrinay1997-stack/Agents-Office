@@ -171,7 +171,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
   const topconn = document.getElementById('topconn');
   const topImgs = {};
   if (topconn) {
-    topconn.innerHTML = `<span class="tc-lab"><span class="dot"></span>CONECTADO A</span>`;
+    topconn.innerHTML = `<span class="tc-lab"><span class="dot"></span>CONECTORES</span>`;
     uniqKeys.forEach((k, i) => {
       const img = document.createElement('img');
       img.src = LOGOS[k].img;
@@ -193,6 +193,50 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       none.textContent = 'nada aún — conecta en claude.ai o ejecuta: claude mcp add';
       topconn.appendChild(none);
     }
+  }
+  // V4 (24 Sep 2026): the connectors' own panel — every server, its state in words and the departments it feeds.
+  // The label opens it; the bar keeps the icons (or folds them away: the switch inside) and never moves.
+  const escH = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const REASON = { 'needs-auth': 'necesita autenticación: abre Claude Code y usa /mcp', failed: 'no se pudo conectar', pending: 'conectando… (o la extensión de Chrome sin vincular)', denied: 'conectado, pero bloqueado para los agentes (office.config.json)' };
+  let panel = null;
+  const pretty = n => { const m = /^plugin:([^:]+):/.exec(String(n)); const s = m ? m[1] : String(n).replace(/^claude\.ai\s+/i, ''); return s.charAt(0).toUpperCase() + s.slice(1); }; // «plugin:context7:context7» → «Context7»
+  function panelHTML() {
+    const deptsOf = k => Object.keys(BY_DEPT).filter(d => BY_DEPT[d].includes(k));
+    const card = k => {
+      const st = STATUS[k] || 'connected', ds = deptsOf(k), ok = st === 'connected';
+      return `<button type="button" class="cp-c${ok ? '' : ' off'}" data-k="${escH(k)}" title="${ok ? 'Ver su flujo hacia los departamentos' : escH(REASON[st] || st)}"><img src="${LOGOS[k].img}" alt=""><span class="cp-n" title="${escH(NAMES[k] || LOGOS[k].name)}">${escH(pretty(NAMES[k] || LOGOS[k].name))}</span>` +
+        `<span class="cp-d">${ok ? (ds.length >= 6 ? '<em>toda la oficina</em>' : ds.map(d => `<i style="background:${DEPTS[d].chip}" title="${escH(DEPTS[d].name)}"></i>`).join('') || '<em>sin departamento</em>') : `<em>${escH(REASON[st] || st)}</em>`}</span></button>`;
+    };
+    const ready = uniqKeys.filter(k => !STATUS[k] || STATUS[k] === 'connected'), attn = uniqKeys.filter(k => STATUS[k] && STATUS[k] !== 'connected' && STATUS[k] !== 'denied'), denied = uniqKeys.filter(k => STATUS[k] === 'denied');
+    const sec = (t, l) => l.length ? `<div class="cp-sec">${t} · ${l.length}</div><div class="cp-g">${l.map(card).join('')}</div>` : '';
+    return `<div class="cp-h"><b>Conectores</b><span>${ready.length} listos${uniqKeys.length !== ready.length ? ` de ${uniqKeys.length}` : ''}</span><span class="sp"></span>` +
+      `<label class="cp-sw"><input type="checkbox" class="cp-icons"${document.body.classList.contains('connFold') ? '' : ' checked'}><span>Iconos en la barra</span></label><button type="button" class="cp-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div>` +
+      `<div class="cp-body">${sec('Listos para los agentes', ready)}${sec('Necesitan atención', attn)}${sec('Bloqueados para los agentes', denied)}` +
+      (uniqKeys.length ? '' : '<p class="cp-foot">Aún no hay conectores.</p>') +
+      `<p class="cp-foot">Para añadir uno: conéctalo en claude.ai o ejecuta <code>claude mcp add …</code>; la oficina lo ve al reiniciar. Qué departamento usa cuál: <code>office.config.json → mcp.departments</code>.</p></div>`;
+  }
+  function closePanel() { if (!panel) return; panel.remove(); panel = null; document.removeEventListener('mousedown', outside, true); topconn && topconn.querySelector('.tc-lab')?.setAttribute('aria-expanded', 'false'); }
+  function outside(e) { if (panel && !panel.contains(e.target) && !e.target.closest('#topconn .tc-lab')) closePanel(); }
+  function togglePanel() {
+    if (panel) return closePanel();
+    panel = document.createElement('div'); panel.id = 'connPanel'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Conectores');
+    panel.innerHTML = panelHTML(); document.body.appendChild(panel);
+    const lab = topconn.querySelector('.tc-lab'); lab.setAttribute('aria-expanded', 'true');
+    const r = lab.getBoundingClientRect(); panel.style.left = Math.max(12, Math.min(r.left, innerWidth - panel.offsetWidth - 12)) + 'px';
+    panel.addEventListener('click', e => {
+      if (e.target.closest('.cp-x')) return closePanel();
+      const c = e.target.closest('.cp-c:not(.off)'); if (c) fireConnector(c.dataset.k);
+    });
+    panel.addEventListener('change', e => { if (!e.target.classList.contains('cp-icons')) return; const fold = !e.target.checked; document.body.classList.toggle('connFold', fold); try { localStorage.setItem('ao.connFold', fold ? '1' : '0'); } catch {} dispatchEvent(new Event('resize')); });
+    panel.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closePanel(); lab.focus(); } });
+    setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
+    panel.querySelector('.cp-x').focus();
+  }
+  if (topconn) {
+    const lab = topconn.querySelector('.tc-lab');
+    lab.setAttribute('role', 'button'); lab.tabIndex = 0; lab.setAttribute('aria-haspopup', 'dialog'); lab.setAttribute('aria-expanded', 'false'); lab.title = 'Ver los conectores';
+    lab.addEventListener('click', e => { e.stopPropagation(); togglePanel(); });
+    lab.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePanel(); } });
   }
 
   // cam + dockAcur are set every tick. At overview (dockAcur low) all connector traffic
@@ -292,7 +336,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
   const topmodels = document.getElementById('topmodels');
   const modelImgs = {};
   if (topmodels) {
-    topmodels.innerHTML = `<span class="tc-lab"><span class="dot"></span>OPERA CON</span>`;
+    topmodels.innerHTML = ''; // V4: the logo alone says which brain runs the office (it said «OPERA CON»)
     Object.keys(MODELS).forEach((k, i) => {
       const img = document.createElement('img');
       img.src = LOGOS[k].img;
@@ -324,10 +368,21 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
   // V3.6 (A3 · B1 · C1): the plan's own gauge beside the Claude logo — session and week, as Claude Code shows them.
   // Live means Claude only: the ChatGPT tile and its wire are demo theatre and go the first time usage arrives.
   let usageEl = null;
+  // the brain the office runs on: Claude by default, Meta when the .bat started it that way (its logo, and why the claude.ai connectors are missing)
+  function setProvider(p) {
+    if (!p || !modelImgs.claude) return;
+    const meta = p.id === 'meta', img = modelImgs.claude;
+    if (modelImgs.chatgpt) { modelImgs.chatgpt.remove(); delete modelImgs.chatgpt; const w = mwires.chatgpt; if (w) { w.path.setAttribute('d', ''); w.dot.setAttribute('opacity', 0); delete mwires.chatgpt; } }
+    if (meta && LOGOS.meta) img.src = LOGOS.meta.img;
+    img.alt = meta ? 'Meta' : p.id === 'anthropic' ? 'Claude' : p.name;
+    img.title = meta ? 'Los agentes trabajan con Meta (Muse Spark). En este modo Claude Code no carga los conectores de claude.ai (Gmail, Canva, Notion, Drive…): abre el iniciador con 1 (Claude) para usarlos.'
+      : p.id === 'anthropic' ? 'Los agentes trabajan con Claude (tu sesión de Claude Code).' : `Los agentes trabajan con ${p.name} (${p.host || ''}).`;
+  }
   function setUsage(u) {
     if (!topmodels) return;
     if (modelImgs.chatgpt) { modelImgs.chatgpt.remove(); delete modelImgs.chatgpt; const w = mwires.chatgpt; if (w) { w.path.setAttribute('d', ''); w.dot.setAttribute('opacity', 0); delete mwires.chatgpt; } }
-    if (!usageEl) { usageEl = document.createElement('span'); usageEl.className = 'tm-usage'; topmodels.appendChild(usageEl); }
+    // V4: the plan's gauge lives in the bottom-left corner, out of the way (it sat in the top bar)
+    if (!usageEl) { const dock = document.getElementById('usageDock'); usageEl = document.createElement('span'); usageEl.className = 'tm-usage'; (dock || topmodels).appendChild(usageEl); if (dock) dock.hidden = false; }
     const when = ts => ts ? new Date(ts).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
     const bar = (lab, x) => { if (!x) return ''; const cls = x.percent >= 90 ? 'c' : x.percent >= 75 ? 'w' : ''; return `<span>${lab}</span><span class="ub"><i class="${cls}" style="width:${x.percent}%"></i></span><b>${x.percent >= 100 ? 'LIMIT' : x.percent + '%'}</b>`; };
     if (u && u.ok && u.source === 'claude') {
@@ -369,7 +424,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
           for (const [k, img] of Object.entries(topImgs)) img.style.display = BY_DEPT[f].includes(k) ? '' : 'none';
           topconn.classList.add('focus');
           topconn.querySelector('.tc-lab').innerHTML =
-            `<span class="dot" style="background:${DEPTS[f].chip}"></span>${DEPTS[f].short} · CONECTADO A`;
+            `<span class="dot" style="background:${DEPTS[f].chip}"></span>${DEPTS[f].short} · CONECTORES`;
         }
       } else {
         topconn.style.opacity = wireA;
@@ -377,7 +432,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
         if (stripDept !== null) {
           for (const img of Object.values(topImgs)) img.style.display = '';
           topconn.classList.remove('focus');
-          topconn.querySelector('.tc-lab').innerHTML = `<span class="dot"></span>CONECTADO A`;
+          topconn.querySelector('.tc-lab').innerHTML = `<span class="dot"></span>CONECTORES`;
         }
       }
       stripDept = f;
@@ -759,5 +814,5 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     }
     if (mwires.chatgpt) { mwires.chatgpt.path.setAttribute('stroke', ink); mwires.chatgpt.dot.setAttribute('fill', ink); }
   }
-  return { tick, sprites: [], onAgentEvent, onToolsUsed, showTip, startReveal, setDark, setUsage, live: LIVE, keys: uniqKeys }; // sprites: none clickable — docks retired
+  return { tick, sprites: [], onAgentEvent, onToolsUsed, showTip, startReveal, setDark, setUsage, setProvider, live: LIVE, keys: uniqKeys }; // sprites: none clickable — docks retired
 }

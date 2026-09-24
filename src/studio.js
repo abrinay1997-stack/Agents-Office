@@ -1,61 +1,82 @@
-// Agents Office — the ESTUDIO on the page (E or ✦ ESTUDIO): generate images and video by hand or in batches, and see
-// everything the agents generated. The work happens on the server (media.mjs) as background jobs; this is the window.
+// Agents Office — the ESTUDIO on the page (E, or the clapperboard in the bar): generate images and video by hand or in
+// batches, and see everything the agents generated. The work happens on the server (media.mjs) as background jobs.
 //   initStudio(ctx) → { open, close, toggle, isOpen }
 //   ctx: isLive() · esc · agentName(id) · openTask?(taskSid)
-// V2 (24 Sep 2026, after open-higgsfield): a catalog of models with their own settings, start/end frames and references
-// (from the gallery or uploaded), «Animar» on any image, live tiles while a job runs (failed ones say why and retry),
-// a masonry gallery at the true ratio, multi-select (★, ZIP, papelera) with undo, and an Uploads tab.
-const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Segundos', batchSize: 'Por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje' };
-const VAL = { auto: 'Automático', low: 'Baja', medium: 'Media', high: 'Alta', video: 'la del video', image: 'la de la imagen', '1:1': 'Cuadrado 1:1', '4:5': 'Feed 4:5', '9:16': 'Story/Reel 9:16', '16:9': 'Web 16:9', '3:4': 'Vertical 3:4', '4:3': 'Horizontal 4:3', '2:3': 'Vertical 2:3', '3:2': 'Horizontal 3:2', '21:9': 'Cine 21:9' };
+// V2 (24 Sep 2026, after open-higgsfield): a catalog of models with their own settings, start/end frames and references,
+// «Animar», live tiles, a masonry gallery, multi-select with ZIP and undo, an Uploads tab.
+// V2.1 (same day, the owner: «organizar esta suite… más intuitivo»): a guided composer — 1 what, 2 model (a picker that
+// says what each model is good at), 3 the idea, 4 starting material, 5 format as shapes + «más ajustes» folded — with the
+// quantity and GENERAR fixed at the bottom; card actions as icons over the picture; clear names everywhere.
+const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje' };
+const VAL = { auto: 'Auto', low: 'Baja', medium: 'Media', high: 'Alta', video: 'la del video', image: 'la de la imagen' };
+const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
 const ROLE = { start: 'Imagen inicial', end: 'Imagen final', reference: 'Referencias', video: 'Video de origen' };
-const ROLE_HELP = { start: 'el video empieza así', end: 'el video termina así', reference: 'producto, logo, personaje o estilo', video: 'el video que se cambia o se alarga' };
+const ROLE_HELP = { start: 'el video empieza así', end: 'el video termina así', reference: 'tu producto, logo, personaje o estilo', video: 'el video que se cambia o se alarga' };
+const I = { // line icons (stroke = currentColor)
+  img: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 9"/>',
+  vid: '<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
+  down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
+  plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>', again: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+};
+const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.st.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.st.' + k, JSON.stringify(v)); } catch {} } };
 
 export function initStudio(ctx) {
   const { isLive, esc, agentName } = ctx;
-  const el = document.createElement('div'); el.id = 'studioOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Estudio de imágenes y video'); el.hidden = true;
+  const el = document.createElement('div'); el.id = 'studioOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'stTitle'); el.tabIndex = -1; el.hidden = true;
   el.innerHTML = `
     <div class="st-head">
-      <div><div class="st-name">✦ ESTUDIO</div><div class="st-sub">Imágenes y video reales. Tus agentes también lo usan solos cuando una tarea lo pide; todo sigue generándose aunque cierres esta ventana.</div></div>
-      <span class="sp"></span><div class="st-budget" aria-live="polite"></div><button type="button" class="st-x" aria-label="Cerrar el Estudio">✕</button>
+      <span class="st-logo">${svg('vid')}</span><div><div class="st-name" id="stTitle">Estudio</div><div class="st-sub">Imágenes y video reales. Sigue generando aunque cierres esta ventana; tus agentes también lo usan.</div></div>
+      <span class="sp"></span><div class="st-budget" aria-live="polite"></div><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)">${svg('x')}</button>
     </div>
     <div class="st-body">
-      <section class="st-gen" aria-label="Generar">
-        <div class="st-seg st-kind" role="tablist" aria-label="Tipo"><button type="button" data-kind="image" role="tab">🖼 Imagen</button><button type="button" data-kind="video" role="tab">🎬 Video</button></div>
-        <label class="st-lab">Modelo<select class="st-model" aria-label="Modelo"></select></label>
-        <div class="st-mnote"></div>
-        <div class="st-seg st-mode" role="tablist" aria-label="Modo"><button type="button" data-mode="one" class="on" role="tab">Una idea</button><button type="button" data-mode="batch" role="tab">Lote (un prompt por línea)</button></div>
-        <div class="st-pwrap">
-          <textarea class="st-prompt" rows="5" aria-label="Prompt"></textarea>
-          <div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción (en inglés, que es como mejor entienden los motores)">✨ Mejorar prompt</button><button type="button" class="st-undo-enh" hidden>↶ Volver al mío</button><span class="sp"></span><span class="st-plen"></span></div>
+      <section class="st-gen" aria-label="Crear">
+        <div class="st-scroll">
+          <div class="st-step"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
+            <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button></div></div>
+          <div class="st-step"><div class="st-h"><b>2</b> Modelo</div>
+            <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden role="listbox" aria-label="Modelos"></div></div></div>
+          <div class="st-step"><div class="st-h"><b>3</b> Describe lo que quieres <span class="sp"></span><label class="st-batch" title="Varias ideas a la vez: una por línea"><input type="checkbox" class="st-mode"> Varias ideas (una por línea)</label></div>
+            <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
+              <div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción (en inglés, que es como mejor lo entienden los motores)">${svg('spark')}<span>Mejorar el prompt</span></button><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span></div></div></div>
+          <div class="st-step st-matstep"><div class="st-h"><b>4</b> Material de partida <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
+          <div class="st-step"><div class="st-h"><b class="st-n5">5</b> Formato y ajustes</div><div class="st-ratios"></div><div class="st-sets"></div>
+            <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
+          <details class="st-keys"><summary>Motores y cómo activarlos</summary><div class="st-engs"></div>
+            <p>La key se guarda en Windows una sola vez (con el comando de arriba en una ventana de comandos, o en «Editar las variables de entorno de esta cuenta») y se reinicia la oficina con el iniciador. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.</p>
+            <p>El tope diario de la oficina está en <code>office.config.json → media.dailyLimit</code> (un video cuenta como 5 imágenes).</p></details>
         </div>
-        <div class="st-slots"></div>
-        <div class="st-sets"></div>
-        <div class="st-row"><label class="st-nwrap st-lab">Variantes<input type="number" class="st-n" min="1" max="8" value="1"></label><span class="st-est"></span></div>
-        <div class="st-row"><button type="button" class="st-go">GENERAR</button></div>
-        <div class="st-msg" aria-live="polite"></div>
-        <details class="st-keys"><summary>Motores y cómo activarlos</summary><div class="st-engs"></div>
-          <p>La key se guarda en Windows una sola vez (en «Editar las variables de entorno de esta cuenta», o con el comando de arriba en una ventana de comandos) y se reinicia la oficina con el iniciador. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.</p>
-          <p>El tope diario de la oficina está en <code>office.config.json → media.dailyLimit</code> (un video cuenta como 5 imágenes).</p></details>
+        <div class="st-foot">
+          <div class="st-qty" role="group" aria-label="Cantidad"><span>Cantidad</span><button type="button" data-d="-1" aria-label="Menos">−</button><output class="st-n">1</output><button type="button" data-d="1" aria-label="Más">+</button></div>
+          <button type="button" class="st-go">GENERAR</button>
+          <div class="st-est"></div>
+          <div class="st-msg" aria-live="polite"></div>
+        </div>
       </section>
       <section class="st-gal" aria-label="Galería">
         <div class="st-filt">
-          <button type="button" data-f="all" class="on">Todo</button><button type="button" data-f="fav">★ Favoritas</button><button type="button" data-f="agent">De agentes</button><button type="button" data-f="you">Tuyas</button><button type="button" data-f="video">Videos</button><button type="button" data-f="up">Subidas</button>
-          <input type="search" class="st-q" placeholder="Buscar en los prompts…" aria-label="Buscar en la galería">
-          <span class="sp"></span><button type="button" class="st-upbtn" title="Sube tus fotos o videos (producto, logo, personaje) para usarlos de referencia o animarlos">⇪ Subir</button><span class="st-count"></span>
+          <div class="st-tabs" role="group" aria-label="Mostrar"><button type="button" data-f="all" class="on" aria-pressed="true">Todo</button><button type="button" data-f="fav" aria-pressed="false">Favoritas</button><button type="button" data-f="you" aria-pressed="false">Tuyas</button><button type="button" data-f="agent" aria-pressed="false">De agentes</button><button type="button" data-f="video" aria-pressed="false">Videos</button><button type="button" data-f="up" aria-pressed="false">Subidas</button></div>
+          <span class="sp"></span>
+          <label class="st-qwrap">${svg('search')}<input type="search" class="st-q" placeholder="Buscar…" aria-label="Buscar en la galería"></label>
+          <button type="button" class="st-upbtn" title="Sube tus fotos o videos (producto, logo, personaje) para usarlos de referencia o animarlos">${svg('up')}<span>Subir</span></button>
+          <button type="button" class="st-selbtn" aria-pressed="false" title="Elegir varias para descargarlas juntas, marcarlas o borrarlas">${svg('grid')}<span>Seleccionar</span></button>
         </div>
-        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Seleccionar todo lo visible</button><button type="button" data-b="fav">★ Favoritas</button><button type="button" data-b="zip">⬇ Descargar ZIP</button><button type="button" data-b="del">🗑 Papelera</button><span class="sp"></span><button type="button" data-b="none">✕ Quitar selección</button></div>
+        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><button type="button" data-b="del">${svg('trash')} Papelera</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
         <div class="st-picking" hidden></div>
+        <div class="st-count" aria-live="polite"></div>
         <div class="st-grid"></div>
       </section>
     </div>
-    <div class="st-light" hidden></div>
+    <div class="st-light" hidden role="dialog" aria-modal="true" aria-label="Vista ampliada"></div>
     <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" multiple hidden>`;
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
-  let items = [], models = [], engines = [], budget = null, jobs = [], def = {};
-  let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, prevPrompt = null;
+  let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
+  let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightFrom = null, prevPrompt = null, qty = 1;
   const modelOf = { image: store.get('model.image', ''), video: store.get('model.video', '') };
   const setsOf = store.get('sets', {}); // model id → its settings
   let media = { start: [], end: [], reference: [], video: [] };
@@ -69,8 +90,11 @@ export function initStudio(ctx) {
   const say = (t, bad) => { $('.st-msg').textContent = t; $('.st-msg').className = 'st-msg' + (bad ? ' bad' : ''); };
   const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const api = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
+  const price = m => !m.cost ? 'gratis' : m.per === 's' ? `~US$${m.cost.toFixed(2)}/s` : `~US$${m.cost < 0.01 ? m.cost.toFixed(3) : m.cost.toFixed(2)}/imagen`;
+  const tags = m => [m.roles.reference && 'Referencias', m.roles.start && (m.kind === 'video' ? 'Anima una imagen' : 'Edita una imagen'), m.roles.end && 'Fotograma final', m.roles.video && 'Parte de un video',
+    (m.settings.sound || m.settings.generateAudio) && 'Sonido', /texto/i.test(m.note) && 'Texto legible', m.cost && m.cost < 0.012 && m.per !== 's' && 'Muy barato'].filter(Boolean);
 
-  /* ---------- the generator ---------- */
+  /* ---------- the composer ---------- */
   function pickModel(k = kind) { // the remembered one if it is on, else the office's default, else the first that is on
     const on = models.filter(m => m.kind === k && m.on);
     if (!on.some(m => m.id === modelOf[k])) modelOf[k] = (on.find(m => m.id === def[k]) || on.find(m => m.engine !== 'prueba') || on[0] || {}).id || '';
@@ -80,51 +104,75 @@ export function initStudio(ctx) {
     for (const [k, f] of Object.entries(m.settings)) if (s[k] === undefined || (f.type === 'enum' && !f.values.includes(String(s[k])))) s[k] = f.default;
     return s;
   }
+  function setSetting(k, v) { const m = cur(); if (!m) return; const s = settingsOf(m); s[k] = v; setsOf[m.id] = s; store.set('sets', setsOf); }
   function renderModels() {
     pickModel();
-    const byEng = {};
-    for (const m of models.filter(x => x.kind === kind)) (byEng[m.engine] = byEng[m.engine] || []).push(m);
-    const engs = engines.filter(e => byEng[e.id]).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
-    $('.st-model').innerHTML = engs.map(e => `<optgroup label="${esc(e.name)}${e.on ? '' : ' — sin key'}">${byEng[e.id].map(m => `<option value="${m.id}"${m.on ? '' : ' disabled'}>${esc(m.name)}${m.on ? '' : ' (sin key)'}</option>`).join('')}</optgroup>`).join('');
-    if (modelOf[kind]) $('.st-model').value = modelOf[kind];
-    el.querySelectorAll('[data-kind]').forEach(b => { b.classList.toggle('on', b.dataset.kind === kind); b.setAttribute('aria-selected', b.dataset.kind === kind); });
-    renderModel();
+    el.querySelectorAll('[data-kind]').forEach(b => { const on = b.dataset.kind === kind; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    renderPick(); renderModel();
+  }
+  function renderPick() {
+    const m = cur(), b = $('.st-mpick');
+    b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${esc(m.name)}</span><span class="st-mp-eng">${esc(m.engineName)}</span><span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
+      : `<span class="st-mp-top"><span class="st-mp-name">Ningún modelo de ${kind === 'video' ? 'video' : 'imagen'} encendido</span><span class="sp"></span><span class="st-mp-caret">▾</span></span><span class="st-mp-note">Abre «Motores y cómo activarlos» abajo.</span>`;
+  }
+  function renderList(qs = '') {
+    const L = $('.st-mlist'), w = qs.toLowerCase();
+    const mine = models.filter(x => x.kind === kind && (!w || `${x.name} ${x.engineName} ${x.note}`.toLowerCase().includes(w)));
+    const engs = engines.filter(e => mine.some(x => x.engine === e.id)).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
+    const row = x => `<button type="button" role="option" class="st-mo${x.id === modelOf[kind] ? ' on' : ''}" data-id="${x.id}" aria-selected="${x.id === modelOf[kind]}"${x.on ? '' : ' disabled'}><span class="st-mo-top"><b>${esc(x.name)}</b><span class="sp"></span><span class="st-mp-cost">${price(x)}</span></span>${x.note ? `<span class="st-mo-note">${esc(x.note)}</span>` : ''}${tags(x).length ? `<span class="st-tags">${tags(x).map(t => `<i>${t}</i>`).join('')}</span>` : ''}</button>`;
+    L.innerHTML = `<label class="st-mq">${svg('search')}<input type="search" placeholder="Buscar modelo…" aria-label="Buscar modelo" value="${esc(qs)}"></label>` +
+      engs.filter(e => e.on).map(e => `<div class="st-mg"><div class="st-mg-h">${esc(e.name)} <span class="ok">● listo</span></div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') +
+      (engs.some(e => !e.on) ? `<details class="st-mg off"><summary>Sin activar: ${engs.filter(e => !e.on).map(e => esc(e.name)).join(', ')}</summary>${engs.filter(e => !e.on).map(e => `<div class="st-mg-h">${esc(e.name)} <code>${esc(e.how || '')}</code></div>${mine.filter(x => x.engine === e.id).map(row).join('')}`).join('')}</details>` : '') +
+      (mine.length ? '' : '<div class="st-empty-s">Ningún modelo con eso.</div>');
+  }
+  function openList(on) {
+    const L = $('.st-mlist'), b = $('.st-mpick');
+    if (on === undefined) on = L.hidden;
+    L.hidden = !on; b.setAttribute('aria-expanded', on);
+    if (on) { renderList(); setTimeout(() => L.querySelector('input').focus(), 20); }
   }
   function renderModel() {
     const m = cur();
-    $('.st-prompt').placeholder = mode === 'batch' ? 'Un prompt por línea — cada línea son «Variantes» archivos. Ej.: los 12 fondos del mes de Instagram.' : kind === 'video' ? (media.start.length ? 'Describe el movimiento: la cámara se acerca despacio, el vapor sube, luz de tarde…' : 'Qué pasa en el video: sujeto, acción, cámara, luz, estilo. Para animar una imagen, pulsa 🎬 en la galería.') : 'Describe la imagen: sujeto, estilo, luz, encuadre, colores. Ej.: fondo oscuro de roca volcánica con brillo naranja #FF5100, espacio limpio abajo para texto';
-    if (!m) { $('.st-mnote').textContent = 'No hay ningún modelo de ' + (kind === 'video' ? 'video' : 'imagen') + ' encendido.'; $('.st-slots').innerHTML = ''; $('.st-sets').innerHTML = ''; estimate(); return; }
-    const price = m.cost ? `aprox. US$${m.per === 's' ? m.cost.toFixed(2) + ' por segundo' : m.cost.toFixed(3) + ' por imagen'}` : 'gratis';
-    $('.st-mnote').innerHTML = `${m.note ? esc(m.note) + ' · ' : ''}<span>${esc(m.engineName)} · ${price}</span>`;
-    // media slots: only the roles this model takes; what no longer fits is dropped
-    for (const r of Object.keys(media)) media[r] = media[r].slice(0, m.roles[r] || 0);
-    $('.st-slots').innerHTML = Object.entries(m.roles).filter(([r, n]) => n > 0 && ROLE[r]).map(([r, n]) => `<div class="st-slot${(m.needs || []).includes(r) && !media[r].length ? ' need' : ''}" data-role="${r}">
-        <div class="st-slot-h"><b>${ROLE[r]}</b> <span>${n > 1 ? `${media[r].length}/${n} · ` : ''}${ROLE_HELP[r]}${(m.needs || []).includes(r) ? ' · obligatorio' : ''}</span></div>
-        <div class="st-chips">${media[r].map(f => `<span class="st-chip" data-f="${esc(f)}">${isVid(f) ? `<video src="${src(f)}" muted preload="metadata"></video>` : `<img src="${src(f)}" alt="">`}<button type="button" data-unslot="${esc(f)}" aria-label="Quitar">✕</button></span>`).join('')}
-          ${media[r].length < n ? `<button type="button" class="st-add" data-slot="${r}" title="Subir un archivo">＋ Subir</button><button type="button" class="st-add" data-gpick="${r}" title="Elegir en la galería de la derecha">▦ De la galería</button>` : ''}</div></div>`).join('');
-    // settings: the ones this model has, remembered per model
-    const s = settingsOf(m);
-    $('.st-sets').innerHTML = Object.entries(m.settings).map(([k, f]) => {
+    $('.st-prompt').placeholder = mode === 'batch' ? 'Una idea por línea — cada línea genera «Cantidad» archivos. Ej.: los 12 fondos del mes de Instagram.' : kind === 'video' ? (media.start.length ? 'Describe el movimiento: la cámara se acerca despacio, el vapor sube, luz de tarde…' : 'Qué pasa en el video: sujeto, acción, cámara, luz, estilo. Para animar una imagen, pulsa Animar sobre ella en la galería.') : 'Ej.: fondo oscuro de roca volcánica con brillo naranja #FF5100, espacio limpio abajo para el texto';
+    if (!m) { $('.st-slots').innerHTML = ''; $('.st-matstep').hidden = true; $('.st-ratios').innerHTML = ''; $('.st-sets').innerHTML = ''; $('.st-sets2').innerHTML = ''; $('.st-more').hidden = true; estimate(); return; }
+    for (const r of Object.keys(media)) media[r] = media[r].slice(0, m.roles[r] || 0); // what no longer fits this model is dropped
+    const roles = Object.entries(m.roles).filter(([r, n]) => n > 0 && ROLE[r]);
+    $('.st-matstep').hidden = !roles.length; $('.st-n5').textContent = roles.length ? '5' : '4'; // the steps count on without a gap
+    $('.st-matstep .st-hn').textContent = (m.needs || []).length ? 'obligatorio' : 'opcional';
+    $('.st-slots').innerHTML = roles.map(([r, n]) => `<div class="st-slot${(m.needs || []).includes(r) && !media[r].length ? ' need' : ''}" data-role="${r}">
+        <div class="st-slot-h"><b>${ROLE[r]}</b> <span>${ROLE_HELP[r]}${n > 1 ? ` · ${media[r].length} de ${n}` : ''}</span></div>
+        <div class="st-chips">${media[r].map(f => `<span class="st-chip" data-f="${esc(f)}">${isVid(f) ? `<video src="${src(f)}" muted preload="metadata"></video>` : `<img src="${src(f)}" alt="">`}<button type="button" data-unslot="${esc(f)}" aria-label="Quitar">${svg('x')}</button></span>`).join('')}
+          ${media[r].length < n ? `<button type="button" class="st-add" data-slot="${r}">${svg('up')}<span>Subir</span></button><button type="button" class="st-add" data-gpick="${r}">${svg('grid')}<span>De la galería</span></button>` : ''}</div></div>`).join('');
+    const s = settingsOf(m), ent = Object.entries(m.settings);
+    const ratio = m.settings.aspectRatio;
+    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="group" aria-label="Formato">${ratio.values.map(v => { const [w, h] = v === 'auto' ? [1, 1] : v.split(':').map(Number); const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-pressed="${String(s.aspectRatio) === v}" title="${esc(RATIO_USE[v] || v)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_USE[v] || '')}</small></button>`; }).join('')}</div>` : '';
+    const ctl = ([k, f]) => {
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
-      if (f.type === 'range') return `<label class="st-lab">${LBL[k] || k} <output>${s[k]}</output><input type="range" data-set="${k}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${s[k]}"></label>`;
+      if (f.type === 'range') return `<label class="st-lab st-range">${LBL[k] || k} <output>${s[k]}</output><input type="range" data-set="${k}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${s[k]}"></label>`;
       return `<label class="st-tog"><input type="checkbox" data-set="${k}"${s[k] ? ' checked' : ''}><span>${LBL[k] || k}</span></label>`;
-    }).join('') || '<div class="st-mnote">Este modelo no tiene ajustes.</div>';
-    $('.st-n').max = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8;
-    if (+$('.st-n').value > +$('.st-n').max) $('.st-n').value = $('.st-n').max;
+    };
+    const main = ent.filter(([k]) => k === 'duration' || k === 'resolution'), rest = ent.filter(([k]) => k !== 'aspectRatio' && k !== 'duration' && k !== 'resolution');
+    $('.st-sets').innerHTML = main.map(ctl).join('');
+    $('.st-sets2').innerHTML = rest.map(ctl).join('');
+    $('.st-more').hidden = !rest.length;
+    $('.st-more summary').textContent = `Más ajustes · ${rest.map(([k]) => (LBL[k] || k).toLowerCase()).slice(0, 3).join(', ')}${rest.length > 3 ? '…' : ''}`;
+    qty = Math.min(qty, kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8);
     estimate();
   }
   const lines = () => $('.st-prompt').value.split('\n').map(x => x.trim()).filter(Boolean);
   function estimate() {
-    const m = cur(); const n = (mode === 'batch' ? lines().length : 1) * Math.max(1, +$('.st-n').value || 1);
-    if (!m) { $('.st-est').textContent = ''; return; }
+    $('.st-n').textContent = qty;
+    const m = cur(); const n = (mode === 'batch' ? Math.max(1, lines().length) : 1) * qty;
+    if (!m) { $('.st-est').textContent = ''; return 0; }
     const s = settingsOf(m), per = Number(s.batchSize) || 1, secs = m.seconds || Number(s.duration) || 5;
-    const cost = (m.per === 's' ? m.cost * secs : m.cost) * n * per;
-    $('.st-est').textContent = `${n * per} ${kind === 'video' ? (n * per === 1 ? 'video' : 'videos') : n * per === 1 ? 'imagen' : 'imágenes'}${m.per === 's' ? ` de ${secs} s` : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}${budget ? ` · quedan ${budget.left} hoy` : ''}`;
+    const cost = (m.per === 's' ? m.cost * secs : m.cost) * n * per, total = n * per;
+    $('.st-est').textContent = `${total} ${kind === 'video' ? (total === 1 ? 'video' : 'videos') : total === 1 ? 'imagen' : 'imágenes'}${m.per === 's' ? ` de ${secs} s` : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}${budget ? ` · te quedan ${budget.left} hoy` : ''}`;
+    $('.st-go').textContent = kind === 'video' ? (total > 1 ? `GENERAR ${total} VIDEOS` : 'GENERAR VIDEO') : total > 1 ? `GENERAR ${total} IMÁGENES` : 'GENERAR IMAGEN';
     $('.st-plen').textContent = $('.st-prompt').value.length > 3000 ? `${$('.st-prompt').value.length}/4000` : '';
     return cost;
   }
   function renderHead() {
-    $('.st-budget').textContent = budget ? `Hoy: ${budget.images} imágenes · ${budget.videos} videos · US$${(budget.cost || 0).toFixed(2)} · quedan ${budget.left} de ${budget.limit}${budget.reserved ? ` (${budget.reserved} en curso)` : ''}` : '';
+    $('.st-budget').innerHTML = budget ? `<span class="st-bm" title="El tope diario de la oficina (office.config.json → media.dailyLimit); un video cuenta como 5"><i style="width:${Math.min(100, Math.round((budget.limit - budget.left) / Math.max(1, budget.limit) * 100))}%"></i></span><span>Hoy ${budget.limit - budget.left} de ${budget.limit}${budget.reserved ? ` · ${budget.reserved} en curso` : ''} · US$${(budget.cost || 0).toFixed(2)}</span>` : '';
     $('.st-engs').innerHTML = engines.map(e => `<div class="st-eng${e.on ? ' on' : ''}"><b>${e.on ? '●' : '○'} ${esc(e.name)}</b> <span>${e.on ? `listo · ${e.models} modelos` : e.id === 'prueba' ? 'siempre listo' : `${e.models} modelos · <code>${esc(e.how || '')}</code>${e.site ? ` · ${esc(e.site)}` : ''}`}</span></div>`).join('');
   }
 
@@ -139,44 +187,57 @@ export function initStudio(ctx) {
     const live = j.state !== 'failed', t = Date.now() - (j.startedAt || j.at);
     return `<figure class="st-card st-job ${j.state}" data-job="${j.id}">
       <div class="st-jbody" style="aspect-ratio:${ar(j.s && j.s.aspectRatio) || '1 / 1'}">
-        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : j.kind === 'video' ? 'Generando video' : 'Generando'}${j.n > 1 ? ` · ${j.items.length}/${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')} · ${fmtDur(t)}</span>` : `<b>✗ No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
+        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : j.kind === 'video' ? 'Generando video' : 'Generando'}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)}</span>` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
         <p>${esc(j.prompt)}</p><span class="st-meta">${esc(j.modelName)}${j.by === 'agent' ? ' · ' + esc(agentName(j.agent) || 'agente') : ''}</span>
       </div>
-      <div class="st-acts">${live ? `<button type="button" data-j="cancel">Cancelar</button>` : `<button type="button" data-j="retry">↻ Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
+      <div class="st-jacts">${live ? `<button type="button" data-j="cancel">Cancelar</button>` : `<button type="button" data-j="retry" class="pri">Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
   }
   function card(it, i) {
-    const vid = it.kind === 'video', on = sel.has(it.file);
+    const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
     return `<figure class="st-card${on ? ' sel' : ''}" data-i="${i}" data-f="${esc(it.file)}">
-      <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar"></label>
-      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline></video><span class="st-play">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}
-        ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}${it.fav ? '<span class="st-favb">★</span>' : ''}</button>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span><span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || it.model ? ' · ' + esc(it.modelName || it.model) : ''} · ${new Date(it.at).toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span></figcaption>
-      <div class="st-acts"><button type="button" data-a="fav" title="Favorita" class="${it.fav ? 'on' : ''}">★</button><a href="${src(it)}" download title="Descargar">⬇</a>${it.upload ? '' : '<button type="button" data-a="again" title="Reusar: mismo prompt, modelo y ajustes">↻</button>'}${vid ? '' : '<button type="button" data-a="anim" title="Animar: convertir en video">🎬</button><button type="button" data-a="ref" title="Usar como referencia">⊕</button>'}<button type="button" data-a="del" title="Mover a la papelera">🗑</button></div>
+      <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
+      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}
+        ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}${it.fav ? `<span class="st-favb" aria-label="Favorita">${svg('star', 'fill')}</span>` : ''}</button>
+      <div class="st-ov" role="group" aria-label="Acciones">
+        <button type="button" data-a="fav" class="${it.fav ? 'on' : ''}" aria-label="${it.fav ? 'Quitar de favoritas' : 'Marcar favorita'}" title="${it.fav ? 'Quitar de favoritas' : 'Favorita'}">${svg('star', it.fav ? 'fill' : '')}</button>
+        <a href="${src(it)}" download aria-label="Descargar" title="Descargar">${svg('down')}</a>
+        ${vid ? '' : `<button type="button" data-a="anim" aria-label="Animar: convertirla en video" title="Animar (convertir en video)">${svg('vid')}</button><button type="button" data-a="ref" aria-label="Usar como referencia" title="Usar como referencia">${svg('plus')}</button>`}
+        ${it.upload ? '' : `<button type="button" data-a="again" aria-label="Repetir con el mismo prompt y ajustes" title="Repetir (mismo prompt y ajustes)">${svg('again')}</button>`}
+        <button type="button" data-a="del" aria-label="Mover a la papelera" title="Papelera">${svg('trash')}</button>
+      </div>
+      <figcaption><span class="st-p">${esc(it.prompt)}</span><span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${new Date(it.at).toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span></figcaption>
     </figure>`;
   }
   function renderGrid() {
     const list = shown(), tj = tileJobs().filter(j => filter === 'all' || (filter === 'you' && j.by !== 'agent') || (filter === 'agent' && j.by === 'agent') || (filter === 'video' && j.kind === 'video'));
-    $('.st-count').textContent = `${list.length} de ${items.length}`;
+    const active = tileJobs().filter(j => j.state !== 'failed').length;
+    $('.st-count').textContent = `${list.length} ${list.length === 1 ? 'archivo' : 'archivos'}${list.length !== items.length ? ` de ${items.length}` : ''}${active ? ` · ${active} generándose` : ''}`;
     const scroll = $('.st-grid').scrollTop;
     const body = tj.map(jobTile).join('') + list.map(it => card(it, items.indexOf(it))).join(''); // the columns live in an inner box: a multi-column box with a fixed height overflows sideways
-    $('.st-grid').innerHTML = body ? `<div class="st-cols">${body}</div>` : `<div class="st-empty">${items.length ? 'Nada con este filtro.' : 'Aún no hay nada. Genera tu primera imagen a la izquierda, sube una foto tuya (⇪ Subir), o pídesela a un agente de Marketing.'}</div>`;
+    $('.st-grid').innerHTML = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
+      : body ? `<div class="st-cols">${body}</div>` : `<div class="st-empty">${items.length ? 'Nada con este filtro.' : 'Aún no hay nada. Genera tu primera imagen a la izquierda, sube una foto tuya (Subir), o pídesela a un agente de Marketing.'}</div>`;
     $('.st-grid').scrollTop = scroll;
     renderSel();
   }
   function renderSel() {
-    $('.st-selbar').hidden = !sel.size; $('.st-seln').textContent = `${sel.size} ${sel.size === 1 ? 'seleccionada' : 'seleccionadas'}`;
-    el.classList.toggle('st-selecting', sel.size > 0);
+    $('.st-selbar').hidden = !(selecting || sel.size); $('.st-seln').textContent = sel.size ? `${sel.size} ${sel.size === 1 ? 'seleccionada' : 'seleccionadas'}` : 'Toca las que quieras';
+    el.classList.toggle('st-selecting', selecting || sel.size > 0);
+    $('.st-selbtn').setAttribute('aria-pressed', selecting || sel.size > 0); $('.st-selbtn').classList.toggle('on', selecting || sel.size > 0);
+    el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"]').forEach(b => { b.disabled = !sel.size; });
     $('.st-picking').hidden = !picking;
-    if (picking) $('.st-picking').innerHTML = `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${ROLE[picking]}» — haz clic en ella. <button type="button" data-b="unpick">Cancelar (Esc)</button>`;
+    if (picking) $('.st-picking').innerHTML = `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${ROLE[picking]}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`;
     el.classList.toggle('st-pickmode', !!picking);
   }
   let loading = null;
-  async function load() {
+  async function load({ full = true } = {}) { // full: the catalog too (the 20-second refresh only touches the gallery, so an open menu stays open)
     if (loading) return loading;
     loading = (async () => {
-      try { const j = await api('GET', '/api/media'); items = j.items || []; models = j.models || []; engines = j.engines || []; budget = j.budget || null; jobs = j.jobs || []; def = j.default || {}; } catch { }
+      try { const j = await api('GET', '/api/media'); items = j.items || []; budget = j.budget || null; jobs = j.jobs || []; loadErr = '';
+        const sig = JSON.stringify((j.models || []).map(m => m.id + (m.on ? 1 : 0)));
+        if (full || sig !== catalogSig) { models = j.models || []; engines = j.engines || []; def = j.default || {}; catalogSig = sig; full = true; }
+      } catch (e) { loadErr = e.message; }
       for (const f of [...sel]) if (!itemOf(f)) sel.delete(f);
-      renderHead(); renderModels(); renderGrid(); watch();
+      renderHead(); if (full) renderModels(); renderGrid(); watch();
     })();
     try { await loading; } finally { loading = null; }
   }
@@ -192,7 +253,7 @@ export function initStudio(ctx) {
         const before = new Map(jobs.map(j => [j.id, j.state]));
         const r = await api('GET', '/api/media/jobs'); jobs = r.jobs; budget = r.budget;
         const finished = jobs.filter(j => (j.state === 'done' || j.state === 'failed') && (before.get(j.id) === 'running' || before.get(j.id) === 'queued'));
-        if (finished.length) { await load(); const ok = finished.filter(j => j.state === 'done'), bad = finished.filter(j => j.state === 'failed'); if (ok.length && !bad.length) say(`Listo: ${ok.reduce((s, j) => s + j.items.length, 0)} archivo(s) nuevos en la galería.`); if (bad.length) say(`${bad.length} no se pudo: ${bad[0].error}`, true); return; }
+        if (finished.length) { await load({ full: false }); const ok = finished.filter(j => j.state === 'done'), bad = finished.filter(j => j.state === 'failed'); if (ok.length && !bad.length) say(`Listo: ${ok.reduce((s, j) => s + j.items.length, 0)} archivo(s) nuevos en la galería.`); if (bad.length) say(`${bad.length} no se pudo: ${bad[0].error}`, true); return; }
         renderHead(); renderGrid();
       } catch {}
       watch();
@@ -203,18 +264,17 @@ export function initStudio(ctx) {
   async function generate(prompts) {
     const m = cur(); if (!m) return say('Elige un modelo.', true);
     if (busy) return; busy = true; $('.st-go').disabled = true;
-    const n = Math.max(1, +$('.st-n').value || 1), settings = settingsOf(m);
-    const mediaNow = Object.fromEntries(Object.entries(media).filter(([, v]) => v.length));
+    const settings = settingsOf(m), mediaNow = Object.fromEntries(Object.entries(media).filter(([, v]) => v.length));
     let ok = 0;
     for (const p of prompts) {
-      try { const r = await api('POST', '/api/media/jobs', { prompt: p, n, kind, model: m.id, settings, media: mediaNow, by: 'you' }); jobs.unshift(r.job); budget = r.budget; ok++; }
-      catch (e) { say(`No se pudo${prompts.length > 1 ? ` (${ok + 1}/${prompts.length})` : ''}: ${e.message}`, true); if (/tope|key/.test(e.message)) break; }
+      try { const r = await api('POST', '/api/media/jobs', { prompt: p, n: qty, kind, model: m.id, settings, media: mediaNow, by: 'you' }); jobs.unshift(r.job); budget = r.budget; ok++; }
+      catch (e) { say(`No se pudo${prompts.length > 1 ? ` (${ok + 1} de ${prompts.length})` : ''}: ${e.message}`, true); if (/tope|key/.test(e.message)) break; }
     }
-    if (ok) say(`${ok === 1 ? 'En marcha' : `${ok} trabajos en marcha`}: ${kind === 'video' ? 'un video tarda unos minutos; ' : ''}sigue trabajando, aparece en la galería al terminar.`);
+    if (ok) say(`${ok === 1 ? 'En marcha' : `${ok} trabajos en marcha`}: ${kind === 'video' ? 'un video tarda unos minutos; ' : ''}aparece en la galería al terminar. Puedes seguir.`);
     busy = false; $('.st-go').disabled = false;
     renderHead(); renderGrid(); watch();
   }
-  function setKind(k) { if (k === kind) return; kind = k; store.set('kind', kind); renderModels(); }
+  function setKind(k) { if (k === kind) return; kind = k; store.set('kind', kind); openList(false); renderModels(); }
   function useModelFor(role, want) { // a model of `want` kind that takes `role`: the current one if it does, else the best that is on
     const c = models.find(m => m.id === modelOf[want]);
     if (c && c.on && c.roles[role]) return c;
@@ -245,12 +305,12 @@ export function initStudio(ctx) {
   function reuse(it) {
     const k = it.kind === 'video' || it.wanted === 'video' ? 'video' : 'image';
     kind = k; store.set('kind', kind);
-    const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (it.settings) setsOf[m.id] = { ...it.settings }; }
+    const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (it.settings) { setsOf[m.id] = { ...it.settings }; store.set('sets', setsOf); } }
     media = { start: [], end: [], reference: [], video: [], ...(it.media || {}) };
     for (const r of Object.keys(media)) media[r] = (media[r] || []).filter(f => itemOf(f));
-    mode = 'one'; el.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === 'one'));
+    mode = 'one'; $('.st-mode').checked = false;
     $('.st-prompt').value = it.prompt; renderModels(); $('.st-prompt').focus();
-    say(m ? 'Mismo prompt, modelo y ajustes: cambia lo que quieras y GENERAR.' : 'Ese modelo no está encendido; elige otro.', !m);
+    say(m ? 'Mismo prompt, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.' : 'Ese modelo no está encendido; elige otro.', !m);
   }
   let toastT = null;
   function toast(text, undo) {
@@ -259,19 +319,20 @@ export function initStudio(ctx) {
     clearTimeout(toastT); toastT = setTimeout(() => { T.hidden = true; }, 9000);
   }
   async function trashMany(files) {
-    const undo = [];
-    for (const f of files) { try { const r = await api('DELETE', '/api/media/item/' + encodeURIComponent(f)); if (r.undo) undo.push(r.undo); } catch {} }
+    const undo = []; let failed = 0;
+    for (const f of files) { try { const r = await api('DELETE', '/api/media/item/' + encodeURIComponent(f)); if (r.undo) undo.push(r.undo); } catch { failed++; } }
     items = items.filter(x => !undo.some(u => u.id === x.file)); for (const u of undo) sel.delete(u.id);
     for (const r of Object.keys(media)) media[r] = media[r].filter(f => !undo.some(u => u.id === f));
     renderGrid(); renderModel(); closeLight();
-    toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera (se vacía a los 30 días).`, async () => {
+    if (!undo.length) return say(`No se pudo mover ${failed === 1 ? 'el archivo' : `ninguno de los ${failed}`} a la papelera.`, true);
+    toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera${failed ? ` · ${failed} no se pudo` : ''} (se vacía a los 30 días).`, async () => {
       let back = 0; for (const u of undo) { try { await api('POST', '/api/media/restore', u); back++; } catch {} }
-      await load(); say(back === undo.length ? 'Recuperado.' : `Recuperé ${back} de ${undo.length}.`, back !== undo.length);
+      await load({ full: false }); say(back === undo.length ? 'Recuperado.' : `Recuperé ${back} de ${undo.length}.`, back !== undo.length);
     });
   }
   async function favMany(files) {
     const all = files.every(f => itemOf(f)?.fav);
-    for (const f of files) { const it = itemOf(f); if (!it) continue; it.fav = !all; fetch('/api/media/item/' + encodeURIComponent(f), { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fav: it.fav }) }); }
+    await Promise.all(files.map(async f => { const it = itemOf(f); if (!it) return; const was = it.fav; it.fav = !all; try { await api('PATCH', '/api/media/item/' + encodeURIComponent(f), { fav: it.fav }); } catch { it.fav = was; say('No se pudo guardar la favorita.', true); } }));
     renderGrid();
   }
   async function zip(files) {
@@ -302,30 +363,32 @@ export function initStudio(ctx) {
   }
 
   /* ---------- the lightbox ---------- */
-  function closeLight() { const L = $('.st-light'); L.hidden = true; L.innerHTML = ''; lightIdx = -1; }
+  function closeLight() { const L = $('.st-light'); if (L.hidden) return; L.hidden = true; L.innerHTML = ''; lightIdx = -1; if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
   function light(i) {
-    const list = shown(); const it = list[i]; if (!it) return; lightIdx = i;
+    const list = shown(); const it = list[i]; if (!it) return; if (lightIdx < 0) lightFrom = document.activeElement; lightIdx = i;
     const L = $('.st-light'); L.hidden = false;
     const setTxt = it.settings ? Object.entries(it.settings).map(([k, v]) => `${LBL[k] || k}: ${typeof v === 'boolean' ? (v ? 'sí' : 'no') : VAL[v] || v}`).join(' · ') : '';
     const used = it.media ? Object.entries(it.media).flatMap(([r, fs]) => fs.map(f => [r, f])) : [];
-    L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar">✕</button>
-      ${i > 0 ? '<button type="button" class="st-lnav prev" aria-label="Anterior">‹</button>' : ''}${i < list.length - 1 ? '<button type="button" class="st-lnav next" aria-label="Siguiente">›</button>' : ''}
-      <div class="st-lmedia">${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="">`}</div>
+    L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
+      ${i > 0 ? '<button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)">‹</button>' : ''}${i < list.length - 1 ? '<button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)">›</button>' : ''}
+      <div class="st-lmedia">${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}">`}</div>
       <div class="st-linfo"><p class="st-lp">${esc(it.prompt)}</p>
       <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${it.by === 'agent' ? esc(agentName(it.agent) || 'agente') : 'tú'}`} · ${new Date(it.at).toLocaleString('es')}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
-      ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? '🎬' : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
-      <div class="st-lacts"><button type="button" data-l="copy">Copiar prompt</button><a href="${src(it)}" download>Descargar</a>${it.upload ? '' : '<button type="button" data-l="again">↻ Reusar</button>'}${it.kind === 'video' ? '' : '<button type="button" data-l="anim">🎬 Animar</button><button type="button" data-l="ref">⊕ Referencia</button>'}<button type="button" data-l="fav">${it.fav ? '★ Quitar de favoritas' : '☆ Favorita'}</button><button type="button" data-l="del">🗑 Papelera</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div></div></div>`;
+      ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
+      <div class="st-lacts">${it.kind === 'video' ? '' : `<button type="button" data-l="anim" class="pri">${svg('vid')} Animar</button><button type="button" data-l="ref">${svg('plus')} Usar de referencia</button>`}${it.upload ? '' : `<button type="button" data-l="again">${svg('again')} Repetir</button>`}
+        <a href="${src(it)}" download>${svg('down')} Descargar</a><button type="button" data-l="copy">Copiar prompt</button><button type="button" data-l="fav">${svg('star', it.fav ? 'fill' : '')} ${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button><button type="button" data-l="del">${svg('trash')} Papelera</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div></div></div>`;
+    L.querySelector('.st-lx').focus();
     L.onclick = e => {
       if (e.target === L || e.target.closest('.st-lx')) return closeLight();
       if (e.target.closest('.st-lnav.prev')) return light(i - 1);
       if (e.target.closest('.st-lnav.next')) return light(i + 1);
       const a = e.target.closest('[data-l]')?.dataset.l; if (!a) return;
-      if (a === 'copy') navigator.clipboard?.writeText(it.prompt).then(() => { e.target.textContent = 'Copiado ✓'; });
+      if (a === 'copy') navigator.clipboard?.writeText(it.prompt).then(() => { e.target.closest('button').textContent = 'Copiado ✓'; });
       if (a === 'again') { closeLight(); reuse(it); }
       if (a === 'anim') { closeLight(); animate(it); }
       if (a === 'ref') { closeLight(); useAsRef(it); }
-      if (a === 'fav') { favMany([it.file]); light(i); }
+      if (a === 'fav') favMany([it.file]).then(() => light(i));
       if (a === 'del') trashMany([it.file]);
       if (a === 'task') { closeLight(); close(); ctx.openTask(it.task); }
     };
@@ -334,10 +397,16 @@ export function initStudio(ctx) {
   /* ---------- events ---------- */
   el.addEventListener('click', async e => {
     if (e.target.closest('.st-x')) return close();
+    if (!e.target.closest('.st-mwrap')) openList(false);
     const kb = e.target.closest('[data-kind]'); if (kb) return setKind(kb.dataset.kind);
-    const md = e.target.closest('[data-mode]'); if (md) { mode = md.dataset.mode; el.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b === md)); renderModel(); return; }
-    const f = e.target.closest('[data-f]'); if (f && f.closest('.st-filt')) { filter = f.dataset.f; el.querySelectorAll('.st-filt [data-f]').forEach(b => b.classList.toggle('on', b === f)); renderGrid(); return; }
+    if (e.target.closest('.st-mpick')) return openList();
+    const mo = e.target.closest('.st-mo'); if (mo && !mo.disabled) { modelOf[kind] = mo.dataset.id; store.set('model.' + kind, mo.dataset.id); openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; }
+    const arb = e.target.closest('[data-ar]'); if (arb) { setSetting('aspectRatio', arb.dataset.ar); renderModel(); return; }
+    const qd = e.target.closest('.st-qty [data-d]'); if (qd) { const max = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8; qty = Math.max(1, Math.min(max, qty + +qd.dataset.d)); estimate(); return; }
+    const f = e.target.closest('[data-f]'); if (f && f.closest('.st-tabs')) { filter = f.dataset.f; el.querySelectorAll('.st-tabs [data-f]').forEach(b => { b.classList.toggle('on', b === f); b.setAttribute('aria-pressed', b === f); }); renderGrid(); return; }
     if (e.target.closest('.st-upbtn')) { uploadRole = null; $('.st-file').click(); return; }
+    if (e.target.closest('.st-selbtn')) { selecting = !(selecting || sel.size); if (!selecting) sel.clear(); renderGrid(); return; }
+    if (e.target.closest('.st-retry')) { load(); return; }
     const sl = e.target.closest('[data-slot]'); if (sl) { uploadRole = sl.dataset.slot; $('.st-file').accept = uploadRole === 'video' ? 'video/mp4,video/webm' : 'image/png,image/jpeg,image/webp'; $('.st-file').click(); return; }
     const gp = e.target.closest('[data-gpick]'); if (gp) { picking = gp.dataset.gpick; renderSel(); return; }
     const us = e.target.closest('[data-unslot]'); if (us) { for (const r of Object.keys(media)) media[r] = media[r].filter(x => x !== us.dataset.unslot); renderModel(); return; }
@@ -345,7 +414,7 @@ export function initStudio(ctx) {
     if (bb) {
       const b = bb.dataset.b, files = [...sel];
       if (b === 'unpick') { picking = null; renderSel(); }
-      if (b === 'none') { sel.clear(); renderGrid(); }
+      if (b === 'none') { sel.clear(); selecting = false; renderGrid(); }
       if (b === 'all') { for (const it of shown()) sel.add(it.file); renderGrid(); }
       if (b === 'fav') favMany(files);
       if (b === 'zip') zip(files);
@@ -355,18 +424,18 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-enh')) {
       const p = $('.st-prompt').value.trim(); if (!p) { $('.st-prompt').focus(); return say('Escribe primero la idea, aunque sea corta.', true); }
       if (!isLive()) return say('Mejorar el prompt necesita la oficina real.', true);
-      const b = $('.st-enh'); b.disabled = true; b.textContent = '✨ Pensando…';
+      const b = $('.st-enh'); b.disabled = true; b.querySelector('span').textContent = 'Pensando…';
       try { const r = await api('POST', '/api/media/enhance', { prompt: p, kind }); prevPrompt = p; $('.st-prompt').value = r.prompt; $('.st-undo-enh').hidden = false; say('Prompt mejorado. Revísalo; «Volver al mío» lo deshace.'); estimate(); }
       catch (err) { say(err.message, true); }
-      b.disabled = false; b.textContent = '✨ Mejorar prompt'; return;
+      b.disabled = false; b.querySelector('span').textContent = 'Mejorar el prompt'; return;
     }
     if (e.target.closest('.st-undo-enh')) { if (prevPrompt != null) $('.st-prompt').value = prevPrompt; prevPrompt = null; $('.st-undo-enh').hidden = true; return; }
     if (e.target.closest('.st-go')) {
       if (!isLive()) return say('El Estudio necesita la oficina real (ábrela con el iniciador).', true);
       const m = cur(); if (!m) return say('Elige un modelo.', true);
-      const miss = (m.needs || []).find(r => !media[r].length); if (miss) return say(`${m.name} necesita «${ROLE[miss]}».`, true);
+      const miss = (m.needs || []).find(r => !media[r].length); if (miss) return say(`${m.name} necesita «${ROLE[miss]}» (paso 4).`, true);
       const ps = mode === 'batch' ? lines() : [$('.st-prompt').value.trim()].filter(Boolean);
-      if (!ps.length && !(m.needs || []).includes('video')) { $('.st-prompt').focus(); return say('Escribe qué quieres generar.', true); }
+      if (!ps.length && !(m.needs || []).includes('video')) { $('.st-prompt').focus(); return say('Escribe qué quieres crear (paso 3).', true); }
       const c = estimate(); if (c > 1 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}. ¿Generar?`)) return;
       return generate(ps.length ? ps : ['']);
     }
@@ -388,7 +457,7 @@ export function initStudio(ctx) {
       return;
     }
     const ck = e.target.closest('.st-ck');
-    if (ck || (sel.size && e.target.closest('.st-thumb'))) { // selecting: a click toggles, Shift extends from the last one
+    if (ck || ((selecting || sel.size) && e.target.closest('.st-thumb'))) { // selecting: a click toggles, Shift extends from the last one
       e.preventDefault();
       const list = shown(), idx = list.indexOf(it);
       if (e.shiftKey && lastPick >= 0) { const [a, b] = [Math.min(lastPick, idx), Math.max(lastPick, idx)]; for (const x of list.slice(a, b + 1)) sel.add(x.file); }
@@ -404,12 +473,13 @@ export function initStudio(ctx) {
     if (a === 'ref') useAsRef(it);
   });
   el.addEventListener('change', e => {
-    if (e.target.classList.contains('st-model')) { modelOf[kind] = e.target.value; store.set('model.' + kind, e.target.value); renderModel(); return; }
+    if (e.target.classList.contains('st-mode')) { mode = e.target.checked ? 'batch' : 'one'; renderModel(); return; }
     if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
-    const k = e.target.dataset?.set; if (k && cur()) { const m = cur(); const s = settingsOf(m); s[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value; setsOf[m.id] = s; store.set('sets', setsOf); estimate(); }
+    const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); estimate(); }
   });
   el.addEventListener('input', e => {
-    if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value; const m = cur(); const s = settingsOf(m); s[e.target.dataset.set] = +e.target.value; setsOf[m.id] = s; store.set('sets', setsOf); }
+    if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
+    if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value; setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; renderGrid(); return; }
     estimate();
   });
@@ -424,11 +494,15 @@ export function initStudio(ctx) {
   el.addEventListener('keydown', e => {
     e.stopPropagation();
     if (!$('.st-light').hidden) { if (e.key === 'Escape') closeLight(); else if (e.key === 'ArrowLeft' && lightIdx > 0) light(lightIdx - 1); else if (e.key === 'ArrowRight' && lightIdx < shown().length - 1) light(lightIdx + 1); return; }
-    if (e.key === 'Escape') { if (picking) { picking = null; renderSel(); } else if (sel.size) { sel.clear(); renderGrid(); } else close(); return; }
+    if (e.key === 'Escape') {
+      if (!$('.st-mlist').hidden) { openList(false); $('.st-mpick').focus(); return; }
+      if (e.target.matches('input[type=search], textarea') && e.target.value && e.target.classList.contains('st-q')) { e.target.value = ''; q = ''; renderGrid(); return; } // Esc empties the search first
+      if (picking) { picking = null; renderSel(); } else if (sel.size || selecting) { sel.clear(); selecting = false; renderGrid(); } else close(); return;
+    }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.classList.contains('st-prompt')) { e.preventDefault(); $('.st-go').click(); }
   });
   let timer = null;
-  function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden) load(); }, 20000); setTimeout(() => $('.st-prompt').focus(), 60); }
-  function close() { if (el.hidden) return; el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => $('.st-prompt').focus(), 60); }
+  function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden };
 }

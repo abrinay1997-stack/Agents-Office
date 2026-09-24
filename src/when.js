@@ -88,18 +88,25 @@ export function parseWhen(input) {
     const t = findTime(s); if (t) s = cut(s, t.span);
     return { when: { kind: 'weekdays', at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), guessWord: t && t.word, needsTime: !t };
   }
+  // A day named once is a DATE, not a routine (24 Sep 2026): «el viernes a las 10 publica…» is one task for this Friday
+  // (parseOnce below); a routine needs a word that repeats — every/each/cada/los/todos los, a plural («mondays»,
+  // «los fines de semana»), or «cada semana»/«weekly» somewhere in the sentence.
+  const weeklyWord = /\b(?:weekly|every\s+week|each\s+week|semanal(?:mente)?|cada\s+semana|todas\s+las\s+semanas)\b/i.test(src);
   // weekends
-  if ((m = /\b(?:every|each|on|at|cada|los|el|todos?\s+los?)?\s*(?:the\s+|el\s+)?(?:weekends?|fin(?:es)?\s+de\s+semana)\b/i.exec(s))) {
+  if ((m = /\b(every|each|on|at|cada|los|el|este|this|todos?\s+los?)?\s*(?:the\s+|el\s+)?(weekends?|fin(?:es)?\s+de\s+semana)\b/i.exec(s))
+    && (/^(every|each|cada|los|todos? los?)$/i.test((m[1] || '').replace(/\s+/g, ' ')) || /^(weekends|fines)/i.test(m[2]) || weeklyWord)) {
     s = cut(s, [m.index, m.index + m[0].length]);
     const t = findTime(s); if (t) s = cut(s, t.span);
     return { when: { kind: 'weekly', days: [6, 0], at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), guessWord: t && t.word, needsTime: !t };
   }
   // named days: every monday · mondays · on mon and thu · every tuesday and friday · each friday · cada lunes · los lun y mié
   {
-    const re = /\b(?:every|each|on|all|every\s+other|cada|los|las|el|todos?\s+los?)?\s*((?:(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?|dom(?:ingo)?s?|lun(?:es)?|mar(?:tes)?|mi[eé](?:rcoles)?|jue(?:ves)?|vie(?:rnes)?|s[aá]b(?:ado)?s?)(?:\s*(?:,|\by\b|\be\b|and|&|\+)\s*(?:(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?|dom(?:ingo)?s?|lun(?:es)?|mar(?:tes)?|mi[eé](?:rcoles)?|jue(?:ves)?|vie(?:rnes)?|s[aá]b(?:ado)?s?))*)\b/i;
+    const re = /\b(every\s+other|every|each|on|all|cada|los|las|el|todos?\s+los?)?\s*((?:(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?|dom(?:ingo)?s?|lun(?:es)?|mar(?:tes)?|mi[eé](?:rcoles)?|jue(?:ves)?|vie(?:rnes)?|s[aá]b(?:ado)?s?)(?:\s*(?:,|\by\b|\be\b|and|&|\+)\s*(?:(?:sun|mon|tues?|wed(?:nes)?|thu(?:rs)?|fri|sat(?:ur)?)(?:day)?s?|dom(?:ingo)?s?|lun(?:es)?|mar(?:tes)?|mi[eé](?:rcoles)?|jue(?:ves)?|vie(?:rnes)?|s[aá]b(?:ado)?s?))*)\b/i;
     if ((m = re.exec(s))) {
-      const days = [...new Set(m[1].split(/\s*(?:,|\by\b|\be\b|and|&|\+)\s*/).map(dayIndex).filter(i => i >= 0))];
-      if (days.length) {
+      const days = [...new Set(m[2].split(/\s*(?:,|\by\b|\be\b|and|&|\+)\s*/).map(dayIndex).filter(i => i >= 0))];
+      const pre = (m[1] || '').toLowerCase().replace(/\s+/g, ' ');
+      const repeats = /^(every other|every|each|all|cada|los|las|todos? los?)$/.test(pre) || /(?:sun|mon|tues|wednes|thurs|fri|satur)days\b|\bdomingos\b|\bs[aá]bados\b/i.test(m[2]) || weeklyWord;
+      if (days.length && repeats) {
         s = cut(s, [m.index, m.index + m[0].length]);
         const t = findTime(s); if (t) s = cut(s, t.span);
         s = s.replace(/\b(?:every|each|cada)\s+(?:week|semana)\b/i, ' ').replace(/\b(?:weekly|semanal(?:mente)?)\b/i, ' ');
@@ -123,6 +130,33 @@ export function parseWhen(input) {
     return { when: { kind: 'daily', at }, text: tidy(s), guessed: !t && !!word || !!(t && t.guessed), guessWord: t && t.guessed ? t.word : word ? word[1].toLowerCase() : undefined, needsTime: !at };
   }
   return null;
+}
+
+/** A ONE-OFF date in the sentence (24 Sep 2026): «el viernes a las 10 publica…», «mañana a las 9 …», «hoy a las 5pm …»,
+ *  «este sábado …», «on friday at 10 …», «tomorrow at 9 …» → { at: ms, text, guessed } (a day with no time: 09:00, guessed),
+ *  or { past: true } for a time today that has gone, or null. Call it only after parseWhen found no routine. */
+export function parseOnce(input, now = new Date()) {
+  let s = String(input || ''), m, day = null;
+  const base = new Date(now); base.setHours(0, 0, 0, 0);
+  const plus = n => { const d = new Date(base); d.setDate(d.getDate() + n); return d; };
+  if ((m = /\b(?:pasado\s+ma[ñn]ana|day\s+after\s+tomorrow)\b/i.exec(s))) day = plus(2);
+  else if ((m = /(?:^|[^\wáéíóúñ])(?:(?:para\s+)?ma[ñn]ana|tomorrow)(?=\s|,|$)/i.exec(s)) && !/\b(?:la|las|cada|por\s+la|en\s+la|de\s+la|todas\s+las)\s+ma[ñn]ana/i.test(s)) { day = plus(1); m = { index: m.index, 0: m[0] }; }
+  else if ((m = /\b(?:hoy|today|esta\s+tarde|esta\s+noche|this\s+(?:afternoon|evening)|tonight)\b/i.exec(s))) day = plus(0);
+  else if ((m = /\b(?:el\s+pr[oó]ximo|el|este|this|next|on)?\s*(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.exec(s))) {
+    const want = dayIndex(m[1]); if (want < 0) return null;
+    let add = (want - base.getDay() + 7) % 7; if (/pr[oó]ximo|next/i.test(m[0]) && add === 0) add = 7;
+    day = plus(add);
+  }
+  if (!day) return null;
+  const word = /tarde|afternoon/i.test(m[0]) ? '15:00' : /noche|tonight|evening/i.test(m[0]) ? '19:00' : null;
+  const isDayName = /lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(m[0]), at0 = m.index;
+  s = cut(s, [m.index, m.index + m[0].length]);
+  const t = findTime(s); if (t) s = cut(s, t.span);
+  if (isDayName && !t && at0 > 3) return null; // «prepara el informe del lunes» names a report, not a date: a day counts when it opens the sentence or comes with a time
+  const at = t ? t.at : word || '09:00';
+  const [h, mi] = at.split(':').map(Number); const d = new Date(day); d.setHours(h, mi, 0, 0);
+  if (d.getTime() <= now.getTime()) { if (day.getTime() === base.getTime() && /lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday/i.test(m[0])) d.setDate(d.getDate() + 7); else return { past: true, text: tidy(s) }; } // «el viernes» said on a Friday after the hour: next Friday
+  return { at: d.getTime(), text: tidy(s), guessed: !t && !word };
 }
 
 /** The REPEAT picker → a schedule. cadence: daily · weekdays · mon…sun · hourly · at: 'HH:MM' · start: 'YYYY-MM-DD' (calendar) */

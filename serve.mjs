@@ -72,6 +72,7 @@ media.configure(cfg, cfg.brainPath, process.env.AO_DATA ? path.resolve(process.e
 // the ESTUDIO reaches the agents of these departments as a tool (office.config.json → media.departments; [] = nobody)
 const STUDIO_DEPTS = Array.isArray(cfg.media?.departments) ? cfg.media.departments : ['marketing', 'delivery', 'sales', 'ops'];
 const STUDIO_MCP = path.join(ROOT, 'estudio-mcp.mjs');
+const DEPUTY = sub.nameOf(cfg); // the owner's right hand above the departments: «Dimitri» unless office.config.json → deputy.name says otherwise
 const TEAMS = teams.settings(cfg); // V3.2 (16 Sep): { enabled, max }
 const roster = loadRoster(BRAIN);
 const AGENTS = roster.agents; // id · department · lead · name · role · does · tools · brief
@@ -418,16 +419,19 @@ async function newTask({ dept, text, team = false, at = null, by = 'you', model,
   return task;
 }
 
-/* ---------- the Subgerente: one chat above the departments (sub.mjs) ---------- */
+/* ---------- DIMITRI, the owner's right hand: one chat above the departments (sub.mjs) ---------- */
 async function subChat(text) {
   const st = sub.load(DATA); refreshSkills();
-  const system = sub.systemPrompt({ business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => DEPTS[k].name), status: sub.statusText(load(), AGENTS, DEPTS) });
-  const convo = st.messages.slice(-10).map(m => `${m.who === 'user' ? 'Dueño' : 'Subgerente'}: ${m.text}${m.plan?.tasks?.length ? ' [repartí: ' + m.plan.tasks.map(t => `${t.title} → ${DEPTS[t.dept].name}${t.state === 'sent' ? ' (enviada)' : t.state === 'skipped' ? ' (descartada)' : ''}`).join('; ') + ']' : ''}`).join('\n');
-  const out = await ask(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\nSubgerente (solo JSON):`, { maxTokens: 3000, timeout: 180000 });
+  const list = load(), index = vaultIndex();
+  const read = relevantNotes(index, null, st.messages.slice(-4).map(m => m.text).join(' ') + ' ' + text, 4); // the company's own notes that touch what is being talked about
+  const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => DEPTS[k].name),
+    status: sub.statusText(list, AGENTS, DEPTS), recent: sub.recentText(list, AGENTS), notes: businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : ''), studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', ') });
+  const convo = st.messages.slice(-12).map(m => `${m.who === 'user' ? 'Dueño' : DEPUTY}: ${m.text}${m.plan?.tasks?.length ? ' [propuse: ' + m.plan.tasks.map(t => `${t.title} → ${DEPTS[t.dept].name}${t.state === 'sent' ? ' (enviada)' : t.state === 'skipped' ? ' (descartada)' : ' (sin decidir)'}`).join('; ') + ']' : ''}`).join('\n');
+  const out = await ask(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${DEPUTY} (solo JSON):`, { maxTokens: 3500, timeout: 180000 });
   const plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
-  const u = sub.message('user', text), m = sub.message('sub', plan.reply || (plan.tasks.length ? 'Así lo repartiría:' : '¿Me das un poco más de detalle?'), plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {});
+  const u = sub.message('user', text), m = sub.message('sub', plan.reply || (plan.tasks.length ? 'Así lo repartiría:' : '¿Me das un poco más de detalle?'), { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}) });
   st.messages.push(u, m); sub.save(DATA, st);
-  console.log(`◆ subgerente: ${plan.tasks.length ? plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : 'reply'}`);
+  console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}`);
   return { messages: [u, m] };
 }
 async function subSend(msgId, edits) { // the owner pressed SEND: each included piece becomes a task in its department
@@ -731,7 +735,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
     }
-    if (url.pathname === '/api/health') return json(res, 200, { ok: true, version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
+    if (url.pathname === '/api/health') return json(res, 200, { ok: true, version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, deputy: DEPUTY, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
       agents: agentsOut(), setup: setupMap(), routines: (l => ({ count: l.length, paused: l.filter(r => r.paused).length, depts: routines.ALLOWED }))(loadRoutines()), roster: { customised: roster.customised, briefed: roster.briefed, files: roster.files, problems: roster.problems }, skills: (({ count, shipped, brain, problems }) => ({ count, shipped, brain, problems }))(skills.summary()), tools: backend === 'claude-cli', mcp: mcp.summary(), teams: TEAMS, browser: mcp.summary().browser });
     if (url.pathname === '/api/agents') return json(res, 200, { agents: agentsOut(), problems: roster.problems, files: roster.files });
     const am = url.pathname.match(/^\/api\/agents\/([a-z0-9_-]+)(?:\/(forget))?$/i);
@@ -765,9 +769,24 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/lessons') return json(res, 200, { dir: learn.dir(BRAIN), agents: AGENTS.map(a => ({ id: a.id, name: a.name, ...learn.read(BRAIN, a.id) })).filter(x => x.rules.length || x.oneOffs.length) });
     if (url.pathname === '/api/mcp') { if (url.searchParams.get('refresh') === '1') await mcp.discover(); else if (!mcp.list().some(x => !x.browser)) await discovering; /* a known list answers at once; only a first-ever start waits for claude mcp list */ return json(res, 200, { ...mcp.summary(), tools: backend === 'claude-cli' }); }
     if (url.pathname === '/api/brain') return json(res, 200, graph);
+    if (url.pathname === '/api/brain/search' && req.method === 'GET') { // the Brain's search: names AND text, accents ignored, a snippet around the hit
+      const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const q = fold(url.searchParams.get('q') || '').trim().slice(0, 120); if (q.length < 2) return json(res, 200, { q, hits: [] });
+      const words = q.split(/\s+/).filter(Boolean), hits = [];
+      for (const [name, raw] of vaultIndex()) {
+        const body = String(raw).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, ''), fn = fold(name), fb = fold(body);
+        if (!words.every(w => fn.includes(w) || fb.includes(w))) continue;
+        let score = 0; for (const w of words) { if (fn.includes(w)) score += 10; let i = -1, c = 0; while ((i = fb.indexOf(w, i + 1)) >= 0 && c < 20) c++; score += c; }
+        const at = Math.max(0, fb.indexOf(words.find(w => fb.includes(w)) || words[0]));
+        const snippet = at >= 0 && fb.includes(words[0]) || words.some(w => fb.includes(w)) ? (at > 50 ? '…' : '') + body.slice(Math.max(0, at - 50), at + 110).replace(/\s+/g, ' ').trim() + '…' : '';
+        hits.push({ name, score, snippet, inName: words.every(w => fn.includes(w)) });
+      }
+      hits.sort((a, b) => b.score - a.score);
+      return json(res, 200, { q, total: hits.length, hits: hits.slice(0, 40) });
+    }
     if (url.pathname === '/api/note' && req.method === 'GET') { // read one note of the brain, by name (the Brain's reader)
       const id = url.searchParams.get('id') || ''; const n = noteIndex().get(id);
-      if (!n || !insideBrain(n.path)) return json(res, 404, { error: 'no such note' });
+      if (!n || !insideBrain(n.path)) return json(res, 404, { error: 'esa nota no existe' });
       const st = fs.statSync(n.path); let text = fs.readFileSync(n.path, 'utf8');
       const cut = text.length > 200000; if (cut) text = text.slice(0, 200000);
       return json(res, 200, { name: id, group: n.group, text, cut, size: st.size, modified: st.mtimeMs, deletable: n.office && /\ntask: /.test(text) });
@@ -796,7 +815,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
     if (url.pathname === '/api/routines' && req.method === 'POST') {
       const b = await body(req);
-      if (!DEPTS[b.dept] || b.dept === 'brain') return json(res, 400, { error: 'unknown department' });
+      if (!DEPTS[b.dept] || b.dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
       if (!routines.ALLOWED.includes(b.dept)) return json(res, 400, { error: routines.refusal(b.dept), refused: true });
       const r = await makeRoutine({ dept: b.dept, text: b.text, when: b.when, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort });
       return json(res, r.error ? 400 : 200, r);
@@ -832,11 +851,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
       const { dept, text, model, effort, team, at } = await body(req);
-      if (!DEPTS[dept] || dept === 'brain') return json(res, 400, { error: 'unknown department' });
-      if (!text || !String(text).trim()) return json(res, 400, { error: 'empty task' });
+      if (!DEPTS[dept] || dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
+      if (!text || !String(text).trim()) return json(res, 400, { error: 'la tarea está vacía' });
       const dueAt = at ? (typeof at === 'number' ? at : Date.parse(at)) : null; // V3.2.1: a task for a date
       if (at && !(dueAt > 0)) return json(res, 400, { error: 'at must be a time (ms or ISO)' });
-      if (dueAt && dueAt < Date.now() - 60000) return json(res, 400, { error: 'that time has passed — pick one that is still ahead' });
+      if (dueAt && dueAt < Date.now() - 60000) return json(res, 400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
       const r = await route(dept, String(text).trim());
       const asTeam = TEAMS.enabled && (team === true || teams.intent(text)); // V3.2 (16 Sep): TEAM in the bar, or "as a team" in the sentence → the lead owns it and splits it
       const task = { id: nid(), dept, agent: asTeam ? leadOf(dept).id : r.agent, title: r.title, text: String(text).trim(), plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, state: 'next', addedAt: Date.now(), by: 'you', model: normModel(model) || undefined, effort: normEffort(effort) || undefined, // model/effort: set on this task (beats routine, agent, office)
@@ -850,7 +869,7 @@ const server = http.createServer(async (req, res) => {
     const m = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(run|revise|approve|reject|stop|archive|repeat))?$/);
     if (m && m[2] === 'stop' && req.method === 'POST') { // the owner stops a running agent: its claude processes (and their MCP servers) are killed
       const t = load().find(x => x.id === m[1]);
-      if (!t) return json(res, 404, { error: 'no such task' });
+      if (!t) return json(res, 404, { error: 'esa tarea ya no existe' });
       if (t.state !== 'doing') return json(res, 409, { error: 'no está en curso' });
       stopping.add(t.id);
       const ps = runsOf.get(t.id); let n = 0;
@@ -863,7 +882,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (m && m[2] === 'archive' && req.method === 'POST') { // out of the lists (kept in tasks.json); note: true also moves its note to the bin
       const b = await body(req); const l = load(); const t = l.find(x => x.id === m[1]);
-      if (!t) return json(res, 404, { error: 'no such task' });
+      if (!t) return json(res, 404, { error: 'esa tarea ya no existe' });
       if (t.state === 'doing') return json(res, 409, { error: 'el agente está trabajando en ella — detenla primero' });
       t.archived = b.archived !== false; t.archivedAt = t.archived ? Date.now() : undefined; save(l);
       const trashed = t.archived && b.note ? trashNote(t) : null;
@@ -871,7 +890,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (m && m[2] === 'repeat' && req.method === 'POST') { // the same work again, as a new task (same agent, same words)
       const src = load().find(x => x.id === m[1]);
-      if (!src) return json(res, 404, { error: 'no such task' });
+      if (!src) return json(res, 404, { error: 'esa tarea ya no existe' });
       const t = { id: nid(), dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', state: 'next', addedAt: Date.now(), by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
         team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id };
       const l = load(); l.push(t); save(l);
@@ -881,7 +900,7 @@ const server = http.createServer(async (req, res) => {
     if (m && !m[2] && req.method === 'PATCH') { // edit a task that has not started: rewrite, reassign, move to a date or back, model, effort — or mark it done by hand
       const b = await body(req);
       const cur = load().find(t => t.id === m[1]);
-      if (!cur) return json(res, 404, { error: 'no such task' });
+      if (!cur) return json(res, 404, { error: 'esa tarea ya no existe' });
       if (cur.state !== 'scheduled' && cur.state !== 'next') return json(res, 409, { error: 'solo se edita una tarea que aún no empezó' });
       if (cur.routine && cur.state === 'next') return json(res, 409, { error: 'es una ejecución de rutina: edita la rutina en el calendario' });
       const patch = {};
@@ -918,8 +937,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (m && req.method === 'POST' && (m[2] === 'approve' || m[2] === 'reject')) { // D1: the owner's tick on a routine's draft
       const task = load().find(t => t.id === m[1]);
-      if (!task) return json(res, 404, { error: 'no such task' });
-      if (task.state !== 'waiting') return json(res, 400, { error: 'this task is not waiting for your OK' });
+      if (!task) return json(res, 404, { error: 'esa tarea ya no existe' });
+      if (task.state !== 'waiting') return json(res, 400, { error: 'esta tarea no está esperando tu visto bueno' });
       const { feedback } = m[2] === 'reject' ? await body(req) : {};
       const note = String(feedback || '').trim();
       { const l = load(); const t = l.find(x => x.id === task.id); if (!t || t.state !== 'waiting') return json(res, 409, { error: 'ya se está procesando' }); t.state = 'doing'; t.startedAt = Date.now(); save(l); } // claimed now: a second click (or «aprobar» in chat) cannot send it twice
@@ -931,7 +950,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (m && req.method === 'POST' && (m[2] === 'run' || m[2] === 'revise')) { // the engine runs it; the page follows it by polling
       const list = load(); const task = list.find(t => t.id === m[1]);
-      if (!task) return json(res, 404, { error: 'no such task' });
+      if (!task) return json(res, 404, { error: 'esa tarea ya no existe' });
       if (task.state === 'doing' || running.has(task.id)) return json(res, 409, { error: 'ya está en curso' });
       if (task.state === 'scheduled') return json(res, 409, { error: 'está programada: corre sola a su hora' });
       if (m[2] === 'run') { if (task.state !== 'next') { task.state = 'next'; task.addedAt = Date.now(); save(list); } setImmediate(pump); return json(res, 200, { ok: true, id: task.id, state: 'next' }); }
@@ -946,7 +965,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (m && req.method === 'DELETE') {
       const list = load(); const t = list.find(x => x.id === m[1]);
-      if (!t) return json(res, 404, { error: 'no such task' });
+      if (!t) return json(res, 404, { error: 'esa tarea ya no existe' });
       if (t.state === 'doing') return json(res, 409, { error: 'el agente está trabajando en ella — espera a que termine' }); // deleting it now would lose the run's result
       save(list.filter(x => x.id !== m[1]));
       const trashed = url.searchParams.get('note') === '1' ? trashNote(t) : null;
@@ -1017,7 +1036,7 @@ const server = http.createServer(async (req, res) => {
     const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);
     if (mm && req.method === 'PATCH') { const b = await body(req); const it = media.update(decodeURIComponent(mm[1]), { ...(typeof b.fav === 'boolean' ? { fav: b.fav } : {}) }); return it ? json(res, 200, it) : json(res, 404, { error: 'no such file' }); }
     if (mm && req.method === 'DELETE') { const t = media.trash(decodeURIComponent(mm[1])); return t ? json(res, 200, { ok: true, undo: t }) : json(res, 404, { error: 'no such file' }); }
-    if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, sub.load(DATA));
+    if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, { ...sub.load(DATA), name: DEPUTY });
     if (url.pathname === '/api/sub/chat' && req.method === 'POST') {
       const { text } = await body(req);
       if (!text || !String(text).trim()) return json(res, 400, { error: 'mensaje vacío' });
@@ -1032,8 +1051,8 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/sub/clear' && req.method === 'POST') { sub.save(DATA, { messages: [] }); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/chat' && req.method === 'POST') {
       const { agent, text, history } = await body(req);
-      if (!text || !String(text).trim()) return json(res, 400, { error: 'empty message' });
-      const a = AGENTS.find(x => x.id === agent); if (!a) return json(res, 400, { error: 'unknown agent' });
+      if (!text || !String(text).trim()) return json(res, 400, { error: 'mensaje vacío' });
+      const a = AGENTS.find(x => x.id === agent); if (!a) return json(res, 400, { error: 'agente desconocido' });
       if (!onboard.active(DATA, a.department)) { // V3.5: "every weekday at 8am, …" · "routines" · "pause …" · "run … now" — unless the lead is mid-interview
         const rc = await routinesChat(a, String(text).trim());
         if (rc) return json(res, 200, { reply: rc.reply, read: [], tools: [], interview: false, routine: rc.routine || null, routines: true });

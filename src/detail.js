@@ -100,7 +100,7 @@ export function initDetail(ctx) {
     const t = cur, a = btn.dataset.a;
     if (a === 'close') return close();
     if (a === 'chat') { close(); openAgent(t.agent); return; }
-    if (a === 'note') { if (!openNote(t.note)) msg('Esa nota ya no está en el Cerebro.', true); return; }
+    if (a === 'note') { if (openNote(t.note)) close(); else msg('Esa nota ya no está en el Cerebro.', true); return; } // the drawer goes: it covered the Brain's reader
     if (a === 'cal') { close(); openCalendar(t.dueAt); return; }
     if (a === 'save') {
       const text = el.querySelector('#tdText').value.trim(); if (!text) { el.querySelector('#tdText').focus(); return; }
@@ -124,9 +124,12 @@ export function initDetail(ctx) {
     if (a === 'delete') { const note = el.querySelector('.td-withnote')?.checked; if (!confirm(`¿Eliminar «${t.title}»${note ? ' y su nota del Cerebro' : ''}? No se puede deshacer${note ? ' (la nota va a la papelera)' : ''}.`)) return; return run('delete', { note }, 'Eliminada.'); }
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
-  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; el.hidden = false; render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
-  function close() { if (!cur) return; cur = null; el.classList.remove('on'); setTimeout(() => { if (!cur) el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; lastSig = sig(t); el.hidden = false; render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
+  function close() { if (!cur) return; if (el.contains(document.activeElement)) document.activeElement.blur(); cur = null; el.classList.remove('on'); setTimeout(() => { if (!cur) el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   // the task changed underneath (a poll, the run finished): redraw, unless the owner is typing in it
-  function refresh() { if (!cur || busy) return; if (el.contains(document.activeElement) && /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName)) return; render(); }
+  // only when something the owner can see changed: every poll used to redraw it (scroll to the top, «Guardado.» gone, focus lost)
+  const sig = t => JSON.stringify([t.state, t.title, t.text, t.agent, t.dueAt, t.note, t.error, t.approved, t.archived, (t.result || '').length, (t.draft || '').length, t.running, t.team && t.team.pieces && t.team.pieces.map(p => p.state)]);
+  let lastSig = '';
+  function refresh() { if (!cur || busy) return; if (el.contains(document.activeElement) && /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName)) return; const s = sig(cur); if (s === lastSig) return; lastSig = s; const sc = el.querySelector('.td-res'); const top = sc ? sc.scrollTop : 0; const f = document.activeElement && el.contains(document.activeElement) && document.activeElement.dataset.a; render(); const sc2 = el.querySelector('.td-res'); if (sc2) sc2.scrollTop = top; if (f) el.querySelector(`[data-a="${f}"]`)?.focus({ preventScroll: true }); }
   return { open, close, refresh, isOpen: () => !!cur, current: () => cur };
 }

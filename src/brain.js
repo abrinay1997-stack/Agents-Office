@@ -28,7 +28,7 @@ const DEPT_FOLDERS = {
 let INK = '21,20,20'; // dark mode swaps this for the cream ink (setTheme)
 const GREEN = '#1E9070';
 const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 42);
-const timeStr = ts => new Date(ts).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+const timeStr = ts => new Date(ts).toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' });
 const agentOf = id => AGENTS.find(a => a.id === id);
 
 export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCamera }) {
@@ -164,8 +164,8 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
   // LIVE: replace the graph with the server's (the user's real vault), keeping today's state
   function setGraph(g) {
     if (!g || !g.nodes || !g.nodes.length) return;
-    const today = new Date().toISOString().slice(0, 10);
-    nodes = g.nodes.map((n, i) => ({ ...n, i, fresh: n.g === 'Agents Office' && n.id.startsWith(today) })); // notes the office wrote today glow green
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0); const today = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`; // LOCAL day: the server names notes by the local date (was UTC: after 19:00 in Panamá nothing was «today»)
+    nodes = g.nodes.map((n, i) => ({ ...n, i, fresh: n.g === 'Agents Office' && (n.id.startsWith(today) || (n.t || 0) * 1000 >= d0.getTime()) })); // notes the office wrote today glow green
     links = g.links.map(([a, b]) => [a, b]);
     adj = nodes.map(() => new Set()); for (const [a, b] of links) { adj[a].add(b); adj[b].add(a); }
     byId = new Map(nodes.map(n => [n.id, n.i])); hubs = nodes.slice(0, 8);
@@ -173,14 +173,16 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     state.notes = g.notes;
     const keepSel = sel && sel.id; sel = null; hover = null; // indices changed: the old objects point at other notes now
     refreshGroups();
-    if (openNow) { meta.textContent = metaText(); chips(); if (keepSel && byId.has(keepSel)) select(nodes[byId.get(keepSel)]); else if (!pane.querySelector('.bv-undo')) pane.innerHTML = EMPTY; }
-    const tag = document.querySelector('.brainTag .b-name b'); if (tag) tag.textContent = state.notes.toLocaleString('es-PA');
+    if (search.value.trim()) { const q = fold(search.value.trim()); match = new Set(nodes.filter(n => fold(n.id).includes(q) || hits.some(h => h.name === n.id)).map(n => n.i)); } // the indices changed: the search points at the right notes again
+    if (openNow) { meta.textContent = metaText(); chips(); if (keepSel && byId.has(keepSel)) sel = nodes[byId.get(keepSel)]; else if (keepSel && !pane.querySelector('.bv-undo')) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); } } // the note being read stays as it is (it used to reload and jump to the top)
+    const tag = document.querySelector('.brainTag .bt-brain b'); if (tag) tag.textContent = state.notes.toLocaleString('es-PA');
     etch(); updateStrip(); dirty();
   }
   // LIVE: an agent read a named note (the server tells us which) — glint it if it is on the floor
   function readNote(agentId, name) {
     const a = agentOf(agentId); const i = byId.get(name);
     if (!a) return;
+    const ic = document.querySelector('.brainTag .brainIc'); if (ic) { ic.classList.remove('fire'); void ic.getBoundingClientRect(); ic.classList.add('fire'); } // the synapses fire together when an agent reads
     if (i != null && onFloor(nodes[i])) { const r = getR()[agentId]; glint(nodes[i], r && r.seat, `${a.name} leyó ${name}`); }
     state.lastRead = { note: name, agent: a.name, ts: Date.now() }; state.reads.set(name, { agent: a.name, ts: Date.now() });
     updateStrip();
@@ -236,23 +238,98 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
   const search = document.getElementById('bvSearch'); const chipsEl = document.getElementById('bvChips');
   const pane = document.getElementById('bvPane'); const meta = document.getElementById('bvMeta');
   let openNow = false, k = 1.2, tx = 0, ty = 0, hover = null, sel = null, drag = null, match = null, freshOnly = false;
-  let groups = [], off = new Set(); // groups switched OFF are remembered, so a folder that appears later starts visible
-  function refreshGroups() { groups = [...new Set(nodes.map(n => n.g))].sort(); }
+  /* ---------- V4 (24 Sep 2026) filters: folders (only these / all), when, who wrote it, department, no links; a real search ---------- */
+  let groups = [];
+  const F = (() => { try { return { inc: [], when: 'all', who: 'all', dept: '', lone: false, onlyHits: false, ...JSON.parse(localStorage.getItem('ao.bv.f') || '{}') }; } catch { return { inc: [], when: 'all', who: 'all', dept: '', lone: false, onlyHits: false }; } })();
+  const saveF = () => { try { localStorage.setItem('ao.bv.f', JSON.stringify(F)); } catch {} };
+  const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const colOf = g => GROUP_COL[g] || `hsl(${[...String(g)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360} 55% 62%)`; // a folder the demo never knew gets its own stable colour
+  function refreshGroups() { groups = [...new Set(nodes.map(n => n.g))].sort(); F.inc = F.inc.filter(g => groups.includes(g)); }
   refreshGroups();
-  const on = { has: g => !off.has(g) };
-  const freshCount = () => nodes.filter(n => n.fresh).length;
+  const DAY = 864e5, startOfToday = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+  const since = () => F.when === 'today' ? startOfToday() : F.when === 'week' ? Date.now() - 7 * DAY : F.when === 'month' ? Date.now() - 30 * DAY : 0;
+  const isOffice = n => n.g === 'Agents Office';
+  const passes = (n, skip) => (skip === 'g' || !F.inc.length || F.inc.includes(n.g)) && (!since() || (n.t || 0) * 1000 >= since())
+    && (F.who === 'all' || (F.who === 'office') === isOffice(n)) && (!F.dept || n.dep === F.dept) && (!F.lone || !n.d) && (!F.onlyHits || !match || match.has(n.i));
+  const visible = n => passes(n);
+  const deptsSeen = () => [...new Set(nodes.map(n => n.dep).filter(Boolean))].sort();
+  // the second row of filters and the search results live under the search box
+  const row2 = document.createElement('div'); row2.id = 'bvRow2'; chipsEl.after(row2);
+  const res = document.createElement('div'); res.id = 'bvRes'; res.hidden = true; res.setAttribute('role', 'listbox'); search.after(res);
+  search.setAttribute('aria-controls', 'bvRes'); search.setAttribute('aria-autocomplete', 'list'); search.placeholder = 'Buscar en nombres y en el texto…';
+  const emptyEl = document.createElement('div'); emptyEl.className = 'bv-none'; emptyEl.hidden = true; emptyEl.innerHTML = 'Nada con estos filtros. <button type="button">Mostrar todo</button>'; ov.appendChild(emptyEl);
+  emptyEl.querySelector('button').addEventListener('click', () => resetF());
+  function resetF() { Object.assign(F, { inc: [], when: 'all', who: 'all', dept: '', lone: false, onlyHits: false }); saveF(); chips(); dirty(); }
   function chips() {
-    chipsEl.innerHTML = groups.map(g => `<button class="bv-chip${on.has(g) ? ' on' : ''}" data-g="${escHTML(g)}" aria-pressed="${on.has(g)}"><i style="background:${GROUP_COL[g] || '#B0ADA3'}"></i>${escHTML(GROUP_NAME(g))}</button>`).join('') +
-      `<button class="bv-chip live${freshOnly ? ' on' : ''}" data-g="__fresh" aria-pressed="${freshOnly}">Nuevas hoy · ${freshCount()}</button>`;
+    const n = g => nodes.filter(x => x.g === g && passes(x, 'g')).length;
+    chipsEl.innerHTML = `<button class="bv-chip all${F.inc.length ? '' : ' on'}" data-g="__all" aria-pressed="${!F.inc.length}">Todas</button>` +
+      groups.map(g => { const on = F.inc.includes(g); return `<button class="bv-chip${on ? ' on' : ''}" data-g="${escHTML(g)}" aria-pressed="${on}" title="${on ? 'Quitar del filtro' : F.inc.length ? 'Añadir al filtro' : 'Ver solo esta carpeta'}"><i style="background:${colOf(g)}"></i>${escHTML(GROUP_NAME(g))} <b>${n(g)}</b></button>`; }).join('');
+    const seg = (key, opts) => `<span class="bv-seg" role="group">${opts.map(([v, l]) => `<button type="button" data-k="${key}" data-v="${v}" class="${F[key] === v ? 'on' : ''}" aria-pressed="${F[key] === v}">${l}</button>`).join('')}</span>`;
+    const ds = deptsSeen(), shown = nodes.filter(visible).length, active = F.inc.length || F.when !== 'all' || F.who !== 'all' || F.dept || F.lone || F.onlyHits;
+    row2.innerHTML = seg('when', [['all', 'Siempre'], ['today', 'Hoy'], ['week', '7 días'], ['month', '30 días']]) + seg('who', [['all', 'Todo'], ['company', 'De la empresa'], ['office', 'De los agentes']]) +
+      (ds.length ? `<select class="bv-dept" aria-label="Departamento"><option value="">Todos los departamentos</option>${ds.map(d => `<option${F.dept === d ? ' selected' : ''}>${escHTML(d)}</option>`).join('')}</select>` : '') +
+      `<label class="bv-tg"><input type="checkbox" data-k="lone"${F.lone ? ' checked' : ''}> Sin enlaces · ${nodes.filter(x => !x.d).length}</label>` +
+      (match ? `<label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo resultados</label>` : '') +
+      `<span class="bv-cnt">${shown} de ${nodes.length} notas</span>${active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : ''}`;
+    emptyEl.hidden = !(openNow && shown === 0);
   }
   chipsEl.addEventListener('click', e => {
     const b = e.target.closest('.bv-chip'); if (!b) return;
-    if (b.dataset.g === '__fresh') freshOnly = !freshOnly; else off.has(b.dataset.g) ? off.delete(b.dataset.g) : off.add(b.dataset.g);
-    chips(); dirty();
+    const g = b.dataset.g;
+    if (g === '__all') F.inc = []; else F.inc = F.inc.includes(g) ? F.inc.filter(x => x !== g) : [...F.inc, g]; // first click: only this folder; more clicks add; «Todas» resets
+    saveF(); chips(); dirty();
   });
-  search.addEventListener('input', () => { const q = search.value.trim().toLowerCase(); match = q ? new Set(nodes.filter(n => n.id.toLowerCase().includes(q)).map(n => n.i)) : null; dirty(); });
-  search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { search.value = ''; match = null; search.blur(); } });
-  const visible = n => on.has(n.g) && (!freshOnly || n.fresh);
+  row2.addEventListener('click', e => {
+    if (e.target.closest('.bv-reset')) return resetF();
+    const b = e.target.closest('button[data-k]'); if (b) { F[b.dataset.k] = b.dataset.v; saveF(); chips(); dirty(); }
+  });
+  row2.addEventListener('change', e => {
+    if (e.target.classList.contains('bv-dept')) F.dept = e.target.value;
+    else if (e.target.dataset.k) F[e.target.dataset.k] = e.target.checked;
+    saveF(); chips(); dirty();
+  });
+  // search: names at once (accents ignored), the text of every note from the server a moment later; ↑ ↓ Enter open a hit
+  let hits = [], hitAt = -1, qSeq = 0, qTimer = 0;
+  function renderHits() {
+    if (!search.value.trim()) { res.hidden = true; return; }
+    res.hidden = false;
+    res.innerHTML = hits.length ? hits.slice(0, 12).map((h, k) => { const n = nodes[byId.get(h.name)]; return `<button type="button" role="option" class="bv-hit${k === hitAt ? ' on' : ''}" data-name="${escHTML(h.name)}" aria-selected="${k === hitAt}">` +
+      `<span class="bv-hn"><i style="background:${n ? colOf(n.g) : '#888'}"></i>${escHTML(h.name)}${n ? '' : ' <em>(fuera del grafo)</em>'}</span>${h.snippet ? `<span class="bv-hs">${escHTML(h.snippet)}</span>` : ''}</button>`; }).join('') +
+      (hits.length > 12 ? `<div class="bv-hmore">+${hits.length - 12} más: afina la búsqueda</div>` : '') : '<div class="bv-hmore">Nada con eso.</div>';
+  }
+  function applySearch() {
+    const q = fold(search.value.trim());
+    if (!q) { match = null; hits = []; renderHits(); chips(); dirty(); return; }
+    const local = nodes.filter(n => fold(n.id).includes(q));
+    match = new Set(local.map(n => n.i)); hits = local.map(n => ({ name: n.id, snippet: '' })); hitAt = -1;
+    renderHits(); chips(); dirty();
+    clearTimeout(qTimer);
+    if (!SERVED || q.length < 2) return;
+    const seq = ++qSeq;
+    qTimer = setTimeout(() => fetch('/api/brain/search?q=' + encodeURIComponent(search.value.trim())).then(r => r.json()).then(j => {
+      if (seq !== qSeq) return;
+      const seen = new Set(hits.map(h => h.name));
+      hits = [...j.hits.filter(h => h.inName).map(h => ({ name: h.name, snippet: h.snippet })), ...hits.filter(h => !j.hits.some(x => x.name === h.name)), ...j.hits.filter(h => !h.inName && !seen.has(h.name)).map(h => ({ name: h.name, snippet: h.snippet }))];
+      for (const h of hits) { const i = byId.get(h.name); if (i != null) match.add(i); }
+      renderHits(); chips(); dirty();
+    }).catch(() => {}), 220);
+  }
+  function openHit(name) {
+    const i = byId.get(name); res.hidden = true;
+    if (i != null) { const n = nodes[i]; if (!visible(n)) { resetF(); } select(n); centre(n); }
+    else if (SERVED) { sel = null; reading = true; pane.classList.add('reading'); pane.innerHTML = `<h3>${esc(name)}</h3><div class="bv-path">fuera del grafo</div><div class="bv-note"><div class="bv-loading">Abriendo la nota…</div></div>`; // a note the graph does not draw: read it anyway
+      fetch('/api/note?id=' + encodeURIComponent(name)).then(r => r.json()).then(j => { const box = pane.querySelector('.bv-note'); if (box) box.innerHTML = j.text ? frontFacts(j.text) + `<div class="bv-md md">${mdToHtml(j.text, { front: true })}</div>` : `<p class="bv-err">${esc(j.error || 'No pude abrirla.')}</p>`; }).catch(() => {}); }
+  }
+  search.addEventListener('input', applySearch);
+  search.addEventListener('focus', () => { if (search.value.trim()) renderHits(); });
+  res.addEventListener('mousedown', e => { const b = e.target.closest('.bv-hit'); if (b) { e.preventDefault(); openHit(b.dataset.name); } });
+  search.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { if (search.value) { search.value = ''; applySearch(); } else search.blur(); res.hidden = true; return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = Math.min(12, hits.length); if (!n) return; hitAt = (hitAt + (e.key === 'ArrowDown' ? 1 : -1) + n) % n; renderHits(); return; }
+    if (e.key === 'Enter') { e.preventDefault(); const h = hits[Math.max(0, hitAt)]; if (h) openHit(h.name); }
+  });
+  search.addEventListener('blur', () => setTimeout(() => { res.hidden = true; }, 150));
   let CW = 1, CH = 1; // the canvas size, read once per frame (reading clientWidth per node forced thousands of layouts a frame)
   function measure() { CW = bcv.clientWidth || 1; CH = bcv.clientHeight || 1; }
   function S() { return Math.min(CW, CH) * 0.44 * k; }
@@ -269,7 +346,7 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
   bcv.addEventListener('wheel', e => {
     e.preventDefault(); e.stopPropagation();
     const f = Math.exp(-e.deltaY * 0.0025); const nk = Math.max(0.5, Math.min(7, k * f)); const r = nk / k;
-    const cx = bcv.clientWidth * 0.42, cy = bcv.clientHeight * 0.5;
+    const cx = bcv.clientWidth * (reading ? 0.34 : 0.42), cy = bcv.clientHeight * 0.5; // the same centre the drawing uses (with a note open it moves left)
     tx = (tx + cx - e.clientX) * r + e.clientX - cx; ty = (ty + cy - e.clientY) * r + e.clientY - cy; k = nk; dirty();
   }, { passive: false });
   const SERVED = location.protocol.startsWith('http');
@@ -290,7 +367,7 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
     const linksHTML = `<div class="bv-lab">Enlaces · ${out.length}</div>` + out.slice(0, 18).map(o => `<button type="button" class="bv-lk" data-i="${o.i}">${esc(o.id)}</button>`).join('') +
       (out.length > 18 ? `<div class="bv-more">+${out.length - 18} más</div>` : '');
     pane.classList.toggle('reading', SERVED); reading = SERVED;
-    pane.innerHTML = `<h3>${esc(n.id)}</h3><div class="bv-path"><i style="background:${GROUP_COL[n.g] || '#B0ADA3'}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${n.fresh ? ' · <span class="bv-g">nueva hoy</span>' : ''}</div>` +
+    pane.innerHTML = `<h3>${esc(n.id)}</h3><div class="bv-path"><i style="background:${colOf(n.g)}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${n.fresh ? ' · <span class="bv-g">nueva hoy</span>' : ''}</div>` +
       (rd ? `<div class="bv-lab">Última lectura por</div><p>${esc(rd.agent)} · ${timeStr(rd.ts)}</p>` : '') +
       (SERVED ? '<div class="bv-note" aria-live="polite"><div class="bv-loading">Abriendo la nota…</div></div>' : '') + `<div class="bv-links">${linksHTML}</div>`;
     pane.scrollTop = 0;
@@ -354,7 +431,7 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
       const x = sx(n), y = sy(n); const r = (1.6 + Math.sqrt(n.d) * .75) * Math.sqrt(k);
       const dim = (hi && !hi.has(n.i)) || (match && !match.has(n.i));
       bctx.globalAlpha = dim ? .2 : 1;
-      bctx.fillStyle = GROUP_COL[n.g] || '#B0ADA3'; bctx.beginPath(); bctx.arc(x, y, r, 0, 7); bctx.fill();
+      bctx.fillStyle = colOf(n.g); bctx.beginPath(); bctx.arc(x, y, r, 0, 7); bctx.fill();
       if (n.fresh) { bctx.strokeStyle = GREEN; bctx.lineWidth = 1.5; bctx.beginPath(); bctx.arc(x, y, r + 3, 0, 7); bctx.stroke(); }
       if (sel === n) { bctx.strokeStyle = '#E8E6DF'; bctx.lineWidth = 1.5; bctx.beginPath(); bctx.arc(x, y, r + 4, 0, 7); bctx.stroke(); }
       const label = n.d >= 18 || k > 2.2 || (hi && hi.has(n.i)) || (match && match.has(n.i)) || n.fresh;
@@ -368,14 +445,15 @@ export function initBrain({ scene, brainGroup, getR, esc, hud, toScreen, getCame
   let opener = null;
   function open() {
     if (openNow) return;
-    openNow = true; opener = document.activeElement; ov.classList.add('on'); document.body.classList.add('brainOpen');
+    openNow = true; opener = document.activeElement; ov.inert = false; ov.classList.add('on'); document.body.classList.add('brainOpen');
     meta.textContent = metaText();
     chips(); if (!sel) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); }
     dirty(); setTimeout(() => document.getElementById('bvClose').focus({ preventScroll: true }), 50); // focus inside the dialog, but not the search box: G/Esc must still close it
   }
-  function close() { if (!openNow) return; openNow = false; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function close() { if (!openNow) return; openNow = false; ov.inert = true; emptyEl.hidden = true; res.hidden = true; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   function toggle() { openNow ? close() : open(); }
   document.getElementById('bvClose').addEventListener('click', close);
+  ov.inert = true; // closed: out of Tab's reach and of screen readers (it stays in the page, faded out)
   addEventListener('resize', dirty);
 
   function setTheme(dark) { INK = dark ? '236,234,227' : '21,20,20'; etch(); }

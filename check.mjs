@@ -318,9 +318,9 @@ else {
     await page.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check'); await page.waitForTimeout(3000);
     await step('smoke: loads without page errors', async () => { if (errors.length) throw new Error(errors[0]); });
     await step('smoke: 35 agents at their desks', async () => { const n = await page.evaluate(() => Object.keys(window.CC.R).length); if (n !== 35) throw new Error('agents: ' + n); return n + ' agents'; });
-    await step('smoke: six department cards + the Brain tag', async () => {
-      const t = await page.evaluate(() => [...document.querySelectorAll('.badge .b-name')].map(e => e.textContent.trim()));
-      for (const k of ['CORREOS', 'VENTAS', 'MARKETING', 'OPERACIONES', 'FINANZAS', 'ENTREGAS', 'EL CEREBRO']) if (!t.some(x => x.startsWith(k))) throw new Error('missing card ' + k);
+    await step('smoke: six department cards + the Brain and Dimitri at the centre', async () => {
+      const t = await page.evaluate(() => [...document.querySelectorAll('.badge .b-name, .brainTag .bt-t')].map(e => e.textContent.trim()));
+      for (const k of ['CORREOS', 'VENTAS', 'MARKETING', 'OPERACIONES', 'FINANZAS', 'ENTREGAS', 'EL CEREBRO', 'DIMITRI']) if (!t.some(x => x.startsWith(k))) throw new Error('missing card ' + k);
     });
     await step('smoke: task panel has rows and counts', async () => {
       const n = await page.evaluate(() => document.querySelectorAll('.tp-row').length); if (n < 10) throw new Error('rows: ' + n);
@@ -424,13 +424,34 @@ else {
       return `${cells} cells · ${rt} routine runs on the grid · rail ${rail} · task scheduled for ${target} · routine starts ${target} (none before) · marketing offered · week view 7`;
     });
     await step('smoke: department focus opens the chat rail', async () => {
-      await page.keyboard.press('1'); await page.waitForTimeout(1800);
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('1'); await page.waitForFunction(() => /agentOpen/.test(document.getElementById('rail').className) && /open/.test(document.getElementById('rail').className) && document.querySelector('#topconn').classList.contains('focus'), null, { timeout: 8000 }).catch(() => {});
       const cls = await page.evaluate(() => document.getElementById('rail').className); if (!/agentOpen/.test(cls) || !/open/.test(cls)) throw new Error('rail: ' + cls);
       const strip = await page.evaluate(() => document.querySelector('#topconn').className); if (!/focus/.test(strip)) throw new Error('top strip not centred');
       await page.keyboard.press('Escape'); await page.waitForTimeout(1200);
     });
+    await step('smoke: V4 — the wheel scrolls panels and zooms only the office; the dock never moves; ✕ closes a department', async () => {
+      const cancelled = sel => page.evaluate(q => { const el = document.querySelector(q); return el ? !el.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })) : null; }, sel);
+      if (await cancelled('.tp-rows') !== false) throw new Error('the wheel over the task list was taken by the 3D view');
+      if (await cancelled('#scene') !== true) throw new Error('the wheel over the office did not zoom');
+      const x0 = await page.evaluate(() => { document.body.classList.add('connFold'); dispatchEvent(new Event('resize')); return Math.round(document.getElementById('topdock').getBoundingClientRect().left); });
+      const x1 = await page.evaluate(() => { document.body.classList.remove('connFold'); dispatchEvent(new Event('resize')); return Math.round(document.getElementById('topdock').getBoundingClientRect().left); });
+      if (Math.abs(x0 - x1) > 1) throw new Error(`the dock moved when the connectors opened: ${x0} → ${x1}`);
+      if (await page.evaluate(() => !!document.getElementById('clock') || !!document.getElementById('topSub'))) throw new Error('the clock / the Subgerente button are still in the bar');
+      const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 6000 }).catch(() => { throw new Error(what); });
+      await page.keyboard.press('2'); await until(() => document.querySelector('#railHeader .rh-x') && /open/.test(document.getElementById('rail').className), 'the department did not open');
+      await page.waitForTimeout(600); await page.click('#railHeader .rh-x');
+      await until(() => !document.body.classList.contains('railLeft') && !/open/.test(document.getElementById('rail').className), '✕ did not close the department');
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('s'); await until(() => !document.getElementById('subOv').hidden, 'S did not open Dimitri');
+      const name = await page.evaluate(() => document.querySelector('#subOv .sb-name').textContent); if (name !== 'DIMITRI') throw new Error('Dimitri named ' + name);
+      await page.evaluate(() => document.activeElement && document.activeElement.blur()); await page.keyboard.press('g'); await page.waitForTimeout(300); // a window is open: G must not open the Brain behind it
+      if (await page.evaluate(() => document.body.classList.contains('brainOpen'))) throw new Error('G opened the Brain behind Dimitri');
+      await page.keyboard.press('Escape'); await until(() => document.getElementById('subOv').hidden, 'Esc did not close Dimitri');
+      return `wheel ok · dock fixed at ${x0}px · ✕ closes · S opens Dimitri · keys stay out · Esc closes it`;
+    });
     await step('smoke: B opens and closes the company board', async () => {
-      await page.keyboard.press('b'); await page.waitForTimeout(700);
+      await page.evaluate(() => document.activeElement && document.activeElement.blur()); await page.keyboard.press('b'); await page.waitForFunction(() => window.CC.tasks.isOpen(), null, { timeout: 5000 }).catch(() => {});
       if (!(await page.evaluate(() => window.CC.tasks.isOpen()))) throw new Error('board did not open');
       await page.keyboard.press('Escape'); await page.waitForTimeout(500);
       if (await page.evaluate(() => window.CC.tasks.isOpen())) throw new Error('board did not close');
@@ -453,6 +474,31 @@ else {
   } catch (e) { bad('smoke: browser', e.message); }
   finally { if (browser) await browser.close(); }
 }
+
+await step('dates: a day named once is a DATE, «cada»/«los»/plurals make a ROUTINE; «del lunes» names a report', async () => {
+  const w = await import('./src/when.js'); const now = new Date('2026-09-24T11:00:00'); // a Thursday
+  const once = w.parseOnce('el viernes a las 10 publica el post del blog', now);
+  if (w.parseWhen('el viernes a las 10 publica el post del blog') || !once || new Date(once.at).getDate() !== 25 || once.text !== 'publica el post del blog') throw new Error('«el viernes a las 10» → ' + JSON.stringify(once));
+  for (const t of ['cada viernes a las 10 publica', 'los lunes y jueves a las 9 revisa', 'mondays at 8 check the inbox', 'every weekend at noon, check']) if (!w.parseWhen(t)) throw new Error('not a routine: ' + t);
+  if (w.parseWhen('¿qué hiciste el martes?')) throw new Error('a question about Tuesday became a routine');
+  if (w.parseOnce('prepara el informe del lunes', now)) throw new Error('«el informe del lunes» was taken as a date');
+  const tm = w.parseOnce('mañana a las 9 llama a Sol', now); if (!tm || new Date(tm.at).getDate() !== 25 || new Date(tm.at).getHours() !== 9) throw new Error('mañana a las 9: ' + JSON.stringify(tm));
+  if (!w.parseOnce('hoy a las 8 algo', now).past) throw new Error('a time that passed today was not refused');
+  return 'el viernes → one task on the 25th · cada/los/mondays → routines · «¿qué hiciste el martes?» → nothing · «del lunes» → nothing';
+});
+
+await step('dimitri: a chat or a status carries no pieces, a plan does; the mode is kept to five', async () => {
+  const sub = await import('./sub.mjs'); const { loadRoster } = await import('./roster.mjs'); const agents = loadRoster().agents;
+  const DEPTS = { emails: {}, sales: {}, marketing: {}, ops: {}, fin: {}, delivery: {}, brain: {} };
+  const chat = sub.parsePlan('{"mode":"charla","reply":"Buena pregunta.","tasks":[{"dept":"sales","title":"x","instruction":"x"}]}', { depts: DEPTS, agents });
+  if (chat.mode !== 'charla' || chat.tasks.length) throw new Error('a chat carried a piece: ' + JSON.stringify(chat));
+  const plan = sub.parsePlan('{"mode":"plan","reply":"Así:","tasks":[{"dept":"sales","title":"Propuesta","instruction":"Haz la propuesta"}]}', { depts: DEPTS, agents });
+  if (plan.mode !== 'plan' || plan.tasks.length !== 1) throw new Error('a plan lost its piece');
+  const odd = sub.parsePlan('{"mode":"repartir","reply":"ok","tasks":[]}', { depts: DEPTS, agents }); if (odd.mode !== 'charla') throw new Error('unknown mode kept: ' + odd.mode);
+  const p = sub.systemPrompt({ name: 'Dimitri', business: 'X', depts: { sales: { name: 'Ventas' } }, agents, skillsOf: () => [], routineDepts: ['Ventas'], status: '', notes: 'nota', recent: 'r' });
+  if (!/Eres Dimitri/.test(p) || !/"charla"/.test(p) || !/No conviertas cada mensaje en tareas/.test(p)) throw new Error('the prompt lost its modes');
+  return 'charla → no pieces · plan → 1 piece · unknown mode → charla · prompt names Dimitri and the five modes';
+});
 
 await step('subgerente: a plan is parsed, moved pieces named, bad departments and past dates dropped', async () => {
   const sb = await import('./sub.mjs'); const { DEPTS } = await import('./src/data.js');
@@ -604,7 +650,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     });
     await step('server: a routine for no department is refused, a routine with no time is asked back', async () => {
       const r = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'brain', text: 'every day at 9am post the reel' }) });
-      const j = await r.json(); if (r.status !== 400 || !/unknown department/.test(j.error)) throw new Error(r.status + ' ' + JSON.stringify(j));
+      const j = await r.json(); if (r.status !== 400 || !/departamento desconocido/.test(j.error)) throw new Error(r.status + ' ' + JSON.stringify(j));
       const t = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'emails', text: 'every weekday, triage the inbox' }) });
       const k = await t.json(); if (t.status !== 400 || !k.needsTime) throw new Error('missing time not asked back: ' + JSON.stringify(k));
       const n = await fetch(base + '/api/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'sales', text: 'chase the quiet deals' }) });
@@ -620,7 +666,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     });
     await step('server: a task scheduled for a time that has passed is refused', async () => { // V3.2.1
       const r = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'sales', text: 'call the leads', at: Date.now() - 3600000 }) });
-      const j = await r.json(); if (r.status !== 400 || !/passed/.test(j.error)) throw new Error(r.status + ' ' + JSON.stringify(j));
+      const j = await r.json(); if (r.status !== 400 || !/ya pasó/.test(j.error)) throw new Error(r.status + ' ' + JSON.stringify(j));
       const b = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'sales', text: 'call the leads', at: 'tomorrowish' }) });
       if (b.status !== 400) throw new Error('bad time accepted');
       return j.error;

@@ -397,6 +397,8 @@ if (SERVED) { // a real office shows real counts, never the demo's invented metr
   const realCount = (k, state) => { try { return tasks ? tasks.tasks.filter(t => t.live && t.state === state && (AGENTS.find(a => a.id === t.agent) || {}).dept === k).length : 0; } catch { return 0; } };
   for (const k of DEPT_KEYS) BB_ROWS[k] = [['ENTREGAS REALES', () => realCount(k, 'done')], ['ESPERAN TU OK', () => realCount(k, 'waiting')]];
 }
+// the Brain's icon: two hemispheres drawn in line, with synapses that fire in turn (and all at once when an agent reads a note)
+const BRAIN_ICON = `<svg class="brainIc" viewBox="0 0 24 24" aria-hidden="true"><g class="bi-l"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.6 6.5a3 3 0 0 0 .4-1.4M6 5.1a3 3 0 0 0 .4 1.4M6 18a4 4 0 0 1-2-.5M20 17.5A4 4 0 0 1 18 18"/></g><g class="bi-s"><circle cx="7.5" cy="9" r="1.1"/><circle cx="16.5" cy="9" r="1.1"/><circle cx="8.5" cy="15" r="1.1"/><circle cx="15.5" cy="15" r="1.1"/><circle cx="12" cy="12" r="1.1"/></g></svg>`;
 for (const k of [...DEPT_KEYS, 'brain']) {
   const dept = DEPTS[k];
   const n = AGENTS.filter(a => a.dept === k).length;
@@ -409,16 +411,17 @@ for (const k of [...DEPT_KEYS, 'brain']) {
       <div class="m-row"><span class="m-lab">${row[0]}</span><span class="m-val" data-m="${k}-${i}">${row[1]()}</span></div>`).join('')}
     </div>
     <div class="b-appr" style="display:none">⚠ <span class="ap-n">1</span> EN ESPERA DE APROBACIÓN</div>`;
+  if (k !== 'brain') { b.setAttribute('role', 'button'); b.tabIndex = 0; b.setAttribute('aria-label', `${dept.name}: abrir el departamento`); b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zoomToDept(k); } }); }
   b.addEventListener('click', (e) => {
     if (e.target.closest('.b-appr')) { zoomToApproval(k); e.stopPropagation(); }
     else if (e.target.closest('.b-tasks') && tasks) { tasks.openFor(k); e.stopPropagation(); }
     else zoomToDept(k);
   });
-  if (k === 'brain') { // V3.6: a small tag names the etched floor and opens the graph (the big card stays retired)
+  if (k === 'brain') { // V4 (24 Sep 2026): the centre of the office — the Brain (an animated brain) and, beside it, Dimitri, the owner's right hand
     b.className = 'badge brainTag';
-    b.innerHTML = `<div class="b-name"><span class="dot" style="background:${dept.chip}"></span>EL CEREBRO<b>${brain.state.notes.toLocaleString('es-PA')}</b>NOTAS</div>`;
-    b.onclick = (e) => { e.stopPropagation(); brain.open(); };
-    b.title = 'abrir el Cerebro (G)';
+    b.innerHTML = `<button type="button" class="bt-brain" title="Abrir el Cerebro: tus notas (G)" aria-label="Abrir el Cerebro">${BRAIN_ICON}<span class="bt-tx"><span class="bt-t">EL CEREBRO</span><span class="bt-s"><b>${brain.state.notes.toLocaleString('es-PA')}</b> notas</span></span></button>` +
+      `<button type="button" class="bt-dim" title="Hablar con Dimitri, tu mano derecha (S)" aria-label="Abrir el chat con Dimitri"><span class="bt-av" aria-hidden="true">D</span><span class="bt-tx"><span class="bt-t">DIMITRI</span><span class="bt-s">tu mano derecha</span></span></button>`;
+    b.onclick = (e) => { e.stopPropagation(); if (e.target.closest('.bt-dim')) subger.toggle(); else if (e.target.closest('.bt-brain')) brain.open(); };
   }
   hud.appendChild(b);
   deptRT[k].badge = b;
@@ -493,7 +496,10 @@ function worldAt(nx, ny) {
 let focused = null; // dept key when zoomed into a dept
 
 addEventListener('wheel', (e) => {
-  if (e.target.closest && e.target.closest('#rail')) return; // let the rail scroll
+  // the wheel zooms the office only over the office itself (the canvas, the cards and name pills floating on it);
+  // over any panel, list, chat or window it scrolls that, like everywhere else (24 Sep 2026: it used to zoom everywhere)
+  const t = e.target;
+  if (!(t === renderer.domElement || (t.closest && t.closest('#hud')))) return;
   e.preventDefault();
   tween = null;
   view.arc = 0;
@@ -503,9 +509,7 @@ addEventListener('wheel', (e) => {
   applyCamera();
   const after = worldAt(nx, ny);
   if (before && after) view.target.add(before.sub(after));
-  if (view.zoom < 1.6 && focused) {
-    if (focused === 'brain') focused = null; else exitFocus(false);
-  }
+  if (view.zoom < 1.6 && focused === 'brain') focused = null; // a department stays open while you zoom out (it used to close its chat mid-conversation); VISTA GENERAL, ✕ or Esc close it
   syncOverviewBtn();
 }, { passive: false });
 
@@ -553,17 +557,29 @@ addEventListener('pointerup', (e) => {
 addEventListener('keydown', (e) => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; // typing in the bar, the big editor or a menu never fires a hotkey
   if (e.target.isContentEditable || ((e.ctrlKey || e.metaKey || e.altKey) && e.key !== 'Escape')) return; // Ctrl+C, Alt+… belong to the browser and to screen readers
-  if (e.key === 'Escape' && tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
-  if (e.key === 'Escape' && studio.isOpen()) { studio.close(); return; }
-  if (e.key === 'Escape') { if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); } else if (brain.isOpen()) brain.close(); else if (tasks && tasks.isOpen()) tasks.close(); else zoomOut(); }
-  else if (e.key === 'p' || e.key === 'P') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
+  // Esc closes the window on top, one at a time, newest first; only with nothing open does it leave the department
+  if (e.key === 'Escape') {
+    const cp = document.getElementById('connPanel'); if (cp) { cp.querySelector('.cp-x').click(); return; }
+    if (tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
+    if (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) { agentSheet.close(); return; }
+    if (subger.isOpen()) { subger.close(); return; }
+    if (studio.isOpen()) { studio.close(); return; }
+    if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); return; }
+    if (brain.isOpen()) { brain.close(); return; }
+    if (tasks && tasks.isOpen()) { tasks.close(); return; }
+    zoomOut(); return;
+  }
+  // with a full-screen window open, the one-letter keys stay out (they used to open more windows invisibly behind it) — except that window's own key, which closes it
+  const topWin = studio.isOpen() ? 'e' : subger.isOpen() ? 's' : brain.isOpen() ? 'g' : (tasks && tasks.detail && tasks.detail.isOpen()) ? '·' : (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) ? '·' : '';
+  if (topWin && e.key.toLowerCase() !== topWin) return;
+  if (e.key === 'p' || e.key === 'P') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
   else if (tasks && tasks.calendar && tasks.calendar.isOpen()) return; // the calendar has its own keys (← → W M T)
   else if (e.key === 'g' || e.key === 'G') brain.toggle(); // V3.6: the full-screen Brain graph
   else if (e.key === 'b' || e.key === 'B') { if (tasks) tasks.toggle(); } // V3: the company-wide board
   else if (e.key === '+' || e.key === '=') zoomStep(1.5);
   else if (e.key === '-' || e.key === '_') zoomStep(1 / 1.5);
   else if (e.key === '0') zoomOut();
-  else if (e.key === 'x' || e.key === 'X') { if (!meeting) planMeeting(performance.now()); }
+  else if ((e.key === 'x' || e.key === 'X') && !SERVED) { if (!meeting) planMeeting(performance.now()); } // demo theatre: two agents walk to a meeting — never in the owner's real office
   else if (e.key >= '1' && e.key <= '6') { // jump straight to a department
     const dept = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'][+e.key - 1];
     if (focused !== dept) enterFocus(dept);
@@ -576,7 +592,8 @@ addEventListener('keydown', (e) => {
   }
   else if (e.key === 'v' || e.key === 'V') setCam(!document.body.classList.contains('cam'));
   else if (e.key === 'd' || e.key === 'D') setDark(!darkOn);
-  else if (e.key === 's' || e.key === 'S') subger.toggle(); // the Subgerente's chat
+  else if (e.key === 's' || e.key === 'S') subger.toggle(); // Dimitri's chat
+  else if (e.key === 't' || e.key === 'T') document.getElementById('topPanel').click(); // show / hide the task panel
   else if (e.key === 'e' || e.key === 'E') studio.toggle(); // the Estudio
   else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
@@ -808,7 +825,7 @@ function buildDeptRail(k) {
   const rh = document.getElementById('railHeader');
   rh.classList.remove('show');
   rh.innerHTML = `
-    <div class="b-name"><span class="dot" style="background:${dept.chip}"></span>${dept.name}<span class="live"></span><span class="rh-sum">${n} agentes</span><button type="button" class="rh-tog" aria-expanded="false" aria-label="Mostrar u ocultar el resumen del departamento" title="Resumen del departamento">▾</button></div>
+    <div class="b-name"><span class="dot" style="background:${dept.chip}"></span>${dept.name}<span class="live"></span><span class="rh-sum">${n} agentes</span><button type="button" class="rh-tog" aria-expanded="false" aria-label="Mostrar u ocultar el resumen del departamento" title="Resumen del departamento">▾</button><button type="button" class="rh-x" aria-label="Cerrar ${dept.name} y volver a la vista general" title="Cerrar (Esc)">✕</button></div>
     <div class="b-count"><span class="b-num">${n}</span><span class="b-lab">AGENTES</span></div>
     <div class="b-metrics">${BB_ROWS[k].map((row, i) => `
       <div class="m-row"><span class="m-lab">${row[0]}</span><span class="m-val" data-rm="${k}-${i}">${row[1]()}</span></div>`).join('')}</div>
@@ -820,6 +837,7 @@ function buildDeptRail(k) {
   try { rh.classList.toggle('expanded', localStorage.getItem('ao.rhOpen') === '1'); } catch {}
   tog.setAttribute('aria-expanded', rh.classList.contains('expanded'));
   tog.addEventListener('click', e => { e.stopPropagation(); const on = rh.classList.toggle('expanded'); tog.setAttribute('aria-expanded', on); try { localStorage.setItem('ao.rhOpen', on ? '1' : '0'); } catch {} });
+  rh.querySelector('.rh-x').addEventListener('click', e => { e.stopPropagation(); zoomOut(); }); // close the department: back to the whole office
   rh.querySelector('.b-appr').addEventListener('click', () => {
     const s = stuckIn(k)[0];
     if (s) openAgentRail(s.a.id);
@@ -920,7 +938,7 @@ function sendChat(text) {
       resolveApproval(id, /(approve|aprobar|aprobado|apruebo)/.test(low));
       return;
     }
-    const rv = tasks && tasks.isLive() && text.match(/^\s*revise\s*[:\-–]\s*(.+)$/i); // LIVE: "revise: …" re-runs the last deliverable
+    const rv = tasks && tasks.isLive() && text.match(/^\s*(?:revise|revisa|revisar|corrige|corregir|cambia)\s*[:\-–]\s*(.+)$/i); // LIVE: "revisa: …" (or "revise:", "corrige:") re-runs the last deliverable
     if (rv && tasks.revise(id, rv[1].trim())) { chatPush(id, { who: 'agent', text: 'En eso — revisando ahora. Caerá aquí cuando esté listo.' }); return; }
     const tr = tasks && tasks.handleChat(id, text); // "add task: …" / "what's on the board"
     if (tr) { chatPush(id, { who: 'agent', text: tr }); return; }
@@ -1420,13 +1438,7 @@ function tickLOD() {
   }
 }
 
-/* ---------- clock (REAL local time — locked rule) ---------- */
-function tickClock() {
-  const d = new Date();
-  document.getElementById('clock').textContent =
-    d.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-setInterval(tickClock, 1000); tickClock();
+/* the clock left the top bar (24 Sep 2026): the seconds made the bar twitch, and the time is on the owner's taskbar */
 
 /* ---------- helpers ---------- */
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
@@ -1467,12 +1479,10 @@ tasks = initTasks({
   hud, R, deptRT, RAIL_SIDE, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent, esc,
   brainWrite: (id, title) => brain.write(id, title), brain,
   onLive: (h) => {
-    if (h.provider && h.provider.id !== 'anthropic') { // option 2 of the .bat: say so, and why the claude.ai connectors are missing
-      const tm = document.getElementById('topmodels');
-      if (tm && !tm.querySelector('.tc-prov')) { const b = document.createElement('span'); b.className = 'tc-prov'; b.textContent = h.provider.id === 'meta' ? 'META · MUSE SPARK' : h.provider.name.toUpperCase();
-        b.title = `La oficina corre con ${h.provider.name}. En este modo Claude Code no carga los conectores de claude.ai (Gmail, Canva, Notion, Drive, Metricool…): los agentes no los tienen. Abre el iniciador con 1 (Claude) para usarlos.`; tm.appendChild(b); }
-    }
-    document.querySelector('#topbar .brand .ver').textContent = 'BETA'; document.title = `${h.name} — Agents Office`; brain.setOwner(h.name); brain.setQuiet(true); applyRoster(h.agents); },
+    if (mcp && mcp.setProvider) mcp.setProvider(h.provider); // the brain the agents run on: Claude's logo, or Meta's (option 2 of the .bat) — the logo alone says it
+    { const br = document.querySelector('#topbar .brand'); br.innerHTML = `<span class="bn">${esc(h.name)}</span><span class="bs">OFICINA</span>`; br.title = `Agents Office ${h.version || ''} · la oficina de ${h.name}`; }
+    if (h.deputy) { const t = document.querySelector('.brainTag .bt-dim'); if (t) { t.querySelector('.bt-t').textContent = String(h.deputy).toUpperCase(); t.querySelector('.bt-av').textContent = String(h.deputy).charAt(0).toUpperCase(); t.title = `Hablar con ${h.deputy}, tu mano derecha (S)`; t.setAttribute('aria-label', `Abrir el chat con ${h.deputy}`); } }
+    document.title = `${h.name} — Agents Office`; brain.setOwner(h.name); brain.setQuiet(true); applyRoster(h.agents); },
   onTools: (agentId, keys) => mcp.onToolsUsed(agentId, keys),
   requestApproval, setStuck: setStuckLive, resolveApproval: (id, ok) => resolveApproval(id, ok),
   onUsage: (u) => { if (mcp && mcp.setUsage) mcp.setUsage(u); }, // V3.6: the plan's gauge in the top bar
@@ -1483,7 +1493,12 @@ view.target.set(...overviewPos());
 addEventListener('resize', () => { if (!focused && !tween && !HERO) view.target.set(...overviewPos()); });
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
-document.getElementById('topSub').addEventListener('click', () => subger.toggle());
+{ // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
+  const btn = document.getElementById('topPanel');
+  const sync = () => { const shown = !document.body.classList.contains('tpMin'); btn.setAttribute('aria-pressed', shown); btn.classList.toggle('on', shown); };
+  btn.addEventListener('click', () => { if (tasks && tasks.setPanel) tasks.setPanel(document.body.classList.contains('tpMin')); sync(); });
+  new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['class'] }); sync();
+}
 agentSheet = initSheet({ host: document.getElementById('railAgent'), esc, isLive: () => tasks.isLive(), MODEL_KEYS: SHEET_MODELS, modelName: sheetModelName, EFFORT_KEYS: SHEET_EFFORTS,
   onSaved: a => { applyRoster([a]); const n = document.querySelector('#railAgent .mh-name'); if (n) n.innerHTML = (a.lead ? '<span class="star">★</span> ' : '') + esc(a.name); },
   openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); } });
@@ -1494,8 +1509,15 @@ document.getElementById('railSheet').addEventListener('click', () => { if (!moda
   document.body.classList.toggle('connFold', pref === null ? innerWidth < 1600 : pref === '1');
   const count = () => { const n = tc.querySelectorAll('img').length; tc.dataset.n = n; const l = tc.querySelector('.tc-lab'); if (l) l.dataset.n = n; };
   new MutationObserver(count).observe(tc, { childList: true }); count();
-  tc.addEventListener('click', e => { if (!e.target.closest('.tc-lab')) return; const on = document.body.classList.toggle('connFold'); try { localStorage.setItem('ao.connFold', on ? '1' : '0'); } catch {} });
-  tc.title = 'Mostrar u ocultar los conectores';
+  // V4: the label opens the connectors' panel (src/mcp.js); the icons share the lane between the brand and the dock:
+  // they shrink to fit (27 → 16 px) instead of pushing the tools to the right
+  const fit = () => {
+    const bar = document.getElementById('topbar'), dock = document.getElementById('topdock'), brand = bar.querySelector('.brand'), lab = tc.querySelector('.tc-lab');
+    const n = tc.querySelectorAll('img').length; if (!n || !lab) return;
+    const room = bar.clientWidth - brand.offsetWidth - dock.offsetWidth - lab.offsetWidth - 90;
+    tc.style.setProperty('--tcs', Math.max(16, Math.min(27, Math.floor(room / n) - 6)) + 'px');
+  };
+  addEventListener('resize', fit); new MutationObserver(fit).observe(tc, { childList: true }); setTimeout(fit, 400); setTimeout(fit, 3000);
 }
 const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); } });
 document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
