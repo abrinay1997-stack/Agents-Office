@@ -440,7 +440,7 @@ export function initTasks(ctx) {
         const r = await fetch(API + '/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, model: mdl || undefined, effort: effortSend(), team: team || undefined }) });
         if (!r.ok) throw new Error((await r.json()).error || r.statusText);
         const st = await r.json();
-        const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, why: st.why, by: 'you', live: true, sid: st.id, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', effort: st.effort,
+        const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, why: st.why, by: 'you', live: true, srv: true, sid: st.id, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', effort: st.effort,
           team: st.team ? { lead: st.team.lead, members: [] } : undefined });
         resetModel(); resetTeam();
         touch(t, 'added'); spawnEmote(R[t.agent], st.team ? '⚑' : '📋');
@@ -595,7 +595,7 @@ export function initTasks(ctx) {
     if (!agentOf(st.agent) || st.archived) return;
     let t = tasks.find(x => x.live && x.sid === st.id);
     if (!t) {
-      t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: st.by === 'routine' ? 'routine' : 'you', live: true, srv: !!(st.routine || st.dueAt), sid: st.id,
+      t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: st.by === 'routine' ? 'routine' : 'you', live: true, srv: true, sid: st.id,
         routine: st.routine, when: st.when, late: !!st.late, due: st.due, needsOk: !!st.needsOk, addedAt: st.addedAt, changedAt: st.addedAt, last: 'added',
         model: st.model, modelUsed: st.modelUsed || st.model || undefined, modelFrom: st.modelFrom || (st.model ? 'task' : undefined), effort: st.effort, effortUsed: st.effortUsed, effortFrom: st.effortFrom });
       if (st.state === 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; t.needsOk = !!st.needsOk; }
@@ -676,25 +676,11 @@ export function initTasks(ctx) {
     return true;
   }
   function toDoing(t) { t.state = 'doing'; t.startedAt = performance.now(); t.progress = 0; t.pausedAt = null; t.running = true; t.ready = false; t.srv = true; touch(t, 'started'); }
-  // LIVE: the agent picks the task up → Claude does it on the server → the result lands in the chat
-  async function runLive(t, feedback) {
-    t.running = true; t.ready = false;
-    try {
-      const r = await fetch(`${API}/tasks/${t.sid}/${feedback ? 'revise' : 'run'}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(feedback ? { feedback } : {}) });
-      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
-      const st = await r.json();
-      t.result = st.result; t.error = !!st.error; t.read = st.read || []; t.note = st.note; t.tools = st.tools || []; t.used = st.used || []; if (st.modelUsed) { t.modelUsed = st.modelUsed; t.modelFrom = st.modelFrom; t.effortUsed = st.effortUsed || ''; t.effortFrom = st.effortFrom; }
-      usageDue = true;
-      if (t.tools.length && onTools) onTools(t.agent, t.tools); // the connectors the agent really pulled on light up
-      if (brain && !t.error) fetch(API + '/brain').then(r => r.json()).then(g => brain.setGraph(g)).catch(() => {}); // the new note joins the graph
-    } catch (e) { t.result = 'Could not complete this task: ' + e.message; t.error = true; }
-    t.ready = true;
-  }
   function revise(agentId, feedback) { // "revise: …" in chat re-runs that agent's last live deliverable
     const t = [...tasks].reverse().find(x => x.live && x.agent === agentId && x.state === 'done' && !x.error);
     if (!t) return false;
-    t.state = 'doing'; t.startedAt = performance.now(); t.progress = 0; t.pausedAt = null; touch(t, 'started');
-    runLive(t, feedback);
+    toDoing(t); t.result = ''; t.draftAt = undefined;
+    post(`/tasks/${t.sid}/revise`, { feedback }).then(j => { if (!j || j.error) { t.state = 'done'; t.error = true; t.result = 'No se pudo revisar: ' + ((j && j.error) || 'sin conexión con la oficina'); touch(t, 'done'); dirty = true; } }); // the server reworks it; the poll brings it back
     return true;
   }
   async function connect() {
@@ -1026,7 +1012,7 @@ export function initTasks(ctx) {
       if (d && !d.live && agentTasks(id, 'next').some(t => t.live || t.piece)) { d.progress = 1; complete(d); continue; } // real work (and a team piece) never waits behind theatre
       if (d) {
         if (d.live) {
-          if (!d.running) runLive(d);
+          if (!d.running) d.running = true; // the server runs it; apply() brings the result
           if (d.ready) { d.progress = 1; complete(d); }
           else d.progress = Math.min(0.92, (now - (d.startedAt || now)) / 45000);
         } else if (d.teamHold) { // demo lead: the card fills as the pieces come in, finishes when the last one lands
@@ -1038,7 +1024,7 @@ export function initTasks(ctx) {
           if (d.progress >= 1) complete(d);
         }
       } else {
-        const nx = agentTasks(id, 'next').sort((a, b) => a.addedAt - b.addedAt)[0];
+        const nx = agentTasks(id, 'next').filter(t => !(live && t.live)).sort((a, b) => a.addedAt - b.addedAt)[0]; // live work is started by the server
         if (nx) { start(nx, now); r.nextBrainAt = null; }
         else if (!r.nextBrainAt) r.nextBrainAt = now + 6000 + Math.random() * 16000;
         else if (now > r.nextBrainAt) { r.nextBrainAt = null; if (!location.protocol.startsWith('http')) brainSend(id); } // served: an idle agent stays idle, no invented jobs

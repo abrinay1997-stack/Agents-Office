@@ -397,6 +397,7 @@ async function newTask({ dept, text, team = false, at = null, by = 'you', model,
   if (at) { task.state = 'scheduled'; task.dueAt = at; task.needsOk = r.needsOk; }
   const list = load(); list.push(task); save(list);
   console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${at ? ' · scheduled ' + untilText(at) : ''}${by === 'sub' ? ' (via the Subgerente)' : ''}`);
+  if (!at) setImmediate(pump);
   return task;
 }
 
@@ -451,15 +452,36 @@ function loadRoutines() { // re-read from disk every time: a routine written by 
 }
 const routinesOut = () => { const list = loadRoutines(); return { routines: list, depts: routines.ALLOWED, path: rlist.path, problems: rlist.problems }; };
 const agentName = id => AGENTS.find(a => a.id === id)?.name || id;
-// routine-driven runs go one at a time, so a burst of catch-ups after a long sleep does not spawn five Claude processes at once
-let queue = Promise.resolve();
-const enqueue = fn => { const p = queue.then(fn, fn); queue = p.catch(e => console.error('run failed:', e.message)); return p; };
+// ONE ENGINE (23 Sep 2026): every task runs here, on the server — the bar's, the Subgerente's, a routine's, a date's.
+// The page only shows it (it used to run the bar's tasks itself: close the tab and they stopped). pump() starts pending
+// tasks oldest first, one per agent, at most cfg.concurrency (default 3) Claude runs at once across the office.
+const MAX_RUNS = Math.max(1, Math.min(8, +cfg.concurrency || 3));
+const running = new Set(); // task ids with a run in flight
+let pumping = false;
+function pump() {
+  if (pumping) return; pumping = true;
+  try {
+    let list; try { list = load(); } catch (e) { console.error('engine:', e.message); return; }
+    const busy = new Set(list.filter(t => t.state === 'doing').map(t => t.agent));
+    for (const t of list.filter(x => x.state === 'next' && !x.archived).sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0))) {
+      if (running.size >= MAX_RUNS) break;
+      if (running.has(t.id) || busy.has(t.agent)) continue;
+      busy.add(t.agent); startRun(t.id);
+    }
+  } finally { pumping = false; }
+}
+function startRun(id, opts = {}) { // one run, tracked; when it ends the next pending task starts
+  running.add(id);
+  const p = runServerTask(id, opts).catch(e => console.error('run failed:', e.message)).finally(() => { running.delete(id); setImmediate(pump); });
+  return p;
+}
+const enqueue = fn => fn(); // kept for the approve/reject path: those runs start at once (the owner is waiting on them)
 function fire(r, { due = Date.now(), late = false, by = 'routine' } = {}) { // the routine becomes a task and runs here, page or no page
   const task = { id: nid(), dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, due, late, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined };
   const list = load(); list.push(task); save(list);
   routines.advance(RSTATE, r, Date.now(), task.id, late); routines.saveState(DATA, RSTATE);
   console.log(`⏱ ${task.id} → ${task.agent}: ${task.title}${late ? ' (LATE · was due ' + new Date(due).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')' : ''}`);
-  enqueue(() => runServerTask(task.id));
+  setImmediate(pump);
   return task;
 }
 async function runServerTask(id, { feedback, approve } = {}) {
@@ -495,9 +517,8 @@ function tickScheduled() { // V3.2.1: a task scheduled for a date fires on its m
     if (t.state !== 'scheduled' || !(t.dueAt <= now)) continue;
     t.state = 'next'; t.due = t.dueAt; t.late = now - t.dueAt > routines.LATE_AFTER; t.addedAt = now; changed = true;
     console.log(`⏱ ${t.id} scheduled task fires → ${t.agent}: ${t.title}${t.late ? ' (LATE · was due ' + new Date(t.dueAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' }) + ')' : ''}`);
-    enqueue(() => runServerTask(t.id));
   }
-  if (changed) save(list);
+  if (changed) { save(list); setImmediate(pump); }
 }
 const uniqueId = (base, list) => { let id = base || 'routine', n = 2; while (list.some(r => r.id === id)) id = `${base}-${n++}`; return id; };
 // edits go to the file as it is on disk (routines.patchFile): saving the validated list would drop the routines the validator left out, and `team`
@@ -726,6 +747,7 @@ const server = http.createServer(async (req, res) => {
       if (dueAt) { task.state = 'scheduled'; task.dueAt = dueAt; task.needsOk = r.needsOk; } // waits for its minute; needsOk decides whether it then waits for the OK
       const list = load(); list.push(task); save(list);
       console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${dueAt ? ' · scheduled ' + untilText(dueAt) : ''}`);
+      if (!dueAt) setImmediate(pump);
       return json(res, 200, task);
     }
     const m = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(run|revise|approve|reject|stop|archive|repeat))?$/);
@@ -756,7 +778,7 @@ const server = http.createServer(async (req, res) => {
       const t = { id: nid(), dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', state: 'next', addedAt: Date.now(), by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
         team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id };
       const l = load(); l.push(t); save(l);
-      console.log(`↻ ${t.id} repeats ${src.id}: ${t.title}`);
+      console.log(`↻ ${t.id} repeats ${src.id}: ${t.title}`); setImmediate(pump);
       return json(res, 200, t);
     }
     if (m && !m[2] && req.method === 'PATCH') { // edit a task that has not started: rewrite, reassign, move to a date or back, model, effort — or mark it done by hand
@@ -793,7 +815,7 @@ const server = http.createServer(async (req, res) => {
       if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk;
       const list = load(); const task = list.find(t => t.id === m[1]); // re-read: routing took a moment and the clock (or the page) may have started it
       if (!task || task.state !== cur.state) return json(res, 409, { error: 'la tarea ya empezó mientras la editabas' });
-      Object.assign(task, patch); for (const k of Object.keys(patch)) if (patch[k] === undefined) delete task[k]; save(list);
+      Object.assign(task, patch); for (const k of Object.keys(patch)) if (patch[k] === undefined) delete task[k]; save(list); if (task.state === 'next') setImmediate(pump);
       console.log(`✎ ${task.id} edited${patch.dueAt ? ' · now ' + untilText(task.dueAt) : ''}${patch.text ? ' · new text' : ''}${patch.agent ? ' · to ' + patch.agent : ''}${patch.state ? ' · ' + patch.state : ''}`);
       return json(res, 200, task);
     }
@@ -805,36 +827,25 @@ const server = http.createServer(async (req, res) => {
       const note = String(feedback || '').trim();
       { const l = load(); const t = l.find(x => x.id === task.id); if (!t || t.state !== 'waiting') return json(res, 409, { error: 'ya se está procesando' }); t.state = 'doing'; t.startedAt = Date.now(); save(l); } // claimed now: a second click (or «aprobar» in chat) cannot send it twice
       console.log(`${m[2] === 'approve' ? '✅' : '↩'} ${task.id} ${m[2] === 'approve' ? 'approved — ' + agentName(task.agent) + ' is sending' : 'sent back: ' + note.slice(0, 80)}`);
-      enqueue(() => runServerTask(task.id, m[2] === 'approve' ? { approve: true } : { feedback: note || 'No es esto. Retrabájalo.' }))
+      enqueue(() => startRun(task.id, m[2] === 'approve' ? { approve: true } : { feedback: note || 'No es esto. Retrabájalo.' }))
         .then(t => { if (m[2] === 'reject' && note && t && !t.error) { const a = AGENTS.find(x => x.id === t.agent); return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); }); } })
         .catch(e => console.warn('approval:', e.message));
       return json(res, 200, { ok: true, id: task.id, state: 'doing' });
     }
-    if (m && req.method === 'POST' && (m[2] === 'run' || m[2] === 'revise')) {
+    if (m && req.method === 'POST' && (m[2] === 'run' || m[2] === 'revise')) { // the engine runs it; the page follows it by polling
       const list = load(); const task = list.find(t => t.id === m[1]);
       if (!task) return json(res, 404, { error: 'no such task' });
-      if (task.state === 'doing' || task.state === 'scheduled') return json(res, 409, { error: task.state === 'doing' ? 'ya está en curso' : 'está programada: corre sola a su hora' });
-      if (m[2] === 'run' && (task.routine || task.dueAt) && task.state !== 'done') return json(res, 409, { error: 'el reloj de la oficina la está corriendo' }); // server-owned: running it from the page too would run it twice and skip the OK
-      const { feedback } = m[2] === 'revise' ? await body(req) : {};
-      task.state = 'doing'; task.startedAt = Date.now(); save(list);
-      try {
-        const { result, read, tools, used, skills: sk, modelUsed, modelFrom, modelId: ran, effortUsed, effortFrom, team } = await run(task, feedback);
-        Object.assign(task, { state: 'done', doneAt: Date.now(), result, read, tools, used, skills: sk, error: false, modelUsed, modelFrom, modelId: ran, effortUsed, effortFrom, ...(team ? { team } : {}) });
-        task.note = writeNote(task);
-        await rebuildGraph();
-      } catch (e) {
-        Object.assign(task, { state: 'done', doneAt: Date.now(), result: stopping.has(task.id) ? 'Detenida por ti antes de terminar.' : 'Could not complete this task: ' + e.message, error: true, stopped: stopping.has(task.id) || undefined });
-      }
-      stopping.delete(task.id);
-      const l2 = load(); const i = l2.findIndex(t => t.id === task.id); if (i >= 0) l2[i] = task; save(l2);
-      console.log(`${task.error ? '✗' : '✓'} ${task.id} ${task.error ? 'failed' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
-      json(res, 200, task);
-      if (feedback && !task.error) { // learn from the correction, after the reply is out the door
-        const a = AGENTS.find(x => x.id === task.agent);
-        learn.classify(ask, a, task, feedback).then(v => { const r = learn.record(BRAIN, a, task, feedback, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); })
-          .catch(e => console.warn('learn:', e.message));
-      }
-      return;
+      if (task.state === 'doing' || running.has(task.id)) return json(res, 409, { error: 'ya está en curso' });
+      if (task.state === 'scheduled') return json(res, 409, { error: 'está programada: corre sola a su hora' });
+      if (m[2] === 'run') { if (task.state !== 'next') { task.state = 'next'; task.addedAt = Date.now(); save(list); } setImmediate(pump); return json(res, 200, { ok: true, id: task.id, state: 'next' }); }
+      const { feedback } = await body(req); const note = String(feedback || '').trim();
+      if (!note) return json(res, 400, { error: 'di qué debe cambiar' });
+      startRun(task.id, { feedback: note }).then(t => { // learn from the correction once the rework is in
+        if (!t || t.error) return;
+        const a = AGENTS.find(x => x.id === t.agent);
+        return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); });
+      }).catch(e => console.warn('learn:', e.message));
+      return json(res, 200, { ok: true, id: task.id, state: 'doing' });
     }
     if (m && req.method === 'DELETE') {
       const list = load(); const t = list.find(x => x.id === m[1]);
@@ -885,7 +896,9 @@ server.listen(cfg.port, HOST, () => {
   console.log(`  tasks: ${FILE}   notes the agents write: ${NOTES_DIR}`);
   const rl = loadRoutines(); const nx = rl.filter(r => !r.paused && r.nextAt).sort((a, b) => a.nextAt - b.nextAt)[0];
   console.log(`  routines: ${rl.length} loaded${rl.some(r => r.paused) ? ' (' + rl.filter(r => r.paused).length + ' paused)' : ''}${nx ? ' · next ' + untilText(nx.nextAt) + ' ' + nx.title.toUpperCase() + ' (' + nx.agent + ')' : ''} · ${rlist.path}`);
-  setInterval(tickRoutines, 20000); tickRoutines(); // the clock: every 20 s; the first tick catches up anything missed while the office was off (once, marked LATE)
+  setInterval(tickRoutines, 20000); tickRoutines();
+  setInterval(pump, 5000); setTimeout(pump, 1500); // pending work left by a restart, or added while every seat was busy
+  console.log(`  engine: the server runs every task · ${MAX_RUNS} at once, one per agent (office.config.json → concurrency)`); // the clock: every 20 s; the first tick catches up anything missed while the office was off (once, marked LATE)
   console.log(`  agents: 35 (${roster.customised} customised${roster.briefed ? ', ' + roster.briefed + ' briefed' : ''}${roster.files.length ? ' via ' + roster.files.join(' + ') : ''})   tools: ${backend === 'claude-cli' ? 'connected MCP servers' + (cfg.tools?.web === false ? '' : ' + web') + (mcp.browserOn() ? ' + the owner\'s Chrome (' + (mcp.browserState().installed ? 'extension paired' + (mcp.browserState().device ? ': ' + mcp.browserState().device : '') : 'extension NOT paired — run `claude --chrome` once') + ')' : '') : 'none on the API backend'}`);
   console.log(`  teams: ${TEAMS.enabled ? 'on — TEAM in the bar or "as a team" in the sentence; the lead splits it across up to ' + TEAMS.max + ' desks' : 'off (teams.enabled in office.config.json)'}`);
   const sk = skills.summary(); const setup = setupMap(); const notYet = DEPT_KEYS.filter(k => !setup[k]);
