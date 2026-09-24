@@ -480,15 +480,30 @@ else {
       await click('.tp-chip[data-f="done"]');
       const n0 = await page.evaluate(() => document.querySelectorAll('.tp-row.done').length); if (!n0) return 'no finished tasks yet (skipped)';
       await click('.tp-clear'); await page.waitForFunction(() => !document.querySelector('.tp-toast').hidden, null, { timeout: 4000 });
-      const arch = await page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0)); if (arch < n0) throw new Error(`archived ${arch} of ${n0}`);
+      const arch = await page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0)); // the demo keeps finishing (and pruning) work, so the count is checked against the toast, not the rows seen before
+      const said = await page.evaluate(() => +(document.querySelector('.tp-toast').textContent.match(/\d+/) || [0])[0]); if (!arch || arch !== said) throw new Error(`archived ${arch}, the toast says ${said} (rows before: ${n0})`);
       await click('.tp-undo'); await page.waitForFunction(() => !document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 }).catch(() => {});
       const left = await page.evaluate(() => document.querySelector('.tp-chip[data-f="archived"]')?.textContent || ''); if (left) throw new Error('DESHACER left ' + left);
       await click('.tp-clear'); await page.waitForFunction(() => document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 });
-      await click('.tp-chip[data-f="archived"]'); const a1 = await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length);
+      const archN = () => page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0));
+      await click('.tp-chip[data-f="archived"]'); const a1 = await archN(); if (!await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length)) throw new Error('ARCHIVADAS shows no rows');
       await click('.tp-row.archived button[data-act="unarchive"]'); await page.waitForTimeout(400);
-      const a2 = await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length); if (a2 !== a1 - 1) throw new Error(`unarchive: ${a1} → ${a2}`);
+      const a2 = await archN(); if (a2 !== a1 - 1) throw new Error(`unarchive: ${a1} → ${a2}`);
       await page.evaluate(() => document.querySelector('.tp-chip[data-f="all"]').click());
       return `${n0} archived · DESHACER brings them back · ARCHIVADAS ${a1} → ${a2}${cut.more ? ' · ' + cut.more : ''}`;
+    });
+    await step('smoke: V4.1 — Tab stays inside an open window, the closed board is inert, ? opens the shortcuts', async () => {
+      await page.keyboard.press('e'); await page.waitForFunction(() => document.body.classList.contains('studioOpen'), null, { timeout: 4000 });
+      let out = 0; for (let i = 0; i < 40; i++) { await page.keyboard.press('Tab'); if (!await page.evaluate(() => document.getElementById('studioOv').contains(document.activeElement))) out++; }
+      for (let i = 0; i < 3 && await page.evaluate(() => document.body.classList.contains('studioOpen')); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); } // Esc closes an open menu first, then the Estudio
+      if (out) throw new Error(`Tab left the Estudio ${out} times`);
+      if (!await page.evaluate(() => document.getElementById('board').inert)) throw new Error('the closed board is reachable with Tab');
+      const at = await page.evaluate(() => { const a = document.activeElement; return a ? a.tagName + '.' + a.className : ''; });
+      await page.keyboard.press('Shift+Slash'); await page.waitForTimeout(300);
+      const sheet = await page.evaluate(() => !document.getElementById('keysOv').hidden && document.querySelectorAll('#keysOv .ks-row').length); if (!sheet) throw new Error('? did not open the shortcuts (focus on ' + at + ')');
+      await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+      if (await page.evaluate(() => [...document.body.children].some(c => c.inert && c.id === 'tpanel'))) throw new Error('the panel stayed inert after the windows closed');
+      return `40 Tabs inside the Estudio · board inert when closed · ${sheet} shortcuts`;
     });
     await step('smoke: no errors after the run', async () => { if (errors.length) throw new Error(errors[0]); });
   } catch (e) { bad('smoke: browser', e.message); }

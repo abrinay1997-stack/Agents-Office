@@ -8,6 +8,7 @@ import { PROFILE } from './profile.js';
 const BRAIN = (PROFILE && PROFILE.graph && PROFILE.graph.nodes && PROFILE.graph.nodes.length) ? PROFILE.graph : BRAIN0; // INDUSTRY PROFILE: the demo company's own graph
 import { AGENTS } from './data.js';
 import { mdToHtml, escHTML } from './md.js';
+import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 
 const GROUP_COL = {
   '40-Marketing': '#E69393', '50-Products': '#98A5EF', '60-Sales': '#EADC8F', '70-Delivery': '#8FD3F4',
@@ -341,12 +342,12 @@ export function initBrain({ esc }) {
   let opener = null;
   function open() {
     if (openNow) return;
-    openNow = true; opener = document.activeElement; ov.inert = false; ov.classList.add('on'); document.body.classList.add('brainOpen');
+    openNow = true; opener = document.activeElement; ov.inert = false; modal.open(ov); ov.classList.add('on'); document.body.classList.add('brainOpen');
     meta.textContent = metaText();
     chips(); if (!sel) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); }
     dirty(); setTimeout(() => document.getElementById('bvClose').focus({ preventScroll: true }), 50); // focus inside the dialog, but not the search box: G/Esc must still close it
   }
-  function close() { if (!openNow) return; openNow = false; ov.inert = true; emptyEl.hidden = true; res.hidden = true; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function close() { if (!openNow) return; openNow = false; modal.close(ov); ov.inert = true; emptyEl.hidden = true; res.hidden = true; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   function toggle() { openNow ? close() : open(); }
   document.getElementById('bvClose').addEventListener('click', close);
   ov.inert = true; // closed: out of Tab's reach and of screen readers (it stays in the page, faded out)

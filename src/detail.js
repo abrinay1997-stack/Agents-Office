@@ -11,6 +11,7 @@
 //   ctx: agentOf · AGENTS · DEPTS · DEPT_KEYS · esc · isLive() · act(t, name, payload) → Promise<{ ok, error }>
 //        openAgent(id) · openNote(name) → bool · openCalendar(ts) · modelName · MODEL_KEYS · officeModel()
 import { mdToHtml } from './md.js';
+import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -124,8 +125,8 @@ export function initDetail(ctx) {
     if (a === 'delete') { const note = el.querySelector('.td-withnote')?.checked; return run('delete', { note }, 'Eliminada.'); } // V4.1: no confirm box — the toast offers DESHACER for 8 s
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
-  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; lastSig = sig(t); el.hidden = false; render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
-  function close() { if (!cur) return; if (el.contains(document.activeElement)) document.activeElement.blur(); cur = null; el.classList.remove('on'); setTimeout(() => { if (!cur) el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; lastSig = sig(t); el.hidden = false; if (modal.any() && modal.top() !== el) { el.setAttribute('aria-modal', 'true'); modal.open(el); } render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
+  function close() { if (!cur) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.setAttribute('aria-modal', 'false'); cur = null; el.classList.remove('on'); setTimeout(() => { if (!cur) el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   // the task changed underneath (a poll, the run finished): redraw, unless the owner is typing in it
   // only when something the owner can see changed: every poll used to redraw it (scroll to the top, «Guardado.» gone, focus lost)
   const sig = t => JSON.stringify([t.state, t.title, t.text, t.agent, t.dueAt, t.note, t.error, t.approved, t.archived, (t.result || '').length, (t.draft || '').length, t.running, t.team && t.team.pieces && t.team.pieces.map(p => p.state)]);

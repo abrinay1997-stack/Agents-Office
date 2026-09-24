@@ -7,6 +7,7 @@
 // V2.1 (same day, the owner: «organizar esta suite… más intuitivo»): a guided composer — 1 what, 2 model (a picker that
 // says what each model is good at), 3 the idea, 4 starting material, 5 format as shapes + «más ajustes» folded — with the
 // quantity and GENERAR fixed at the bottom; card actions as icons over the picture; clear names everywhere.
+import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje' };
 const VAL = { auto: 'Auto', low: 'Baja', medium: 'Media', high: 'Alta', video: 'la del video', image: 'la de la imagen' };
 const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
@@ -232,7 +233,8 @@ export function initStudio(ctx) {
   async function load({ full = true } = {}) { // full: the catalog too (the 20-second refresh only touches the gallery, so an open menu stays open)
     if (loading) return loading;
     loading = (async () => {
-      try { const j = await api('GET', '/api/media'); items = j.items || []; budget = j.budget || null; jobs = j.jobs || []; loadErr = '';
+      try { if (!location.protocol.startsWith('http')) throw new Error('el Estudio trabaja con la oficina real: ábrela con el iniciador (.bat)'); // the demo file has no server to ask (it logged a fetch error)
+        const j = await api('GET', '/api/media'); items = j.items || []; budget = j.budget || null; jobs = j.jobs || []; loadErr = '';
         const sig = JSON.stringify((j.models || []).map(m => m.id + (m.on ? 1 : 0)));
         if (full || sig !== catalogSig) { models = j.models || []; engines = j.engines || []; def = j.default || {}; catalogSig = sig; full = true; }
       } catch (e) { loadErr = e.message; }
@@ -363,10 +365,10 @@ export function initStudio(ctx) {
   }
 
   /* ---------- the lightbox ---------- */
-  function closeLight() { const L = $('.st-light'); if (L.hidden) return; L.hidden = true; L.innerHTML = ''; lightIdx = -1; if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
+  function closeLight() { const L = $('.st-light'); if (L.hidden) return; L.hidden = true; L.innerHTML = ''; lightIdx = -1; modal.close(L); if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
   function light(i) {
     const list = shown(); const it = list[i]; if (!it) return; if (lightIdx < 0) lightFrom = document.activeElement; lightIdx = i;
-    const L = $('.st-light'); L.hidden = false;
+    const L = $('.st-light'); L.hidden = false; modal.open(L);
     const setTxt = it.settings ? Object.entries(it.settings).map(([k, v]) => `${LBL[k] || k}: ${typeof v === 'boolean' ? (v ? 'sí' : 'no') : VAL[v] || v}`).join(' · ') : '';
     const used = it.media ? Object.entries(it.media).flatMap(([r, fs]) => fs.map(f => [r, f])) : [];
     L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
@@ -502,7 +504,7 @@ export function initStudio(ctx) {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.classList.contains('st-prompt')) { e.preventDefault(); $('.st-go').click(); }
   });
   let timer = null;
-  function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => $('.st-prompt').focus(), 60); }
-  function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => $('.st-prompt').focus(), 60); }
+  function close() { if (el.hidden) return; closeLight(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden };
 }

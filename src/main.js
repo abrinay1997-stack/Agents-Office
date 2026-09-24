@@ -3,6 +3,7 @@
 import { initSheet } from './agentsheet.js'; // the agent sheet: edit who an agent is from the office
 import { MODEL_KEYS as SHEET_MODELS, modelName as sheetModelName, EFFORT_KEYS as SHEET_EFFORTS } from './models.js';
 import { initStudio } from './studio.js'; // the Estudio: images and video, by hand and by the agents
+import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
@@ -392,7 +393,7 @@ const BB_ROWS = profileRows() || {
 };
 if (PROFILE && !BB_ROWS.brain) BB_ROWS.brain = [['NOTAS INDEXADAS', () => brainNotes.toLocaleString('es-PA')]];
 if (SERVED) { // a real office shows real counts, never the demo's invented metrics
-  const realCount = (k, state) => { try { return tasks ? tasks.tasks.filter(t => t.live && t.state === state && (AGENTS.find(a => a.id === t.agent) || {}).dept === k).length : 0; } catch { return 0; } };
+  const realCount = (k, state) => { try { return tasks ? tasks.tasks.filter(t => t.live && !t.piece && t.state === state && (AGENTS.find(a => a.id === t.agent) || {}).dept === k).length : 0; } catch { return 0; } }; // a team's pieces are not deliveries of their own
   for (const k of DEPT_KEYS) BB_ROWS[k] = [['ENTREGAS REALES', () => realCount(k, 'done')], ['ESPERAN TU OK', () => realCount(k, 'waiting')]];
 }
 // the Brain's icon: two hemispheres drawn in line, with synapses that fire in turn (and all at once when an agent reads a note)
@@ -412,7 +413,7 @@ for (const k of [...DEPT_KEYS, 'brain']) {
   if (k !== 'brain') { b.setAttribute('role', 'button'); b.tabIndex = 0; b.setAttribute('aria-label', `${dept.name}: abrir el departamento`); b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zoomToDept(k); } }); }
   b.addEventListener('click', (e) => {
     if (e.target.closest('.b-appr')) { zoomToApproval(k); e.stopPropagation(); }
-    else if (e.target.closest('.b-tasks') && tasks) { tasks.openFor(k); e.stopPropagation(); }
+    else if (e.target.closest('.b-tasks') && tasks) { tasks.showDept(k); e.stopPropagation(); }
     else zoomToDept(k);
   });
   if (k === 'brain') { // V4 (24 Sep 2026): the centre of the office — the Brain (an animated brain) and, beside it, Dimitri, the owner's right hand
@@ -557,6 +558,7 @@ addEventListener('keydown', (e) => {
   if (e.target.isContentEditable || ((e.ctrlKey || e.metaKey || e.altKey) && e.key !== 'Escape')) return; // Ctrl+C, Alt+… belong to the browser and to screen readers
   // Esc closes the window on top, one at a time, newest first; only with nothing open does it leave the department
   if (e.key === 'Escape') {
+    if (keysSheet.isOpen()) { keysSheet.close(); return; }
     const cp = document.getElementById('connPanel'); if (cp) { cp.querySelector('.cp-x').click(); return; }
     if (tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
     if (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) { agentSheet.close(); return; }
@@ -568,6 +570,8 @@ addEventListener('keydown', (e) => {
     zoomOut(); return;
   }
   // with a full-screen window open, the one-letter keys stay out (they used to open more windows invisibly behind it) — except that window's own key, which closes it
+  if (e.key === '?' || (e.key === '/' && e.shiftKey)) { keysSheet.toggle(); return; } // V4.1 (audit 27): every key, in one sheet
+  if (keysSheet.isOpen()) { if (e.key === 'd' || e.key === 'D') { setDark(!darkOn); keysSheet.sync(); } return; }
   const topWin = studio.isOpen() ? 'e' : subger.isOpen() ? 's' : brain.isOpen() ? 'g' : (tasks && tasks.detail && tasks.detail.isOpen()) ? '·' : (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) ? '·' : '';
   if (topWin && e.key.toLowerCase() !== topWin) return;
   if (e.key === 'p' || e.key === 'P') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
@@ -596,6 +600,42 @@ addEventListener('keydown', (e) => {
   else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
 
+/* ---------- V4.1 (24 Sep 2026, audit 27): the shortcuts sheet — «?» or the keyboard in the dock. B, D, 1–6 and the rest
+   used to exist only as keys nobody could discover. Each line is also a button that does it; dark mode is a switch. ---------- */
+const keysSheet = (() => {
+  const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
+  const G = [
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
+    ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
+    ['Calendario abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['W · M', 'Vista de semana o de mes']]],
+    ['Vista', [['D', 'Modo oscuro (se recuerda en este navegador)'], ['V', 'Modo cámara: fondo neutro para grabar la pantalla', 'v']]],
+  ];
+  if (!SERVED) G.push(['Solo en la demo', [['X', 'Dos agentes se reúnen en el Cerebro', 'x'], ['W', 'Una aprobación de ejemplo', 'w']]]);
+  const el = document.createElement('div'); el.id = 'keysOv'; el.hidden = true; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'keysT');
+  el.innerHTML = `<div class="ks-box"><div class="ks-head"><h2 id="keysT">Atajos de teclado</h2><span class="sp"></span>
+      <label class="ks-dark"><input type="checkbox" role="switch" class="ks-dk"> Modo oscuro <kbd>D</kbd></label>
+      <button type="button" class="ks-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div>
+    <p class="ks-lead">Funcionan cuando no estás escribiendo. Pulsa una línea para hacerlo ahora.</p>
+    <div class="ks-grid">${G.map(([h, rows]) => `<section><h3>${h}</h3>${rows.map(([k, t, key]) => key
+      ? `<button type="button" class="ks-row" data-key="${key}"><kbd>${k}</kbd><span>${t}</span></button>`
+      : `<div class="ks-row"><kbd>${k}</kbd><span>${t}</span></div>`).join('')}</section>`).join('')}</div></div>`;
+  document.body.appendChild(el);
+  let opener = null;
+  const sync = () => { el.querySelector('.ks-dk').checked = darkOn; };
+  function open() { if (!el.hidden) return; opener = document.activeElement; sync(); el.hidden = false; modal.open(el); document.getElementById('topKeys')?.setAttribute('aria-expanded', 'true'); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.ks-x').focus({ preventScroll: true }); }
+  function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); el.hidden = true; document.getElementById('topKeys')?.setAttribute('aria-expanded', 'false'); if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
+  el.addEventListener('click', e => {
+    if (e.target === el || e.target.closest('.ks-x')) return close();
+    const b = e.target.closest('.ks-row[data-key]'); if (!b) return;
+    close(); setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', { key: b.dataset.key })), 0); // the same path as the key itself, after this click has finished (a click-outside would close what it opens)
+  });
+  el.querySelector('.ks-dk').addEventListener('change', e => setDark(e.target.checked));
+  el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+  return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden, sync };
+})();
+document.getElementById('topKeys').addEventListener('click', () => keysSheet.toggle());
+
 // camera mode: mid-tone backdrop for filming the screen (#cam=1 / V toggles)
 function setCam(on) { document.body.classList.toggle('cam', !!on); }
 // DARK MODE (AJ, 6 Sep 2026: "make another one in dark mode as I will show both"): D toggles, #dark=1
@@ -604,8 +644,9 @@ function setCam(on) { document.body.classList.toggle('cam', !!on); }
 let darkOn = false;
 const DARK = { plinth: 0x2c2d2b, walkway: 0x303230, ground: 0x1b1c1a };
 function mix(hex, base, k) { const a = new THREE.Color(hex), b = new THREE.Color(base); return b.lerp(a, k); }
-function setDark(on) {
+function setDark(on, remember = true) {
   darkOn = !!on;
+  if (remember) try { localStorage.setItem('ao.dark', darkOn ? '1' : '0'); } catch {} // V4.1: remembered on this browser (audit 27)
   document.body.classList.toggle('dark', darkOn);
   restoreSceneDim(); for (const m of dimCache.values()) if (m && m.dispose) m.dispose(); dimCache.clear(); // the dim twins cache base colours — rebuild them for the new palette
   scene.traverse(o => {
@@ -854,14 +895,14 @@ function buildDeptRail(k) {
     ${tasks ? tasks.rowHTML(k) : ''}
     <div class="b-appr" style="display:${stuckIn(k).length ? 'flex' : 'none'}">⚠ <span class="ap-n">${stuckIn(k).length}</span> EN ESPERA DE APROBACIÓN</div>`;
   const trow = rh.querySelector('.b-tasks');
-  if (trow) trow.addEventListener('click', () => tasks.toggle());
+  if (trow) trow.addEventListener('click', () => tasks.showDept(k)); // the same as on the pod's card (audit 30)
   const tog = rh.querySelector('.rh-tog'); // the card folds to one line in the chat; the choice is remembered
   try { rh.classList.toggle('expanded', localStorage.getItem('ao.rhOpen') === '1'); } catch {}
   tog.setAttribute('aria-expanded', rh.classList.contains('expanded'));
   tog.addEventListener('click', e => { e.stopPropagation(); const on = rh.classList.toggle('expanded'); tog.setAttribute('aria-expanded', on); try { localStorage.setItem('ao.rhOpen', on ? '1' : '0'); } catch {} });
   rh.querySelector('.rh-x').addEventListener('click', e => { e.stopPropagation(); zoomOut(); }); // close the department: back to the whole office
   rh.querySelector('.b-appr').addEventListener('click', () => {
-    const s = stuckIn(k)[0];
+    const s = oldestFirst(stuckIn(k))[0];
     if (s) openAgentRail(s.a.id);
   });
   // V3.7 (AJ, 6 Sep): the agent-chip strip is gone — click an agent in the scene to talk to them
@@ -896,7 +937,7 @@ function flyBillboardIntoRail(k) {
   }, 740);
 }
 function openAgentRail(id, tab = 'chat', fly = true) {
-  if (agentSheet && agentSheet.isOpen() && agentSheet.current() !== id) agentSheet.close(); // another agent: back to its chat
+  if (agentSheet && agentSheet.isOpen() && agentSheet.current() !== id && !agentSheet.close()) return; // another agent: back to its chat — unless the owner stays to save the sheet
   const r = R[id];
   ensureChat(id);
   modalOpen = id;
@@ -1608,7 +1649,9 @@ resize();
   if (h.get('appr')) requestApproval(h.get('appr') === '1' ? 'apay' : h.get('appr'));
   if (h.get('view') && LAYOUT[h.get('view')]) enterFocus(h.get('view'));
   if (h.get('cam')) setCam(h.get('cam') === '1');
-  if (h.get('dark') === '1' || document.body.classList.contains('dark')) setDark(true);
+  let savedDark = null; try { savedDark = localStorage.getItem('ao.dark'); } catch {}
+  if (h.get('dark') === '1' || document.body.classList.contains('dark')) setDark(true, false);
+  else if (h.get('dark') !== '0' && savedDark === '1') setDark(true, false);
   // typing #dark=1 into an OPEN tab is a same-document hash change (no reload) — react to it live
   addEventListener('hashchange', () => { const d = new URLSearchParams(location.hash.slice(1)).get('dark'); if (d === '1') setDark(true); else if (d === '0') setDark(false); });
   if (h.get('board')) { // #board=1 → company board · #board=marketing → that dept's board

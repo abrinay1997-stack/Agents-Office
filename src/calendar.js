@@ -12,6 +12,7 @@
 //        createRoutine({ dept, text, when, needsOk, model }) → Promise<{ ok, routine, error }>
 //        cancelTask(t) · rtAct(id, act) · openAgent(id, tab) · esc · isLive() · officeModel() · MODEL_KEYS · modelName · business()
 import { occurrences, describe, untilText, fromPicker, toPicker, shortDate } from './when.js';
+import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']; // the week starts on Monday (AU/NZ/UK)
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -146,7 +147,8 @@ export function initCalendar(ctx) {
     if (y + H > innerHeight - 12) y = Math.max(12, innerHeight - H - 12);
     el.style.left = x + 'px'; el.style.top = y + 'px';
   }
-  function closePop() { E.pop.hidden = true; E.pop.innerHTML = ''; popKind = null; ov.querySelectorAll('.cv-day.sel').forEach(n => n.classList.remove('sel')); }
+  let createDraft = ''; // V4.1 (audit 26): what was typed in «Programar para» survives a click outside and comes back on the next day clicked
+  function closePop() { if (popKind === 'create') { const tx = E.pop.querySelector('.cv-text'); if (tx) createDraft = tx.value; } E.pop.hidden = true; E.pop.innerHTML = ''; popKind = null; ov.querySelectorAll('.cv-day.sel').forEach(n => n.classList.remove('sel')); }
   function openCreate(dayKey, cell) {
     closePop(); popKind = 'create'; cell.classList.add('sel');
     if (currentDept && DEPT_KEYS.includes(currentDept())) lastDept = currentDept(); // the popover opens on the bar's department
@@ -154,7 +156,7 @@ export function initCalendar(ctx) {
     E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">PROGRAMAR PARA</span><b>${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()]}</b><span class="sp"></span><button class="cv-x" data-act="close">✕</button></div>
       ${past ? '<div class="cv-note">Ese día ya pasó — elige hoy o un día posterior.</div>' : ''}
       <div class="cv-row"><select class="cv-dept">${DEPT_KEYS.map(k => `<option value="${k}"${k === lastDept ? ' selected' : ''}>${DEPTS[k].name}</option>`).join('')}</select><input type="time" class="cv-time" value="${dayKey === ymd(new Date()) ? pad(Math.min(23, new Date().getHours() + 1)) + ':00' : '09:00'}"><select class="cv-model" title="which model runs it"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}">${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>
-      <textarea class="cv-text" rows="3" placeholder="¿Qué debe pasar ese día?"></textarea>
+      <textarea class="cv-text" rows="3" placeholder="¿Qué debe pasar ese día?" aria-label="Qué debe pasar ese día">${esc(createDraft)}</textarea>${createDraft.trim() ? '<div class="cv-note">Recuperé lo que estabas escribiendo. <button type="button" class="cv-lnk" data-act="forget">Borrarlo</button></div>' : ''}
       <div class="cv-row"><button class="cv-rep" data-act="rep">REPETIR</button><select class="cv-cad" hidden>${CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><label class="cv-ok" hidden><input type="checkbox" class="cv-okc" checked> necesita mi visto bueno</label><span class="sp"></span><button class="cv-go" data-act="go"${past ? ' disabled' : ''}>AGREGAR</button></div>
       <div class="cv-hint">${past ? '' : 'Una tarea para este día — se ejecuta a esa hora y aparece en el panel. REPETIR la convierte en rutina desde esta fecha.'}</div>`;
     E.pop.hidden = false; place(E.pop, cell);
@@ -170,7 +172,8 @@ export function initCalendar(ctx) {
     [P.dept, P.time, P.cad, P.model].forEach(el => { el.addEventListener('change', hint); el.addEventListener('keydown', e => e.stopPropagation()); });
     P.text.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } else if (e.key === 'Escape') closePop(); });
     P.go.addEventListener('click', go);
-    hint(); P.text.focus();
+    E.pop.querySelector('[data-act="forget"]')?.addEventListener('click', e => { createDraft = ''; P.text.value = ''; e.currentTarget.parentElement.remove(); P.text.focus(); });
+    hint(); P.text.focus(); P.text.setSelectionRange(P.text.value.length, P.text.value.length);
     async function go() {
       const text = P.text.value.trim().replace(/[.!]+$/, ''); if (!text) { P.text.focus(); return; }
       const k = P.dept.value, model = P.model.value || undefined;
@@ -179,7 +182,7 @@ export function initCalendar(ctx) {
       if (repeat) r = await createRoutine({ dept: k, text, when: fromPicker(P.cad.value, P.time.value, dayKey), needsOk: P.okc.checked, model });
       else r = await create({ dept: k, text, at: new Date(`${dayKey}T${P.time.value || '09:00'}:00`).getTime(), model });
       if (!r || !r.ok) { P.hint.innerHTML = `<span class="amber">${esc((r && r.error) || 'No se pudo agregar.')}</span>`; P.go.disabled = false; return; }
-      closePop(); render();
+      P.text.value = ''; createDraft = ''; closePop(); render();
       const el = E.grid.querySelector(`.cv-ev[data-ev="${repeat ? 'r:' + r.routine.id + ':' : 't:' + r.task.id}"], .cv-ev[data-ev^="${repeat ? 'r:' + r.routine.id + ':' : 't:' + r.task.id}"]`);
       if (el) { el.classList.add('new'); el.scrollIntoView({ block: 'nearest' }); }
     }
@@ -373,9 +376,16 @@ export function initCalendar(ctx) {
   let timer = null;
   let calOpener = null;
   ov.inert = true; // closed: out of Tab's reach
-  function open() { if (openNow) return; openNow = true; calOpener = document.activeElement; ov.inert = false; E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging) render(); }, 30000); }
-  function close() { if (!openNow) return; openNow = false; closePop(); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from
+  function open() { if (openNow) return; openNow = true; calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging) render(); }, 30000); }
+  function close() { if (!openNow) return; openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from
   function toggle() { openNow ? close() : open(); }
   function openAt(ts) { anchor = startOfDay(ts || Date.now()); if (view === 'month' && ts) view = 'week'; if (openNow) { closePop(); render(); } else open(); setTimeout(() => { const el = E.grid.querySelector(`.cv-day[data-day="${ymd(new Date(anchor))}"]`); if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); } }, 60); }
-  return { open, openAt, close, toggle, isOpen: () => openNow, refresh: () => { if (openNow && E.pop.hidden && !dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
+  function openRoutine(rid) { // V4.1 (audit 29): a routine clicked on the board opens here, on its next run, with its editor
+    const r = routines.find(x => x.id === rid); if (!r) return false;
+    if (!r.nextAt || r.paused) { onlyRoutine = rid; showRoutines = true; if (openNow) render(); else open(); return true; } // paused: the calendar shows only it
+    openAt(r.nextAt);
+    setTimeout(() => { const el = E.grid.querySelector(`.cv-ev[data-ev^="r:${CSS.escape(rid)}:"]`); if (el) { el.scrollIntoView({ block: 'nearest' }); openEvent(el.dataset.ev, el); } }, 80);
+    return true;
+  }
+  return { open, openAt, openRoutine, close, toggle, isOpen: () => openNow, refresh: () => { if (openNow && E.pop.hidden && !dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
 }

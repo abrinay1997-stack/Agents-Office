@@ -27,6 +27,7 @@ import { parseWhen, parseOnce, describe, nextRun, fromPicker, untilText } from '
 import { initCalendar } from './calendar.js';
 import { initDetail } from './detail.js'; // the task detail drawer: every action on a task, from the list, the board and the calendar // V3.2.1 (16 Sep 2026): the calendar on P
 import { MODEL_KEYS, MODELS, DEFAULT_MODEL, modelName, normModel, FROM_TEXT , EFFORT_KEYS, EFFORT_NAME, normEffort, effortName, effortFor } from './models.js';
+import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 
 const SEGMENTS = ['roofing', 'HVAC', 'dental', 'logistics', 'fitness', 'property', 'landscaping', 'legal'];
 
@@ -270,16 +271,21 @@ export function initTasks(ctx) {
   }
 
   /* ---------- badge rows (far-zoom layer): DOING · NEXT · DONE per pod ---------- */
+  // V4.1 (audit 43): the live office counts LISTO from the real list, the same way the card's ENTREGAS REALES does (the demo keeps its running count)
+  const doneIn = k => live ? tasks.filter(t => t.dept === k && t.state === 'done' && t.live && !t.piece).length : doneCount[k];
   function rowHTML(k) {
-    return `<div class="b-tasks" data-tkrow="${k}" title="mostrar ${DEPTS[k].short} en el panel de tareas">
+    return `<div class="b-tasks" data-tkrow="${k}" title="Ver ${DEPTS[k].short} en el panel de tareas">
       <span>EN CURSO<b data-tk="${k}-doing">${deptTasks(k, 'doing').length}</b></span>
       <span>PRÓXIMO<b data-tk="${k}-next">${deptTasks(k, 'next').length}</b></span>
-      <span>LISTO<b data-tk="${k}-done">${doneCount[k]}</b></span></div>`;
+      <span>LISTO<b data-tk="${k}-done">${doneIn(k)}</b></span></div>`;
   }
+  // V4.1 (audit 30): the row does ONE thing wherever it is — the card on the pod or the docked copy in the chat — it shows
+  // that department in the task panel (the panel opens if it was folded). The docked copy used to open the company board.
+  function showDept(k) { if (getFocused() !== k) enterFocus(k); setPanelMin(false); filter = 'all'; limit = PAGE; render(true); P_.rows.scrollTop = 0; panel.classList.remove('tp-flash'); void panel.offsetWidth; panel.classList.add('tp-flash'); }
   for (const k of DEPT_KEYS) deptRT[k].apprRow.insertAdjacentHTML('beforebegin', rowHTML(k));
   function syncBadges() {
     for (const k of DEPT_KEYS) {
-      const vals = { doing: deptTasks(k, 'doing').length, next: deptTasks(k, 'next').length, done: doneCount[k] };
+      const vals = { doing: deptTasks(k, 'doing').length, next: deptTasks(k, 'next').length, done: doneIn(k) };
       for (const [s, n] of Object.entries(vals)) {
         document.querySelectorAll(`[data-tk="${k}-${s}"]`).forEach(b => {
           if (b.textContent !== String(n)) {
@@ -309,10 +315,10 @@ export function initTasks(ctx) {
     head.appendChild(min);
     const tab = document.createElement('button'); tab.type = 'button'; tab.id = 'tpTab'; tab.title = 'Abrir el panel de tareas (T)'; document.body.appendChild(tab);
     P_.tab = tab;
-    const setMin = on => { document.body.classList.toggle('tpMin', on); try { localStorage.setItem('ao.tpMin', on ? '1' : '0'); } catch {} if (reframe) reframe(); };
+    const setMin = on => { document.body.classList.toggle('tpMin', on); panel.inert = on; /* folded: its controls leave Tab's reach (audit 23) */ try { localStorage.setItem('ao.tpMin', on ? '1' : '0'); } catch {} if (reframe) reframe(); };
     setPanelMin = setMin;
     min.addEventListener('click', () => setMin(true)); tab.addEventListener('click', () => setMin(false));
-    try { if (localStorage.getItem('ao.tpMin') === '1') document.body.classList.add('tpMin'); } catch {}
+    try { if (localStorage.getItem('ao.tpMin') === '1') { document.body.classList.add('tpMin'); panel.inert = true; } } catch {}
   }
   { // the list's own tools: a search box and «Limpiar listas»
     const bar = document.createElement('div'); bar.className = 'tp-tools';
@@ -334,8 +340,8 @@ export function initTasks(ctx) {
   const big = document.getElementById('tpBig');
   const B_ = { in: big.querySelector('.tb-in'), dept: big.querySelector('.tb-dept'), dot: big.querySelector('.tb-head .dot'), hint: big.querySelector('.tb-hint'), add: big.querySelector('.tb-add'), close: big.querySelector('.tb-close') };
   function grow() { P_.input.style.height = '30px'; if (!P_.input.value) return; P_.input.style.height = Math.min(118, Math.max(30, P_.input.scrollHeight)) + 'px'; } // empty: one line, even if the placeholder wraps
-  function openBig() { B_.in.value = P_.input.value; B_.in.placeholder = P_.input.placeholder; big.classList.add('on'); mirrorHint(); B_.in.focus(); B_.in.setSelectionRange(B_.in.value.length, B_.in.value.length); }
-  function closeBig() { if (!big.classList.contains('on')) return; big.classList.remove('on'); grow(); if (P_.input.value) P_.input.focus(); }
+  function openBig() { B_.in.value = P_.input.value; B_.in.placeholder = P_.input.placeholder; big.classList.add('on'); modal.open(big); mirrorHint(); B_.in.focus(); B_.in.setSelectionRange(B_.in.value.length, B_.in.value.length); }
+  function closeBig() { if (!big.classList.contains('on')) return; big.classList.remove('on'); modal.close(big); grow(); if (P_.input.value) P_.input.focus(); }
   function mirrorHint() { B_.hint.innerHTML = P_.hint.innerHTML; B_.hint.className = P_.hint.className.replace('tp-hint', 'tp-hint tb-hint'); }
   // V3.6 (D2): the model menu — Sonnet · Opus · Fable. Shows the office default; change it and it applies to this task (or this routine, with REPEAT on)
   let officeModel = DEFAULT_MODEL, modelTouched = false;
@@ -861,10 +867,20 @@ export function initTasks(ctx) {
       requestAnimationFrame(() => requestAnimationFrame(() => { n.style.transition = 'transform .65s var(--ease)'; n.style.transform = ''; }));
     });
   }
+  let lastChips = '', lastRows = '';
+  function setChips() { // the chips stay the same elements while only their counts or the filter change: a chip replaced between press and release lost the click
+    const h = chipsHTML(); if (h === lastChips) return;
+    const tmp = document.createElement('div'); tmp.innerHTML = h;
+    const want = [...tmp.children], have = [...P_.chips.children];
+    if (want.length === have.length && want.every((w, i) => w.dataset.f === have[i].dataset.f)) {
+      want.forEach((w, i) => { const c = have[i]; if (c.className !== w.className) c.className = w.className; c.setAttribute('aria-pressed', w.getAttribute('aria-pressed')); const n = w.querySelector('b').textContent, b = c.querySelector('b'); if (b.textContent !== n) b.textContent = n; });
+    } else P_.chips.innerHTML = h;
+    lastChips = h;
+  }
   function render(structural) {
     const f = getFocused();
     P_.scope.textContent = (f && f !== 'brain') ? DEPTS[f].name : 'TODA LA OFICINA';
-    P_.chips.innerHTML = chipsHTML();
+    setChips();
     if (P_.tab) { const all = tasks.filter(t => !t.piece), c = st => all.filter(t => t.state === st).length; P_.tab.innerHTML = `<span class="tt-l">TAREAS</span>${c('doing') ? `<b class="tt-doing">${c('doing')}</b>` : ''}${c('waiting') ? `<b class="tt-wait">${c('waiting')}</b>` : ''}${c('next') ? `<b>${c('next')}</b>` : ''}`; P_.tab.title = `${c('doing')} en curso · ${c('waiting')} esperan tu OK · ${c('next')} pendientes — clic para abrir`; }
     if (P_.tools) { const nd = scoped().filter(t => t.state === 'done').length; P_.clear.hidden = !nd; P_.clear.textContent = `Limpiar listas (${nd})`; }
     const all = filter === 'archived' ? [] : scoped().filter(t => filter === 'all' || (filter === 'error' ? t.state === 'done' && t.error : t.state === filter))
@@ -873,12 +889,14 @@ export function initTasks(ctx) {
     const more = all.length > list.length ? `<button type="button" class="tp-more" data-more="1">Se ven ${list.length} de ${all.length}. Mostrar ${Math.min(PAGE, all.length - list.length)} más</button>` : '';
     const before = structural ? {} : rects();
     const fid = P_.rows.contains(document.activeElement) ? document.activeElement.closest('.tp-row')?.dataset.id : null;
-    P_.rows.innerHTML = filter === 'sched'
+    const html = filter === 'sched'
       ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || (query ? emptyHTML() : `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — «cada día hábil a las 8, …» — o presiona REPETIR. Presiona <b>P</b> para el calendario.</div>`))
       : filter === 'archived' ? (scopedArchived().slice(0, limit).map(rowHTMLx).join('') + (scopedArchived().length > limit ? `<button type="button" class="tp-more" data-more="1">Se ven ${limit} de ${scopedArchived().length}. Mostrar más</button>` : '') || emptyHTML())
       : (list.map(rowHTMLp).join('') + more || emptyHTML());
     listStale = false; forceList = false;
     renderNext();
+    if (!structural && html === lastRows) return; // nothing in the list changed: the rows stay the same elements (a click on a row that was being replaced got lost)
+    P_.rows.innerHTML = lastRows = html;
     P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
     P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.tabIndex = 0; n.setAttribute('role', 'button'); n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); }); // every row opens its detail
     if (!structural) flip(before);
@@ -913,8 +931,8 @@ export function initTasks(ctx) {
   render(true);
 
   /* ---------- the company board (B) ---------- */
-  const el = document.createElement('div'); el.id = 'board'; document.body.appendChild(el);
-  const dim = document.createElement('div'); dim.id = 'boardDim'; document.body.appendChild(dim);
+  const el = document.createElement('div'); el.id = 'board'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Tablero de la empresa'); el.inert = true; document.body.appendChild(el); // closed: inert (audit 23)
+  const dim = document.createElement('div'); dim.id = 'boardDim'; dim.setAttribute('data-modal-keep', ''); document.body.appendChild(dim);
   dim.addEventListener('click', close);
   function cardHTML(t) {
     const a = agentOf(t.agent), chip = DEPTS[t.dept].chip;
@@ -940,7 +958,7 @@ export function initTasks(ctx) {
   };
   function cardHTMLr(r) { // C1: a SCHEDULED card on the company board
     const a = agentOf(r.agent), chip = DEPTS[r.dept].chip;
-    return `<div class="tk sched${r.paused ? ' paused' : ''}" data-rid="${r.id}" data-dept="${r.dept}"><div class="tk-t">⏱ ${esc(r.title)}</div>
+    return `<div class="tk sched${r.paused ? ' paused' : ''}" data-rid="${r.id}" data-dept="${r.dept}" role="button" tabindex="0" aria-label="Rutina: ${esc(r.title)} — abrirla en el calendario"><div class="tk-t">⏱ ${esc(r.title)}</div>
       <div class="tk-m"><span class="tk-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span><span>${a.name} · ${modelName(r.model || officeModel).toUpperCase()}</span><span class="tk-pct">${r.paused ? 'PAUSADA' : esc(untilText(r.nextAt).toUpperCase())}</span></div></div>`;
   }
   const COLS = [['sched', 'PROGRAMADAS'], ['next', 'PENDIENTES'], ['doing', 'EN CURSO'], ['waiting', 'EN ESPERA DE APROBACIÓN'], ['done', 'LISTAS']];
@@ -965,14 +983,14 @@ export function initTasks(ctx) {
   function renderBoard() {
     if (!board.open || boardDrag) return; // nothing re-renders under a card being dragged
     el.innerHTML = companyHTML();
-    el.querySelectorAll('.tk.sched[data-rid]').forEach(n => n.addEventListener('click', () => { close(); filter = 'sched'; openFor(n.dataset.dept); render(true); }));
+    el.querySelectorAll('.tk.sched[data-rid]').forEach(n => n.addEventListener('click', () => { close(); if (calendar) calendar.openRoutine(n.dataset.rid); })); // V4.1 (audit 29): the routine itself opens, in the calendar — it used to flip the filter and fly the camera
   }
   // one listener for the whole board: a card opens its detail · «+N más» opens the lane · drag moves state or department
   el.addEventListener('click', e => {
     const more = e.target.closest('.more[data-lane]'); if (more) { const k = more.dataset.lane; expanded.has(k) ? expanded.delete(k) : expanded.add(k); renderBoard(); return; }
     const card = e.target.closest('.tk[data-id]'); if (card) openTask(tasks.find(t => String(t.id) === card.dataset.id));
   });
-  el.addEventListener('keydown', e => { const c = e.target.closest('.tk[data-id]'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); c.click(); } });
+  el.addEventListener('keydown', e => { const c = e.target.closest('.tk[data-id], .tk[data-rid]'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); c.click(); } });
   el.addEventListener('dragstart', e => {
     const card = e.target.closest('.tk[draggable="true"]'); if (!card) return;
     boardDrag = tasks.find(t => String(t.id) === card.dataset.id); if (!boardDrag) return;
@@ -1012,12 +1030,13 @@ export function initTasks(ctx) {
     if (!r || !r.ok) alert('No se pudo: ' + ((r && r.error) || 'error'));
   });
   function open() {
-    board.open = true;
+    board.open = true; boardOpener = document.activeElement; el.inert = false; modal.open(el); el.tabIndex = -1;
     el.className = 'company';
     renderBoard();
-    requestAnimationFrame(() => requestAnimationFrame(() => { if (!board.open) return; el.classList.add('on'); dim.classList.add('on'); })); // a close before this frame must win, or the board sits open with nothing to close it
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!board.open) return; el.classList.add('on'); dim.classList.add('on'); el.focus({ preventScroll: true }); })); // a close before this frame must win, or the board sits open with nothing to close it
   }
-  function close() { if (!board.open) return; board.open = false; el.classList.remove('on'); dim.classList.remove('on'); }
+  let boardOpener = null;
+  function close() { if (!board.open) return; board.open = false; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.inert = true; el.classList.remove('on'); dim.classList.remove('on'); if (boardOpener && document.contains(boardOpener) && boardOpener.focus) boardOpener.focus({ preventScroll: true }); }
   function toggle() { board.open ? close() : open(); }
   const isOpen = () => board.open;
   const boardWidth = () => 0; // the dept-side board is retired — the panel is the department view
@@ -1121,7 +1140,7 @@ export function initTasks(ctx) {
       }
     }
     if (now - lastBadge > 400) { syncBadges(); lastBadge = now; }
-    if (dirty) { renderBoard(); dirty = false; if (holdList()) { listStale = true; P_.chips.innerHTML = chipsHTML(); } else render(false); }
+    if (dirty) { renderBoard(); dirty = false; if (holdList()) { listStale = true; setChips(); } else render(false); }
     else if (listStale && !holdList()) render(false);
     else {
       if (now - lastBar > 250) { refreshBars(); lastBar = now; }
@@ -1309,7 +1328,7 @@ export function initTasks(ctx) {
     dirty = true; if (calendar) calendar.refresh();
     return ok;
   }
-  const toast = document.createElement('div'); toast.className = 'tp-toast'; toast.hidden = true; toast.setAttribute('role', 'status'); document.body.appendChild(toast);
+  const toast = document.createElement('div'); toast.className = 'tp-toast'; toast.hidden = true; toast.setAttribute('role', 'status'); toast.setAttribute('data-modal-keep', ''); document.body.appendChild(toast);
   let pendingUndo = null, toastTimer = 0;
   function offerUndo(html, { undo, commit }) { // one toast at a time: a new one commits the previous action
     if (pendingUndo) finishUndo(true);
@@ -1339,6 +1358,6 @@ export function initTasks(ctx) {
   const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
   return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
            findBySid: sid => tasks.find(t => t.live && t.sid === sid),
-           handleChat, addTask, revise, rowHTML, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
+           handleChat, addTask, revise, rowHTML, showDept, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
            routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, rejectLive, waitingFor, officeModel: () => officeModel, chosenModel, chosenEffort };
 }

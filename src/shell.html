@@ -968,6 +968,7 @@
   .cv-hint { font-size: 10.5px; line-height: 1.4; color: var(--grey); min-height: 14px; }
   .cv-hint .amber, .cv-note { color: #8A6414; font-weight: 600; }
   .cv-note { font-size: 11px; }
+  .cv-lnk { background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; margin-left: 4px; font: inherit; color: inherit; cursor: pointer; }
   body.dark #calOv { --cv-line: rgba(236,234,227,.1); --cv-card: #1E1F24; --cv-soft: rgba(236,234,227,.045); }
   body.dark .cv-band { background: #0F1013; }
   body.dark .cv-r.on { background: #FDFFF8; color: #151414; } body.dark .cv-r.on .cv-r-m, body.dark .cv-r.on .cv-r-n { color: rgba(21,20,20,.65); }
@@ -1177,6 +1178,9 @@
   body.dark .tp-search { background: #1E1F24; }
   /* V4.1: ARCHIVADAS, «show more», the empty text's way out, and the DESHACER toast */
   .tp-chip.x { border-style: dashed; }
+  #tpanel.tp-flash { animation: tpFlash 1.2s var(--ease); }
+  @keyframes tpFlash { 30% { box-shadow: 0 0 0 3px rgba(255,81,0,.35), 0 18px 40px rgba(21,20,20,.12); } }
+  .b-tasks { cursor: pointer; }
   .tp-chip.flash { animation: chipFlash 1.4s var(--ease) 2; }
   @keyframes chipFlash { 50% { background: rgba(255,81,0,.14); border-color: #FF5100; } }
   .tp-st.arch { border-style: dotted; color: var(--grey); }
@@ -1511,6 +1515,25 @@
   .tb-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .tb-ic:hover, body.studioOpen #topStudio, body.calOpen #topCal { background: var(--ink); color: var(--cream); border-color: var(--ink); }
   .tb-ic:focus-visible { outline: 2px solid #FF5100; outline-offset: 2px; }
+  /* V4.1: the shortcuts sheet (?) */
+  #keysOv { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px; background: rgba(21,20,20,.28); opacity: 0; transition: opacity .2s var(--ease); }
+  #keysOv.on { opacity: 1; } #keysOv[hidden] { display: none; }
+  #keysOv .ks-box { width: min(760px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 18px; padding: 18px 20px 20px; box-shadow: 0 24px 60px rgba(21,20,20,.25); }
+  #keysOv .ks-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #keysOv h2 { font-family: var(--serif); font-weight: 400; font-size: 24px; margin: 0; }
+  #keysOv .sp { flex: 1; }
+  #keysOv .ks-x { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; font-size: 14px; }
+  #keysOv .ks-dark { display: inline-flex; align-items: center; gap: 7px; font: 600 12px var(--ui); cursor: pointer; }
+  #keysOv .ks-dark input { width: 16px; height: 16px; accent-color: #FF5100; }
+  #keysOv .ks-lead { font-size: 12.5px; color: var(--grey); margin: 6px 0 12px; }
+  #keysOv .ks-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 22px; }
+  #keysOv h3 { font: 700 10.5px var(--ui); letter-spacing: .16em; text-transform: uppercase; color: var(--grey); margin: 0 0 6px; }
+  #keysOv .ks-row { display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left; padding: 6px 8px; margin: 0 -8px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: 13px/1.35 var(--ui); }
+  #keysOv button.ks-row { cursor: pointer; } #keysOv button.ks-row:hover { background: rgba(21,20,20,.05); }
+  #keysOv kbd { flex: none; min-width: 34px; text-align: center; font: 600 11px var(--ui); padding: 3px 7px; border: 1px solid var(--hairline); border-bottom-width: 2px; border-radius: 6px; background: #fff; color: var(--ink); }
+  #keysOv button:focus-visible, #keysOv input:focus-visible { outline: 2px solid #FF5100; outline-offset: 2px; }
+  body.dark #keysOv .ks-box { background: #17181C; } body.dark #keysOv kbd { background: #1E1F24; } body.dark #keysOv button.ks-row:hover { background: rgba(236,234,227,.06); }
+  @media (prefers-reduced-motion: reduce) { #keysOv { transition: none; } }
   #topPanel .tb-fill { fill: currentColor; stroke: none; opacity: 0; transition: opacity .2s var(--ease); }
   #topPanel.on .tb-fill { opacity: .4; }
   #topAppr { margin-right: 2px; white-space: nowrap; }
@@ -1683,6 +1706,7 @@
     <button id="topAppr" type="button" style="display:none" title="Esperan tu visto bueno" aria-label="Esperan tu visto bueno">⚠ <span>0</span></button>
     <button id="topStudio" class="tb-ic" type="button" aria-label="Estudio: imágenes y video" title="Estudio — imágenes y video (E)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></button>
     <button id="topCal" class="tb-ic" type="button" aria-label="Calendario" title="Calendario — tareas y rutinas en sus días (P)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg></button>
+    <button id="topKeys" class="tb-ic" type="button" aria-label="Atajos de teclado" aria-haspopup="dialog" aria-expanded="false" title="Atajos de teclado (?)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M7.5 14h9"/></svg></button>
     <button id="topPanel" class="tb-ic" type="button" aria-label="Mostrar u ocultar el panel de tareas" aria-pressed="true" title="Panel de tareas (T)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><path d="M15 3.5v17"/><path class="tb-fill" d="M15.5 4h3.5a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-3.5Z"/></svg></button>
   </div>
 </div>
