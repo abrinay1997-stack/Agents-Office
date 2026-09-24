@@ -5,7 +5,9 @@
 A 3D isometric office where AI agents do real work on your own Claude login.
 
 Six departments, thirty-five agents at their desks, a task bar that routes what you type to the
-right agent, and a Brain at the centre that is your own folder of notes. Type a task, the office
+right agent, and a Brain at the centre that is your own folder of notes. 
+
+Type a task, the office
 gives it to the right person, they read your notes, use the connectors you have already set up
 in Claude Code, do the work, and file the result back into your notes. Everything runs on your
 machine.
