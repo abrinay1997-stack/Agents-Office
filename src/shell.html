@@ -1931,14 +1931,25 @@
   .st-hhead { display: flex; align-items: center; } .st-hhead h2 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0; }
   .st-hx { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--hairline); background: none; color: var(--ink); display: grid; place-items: center; cursor: pointer; }
   .st-hsub { font-size: 12.5px; color: var(--grey); margin: 6px 0 12px; }
+  /* V4.4 (25 Sep 2026): the Estudio's bin */
+  .st-binall { margin-right: 8px; font: 600 12.5px var(--ui); min-height: 32px; padding: 6px 12px; border-radius: 99px; border: 1px solid #B3261E; background: none; color: #B3261E; cursor: pointer; } body.dark .st-binall { color: #FF8A7A; border-color: #FF8A7A; }
+  .st-bmsg { font-size: 13px; color: #13705A; min-height: 18px; margin: 0 0 6px; } body.dark .st-bmsg { color: #5FD3A8; }
+  .st-blist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .st-blist li { display: grid; grid-template-columns: 84px 1fr; gap: 12px; padding: 8px; border: 1px solid var(--hairline); border-radius: 12px; }
+  .st-bthumb { width: 84px; height: 84px; border-radius: 8px; overflow: hidden; background: #151414; display: block; } .st-bthumb img, .st-bthumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .st-binfo { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 13px; } .st-bp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .st-bacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .st-bacts button { font: 600 12.5px var(--ui); min-height: 32px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+  .st-bacts button:hover { border-color: var(--ink); } .st-bacts .warn { color: #B3261E; } body.dark .st-bacts .warn { color: #FF8A7A; }
+  .st-binov button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .st-hlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .st-hlist li { display: grid; grid-template-columns: 92px 1fr; gap: 2px 10px; padding: 9px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 13px; }
   .st-hlist li > b { grid-row: span 3; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
   .st-hlist li.done > b { color: #13705A; } .st-hlist li.failed > b { color: #B3261E; } .st-hlist li.cancel > b { color: var(--grey); }
   body.dark .st-hlist li.done > b { color: #5FD3A8; } body.dark .st-hlist li.failed > b, body.dark .st-hr { color: #FF8A7A; }
   .st-hm { font-size: 11.5px; color: var(--grey); } .st-hr { font-size: 12px; color: #B3261E; }
-  .st-histbtn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--ui); font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
-  .st-histbtn:hover { border-color: var(--ink); }
+  .st-histbtn, .st-binbtn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--ui); font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+  .st-histbtn:hover, .st-binbtn:hover { border-color: var(--ink); }
   /* A43: the budget's numbers are always there — short on a narrow screen */
   .st-bshort { display: none; } @media (max-width: 900px) { .st-budget .st-bshort { display: inline !important; } .st-blong { display: none; } }
   /* A45: the composer folds to a strip */
@@ -2019,6 +2030,22 @@
   .st-card.menu-on .st-ov { opacity: 1; transform: none; }
   .st-ov .st-op { width: auto; padding: 0 12px 0 9px; gap: 6px; display: inline-flex; align-items: center; font-family: var(--ui); font-size: 12.5px; font-weight: 600; }
   .st-ov .st-op .ic { width: 16px; height: 16px; }
+  /* V4.4 (25 Sep 2026): nothing over the picture — the card's actions sit in a row under its caption, on the card's own
+     background, always visible (a light image used to swallow the floating buttons); the tick is solid on any picture */
+  .st-card .st-ov { position: static; opacity: 1; transform: none; display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 0 10px 10px; transition: none; }
+  .st-card .st-ov button, .st-card .st-ov a { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline); background: none; color: var(--ink); box-shadow: none; }
+  .st-card .st-ov .st-op { width: auto; padding: 0 12px 0 9px; margin-right: auto; }
+  .st-card .st-ov .st-more { margin-left: auto; }
+  .st-card .st-ov .st-op + .st-more { margin-left: 0; }
+  .st-card .st-ov button:hover, .st-card .st-ov a:hover { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+  .st-card .st-ov button.on { color: #8A6A00; border-color: #C8A438; } body.dark .st-card .st-ov button.on { color: #F2C94C; }
+  .st-card .st-ov button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .st-card figcaption { padding-bottom: 8px; }
+  .st-ck { background: #fff; border: 2px solid #151414; box-shadow: 0 1px 6px rgba(0,0,0,.45); }
+  .st-ck input { accent-color: #151414; }
+  @media (hover: none) { .st-ck { opacity: 1; } }
+  .st-lbox .st-lmedia img, .st-lbox .st-lmedia video { box-shadow: 0 0 0 1px var(--hairline); } /* a white picture keeps its edge on the cream box */
+  @media (max-width: 1100px) { .st-lbox { padding-top: 58px; } .st-lx { top: 12px; right: 12px; } .st-lbox .st-lmedia img, .st-lbox .st-lmedia video { max-height: max(38vh, calc(92vh - 330px)); } } /* stacked: the ✕ gets its own strip above the picture, and the actions fit under it */
   .st-menu { position: fixed; z-index: 70; min-width: 210px; padding: 6px; border-radius: 12px; background: var(--cream); border: 1px solid var(--hairline); box-shadow: 0 16px 40px rgba(21,20,20,.22); display: flex; flex-direction: column; }
   .st-menu[hidden] { display: none; }
   .st-menu [role="menuitem"] { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font-family: var(--ui); font-size: 13px; text-align: left; cursor: pointer; text-decoration: none; }
@@ -2026,12 +2053,8 @@
   .st-menu .warn { color: #B3261E; } body.dark .st-menu .warn { color: #FF8A7A; }
   .st-menu .ic { width: 17px; height: 17px; } .st-menu .ic.fill { color: #C8A438; }
   .st-msep { height: 1px; background: var(--hairline); margin: 5px 4px; }
-  @media (hover: hover) { .st-menu .st-mi-t { display: none; } }
-  @media (hover: none) { /* a finger: only «⋯», always there, small, out of the picture's way */
-    .st-ov .st-oi:not(.st-more), .st-ov .st-op { display: none; }
-    .st-ov { opacity: 1; transform: none; }
-    .st-ov .st-more { width: 34px; height: 34px; }
-  }
+  .st-menu .st-mi-t { display: none; } /* the star and the main action are in the card's own row */
+
   @media (max-width: 760px) {
     .st-ptabs { display: flex; gap: 4px; padding: 6px 12px; border-bottom: 1px solid var(--hairline); flex: none; }
     .st-ptabs button { flex: 1; font-family: var(--ui); font-size: 13px; font-weight: 600; padding: 9px 10px; border-radius: 99px; border: 0; background: none; color: var(--grey); cursor: pointer; }

@@ -31,3 +31,23 @@ test('a picture restored from the bin comes back to its own name, beside the one
   assert.equal(media.restore(bin), true);
   assert.ok(media.resolve(a.id) && media.resolve(b.id));
 });
+
+test('the bin: listed with its days left, back to the gallery, or gone for good; the 30 days count from the day it went in', () => {
+  const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-media-bin-'));
+  media.configure({}, brain, path.join(brain, 'data'));
+  const a = up(), b = up();
+  const binA = media.trash(a.id), binB = media.trash(b.id);
+  const list = media.trashList();
+  assert.equal(list.length, 2);
+  assert.equal(list[0].daysLeft, 30);
+  assert.deepEqual(new Set(list.map(x => x.id)), new Set([a.id, b.id]));
+  const stat = fs.statSync(path.join(media.dir(), '.papelera', binA.bin[0]));
+  assert.ok(Date.now() - stat.mtimeMs < 60e3, 'dated the day it went in, not the day it was made');
+  assert.ok(media.trashFile(list[0].name));
+  assert.equal(media.trashFile('../../secreto.png'), null);
+  assert.equal(media.restore({ id: list.find(x => x.id === a.id).id, bin: list.find(x => x.id === a.id).bin }), true);
+  assert.ok(media.resolve(a.id));
+  assert.equal(media.purge({ bin: binB.bin }), 2);
+  assert.equal(media.trashList().length, 0);
+  assert.equal(media.purge({ bin: ['../x'] }), 0);
+});

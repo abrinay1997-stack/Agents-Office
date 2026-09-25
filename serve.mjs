@@ -1142,7 +1142,7 @@ function emptyBins() { // the bins keep 30 days: a note or a file thrown away by
   const cut = Date.now() - 30 * 864e5; let n = 0;
   for (const bin of [TRASH, path.join(media.dir() || '', '.papelera')]) {
     if (!bin || !fs.existsSync(bin)) continue;
-    for (const f of fs.readdirSync(bin)) { const p = path.join(bin, f); try { if (fs.statSync(p).mtimeMs < cut) { fs.rmSync(p, { force: true }); n++; } } catch {} }
+    for (const f of fs.readdirSync(bin)) { const p = path.join(bin, f); try { const st = /^(\d{12,})-/.exec(f)?.[1] || /__(\d{12,})\.md$/.exec(f)?.[1]; if ((st ? +st : fs.statSync(p).mtimeMs) < cut) { fs.rmSync(p, { force: true }); n++; } } catch {} } // counted from the day it went in (its stamp), not the file's own date
   }
   if (n) console.log(`  ${n} item${n > 1 ? 's' : ''} older than 30 days removed from the bins`);
 }
@@ -1568,6 +1568,9 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req, 40 << 20);
       try { const it = media.upload(b); console.log(`✦ estudio: uploaded ${it.file}`); return json(res, 200, { item: it }); } catch (e) { return json(res, 400, { error: e.message }); }
     }
+    if (url.pathname === '/api/media/trash' && req.method === 'GET') return json(res, 200, { items: media.trashList(), days: media.BIN_DAYS }); // V4.4: the Estudio's bin
+    if (url.pathname === '/api/media/trash/file' && req.method === 'GET') { const f = media.trashFile(url.searchParams.get('n')); if (!f) return json(res, 404, { error: 'no está en la papelera' }); const ext = path.extname(f).slice(1).toLowerCase(); const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm' }[ext] || 'application/octet-stream'; res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(ext === 'svg' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }); return fs.createReadStream(f).pipe(res); }
+    if (url.pathname === '/api/media/trash/purge' && req.method === 'POST') { const b = await body(req); return json(res, 200, { ok: true, removed: media.purge(b) }); }
     if (url.pathname === '/api/media/restore' && req.method === 'POST') { const b = await body(req); return media.restore(b) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)' }); }
     if (url.pathname === '/api/media/zip' && req.method === 'POST') {
       const { ids } = await body(req); const z = media.zip(ids);

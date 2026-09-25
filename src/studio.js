@@ -8,8 +8,10 @@
 // says what each model is good at), 3 the idea, 4 starting material, 5 format as shapes + «más ajustes» folded — with the
 // quantity and GENERAR fixed at the bottom; card actions as icons over the picture; clear names everywhere.
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
-const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje' };
-const VAL = { auto: 'Auto', low: 'Baja', medium: 'Media', high: 'Alta', video: 'la del video', image: 'la de la imagen' };
+const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
+  mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo' }; // V4.4: the settings Higgsfield's own schemas bring
+const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
+  epic: 'Épico', drama: 'Drama', noir: 'Noir', comedy: 'Comedia', horror: 'Terror', action: 'Acción', calm: 'Calmado', dynamic: 'Dinámico', chaotic: 'Caótico', 'single-shot': 'Un solo plano', static: 'Fija', dolly_in: 'Acercarse', dolly_out: 'Alejarse', dolly_left: 'A la izquierda', dolly_right: 'A la derecha', jib_up: 'Subir', jib_down: 'Bajar', focus_shift: 'Cambio de foco' };
 const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
 const RATIO_WORD = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Vertical', '16:9': 'Horizontal', '3:4': 'Retrato', '4:3': 'Clásico', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' }; // V4.2 (audit A15): one word that fits; the use goes in the title
 // V4.2 (audit A5): the engine beside the model only when it adds something («Kling 3 · Higgsfield», not «Prueba (gratis) · Prueba (gratis)»)
@@ -77,6 +79,7 @@ export function initStudio(ctx) {
           <button type="button" class="st-upbtn" title="Sube tus fotos o videos (producto, logo, personaje) para usarlos de referencia o animarlos">${svg('up')}<span>Subir</span></button>
           <button type="button" class="st-selbtn" aria-pressed="false" title="Elegir varias para descargarlas juntas, marcarlas o borrarlas">${svg('grid')}<span>Seleccionar</span></button>
           <button type="button" class="st-histbtn" title="Todos los trabajos de la última semana: hechos, fallados y cancelados, con el motivo">${svg('again')}<span>Historial</span></button>
+          <button type="button" class="st-binbtn" title="Lo que mandaste a la papelera: vuelve con un clic durante 30 días">${svg('trash')}<span>Papelera</span></button>
         </div>
         <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><button type="button" data-b="del">${svg('trash')} Papelera</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
         <div class="st-picking" hidden></div>
@@ -86,6 +89,7 @@ export function initStudio(ctx) {
     </div>
     <div class="st-light" hidden role="dialog" aria-modal="true" aria-label="Vista ampliada"></div>
     <div class="st-hist" hidden role="dialog" aria-modal="true" aria-labelledby="stHistT"></div>
+    <div class="st-hist st-binov" hidden role="dialog" aria-modal="true" aria-labelledby="stBinT"></div>
     <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" multiple hidden>`;
   document.body.appendChild(el);
@@ -176,7 +180,7 @@ export function initStudio(ctx) {
           ${media[r].length < n ? `<button type="button" class="st-add" data-slot="${r}">${svg('up')}<span>Subir</span></button><button type="button" class="st-add" data-gpick="${r}">${svg('grid')}<span>De la galería</span></button>` : ''}</div></div>`).join('');
     const s = settingsOf(m), ent = Object.entries(m.settings);
     const ratio = m.settings.aspectRatio;
-    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="group" aria-label="Formato">${ratio.values.map(v => { const [w, h] = v === 'auto' ? [1, 1] : v.split(':').map(Number); const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-pressed="${String(s.aspectRatio) === v}" title="${esc(v === 'auto' ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
+    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="group" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-pressed="${String(s.aspectRatio) === v}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
     const ctl = ([k, f]) => {
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
       if (f.type === 'range') return `<label class="st-lab st-range">${LBL[k] || k} <output>${s[k]}${k === 'duration' ? ' s' : ''}</output><input type="range" data-set="${k}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${s[k]}"></label>`;
@@ -240,9 +244,9 @@ export function initStudio(ctx) {
   }
   function card(it) {
     const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
-    // V4.2 (audit A20 · A21): one action in words (Animar an image, Repetir a video), the star, and «⋯» for the rest — the
-    // six unlabelled icons are gone, the bin is last in the menu and apart. On a touch screen only «⋯» shows (st-mi-t: the
-    // star and the main action repeat in the menu there), so the picture is not covered.
+    // V4.2 (audit A20 · A21): one action in words (Animar an image, Repetir a video), the star, and «⋯» for the rest; the bin
+    // is last in the menu and apart. V4.4 (25 Sep 2026): the row sits under the caption, on the card's own background — it
+    // used to float over the picture, where a light image swallowed it; nothing covers the picture now, on a phone either.
     const primary = !vid ? ['anim', 'Animar', 'Convertirla en video', 'vid'] : !it.upload ? ['again', 'Repetir', 'Otra vez, con el mismo prompt y ajustes', 'again'] : null;
     const menu = [
       ['fav', it.fav ? 'Quitar de favoritas' : 'Favorita', 'star', 'st-mi-t', it.fav ? 'fill' : ''],
@@ -253,16 +257,16 @@ export function initStudio(ctx) {
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
       <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}
-        ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}${it.fav ? `<span class="st-favb" aria-label="Favorita">${svg('star', 'fill')}</span>` : ''}</button>
+        ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}</button>
+      <div class="st-menu" role="menu" hidden>
+        ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
+      </div>
+      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
       <div class="st-ov" role="group" aria-label="Acciones">
         <button type="button" data-a="fav" class="st-oi${it.fav ? ' on' : ''}" aria-label="${it.fav ? 'Quitar de favoritas' : 'Marcar favorita'}" title="${it.fav ? 'Quitar de favoritas' : 'Favorita'}">${svg('star', it.fav ? 'fill' : '')}</button>
         ${primary ? `<button type="button" data-a="${primary[0]}" class="st-op" title="${primary[2]}">${svg(primary[3])}<span>${primary[1]}</span></button>` : ''}
         <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más acciones">${svg('dots')}</button>
       </div>
-      <div class="st-menu" role="menu" hidden>
-        ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
-      </div>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
     </figure>`;
   }
   // V4.2 (audit A17 · A18): the gallery is updated in place. A card whose content did not change keeps its node — a playing
@@ -409,6 +413,40 @@ export function initStudio(ctx) {
     histFrom = document.activeElement; H.hidden = false; modal.open(H); H.querySelector('.st-hx').focus();
     H.onclick = e => { if (e.target === H || e.target.closest('.st-hx')) closeHist(); };
   }
+  // V4.4 (25 Sep 2026): the Estudio's bin, where «Mover a la papelera» sends a file — 30 days to bring it back, then it goes.
+  // It used to be reachable only from the 8-second DESHACER after throwing something away.
+  let binFrom = null, binItems = [];
+  async function openBin() {
+    const B = $('.st-binov');
+    const draw = msg => {
+      B.innerHTML = `<div class="st-hbox"><div class="st-hhead"><h2 id="stBinT">Papelera</h2><span class="sp"></span>${binItems.length ? '<button type="button" class="st-binall">Vaciar la papelera</button>' : ''}<button type="button" class="st-hx" aria-label="Cerrar">${svg('x')}</button></div>
+        <p class="st-hsub">${binItems.length ? `${binItems.length} ${binItems.length === 1 ? 'archivo' : 'archivos'}. Cada uno se borra solo a los 30 días de tirarlo; hasta entonces vuelve a la galería con «Recuperar».` : 'Vacía. Lo que mandes a la papelera queda aquí 30 días.'}</p>
+        <div class="st-bmsg" role="status" aria-live="polite">${msg ? esc(msg) : ''}</div>
+        <ul class="st-blist">${binItems.map((b, i) => `<li><span class="st-bthumb">${b.kind === 'video' ? `<video src="/api/media/trash/file?n=${encodeURIComponent(b.name)}" muted preload="metadata" playsinline></video>` : `<img src="/api/media/trash/file?n=${encodeURIComponent(b.name)}" alt="" loading="lazy">`}</span>
+          <span class="st-binfo"><span class="st-bp">${esc(b.prompt)}</span><span class="st-hm">${b.upload ? 'subida por ti' : esc(b.modelName || '')}${b.at ? ' · creada ' + esc(when(b.at)) : ''} · se borra en ${b.daysLeft} ${b.daysLeft === 1 ? 'día' : 'días'}</span>
+          <span class="st-bacts"><button type="button" data-bin="back" data-i="${i}">Recuperar</button><button type="button" data-bin="gone" data-i="${i}" class="warn">Borrar para siempre</button></span></span></li>`).join('')}</ul></div>`;
+    };
+    binFrom = binFrom || document.activeElement; B.hidden = false; modal.open(B);
+    try { const r = await api('GET', '/api/media/trash'); binItems = r.items || []; draw(); } catch (e) { binItems = []; draw('No pude abrir la papelera: ' + e.message); }
+    B.querySelector('.st-hx').focus();
+    B.onclick = async e => {
+      if (e.target === B || e.target.closest('.st-hx')) return closeBin();
+      if (e.target.closest('.st-binall')) {
+        const btn = e.target.closest('.st-binall'); if (btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = `¿Borrar los ${binItems.length} para siempre? Pulsa otra vez`; return; }
+        try { await api('POST', '/api/media/trash/purge', { all: true }); binItems = []; draw('Papelera vacía.'); B.querySelector('.st-hx').focus(); } catch (err) { draw('No se pudo: ' + err.message); }
+        return;
+      }
+      const b = e.target.closest('[data-bin]'); if (!b) return; const it = binItems[+b.dataset.i]; if (!it) return;
+      if (b.dataset.bin === 'gone' && b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = '¿Seguro? Pulsa otra vez'; return; } // a second click: this one does not come back
+      try {
+        if (b.dataset.bin === 'back') { await api('POST', '/api/media/restore', { id: it.id, bin: it.bin }); await load({ full: false }); }
+        else await api('POST', '/api/media/trash/purge', { bin: it.bin });
+        binItems = binItems.filter(x => x !== it); draw(b.dataset.bin === 'back' ? 'Recuperada: ya está en la galería.' : 'Borrada para siempre.');
+        (B.querySelector('[data-bin]') || B.querySelector('.st-hx')).focus();
+      } catch (err) { draw(b.dataset.bin === 'back' ? 'No se pudo recuperar: ' + err.message : 'No se pudo borrar: ' + err.message); }
+    };
+  }
+  function closeBin() { const B = $('.st-binov'); if (B.hidden) return; B.hidden = true; B.innerHTML = ''; modal.close(B); if (binFrom && document.contains(binFrom)) binFrom.focus({ preventScroll: true }); binFrom = null; }
   function closeHist() { const H = $('.st-hist'); if (H.hidden) return; H.hidden = true; H.innerHTML = ''; modal.close(H); if (histFrom && document.contains(histFrom)) histFrom.focus({ preventScroll: true }); }
   function setMode(m) { mode = m; el.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); renderModel(); }
   function setKind(k) { if (k === kind) return; clearFieldErr(); $('.st-keyhelp').hidden = true; kind = k; store.set('kind', kind); openList(false); renderModels(); }
@@ -471,7 +509,7 @@ export function initStudio(ctx) {
     for (const r of Object.keys(media)) media[r] = media[r].filter(f => !undo.some(u => u.id === f));
     renderGrid(); renderModel(); closeLight();
     if (!undo.length) return say(`No se pudo mover ${failed === 1 ? 'el archivo' : `ninguno de los ${failed}`} a la papelera.`, true);
-    toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera${failed ? ` · ${failed} no se pudo` : ''} (se vacía a los 30 días).`, async () => {
+    toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera${failed ? ` · ${failed} no se pudo` : ''}: está en «Papelera», 30 días.`, async () => {
       let back = 0; for (const u of undo) { try { await api('POST', '/api/media/restore', u); back++; } catch {} }
       await load({ full: false }); say(back === undo.length ? 'Recuperado.' : `Recuperé ${back} de ${undo.length}.`, back !== undo.length);
     });
@@ -572,6 +610,7 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-unfold')) { el.classList.remove('st-folded'); store.set('fold', false); relayout(); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-open-engs')) { showPane('gen'); el.classList.remove('st-folded'); const d = $('.st-keys'); d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); d.querySelector('summary').focus({ preventScroll: true }); return; }
     if (e.target.closest('.st-histbtn')) { openHist(); return; }
+    if (e.target.closest('.st-binbtn')) { openBin(); return; }
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-new')) { $('.st-prompt').value = ''; media = { start: [], end: [], reference: [], video: [] }; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; clearFieldErr(); armed = false; renderModel(); say('Compositor vacío: empieza una idea nueva.'); $('.st-prompt').focus(); return; }
     const qd = e.target.closest('.st-qty [data-d]'); if (qd) { const max = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8; qty = Math.max(1, Math.min(max, qty + +qd.dataset.d)); estimate(); return; }
@@ -703,12 +742,13 @@ export function initStudio(ctx) {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
     if (!typing && (e.key === '?' || (e.key === '/' && e.shiftKey))) return; // V4.2 (audit A48): the shortcuts sheet opens over the Estudio too
     e.stopPropagation();
-    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && $('.st-light').hidden && $('.st-hist').hidden && !el.querySelector('.st-menu:not([hidden])')) { // V4.2 (audit A47)
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && !el.querySelector('.st-menu:not([hidden])')) { // V4.2 (audit A47)
       if (e.key === '/') { e.preventDefault(); showPane('gal'); $('.st-q').focus(); return; }
       if (e.key === 'i' || e.key === 'I') { setKind('image'); return; }
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
+    if (!$('.st-binov').hidden) { if (e.key === 'Escape') closeBin(); return; }
     const om = el.querySelector('.st-menu:not([hidden])');
     if (om) { // the open «⋯» menu: arrows move, Esc and Tab close it, back on its button
       const its = [...om.querySelectorAll('[role="menuitem"]')].filter(x => x.offsetParent), i = its.indexOf(document.activeElement), btn = om.closest('.st-card')?.querySelector('.st-more');
@@ -775,6 +815,6 @@ export function initStudio(ctx) {
   let timer = null;
   el.classList.toggle('st-folded', !!store.get('fold', false));
   function open() { if (!el.hidden) return; if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
-  function close() { if (el.hidden) return; seenAt = Date.now(); closeLight(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
+  function close() { if (el.hidden) return; seenAt = Date.now(); closeLight(); closeHist(); closeBin(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden };
 }
