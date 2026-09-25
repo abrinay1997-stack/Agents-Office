@@ -27,6 +27,7 @@ import { parseWhen, parseOnce, describe, nextRun, fromPicker, untilText } from '
 import { initCalendar } from './calendar.js';
 import { initDetail } from './detail.js'; // the task detail drawer: every action on a task, from the list, the board and the calendar // V3.2.1 (16 Sep 2026): the calendar on P
 import { MODEL_KEYS, MODELS, DEFAULT_MODEL, modelName, normModel, FROM_TEXT , EFFORT_KEYS, EFFORT_NAME, normEffort, effortName, effortFor } from './models.js';
+import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 
 const SEGMENTS = ['roofing', 'HVAC', 'dental', 'logistics', 'fitness', 'property', 'landscaping', 'legal'];
 
@@ -115,8 +116,11 @@ const CHAINS = [
 applyTasks({ POOL, KEYS, CHAINS, SEGMENTS, AGENTS }); // INDUSTRY PROFILE (12 Sep 2026): per-industry demo file; no-op otherwise
 function fill(s, v) { return s.replace('{co}', v.co).replace('{n}', v.n).replace('{segment}', v.segment); }
 function vars() { return { co: rnd(P.co), n: ri(6, 40), segment: rnd(SEGMENTS) }; }
-function timeStr(ts) {
-  return new Date(ts).toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' });
+function timeStr(ts) { // today: «7:13 p. m.» · yesterday: «ayer 7:13 p. m.» · before: «lun 22 sep, 7:13 p. m.» (an old card no longer looks like today's)
+  const d = new Date(ts), t = d.toLocaleTimeString('es-PA', { hour: 'numeric', minute: '2-digit' });
+  const day = x => { const y = new Date(x); y.setHours(0, 0, 0, 0); return y.getTime(); };
+  const k = Math.round((day(Date.now()) - day(ts)) / 864e5);
+  return k <= 0 ? t : k === 1 ? 'ayer ' + t : d.toLocaleDateString('es-PA', { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + t;
 }
 function span(ms) { // "4 min" · "1 h 12 min" · "3 h"
   const m = Math.max(0, Math.round(ms / 60000));
@@ -130,20 +134,22 @@ const STATE_LABEL = { next: 'Pendientes', doing: 'En curso', waiting: 'En espera
 
 export function initTasks(ctx) {
   const { R, deptRT, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent,
-          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage, resolveApproval: onResolveDemo, reframe } = ctx;
+          getFocused, esc, brainWrite, brain, onLive, onTools, requestApproval, setStuck, onUsage, resolveApproval: onResolveDemo, reframe, decided, settle } = ctx;
   // LIVE mode (served by serve.mjs): the bar routes through Claude, agents produce real
   // deliverables saved as notes in the brain, and tasks persist. Opened as a file it stays demo.
   let live = false;
   const API = '/api';
-  const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
+  const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48); // «Panadería» → «panaderia», not «panader-a»
 
   const tasks = [];
   let seq = 1;
+  const archived = []; // V4.1: { t, at, trashed } newest first — what ARCHIVADAS shows (live: the server's archived tasks too)
+  const deleting = new Set(); // sids deleted on this page whose DELETE waits behind DESHACER: the poll must not bring them back
   // V3.5 routines. Live: the server's list (polled). Demo: session-only, fired by this tick.
   const routines = []; let rseq = 1, polling = false, railAgent = null, railExp = false;
   const RT_DEPTS = ['emails', 'fin', 'sales', 'marketing', 'ops', 'delivery']; // every department has routines (24 Sep 2026)
   const RT_NAMES = PROFILE ? Object.fromEntries(Object.entries(PROFILE.pods).map(([k, v]) => [k, titleCase(v)])) : { emails: 'Emails', fin: 'Accounting', sales: 'Sales', marketing: 'Marketing', ops: 'Operations', delivery: 'Delivery' };
-  const rtRefuse = k => `Routines come to ${RT_NAMES[k] || k} in a later release. This release: Emails, Accounting and Sales.`;
+  const rtRefuse = k => `${RT_NAMES[k] || k} todavía no tiene rutinas en esta oficina.`; // every department has them since 24 Sep 2026: only an unknown one lands here
   const deptRoutines = k => routines.filter(r => r.dept === k);
   const agentRoutines = id => routines.filter(r => r.agent === id);
   const nextOf = list => list.filter(r => !r.paused && r.nextAt).sort((a, b) => a.nextAt - b.nextAt)[0];
@@ -197,7 +203,7 @@ export function initTasks(ctx) {
     feedPush(r, '✓', 'Listo: ' + t.title);
     if (chatHist[t.agent]) chatPush(t.agent, { who: 'work', i: '✓', text: 'listo — ' + t.title });
     if (t.live) deliver(t); // the real deliverable lands in the agent's chat; the server already wrote the note
-    else if (t.piece) { if (R[t.leadId]) { spawnEmote(R[t.leadId], '📋'); feedPush(R[t.leadId], '📋', `Piece in from ${agentOf(t.agent).name}: ${t.title}`); } } // demo: the piece walks back to the lead
+    else if (t.piece) { if (R[t.leadId]) { spawnEmote(R[t.leadId], '📋'); feedPush(R[t.leadId], '📋', `Parte recibida de ${agentOf(t.agent).name}: ${t.title}`); } } // demo: the piece walks back to the lead
     // demo: finished work becomes a note in the Brain — always for tasks you added, a quarter of the rest
     else if (brainWrite && (t.by === 'you' || Math.random() < 0.25)) brainWrite(t.agent, t.title);
     touch(t, 'done');
@@ -210,18 +216,19 @@ export function initTasks(ctx) {
     }
     prune(t.dept);
   }
-  function deliver(t) {
+  function deliver(t, quiet) {
     const a = agentOf(t.agent);
     if (t.piece) { // V3.2 (16 Sep): a teammate's piece — in their own chat, then it walks back to the lead
       const L = agentOf(t.leadId), parent = tasks.find(x => x.id === t.parent);
-      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)} · clic para verla`, content: t.result });
+      chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: slug(t.title) + '.md', title: t.title, meta: `mi parte · pasada a ${L ? L.name : 'el líder'} · ${timeStr(t.doneAt)}`, content: t.result });
       if (!t.error) chatPush(t.agent, { who: 'agent', text: `Mi parte de "${parent ? parent.title : t.title}" está lista y con ${L ? L.name : 'the lead'}${t.used && t.used.length ? `. Used ${t.used.join(', ')}` : ''}.` });
-      feedPush(R[t.agent], '📄', `Piece done → ${L ? L.name : 'lead'}: ${t.title}`);
-      if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Piece in from ${a.name}: ${t.title}`); }
+      feedPush(R[t.agent], '📄', `Parte lista → ${L ? L.name : 'el jefe'}: ${t.title}`);
+      if (L && R[L.id]) { spawnEmote(R[L.id], '📋'); feedPush(R[L.id], '📋', `Parte recibida de ${a.name}: ${t.title}`); }
       return;
     }
-    chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md',
-      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)} · clic para verlo`, content: t.result });
+    chatPush(t.agent, { who: 'file', icon: t.error ? '⚠' : '📄', name: (t.note || slug(t.title)) + '.md', title: t.title,
+      meta: `${t.error ? 'no se pudo completar' : t.approved ? 'enviado tras tu visto bueno · guardado en tu cerebro' : 'entregado · guardado en tu cerebro'} · ${timeStr(t.doneAt)}`, content: t.result, sid: t.sid });
+    if (quiet) return;
     if (!t.error) chatPush(t.agent, { who: 'agent', text: `Listo — "${t.title}"${t.routine ? ` (rutina, ${t.when}${t.late ? ', se atrasó' : ''})` : ''} está lista arriba${t.team?.members?.length ? ` — el equipo fuimos ${membersText(t)} y yo` : ''}${t.read && t.read.length ? ` (leí ${t.read.slice(0, 3).join(', ')})` : ''}${t.used && t.used.length ? `. Usé ${t.used.join(', ')}` : ''}. Di "revisa: …" y la cambio.` });
     feedPush(R[t.agent], '📄', `Entregada: ${t.title}`);
     if (brain && t.read) for (const n of t.read.slice(0, 2)) brain.readNote(t.agent, n);
@@ -264,16 +271,21 @@ export function initTasks(ctx) {
   }
 
   /* ---------- badge rows (far-zoom layer): DOING · NEXT · DONE per pod ---------- */
+  // V4.1 (audit 43): the live office counts LISTO from the real list, the same way the card's ENTREGAS REALES does (the demo keeps its running count)
+  const doneIn = k => live ? tasks.filter(t => t.dept === k && t.state === 'done' && t.live && !t.piece).length : doneCount[k];
   function rowHTML(k) {
-    return `<div class="b-tasks" data-tkrow="${k}" title="mostrar ${DEPTS[k].short} en el panel de tareas">
+    return `<div class="b-tasks" data-tkrow="${k}" title="Ver ${DEPTS[k].short} en el panel de tareas">
       <span>EN CURSO<b data-tk="${k}-doing">${deptTasks(k, 'doing').length}</b></span>
       <span>PRÓXIMO<b data-tk="${k}-next">${deptTasks(k, 'next').length}</b></span>
-      <span>LISTO<b data-tk="${k}-done">${doneCount[k]}</b></span></div>`;
+      <span>LISTO<b data-tk="${k}-done">${doneIn(k)}</b></span></div>`;
   }
+  // V4.1 (audit 30): the row does ONE thing wherever it is — the card on the pod or the docked copy in the chat — it shows
+  // that department in the task panel (the panel opens if it was folded). The docked copy used to open the company board.
+  function showDept(k) { if (getFocused() !== k) enterFocus(k); setPanelMin(false); filter = 'all'; limit = PAGE; render(true); P_.rows.scrollTop = 0; panel.classList.remove('tp-flash'); void panel.offsetWidth; panel.classList.add('tp-flash'); }
   for (const k of DEPT_KEYS) deptRT[k].apprRow.insertAdjacentHTML('beforebegin', rowHTML(k));
   function syncBadges() {
     for (const k of DEPT_KEYS) {
-      const vals = { doing: deptTasks(k, 'doing').length, next: deptTasks(k, 'next').length, done: doneCount[k] };
+      const vals = { doing: deptTasks(k, 'doing').length, next: deptTasks(k, 'next').length, done: doneIn(k) };
       for (const [s, n] of Object.entries(vals)) {
         document.querySelectorAll(`[data-tk="${k}-${s}"]`).forEach(b => {
           if (b.textContent !== String(n)) {
@@ -303,10 +315,10 @@ export function initTasks(ctx) {
     head.appendChild(min);
     const tab = document.createElement('button'); tab.type = 'button'; tab.id = 'tpTab'; tab.title = 'Abrir el panel de tareas (T)'; document.body.appendChild(tab);
     P_.tab = tab;
-    const setMin = on => { document.body.classList.toggle('tpMin', on); try { localStorage.setItem('ao.tpMin', on ? '1' : '0'); } catch {} if (reframe) reframe(); };
+    const setMin = on => { document.body.classList.toggle('tpMin', on); panel.inert = on; /* folded: its controls leave Tab's reach (audit 23) */ try { localStorage.setItem('ao.tpMin', on ? '1' : '0'); } catch {} if (reframe) reframe(); };
     setPanelMin = setMin;
     min.addEventListener('click', () => setMin(true)); tab.addEventListener('click', () => setMin(false));
-    try { if (localStorage.getItem('ao.tpMin') === '1') document.body.classList.add('tpMin'); } catch {}
+    try { if (localStorage.getItem('ao.tpMin') === '1') { document.body.classList.add('tpMin'); panel.inert = true; } } catch {}
   }
   { // the list's own tools: a search box and «Limpiar listas»
     const bar = document.createElement('div'); bar.className = 'tp-tools';
@@ -316,14 +328,20 @@ export function initTasks(ctx) {
     P_.search.addEventListener('input', () => { query = P_.search.value.trim(); render(true); });
     P_.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { P_.search.value = ''; query = ''; render(true); P_.search.blur(); } });
     P_.clear.addEventListener('click', () => clearDone());
+    P_.rows.addEventListener('click', e => {
+      const m = e.target.closest('.tp-more'); if (m) { limit += PAGE; render(true); return; }
+      const c = e.target.closest('.tp-lnk[data-clr]'); if (!c) return;
+      if (c.dataset.clr === 'q') { P_.search.value = ''; query = ''; } else filter = 'all';
+      limit = PAGE; render(true);
+    });
     P_.rows.addEventListener('keydown', e => { if (e.target.closest('button')) return; const r = e.target.closest('.tp-row[role="button"]'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); r.click(); } });
   }
   // V3.7: the box grows with the text (one line at rest, six at most) and the big editor mirrors it
   const big = document.getElementById('tpBig');
   const B_ = { in: big.querySelector('.tb-in'), dept: big.querySelector('.tb-dept'), dot: big.querySelector('.tb-head .dot'), hint: big.querySelector('.tb-hint'), add: big.querySelector('.tb-add'), close: big.querySelector('.tb-close') };
   function grow() { P_.input.style.height = '30px'; if (!P_.input.value) return; P_.input.style.height = Math.min(118, Math.max(30, P_.input.scrollHeight)) + 'px'; } // empty: one line, even if the placeholder wraps
-  function openBig() { B_.in.value = P_.input.value; B_.in.placeholder = P_.input.placeholder; big.classList.add('on'); mirrorHint(); B_.in.focus(); B_.in.setSelectionRange(B_.in.value.length, B_.in.value.length); }
-  function closeBig() { if (!big.classList.contains('on')) return; big.classList.remove('on'); grow(); if (P_.input.value) P_.input.focus(); }
+  function openBig() { B_.in.value = P_.input.value; B_.in.placeholder = P_.input.placeholder; big.classList.add('on'); modal.open(big); mirrorHint(); B_.in.focus(); B_.in.setSelectionRange(B_.in.value.length, B_.in.value.length); }
+  function closeBig() { if (!big.classList.contains('on')) return; big.classList.remove('on'); modal.close(big); grow(); if (P_.input.value) P_.input.focus(); }
   function mirrorHint() { B_.hint.innerHTML = P_.hint.innerHTML; B_.hint.className = P_.hint.className.replace('tp-hint', 'tp-hint tb-hint'); }
   // V3.6 (D2): the model menu — Sonnet · Opus · Fable. Shows the office default; change it and it applies to this task (or this routine, with REPEAT on)
   let officeModel = DEFAULT_MODEL, modelTouched = false;
@@ -353,7 +371,8 @@ export function initTasks(ctx) {
   // the REPEAT picker (B1): cadence + time; "needs my OK" defaults on (D1)
   let repeat = false;
   P_.cad.innerHTML = [['weekdays', 'Cada día hábil'], ['daily', 'Todos los días'], ['mon', 'lunes'], ['tue', 'martes'], ['wed', 'miércoles'], ['thu', 'jueves'], ['fri', 'viernes'], ['sat', 'sábados'], ['sun', 'domingos'], ['hourly', 'Cada hora, 9–5, días hábiles']].map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
-  P_.rep.addEventListener('click', () => { repeat = !repeat; P_.rep.classList.toggle('on', repeat); P_.repRow.hidden = !repeat; updateHint(); if (repeat) P_.input.focus(); });
+  P_.rep.setAttribute('aria-pressed', 'false'); P_.team.setAttribute('aria-pressed', 'false'); // V4.1 (audit 93): the toggles say whether they are on
+  P_.rep.addEventListener('click', () => { repeat = !repeat; P_.rep.classList.toggle('on', repeat); P_.rep.setAttribute('aria-pressed', repeat); P_.repRow.hidden = !repeat; updateHint(); if (repeat) P_.input.focus(); });
   P_.cad.addEventListener('change', () => { P_.at.disabled = P_.cad.value === 'hourly'; updateHint(); });
   P_.at.addEventListener('change', updateHint);
   [P_.cad, P_.at, P_.okc].forEach(el => el.addEventListener('keydown', e => e.stopPropagation()));
@@ -363,21 +382,44 @@ export function initTasks(ctx) {
   const teamIntent = text => /\b(as a team|team up|team this|get the (whole )?team|the (whole )?team (on|to|should|can)|with the team|(spawn|use|get) (\d+|two|three|four|five|a few|some) teammates?|\d+ teammates|split (it|this|the work) (up|across|between)|teammates|team:|whole department)\b/i.test(text);
   const asTeam = text => teamsCfg.enabled && (teamOn || teamIntent(text));
   const leadOf = k => AGENTS.find(x => x.dept === k && x.lead) || AGENTS.filter(x => x.dept === k)[0];
-  P_.team.addEventListener('click', () => { teamOn = !teamOn; P_.team.classList.toggle('on', teamOn); updateHint(); if (teamOn) P_.input.focus(); });
-  function resetTeam() { teamOn = false; P_.team.classList.remove('on'); }
+  P_.team.addEventListener('click', () => { teamOn = !teamOn; P_.team.classList.toggle('on', teamOn); P_.team.setAttribute('aria-pressed', teamOn); updateHint(); if (teamOn) P_.input.focus(); });
+  function resetTeam() { teamOn = false; P_.team.classList.remove('on'); P_.team.setAttribute('aria-pressed', 'false'); }
   const teamBit = t => t.team?.members?.length ? ` · <span class="tp-team-chip">TEAM ${t.team.members.length + 1}</span>` : t.piece ? ' · <span class="tp-team-chip">PIECE</span>' : '';
   const membersText = t => (t.team?.members || []).map(id => agentOf(id)?.name || id).join(', ');
   let dept = 'marketing', filter = 'all';
-  P_.menu.innerHTML = DEPT_KEYS.map(k => `<button data-k="${k}"><span class="dot" style="background:${DEPTS[k].chip}"></span>${DEPTS[k].name}</button>`).join('');
-  P_.menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { setDept(b.dataset.k); P_.menu.classList.remove('on'); P_.input.focus(); }));
-  P_.dd.addEventListener('click', (e) => { e.stopPropagation(); P_.menu.classList.toggle('on'); });
-  document.addEventListener('click', () => P_.menu.classList.remove('on'));
+  // V4.1 (audit 92): the department menu is a real menu — aria-expanded, ↑ ↓ Home End to move, Enter to pick, Esc or Tab to leave
+  P_.dd.type = 'button'; P_.dd.setAttribute('aria-haspopup', 'menu'); P_.dd.setAttribute('aria-expanded', 'false'); P_.dd.setAttribute('aria-controls', 'tpMenu');
+  P_.menu.id = 'tpMenu'; P_.menu.setAttribute('role', 'menu'); P_.menu.setAttribute('aria-label', 'Departamento de la tarea');
+  P_.menu.innerHTML = DEPT_KEYS.map(k => `<button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-k="${k}"><span class="dot" style="background:${DEPTS[k].chip}"></span>${DEPTS[k].name}</button>`).join('');
+  const menuItems = () => [...P_.menu.querySelectorAll('button')];
+  function menuOpen(on, focusWhich) {
+    P_.menu.classList.toggle('on', on); P_.dd.setAttribute('aria-expanded', on);
+    if (!on) return;
+    const items = menuItems(), cur = items.findIndex(b => b.dataset.k === dept);
+    items.forEach(b => b.setAttribute('aria-checked', b.dataset.k === dept));
+    (items[focusWhich === 'last' ? items.length - 1 : cur >= 0 ? cur : 0]).focus();
+  }
+  P_.menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { setDept(b.dataset.k); menuOpen(false); P_.input.focus(); }));
+  P_.dd.addEventListener('click', (e) => { e.stopPropagation(); menuOpen(!P_.menu.classList.contains('on')); });
+  P_.dd.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); menuOpen(true, e.key === 'ArrowUp' ? 'last' : null); } });
+  P_.menu.addEventListener('keydown', e => {
+    e.stopPropagation();
+    const items = menuItems(), i = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); menuOpen(false); P_.dd.focus(); }
+    else if (e.key === 'Tab') menuOpen(false);
+  });
+  document.addEventListener('click', () => { if (P_.menu.classList.contains('on')) menuOpen(false); });
   function setDept(k) {
     dept = k;
     P_.ddName.textContent = DEPTS[k].short;
     P_.ddDot.style.background = DEPTS[k].chip;
+    P_.dd.setAttribute('aria-label', `Departamento: ${DEPTS[k].name}. Cambiar`); P_.dd.title = 'Elige el departamento de la tarea (↓ abre la lista)';
     B_.dept.textContent = DEPTS[k].name.toUpperCase(); B_.dot.style.background = DEPTS[k].chip;
-    P_.input.placeholder = `Escribe una tarea para ${DEPTS[k].name.toLowerCase()}…`;
+    P_.input.placeholder = `Nueva tarea para ${DEPTS[k].short.charAt(0) + DEPTS[k].short.slice(1).toLowerCase()}…`; P_.input.setAttribute('aria-label', `Nueva tarea para ${DEPTS[k].name}`);
     updateHint();
   }
   // routing: keywords → the right agent in the chosen dept; fallback = the dept lead (or first agent)
@@ -434,6 +476,9 @@ export function initTasks(ctx) {
   B_.add.addEventListener('click', submit);
   B_.close.addEventListener('click', closeBig);
   big.addEventListener('click', (e) => { if (e.target === big) closeBig(); });
+  const SEE_SCHED = '<button type="button" class="tp-lnk" data-f="sched">Ver en PROGRAMADAS</button>';
+  function flashChip(f) { const c = P_.chips.querySelector(`.tp-chip[data-f="${f}"]`); if (c) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } }
+  P_.hint.addEventListener('click', e => { const b = e.target.closest('.tp-lnk[data-f]'); if (b) { filter = b.dataset.f; limit = PAGE; render(true); } });
   function say(html, cls) { P_.hint.innerHTML = html; P_.hint.className = 'tp-hint on' + (cls ? ' ' + cls : ''); grow(); if (big.classList.contains('on')) mirrorHint(); }
   async function submit() {
     let title = P_.input.value.trim().replace(/[.!]+$/, '');
@@ -496,10 +541,10 @@ export function initTasks(ctx) {
     const L = leadOf(k), others = AGENTS.filter(x => x.dept === k && !x.lead).sort(() => Math.random() - 0.5);
     const picks = others.slice(0, Math.max(2, Math.min(3, teamsCfg.max - 1, others.length)));
     const t = mk({ agent: L.id, title, by: 'you', team: { lead: L.id, members: picks.map(p => p.id) }, teamHold: true });
-    touch(t, 'added'); spawnEmote(R[L.id], '⚑'); feedPush(R[L.id], '⚑', `Team task: ${title} — ${picks.map(p => agentOf(p.id).name).join(', ')}`);
+    touch(t, 'added'); spawnEmote(R[L.id], '⚑'); feedPush(R[L.id], '⚑', `Tarea en equipo: ${title} — ${picks.map(p => agentOf(p.id).name).join(', ')}`);
     for (const p of picks) {
       const c = mk({ agent: p.id, title: `${title} — ${(p.role || 'their').replace(/ Agent$/i, '').toLowerCase()} part`, by: 'team', piece: true, parent: t.id, leadId: L.id, from: L.id });
-      touch(c, 'handoff'); spawnEmote(R[p.id], '📋'); feedPush(R[p.id], '📋', `Team piece from ${L.name}: ${c.title}`);
+      touch(c, 'handoff'); spawnEmote(R[p.id], '📋'); feedPush(R[p.id], '📋', `Parte del equipo de ${L.name}: ${c.title}`);
     }
     return t;
   }
@@ -519,9 +564,9 @@ export function initTasks(ctx) {
         const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
         setRoutines([...routines.filter(x => x.id !== j.routine.id), j.routine]);
         const a = agentOf(j.routine.agent);
-        say(`Rutina programada — <b>${a.name}</b> · ${esc(j.routine.desc)} · próxima ${esc(untilText(j.routine.nextAt))}${j.routine.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${j.guessed ? ` · "${esc(j.guessed)}" taken as ${j.routine.when.at}` : ''}`);
-        P_.input.value = ''; resetModel(); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${j.routine.title} (${j.routine.desc})`);
-        filter = 'sched'; render(true); poll();
+        say(`Rutina programada — <b>${a.name}</b> · ${esc(j.routine.desc)} · próxima ${esc(untilText(j.routine.nextAt))}${j.routine.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${j.guessed ? ` · tomé «${esc(j.guessed)}» como las ${j.routine.when.at}` : ''} ${SEE_SCHED}`);
+        P_.input.value = ''; resetModel(); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${j.routine.title} (${j.routine.desc})`);
+        render(true); flashChip('sched'); poll();
       } catch (e) { say(`No se pudo programar (${esc(e.message)}).`, 'err'); }
       P_.input.disabled = false; P_.add.disabled = false; P_.input.blur();
       return;
@@ -529,8 +574,8 @@ export function initTasks(ctx) {
     const { agent: a } = route(k, text);
     const r = addRoutine(k, a.id, text, rt.when, rt.picker ? P_.okc.checked : guessOk(text));
     r.model = chosenModel() || undefined; r.effort = effortSend(); resetModel();
-    P_.input.value = ''; say(`Rutina programada — <b>${a.name}</b> · ${esc(r.desc)} · próxima ${esc(untilText(r.nextAt))}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}`);
-    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${r.title} (${r.desc})`); filter = 'sched'; render(true); P_.input.blur(); setTimeout(updateHint, 5000);
+    P_.input.value = ''; say(`Rutina programada — <b>${a.name}</b> · ${esc(r.desc)} · próxima ${esc(untilText(r.nextAt))}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'} ${SEE_SCHED}`);
+    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${r.title} (${r.desc})`); render(true); flashChip('sched'); P_.input.blur(); setTimeout(updateHint, 5000);
   }
   function guessOk(text) { const t = text.toLowerCase(); return /\b(send|reply|chase|nudge|remind|post|publish|pay|book|draft|message|email)\b/.test(t) || !/\b(list|summari[sz]e|triage|tell me|what|report|match|reconcile|qualify|review|check|read|find|flag|count)\b/.test(t); }
   function addRoutine(k, agentId, text, when, needsOk) { // demo: session-only
@@ -600,8 +645,9 @@ export function initTasks(ctx) {
       if (Array.isArray(rl.routines)) setRoutines(rl.routines);
       if (Array.isArray(tl)) {
         for (const st of tl) reconcile(st);
-        const keep = new Set(tl.filter(x => !x.archived).map(x => x.id));
-        for (let i = tasks.length - 1; i >= 0; i--) { const t = tasks[i]; if (t.live && t.sid && !t.piece && !keep.has(t.sid) && t.state !== 'doing') { tasks.splice(i, 1); dirty = true; if (detail.current() === t) detail.close(); } }
+        const keep = new Set(tl.filter(x => !x.archived).map(x => x.id)), arch = new Map(tl.filter(x => x.archived).map(x => [x.id, x]));
+        for (let i = tasks.length - 1; i >= 0; i--) { const t = tasks[i]; if (t.live && t.sid && !t.piece && !keep.has(t.sid) && t.state !== 'doing') { tasks.splice(i, 1); dirty = true; if (detail.current() === t) detail.close(); if (arch.has(t.sid) && !archived.some(x => x.t.sid === t.sid)) archived.unshift({ t, at: arch.get(t.sid).archivedAt || Date.now() }); } }
+        for (let i = archived.length - 1; i >= 0; i--) { const sid = archived[i].t.sid; if (sid && keep.has(sid)) { archived.splice(i, 1); dirty = true; } }
         for (const st of tl) { const t = tasks.find(x => x.live && x.sid === st.id); if (t && (t.state === 'next' || t.state === 'scheduled') && st.state === t.state && (t.agent !== st.agent || t.title !== st.title)) { Object.assign(t, { agent: st.agent, dept: agentOf(st.agent).dept, title: st.title, text: st.text }); dirty = true; } }
       }
       if (calendar) calendar.refresh();
@@ -619,8 +665,10 @@ export function initTasks(ctx) {
     if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
     else say('Conexión recuperada.');
   }
+  const fromServer = st => ({ id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
+    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
-    if (!agentOf(st.agent) || st.archived) return;
+    if (!agentOf(st.agent) || st.archived || deleting.has(st.id)) return;
     let t = tasks.find(x => x.live && x.sid === st.id);
     if (!t) {
       t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: st.by === 'routine' ? 'routine' : 'you', live: true, srv: true, sid: st.id,
@@ -645,7 +693,7 @@ export function initTasks(ctx) {
       let c = tasks.find(x => x.live && x.sid === sid);
       if (!c) {
         c = mk({ agent: p.agent, title: p.title, text: p.text, by: 'team', live: true, srv: true, sid, piece: true, parent: t.id, leadId: tm.lead, from: tm.lead, addedAt: tm.plannedAt || Date.now(), changedAt: tm.plannedAt || Date.now(), last: 'handoff', running: true });
-        if (!quiet) { spawnEmote(R[p.agent], '📋'); feedPush(R[p.agent], '📋', `Team piece from ${agentOf(tm.lead).name}: ${p.title}`); }
+        if (!quiet) { spawnEmote(R[p.agent], '📋'); feedPush(R[p.agent], '📋', `Parte del equipo de ${agentOf(tm.lead).name}: ${p.title}`); }
         touch(c, 'handoff');
       }
       if (p.state === 'doing' && c.state !== 'doing') { c.state = 'doing'; c.startedAt = performance.now() - Math.max(0, Date.now() - (p.startedAt || Date.now())); c.progress = 0; c.running = true; c.ready = false; c.changedAt = p.startedAt || Date.now(); touch(c, 'started'); }
@@ -659,14 +707,14 @@ export function initTasks(ctx) {
       const key = `${st.id}:${m.from}:${m.to}:${m.at}`; if (seenNotes.has(key)) continue; seenNotes.add(key);
       if (quiet) continue;
       const to = m.to === 'lead' ? tm.lead : m.to, toName = agentOf(to)?.name || m.to;
-      if (R[m.from]) { spawnEmote(R[m.from], '💬'); feedPush(R[m.from], '💬', `Note to ${toName}: ${m.text}`); chatPush(m.from, { who: 'work', i: '💬', text: `note to ${toName}: ${m.text}` }); }
-      if (R[to]) { feedPush(R[to], '📨', `Note from ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `note from ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
+      if (R[m.from]) { spawnEmote(R[m.from], '💬'); feedPush(R[m.from], '💬', `Nota para ${toName}: ${m.text}`); chatPush(m.from, { who: 'work', i: '💬', text: `nota para ${toName}: ${m.text}` }); }
+      if (R[to]) { feedPush(R[to], '📨', `Nota de ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `nota de ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
     }
   }
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
     if (st.state === 'scheduled') { if (t.state !== 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; touch(t, 'scheduled'); } else if (t.dueAt !== st.dueAt || t.title !== st.title || t.text !== st.text) { Object.assign(t, { dueAt: st.dueAt, title: st.title, text: st.text }); dirty = true; } return; }
-    if (t.state === 'scheduled' && st.state !== 'scheduled') { t.state = 'next'; t.addedAt = st.addedAt || Date.now(); t.late = !!st.late; t.due = st.due; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Scheduled task fired: ${t.title}${t.late ? ' (late)' : ''}`); if (calendar) calendar.refresh(); }
+    if (t.state === 'scheduled' && st.state !== 'scheduled') { t.state = 'next'; t.addedAt = st.addedAt || Date.now(); t.late = !!st.late; t.due = st.due; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}${t.late ? ' (atrasada)' : ''}`); if (calendar) calendar.refresh(); }
     if (st.state === 'doing' && t.state !== 'doing') {
       t.state = 'doing'; t.startedAt = performance.now() - Math.max(0, Date.now() - (st.startedAt || Date.now())); t.progress = 0; t.pausedAt = null; t.running = true; t.ready = false; t.srv = true; t.changedAt = st.startedAt || Date.now(); touch(t, 'started');
     } else if (st.state === 'waiting' && t.draftAt !== st.waitingAt) { // a new draft is waiting for the OK (the first, or a rework after REJECT)
@@ -680,27 +728,26 @@ export function initTasks(ctx) {
     }
   }
   function askApproval(t) { // D1: the draft lands in the chat with APPROVE / REJECT and the agent stands and waves
-    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', meta: `borrador · en espera de tu visto bueno · ${timeStr(t.changedAt)} · clic para ver`, content: t.draft || t.result });
-    chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" está lista — aprueba para enviarla, rechaza para decirme qué cambiar.`, pending: true, live: true });
+    chatPush(t.agent, { who: 'file', icon: '📝', name: slug(t.title) + '.md', title: t.title, meta: `borrador · espera tu visto bueno · ${timeStr(t.changedAt)}`, content: t.draft || t.result, sid: t.sid });
+    chatPush(t.agent, { who: 'appr', text: t.ask || `"${t.title}" está lista — aprueba para enviarla, rechaza para decirme qué cambiar.`, pending: true, live: true, sid: t.sid }); // V4.1: the card knows its draft
     feedPush(R[t.agent], '⏸', `En espera de tu visto bueno: ${t.title}`);
     if (setStuck) setStuck(t.agent, t.ask, t.sid);
   }
-  const pendingFeedback = {}; // agentId → sid after REJECT: the owner's next chat line is the note
-  function resolveLive(agentId, approved) { // APPROVE / REJECT on a live draft (main.js calls this instead of the demo onResolve)
-    const t = tasks.find(x => x.live && x.agent === agentId && x.state === 'waiting'); if (!t) return false;
-    if (approved) {
-      toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' });
-      post(`/tasks/${t.sid}/approve`).then(j => { if (!j || j.error) { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(agentId, { who: 'agent', text: `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.` }); } }); // an answer, not a card stuck «doing» forever
-    }
-    else { pendingFeedback[agentId] = t.sid; chatPush(agentId, { who: 'agent', text: 'Entendido. ¿Qué debería cambiar? Dímelo aquí y lo rehago — vuelve para tu visto bueno.' }); }
+  // V4.1 (24 Sep 2026): every decision names its draft (sid). Two drafts from one agent are two cards, and each button acts on its own.
+  const waitingFor = (agentId, sid) => tasks.find(x => x.live && !x.piece && x.agent === agentId && x.state === 'waiting' && (!sid || x.sid === sid));
+  const backToWaiting = (t, text) => { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(t.agent, { who: 'agent', text }); askApproval(t); }; // an answer and a fresh card, not a card stuck «doing» forever
+  function resolveLive(agentId, approved, sid) { // APPROVE on a live draft (REJECT opens the note on the card: rejectLive)
+    const t = waitingFor(agentId, sid); if (!t || !approved) return false;
+    toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' });
+    if (decided) decided(agentId, t.sid, true);
+    post(`/tasks/${t.sid}/approve`).then(j => { if (!j || j.error) backToWaiting(t, `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`); });
     return true;
   }
-  const pendingReject = agentId => !!pendingFeedback[agentId];
-  function rejectLive(agentId, feedback) {
-    const sid = pendingFeedback[agentId]; delete pendingFeedback[agentId];
-    const t = tasks.find(x => x.live && x.sid === sid); if (!t) return false;
+  function rejectLive(agentId, sid, feedback) {
+    const t = waitingFor(agentId, sid); if (!t) return false;
     toDoing(t); chatPush(agentId, { who: 'agent', text: 'En eso — lo rehago con tu nota. Vuelve aquí para tu visto bueno.' });
-    post(`/tasks/${sid}/reject`, { feedback }).then(j => { if (!j || j.error) { t.state = 'waiting'; t.running = true; touch(t, 'waiting'); chatPush(agentId, { who: 'agent', text: `No se pudo devolver: ${(j && j.error) || 'sin conexión con la oficina'}.` }); } });
+    if (decided) decided(agentId, t.sid, false);
+    post(`/tasks/${t.sid}/reject`, { feedback }).then(j => { if (!j || j.error) backToWaiting(t, `No se pudo devolver: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`); });
     return true;
   }
   function toDoing(t) { t.state = 'doing'; t.startedAt = performance.now(); t.progress = 0; t.pausedAt = null; t.running = true; t.ready = false; t.srv = true; touch(t, 'started'); }
@@ -724,13 +771,17 @@ export function initTasks(ctx) {
       const list = await (await fetch(API + '/tasks')).json();
       for (const st of list) {
         if (!agentOf(st.agent)) continue;
+        if (st.archived) { archived.push({ t: fromServer(st), at: st.archivedAt || st.doneAt || st.addedAt || 0 }); continue; } // out of the list and the chats (it used to come back on every load): in ARCHIVADAS
+
         if (st.state === 'done') {
           const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: 'you', live: true, sid: st.id, state: 'done',
-            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, last: 'done' });
+            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, last: 'done',
+            routine: st.routine, when: st.when, due: st.due, late: !!st.late, approved: !!st.approved }); // V4.2: a routine's run stays one — the calendar marks the past by it
           if (st.team) syncTeam(t, st, true);
-          deliver(t);
+          deliver(t, true); // quiet: the file card stays in the chat's history; no «Listo» line, feed item or brain spark on every page load
         } else reconcile(st); // next, doing (the server may be running it), waiting for your OK, scheduled for a date — pick it up again
       }
+      archived.sort((a, b) => b.at - a.at);
       dirty = true;
       if (onLive) onLive(h);
       await poll(); setInterval(() => { if (!document.hidden) poll(); }, 6000); addEventListener('visibilitychange', () => { if (!document.hidden) poll(); }); // a hidden tab stops asking; back in view it catches up at once // V3.5: routines fire on the server's clock — the page keeps up
@@ -745,13 +796,13 @@ export function initTasks(ctx) {
     return t;
   }
   // chips: filters with live counts
-  const CHIPS = [['all', 'Todas'], ['sched', 'Programadas'], ['next', 'Pendientes'], ['doing', 'En curso'], ['waiting', 'En espera'], ['done', 'Listas'], ['error', 'Con error']];
+  const CHIPS = [['all', 'Todas'], ['sched', 'Programadas'], ['next', 'Pendientes'], ['doing', 'En curso'], ['waiting', 'En espera'], ['done', 'Listas'], ['error', 'Con error'], ['archived', 'Archivadas']];
   function chipsHTML() {
     const scope = scoped();
-    const cnt = st => st === 'all' ? scope.length : st === 'sched' ? scopedRoutines().length + scope.filter(t => t.state === 'scheduled').length : st === 'error' ? scope.filter(t => t.state === 'done' && t.error).length : scope.filter(t => t.state === st).length;
-    return CHIPS.filter(([st]) => st !== 'error' || cnt('error') || filter === 'error').map(([st, lab]) => `<button class="tp-chip${filter === st ? ' on' : ''}${st === 'waiting' ? ' w' : ''}${st === 'error' ? ' e' : ''}" data-f="${st}">${lab}<b>${cnt(st)}</b></button>`).join('');
+    const cnt = st => st === 'all' ? scope.length : st === 'sched' ? scopedRoutines().length + scope.filter(t => t.state === 'scheduled').length : st === 'error' ? scope.filter(t => t.state === 'done' && t.error).length : st === 'archived' ? scopedArchived().length : scope.filter(t => t.state === st).length;
+    return CHIPS.filter(([st]) => !(st === 'error' || st === 'archived') || cnt(st) || filter === st).map(([st, lab]) => `<button type="button" class="tp-chip${filter === st ? ' on' : ''}${st === 'waiting' ? ' w' : ''}${st === 'error' ? ' e' : ''}${st === 'archived' ? ' x' : ''}" data-f="${st}" aria-pressed="${filter === st}">${lab}<b>${cnt(st)}</b></button>`).join('');
   }
-  P_.chips.addEventListener('click', (e) => { const b = e.target.closest('.tp-chip'); if (!b) return; filter = b.dataset.f; render(true); });
+  P_.chips.addEventListener('click', (e) => { const b = e.target.closest('.tp-chip'); if (!b) return; filter = b.dataset.f; limit = PAGE; render(true); });
   let query = '';
   function scoped() {
     const f = getFocused();
@@ -760,6 +811,33 @@ export function initTasks(ctx) {
     return tasks.filter(t => (!f || f === 'brain' || t.dept === f) && (!q || fold(t.title + ' ' + (t.text || '') + ' ' + (agentOf(t.agent)?.name || '')).includes(q)));
   }
   function scopedRoutines() { const f = getFocused(); return (f && f !== 'brain') ? deptRoutines(f) : routines.slice(); }
+  function scopedArchived() {
+    const f = getFocused(), fold = x => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''), q = fold(query);
+    return archived.filter(e => (!f || f === 'brain' || e.t.dept === f) && (!q || fold(e.t.title + ' ' + (e.t.text || '') + ' ' + (agentOf(e.t.agent)?.name || '')).includes(q)));
+  }
+  function rowHTMLx(e) { // an ARCHIVED row: what it was, who, when it left the list, and the way back
+    const t = e.t, a = agentOf(t.agent);
+    return `<div class="tp-row archived" data-xid="${esc(String(t.sid || t.id))}" data-dept="${t.dept}">
+      <span class="tp-st arch">ARCH.</span>
+      <div class="tp-body"><div class="tp-t">${esc(t.title)}</div><div class="tp-m">${a ? a.name + ' · ' + DEPTS[t.dept].short + ' · ' : ''}archivada ${timeStr(e.at)}${t.error ? ' · <span class="tp-amber">con error</span>' : ''}${e.trashed ? ' · su nota está en la papelera' : ''}</div>
+      <div class="tp-act"><button type="button" data-act="unarchive">DEVOLVER A LA LISTA</button></div></div></div>`;
+  }
+  const PAGE = 60; let limit = PAGE; // V4.1: the list says when it shows only part, and shows more on request
+  function emptyHTML() { // V4.1: an empty list says why — the filter, the search, or truly nothing
+    const f = getFocused(), where = (f && f !== 'brain') ? ` en ${esc(DEPTS[f].name)}` : '';
+    const lab = (CHIPS.find(c => c[0] === filter) || [, ''])[1];
+    if (query) return `<div class="tp-empty">Nada coincide con «${esc(query)}»${filter !== 'all' ? ` en ${esc(lab)}` : ''}${where}.<button type="button" class="tp-lnk" data-clr="q">Borrar la búsqueda</button></div>`;
+    if (filter === 'archived') return `<div class="tp-empty">No hay tareas archivadas${where}.</div>`;
+    if (filter !== 'all') return `<div class="tp-empty">Nada en «${esc(lab)}»${where} por ahora.<button type="button" class="tp-lnk" data-clr="f">Ver todas</button></div>`;
+    return `<div class="tp-empty">Nada aquí por ahora${where}. Escribe arriba qué hay que hacer.</div>`;
+  }
+  // V4.1: the list holds still while the mouse is on it (moved in the last 6 s) — it used to reorder under the cursor and a click opened
+  // another task. The owner's own actions still show at once, and a row with the keyboard focus keeps it across a redraw.
+  let hoverList = false, lastMove = 0, listStale = false, forceList = false;
+  P_.rows.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') { hoverList = true; lastMove = performance.now(); } });
+  P_.rows.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { hoverList = true; lastMove = performance.now(); } });
+  P_.rows.addEventListener('pointerleave', () => { hoverList = false; });
+  const holdList = () => !forceList && hoverList && performance.now() - lastMove < 6000;
   function metaFor(t) {
     const a = agentOf(t.agent), now = Date.now();
     const f = getFocused();
@@ -770,9 +848,9 @@ export function initTasks(ctx) {
         const w = now - t.addedAt;
         return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)} · ${src}${teamBit(t)}${modelBit(t)}`;
       }
-      case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · rendering' : t.teamHold ? ' · waiting on the pieces' : ''}${t.routine ? ' · routine' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · renderizando' : t.teamHold ? ' · esperando las partes' : ''}${t.routine ? ' · rutina' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · borrador de rutina' : ''}${teamBit(t)}${modelBit(t)}`;
-      case 'scheduled': return `${who} · se ejecuta ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · en espera de tu visto bueno' : ''}${teamBit(t)}${modelBit(t)}`;
+      case 'scheduled': return `${who} · se ejecuta ${esc(untilText(t.dueAt))} · ${new Date(t.dueAt).toLocaleDateString('es-PA', { weekday: 'short', day: 'numeric', month: 'short' })} ${timeStr(t.dueAt)}${t.needsOk ? ' · en espera de tu visto bueno' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'done': return `${who} · lista ${timeStr(t.doneAt)}${t.approved ? (t.live ? ' · enviada tras tu visto bueno' : ' · aprobada') : ''}${t.late ? ' · <span class="tp-late">se atrasó</span>' : ''}${teamBit(t)}${modelBit(t)}${t.live ? (t.error ? ' · <span class="tp-amber">con error</span>' : ' · <span class="tp-res">ver resultado →</span>') : ''}`;
     }
     return who;
@@ -789,7 +867,7 @@ export function initTasks(ctx) {
     const a = agentOf(r.agent);
     return `<div class="tp-row sched${r.paused ? ' paused' : ''}" data-id="r:${r.id}" data-rid="${r.id}" data-dept="${r.dept}" data-agent="${r.agent}">
       <span class="tp-st sched">⏱</span>
-      <div class="tp-body"><div class="tp-t">${esc(r.title)}</div><div class="tp-m">${esc(r.desc)} · ${a.name} · ${modelName(r.model || officeModel)}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${r.lastAt ? ' · last ' + timeStr(r.lastAt) + (r.lastLate ? ' <span class="tp-late">late</span>' : '') : ''}</div>
+      <div class="tp-body"><div class="tp-t">${esc(r.title)}</div><div class="tp-m">${esc(r.desc)} · ${a.name} · ${modelName(r.model || officeModel)}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'}${r.lastAt ? ' · última ' + timeStr(r.lastAt) + (r.lastLate ? ' <span class="tp-late">atrasada</span>' : '') : ''}</div>
       <div class="tp-act"><button class="run" data-act="run">EJECUTAR AHORA</button><button data-act="${r.paused ? 'resume' : 'pause'}">${r.paused ? 'REANUDAR' : 'PAUSAR'}</button><button data-act="delete">ELIMINAR</button></div></div>
       <span class="tp-ago" data-rago="${r.id}">${r.paused ? 'PAUSADA' : esc(untilText(r.nextAt))}</span></div>`;
   }
@@ -814,22 +892,40 @@ export function initTasks(ctx) {
       requestAnimationFrame(() => requestAnimationFrame(() => { n.style.transition = 'transform .65s var(--ease)'; n.style.transform = ''; }));
     });
   }
+  let lastChips = '', lastRows = '';
+  function setChips() { // the chips stay the same elements while only their counts or the filter change: a chip replaced between press and release lost the click
+    const h = chipsHTML(); if (h === lastChips) return;
+    const tmp = document.createElement('div'); tmp.innerHTML = h;
+    const want = [...tmp.children], have = [...P_.chips.children];
+    if (want.length === have.length && want.every((w, i) => w.dataset.f === have[i].dataset.f)) {
+      want.forEach((w, i) => { const c = have[i]; if (c.className !== w.className) c.className = w.className; c.setAttribute('aria-pressed', w.getAttribute('aria-pressed')); const n = w.querySelector('b').textContent, b = c.querySelector('b'); if (b.textContent !== n) b.textContent = n; });
+    } else P_.chips.innerHTML = h;
+    lastChips = h;
+  }
   function render(structural) {
     const f = getFocused();
     P_.scope.textContent = (f && f !== 'brain') ? DEPTS[f].name : 'TODA LA OFICINA';
-    P_.chips.innerHTML = chipsHTML();
+    setChips();
     if (P_.tab) { const all = tasks.filter(t => !t.piece), c = st => all.filter(t => t.state === st).length; P_.tab.innerHTML = `<span class="tt-l">TAREAS</span>${c('doing') ? `<b class="tt-doing">${c('doing')}</b>` : ''}${c('waiting') ? `<b class="tt-wait">${c('waiting')}</b>` : ''}${c('next') ? `<b>${c('next')}</b>` : ''}`; P_.tab.title = `${c('doing')} en curso · ${c('waiting')} esperan tu OK · ${c('next')} pendientes — clic para abrir`; }
     if (P_.tools) { const nd = scoped().filter(t => t.state === 'done').length; P_.clear.hidden = !nd; P_.clear.textContent = `Limpiar listas (${nd})`; }
-    const list = scoped().filter(t => filter === 'all' || (filter === 'error' ? t.state === 'done' && t.error : t.state === filter))
-      .sort((a, b) => b.changedAt - a.changedAt).slice(0, 60);
+    const all = filter === 'archived' ? [] : scoped().filter(t => filter === 'all' || (filter === 'error' ? t.state === 'done' && t.error : t.state === filter))
+      .sort((a, b) => b.changedAt - a.changedAt);
+    const list = all.slice(0, limit);
+    const more = all.length > list.length ? `<button type="button" class="tp-more" data-more="1">Se ven ${list.length} de ${all.length}. Mostrar ${Math.min(PAGE, all.length - list.length)} más</button>` : '';
     const before = structural ? {} : rects();
-    P_.rows.innerHTML = filter === 'sched'
-      ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — "cada día hábil a las 8, …" — o presiona REPETIR. Presiona <b>P</b> para el calendario…${RT_DEPTS.includes(dept) ? '' : ' Rutinas: Correos, Contabilidad y Ventas en esta versión.'}</div>`)
-      : (list.map(rowHTMLp).join('') || `<div class="tp-empty">Nada aquí por ahora.</div>`);
+    const fid = P_.rows.contains(document.activeElement) ? document.activeElement.closest('.tp-row')?.dataset.id : null;
+    const html = filter === 'sched'
+      ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || (query ? emptyHTML() : `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — «cada día hábil a las 8, …» — o presiona REPETIR. Presiona <b>P</b> para el calendario.</div>`))
+      : filter === 'archived' ? (scopedArchived().slice(0, limit).map(rowHTMLx).join('') + (scopedArchived().length > limit ? `<button type="button" class="tp-more" data-more="1">Se ven ${limit} de ${scopedArchived().length}. Mostrar más</button>` : '') || emptyHTML())
+      : (list.map(rowHTMLp).join('') + more || emptyHTML());
+    listStale = false; forceList = false;
     renderNext();
-    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
+    if (!structural && html === lastRows) return; // nothing in the list changed: the rows stay the same elements (a click on a row that was being replaced got lost)
+    P_.rows.innerHTML = lastRows = html;
+    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
     P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.tabIndex = 0; n.setAttribute('role', 'button'); n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); }); // every row opens its detail
     if (!structural) flip(before);
+    if (fid) P_.rows.querySelector(`.tp-row[data-id="${CSS.escape(fid)}"]`)?.focus({ preventScroll: true });
   }
   function refreshBars() {
     for (const t of tasks) {
@@ -860,19 +956,20 @@ export function initTasks(ctx) {
   render(true);
 
   /* ---------- the company board (B) ---------- */
-  const el = document.createElement('div'); el.id = 'board'; document.body.appendChild(el);
-  const dim = document.createElement('div'); dim.id = 'boardDim'; document.body.appendChild(dim);
+  const el = document.createElement('div'); el.id = 'board'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Tablero de la empresa'); el.inert = true; document.body.appendChild(el); // closed: inert (audit 23)
+  const dim = document.createElement('div'); dim.id = 'boardDim'; dim.setAttribute('data-modal-keep', ''); document.body.appendChild(dim);
   dim.addEventListener('click', close);
+  el.addEventListener('click', e => { if (e.target.closest('.bd-x')) close(); });
   function cardHTML(t) {
     const a = agentOf(t.agent), chip = DEPTS[t.dept].chip;
     const pct = Math.round(t.progress * 100);
     const av = `<span class="tk-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span>`;
     let meta;
     if (t.state === 'done') meta = `<span class="tk-tick">✓</span><span>${a.name}</span><span class="tk-pct">${t.approved ? 'APROBADO · ' : ''}${t.modelUsed ? modelName(t.modelUsed).toUpperCase() + ' · ' : ''}${timeStr(t.doneAt)}</span>`;
-    else if (t.state === 'waiting') meta = `${av}<span>${a.name}</span><span class="tk-chip">EN ESPERA ${span(Date.now() - t.changedAt).toUpperCase()}</span>`;
+    else if (t.state === 'waiting') meta = `${av}<span>${a.name}</span><span class="tk-chip" title="espera tu visto bueno desde hace ${span(Date.now() - t.changedAt)}">${span(Date.now() - t.changedAt)}</span>`;
     else if (t.state === 'doing') meta = `${av}<span>${a.name}</span><span class="tk-pct" data-pct="${t.id}">${t.agent === 'vid' ? 'RENDERIZANDO · ' : ''}${pct}%</span>`;
     else if (t.state === 'scheduled') meta = `${av}<span>${a.name}</span><span class="tk-pct">${esc(untilText(t.dueAt).toUpperCase())}</span>`;
-    else meta = `${av}<span>${a.name}</span><span class="tk-pct">${span(Date.now() - t.addedAt).toUpperCase()} EN PENDIENTES</span>`;
+    else meta = `${av}<span>${a.name}</span><span class="tk-pct" title="en pendientes desde hace ${span(Date.now() - t.addedAt)}">${span(Date.now() - t.addedAt)}</span>`;
     const drag = !t.piece && !t.isAsk && ['next', 'scheduled', 'waiting', 'done'].includes(t.state) && !(t.routine && t.state === 'next');
     return `<div class="tk ${t.state === 'scheduled' ? 'sched scheduled' : t.state}${t.revised ? ' rev' : ''}${t.error ? ' err' : ''}" data-id="${t.id}" data-dept="${t.dept}" role="button" tabindex="0"${drag ? ' draggable="true"' : ''}>
       <div class="tk-t">${t.routine || t.state === 'scheduled' ? '⏱ ' : ''}${t.team?.members?.length ? '⚑ ' : t.piece ? '↳ ' : ''}${esc(t.title)}</div><div class="tk-m">${meta}</div>
@@ -887,15 +984,16 @@ export function initTasks(ctx) {
   };
   function cardHTMLr(r) { // C1: a SCHEDULED card on the company board
     const a = agentOf(r.agent), chip = DEPTS[r.dept].chip;
-    return `<div class="tk sched${r.paused ? ' paused' : ''}" data-rid="${r.id}" data-dept="${r.dept}"><div class="tk-t">⏱ ${esc(r.title)}</div>
+    return `<div class="tk sched${r.paused ? ' paused' : ''}" data-rid="${r.id}" data-dept="${r.dept}" role="button" tabindex="0" aria-label="Rutina: ${esc(r.title)} — abrirla en el calendario"><div class="tk-t">⏱ ${esc(r.title)}</div>
       <div class="tk-m"><span class="tk-av" style="border-color:${chip};background:${chip}55">${a.name[0]}</span><span>${a.name} · ${modelName(r.model || officeModel).toUpperCase()}</span><span class="tk-pct">${r.paused ? 'PAUSADA' : esc(untilText(r.nextAt).toUpperCase())}</span></div></div>`;
   }
   const COLS = [['sched', 'PROGRAMADAS'], ['next', 'PENDIENTES'], ['doing', 'EN CURSO'], ['waiting', 'EN ESPERA DE APROBACIÓN'], ['done', 'LISTAS']];
   function companyHTML() {
     const tot = st => DEPT_KEYS.reduce((s, k) => s + deptTasks(k, st).length, 0);
-    const doneAll = DEPT_KEYS.reduce((s, k) => s + doneCount[k], 0);
+    const doneAll = DEPT_KEYS.reduce((s, k) => s + doneIn(k), 0); // the live office counts the real list, like LISTO on the cards
     return `<div class="bd-head">
-        <span class="b-name"><span class="bd-title">Agents Office</span>Tablero de hoy · arrastra una tarjeta para cambiarla de estado o de departamento</span>
+        <span class="b-name"><span class="bd-title">${esc(document.title.replace(/ — Agents Office$/, '') || 'Agents Office')}</span>Tablero de hoy · arrastra una tarjeta para cambiarla de estado o de departamento</span>
+        <button type="button" class="bd-x" aria-label="Cerrar el tablero" title="Cerrar (B o Esc)">✕</button>
         <span class="bd-stats"><span>PROGRAMADAS<b>${routines.length + tot('scheduled')}</b></span><span>EN CURSO<b>${tot('doing')}</b></span><span>PENDIENTES<b>${tot('next')}</b></span><span>EN ESPERA<b>${tot('waiting')}</b></span><span>LISTAS<b>${doneAll}</b></span></span></div>
       <div class="bd-lanes"><div class="lh"></div>${COLS.map(([, lab]) => `<div class="lh">${lab}</div>`).join('')}
       ${DEPT_KEYS.map(k => {
@@ -912,14 +1010,14 @@ export function initTasks(ctx) {
   function renderBoard() {
     if (!board.open || boardDrag) return; // nothing re-renders under a card being dragged
     el.innerHTML = companyHTML();
-    el.querySelectorAll('.tk.sched[data-rid]').forEach(n => n.addEventListener('click', () => { close(); filter = 'sched'; openFor(n.dataset.dept); render(true); }));
+    el.querySelectorAll('.tk.sched[data-rid]').forEach(n => n.addEventListener('click', () => { close(); if (calendar) calendar.openRoutine(n.dataset.rid); })); // V4.1 (audit 29): the routine itself opens, in the calendar — it used to flip the filter and fly the camera
   }
   // one listener for the whole board: a card opens its detail · «+N más» opens the lane · drag moves state or department
   el.addEventListener('click', e => {
     const more = e.target.closest('.more[data-lane]'); if (more) { const k = more.dataset.lane; expanded.has(k) ? expanded.delete(k) : expanded.add(k); renderBoard(); return; }
     const card = e.target.closest('.tk[data-id]'); if (card) openTask(tasks.find(t => String(t.id) === card.dataset.id));
   });
-  el.addEventListener('keydown', e => { const c = e.target.closest('.tk[data-id]'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); c.click(); } });
+  el.addEventListener('keydown', e => { const c = e.target.closest('.tk[data-id], .tk[data-rid]'); if (c && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); c.click(); } });
   el.addEventListener('dragstart', e => {
     const card = e.target.closest('.tk[draggable="true"]'); if (!card) return;
     boardDrag = tasks.find(t => String(t.id) === card.dataset.id); if (!boardDrag) return;
@@ -959,12 +1057,13 @@ export function initTasks(ctx) {
     if (!r || !r.ok) alert('No se pudo: ' + ((r && r.error) || 'error'));
   });
   function open() {
-    board.open = true;
+    board.open = true; boardOpener = document.activeElement; el.inert = false; modal.open(el); el.tabIndex = -1;
     el.className = 'company';
     renderBoard();
-    requestAnimationFrame(() => requestAnimationFrame(() => { if (!board.open) return; el.classList.add('on'); dim.classList.add('on'); })); // a close before this frame must win, or the board sits open with nothing to close it
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (!board.open) return; el.classList.add('on'); dim.classList.add('on'); el.focus({ preventScroll: true }); })); // a close before this frame must win, or the board sits open with nothing to close it
   }
-  function close() { if (!board.open) return; board.open = false; el.classList.remove('on'); dim.classList.remove('on'); }
+  let boardOpener = null;
+  function close() { if (!board.open) return; board.open = false; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.inert = true; el.classList.remove('on'); dim.classList.remove('on'); if (boardOpener && document.contains(boardOpener) && boardOpener.focus) boardOpener.focus({ preventScroll: true }); }
   function toggle() { board.open ? close() : open(); }
   const isOpen = () => board.open;
   const boardWidth = () => 0; // the dept-side board is retired — the panel is the department view
@@ -992,7 +1091,7 @@ export function initTasks(ctx) {
   function handleChat(agentId, text) {
     if (!live) { // demo: "every weekday at 8am, …" · "routines" (live: the server handles these, so fall through)
       const k0 = R[agentId].a.dept, a0 = R[agentId].a;
-      if (/^\s*(routines?|schedule|timetable)\s*\??\s*$/i.test(text)) {
+      if (/^\s*¿?\s*(routines?|schedule|timetable|rutinas?|horario)\s*\??\s*$/i.test(text)) {
         if (!RT_DEPTS.includes(k0)) return rtRefuse(k0);
         const mine = deptRoutines(k0).sort(byNext);
         return mine.length ? `${RT_NAMES[k0]} rutinas:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${agentOf(r.agent).name}${r.paused ? ' · PAUSADA' : ''}`).join('\n') : `Nada en el horario de ${RT_NAMES[k0]} todavía. Dame una con hora — "cada día hábil a las 8, …" — y la anoto.`;
@@ -1041,7 +1140,7 @@ export function initTasks(ctx) {
   /* ---------- per-frame ---------- */
   function tick(now) {
     if (!live) { const w = Date.now(); for (const r of routines) if (!r.paused && r.nextAt && r.nextAt <= w) fireDemo(r, false); // demo: this page is the clock
-      for (const t of tasks) if (t.state === 'scheduled' && t.dueAt <= w) { t.state = 'next'; t.addedAt = w; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Scheduled task fired: ${t.title}`); } }
+      for (const t of tasks) if (t.state === 'scheduled' && t.dueAt <= w) { t.state = 'next'; t.addedAt = w; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}`); } }
     for (const id in R) {
       const r = R[id];
       if (r.state === 'stuck') continue;
@@ -1068,7 +1167,8 @@ export function initTasks(ctx) {
       }
     }
     if (now - lastBadge > 400) { syncBadges(); lastBadge = now; }
-    if (dirty) { render(false); renderBoard(); dirty = false; }
+    if (dirty) { renderBoard(); dirty = false; if (holdList()) { listStale = true; setChips(); } else render(false); }
+    else if (listStale && !holdList()) render(false);
     else {
       if (now - lastBar > 250) { refreshBars(); lastBar = now; }
       if (now - lastAgo > 15000) { refreshAgo(); lastAgo = now; }
@@ -1076,37 +1176,37 @@ export function initTasks(ctx) {
   }
 
   /* ---------- V3.2.1 (16 Sep 2026): the CALENDAR (P) — tasks and routines on their days; click a day to schedule ---------- */
-  async function createScheduled({ dept: k, text, at, model }) { // a task for a date: live → the server routes it now and runs it then; demo → session-only
+  async function createScheduled({ dept: k, text, at, model, effort, team, agent, title: fixedTitle, needsOk }) { // a task for a date: live → the server routes it now and runs it then; demo → session-only
     if (!(at > Date.now())) return { ok: false, error: 'Elige una hora que aún esté por venir.' };
     if (live) {
       try {
-        const r = await fetch(API + '/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, at, model: normModel(model) || undefined, team: asTeam(text) || undefined }) });
+        const r = await fetch(API + '/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, at, model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: agent ? undefined : team || asTeam(text) || undefined, agent, title: fixedTitle, needsOk }) });
         const st = await r.json(); if (!r.ok) throw new Error(st.error || r.statusText);
         const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, why: st.why, by: 'you', live: true, sid: st.id, state: 'scheduled', dueAt: st.dueAt, needsOk: !!st.needsOk, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', team: st.team ? { lead: st.team.lead, members: [] } : undefined });
-        touch(t, 'scheduled'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Programada para ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
+        touch(t, 'scheduled'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Programada para ${new Date(at).toLocaleString('es-PA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
         return { ok: true, task: t };
       } catch (e) { return { ok: false, error: e.message }; }
     }
     const { agent: a } = route(k, text);
     const title = (text.charAt(0).toUpperCase() + text.slice(1)).slice(0, 90);
     const t = mk({ agent: a.id, title, text, by: 'you', state: 'scheduled', dueAt: at, needsOk: guessOk(text), modelUsed: normModel(model) || officeModel, modelFrom: model ? 'task' : 'office' });
-    touch(t, 'scheduled'); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Programada para ${new Date(at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${title}`);
+    touch(t, 'scheduled'); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Programada para ${new Date(at).toLocaleString('es-PA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${title}`);
     return { ok: true, task: t };
   }
-  async function createRoutineAt({ dept: k, text, when, needsOk, model }) { // a routine from a date (when.start)
+  async function createRoutineAt({ dept: k, text, when, needsOk, model, effort }) { // a routine from a date (when.start)
     if (!RT_DEPTS.includes(k)) return { ok: false, error: rtRefuse(k) };
     if (live) {
       try {
-        const r = await fetch(API + '/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, when, needsOk, model: normModel(model) || undefined }) });
+        const r = await fetch(API + '/routines', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: k, text, when, needsOk, model: normModel(model) || undefined, effort: normEffort(effort) || undefined }) });
         const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
         setRoutines([...routines.filter(x => x.id !== j.routine.id), j.routine]);
-        const a = agentOf(j.routine.agent); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${j.routine.title} (${j.routine.desc})`);
+        const a = agentOf(j.routine.agent); spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${j.routine.title} (${j.routine.desc})`);
         return { ok: true, routine: routines.find(x => x.id === j.routine.id) };
       } catch (e) { return { ok: false, error: e.message }; }
     }
     const { agent: a } = route(k, text);
     const r = addRoutine(k, a.id, text, when, needsOk); r.model = normModel(model) || undefined;
-    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `New routine: ${r.title} (${r.desc})`);
+    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${r.title} (${r.desc})`);
     return { ok: true, routine: r };
   }
   async function cancelScheduled(t) {
@@ -1130,7 +1230,7 @@ export function initTasks(ctx) {
         Object.assign(t, { title: st.title, text: st.text, dueAt: st.dueAt, needsOk: !!st.needsOk, model: st.model, modelUsed: st.model || officeModel, modelFrom: st.model ? 'task' : 'office', plan: st.plan || t.plan });
         if (moved) t.agent = st.agent;
         touch(t, 'scheduled'); dirty = true;
-        feedPush(R[t.agent], '✎', `Reprogramada para ${new Date(t.dueAt).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
+        feedPush(R[t.agent], '✎', `Reprogramada para ${new Date(t.dueAt).toLocaleString('es-PA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: ${t.title}`);
         return { ok: true, task: t };
       } catch (e) { return { ok: false, error: e.message || 'sin conexión con la oficina' }; }
     }
@@ -1167,9 +1267,10 @@ export function initTasks(ctx) {
     if (moved) spawnEmote(R[t.agent], '📋');
     touch(t, 'edited');
   }
-  const removeLocal = t => { const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); dirty = true; if (calendar) calendar.refresh(); };
+  const removeLocal = t => { const i = tasks.indexOf(t); if (i >= 0) tasks.splice(i, 1); dirty = true; if (calendar) calendar.refresh(); if (settle && t.state === 'waiting') settle(t.agent); }; // an archived draft takes its ⚠ with it
   async function act(t, name, p = {}) {
     const L = live && t.live && t.sid && !t.piece;
+    forceList = true; // the owner's own action shows at once, mouse on the list or not
     try {
       switch (name) {
         case 'save': case 'unschedule': case 'done': {
@@ -1194,18 +1295,28 @@ export function initTasks(ctx) {
           if (L) {
             await req('POST', `/tasks/${t.sid}/${name}`, name === 'reject' ? { feedback: p.feedback } : {});
             toDoing(t); chatPush(t.agent, { who: 'agent', text: name === 'approve' ? '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' : 'En eso — lo rehago con tu nota. Vuelve aquí para tu visto bueno.' });
+            if (decided) decided(t.agent, t.sid, name === 'approve'); // V4.1: the ⚠, the counters and the chat card follow (they used to stay)
           } else if (onResolveDemo) onResolveDemo(t.agent, name === 'approve');
           break;
         case 'repeat':
           if (L) reconcile(await req('POST', `/tasks/${t.sid}/repeat`));
           else addTask(t.agent, t.title, 'you');
           break;
-        case 'archive':
-          if (L) { const j = await req('POST', `/tasks/${t.sid}/archive`, { note: !!p.note }); if (j.graph && brain) brain.setGraph(j.graph); }
-          removeLocal(t); return { ok: true, gone: true };
-        case 'delete':
-          if (L) { const j = await req('DELETE', `/tasks/${t.sid}${p.note ? '?note=1' : ''}`); if (j.graph && brain) brain.setGraph(j.graph); }
-          removeLocal(t); return { ok: true, gone: true };
+        case 'archive': { // V4.1: it goes to ARCHIVADAS, and the toast offers DESHACER
+          let trashed = null;
+          if (L) { const j = await req('POST', `/tasks/${t.sid}/archive`, { note: !!p.note }); if (j.graph && brain) brain.setGraph(j.graph); trashed = j.trashed || null; }
+          removeLocal(t); archived.unshift({ t, at: Date.now(), trashed });
+          if (!p.quiet) offerUndo(`Archivada: «${esc(short(t.title))}»${trashed ? ' y su nota, a la papelera' : ''}.`, { undo: () => unarchive([t]) });
+          return { ok: true, gone: true };
+        }
+        case 'unarchive':
+          return (await unarchive([t])) ? { ok: true } : { ok: false, error: 'no se pudo devolver a la lista' };
+        case 'delete': { // V4.1: it leaves the list at once; the server deletes it when DESHACER is gone (8 s), or when the page closes
+          removeLocal(t); if (L) deleting.add(t.sid);
+          const commit = () => { if (!L) return; fetch(`${API}/tasks/${t.sid}${p.note ? '?note=1' : ''}`, { method: 'DELETE', keepalive: true }).then(r => r.json()).then(j => { if (j.graph && brain) brain.setGraph(j.graph); }).catch(() => {}).finally(() => deleting.delete(t.sid)); };
+          offerUndo(`Eliminada: «${esc(short(t.title))}»${p.note ? ' (su nota va a la papelera)' : ''}.`, { commit, undo: () => { if (L) deleting.delete(t.sid); if (!tasks.includes(t)) tasks.push(t); dirty = true; if (calendar) calendar.refresh(); if (settle && t.state === 'waiting') settle(t.agent); return true; } });
+          return { ok: true, gone: true };
+        }
         default: return { ok: false, error: 'acción desconocida' };
       }
       dirty = true; if (calendar) calendar.refresh();
@@ -1216,16 +1327,64 @@ export function initTasks(ctx) {
   const detail = initDetail({ agentOf, AGENTS, DEPTS, DEPT_KEYS, esc, isLive: () => live, act, openAgent: id => { leaveOverlays(); if (openAgent) openAgent(id, 'chat'); },
     openNote: name => { leaveOverlays(); return !!(brain && brain.show(name)); }, openCalendar: ts => calendar && calendar.openAt(ts), modelName, MODEL_KEYS, officeModel: () => officeModel });
   function openTask(t) { if (t) detail.open(t); }
-  // «Limpiar listas»: every finished task in view leaves the list (archived on the server; notes stay in the Brain)
+  // «Limpiar listas»: every finished task in view goes to ARCHIVADAS (on the server too; notes stay in the Brain) — with DESHACER, no confirm box
   async function clearDone() {
     const done = scoped().filter(t => t.state === 'done' && !t.piece);
-    if (!done.length || !confirm(`¿Archivar ${done.length} ${done.length === 1 ? 'tarea lista' : 'tareas listas'}? Salen de la lista; sus notas siguen en el Cerebro.`)) return;
-    for (const t of done) await act(t, 'archive', {});
-    render(true);
+    if (!done.length) return;
+    P_.clear.disabled = true;
+    const gone = []; for (const t of done) { const r = await act(t, 'archive', { quiet: true }); if (r && r.ok) gone.push(t); }
+    P_.clear.disabled = false; render(true);
+    if (gone.length) offerUndo(`${gone.length} ${gone.length === 1 ? 'tarea archivada' : 'tareas archivadas'}. Sus notas siguen en el Cerebro; las ves en ARCHIVADAS.`, { undo: () => unarchive(gone) });
+    if (gone.length < done.length) say(`${done.length - gone.length} no se pudieron archivar.`, 'err');
   }
-  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
+  /* ---------- V4.1 (24 Sep 2026): ARCHIVADAS, and DESHACER after Archivar, Limpiar listas and Eliminar ---------- */
+  const short = x => { x = String(x || ''); return x.length > 48 ? x.slice(0, 46) + '…' : x; };
+  async function unarchive(list) {
+    let ok = true;
+    for (const t of list) {
+      const e = archived.find(x => x.t === t);
+      try {
+        if (live && t.live && t.sid) {
+          await req('POST', `/tasks/${t.sid}/archive`, { archived: false });
+          if (e && e.trashed) { try { const j = await req('POST', '/note/restore', { file: e.trashed }); if (j.graph && brain) brain.setGraph(j.graph); } catch {} }
+        }
+        if (e) archived.splice(archived.indexOf(e), 1);
+        if (!tasks.includes(t)) tasks.push(t);
+      } catch { ok = false; }
+    }
+    dirty = true; if (calendar) calendar.refresh();
+    return ok;
+  }
+  const toast = document.createElement('div'); toast.className = 'tp-toast'; toast.hidden = true; toast.setAttribute('role', 'status'); toast.setAttribute('data-modal-keep', ''); document.body.appendChild(toast);
+  let pendingUndo = null, toastTimer = 0;
+  function offerUndo(html, { undo, commit }) { // one toast at a time: a new one commits the previous action
+    if (pendingUndo) finishUndo(true);
+    pendingUndo = { undo, commit };
+    toast.innerHTML = `<span class="tt-x">${html}</span><button type="button" class="tp-undo">DESHACER</button><button type="button" class="tp-tclose" aria-label="Cerrar el aviso">✕</button>`;
+    toast.hidden = false; requestAnimationFrame(() => toast.classList.add('on'));
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), 10000);
+  }
+  function finishUndo(doCommit) {
+    clearTimeout(toastTimer); const u = pendingUndo; pendingUndo = null;
+    if (toast.contains(document.activeElement)) document.activeElement.blur();
+    toast.classList.remove('on'); setTimeout(() => { if (!pendingUndo) toast.hidden = true; }, 260);
+    if (u && doCommit && u.commit) u.commit();
+    return u;
+  }
+  toast.addEventListener('click', async e => {
+    if (e.target.closest('.tp-tclose')) return finishUndo(true);
+    if (!e.target.closest('.tp-undo')) return;
+    const u = finishUndo(false); if (!u || !u.undo) return;
+    forceList = true; const ok = await u.undo(); say(ok === false ? 'No se pudo deshacer.' : 'Deshecho: la tarea volvió a la lista.', ok === false ? 'err' : ''); render(true);
+  });
+  // the toast waits while the pointer or the keyboard is on it (time to read and reach DESHACER)
+  toast.addEventListener('pointerenter', () => clearTimeout(toastTimer));
+  toast.addEventListener('pointerleave', () => { if (pendingUndo) { clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), 4000); } });
+  toast.addEventListener('focusin', () => clearTimeout(toastTimer));
+  addEventListener('pagehide', () => { if (pendingUndo) finishUndo(true); }); // closing the page carries the delete out (keepalive)
+  const calendar = initCalendar({ tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), archivedTasks: () => archived.map(x => x.t), EFFORT_KEYS, effortName, teamsOn: () => teamsCfg.enabled, openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
   return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
            findBySid: sid => tasks.find(t => t.live && t.sid === sid),
-           handleChat, addTask, revise, rowHTML, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
-           routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, pendingReject, rejectLive, officeModel: () => officeModel, chosenModel, chosenEffort };
+           handleChat, addTask, revise, rowHTML, showDept, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
+           routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, rejectLive, waitingFor, officeModel: () => officeModel, chosenModel, chosenEffort };
 }

@@ -82,7 +82,7 @@ const HF = {
     throw new Error('el modelo no tiene ruta');
   },
 };
-const t2v = p => ({ text: p, image: p.replace(/\/text-to-video$/, '/image-to-video') });
+const t2v = p => /\/text-to-video$/.test(p) ? { text: p, image: p.replace(/\/text-to-video$/, '/image-to-video') } : { text: p }; // as open-higgsfield: an image route only where the path has one (LTX's «…/text-to-video/pro» has none — a start frame there went to the text route)
 const hfImage = (id, name, text, cost, note) => ({ id, engine: 'higgsfield', kind: 'image', name, cost, note, roles: { reference: 8 }, settings: { aspectRatio: E(HF_IMG_ASPECT, '1:1'), resolution: E(['1k', '2k', '4k'], '1k') }, hf: HF.paths({ text }) });
 const hfVideo = (id, name, roles, spec, perSec, note) => ({ id, engine: 'higgsfield', kind: 'video', name, cost: perSec, per: 's', note, roles, settings: { aspectRatio: E(VID_ASPECT, '16:9'), resolution: E(['720p', '1080p'], '720p'), duration: R(4, 10, 5) }, hf: HF.paths(spec) });
 const soulSet = { aspectRatio: E(SOUL_ASPECT, '1:1'), resolution: E(['720p', '1080p'], '720p'), batchSize: E(['1', '4'], '1'), enhancePrompt: B(false) };
@@ -113,7 +113,8 @@ const CATALOG = [
   falImg('flux-kontext', 'Flux Kontext', 0.04, 'fal-ai/flux-pro/kontext/text-to-image', 'fal-ai/flux-pro/kontext', 1, 'Cambia una imagen con una frase («ponle fondo de playa»).', s => ({ aspect_ratio: s.aspectRatio })),
   falImg('flux-schnell', 'Flux Schnell', 0.003, 'fal-ai/flux/schnell', null, 0, 'El más barato: para probar ideas en lote.', s => ({ image_size: FAL_SIZE[s.aspectRatio] || 'square_hd' })),
   falImg('ideogram-3-fal', 'Ideogram 3 (fal)', 0.06, 'fal-ai/ideogram/v3', null, 0, 'Texto legible dentro de la imagen.', s => ({ image_size: FAL_SIZE[s.aspectRatio] || 'square_hd' })),
-  { id: 'prueba', engine: 'prueba', kind: 'image', name: 'Prueba (gratis)', cost: 0, note: 'Una tarjeta con tu prompt: prueba el Estudio sin gastar.', roles: { start: 1, end: 1, reference: 8 }, settings: { aspectRatio: E(IMG_ASPECT, '1:1') } },
+  // V4.2: an image takes references only — no real image model has a first or last frame; the free test card used to ask for them and looked like a video form
+  { id: 'prueba', engine: 'prueba', kind: 'image', name: 'Prueba (gratis)', cost: 0, note: 'Una tarjeta con tu prompt, no una imagen real: prueba el Estudio sin gastar.', roles: { reference: 8 }, settings: { aspectRatio: E(IMG_ASPECT, '1:1') } },
   // ---- video
   { id: 'kling-3-std', engine: 'higgsfield', kind: 'video', name: 'Kling 3.0', cost: 0.08, per: 's', note: 'El equilibrio: buena calidad, sonido, imagen inicial y final.', roles: { start: 1, end: 1 }, settings: kling3Set, hf: HF.kling3('kling-video/v3.0/std') },
   { id: 'kling-3-pro', engine: 'higgsfield', kind: 'video', name: 'Kling 3.0 Pro', cost: 0.11, per: 's', roles: { start: 1, end: 1 }, settings: kling3Set, hf: HF.kling3('kling-video/v3.0/pro') },
@@ -126,13 +127,26 @@ const CATALOG = [
   { id: 'seedance-2.5-edit', engine: 'higgsfield', kind: 'video', name: 'Seedance 2.5 · Editar video', cost: 0.1, per: 's', note: 'Cambia un video existente con una frase.', needs: ['video'], roles: { video: 1, reference: 30 }, settings: seedance25Set, hf: HF.seedanceSource('bytedance/seedance-2.5/video-edit', false) },
   { id: 'seedance-2.5-extend', engine: 'higgsfield', kind: 'video', name: 'Seedance 2.5 · Alargar video', cost: 0.1, per: 's', note: 'Continúa un video existente.', needs: ['video'], roles: { video: 1, reference: 30 }, settings: { duration: R(4, 30, 5), ...seedance25Set }, hf: HF.seedanceSource('bytedance/seedance-2.5/video-extend', true) },
   { id: 'kling-3-motion', engine: 'higgsfield', kind: 'video', name: 'Kling 3 · Copiar movimiento', cost: 0.1, per: 's', note: 'Tu personaje (imagen) hace el movimiento de un video.', needs: ['start', 'video'], roles: { start: 1, video: 1 }, settings: motionSet, hf: HF.motion('kling-video/v3/motion-control/std') },
-  hfVideo('kling-o3', 'Kling O3 · Primer y último fotograma', { start: 1, end: 1 }, { firstLast: 'kling-video/o3/first-last-frame' }, 0.1, 'Une dos imágenes con un movimiento.'),
+  { ...hfVideo('kling-o3', 'Kling O3 · Primer y último fotograma', { start: 1, end: 1 }, { firstLast: 'kling-video/o3/first-last-frame' }, 0.1, 'Une dos imágenes con un movimiento.'), needs: ['start'] }, // its only route is first-last: without a frame it has nothing to take
   hfVideo('kling-2.6', 'Kling 2.6 Pro', { start: 1 }, t2v('kling-video/v2.6/pro/text-to-video'), 0.07),
   hfVideo('minimax-hailuo-2.3', 'MiniMax Hailuo 2.3', { start: 1 }, t2v('minimax/hailuo-2.3/standard/text-to-video'), 0.045),
   hfVideo('wan-3', 'Wan 3.0', { start: 1 }, t2v('alibaba/wan-3.0/text-to-video'), 0.05),
-  hfVideo('ltx-2.5-pro', 'LTX 2.5 Pro', { start: 1 }, t2v('lightricks/ltx-2.5/text-to-video/pro'), 0.06),
+  hfVideo('ltx-2.5-pro', 'LTX 2.5 Pro', {}, t2v('lightricks/ltx-2.5/text-to-video/pro'), 0.06), // text only: its route takes no first frame (open-higgsfield offers one and drops it)
   hfVideo('pixverse-6', 'PixVerse 6', { start: 1 }, t2v('pixverse/v6/text-to-video'), 0.05),
   hfVideo('grok-imagine-video', 'Grok Imagine Video 1.5', { reference: 8, video: 3 }, { reference: 'xai/grok-imagine-video/v1.5/reference-to-video' }, 0.05),
+  // V4.2 (25 Sep 2026): the twelve models open-higgsfield (b16a0ef) lists that we did not — same paths, same shared mapper. Their prices
+  // are estimates until the owner sees Higgsfield's own: the note says so.
+  { id: 'kling-3-motion-pro', engine: 'higgsfield', kind: 'video', name: 'Kling 3 Pro · Copiar movimiento', cost: 0.15, per: 's', note: 'Como Copiar movimiento, con más calidad. Precio aproximado.', needs: ['start', 'video'], roles: { start: 1, video: 1 }, settings: motionSet, hf: HF.motion('kling-video/v3/motion-control/pro') },
+  { ...hfVideo('kling-o1', 'Kling O1 · Primer y último fotograma', { start: 1, end: 1 }, { firstLast: 'kling-video/omni/first-last-frame' }, 0.1, 'Kling Omni: une una imagen inicial (y una final) con un movimiento. Precio aproximado.'), needs: ['start'] },
+  { ...hfVideo('kling-2.5', 'Kling 2.5 Turbo · Anima una foto', { start: 1 }, { image: 'kling-video/v2.5-turbo/standard/image-to-video' }, 0.05, 'Barato y rápido para animar una imagen. Precio aproximado.'), needs: ['start'] },
+  hfVideo('wan-2.6', 'Wan 2.6', { start: 1 }, t2v('wan/v2.6/text-to-video'), 0.04, 'Económico; texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('wan-2.7', 'Wan 2.7', { start: 1 }, t2v('wan/v2.7/text-to-video'), 0.045, 'Texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('wan-3-prime', 'Wan 3.0 Prime', { start: 1 }, t2v('alibaba/wan-3.0-prime/text-to-video'), 0.07, 'La versión alta de Wan 3. Precio aproximado.'),
+  hfVideo('minimax-h3', 'MiniMax H3', { start: 1 }, t2v('minimax/h3/text-to-video'), 0.06, 'Texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('ltx-2.5-fast', 'LTX 2.5 Fast', {}, t2v('lightricks/ltx-2.5/text-to-video/fast'), 0.03, 'Rápido y barato; solo texto. Precio aproximado.'), // text only, as LTX 2.5 Pro
+  hfVideo('happy-horse-1', 'Happy Horse 1.0', { start: 1 }, t2v('alibaba/happy-horse/text-to-video'), 0.04, 'De Alibaba; texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('happy-horse-1.1', 'Happy Horse 1.1', { start: 1 }, t2v('alibaba/happy-horse/v1.1/text-to-video'), 0.045, 'La versión nueva de Happy Horse. Precio aproximado.'),
+  hfVideo('flux-3', 'Flux 3 (video)', { start: 1 }, t2v('blackforestlabs/flux-3/text-to-video'), 0.06, 'El video de Black Forest Labs; texto o una imagen inicial. Precio aproximado.'),
   { ...hfVideo('dop', 'DoP · Anima una foto', { start: 1 }, { image: 'higgsfield-ai/dop/lite' }, 0.05, 'Movimientos de cámara sobre una foto tuya.'), needs: ['start'] },
   { id: 'kling-2.5-fal', engine: 'fal', kind: 'video', name: 'Kling 2.5 Turbo (fal)', cost: 0.07, per: 's', roles: { start: 1, end: 1 }, settings: { aspectRatio: E(VID_ASPECT, '16:9'), duration: E(['5', '10'], '5') },
     fal: j => j.m.start[0] ? { path: 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video', body: { prompt: j.prompt, image_url: j.m.start[0], ...(j.m.end[0] ? { tail_image_url: j.m.end[0] } : {}), duration: j.s.duration } } : { path: 'fal-ai/kling-video/v2.5-turbo/pro/text-to-video', body: { prompt: j.prompt, duration: j.s.duration, aspect_ratio: j.s.aspectRatio } } },
@@ -327,6 +341,7 @@ const fromUrl = async url => { const r = await fetch(url, { signal: AbortSignal.
 const extOf = (mime, url, fallback = 'png') => { const s = (mime || '') + ' ' + (url || '').split('?')[0].slice(-6); return /jpe?g/.test(s) ? 'jpg' : /webp/.test(s) ? 'webp' : /webm/.test(s) ? 'webm' : /mp4|quicktime|\.mov/.test(s) ? 'mp4' : /png/.test(s) ? 'png' : fallback; };
 function friendly(msg, status) { // what the owner reads on the red tile
   const m = String(msg || '');
+  if (status === 403 && /Higgsfield/.test(m)) return 'sin créditos en Higgsfield: recarga en cloud.higgsfield.ai (' + m.slice(0, 100) + ')'; // Higgsfield answers 403 for «Not enough credits» (its own client), not for a bad key
   if (status === 401 || status === 403 || /unauthori[sz]ed|invalid (api )?key|forbidden/i.test(m)) return 'la key no es válida o no tiene permiso (' + m.slice(0, 120) + ')';
   if (status === 402 || /insufficient|credits?|balance|quota|billing/i.test(m)) return 'sin saldo o créditos en el servicio (' + m.slice(0, 120) + ')';
   if (status === 429 || /rate.?limit|too many/i.test(m)) return 'el servicio pide esperar un poco (demasiadas peticiones); reintenta en un minuto';
@@ -377,7 +392,9 @@ const RUN = {
       const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const lines = []; let cur = '';
       for (const wd of esc(text).split(/\s+/)) { if ((cur + ' ' + wd).length > 28) { lines.push(cur); cur = wd; } else cur = (cur ? cur + ' ' : '') + wd; } if (cur) lines.push(cur);
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,22%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},80%,45%)"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><text x="50%" y="12%" fill="#fff" opacity=".6" font-family="Georgia,serif" font-size="${w / 22}" text-anchor="middle">PRUEBA · ${m.kind === 'video' ? 'VIDEO' : 'ESTUDIO'}</text>${lines.slice(0, 8).map((l, k) => `<text x="50%" y="${34 + k * 8}%" fill="#fff" font-family="Georgia,serif" font-size="${w / 17}" text-anchor="middle">${l}</text>`).join('')}${count ? `<text x="50%" y="92%" fill="#fff" opacity=".7" font-family="Georgia,serif" font-size="${w / 30}" text-anchor="middle">con ${esc(count)}</text>` : ''}</svg>`;
+      const secs = Math.max(1, Number(job.s.duration) || 5), anim = m.kind === 'video' // V4.2 (audit A30): a test «video» is an animated card (a playhead, a moving light) — no encoder here to make an .mp4
+        ? `<circle r="${w / 5}" cy="${h / 2}" fill="#fff" opacity=".12"><animate attributeName="cx" values="${-w / 5};${w * 1.2}" dur="${secs}s" repeatCount="indefinite"/></circle><rect x="0" y="${h - h / 40}" height="${h / 40}" fill="#fff" opacity=".85"><animate attributeName="width" values="0;${w}" dur="${secs}s" repeatCount="indefinite"/></rect><text x="96%" y="${h - h / 20}" fill="#fff" opacity=".8" font-family="Georgia,serif" font-size="${w / 34}" text-anchor="end">muestra animada · ${secs} s</text>` : '';
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},70%,22%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360},80%,45%)"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><text x="50%" y="12%" fill="#fff" opacity=".6" font-family="Georgia,serif" font-size="${w / 22}" text-anchor="middle">PRUEBA · ${m.kind === 'video' ? 'VIDEO' : 'ESTUDIO'}</text>${lines.slice(0, 8).map((l, k) => `<text x="50%" y="${34 + k * 8}%" fill="#fff" font-family="Georgia,serif" font-size="${w / 17}" text-anchor="middle">${l}</text>`).join('')}${count ? `<text x="50%" y="92%" fill="#fff" opacity=".7" font-family="Georgia,serif" font-size="${w / 30}" text-anchor="middle">con ${esc(count)}</text>` : ''}${anim}</svg>`;
       ctx.add(Buffer.from(svg), 'svg', m.kind === 'video' ? { wanted: 'video' } : {});
     }
   },

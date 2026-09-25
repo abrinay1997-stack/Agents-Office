@@ -39,8 +39,13 @@ export function initSheet(ctx) {
       (d.recent.length ? `<ul class="ag-recent">${d.recent.map(t => `<li><button type="button" data-sid="${esc(t.id)}"><span class="ag-st ${t.error ? 'err' : t.state}">${t.error ? 'error' : STATE[t.state] || t.state}</span>${esc(t.title)}</button></li>`).join('')}</ul>` : '<p class="ag-note">Sin tareas todavía.</p>');
     el.innerHTML = `<div class="ag-head"><div><div class="ag-title">${esc(a.name)}${a.lead ? ' <span class="star">★</span>' : ''}</div><div class="ag-sub">${esc(a.role || '')}</div></div><span class="sp"></span><button type="button" class="ag-x" aria-label="Volver al chat">✕</button></div>
       <div class="ag-scroll">${sec('who', 'Quién es', who)}${sec('skills', 'Skills', skills, d.skills.length)}${sec('lessons', 'Lecciones aprendidas', lessons, L.rules.length + L.oneOffs.length)}${sec('record', 'Historial', record, st.done + st.failed)}</div>`;
-    count();
+    count(); snap = formNow();
   }
+  // V4.1 (audit 25): closing with unsaved changes asks first — it used to throw them away without a word
+  const FIELDS = ['.ag-name', '.ag-role', '.ag-does', '.ag-brief', '.ag-model', '.ag-effort', '.ag-tools'];
+  let snap = '';
+  const formNow = () => FIELDS.map(f => { const x = el.querySelector(f); return x ? x.value : ''; }).join('\u0001');
+  const unsaved = () => !el.hidden && !!data && !!el.querySelector('.ag-name') && formNow() !== snap;
   const count = () => { const b = el.querySelector('.ag-brief'), c = el.querySelector('.ag-cnt'); if (b && c) c.textContent = `${b.value.length} / 2000`; };
   const msg = (t, bad) => { const m = el.querySelector('.ag-msg'); if (m) { m.textContent = t; m.className = 'ag-msg' + (bad ? ' bad' : ''); } };
   async function load(id) {
@@ -77,6 +82,10 @@ export function initSheet(ctx) {
     if (!isLive()) { alert('La ficha edita la oficina real: ábrela con el iniciador.'); return; }
     cur = id; el.hidden = false; host.classList.add('sheetOpen'); load(id);
   }
-  function close() { cur = null; el.hidden = true; host.classList.remove('sheetOpen'); }
-  return { open: openSheet, close, isOpen: () => !el.hidden, current: () => cur };
+  function close(force) { // → false when the owner chose to stay and keep the changes
+    if (!force && unsaved() && !confirm(`Hay cambios sin guardar en la ficha de ${data.agent.name}. ¿Cerrar sin guardarlos?`)) { el.querySelector('.ag-save')?.focus(); return false; }
+    cur = null; el.hidden = true; host.classList.remove('sheetOpen'); return true;
+  }
+  addEventListener('beforeunload', e => { if (unsaved()) { e.preventDefault(); e.returnValue = ''; } }); // closing the page warns too
+  return { open: openSheet, close, isOpen: () => !el.hidden, current: () => cur, unsaved };
 }

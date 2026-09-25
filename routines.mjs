@@ -23,12 +23,12 @@ export const file = brainPath => path.join(brainPath, 'Agents Office', 'routines
 export const stateFile = dataDir => path.join(dataDir, 'routines.json');
 export const LATE_AFTER = 90 * 1000; // a run more than 90 s past its minute was missed (asleep, or the office was off) → runs once, marked LATE
 
-const slug = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 const readJSON = (p, fallback) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fallback; } };
 
 /** "Routines come to Marketing in a later release. This release: Emails, Accounting, Sales." */
 export function refusal(dept) {
-  return `Routines come to ${NAMES[dept] || dept} in a later release. This release: Emails, Accounting and Sales.`;
+  return `${NAMES[dept] || dept} todavía no tiene rutinas en esta oficina.`; // every department has them since 24 Sep 2026
 }
 
 /** Normalise + check one routine against the roster. Returns { routine, problems }. Fixed fields are kept as given; bad ones are named. */
@@ -149,17 +149,17 @@ export function guessNeedsOk(text) {
 
 /** The one-line question the agent asks when a routine's draft is waiting. */
 export function askLine(task) {
-  return `"${task.title}" is done and waiting for your OK — approve to send it, reject to tell me what to change.`;
+  return `«${task.title}» está lista y espera tu visto bueno: aprueba para enviarla, o rechaza y dime qué cambiar.`;
 }
 
 /** The "routines" list a lead reads back in chat. */
 export function listText(list, dept, agents) {
   const mine = list.filter(r => r.dept === dept);
-  const DNAMES = { emails: 'Correos', fin: 'Contabilidad', sales: 'Ventas' };
-  if (!mine.length) return `Todavía no hay nada en el horario de ${DNAMES[dept] || dept}. Dame una con hora — "every weekday at 8am, …" — y la anoto.`;
+  const DNAMES = { emails: 'Correos', fin: 'Contabilidad', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', delivery: 'Entregas' };
+  if (!mine.length) return `Todavía no hay nada en el horario de ${DNAMES[dept] || dept}. Dame una con hora — «cada día hábil a las 8, …» — y la anoto.`;
   const name = id => agents.find(a => a.id === id)?.name || id;
-  return `Rutinas de ${DNAMES[dept] || dept}:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${name(r.agent)}${r.paused ? ' · PAUSADA' : ''}${r.needsOk ? ' · en espera de tu visto bueno' : ' · read-only'}`).join('\n') +
-    `\n\nDi "pause …", "resume …", "run … now" o "delete …" con algunas palabras del nombre.`;
+  return `Rutinas de ${DNAMES[dept] || dept}:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${name(r.agent)}${r.paused ? ' · PAUSADA' : ''}${r.needsOk ? ' · espera tu visto bueno' : ' · solo lectura'}`).join('\n') +
+    `\n\nDi «pausa …», «reanuda …», «ejecuta …» o «elimina …» con algunas palabras del nombre.`;
 }
 
 /** Match "pause the monday one" / "run inbox triage now" to a routine in the department by word overlap. */

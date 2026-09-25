@@ -363,6 +363,8 @@ else {
       const hint = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Rutina programada/.test(hint)) throw new Error('hint: ' + hint);
       await page.waitForTimeout(400);
       const n = await page.evaluate(() => window.CC.routines().length); if (n !== 1) throw new Error('routines: ' + n);
+      const kept = await page.evaluate(() => document.querySelector('.tp-chip.on')?.dataset.f); if (kept === 'sched') throw new Error('the panel jumped to SCHEDULED on its own (audit 46)');
+      await page.click('.tp-hint .tp-lnk[data-f="sched"]'); await page.waitForTimeout(300); // «Ver en PROGRAMADAS» in the hint
       const row = await page.evaluate(() => [...document.querySelectorAll('.tp-row.sched .tp-t')].some(e => /triage the inbox/i.test(e.textContent))); if (!row) throw new Error('no SCHEDULED row');
       const strip = await page.evaluate(() => { const e = document.querySelector('.tp-next'); return e.hidden ? '' : e.textContent; }); if (!/PRÓXIMA/.test(strip) || !/triage/i.test(strip)) throw new Error('next-up strip: ' + strip);
       await page.keyboard.press('b'); await page.waitForTimeout(600);
@@ -419,7 +421,7 @@ else {
       await page.selectOption('.cv-dept', 'marketing'); await page.click('.cv-rep'); await page.waitForTimeout(150);
       const mkh = await page.$eval('.cv-hint', e => e.textContent); const dis = await page.$eval('.cv-go', e => e.disabled); if (!/Rutina ·/.test(mkh) || dis) throw new Error('marketing routine not offered: ' + mkh);
       await page.keyboard.press('Escape'); await page.waitForTimeout(150); if (!await page.$eval('#cvPop', e => e.hidden)) throw new Error('Esc did not close the popover');
-      await page.click('.cv-seg button[data-v="week"]'); await page.waitForTimeout(300); const wk = await page.$$eval('.cv-day', e => e.length); if (wk !== 7) throw new Error('week cells: ' + wk);
+      await page.click('.cv-seg button[data-v="week"]'); await page.waitForTimeout(300); const wk = await page.$$eval('.cv-tg-d', e => e.length), slots = await page.$$eval('.cv-slot', e => e.length); if (wk !== 7 || slots !== 7 * 24) throw new Error('week time grid: ' + wk + ' days, ' + slots + ' slots');
       await page.keyboard.press('Escape'); await page.waitForTimeout(300); if (await page.$eval('#calOv', e => e.classList.contains('on'))) throw new Error('Esc did not close the calendar');
       return `${cells} cells · ${rt} routine runs on the grid · rail ${rail} · task scheduled for ${target} · routine starts ${target} (none before) · marketing offered · week view 7`;
     });
@@ -469,6 +471,51 @@ else {
       await page.evaluate(() => window.CC.requestApproval('ada'));
       await page.waitForFunction(() => document.querySelectorAll('.tp-row.waiting').length > 0, null, { timeout: 4000 }).catch(() => {}); // the panel renders on the next frame; headless WebGL frames can be slow
       const w = await page.evaluate(() => document.querySelectorAll('.tp-row.waiting').length); if (!w) throw new Error('no waiting row (ada: ' + (await page.evaluate(() => window.CC.R.ada.state)) + ')');
+    });
+    await step('smoke: V4.1 — Limpiar listas archives with DESHACER, ARCHIVADAS brings one back, the list says when it is cut', async () => {
+      const click = (sel) => page.click(sel, { timeout: 5000 }).catch(e => { throw new Error(`click ${sel}: ${e.message.split('\n')[0]}`); });
+      await page.evaluate(() => { const s = document.querySelector('.tp-search'); s.value = ''; s.dispatchEvent(new Event('input')); document.querySelector('.tp-chip[data-f="all"]').click(); });
+      const cut = await page.evaluate(() => { const shown = document.querySelectorAll('.tp-row').length, m = document.querySelector('.tp-more'); return { shown, more: m ? m.textContent : '' }; });
+      if (cut.shown >= 60 && !/Se ven 60 de/.test(cut.more)) throw new Error('60 rows and no «show more»: ' + cut.more);
+      await click('.tp-chip[data-f="done"]');
+      const n0 = await page.evaluate(() => document.querySelectorAll('.tp-row.done').length); if (!n0) return 'no finished tasks yet (skipped)';
+      await click('.tp-clear'); await page.waitForFunction(() => !document.querySelector('.tp-toast').hidden, null, { timeout: 4000 });
+      const arch = await page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0)); // the demo keeps finishing (and pruning) work, so the count is checked against the toast, not the rows seen before
+      const said = await page.evaluate(() => +(document.querySelector('.tp-toast').textContent.match(/\d+/) || [0])[0]); if (!arch || arch !== said) throw new Error(`archived ${arch}, the toast says ${said} (rows before: ${n0})`);
+      await click('.tp-undo'); await page.waitForFunction(() => !document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 }).catch(() => {});
+      const left = await page.evaluate(() => document.querySelector('.tp-chip[data-f="archived"]')?.textContent || ''); if (left) throw new Error('DESHACER left ' + left);
+      await click('.tp-clear'); await page.waitForFunction(() => document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 });
+      const archN = () => page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0));
+      await click('.tp-chip[data-f="archived"]'); const a1 = await archN(); if (!await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length)) throw new Error('ARCHIVADAS shows no rows');
+      await click('.tp-row.archived button[data-act="unarchive"]'); await page.waitForTimeout(400);
+      const a2 = await archN(); if (a2 !== a1 - 1) throw new Error(`unarchive: ${a1} → ${a2}`);
+      await page.evaluate(() => document.querySelector('.tp-chip[data-f="all"]').click());
+      return `${n0} archived · DESHACER brings them back · ARCHIVADAS ${a1} → ${a2}${cut.more ? ' · ' + cut.more : ''}`;
+    });
+    await step('smoke: V4.1 — Tab stays inside an open window, the closed board is inert, ? opens the shortcuts', async () => {
+      await page.keyboard.press('e'); await page.waitForFunction(() => document.body.classList.contains('studioOpen'), null, { timeout: 4000 });
+      let out = 0; for (let i = 0; i < 40; i++) { await page.keyboard.press('Tab'); if (!await page.evaluate(() => document.getElementById('studioOv').contains(document.activeElement))) out++; }
+      for (let i = 0; i < 3 && await page.evaluate(() => document.body.classList.contains('studioOpen')); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); } // Esc closes an open menu first, then the Estudio
+      if (out) throw new Error(`Tab left the Estudio ${out} times`);
+      if (!await page.evaluate(() => document.getElementById('board').inert)) throw new Error('the closed board is reachable with Tab');
+      const at = await page.evaluate(() => { const a = document.activeElement; return a ? a.tagName + '.' + a.className : ''; });
+      await page.keyboard.press('Shift+Slash'); await page.waitForTimeout(300);
+      const sheet = await page.evaluate(() => !document.getElementById('keysOv').hidden && document.querySelectorAll('#keysOv .ks-row').length); if (!sheet) throw new Error('? did not open the shortcuts (focus on ' + at + ')');
+      await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+      if (await page.evaluate(() => [...document.body.children].some(c => c.inert && c.id === 'tpanel'))) throw new Error('the panel stayed inert after the windows closed');
+      return `40 Tabs inside the Estudio · board inert when closed · ${sheet} shortcuts`;
+    });
+    await step('smoke: V4.1 — on a phone the whole office fits above the task sheet, with one-line department cards', async () => {
+      const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+      try {
+        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check'); await ph.waitForTimeout(3000);
+        const measure = () => ph.evaluate(() => { const b = [...document.querySelectorAll('.badge:not(.brainTag)')].map(e => e.getBoundingClientRect()); return { at: b.map(x => Math.round(x.left) + ',' + Math.round(x.right) + ',' + Math.round(x.bottom)).join(' '), compact: document.body.classList.contains('cardsCompact'), inside: b.every(x => x.left >= 0 && x.right <= innerWidth + 1 && x.bottom <= innerHeight * 0.56), n: b.length, overflow: document.documentElement.scrollWidth > innerWidth }; });
+        let r = await measure(); for (let t = 0; t < 6 && !r.inside; t++) { await ph.waitForTimeout(500); r = await measure(); } // the overview's fit animates: a slow machine gets up to 3 s more
+        if (!r.compact) throw new Error('cards not compact on a phone');
+        if (!r.inside) throw new Error('a department card sits off screen or under the task sheet (' + r.at + ')');
+        if (r.overflow) throw new Error('the page scrolls sideways on a phone');
+        return `${r.n} one-line cards, all above the sheet · no sideways scroll`;
+      } finally { await ph.close(); }
     });
     await step('smoke: no errors after the run', async () => { if (errors.length) throw new Error(errors[0]); });
   } catch (e) { bad('smoke: browser', e.message); }
@@ -598,6 +645,8 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     const z = md.zip(md.list().map(i => i.file)); if (z.buf.readUInt32LE(0) !== 0x04034b50 || z.count !== md.list().length) throw new Error('zip');
     const t = md.trash(up.file); if (!t || md.list().some(i => i.file === up.file) || !md.restore(t) || !md.list().some(i => i.file === up.file)) throw new Error('trash and restore');
     if (md.restore({ id: '../../office.config.json', bin: ['1-x'] })) throw new Error('restore escaped');
+    const framed = md.models().filter(x => x.kind === 'image' && (x.roles.start || x.roles.end)).map(x => x.id); // first and last frames are for video only
+    if (framed.length) throw new Error('an image model asks for video frames: ' + framed.join(', '));
     return `${md.models().length} models · Soul 2, Kling 3 (image → video, upload to Higgsfield), fal Kling (queue, data URI) · NSFW says why · a video resumes after a restart · ZIP · undo`;
   } finally { for (const k of Object.keys(ENV)) { if (keep[k] === undefined) delete process.env[k]; else process.env[k] = keep[k]; } mock.close(); fs.rmSync(tmp, { recursive: true, force: true }); }
 });
@@ -779,7 +828,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
           if (done.error) throw new Error('task failed');
           await page.waitForTimeout(2500);
           await page.click(`.tp-row[data-id="${mine}"]`); await page.waitForTimeout(2500);
-          const card = await page.evaluate(n => [...document.querySelectorAll('.m-file .f-name')].some(e => e.textContent === n + '.md'), done.note); if (!card) throw new Error('deliverable card not in the chat');
+          const card = await page.evaluate(n => [...document.querySelectorAll('.m-file')].some(e => e.textContent.includes(n + '.md')), done.note); if (!card) throw new Error('deliverable card not in the chat');
           const after = await page.evaluate(() => window.CC.brain.nodes.length);
           const inGraph = await page.evaluate(n => window.CC.brain.nodes.some(x => x.id === n), done.note); // a second run on the same day rewrites the same note, so the count may not grow
           if (after < before || !inGraph) throw new Error(`the new note is not in the brain graph (${before} → ${after}, ${done.note})`);

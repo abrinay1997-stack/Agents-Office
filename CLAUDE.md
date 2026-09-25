@@ -50,6 +50,13 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.2 (24–25 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos): los 98 arreglados (A30 en parte). Lo principal:
+  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió); la ventanita de la rutina con el título entero y todas sus acciones a la vista; cancelar una tarea o eliminar una rutina sin pregunta, con DESHACER 8 segundos; los días de una rutina como siete botones (L M X J V S D); mover una ejecución pregunta «solo esta vez» (se salta y queda una tarea en su lugar, mismo agente) o «siempre»; lo que está en marcha va en una franja «SIN TERMINAR»; los avisos salen abajo, junto al trabajo; las cifras filtran; la semana puede empezar el domingo y dice su número; las rutinas se buscan y van por departamento (clic las abre, 👁 muestra solo sus días); la búsqueda lista resultados con fecha; el botón Rutinas en el teléfono; «Suscribirme (.ics)» (`/api/calendar.ics`).
+  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono; en cada tarjeta ★, una acción con texto y el menú «⋯» (la papelera al final); «Mejorar el prompt» dice el idioma (en inglés con su traducción debajo, o en español); con el Estudio cerrado, lo que termina se avisa (número en la claqueta del dock y aviso con VER); cada trabajo en marcha dice cuánto suele tardar (la mediana de ese modelo) con una barra; «Cancelar» en un motor de pago pregunta en la tarjeta si se cobra igual; el visor ampliado dice «3 de 8» y tiene «Variar» (mismo prompt, la imagen como referencia); las imágenes de un mismo pedido en una sola tarjeta («Ver por separado», «Descargar las N»); la galería separada por días; la imagen de un agente dice para qué tarea fue y la búsqueda encuentra por agente y por tarea; todos los modelos a la vista (los sin key atenuados, con cómo activarlos); «Una idea / Varias ideas»; aviso de costo desde US$0,50; «Nuevo»; el mismo pedido dos veces pide un segundo clic; subidas con porcentaje; pestañas con número; Historial de trabajos; compositor plegable; atajos (Ctrl+Enter, /, I, V) en la hoja «?».
+- V4.1 (24 sep, rama `claude/gracious-pascal-aryw2d`):
+  - el centro de la oficina sin la red neuronal: solo el icono del Cerebro y Dimitri;
+  - los 31 ⏳ de `docs/auditoria-ux-2026-09-24.md`: aprobaciones por borrador, ARCHIVADAS con DESHACER, trampas de foco (`src/modal.js`), hoja de atajos «?», teclado, papelera de notas, tablet;
+  - la auditoría visual de 50 puntos (`docs/auditoria-visual-2026-09-24.md`), con 37 aplicados: tarjetas compactas y encuadre en pantallas estrechas, contraste AA en oscuro, landmarks;
 - motor único en el servidor;
 - Estudio V2 (41 modelos, Higgsfield, trabajos en segundo plano, Animar);
 - barra superior V4 con dock de herramientas;
@@ -57,16 +64,22 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - filtros y búsqueda del Cerebro;
 - calendario con rutinas en los seis departamentos;
 - ficha del agente;
-- auditoría de 100 puntos, 69 arreglados.
+- auditoría de 100 puntos: los 100 arreglados.
 
 **Siguiente, en este orden:**
-1. Los 31 puntos ⏳ de `docs/auditoria-ux-2026-09-24.md`, empezando por:
-   - el flujo de aprobaciones (31–33): puede aprobar el borrador equivocado;
-   - la vista de archivadas con Deshacer (39);
-   - las trampas de foco de las ventanas (22–24);
-   - la lista de tareas (40–42).
+1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
+   - el tamaño de los nombres de los agentes en la vista general (8);
+   - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);
+   - el punto rojo que parpadea en las tarjetas (9).
 2. Probar el Estudio con una key real: Higgsfield `HF_KEY`, Nano Banana `GEMINI_API_KEY` o fal.ai `FAL_KEY`.
 3. Las mejoras que el dueño vaya pidiendo. Una herramienta nueva entra como un botón más en el dock de la barra superior (ver «The top bar»).
+
+**Reglas de la interfaz (V4.1):**
+- Toda ventana modal nueva llama a `modal.open(el)` al abrirse y a `modal.close(el)` al cerrarse (`src/modal.js`). Mientras está abierta, el resto de la página queda inerte y Tab da la vuelta dentro de ella.
+- Todo atajo nuevo va también en la hoja «?» (`keysSheet` en `src/main.js`).
+- Los colores nuevos pasan 4,5:1 en claro y en oscuro.
+- El anillo de foco usa `var(--focus)`.
+- Nada que se vea en la oficina depende del ancho de la ventana sin probarlo a 390 px (teléfono), a 1024 px y a 1512 px.
 
 ## Changing the agents
 
@@ -205,14 +218,14 @@ The owner's right hand, above the six departments: the ◆ tag beside the Brain 
 
 ## The top bar (V4, 24 Sep 2026)
 
-Brand (the business name) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta), approvals ⚠, the Estudio (clapperboard, E), the calendar (P), and the task panel's switch (T). A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key. The plan's usage (session · week) sits in the bottom-left corner.
+Brand (the business name) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta), approvals ⚠ (it counts drafts; each click goes to the next one), the Estudio (clapperboard, E), the calendar (P), the keyboard shortcuts (?), and the task panel's switch (T). A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key. The plan's usage (session · week) sits in the bottom-left corner.
 
 ## The Estudio (images and video)
 
 Real image and video generation, for the owner (the clapperboard in the dock, key E) and for the agents. `media.mjs` is the engine, `estudio-mcp.mjs` the agents' tool, `src/studio.js` the window.
 
 - **Engines** turn on when their key is in the Windows environment — never write a key into a file: `HF_KEY="id:secret"` (Higgsfield Cloud: Soul, Kling 3, Seedance 2/2.5, Flux 2, Ideogram 4, Recraft, Wan, MiniMax, LTX, PixVerse…; or `HF_API_KEY` + `HF_API_SECRET`; `HF_API_BASE_URL` overrides `https://api.higgsfield.ai`), `GEMINI_API_KEY` (Nano Banana), `XAI_API_KEY` (Grok), `OPENAI_API_KEY` (GPT Image), `FAL_KEY` (fal.ai: Flux, Seedream, Nano Banana, Ideogram, Kling 2.5, Seedance 1, Hailuo, Veo 3). `prueba` and `prueba-video` are free local cards for testing the flow.
-- **Models** are the `CATALOG` in `media.mjs`: each one has its engine, the media it takes (`roles`: start/end frame, references, a source video; `needs` for the required ones) and its `settings` (enum / range / boolean, shown by the page). The Higgsfield request bodies are a port of open-higgsfield's mappers (`wide-trace/open-higgsfield`, `src/generation/to-platform.ts`); auth and uploads follow Higgsfield's own client. Your own fal or Higgsfield model: `office.config.json → media.custom: [{ "id", "name", "engine": "fal"|"higgsfield", "kind": "image"|"video", "path", "cost" }]`. Default models: `media.default: { "image": "…", "video": "…" }`.
+- **Models** are the `CATALOG` in `media.mjs`: each one has its engine, the media it takes (`roles`: start/end frame — **video only**, an image model never takes a frame and `npm run check` refuses one that does — references, a source video; `needs` for the required ones) and its `settings` (enum / range / boolean, shown by the page). The Higgsfield request bodies are a port of open-higgsfield's mappers (`wide-trace/open-higgsfield`, `src/generation/to-platform.ts`); auth and uploads follow Higgsfield's own client. Checked on 25 Sep 2026 against `higgsfield-ai/higgsfield-client` and `higgsfield-js` v2 (auth `Key id:secret`, `POST /<model>` → `status_url`/`cancel_url`, `/requests/{id}/status` → queued · in_progress · completed · failed · nsfw · canceled, `images[].url`/`video.url`, `/files/generate-upload-url` + PUT with `upload_headers`; 403 means «not enough credits»; only a queued request can be cancelled) and against open-higgsfield b16a0ef: all 38 of its models are in our catalog (52 in all), and the 105 path/body combinations match. The twelve added on 25 Sep (Kling 3 Motion Pro, Kling O1, Kling 2.5, Wan 2.6/2.7/3 Prime, MiniMax H3, LTX 2.5 Fast, Happy Horse 1/1.1, Flux 3 video) carry estimated prices, said in their notes. Kling O1/O3 and Kling 2.5 need a first frame (their only route takes one); LTX 2.5 is text only. `Autom8AI/Open-Higgsfield-AI` is a different product: it runs on muapi.ai with a muapi key, not on Higgsfield's API. Your own fal or Higgsfield model: `office.config.json → media.custom: [{ "id", "name", "engine": "fal"|"higgsfield", "kind": "image"|"video", "path", "cost" }]`. Default models: `media.default: { "image": "…", "video": "…" }`.
 - **Jobs**: every generation is a background job in `data/media-jobs.json` (queued → running → done/failed with the reason in plain words). Queue engines keep their request ids, so a restart resumes the poll. The page shows live tiles; a failed one says why and has REINTENTAR.
 - **Agents** in `media.departments` (default marketing, delivery, sales, ops) get `generar_imagen`, `generar_video` (with `imagen_inicial`/`imagen_final` to animate), `buscar_en_galeria`, `estado_trabajo`, `estado_estudio`. An image usually comes back within the call as `![…](/media/…)`; a video hands back `⏳ Estudio: … (trabajo <id>)`, which the agent leaves in its deliverable and the office swaps for the file when the job ends (task result and its note).
 - **Files**: `<brain>/Agents Office/media/YYYY-MM/` with a `.json` record beside each (prompt, model, settings, media used, size, who, task). Uploads (the owner's product photos, logos, faces) live there too, marked `upload`. Trash goes to `media/.papelera` (30 days, with undo). Budget: `media.dailyLimit` (a video counts 5), `media.maxPerRequest`, `media.concurrency` (jobs at once, default 3).

@@ -271,7 +271,12 @@ async function route(dept, text) {
     'Pick the single best agent for the owner\'s request — an agent whose skills match the request is the right one — and return ONLY a JSON object — no prose, no code fences.';
   const user = `Department: ${d.name}\nAgents (id · name · role · what they do):\n${rosterText(dept)}\n\nOwner's request: "${text}"\n\n` +
     'Return: {"agent":"<id from the list>","title":"<clean imperative task title, max 70 characters>","plan":["<step>","<step>","<step>"],"eta_minutes":<integer>,"why":"<one short sentence>","needs_ok":<true if doing this involves sending, posting, paying, deleting or changing anything outside this machine; false if it only reads and reports>}';
-  const j = parseJSON(await ask(system, user, { maxTokens: 800, timeout: 150000, model: 'sonnet' })); // routing is a one-line JSON job: always Sonnet
+  let j; // routing is a one-line JSON job: always Sonnet
+  try { j = parseJSON(await ask(system, user, { maxTokens: 800, timeout: 150000, model: 'sonnet' })); }
+  catch (e) { // V4.2 (audit B18): an answer that is not JSON lost the task with «Unexpected end of JSON input» — the lead takes it instead
+    console.warn('router: no usable answer, the lead takes it:', e.message);
+    j = { why: 'El enrutador no dio una respuesta clara: la tiene el jefe del departamento.' };
+  }
   const valid = AGENTS.find(a => a.id === j.agent && a.department === dept);
   const agent = valid ? valid.id : (AGENTS.find(a => a.department === dept && a.lead) || AGENTS.find(a => a.department === dept)).id;
   return { agent, title: String(j.title || text).slice(0, 90), plan: Array.isArray(j.plan) ? j.plan.slice(0, 4).map(String) : [],
@@ -463,6 +468,27 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
 /* ---------- routines: the office's own clock (V3.5) ---------- */
 const RSTATE = routines.loadState(DATA);
 let rlist = { routines: [], problems: [], path: routines.file(BRAIN) };
+function icsFeed() {
+  const p2 = n => String(n).padStart(2, '0'), stamp = d => `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}T${p2(d.getHours())}${p2(d.getMinutes())}00`;
+  const txt = s => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\r?\n/g, '\\n');
+  const BY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'], now = new Date(), ev = [];
+  const fold = l => l.length <= 60 ? l : l.match(/.{1,60}/gu).join('\r\n ');
+  for (const r of loadRoutines()) {
+    const w = r.when; if (!w || r.paused || w.kind === 'minutes') continue;
+    const start = w.start ? new Date(w.start + 'T00:00:00') : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [h, m] = String(w.at || w.from || '09:00').split(':').map(Number); start.setHours(h, m, 0, 0);
+    const rule = w.kind === 'daily' ? 'FREQ=DAILY' : w.kind === 'weekdays' ? 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' : w.kind === 'weekly' ? `FREQ=WEEKLY;BYDAY=${w.days.map(d => BY[d]).join(',')}`
+      : w.kind === 'hourly' ? (() => { const a = +String(w.from).split(':')[0], b = +String(w.to).split(':')[0], hs = []; for (let x = a; x <= b; x += Math.max(1, w.every || 1)) hs.push(x); return `FREQ=WEEKLY;BYDAY=${w.weekdaysOnly ? 'MO,TU,WE,TH,FR' : BY.join(',')};BYHOUR=${hs.join(',')};BYMINUTE=${+String(w.from).split(':')[1] || 0}`; })() : null;
+    if (!rule) continue;
+    const a = AGENTS.find(x => x.id === r.agent);
+    ev.push(['BEGIN:VEVENT', `UID:rutina-${r.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(start)}`, 'DURATION:PT30M', `RRULE:${rule}`, `SUMMARY:${txt('⏱ ' + r.title)}`, `DESCRIPTION:${txt(`${r.text || r.title}\n${DEPTS[r.dept]?.name || r.dept} · ${a ? a.name : r.agent}${r.needsOk ? ' · pide tu OK' : ''}`)}`, 'END:VEVENT']);
+  }
+  for (const t of load()) if (t.state === 'scheduled' && t.dueAt) {
+    const a = AGENTS.find(x => x.id === t.agent);
+    ev.push(['BEGIN:VEVENT', `UID:tarea-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(new Date(t.dueAt))}`, 'DURATION:PT30M', `SUMMARY:${txt('◷ ' + t.title)}`, `DESCRIPTION:${txt(`${t.text || t.title}\n${DEPTS[t.dept]?.name || t.dept} · ${a ? a.name : t.agent}`)}`, 'END:VEVENT']);
+  }
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Agents Office//Calendario//ES', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${txt(cfg.name + ' · oficina')}`, ...ev.flat(), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
+}
 function loadRoutines() { // re-read from disk every time: a routine written by Claude Code, or by hand, lands without a restart
   const r = routines.load(BRAIN, AGENTS);
   if (r.problems.join() !== rlist.problems.join()) for (const w of r.problems) console.warn('routines:', w);
@@ -615,27 +641,27 @@ async function makeRoutine({ dept, text, when, agent, needsOk, model, effort }) 
 // B2: a routine said to an agent in chat. The lead routes it inside the department; a specialist takes it on.
 async function routinesChat(a, text) {
   const t = String(text).trim(), dept = a.department, allowed = routines.ALLOWED.includes(dept);
-  if (/^\s*(routines?|schedule|timetable|what(?:'s| is) (?:scheduled|on the (?:schedule|timetable)))\s*\??\s*$/i.test(t)) return { reply: allowed ? routines.listText(loadRoutines(), dept, AGENTS) : routines.refusal(dept) };
-  const cmd = /^\s*(pause|stop|resume|start|unpause|delete|remove|run)\b\s*(?:the\s+)?(.*?)\s*[.!]?$/i.exec(t);
+  if (/^\s*¿?\s*(routines?|schedule|timetable|what(?:'s| is) (?:scheduled|on the (?:schedule|timetable))|rutinas?|horario|qu[eé] (?:hay|tengo) (?:programado|en el horario))\s*\??\s*$/i.test(t)) return { reply: allowed ? routines.listText(loadRoutines(), dept, AGENTS) : routines.refusal(dept) };
+  const cmd = /^\s*(pause|stop|resume|start|unpause|delete|remove|run|pausa|pausar|det[eé]n|detener|reanuda|reanudar|activa|activar|elimina|eliminar|borra|borrar|ejecuta|ejecutar|corre)\b\s*(?:the\s+|la\s+|el\s+)?(?:rutina\s+(?:de\s+)?)?(.*?)\s*(?:now|ahora(?: mismo)?)?\s*[.!]?$/i.exec(t); // V4.1: the Spanish verbs too
   if (cmd && allowed && !parseWhen(t)) {
     const list = loadRoutines(); const words = cmd[2].replace(/\s+(routine|one)$/i, ''); const r = routines.matchRoutine(list, dept, words);
-    if (!r) return { reply: (list.some(x => x.dept === dept) ? '¿Cuál? ' : '') + routines.listText(list, dept, AGENTS) };
-    const verb = cmd[1].toLowerCase();
+    if (!r) return !words || /\b(rutinas?|routines?)\b/i.test(t) ? { reply: (list.some(x => x.dept === dept) ? '¿Cuál? ' : '') + routines.listText(list, dept, AGENTS) } : null; // «borra el segundo párrafo» is a chat, not a routine that does not exist
+    const v0 = cmd[1].toLowerCase(), verb = /^(run|ejecuta|ejecutar|corre)$/.test(v0) ? 'run' : /^(pause|stop|pausa|pausar|det[eé]n|detener)$/.test(v0) ? 'pause' : /^(resume|start|unpause|reanuda|reanudar|activa|activar)$/.test(v0) ? 'resume' : 'delete';
     if (verb === 'run') { const task = fire(r, { by: 'you' }); return { reply: `Ejecutando "${r.title}" ahora — ${r.agent === a.id ? 'yo me encargo' : agentName(r.agent) + ' se encarga'}. Llega al panel${r.needsOk ? ' y espera tu visto bueno antes de enviar nada' : ''}.`, task }; }
-    if (/pause|stop/.test(verb)) { editRoutine(r.id, { paused: true }); return { reply: `Pausada "${r.title}". Sigue en el horario; di "resume ${r.title.toLowerCase()}" para activarla de nuevo.` }; }
+    if (/pause|stop/.test(verb)) { editRoutine(r.id, { paused: true }); return { reply: `Pausada «${r.title}». Sigue en el horario; di «reanuda ${r.title.toLowerCase()}» para activarla de nuevo.` }; }
     if (/resume|start|unpause/.test(verb)) { const n = editRoutine(r.id, { paused: false }); return { reply: `"${r.title}" vuelve a estar activa — próxima ejecución ${untilText(n.nextAt)}.` }; }
     if (/delete|remove/.test(verb)) { removeRoutine(r.id); return { reply: `Eliminada "${r.title}". Fuera del horario.` }; }
   }
   const p = parseWhen(t);
   if (!p) return null;
   if (!allowed) return { reply: routines.refusal(dept) };
-  if (p.needsDay) return { reply: '¿Qué día? Dilo de nuevo con el día: "every Monday at 9am, …".' };
-  if (p.needsTime) return { reply: `¿A qué hora? Dilo de nuevo con la hora, p. ej. "every weekday at 8am, ${p.text ? p.text.slice(0, 60) : '…'}".` };
+  if (p.needsDay) return { reply: '¿Qué día? Dilo de nuevo con el día: «cada lunes a las 9, …».' };
+  if (p.needsTime) return { reply: `¿A qué hora? Dilo de nuevo con la hora, p. ej. «cada día hábil a las 8, ${p.text ? p.text.slice(0, 60) : '…'}».` };
   if (!p.text) return { reply: 'Tengo la hora pero no la tarea. Dilo de nuevo con lo que debe pasar.' };
   const made = await makeRoutine({ dept, text: p.text, when: p.when, agent: a.lead ? undefined : a.id });
   if (made.error) return { reply: made.error };
   const r = made.routine, who = r.agent === a.id ? 'yo me encargo' : `${agentName(r.agent)} se encarga`;
-  return { reply: `Listo. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${who}.${made.guessed ? ` Tomé "${made.guessed}" como ${r.when.at}; di una hora para cambiarlo.` : ''} ${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno primero.' : 'Solo lee, así que no te esperará.'} Próxima ejecución ${untilText(r.nextAt)}. Di "routines" para ver la lista, "pause ${r.title.toLowerCase()}" para detenerla.`, routine: r };
+  return { reply: `Listo. ${r.desc.charAt(0).toUpperCase() + r.desc.slice(1)}, ${who}.${made.guessed ? ` Tomé «${made.guessed}» como las ${r.when.at}; di una hora para cambiarlo.` : ''} ${r.needsOk ? 'Lo que haya que enviar espera tu visto bueno primero.' : 'Solo lee, así que no te esperará.'} Próxima ejecución ${untilText(r.nextAt)}. Di «rutinas» para ver la lista, o «pausa ${r.title.toLowerCase()}» para detenerla.`, routine: r };
 }
 
 /* ---------- http ---------- */
@@ -801,6 +827,11 @@ const server = http.createServer(async (req, res) => {
       console.log(`🗑 note to the bin: ${id}`);
       return json(res, 200, { ok: true, trashed: path.basename(dest), graph: await rebuildGraph() });
     }
+    if (url.pathname === '/api/note/trash' && req.method === 'GET') { // V4.1: what is in the bin (newest first) — the Brain's «Papelera» view
+      let files = []; try { files = fs.readdirSync(TRASH).filter(f => /__\d+\.md$/.test(f)); } catch {}
+      const items = files.map(f => ({ file: f, name: f.replace(/__\d+\.md$/, ''), at: +f.match(/__(\d+)\.md$/)[1] })).sort((a, b) => b.at - a.at).slice(0, 200);
+      return json(res, 200, { items, keepDays: 30 });
+    }
     if (url.pathname === '/api/note/restore' && req.method === 'POST') { // one note back out of the bin
       const { file } = await body(req); const f = path.basename(String(file || ''));
       const src = path.join(TRASH, f);
@@ -813,6 +844,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
     if (url.pathname === '/api/tasks' && req.method === 'GET') return json(res, 200, load());
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
+    if (url.pathname === '/api/calendar.ics' && req.method === 'GET') { // V4.2 (audit B46): the office's timetable, read-only, for the owner's own calendar app
+      res.writeHead(200, { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"', 'cache-control': 'no-cache' });
+      return res.end(icsFeed());
+    }
     if (url.pathname === '/api/routines' && req.method === 'POST') {
       const b = await body(req);
       if (!DEPTS[b.dept] || b.dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
@@ -850,13 +885,14 @@ const server = http.createServer(async (req, res) => {
       const out = editRoutine(r.id, patch); return json(res, 200, { ok: true, routine: out, routines: loadRoutines() });
     }
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
-      const { dept, text, model, effort, team, at } = await body(req);
+      const { dept, text, model, effort, team, at, agent: fixedAgent, title: fixedTitle, needsOk: fixedOk } = await body(req);
       if (!DEPTS[dept] || dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
       if (!text || !String(text).trim()) return json(res, 400, { error: 'la tarea está vacía' });
       const dueAt = at ? (typeof at === 'number' ? at : Date.parse(at)) : null; // V3.2.1: a task for a date
       if (at && !(dueAt > 0)) return json(res, 400, { error: 'at must be a time (ms or ISO)' });
       if (dueAt && dueAt < Date.now() - 60000) return json(res, 400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
-      const r = await route(dept, String(text).trim());
+      const fixed = fixedAgent && AGENTS.find(a => a.id === fixedAgent && a.department === dept); // V4.2 (audit B30): one run of a routine, moved — its own desk, no routing
+      const r = fixed ? { agent: fixed.id, title: String(fixedTitle || text).slice(0, 90), plan: [], eta: 15, why: 'una ejecución de rutina, movida', needsOk: typeof fixedOk === 'boolean' ? fixedOk : routines.guessNeedsOk(text) } : await route(dept, String(text).trim());
       const asTeam = TEAMS.enabled && (team === true || teams.intent(text)); // V3.2 (16 Sep): TEAM in the bar, or "as a team" in the sentence → the lead owns it and splits it
       const task = { id: nid(), dept, agent: asTeam ? leadOf(dept).id : r.agent, title: r.title, text: String(text).trim(), plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, state: 'next', addedAt: Date.now(), by: 'you', model: normModel(model) || undefined, effort: normEffort(effort) || undefined, // model/effort: set on this task (beats routine, agent, office)
         team: asTeam ? { lead: leadOf(dept).id, asked: team === true ? 'you' : 'text' } : undefined };
@@ -1026,11 +1062,19 @@ const server = http.createServer(async (req, res) => {
       return res.end(z.buf);
     }
     if (url.pathname === '/api/media/enhance' && req.method === 'POST') { // the owner's idea into a production prompt (Claude, no tools)
-      const { prompt, kind } = await body(req);
+      const { prompt, kind, lang } = await body(req); const en = lang !== 'es';
       const idea = String(prompt || '').trim(); if (!idea) return json(res, 400, { error: 'escribe primero la idea' }); if (idea.length > 3000) return json(res, 400, { error: 'la idea es muy larga' });
       const sys = `Eres director de arte de ${cfg.name}. Convierte la idea del dueño en UN prompt de producción para un motor de ${kind === 'video' ? 'VIDEO: sujeto, acción, movimiento de cámara, ritmo, luz, estilo, sonido si aplica' : 'IMAGEN: sujeto, composición y encuadre, lente, luz, paleta, estilo, fondo'}. ` +
-        'Conserva todo lo que pidió (marca, colores, texto exacto entre comillas si lo pidió); no inventes texto, logos ni personas que no pidió. Escríbelo en inglés (los motores lo entienden mejor), una sola línea, máximo 90 palabras. Devuelve solo el prompt, sin comillas ni explicación.';
-      try { const out = String(await ask(sys, idea, { maxTokens: 600, timeout: 90000 })).trim().replace(/^["'`]+|["'`]+$/g, '').split('\n').filter(Boolean).join(' ').slice(0, 1500); return json(res, 200, { prompt: out }); }
+        'Conserva todo lo que pidió (marca, colores, texto exacto entre comillas si lo pidió); no inventes texto, logos ni personas que no pidió. ' +
+        (en ? 'Escríbelo en inglés (los motores lo entienden mejor), una sola línea, máximo 90 palabras. Devuelve SOLO un objeto JSON, sin bloque de código: {"prompt":"<el prompt en inglés>","es":"<el mismo prompt traducido al español, para que el dueño lo lea>"}.'
+          : 'Escríbelo en español, una sola línea, máximo 90 palabras. Devuelve solo el prompt, sin comillas ni explicación.');
+      const clean = x => String(x || '').trim().replace(/^["'`]+|["'`]+$/g, '').split('\n').filter(Boolean).join(' ').slice(0, 1500);
+      try { // V4.2 (audit A2): it used to turn a Spanish idea into English without a word; now the owner picks, and English comes with its Spanish reading
+        const raw = String(await ask(sys, idea, { maxTokens: 900, timeout: 90000 }));
+        let out = { prompt: clean(raw), es: '' };
+        if (en) { try { const j = parseJSON(raw); if (j && j.prompt) out = { prompt: clean(j.prompt), es: clean(j.es) }; } catch {} }
+        return json(res, 200, { ...out, lang: en ? 'en' : 'es' });
+      }
       catch (e) { return json(res, 502, { error: 'no pude mejorarlo ahora: ' + e.message }); }
     }
     const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);

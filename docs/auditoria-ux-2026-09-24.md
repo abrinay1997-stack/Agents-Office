@@ -8,7 +8,7 @@ Estos son los 100 problemas más importantes de la oficina: desplazamiento, nave
 
 Se unieron los duplicados y cada punto va con su estado.
 
-**✅ = arreglado en esta ronda** (commits `c69cfd4` y siguientes) · **⏳ = pendiente** · la gravedad va entre corchetes.
+**✅ = arreglado** (commits `c69cfd4` y siguientes; los 31 que quedaban, en V4.1, rama `claude/gracious-pascal-aryw2d`) · **⏳ = pendiente** · la gravedad va entre corchetes.
 
 ## 1. Lo que reportó el dueño
 
@@ -54,21 +54,21 @@ Se unieron los duplicados y cada punto va con su estado.
 19. ✅ [media] Al cerrar Dimitri, el Estudio o el detalle, el cursor se quedaba «dentro» de la ventana oculta y se tragaba los atajos. Ahora se suelta.
 20. ✅ [media] El Cerebro y el calendario cerrados seguían alcanzables con Tab, aunque invisibles. Ahora quedan inertes al cerrarse. (A3)
 21. ✅ [media] El calendario no devolvía el foco al cerrarse. (A22)
-22. ⏳ [media] Faltan trampas de foco en las ventanas modales. Con el Estudio o el Cerebro abiertos, Tab puede salir a la barra de arriba. (A21)
-23. ⏳ [media] El tablero cerrado y el panel minimizado conservan controles alcanzables con Tab. (A4)
-24. ⏳ [media] El detalle se abre fuera del calendario, que tiene aria-modal, y los lectores de pantalla no llegan a él. (A10)
-25. ⏳ [media] La ficha del agente descarta los cambios sin guardar al cerrarse, sin avisar. (L35)
-26. ⏳ [baja] La ventanita «Programar para» del calendario pierde lo escrito con un clic fuera. (L51)
-27. ⏳ [media] B (tablero), D (oscuro), 1–6 y X solo existen como teclas. Falta una hoja de atajos con «?» y guardar el modo oscuro. (L33)
+22. ✅ [media] Faltaban trampas de foco en las ventanas modales: con el Estudio o el Cerebro abiertos, Tab salía a la barra de arriba. Ahora, con una ventana abierta, el resto de la página queda inerte y Tab da la vuelta dentro de ella (`src/modal.js`). (A21)
+23. ✅ [media] El tablero cerrado y el panel minimizado conservaban controles alcanzables con Tab. Ahora quedan inertes; el tablero recibe el foco al abrirse y lo devuelve al cerrarse. (A4)
+24. ✅ [media] El detalle se abría fuera del calendario, que tiene aria-modal, y los lectores de pantalla no llegaban a él. Ahora, abierto encima de otra ventana, el detalle es modal y la de abajo queda inerte hasta que se cierra. (A10)
+25. ✅ [media] La ficha del agente descartaba los cambios sin guardar al cerrarse, sin avisar. Ahora pregunta antes (también al pasar a otro agente o cerrar la página). (L35)
+26. ✅ [baja] La ventanita «Programar para» del calendario perdía lo escrito con un clic fuera. Ahora lo recupera al abrirse otra vez, con «Borrarlo». (L51)
+27. ✅ [media] B (tablero), D (oscuro), 1–6 y X solo existían como teclas. Ahora hay una hoja de atajos con «?» o el teclado del dock (cada línea es un botón que lo hace) y el modo oscuro se recuerda en el navegador. (L33)
 28. ✅ [baja] La tecla X (una reunión inventada) funcionaba en la oficina real. Ahora solo en la demo. (L60)
-29. ⏳ [baja] Pulsar una rutina en el tablero no la abre: cambia el filtro y mueve la cámara. (L55)
-30. ⏳ [media] La fila EN CURSO/PRÓXIMO/LISTO hace dos cosas distintas según dónde esté. (L32)
+29. ✅ [baja] Pulsar una rutina en el tablero no la abría: cambiaba el filtro y movía la cámara. Ahora abre el calendario en su próxima ejecución, con su editor; también con el teclado. (L55)
+30. ✅ [media] La fila EN CURSO/PRÓXIMO/LISTO hacía dos cosas distintas según dónde estuviera. Ahora, en la tarjeta o en el chat, muestra ese departamento en el panel de tareas (y lo abre si estaba plegado). (L32)
 
 ## 3. Tareas, aprobaciones y rutinas (lógica)
 
-31. ⏳ [alta] Con dos borradores del mismo agente esperando, APROBAR/RECHAZAR en el chat actúa sobre el primero de la lista, no sobre el que se ve. La tarjeta tiene que guardar el id de su tarea. (L1)
-32. ⏳ [alta] Aprobar desde el detalle o el tablero no limpia el ⚠ del agente, ni el contador, ni la tarjeta del chat. (L2)
-33. ⏳ [alta] RECHAZAR en el chat quita el ⚠ aunque la tarea sigue esperando, y lo siguiente que escribes se toma como corrección. (L7)
+31. ✅ [alta] Con dos borradores del mismo agente esperando, APROBAR/RECHAZAR en el chat actuaba sobre el primero de la lista, no sobre el que se ve. Ahora cada tarjeta guarda el id de su tarea y cada botón actúa sobre la suya. (L1)
+32. ✅ [alta] Aprobar desde el detalle o el tablero no limpiaba el ⚠ del agente, ni el contador, ni la tarjeta del chat. Ahora el ⚠ sigue a los borradores que de verdad esperan, venga la decisión de donde venga (también de otra ventana). (L2)
+33. ✅ [alta] RECHAZAR en el chat quitaba el ⚠ aunque la tarea seguía esperando, y lo siguiente que escribías se tomaba como corrección. Ahora RECHAZAR abre la nota en la propia tarjeta (DEVOLVER CON ESTA NOTA / CANCELAR) y el ⚠ se queda hasta que la nota sale. (L7)
 34. ✅ [alta] «tarea: …» en el chat creaba, en la oficina real, una tarea falsa que solo existía en la página. Ahora va al servidor, y también acepta «agregar tarea:» y «pendiente:». (L3)
 35. ✅ [alta] «El viernes a las 10 publica…» se volvía una rutina SEMANAL. Ahora:
     - un día nombrado una vez es una tarea programada para esa fecha;
@@ -77,16 +77,16 @@ Se unieron los duplicados y cada punto va con su estado.
 36. ✅ [alta] En el chat de un agente, «¿qué hiciste el martes?» respondía «¿A qué hora?» y podía crear una rutina. (L5)
 37. ✅ [alta] ELIMINAR una rutina desde el panel o el chat la borraba sin preguntar, y un fallo no se mostraba. (L11)
 38. ✅ [media] Solo se entendía «revise: …» en inglés. Ahora también «revisa:», «corrige:» y «cambia:». (L25)
-39. ⏳ [media] «Limpiar listas» y «Archivar» no tienen vista de archivadas ni Deshacer, aunque el servidor ya permite desarchivar. (L12)
-40. ⏳ [media] La lista muestra solo 60 tareas sin avisar. (L23)
-41. ⏳ [media] La lista se reordena bajo el cursor y un clic puede abrir otra tarea. (L24)
-42. ⏳ [media] Con un filtro activo, la lista vacía dice «Nada aquí por ahora» sin mencionar el filtro. (L39)
-43. ⏳ [media] «LISTO» y «ENTREGAS REALES» cuentan distinto la misma cosa. (L31)
-44. ⏳ [media] Al abrir la página se vuelven a publicar en los chats las entregas pasadas, incluidas las archivadas. (L37)
-45. ⏳ [media] El ⚠ de arriba cuenta agentes, no borradores, y siempre lleva al primero. (L42)
-46. ⏳ [baja] Crear una rutina cambia el filtro del panel a «Programadas» sin avisar. (L58)
-47. ⏳ [baja] Tras Archivar o Eliminar en el detalle no hay aviso ni Deshacer. (L57)
-48. ⏳ [baja] Se añade una espera artificial de 0,5–1 s antes de enviar un mensaje del chat real. (L59)
+39. ✅ [media] «Limpiar listas» y «Archivar» no tenían vista de archivadas ni Deshacer. Ahora hay un filtro ARCHIVADAS con «Devolver a la lista» en cada fila, y un aviso con DESHACER (10 s, se pausa con el cursor encima). (L12)
+40. ✅ [media] La lista mostraba solo 60 tareas sin avisar. Ahora dice «Se ven 60 de N» y muestra 60 más al pulsarlo. (L23)
+41. ✅ [media] La lista se reordenaba bajo el cursor y un clic podía abrir otra tarea. Ahora se queda quieta mientras el ratón está sobre ella (y se mueve), y una fila con el foco del teclado lo conserva al redibujarse. (L24)
+42. ✅ [media] Con un filtro activo, la lista vacía decía «Nada aquí por ahora» sin mencionar el filtro. Ahora nombra el filtro o la búsqueda y ofrece «Ver todas» o «Borrar la búsqueda». (L39)
+43. ✅ [media] «LISTO» y «ENTREGAS REALES» contaban distinto la misma cosa. Ahora, en la oficina real, los dos cuentan las entregas de la lista (sin las partes de un equipo). (L31)
+44. ✅ [media] Al abrir la página se volvían a publicar en los chats las entregas pasadas, incluidas las archivadas. Ahora las archivadas no vuelven, y las demás quedan solo como la tarjeta del archivo (sin «Listo», sin aviso en la actividad). (L37)
+45. ✅ [media] El ⚠ de arriba contaba agentes, no borradores, y siempre llevaba al primero. Ahora cuenta borradores y cada clic lleva al siguiente, del que más espera al más nuevo; es un botón de verdad, con su nombre para lectores de pantalla. (L42)
+46. ✅ [baja] Crear una rutina cambiaba el filtro del panel a «Programadas» sin avisar. Ahora el filtro se queda, el chip PROGRAMADAS destella y el aviso trae «Ver en PROGRAMADAS». (L58)
+47. ✅ [baja] Tras Archivar o Eliminar en el detalle no había aviso ni Deshacer. Ahora los dos lo tienen; Eliminar ya no pregunta: la tarea sale al instante y el servidor la borra cuando pasa el DESHACER (o al cerrar la página). (L57)
+48. ✅ [baja] Se añadía una espera artificial de 0,5–1 s antes de enviar un mensaje del chat real. Ahora solo la demo «escribe». (L59)
 
 ## 4. Dimitri
 
@@ -94,7 +94,7 @@ Se unieron los duplicados y cada punto va con su estado.
 50. ✅ [media] «Descartar el plan» mostraba «Enviando a los jefes…». (L40)
 51. ✅ [media] Un fallo al cargar la conversación parecía una conversación vacía; «Nueva conversación» vaciaba la vista aunque fallara. (L41)
 52. ✅ [media] Cada 3 s el lector de pantalla releía toda la conversación. Ahora solo anuncia la respuesta nueva. (A24)
-53. ⏳ [media] La fecha que propone Dimitri para cada pieza no se puede editar ni quitar desde la tarjeta. (L16)
+53. ✅ [media] La fecha que propone Dimitri para cada pieza no se podía editar ni quitar desde la tarjeta. Ahora es un campo de fecha y hora, con ✕ para quitarla («ya»); una hora pasada se rechaza. (L16)
 54. ✅ [media] En la demo (sin servidor), Dimitri intentaba cargar la conversación y daba error.
 
 ## 5. El Cerebro
@@ -107,10 +107,10 @@ Se unieron los duplicados y cada punto va con su estado.
 60. ✅ [media] Los colores por carpeta estaban fijados a la demo: el cerebro real salía gris. Ahora cada carpeta tiene un color estable. (L21)
 61. ✅ [media] Con ciertos filtros el lienzo quedaba vacío sin explicación. (L22)
 62. ✅ [baja] Con una nota abierta, la rueda no acercaba hacia el cursor. (L43)
-63. ⏳ [baja] No hay vista de la papelera de notas, y «Deshacer» desaparece al hacer clic en otra. (L44)
-64. ⏳ [baja] «+N más» enlaces no se puede pulsar. (L45)
-65. ⏳ [baja] Un [[enlace]] a una nota fuera del grafo solo se pone gris, sin decir por qué. (L47)
-66. ⏳ [media] En tablet no se puede arrastrar ni pellizcar el grafo: faltan Pointer Events. (A41)
+63. ✅ [baja] No había vista de la papelera de notas, y «Deshacer» desaparecía al hacer clic en otra. Ahora el Cerebro tiene «🗑 Papelera»: cada nota tirada se ve 30 días, con «Restaurar». (L44)
+64. ✅ [baja] «+N más» enlaces no se podía pulsar. Ahora es un botón que muestra el resto. (L45)
+65. ✅ [baja] Un [[enlace]] a una nota fuera del grafo solo se ponía gris, sin decir por qué. Ahora dice «(no está en el Cerebro)» y explica el motivo al pasar el cursor. (L47)
+66. ✅ [media] En tablet no se podía arrastrar ni pellizcar el grafo. Ahora usa Pointer Events: un dedo arrastra, dos pellizcan, un toque abre la nota. (A41)
 
 ## 6. El Estudio
 
@@ -136,26 +136,26 @@ Se unieron los duplicados y cada punto va con su estado.
 83. ✅ [media] El Cerebro no tenía diseño para pantallas pequeñas. (A14)
 84. ✅ [media] El calendario en pantallas estrechas: ahora se pliega la lista de rutinas y el popover cabe. Parcial: la cuadrícula de 7 días sigue apretada en un teléfono. (A13)
 85. ✅ [media] El tablero en pantallas estrechas: ahora las columnas tienen ancho mínimo y scroll lateral. Parcial. (A15)
-86. ⏳ [media] El tablero queda debajo de «Vista general» y de la marca. (A19)
+86. ✅ [media] El tablero quedaba debajo de «Vista general» y de la marca. Ahora va por encima de todo, con su ✕ para cerrarlo y el nombre del negocio. (A19)
 87. ✅ [baja] El popover del calendario se cortaba en pantallas bajas. (A43)
 
 ## 8. Accesibilidad y teclado
 
-88. ✅ [alta] Las tarjetas de los departamentos no se podían abrir con el teclado. Ahora son botones con Enter/Espacio. Las píldoras de los agentes siguen pendientes. (A7)
+88. ✅ [alta] Las tarjetas de los departamentos no se podían abrir con el teclado. Ahora son botones con Enter/Espacio, y las píldoras de los agentes también (con Tab dentro de su departamento). (A7)
 89. ✅ [alta] En las filas programadas, Enter sobre CANCELAR abría el detalle en vez de cancelar. (A8)
 90. ✅ [media] Faltaban nombres en la caja de tareas, el editor grande y el buscador del calendario; el editor grande no era un diálogo. (A30)
-91. ✅ [media] El chat del agente no se anunciaba (ahora es role="log"). Parcial: todavía se redibuja entero. (A25)
-92. ⏳ [media] El menú de departamento del panel no tiene teclado (flechas, Esc) ni aria-expanded. (A26)
-93. ⏳ [media] Los interruptores REPETIR/EQUIPO y los filtros del panel y del calendario no dicen si están activos (aria-pressed). Ya lo dicen en el Estudio y el Cerebro. (A27)
-94. ⏳ [media] Varios elementos solo responden al clic: rutinas del calendario, «Actividad», los [[enlaces]] fuera del chat. (A31, A32)
+91. ✅ [media] El chat del agente no se anunciaba (ahora es role="log"). Desde V4.1 un mensaje nuevo se añade al final en vez de redibujar todo el chat: el lector de pantalla oye solo lo nuevo y un archivo abierto o una nota a medio escribir no se tocan. (A25)
+92. ✅ [media] El menú de departamento del panel no tenía teclado ni aria-expanded. Ahora ↓ lo abre, ↑ ↓ Inicio Fin mueven, Enter elige y Esc cierra. (A26)
+93. ✅ [media] Los interruptores REPETIR/EQUIPO y los filtros del panel y del calendario no decían si estaban activos. Ahora llevan aria-pressed, también DÍA/SEMANA/MES. (A27)
+94. ✅ [media] Varios elementos solo respondían al clic: rutinas del calendario, las tareas sin fecha, los [[enlaces]] fuera del chat. Ahora responden a Enter/Espacio, y un [[enlace]] en el detalle o en Dimitri abre su nota. (A31, A32)
 95. ✅ [media] Los anillos de foco convertían los botones redondos en rectángulos. (A45)
 96. ✅ [baja] Con «reducir movimiento» activado, los indicadores de carga quedaban congelados. (A49)
-97. ⏳ [baja] La oficina 3D (el canvas) no tiene una alternativa en texto para lectores de pantalla. (A54)
+97. ✅ [baja] La oficina 3D (el canvas) no tenía alternativa en texto para lectores de pantalla. Ahora la describe y dice cómo moverse con el teclado. (A54)
 
 ## 9. Visual, modo oscuro y textos
 
 98. ✅ [media] En modo oscuro, el ámbar, el verde, el rojo, el azul y el violeta tenían un contraste de 2,3–3,5:1. Ahora tienen versiones claras; también los fondos que desaparecían. (A35, A36)
-99. ✅ [media] Textos en inglés en la interfaz y en los errores del servidor: WHOLE OFFICE, routine, failed, result ready, click to view, Delivered, no such task… Ahora están en español, y las horas en formato local. Parcial: quedan ejemplos en inglés en las respuestas sobre rutinas del chat. (A51, L26–L28, L30, L48, L49)
+99. ✅ [media] Textos en inglés en la interfaz y en los errores del servidor: WHOLE OFFICE, routine, failed, result ready, click to view, Delivered, no such task… Ahora están en español, y las horas en formato local. Completo desde V4.1: las respuestas sobre rutinas del chat usan ejemplos en español y entienden «pausa», «reanuda», «ejecuta» y «elimina»; los avisos de equipo y de rutinas, también en español. (A51, L26–L28, L30, L48, L49)
 100. ✅ [baja] Otros ajustes visuales:
     - las barras de scroll estaban ocultas en las listas y ahora se ven finas (A52);
     - los números que cambian ya no empujan a sus vecinos (A47);
@@ -165,4 +165,13 @@ Se unieron los duplicados y cada punto va con su estado.
 
 ---
 
-**Resumen:** 69 arreglados en esta ronda, 31 pendientes. Los pendientes de mayor impacto son el flujo de aprobaciones (31–33), la vista de archivadas con Deshacer (39) y las trampas de foco en las ventanas (22). Van primero en la próxima ronda.
+**Resumen:** los 100 están arreglados. En la primera ronda se arreglaron 69 (V4) y en V4.1 los 31 que quedaban:
+
+- el flujo de aprobaciones por borrador;
+- las archivadas con Deshacer;
+- las trampas de foco y la hoja de atajos;
+- la lista de tareas, el teclado, la papelera de notas, la tablet y el español.
+
+Siguen parciales el 84 y el 85: el calendario y el tablero en un teléfono. Son mucho mejores que antes, pero el calendario pide una vista de agenda (ver `docs/auditoria-visual-2026-09-24.md`, punto 38).
+
+La siguiente revisión, la visual (50 hallazgos, 37 aplicados), está en [auditoria-visual-2026-09-24.md](auditoria-visual-2026-09-24.md).
