@@ -22,7 +22,7 @@ const BY = { you: 'ti', sub: 'el Subgerente', routine: 'una rutina', team: 'el l
 
 export function initDetail(ctx) {
   const { agentOf, AGENTS, DEPTS, DEPT_KEYS, esc, isLive, act, openAgent, openNote, openCalendar, modelName, MODEL_KEYS, officeModel } = ctx;
-  const el = document.createElement('aside'); el.id = 'tdDrawer'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'false'); el.setAttribute('aria-label', 'Detalle de la tarea'); el.hidden = true;
+  const el = document.createElement('div'); el.id = 'tdDrawer'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'false'); el.setAttribute('aria-label', 'Detalle de la tarea'); el.hidden = true;
   document.body.appendChild(el);
   let cur = null, busy = false, opener = null;
 

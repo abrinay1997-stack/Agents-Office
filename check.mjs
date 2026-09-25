@@ -508,7 +508,7 @@ else {
     await step('smoke: V4.1 — on a phone the whole office fits above the task sheet, with one-line department cards', async () => {
       const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
       try {
-        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check'); await ph.waitForTimeout(3000);
+        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000); // a second 3D page beside the first takes ~30 s on a slow machine (software WebGL)
         const measure = () => ph.evaluate(() => { const b = [...document.querySelectorAll('.badge:not(.brainTag)')].map(e => e.getBoundingClientRect()); return { at: b.map(x => Math.round(x.left) + ',' + Math.round(x.right) + ',' + Math.round(x.bottom)).join(' '), compact: document.body.classList.contains('cardsCompact'), inside: b.every(x => x.left >= 0 && x.right <= innerWidth + 1 && x.bottom <= innerHeight * 0.56), n: b.length, overflow: document.documentElement.scrollWidth > innerWidth }; });
         let r = await measure(); for (let t = 0; t < 6 && !r.inside; t++) { await ph.waitForTimeout(500); r = await measure(); } // the overview's fit animates: a slow machine gets up to 3 s more
         if (!r.compact) throw new Error('cards not compact on a phone');

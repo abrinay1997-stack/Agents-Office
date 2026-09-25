@@ -1204,6 +1204,7 @@
   .tp-clear { font-family: var(--ui); font-size: 11px; font-weight: 600; white-space: nowrap; padding: 6px 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--grey); cursor: pointer; }
   .tp-clear:hover { color: var(--ink); border-color: var(--ink); } .tp-clear[hidden] { display: none; }
   .tp-chip.e { color: #B3261E; }
+  .tp-open { all: unset; cursor: pointer; display: inline; } .tp-open:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
   .tp-row[role="button"] { cursor: pointer; } .tp-row[role="button"]:hover { background: rgba(21,20,20,.03); }
   body.dark .tp-search { background: #1E1F24; }
   /* V4.1: ARCHIVADAS, «show more», the empty text's way out, and the DESHACER toast */
@@ -1822,7 +1823,7 @@
   .cv-rq[hidden] { display: none; }
   .cv-rg { margin-bottom: 8px; } .cv-rg > summary { cursor: pointer; font-size: 11px; letter-spacing: .12em; font-weight: 700; color: var(--grey); text-transform: uppercase; padding: 4px; list-style: none; display: flex; align-items: center; gap: 6px; }
   .cv-rg > summary::-webkit-details-marker { display: none; } .cv-rg > summary i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; } .cv-rg > summary b { font-family: var(--serif); font-weight: 400; font-size: 14px; letter-spacing: 0; color: var(--ink); }
-  .cv-rg .cv-r { margin-bottom: 6px; position: relative; padding-right: 34px; }
+  .cv-rw { position: relative; margin-bottom: 6px; } .cv-rg .cv-r { position: relative; padding-right: 34px; }
   .cv-r-eye { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 8px; border: 1px solid transparent; background: none; cursor: pointer; font-size: 13px; line-height: 1; opacity: .55; }
   .cv-r-eye:hover, .cv-r-eye[aria-pressed="true"] { opacity: 1; border-color: var(--hairline); }
   /* B36 */ .cv-ld { grid-template-columns: 1fr 70px 22px; } .cv-ld small { grid-column: 1 / -1; font-size: 10.5px; color: var(--grey); margin-top: -2px; } .cv-ld-sub { font-size: 11px; color: var(--grey); margin: -2px 4px 6px; }
@@ -2043,6 +2044,47 @@
 
   .vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } /* read out, not seen */
   .sb-reload { font-family: var(--ui); font-style: normal; font-size: 12px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--ink); background: none; cursor: pointer; margin-left: 6px; }
+
+  /* ── V4.3 (25 sep 2026) — auditoría profunda: accesibilidad (docs/auditoria-profunda-2026-09-25.md, puntos A1–A30) ── */
+  /* A7–A12: every field shows the focus ring, not only a darker border (a border change alone fails 2.4.7 / 2.4.11) */
+  #cvSearch:focus-visible, .cv-rq:focus-visible, .cv-text:focus-visible, .cv-title:focus-visible, .tb-in:focus-visible,
+  #bvSearch:focus-visible, #rail .mInput input:focus-visible, #rail .mInput textarea:focus-visible, .cv-tshort:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .st-pwrap:focus-within, .st-mq:focus-within, .st-qwrap:focus-within { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .cv-res:focus-visible, .st-menu [role="menuitem"]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  /* A13: the ring appears at once — a button's own transition must not fade it in from 0 */
+  :focus-visible { transition-property: none !important; }
+  /* A14–A18: paused, skipped and past runs say so with colour and a mark, not by fading the text below 4.5:1 */
+  .cv-ev.paused, .cv-ev.skipped { opacity: 1; filter: none; background: var(--cv-soft); border-left-style: dashed; }
+  .cv-ev.paused .cv-ev-t, .cv-ev.paused .cv-ev-h, .cv-ev.paused .cv-ev-m, .cv-ev.skipped .cv-ev-t, .cv-ev.skipped .cv-ev-h, .cv-ev.skipped .cv-ev-m,
+  .cv-ev.paused .cv-ev-m span, .cv-ev.skipped .cv-ev-m span { color: #5E5D59; }
+  body.dark .cv-ev.paused .cv-ev-t, body.dark .cv-ev.paused .cv-ev-h, body.dark .cv-ev.paused .cv-ev-m, body.dark .cv-ev.skipped .cv-ev-t, body.dark .cv-ev.skipped .cv-ev-h, body.dark .cv-ev.skipped .cv-ev-m,
+  body.dark .cv-ev.paused .cv-ev-m span, body.dark .cv-ev.skipped .cv-ev-m span, body.dark .cv-ev.run .cv-ev-t, body.dark .cv-ev.run .cv-ev-m, body.dark .cv-ev.run .cv-ev-h { color: #C2C0B9; }
+  .tp-row.sched.paused, .tk.sched.paused, .cv-r.paused { opacity: 1; border-style: dashed; }
+  .tp-row.sched.paused .tp-t, .tk.sched.paused .tk-t, .cv-r.paused .cv-r-t { color: #5E5D59; }
+  body.dark .tp-row.sched.paused .tp-t, body.dark .tk.sched.paused .tk-t, body.dark .cv-r.paused .cv-r-t, body.dark .tk.sched.paused .tk-m span { color: #C2C0B9; }
+  /* A19–A22: state colours that pass 4.5:1 on the dark panels */
+  body.dark .tp-chip.e { color: #FF8A80; }
+  body.dark .td-st.sched { color: #B9A6F2; border-color: rgba(185,166,242,.45); }
+  body.dark .td-st.doing { color: #8FB0FF; } body.dark .td-st.waiting { color: #F2C46B; }
+  body.dark .st-mg-h .ok, body.dark .ok { color: #5FD3A8; }
+  /* A23: the counts on the Estudio's tabs (Todo 12 · Favoritas 3) were at 70% opacity: 3.3:1 */
+  .st-tabs button b, .st-ptabs b { opacity: 1; color: inherit; font-weight: 600; }
+  /* A24–A27: targets of at least 24px, or 24px apart (2.5.8) */
+  .cv-add { width: 24px; height: 24px; }
+  .cv-grid.month .cv-evs { gap: 4px; } .cv-ev.line { min-height: 20px; box-sizing: border-box; }
+  .cv-st, .cv-lk, .st-fold, .st-new, .st-sum { min-height: 24px; }
+  .st-tchip { min-height: 24px; box-sizing: border-box; line-height: 18px; }
+  .bv-seg button, .bv-reset { min-height: 24px; }
+  .st-ck input { width: 20px; height: 20px; }
+  body.cardsCompact .badge:not(.brainTag) { min-height: 26px; }
+  summary.cv-rail-h, .st-keys summary, details > summary { min-height: 24px; }
+  /* A28: nothing on screen under 10.5px (9–9.5px labels could not be read at arm's length) */
+  .ticket .tk-s, .tk-chip, .bd-lanes .more, .tp-team-chip, .cv-av, .st-ar small, #topbar .brand .bs, .cv-tg-h.lv { font-size: 10.5px; }
+  #usageDock .tm-usage { font-size: 10.5px; }
+  @media (max-width: 900px) { #licence { font-size: 10.5px; } }
+  @media (max-width: 760px) { .cv-num { font-size: 10.5px; } }
+  /* A29: the Estudio fits a 320px screen (1.4.10 reflow) */
+  @media (max-width: 400px) { #studioOv .st-gen, #studioOv .st-scroll, #studioOv .st-step, #studioOv .st-kind { min-width: 0; max-width: 100%; box-sizing: border-box; } #studioOv .st-kind button { min-width: 0; } .st-foot { grid-template-columns: minmax(0, auto) minmax(0, 1fr); padding: 10px 12px 12px; } .st-go { white-space: normal; letter-spacing: .06em; padding: 11px 14px; } }
 </style>
 </head>
 <body>

@@ -461,7 +461,7 @@ for (const k of [...DEPT_KEYS, 'brain']) {
   if (k === 'fin') deptRT[k].sideBadge = true;
   if (k === 'ops') { deptRT[k].sideBadge = true; deptRT[k].sideLeft = true; }
 }
-if (SERVED) setInterval(() => updateBillboards(), 1500); // V4.1: the real office's card counts follow the list (they froze at page load)
+if (SERVED) setInterval(() => { if (!document.hidden) updateBillboards(); }, 1500); // V4.3: a hidden tab does not repaint cards nobody sees; // V4.1: the real office's card counts follow the list (they froze at page load)
 function updateBillboards() {
   for (const k of Object.keys(BB_ROWS)) {
     BB_ROWS[k].forEach((row, i) => {
@@ -1594,7 +1594,7 @@ function tickLOD() {
       xf = 'translate(-50%,-100%)';
     }
     setS(d.badge, 'transform', `translate(${px(sx)}px,${px(sy)}px) ${xf} scale(${badgeScale.toFixed(3)})`);
-    setS(d.badge, 'opacity', (1 - 0.75 * focusDim).toFixed(3)); // unfocused boards recede with the scene
+    setS(d.badge, 'opacity', k === 'brain' ? '1' : (1 - 0.75 * focusDim).toFixed(3)); // unfocused boards recede with the scene; V4.3: the Brain and Dimitri are reachable from every view, so they stay legible (at 33% their text fell to 1.1:1)
     setS(d.badge, 'pointerEvents', 'auto');
   }
   // name pills stay on at EVERY zoom (AJ's call) — smaller when far, full-size when near
