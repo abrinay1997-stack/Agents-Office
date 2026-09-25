@@ -1794,6 +1794,50 @@
   /* B33: a draft that is really waiting, in amber; «pedirá tu OK» is only a note */
   .cv-wait { color: #8A6414; font-weight: 700; } body.dark .cv-wait { color: #E8B44A; }
   .cv-said b { color: var(--ink); font-weight: 700; }
+  /* B8: work under way, a strip above the month and the agenda */
+  .cv-live { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 10px 0 2px; } .cv-live[hidden] { display: none; }
+  .cv-live-h { font-size: 10.5px; letter-spacing: .14em; font-weight: 700; color: var(--grey); margin-right: 4px; } .cv-live-h b { font-family: var(--serif); font-weight: 400; font-size: 15px; color: var(--ink); letter-spacing: 0; }
+  .cv-live .cv-ev.line { max-width: 280px; }
+  /* B10: the legend */
+  .cv-legend { font-size: 11px; color: var(--grey); margin-left: 6px; white-space: nowrap; } .cv-legend i { color: #8A6414; } body.dark .cv-legend i { color: #E8B44A; }
+  @media (max-width: 1300px) { .cv-legend { display: none; } }
+  /* B14 · B44 */
+  #cvTitle small .cv-thisweek, .cv-thisweek { font-size: 12px; }
+  .cv-st { background: none; border: 0; padding: 0; font: inherit; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--grey); cursor: pointer; }
+  .cv-st b { font-family: var(--serif); font-weight: 400; font-size: 16px; letter-spacing: 0; color: var(--ink); margin-right: 4px; }
+  .cv-st:not(.on) { text-decoration: line-through; opacity: .6; } .cv-st:hover { color: var(--ink); }
+  /* B20: the toast also carries plain messages */
+  .cv-toast.bad { background: #6E1A12; }
+  .cv-toast button[hidden] { display: none; }
+  /* B24 */ .cv-moreopt summary { font-size: 11.5px; color: var(--grey); cursor: pointer; } .cv-moreopt .cv-row { margin-top: 6px; }
+  .cv-effort { font-family: var(--ui); font-size: 11px; letter-spacing: .1em; font-weight: 700; text-transform: uppercase; color: var(--ink); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 6px 9px; }
+  /* B25: the arrow to its day */
+  #cvPop[data-side="l"]::before, #cvPop[data-side="r"]::before { content: ''; position: absolute; top: var(--ay, 20px); width: 12px; height: 12px; background: var(--cv-card); border: 1.5px solid var(--ink); transform: rotate(45deg); }
+  #cvPop[data-side="l"]::before { left: -7.5px; border-top: 0; border-right: 0; } #cvPop[data-side="r"]::before { right: -7.5px; border-bottom: 0; border-left: 0; }
+  #cvPop { overflow: visible; } #cvPop > * { position: relative; }
+  /* B27 */ .cv-tshort { border: 1px solid var(--hairline); border-radius: 10px; padding: 7px 10px; font-family: var(--ui); font-size: 13px; color: var(--ink); background: none; width: 100%; box-sizing: border-box; }
+  /* B32 */ .cv-rail-hint { font-weight: 400; letter-spacing: .04em; text-transform: none; margin-left: 8px; font-size: 11px; }
+  /* B34 · B35: routines by department, searchable; the eye shows only its days */
+  .cv-rq { width: 100%; box-sizing: border-box; margin: 0 0 8px; background: var(--cv-card); border: 1px solid var(--hairline); border-radius: 99px; padding: 7px 12px; font-family: var(--ui); font-size: 12px; color: var(--ink); outline: none; }
+  .cv-rq[hidden] { display: none; }
+  .cv-rg { margin-bottom: 8px; } .cv-rg > summary { cursor: pointer; font-size: 11px; letter-spacing: .12em; font-weight: 700; color: var(--grey); text-transform: uppercase; padding: 4px; list-style: none; display: flex; align-items: center; gap: 6px; }
+  .cv-rg > summary::-webkit-details-marker { display: none; } .cv-rg > summary i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; } .cv-rg > summary b { font-family: var(--serif); font-weight: 400; font-size: 14px; letter-spacing: 0; color: var(--ink); }
+  .cv-rg .cv-r { margin-bottom: 6px; position: relative; padding-right: 34px; }
+  .cv-r-eye { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 8px; border: 1px solid transparent; background: none; cursor: pointer; font-size: 13px; line-height: 1; opacity: .55; }
+  .cv-r-eye:hover, .cv-r-eye[aria-pressed="true"] { opacity: 1; border-color: var(--hairline); }
+  /* B36 */ .cv-ld { grid-template-columns: 1fr 70px 22px; } .cv-ld small { grid-column: 1 / -1; font-size: 10.5px; color: var(--grey); margin-top: -2px; } .cv-ld-sub { font-size: 11px; color: var(--grey); margin: -2px 4px 6px; }
+  /* B37: on a narrow screen the rail opens as a panel */
+  .cv-railbtn { display: none; font-family: var(--ui); font-size: 10.5px; letter-spacing: .14em; font-weight: 700; border: 1px solid var(--hairline); border-radius: 99px; padding: 7px 12px; background: none; color: var(--ink); cursor: pointer; }
+  @media (max-width: 900px) { .cv-railbtn { display: inline-block; } #calOv.railOpen .cv-rail { display: flex; position: absolute; left: 0; top: 0; bottom: 0; z-index: 44; width: min(320px, 86vw); background: var(--cream); box-shadow: 20px 0 50px rgba(0,0,0,.2); } .cv-body { position: relative; } }
+  /* B41: search results with their dates */
+  .cv-sw { position: relative; } .cv-results { position: absolute; top: calc(100% + 6px); left: 0; z-index: 46; width: min(420px, 90vw); max-height: 60vh; overflow-y: auto; background: var(--cv-card); border: 1.5px solid var(--ink); border-radius: 14px; padding: 6px; box-shadow: 0 20px 50px rgba(0,0,0,.2); }
+  .cv-results[hidden] { display: none; } .cv-res-h { font-size: 11px; color: var(--grey); padding: 4px 8px 6px; }
+  .cv-res { display: grid; grid-template-columns: 110px 1fr; gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 7px 8px; font-family: var(--ui); font-size: 12.5px; color: var(--ink); cursor: pointer; }
+  .cv-res:hover, .cv-res:focus-visible { background: rgba(127,127,127,.12); outline: none; } .cv-res span:first-child { color: var(--grey); font-variant-numeric: tabular-nums; }
+  /* B45: the band in dark mode keeps its edge */
+  body.dark .cv-band { border-bottom: 1px solid rgba(236,234,227,.14); }
+  @media (max-width: 760px) { .cv-st { display: none; } }
+  .cv-foot-acts { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 8px; }
   /* B23: the days of a routine as seven toggles */
   .cv-dwrap { display: block; } .cv-dwrap[hidden] { display: none; }
   .cv-days { display: flex; gap: 4px; }
@@ -1872,6 +1916,64 @@
   .st-all { font: inherit; background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; color: var(--ink); cursor: pointer; margin-left: 6px; }
   /* A44: on a phone, «Crear | Galería» — one pane at a time, the whole screen for it */
   .st-ptabs { display: none; }
+  /* A22 */ .st-tabs button b { font-weight: 400; opacity: .7; margin-left: 2px; font-variant-numeric: tabular-nums; }
+  /* A26: the selection bar sits over the filters, the gallery does not jump */
+  .st-gal { position: relative; } .st-selbar { position: absolute; top: 0; left: 0; right: 0; z-index: 6; min-height: 52px; box-sizing: border-box; }
+  /* A36: main actions, then quiet links, the bin apart */
+  .st-lacts2 { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 12px; }
+  .st-lacts2 button { background: none; border: 0; padding: 3px 0; font-family: var(--ui); font-size: 12.5px; color: var(--ink); text-decoration: underline; text-decoration-color: var(--hairline); text-underline-offset: 3px; cursor: pointer; }
+  .st-lacts2 button:hover { text-decoration-color: currentColor; }
+  .st-ldel { display: inline-flex; align-items: center; gap: 6px; margin-top: 18px; background: none; border: 0; padding: 4px 0; font-family: var(--ui); font-size: 12.5px; color: #B3261E; cursor: pointer; } body.dark .st-ldel { color: #FF8A7A; } .st-ldel .ic { width: 15px; height: 15px; }
+  /* A42: the job history */
+  .st-hist { position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; background: rgba(21,20,20,.5); padding: 16px; } .st-hist[hidden] { display: none; }
+  .st-hbox { width: min(720px, 100%); max-height: 86vh; overflow-y: auto; background: var(--cream); border-radius: 16px; padding: 18px 20px; }
+  .st-hhead { display: flex; align-items: center; } .st-hhead h2 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0; }
+  .st-hx { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--hairline); background: none; color: var(--ink); display: grid; place-items: center; cursor: pointer; }
+  .st-hsub { font-size: 12.5px; color: var(--grey); margin: 6px 0 12px; }
+  .st-hlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .st-hlist li { display: grid; grid-template-columns: 92px 1fr; gap: 2px 10px; padding: 9px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 13px; }
+  .st-hlist li > b { grid-row: span 3; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }
+  .st-hlist li.done > b { color: #13705A; } .st-hlist li.failed > b { color: #B3261E; } .st-hlist li.cancel > b { color: var(--grey); }
+  body.dark .st-hlist li.done > b { color: #5FD3A8; } body.dark .st-hlist li.failed > b, body.dark .st-hr { color: #FF8A7A; }
+  .st-hm { font-size: 11.5px; color: var(--grey); } .st-hr { font-size: 12px; color: #B3261E; }
+  .st-histbtn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--ui); font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+  .st-histbtn:hover { border-color: var(--ink); }
+  /* A43: the budget's numbers are always there — short on a narrow screen */
+  .st-bshort { display: none; } @media (max-width: 900px) { .st-budget .st-bshort { display: inline !important; } .st-blong { display: none; } }
+  /* A45: the composer folds to a strip */
+  .st-fold { display: block; margin: -4px 0 6px auto; background: none; border: 0; font-family: var(--ui); font-size: 11.5px; color: var(--grey); cursor: pointer; padding: 2px 0; }
+  .st-fold:hover { color: var(--ink); }
+  .st-unfold { display: none; }
+  @media (min-width: 761px) {
+    #studioOv.st-folded .st-body { grid-template-columns: 56px 1fr; }
+    #studioOv.st-folded .st-gen > :not(.st-unfold) { display: none; }
+    #studioOv.st-folded .st-unfold { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 14px auto; background: none; border: 1px solid var(--hairline); border-radius: 12px; padding: 12px 8px; font-family: var(--ui); font-size: 11.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+    #studioOv.st-folded .st-unfold span { writing-mode: vertical-rl; letter-spacing: .1em; }
+  }
+  @media (max-width: 760px) { .st-fold { display: none; } }
+  /* A50: dark mode — the logo is the brand colour, the white buttons get the dark ground */
+  body.dark .st-logo { background: #C43E00; color: #fff; }
+  body.dark .st-upbtn, body.dark .st-selbtn, body.dark .st-qwrap, body.dark .st-qty button { background: #1E1F24; border-color: rgba(236,234,227,.3); color: var(--ink); }
+  /* A51: the footer's message line is always there, so GENERAR never jumps */
+  .st-msg { min-height: 18px; } .st-msg:empty { display: block; }
+  /* A52: the first-time card */
+  .st-start { text-align: left; max-width: 520px; margin: 10px auto; border: 1px solid var(--hairline); border-radius: 16px; padding: 16px 20px; background: var(--cream); font-style: normal; }
+  .st-start h3 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0 0 8px; } .st-start ol { margin: 0; padding-left: 20px; font-family: var(--ui); font-size: 13.5px; line-height: 1.55; color: var(--ink); }
+  .st-open-engs { background: none; border: 0; padding: 0; font: inherit; color: var(--ink); font-weight: 600; text-decoration: underline; cursor: pointer; }
+  /* A6 · A8: every model in sight; the ones without a key dimmed, with how to turn them on */
+  .st-mpick[hidden] { display: none; }
+  .st-mg.off .st-mo { opacity: .55; cursor: not-allowed; } .st-mg-off { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--grey); font-weight: 600; margin-left: 6px; }
+  .st-mg-how { font-size: 11.5px; line-height: 1.4; color: var(--grey); margin: 0 8px 6px; } .st-mg-how code { font-size: 11px; word-break: break-all; }
+  .st-mo:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  /* A9: one idea or several */
+  .st-modeseg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 99px; border: 1px solid var(--hairline); margin: 0 0 8px; }
+  .st-modeseg button { font-family: var(--ui); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 99px; border: 0; background: none; color: var(--grey); cursor: pointer; }
+  .st-modeseg button[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
+  .st-bcount { font-size: 12px; font-weight: 600; color: var(--ink); margin: 6px 2px 0; } .st-bcount[hidden] { display: none; }
+  /* A11 · A12 · A13 */
+  .st-plen.near { color: #8A6414; font-weight: 600; } body.dark .st-plen.near { color: #E8B44A; }
+  .st-qty button:disabled { opacity: .35; cursor: not-allowed; }
+  .st-new { font-family: var(--ui); font-size: 12px; font-weight: 600; background: none; border: 0; color: var(--ink); text-decoration: underline; text-decoration-color: var(--hairline); text-underline-offset: 3px; cursor: pointer; margin-left: 8px; }
   /* A23: the gallery in days */
   .st-days { display: block; }
   .st-day { font-family: var(--serif); font-weight: 400; font-size: 19px; margin: 18px 0 10px; display: flex; align-items: baseline; gap: 8px; }
@@ -2023,9 +2125,9 @@
     <button id="cvKeys" type="button" aria-label="Atajos del calendario" title="atajos (?)">?</button>
     <button id="cvClose" type="button" aria-label="Cerrar el calendario" title="cerrar (Esc · P)">✕</button>
   </div>
-  <div class="cv-tools"><input id="cvSearch" placeholder="Buscar tareas y rutinas…" autocomplete="off" spellcheck="false" aria-label="Buscar tareas y rutinas en el calendario"><div id="cvChips"></div><div class="cv-sp"></div><div class="cv-stats" id="cvStats"></div></div>
+  <div class="cv-tools"><button type="button" class="cv-railbtn" data-rail aria-expanded="false">Rutinas</button><div class="cv-sw"><input id="cvSearch" placeholder="Buscar tareas y rutinas…" autocomplete="off" spellcheck="false" aria-label="Buscar tareas y rutinas en el calendario"><div class="cv-results" id="cvResults" hidden role="listbox" aria-label="Resultados"></div></div><div id="cvChips"></div><div class="cv-sp"></div><div class="cv-stats" id="cvStats"></div></div>
   <div class="cv-body">
-    <aside class="cv-rail"><div class="cv-rail-h">RUTINAS <b id="cvRtN">0</b></div><div id="cvRail"></div><div class="cv-rail-foot">Haz clic en un día para programar una tarea, o activa REPETIR para iniciar una rutina desde esa fecha. Haz clic en una rutina para ver solo sus días.</div></aside>
+    <aside class="cv-rail"><div class="cv-rail-h">RUTINAS <b id="cvRtN">0</b></div><div id="cvRail"></div><div class="cv-rail-foot">Haz clic en un día para programar una tarea, o activa REPETIR para iniciar una rutina desde esa fecha. Clic en una rutina: la abres; 👁: solo sus días.<div class="cv-foot-acts"><button type="button" class="cv-lk" data-ws>La semana empieza el lunes · cambiar</button><button type="button" class="cv-lk" data-ics title="Una dirección para ver las rutinas y lo programado en tu app de calendario (solo lectura)">Suscribirme (.ics)</button></div></div></aside>
     <div class="cv-wrap"><div class="cv-dow" id="cvDow"></div><div class="cv-grid month" id="cvGrid"></div></div>
   </div>
   <div id="cvPop" hidden></div>

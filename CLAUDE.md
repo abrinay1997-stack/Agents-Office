@@ -50,9 +50,9 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
-- V4.2 (24 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos), con 44 ya arreglados:
-  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió); la ventanita de la rutina con el título entero y todas sus acciones a la vista; cancelar una tarea o eliminar una rutina sin pregunta, con DESHACER 8 segundos; los días de una rutina como siete botones (L M X J V S D); mover una ejecución pregunta «solo esta vez» (se salta y queda una tarea en su lugar, mismo agente) o «siempre».
-  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono; en cada tarjeta ★, una acción con texto y el menú «⋯» (la papelera al final); «Mejorar el prompt» dice el idioma (en inglés con su traducción debajo, o en español); con el Estudio cerrado, lo que termina se avisa (número en la claqueta del dock y aviso con VER); cada trabajo en marcha dice cuánto suele tardar (la mediana de ese modelo) con una barra; «Cancelar» en un motor de pago pregunta en la tarjeta si se cobra igual; el visor ampliado dice «3 de 8» y tiene «Variar» (mismo prompt, la imagen como referencia); las imágenes de un mismo pedido en una sola tarjeta («Ver por separado», «Descargar las N»); la galería separada por días; la imagen de un agente dice para qué tarea fue y la búsqueda encuentra por agente y por tarea.
+- V4.2 (24–25 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos): los 98 arreglados (A30 en parte). Lo principal:
+  - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió); la ventanita de la rutina con el título entero y todas sus acciones a la vista; cancelar una tarea o eliminar una rutina sin pregunta, con DESHACER 8 segundos; los días de una rutina como siete botones (L M X J V S D); mover una ejecución pregunta «solo esta vez» (se salta y queda una tarea en su lugar, mismo agente) o «siempre»; lo que está en marcha va en una franja «SIN TERMINAR»; los avisos salen abajo, junto al trabajo; las cifras filtran; la semana puede empezar el domingo y dice su número; las rutinas se buscan y van por departamento (clic las abre, 👁 muestra solo sus días); la búsqueda lista resultados con fecha; el botón Rutinas en el teléfono; «Suscribirme (.ics)» (`/api/calendar.ics`).
+  - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono; en cada tarjeta ★, una acción con texto y el menú «⋯» (la papelera al final); «Mejorar el prompt» dice el idioma (en inglés con su traducción debajo, o en español); con el Estudio cerrado, lo que termina se avisa (número en la claqueta del dock y aviso con VER); cada trabajo en marcha dice cuánto suele tardar (la mediana de ese modelo) con una barra; «Cancelar» en un motor de pago pregunta en la tarjeta si se cobra igual; el visor ampliado dice «3 de 8» y tiene «Variar» (mismo prompt, la imagen como referencia); las imágenes de un mismo pedido en una sola tarjeta («Ver por separado», «Descargar las N»); la galería separada por días; la imagen de un agente dice para qué tarea fue y la búsqueda encuentra por agente y por tarea; todos los modelos a la vista (los sin key atenuados, con cómo activarlos); «Una idea / Varias ideas»; aviso de costo desde US$0,50; «Nuevo»; el mismo pedido dos veces pide un segundo clic; subidas con porcentaje; pestañas con número; Historial de trabajos; compositor plegable; atajos (Ctrl+Enter, /, I, V) en la hoja «?».
 - V4.1 (24 sep, rama `claude/gracious-pascal-aryw2d`):
   - el centro de la oficina sin la red neuronal: solo el icono del Cerebro y Dimitri;
   - los 31 ⏳ de `docs/auditoria-ux-2026-09-24.md`: aprobaciones por borrador, ARCHIVADAS con DESHACER, trampas de foco (`src/modal.js`), hoja de atajos «?», teclado, papelera de notas, tablet;
@@ -67,16 +67,12 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - auditoría de 100 puntos: los 100 arreglados.
 
 **Siguiente, en este orden:**
-1. Lo que queda abierto en `docs/auditoria-estudio-calendario-2026-09-24.md`. Lo que más molesta:
-   - en el calendario, cuando algo falla, el mensaje sale en la línea de cifras de arriba en vez de junto a lo que falló (B20);
-   - «Ejecutar ahora» no dice qué pasa luego (B22);
-   - en el Estudio, «Varias ideas» es una casilla que no se nota (A9) y el tope de 8 imágenes no se explica (A12).
-2. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
+1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
    - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);
    - el punto rojo que parpadea en las tarjetas (9).
-3. Probar el Estudio con una key real: Higgsfield `HF_KEY`, Nano Banana `GEMINI_API_KEY` o fal.ai `FAL_KEY`.
-4. Las mejoras que el dueño vaya pidiendo. Una herramienta nueva entra como un botón más en el dock de la barra superior (ver «The top bar»).
+2. Probar el Estudio con una key real: Higgsfield `HF_KEY`, Nano Banana `GEMINI_API_KEY` o fal.ai `FAL_KEY`.
+3. Las mejoras que el dueño vaya pidiendo. Una herramienta nueva entra como un botón más en el dock de la barra superior (ver «The top bar»).
 
 **Reglas de la interfaz (V4.1):**
 - Toda ventana modal nueva llama a `modal.open(el)` al abrirse y a `modal.close(el)` al cerrarse (`src/modal.js`). Mientras está abierta, el resto de la página queda inerte y Tab da la vuelta dentro de ella.

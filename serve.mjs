@@ -468,6 +468,27 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
 /* ---------- routines: the office's own clock (V3.5) ---------- */
 const RSTATE = routines.loadState(DATA);
 let rlist = { routines: [], problems: [], path: routines.file(BRAIN) };
+function icsFeed() {
+  const p2 = n => String(n).padStart(2, '0'), stamp = d => `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}T${p2(d.getHours())}${p2(d.getMinutes())}00`;
+  const txt = s => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\r?\n/g, '\\n');
+  const BY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'], now = new Date(), ev = [];
+  const fold = l => l.length <= 60 ? l : l.match(/.{1,60}/gu).join('\r\n ');
+  for (const r of loadRoutines()) {
+    const w = r.when; if (!w || r.paused || w.kind === 'minutes') continue;
+    const start = w.start ? new Date(w.start + 'T00:00:00') : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [h, m] = String(w.at || w.from || '09:00').split(':').map(Number); start.setHours(h, m, 0, 0);
+    const rule = w.kind === 'daily' ? 'FREQ=DAILY' : w.kind === 'weekdays' ? 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' : w.kind === 'weekly' ? `FREQ=WEEKLY;BYDAY=${w.days.map(d => BY[d]).join(',')}`
+      : w.kind === 'hourly' ? (() => { const a = +String(w.from).split(':')[0], b = +String(w.to).split(':')[0], hs = []; for (let x = a; x <= b; x += Math.max(1, w.every || 1)) hs.push(x); return `FREQ=WEEKLY;BYDAY=${w.weekdaysOnly ? 'MO,TU,WE,TH,FR' : BY.join(',')};BYHOUR=${hs.join(',')};BYMINUTE=${+String(w.from).split(':')[1] || 0}`; })() : null;
+    if (!rule) continue;
+    const a = AGENTS.find(x => x.id === r.agent);
+    ev.push(['BEGIN:VEVENT', `UID:rutina-${r.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(start)}`, 'DURATION:PT30M', `RRULE:${rule}`, `SUMMARY:${txt('⏱ ' + r.title)}`, `DESCRIPTION:${txt(`${r.text || r.title}\n${DEPTS[r.dept]?.name || r.dept} · ${a ? a.name : r.agent}${r.needsOk ? ' · pide tu OK' : ''}`)}`, 'END:VEVENT']);
+  }
+  for (const t of load()) if (t.state === 'scheduled' && t.dueAt) {
+    const a = AGENTS.find(x => x.id === t.agent);
+    ev.push(['BEGIN:VEVENT', `UID:tarea-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(new Date(t.dueAt))}`, 'DURATION:PT30M', `SUMMARY:${txt('◷ ' + t.title)}`, `DESCRIPTION:${txt(`${t.text || t.title}\n${DEPTS[t.dept]?.name || t.dept} · ${a ? a.name : t.agent}`)}`, 'END:VEVENT']);
+  }
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Agents Office//Calendario//ES', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${txt(cfg.name + ' · oficina')}`, ...ev.flat(), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
+}
 function loadRoutines() { // re-read from disk every time: a routine written by Claude Code, or by hand, lands without a restart
   const r = routines.load(BRAIN, AGENTS);
   if (r.problems.join() !== rlist.problems.join()) for (const w of r.problems) console.warn('routines:', w);
@@ -823,6 +844,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
     if (url.pathname === '/api/tasks' && req.method === 'GET') return json(res, 200, load());
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
+    if (url.pathname === '/api/calendar.ics' && req.method === 'GET') { // V4.2 (audit B46): the office's timetable, read-only, for the owner's own calendar app
+      res.writeHead(200, { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"', 'cache-control': 'no-cache' });
+      return res.end(icsFeed());
+    }
     if (url.pathname === '/api/routines' && req.method === 'POST') {
       const b = await body(req);
       if (!DEPTS[b.dept] || b.dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
