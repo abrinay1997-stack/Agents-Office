@@ -713,6 +713,8 @@ export function initTasks(ctx) {
   }
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
+    { const q = JSON.stringify([st.queue || null, st.retryAt || null, st.attempts || 0, st.lastError || '']); if (t.qsig !== q) { t.qsig = q; t.queue = st.queue; t.retryAt = st.retryAt; t.attempts = st.attempts || 0; t.lastError = st.lastError; dirty = true; } } // V4.4 (B1, B5)
+    if (st.state === 'next' && t.state === 'doing') { t.state = 'next'; t.running = false; t.progress = 0; t.addedAt = st.addedAt || Date.now(); touch(t, 'added'); } // V4.4 (B1): a failed run waits for its retry
     if (st.state === 'scheduled') { if (t.state !== 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; touch(t, 'scheduled'); } else if (t.dueAt !== st.dueAt || t.title !== st.title || t.text !== st.text) { Object.assign(t, { dueAt: st.dueAt, title: st.title, text: st.text }); dirty = true; } return; }
     if (t.state === 'scheduled' && st.state !== 'scheduled') { t.state = 'next'; t.addedAt = st.addedAt || Date.now(); t.late = !!st.late; t.due = st.due; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}${t.late ? ' (atrasada)' : ''}`); if (calendar) calendar.refresh(); }
     if (st.state === 'doing' && t.state !== 'doing') {
@@ -838,6 +840,7 @@ export function initTasks(ctx) {
   P_.rows.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { hoverList = true; lastMove = performance.now(); } });
   P_.rows.addEventListener('pointerleave', () => { hoverList = false; });
   const holdList = () => !forceList && hoverList && performance.now() - lastMove < 6000;
+  const retryWhy = m => /usage limit|limit reached|429|rate/i.test(m) ? 'límite de uso de Claude' : /took longer|timed? ?out/i.test(m) ? 'tardó demasiado; ahora con más tiempo' : /network|ECONN|ENOTFOUND|socket|fetch failed/i.test(m) ? 'fallo de red' : /overloaded|50\d|529/i.test(m) ? 'Claude estaba saturado' : 'fallo pasajero';
   function metaFor(t) {
     const a = agentOf(t.agent), now = Date.now();
     const f = getFocused();
@@ -846,7 +849,9 @@ export function initTasks(ctx) {
       case 'next': {
         const src = t.piece ? `parte del equipo de ${agentOf(t.leadId)?.name || 'el líder'}` : t.routine ? `rutina · ${t.when}${t.late ? ' · <span class="tp-late">atrasada · tocaba a las ' + timeStr(t.due) + '</span>' : ''}` : t.by === 'you' ? 'la pediste tú' : t.by === 'sub' ? 'vía Dimitri' : t.last === 'handoff' && t.from ? `de ${agentOf(t.from).name}` : t.revised ? 'devuelta para revisar' : 'del Cerebro';
         const w = now - t.addedAt;
-        return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)} · ${src}${teamBit(t)}${modelBit(t)}`;
+        const q = t.retryAt && t.retryAt > now ? ` · <span class="tp-retry">↻ reintento ${t.attempts || 1} a las ${timeStr(t.retryAt)}${t.lastError ? ' (' + esc(retryWhy(t.lastError)) + ')' : ''}</span>`
+          : t.queue && t.queue.why !== 'turno' ? ` · <span class="tp-queue">${t.queue.why === 'agente' ? `espera a que ${esc(a.name)} termine lo suyo` : `turno ${t.queue.pos}: todos los agentes que pueden trabajar a la vez están ocupados`}</span>` : ''; // V4.4 (B5): why it waits
+        return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)}${q} · ${src}${teamBit(t)}${modelBit(t)}`;
       }
       case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · renderizando' : t.teamHold ? ' · esperando las partes' : ''}${t.routine ? ' · rutina' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · borrador de rutina' : ''}${teamBit(t)}${modelBit(t)}`;

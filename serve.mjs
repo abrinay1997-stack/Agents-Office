@@ -54,6 +54,7 @@ import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
 import * as media from './media.mjs';
 import * as safety from './safety.mjs';
+import * as rel from './reliability.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 
@@ -67,7 +68,23 @@ const CLI_CWD = path.join(os.tmpdir(), 'agents-office-cli'); // an empty cwd: no
 const GUARD = path.join(ROOT, 'guard.mjs'); // V4.4: the hook Claude Code runs around every tool call (safety.mjs has the rules)
 const AUDIT = path.join(DATA, 'audit'); // one line per tool call: who, which tool, where it went, allowed or refused
 const SAFETY = () => safety.normalize(cfg.safety);
+// V4.4 (B2, B6, B7): the office's notices — something the owner should know without opening a task (a run done late, a retry,
+// Claude's login gone, a connector down). data/notices.json, the last 200; the page shows them and Telegram (tanda 3) sends them.
+const NOTICES = path.join(DATA, 'notices.json');
+const noticeHooks = [];
+function loadNotices() { try { return JSON.parse(fs.readFileSync(NOTICES, 'utf8')); } catch { return []; } }
+function notice(kind, text, { level = 'info', task = null, key = null } = {}) {
+  try {
+    const list = loadNotices(), now = Date.now();
+    if (key && list.some(n => n.key === key && now - n.t < 6 * 3600e3)) return null; // the same problem is said once every six hours
+    const n = { id: nid(), t: now, kind, level, text, task, key, read: false };
+    list.push(n); fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(list.slice(-200), null, 1)); fs.renameSync(NOTICES + '.tmp', NOTICES);
+    for (const h of noticeHooks) try { h(n); } catch {}
+    return n;
+  } catch { return null; }
+}
 const version = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return '?'; } })();
+const claudeLogin = { ok: null, at: 0 }; // V4.4 (B7): null = unknown yet, false = a run said the login is gone
 const RUN_TIMEOUT = Math.max(60, +cfg.timeout || 300) * 1000; // agents with tools take longer than a plain draft
 { const m = normModel(cfg.model); if (cfg.model && !m) console.warn(`config: model must be sonnet, opus or fable (got "${cfg.model}") — using ${DEFAULT_MODEL}`); cfg.model = m || DEFAULT_MODEL; } // V3.6: three models, by name
 { const e = normEffort(cfg.effort); if (cfg.effort && !e) console.warn(`config: effort must be low, medium, high, xhigh or max (got "${cfg.effort}") — using the model's own`); cfg.effort = e || ''; } // V3.6.1: the office's effort, empty = the model's own
@@ -117,10 +134,19 @@ const load = () => {
   let raw; try { raw = fs.readFileSync(FILE, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
   try { return JSON.parse(raw); } catch {
     const aside = FILE.replace(/\.json$/, `.unreadable-${Date.now()}.json`); try { fs.copyFileSync(FILE, aside); } catch {}
+    // V4.4 (B9): a damaged tasks.json comes back from the newest daily copy instead of stopping the office
+    const dir = path.join(DATA, 'backups'); let copy = null;
+    try { copy = fs.readdirSync(dir).filter(f => /^tasks-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().find(f => { try { JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); return true; } catch { return false; } }); } catch {}
+    if (copy) {
+      const list = JSON.parse(fs.readFileSync(path.join(dir, copy), 'utf8')); save(list);
+      console.error(`tasks.json could not be read — restored from backups/${copy} (the damaged file is at ${aside})`);
+      setImmediate(() => notice('restored', `El archivo de tareas estaba dañado y se recuperó de la copia ${copy.slice(6, 16)}. Lo de después de esa fecha puede faltar; el archivo dañado quedó en ${path.basename(aside)}.`, { level: 'warn' }));
+      return list;
+    }
     console.error(`tasks.json could not be read — a copy is at ${aside}`); throw new Error('no se pudo leer data/tasks.json (se guardó una copia al lado)');
   }
 };
-{ // one copy a day of the tasks and the routines file, the last 14 kept: data/backups/
+function dailyBackup() { // one copy a day of the tasks and the routines file, the last 14 kept: data/backups/ — V4.4 (B9): every day the office runs, not only on the day it starts
   const dir = path.join(DATA, 'backups'), day = new Date().toISOString().slice(0, 10);
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -217,13 +243,13 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
       if (guardOut) Object.assign(guardOut, guardReport(runId, taintFile));
       for (const f of [sysFile, guardFile, taintFile, settingsFile]) fs.rm(f, { force: true }, () => {});
     };
-    let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null;
-    const timer = setTimeout(() => { killTree(p); reject(new Error(`Claude took longer than ${timeout / 1000} s`)); }, timeout);
+    let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null, partial = '';
+    const timer = setTimeout(() => { killTree(p); const e = new Error(`Claude took longer than ${timeout / 1000} s`); e.partial = partial.trim(); reject(e); }, timeout); // V4.4 (B4): what it had written so far is kept
     const feed = line => {
       if (!line.trim()) return;
       let j; try { j = JSON.parse(line); } catch { return; }
       if (j.type === 'system' && j.subtype === 'init') mcp.fromInit(j);
-      if (j.type === 'assistant' && j.message?.content) for (const b of j.message.content) if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name);
+      if (j.type === 'assistant' && j.message?.content) for (const b of j.message.content) { if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name); if (b.type === 'text' && b.text) partial += b.text + '\n'; }
       if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); }
     };
     p.stdout.on('data', d => { out += d; let i; while ((i = out.indexOf('\n')) >= 0) { feed(out.slice(0, i)); out = out.slice(i + 1); } });
@@ -330,6 +356,7 @@ function studioText(a) {
 }
 const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. Name every recipient with the exact email address or phone number, and every amount: after the OK the office only lets a send reach the addresses written in this draft. End with one line saying exactly what will go out when approved (or that nothing needs to).'
   : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
+const timeoutFor = task => Math.min(3600, (task.timeout || RUN_TIMEOUT / 1000) * (task.timeoutMul || 1)) * 1000; // V4.4 (B4): a routine's own clock; a retry after a timeout gets twice as long
 const runModeOf = mode => mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : 'task'; // V4.4: safety.writesAllowed decides from this and the policy
 const knownFor = task => `${task.text || ''}\n${task.draft || task.result || ''}`; // after the OK, a send names only addresses in what the owner approved
 const pickFor = (task, a) => { // model + effort: four places, one precedence (task > routine > agent > office)
@@ -357,7 +384,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
   const guard = {};
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard });
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
   if (!text) throw new Error('Claude returned nothing');
   return { result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, guard };
 }
@@ -391,7 +418,7 @@ async function runTeam(task, mode) {
       const user = `Task (the whole request, for context): ${task.title}\nOwner's request: ${task.text}\n\nYOUR PIECE: ${piece.title}\n${piece.text}` + routineLineFor(task) + (mode === 'draft' ? modeLineFor('draft', task) : '');
       const { pick, eff } = pickFor(task, a);
       const pg = {};
-      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: 'piece', guardOut: pg });
+      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: 'piece', guardOut: pg, timeout: timeoutFor(task) });
       if (pg.blocked?.length || pg.taint) piece.guard = pg;
       const { body, messages } = teams.parseMessages(text, ids);
       Object.assign(piece, { result: body || '(empty)', tools: toolKeys(tools), used: mcp.namesOf(tools), read, modelId: ran, error: !text });
@@ -412,7 +439,7 @@ async function runTeamLead(task, feedback, mode) {
   const user = teams.synthPrompt({ task, pieces: tm.pieces || [], messages: tm.messages || [], nameOf, feedback: mode === 'approve' ? null : feedback }) + routineLineFor(task) + modeLineFor(mode, task);
   const { pick, eff } = pickFor(task, lead);
   const guard = {};
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard });
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
   if (!text) throw new Error('Claude returned nothing');
   for (const p of tm.pieces || []) if (p.guard) { guard.blocked = [...(guard.blocked || []), ...p.guard.blocked]; guard.taint = guard.taint || p.guard.taint; }
   const allTools = [...new Set([...(tm.pieces || []).flatMap(p => p.tools || []), ...toolKeys(tools)])];
@@ -548,6 +575,7 @@ function pump() {
     for (const t of list.filter(x => x.state === 'next' && !x.archived).sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0))) {
       if (running.size >= MAX_RUNS) break;
       if (running.has(t.id) || busy.has(t.agent)) continue;
+      if (t.retryAt && t.retryAt > Date.now()) continue; // V4.4 (B1): waits for its retry time
       busy.add(t.agent); startRun(t.id);
     }
   } finally { pumping = false; }
@@ -558,10 +586,11 @@ function startRun(id, opts = {}) { // one run, tracked; when it ends the next pe
   return p;
 }
 const enqueue = fn => fn(); // kept for the approve/reject path: those runs start at once (the owner is waiting on them)
-function fire(r, { due = Date.now(), late = false, by = 'routine' } = {}) { // the routine becomes a task and runs here, page or no page
-  const task = { id: nid(), dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, due, late, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined };
+function fire(r, { due = Date.now(), late = false, by = 'routine', missed = 0 } = {}) { // the routine becomes a task and runs here, page or no page
+  const task = { id: nid(), dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, due, late, missed: missed > 1 ? missed : undefined, timeout: r.timeout, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined };
   const list = load(); list.push(task); save(list);
   routines.advance(RSTATE, r, Date.now(), task.id, late); routines.saveState(DATA, RSTATE);
+  if (late) notice('late', `«${r.title}» se hizo tarde${missed > 1 ? ` (se perdieron ${missed} ejecuciones mientras la computadora dormía; se hace una)` : ''}: tocaba el ${new Date(due).toLocaleString('es-PA', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}`);
   console.log(`⏱ ${task.id} → ${task.agent}: ${task.title}${late ? ' (LATE · was due ' + new Date(due).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')' : ''}`);
   setImmediate(pump);
   return task;
@@ -573,6 +602,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
     const out = await run(task, feedback, approve ? 'approve' : task.needsOk ? 'draft' : 'routine');
     if (approve) { task.result = (task.draft || task.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; task.approved = true; task.approvedAt = Date.now(); }
     else task.result = out.result;
+    delete task.retryAt; delete task.lastError; delete task.partial; claudeLogin.ok = true;
     const g = out.guard || {};
     if (g.blocked?.length || g.taint) task.guard = { blocked: (g.blocked || []).slice(0, 12), taint: g.taint || null, at: Date.now(), approve: !!approve };
     else delete task.guard;
@@ -584,7 +614,20 @@ async function runServerTask(id, { feedback, approve } = {}) {
     if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = task.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); }
     else { task.state = 'done'; task.doneAt = Date.now(); task.note = writeNote(task); await rebuildGraph(); }
   } catch (e) {
-    Object.assign(task, { state: 'done', doneAt: Date.now(), result: stopping.has(task.id) ? 'Detenida por ti antes de terminar.' : 'Could not complete this task: ' + e.message, error: true, stopped: stopping.has(task.id) || undefined });
+    // V4.4 (B1, B4, B7): a passing failure is retried later on its own; a login problem stops and says how to fix it; what was written before a timeout is kept
+    const step = rel.nextStep({ ...task, stopped: stopping.has(task.id) }, e.message, cfg.retries);
+    if (step.retry) {
+      Object.assign(task, { state: 'next', attempts: step.attempt, retryAt: step.at, lastError: e.message, lastErrorKind: step.kind, timeoutMul: step.timeoutMul, partial: e.partial || task.partial });
+      console.log(`↻ ${task.id} failed (${step.kind}: ${e.message.slice(0, 80)}) — retry ${step.attempt} at ${new Date(step.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+      if (step.kind === 'limit') notice('limit', `Se alcanzó el límite de uso de Claude. «${task.title}» se reintenta sola a las ${new Date(step.at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })}.`, { level: 'warn', task: task.id, key: 'limit' });
+      setTimeout(pump, step.at - Date.now() + 500);
+    } else {
+      const partial = (e.partial || task.partial || '').trim();
+      const why = step.kind === 'login' ? 'Claude pidió volver a iniciar sesión. Abre una ventana de comandos, escribe `claude` y entra con tu cuenta; luego pulsa Reintentar.' : step.kind === 'limit' ? 'Se alcanzó el límite de uso de Claude y ya no quedan reintentos. Pulsa Reintentar cuando se renueve.' : 'Could not complete this task: ' + e.message;
+      Object.assign(task, { state: 'done', doneAt: Date.now(), result: stopping.has(task.id) ? 'Detenida por ti antes de terminar.' : (partial ? `${partial}\n\n---\n⚠ INCOMPLETA — ${why}` : why), error: true, errorKind: step.kind, stopped: stopping.has(task.id) || undefined, retryAt: undefined });
+      if (step.kind === 'login') { claudeLogin.ok = false; claudeLogin.at = Date.now(); notice('login', 'Claude Code cerró la sesión: ninguna tarea puede correr. Abre una ventana de comandos, escribe `claude` y entra con tu cuenta.', { level: 'error', key: 'login' }); }
+      else if (!stopping.has(task.id)) notice('failed', `«${task.title}» falló${task.attempts ? ` después de ${task.attempts + 1} intentos` : ''}: ${e.message.slice(0, 160)}`, { level: 'error', task: task.id });
+    }
   }
   stopping.delete(task.id);
   list = load(); const i = list.findIndex(t => t.id === task.id); if (i >= 0) list[i] = task; save(list);
@@ -626,9 +669,9 @@ function mediaReq(b, by) { // what the page or an agent may ask the Estudio for
 function tickRoutines() { // the clock never throws: an exception in a setInterval would stop the office
   try {
     let list; try { list = loadRoutines(); } catch (e) { console.warn('routines:', e.message); list = null; }
-    if (list) for (const { routine, due, late, skipped } of routines.due(list, RSTATE)) {
-      if (skipped) { routines.saveState(DATA, RSTATE); console.log(`⏭ ${routine.id} skipped this run (next ${untilText(RSTATE[routine.id].nextAt)})`); continue; }
-      fire(routine, { due, late });
+    if (list) for (const { routine, due, late, skipped, missed } of routines.due(list, RSTATE)) {
+      if (skipped) { routines.saveState(DATA, RSTATE); if (missed) notice('missed', `«${routine.title}» no corrió ${missed === 1 ? 'una vez' : missed + ' veces'} con la computadora dormida o la oficina cerrada; esta rutina no se recupera tarde.`); console.log(`⏭ ${routine.id} skipped this run${missed ? ` (${missed} missed while asleep)` : ''} (next ${untilText(RSTATE[routine.id].nextAt)})`); continue; }
+      fire(routine, { due, late, missed });
     }
     tickScheduled();
   } catch (e) { console.error('clock:', e.message); }
@@ -734,6 +777,52 @@ function page() {
   if (st.mtimeMs !== pageCache.mtime) { const raw = fs.readFileSync(HTML); pageCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }) }; }
   return pageCache;
 }
+/* ---------- V4.4 (B6, B7, B8): the office's health — one list of checks, green / amber / red, for the dock's traffic light ---------- */
+function officeStatus() {
+  const now = Date.now(), list = load(), day = 864e5, checks = [];
+  const add = (id, label, state, detail, fix = '') => checks.push({ id, label, state, detail, fix });
+  // Claude
+  if (claudeLogin.ok === false) add('claude', 'Claude', 'bad', 'La sesión de Claude Code se cerró: ninguna tarea puede correr.', 'Abre una ventana de comandos, escribe `claude` y entra con tu cuenta.');
+  else { const last = list.filter(t => t.state === 'done' && !t.error && t.doneAt).sort((a, b) => b.doneAt - a.doneAt)[0]; add('claude', 'Claude', claudeLogin.ok ? 'ok' : 'info', last ? `Última tarea terminada ${agoText(now - last.doneAt)}.` : 'Todavía no terminó ninguna tarea en esta sesión.'); }
+  // connectors
+  const srv = mcp.list().filter(x => !x.browser), badS = srv.filter(x => x.status === 'failed'), authS = srv.filter(x => x.status === 'needs-auth');
+  add('conectores', 'Conectores', badS.length ? 'bad' : authS.length ? 'warn' : srv.length ? 'ok' : 'info',
+    !srv.length ? 'No hay conectores (Gmail, CRM…) en esta máquina.' : badS.length || authS.length ? [badS.length ? `sin conexión: ${badS.map(x => x.name).join(', ')}` : '', authS.length ? `piden volver a entrar: ${authS.map(x => x.name).join(', ')}` : ''].filter(Boolean).join(' · ') : `${srv.filter(x => x.status === 'connected').length} conectados.`,
+    badS.length || authS.length ? 'Abre el panel de conectores (la etiqueta de la barra) y vuelve a conectarlos en claude.ai.' : '');
+  // disk
+  try { const st = fs.statfsSync(DATA_ROOT()); const free = st.bavail * st.bsize; add('disco', 'Disco', free < 200e6 ? 'bad' : free < 1e9 ? 'warn' : 'ok', `${(free / 1e9).toFixed(1)} GB libres.`, free < 1e9 ? 'Libera espacio: las tareas y las imágenes necesitan sitio para guardarse.' : ''); } catch { add('disco', 'Disco', 'info', 'No se pudo medir.'); }
+  // routines
+  const rs = routinesOut().routines || [], failedR = rs.filter(r => { const t = list.find(x => x.id === r.lastTaskId); return t && t.error; });
+  add('rutinas', 'Rutinas', failedR.length ? 'warn' : 'ok', rs.length ? (failedR.length ? `La última ejecución falló en: ${failedR.map(r => '«' + r.title + '»').join(', ')}.` : `${rs.length} en el horario; ninguna falló la última vez.`) : 'No hay rutinas.', failedR.length ? 'Abre la tarea para ver por qué; la rutina seguirá en su horario.' : '');
+  // queue and retries
+  const waiting = list.filter(t => t.state === 'next' && !t.archived), retrying = waiting.filter(t => t.retryAt), oldest = waiting.reduce((m, t) => Math.min(m, t.addedAt || now), now);
+  add('cola', 'Cola de trabajo', waiting.length && now - oldest > 3600e3 ? 'warn' : 'ok', waiting.length ? `${waiting.length} esperando${retrying.length ? `, ${retrying.length} con reintento programado` : ''}; ${running.size} en marcha (máximo ${MAX_RUNS}).` : `Nada esperando; ${running.size} en marcha.`);
+  // approvals
+  const appr = list.filter(t => t.state === 'waiting' && !t.archived), oldA = appr.filter(t => now - (t.waitingAt || now) > day);
+  add('aprobaciones', 'Aprobaciones', oldA.length ? 'warn' : 'ok', appr.length ? `${appr.length} esperan tu visto bueno${oldA.length ? `, ${oldA.length} desde hace más de un día` : ''}.` : 'Nada espera tu visto bueno.');
+  // errors in 24 h
+  const errs = list.filter(t => t.error && !t.stopped && now - (t.doneAt || 0) < day);
+  add('errores', 'Fallos (24 h)', errs.length > 2 ? 'bad' : errs.length ? 'warn' : 'ok', errs.length ? `${errs.length} tarea(s) fallaron: ${errs.slice(0, 3).map(t => '«' + t.title.slice(0, 40) + '»').join(', ')}.` : 'Ninguna tarea falló.');
+  // security
+  const sec = list.filter(t => t.guard && now - (t.guard.at || 0) < day), taints = sec.filter(t => t.guard.taint);
+  add('seguridad', 'Seguridad (24 h)', taints.length ? 'bad' : sec.length ? 'warn' : 'ok', taints.length ? `${taints.length} tarea(s) leyeron algo con órdenes escondidas; no se envió nada.` : sec.length ? `El guardián detuvo algo en ${sec.length} tarea(s).` : 'Sin bloqueos.', taints.length || sec.length ? 'Ábrelas: el detalle dice qué se detuvo y por qué.' : '');
+  // backup
+  let lastB = null; try { lastB = fs.readdirSync(path.join(DATA, 'backups')).filter(f => /^tasks-/.test(f)).sort().pop(); } catch {}
+  add('respaldo', 'Copia diaria', lastB ? 'ok' : 'info', lastB ? `Última copia: ${lastB.slice(6, 16)} (14 días en data/backups).` : 'Aún no hay copia (se hace al tener tareas).');
+  const rank = { bad: 3, warn: 2, info: 1, ok: 0 };
+  const overall = checks.reduce((w, c) => rank[c.state] > rank[w] ? c.state : w, 'ok');
+  const notices = loadNotices().slice(-30).reverse();
+  return { overall, checks, notices, unread: notices.filter(n => !n.read).length, at: now };
+}
+const agoText = ms => ms < 90e3 ? 'hace un momento' : ms < 3600e3 ? `hace ${Math.round(ms / 60e3)} min` : ms < 864e5 ? `hace ${Math.round(ms / 3600e3)} h` : `hace ${Math.round(ms / 864e5)} días`;
+const DATA_ROOT = () => { try { fs.mkdirSync(DATA, { recursive: true }); } catch {} return DATA; };
+// V4.4 (B8): the connectors are asked again every three hours; one that was working and stops is a notice
+setInterval(async () => {
+  const before = new Map(mcp.list().map(x => [x.id, x.status]));
+  try { await mcp.discover(); } catch { return; }
+  for (const x of mcp.list()) if (!x.browser && before.get(x.id) === 'connected' && (x.status === 'failed' || x.status === 'needs-auth')) notice('connector', `${x.name} dejó de funcionar (${x.status === 'failed' ? 'sin conexión' : 'pide volver a entrar'}). Los agentes no pueden usarlo hasta que lo reconectes.`, { level: 'warn', key: 'conn-' + x.id });
+}, 3 * 3600e3);
+
 /* ---------- the brain's notes: read one, move an office note to the bin ---------- */
 const TRASH = path.join(NOTES_DIR, '.papelera'); // dot folder: out of the graph, out of the agents' context, hidden in Obsidian
 function noteIndex() { // name → { path, group, office } — the only paths /api/note will ever open (the request never builds a path)
@@ -780,7 +869,17 @@ function emptyBins() { // the bins keep 30 days: a note or a file thrown away by
   }
   if (n) console.log(`  ${n} item${n > 1 ? 's' : ''} older than 30 days removed from the bins`);
 }
-autoArchive(); emptyBins(); setInterval(() => { autoArchive(); emptyBins(); }, 6 * 3600 * 1000);
+// V4.4 (B9): tasks archived more than 90 days ago leave tasks.json for data/archive/tasks-YYYY-MM.json, so the live file stays small
+function moveOldArchive() {
+  const list = load(), cut = Date.now() - 90 * 864e5, keep = [], out = {};
+  for (const t of list) { if (t.archived && (t.archivedAt || t.doneAt || 0) < cut) { const m = localDay(t.archivedAt || t.doneAt || Date.now()).slice(0, 7); (out[m] ||= []).push(t); } else keep.push(t); }
+  const months = Object.keys(out); if (!months.length) return;
+  const dir = path.join(DATA, 'archive'); fs.mkdirSync(dir, { recursive: true });
+  for (const m of months) { const f = path.join(dir, `tasks-${m}.json`); let prev = []; try { prev = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {} const ids = new Set(prev.map(t => t.id)); fs.writeFileSync(f + '.tmp', JSON.stringify([...prev, ...out[m].filter(t => !ids.has(t.id))], null, 1)); fs.renameSync(f + '.tmp', f); }
+  save(keep); console.log(`  ${list.length - keep.length} archived task(s) older than 90 days moved to data/archive/`);
+}
+dailyBackup(); autoArchive(); emptyBins(); try { moveOldArchive(); } catch (e) { console.warn('archive:', e.message); }
+setInterval(() => { dailyBackup(); autoArchive(); emptyBins(); try { moveOldArchive(); } catch (e) { console.warn('archive:', e.message); } }, 6 * 3600 * 1000);
 if (PROVIDER.id !== 'anthropic') console.log(`  provider: ${PROVIDER.name} (${PROVIDER.host}) — the claude.ai connectors (Gmail, Canva, Notion, Drive…) are not loaded in this mode`);
 /* one list per provider: Meta's has no claude.ai connectors, Claude's does */ if (mcp.useCache(path.join(DATA, `mcp-cache-${PROVIDER.id}.json`))) console.log('  connectors: showing the last known list while `claude mcp list` checks them (~40 s)');
 const discovering = mcp.discover().then(async l => {
@@ -883,7 +982,9 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, name: path.basename(dest, '.md'), graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
-    if (url.pathname === '/api/tasks' && req.method === 'GET') return json(res, 200, load());
+    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = rel.queueOf(l, running.size, MAX_RUNS); for (const t of l) if (q[t.id]) t.queue = q[t.id]; return json(res, 200, l); } // V4.4 (B5): where each waiting task sits
+    if (url.pathname === '/api/status' && req.method === 'GET') return json(res, 200, officeStatus());
+    if (url.pathname === '/api/notices/read' && req.method === 'POST') { const l = loadNotices().map(n => ({ ...n, read: true })); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(l, null, 1)); fs.renameSync(NOTICES + '.tmp', NOTICES); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
     if (url.pathname === '/api/calendar.ics' && req.method === 'GET') { // V4.2 (audit B46): the office's timetable, read-only, for the owner's own calendar app
       res.writeHead(200, { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"', 'cache-control': 'no-cache' });
@@ -1157,6 +1258,7 @@ const server = http.createServer(async (req, res) => {
 server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? `Port ${cfg.port} is already in use — is another office running? Close it, or set PORT.` : e.message); process.exit(1); });
 server.listen(cfg.port, HOST, () => {
   console.log(`Agents Office ${version} → http://localhost:${cfg.port}`);
+  if (!/^(127\.0\.0\.1|localhost|::1)$/.test(HOST)) console.warn(`  ⚠ ESCUCHANDO EN ${HOST}: la oficina NO tiene inicio de sesión todavía (issue #2). Cualquiera que llegue a esta dirección puede mandar a los agentes. Úsala solo en una red de confianza o detrás de un acceso con contraseña (docs/despliegue.md).`);
   console.log(`  business: ${cfg.name}   brain: ${BRAIN} (${graph.notes} notes, ${graph.links.length} links)   claude: ${backend} · ${modelName(cfg.model)}${cfg.effort ? ' · effort ' + cfg.effort : ''} by default (routing on Sonnet)`);
   getUsage(true).then(u => console.log(u.source === 'claude' ? `  usage: session ${u.session?.percent ?? '—'}% · week ${u.week?.percent ?? '—'}% (your Claude plan, as Claude Code shows it)` : `  usage: Claude's gauge unavailable (${u.reason}) — showing the office's own count`)).catch(() => {});
   console.log(`  tasks: ${FILE}   notes the agents write: ${NOTES_DIR}`);

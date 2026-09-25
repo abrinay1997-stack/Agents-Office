@@ -4,7 +4,7 @@
 
 El dueño marcó 69. Leyenda: ✅ hecho · ⏳ marcado, pendiente · 📌 issue abierto · ▫️ no marcado.
 
-Hechos: 7 de 69 marcados.
+Hechos: 16 de 69 marcados.
 
 ## A. Seguridad y control
 
@@ -21,16 +21,16 @@ Hechos: 7 de 69 marcados.
 
 ## B. Confiabilidad
 
-- ⏳ **B1** [alta · horas] **Una tarea fallida no se reintenta sola.** Existe el botón Reintentar, pero no hay reintento automático con espera creciente para fallos pasajeros (red, límite de uso). _Nota del dueño: Mejorar la lógica existente._
-- ⏳ **B2** [alta · días] **Rutinas perdidas con la PC apagada.** Si la PC duerme, la rutina no corre. El calendario lo marca como «no corrió», pero no la recupera al despertar ni te avisa.
-- ⏳ **B3** [alta · semanas] **Solo corre en tu PC encendida.** No hay forma de dejar la oficina en un servidor o en la nube. _Nota del dueño: Local primero; dejarlo listo para Railway o Cloudflare sin incurrir en costos._
-- ⏳ **B4** [media · horas] **Tiempo límite fijo de 5 minutos.** Cada ejecución se corta a los 300 s y lo hecho se pierde. No se guarda un avance parcial.
-- ⏳ **B5** [media · horas] **La cola no dice cuándo te toca.** Hay 3 ejecuciones a la vez y una por agente. Una tarea en espera no dice su posición ni cuándo empieza.
-- ⏳ **B6** [alta · días] **Sin semáforo de salud de la oficina.** No hay una vista que diga «Claude conectado ✓, Gmail ✓, disco ✓, última rutina ✓» y avise cuando algo cae.
-- ⏳ **B7** [alta · horas] **Sesión de Claude vencida: aviso poco claro.** Si el login de Claude Code caduca, cada tarea falla con un error técnico en vez de un aviso claro con cómo volver a entrar.
-- ⏳ **B8** [media · días] **Las conexiones reales no se prueban.** La prueba en vivo es opcional (CHECK_LIVE). Nada comprueba cada día que Gmail o el CRM siguen respondiendo. _Nota del dueño: Depende de Claude._
-- ⏳ **B9** [media · semanas] **Archivos JSON como base de datos.** Tareas, trabajos e historial viven en JSON enteros que se reescriben en cada cambio.
-- ✅ **B10** [media · días] **Actualizar sin marcha atrás.** Actualizar-Oficina.bat trae lo nuevo, pero no hay «volver a la versión de ayer» con un clic si algo se rompe. _Nota del dueño: Tests en GitHub que avisen si un cambio rompe el código._ → en parte: GitHub Actions corre secretos, tests y el check completo en cada push y PR (la marcha atrás con un clic va en la tanda 2).
+- ✅ **B1** [alta · horas] **Una tarea fallida no se reintenta sola.** Existe el botón Reintentar, pero no hay reintento automático con espera creciente para fallos pasajeros (red, límite de uso). _Nota del dueño: Mejorar la lógica existente._ → `reliability.mjs`: reintento solo con espera creciente (1, 5, 15 min; `retries` en la configuración); si Claude llega a su límite de uso, se reintenta cuando se renueva; un error que se repetiría igual no se reintenta. La fila dice «↻ reintento 2 a las 10:05 (fallo de red)».
+- ✅ **B2** [alta · días] **Rutinas perdidas con la PC apagada.** Si la PC duerme, la rutina no corre. El calendario lo marca como «no corrió», pero no la recupera al despertar ni te avisa. → Al despertar, la rutina se hace una vez, marcada «atrasada», y un aviso dice cuántas ejecuciones se perdieron. Con `catchUp: false`, una rutina que solo tiene sentido a su hora se salta.
+- ✅ **B3** [alta · semanas] **Solo corre en tu PC encendida.** No hay forma de dejar la oficina en un servidor o en la nube. _Nota del dueño: Local primero; dejarlo listo para Railway o Cloudflare sin incurrir en costos._ → Preparada, sin activar ni costos: `Dockerfile`, `railway.json`, `AO_HOST`/`AO_DATA` y `docs/despliegue.md` (túnel gratis de Cloudflare con Access; Cloudflare Workers no sirve y se explica por qué).
+- ✅ **B4** [media · horas] **Tiempo límite fijo de 5 minutos.** Cada ejecución se corta a los 300 s y lo hecho se pierde. No se guarda un avance parcial. → Lo escrito antes de un tiempo agotado se guarda como entrega «INCOMPLETA». El reintento tiene el doble de tiempo (hasta 4 veces). Cada rutina puede fijar su `timeout`.
+- ✅ **B5** [media · horas] **La cola no dice cuándo te toca.** Hay 3 ejecuciones a la vez y una por agente. Una tarea en espera no dice su posición ni cuándo empieza. → Cada tarea en espera dice por qué: su agente está ocupado, le toca en el turno N o espera su reintento.
+- ✅ **B6** [alta · días] **Sin semáforo de salud de la oficina.** No hay una vista que diga «Claude conectado ✓, Gmail ✓, disco ✓, última rutina ✓» y avise cuando algo cae. → Semáforo en el dock (tecla O): Claude, conectores, disco, rutinas, cola, aprobaciones, fallos, seguridad y copia diaria. Abajo, los avisos.
+- ✅ **B7** [alta · horas] **Sesión de Claude vencida: aviso poco claro.** Si el login de Claude Code caduca, cada tarea falla con un error técnico en vez de un aviso claro con cómo volver a entrar. → Si Claude pide iniciar sesión de nuevo: no se reintenta, la tarea dice qué hacer, el semáforo se pone en rojo y queda un aviso.
+- ✅ **B8** [media · días] **Las conexiones reales no se prueban.** La prueba en vivo es opcional (CHECK_LIVE). Nada comprueba cada día que Gmail o el CRM siguen respondiendo. _Nota del dueño: Depende de Claude._ → Cada 3 h se vuelve a preguntar a Claude Code por los conectores; si uno que funcionaba cae, queda un aviso. «Probar conexiones ahora» en el semáforo.
+- ✅ **B9** [media · semanas] **Archivos JSON como base de datos.** Tareas, trabajos e historial viven en JSON enteros que se reescriben en cada cambio. → Si `tasks.json` se daña, se recupera sola de la copia diaria más reciente. La copia se hace cada día, no solo al arrancar. Las archivadas de hace más de 90 días pasan a `data/archive/`. Escritura atómica también del estado de las rutinas y de los avisos.
+- ✅ **B10** [media · días] **Actualizar sin marcha atrás.** Actualizar-Oficina.bat trae lo nuevo, pero no hay «volver a la versión de ayer» con un clic si algo se rompe. _Nota del dueño: Tests en GitHub que avisen si un cambio rompe el código._ → GitHub Actions en cada push y PR, y `Volver-Atras.bat`: con un doble clic, el código vuelve a como estaba antes del último Actualizar-Oficina.bat.
 
 ## C. Costos y retorno
 

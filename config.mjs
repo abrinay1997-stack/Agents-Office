@@ -30,6 +30,7 @@ export function loadConfig() {
   if (process.env.AO_NAME) c.name = process.env.AO_NAME;
   if (process.env.AO_BRAIN) c.brain = process.env.AO_BRAIN;
   if (process.env.PORT) c.port = +process.env.PORT;
+  if (process.env.AO_HOST) c.host = process.env.AO_HOST; // V4.4 (B3): a container listens on 0.0.0.0 — read issue #2 before exposing it
   if (process.env.AO_MODEL) c.model = process.env.AO_MODEL;
   c.port = +c.port || 4520;
   c.brainPath = path.resolve(ROOT, c.brain);

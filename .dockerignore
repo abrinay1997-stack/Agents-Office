@@ -1,0 +1,11 @@
+node_modules
+data
+office.config.local.json
+office.agents.local.json
+brain/Agents Office
+brain-panaclaw/Agents Office/*
+!brain-panaclaw/Agents Office/agents.json
+!brain-panaclaw/Agents Office/routines.json
+!brain-panaclaw/Agents Office/skills
+.git
+*.log

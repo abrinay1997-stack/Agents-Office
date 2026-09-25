@@ -684,6 +684,14 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
   else {
     ok('server: starts', `${up.name} · ${up.backend} · brain ${up.notes} notes`);
     await step('server: serves the office', async () => { const r = await fetch(base + '/'); const t = await r.text(); if (!/AGENTS OFFICE/.test(t)) throw new Error('html missing'); });
+    await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, copy)', async () => {
+      const st = await (await fetch(base + '/api/status')).json();
+      const ids = st.checks.map(c => c.id).join(',');
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respaldo') throw new Error('checks: ' + ids);
+      if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
+      const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
+      return `${st.checks.length} checks · overall ${st.overall}`;
+    });
     await step('server: /api/brain has the live graph', async () => { const g = await (await fetch(base + '/api/brain')).json(); if (!g.nodes.length) throw new Error('empty'); return `${g.nodes.length} linked notes`; });
     await step('server: /api/mcp lists this machine\'s connectors', async () => {
       const m = await (await fetch(base + '/api/mcp')).json();

@@ -228,6 +228,23 @@ Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs
 - **Tests:** `npm test` (node:test, carpeta `tests/`) corre dentro de `npm run check`. GitHub Actions (`.github/workflows/check.yml`) ejecuta secretos, tests y el check completo en cada push y cada Pull Request. **Todo cambio de lógica nuevo lleva su test.**
 - **Pendiente con issue:** inicio de sesión antes de exponer la oficina fuera de localhost (A1, issue #2).
 
+## Confiabilidad (V4.4, 25 sep 2026)
+
+- **Reintentos** (`reliability.mjs`, `office.config.json → retries: { max: 2, backoff: [60, 300, 900] }`):
+  - un fallo pasajero (red, Claude saturado, tiempo agotado) se reintenta solo;
+  - si Claude llega a su límite de uso, se reintenta cuando se renueva;
+  - un problema de sesión («vuelve a iniciar sesión») no se reintenta: se avisa;
+  - tras un tiempo agotado, el reintento tiene el doble de tiempo; lo que el agente había escrito se guarda como entrega «INCOMPLETA» si al final no lo logra.
+- **Rutinas con la computadora dormida:** al despertar se hace una vez, «atrasada», y queda un aviso con cuántas se perdieron.
+  - `catchUp: false` en la rutina la salta en vez de hacerla tarde.
+  - `timeout` (segundos) da más tiempo a una rutina larga.
+- **Semáforo** (botón del dock, tecla O, `/api/status`): Claude, conectores, disco, rutinas, cola, aprobaciones, fallos, seguridad y copia diaria, y debajo los **avisos** (`data/notices.json`, `/api/notices/read`). Los conectores se vuelven a comprobar cada 3 h.
+- **Datos:**
+  - un `tasks.json` dañado se recupera de la copia diaria más reciente (`data/backups/`, 14 días, una copia por día que la oficina está abierta);
+  - lo archivado hace más de 90 días pasa a `data/archive/`.
+- **Volver atrás:** `Volver-Atras.bat` deja el código como antes del último `Actualizar-Oficina.bat` (que anota la versión en `data/version-anterior.txt`).
+- **Despliegue (preparado, no activado):** `Dockerfile`, `railway.json`, `AO_HOST`, `AO_DATA`. Léase `docs/despliegue.md`; nada se expone sin cerrar el issue #2.
+
 ## Agent Teams
 
 When the owner says "as a team", "get the team on it", "spawn three teammates to …", or presses TEAM in the bar, the department **lead** takes the task and splits it into two to `teams.max` independent pieces on the desks whose `does` or skills fit; the pieces run at the same time, one Claude process each; teammates may leave one-line notes (`@lead: …`, `@<id>: …`) which reach the lead; the lead writes the final from the pieces. This is the office's own build of the shape (lead · teammates · shared piece list · notes) from separate headless Claude sessions — Claude Code's own agent teams only spawn in an interactive terminal, so they are not what runs here. Nothing to write for a team task; it is the same roster, briefs and skills. To make a seat a better teammate, improve its `does` (the lead splits by it) and its skills. A team routine is `"team": true` in `routines.json` with the lead as `agent`.
