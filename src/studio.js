@@ -102,7 +102,8 @@ export function initStudio(ctx) {
   const roleName = r => ROLE[r];
   const roleHelp = (r, m = cur()) => helpFor(r, m);
   const itemOf = f => items.find(x => x.file === f);
-  const src = it => '/media/' + String(it.file || it).split('/').map(encodeURIComponent).join('/');
+  // the address carries the file's own moment (?v=): a picture never shows another one that once had its name (the browser keeps them a day)
+  const src = it => { const f = String(it.file || it), x = typeof it === 'object' && it.at ? it : itemOf(f); return '/media/' + f.split('/').map(encodeURIComponent).join('/') + (x && x.at ? '?v=' + x.at : ''); };
   const isVid = f => /\.(mp4|webm)$/i.test(f);
   const ar = r => (r && /^\d+:\d+$/.test(r) ? r.replace(':', ' / ') : '');
   const dlName = it => { const d = new Date(it.at || Date.now()), ext = String(it.file).split('.').pop(); return `${String(it.prompt || 'estudio').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'estudio'}-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.${ext}`; }; // V4.2 (audit A37)
@@ -300,7 +301,7 @@ export function initStudio(ctx) {
     for (const it of list) {
       const g = !flat && it.job && byJob.get(it.job);
       if (g && g.length > 1) { if (placed.has(it.job)) continue; placed.add(it.job); const a = aspect(g[0]); want.push(['g:' + it.job, groupCard(g), (g.length === 2 ? a / 2 : a) + 0.15, dayKey(it.at), g.length, it.at]); continue; }
-      want.push(['f:' + it.file, card(it), aspect(it), dayKey(it.at), 1, it.at]);
+      want.push(['f:' + it.file + '@' + it.at, card(it), aspect(it), dayKey(it.at), 1, it.at]);
     }
     const keep = new Set(), active_ = document.activeElement;
     for (const [k, html] of want) {

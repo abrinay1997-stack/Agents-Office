@@ -232,11 +232,20 @@ function dims(b, ext) { // width × height from the file header (png, jpg, webp,
   } catch {}
   return null;
 }
+/** A name is taken while its file, its record, or its copy in the bin exists — a restore never collides with a new picture. */
+function taken(folder, name, ext) {
+  if (fs.existsSync(path.join(folder, name + '.' + ext)) || fs.existsSync(path.join(folder, name + '.json'))) return true;
+  const bin = path.join(root, '.papelera'); if (!fs.existsSync(bin)) return false;
+  const tail = '-' + name + '.'; return fs.readdirSync(bin).some(f => f.includes(tail));
+}
 function store(buf, ext, meta) {
   const d = new Date(), sub = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const folder = path.join(root, sub); fs.mkdirSync(folder, { recursive: true });
-  let base = `${sub}-${String(d.getDate()).padStart(2, '0')} ${slug(meta.prompt)}`, name = base;
-  for (let n = 2; fs.existsSync(path.join(folder, name + '.' + ext)) || fs.existsSync(path.join(folder, name + '.json')); n++) name = `${base}-${n}`;
+  // the name is never reused (V4.4, 25 Sep 2026): «date + prompt» alone came back free when a file went to the bin, and the
+  // next picture with the same prompt took it — the browser (and a reference or a deliverable pointing at it) showed the old one
+  const hms = [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join('');
+  let base = `${sub}-${String(d.getDate()).padStart(2, '0')} ${slug(meta.prompt)} ${hms}`, name = base;
+  for (let n = 2; taken(folder, name, ext); n++) name = `${base}-${n}`;
   fs.writeFileSync(path.join(folder, name + '.' + ext), buf);
   const rel = `${sub}/${name}.${ext}`, wh = dims(buf, ext);
   const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : 'image', ext, at: Date.now(), ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
@@ -376,7 +385,7 @@ async function pollUntil(job, check, { every = 4000, deadline = 20 * 60e3 } = {}
     if (Date.now() > until) throw new Error('tardó más de ' + Math.round(deadline / 60e3) + ' minutos; mira en el panel del servicio si terminó');
     await sleep(+process.env.AO_POLL_MS || every);
     try { const r = await check(); misses = 0; if (r) return r; }
-    catch (e) { if (e.final || ++misses >= 3) throw e; }
+    catch (e) { if (e.final || [401, 403, 404].includes(e.status) || ++misses >= 3) throw e; } // Higgsfield: 401/404 are not worth asking again
   }
 }
 const final = e => Object.assign(e, { final: true });
@@ -480,7 +489,8 @@ const RUN = {
       const outs = [...(st.images || []).map(x => x.url), ...(st.video?.url ? [st.video.url] : []), ...((st.videos || []).map(x => x.url))].filter(Boolean);
       if (!outs.length) throw new Error('Higgsfield terminó sin archivo');
       job.note = 'descargando';
-      for (const u of outs) { const r = await fromUrl(u); ctx.add(r.buf, extOf(r.mime, u, m.kind === 'video' ? 'mp4' : 'png')); }
+      rq.got = rq.got || []; // files already saved from this request: a restart mid-download never saves one twice
+      for (const u of outs) { if (rq.got.includes(u)) continue; const r = await fromUrl(u); ctx.add(r.buf, extOf(r.mime, u, m.kind === 'video' ? 'mp4' : 'png')); rq.got.push(u); ctx.save(); }
       rq.done = true; ctx.save();
     }
   },

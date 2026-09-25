@@ -54,13 +54,14 @@ test('end to end: an approval reaches the owner with buttons, ✅ approves in th
   const bot = T.start({ port: office.address().port, cfg: { name: 'PanaClaw' }, dataDir: dir, onTask: f => { onTask = f; }, onNotice: () => {}, log: { warn() {} } });
   try {
     onTask({ id: 'tk1', state: 'waiting', title: 'Responder a Sol', draft: 'Para: sol@cliente.com', agentName: 'SOL', deptName: 'Ventas' });
-    await new Promise(r => setTimeout(r, 150));
-    const sent = calls.tg.find(c => c.m === 'sendMessage' && /Espera tu visto bueno/.test(c.body.text));
+    const until = async (ok, ms = 5000) => { for (const end = Date.now() + ms; !ok() && Date.now() < end;) await new Promise(r => setTimeout(r, 20)); }; // waits for what it checks, not a fixed time (a busy machine made 150 ms too short)
+    const findSent = () => calls.tg.find(c => c.m === 'sendMessage' && /Espera tu visto bueno/.test(c.body.text));
+    await until(findSent); const sent = findSent();
     assert.ok(sent, 'approval message sent'); assert.equal(sent.body.chat_id, '42');
     assert.equal(sent.body.reply_markup.inline_keyboard[0][0].callback_data, 'ap:tk1');
     updates.push({ update_id: 1, callback_query: { id: 'q1', from: { id: 42 }, data: 'ap:tk1', message: { message_id: 5, chat: { id: 42 } } } });
     updates.push({ update_id: 2, message: { from: { id: 99 }, chat: { id: 99 }, text: '/pendientes' } });
-    await new Promise(r => setTimeout(r, 400));
+    await until(() => calls.office.some(c => c.method === 'POST' && c.url === '/api/tasks/tk1/approve') && calls.tg.some(c => c.m === 'sendMessage' && c.body.chat_id === 99));
     assert.ok(calls.office.some(c => c.method === 'POST' && c.url === '/api/tasks/tk1/approve'), 'the office was asked to approve');
     assert.ok(!calls.office.some(c => c.url === '/api/tasks' && c.method === 'GET'), 'the stranger got nothing from the office');
     assert.ok(calls.tg.some(c => c.m === 'sendMessage' && c.body.chat_id === 99 && /privado/.test(c.body.text)), 'the stranger is told it is private');
