@@ -259,6 +259,28 @@ Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs
   - Un evento repetido se toma una sola vez; `perHour` pone un tope.
   - El owner dice «cuando llegue un formulario / un pago / un WhatsApp, …»: escribe el disparador en ese archivo (sin secretos) y corre `npm run check`.
 
+## Costos y retorno (V4.4, 25 sep 2026)
+
+- **Registro:** cada llamada a un modelo es una línea en `data/costs.jsonl` (`costs.mjs`).
+  - Con Claude Code, el costo lo informa el propio Claude (`total_cost_usd`).
+  - Con otro proveedor compatible (Meta, DeepSeek, Kimi, GLM, OpenRouter vía `ANTHROPIC_BASE_URL`) se calcula con la tabla de precios de `costs.mjs`.
+  - Los trabajos del Estudio entran como «estimado».
+  - Con un plan de Claude de tarifa fija, la cifra es «lo que costaría en la API».
+- **Ventana «Costos y retorno»:** tecla U, o clic en el uso del plan abajo a la izquierda. Muestra:
+  - el mes;
+  - el costo por tarea;
+  - las horas ahorradas y lo que valen;
+  - las últimas 8 semanas;
+  - el desglose por departamento, agente y modelo;
+  - sugerencias aplicables con un clic (un agente que puede ir a Sonnet, otro que necesita Opus, una rutina que nadie lee);
+  - el CSV del mes para contabilidad (`/api/costs.csv?month=AAAA-MM`).
+- **Configuración** (`office.config.json → costs`):
+  - `monthlyBudget` en US$ (aviso al `alertAt`, 80 %; con `stopAtBudget: true`, no empiezan tareas nuevas al pasarlo);
+  - `hourlyRate`: lo que cuesta una hora de una persona;
+  - `minutesPerTask` por departamento; una rutina puede llevar su propio `minutesSaved`;
+  - `prices`: precios propios.
+- **Precios:** la tabla lleva fecha (`PRICES_AS_OF`) y sus fuentes. `npm run check` avisa cuando tiene más de 90 días; al actualizarla, usa las páginas oficiales de cada proveedor.
+
 ## Agent Teams
 
 When the owner says "as a team", "get the team on it", "spawn three teammates to …", or presses TEAM in the bar, the department **lead** takes the task and splits it into two to `teams.max` independent pieces on the desks whose `does` or skills fit; the pieces run at the same time, one Claude process each; teammates may leave one-line notes (`@lead: …`, `@<id>: …`) which reach the lead; the lead writes the final from the pieces. This is the office's own build of the shape (lead · teammates · shared piece list · notes) from separate headless Claude sessions — Claude Code's own agent teams only spawn in an interactive terminal, so they are not what runs here. Nothing to write for a team task; it is the same roster, briefs and skills. To make a seat a better teammate, improve its `does` (the lead splits by it) and its skills. A team routine is `"team": true` in `routines.json` with the lead as `agent`.

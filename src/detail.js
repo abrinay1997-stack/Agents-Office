@@ -48,7 +48,7 @@ export function initDetail(ctx) {
     el.innerHTML = `
       <div class="td-head"><span class="td-st ${cls}">${label}</span><span class="sp"></span><button type="button" class="td-x" data-a="close" aria-label="Cerrar">✕</button></div>
       <h2 class="td-title">${t.routine ? '⏱ ' : ''}${t.team?.members?.length || t.team ? '⚑ ' : ''}${esc(t.title)}</h2>
-      <div class="td-who"><span class="td-dot" style="background:${d.chip}"></span>${esc(d.name)} · ${esc(a ? a.name : t.agent)}${t.team ? ' · en equipo' : ''}${t.modelUsed ? ' · ' + esc(modelName(t.modelUsed)) : ''}${t.piece ? ' · pieza del equipo' : ''}</div>
+      <div class="td-who"><span class="td-dot" style="background:${d.chip}"></span>${esc(d.name)} · ${esc(a ? a.name : t.agent)}${t.team ? ' · en equipo' : ''}${t.modelUsed ? ' · ' + esc(modelName(t.modelUsed)) : ''}${t.piece ? ' · pieza del equipo' : ''}${t.cost > 0 ? ` · <span title="Lo que costaron sus ejecuciones al precio de la API (con un plan de Claude pagas tu tarifa fija)">US$${t.cost < 0.01 ? t.cost.toFixed(4) : t.cost.toFixed(2)}</span>` : ''}</div>
       ${history(t)}
       ${editable ? `
         <label class="td-lab" for="tdText">Qué se pidió</label>
@@ -136,7 +136,7 @@ export function initDetail(ctx) {
     if (a === 'delete') { const note = el.querySelector('.td-withnote')?.checked; return run('delete', { note }, 'Eliminada.'); } // V4.1: no confirm box — the toast offers DESHACER for 8 s
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
-  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; lastSig = sig(t); el.hidden = false; if (modal.any() && modal.top() !== el) { el.setAttribute('aria-modal', 'true'); modal.open(el); } render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
+  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; if (t.sid && isLive() && !t.seenSent) { t.seenSent = true; fetch(`/api/tasks/${encodeURIComponent(t.sid)}/seen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {}); } /* V4.4 (C7): the office knows which deliverables get read */ lastSig = sig(t); el.hidden = false; if (modal.any() && modal.top() !== el) { el.setAttribute('aria-modal', 'true'); modal.open(el); } render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
   function close() { if (!cur) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.setAttribute('aria-modal', 'false'); cur = null; el.classList.remove('on'); setTimeout(() => { if (!cur) el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   // the task changed underneath (a poll, the run finished): redraw, unless the owner is typing in it
   // only when something the owner can see changed: every poll used to redraw it (scroll to the top, «Guardado.» gone, focus lost)

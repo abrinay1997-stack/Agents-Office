@@ -49,6 +49,11 @@ await step('secrets: nothing that looks like a key, a card or an ID card in the 
   const out = await sh('node', ['scripts/secrets-scan.mjs', '--all']).catch(e => { throw new Error(e.message + ' — npm run secrets'); });
   return out.trim();
 });
+await step('costs: the price table is recent (models and prices change often)', async () => {
+  const C = await import('./costs.mjs'); const days = Math.floor((Date.now() - Date.parse(C.PRICES_AS_OF)) / 864e5);
+  if (days > 90) throw new Error(`la tabla de precios de costs.mjs es del ${C.PRICES_AS_OF} (${days} días): revísala con las páginas oficiales de cada proveedor`);
+  return `${C.PRICES.length} modelos · precios al ${C.PRICES_AS_OF} · ${[...new Set(C.PRICES.map(p => p.provider))].join(', ')}`;
+});
 await step('triggers: <brain>/Agents Office/triggers.json is valid', async () => {
   const T = await import('./triggers.mjs'); const { loadRoster } = await import('./roster.mjs');
   const r = T.load(cfg.brainPath, loadRoster().agents); if (r.problems.length) throw new Error(r.problems.join(' | '));
@@ -710,6 +715,13 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       const again = await (await post(HOOK, { id: 'ev-1', name: 'Sol' })).json(); if (!again.skipped) throw new Error('duplicate was taken twice');
       const tl = await (await fetch(base + '/api/triggers')).json(); if (tl.triggers.length !== 1 || !tl.token) throw new Error('/api/triggers');
       return 'no secret → 401 · task «Contacto de Sol» for PIPER, waits for the OK · duplicate skipped';
+    });
+    await step('server: /api/costs has the month, the weeks and the suggestions; the CSV downloads', async () => {
+      const c = await (await fetch(base + '/api/costs')).json();
+      if (typeof c.usd !== 'number' || c.weeks?.length !== 8 || !Array.isArray(c.suggestions) || !c.prices?.length) throw new Error(JSON.stringify(c).slice(0, 160));
+      const r = await fetch(base + '/api/costs.csv?month=' + c.month); const t = await r.text();
+      if (!r.ok || !/text\/csv/.test(r.headers.get('content-type')) || !t.includes('fecha,hora,tarea')) throw new Error('csv ' + r.status);
+      return `month ${c.month} · US$${c.usd.toFixed(2)} · ${c.prices.length} prices · CSV ok`;
     });
     await step('server: /api/brain has the live graph', async () => { const g = await (await fetch(base + '/api/brain')).json(); if (!g.nodes.length) throw new Error('empty'); return `${g.nodes.length} linked notes`; });
     await step('server: /api/mcp lists this machine\'s connectors', async () => {

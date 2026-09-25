@@ -57,6 +57,7 @@ import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
 import * as telegram from './telegram.mjs';
 import * as triggers from './triggers.mjs';
+import * as costs from './costs.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 
@@ -120,6 +121,10 @@ const PROVIDER = (() => {
   let host = ''; try { host = u ? new URL(u).hostname : ''; } catch {}
   if (!host || /(^|\.)anthropic\.com$/.test(host)) return { id: 'anthropic', name: 'Claude', host: host || 'api.anthropic.com' };
   if (/(^|\.)meta\.ai$/.test(host)) return { id: 'meta', name: 'Meta Muse Spark', host, model: process.env.ANTHROPIC_MODEL || '' };
+  if (/deepseek\.com$/.test(host)) return { id: 'deepseek', name: 'DeepSeek', host, model: process.env.ANTHROPIC_MODEL || '' }; // V4.4 (C1): Anthropic-compatible endpoints, priced by costs.mjs
+  if (/moonshot\.(ai|cn)$|kimi\.ai$/.test(host)) return { id: 'moonshot', name: 'Kimi (Moonshot)', host, model: process.env.ANTHROPIC_MODEL || '' };
+  if (/(^|\.)z\.ai$|bigmodel\.cn$/.test(host)) return { id: 'zai', name: 'GLM (Z.ai)', host, model: process.env.ANTHROPIC_MODEL || '' };
+  if (/openrouter\.ai$/.test(host)) return { id: 'openrouter', name: 'OpenRouter', host, model: process.env.ANTHROPIC_MODEL || '' };
   return { id: 'other', name: host, host, model: process.env.ANTHROPIC_MODEL || '' };
 })();
 let backend = 'claude-cli', sdk = null;
@@ -205,12 +210,26 @@ function guardReport(runId, taintFile) {
   }
   return out;
 }
-async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null } = {}) { // V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+// V4.4 (C1, C3): every model call is one line in data/costs.jsonl; the month's budget is watched after each one
+const COSTS = () => costs.config(cfg.costs);
+let budgetLevel = null;
+function ledger({ taskId, agent, kind, modelId, usage, reported }) {
+  const t = taskId ? load().find(x => x.id === taskId) : null;
+  const l = costs.line({ task: taskId || null, agent: agent?.id || null, dept: agent?.department || t?.dept || null, kind, modelId: modelId || (PROVIDER.id === 'anthropic' ? modelId : PROVIDER.model) || PROVIDER.model, provider: PROVIDER.id, usage, reported, cfgPrices: cfg.costs?.prices });
+  costs.append(DATA, l);
+  const b = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS());
+  if (b.level !== budgetLevel && (b.level === 'alert' || b.level === 'over')) notice('budget', b.level === 'over' ? `Se llegó al presupuesto del mes: US$${b.spent.toFixed(2)} de US$${b.budget.toFixed(2)}.${COSTS().stopAtBudget ? ' Las tareas nuevas esperan hasta que subas el presupuesto o empiece el mes.' : ''}` : `Van US$${b.spent.toFixed(2)} de US$${b.budget.toFixed(2)} del presupuesto del mes (${Math.round(b.ratio * 100)} %).`, { level: b.level === 'over' ? 'error' : 'warn', key: 'budget-' + b.month + '-' + b.level });
+  budgetLevel = b.level;
+  return l.usd;
+}
+try { budgetLevel = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()).level; } catch {} // after a restart the office still knows where the month stands
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null } = {}) { // V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
     const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
     bumpUsage(res.usage);
-    return { text: res.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(), tools: [], usage: res.usage, modelId: res.model };
+    const usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: res.model, usage: res.usage });
+    return { text: res.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(), tools: [], usage: res.usage, modelId: res.model, usd };
   }
   fs.mkdirSync(CLI_CWD, { recursive: true });
   const allowed = tools ? mcp.allowedTools(agent) : [];
@@ -245,14 +264,14 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
       if (guardOut) Object.assign(guardOut, guardReport(runId, taintFile));
       for (const f of [sysFile, guardFile, taintFile, settingsFile]) fs.rm(f, { force: true }, () => {});
     };
-    let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null, partial = '';
+    let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null, partial = '', reported = null, usd = 0;
     const timer = setTimeout(() => { killTree(p); const e = new Error(`Claude took longer than ${timeout / 1000} s`); e.partial = partial.trim(); reject(e); }, timeout); // V4.4 (B4): what it had written so far is kept
     const feed = line => {
       if (!line.trim()) return;
       let j; try { j = JSON.parse(line); } catch { return; }
       if (j.type === 'system' && j.subtype === 'init') mcp.fromInit(j);
       if (j.type === 'assistant' && j.message?.content) for (const b of j.message.content) { if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name); if (b.type === 'text' && b.text) partial += b.text + '\n'; }
-      if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); }
+      if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); reported = typeof j.total_cost_usd === 'number' ? j.total_cost_usd : null; usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: modelUsed || modelId(model), usage: usageOut, reported }); }
     };
     p.stdout.on('data', d => { out += d; let i; while ((i = out.indexOf('\n')) >= 0) { feed(out.slice(0, i)); out = out.slice(i + 1); } });
     p.stderr.on('data', d => { err += d; });
@@ -263,7 +282,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
       if (!gotResult) { try { text = String(JSON.parse(out).result || '').trim(); } catch { text = out.trim(); } }
       bumpUsage(usageOut);
       if (isError) return reject(new Error(text || 'Claude reported an error with no message')); // an API error is not a deliverable: never saved as a note
-      resolve({ text, tools: used, usage: usageOut, modelId: modelUsed });
+      resolve({ text, tools: used, usage: usageOut, modelId: modelUsed, usd });
     });
   });
 }
@@ -386,9 +405,9 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
   const guard = {};
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
+  const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
   if (!text) throw new Error('Claude returned nothing');
-  return { result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, guard };
+  return { usd, result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, guard };
 }
 
 /* ---------- V3.2 (16 Sep) Agent Teams: the lead plans, the desks work at once, the lead writes the final ---------- */
@@ -420,7 +439,8 @@ async function runTeam(task, mode) {
       const user = `Task (the whole request, for context): ${task.title}\nOwner's request: ${task.text}\n\nYOUR PIECE: ${piece.title}\n${piece.text}` + routineLineFor(task) + (mode === 'draft' ? modeLineFor('draft', task) : '');
       const { pick, eff } = pickFor(task, a);
       const pg = {};
-      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: 'piece', guardOut: pg, timeout: timeoutFor(task) });
+      const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: 'piece', guardOut: pg, timeout: timeoutFor(task) });
+      piece.usd = (piece.usd || 0) + (usd || 0);
       if (pg.blocked?.length || pg.taint) piece.guard = pg;
       const { body, messages } = teams.parseMessages(text, ids);
       Object.assign(piece, { result: body || '(empty)', tools: toolKeys(tools), used: mcp.namesOf(tools), read, modelId: ran, error: !text });
@@ -441,13 +461,13 @@ async function runTeamLead(task, feedback, mode) {
   const user = teams.synthPrompt({ task, pieces: tm.pieces || [], messages: tm.messages || [], nameOf, feedback: mode === 'approve' ? null : feedback }) + routineLineFor(task) + modeLineFor(mode, task);
   const { pick, eff } = pickFor(task, lead);
   const guard = {};
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
+  const { text, tools, modelId: ran, usd: leadUsd } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
   if (!text) throw new Error('Claude returned nothing');
   for (const p of tm.pieces || []) if (p.guard) { guard.blocked = [...(guard.blocked || []), ...p.guard.blocked]; guard.taint = guard.taint || p.guard.taint; }
   const allTools = [...new Set([...(tm.pieces || []).flatMap(p => p.tools || []), ...toolKeys(tools)])];
   const allUsed = [...new Set([...(tm.pieces || []).flatMap(p => p.used || []), ...mcp.namesOf(tools)])];
   const allRead = [...new Set([...read, ...(tm.pieces || []).flatMap(p => p.read || [])])];
-  return { result: text, read: allRead, tools: allTools, used: allUsed, skills: skills.names(lead), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, team: tm, guard };
+  return { result: text, read: allRead, tools: allTools, used: allUsed, skills: skills.names(lead), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, team: tm, guard, usd: (leadUsd || 0) + (mode === 'approve' || feedback ? 0 : (tm.pieces || []).reduce((x, p) => x + (p.usd || 0), 0)) };
 }
 function writeNote(task) { // the deliverable becomes a note in the brain, linked to what was read
   fs.mkdirSync(NOTES_DIR, { recursive: true });
@@ -578,6 +598,7 @@ function pump() {
       if (running.size >= MAX_RUNS) break;
       if (running.has(t.id) || busy.has(t.agent)) continue;
       if (t.retryAt && t.retryAt > Date.now()) continue; // V4.4 (B1): waits for its retry time
+      if (budgetLevel === 'over' && COSTS().stopAtBudget) continue; // V4.4 (C3): the month's budget is spent and the owner asked to stop there
       busy.add(t.agent); startRun(t.id);
     }
   } finally { pumping = false; }
@@ -605,6 +626,8 @@ async function runServerTask(id, { feedback, approve } = {}) {
     if (approve) { task.result = (task.draft || task.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; task.approved = true; task.approvedAt = Date.now(); }
     else task.result = out.result;
     delete task.retryAt; delete task.lastError; delete task.partial; claudeLogin.ok = true;
+    task.cost = Math.round(((task.cost || 0) + (out.usd || 0)) * 1e6) / 1e6; // V4.4 (C1): US$, every run of this task (drafts, revisions, the send)
+    if (feedback) task.revisions = (task.revisions || 0) + 1; // V4.4 (C4, D): how often the owner sent it back
     const g = out.guard || {};
     if (g.blocked?.length || g.taint) task.guard = { blocked: (g.blocked || []).slice(0, 12), taint: g.taint || null, at: Date.now(), approve: !!approve };
     else if (!task.trigger) delete task.guard; // a trigger's warning (what arrived had hidden orders) stays on the task
@@ -884,7 +907,7 @@ function insideBrain(p) { // no symlink, and the real path stays inside the brai
 }
 
 await rebuildGraph();
-media.setHooks({ onDone: j => attachJob(j) }); // the Estudio's finished jobs reach their task from now on
+media.setHooks({ onDone: j => { attachJob(j); if (j.state === 'done' && j.engine !== 'prueba') { const a = AGENTS.find(x => x.id === j.agent); const usd = media.estimate({ model: j.model, n: j.n, settings: j.s }); costs.append(DATA, { t: Date.now(), task: j.task || null, agent: j.agent || null, dept: a?.department || null, kind: 'estudio', model: j.model, provider: j.engine, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, usd, source: 'estimado' }); } } }); // the Estudio's finished jobs reach their task from now on; V4.4 (C5): and their estimated cost joins the ledger, marked «estimado» for the provider's invoice
 for (const j of media.jobs()) attachJob(j); // and the ones that finished while the office was off or starting
 { // a restart cut these runs short: say so, instead of leaving them «in progress» forever
   const list = load(); let n = 0;
@@ -1079,6 +1102,19 @@ const server = http.createServer(async (req, res) => {
       if (!dueAt) setImmediate(pump);
       return json(res, 200, task);
     }
+    if (url.pathname === '/api/costs' && req.method === 'GET') { const since = Date.now() - 70 * 864e5; return json(res, 200, { ...costs.report(costs.read(DATA, since), load(), AGENTS, cfg.costs, Date.now()), subscription: backend === 'claude-cli' && PROVIDER.id === 'anthropic' && !process.env.ANTHROPIC_API_KEY, provider: PROVIDER.name, config: COSTS(), prices: costs.PRICES.map(({ match, ...p }) => p), priceSources: costs.PRICE_SOURCES }); } // V4.4 (C1–C9)
+    if (url.pathname === '/api/costs.csv' && req.method === 'GET') { // V4.4 (C10): the month for the accountant
+      const month = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : new Date().toISOString().slice(0, 7);
+      res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="costos-${cfg.name.replace(/[^\w-]+/g, '-')}-${month}.csv"` });
+      return res.end(costs.csv(costs.read(DATA, Date.parse(month + '-01T00:00:00') - 864e5), load(), AGENTS, month));
+    }
+    if (url.pathname === '/api/costs/apply' && req.method === 'POST') { // V4.4 (C4, C7): the owner accepts a suggestion
+      const { action } = await body(req) || {};
+      if (action?.agent && ['sonnet', 'opus', 'fable'].includes(action.model)) { const r = saveAgent(BRAIN, action.agent, { model: action.model }); if (r.problems.length) return json(res, 400, { error: r.problems.join(' · ') }); refreshSkills(); return json(res, 200, { ok: true, text: `${agentName(action.agent)} usa ahora ${modelName(action.model)}.` }); }
+      if (action?.routine && action.paused === true) { const r = editRoutine(action.routine, { paused: true }); return r ? json(res, 200, { ok: true, text: `Rutina «${r.title}» pausada.` }) : json(res, 404, { error: 'esa rutina ya no existe' }); }
+      return json(res, 400, { error: 'acción desconocida' });
+    }
+    { const sm = url.pathname.match(/^\/api\/tasks\/([^/]+)\/seen$/); if (sm && req.method === 'POST') { const l = load(), t = l.find(x => x.id === sm[1]); if (t && !t.seenAt) { t.seenAt = Date.now(); save(l); } return json(res, 200, { ok: true }); } } // V4.4 (C7): the owner opened it
     if (url.pathname === '/api/triggers' && req.method === 'GET') { const t = triggers.load(BRAIN, AGENTS); return json(res, 200, { ...t, path: triggers.file(BRAIN), token: !!process.env.AO_HOOK_TOKEN && process.env.AO_HOOK_TOKEN.length >= 16, url: `/api/hook/<id>` }); }
     const hk = url.pathname.match(/^\/api\/hook\/([a-z0-9-]+)$/);
     if (hk) return hookIn(req, res, url, hk[1]); // V4.4 (E1, E2)
@@ -1157,7 +1193,7 @@ const server = http.createServer(async (req, res) => {
       if (task.state !== 'waiting') return json(res, 400, { error: 'esta tarea no está esperando tu visto bueno' });
       const { feedback } = m[2] === 'reject' ? await body(req) : {};
       const note = String(feedback || '').trim();
-      { const l = load(); const t = l.find(x => x.id === task.id); if (!t || t.state !== 'waiting') return json(res, 409, { error: 'ya se está procesando' }); t.state = 'doing'; t.startedAt = Date.now(); save(l); } // claimed now: a second click (or «aprobar» in chat) cannot send it twice
+      { const l = load(); const t = l.find(x => x.id === task.id); if (!t || t.state !== 'waiting') return json(res, 409, { error: 'ya se está procesando' }); t.state = 'doing'; t.startedAt = Date.now(); t.seenAt = t.seenAt || Date.now(); save(l); } // claimed now: a second click (or «aprobar» in chat) cannot send it twice
       console.log(`${m[2] === 'approve' ? '✅' : '↩'} ${task.id} ${m[2] === 'approve' ? 'approved — ' + agentName(task.agent) + ' is sending' : 'sent back: ' + note.slice(0, 80)}`);
       enqueue(() => startRun(task.id, m[2] === 'approve' ? { approve: true } : { feedback: note || 'No es esto. Retrabájalo.' }))
         .then(t => { if (m[2] === 'reject' && note && t && !t.error) { const a = AGENTS.find(x => x.id === t.agent); return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); }); } })

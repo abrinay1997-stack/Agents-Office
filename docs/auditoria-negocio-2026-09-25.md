@@ -4,7 +4,7 @@
 
 El dueño marcó 69. Leyenda: ✅ hecho · ⏳ marcado, pendiente · 📌 issue abierto · ▫️ no marcado.
 
-Hechos: 23 de 69 marcados.
+Hechos: 32 de 69 marcados.
 
 ## A. Seguridad y control
 
@@ -34,16 +34,16 @@ Hechos: 23 de 69 marcados.
 
 ## C. Costos y retorno
 
-- ⏳ **C1** [crítica · días] **Cero dólares en pantalla.** El contador de uso muestra tokens de la ventana de 5 horas: «No dollars anywhere», dice el código. No sabes cuánto cuesta cada tarea, agente o departamento. _Nota del dueño: Crítico; al día con los modelos y con más proveedores, no solo Meta y Claude._
-- ⏳ **C2** [alta · días] **Sin retorno: horas ahorradas.** Copilot Studio calcula tiempo y dinero ahorrados por cada ejecución que sale bien. Aquí no hay nada parecido.
-- ⏳ **C3** [alta · horas] **Sin presupuesto mensual con tope.** Solo el Estudio tiene límite diario. No hay «gasta como máximo $X al mes y avísame al 80 %».
-- ⏳ **C4** [media · horas] **Sin recomendación de modelo por tarea.** Tú eliges Sonnet, Opus o Fable. Nada sugiere el más barato que alcanza para cada tipo de trabajo.
-- ⏳ **C5** [media · días] **Costos del Estudio estimados.** Los precios de 12 modelos son estimados y no se cruzan con lo que cobra el proveedor.
-- ⏳ **C6** [media · días] **Sin tablero de uso por semana.** No hay una vista de trabajos, uso y fallos por departamento y por semana.
-- ⏳ **C7** [media · horas] **Rutinas que nadie lee.** Nada detecta las entregas que nunca abres para sugerir pausar esa rutina.
+- ✅ **C1** [crítica · días] **Cero dólares en pantalla.** El contador de uso muestra tokens de la ventana de 5 horas: «No dollars anywhere», dice el código. No sabes cuánto cuesta cada tarea, agente o departamento. _Nota del dueño: Crítico; al día con los modelos y con más proveedores, no solo Meta y Claude._ → Cada llamada tiene su costo en US$ (`data/costs.jsonl`): el que informa Claude Code, o la tabla de precios con fecha (Claude, Meta, DeepSeek, Kimi, GLM) para otros proveedores compatibles. El costo aparece en cada tarea. El check avisa si la tabla tiene más de 90 días.
+- ✅ **C2** [alta · días] **Sin retorno: horas ahorradas.** Copilot Studio calcula tiempo y dinero ahorrados por cada ejecución que sale bien. Aquí no hay nada parecido. → Horas ahorradas por tarea terminada (por departamento o por rutina) y lo que valen.
+- ✅ **C3** [alta · horas] **Sin presupuesto mensual con tope.** Solo el Estudio tiene límite diario. No hay «gasta como máximo $X al mes y avísame al 80 %». → `costs.monthlyBudget` con aviso al 80 % y al pasarlo (también por Telegram); `stopAtBudget` detiene las tareas nuevas.
+- ✅ **C4** [media · horas] **Sin recomendación de modelo por tarea.** Tú eliges Sonnet, Opus o Fable. Nada sugiere el más barato que alcanza para cada tipo de trabajo. → Sugerencia con un clic: bajar a Sonnet un agente con trabajo corto que se aprueba sin cambios (con el ahorro estimado), o subir a Opus uno que vuelve mucho con correcciones.
+- ✅ **C5** [media · días] **Costos del Estudio estimados.** Los precios de 12 modelos son estimados y no se cruzan con lo que cobra el proveedor. → en parte: los trabajos del Estudio entran al registro como «estimado» y el CSV lo dice, para cotejarlo con la factura. Los proveedores no devuelven el precio real por trabajo.
+- ✅ **C6** [media · días] **Sin tablero de uso por semana.** No hay una vista de trabajos, uso y fallos por departamento y por semana. → Últimas 8 semanas (gráfico + tabla) y desglose por departamento, agente y modelo.
+- ✅ **C7** [media · horas] **Rutinas que nadie lee.** Nada detecta las entregas que nunca abres para sugerir pausar esa rutina. → La oficina anota qué entregas abres (página, Telegram, aprobar); si nadie abrió las últimas 4 de una rutina, sugiere pausarla con un clic.
 - ▫️ **C8** [baja · días] **No se mide el contexto que lee cada tarea.** Cada ejecución relee notas del cerebro, pero no se mide cuánto contexto consume.
-- ⏳ **C9** [baja · horas] **Agente contra persona.** No hay una comparación simple de «esto costaría X horas de una persona».
-- ⏳ **C10** [media · horas] **Informe mensual para contabilidad.** No se puede exportar un CSV o PDF del trabajo hecho y su costo.
+- ✅ **C9** [baja · horas] **Agente contra persona.** No hay una comparación simple de «esto costaría X horas de una persona». → `costs.hourlyRate`: «lo que valen» las horas ahorradas frente a lo que costó, «rinde N×».
+- ✅ **C10** [media · horas] **Informe mensual para contabilidad.** No se puede exportar un CSV o PDF del trabajo hecho y su costo. → «Descargar CSV del mes» (`/api/costs.csv?month=AAAA-MM`), que abre bien en Excel.
 
 ## D. Calidad del trabajo
 

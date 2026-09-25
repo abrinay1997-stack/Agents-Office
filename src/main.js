@@ -6,6 +6,7 @@ import { initStudio } from './studio.js'; // the Estudio: images and video, by h
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
 import { initHealth } from './health.js'; // V4.4: the office's health (O)
+import { initCosts } from './costs.js'; // V4.4: costs and return (U)
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -576,6 +577,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (keysSheet.isOpen()) { keysSheet.close(); return; }
     if (health.isOpen()) { health.close(); return; }
+    if (costsWin.isOpen()) { costsWin.close(); return; }
     const cp = document.getElementById('connPanel'); if (cp) { cp.querySelector('.cp-x').click(); return; }
     if (tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
     if (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) { agentSheet.close(); return; }
@@ -615,6 +617,7 @@ addEventListener('keydown', (e) => {
   else if (e.key === 't' || e.key === 'T') document.getElementById('topPanel').click(); // show / hide the task panel
   else if (e.key === 'e' || e.key === 'E') studio.toggle(); // the Estudio
   else if (e.key === 'o' || e.key === 'O') health.toggle(); // V4.4: the office's health
+  else if (e.key === 'u' || e.key === 'U') costsWin.toggle(); // V4.4: costs and return
   else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
 
@@ -623,7 +626,7 @@ addEventListener('keydown', (e) => {
 const keysSheet = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
-    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos y retorno: cuánto cuesta y cuánto ahorra', 'u'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
     ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
@@ -655,6 +658,7 @@ const keysSheet = (() => {
 })();
 document.getElementById('topKeys').addEventListener('click', () => keysSheet.toggle());
 const health = initHealth({ served: SERVED, esc }); // V4.4 (B6)
+const costsWin = initCosts({ served: SERVED, esc }); // V4.4 (C1–C10)
 
 // camera mode: mid-tone backdrop for filming the screen (#cam=1 / V toggles)
 function setCam(on) { document.body.classList.toggle('cam', !!on); }

@@ -123,7 +123,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
     try {
       if (k === 'ap') { await local('POST', `/api/tasks/${id}/approve`); await strip(); await done('Aprobada'); return send(chat, '✅ Aprobada: el agente la envía ahora. Te aviso si algo falla.'); }
       if (k === 'rj') { st.pendingReject[chat] = id; saveSt(); await done(''); return send(chat, '↩ ¿Qué debe cambiar? Escríbelo en tu próximo mensaje.', { reply_markup: { force_reply: true } }); }
-      if (k === 'vw') { const t = (await local('GET', '/api/tasks')).find(x => x.id === id); await done(''); return send(chat, t ? esc(t.draft || t.result || '') : 'Esa tarea ya no existe.'); }
+      if (k === 'vw') { const t = (await local('GET', '/api/tasks')).find(x => x.id === id); local('POST', `/api/tasks/${id}/seen`, {}).catch(() => {}); await done(''); return send(chat, t ? esc(t.draft || t.result || '') : 'Esa tarea ya no existe.'); }
       if (k === 'rp') { await local('POST', `/api/tasks/${id}/repeat`); await strip(); await done('Otra vez'); return send(chat, '↻ Va de nuevo a la cola.'); }
       if (k === 'sd') { const r = await local('POST', '/api/sub/send', { msg: id }); await strip(); await done('Enviado'); return send(chat, `📤 Enviado a los jefes${r.tasks?.filter(Boolean).length ? ': ' + r.tasks.filter(Boolean).length + ' tarea(s)' : ''}.`); }
       await done('');
