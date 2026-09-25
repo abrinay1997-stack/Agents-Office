@@ -2085,6 +2085,11 @@
   @media (max-width: 760px) { .cv-num { font-size: 10.5px; } }
   /* A29: the Estudio fits a 320px screen (1.4.10 reflow) */
   @media (max-width: 400px) { #studioOv .st-gen, #studioOv .st-scroll, #studioOv .st-step, #studioOv .st-kind { min-width: 0; max-width: 100%; box-sizing: border-box; } #studioOv .st-kind button { min-width: 0; } .st-foot { grid-template-columns: minmax(0, auto) minmax(0, 1fr); padding: 10px 12px 12px; } .st-go { white-space: normal; letter-spacing: .06em; padding: 11px 14px; } }
+  /* V4.4: the guard's report in a task's detail */
+  .td-guard { border: 1px solid rgba(43,107,235,.35); background: rgba(43,107,235,.06); border-radius: 12px; padding: 10px 12px; margin: 10px 0; font-size: 13px; line-height: 1.45; }
+  .td-guard.bad { border-color: rgba(179,38,30,.45); background: rgba(179,38,30,.06); }
+  .td-guard p { margin: 6px 0 0; } .td-guard ul { margin: 6px 0 0; padding-left: 18px; } .td-guard li { margin: 3px 0; }
+  body.dark .td-guard { border-color: rgba(143,176,255,.4); background: rgba(143,176,255,.08); } body.dark .td-guard.bad { border-color: rgba(255,138,128,.45); background: rgba(255,138,128,.08); }
 </style>
 </head>
 <body>

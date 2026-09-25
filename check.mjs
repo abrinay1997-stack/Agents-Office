@@ -37,6 +37,24 @@ await step('build: graph has linked notes', async () => {
   return `${BRAIN.notes} notes · ${BRAIN.nodes.length} linked · ${BRAIN.links.length} links`;
 });
 
+/* ---------- 1a. V4.4: the unit tests, the secrets check, the agents' safety rules ---------- */
+await step('tests: npm test (safety rules, the guard, the secrets check)', async () => {
+  const out = await sh('node', ['--test']).catch(e => { throw new Error('a test failed — run npm test to see which: ' + e.message); });
+  const n = /# pass (\d+)/.exec(out)?.[1], f = /# fail (\d+)/.exec(out)?.[1];
+  if (f && +f) throw new Error(`${f} test(s) failed — npm test`);
+  return `${n} tests pass`;
+});
+await step('secrets: nothing that looks like a key, a card or an ID card in the repository', async () => {
+  await sh('node', ['scripts/install-hooks.mjs']); // the pre-commit check, on this machine too
+  const out = await sh('node', ['scripts/secrets-scan.mjs', '--all']).catch(e => { throw new Error(e.message + ' — npm run secrets'); });
+  return out.trim();
+});
+await step('safety: office.config → safety is valid (who may send, sites, caps)', async () => {
+  const S = await import('./safety.mjs'); const p = S.problems(cfg.safety || {}); if (p.length) throw new Error(p.join(' | '));
+  const n = S.normalize(cfg.safety);
+  return `envíos: ${n.writes}${Object.keys(n.departments).length ? ' · ' + Object.entries(n.departments).map(([d, v]) => d + ' ' + v).join(', ') : ''} · Chrome: ${n.browserSites.length ? n.browserSites.length + ' sitios permitidos' : 'cualquier sitio'}${n.browserBlock.length ? ', ' + n.browserBlock.length + ' prohibidos' : ''} · topes ${n.limits.perAgentDay}/agente y ${n.limits.perRecipientDay}/destinatario al día`;
+});
+
 /* ---------- 1b. the roster + the connector parser ---------- */
 await step('roster: office.agents.json validates', async () => {
   const { loadRoster } = await import('./roster.mjs');

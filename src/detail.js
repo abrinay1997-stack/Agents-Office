@@ -62,11 +62,22 @@ export function initDetail(ctx) {
         <p class="td-note">${t.state === 'scheduled' ? 'Cambia el día o la hora para moverla. «Ejecutar ahora» la pasa a pendientes.' : 'Pon un día para programarla; sin día, el agente la toma en cuanto se libere.'}${live ? ' Si cambias el texto, el líder vuelve a elegir el escritorio (salvo que elijas uno tú).' : ''}</p>`
       : t.text && t.text !== t.title ? `<label class="td-lab">Qué se pidió</label><div class="td-ask">${esc(t.text)}</div>` : ''}
       ${t.team?.members?.length ? `<label class="td-lab">Equipo</label><div class="td-ask">${esc([t.team.lead, ...t.team.members].map(id => agentOf(id)?.name || id).join(' · '))}${t.team.why ? ' — ' + esc(t.team.why) : ''}</div>` : ''}
+      ${guardHTML(t)}
       ${result ? `<label class="td-lab">${t.state === 'waiting' ? 'Borrador para tu visto bueno' : t.error ? 'Qué pasó' : 'Entregable'}</label><div class="td-res md${t.error ? ' err' : ''}">${mdToHtml(result)}</div>` : ''}
       ${t.state === 'waiting' ? `<label class="td-lab" for="tdFb">Si lo devuelves, ¿qué debe cambiar?</label><textarea id="tdFb" class="td-text" rows="2" placeholder="Ej.: más corto, sin el segundo párrafo, con el precio de Launch"></textarea>` : ''}
       <div class="td-acts">${actions(t, editable, live)}</div>
       ${t.state === 'done' ? `<label class="td-chk"><input type="checkbox" class="td-withnote"${t.note ? '' : ' disabled'}> también mover su nota del Cerebro a la papelera</label>` : ''}
       <div class="td-msg" aria-live="polite"></div>`;
+  }
+  // V4.4: what the office's guard stopped in this task — the owner sees every refused send and any hidden orders an email or a page carried
+  function guardHTML(t) {
+    const g = t.guard; if (!g && !t.heldForOk) return '';
+    const tool = n => esc(String(n || '').replace(/^mcp__/, '').replace(/__/, ' · ').replace(/_/g, ' '));
+    const items = (g?.blocked || []).filter(b => b.code !== 'no-writes' || !t.heldForOk).map(b => `<li><b>${tool(b.tool)}</b>: ${esc(b.why || '')}</li>`).join('');
+    return `<div class="td-guard${g?.taint ? ' bad' : ''}" role="note"><b>🛡 Seguridad</b>` +
+      (t.heldForOk ? `<p>El agente quiso enviar algo sin tu visto bueno. La oficina lo detuvo y te deja el borrador para aprobar.</p>` : '') +
+      (g?.taint ? `<p>Lo que leyó en <b>${tool(g.taint.tool)}</b> ${esc(g.taint.why)}. Por eso no se envió nada en esa ejecución. Revisa ese correo o esa página: puede ser un intento de engaño.</p>` : '') +
+      (items ? `<ul>${items}</ul>` : '') + '</div>';
   }
   function actions(t, editable, live) {
     const b = (a, txt, cls = '') => `<button type="button" class="td-btn ${cls}" data-a="${a}">${txt}</button>`;

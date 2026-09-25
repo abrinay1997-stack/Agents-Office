@@ -53,6 +53,7 @@ import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
 import * as media from './media.mjs';
+import * as safety from './safety.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 
@@ -63,6 +64,9 @@ const FILE = path.join(DATA, 'tasks.json');
 const BRAIN = cfg.brainPath;
 const NOTES_DIR = path.join(BRAIN, 'Agents Office');
 const CLI_CWD = path.join(os.tmpdir(), 'agents-office-cli'); // an empty cwd: no CLAUDE.md, no repo context
+const GUARD = path.join(ROOT, 'guard.mjs'); // V4.4: the hook Claude Code runs around every tool call (safety.mjs has the rules)
+const AUDIT = path.join(DATA, 'audit'); // one line per tool call: who, which tool, where it went, allowed or refused
+const SAFETY = () => safety.normalize(cfg.safety);
 const version = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version; } catch { return '?'; } })();
 const RUN_TIMEOUT = Math.max(60, +cfg.timeout || 300) * 1000; // agents with tools take longer than a plain draft
 { const m = normModel(cfg.model); if (cfg.model && !m) console.warn(`config: model must be sonnet, opus or fable (got "${cfg.model}") — using ${DEFAULT_MODEL}`); cfg.model = m || DEFAULT_MODEL; } // V3.6: three models, by name
@@ -163,7 +167,17 @@ function killTree(p) {
 }
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => { for (const p of children) killTree(p); process.exit(0); });
 process.on('exit', () => { for (const p of children) killTree(p); });
-async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null } = {}) { // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+// V4.4: what the guard refused in one run (read back from the audit log) and whether something the agent read carried hidden orders
+function guardReport(runId, taintFile) {
+  const out = { blocked: [], taint: null };
+  try { out.taint = JSON.parse(fs.readFileSync(taintFile, 'utf8')); } catch {}
+  for (const d of [localDay(Date.now() - 86400000), localDay(Date.now())]) {
+    let lines = []; try { lines = fs.readFileSync(path.join(AUDIT, d + '.jsonl'), 'utf8').split('\n'); } catch {}
+    for (const l of lines) { if (!l.includes(runId)) continue; try { const j = JSON.parse(l); if (j.run === runId && j.decision === 'block') out.blocked.push({ tool: j.tool, why: j.why, kind: j.kind, code: j.code }); } catch {} }
+  }
+  return out;
+}
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null } = {}) { // V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
     const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
@@ -176,19 +190,33 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   if (studio) allowed.push('mcp__estudio');
   // the system prompt goes in a file and the request on stdin: skills + notes + a revise can pass Windows' 32,767-character command line
   const sysFile = path.join(CLI_CWD, `system-${nid()}.txt`); fs.writeFileSync(sysFile, system);
+  // V4.4: the guard — a hook around every tool call. A run that may not send also loses the send tools outright where it can never need them (a draft, a teammate's piece, «nunca»)
+  const pol = safety.modeFor(cfg.safety, agent?.department), writes = safety.writesAllowed(pol, runMode);
+  const runId = nid(), guardFile = path.join(CLI_CWD, `guard-${runId}.json`), taintFile = path.join(CLI_CWD, `taint-${runId}.json`), settingsFile = path.join(CLI_CWD, `settings-${runId}.json`);
+  const hardOff = tools && !writes && (runMode === 'draft' || runMode === 'piece' || pol === 'nunca') ? mcp.writeTools(agent, SAFETY().safeTools) : [];
+  if (tools && agent) {
+    fs.writeFileSync(guardFile, JSON.stringify({ run: runId, task: taskId, agent: agent.id, dept: agent.department, writes, runMode, policy: pol, known: runMode === 'approve' ? known : null, safety: cfg.safety || {}, auditDir: AUDIT, taintFile }));
+    const cmd = phase => `"${process.execPath}" "${GUARD}" ${phase}`;
+    fs.writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: '', hooks: [{ type: 'command', command: cmd('pre'), timeout: 30 }] }], PostToolUse: [{ matcher: '', hooks: [{ type: 'command', command: cmd('post'), timeout: 30 }] }] } }));
+  }
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--system-prompt-file', sysFile,
-    '--disallowedTools', ['Bash', 'Edit', 'Write', 'Read', 'Glob', 'Grep', 'Agent', 'NotebookEdit', 'Task', ...(allowed.includes('WebFetch') ? [] : ['WebFetch', 'WebSearch']), ...mcp.disallowedTools(agent, tools)].join(',')];
+    '--disallowedTools', ['Bash', 'Edit', 'Write', 'Read', 'Glob', 'Grep', 'Agent', 'NotebookEdit', 'Task', ...(allowed.includes('WebFetch') ? [] : ['WebFetch', 'WebSearch']), ...mcp.disallowedTools(agent, tools), ...hardOff].join(',')];
+  if (tools && agent) args.push('--settings', settingsFile);
   if (allowed.length) args.push('--allowedTools', allowed.join(','));
   args.push(...(tools ? mcp.cliArgs() : ['--no-chrome'])); // V3.2 (16 Sep): the owner's Chrome, when tools.browser is on
   args.push(...modelArgs(model, effort));
   if (studio) args.push('--mcp-config', JSON.stringify({ mcpServers: { estudio: { command: process.execPath, args: [STUDIO_MCP], env: { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' } } } }));
-  const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes
+  const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes
   return new Promise((resolve, reject) => {
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
     children.add(p);
     if (taskId) { if (!runsOf.has(taskId)) runsOf.set(taskId, new Set()); runsOf.get(taskId).add(p); }
     p.stdin.on('error', () => {}); p.stdin.end(user);
-    const cleanup = () => { children.delete(p); if (taskId && runsOf.has(taskId)) { runsOf.get(taskId).delete(p); if (!runsOf.get(taskId).size) runsOf.delete(taskId); } fs.rm(sysFile, { force: true }, () => {}); };
+    const cleanup = () => {
+      children.delete(p); if (taskId && runsOf.has(taskId)) { runsOf.get(taskId).delete(p); if (!runsOf.get(taskId).size) runsOf.delete(taskId); }
+      if (guardOut) Object.assign(guardOut, guardReport(runId, taintFile));
+      for (const f of [sysFile, guardFile, taintFile, settingsFile]) fs.rm(f, { force: true }, () => {});
+    };
     let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null;
     const timer = setTimeout(() => { killTree(p); reject(new Error(`Claude took longer than ${timeout / 1000} s`)); }, timeout);
     const feed = line => {
@@ -300,8 +328,10 @@ function studioText(a) {
     'Cuando la tarea pida imágenes o video, GENÉRALOS (no entregues solo prompts) y pon en tu entregable, tal cual, las líneas que devuelve la herramienta: ![…](/media/…) si ya está, o la línea ⏳ si sigue en proceso (un video tarda minutos; la oficina cambia esa línea por el archivo cuando termine, tú no esperes). ' +
     'Para animar una imagen o usarla de referencia (un producto, un logo, un personaje) búscala con buscar_en_galeria y pasa su id. Un lote grande: consulta estado_estudio antes (tope diario).';
 }
-const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. End with one line saying exactly what will go out when approved (or that nothing needs to).'
+const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. Name every recipient with the exact email address or phone number, and every amount: after the OK the office only lets a send reach the addresses written in this draft. End with one line saying exactly what will go out when approved (or that nothing needs to).'
   : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
+const runModeOf = mode => mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : 'task'; // V4.4: safety.writesAllowed decides from this and the policy
+const knownFor = task => `${task.text || ''}\n${task.draft || task.result || ''}`; // after the OK, a send names only addresses in what the owner approved
 const pickFor = (task, a) => { // model + effort: four places, one precedence (task > routine > agent > office)
   const pick = modelFor({ task: task.model, routine: task.routineModel, agent: a.model, office: cfg.model });
   const eff = effortFor({ task: task.effort, routine: task.routineEffort, agent: a.effort, office: cfg.effort, model: pick.model });
@@ -326,9 +356,10 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
   const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + routineLine + modeLine +
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id });
+  const guard = {};
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard });
   if (!text) throw new Error('Claude returned nothing');
-  return { result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from };
+  return { result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, guard };
 }
 
 /* ---------- V3.2 (16 Sep) Agent Teams: the lead plans, the desks work at once, the lead writes the final ---------- */
@@ -359,7 +390,9 @@ async function runTeam(task, mode) {
       const system = agentSystem(a, index, read, { extra: teams.teamSection({ me: a, lead, pieces: task.team.pieces, nameOf }), words: 220 });
       const user = `Task (the whole request, for context): ${task.title}\nOwner's request: ${task.text}\n\nYOUR PIECE: ${piece.title}\n${piece.text}` + routineLineFor(task) + (mode === 'draft' ? modeLineFor('draft', task) : '');
       const { pick, eff } = pickFor(task, a);
-      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id });
+      const pg = {};
+      const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: 'piece', guardOut: pg });
+      if (pg.blocked?.length || pg.taint) piece.guard = pg;
       const { body, messages } = teams.parseMessages(text, ids);
       Object.assign(piece, { result: body || '(empty)', tools: toolKeys(tools), used: mcp.namesOf(tools), read, modelId: ran, error: !text });
       for (const m of messages) task.team.messages.push({ from: a.id, to: m.to === lead.id ? 'lead' : m.to, text: m.text, at: Date.now() });
@@ -378,12 +411,14 @@ async function runTeamLead(task, feedback, mode) {
   const system = agentSystem(lead, index, read, { extra: `TEAM\nYou lead this team. The pieces below were done by your teammates (one of them may be yours). You write the finished deliverable from them.`, words: 450 });
   const user = teams.synthPrompt({ task, pieces: tm.pieces || [], messages: tm.messages || [], nameOf, feedback: mode === 'approve' ? null : feedback }) + routineLineFor(task) + modeLineFor(mode, task);
   const { pick, eff } = pickFor(task, lead);
-  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id });
+  const guard = {};
+  const { text, tools, modelId: ran } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard });
   if (!text) throw new Error('Claude returned nothing');
+  for (const p of tm.pieces || []) if (p.guard) { guard.blocked = [...(guard.blocked || []), ...p.guard.blocked]; guard.taint = guard.taint || p.guard.taint; }
   const allTools = [...new Set([...(tm.pieces || []).flatMap(p => p.tools || []), ...toolKeys(tools)])];
   const allUsed = [...new Set([...(tm.pieces || []).flatMap(p => p.used || []), ...mcp.namesOf(tools)])];
   const allRead = [...new Set([...read, ...(tm.pieces || []).flatMap(p => p.read || [])])];
-  return { result: text, read: allRead, tools: allTools, used: allUsed, skills: skills.names(lead), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, team: tm };
+  return { result: text, read: allRead, tools: allTools, used: allUsed, skills: skills.names(lead), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, team: tm, guard };
 }
 function writeNote(task) { // the deliverable becomes a note in the brain, linked to what was read
   fs.mkdirSync(NOTES_DIR, { recursive: true });
@@ -407,7 +442,7 @@ async function chat(agentId, text, history) {
     'Use the company notes; say when something is not in them. If the owner asks you to look something up, use your tools. Nothing outbound is sent without the owner\'s explicit say-so.\n\n' +
     `${mcp.promptText(a)}${studioText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nRELEVANT NOTES\n${contextText(index, read)}\n\nYOUR RECENT TASKS\n${mine || '—'}`;
   const convo = (history || []).slice(-8).map(m => `${m.who === 'user' ? 'Dueño' : a.name}: ${m.text}`).join('\n');
-  const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${a.name}:`, { maxTokens: 1200, agent: a, model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
+  const { text: reply, tools } = await askX(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${a.name}:`, { maxTokens: 1200, agent: a, runMode: 'chat', model: modelFor({ agent: a.model, office: cfg.model }).model, effort: effortFor({ agent: a.effort, office: cfg.effort, model: modelFor({ agent: a.model, office: cfg.model }).model }).effort });
   return { reply, read, tools: toolKeys(tools), used: mcp.namesOf(tools) };
 }
 
@@ -538,6 +573,12 @@ async function runServerTask(id, { feedback, approve } = {}) {
     const out = await run(task, feedback, approve ? 'approve' : task.needsOk ? 'draft' : 'routine');
     if (approve) { task.result = (task.draft || task.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; task.approved = true; task.approvedAt = Date.now(); }
     else task.result = out.result;
+    const g = out.guard || {};
+    if (g.blocked?.length || g.taint) task.guard = { blocked: (g.blocked || []).slice(0, 12), taint: g.taint || null, at: Date.now(), approve: !!approve };
+    else delete task.guard;
+    // V4.4 (A3): under «aprobar» a task that tried to send without the OK is not lost — it waits for the OK with its draft
+    const wanted = (g.blocked || []).some(b => b.code === 'no-writes');
+    if (!approve && !task.needsOk && wanted && !g.taint && safety.modeFor(cfg.safety, AGENTS.find(x => x.id === task.agent)?.department) !== 'nunca') { task.needsOk = true; task.heldForOk = true; }
     Object.assign(task, { read: out.read, tools: [...new Set([...(task.tools || []), ...out.tools])], used: [...new Set([...(task.used || []), ...out.used])], skills: out.skills, error: false, modelUsed: out.modelUsed, modelFrom: out.modelFrom, modelId: out.modelId, effortUsed: out.effortUsed, effortFrom: out.effortFrom, ...(out.team ? { team: out.team } : {}) });
     for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) { applyJob(task, j, ['result']); media.markAttached(j.id); } // images an agent made during its run
     if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = task.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); }
@@ -761,7 +802,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
     }
-    if (url.pathname === '/api/health') return json(res, 200, { ok: true, version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, deputy: DEPUTY, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
+    if (url.pathname === '/api/health') return json(res, 200, { ok: true, safety: (n => ({ writes: n.writes, departments: n.departments, browserSites: n.browserSites.length, browserBlock: n.browserBlock.length, limits: n.limits }))(SAFETY()), version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, deputy: DEPUTY, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
       agents: agentsOut(), setup: setupMap(), routines: (l => ({ count: l.length, paused: l.filter(r => r.paused).length, depts: routines.ALLOWED }))(loadRoutines()), roster: { customised: roster.customised, briefed: roster.briefed, files: roster.files, problems: roster.problems }, skills: (({ count, shipped, brain, problems }) => ({ count, shipped, brain, problems }))(skills.summary()), tools: backend === 'claude-cli', mcp: mcp.summary(), teams: TEAMS, browser: mcp.summary().browser });
     if (url.pathname === '/api/agents') return json(res, 200, { agents: agentsOut(), problems: roster.problems, files: roster.files });
     const am = url.pathname.match(/^\/api\/agents\/([a-z0-9_-]+)(?:\/(forget))?$/i);

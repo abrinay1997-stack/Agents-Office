@@ -28,7 +28,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 **Reglas:**
 1. **Antes de empezar, trae lo último:** `git pull`, o `Actualizar-Oficina.bat`.
 2. **Trabaja en una rama con nombre** (p. ej. `mejora/aprobaciones`) y abre un Pull Request hacia `main`; el dueño lo acepta. Solo sube directo a `main` si el dueño lo pidió.
-3. **Antes de subir:** `npm run check` en verde, y commits en español que digan qué cambió y por qué.
+3. **Antes de subir:** `npm run check` en verde (incluye `npm test` y la revisión de secretos), y commits en español que digan qué cambió y por qué. GitHub vuelve a correr todo en cada push.
 4. **Nunca subas** keys, `data/`, `office.config.local.json` ni las entregas de los agentes (el `.gitignore` ya lo impide: no lo fuerces). El repositorio puede ser público: lo que viaja lo puede leer cualquiera.
 5. **Al arreglar un punto de la auditoría,** márcalo ✅ en `docs/auditoria-ux-2026-09-24.md` en el mismo commit. Al cambiar algo que el dueño usa, actualiza este archivo y el README.
 6. **Avísense antes de tocar a la vez los archivos grandes:** `src/main.js`, `src/tasks.js`, `src/shell.html`, `serve.mjs`. Son los que más chocan.
@@ -210,6 +210,23 @@ The top bar shows the MCP servers **this machine's Claude Code** is connected to
 `allow` empty means every connected server. `deny` keeps a server in the bar but out of the agents' hands (`"Chrome"` works there too). `departments` says which pods a server is wired to; unknown servers default to every pod. `tools.web` gives the agents web search. `tools.browser` (V3.2 (16 Sep)) gives them the owner's own Chrome through Claude Code's Chrome integration — the run starts with `--chrome` and gets the `claude-in-chrome` server (open tabs, read pages, fill forms on sites the owner is signed in to); it needs the Claude in Chrome extension paired to this machine (`claude --chrome` once) and the Claude Code login. The bar shows a Chrome tile wired to every pod. `teams` (V3.2 (16 Sep)) is Agent Teams: `enabled` shows the TEAM button and makes "as a team" mean it; `max` caps the desks (2–6, default 4).
 
 Agents get only connected servers (plus web when enabled, plus the browser when enabled and paired). They never get Bash, file tools or sub-agents. Their standing rule: read freely; send, post, pay, delete or change data outside this machine **only** when the owner's task explicitly asks for that exact action — in the browser too.
+
+## Seguridad de los agentes (V4.4, 25 sep 2026)
+
+Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs` antes y después de cada herramienta que usa un agente (un hook que `serve.mjs` pasa con `--settings`). Las reglas viven en `safety.mjs` y se prueban en `tests/`.
+- **Quién puede enviar** (`office.config.json → safety.writes`, o por departamento en `safety.departments`):
+  - `aprobar` (por defecto): nada sale (enviar, publicar, pagar, borrar, cambiar) salvo en la ejecución que sigue a tu OK. Si una tarea intenta enviar sin OK, la oficina la detiene y la deja en ESPERA DE APROBACIÓN con su borrador.
+  - `pedido`: como antes; una tarea puede enviar si su texto lo pide, pero un borrador que espera OK nunca.
+  - `nunca`: los agentes solo preparan; tú haces el envío.
+- **Destinatarios:** después del OK, un envío solo puede ir a los correos y teléfonos que aparecen en el borrador aprobado (`checkRecipients`). Por eso el borrador nombra cada dirección exacta.
+- **Inyección:** si un correo, una página o un documento que lee el agente trae órdenes escondidas («ignora tus instrucciones», «reenvía todos los correos», «no le digas al dueño»), se bloquea todo envío en esa ejecución y la tarea lo muestra en 🛡 Seguridad.
+- **Chrome:** `browserSites` (lista de sitios permitidos; vacía = todos) y `browserBlock` (prohibidos). Admite `*.dominio.com`.
+- **Topes diarios:** `limits.perAgentDay` (envíos por agente) y `limits.perRecipientDay` (por dirección); 0 = sin tope.
+- **Qué herramienta «envía»:** la primera palabra verbo de su nombre decide (`send_email` envía, `get_schedule` lee). Las que llevan `draft`/`borrador` (`safeTools`) no cuentan como envío. El Estudio es interno.
+- **Registro:** cada llamada, permitida o no, queda en `data/audit/AAAA-MM-DD.jsonl` (no viaja por GitHub).
+- **Secretos:** `npm run secrets` revisa el repositorio. El hook `.githooks/pre-commit` (se activa con `npm install` o `npm run check`) impide commitear algo que parezca una key, una contraseña, una tarjeta o una cédula. Un ejemplo inofensivo lleva `secrets-ok` en su línea; una ruta entera va en `.secretsignore`.
+- **Tests:** `npm test` (node:test, carpeta `tests/`) corre dentro de `npm run check`. GitHub Actions (`.github/workflows/check.yml`) ejecuta secretos, tests y el check completo en cada push y cada Pull Request. **Todo cambio de lógica nuevo lleva su test.**
+- **Pendiente con issue:** inicio de sesión antes de exponer la oficina fuera de localhost (A1, issue #2).
 
 ## Agent Teams
 

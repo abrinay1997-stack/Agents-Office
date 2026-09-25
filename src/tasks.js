@@ -666,7 +666,7 @@ export function initTasks(ctx) {
     else say('Conexión recuperada.');
   }
   const fromServer = st => ({ id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
-    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
+    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, guard: st.guard, heldForOk: !!st.heldForOk, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
     if (!agentOf(st.agent) || st.archived || deleting.has(st.id)) return;
     let t = tasks.find(x => x.live && x.sid === st.id);
@@ -680,7 +680,7 @@ export function initTasks(ctx) {
     }
     apply(t, st);
   }
-  function copyResult(t, st) { t.result = st.result; t.error = !!st.error; t.read = st.read || []; t.note = st.note; t.tools = st.tools || []; t.used = st.used || []; t.draft = st.draft; t.approved = !!st.approved; if (st.modelUsed) { t.modelUsed = st.modelUsed; t.modelFrom = st.modelFrom; t.effortUsed = st.effortUsed || ''; t.effortFrom = st.effortFrom; } }
+  function copyResult(t, st) { t.result = st.result; t.error = !!st.error; t.read = st.read || []; t.note = st.note; t.tools = st.tools || []; t.used = st.used || []; t.draft = st.draft; t.approved = !!st.approved; t.guard = st.guard; t.heldForOk = !!st.heldForOk; if (st.modelUsed) { t.modelUsed = st.modelUsed; t.modelFrom = st.modelFrom; t.effortUsed = st.effortUsed || ''; t.effortFrom = st.effortFrom; } }
   // V3.2 (16 Sep): the server's team state → piece cards on the teammates' desks, notes as 💬, the lead's members list
   const seenNotes = new Set();
   function syncTeam(t, st, quiet) {
@@ -775,7 +775,7 @@ export function initTasks(ctx) {
 
         if (st.state === 'done') {
           const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: 'you', live: true, sid: st.id, state: 'done',
-            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, last: 'done',
+            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, guard: st.guard, heldForOk: !!st.heldForOk, last: 'done',
             routine: st.routine, when: st.when, due: st.due, late: !!st.late, approved: !!st.approved }); // V4.2: a routine's run stays one — the calendar marks the past by it
           if (st.team) syncTeam(t, st, true);
           deliver(t, true); // quiet: the file card stays in the chat's history; no «Listo» line, feed item or brain spark on every page load
