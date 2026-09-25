@@ -645,6 +645,8 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     const z = md.zip(md.list().map(i => i.file)); if (z.buf.readUInt32LE(0) !== 0x04034b50 || z.count !== md.list().length) throw new Error('zip');
     const t = md.trash(up.file); if (!t || md.list().some(i => i.file === up.file) || !md.restore(t) || !md.list().some(i => i.file === up.file)) throw new Error('trash and restore');
     if (md.restore({ id: '../../office.config.json', bin: ['1-x'] })) throw new Error('restore escaped');
+    const framed = md.models().filter(x => x.kind === 'image' && (x.roles.start || x.roles.end)).map(x => x.id); // first and last frames are for video only
+    if (framed.length) throw new Error('an image model asks for video frames: ' + framed.join(', '));
     return `${md.models().length} models · Soul 2, Kling 3 (image → video, upload to Higgsfield), fal Kling (queue, data URI) · NSFW says why · a video resumes after a restart · ZIP · undo`;
   } finally { for (const k of Object.keys(ENV)) { if (keep[k] === undefined) delete process.env[k]; else process.env[k] = keep[k]; } mock.close(); fs.rmSync(tmp, { recursive: true, force: true }); }
 });

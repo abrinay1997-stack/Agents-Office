@@ -113,7 +113,8 @@ const CATALOG = [
   falImg('flux-kontext', 'Flux Kontext', 0.04, 'fal-ai/flux-pro/kontext/text-to-image', 'fal-ai/flux-pro/kontext', 1, 'Cambia una imagen con una frase («ponle fondo de playa»).', s => ({ aspect_ratio: s.aspectRatio })),
   falImg('flux-schnell', 'Flux Schnell', 0.003, 'fal-ai/flux/schnell', null, 0, 'El más barato: para probar ideas en lote.', s => ({ image_size: FAL_SIZE[s.aspectRatio] || 'square_hd' })),
   falImg('ideogram-3-fal', 'Ideogram 3 (fal)', 0.06, 'fal-ai/ideogram/v3', null, 0, 'Texto legible dentro de la imagen.', s => ({ image_size: FAL_SIZE[s.aspectRatio] || 'square_hd' })),
-  { id: 'prueba', engine: 'prueba', kind: 'image', name: 'Prueba (gratis)', cost: 0, note: 'Una tarjeta con tu prompt: prueba el Estudio sin gastar.', roles: { start: 1, end: 1, reference: 8 }, settings: { aspectRatio: E(IMG_ASPECT, '1:1') } },
+  // V4.2: an image takes references only — no real image model has a first or last frame; the free test card used to ask for them and looked like a video form
+  { id: 'prueba', engine: 'prueba', kind: 'image', name: 'Prueba (gratis)', cost: 0, note: 'Una tarjeta con tu prompt, no una imagen real: prueba el Estudio sin gastar.', roles: { reference: 8 }, settings: { aspectRatio: E(IMG_ASPECT, '1:1') } },
   // ---- video
   { id: 'kling-3-std', engine: 'higgsfield', kind: 'video', name: 'Kling 3.0', cost: 0.08, per: 's', note: 'El equilibrio: buena calidad, sonido, imagen inicial y final.', roles: { start: 1, end: 1 }, settings: kling3Set, hf: HF.kling3('kling-video/v3.0/std') },
   { id: 'kling-3-pro', engine: 'higgsfield', kind: 'video', name: 'Kling 3.0 Pro', cost: 0.11, per: 's', roles: { start: 1, end: 1 }, settings: kling3Set, hf: HF.kling3('kling-video/v3.0/pro') },

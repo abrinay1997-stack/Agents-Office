@@ -14,10 +14,11 @@ const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '
 const RATIO_WORD = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Vertical', '16:9': 'Horizontal', '3:4': 'Retrato', '4:3': 'Clásico', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' }; // V4.2 (audit A15): one word that fits; the use goes in the title
 // V4.2 (audit A5): the engine beside the model only when it adds something («Kling 3 · Higgsfield», not «Prueba (gratis) · Prueba (gratis)»)
 const engineAdds = m => m.engineName && !m.name.toLowerCase().includes(m.engineName.toLowerCase().split(/[\s.(]/)[0]);
-const ROLE = { start: 'Imagen inicial', end: 'Imagen final', reference: 'Referencias', video: 'Video de origen' };
-const ROLE_HELP = { start: 'el video empieza así', end: 'el video termina así', reference: 'tu producto, logo, personaje o estilo', video: 'el video que se cambia o se alarga' };
-// V4.2 (audit A1): an image model's slots are not «el video empieza así» — the same roles, in image words
-const ROLE_IMG = { start: 'Imagen a editar', end: 'Resultado parecido a esta' }, ROLE_IMG_HELP = { start: 'la foto que el modelo cambia', end: 'cómo debería quedar' };
+// The media a model takes. Fotogramas (start, end) are video-only: the first and the last picture of the clip. An image model takes
+// references only — the photo to edit, a product, a logo, a face, a style — and the catalog never gives an image model a frame.
+const ROLE = { start: 'Fotograma inicial', end: 'Fotograma final', reference: 'Referencias', video: 'Video de origen' };
+const ROLE_HELP = { start: 'la primera imagen del video: empieza así', end: 'la última imagen: el video termina así', reference: 'tu producto, logo, personaje o estilo', video: 'el video que se cambia o se alarga' };
+const helpFor = (r, m) => r === 'reference' && m && m.kind === 'image' ? 'la foto que quieres editar, o tu producto, logo, personaje o estilo' : r === 'video' && m && (m.needs || []).includes('start') ? 'el video cuyo movimiento se copia' : ROLE_HELP[r];
 const I = { // line icons (stroke = currentColor)
   img: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="m21 16-5-5-8 9"/>',
   vid: '<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
@@ -52,7 +53,7 @@ export function initStudio(ctx) {
             <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
               <div class="st-bcount" hidden></div><div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span><button type="button" class="st-new" title="Vacía la idea y el material de partida">Nuevo</button></div>
               <div class="st-es" hidden><b>En español:</b> <span></span></div></div></div>
-          <div class="st-step st-matstep"><div class="st-h"><b>4</b> Material de partida <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
+          <div class="st-step st-matstep"><div class="st-h"><b>4</b> <span class="st-mt">Material de partida</span> <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
           <div class="st-step"><div class="st-h"><b class="st-n5">5</b> Formato y ajustes</div><div class="st-ratios"></div><div class="st-sets"></div>
             <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
           <details class="st-keys"><summary>Motores y cómo activarlos</summary><div class="st-engs"></div>
@@ -98,8 +99,8 @@ export function initStudio(ctx) {
   let media = { start: [], end: [], reference: [], video: [] };
 
   const cur = () => models.find(m => m.id === modelOf[kind]) || null;
-  const roleName = (r, m = cur()) => (m && m.kind === 'image' && ROLE_IMG[r]) || ROLE[r];
-  const roleHelp = (r, m = cur()) => (m && m.kind === 'image' && ROLE_IMG_HELP[r]) || ROLE_HELP[r];
+  const roleName = r => ROLE[r];
+  const roleHelp = (r, m = cur()) => helpFor(r, m);
   const itemOf = f => items.find(x => x.file === f);
   const src = it => '/media/' + String(it.file || it).split('/').map(encodeURIComponent).join('/');
   const isVid = f => /\.(mp4|webm)$/i.test(f);
@@ -118,7 +119,7 @@ export function initStudio(ctx) {
   const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const api = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
   const price = m => !m.cost ? 'gratis' : m.per === 's' ? `~US$${m.cost.toFixed(2)}/s` : `~US$${m.cost < 0.01 ? m.cost.toFixed(3) : m.cost.toFixed(2)}/imagen`;
-  const tags = m => [m.roles.reference && 'Referencias', m.roles.start && (m.kind === 'video' ? 'Anima una imagen' : 'Edita una imagen'), m.roles.end && 'Fotograma final', m.roles.video && 'Parte de un video',
+  const tags = m => [m.roles.reference && (m.kind === 'image' ? 'Edita o combina imágenes' : 'Referencias'), m.kind === 'video' && m.roles.start && 'Anima una imagen', m.kind === 'video' && m.roles.end && 'Fotograma final', m.roles.video && 'Parte de un video',
     (m.settings.sound || m.settings.generateAudio) && 'Sonido', /texto/i.test(m.note) && 'Texto legible', m.cost && m.cost < 0.012 && m.per !== 's' && 'Muy barato'].filter(Boolean);
 
   /* ---------- the composer ---------- */
@@ -166,6 +167,7 @@ export function initStudio(ctx) {
     const roles = Object.entries(m.roles).filter(([r, n]) => n > 0 && ROLE[r]);
     $('.st-matstep').hidden = !roles.length; $('.st-n5').textContent = roles.length ? '5' : '4'; // the steps count on without a gap
     $('.st-matstep .st-hn').textContent = (m.needs || []).length ? 'obligatorio' : 'opcional';
+    $('.st-mt').textContent = m.kind === 'image' ? 'Imágenes de referencia' : roles.some(([r]) => r === 'start' || r === 'end') ? 'Fotogramas y material' : 'Material de partida'; // the title says what this model takes
     $('.st-slots').innerHTML = roles.map(([r, n]) => `<div class="st-slot${(m.needs || []).includes(r) && !media[r].length ? ' need' : ''}" data-role="${r}">
         <div class="st-slot-h"><b>${roleName(r, m)}</b> <span>${roleHelp(r, m)}${n > 1 ? ` · ${media[r].length} de ${n}` : ''}</span></div>
         <div class="st-chips">${media[r].map(f => `<span class="st-chip" data-f="${esc(f)}">${isVid(f) ? `<video src="${src(f)}" muted preload="metadata"></video>` : `<img src="${src(f)}" alt="">`}<button type="button" data-unslot="${esc(f)}" aria-label="Quitar">${svg('x')}</button></span>`).join('')}
