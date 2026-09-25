@@ -127,13 +127,26 @@ const CATALOG = [
   { id: 'seedance-2.5-edit', engine: 'higgsfield', kind: 'video', name: 'Seedance 2.5 · Editar video', cost: 0.1, per: 's', note: 'Cambia un video existente con una frase.', needs: ['video'], roles: { video: 1, reference: 30 }, settings: seedance25Set, hf: HF.seedanceSource('bytedance/seedance-2.5/video-edit', false) },
   { id: 'seedance-2.5-extend', engine: 'higgsfield', kind: 'video', name: 'Seedance 2.5 · Alargar video', cost: 0.1, per: 's', note: 'Continúa un video existente.', needs: ['video'], roles: { video: 1, reference: 30 }, settings: { duration: R(4, 30, 5), ...seedance25Set }, hf: HF.seedanceSource('bytedance/seedance-2.5/video-extend', true) },
   { id: 'kling-3-motion', engine: 'higgsfield', kind: 'video', name: 'Kling 3 · Copiar movimiento', cost: 0.1, per: 's', note: 'Tu personaje (imagen) hace el movimiento de un video.', needs: ['start', 'video'], roles: { start: 1, video: 1 }, settings: motionSet, hf: HF.motion('kling-video/v3/motion-control/std') },
-  hfVideo('kling-o3', 'Kling O3 · Primer y último fotograma', { start: 1, end: 1 }, { firstLast: 'kling-video/o3/first-last-frame' }, 0.1, 'Une dos imágenes con un movimiento.'),
+  { ...hfVideo('kling-o3', 'Kling O3 · Primer y último fotograma', { start: 1, end: 1 }, { firstLast: 'kling-video/o3/first-last-frame' }, 0.1, 'Une dos imágenes con un movimiento.'), needs: ['start'] }, // its only route is first-last: without a frame it has nothing to take
   hfVideo('kling-2.6', 'Kling 2.6 Pro', { start: 1 }, t2v('kling-video/v2.6/pro/text-to-video'), 0.07),
   hfVideo('minimax-hailuo-2.3', 'MiniMax Hailuo 2.3', { start: 1 }, t2v('minimax/hailuo-2.3/standard/text-to-video'), 0.045),
   hfVideo('wan-3', 'Wan 3.0', { start: 1 }, t2v('alibaba/wan-3.0/text-to-video'), 0.05),
   hfVideo('ltx-2.5-pro', 'LTX 2.5 Pro', {}, t2v('lightricks/ltx-2.5/text-to-video/pro'), 0.06), // text only: its route takes no first frame (open-higgsfield offers one and drops it)
   hfVideo('pixverse-6', 'PixVerse 6', { start: 1 }, t2v('pixverse/v6/text-to-video'), 0.05),
   hfVideo('grok-imagine-video', 'Grok Imagine Video 1.5', { reference: 8, video: 3 }, { reference: 'xai/grok-imagine-video/v1.5/reference-to-video' }, 0.05),
+  // V4.2 (25 Sep 2026): the twelve models open-higgsfield (b16a0ef) lists that we did not — same paths, same shared mapper. Their prices
+  // are estimates until the owner sees Higgsfield's own: the note says so.
+  { id: 'kling-3-motion-pro', engine: 'higgsfield', kind: 'video', name: 'Kling 3 Pro · Copiar movimiento', cost: 0.15, per: 's', note: 'Como Copiar movimiento, con más calidad. Precio aproximado.', needs: ['start', 'video'], roles: { start: 1, video: 1 }, settings: motionSet, hf: HF.motion('kling-video/v3/motion-control/pro') },
+  { ...hfVideo('kling-o1', 'Kling O1 · Primer y último fotograma', { start: 1, end: 1 }, { firstLast: 'kling-video/omni/first-last-frame' }, 0.1, 'Kling Omni: une una imagen inicial (y una final) con un movimiento. Precio aproximado.'), needs: ['start'] },
+  { ...hfVideo('kling-2.5', 'Kling 2.5 Turbo · Anima una foto', { start: 1 }, { image: 'kling-video/v2.5-turbo/standard/image-to-video' }, 0.05, 'Barato y rápido para animar una imagen. Precio aproximado.'), needs: ['start'] },
+  hfVideo('wan-2.6', 'Wan 2.6', { start: 1 }, t2v('wan/v2.6/text-to-video'), 0.04, 'Económico; texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('wan-2.7', 'Wan 2.7', { start: 1 }, t2v('wan/v2.7/text-to-video'), 0.045, 'Texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('wan-3-prime', 'Wan 3.0 Prime', { start: 1 }, t2v('alibaba/wan-3.0-prime/text-to-video'), 0.07, 'La versión alta de Wan 3. Precio aproximado.'),
+  hfVideo('minimax-h3', 'MiniMax H3', { start: 1 }, t2v('minimax/h3/text-to-video'), 0.06, 'Texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('ltx-2.5-fast', 'LTX 2.5 Fast', {}, t2v('lightricks/ltx-2.5/text-to-video/fast'), 0.03, 'Rápido y barato; solo texto. Precio aproximado.'), // text only, as LTX 2.5 Pro
+  hfVideo('happy-horse-1', 'Happy Horse 1.0', { start: 1 }, t2v('alibaba/happy-horse/text-to-video'), 0.04, 'De Alibaba; texto o una imagen inicial. Precio aproximado.'),
+  hfVideo('happy-horse-1.1', 'Happy Horse 1.1', { start: 1 }, t2v('alibaba/happy-horse/v1.1/text-to-video'), 0.045, 'La versión nueva de Happy Horse. Precio aproximado.'),
+  hfVideo('flux-3', 'Flux 3 (video)', { start: 1 }, t2v('blackforestlabs/flux-3/text-to-video'), 0.06, 'El video de Black Forest Labs; texto o una imagen inicial. Precio aproximado.'),
   { ...hfVideo('dop', 'DoP · Anima una foto', { start: 1 }, { image: 'higgsfield-ai/dop/lite' }, 0.05, 'Movimientos de cámara sobre una foto tuya.'), needs: ['start'] },
   { id: 'kling-2.5-fal', engine: 'fal', kind: 'video', name: 'Kling 2.5 Turbo (fal)', cost: 0.07, per: 's', roles: { start: 1, end: 1 }, settings: { aspectRatio: E(VID_ASPECT, '16:9'), duration: E(['5', '10'], '5') },
     fal: j => j.m.start[0] ? { path: 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video', body: { prompt: j.prompt, image_url: j.m.start[0], ...(j.m.end[0] ? { tail_image_url: j.m.end[0] } : {}), duration: j.s.duration } } : { path: 'fal-ai/kling-video/v2.5-turbo/pro/text-to-video', body: { prompt: j.prompt, duration: j.s.duration, aspect_ratio: j.s.aspectRatio } } },
