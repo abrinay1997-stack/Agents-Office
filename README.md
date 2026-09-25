@@ -14,16 +14,15 @@ machine.
 
 **Beta.** It works end to end. Expect rough edges and tell us about them in Issues.
 
-> **Versión modificada.** Esta copia es un fork de Agents Office (Sahni.ai), modificado por
 > **Abrinay · PanaClaw** (https://panaclaw.com): interfaz en español, configuración para el negocio
 > PanaClaw (brain en `brain-panaclaw/`, 35 puestos, skills y rutinas) y la oficina servida sin
 > simulación de demostración. El producto original, su marca y su licencia son de Sahni.ai.
 
-**License, in plain English:** Agents Office is a Sahni.ai product. It is free for personal and
+**License, in plain English:** Agents Office is a Abrinay product. It is free for personal and
 internal use. You may not sell it, resell it, or build a paid product on it. You may not rename it,
-rebrand it, strip the Sahni.ai mark or the notices, present it as your own, or wire it into or bundle
+rebrand it, strip the Abrinay mark or the notices, present it as your own, or wire it into or bundle
 it with another product, agent system or workforce. (Formal terms: PolyForm Noncommercial 1.0.0 plus
-Sahni.ai's additional terms — see [LICENSE](LICENSE).) The page carries the Sahni.ai mark at the
+Abrinay additional terms — see [LICENSE](LICENSE).) The page carries the Sahni.ai mark at the
 bottom-left and a licence line along the bottom; leave them in place.
 
 ## Latest updates
