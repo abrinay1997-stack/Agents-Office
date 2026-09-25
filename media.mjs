@@ -82,7 +82,7 @@ const HF = {
     throw new Error('el modelo no tiene ruta');
   },
 };
-const t2v = p => ({ text: p, image: p.replace(/\/text-to-video$/, '/image-to-video') });
+const t2v = p => /\/text-to-video$/.test(p) ? { text: p, image: p.replace(/\/text-to-video$/, '/image-to-video') } : { text: p }; // as open-higgsfield: an image route only where the path has one (LTX's «…/text-to-video/pro» has none — a start frame there went to the text route)
 const hfImage = (id, name, text, cost, note) => ({ id, engine: 'higgsfield', kind: 'image', name, cost, note, roles: { reference: 8 }, settings: { aspectRatio: E(HF_IMG_ASPECT, '1:1'), resolution: E(['1k', '2k', '4k'], '1k') }, hf: HF.paths({ text }) });
 const hfVideo = (id, name, roles, spec, perSec, note) => ({ id, engine: 'higgsfield', kind: 'video', name, cost: perSec, per: 's', note, roles, settings: { aspectRatio: E(VID_ASPECT, '16:9'), resolution: E(['720p', '1080p'], '720p'), duration: R(4, 10, 5) }, hf: HF.paths(spec) });
 const soulSet = { aspectRatio: E(SOUL_ASPECT, '1:1'), resolution: E(['720p', '1080p'], '720p'), batchSize: E(['1', '4'], '1'), enhancePrompt: B(false) };
@@ -131,7 +131,7 @@ const CATALOG = [
   hfVideo('kling-2.6', 'Kling 2.6 Pro', { start: 1 }, t2v('kling-video/v2.6/pro/text-to-video'), 0.07),
   hfVideo('minimax-hailuo-2.3', 'MiniMax Hailuo 2.3', { start: 1 }, t2v('minimax/hailuo-2.3/standard/text-to-video'), 0.045),
   hfVideo('wan-3', 'Wan 3.0', { start: 1 }, t2v('alibaba/wan-3.0/text-to-video'), 0.05),
-  hfVideo('ltx-2.5-pro', 'LTX 2.5 Pro', { start: 1 }, t2v('lightricks/ltx-2.5/text-to-video/pro'), 0.06),
+  hfVideo('ltx-2.5-pro', 'LTX 2.5 Pro', {}, t2v('lightricks/ltx-2.5/text-to-video/pro'), 0.06), // text only: its route takes no first frame (open-higgsfield offers one and drops it)
   hfVideo('pixverse-6', 'PixVerse 6', { start: 1 }, t2v('pixverse/v6/text-to-video'), 0.05),
   hfVideo('grok-imagine-video', 'Grok Imagine Video 1.5', { reference: 8, video: 3 }, { reference: 'xai/grok-imagine-video/v1.5/reference-to-video' }, 0.05),
   { ...hfVideo('dop', 'DoP · Anima una foto', { start: 1 }, { image: 'higgsfield-ai/dop/lite' }, 0.05, 'Movimientos de cámara sobre una foto tuya.'), needs: ['start'] },
@@ -328,6 +328,7 @@ const fromUrl = async url => { const r = await fetch(url, { signal: AbortSignal.
 const extOf = (mime, url, fallback = 'png') => { const s = (mime || '') + ' ' + (url || '').split('?')[0].slice(-6); return /jpe?g/.test(s) ? 'jpg' : /webp/.test(s) ? 'webp' : /webm/.test(s) ? 'webm' : /mp4|quicktime|\.mov/.test(s) ? 'mp4' : /png/.test(s) ? 'png' : fallback; };
 function friendly(msg, status) { // what the owner reads on the red tile
   const m = String(msg || '');
+  if (status === 403 && /Higgsfield/.test(m)) return 'sin créditos en Higgsfield: recarga en cloud.higgsfield.ai (' + m.slice(0, 100) + ')'; // Higgsfield answers 403 for «Not enough credits» (its own client), not for a bad key
   if (status === 401 || status === 403 || /unauthori[sz]ed|invalid (api )?key|forbidden/i.test(m)) return 'la key no es válida o no tiene permiso (' + m.slice(0, 120) + ')';
   if (status === 402 || /insufficient|credits?|balance|quota|billing/i.test(m)) return 'sin saldo o créditos en el servicio (' + m.slice(0, 120) + ')';
   if (status === 429 || /rate.?limit|too many/i.test(m)) return 'el servicio pide esperar un poco (demasiadas peticiones); reintenta en un minuto';
