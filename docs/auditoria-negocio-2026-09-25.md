@@ -4,7 +4,7 @@
 
 El dueño marcó 69. Leyenda: ✅ hecho · ⏳ marcado, pendiente · 📌 issue abierto · ▫️ no marcado.
 
-Hechos: 16 de 69 marcados.
+Hechos: 23 de 69 marcados.
 
 ## A. Seguridad y control
 
@@ -60,9 +60,9 @@ Hechos: 16 de 69 marcados.
 
 ## E. Disparadores e integraciones
 
-- ⏳ **E1** [crítica · semanas] **Solo se dispara por reloj.** Las rutinas solo corren a una hora. Faltan disparadores por evento: correo nuevo, formulario, pago recibido, WhatsApp entrante. Es lo primero que ofrecen Lindy y Zapier. _Nota del dueño: Totalmente de acuerdo._
-- ⏳ **E2** [alta · horas] **Sin webhook de entrada.** No hay una dirección a la que Zapier, Make, n8n o tu web puedan avisar «llegó esto».
-- ⏳ **E3** [alta · días] **Sin hablar con Dimitri por WhatsApp o Telegram.** Dimitri solo existe dentro de la página.
+- ✅ **E1** [crítica · semanas] **Solo se dispara por reloj.** Las rutinas solo corren a una hora. Faltan disparadores por evento: correo nuevo, formulario, pago recibido, WhatsApp entrante. Es lo primero que ofrecen Lindy y Zapier. _Nota del dueño: Totalmente de acuerdo._ → Disparadores por evento (`triggers.mjs`, `docs/disparadores.md`): formulario, pago de Stripe, WhatsApp (API de Meta), correo vía Zapier/Make/n8n. Crean la tarea al instante; evento repetido se toma una vez; tope por hora.
+- ✅ **E2** [alta · horas] **Sin webhook de entrada.** No hay una dirección a la que Zapier, Make, n8n o tu web puedan avisar «llegó esto». → `POST /api/hook/<id>` con `AO_HOOK_TOKEN` (variable de entorno); lo recibido va como DATOS, nunca como órdenes.
+- ✅ **E3** [alta · días] **Sin hablar con Dimitri por WhatsApp o Telegram.** Dimitri solo existe dentro de la página. → Dimitri en Telegram: cualquier mensaje va a Dimitri; si propone un plan, botón «Enviar a los jefes».
 - ▫️ **E4** [baja · semanas] **Sin agente de llamadas.** Lindy contesta y hace llamadas con voz natural.
 - ▫️ **E5** [alta · días] **Conectar Gmail o el CRM pide la terminal.** Los conectores salen de lo que tenga instalado Claude Code (claude mcp add). No hay un catálogo con «Conectar» de un clic.
 - ▫️ **E6** [alta · días] **Sin cadenas entre departamentos.** Lo que entrega Ventas no dispara solo el trabajo de Entregas o Contabilidad (propuesta aceptada → factura → bienvenida).
@@ -73,15 +73,15 @@ Hechos: 16 de 69 marcados.
 
 ## F. Avisos y teléfono
 
-- ⏳ **F1** [crítica · días] **Si cierras la pestaña, no te enteras de nada.** No hay avisos al teléfono, por correo ni por WhatsApp. Un borrador que espera tu OK espera hasta que abras la oficina. _Nota del dueño: Bot de Telegram de Dimitri para el dueño; tokens en variables secretas._
-- ⏳ **F2** [alta · horas] **Sin notificaciones del navegador.** La página no usa las notificaciones del sistema cuando algo espera tu aprobación o falla. _Nota del dueño: Se resuelve con Telegram._
+- ✅ **F1** [crítica · días] **Si cierras la pestaña, no te enteras de nada.** No hay avisos al teléfono, por correo ni por WhatsApp. Un borrador que espera tu OK espera hasta que abras la oficina. _Nota del dueño: Bot de Telegram de Dimitri para el dueño; tokens en variables secretas._ → Telegram: aprobaciones, fallos y avisos llegan al teléfono con la oficina cerrada; token e ids solo en variables de entorno.
+- ✅ **F2** [alta · horas] **Sin notificaciones del navegador.** La página no usa las notificaciones del sistema cuando algo espera tu aprobación o falla. _Nota del dueño: Se resuelve con Telegram._ → Resuelto con Telegram, como pediste (llega aunque el navegador esté cerrado).
 - ▫️ **F3** [alta · horas] **Sin parte diario.** No llega un resumen único cada mañana: qué se hizo, qué espera tu OK y qué falló.
 - ▫️ **F4** [media · días] **No se instala como app en el teléfono.** No es una PWA: no tiene icono en la pantalla de inicio ni se abre como app.
 - ▫️ **F5** [media · días] **Sin alertas de urgencia.** Un cliente molesto o un pago rechazado no sube de prioridad ni te avisa al momento.
-- ⏳ **F6** [baja · horas] **Sin horario de no molestar.** No se puede decir «de 20:00 a 7:00 solo lo urgente».
+- ✅ **F6** [baja · horas] **Sin horario de no molestar.** No se puede decir «de 20:00 a 7:00 solo lo urgente». → `telegram.quiet` (p. ej. 21:00–07:00) y `/silencio N`: guarda lo no urgente y lo manda en un resumen al terminar.
 - ▫️ **F7** [alta · días] **La oficina 3D pesa en el teléfono.** En nuestras pruebas, una segunda página 3D tardó unos 30 s en cargar. No hay una vista ligera, sin 3D, para el móvil.
 - ▫️ **F8** [media · horas] **La pestaña no cuenta pendientes.** El título de la pestaña no dice «(3) Agents Office» cuando hay aprobaciones.
-- ⏳ **F9** [alta · días] **Aprobar con un toque desde el aviso.** Cuando haya avisos, lo ideal es aprobar o rechazar desde el propio aviso, sin abrir la oficina.
+- ✅ **F9** [alta · días] **Aprobar con un toque desde el aviso.** Cuando haya avisos, lo ideal es aprobar o rechazar desde el propio aviso, sin abrir la oficina. → Botones en el propio mensaje: ✅ Aprobar y enviar, ↩ Devolver (pide la nota), 👁 Ver completo, ↻ Reintentar.
 - ▫️ **F10** [baja · días] **Solo en español.** El sistema de idiomas está en su fase 1: no hay cambio de idioma.
 
 ## G. Aprobaciones

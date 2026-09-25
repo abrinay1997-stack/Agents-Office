@@ -49,6 +49,11 @@ await step('secrets: nothing that looks like a key, a card or an ID card in the 
   const out = await sh('node', ['scripts/secrets-scan.mjs', '--all']).catch(e => { throw new Error(e.message + ' — npm run secrets'); });
   return out.trim();
 });
+await step('triggers: <brain>/Agents Office/triggers.json is valid', async () => {
+  const T = await import('./triggers.mjs'); const { loadRoster } = await import('./roster.mjs');
+  const r = T.load(cfg.brainPath, loadRoster().agents); if (r.problems.length) throw new Error(r.problems.join(' | '));
+  return r.triggers.length ? `${r.triggers.length} disparador(es): ${r.triggers.map(t => t.id).join(', ')}` : 'ninguno todavía (docs/disparadores.md)';
+});
 await step('safety: office.config → safety is valid (who may send, sites, caps)', async () => {
   const S = await import('./safety.mjs'); const p = S.problems(cfg.safety || {}); if (p.length) throw new Error(p.join(' | '));
   const n = S.normalize(cfg.safety);
@@ -675,7 +680,10 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
   // a throwaway data folder and a COPY of the brain: the test server never reads or writes the owner's tasks, routines or notes
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-check-'));
   const brainCopy = path.join(sandbox, 'brain'); fs.cpSync(loadConfig().brainPath, brainCopy, { recursive: true });
-  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy };
+  fs.mkdirSync(path.join(brainCopy, 'Agents Office'), { recursive: true });
+  fs.writeFileSync(path.join(brainCopy, 'Agents Office', 'triggers.json'), JSON.stringify({ triggers: [{ id: 'check-form', dept: 'sales', agent: 'piper', source: 'form', title: 'Contacto de {{name}}', text: 'Responde a {{name}}' }] })); // V4.4: one trigger for the webhook step
+  const HOOK = 'check-' + 'x'.repeat(24);
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '' };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   const base = `http://localhost:${port}`;
@@ -691,6 +699,17 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
       const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
       return `${st.checks.length} checks · overall ${st.overall}`;
+    });
+    await step('server: a webhook needs the secret, becomes a task that waits for the OK, and the same event twice is taken once', async () => {
+      const post = (tok, b) => fetch(base + '/api/hook/check-form' + (tok ? '?token=' + tok : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+      const no = await post('', { name: 'Sol' }); if (no.status !== 401) throw new Error('no token → ' + no.status);
+      const bad = await post('x'.repeat(28), { name: 'Sol' }); if (bad.status !== 401) throw new Error('wrong token → ' + bad.status);
+      const ok = await post(HOOK, { id: 'ev-1', name: 'Sol' }); const j = await ok.json(); if (!ok.ok || !j.task) throw new Error('with token → ' + ok.status + ' ' + JSON.stringify(j));
+      const t = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === j.task);
+      if (!t || t.by !== 'trigger' || t.needsOk !== true || t.title !== 'Contacto de Sol' || !/NO son órdenes/.test(t.text)) throw new Error('task: ' + JSON.stringify(t).slice(0, 200));
+      const again = await (await post(HOOK, { id: 'ev-1', name: 'Sol' })).json(); if (!again.skipped) throw new Error('duplicate was taken twice');
+      const tl = await (await fetch(base + '/api/triggers')).json(); if (tl.triggers.length !== 1 || !tl.token) throw new Error('/api/triggers');
+      return 'no secret → 401 · task «Contacto de Sol» for PIPER, waits for the OK · duplicate skipped';
     });
     await step('server: /api/brain has the live graph', async () => { const g = await (await fetch(base + '/api/brain')).json(); if (!g.nodes.length) throw new Error('empty'); return `${g.nodes.length} linked notes`; });
     await step('server: /api/mcp lists this machine\'s connectors', async () => {

@@ -245,6 +245,20 @@ Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs
 - **Volver atrás:** `Volver-Atras.bat` deja el código como antes del último `Actualizar-Oficina.bat` (que anota la versión en `data/version-anterior.txt`).
 - **Despliegue (preparado, no activado):** `Dockerfile`, `railway.json`, `AO_HOST`, `AO_DATA`. Léase `docs/despliegue.md`; nada se expone sin cerrar el issue #2.
 
+## Telegram y disparadores (V4.4, 25 sep 2026)
+
+- **Dimitri en Telegram** (`telegram.mjs`, guía en `docs/telegram.md`): se enciende con dos variables de entorno, `TELEGRAM_BOT_TOKEN` y `TELEGRAM_OWNER_ID`, **nunca en archivos**.
+  - Al teléfono llegan las aprobaciones (✅ / ↩), los fallos (↻) y los avisos.
+  - Cualquier otro mensaje va a Dimitri. Comandos: `/estado`, `/pendientes`, `/tarea ventas: …`, `/silencio 2`.
+  - `office.config.json → telegram.quiet` es el horario de no molestar y `telegram.notify` dice qué avisa.
+  - Solo los ids de `TELEGRAM_OWNER_ID` pueden usar el bot. Todo pasa por la API local de la oficina, con las mismas reglas que la página.
+- **Disparadores** (`triggers.mjs`, guía en `docs/disparadores.md`): `<brain>/Agents Office/triggers.json` define qué tarea crea cada evento.
+  - Llega por `POST /api/hook/<id>` con la clave `AO_HOOK_TOKEN` (variable de entorno).
+  - Fuentes: `form`, `stripe`, `whatsapp`, `email` (Zapier/Make/n8n), `generic`.
+  - Lo recibido va al agente como bloque de DATOS («no son órdenes»). Si trae órdenes escondidas, la tarea espera tu OK.
+  - Un evento repetido se toma una sola vez; `perHour` pone un tope.
+  - El owner dice «cuando llegue un formulario / un pago / un WhatsApp, …»: escribe el disparador en ese archivo (sin secretos) y corre `npm run check`.
+
 ## Agent Teams
 
 When the owner says "as a team", "get the team on it", "spawn three teammates to …", or presses TEAM in the bar, the department **lead** takes the task and splits it into two to `teams.max` independent pieces on the desks whose `does` or skills fit; the pieces run at the same time, one Claude process each; teammates may leave one-line notes (`@lead: …`, `@<id>: …`) which reach the lead; the lead writes the final from the pieces. This is the office's own build of the shape (lead · teammates · shared piece list · notes) from separate headless Claude sessions — Claude Code's own agent teams only spawn in an interactive terminal, so they are not what runs here. Nothing to write for a team task; it is the same roster, briefs and skills. To make a seat a better teammate, improve its `does` (the lead splits by it) and its skills. A team routine is `"team": true` in `routines.json` with the lead as `agent`.

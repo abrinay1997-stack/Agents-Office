@@ -55,6 +55,8 @@ import * as sub from './sub.mjs';
 import * as media from './media.mjs';
 import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
+import * as telegram from './telegram.mjs';
+import * as triggers from './triggers.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 
@@ -71,7 +73,7 @@ const SAFETY = () => safety.normalize(cfg.safety);
 // V4.4 (B2, B6, B7): the office's notices — something the owner should know without opening a task (a run done late, a retry,
 // Claude's login gone, a connector down). data/notices.json, the last 200; the page shows them and Telegram (tanda 3) sends them.
 const NOTICES = path.join(DATA, 'notices.json');
-const noticeHooks = [];
+const noticeHooks = [], taskHooks = []; // V4.4: Telegram (and later other channels) listen here
 function loadNotices() { try { return JSON.parse(fs.readFileSync(NOTICES, 'utf8')); } catch { return []; } }
 function notice(kind, text, { level = 'info', task = null, key = null } = {}) {
   try {
@@ -605,7 +607,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
     delete task.retryAt; delete task.lastError; delete task.partial; claudeLogin.ok = true;
     const g = out.guard || {};
     if (g.blocked?.length || g.taint) task.guard = { blocked: (g.blocked || []).slice(0, 12), taint: g.taint || null, at: Date.now(), approve: !!approve };
-    else delete task.guard;
+    else if (!task.trigger) delete task.guard; // a trigger's warning (what arrived had hidden orders) stays on the task
     // V4.4 (A3): under «aprobar» a task that tried to send without the OK is not lost — it waits for the OK with its draft
     const wanted = (g.blocked || []).some(b => b.code === 'no-writes');
     if (!approve && !task.needsOk && wanted && !g.taint && safety.modeFor(cfg.safety, AGENTS.find(x => x.id === task.agent)?.department) !== 'nunca') { task.needsOk = true; task.heldForOk = true; }
@@ -632,6 +634,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
   stopping.delete(task.id);
   list = load(); const i = list.findIndex(t => t.id === task.id); if (i >= 0) list[i] = task; save(list);
   setImmediate(() => { for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) attachJob(j); }); // one that finished while this run was being saved
+  for (const h of taskHooks) try { h({ ...task, agentName: agentName(task.agent), deptName: DEPTS[task.dept]?.name || task.dept }); } catch {} // V4.4: a draft waiting, a failure, a finished task → Telegram
   console.log(`${task.error ? '✗' : task.state === 'waiting' ? '⏸' : '✓'} ${task.id} ${task.error ? 'failed' : task.state === 'waiting' ? 'waiting for your OK' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
   return task;
 }
@@ -760,6 +763,38 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
 // and a hostile DNS name pointed at 127.0.0.1 is refused by the Host check (DNS rebinding).
 const HOST = cfg.host || '127.0.0.1';
+/* ---------- V4.4 (E1, E2): triggers — a webhook turns an event (a form, a payment, a WhatsApp, a new email) into a task ---------- */
+const TRIG_STATE = path.join(DATA, 'triggers.json');
+async function hookIn(req, res, url, id) {
+  const given = req.headers['x-office-token'] || url.searchParams.get('token') || String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (req.method === 'GET') { // WhatsApp Cloud API proves the address with a GET before sending anything
+    if (url.searchParams.get('hub.mode') === 'subscribe' && triggers.authorized(url.searchParams.get('hub.verify_token'))) { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end(String(url.searchParams.get('hub.challenge') || '')); }
+    return json(res, 403, { error: 'refused' });
+  }
+  if (req.method !== 'POST') return json(res, 405, { error: 'POST only' });
+  if (!triggers.authorized(given)) { console.warn(`refused hook ${id} (bad or missing token)`); return json(res, 401, { error: process.env.AO_HOOK_TOKEN ? 'token incorrecto' : 'esta oficina no acepta webhooks: falta la variable AO_HOOK_TOKEN' }); }
+  const { triggers: list, problems } = triggers.load(BRAIN, AGENTS), tr = list.find(t => t.id === id);
+  if (!tr) { const p = problems.find(x => x.startsWith(id + ':') || x.includes(`«${id}»`)); return json(res, 404, { error: p || `no hay un disparador «${id}» en triggers.json` }); }
+  if (tr.paused) return json(res, 202, { ok: true, skipped: 'pausado' });
+  let raw = ''; try { raw = await new Promise((ok, ko) => { let b = '', n = 0; req.on('data', d => { n += d.length; if (n > 1e6) ko(new Error('demasiado grande')); else b += d; }); req.on('end', () => ok(b)); req.on('error', ko); }); } catch (e) { return json(res, 413, { error: e.message }); }
+  let data = {}; const ct = String(req.headers['content-type'] || '');
+  try { data = /json/.test(ct) || /^\s*[{[]/.test(raw) ? JSON.parse(raw || '{}') : Object.fromEntries(new URLSearchParams(raw)); } catch { return json(res, 400, { error: 'el cuerpo no es JSON ni un formulario' }); }
+  const a = triggers.adapt(tr.source, data);
+  if (a.skip) return json(res, 200, { ok: true, skipped: a.skip });
+  let st = {}; try { st = JSON.parse(fs.readFileSync(TRIG_STATE, 'utf8')); } catch {}
+  const adm = triggers.admit(st, tr, a.eventId); fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(TRIG_STATE + '.tmp', JSON.stringify(st)); fs.renameSync(TRIG_STATE + '.tmp', TRIG_STATE);
+  if (!adm.ok) { if (!adm.dup) notice('trigger', `El disparador «${id}» se frenó: ${adm.why}.`, { level: 'warn', key: 'trig-' + id }); return json(res, adm.dup ? 200 : 429, { ok: adm.dup, skipped: adm.why }); }
+  const text = triggers.taskText(tr, a), inj = triggers.suspicious(a);
+  const fixed = tr.agent && AGENTS.find(x => x.id === tr.agent);
+  const r = fixed ? { agent: fixed.id, title: (tr.title || a.summary || tr.text).slice(0, 90), plan: [], eta: 15, why: 'disparador ' + id } : await route(tr.dept, text);
+  const asTeam = TEAMS.enabled && tr.team;
+  const task = { id: nid(), dept: tr.dept, agent: asTeam ? leadOf(tr.dept).id : r.agent, title: tr.title ? triggers.render(tr.title, a.fields).slice(0, 90) : r.title, text, plan: r.plan || [], eta: r.eta || 15, why: r.why, state: 'next', addedAt: Date.now(), by: 'trigger', trigger: id, needsOk: tr.needsOk || !!inj, team: asTeam ? { lead: leadOf(tr.dept).id, asked: 'trigger' } : undefined, ...(inj ? { guard: { blocked: [], taint: { why: inj, tool: 'webhook ' + id }, at: Date.now() } } : {}) };
+  const l = load(); l.push(task); save(l);
+  console.log(`⚡ ${task.id} trigger ${id} → ${task.agent}: ${task.title}${inj ? ' (⚠ ' + inj + ')' : ''}`);
+  if (inj) notice('trigger', `Lo que llegó por «${id}» ${inj}. La tarea «${task.title}» esperará tu visto bueno.`, { level: 'warn', task: task.id });
+  setImmediate(pump);
+  return json(res, 200, { ok: true, task: task.id, title: task.title });
+}
 const LOCAL_NAME = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 function trusted(req) {
   const host = String(req.headers.host || '');
@@ -891,7 +926,7 @@ const agentsOut = () => { const setup = setupMap(); return AGENTS.map(a => ({ id
   interviewer: leadOf(a.department).id === a.id, setUp: setup[a.department] })); };
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
-  const why = trusted(req);
+  const why = url.pathname.startsWith('/api/hook/') ? '' : trusted(req); // V4.4 (E2): a webhook comes from another system — it proves itself with AO_HOOK_TOKEN instead
   if (why) { console.warn(`refused ${req.method} ${url.pathname} (${why}: ${why === 'host' ? req.headers.host : why === 'origin' ? req.headers.origin : req.headers['content-type'] || 'none'})`); return json(res, 403, { error: `refused: ${why}` }); }
   try {
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/command-centre-v2.html' || url.pathname === '/dark')) {
@@ -1044,6 +1079,9 @@ const server = http.createServer(async (req, res) => {
       if (!dueAt) setImmediate(pump);
       return json(res, 200, task);
     }
+    if (url.pathname === '/api/triggers' && req.method === 'GET') { const t = triggers.load(BRAIN, AGENTS); return json(res, 200, { ...t, path: triggers.file(BRAIN), token: !!process.env.AO_HOOK_TOKEN && process.env.AO_HOOK_TOKEN.length >= 16, url: `/api/hook/<id>` }); }
+    const hk = url.pathname.match(/^\/api\/hook\/([a-z0-9-]+)$/);
+    if (hk) return hookIn(req, res, url, hk[1]); // V4.4 (E1, E2)
     const m = url.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(run|revise|approve|reject|stop|archive|repeat))?$/);
     if (m && m[2] === 'stop' && req.method === 'POST') { // the owner stops a running agent: its claude processes (and their MCP servers) are killed
       const t = load().find(x => x.id === m[1]);
@@ -1258,6 +1296,8 @@ const server = http.createServer(async (req, res) => {
 server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? `Port ${cfg.port} is already in use — is another office running? Close it, or set PORT.` : e.message); process.exit(1); });
 server.listen(cfg.port, HOST, () => {
   console.log(`Agents Office ${version} → http://localhost:${cfg.port}`);
+  { const tg = telegram.start({ port: cfg.port, cfg: { ...cfg, deputy: { name: DEPUTY } }, dataDir: DATA, onTask: f => taskHooks.push(f), onNotice: f => noticeHooks.push(f) }); // V4.4: Dimitri on Telegram (tokens only in environment variables)
+    console.log(tg ? `  telegram: on — ${tg.owners} owner id(s); approvals, failures and notices go to the phone` : process.env.TELEGRAM_BOT_TOKEN ? '  telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_OWNER_ID is missing or the token looks wrong — see docs/telegram.md' : '  telegram: off (docs/telegram.md: two environment variables turn it on)'); }
   if (!/^(127\.0\.0\.1|localhost|::1)$/.test(HOST)) console.warn(`  ⚠ ESCUCHANDO EN ${HOST}: la oficina NO tiene inicio de sesión todavía (issue #2). Cualquiera que llegue a esta dirección puede mandar a los agentes. Úsala solo en una red de confianza o detrás de un acceso con contraseña (docs/despliegue.md).`);
   console.log(`  business: ${cfg.name}   brain: ${BRAIN} (${graph.notes} notes, ${graph.links.length} links)   claude: ${backend} · ${modelName(cfg.model)}${cfg.effort ? ' · effort ' + cfg.effort : ''} by default (routing on Sonnet)`);
   getUsage(true).then(u => console.log(u.source === 'claude' ? `  usage: session ${u.session?.percent ?? '—'}% · week ${u.week?.percent ?? '—'}% (your Claude plan, as Claude Code shows it)` : `  usage: Claude's gauge unavailable (${u.reason}) — showing the office's own count`)).catch(() => {});
