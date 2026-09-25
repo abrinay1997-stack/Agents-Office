@@ -68,10 +68,22 @@ export function initDetail(ctx) {
       ${t.read?.length && t.state !== 'next' && t.state !== 'scheduled' ? `<p class="td-src">📚 Notas que leyó: ${t.read.map(n => esc(n)).join(' · ')}</p>` : ''}
       ${t.state === 'done' && !t.error && !t.piece && isLive() ? voteHTML(t) : ''}
       ${approvalsHTML(t)}
+      ${live && t.sid && !t.piece ? peopleHTML(t) : ''}
       ${t.state === 'waiting' ? `<label class="td-lab" for="tdFb">Si lo devuelves, ¿qué debe cambiar?</label><textarea id="tdFb" class="td-text" rows="2" placeholder="Ej.: más corto, sin el segundo párrafo, con el precio de Launch"></textarea>` : ''}
       <div class="td-acts">${actions(t, editable, live)}</div>
       ${t.state === 'done' ? `<label class="td-chk"><input type="checkbox" class="td-withnote"${t.note ? '' : ' disabled'}> también mover su nota del Cerebro a la papelera</label>` : ''}
       <div class="td-msg" aria-live="polite"></div>`;
+  }
+  // V4.4 (audit I3, I4, I6): people on the team — who has it now, hand it to a person, comments with @mentions
+  let team = null;
+  function loadTeam() { if (team !== null) return; team = []; fetch('/api/team').then(r => r.json()).then(j => { team = j.people || []; if (cur) render(); }).catch(() => {}); }
+  function peopleHTML(t) {
+    loadTeam();
+    const who = t.person ? `<p class="td-src">👤 La lleva <b>${esc(t.person)}</b>${t.handoff?.from && t.handoff.from !== 'la página' ? ` — ${esc(agentOf(t.handoff.from)?.name || t.handoff.from)} la pasó` : ''}${t.handoff?.why ? `: ${esc(t.handoff.why)}` : ''}. Los agentes no la tocan mientras tanto.</p>` : '';
+    const canPass = t.state !== 'doing' && t.state !== 'waiting';
+    const pass = canPass ? `<div class="td-pass"><label class="td-lab" for="tdPerson">${t.person ? 'Pasarla a otra persona' : 'Pasar a una persona'}</label><div class="td-row"><select id="tdPerson"><option value="">— elige —</option><option value="Tú">Yo mismo</option>${(team || []).map(p => `<option${p.name === t.person ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select><button type="button" class="td-btn" data-a="person">Pasar</button>${t.person ? '<button type="button" class="td-btn" data-a="unperson">Devolver a los agentes</button>' : ''}</div>${team && !team.length ? '<p class="td-note">Añade a tu equipo en Ajustes (,) → Equipo, con su Telegram para avisarles.</p>' : ''}</div>` : '';
+    const cs = (t.comments || []).map(c => `<li><b>${esc(c.by)}</b> <small>${esc(new Date(c.at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</small><div>${esc(c.text)}</div></li>`).join('');
+    return `<div class="td-people">${who}${pass}<label class="td-lab" for="tdCom">Comentarios${t.comments?.length ? ` (${t.comments.length})` : ''}</label>${cs ? `<ul class="td-coms">${cs}</ul>` : ''}<div class="td-row"><textarea id="tdCom" class="td-text" rows="2" placeholder="Escribe una nota; @nombre avisa a esa persona"></textarea><button type="button" class="td-btn" data-a="comment">Comentar</button></div></div>`;
   }
   // V4.4: what the office's guard stopped in this task — the owner sees every refused send and any hidden orders an email or a page carried
   function guardHTML(t) {
@@ -105,6 +117,7 @@ export function initDetail(ctx) {
     if (t.state === 'doing') out.push(b('stop', 'Detener al agente', 'warn'));
     if (t.state === 'waiting') { out.push(b('approve', 'Aprobar y enviar', 'pri')); out.push(b('reject', 'Devolver con la nota')); if (t.sid && isLive() && !editingDraft) out.push(b('editdraft', 'Editar el borrador')); }
     if (t.state === 'done' && !t.piece) out.push(b('repeat', t.error ? 'Reintentar' : 'Repetir', t.error ? 'pri' : ''));
+    if (t.state === 'done' && !t.error && !t.piece && t.result && live && t.sid) out.push(t.example ? '<span class="td-tag">⭐ Es un ejemplo de este agente</span>' : b('example', '⭐ Guardar como ejemplo')); // H5
     out.push(b('chat', 'Abrir el chat del agente'));
     if (t.note && openNote) out.push(b('note', 'Ver su nota en el Cerebro'));
     if (t.dueAt && openCalendar) out.push(b('cal', 'Verla en el calendario'));
@@ -148,6 +161,9 @@ export function initDetail(ctx) {
     if (a === 'stop') { if (!confirm(`¿Detener a ${agentOf(t.agent)?.name || 'este agente'}? Lo que llevaba hecho se pierde.`)) return; return run('stop', {}, 'Detenido.'); }
     if (a === 'editdraft') { editingDraft = true; render(); el.querySelector('#tdDraft')?.focus(); return; } // G1
     if (a === 'canceldraft') { editingDraft = false; render(); return; }
+    if (a === 'example') { const r = await post(`/tasks/${encodeURIComponent(t.sid)}/example`); if (r.error) return msg(r.error, true); t.example = true; render(); return msg(r.text); }
+    if (a === 'comment') { const text = el.querySelector('#tdCom').value.trim(); if (!text) return el.querySelector('#tdCom').focus(); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/comment`, { text }); if (r.error) return msg(r.error, true); t.comments = r.comments; render(); return msg('Comentario guardado.'); }
+    if (a === 'person' || a === 'unperson') { const person = a === 'person' ? el.querySelector('#tdPerson').value : ''; if (a === 'person' && !person) return el.querySelector('#tdPerson').focus(); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/person`, { person }); if (r.error) return msg(r.error, true); t.person = r.person; if (r.person && t.state === 'done') t.state = 'next'; render(); return msg(r.person ? `La lleva ${r.person}.` : 'Vuelve a los agentes.'); }
     if (a === 'savedraft') { const d = el.querySelector('#tdDraft').value.trim(); if (!d) return msg('El borrador quedó vacío.', true); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/draft`, { draft: d }); if (r.error) return msg(r.error, true); Object.assign(t, { draft: r.task.draft, result: r.task.result, editedDraft: true, preview: r.task.preview, risk: r.task.risk, approvals: r.task.approvals }); editingDraft = false; render(); return msg('Guardado. Si lo apruebas, sale tu versión.'); }
     if (a === 'vote-up') { voting = false; const r = await post(`/tasks/${encodeURIComponent(t.sid)}/vote`, { vote: t.vote === 'up' ? null : 'up' }); if (!r.error) t.vote = r.vote; render(); return msg(t.vote === 'up' ? 'Gracias: cuenta para la calidad de este agente.' : ''); }
     if (a === 'vote-down') { voting = true; render(); el.querySelector('#tdWhy')?.focus(); return; }

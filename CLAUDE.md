@@ -50,6 +50,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.4 (25 sep, misma rama): la auditoría de negocio (`docs/auditoria-negocio-2026-09-25.md`, 100 puntos): los 69 que marcó el dueño, hechos en seis tandas (seguridad y tests, confiabilidad, Telegram y disparadores, costos, aprobaciones y calidad, conocimiento y equipo). A1 (inicio de sesión) queda como issue #2.
 - V4.3 (25 sep, misma rama): la auditoría profunda (`docs/auditoria-profunda-2026-09-25.md`): los 30 errores de accesibilidad visual más críticos, arreglados; axe pasa de 8 fallos críticos, 226 controles anidados y 244 contrastes bajos a 0. Anillo de foco en todos los campos, lo pausado y saltado se lee (sin atenuar), objetivos de 24 px, nada bajo 10,5 px, el Estudio cabe a 320 px, el Cerebro y Dimitri siempre legibles. Regla nueva: un botón nunca va dentro de otro elemento con rol de botón; si una fila tiene sus propios botones, el que la abre es su título.
 - V4.2 (24–25 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos): los 98 arreglados (A30 en parte). Lo principal:
   - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió); la ventanita de la rutina con el título entero y todas sus acciones a la vista; cancelar una tarea o eliminar una rutina sin pregunta, con DESHACER 8 segundos; los días de una rutina como siete botones (L M X J V S D); mover una ejecución pregunta «solo esta vez» (se salta y queda una tarea en su lugar, mismo agente) o «siempre»; lo que está en marcha va en una franja «SIN TERMINAR»; los avisos salen abajo, junto al trabajo; las cifras filtran; la semana puede empezar el domingo y dice su número; las rutinas se buscan y van por departamento (clic las abre, 👁 muestra solo sus días); la búsqueda lista resultados con fecha; el botón Rutinas en el teléfono; «Suscribirme (.ics)» (`/api/calendar.ics`).
@@ -306,6 +307,29 @@ Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs
 - **Lecciones:** las repetidas se funden solas; con más de 15, un aviso propone pasarlas a la skill.
 - **Enrutador:** cuando mueves una tarea a otro agente, se guarda en `data/routing.json`. El enrutador lee los casos parecidos antes de elegir.
 
+## Conocimiento, equipo y negocio (V4.4, 25 sep 2026)
+
+- **Ajustes** (tecla `,`, el engranaje del dock; `settings.mjs`, `src/settings.js`): lo que antes era JSON, en formularios que se explican. Guarda en `office.config.local.json` (en el check, `AO_LOCAL_CONFIG` lo apunta al sandbox). Los que llevan ↻ se aplican al reiniciar. Un campo nuevo es una línea en `settings.FIELDS`.
+- **Cifras de la empresa** (Ajustes): `<cerebro>/Agents Office/cifras.json`. Todos los agentes las leen antes de cada trabajo y las usan tal cual. Un precio o una comisión va aquí, nunca en una skill.
+- **Voz de marca** (Ajustes): la nota `voice` del Cerebro; la leen todos.
+- **Preparar desde mi web** (Ajustes, `POST /api/onboard/company`): el jefe de Operaciones lee la web y escribe `00-Empresa/{perfil,oferta,voz,faq,clientes}.md`, instrucciones para cada jefe sin brief y cifras para confirmar.
+- **Documentos al Cerebro** (`documents.mjs`): «⬆ Subir documento» en el Cerebro, o soltar el archivo encima. PDF, Word, Excel, CSV o texto (hasta 15 MB) se vuelven `<cerebro>/Documentos/<nombre>.md`. Se convierte en esta máquina. Un PDF escaneado se rechaza con la razón.
+- **Búsqueda del Cerebro** (`knowledge.mjs`): por pasajes (BM25), y por significado si hay `GEMINI_API_KEY`, `OPENAI_API_KEY` o `VOYAGE_API_KEY` (vectores en `data/embeddings.json`). El agente recibe los párrafos que importan. Una nota con `actualizado:` de más de 180 días (o sin tocar ese tiempo) llega con aviso de «puede estar vieja» y sale en «Notas que conviene revisar».
+- **Mismo cliente:** antes de trabajar, el agente ve lo que otros departamentos hicieron con ese cliente en los últimos 30 días.
+- **Ejemplos:** «⭐ Guardar como ejemplo» en una tarea terminada. Se guarda en `<cerebro>/Agents Office/ejemplos/<agente>/`; el agente los lee antes de trabajar.
+- **Personas del equipo** (Ajustes → Equipo: nombre, Telegram, departamento):
+  - una tarea puede **pasarse a una persona**: los agentes no la tocan y la persona recibe un aviso por Telegram;
+  - el agente también puede pasarla, escribiendo `PASAR A UNA PERSONA: <nombre> — <por qué>`;
+  - **comentarios** en cada tarea; `@nombre` avisa a esa persona.
+- **Cómo va el negocio** (tecla N, `business.mjs`, `data/kpis.json`): los indicadores del dueño, con tendencia y meta. Un valor llega de tres formas:
+  - a mano;
+  - por webhook: `POST /api/kpi/<id>` con `AO_HOOK_TOKEN`;
+  - de una entrega con una línea `KPI ventas_semana = 1.250` (una rutina lo mantiene al día).
+  - Debajo, las cifras de la oficina: terminados, respuesta a eventos, esperando OK, horas ahorradas.
+- **Resumen del lunes:** cada lunes a las 8, Dimitri deja el resumen de la semana, también por Telegram. Se apaga en Ajustes (`deputy.weekly`).
+- **Buscar en todo** (Ctrl+K, `src/search.js`): tareas y entregables, agentes, rutinas, notas e imágenes.
+- **Instalar en otra computadora:** `Instalar-Oficina.bat` y `docs/instalar.md`.
+
 ## Agent Teams
 
 When the owner says "as a team", "get the team on it", "spawn three teammates to …", or presses TEAM in the bar, the department **lead** takes the task and splits it into two to `teams.max` independent pieces on the desks whose `does` or skills fit; the pieces run at the same time, one Claude process each; teammates may leave one-line notes (`@lead: …`, `@<id>: …`) which reach the lead; the lead writes the final from the pieces. This is the office's own build of the shape (lead · teammates · shared piece list · notes) from separate headless Claude sessions — Claude Code's own agent teams only spawn in an interactive terminal, so they are not what runs here. Nothing to write for a team task; it is the same roster, briefs and skills. To make a seat a better teammate, improve its `does` (the lead splits by it) and its skills. A team routine is `"team": true` in `routines.json` with the lead as `agent`.
@@ -316,7 +340,7 @@ The owner's right hand, above the six departments: the ◆ tag beside the Brain 
 
 ## The top bar (V4, 24 Sep 2026)
 
-Brand (the business name) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta), approvals ⚠ (it counts drafts; each click goes to the next one), the Estudio (clapperboard, E), the calendar (P), the keyboard shortcuts (?), and the task panel's switch (T). A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key. The plan's usage (session · week) sits in the bottom-left corner.
+Brand (the business name) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta), approvals ⚠ (it counts drafts; each click goes to the next one), the Estudio (clapperboard, E), the calendar (P), the health light (O), the business (N), the settings (`,`), the keyboard shortcuts (?, hidden under 760 px, where «?» still works), and the task panel's switch (T). Ctrl+K searches everything. A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key. The plan's usage (session · week) sits in the bottom-left corner.
 
 ## The Estudio (images and video)
 

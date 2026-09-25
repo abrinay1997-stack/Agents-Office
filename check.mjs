@@ -692,7 +692,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     { id: 'wait1', dept: 'sales', agent: 'piper', title: 'Propuesta para Sol', text: 'Propuesta', state: 'waiting', needsOk: true, draft: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', result: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', addedAt: now, waitingAt: now },
     { id: 'wait2', dept: 'sales', agent: 'folo', title: 'Seguimiento a Luna', text: 'Seguimiento', state: 'waiting', needsOk: true, draft: 'Hola Luna', result: 'Hola Luna', addedAt: now, waitingAt: now },
     { id: 'done1', dept: 'fin', agent: 'invo', title: 'Lista de facturas', text: 'Lista', state: 'done', result: 'Tres facturas', addedAt: now, doneAt: now }])); }
-  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '' };
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   const base = `http://localhost:${port}`;
@@ -704,7 +704,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, copy)', async () => {
       const st = await (await fetch(base + '/api/status')).json();
       const ids = st.checks.map(c => c.id).join(',');
-      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respaldo') throw new Error('checks: ' + ids);
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,notas,respaldo') throw new Error('checks: ' + ids);
       if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
       const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
       return `${st.checks.length} checks · overall ${st.overall}`;
@@ -740,6 +740,48 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       await post('/tasks/wait1/undo'); await post('/tasks/wait2/undo'); // nothing is sent from the check
       const q = await (await fetch(base + '/api/quality')).json(); if (!Array.isArray(q.agents)) throw new Error('quality');
       return 'edit → preview «Propuesta final» · approve → 30 s to undo · second approve refused · history edit,approve,undo · 👎 recorded · batch of 2';
+    });
+    await step('server: settings save to the local file and apply; a bad value is refused in words', async () => { // V4.4 (J5)
+      const post = (p, b) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const g = await (await fetch(base + '/api/settings')).json(); if (!g.fields?.length || !g.groups?.length) throw new Error('no fields');
+      const s = await post('/settings', { changes: { 'approvals.undoSeconds': 45, 'costs.monthlyBudget': 'mucho' } }); if (!s.ok || s.errors.length !== 1) throw new Error(JSON.stringify(s));
+      const after = await (await fetch(base + '/api/settings')).json(); if (after.values['approvals.undoSeconds'] !== 45) throw new Error('not applied: ' + after.values['approvals.undoSeconds']);
+      const local = JSON.parse(fs.readFileSync(path.join(sandbox, 'office.config.local.json'), 'utf8')); if (local.approvals?.undoSeconds !== 45) throw new Error('not written');
+      return `${g.fields.length} settings in ${g.groups.length} groups · saved to the sandbox · «${s.errors[0]}»`;
+    });
+    await step('server: the company figures and the brand voice reach the agents; a document dropped on the Brain becomes a note', async () => { // V4.4 (H4, H6, E9)
+      const post = (p, b) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const c = await post('/cifras', { items: [{ name: 'Precio del plan Launch', value: '1500', unit: 'US$', note: '' }] }); if (!c.ok || c.items.length !== 1) throw new Error('cifras ' + JSON.stringify(c));
+      const v = await post('/voice', { text: '# Voz\nCercana, sin tecnicismos.' }); if (!v.ok) throw new Error('voice');
+      const csv = Buffer.from('cliente;total\nSol;150\nLuna;90\n').toString('base64');
+      const u = await post('/brain/upload', { name: 'Clientes del mes.csv', data: csv }); if (!u.ok || !/clientes-del-mes/.test(u.note)) throw new Error('upload ' + JSON.stringify(u));
+      const md = fs.readFileSync(path.join(brainCopy, 'Documentos', u.note + '.md'), 'utf8'); if (!md.includes('| Sol | 150 |')) throw new Error('table missing');
+      const bad = await post('/brain/upload', { name: 'foto.png', data: 'AAAA' }); if (bad.status !== 400) throw new Error('a png was not refused');
+      const st = await (await fetch(base + '/api/brain/stale')).json(); if (!Array.isArray(st.notes)) throw new Error('stale');
+      return `1 figure · voice saved · CSV → Documentos/${u.note}.md as a table · a PNG refused · ${st.notes.length} notes to review`;
+    });
+    await step('server: the business — a KPI by hand («1.200») and by webhook (with the secret)', async () => { // V4.4 (J1)
+      const post = (p, b, q = '') => fetch(base + '/api' + p + q, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const d = await post('/business/kpi', { id: 'ventas_semana', name: 'Ventas de la semana', unit: 'US$', better: 'up', goal: 5000 }); if (!d.ok) throw new Error('def ' + JSON.stringify(d));
+      const h = await post('/business/value', { id: 'ventas_semana', value: '1.200' }); if (h.error) throw new Error('hand ' + h.error);
+      const no = await post('/kpi/ventas_semana', { value: 1 }); if (no.status !== 401) throw new Error('webhook without the secret: ' + no.status);
+      const w = await post('/kpi/ventas_semana', { value: 1500 }, '?token=' + HOOK); if (w.error) throw new Error('webhook ' + w.error);
+      const b = await (await fetch(base + '/api/business')).json(); const k = b.kpis.find(x => x.id === 'ventas_semana');
+      if (!k || k.value !== 1500 || k.prev !== 1200 || !k.good || b.office.length < 4) throw new Error(JSON.stringify(k));
+      return `1.200 by hand → 1.500 by webhook: ▲ ${Math.round(k.change * 100)} % · ${Math.round(k.goalPct * 100)} % of the goal · webhook without the secret refused`;
+    });
+    await step('server: the team — a person takes a task, comments with @mentions, a finished job saved as an example', async () => { // V4.4 (I3, I4, I6, H5)
+      const post = (p, b) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const s = await post('/settings', { changes: { 'team.people': [{ name: 'Ana', depts: ['fin'] }] } }); if (s.errors?.length) throw new Error('people ' + s.errors);
+      const tm = await (await fetch(base + '/api/team')).json(); if (tm.people?.[0]?.name !== 'Ana') throw new Error('team ' + JSON.stringify(tm));
+      const nobody = await post('/tasks/done1/person', { person: 'Nadie' }); if (nobody.status !== 400) throw new Error('an unknown person was not refused');
+      const ex = await post('/tasks/done1/example', {}); if (!ex.ok) throw new Error('example ' + JSON.stringify(ex));
+      const c = await post('/tasks/done1/comment', { text: '@Ana revisa la tercera factura' }); if (c.comments?.length !== 1) throw new Error('comment');
+      const p = await post('/tasks/done1/person', { person: 'Ana' }); if (p.person !== 'Ana') throw new Error('person ' + JSON.stringify(p));
+      const t = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === 'done1'); if (t.state !== 'next' || t.person !== 'Ana' || !t.example) throw new Error(JSON.stringify({ state: t.state, person: t.person }));
+      await new Promise(r => setTimeout(r, 400)); const t2 = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === 'done1'); if (t2.state !== 'next') throw new Error('an agent took the person\'s task: ' + t2.state);
+      const mention = fs.readFileSync(path.join(sandbox, 'data', 'notices.json'), 'utf8').includes('mencionó a Ana'); if (!mention) throw new Error('the @mention raised no notice');
+      return 'Ana takes «Lista de facturas» (the agents leave it) · 1 comment → a mention notice · saved as an example · an unknown person refused';
     });
     await step('server: /api/brain has the live graph', async () => { const g = await (await fetch(base + '/api/brain')).json(); if (!g.nodes.length) throw new Error('empty'); return `${g.nodes.length} linked notes`; });
     await step('server: /api/mcp lists this machine\'s connectors', async () => {

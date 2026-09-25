@@ -18,12 +18,15 @@
     "node": ">=20"
   },
   "dependencies": {
-    "d3-force": "^3.0.0"
+    "d3-force": "^3.0.0",
+    "exceljs": "^4.4.0",
+    "mammoth": "^1.12.3",
+    "pdfjs-dist": "^6.3.289"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "three": "^0.185.1",
-    "playwright-core": "^1.62.0"
+    "playwright-core": "^1.62.0",
+    "three": "^0.185.1"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.80.0"

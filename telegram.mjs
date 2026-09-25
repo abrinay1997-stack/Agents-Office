@@ -172,5 +172,5 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
   }
   call('setMyCommands', { commands: [{ command: 'estado', description: 'Cómo va la oficina' }, { command: 'pendientes', description: 'Lo que espera tu visto bueno' }, { command: 'tarea', description: 'ventas: … — una tarea' }, { command: 'silencio', description: 'No molestar N horas' }, { command: 'ayuda', description: 'Qué puedo hacer' }] }).catch(() => {});
   loop();
-  return { owners: who.length, send: text => toOwners(text), stop: () => { stopped = true; clearInterval(flushTimer); } };
+  return { owners: who.length, send: text => toOwners(text), sendTo: (id, text) => send(String(id), esc(text)), stop: () => { stopped = true; clearInterval(flushTimer); } };
 }

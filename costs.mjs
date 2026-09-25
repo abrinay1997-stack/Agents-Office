@@ -114,6 +114,9 @@ export function suggestions(lines, tasks, agents, c, now = Date.now()) {
       out.push({ kind: 'model-up', agent: a.id, text: `${a.name} usa Sonnet y ${revised} de sus ${mine.length} entregas volvieron con correcciones. Opus podría acertar a la primera; cuesta más por tarea, pero ahorra idas y vueltas.`, action: { agent: a.id, model: 'opus' } });
     }
   }
+  // J10: seats that did nothing in 30 days — rename them to something the business needs
+  const idle = agents.filter(a => !a.lead && !tasks.some(t => (t.agent === a.id || t.team?.pieces?.some(p => p.agent === a.id)) && (t.addedAt || 0) >= since));
+  if (idle.length >= 3) out.push({ kind: 'idle', text: `${idle.length} puestos no hicieron nada en 30 días: ${idle.slice(0, 8).map(a => a.name).join(', ')}${idle.length > 8 ? '…' : ''}. Un puesto quieto no cuesta, pero puedes renombrarlo a algo que tu negocio necesite (ficha del agente → Quién es).`, action: null, agents: idle.map(a => a.id) });
   const byRoutine = {};
   for (const t of tasks) if (t.routine && t.state === 'done' && !t.error && (t.doneAt || 0) >= since) (byRoutine[t.routine] ||= []).push(t);
   for (const [id, ts] of Object.entries(byRoutine)) {

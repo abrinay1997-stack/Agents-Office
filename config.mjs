@@ -19,7 +19,7 @@ function readJSON(p) {
 export function loadConfig() {
   const shipped = readJSON(path.join(ROOT, 'office.config.json'));
   const team = readJSON(path.join(ROOT, 'office.config.equipo.json'));
-  const local = readJSON(path.join(ROOT, 'office.config.local.json'));
+  const local = readJSON(process.env.AO_LOCAL_CONFIG || path.join(ROOT, 'office.config.local.json'));
   const base = { ...shipped, ...team, mcp: { ...(shipped.mcp || {}), ...(team.mcp || {}) }, tools: { ...(shipped.tools || {}), ...(team.tools || {}) }, teams: { ...(shipped.teams || {}), ...(team.teams || {}) }, media: { ...(shipped.media || {}), ...(team.media || {}) }, safety: { ...(shipped.safety || {}), ...(team.safety || {}) } };
   const c = { name: 'Agents Office', brain: './brain', port: 4520, model: 'sonnet', ...base, ...local }; // V3.6: model = sonnet · opus · fable
   c.mcp = { allow: [], deny: [], departments: {}, ...(base.mcp || {}), ...(local.mcp || {}) };

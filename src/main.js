@@ -7,6 +7,9 @@ import { modal } from './modal.js'; // V4.1: the page outside an open window is 
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
 import { initHealth } from './health.js'; // V4.4: the office's health (O)
 import { initCosts } from './costs.js'; // V4.4: costs and return (U)
+import { initSettings } from './settings.js'; // V4.4: the settings window (,)
+import { initBusiness } from './business.js'; // V4.4: how the business is doing (N)
+import { initSearch } from './search.js'; // V4.4: search everything (Ctrl+K)
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -578,6 +581,8 @@ addEventListener('keydown', (e) => {
     if (keysSheet.isOpen()) { keysSheet.close(); return; }
     if (health.isOpen()) { health.close(); return; }
     if (costsWin.isOpen()) { costsWin.close(); return; }
+    if (settingsWin.isOpen()) { settingsWin.close(); return; }
+    if (bizWin.isOpen()) { bizWin.close(); return; }
     const cp = document.getElementById('connPanel'); if (cp) { cp.querySelector('.cp-x').click(); return; }
     if (tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
     if (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) { agentSheet.close(); return; }
@@ -618,6 +623,8 @@ addEventListener('keydown', (e) => {
   else if (e.key === 'e' || e.key === 'E') studio.toggle(); // the Estudio
   else if (e.key === 'o' || e.key === 'O') health.toggle(); // V4.4: the office's health
   else if (e.key === 'u' || e.key === 'U') costsWin.toggle(); // V4.4: costs and return
+  else if (e.key === ',') settingsWin.toggle(); // V4.4: settings
+  else if (e.key === 'n' || e.key === 'N') bizWin.toggle(); // V4.4: how the business is doing
   else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
 
@@ -626,7 +633,7 @@ addEventListener('keydown', (e) => {
 const keysSheet = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
-    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
     ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
@@ -650,7 +657,7 @@ const keysSheet = (() => {
   el.addEventListener('click', e => {
     if (e.target === el || e.target.closest('.ks-x')) return close();
     const b = e.target.closest('.ks-row[data-key]'); if (!b) return;
-    close(); setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', { key: b.dataset.key })), 0); // the same path as the key itself, after this click has finished (a click-outside would close what it opens)
+    close(); setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', { key: b.dataset.key, ctrlKey: b.dataset.key === 'k' })), 0); // the same path as the key itself, after this click has finished (a click-outside would close what it opens)
   });
   el.querySelector('.ks-dk').addEventListener('change', e => setDark(e.target.checked));
   el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
@@ -659,6 +666,8 @@ const keysSheet = (() => {
 document.getElementById('topKeys').addEventListener('click', () => keysSheet.toggle());
 const health = initHealth({ served: SERVED, esc }); // V4.4 (B6)
 const costsWin = initCosts({ served: SERVED, esc }); // V4.4 (C1–C10)
+const settingsWin = initSettings({ served: SERVED, esc }); // V4.4 (J5, H1)
+const bizWin = initBusiness({ served: SERVED, esc }); // V4.4 (J1)
 
 // camera mode: mid-tone backdrop for filming the screen (#cam=1 / V toggles)
 function setCam(on) { document.body.classList.toggle('cam', !!on); }
@@ -1699,6 +1708,10 @@ document.getElementById('railSheet').addEventListener('click', () => { if (!moda
   addEventListener('resize', fit); new MutationObserver(fit).observe(tc, { childList: true }); setTimeout(fit, 400); setTimeout(fit, 3000);
 }
 const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', taskTitle: sid => (tasks.findBySid(sid) || {}).title || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); } });
+const finder = initSearch({ served: SERVED, esc, agents: AGENTS, // V4.4 (J7): Ctrl+K, everything at once
+  getTasks: () => (tasks && tasks.tasks) || [], getRoutines: () => (tasks && tasks.routines) || [],
+  openTask: t => tasks.openTask(t), openAgent: id => openAgent(id, 'chat'),
+  openNote: name => { if (!brain.show(name)) { brain.open(); } }, openRoutine: id => tasks.calendar && tasks.calendar.openRoutine(id), openStudio: () => studio.open() });
 document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
 const hero = HERO ? initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;
 if (HERO && HERO.target) { view.target.set(...HERO.target); view.zoom = HERO.zoom || view.zoom; }

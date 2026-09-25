@@ -675,7 +675,7 @@ export function initTasks(ctx) {
     if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
     else say('Conexión recuperada.');
   }
-  const extraOf = st => Object.fromEntries(['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read'].map(k => [k, st[k]]));
+  const extraOf = st => Object.fromEntries(['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'person', 'handoff', 'comments', 'example'].map(k => [k, st[k]]));
   const fromServer = st => ({ ...extraOf(st), id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
     addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, guard: st.guard, heldForOk: !!st.heldForOk, cost: st.cost, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
@@ -722,7 +722,7 @@ export function initTasks(ctx) {
       if (R[to]) { feedPush(R[to], '📨', `Nota de ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `nota de ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
     }
   }
-  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft']; // V4.4: what the detail shows (G, D)
+  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft', 'person', 'handoff', 'comments', 'example']; // V4.4: what the detail shows (G, D)
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
     for (const k of EXTRA) if (JSON.stringify(t[k]) !== JSON.stringify(st[k])) { t[k] = st[k]; dirty = true; }
@@ -861,7 +861,7 @@ export function initTasks(ctx) {
   function metaFor(t) {
     const a = agentOf(t.agent), now = Date.now();
     const f = getFocused();
-    const who = (f && f !== 'brain') ? a.name : `${a.name} · ${DEPTS[t.dept].short}`;
+    const who = (t.person ? `👤 ${esc(t.person)} · ` : '') + ((f && f !== 'brain') ? a.name : `${a.name} · ${DEPTS[t.dept].short}`) + (t.comments?.length ? ` · 💬 ${t.comments.length}` : '');
     switch (t.state) {
       case 'next': {
         const src = t.piece ? `parte del equipo de ${agentOf(t.leadId)?.name || 'el líder'}` : t.routine ? `rutina · ${t.when}${t.late ? ' · <span class="tp-late">atrasada · tocaba a las ' + timeStr(t.due) + '</span>' : ''}` : t.by === 'you' ? 'la pediste tú' : t.by === 'sub' ? 'vía Dimitri' : t.last === 'handoff' && t.from ? `de ${agentOf(t.from).name}` : t.revised ? 'devuelta para revisar' : 'del Cerebro';

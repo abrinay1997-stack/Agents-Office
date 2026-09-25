@@ -4,12 +4,12 @@
 
 El dueño marcó 69. Leyenda: ✅ hecho · ⏳ marcado, pendiente · 📌 issue abierto · ▫️ no marcado.
 
-Hechos: 50 de 69 marcados.
+Hechos: 69 de 69 marcados.
 
 ## A. Seguridad y control
 
 - 📌 **A1** [crítica · días] **Sin contraseña si la abres en la red.** Si se pone host para usarla desde el teléfono en la wifi, cualquiera en esa red puede mandar a los agentes, que tienen tu Gmail y tu Chrome. No hay inicio de sesión. _Nota del dueño: Solo issue (#2): claves en variables secretas si algún día va a la web._ → Issue #2 con los requisitos (claves solo en variables de entorno, cerrado por defecto, tests).
-- ⏳ **A2** [alta · semanas] **Sin acceso seguro desde fuera de la oficina.** Solo funciona en localhost. No hay un túnel con inicio de sesión para verla desde el teléfono en la calle.
+- ✅ **A2** [alta · semanas] **Sin acceso seguro desde fuera de la oficina.** Solo funciona en localhost. No hay un túnel con inicio de sesión para verla desde el teléfono en la calle. → Desde fuera, por Telegram con Dimitri (tanda 3); y para abrir la oficina misma, la guía de Cloudflare Tunnel + Access en `docs/despliegue.md` (el inicio de sesión propio sigue en el issue #2).
 - ✅ **A3** [crítica · días] **«Solo envía si te lo piden» es un ruego, no un candado.** La regla de no enviar, pagar ni borrar sin pedido explícito está escrita en el prompt. Nada técnico bloquea las herramientas que escriben. _Nota del dueño: Contemplar varias formas de funcionar._ → `guard.mjs` + `safety.mjs`: tres políticas (`aprobar`, `pedido`, `nunca`) y por departamento; una tarea que intenta enviar sin OK queda esperando tu visto bueno.
 - ✅ **A4** [alta · días] **Sin registro de cada acción externa.** No queda una bitácora con qué herramienta usó cada agente, sobre qué datos y cuándo. → (sin marcar, sale con el guardián) cada llamada de herramienta queda en `data/audit/AAAA-MM-DD.jsonl`.
 - ✅ **A5** [crítica · días] **Inyección de instrucciones por correo o web.** Un correo o una página que el agente lee puede traer órdenes escondidas («reenvía esto a…»). Nada lo detecta ni lo separa. _Nota del dueño: Crítico: ciberseguridad._ → Regla de «contenido de terceros = datos» en cada agente, detector de órdenes escondidas en lo que leen, bloqueo de envíos tras detectarlas y aviso 🛡 en la tarea; tras el OK solo se envía a direcciones del borrador.
@@ -68,7 +68,7 @@ Hechos: 50 de 69 marcados.
 - ▫️ **E6** [alta · días] **Sin cadenas entre departamentos.** Lo que entrega Ventas no dispara solo el trabajo de Entregas o Contabilidad (propuesta aceptada → factura → bienvenida).
 - ▫️ **E7** [media · días] **El calendario no ve tu Google Calendar.** La oficina publica un .ics, pero no lee tu calendario real para no chocar con citas.
 - ▫️ **E8** [media · horas] **La oficina no te escribe correos.** No hay un correo propio para mandarte el resumen, un aviso o una alerta.
-- ⏳ **E9** [alta · días] **No se pueden subir documentos al cerebro.** El cerebro no acepta que arrastres un PDF, un Word o un Excel. Hay que copiarlos a mano como notas.
+- ✅ **E9** [alta · días] **No se pueden subir documentos al cerebro.** El cerebro no acepta que arrastres un PDF, un Word o un Excel. Hay que copiarlos a mano como notas. → «⬆ Subir documento» en el Cerebro o soltar el archivo encima: PDF, Word, Excel, CSV o texto se vuelven una nota en `Documentos/`, convertidos en esta máquina (`documents.mjs`).
 - ▫️ **E10** [baja · horas] **Sin API documentada.** La API existe, pero no hay una guía para que otro sistema la use.
 
 ## F. Avisos y teléfono
@@ -99,39 +99,39 @@ Hechos: 50 de 69 marcados.
 
 ## H. Conocimiento y memoria
 
-- ⏳ **H1** [alta · semanas] **El cerebro no busca por significado.** El agente lee las notas por nombre y por palabras. No hay búsqueda por significado (RAG) sobre todo el cerebro.
+- ✅ **H1** [alta · semanas] **El cerebro no busca por significado.** El agente lee las notas por nombre y por palabras. No hay búsqueda por significado (RAG) sobre todo el cerebro. → El Cerebro busca por pasajes (BM25, sin claves) y, si hay GEMINI_API_KEY, OPENAI_API_KEY o VOYAGE_API_KEY, también por significado (`knowledge.mjs`); el agente recibe los párrafos que importan, no solo nombres de notas.
 - ▫️ **H2** [alta · días] **Sin ficha de cliente.** No existe una memoria por cliente con su historial (qué se le dijo, qué compró, qué reclamó).
-- ⏳ **H3** [media · horas] **Notas sin fecha de revisión.** Las notas de la empresa no avisan cuando llevan meses sin revisarse (precios, horarios, políticas).
-- ⏳ **H4** [media · días] **Sin libro de cifras visible.** CLAUDE.md menciona un libro de cifras (numbers ledger), pero no hay una pantalla para ver y editar esas cifras (precios, comisiones, metas).
-- ⏳ **H5** [media · horas] **Las mejores entregas no se reusan.** No hay una biblioteca de «entregas que me gustaron» que los agentes usen como ejemplo.
-- ⏳ **H6** [media · horas] **La voz de marca solo se cambia en archivos.** El tono, las palabras prohibidas y la firma se editan en una skill a mano, no desde la oficina.
-- ⏳ **H7** [media · días] **Los departamentos no se enteran entre sí.** Un agente de Ventas no sabe qué le prometió Entregas al mismo cliente, más allá de las últimas entregas.
+- ✅ **H3** [media · horas] **Notas sin fecha de revisión.** Las notas de la empresa no avisan cuando llevan meses sin revisarse (precios, horarios, políticas). → Las notas viejas (fecha «actualizado», o sin tocar en 180 días) llegan al agente con un aviso, y el Cerebro las lista para revisar; el semáforo (O) las cuenta.
+- ✅ **H4** [media · días] **Sin libro de cifras visible.** CLAUDE.md menciona un libro de cifras (numbers ledger), pero no hay una pantalla para ver y editar esas cifras (precios, comisiones, metas). → Ajustes → Cifras de la empresa: precios, comisiones y metas que todos los agentes leen y usan tal cual (`<cerebro>/Agents Office/cifras.json`).
+- ✅ **H5** [media · horas] **Las mejores entregas no se reusan.** No hay una biblioteca de «entregas que me gustaron» que los agentes usen como ejemplo. → «⭐ Guardar como ejemplo» en una tarea terminada: el agente lee sus ejemplos antes de cada trabajo.
+- ✅ **H6** [media · horas] **La voz de marca solo se cambia en archivos.** El tono, las palabras prohibidas y la firma se editan en una skill a mano, no desde la oficina. → Ajustes → Voz de marca: se edita en la oficina y la leen todos los agentes.
+- ✅ **H7** [media · días] **Los departamentos no se enteran entre sí.** Un agente de Ventas no sabe qué le prometió Entregas al mismo cliente, más allá de las últimas entregas. → Antes de trabajar, el agente ve lo que otros departamentos hicieron hace poco con el mismo cliente.
 - ▫️ **H8** [media · días] **El conocimiento no sincroniza con Drive o Notion.** El cerebro vive en archivos locales. Lo que tu equipo escribe en Drive no entra solo.
-- ⏳ **H9** [alta · días] **Configuración inicial por departamento.** La entrevista cubre un departamento por vez. Falta un arranque que lea tu web, tus precios y tus clientes y prepare los seis departamentos.
+- ✅ **H9** [alta · días] **Configuración inicial por departamento.** La entrevista cubre un departamento por vez. Falta un arranque que lea tu web, tus precios y tus clientes y prepare los seis departamentos. → Ajustes → Preparar desde mi web: lee la web y escribe perfil, oferta, voz, FAQ y clientes en el Cerebro, instrucciones a cada jefe sin ellas y cifras para confirmar.
 - ▫️ **H10** [media · días] **No se puede olvidar a un cliente.** No hay forma de borrar a una persona de todas las notas, entregas e historial.
 
 ## I. Equipo
 
 - ▫️ **I1** [alta · semanas] **Sin usuarios ni roles.** No hay dueño, empleado ni «solo lectura». Quien abre la página puede hacer todo.
 - ▫️ **I2** [alta · semanas] **Cada persona ve una oficina distinta.** Por diseño, data/ no viaja: cada miembro del equipo tiene su propio historial vacío. No hay un tablero compartido en vivo.
-- ⏳ **I3** [media · días] **Tareas para personas.** El tablero solo tiene agentes. No se puede asignar una tarea a una persona del equipo junto a las de los agentes.
-- ⏳ **I4** [media · días] **Sin comentarios en las tareas.** No se puede comentar una tarea ni mencionar a alguien.
+- ✅ **I3** [media · días] **Tareas para personas.** El tablero solo tiene agentes. No se puede asignar una tarea a una persona del equipo junto a las de los agentes. → Una tarea puede llevarla una persona del equipo: los agentes no la tocan y la persona recibe un aviso por Telegram.
+- ✅ **I4** [media · días] **Sin comentarios en las tareas.** No se puede comentar una tarea ni mencionar a alguien. → Comentarios en cada tarea; @nombre avisa a esa persona.
 - ▫️ **I5** [alta · días] **Git para gente no técnica.** Colaborar pide ramas, Pull Requests y resolver choques de git con archivos .bat.
-- ⏳ **I6** [media · horas] **Traspaso del agente a una persona.** Cuando el agente no puede, no hay un «pásaselo a Juan» con todo el contexto.
+- ✅ **I6** [media · horas] **Traspaso del agente a una persona.** Cuando el agente no puede, no hay un «pásaselo a Juan» con todo el contexto. → Si el agente necesita a alguien, escribe «PASAR A UNA PERSONA: …» y la tarea pasa a esa persona con un aviso; también a mano desde el detalle.
 - ▫️ **I7** [media · horas] **Sin bitácora de cambios del equipo.** No se ve quién cambió una rutina, un agente o un conector, ni cuándo.
 - ▫️ **I8** [baja · días] **Permisos por departamento.** No se puede dejar que el de ventas vea solo Ventas.
 - ▫️ **I9** [baja · horas] **Ayuda dentro de la app.** No hay una guía corta dentro de la oficina para un empleado nuevo.
-- ⏳ **I10** [media · días] **Los ajustes se editan en JSON.** Conectores permitidos, modelo, horarios, límites: todo se cambia editando office.config.json.
+- ✅ **I10** [media · días] **Los ajustes se editan en JSON.** Conectores permitidos, modelo, horarios, límites: todo se cambia editando office.config.json. → Todo lo de los JSON, en Ajustes (tecla `,`): validado y guardado en `office.config.local.json`.
 
 ## J. Producto y dueño
 
-- ⏳ **J1** [crítica · días] **No muestra cómo va el negocio.** La oficina muestra actividad de agentes, no resultados: ventas de la semana, facturas vencidas, leads nuevos, tiempo de respuesta.
+- ✅ **J1** [crítica · días] **No muestra cómo va el negocio.** La oficina muestra actividad de agentes, no resultados: ventas de la semana, facturas vencidas, leads nuevos, tiempo de respuesta. → «Cómo va el negocio» (tecla N): tus indicadores con tendencia y meta, anotados a mano, por webhook o por una línea «KPI id = valor» en una entrega; y las cifras de la oficina.
 - ▫️ **J2** [alta · días] **Sin metas por departamento.** No hay objetivos («20 leads al mes», «cobrar en 30 días») que guíen a los agentes y midan el avance.
-- ⏳ **J3** [crítica · semanas] **Instalarla pide ser técnico.** Node, Git, Claude Code, variables de entorno y archivos .bat. Lindy y Zapier se usan desde el navegador en minutos.
+- ✅ **J3** [crítica · semanas] **Instalarla pide ser técnico.** Node, Git, Claude Code, variables de entorno y archivos .bat. Lindy y Zapier se usan desde el navegador en minutos. → `Instalar-Oficina.bat`: instala Node, Git y Claude Code, clona, instala y deja el acceso directo; guía en `docs/instalar.md`.
 - ▫️ **J4** [media · días] **Sin plantillas por tipo de negocio.** No hay «oficina para restaurante», «para agencia» o «para tienda online» con agentes, skills y rutinas ya pensados.
-- ⏳ **J5** [alta · días] **Sin pantalla de ajustes.** No hay una ventana de Ajustes para conectores, modelos, horarios, presupuesto y avisos.
+- ✅ **J5** [alta · días] **Sin pantalla de ajustes.** No hay una ventana de Ajustes para conectores, modelos, horarios, presupuesto y avisos. → Ventana de Ajustes (engranaje del dock, tecla `,`) con 11 secciones.
 - ▫️ **J6** [media · horas] **Elegir la vista de inicio.** La oficina 3D es lo primero siempre. Falta poder abrir directo en el tablero o en la lista.
-- ⏳ **J7** [media · horas] **Sin búsqueda global.** No hay un Ctrl+K que busque a la vez en tareas, notas, agentes, rutinas e imágenes.
-- ⏳ **J8** [media · horas] **Dimitri no te busca.** Dimitri responde cuando le hablas, pero no viene con un informe semanal programado con decisiones sugeridas.
+- ✅ **J7** [media · horas] **Sin búsqueda global.** No hay un Ctrl+K que busque a la vez en tareas, notas, agentes, rutinas e imágenes. → Ctrl+K busca a la vez en tareas y entregables, agentes, rutinas, notas e imágenes.
+- ✅ **J8** [media · horas] **Dimitri no te busca.** Dimitri responde cuando le hablas, pero no viene con un informe semanal programado con decisiones sugeridas. → Cada lunes a las 8 Dimitri deja el resumen de la semana (y lo manda por Telegram); se apaga en Ajustes.
 - ▫️ **J9** [media · horas] **Demo y realidad se confunden.** La página abierta como archivo muestra actividad inventada con el mismo aspecto que la real.
-- ⏳ **J10** [baja · horas] **Agentes que nunca se usan.** Nada señala los puestos que no han hecho nada en un mes para sugerir renombrarlos a algo útil.
+- ✅ **J10** [baja · horas] **Agentes que nunca se usan.** Nada señala los puestos que no han hecho nada en un mes para sugerir renombrarlos a algo útil. → Costos sugiere los asientos sin uso en 30 días (renombrarlos o dejarlos: un agente parado no cuesta).

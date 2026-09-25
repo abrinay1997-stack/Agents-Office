@@ -47,7 +47,7 @@ export function initCosts({ served, esc }) {
         <div class="cs-tile"><span>Horas ahorradas</span><b>${d.hours.toFixed(1)} h</b><small>estimadas por departamento (<code>costs.minutesPerTask</code>)</small></div>
         <div class="cs-tile"><span>Lo que valen</span><b>${d.hourlyRate ? usd(d.value) : '—'}</b><small>${d.hourlyRate ? `a ${usd(d.hourlyRate)}/h de una persona · ${d.value > d.usd ? 'rinde ' + (d.usd ? Math.round(d.value / d.usd) + '×' : 'mucho') : 'aún no compensa'}` : 'pon lo que cuesta una hora de tu equipo en <code>costs.hourlyRate</code>'}</small></div>
       </div>
-      ${d.suggestions.length ? `<h3>Sugerencias</h3><ul class="cs-sug">${d.suggestions.map((s, i) => `<li><span>${esc(s.text)}</span><button type="button" class="cs-btn" data-apply="${i}">${s.kind === 'routine-unread' ? 'Pausarla' : 'Cambiar el modelo'}</button></li>`).join('')}</ul>` : ''}
+      ${d.suggestions.length ? `<h3>Sugerencias</h3><ul class="cs-sug">${d.suggestions.map((s, i) => `<li><span>${esc(s.text)}</span>${s.action ? `<button type="button" class="cs-btn" data-apply="${i}">${s.kind === 'routine-unread' ? 'Pausarla' : 'Cambiar el modelo'}</button>` : ''}</li>`).join('')}</ul>` : ''}
       <h3>Últimas 8 semanas</h3>${chart(d.weeks)}
       <details class="cs-more"><summary>Ver la tabla por semana</summary>${table(['Semana', 'Tareas', 'Fallos', 'Costo'], d.weeks.map(w => [new Date(w.start).toLocaleDateString('es-PA', { day: 'numeric', month: 'short' }), w.tasks, w.failed, usd(w.usd)]))}</details>
       <div class="cs-cols">

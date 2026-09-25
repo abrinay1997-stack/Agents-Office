@@ -168,7 +168,7 @@ export function initBrain({ esc }) {
       `<label class="bv-tg"><input type="checkbox" data-k="lone"${F.lone ? ' checked' : ''}> Sin enlaces · ${nodes.filter(x => !x.d).length}</label>` +
       (match ? `<label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo resultados</label>` : '') +
       `<span class="bv-cnt">${shown} de ${nodes.length} notas</span>${active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : ''}` +
-      (location.protocol.startsWith('http') ? '<button type="button" class="bv-reset bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button>' : '');
+      (location.protocol.startsWith('http') ? '<button type="button" class="bv-reset bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-reset bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button>' : '');
     emptyEl.hidden = !(openNow && shown === 0);
   }
   chipsEl.addEventListener('click', e => {
@@ -179,6 +179,7 @@ export function initBrain({ esc }) {
   });
   row2.addEventListener('click', e => {
     if (e.target.closest('.bv-bin')) return showBin();
+    if (e.target.closest('.bv-up')) return showUpload();
     if (e.target.closest('.bv-reset')) return resetF();
     const b = e.target.closest('button[data-k]'); if (b) { F[b.dataset.k] = b.dataset.v; saveF(); chips(); dirty(); }
   });
@@ -312,6 +313,34 @@ export function initBrain({ esc }) {
     const done = () => { const o = btn.textContent; btn.textContent = 'Copiado ✓'; setTimeout(() => { btn.textContent = o; }, 1400); };
     (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(done, () => { const a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); done(); } catch {} a.remove(); });
   }
+  // V4.4 (audit E9, H3): documents into the Brain — a PDF, Word, Excel, CSV or text file becomes a note in Documentos/,
+  // converted on this machine; and the notes that may be out of date, to check
+  async function showUpload(files) {
+    sel = null; dirty(); reading = false; pane.classList.remove('reading');
+    pane.innerHTML = `<h3>Subir documentos</h3><div class="bv-path">PDF, Word (.docx), Excel (.xlsx), CSV o texto · hasta 15 MB · se convierte aquí, nada sale de tu máquina</div>
+      <label class="bv-drop"><input type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.txt,.md,.json,.html" class="sr"><b>Elige archivos</b> o suéltalos aquí</label>
+      <ul class="bv-ups" aria-live="polite"></ul><div class="bv-stale"></div>`;
+    const inp = pane.querySelector('input[type=file]'); inp.addEventListener('change', () => upload([...inp.files]));
+    if (files && files.length) upload(files);
+    try { const j = await (await fetch('/api/brain/stale')).json(); const box = pane.querySelector('.bv-stale'); if (box && j.notes && j.notes.length) box.innerHTML = `<h4>Notas que conviene revisar (${j.notes.length})</h4><p class="bv-path">Los agentes las leen con un aviso de que pueden estar viejas.</p><ul>${j.notes.slice(0, 20).map(n => `<li><button type="button" class="bv-link" data-n="${esc(n.name)}">${esc(n.name)}</button> <small>${esc(n.why)}</small></li>`).join('')}</ul>`; } catch {}
+  }
+  async function upload(files) {
+    const list = pane.querySelector('.bv-ups'); if (!list) return;
+    for (const f of files) {
+      const li = document.createElement('li'); li.textContent = `${f.name} · leyendo…`; list.appendChild(li);
+      if (f.size > 15 * 1024 * 1024) { li.textContent = `${f.name} · pasa de 15 MB`; li.className = 'bad'; continue; }
+      try {
+        const data = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = () => ko(new Error('no se pudo leer')); r.readAsDataURL(f); });
+        const r = await fetch('/api/brain/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: f.name, data }) }); const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.statusText);
+        li.innerHTML = `✓ ${esc(f.name)} → <button type="button" class="bv-link" data-n="${esc(j.note)}">${esc(j.note)}</button> <small>${Math.round(j.chars / 1000)} mil caracteres</small>`; li.className = 'good';
+      } catch (e) { li.textContent = `${f.name} · ${e.message}`; li.className = 'bad'; }
+    }
+  }
+  pane.addEventListener('click', e => { const b = e.target.closest('.bv-link[data-n]'); if (b) openHit(b.dataset.n); });
+  ov.addEventListener('dragover', e => { if (SERVED && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); ov.classList.add('dropping'); } });
+  ov.addEventListener('dragleave', e => { if (e.target === ov || !ov.contains(e.relatedTarget)) ov.classList.remove('dropping'); });
+  ov.addEventListener('drop', e => { if (!SERVED || !e.dataTransfer?.files?.length) return; e.preventDefault(); ov.classList.remove('dropping'); showUpload([...e.dataTransfer.files]); });
   // V4.1 (audit 63): the bin has its own view — «Deshacer» no longer vanishes with the next click: every note thrown away stays here 30 days
   async function showBin() {
     sel = null; dirty(); reading = false; pane.classList.remove('reading');
