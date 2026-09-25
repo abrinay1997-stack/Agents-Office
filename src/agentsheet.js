@@ -38,7 +38,7 @@ export function initSheet(ctx) {
     const record = `<div class="ag-stats"><span><b>${st.done}</b> listas</span><span><b>${st.failed}</b> con error</span><span><b>${st.running}</b> en curso</span><span><b>${st.waiting}</b> esperan tu OK</span><span><b>${st.pending}</b> en cola</span>${st.avgMinutes !== null ? `<span><b>${st.avgMinutes}</b> min de promedio</span>` : ''}</div>` +
       (d.recent.length ? `<ul class="ag-recent">${d.recent.map(t => `<li><button type="button" data-sid="${esc(t.id)}"><span class="ag-st ${t.error ? 'err' : t.state}">${t.error ? 'error' : STATE[t.state] || t.state}</span>${esc(t.title)}</button></li>`).join('')}</ul>` : '<p class="ag-note">Sin tareas todavía.</p>');
     el.innerHTML = `<div class="ag-head"><div><div class="ag-title">${esc(a.name)}${a.lead ? ' <span class="star">★</span>' : ''}</div><div class="ag-sub">${esc(a.role || '')}</div></div><span class="sp"></span><button type="button" class="ag-x" aria-label="Volver al chat">✕</button></div>
-      <div class="ag-scroll">${sec('who', 'Quién es', who)}${sec('skills', 'Skills', skills, d.skills.length)}${sec('lessons', 'Lecciones aprendidas', lessons, L.rules.length + L.oneOffs.length)}${sec('record', 'Historial', record, st.done + st.failed)}</div>`;
+      <div class="ag-scroll">${sec('who', 'Quién es', who)}${sec('skills', 'Skills', skills, d.skills.length)}${sec('lessons', 'Lecciones aprendidas', lessons, L.rules.length + L.oneOffs.length)}${sec('record', 'Historial', record, st.done + st.failed)}${sec('versions', 'Versiones de sus skills y brief', versionsHTML(), (data.versions || []).reduce((n, x) => n + x.versions.length, 0) || undefined)}</div>`;
     count(); snap = formNow();
   }
   // V4.1 (audit 25): closing with unsaved changes asks first — it used to throw them away without a word
@@ -50,9 +50,18 @@ export function initSheet(ctx) {
   const msg = (t, bad) => { const m = el.querySelector('.ag-msg'); if (m) { m.textContent = t; m.className = 'ag-msg' + (bad ? ' bad' : ''); } };
   async function load(id) {
     el.innerHTML = '<div class="ag-loading">Abriendo la ficha…</div>';
-    try { const r = await fetch('/api/agents/' + encodeURIComponent(id)); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); data = j; if (cur === id) render(); }
+    try { const r = await fetch('/api/agents/' + encodeURIComponent(id)); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); data = j; if (cur === id) render(); loadVersions(id); }
     catch (e) { el.innerHTML = `<div class="ag-loading bad">No pude abrir la ficha: ${esc(e.message)}</div>`; }
   }
+  // V4.4 (D7): every version of this desk's skills and brief, with «Volver a esta versión»
+  async function loadVersions(id) {
+    const items = [...(data.skills || []).filter(k => k.source !== 'shipped').map(k => ({ kind: 'skill', name: k.name })), { kind: 'brief', name: id }];
+    const got = await Promise.all(items.map(it => fetch(`/api/history?kind=${it.kind}&name=${encodeURIComponent(it.name)}`).then(r => r.json()).then(j => ({ ...it, versions: j.versions || [] })).catch(() => ({ ...it, versions: [] }))));
+    if (cur !== id || !data) return; data.versions = got.filter(x => x.versions.length); render();
+  }
+  const when = at => new Date(at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const versionsHTML = () => { const v = data.versions || []; if (!v.length) return '<p class="ag-note">La oficina guarda cada versión de sus skills y de su brief desde que empieza a verlas; aquí aparecen cuando cambien.</p>';
+    return v.map(x => `<p class="ag-lab">${x.kind === 'skill' ? 'Skill «' + esc(x.name) + '»' : 'Su brief'}</p><ul class="ag-vers">${x.versions.map((ver, i) => `<li><span><b>${when(ver.at)}</b>${i === 0 ? ' · la actual' : ''}<br><small>${esc(ver.preview)}…</small></span>${i ? `<button type="button" class="ag-restore" data-kind="${x.kind}" data-name="${esc(x.name)}" data-at="${ver.at}">Volver a esta</button>` : ''}</li>`).join('')}</ul>`).join(''); };
   async function save() {
     if (busy) return; busy = true;
     const v = s => el.querySelector(s).value;
@@ -75,6 +84,10 @@ export function initSheet(ctx) {
     if (f) { if (!confirm('¿Olvidar esta lección? El agente dejará de tenerla en cuenta.')) return;
       const r = await fetch(`/api/agents/${encodeURIComponent(cur)}/forget`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ line: f.dataset.line }) });
       const j = await r.json(); if (r.ok) { data.lessons = j.lessons; render(); } else alert(j.error || 'No se pudo'); return; }
+    const rs = e.target.closest('.ag-restore');
+    if (rs) { if (!confirm(`¿Volver a la versión del ${when(+rs.dataset.at)}? La actual queda guardada en el historial.`)) return;
+      const r = await fetch('/api/history/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: rs.dataset.kind, name: rs.dataset.name, at: +rs.dataset.at }) });
+      const j = await r.json(); alert(r.ok ? j.text : j.error || 'No se pudo'); if (r.ok) load(cur); return; }
     const t = e.target.closest('[data-sid]'); if (t && openTask) openTask(t.dataset.sid);
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); } });

@@ -51,6 +51,8 @@ export function validate(r, agents, existing = []) {
   if (!valid(out.when)) problems.push(`${out.id}: the schedule is not complete (${JSON.stringify(r.when || null)}) — see src/when.js`);
   out.needsOk = r.needsOk !== false;
   out.paused = r.paused === true;
+  if (r.autonomous === true) out.autonomous = true; // V4.4 (G2): earned after N clean approvals — it sends without asking (amounts over the limit still wait)
+  if (Number.isFinite(+r.minutesSaved) && +r.minutesSaved > 0) out.minutesSaved = +r.minutesSaved; // V4.4 (C2)
   if (r.catchUp === false) out.catchUp = false; // V4.4 (B2): a missed run (the computer slept) is skipped, not done late — for things that only make sense on time
   if (Number.isFinite(+r.timeout) && +r.timeout > 0) out.timeout = Math.max(60, Math.min(3600, +r.timeout)); // V4.4 (B4): seconds for this routine's run
   if (Array.isArray(r.plan)) out.plan = r.plan.slice(0, 4).map(String);

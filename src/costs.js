@@ -22,12 +22,22 @@ export function initCosts({ served, esc }) {
     return `<svg class="cs-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Costo por semana, últimas 8 semanas: ${weeks.map(w => usd(w.usd)).join(', ')}"><line x1="${pad}" x2="${W}" y1="${H - 22}" y2="${H - 22}" class="cs-axis"/><text x="0" y="12" class="cs-ax">${usd(max)}</text>${bars}</svg>`;
   }
   const table = (head, rows) => `<div class="cs-tw"><table class="cs-t"><thead><tr>${head.map((h, i) => `<th${i ? ' class="n"' : ''}>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td${i ? ' class="n"' : ''}>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  // V4.4 (D1, D10): how each desk is doing — used as it came, sent back, 👍/👎, and a drop after a skill change
+  function qualityHTML(q) {
+    if (!q) return '';
+    const pct = v => v === null || v === undefined ? '—' : v + ' %';
+    const rows = q.agents.filter(a => a.tasks).sort((a, b) => (a.score ?? 101) - (b.score ?? 101)).slice(0, 12);
+    return `<h3>Calidad (28 días)</h3>
+      ${q.drops.length ? `<ul class="cs-sug">${q.drops.map(d => `<li><span>⚠ ${esc(d.name)} bajó de ${d.before} a ${d.after} desde que cambió su skill o su brief (${new Date(d.since).toLocaleDateString('es-PA')}). Puedes volver a la versión anterior desde su ficha.</span></li>`).join('')}</ul>` : ''}
+      ${rows.length ? table(['Agente', 'Tareas', 'Puntaje', 'A la primera', 'Devueltas', '👍 / 👎'], rows.map(a => [esc(a.name), a.tasks, (a.score ?? '—') + (a.before !== null && a.score !== null ? ` <small class="${a.score < a.before ? 'cs-down' : 'cs-up'}">${a.score >= a.before ? '▲' : '▼'} ${Math.abs(a.score - a.before)}</small>` : ''), pct(a.firstTry), a.revisions, `${a.up} / ${a.down}`])) : '<p class="cs-empty">Aún no hay tareas terminadas para medir.</p>'}
+      <p class="cs-src">Puntaje de 0 a 100: una entrega usada tal cual vale 100; cada vez que la devuelves resta 30 y un 👎 resta 50. ${q.routing.rate !== null ? `Tareas que cambiaste de agente: ${q.routing.moved} de ${q.routing.routed} (${q.routing.rate} %); el enrutador aprende de esos cambios.` : ''}${q.reviews ? ` Segundas opiniones del jefe: ${q.reviews}.` : ''}</p>`;
+  }
   function render() {
     const body = el.querySelector('.cs-body');
     if (!served) { body.innerHTML = '<p class="cs-lead">Esta es la demo: los costos reales aparecen cuando la oficina corre con <code>npm start</code>.</p>'; return; }
     if (!data) { body.innerHTML = '<p class="cs-lead">Sumando…</p>'; return; }
     const d = data, b = d.budget;
-    el.querySelector('#costsT').textContent = 'Costos y retorno · ' + monthName(d.month);
+    el.querySelector('#costsT').textContent = 'Costos, calidad y retorno · ' + monthName(d.month);
     el.querySelector('[data-a="csv"]').href = '/api/costs.csv?month=' + d.month;
     body.innerHTML = `
       ${d.subscription ? '<p class="cs-note">Tu Claude es un plan de tarifa fija: estas cifras son <b>lo que costaría en la API</b>. Sirven para comparar agentes y decidir qué automatizar.</p>' : ''}
@@ -44,10 +54,11 @@ export function initCosts({ served, esc }) {
         <section><h3>Por departamento</h3>${d.byDept.length ? table(['Departamento', 'Tareas', 'Costo'], d.byDept.map(x => [esc(DEPT[x.key] || x.key), x.tasks, usd(x.usd)])) : '<p class="cs-empty">Aún nada este mes.</p>'}</section>
         <section><h3>Por agente</h3>${d.byAgent.filter(x => x.key !== '—').length ? table(['Agente', 'Tareas', 'Costo'], d.byAgent.filter(x => x.key !== '—').slice(0, 10).map(x => [esc(x.name), x.tasks, usd(x.usd)])) : '<p class="cs-empty">Aún nada este mes.</p>'}</section>
       </div>
+      ${qualityHTML(d.quality)}
       <h3>Por modelo</h3>${d.byModel.length ? table(['Modelo', 'Ejecuciones', 'Costo'], d.byModel.map(x => [esc(x.key || '—'), x.runs, usd(x.usd)])) : '<p class="cs-empty">Aún nada este mes.</p>'}
       <details class="cs-more"><summary>Precios que usa la oficina (al ${esc(d.pricesAsOf)})</summary>${table(['Modelo', 'Proveedor', 'Entrada /1M', 'Salida /1M', 'Caché /1M'], d.prices.map(p => [esc(p.name), esc(p.provider), '$' + p.in, '$' + p.out, '$' + p.cacheRead]))}<p class="cs-src">${d.priceSources.map(esc).join('<br>')}<br>Con Claude Code, el costo de cada ejecución lo informa el propio Claude; la tabla se usa para otros proveedores. Precios propios: <code>costs.prices</code>.</p></details>`;
   }
-  async function load() { if (!served) return; try { const r = await fetch('/api/costs'); if (r.ok) { data = await r.json(); if (!el.hidden) render(); } } catch {} }
+  async function load() { if (!served) return; try { const [r, q] = await Promise.all([fetch('/api/costs'), fetch('/api/quality')]); if (r.ok) { data = await r.json(); data.quality = q.ok ? await q.json() : null; if (!el.hidden) render(); } } catch {} }
   function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; modal.open(el); render(); load(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.cs-x').focus({ preventScroll: true }); }
   function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); el.hidden = true; if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   el.addEventListener('click', async e => {

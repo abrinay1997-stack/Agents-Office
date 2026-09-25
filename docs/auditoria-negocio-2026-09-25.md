@@ -4,7 +4,7 @@
 
 El dueño marcó 69. Leyenda: ✅ hecho · ⏳ marcado, pendiente · 📌 issue abierto · ▫️ no marcado.
 
-Hechos: 32 de 69 marcados.
+Hechos: 50 de 69 marcados.
 
 ## A. Seguridad y control
 
@@ -47,16 +47,16 @@ Hechos: 32 de 69 marcados.
 
 ## D. Calidad del trabajo
 
-- ⏳ **D1** [alta · semanas] **Sin evaluaciones de calidad.** Relevance AI permite fijar umbrales de calidad y medir a los agentes todo el tiempo. Aquí no se mide si mejoran o empeoran.
-- ⏳ **D2** [alta · horas] **Sin 👍 / 👎 en cada entrega.** La única forma de corregir es escribir revise: …. Falta un voto de un clic con motivo.
-- ⏳ **D3** [alta · días] **Las entregas no dicen de dónde sacan los datos.** Una entrega no cita la nota o la fuente de cada cifra o afirmación.
-- ⏳ **D4** [media · días] **Sin autorrevisión antes de entregar.** El agente no pasa por una lista de control («¿tiene precio? ¿nombre del cliente? ¿tono?») antes de marcar LISTA. _Nota del dueño: ¿No lo hace el jefe de departamento?_
-- ⏳ **D5** [media · días] **Sin segunda opinión en lo delicado.** Nada hace que otro agente revise una propuesta, un contrato o un pago antes de pedirte el OK.
+- ✅ **D1** [alta · semanas] **Sin evaluaciones de calidad.** Relevance AI permite fijar umbrales de calidad y medir a los agentes todo el tiempo. Aquí no se mide si mejoran o empeoran. → Puntaje de calidad por agente (28 días, con tendencia), % a la primera, devueltas, 👍/👎, y aviso cuando empeora tras cambiar su skill o brief.
+- ✅ **D2** [alta · horas] **Sin 👍 / 👎 en cada entrega.** La única forma de corregir es escribir revise: …. Falta un voto de un clic con motivo. → 👍 / 👎 en cada entrega; el motivo del 👎 va a sus lecciones.
+- ✅ **D3** [alta · días] **Las entregas no dicen de dónde sacan los datos.** Una entrega no cita la nota o la fuente de cada cifra o afirmación. → Cada entrega cierra con «Fuentes:» (notas o páginas) y el detalle lista las notas que leyó; lo que no tiene fuente va marcado (assumed).
+- ✅ **D4** [media · días] **Sin autorrevisión antes de entregar.** El agente no pasa por una lista de control («¿tiene precio? ¿nombre del cliente? ¿tono?») antes de marcar LISTA. _Nota del dueño: ¿No lo hace el jefe de departamento?_ → El jefe solo repasaba en modo equipo; ahora cada agente se revisa en silencio contra su skill y sus lecciones antes de entregar (sin costo extra).
+- ✅ **D5** [media · días] **Sin segunda opinión en lo delicado.** Nada hace que otro agente revise una propuesta, un contrato o un pago antes de pedirte el OK. → En lo delicado (Finanzas, contratos, propuestas, facturas, importes grandes), el jefe revisa y el agente corrige una vez antes de que te llegue (`quality.review`).
 - ▫️ **D6** [baja · semanas] **35 puestos fijos.** No se puede añadir un agente, solo renombrar un puesto. Los demás productos crean los agentes que necesites.
-- ⏳ **D7** [media · horas] **Skills y briefs sin historial.** No se ve quién cambió una skill, qué cambió ni cómo volver a la versión anterior (fuera de git).
+- ✅ **D7** [media · horas] **Skills y briefs sin historial.** No se ve quién cambió una skill, qué cambió ni cómo volver a la versión anterior (fuera de git). → Cada versión de skills y briefs en `data/history/`; en la ficha del agente, «Volver a esta».
 - ▫️ **D8** [alta · días] **Sin modo ensayo.** No hay forma de correr una tarea «en seco», con todo menos el envío, para probar una skill nueva.
-- ⏳ **D9** [media · horas] **Las lecciones crecen sin orden.** Cada revise: se acumula en feedback/. Nada las fusiona en la skill ni quita las repetidas.
-- ⏳ **D10** [media · días] **El enrutador no aprende.** Cuando mueves una tarea a otro departamento o agente, el enrutador no aprende de ese cambio ni lo mide.
+- ✅ **D9** [media · horas] **Las lecciones crecen sin orden.** Cada revise: se acumula en feedback/. Nada las fusiona en la skill ni quita las repetidas. → Las lecciones repetidas se funden solas; con más de 15, un aviso propone pasarlas a la skill.
+- ✅ **D10** [media · días] **El enrutador no aprende.** Cuando mueves una tarea a otro departamento o agente, el enrutador no aprende de ese cambio ni lo mide. → Cuando mueves una tarea, el enrutador lo guarda y lo lee en pedidos parecidos; se mide el % de reasignaciones.
 
 ## E. Disparadores e integraciones
 
@@ -86,16 +86,16 @@ Hechos: 32 de 69 marcados.
 
 ## G. Aprobaciones
 
-- ⏳ **G1** [alta · días] **No puedes editar el borrador antes de aprobar.** Para cambiar una línea hay que pedírselo al agente con revise: y esperar otra ejecución.
-- ⏳ **G2** [alta · días] **Todo pide el mismo OK.** No hay niveles de riesgo ni autonomía que se gane: aprobar solo lo de bajo riesgo tras 20 aciertos seguidos.
-- ⏳ **G3** [alta · días] **Aprobar sin ver exactamente qué sale.** El borrador se ve como texto. Falta una tarjeta con destinatario, asunto, adjuntos e importe, tal como se enviará.
-- ⏳ **G4** [media · horas] **Aprobaciones que nunca caducan.** Un borrador viejo sigue ahí sin recordatorio ni vencimiento.
-- ⏳ **G5** [media · días] **No se puede delegar la aprobación.** No puedes decir «las respuestas a clientes las aprueba María».
-- ⏳ **G6** [media · horas] **Aprobar en lote.** Para aprobar 10 borradores hay que abrirlos uno por uno.
-- ⏳ **G7** [alta · días] **Sin «deshacer envío».** Después de aprobar, la acción es inmediata. No hay 30 segundos para arrepentirse, como en Gmail.
-- ⏳ **G8** [media · horas] **Sin registro de quién aprobó.** No queda guardado quién aprobó qué, cuándo y con qué cambios.
-- ⏳ **G9** [alta · días] **Reglas por importe.** No hay «todo pago de más de $200 pide OK aunque la rutina diga que no».
-- ⏳ **G10** [media · días] **El OK es por rutina, no por acción.** needsOk vale para toda la rutina. Una rutina que lee y además envía queda o toda frenada o toda suelta.
+- ✅ **G1** [alta · días] **No puedes editar el borrador antes de aprobar.** Para cambiar una línea hay que pedírselo al agente con revise: y esperar otra ejecución. → «Editar el borrador» en el detalle: lo cambias a mano y sale tu versión, sin otra ejecución.
+- ✅ **G2** [alta · días] **Todo pide el mismo OK.** No hay niveles de riesgo ni autonomía que se gane: aprobar solo lo de bajo riesgo tras 20 aciertos seguidos. → Riesgo alto/medio/bajo en cada borrador; tras 20 aprobaciones seguidas sin cambios, la oficina ofrece dejar la rutina enviar sola (`autonomous`); lo de alto riesgo nunca va solo.
+- ✅ **G3** [alta · días] **Aprobar sin ver exactamente qué sale.** El borrador se ve como texto. Falta una tarjeta con destinatario, asunto, adjuntos e importe, tal como se enviará. → Tarjeta «Lo que saldrá»: canal, destinatarios, asunto, importes, adjuntos (también en Telegram).
+- ✅ **G4** [media · horas] **Aprobaciones que nunca caducan.** Un borrador viejo sigue ahí sin recordatorio ni vencimiento. → Recordatorio a las 24 h (también por Telegram) y caducidad a los 7 días sin enviar nada.
+- ✅ **G5** [media · días] **No se puede delegar la aprobación.** No puedes decir «las respuestas a clientes las aprueba María». → `telegram.approvers`: personas que aprueban solo lo de sus departamentos desde Telegram.
+- ✅ **G6** [media · horas] **Aprobar en lote.** Para aprobar 10 borradores hay que abrirlos uno por uno. → «Aprobar todas» en el filtro En espera (dos clics) y `/api/tasks/approve-batch`.
+- ✅ **G7** [alta · días] **Sin «deshacer envío».** Después de aprobar, la acción es inmediata. No hay 30 segundos para arrepentirse, como en Gmail. → 30 s para «Deshacer» tras aprobar, en la página y en Telegram (`approvals.undoSeconds`).
+- ✅ **G8** [media · horas] **Sin registro de quién aprobó.** No queda guardado quién aprobó qué, cuándo y con qué cambios. → Historial en cada tarea (aprobó, editó, devolvió, deshizo, caducó; quién y cuándo) y en `data/audit/`.
+- ✅ **G9** [alta · días] **Reglas por importe.** No hay «todo pago de más de $200 pide OK aunque la rutina diga que no». → `approvals.amountLimit` (00): una tarea o un envío con un importe mayor siempre espera tu OK; el guardián lo bloquea.
+- ✅ **G10** [media · días] **El OK es por rutina, no por acción.** needsOk vale para toda la rutina. Una rutina que lee y además envía queda o toda frenada o toda suelta. → Con el guardián, el OK es por acción: una rutina sin `needsOk` lee libre y solo lo que intenta enviar queda esperando.
 
 ## H. Conocimiento y memoria
 

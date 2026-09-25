@@ -281,6 +281,31 @@ Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs
   - `prices`: precios propios.
 - **Precios:** la tabla lleva fecha (`PRICES_AS_OF`) y sus fuentes. `npm run check` avisa cuando tiene más de 90 días; al actualizarla, usa las páginas oficiales de cada proveedor.
 
+## Aprobaciones y calidad (V4.4, 25 sep 2026)
+
+- **Aprobaciones** (`approvals.mjs`, `office.config.json → approvals`):
+  - el detalle muestra «Lo que saldrá» (canal, destinatarios, asunto, importes, adjuntos) y el riesgo (alto, medio, bajo);
+  - **Editar el borrador** a mano, sin otra ejecución;
+  - al aprobar hay `undoSeconds` (30) para **Deshacer**, en la página y en Telegram;
+  - historial de quién aprobó, editó, devolvió o deshizo, también en `data/audit/`;
+  - **Aprobar todas** en el filtro «En espera» (dos clics);
+  - recordatorio tras `remindAfterHours` (24) y caducidad tras `expireAfterDays` (7): no se envía nada;
+  - todo importe mayor que `amountLimit` ($200) espera el OK siempre, aunque la tarea no lo pidiera; el guardián lo bloquea.
+- **Autonomía que se gana:** tras `autonomyAfter` (20) aprobaciones seguidas sin cambios de una rutina, un aviso ofrece dejarla enviar sola. En la rutina: `"autonomous": true` en routines.json. Los importes grandes siguen esperando.
+- **Aprobadores delegados:** `telegram.approvers { "<id de Telegram>": ["emails", "sales"] }` en `office.config.local.json`. Esas personas solo aprueban o devuelven lo de sus departamentos.
+- **OK por acción, no por rutina:** con `safety.writes = aprobar`, una rutina con `needsOk: false` lee y trabaja libre, y solo lo que intente enviar queda esperando tu OK.
+- **Calidad** (`quality.mjs`), sección «Calidad» de la ventana U:
+  - puntaje por agente (una entrega usada tal cual vale 100; cada devolución resta 30; 👎 resta 50);
+  - % aprobado a la primera, 👍/👎, y un aviso cuando un agente empeora tras cambiar su skill o su brief;
+  - 👍/👎 en cada entrega; el motivo de un 👎 entra en sus lecciones.
+- **Lo que hace cada agente:**
+  - termina con «Fuentes:» (las notas o páginas que usó);
+  - se revisa en silencio contra su skill antes de entregar;
+  - en lo delicado (Finanzas, contratos, propuestas, facturas o importes grandes), el jefe del departamento revisa y el agente corrige una vez antes de que te llegue. Se configura en `quality.review`.
+- **Historial de skills y briefs:** cada versión queda en `data/history/`. La ficha del agente tiene «Versiones de sus skills y brief» con **Volver a esta**.
+- **Lecciones:** las repetidas se funden solas; con más de 15, un aviso propone pasarlas a la skill.
+- **Enrutador:** cuando mueves una tarea a otro agente, se guarda en `data/routing.json`. El enrutador lee los casos parecidos antes de elegir.
+
 ## Agent Teams
 
 When the owner says "as a team", "get the team on it", "spawn three teammates to …", or presses TEAM in the bar, the department **lead** takes the task and splits it into two to `teams.max` independent pieces on the desks whose `does` or skills fit; the pieces run at the same time, one Claude process each; teammates may leave one-line notes (`@lead: …`, `@<id>: …`) which reach the lead; the lead writes the final from the pieces. This is the office's own build of the shape (lead · teammates · shared piece list · notes) from separate headless Claude sessions — Claude Code's own agent teams only spawn in an interactive terminal, so they are not what runs here. Nothing to write for a team task; it is the same roster, briefs and skills. To make a seat a better teammate, improve its `does` (the lead splits by it) and its skills. A team routine is `"team": true` in `routines.json` with the lead as `agent`.

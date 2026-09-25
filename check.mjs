@@ -688,6 +688,10 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
   fs.mkdirSync(path.join(brainCopy, 'Agents Office'), { recursive: true });
   fs.writeFileSync(path.join(brainCopy, 'Agents Office', 'triggers.json'), JSON.stringify({ triggers: [{ id: 'check-form', dept: 'sales', agent: 'piper', source: 'form', title: 'Contacto de {{name}}', text: 'Responde a {{name}}' }] })); // V4.4: one trigger for the webhook step
   const HOOK = 'check-' + 'x'.repeat(24);
+  { const now = Date.now(); fs.mkdirSync(path.join(sandbox, 'data'), { recursive: true }); fs.writeFileSync(path.join(sandbox, 'data', 'tasks.json'), JSON.stringify([ // V4.4: two drafts waiting and a finished task, for the approvals step
+    { id: 'wait1', dept: 'sales', agent: 'piper', title: 'Propuesta para Sol', text: 'Propuesta', state: 'waiting', needsOk: true, draft: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', result: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', addedAt: now, waitingAt: now },
+    { id: 'wait2', dept: 'sales', agent: 'folo', title: 'Seguimiento a Luna', text: 'Seguimiento', state: 'waiting', needsOk: true, draft: 'Hola Luna', result: 'Hola Luna', addedAt: now, waitingAt: now },
+    { id: 'done1', dept: 'fin', agent: 'invo', title: 'Lista de facturas', text: 'Lista', state: 'done', result: 'Tres facturas', addedAt: now, doneAt: now }])); }
   const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '' };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
@@ -722,6 +726,20 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       const r = await fetch(base + '/api/costs.csv?month=' + c.month); const t = await r.text();
       if (!r.ok || !/text\/csv/.test(r.headers.get('content-type')) || !t.includes('fecha,hora,tarea')) throw new Error('csv ' + r.status);
       return `month ${c.month} · US$${c.usd.toFixed(2)} · ${c.prices.length} prices · CSV ok`;
+    });
+    await step('server: approvals — edit the draft, approve with undo, the history, 👍/👎, approve in one go', async () => {
+      const post = (p, b, by) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(by ? { 'x-office-by': by } : {}) }, body: JSON.stringify(b || {}) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const e = await post('/tasks/wait1/draft', { draft: 'Para: sol@cliente.com\nAsunto: Propuesta final\nTotal: $150' }); if (!e.ok || !e.task.editedDraft || e.task.preview.subject !== 'Propuesta final') throw new Error('edit: ' + JSON.stringify(e).slice(0, 120));
+      const a = await post('/tasks/wait1/approve', {}, 'check'); if (!a.ok || !a.sendAt) throw new Error('approve: ' + JSON.stringify(a));
+      const again = await post('/tasks/wait1/approve'); if (again.status !== 409) throw new Error('a second approve was not refused');
+      const u = await post('/tasks/wait1/undo', {}, 'check'); if (!u.ok) throw new Error('undo: ' + JSON.stringify(u));
+      const t = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === 'wait1');
+      if (t.state !== 'waiting' || t.approving || t.approvals.map(x => x.action).join() !== 'edit,approve,undo' || t.approvals[1].by !== 'check') throw new Error('after undo: ' + JSON.stringify(t.approvals));
+      const v = await post('/tasks/done1/vote', { vote: 'down', reason: 'faltó el total' }); if (v.vote !== 'down') throw new Error('vote');
+      const b = await post('/tasks/approve-batch', { ids: ['wait1', 'wait2'] }); if (b.approved !== 2) throw new Error('batch: ' + JSON.stringify(b));
+      await post('/tasks/wait1/undo'); await post('/tasks/wait2/undo'); // nothing is sent from the check
+      const q = await (await fetch(base + '/api/quality')).json(); if (!Array.isArray(q.agents)) throw new Error('quality');
+      return 'edit → preview «Propuesta final» · approve → 30 s to undo · second approve refused · history edit,approve,undo · 👎 recorded · batch of 2';
     });
     await step('server: /api/brain has the live graph', async () => { const g = await (await fetch(base + '/api/brain')).json(); if (!g.nodes.length) throw new Error('empty'); return `${g.nodes.length} linked notes`; });
     await step('server: /api/mcp lists this machine\'s connectors', async () => {

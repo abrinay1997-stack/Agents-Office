@@ -57,3 +57,12 @@ test('addresses and numbers in a send', () => {
   assert.deepEqual(t.phones, ['50761234567']);
   assert.deepEqual(S.unknownTargets(t, 'a@b.com y +507 6123 4567'), ['c@d.org']);
 });
+
+test('a send over the amount limit waits for the OK unless it is the run after the OK; an autonomous routine may send', () => {
+  const pay = 'mcp__stripe__create_payment_link';
+  assert.equal(S.decide(pay, { amount: '$450' }, { writes: true, runMode: 'task', amountLimit: 200 }).code, 'amount');
+  assert.equal(S.decide(pay, { amount: '$450' }, { writes: true, runMode: 'approve', amountLimit: 200 }).allow, true);
+  assert.equal(S.decide(pay, { amount: '$150' }, { writes: true, runMode: 'task', amountLimit: 200 }).allow, true);
+  assert.equal(S.writesAllowed('aprobar', 'autonomous'), true);
+  assert.equal(S.writesAllowed('nunca', 'autonomous'), false);
+});

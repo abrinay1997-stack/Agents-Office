@@ -44,7 +44,7 @@ try {
     let lines = []; try { lines = fs.readFileSync(auditFile, 'utf8').split('\n'); } catch {}
     for (const l of lines) { if (!l) continue; let j; try { j = JSON.parse(l); } catch { continue; } if (j.decision !== 'allow' || j.kind !== 'write') continue; if (j.agent === ctx.agent) counts.agentToday++; for (const a of j.targets || []) counts.byTarget[a] = (counts.byTarget[a] || 0) + 1; }
   }
-  const d = decide(tool, ev.tool_input, { writes: !!ctx.writes, known: ctx.known ?? null, safety, tainted: tainted(), counts });
+  const d = decide(tool, ev.tool_input, { writes: !!ctx.writes, known: ctx.known ?? null, safety, tainted: tainted(), counts, runMode: ctx.runMode, amountLimit: +ctx.amountLimit || 0 });
   const t = d.kind === 'write' ? targetsOf(ev.tool_input) : null;
   log({ phase, kind: d.kind, decision: d.allow ? 'allow' : 'block', code: d.code, why: d.why, targets: t ? [...t.emails, ...t.phones] : undefined, url: ev.tool_input?.url || undefined });
   if (!d.allow) refuse(d.why);

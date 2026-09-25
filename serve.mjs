@@ -58,6 +58,9 @@ import * as rel from './reliability.mjs';
 import * as telegram from './telegram.mjs';
 import * as triggers from './triggers.mjs';
 import * as costs from './costs.mjs';
+import * as approvals from './approvals.mjs';
+import * as quality from './quality.mjs';
+import * as history from './history.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 
@@ -110,7 +113,14 @@ function reloadRoster() {
   if (r.problems.join() !== roster.problems.join()) for (const w of r.problems) console.warn('agents:', w);
   Object.assign(roster, { problems: r.problems, customised: r.customised, briefed: r.briefed, files: r.files });
 }
-const refreshSkills = () => { reloadRoster(); const s = loadSkills(BRAIN, AGENTS); if (s.problems.join() !== skills.problems.join()) for (const w of s.problems) console.warn('skills:', w); skills = s; return s; };
+const refreshSkills = () => { reloadRoster(); const s = loadSkills(BRAIN, AGENTS); if (s.problems.join() !== skills.problems.join()) for (const w of s.problems) console.warn('skills:', w); skills = s; keepHistory(s); return s; };
+function keepHistory(s) { // V4.4 (D7): every version of a skill or a brief is kept in data/history/
+  try {
+    const items = [...s.skills.filter(k => k.source !== 'shipped').map(k => ({ kind: 'skill', name: k.name, text: k.text, agents: AGENTS.filter(a => k.everyone || k.agents.includes(a.id) || k.departments.includes(a.department)).map(a => a.id) })),
+      ...AGENTS.filter(a => a.brief).map(a => ({ kind: 'brief', name: a.id, text: a.brief, agents: [a.id] }))];
+    for (const c of history.snapshot(DATA, items)) console.log(`  ✎ ${c.kind === 'skill' ? 'skill «' + c.name + '»' : 'brief of ' + agentName(c.name)} changed — the earlier version is in data/history/`);
+  } catch (e) { console.warn('history:', e.message); }
+}
 const leadOf = dept => AGENTS.find(a => a.department === dept && a.lead) || AGENTS.find(a => a.department === dept);
 const setupMap = () => Object.fromEntries(DEPT_KEYS.map(k => [k, onboard.isSetUp(AGENTS, skills, k)]));
 
@@ -242,7 +252,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   const runId = nid(), guardFile = path.join(CLI_CWD, `guard-${runId}.json`), taintFile = path.join(CLI_CWD, `taint-${runId}.json`), settingsFile = path.join(CLI_CWD, `settings-${runId}.json`);
   const hardOff = tools && !writes && (runMode === 'draft' || runMode === 'piece' || pol === 'nunca') ? mcp.writeTools(agent, SAFETY().safeTools) : [];
   if (tools && agent) {
-    fs.writeFileSync(guardFile, JSON.stringify({ run: runId, task: taskId, agent: agent.id, dept: agent.department, writes, runMode, policy: pol, known: runMode === 'approve' ? known : null, safety: cfg.safety || {}, auditDir: AUDIT, taintFile }));
+    fs.writeFileSync(guardFile, JSON.stringify({ run: runId, task: taskId, agent: agent.id, dept: agent.department, writes, runMode, policy: pol, amountLimit: APPR().amountLimit, known: runMode === 'approve' ? known : null, safety: cfg.safety || {}, auditDir: AUDIT, taintFile }));
     const cmd = phase => `"${process.execPath}" "${GUARD}" ${phase}`;
     fs.writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: '', hooks: [{ type: 'command', command: cmd('pre'), timeout: 30 }] }], PostToolUse: [{ matcher: '', hooks: [{ type: 'command', command: cmd('post'), timeout: 30 }] }] } }));
   }
@@ -340,11 +350,18 @@ function agentBrief(a) {
   return (a.brief ? `\nSTANDING INSTRUCTIONS FROM THE OWNER\n${a.brief}\n` : '') + (skills.promptText(a) ? `\n${skills.promptText(a)}\n` : '') + (lessons ? `\n${lessons}\n` : '');
 }
 const toolKeys = names => [...new Set(names.map(n => /^mcp__/.test(n) ? mcp.keyOf(n) : n === 'WebSearch' || n === 'WebFetch' ? 'web' : null).filter(Boolean))];
+// V4.4 (D10): the owner's routing corrections (data/routing.json) — the router reads the closest ones before choosing
+const ROUTING = path.join(DATA, 'routing.json');
+const loadRouting = () => { try { return JSON.parse(fs.readFileSync(ROUTING, 'utf8')); } catch { return []; } };
+function routeCorrection(task, to) {
+  const l = loadRouting(); l.push({ t: Date.now(), dept: to.department, fromDept: task.dept, text: String(task.text || task.title).slice(0, 300), from: task.agent, to: to.id });
+  fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(ROUTING + '.tmp', JSON.stringify(l.slice(-300), null, 1)); fs.renameSync(ROUTING + '.tmp', ROUTING);
+}
 async function route(dept, text) {
   const d = DEPTS[dept]; refreshSkills();
   const system = `You are the router for ${cfg.name}, a business whose departments are run by AI agents. ` +
     'Pick the single best agent for the owner\'s request — an agent whose skills match the request is the right one — and return ONLY a JSON object — no prose, no code fences.';
-  const user = `Department: ${d.name}\nAgents (id · name · role · what they do):\n${rosterText(dept)}\n\nOwner's request: "${text}"\n\n` +
+  const user = `Department: ${d.name}\nAgents (id · name · role · what they do):\n${rosterText(dept)}\n${quality.lessonsText(quality.lessonsFor(loadRouting(), dept, text), agentName)}\nOwner's request: "${text}"\n\n` +
     'Return: {"agent":"<id from the list>","title":"<clean imperative task title, max 70 characters>","plan":["<step>","<step>","<step>"],"eta_minutes":<integer>,"why":"<one short sentence>","needs_ok":<true if doing this involves sending, posting, paying, deleting or changing anything outside this machine; false if it only reads and reports>}';
   let j; // routing is a one-line JSON job: always Sonnet
   try { j = parseJSON(await ask(system, user, { maxTokens: 800, timeout: 150000, model: 'sonnet' })); }
@@ -363,7 +380,9 @@ function agentSystem(a, index, read, { extra = '', words = 260 } = {}) {
   return `You are ${a.name}, ${a.role || 'an agent'}, in the ${d.name} department of ${cfg.name}. ${a.does}\n${agentBrief(a)}` + (extra ? `\n${extra}\n` : '') +
     'Escribe el entregable terminado en sí, no una descripción de lo que harías. Texto plano: un encabezado corto, luego secciones cortas o viñetas. ' +
     `Como máximo ${words} palabras, salvo que una skill o las instrucciones del dueño indiquen otra forma — eso prevalece. Sin preámbulo, sin despedida. Apóyalo en las notas de la empresa de abajo; donde falte un dato, haz una suposición razonable y márcala (assumed). ` +
-    'Si usaste una herramienta, dilo en una línea al final ("Used: Gmail — searched the client thread").\n\n' +
+    'Si usaste una herramienta, dilo en una línea al final ("Used: Gmail — searched the client thread"). ' +
+    'FUENTES: cada cifra, precio, fecha o dato de un cliente sale de algún lado; al final, una línea «Fuentes:» con las notas (por su nombre) o las páginas que usaste; lo que no tenga fuente va marcado (assumed). ' + // V4.4 (D3)
+    'ANTES DE ENTREGAR, revisa tu trabajo en silencio contra las reglas de tu skill, las lecciones y la petición del dueño (¿falta un precio, un nombre, un paso, el tono?) y corrige lo que falle; no muestres la revisión.\n\n' + // V4.4 (D4)
     `${mcp.promptText(a)}${studioText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
 }
 function studioText(a) {
@@ -378,7 +397,8 @@ function studioText(a) {
 const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. Name every recipient with the exact email address or phone number, and every amount: after the OK the office only lets a send reach the addresses written in this draft. End with one line saying exactly what will go out when approved (or that nothing needs to).'
   : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
 const timeoutFor = task => Math.min(3600, (task.timeout || RUN_TIMEOUT / 1000) * (task.timeoutMul || 1)) * 1000; // V4.4 (B4): a routine's own clock; a retry after a timeout gets twice as long
-const runModeOf = mode => mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : 'task'; // V4.4: safety.writesAllowed decides from this and the policy
+const runModeOf = (mode, task) => mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : task?.autonomous ? 'autonomous' : 'task';
+const APPR = () => approvals.config(cfg.approvals); // V4.4 (G): undo window, reminders, expiry, amount limit, autonomy // V4.4: safety.writesAllowed decides from this and the policy
 const knownFor = task => `${task.text || ''}\n${task.draft || task.result || ''}`; // after the OK, a send names only addresses in what the owner approved
 const pickFor = (task, a) => { // model + effort: four places, one precedence (task > routine > agent > office)
   const pick = modelFor({ task: task.model, routine: task.routineModel, agent: a.model, office: cfg.model });
@@ -405,7 +425,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
   const guard = {};
-  const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
+  const { text, tools, modelId: ran, usd } = await askX(system, user, { model: pick.model, effort: eff.effort, agent: a, taskId: task.id, runMode: runModeOf(mode, task), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
   if (!text) throw new Error('Claude returned nothing');
   return { usd, result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, guard };
 }
@@ -461,7 +481,7 @@ async function runTeamLead(task, feedback, mode) {
   const user = teams.synthPrompt({ task, pieces: tm.pieces || [], messages: tm.messages || [], nameOf, feedback: mode === 'approve' ? null : feedback }) + routineLineFor(task) + modeLineFor(mode, task);
   const { pick, eff } = pickFor(task, lead);
   const guard = {};
-  const { text, tools, modelId: ran, usd: leadUsd } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
+  const { text, tools, modelId: ran, usd: leadUsd } = await askX(system, user, { model: pick.model, effort: eff.effort, maxTokens: 6000, agent: lead, taskId: task.id, runMode: runModeOf(mode, task), known: knownFor(task), guardOut: guard, timeout: timeoutFor(task) });
   if (!text) throw new Error('Claude returned nothing');
   for (const p of tm.pieces || []) if (p.guard) { guard.blocked = [...(guard.blocked || []), ...p.guard.blocked]; guard.taint = guard.taint || p.guard.taint; }
   const allTools = [...new Set([...(tm.pieces || []).flatMap(p => p.tools || []), ...toolKeys(tools)])];
@@ -610,7 +630,7 @@ function startRun(id, opts = {}) { // one run, tracked; when it ends the next pe
 }
 const enqueue = fn => fn(); // kept for the approve/reject path: those runs start at once (the owner is waiting on them)
 function fire(r, { due = Date.now(), late = false, by = 'routine', missed = 0 } = {}) { // the routine becomes a task and runs here, page or no page
-  const task = { id: nid(), dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, due, late, missed: missed > 1 ? missed : undefined, timeout: r.timeout, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined };
+  const task = { id: nid(), dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, autonomous: r.autonomous || undefined, due, late, missed: missed > 1 ? missed : undefined, timeout: r.timeout, minutesSaved: r.minutesSaved, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined };
   const list = load(); list.push(task); save(list);
   routines.advance(RSTATE, r, Date.now(), task.id, late); routines.saveState(DATA, RSTATE);
   if (late) notice('late', `«${r.title}» se hizo tarde${missed > 1 ? ` (se perdieron ${missed} ejecuciones mientras la computadora dormía; se hace una)` : ''}: tocaba el ${new Date(due).toLocaleString('es-PA', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}`);
@@ -618,11 +638,39 @@ function fire(r, { due = Date.now(), late = false, by = 'routine', missed = 0 } 
   setImmediate(pump);
   return task;
 }
+// V4.4 (D5): a second opinion on sensitive work — the department lead reads the draft before it reaches the owner, and the
+// desk fixes what the lead flags (one pass). office.config.json → quality.review { enabled, departments, words }
+const REVIEW = () => ({ enabled: true, departments: ['fin'], words: ['contrato', 'propuesta', 'cotización', 'cotizacion', 'factura', 'presupuesto', 'legal', 'contract', 'proposal', 'invoice'], ...(cfg.quality?.review || {}) });
+function needsReview(task, result) {
+  const r = REVIEW(); if (!r.enabled || task.piece || task.team) return false;
+  const a = AGENTS.find(x => x.id === task.agent); if (!a || a.lead) return false;
+  const hay = `${task.title} ${task.text}`.toLowerCase();
+  return r.departments.includes(task.dept) || r.words.some(w => hay.includes(String(w).toLowerCase())) || approvals.overLimit(result, APPR().amountLimit).length > 0;
+}
+async function reviewDraft(task, result) {
+  const lead = leadOf(task.dept), a = AGENTS.find(x => x.id === task.agent);
+  const system = `Eres ${lead.name}, jefe de ${DEPTS[task.dept].name} en ${cfg.name}. Revisas el trabajo de ${a.name} antes de que llegue al dueño. Devuelve SOLO JSON, sin texto alrededor.`;
+  const user = `Pedido del dueño: ${task.text}\n\nBorrador de ${a.name}:\n${result.slice(0, 12000)}\n\nRevisa: datos o cifras sin fuente, importes o cálculos que no cuadran, destinatarios o nombres dudosos, partes del pedido que faltan, promesas que la empresa no puede cumplir, tono.\nDevuelve {"ok": true} si puede ir al dueño tal cual, o {"ok": false, "fixes": ["<corrección concreta>", …]} (máximo 5).`;
+  try { const j = parseJSON(await ask(system, user, { maxTokens: 700, timeout: 120000, model: 'sonnet', taskId: task.id, kind: 'revision' })); return { ok: !!j.ok, fixes: Array.isArray(j.fixes) ? j.fixes.slice(0, 5).map(String) : [], by: lead.id, at: Date.now() }; }
+  catch (e) { console.warn('review:', e.message); return null; }
+}
 async function runServerTask(id, { feedback, approve } = {}) {
   let list = load(); const task = list.find(t => t.id === id); if (!task) return null;
   task.state = 'doing'; task.startedAt = Date.now(); delete task.ask; save(list);
   try {
-    const out = await run(task, feedback, approve ? 'approve' : task.needsOk ? 'draft' : 'routine');
+    let out = await run(task, feedback, approve ? 'approve' : task.needsOk ? 'draft' : 'routine');
+    if (!approve && !feedback && needsReview(task, out.result)) { // D5
+      const rv = await reviewDraft(task, out.result);
+      if (rv) {
+        task.review = rv;
+        if (!rv.ok && rv.fixes.length) {
+          console.log(`  ⚖ ${task.id} ${agentName(rv.by)} asks for ${rv.fixes.length} fix(es) before it reaches you`);
+          task.result = out.result;
+          const again = await run(task, `Revisión de ${agentName(rv.by)} (tu jefe) antes de mostrarlo al dueño:\n- ${rv.fixes.join('\n- ')}`, task.needsOk ? 'draft' : 'routine');
+          out = { ...again, usd: (out.usd || 0) + (again.usd || 0) };
+        }
+      }
+    }
     if (approve) { task.result = (task.draft || task.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; task.approved = true; task.approvedAt = Date.now(); }
     else task.result = out.result;
     delete task.retryAt; delete task.lastError; delete task.partial; claudeLogin.ok = true;
@@ -632,11 +680,11 @@ async function runServerTask(id, { feedback, approve } = {}) {
     if (g.blocked?.length || g.taint) task.guard = { blocked: (g.blocked || []).slice(0, 12), taint: g.taint || null, at: Date.now(), approve: !!approve };
     else if (!task.trigger) delete task.guard; // a trigger's warning (what arrived had hidden orders) stays on the task
     // V4.4 (A3): under «aprobar» a task that tried to send without the OK is not lost — it waits for the OK with its draft
-    const wanted = (g.blocked || []).some(b => b.code === 'no-writes');
+    const wanted = (g.blocked || []).some(b => b.code === 'no-writes' || b.code === 'amount');
     if (!approve && !task.needsOk && wanted && !g.taint && safety.modeFor(cfg.safety, AGENTS.find(x => x.id === task.agent)?.department) !== 'nunca') { task.needsOk = true; task.heldForOk = true; }
     Object.assign(task, { read: out.read, tools: [...new Set([...(task.tools || []), ...out.tools])], used: [...new Set([...(task.used || []), ...out.used])], skills: out.skills, error: false, modelUsed: out.modelUsed, modelFrom: out.modelFrom, modelId: out.modelId, effortUsed: out.effortUsed, effortFrom: out.effortFrom, ...(out.team ? { team: out.team } : {}) });
     for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) { applyJob(task, j, ['result']); media.markAttached(j.id); } // images an agent made during its run
-    if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = task.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); }
+    if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = task.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); delete task.editedDraft; delete task.remindedAt; draftFacts(task); }
     else { task.state = 'done'; task.doneAt = Date.now(); task.note = writeNote(task); await rebuildGraph(); }
   } catch (e) {
     // V4.4 (B1, B4, B7): a passing failure is retried later on its own; a login problem stops and says how to fix it; what was written before a timeout is kept
@@ -785,6 +833,72 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
 // and a hostile DNS name pointed at 127.0.0.1 is refused by the Host check (DNS rebinding).
+/* ---------- V4.4 (G1–G10): approvals — edit, undo, history, batches, reminders, expiry, earned autonomy ---------- */
+function tidyLessons(a) { // V4.4 (D9): no repeated lessons; a long list is time to fold them into the skill
+  try {
+    const r = learn.tidy(BRAIN, a.id, quality.dedupe);
+    if (r.removed.length) console.log(`  ↳ ${a.name}: ${r.removed.length} repeated lesson(s) folded`);
+    if (r.kept > 15) notice('lessons', `${a.name} ya tiene ${r.kept} lecciones permanentes. Conviene fundirlas en su skill: abre Claude Code en la carpeta de la oficina y dile «funde las lecciones de ${a.name} en su skill».`, { key: 'lessons-' + a.id });
+  } catch (e) { console.warn('lessons:', e.message); }
+}
+const whoFrom = (req, b = {}) => String(b.by || req.headers['x-office-by'] || 'la página').slice(0, 80); // Telegram says which person; the page is the owner
+const undoTimers = new Map();
+function logApproval(t, action, by, extra = {}) { (t.approvals ||= []).push(approvals.entry(action, by, extra)); try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), task: t.id, agent: t.agent, dept: t.dept, tool: 'approval', kind: 'approval', decision: action, by, ...extra }) + '\n'); } catch {} }
+function decideDraft(id, verb, note, by) {
+  const l = load(), t = l.find(x => x.id === id);
+  if (!t) return { status: 404, error: 'esa tarea ya no existe' };
+  if (t.state !== 'waiting') return { status: 400, error: 'esta tarea no está esperando tu visto bueno' };
+  if (t.approving) return { status: 409, error: 'ya está aprobada: se envía en unos segundos (puedes deshacerlo)' };
+  t.seenAt = t.seenAt || Date.now();
+  if (verb === 'reject') {
+    t.state = 'doing'; t.startedAt = Date.now(); t.rejected = true; logApproval(t, 'reject', by, { note: note.slice(0, 300) }); save(l);
+    console.log(`↩ ${t.id} sent back by ${by}: ${note.slice(0, 80)}`);
+    enqueue(() => startRun(t.id, { feedback: note || 'No es esto. Retrabájalo.' }))
+      .then(x => { if (note && x && !x.error) { const a = AGENTS.find(y => y.id === x.agent); return learn.classify(ask, a, x, note).then(v => { const r = learn.record(BRAIN, a, x, note, v); tidyLessons(a); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); }); } })
+      .catch(e => console.warn('approval:', e.message));
+    return { ok: true, id: t.id, state: 'doing' };
+  }
+  const wait = APPR().undoSeconds;
+  logApproval(t, 'approve', by, { risk: t.risk, edited: !!t.editedDraft });
+  if (wait > 0) { // G7: a few seconds to change one's mind, like Gmail's «Deshacer envío»
+    t.approving = { by, at: Date.now(), sendAt: Date.now() + wait * 1000 }; save(l);
+    undoTimers.set(t.id, setTimeout(() => commitApproval(t.id), wait * 1000));
+    console.log(`✅ ${t.id} approved by ${by} — sends in ${wait} s unless undone`);
+    return { ok: true, id: t.id, state: 'waiting', sendAt: t.approving.sendAt, undoSeconds: wait };
+  }
+  save(l); commitApproval(t.id); return { ok: true, id: t.id, state: 'doing' };
+}
+function commitApproval(id) {
+  undoTimers.delete(id);
+  const l = load(), t = l.find(x => x.id === id); if (!t || t.state !== 'waiting') return;
+  delete t.approving; t.state = 'doing'; t.startedAt = Date.now(); save(l);
+  console.log(`✅ ${t.id} ${agentName(t.agent)} is sending`);
+  enqueue(() => startRun(t.id, { approve: true })).then(x => { if (x && !x.error) offerAutonomy(x); }).catch(e => console.warn('approval:', e.message));
+}
+function undoApproval(id, by) {
+  const l = load(), t = l.find(x => x.id === id);
+  if (!t || !t.approving) return { status: 409, error: 'ya no se puede deshacer: el envío empezó' };
+  clearTimeout(undoTimers.get(id)); undoTimers.delete(id); delete t.approving; logApproval(t, 'undo', by); save(l);
+  console.log(`↶ ${t.id} approval undone by ${by}`); return { ok: true, id, state: 'waiting' };
+}
+function offerAutonomy(t) { // G2: after N clean approvals in a row, the routine may send without asking
+  if (!t.routine) return; const r = rlist.routines.find(x => x.id === t.routine); if (!r || r.autonomous || !r.needsOk) return;
+  if (approvals.earnedAutonomy(load(), t.routine, APPR())) notice('autonomy', `Aprobaste las últimas ${APPR().autonomyAfter} entregas de «${r.title}» sin cambios. Si quieres, deja que envíe sola: en el calendario, abre la rutina y quítale «pedir mi OK» (los importes de más de $${APPR().amountLimit} siempre esperarán).`, { key: 'autonomy-' + r.id });
+}
+function draftFacts(t) { const d = t.draft || t.result || ''; t.risk = approvals.risk(d, APPR()); t.preview = approvals.preview(d); } // G2, G3
+function tickApprovals() { // G4: reminders and expiry
+  const now = Date.now(), c = APPR(); let l; try { l = load(); } catch { return; }
+  for (const t of l) if (t.approving && t.approving.sendAt <= now && !undoTimers.has(t.id)) setImmediate(() => commitApproval(t.id)); // an approval pending across a restart goes out
+  const d = approvals.due(l, c, now); if (!d.remind.length && !d.expire.length) return;
+  for (const id of d.remind) { const t = l.find(x => x.id === id); t.remindedAt = now; notice('remind', `«${t.title}» espera tu visto bueno desde hace ${agoText(now - t.waitingAt).replace('hace ', '')}.`, { task: t.id }); for (const h of taskHooks) try { h({ ...t, agentName: agentName(t.agent), deptName: DEPTS[t.dept]?.name }); } catch {} }
+  for (const id of d.expire) { const t = l.find(x => x.id === id); Object.assign(t, { state: 'done', doneAt: now, expired: true, result: `${t.draft || t.result || ''}\n\n---\n⌛ CADUCÓ: pasaron ${c.expireAfterDays} días sin tu visto bueno y no se envió nada.` }); logApproval(t, 'expire', 'la oficina'); notice('expired', `«${t.title}» caducó sin tu visto bueno; no se envió nada.`, { task: t.id }); }
+  save(l);
+}
+setInterval(tickApprovals, 60000); setTimeout(tickApprovals, 5000);
+function checkQuality() { // V4.4 (D1): a desk whose work got worse after its skill or brief changed
+  try { for (const d of quality.drops(load(), AGENTS, history.changesByAgent(DATA))) notice('quality', `La calidad de ${d.name} bajó de ${d.before} a ${d.after} (de 100) desde que cambió su skill o su brief el ${new Date(d.since).toLocaleDateString('es-PA')}. Puedes volver a la versión anterior desde su ficha.`, { level: 'warn', key: 'quality-' + d.agent + '-' + d.since }); } catch (e) { console.warn('quality:', e.message); }
+}
+setInterval(checkQuality, 6 * 3600e3); setTimeout(checkQuality, 20000);
 const HOST = cfg.host || '127.0.0.1';
 /* ---------- V4.4 (E1, E2): triggers — a webhook turns an event (a form, a payment, a WhatsApp, a new email) into a task ---------- */
 const TRIG_STATE = path.join(DATA, 'triggers.json');
@@ -1040,7 +1154,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, name: path.basename(dest, '.md'), graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
-    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = rel.queueOf(l, running.size, MAX_RUNS); for (const t of l) if (q[t.id]) t.queue = q[t.id]; return json(res, 200, l); } // V4.4 (B5): where each waiting task sits
+    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = rel.queueOf(l, running.size, MAX_RUNS); for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, l); } // V4.4 (B5): where each waiting task sits
     if (url.pathname === '/api/status' && req.method === 'GET') return json(res, 200, officeStatus());
     if (url.pathname === '/api/notices/read' && req.method === 'POST') { const l = loadNotices().map(n => ({ ...n, read: true })); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(l, null, 1)); fs.renameSync(NOTICES + '.tmp', NOTICES); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
@@ -1097,10 +1211,27 @@ const server = http.createServer(async (req, res) => {
       const task = { id: nid(), dept, agent: asTeam ? leadOf(dept).id : r.agent, title: r.title, text: String(text).trim(), plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, state: 'next', addedAt: Date.now(), by: 'you', model: normModel(model) || undefined, effort: normEffort(effort) || undefined, // model/effort: set on this task (beats routine, agent, office)
         team: asTeam ? { lead: leadOf(dept).id, asked: team === true ? 'you' : 'text' } : undefined };
       if (dueAt) { task.state = 'scheduled'; task.dueAt = dueAt; task.needsOk = r.needsOk; } // waits for its minute; needsOk decides whether it then waits for the OK
+      if (approvals.overLimit(task.text, APPR().amountLimit).length) task.needsOk = true; // V4.4 (G9): an amount over the owner's limit always waits for the OK
       const list = load(); list.push(task); save(list);
       console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${dueAt ? ' · scheduled ' + untilText(dueAt) : ''}`);
       if (!dueAt) setImmediate(pump);
       return json(res, 200, task);
+    }
+    if (url.pathname === '/api/history' && req.method === 'GET') { // V4.4 (D7)
+      const kind = url.searchParams.get('kind') === 'brief' ? 'brief' : 'skill', name = String(url.searchParams.get('name') || ''), at = url.searchParams.get('at');
+      if (at) { const t = history.read(DATA, kind, name, at); return t === null ? json(res, 404, { error: 'esa versión no existe' }) : json(res, 200, { kind, name, at: +at, text: t }); }
+      return json(res, 200, { kind, name, versions: history.versions(DATA, kind, name) });
+    }
+    if (url.pathname === '/api/history/restore' && req.method === 'POST') { // V4.4 (D7): back to an earlier version
+      const b = await body(req); const kind = b.kind === 'brief' ? 'brief' : 'skill', t = history.read(DATA, kind, String(b.name || ''), b.at);
+      if (t === null) return json(res, 404, { error: 'esa versión no existe' });
+      if (kind === 'brief') { const r = saveAgent(BRAIN, String(b.name), { brief: t }); if (r.problems.length) return json(res, 400, { error: r.problems.join(' · ') }); }
+      else { const sk = skills.skills.find(k => k.name === b.name && k.source !== 'shipped'); if (!sk) return json(res, 404, { error: 'esa skill no está en el cerebro' }); const f = path.join(ROOT, sk.path); const cur = fs.readFileSync(f, 'utf8'); const m = /^---[\s\S]*?---\s*/.exec(cur); fs.writeFileSync(f, (m ? m[0] : '') + t.replace(/^---[\s\S]*?---\s*/, '')); }
+      refreshSkills(); return json(res, 200, { ok: true, text: `Listo: ${kind === 'skill' ? 'la skill «' + b.name + '»' : 'el brief de ' + agentName(b.name)} volvió a la versión del ${new Date(+b.at).toLocaleString('es-PA')}.` });
+    }
+    if (url.pathname === '/api/quality' && req.method === 'GET') { // V4.4 (D1, D10)
+      const l = load(), ch = history.changesByAgent(DATA);
+      return json(res, 200, { agents: quality.byAgent(l, AGENTS), drops: quality.drops(l, AGENTS, ch), routing: quality.rerouteRate(l, loadRouting()), reviews: l.filter(t => t.review && Date.now() - t.review.at < 28 * 864e5).length });
     }
     if (url.pathname === '/api/costs' && req.method === 'GET') { const since = Date.now() - 70 * 864e5; return json(res, 200, { ...costs.report(costs.read(DATA, since), load(), AGENTS, cfg.costs, Date.now()), subscription: backend === 'claude-cli' && PROVIDER.id === 'anthropic' && !process.env.ANTHROPIC_API_KEY, provider: PROVIDER.name, config: COSTS(), prices: costs.PRICES.map(({ match, ...p }) => p), priceSources: costs.PRICE_SOURCES }); } // V4.4 (C1–C9)
     if (url.pathname === '/api/costs.csv' && req.method === 'GET') { // V4.4 (C10): the month for the accountant
@@ -1113,6 +1244,28 @@ const server = http.createServer(async (req, res) => {
       if (action?.agent && ['sonnet', 'opus', 'fable'].includes(action.model)) { const r = saveAgent(BRAIN, action.agent, { model: action.model }); if (r.problems.length) return json(res, 400, { error: r.problems.join(' · ') }); refreshSkills(); return json(res, 200, { ok: true, text: `${agentName(action.agent)} usa ahora ${modelName(action.model)}.` }); }
       if (action?.routine && action.paused === true) { const r = editRoutine(action.routine, { paused: true }); return r ? json(res, 200, { ok: true, text: `Rutina «${r.title}» pausada.` }) : json(res, 404, { error: 'esa rutina ya no existe' }); }
       return json(res, 400, { error: 'acción desconocida' });
+    }
+    { const um = url.pathname.match(/^\/api\/tasks\/([^/]+)\/(undo|draft|vote)$/);
+      if (um && req.method === 'POST') {
+        const b = await body(req).catch(() => ({})) || {};
+        if (um[2] === 'undo') { const r = undoApproval(um[1], whoFrom(req, b)); return json(res, r.status || 200, r); }
+        const l = load(), t = l.find(x => x.id === um[1]); if (!t) return json(res, 404, { error: 'esa tarea ya no existe' });
+        if (um[2] === 'draft') { // G1: the owner fixes the draft by hand, no new run
+          if (t.state !== 'waiting' || t.approving) return json(res, 409, { error: 'solo se edita un borrador que espera tu visto bueno' });
+          const d = String(b.draft || '').trim(); if (!d) return json(res, 400, { error: 'el borrador quedó vacío' });
+          t.draft = t.result = d.slice(0, 60000); t.editedDraft = true; draftFacts(t); logApproval(t, 'edit', whoFrom(req, b)); save(l); return json(res, 200, { ok: true, task: t });
+        }
+        if (um[2] === 'vote') { // D2: 👍 / 👎 with a reason
+          const v = b.vote === 'up' || b.vote === 'down' ? b.vote : null; t.vote = v; t.voteReason = v === 'down' ? String(b.reason || '').slice(0, 300) : ''; save(l);
+          if (v === 'down' && t.voteReason) { const a = AGENTS.find(x => x.id === t.agent); if (a) { learn.record(BRAIN, a, t, t.voteReason, null); tidyLessons(a); } }
+          return json(res, 200, { ok: true, vote: v });
+        }
+      }
+    }
+    if (url.pathname === '/api/tasks/approve-batch' && req.method === 'POST') { // G6
+      const b = await body(req).catch(() => ({})) || {}; const by = whoFrom(req, b);
+      const out = (Array.isArray(b.ids) ? b.ids.slice(0, 50) : []).map(id => ({ id, ...decideDraft(String(id), 'approve', '', by) }));
+      return json(res, 200, { ok: true, results: out, approved: out.filter(x => x.ok).length });
     }
     { const sm = url.pathname.match(/^\/api\/tasks\/([^/]+)\/seen$/); if (sm && req.method === 'POST') { const l = load(), t = l.find(x => x.id === sm[1]); if (t && !t.seenAt) { t.seenAt = Date.now(); save(l); } return json(res, 200, { ok: true }); } } // V4.4 (C7): the owner opened it
     if (url.pathname === '/api/triggers' && req.method === 'GET') { const t = triggers.load(BRAIN, AGENTS); return json(res, 200, { ...t, path: triggers.file(BRAIN), token: !!process.env.AO_HOOK_TOKEN && process.env.AO_HOOK_TOKEN.length >= 16, url: `/api/hook/<id>` }); }
@@ -1165,6 +1318,7 @@ const server = http.createServer(async (req, res) => {
         const a = AGENTS.find(x => x.id === b.agent); if (!a) return json(res, 400, { error: 'no existe ese agente' });
         if (cur.team && !a.lead) return json(res, 400, { error: 'una tarea en equipo va al líder del departamento' });
         patch.agent = a.id; patch.dept = a.department;
+        if (a.id !== cur.agent && cur.by !== 'routine' && !cur.routine && !cur.piece) routeCorrection(cur, a); // V4.4 (D10): the router learns from the owner moving a task
       }
       if (b.at === null && cur.state === 'scheduled') { patch.state = 'next'; patch.dueAt = undefined; patch.addedAt = Date.now(); } // unscheduled: it goes to the queue now
       if (b.at !== undefined && b.at !== null) {
@@ -1188,17 +1342,9 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, task);
     }
     if (m && req.method === 'POST' && (m[2] === 'approve' || m[2] === 'reject')) { // D1: the owner's tick on a routine's draft
-      const task = load().find(t => t.id === m[1]);
-      if (!task) return json(res, 404, { error: 'esa tarea ya no existe' });
-      if (task.state !== 'waiting') return json(res, 400, { error: 'esta tarea no está esperando tu visto bueno' });
-      const { feedback } = m[2] === 'reject' ? await body(req) : {};
-      const note = String(feedback || '').trim();
-      { const l = load(); const t = l.find(x => x.id === task.id); if (!t || t.state !== 'waiting') return json(res, 409, { error: 'ya se está procesando' }); t.state = 'doing'; t.startedAt = Date.now(); t.seenAt = t.seenAt || Date.now(); save(l); } // claimed now: a second click (or «aprobar» in chat) cannot send it twice
-      console.log(`${m[2] === 'approve' ? '✅' : '↩'} ${task.id} ${m[2] === 'approve' ? 'approved — ' + agentName(task.agent) + ' is sending' : 'sent back: ' + note.slice(0, 80)}`);
-      enqueue(() => startRun(task.id, m[2] === 'approve' ? { approve: true } : { feedback: note || 'No es esto. Retrabájalo.' }))
-        .then(t => { if (m[2] === 'reject' && note && t && !t.error) { const a = AGENTS.find(x => x.id === t.agent); return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); }); } })
-        .catch(e => console.warn('approval:', e.message));
-      return json(res, 200, { ok: true, id: task.id, state: 'doing' });
+      const b = await body(req).catch(() => ({})) || {};
+      const r = decideDraft(m[1], m[2], String(b.feedback || '').trim(), whoFrom(req, b));
+      return json(res, r.status || 200, r);
     }
     if (m && req.method === 'POST' && (m[2] === 'run' || m[2] === 'revise')) { // the engine runs it; the page follows it by polling
       const list = load(); const task = list.find(t => t.id === m[1]);
@@ -1211,7 +1357,7 @@ const server = http.createServer(async (req, res) => {
       startRun(task.id, { feedback: note }).then(t => { // learn from the correction once the rework is in
         if (!t || t.error) return;
         const a = AGENTS.find(x => x.id === t.agent);
-        return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); });
+        return learn.classify(ask, a, t, note).then(v => { const r = learn.record(BRAIN, a, t, note, v); tidyLessons(a); console.log(`  ↳ ${a.name} ${r.standing ? 'learned a rule' : 'noted a one-off'}: ${r.line.slice(0, 100)}`); });
       }).catch(e => console.warn('learn:', e.message));
       return json(res, 200, { ok: true, id: task.id, state: 'doing' });
     }

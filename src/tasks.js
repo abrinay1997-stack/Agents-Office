@@ -328,7 +328,17 @@ export function initTasks(ctx) {
     P_.search.addEventListener('input', () => { query = P_.search.value.trim(); render(true); });
     P_.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { P_.search.value = ''; query = ''; render(true); P_.search.blur(); } });
     P_.clear.addEventListener('click', () => clearDone());
-    P_.rows.addEventListener('click', e => {
+    P_.rows.addEventListener('click', e => { // V4.4 (G6): «Aprobar todas» — the first click arms it, the second approves every waiting draft in view
+      const bt = e.target.closest('[data-batch]');
+      if (bt) {
+        e.stopPropagation();
+        if (bt.dataset.batch === 'arm') { batchArmed = true; render(true); clearTimeout(batchTimer); batchTimer = setTimeout(() => { batchArmed = false; render(true); }, 5000); setTimeout(() => P_.rows.querySelector('[data-batch]')?.focus(), 0); return; }
+        batchArmed = false; clearTimeout(batchTimer);
+        const ts = scoped().filter(t => t.live && t.sid && !t.piece && t.state === 'waiting');
+        for (const t of ts) { toDoing(t); if (decided) decided(t.agent, t.sid, true); }
+        post('/tasks/approve-batch', { ids: ts.map(t => t.sid) }).then(j => { const n = j?.approved || 0; say(n ? `Aprobadas ${n}: salen en unos segundos.` : 'No se pudo aprobar: ' + (j?.error || 'sin conexión con la oficina'), n ? '' : 'err'); if (!n) for (const t of ts) backToWaiting(t, 'No se pudo aprobar en lote. Sigue esperando tu visto bueno.'); });
+        render(true); return;
+      }
       const m = e.target.closest('.tp-more'); if (m) { limit += PAGE; render(true); return; }
       const c = e.target.closest('.tp-lnk[data-clr]'); if (!c) return;
       if (c.dataset.clr === 'q') { P_.search.value = ''; query = ''; } else filter = 'all';
@@ -665,7 +675,8 @@ export function initTasks(ctx) {
     if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
     else say('Conexión recuperada.');
   }
-  const fromServer = st => ({ id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
+  const extraOf = st => Object.fromEntries(['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read'].map(k => [k, st[k]]));
+  const fromServer = st => ({ ...extraOf(st), id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
     addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, guard: st.guard, heldForOk: !!st.heldForOk, cost: st.cost, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
     if (!agentOf(st.agent) || st.archived || deleting.has(st.id)) return;
@@ -711,8 +722,10 @@ export function initTasks(ctx) {
       if (R[to]) { feedPush(R[to], '📨', `Nota de ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `nota de ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
     }
   }
+  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft']; // V4.4: what the detail shows (G, D)
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
+    for (const k of EXTRA) if (JSON.stringify(t[k]) !== JSON.stringify(st[k])) { t[k] = st[k]; dirty = true; }
     { const q = JSON.stringify([st.queue || null, st.retryAt || null, st.attempts || 0, st.lastError || '']); if (t.qsig !== q) { t.qsig = q; t.queue = st.queue; t.retryAt = st.retryAt; t.attempts = st.attempts || 0; t.lastError = st.lastError; dirty = true; } } // V4.4 (B1, B5)
     if (st.state === 'next' && t.state === 'doing') { t.state = 'next'; t.running = false; t.progress = 0; t.addedAt = st.addedAt || Date.now(); touch(t, 'added'); } // V4.4 (B1): a failed run waits for its retry
     if (st.state === 'scheduled') { if (t.state !== 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; touch(t, 'scheduled'); } else if (t.dueAt !== st.dueAt || t.title !== st.title || t.text !== st.text) { Object.assign(t, { dueAt: st.dueAt, title: st.title, text: st.text }); dirty = true; } return; }
@@ -742,7 +755,10 @@ export function initTasks(ctx) {
     const t = waitingFor(agentId, sid); if (!t || !approved) return false;
     toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' });
     if (decided) decided(agentId, t.sid, true);
-    post(`/tasks/${t.sid}/approve`).then(j => { if (!j || j.error) backToWaiting(t, `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`); });
+    post(`/tasks/${t.sid}/approve`).then(j => {
+      if (!j || j.error) return backToWaiting(t, `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`);
+      if (j.sendAt) offerUndo(`Aprobado: «${esc(short(t.title))}» sale en ${j.undoSeconds} s.`, { ms: Math.max(4000, j.sendAt - Date.now() - 500), undo: () => post(`/tasks/${t.sid}/undo`).then(r => { if (r && r.ok) backToWaiting(t, '↶ Deshecho: no se envió nada. Sigue esperando tu visto bueno.'); else chatPush(t.agent, { who: 'agent', text: 'Ya no se pudo deshacer: el envío había empezado.' }); }) }); // V4.4 (G7): «Deshacer envío»
+    });
     return true;
   }
   function rejectLive(agentId, sid, feedback) {
@@ -840,6 +856,7 @@ export function initTasks(ctx) {
   P_.rows.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { hoverList = true; lastMove = performance.now(); } });
   P_.rows.addEventListener('pointerleave', () => { hoverList = false; });
   const holdList = () => !forceList && hoverList && performance.now() - lastMove < 6000;
+  let batchArmed = false, batchTimer = 0;
   const retryWhy = m => /usage limit|limit reached|429|rate/i.test(m) ? 'límite de uso de Claude' : /took longer|timed? ?out/i.test(m) ? 'tardó demasiado; ahora con más tiempo' : /network|ECONN|ENOTFOUND|socket|fetch failed/i.test(m) ? 'fallo de red' : /overloaded|50\d|529/i.test(m) ? 'Claude estaba saturado' : 'fallo pasajero';
   function metaFor(t) {
     const a = agentOf(t.agent), now = Date.now();
@@ -922,7 +939,7 @@ export function initTasks(ctx) {
     const html = filter === 'sched'
       ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || (query ? emptyHTML() : `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — «cada día hábil a las 8, …» — o presiona REPETIR. Presiona <b>P</b> para el calendario.</div>`))
       : filter === 'archived' ? (scopedArchived().slice(0, limit).map(rowHTMLx).join('') + (scopedArchived().length > limit ? `<button type="button" class="tp-more" data-more="1">Se ven ${limit} de ${scopedArchived().length}. Mostrar más</button>` : '') || emptyHTML())
-      : (list.map(rowHTMLp).join('') + more || emptyHTML());
+      : ((filter === 'waiting' && isLive() && list.filter(t => t.live && t.sid && !t.piece).length >= 2 ? `<div class="tp-batch"><span>${list.filter(t => t.live && t.sid && !t.piece).length} esperan tu visto bueno</span><button type="button" class="tp-batch-go" data-batch="${batchArmed ? 'go' : 'arm'}">${batchArmed ? '¿Seguro? Aprobar todas' : 'Aprobar todas'}</button></div>` : '') + list.map(rowHTMLp).join('') + more || emptyHTML()); // V4.4 (G6): approve in one go, two clicks
     listStale = false; forceList = false;
     renderNext();
     if (!structural && html === lastRows) return; // nothing in the list changed: the rows stay the same elements (a click on a row that was being replaced got lost)
@@ -1362,12 +1379,12 @@ export function initTasks(ctx) {
   }
   const toast = document.createElement('div'); toast.className = 'tp-toast'; toast.hidden = true; toast.setAttribute('role', 'status'); toast.setAttribute('data-modal-keep', ''); document.body.appendChild(toast);
   let pendingUndo = null, toastTimer = 0;
-  function offerUndo(html, { undo, commit }) { // one toast at a time: a new one commits the previous action
+  function offerUndo(html, { undo, commit, ms = 10000 }) { // one toast at a time: a new one commits the previous action
     if (pendingUndo) finishUndo(true);
     pendingUndo = { undo, commit };
     toast.innerHTML = `<span class="tt-x">${html}</span><button type="button" class="tp-undo">DESHACER</button><button type="button" class="tp-tclose" aria-label="Cerrar el aviso">✕</button>`;
     toast.hidden = false; requestAnimationFrame(() => toast.classList.add('on'));
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), 10000);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), ms);
   }
   function finishUndo(doCommit) {
     clearTimeout(toastTimer); const u = pendingUndo; pendingUndo = null;

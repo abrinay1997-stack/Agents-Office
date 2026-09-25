@@ -81,3 +81,15 @@ export function forget(brainPath, id, line) {
   lines.splice(i, 1); fs.writeFileSync(p, lines.join('\n'));
   return true;
 }
+
+/** V4.4 (D9): fold near-duplicate standing rules (the newest wording stays). → { kept, removed } */
+export function tidy(brainPath, id, dedupe) {
+  const p = file(brainPath, id); if (!fs.existsSync(p)) return { kept: 0, removed: [] };
+  const { rules } = read(brainPath, id); const { keep, dropped } = dedupe(rules);
+  if (!dropped.length) return { kept: keep.length, removed: [] };
+  const lines = fs.readFileSync(p, 'utf8').split(/\r?\n/), gone = new Set(dropped);
+  const out = lines.filter(l => { const m = l.match(/^\s*[-*]\s+(.+)$/); return !(m && gone.has(m[1].trim())); });
+  fs.writeFileSync(p + '.tmp', out.join('\n')); fs.renameSync(p + '.tmp', p);
+  return { kept: keep.length, removed: dropped };
+}
+

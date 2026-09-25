@@ -63,7 +63,11 @@ export function initDetail(ctx) {
       : t.text && t.text !== t.title ? `<label class="td-lab">Qué se pidió</label><div class="td-ask">${esc(t.text)}</div>` : ''}
       ${t.team?.members?.length ? `<label class="td-lab">Equipo</label><div class="td-ask">${esc([t.team.lead, ...t.team.members].map(id => agentOf(id)?.name || id).join(' · '))}${t.team.why ? ' — ' + esc(t.team.why) : ''}</div>` : ''}
       ${guardHTML(t)}
-      ${result ? `<label class="td-lab">${t.state === 'waiting' ? 'Borrador para tu visto bueno' : t.error ? 'Qué pasó' : 'Entregable'}</label><div class="td-res md${t.error ? ' err' : ''}">${mdToHtml(result)}</div>` : ''}
+      ${t.state === 'waiting' ? previewHTML(t) : ''}${reviewHTML(t)}
+      ${result ? (editingDraft && t.state === 'waiting' ? `<label class="td-lab" for="tdDraft">Tu versión del borrador (se envía tal cual la dejes)</label><textarea id="tdDraft" class="td-text td-draft" rows="12">${esc(result)}</textarea><div class="td-acts"><button type="button" class="td-btn pri" data-a="savedraft">Guardar el borrador</button><button type="button" class="td-btn" data-a="canceldraft">Cancelar</button></div>` : `<label class="td-lab">${t.state === 'waiting' ? 'Borrador para tu visto bueno' + (t.editedDraft ? ' <span class="td-tag">editado por ti</span>' : '') : t.error ? 'Qué pasó' : 'Entregable'}</label><div class="td-res md${t.error ? ' err' : ''}">${mdToHtml(result)}</div>`) : ''}
+      ${t.read?.length && t.state !== 'next' && t.state !== 'scheduled' ? `<p class="td-src">📚 Notas que leyó: ${t.read.map(n => esc(n)).join(' · ')}</p>` : ''}
+      ${t.state === 'done' && !t.error && !t.piece && isLive() ? voteHTML(t) : ''}
+      ${approvalsHTML(t)}
       ${t.state === 'waiting' ? `<label class="td-lab" for="tdFb">Si lo devuelves, ¿qué debe cambiar?</label><textarea id="tdFb" class="td-text" rows="2" placeholder="Ej.: más corto, sin el segundo párrafo, con el precio de Launch"></textarea>` : ''}
       <div class="td-acts">${actions(t, editable, live)}</div>
       ${t.state === 'done' ? `<label class="td-chk"><input type="checkbox" class="td-withnote"${t.note ? '' : ' disabled'}> también mover su nota del Cerebro a la papelera</label>` : ''}
@@ -79,6 +83,19 @@ export function initDetail(ctx) {
       (g?.taint ? `<p>Lo que leyó en <b>${tool(g.taint.tool)}</b> ${esc(g.taint.why)}. Por eso no se envió nada en esa ejecución. Revisa ese correo o esa página: puede ser un intento de engaño.</p>` : '') +
       (items ? `<ul>${items}</ul>` : '') + '</div>';
   }
+  // V4.4 (G3, G2): what will go out, as a card, and how risky it is
+  function previewHTML(t) {
+    const p = t.preview; if (!p) return '';
+    const rows = [p.channel && ['Canal', esc(p.channel)], p.to?.length && ['Para', esc(p.to.join(', '))], p.phones?.length && ['Teléfonos', esc(p.phones.join(', '))], p.subject && ['Asunto', esc(p.subject)], p.amounts?.length && ['Importes', p.amounts.map(n => '$' + n.toLocaleString('es-PA')).join(', ')], p.attachments?.length && ['Adjuntos', esc(p.attachments.join(', '))]].filter(Boolean);
+    const risk = t.risk ? `<span class="td-risk r-${t.risk}">Riesgo ${t.risk}</span>` : '';
+    return `<div class="td-prev" role="group" aria-label="Lo que saldrá"><div class="td-prev-h"><b>Lo que saldrá</b>${risk}</div>${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : '<p>El borrador no nombra destinatarios ni importes: revisa el texto de abajo.</p>'}</div>`;
+  }
+  const reviewHTML = t => t.review ? `<p class="td-src">⚖ Revisado por ${esc(agentOf(t.review.by)?.name || t.review.by)} antes de llegarte${t.review.ok ? ': sin cambios.' : `: pidió ${t.review.fixes.length} ${t.review.fixes.length === 1 ? 'corrección' : 'correcciones'}, ya hechas (${t.review.fixes.map(esc).join('; ')}).`}</p>` : '';
+  const ACTION = { approve: 'Aprobado', reject: 'Devuelto', undo: 'Aprobación deshecha', edit: 'Borrador editado', expire: 'Caducó' };
+  const approvalsHTML = t => t.approvals?.length ? `<details class="td-hist"><summary>Historial de aprobaciones (${t.approvals.length})</summary><ul>${t.approvals.map(e => `<li><time>${new Date(e.at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time> ${ACTION[e.action] || esc(e.action)} · ${esc(e.by)}${e.note ? ` — «${esc(e.note)}»` : ''}</li>`).join('')}</ul></details>` : ''; // G8
+  const voteHTML = t => `<div class="td-vote" role="group" aria-label="¿Te sirvió?"><span>¿Te sirvió?</span><button type="button" class="td-btn${t.vote === 'up' ? ' on' : ''}" data-a="vote-up" aria-pressed="${t.vote === 'up'}">👍 Sí</button><button type="button" class="td-btn${t.vote === 'down' ? ' on' : ''}" data-a="vote-down" aria-pressed="${t.vote === 'down'}">👎 No</button>${voting ? `<input id="tdWhy" class="td-text td-why" placeholder="¿Qué faltó o sobró? (el agente lo tendrá en cuenta)" aria-label="Qué faltó o sobró"><button type="button" class="td-btn pri" data-a="vote-send">Enviar</button>` : ''}</div>`; // D2
+  let editingDraft = false, voting = false;
+  async function post(p, b) { try { const r = await fetch('/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b || {}) }); const j = await r.json().catch(() => ({})); return r.ok ? j : { error: j.error || 'No se pudo.' }; } catch { return { error: 'sin conexión con la oficina' }; } }
   function actions(t, editable, live) {
     const b = (a, txt, cls = '') => `<button type="button" class="td-btn ${cls}" data-a="${a}">${txt}</button>`;
     const out = [];
@@ -86,7 +103,7 @@ export function initDetail(ctx) {
     if (t.state === 'scheduled') out.push(b('unschedule', 'Ejecutar ahora'));
     if (editable) out.push(b('done', 'Marcar como hecha'));
     if (t.state === 'doing') out.push(b('stop', 'Detener al agente', 'warn'));
-    if (t.state === 'waiting') { out.push(b('approve', 'Aprobar y enviar', 'pri')); out.push(b('reject', 'Devolver con la nota')); }
+    if (t.state === 'waiting') { out.push(b('approve', 'Aprobar y enviar', 'pri')); out.push(b('reject', 'Devolver con la nota')); if (t.sid && isLive() && !editingDraft) out.push(b('editdraft', 'Editar el borrador')); }
     if (t.state === 'done' && !t.piece) out.push(b('repeat', t.error ? 'Reintentar' : 'Repetir', t.error ? 'pri' : ''));
     out.push(b('chat', 'Abrir el chat del agente'));
     if (t.note && openNote) out.push(b('note', 'Ver su nota en el Cerebro'));
@@ -129,19 +146,25 @@ export function initDetail(ctx) {
     if (a === 'unschedule') return run('unschedule', {}, 'Pasó a pendientes: el agente la toma en cuanto se libere.');
     if (a === 'done') { if (!confirm(`¿Marcar «${t.title}» como hecha sin ejecutarla?`)) return; return run('done', {}, 'Marcada como hecha.'); }
     if (a === 'stop') { if (!confirm(`¿Detener a ${agentOf(t.agent)?.name || 'este agente'}? Lo que llevaba hecho se pierde.`)) return; return run('stop', {}, 'Detenido.'); }
-    if (a === 'approve') return run('approve', {}, 'Aprobado: el agente lo está enviando.');
+    if (a === 'editdraft') { editingDraft = true; render(); el.querySelector('#tdDraft')?.focus(); return; } // G1
+    if (a === 'canceldraft') { editingDraft = false; render(); return; }
+    if (a === 'savedraft') { const d = el.querySelector('#tdDraft').value.trim(); if (!d) return msg('El borrador quedó vacío.', true); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/draft`, { draft: d }); if (r.error) return msg(r.error, true); Object.assign(t, { draft: r.task.draft, result: r.task.result, editedDraft: true, preview: r.task.preview, risk: r.task.risk, approvals: r.task.approvals }); editingDraft = false; render(); return msg('Guardado. Si lo apruebas, sale tu versión.'); }
+    if (a === 'vote-up') { voting = false; const r = await post(`/tasks/${encodeURIComponent(t.sid)}/vote`, { vote: t.vote === 'up' ? null : 'up' }); if (!r.error) t.vote = r.vote; render(); return msg(t.vote === 'up' ? 'Gracias: cuenta para la calidad de este agente.' : ''); }
+    if (a === 'vote-down') { voting = true; render(); el.querySelector('#tdWhy')?.focus(); return; }
+    if (a === 'vote-send') { const why = el.querySelector('#tdWhy').value.trim(); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/vote`, { vote: 'down', reason: why }); voting = false; if (!r.error) t.vote = 'down'; render(); return msg(why ? 'Anotado: el agente lo tendrá en cuenta la próxima vez.' : 'Anotado.'); } // D2
+    if (a === 'approve') return run('approve', {}, 'Aprobado: sale en unos segundos (puedes deshacerlo abajo).');
     if (a === 'reject') { const fb = el.querySelector('#tdFb').value.trim(); if (!fb) { el.querySelector('#tdFb').focus(); return msg('Escribe qué debe cambiar.', true); } return run('reject', { feedback: fb }, 'Devuelto: lo rehace con tu nota.'); }
     if (a === 'repeat') return run('repeat', {}, 'Listo: es una tarea nueva en pendientes.');
     if (a === 'archive') { const note = el.querySelector('.td-withnote')?.checked; return run('archive', { note }, 'Archivada.'); }
     if (a === 'delete') { const note = el.querySelector('.td-withnote')?.checked; return run('delete', { note }, 'Eliminada.'); } // V4.1: no confirm box — the toast offers DESHACER for 8 s
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
-  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; if (t.sid && isLive() && !t.seenSent) { t.seenSent = true; fetch(`/api/tasks/${encodeURIComponent(t.sid)}/seen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {}); } /* V4.4 (C7): the office knows which deliverables get read */ lastSig = sig(t); el.hidden = false; if (modal.any() && modal.top() !== el) { el.setAttribute('aria-modal', 'true'); modal.open(el); } render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
+  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; if (cur !== t) { editingDraft = false; voting = false; } cur = t; if (t.sid && isLive() && !t.seenSent) { t.seenSent = true; fetch(`/api/tasks/${encodeURIComponent(t.sid)}/seen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {}); } /* V4.4 (C7): the office knows which deliverables get read */ lastSig = sig(t); el.hidden = false; if (modal.any() && modal.top() !== el) { el.setAttribute('aria-modal', 'true'); modal.open(el); } render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
   function close() { if (!cur) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.setAttribute('aria-modal', 'false'); cur = null; el.classList.remove('on'); setTimeout(() => { if (!cur) el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   // the task changed underneath (a poll, the run finished): redraw, unless the owner is typing in it
   // only when something the owner can see changed: every poll used to redraw it (scroll to the top, «Guardado.» gone, focus lost)
   const sig = t => JSON.stringify([t.state, t.title, t.text, t.agent, t.dueAt, t.note, t.error, t.approved, t.archived, (t.result || '').length, (t.draft || '').length, t.running, t.team && t.team.pieces && t.team.pieces.map(p => p.state)]);
   let lastSig = '';
-  function refresh() { if (!cur || busy) return; if (el.contains(document.activeElement) && /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName)) return; const s = sig(cur); if (s === lastSig) return; lastSig = s; const sc = el.querySelector('.td-res'); const top = sc ? sc.scrollTop : 0; const f = document.activeElement && el.contains(document.activeElement) && document.activeElement.dataset.a; render(); const sc2 = el.querySelector('.td-res'); if (sc2) sc2.scrollTop = top; if (f) el.querySelector(`[data-a="${f}"]`)?.focus({ preventScroll: true }); }
+  function refresh() { if (!cur || busy || editingDraft || voting) return; if (el.contains(document.activeElement) && /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName)) return; const s = sig(cur); if (s === lastSig) return; lastSig = s; const sc = el.querySelector('.td-res'); const top = sc ? sc.scrollTop : 0; const f = document.activeElement && el.contains(document.activeElement) && document.activeElement.dataset.a; render(); const sc2 = el.querySelector('.td-res'); if (sc2) sc2.scrollTop = top; if (f) el.querySelector(`[data-a="${f}"]`)?.focus({ preventScroll: true }); }
   return { open, close, refresh, isOpen: () => !!cur, current: () => cur };
 }

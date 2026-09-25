@@ -49,7 +49,14 @@ export function chunks(text, max = 3900) {
 }
 export function approvalText(t, agentName, deptName) {
   const draft = String(t.draft || t.result || '').trim();
-  return `⚠ <b>Espera tu visto bueno</b>\n<b>${esc(t.title)}</b>\n${esc(agentName)} · ${esc(deptName)}${t.heldForOk ? '\n🛡 El agente quiso enviarlo sin tu OK; la oficina lo detuvo.' : ''}\n\n${esc(draft.slice(0, 1400))}${draft.length > 1400 ? '\n…' : ''}`;
+  return `⚠ <b>Espera tu visto bueno</b>\n<b>${esc(t.title)}</b>\n${esc(agentName)} · ${esc(deptName)}${previewText(t)}${t.heldForOk ? '\n🛡 El agente quiso enviarlo sin tu OK; la oficina lo detuvo.' : ''}\n\n${esc(draft.slice(0, 1400))}${draft.length > 1400 ? '\n…' : ''}`;
+}
+export function previewText(t) { // V4.4 (G3): what will go out, as a card
+  const p = t.preview || {}; const bits = [];
+  if (p.channel) bits.push('📨 ' + esc(p.channel)); if (p.to?.length) bits.push('Para: ' + esc(p.to.join(', '))); if (p.phones?.length) bits.push('Tel: ' + esc(p.phones.join(', ')));
+  if (p.subject) bits.push('Asunto: ' + esc(p.subject)); if (p.amounts?.length) bits.push('Importes: ' + p.amounts.map(n => '$' + n).join(', ')); if (p.attachments?.length) bits.push('Adjuntos: ' + esc(p.attachments.join(', ')));
+  const r = t.risk ? { alto: '🔴 riesgo alto', medio: '🟡 riesgo medio', bajo: '🟢 riesgo bajo' }[t.risk] : '';
+  return bits.length || r ? `\n${[r, ...bits].filter(Boolean).join('\n')}` : '';
 }
 export const approvalButtons = id => ({ inline_keyboard: [[{ text: '✅ Aprobar y enviar', callback_data: 'ap:' + id }, { text: '↩ Devolver', callback_data: 'rj:' + id }], [{ text: '👁 Ver completo', callback_data: 'vw:' + id }]] });
 
@@ -57,10 +64,13 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
   const token = String(process.env.TELEGRAM_BOT_TOKEN || '').trim(), who = owners();
   if (!configured()) return null;
   const tg = { ...(cfg.telegram || {}) }, notify = { approvals: true, failures: true, done: false, notices: true, ...(tg.notify || {}) };
+  // V4.4 (G5): people who may approve for some departments only — office.config.local.json → telegram.approvers { "<id>": ["emails", "sales"] }
+  const approvers = Object.fromEntries(Object.entries(tg.approvers || {}).filter(([id, d]) => /^-?\d+$/.test(id) && Array.isArray(d)).map(([id, d]) => [String(id), d.map(String)]));
+  const isOwner = id => allowed(id, who), canApprove = (id, dept) => isOwner(id) || (approvers[String(id)] || []).includes(dept);
   const stateFile = path.join(dataDir, 'telegram.json');
   let st = { offset: 0, pendingReject: {}, held: [], snoozeUntil: 0 }; try { st = { ...st, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; } catch {}
   const saveSt = () => { try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(stateFile + '.tmp', JSON.stringify(st)); fs.renameSync(stateFile + '.tmp', stateFile); } catch {} };
-  const local = async (method, p, body) => { const r = await fetch(`http://127.0.0.1:${port}${p}`, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; };
+  const local = async (method, p, body, by) => { const r = await fetch(`http://127.0.0.1:${port}${p}`, { method, headers: { 'content-type': 'application/json', ...(by ? { 'x-office-by': by } : {}) }, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; };
   const call = async (m, body) => { const r = await fetch(`${process.env.TELEGRAM_API_BASE || API}/bot${token}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }); const j = await r.json().catch(() => ({})); if (!j.ok) throw new Error(j.description || 'Telegram ' + r.status); return j.result; };
   const send = async (chat, text, extra = {}) => { for (const c of chunks(text)) await call('sendMessage', { chat_id: chat, text: c, parse_mode: 'HTML', disable_web_page_preview: true, ...extra }).catch(e => log.warn('telegram:', e.message)); };
   const toOwners = (text, extra, { urgent = false } = {}) => {
@@ -79,7 +89,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
   onTask(t => {
     if (!t || t.piece) return;
     const name = t.agentName || t.agent, dept = t.deptName || t.dept;
-    if (t.state === 'waiting' && notify.approvals) toOwners(approvalText(t, name, dept), { reply_markup: approvalButtons(t.id) });
+    if (t.state === 'waiting' && notify.approvals) { toOwners(approvalText(t, name, dept), { reply_markup: approvalButtons(t.id) }); for (const [id, ds] of Object.entries(approvers)) if (ds.includes(t.dept) && !who.includes(id)) send(id, approvalText(t, name, dept), { reply_markup: approvalButtons(t.id) }); }
     else if (t.state === 'done' && t.error && !t.stopped && notify.failures) toOwners(`✗ <b>Falló</b> «${esc(t.title)}» (${esc(name)})\n${esc(String(t.result || '').slice(0, 600))}`, { reply_markup: { inline_keyboard: [[{ text: '↻ Reintentar', callback_data: 'rp:' + t.id }]] } }, { urgent: t.errorKind === 'login' });
     else if (t.state === 'done' && !t.error && notify.done) toOwners(`✓ <b>Lista</b> «${esc(t.title)}» (${esc(name)})\n${esc(String(t.result || '').slice(0, 700))}`);
   });
@@ -87,8 +97,8 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
 
   async function handleText(chat, text) {
     if (st.pendingReject[chat]) { // the note for a «↩ Devolver»
-      const id = st.pendingReject[chat]; delete st.pendingReject[chat]; saveSt();
-      try { await local('POST', `/api/tasks/${id}/reject`, { feedback: text }); await send(chat, '↩ Devuelta con tu nota. El agente la rehace y te llega de nuevo.'); } catch (e) { await send(chat, '✗ ' + esc(e.message)); }
+      const pr = st.pendingReject[chat], id = typeof pr === 'string' ? pr : pr.id, rby = typeof pr === 'string' ? 'telegram' : pr.by; delete st.pendingReject[chat]; saveSt();
+      try { await local('POST', `/api/tasks/${id}/reject`, { feedback: text }, rby); await send(chat, '↩ Devuelta con tu nota. El agente la rehace y te llega de nuevo.'); } catch (e) { await send(chat, '✗ ' + esc(e.message)); }
       return;
     }
     const { cmd, arg } = parseCommand(text);
@@ -118,11 +128,17 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
   }
   async function handleCallback(q) {
     const chat = String(q.message?.chat?.id || q.from.id), [k, id] = String(q.data || '').split(':');
+    const by = 'telegram: ' + (q.from.first_name || q.from.username || q.from.id) + (isOwner(q.from.id) ? '' : ' (aprobador)');
+    if (!isOwner(q.from.id)) { // an approver: only the approval buttons, only for their departments
+      const t = ['ap', 'rj', 'vw', 'ud'].includes(k) ? (await local('GET', '/api/tasks').catch(() => [])).find(x => x.id === id) : null;
+      if (!t || !canApprove(q.from.id, t.dept)) { await call('answerCallbackQuery', { callback_query_id: q.id, text: 'No tienes permiso para eso' }).catch(() => {}); return; }
+    }
     const done = txt => call('answerCallbackQuery', { callback_query_id: q.id, text: txt }).catch(() => {});
     const strip = () => call('editMessageReplyMarkup', { chat_id: chat, message_id: q.message?.message_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
     try {
-      if (k === 'ap') { await local('POST', `/api/tasks/${id}/approve`); await strip(); await done('Aprobada'); return send(chat, '✅ Aprobada: el agente la envía ahora. Te aviso si algo falla.'); }
-      if (k === 'rj') { st.pendingReject[chat] = id; saveSt(); await done(''); return send(chat, '↩ ¿Qué debe cambiar? Escríbelo en tu próximo mensaje.', { reply_markup: { force_reply: true } }); }
+      if (k === 'ap') { const r = await local('POST', `/api/tasks/${id}/approve`, {}, by); await strip(); await done('Aprobada'); return r.sendAt ? send(chat, `✅ Aprobada: sale en ${r.undoSeconds} s.`, { reply_markup: { inline_keyboard: [[{ text: '↶ Deshacer', callback_data: 'ud:' + id }]] } }) : send(chat, '✅ Aprobada: el agente la envía ahora. Te aviso si algo falla.'); }
+      if (k === 'ud') { await local('POST', `/api/tasks/${id}/undo`, {}, by); await strip(); await done('Deshecho'); return send(chat, '↶ Deshecho: no se envió nada. Sigue esperando tu visto bueno.', { reply_markup: approvalButtons(id) }); }
+      if (k === 'rj') { st.pendingReject[chat] = { id, by }; saveSt(); await done(''); return send(chat, '↩ ¿Qué debe cambiar? Escríbelo en tu próximo mensaje.', { reply_markup: { force_reply: true } }); }
       if (k === 'vw') { const t = (await local('GET', '/api/tasks')).find(x => x.id === id); local('POST', `/api/tasks/${id}/seen`, {}).catch(() => {}); await done(''); return send(chat, t ? esc(t.draft || t.result || '') : 'Esa tarea ya no existe.'); }
       if (k === 'rp') { await local('POST', `/api/tasks/${id}/repeat`); await strip(); await done('Otra vez'); return send(chat, '↻ Va de nuevo a la cola.'); }
       if (k === 'sd') { const r = await local('POST', '/api/sub/send', { msg: id }); await strip(); await done('Enviado'); return send(chat, `📤 Enviado a los jefes${r.tasks?.filter(Boolean).length ? ': ' + r.tasks.filter(Boolean).length + ' tarea(s)' : ''}.`); }
@@ -138,6 +154,12 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
         for (const u of ups) {
           st.offset = u.update_id + 1; saveSt();
           const from = u.message?.from?.id ?? u.callback_query?.from?.id, chat = u.message?.chat?.id ?? u.callback_query?.message?.chat?.id;
+          if (!allowed(from, who) && approvers[String(from)]) { // V4.4 (G5): an approver — approval buttons and /pendientes for their departments, nothing else
+            if (u.callback_query) await handleCallback(u.callback_query);
+            else if (u.message?.text && st.pendingReject[String(chat)]) await handleText(String(chat), u.message.text);
+            else if (u.message?.text) { const { cmd } = parseCommand(u.message.text); if (cmd === 'pendientes') { const list = (await local('GET', '/api/tasks')).filter(t => t.state === 'waiting' && !t.archived && canApprove(from, t.dept)); if (!list.length) await send(chat, 'Nada de tus departamentos espera visto bueno. ✓'); for (const t of list.slice(0, 10)) await send(chat, approvalText(t, t.agent, t.dept), { reply_markup: approvalButtons(t.id) }); } else await send(chat, 'Puedes aprobar o devolver lo de tus departamentos con los botones, y ver lo pendiente con /pendientes.'); }
+            continue;
+          }
           if (!allowed(from, who)) { // a stranger: refused, told their id once a day, and the owner hears about it
             if (Date.now() - (refused.get(from) || 0) > 864e5) { refused.set(from, Date.now()); send(chat, `Este bot es privado. Tu id es <code>${esc(from)}</code>; si el dueño quiere darte acceso, lo añade a TELEGRAM_OWNER_ID.`); log.warn(`telegram: refused user ${from}`); }
             continue;
