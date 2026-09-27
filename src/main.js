@@ -591,7 +591,7 @@ addEventListener('keydown', (e) => {
     if (subger.isOpen()) { subger.close(); return; }
     if (studio.isOpen()) { studio.close(); return; }
     if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); return; }
-    if (brain.isOpen()) { brain.close(); return; }
+    if (brain.isOpen()) { if (!brain.back()) brain.close(); return; } // V4.6: the search's list, then the card, then the Brain
     if (tasks && tasks.isOpen()) { tasks.close(); return; }
     zoomOut(); return;
   }
@@ -647,6 +647,7 @@ const KEYS = (() => {
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
     ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
+    ['Cerebro abierto', [['← → ↑ ↓', 'Girarlo (con Mayús, más rápido)'], ['+  −', 'Acercar y alejar'], ['0', 'Centrarlo'], ['Espacio', 'Que gire solo, o pararlo'], ['Esc', 'Cerrar la lista de la búsqueda, la ficha y luego el Cerebro']]],
     ['Calendario abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['D · W · M · A', 'Vista de día, semana, mes o agenda'], ['Clic en una hora', 'Programar algo a esa hora (semana y día)'], ['Mantener pulsada', 'En tablet o teléfono: arrastrar una tarjeta a otro día u hora']]],
     ['Vista', [['V', 'Modo cámara: fondo neutro para grabar la pantalla', 'v']]],
   ];

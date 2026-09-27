@@ -62,6 +62,7 @@ import * as approvals from './approvals.mjs';
 import * as quality from './quality.mjs';
 import * as history from './history.mjs';
 import * as knowledge from './knowledge.mjs';
+import * as memory from './memory.mjs'; // V4.6: mentions, summaries, a context budget, the neighbourhood, synapses that learn
 import * as settings from './settings.mjs';
 import * as documents from './documents.mjs';
 import * as business from './business.mjs';
@@ -329,10 +330,20 @@ function businessContext(index) {
 let KIX = { sig: '', ix: null };
 function kIndex(index) { const sig = [...index].map(([n, t]) => n + ':' + t.length).join('|'); if (KIX.sig !== sig) KIX = { sig, ix: knowledge.buildIndex(new Map([...index].filter(([n]) => !['CLAUDE', 'index', 'log'].includes(n)))) }; return KIX.ix; }
 const MOC = { emails: 'MOC-Emails', sales: 'MOC-Sales', marketing: 'MOC-Marketing', ops: 'MOC-Operations', fin: 'MOC-Finance', delivery: 'MOC-Delivery' };
+// V4.6 (27 Sep 2026): what the Brain learned weighs in (a note cited in approved work ranks a little higher, one sent back a
+// little lower: × 0.8 … 1.2), and the best notes bring up to two neighbours — by [[link]], by mention or by use — as a summary
+let KG = { sig: '', adj: null };
+function kGraph(index) { const sig = KIX.sig + '|' + Object.keys(MEM.edges).length; if (KG.sig !== sig) KG = { sig, adj: memory.linkGraph(new Map([...index].filter(([n]) => !['CLAUDE', 'log'].includes(n))), { extra: memory.learnedLinks(MEM) }) }; return KG.adj; }
 function relevantNotes(index, dept, text, n = 4, queryVec = null) {
   const moc = MOC[dept];
-  const r = knowledge.search(kIndex(index), text, { n, per: 2, always: moc && index.has(moc) ? [moc] : [], vectors: queryVec ? VEC.map : null, queryVec });
-  const names = r.map(x => x.note); names.passages = new Map(r.map(x => [x.note, x.passages])); return names;
+  const r = knowledge.search(kIndex(index), text, { n: n + 2, per: 2, always: moc && index.has(moc) ? [moc] : [], vectors: queryVec ? VEC.map : null, queryVec });
+  const ranked = r.filter(x => x.score > 0).map(x => ({ ...x, score: x.score * memory.boostOf(MEM, x.note) })).sort((a, b) => b.score - a.score).slice(0, n);
+  const always = r.filter(x => x.score === 0 && !ranked.some(y => y.note === x.note));
+  const near = memory.expand(ranked, kGraph(index), { max: 2, skip: new Set(['CLAUDE', 'index', 'log', ...always.map(x => x.note)]) });
+  const names = [...ranked, ...always].map(x => x.note).concat(near.map(x => x.note));
+  names.passages = new Map([...ranked, ...always].map(x => [x.note, x.passages]).concat(near.map(x => [x.note, [memory.summary(index.get(x.note) || '', 420)]])));
+  names.via = new Map(near.map(x => [x.note, x.via]));
+  return names;
 }
 const EMB = knowledge.embedder(); const VECFILE = path.join(DATA, 'embeddings.json');
 const VEC = { map: (() => { try { return JSON.parse(fs.readFileSync(VECFILE, 'utf8')); } catch { return {}; } })(), busy: false };
@@ -352,8 +363,17 @@ async function relevantNotesFor(index, dept, text, n = 4) { // with meaning when
 // V4.4 (H3): a company note that needs a look is labelled in what the agent reads
 function staleOf(name) { return STALE.get(name) || null; }
 let STALE = new Map();
-function contextText(index, names) {
-  return names.map(n => { const st = staleOf(n); const body = names.passages?.get(n)?.join('\n…\n') || (index.get(n) || '').slice(0, 1800); return `--- ${n}.md ---${st ? ` (nota ${st.why}: confírmala antes de citar cifras de aquí)` : ''}\n${body.slice(0, 2600)}`; }).join('\n\n');
+function contextText(index, names, budget = 9000) { // V4.6: a budget (best first, near-copies out) instead of up to 2,600 characters per note
+  return memory.pack(names.map(n => { const st = staleOf(n), via = names.via?.get(n); const body = names.passages?.get(n)?.join('\n…\n') || (index.get(n) || '').slice(0, 1800); return { head: `--- ${n}.md ---${via ? ` (relacionada con ${via}: su resumen)` : ''}${st ? ` (nota ${st.why}: confírmala antes de citar cifras de aquí)` : ''}`, body: body.slice(0, 2600) }; }), budget);
+}
+// V4.6: the synapses that learn — data/memory.json (this machine's; like data/, it does not travel through GitHub)
+const MEMFILE = path.join(DATA, 'memory.json');
+let MEM = (() => { try { const m = JSON.parse(fs.readFileSync(MEMFILE, 'utf8')); return m && m.notes ? m : memory.emptyMemory(); } catch { return memory.emptyMemory(); } })();
+function saveMem() { try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(MEMFILE + '.tmp', JSON.stringify(MEM)); fs.renameSync(MEMFILE + '.tmp', MEMFILE); } catch (e) { console.warn('memory:', e.message); } }
+/** A finished task teaches the Brain: its «Fuentes:» among what it read, and how the owner judged it (approved, sent back, 👍/👎). */
+function learnFrom(t) {
+  if (!t || !t.read?.length || t.piece || (t.error && !t.stopped)) return;
+  memory.reinforce(MEM, { id: t.id, r: memory.outcome(t), cited: memory.cited(t.result, t.read), read: t.read }); saveMem();
 }
 
 /* ---------- the roster, as Claude sees it ---------- */
@@ -712,7 +732,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
     Object.assign(task, { read: out.read, tools: [...new Set([...(task.tools || []), ...out.tools])], used: [...new Set([...(task.used || []), ...out.used])], skills: out.skills, error: false, modelUsed: out.modelUsed, modelFrom: out.modelFrom, modelId: out.modelId, effortUsed: out.effortUsed, effortFrom: out.effortFrom, ...(out.team ? { team: out.team } : {}) });
     for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) { applyJob(task, j, ['result']); media.markAttached(j.id); } // images an agent made during its run
     if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = task.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); delete task.editedDraft; delete task.remindedAt; draftFacts(task); }
-    else { task.state = 'done'; task.doneAt = Date.now(); task.note = writeNote(task); await rebuildGraph(); }
+    else { task.state = 'done'; task.doneAt = Date.now(); task.note = writeNote(task); learnFrom(task); await rebuildGraph(); }
   } catch (e) {
     // V4.4 (B1, B4, B7): a passing failure is retried later on its own; a login problem stops and says how to fix it; what was written before a timeout is kept
     const step = rel.nextStep({ ...task, stopped: stopping.has(task.id) }, e.message, cfg.retries);
@@ -1211,7 +1231,12 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/skills') return json(res, 200, refreshSkills().summary()); // reloads from disk: edit a skill, hit this, see it
     if (url.pathname === '/api/lessons') return json(res, 200, { dir: learn.dir(BRAIN), agents: AGENTS.map(a => ({ id: a.id, name: a.name, ...learn.read(BRAIN, a.id) })).filter(x => x.rules.length || x.oneOffs.length) });
     if (url.pathname === '/api/mcp') { if (url.searchParams.get('refresh') === '1') await mcp.discover(); else if (!mcp.list().some(x => !x.browser)) await discovering; /* a known list answers at once; only a first-ever start waits for claude mcp list */ return json(res, 200, { ...mcp.summary(), tools: backend === 'claude-cli' }); }
-    if (url.pathname === '/api/brain') return json(res, 200, graph);
+    if (url.pathname === '/api/brain') { // V4.6: + what the Brain learned — each note's weight and the links learned from use (live only: never baked into the repo)
+      const at = new Map(graph.nodes.map((n, i) => [n.id, i])), now = Date.now(), w = {};
+      for (const [name, e] of Object.entries(MEM.notes)) { const v = memory.effective(e, now); if (at.has(name) && Math.abs(v - 0.5) > 0.02) w[at.get(name)] = +v.toFixed(3); }
+      const learned = memory.learnedLinks(MEM, now).filter(([a, b]) => at.has(a) && at.has(b)).map(([a, b, x]) => [at.get(a), at.get(b), x]);
+      return json(res, 200, { ...graph, learned: { w, links: learned } });
+    }
     if (url.pathname === '/api/brain/search' && req.method === 'GET') { // the Brain's search: names AND text, accents ignored, a snippet around the hit
       const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
       const q = fold(url.searchParams.get('q') || '').trim().slice(0, 120); if (q.length < 2) return json(res, 200, { q, hits: [] });
@@ -1231,6 +1256,11 @@ const server = http.createServer(async (req, res) => {
       const id = url.searchParams.get('id') || ''; const n = noteIndex().get(id);
       if (!n || !insideBrain(n.path)) return json(res, 404, { error: 'esa nota no existe' });
       const st = fs.statSync(n.path); let text = fs.readFileSync(n.path, 'utf8');
+      if (url.searchParams.get('peek') === '1') { // V4.6: the Brain's preview under the pointer — its first lines, as plain text
+        const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').replace(/^#+\s.*$/m, '').replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, '$1').replace(/^\s*\|?\s*:?-{2,}.*$/gm, '').replace(/[*_`>#|]+/g, ' ').replace(/(^|\s)[-:—]{2,}(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim(); // table rules and markup out
+        const sm = memory.summary(text, 300);
+        return json(res, 200, { name: id, group: n.group, peek: sm || body.slice(0, 260) + (body.length > 260 ? '…' : '') });
+      }
       const cut = text.length > 200000; if (cut) text = text.slice(0, 200000);
       return json(res, 200, { name: id, group: n.group, text, cut, size: st.size, modified: st.mtimeMs, deletable: n.office && /\ntask: /.test(text) });
     }
@@ -1408,7 +1438,7 @@ const server = http.createServer(async (req, res) => {
           t.draft = t.result = d.slice(0, 60000); t.editedDraft = true; draftFacts(t); logApproval(t, 'edit', whoFrom(req, b)); save(l); return json(res, 200, { ok: true, task: t });
         }
         if (um[2] === 'vote') { // D2: 👍 / 👎 with a reason
-          const v = b.vote === 'up' || b.vote === 'down' ? b.vote : null; t.vote = v; t.voteReason = v === 'down' ? String(b.reason || '').slice(0, 300) : ''; save(l);
+          const v = b.vote === 'up' || b.vote === 'down' ? b.vote : null; t.vote = v; t.voteReason = v === 'down' ? String(b.reason || '').slice(0, 300) : ''; save(l); if (t.state === 'done') learnFrom(t); // V4.6: the vote re-teaches the Brain (it replaces the last lesson of this task)
           if (v === 'down' && t.voteReason) { const a = AGENTS.find(x => x.id === t.agent); if (a) { learn.record(BRAIN, a, t, t.voteReason, null); tidyLessons(a); } }
           return json(res, 200, { ok: true, vote: v });
         }

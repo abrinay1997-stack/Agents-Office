@@ -10,6 +10,7 @@ import { AGENTS } from './data.js';
 import { mdToHtml, escHTML } from './md.js';
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
+import { initBrain3D } from './brain3d.js'; // V4.6: the Brain as a 3D neural network
 
 const GROUP_COL = {
   '40-Marketing': '#E69393', '50-Products': '#98A5EF', '60-Sales': '#EADC8F', '70-Delivery': '#8FD3F4',
@@ -34,6 +35,8 @@ export function initBrain({ esc }) {
   /* ---------- data ---------- */
   let nodes = BRAIN.nodes.map((n, i) => ({ ...n, i }));
   let links = BRAIN.links.map(([a, b]) => [a, b]);
+  let extra = (BRAIN.extra || []).map(([a, b]) => [a, b]), learnedLinks = []; // V4.6: mentions (a note names another without linking it) · links learned from approved work
+  let adjM = nodes.map(() => new Set()); for (const [a, b] of extra) { if (adjM[a] && adjM[b]) { adjM[a].add(b); adjM[b].add(a); } }
   let adj = nodes.map(() => new Set());
   for (const [a, b] of links) { adj[a].add(b); adj[b].add(a); }
   let byId = new Map(nodes.map(n => [n.id, n.i]));
@@ -67,7 +70,7 @@ export function initBrain({ esc }) {
     fire();
     state.lastRead = { note: n.id, agent: a.name, ts: Date.now() };
     state.reads.set(n.id, { agent: a.name, ts: Date.now() });
-    updateStrip();
+    updateStrip(); if (g3 && openNow) g3.pulseFrom(n.i);
   }
   // writes: a finished task becomes a new note off its department's hub
   function write(agentId, title) {
@@ -83,7 +86,7 @@ export function initBrain({ esc }) {
     state.notes++; state.newToday++;
     state.written.set(id, { agent: a.name, task: title, ts: Date.now() });
     const tag = document.querySelector('.brainTag .bt-brain b'); if (tag) tag.textContent = state.notes.toLocaleString('es-PA');
-    updateStrip(); if (openNow) dirty();
+    updateStrip(); graphChanged(); if (g3) g3.pulseFrom(n.i, 1);
   }
   // LIVE: replace the graph with the server's (the user's real vault), keeping today's state
   function setGraph(g) {
@@ -92,14 +95,17 @@ export function initBrain({ esc }) {
     nodes = g.nodes.map((n, i) => ({ ...n, i, fresh: n.g === 'Agents Office' && (n.id.startsWith(today) || (n.t || 0) * 1000 >= d0.getTime()) })); // notes the office wrote today glow green
     links = g.links.map(([a, b]) => [a, b]);
     adj = nodes.map(() => new Set()); for (const [a, b] of links) { adj[a].add(b); adj[b].add(a); }
+    extra = (g.extra || []).map(([a, b]) => [a, b]); adjM = nodes.map(() => new Set()); for (const [a, b] of extra) { if (adjM[a] && adjM[b]) { adjM[a].add(b); adjM[b].add(a); } }
+    learnedLinks = (g.learned?.links || []).filter(([a, b]) => nodes[a] && nodes[b]); for (const [i, w] of Object.entries(g.learned?.w || {})) if (nodes[+i]) nodes[+i].w = w; // what the Brain learned from the owner's approvals
     byId = new Map(nodes.map(n => [n.id, n.i])); hubs = nodes.slice(0, 8);
     state.notes = g.notes;
     const keepSel = sel && sel.id; sel = null; hover = null; // indices changed: the old objects point at other notes now
     refreshGroups();
     if (search.value.trim()) { const q = fold(search.value.trim()); match = new Set(nodes.filter(n => fold(n.id).includes(q) || hits.some(h => h.name === n.id)).map(n => n.i)); } // the indices changed: the search points at the right notes again
-    if (openNow) { meta.textContent = metaText(); chips(); if (keepSel && byId.has(keepSel)) sel = nodes[byId.get(keepSel)]; else if (keepSel && !pane.querySelector('.bv-undo')) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); } } // the note being read stays as it is (it used to reload and jump to the top)
+    if (keepSel && byId.has(keepSel)) sel = nodes[byId.get(keepSel)]; else if (keepSel && !pane.querySelector('.bv-undo')) closePane(); // the note being read stays as it is (it used to reload and jump to the top)
+    if (openNow) { meta.textContent = metaText(); chips(); }
     const tag = document.querySelector('.brainTag .bt-brain b'); if (tag) tag.textContent = state.notes.toLocaleString('es-PA');
-    updateStrip(); dirty();
+    updateStrip(); graphChanged();
   }
   // LIVE: an agent read a named note (the server tells us which) — the icon's synapses fire together
   function readNote(agentId, name) {
@@ -107,6 +113,7 @@ export function initBrain({ esc }) {
     fire();
     state.lastRead = { note: name, agent: a.name, ts: Date.now() }; state.reads.set(name, { agent: a.name, ts: Date.now() });
     updateStrip();
+    const i = byId.get(name); if (g3 && openNow && i != null) g3.pulseFrom(i); // V4.6: the signal runs out along its synapses
   }
 
   /* ---------- the panel strip: the door ---------- */
@@ -130,15 +137,21 @@ export function initBrain({ esc }) {
   }
   updateStrip();
 
-  /* ---------- the full-screen graph (G / click the pod / the strip) ---------- */
+  /* ---------- the full-screen Brain (G · the dock · the centre's tag) — V4.6 (27 Sep 2026): a 3D neural network ----------
+     The notes are neurons and the links synapses (src/brain3d.js draws them); here live the data, the filters on the left
+     («Explorar»), the search, the reading card on the right (it hides or closes on its own now, the Brain stays open), the
+     preview under the cursor and the view's buttons. */
   const ov = document.getElementById('brainOv');
-  const bcv = document.getElementById('bvCv'); const bctx = bcv.getContext('2d');
+  const SERVED = location.protocol.startsWith('http');
+  const stage = document.getElementById('bvStage'), side = document.getElementById('bvSide'), sideBtn = document.getElementById('bvOpenSide');
   const search = document.getElementById('bvSearch'); const chipsEl = document.getElementById('bvChips');
   const pane = document.getElementById('bvPane'); const meta = document.getElementById('bvMeta');
-  let openNow = false, k = 1.2, tx = 0, ty = 0, hover = null, sel = null, drag = null, match = null, freshOnly = false;
+  const tip = document.getElementById('bvTip'), tab = document.getElementById('bvTab'), cnt = document.getElementById('bvCnt');
+  let openNow = false, hover = null, sel = null, match = null, regionHi = null, g3 = null, labelsCache = [];
   /* ---------- V4 (24 Sep 2026) filters: folders (only these / all), when, who wrote it, department, no links; a real search ---------- */
   let groups = [];
-  const F = (() => { try { return { inc: [], when: 'all', who: 'all', dept: '', lone: false, onlyHits: false, ...JSON.parse(localStorage.getItem('ao.bv.f') || '{}') }; } catch { return { inc: [], when: 'all', who: 'all', dept: '', lone: false, onlyHits: false }; } })();
+  const F = (() => { const d = { inc: [], when: 'all', who: 'all', dept: '', conn: 'all', onlyHits: false }; try { const f = { ...d, ...JSON.parse(localStorage.getItem('ao.bv.f') || '{}') }; if (f.lone) f.conn = 'lone'; delete f.lone; return f; } catch { return d; } })();
+  let hood = null; // V4.6: { id, depth, set } — only what is near one note (not remembered: it belongs to this visit)
   const saveF = () => { try { localStorage.setItem('ao.bv.f', JSON.stringify(F)); } catch {} };
   const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const colOf = g => GROUP_COL[g] || `hsl(${[...String(g)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360} 55% 62%)`; // a folder the demo never knew gets its own stable colour
@@ -148,45 +161,73 @@ export function initBrain({ esc }) {
   const since = () => F.when === 'today' ? startOfToday() : F.when === 'week' ? Date.now() - 7 * DAY : F.when === 'month' ? Date.now() - 30 * DAY : 0;
   const isOffice = n => n.g === 'Agents Office';
   const passes = (n, skip) => (skip === 'g' || !F.inc.length || F.inc.includes(n.g)) && (!since() || (n.t || 0) * 1000 >= since())
-    && (F.who === 'all' || (F.who === 'office') === isOffice(n)) && (!F.dept || n.dep === F.dept) && (!F.lone || !n.d) && (!F.onlyHits || !match || match.has(n.i));
+    && (F.who === 'all' || (F.who === 'office') === isOffice(n)) && (!F.dept || n.dep === F.dept) && (F.conn !== 'lone' || !n.d) && (F.conn !== 'hubs' || n.d >= HUB) && (!F.onlyHits || !match || match.has(n.i)) && (!hood || hood.set.has(n.i));
+  const HUB = 5; // «centrales»: five links or more
+  function setHood(n, depth) { // the notes within `depth` links of n (breadth first)
+    if (!n) { hood = null; chips(); dirty(); return; }
+    const set = new Set([n.i]); let edge = [n.i];
+    for (let d = 0; d < depth; d++) { const next = []; for (const i of edge) for (const j of adj[i]) if (!set.has(j)) { set.add(j); next.push(j); } edge = next; }
+    hood = { id: n.id, depth, set }; chips(); dirty(); if (g3) g3.fly(n, depth > 1 ? 2.6 : 2.1);
+  }
   const visible = n => passes(n);
   const deptsSeen = () => [...new Set(nodes.map(n => n.dep).filter(Boolean))].sort();
-  // the second row of filters and the search results live under the search box
-  const row2 = document.createElement('div'); row2.id = 'bvRow2'; chipsEl.after(row2);
+  const row2 = document.getElementById('bvRow2');
   const res = document.createElement('div'); res.id = 'bvRes'; res.hidden = true; res.setAttribute('role', 'listbox'); search.after(res);
-  search.setAttribute('aria-controls', 'bvRes'); search.setAttribute('aria-autocomplete', 'list'); search.placeholder = 'Buscar en nombres y en el texto…';
+  search.setAttribute('aria-controls', 'bvRes'); search.setAttribute('aria-autocomplete', 'list');
   const emptyEl = document.createElement('div'); emptyEl.className = 'bv-none'; emptyEl.hidden = true; emptyEl.innerHTML = 'Nada con estos filtros. <button type="button">Mostrar todo</button>'; ov.appendChild(emptyEl);
   emptyEl.querySelector('button').addEventListener('click', () => resetF());
-  function resetF() { Object.assign(F, { inc: [], when: 'all', who: 'all', dept: '', lone: false, onlyHits: false }); saveF(); chips(); dirty(); }
+  function resetF() { Object.assign(F, { inc: [], when: 'all', who: 'all', dept: '', conn: 'all', onlyHits: false }); hood = null; saveF(); chips(); dirty(); }
+  let listOpen = false;
   function chips() {
     const n = g => nodes.filter(x => x.g === g && passes(x, 'g')).length;
-    chipsEl.innerHTML = `<button class="bv-chip all${F.inc.length ? '' : ' on'}" data-g="__all" aria-pressed="${!F.inc.length}">Todas</button>` +
-      groups.map(g => { const on = F.inc.includes(g); return `<button class="bv-chip${on ? ' on' : ''}" data-g="${escHTML(g)}" aria-pressed="${on}" title="${on ? 'Quitar del filtro' : F.inc.length ? 'Añadir al filtro' : 'Ver solo esta carpeta'}"><i style="background:${colOf(g)}"></i>${escHTML(GROUP_NAME(g))} <b>${n(g)}</b></button>`; }).join('');
-    const seg = (key, opts) => `<span class="bv-seg" role="group">${opts.map(([v, l]) => `<button type="button" data-k="${key}" data-v="${v}" class="${F[key] === v ? 'on' : ''}" aria-pressed="${F[key] === v}">${l}</button>`).join('')}</span>`;
-    const ds = deptsSeen(), shown = nodes.filter(visible).length, active = F.inc.length || F.when !== 'all' || F.who !== 'all' || F.dept || F.lone || F.onlyHits;
-    row2.innerHTML = seg('when', [['all', 'Siempre'], ['today', 'Hoy'], ['week', '7 días'], ['month', '30 días']]) + seg('who', [['all', 'Todo'], ['company', 'De la empresa'], ['office', 'De los agentes']]) +
-      (ds.length ? `<select class="bv-dept" aria-label="Departamento"><option value="">Todos los departamentos</option>${ds.map(d => `<option${F.dept === d ? ' selected' : ''}>${escHTML(d)}</option>`).join('')}</select>` : '') +
-      `<label class="bv-tg"><input type="checkbox" data-k="lone"${F.lone ? ' checked' : ''}> Sin enlaces · ${nodes.filter(x => !x.d).length}</label>` +
-      (match ? `<label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo resultados</label>` : '') +
-      `<span class="bv-cnt">${shown} de ${nodes.length} notas</span>${active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : ''}` +
-      (location.protocol.startsWith('http') ? '<button type="button" class="bv-reset bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-reset bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button>' : '');
+    // regions: one folder, one lobe of the brain; the first click shows only it, more clicks add, «Todas» brings every one back
+    chipsEl.innerHTML = `<button type="button" class="bv-reg all${F.inc.length ? '' : ' on'}" data-g="__all" aria-pressed="${!F.inc.length}"><i class="bv-all"></i><span>Todas las regiones</span><b>${nodes.length}</b></button>` +
+      groups.map(g => { const on = F.inc.includes(g); return `<button type="button" class="bv-reg${on ? ' on' : ''}" data-g="${escHTML(g)}" aria-pressed="${on}" title="${on ? 'Quitar del filtro' : F.inc.length ? 'Añadir al filtro' : 'Ver solo esta región'}"><i style="background:${colOf(g)}"></i><span>${escHTML(GROUP_NAME(g))}</span><b>${n(g)}</b></button>`; }).join('');
+    const cur = key => (key === 'hd' ? String(hood ? hood.depth : '') : F[key]);
+    const seg = (key, opts) => `<span class="bv-seg" role="group">${opts.map(([v, l]) => `<button type="button" data-k="${key}" data-v="${v}" class="${cur(key) === v ? 'on' : ''}" aria-pressed="${cur(key) === v}">${l}</button>`).join('')}</span>`;
+    const ds = deptsSeen(), shown = nodes.filter(visible).length, active = F.inc.length || F.when !== 'all' || F.who !== 'all' || F.dept || F.conn !== 'all' || F.onlyHits || hood;
+    row2.innerHTML = `<section class="bv-sec"><h3>Cuándo</h3>${seg('when', [['all', 'Siempre'], ['today', 'Hoy'], ['week', '7 días'], ['month', '30 días']])}</section>` +
+      `<section class="bv-sec"><h3>De quién</h3>${seg('who', [['all', 'Todo'], ['company', 'Empresa'], ['office', 'Agentes']])}</section>` +
+      (ds.length ? `<section class="bv-sec"><h3>Departamento</h3><select class="bv-dept" aria-label="Departamento"><option value="">Todos los departamentos</option>${ds.map(d => `<option${F.dept === d ? ' selected' : ''}>${escHTML(d)}</option>`).join('')}</select></section>` : '') +
+      `<section class="bv-sec bv-syn"><h3>Sinapsis</h3><div class="bv-leg"><i class="wiki"></i>Enlaces [[…]] <b>${links.length}</b></div>` +
+      `<label class="bv-leg"><input type="checkbox" data-k="ment"${F.ment !== false ? ' checked' : ''}><i class="ment"></i>Menciones sin enlace <b>${extra.length}</b></label>` +
+      `<label class="bv-leg" title="Notas que los agentes citaron juntas en trabajo que aprobaste: se refuerzan; lo devuelto las debilita; sin uso, se apagan en unos meses"><input type="checkbox" data-k="learn"${F.learn !== false ? ' checked' : ''}><i class="learn"></i>Reforzadas por tu trabajo aprobado <b>${learnedLinks.length}</b></label></section>` +
+      `<section class="bv-sec"><h3>Conexiones</h3>${seg('conn', [['all', 'Todas'], ['hubs', `Centrales ${nodes.filter(x => x.d >= HUB).length}`], ['lone', `Sueltas ${nodes.filter(x => !x.d).length}`]])}</section>` +
+      (hood ? `<section class="bv-sec bv-hood"><h3>Vecindario</h3><div class="bv-hoodc"><span>Lo que está a ${hood.depth} ${hood.depth === 1 ? 'salto' : 'saltos'} de <b>${escHTML(hood.id)}</b></span><button type="button" class="bv-hoodx" aria-label="Quitar el vecindario" title="Quitar el vecindario">✕</button></div>${seg('hd', [['1', '1 salto'], ['2', '2 saltos'], ['3', '3 saltos']])}</section>` : '') +
+      (match ? `<section class="bv-sec bv-tgs"><label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo lo que encontré</label></section>` : '') +
+      (active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : '') +
+      (SERVED ? '<section class="bv-sec bv-tools"><h3>Herramientas</h3><button type="button" class="bv-tool bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-tool bv-stale" title="Las notas que pueden estar viejas: los agentes las leen con un aviso">⏳ Notas por revisar</button><button type="button" class="bv-tool bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button></section>' : '') +
+      `<details class="bv-sec bv-list"${listOpen ? ' open' : ''}><summary>Lista de notas <b>${shown}</b></summary><div class="bv-lst">${listOpen ? listHTML() : ''}</div></details>`;
+    cnt.textContent = `${shown} de ${nodes.length}`;
     emptyEl.hidden = !(openNow && shown === 0);
   }
+  // the notes as a list: the same brain for the keyboard and for screen readers (the 3D canvas is a picture to them)
+  function listHTML() { const l = nodes.filter(visible).sort((a, b) => a.id.localeCompare(b.id, 'es')); return l.slice(0, 400).map(n => `<button type="button" class="bv-li${n === sel ? ' on' : ''}" data-i="${n.i}"><i style="background:${colOf(n.g)}"></i>${escHTML(n.id)}</button>`).join('') + (l.length > 400 ? `<p class="bv-hmore">+${l.length - 400} más: busca o filtra</p>` : ''); }
   chipsEl.addEventListener('click', e => {
-    const b = e.target.closest('.bv-chip'); if (!b) return;
+    const b = e.target.closest('.bv-reg'); if (!b) return;
     const g = b.dataset.g;
-    if (g === '__all') F.inc = []; else F.inc = F.inc.includes(g) ? F.inc.filter(x => x !== g) : [...F.inc, g]; // first click: only this folder; more clicks add; «Todas» resets
-    saveF(); chips(); dirty();
+    if (g === '__all') F.inc = []; else F.inc = F.inc.includes(g) ? F.inc.filter(x => x !== g) : [...F.inc, g];
+    saveF(); regionHi = null; chips(); dirty();
   });
+  // a region under the pointer lights up in the brain
+  chipsEl.addEventListener('pointerover', e => { const b = e.target.closest('.bv-reg'); const g = b && b.dataset.g !== '__all' ? b.dataset.g : null; if (g !== regionHi) { regionHi = g; dirty(); } });
+  chipsEl.addEventListener('pointerleave', () => { if (regionHi) { regionHi = null; dirty(); } });
   row2.addEventListener('click', e => {
     if (e.target.closest('.bv-bin')) return showBin();
     if (e.target.closest('.bv-up')) return showUpload();
+    if (e.target.closest('.bv-stale')) return showStale();
     if (e.target.closest('.bv-reset')) return resetF();
-    const b = e.target.closest('button[data-k]'); if (b) { F[b.dataset.k] = b.dataset.v; saveF(); chips(); dirty(); }
+    const li = e.target.closest('.bv-li'); if (li) { const n = nodes[+li.dataset.i]; if (n) { select(n); centre(n); } return; }
+    if (e.target.closest('.bv-hoodx')) return setHood(null);
+    const b = e.target.closest('button[data-k]'); if (!b) return;
+    if (b.dataset.k === 'hd') { const n = hood && nodes[byId.get(hood.id)]; if (n) setHood(n, +b.dataset.v); return; }
+    F[b.dataset.k] = b.dataset.v; saveF(); chips(); dirty();
   });
+  row2.addEventListener('toggle', e => { if (!e.target.classList.contains('bv-list')) return; listOpen = e.target.open; if (listOpen) e.target.querySelector('.bv-lst').innerHTML = listHTML(); }, true);
   row2.addEventListener('change', e => {
     if (e.target.classList.contains('bv-dept')) F.dept = e.target.value;
     else if (e.target.dataset.k) F[e.target.dataset.k] = e.target.checked;
+    if (g3 && (e.target.dataset.k === 'ment' || e.target.dataset.k === 'learn')) g3.setLayers(F.ment !== false, F.learn !== false);
     saveF(); chips(); dirty();
   });
   // search: names at once (accents ignored), the text of every note from the server a moment later; ↑ ↓ Enter open a hit
@@ -218,7 +259,7 @@ export function initBrain({ esc }) {
   function openHit(name) {
     const i = byId.get(name); res.hidden = true;
     if (i != null) { const n = nodes[i]; if (!visible(n)) { resetF(); } select(n); centre(n); }
-    else if (SERVED) { sel = null; reading = true; pane.classList.add('reading'); pane.innerHTML = `<h3>${esc(name)}</h3><div class="bv-path">fuera del grafo</div><div class="bv-note"><div class="bv-loading">Abriendo la nota…</div></div>`; // a note the graph does not draw: read it anyway
+    else if (SERVED) { sel = null; dirty(); setPane(`<h3>${esc(name)}</h3><div class="bv-path">fuera del grafo</div><div class="bv-note"><div class="bv-loading">Abriendo la nota…</div></div>`, { reading: true }); // a note the graph does not draw: read it anyway
       fetch('/api/note?id=' + encodeURIComponent(name)).then(r => r.json()).then(j => { const box = pane.querySelector('.bv-note'); if (box) box.innerHTML = j.text ? frontFacts(j.text) + `<div class="bv-md md">${mdToHtml(j.text, { front: true })}</div>` : `<p class="bv-err">${esc(j.error || 'No pude abrirla.')}</p>`; }).catch(() => {}); }
   }
   search.addEventListener('input', applySearch);
@@ -231,54 +272,81 @@ export function initBrain({ esc }) {
     if (e.key === 'Enter') { e.preventDefault(); const h = hits[Math.max(0, hitAt)]; if (h) openHit(h.name); }
   });
   search.addEventListener('blur', () => setTimeout(() => { res.hidden = true; }, 150));
-  let CW = 1, CH = 1; // the canvas size, read once per frame (reading clientWidth per node forced thousands of layouts a frame)
-  function measure() { CW = bcv.clientWidth || 1; CH = bcv.clientHeight || 1; }
-  function S() { return Math.min(CW, CH) * 0.44 * k; }
-  function sx(n) { return CW * (reading ? 0.34 : 0.42) + n.x * S() + tx; }
-  function sy(n) { return CH * 0.5 + n.y * S() + ty; }
-  // V4.1 (audit 66): Pointer Events — the mouse, a pen and a finger drag the graph; two fingers pinch to zoom; a tap opens a note
-  function hoverAt(x, y, reach) {
-    let best = null, bd = reach; measure();
-    for (const n of nodes) { if (!visible(n)) continue; const d = Math.hypot(sx(n) - x, sy(n) - y); if (d < bd) { bd = d; best = n; } }
-    if (best !== hover) { hover = best; dirty(); } return best;
+
+  /* ---------- the 3D view: made the first time the Brain opens, fed by the data and the focus kept here ---------- */
+  const phone = () => innerWidth <= 760;
+  function computeLabels() { // which names show: the focus and its neighbours, the search's hits, a region under the pointer, else the hubs
+    const out = new Set(), vis = n => n && visible(n), f = hover || sel;
+    if (sel) out.add(sel); if (hover) out.add(hover);
+    if (f) [...adj[f.i]].map(i => nodes[i]).filter(vis).sort((a, b) => b.d - a.d).slice(0, 12).forEach(n => out.add(n));
+    if (regionHi) nodes.filter(n => n.g === regionHi && vis(n)).sort((a, b) => b.d - a.d).slice(0, 10).forEach(n => out.add(n));
+    if (match) [...match].map(i => nodes[i]).filter(vis).sort((a, b) => b.d - a.d).slice(0, 24).forEach(n => out.add(n));
+    if (!f && !match && !regionHi) { nodes.filter(vis).sort((a, b) => b.d - a.d).slice(0, phone() ? 6 : 12).forEach(n => out.add(n)); nodes.filter(n => n.fresh && vis(n)).slice(0, 6).forEach(n => out.add(n)); }
+    return [...out].filter(vis);
   }
-  function zoomAt(x, y, nk) { // keep the point under the cursor (or between the fingers) where it is
-    nk = Math.max(0.5, Math.min(7, nk)); const r = nk / k;
-    const cx = bcv.clientWidth * (reading ? 0.34 : 0.42), cy = bcv.clientHeight * 0.5; // the same centre the drawing uses (with a note open it moves left)
-    tx = (tx + cx - x) * r + x - cx; ty = (ty + cy - y) * r + y - cy; k = nk; dirty();
+  function dirty() { // the filters, the search or the focus changed: repaint the brain (not every frame)
+    if (!g3) return;
+    labelsCache = computeLabels();
+    g3.setFocus(sel, hover, regionHi ? new Set(nodes.filter(n => n.g === regionHi).map(n => n.i)) : match);
   }
-  const pts = new Map(); let pinch = null;
-  bcv.addEventListener('pointerdown', e => {
-    try { bcv.setPointerCapture(e.pointerId); } catch {}
-    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, k }; drag = null; return; }
-    drag = { x: e.clientX, y: e.clientY, moved: false, touch: e.pointerType !== 'mouse' };
-    if (e.pointerType !== 'mouse') hoverAt(e.clientX, e.clientY, 24); // a finger has no hover: the note under it is the one a tap opens
+  function make3D() {
+    if (g3) return g3;
+    try {
+      g3 = initBrain3D({ host: stage, colOf, visible, labelsFor: () => labelsCache, recent: recentIdx,
+        onPick: n => { select(n); centre(n); },
+        onHover: (n, x, y) => showTip(n, x, y) });
+      g3.setData(nodes, links, { extra, learned: learnedLinks }); g3.setLayers(F.ment !== false, F.learn !== false);
+    } catch (e) { stage.innerHTML = `<p class="bv-err bv-nogl">No pude dibujar el Cerebro en 3D en este navegador (${esc(e.message)}). La búsqueda y la lista de notas de la izquierda siguen funcionando.</p>`; g3 = null; }
+    return g3;
+  }
+  function recentIdx() { // the notes the agents read or wrote in the last 24 hours
+    const since = Date.now() - DAY, out = [];
+    for (const m of [state.reads, state.written]) for (const [id, r] of m) if (r.ts >= since && byId.has(id)) out.push(byId.get(id));
+    return out;
+  }
+  function graphChanged() { if (g3) { g3.setData(nodes, links, { extra, learned: learnedLinks }); dirty(); } }
+  function insets() { // the filters on the left and the card on the right: the brain sits in the room between them
+    if (!g3) return;
+    const l = !phone() && !side.classList.contains('folded') ? side.offsetWidth + 16 : 0, r = !phone() && !pane.hidden ? pane.offsetWidth + 22 : 0, b = phone() && !pane.hidden ? pane.offsetHeight : 0;
+    g3.setInsets(l, r, b);
+  }
+  function centre(n) { if (g3) g3.fly(n); }
+  // the preview under the pointer: its region, links, date and its first lines (asked once, then remembered)
+  const peeks = new Map(); let peekT = 0;
+  const dateOf = t => t ? new Date(t * 1000).toLocaleDateString('es-PA', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  function showTip(n, x, y) {
+    if (n !== hover) { hover = n; dirty(); }
+    if (!n) { tip.hidden = true; return; }
+    const pk = peeks.get(n.id);
+    tip.innerHTML = `<b>${esc(n.id)}</b><span class="bv-tp"><i style="background:${colOf(n.g)}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${n.t ? ' · ' + dateOf(n.t) : ''}${n.fresh ? ' · <em>nueva hoy</em>' : ''}</span>` +
+      (SERVED ? `<span class="bv-tx">${pk === undefined ? 'Leyendo…' : pk ? esc(pk) : '<em>(vacía)</em>'}</span>` : '') + '<span class="bv-th">Clic para leerla</span>';
+    tip.hidden = false;
+    const W = ov.clientWidth, H = ov.clientHeight, tw = tip.offsetWidth, th = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(x + 18, W - tw - 8)) + 'px'; tip.style.top = Math.max(8, Math.min(y + 18, H - th - 8)) + 'px';
+    if (SERVED && pk === undefined) { clearTimeout(peekT); peekT = setTimeout(() => fetch('/api/note?peek=1&id=' + encodeURIComponent(n.id)).then(r => r.json()).then(j => { peeks.set(n.id, j.peek || ''); if (hover === n) showTip(n, x, y); }).catch(() => peeks.set(n.id, '')), 140); }
+  }
+  // the view's buttons: centre, turn by itself, closer, farther
+  ov.querySelector('.bv-ctl').addEventListener('click', e => {
+    const b = e.target.closest('button[data-c]'); if (!b || !g3) return;
+    const c = b.dataset.c;
+    if (c === 'reset') g3.reset(); else if (c === 'in') g3.zoomBy(0.78); else if (c === 'out') g3.zoomBy(1.28);
+    else if (c === 'spin') { const on = g3.spin(); b.setAttribute('aria-pressed', on); b.title = on ? 'Dejar de girar' : 'Girar solo'; b.innerHTML = on ? PAUSE : PLAY; try { localStorage.setItem('ao.bv.spin', on ? '1' : '0'); } catch {} }
   });
-  bcv.addEventListener('pointermove', e => {
-    if (pts.has(e.pointerId)) pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, pinch.k * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d); return; }
-    if (drag) {
-      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-      if (!drag.moved && Math.hypot(dx, dy) < (drag.touch ? 8 : 3)) return; // a small wobble is still a tap
-      tx += dx; ty += dy; drag.x = e.clientX; drag.y = e.clientY; drag.moved = true; dirty(); return;
-    }
-    if (e.pointerType === 'mouse') { const best = hoverAt(e.clientX, e.clientY, 12); bcv.style.cursor = best ? 'pointer' : 'grab'; }
-  });
-  const endPointer = e => {
-    pts.delete(e.pointerId);
-    if (pinch) { if (pts.size < 2) pinch = null; drag = null; return; }
-    if (!drag) return; const moved = drag.moved; drag = null; if (!moved && hover && openNow) select(hover);
-  };
-  bcv.addEventListener('pointerup', endPointer);
-  bcv.addEventListener('pointercancel', e => { pts.delete(e.pointerId); pinch = null; drag = null; });
-  bcv.addEventListener('wheel', e => {
-    e.preventDefault(); e.stopPropagation();
-    zoomAt(e.clientX, e.clientY, k * Math.exp(-e.deltaY * 0.0025));
-  }, { passive: false });
-  const SERVED = location.protocol.startsWith('http');
-  const EMPTY = '<div class="bv-empty">Haz clic en una nota para leerla. Pasa el cursor para ver sus vecinas.</div>';
-  let reading = false, readSeq = 0;
+  const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>', PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>';
+  // the panel on the left folds away (remembered); on a phone it opens over the brain
+  function setSide(open) { side.classList.toggle('folded', !open); sideBtn.setAttribute('aria-expanded', open); try { if (!phone()) localStorage.setItem('ao.bv.side', open ? '1' : '0'); } catch {} requestAnimationFrame(insets); }
+  side.querySelector('.bv-fold').addEventListener('click', () => { setSide(false); sideBtn.focus(); });
+  sideBtn.addEventListener('click', () => { setSide(true); search.focus({ preventScroll: true }); });
+
+  /* ---------- the reading card on the right: it hides (the note stays marked, a tab brings it back) or closes, and the Brain stays ---------- */
+  let reading = false, readSeq = 0, paneOn = 'closed';
+  const PANE_HEAD = '<div class="bv-ph"><span class="sp"></span><button type="button" class="bv-pfold" aria-label="Ocultar la ficha" title="Ocultar la ficha: la nota sigue marcada; vuelve con la pestaña del borde">⟩</button><button type="button" class="bv-pclose" aria-label="Cerrar la ficha" title="Cerrar la ficha (Esc)">✕</button></div>';
+  function setPane(html, { reading: r = false } = {}) { pane.innerHTML = PANE_HEAD + `<div class="bv-pb">${html}</div>`; reading = r; pane.classList.toggle('reading', r); pane.hidden = false; tab.hidden = true; paneOn = 'open'; pane.scrollTop = 0; requestAnimationFrame(insets); }
+  function closePane() { const had = sel; pane.hidden = true; tab.hidden = true; paneOn = 'closed'; reading = false; pane.classList.remove('reading'); sel = null; if (had) { dirty(); if (listOpen) chips(); } requestAnimationFrame(insets); }
+  function foldPane() { if (paneOn !== 'open') return; const t = pane.querySelector('h3'); pane.hidden = true; paneOn = 'folded'; tab.hidden = false; tab.innerHTML = `<span>${esc(t ? t.textContent : 'La ficha')}</span>`; tab.title = 'Volver a la ficha'; requestAnimationFrame(insets); tab.focus({ preventScroll: true }); }
+  function unfoldPane() { pane.hidden = false; tab.hidden = true; paneOn = 'open'; requestAnimationFrame(insets); pane.querySelector('.bv-pfold')?.focus({ preventScroll: true }); }
+  tab.addEventListener('click', unfoldPane);
+  pane.addEventListener('click', e => { if (e.target.closest('.bv-pclose')) closePane(); else if (e.target.closest('.bv-pfold')) foldPane(); else if (e.target.closest('.bv-near') && sel) setHood(sel, 2); });
   // front matter → the little facts line (who wrote it, when, with what)
   function frontFacts(text) {
     const m = /^---\n([\s\S]*?)\n---/.exec(String(text).replace(/\r\n?/g, '\n')); if (!m) return '';
@@ -288,16 +356,17 @@ export function initBrain({ esc }) {
     return bits.length ? `<div class="bv-facts">${bits.join(' · ')}</div>` : '';
   }
   function select(n) {
-    sel = n; dirty();
+    sel = n; tip.hidden = true; dirty(); if (listOpen) chips();
     const out = [...adj[n.i]].map(i => nodes[i]).sort((a, b) => b.d - a.d);
     const rd = state.reads.get(n.id);
-    const linksHTML = `<div class="bv-lab">Enlaces · ${out.length}</div>` + out.slice(0, 18).map(o => `<button type="button" class="bv-lk" data-i="${o.i}">${esc(o.id)}</button>`).join('') +
-      (out.length > 18 ? `<button type="button" class="bv-more" data-all="1">+${out.length - 18} más: verlos todos</button>` : ''); // V4.1 (audit 64): it opens the rest
-    pane.classList.toggle('reading', SERVED); reading = SERVED;
-    pane.innerHTML = `<h3>${esc(n.id)}</h3><div class="bv-path"><i style="background:${colOf(n.g)}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${n.fresh ? ' · <span class="bv-g">nueva hoy</span>' : ''}</div>` +
+    const linksHTML = `<div class="bv-lab">Conectada con · ${out.length}</div>` + out.slice(0, 18).map(o => `<button type="button" class="bv-lk" data-i="${o.i}"><i style="background:${colOf(o.g)}"></i>${esc(o.id)}</button>`).join('') +
+      (out.length > 18 ? `<button type="button" class="bv-more" data-all="1">+${out.length - 18} más: verlas todas</button>` : ''); // V4.1 (audit 64): it opens the rest
+    const men = [...(adjM[n.i] || [])].map(i => nodes[i]).filter(Boolean);
+    const learnt = n.w == null ? '' : n.w > 0.56 ? '<div class="bv-learn up">Sinapsis reforzada: los agentes la citaron en trabajo que aprobaste.</div>' : n.w < 0.44 ? '<div class="bv-learn down">Sinapsis debilitada: salió en trabajo devuelto o leído sin usar.</div>' : '';
+    setPane(`<h3>${esc(n.id)}</h3><div class="bv-path"><i style="background:${colOf(n.g)}"></i>${esc(GROUP_NAME(n.g))} · ${n.d} enlace${n.d === 1 ? '' : 's'}${men.length ? ` · ${men.length} mención${men.length === 1 ? '' : 'es'}` : ''}${n.fresh ? ' · <span class="bv-g">nueva hoy</span>' : ''}</div>` + learnt +
       (rd ? `<div class="bv-lab">Última lectura por</div><p>${esc(rd.agent)} · ${timeStr(rd.ts)}</p>` : '') +
-      (SERVED ? '<div class="bv-note" aria-live="polite"><div class="bv-loading">Abriendo la nota…</div></div>' : '') + `<div class="bv-links">${linksHTML}</div>`;
-    pane.scrollTop = 0;
+      `<div class="bv-pacts"><button type="button" class="bv-btn bv-near" title="Deja a la vista solo esta nota y lo que está a uno o dos enlaces">◎ Solo su vecindario</button></div>` +
+      (SERVED ? '<div class="bv-note" aria-live="polite"><div class="bv-loading">Abriendo la nota…</div></div>' : '') + `<div class="bv-links">${linksHTML}${men.length ? `<div class="bv-lab">Menciones sin enlace · ${men.length}</div>` + men.slice(0, 12).map(o => `<button type="button" class="bv-lk ment" data-i="${o.i}"><i style="background:${colOf(o.g)}"></i>${esc(o.id)}</button>`).join('') : ''}</div>`, { reading: SERVED });
     if (!SERVED) return; // the file-opened demo has no notes to read
     const seq = ++readSeq;
     fetch('/api/note?id=' + encodeURIComponent(n.id)).then(r => r.json().then(j => ({ ok: r.ok, j }))).then(({ ok, j }) => {
@@ -317,13 +386,21 @@ export function initBrain({ esc }) {
   // V4.4 (audit E9, H3): documents into the Brain — a PDF, Word, Excel, CSV or text file becomes a note in Documentos/,
   // converted on this machine; and the notes that may be out of date, to check
   async function showUpload(files) {
-    sel = null; dirty(); reading = false; pane.classList.remove('reading');
-    pane.innerHTML = `<h3>Subir documentos</h3><div class="bv-path">PDF, Word (.docx), Excel (.xlsx), CSV o texto · hasta 15 MB · se convierte aquí, nada sale de tu máquina</div>
+    sel = null; dirty();
+    setPane(`<h3>Subir documentos</h3><div class="bv-path">PDF, Word (.docx), Excel (.xlsx), CSV o texto · hasta 15 MB · se convierte aquí, nada sale de tu máquina</div>
       <label class="bv-drop"><input type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.txt,.md,.json,.html" class="sr"><b>Elige archivos</b> o suéltalos aquí</label>
-      <ul class="bv-ups" aria-live="polite"></ul><div class="bv-stale"></div>`;
+      <ul class="bv-ups" aria-live="polite"></ul>`);
     const inp = pane.querySelector('input[type=file]'); inp.addEventListener('change', () => upload([...inp.files]));
     if (files && files.length) upload(files);
-    try { const j = await (await fetch('/api/brain/stale')).json(); const box = pane.querySelector('.bv-stale'); if (box && j.notes && j.notes.length) box.innerHTML = `<h4>Notas que conviene revisar (${j.notes.length})</h4><p class="bv-path">Los agentes las leen con un aviso de que pueden estar viejas.</p><ul>${j.notes.slice(0, 20).map(n => `<li><button type="button" class="bv-link" data-n="${esc(n.name)}">${esc(n.name)}</button> <small>${esc(n.why)}</small></li>`).join('')}</ul>`; } catch {}
+  }
+  async function showStale() {
+    sel = null; dirty();
+    setPane('<h3>Notas por revisar</h3><div class="bv-loading">Buscando…</div>');
+    try {
+      const j = await (await fetch('/api/brain/stale')).json(), l = j.notes || [];
+      setPane(`<h3>Notas por revisar</h3><div class="bv-path">${l.length} ${l.length === 1 ? 'nota' : 'notas'} · los agentes las leen con un aviso de que pueden estar viejas</div>` +
+        (l.length ? `<ul class="bv-stl">${l.slice(0, 40).map(n => `<li><button type="button" class="bv-link" data-n="${esc(n.name)}">${esc(n.name)}</button> <small>${esc(n.why)}</small></li>`).join('')}</ul>` : '<div class="bv-empty">Todo al día.</div>'));
+    } catch (e) { setPane(`<h3>Notas por revisar</h3><p class="bv-err">No pude leerlas: ${esc(e.message)}</p>`); }
   }
   async function upload(files) {
     const list = pane.querySelector('.bv-ups'); if (!list) return;
@@ -344,15 +421,15 @@ export function initBrain({ esc }) {
   ov.addEventListener('drop', e => { if (!SERVED || !e.dataTransfer?.files?.length) return; e.preventDefault(); ov.classList.remove('dropping'); showUpload([...e.dataTransfer.files]); });
   // V4.1 (audit 63): the bin has its own view — «Deshacer» no longer vanishes with the next click: every note thrown away stays here 30 days
   async function showBin() {
-    sel = null; dirty(); reading = false; pane.classList.remove('reading');
-    pane.innerHTML = '<h3>Papelera</h3><div class="bv-loading">Abriendo la papelera…</div>';
+    sel = null; dirty();
+    setPane('<h3>Papelera</h3><div class="bv-loading">Abriendo la papelera…</div>');
     try {
       const r = await fetch('/api/note/trash'); const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
       const day = ts => new Date(ts).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
-      pane.innerHTML = `<h3>Papelera</h3><div class="bv-path">${j.items.length} ${j.items.length === 1 ? 'nota' : 'notas'} · se quedan ${j.keepDays} días y luego se borran solas</div>` +
+      setPane(`<h3>Papelera</h3><div class="bv-path">${j.items.length} ${j.items.length === 1 ? 'nota' : 'notas'} · se quedan ${j.keepDays} días y luego se borran solas</div>` +
         (j.items.length ? `<div class="bv-bins">${j.items.map(it => `<div class="bv-binrow"><div><b>${esc(it.name)}</b><small>a la papelera el ${esc(day(it.at))}</small></div><button type="button" class="bv-btn bv-restore" data-file="${esc(it.file)}">Restaurar</button></div>`).join('')}</div>`
-          : '<div class="bv-empty">La papelera está vacía.</div>');
-    } catch (e) { pane.innerHTML = `<h3>Papelera</h3><p class="bv-err">No pude abrirla: ${esc(e.message)}</p>`; }
+          : '<div class="bv-empty">La papelera está vacía.</div>'));
+    } catch (e) { setPane(`<h3>Papelera</h3><p class="bv-err">No pude abrirla: ${esc(e.message)}</p>`); }
   }
   pane.addEventListener('click', async e => {
     const b = e.target.closest('.bv-restore'); if (!b) return;
@@ -368,53 +445,22 @@ export function initBrain({ esc }) {
     try {
       const r = await fetch('/api/note/trash', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error || 'error');
-      sel = null; reading = false; pane.classList.remove('reading');
-      pane.innerHTML = `<div class="bv-undo"><p>«${esc(id)}» está en la papelera.</p><button type="button" class="bv-btn">Deshacer</button></div>`;
+      sel = null;
+      setPane(`<div class="bv-undo"><h3>En la papelera</h3><p>«${esc(id)}» está en la papelera.</p><button type="button" class="bv-btn">Deshacer</button></div>`);
       pane.querySelector('.bv-undo button').addEventListener('click', async e => {
         e.currentTarget.disabled = true;
-        try { const r2 = await fetch('/api/note/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file: j.trashed }) }); const j2 = await r2.json(); if (!r2.ok) throw new Error(j2.error); pane.innerHTML = EMPTY; setGraph(j2.graph); const b = byId.get(j2.name); if (b != null) select(nodes[b]); }
-        catch (err) { pane.innerHTML = `<p class="bv-err">No pude restaurarla: ${esc(err.message)}</p>`; }
+        try { const r2 = await fetch('/api/note/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file: j.trashed }) }); const j2 = await r2.json(); if (!r2.ok) throw new Error(j2.error); closePane(); setGraph(j2.graph); const b = byId.get(j2.name); if (b != null) select(nodes[b]); }
+        catch (err) { setPane(`<p class="bv-err">No pude restaurarla: ${esc(err.message)}</p>`); }
       });
       setGraph(j.graph);
     } catch (e) { btn.disabled = false; btn.textContent = 'Mover a la papelera'; alert('No se pudo mover: ' + e.message); }
   }
   pane.addEventListener('click', e => { // links inside the pane: the neighbour list and the [[wiki]] links in the text
     const lk = e.target.closest('.bv-lk'); if (lk) { const t = nodes[+lk.dataset.i]; if (t) { select(t); centre(t); } return; }
-    const more = e.target.closest('.bv-more[data-all]'); if (more && sel) { const rest = [...adj[sel.i]].map(i => nodes[i]).sort((a, b) => b.d - a.d).slice(18); more.insertAdjacentHTML('beforebegin', rest.map(o => `<button type="button" class="bv-lk" data-i="${o.i}">${esc(o.id)}</button>`).join('')); const next = more.previousElementSibling; more.remove(); if (next) next.focus({ preventScroll: true }); return; }
+    const more = e.target.closest('.bv-more[data-all]'); if (more && sel) { const rest = [...adj[sel.i]].map(i => nodes[i]).sort((a, b) => b.d - a.d).slice(18); more.insertAdjacentHTML('beforebegin', rest.map(o => `<button type="button" class="bv-lk" data-i="${o.i}"><i style="background:${colOf(o.g)}"></i>${esc(o.id)}</button>`).join('')); const next = more.previousElementSibling; more.remove(); if (next) next.focus({ preventScroll: true }); return; }
     const w = e.target.closest('.md-wiki'); if (w) { const i = byId.get(w.dataset.note); if (i != null) { select(nodes[i]); centre(nodes[i]); } else { w.classList.add('missing'); w.setAttribute('aria-disabled', 'true'); w.title = 'Esa nota no está en el Cerebro: se borró, se renombró o está fuera de las carpetas que lee la oficina'; if (!w.nextElementSibling || !w.nextElementSibling.classList.contains('md-miss')) w.insertAdjacentHTML('afterend', '<span class="md-miss" role="note"> (no está en el grafo)</span>'); } }
   });
   pane.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.md-wiki')) { e.preventDefault(); e.target.click(); } });
-  function centre(n) { measure(); tx = -n.x * S(); ty = -n.y * S(); dirty(); }
-  let raf = 0;
-  function dirty() { if (openNow && !raf) raf = requestAnimationFrame(() => { raf = 0; draw(); }); } // one frame, only when something changed
-  function draw() {
-    if (!openNow) return;
-    measure();
-    const dpr = devicePixelRatio || 1, Wd = CW, Hd = CH;
-    if (bcv.width !== Math.round(Wd * dpr)) { bcv.width = Math.round(Wd * dpr); bcv.height = Math.round(Hd * dpr); }
-    bctx.setTransform(dpr, 0, 0, dpr, 0, 0); bctx.clearRect(0, 0, Wd, Hd);
-    const focus = hover || sel; const hi = focus ? new Set([focus.i, ...adj[focus.i]]) : null;
-    bctx.lineWidth = Math.max(.5, .8 * Math.sqrt(k));
-    for (const [a, b] of links) {
-      const A = nodes[a], B = nodes[b]; if (!visible(A) || !visible(B)) continue;
-      const lit = hi && hi.has(a) && hi.has(b);
-      bctx.strokeStyle = lit ? 'rgba(232,230,223,.85)' : `rgba(232,230,223,${hi || match ? .05 : .15})`;
-      bctx.beginPath(); bctx.moveTo(sx(A), sy(A)); bctx.lineTo(sx(B), sy(B)); bctx.stroke();
-    }
-    bctx.font = `${Math.max(9, 10 * Math.sqrt(k))}px Inter, -apple-system, sans-serif`; bctx.textBaseline = 'middle';
-    for (const n of nodes) {
-      if (!visible(n)) continue;
-      const x = sx(n), y = sy(n); const r = (1.6 + Math.sqrt(n.d) * .75) * Math.sqrt(k);
-      const dim = (hi && !hi.has(n.i)) || (match && !match.has(n.i));
-      bctx.globalAlpha = dim ? .2 : 1;
-      bctx.fillStyle = colOf(n.g); bctx.beginPath(); bctx.arc(x, y, r, 0, 7); bctx.fill();
-      if (n.fresh) { bctx.strokeStyle = GREEN; bctx.lineWidth = 1.5; bctx.beginPath(); bctx.arc(x, y, r + 3, 0, 7); bctx.stroke(); }
-      if (sel === n) { bctx.strokeStyle = '#E8E6DF'; bctx.lineWidth = 1.5; bctx.beginPath(); bctx.arc(x, y, r + 4, 0, 7); bctx.stroke(); }
-      const label = n.d >= 18 || k > 2.2 || (hi && hi.has(n.i)) || (match && match.has(n.i)) || n.fresh;
-      if (label) { bctx.fillStyle = dim ? 'rgba(232,230,223,.35)' : '#E8E6DF'; bctx.fillText(n.id, x + r + 4, y); }
-      bctx.globalAlpha = 1;
-    }
-  }
   let owner = PROFILE && PROFILE.company ? String(PROFILE.company).toUpperCase() : 'TUS NOTAS'; // V3.1: the business name when served (was hard-coded to one company); INDUSTRY PROFILE: the demo company
   const metaText = () => `${owner} · ${state.notes.toLocaleString('es-PA')} NOTAS · ${links.length} ENLACES`;
   function setOwner(name) { owner = String(name || 'TUS NOTAS').toUpperCase(); if (openNow) meta.textContent = metaText(); }
@@ -423,17 +469,39 @@ export function initBrain({ esc }) {
     if (openNow) return;
     views.opening('brain'); openNow = true; opener = document.activeElement; ov.inert = false; modal.open(ov); ov.classList.add('on'); document.body.classList.add('brainOpen');
     meta.textContent = metaText();
-    chips(); if (!sel) { pane.innerHTML = EMPTY; reading = false; pane.classList.remove('reading'); }
-    dirty(); setTimeout(() => { if (openNow) document.getElementById('bvClose').focus({ preventScroll: true }); }, 50); // focus inside the dialog, but not the search box: G/Esc must still close it
+    let sideOpen = !phone(); try { const v = localStorage.getItem('ao.bv.side'); if (!phone() && v) sideOpen = v === '1'; } catch {}
+    setSide(sideOpen);
+    chips();
+    if (make3D()) {
+      let spin = true; try { spin = localStorage.getItem('ao.bv.spin') !== '0'; } catch {}
+      const on = g3.spin(spin), b = ov.querySelector('.bv-ctl [data-c="spin"]'); b.setAttribute('aria-pressed', on); b.innerHTML = on ? PAUSE : PLAY; b.title = on ? 'Dejar de girar' : 'Girar solo';
+      g3.start(); dirty(); insets();
+    }
+    setTimeout(() => { if (openNow) document.getElementById('bvClose').focus({ preventScroll: true }); }, 50); // focus inside the view, but not the search box: G/Esc must still close it
   }
-  function close(o = {}) { if (!openNow) return; openNow = false; modal.close(ov); ov.inert = true; emptyEl.hidden = true; res.hidden = true; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
+  function close(o = {}) { if (!openNow) return; openNow = false; if (g3) g3.stop(); hover = null; tip.hidden = true; modal.close(ov); ov.inert = true; emptyEl.hidden = true; res.hidden = true; ov.classList.remove('on'); document.body.classList.remove('brainOpen'); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   views.add('brain', { isOpen: () => openNow, close });
   function toggle() { openNow ? close() : open(); }
+  // Esc, one step at a time: the search's list, the card, the panel over a phone — and only then the Brain
+  function back() {
+    if (!res.hidden) { res.hidden = true; return true; }
+    if (paneOn !== 'closed') { closePane(); return true; }
+    if (phone() && !side.classList.contains('folded')) { setSide(false); return true; }
+    return false;
+  }
   document.getElementById('bvClose').addEventListener('click', () => close());
+  ov.addEventListener('keydown', e => {
+    if (!g3 || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.closest('.bv-pane, .bv-side')) return;
+    const k = e.key, step = e.shiftKey ? 0.35 : 0.12;
+    if (k === 'ArrowLeft' || k === 'ArrowRight') { e.preventDefault(); g3.rotateBy(k === 'ArrowLeft' ? -step : step, 0); }
+    else if (k === 'ArrowUp' || k === 'ArrowDown') { e.preventDefault(); g3.rotateBy(0, k === 'ArrowUp' ? -step : step); }
+    else if (k === '+' || k === '=') g3.zoomBy(0.8); else if (k === '-' || k === '_') g3.zoomBy(1.25); else if (k === '0') g3.reset();
+    else if (k === ' ' && !/^(BUTTON|SUMMARY|A)$/.test(e.target.tagName)) { e.preventDefault(); ov.querySelector('.bv-ctl [data-c="spin"]').click(); }
+  });
   ov.inert = true; // closed: out of Tab's reach and of screen readers (it stays in the page, faded out)
-  addEventListener('resize', dirty);
+  addEventListener('resize', () => { if (openNow) requestAnimationFrame(insets); });
 
   function setTheme(dark) { INK = dark ? '236,234,227' : '21,20,20'; }
   function show(id) { const i = byId.get(id); if (i == null) return false; open(); select(nodes[i]); centre(nodes[i]); return true; } // open the Brain on one note (a [[link]] in the chat)
-  return { show, read, readNote, write, setGraph, setTheme, setOwner, setQuiet, open, close, toggle, isOpen: () => openNow, state, get nodes() { return nodes; }, get links() { return links; } };
+  return { show, read, readNote, write, setGraph, setTheme, setOwner, setQuiet, open, close, back, toggle, isOpen: () => openNow, state, get nodes() { return nodes; }, get links() { return links; } };
 }

@@ -2282,6 +2282,102 @@
   .ag-vers { list-style: none; margin: 0 0 10px; padding: 0; } .ag-vers li { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--hairline); font-size: 12.5px; }
   .ag-vers small { color: var(--grey); } .ag-restore { font-family: var(--ui); font-size: 12px; font-weight: 600; min-height: 28px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; white-space: nowrap; }
   .ag-restore:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  /* ---------- V4.6 (27 Sep 2026): the Brain as a 3D neural network — stage, «Explorar» on the left, the card on the right ---------- */
+  #brainOv { background: radial-gradient(120% 90% at 55% 45%, #161A26 0%, #0F1117 55%, #0A0B10 100%); }
+  #bvStage { position: absolute; inset: 0; overflow: hidden; }
+  #bvStage canvas { position: absolute; inset: 0; display: block; cursor: grab; touch-action: none; outline: none; }
+  #bvStage canvas:active { cursor: grabbing; }
+  .bv-nogl { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 420px; text-align: center; }
+  .bv3-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .bv3-lab { position: absolute; left: 0; top: 0; pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; max-width: 240px; padding: 2px 10px 2px 8px;
+    font: 500 12px/1.2 var(--ui); color: #E8E6DF; background: rgba(15,17,23,.66); border: 1px solid color-mix(in srgb, var(--c) 42%, transparent); border-radius: 99px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: opacity .25s, background .15s; will-change: transform; }
+  .bv3-lab::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--c); flex: none; box-shadow: 0 0 8px var(--c); }
+  .bv3-lab:hover, .bv3-lab.foc { background: rgba(26,30,42,.95); border-color: var(--c); color: #fff; opacity: 1 !important; }
+  .bv3-lab.sel { background: #F2F0E8; color: #0F1117; border-color: #F2F0E8; font-weight: 600; }
+  .bv3-lab[hidden] { display: none; }
+  /* «Explorar»: search, regions (a folder, a lobe), when, who, department, tools and the list of notes */
+  .bv-side { position: absolute; left: 16px; top: 16px; bottom: 16px; width: 288px; z-index: 4; display: flex; flex-direction: column;
+    background: rgba(20,23,32,.84); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid rgba(253,255,248,.12); border-radius: 18px; box-shadow: 0 24px 60px rgba(0,0,0,.35); }
+  .bv-side.folded { display: none; }
+  .bv-sh { display: flex; align-items: center; gap: 8px; padding: 12px 10px 8px 16px; font: 700 10.5px var(--ui); letter-spacing: .18em; color: #B9B7AF; }
+  .bv-sh .bv-cnt { margin-left: auto; letter-spacing: .04em; font-weight: 500; }
+  .bv-fold { width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(253,255,248,.16); background: none; color: #E8E6DF; font-size: 16px; cursor: pointer; }
+  .bv-fold:hover { border-color: rgba(253,255,248,.5); }
+  .bv-sbody { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 14px 14px; scrollbar-width: thin; scrollbar-color: #3A3F4E transparent; overscroll-behavior: contain; }
+  .bv-sw { position: relative; }
+  #bvSearch { width: 100%; box-sizing: border-box; }
+  #bvRes { position: static; width: auto; max-height: 46vh; margin-top: 6px; box-shadow: none; }
+  .bv-sec h3 { font: 700 10.5px var(--ui); letter-spacing: .16em; text-transform: uppercase; color: #A9A7A0; margin: 16px 0 6px; }
+  .bv-sec h3 small { font-weight: 500; letter-spacing: .02em; text-transform: none; color: #8E8C85; margin-left: 6px; }
+  .bv-reg { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 30px; padding: 4px 9px; margin: 1px 0; border-radius: 9px; border: 1px solid transparent;
+    background: none; color: #CFCDC5; font: 13px var(--ui); text-align: left; cursor: pointer; }
+  .bv-reg i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .bv-reg i.bv-all { background: conic-gradient(#E69393, #EADC8F, #5ADEB7, #8FD3F4, #BFA2E3, #E69393); }
+  .bv-reg span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bv-reg b { font-weight: 500; color: #8E8C85; font-variant-numeric: tabular-nums; }
+  .bv-reg:hover { background: rgba(253,255,248,.06); }
+  .bv-reg.on { background: rgba(253,255,248,.11); border-color: rgba(253,255,248,.22); color: #fff; }
+  .bv-reg:focus-visible, .bv-tool:focus-visible, .bv-li:focus-visible, .bv-fold:focus-visible, .bv-open:focus-visible, .bv-ctl button:focus-visible, .bv-tab:focus-visible, .bv-ph button:focus-visible, .bv3-lab:focus-visible, .bv-list summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  #bvRow2 { display: block; }
+  #bvRow2 .bv-seg { display: flex; } #bvRow2 .bv-seg button { flex: 1; min-height: 28px; }
+  #bvRow2 .bv-dept { width: 100%; min-height: 32px; }
+  .bv-tgs { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; font-size: 12.5px; color: #CFCDC5; } .bv-tgs b { color: #8E8C85; font-weight: 500; }
+  #bvRow2 .bv-reset { margin-top: 12px; min-height: 28px; }
+  .bv-tools { display: flex; flex-direction: column; gap: 6px; } .bv-tools h3 { margin-bottom: 2px; }
+  .bv-tool { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(253,255,248,.14); background: rgba(253,255,248,.03); color: #E8E6DF; font: 12.5px var(--ui); cursor: pointer; text-align: left; }
+  .bv-tool:hover { border-color: rgba(253,255,248,.4); background: rgba(253,255,248,.07); }
+  .bv-list summary { cursor: pointer; font: 700 10.5px var(--ui); letter-spacing: .16em; text-transform: uppercase; color: #A9A7A0; margin: 16px 0 6px; min-height: 24px; display: flex; align-items: center; gap: 6px; }
+  .bv-list summary b { font-weight: 500; letter-spacing: 0; color: #8E8C85; }
+  .bv-li { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 26px; padding: 3px 8px; border-radius: 8px; border: 0; background: none; color: #CFCDC5; font: 12.5px var(--ui); text-align: left; cursor: pointer; }
+  .bv-li i { width: 7px; height: 7px; border-radius: 50%; flex: none; } .bv-li:hover, .bv-li.on { background: rgba(253,255,248,.08); color: #fff; }
+  .bv-open { position: absolute; left: 16px; top: 16px; z-index: 4; display: none; align-items: center; gap: 8px; min-height: 36px; padding: 0 14px; border-radius: 11px;
+    border: 1px solid rgba(253,255,248,.2); background: rgba(20,23,32,.84); color: #E8E6DF; font: 600 12.5px var(--ui); cursor: pointer; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .bv-side.folded ~ .bv-open { display: inline-flex; }
+  /* the reading card: its own header — the chevron hides it (a tab on the edge brings it back), the cross closes it; the Brain stays */
+  .bv-pane { z-index: 4; padding-top: 0; } .bv-pane[hidden] { display: none; }
+  .bv-ph { position: sticky; top: 0; z-index: 1; display: flex; gap: 6px; margin: 0 -18px 4px; padding: 10px 10px 6px 18px; background: linear-gradient(#181B24 70%, rgba(24,27,36,0)); }
+  .bv-ph .sp { flex: 1; }
+  .bv-ph button { width: 32px; height: 32px; border-radius: 9px; border: 1px solid rgba(253,255,248,.16); background: #181B24; color: #E8E6DF; font-size: 14px; cursor: pointer; }
+  .bv-ph button:hover { border-color: rgba(253,255,248,.5); }
+  .bv-pb h3 { margin-top: 0; }
+  .bv-tab { position: absolute; right: 0; top: 50%; transform: translateY(-50%); z-index: 4; max-height: 60vh; padding: 14px 8px; border-radius: 12px 0 0 12px;
+    border: 1px solid rgba(253,255,248,.2); border-right: 0; background: rgba(24,27,36,.92); color: #E8E6DF; font: 600 12px var(--ui); cursor: pointer; writing-mode: vertical-rl; overflow: hidden; }
+  .bv-tab span { display: block; max-height: 56vh; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .bv-tab[hidden] { display: none; }
+  .bv-lk { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 3px 6px; border-radius: 8px; color: #C9D3FF; }
+  .bv-lk::before, .bv-lk::after { content: none; } .bv-lk i { width: 7px; height: 7px; border-radius: 50%; flex: none; } .bv-lk:hover { background: rgba(253,255,248,.07); }
+  .bv-stl { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; } .bv-stl li { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.08); } .bv-stl small { display: block; color: #A9A7A0; }
+  /* the preview under the pointer */
+  .bv-tip { position: absolute; z-index: 6; width: max-content; max-width: 300px; display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; pointer-events: none;
+    background: rgba(24,27,36,.96); border: 1px solid rgba(253,255,248,.2); border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.45); color: #E8E6DF; font: 12.5px/1.4 var(--ui); }
+  .bv-tip[hidden] { display: none; } .bv-tip b { font-size: 13.5px; }
+  .bv-tp { display: flex; align-items: center; gap: 6px; color: #B9B7AF; font-size: 11.5px; } .bv-tp i { width: 8px; height: 8px; border-radius: 50%; flex: none; } .bv-tp em { color: #7FD3B4; font-style: normal; }
+  .bv-tx { color: #CFCDC5; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; } .bv-th { color: #8E8C85; font-size: 11px; }
+  /* the view's buttons, centred at the bottom, clear of the panel and of the card */
+  .bv-dock { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+  .bv-dock .bv-foot { position: static; text-align: center; max-width: 60vw; pointer-events: none; }
+  .bv-ctl { display: flex; gap: 6px; padding: 5px; border-radius: 14px; background: rgba(20,23,32,.82); border: 1px solid rgba(253,255,248,.14); pointer-events: auto; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+  .bv-ctl button { width: 36px; height: 36px; border-radius: 10px; border: 0; background: none; color: #E8E6DF; cursor: pointer; display: grid; place-items: center; }
+  .bv-ctl button:hover, .bv-ctl button[aria-pressed="true"] { background: rgba(253,255,248,.12); }
+  .bv-ctl svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .bv-ctl [data-c="spin"] svg { fill: currentColor; stroke: none; }
+  @media (max-width: 1100px) { .bv-dock .bv-foot { display: none; } } .bv-pane:not([hidden]) ~ .bv-dock .bv-foot { display: none; }
+  /* a phone: «Explorar» opens over the brain, the card is a sheet at the bottom */
+  @media (max-width: 760px) {
+    .bv-side { left: 8px; right: 8px; top: 8px; bottom: 8px; width: auto; }
+    .bv-brand { display: none; }
+    .bv-pane, .bv-pane.reading { left: 0; right: 0; top: auto; bottom: 0; width: auto; height: 62%; border-radius: 18px 18px 0 0; }
+    .bv-dock { bottom: 10px; } .bv-pane:not([hidden]) ~ .bv-dock { display: none; }
+    .bv3-lab { max-width: 160px; font-size: 11.5px; }
+  }
+  .bv-leg { display: flex; align-items: center; gap: 8px; min-height: 26px; font-size: 12.5px; color: #CFCDC5; cursor: default; } label.bv-leg { cursor: pointer; } .bv-leg b { margin-left: auto; font-weight: 500; color: #8E8C85; } .bv-leg input { accent-color: #FF8A3D; margin: 0; }
+  .bv-leg i { width: 22px; height: 0; flex: none; border-top: 2px solid; } .bv-leg i.wiki { border-color: #B9B7AF; } .bv-leg i.ment { border-top: 2px dashed #8FA8FF; } .bv-leg i.learn { border-top: 3px solid #FFC46B; box-shadow: 0 0 6px #FFC46B; }
+  .bv-learn { font-size: 12.5px; line-height: 1.4; padding: 6px 10px; border-radius: 10px; margin: 2px 0 8px; } .bv-learn.up { color: #FFD797; background: rgba(255,196,107,.1); border: 1px solid rgba(255,196,107,.35); } .bv-learn.down { color: #C9D3FF; background: rgba(143,168,255,.08); border: 1px solid rgba(143,168,255,.3); }
+  .bv-lk.ment { color: #AFC0FF; font-style: italic; }
+  .bv-pacts { margin: 4px 0 10px; } .bv-pacts .bv-btn { padding: 6px 12px; }
+  .bv-hoodc { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #CFCDC5; margin-bottom: 6px; } .bv-hoodc span { flex: 1; min-width: 0; } .bv-hoodc b { color: #fff; font-weight: 600; word-break: break-word; }
+  .bv-hoodx { width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(253,255,248,.18); background: none; color: #E8E6DF; cursor: pointer; flex: none; }
+  @media (prefers-reduced-motion: reduce) { .bv3-lab { transition: none; } }
 </style>
 </head>
 <body>
@@ -2350,12 +2446,23 @@
 <button id="overviewBtn">◂ VISTA GENERAL</button>
 <!-- V3.6: the full-screen Brain graph (G · click the pod · the panel strip) -->
 <div id="brainOv" role="dialog" data-view aria-label="El Cerebro: tus notas">
-  <canvas id="bvCv"></canvas>
-  <div class="bv-top"><input id="bvSearch" placeholder="Buscar en el Cerebro…" aria-label="Buscar una nota" autocomplete="off" spellcheck="false"><div id="bvChips"></div></div>
+  <div id="bvStage"></div><!-- V4.6: the 3D neural network (src/brain3d.js) and its names -->
+  <aside id="bvSide" class="bv-side" aria-label="Explorar y filtrar el Cerebro">
+    <div class="bv-sh"><b>EXPLORAR</b><span class="bv-cnt" id="bvCnt"></span><button type="button" class="bv-fold" aria-label="Plegar el panel" title="Plegar el panel">‹</button></div>
+    <div class="bv-sbody">
+      <div class="bv-sw"><input id="bvSearch" placeholder="Buscar en nombres y en el texto…" aria-label="Buscar una nota" autocomplete="off" spellcheck="false"></div>
+      <section class="bv-sec"><h3>Regiones <small>cada carpeta, un lóbulo</small></h3><div id="bvChips"></div></section>
+      <div id="bvRow2"></div>
+    </div>
+  </aside>
+  <button type="button" class="bv-open" id="bvOpenSide" aria-expanded="false" title="Explorar y filtrar"><span aria-hidden="true">☰</span> Explorar</button>
   <div class="bv-brand">EL CEREBRO <small id="bvMeta"></small></div>
-  <div class="bv-pane" id="bvPane" aria-label="Nota seleccionada"></div>
-  <div class="bv-foot">Esc cierra · scroll acerca · arrastrar mueve · clic en una nota para leerla</div>
-  <button id="bvClose" type="button" title="Cerrar (Esc)" aria-label="Cerrar el Cerebro"><span aria-hidden="true">✕</span></button>
+  <div class="bv-pane" id="bvPane" hidden aria-label="Nota seleccionada"></div>
+  <button type="button" class="bv-tab" id="bvTab" hidden></button>
+  <div class="bv-dock"><div class="bv-foot">Arrastra para girar · rueda o pellizco para acercar · clic en una neurona o en su nombre para leerla · doble clic en el vacío para centrar</div>
+    <div class="bv-ctl" role="group" aria-label="La vista del Cerebro"><button type="button" data-c="reset" title="Centrar (doble clic en el vacío)" aria-label="Centrar el Cerebro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg></button><button type="button" data-c="spin" aria-pressed="true" aria-label="Girar solo"></button><button type="button" data-c="in" title="Acercar" aria-label="Acercar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><button type="button" data-c="out" title="Alejar" aria-label="Alejar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button></div></div>
+  <div class="bv-tip" id="bvTip" hidden role="tooltip"></div>
+  <button id="bvClose" type="button" title="Cerrar el Cerebro (Esc)" aria-label="Cerrar el Cerebro"><span aria-hidden="true">✕</span></button>
 </div>
 <!-- V3.2.1 (16 Sep 2026): the CALENDAR — P. Tasks and routines on the days they belong to; click a day to schedule -->
 <div id="calOv" role="dialog" data-view aria-label="Calendario">

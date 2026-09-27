@@ -50,6 +50,10 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.6 (27 sep, rama `mejora/cerebro-3d`), el Cerebro y su memoria, pedido del dueño:
+  - El logo lleva a la vista general (cierra la vista, Dimitri y el departamento, y la cámara vuelve).
+  - **Cerebro 3D** (`src/brain3d.js`, three.js): notas = neuronas, `[[enlaces]]` = sinapsis. Cada carpeta es un lóbulo (hemisferio y vecinos por afinidad de enlaces), los índices al centro y los detalles hacia la corteza. Gira solo y se para al tocarlo; nombres clicables; vista previa al pasar el cursor; «Explorar» a la izquierda (búsqueda, regiones, cuándo, quién, sinapsis, conexiones, vecindario, herramientas, lista de notas para el teclado); la ficha se oculta (⟩) o se cierra (✕) sin cerrar el Cerebro.
+  - **Memoria** (`memory.mjs`, tras estudiar cognee, Graphiti, Mem0, HippoGraph, company-brain y Engram): menciones sin enlace, resúmenes, presupuesto de contexto, vecindario en la búsqueda y **sinapsis que aprenden** de lo aprobado o devuelto (`data/memory.json`).
 - V4.5 (27 sep, rama `mejora/ajustes-y-navegacion`), pedidos del dueño:
   - Estudio, Calendario y Cerebro son **vistas** bajo la barra superior (`src/views.js`): una a la vez, la barra siempre a mano; otro icono (o E, P, G) cambia de vista; el nombre de la empresa vuelve a la oficina; el Cerebro tiene su icono en el dock.
   - Ajustes gana **Apariencia** (Claro por defecto, Oscuro, Automático; se recuerda en el navegador, `ao.theme`) y **Atajos de teclado** (la lista que abre «?»). Fuera el botón de teclado del dock y la tecla D.
@@ -85,6 +89,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - Toda ventana modal nueva llama a `modal.open(el)` al abrirse y a `modal.close(el)` al cerrarse (`src/modal.js`). Mientras está abierta, el resto de la página queda inerte y Tab da la vuelta dentro de ella.
 - (V4.5) Estudio, Calendario y Cerebro no son ventanas encima de la oficina sino **vistas** debajo de la barra superior (`top: 52px`, atributo `data-view`): una a la vez. Una vista nueva lleva `data-view`, se registra con `views.add(nombre, { isOpen, close })` y llama a `views.opening(nombre)` al abrirse (`src/views.js`); su `close({ quiet: true })` no devuelve el foco. Con una vista arriba, `modal.js` deja la barra (`[data-shell]`) fuera de lo inerte. Una ventana de verdad (Ajustes, Estado…) sigue bloqueándolo todo.
 - Todo atajo nuevo va también en la lista `KEYS` de `src/main.js`, que se ve en Ajustes → «Atajos de teclado» (tecla «?»).
+- (V4.6) Todo lo que se pueda clicar sobre un lienzo se busca en coordenadas **del lienzo** (`clientX − rect.left`), nunca de la página, y con tolerancia de dedo (16 px ratón, 26 px táctil). Un clic que se mueve más de 5 px (10 táctil) es un arrastre.
 - Los colores nuevos pasan 4,5:1 en claro y en oscuro.
 - El anillo de foco usa `var(--focus)`, también en los campos de texto (un borde más oscuro no basta).
 - Nada se atenúa con `opacity` para decir «pausado» o «saltado»: el texto debe seguir a 4,5:1.
@@ -320,6 +325,12 @@ Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs
 - **Voz de marca** (Ajustes): la nota `voice` del Cerebro; la leen todos.
 - **Preparar desde mi web** (Ajustes, `POST /api/onboard/company`): el jefe de Operaciones lee la web y escribe `00-Empresa/{perfil,oferta,voz,faq,clientes}.md`, instrucciones para cada jefe sin brief y cifras para confirmar.
 - **Documentos al Cerebro** (`documents.mjs`): «⬆ Subir documento» en el Cerebro, o soltar el archivo encima. PDF, Word, Excel, CSV o texto (hasta 15 MB) se vuelven `<cerebro>/Documentos/<nombre>.md`. Se convierte en esta máquina. Un PDF escaneado se rechaza con la razón.
+- **Memoria del Cerebro** (V4.6, `memory.mjs`, sin llamadas extra a un modelo; probada en `tests/memory.test.mjs`):
+  - **Menciones:** una nota que nombra a otra (dos palabras o una de 7+ letras) sin `[[enlace]]` queda conectada igual (peso 0,35). Se dibujan como sinapsis tenues (`graph.extra`).
+  - **Vecindario:** las 3 mejores notas de una tarea traen hasta 2 vecinas como **resumen** (`summary`: título, primera frase de cada sección, importes), castigando a las notas índice.
+  - **Presupuesto de contexto:** las notas de una tarea caben en 9.000 caracteres; un pasaje casi igual a otro (Jaccard ≥ 0,8) no entra.
+  - **Sinapsis que aprenden** (`data/memory.json`, de esta máquina): al terminar o votar una tarea, las notas de su línea «Fuentes:» se acercan al resultado (aprobada 1 · usada tal cual 0,75 · −0,25 por devolución · 👎 0) y la pareja citada junta refuerza su enlace (dorado en el Cerebro). Idempotente por tarea (un voto nuevo reemplaza al anterior). Sin uso vuelven a neutro (vida media 90 días). En la búsqueda: × 0,8…1,2.
+  - `/api/brain` añade `extra` (menciones) y `learned` (pesos y enlaces aprendidos: solo en vivo, nunca en `src/braingraph.js`).
 - **Búsqueda del Cerebro** (`knowledge.mjs`): por pasajes (BM25), y por significado si hay `GEMINI_API_KEY`, `OPENAI_API_KEY` o `VOYAGE_API_KEY` (vectores en `data/embeddings.json`). El agente recibe los párrafos que importan. Una nota con `actualizado:` de más de 180 días (o sin tocar ese tiempo) llega con aviso de «puede estar vieja» y sale en «Notas que conviene revisar».
 - **Mismo cliente:** antes de trabajar, el agente ve lo que otros departamentos hicieron con ese cliente en los últimos 30 días.
 - **Ejemplos:** «⭐ Guardar como ejemplo» en una tarea terminada. Se guarda en `<cerebro>/Agents Office/ejemplos/<agente>/`; el agente los lee antes de trabajar.

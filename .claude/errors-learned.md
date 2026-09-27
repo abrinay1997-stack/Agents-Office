@@ -154,3 +154,30 @@
 **Prevención:** Toda clase que fije `display` en un elemento que se oculta con `hidden` necesita su regla `[hidden]`.
 **Archivos:** `src/shell.html`
 
+
+## [2026-09-27] — Clicar una nota del Cerebro fallaba siempre por 52 px
+
+**Contexto:** V4.5 bajó las vistas (Estudio, Calendario, Cerebro) bajo la barra superior (`inset: 52px 0 0 0`).
+**Error:** El dueño: «cuando intento cliquear algún archivo es muy difícil». Casi nunca abría la nota.
+**Causa raíz:** El Cerebro 2D comparaba `clientX/clientY` (coordenadas de la página) con posiciones dibujadas en coordenadas del lienzo; al bajar el lienzo 52 px, todo clic apuntaba 52 px por encima. Además el alcance era de 12 px sin sumar el radio del punto, un clic con 3 px de temblor contaba como arrastre y el clic abría el `hover` del último movimiento.
+**Fix aplicado:** El Cerebro 3D (`src/brain3d.js`) busca la nota en coordenadas del lienzo (`getBoundingClientRect`), con tolerancia de 16 px (26 táctil) más el radio de la neurona, toma la candidata al pulsar y la confirma al soltar; un arrastre es > 5 px (10 táctil). Los nombres también se pueden clicar.
+**Prevención:** Al mover un contenedor de un lienzo interactivo, revisar su detección de clic. Regla en CLAUDE.md (reglas de la interfaz).
+**Archivos:** `src/brain3d.js` (pickAt, pointerdown/up)
+
+## [2026-09-27] — Una nota nueva movía todo el Cerebro 3D
+
+**Contexto:** `layout3D` con posiciones previas (`prev`) al llegar una nota nueva.
+**Error:** Prueba «a new note joins beside its neighbour and the others keep their place»: una nota vieja se movió 1,49 (medio cerebro).
+**Causa raíz:** Las regiones se ordenaban por número de notas: una nota más cambiaba el orden, todas las anclas se movían y el asentado de 90 vueltas arrastraba a todas las notas.
+**Fix aplicado:** Con posiciones previas solo se mueven las notas nuevas y sus vecinas; las regiones salen de la afinidad de enlaces; la rejilla se adapta al número de notas (2.000 notas: 6,7 s → 1,2 s la primera vez; una nota nueva 1,7 s → 25 ms). Las posiciones se recuerdan en el navegador (`ao.bv.pos`).
+**Prevención:** En una disposición incremental, lo ya colocado queda fijo; probarlo con un test de «no se mueve».
+**Archivos:** `src/brain3d.js` (layout3D, regionAnchors), `tests/brain3d.test.mjs`
+
+## [2026-09-27] — Los heredocs con comillas simples dentro fallan en la consola de Bash de esta máquina
+
+**Contexto:** Pasar CSS o JS con `content: ''` o `'\u0001'` por `cat > archivo <<'EOF'`.
+**Error:** `unexpected EOF while looking for matching '` aunque el heredoc tenía el delimitador entre comillas.
+**Causa raíz:** La herramienta revisa el equilibrio de comillas del comando entero antes de ejecutarlo, sin entender los heredocs.
+**Fix aplicado:** Escribir esos archivos con la herramienta Write (y los scripts de Python también), y ejecutarlos después.
+**Prevención:** Nada con comillas simples sueltas dentro de un heredoc; archivos auxiliares, con Write.
+**Archivos:** —

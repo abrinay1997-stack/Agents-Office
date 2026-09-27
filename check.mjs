@@ -494,6 +494,22 @@ else {
       if (await page.evaluate(() => window.CC.brain.isOpen())) throw new Error('graph did not close');
       return n + ' notes';
     });
+    await step('smoke: V4.6 — the Brain in 3D: a click on a neuron opens its card, the card hides and comes back, Esc closes the card before the Brain', async () => {
+      const until = (fn, what, ms = 8000) => page.waitForFunction(fn, null, { timeout: ms }).catch(() => { throw new Error(what); });
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('g'); await until(() => document.body.classList.contains('brainOpen') && document.querySelector('#bvStage canvas'), 'G did not open the 3D Brain');
+      await until(() => document.querySelectorAll('.bv3-lab:not([hidden])').length > 0, 'no names on the neurons');
+      const dot = await page.evaluate(() => { const b = document.querySelector('.bv3-lab:not([hidden])'), r = b.getBoundingClientRect(); return { x: r.left - 9, y: r.top + 9, name: b.textContent }; }); // the name sits 9 px right of and above its neuron
+      await page.mouse.click(dot.x, dot.y);
+      await until(() => !document.getElementById('bvPane').hidden, `a click on the neuron of «${dot.name}» did not open its card`);
+      const opened = await page.evaluate(() => document.querySelector('#bvPane h3')?.textContent);
+      await page.click('.bv-pfold'); await until(() => document.getElementById('bvPane').hidden && !document.getElementById('bvTab').hidden, 'the card did not hide to its tab');
+      await page.click('#bvTab'); await until(() => !document.getElementById('bvPane').hidden, 'the tab did not bring the card back');
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('Escape'); await until(() => document.getElementById('bvPane').hidden && document.body.classList.contains('brainOpen'), 'Esc closed the Brain instead of the card');
+      await page.keyboard.press('Escape'); await until(() => !document.body.classList.contains('brainOpen'), 'the second Esc did not close the Brain');
+      return `neuron «${dot.name}» → card «${opened}» · hides to a tab and back · Esc: card, then Brain`;
+    });
     await step('smoke: approval flow reaches the panel', async () => {
       await page.evaluate(() => { const all = document.querySelector('.tp-chip[data-f="all"]'); if (all) all.click(); }); // an earlier step leaves the panel on SCHEDULED
       await page.evaluate(() => window.CC.requestApproval('ada'));
