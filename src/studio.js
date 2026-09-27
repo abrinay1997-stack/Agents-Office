@@ -9,7 +9,7 @@
 // quantity and GENERAR fixed at the bottom; card actions as icons over the picture; clear names everywhere.
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
-  mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo' }; // V4.4: the settings Higgsfield's own schemas bring
+  imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo' }; // V4.4: the settings Higgsfield's own schemas bring
 const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
   epic: 'Épico', drama: 'Drama', noir: 'Noir', comedy: 'Comedia', horror: 'Terror', action: 'Acción', calm: 'Calmado', dynamic: 'Dinámico', chaotic: 'Caótico', 'single-shot': 'Un solo plano', static: 'Fija', dolly_in: 'Acercarse', dolly_out: 'Alejarse', dolly_left: 'A la izquierda', dolly_right: 'A la derecha', jib_up: 'Subir', jib_down: 'Bajar', focus_shift: 'Cambio de foco' };
 const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
@@ -148,16 +148,40 @@ export function initStudio(ctx) {
     b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${esc(m.name)}</span>${engineAdds(m) ? `<span class="st-mp-eng">${esc(m.engineName)}</span>` : ''}<span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
       : `<span class="st-mp-top"><span class="st-mp-name">Ningún modelo de ${kind === 'video' ? 'video' : 'imagen'} encendido</span><span class="sp"></span><span class="st-mp-caret">▾</span></span><span class="st-mp-note">Abre «Motores y cómo activarlos» abajo.</span>`;
   }
+  // V4.4 (27 Sep 2026): the model list sorts (recommended, best quality, cheapest, most expensive, fastest, by maker) and
+  // filters by maker; each model says its maker, its quality (1–4), its speed and what it is good for. The ones without a
+  // key stay in the list, apart and dimmed, with how to switch their engine on.
+  const SORTS = [['rec', 'Recomendado'], ['tier', 'Mejor calidad'], ['cheap', 'Más barato'], ['dear', 'Más caro'], ['fast', 'Más rápido'], ['maker', 'Por creador']];
+  const SPEED = { 'muy rápido': 0, 'rápido': 1, normal: 2, lento: 3 };
+  const TIER = { 1: 'básica', 2: 'buena', 3: 'alta', 4: 'la mejor' };
+  const dots = n => `<span class="st-tier" title="Calidad ${TIER[n] || ''}" aria-label="Calidad ${TIER[n] || ''}">${'●'.repeat(n)}<span aria-hidden="true">${'●'.repeat(4 - n)}</span></span>`;
   function renderList(qs = '') {
-    const L = $('.st-mlist'), w = qs.toLowerCase();
-    const mine = models.filter(x => x.kind === kind && (!w || `${x.name} ${x.engineName} ${x.note}`.toLowerCase().includes(w)));
-    const engs = engines.filter(e => mine.some(x => x.engine === e.id)).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
-    const row = x => `<button type="button" role="option" class="st-mo${x.id === modelOf[kind] ? ' on' : ''}" data-id="${x.id}" aria-selected="${x.id === modelOf[kind]}"${x.on ? '' : ' aria-disabled="true" disabled'} tabindex="-1"><span class="st-mo-top"><b>${esc(x.name)}</b><span class="sp"></span><span class="st-mp-cost">${price(x)}</span></span>${x.note ? `<span class="st-mo-note">${esc(x.note)}</span>` : ''}${tags(x).length ? `<span class="st-tags">${tags(x).map(t => `<i>${t}</i>`).join('')}</span>` : ''}</button>`;
-    L.innerHTML = `<label class="st-mq">${svg('search')}<input type="search" placeholder="Buscar modelo…" aria-label="Buscar modelo" value="${esc(qs)}"></label>` +
-      '<div role="listbox" aria-label="Modelos">' + // V4.3: the search box sits outside the listbox; a listbox holds only groups of options
-      engs.filter(e => e.on).map(e => `<div class="st-mg" role="group" aria-label="${esc(e.name)}, listo"><div class="st-mg-h" aria-hidden="true">${esc(e.name)} <span class="ok">● listo</span></div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') +
-      engs.filter(e => !e.on).map(e => `<div class="st-mg off" role="group" aria-label="${esc(e.name)}, sin activar"><div class="st-mg-h">${esc(e.name)} <span class="st-mg-off">sin activar</span></div><div class="st-mg-how">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b> y ` : ''}pega <code>${esc(e.how || '')}</code> en una ventana de comandos; luego reinicia la oficina.</div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') + '</div>' +
-      (mine.length ? '' : '<div class="st-empty-s">Ningún modelo con eso.</div>');
+    const L = $('.st-mlist'), w = qs.toLowerCase(), sort = store.get('msort', 'rec'), maker = store.get('mmaker', '');
+    const all = models.filter(x => x.kind === kind);
+    const makers = [...new Set(all.map(x => x.maker))].sort((a, b) => a.localeCompare(b, 'es'));
+    const mine = all.filter(x => (!maker || x.maker === maker) && (!w || `${x.name} ${x.engineName} ${x.note} ${x.maker} ${(x.uses || []).join(' ')}`.toLowerCase().includes(w)));
+    const unit = x => x.cost || 0;
+    const cmp = { tier: (a, b) => b.tier - a.tier || unit(a) - unit(b), cheap: (a, b) => unit(a) - unit(b) || b.tier - a.tier, dear: (a, b) => unit(b) - unit(a) || b.tier - a.tier, fast: (a, b) => SPEED[a.speed] - SPEED[b.speed] || b.tier - a.tier, maker: (a, b) => a.maker.localeCompare(b.maker, 'es') || b.tier - a.tier }[sort];
+    const row = x => `<button type="button" role="option" class="st-mo${x.id === modelOf[kind] ? ' on' : ''}" data-id="${x.id}" aria-selected="${x.id === modelOf[kind]}"${x.on ? '' : ' aria-disabled="true" disabled'} tabindex="-1"><span class="st-mo-top"><b>${esc(x.name)}</b><span class="sp"></span><span class="st-mp-cost">${price(x)}</span></span>
+      <span class="st-mo-meta">${dots(x.tier)}<span>${esc(x.maker)}</span><span>· ${esc(x.speed)}</span>${x.legacy ? '<span class="st-old">· antiguo</span>' : ''}</span>
+      ${x.note ? `<span class="st-mo-note">${esc(x.note)}</span>` : ''}${(x.uses || []).length ? `<span class="st-mo-uses"><b>Para:</b> ${x.uses.map(esc).join(' · ')}</span>` : ''}${tags(x).length ? `<span class="st-tags">${tags(x).map(t => `<i>${t}</i>`).join('')}</span>` : ''}</button>`;
+    const how = e => `<div class="st-mg-how">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b> y ` : ''}pega <code>${esc(e.how || '')}</code> en una ventana de comandos; luego reinicia la oficina.</div>`;
+    let body = '';
+    if (sort === 'rec') { // as before: by engine, the ones that are on first
+      const engs = engines.filter(e => mine.some(x => x.engine === e.id)).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
+      body = engs.filter(e => e.on).map(e => `<div class="st-mg" role="group" aria-label="${esc(e.name)}, listo"><div class="st-mg-h" aria-hidden="true">${esc(e.name)} <span class="ok">● listo</span></div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') +
+        engs.filter(e => !e.on).map(e => `<div class="st-mg off" role="group" aria-label="${esc(e.name)}, sin activar"><div class="st-mg-h">${esc(e.name)} <span class="st-mg-off">sin activar</span></div>${how(e)}${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('');
+    } else if (sort === 'maker') {
+      const ms = [...new Set(mine.slice().sort(cmp).map(x => x.maker))];
+      body = ms.map(mk => { const l = mine.filter(x => x.maker === mk).sort((a, b) => (b.on - a.on) || cmp(a, b)); return `<div class="st-mg" role="group" aria-label="${esc(mk)}"><div class="st-mg-h" aria-hidden="true">${esc(mk)} <span class="st-mg-n">${l.length}</span></div>${l.map(row).join('')}</div>`; }).join('');
+    } else {
+      const on = mine.filter(x => x.on).sort(cmp), off = mine.filter(x => !x.on).sort(cmp);
+      body = (on.length ? `<div class="st-mg" role="group" aria-label="Listos"><div class="st-mg-h" aria-hidden="true">Listos para usar <span class="ok">● ${on.length}</span></div>${on.map(row).join('')}</div>` : '') +
+        (off.length ? `<div class="st-mg off" role="group" aria-label="Sin activar"><div class="st-mg-h">Sin activar <span class="st-mg-off">${off.length} · su motor necesita una key</span></div>${off.map(row).join('')}</div>` : '');
+    }
+    L.innerHTML = `<label class="st-mq">${svg('search')}<input type="search" placeholder="Buscar modelo, creador o uso…" aria-label="Buscar modelo" value="${esc(qs)}"></label>` +
+      `<div class="st-mctl"><label>Ordenar<select data-msort aria-label="Ordenar los modelos">${SORTS.map(([k, t]) => `<option value="${k}"${k === sort ? ' selected' : ''}>${t}</option>`).join('')}</select></label><label>Creador<select data-mmaker aria-label="Filtrar por creador"><option value="">Todos (${all.length})</option>${makers.map(mk => `<option${mk === maker ? ' selected' : ''}>${esc(mk)}</option>`).join('')}</select></label></div>` +
+      `<div role="listbox" aria-label="Modelos">${body}</div>` + (mine.length ? '' : '<div class="st-empty-s">Ningún modelo con eso.</div>');
   }
   function openList(on) {
     const L = $('.st-mlist'), b = $('.st-mpick');
@@ -244,16 +268,14 @@ export function initStudio(ctx) {
   }
   function card(it) {
     const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
-    // V4.2 (audit A20 · A21): one action in words (Animar an image, Repetir a video), the star, and «⋯» for the rest; the bin
-    // is last in the menu and apart. V4.4 (25 Sep 2026): the row sits under the caption, on the card's own background — it
-    // used to float over the picture, where a light image swallowed it; nothing covers the picture now, on a phone either.
+    // V4.4 (25–27 Sep 2026): a row under the caption, on the card's own background (it used to float over the picture,
+    // where a light image swallowed it): the main action as its icon (the clapperboard animates an image; a video repeats),
+    // Descargar and the bin always in sight, and «⋯» for the favourite, Variar, Usar de referencia and Repetir.
     const primary = !vid ? ['anim', 'Animar', 'Convertirla en video', 'vid'] : !it.upload ? ['again', 'Repetir', 'Otra vez, con el mismo prompt y ajustes', 'again'] : null;
-    const menu = [
-      ['fav', it.fav ? 'Quitar de favoritas' : 'Favorita', 'star', 'st-mi-t', it.fav ? 'fill' : ''],
-      ...(primary ? [[primary[0], primary[1], primary[3], 'st-mi-t']] : []),
+    const menu = [ // V4.4 (27 Sep 2026): the row shows the main action, Descargar and the bin as icons; the rest lives here
+      ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
       ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark'], ['ref', 'Usar de referencia', 'plus']]),
-      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []),
-      ['dl'], '-', ['del', 'Mover a la papelera', 'trash', 'warn']];
+      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : [])];
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
       <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}
@@ -261,11 +283,12 @@ export function initStudio(ctx) {
       <div class="st-menu" role="menu" hidden>
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
+      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
       <div class="st-ov" role="group" aria-label="Acciones">
-        <button type="button" data-a="fav" class="st-oi${it.fav ? ' on' : ''}" aria-label="${it.fav ? 'Quitar de favoritas' : 'Marcar favorita'}" title="${it.fav ? 'Quitar de favoritas' : 'Favorita'}">${svg('star', it.fav ? 'fill' : '')}</button>
-        ${primary ? `<button type="button" data-a="${primary[0]}" class="st-op" title="${primary[2]}">${svg(primary[3])}<span>${primary[1]}</span></button>` : ''}
-        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más acciones">${svg('dots')}</button>
+        ${primary ? `<button type="button" data-a="${primary[0]}" class="st-oi" aria-label="${primary[1]}: ${esc(label)}" title="${primary[1]} — ${primary[2].toLowerCase()}">${svg(primary[3])}</button>` : ''}
+        <a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar">${svg('down')}</a>
+        <button type="button" data-a="del" class="st-oi st-odel" aria-label="Mover a la papelera: ${esc(label)}" title="Mover a la papelera (30 días para recuperarla)">${svg('trash')}</button>
+        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más: favorita, variar, usar de referencia, repetir">${svg('dots')}</button>
       </div>
     </figure>`;
   }
@@ -716,6 +739,7 @@ export function initStudio(ctx) {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
 
     if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
+    if (e.target.matches?.('[data-msort], [data-mmaker]')) { store.set(e.target.hasAttribute('data-msort') ? 'msort' : 'mmaker', e.target.value); const qv = $('.st-mq input')?.value || ''; renderList(qv); $(e.target.hasAttribute('data-msort') ? '[data-msort]' : '[data-mmaker]')?.focus(); return; }
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); estimate(); }
   });
   el.addEventListener('input', e => {
@@ -757,7 +781,7 @@ export function initStudio(ctx) {
       if (e.key === 'Escape' || e.key === 'Tab') { if (e.key === 'Escape') e.preventDefault(); closeMenus(); btn?.focus(); if (e.key === 'Escape') return; }
     }
     const inList = e.target.closest && e.target.closest('.st-mlist');
-    if (inList && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { // V4.2 (audit A7): the model list moves with the arrows, like a real list
+    if (inList && e.target.tagName !== 'SELECT' && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { // V4.2 (audit A7): the model list moves with the arrows, like a real list
       const opts = [...inList.querySelectorAll('.st-mo:not([disabled])')], i = opts.indexOf(document.activeElement); e.preventDefault();
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? opts.length - 1 : i < 0 ? (e.key === 'ArrowDown' ? 0 : opts.length - 1) : Math.max(0, Math.min(opts.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
       if (e.key === 'ArrowUp' && i === 0) inList.querySelector('input').focus(); else opts[n]?.focus();

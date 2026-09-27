@@ -4,7 +4,7 @@
 // no key ever lives in a file of this repo:
 //   higgsfield — Higgsfield Cloud: Soul, Kling 3, Seedance 2/2.5, Flux 2, Ideogram 4, Recraft, Wan, MiniMax, LTX…  HF_KEY="id:secret"
 //                (or HF_API_KEY + HF_API_SECRET; HF_API_BASE_URL overrides https://api.higgsfield.ai)
-//   gemini     — Google «Nano Banana»                                               GEMINI_API_KEY
+//   gemini     — Google: Nano Banana 2 / 2 Lite / Pro (images), Veo 3.1 / Fast / Lite (video)  GEMINI_API_KEY
 //   grok       — xAI Grok image                                                     XAI_API_KEY
 //   openai     — OpenAI gpt-image-1                                                 OPENAI_API_KEY
 //   fal        — fal.ai: Flux, Seedream, Nano Banana, Ideogram, Kling, Seedance, Hailuo, Veo   FAL_KEY
@@ -21,7 +21,7 @@ import path from 'node:path';
 
 export const ENGINES = {
   higgsfield: { name: 'Higgsfield', env: 'HF_KEY', site: 'cloud.higgsfield.ai', how: 'setx HF_KEY "tu-id:tu-secreto"' },
-  gemini: { name: 'Nano Banana (Google)', env: 'GEMINI_API_KEY', site: 'aistudio.google.com' },
+  gemini: { name: 'Google (Gemini API)', env: 'GEMINI_API_KEY', site: 'aistudio.google.com' },
   grok: { name: 'Grok (xAI)', env: 'XAI_API_KEY', site: 'console.x.ai' },
   openai: { name: 'OpenAI', env: 'OPENAI_API_KEY', site: 'platform.openai.com' },
   fal: { name: 'fal.ai', env: 'FAL_KEY', site: 'fal.ai' },
@@ -235,7 +235,12 @@ const HF_VIDEOS = [
 const CATALOG = [
   // ---- images
   ...HF_IMAGES,
-  { id: 'nano-banana', engine: 'gemini', kind: 'image', name: 'Nano Banana', cost: 0.039, note: 'Edita y mezcla fotos: dale hasta 3 referencias (tu producto, tu logo, un estilo).', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '9:16', '16:9', '4:3', '3:2', '2:3', '21:9'], '1:1') } },
+  { id: 'nano-banana', engine: 'gemini', kind: 'image', name: 'Nano Banana (2.5)', cost: 0.039, note: 'Edita y mezcla fotos: dale hasta 3 referencias (tu producto, tu logo, un estilo).', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '9:16', '16:9', '4:3', '3:2', '2:3', '21:9'], '1:1') } },
+  // V4.4 (27 Sep 2026): Google's current image models on the same GEMINI_API_KEY (ids from Google's own cookbook, google-gemini/cookbook,
+  // Sep 2026). Imagen was shut down on 17 Aug 2026, so it is not here. Prices are estimates: the note says so.
+  { id: 'nano-banana-2', engine: 'gemini', kind: 'image', gid: 'gemini-3.1-flash-image', name: 'Nano Banana 2', cost: 0.067, note: 'El todoterreno de Google: hasta 14 referencias, formatos muy anchos o altos, hasta 4K. Precio aproximado.', roles: { reference: 14 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '5:4', '21:9', '1:4', '4:1', '1:8', '8:1'], '1:1'), imageSize: E(['1K', '2K', '4K'], '1K') } },
+  { id: 'nano-banana-2-lite', engine: 'gemini', kind: 'image', gid: 'gemini-3.1-flash-lite-image', name: 'Nano Banana 2 Lite', cost: 0.02, note: 'El más rápido y barato de Google (tiene capa gratuita): para probar ideas y lotes. Hasta 3 referencias. Precio aproximado.', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '5:4', '21:9'], '1:1') } },
+  { id: 'nano-banana-pro', engine: 'gemini', kind: 'image', gid: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', cost: 0.134, note: 'El tope de Google: piensa la composición, texto legible, personajes coherentes con hasta 14 referencias, hasta 4K. Precio aproximado.', roles: { reference: 14 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '5:4', '21:9'], '1:1'), imageSize: E(['1K', '2K', '4K'], '1K') } },
   { id: 'gpt-image-1', engine: 'openai', kind: 'image', name: 'GPT Image', cost: 0.042, note: 'Sigue instrucciones largas y escribe texto; edita con referencias.', roles: { reference: 4 }, settings: { aspectRatio: E(['1:1', '3:2', '2:3'], '1:1'), quality: E(['low', 'medium', 'high'], 'medium') } },
   { id: 'grok-image', engine: 'grok', kind: 'image', name: 'Grok Image', cost: 0.07, roles: {}, settings: {} },
   falImg('nano-banana-fal', 'Nano Banana (fal)', 0.039, 'fal-ai/nano-banana', 'fal-ai/nano-banana/edit', 3, 'Nano Banana a través de tu key de fal.ai.', s => ({ aspect_ratio: s.aspectRatio })),
@@ -246,6 +251,10 @@ const CATALOG = [
   // V4.2: an image takes references only — no real image model has a first or last frame; the free test card used to ask for them and looked like a video form
   { id: 'prueba', engine: 'prueba', kind: 'image', name: 'Prueba (gratis)', cost: 0, note: 'Una tarjeta con tu prompt, no una imagen real: prueba el Estudio sin gastar.', roles: { reference: 8 }, settings: { aspectRatio: E(IMG_ASPECT, '1:1') } },
   // ---- video
+  // V4.4 (27 Sep 2026): Google Veo 3.1 on GEMINI_API_KEY — needs a paid (billing) AI Studio project; sound comes with the video.
+  { id: 'veo-3.1', engine: 'gemini', kind: 'video', gid: 'veo-3.1-generate-preview', name: 'Veo 3.1', cost: 0.4, per: 's', note: 'El video de Google, con sonido y diálogo: imagen inicial y final, o hasta 3 referencias (con referencias sale a 720p horizontal). Precio aproximado.', roles: { start: 1, end: 1, reference: 3 }, settings: { aspectRatio: E(['16:9', '9:16'], '16:9'), resolution: E(['720p', '1080p'], '720p'), duration: E(['4', '6', '8'], '8') } },
+  { id: 'veo-3.1-fast', engine: 'gemini', kind: 'video', gid: 'veo-3.1-fast-generate-preview', name: 'Veo 3.1 Fast', cost: 0.15, per: 's', note: 'Veo más rápido y barato, con sonido; imagen inicial y final. Precio aproximado.', roles: { start: 1, end: 1 }, settings: { aspectRatio: E(['16:9', '9:16'], '16:9'), resolution: E(['720p', '1080p'], '720p'), duration: E(['4', '6', '8'], '8') } },
+  { id: 'veo-3.1-lite', engine: 'gemini', kind: 'video', gid: 'veo-3.1-lite-generate-preview', name: 'Veo 3.1 Lite', cost: 0.05, per: 's', note: 'El Veo más económico: para anuncios en lote y pruebas. Precio aproximado.', roles: { start: 1 }, settings: { aspectRatio: E(['16:9', '9:16'], '16:9'), resolution: E(['720p', '1080p'], '720p'), duration: E(['4', '6', '8'], '8') } },
   ...HF_VIDEOS,
   { id: 'kling-2.5-fal', engine: 'fal', kind: 'video', name: 'Kling 2.5 Turbo (fal)', cost: 0.07, per: 's', roles: { start: 1, end: 1 }, settings: { aspectRatio: E(VID_ASPECT, '16:9'), duration: E(['5', '10'], '5') },
     fal: j => j.m.start[0] ? { path: 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video', body: { prompt: j.prompt, image_url: j.m.start[0], ...(j.m.end[0] ? { tail_image_url: j.m.end[0] } : {}), duration: j.s.duration } } : { path: 'fal-ai/kling-video/v2.5-turbo/pro/text-to-video', body: { prompt: j.prompt, duration: j.s.duration, aspect_ratio: j.s.aspectRatio } } },
@@ -257,7 +266,89 @@ const CATALOG = [
     fal: j => j.m.start[0] ? { path: 'fal-ai/veo3/fast/image-to-video', body: { prompt: j.prompt, image_url: j.m.start[0], duration: '8s', generate_audio: j.s.generateAudio } } : { path: 'fal-ai/veo3/fast', body: { prompt: j.prompt, aspect_ratio: j.s.aspectRatio, duration: '8s', generate_audio: j.s.generateAudio } } },
   { id: 'prueba-video', engine: 'prueba', kind: 'video', name: 'Prueba de video (gratis)', cost: 0, note: 'Una tarjeta en lugar del video: prueba el flujo (Animar, fotogramas) sin gastar.', roles: { start: 1, end: 1, reference: 8, video: 1 }, settings: { aspectRatio: E(VID_ASPECT, '16:9'), duration: R(3, 15, 5) } },
 ];
-const PREFER = { image: ['nano-banana', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image'], video: ['kling-3-std', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal'] };
+const PREFER = { image: ['nano-banana-2', 'nano-banana', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image'], video: ['kling-3-std', 'veo-3.1-fast', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal'] };
+
+/* V4.4 (27 Sep 2026): what the model picker sorts and filters by — who makes it, its quality tier (1 básica · 2 buena ·
+   3 alta · 4 la mejor), how fast it answers, and what it is good for. A model not listed here gets its engine as maker and
+   tier 2. The tiers are the office's own reading of each model's place in its family, not a benchmark. */
+const G = 'Google', HFM = 'Higgsfield', K = 'Kling (Kuaishou)', BD = 'ByteDance', AL = 'Alibaba', BFL = 'Black Forest Labs';
+const INFO = {
+  'nano-banana': [G, 3, 'rápido', ['editar fotos', 'mezclar referencias', 'producto']],
+  'nano-banana-2': [G, 3, 'rápido', ['todo uso', 'editar fotos', 'hasta 14 referencias', 'formatos extremos', '4K']],
+  'nano-banana-2-lite': [G, 2, 'muy rápido', ['bocetos', 'lotes', 'capa gratuita']],
+  'nano-banana-pro': [G, 4, 'normal', ['texto legible', 'personajes coherentes', 'composición compleja', '4K']],
+  'nano-banana-fal': [G, 3, 'rápido', ['editar fotos', 'mezclar referencias']],
+  'veo-3.1': [G, 4, 'lento', ['con sonido y diálogo', 'cine', 'referencias', 'primer y último fotograma']],
+  'veo-3.1-fast': [G, 3, 'normal', ['con sonido', 'anuncios', 'redes']],
+  'veo-3.1-lite': [G, 2, 'rápido', ['lotes de anuncios', 'pruebas', 'barato']],
+  'veo-3-fast-fal': [G, 3, 'normal', ['con sonido', 'anuncios']],
+  'gpt-image-1': ['OpenAI', 3, 'lento', ['instrucciones largas', 'texto en imagen', 'editar fotos']],
+  'grok-image': ['xAI', 2, 'rápido', ['ideas rápidas']],
+  'grok-imagine-2': ['xAI', 3, 'rápido', ['editar fotos', 'hasta 10 referencias']],
+  'grok-imagine-video': ['xAI', 3, 'normal', ['referencias', 'redes']],
+  'soul': [HFM, 3, 'normal', ['moda', 'redes', 'retrato']],
+  'soul-2': [HFM, 3, 'normal', ['moda', 'redes', 'retrato']],
+  'soul-cinema': [HFM, 3, 'normal', ['cine', 'fotogramas', 'retrato']],
+  'marketing-studio': [HFM, 3, 'normal', ['producto', 'publicidad', 'hasta 16 referencias']],
+  'marketing-studio-flare': [HFM, 4, 'normal', ['producto', 'publicidad']],
+  'marketing-studio-sunburst': [HFM, 4, 'normal', ['producto', 'publicidad']],
+  'cinema-studio-4': [HFM, 4, 'lento', ['cine', 'dirección de cámara', 'con sonido', 'hasta 30 s']],
+  'genjutsu-motion': [HFM, 3, 'normal', ['copiar movimiento', 'personajes']],
+  'genjutsu-swap': [HFM, 3, 'normal', ['cambiar un objeto', 'editar video']],
+  'dop': [HFM, 2, 'normal', ['animar una foto']],
+  'ideogram-4': ['Ideogram', 4, 'normal', ['texto legible', 'carteles', 'posts con título']],
+  'ideogram-3-fal': ['Ideogram', 3, 'normal', ['texto legible', 'carteles']],
+  'recraft-4.1': ['Recraft', 3, 'normal', ['diseño gráfico', 'ilustración', 'vector']],
+  'recraft-4.1-pro': ['Recraft', 4, 'normal', ['diseño gráfico', '2K']],
+  'recraft-4.1-utility': ['Recraft', 2, 'rápido', ['iconos', 'fondos', 'recursos']],
+  'recraft-4.1-utility-pro': ['Recraft', 3, 'normal', ['iconos', 'recursos', '2K']],
+  'qwen-image-3': [AL, 3, 'normal', ['texto en imagen', 'editar fotos']],
+  'z-image-turbo': [AL, 2, 'muy rápido', ['bocetos', 'lotes', 'barato']],
+  'wan-2.6': [AL, 2, 'normal', ['barato', 'video de referencia']],
+  'wan-2.7': [AL, 3, 'normal', ['referencias', 'imagen inicial y final']],
+  'wan-3': [AL, 3, 'normal', ['hasta 30 s', 'con audio', 'referencias']],
+  'wan-3-prime': [AL, 4, 'lento', ['hasta 30 s', 'con audio', 'referencias']],
+  'happy-horse-1': [AL, 2, 'normal', ['barato', 'referencias']],
+  'happy-horse-1.1': [AL, 3, 'normal', ['referencias', '1080p']],
+  'seedream-4': [BD, 3, 'normal', ['alta resolución', 'editar fotos']],
+  'seedance-2': [BD, 3, 'normal', ['referencias', 'con audio', 'personajes']],
+  'seedance-2.5': [BD, 4, 'lento', ['hasta 30 s', 'con audio', 'muchas referencias']],
+  'seedance-2.5-edit': [BD, 4, 'lento', ['editar video']],
+  'seedance-2.5-extend': [BD, 4, 'lento', ['alargar video']],
+  'seedance-2-fast': [BD, 2, 'rápido', ['referencias']],
+  'seedance-2-mini': [BD, 2, 'rápido', ['barato']],
+  'seedance-1-fal': [BD, 2, 'normal', ['animar una foto']],
+  'kling-3-std': [K, 3, 'normal', ['con sonido', 'imagen inicial y final', 'todo uso']],
+  'kling-3-pro': [K, 4, 'lento', ['con sonido', 'calidad alta']],
+  'kling-3-4k': [K, 4, 'lento', ['4K', 'con sonido']],
+  'kling-3-turbo': [K, 2, 'rápido', ['rápido', 'redes']],
+  'kling-3-motion': [K, 3, 'normal', ['copiar movimiento', 'bailes', 'personajes']],
+  'kling-3-motion-pro': [K, 4, 'normal', ['copiar movimiento', 'calidad alta']],
+  'kling-2.6-motion': [K, 2, 'normal', ['copiar movimiento']],
+  'kling-2.6-motion-pro': [K, 3, 'normal', ['copiar movimiento']],
+  'kling-o3': [K, 4, 'lento', ['primer y último fotograma', 'referencias', 'video de guía']],
+  'kling-o3-edit': [K, 4, 'lento', ['editar video']],
+  'kling-o1': [K, 3, 'normal', ['primer y último fotograma', 'referencias', 'video de guía']],
+  'kling-o1-edit': [K, 3, 'normal', ['editar video']],
+  'kling-2.6': [K, 3, 'normal', ['con sonido']],
+  'kling-2.5': [K, 2, 'rápido', ['animar una foto', 'barato']],
+  'kling-2.5-pro': [K, 3, 'normal', ['texto o foto']],
+  'kling-2.5-fal': [K, 2, 'rápido', ['animar una foto']],
+  'minimax-hailuo-2.3': ['MiniMax', 3, 'normal', ['movimiento natural', '6 o 10 s']],
+  'minimax-h3': ['MiniMax', 4, 'lento', ['2K', 'referencias']],
+  'hailuo-02-fal': ['MiniMax', 2, 'normal', ['animar una foto']],
+  'ltx-2.5-pro': ['Lightricks', 3, 'normal', ['movimientos de cámara', 'con audio']],
+  'ltx-2.5-fast': ['Lightricks', 2, 'rápido', ['hasta 4K', 'barato']],
+  'pixverse-6': ['PixVerse', 3, 'rápido', ['redes', 'con audio']],
+  'flux-2': [BFL, 3, 'normal', ['realismo', 'detalle']],
+  'flux-3': [BFL, 3, 'normal', ['video']],
+  'flux-kontext': [BFL, 3, 'normal', ['editar con una frase']],
+  'flux-schnell': [BFL, 1, 'muy rápido', ['bocetos', 'lotes', 'el más barato']],
+  'prueba': ['Prueba (gratis)', 1, 'muy rápido', ['probar el flujo sin gastar']],
+  'prueba-video': ['Prueba (gratis)', 1, 'muy rápido', ['probar el flujo sin gastar']],
+};
+export const TIER_NAME = { 1: 'básica', 2: 'buena', 3: 'alta', 4: 'la mejor' };
+const infoOf = x => { const i = INFO[x.id]; return i ? { maker: i[0], tier: i[1], speed: i[2], uses: i[3] } : { maker: x.engine === 'higgsfield' ? HFM : ENGINES[x.engine]?.name || x.engine, tier: 2, speed: 'normal', uses: [] }; };
 
 let cfg = { dailyLimit: 40, maxPerRequest: 8, models: {} }, root = '', usageFile = '', jobsFile = '', MODELS = CATALOG, hooks = {};
 export function configure(officeCfg, brainPath, dataDir, h = {}) {
@@ -280,7 +371,7 @@ export function setHooks(h = {}) { hooks = { ...hooks, ...h }; }
 export const model = id => MODELS.find(x => x.id === id) || null;
 /** The catalog as the page and the agents see it (no functions), each model marked on/off by its engine's key. */
 export function models() {
-  return MODELS.map(x => ({ id: x.id, engine: x.engine, engineName: ENGINES[x.engine].name, kind: x.kind, name: x.name, note: x.note || '', cost: x.cost, per: x.per || 'item', seconds: x.seconds || null, roles: x.roles || {}, needs: x.needs || [], settings: x.settings || {}, on: engineOn(x.engine), ...(x.legacy ? { legacy: true } : {}) }));
+  return MODELS.map(x => ({ id: x.id, engine: x.engine, engineName: ENGINES[x.engine].name, kind: x.kind, name: x.name, note: x.note || '', cost: x.cost, per: x.per || 'item', seconds: x.seconds || null, roles: x.roles || {}, needs: x.needs || [], settings: x.settings || {}, on: engineOn(x.engine), ...(x.legacy ? { legacy: true } : {}), ...infoOf(x) }));
 }
 export function engines() {
   return Object.entries(ENGINES).map(([id, e]) => ({ id, name: e.name, on: engineOn(id), env: e.env, site: e.site || null, how: e.how || (e.env ? `setx ${e.env} "tu-key"` : null), models: MODELS.filter(x => x.engine === id).length }));
@@ -516,6 +607,55 @@ async function pollUntil(job, check, { every = 4000, deadline = 20 * 60e3 } = {}
 }
 const final = e => Object.assign(e, { final: true });
 
+/* Google Veo on the Gemini API (V4.4, 27 Sep 2026), as Google's own SDK sends it (googleapis/js-genai, _models_converters.ts):
+   POST v1beta/models/<id>:predictLongRunning { instances: [{ prompt, image?, lastFrame?, referenceImages? }], parameters:
+   { aspectRatio, resolution, durationSeconds } } → an operation; GET v1beta/<operation> until done →
+   response.generateVideoResponse.generatedSamples[].video.uri, downloaded with the same key. Images go as { bytesBase64Encoded, mimeType }. */
+export function veoRequest(m, job, files) {
+  const img = f => ({ bytesBase64Encoded: fs.readFileSync(f.p).toString('base64'), mimeType: f.mime });
+  const inst = { prompt: job.prompt }, refs = (files.reference || []).slice(0, m.roles.reference || 0);
+  if (files.start?.[0]) inst.image = img(files.start[0]);
+  if (files.end?.[0] && files.start?.[0]) inst.lastFrame = img(files.end[0]); // a last frame only goes with a first one
+  if (refs.length && !inst.image) inst.referenceImages = refs.map(f => ({ image: img(f), referenceType: 'asset' }));
+  const p = { aspectRatio: job.s.aspectRatio || '16:9', resolution: job.s.resolution || '720p', durationSeconds: Number(job.s.duration) || 8 };
+  if (inst.referenceImages) Object.assign(p, { aspectRatio: '16:9', resolution: '720p' }); // references: 720p landscape only
+  if (p.resolution === '1080p') p.durationSeconds = 8; // 1080p comes in 8 s
+  return { instances: [inst], parameters: p };
+}
+async function veo(m, job, ctx) {
+  const key = secret('gemini'), base = GEMINI_BASE(), head = { 'content-type': 'application/json', 'x-goog-api-key': key };
+  if (!job.remote?.length) {
+    const body = veoRequest(m, job, inputFiles(job)); job.remote = [];
+    for (let i = 0; i < job.n; i++) {
+      job.note = 'enviando a Google';
+      const op = await http(`${base}/v1beta/models/${encodeURIComponent(m.gid)}:predictLongRunning`, { method: 'POST', headers: head, body: JSON.stringify(body) }, m.name);
+      if (!op?.name) throw new Error(`${m.name}: Google no devolvió el número de la operación`);
+      job.remote.push({ id: op.name }); ctx.save();
+    }
+  }
+  for (const rq of job.remote) {
+    if (rq.done) continue;
+    const op = await pollUntil(job, async () => {
+      const o = await http(`${base}/v1beta/${rq.id.split('/').map(encodeURIComponent).join('/')}`, { headers: head }, m.name);
+      job.note = o.done ? 'descargando' : 'generando';
+      if (o.error) throw final(new Error(`${m.name}: ${o.error.message || JSON.stringify(o.error).slice(0, 200)}`));
+      return o.done ? o : null;
+    }, { every: 8000, deadline: 15 * 60e3 });
+    const res = op.response?.generateVideoResponse || op.response || {};
+    const vids = (res.generatedSamples || res.generatedVideos || []).map(x => x.video).filter(Boolean);
+    if (!vids.length) throw final(new Error(`${m.name} no devolvió video${res.raiMediaFilteredReasons?.length ? ': ' + res.raiMediaFilteredReasons.join(' ') : res.raiMediaFilteredCount ? ' (lo bloqueó el filtro de contenido de Google; cambia el prompt)' : ''}`));
+    rq.got = rq.got || [];
+    for (const v of vids) {
+      const u = v.uri; if (u && rq.got.includes(u)) continue;
+      let buf;
+      if (v.videoBytes || v.bytesBase64Encoded) buf = Buffer.from(v.videoBytes || v.bytesBase64Encoded, 'base64');
+      else { const r = await fetch(u, { headers: { 'x-goog-api-key': key }, redirect: 'follow', signal: AbortSignal.timeout(300000) }); if (!r.ok) throw new Error(`no pude descargar el video de Google: ${r.status}`); buf = Buffer.from(await r.arrayBuffer()); }
+      ctx.add(buf, 'mp4'); if (u) rq.got.push(u); ctx.save();
+    }
+    rq.done = true; ctx.save();
+  }
+}
+
 const RUN = {
   async prueba(m, job, ctx) { // an SVG card: proves the pipeline for free (a video becomes a card too)
     const [w, h] = SIZE[job.s.aspectRatio] || SIZE['1:1'];
@@ -534,13 +674,14 @@ const RUN = {
     }
   },
   async gemini(m, job, ctx) { // Nano Banana: generateContent returns the image inline; the references go in as inline images
+    if (m.kind === 'video') return veo(m, job, ctx);
     const refs = inputFiles(job).reference.map(f => ({ inlineData: { mimeType: f.mime, data: fs.readFileSync(f.p).toString('base64') } }));
     for (let i = 0; i < job.n; i++) {
       if (job.cancel) throw new Error('Cancelado por ti.');
-      const j = await http(`${GEMINI_BASE()}/v1beta/models/${encodeURIComponent(cfg.models.gemini)}:generateContent`, {
+      const j = await http(`${GEMINI_BASE()}/v1beta/models/${encodeURIComponent(m.gid || cfg.models.gemini)}:generateContent`, {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': secret('gemini') },
-        body: JSON.stringify({ contents: [{ parts: [{ text: job.prompt }, ...refs] }], generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: job.s.aspectRatio } } }),
-      }, 'Nano Banana');
+        body: JSON.stringify({ contents: [{ parts: [{ text: job.prompt }, ...refs] }], generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: job.s.aspectRatio, ...(job.s.imageSize ? { imageSize: job.s.imageSize } : {}) } } }),
+      }, m.name);
       const parts = (j.candidates || []).flatMap(c => c.content?.parts || []).filter(p => p.inlineData || p.inline_data);
       if (!parts.length) throw new Error('Nano Banana no devolvió imagen' + (j.promptFeedback?.blockReason ? ` (bloqueado: ${j.promptFeedback.blockReason})` : (j.candidates?.[0]?.finishReason ? ` (${j.candidates[0].finishReason})` : '')));
       for (const p of parts) { const d = p.inlineData || p.inline_data; ctx.add(Buffer.from(d.data, 'base64'), extOf(d.mimeType || d.mime_type)); }
