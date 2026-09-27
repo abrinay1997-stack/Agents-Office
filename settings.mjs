@@ -2,7 +2,7 @@
 // it does; a change is validated here and written to office.config.local.json (this machine; it wins over the team's
 // file and is never uploaded). Proven in tests/settings.test.mjs.
 export const GROUPS = [
-  ['general', 'General'], ['seguridad', 'Seguridad'], ['aprobaciones', 'Aprobaciones'], ['costos', 'Costos'], ['avisos', 'Avisos y Telegram'], ['conectores', 'Conectores'], ['calidad', 'Calidad'], ['equipo', 'Equipo'],
+  ['general', 'General'], ['seguridad', 'Seguridad'], ['aprobaciones', 'Aprobaciones'], ['costos', 'Costos'], ['estudio', 'Estudio'], ['avisos', 'Avisos y Telegram'], ['conectores', 'Conectores'], ['calidad', 'Calidad'], ['equipo', 'Equipo'],
 ];
 const DEPTS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 // type: text · number · bool · select · list (strings) · depts (departments) · time (HH:MM or empty) · people
@@ -25,6 +25,12 @@ export const FIELDS = [
   { path: 'costs.alertAt', group: 'costos', type: 'number', label: 'Avisarme al (fracción del presupuesto)', min: 0.1, max: 1, step: 0.05 },
   { path: 'costs.stopAtBudget', group: 'costos', type: 'bool', label: 'Frenar las tareas nuevas al pasar el presupuesto' },
   { path: 'costs.hourlyRate', group: 'costos', type: 'number', label: 'Lo que cuesta una hora de tu equipo (US$)', min: 0, max: 1000 },
+  // V4.5 (27 Sep 2026, the owner): the Estudio's caps — they were only in office.config.json (media.*). Applied at once (media.setLimits).
+  { path: 'media.dailyLimit', group: 'estudio', type: 'number', label: 'Tope de generaciones al día', min: 0, max: 10000, default: 40, help: 'Cuenta imágenes; un video cuenta como 5. Lo del motor «Prueba» no cuenta. 0 = sin tope.' },
+  { path: 'media.dailyBudget', group: 'estudio', type: 'number', label: 'Gasto máximo al día en el Estudio (US$)', min: 0, max: 100000, step: 0.5, default: 0, help: 'Con el precio aproximado de cada modelo; lo que está generándose ya cuenta. Un pedido que lo pasaría no se envía. 0 = sin límite.' },
+  { path: 'media.monthlyBudget', group: 'estudio', type: 'number', label: 'Gasto máximo al mes en el Estudio (US$)', min: 0, max: 1000000, step: 1, default: 0, help: 'Igual, por mes calendario. Aparte del presupuesto de la oficina (Costos), que cuenta a los agentes. 0 = sin límite.' },
+  { path: 'media.maxPerRequest', group: 'estudio', type: 'number', label: 'Imágenes por pedido (máximo)', min: 1, max: 8, default: 8, help: 'Cuántas se pueden pedir de una vez. Un video va de 1 a 4.' },
+  { path: 'media.concurrency', group: 'estudio', type: 'number', label: 'Trabajos del Estudio a la vez', min: 1, max: 6, default: 3, help: 'Más a la vez termina antes, pero los motores pueden pedir esperar.' },
   { path: 'telegram.quiet.from', group: 'avisos', type: 'time', label: 'No molestar desde' },
   { path: 'telegram.quiet.to', group: 'avisos', type: 'time', label: 'No molestar hasta' },
   { path: 'telegram.notify.approvals', group: 'avisos', type: 'bool', label: 'Avisar de borradores que esperan mi OK' },

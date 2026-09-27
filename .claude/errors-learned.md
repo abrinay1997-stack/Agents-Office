@@ -116,4 +116,41 @@
 **Fix aplicado:** Para cambios con acentos, usar la herramienta Edit o un archivo `.py` escrito con Write (que Python lee como UTF-8).
 **Prevención:** Nada con caracteres no ASCII por heredoc en Windows.
 **Archivos:** —
+**Nota (2026-09-27):** con `python -` (el script entero por stdin, heredoc entre comillas `<<'EOF'`) los acentos llegaron bien: Python lee el código fuente como UTF-8. El problema es con `python -c` o al leer texto de stdin como datos. Igual, comprobar con `grep "Ã\|â€"` después.
+
+## [2026-09-27] — La cámara volaba hacia atrás un cuadro al empezar un vuelo
+
+**Contexto:** Al abrir a Dimitri se acerca el centro (`enterFocus('brain')` → `flyTo`); una prueba medía el zoom cada 150 ms.
+**Error:** El zoom pasaba de 0,51 a −0,54 y luego a 3,1: un zoom negativo por un momento (en un navegador normal, un tirón de un cuadro hacia afuera antes de acercarse).
+**Causa raíz:** `tickTween(now)` recibe la hora del cuadro de `requestAnimationFrame`, que empezó ANTES del clic que llamó a `flyTo` (`t0 = performance.now()`). El progreso `k` salía negativo y la curva de easing devuelve valores negativos fuera de [0, 1].
+**Fix aplicado:** `k = Math.min(1, Math.max(0, (now - t0) / dur))`.
+**Prevención:** Toda animación que mezcle `performance.now()` de un evento con la hora de rAF debe acotar el progreso a [0, 1].
+**Archivos:** `src/main.js` (tickTween)
+
+## [2026-09-27] — Tab se atascaba o se escapaba con una vista abierta
+
+**Contexto:** V4.5: Estudio, Calendario y Cerebro son vistas bajo la barra superior; `modal.js` deja la barra fuera de lo inerte y Tab recorre barra + vista.
+**Error:** `npm run check`: «Tab left the Estudio and its top bar 1 times»; luego, Tab se quedaba quieto en un `<summary>`.
+**Causa raíz:** (1) Un aviso con DESHACER lleva `data-modal-keep` (nunca inerte) y está en la página entre la barra y la vista: el navegador lo visitaba al salir del último icono de la barra. (2) Un botón dentro de un `<details>` cerrado tiene cajas (`getClientRects` no vacío) pero no acepta el foco, y la lista de «enfocables» lo incluía.
+**Fix aplicado:** Con una vista arriba, `modal.js` lleva el orden de Tab él mismo (paso a paso por la lista, saltando lo que no acepte el foco) y excluye lo que está dentro de un `<details>` cerrado.
+**Prevención:** Si se deja algo fuera de lo inerte, controlar el orden de Tab en vez de confiar en el orden del DOM; «visible» no es «enfocable».
+**Archivos:** `src/modal.js`
+
+## [2026-09-27] — `npm run check` generaba (y cobraba) una imagen real de Gemini
+
+**Contexto:** El paso «estudio: the free test engine generates…» de `check.mjs` comprueba que un motor sin key avisa de cuál falta, pidiendo una imagen a `gemini`.
+**Error:** «✗ … — trash» en cada check de esta máquina; a la vez, una imagen de verdad en la cuenta de Google del dueño (≈US$0,04) por cada ejecución.
+**Causa raíz:** El dueño ya tiene `GEMINI_API_KEY` en Windows: el pedido «sin key» salió de verdad, la imagen extra entró en la galería de prueba y la cuenta de la papelera ya no daba 1. La condición `!process.env.GEMINI_API_KEY` solo esquivaba el mensaje, no el gasto.
+**Fix aplicado:** Quitar `GEMINI_API_KEY` del entorno solo durante esa llamada y devolverla en `finally`.
+**Prevención:** Una prueba que «no debe tener key» la quita ella misma; nunca confía en que la máquina no la tenga. Las pruebas de motores de pago usan un sustituto local (`HF_API_BASE_URL`, `AO_GEMINI_BASE`, `AO_FAL_QUEUE`).
+**Archivos:** `check.mjs` (paso del motor de prueba)
+
+## [2026-09-27] — `hidden` no ocultaba el botón Guardar de Ajustes
+
+**Contexto:** Las pestañas nuevas de Ajustes (Apariencia, Atajos) se aplican al instante y no deben mostrar «Guardar».
+**Error:** El botón seguía a la vista aunque tenía `hidden` (también pasaba en «Preparar desde mi web»).
+**Causa raíz:** `.sg-btn { display: inline-flex }` gana al `display: none` que el navegador da a `[hidden]`.
+**Fix aplicado:** `.sg-btn[hidden], .bz-btn[hidden] { display: none; }`.
+**Prevención:** Toda clase que fije `display` en un elemento que se oculta con `hidden` necesita su regla `[hidden]`.
+**Archivos:** `src/shell.html`
 

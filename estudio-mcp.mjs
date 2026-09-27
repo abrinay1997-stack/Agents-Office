@@ -42,7 +42,7 @@ async function tools() {
       inputSchema: { type: 'object', properties: { buscar: { type: 'string', description: 'Palabras del prompt o del nombre del archivo. Vacío = lo más reciente.' }, solo_subidas: { type: 'boolean', description: 'Solo lo que subió el dueño.' }, cantidad: { type: 'integer', minimum: 1, maximum: 30 } } } },
     { name: 'estado_trabajo', description: 'Cómo va un trabajo del Estudio (el id que salió en una línea ⏳). Espera hasta un minuto a que termine.',
       inputSchema: { type: 'object', properties: { trabajo: { type: 'string' } }, required: ['trabajo'] } },
-    { name: 'estado_estudio', description: 'Qué motores y modelos tiene listos el dueño, cuánto queda del tope diario y qué trabajos de esta tarea siguen en marcha. Consúltalo antes de un lote grande.',
+    { name: 'estado_estudio', description: 'Qué motores y modelos tiene listos el dueño, cuánto queda del tope diario y del presupuesto en US$ (si el dueño lo puso), y qué trabajos de esta tarea siguen en marcha. Consúltalo antes de un lote grande.',
       inputSchema: { type: 'object', properties: {} } },
   ];
 }
@@ -63,7 +63,7 @@ async function call(name, a = {}) {
     const c = await office('/api/media/models'); catalog = c;
     const mine = who.task ? (await office('/api/media/jobs?active=1&task=' + encodeURIComponent(who.task))).jobs : [];
     const on = c.models.filter(m => m.on);
-    return `Motores: ${c.engines.map(e => `${e.name} ${e.on ? 'LISTO' : 'sin key'}`).join(' · ')}.\nModelos de imagen: ${on.filter(m => m.kind === 'image').map(m => m.id).join(', ') || '—'}.\nModelos de video: ${on.filter(m => m.kind === 'video').map(m => m.id).join(', ') || '—'}.\nTope diario: quedan ${c.budget.left} de ${c.budget.limit} (un video cuenta 5). Máximo por pedido: ${c.budget.maxPerRequest}.` +
+    return `Motores: ${c.engines.map(e => `${e.name} ${e.on ? 'LISTO' : 'sin key'}`).join(' · ')}.\nModelos de imagen: ${on.filter(m => m.kind === 'image').map(m => m.id).join(', ') || '—'}.\nModelos de video: ${on.filter(m => m.kind === 'video').map(m => m.id).join(', ') || '—'}.\n${c.budget.left == null ? 'Sin tope diario de generaciones' : `Tope diario: quedan ${c.budget.left} de ${c.budget.limit} (un video cuenta 5)`}.${c.budget.costLeftDay != null ? ` Presupuesto del día: quedan US$${c.budget.costLeftDay.toFixed(2)} de US$${c.budget.dailyBudget}.` : ''}${c.budget.costLeftMonth != null ? ` Presupuesto del mes: quedan US$${c.budget.costLeftMonth.toFixed(2)} de US$${c.budget.monthlyBudget}.` : ''} Máximo por pedido: ${c.budget.maxPerRequest}.` +
       (mine.length ? `\nEn marcha para esta tarea: ${mine.map(j => `${j.id} (${j.modelName}, ${j.note || j.state})`).join('; ')}.` : '');
   }
   if (name === 'buscar_en_galeria') {

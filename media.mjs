@@ -16,6 +16,9 @@
 // engines (Higgsfield, fal video) keep their request ids in the job, so a restart of the office resumes the poll.
 // FILES. <brain>/Agents Office/media/YYYY-MM/<name>.<ext> with <name>.json beside it (prompt, model, settings, the media
 // it used, cost estimate, who asked, task). Budget: office.config.json → "media": { "dailyLimit": 40, "maxPerRequest": 8 }.
+// V4.5 (27 Sep 2026): the owner sets it in Ajustes → Estudio (office.config.local.json, applied at once by setLimits): the
+// count a day (0 = no cap) and, new, a spend limit in US$ a day and a month ("dailyBudget", "monthlyBudget"; 0 = none),
+// checked BEFORE a request is sent with the model's estimated price, counting what is still being generated.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -401,14 +404,33 @@ function settingsFor(m, given = {}, legacy = {}) {
 function unitCost(m, s) { return m.per === 's' ? +(m.cost * (m.seconds || Number(s.duration) || 5)).toFixed(3) : m.cost; }
 export function estimate({ model: id, n = 1, settings = {} } = {}) { const m = model(id); if (!m) return 0; return +(unitCost(m, settingsFor(m, settings)) * Math.max(1, +n || 1) * (m.hf && m.settings.batchSize ? Number(settingsFor(m, settings).batchSize) : 1)).toFixed(3); }
 
-/* ---------- budget: a count per day, kept in data/ (a video weighs 5 images) ---------- */
-const today = () => new Date().toISOString().slice(0, 10);
+/* ---------- budget: a count per day and the money spent a day and a month, kept in data/ (a video weighs 5 images) ---------- */
+// V4.5: the owner's day, not UTC's (in Panamá the «day» used to turn at 7 in the evening)
+const localDay = (d = new Date()) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); };
+const today = () => localDay();
 const weightOf = (kind, n) => (kind === 'video' ? 5 : 1) * n;
-function usage() { try { const u = JSON.parse(fs.readFileSync(usageFile, 'utf8')); return u.day === today() ? u : { day: today(), images: 0, videos: 0, cost: 0 }; } catch { return { day: today(), images: 0, videos: 0, cost: 0 }; } }
-function spend(kind, n, cost) { const u = usage(); u[kind] += n; u.cost = +(u.cost + cost).toFixed(3); fs.mkdirSync(path.dirname(usageFile), { recursive: true }); fs.writeFileSync(usageFile, JSON.stringify(u)); return u; }
+function usage() {
+  let u = null; try { u = JSON.parse(fs.readFileSync(usageFile, 'utf8')); } catch {}
+  const day = today(), month = day.slice(0, 7);
+  const monthCost = u && (u.month || String(u.day || '').slice(0, 7)) === month ? +(u.monthCost ?? u.cost ?? 0) : 0; // a file from before V4.5 has no month: today's spend starts it
+  return u && u.day === day ? { ...u, month, monthCost } : { day, images: 0, videos: 0, cost: 0, month, monthCost };
+}
+function spend(kind, n, cost) { const u = usage(); u[kind] += n; u.cost = +(u.cost + cost).toFixed(3); u.monthCost = +(u.monthCost + cost).toFixed(3); fs.mkdirSync(path.dirname(usageFile), { recursive: true }); fs.writeFileSync(usageFile, JSON.stringify(u)); return u; }
+const cap = v => (Number.isFinite(+v) && +v > 0 ? +v : 0); // 0, empty or nonsense = no cap
+/** What is left today and this month. left / costLeftDay / costLeftMonth are null when that cap is off. */
 export function budget() {
-  const u = usage(), reserved = JOBS.filter(j => (j.state === 'queued' || j.state === 'running') && j.engine !== 'prueba').reduce((s, j) => s + Math.max(0, j.weight - weightOf(j.kind, j.items.length)), 0);
-  return { ...u, limit: cfg.dailyLimit, reserved, left: Math.max(0, cfg.dailyLimit - u.images - u.videos * 5 - reserved), maxPerRequest: cfg.maxPerRequest };
+  const u = usage(), active = JOBS.filter(j => (j.state === 'queued' || j.state === 'running') && j.engine !== 'prueba');
+  const reserved = active.reduce((s, j) => s + Math.max(0, j.weight - weightOf(j.kind, j.items.length)), 0);
+  const costReserved = +active.reduce((s, j) => s + (+j.unit || 0) * (+j.n || 1), 0).toFixed(3); // a running job is paid when it ends: until then its estimate is held
+  const limit = cap(cfg.dailyLimit), used = u.images + u.videos * 5, dailyBudget = cap(cfg.dailyBudget), monthlyBudget = cap(cfg.monthlyBudget);
+  const left$ = (b, spent) => (b ? +Math.max(0, b - spent - costReserved).toFixed(3) : null);
+  return { ...u, limit, used, reserved, left: limit ? Math.max(0, limit - used - reserved) : null, maxPerRequest: cfg.maxPerRequest,
+    dailyBudget, monthlyBudget, costReserved, costLeftDay: left$(dailyBudget, u.cost), costLeftMonth: left$(monthlyBudget, u.monthCost) };
+}
+/** V4.5: the caps from Ajustes → Estudio, applied at once (the jobs and the catalog stay as they are). */
+export function setLimits(m = {}) {
+  for (const k of ['dailyLimit', 'dailyBudget', 'monthlyBudget', 'maxPerRequest', 'concurrency']) if (m[k] !== undefined) cfg[k] = m[k];
+  setImmediate(pumpJobs); // more at once may start a queued job now
 }
 
 /* ---------- storage ---------- */
@@ -805,7 +827,13 @@ export function submit(req = {}) {
   if (m.routes) hfRoute(m, Object.fromEntries(Object.entries(media).map(([r, l]) => [r, l.length]))); // a combination its routes do not take is said now, before anything is spent
   const s = settingsFor(m, req.settings || {}, { ratio: req.ratio, seconds: req.seconds });
   const per = m.hf && s.batchSize ? Number(s.batchSize) : 1, weight = weightOf(m.kind, n * per);
-  const b = budget(); if (m.engine !== 'prueba' && weight > b.left) throw new Error(`tope diario alcanzado: quedan ${b.left} de ${b.limit} (office.config.json → media.dailyLimit)`);
+  const b = budget();
+  if (m.engine !== 'prueba') { // the free test engine never counts
+    if (b.left != null && weight > b.left) throw new Error(`tope diario alcanzado: quedan ${b.left} de ${b.limit} (cámbialo en Ajustes → Estudio)`);
+    const est = +(unitCost(m, s) * per * n).toFixed(3), usd = v => 'US$' + (+v).toFixed(2);
+    if (b.costLeftDay != null && est > b.costLeftDay + 1e-9) throw new Error(`presupuesto del día del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftDay)} de ${usd(b.dailyBudget)} (cámbialo en Ajustes → Estudio)`);
+    if (b.costLeftMonth != null && est > b.costLeftMonth + 1e-9) throw new Error(`presupuesto del mes del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftMonth)} de ${usd(b.monthlyBudget)} (cámbialo en Ajustes → Estudio)`);
+  }
   const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: req.by === 'agent' ? 'agent' : 'you', agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s) * per, retryOf: req.retryOf || undefined };
   JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
   return pub(j);

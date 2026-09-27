@@ -13,6 +13,7 @@
 //        cancelTask(t) · rtAct(id, act) · openAgent(id, tab) · esc · isLive() · officeModel() · MODEL_KEYS · modelName · business()
 import { occurrences, describe, untilText, fromPicker, toPicker, shortDate } from './when.js';
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
+import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']; // the week starts on Monday (AU/NZ/UK)
 const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -644,8 +645,9 @@ export function initCalendar(ctx) {
   let fitT = 0; addEventListener('resize', () => { if (!openNow || view !== 'month') return; clearTimeout(fitT); fitT = setTimeout(() => { if (E.pop.hidden && !dragging) render(); }, 150); }); // the month re-counts what fits
   $('#cvKeys')?.addEventListener('click', () => dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))); // V4.2 (audit B38): the keys live in the «?» sheet, not in the band
   ov.inert = true; // closed: out of Tab's reach
-  function open() { if (openNow) return; openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging && sig() !== lastSig) render(); }, 30000); }
-  function close() { if (!openNow) return; flushUndo(); openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from
+  function open() { if (openNow) return; views.opening('cal'); openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging && sig() !== lastSig) render(); }, 30000); }
+  function close(o = {}) { if (!openNow) return; flushUndo(); openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (!o.quiet && calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from (not when another view takes over)
+  views.add('cal', { isOpen: () => openNow, close });
   function toggle() { openNow ? close() : open(); }
   function openAt(ts) { anchor = startOfDay(ts || Date.now()); if (view === 'month' && ts) view = 'week'; if (openNow) { closePop(); render(); } else open(); setTimeout(() => { const el = E.grid.querySelector(`.cv-day[data-day="${ymd(new Date(anchor))}"]`); if (el) { el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); } }, 60); }
   function openRoutine(rid) { // V4.1 (audit 29): a routine clicked on the board opens here, on its next run, with its editor

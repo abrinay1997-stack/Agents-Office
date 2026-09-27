@@ -18,3 +18,12 @@ test('settings that need a restart say so', () => {
   assert.equal(S.apply({}, { 'tools.web': false }).restart, true);
   assert.equal(S.apply({}, { 'costs.hourlyRate': 5 }).restart, false);
 });
+
+test('V4.5: the Estudio caps are settings — 0 is allowed (no cap), a bad value is refused', () => {
+  const r = S.apply({}, { 'media.dailyLimit': 0, 'media.dailyBudget': '2.5', 'media.monthlyBudget': 40, 'media.maxPerRequest': 4 });
+  assert.deepEqual(r.errors, []); assert.equal(r.restart, false);
+  assert.deepEqual(r.local.media, { dailyLimit: 0, dailyBudget: 2.5, monthlyBudget: 40, maxPerRequest: 4 });
+  const bad = S.apply({}, { 'media.maxPerRequest': 20, 'media.dailyBudget': -1, 'media.concurrency': 9 });
+  assert.equal(bad.errors.length, 3);
+  assert.ok(S.GROUPS.some(([k]) => k === 'estudio'));
+});

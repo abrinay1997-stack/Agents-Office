@@ -520,18 +520,51 @@ else {
       await page.evaluate(() => document.querySelector('.tp-chip[data-f="all"]').click());
       return `${n0} archived · DESHACER brings them back · ARCHIVADAS ${a1} → ${a2}${cut.more ? ' · ' + cut.more : ''}`;
     });
-    await step('smoke: V4.1 — Tab stays inside an open window, the closed board is inert, ? opens the shortcuts', async () => {
+    await step('smoke: V4.1 — Tab stays inside an open view and its top bar, the closed board is inert, ? opens the shortcuts in Ajustes', async () => {
       await page.keyboard.press('e'); await page.waitForFunction(() => document.body.classList.contains('studioOpen'), null, { timeout: 4000 });
-      let out = 0; for (let i = 0; i < 40; i++) { await page.keyboard.press('Tab'); if (!await page.evaluate(() => document.getElementById('studioOv').contains(document.activeElement))) out++; }
+      if (await page.evaluate(() => document.getElementById('topbar').inert)) throw new Error('the top bar went inert under the Estudio (V4.5: a view keeps it)');
+      let out = 0, bar = 0; for (let i = 0; i < 40; i++) { await page.keyboard.press('Tab'); const w = await page.evaluate(() => document.getElementById('studioOv').contains(document.activeElement) ? 'v' : document.getElementById('topbar').contains(document.activeElement) ? 'b' : ''); if (!w) out++; if (w === 'b') bar++; }
       for (let i = 0; i < 3 && await page.evaluate(() => document.body.classList.contains('studioOpen')); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); } // Esc closes an open menu first, then the Estudio
-      if (out) throw new Error(`Tab left the Estudio ${out} times`);
+      if (out) throw new Error(`Tab left the Estudio and its top bar ${out} times`);
+      if (!bar) throw new Error('Tab never reached the top bar over the Estudio');
       if (!await page.evaluate(() => document.getElementById('board').inert)) throw new Error('the closed board is reachable with Tab');
       const at = await page.evaluate(() => { const a = document.activeElement; return a ? a.tagName + '.' + a.className : ''; });
       await page.keyboard.press('Shift+Slash'); await page.waitForTimeout(300);
-      const sheet = await page.evaluate(() => !document.getElementById('keysOv').hidden && document.querySelectorAll('#keysOv .ks-row').length); if (!sheet) throw new Error('? did not open the shortcuts (focus on ' + at + ')');
+      const sheet = await page.evaluate(() => !document.getElementById('setOv').hidden && document.querySelectorAll('#setOv .sg-keys .ks-row').length); if (!sheet) throw new Error('? did not open the shortcuts in Ajustes (focus on ' + at + ')');
       await page.keyboard.press('Escape'); await page.waitForTimeout(300);
       if (await page.evaluate(() => [...document.body.children].some(c => c.inert && c.id === 'tpanel'))) throw new Error('the panel stayed inert after the windows closed');
-      return `40 Tabs inside the Estudio · board inert when closed · ${sheet} shortcuts`;
+      return `40 Tabs inside the Estudio and its bar (${bar} on the bar) · board inert when closed · ${sheet} shortcuts in Ajustes`;
+    });
+    await step('smoke: V4.5 — one view at a time under a top bar that stays; the brand goes home; the theme starts light and lives in Ajustes', async () => {
+      const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 5000 }).catch(() => { throw new Error(what); });
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      if (await page.evaluate(() => document.body.classList.contains('dark'))) throw new Error('the office opened dark: the default is light');
+      await page.keyboard.press('e'); await until(() => document.body.classList.contains('studioOpen'), 'E did not open the Estudio');
+      await page.click('#topCal'); await until(() => document.body.classList.contains('calOpen') && !document.body.classList.contains('studioOpen'), 'the calendar button did nothing over the Estudio');
+      const top = await page.evaluate(() => [Math.round(document.getElementById('calOv').getBoundingClientRect().top), document.elementFromPoint(innerWidth - 60, 26)?.closest('#topbar') ? 1 : 0]);
+      if (top[0] < 52 || !top[1]) throw new Error('the calendar covers the top bar: ' + top);
+      await page.click('#topBrain'); await until(() => document.body.classList.contains('brainOpen') && !document.body.classList.contains('calOpen'), 'the Brain button did not switch from the calendar');
+      if (await page.evaluate(() => document.getElementById('topBrain').getAttribute('aria-pressed')) !== 'true') throw new Error('the button of the open view is not pressed');
+      await page.keyboard.press('p'); await until(() => document.body.classList.contains('calOpen') && !document.body.classList.contains('brainOpen'), 'P did not switch from the Brain to the calendar');
+      await page.click('#topbar .brand'); await until(() => !document.body.classList.contains('calOpen') && !document.body.classList.contains('brainOpen') && !document.body.classList.contains('studioOpen'), 'the brand did not go back to the office');
+      await page.keyboard.press(','); await until(() => !document.getElementById('setOv').hidden, ', did not open Ajustes');
+      await page.click('#sgt-apariencia'); await page.click('.sg-th:has(input[value="dark"])'); await until(() => document.body.classList.contains('dark'), 'Oscuro did not darken the office');
+      await page.click('.sg-th:has(input[value="light"])'); await until(() => !document.body.classList.contains('dark'), 'Claro did not bring the light back');
+      const saved = await page.evaluate(() => localStorage.getItem('ao.theme'));
+      await page.keyboard.press('Escape'); await until(() => document.getElementById('setOv').hidden, 'Esc did not close Ajustes');
+      return `Estudio → calendario → Cerebro → calendario → oficina · bar always there · theme Oscuro/Claro applied, saved «${saved}»`;
+    });
+    await step('smoke: V4.5 — Dimitri brings the centre closer and the Brain and Dimitri grow with it', async () => {
+      await page.evaluate(() => { document.activeElement && document.activeElement.blur(); window.CC.zoomOut(); }); await page.waitForTimeout(900);
+      const w0 = await page.evaluate(() => document.querySelector('.brainTag').getBoundingClientRect().width);
+      await page.click('.brainTag .bt-dim'); await page.waitForFunction(() => !document.getElementById('subOv').hidden, null, { timeout: 4000 });
+      await page.waitForFunction(() => window.CC.view.zoom > 2.9, null, { timeout: 10000 }).catch(() => {}); await page.waitForTimeout(400); // software WebGL: the first frames after a theme change are slow
+      const r = await page.evaluate(() => { const t = document.querySelector('.brainTag').getBoundingClientRect(), s = document.getElementById('subOv').getBoundingClientRect(); return { w: t.width, left: t.left, chat: s.right, zoom: window.CC.view.zoom }; });
+      if (r.zoom < 2) throw new Error('the centre did not come closer: zoom ' + r.zoom.toFixed(2));
+      if (!(r.w > w0 * 1.05)) throw new Error(`the Brain and Dimitri did not grow: ${Math.round(w0)} → ${Math.round(r.w)} px`);
+      if (r.left < r.chat - 1) throw new Error(`the centre sits under Dimitri's chat: tag at ${Math.round(r.left)}, chat ends at ${Math.round(r.chat)}`);
+      await page.keyboard.press('Escape'); await page.waitForTimeout(300); await page.evaluate(() => window.CC.zoomOut()); await page.waitForTimeout(700);
+      return `${Math.round(w0)} → ${Math.round(r.w)} px at zoom ${r.zoom.toFixed(1)} · clear of Dimitri's chat`;
     });
     await step('smoke: V4.1 — on a phone the whole office fits above the task sheet, with one-line department cards', async () => {
       const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
@@ -614,8 +647,10 @@ await step('estudio: the free test engine generates, files are stored with their
     const all = md.list(); if (all.length !== 2 || !all[0].prompt) throw new Error('list: ' + all.length);
     if (!md.resolve(all[0].file)) throw new Error('resolve a real file');
     for (const bad of ['../../office.config.json', '2026-09/../../x.png', 'C:/Windows/win.ini', '2026-09/a.exe']) if (md.resolve(bad)) throw new Error('escaped: ' + bad);
-    let refused = ''; try { await md.generate({ prompt: 'x', provider: 'gemini' }); } catch (e) { refused = e.message; }
-    if (!/GEMINI_API_KEY/.test(refused) && !process.env.GEMINI_API_KEY) throw new Error('a provider with no key must say which key: ' + refused);
+    // V4.5: the key is taken away for this one call — with the owner's GEMINI_API_KEY set, this line generated (and paid for) a real image on every check
+    let refused = ''; const gk = process.env.GEMINI_API_KEY; delete process.env.GEMINI_API_KEY;
+    try { await md.generate({ prompt: 'x', provider: 'gemini' }); } catch (e) { refused = e.message; } finally { if (gk !== undefined) process.env.GEMINI_API_KEY = gk; }
+    if (!/GEMINI_API_KEY/.test(refused)) throw new Error('a provider with no key must say which key: ' + refused);
     if (!md.trash(all[1].file) || md.list().length !== 1) throw new Error('trash');
     return `2 test images · record · no path escapes · no key → «${refused.slice(0, 40)}…»`;
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

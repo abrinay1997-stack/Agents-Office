@@ -27,6 +27,7 @@ bottom-left and a licence line along the bottom; leave them in place.
 
 ## Latest updates
 
+- **V4.5: one bar to get around, your theme, Estudio caps in Settings** — 27 Sep 2026 · The Estudio, the calendar and the Brain are views under a top bar that never goes away: one is open at a time, and a click on another icon (or E, P, G) switches to it — the calendar used to stay shut while the Estudio was open, and the calendar and the Brain covered the bar. The Brain has its own icon in the dock, and your business name takes you home. Settings (key `,`) gain **Apariencia** — Claro (the default), Oscuro or Automático, which follows your system — and **Atajos de teclado**, the list `?` still opens; the keyboard button and the D key are gone. Opening Dimitri brings the centre closer, beside his chat, and the Brain and Dimitri grow as you come near instead of shrinking. Every Estudio card has **Usar de referencia** beside Animar, Descargar and the bin. The Estudio's caps live in **Settings → Estudio**: generations a day (0 = no cap) and, new, a spending limit in US$ a day and a month, checked before anything is sent.
 - **V4.4: Google video, and an Estudio that is easier to read** — 27 Sep 2026 · With the same `GEMINI_API_KEY` as Nano Banana you now get Nano Banana 2, 2 Lite and Pro, and **video with Veo 3.1, Fast and Lite** (sound included; Veo needs billing on the AI Studio project). The viewer shows the picture and its text side by side, never one over the other. Each card has Animar, Descargar and the bin as icons, the rest under «⋯». The model list sorts by quality, price, speed or maker, filters by maker and says what each model is for.
 - **V4.4: every Higgsfield model, built from its own documentation** — 25 Sep 2026 · The Estudio's Higgsfield catalog now comes from Higgsfield's published schemas: 53 models (Cinema Studio 4.0, Marketing Studio, Kling O3/O1 with references and video edit, Genjutsu, Recraft Pro/Utility, Qwen edit, LTX from an image, and more), and every request carries only fields and values Higgsfield accepts — 37 kinds of request used to be refused. Card actions no longer cover the picture; the Estudio has a **Papelera** you can open (recover or delete for good within 30 days); a new picture never shows an old one.
 - **V4.4: an office that knows your business** — 25 Sep 2026 · Settings (key `,`) replace the JSON files: security, approvals, costs, notices, connectors, quality and your team, plus your company's figures (prices, commissions, goals the agents use as they are), your brand voice, and «set it up from my website». Drop a PDF, Word, Excel or CSV on the Brain and it becomes a note every agent can read; the Brain searches by passage, and by meaning when an embeddings key is present, and flags notes that may be out of date. «How the business is doing» (key N) tracks your own indicators (by hand, by webhook, or from a line `KPI id = value` in a deliverable). Tasks can go to a person on your team, carry comments with @mentions, and a job you liked can be saved as an example for that agent. Ctrl+K searches everything; Dimitri sends a Monday summary; `Instalar-Oficina.bat` installs the office on a new Windows PC (`docs/instalar.md`).
@@ -348,12 +349,15 @@ shape. Every generation is a background job: close the window, it keeps going; a
 - **Engines** switch on with a key in your Windows environment, never in a file: `HF_KEY` (Higgsfield, "id:secret"),
   `GEMINI_API_KEY` (Nano Banana), `OPENAI_API_KEY`, `XAI_API_KEY` (Grok), `FAL_KEY` (fal.ai). Restart the office after
   setting one. The free *Prueba* engines let you try the whole flow without a key.
-- **Animar** (🎬 on any image) opens a video model that takes a start frame, with the image in it. **⊕** uses an image as a
-  reference (your product, your logo). **⇪ Subir** or drag-and-drop adds your own photos and videos.
+- **Animar** (🎬 on any image) opens a video model that takes a start frame, with the image in it. **Usar de referencia**
+  (the picture with a +, beside it on every card) puts an image in the references of the next one (your product, your logo).
+  **⇪ Subir** or drag-and-drop adds your own photos and videos.
 - **The agents** of Marketing, Delivery, Sales and Operations get the Estudio as a tool (`media.departments`). A video an
   agent starts keeps generating after its run; the office puts it into the deliverable when it is ready.
-- A daily cap (`media.dailyLimit`, a video counts 5) and a cost estimate before anything over a dollar. Put a spending
-  limit on each service's own site as well.
+- Caps in **Settings → Estudio** (key `,`, or the counter at the top of the Estudio): generations a day (`media.dailyLimit`,
+  a video counts 5, 0 = no cap) and a spending limit in US$ a day and a month (`media.dailyBudget`, `media.monthlyBudget`,
+  0 = none), checked with each model's estimated price before a request is sent, counting what is still generating. A cost
+  estimate asks first from US$0.50. Put a spending limit on each service's own site as well.
 
 ## Which model, and how much of your plan
 
@@ -412,8 +416,9 @@ every note they read, so your graph grows as the office works.
 | `C` | Chat with the department lead |
 | `X` | Send two agents to meet at the Brain |
 | `V` | Full screen view with dimmed lighting |
-| `D` | Dark mode (remembered on this browser). http://localhost:4520/dark opens in it |
-| `?` | Every key in one sheet (also the keyboard button in the top bar); each line does it |
+| `,` | Settings — including **Apariencia** (Claro, Oscuro, Automático; remembered on this browser; http://localhost:4520/dark opens dark once) and the Estudio's caps |
+| `?` | Every key, in Settings → Atajos de teclado; each line does it |
+| `E` `P` `G` | With the Estudio, the calendar or the Brain open: switch between them (the top bar stays) |
 | `Esc` | Back |
 
 ## The build loop

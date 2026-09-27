@@ -931,7 +931,7 @@ const LOCAL_CFG = process.env.AO_LOCAL_CONFIG || path.join(ROOT, 'office.config.
 function saveSettings(changes) { // J5, I10: validated, written to office.config.local.json, applied now (a few need a restart)
   let local = {}; try { local = JSON.parse(fs.readFileSync(LOCAL_CFG, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') return { errors: ['office.config.local.json no es JSON válido: arréglalo antes de guardar desde aquí'] }; }
   const r = settings.apply(local, changes);
-  if (Object.keys(changes || {}).length > r.errors.length) { fs.writeFileSync(LOCAL_CFG + '.tmp', JSON.stringify(r.local, null, 2) + '\n'); fs.renameSync(LOCAL_CFG + '.tmp', LOCAL_CFG); Object.assign(cfg, loadConfig()); }
+  if (Object.keys(changes || {}).length > r.errors.length) { fs.writeFileSync(LOCAL_CFG + '.tmp', JSON.stringify(r.local, null, 2) + '\n'); fs.renameSync(LOCAL_CFG + '.tmp', LOCAL_CFG); Object.assign(cfg, loadConfig()); media.setLimits(cfg.media || {}); } // V4.5: the Estudio's caps apply at once
   return { ok: true, errors: r.errors, restart: r.restart };
 }
 // H4: the company's figures — one place for prices, commissions, goals, hours; every agent reads them before working
@@ -1644,7 +1644,7 @@ server.listen(cfg.port, HOST, () => {
   setInterval(tickRoutines, 20000); tickRoutines();
   setInterval(pump, 5000); setTimeout(pump, 1500); // pending work left by a restart, or added while every seat was busy
   { const on = media.engines().filter(p => p.on && p.id !== 'prueba'), n = media.models().filter(m => m.on && m.engine !== 'prueba').length, act = media.jobs({ active: true }).length;
-    console.log(`  estudio: ${on.length ? on.map(p => p.name).join(', ') + ` (${n} models)` : 'no key yet (only the free «prueba» engines) — setx HF_KEY / GEMINI_API_KEY / XAI_API_KEY / OPENAI_API_KEY / FAL_KEY'} · for ${STUDIO_DEPTS.join(', ') || 'nobody'} · ${media.budget().left}/${media.budget().limit} left today${act ? ` · ${act} job${act > 1 ? 's' : ''} in progress` : ''}`); }
+    console.log(`  estudio: ${on.length ? on.map(p => p.name).join(', ') + ` (${n} models)` : 'no key yet (only the free «prueba» engines) — setx HF_KEY / GEMINI_API_KEY / XAI_API_KEY / OPENAI_API_KEY / FAL_KEY'} · for ${STUDIO_DEPTS.join(', ') || 'nobody'} · ${(b => b.left == null ? 'no daily cap' : `${b.left}/${b.limit} left today`)(media.budget())}${act ? ` · ${act} job${act > 1 ? 's' : ''} in progress` : ''}`); }
   console.log(`  engine: the server runs every task · ${MAX_RUNS} at once, one per agent (office.config.json → concurrency)`); // the clock: every 20 s; the first tick catches up anything missed while the office was off (once, marked LATE)
   console.log(`  agents: 35 (${roster.customised} customised${roster.briefed ? ', ' + roster.briefed + ' briefed' : ''}${roster.files.length ? ' via ' + roster.files.join(' + ') : ''})   tools: ${backend === 'claude-cli' ? 'connected MCP servers' + (cfg.tools?.web === false ? '' : ' + web') + (mcp.browserOn() ? ' + the owner\'s Chrome (' + (mcp.browserState().installed ? 'extension paired' + (mcp.browserState().device ? ': ' + mcp.browserState().device : '') : 'extension NOT paired — run `claude --chrome` once') + ')' : '') : 'none on the API backend'}`);
   console.log(`  teams: ${TEAMS.enabled ? 'on — TEAM in the bar or "as a team" in the sentence; the lead splits it across up to ' + TEAMS.max + ' desks' : 'off (teams.enabled in office.config.json)'}`);
