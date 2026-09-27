@@ -546,7 +546,9 @@ else {
       await page.click('#topBrain'); await until(() => document.body.classList.contains('brainOpen') && !document.body.classList.contains('calOpen'), 'the Brain button did not switch from the calendar');
       if (await page.evaluate(() => document.getElementById('topBrain').getAttribute('aria-pressed')) !== 'true') throw new Error('the button of the open view is not pressed');
       await page.keyboard.press('p'); await until(() => document.body.classList.contains('calOpen') && !document.body.classList.contains('brainOpen'), 'P did not switch from the Brain to the calendar');
+      await page.evaluate(() => window.CC.view.zoom = 2.6); // zoomed in behind the calendar: the brand must also bring back the whole office
       await page.click('#topbar .brand'); await until(() => !document.body.classList.contains('calOpen') && !document.body.classList.contains('brainOpen') && !document.body.classList.contains('studioOpen'), 'the brand did not go back to the office');
+      await page.waitForFunction(() => window.CC.view.zoom < 1.2, null, { timeout: 8000 }).catch(() => { throw new Error('the brand closed the view but did not fly back to the overview'); });
       await page.keyboard.press(','); await until(() => !document.getElementById('setOv').hidden, ', did not open Ajustes');
       await page.click('#sgt-apariencia'); await page.click('.sg-th:has(input[value="dark"])'); await until(() => document.body.classList.contains('dark'), 'Oscuro did not darken the office');
       await page.click('.sg-th:has(input[value="light"])'); await until(() => !document.body.classList.contains('dark'), 'Claro did not bring the light back');

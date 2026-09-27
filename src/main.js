@@ -1740,9 +1740,13 @@ const finder = initSearch({ served: SERVED, esc, agents: AGENTS, // V4.4 (J7): C
 document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
 document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)
 // V4.5 (27 Sep 2026): the top bar is the way around — one view at a time under it (src/views.js); the brand is the way home
+// (27 Sep 2026, the owner: «que se viera la oficina en la vista general»): home is the whole office — the view closes, Dimitri's
+// chat and a department's chat close, and the camera flies back to the overview, all in one click
 document.querySelector('#topbar .brand').addEventListener('click', () => {
   const v = views.current();
-  if (v === 'studio') studio.close(); else if (v === 'cal') tasks.calendar.close(); else if (v === 'brain') brain.close(); else zoomOut();
+  if (v === 'studio') studio.close({ quiet: true }); else if (v === 'cal') tasks.calendar.close({ quiet: true }); else if (v === 'brain') brain.close({ quiet: true });
+  if (subger.isOpen()) subger.close();
+  zoomOut();
 });
 const hero = HERO ? initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;
 if (HERO && HERO.target) { view.target.set(...HERO.target); view.zoom = HERO.zoom || view.zoom; }
