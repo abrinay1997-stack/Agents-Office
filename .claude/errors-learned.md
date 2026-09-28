@@ -116,4 +116,95 @@
 **Fix aplicado:** Para cambios con acentos, usar la herramienta Edit o un archivo `.py` escrito con Write (que Python lee como UTF-8).
 **Prevención:** Nada con caracteres no ASCII por heredoc en Windows.
 **Archivos:** —
+**Nota (2026-09-27):** con `python -` (el script entero por stdin, heredoc entre comillas `<<'EOF'`) los acentos llegaron bien: Python lee el código fuente como UTF-8. El problema es con `python -c` o al leer texto de stdin como datos. Igual, comprobar con `grep "Ã\|â€"` después.
 
+## [2026-09-27] — La cámara volaba hacia atrás un cuadro al empezar un vuelo
+
+**Contexto:** Al abrir a Dimitri se acerca el centro (`enterFocus('brain')` → `flyTo`); una prueba medía el zoom cada 150 ms.
+**Error:** El zoom pasaba de 0,51 a −0,54 y luego a 3,1: un zoom negativo por un momento (en un navegador normal, un tirón de un cuadro hacia afuera antes de acercarse).
+**Causa raíz:** `tickTween(now)` recibe la hora del cuadro de `requestAnimationFrame`, que empezó ANTES del clic que llamó a `flyTo` (`t0 = performance.now()`). El progreso `k` salía negativo y la curva de easing devuelve valores negativos fuera de [0, 1].
+**Fix aplicado:** `k = Math.min(1, Math.max(0, (now - t0) / dur))`.
+**Prevención:** Toda animación que mezcle `performance.now()` de un evento con la hora de rAF debe acotar el progreso a [0, 1].
+**Archivos:** `src/main.js` (tickTween)
+
+## [2026-09-27] — Tab se atascaba o se escapaba con una vista abierta
+
+**Contexto:** V4.5: Estudio, Calendario y Cerebro son vistas bajo la barra superior; `modal.js` deja la barra fuera de lo inerte y Tab recorre barra + vista.
+**Error:** `npm run check`: «Tab left the Estudio and its top bar 1 times»; luego, Tab se quedaba quieto en un `<summary>`.
+**Causa raíz:** (1) Un aviso con DESHACER lleva `data-modal-keep` (nunca inerte) y está en la página entre la barra y la vista: el navegador lo visitaba al salir del último icono de la barra. (2) Un botón dentro de un `<details>` cerrado tiene cajas (`getClientRects` no vacío) pero no acepta el foco, y la lista de «enfocables» lo incluía.
+**Fix aplicado:** Con una vista arriba, `modal.js` lleva el orden de Tab él mismo (paso a paso por la lista, saltando lo que no acepte el foco) y excluye lo que está dentro de un `<details>` cerrado.
+**Prevención:** Si se deja algo fuera de lo inerte, controlar el orden de Tab en vez de confiar en el orden del DOM; «visible» no es «enfocable».
+**Archivos:** `src/modal.js`
+
+## [2026-09-27] — `npm run check` generaba (y cobraba) una imagen real de Gemini
+
+**Contexto:** El paso «estudio: the free test engine generates…» de `check.mjs` comprueba que un motor sin key avisa de cuál falta, pidiendo una imagen a `gemini`.
+**Error:** «✗ … — trash» en cada check de esta máquina; a la vez, una imagen de verdad en la cuenta de Google del dueño (≈US$0,04) por cada ejecución.
+**Causa raíz:** El dueño ya tiene `GEMINI_API_KEY` en Windows: el pedido «sin key» salió de verdad, la imagen extra entró en la galería de prueba y la cuenta de la papelera ya no daba 1. La condición `!process.env.GEMINI_API_KEY` solo esquivaba el mensaje, no el gasto.
+**Fix aplicado:** Quitar `GEMINI_API_KEY` del entorno solo durante esa llamada y devolverla en `finally`.
+**Prevención:** Una prueba que «no debe tener key» la quita ella misma; nunca confía en que la máquina no la tenga. Las pruebas de motores de pago usan un sustituto local (`HF_API_BASE_URL`, `AO_GEMINI_BASE`, `AO_FAL_QUEUE`).
+**Archivos:** `check.mjs` (paso del motor de prueba)
+
+## [2026-09-27] — `hidden` no ocultaba el botón Guardar de Ajustes
+
+**Contexto:** Las pestañas nuevas de Ajustes (Apariencia, Atajos) se aplican al instante y no deben mostrar «Guardar».
+**Error:** El botón seguía a la vista aunque tenía `hidden` (también pasaba en «Preparar desde mi web»).
+**Causa raíz:** `.sg-btn { display: inline-flex }` gana al `display: none` que el navegador da a `[hidden]`.
+**Fix aplicado:** `.sg-btn[hidden], .bz-btn[hidden] { display: none; }`.
+**Prevención:** Toda clase que fije `display` en un elemento que se oculta con `hidden` necesita su regla `[hidden]`.
+**Archivos:** `src/shell.html`
+
+
+## [2026-09-27] — Clicar una nota del Cerebro fallaba siempre por 52 px
+
+**Contexto:** V4.5 bajó las vistas (Estudio, Calendario, Cerebro) bajo la barra superior (`inset: 52px 0 0 0`).
+**Error:** El dueño: «cuando intento cliquear algún archivo es muy difícil». Casi nunca abría la nota.
+**Causa raíz:** El Cerebro 2D comparaba `clientX/clientY` (coordenadas de la página) con posiciones dibujadas en coordenadas del lienzo; al bajar el lienzo 52 px, todo clic apuntaba 52 px por encima. Además el alcance era de 12 px sin sumar el radio del punto, un clic con 3 px de temblor contaba como arrastre y el clic abría el `hover` del último movimiento.
+**Fix aplicado:** El Cerebro 3D (`src/brain3d.js`) busca la nota en coordenadas del lienzo (`getBoundingClientRect`), con tolerancia de 16 px (26 táctil) más el radio de la neurona, toma la candidata al pulsar y la confirma al soltar; un arrastre es > 5 px (10 táctil). Los nombres también se pueden clicar.
+**Prevención:** Al mover un contenedor de un lienzo interactivo, revisar su detección de clic. Regla en CLAUDE.md (reglas de la interfaz).
+**Archivos:** `src/brain3d.js` (pickAt, pointerdown/up)
+
+## [2026-09-27] — Una nota nueva movía todo el Cerebro 3D
+
+**Contexto:** `layout3D` con posiciones previas (`prev`) al llegar una nota nueva.
+**Error:** Prueba «a new note joins beside its neighbour and the others keep their place»: una nota vieja se movió 1,49 (medio cerebro).
+**Causa raíz:** Las regiones se ordenaban por número de notas: una nota más cambiaba el orden, todas las anclas se movían y el asentado de 90 vueltas arrastraba a todas las notas.
+**Fix aplicado:** Con posiciones previas solo se mueven las notas nuevas y sus vecinas; las regiones salen de la afinidad de enlaces; la rejilla se adapta al número de notas (2.000 notas: 6,7 s → 1,2 s la primera vez; una nota nueva 1,7 s → 25 ms). Las posiciones se recuerdan en el navegador (`ao.bv.pos`).
+**Prevención:** En una disposición incremental, lo ya colocado queda fijo; probarlo con un test de «no se mueve».
+**Archivos:** `src/brain3d.js` (layout3D, regionAnchors), `tests/brain3d.test.mjs`
+
+## [2026-09-27] — Los heredocs con comillas simples dentro fallan en la consola de Bash de esta máquina
+
+**Contexto:** Pasar CSS o JS con `content: ''` o `'\u0001'` por `cat > archivo <<'EOF'`.
+**Error:** `unexpected EOF while looking for matching '` aunque el heredoc tenía el delimitador entre comillas.
+**Causa raíz:** La herramienta revisa el equilibrio de comillas del comando entero antes de ejecutarlo, sin entender los heredocs.
+**Fix aplicado:** Escribir esos archivos con la herramienta Write (y los scripts de Python también), y ejecutarlos después.
+**Prevención:** Nada con comillas simples sueltas dentro de un heredoc; archivos auxiliares, con Write.
+**Archivos:** —
+
+## [2026-09-27] — Un comentario `//` metido a mitad de línea anuló el código que seguía
+
+**Contexto:** Parches con Python que añadían una explicación a líneas largas de una sola línea (`src/studio.js` closeMenus; `src/brain3d.js` setData).
+**Error:** esbuild: «Expected ")" but found end of file»; la segunda vez no hubo error de compilación: el Cerebro 3D se quedó sin posiciones (`P = layout3D(...)` quedó comentado), sin nombres visibles y con «computeBoundingSphere(): Computed radius is NaN».
+**Causa raíz:** Un `// comentario` insertado en medio de una línea convierte en comentario todo lo que sigue en esa línea.
+**Fix aplicado:** `/* comentario */` en su lugar.
+**Prevención:** En una línea que sigue después del punto de inserción, solo comentarios de bloque `/* */`. Un `//` va únicamente al final real de la línea. Tras parchear, `node build.mjs` y una prueba que ejercite lo tocado.
+**Archivos:** `src/studio.js` (closeMenus), `src/brain3d.js` (setData)
+
+## [2026-09-28] — GitHub Actions en rojo desde el 25 sep: los PDF no se leían con Node 20
+
+**Contexto:** Al abrir el PR #3, «All checks have failed»; los commits desde V4.4 tanda 6 (25 sep) ya salían con 0/1 OK.
+**Error:** `not ok — a PDF with text is read page by page · Promise.withResolvers is not a function` en `npm test` (GitHub usa Node 20).
+**Causa raíz:** `pdfjs-dist` 6 usa `Promise.withResolvers`, que Node tiene solo desde la 22. En la máquina del dueño (Node 22) todo pasaba; con Node 20 (lo que pide la guía de instalación) subir un PDF al Cerebro fallaba.
+**Fix aplicado:** Un relleno de `Promise.withResolvers` en `documents.mjs` antes de cargar pdfjs. Probado con `npx -y node@20 --test` y `npx -y node@20 check.mjs` en una copia limpia de la rama (90/90, 74/74).
+**Prevención:** Antes de un PR, correr las pruebas con la versión mínima de Node (`npx -y node@20 --test`); mirar el estado de GitHub Actions de la rama, no solo el check local.
+**Archivos:** `documents.mjs` (toMarkdown, rama pdf)
+
+## [2026-09-28] — En GitHub faltaba el mosaico de Chrome (73/74)
+
+**Contexto:** Pull Request #3 (`mejora/estudio-carpetas` → `main`); GitHub Actions corre `npm run check` en Ubuntu.
+**Error:** «server: /api/health says teams and the browser are on; the bar has the Chrome tile — chrome not in /api/mcp».
+**Causa raíz:** El mosaico de Chrome solo se añadía cuando `claude mcp list` respondía. En la máquina de GitHub no hay Claude Code: `spawn` falla, `discover()` termina con `null` y la lista queda vacía, sin Chrome, aunque `tools.browser` esté activado. En esta PC nunca se veía porque Claude Code sí está.
+**Fix aplicado:** `discover()` aplica `withBrowser` también cuando no hay respuesta; el mosaico sigue a `tools.browser` siempre. Test: `tests/mcp-browser.test.mjs` (con `CLAUDE_BIN` apuntando a un programa que no existe).
+**Prevención:** Lo que la página muestra por configuración no debe depender de que un programa externo responda. Probar el camino «sin Claude CLI» con `CLAUDE_BIN` falso.
+**Archivos:** `mcp.mjs` (discover → finish), `tests/mcp-browser.test.mjs`

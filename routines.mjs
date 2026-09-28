@@ -16,6 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, nextRun, valid } from './src/when.js';
+import { missedRuns } from './reliability.mjs';
 
 export const ALLOWED = ['emails', 'fin', 'sales', 'marketing', 'ops', 'delivery']; // 24 Sep 2026: every department (was emails/fin/sales) — the owner's content work runs on a timetable too
 export const NAMES = { emails: 'Emails', fin: 'Accounting', sales: 'Sales', marketing: 'Marketing', ops: 'Operations', delivery: 'Delivery' };
@@ -50,6 +51,10 @@ export function validate(r, agents, existing = []) {
   if (!valid(out.when)) problems.push(`${out.id}: the schedule is not complete (${JSON.stringify(r.when || null)}) — see src/when.js`);
   out.needsOk = r.needsOk !== false;
   out.paused = r.paused === true;
+  if (r.autonomous === true) out.autonomous = true; // V4.4 (G2): earned after N clean approvals — it sends without asking (amounts over the limit still wait)
+  if (Number.isFinite(+r.minutesSaved) && +r.minutesSaved > 0) out.minutesSaved = +r.minutesSaved; // V4.4 (C2)
+  if (r.catchUp === false) out.catchUp = false; // V4.4 (B2): a missed run (the computer slept) is skipped, not done late — for things that only make sense on time
+  if (Number.isFinite(+r.timeout) && +r.timeout > 0) out.timeout = Math.max(60, Math.min(3600, +r.timeout)); // V4.4 (B4): seconds for this routine's run
   if (Array.isArray(r.plan)) out.plan = r.plan.slice(0, 4).map(String);
   if (r.team === true) { // V3.2 (16 Sep): a team routine — the department lead splits it across the desks, so the lead owns it
     out.team = true; const lead = agents.find(x => x.department === out.dept && x.lead);
@@ -100,7 +105,7 @@ export function patchFile(brainPath, id, patch) {
 
 /* ---------- run state: data/routines.json → { [id]: { nextAt, lastAt, runs, lastTaskId } } ---------- */
 export const loadState = dataDir => readJSON(stateFile(dataDir), {});
-export function saveState(dataDir, st) { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(stateFile(dataDir), JSON.stringify(st, null, 2)); }
+export function saveState(dataDir, st) { fs.mkdirSync(dataDir, { recursive: true }); const f = stateFile(dataDir); fs.writeFileSync(f + '.tmp', JSON.stringify(st, null, 2)); fs.renameSync(f + '.tmp', f); } // V4.4 (B9): write, then rename — never half a file
 
 /** Give every routine a nextAt (new ones: the next due time from now). Returns the merged view the API serves. */
 export function withState(routines, st, now = Date.now()) {
@@ -125,7 +130,10 @@ export function due(routines, st, now = Date.now()) {
     if (Array.isArray(s.skip) && s.skip.includes(s.nextAt)) { // the owner skipped this one run: the clock moves on without firing
       s.skip = s.skip.filter(x => x !== s.nextAt); s.skippedAt = s.nextAt; s.nextAt = nextRun(r.when, Math.max(now, s.nextAt)); hits.push({ routine: r, skipped: true }); continue;
     }
-    hits.push({ routine: r, due: s.nextAt, late: now - s.nextAt > LATE_AFTER });
+    const late = now - s.nextAt > LATE_AFTER;
+    const missed = late ? missedRuns(s.nextAt, now, t => nextRun(r.when, t)) : 0; // V4.4 (B2): how many runs the sleep swallowed
+    if (late && r.catchUp === false) { s.missedAt = s.nextAt; s.missed = (s.missed || 0) + missed; s.nextAt = nextRun(r.when, now); hits.push({ routine: r, skipped: true, missed }); continue; }
+    hits.push({ routine: r, due: s.nextAt, late, missed });
   }
   return hits;
 }

@@ -37,6 +37,34 @@ await step('build: graph has linked notes', async () => {
   return `${BRAIN.notes} notes · ${BRAIN.nodes.length} linked · ${BRAIN.links.length} links`;
 });
 
+/* ---------- 1a. V4.4: the unit tests, the secrets check, the agents' safety rules ---------- */
+await step('tests: npm test (safety rules, the guard, the secrets check)', async () => {
+  const out = await sh('node', ['--test']).catch(e => { throw new Error('a test failed — run npm test to see which: ' + e.message); });
+  const n = /# pass (\d+)/.exec(out)?.[1], f = /# fail (\d+)/.exec(out)?.[1];
+  if (f && +f) throw new Error(`${f} test(s) failed — npm test`);
+  return `${n} tests pass`;
+});
+await step('secrets: nothing that looks like a key, a card or an ID card in the repository', async () => {
+  await sh('node', ['scripts/install-hooks.mjs']); // the pre-commit check, on this machine too
+  const out = await sh('node', ['scripts/secrets-scan.mjs', '--all']).catch(e => { throw new Error(e.message + ' — npm run secrets'); });
+  return out.trim();
+});
+await step('costs: the price table is recent (models and prices change often)', async () => {
+  const C = await import('./costs.mjs'); const days = Math.floor((Date.now() - Date.parse(C.PRICES_AS_OF)) / 864e5);
+  if (days > 90) throw new Error(`la tabla de precios de costs.mjs es del ${C.PRICES_AS_OF} (${days} días): revísala con las páginas oficiales de cada proveedor`);
+  return `${C.PRICES.length} modelos · precios al ${C.PRICES_AS_OF} · ${[...new Set(C.PRICES.map(p => p.provider))].join(', ')}`;
+});
+await step('triggers: <brain>/Agents Office/triggers.json is valid', async () => {
+  const T = await import('./triggers.mjs'); const { loadRoster } = await import('./roster.mjs');
+  const r = T.load(cfg.brainPath, loadRoster().agents); if (r.problems.length) throw new Error(r.problems.join(' | '));
+  return r.triggers.length ? `${r.triggers.length} disparador(es): ${r.triggers.map(t => t.id).join(', ')}` : 'ninguno todavía (docs/disparadores.md)';
+});
+await step('safety: office.config → safety is valid (who may send, sites, caps)', async () => {
+  const S = await import('./safety.mjs'); const p = S.problems(cfg.safety || {}); if (p.length) throw new Error(p.join(' | '));
+  const n = S.normalize(cfg.safety);
+  return `envíos: ${n.writes}${Object.keys(n.departments).length ? ' · ' + Object.entries(n.departments).map(([d, v]) => d + ' ' + v).join(', ') : ''} · Chrome: ${n.browserSites.length ? n.browserSites.length + ' sitios permitidos' : 'cualquier sitio'}${n.browserBlock.length ? ', ' + n.browserBlock.length + ' prohibidos' : ''} · topes ${n.limits.perAgentDay}/agente y ${n.limits.perRecipientDay}/destinatario al día`;
+});
+
 /* ---------- 1b. the roster + the connector parser ---------- */
 await step('roster: office.agents.json validates', async () => {
   const { loadRoster } = await import('./roster.mjs');
@@ -466,6 +494,22 @@ else {
       if (await page.evaluate(() => window.CC.brain.isOpen())) throw new Error('graph did not close');
       return n + ' notes';
     });
+    await step('smoke: V4.6 — the Brain in 3D: a click on a neuron opens its card, the card hides and comes back, Esc closes the card before the Brain', async () => {
+      const until = (fn, what, ms = 8000) => page.waitForFunction(fn, null, { timeout: ms }).catch(() => { throw new Error(what); });
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('g'); await until(() => document.body.classList.contains('brainOpen') && document.querySelector('#bvStage canvas'), 'G did not open the 3D Brain');
+      await until(() => document.querySelectorAll('.bv3-lab:not([hidden])').length > 0, 'no names on the neurons');
+      const dot = await page.evaluate(() => { const b = document.querySelector('.bv3-lab:not([hidden])'), r = b.getBoundingClientRect(); return { x: r.left - 9, y: r.top + 9, name: b.textContent }; }); // the name sits 9 px right of and above its neuron
+      await page.mouse.click(dot.x, dot.y);
+      await until(() => !document.getElementById('bvPane').hidden, `a click on the neuron of «${dot.name}» did not open its card`);
+      const opened = await page.evaluate(() => document.querySelector('#bvPane h3')?.textContent);
+      await page.click('.bv-pfold'); await until(() => document.getElementById('bvPane').hidden && !document.getElementById('bvTab').hidden, 'the card did not hide to its tab');
+      await page.click('#bvTab'); await until(() => !document.getElementById('bvPane').hidden, 'the tab did not bring the card back');
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('Escape'); await until(() => document.getElementById('bvPane').hidden && document.body.classList.contains('brainOpen'), 'Esc closed the Brain instead of the card');
+      await page.keyboard.press('Escape'); await until(() => !document.body.classList.contains('brainOpen'), 'the second Esc did not close the Brain');
+      return `neuron «${dot.name}» → card «${opened}» · hides to a tab and back · Esc: card, then Brain`;
+    });
     await step('smoke: approval flow reaches the panel', async () => {
       await page.evaluate(() => { const all = document.querySelector('.tp-chip[data-f="all"]'); if (all) all.click(); }); // an earlier step leaves the panel on SCHEDULED
       await page.evaluate(() => window.CC.requestApproval('ada'));
@@ -492,23 +536,58 @@ else {
       await page.evaluate(() => document.querySelector('.tp-chip[data-f="all"]').click());
       return `${n0} archived · DESHACER brings them back · ARCHIVADAS ${a1} → ${a2}${cut.more ? ' · ' + cut.more : ''}`;
     });
-    await step('smoke: V4.1 — Tab stays inside an open window, the closed board is inert, ? opens the shortcuts', async () => {
+    await step('smoke: V4.1 — Tab stays inside an open view and its top bar, the closed board is inert, ? opens the shortcuts in Ajustes', async () => {
       await page.keyboard.press('e'); await page.waitForFunction(() => document.body.classList.contains('studioOpen'), null, { timeout: 4000 });
-      let out = 0; for (let i = 0; i < 40; i++) { await page.keyboard.press('Tab'); if (!await page.evaluate(() => document.getElementById('studioOv').contains(document.activeElement))) out++; }
+      if (await page.evaluate(() => document.getElementById('topbar').inert)) throw new Error('the top bar went inert under the Estudio (V4.5: a view keeps it)');
+      let out = 0, bar = 0; for (let i = 0; i < 40; i++) { await page.keyboard.press('Tab'); const w = await page.evaluate(() => document.getElementById('studioOv').contains(document.activeElement) ? 'v' : document.getElementById('topbar').contains(document.activeElement) ? 'b' : ''); if (!w) out++; if (w === 'b') bar++; }
       for (let i = 0; i < 3 && await page.evaluate(() => document.body.classList.contains('studioOpen')); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); } // Esc closes an open menu first, then the Estudio
-      if (out) throw new Error(`Tab left the Estudio ${out} times`);
+      if (out) throw new Error(`Tab left the Estudio and its top bar ${out} times`);
+      if (!bar) throw new Error('Tab never reached the top bar over the Estudio');
       if (!await page.evaluate(() => document.getElementById('board').inert)) throw new Error('the closed board is reachable with Tab');
       const at = await page.evaluate(() => { const a = document.activeElement; return a ? a.tagName + '.' + a.className : ''; });
       await page.keyboard.press('Shift+Slash'); await page.waitForTimeout(300);
-      const sheet = await page.evaluate(() => !document.getElementById('keysOv').hidden && document.querySelectorAll('#keysOv .ks-row').length); if (!sheet) throw new Error('? did not open the shortcuts (focus on ' + at + ')');
+      const sheet = await page.evaluate(() => !document.getElementById('setOv').hidden && document.querySelectorAll('#setOv .sg-keys .ks-row').length); if (!sheet) throw new Error('? did not open the shortcuts in Ajustes (focus on ' + at + ')');
       await page.keyboard.press('Escape'); await page.waitForTimeout(300);
       if (await page.evaluate(() => [...document.body.children].some(c => c.inert && c.id === 'tpanel'))) throw new Error('the panel stayed inert after the windows closed');
-      return `40 Tabs inside the Estudio · board inert when closed · ${sheet} shortcuts`;
+      return `40 Tabs inside the Estudio and its bar (${bar} on the bar) · board inert when closed · ${sheet} shortcuts in Ajustes`;
+    });
+    await step('smoke: V4.5 — one view at a time under a top bar that stays; the brand goes home; the theme starts light and lives in Ajustes', async () => {
+      const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 5000 }).catch(() => { throw new Error(what); });
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      if (await page.evaluate(() => document.body.classList.contains('dark'))) throw new Error('the office opened dark: the default is light');
+      await page.keyboard.press('e'); await until(() => document.body.classList.contains('studioOpen'), 'E did not open the Estudio');
+      await page.click('#topCal'); await until(() => document.body.classList.contains('calOpen') && !document.body.classList.contains('studioOpen'), 'the calendar button did nothing over the Estudio');
+      const top = await page.evaluate(() => [Math.round(document.getElementById('calOv').getBoundingClientRect().top), document.elementFromPoint(innerWidth - 60, 26)?.closest('#topbar') ? 1 : 0]);
+      if (top[0] < 52 || !top[1]) throw new Error('the calendar covers the top bar: ' + top);
+      await page.click('#topBrain'); await until(() => document.body.classList.contains('brainOpen') && !document.body.classList.contains('calOpen'), 'the Brain button did not switch from the calendar');
+      if (await page.evaluate(() => document.getElementById('topBrain').getAttribute('aria-pressed')) !== 'true') throw new Error('the button of the open view is not pressed');
+      await page.keyboard.press('p'); await until(() => document.body.classList.contains('calOpen') && !document.body.classList.contains('brainOpen'), 'P did not switch from the Brain to the calendar');
+      await page.evaluate(() => window.CC.view.zoom = 2.6); // zoomed in behind the calendar: the brand must also bring back the whole office
+      await page.click('#topbar .brand'); await until(() => !document.body.classList.contains('calOpen') && !document.body.classList.contains('brainOpen') && !document.body.classList.contains('studioOpen'), 'the brand did not go back to the office');
+      await page.waitForFunction(() => window.CC.view.zoom < 1.2, null, { timeout: 8000 }).catch(() => { throw new Error('the brand closed the view but did not fly back to the overview'); });
+      await page.keyboard.press(','); await until(() => !document.getElementById('setOv').hidden, ', did not open Ajustes');
+      await page.click('#sgt-apariencia'); await page.click('.sg-th:has(input[value="dark"])'); await until(() => document.body.classList.contains('dark'), 'Oscuro did not darken the office');
+      await page.click('.sg-th:has(input[value="light"])'); await until(() => !document.body.classList.contains('dark'), 'Claro did not bring the light back');
+      const saved = await page.evaluate(() => localStorage.getItem('ao.theme'));
+      await page.keyboard.press('Escape'); await until(() => document.getElementById('setOv').hidden, 'Esc did not close Ajustes');
+      return `Estudio → calendario → Cerebro → calendario → oficina · bar always there · theme Oscuro/Claro applied, saved «${saved}»`;
+    });
+    await step('smoke: V4.5 — Dimitri brings the centre closer and the Brain and Dimitri grow with it', async () => {
+      await page.evaluate(() => { document.activeElement && document.activeElement.blur(); window.CC.zoomOut(); }); await page.waitForTimeout(900);
+      const w0 = await page.evaluate(() => document.querySelector('.brainTag').getBoundingClientRect().width);
+      await page.click('.brainTag .bt-dim'); await page.waitForFunction(() => !document.getElementById('subOv').hidden, null, { timeout: 4000 });
+      await page.waitForFunction(() => window.CC.view.zoom > 2.9, null, { timeout: 10000 }).catch(() => {}); await page.waitForTimeout(400); // software WebGL: the first frames after a theme change are slow
+      const r = await page.evaluate(() => { const t = document.querySelector('.brainTag').getBoundingClientRect(), s = document.getElementById('subOv').getBoundingClientRect(); return { w: t.width, left: t.left, chat: s.right, zoom: window.CC.view.zoom }; });
+      if (r.zoom < 2) throw new Error('the centre did not come closer: zoom ' + r.zoom.toFixed(2));
+      if (!(r.w > w0 * 1.05)) throw new Error(`the Brain and Dimitri did not grow: ${Math.round(w0)} → ${Math.round(r.w)} px`);
+      if (r.left < r.chat - 1) throw new Error(`the centre sits under Dimitri's chat: tag at ${Math.round(r.left)}, chat ends at ${Math.round(r.chat)}`);
+      await page.keyboard.press('Escape'); await page.waitForTimeout(300); await page.evaluate(() => window.CC.zoomOut()); await page.waitForTimeout(700);
+      return `${Math.round(w0)} → ${Math.round(r.w)} px at zoom ${r.zoom.toFixed(1)} · clear of Dimitri's chat`;
     });
     await step('smoke: V4.1 — on a phone the whole office fits above the task sheet, with one-line department cards', async () => {
       const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
       try {
-        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check'); await ph.waitForTimeout(3000);
+        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000); // a second 3D page beside the first takes ~30 s on a slow machine (software WebGL)
         const measure = () => ph.evaluate(() => { const b = [...document.querySelectorAll('.badge:not(.brainTag)')].map(e => e.getBoundingClientRect()); return { at: b.map(x => Math.round(x.left) + ',' + Math.round(x.right) + ',' + Math.round(x.bottom)).join(' '), compact: document.body.classList.contains('cardsCompact'), inside: b.every(x => x.left >= 0 && x.right <= innerWidth + 1 && x.bottom <= innerHeight * 0.56), n: b.length, overflow: document.documentElement.scrollWidth > innerWidth }; });
         let r = await measure(); for (let t = 0; t < 6 && !r.inside; t++) { await ph.waitForTimeout(500); r = await measure(); } // the overview's fit animates: a slow machine gets up to 3 s more
         if (!r.compact) throw new Error('cards not compact on a phone');
@@ -586,8 +665,10 @@ await step('estudio: the free test engine generates, files are stored with their
     const all = md.list(); if (all.length !== 2 || !all[0].prompt) throw new Error('list: ' + all.length);
     if (!md.resolve(all[0].file)) throw new Error('resolve a real file');
     for (const bad of ['../../office.config.json', '2026-09/../../x.png', 'C:/Windows/win.ini', '2026-09/a.exe']) if (md.resolve(bad)) throw new Error('escaped: ' + bad);
-    let refused = ''; try { await md.generate({ prompt: 'x', provider: 'gemini' }); } catch (e) { refused = e.message; }
-    if (!/GEMINI_API_KEY/.test(refused) && !process.env.GEMINI_API_KEY) throw new Error('a provider with no key must say which key: ' + refused);
+    // V4.5: the key is taken away for this one call — with the owner's GEMINI_API_KEY set, this line generated (and paid for) a real image on every check
+    let refused = ''; const gk = process.env.GEMINI_API_KEY; delete process.env.GEMINI_API_KEY;
+    try { await md.generate({ prompt: 'x', provider: 'gemini' }); } catch (e) { refused = e.message; } finally { if (gk !== undefined) process.env.GEMINI_API_KEY = gk; }
+    if (!/GEMINI_API_KEY/.test(refused)) throw new Error('a provider with no key must say which key: ' + refused);
     if (!md.trash(all[1].file) || md.list().length !== 1) throw new Error('trash');
     return `2 test images · record · no path escapes · no key → «${refused.slice(0, 40)}…»`;
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
@@ -657,7 +738,14 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
   // a throwaway data folder and a COPY of the brain: the test server never reads or writes the owner's tasks, routines or notes
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-check-'));
   const brainCopy = path.join(sandbox, 'brain'); fs.cpSync(loadConfig().brainPath, brainCopy, { recursive: true });
-  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy };
+  fs.mkdirSync(path.join(brainCopy, 'Agents Office'), { recursive: true });
+  fs.writeFileSync(path.join(brainCopy, 'Agents Office', 'triggers.json'), JSON.stringify({ triggers: [{ id: 'check-form', dept: 'sales', agent: 'piper', source: 'form', title: 'Contacto de {{name}}', text: 'Responde a {{name}}' }] })); // V4.4: one trigger for the webhook step
+  const HOOK = 'check-' + 'x'.repeat(24);
+  { const now = Date.now(); fs.mkdirSync(path.join(sandbox, 'data'), { recursive: true }); fs.writeFileSync(path.join(sandbox, 'data', 'tasks.json'), JSON.stringify([ // V4.4: two drafts waiting and a finished task, for the approvals step
+    { id: 'wait1', dept: 'sales', agent: 'piper', title: 'Propuesta para Sol', text: 'Propuesta', state: 'waiting', needsOk: true, draft: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', result: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', addedAt: now, waitingAt: now },
+    { id: 'wait2', dept: 'sales', agent: 'folo', title: 'Seguimiento a Luna', text: 'Seguimiento', state: 'waiting', needsOk: true, draft: 'Hola Luna', result: 'Hola Luna', addedAt: now, waitingAt: now },
+    { id: 'done1', dept: 'fin', agent: 'invo', title: 'Lista de facturas', text: 'Lista', state: 'done', result: 'Tres facturas', addedAt: now, doneAt: now }])); }
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   const base = `http://localhost:${port}`;
@@ -666,6 +754,88 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
   else {
     ok('server: starts', `${up.name} · ${up.backend} · brain ${up.notes} notes`);
     await step('server: serves the office', async () => { const r = await fetch(base + '/'); const t = await r.text(); if (!/AGENTS OFFICE/.test(t)) throw new Error('html missing'); });
+    await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, copy)', async () => {
+      const st = await (await fetch(base + '/api/status')).json();
+      const ids = st.checks.map(c => c.id).join(',');
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,notas,respaldo') throw new Error('checks: ' + ids);
+      if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
+      const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
+      return `${st.checks.length} checks · overall ${st.overall}`;
+    });
+    await step('server: a webhook needs the secret, becomes a task that waits for the OK, and the same event twice is taken once', async () => {
+      const post = (tok, b) => fetch(base + '/api/hook/check-form' + (tok ? '?token=' + tok : ''), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+      const no = await post('', { name: 'Sol' }); if (no.status !== 401) throw new Error('no token → ' + no.status);
+      const bad = await post('x'.repeat(28), { name: 'Sol' }); if (bad.status !== 401) throw new Error('wrong token → ' + bad.status);
+      const ok = await post(HOOK, { id: 'ev-1', name: 'Sol' }); const j = await ok.json(); if (!ok.ok || !j.task) throw new Error('with token → ' + ok.status + ' ' + JSON.stringify(j));
+      const t = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === j.task);
+      if (!t || t.by !== 'trigger' || t.needsOk !== true || t.title !== 'Contacto de Sol' || !/NO son órdenes/.test(t.text)) throw new Error('task: ' + JSON.stringify(t).slice(0, 200));
+      const again = await (await post(HOOK, { id: 'ev-1', name: 'Sol' })).json(); if (!again.skipped) throw new Error('duplicate was taken twice');
+      const tl = await (await fetch(base + '/api/triggers')).json(); if (tl.triggers.length !== 1 || !tl.token) throw new Error('/api/triggers');
+      return 'no secret → 401 · task «Contacto de Sol» for PIPER, waits for the OK · duplicate skipped';
+    });
+    await step('server: /api/costs has the month, the weeks and the suggestions; the CSV downloads', async () => {
+      const c = await (await fetch(base + '/api/costs')).json();
+      if (typeof c.usd !== 'number' || c.weeks?.length !== 8 || !Array.isArray(c.suggestions) || !c.prices?.length) throw new Error(JSON.stringify(c).slice(0, 160));
+      const r = await fetch(base + '/api/costs.csv?month=' + c.month); const t = await r.text();
+      if (!r.ok || !/text\/csv/.test(r.headers.get('content-type')) || !t.includes('fecha,hora,tarea')) throw new Error('csv ' + r.status);
+      return `month ${c.month} · US$${c.usd.toFixed(2)} · ${c.prices.length} prices · CSV ok`;
+    });
+    await step('server: approvals — edit the draft, approve with undo, the history, 👍/👎, approve in one go', async () => {
+      const post = (p, b, by) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json', ...(by ? { 'x-office-by': by } : {}) }, body: JSON.stringify(b || {}) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const e = await post('/tasks/wait1/draft', { draft: 'Para: sol@cliente.com\nAsunto: Propuesta final\nTotal: $150' }); if (!e.ok || !e.task.editedDraft || e.task.preview.subject !== 'Propuesta final') throw new Error('edit: ' + JSON.stringify(e).slice(0, 120));
+      const a = await post('/tasks/wait1/approve', {}, 'check'); if (!a.ok || !a.sendAt) throw new Error('approve: ' + JSON.stringify(a));
+      const again = await post('/tasks/wait1/approve'); if (again.status !== 409) throw new Error('a second approve was not refused');
+      const u = await post('/tasks/wait1/undo', {}, 'check'); if (!u.ok) throw new Error('undo: ' + JSON.stringify(u));
+      const t = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === 'wait1');
+      if (t.state !== 'waiting' || t.approving || t.approvals.map(x => x.action).join() !== 'edit,approve,undo' || t.approvals[1].by !== 'check') throw new Error('after undo: ' + JSON.stringify(t.approvals));
+      const v = await post('/tasks/done1/vote', { vote: 'down', reason: 'faltó el total' }); if (v.vote !== 'down') throw new Error('vote');
+      const b = await post('/tasks/approve-batch', { ids: ['wait1', 'wait2'] }); if (b.approved !== 2) throw new Error('batch: ' + JSON.stringify(b));
+      await post('/tasks/wait1/undo'); await post('/tasks/wait2/undo'); // nothing is sent from the check
+      const q = await (await fetch(base + '/api/quality')).json(); if (!Array.isArray(q.agents)) throw new Error('quality');
+      return 'edit → preview «Propuesta final» · approve → 30 s to undo · second approve refused · history edit,approve,undo · 👎 recorded · batch of 2';
+    });
+    await step('server: settings save to the local file and apply; a bad value is refused in words', async () => { // V4.4 (J5)
+      const post = (p, b) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const g = await (await fetch(base + '/api/settings')).json(); if (!g.fields?.length || !g.groups?.length) throw new Error('no fields');
+      const s = await post('/settings', { changes: { 'approvals.undoSeconds': 45, 'costs.monthlyBudget': 'mucho' } }); if (!s.ok || s.errors.length !== 1) throw new Error(JSON.stringify(s));
+      const after = await (await fetch(base + '/api/settings')).json(); if (after.values['approvals.undoSeconds'] !== 45) throw new Error('not applied: ' + after.values['approvals.undoSeconds']);
+      const local = JSON.parse(fs.readFileSync(path.join(sandbox, 'office.config.local.json'), 'utf8')); if (local.approvals?.undoSeconds !== 45) throw new Error('not written');
+      return `${g.fields.length} settings in ${g.groups.length} groups · saved to the sandbox · «${s.errors[0]}»`;
+    });
+    await step('server: the company figures and the brand voice reach the agents; a document dropped on the Brain becomes a note', async () => { // V4.4 (H4, H6, E9)
+      const post = (p, b) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const c = await post('/cifras', { items: [{ name: 'Precio del plan Launch', value: '1500', unit: 'US$', note: '' }] }); if (!c.ok || c.items.length !== 1) throw new Error('cifras ' + JSON.stringify(c));
+      const v = await post('/voice', { text: '# Voz\nCercana, sin tecnicismos.' }); if (!v.ok) throw new Error('voice');
+      const csv = Buffer.from('cliente;total\nSol;150\nLuna;90\n').toString('base64');
+      const u = await post('/brain/upload', { name: 'Clientes del mes.csv', data: csv }); if (!u.ok || !/clientes-del-mes/.test(u.note)) throw new Error('upload ' + JSON.stringify(u));
+      const md = fs.readFileSync(path.join(brainCopy, 'Documentos', u.note + '.md'), 'utf8'); if (!md.includes('| Sol | 150 |')) throw new Error('table missing');
+      const bad = await post('/brain/upload', { name: 'foto.png', data: 'AAAA' }); if (bad.status !== 400) throw new Error('a png was not refused');
+      const st = await (await fetch(base + '/api/brain/stale')).json(); if (!Array.isArray(st.notes)) throw new Error('stale');
+      return `1 figure · voice saved · CSV → Documentos/${u.note}.md as a table · a PNG refused · ${st.notes.length} notes to review`;
+    });
+    await step('server: the business — a KPI by hand («1.200») and by webhook (with the secret)', async () => { // V4.4 (J1)
+      const post = (p, b, q = '') => fetch(base + '/api' + p + q, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const d = await post('/business/kpi', { id: 'ventas_semana', name: 'Ventas de la semana', unit: 'US$', better: 'up', goal: 5000 }); if (!d.ok) throw new Error('def ' + JSON.stringify(d));
+      const h = await post('/business/value', { id: 'ventas_semana', value: '1.200' }); if (h.error) throw new Error('hand ' + h.error);
+      const no = await post('/kpi/ventas_semana', { value: 1 }); if (no.status !== 401) throw new Error('webhook without the secret: ' + no.status);
+      const w = await post('/kpi/ventas_semana', { value: 1500 }, '?token=' + HOOK); if (w.error) throw new Error('webhook ' + w.error);
+      const b = await (await fetch(base + '/api/business')).json(); const k = b.kpis.find(x => x.id === 'ventas_semana');
+      if (!k || k.value !== 1500 || k.prev !== 1200 || !k.good || b.office.length < 4) throw new Error(JSON.stringify(k));
+      return `1.200 by hand → 1.500 by webhook: ▲ ${Math.round(k.change * 100)} % · ${Math.round(k.goalPct * 100)} % of the goal · webhook without the secret refused`;
+    });
+    await step('server: the team — a person takes a task, comments with @mentions, a finished job saved as an example', async () => { // V4.4 (I3, I4, I6, H5)
+      const post = (p, b) => fetch(base + '/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+      const s = await post('/settings', { changes: { 'team.people': [{ name: 'Ana', depts: ['fin'] }] } }); if (s.errors?.length) throw new Error('people ' + s.errors);
+      const tm = await (await fetch(base + '/api/team')).json(); if (tm.people?.[0]?.name !== 'Ana') throw new Error('team ' + JSON.stringify(tm));
+      const nobody = await post('/tasks/done1/person', { person: 'Nadie' }); if (nobody.status !== 400) throw new Error('an unknown person was not refused');
+      const ex = await post('/tasks/done1/example', {}); if (!ex.ok) throw new Error('example ' + JSON.stringify(ex));
+      const c = await post('/tasks/done1/comment', { text: '@Ana revisa la tercera factura' }); if (c.comments?.length !== 1) throw new Error('comment');
+      const p = await post('/tasks/done1/person', { person: 'Ana' }); if (p.person !== 'Ana') throw new Error('person ' + JSON.stringify(p));
+      const t = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === 'done1'); if (t.state !== 'next' || t.person !== 'Ana' || !t.example) throw new Error(JSON.stringify({ state: t.state, person: t.person }));
+      await new Promise(r => setTimeout(r, 400)); const t2 = (await (await fetch(base + '/api/tasks')).json()).find(x => x.id === 'done1'); if (t2.state !== 'next') throw new Error('an agent took the person\'s task: ' + t2.state);
+      const mention = fs.readFileSync(path.join(sandbox, 'data', 'notices.json'), 'utf8').includes('mencionó a Ana'); if (!mention) throw new Error('the @mention raised no notice');
+      return 'Ana takes «Lista de facturas» (the agents leave it) · 1 comment → a mention notice · saved as an example · an unknown person refused';
+    });
     await step('server: /api/brain has the live graph', async () => { const g = await (await fetch(base + '/api/brain')).json(); if (!g.nodes.length) throw new Error('empty'); return `${g.nodes.length} linked notes`; });
     await step('server: /api/mcp lists this machine\'s connectors', async () => {
       const m = await (await fetch(base + '/api/mcp')).json();
@@ -735,7 +905,13 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       if (z.headers.get('content-type') !== 'application/zip') throw new Error('zip');
       const d = await (await fetch(base + '/api/media/item/' + encodeURIComponent(item.file), { method: 'DELETE' })).json(); await post('/api/media/restore', d.undo);
       const rg = await fetch(base + '/media/' + job.items[0].split('/').map(encodeURIComponent).join('/'), { headers: { range: 'bytes=0-9' } }); if (rg.status !== 206) throw new Error('range ' + rg.status);
-      return `${cat.models.length} models · job → task · upload · ZIP · undo · ranges`;
+      // V4.6: folders — made with the selected files, a generation inside one lands in it, removing it keeps the files
+      const fd = await post('/api/media/folders', { name: 'Logos del check', files: [item.file] }); if (fd.moved !== 1) throw new Error('folder: ' + JSON.stringify(fd).slice(0, 120));
+      const { job: j2 } = await post('/api/media/jobs', { model: 'prueba', prompt: 'dentro de la carpeta', n: 1, folder: fd.folder.id, wait: 8000 });
+      const lib = await (await fetch(base + '/api/media')).json(), inF = lib.items.filter(x => x.folder === fd.folder.id).map(x => x.file);
+      if (!inF.includes(item.file) || !inF.includes(j2.items[0]) || lib.folders.find(f => f.id === fd.folder.id)?.n !== 2) throw new Error('folder contents: ' + JSON.stringify(inF));
+      const rm = await (await fetch(base + '/api/media/folders/' + fd.folder.id, { method: 'DELETE' })).json(); if (rm.freed !== 2) throw new Error('remove folder: ' + JSON.stringify(rm));
+      return `${cat.models.length} models · job → task · upload · ZIP · undo · ranges · folders`;
     });
     await step('server: rejects an empty task', async () => { const r = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"dept":"sales","text":""}' }); if (r.status !== 400) throw new Error('status ' + r.status); });
     if (LIVE) {

@@ -328,7 +328,17 @@ export function initTasks(ctx) {
     P_.search.addEventListener('input', () => { query = P_.search.value.trim(); render(true); });
     P_.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { P_.search.value = ''; query = ''; render(true); P_.search.blur(); } });
     P_.clear.addEventListener('click', () => clearDone());
-    P_.rows.addEventListener('click', e => {
+    P_.rows.addEventListener('click', e => { // V4.4 (G6): «Aprobar todas» — the first click arms it, the second approves every waiting draft in view
+      const bt = e.target.closest('[data-batch]');
+      if (bt) {
+        e.stopPropagation();
+        if (bt.dataset.batch === 'arm') { batchArmed = true; render(true); clearTimeout(batchTimer); batchTimer = setTimeout(() => { batchArmed = false; render(true); }, 5000); setTimeout(() => P_.rows.querySelector('[data-batch]')?.focus(), 0); return; }
+        batchArmed = false; clearTimeout(batchTimer);
+        const ts = scoped().filter(t => t.live && t.sid && !t.piece && t.state === 'waiting');
+        for (const t of ts) { toDoing(t); if (decided) decided(t.agent, t.sid, true); }
+        post('/tasks/approve-batch', { ids: ts.map(t => t.sid) }).then(j => { const n = j?.approved || 0; say(n ? `Aprobadas ${n}: salen en unos segundos.` : 'No se pudo aprobar: ' + (j?.error || 'sin conexión con la oficina'), n ? '' : 'err'); if (!n) for (const t of ts) backToWaiting(t, 'No se pudo aprobar en lote. Sigue esperando tu visto bueno.'); });
+        render(true); return;
+      }
       const m = e.target.closest('.tp-more'); if (m) { limit += PAGE; render(true); return; }
       const c = e.target.closest('.tp-lnk[data-clr]'); if (!c) return;
       if (c.dataset.clr === 'q') { P_.search.value = ''; query = ''; } else filter = 'all';
@@ -665,8 +675,9 @@ export function initTasks(ctx) {
     if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
     else say('Conexión recuperada.');
   }
-  const fromServer = st => ({ id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
-    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
+  const extraOf = st => Object.fromEntries(['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'person', 'handoff', 'comments', 'example'].map(k => [k, st[k]]));
+  const fromServer = st => ({ ...extraOf(st), id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
+    addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, guard: st.guard, heldForOk: !!st.heldForOk, cost: st.cost, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
     if (!agentOf(st.agent) || st.archived || deleting.has(st.id)) return;
     let t = tasks.find(x => x.live && x.sid === st.id);
@@ -680,7 +691,7 @@ export function initTasks(ctx) {
     }
     apply(t, st);
   }
-  function copyResult(t, st) { t.result = st.result; t.error = !!st.error; t.read = st.read || []; t.note = st.note; t.tools = st.tools || []; t.used = st.used || []; t.draft = st.draft; t.approved = !!st.approved; if (st.modelUsed) { t.modelUsed = st.modelUsed; t.modelFrom = st.modelFrom; t.effortUsed = st.effortUsed || ''; t.effortFrom = st.effortFrom; } }
+  function copyResult(t, st) { t.result = st.result; t.error = !!st.error; t.read = st.read || []; t.note = st.note; t.tools = st.tools || []; t.used = st.used || []; t.draft = st.draft; t.approved = !!st.approved; t.guard = st.guard; t.heldForOk = !!st.heldForOk; t.cost = st.cost; if (st.modelUsed) { t.modelUsed = st.modelUsed; t.modelFrom = st.modelFrom; t.effortUsed = st.effortUsed || ''; t.effortFrom = st.effortFrom; } }
   // V3.2 (16 Sep): the server's team state → piece cards on the teammates' desks, notes as 💬, the lead's members list
   const seenNotes = new Set();
   function syncTeam(t, st, quiet) {
@@ -711,8 +722,12 @@ export function initTasks(ctx) {
       if (R[to]) { feedPush(R[to], '📨', `Nota de ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `nota de ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
     }
   }
+  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft', 'person', 'handoff', 'comments', 'example']; // V4.4: what the detail shows (G, D)
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
+    for (const k of EXTRA) if (JSON.stringify(t[k]) !== JSON.stringify(st[k])) { t[k] = st[k]; dirty = true; }
+    { const q = JSON.stringify([st.queue || null, st.retryAt || null, st.attempts || 0, st.lastError || '']); if (t.qsig !== q) { t.qsig = q; t.queue = st.queue; t.retryAt = st.retryAt; t.attempts = st.attempts || 0; t.lastError = st.lastError; dirty = true; } } // V4.4 (B1, B5)
+    if (st.state === 'next' && t.state === 'doing') { t.state = 'next'; t.running = false; t.progress = 0; t.addedAt = st.addedAt || Date.now(); touch(t, 'added'); } // V4.4 (B1): a failed run waits for its retry
     if (st.state === 'scheduled') { if (t.state !== 'scheduled') { t.state = 'scheduled'; t.dueAt = st.dueAt; touch(t, 'scheduled'); } else if (t.dueAt !== st.dueAt || t.title !== st.title || t.text !== st.text) { Object.assign(t, { dueAt: st.dueAt, title: st.title, text: st.text }); dirty = true; } return; }
     if (t.state === 'scheduled' && st.state !== 'scheduled') { t.state = 'next'; t.addedAt = st.addedAt || Date.now(); t.late = !!st.late; t.due = st.due; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}${t.late ? ' (atrasada)' : ''}`); if (calendar) calendar.refresh(); }
     if (st.state === 'doing' && t.state !== 'doing') {
@@ -740,7 +755,10 @@ export function initTasks(ctx) {
     const t = waitingFor(agentId, sid); if (!t || !approved) return false;
     toDoing(t); chatPush(agentId, { who: 'agent', text: '✓ Aprobado — enviándolo ahora. Llega aquí cuando esté listo.' });
     if (decided) decided(agentId, t.sid, true);
-    post(`/tasks/${t.sid}/approve`).then(j => { if (!j || j.error) backToWaiting(t, `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`); });
+    post(`/tasks/${t.sid}/approve`).then(j => {
+      if (!j || j.error) return backToWaiting(t, `No se pudo aprobar: ${(j && j.error) || 'sin conexión con la oficina'}. Sigue esperando tu visto bueno.`);
+      if (j.sendAt) offerUndo(`Aprobado: «${esc(short(t.title))}» sale en ${j.undoSeconds} s.`, { ms: Math.max(4000, j.sendAt - Date.now() - 500), undo: () => post(`/tasks/${t.sid}/undo`).then(r => { if (r && r.ok) backToWaiting(t, '↶ Deshecho: no se envió nada. Sigue esperando tu visto bueno.'); else chatPush(t.agent, { who: 'agent', text: 'Ya no se pudo deshacer: el envío había empezado.' }); }) }); // V4.4 (G7): «Deshacer envío»
+    });
     return true;
   }
   function rejectLive(agentId, sid, feedback) {
@@ -775,7 +793,7 @@ export function initTasks(ctx) {
 
         if (st.state === 'done') {
           const t = mk({ agent: st.agent, title: st.title, text: st.text, plan: st.plan, by: 'you', live: true, sid: st.id, state: 'done',
-            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, last: 'done',
+            doneAt: st.doneAt, changedAt: st.doneAt, addedAt: st.addedAt, result: st.result, read: st.read, note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, guard: st.guard, heldForOk: !!st.heldForOk, cost: st.cost, last: 'done',
             routine: st.routine, when: st.when, due: st.due, late: !!st.late, approved: !!st.approved }); // V4.2: a routine's run stays one — the calendar marks the past by it
           if (st.team) syncTeam(t, st, true);
           deliver(t, true); // quiet: the file card stays in the chat's history; no «Listo» line, feed item or brain spark on every page load
@@ -838,15 +856,19 @@ export function initTasks(ctx) {
   P_.rows.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { hoverList = true; lastMove = performance.now(); } });
   P_.rows.addEventListener('pointerleave', () => { hoverList = false; });
   const holdList = () => !forceList && hoverList && performance.now() - lastMove < 6000;
+  let batchArmed = false, batchTimer = 0;
+  const retryWhy = m => /usage limit|limit reached|429|rate/i.test(m) ? 'límite de uso de Claude' : /took longer|timed? ?out/i.test(m) ? 'tardó demasiado; ahora con más tiempo' : /network|ECONN|ENOTFOUND|socket|fetch failed/i.test(m) ? 'fallo de red' : /overloaded|50\d|529/i.test(m) ? 'Claude estaba saturado' : 'fallo pasajero';
   function metaFor(t) {
     const a = agentOf(t.agent), now = Date.now();
     const f = getFocused();
-    const who = (f && f !== 'brain') ? a.name : `${a.name} · ${DEPTS[t.dept].short}`;
+    const who = (t.person ? `👤 ${esc(t.person)} · ` : '') + ((f && f !== 'brain') ? a.name : `${a.name} · ${DEPTS[t.dept].short}`) + (t.comments?.length ? ` · 💬 ${t.comments.length}` : '');
     switch (t.state) {
       case 'next': {
         const src = t.piece ? `parte del equipo de ${agentOf(t.leadId)?.name || 'el líder'}` : t.routine ? `rutina · ${t.when}${t.late ? ' · <span class="tp-late">atrasada · tocaba a las ' + timeStr(t.due) + '</span>' : ''}` : t.by === 'you' ? 'la pediste tú' : t.by === 'sub' ? 'vía Dimitri' : t.last === 'handoff' && t.from ? `de ${agentOf(t.from).name}` : t.revised ? 'devuelta para revisar' : 'del Cerebro';
         const w = now - t.addedAt;
-        return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)} · ${src}${teamBit(t)}${modelBit(t)}`;
+        const q = t.retryAt && t.retryAt > now ? ` · <span class="tp-retry">↻ reintento ${t.attempts || 1} a las ${timeStr(t.retryAt)}${t.lastError ? ' (' + esc(retryWhy(t.lastError)) + ')' : ''}</span>`
+          : t.queue && t.queue.why !== 'turno' ? ` · <span class="tp-queue">${t.queue.why === 'agente' ? `espera a que ${esc(a.name)} termine lo suyo` : `turno ${t.queue.pos}: todos los agentes que pueden trabajar a la vez están ocupados`}</span>` : ''; // V4.4 (B5): why it waits
+        return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)}${q} · ${src}${teamBit(t)}${modelBit(t)}`;
       }
       case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · renderizando' : t.teamHold ? ' · esperando las partes' : ''}${t.routine ? ' · rutina' : ''}${teamBit(t)}${modelBit(t)}`;
       case 'waiting': return `<span class="tp-amber">en espera ${span(now - t.changedAt)} de tu visto bueno</span> · ${who}${t.routine ? ' · borrador de rutina' : ''}${teamBit(t)}${modelBit(t)}`;
@@ -917,13 +939,13 @@ export function initTasks(ctx) {
     const html = filter === 'sched'
       ? ((scopedRoutines().sort(byNext).map(rowHTMLr).join('') + scoped().filter(t => t.state === 'scheduled').sort((a, b) => a.dueAt - b.dueAt).map(rowHTMLp).join('')) || (query ? emptyHTML() : `<div class="tp-empty">Sin rutinas todavía. Escribe una con hora — «cada día hábil a las 8, …» — o presiona REPETIR. Presiona <b>P</b> para el calendario.</div>`))
       : filter === 'archived' ? (scopedArchived().slice(0, limit).map(rowHTMLx).join('') + (scopedArchived().length > limit ? `<button type="button" class="tp-more" data-more="1">Se ven ${limit} de ${scopedArchived().length}. Mostrar más</button>` : '') || emptyHTML())
-      : (list.map(rowHTMLp).join('') + more || emptyHTML());
+      : ((filter === 'waiting' && isLive() && list.filter(t => t.live && t.sid && !t.piece).length >= 2 ? `<div class="tp-batch"><span>${list.filter(t => t.live && t.sid && !t.piece).length} esperan tu visto bueno</span><button type="button" class="tp-batch-go" data-batch="${batchArmed ? 'go' : 'arm'}">${batchArmed ? '¿Seguro? Aprobar todas' : 'Aprobar todas'}</button></div>` : '') + list.map(rowHTMLp).join('') + more || emptyHTML()); // V4.4 (G6): approve in one go, two clicks
     listStale = false; forceList = false;
     renderNext();
     if (!structural && html === lastRows) return; // nothing in the list changed: the rows stay the same elements (a click on a row that was being replaced got lost)
     P_.rows.innerHTML = lastRows = html;
     P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
-    P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.tabIndex = 0; n.setAttribute('role', 'button'); n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); }); // every row opens its detail
+    P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); if (n.querySelector('.tp-act button')) { const t = n.querySelector('.tp-t'); t.innerHTML = `<button type="button" class="tp-open">${t.innerHTML}</button>`; return; } n.tabIndex = 0; n.setAttribute('role', 'button'); }); // every row opens its detail; V4.3: a row with its own buttons opens from its title (a button inside a button is two controls a screen reader cannot tell apart)
     if (!structural) flip(before);
     if (fid) P_.rows.querySelector(`.tp-row[data-id="${CSS.escape(fid)}"]`)?.focus({ preventScroll: true });
   }
@@ -1357,12 +1379,12 @@ export function initTasks(ctx) {
   }
   const toast = document.createElement('div'); toast.className = 'tp-toast'; toast.hidden = true; toast.setAttribute('role', 'status'); toast.setAttribute('data-modal-keep', ''); document.body.appendChild(toast);
   let pendingUndo = null, toastTimer = 0;
-  function offerUndo(html, { undo, commit }) { // one toast at a time: a new one commits the previous action
+  function offerUndo(html, { undo, commit, ms = 10000 }) { // one toast at a time: a new one commits the previous action
     if (pendingUndo) finishUndo(true);
     pendingUndo = { undo, commit };
     toast.innerHTML = `<span class="tt-x">${html}</span><button type="button" class="tp-undo">DESHACER</button><button type="button" class="tp-tclose" aria-label="Cerrar el aviso">✕</button>`;
     toast.hidden = false; requestAnimationFrame(() => toast.classList.add('on'));
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), 10000);
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), ms);
   }
   function finishUndo(doCommit) {
     clearTimeout(toastTimer); const u = pendingUndo; pendingUndo = null;

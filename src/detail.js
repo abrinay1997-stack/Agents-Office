@@ -22,7 +22,7 @@ const BY = { you: 'ti', sub: 'el Subgerente', routine: 'una rutina', team: 'el l
 
 export function initDetail(ctx) {
   const { agentOf, AGENTS, DEPTS, DEPT_KEYS, esc, isLive, act, openAgent, openNote, openCalendar, modelName, MODEL_KEYS, officeModel } = ctx;
-  const el = document.createElement('aside'); el.id = 'tdDrawer'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'false'); el.setAttribute('aria-label', 'Detalle de la tarea'); el.hidden = true;
+  const el = document.createElement('div'); el.id = 'tdDrawer'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'false'); el.setAttribute('aria-label', 'Detalle de la tarea'); el.hidden = true;
   document.body.appendChild(el);
   let cur = null, busy = false, opener = null;
 
@@ -48,7 +48,7 @@ export function initDetail(ctx) {
     el.innerHTML = `
       <div class="td-head"><span class="td-st ${cls}">${label}</span><span class="sp"></span><button type="button" class="td-x" data-a="close" aria-label="Cerrar">✕</button></div>
       <h2 class="td-title">${t.routine ? '⏱ ' : ''}${t.team?.members?.length || t.team ? '⚑ ' : ''}${esc(t.title)}</h2>
-      <div class="td-who"><span class="td-dot" style="background:${d.chip}"></span>${esc(d.name)} · ${esc(a ? a.name : t.agent)}${t.team ? ' · en equipo' : ''}${t.modelUsed ? ' · ' + esc(modelName(t.modelUsed)) : ''}${t.piece ? ' · pieza del equipo' : ''}</div>
+      <div class="td-who"><span class="td-dot" style="background:${d.chip}"></span>${esc(d.name)} · ${esc(a ? a.name : t.agent)}${t.team ? ' · en equipo' : ''}${t.modelUsed ? ' · ' + esc(modelName(t.modelUsed)) : ''}${t.piece ? ' · pieza del equipo' : ''}${t.cost > 0 ? ` · <span title="Lo que costaron sus ejecuciones al precio de la API (con un plan de Claude pagas tu tarifa fija)">US$${t.cost < 0.01 ? t.cost.toFixed(4) : t.cost.toFixed(2)}</span>` : ''}</div>
       ${history(t)}
       ${editable ? `
         <label class="td-lab" for="tdText">Qué se pidió</label>
@@ -62,12 +62,52 @@ export function initDetail(ctx) {
         <p class="td-note">${t.state === 'scheduled' ? 'Cambia el día o la hora para moverla. «Ejecutar ahora» la pasa a pendientes.' : 'Pon un día para programarla; sin día, el agente la toma en cuanto se libere.'}${live ? ' Si cambias el texto, el líder vuelve a elegir el escritorio (salvo que elijas uno tú).' : ''}</p>`
       : t.text && t.text !== t.title ? `<label class="td-lab">Qué se pidió</label><div class="td-ask">${esc(t.text)}</div>` : ''}
       ${t.team?.members?.length ? `<label class="td-lab">Equipo</label><div class="td-ask">${esc([t.team.lead, ...t.team.members].map(id => agentOf(id)?.name || id).join(' · '))}${t.team.why ? ' — ' + esc(t.team.why) : ''}</div>` : ''}
-      ${result ? `<label class="td-lab">${t.state === 'waiting' ? 'Borrador para tu visto bueno' : t.error ? 'Qué pasó' : 'Entregable'}</label><div class="td-res md${t.error ? ' err' : ''}">${mdToHtml(result)}</div>` : ''}
+      ${guardHTML(t)}
+      ${t.state === 'waiting' ? previewHTML(t) : ''}${reviewHTML(t)}
+      ${result ? (editingDraft && t.state === 'waiting' ? `<label class="td-lab" for="tdDraft">Tu versión del borrador (se envía tal cual la dejes)</label><textarea id="tdDraft" class="td-text td-draft" rows="12">${esc(result)}</textarea><div class="td-acts"><button type="button" class="td-btn pri" data-a="savedraft">Guardar el borrador</button><button type="button" class="td-btn" data-a="canceldraft">Cancelar</button></div>` : `<label class="td-lab">${t.state === 'waiting' ? 'Borrador para tu visto bueno' + (t.editedDraft ? ' <span class="td-tag">editado por ti</span>' : '') : t.error ? 'Qué pasó' : 'Entregable'}</label><div class="td-res md${t.error ? ' err' : ''}">${mdToHtml(result)}</div>`) : ''}
+      ${t.read?.length && t.state !== 'next' && t.state !== 'scheduled' ? `<p class="td-src">📚 Notas que leyó: ${t.read.map(n => esc(n)).join(' · ')}</p>` : ''}
+      ${t.state === 'done' && !t.error && !t.piece && isLive() ? voteHTML(t) : ''}
+      ${approvalsHTML(t)}
+      ${live && t.sid && !t.piece ? peopleHTML(t) : ''}
       ${t.state === 'waiting' ? `<label class="td-lab" for="tdFb">Si lo devuelves, ¿qué debe cambiar?</label><textarea id="tdFb" class="td-text" rows="2" placeholder="Ej.: más corto, sin el segundo párrafo, con el precio de Launch"></textarea>` : ''}
       <div class="td-acts">${actions(t, editable, live)}</div>
       ${t.state === 'done' ? `<label class="td-chk"><input type="checkbox" class="td-withnote"${t.note ? '' : ' disabled'}> también mover su nota del Cerebro a la papelera</label>` : ''}
       <div class="td-msg" aria-live="polite"></div>`;
   }
+  // V4.4 (audit I3, I4, I6): people on the team — who has it now, hand it to a person, comments with @mentions
+  let team = null;
+  function loadTeam() { if (team !== null) return; team = []; fetch('/api/team').then(r => r.json()).then(j => { team = j.people || []; if (cur) render(); }).catch(() => {}); }
+  function peopleHTML(t) {
+    loadTeam();
+    const who = t.person ? `<p class="td-src">👤 La lleva <b>${esc(t.person)}</b>${t.handoff?.from && t.handoff.from !== 'la página' ? ` — ${esc(agentOf(t.handoff.from)?.name || t.handoff.from)} la pasó` : ''}${t.handoff?.why ? `: ${esc(t.handoff.why)}` : ''}. Los agentes no la tocan mientras tanto.</p>` : '';
+    const canPass = t.state !== 'doing' && t.state !== 'waiting';
+    const pass = canPass ? `<div class="td-pass"><label class="td-lab" for="tdPerson">${t.person ? 'Pasarla a otra persona' : 'Pasar a una persona'}</label><div class="td-row"><select id="tdPerson"><option value="">— elige —</option><option value="Tú">Yo mismo</option>${(team || []).map(p => `<option${p.name === t.person ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select><button type="button" class="td-btn" data-a="person">Pasar</button>${t.person ? '<button type="button" class="td-btn" data-a="unperson">Devolver a los agentes</button>' : ''}</div>${team && !team.length ? '<p class="td-note">Añade a tu equipo en Ajustes (,) → Equipo, con su Telegram para avisarles.</p>' : ''}</div>` : '';
+    const cs = (t.comments || []).map(c => `<li><b>${esc(c.by)}</b> <small>${esc(new Date(c.at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}</small><div>${esc(c.text)}</div></li>`).join('');
+    return `<div class="td-people">${who}${pass}<label class="td-lab" for="tdCom">Comentarios${t.comments?.length ? ` (${t.comments.length})` : ''}</label>${cs ? `<ul class="td-coms">${cs}</ul>` : ''}<div class="td-row"><textarea id="tdCom" class="td-text" rows="2" placeholder="Escribe una nota; @nombre avisa a esa persona"></textarea><button type="button" class="td-btn" data-a="comment">Comentar</button></div></div>`;
+  }
+  // V4.4: what the office's guard stopped in this task — the owner sees every refused send and any hidden orders an email or a page carried
+  function guardHTML(t) {
+    const g = t.guard; if (!g && !t.heldForOk) return '';
+    const tool = n => esc(String(n || '').replace(/^mcp__/, '').replace(/__/, ' · ').replace(/_/g, ' '));
+    const items = (g?.blocked || []).filter(b => b.code !== 'no-writes' || !t.heldForOk).map(b => `<li><b>${tool(b.tool)}</b>: ${esc(b.why || '')}</li>`).join('');
+    return `<div class="td-guard${g?.taint ? ' bad' : ''}" role="note"><b>🛡 Seguridad</b>` +
+      (t.heldForOk ? `<p>El agente quiso enviar algo sin tu visto bueno. La oficina lo detuvo y te deja el borrador para aprobar.</p>` : '') +
+      (g?.taint ? `<p>Lo que leyó en <b>${tool(g.taint.tool)}</b> ${esc(g.taint.why)}. Por eso no se envió nada en esa ejecución. Revisa ese correo o esa página: puede ser un intento de engaño.</p>` : '') +
+      (items ? `<ul>${items}</ul>` : '') + '</div>';
+  }
+  // V4.4 (G3, G2): what will go out, as a card, and how risky it is
+  function previewHTML(t) {
+    const p = t.preview; if (!p) return '';
+    const rows = [p.channel && ['Canal', esc(p.channel)], p.to?.length && ['Para', esc(p.to.join(', '))], p.phones?.length && ['Teléfonos', esc(p.phones.join(', '))], p.subject && ['Asunto', esc(p.subject)], p.amounts?.length && ['Importes', p.amounts.map(n => '$' + n.toLocaleString('es-PA')).join(', ')], p.attachments?.length && ['Adjuntos', esc(p.attachments.join(', '))]].filter(Boolean);
+    const risk = t.risk ? `<span class="td-risk r-${t.risk}">Riesgo ${t.risk}</span>` : '';
+    return `<div class="td-prev" role="group" aria-label="Lo que saldrá"><div class="td-prev-h"><b>Lo que saldrá</b>${risk}</div>${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : '<p>El borrador no nombra destinatarios ni importes: revisa el texto de abajo.</p>'}</div>`;
+  }
+  const reviewHTML = t => t.review ? `<p class="td-src">⚖ Revisado por ${esc(agentOf(t.review.by)?.name || t.review.by)} antes de llegarte${t.review.ok ? ': sin cambios.' : `: pidió ${t.review.fixes.length} ${t.review.fixes.length === 1 ? 'corrección' : 'correcciones'}, ya hechas (${t.review.fixes.map(esc).join('; ')}).`}</p>` : '';
+  const ACTION = { approve: 'Aprobado', reject: 'Devuelto', undo: 'Aprobación deshecha', edit: 'Borrador editado', expire: 'Caducó' };
+  const approvalsHTML = t => t.approvals?.length ? `<details class="td-hist"><summary>Historial de aprobaciones (${t.approvals.length})</summary><ul>${t.approvals.map(e => `<li><time>${new Date(e.at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time> ${ACTION[e.action] || esc(e.action)} · ${esc(e.by)}${e.note ? ` — «${esc(e.note)}»` : ''}</li>`).join('')}</ul></details>` : ''; // G8
+  const voteHTML = t => `<div class="td-vote" role="group" aria-label="¿Te sirvió?"><span>¿Te sirvió?</span><button type="button" class="td-btn${t.vote === 'up' ? ' on' : ''}" data-a="vote-up" aria-pressed="${t.vote === 'up'}">👍 Sí</button><button type="button" class="td-btn${t.vote === 'down' ? ' on' : ''}" data-a="vote-down" aria-pressed="${t.vote === 'down'}">👎 No</button>${voting ? `<input id="tdWhy" class="td-text td-why" placeholder="¿Qué faltó o sobró? (el agente lo tendrá en cuenta)" aria-label="Qué faltó o sobró"><button type="button" class="td-btn pri" data-a="vote-send">Enviar</button>` : ''}</div>`; // D2
+  let editingDraft = false, voting = false;
+  async function post(p, b) { try { const r = await fetch('/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b || {}) }); const j = await r.json().catch(() => ({})); return r.ok ? j : { error: j.error || 'No se pudo.' }; } catch { return { error: 'sin conexión con la oficina' }; } }
   function actions(t, editable, live) {
     const b = (a, txt, cls = '') => `<button type="button" class="td-btn ${cls}" data-a="${a}">${txt}</button>`;
     const out = [];
@@ -75,8 +115,9 @@ export function initDetail(ctx) {
     if (t.state === 'scheduled') out.push(b('unschedule', 'Ejecutar ahora'));
     if (editable) out.push(b('done', 'Marcar como hecha'));
     if (t.state === 'doing') out.push(b('stop', 'Detener al agente', 'warn'));
-    if (t.state === 'waiting') { out.push(b('approve', 'Aprobar y enviar', 'pri')); out.push(b('reject', 'Devolver con la nota')); }
+    if (t.state === 'waiting') { out.push(b('approve', 'Aprobar y enviar', 'pri')); out.push(b('reject', 'Devolver con la nota')); if (t.sid && isLive() && !editingDraft) out.push(b('editdraft', 'Editar el borrador')); }
     if (t.state === 'done' && !t.piece) out.push(b('repeat', t.error ? 'Reintentar' : 'Repetir', t.error ? 'pri' : ''));
+    if (t.state === 'done' && !t.error && !t.piece && t.result && live && t.sid) out.push(t.example ? '<span class="td-tag">⭐ Es un ejemplo de este agente</span>' : b('example', '⭐ Guardar como ejemplo')); // H5
     out.push(b('chat', 'Abrir el chat del agente'));
     if (t.note && openNote) out.push(b('note', 'Ver su nota en el Cerebro'));
     if (t.dueAt && openCalendar) out.push(b('cal', 'Verla en el calendario'));
@@ -118,19 +159,28 @@ export function initDetail(ctx) {
     if (a === 'unschedule') return run('unschedule', {}, 'Pasó a pendientes: el agente la toma en cuanto se libere.');
     if (a === 'done') { if (!confirm(`¿Marcar «${t.title}» como hecha sin ejecutarla?`)) return; return run('done', {}, 'Marcada como hecha.'); }
     if (a === 'stop') { if (!confirm(`¿Detener a ${agentOf(t.agent)?.name || 'este agente'}? Lo que llevaba hecho se pierde.`)) return; return run('stop', {}, 'Detenido.'); }
-    if (a === 'approve') return run('approve', {}, 'Aprobado: el agente lo está enviando.');
+    if (a === 'editdraft') { editingDraft = true; render(); el.querySelector('#tdDraft')?.focus(); return; } // G1
+    if (a === 'canceldraft') { editingDraft = false; render(); return; }
+    if (a === 'example') { const r = await post(`/tasks/${encodeURIComponent(t.sid)}/example`); if (r.error) return msg(r.error, true); t.example = true; render(); return msg(r.text); }
+    if (a === 'comment') { const text = el.querySelector('#tdCom').value.trim(); if (!text) return el.querySelector('#tdCom').focus(); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/comment`, { text }); if (r.error) return msg(r.error, true); t.comments = r.comments; render(); return msg('Comentario guardado.'); }
+    if (a === 'person' || a === 'unperson') { const person = a === 'person' ? el.querySelector('#tdPerson').value : ''; if (a === 'person' && !person) return el.querySelector('#tdPerson').focus(); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/person`, { person }); if (r.error) return msg(r.error, true); t.person = r.person; if (r.person && t.state === 'done') t.state = 'next'; render(); return msg(r.person ? `La lleva ${r.person}.` : 'Vuelve a los agentes.'); }
+    if (a === 'savedraft') { const d = el.querySelector('#tdDraft').value.trim(); if (!d) return msg('El borrador quedó vacío.', true); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/draft`, { draft: d }); if (r.error) return msg(r.error, true); Object.assign(t, { draft: r.task.draft, result: r.task.result, editedDraft: true, preview: r.task.preview, risk: r.task.risk, approvals: r.task.approvals }); editingDraft = false; render(); return msg('Guardado. Si lo apruebas, sale tu versión.'); }
+    if (a === 'vote-up') { voting = false; const r = await post(`/tasks/${encodeURIComponent(t.sid)}/vote`, { vote: t.vote === 'up' ? null : 'up' }); if (!r.error) t.vote = r.vote; render(); return msg(t.vote === 'up' ? 'Gracias: cuenta para la calidad de este agente.' : ''); }
+    if (a === 'vote-down') { voting = true; render(); el.querySelector('#tdWhy')?.focus(); return; }
+    if (a === 'vote-send') { const why = el.querySelector('#tdWhy').value.trim(); const r = await post(`/tasks/${encodeURIComponent(t.sid)}/vote`, { vote: 'down', reason: why }); voting = false; if (!r.error) t.vote = 'down'; render(); return msg(why ? 'Anotado: el agente lo tendrá en cuenta la próxima vez.' : 'Anotado.'); } // D2
+    if (a === 'approve') return run('approve', {}, 'Aprobado: sale en unos segundos (puedes deshacerlo abajo).');
     if (a === 'reject') { const fb = el.querySelector('#tdFb').value.trim(); if (!fb) { el.querySelector('#tdFb').focus(); return msg('Escribe qué debe cambiar.', true); } return run('reject', { feedback: fb }, 'Devuelto: lo rehace con tu nota.'); }
     if (a === 'repeat') return run('repeat', {}, 'Listo: es una tarea nueva en pendientes.');
     if (a === 'archive') { const note = el.querySelector('.td-withnote')?.checked; return run('archive', { note }, 'Archivada.'); }
     if (a === 'delete') { const note = el.querySelector('.td-withnote')?.checked; return run('delete', { note }, 'Eliminada.'); } // V4.1: no confirm box — the toast offers DESHACER for 8 s
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); });
-  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; cur = t; lastSig = sig(t); el.hidden = false; if (modal.any() && modal.top() !== el) { el.setAttribute('aria-modal', 'true'); modal.open(el); } render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
+  function open(t) { if (!t) return; if (!cur) opener = document.activeElement; if (cur !== t) { editingDraft = false; voting = false; } cur = t; if (t.sid && isLive() && !t.seenSent) { t.seenSent = true; fetch(`/api/tasks/${encodeURIComponent(t.sid)}/seen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {}); } /* V4.4 (C7): the office knows which deliverables get read */ lastSig = sig(t); el.hidden = false; if (modal.any() && modal.top() !== el) { el.setAttribute('aria-modal', 'true'); modal.open(el); } render(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.td-x').focus({ preventScroll: true }); }
   function close() { if (!cur) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.setAttribute('aria-modal', 'false'); cur = null; el.classList.remove('on'); setTimeout(() => { if (!cur) el.hidden = true; }, 250); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
   // the task changed underneath (a poll, the run finished): redraw, unless the owner is typing in it
   // only when something the owner can see changed: every poll used to redraw it (scroll to the top, «Guardado.» gone, focus lost)
   const sig = t => JSON.stringify([t.state, t.title, t.text, t.agent, t.dueAt, t.note, t.error, t.approved, t.archived, (t.result || '').length, (t.draft || '').length, t.running, t.team && t.team.pieces && t.team.pieces.map(p => p.state)]);
   let lastSig = '';
-  function refresh() { if (!cur || busy) return; if (el.contains(document.activeElement) && /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName)) return; const s = sig(cur); if (s === lastSig) return; lastSig = s; const sc = el.querySelector('.td-res'); const top = sc ? sc.scrollTop : 0; const f = document.activeElement && el.contains(document.activeElement) && document.activeElement.dataset.a; render(); const sc2 = el.querySelector('.td-res'); if (sc2) sc2.scrollTop = top; if (f) el.querySelector(`[data-a="${f}"]`)?.focus({ preventScroll: true }); }
+  function refresh() { if (!cur || busy || editingDraft || voting) return; if (el.contains(document.activeElement) && /^(TEXTAREA|INPUT|SELECT)$/.test(document.activeElement.tagName)) return; const s = sig(cur); if (s === lastSig) return; lastSig = s; const sc = el.querySelector('.td-res'); const top = sc ? sc.scrollTop : 0; const f = document.activeElement && el.contains(document.activeElement) && document.activeElement.dataset.a; render(); const sc2 = el.querySelector('.td-res'); if (sc2) sc2.scrollTop = top; if (f) el.querySelector(`[data-a="${f}"]`)?.focus({ preventScroll: true }); }
   return { open, close, refresh, isOpen: () => !!cur, current: () => cur };
 }

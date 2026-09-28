@@ -1,0 +1,3 @@
+#!/bin/sh
+# Agents Office (V4.4): nothing that looks like a key, a password, a card or an ID card goes into a commit.
+node scripts/secrets-scan.mjs --staged --quiet || exit 1

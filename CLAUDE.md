@@ -28,7 +28,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 **Reglas:**
 1. **Antes de empezar, trae lo último:** `git pull`, o `Actualizar-Oficina.bat`.
 2. **Trabaja en una rama con nombre** (p. ej. `mejora/aprobaciones`) y abre un Pull Request hacia `main`; el dueño lo acepta. Solo sube directo a `main` si el dueño lo pidió.
-3. **Antes de subir:** `npm run check` en verde, y commits en español que digan qué cambió y por qué.
+3. **Antes de subir:** `npm run check` en verde (incluye `npm test` y la revisión de secretos), y commits en español que digan qué cambió y por qué. GitHub vuelve a correr todo en cada push.
 4. **Nunca subas** keys, `data/`, `office.config.local.json` ni las entregas de los agentes (el `.gitignore` ya lo impide: no lo fuerces). El repositorio puede ser público: lo que viaja lo puede leer cualquiera.
 5. **Al arreglar un punto de la auditoría,** márcalo ✅ en `docs/auditoria-ux-2026-09-24.md` en el mismo commit. Al cambiar algo que el dueño usa, actualiza este archivo y el README.
 6. **Avísense antes de tocar a la vez los archivos grandes:** `src/main.js`, `src/tasks.js`, `src/shell.html`, `serve.mjs`. Son los que más chocan.
@@ -50,6 +50,17 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.6 (27 sep, rama `mejora/cerebro-3d`), el Cerebro y su memoria, pedido del dueño:
+  - El logo lleva a la vista general (cierra la vista, Dimitri y el departamento, y la cámara vuelve).
+  - **Cerebro 3D** (`src/brain3d.js`, three.js): notas = neuronas, `[[enlaces]]` = sinapsis. Cada carpeta es un lóbulo (hemisferio y vecinos por afinidad de enlaces), los índices al centro y los detalles hacia la corteza. Gira solo y se para al tocarlo; nombres clicables; vista previa al pasar el cursor; «Explorar» a la izquierda (búsqueda, regiones, cuándo, quién, sinapsis, conexiones, vecindario, herramientas, lista de notas para el teclado); la ficha se oculta (⟩) o se cierra (✕) sin cerrar el Cerebro.
+  - **Memoria** (`memory.mjs`, tras estudiar cognee, Graphiti, Mem0, HippoGraph, company-brain y Engram): menciones sin enlace, resúmenes, presupuesto de contexto, vecindario en la búsqueda y **sinapsis que aprenden** de lo aprobado o devuelto (`data/memory.json`).
+- V4.5 (27 sep, rama `mejora/ajustes-y-navegacion`), pedidos del dueño:
+  - Estudio, Calendario y Cerebro son **vistas** bajo la barra superior (`src/views.js`): una a la vez, la barra siempre a mano; otro icono (o E, P, G) cambia de vista; el nombre de la empresa vuelve a la oficina; el Cerebro tiene su icono en el dock.
+  - Ajustes gana **Apariencia** (Claro por defecto, Oscuro, Automático; se recuerda en el navegador, `ao.theme`) y **Atajos de teclado** (la lista que abre «?»). Fuera el botón de teclado del dock y la tecla D.
+  - Abrir a Dimitri acerca el centro junto a su chat; el Cerebro y Dimitri crecen al acercarse (antes se achicaban).
+  - Estudio: «Usar de referencia» en la fila de cada tarjeta; **Ajustes → Estudio** con el tope al día (0 = sin tope) y gasto máximo en US$ al día y al mes (`media.dailyBudget`, `media.monthlyBudget`), aplicado al instante.
+- V4.4 (25 sep, misma rama): la auditoría de negocio (`docs/auditoria-negocio-2026-09-25.md`, 100 puntos): los 69 que marcó el dueño, hechos en seis tandas (seguridad y tests, confiabilidad, Telegram y disparadores, costos, aprobaciones y calidad, conocimiento y equipo). A1 (inicio de sesión) queda como issue #2.
+- V4.3 (25 sep, misma rama): la auditoría profunda (`docs/auditoria-profunda-2026-09-25.md`): los 30 errores de accesibilidad visual más críticos, arreglados; axe pasa de 8 fallos críticos, 226 controles anidados y 244 contrastes bajos a 0. Anillo de foco en todos los campos, lo pausado y saltado se lee (sin atenuar), objetivos de 24 px, nada bajo 10,5 px, el Estudio cabe a 320 px, el Cerebro y Dimitri siempre legibles. Regla nueva: un botón nunca va dentro de otro elemento con rol de botón; si una fila tiene sus propios botones, el que la abre es su título.
 - V4.2 (24–25 sep, misma rama): la auditoría del Estudio y del Calendario (`docs/auditoria-estudio-calendario-2026-09-24.md`, 98 puntos): los 98 arreglados (A30 en parte). Lo principal:
   - Calendario: semana y día con horas de 00 a 24 y una línea de «ahora»; el mes a una línea por evento; fechas en español; arrastrar con el dedo; el enrutador ya no pierde una tarea; la AGENDA (tecla A, la vista del teléfono); las ejecuciones pasadas de cada rutina (hecha ✓, falló ⚠, saltada, no corrió); la ventanita de la rutina con el título entero y todas sus acciones a la vista; cancelar una tarea o eliminar una rutina sin pregunta, con DESHACER 8 segundos; los días de una rutina como siete botones (L M X J V S D); mover una ejecución pregunta «solo esta vez» (se salta y queda una tarea en su lugar, mismo agente) o «siempre»; lo que está en marcha va en una franja «SIN TERMINAR»; los avisos salen abajo, junto al trabajo; las cifras filtran; la semana puede empezar el domingo y dice su número; las rutinas se buscan y van por departamento (clic las abre, 👁 muestra solo sus días); la búsqueda lista resultados con fecha; el botón Rutinas en el teléfono; «Suscribirme (.ics)» (`/api/calendar.ics`).
   - Estudio: la galería en orden por filas y sin redibujarse; el error junto al campo; el resumen del formato en el pie; ayuda cuando falta una key; pestañas en el teléfono; en cada tarjeta ★, una acción con texto y el menú «⋯» (la papelera al final); «Mejorar el prompt» dice el idioma (en inglés con su traducción debajo, o en español); con el Estudio cerrado, lo que termina se avisa (número en la claqueta del dock y aviso con VER); cada trabajo en marcha dice cuánto suele tardar (la mediana de ese modelo) con una barra; «Cancelar» en un motor de pago pregunta en la tarjeta si se cobra igual; el visor ampliado dice «3 de 8» y tiene «Variar» (mismo prompt, la imagen como referencia); las imágenes de un mismo pedido en una sola tarjeta («Ver por separado», «Descargar las N»); la galería separada por días; la imagen de un agente dice para qué tarea fue y la búsqueda encuentra por agente y por tarea; todos los modelos a la vista (los sin key atenuados, con cómo activarlos); «Una idea / Varias ideas»; aviso de costo desde US$0,50; «Nuevo»; el mismo pedido dos veces pide un segundo clic; subidas con porcentaje; pestañas con número; Historial de trabajos; compositor plegable; atajos (Ctrl+Enter, /, I, V) en la hoja «?».
@@ -76,9 +87,13 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 
 **Reglas de la interfaz (V4.1):**
 - Toda ventana modal nueva llama a `modal.open(el)` al abrirse y a `modal.close(el)` al cerrarse (`src/modal.js`). Mientras está abierta, el resto de la página queda inerte y Tab da la vuelta dentro de ella.
-- Todo atajo nuevo va también en la hoja «?» (`keysSheet` en `src/main.js`).
+- (V4.5) Estudio, Calendario y Cerebro no son ventanas encima de la oficina sino **vistas** debajo de la barra superior (`top: 52px`, atributo `data-view`): una a la vez. Una vista nueva lleva `data-view`, se registra con `views.add(nombre, { isOpen, close })` y llama a `views.opening(nombre)` al abrirse (`src/views.js`); su `close({ quiet: true })` no devuelve el foco. Con una vista arriba, `modal.js` deja la barra (`[data-shell]`) fuera de lo inerte. Una ventana de verdad (Ajustes, Estado…) sigue bloqueándolo todo.
+- Todo atajo nuevo va también en la lista `KEYS` de `src/main.js`, que se ve en Ajustes → «Atajos de teclado» (tecla «?»).
+- (V4.6) Todo lo que se pueda clicar sobre un lienzo se busca en coordenadas **del lienzo** (`clientX − rect.left`), nunca de la página, y con tolerancia de dedo (16 px ratón, 26 px táctil). Un clic que se mueve más de 5 px (10 táctil) es un arrastre.
 - Los colores nuevos pasan 4,5:1 en claro y en oscuro.
-- El anillo de foco usa `var(--focus)`.
+- El anillo de foco usa `var(--focus)`, también en los campos de texto (un borde más oscuro no basta).
+- Nada se atenúa con `opacity` para decir «pausado» o «saltado»: el texto debe seguir a 4,5:1.
+- Todo objetivo mide 24 px o más (o está a 24 px de centro a centro del siguiente); ningún texto baja de 10,5 px.
 - Nada que se vea en la oficina depende del ancho de la ventana sin probarlo a 390 px (teléfono), a 1024 px y a 1512 px.
 
 ## Changing the agents
@@ -208,6 +223,130 @@ The top bar shows the MCP servers **this machine's Claude Code** is connected to
 
 Agents get only connected servers (plus web when enabled, plus the browser when enabled and paired). They never get Bash, file tools or sub-agents. Their standing rule: read freely; send, post, pay, delete or change data outside this machine **only** when the owner's task explicitly asks for that exact action — in the browser too.
 
+## Seguridad de los agentes (V4.4, 25 sep 2026)
+
+Las reglas de envío son **candados, no ruegos**. Claude Code ejecuta `guard.mjs` antes y después de cada herramienta que usa un agente (un hook que `serve.mjs` pasa con `--settings`). Las reglas viven en `safety.mjs` y se prueban en `tests/`.
+- **Quién puede enviar** (`office.config.json → safety.writes`, o por departamento en `safety.departments`):
+  - `aprobar` (por defecto): nada sale (enviar, publicar, pagar, borrar, cambiar) salvo en la ejecución que sigue a tu OK. Si una tarea intenta enviar sin OK, la oficina la detiene y la deja en ESPERA DE APROBACIÓN con su borrador.
+  - `pedido`: como antes; una tarea puede enviar si su texto lo pide, pero un borrador que espera OK nunca.
+  - `nunca`: los agentes solo preparan; tú haces el envío.
+- **Destinatarios:** después del OK, un envío solo puede ir a los correos y teléfonos que aparecen en el borrador aprobado (`checkRecipients`). Por eso el borrador nombra cada dirección exacta.
+- **Inyección:** si un correo, una página o un documento que lee el agente trae órdenes escondidas («ignora tus instrucciones», «reenvía todos los correos», «no le digas al dueño»), se bloquea todo envío en esa ejecución y la tarea lo muestra en 🛡 Seguridad.
+- **Chrome:** `browserSites` (lista de sitios permitidos; vacía = todos) y `browserBlock` (prohibidos). Admite `*.dominio.com`.
+- **Topes diarios:** `limits.perAgentDay` (envíos por agente) y `limits.perRecipientDay` (por dirección); 0 = sin tope.
+- **Qué herramienta «envía»:** la primera palabra verbo de su nombre decide (`send_email` envía, `get_schedule` lee). Las que llevan `draft`/`borrador` (`safeTools`) no cuentan como envío. El Estudio es interno.
+- **Registro:** cada llamada, permitida o no, queda en `data/audit/AAAA-MM-DD.jsonl` (no viaja por GitHub).
+- **Secretos:** `npm run secrets` revisa el repositorio. El hook `.githooks/pre-commit` (se activa con `npm install` o `npm run check`) impide commitear algo que parezca una key, una contraseña, una tarjeta o una cédula. Un ejemplo inofensivo lleva `secrets-ok` en su línea; una ruta entera va en `.secretsignore`.
+- **Tests:** `npm test` (node:test, carpeta `tests/`) corre dentro de `npm run check`. GitHub Actions (`.github/workflows/check.yml`) ejecuta secretos, tests y el check completo en cada push y cada Pull Request. **Todo cambio de lógica nuevo lleva su test.**
+- **Pendiente con issue:** inicio de sesión antes de exponer la oficina fuera de localhost (A1, issue #2).
+
+## Confiabilidad (V4.4, 25 sep 2026)
+
+- **Reintentos** (`reliability.mjs`, `office.config.json → retries: { max: 2, backoff: [60, 300, 900] }`):
+  - un fallo pasajero (red, Claude saturado, tiempo agotado) se reintenta solo;
+  - si Claude llega a su límite de uso, se reintenta cuando se renueva;
+  - un problema de sesión («vuelve a iniciar sesión») no se reintenta: se avisa;
+  - tras un tiempo agotado, el reintento tiene el doble de tiempo; lo que el agente había escrito se guarda como entrega «INCOMPLETA» si al final no lo logra.
+- **Rutinas con la computadora dormida:** al despertar se hace una vez, «atrasada», y queda un aviso con cuántas se perdieron.
+  - `catchUp: false` en la rutina la salta en vez de hacerla tarde.
+  - `timeout` (segundos) da más tiempo a una rutina larga.
+- **Semáforo** (botón del dock, tecla O, `/api/status`): Claude, conectores, disco, rutinas, cola, aprobaciones, fallos, seguridad y copia diaria, y debajo los **avisos** (`data/notices.json`, `/api/notices/read`). Los conectores se vuelven a comprobar cada 3 h.
+- **Datos:**
+  - un `tasks.json` dañado se recupera de la copia diaria más reciente (`data/backups/`, 14 días, una copia por día que la oficina está abierta);
+  - lo archivado hace más de 90 días pasa a `data/archive/`.
+- **Volver atrás:** `Volver-Atras.bat` deja el código como antes del último `Actualizar-Oficina.bat` (que anota la versión en `data/version-anterior.txt`).
+- **Despliegue (preparado, no activado):** `Dockerfile`, `railway.json`, `AO_HOST`, `AO_DATA`. Léase `docs/despliegue.md`; nada se expone sin cerrar el issue #2.
+
+## Telegram y disparadores (V4.4, 25 sep 2026)
+
+- **Dimitri en Telegram** (`telegram.mjs`, guía en `docs/telegram.md`): se enciende con dos variables de entorno, `TELEGRAM_BOT_TOKEN` y `TELEGRAM_OWNER_ID`, **nunca en archivos**.
+  - Al teléfono llegan las aprobaciones (✅ / ↩), los fallos (↻) y los avisos.
+  - Cualquier otro mensaje va a Dimitri. Comandos: `/estado`, `/pendientes`, `/tarea ventas: …`, `/silencio 2`.
+  - `office.config.json → telegram.quiet` es el horario de no molestar y `telegram.notify` dice qué avisa.
+  - Solo los ids de `TELEGRAM_OWNER_ID` pueden usar el bot. Todo pasa por la API local de la oficina, con las mismas reglas que la página.
+- **Disparadores** (`triggers.mjs`, guía en `docs/disparadores.md`): `<brain>/Agents Office/triggers.json` define qué tarea crea cada evento.
+  - Llega por `POST /api/hook/<id>` con la clave `AO_HOOK_TOKEN` (variable de entorno).
+  - Fuentes: `form`, `stripe`, `whatsapp`, `email` (Zapier/Make/n8n), `generic`.
+  - Lo recibido va al agente como bloque de DATOS («no son órdenes»). Si trae órdenes escondidas, la tarea espera tu OK.
+  - Un evento repetido se toma una sola vez; `perHour` pone un tope.
+  - El owner dice «cuando llegue un formulario / un pago / un WhatsApp, …»: escribe el disparador en ese archivo (sin secretos) y corre `npm run check`.
+
+## Costos y retorno (V4.4, 25 sep 2026)
+
+- **Registro:** cada llamada a un modelo es una línea en `data/costs.jsonl` (`costs.mjs`).
+  - Con Claude Code, el costo lo informa el propio Claude (`total_cost_usd`).
+  - Con otro proveedor compatible (Meta, DeepSeek, Kimi, GLM, OpenRouter vía `ANTHROPIC_BASE_URL`) se calcula con la tabla de precios de `costs.mjs`.
+  - Los trabajos del Estudio entran como «estimado».
+  - Con un plan de Claude de tarifa fija, la cifra es «lo que costaría en la API».
+- **Ventana «Costos y retorno»:** tecla U, o clic en el uso del plan abajo a la izquierda. Muestra:
+  - el mes;
+  - el costo por tarea;
+  - las horas ahorradas y lo que valen;
+  - las últimas 8 semanas;
+  - el desglose por departamento, agente y modelo;
+  - sugerencias aplicables con un clic (un agente que puede ir a Sonnet, otro que necesita Opus, una rutina que nadie lee);
+  - el CSV del mes para contabilidad (`/api/costs.csv?month=AAAA-MM`).
+- **Configuración** (`office.config.json → costs`):
+  - `monthlyBudget` en US$ (aviso al `alertAt`, 80 %; con `stopAtBudget: true`, no empiezan tareas nuevas al pasarlo);
+  - `hourlyRate`: lo que cuesta una hora de una persona;
+  - `minutesPerTask` por departamento; una rutina puede llevar su propio `minutesSaved`;
+  - `prices`: precios propios.
+- **Precios:** la tabla lleva fecha (`PRICES_AS_OF`) y sus fuentes. `npm run check` avisa cuando tiene más de 90 días; al actualizarla, usa las páginas oficiales de cada proveedor.
+
+## Aprobaciones y calidad (V4.4, 25 sep 2026)
+
+- **Aprobaciones** (`approvals.mjs`, `office.config.json → approvals`):
+  - el detalle muestra «Lo que saldrá» (canal, destinatarios, asunto, importes, adjuntos) y el riesgo (alto, medio, bajo);
+  - **Editar el borrador** a mano, sin otra ejecución;
+  - al aprobar hay `undoSeconds` (30) para **Deshacer**, en la página y en Telegram;
+  - historial de quién aprobó, editó, devolvió o deshizo, también en `data/audit/`;
+  - **Aprobar todas** en el filtro «En espera» (dos clics);
+  - recordatorio tras `remindAfterHours` (24) y caducidad tras `expireAfterDays` (7): no se envía nada;
+  - todo importe mayor que `amountLimit` ($200) espera el OK siempre, aunque la tarea no lo pidiera; el guardián lo bloquea.
+- **Autonomía que se gana:** tras `autonomyAfter` (20) aprobaciones seguidas sin cambios de una rutina, un aviso ofrece dejarla enviar sola. En la rutina: `"autonomous": true` en routines.json. Los importes grandes siguen esperando.
+- **Aprobadores delegados:** `telegram.approvers { "<id de Telegram>": ["emails", "sales"] }` en `office.config.local.json`. Esas personas solo aprueban o devuelven lo de sus departamentos.
+- **OK por acción, no por rutina:** con `safety.writes = aprobar`, una rutina con `needsOk: false` lee y trabaja libre, y solo lo que intente enviar queda esperando tu OK.
+- **Calidad** (`quality.mjs`), sección «Calidad» de la ventana U:
+  - puntaje por agente (una entrega usada tal cual vale 100; cada devolución resta 30; 👎 resta 50);
+  - % aprobado a la primera, 👍/👎, y un aviso cuando un agente empeora tras cambiar su skill o su brief;
+  - 👍/👎 en cada entrega; el motivo de un 👎 entra en sus lecciones.
+- **Lo que hace cada agente:**
+  - termina con «Fuentes:» (las notas o páginas que usó);
+  - se revisa en silencio contra su skill antes de entregar;
+  - en lo delicado (Finanzas, contratos, propuestas, facturas o importes grandes), el jefe del departamento revisa y el agente corrige una vez antes de que te llegue. Se configura en `quality.review`.
+- **Historial de skills y briefs:** cada versión queda en `data/history/`. La ficha del agente tiene «Versiones de sus skills y brief» con **Volver a esta**.
+- **Lecciones:** las repetidas se funden solas; con más de 15, un aviso propone pasarlas a la skill.
+- **Enrutador:** cuando mueves una tarea a otro agente, se guarda en `data/routing.json`. El enrutador lee los casos parecidos antes de elegir.
+
+## Conocimiento, equipo y negocio (V4.4, 25 sep 2026)
+
+- **Ajustes** (tecla `,`, el engranaje del dock; `settings.mjs`, `src/settings.js`): lo que antes era JSON, en formularios que se explican. Guarda en `office.config.local.json` (en el check, `AO_LOCAL_CONFIG` lo apunta al sandbox). Los que llevan ↻ se aplican al reiniciar. Un campo nuevo es una línea en `settings.FIELDS`. Solo se envía lo que cambió (un número vacío conserva su valor por defecto). V4.5: dos pestañas del navegador, sin Guardar y también en la demo: **Apariencia** (tema) y **Atajos de teclado**.
+- **Cifras de la empresa** (Ajustes): `<cerebro>/Agents Office/cifras.json`. Todos los agentes las leen antes de cada trabajo y las usan tal cual. Un precio o una comisión va aquí, nunca en una skill.
+- **Voz de marca** (Ajustes): la nota `voice` del Cerebro; la leen todos.
+- **Preparar desde mi web** (Ajustes, `POST /api/onboard/company`): el jefe de Operaciones lee la web y escribe `00-Empresa/{perfil,oferta,voz,faq,clientes}.md`, instrucciones para cada jefe sin brief y cifras para confirmar.
+- **Documentos al Cerebro** (`documents.mjs`): «⬆ Subir documento» en el Cerebro, o soltar el archivo encima. PDF, Word, Excel, CSV o texto (hasta 15 MB) se vuelven `<cerebro>/Documentos/<nombre>.md`. Se convierte en esta máquina. Un PDF escaneado se rechaza con la razón.
+- **Memoria del Cerebro** (V4.6, `memory.mjs`, sin llamadas extra a un modelo; probada en `tests/memory.test.mjs`):
+  - **Menciones:** una nota que nombra a otra (dos palabras o una de 7+ letras) sin `[[enlace]]` queda conectada igual (peso 0,35). Se dibujan como sinapsis tenues (`graph.extra`).
+  - **Vecindario:** las 3 mejores notas de una tarea traen hasta 2 vecinas como **resumen** (`summary`: título, primera frase de cada sección, importes), castigando a las notas índice.
+  - **Presupuesto de contexto:** las notas de una tarea caben en 9.000 caracteres; un pasaje casi igual a otro (Jaccard ≥ 0,8) no entra.
+  - **Sinapsis que aprenden** (`data/memory.json`, de esta máquina): al terminar o votar una tarea, las notas de su línea «Fuentes:» se acercan al resultado (aprobada 1 · usada tal cual 0,75 · −0,25 por devolución · 👎 0) y la pareja citada junta refuerza su enlace (dorado en el Cerebro). Idempotente por tarea (un voto nuevo reemplaza al anterior). Sin uso vuelven a neutro (vida media 90 días). En la búsqueda: × 0,8…1,2.
+  - `/api/brain` añade `extra` (menciones) y `learned` (pesos y enlaces aprendidos: solo en vivo, nunca en `src/braingraph.js`).
+- **Búsqueda del Cerebro** (`knowledge.mjs`): por pasajes (BM25), y por significado si hay `GEMINI_API_KEY`, `OPENAI_API_KEY` o `VOYAGE_API_KEY` (vectores en `data/embeddings.json`). El agente recibe los párrafos que importan. Una nota con `actualizado:` de más de 180 días (o sin tocar ese tiempo) llega con aviso de «puede estar vieja» y sale en «Notas que conviene revisar».
+- **Mismo cliente:** antes de trabajar, el agente ve lo que otros departamentos hicieron con ese cliente en los últimos 30 días.
+- **Ejemplos:** «⭐ Guardar como ejemplo» en una tarea terminada. Se guarda en `<cerebro>/Agents Office/ejemplos/<agente>/`; el agente los lee antes de trabajar.
+- **Personas del equipo** (Ajustes → Equipo: nombre, Telegram, departamento):
+  - una tarea puede **pasarse a una persona**: los agentes no la tocan y la persona recibe un aviso por Telegram;
+  - el agente también puede pasarla, escribiendo `PASAR A UNA PERSONA: <nombre> — <por qué>`;
+  - **comentarios** en cada tarea; `@nombre` avisa a esa persona.
+- **Cómo va el negocio** (tecla N, `business.mjs`, `data/kpis.json`): los indicadores del dueño, con tendencia y meta. Un valor llega de tres formas:
+  - a mano;
+  - por webhook: `POST /api/kpi/<id>` con `AO_HOOK_TOKEN`;
+  - de una entrega con una línea `KPI ventas_semana = 1.250` (una rutina lo mantiene al día).
+  - Debajo, las cifras de la oficina: terminados, respuesta a eventos, esperando OK, horas ahorradas.
+- **Resumen del lunes:** cada lunes a las 8, Dimitri deja el resumen de la semana, también por Telegram. Se apaga en Ajustes (`deputy.weekly`).
+- **Buscar en todo** (Ctrl+K, `src/search.js`): tareas y entregables, agentes, rutinas, notas e imágenes.
+- **Instalar en otra computadora:** `Instalar-Oficina.bat` y `docs/instalar.md`.
+
 ## Agent Teams
 
 When the owner says "as a team", "get the team on it", "spawn three teammates to …", or presses TEAM in the bar, the department **lead** takes the task and splits it into two to `teams.max` independent pieces on the desks whose `does` or skills fit; the pieces run at the same time, one Claude process each; teammates may leave one-line notes (`@lead: …`, `@<id>: …`) which reach the lead; the lead writes the final from the pieces. This is the office's own build of the shape (lead · teammates · shared piece list · notes) from separate headless Claude sessions — Claude Code's own agent teams only spawn in an interactive terminal, so they are not what runs here. Nothing to write for a team task; it is the same roster, briefs and skills. To make a seat a better teammate, improve its `does` (the lead splits by it) and its skills. A team routine is `"team": true` in `routines.json` with the lead as `agent`.
@@ -218,17 +357,24 @@ The owner's right hand, above the six departments: the ◆ tag beside the Brain 
 
 ## The top bar (V4, 24 Sep 2026)
 
-Brand (the business name) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta), approvals ⚠ (it counts drafts; each click goes to the next one), the Estudio (clapperboard, E), the calendar (P), the keyboard shortcuts (?), and the task panel's switch (T). A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key. The plan's usage (session · week) sits in the bottom-left corner.
+Brand (the business name — a button: it closes the open view, or flies back to the whole office) · the connector lane (its label opens the connectors' panel; the icons shrink to fit and never push anything) · a fixed **dock** of icon tools on the right: the model's logo (Claude or Meta; hidden under 440 px), approvals ⚠ (it counts drafts; each click goes to the next one), the Estudio (clapperboard, E), the calendar (P), the Brain (G, V4.5), the health light (O), the business (N), the settings (`,` — with Apariencia and the keyboard shortcuts, «?»), and the task panel's switch (T). The open view's icon stays pressed (`aria-pressed`). Ctrl+K searches everything. A new tool joins the dock as one more `<button class="tb-ic">` with an SVG, an `aria-label` and a `title` naming its key; check it still fits at 390 px. The plan's usage (session · week) sits in the bottom-left corner.
 
 ## The Estudio (images and video)
 
 Real image and video generation, for the owner (the clapperboard in the dock, key E) and for the agents. `media.mjs` is the engine, `estudio-mcp.mjs` the agents' tool, `src/studio.js` the window.
 
-- **Engines** turn on when their key is in the Windows environment — never write a key into a file: `HF_KEY="id:secret"` (Higgsfield Cloud: Soul, Kling 3, Seedance 2/2.5, Flux 2, Ideogram 4, Recraft, Wan, MiniMax, LTX, PixVerse…; or `HF_API_KEY` + `HF_API_SECRET`; `HF_API_BASE_URL` overrides `https://api.higgsfield.ai`), `GEMINI_API_KEY` (Nano Banana), `XAI_API_KEY` (Grok), `OPENAI_API_KEY` (GPT Image), `FAL_KEY` (fal.ai: Flux, Seedream, Nano Banana, Ideogram, Kling 2.5, Seedance 1, Hailuo, Veo 3). `prueba` and `prueba-video` are free local cards for testing the flow.
-- **Models** are the `CATALOG` in `media.mjs`: each one has its engine, the media it takes (`roles`: start/end frame — **video only**, an image model never takes a frame and `npm run check` refuses one that does — references, a source video; `needs` for the required ones) and its `settings` (enum / range / boolean, shown by the page). The Higgsfield request bodies are a port of open-higgsfield's mappers (`wide-trace/open-higgsfield`, `src/generation/to-platform.ts`); auth and uploads follow Higgsfield's own client. Checked on 25 Sep 2026 against `higgsfield-ai/higgsfield-client` and `higgsfield-js` v2 (auth `Key id:secret`, `POST /<model>` → `status_url`/`cancel_url`, `/requests/{id}/status` → queued · in_progress · completed · failed · nsfw · canceled, `images[].url`/`video.url`, `/files/generate-upload-url` + PUT with `upload_headers`; 403 means «not enough credits»; only a queued request can be cancelled) and against open-higgsfield b16a0ef: all 38 of its models are in our catalog (52 in all), and the 105 path/body combinations match. The twelve added on 25 Sep (Kling 3 Motion Pro, Kling O1, Kling 2.5, Wan 2.6/2.7/3 Prime, MiniMax H3, LTX 2.5 Fast, Happy Horse 1/1.1, Flux 3 video) carry estimated prices, said in their notes. Kling O1/O3 and Kling 2.5 need a first frame (their only route takes one); LTX 2.5 is text only. `Autom8AI/Open-Higgsfield-AI` is a different product: it runs on muapi.ai with a muapi key, not on Higgsfield's API. Your own fal or Higgsfield model: `office.config.json → media.custom: [{ "id", "name", "engine": "fal"|"higgsfield", "kind": "image"|"video", "path", "cost" }]`. Default models: `media.default: { "image": "…", "video": "…" }`.
+- **Engines** turn on when their key is in the Windows environment — never write a key into a file: `HF_KEY="id:secret"` (Higgsfield Cloud: Soul, Kling 3, Seedance 2/2.5, Flux 2, Ideogram 4, Recraft, Wan, MiniMax, LTX, PixVerse…; or `HF_API_KEY` + `HF_API_SECRET`; `HF_API_BASE_URL` overrides `https://api.higgsfield.ai`), `GEMINI_API_KEY` (Google: Nano Banana 2, 2 Lite, Pro and 2.5 for images; **Veo 3.1, Fast and Lite for video** — Veo needs billing on the AI Studio project; Imagen was shut down by Google on 17 Aug 2026), `XAI_API_KEY` (Grok), `OPENAI_API_KEY` (GPT Image), `FAL_KEY` (fal.ai: Flux, Seedream, Nano Banana, Ideogram, Kling 2.5, Seedance 1, Hailuo, Veo 3). `prueba` and `prueba-video` are free local cards for testing the flow.
+- **Models** are the `CATALOG` in `media.mjs`: each one has its engine, the media it takes (`roles`: start/end frame — **video only**, an image model never takes a frame and `npm run check` refuses one that does — references, a source video; `needs` for the required ones) and its `settings` (enum / range / boolean, shown by the page).
+- **Higgsfield (V4.4, 25 Sep 2026) is built from its own documentation.** `higgsfield-schemas.json` holds every route Higgsfield documents (81 on 25 Sep 2026: fields, allowed values, limits, defaults, required), made by `node scripts/higgsfield-schemas.mjs <llms-full.txt>` from docs.higgsfield.ai. Each Higgsfield model in `media.mjs` is only a list of routes (`hfm(id, name, kind, { text, image, firstLast, reference, videoRef, edit }, cost, note)`); from the schemas the office works out its settings, the media it takes, which route a request goes to (by the media it carries) and a body with only fields that route knows, each value one it accepts. `tests/higgsfield.test.mjs` sends every combination through the schema and checks every documented route is reachable. 53 Higgsfield models: Soul, Soul 2, Soul Cinema, Marketing Studio (3), Ideogram 4, Recraft 4.1 (4), Grok Imagine 2, Qwen Image 3 (+edit), Z-Image Turbo; Kling 3 (std, pro, 4K, turbo), Kling 3 and 2.6 motion control (std, pro), Kling O3 and O1 (first-last, image reference, video reference, video edit), Kling 2.6 Pro, Kling 2.5 Turbo (std, pro), Seedance 2.0 and 2.5 (+edit, +extend), Cinema Studio 4.0, Genjutsu (motion transfer, object swap), MiniMax Hailuo 2.3 and H3, Wan 2.6/2.7/3/3 Prime (with reference), LTX 2.5 Pro/Fast (text and image), PixVerse 6, Happy Horse 1.0/1.1, Grok Imagine Video. Five routes the documentation no longer lists (Flux 2 Pro, Flux 3 video, DoP, Seedance 2.0 Fast/Mini) stay as `legacy: true` with a note. **When Higgsfield adds a model:** download the new `llms-full.txt`, rerun the script, add one `hfm(…)` line, `npm run check`. Prices of the new ones are estimates, said in their notes.
+- **Google (V4.4, 27 Sep 2026)** runs on `GEMINI_API_KEY`: images by `generateContent` (each model has its own `gid`: `gemini-3.1-flash-image`, `gemini-3.1-flash-lite-image`, `gemini-3-pro-image-preview`, `gemini-2.5-flash-image`; `imageConfig.aspectRatio` and `imageSize` 1K/2K/4K), video by Veo as Google's own SDK sends it (`googleapis/js-genai`): `POST v1beta/models/<id>:predictLongRunning` → poll `GET v1beta/<operation>` → `generateVideoResponse.generatedSamples[].video.uri`, downloaded with the key (`veoRequest` in `media.mjs`; a first and last frame; up to 3 references, which go at 720p landscape; 1080p comes in 8 s). `tests/google.test.mjs` runs both against a local stand-in. The ids come from Google's cookbook (`google-gemini/cookbook`); if Google renames one, change its `gid`.
+- **Other engines.** Auth and uploads follow Higgsfield's own client (`Key id:secret`, `POST /<model>` → `status_url`/`cancel_url`, `/requests/{id}/status` → queued · in_progress · completed · failed · nsfw · canceled, `images[].url`/`video.url`, `/files/generate-upload-url` + PUT; 403 means «not enough credits»; only a queued request can be cancelled; a 401/403/404 on a status stops the poll). Your own fal or Higgsfield model: `office.config.json → media.custom: [{ "id", "name", "engine": "fal"|"higgsfield", "kind": "image"|"video", "path", "cost" }]`. Default models: `media.default: { "image": "…", "video": "…" }`.
 - **Jobs**: every generation is a background job in `data/media-jobs.json` (queued → running → done/failed with the reason in plain words). Queue engines keep their request ids, so a restart resumes the poll. The page shows live tiles; a failed one says why and has REINTENTAR.
 - **Agents** in `media.departments` (default marketing, delivery, sales, ops) get `generar_imagen`, `generar_video` (with `imagen_inicial`/`imagen_final` to animate), `buscar_en_galeria`, `estado_trabajo`, `estado_estudio`. An image usually comes back within the call as `![…](/media/…)`; a video hands back `⏳ Estudio: … (trabajo <id>)`, which the agent leaves in its deliverable and the office swaps for the file when the job ends (task result and its note).
-- **Files**: `<brain>/Agents Office/media/YYYY-MM/` with a `.json` record beside each (prompt, model, settings, media used, size, who, task). Uploads (the owner's product photos, logos, faces) live there too, marked `upload`. Trash goes to `media/.papelera` (30 days, with undo). Budget: `media.dailyLimit` (a video counts 5), `media.maxPerRequest`, `media.concurrency` (jobs at once, default 3).
+- **Files**: `<brain>/Agents Office/media/YYYY-MM/`, named `YYYY-MM-DD <prompt> HHMMSS` and never reused (not even a name whose file is in the bin: a reused name made the gallery show an old picture from the browser's cache; `tests/media-names.test.mjs`); the page asks for each one as `/media/…?v=<its time>`. A `.json` record sits beside each (prompt, model, settings, media used, size, who, task). Uploads (the owner's product photos, logos, faces) live there too, marked `upload`. Trash goes to `media/.papelera`: 30 days counted from the day it went in, then it is removed; **Papelera** in the Estudio (beside Historial) lists it with its picture and days left, «Recuperar» or «Borrar para siempre», and «Vaciar la papelera» (`/api/media/trash`, `/api/media/trash/purge`). The Brain has its own bin (🗑 Papelera in the Brain, G) for the office's deliverables. Budget (V4.5: in **Ajustes → Estudio**, applied at once by `media.setLimits`): `media.dailyLimit` (a video counts 5; 0 = no cap), `media.dailyBudget` and `media.monthlyBudget` (US$, 0 = none; checked with the model's estimated price before a request is sent, jobs still running count), `media.maxPerRequest`, `media.concurrency` (jobs at once, default 3). The day is the machine's local day; `data/media-usage.json` keeps the day's count and cost and the month's cost.
+- **Folders (V4.6, 27 Sep 2026):** the owner's own labels, not directories — a file never moves on disk (the links in deliverables and references keep working); its `.json` record carries `folder: <id>` and `<media>/folders.json` keeps the names. A strip under the gallery's filters: Todas · Sin carpeta · each folder (click to see it, double click or F2 or «⋯» to rename, «⋯» to remove — its files stay, in «Sin carpeta») · + Nueva carpeta. Drag a card (or all the selected ones) onto a folder; «Mover a…» in the selection bar and «⋯ → Mover a una carpeta…» on a card do the same without a mouse (a phone cannot drag). What is generated or uploaded while a folder is open lands in it (`folder` in `/api/media/jobs` and `/api/media/upload`). API: `POST /api/media/folders {name, files?}`, `PATCH|DELETE /api/media/folders/<id>`, `POST /api/media/move {files, folder|null}`; `tests/media-folders.test.mjs`.
+- **The cards (V4.4; V4.5):** nothing sits over a picture. Under the caption, icons always in sight — the main action (the clapperboard animates an image; a video repeats), **Usar de referencia** (images only, V4.5: the owner uses it a lot), Descargar, the bin — and «⋯» for the favourite, Variar and Repetir. Each icon says what it does on hover.
+- **The viewer (V4.4, 27 Sep 2026):** two columns, the picture and its own panel (prompt, details, actions); the picture can only fill its own column, so the text never sits on it. Under 1100 px the panel goes below the picture.
+- **The model list (V4.4, 27 Sep 2026):** sorts by Recomendado, Mejor calidad, Más barato, Más caro, Más rápido or Por creador, filters by maker, and searches by name, maker or use. Each model shows its maker, quality (●●●● 1–4), speed and «Para: …» — from `INFO` in `media.mjs` (a model not listed there gets its engine as maker and quality 2; add a line when you add a model).
 - To make an agent use it well, put the house style for prompts in its skill (e.g. `prompts-visuales`), and which model to prefer for which piece.
 
 ## Everything else

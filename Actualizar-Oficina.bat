@@ -30,7 +30,9 @@ if errorlevel 1 (
   git commit -q -m "Cambios locales guardados antes de actualizar"
   echo Guardados.
 )
-rem 3. Traer lo del equipo
+rem 3. Traer lo del equipo (V4.4: antes se anota la version actual, para Volver-Atras.bat)
+if not exist data mkdir data
+git rev-parse HEAD > "data\version-anterior.txt"
 echo Trayendo lo ultimo de GitHub...
 git pull --no-rebase --no-edit
 if errorlevel 1 goto FALLO

@@ -397,7 +397,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     } else { usageEl.className = 'tm-usage off'; usageEl.innerHTML = '<span>USO NO DISPONIBLE</span>'; usageEl.title = (u && u.reason) || ''; }
   }
   function modelPulse(k, strong = false) {
-    if (!modelImgs[k]) return; // a tile that has gone (ChatGPT in a live office) has no wire to pulse
+    if (!modelImgs[k] || !mwires[k]) return; // a tile that has gone (ChatGPT in a live office), or one with no wire, has nothing to pulse
     wirePulse('brain', { model: k, scale: strong ? 1.2 : 0.9 });
     wirePulse('brain', { model: k, reverse: true, delay: 900, scale: strong ? 1 : 0.75 });
     if (modelImgs[k] && strong) { modelImgs[k].classList.remove('tpulse'); void modelImgs[k].offsetWidth; modelImgs[k].classList.add('tpulse'); }
@@ -521,6 +521,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       const k = (now - p.t0) / p.dur;
       if (k < 0) continue;
       if (k >= 1) { p.el.remove(); wirePulses.splice(i, 1); continue; }
+      if (p.model && !mwires[p.model]) { p.el.remove(); wirePulses.splice(i, 1); continue; } // its wire went with the tile: every frame used to throw here
       const path = p.model ? mwires[p.model].path
         : (p.shared && shared[p.shared].wires[p.dept]) ? shared[p.shared].wires[p.dept].path : wires[p.dept].path;
       if (!path.getAttribute('d')) { p.el.remove(); wirePulses.splice(i, 1); continue; } // wire hidden (other dept in focus)

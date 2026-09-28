@@ -1,0 +1,25 @@
+# Agents Office — every push and every Pull Request runs the tests and the full check (V4.4, 25 Sep 2026).
+# If a change breaks something, GitHub marks it red before it reaches main.
+name: check
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Secrets (keys, cards, ID cards)
+        run: npm run secrets
+      - name: Unit tests
+        run: npm test
+      - name: Browser for the smoke tests
+        run: npx playwright-core install --with-deps chromium
+      - name: Full check (build, roster, skills, routines, Estudio, server, page)
+        run: npm run check

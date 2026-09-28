@@ -4,7 +4,13 @@ import { initSheet } from './agentsheet.js'; // the agent sheet: edit who an age
 import { MODEL_KEYS as SHEET_MODELS, modelName as sheetModelName, EFFORT_KEYS as SHEET_EFFORTS } from './models.js';
 import { initStudio } from './studio.js'; // the Estudio: images and video, by hand and by the agents
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
+import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
+import { initHealth } from './health.js'; // V4.4: the office's health (O)
+import { initCosts } from './costs.js'; // V4.4: costs and return (U)
+import { initSettings } from './settings.js'; // V4.4: the settings window (,)
+import { initBusiness } from './business.js'; // V4.4: how the business is doing (N)
+import { initSearch } from './search.js'; // V4.4: search everything (Ctrl+K)
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -107,7 +113,7 @@ function flyTo(targetPos, zoom, dur = 800, opts = {}) {
 }
 function tickTween(now) {
   if (!tween) return;
-  const k = Math.min(1, (now - tween.t0) / tween.dur);
+  const k = Math.min(1, Math.max(0, (now - tween.t0) / tween.dur)); // V4.5: a frame's time can be older than the click that started the flight — it flew backwards for a frame
   const e = bezier(k);
   view.target.lerpVectors(tween.fromT, tween.toT, e);
   view.zoom = tween.fromZ + (tween.toZ - tween.fromZ) * e;
@@ -425,7 +431,7 @@ for (const k of [...DEPT_KEYS, 'brain']) {
     </div>
     <div class="b-appr" style="display:none">⚠ <span class="ap-n">1</span><span class="ap-l"> EN ESPERA DE APROBACIÓN</span></div>`;
   if (k !== 'brain') { b.setAttribute('role', 'button'); b.tabIndex = 0; b.title = `${dept.name} · ${n} agentes — abrir el departamento`; b.setAttribute('aria-label', `${dept.name}: abrir el departamento`); b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zoomToDept(k); } }); }
-  b.addEventListener('click', (e) => {
+  if (k !== 'brain') b.addEventListener('click', (e) => {
     if (e.target.closest('.b-appr')) { zoomToApproval(k); e.stopPropagation(); }
     else if (e.target.closest('.b-tasks') && tasks) { tasks.showDept(k); e.stopPropagation(); }
     else zoomToDept(k);
@@ -434,7 +440,9 @@ for (const k of [...DEPT_KEYS, 'brain']) {
     b.className = 'badge brainTag';
     b.innerHTML = `<button type="button" class="bt-brain" title="Abrir el Cerebro: tus notas (G)" aria-label="Abrir el Cerebro">${BRAIN_ICON}<span class="bt-tx"><span class="bt-t">EL CEREBRO</span><span class="bt-s"><b>${brain.state.notes.toLocaleString('es-PA')}</b> notas</span></span></button>` +
       `<button type="button" class="bt-dim" title="Hablar con Dimitri, tu mano derecha (S) · el punto verde: disponible" aria-label="Abrir el chat con Dimitri"><span class="bt-av" aria-hidden="true">D</span><span class="bt-tx"><span class="bt-t">DIMITRI</span><span class="bt-s">tu mano derecha</span></span></button>`;
-    b.onclick = (e) => { e.stopPropagation(); if (e.target.closest('.bt-dim')) subger.toggle(); else if (e.target.closest('.bt-brain')) brain.open(); };
+    // V4.5 (27 Sep 2026): Dimitri's chat brings the centre closer, beside the chat (the card's own click used to zoom as well,
+    // by accident, and the two buttons shrank as the office came near); the Brain opens its view
+    b.addEventListener('click', (e) => { e.stopPropagation(); if (e.target.closest('.bt-dim')) { const opening = !subger.isOpen(); subger.toggle(); if (opening) enterFocus('brain'); } else if (e.target.closest('.bt-brain')) brain.open(); });
   }
   hud.appendChild(b);
   deptRT[k].badge = b;
@@ -461,7 +469,7 @@ for (const k of [...DEPT_KEYS, 'brain']) {
   if (k === 'fin') deptRT[k].sideBadge = true;
   if (k === 'ops') { deptRT[k].sideBadge = true; deptRT[k].sideLeft = true; }
 }
-if (SERVED) setInterval(() => updateBillboards(), 1500); // V4.1: the real office's card counts follow the list (they froze at page load)
+if (SERVED) setInterval(() => { if (!document.hidden) updateBillboards(); }, 1500); // V4.3: a hidden tab does not repaint cards nobody sees; // V4.1: the real office's card counts follow the list (they froze at page load)
 function updateBillboards() {
   for (const k of Object.keys(BB_ROWS)) {
     BB_ROWS[k].forEach((row, i) => {
@@ -573,96 +581,108 @@ addEventListener('keydown', (e) => {
   if (e.target.isContentEditable || ((e.ctrlKey || e.metaKey || e.altKey) && e.key !== 'Escape')) return; // Ctrl+C, Alt+… belong to the browser and to screen readers
   // Esc closes the window on top, one at a time, newest first; only with nothing open does it leave the department
   if (e.key === 'Escape') {
-    if (keysSheet.isOpen()) { keysSheet.close(); return; }
+    if (health.isOpen()) { health.close(); return; }
+    if (costsWin.isOpen()) { costsWin.close(); return; }
+    if (settingsWin.isOpen()) { settingsWin.close(); return; }
+    if (bizWin.isOpen()) { bizWin.close(); return; }
     const cp = document.getElementById('connPanel'); if (cp) { cp.querySelector('.cp-x').click(); return; }
     if (tasks && tasks.detail && tasks.detail.isOpen()) { tasks.detail.close(); return; }
     if (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) { agentSheet.close(); return; }
     if (subger.isOpen()) { subger.close(); return; }
     if (studio.isOpen()) { studio.close(); return; }
     if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); return; }
-    if (brain.isOpen()) { brain.close(); return; }
+    if (brain.isOpen()) { if (!brain.back()) brain.close(); return; } // V4.6: the search's list, then the card, then the Brain
     if (tasks && tasks.isOpen()) { tasks.close(); return; }
     zoomOut(); return;
   }
-  // with a full-screen window open, the one-letter keys stay out (they used to open more windows invisibly behind it) — except that window's own key, which closes it
-  if (e.key === '?' || (e.key === '/' && e.shiftKey)) { keysSheet.toggle(); return; } // V4.1 (audit 27): every key, in one sheet
-  if (keysSheet.isOpen()) { if (e.key === 'd' || e.key === 'D') { setDark(!darkOn); keysSheet.sync(); } return; }
-  const topWin = studio.isOpen() ? 'e' : subger.isOpen() ? 's' : brain.isOpen() ? 'g' : (tasks && tasks.detail && tasks.detail.isOpen()) ? '·' : (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) ? '·' : '';
-  if (topWin && e.key.toLowerCase() !== topWin) return;
-  if (e.key === 'p' || e.key === 'P') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
-  else if (tasks && tasks.calendar && tasks.calendar.isOpen()) return; // the calendar has its own keys (← → W M T)
-  else if (e.key === 'g' || e.key === 'G') brain.toggle(); // V3.6: the full-screen Brain graph
-  else if (e.key === 'b' || e.key === 'B') { if (tasks) tasks.toggle(); } // V3: the company-wide board
+  if (e.key === '?' || (e.key === '/' && e.shiftKey)) { showKeys(); return; } // V4.5: every key, in Ajustes → Atajos de teclado
+  if (health.isOpen() || costsWin.isOpen() || settingsWin.isOpen() || bizWin.isOpen()) return; // a window on top: its keys only (a letter used to open another window behind it)
+  const key = e.key.toLowerCase();
+  // with a drawer or a sheet open, the one-letter keys stay out — except that window's own key, which closes it
+  const topWin = subger.isOpen() ? 's' : (tasks && tasks.detail && tasks.detail.isOpen()) ? '·' : (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) ? '·' : '';
+  if (topWin && key !== topWin) return;
+  // V4.5 (27 Sep 2026): a view (the Estudio, the calendar, the Brain) keeps the top bar — its dock's keys switch views or open a
+  // window on top; the office's own keys (1–6, +, −, T…) wait, and the calendar keeps its own (← → T D W M A)
+  if (views.current()) {
+    if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'g') brain.toggle();
+    else if (key === 'o') health.toggle(); else if (key === 'n') bizWin.toggle(); else if (key === 'u') costsWin.toggle(); else if (key === ',') settingsWin.toggle();
+    return;
+  }
+  if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
+  else if (key === 'g') brain.toggle(); // V3.6: the full-screen Brain graph
+  else if (key === 'b') { if (tasks) tasks.toggle(); } // V3: the company-wide board
   else if (e.key === '+' || e.key === '=') zoomStep(1.5);
   else if (e.key === '-' || e.key === '_') zoomStep(1 / 1.5);
   else if (e.key === '0') zoomOut();
-  else if ((e.key === 'x' || e.key === 'X') && !SERVED) { if (!meeting) planMeeting(performance.now()); } // demo theatre: two agents walk to a meeting — never in the owner's real office
+  else if (key === 'x' && !SERVED) { if (!meeting) planMeeting(performance.now()); } // demo theatre: two agents walk to a meeting — never in the owner's real office
   else if (e.key >= '1' && e.key <= '6') { // jump straight to a department
     const dept = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'][+e.key - 1];
     if (focused !== dept) enterFocus(dept);
   }
-  else if (e.key === 'c' || e.key === 'C') { // in a department: open its (lead) agent's chat
+  else if (key === 'c') { // in a department: open its (lead) agent's chat
     if (focused && focused !== 'brain') {
       const a = AGENTS.find(x => x.dept === focused && x.lead) || AGENTS.find(x => x.dept === focused);
       if (a) openAgentRail(a.id, 'chat');
     }
   }
-  else if (e.key === 'v' || e.key === 'V') setCam(!document.body.classList.contains('cam'));
-  else if (e.key === 'd' || e.key === 'D') setDark(!darkOn);
-  else if (e.key === 's' || e.key === 'S') subger.toggle(); // Dimitri's chat
-  else if (e.key === 't' || e.key === 'T') document.getElementById('topPanel').click(); // show / hide the task panel
-  else if (e.key === 'e' || e.key === 'E') studio.toggle(); // the Estudio
-  else if ((e.key === 'w' || e.key === 'W') && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
+  else if (key === 'v') setCam(!document.body.classList.contains('cam'));
+  else if (key === 's') subger.toggle(); // Dimitri's chat
+  else if (key === 't') document.getElementById('topPanel').click(); // show / hide the task panel
+  else if (key === 'e') studio.toggle(); // the Estudio
+  else if (key === 'o') health.toggle(); // V4.4: the office's health
+  else if (key === 'u') costsWin.toggle(); // V4.4: costs and return
+  else if (e.key === ',') settingsWin.toggle(); // V4.4: settings
+  else if (key === 'n') bizWin.toggle(); // V4.4: how the business is doing
+  else if (key === 'w' && !SERVED) requestApproval('apay'); // demo cue only: the owner's real office never shows an invented approval
 });
 
-/* ---------- V4.1 (24 Sep 2026, audit 27): the shortcuts sheet — «?» or the keyboard in the dock. B, D, 1–6 and the rest
-   used to exist only as keys nobody could discover. Each line is also a button that does it; dark mode is a switch. ---------- */
-const keysSheet = (() => {
+/* ---------- V4.1 (24 Sep 2026, audit 27): every shortcut in one list — B, 1–6 and the rest used to exist only as keys nobody
+   could discover. V4.5 (27 Sep 2026, the owner): the list lives in Ajustes → «Atajos de teclado» (? opens it there) and the
+   dark mode left it for Ajustes → Apariencia. Each line with a key is also a button that does it. A new key goes here too. ---------- */
+const KEYS = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
-    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Estudio, calendario o Cerebro abiertos', [['E · P · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
     ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
-    ['Calendario abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['D · W · M · A', 'Vista de día, semana, mes o agenda (con el calendario abierto, D no cambia el modo oscuro)'], ['Clic en una hora', 'Programar algo a esa hora (semana y día)'], ['Mantener pulsada', 'En tablet o teléfono: arrastrar una tarjeta a otro día u hora']]],
-    ['Vista', [['D', 'Modo oscuro (se recuerda en este navegador)'], ['V', 'Modo cámara: fondo neutro para grabar la pantalla', 'v']]],
+    ['Cerebro abierto', [['← → ↑ ↓', 'Girarlo (con Mayús, más rápido)'], ['+  −', 'Acercar y alejar'], ['0', 'Centrarlo'], ['Espacio', 'Que gire solo, o pararlo'], ['Esc', 'Cerrar la lista de la búsqueda, la ficha y luego el Cerebro']]],
+    ['Calendario abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['D · W · M · A', 'Vista de día, semana, mes o agenda'], ['Clic en una hora', 'Programar algo a esa hora (semana y día)'], ['Mantener pulsada', 'En tablet o teléfono: arrastrar una tarjeta a otro día u hora']]],
+    ['Vista', [['V', 'Modo cámara: fondo neutro para grabar la pantalla', 'v']]],
   ];
   if (!SERVED) G.push(['Solo en la demo', [['X', 'Dos agentes se reúnen en el Cerebro', 'x'], ['W', 'Una aprobación de ejemplo', 'w']]]);
-  const el = document.createElement('div'); el.id = 'keysOv'; el.hidden = true; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'keysT');
-  el.innerHTML = `<div class="ks-box"><div class="ks-head"><h2 id="keysT">Atajos de teclado</h2><span class="sp"></span>
-      <label class="ks-dark"><input type="checkbox" role="switch" class="ks-dk"> Modo oscuro <kbd>D</kbd></label>
-      <button type="button" class="ks-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div>
-    <p class="ks-lead">Funcionan cuando no estás escribiendo. Pulsa una línea para hacerlo ahora.</p>
-    <div class="ks-grid">${G.map(([h, rows]) => `<section><h3>${h}</h3>${rows.map(([k, t, key]) => key
-      ? `<button type="button" class="ks-row" data-key="${key}"><kbd>${k}</kbd><span>${t}</span></button>`
-      : `<div class="ks-row"><kbd>${k}</kbd><span>${t}</span></div>`).join('')}</section>`).join('')}</div></div>`;
-  document.body.appendChild(el);
-  let opener = null;
-  const sync = () => { el.querySelector('.ks-dk').checked = darkOn; };
-  function open() { if (!el.hidden) return; opener = document.activeElement; sync(); el.hidden = false; modal.open(el); document.getElementById('topKeys')?.setAttribute('aria-expanded', 'true'); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.ks-x').focus({ preventScroll: true }); }
-  function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); el.hidden = true; document.getElementById('topKeys')?.setAttribute('aria-expanded', 'false'); if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
-  el.addEventListener('click', e => {
-    if (e.target === el || e.target.closest('.ks-x')) return close();
-    const b = e.target.closest('.ks-row[data-key]'); if (!b) return;
-    close(); setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', { key: b.dataset.key })), 0); // the same path as the key itself, after this click has finished (a click-outside would close what it opens)
-  });
-  el.querySelector('.ks-dk').addEventListener('change', e => setDark(e.target.checked));
-  el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
-  return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden, sync };
+  return G;
 })();
-document.getElementById('topKeys').addEventListener('click', () => keysSheet.toggle());
+// a line of the list pressed: the same path as the key itself, after the click that closed Ajustes has finished
+const runKey = k => setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: k === 'k' })), 0);
+function showKeys() { // «?»: Ajustes opens on its shortcuts; pressed again there, it closes
+  for (const w of [health, costsWin, bizWin]) if (w.isOpen()) w.close();
+  if (settingsWin.isOpen() && settingsWin.tab() === 'atajos') settingsWin.close(); else settingsWin.open('atajos');
+}
+const health = initHealth({ served: SERVED, esc }); // V4.4 (B6)
+const costsWin = initCosts({ served: SERVED, esc }); // V4.4 (C1–C10)
+const settingsWin = initSettings({ served: SERVED, esc, keys: KEYS, runKey, theme: { get: themePref, set: setTheme, systemDark: () => sysDark.matches } }); // V4.4 (J5, H1); V4.5: + Apariencia and the shortcuts
+const bizWin = initBusiness({ served: SERVED, esc }); // V4.4 (J1)
 
 // camera mode: mid-tone backdrop for filming the screen (#cam=1 / V toggles)
 function setCam(on) { document.body.classList.toggle('cam', !!on); }
-// DARK MODE (AJ, 6 Sep 2026: "make another one in dark mode as I will show both"): D toggles, #dark=1
-// forces it, /dark on the server opens in it. The chrome follows the CSS tokens; the scene
-// re-tints its shared materials (plinths, floors, walkways), relights, and the Brain/wires swap ink.
-let darkOn = false;
+// DARK MODE (AJ, 6 Sep 2026: "make another one in dark mode as I will show both"): #dark=1 forces it, /dark on the server
+// opens in it. The chrome follows the CSS tokens; the scene re-tints its shared materials (plinths, floors, walkways),
+// relights, and the Brain/wires swap ink.
+// V4.5 (27 Sep 2026, the owner): the theme is chosen in Ajustes → Apariencia — Claro (the default), Oscuro or Automático
+// (it follows the system and changes with it). It is remembered in this browser. The D key is gone: the calendar's D is its
+// day view, and a switch with three positions is not a key. #dark=1 / #dark=0 still force it for a recording, unsaved.
+let darkOn = false, themeForced = false;
+const THEME_KEY = 'ao.theme', sysDark = matchMedia('(prefers-color-scheme: dark)');
+function themePref() { try { const v = localStorage.getItem(THEME_KEY); return v === 'dark' || v === 'auto' ? v : 'light'; } catch { return 'light'; } }
+function applyTheme(pref = themePref()) { setDark(pref === 'dark' || (pref === 'auto' && sysDark.matches)); }
+function setTheme(pref) { pref = pref === 'dark' || pref === 'auto' ? pref : 'light'; try { localStorage.setItem(THEME_KEY, pref); } catch {} themeForced = false; applyTheme(pref); }
+sysDark.addEventListener?.('change', () => { if (!themeForced && themePref() === 'auto') applyTheme('auto'); });
 const DARK = { plinth: 0x2c2d2b, walkway: 0x303230, ground: 0x1b1c1a };
 function mix(hex, base, k) { const a = new THREE.Color(hex), b = new THREE.Color(base); return b.lerp(a, k); }
-function setDark(on, remember = true) {
+function setDark(on) {
   darkOn = !!on;
-  if (remember) try { localStorage.setItem('ao.dark', darkOn ? '1' : '0'); } catch {} // V4.1: remembered on this browser (audit 27)
   document.body.classList.toggle('dark', darkOn);
   restoreSceneDim(); for (const m of dimCache.values()) if (m && m.dispose) m.dispose(); dimCache.clear(); // the dim twins cache base colours — rebuild them for the new palette
   scene.traverse(o => {
@@ -877,9 +897,10 @@ function focusTarget(k, atPos) {
 function enterFocus(k, pendingAgentId) {
   pillTabs(k === 'brain' ? null : k);
   if (k === 'brain') { // the Brain keeps its plain fly-in (AJ's call)
+    if (focused && focused !== 'brain') exitFocus(false); // V4.5: from a department to the centre, its chat closes (it used to stay open behind)
     focused = 'brain';
     if (tasks) tasks.onFocusChange('brain');
-    flyTo([LAYOUT.brain.pos[0], 0, LAYOUT.brain.pos[1] + 1.5], 3.1, 700);
+    flyTo(centreTarget(3.1), 3.1, 700);
     syncOverviewBtn();
     return;
   }
@@ -915,6 +936,21 @@ function enterFocus(k, pendingAgentId) {
     cascadeRows();
   }));
   syncOverviewBtn();
+}
+// V4.5 (27 Sep 2026): the centre comes to rest in the room the page leaves it — between Dimitri's chat (#subOv, on the left,
+// when it is open) and the task panel (on the right) — the way a department sits beside its own chat. The chat counts only
+// when the room beside it can hold the centre (a tablet with the panel open has none: the centre stays under the chat).
+function chatLeft(rightPx) {
+  if (innerWidth <= 900 || !document.body.classList.contains('subOpen')) return 0;
+  const l = 14 + Math.min(640, innerWidth - 28);
+  return innerWidth - rightPx - l >= 240 ? l : 0;
+}
+function centreTarget(zoom) {
+  const ppw = zoom * innerHeight / (2 * FR), wide = innerWidth > 900;
+  const right = wide && !document.body.classList.contains('tpMin') ? (tasks ? tasks.panelWidth() : 400) + 30 : 0;
+  const left = chatLeft(right);
+  const d = (left - right) / 2 / ppw; // screen px → world units along screen-right
+  return [LAYOUT.brain.pos[0] - SCREEN_RIGHT.x * d, 0, LAYOUT.brain.pos[1] + 1.5 - SCREEN_RIGHT.z * d];
 }
 function pillTabs(k) { for (const r of Object.values(R)) r.pill.tabIndex = k && r.a.dept === k ? 0 : -1; } // only the open department's agents are Tab stops
 function exitFocus(flyOut = true) {
@@ -1570,6 +1606,9 @@ function tickLOD() {
   const pillA = smooth(1.45, 1.85, z); // pills stay on at near — they name the agents
   // billboards persist at every zoom (v1 rule) — slightly larger when far, compact when near
   const badgeScale = 1.02 - 0.3 * smooth(1.2, 2.6, z);
+  // V4.5 (27 Sep 2026, the owner): the Brain and Dimitri GROW as the office comes closer, like the agents' names — they used to
+  // shrink with the department cards (which fold into the chat when you go in). Capped to the room between Dimitri's chat and the panel.
+  const tagScale = 1.02 + 0.33 * smooth(1.2, 2.8, z);
   // V4.1: under 900 px the panel is a sheet at the BOTTOM, not a column on the right — the cards keep clear of it there
   // (they used to be pinned to the left edge, and half of them hid under the sheet)
   const narrow = innerWidth <= 900, sheet = narrow && !document.body.classList.contains('tpMin');
@@ -1578,7 +1617,10 @@ function tickLOD() {
     if (focused === k && k !== 'brain') continue; // this billboard is docked in the rail
     let [sx, sy] = toScreen(d.badgeAnchor);
     // keep billboards fully on screen (camera-readability rule)
-    const [bw0, bh0] = box(d.badge); const bh = bh0 * badgeScale, bw = bw0 * badgeScale;
+    const [bw0, bh0] = box(d.badge);
+    const chatL = k === 'brain' ? chatLeft(innerWidth - rightEdge) : 0, leftEdge = chatL ? chatL + 10 : 8; // beside Dimitri's chat when it fits there
+    const sc = k === 'brain' ? Math.max(0.6, Math.min(tagScale, (rightEdge - leftEdge - 8) / Math.max(1, bw0))) : badgeScale;
+    const bh = bh0 * sc, bw = bw0 * sc;
     let xf;
     if (d.sideBadge) { // anchored by an edge, vertically centred (emails/sales/fin/delivery)
       sy = clamp(sy, 64 + bh / 2, bottomEdge - bh / 2 + 4);
@@ -1586,15 +1628,15 @@ function tickLOD() {
       else { sx = clamp(sx, 8, rightEdge - bw); xf = 'translate(0,-50%)'; }
     } else if (k === 'brain') { // the Brain and Dimitri sit centred on the centre pod
       sy = clamp(sy, bh / 2 + 64, bottomEdge - bh / 2);
-      sx = clamp(sx, bw / 2 + 8, rightEdge - bw / 2);
+      sx = clamp(sx, leftEdge + bw / 2, rightEdge - bw / 2);
       xf = 'translate(-50%,-50%)';
     } else {
       sy = clamp(sy, bh + 64, bottomEdge);
       sx = clamp(sx, bw / 2 + 8, rightEdge - bw / 2);
       xf = 'translate(-50%,-100%)';
     }
-    setS(d.badge, 'transform', `translate(${px(sx)}px,${px(sy)}px) ${xf} scale(${badgeScale.toFixed(3)})`);
-    setS(d.badge, 'opacity', (1 - 0.75 * focusDim).toFixed(3)); // unfocused boards recede with the scene
+    setS(d.badge, 'transform', `translate(${px(sx)}px,${px(sy)}px) ${xf} scale(${sc.toFixed(3)})`);
+    setS(d.badge, 'opacity', k === 'brain' ? '1' : (1 - 0.75 * focusDim).toFixed(3)); // unfocused boards recede with the scene; V4.3: the Brain and Dimitri are reachable from every view, so they stay legible (at 33% their text fell to 1.1:1)
     setS(d.badge, 'pointerEvents', 'auto');
   }
   // name pills stay on at EVERY zoom (AJ's call) — smaller when far, full-size when near
@@ -1651,7 +1693,7 @@ tasks = initTasks({
   brainWrite: (id, title) => brain.write(id, title), brain,
   onLive: (h) => {
     if (mcp && mcp.setProvider) mcp.setProvider(h.provider); // the brain the agents run on: Claude's logo, or Meta's (option 2 of the .bat) — the logo alone says it
-    { const br = document.querySelector('#topbar .brand'); br.innerHTML = `<span class="bn">${esc(h.name)}</span><span class="bs">OFICINA</span>`; br.title = `Agents Office ${h.version || ''} · la oficina de ${h.name}`; }
+    { const br = document.querySelector('#topbar .brand'); br.innerHTML = `<span class="bn">${esc(h.name)}</span><span class="bs">OFICINA</span>`; br.title = `Volver a la oficina · Agents Office ${h.version || ''} · la oficina de ${h.name}`; }
     if (h.deputy) { const t = document.querySelector('.brainTag .bt-dim'); if (t) { t.querySelector('.bt-t').textContent = String(h.deputy).toUpperCase(); t.querySelector('.bt-av').textContent = String(h.deputy).charAt(0).toUpperCase(); t.title = `Hablar con ${h.deputy}, tu mano derecha (S)`; t.setAttribute('aria-label', `Abrir el chat con ${h.deputy}`); } }
     document.title = `${h.name} — Agents Office`; brain.setOwner(h.name); brain.setQuiet(true); applyRoster(h.agents); },
   onTools: (agentId, keys) => mcp.onToolsUsed(agentId, keys),
@@ -1666,7 +1708,8 @@ const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, fi
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
 { // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
   const btn = document.getElementById('topPanel');
-  const sync = () => { const shown = !document.body.classList.contains('tpMin'); btn.setAttribute('aria-pressed', shown); btn.classList.toggle('on', shown); };
+  const VIEW_BTN = [['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
+  const sync = () => { const cl = document.body.classList, shown = !cl.contains('tpMin'); btn.setAttribute('aria-pressed', shown); btn.classList.toggle('on', shown); for (const [b, c] of VIEW_BTN) b?.setAttribute('aria-pressed', cl.contains(c)); }; // the open view's icon stays pressed
   btn.addEventListener('click', () => { if (tasks && tasks.setPanel) tasks.setPanel(document.body.classList.contains('tpMin')); sync(); });
   new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['class'] }); sync();
 }
@@ -1690,8 +1733,22 @@ document.getElementById('railSheet').addEventListener('click', () => { if (!moda
   };
   addEventListener('resize', fit); new MutationObserver(fit).observe(tc, { childList: true }); setTimeout(fit, 400); setTimeout(fit, 3000);
 }
-const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', taskTitle: sid => (tasks.findBySid(sid) || {}).title || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); } });
+const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', taskTitle: sid => (tasks.findBySid(sid) || {}).title || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); }, openSettings: tab => settingsWin.open(tab) }); // V4.5: the caps chip opens Ajustes → Estudio
+const finder = initSearch({ served: SERVED, esc, agents: AGENTS, // V4.4 (J7): Ctrl+K, everything at once
+  getTasks: () => (tasks && tasks.tasks) || [], getRoutines: () => (tasks && tasks.routines) || [],
+  openTask: t => tasks.openTask(t), openAgent: id => openAgent(id, 'chat'),
+  openNote: name => { if (!brain.show(name)) { brain.open(); } }, openRoutine: id => tasks.calendar && tasks.calendar.openRoutine(id), openStudio: () => studio.open() });
 document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
+document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)
+// V4.5 (27 Sep 2026): the top bar is the way around — one view at a time under it (src/views.js); the brand is the way home
+// (27 Sep 2026, the owner: «que se viera la oficina en la vista general»): home is the whole office — the view closes, Dimitri's
+// chat and a department's chat close, and the camera flies back to the overview, all in one click
+document.querySelector('#topbar .brand').addEventListener('click', () => {
+  const v = views.current();
+  if (v === 'studio') studio.close({ quiet: true }); else if (v === 'cal') tasks.calendar.close({ quiet: true }); else if (v === 'brain') brain.close({ quiet: true });
+  if (subger.isOpen()) subger.close();
+  zoomOut();
+});
 const hero = HERO ? initHero({ scene, R, AGENTS, deptRT, LAYOUT, DEPTS, DEPT_KEYS, view, camera, spawnEmote, isBusy: () => !!focused || !!tween || !!drag }) : null;
 if (HERO && HERO.target) { view.target.set(...HERO.target); view.zoom = HERO.zoom || view.zoom; }
 
@@ -1710,11 +1767,12 @@ resize();
   if (h.get('appr')) requestApproval(h.get('appr') === '1' ? 'apay' : h.get('appr'));
   if (h.get('view') && LAYOUT[h.get('view')]) enterFocus(h.get('view'));
   if (h.get('cam')) setCam(h.get('cam') === '1');
-  let savedDark = null; try { savedDark = localStorage.getItem('ao.dark'); } catch {}
-  if (h.get('dark') === '1' || document.body.classList.contains('dark')) setDark(true, false);
-  else if (h.get('dark') !== '0' && savedDark === '1') setDark(true, false);
+  try { localStorage.removeItem('ao.dark'); } catch {} // V4.5: the old D switch's memory — the theme starts light until chosen in Ajustes
+  if (h.get('dark') === '1' || document.body.classList.contains('dark')) { themeForced = true; setDark(true); } // #dark=1 or /dark: this page only, the saved choice untouched
+  else if (h.get('dark') === '0') { themeForced = true; setDark(false); }
+  else applyTheme();
   // typing #dark=1 into an OPEN tab is a same-document hash change (no reload) — react to it live
-  addEventListener('hashchange', () => { const d = new URLSearchParams(location.hash.slice(1)).get('dark'); if (d === '1') setDark(true); else if (d === '0') setDark(false); });
+  addEventListener('hashchange', () => { const d = new URLSearchParams(location.hash.slice(1)).get('dark'); if (d === '1') { themeForced = true; setDark(true); } else if (d === '0') { themeForced = true; setDark(false); } });
   if (h.get('board')) { // #board=1 → company board · #board=marketing → that dept's board
     const b = h.get('board');
     if (LAYOUT[b] && b !== 'brain') tasks.openFor(b); else tasks.open();

@@ -8,8 +8,11 @@
 // says what each model is good at), 3 the idea, 4 starting material, 5 format as shapes + «más ajustes» folded — with the
 // quantity and GENERAR fixed at the bottom; card actions as icons over the picture; clear names everywhere.
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
-const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje' };
-const VAL = { auto: 'Auto', low: 'Baja', medium: 'Media', high: 'Alta', video: 'la del video', image: 'la de la imagen' };
+import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
+const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
+  imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo' }; // V4.4: the settings Higgsfield's own schemas bring
+const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
+  epic: 'Épico', drama: 'Drama', noir: 'Noir', comedy: 'Comedia', horror: 'Terror', action: 'Acción', calm: 'Calmado', dynamic: 'Dinámico', chaotic: 'Caótico', 'single-shot': 'Un solo plano', static: 'Fija', dolly_in: 'Acercarse', dolly_out: 'Alejarse', dolly_left: 'A la izquierda', dolly_right: 'A la derecha', jib_up: 'Subir', jib_down: 'Bajar', focus_shift: 'Cambio de foco' };
 const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
 const RATIO_WORD = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Vertical', '16:9': 'Horizontal', '3:4': 'Retrato', '4:3': 'Clásico', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' }; // V4.2 (audit A15): one word that fits; the use goes in the title
 // V4.2 (audit A5): the engine beside the model only when it adds something («Kling 3 · Higgsfield», not «Prueba (gratis) · Prueba (gratis)»)
@@ -24,8 +27,8 @@ const I = { // line icons (stroke = currentColor)
   vid: '<path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
   down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
-  plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>', again: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
-  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>', ref: '<rect x="3" y="7" width="13" height="13" rx="2.5"/><circle cx="7.8" cy="11.6" r="1.4"/><path d="m16 17-3.5-3.5L6 20"/><path d="M19.5 2.5v7M16 6h7"/>', again: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', folder: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
 };
 const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
@@ -33,11 +36,11 @@ const store = { get(k, d) { try { const v = localStorage.getItem('ao.st.' + k); 
 
 export function initStudio(ctx) {
   const { isLive, esc, agentName } = ctx;
-  const el = document.createElement('div'); el.id = 'studioOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'stTitle'); el.tabIndex = -1; el.hidden = true;
+  const el = document.createElement('div'); el.id = 'studioOv'; el.setAttribute('role', 'dialog'); el.setAttribute('data-view', ''); el.setAttribute('aria-labelledby', 'stTitle'); el.tabIndex = -1; el.hidden = true;
   el.innerHTML = `
     <div class="st-head">
       <span class="st-logo">${svg('vid')}</span><div><div class="st-name" id="stTitle">Estudio</div><div class="st-sub"${store.get('subSeen', false) ? ' hidden' : ''}>Imágenes y video reales. Sigue generando aunque cierres esta ventana; tus agentes también lo usan.</div></div>
-      <span class="sp"></span><div class="st-budget" aria-live="polite"></div><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)">${svg('x')}</button>
+      <span class="sp"></span><button type="button" class="st-budget" aria-live="polite" title="Tus topes del Estudio: se cambian en Ajustes → Estudio"></button><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)">${svg('x')}</button>
     </div>
     <div class="st-ptabs" role="tablist" aria-label="Estudio"><button type="button" role="tab" data-pt="gen" aria-selected="true">Crear</button><button type="button" role="tab" data-pt="gal" aria-selected="false">Galería <b class="st-ptn"></b></button></div>
     <div class="st-body">
@@ -47,7 +50,7 @@ export function initStudio(ctx) {
           <div class="st-step"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
             <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button></div></div>
           <div class="st-step"><div class="st-h"><b>2</b> Modelo</div>
-            <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden role="listbox" aria-label="Modelos"></div></div></div>
+            <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden></div></div></div>
           <div class="st-step"><div class="st-h"><b>3</b> Describe lo que quieres</div>
             <div class="st-modeseg" role="group" aria-label="Cuántas ideas"><button type="button" data-mode="one" aria-pressed="true">Una idea</button><button type="button" data-mode="batch" aria-pressed="false" title="Una idea por línea: cada línea es un pedido aparte">Varias ideas, una por línea</button></div>
             <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
@@ -58,7 +61,7 @@ export function initStudio(ctx) {
             <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
           <details class="st-keys"><summary>Motores y cómo activarlos</summary><div class="st-engs"></div>
             <p>La key se guarda en Windows una sola vez (con el comando de arriba en una ventana de comandos, o en «Editar las variables de entorno de esta cuenta») y se reinicia la oficina con el iniciador. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.</p>
-            <p>El tope diario de la oficina está en <code>office.config.json → media.dailyLimit</code> (un video cuenta como 5 imágenes).</p></details>
+            <p>El tope de generaciones al día y el gasto máximo (del día y del mes) se cambian en <button type="button" class="st-lk" data-open="settings">Ajustes → Estudio</button> (un video cuenta como 5 imágenes).</p></details>
         </div>
         <div class="st-foot">
           <div class="st-qty" role="group" aria-label="Cantidad"><span>Cantidad</span><button type="button" data-d="-1" aria-label="Menos">−</button><output class="st-n">1</output><button type="button" data-d="1" aria-label="Más">+</button></div>
@@ -77,8 +80,10 @@ export function initStudio(ctx) {
           <button type="button" class="st-upbtn" title="Sube tus fotos o videos (producto, logo, personaje) para usarlos de referencia o animarlos">${svg('up')}<span>Subir</span></button>
           <button type="button" class="st-selbtn" aria-pressed="false" title="Elegir varias para descargarlas juntas, marcarlas o borrarlas">${svg('grid')}<span>Seleccionar</span></button>
           <button type="button" class="st-histbtn" title="Todos los trabajos de la última semana: hechos, fallados y cancelados, con el motivo">${svg('again')}<span>Historial</span></button>
+          <button type="button" class="st-binbtn" title="Lo que mandaste a la papelera: vuelve con un clic durante 30 días">${svg('trash')}<span>Papelera</span></button>
         </div>
-        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><button type="button" data-b="del">${svg('trash')} Papelera</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
+        <div class="st-folders" role="toolbar" aria-label="Carpetas: arrastra imágenes a una carpeta para guardarlas ahí"></div>
+        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><label class="st-mvw">${svg('folder')}<select class="st-mv" aria-label="Mover las seleccionadas a una carpeta"></select></label><button type="button" data-b="del">${svg('trash')} Papelera</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
         <div class="st-picking" hidden></div>
         <div class="st-count" aria-live="polite"></div>
         <div class="st-grid"></div>
@@ -86,11 +91,16 @@ export function initStudio(ctx) {
     </div>
     <div class="st-light" hidden role="dialog" aria-modal="true" aria-label="Vista ampliada"></div>
     <div class="st-hist" hidden role="dialog" aria-modal="true" aria-labelledby="stHistT"></div>
+    <div class="st-hist st-binov" hidden role="dialog" aria-modal="true" aria-labelledby="stBinT"></div>
     <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" multiple hidden>`;
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
+  // V4.6 (27 Sep 2026, the owner): folders — labels on each file (nothing moves on disk); drag pictures onto one, rename it, remove it
+  let folders = [], folderF = store.get('folder', 'all'), dragFiles = null, fdEdit = null, fdNewFor = null; // fdEdit: 'new' or a folder id being renamed · fdNewFor: files waiting for the new folder
+  const folderName = id => (folders.find(f => f.id === id) || {}).name || '';
+  const inFolder = it => (it.folder && folders.some(f => f.id === it.folder) ? it.folder : null);
   let lastSig = '', lastAt = 0, armed = false;
   let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightFrom = null, prevPrompt = null, qty = 1;
   const modelOf = { image: store.get('model.image', ''), video: store.get('model.video', '') };
@@ -102,7 +112,8 @@ export function initStudio(ctx) {
   const roleName = r => ROLE[r];
   const roleHelp = (r, m = cur()) => helpFor(r, m);
   const itemOf = f => items.find(x => x.file === f);
-  const src = it => '/media/' + String(it.file || it).split('/').map(encodeURIComponent).join('/');
+  // the address carries the file's own moment (?v=): a picture never shows another one that once had its name (the browser keeps them a day)
+  const src = it => { const f = String(it.file || it), x = typeof it === 'object' && it.at ? it : itemOf(f); return '/media/' + f.split('/').map(encodeURIComponent).join('/') + (x && x.at ? '?v=' + x.at : ''); };
   const isVid = f => /\.(mp4|webm)$/i.test(f);
   const ar = r => (r && /^\d+:\d+$/.test(r) ? r.replace(':', ' / ') : '');
   const dlName = it => { const d = new Date(it.at || Date.now()), ext = String(it.file).split('.').pop(); return `${String(it.prompt || 'estudio').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'estudio'}-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.${ext}`; }; // V4.2 (audit A37)
@@ -143,15 +154,40 @@ export function initStudio(ctx) {
     b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${esc(m.name)}</span>${engineAdds(m) ? `<span class="st-mp-eng">${esc(m.engineName)}</span>` : ''}<span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
       : `<span class="st-mp-top"><span class="st-mp-name">Ningún modelo de ${kind === 'video' ? 'video' : 'imagen'} encendido</span><span class="sp"></span><span class="st-mp-caret">▾</span></span><span class="st-mp-note">Abre «Motores y cómo activarlos» abajo.</span>`;
   }
+  // V4.4 (27 Sep 2026): the model list sorts (recommended, best quality, cheapest, most expensive, fastest, by maker) and
+  // filters by maker; each model says its maker, its quality (1–4), its speed and what it is good for. The ones without a
+  // key stay in the list, apart and dimmed, with how to switch their engine on.
+  const SORTS = [['rec', 'Recomendado'], ['tier', 'Mejor calidad'], ['cheap', 'Más barato'], ['dear', 'Más caro'], ['fast', 'Más rápido'], ['maker', 'Por creador']];
+  const SPEED = { 'muy rápido': 0, 'rápido': 1, normal: 2, lento: 3 };
+  const TIER = { 1: 'básica', 2: 'buena', 3: 'alta', 4: 'la mejor' };
+  const dots = n => `<span class="st-tier" title="Calidad ${TIER[n] || ''}" aria-label="Calidad ${TIER[n] || ''}">${'●'.repeat(n)}<span aria-hidden="true">${'●'.repeat(4 - n)}</span></span>`;
   function renderList(qs = '') {
-    const L = $('.st-mlist'), w = qs.toLowerCase();
-    const mine = models.filter(x => x.kind === kind && (!w || `${x.name} ${x.engineName} ${x.note}`.toLowerCase().includes(w)));
-    const engs = engines.filter(e => mine.some(x => x.engine === e.id)).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
-    const row = x => `<button type="button" role="option" class="st-mo${x.id === modelOf[kind] ? ' on' : ''}" data-id="${x.id}" aria-selected="${x.id === modelOf[kind]}"${x.on ? '' : ' aria-disabled="true" disabled'} tabindex="-1"><span class="st-mo-top"><b>${esc(x.name)}</b><span class="sp"></span><span class="st-mp-cost">${price(x)}</span></span>${x.note ? `<span class="st-mo-note">${esc(x.note)}</span>` : ''}${tags(x).length ? `<span class="st-tags">${tags(x).map(t => `<i>${t}</i>`).join('')}</span>` : ''}</button>`;
-    L.innerHTML = `<label class="st-mq">${svg('search')}<input type="search" placeholder="Buscar modelo…" aria-label="Buscar modelo" value="${esc(qs)}"></label>` +
-      engs.filter(e => e.on).map(e => `<div class="st-mg"><div class="st-mg-h">${esc(e.name)} <span class="ok">● listo</span></div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') +
-      engs.filter(e => !e.on).map(e => `<div class="st-mg off"><div class="st-mg-h">${esc(e.name)} <span class="st-mg-off">sin activar</span></div><div class="st-mg-how">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b> y ` : ''}pega <code>${esc(e.how || '')}</code> en una ventana de comandos; luego reinicia la oficina.</div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') +
-      (mine.length ? '' : '<div class="st-empty-s">Ningún modelo con eso.</div>');
+    const L = $('.st-mlist'), w = qs.toLowerCase(), sort = store.get('msort', 'rec'), maker = store.get('mmaker', '');
+    const all = models.filter(x => x.kind === kind);
+    const makers = [...new Set(all.map(x => x.maker))].sort((a, b) => a.localeCompare(b, 'es'));
+    const mine = all.filter(x => (!maker || x.maker === maker) && (!w || `${x.name} ${x.engineName} ${x.note} ${x.maker} ${(x.uses || []).join(' ')}`.toLowerCase().includes(w)));
+    const unit = x => x.cost || 0;
+    const cmp = { tier: (a, b) => b.tier - a.tier || unit(a) - unit(b), cheap: (a, b) => unit(a) - unit(b) || b.tier - a.tier, dear: (a, b) => unit(b) - unit(a) || b.tier - a.tier, fast: (a, b) => SPEED[a.speed] - SPEED[b.speed] || b.tier - a.tier, maker: (a, b) => a.maker.localeCompare(b.maker, 'es') || b.tier - a.tier }[sort];
+    const row = x => `<button type="button" role="option" class="st-mo${x.id === modelOf[kind] ? ' on' : ''}" data-id="${x.id}" aria-selected="${x.id === modelOf[kind]}"${x.on ? '' : ' aria-disabled="true" disabled'} tabindex="-1"><span class="st-mo-top"><b>${esc(x.name)}</b><span class="sp"></span><span class="st-mp-cost">${price(x)}</span></span>
+      <span class="st-mo-meta">${dots(x.tier)}<span>${esc(x.maker)}</span><span>· ${esc(x.speed)}</span>${x.legacy ? '<span class="st-old">· antiguo</span>' : ''}</span>
+      ${x.note ? `<span class="st-mo-note">${esc(x.note)}</span>` : ''}${(x.uses || []).length ? `<span class="st-mo-uses"><b>Para:</b> ${x.uses.map(esc).join(' · ')}</span>` : ''}${tags(x).length ? `<span class="st-tags">${tags(x).map(t => `<i>${t}</i>`).join('')}</span>` : ''}</button>`;
+    const how = e => `<div class="st-mg-how">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b> y ` : ''}pega <code>${esc(e.how || '')}</code> en una ventana de comandos; luego reinicia la oficina.</div>`;
+    let body = '';
+    if (sort === 'rec') { // as before: by engine, the ones that are on first
+      const engs = engines.filter(e => mine.some(x => x.engine === e.id)).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
+      body = engs.filter(e => e.on).map(e => `<div class="st-mg" role="group" aria-label="${esc(e.name)}, listo"><div class="st-mg-h" aria-hidden="true">${esc(e.name)} <span class="ok">● listo</span></div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') +
+        engs.filter(e => !e.on).map(e => `<div class="st-mg off" role="group" aria-label="${esc(e.name)}, sin activar"><div class="st-mg-h">${esc(e.name)} <span class="st-mg-off">sin activar</span></div>${how(e)}${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('');
+    } else if (sort === 'maker') {
+      const ms = [...new Set(mine.slice().sort(cmp).map(x => x.maker))];
+      body = ms.map(mk => { const l = mine.filter(x => x.maker === mk).sort((a, b) => (b.on - a.on) || cmp(a, b)); return `<div class="st-mg" role="group" aria-label="${esc(mk)}"><div class="st-mg-h" aria-hidden="true">${esc(mk)} <span class="st-mg-n">${l.length}</span></div>${l.map(row).join('')}</div>`; }).join('');
+    } else {
+      const on = mine.filter(x => x.on).sort(cmp), off = mine.filter(x => !x.on).sort(cmp);
+      body = (on.length ? `<div class="st-mg" role="group" aria-label="Listos"><div class="st-mg-h" aria-hidden="true">Listos para usar <span class="ok">● ${on.length}</span></div>${on.map(row).join('')}</div>` : '') +
+        (off.length ? `<div class="st-mg off" role="group" aria-label="Sin activar"><div class="st-mg-h">Sin activar <span class="st-mg-off">${off.length} · su motor necesita una key</span></div>${off.map(row).join('')}</div>` : '');
+    }
+    L.innerHTML = `<label class="st-mq">${svg('search')}<input type="search" placeholder="Buscar modelo, creador o uso…" aria-label="Buscar modelo" value="${esc(qs)}"></label>` +
+      `<div class="st-mctl"><label>Ordenar<select data-msort aria-label="Ordenar los modelos">${SORTS.map(([k, t]) => `<option value="${k}"${k === sort ? ' selected' : ''}>${t}</option>`).join('')}</select></label><label>Creador<select data-mmaker aria-label="Filtrar por creador"><option value="">Todos (${all.length})</option>${makers.map(mk => `<option${mk === maker ? ' selected' : ''}>${esc(mk)}</option>`).join('')}</select></label></div>` +
+      `<div role="listbox" aria-label="Modelos">${body}</div>` + (mine.length ? '' : '<div class="st-empty-s">Ningún modelo con eso.</div>');
   }
   function openList(on) {
     const L = $('.st-mlist'), b = $('.st-mpick');
@@ -174,7 +210,7 @@ export function initStudio(ctx) {
           ${media[r].length < n ? `<button type="button" class="st-add" data-slot="${r}">${svg('up')}<span>Subir</span></button><button type="button" class="st-add" data-gpick="${r}">${svg('grid')}<span>De la galería</span></button>` : ''}</div></div>`).join('');
     const s = settingsOf(m), ent = Object.entries(m.settings);
     const ratio = m.settings.aspectRatio;
-    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="group" aria-label="Formato">${ratio.values.map(v => { const [w, h] = v === 'auto' ? [1, 1] : v.split(':').map(Number); const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-pressed="${String(s.aspectRatio) === v}" title="${esc(v === 'auto' ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
+    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="group" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-pressed="${String(s.aspectRatio) === v}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
     const ctl = ([k, f]) => {
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
       if (f.type === 'range') return `<label class="st-lab st-range">${LBL[k] || k} <output>${s[k]}${k === 'duration' ? ' s' : ''}</output><input type="range" data-set="${k}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${s[k]}"></label>`;
@@ -195,7 +231,9 @@ export function initStudio(ctx) {
     if (!m) { $('.st-est').textContent = ''; return 0; }
     const s = settingsOf(m), per = Number(s.batchSize) || 1, secs = m.seconds || Number(s.duration) || 5;
     const cost = (m.per === 's' ? m.cost * secs : m.cost) * n * per, total = n * per;
-    $('.st-est').textContent = `${total} ${kind === 'video' ? (total === 1 ? 'video' : 'videos') : total === 1 ? 'imagen' : 'imágenes'}${m.per === 's' ? ` de ${secs} s` : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}${budget ? ` · hoy llevas US$${(budget.cost || 0).toFixed(2)} · te quedan ${budget.left}` : ''}`;
+    const room = moneyLeft(); // V4.5: the Estudio's own spending caps (Ajustes → Estudio)
+    $('.st-est').textContent = `${total} ${kind === 'video' ? (total === 1 ? 'video' : 'videos') : total === 1 ? 'imagen' : 'imágenes'}${m.per === 's' ? ` de ${secs} s` : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}${budget ? ` · hoy llevas US$${(budget.cost || 0).toFixed(2)}${budget.left == null ? '' : ` · te quedan ${budget.left}`}${room == null ? '' : ` · quedan US$${room.toFixed(2)} de tu presupuesto`}` : ''}`;
+    $('.st-est').classList.toggle('over', !!(cost && room != null && cost > room + 1e-9 && m.engine !== 'prueba'));
     const sum = [s.aspectRatio && s.aspectRatio !== 'auto' ? `${s.aspectRatio}${RATIO_WORD[s.aspectRatio] ? ' ' + RATIO_WORD[s.aspectRatio] : ''}` : s.aspectRatio ? 'formato auto' : '', m.settings.duration ? `${secs} s` : '', s.resolution ? String(s.resolution) : ''].filter(Boolean);
     $('.st-sum').innerHTML = sum.length ? `${sum.map(esc).join(' · ')} <u>cambiar</u>` : ''; $('.st-sum').hidden = !sum.length;
     $('.st-go').textContent = kind === 'video' ? (total > 1 ? `GENERAR ${total} VIDEOS` : 'GENERAR VIDEO') : total > 1 ? `GENERAR ${total} IMÁGENES` : 'GENERAR IMAGEN';
@@ -205,15 +243,24 @@ export function initStudio(ctx) {
     const [dn, up] = el.querySelectorAll('.st-qty [data-d]'); dn.disabled = qty <= 1; up.disabled = qty >= maxQ; up.title = qty >= maxQ ? `Máximo ${maxQ} por pedido${kind === 'video' ? ' (un video pesa como 5 imágenes)' : ''}` : 'Más';
     return cost;
   }
+  // V4.5 (27 Sep 2026): the caps come from Ajustes → Estudio — a count a day (0 = none; a video counts 5) and, new, a spend
+  // limit a day and a month in US$ (0 = none). null left = no cap of that kind.
+  function moneyLeft() { if (!budget) return null; const l = [budget.costLeftDay, budget.costLeftMonth].filter(x => x != null); return l.length ? Math.min(...l) : null; }
+  function budgetHTML(b) {
+    const used = b.used ?? (b.limit - b.left), pct = Math.max(b.left == null ? 0 : (used + (b.reserved || 0)) / Math.max(1, b.limit), b.dailyBudget ? ((b.cost || 0) + (b.costReserved || 0)) / b.dailyBudget : 0, b.monthlyBudget ? ((b.monthCost || 0) + (b.costReserved || 0)) / b.monthlyBudget : 0);
+    const usd = n => 'US$' + (+n || 0).toFixed(2);
+    const long = [`Hoy ${used}${b.left == null ? '' : ` de ${b.limit}`}${b.reserved ? ` · ${b.reserved} en curso` : ''}`, `${usd(b.cost)}${b.dailyBudget ? ` de ${usd(b.dailyBudget)}` : ''}`, b.monthlyBudget ? `mes ${usd(b.monthCost)} de ${usd(b.monthlyBudget)}` : ''].filter(Boolean).join(' · ');
+    return `<span class="st-bm${pct >= 0.9 ? ' hot' : ''}" aria-hidden="true"><i style="width:${Math.min(100, Math.round(pct * 100))}%"></i></span><span class="st-bshort">${used}${b.left == null ? '' : '/' + b.limit} hoy</span><span class="st-blong">${long}</span><span class="vh">: cambiar los topes en Ajustes</span>`;
+  }
   function renderHead() {
-    $('.st-budget').innerHTML = budget ? `<span class="st-bm" title="El tope diario de la oficina (office.config.json → media.dailyLimit); un video cuenta como 5"><i style="width:${Math.min(100, Math.round((budget.limit - budget.left) / Math.max(1, budget.limit) * 100))}%"></i></span><span class="st-bshort" title="Usadas hoy de tu tope diario">${budget.limit - budget.left}/${budget.limit} hoy</span><span class="st-blong">Hoy ${budget.limit - budget.left} de ${budget.limit}${budget.reserved ? ` · ${budget.reserved} en curso` : ''} · US$${(budget.cost || 0).toFixed(2)}</span>` : '';
+    $('.st-budget').innerHTML = budget ? budgetHTML(budget) : ''; $('.st-budget').hidden = !budget;
     $('.st-engs').innerHTML = engines.map(e => `<div class="st-eng${e.on ? ' on' : ''}"><b>${e.on ? '●' : '○'} ${esc(e.name)}</b> <span>${e.on ? `listo · ${e.models} modelos` : e.id === 'prueba' ? 'siempre listo' : `${e.models} modelos · <code>${esc(e.how || '')}</code>${e.site ? ` · ${esc(e.site)}` : ''}`}</span></div>`).join('');
   }
 
   /* ---------- the gallery ---------- */
   function shown() {
     const w = q.toLowerCase();
-    return items.filter(it => (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && it.by === 'agent') || (filter === 'you' && it.by !== 'agent' && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload))
+    return items.filter(it => (folderF === 'all' || (folderF === 'none' ? !inFolder(it) : inFolder(it) === folderF)) && (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && it.by === 'agent') || (filter === 'you' && it.by !== 'agent' && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload))
       && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file} ${it.by === 'agent' ? agentName(it.agent) || '' : ''} ${it.task && ctx.taskTitle ? ctx.taskTitle(it.task) : ''}`.toLowerCase().includes(w)));
   }
   const tileJobs = () => jobs.filter(j => j.state === 'queued' || j.state === 'running' || (j.state === 'failed' && Date.now() - (j.doneAt || j.at) < 3 * 864e5));
@@ -238,29 +285,30 @@ export function initStudio(ctx) {
   }
   function card(it) {
     const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
-    // V4.2 (audit A20 · A21): one action in words (Animar an image, Repetir a video), the star, and «⋯» for the rest — the
-    // six unlabelled icons are gone, the bin is last in the menu and apart. On a touch screen only «⋯» shows (st-mi-t: the
-    // star and the main action repeat in the menu there), so the picture is not covered.
+    // V4.4 (25–27 Sep 2026): a row under the caption, on the card's own background (it used to float over the picture,
+    // where a light image swallowed it): the main action as its icon (the clapperboard animates an image; a video repeats),
+    // Descargar and the bin always in sight, and «⋯» for the favourite, Variar and Repetir.
+    // V4.5 (27 Sep 2026, the owner: «una función que se usaría bastante»): «Usar de referencia» joins the row, beside Animar.
     const primary = !vid ? ['anim', 'Animar', 'Convertirla en video', 'vid'] : !it.upload ? ['again', 'Repetir', 'Otra vez, con el mismo prompt y ajustes', 'again'] : null;
-    const menu = [
-      ['fav', it.fav ? 'Quitar de favoritas' : 'Favorita', 'star', 'st-mi-t', it.fav ? 'fill' : ''],
-      ...(primary ? [[primary[0], primary[1], primary[3], 'st-mi-t']] : []),
-      ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark'], ['ref', 'Usar de referencia', 'plus']]),
-      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []),
-      ['dl'], '-', ['del', 'Mover a la papelera', 'trash', 'warn']];
-    return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}">
+    const menu = [ // V4.4 (27 Sep 2026): the row shows the main action, Descargar and the bin as icons; the rest lives here
+      ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
+      ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark']]),
+      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ['move', 'Mover a una carpeta…', 'folder']];
+    return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}" draggable="true">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
-      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}
-        ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}${it.fav ? `<span class="st-favb" aria-label="Favorita">${svg('star', 'fill')}</span>` : ''}</button>
-      <div class="st-ov" role="group" aria-label="Acciones">
-        <button type="button" data-a="fav" class="st-oi${it.fav ? ' on' : ''}" aria-label="${it.fav ? 'Quitar de favoritas' : 'Marcar favorita'}" title="${it.fav ? 'Quitar de favoritas' : 'Favorita'}">${svg('star', it.fav ? 'fill' : '')}</button>
-        ${primary ? `<button type="button" data-a="${primary[0]}" class="st-op" title="${primary[2]}">${svg(primary[3])}<span>${primary[1]}</span></button>` : ''}
-        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más acciones">${svg('dots')}</button>
-      </div>
+      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
+        ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}</button>
       <div class="st-menu" role="menu" hidden>
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}</span></figcaption>
+      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
+      <div class="st-ov" role="group" aria-label="Acciones">
+        ${primary ? `<button type="button" data-a="${primary[0]}" class="st-oi" aria-label="${primary[1]}: ${esc(label)}" title="${primary[1]} — ${primary[2].toLowerCase()}">${svg(primary[3])}</button>` : ''}
+        ${vid ? '' : `<button type="button" data-a="ref" class="st-oi" aria-label="Usar de referencia: ${esc(label)}" title="Usar de referencia — tu producto, logo, personaje o estilo en lo próximo que crees">${svg('ref')}</button>`}
+        <a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar">${svg('down')}</a>
+        <button type="button" data-a="del" class="st-oi st-odel" aria-label="Mover a la papelera: ${esc(label)}" title="Mover a la papelera (30 días para recuperarla)">${svg('trash')}</button>
+        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más: favorita, variar, repetir">${svg('dots')}</button>
+      </div>
     </figure>`;
   }
   // V4.2 (audit A17 · A18): the gallery is updated in place. A card whose content did not change keeps its node — a playing
@@ -273,7 +321,7 @@ export function initStudio(ctx) {
   function groupCard(its) { // V4.2 (audit A19): «(1/2)» and «(2/2)» of one request, one card: the prompt once, the pictures side by side
     const f = its[0], n = its.length, vid = f.kind === 'video';
     const thumbs = its.slice(0, 4).map((it, i) => `<button type="button" class="st-gt" data-gf="${esc(it.file)}" aria-label="Ver ${i + 1} de ${n} en grande"${ratioOf(it) ? ` style="aspect-ratio:${ratioOf(it)}"` : ''}>${isVid(it.file) ? `<video src="${src(it)}" muted preload="metadata" playsinline></video>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}${it.fav ? `<span class="st-favb">${svg('star', 'fill')}</span>` : ''}${i === 3 && n > 4 ? `<span class="st-gmore">+${n - 4}</span>` : ''}</button>`).join('');
-    return `<figure class="st-card st-group" data-g="${esc(f.job)}"><div class="st-gthumbs n${Math.min(n, 4)}">${thumbs}</div>
+    return `<figure class="st-card st-group" data-g="${esc(f.job)}" draggable="true"><div class="st-gthumbs n${Math.min(n, 4)}">${thumbs.replace(/<(img|video) /g, '<$1 draggable="false" ')}</div>
       <figcaption><span class="st-p">${esc(f.prompt)}</span>${f.task && f.by === 'agent' ? `<span class="st-tchip st-tchip-s">para: ${esc((ctx.taskTitle && ctx.taskTitle(f.task)) || 'su tarea')}</span>` : ''}<span class="st-meta"><b>${n} ${vid ? 'videos' : 'imágenes'} de un pedido</b> · ${esc(f.by === 'agent' ? (agentName(f.agent) || 'agente') : 'tú')}${f.modelName ? ' · ' + esc(f.modelName) : ''} · ${esc(when(f.at))}</span>
       <span class="st-gacts"><button type="button" data-ga="split">Ver por separado</button><button type="button" data-ga="zip">${svg('down')} Descargar las ${n}</button></span></figcaption></figure>`;
   }
@@ -281,7 +329,8 @@ export function initStudio(ctx) {
   const colCount = () => { const w = $('.st-grid').clientWidth - 36; return w > 0 ? Math.max(1, Math.floor((w + 14) / (230 + 14))) : 0; };
   function when(ts) { const d = new Date(ts), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; return d.toDateString() === n.toDateString() ? `hoy ${t}` : d.toDateString() === y.toDateString() ? `ayer ${t}` : d.toLocaleDateString('es', { day: 'numeric', month: 'short', ...(d.getFullYear() !== n.getFullYear() ? { year: 'numeric' } : {}) }); }
   function renderGrid() {
-    const list = shown(), tj = tileJobs().filter(j => filter === 'all' || (filter === 'you' && j.by !== 'agent') || (filter === 'agent' && j.by === 'agent') || (filter === 'video' && j.kind === 'video'));
+    const list = shown(), tj = tileJobs().filter(j => (folderF === 'all' || (folderF === 'none' ? !j.folder : j.folder === folderF)) && (filter === 'all' || (filter === 'you' && j.by !== 'agent') || (filter === 'agent' && j.by === 'agent') || (filter === 'video' && j.kind === 'video')));
+    renderFolders();
     const active = tileJobs().filter(j => j.state !== 'failed').length;
     $('.st-count').textContent = `${list.length} ${list.length === 1 ? 'archivo' : 'archivos'}${list.length !== items.length ? ` de ${items.length}` : ''}${active ? ` · ${active} generándose` : ''}`;
     const cnt = { all: items.length, fav: items.filter(i => i.fav).length, you: items.filter(i => i.by !== 'agent' && !i.upload).length, agent: items.filter(i => i.by === 'agent').length, video: items.filter(i => i.kind === 'video' || i.wanted === 'video').length, up: items.filter(i => i.upload).length }; // V4.2 (audit A22)
@@ -299,7 +348,7 @@ export function initStudio(ctx) {
     for (const it of list) {
       const g = !flat && it.job && byJob.get(it.job);
       if (g && g.length > 1) { if (placed.has(it.job)) continue; placed.add(it.job); const a = aspect(g[0]); want.push(['g:' + it.job, groupCard(g), (g.length === 2 ? a / 2 : a) + 0.15, dayKey(it.at), g.length, it.at]); continue; }
-      want.push(['f:' + it.file, card(it), aspect(it), dayKey(it.at), 1, it.at]);
+      want.push(['f:' + it.file + '@' + it.at, card(it), aspect(it), dayKey(it.at), 1, it.at]);
     }
     const keep = new Set(), active_ = document.activeElement;
     for (const [k, html] of want) {
@@ -332,7 +381,8 @@ export function initStudio(ctx) {
     $('.st-selbar').hidden = !(selecting || sel.size); $('.st-seln').textContent = (sel.size ? `${sel.size} ${sel.size === 1 ? 'seleccionada' : 'seleccionadas'}` : 'Toca las que quieras') + ' · Mayús + clic elige un rango';
     el.classList.toggle('st-selecting', selecting || sel.size > 0);
     $('.st-selbtn').setAttribute('aria-pressed', selecting || sel.size > 0); $('.st-selbtn').classList.toggle('on', selecting || sel.size > 0);
-    el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"]').forEach(b => { b.disabled = !sel.size; });
+    el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"], .st-selbar .st-mv').forEach(b => { b.disabled = !sel.size; });
+    const mv = $('.st-mv'); if (mv && document.activeElement !== mv) mv.innerHTML = `<option value="">Mover a…</option>${folders.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('')}<option value="none">Sin carpeta</option><option value="__new">+ Nueva carpeta…</option>`;
     $('.st-picking').hidden = !picking;
     if (picking) $('.st-picking').innerHTML = `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${roleName(picking)}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`;
     el.classList.toggle('st-pickmode', !!picking);
@@ -342,12 +392,13 @@ export function initStudio(ctx) {
     if (loading) return loading;
     loading = (async () => {
       try { if (!location.protocol.startsWith('http')) throw new Error('el Estudio trabaja con la oficina real: ábrela con el iniciador (.bat)'); // the demo file has no server to ask (it logged a fetch error)
-        const j = await api('GET', '/api/media'); items = j.items || []; budget = j.budget || null; jobs = j.jobs || []; loadErr = '';
+        const j = await api('GET', '/api/media'); items = j.items || []; budget = j.budget || null; jobs = j.jobs || []; folders = j.folders || []; loadErr = '';
+        if (folderF !== 'all' && folderF !== 'none' && !folders.some(f => f.id === folderF)) { folderF = 'all'; store.set('folder', 'all'); } // a folder removed elsewhere
         const sig = JSON.stringify((j.models || []).map(m => m.id + (m.on ? 1 : 0)));
         if (full || sig !== catalogSig) { models = j.models || []; engines = j.engines || []; def = j.default || {}; catalogSig = sig; full = true; }
       } catch (e) { loadErr = e.message; }
       for (const f of [...sel]) if (!itemOf(f)) sel.delete(f);
-      renderHead(); if (full) renderModels(); renderGrid(); watch();
+      renderHead(); if (full) renderModels(); else if (cur()) estimate(); renderGrid(); watch(); // V4.5: the cost line follows the caps too
     })();
     try { await loading; } finally { loading = null; }
   }
@@ -364,7 +415,7 @@ export function initStudio(ctx) {
         const r = await api('GET', '/api/media/jobs'); jobs = r.jobs; budget = r.budget;
         const finished = jobs.filter(j => (j.state === 'done' || j.state === 'failed') && (before.get(j.id) === 'running' || before.get(j.id) === 'queued'));
         if (finished.length) { await load({ full: false }); const ok = finished.filter(j => j.state === 'done'), bad = finished.filter(j => j.state === 'failed'); if (ok.length && !bad.length) say(`Listo: ${ok.reduce((s, j) => s + j.items.length, 0)} archivo(s) nuevos en la galería.`); if (bad.length) say(`${bad.length} no se pudo: ${bad[0].error}`, true); return; }
-        renderHead(); renderGrid();
+        renderHead(); if (cur()) estimate(); renderGrid();
       } catch {}
       watch();
     }, 2500);
@@ -377,12 +428,12 @@ export function initStudio(ctx) {
     const settings = settingsOf(m), mediaNow = Object.fromEntries(Object.entries(media).filter(([, v]) => v.length));
     let ok = 0;
     for (const p of prompts) {
-      try { const r = await api('POST', '/api/media/jobs', { prompt: p, n: qty, kind, model: m.id, settings, media: mediaNow, by: 'you' }); jobs.unshift(r.job); budget = r.budget; ok++; }
-      catch (e) { if (/key/i.test(e.message)) { keyHelp(m, e.message); break; } say(`No se pudo${prompts.length > 1 ? ` (${ok + 1} de ${prompts.length})` : ''}: ${e.message}`, true); if (/tope/.test(e.message)) break; }
+      try { const r = await api('POST', '/api/media/jobs', { prompt: p, n: qty, kind, model: m.id, settings, media: mediaNow, by: 'you', ...(folders.some(f => f.id === folderF) ? { folder: folderF } : {}) }); jobs.unshift(r.job); budget = r.budget; ok++; }
+      catch (e) { if (/key/i.test(e.message)) { keyHelp(m, e.message); break; } say(`No se pudo${prompts.length > 1 ? ` (${ok + 1} de ${prompts.length})` : ''}: ${e.message}`, true); if (/tope|presupuesto/.test(e.message)) break; }
     }
     if (ok) { say(`${ok === 1 ? 'En marcha' : `${ok} trabajos en marcha`}: ${kind === 'video' ? 'un video tarda unos minutos; ' : ''}aparece en la galería al terminar. Puedes seguir.`); if (phone()) showPane('gal'); } // on a phone, the new tile is what to look at
     busy = false; $('.st-go').disabled = false;
-    renderHead(); renderGrid(); watch();
+    renderHead(); estimate(); renderGrid(); watch();
   }
   function keyHelp(m, message) { // V4.2 (audit A38): what to do, step by step, and a way to keep going now
     const eng = engines.find(x => x.id === m.engine) || {}, K = $('.st-keyhelp');
@@ -407,6 +458,40 @@ export function initStudio(ctx) {
     histFrom = document.activeElement; H.hidden = false; modal.open(H); H.querySelector('.st-hx').focus();
     H.onclick = e => { if (e.target === H || e.target.closest('.st-hx')) closeHist(); };
   }
+  // V4.4 (25 Sep 2026): the Estudio's bin, where «Mover a la papelera» sends a file — 30 days to bring it back, then it goes.
+  // It used to be reachable only from the 8-second DESHACER after throwing something away.
+  let binFrom = null, binItems = [];
+  async function openBin() {
+    const B = $('.st-binov');
+    const draw = msg => {
+      B.innerHTML = `<div class="st-hbox"><div class="st-hhead"><h2 id="stBinT">Papelera</h2><span class="sp"></span>${binItems.length ? '<button type="button" class="st-binall">Vaciar la papelera</button>' : ''}<button type="button" class="st-hx" aria-label="Cerrar">${svg('x')}</button></div>
+        <p class="st-hsub">${binItems.length ? `${binItems.length} ${binItems.length === 1 ? 'archivo' : 'archivos'}. Cada uno se borra solo a los 30 días de tirarlo; hasta entonces vuelve a la galería con «Recuperar».` : 'Vacía. Lo que mandes a la papelera queda aquí 30 días.'}</p>
+        <div class="st-bmsg" role="status" aria-live="polite">${msg ? esc(msg) : ''}</div>
+        <ul class="st-blist">${binItems.map((b, i) => `<li><span class="st-bthumb">${b.kind === 'video' ? `<video src="/api/media/trash/file?n=${encodeURIComponent(b.name)}" muted preload="metadata" playsinline></video>` : `<img src="/api/media/trash/file?n=${encodeURIComponent(b.name)}" alt="" loading="lazy">`}</span>
+          <span class="st-binfo"><span class="st-bp">${esc(b.prompt)}</span><span class="st-hm">${b.upload ? 'subida por ti' : esc(b.modelName || '')}${b.at ? ' · creada ' + esc(when(b.at)) : ''} · se borra en ${b.daysLeft} ${b.daysLeft === 1 ? 'día' : 'días'}</span>
+          <span class="st-bacts"><button type="button" data-bin="back" data-i="${i}">Recuperar</button><button type="button" data-bin="gone" data-i="${i}" class="warn">Borrar para siempre</button></span></span></li>`).join('')}</ul></div>`;
+    };
+    binFrom = binFrom || document.activeElement; B.hidden = false; modal.open(B);
+    try { const r = await api('GET', '/api/media/trash'); binItems = r.items || []; draw(); } catch (e) { binItems = []; draw('No pude abrir la papelera: ' + e.message); }
+    B.querySelector('.st-hx').focus();
+    B.onclick = async e => {
+      if (e.target === B || e.target.closest('.st-hx')) return closeBin();
+      if (e.target.closest('.st-binall')) {
+        const btn = e.target.closest('.st-binall'); if (btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = `¿Borrar los ${binItems.length} para siempre? Pulsa otra vez`; return; }
+        try { await api('POST', '/api/media/trash/purge', { all: true }); binItems = []; draw('Papelera vacía.'); B.querySelector('.st-hx').focus(); } catch (err) { draw('No se pudo: ' + err.message); }
+        return;
+      }
+      const b = e.target.closest('[data-bin]'); if (!b) return; const it = binItems[+b.dataset.i]; if (!it) return;
+      if (b.dataset.bin === 'gone' && b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = '¿Seguro? Pulsa otra vez'; return; } // a second click: this one does not come back
+      try {
+        if (b.dataset.bin === 'back') { await api('POST', '/api/media/restore', { id: it.id, bin: it.bin }); await load({ full: false }); }
+        else await api('POST', '/api/media/trash/purge', { bin: it.bin });
+        binItems = binItems.filter(x => x !== it); draw(b.dataset.bin === 'back' ? 'Recuperada: ya está en la galería.' : 'Borrada para siempre.');
+        (B.querySelector('[data-bin]') || B.querySelector('.st-hx')).focus();
+      } catch (err) { draw(b.dataset.bin === 'back' ? 'No se pudo recuperar: ' + err.message : 'No se pudo borrar: ' + err.message); }
+    };
+  }
+  function closeBin() { const B = $('.st-binov'); if (B.hidden) return; B.hidden = true; B.innerHTML = ''; modal.close(B); if (binFrom && document.contains(binFrom)) binFrom.focus({ preventScroll: true }); binFrom = null; }
   function closeHist() { const H = $('.st-hist'); if (H.hidden) return; H.hidden = true; H.innerHTML = ''; modal.close(H); if (histFrom && document.contains(histFrom)) histFrom.focus({ preventScroll: true }); }
   function setMode(m) { mode = m; el.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); renderModel(); }
   function setKind(k) { if (k === kind) return; clearFieldErr(); $('.st-keyhelp').hidden = true; kind = k; store.set('kind', kind); openList(false); renderModels(); }
@@ -435,7 +520,7 @@ export function initStudio(ctx) {
   function useAsRef(it) {
     let m = cur();
     if (!m || !m.roles.reference) { m = useModelFor('reference', kind); if (!m && kind === 'video') { kind = 'image'; m = useModelFor('reference', 'image'); } if (!m) return say('Ningún modelo encendido acepta referencias.', true); modelOf[kind] = m.id; store.set('model.' + kind, m.id); renderModels(); }
-    if (addMedia('reference', it.file)) say(`Referencia añadida a ${m.name}. Describe qué hacer con ella.`);
+    if (addMedia('reference', it.file)) { say(`Referencia añadida a ${m.name}. Describe qué hacer con ella.`); if (phone()) showPane('gen'); }
   }
   function vary(it) { // V4.2 (audit A35): another take close to this one — its prompt and model, the picture itself as the reference
     reuse(it, true);
@@ -469,10 +554,117 @@ export function initStudio(ctx) {
     for (const r of Object.keys(media)) media[r] = media[r].filter(f => !undo.some(u => u.id === f));
     renderGrid(); renderModel(); closeLight();
     if (!undo.length) return say(`No se pudo mover ${failed === 1 ? 'el archivo' : `ninguno de los ${failed}`} a la papelera.`, true);
-    toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera${failed ? ` · ${failed} no se pudo` : ''} (se vacía a los 30 días).`, async () => {
+    toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera${failed ? ` · ${failed} no se pudo` : ''}: está en «Papelera», 30 días.`, async () => {
       let back = 0; for (const u of undo) { try { await api('POST', '/api/media/restore', u); back++; } catch {} }
       await load({ full: false }); say(back === undo.length ? 'Recuperado.' : `Recuperé ${back} de ${undo.length}.`, back !== undo.length);
     });
+  }
+  /* ---------- V4.6: folders — the strip, dragging onto it, renaming, removing ---------- */
+  const FD_ICON = svg('folder');
+  function renderFolders() {
+    const box = $('.st-folders'); if (!box || (fdEdit && box.contains(document.activeElement) && document.activeElement.classList.contains('st-fdin'))) return; // a name being typed is not redrawn under the caret
+    const none = items.filter(it => !inFolder(it)).length;
+    const chip = (id, label, n, extra = '') => `<button type="button" class="st-fd" data-fd="${esc(id)}"${extra}>${label} <b>${n}</b></button>`;
+    const html = chip('all', 'Todas', items.length) + chip('none', 'Sin carpeta', none, ' title="Suelta aquí para sacarlas de su carpeta"') +
+      folders.map(f => fdEdit === f.id
+        ? `<input class="st-fdin" data-fdr="${esc(f.id)}" value="${esc(f.name)}" maxlength="60" aria-label="Nuevo nombre de la carpeta">`
+        : `<span class="st-fdw">${chip(f.id, FD_ICON + esc(f.name), items.filter(it => it.folder === f.id).length, ` title="Carpeta «${esc(f.name)}»: clic para verla, suelta imágenes aquí para guardarlas, doble clic para renombrarla"`)}<button type="button" class="st-fdm" data-fdm="${esc(f.id)}" aria-label="Opciones de la carpeta ${esc(f.name)}" aria-haspopup="menu" title="Renombrar o eliminar">⋯</button></span>`).join('') +
+      (fdEdit === 'new' ? `<input class="st-fdin" data-fdnew="1" placeholder="Nombre de la carpeta" maxlength="60" aria-label="Nombre de la carpeta nueva">` : `<button type="button" class="st-fdnew">+ Nueva carpeta</button>`);
+    if (box._html !== html) { box._html = html; box.innerHTML = html; const inp = box.querySelector('.st-fdin'); if (inp) { inp.focus(); if (inp.dataset.fdr) inp.select(); } } // the same chips stay the same elements: a double click is not lost to a redraw
+    box.querySelectorAll('.st-fd').forEach(b => { const on = b.dataset.fd === folderF; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  }
+  function setFolder(id) { folderF = id; store.set('folder', id); closeFdMenu(); renderGrid(); }
+  async function moveFiles(files, folder, quiet) { // folder: an id, or null (out of any folder)
+    files = files.filter(f => itemOf(f)); if (!files.length) return;
+    const prev = new Map(files.map(f => [f, itemOf(f).folder || null]));
+    try { const r = await api('POST', '/api/media/move', { files, folder }); folders = r.folders || folders; }
+    catch (err) { return say('No se pudo mover: ' + err.message, true); }
+    for (const f of files) itemOf(f).folder = folder;
+    sel.clear(); selecting = false; renderGrid();
+    if (quiet) return;
+    const where = folder ? `a «${folderName(folder)}»` : 'fuera de su carpeta';
+    toast(`${files.length} ${files.length === 1 ? 'archivo movido' : 'archivos movidos'} ${where}.`, async () => { // DESHACER: each one back to where it was
+      const back = new Map(); for (const [f, p] of prev) back.set(p, [...(back.get(p) || []), f]);
+      for (const [p, fs] of back) { try { await api('POST', '/api/media/move', { files: fs, folder: p }); for (const f of fs) { const it = itemOf(f); if (it) it.folder = p; } } catch {} }
+      await load({ full: false }); say('Deshecho.');
+    });
+  }
+  async function saveFolderName(inp) {
+    const name = inp.value.trim(), rid = inp.dataset.fdr, isNew = !!inp.dataset.fdnew;
+    if (!name) { fdEdit = null; fdNewFor = null; renderFolders(); return; }
+    try {
+      if (isNew) {
+        const files = fdNewFor || [];
+        const r = await api('POST', '/api/media/folders', { name, files }); folders = r.folders || folders;
+        for (const f of files) { const it = itemOf(f); if (it) it.folder = r.folder.id; }
+        fdEdit = null; fdNewFor = null; if (files.length) { sel.clear(); selecting = false; }
+        say(files.length ? `Carpeta «${r.folder.name}» creada con ${files.length} ${files.length === 1 ? 'archivo' : 'archivos'}.` : `Carpeta «${r.folder.name}» creada: arrastra imágenes a ella.`);
+      } else {
+        const r = await api('PATCH', '/api/media/folders/' + rid, { name }); folders = r.folders || folders; fdEdit = null; say(`Ahora se llama «${r.folder.name}».`);
+      }
+    } catch (err) { say(err.message.charAt(0).toUpperCase() + err.message.slice(1) + '.', true); inp.focus(); inp.select(); return; }
+    renderGrid();
+  }
+  async function removeFolder(id) {
+    const f = folders.find(x => x.id === id); if (!f) return;
+    const n = items.filter(it => it.folder === id).length;
+    if (!confirm(`¿Eliminar la carpeta «${f.name}»?\n\n${n ? `Sus ${n} ${n === 1 ? 'archivo no se borra: queda' : 'archivos no se borran: quedan'} en «Sin carpeta».` : 'Está vacía.'}`)) return;
+    try { const r = await api('DELETE', '/api/media/folders/' + id); folders = r.folders || folders.filter(x => x.id !== id); for (const it of items) if (it.folder === id) it.folder = null; }
+    catch (err) { return say('No se pudo eliminar: ' + err.message, true); }
+    if (folderF === id) { folderF = 'all'; store.set('folder', 'all'); }
+    say(`Carpeta «${f.name}» eliminada${n ? `; sus ${n} ${n === 1 ? 'archivo está' : 'archivos están'} en «Sin carpeta»` : ''}.`); renderGrid();
+  }
+  // the small menu of a folder: rename, remove
+  let fdMenu = null;
+  function closeFdMenu() { if (fdMenu) { fdMenu.remove(); fdMenu = null; } }
+  function openFdMenu(btn) {
+    const id = btn.dataset.fdm; if (fdMenu && fdMenu.dataset.for === id) return closeFdMenu(); closeFdMenu();
+    fdMenu = document.createElement('div'); fdMenu.className = 'st-menu st-fdmenu'; fdMenu.setAttribute('role', 'menu'); fdMenu.dataset.for = id;
+    fdMenu.innerHTML = `<button type="button" role="menuitem" data-fda="rename">${svg('spark')}<span>Renombrar</span></button><button type="button" role="menuitem" data-fda="remove" class="warn">${svg('trash')}<span>Eliminar la carpeta</span></button>`;
+    el.appendChild(fdMenu);
+    const r = btn.getBoundingClientRect(); fdMenu.style.left = Math.max(8, Math.min(innerWidth - fdMenu.offsetWidth - 8, r.left)) + 'px'; fdMenu.style.top = (r.bottom + 6) + 'px';
+    fdMenu.querySelector('button').focus();
+    fdMenu.addEventListener('click', e => { const a = e.target.closest('[data-fda]')?.dataset.fda; closeFdMenu(); if (a === 'rename') { fdEdit = id; renderFolders(); } if (a === 'remove') removeFolder(id); });
+    fdMenu.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); closeFdMenu(); btn.focus(); } if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const b = [...fdMenu.querySelectorAll('button')], i = b.indexOf(document.activeElement); b[(i + (e.key === 'ArrowDown' ? 1 : -1) + b.length) % b.length].focus(); } });
+  }
+  {
+    const box = $('.st-folders');
+    box.addEventListener('click', e => {
+      const fdm = e.target.closest('[data-fdm]'); if (fdm) return openFdMenu(fdm);
+      if (e.target.closest('.st-fdnew')) { fdEdit = 'new'; fdNewFor = sel.size ? [...sel] : null; renderFolders(); return; }
+      const fd = e.target.closest('[data-fd]'); if (fd) setFolder(fd.dataset.fd);
+    });
+    box.addEventListener('dblclick', e => { const fd = e.target.closest('[data-fd]'); if (fd && folders.some(f => f.id === fd.dataset.fd)) { fdEdit = fd.dataset.fd; renderFolders(); } });
+    box.addEventListener('keydown', e => {
+      const inp = e.target.closest('.st-fdin'); if (!inp) { if (e.key === 'F2') { const fd = e.target.closest('[data-fd]'); if (fd && folders.some(f => f.id === fd.dataset.fd)) { e.preventDefault(); fdEdit = fd.dataset.fd; renderFolders(); } } return; }
+      e.stopPropagation(); // typing a name: no Estudio shortcut fires
+      if (e.key === 'Enter') { e.preventDefault(); saveFolderName(inp); }
+      if (e.key === 'Escape') { e.preventDefault(); fdEdit = null; fdNewFor = null; renderFolders(); box.querySelector('.st-fd.on')?.focus(); }
+    });
+    box.addEventListener('focusout', e => { const inp = e.target.closest?.('.st-fdin'); if (inp && !box.contains(e.relatedTarget)) setTimeout(() => { if (fdEdit && document.activeElement !== inp) saveFolderName(inp); }, 0); });
+    // dropping pictures on a folder
+    box.addEventListener('dragover', e => { const fd = e.target.closest('[data-fd]'); if (!dragFiles || !fd || fd.dataset.fd === 'all') return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; box.querySelectorAll('.drop').forEach(x => x !== fd && x.classList.remove('drop')); fd.classList.add('drop'); });
+    box.addEventListener('dragleave', e => { const fd = e.target.closest('[data-fd]'); if (fd && !fd.contains(e.relatedTarget)) fd.classList.remove('drop'); });
+    box.addEventListener('drop', e => { const fd = e.target.closest('[data-fd]'); if (!dragFiles || !fd || fd.dataset.fd === 'all') return; e.preventDefault(); e.stopPropagation(); fd.classList.remove('drop'); const files = dragFiles; dragFiles = null; el.classList.remove('st-dragging'); moveFiles(files, fd.dataset.fd === 'none' ? null : fd.dataset.fd); });
+    // dragging a card (or all the selected ones, when it is one of them)
+    const grid = $('.st-grid');
+    grid.addEventListener('dragstart', e => {
+      const g = e.target.closest?.('.st-group'), c = e.target.closest?.('.st-card[data-f]');
+      const files = g ? items.filter(x => x.job === g.dataset.g).map(x => x.file) : c ? (sel.has(c.dataset.f) && sel.size > 1 ? [...sel] : [c.dataset.f]) : null;
+      if (!files || !files.length) return;
+      dragFiles = files; el.classList.add('st-dragging');
+      e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/x-ao-media', JSON.stringify(files)); e.dataTransfer.setData('text/plain', files.length + ' archivo(s)');
+      if (files.length > 1) { const b = document.createElement('div'); b.className = 'st-dragn'; b.textContent = `${files.length} archivos`; document.body.appendChild(b); e.dataTransfer.setDragImage(b, 20, 20); setTimeout(() => b.remove(), 0); }
+    });
+    grid.addEventListener('dragend', () => { dragFiles = null; el.classList.remove('st-dragging'); $('.st-folders').querySelectorAll('.drop').forEach(x => x.classList.remove('drop')); });
+    // «Mover a…» in the selection bar (the keyboard's and the phone's way: a finger cannot drag here)
+    el.addEventListener('change', e => {
+      if (!e.target.classList.contains('st-mv')) return;
+      const v = e.target.value; e.target.value = ''; if (!v || !sel.size) return;
+      if (v === '__new') { fdEdit = 'new'; fdNewFor = [...sel]; renderFolders(); return; }
+      moveFiles([...sel], v === 'none' ? null : v);
+    });
+    document.addEventListener('click', e => { if (fdMenu && !fdMenu.contains(e.target) && !e.target.closest('[data-fdm]')) closeFdMenu(); });
   }
   async function favMany(files) {
     const all = files.every(f => itemOf(f)?.fav);
@@ -502,7 +694,7 @@ export function initStudio(ctx) {
           const x = new XMLHttpRequest(); x.open('POST', '/api/media/upload'); x.setRequestHeader('content-type', 'application/json');
           x.upload.onprogress = ev => { if (ev.lengthComputable) say(`Subiendo «${file.name}»… ${Math.round(ev.loaded / ev.total * 100)} %`); };
           x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} x.status < 300 ? res(j) : rej(new Error(j.error || x.statusText)); };
-          x.onerror = () => rej(new Error('sin conexión con la oficina')); x.send(JSON.stringify({ name: file.name, data }));
+          x.onerror = () => rej(new Error('sin conexión con la oficina')); x.send(JSON.stringify({ name: file.name, data, ...(folders.some(f => f.id === folderF) ? { folder: folderF } : {}) }));
         });
         items.unshift(r.item); ok++; done.push(r.item);
         if (role) addMedia(role, r.item.file);
@@ -547,7 +739,7 @@ export function initStudio(ctx) {
   }
 
   /* ---------- events ---------- */
-  function closeMenus(except) { el.querySelectorAll('.st-menu:not([hidden])').forEach(m => { if (m === except) return; m.hidden = true; m.closest('.st-card')?.classList.remove('menu-on'); m.closest('.st-card')?.querySelector('.st-more')?.setAttribute('aria-expanded', 'false'); }); }
+  function closeMenus(except) { el.querySelectorAll('.st-menu:not([hidden]):not(.st-fdmenu)').forEach(m => { /* a folder's menu closes on its own */ if (m === except) return; m.hidden = true; m.closest('.st-card')?.classList.remove('menu-on'); m.closest('.st-card')?.querySelector('.st-more')?.setAttribute('aria-expanded', 'false'); }); }
   function openMenu(card, focusFirst) {
     const m = card.querySelector('.st-menu'), b = card.querySelector('.st-more'); if (!m || !b) return;
     if (!m.hidden) { closeMenus(); b.focus(); return; }
@@ -560,6 +752,7 @@ export function initStudio(ctx) {
   $('.st-grid').addEventListener('scroll', () => closeMenus(), { passive: true });
   el.addEventListener('click', async e => {
     if (e.target.closest('.st-x')) return close();
+    if (e.target.closest('.st-budget, [data-open="settings"]')) { if (ctx.openSettings) ctx.openSettings('estudio'); return; } // V4.5: the caps live in Ajustes → Estudio
     if (!e.target.closest('.st-more')) closeMenus();
     if (!e.target.closest('.st-mwrap')) openList(false);
     const kb = e.target.closest('[data-kind]'); if (kb) return setKind(kb.dataset.kind);
@@ -570,6 +763,7 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-unfold')) { el.classList.remove('st-folded'); store.set('fold', false); relayout(); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-open-engs')) { showPane('gen'); el.classList.remove('st-folded'); const d = $('.st-keys'); d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); d.querySelector('summary').focus({ preventScroll: true }); return; }
     if (e.target.closest('.st-histbtn')) { openHist(); return; }
+    if (e.target.closest('.st-binbtn')) { openBin(); return; }
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-new')) { $('.st-prompt').value = ''; media = { start: [], end: [], reference: [], video: [] }; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; clearFieldErr(); armed = false; renderModel(); say('Compositor vacío: empieza una idea nueva.'); $('.st-prompt').focus(); return; }
     const qd = e.target.closest('.st-qty [data-d]'); if (qd) { const max = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8; qty = Math.max(1, Math.min(max, qty + +qd.dataset.d)); estimate(); return; }
@@ -669,12 +863,14 @@ export function initStudio(ctx) {
     if (a === 'anim') animate(it);
     if (a === 'ref') useAsRef(it);
     if (a === 'vary') vary(it);
+    if (a === 'move') { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
     if (a === 'task' && it.task && ctx.openTask) { close(); ctx.openTask(it.task); } // V4.2 (audit A25)
   });
   el.addEventListener('change', e => {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
 
     if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
+    if (e.target.matches?.('[data-msort], [data-mmaker]')) { store.set(e.target.hasAttribute('data-msort') ? 'msort' : 'mmaker', e.target.value); const qv = $('.st-mq input')?.value || ''; renderList(qv); $(e.target.hasAttribute('data-msort') ? '[data-msort]' : '[data-mmaker]')?.focus(); return; }
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); estimate(); }
   });
   el.addEventListener('input', e => {
@@ -685,9 +881,9 @@ export function initStudio(ctx) {
     estimate();
   });
   // drop files: on a slot they go into it, anywhere else they are uploaded to the gallery
-  el.addEventListener('dragover', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.add('st-drop'); } });
+  el.addEventListener('dragover', e => { if (!dragFiles && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.add('st-drop'); } });
   el.addEventListener('dragleave', e => { if (e.target === el || !el.contains(e.relatedTarget)) el.classList.remove('st-drop'); });
-  el.addEventListener('drop', e => { if (!e.dataTransfer?.files?.length) return; e.preventDefault(); el.classList.remove('st-drop'); const slot = e.target.closest('.st-slot'); uploadFiles([...e.dataTransfer.files], slot ? slot.dataset.role : null); });
+  el.addEventListener('drop', e => { if (dragFiles || !e.dataTransfer?.files?.length) return; e.preventDefault(); el.classList.remove('st-drop'); const slot = e.target.closest('.st-slot'); uploadFiles([...e.dataTransfer.files], slot ? slot.dataset.role : null); });
   el.addEventListener('paste', async e => { const fs = [...(e.clipboardData?.files || [])].filter(f => /^image\//.test(f.type)); if (!fs.length) return; e.preventDefault(); const m = cur(); const role = m && m.roles.reference ? 'reference' : m && m.roles.start ? 'start' : null;
     const up = await uploadFiles(fs, role); if (!up.length) return;
     toast(`${up.length === 1 ? 'Imagen pegada' : up.length + ' imágenes pegadas'}${role ? ` como «${roleName(role)}»` : ' en Subidas'}.`, async () => { // V4.2 (audit A14): pasting no longer uploads silently
@@ -700,13 +896,15 @@ export function initStudio(ctx) {
   el.addEventListener('keydown', e => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
     if (!typing && (e.key === '?' || (e.key === '/' && e.shiftKey))) return; // V4.2 (audit A48): the shortcuts sheet opens over the Estudio too
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && /^[epgonu,]$/i.test(e.key) && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && !el.querySelector('.st-menu:not([hidden])')) return; // V4.5: the dock's keys reach the office — P and G switch views, O N U , open a window on top
     e.stopPropagation();
-    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && $('.st-light').hidden && $('.st-hist').hidden && !el.querySelector('.st-menu:not([hidden])')) { // V4.2 (audit A47)
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && !el.querySelector('.st-menu:not([hidden])')) { // V4.2 (audit A47)
       if (e.key === '/') { e.preventDefault(); showPane('gal'); $('.st-q').focus(); return; }
       if (e.key === 'i' || e.key === 'I') { setKind('image'); return; }
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
+    if (!$('.st-binov').hidden) { if (e.key === 'Escape') closeBin(); return; }
     const om = el.querySelector('.st-menu:not([hidden])');
     if (om) { // the open «⋯» menu: arrows move, Esc and Tab close it, back on its button
       const its = [...om.querySelectorAll('[role="menuitem"]')].filter(x => x.offsetParent), i = its.indexOf(document.activeElement), btn = om.closest('.st-card')?.querySelector('.st-more');
@@ -715,7 +913,7 @@ export function initStudio(ctx) {
       if (e.key === 'Escape' || e.key === 'Tab') { if (e.key === 'Escape') e.preventDefault(); closeMenus(); btn?.focus(); if (e.key === 'Escape') return; }
     }
     const inList = e.target.closest && e.target.closest('.st-mlist');
-    if (inList && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { // V4.2 (audit A7): the model list moves with the arrows, like a real list
+    if (inList && e.target.tagName !== 'SELECT' && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { // V4.2 (audit A7): the model list moves with the arrows, like a real list
       const opts = [...inList.querySelectorAll('.st-mo:not([disabled])')], i = opts.indexOf(document.activeElement); e.preventDefault();
       const n = e.key === 'Home' ? 0 : e.key === 'End' ? opts.length - 1 : i < 0 ? (e.key === 'ArrowDown' ? 0 : opts.length - 1) : Math.max(0, Math.min(opts.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)));
       if (e.key === 'ArrowUp' && i === 0) inList.querySelector('input').focus(); else opts[n]?.focus();
@@ -772,7 +970,10 @@ export function initStudio(ctx) {
   showPane('gen');
   let timer = null;
   el.classList.toggle('st-folded', !!store.get('fold', false));
-  function open() { if (!el.hidden) return; if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
-  function close() { if (el.hidden) return; seenAt = Date.now(); closeLight(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); setTimeout(() => { el.hidden = true; }, 220); if (opener && opener.focus) opener.focus({ preventScroll: true }); }
-  return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden };
+  const isOn = () => document.body.classList.contains('studioOpen'); // not el.hidden: that waits 220 ms for the fade after close
+  let hideT = 0;
+  function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
+  function close(o = {}) { if (!isOn()) return; seenAt = Date.now(); closeLight(); closeHist(); closeBin(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
+  views.add('studio', { isOpen: isOn, close });
+  return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn };
 }
