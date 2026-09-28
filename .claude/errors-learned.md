@@ -199,3 +199,12 @@
 **Fix aplicado:** Un relleno de `Promise.withResolvers` en `documents.mjs` antes de cargar pdfjs. Probado con `npx -y node@20 --test` y `npx -y node@20 check.mjs` en una copia limpia de la rama (90/90, 74/74).
 **Prevención:** Antes de un PR, correr las pruebas con la versión mínima de Node (`npx -y node@20 --test`); mirar el estado de GitHub Actions de la rama, no solo el check local.
 **Archivos:** `documents.mjs` (toMarkdown, rama pdf)
+
+## [2026-09-28] — En GitHub faltaba el mosaico de Chrome (73/74)
+
+**Contexto:** Pull Request #3 (`mejora/estudio-carpetas` → `main`); GitHub Actions corre `npm run check` en Ubuntu.
+**Error:** «server: /api/health says teams and the browser are on; the bar has the Chrome tile — chrome not in /api/mcp».
+**Causa raíz:** El mosaico de Chrome solo se añadía cuando `claude mcp list` respondía. En la máquina de GitHub no hay Claude Code: `spawn` falla, `discover()` termina con `null` y la lista queda vacía, sin Chrome, aunque `tools.browser` esté activado. En esta PC nunca se veía porque Claude Code sí está.
+**Fix aplicado:** `discover()` aplica `withBrowser` también cuando no hay respuesta; el mosaico sigue a `tools.browser` siempre. Test: `tests/mcp-browser.test.mjs` (con `CLAUDE_BIN` apuntando a un programa que no existe).
+**Prevención:** Lo que la página muestra por configuración no debe depender de que un programa externo responda. Probar el camino «sin Claude CLI» con `CLAUDE_BIN` falso.
+**Archivos:** `mcp.mjs` (discover → finish), `tests/mcp-browser.test.mjs`

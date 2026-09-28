@@ -145,7 +145,7 @@ export function discover({ timeout = 120000 } = {}) {
         const prev = new Map(servers.map(s => [s.id, s]));
         servers = withBrowser(list.map(s => { const o = prev.get(s.id); return o && o.tools?.length ? { ...s, tools: o.tools } : s; })); discoveredAt = Date.now();
         if (cacheFile && complete && list.length) try { fs.writeFileSync(cacheFile, JSON.stringify({ at: discoveredAt, servers: list.map(s => ({ raw: s.raw, name: s.name, target: s.target, status: s.status })) })); } catch {}
-      }
+      } else servers = withBrowser(servers); // no answer (no Claude CLI on this machine, or it failed): the Chrome tile still follows tools.browser
       resolve(servers);
     };
     let p;
