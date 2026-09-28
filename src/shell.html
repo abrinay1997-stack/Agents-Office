@@ -2378,6 +2378,27 @@
   .bv-hoodc { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #CFCDC5; margin-bottom: 6px; } .bv-hoodc span { flex: 1; min-width: 0; } .bv-hoodc b { color: #fff; font-weight: 600; word-break: break-word; }
   .bv-hoodx { width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(253,255,248,.18); background: none; color: #E8E6DF; cursor: pointer; flex: none; }
   @media (prefers-reduced-motion: reduce) { .bv3-lab { transition: none; } }
+  /* V4.6 (27 Sep 2026): folders in the gallery — a strip of chips under the filters; a picture dragged onto one goes into it */
+  .st-folders { display: flex; gap: 6px; align-items: center; padding: 8px 18px; border-bottom: 1px solid var(--hairline); overflow-x: auto; scrollbar-width: thin; flex: none; }
+  .st-folders:empty { display: none; } .st-gal { min-width: 0; } .st-folders { min-width: 0; max-width: 100%; box-sizing: border-box; } /* the strip scrolls inside its width: it no longer widens the gallery on a phone */
+  .st-fd { display: inline-flex; align-items: center; gap: 6px; flex: none; min-height: 32px; padding: 5px 12px; border-radius: 10px; border: 1px dashed transparent; background: rgba(127,127,127,.08); color: var(--ink); font: 500 12.5px var(--ui); cursor: pointer; white-space: nowrap; max-width: 260px; }
+  .st-fd .ic { width: 16px; height: 16px; flex: none; } .st-fd b { font-weight: 600; color: var(--grey); font-variant-numeric: tabular-nums; }
+  .st-fd:hover { background: rgba(127,127,127,.16); } .st-fd.on { background: var(--ink); color: var(--cream); } .st-fd.on b { color: inherit; opacity: .75; }
+  .st-dragging .st-fd:not([data-fd="all"]) { border-color: var(--grey); } /* while dragging, every folder shows it takes pictures */
+  .st-fd.drop { border: 2px solid #FF5100 !important; background: rgba(255,81,0,.1); color: var(--ink); transform: scale(1.04); }
+  .st-fdw { display: inline-flex; align-items: center; flex: none; }
+  .st-fdw .st-fd { border-radius: 10px 0 0 10px; } .st-fdm { min-height: 32px; min-width: 28px; padding: 0 6px; border: 0; border-radius: 0 10px 10px 0; background: rgba(127,127,127,.08); color: var(--grey); cursor: pointer; font-size: 15px; line-height: 1; }
+  .st-fdm:hover { background: rgba(127,127,127,.2); color: var(--ink); } .st-fd.on + .st-fdm { background: var(--ink); color: var(--cream); }
+  .st-fdnew { flex: none; min-height: 32px; padding: 5px 12px; border-radius: 10px; border: 1px dashed var(--hairline); background: none; color: var(--ink); font: 600 12.5px var(--ui); cursor: pointer; white-space: nowrap; }
+  .st-fdnew:hover { border-color: var(--ink); }
+  .st-fdin { flex: none; width: 200px; min-height: 32px; padding: 5px 10px; border-radius: 10px; border: 1.5px solid var(--ink); background: var(--cream); color: var(--ink); font: 13px var(--ui); }
+  .st-fd:focus-visible, .st-fdm:focus-visible, .st-fdnew:focus-visible, .st-fdin:focus-visible, .st-mv:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .st-card[draggable="true"] { cursor: grab; } .st-card[draggable="true"]:active { cursor: grabbing; }
+  .st-dragn { position: fixed; left: -999px; top: -999px; padding: 8px 14px; border-radius: 99px; background: #FF5100; color: #fff; font: 700 13px var(--ui); }
+  .st-infd { display: inline-flex; align-items: center; gap: 3px; } .st-infd .ic { width: 12px; height: 12px; }
+  .st-mvw { display: inline-flex; align-items: center; gap: 6px; color: var(--cream); } .st-mvw .ic { width: 16px; height: 16px; }
+  .st-mv { font: 12px var(--ui); min-height: 30px; padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(255,255,255,.3); background: #151414; color: var(--cream); cursor: pointer; } .st-mv:disabled { opacity: .5; cursor: default; }
+  body.dark .st-fdin { background: #1B1C21; } body.dark .st-fd.on + .st-fdm { color: #15161A; }
 </style>
 </head>
 <body>

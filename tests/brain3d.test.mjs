@@ -53,3 +53,10 @@ test('a new note joins beside its neighbour and the others keep their place', ()
   assert.ok(Math.max(...moved) < 0.35, `an old note moved ${Math.max(...moved).toFixed(2)}`);
   assert.ok(dist(at(Q, nodes.length), at(Q, moc)) < 0.6, 'the new note is far from the map it links to');
 });
+
+test('a place that is not a number (a note added before it was laid out) is laid out again, never drawn at NaN', () => {
+  const { nodes, links } = vault(), P = layout3D(nodes, links);
+  const prev = new Map(nodes.map((n, i) => [n.id, at(P, i)])); prev.set(nodes[5].id, [NaN, undefined, 0]);
+  const Q = layout3D(nodes, links, prev);
+  assert.ok([...Q].every(Number.isFinite), 'a NaN reached the drawing');
+});

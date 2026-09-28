@@ -784,7 +784,7 @@ function mediaReq(b, by) { // what the page or an agent may ask the Estudio for
   const ids = v => (Array.isArray(v) ? v : []).filter(x => typeof x === 'string').slice(0, 30);
   const m = b.media && typeof b.media === 'object' ? Object.fromEntries(['start', 'end', 'reference', 'video', 'audio'].map(k => [k, ids(b.media[k])]).filter(([, v]) => v.length)) : {};
   return { prompt: b.prompt, n: b.n, kind: b.kind, model: typeof b.model === 'string' ? b.model : undefined, provider: typeof b.provider === 'string' ? b.provider : undefined, ratio: b.ratio, seconds: b.seconds,
-    settings: b.settings && typeof b.settings === 'object' && !Array.isArray(b.settings) ? b.settings : {}, media: m, by: by || (b.by === 'agent' ? 'agent' : 'you'),
+    settings: b.settings && typeof b.settings === 'object' && !Array.isArray(b.settings) ? b.settings : {}, media: m, by: by || (b.by === 'agent' ? 'agent' : 'you'), folder: typeof b.folder === 'string' ? b.folder : undefined,
     agent: b.agent && AGENTS.some(a => a.id === b.agent) ? b.agent : null, task: typeof b.task === 'string' && /^[a-z0-9]{4,20}$/i.test(b.task) ? b.task : null };
 }
 function tickRoutines() { // the clock never throws: an exception in a setInterval would stop the office
@@ -1567,7 +1567,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { ...head, 'content-length': size });
       return fs.createReadStream(f).pipe(res);
     }
-    if (url.pathname === '/api/media' && req.method === 'GET') return json(res, 200, { items: media.list(), budget: media.budget(), engines: media.engines(), models: media.models(), jobs: media.jobs(), providers: media.providers(), default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
+    // V4.6: folders to organise the gallery — labels in each file's record, never a move on disk
+    if (url.pathname === '/api/media/folders' && req.method === 'POST') { const b = await body(req); try { const f = media.addFolder(b.name); const moved = Array.isArray(b.files) && b.files.length ? media.moveTo(b.files, f.id) : 0; return json(res, 200, { folder: f, moved, folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+    { const fm = url.pathname.match(/^\/api\/media\/folders\/(c[a-z0-9]{4,20})$/);
+      if (fm && req.method === 'PATCH') { const b = await body(req); try { return json(res, 200, { folder: media.renameFolder(fm[1], b.name), folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (fm && req.method === 'DELETE') { try { const n = media.removeFolder(fm[1]); return json(res, 200, { ok: true, freed: n, folders: media.folders() }); } catch (e) { return json(res, 404, { error: e.message }); } } }
+    if (url.pathname === '/api/media/move' && req.method === 'POST') { const b = await body(req); try { const n = media.moveTo(b.files, b.folder || null); return json(res, 200, { ok: true, moved: n, folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+    if (url.pathname === '/api/media' && req.method === 'GET') return json(res, 200, { folders: media.folders(), items: media.list(), budget: media.budget(), engines: media.engines(), models: media.models(), jobs: media.jobs(), providers: media.providers(), default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
     if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
     if (url.pathname === '/api/media/jobs' && req.method === 'GET') return json(res, 200, { jobs: media.jobs({ task: url.searchParams.get('task') || undefined, active: url.searchParams.get('active') === '1' }), budget: media.budget() });
     if (url.pathname === '/api/media/jobs' && req.method === 'POST') { // queue one generation; `wait` (ms, max 110 s) answers when it finished or at that time, whichever first

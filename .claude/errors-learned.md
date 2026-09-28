@@ -181,3 +181,12 @@
 **Fix aplicado:** Escribir esos archivos con la herramienta Write (y los scripts de Python también), y ejecutarlos después.
 **Prevención:** Nada con comillas simples sueltas dentro de un heredoc; archivos auxiliares, con Write.
 **Archivos:** —
+
+## [2026-09-27] — Un comentario `//` metido a mitad de línea anuló el código que seguía
+
+**Contexto:** Parches con Python que añadían una explicación a líneas largas de una sola línea (`src/studio.js` closeMenus; `src/brain3d.js` setData).
+**Error:** esbuild: «Expected ")" but found end of file»; la segunda vez no hubo error de compilación: el Cerebro 3D se quedó sin posiciones (`P = layout3D(...)` quedó comentado), sin nombres visibles y con «computeBoundingSphere(): Computed radius is NaN».
+**Causa raíz:** Un `// comentario` insertado en medio de una línea convierte en comentario todo lo que sigue en esa línea.
+**Fix aplicado:** `/* comentario */` en su lugar.
+**Prevención:** En una línea que sigue después del punto de inserción, solo comentarios de bloque `/* */`. Un `//` va únicamente al final real de la línea. Tras parchear, `node build.mjs` y una prueba que ejercite lo tocado.
+**Archivos:** `src/studio.js` (closeMenus), `src/brain3d.js` (setData)

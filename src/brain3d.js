@@ -58,7 +58,7 @@ export function layout3D(nodes, links, prev = new Map(), soft = []) { // soft: m
   const move = new Uint8Array(N); let fresh = 0;
   nodes.forEach((n, i) => {
     const p = prev.get(n.id);
-    if (p) { P[i * 3] = p[0]; P[i * 3 + 1] = p[1]; P[i * 3 + 2] = p[2]; return; }
+    if (p && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2])) { P[i * 3] = p[0]; P[i * 3 + 1] = p[1]; P[i * 3 + 2] = p[2]; return; } // a place that is not a number is no place: laid out again
     fresh++; move[i] = 1; for (const j of adj[i]) move[j] = 1; // a new note, and the notes it touches, find their place
     const r = rng(hash(n.id)), nb = adj[i].map(j => prev.get(nodes[j].id)).find(Boolean); // born beside a neighbour it already has
     const b = nb || [T[i * 3], T[i * 3 + 1], T[i * 3 + 2]];
@@ -150,7 +150,7 @@ export function initBrain3D(ctx) {
     const m = spriteMaterial(tex); m.userData.shell = true; brain.add(new THREE.Points(g, m));
   }
 
-  let nodes = [], links = [], P = new Float32Array(0), posById = new Map(), visibleMask = [], focus = null, sel = null, hi = null, match = null;
+  let nodes = [], ids = [], links = [], P = new Float32Array(0), posById = new Map(), visibleMask = [], focus = null, sel = null, hi = null, match = null;
   let cores = null, glow = null, lines = null, hiLines = null, softLines = null, ment = [], learned = [], showMent = true, showLearn = true;
   const mentC = new THREE.Color(0x8FA8FF), goldC = new THREE.Color(0xFFC46B);
   const coreGeo = new THREE.IcosahedronGeometry(1, 3), coreMat = new THREE.MeshPhongMaterial({ shininess: 70, specular: 0x444a5a, fog: true });
@@ -358,9 +358,9 @@ export function initBrain3D(ctx) {
   return {
     setData(ns, ls, more = {}) { // new graph: the notes that were already there keep their place; more: { extra: mentions, learned: [[a, b, w]] }
       ment = (more.extra || []).filter(([a, b]) => ns[a] && ns[b]); learned = (more.learned || []).filter(([a, b]) => ns[a] && ns[b]);
-      let prev = new Map(nodes.map((n, i) => [n.id, [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]]]));
+      let prev = new Map(ids.map((id, i) => [id, [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]]])); // the ids laid out last time (the page's own list may already hold a newer note)
       if (!prev.size) try { const c = JSON.parse(localStorage.getItem(POS_KEY) || 'null'); if (c && c.v === LAYOUT_V) prev = new Map(Object.entries(c.p)); } catch {} // the last opening's places
-      nodes = ns; links = ls.filter(([a, b]) => ns[a] && ns[b]); P = layout3D(nodes, links, prev, ment); posById = new Map(nodes.map((n, i) => [n.id, i])); pulses.length = 0; build();
+      nodes = ns.slice(); ids = nodes.map(n => n.id); links = ls.filter(([a, b]) => ns[a] && ns[b]); /* our own copy: a note the page adds is drawn only once it has a place */ P = layout3D(nodes, links, prev, ment); posById = new Map(nodes.map((n, i) => [n.id, i])); pulses.length = 0; build();
       try { const p = {}; nodes.forEach((n, i) => { p[n.id] = [+P[i * 3].toFixed(3), +P[i * 3 + 1].toFixed(3), +P[i * 3 + 2].toFixed(3)]; }); localStorage.setItem(POS_KEY, JSON.stringify({ v: LAYOUT_V, p })); } catch {}
     },
     setFocus(s, h, m) { sel = s; focus = h || s; match = m; hi = focus ? new Set([focus.i, ...[...links, ...(showMent ? ment : []), ...(showLearn ? learned : [])].filter(([a, b]) => a === focus.i || b === focus.i).map(([a, b]) => (a === focus.i ? b : a))]) : null; if (sel) controls.autoRotate = false; else if (idleAt === Infinity && spinOn) idleAt = performance.now() + 3000; paint(); }, // a card closed: it turns again a moment later

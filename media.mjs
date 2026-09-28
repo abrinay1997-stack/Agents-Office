@@ -464,6 +464,44 @@ function store(buf, ext, meta) {
   fs.writeFileSync(path.join(folder, name + '.json'), JSON.stringify(item, null, 2));
   return item;
 }
+/* ---------- V4.6 (27 Sep 2026, the owner): folders to organise the gallery ----------
+   Folders are the owner's own labels, not directories: a file stays where it is (the links in the deliverables and the
+   references keep working) and its record says which folder it is in. <media>/folders.json keeps their names. */
+const foldersFile = () => path.join(root, 'folders.json');
+function readFolders() { try { const j = JSON.parse(fs.readFileSync(foldersFile(), 'utf8')); return Array.isArray(j.folders) ? j.folders.filter(f => f && /^c[a-z0-9]{4,20}$/.test(f.id) && typeof f.name === 'string') : []; } catch { return []; } }
+function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ folders: l }, null, 1)); fs.renameSync(f + '.tmp', f); }
+const cleanName = n => String(n ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+/** The folders, with how many files each holds (the ones in the bin do not count). */
+export function folders(items = list()) {
+  const count = new Map(); for (const it of items) if (it.folder) count.set(it.folder, (count.get(it.folder) || 0) + 1);
+  return readFolders().map(f => ({ ...f, n: count.get(f.id) || 0 }));
+}
+export const folderOf = id => readFolders().find(f => f.id === id) || null;
+export function addFolder(name) {
+  const nm = cleanName(name); if (!nm) throw new Error('ponle un nombre a la carpeta');
+  const l = readFolders(); if (l.some(f => f.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`);
+  if (l.length >= 200) throw new Error('como mucho 200 carpetas');
+  const f = { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: nm, at: Date.now() };
+  writeFolders([...l, f]); return f;
+}
+export function renameFolder(id, name) {
+  const nm = cleanName(name); if (!nm) throw new Error('ponle un nombre a la carpeta');
+  const l = readFolders(), f = l.find(x => x.id === id); if (!f) throw new Error('esa carpeta ya no existe');
+  if (l.some(x => x.id !== id && x.name.toLowerCase() === nm.toLowerCase())) throw new Error(`ya hay una carpeta «${nm}»`);
+  f.name = nm; writeFolders(l); return f;
+}
+/** The folder goes; its files stay, with no folder. → how many files it held */
+export function removeFolder(id) {
+  const l = readFolders(); if (!l.some(f => f.id === id)) throw new Error('esa carpeta ya no existe');
+  let n = 0; for (const it of list()) if (it.folder === id) { update(it.file, { folder: null }); n++; }
+  writeFolders(l.filter(f => f.id !== id)); return n;
+}
+/** Files into a folder (null: out of any folder). → how many moved */
+export function moveTo(files, folder) {
+  if (folder != null && !readFolders().some(f => f.id === folder)) throw new Error('esa carpeta ya no existe');
+  let n = 0; for (const id of (Array.isArray(files) ? files : []).slice(0, 2000)) if (typeof id === 'string' && update(id, { folder: folder || null })) n++;
+  return n;
+}
 /** Everything in the studio, newest first (reads the .json sidecars). */
 export function list({ limit = 600 } = {}) {
   const out = [];
@@ -539,7 +577,7 @@ export function purge({ bin, all } = {}) {
 /* uploads: the owner's own photos and videos, to use as a reference or a first frame (never svg: it could carry script) */
 const UPLOAD = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' };
 const MAGIC = { png: b => b.length > 8 && b.readUInt32BE(0) === 0x89504E47, jpg: b => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF, webp: b => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP', mp4: b => b.toString('ascii', 4, 8) === 'ftyp', webm: b => b.length > 4 && b.readUInt32BE(0) === 0x1A45DFA3 };
-export function upload({ name, data } = {}) {
+export function upload({ name, data, folder } = {}) {
   const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(String(data || ''));
   if (!m) throw new Error('el archivo no llegó bien');
   const ext = UPLOAD[m[1].toLowerCase()]; if (!ext) throw new Error('solo PNG, JPG, WEBP, MP4 o WEBM');
@@ -547,7 +585,7 @@ export function upload({ name, data } = {}) {
   if (!MAGIC[ext](buf)) throw new Error('el archivo no es lo que dice ser');
   if (buf.length > (ext === 'mp4' || ext === 'webm' ? 25 : 12) * 1024 * 1024) throw new Error(ext === 'mp4' || ext === 'webm' ? 'el video pasa de 25 MB' : 'la imagen pasa de 12 MB');
   const title = String(name || 'subida').replace(/\.[^.]+$/, '').slice(0, 80) || 'subida';
-  return store(buf, ext, { prompt: title, provider: 'subida', model: '', by: 'you', upload: true, agent: null, task: null });
+  return store(buf, ext, { prompt: title, provider: 'subida', model: '', by: 'you', upload: true, agent: null, task: null, ...(folder && folderOf(folder) ? { folder } : {}) }); // V4.6: into the folder the owner is looking at
 }
 /** Several files in one .zip (stored, not compressed: images and video are already compressed). */
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -834,7 +872,7 @@ export function submit(req = {}) {
     if (b.costLeftDay != null && est > b.costLeftDay + 1e-9) throw new Error(`presupuesto del día del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftDay)} de ${usd(b.dailyBudget)} (cámbialo en Ajustes → Estudio)`);
     if (b.costLeftMonth != null && est > b.costLeftMonth + 1e-9) throw new Error(`presupuesto del mes del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftMonth)} de ${usd(b.monthlyBudget)} (cámbialo en Ajustes → Estudio)`);
   }
-  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: req.by === 'agent' ? 'agent' : 'you', agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s) * per, retryOf: req.retryOf || undefined };
+  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: req.by === 'agent' ? 'agent' : 'you', agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined }; // V4.6: generated inside a folder, it lands there
   JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
   return pub(j);
 }
@@ -846,7 +884,7 @@ async function runJob(j) {
   running++; j.state = 'running'; j.startedAt = j.startedAt || Date.now(); j.note = j.remote?.length ? 'retomando tras el reinicio' : 'enviando'; saveJobs();
   const m = model(j.model);
   const ctx = { save: saveJobs, add: (buf, ext, extra = {}) => {
-    const it = store(buf, ext, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...extra });
+    const it = store(buf, ext, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...extra });
     j.items.push(it.file); saveJobs(); return it;
   } };
   try {

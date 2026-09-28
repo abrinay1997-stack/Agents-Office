@@ -905,7 +905,13 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       if (z.headers.get('content-type') !== 'application/zip') throw new Error('zip');
       const d = await (await fetch(base + '/api/media/item/' + encodeURIComponent(item.file), { method: 'DELETE' })).json(); await post('/api/media/restore', d.undo);
       const rg = await fetch(base + '/media/' + job.items[0].split('/').map(encodeURIComponent).join('/'), { headers: { range: 'bytes=0-9' } }); if (rg.status !== 206) throw new Error('range ' + rg.status);
-      return `${cat.models.length} models · job → task · upload · ZIP · undo · ranges`;
+      // V4.6: folders — made with the selected files, a generation inside one lands in it, removing it keeps the files
+      const fd = await post('/api/media/folders', { name: 'Logos del check', files: [item.file] }); if (fd.moved !== 1) throw new Error('folder: ' + JSON.stringify(fd).slice(0, 120));
+      const { job: j2 } = await post('/api/media/jobs', { model: 'prueba', prompt: 'dentro de la carpeta', n: 1, folder: fd.folder.id, wait: 8000 });
+      const lib = await (await fetch(base + '/api/media')).json(), inF = lib.items.filter(x => x.folder === fd.folder.id).map(x => x.file);
+      if (!inF.includes(item.file) || !inF.includes(j2.items[0]) || lib.folders.find(f => f.id === fd.folder.id)?.n !== 2) throw new Error('folder contents: ' + JSON.stringify(inF));
+      const rm = await (await fetch(base + '/api/media/folders/' + fd.folder.id, { method: 'DELETE' })).json(); if (rm.freed !== 2) throw new Error('remove folder: ' + JSON.stringify(rm));
+      return `${cat.models.length} models · job → task · upload · ZIP · undo · ranges · folders`;
     });
     await step('server: rejects an empty task', async () => { const r = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"dept":"sales","text":""}' }); if (r.status !== 400) throw new Error('status ' + r.status); });
     if (LIVE) {
