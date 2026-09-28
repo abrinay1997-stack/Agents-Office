@@ -190,3 +190,12 @@
 **Fix aplicado:** `/* comentario */` en su lugar.
 **Prevención:** En una línea que sigue después del punto de inserción, solo comentarios de bloque `/* */`. Un `//` va únicamente al final real de la línea. Tras parchear, `node build.mjs` y una prueba que ejercite lo tocado.
 **Archivos:** `src/studio.js` (closeMenus), `src/brain3d.js` (setData)
+
+## [2026-09-28] — GitHub Actions en rojo desde el 25 sep: los PDF no se leían con Node 20
+
+**Contexto:** Al abrir el PR #3, «All checks have failed»; los commits desde V4.4 tanda 6 (25 sep) ya salían con 0/1 OK.
+**Error:** `not ok — a PDF with text is read page by page · Promise.withResolvers is not a function` en `npm test` (GitHub usa Node 20).
+**Causa raíz:** `pdfjs-dist` 6 usa `Promise.withResolvers`, que Node tiene solo desde la 22. En la máquina del dueño (Node 22) todo pasaba; con Node 20 (lo que pide la guía de instalación) subir un PDF al Cerebro fallaba.
+**Fix aplicado:** Un relleno de `Promise.withResolvers` en `documents.mjs` antes de cargar pdfjs. Probado con `npx -y node@20 --test` y `npx -y node@20 check.mjs` en una copia limpia de la rama (90/90, 74/74).
+**Prevención:** Antes de un PR, correr las pruebas con la versión mínima de Node (`npx -y node@20 --test`); mirar el estado de GitHub Actions de la rama, no solo el check local.
+**Archivos:** `documents.mjs` (toMarkdown, rama pdf)

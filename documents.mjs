@@ -30,6 +30,9 @@ export async function toMarkdown(name, buf) {
     return out.join('\n\n');
   }
   if (k === 'pdf') {
+    // pdfjs-dist 6 calls Promise.withResolvers, which Node has only since 22; the office supports Node 20 (and GitHub checks
+    // on it): without this, every PDF failed there with «Promise.withResolvers is not a function»
+    if (typeof Promise.withResolvers !== 'function') Promise.withResolvers = function () { let resolve, reject; const promise = new this((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
     const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, verbosity: 0 }).promise;
     const pages = [];
