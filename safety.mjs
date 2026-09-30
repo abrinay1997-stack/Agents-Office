@@ -45,7 +45,7 @@ export function writesAllowed(mode, runMode) {
 const WRITE_VERBS = new Set(['send', 'reply', 'forward', 'post', 'publish', 'create', 'update', 'edit', 'modify', 'patch', 'put', 'delete', 'remove', 'trash', 'archive', 'move', 'pay', 'charge', 'refund', 'transfer', 'payout', 'book', 'schedule', 'cancel', 'invite', 'share', 'upload', 'write', 'insert', 'append', 'set', 'add', 'assign', 'approve', 'submit', 'execute', 'run', 'merge', 'push', 'comment', 'like', 'follow', 'unfollow', 'subscribe', 'unsubscribe', 'import', 'rename', 'label', 'mark', 'void', 'issue', 'dispatch', 'enviar', 'publicar', 'crear', 'borrar', 'eliminar', 'pagar', 'actualizar']);
 const READ_VERBS = new Set(['get', 'list', 'search', 'read', 'fetch', 'find', 'query', 'describe', 'lookup', 'view', 'show', 'check', 'count', 'download', 'retrieve', 'preview', 'status', 'buscar', 'leer', 'listar', 'ver']);
 const CHROME_WRITE = new Set(['form_input', 'computer', 'javascript_tool', 'upload_image', 'file_upload']);
-const INTERNAL = new Set(['estudio']); // the office's own Estudio: it makes files on this machine, nothing leaves
+const INTERNAL = new Set(['estudio', 'contenido']); // the office's own Estudio and Contenido: files and notes on this machine, nothing leaves (Contenido has no tool that approves, schedules or publishes — tests/contenido-mcp.test.mjs)
 export function splitTool(name) {
   const m = /^mcp__(.+?)__(.+)$/.exec(String(name)); return m ? { server: m[1], tool: m[2] } : { server: '', tool: String(name) };
 }

@@ -53,6 +53,8 @@ import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
 import * as media from './media.mjs';
+import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
+import { crearRutas } from './contenido/rutas.mjs';
 import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
 import * as telegram from './telegram.mjs';
@@ -104,6 +106,13 @@ media.configure(cfg, cfg.brainPath, process.env.AO_DATA ? path.resolve(process.e
 // the ESTUDIO reaches the agents of these departments as a tool (office.config.json → media.departments; [] = nobody)
 const STUDIO_DEPTS = Array.isArray(cfg.media?.departments) ? cfg.media.departments : ['marketing', 'delivery', 'sales', 'ops'];
 const STUDIO_MCP = path.join(ROOT, 'estudio-mcp.mjs');
+// V4.7: CONTENIDO — the calendar of what will be published. Its pieces are notes in <brain>/Agents Office/contenido (git ignores that folder: an unpublished
+// caption carries prices and launches, and this repository may be public). The agents of these departments can read it and leave DRAFTS (contenido-mcp.mjs);
+// approving is the owner's, in the Contenido view — see contenido/rutas.mjs.
+const CONTENIDO_DEPTS = Array.isArray(cfg.contenido?.departments) ? cfg.contenido.departments : ['marketing', 'delivery'];
+const CONTENIDO_MCP = path.join(ROOT, 'contenido-mcp.mjs');
+const CONTENIDO_DIR = path.join(cfg.brainPath, 'Agents Office', 'contenido');
+const contenido = crearAlmacen({ dir: CONTENIDO_DIR, medioExiste: id => !!media.resolve(id) });
 const DEPUTY = sub.nameOf(cfg); // the owner's right hand above the departments: «Dimitri» unless office.config.json → deputy.name says otherwise
 const TEAMS = teams.settings(cfg); // V3.2 (16 Sep): { enabled, max }
 const roster = loadRoster(BRAIN);
@@ -173,6 +182,10 @@ function dailyBackup() { // one copy a day of the tasks and the routines file, t
   try {
     fs.mkdirSync(dir, { recursive: true });
     for (const [src, name] of [[FILE, 'tasks'], [routines.file(BRAIN), 'routines']]) { const dest = path.join(dir, `${name}-${day}.json`); if (fs.existsSync(src) && !fs.existsSync(dest)) fs.copyFileSync(src, dest); }
+    if (fs.existsSync(CONTENIDO_DIR)) { // V4.7: the content pieces too — a day's copy of the folder, the last 14 (they are text: a few KB)
+      const dest = path.join(dir, `contenido-${day}`); if (!fs.existsSync(dest)) fs.cpSync(CONTENIDO_DIR, dest, { recursive: true, filter: f => !f.includes(`${path.sep}.papelera`) });
+      for (const d of fs.readdirSync(dir).filter(f => /^contenido-\d{4}-\d{2}-\d{2}$/.test(f)).sort().slice(0, -14)) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
+    }
     const all = fs.readdirSync(dir).filter(f => /^(tasks|routines)-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
     for (const kind of ['tasks', 'routines']) { const mine = all.filter(f => f.startsWith(kind + '-')); for (const f of mine.slice(0, -14)) fs.rmSync(path.join(dir, f), { force: true }); }
   } catch (e) { console.warn('backup:', e.message); }
@@ -250,6 +263,8 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   const allowed = tools ? mcp.allowedTools(agent) : [];
   const studio = tools && agent && STUDIO_DEPTS.includes(agent.department); // images and video for real (media.mjs through estudio-mcp.mjs)
   if (studio) allowed.push('mcp__estudio');
+  const conContenido = tools && agent && CONTENIDO_DEPTS.includes(agent.department); // V4.7: read the content calendar and leave drafts (never approve, schedule or publish)
+  if (conContenido) allowed.push('mcp__contenido');
   // the system prompt goes in a file and the request on stdin: skills + notes + a revise can pass Windows' 32,767-character command line
   const sysFile = path.join(CLI_CWD, `system-${nid()}.txt`); fs.writeFileSync(sysFile, system);
   // V4.4: the guard — a hook around every tool call. A run that may not send also loses the send tools outright where it can never need them (a draft, a teammate's piece, «nunca»)
@@ -267,7 +282,10 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   if (allowed.length) args.push('--allowedTools', allowed.join(','));
   args.push(...(tools ? mcp.cliArgs() : ['--no-chrome'])); // V3.2 (16 Sep): the owner's Chrome, when tools.browser is on
   args.push(...modelArgs(model, effort));
-  if (studio) args.push('--mcp-config', JSON.stringify({ mcpServers: { estudio: { command: process.execPath, args: [STUDIO_MCP], env: { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' } } } }));
+  if (studio || conContenido) { // the office's own servers, one --mcp-config: the Estudio and Contenido share who is asking
+    const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
+    args.push('--mcp-config', JSON.stringify({ mcpServers: { ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
+  }
   const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes
   return new Promise((resolve, reject) => {
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -419,7 +437,7 @@ function agentSystem(a, index, read, { extra = '', words = 260 } = {}) {
     'FUENTES: cada cifra, precio, fecha o dato de un cliente sale de algún lado; al final, una línea «Fuentes:» con las notas (por su nombre) o las páginas que usaste; lo que no tenga fuente va marcado (assumed). ' + // V4.4 (D3)
     'ANTES DE ENTREGAR, revisa tu trabajo en silencio contra las reglas de tu skill, las lecciones y la petición del dueño (¿falta un precio, un nombre, un paso, el tono?) y corrige lo que falle; no muestres la revisión. ' + // V4.4 (D4)
     'Si de verdad no puedes hacerlo (falta un acceso, una decisión del dueño, algo físico o una llamada), empieza tu respuesta con «PASAR A UNA PERSONA:» y di en dos líneas qué hace falta y lo que ya adelantaste.\n\n' + // V4.4 (I6)
-    `${mcp.promptText(a)}${studioText(a)}${cifrasText()}${examplesText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
+    `${mcp.promptText(a)}${studioText(a)}${contenidoText(a)}${cifrasText()}${examplesText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
 }
 function studioText(a) {
   if (!STUDIO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
@@ -429,6 +447,11 @@ function studioText(a) {
     (on.length ? `Modelos listos — imagen: ${img.join(', ') || 'ninguno'}; video: ${vid.join(', ') || 'ninguno'}. Si no eliges modelo se usa el del dueño. ` : 'El dueño aún no puso una key de imagen: solo están los motores de «prueba» (tarjetas de muestra); úsalos solo si la tarea pide probar el Estudio. ') +
     'Cuando la tarea pida imágenes o video, GENÉRALOS (no entregues solo prompts) y pon en tu entregable, tal cual, las líneas que devuelve la herramienta: ![…](/media/…) si ya está, o la línea ⏳ si sigue en proceso (un video tarda minutos; la oficina cambia esa línea por el archivo cuando termine, tú no esperes). ' +
     'Para animar una imagen o usarla de referencia (un producto, un logo, un personaje) búscala con buscar_en_galeria y pasa su id. Un lote grande: consulta estado_estudio antes (tope diario).';
+}
+function contenidoText(a) { // V4.7: what an agent of these departments may do with the content calendar
+  if (!CONTENIDO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
+  return '\n- CONTENIDO (mcp__contenido__*): el calendario de lo que se va a publicar en Instagram y Facebook. ver_calendario_contenido y ver_pieza LEEN lo que hay (míralo antes de proponer, para no repetir ni pisar); crear_borrador deja una pieza como BORRADOR con su día, hora, formato, redes, texto y las imágenes del Estudio (pasa sus ids en `medios`); mejorar_borrador corrige un borrador tuyo. ' +
+    'Tú NO apruebas, NO programas y NO publicas: el dueño revisa cada borrador y lo aprueba en Contenido, y solo lo aprobado sale. Escribe el texto completo y listo para salir, con la voz de la marca (sus notas del cerebro). Para una imagen, genérala primero con el Estudio y usa su id. Termina tu entregable diciendo qué borradores dejaste y para qué días.';
 }
 const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. Name every recipient with the exact email address or phone number, and every amount: after the OK the office only lets a send reach the addresses written in this draft. End with one line saying exactly what will go out when approved (or that nothing needs to).'
   : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
@@ -877,6 +900,7 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
   req.on('data', d => { size += d.length; if (size > limit) { if (s !== null) reject(Object.assign(new Error('request too large'), { status: 413 })); s = null; return; } if (s !== null) s += d; }); // over the limit: stop keeping it, drain the rest, answer 413
   req.on('end', () => { if (s === null) return; try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('the body is not valid JSON'), { status: 400 })); } });
 });
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, ajustes: () => ({ departamentos: CONTENIDO_DEPTS }) });
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
 // and a hostile DNS name pointed at 127.0.0.1 is refused by the Host check (DNS rebinding).
@@ -1225,7 +1249,7 @@ const server = http.createServer(async (req, res) => {
         lessons: learn.read(BRAIN, a.id),
         stats: { done: ok.length, failed: done.length - ok.length, running: mine.filter(t => t.state === 'doing').length, waiting: mine.filter(t => t.state === 'waiting').length, pending: mine.filter(t => t.state === 'next' || t.state === 'scheduled').length, avgMinutes: dur.length ? Math.round(dur.reduce((x, y) => x + y, 0) / dur.length / 60000) : null },
         recent: mine.filter(t => !t.archived).sort((x, y) => (y.doneAt || y.addedAt || 0) - (x.doneAt || x.addedAt || 0)).slice(0, 10).map(t => ({ id: t.id, title: t.title, state: t.state, error: !!t.error, at: t.doneAt || t.addedAt })),
-        connectors: mcp.usableFor(a).map(x => x.name), studio: STUDIO_DEPTS.includes(a.department),
+        connectors: mcp.usableFor(a).map(x => x.name), studio: STUDIO_DEPTS.includes(a.department), contenido: CONTENIDO_DEPTS.includes(a.department),
       });
     }
     if (url.pathname === '/api/skills') return json(res, 200, refreshSkills().summary()); // reloads from disk: edit a skill, hit this, see it
@@ -1551,6 +1575,8 @@ const server = http.createServer(async (req, res) => {
       const trashed = url.searchParams.get('note') === '1' ? trashNote(t) : null;
       return json(res, 200, { ok: true, trashed, graph: trashed ? await rebuildGraph() : undefined });
     }
+    /* ---------- V4.7: Contenido — the pieces, their review and approval ---------- */
+    if (url.pathname.startsWith('/api/contenido') && await contenidoRoutes(req, res, url)) return;
     /* ---------- the Estudio ---------- */
     if (url.pathname.startsWith('/media/') && req.method === 'GET') { // a generated file (only inside <brain>/Agents Office/media); ranges, so a video can seek
       const f = media.resolve(decodeURIComponent(url.pathname.slice(7)));
@@ -1632,7 +1658,7 @@ const server = http.createServer(async (req, res) => {
     }
     const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);
     if (mm && req.method === 'PATCH') { const b = await body(req); const it = media.update(decodeURIComponent(mm[1]), { ...(typeof b.fav === 'boolean' ? { fav: b.fav } : {}) }); return it ? json(res, 200, it) : json(res, 404, { error: 'no such file' }); }
-    if (mm && req.method === 'DELETE') { const t = media.trash(decodeURIComponent(mm[1])); return t ? json(res, 200, { ok: true, undo: t }) : json(res, 404, { error: 'no such file' }); }
+    if (mm && req.method === 'DELETE') { const usos = contenido.usos(decodeURIComponent(mm[1])); if (usos.length) return json(res, 409, { error: `Este archivo está en ${usos.length === 1 ? 'una pieza' : usos.length + ' piezas'} de Contenido (${usos.slice(0, 3).map(u => '«' + (u.titulo || u.id) + '»').join(', ')}): quítalo de ahí primero`, piezas: usos }); const t = media.trash(decodeURIComponent(mm[1])); return t ? json(res, 200, { ok: true, undo: t }) : json(res, 404, { error: 'no such file' }); }
     if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, { ...sub.load(DATA), name: DEPUTY });
     if (url.pathname === '/api/sub/chat' && req.method === 'POST') {
       const { text } = await body(req);

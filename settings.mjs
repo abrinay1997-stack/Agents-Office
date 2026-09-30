@@ -2,7 +2,7 @@
 // it does; a change is validated here and written to office.config.local.json (this machine; it wins over the team's
 // file and is never uploaded). Proven in tests/settings.test.mjs.
 export const GROUPS = [
-  ['general', 'General'], ['seguridad', 'Seguridad'], ['aprobaciones', 'Aprobaciones'], ['costos', 'Costos'], ['estudio', 'Estudio'], ['avisos', 'Avisos y Telegram'], ['conectores', 'Conectores'], ['calidad', 'Calidad'], ['equipo', 'Equipo'],
+  ['general', 'General'], ['seguridad', 'Seguridad'], ['aprobaciones', 'Aprobaciones'], ['costos', 'Costos'], ['estudio', 'Estudio'], ['contenido', 'Contenido'], ['avisos', 'Avisos y Telegram'], ['conectores', 'Conectores'], ['calidad', 'Calidad'], ['equipo', 'Equipo'],
 ];
 const DEPTS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 // type: text · number · bool · select · list (strings) · depts (departments) · time (HH:MM or empty) · people
@@ -26,6 +26,8 @@ export const FIELDS = [
   { path: 'costs.stopAtBudget', group: 'costos', type: 'bool', label: 'Frenar las tareas nuevas al pasar el presupuesto' },
   { path: 'costs.hourlyRate', group: 'costos', type: 'number', label: 'Lo que cuesta una hora de tu equipo (US$)', min: 0, max: 1000 },
   // V4.5 (27 Sep 2026, the owner): the Estudio's caps — they were only in office.config.json (media.*). Applied at once (media.setLimits).
+  // V4.7: Contenido — which departments' agents may read the content calendar and leave DRAFTS (they never approve, schedule or publish). Applies on restart.
+  { path: 'contenido.departments', group: 'contenido', type: 'depts', label: 'Departamentos cuyos agentes pueden dejar borradores', restart: true, help: 'Leen el calendario de contenido y dejan borradores que tú revisas y apruebas en Contenido (K). Ninguno aprueba, programa ni publica. Vacío = ninguno.', default: ['marketing', 'delivery'] },
   { path: 'media.dailyLimit', group: 'estudio', type: 'number', label: 'Tope de generaciones al día', min: 0, max: 10000, default: 40, help: 'Cuenta imágenes; un video cuenta como 5. Lo del motor «Prueba» no cuenta. 0 = sin tope.' },
   { path: 'media.dailyBudget', group: 'estudio', type: 'number', label: 'Gasto máximo al día en el Estudio (US$)', min: 0, max: 100000, step: 0.5, default: 0, help: 'Con el precio aproximado de cada modelo; lo que está generándose ya cuenta. Un pedido que lo pasaría no se envía. 0 = sin límite.' },
   { path: 'media.monthlyBudget', group: 'estudio', type: 'number', label: 'Gasto máximo al mes en el Estudio (US$)', min: 0, max: 1000000, step: 1, default: 0, help: 'Igual, por mes calendario. Aparte del presupuesto de la oficina (Costos), que cuenta a los agentes. 0 = sin límite.' },
