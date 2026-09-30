@@ -2080,6 +2080,9 @@
   .st-old { color: #8A5A00; } body.dark .st-old { color: #F2C46B; }
   .st-mo-uses { display: block; font-size: 12px; color: var(--ink); margin-top: 3px; line-height: 1.4; } .st-mo-uses b { font-weight: 600; }
   .st-mg-n { font-weight: 600; color: var(--grey); }
+  /* V4.8 (30 Sep 2026): an audio in the gallery (mp3/wav, for Muse Spark to transcribe) */
+  .st-aud { display: grid; place-items: center; aspect-ratio: 16 / 9; width: 100%; font-size: 44px; color: #F2EFE8; background: linear-gradient(135deg, #2A2233, #151414); }
+  .st-laud { display: grid; place-items: center; gap: 16px; padding: 30px; color: #F2EFE8; font-size: 64px; } .st-laud audio { width: min(520px, 80vw); }
   .st-menu { position: fixed; z-index: 70; min-width: 210px; padding: 6px; border-radius: 12px; background: var(--cream); border: 1px solid var(--hairline); box-shadow: 0 16px 40px rgba(21,20,20,.22); display: flex; flex-direction: column; }
   .st-menu[hidden] { display: none; }
   .st-menu [role="menuitem"] { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font-family: var(--ui); font-size: 13px; text-align: left; cursor: pointer; text-decoration: none; }

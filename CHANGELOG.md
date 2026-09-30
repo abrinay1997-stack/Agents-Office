@@ -1,5 +1,12 @@
 # Changelog
 
+## V4.8 — 30 sep 2026 (Meta en el Estudio)
+
+- **Muse Image (Meta)** como motor del Estudio: `muse-image-1.0` en `api.meta.ai/v1`, con `META_API_KEY` o `MODEL_API_KEY`. Sin referencias genera (`/images/generations`); con hasta 10 referencias edita y compone (`/images/edits`, cuerpo JSON de Meta con `images: [{ image_url }]`). Formato (proporción), calidad (`reasoning_strength`: alta o baja) y archivo (webp, png, jpeg). Busca referencias reales por su cuenta, incluido en el precio: US$0,01 por imagen, registrado en costos.
+- **Entender video y audio con Muse Spark**: `understand.mjs`, la ruta `POST /api/media/understand` y dos herramientas para los agentes, `analizar_video` (mp4 de la galería o una URL https; también lee lo que se dice) y `transcribir_audio` (mp3/wav). `muse-spark-1.3` para video y `muse-spark-1.2` para audio. Solo aparecen con la key de Meta. El texto le llega al agente marcado como material, no como órdenes. Cada consulta se registra en costos como «entendimiento». No genera video: eso sigue con Veo, Kling y Seedance.
+- La galería del Estudio acepta **mp3 y wav** (tarjeta ♪ con reproductor); un audio nunca se usa como referencia ni como fotograma.
+- Pruebas nuevas: `tests/meta.test.mjs` y `tests/understand.test.mjs`, contra un Meta simulado. Todavía sin probar con una key real.
+
 ## 3.2.1-beta.2 — 19 Sep 2026
 
 - **Licence.** LICENSE now opens with the Required Notices (Copyright 2026 Sahni.ai; Agents Office is a Sahni.ai product) and Sahni.ai's additional terms: the name and mark stay, no renaming or rebranding, no wiring it into or bundling it with another product, agent system or workforce, and anything else needs written permission. The PolyForm Noncommercial 1.0.0 text below them is unchanged. README says the same in plain English. No change to the office itself.

@@ -97,7 +97,7 @@ export function initStudio(ctx) {
     <div class="st-hist" hidden role="dialog" aria-modal="true" aria-labelledby="stHistT"></div>
     <div class="st-hist st-binov" hidden role="dialog" aria-modal="true" aria-labelledby="stBinT"></div>
     <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
-    <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm" multiple hidden>`;
+    <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav" multiple hidden>`;
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
@@ -288,20 +288,20 @@ export function initStudio(ctx) {
         : `<button type="button" data-j="cancel" title="${j.state === 'queued' ? 'Aún no empezó: no se cobra' : paid ? 'Ya se envió al motor: puede cobrarse igual' : 'Gratis: no se cobra'}">Cancelar</button>`) : `<button type="button" data-j="retry" class="pri">Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
   }
   function card(it) {
-    const vid = it.kind === 'video', on = sel.has(it.file), label = String(it.prompt).slice(0, 70);
+    const aud = it.kind === 'audio', vid = it.kind === 'video' || aud, on = sel.has(it.file), label = String(it.prompt).slice(0, 70); // V4.8: an audio (for Muse Spark to transcribe) is neither animated nor a reference
     // V4.4 (25–27 Sep 2026): a row under the caption, on the card's own background (it used to float over the picture,
     // where a light image swallowed it): the main action as its icon (the clapperboard animates an image; a video repeats),
     // Descargar and the bin always in sight, and «⋯» for the favourite, Variar and Repetir.
     // V4.5 (27 Sep 2026, the owner: «una función que se usaría bastante»): «Usar de referencia» joins the row, beside Animar.
-    const primary = !vid ? ['anim', 'Animar', 'Convertirla en video', 'vid'] : !it.upload ? ['again', 'Repetir', 'Otra vez, con el mismo prompt y ajustes', 'again'] : null;
+    const primary = aud ? null : !vid ? ['anim', 'Animar', 'Convertirla en video', 'vid'] : !it.upload ? ['again', 'Repetir', 'Otra vez, con el mismo prompt y ajustes', 'again'] : null;
     const menu = [ // V4.4 (27 Sep 2026): the row shows the main action, Descargar and the bin as icons; the rest lives here
       ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
       ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark']]),
       ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar ? [['cal', 'Enviar al calendario de contenido', 'cal']] : [])];
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}" draggable="true">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
-      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
-        ${it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}</button>
+      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${aud ? '<span class="st-aud" aria-hidden="true">♪</span>' : vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
+        ${aud ? '<span class="st-badge">AUDIO</span>' : it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}</button>
       <div class="st-menu" role="menu" hidden>
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
@@ -717,14 +717,14 @@ export function initStudio(ctx) {
     const setTxt = it.settings ? Object.entries(it.settings).map(([k, v]) => `${LBL[k] || k}: ${typeof v === 'boolean' ? (v ? 'sí' : 'no') : VAL[v] || v}`).join(' · ') : '';
     const used = it.media ? Object.entries(it.media).flatMap(([r, fs]) => fs.map(f => [r, f])) : [];
     L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
-      <div class="st-lmedia">${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}">`}</div>
+      <div class="st-lmedia">${it.kind === 'audio' ? `<div class="st-laud"><span aria-hidden="true">♪</span><audio src="${src(it)}" controls></audio></div>` : it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}">`}</div>
       <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${i + 1} de ${list.length}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 ? '' : ' disabled'}>›</button></div>
       <p class="st-lp">${esc(it.prompt)}</p>
       <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${it.by === 'agent' ? esc(agentName(it.agent) || 'agente') : 'tú'}`} · ${esc(when(it.at))}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
-      <div class="st-lacts">${it.kind === 'video' ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>`) : `<button type="button" data-l="anim" class="pri">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
-      <div class="st-lacts2">${it.kind === 'video' ? '' : '<button type="button" data-l="ref">Usar de referencia</button>'}${it.upload || it.kind === 'video' ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">Copiar prompt</button>${ctx.toCalendar ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}<button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
+      <div class="st-lacts">${it.kind === 'video' || it.kind === 'audio' ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>`) : `<button type="button" data-l="anim" class="pri">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
+      <div class="st-lacts2">${it.kind === 'video' || it.kind === 'audio' ? '' : '<button type="button" data-l="ref">Usar de referencia</button>'}${it.upload || it.kind === 'video' || it.kind === 'audio' ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">Copiar prompt</button>${ctx.toCalendar ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}<button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
       <button type="button" class="st-ldel" data-l="del">${svg('trash')} Mover a la papelera</button></div></div>`;
     L.querySelector('.st-lx').focus();
     L.onclick = e => {

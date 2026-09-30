@@ -7,6 +7,7 @@
 //   gemini     — Google: Nano Banana 2 / 2 Lite / Pro (images), Veo 3.1 / Fast / Lite (video)  GEMINI_API_KEY
 //   grok       — xAI Grok image                                                     XAI_API_KEY
 //   openai     — OpenAI gpt-image-1                                                 OPENAI_API_KEY
+//   meta       — Meta Muse Image (muse-image-1.0): generates, edits, searches real references itself   META_API_KEY (or MODEL_API_KEY)
 //   fal        — fal.ai: Flux, Seedream, Nano Banana, Ideogram, Kling, Seedance, Hailuo, Veo   FAL_KEY
 //   prueba     — a free local test card: the whole pipeline without spending anything
 // MODELS. CATALOG below: each model says its engine, the media it takes (start/end frame, references, a video) and its
@@ -27,20 +28,23 @@ export const ENGINES = {
   gemini: { name: 'Google (Gemini API)', env: 'GEMINI_API_KEY', site: 'aistudio.google.com' },
   grok: { name: 'Grok (xAI)', env: 'XAI_API_KEY', site: 'console.x.ai' },
   openai: { name: 'OpenAI', env: 'OPENAI_API_KEY', site: 'platform.openai.com' },
+  meta: { name: 'Meta (Muse Image)', env: 'META_API_KEY', site: 'dev.meta.ai', how: 'setx META_API_KEY "tu-key-de-meta"' }, // V4.8: also MODEL_API_KEY, the key the office already uses for Muse Spark
   fal: { name: 'fal.ai', env: 'FAL_KEY', site: 'fal.ai' },
   prueba: { name: 'Prueba (gratis)', env: null },
 };
 export const NAMES = Object.fromEntries(Object.entries(ENGINES).map(([k, v]) => [k, v.name]));
-export const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash-image', grok: 'grok-2-image', openai: 'gpt-image-1' };
+export const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash-image', grok: 'grok-2-image', openai: 'gpt-image-1', meta: 'muse-image-1.0' };
 const secret = e => {
   if (e === 'prueba') return 'local';
   if (e === 'higgsfield') return process.env.HF_KEY || (process.env.HF_API_KEY && process.env.HF_API_SECRET ? `${process.env.HF_API_KEY}:${process.env.HF_API_SECRET}` : '');
+  if (e === 'meta') return process.env.META_API_KEY || process.env.MODEL_API_KEY || ''; // Meta's docs call it MODEL_API_KEY; the office names the engine
   return process.env[ENGINES[e]?.env] || '';
 };
 const engineOn = e => !!secret(e);
 const HF_BASE = () => (process.env.HF_API_BASE_URL || 'https://api.higgsfield.ai').replace(/\/$/, '');
 // the fal.ai and Google addresses can point at a local stand-in (npm run check tests the queues with no key and no spend)
 const FAL_RUN = () => process.env.AO_FAL_RUN || 'https://fal.run', FAL_QUEUE = () => process.env.AO_FAL_QUEUE || 'https://queue.fal.run', GEMINI_BASE = () => process.env.AO_GEMINI_BASE || 'https://generativelanguage.googleapis.com';
+const META_BASE = () => (process.env.AO_META_BASE || 'https://api.meta.ai/v1').replace(/\/$/, '');
 
 /* ---------- the catalog ---------- */
 const E = (values, def) => ({ type: 'enum', values, default: def ?? values[0] });
@@ -245,6 +249,9 @@ const CATALOG = [
   { id: 'nano-banana-2-lite', engine: 'gemini', kind: 'image', gid: 'gemini-3.1-flash-lite-image', name: 'Nano Banana 2 Lite', cost: 0.02, note: 'El más rápido y barato de Google (tiene capa gratuita): para probar ideas y lotes. Hasta 3 referencias. Precio aproximado.', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '5:4', '21:9'], '1:1') } },
   { id: 'nano-banana-pro', engine: 'gemini', kind: 'image', gid: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro', cost: 0.134, note: 'El tope de Google: piensa la composición, texto legible, personajes coherentes con hasta 14 referencias, hasta 4K. Precio aproximado.', roles: { reference: 14 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '5:4', '21:9'], '1:1'), imageSize: E(['1K', '2K', '4K'], '1K') } },
   { id: 'gpt-image-1', engine: 'openai', kind: 'image', name: 'GPT Image', cost: 0.042, note: 'Sigue instrucciones largas y escribe texto; edita con referencias.', roles: { reference: 4 }, settings: { aspectRatio: E(['1:1', '3:2', '2:3'], '1:1'), quality: E(['low', 'medium', 'high'], 'medium') } },
+  // V4.8 (30 Sep 2026): Meta Muse Image — OpenAI-compatible images API at api.meta.ai/v1; it searches the web for real references
+  // (brands, places, today's data) on its own, included in the price. quality → reasoning_strength (high refines in several passes).
+  { id: 'muse-image', engine: 'meta', kind: 'image', name: 'Muse Image', cost: 0.01, note: 'De Meta: genera y edita, y busca por su cuenta referencias reales (marcas, lugares, datos actuales) antes de dibujar. Texto legible e infografías. Muy barato.', roles: { reference: 10 }, settings: { aspectRatio: E(IMG_ASPECT, '1:1'), quality: E(['high', 'low'], 'high'), outputFormat: E(['webp', 'png', 'jpeg'], 'webp') } },
   { id: 'grok-image', engine: 'grok', kind: 'image', name: 'Grok Image', cost: 0.07, roles: {}, settings: {} },
   falImg('nano-banana-fal', 'Nano Banana (fal)', 0.039, 'fal-ai/nano-banana', 'fal-ai/nano-banana/edit', 3, 'Nano Banana a través de tu key de fal.ai.', s => ({ aspect_ratio: s.aspectRatio })),
   falImg('seedream-4', 'Seedream 4', 0.03, 'fal-ai/bytedance/seedream/v4/text-to-image', 'fal-ai/bytedance/seedream/v4/edit', 4, 'ByteDance: alta resolución, edita con referencias.', s => ({ image_size: FAL_SIZE[s.aspectRatio] || 'square_hd' })),
@@ -269,7 +276,7 @@ const CATALOG = [
     fal: j => j.m.start[0] ? { path: 'fal-ai/veo3/fast/image-to-video', body: { prompt: j.prompt, image_url: j.m.start[0], duration: '8s', generate_audio: j.s.generateAudio } } : { path: 'fal-ai/veo3/fast', body: { prompt: j.prompt, aspect_ratio: j.s.aspectRatio, duration: '8s', generate_audio: j.s.generateAudio } } },
   { id: 'prueba-video', engine: 'prueba', kind: 'video', name: 'Prueba de video (gratis)', cost: 0, note: 'Una tarjeta en lugar del video: prueba el flujo (Animar, fotogramas) sin gastar.', roles: { start: 1, end: 1, reference: 8, video: 1 }, settings: { aspectRatio: E(VID_ASPECT, '16:9'), duration: R(3, 15, 5) } },
 ];
-const PREFER = { image: ['nano-banana-2', 'nano-banana', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image'], video: ['kling-3-std', 'veo-3.1-fast', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal'] };
+const PREFER = { image: ['nano-banana-2', 'nano-banana', 'muse-image', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image'], video: ['kling-3-std', 'veo-3.1-fast', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal'] };
 
 /* V4.4 (27 Sep 2026): what the model picker sorts and filters by — who makes it, its quality tier (1 básica · 2 buena ·
    3 alta · 4 la mejor), how fast it answers, and what it is good for. A model not listed here gets its engine as maker and
@@ -286,6 +293,7 @@ const INFO = {
   'veo-3.1-lite': [G, 2, 'rápido', ['lotes de anuncios', 'pruebas', 'barato']],
   'veo-3-fast-fal': [G, 3, 'normal', ['con sonido', 'anuncios']],
   'gpt-image-1': ['OpenAI', 3, 'lento', ['instrucciones largas', 'texto en imagen', 'editar fotos']],
+  'muse-image': ['Meta', 3, 'normal', ['busca referencias reales', 'texto en imagen', 'infografías', 'editar y componer', 'barato']],
   'grok-image': ['xAI', 2, 'rápido', ['ideas rápidas']],
   'grok-imagine-2': ['xAI', 3, 'rápido', ['editar fotos', 'hasta 10 referencias']],
   'grok-imagine-video': ['xAI', 3, 'normal', ['referencias', 'redes']],
@@ -460,7 +468,7 @@ function store(buf, ext, meta) {
   for (let n = 2; taken(folder, name, ext); n++) name = `${base}-${n}`;
   fs.writeFileSync(path.join(folder, name + '.' + ext), buf);
   const rel = `${sub}/${name}.${ext}`, wh = dims(buf, ext);
-  const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : 'image', ext, at: Date.now(), ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
+  const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : ext === 'mp3' || ext === 'wav' ? 'audio' : 'image', ext, at: Date.now(), ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
   fs.writeFileSync(path.join(folder, name + '.json'), JSON.stringify(item, null, 2));
   return item;
 }
@@ -514,7 +522,7 @@ export function list({ limit = 600 } = {}) {
   }
   return out.sort((a, b) => b.at - a.at).slice(0, limit);
 }
-const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm)$/i;
+const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav)$/i; // V4.8: audio too, for Muse Spark to transcribe
 /** A path inside the studio, or null (never outside it: the id comes from the request). */
 export function resolve(id) {
   const rel = String(id || '').replace(/\\/g, '/');
@@ -556,11 +564,11 @@ export function trashList() {
   const dir = binDir(); if (!root || !fs.existsSync(dir)) return [];
   const names = fs.readdirSync(dir), out = [];
   for (const nm of names) {
-    const m = BIN_RE.exec(nm); if (!m || /\.json$/i.test(nm) || !/\.(png|jpe?g|webp|svg|mp4|webm)$/i.test(nm)) continue;
+    const m = BIN_RE.exec(nm); if (!m || /\.json$/i.test(nm) || !/\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav)$/i.test(nm)) continue;
     const stamp = +m[1], base = m[2], rec = `${m[1]}-${base.replace(/\.[^.]+$/, '')}.json`;
     let it = {}; try { it = JSON.parse(fs.readFileSync(path.join(dir, rec), 'utf8')); } catch {}
     const id = it.file || `${base.slice(0, 7)}/${base}`;
-    out.push({ id, bin: names.includes(rec) ? [nm, rec] : [nm], name: nm, prompt: it.prompt || base, kind: /\.(mp4|webm)$/i.test(nm) ? 'video' : 'image', at: it.at || null, trashedAt: stamp,
+    out.push({ id, bin: names.includes(rec) ? [nm, rec] : [nm], name: nm, prompt: it.prompt || base, kind: /\.(mp4|webm)$/i.test(nm) ? 'video' : /\.(mp3|wav)$/i.test(nm) ? 'audio' : 'image', at: it.at || null, trashedAt: stamp,
       daysLeft: Math.max(0, Math.ceil((stamp + BIN_DAYS * 864e5 - Date.now()) / 864e5)), modelName: it.modelName || it.model || '', upload: !!it.upload });
   }
   return out.sort((a, b) => b.trashedAt - a.trashedAt);
@@ -575,15 +583,16 @@ export function purge({ bin, all } = {}) {
   return n;
 }
 /* uploads: the owner's own photos and videos, to use as a reference or a first frame (never svg: it could carry script) */
-const UPLOAD = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm' };
-const MAGIC = { png: b => b.length > 8 && b.readUInt32BE(0) === 0x89504E47, jpg: b => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF, webp: b => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP', mp4: b => b.toString('ascii', 4, 8) === 'ftyp', webm: b => b.length > 4 && b.readUInt32BE(0) === 0x1A45DFA3 };
+const UPLOAD = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav' }; // V4.8: mp3/wav, for transcribing
+const MAGIC = { png: b => b.length > 8 && b.readUInt32BE(0) === 0x89504E47, jpg: b => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF, webp: b => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP', mp4: b => b.toString('ascii', 4, 8) === 'ftyp', webm: b => b.length > 4 && b.readUInt32BE(0) === 0x1A45DFA3 , mp3: b => b.length > 3 && (b.toString('ascii', 0, 3) === 'ID3' || (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0)), wav: b => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WAVE' };
 export function upload({ name, data, folder } = {}) {
   const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(String(data || ''));
   if (!m) throw new Error('el archivo no llegó bien');
-  const ext = UPLOAD[m[1].toLowerCase()]; if (!ext) throw new Error('solo PNG, JPG, WEBP, MP4 o WEBM');
+  const ext = UPLOAD[m[1].toLowerCase()]; if (!ext) throw new Error('solo PNG, JPG, WEBP, MP4, WEBM, MP3 o WAV');
   const buf = Buffer.from(m[2], 'base64');
   if (!MAGIC[ext](buf)) throw new Error('el archivo no es lo que dice ser');
-  if (buf.length > (ext === 'mp4' || ext === 'webm' ? 25 : 12) * 1024 * 1024) throw new Error(ext === 'mp4' || ext === 'webm' ? 'el video pasa de 25 MB' : 'la imagen pasa de 12 MB');
+  const audio = ext === 'mp3' || ext === 'wav', vid = ext === 'mp4' || ext === 'webm';
+  if (buf.length > (vid || audio ? 25 : 12) * 1024 * 1024) throw new Error(vid ? 'el video pasa de 25 MB' : audio ? 'el audio pasa de 25 MB' : 'la imagen pasa de 12 MB');
   const title = String(name || 'subida').replace(/\.[^.]+$/, '').slice(0, 80) || 'subida';
   return store(buf, ext, { prompt: title, provider: 'subida', model: '', by: 'you', upload: true, agent: null, task: null, ...(folder && folderOf(folder) ? { folder } : {}) }); // V4.6: into the folder the owner is looking at
 }
@@ -762,6 +771,18 @@ const RUN = {
     } else j = await http('https://api.openai.com/v1/images/generations', { method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ model: cfg.models.openai, prompt: job.prompt, n: job.n, size, quality: job.s.quality }), timeout: 300000 }, 'OpenAI');
     for (const d of j.data || []) { if (d.b64_json) ctx.add(Buffer.from(d.b64_json, 'base64'), 'png'); else { const r = await fromUrl(d.url); ctx.add(r.buf, extOf(r.mime, d.url)); } }
   },
+  async meta(m, job, ctx) { // Muse Image (OpenAI-compatible): no references → /images/generations; with them → /images/edits with Meta's own JSON body (images: [{ image_url }]), no multipart
+    const auth = { authorization: `Bearer ${secret('meta')}`, 'content-type': 'application/json' };
+    const [w, h] = SIZE[job.s.aspectRatio] || SIZE['1:1'], fmt = job.s.outputFormat || 'webp'; // "WxH": Meta keeps the ratio, not the exact size
+    const refs = inputFiles(job).reference;
+    const base = { model: m.gid || cfg.models.meta, prompt: job.prompt, n: job.n, size: `${w}x${h}`, output_format: fmt, response_format: 'b64_json', ...(job.s.quality ? { reasoning_strength: job.s.quality } : {}) };
+    const j = refs.length
+      ? await http(`${META_BASE()}/images/edits`, { method: 'POST', headers: auth, body: JSON.stringify({ ...base, images: refs.map(f => ({ image_url: asDataUri(f) })) }), timeout: 300000 }, 'Meta')
+      : await http(`${META_BASE()}/images/generations`, { method: 'POST', headers: auth, body: JSON.stringify(base), timeout: 300000 }, 'Meta');
+    const out = j.output_format || fmt, ext = out === 'jpeg' ? 'jpg' : out;
+    if (!(j.data || []).length) throw new Error('Muse Image no devolvió imagen');
+    for (const d of j.data) { if (d.b64_json) ctx.add(Buffer.from(d.b64_json, 'base64'), ext); else if (d.url) { const r = await fromUrl(d.url); ctx.add(r.buf, extOf(r.mime, d.url, ext)); } }
+  },
   async fal(m, job, ctx) {
     const f = inputFiles(job), auth = { authorization: `Key ${secret('fal')}`, 'content-type': 'application/json' };
     const urls = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.map(asDataUri)]));
@@ -860,7 +881,7 @@ export function submit(req = {}) {
   if (prompt.length > 4000) throw new Error('el prompt es muy largo (máx. 4000)');
   const n = Math.max(1, Math.min(m.kind === 'video' ? 4 : cfg.maxPerRequest, +req.n || 1));
   const media = {};
-  for (const [role, max] of Object.entries(m.roles || {})) { const ids = (req.media?.[role] || []).filter(x => typeof x === 'string').slice(0, max); for (const x of ids) { if (!resolve(x)) throw new Error(`no encuentro «${x}» en el Estudio`); if (m.engine !== 'prueba' && /\.svg$/i.test(x)) throw new Error('una tarjeta de prueba no sirve de referencia para un motor real: usa una imagen generada o subida'); if (role === 'video' ? !/\.(mp4|webm)$/i.test(x) : /\.(mp4|webm)$/i.test(x)) throw new Error(role === 'video' ? 'ahí va un video' : 'ahí va una imagen, no un video'); } if (ids.length) media[role] = ids; }
+  for (const [role, max] of Object.entries(m.roles || {})) { const ids = (req.media?.[role] || []).filter(x => typeof x === 'string').slice(0, max); for (const x of ids) { if (!resolve(x)) throw new Error(`no encuentro «${x}» en el Estudio`); if (/\.(mp3|wav)$/i.test(x)) throw new Error('un audio no sirve de referencia ni de fotograma: los modelos del Estudio toman imágenes y videos'); if (m.engine !== 'prueba' && /\.svg$/i.test(x)) throw new Error('una tarjeta de prueba no sirve de referencia para un motor real: usa una imagen generada o subida'); if (role === 'video' ? !/\.(mp4|webm)$/i.test(x) : /\.(mp4|webm)$/i.test(x)) throw new Error(role === 'video' ? 'ahí va un video' : 'ahí va una imagen, no un video'); } if (ids.length) media[role] = ids; }
   for (const r of m.needs || []) if (!media[r]?.length) throw new Error(`${m.name} necesita ${{ start: 'una imagen inicial', video: 'un video de origen', reference: 'imágenes de referencia' }[r] || r}`);
   if (m.routes) hfRoute(m, Object.fromEntries(Object.entries(media).map(([r, l]) => [r, l.length]))); // a combination its routes do not take is said now, before anything is spent
   const s = settingsFor(m, req.settings || {}, { ratio: req.ratio, seconds: req.seconds });

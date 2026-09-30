@@ -53,6 +53,7 @@ import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
 import * as media from './media.mjs';
+import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
 import { crearRutas } from './contenido/rutas.mjs';
 import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectura — su token vive en META_ACCESS_TOKEN y no toca el disco
@@ -1646,7 +1647,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/media/') && req.method === 'GET') { // a generated file (only inside <brain>/Agents Office/media); ranges, so a video can seek
       const f = media.resolve(decodeURIComponent(url.pathname.slice(7)));
       if (!f) return json(res, 404, { error: 'no such file' });
-      const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm' }[f.split('.').pop().toLowerCase()];
+      const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav' }[f.split('.').pop().toLowerCase()];
       const size = fs.statSync(f).size, head = { 'content-type': type, 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff', 'accept-ranges': 'bytes', ...(type === 'image/svg+xml' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) };
       const rg = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
       if (rg && size && (rg[1] !== '' || rg[2] !== '')) {
@@ -1683,6 +1684,18 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST' && jm[2] === 'cancel') { const j = media.cancel(jm[1]); return j ? json(res, 200, { job: j }) : json(res, 404, { error: 'no such job' }); }
       if (req.method === 'DELETE' && !jm[2]) return media.forget(jm[1]) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'ese trabajo sigue en marcha' });
     }
+    if (url.pathname === '/api/media/understand' && req.method === 'POST') { // V4.8: a video or an audio → text (Muse Spark). { prompt, kind: 'video'|'audio', media?: gallery id, url?: public mp4, agent?, task? }
+      const b = await body(req);
+      try {
+        const filePath = b.media ? media.resolve(String(b.media)) : null;
+        if (b.media && !filePath) return json(res, 404, { error: 'no encontré ese archivo en la galería' });
+        const out = await understand.understand({ prompt: b.prompt, kind: b.kind === 'audio' ? 'audio' : 'video', filePath, url: b.url, model: b.model });
+        const a = AGENTS.find(x => x.id === b.agent);
+        costs.append(DATA, costs.line({ task: b.task || null, agent: a?.id || null, dept: a?.department || null, kind: 'entendimiento', modelId: out.model, provider: 'meta', usage: out.usage || {}, cfgPrices: COSTS().prices }));
+        console.log(`✦ entender: ${b.kind === 'audio' ? 'audio' : 'video'} ${b.media || b.url} → ${out.text.length} caracteres (${out.model})`);
+        return json(res, 200, out);
+      } catch (e) { return json(res, 400, { error: e.message }); }
+    }
     if (url.pathname === '/api/media/generate' && req.method === 'POST') { // V1: generate and wait (kept for scripts)
       const b = await body(req);
       try {
@@ -1696,7 +1709,7 @@ const server = http.createServer(async (req, res) => {
       try { const it = media.upload(b); console.log(`✦ estudio: uploaded ${it.file}`); return json(res, 200, { item: it }); } catch (e) { return json(res, 400, { error: e.message }); }
     }
     if (url.pathname === '/api/media/trash' && req.method === 'GET') return json(res, 200, { items: media.trashList(), days: media.BIN_DAYS }); // V4.4: the Estudio's bin
-    if (url.pathname === '/api/media/trash/file' && req.method === 'GET') { const f = media.trashFile(url.searchParams.get('n')); if (!f) return json(res, 404, { error: 'no está en la papelera' }); const ext = path.extname(f).slice(1).toLowerCase(); const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm' }[ext] || 'application/octet-stream'; res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(ext === 'svg' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }); return fs.createReadStream(f).pipe(res); }
+    if (url.pathname === '/api/media/trash/file' && req.method === 'GET') { const f = media.trashFile(url.searchParams.get('n')); if (!f) return json(res, 404, { error: 'no está en la papelera' }); const ext = path.extname(f).slice(1).toLowerCase(); const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav' }[ext] || 'application/octet-stream'; res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(ext === 'svg' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }); return fs.createReadStream(f).pipe(res); }
     if (url.pathname === '/api/media/trash/purge' && req.method === 'POST') { const b = await body(req); return json(res, 200, { ok: true, removed: media.purge(b) }); }
     if (url.pathname === '/api/media/restore' && req.method === 'POST') { const b = await body(req); return media.restore(b) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)' }); }
     if (url.pathname === '/api/media/zip' && req.method === 'POST') {
