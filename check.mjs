@@ -642,8 +642,15 @@ else {
         await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
         const vis = id => ph.evaluate(i => { const e = document.getElementById(i); return !!e && e.getBoundingClientRect().width > 0; }, id);
         if (!await vis('topMore') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
-        const over = await ph.evaluate(() => [...document.querySelectorAll('#topdock button')].filter(b => b.getBoundingClientRect().width > 0).some(b => b.getBoundingClientRect().right > innerWidth + 1));
-        if (over) throw new Error('a dock button sits off screen on a phone');
+        // El aviso «⚠ N» aparece según el momento de la demo (en CI, más tarde que aquí) y ensancha el dock: se fuerza para que el paso no dependa del reloj, y se mide a los anchos de teléfono de verdad.
+        await ph.evaluate(() => { const a = document.getElementById('topAppr'); a.style.display = ''; a.querySelector('span').textContent = '12'; });
+        for (const w of [390, 360, 320]) {
+          await ph.setViewportSize({ width: w, height: 844 }); await ph.waitForTimeout(150);
+          const m = await ph.evaluate(() => { const bs = [...document.querySelectorAll('#topdock button')].filter(b => b.getBoundingClientRect().width > 0); return { over: bs.some(b => b.getBoundingClientRect().right > innerWidth - 4), brand: document.querySelector('#topbar .brand').getBoundingClientRect().width }; });
+          if (m.over) throw new Error(`a dock button sits off screen on a phone (${w} px, with the approvals pill on)`);
+          if (m.brand < 40) throw new Error(`the brand is squeezed to ${Math.round(m.brand)} px at ${w} px`);
+        }
+        await ph.setViewportSize({ width: 390, height: 844 }); await ph.evaluate(() => { document.getElementById('topAppr').style.display = 'none'; });
         await ph.click('#topMore'); await ph.waitForFunction(() => !document.getElementById('topMoreMenu').hidden, null, { timeout: 3000 });
         await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
         await ph.keyboard.press('Escape'); await ph.waitForFunction(() => document.getElementById('setOv').hidden, null, { timeout: 3000 });
