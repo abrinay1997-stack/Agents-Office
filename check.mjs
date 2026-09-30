@@ -413,7 +413,7 @@ else {
       await page.evaluate(() => window.CC.tasks.rtAct(window.CC.routines()[0].id, 'run')); await page.waitForTimeout(500);
       const fired = await page.evaluate(() => window.CC.tasks.tasks.some(t => t.routine && /triage the inbox/i.test(t.title))); if (!fired) throw new Error('RUN NOW did not make a task');
       await page.click('.tp-dd'); await page.click('.tp-menu button[data-k="marketing"]');
-      await page.fill('.tp-in', 'every day at 9am post the reel'); await page.keyboard.press('Enter'); await page.waitForTimeout(400);
+      await page.fill('.tp-in', 'every day at 9am post the reel'); await page.keyboard.press('Enter'); await page.waitForFunction(() => /Rutina programada/.test(document.querySelector('.tp-hint').textContent), null, { timeout: 4000 }).catch(() => {}); // a slow machine took longer than the fixed 400 ms once: wait for the hint, fail with what it says if it never comes
       const mk = await page.evaluate(() => document.querySelector('.tp-hint').textContent); if (!/Rutina programada/.test(mk)) throw new Error('a marketing routine was not set: ' + mk);
       const two = await page.evaluate(() => window.CC.routines().length); if (two !== 2) throw new Error('routines: ' + two);
       const opts = await page.evaluate(() => [...document.querySelectorAll('.tp-model option')].map(o => o.value).join(',') + '|' + document.querySelector('.tp-model').value); if (opts !== 'sonnet,opus,fable|sonnet') throw new Error('model menu: ' + opts);
