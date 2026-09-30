@@ -1,4 +1,4 @@
-/* V4.7 — el «⋯» del dock: solo existe en el teléfono, donde recoge Salud, Negocio y Ajustes (src/dock.js). */
+/* V4.7 — el «⋯» del dock: solo existe en el teléfono, donde recoge Analíticas, Salud, Negocio y Ajustes (src/dock.js). */
 #topMore { display: none; position: relative; }
 #topMore .hl-badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--cream); background: transparent; }
 #topMore[data-state="ok"] .hl-badge { background: #1E9070; } #topMore[data-state="warn"] .hl-badge { background: #D18A00; } #topMore[data-state="bad"] .hl-badge { background: #B3261E; }
@@ -14,7 +14,7 @@ body.dark #topMore .hl-badge { border-color: #1B1C21; }
 body.dark #topMoreMenu { background: #1B1C21; }
 @media (max-width: 440px) {
   #topMore { display: inline-grid; }
-  #topHealth, #topBiz, #topSettings { display: none; }
+  #topAnaliticas, #topHealth, #topBiz, #topSettings { display: none; }
   /* El dock es lo que no puede salirse: con el aviso «⚠ N» de aprobaciones encendido (el uso normal) y seis botones, la marca de 147 px lo empujaba fuera a 390 px, y sin aviso ya se salía a 360. La marca cede, con puntos suspensivos. */
   #topbar .brand { flex: 0 1 auto; min-width: 0; overflow: hidden; }
   #topbar .brand .bn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }

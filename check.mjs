@@ -5,6 +5,7 @@
 // loop the Beta was built against: change something, run it, fix what is red, repeat.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { loadConfig, ROOT } from './config.mjs';
@@ -636,12 +637,12 @@ else {
       await page.evaluate(() => { try { localStorage.removeItem('ao.cal.ct'); } catch {} });
       return `${n} pieces on the month · saved · approved · un-approved by a change · Programación honest · ${layer} on the tasks calendar`;
     });
-    await step('smoke: V4.7 — on a phone the dock folds Salud, Negocio and Ajustes into «⋯», and a piece opens as a full sheet', async () => {
+    await step('smoke: V4.7 — on a phone the dock folds Analíticas, Salud, Negocio and Ajustes into «⋯», and a piece opens as a full sheet', async () => {
       const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
       try {
         await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
         const vis = id => ph.evaluate(i => { const e = document.getElementById(i); return !!e && e.getBoundingClientRect().width > 0; }, id);
-        if (!await vis('topMore') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
         // El aviso «⚠ N» aparece según el momento de la demo (en CI, más tarde que aquí) y ensancha el dock: se fuerza para que el paso no dependa del reloj, y se mide a los anchos de teléfono de verdad.
         await ph.evaluate(() => { const a = document.getElementById('topAppr'); a.style.display = ''; a.querySelector('span').textContent = '12'; });
         for (const w of [390, 360, 320]) {
@@ -652,7 +653,7 @@ else {
         }
         await ph.setViewportSize({ width: 390, height: 844 }); await ph.evaluate(() => { document.getElementById('topAppr').style.display = 'none'; });
         await ph.click('#topMore'); await ph.waitForFunction(() => !document.getElementById('topMoreMenu').hidden, null, { timeout: 3000 });
-        await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
+        await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
         await ph.keyboard.press('Escape'); await ph.waitForFunction(() => document.getElementById('setOv').hidden, null, { timeout: 3000 });
         if (await ph.evaluate(() => document.activeElement && document.activeElement.id) !== 'topMore') throw new Error('focus did not come back to «⋯»');
         await ph.click('#topContenido'); await ph.waitForFunction(() => document.body.classList.contains('ctOpen'), null, { timeout: 4000 });
@@ -661,6 +662,42 @@ else {
         if (r.w < 380 || r.role !== 'dialog') throw new Error(`the piece is not a full sheet on a phone: ${JSON.stringify(r)}`);
         if (r.side) throw new Error('the page scrolls sideways on a phone');
         return 'dock folded · menu opens Ajustes and gives the focus back · the piece is a full sheet · no sideways scroll';
+      } finally { await ph.close(); }
+    });
+    await step('smoke: V4.7 (F2) — R opens Analíticas: the demo is labelled, six figures, the chart, the heat map, the period and network switches, Esc closes', async () => {
+      const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 6000 }).catch(() => { throw new Error(what); });
+      for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(150); } await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('r'); await until(() => document.body.classList.contains('anOpen'), 'R did not open Analíticas');
+      if (await page.evaluate(() => document.getElementById('topAnaliticas').getAttribute('aria-pressed')) !== 'true') throw new Error('the dock button of the open view is not pressed');
+      if (await page.evaluate(() => document.getElementById('topbar').inert)) throw new Error('the top bar went inert under Analíticas (a view keeps it)');
+      const t = await page.evaluate(() => document.querySelector('#anOv .an-banner')?.textContent || '');
+      if (!/DEMO/.test(t)) throw new Error('the sample data are not labelled as such: «' + t + '»');
+      const n = await page.locator('#anOv .an-kpi').count(); if (n !== 6) throw new Error(`${n} figures instead of 6`);
+      if (!await page.evaluate(() => document.querySelector('#anOv .an-chart polyline.an-line-c') && document.querySelectorAll('#anOv .an-heat tbody td').length === 56)) throw new Error('the chart or the heat map (7 days × 8 blocks) is missing');
+      if (!await page.evaluate(() => /Hora sugerida: \d\d:00/.test(document.getElementById('anOv').textContent))) throw new Error('the suggested hour is missing with enough sample data');
+      const v30 = await page.evaluate(() => document.querySelector('#anOv .an-kv').textContent);
+      await page.click('#anOv .an-dias [data-d="7"]'); await until(() => document.querySelector('#anOv .an-dias [data-d="7"]').getAttribute('aria-pressed') === 'true', 'the 7-day button did not press');
+      await page.click('#anOv .an-redes [data-r="facebook"]'); await page.waitForTimeout(150);
+      const fb = await page.evaluate(() => [...document.querySelectorAll('#anOv .an-top .an-net')].map(e => e.textContent));
+      if (!fb.length || fb.some(x => x !== 'FB')) throw new Error('with Facebook chosen, other networks still show: ' + fb.join(','));
+      await page.click('#anOv .an-redes [data-r="todas"]'); await page.click('#anOv .an-dias [data-d="30"]');
+      await page.click('#anOv .an-chip[data-k="alcance"]'); await page.waitForTimeout(100);
+      if (!await page.evaluate(() => /Alcance por día/.test(document.querySelector('#anOv .an-fig figcaption').textContent))) throw new Error('the chart did not switch to Alcance');
+      await page.keyboard.press('Escape'); await until(() => !document.body.classList.contains('anOpen'), 'Esc did not close Analíticas');
+      return `DEMO label · 6 figures (Seguidores ${v30}) · chart + heat map 56 cells + suggested hour · 7 days / Facebook / Alcance switches · Esc closes`;
+    });
+    await step('smoke: V4.7 (F2) — on a phone Analíticas opens from «⋯», fits without sideways scroll and keeps its text at 10,5 px or more', async () => {
+      const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+      try {
+        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
+        await ph.click('#topMore'); await ph.waitForFunction(() => !document.getElementById('topMoreMenu').hidden, null, { timeout: 3000 });
+        await ph.keyboard.press('Enter'); await ph.waitForFunction(() => document.body.classList.contains('anOpen'), null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Analíticas'); });
+        await ph.waitForTimeout(400);
+        const r = await ph.evaluate(() => { const b = document.querySelector('#anOv .an-body'); const small = [...document.querySelectorAll('#anOv .an-body *')].filter(e => e.childNodes.length && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 10.5 && e.closest('.an-sr') === null && getComputedStyle(e).position !== 'absolute').map(e => e.tagName + '.' + e.className); const svgSmall = [...document.querySelectorAll('#anOv .an-tx')].filter(e => parseFloat(getComputedStyle(e).fontSize) * (e.getBoundingClientRect().width / (e.getBBox().width || 1)) < 10.4).length; return { sw: b.scrollWidth, cw: b.clientWidth, small: small.slice(0, 3), svgSmall }; });
+        if (r.sw > r.cw + 1) throw new Error(`Analíticas scrolls sideways on a phone (${r.sw} > ${r.cw})`);
+        if (r.small.length) throw new Error('text under 10,5 px: ' + r.small.join(', '));
+        if (r.svgSmall) throw new Error('the chart labels are under 10,5 px on a phone');
+        return 'opens from «⋯» · no sideways scroll · no text under 10,5 px';
       } finally { await ph.close(); }
     });
     await step('smoke: no errors after the run', async () => { if (errors.length) throw new Error(errors[0]); });
@@ -812,7 +849,25 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     { id: 'wait1', dept: 'sales', agent: 'piper', title: 'Propuesta para Sol', text: 'Propuesta', state: 'waiting', needsOk: true, draft: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', result: 'Para: sol@cliente.com\nAsunto: Propuesta\nTotal: $150', addedAt: now, waitingAt: now },
     { id: 'wait2', dept: 'sales', agent: 'folo', title: 'Seguimiento a Luna', text: 'Seguimiento', state: 'waiting', needsOk: true, draft: 'Hola Luna', result: 'Hola Luna', addedAt: now, waitingAt: now },
     { id: 'done1', dept: 'fin', agent: 'invo', title: 'Lista de facturas', text: 'Lista', state: 'done', result: 'Tres facturas', addedAt: now, doneAt: now }])); }
-  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
+  // V4.7 (F2): un Graph DE MENTIRA en esta máquina. El servidor de pruebas habla con él y con un token falso: nunca con Meta ni con el token del dueño.
+  const TOKEN_FALSO = 'check-token-' + 'y'.repeat(24), graphVistos = [];
+  const graphStub = http.createServer((rq, rs) => {
+    const u = new URL(rq.url, 'http://x'), ruta = u.pathname.replace(/^\/v[\d.]+/, ''), q = u.searchParams, out = (c, b) => { rs.writeHead(c, { 'content-type': 'application/json' }); rs.end(JSON.stringify(b)); };
+    graphVistos.push({ ruta, token: q.get('access_token') });
+    const dia = new Date(); dia.setDate(dia.getDate() - 3);
+    if (ruta === '/debug_token') return out(200, { data: { is_valid: true, type: 'SYSTEM_USER', expires_at: 0, scopes: ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'read_insights', 'business_management', 'instagram_basic', 'instagram_manage_insights'] } });
+    if (ruta === '/me/accounts') return out(200, { data: [{ id: 'P1', name: 'PanaClaw', access_token: 'check-token-de-pagina-' + 'z'.repeat(12), instagram_business_account: { id: 'IG1', username: 'panaclaw', name: 'PanaClaw IG' } }] });
+    if (ruta === '/P1') return out(200, { access_token: 'check-token-de-pagina-' + 'z'.repeat(12), followers_count: 800 });
+    if (ruta === '/IG1') return out(200, { followers_count: 1200, media_count: 40 });
+    if (ruta === '/IG1/insights') return out(200, q.get('breakdown') ? { data: [] } : { data: String(q.get('metric')).split(',').map((m, i) => ({ name: m, total_value: { value: 100 * (i + 1) } })) });
+    if (ruta === '/IG1/media') return out(200, { data: [{ id: 'M1', caption: 'Reel de prueba', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://instagram.com/reel/1', timestamp: dia.toISOString(), like_count: 30, comments_count: 4 }] });
+    if (ruta === '/M1/insights') return out(200, { data: [{ name: 'reach', values: [{ value: 900 }] }, { name: 'total_interactions', values: [{ value: 42 }] }] });
+    if (ruta === '/P1/insights') return out(200, { data: [{ name: q.get('metric'), values: [{ value: 77 }] }] });
+    if (ruta === '/P1/posts') return out(200, { data: [] });
+    out(400, { error: { message: 'ruta no simulada: ' + ruta, code: 100 } });
+  });
+  await new Promise(r => graphStub.listen(0, '127.0.0.1', r));
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: TOKEN_FALSO, META_APP_SECRET: '', META_GRAPH_HOST: `http://127.0.0.1:${graphStub.address().port}`, AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   const base = `http://localhost:${port}`;
@@ -821,10 +876,10 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
   else {
     ok('server: starts', `${up.name} · ${up.backend} · brain ${up.notes} notes`);
     await step('server: serves the office', async () => { const r = await fetch(base + '/'); const t = await r.text(); if (!/AGENTS OFFICE/.test(t)) throw new Error('html missing'); });
-    await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, copy)', async () => {
+    await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, notes, Meta, copy)', async () => {
       const st = await (await fetch(base + '/api/status')).json();
       const ids = st.checks.map(c => c.id).join(',');
-      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,notas,respaldo') throw new Error('checks: ' + ids);
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,notas,redes,respaldo') throw new Error('checks: ' + ids);
       if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
       const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
       return `${st.checks.length} checks · overall ${st.overall}`;
@@ -974,6 +1029,25 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       const m = await sheet('newt'), f = await sheet('invo'); if (m.contenido !== true || f.contenido === true) throw new Error(`the agents' Contenido access is wrong: marketing ${m.contenido}, finance ${f.contenido}`);
       return `note ${note} · agent 403 · approve 409 → 200 · change → revisión · file kept · Marketing has the tool, Finanzas does not`;
     });
+    await step('server: Analíticas — «Comprobar conexión», the daily photo, the figures on the API, the indicators, and the token nowhere', async () => { // V4.7 (F2), against the fake Graph above
+      const call = async (m, p) => { const r = await fetch(base + p, { method: m }); const t = await r.text(); return { status: r.status, text: t, ...(() => { try { return JSON.parse(t); } catch { return {}; } })() }; };
+      const s0 = await call('POST', '/api/contenido/meta/sincronizar');
+      if (s0.status !== 200 || !s0.ok || s0.meta.cuentas.length !== 2 || s0.meta.token.tipo !== 'SYSTEM_USER' || s0.meta.token.faltan.length) throw new Error('sincronizar: ' + s0.text.slice(0, 200));
+      const up = await call('POST', '/api/contenido/analiticas/actualizar?todas=1'); if (up.status !== 202) throw new Error('actualizar: ' + up.status + ' ' + up.text.slice(0, 120));
+      let an = null; for (let i = 0; i < 60; i++) { an = await call('GET', '/api/contenido/analiticas?dias=30'); if (!an.actualizando && an.serie?.length) break; await new Promise(r => setTimeout(r, 250)); }
+      if (!an || an.actualizando || an.serie.length !== 2) throw new Error('the photo did not arrive: ' + (an ? an.serie?.length + ' rows, actualizando ' + an.actualizando : 'none'));
+      const ig = an.serie.find(f => f.red === 'instagram'); if (!ig || ig.seguidores !== 1200 || ig.alcance !== 100) throw new Error('instagram row: ' + JSON.stringify(ig));
+      if (an.publicaciones.length !== 1 || an.publicaciones[0].tipo !== 'reel' || an.publicaciones[0].interacciones !== 42) throw new Error('publications: ' + JSON.stringify(an.publicaciones));
+      if (!graphVistos.length || graphVistos.some(v => !v.token)) throw new Error('a call went to Graph with no token');
+      const dir = path.join(sandbox, 'data', 'contenido'); const todo = (function walk(d) { return fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]); })(dir).map(f => fs.readFileSync(f, 'utf8')).join('\n') + an.text + s0.text;
+      if (todo.includes(TOKEN_FALSO) || todo.includes('check-token-de-pagina')) throw new Error('a token reached disk or the API');
+      const ind = await call('POST', '/api/contenido/analiticas/indicadores'); if (ind.status !== 200 || ind.creados.length !== 2) throw new Error('indicadores: ' + ind.text.slice(0, 120));
+      const biz = await call('GET', '/api/business'); const k = biz.kpis.find(x => x.id === 'meta_seguidores'); if (!k || !(k.value > 0)) throw new Error('followers did not reach «Cómo va el negocio»: ' + JSON.stringify(k));
+      const again = await call('POST', '/api/contenido/analiticas/indicadores'); if (again.creados.length) throw new Error('the indicators were created twice');
+      for (const bad of ['/api/contenido/miniatura/0123456789abcdef0123', '/api/contenido/miniatura/..%2F..%2Fdata%2Ftasks', '/api/contenido/miniatura/AAAAAAAAAAAAAAAAAAAA']) if ((await call('GET', bad)).status === 200) throw new Error('a thumbnail route answered for ' + bad);
+      const st = await call('GET', '/api/status'); const red = st.checks.find(c => c.id === 'redes'); if (!red || red.state !== 'ok') throw new Error('the health row for Meta: ' + JSON.stringify(red));
+      return `2 accounts · token SYSTEM_USER, no missing permissions · photo: IG ${ig.seguidores} followers, ${an.publicaciones.length} reel · followers in the business board (${k.value}) · no token on disk or in any answer · thumbnail routes shut · health «Redes» ok`;
+    });
     await step('server: the Estudio queues a job, a finished one reaches its task, uploads, zips, undoes (free engine only)', async () => {
       const post = async (p, b) => { const r = await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`${p} ${r.status} ${j.error}`); return j; };
       const cat = await (await fetch(base + '/api/media/models')).json(); if (cat.models.length < 30 || !cat.engines.some(e => e.id === 'higgsfield')) throw new Error('catalog: ' + cat.models.length);
@@ -1098,7 +1172,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       });
     } else ok('live: skipped', 'set CHECK_LIVE=1 to route one task and one chat through Claude');
   }
-  srv.kill();
+  srv.kill(); graphStub.close();
   setTimeout(() => { try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch {} }, 500); // the throwaway copy goes when the server has let go of it
 }
 

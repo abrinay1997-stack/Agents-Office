@@ -865,9 +865,9 @@
   .tb-new:not(:empty)::after { content: ' · '; color: var(--grey); font-weight: 400; }
   .tb-open { color: var(--ink); font-weight: 600; }
   /* ---------- V3.2.1 (16 Sep 2026): the CALENDAR (P) — one quiet screen, everything on its day ---------- */
-  :is(#calOv, #ctOv) { position: fixed; inset: 52px 0 0 0; z-index: 41; background: var(--cream); color: var(--ink); font-family: var(--ui); display: flex; flex-direction: column;
+  :is(#calOv, #ctOv, #anOv) { position: fixed; inset: 52px 0 0 0; z-index: 41; background: var(--cream); color: var(--ink); font-family: var(--ui); display: flex; flex-direction: column;
     opacity: 0; pointer-events: none; transition: opacity .35s var(--ease); outline: none; --cv-line: rgba(21,20,20,.09); --cv-card: #fff; --cv-soft: rgba(21,20,20,.035); }
-  :is(#calOv, #ctOv).on { opacity: 1; pointer-events: auto; }
+  :is(#calOv, #ctOv, #anOv).on { opacity: 1; pointer-events: auto; }
   .cv-band { display: flex; align-items: center; gap: 18px; height: 64px; padding: 0 22px; background: #151414; color: #FDFFF8; flex: none; } /* fixed: the band stays ink in dark mode too */
   .cv-brand { font-family: var(--serif); font-size: 22px; letter-spacing: .05em; white-space: nowrap; }
   .cv-brand small { font-family: var(--ui); font-size: 10.5px; letter-spacing: .18em; color: rgba(253,255,248,.55); margin-left: 12px; vertical-align: 3px; text-transform: uppercase; }
@@ -994,7 +994,7 @@
   .cv-hint .amber, .cv-note { color: #8A6414; font-weight: 600; }
   .cv-note { font-size: 11px; }
   .cv-lnk { background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; margin-left: 4px; font: inherit; color: inherit; cursor: pointer; }
-  body.dark :is(#calOv, #ctOv) { --cv-line: rgba(236,234,227,.1); --cv-card: #1E1F24; --cv-soft: rgba(236,234,227,.045); }
+  body.dark :is(#calOv, #ctOv, #anOv) { --cv-line: rgba(236,234,227,.1); --cv-card: #1E1F24; --cv-soft: rgba(236,234,227,.045); }
   body.dark .cv-band { background: #0F1013; }
   body.dark .cv-r.on { background: #FDFFF8; color: #151414; } body.dark .cv-r.on .cv-r-m, body.dark .cv-r.on .cv-r-n { color: rgba(21,20,20,.65); }
   body.dark .cv-chip.only, body.dark .cv-more:hover, body.dark .cv-add:hover, body.dark .cv-go, body.dark .cv-rep.on { background: #FDFFF8; color: #151414; border-color: #FDFFF8; }
@@ -2418,6 +2418,7 @@
     <button id="topStudio" class="tb-ic" type="button" aria-label="Estudio: imágenes y video" aria-pressed="false" title="Estudio — imágenes y video (E)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></button>
     <button id="topCal" class="tb-ic" type="button" aria-label="Calendario" aria-pressed="false" title="Calendario — tareas y rutinas en sus días (P)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg></button>
     <button id="topContenido" class="tb-ic" type="button" aria-label="Contenido: lo que se publica en Instagram y Facebook" aria-pressed="false" title="Contenido — el calendario de lo que se publica y su programación (K)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><circle cx="9" cy="14.6" r="1.3"/><path d="m21 19.5-4-4-6.5 5"/></svg></button>
+    <button id="topAnaliticas" class="tb-ic" type="button" aria-label="Analíticas: cómo rinden tus redes" aria-pressed="false" title="Analíticas — cómo rinden Instagram y Facebook (R)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20.5h18"/><rect x="5" y="11" width="3.4" height="9.5" rx=".8"/><rect x="10.3" y="4.5" width="3.4" height="16" rx=".8"/><rect x="15.6" y="8" width="3.4" height="12.5" rx=".8"/></svg></button>
     <button id="topBrain" class="tb-ic" type="button" aria-label="El Cerebro: tus notas" aria-pressed="false" title="El Cerebro — tus notas y documentos (G)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg></button>
     <button id="topHealth" class="tb-ic" type="button" aria-label="Estado de la oficina" aria-haspopup="dialog" aria-expanded="false" title="Estado de la oficina — conexiones, fallos, avisos (O)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg><i class="hl-badge" aria-hidden="true"></i></button>
     <button id="topBiz" class="tb-ic" type="button" aria-label="Cómo va el negocio" aria-haspopup="dialog" aria-expanded="false" title="Cómo va el negocio — tus indicadores (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17M6 16.5v-4M10.5 16.5v-8M15 16.5v-6M19.5 16.5V5"/></svg></button>
