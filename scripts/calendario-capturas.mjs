@@ -21,7 +21,7 @@ function chromePath() {
   return undefined; // que Playwright lo encuentre solo
 }
 
-const ID = { cal: { boton: 'topCal', tecla: 'p', raiz: '#calOv', clase: 'calOpen' }, contenido: { boton: 'topContenido', tecla: 'c', raiz: '#ctOv', clase: 'ctOpen' } }[vistaId];
+const ID = { cal: { boton: 'topCal', tecla: 'p', raiz: '#calOv', clase: 'calOpen' }, contenido: { boton: 'topContenido', tecla: 'k', raiz: '#ctOv', clase: 'ctOpen' } }[vistaId];
 if (!ID) throw new Error('vista desconocida: ' + vistaId);
 
 // Los datos fijos del calendario (se ejecuta DENTRO de la página): tareas de todas las clases y rutinas de todos los ritmos.

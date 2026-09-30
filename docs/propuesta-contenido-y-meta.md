@@ -1,6 +1,6 @@
 # Contenido y Meta en la oficina: calendario de contenido, programación y analíticas
 
-Propuesta del 30 sep 2026. **Nada de esto está implementado.** Es el plan para traer a la oficina lo mejor de Juancito Ads (conexión con Meta, calendario de contenido, cola de publicación, métricas) sin romper lo que la oficina ya es.
+Propuesta del 30 sep 2026. **Estado (30 sep): F0 y F1 están hechas** (el refactor del calendario, las piezas, la vista Contenido con su Programación, los agentes que dejan borradores, el puente con el Estudio y la capa en el calendario de tareas); **nada de Meta está hecho todavía** (F2 en adelante). Lo que cambió al construirlo está en la sección 15. Es el plan para traer a la oficina lo mejor de Juancito Ads (conexión con Meta, calendario de contenido, cola de publicación, métricas) sin romper lo que la oficina ya es.
 
 **Decisiones ya tomadas por el dueño (30 sep):** dos botones nuevos en el dock («Contenido» y «Analíticas»); las imágenes llegan a Instagram por un bucket público de R2; **la oficina es el puente que PROGRAMA en Meta, no la que dispara**; y las cuentas son de una sola empresa (PanaClaw). Quedan abiertas las de la sección 14.
 
@@ -376,3 +376,16 @@ F0 y F1 no necesitan ninguna llave. F2 necesita el token de Meta. F3, además, e
 8. **El motor del calendario.** Recomendado: `calendar-core` puro, con las capturas de antes y después. Alternativa: dejar `calendar.js` como está y hacer el de contenido aparte (más rápido hoy, dos motores para siempre).
 9. **Modo por defecto.** Recomendado: `simulacro`. `real` solo cuando el dueño lo encienda.
 10. **Plan B de Instagram** (solo si no deja programar): se decide cuando se sepa la respuesta.
+
+## 15. Lo que cambió al construir F0 y F1 (30 sep 2026)
+
+- **La tecla es `K`, no `C`:** `C` ya abre el chat del jefe dentro de un departamento. Analíticas (F2) tomará otra letra libre (`R`, «Resultados», si nadie la usa antes).
+- **El botón del dock lleva el número de piezas por revisar** (la insignia azul), no se mezcla con el ⚠ de las aprobaciones de tareas.
+- **Una pieza guarda `titulo`, `texto`, `comentario`, `hashtags`, `textoFacebook`, `notas`** (no `descripcion` ni `hashtagsFinales`): son los campos que se leen y se editan en el Cerebro. `postDePieza()` los traduce a los nombres de Juancito Ads para que las reglas portadas queden idénticas.
+- **`calendar-dnd.js` salió también de `calendar.js`** (no estaba en el plan): el arrastre con el ratón y con el dedo es el mismo en los dos calendarios.
+- **Una corrección de paso:** el título de una semana que cruza de mes decía «28–4 Sep – 4 Octubre»; ahora dice «28 Sep – 4 Octubre».
+- **El calendario de tareas ganó el chip CONTENIDO** (la capa). Ese chip cambia un poco el ancho de la barra a 1024 px: el mes cabe una fila menos de eventos en un caso, y lo dice con «+N más».
+- **La protección de la papelera del Estudio es del servidor** (`DELETE /api/media/item/<id>` contesta 409 con las piezas que usan el archivo), no una marca `usadoEn` en el registro del archivo: una sola fuente de verdad, las propias piezas.
+- **Las piezas se copian cada día** con `dailyBackup` (`data/backups/contenido-AAAA-MM-DD/`).
+- **Lo que sigue siendo verdad y falta comprobar:** Instagram y la programación por API, cambiar o borrar lo ya entregado, y cuándo baja Meta la imagen (sección 9.3). F3 empieza por ahí.
+

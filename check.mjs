@@ -607,6 +607,55 @@ else {
         return `${r.n} one-line cards, all above the sheet · no sideways scroll`;
       } finally { await ph.close(); }
     });
+    await step('smoke: V4.7 — K opens Contenido: a piece opens, saves and is approved; Programación says Meta is not connected; the calendar shows the pieces as a layer; Esc closes the piece first', async () => {
+      const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 6000 }).catch(() => { throw new Error(what); });
+      for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(150); } await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('k'); await until(() => document.body.classList.contains('ctOpen'), 'K did not open Contenido');
+      if (await page.evaluate(() => document.getElementById('topContenido').getAttribute('aria-pressed')) !== 'true') throw new Error('the dock button of the open view is not pressed');
+      if (await page.evaluate(() => document.getElementById('topbar').inert)) throw new Error('the top bar went inert under Contenido (a view keeps it)');
+      await page.click('#ctOv .ct-views [data-v="agenda"]').catch(() => {}); await page.click('#ctOv .ct-views [data-v="month"]'); await page.waitForTimeout(300);
+      const n = await page.locator('#ctGrid .cv-ev.pz').count(); if (n < 3) throw new Error(`the demo pieces are not on the calendar (${n})`);
+      await page.locator('#ctGrid .cv-ev', { hasText: 'Kit de limpieza' }).first().click(); await until(() => !document.querySelector('.ct-panel').hidden, 'a click on a piece did not open its panel');
+      await page.fill('.pz-ta[data-f="texto"]', 'a'.repeat(2300)); await page.waitForTimeout(250);
+      if (!await page.evaluate(() => /máximo es 2200/.test(document.querySelector('.pz-review').textContent))) throw new Error('the review did not name the Instagram limit');
+      await page.fill('.pz-ta[data-f="texto"]', 'Por la compra de tus lentes, elige tu regalo.'); await page.waitForTimeout(1200);
+      await until(() => /Guardado/.test(document.querySelector('.pz-state').textContent), 'the piece did not save itself');
+      await page.click('.pz-go[data-a="approve"]'); await until(() => /APROBADA/.test(document.querySelector('.pz-chip').textContent), 'Aprobar did not approve a piece that can go out');
+      await page.fill('.pz-ta[data-f="texto"]', 'Otro texto.'); await page.waitForTimeout(1200);
+      if (!await page.evaluate(() => /A REVISAR/.test(document.querySelector('.pz-chip').textContent))) throw new Error('changing what goes out did not take the approval away');
+      await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+      if (!await page.evaluate(() => document.querySelector('.ct-panel').hidden && document.body.classList.contains('ctOpen'))) throw new Error('Esc did not close the piece first and leave Contenido open');
+      await page.click('#ctOv .ct-mode [data-m="prog"]'); await page.waitForTimeout(300);
+      if (!await page.evaluate(() => /Meta todavía no está conectada/.test(document.querySelector('.ct-banner').textContent) && document.querySelector('.cv-wrap').offsetParent === null)) throw new Error('Programación must say Meta is not connected and hide the calendar');
+      await page.keyboard.press('Escape'); await until(() => !document.body.classList.contains('ctOpen'), 'Esc did not close Contenido');
+      await page.keyboard.press('p'); await until(() => document.body.classList.contains('calOpen'), 'P did not open the calendar'); await page.waitForTimeout(400);
+      await page.click('#cvChips [data-tog="content"]'); await page.waitForTimeout(500);
+      const layer = await page.locator('#cvGrid .cv-ev.content').count(); if (layer < 1) throw new Error('the calendar layer shows no content pieces');
+      await page.locator('#cvGrid .cv-ev.content').first().click(); await until(() => document.body.classList.contains('ctOpen') && !document.body.classList.contains('calOpen'), 'a piece on the calendar did not open in Contenido');
+      await page.keyboard.press('Escape'); await page.waitForTimeout(300); await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+      await page.evaluate(() => { try { localStorage.removeItem('ao.cal.ct'); } catch {} });
+      return `${n} pieces on the month · saved · approved · un-approved by a change · Programación honest · ${layer} on the tasks calendar`;
+    });
+    await step('smoke: V4.7 — on a phone the dock folds Salud, Negocio and Ajustes into «⋯», and a piece opens as a full sheet', async () => {
+      const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+      try {
+        await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
+        const vis = id => ph.evaluate(i => { const e = document.getElementById(i); return !!e && e.getBoundingClientRect().width > 0; }, id);
+        if (!await vis('topMore') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        const over = await ph.evaluate(() => [...document.querySelectorAll('#topdock button')].filter(b => b.getBoundingClientRect().width > 0).some(b => b.getBoundingClientRect().right > innerWidth + 1));
+        if (over) throw new Error('a dock button sits off screen on a phone');
+        await ph.click('#topMore'); await ph.waitForFunction(() => !document.getElementById('topMoreMenu').hidden, null, { timeout: 3000 });
+        await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
+        await ph.keyboard.press('Escape'); await ph.waitForFunction(() => document.getElementById('setOv').hidden, null, { timeout: 3000 });
+        if (await ph.evaluate(() => document.activeElement && document.activeElement.id) !== 'topMore') throw new Error('focus did not come back to «⋯»');
+        await ph.click('#topContenido'); await ph.waitForFunction(() => document.body.classList.contains('ctOpen'), null, { timeout: 4000 });
+        await ph.locator('#ctGrid .cv-ev.pz').first().click(); await ph.waitForFunction(() => !document.querySelector('.ct-panel').hidden, null, { timeout: 4000 });
+        const r = await ph.evaluate(() => { const p = document.querySelector('.ct-panel').getBoundingClientRect(); return { w: p.width, top: p.top, role: document.querySelector('.ct-panel').getAttribute('role'), side: document.documentElement.scrollWidth > innerWidth }; });
+        if (r.w < 380 || r.role !== 'dialog') throw new Error(`the piece is not a full sheet on a phone: ${JSON.stringify(r)}`);
+        if (r.side) throw new Error('the page scrolls sideways on a phone');
+        return 'dock folded · menu opens Ajustes and gives the focus back · the piece is a full sheet · no sideways scroll';
+      } finally { await ph.close(); }
+    });
     await step('smoke: no errors after the run', async () => { if (errors.length) throw new Error(errors[0]); });
   } catch (e) { bad('smoke: browser', e.message); }
   finally { if (browser) await browser.close(); }
@@ -900,6 +949,23 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       const b = await fetch(base + '/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dept: 'sales', text: 'call the leads', at: 'tomorrowish' }) });
       if (b.status !== 400) throw new Error('bad time accepted');
       return j.error;
+    });
+    await step('server: Contenido — an agent leaves a draft as a note, only the owner approves, a change takes the OK away, the Estudio keeps the files a piece uses', async () => { // V4.7
+      const call = async (m, p, b) => { const r = await fetch(base + p, { method: m, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, ...(await r.json().catch(() => ({}))) }; };
+      const { job } = await call('POST', '/api/media/jobs', { model: 'prueba', prompt: 'tarjeta de contenido', n: 1, by: 'user', wait: 8000 }); const img = job.items[0];
+      const a = await call('POST', '/api/contenido/piezas', { por: 'agente', agente: 'newt', tarea: 'chk1', titulo: 'Borrador del agente', fecha: '2026-11-03', texto: 'Hola', estado: 'aprobada' });
+      if (a.status !== 200 || a.pieza.estado !== 'borrador') throw new Error('an agent must leave a draft, never an approved piece: ' + JSON.stringify(a).slice(0, 120));
+      const dir = path.join(brainCopy, 'Agents Office', 'contenido', '2026-11'); const note = fs.readdirSync(dir).find(f => f.startsWith('p-20261103')); if (!note || !/estado: borrador/.test(fs.readFileSync(path.join(dir, note), 'utf8'))) throw new Error('the piece is not a note in <brain>/Agents Office/contenido');
+      if ((await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, { por: 'agente' })).status !== 403) throw new Error('an agent approved a piece');
+      const no = await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, {}); if (no.status !== 409 || !/imagen o un video/.test(no.error)) throw new Error('a piece with no picture was approved: ' + JSON.stringify(no).slice(0, 120));
+      await call('PATCH', `/api/contenido/piezas/${a.pieza.id}`, { medios: [img] });
+      const ap = await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, {}); if (ap.status !== 200 || ap.pieza.estado !== 'aprobada') throw new Error('approve failed: ' + JSON.stringify(ap).slice(0, 120));
+      const ch = await call('PATCH', `/api/contenido/piezas/${a.pieza.id}`, { texto: 'Hola, con otro precio' }); if (ch.pieza.estado !== 'revision' || !ch.soltada) throw new Error('a change did not take the approval away');
+      const del = await fetch(base + '/api/media/item/' + encodeURIComponent(img), { method: 'DELETE' }); if (del.status !== 409) throw new Error('the Estudio trashed a file a piece uses (' + del.status + ')');
+      const list = await call('GET', '/api/contenido?desde=2026-11-01&hasta=2026-11-30'); if (list.piezas.length !== 1 || list.resumen.total !== 1) throw new Error('list: ' + JSON.stringify(list.resumen));
+      const sheet = async id => (await (await fetch(base + '/api/agents/' + id)).json());
+      const m = await sheet('newt'), f = await sheet('invo'); if (m.contenido !== true || f.contenido === true) throw new Error(`the agents' Contenido access is wrong: marketing ${m.contenido}, finance ${f.contenido}`);
+      return `note ${note} · agent 403 · approve 409 → 200 · change → revisión · file kept · Marketing has the tool, Finanzas does not`;
     });
     await step('server: the Estudio queues a job, a finished one reaches its task, uploads, zips, undoes (free engine only)', async () => {
       const post = async (p, b) => { const r = await fetch(base + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(`${p} ${r.status} ${j.error}`); return j; };

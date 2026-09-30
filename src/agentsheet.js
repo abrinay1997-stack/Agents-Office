@@ -27,7 +27,7 @@ export function initSheet(ctx) {
         <label>Esfuerzo<select class="ag-effort"><option value="">El de la oficina</option>${EFFORT_KEYS.map(k => `<option value="${k}"${a.effort === k ? ' selected' : ''}>${k}</option>`).join('')}</select></label>
       </div>
       <label>Conectores habituales <small>(separados por coma; los que usa primero)</small><input class="ag-tools" value="${esc((a.tools || []).join(', '))}"></label>
-      <p class="ag-note">Tiene acceso a: ${d.connectors.length ? esc(d.connectors.join(', ')) : 'ningún conector conectado'}${d.studio ? ' · ✦ Estudio (imágenes y video)' : ''}. Los cambios valen desde la próxima tarea.</p>
+      <p class="ag-note">Tiene acceso a: ${d.connectors.length ? esc(d.connectors.join(', ')) : 'ningún conector conectado'}${d.studio ? ' · ✦ Estudio (imágenes y video)' : ''}${d.contenido ? ' · ✦ Contenido (deja borradores; tú los apruebas)' : ''}. Los cambios valen desde la próxima tarea.</p>
       <div class="ag-acts"><button type="button" class="ag-save">GUARDAR</button><span class="ag-msg" aria-live="polite"></span></div>`;
     const skills = d.skills.length ? d.skills.map(s => `<details class="ag-skill"><summary><b>${esc(s.name)}</b>${s.description ? ' — ' + esc(s.description) : ''}${s.everyone ? ' <i>(toda la oficina)</i>' : ''}</summary><div class="md ag-skilltext">${mdToHtml(s.text || '')}</div>${s.files.length ? `<p class="ag-note">Archivos: ${s.files.map(esc).join(', ')}</p>` : ''}</details>`).join('') + '<p class="ag-note">Para enseñarle un proceso nuevo, escribe «configurar» al líder del departamento, o pídeselo a Claude Code («así hacemos X»).</p>'
       : '<p class="ag-note">Sin skills todavía. Escribe «configurar» al líder del departamento para crear una.</p>';

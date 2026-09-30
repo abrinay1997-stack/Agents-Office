@@ -69,7 +69,7 @@ test('los títulos: mes, día, semana (con su número) y agenda', () => {
   const anchor = at(2026, 9, 30);
   assert.equal(titleHTML('month', anchor, rangeOf('month', anchor)), 'Septiembre <small>2026</small>');
   assert.equal(titleHTML('day', anchor, rangeOf('day', anchor)), '30 Septiembre <small>2026</small>');
-  assert.match(titleHTML('week', anchor, rangeOf('week', anchor)), /^28–4 Sep – 4 Octubre <small>2026 · semana 40<\/small>$/);
+  assert.match(titleHTML('week', anchor, rangeOf('week', anchor)), /^28 Sep – 4 Octubre <small>2026 · semana 40<\/small>$/);
   assert.match(titleHTML('week', at(2026, 9, 16), rangeOf('week', at(2026, 9, 16))), /^14–20 Septiembre <small>2026 · semana 38<\/small>$/); // una semana dentro de un mes no repite el mes
   assert.match(titleHTML('agenda', anchor, rangeOf('agenda', anchor)), /^30 sep – 13 oct <small>2026<\/small>$/);
 });

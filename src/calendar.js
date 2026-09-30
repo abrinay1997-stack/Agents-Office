@@ -15,19 +15,9 @@ import { occurrences, describe, untilText, fromPicker, toPicker, shortDate } fro
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 // V4.7: the grids and the dates are the shared engine (calendar-core.js) and the drag is shared too (calendar-dnd.js): the content calendar uses both
-import { DOW, MONTHS, DOW_LONG, DAY, pad, ymd, hm, startOfDay, fmtDay, fmtLong, weekStart, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth } from './calendar-core.js';
+import { DOW, MONTHS, DOW_LONG, DAY, pad, ymd, hm, startOfDay, fmtDay, fmtLong, weekStart, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, timeOpts, dateOpts } from './calendar-core.js';
 import { attachDnd } from './calendar-dnd.js';
-function timeOpts(val) { // a 24-hour menu every 15 minutes (plus the value it already has) instead of the browser's «10:05 AM»
-  const set = new Set(); for (let m = 0; m < 1440; m += 15) set.add(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
-  if (val) set.add(val);
-  return [...set].sort().map(v => `<option value="${v}"${v === val ? ' selected' : ''}>${v}</option>`).join('');
-}
-function dateOpts(val) { // the next 120 days, «jue 25 sep», instead of the browser's «09/26/2026»
-  const out = [], t0 = startOfDay(Date.now()); let seen = false;
-  for (let i = 0; i < 120; i++) { const d = new Date(t0); d.setDate(d.getDate() + i); const k = ymd(d); if (k === val) seen = true; out.push(`<option value="${k}"${k === val ? ' selected' : ''}>${i === 0 ? 'hoy · ' : i === 1 ? 'mañana · ' : ''}${fmtDay(d.getTime())}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}</option>`); }
-  if (val && !seen) out.unshift(`<option value="${val}" selected>${fmtDay(new Date(val + 'T00:00:00').getTime())}</option>`);
-  return out.join('');
-}
+import { ESTADO as PIEZA_ESTADO } from './pieza.js'; // V4.7: the «Contenido» layer paints the pieces with their own colours
 const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it sits in the «en marcha» row
 const isLive_ = ev => LIVE.includes(ev.kind);
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['days', 'Algunos días…'], ['hourly', 'Cada hora, 9–5, días hábiles']];
@@ -45,7 +35,7 @@ function pickWhen(cad, at, days, start) { // the menu → a schedule; «Algunos 
 const cadOf = when => !when ? 'weekdays' : when.kind === 'weekly' ? 'days' : toPicker(when).custom ? 'custom' : toPicker(when).cadence;
 
 export function initCalendar(ctx) {
-  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, EFFORT_KEYS, effortName, teamsOn, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
+  const { contenido, tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, EFFORT_KEYS, effortName, teamsOn, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
   const ov = document.getElementById('calOv'); if (!ov) return null;
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
@@ -54,6 +44,8 @@ export function initCalendar(ctx) {
   let WS = (() => { try { return localStorage.getItem('ao.cal.ws') === '0' ? 0 : 1; } catch { return 1; } })();
   const wkStart = ts => weekStart(ts, WS);
   let showSched = true; // B44: the counts are filters too
+  // V4.7: the «Contenido» layer — the content pieces on their days, next to the tasks (read only: a click opens the piece in Contenido). Off until turned on.
+  let showContent = (() => { try { return localStorage.getItem('ao.cal.ct') === '1'; } catch { return false; } })(), ctPieces = [], ctKey = '';
   // V4.2 (audit B2–B4): the week and the day are one time grid, 00:00–24:00 — the day view used to stop at 06–22 and put a 23:30 task in the 22:00 row
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it)
   const attr = v => esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // inside title="…": a quote in a title must not end the attribute
@@ -116,14 +108,30 @@ export function initCalendar(ctx) {
       if (r.when.kind === 'hourly' && (view === 'month' || view === 'agenda')) { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
       else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, paused: r.paused, skipped: (r.skips || []).includes(at) });
     }
+    if (showContent && contenido) for (const p of ctPieces) { // the pieces have a day and maybe an hour; without one they sit at the end of their day
+      if (!p.fecha) continue; const [h, m] = (p.hora || '23:59').split(':').map(Number), at = new Date(`${p.fecha}T00:00:00`).setHours(h, m, p.hora ? 0 : 59, 0);
+      if (at < from || at >= to) continue; const title = p.titulo || (p.texto || '').split('\n')[0].slice(0, 60) || 'Sin título';
+      if (!matches(title)) continue; (by[ymd(new Date(at))] ||= []).push({ kind: 'content', at, title, p });
+    }
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
+  }
+  function syncContent(from, to) { // the pieces of the days on screen, fetched once per range
+    if (!showContent || !contenido) return;
+    const key = ymd(new Date(from)) + '|' + ymd(new Date(to - 1)); if (key === ctKey) return; ctKey = key;
+    Promise.resolve(contenido.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { ctPieces = l || []; if (openNow) render(); }, () => { ctPieces = []; });
+  }
+  function contentCard(ev, line) {
+    const p = ev.p, e = PIEZA_ESTADO[p.estado] || PIEZA_ESTADO.borrador, hora = p.hora || '—', tip = `Contenido · ${ev.title} · ${e.name.toLowerCase()} · ${p.hora || 'sin hora'} · ${p.redes.join(' y ')} · clic: abrirla en Contenido`;
+    if (line) return `<div class="cv-ev line content" data-ev="c:${attr(p.id)}" style="--chip:${e.color}" title="${attr(tip)}" role="button" tabindex="0"><span class="cv-ev-h">${esc(hora)}</span><span class="cv-ev-t"><span class="cv-rt pz-tone" style="--c:${e.color};--cd:${e.dark}">▣</span>${esc(ev.title)}</span></div>`;
+    return `<div class="cv-ev content" data-ev="c:${attr(p.id)}" style="--chip:${e.color}" title="${attr(tip)}" role="button" tabindex="0"><div class="cv-ev-t"><span class="cv-rt pz-tone" style="--c:${e.color};--cd:${e.dark}">▣</span>${esc(ev.title)}</div><div class="cv-ev-m"><span>${esc(hora)} · ${esc(e.name.toLowerCase())}</span></div></div>`;
   }
 
   /* ---------- drawing ---------- */
   const initials = n => { const w = String(n || '?').split(/\s+/).filter(Boolean); return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase(); }; // V4.2 (audit B9): «LC», «LV» — every lead used to be «L»
   const av = (id) => { const a = agentOf(id); const c = a ? DEPTS[a.dept].chip : '#ccc'; return `<i class="cv-av" style="border-color:${c};background:${c}55" title="${attr(a ? a.name : id)}">${esc(a ? initials(a.name) : '?')}</i>`; };
   function cardHTML(ev, line) {
+    if (ev.kind === 'content') return contentCard(ev, line);
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
     const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'run' ? `${hm(ev.at)} · ${ev.status === 'skipped' ? 'saltada' : 'no corrió'}` : ev.kind === 'done' ? `${ev.t?.error ? 'falló' : 'listo'} ${hm(ev.at)}${ev.t?.routine ? ' · rutina' : ''}${ev.t?.late ? ' · atrasada' : ''}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
@@ -140,13 +148,14 @@ export function initCalendar(ctx) {
   }
   // V4.2 (audit B42): what the calendar shows, in one string — the 30-second tick redraws only when it changes (or every 5 minutes, for «now»)
   let lastSig = '';
-  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), Math.floor(Date.now() / 300000)]);
+  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), showContent ? ctPieces.map(p => [p.id, p.actualizada, p.estado, p.fecha, p.hora]) : 0, Math.floor(Date.now() / 300000)]);
   function render() {
     if (dnd && dnd.dragging) return; // a re-render mid-drag would pull the card out from under the pointer
     lastSig = sig();
     const fa = document.activeElement, fkey = fa && ov.contains(fa) && fa.dataset ? (fa.dataset.ev ? `[data-ev="${CSS.escape(fa.dataset.ev)}"]` : fa.dataset.rid ? `[data-rid="${CSS.escape(fa.dataset.rid)}"]` : null) : null;
     queueMicrotask(() => { if (fkey && !ov.contains(document.activeElement)) ov.querySelector(fkey)?.focus({ preventScroll: true }); }); // the keyboard stays where it was
     const { from, to, days } = range();
+    syncContent(from, to);
     const by = events(from, to);
     const a = new Date(anchor);
     E.title.innerHTML = titleHTML(view, anchor, { from, to, days });
@@ -218,9 +227,9 @@ export function initCalendar(ctx) {
   function renderChips() {
     const all = deptOn.size === DEPT_KEYS.length;
     E.chips.innerHTML = `<button type="button" class="cv-chip${all ? ' on' : ''}" data-dept="*" aria-pressed="${all}" title="Todos los departamentos">TODOS</button>` + DEPT_KEYS.map(k => `<button type="button" class="cv-chip${!all && deptOn.has(k) ? ' on' : ''}" data-dept="${k}" aria-pressed="${!all && deptOn.has(k)}" title="Ver solo ${attr(DEPTS[k].name)} (Mayús + clic: sumarlo a los que ya ves)"><i style="background:${DEPTS[k].chip}"></i>${DEPTS[k].short}</button>`).join('') +
-      `<span class="cv-sep"></span><button type="button" class="cv-chip${showRoutines ? ' on' : ''}" data-tog="routines" aria-pressed="${showRoutines}"><i class="rt" aria-hidden="true">⏱</i>RUTINAS</button><button type="button" class="cv-chip${showDone ? ' on' : ''}" data-tog="done" aria-pressed="${showDone}"><i class="tick" aria-hidden="true">✓</i>LISTAS</button>` +
+      `<span class="cv-sep"></span><button type="button" class="cv-chip${showRoutines ? ' on' : ''}" data-tog="routines" aria-pressed="${showRoutines}"><i class="rt" aria-hidden="true">⏱</i>RUTINAS</button><button type="button" class="cv-chip${showDone ? ' on' : ''}" data-tog="done" aria-pressed="${showDone}"><i class="tick" aria-hidden="true">✓</i>LISTAS</button>` + (contenido ? `<button type="button" class="cv-chip${showContent ? ' on' : ''}" data-tog="content" aria-pressed="${showContent}" title="Las piezas de contenido en sus días (se editan en Contenido, K)"><i class="rt" aria-hidden="true">▣</i>CONTENIDO</button>` : '') +
       (onlyRoutine ? `<button class="cv-chip only on" data-tog="only">SOLO ESTA RUTINA ✕</button>` : '') +
-      '<span class="cv-legend" aria-label="Qué significa cada marca">⏱ rutina · ◷ programada · ✓ lista · <span class="cv-fail">⚠</span> falló · <s>tachada</s> saltada · <i>no corrió</i> sin tarea</span>';
+      '<span class="cv-legend" aria-label="Qué significa cada marca">⏱ rutina · ◷ programada · ✓ lista · <span class="cv-fail">⚠</span> falló · <s>tachada</s> saltada · <i>no corrió</i> sin tarea' + (showContent ? ' · ▣ contenido' : '') + '</span>';
   }
 
   /* ---------- the popovers: a day (create), an event (details), "n more" (the whole day) ---------- */
@@ -285,6 +294,7 @@ export function initCalendar(ctx) {
   function openEvent(id, el) {
     closePop();
     const [kind, ...rest] = id.split(':');
+    if (kind === 'c') { if (contenido) { close(); contenido.openPiece(rest[0]); } return; } // a content piece opens in Contenido
     if (kind === 't') {
       const t = tasks.find(x => String(x.id) === rest[0]); if (!t) return;
       if (t.state !== 'scheduled' && openTask) { openTask(t); return; } // done · running · waiting · pending → the task's detail, over the calendar
@@ -476,7 +486,7 @@ export function initCalendar(ctx) {
         if (k === '*') deptOn = new Set(DEPT_KEYS);
         else if (e.shiftKey && !all) { if (deptOn.has(k)) { deptOn.delete(k); if (!deptOn.size) deptOn = new Set(DEPT_KEYS); } else deptOn.add(k); }
         else deptOn = !all && deptOn.size === 1 && deptOn.has(k) ? new Set(DEPT_KEYS) : new Set([k]); }
-      else if (chip.dataset.tog === 'routines') showRoutines = !showRoutines; else if (chip.dataset.tog === 'done') showDone = !showDone; else if (chip.dataset.tog === 'only') onlyRoutine = null;
+      else if (chip.dataset.tog === 'routines') showRoutines = !showRoutines; else if (chip.dataset.tog === 'done') showDone = !showDone; else if (chip.dataset.tog === 'content') { showContent = !showContent; ctKey = ''; try { localStorage.setItem('ao.cal.ct', showContent ? '1' : '0'); } catch {} } else if (chip.dataset.tog === 'only') onlyRoutine = null;
       render(); return;
     }
     const day = e.target.closest('.cv-day'); if (day && !E.pop.contains(e.target)) { if (e.target === day || e.target.classList.contains('cv-evs') || e.target.closest('.cv-num')) { openCreate(day.dataset.day, day); return; } }

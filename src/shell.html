@@ -865,9 +865,9 @@
   .tb-new:not(:empty)::after { content: ' · '; color: var(--grey); font-weight: 400; }
   .tb-open { color: var(--ink); font-weight: 600; }
   /* ---------- V3.2.1 (16 Sep 2026): the CALENDAR (P) — one quiet screen, everything on its day ---------- */
-  #calOv { position: fixed; inset: 52px 0 0 0; z-index: 41; background: var(--cream); color: var(--ink); font-family: var(--ui); display: flex; flex-direction: column;
+  :is(#calOv, #ctOv) { position: fixed; inset: 52px 0 0 0; z-index: 41; background: var(--cream); color: var(--ink); font-family: var(--ui); display: flex; flex-direction: column;
     opacity: 0; pointer-events: none; transition: opacity .35s var(--ease); outline: none; --cv-line: rgba(21,20,20,.09); --cv-card: #fff; --cv-soft: rgba(21,20,20,.035); }
-  #calOv.on { opacity: 1; pointer-events: auto; }
+  :is(#calOv, #ctOv).on { opacity: 1; pointer-events: auto; }
   .cv-band { display: flex; align-items: center; gap: 18px; height: 64px; padding: 0 22px; background: #151414; color: #FDFFF8; flex: none; } /* fixed: the band stays ink in dark mode too */
   .cv-brand { font-family: var(--serif); font-size: 22px; letter-spacing: .05em; white-space: nowrap; }
   .cv-brand small { font-family: var(--ui); font-size: 10.5px; letter-spacing: .18em; color: rgba(253,255,248,.55); margin-left: 12px; vertical-align: 3px; text-transform: uppercase; }
@@ -876,20 +876,20 @@
   .cv-seg button.on { background: #FDFFF8; color: #151414; }
   .cv-nav { display: flex; align-items: center; gap: 8px; margin-left: 10px; }
   .cv-nav button { font-family: var(--ui); background: none; border: 1px solid rgba(253,255,248,.22); color: #FDFFF8; border-radius: 99px; cursor: pointer; transition: all .3s var(--ease); }
-  .cv-nav #cvPrev, .cv-nav #cvNext { width: 30px; height: 30px; font-size: 18px; line-height: 1; padding: 0 0 2px; }
-  .cv-nav #cvToday { font-size: 10.5px; letter-spacing: .16em; font-weight: 700; padding: 8px 12px; margin-left: 6px; }
+  .cv-nav :is(#cvPrev, #ctPrev), .cv-nav :is(#cvNext, #ctNext) { width: 30px; height: 30px; font-size: 18px; line-height: 1; padding: 0 0 2px; }
+  .cv-nav :is(#cvToday, #ctToday) { font-size: 10.5px; letter-spacing: .16em; font-weight: 700; padding: 8px 12px; margin-left: 6px; }
   .cv-nav button:hover { background: #FDFFF8; color: #151414; border-color: #FDFFF8; }
-  #cvTitle { font-family: var(--serif); font-size: 24px; letter-spacing: .01em; min-width: 200px; text-align: center; white-space: nowrap; }
-  #cvTitle small { font-size: 15px; color: rgba(253,255,248,.55); margin-left: 6px; }
+  :is(#cvTitle, #ctTitle) { font-family: var(--serif); font-size: 24px; letter-spacing: .01em; min-width: 200px; text-align: center; white-space: nowrap; }
+  :is(#cvTitle, #ctTitle) small { font-size: 15px; color: rgba(253,255,248,.55); margin-left: 6px; }
   .cv-sp { flex: 1; }
   .cv-keys { font-size: 10.5px; letter-spacing: .1em; color: rgba(253,255,248,.45); white-space: nowrap; }
   .cv-keys b { font-weight: 600; color: rgba(253,255,248,.8); border: 1px solid rgba(253,255,248,.25); border-radius: 5px; padding: 1px 5px; margin-right: 1px; }
-  #cvClose { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(253,255,248,.22); background: none; color: #FDFFF8; cursor: pointer; font-size: 13px; }
-  #cvClose:hover { background: #FDFFF8; color: #151414; }
+  :is(#cvClose, #ctClose) { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(253,255,248,.22); background: none; color: #FDFFF8; cursor: pointer; font-size: 13px; }
+  :is(#cvClose, #ctClose):hover { background: #FDFFF8; color: #151414; }
   .cv-tools { display: flex; align-items: center; gap: 10px; padding: 12px 22px; border-bottom: 1px solid var(--cv-line); flex: none; flex-wrap: wrap; }
-  #cvSearch { width: 260px; background: var(--cv-card); border: 1px solid var(--hairline); border-radius: 99px; outline: none; padding: 8px 14px; font-family: var(--ui); font-size: 12.5px; color: var(--ink); }
-  #cvSearch:focus { border-color: var(--ink); }
-  #cvChips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  :is(#cvSearch, #ctSearch) { width: 260px; background: var(--cv-card); border: 1px solid var(--hairline); border-radius: 99px; outline: none; padding: 8px 14px; font-family: var(--ui); font-size: 12.5px; color: var(--ink); }
+  :is(#cvSearch, #ctSearch):focus { border-color: var(--ink); }
+  :is(#cvChips, #ctChips) { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .cv-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--ui); font-size: 10.5px; letter-spacing: .14em; font-weight: 700; border: 1px solid var(--hairline); border-radius: 99px; padding: 5px 10px; color: var(--grey); background: none; cursor: pointer; transition: all .3s var(--ease); }
   .cv-chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; opacity: .35; font-style: normal; }
   .cv-chip i.rt, .cv-chip i.tick { width: auto; height: auto; font-size: 10px; }
@@ -955,8 +955,8 @@
   .cv-day:not(:hover) .cv-more { left: 8px; }
   .cv-more:hover { background: var(--ink); color: var(--cream); }
   .cv-grid.week .cv-day { padding-bottom: 30px; } .cv-grid.week .cv-ev { padding: 7px 9px; } .cv-grid.week .cv-ev-t { white-space: normal; }
-  #cvPop { position: fixed; z-index: 45; width: 372px; background: var(--cv-card); border: 1.5px solid var(--ink); border-radius: 18px; padding: 12px 14px 13px; box-shadow: 0 30px 80px rgba(21,20,20,.28); display: flex; flex-direction: column; gap: 8px; }
-  #cvPop[hidden] { display: none; }
+  :is(#cvPop, #ctPop) { position: fixed; z-index: 45; width: 372px; background: var(--cv-card); border: 1.5px solid var(--ink); border-radius: 18px; padding: 12px 14px 13px; box-shadow: 0 30px 80px rgba(21,20,20,.28); display: flex; flex-direction: column; gap: 8px; }
+  :is(#cvPop, #ctPop)[hidden] { display: none; }
   .cv-pop-h { display: flex; align-items: center; gap: 8px; font-size: 10.5px; letter-spacing: .16em; font-weight: 700; color: var(--grey); }
   .cv-pop-h b { font-family: var(--serif); font-weight: 400; font-size: 17px; letter-spacing: 0; color: var(--ink); }
   .cv-pop-h .sp, .cv-row .sp { flex: 1; }
@@ -976,10 +976,10 @@
   .cv-lab { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--grey); margin-top: 4px; }
   .cv-title { font-family: var(--serif); font-size: 19px; line-height: 1.2; border: 1px solid transparent; border-radius: 8px; padding: 4px 6px; margin: 0 -6px; background: none; color: var(--ink); outline: none; }
   .cv-title:hover, .cv-title:focus { border-color: var(--hairline); }
-  #cvPop .cv-text { width: 100%; box-sizing: border-box; }
+  :is(#cvPop, #ctPop) .cv-text { width: 100%; box-sizing: border-box; }
   .cv-ev[draggable="true"] { cursor: grab; }
   .cv-ev.cv-dragging { opacity: .4; }
-  #calOv.dragging .cv-day:not(.past) { outline: 1px dashed transparent; }
+  :is(#calOv, #ctOv).dragging .cv-day:not(.past) { outline: 1px dashed transparent; }
   .cv-day.drop { background: color-mix(in srgb, #2B6BEB 10%, transparent); outline: 2px dashed #2B6BEB !important; outline-offset: -3px; }
   .cv-ev:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
   .cv-rep { font-family: var(--ui); font-size: 10.5px; letter-spacing: .14em; font-weight: 700; border: 1px solid var(--hairline); color: var(--grey); background: none; border-radius: 99px; padding: 6px 10px; cursor: pointer; transition: all .3s var(--ease); }
@@ -994,7 +994,7 @@
   .cv-hint .amber, .cv-note { color: #8A6414; font-weight: 600; }
   .cv-note { font-size: 11px; }
   .cv-lnk { background: none; border: 0; border-bottom: 1px solid currentColor; padding: 0; margin-left: 4px; font: inherit; color: inherit; cursor: pointer; }
-  body.dark #calOv { --cv-line: rgba(236,234,227,.1); --cv-card: #1E1F24; --cv-soft: rgba(236,234,227,.045); }
+  body.dark :is(#calOv, #ctOv) { --cv-line: rgba(236,234,227,.1); --cv-card: #1E1F24; --cv-soft: rgba(236,234,227,.045); }
   body.dark .cv-band { background: #0F1013; }
   body.dark .cv-r.on { background: #FDFFF8; color: #151414; } body.dark .cv-r.on .cv-r-m, body.dark .cv-r.on .cv-r-n { color: rgba(21,20,20,.65); }
   body.dark .cv-chip.only, body.dark .cv-more:hover, body.dark .cv-add:hover, body.dark .cv-go, body.dark .cv-rep.on { background: #FDFFF8; color: #151414; border-color: #FDFFF8; }
@@ -1697,16 +1697,16 @@
   /* scrollbars were hidden in lists: with a mouse there was no sign of more below */
   .tp-rows, .cv-rail, .bv-pane { scrollbar-width: thin; }
   /* the calendar band ran off the screen under ~1500px and took its ✕ with it */
-  .cv-band { min-width: 0; } #cvClose { flex: none; margin-left: auto; }
+  .cv-band { min-width: 0; } :is(#cvClose, #ctClose) { flex: none; margin-left: auto; }
   @media (max-width: 1500px) { .cv-keys { display: none; } }
   @media (max-width: 760px) { /* V4.1: the ✕ fell off the screen, and the day's «+» covered its number */
     .cv-band { height: auto; flex-wrap: wrap; padding: 10px 12px; gap: 8px 10px; }
-    .cv-brand { order: 1; font-size: 18px; } .cv-brand small { display: none; } #cvClose { order: 2; margin-left: auto; width: 36px; height: 36px; }
+    .cv-brand { order: 1; font-size: 18px; } .cv-brand small { display: none; } :is(#cvClose, #ctClose) { order: 2; margin-left: auto; width: 36px; height: 36px; }
     .cv-sp { display: none; } .cv-seg { order: 3; margin-left: 0; } .cv-nav { order: 4; margin-left: 0; flex: 1; justify-content: flex-end; }
-    #cvTitle { min-width: 0; font-size: 18px; } #cvTitle small { display: none; } .cv-nav #cvToday { padding: 7px 9px; }
-    .cv-add { display: none; } #cvStats { flex-wrap: wrap; row-gap: 4px; } .cv-num { right: 4px; bottom: 3px; gap: 2px; font-size: 8.5px; } .cv-num b { font-size: 14px; }
+    :is(#cvTitle, #ctTitle) { min-width: 0; font-size: 18px; } :is(#cvTitle, #ctTitle) small { display: none; } .cv-nav :is(#cvToday, #ctToday) { padding: 7px 9px; }
+    .cv-add { display: none; } :is(#cvStats, #ctStats) { flex-wrap: wrap; row-gap: 4px; } .cv-num { right: 4px; bottom: 3px; gap: 2px; font-size: 8.5px; } .cv-num b { font-size: 14px; }
   }
-  #cvPop { max-height: calc(100vh - 24px); overflow-y: auto; width: min(372px, calc(100vw - 24px)); }
+  :is(#cvPop, #ctPop) { max-height: calc(100vh - 24px); overflow-y: auto; width: min(372px, calc(100vw - 24px)); }
   .cv-add:focus-visible, .cv-day:focus-within .cv-add { opacity: 1; }
   @media (hover: none) { .cv-add { opacity: 1; } }
   .cv-keys { color: rgba(253,255,248,.62); }
@@ -1730,7 +1730,7 @@
     #zoomCtl { z-index: 16; bottom: calc(46vh + 30px); }
     body.tpMin #zoomCtl { bottom: 20px; }
     #overviewBtn.right { top: auto; bottom: calc(46vh + 30px); right: auto; left: 12px; }
-    .cv-rail { display: none; } .cv-tools { flex-wrap: wrap; } #cvSearch { width: 100%; }
+    .cv-rail { display: none; } .cv-tools { flex-wrap: wrap; } :is(#cvSearch, #ctSearch) { width: 100%; }
     .bd-lanes { grid-template-columns: 90px repeat(5, minmax(150px, 1fr)); overflow-x: auto; } .bd-head, .bd-stats { flex-wrap: wrap; }
     #cornerBL { display: none; }
   }
@@ -1749,10 +1749,10 @@
 
   /* ================= V4.2 (24 Sep 2026) — the calendar, see docs/auditoria-estudio-calendario-2026-09-24.md ================= */
   /* B38: the band never loses its ✕ — the keys moved to the «?» sheet, the title gives way first */
-  .cv-nav { min-width: 0; } #cvTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #cvKeys { flex: none; width: 30px; height: 30px; border-radius: 99px; border: 1px solid rgba(253,255,248,.22); background: none; color: #FDFFF8; font-family: var(--ui); font-weight: 700; cursor: pointer; }
-  #cvKeys:hover { background: #FDFFF8; color: #151414; }
-  @media (max-width: 760px) { #cvKeys { display: none; } }
+  .cv-nav { min-width: 0; } :is(#cvTitle, #ctTitle) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :is(#cvKeys, #ctKeys) { flex: none; width: 30px; height: 30px; border-radius: 99px; border: 1px solid rgba(253,255,248,.22); background: none; color: #FDFFF8; font-family: var(--ui); font-weight: 700; cursor: pointer; }
+  :is(#cvKeys, #ctKeys):hover { background: #FDFFF8; color: #151414; }
+  @media (max-width: 760px) { :is(#cvKeys, #ctKeys) { display: none; } }
   /* B12: weekends a plain, slightly darker ground — the diagonal hatching ran over the cards */
   .cv-day.wknd { background: var(--cv-soft); }
   /* B1 · B6: the month — the day's number on top, one line per event, «+N más» always visible */
@@ -1807,7 +1807,7 @@
   .cv-legend { font-size: 11px; color: var(--grey); margin-left: 6px; white-space: nowrap; } .cv-legend i { color: #8A6414; } body.dark .cv-legend i { color: #E8B44A; }
   @media (max-width: 1300px) { .cv-legend { display: none; } }
   /* B14 · B44 */
-  #cvTitle small .cv-thisweek, .cv-thisweek { font-size: 12px; }
+  :is(#cvTitle, #ctTitle) small .cv-thisweek, .cv-thisweek { font-size: 12px; }
   .cv-st { background: none; border: 0; padding: 0; font: inherit; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--grey); cursor: pointer; }
   .cv-st b { font-family: var(--serif); font-weight: 400; font-size: 16px; letter-spacing: 0; color: var(--ink); margin-right: 4px; }
   .cv-st:not(.on) { text-decoration: line-through; opacity: .6; } .cv-st:hover { color: var(--ink); }
@@ -1817,9 +1817,9 @@
   /* B24 */ .cv-moreopt summary { font-size: 11.5px; color: var(--grey); cursor: pointer; } .cv-moreopt .cv-row { margin-top: 6px; }
   .cv-effort { font-family: var(--ui); font-size: 11px; letter-spacing: .1em; font-weight: 700; text-transform: uppercase; color: var(--ink); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 6px 9px; }
   /* B25: the arrow to its day */
-  #cvPop[data-side="l"]::before, #cvPop[data-side="r"]::before { content: ''; position: absolute; top: var(--ay, 20px); width: 12px; height: 12px; background: var(--cv-card); border: 1.5px solid var(--ink); transform: rotate(45deg); }
-  #cvPop[data-side="l"]::before { left: -7.5px; border-top: 0; border-right: 0; } #cvPop[data-side="r"]::before { right: -7.5px; border-bottom: 0; border-left: 0; }
-  #cvPop { overflow: visible; } #cvPop > * { position: relative; }
+  :is(#cvPop, #ctPop)[data-side="l"]::before, :is(#cvPop, #ctPop)[data-side="r"]::before { content: ''; position: absolute; top: var(--ay, 20px); width: 12px; height: 12px; background: var(--cv-card); border: 1.5px solid var(--ink); transform: rotate(45deg); }
+  :is(#cvPop, #ctPop)[data-side="l"]::before { left: -7.5px; border-top: 0; border-right: 0; } :is(#cvPop, #ctPop)[data-side="r"]::before { right: -7.5px; border-bottom: 0; border-left: 0; }
+  :is(#cvPop, #ctPop) { overflow: visible; } :is(#cvPop, #ctPop) > * { position: relative; }
   /* B27 */ .cv-tshort { border: 1px solid var(--hairline); border-radius: 10px; padding: 7px 10px; font-family: var(--ui); font-size: 13px; color: var(--ink); background: none; width: 100%; box-sizing: border-box; }
   /* B32 */ .cv-rail-hint { font-weight: 400; letter-spacing: .04em; text-transform: none; margin-left: 8px; font-size: 11px; }
   /* B34 · B35: routines by department, searchable; the eye shows only its days */
@@ -1833,7 +1833,7 @@
   /* B36 */ .cv-ld { grid-template-columns: 1fr 70px 22px; } .cv-ld small { grid-column: 1 / -1; font-size: 10.5px; color: var(--grey); margin-top: -2px; } .cv-ld-sub { font-size: 11px; color: var(--grey); margin: -2px 4px 6px; }
   /* B37: on a narrow screen the rail opens as a panel */
   .cv-railbtn { display: none; font-family: var(--ui); font-size: 10.5px; letter-spacing: .14em; font-weight: 700; border: 1px solid var(--hairline); border-radius: 99px; padding: 7px 12px; background: none; color: var(--ink); cursor: pointer; }
-  @media (max-width: 900px) { .cv-railbtn { display: inline-block; } #calOv.railOpen .cv-rail { display: flex; position: absolute; left: 0; top: 0; bottom: 0; z-index: 44; width: min(320px, 86vw); background: var(--cream); box-shadow: 20px 0 50px rgba(0,0,0,.2); } .cv-body { position: relative; } }
+  @media (max-width: 900px) { .cv-railbtn { display: inline-block; } :is(#calOv, #ctOv).railOpen .cv-rail { display: flex; position: absolute; left: 0; top: 0; bottom: 0; z-index: 44; width: min(320px, 86vw); background: var(--cream); box-shadow: 20px 0 50px rgba(0,0,0,.2); } .cv-body { position: relative; } }
   /* B41: search results with their dates */
   .cv-sw { position: relative; } .cv-results { position: absolute; top: calc(100% + 6px); left: 0; z-index: 46; width: min(420px, 90vw); max-height: 60vh; overflow-y: auto; background: var(--cv-card); border: 1.5px solid var(--ink); border-radius: 14px; padding: 6px; box-shadow: 0 20px 50px rgba(0,0,0,.2); }
   .cv-results[hidden] { display: none; } .cv-res-h { font-size: 11px; color: var(--grey); padding: 4px 8px 6px; }
@@ -1880,16 +1880,16 @@
   @media (max-width: 760px) { /* the phone: views on one row, the dates on the next, the filters in one sliding row, the counts only when they say something */
     .cv-seg [data-v="agenda"] { display: inline-block; }
     .cv-seg { width: 100%; } .cv-seg button { flex: 1; padding: 7px 6px; }
-    .cv-nav { width: 100%; } #cvTitle { flex: 1; text-align: center; }
+    .cv-nav { width: 100%; } :is(#cvTitle, #ctTitle) { flex: 1; text-align: center; }
     .cv-tools { padding: 8px 12px; gap: 8px; }
-    #cvChips { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; max-width: 100%; scrollbar-width: none; padding-bottom: 2px; } #cvChips::-webkit-scrollbar { display: none; }
+    :is(#cvChips, #ctChips) { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; max-width: 100%; scrollbar-width: none; padding-bottom: 2px; } :is(#cvChips, #ctChips)::-webkit-scrollbar { display: none; }
     .cv-chip { flex: none; } .cv-sep { flex: none; }
     .cv-stats span:not(.amber):not(.cv-said) { display: none; }
     .cv-wrap { padding: 0 8px 24px; }
   }
   /* B19: «necesita mi visto bueno» only with REPETIR — display:flex beat the hidden attribute; the popover rows wrap instead of hiding a button */
   .cv-ok[hidden], .cv-cad[hidden] { display: none; }
-  #cvPop .cv-row { flex-wrap: wrap; row-gap: 6px; } #cvPop .cv-model { max-width: 120px; }
+  :is(#cvPop, #ctPop) .cv-row { flex-wrap: wrap; row-gap: 6px; } :is(#cvPop, #ctPop) .cv-model { max-width: 120px; }
   /* B16: the routine's title wraps whole; its secondary actions are quiet words on a second row */
   textarea.cv-title { resize: none; overflow: hidden; width: calc(100% + 12px); box-sizing: border-box; font: inherit; font-family: var(--serif); font-size: 19px; line-height: 1.25; display: block; }
   .cv-row2 { gap: 4px 14px; padding-top: 2px; border-top: 1px solid var(--cv-line); padding-top: 8px; }
@@ -2103,7 +2103,7 @@
 
   /* ── V4.3 (25 sep 2026) — auditoría profunda: accesibilidad (docs/auditoria-profunda-2026-09-25.md, puntos A1–A30) ── */
   /* A7–A12: every field shows the focus ring, not only a darker border (a border change alone fails 2.4.7 / 2.4.11) */
-  #cvSearch:focus-visible, .cv-rq:focus-visible, .cv-text:focus-visible, .cv-title:focus-visible, .tb-in:focus-visible,
+  :is(#cvSearch, #ctSearch):focus-visible, .cv-rq:focus-visible, .cv-text:focus-visible, .cv-title:focus-visible, .tb-in:focus-visible,
   #bvSearch:focus-visible, #rail .mInput input:focus-visible, #rail .mInput textarea:focus-visible, .cv-tshort:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
   .st-pwrap:focus-within, .st-mq:focus-within, .st-qwrap:focus-within { outline: 2px solid var(--focus); outline-offset: 1px; }
   .cv-res:focus-visible, .st-menu [role="menuitem"]:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
@@ -2417,6 +2417,7 @@
     <button id="topAppr" type="button" style="display:none" title="Esperan tu visto bueno" aria-label="Esperan tu visto bueno">⚠ <span>0</span></button>
     <button id="topStudio" class="tb-ic" type="button" aria-label="Estudio: imágenes y video" aria-pressed="false" title="Estudio — imágenes y video (E)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></button>
     <button id="topCal" class="tb-ic" type="button" aria-label="Calendario" aria-pressed="false" title="Calendario — tareas y rutinas en sus días (P)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg></button>
+    <button id="topContenido" class="tb-ic" type="button" aria-label="Contenido: lo que se publica en Instagram y Facebook" aria-pressed="false" title="Contenido — el calendario de lo que se publica y su programación (K)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><circle cx="9" cy="14.6" r="1.3"/><path d="m21 19.5-4-4-6.5 5"/></svg></button>
     <button id="topBrain" class="tb-ic" type="button" aria-label="El Cerebro: tus notas" aria-pressed="false" title="El Cerebro — tus notas y documentos (G)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg></button>
     <button id="topHealth" class="tb-ic" type="button" aria-label="Estado de la oficina" aria-haspopup="dialog" aria-expanded="false" title="Estado de la oficina — conexiones, fallos, avisos (O)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg><i class="hl-badge" aria-hidden="true"></i></button>
     <button id="topBiz" class="tb-ic" type="button" aria-label="Cómo va el negocio" aria-haspopup="dialog" aria-expanded="false" title="Cómo va el negocio — tus indicadores (N)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17M6 16.5v-4M10.5 16.5v-8M15 16.5v-6M19.5 16.5V5"/></svg></button>

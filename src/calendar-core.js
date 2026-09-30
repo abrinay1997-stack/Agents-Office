@@ -58,7 +58,8 @@ export function titleHTML(view, anchor, { from, to, days }) {
   if (view === 'day') return `${a.getDate()} ${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>`;
   if (view === 'month') return `${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>`;
   const s = new Date(from), e = new Date(to - DAY);
-  return `${s.getDate()}–${e.getDate()} ${s.getMonth() === e.getMonth() ? MONTHS[e.getMonth()] : MONTHS[s.getMonth()].slice(0, 3) + ' – ' + e.getDate() + ' ' + MONTHS[e.getMonth()]} <small>${e.getFullYear()} · semana ${isoWeek(from + 3 * DAY)}</small>`;
+  // una semana dentro de un mes: «14–20 Septiembre»; una que cruza de mes: «28 Sep – 4 Octubre» (antes salía «28–4 Sep – 4 Octubre»)
+  return `${s.getMonth() === e.getMonth() ? `${s.getDate()}–${e.getDate()} ${MONTHS[e.getMonth()]}` : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0, 3)} – ${e.getDate()} ${MONTHS[e.getMonth()]}`} <small>${e.getFullYear()} · semana ${isoWeek(from + 3 * DAY)}</small>`;
 }
 
 /** La fila de nombres de día (Lun Mar …) sobre el mes, o «Domingo 27 de septiembre» sobre un día. */
@@ -132,4 +133,18 @@ export function fitMonth(grid) {
     k = Math.max(1, k); items.slice(k).forEach(n => { n.hidden = true; });
     evs.insertAdjacentHTML('beforeend', `<button type="button" class="cv-more" data-day="${cell.dataset.day}">+${items.length - k} más</button>`);
   }
+}
+
+/** Las horas del menú: cada 15 minutos (más la que ya tiene) en lugar del «10:05 AM» del navegador. <option> listas para un <select>. */
+export function timeOpts(val) {
+  const set = new Set(); for (let m = 0; m < 1440; m += 15) set.add(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
+  if (val) set.add(val);
+  return [...set].sort().map(v => `<option value="${v}"${v === val ? ' selected' : ''}>${v}</option>`).join('');
+}
+/** Los próximos 120 días, «jue 25 sep», en lugar del «09/26/2026» del navegador; un día fuera de ese rango (una pieza vieja) se añade al principio. */
+export function dateOpts(val, now = Date.now()) {
+  const out = [], t0 = startOfDay(now); let seen = false;
+  for (let i = 0; i < 120; i++) { const d = new Date(t0); d.setDate(d.getDate() + i); const k = ymd(d); if (k === val) seen = true; out.push(`<option value="${k}"${k === val ? ' selected' : ''}>${i === 0 ? 'hoy · ' : i === 1 ? 'mañana · ' : ''}${fmtDay(d.getTime())}${d.getFullYear() !== new Date(now).getFullYear() ? ' ' + d.getFullYear() : ''}</option>`); }
+  if (val && !seen) out.unshift(`<option value="${val}" selected>${fmtDay(new Date(val + 'T00:00:00').getTime())}</option>`);
+  return out.join('');
 }

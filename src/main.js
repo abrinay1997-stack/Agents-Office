@@ -3,6 +3,7 @@
 import { initSheet } from './agentsheet.js'; // the agent sheet: edit who an agent is from the office
 import { MODEL_KEYS as SHEET_MODELS, modelName as sheetModelName, EFFORT_KEYS as SHEET_EFFORTS } from './models.js';
 import { initStudio } from './studio.js'; // the Estudio: images and video, by hand and by the agents
+import { initContenido } from './contenido.js'; // V4.7: Contenido — the calendar of what is published, its schedule, the piece panel (K)
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
@@ -591,6 +592,7 @@ addEventListener('keydown', (e) => {
     if (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) { agentSheet.close(); return; }
     if (subger.isOpen()) { subger.close(); return; }
     if (studio.isOpen()) { studio.close(); return; }
+    if (contenido.isOpen()) { if (contenido.panelOpen()) contenido.closePanel(); else if (contenido.popOpen()) contenido.closePop(); else contenido.close(); return; } // V4.7: the piece, then the day's list, then Contenido
     if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); return; }
     if (brain.isOpen()) { if (!brain.back()) brain.close(); return; } // V4.6: the search's list, then the card, then the Brain
     if (tasks && tasks.isOpen()) { tasks.close(); return; }
@@ -605,11 +607,12 @@ addEventListener('keydown', (e) => {
   // V4.5 (27 Sep 2026): a view (the Estudio, the calendar, the Brain) keeps the top bar — its dock's keys switch views or open a
   // window on top; the office's own keys (1–6, +, −, T…) wait, and the calendar keeps its own (← → T D W M A)
   if (views.current()) {
-    if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'g') brain.toggle();
+    if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'k') contenido.toggle(); else if (key === 'g') brain.toggle();
     else if (key === 'o') health.toggle(); else if (key === 'n') bizWin.toggle(); else if (key === 'u') costsWin.toggle(); else if (key === ',') settingsWin.toggle();
     return;
   }
   if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
+  else if (key === 'k') contenido.toggle(); // V4.7: Contenido
   else if (key === 'g') brain.toggle(); // V3.6: the full-screen Brain graph
   else if (key === 'b') { if (tasks) tasks.toggle(); } // V3: the company-wide board
   else if (e.key === '+' || e.key === '=') zoomStep(1.5);
@@ -643,10 +646,11 @@ addEventListener('keydown', (e) => {
 const KEYS = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
-    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
-    ['Estudio, calendario o Cerebro abiertos', [['E · P · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
+    ['Contenido abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['W · M · A · D', 'Semana, mes, agenda o día'], ['Arrastrar una tarjeta', 'Mover la pieza a otro día (si estaba aprobada, vuelve a revisión)'], ['Esc', 'Cerrar la pieza, la lista del día o Contenido']]],
     ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
     ['Cerebro abierto', [['← → ↑ ↓', 'Girarlo (con Mayús, más rápido)'], ['+  −', 'Acercar y alejar'], ['0', 'Centrarlo'], ['Espacio', 'Que gire solo, o pararlo'], ['Esc', 'Cerrar la lista de la búsqueda, la ficha y luego el Cerebro']]],
     ['Calendario abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['D · W · M · A', 'Vista de día, semana, mes o agenda'], ['Clic en una hora', 'Programar algo a esa hora (semana y día)'], ['Mantener pulsada', 'En tablet o teléfono: arrastrar una tarjeta a otro día u hora']]],
@@ -1690,7 +1694,8 @@ function applyRoster(agents) {
   }
   if (tasks && tasks.syncPills) tasks.syncPills(); // the pills were rebuilt — put the clock chips back
 }
-tasks = initTasks({
+tasks = initTasks({ contenido: { between: (a, b) => contenido.between(a, b), openPiece: id => contenido.openPiece(id) }, // V4.7: the calendar's «Contenido» layer (contenido is defined further down; these run on a click)
+  
   hud, R, deptRT, RAIL_SIDE, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent, esc,
   brainWrite: (id, title) => brain.write(id, title), brain,
   onLive: (h) => {
@@ -1710,7 +1715,7 @@ const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, fi
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
 { // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
   const btn = document.getElementById('topPanel');
-  const VIEW_BTN = [['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
+  const VIEW_BTN = [['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topContenido', 'ctOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
   const sync = () => { const cl = document.body.classList, shown = !cl.contains('tpMin'); btn.setAttribute('aria-pressed', shown); btn.classList.toggle('on', shown); for (const [b, c] of VIEW_BTN) b?.setAttribute('aria-pressed', cl.contains(c)); }; // the open view's icon stays pressed
   btn.addEventListener('click', () => { if (tasks && tasks.setPanel) tasks.setPanel(document.body.classList.contains('tpMin')); sync(); });
   new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['class'] }); sync();
@@ -1735,12 +1740,14 @@ document.getElementById('railSheet').addEventListener('click', () => { if (!moda
   };
   addEventListener('resize', fit); new MutationObserver(fit).observe(tc, { childList: true }); setTimeout(fit, 400); setTimeout(fit, 3000);
 }
-const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', taskTitle: sid => (tasks.findBySid(sid) || {}).title || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); }, openSettings: tab => settingsWin.open(tab) }); // V4.5: the caps chip opens Ajustes → Estudio
+const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', taskTitle: sid => (tasks.findBySid(sid) || {}).title || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); }, openSettings: tab => settingsWin.open(tab), toCalendar: (file, kind, prompt) => contenido.fromMedia(file, kind, prompt) }); // V4.5: the caps chip opens Ajustes → Estudio · V4.7: «Enviar al calendario» (contenido is defined just below: it is only called on a click)
 const finder = initSearch({ served: SERVED, esc, agents: AGENTS, // V4.4 (J7): Ctrl+K, everything at once
   getTasks: () => (tasks && tasks.tasks) || [], getRoutines: () => (tasks && tasks.routines) || [],
   openTask: t => tasks.openTask(t), openAgent: id => openAgent(id, 'chat'),
   openNote: name => { if (!brain.show(name)) { brain.open(); } }, openRoutine: id => tasks.calendar && tasks.calendar.openRoutine(id), openStudio: () => studio.open() });
 document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
+const contenido = initContenido({ served: SERVED, esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', business: () => document.title.replace(/ — Agents Office$/, ''), openStudio: (target, onPick) => studio.forTarget(target, onPick) }); // V4.7
+document.getElementById('topContenido').addEventListener('click', () => contenido.toggle());
 document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)
 // V4.5 (27 Sep 2026): the top bar is the way around — one view at a time under it (src/views.js); the brand is the way home
 // (27 Sep 2026, the owner: «que se viera la oficina en la vista general»): home is the whole office — the view closes, Dimitri's
@@ -1787,7 +1794,7 @@ window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval,
 
 let last = performance.now(), lastFrame = 0, frameN = 0, lastInput = performance.now();
 for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
-const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen'); // a full-screen view hides the office
+const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen') || document.body.classList.contains('ctOpen'); // a full-screen view hides the office
 // Frame budget: full rate while the camera flies or the owner is moving the pointer; 30 fps when the office just lives;
 // 5 fps of simulation and NO drawing while the Brain or the calendar covers it. The tab hidden → the browser stops rAF.
 function loop(now) {
