@@ -626,7 +626,7 @@ else {
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
       if (!await page.evaluate(() => document.querySelector('.ct-panel').hidden && document.body.classList.contains('ctOpen'))) throw new Error('Esc did not close the piece first and leave Contenido open');
       await page.click('#ctOv .ct-mode [data-m="prog"]'); await page.waitForTimeout(300);
-      if (!await page.evaluate(() => /Meta todavía no está conectada/.test(document.querySelector('.ct-banner').textContent) && document.querySelector('.cv-wrap').offsetParent === null)) throw new Error('Programación must say Meta is not connected and hide the calendar');
+      if (!await page.evaluate(() => /Meta todavía no está conectada/.test(document.querySelector('.ct-banner').textContent) && document.querySelector('#ctOv .cv-wrap').offsetParent === null)) throw new Error('Programación must say Meta is not connected and hide the calendar');
       await page.keyboard.press('Escape'); await until(() => !document.body.classList.contains('ctOpen'), 'Esc did not close Contenido');
       await page.keyboard.press('p'); await until(() => document.body.classList.contains('calOpen'), 'P did not open the calendar'); await page.waitForTimeout(400);
       await page.click('#cvChips [data-tog="content"]'); await page.waitForTimeout(500);
