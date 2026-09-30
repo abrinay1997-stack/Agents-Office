@@ -16,6 +16,12 @@
     "enabled": true,
     "max": 4
   },
+  "contenido": {
+    "departments": [
+      "marketing",
+      "delivery"
+    ]
+  },
   "safety": {
     "writes": "aprobar",
     "departments": {},

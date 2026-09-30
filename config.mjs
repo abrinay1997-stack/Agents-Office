@@ -26,6 +26,7 @@ export function loadConfig() {
   c.tools = { web: true, browser: true, ...(base.tools || {}), ...(local.tools || {}) }; // V3.2 (16 Sep): browser = Claude in Chrome
   c.teams = { enabled: true, max: 4, ...(base.teams || {}), ...(local.teams || {}) }; // V3.2 (16 Sep): Agent Teams
   c.media = { ...(base.media || {}), ...(local.media || {}) }; // the Estudio's budget and departments
+  c.contenido = { ...(base.contenido || {}), ...(local.contenido || {}) }; // V4.7: Contenido — which departments' agents may leave drafts
   c.safety = { ...(base.safety || {}), ...(local.safety || {}) }; // V4.4: who may send, the Chrome sites, the daily caps — safety.mjs
   if (process.env.AO_NAME) c.name = process.env.AO_NAME;
   if (process.env.AO_BRAIN) c.brain = process.env.AO_BRAIN;

@@ -14,32 +14,12 @@
 import { occurrences, describe, untilText, fromPicker, toPicker, shortDate } from './when.js';
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
-
-const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']; // the week starts on Monday (AU/NZ/UK)
-const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const DAY = 864e5;
-const pad = n => String(n).padStart(2, '0');
-const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const hm = ts => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-const startOfDay = ts => { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); };
-const mondayOf = ts => { const d = new Date(startOfDay(ts)); const k = (d.getDay() + 6) % 7; d.setDate(d.getDate() - k); return d.getTime(); };
-const DOW_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-const DOW_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-// V4.2 (audit B15): dates and times in Spanish, whatever the browser's language — «Friday, September 25 at 08:30 AM» and «09/26/2026» are gone
-const fmtDay = ts => { const d = new Date(ts); return `${DOW_SHORT[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3).toLowerCase()}`; };
-const fmtLong = ts => { const d = new Date(ts); return `${DOW_LONG[d.getDay()]} ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}, ${hm(ts)}`; };
-function timeOpts(val) { // a 24-hour menu every 15 minutes (plus the value it already has) instead of the browser's «10:05 AM»
-  const set = new Set(); for (let m = 0; m < 1440; m += 15) set.add(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`);
-  if (val) set.add(val);
-  return [...set].sort().map(v => `<option value="${v}"${v === val ? ' selected' : ''}>${v}</option>`).join('');
-}
-function dateOpts(val) { // the next 120 days, «jue 25 sep», instead of the browser's «09/26/2026»
-  const out = [], t0 = startOfDay(Date.now()); let seen = false;
-  for (let i = 0; i < 120; i++) { const d = new Date(t0); d.setDate(d.getDate() + i); const k = ymd(d); if (k === val) seen = true; out.push(`<option value="${k}"${k === val ? ' selected' : ''}>${i === 0 ? 'hoy · ' : i === 1 ? 'mañana · ' : ''}${fmtDay(d.getTime())}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}</option>`); }
-  if (val && !seen) out.unshift(`<option value="${val}" selected>${fmtDay(new Date(val + 'T00:00:00').getTime())}</option>`);
-  return out.join('');
-}
+// V4.7: the grids and the dates are the shared engine (calendar-core.js) and the drag is shared too (calendar-dnd.js): the content calendar uses both
+import { DOW, MONTHS, DOW_LONG, DAY, pad, ymd, hm, startOfDay, fmtDay, fmtLong, weekStart, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, timeOpts, dateOpts } from './calendar-core.js';
+import { attachDnd } from './calendar-dnd.js';
+import { ESTADO as PIEZA_ESTADO } from './pieza.js'; // V4.7: the «Contenido» layer paints the pieces with their own colours
 const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it sits in the «en marcha» row
+const isLive_ = ev => LIVE.includes(ev.kind);
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['days', 'Algunos días…'], ['hourly', 'Cada hora, 9–5, días hábiles']];
 const DAY_KEYS = [[1, 'L', 'lunes'], [2, 'M', 'martes'], [3, 'X', 'miércoles'], [4, 'J', 'jueves'], [5, 'V', 'viernes'], [6, 'S', 'sábado'], [0, 'D', 'domingo']];
 // V4.2 (audit B23): «lun, mié, vie» could not be edited — it showed as fixed text; now the days are seven toggles
@@ -55,21 +35,21 @@ function pickWhen(cad, at, days, start) { // the menu → a schedule; «Algunos 
 const cadOf = when => !when ? 'weekdays' : when.kind === 'weekly' ? 'days' : toPicker(when).custom ? 'custom' : toPicker(when).cadence;
 
 export function initCalendar(ctx) {
-  const { tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, EFFORT_KEYS, effortName, teamsOn, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
+  const { contenido, tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, EFFORT_KEYS, effortName, teamsOn, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
   const ov = document.getElementById('calOv'); if (!ov) return null;
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
   let openNow = false, view = 'month', anchor = startOfDay(Date.now()), q = '', deptOn = new Set(DEPT_KEYS), showRoutines = true, showDone = true, onlyRoutine = null, popKind = null, lastDept = 'marketing';
   // V4.2 (audit B13): the week starts on Monday or on Sunday (the owner's choice, remembered on this browser)
   let WS = (() => { try { return localStorage.getItem('ao.cal.ws') === '0' ? 0 : 1; } catch { return 1; } })();
-  const wkStart = ts => { const d = new Date(startOfDay(ts)); d.setDate(d.getDate() - (d.getDay() - WS + 7) % 7); return d.getTime(); };
-  const dowHead = () => WS === 1 ? DOW : ['Dom', ...DOW.slice(0, 6)];
-  const isoWeek = ts => { const d = new Date(startOfDay(ts)); d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7); const w1 = new Date(d.getFullYear(), 0, 4); return 1 + Math.round(((d - w1) / DAY - 3 + (w1.getDay() + 6) % 7) / 7); };
+  const wkStart = ts => weekStart(ts, WS);
   let showSched = true; // B44: the counts are filters too
+  // V4.7: the «Contenido» layer — the content pieces on their days, next to the tasks (read only: a click opens the piece in Contenido). Off until turned on.
+  let showContent = (() => { try { return localStorage.getItem('ao.cal.ct') === '1'; } catch { return false; } })(), ctPieces = [], ctKey = '';
   // V4.2 (audit B2–B4): the week and the day are one time grid, 00:00–24:00 — the day view used to stop at 06–22 and put a 23:30 task in the 22:00 row
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it)
   const attr = v => esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // inside title="…": a quote in a title must not end the attribute
-  let dragging = null; // { kind: 't' | 'r', id, at } while a card is being dragged — nothing re-renders under it
+  let dnd = null; // the drag (calendar-dnd.js): dnd.dragging is { kind: 't' | 'r', id, at } while a card is in the air — nothing re-renders under it
   // V4.2 (audit B21): cancelling a task or deleting a routine no longer asks «¿seguro?» — it goes at once, with DESHACER for
   // 8 seconds, and only then reaches the server (closing the calendar, or the next one, sends it straight away)
   const gone = new Set(); let undoT = null, commitFn = null;
@@ -91,15 +71,8 @@ export function initCalendar(ctx) {
   }
 
   /* ---------- what is on each day ---------- */
-  const AGENDA_DAYS = 14;
   const narrow = () => matchMedia('(max-width: 760px)').matches;
-  function range() { // [from, to) of the days on screen
-    if (view === 'agenda') { const a = startOfDay(anchor); return { from: a, to: a + AGENDA_DAYS * DAY, days: AGENDA_DAYS }; }
-    if (view === 'day') { const a = startOfDay(anchor); return { from: a, to: a + DAY, days: 1 }; }
-    if (view === 'week') { const a = wkStart(anchor); return { from: a, to: a + 7 * DAY, days: 7 }; }
-    const d = new Date(anchor); d.setDate(1); const first = wkStart(d.getTime()); const rows = Math.ceil((new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() + ((d.getDay() - WS + 7) % 7)) / 7);
-    return { from: first, to: first + rows * 7 * DAY, days: rows * 7 };
-  }
+  const range = () => rangeOf(view, anchor, WS); // [from, to) of the days on screen
   const matches = s => !q || String(s || '').toLowerCase().includes(q);
   function events(from, to) { // day key → [{ kind, at, title, dept, agent, t?, r? }]
     const by = {}; const push = ev => { if (!deptOn.has(ev.dept)) return; if (!matches(ev.title + ' ' + (agentOf(ev.agent)?.name || ''))) return; (by[ymd(new Date(ev.at))] ||= []).push(ev); };
@@ -135,14 +108,30 @@ export function initCalendar(ctx) {
       if (r.when.kind === 'hourly' && (view === 'month' || view === 'agenda')) { const seen = new Set(); for (const at of occ) { const k = ymd(new Date(at)); if (seen.has(k)) continue; seen.add(k); push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, hourly: true, paused: r.paused }); } }
       else for (const at of occ) push({ kind: 'routine', at, title: r.title, dept: r.dept, agent: r.agent, r, paused: r.paused, skipped: (r.skips || []).includes(at) });
     }
+    if (showContent && contenido) for (const p of ctPieces) { // the pieces have a day and maybe an hour; without one they sit at the end of their day
+      if (!p.fecha) continue; const [h, m] = (p.hora || '23:59').split(':').map(Number), at = new Date(`${p.fecha}T00:00:00`).setHours(h, m, p.hora ? 0 : 59, 0);
+      if (at < from || at >= to) continue; const title = p.titulo || (p.texto || '').split('\n')[0].slice(0, 60) || 'Sin título';
+      if (!matches(title)) continue; (by[ymd(new Date(at))] ||= []).push({ kind: 'content', at, title, p });
+    }
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
+  }
+  function syncContent(from, to) { // the pieces of the days on screen, fetched once per range
+    if (!showContent || !contenido) return;
+    const key = ymd(new Date(from)) + '|' + ymd(new Date(to - 1)); if (key === ctKey) return; ctKey = key;
+    Promise.resolve(contenido.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { ctPieces = l || []; if (openNow) render(); }, () => { ctPieces = []; });
+  }
+  function contentCard(ev, line) {
+    const p = ev.p, e = PIEZA_ESTADO[p.estado] || PIEZA_ESTADO.borrador, hora = p.hora || '—', tip = `Contenido · ${ev.title} · ${e.name.toLowerCase()} · ${p.hora || 'sin hora'} · ${p.redes.join(' y ')} · clic: abrirla en Contenido`;
+    if (line) return `<div class="cv-ev line content" data-ev="c:${attr(p.id)}" style="--chip:${e.color}" title="${attr(tip)}" role="button" tabindex="0"><span class="cv-ev-h">${esc(hora)}</span><span class="cv-ev-t"><span class="cv-rt pz-tone" style="--c:${e.color};--cd:${e.dark}">▣</span>${esc(ev.title)}</span></div>`;
+    return `<div class="cv-ev content" data-ev="c:${attr(p.id)}" style="--chip:${e.color}" title="${attr(tip)}" role="button" tabindex="0"><div class="cv-ev-t"><span class="cv-rt pz-tone" style="--c:${e.color};--cd:${e.dark}">▣</span>${esc(ev.title)}</div><div class="cv-ev-m"><span>${esc(hora)} · ${esc(e.name.toLowerCase())}</span></div></div>`;
   }
 
   /* ---------- drawing ---------- */
   const initials = n => { const w = String(n || '?').split(/\s+/).filter(Boolean); return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase(); }; // V4.2 (audit B9): «LC», «LV» — every lead used to be «L»
   const av = (id) => { const a = agentOf(id); const c = a ? DEPTS[a.dept].chip : '#ccc'; return `<i class="cv-av" style="border-color:${c};background:${c}55" title="${attr(a ? a.name : id)}">${esc(a ? initials(a.name) : '?')}</i>`; };
   function cardHTML(ev, line) {
+    if (ev.kind === 'content') return contentCard(ev, line);
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
     const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'run' ? `${hm(ev.at)} · ${ev.status === 'skipped' ? 'saltada' : 'no corrió'}` : ev.kind === 'done' ? `${ev.t?.error ? 'falló' : 'listo'} ${hm(ev.at)}${ev.t?.routine ? ' · rutina' : ''}${ev.t?.late ? ' · atrasada' : ''}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
@@ -159,44 +148,38 @@ export function initCalendar(ctx) {
   }
   // V4.2 (audit B42): what the calendar shows, in one string — the 30-second tick redraws only when it changes (or every 5 minutes, for «now»)
   let lastSig = '';
-  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), Math.floor(Date.now() / 300000)]);
+  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), showContent ? ctPieces.map(p => [p.id, p.actualizada, p.estado, p.fecha, p.hora]) : 0, Math.floor(Date.now() / 300000)]);
   function render() {
-    if (dragging) return; // a re-render mid-drag would pull the card out from under the pointer
+    if (dnd && dnd.dragging) return; // a re-render mid-drag would pull the card out from under the pointer
     lastSig = sig();
     const fa = document.activeElement, fkey = fa && ov.contains(fa) && fa.dataset ? (fa.dataset.ev ? `[data-ev="${CSS.escape(fa.dataset.ev)}"]` : fa.dataset.rid ? `[data-rid="${CSS.escape(fa.dataset.rid)}"]` : null) : null;
     queueMicrotask(() => { if (fkey && !ov.contains(document.activeElement)) ov.querySelector(fkey)?.focus({ preventScroll: true }); }); // the keyboard stays where it was
     const { from, to, days } = range();
-    const by = events(from, to), today = ymd(new Date());
+    syncContent(from, to);
+    const by = events(from, to);
     const a = new Date(anchor);
-    E.title.innerHTML = view === 'day' ? `${a.getDate()} ${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : view === 'month' ? `${MONTHS[a.getMonth()]} <small>${a.getFullYear()}</small>` : (() => { const s = new Date(from), e = new Date(to - DAY); return `${s.getDate()}–${e.getDate()} ${s.getMonth() === e.getMonth() ? MONTHS[e.getMonth()] : MONTHS[s.getMonth()].slice(0, 3) + ' – ' + e.getDate() + ' ' + MONTHS[e.getMonth()]} <small>${e.getFullYear()} · semana ${isoWeek(from + 3 * DAY)}</small>`; })();
+    E.title.innerHTML = titleHTML(view, anchor, { from, to, days });
     E.seg.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === view); b.setAttribute('aria-pressed', b.dataset.v === view); });
     E.dow.hidden = view !== 'month';
     if (!E.live) { E.live = document.createElement('div'); E.live.className = 'cv-live'; E.dow.parentElement.insertBefore(E.live, E.dow); }
     const liveEvs = view === 'month' || view === 'agenda' ? Object.values(events(startOfDay(Date.now()), startOfDay(Date.now()) + DAY)).flat().filter(ev => LIVE.includes(ev.kind)) : [];
     E.live.hidden = !liveEvs.length;
     E.live.innerHTML = liveEvs.length ? `<span class="cv-live-h">SIN TERMINAR <b>${liveEvs.length}</b></span>${liveEvs.map(ev => cardHTML(ev, true)).join('')}` : '';
-    if (view === 'agenda') { const e = new Date(from + (days - 1) * DAY); E.title.innerHTML = `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 3).toLowerCase()} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0, 3).toLowerCase()} <small>${e.getFullYear()}</small>`; }
-    E.dow.innerHTML = view === 'day' ? `<div class="cv-dayname">${['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][a.getDay()]} ${a.getDate()} de ${MONTHS[a.getMonth()].toLowerCase()}</div>` : dowHead().map(d => `<div>${d}</div>`).join('');
+    E.dow.innerHTML = dowHTML(view, anchor, WS);
     E.grid.className = 'cv-grid ' + view; E.grid.style.setProperty('--rows', days / 7);
     let html = '', nDone = 0, nSched = 0, nRt = 0;
     for (let i = 0; i < days; i++) {
       const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = by[k] || [];
       for (const ev of list) { if (ev.kind === 'done') nDone++; else if (ev.kind === 'sched') nSched++; else if (ev.kind === 'routine') nRt++; }
     }
-    if (view === 'month') for (let i = 0; i < days; i++) {
-      const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = (by[k] || []).filter(ev => !LIVE.includes(ev.kind));
-      const out = d.getMonth() !== a.getMonth(), past = ts < startOfDay(Date.now());
-      html += `<div class="cv-day${k === today ? ' today' : ''}${out ? ' out' : ''}${past ? ' past' : ''}${d.getDay() === 0 || d.getDay() === 6 ? ' wknd' : ''}" data-day="${k}">
-        <div class="cv-num">${d.getDate() === 1 ? `<span>${MONTHS[d.getMonth()].slice(0, 3)}</span>` : ''}<b>${pad(d.getDate())}</b></div>
-        <button class="cv-add" type="button" title="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}" aria-label="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}">+</button>
-        <div class="cv-evs">${list.map(ev => cardHTML(ev, true)).join('')}</div></div>`;
-    }
-    else if (view === 'agenda') { E.grid.className = 'cv-grid agenda'; html = agendaHTML(from, days, by); }
-    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', days); html = `<div class="cv-tg">${timeGrid(from, days, by)}</div>`; }
+    const grid = { from, days, by, card: cardHTML, live: isLive_ };
+    if (view === 'month') html = monthHTML({ ...grid, anchor });
+    else if (view === 'agenda') { E.grid.className = 'cv-grid agenda'; html = agendaHTML(grid); }
+    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, liveLabel: 'EN MARCHA' })}</div>`; }
     const key = view + ':' + from;
     if (view !== 'month' && key === tgKey) tgScroll = E.grid.scrollTop;
     E.grid.innerHTML = html;
-    if (view === 'month') fitMonth();
+    if (view === 'month') fitMonth(E.grid);
     else if (view === 'agenda') { if (key !== tgKey) { tgKey = key; E.grid.scrollTop = 0; } else E.grid.scrollTop = tgScroll; }
     else if (key === tgKey) E.grid.scrollTop = tgScroll;
     else { // a new week or day opens on the working hours, or on «now» when today is on screen
@@ -209,45 +192,6 @@ export function initCalendar(ctx) {
     E.stats.innerHTML = `<button type="button" class="cv-st${showRoutines ? ' on' : ''}" data-st="routines" aria-pressed="${showRoutines}" title="Mostrar u ocultar las rutinas"><b>${nRt}</b> ${nRt === 1 ? 'ejecución de rutina' : 'ejecuciones de rutinas'}</button><button type="button" class="cv-st${showSched ? ' on' : ''}" data-st="sched" aria-pressed="${showSched}" title="Mostrar u ocultar las programadas"><b>${nSched}</b> programadas</button><button type="button" class="cv-st${showDone ? ' on' : ''}" data-st="done" aria-pressed="${showDone}" title="Mostrar u ocultar las listas"><b>${nDone}</b> listas</button>`;
     renderRail(); renderChips();
     const wsb = $('[data-ws]'); if (wsb) wsb.textContent = `La semana empieza el ${WS === 1 ? 'lunes' : 'domingo'} · cambiar`;
-  }
-  function timeGrid(from, days, by) { // columns = days, rows = hours; a slot is a drop target and a click schedules at that hour
-    const today = ymd(new Date()), now = new Date();
-    const cols = []; for (let i = 0; i < days; i++) { const ts = from + i * DAY, d = new Date(ts); cols.push({ ts, d, k: ymd(d), list: by[ymd(d)] || [] }); }
-    let html = '<div class="cv-tg-c"></div>' + cols.map(({ d, k }) => `<div class="cv-tg-d${k === today ? ' today' : ''}" data-day="${k}"><span>${days === 1 ? DOW_LONG[d.getDay()] : DOW[(d.getDay() + 6) % 7]}</span><b>${d.getDate()}</b>${days === 1 ? `<span>de ${MONTHS[d.getMonth()].toLowerCase()}</span>` : ''}</div>`).join('');
-    if (cols.some(c => c.list.some(ev => LIVE.includes(ev.kind)))) // work under way has no hour: a row of its own above the grid, never a fake hour
-      html += '<div class="cv-tg-h lv">EN MARCHA</div>' + cols.map(c => `<div class="cv-tg-lv">${c.list.filter(ev => LIVE.includes(ev.kind)).map(ev => cardHTML(ev)).join('')}</div>`).join('');
-    for (let h = 0; h < 24; h++) {
-      html += `<div class="cv-tg-h" data-h="${h}">${pad(h)}:00</div>`;
-      for (const c of cols) {
-        const end = new Date(c.ts); end.setHours(h + 1, 0, 0, 0);
-        const isNow = c.k === today && h === now.getHours(), wk = (c.d.getDay() + 6) % 7 >= 5;
-        const list = c.list.filter(ev => !LIVE.includes(ev.kind) && new Date(ev.at).getHours() === h);
-        html += `<div class="cv-day cv-slot${end.getTime() <= Date.now() ? ' past' : ''}${isNow ? ' now' : ''}${wk ? ' wknd' : ''}" data-day="${c.k}" data-hour="${h}">${isNow ? `<i class="cv-nowline" style="top:${Math.round(now.getMinutes() / 60 * 100)}%" aria-hidden="true"></i>` : ''}<div class="cv-evs">${list.map(ev => cardHTML(ev)).join('')}</div></div>`;
-      }
-    }
-    return html;
-  }
-  function agendaHTML(from, days, by) { // V4.2 (audit B5): on a phone, a list by day — what is on, in order, readable; today always shows
-    const today = ymd(new Date()); let html = '', any = false;
-    for (let i = 0; i < days; i++) {
-      const ts = from + i * DAY, d = new Date(ts), k = ymd(d), list = (by[k] || []).filter(ev => !LIVE.includes(ev.kind));
-      if (!list.length && k !== today) continue; any = true;
-      const rel = k === today ? 'hoy' : ymd(new Date(Date.now() + DAY)) === k ? 'mañana' : '';
-      html += `<section class="cv-day cv-ag-day${k === today ? ' today' : ''}${ts < startOfDay(Date.now()) ? ' past' : ''}" data-day="${k}">
-        <div class="cv-ag-h"><b>${d.getDate()}</b><span>${DOW_LONG[d.getDay()]}${rel ? ` · ${rel}` : ''}</span><span class="sp"></span><button class="cv-add" type="button" aria-label="Programar algo el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}">+</button></div>
-        <div class="cv-evs">${list.length ? list.map(ev => cardHTML(ev)).join('') : '<div class="cv-empty">Nada para hoy.</div>'}</div></section>`;
-    }
-    return any ? html : '<div class="cv-empty">Nada en estos días.</div>';
-  }
-  function fitMonth() { // as many one-line events as the cell holds, then «+N más» — never a card cut in half
-    for (const cell of E.grid.querySelectorAll('.cv-day')) {
-      const evs = cell.querySelector('.cv-evs'), items = [...evs.querySelectorAll('.cv-ev')];
-      if (!items.length || evs.scrollHeight <= evs.clientHeight + 1) continue;
-      const room = evs.clientHeight - 20; let k = 0;
-      for (const it of items) { if (it.offsetTop + it.offsetHeight <= room) k++; else break; }
-      k = Math.max(1, k); items.slice(k).forEach(n => { n.hidden = true; });
-      evs.insertAdjacentHTML('beforeend', `<button type="button" class="cv-more" data-day="${cell.dataset.day}">+${items.length - k} más</button>`);
-    }
   }
   function renderBacklog() { // pending work with no date: drag it onto a day to schedule it
     const list = (backlog ? backlog() : []).filter(t => deptOn.has(t.dept) && matches(t.title));
@@ -283,9 +227,9 @@ export function initCalendar(ctx) {
   function renderChips() {
     const all = deptOn.size === DEPT_KEYS.length;
     E.chips.innerHTML = `<button type="button" class="cv-chip${all ? ' on' : ''}" data-dept="*" aria-pressed="${all}" title="Todos los departamentos">TODOS</button>` + DEPT_KEYS.map(k => `<button type="button" class="cv-chip${!all && deptOn.has(k) ? ' on' : ''}" data-dept="${k}" aria-pressed="${!all && deptOn.has(k)}" title="Ver solo ${attr(DEPTS[k].name)} (Mayús + clic: sumarlo a los que ya ves)"><i style="background:${DEPTS[k].chip}"></i>${DEPTS[k].short}</button>`).join('') +
-      `<span class="cv-sep"></span><button type="button" class="cv-chip${showRoutines ? ' on' : ''}" data-tog="routines" aria-pressed="${showRoutines}"><i class="rt" aria-hidden="true">⏱</i>RUTINAS</button><button type="button" class="cv-chip${showDone ? ' on' : ''}" data-tog="done" aria-pressed="${showDone}"><i class="tick" aria-hidden="true">✓</i>LISTAS</button>` +
+      `<span class="cv-sep"></span><button type="button" class="cv-chip${showRoutines ? ' on' : ''}" data-tog="routines" aria-pressed="${showRoutines}"><i class="rt" aria-hidden="true">⏱</i>RUTINAS</button><button type="button" class="cv-chip${showDone ? ' on' : ''}" data-tog="done" aria-pressed="${showDone}"><i class="tick" aria-hidden="true">✓</i>LISTAS</button>` + (contenido ? `<button type="button" class="cv-chip${showContent ? ' on' : ''}" data-tog="content" aria-pressed="${showContent}" title="Las piezas de contenido en sus días (se editan en Contenido, K)"><i class="rt" aria-hidden="true">▣</i>CONTENIDO</button>` : '') +
       (onlyRoutine ? `<button class="cv-chip only on" data-tog="only">SOLO ESTA RUTINA ✕</button>` : '') +
-      '<span class="cv-legend" aria-label="Qué significa cada marca">⏱ rutina · ◷ programada · ✓ lista · <span class="cv-fail">⚠</span> falló · <s>tachada</s> saltada · <i>no corrió</i> sin tarea</span>';
+      '<span class="cv-legend" aria-label="Qué significa cada marca">⏱ rutina · ◷ programada · ✓ lista · <span class="cv-fail">⚠</span> falló · <s>tachada</s> saltada · <i>no corrió</i> sin tarea' + (showContent ? ' · ▣ contenido' : '') + '</span>';
   }
 
   /* ---------- the popovers: a day (create), an event (details), "n more" (the whole day) ---------- */
@@ -350,6 +294,7 @@ export function initCalendar(ctx) {
   function openEvent(id, el) {
     closePop();
     const [kind, ...rest] = id.split(':');
+    if (kind === 'c') { if (contenido) { close(); contenido.openPiece(rest[0]); } return; } // a content piece opens in Contenido
     if (kind === 't') {
       const t = tasks.find(x => String(x.id) === rest[0]); if (!t) return;
       if (t.state !== 'scheduled' && openTask) { openTask(t); return; } // done · running · waiting · pending → the task's detail, over the calendar
@@ -444,28 +389,9 @@ export function initCalendar(ctx) {
   }
   function flash(evId) { const el = E.grid.querySelector(`.cv-ev[data-ev^="${evId}"]`); if (el) { el.classList.add('new'); el.scrollIntoView({ block: 'nearest' }); } }
 
-  /* ---------- drag a card to another day: a scheduled task moves (same time), a weekly routine changes its weekday ---------- */
-  ov.addEventListener('dragstart', e => {
-    const card = e.target.closest('.cv-ev[draggable="true"], .cv-bk[draggable="true"]'); if (!card) return;
-    const [kind, id, at] = card.dataset.ev.split(':');
-    dragging = { kind, id, at: +at || 0 }; closePop();
-    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', card.dataset.ev);
-    card.classList.add('cv-dragging'); ov.classList.add('dragging');
-  });
-  ov.addEventListener('dragend', () => { E.grid.querySelectorAll('.cv-dragging, .cv-day.drop').forEach(n => n.classList.remove('cv-dragging', 'drop')); ov.classList.remove('dragging'); setTimeout(() => { dragging = null; }, 0); });
-  E.grid.addEventListener('dragover', e => {
-    if (!dragging) return; const day = e.target.closest('.cv-day'); if (!day) return;
-    if (day.classList.contains('past')) { e.dataTransfer.dropEffect = 'none'; return; }
-    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-    E.grid.querySelectorAll('.cv-day.drop').forEach(n => { if (n !== day) n.classList.remove('drop'); }); day.classList.add('drop');
-  });
-  E.grid.addEventListener('dragleave', e => { const day = e.target.closest('.cv-day'); if (day && !day.contains(e.relatedTarget)) day.classList.remove('drop'); });
-  E.grid.addEventListener('drop', async e => {
-    if (!dragging) return; const day = e.target.closest('.cv-day'); if (!day || day.classList.contains('past')) return;
-    e.preventDefault();
-    const d = dragging; dragging = null; ov.classList.remove('dragging');
-    await dropOn(day, d);
-  });
+  /* ---------- drag a card to another day: a scheduled task moves (same time), a weekly routine changes its weekday ----------
+     The mouse and the finger are calendar-dnd.js (shared with the content calendar); what happens on drop is below. */
+  dnd = attachDnd({ root: ov, grid: E.grid, onStart: () => closePop(), onDrop: (day, d) => dropOn(day, d), onCancel: () => render() });
   async function dropOn(day, d) { // the mouse and the finger end here alike
     const target = new Date(day.dataset.day + 'T00:00:00'), hour = day.dataset.hour !== undefined ? +day.dataset.hour : null;
     if (d.kind === 't') {
@@ -527,50 +453,6 @@ export function initCalendar(ctx) {
     });
   }
 
-  /* ---------- V4.2 (audit B28): drag with a finger — a tablet or a phone had no HTML5 drag at all. Hold a card still
-     for a moment, then move it: the page stops scrolling, the day or hour under the finger lights up, lifting drops it. ---------- */
-  let touch = null, eatClick = false;
-  ov.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse' || touch) return;
-    const card = e.target.closest('.cv-ev[draggable="true"], .cv-bk[draggable="true"]'); if (!card) return;
-    touch = { card, x: e.clientX, y: e.clientY, on: false, ghost: null, over: null };
-    touch.timer = setTimeout(() => {
-      if (!touch) return;
-      const [kind, id, at] = card.dataset.ev.split(':');
-      dragging = { kind, id, at: +at || 0 }; closePop(); touch.on = true;
-      card.classList.add('cv-dragging'); ov.classList.add('dragging');
-      const g = card.cloneNode(true); g.classList.add('cv-ghost'); g.removeAttribute('draggable'); g.style.width = card.offsetWidth + 'px';
-      document.body.appendChild(g); touch.ghost = g; moveGhost(touch.x, touch.y);
-      if (navigator.vibrate) navigator.vibrate(12);
-    }, 380);
-  });
-  function moveGhost(x, y) { if (touch && touch.ghost) { touch.ghost.style.left = x + 'px'; touch.ghost.style.top = y + 'px'; } }
-  function endTouch() {
-    if (!touch) return; clearTimeout(touch.timer);
-    if (touch.ghost) touch.ghost.remove();
-    if (touch.on) { eatClick = true; setTimeout(() => { eatClick = false; }, 400); }
-    touch.card.classList.remove('cv-dragging'); ov.classList.remove('dragging'); E.grid.querySelectorAll('.cv-day.drop').forEach(n => n.classList.remove('drop'));
-    touch = null;
-  }
-  ov.addEventListener('pointermove', e => {
-    if (!touch) return;
-    if (!touch.on) { if (Math.hypot(e.clientX - touch.x, e.clientY - touch.y) > 8) { clearTimeout(touch.timer); touch = null; } return; } // a swipe: the page scrolls as always
-    moveGhost(e.clientX, e.clientY);
-    const under = document.elementFromPoint(e.clientX, e.clientY), day = under && under.closest('#cvGrid .cv-day');
-    E.grid.querySelectorAll('.cv-day.drop').forEach(n => { if (n !== day) n.classList.remove('drop'); });
-    touch.over = day && !day.classList.contains('past') ? day : null; if (touch.over) touch.over.classList.add('drop');
-    // near the grid's top or bottom edge, it scrolls under the finger
-    const g = E.grid.getBoundingClientRect(); if (e.clientY < g.top + 40) E.grid.scrollTop -= 12; else if (e.clientY > g.bottom - 40) E.grid.scrollTop += 12;
-  });
-  ov.addEventListener('touchmove', e => { if (touch && touch.on) e.preventDefault(); }, { passive: false }); // holding a card: the finger moves the card, not the page
-  ov.addEventListener('pointerup', async () => {
-    if (!touch) return; const was = touch.on, day = touch.over, d = dragging;
-    endTouch(); dragging = null;
-    if (was && day && d) await dropOn(day, d); else if (was) render();
-  });
-  ov.addEventListener('pointercancel', () => { if (touch) { const was = touch.on; endTouch(); if (was) { dragging = null; render(); } } });
-  ov.addEventListener('contextmenu', e => { if (touch) e.preventDefault(); }); // a long press is a drag here, not the phone's menu
-  ov.addEventListener('click', e => { if (eatClick) { e.stopPropagation(); e.preventDefault(); eatClick = false; } }, true);
   ov.addEventListener('toggle', e => { const g = e.target.closest && e.target.closest('.cv-rg'); if (g) { if (g.open) railFold.delete(g.dataset.dept); else railFold.add(g.dataset.dept); } }, true);
   ov.addEventListener('keydown', e => { // a card opens with Enter too
     const card = e.target.closest && e.target.closest('.cv-ev'); if (card && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openEvent(card.dataset.ev, card); }
@@ -604,7 +486,7 @@ export function initCalendar(ctx) {
         if (k === '*') deptOn = new Set(DEPT_KEYS);
         else if (e.shiftKey && !all) { if (deptOn.has(k)) { deptOn.delete(k); if (!deptOn.size) deptOn = new Set(DEPT_KEYS); } else deptOn.add(k); }
         else deptOn = !all && deptOn.size === 1 && deptOn.has(k) ? new Set(DEPT_KEYS) : new Set([k]); }
-      else if (chip.dataset.tog === 'routines') showRoutines = !showRoutines; else if (chip.dataset.tog === 'done') showDone = !showDone; else if (chip.dataset.tog === 'only') onlyRoutine = null;
+      else if (chip.dataset.tog === 'routines') showRoutines = !showRoutines; else if (chip.dataset.tog === 'done') showDone = !showDone; else if (chip.dataset.tog === 'content') { showContent = !showContent; ctKey = ''; try { localStorage.setItem('ao.cal.ct', showContent ? '1' : '0'); } catch {} } else if (chip.dataset.tog === 'only') onlyRoutine = null;
       render(); return;
     }
     const day = e.target.closest('.cv-day'); if (day && !E.pop.contains(e.target)) { if (e.target === day || e.target.classList.contains('cv-evs') || e.target.closest('.cv-num')) { openCreate(day.dataset.day, day); return; } }
@@ -636,16 +518,16 @@ export function initCalendar(ctx) {
     setTimeout(() => { const el = E.grid.querySelector(`.cv-ev[data-ev="${CSS.escape(b.dataset.rev)}"]`) || E.grid.querySelector(`.cv-ev[data-ev^="${CSS.escape(b.dataset.rev.split(':').slice(0, 2).join(':'))}"]`); if (el) { el.hidden = false; el.scrollIntoView({ block: 'nearest' }); el.classList.add('new'); el.focus({ preventScroll: true }); } }, 60);
   });
   document.addEventListener('click', e => { if (!RES.hidden && !e.target.closest('.cv-sw')) RES.hidden = true; });
-  function step(n) { const d = new Date(anchor); if (view === 'agenda') d.setDate(d.getDate() + AGENDA_DAYS * n); else if (view === 'day') d.setDate(d.getDate() + n); else if (view === 'week') d.setDate(d.getDate() + 7 * n); else { d.setDate(1); d.setMonth(d.getMonth() + n); } anchor = d.getTime(); closePop(); render(); }
+  function step(n) { anchor = stepAnchor(view, anchor, n); closePop(); render(); }
   ov.addEventListener('keydown', e => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1); else if (e.key === 't' || e.key === 'T') { anchor = startOfDay(Date.now()); tgKey = ''; render(); } else if (e.key === 'w' || e.key === 'W') { view = 'week'; render(); } else if (e.key === 'm' || e.key === 'M') { view = 'month'; render(); } else if (e.key === 'a' || e.key === 'A') { view = 'agenda'; render(); } else if (e.key === 'd' || e.key === 'D') { view = 'day'; render(); } });
   ov.addEventListener('dblclick', e => { const day = e.target.closest('.cv-day[data-day]'); if (!day || view !== 'month' || e.target.closest('.cv-ev')) return; anchor = new Date(day.dataset.day + 'T00:00:00').getTime(); view = 'day'; closePop(); render(); });
 
   let timer = null;
   let calOpener = null;
-  let fitT = 0; addEventListener('resize', () => { if (!openNow || view !== 'month') return; clearTimeout(fitT); fitT = setTimeout(() => { if (E.pop.hidden && !dragging) render(); }, 150); }); // the month re-counts what fits
+  let fitT = 0; addEventListener('resize', () => { if (!openNow || view !== 'month') return; clearTimeout(fitT); fitT = setTimeout(() => { if (E.pop.hidden && !dnd.dragging) render(); }, 150); }); // the month re-counts what fits
   $('#cvKeys')?.addEventListener('click', () => dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))); // V4.2 (audit B38): the keys live in the «?» sheet, not in the band
   ov.inert = true; // closed: out of Tab's reach
-  function open() { if (openNow) return; views.opening('cal'); openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dragging && sig() !== lastSig) render(); }, 30000); }
+  function open() { if (openNow) return; views.opening('cal'); openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (E.pop.hidden && !dnd.dragging && sig() !== lastSig) render(); }, 30000); }
   function close(o = {}) { if (!openNow) return; flushUndo(); openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (!o.quiet && calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from (not when another view takes over)
   views.add('cal', { isOpen: () => openNow, close });
   function toggle() { openNow ? close() : open(); }
@@ -657,5 +539,5 @@ export function initCalendar(ctx) {
     setTimeout(() => { const el = E.grid.querySelector(`.cv-ev[data-ev^="r:${CSS.escape(rid)}:"]`); if (el) { el.scrollIntoView({ block: 'nearest' }); openEvent(el.dataset.ev, el); } }, 80);
     return true;
   }
-  return { open, openAt, openRoutine, close, toggle, isOpen: () => openNow, refresh: () => { if (openNow && E.pop.hidden && !dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
+  return { open, openAt, openRoutine, close, toggle, isOpen: () => openNow, refresh: () => { if (openNow && E.pop.hidden && !dnd.dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
 }

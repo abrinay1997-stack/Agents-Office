@@ -29,13 +29,16 @@ const I = { // line icons (stroke = currentColor)
   down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
   plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>', ref: '<rect x="3" y="7" width="13" height="13" rx="2.5"/><circle cx="7.8" cy="11.6" r="1.4"/><path d="m16 17-3.5-3.5L6 20"/><path d="M19.5 2.5v7M16 6h7"/>', again: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', folder: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
-  x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  cal: '<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><path d="M12 13v5M9.5 15.5h5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
 };
 const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.st.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.st.' + k, JSON.stringify(v)); } catch {} } };
 
 export function initStudio(ctx) {
   const { isLive, esc, agentName } = ctx;
+  // V4.7: the Estudio and Contenido work together. A picture or a video can be sent to the content calendar (ctx.toCalendar), and the calendar can open
+  // the Estudio «for a piece» (forTarget): the cards then offer «Usar en la pieza» and «Volver a la pieza» hands back what was chosen.
+  let pickFor = null; // { target: { id, titulo }, onPick(ids), ids: [] }
   const el = document.createElement('div'); el.id = 'studioOv'; el.setAttribute('role', 'dialog'); el.setAttribute('data-view', ''); el.setAttribute('aria-labelledby', 'stTitle'); el.tabIndex = -1; el.hidden = true;
   el.innerHTML = `
     <div class="st-head">
@@ -43,6 +46,7 @@ export function initStudio(ctx) {
       <span class="sp"></span><button type="button" class="st-budget" aria-live="polite" title="Tus topes del Estudio: se cambian en Ajustes → Estudio"></button><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)">${svg('x')}</button>
     </div>
     <div class="st-ptabs" role="tablist" aria-label="Estudio"><button type="button" role="tab" data-pt="gen" aria-selected="true">Crear</button><button type="button" role="tab" data-pt="gal" aria-selected="false">Galería <b class="st-ptn"></b></button></div>
+    <div class="st-forpiece" hidden role="status"></div>
     <div class="st-body">
       <section class="st-gen" aria-label="Crear">
         <button type="button" class="st-unfold" title="Mostrar el compositor" aria-label="Mostrar el compositor">${svg('spark')}<span>Crear</span></button>
@@ -293,7 +297,7 @@ export function initStudio(ctx) {
     const menu = [ // V4.4 (27 Sep 2026): the row shows the main action, Descargar and the bin as icons; the rest lives here
       ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
       ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark']]),
-      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ['move', 'Mover a una carpeta…', 'folder']];
+      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar ? [['cal', 'Enviar al calendario de contenido', 'cal']] : [])];
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}" draggable="true">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
       <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
@@ -303,6 +307,7 @@ export function initStudio(ctx) {
       </div>
       <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
       <div class="st-ov" role="group" aria-label="Acciones">
+        ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla en la pieza «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? '✓ En la pieza' : 'Usar en la pieza'}</button>` : ''}
         ${primary ? `<button type="button" data-a="${primary[0]}" class="st-oi" aria-label="${primary[1]}: ${esc(label)}" title="${primary[1]} — ${primary[2].toLowerCase()}">${svg(primary[3])}</button>` : ''}
         ${vid ? '' : `<button type="button" data-a="ref" class="st-oi" aria-label="Usar de referencia: ${esc(label)}" title="Usar de referencia — tu producto, logo, personaje o estilo en lo próximo que crees">${svg('ref')}</button>`}
         <a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar">${svg('down')}</a>
@@ -719,7 +724,7 @@ export function initStudio(ctx) {
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
       <div class="st-lacts">${it.kind === 'video' ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>`) : `<button type="button" data-l="anim" class="pri">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
-      <div class="st-lacts2">${it.kind === 'video' ? '' : '<button type="button" data-l="ref">Usar de referencia</button>'}${it.upload || it.kind === 'video' ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">Copiar prompt</button><button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
+      <div class="st-lacts2">${it.kind === 'video' ? '' : '<button type="button" data-l="ref">Usar de referencia</button>'}${it.upload || it.kind === 'video' ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">Copiar prompt</button>${ctx.toCalendar ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}<button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
       <button type="button" class="st-ldel" data-l="del">${svg('trash')} Mover a la papelera</button></div></div>`;
     L.querySelector('.st-lx').focus();
     L.onclick = e => {
@@ -732,6 +737,7 @@ export function initStudio(ctx) {
       if (a === 'again') { closeLight(); reuse(it); }
       if (a === 'anim') { closeLight(); animate(it); }
       if (a === 'ref') { closeLight(); useAsRef(it); }
+      if (a === 'cal' && ctx.toCalendar) { closeLight(); ctx.toCalendar(it.file, it.kind, it.prompt); }
       if (a === 'fav') favMany([it.file]).then(() => light(i));
       if (a === 'del') trashMany([it.file]);
       if (a === 'task') { closeLight(); close(); ctx.openTask(it.task); }
@@ -863,6 +869,8 @@ export function initStudio(ctx) {
     if (a === 'anim') animate(it);
     if (a === 'ref') useAsRef(it);
     if (a === 'vary') vary(it);
+    if (a === 'cal' && ctx.toCalendar) ctx.toCalendar(it.file, it.kind, it.prompt); // Contenido opens (and the Estudio steps aside) with a new piece that carries this file
+    if (a === 'usar' && pickFor) { const k = pickFor.ids.indexOf(it.file); if (k >= 0) pickFor.ids.splice(k, 1); else pickFor.ids.push(it.file); paintFor(); }
     if (a === 'move') { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
     if (a === 'task' && it.task && ctx.openTask) { close(); ctx.openTask(it.task); } // V4.2 (audit A25)
   });
@@ -968,12 +976,27 @@ export function initStudio(ctx) {
     if (p === 'gal') relayout();
   }
   showPane('gen');
+  /* V4.7: «para la pieza» — the calendar opened the Estudio to make (or pick) the pictures of one piece */
+  const forBar = $('.st-forpiece');
+  function paintFor() {
+    if (!pickFor) { forBar.hidden = true; forBar.innerHTML = ''; el.classList.remove('st-for'); if (typeof renderGrid === 'function') renderGrid(); return; }
+    const n = pickFor.ids.length;
+    forBar.hidden = false; el.classList.add('st-for');
+    forBar.innerHTML = `<span>Para la pieza <b>«${esc(pickFor.target.titulo)}»</b> · ${n ? `${n} ${n === 1 ? 'elegida' : 'elegidas'}` : 'crea algo o elige de la galería y pulsa «Usar en la pieza»'}</span><span class="sp"></span><button type="button" data-f="back" class="pri">Volver a la pieza${n ? ` (${n})` : ''}</button><button type="button" data-f="no">Cancelar</button>`;
+    renderGrid();
+  }
+  forBar.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !pickFor) return; const p = pickFor; pickFor = null; paintFor();
+    if (b.dataset.f === 'back') p.onPick(p.ids); else say('Sin cambios en la pieza.');
+  });
   let timer = null;
   el.classList.toggle('st-folded', !!store.get('fold', false));
   const isOn = () => document.body.classList.contains('studioOpen'); // not el.hidden: that waits 220 ms for the fade after close
   let hideT = 0;
   function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
-  function close(o = {}) { if (!isOn()) return; seenAt = Date.now(); closeLight(); closeHist(); closeBin(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
+  function close(o = {}) { if (!isOn()) return; if (pickFor) { pickFor = null; paintFor(); } seenAt = Date.now(); closeLight(); closeHist(); closeBin(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   views.add('studio', { isOpen: isOn, close });
-  return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn };
+  return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn,
+    /** V4.7: open the Estudio for one piece of content; `onPick(ids)` gets the gallery files chosen when the owner goes back to it. */
+    forTarget(target, onPick) { pickFor = { target, onPick, ids: [] }; open(); showPane('gal'); paintFor(); } };
 }

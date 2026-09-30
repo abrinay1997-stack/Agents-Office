@@ -1,6 +1,6 @@
 // Bundle src/main.js (+three) into a single self-contained HTML that opens by double-click.
 import { build } from 'esbuild';
-import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, readdirSync, existsSync } from 'fs';
 import { buildBrainGraph } from './graph-build.mjs';
 await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/braingraph.js
 
@@ -13,7 +13,10 @@ const res = await build({
   target: 'es2020',
 });
 const js = res.outputFiles[0].text;
-const shell = readFileSync('src/shell.html', 'utf8');
+// V4.7: the views added after V4.6 keep their style in src/css/<name>.css instead of growing shell.html; they are joined, in name order,
+// where shell.html says «/* <css-vistas> */» (the end of its <style>). Nothing else changes: it is still one file that opens by double click.
+const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css')).sort().map(f => `/* ---- src/css/${f} ---- */\n${readFileSync('src/css/' + f, 'utf8')}`).join('\n') : '';
+const shell = readFileSync('src/shell.html', 'utf8').replace('/* <css-vistas> */', () => vistasCss);
 const html = shell.replace('<!--APP-->', () => `<script>${js}</script>`);
 mkdirSync('dist', { recursive: true });
 // write-then-rename, retried: on Windows the running office may be reading the page at that instant (EBUSY / UNKNOWN)
