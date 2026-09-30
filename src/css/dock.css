@@ -1,0 +1,18 @@
+/* V4.7 — el «⋯» del dock: solo existe en el teléfono, donde recoge Salud, Negocio y Ajustes (src/dock.js). */
+#topMore { display: none; position: relative; }
+#topMore .hl-badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--cream); background: transparent; }
+#topMore[data-state="ok"] .hl-badge { background: #1E9070; } #topMore[data-state="warn"] .hl-badge { background: #D18A00; } #topMore[data-state="bad"] .hl-badge { background: #B3261E; }
+body.dark #topMore .hl-badge { border-color: #1B1C21; }
+#topMore svg { fill: currentColor; stroke: none; }
+#topMore[aria-expanded="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+#topMoreMenu { position: fixed; z-index: 60; min-width: 232px; max-width: calc(100vw - 16px); padding: 6px; background: var(--cream); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 14px; box-shadow: 0 18px 50px rgba(21,20,20,.28); display: flex; flex-direction: column; gap: 2px; }
+#topMoreMenu[hidden] { display: none; }
+#topMoreMenu button { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 40px; padding: 8px 12px; border: 0; border-radius: 9px; background: none; color: inherit; font-family: var(--ui); font-size: 13px; text-align: left; cursor: pointer; }
+#topMoreMenu button:hover, #topMoreMenu button:focus-visible { background: var(--ink); color: var(--cream); outline: none; }
+#topMoreMenu button:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+#topMoreMenu kbd { font-family: var(--ui); font-size: 10.5px; letter-spacing: .08em; border: 1px solid currentColor; border-radius: 5px; padding: 1px 6px; opacity: .8; }
+body.dark #topMoreMenu { background: #1B1C21; }
+@media (max-width: 440px) {
+  #topMore { display: inline-grid; }
+  #topHealth, #topBiz, #topSettings { display: none; }
+}

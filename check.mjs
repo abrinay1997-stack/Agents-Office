@@ -37,6 +37,17 @@ await step('build: graph has linked notes', async () => {
   return `${BRAIN.notes} notes · ${BRAIN.nodes.length} linked · ${BRAIN.links.length} links`;
 });
 
+await step('build: the views\' own style (src/css/*.css) reaches the page once each, and shell.html keeps its one marker', async () => { // V4.7
+  const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8');
+  const shell = fs.readFileSync(path.join(ROOT, 'src', 'shell.html'), 'utf8');
+  const marks = shell.split('/* <css-vistas> */').length - 1;
+  if (marks !== 1) throw new Error(`shell.html must carry exactly one «/* <css-vistas> */» marker at the end of its <style> (it has ${marks}): without it, no view's own CSS reaches the page`);
+  if (html.includes('<css-vistas>')) throw new Error('the marker is still in the built page: build.mjs did not replace it');
+  const dir = path.join(ROOT, 'src', 'css'), files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.css')) : [];
+  for (const f of files) { const n = html.split(`/* ---- src/css/${f} ---- */`).length - 1; if (n !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page (it must be exactly 1)`); }
+  return `${files.length} stylesheet(s): ${files.join(', ')}`;
+});
+
 /* ---------- 1a. V4.4: the unit tests, the secrets check, the agents' safety rules ---------- */
 await step('tests: npm test (safety rules, the guard, the secrets check)', async () => {
   const out = await sh('node', ['--test']).catch(e => { throw new Error('a test failed — run npm test to see which: ' + e.message); });

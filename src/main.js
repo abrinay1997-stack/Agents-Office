@@ -10,6 +10,7 @@ import { initHealth } from './health.js'; // V4.4: the office's health (O)
 import { initCosts } from './costs.js'; // V4.4: costs and return (U)
 import { initSettings } from './settings.js'; // V4.4: the settings window (,)
 import { initBusiness } from './business.js'; // V4.4: how the business is doing (N)
+import { initDock } from './dock.js'; // V4.7: on a phone, Salud, Negocio and Ajustes fold into one «⋯»
 import { initSearch } from './search.js'; // V4.4: search everything (Ctrl+K)
 import { mdToHtml } from './md.js';
 import * as THREE from 'three';
@@ -664,6 +665,7 @@ const health = initHealth({ served: SERVED, esc }); // V4.4 (B6)
 const costsWin = initCosts({ served: SERVED, esc }); // V4.4 (C1–C10)
 const settingsWin = initSettings({ served: SERVED, esc, keys: KEYS, runKey, theme: { get: themePref, set: setTheme, systemDark: () => sysDark.matches } }); // V4.4 (J5, H1); V4.5: + Apariencia and the shortcuts
 const bizWin = initBusiness({ served: SERVED, esc }); // V4.4 (J1)
+initDock(); // V4.7: after the three buttons it folds exist
 
 // camera mode: mid-tone backdrop for filming the screen (#cam=1 / V toggles)
 function setCam(on) { document.body.classList.toggle('cam', !!on); }
