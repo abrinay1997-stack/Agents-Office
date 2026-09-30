@@ -55,6 +55,10 @@ import * as sub from './sub.mjs';
 import * as media from './media.mjs';
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
 import { crearRutas } from './contenido/rutas.mjs';
+import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectura — su token vive en META_ACCESS_TOKEN y no toca el disco
+import { crearMetricas } from './contenido/metricas.mjs';
+import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
+import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
 import * as telegram from './telegram.mjs';
@@ -113,6 +117,18 @@ const CONTENIDO_DEPTS = Array.isArray(cfg.contenido?.departments) ? cfg.contenid
 const CONTENIDO_MCP = path.join(ROOT, 'contenido-mcp.mjs');
 const CONTENIDO_DIR = path.join(cfg.brainPath, 'Agents Office', 'contenido');
 const contenido = crearAlmacen({ dir: CONTENIDO_DIR, medioExiste: id => !!media.resolve(id) });
+// V4.7 (F2): ANALÍTICAS — Meta en solo lectura. El token es META_ACCESS_TOKEN (variable de Windows, nunca un archivo); lo leído vive en data/contenido/
+// (cuentas, una foto diaria de cada una y las miniaturas), que no viaja por GitHub. Ver contenido/meta.mjs y contenido/metricas.mjs.
+const ANALITICAS_DIR = path.join(DATA, 'contenido');
+const INDICADORES_META = [
+  { id: 'meta_seguidores', name: 'Seguidores (Instagram + Facebook)', unit: '', better: 'up' },
+  { id: 'meta_alcance', name: 'Alcance de los últimos 30 días', unit: '', better: 'up' },
+];
+const meta = crearMeta({ dir: ANALITICAS_DIR });
+const metricas = crearMetricas({
+  meta, dir: ANALITICAS_DIR, avisar: (t, o) => notice('analiticas', t, o),
+  alFotografiar: ({ serie, publicaciones }) => llevarIndicadoresMeta(serie, publicaciones), // cada foto buena pone al día los indicadores del dueño (si los tiene)
+});
 const DEPUTY = sub.nameOf(cfg); // the owner's right hand above the departments: «Dimitri» unless office.config.json → deputy.name says otherwise
 const TEAMS = teams.settings(cfg); // V3.2 (16 Sep): { enabled, max }
 const roster = loadRoster(BRAIN);
@@ -185,6 +201,10 @@ function dailyBackup() { // one copy a day of the tasks and the routines file, t
     if (fs.existsSync(CONTENIDO_DIR)) { // V4.7: the content pieces too — a day's copy of the folder, the last 14 (they are text: a few KB)
       const dest = path.join(dir, `contenido-${day}`); if (!fs.existsSync(dest)) fs.cpSync(CONTENIDO_DIR, dest, { recursive: true, filter: f => !f.includes(`${path.sep}.papelera`) });
       for (const d of fs.readdirSync(dir).filter(f => /^contenido-\d{4}-\d{2}-\d{2}$/.test(f)).sort().slice(0, -14)) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
+    }
+    if (fs.existsSync(ANALITICAS_DIR)) { // V4.7 (F2): lo que Meta ya no devuelve —la historia de seguidores de cada día— solo existe si se apuntó: se copia (sin las miniaturas)
+      const dest = path.join(dir, `analiticas-${day}`); if (!fs.existsSync(dest)) fs.cpSync(ANALITICAS_DIR, dest, { recursive: true, filter: f => !f.includes(`${path.sep}miniaturas`) });
+      for (const d of fs.readdirSync(dir).filter(f => /^analiticas-\d{4}-\d{2}-\d{2}$/.test(f)).sort().slice(0, -14)) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
     }
     const all = fs.readdirSync(dir).filter(f => /^(tasks|routines)-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
     for (const kind of ['tasks', 'routines']) { const mine = all.filter(f => f.startsWith(kind + '-')); for (const f of mine.slice(0, -14)) fs.rmSync(path.join(dir, f), { force: true }); }
@@ -901,6 +921,7 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
   req.on('end', () => { if (s === null) return; try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('the body is not valid JSON'), { status: 400 })); } });
 });
 const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, ajustes: () => ({ departamentos: CONTENIDO_DEPTS }) });
+const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
 // and a hostile DNS name pointed at 127.0.0.1 is refused by the Host check (DNS rebinding).
@@ -1010,6 +1031,42 @@ function recordKpi(id, value, from) {
   if (v === null) return { error: 'el valor tiene que ser un número' };
   (k.values[id] ||= []).push({ t: Date.now(), v, from }); k.values[id] = k.values[id].slice(-400); saveKpis(k); return { ok: true, id, value: v };
 }
+// V4.7 (F2): seguidores y alcance de Meta a «Cómo va el negocio» — sin una segunda contabilidad: son los mismos números que Analíticas (src/contenido-cifras.js).
+// Solo se escriben en los indicadores que el dueño TIENE (los crea él con un botón en Analíticas o a mano); una foto repetida el mismo día no suma un punto más.
+function llevarIndicadoresMeta(serie, publicaciones) {
+  const hoy = localDay(Date.now()), d = new Date(); d.setDate(d.getDate() - 30);
+  const k = cifrasKpis({ serie, publicaciones }, { desde: localDay(d.getTime()), hasta: hoy });
+  const valores = { meta_seguidores: k.seguidores.valor, meta_alcance: k.alcance.valor };
+  const kp = loadKpis();
+  for (const def of INDICADORES_META) {
+    const v = valores[def.id]; if (v == null || !kp.defs.some(x => x.id === def.id)) continue;
+    const last = (kp.values[def.id] || []).at(-1);
+    if (last && last.v === v && localDay(last.t) === hoy) continue;
+    recordKpi(def.id, v, 'Meta');
+  }
+}
+const indicadoresMeta = {
+  estado: () => { const kp = loadKpis(); return Object.fromEntries(INDICADORES_META.map(d => [d.id.replace('meta_', ''), kp.defs.some(x => x.id === d.id)])); },
+  crear() { // el botón «Llevar a Cómo va el negocio»: los define (sin tocar los que el dueño ya tenga) y pone el primer valor si ya hay fotos
+    const kp = loadKpis(), creados = [];
+    for (const def of INDICADORES_META) if (!kp.defs.some(x => x.id === def.id)) { kp.defs.push(def); creados.push(def.id); }
+    saveKpis(kp);
+    const { serie, publicaciones } = metricas.leer({ dias: 90 }); if (serie.length) llevarIndicadoresMeta(serie, publicaciones);
+    return { creados };
+  },
+};
+// V4.7 (F2): la foto diaria. Cada 10 minutos mira si falta la de ayer (desde las 6:00 de la máquina) y, si la computadora estaba apagada a esa hora, se hace al encenderla.
+// Las cuentas se vuelven a listar cada 24 h (una página nueva, un permiso retirado). Sin META_ACCESS_TOKEN no hace nada: la oficina no habla con Meta por su cuenta.
+async function tickAnaliticas() {
+  try {
+    if (!meta.configurado() || metricas.enMarcha()) return;
+    if (new Date().getHours() < metricas.horaDeLaFoto) return;
+    const e = meta.estado(), viejo = !e.sincronizadaAt || Date.now() - Date.parse(e.sincronizadaAt) > (e.cuentas.length ? 24 : 6) * 3600e3;
+    if (viejo) { const n = await meta.sincronizar(); if (n.error && !n.cuentas.length) return; }
+    if (metricas.pendientes(meta.estado().cuentas).length) await metricas.actualizar();
+  } catch (err) { console.warn('analíticas:', err.message); }
+}
+setInterval(tickAnaliticas, 10 * 60e3); setTimeout(tickAnaliticas, 30e3);
 // H9: set the whole office up from the company's website (or what the owner tells) — notes for the brain, a brief per lead
 async function companyBootstrap(url, about) {
   const lead = leadOf('ops'), now = new Date().toISOString().slice(0, 10);
@@ -1127,6 +1184,13 @@ function officeStatus() {
   // H3: company notes that need a look
   vaultIndex(); const stale = [...STALE];
   add('notas', 'Notas de la empresa', stale.length > 5 ? 'warn' : stale.length ? 'info' : 'ok', stale.length ? `${stale.length} por revisar: ${stale.slice(0, 4).map(([n, st]) => `${n} (${st.why})`).join(', ')}${stale.length > 4 ? '…' : ''}.` : 'Todas al día.', stale.length ? 'Ábrelas en el Cerebro, confirma precios y fechas, y pon «actualizado: AAAA-MM-DD» en su cabecera (o «revisar:» con la próxima fecha).' : '');
+  // V4.7 (F2): the Meta connection (read only) — sin token es «info», no un fallo: conectarla es opcional
+  { const m = meta.estado(), foto = metricas.leer({ dias: 14 }).ultimaFoto, faltan = m.token?.faltan || [], viejaMs = foto ? now - Date.parse(foto + 'T12:00:00') : null;
+    if (!m.configurado) add('redes', 'Redes (Meta)', 'info', 'Meta no está conectada: Analíticas queda vacía.', 'Pon el token del usuario del sistema en la variable META_ACCESS_TOKEN y abre Analíticas (R) → «Comprobar conexión».');
+    else if (m.error && !m.cuentas.length) add('redes', 'Redes (Meta)', 'bad', m.error, 'Abre Analíticas (R) → «Comprobar conexión» para verlo completo.');
+    else if (m.error || faltan.length) add('redes', 'Redes (Meta)', 'warn', m.error || `Al token le faltan permisos: ${faltan.join(', ')}.`, 'Genera el token de nuevo en Business Manager con esos permisos.');
+    else if (viejaMs !== null && viejaMs > 3 * day) add('redes', 'Redes (Meta)', 'warn', `La última foto de métricas es de ${foto}.`, 'Abre Analíticas (R) → «Actualizar ahora»; si falla, el motivo sale ahí.');
+    else add('redes', 'Redes (Meta)', 'ok', `${m.cuentas.length} cuenta(s) conectada(s)${foto ? `; última foto de ${foto}` : '; todavía sin foto (se hace desde las 6:00)'}.`); }
   // backup
   let lastB = null; try { lastB = fs.readdirSync(path.join(DATA, 'backups')).filter(f => /^tasks-/.test(f)).sort().pop(); } catch {}
   add('respaldo', 'Copia diaria', lastB ? 'ok' : 'info', lastB ? `Última copia: ${lastB.slice(6, 16)} (14 días en data/backups).` : 'Aún no hay copia (se hace al tener tareas).');
@@ -1576,6 +1640,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, trashed, graph: trashed ? await rebuildGraph() : undefined });
     }
     /* ---------- V4.7: Contenido — the pieces, their review and approval ---------- */
+    if (url.pathname.startsWith('/api/contenido/') && await analiticasRoutes(req, res, url)) return; // V4.7 (F2): Analíticas y la conexión con Meta
     if (url.pathname.startsWith('/api/contenido') && await contenidoRoutes(req, res, url)) return;
     /* ---------- the Estudio ---------- */
     if (url.pathname.startsWith('/media/') && req.method === 'GET') { // a generated file (only inside <brain>/Agents Office/media); ranges, so a video can seek

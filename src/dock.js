@@ -1,8 +1,8 @@
-// Agents Office V4.7 (30 sep 2026) — el dock en el teléfono. A 440 px o menos caben ocho botones, no diez: Salud, Negocio y Ajustes se
-// recogen en un solo «⋯» que abre un menú. Los tres siguen existiendo (y sus atajos O, N y «,» también): el menú solo les hace clic.
+// Agents Office V4.7 (30 sep 2026) — el dock en el teléfono. A 440 px o menos caben seis botones y el aviso de aprobaciones, no once: Analíticas, Salud,
+// Negocio y Ajustes se recogen en un solo «⋯» que abre un menú. Los cuatro siguen existiendo (y sus atajos R, O, N y «,» también): el menú solo les hace clic.
 // Arriba de 440 px no cambia nada. La luz de Salud se copia al «⋯» para que un fallo no se esconda dentro del menú.
-const FOLDED = ['topHealth', 'topBiz', 'topSettings'];
-const KEY_OF = { topHealth: 'O', topBiz: 'N', topSettings: ',' };
+const FOLDED = ['topAnaliticas', 'topHealth', 'topBiz', 'topSettings'];
+const KEY_OF = { topAnaliticas: 'R', topHealth: 'O', topBiz: 'N', topSettings: ',' };
 
 export function initDock() {
   const dock = document.getElementById('topdock'), anchor = document.getElementById('topPanel');
@@ -10,8 +10,8 @@ export function initDock() {
   if (!dock || !anchor || !real.length) return null;
   const btn = document.createElement('button');
   btn.id = 'topMore'; btn.className = 'tb-ic'; btn.type = 'button';
-  btn.setAttribute('aria-label', 'Más herramientas: estado, negocio y ajustes'); btn.setAttribute('aria-haspopup', 'menu'); btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', 'topMoreMenu');
-  btn.title = 'Más — estado de la oficina, negocio y ajustes';
+  btn.setAttribute('aria-label', 'Más herramientas: analíticas, estado, negocio y ajustes'); btn.setAttribute('aria-haspopup', 'menu'); btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', 'topMoreMenu');
+  btn.title = 'Más — analíticas, estado de la oficina, negocio y ajustes';
   btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg><i class="hl-badge" aria-hidden="true"></i>';
   dock.insertBefore(btn, anchor);
   const menu = document.createElement('div');
