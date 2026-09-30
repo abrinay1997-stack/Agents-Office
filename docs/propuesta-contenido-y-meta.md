@@ -1,16 +1,18 @@
 # Contenido y Meta en la oficina: calendario de contenido, programación y analíticas
 
-Propuesta del 30 sep 2026. **Nada de esto está implementado.** Es el plan para traer a la oficina lo mejor de Juancito Ads (conexión con Meta, calendario de contenido, cola de publicación, métricas) sin romper lo que la oficina ya es. Al final están las decisiones abiertas; hasta que el dueño las conteste no se escribe código.
+Propuesta del 30 sep 2026. **Nada de esto está implementado.** Es el plan para traer a la oficina lo mejor de Juancito Ads (conexión con Meta, calendario de contenido, cola de publicación, métricas) sin romper lo que la oficina ya es.
+
+**Decisiones ya tomadas por el dueño (30 sep):** dos botones nuevos en el dock («Contenido» y «Analíticas»); las imágenes llegan a Instagram por un bucket público de R2; **la oficina es el puente que PROGRAMA en Meta, no la que dispara**; y las cuentas son de una sola empresa (PanaClaw). Quedan abiertas las de la sección 14.
 
 ## 1. Resumen en diez líneas
 
 1. La oficina gana **tres vistas** bajo la barra superior, como el Estudio y el Cerebro: **Calendario de contenido**, **Programación** y **Analíticas**. Las tres hablan con Meta (Instagram y Facebook).
 2. El calendario de tareas y rutinas (P) **no se toca en lo visible**. Su motor (la cuadrícula de mes, semana, día y agenda) se saca a un módulo puro, `calendar-core`, y el calendario de contenido lo reutiliza con otras tarjetas.
 3. Una **pieza** es una nota de texto (idea, caption, medios del Estudio, día, hora, redes). Su estado de publicación (en cola, publicando, publicada, falló) vive aparte, en `data/`, igual que en Juancito Ads.
-4. **Los agentes nunca publican.** Escriben borradores por una herramienta interna (`contenido`, como la del Estudio) que no puede aprobar ni programar. Publica el reloj de la oficina, y solo lo que el dueño aprobó.
+4. **Los agentes nunca publican ni programan.** Escriben borradores por una herramienta interna (`contenido`, como la del Estudio) que no puede aprobar ni programar. Solo lo que el dueño aprobó se entrega a Meta, **con su fecha y hora**, y es Meta quien lo publica: la oficina puede estar apagada a esa hora.
 5. Se trae de Juancito Ads lo que es **código puro** (reglas por red, planificación de la cola, cifras, hora sugerida, semanas) copiado con su procedencia y sus tests, y lo que habla con Meta (cliente de la Graph API, pasos de publicación, métricas) reescrito sobre archivos en vez de D1.
 6. Lo que **no** viene: varios espacios, roles, sockets, aprobación por un cliente externo, TikTok, auditorías e informes (estos dos últimos, en una fase tardía).
-7. **Meta desde una máquina local** tiene tres problemas reales: cómo se conecta sin un sitio público, de dónde baja Meta las imágenes, y qué pasa si el computador duerme a la hora de publicar. La propuesta resuelve los tres, y los marca como **por comprobar con la cuenta real**.
+7. **Meta desde una máquina local** tiene tres problemas reales: cómo se conecta sin un sitio público, de dónde baja Meta las imágenes, y qué pasa si el computador duerme. Con «la oficina programa, Meta dispara» el tercero casi desaparece; queda una pregunta por verificar: **¿deja Instagram programar por API?** (ver 9.3). Todo se marca como **por comprobar con la cuenta real**.
 8. Empieza en **modo simulacro**: todo funciona con un Meta de mentira (como el motor «Prueba» del Estudio) hasta que el dueño pone su token y pasa a «real» con dos toques.
 9. Seis fases. La primera (**F0**) es solo refactor, sin cambio visible; la segunda (**F1**) ya deja un calendario de contenido usable, sin Meta.
 10. Cada fase termina en `npm run check` en verde, con tests nuevos y con la vista probada a 390, 1024 y 1512 px.
@@ -51,7 +53,7 @@ Son módulos ESM sin dependencias, que en Juancito Ads importan igual el Worker 
 | Módulo de Juancito Ads | Líneas | En la oficina |
 |---|---|---|
 | `worker/lib/meta.js` | 259 | `contenido/meta.mjs`: cliente de la Graph API (versión fijada), traducción de errores de Meta a frases |
-| `worker/lib/publicador.js` | 750 | `contenido/publicador.mjs` y `cola.mjs`: los pasos, la reserva, «publicar es lo único que no se repite» |
+| `worker/lib/publicador.js` | 750 | `contenido/programador.mjs` y `cola.mjs`: los pasos para entregar la pieza a Meta con su hora, la reserva, «entregar es lo único que no se repite». Juancito Ads dispara con su cron; aquí Meta dispara |
 | `worker/lib/metricas.js` | 312 | `contenido/metricas.mjs`: foto diaria, cada grupo de métricas por su lado |
 
 ### Queda fuera
@@ -61,9 +63,9 @@ Varios espacios de trabajo y `owner_id`, D1, R2, Durable Object y socket (la ofi
 ## 4. Principios (no se negocian sin preguntar)
 
 1. **Los agentes no publican.** Ningún agente recibe una herramienta que apruebe, programe o publique. La herramienta interna `contenido` se agrega a `INTERNAL` en `safety.mjs` (como `estudio`) y un test comprueba que su lista de herramientas no contiene ningún verbo de envío.
-2. **Publica el reloj de la oficina, y solo lo aprobado.** El OK del dueño en la vista es el único paso que convierte una pieza en «aprobada». La cola solo toma piezas aprobadas, y un interruptor en Ajustes (`apagado`, `simulacro`, `real`) manda por encima.
+2. **La oficina programa; Meta publica; y solo lo aprobado se entrega.** El OK del dueño en la vista es el único paso que convierte una pieza en «aprobada». La cola solo entrega piezas aprobadas, y un interruptor en Ajustes (`apagado`, `simulacro`, `real`) manda por encima. Entregar a Meta **es** la decisión de publicar, así que se trata con el mismo cuidado que publicar.
 3. **La definición de la pieza y su estado de publicación son cosas distintas.** La nota describe lo que se quiere publicar; `data/contenido/cola.json` dice qué pasó. La vista junta las dos (igual que `cola.js` en Juancito Ads). Aprendido allí: el `status` del calendario no es la verdad de lo publicado.
-4. **Doble testigo de lo publicado.** Cuando Meta devuelve el id de una publicación, se guarda en la cola **y** en la cabecera de la nota. El publicador se niega a publicar una pieza cuya nota ya dice «publicada». Así, si `data/` se pierde o se restaura de una copia vieja, no se duplica nada en el perfil de la marca.
+4. **Doble testigo de lo entregado.** Cuando Meta devuelve el id de una publicación programada, se guarda en la cola **y** en la cabecera de la nota. El programador se niega a entregar una pieza cuya nota ya dice «en Meta». Así, si `data/` se pierde o se restaura de una copia vieja, no se duplica nada en el perfil de la marca.
 5. **Nada secreto se escribe en disco.** El token de Meta y las llaves del almacén de medios viven en variables de entorno de Windows. Los tokens de página se piden a Meta al usarlos y no se guardan.
 6. **Módulos nuevos, archivos grandes intactos.** `serve.mjs` (1.690 líneas), `src/main.js` (1.810) y `src/shell.html` (2.549) son los que más chocan entre el dueño y el equipo. Cada uno recibe solo unas pocas líneas de cableado; todo lo nuevo vive en módulos propios.
 7. **Simulacro primero.** Hasta que haya token, todo el circuito (aprobar, programar, «publicar», ver el resultado) corre contra un Meta de mentira. Lo mismo que el motor `prueba` del Estudio, y lo que permite probar sin arriesgar un perfil real.
@@ -76,7 +78,7 @@ Varios espacios de trabajo y `owner_id`, D1, R2, Durable Object y socket (la ofi
 contenido/                      (servidor, .mjs)
   piezas.mjs                    leer, escribir y validar las notas de pieza; estados; el doble testigo
   cola.mjs                      la cola: planificar, reservar, avanzar, cancelar, reintentar (data/contenido/cola.json)
-  publicador.mjs                los pasos de Instagram y Facebook; el modo apagado / simulacro / real
+  programador.mjs               entregar la pieza a Meta con su hora (Facebook e Instagram); el modo apagado / simulacro / real
   meta.mjs                      cliente de la Graph API y sus errores en español
   medios-publicos.mjs           poner un archivo donde Meta pueda bajarlo, y quitarlo después
   metricas.mjs                  la foto diaria de cada cuenta y de cada publicación (data/contenido/metricas/)
@@ -94,10 +96,10 @@ src/
   pieza.js                      el panel de una pieza, compartido por Contenido y Programación
   css/contenido.css, ...        el estilo de cada vista, fuera de shell.html (ver F0)
 tests/
-  contenido-*.test.mjs          piezas, reglas, cola, publicador con un Meta de mentira, métricas, MCP
+  contenido-*.test.mjs          piezas, reglas, cola, programador con un Meta de mentira, métricas, MCP
 ```
 
-El servidor hace tres cosas más, todas de una línea: importar `contenido/rutas.mjs`, llamar a `tickContenido()` desde el mismo reloj de un minuto que ya vigila las tareas fechadas, y añadir `data/contenido/` a `dailyBackup`.
+El servidor hace tres cosas más, todas de una línea: importar `contenido/rutas.mjs`, llamar a `tickContenido()` desde el mismo reloj de un minuto que ya vigila las tareas fechadas (ahora solo **entrega** lo que ya entró en la ventana de Meta y **vigila** lo entregado; ya no dispara), y añadir `data/contenido/` a `dailyBackup`.
 
 ### Dónde vive cada dato
 
@@ -146,7 +148,7 @@ Las tres siguen la regla V4.5: una vista más bajo la barra superior (`top: 52px
 La misma cuadrícula que el calendario de tareas (mes, semana, día, agenda), con otras tarjetas:
 
 - **Tarjeta de pieza:** miniatura a la izquierda (nada encima de la imagen), título y hora a la derecha, iconos de las redes y una etiqueta de estado. En el mes, una línea por pieza; en semana y día, con miniatura.
-- **Estados** (etiqueta con texto, nunca solo color): Idea · Borrador · En revisión · Aprobada · Programada · Publicando · Publicada · Falló · A mano.
+- **Estados** (etiqueta con texto, nunca solo color): Idea · Borrador · En revisión · Aprobada (por entregar) · En Meta (programada en la plataforma, con su hora) · Publicada (Meta ya la sacó) · Falló · A mano.
 - **Arrastrar una pieza a otro día** la mueve; si ya estaba programada, mueve también lo programado. Con teclado y en el teléfono: «Mover a…» en el panel, como en el Estudio.
 - **Filtros:** por red, por estado, por formato, por responsable; «Mías» y «Necesitan revisión».
 - **Barra de meses** `‹ Octubre 2026 › Hoy` y la agenda como vista del teléfono, por defecto por debajo de 760 px.
@@ -159,7 +161,7 @@ Lo operativo, en listas, no en fechas (la primera pantalla de `/programacion` de
 1. **Por revisar:** piezas en «En revisión», con «Aprobar todas» (dos clics, como en Aprobaciones).
 2. **Aprobadas, por programar:** lo aprobado que aún no está en la cola.
 3. **Lo que falló:** con el motivo en español y **Reintentar** o **Descartar**.
-4. **Lo que sale:** la cola por hora, con **Cancelar** y **Publicar ahora** (pide confirmar).
+4. **En Meta:** lo ya entregado, por hora de salida, con **Cambiar hora** y **Cancelar** (Facebook y Meta lo permiten por API; para Instagram, por verificar, ver 9.3) y **Publicar ahora** (pide confirmar).
 5. **Lo que salió:** con enlace a la publicación y sus primeras cifras.
 
 Arriba, tres contadores y el estado de las cuentas («Instagram: @marca · Facebook: Página · token vigente»). El icono de la vista lleva un número rojo cuando algo falló, como la luz de salud.
@@ -193,13 +195,18 @@ Escribe borradores  ── crear_borrador ──►  notas «borrador» en Conte
 El dueño abre Contenido: edita, cambia la hora, arregla lo que revisarPublicacion marca
    │  «Aprobar y programar»   ← el único paso humano que autoriza
    ▼
-La cola guarda la salida (estado: programada, con la hora)
+La cola guarda la salida (estado: aprobada, con su hora)
    ▼
-El reloj de la oficina (cada minuto)  ── tickContenido ──►  publicador
-   │  Facebook: publica o programa nativo · Instagram: contenedor → esperar → publicar
+El reloj de la oficina (cada minuto)  ── tickContenido ──►  programador
+   │  en cuanto la hora cae dentro de la ventana de Meta (y, si se quiere, N horas antes):
+   │  sube la imagen al bucket, crea la publicación programada en Facebook e Instagram
    │  el id que devuelve Meta se guarda ANTES que nada (cola + nota)
    ▼
-Publicada  ──►  aviso (y Telegram)  ──►  las cifras maduran  ──►  Analíticas
+En Meta  ── a su hora, Meta publica; la oficina puede estar apagada ──►  Publicada
+   │  (al encender, la oficina lo comprueba y borra la imagen del bucket)
+   ▼
+aviso (y Telegram)  ──►  las cifras maduran  ──►  Analíticas
+                              └──►  el Cerebro aprende qué notas dieron buen resultado
                                               └──►  el Cerebro aprende qué notas dieron buen resultado
 ```
 
@@ -224,12 +231,12 @@ Se habilita por departamento (`contenido.departments`, por defecto Marketing y D
 
 ## 8. Seguridad
 
-- **Tres candados independientes para publicar:** la pieza está `aprobada` por el dueño; el modo es `real` (o `simulacro`); y hay token válido. Si falta uno, no sale nada.
+- **Tres candados independientes para entregar a Meta:** la pieza está `aprobada` por el dueño; el modo es `real` (o `simulacro`); y hay token válido. Si falta uno, no se entrega nada.
 - **Topes:** Instagram permite 50 publicaciones cada 24 horas por cuenta; la cola consulta el límite de Meta antes de reservar y se detiene con un aviso, no con un error.
-- **Un solo publicador a la vez.** Una reserva por pieza (`reservadoHasta`, que caduca sola si el proceso muere a medias) y un cerrojo en `tickContenido` para que el doble clic de «Publicar ahora» o dos ticks seguidos no publiquen dos veces.
+- **Una sola entrega a la vez.** Una reserva por pieza (`reservadoHasta`, que caduca sola si el proceso muere a medias) y un cerrojo en `tickContenido` para que el doble clic de «Publicar ahora» o dos ticks seguidos no entreguen dos veces.
 - **Auditoría:** cada intento (permitido o no) queda en `data/audit/AAAA-MM-DD.jsonl`, como las llamadas de los agentes.
-- **Deshacer:** tras «Aprobar y programar» hay 30 segundos para deshacer, como en Aprobaciones.
-- **Lo que sale de la máquina:** solo los archivos de la pieza y su texto, a Meta y al almacén de medios. El almacén se vacía después de publicar.
+- **Deshacer y cuándo se entrega:** tras «Aprobar» hay 30 segundos para deshacer, como en Aprobaciones. Una vez en Meta, cambiarla o quitarla depende de lo que Meta deje por API, por eso la entrega no tiene por qué ser inmediata (ver 9.3, «cuándo se entrega»).
+- **Lo que sale de la máquina:** solo los archivos de la pieza y su texto, a Meta y al almacén de medios. El almacén se vacía cuando la oficina comprueba que Meta ya la publicó (o se quita a mano).
 - **Inyección:** lo que Meta devuelve (comentarios, textos de otras cuentas si algún día se leen) nunca se trata como orden; es dato.
 
 ## 9. Meta desde una máquina local
@@ -259,21 +266,34 @@ Facebook acepta el archivo subido directamente. **Instagram no**: pide una direc
 
 Instagram acepta además una subida por partes para los reels; si funciona con esta cuenta, evita el almacén para video. **Por verificar.** Las imágenes de Instagram siguen necesitando la dirección, y solo se aceptan en JPEG (el navegador las convierte al programar, como hace Juancito Ads).
 
-### 9.3 Qué pasa si el computador duerme a la hora de publicar
+### 9.3 La oficina programa, Meta publica (decisión del dueño)
 
-| Política | Cómo funciona |
-|---|---|
-| **A. Facebook nativo + Instagram por reloj, con ventana de tolerancia (recomendada)** | Facebook permite programar una publicación (`scheduled_publish_time`, entre 10 minutos y 30 días adelante), así que sale aunque el computador esté apagado. Instagram no lo permite por la API, así que sale a la hora si la oficina está despierta. Si se despierta más tarde, publica solo si pasaron menos de N minutos (por defecto 120, configurable); si pasaron más, marca «se perdió la hora», avisa (y Telegram) y espera una decisión del dueño |
-| B. Solo por reloj, como Juancito Ads | Todo sale cuando la oficina esté encendida y despierta | Lo más simple; una oficina dormida a las 9:00 es una publicación perdida |
-| C. Llevar el publicador a un servidor | El despliegue ya está preparado (`Dockerfile`, `railway.json`) | Bloqueado por el issue #2 (no hay inicio de sesión) y por decidir dónde viven los datos |
+El dueño decidió que **la oficina sea el puente que programa, no la que dispara**: se entrega cada pieza a Meta con su fecha y hora, y Meta la publica. Así el computador puede estar dormido a las 9:00 sin que se pierda nada, y el reloj de la oficina deja de ser lo que decide si algo sale.
 
-La ventana de tolerancia es lo mismo que ya hacen las rutinas («atrasadas», una vez). Una publicación tarde con el cliente esperando es peor que un aviso: por eso la política por defecto no publica «lo que sea» al despertar.
+| Red | ¿Se puede programar por la API? | Estado |
+|---|---|---|
+| **Facebook (Página)** | Sí: se crea la publicación sin publicar (`published=false`) con `scheduled_publish_time` (de 10 minutos a unos 30 días adelante), y se puede cambiar de hora o borrar por API | Conocido |
+| **Instagram** | **Por verificar.** Juancito Ads lo tiene anotado como «no se puede: la hora la cumple el cron». Varias guías de 2026 dicen que el contenedor acepta `scheduled_publish_time` (de 10 minutos a 75 días) y que Instagram publica solo. No pude abrir la documentación oficial de Meta desde esta sesión para confirmarlo. Si es cierto, la decisión del dueño se cumple entera. Si no, hay un plan B (abajo) | **Primera tarea de F3:** crear un contenedor programado en una cuenta de pruebas y ver si sale solo |
 
-**Una cuarta vía, para más adelante (F5):** el conector Metricool que los agentes de Marketing ya tienen programa en Instagram desde los servidores de Metricool, con el computador apagado. Se podría añadir como un segundo «conductor» detrás de la misma cola: el resto del sistema no se entera. Es de pago y es un tercero, así que **no** se propone de entrada; queda anotado porque el diseño lo permite sin cambios (`publicador.mjs` habla con una interfaz, no con Meta a secas).
+**Consecuencias de programar en Meta en vez de disparar:**
+
+1. **La oficina solo tiene que estar despierta una vez** dentro de la ventana de Meta, no a la hora exacta. Una pieza para el lunes a las 9:00 se puede entregar el viernes, el sábado o el lunes a las 8:40. Si la oficina se enciende dentro de esa ventana, sale; si no se encendió nunca en esa ventana, la pieza pasa a «Falló: no se pudo entregar a tiempo», con aviso (y Telegram).
+2. **La imagen debe seguir en el bucket hasta que Meta la haya descargado.** No se sabe si Meta la baja al crear la publicación programada o a la hora de salir. Hasta comprobarlo, se conserva hasta un rato después de la hora de salida y se borra cuando la oficina confirma que salió. Por verificar.
+3. **Cambiar o quitar algo ya entregado depende de Meta.** En Facebook, sí. En Instagram, por verificar: si la API no deja borrar un contenedor programado, «Cancelar» tendría que hacerse en Meta Business Suite y la pantalla lo dice tal cual, sin prometer lo que no puede. Por eso importa **cuándo** se entrega (siguiente punto).
+4. **Cuándo se entrega** (`contenido.entregarHorasAntes`): recomendado **24 horas antes** de la hora de salida, o en cuanto se aprueba si faltan menos. Hasta entonces la pieza es «Aprobada» y se edita y cancela sin límites; desde la entrega, solo lo que Meta permita. Alternativa: entregar en cuanto se aprueba (máxima tolerancia a un computador apagado, mínima libertad de cambiar). Se puede fijar por pieza.
+5. **El límite de 50 publicaciones cada 24 horas por cuenta** cuenta desde la entrega, no desde la hora de salida (por verificar): la cola lo consulta y se detiene con un aviso.
+
+**Plan B si Instagram no deja programar** (se decide cuando se sepa la respuesta, no antes):
+
+| Opción | Cómo funciona | Contra |
+|---|---|---|
+| Facebook programado por API + Instagram por reloj con ventana de tolerancia | Facebook sale siempre. Instagram sale a su hora si la oficina está despierta; si despierta tarde, publica solo si pasaron menos de N minutos (por defecto 120), y si no, avisa y espera una decisión | Instagram sigue dependiendo de que la oficina esté despierta |
+| Metricool como conductor de Instagram | El conector Metricool que los agentes de Marketing ya tienen programa en Instagram desde los servidores de Metricool, con el computador apagado. Se enchufa detrás de la misma cola: el resto del sistema no se entera (`programador.mjs` habla con una interfaz, no con Meta a secas) | De pago y es un tercero |
+| Entregar a Instagram a través del Worker de Juancito Ads | El Worker ya publica por su cron con el computador apagado; la oficina le pasaría la pieza | Acopla las dos apps; requiere tocar el otro repositorio |
 
 ### 9.4 Lo que ya se sabe de Meta (de Juancito Ads)
 
-Meta no deja programar Instagram por API; descarga los medios, no se le suben; Instagram solo publica JPEG; el token que caduca es el de la persona, no el de las páginas (y un token de usuario del sistema no caduca); publicar es un proceso de varios pasos y un reel no cabe en una vuelta, así que cada paso guarda su avance; **lo único que no se repite nunca es publicar**; las métricas cambian de nombre (`impressions` → `views`) y cada grupo se pide por su lado para que uno roto no tire la foto entera; Meta guarda pocos días de historia, así que la foto diaria es lo que permite comparar contra hace un mes.
+Juancito Ads da por hecho que Meta no deja programar Instagram por API (ver 9.3: se comprueba de nuevo, porque puede haber cambiado); Meta descarga los medios, no se le suben; Instagram solo publica JPEG; el token que caduca es el de la persona, no el de las páginas (y un token de usuario del sistema no caduca); publicar es un proceso de varios pasos y un reel no cabe en una vuelta, así que cada paso guarda su avance; **lo único que no se repite nunca es publicar** (aquí, entregar); las métricas cambian de nombre (`impressions` → `views`) y cada grupo se pide por su lado para que uno roto no tire la foto entera; Meta guarda pocos días de historia, así que la foto diaria es lo que permite comparar contra hace un mes.
 
 ## 10. Refactor del calendario
 
@@ -320,7 +340,7 @@ Atajos sugeridos, sin chocar con los actuales (E, P, G, O, N, T, `,`): **C** par
 | **F0** Refactor | `calendar-core.js` sacado de `calendar.js`; el estilo por vista fuera de `shell.html`; el dock con «⋯» en el teléfono. **Sin cambio visible** | `npm run check` en verde; capturas antes/después iguales a 390, 1024 y 1512 px; los 98 puntos de la auditoría del calendario siguen cumpliéndose |
 | **F1** Contenido sin Meta | Las piezas como notas; la vista Calendario de contenido con su panel; estados hasta «Aprobada»; el puente con el Estudio (incluida la protección de la papelera); `contenido-mcp` y la skill `plan-contenido`; la capa en el calendario P | Un agente escribe un borrador desde una rutina, el dueño lo edita y lo aprueba; todo probado en demo; los tests de reglas portados |
 | **F2** Meta, solo lectura | Cliente de la Graph API; cuentas visibles; la vista Analíticas; fotos diarias; KPI al panel del negocio; Ajustes → Redes con el estado del token | Con el token real: se ven las cuentas, la foto diaria se guarda y las cifras coinciden con las que muestra Meta |
-| **F3** Programación | La cola y el publicador; la vista Programación; **primero Facebook**, luego Instagram (post, carrusel, reel) y las historias; modo `simulacro` y modo `real`; la ventana de tolerancia; avisos y Telegram; el doble testigo | Una publicación de prueba **real** sale en una cuenta de pruebas de cada red, y una segunda vuelta del reloj no la duplica |
+| **F3** Programación | La cola y el programador; la vista Programación; **primero verificar con una cuenta de pruebas** si Instagram acepta `scheduled_publish_time` y si se puede cambiar o borrar lo entregado; **luego Facebook**, Instagram (post, carrusel, reel) y las historias; modo `simulacro` y modo `real`; la ventana de Meta y `entregarHorasAntes`; avisos y Telegram; el doble testigo | Una publicación de prueba **real** queda programada en una cuenta de pruebas de cada red, **con la oficina apagada** sale a su hora, y una segunda vuelta del reloj no la duplica |
 | **F4** Aprender | Hora sugerida; las cifras alimentan las sinapsis del Cerebro; `ver_analiticas` para los agentes; Dimitri y el resumen del lunes hablan de contenido | Un agente propone una hora respaldada por datos y lo dice |
 | **F5** Después | TikTok, informes mensuales, aprobación por un cliente externo, un segundo conductor (Metricool), competencia | Solo si el dueño lo pide |
 
@@ -328,25 +348,31 @@ F0 y F1 no necesitan ninguna llave. F2 necesita el token de Meta. F3, además, e
 
 ## 13. Riesgos y lo que no se ha comprobado
 
-- **Nada de esta propuesta se ha probado contra Meta desde esta máquina.** Todo lo que se sabe de Meta viene de Juancito Ads, que lo vive en producción, pero con otra conexión (OAuth de la agencia). El token de usuario del sistema, los permisos exactos que pide y la subida por partes de reels desde una máquina local se verifican en F2 y F3 con una cuenta real y una publicación de prueba.
+- **Nada de esta propuesta se ha probado contra Meta desde esta máquina.** Todo lo que se sabe de Meta viene de Juancito Ads, que lo vive en producción, pero con otra conexión (OAuth de la agencia). El token de usuario del sistema, los permisos exactos que pide, la programación de Instagram por API y la subida por partes de reels desde una máquina local se verifican en F2 y F3 con una cuenta real y una publicación de prueba.
 - **Copiar código crea dos copias.** Es la razón de los comentarios de procedencia y de copiar también los tests. Si algún día las dos apps deben compartir el módulo, el paso siguiente es sacarlo a un paquete; hoy no compensa (son ~1.200 líneas puras).
-- **La oficina dormida.** La política de 9.3 reduce el daño; no lo quita en Instagram.
+- **Instagram y la programación por API no están confirmados.** Si Instagram no la admite, Instagram queda con el plan B de 9.3 (y una oficina dormida a la hora es una publicación perdida o tardía en esa red).
+- **Lo entregado a Meta se puede editar poco.** Si la API de Instagram no borra contenedores programados, una pieza entregada por error solo se quita en Meta Business Suite. Por eso la entrega no es inmediata por defecto y por eso «Aprobar» tiene 30 segundos de deshacer.
+- **La imagen debe vivir en el bucket hasta que Meta la use.** Borrarla antes podría dejar una publicación programada sin imagen. Se comprueba en F3 antes de dar por buena la limpieza automática.
 - **Perder `data/`.** El doble testigo evita duplicados; lo que se pierde es la cola (y con ella lo programado). Por eso `data/contenido/` entra en `dailyBackup` y las escrituras son atómicas (escribir a un temporal y renombrar, como hace `build.mjs`).
 - **`emptyBins` y los archivos usados por una pieza.** Si se olvida la marca `usadoEn`, la papelera se llevará una imagen programada. Lleva su test.
 - **Cambios de versión de la Graph API.** La versión se fija en `meta.mjs` y las métricas que Meta retire se ven como «no disponible», no como fallo total.
 - **Los archivos que chocan.** F0 y el cableado tocan `serve.mjs`, `src/main.js` y `src/shell.html`. Se avisa antes.
 - **El repositorio puede ser público.** Cualquier cosa nueva que se añada a `git` se revisa contra `npm run secrets`, y las piezas van en carpetas ignoradas.
 
-## 14. Decisiones abiertas
+## 14. Decisiones
 
-Las cuatro primeras cambian lo que se construye; las demás están recomendadas y se cambian con una frase.
+### Tomadas por el dueño (30 sep 2026)
 
-1. **Botones del dock.** Recomendado: **dos** («Contenido», con Calendario y Programación como dos modos dentro de la misma vista, y «Analíticas» aparte). Alternativas: tres botones separados, o uno solo con pestañas.
-2. **Cómo llegan las imágenes a Instagram.** Recomendado: un bucket público de R2 propio de la oficina. Alternativas: un túnel, o pasar por el Worker de Juancito Ads.
-3. **Si el computador duerme a la hora de publicar.** Recomendado: Facebook nativo, Instagram por reloj con una ventana de tolerancia. Alternativas: solo reloj, o un servidor.
-4. **A quién pertenecen las cuentas.** Recomendado: una sola empresa (PanaClaw) con sus cuentas de Meta. Alternativa: varias marcas, con la pieza etiquetada por marca (más piezas de interfaz y de permisos).
-5. **Dónde viven las piezas.** Recomendado: notas en `Agents Office/contenido/` (no viajan por GitHub) con el estado aparte. Alternativa: un JSON en `data/`, sin notas.
-6. **Cómo se trae el código de Juancito Ads.** Recomendado: copiar con procedencia y tests. Alternativa: un paquete compartido.
-7. **El motor del calendario.** Recomendado: `calendar-core` puro, con las capturas de antes y después. Alternativa: dejar `calendar.js` como está y hacer el de contenido aparte (más rápido hoy, dos motores para siempre).
-8. **Modo por defecto.** Recomendado: `simulacro`. `real` solo cuando el dueño lo encienda.
-9. **Metricool como segundo conductor.** Recomendado: solo anotado, para F5.
+1. **Botones del dock:** **dos** — «Contenido» (con Calendario y Programación como dos modos de la misma vista, que comparten el panel de la pieza) y «Analíticas» aparte.
+2. **Imágenes para Instagram:** un **bucket público de R2** propio de la oficina.
+3. **Quién dispara:** **la oficina programa en Meta y Meta publica**, en las dos redes; la oficina es el puente. Instagram por API está por verificar (9.3).
+4. **Cuentas:** **una sola empresa (PanaClaw)**.
+
+### Abiertas (recomendadas; se cambian con una frase)
+
+5. **Cuándo se entrega a Meta.** Recomendado: 24 horas antes de la hora de salida (o al aprobar, si faltan menos), para poder editar y cancelar hasta entonces. Alternativa: en cuanto se aprueba.
+6. **Dónde viven las piezas.** Recomendado: notas en `Agents Office/contenido/` (no viajan por GitHub) con el estado aparte. Alternativa: un JSON en `data/`, sin notas.
+7. **Cómo se trae el código de Juancito Ads.** Recomendado: copiar con procedencia y tests. Alternativa: un paquete compartido.
+8. **El motor del calendario.** Recomendado: `calendar-core` puro, con las capturas de antes y después. Alternativa: dejar `calendar.js` como está y hacer el de contenido aparte (más rápido hoy, dos motores para siempre).
+9. **Modo por defecto.** Recomendado: `simulacro`. `real` solo cuando el dueño lo encienda.
+10. **Plan B de Instagram** (solo si no deja programar): se decide cuando se sepa la respuesta.
