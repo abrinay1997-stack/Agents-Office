@@ -276,7 +276,11 @@ const CATALOG = [
     fal: j => j.m.start[0] ? { path: 'fal-ai/veo3/fast/image-to-video', body: { prompt: j.prompt, image_url: j.m.start[0], duration: '8s', generate_audio: j.s.generateAudio } } : { path: 'fal-ai/veo3/fast', body: { prompt: j.prompt, aspect_ratio: j.s.aspectRatio, duration: '8s', generate_audio: j.s.generateAudio } } },
   { id: 'prueba-video', engine: 'prueba', kind: 'video', name: 'Prueba de video (gratis)', cost: 0, note: 'Una tarjeta en lugar del video: prueba el flujo (Animar, fotogramas) sin gastar.', roles: { start: 1, end: 1, reference: 8, video: 1 }, settings: { aspectRatio: E(VID_ASPECT, '16:9'), duration: R(3, 15, 5) } },
 ];
-const PREFER = { image: ['nano-banana-2', 'nano-banana', 'muse-image', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image'], video: ['kling-3-std', 'veo-3.1-fast', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal'] };
+// V4.9 (30 Sep 2026): the models that EDIT an image (the image goes in as a reference, an instruction says what changes), best first —
+// «Editar» in the Estudio and Dimitri's edits use them; the original is never touched, the result is a new version beside it
+const EDIT_MODELS = ['nano-banana-2', 'nano-banana-pro', 'nano-banana', 'muse-image', 'gpt-image-1', 'qwen-image-3', 'grok-imagine-2', 'flux-kontext', 'seedream-4', 'nano-banana-fal'];
+for (const x of CATALOG) if (EDIT_MODELS.includes(x.id)) x.edit = true;
+const PREFER = { edit: EDIT_MODELS, image: ['nano-banana-2', 'nano-banana', 'muse-image', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image'], video: ['kling-3-std', 'veo-3.1-fast', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal'] };
 
 /* V4.4 (27 Sep 2026): what the model picker sorts and filters by — who makes it, its quality tier (1 básica · 2 buena ·
    3 alta · 4 la mejor), how fast it answers, and what it is good for. A model not listed here gets its engine as maker and
@@ -382,7 +386,12 @@ export function setHooks(h = {}) { hooks = { ...hooks, ...h }; }
 export const model = id => MODELS.find(x => x.id === id) || null;
 /** The catalog as the page and the agents see it (no functions), each model marked on/off by its engine's key. */
 export function models() {
-  return MODELS.map(x => ({ id: x.id, engine: x.engine, engineName: ENGINES[x.engine].name, kind: x.kind, name: x.name, note: x.note || '', cost: x.cost, per: x.per || 'item', seconds: x.seconds || null, roles: x.roles || {}, needs: x.needs || [], settings: x.settings || {}, on: engineOn(x.engine), ...(x.legacy ? { legacy: true } : {}), ...infoOf(x) }));
+  return MODELS.map(x => ({ id: x.id, engine: x.engine, engineName: ENGINES[x.engine].name, kind: x.kind, name: x.name, note: x.note || '', cost: x.cost, per: x.per || 'item', seconds: x.seconds || null, roles: x.roles || {}, needs: x.needs || [], settings: x.settings || {}, on: engineOn(x.engine), ...(x.legacy ? { legacy: true } : {}), ...(x.edit ? { edit: true } : {}), ...infoOf(x) }));
+}
+/** The models that can edit an image right now (their engine has its key), best first. */
+export function editModels() {
+  const rank = id => { const i = PREFER.edit.indexOf(id); return i < 0 ? 99 : i; };
+  return models().filter(m => m.on && m.edit && m.kind === 'image' && (m.roles.reference || 0) >= 1).sort((a, b) => rank(a.id) - rank(b.id));
 }
 export function engines() {
   return Object.entries(ENGINES).map(([id, e]) => ({ id, name: e.name, on: engineOn(id), env: e.env, site: e.site || null, how: e.how || (e.env ? `setx ${e.env} "tu-key"` : null), models: MODELS.filter(x => x.engine === id).length }));
@@ -868,6 +877,17 @@ const jid = () => 'j' + Date.now().toString(36) + Math.random().toString(36).sli
 const pub = j => { const { remote, cancel, ...rest } = j; return { ...rest, remote: remote ? remote.length : 0, modelName: model(j.model)?.name || j.model, engineName: ENGINES[j.engine]?.name || j.engine }; };
 export function jobs({ task, active } = {}) { return JOBS.filter(j => (!task || j.task === task) && (!active || j.state === 'queued' || j.state === 'running')).slice().reverse().map(pub); }
 export const job = id => { const j = JOBS.find(x => x.id === id); return j ? pub(j) : null; };
+/* V4.9 (30 Sep 2026): the trail a job leaves — who asked ('you' · 'agent' · 'dimitri'), the gallery file it is a new version of,
+   Dimitri's message and creative, what it is for, the Brain's notes read to make it. Saved in the job and in each file's record. */
+const BY = ['you', 'agent', 'dimitri'];
+function trail(req) {
+  const extra = {};
+  if (req.versionOf != null) { const v = String(req.versionOf).replace(/\\/g, '/'); if (!resolve(v)) throw new Error(`no encuentro «${v}» en el Estudio para hacer una versión`); extra.versionOf = v; }
+  if (req.sub && typeof req.sub === 'object' && typeof req.sub.msg === 'string' && /^[a-z0-9_-]{1,40}$/i.test(req.sub.msg) && Number.isInteger(+req.sub.i) && +req.sub.i >= 0) extra.sub = { msg: req.sub.msg, i: +req.sub.i };
+  if (typeof req.purpose === 'string' && req.purpose.trim()) extra.purpose = req.purpose.replace(/[\x00-\x1f]/g, ' ').trim().slice(0, 200);
+  if (Array.isArray(req.read)) { const r = [...new Set(req.read.filter(x => typeof x === 'string').map(x => x.replace(/[\x00-\x1f\[\]]/g, '').trim().slice(0, 160)).filter(Boolean))].slice(0, 20); if (r.length) extra.read = r; }
+  return { by: BY.includes(req.by) ? req.by : 'you', extra };
+}
 /** Queue a generation. Checks everything up front (model, key, prompt, media, budget) so a bad request fails at once. */
 export function submit(req = {}) {
   const kind = req.kind === 'video' ? 'video' : 'image';
@@ -893,7 +913,8 @@ export function submit(req = {}) {
     if (b.costLeftDay != null && est > b.costLeftDay + 1e-9) throw new Error(`presupuesto del día del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftDay)} de ${usd(b.dailyBudget)} (cámbialo en Ajustes → Estudio)`);
     if (b.costLeftMonth != null && est > b.costLeftMonth + 1e-9) throw new Error(`presupuesto del mes del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftMonth)} de ${usd(b.monthlyBudget)} (cámbialo en Ajustes → Estudio)`);
   }
-  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: req.by === 'agent' ? 'agent' : 'you', agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined }; // V4.6: generated inside a folder, it lands there
+  const tr = trail(req); // V4.9: who asked (Dimitri too), what for, what it read, which picture it is a version of
+  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra }; // V4.6: generated inside a folder, it lands there
   JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
   return pub(j);
 }
@@ -905,7 +926,7 @@ async function runJob(j) {
   running++; j.state = 'running'; j.startedAt = j.startedAt || Date.now(); j.note = j.remote?.length ? 'retomando tras el reinicio' : 'enviando'; saveJobs();
   const m = model(j.model);
   const ctx = { save: saveJobs, add: (buf, ext, extra = {}) => {
-    const it = store(buf, ext, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...extra });
+    const it = store(buf, ext, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...(j.versionOf ? { versionOf: j.versionOf } : {}), ...(j.sub ? { sub: j.sub } : {}), ...(j.purpose ? { purpose: j.purpose } : {}), ...(j.read ? { read: j.read } : {}), ...extra });
     j.items.push(it.file); saveJobs(); return it;
   } };
   try {
@@ -919,6 +940,7 @@ async function runJob(j) {
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${e.message}`);
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
+  if (j.versionOf && j.items.length) { try { const o = item(j.versionOf); if (o) update(j.versionOf, { versions: [...new Set([...(Array.isArray(o.versions) ? o.versions : []), ...j.items])] }); } catch (e) { console.warn('estudio versions:', e.message); } } // V4.9: the original's record lists its versions; its file is never touched
   if (j.engine !== 'prueba' && j.items.length) spend(j.kind === 'video' ? 'videos' : 'images', j.items.length, j.cost);
   if (j.remote && j.state === 'done') delete j.remote; else if (j.remote && j.cancel) delete j.remote;
   saveJobs(); running--;
@@ -946,7 +968,7 @@ export function cancel(id) {
   }
   return pub(j);
 }
-export function retry(id) { const j = JOBS.find(x => x.id === id); if (!j) return null; return submit({ model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, by: j.by, agent: j.agent, task: j.task, retryOf: j.id }); }
+export function retry(id) { const j = JOBS.find(x => x.id === id); if (!j) return null; return submit({ model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, by: j.by, agent: j.agent, task: j.task, retryOf: j.id, folder: j.folder, versionOf: j.versionOf, sub: j.sub, purpose: j.purpose, read: j.read }); }
 export function forget(id) { const i = JOBS.findIndex(x => x.id === id && (x.state === 'done' || x.state === 'failed')); if (i < 0) return false; JOBS.splice(i, 1); saveJobs(); return true; }
 export function markAttached(id) { const j = JOBS.find(x => x.id === id); if (j) { j.attached = true; saveJobs(); } }
 
@@ -958,3 +980,68 @@ export async function generate(req) {
   const items = done.items.map(f => item(f)).filter(Boolean);
   return { items, cost: done.cost, budget: budget(), job: done };
 }
+
+/* ---------- V4.9 (30 Sep 2026): edit a picture — a new version beside it, the original never touched ---------- */
+const RATIOS = ['1:1', '4:5', '5:4', '3:4', '4:3', '2:3', '3:2', '9:16', '16:9', '21:9', '1:4', '4:1', '1:8', '8:1'];
+/** The ratio of a gallery file: the one it was generated at, or the closest to its size (within 3 %), or null. */
+export function ratioOf(it) {
+  if (it?.ratio && RATIOS.includes(it.ratio)) return it.ratio;
+  if (!(it?.w > 0 && it?.h > 0)) return null;
+  let best = null, d = Infinity;
+  for (const x of RATIOS) { const [a, b] = x.split(':').map(Number), e = Math.abs(Math.log((it.w / it.h) / (a / b))); if (e < d) { d = e; best = x; } }
+  return d < 0.03 ? best : null;
+}
+/** The request for submit() that edits `file` with `instruction`: the model asked for if it edits, else the best one on; the
+ *  original's ratio when the model has it; its folder; the original as the reference; versionOf. No edit engine on → an Error
+ *  with code 'no-edit-engine' and the engines that would edit, with how to turn each on. */
+export function editRequest({ file, instruction, model: want } = {}) {
+  const id = String(file || '').replace(/\\/g, '/'), it = resolve(id) ? item(id) : null;
+  if (!it) throw new Error('no encuentro esa imagen en el Estudio');
+  if ((it.kind && it.kind !== 'image') || /\.(mp4|webm|mp3|wav)$/i.test(id)) throw new Error('solo se puede editar una imagen');
+  const text = String(instruction || '').trim(); if (!text) throw new Error('di qué quieres cambiar de la imagen');
+  if (text.length > 4000) throw new Error('la instrucción es muy larga (máx. 4000)');
+  const list = editModels();
+  if (!list.length) {
+    const e = new Error('ningún motor que edita imágenes tiene key todavía: activa uno y reinicia la oficina');
+    e.code = 'no-edit-engine'; e.engines = engines().filter(x => x.id !== 'prueba' && MODELS.some(m => m.engine === x.id && m.edit)).map(x => ({ id: x.id, name: x.name, how: x.how }));
+    throw e;
+  }
+  const m = list.find(x => x.id === want) || list[0], r = ratioOf(it), f = m.settings.aspectRatio;
+  return { kind: 'image', model: m.id, prompt: text, n: 1, settings: r && f?.values?.includes(r) ? { aspectRatio: r } : {}, media: { reference: [id] }, versionOf: id, by: 'you', ...(it.folder ? { folder: it.folder } : {}) };
+}
+
+/* ---------- V4.9: the trail in the Brain and in the memory ----------
+   A real job by Dimitri or an agent, or an edit, leaves a note: <brain>/Agents Office/estudio/YYYY-MM/<YYYY-MM-DD> <slug> <hhmmss>.md
+   (inside «Agents Office/», so it never travels through GitHub, like the deliverables), and each file's record names it. */
+export const needsNote = j => !!j && j.state === 'done' && Array.isArray(j.items) && j.items.length > 0 && j.engine !== 'prueba' && (j.by === 'dimitri' || j.by === 'agent' || !!j.versionOf);
+const yml = v => JSON.stringify(String(v)); // a quoted YAML scalar: a prompt or a name never breaks the front matter
+/** Writes the note of a finished job (once) and returns its name, or null when the job leaves none. */
+export function writeStudioNote(j, now = new Date()) {
+  if (!needsNote(j) || !root) return null;
+  const had = item(j.items[0])?.note; if (had) return had; // once per job
+  const p2 = x => String(x).padStart(2, '0'), sub = `${now.getFullYear()}-${p2(now.getMonth() + 1)}`, day = `${sub}-${p2(now.getDate())}`, hms = p2(now.getHours()) + p2(now.getMinutes()) + p2(now.getSeconds());
+  const folder = path.join(path.dirname(root), 'estudio', sub); fs.mkdirSync(folder, { recursive: true });
+  const base = `${day} ${slug(j.prompt)} ${hms}`; let name = base; for (let n = 2; fs.existsSync(path.join(folder, name + '.md')); n++) name = `${base}-${n}`;
+  const fname = j.folder ? folderOf(j.folder)?.name || '' : '', src = f => '/media/' + f.split('/').map(encodeURIComponent).join('/');
+  const fm = ['---', 'kind: creativo', `model: ${yml(j.model)}`, `by: ${j.by}`, ...(j.agent ? [`agent: ${yml(j.agent)}`] : []), ...(j.task ? [`task: ${yml(j.task)}`] : []),
+    `folder: ${yml(fname)}`, `purpose: ${yml(j.purpose || '')}`, ...(j.versionOf ? [`versionOf: ${yml(j.versionOf)}`] : []), 'files:', ...j.items.map(f => `  - ${yml(f)}`), `date: ${day}`, '---'];
+  const who = j.by === 'dimitri' ? 'Dimitri' : j.by === 'agent' ? `el agente ${j.agent || ''}`.trim() : 'el dueño';
+  const body = [`# ${String(j.prompt).replace(/\s+/g, ' ').slice(0, 90)}`, '',
+    `${j.versionOf ? 'Versión editada' : 'Creativo'} del Estudio, pedido por ${who}, con ${j.modelName || j.model}${fname ? ` · carpeta «${fname}»` : ''}${j.purpose ? ` · para: ${j.purpose}` : ''}.`, '',
+    '## Prompt', String(j.prompt), '', ...(j.versionOf ? ['## Original', `![](${src(j.versionOf)})`, ''] : []),
+    '## Archivos', ...j.items.map(f => /\.(mp4|webm)$/i.test(f) ? `[▶ ${f.split('/').pop()}](${src(f)})` : `![](${src(f)})`), '',
+    ...(j.read?.length ? [`Read: ${j.read.map(n => `[[${n}]]`).join(' · ')}`, ''] : [])];
+  fs.writeFileSync(path.join(folder, name + '.md'), [...fm, '', ...body].join('\n'));
+  for (const f of j.items) { try { update(f, { note: name }); } catch {} }
+  return name;
+}
+/** What the memory learns from one gallery file (r: 1 used or ⭐, 0 thrown away unused), or null when it read no note. Its id is
+ *  'm:' + the file, so memory.reinforce counts it once and a new verdict replaces the old one. */
+export function learnArgs(file, r) {
+  const it = item(file); if (!it || !Array.isArray(it.read) || !it.read.length) return null;
+  return { id: 'm:' + it.file, r: Math.max(0, Math.min(1, +r || 0)), cited: it.read, read: it.read };
+}
+/** A file the owner used (as a reference, in a piece, on the calendar): its record says how. */
+const USES = ['ref', 'pieza', 'calendario'];
+export function markUsed(file, how) { if (!USES.includes(how)) return null; const it = item(file); if (!it) return null; return update(file, { used: [...new Set([...(Array.isArray(it.used) ? it.used : []), how])] }); }
+export const wasUsed = it => !!it && (it.fav === true || (Array.isArray(it.used) && it.used.length > 0));
