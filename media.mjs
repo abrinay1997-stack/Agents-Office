@@ -470,6 +470,7 @@ function store(buf, ext, meta) {
   const rel = `${sub}/${name}.${ext}`, wh = dims(buf, ext);
   const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : ext === 'mp3' || ext === 'wav' ? 'audio' : 'image', ext, at: Date.now(), ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
   fs.writeFileSync(path.join(folder, name + '.json'), JSON.stringify(item, null, 2));
+  idxPut(sub, { ...item });
   return item;
 }
 /* ---------- V4.6 (27 Sep 2026, the owner): folders to organise the gallery ----------
@@ -480,7 +481,7 @@ function readFolders() { try { const j = JSON.parse(fs.readFileSync(foldersFile(
 function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ folders: l }, null, 1)); fs.renameSync(f + '.tmp', f); }
 const cleanName = n => String(n ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
 /** The folders, with how many files each holds (the ones in the bin do not count). */
-export function folders(items = list()) {
+export function folders(items = all()) {
   const count = new Map(); for (const it of items) if (it.folder) count.set(it.folder, (count.get(it.folder) || 0) + 1);
   return readFolders().map(f => ({ ...f, n: count.get(f.id) || 0 }));
 }
@@ -501,7 +502,7 @@ export function renameFolder(id, name) {
 /** The folder goes; its files stay, with no folder. → how many files it held */
 export function removeFolder(id) {
   const l = readFolders(); if (!l.some(f => f.id === id)) throw new Error('esa carpeta ya no existe');
-  let n = 0; for (const it of list()) if (it.folder === id) { update(it.file, { folder: null }); n++; }
+  let n = 0; for (const it of all()) if (it.folder === id) { update(it.file, { folder: null }); n++; } // the whole gallery, never just its first 600
   writeFolders(l.filter(f => f.id !== id)); return n;
 }
 /** Files into a folder (null: out of any folder). → how many moved */
@@ -510,17 +511,49 @@ export function moveTo(files, folder) {
   let n = 0; for (const id of (Array.isArray(files) ? files : []).slice(0, 2000)) if (typeof id === 'string' && update(id, { folder: folder || null })) n++;
   return n;
 }
-/** Everything in the studio, newest first (reads the .json sidecars). */
-export function list({ limit = 600 } = {}) {
-  const out = [];
-  if (!root || !fs.existsSync(root)) return out;
-  for (const sub of fs.readdirSync(root).filter(x => /^\d{4}-\d{2}$/.test(x)).sort().reverse()) {
-    for (const f of fs.readdirSync(path.join(root, sub)).filter(x => x.endsWith('.json'))) {
-      try { const it = JSON.parse(fs.readFileSync(path.join(root, sub, f), 'utf8')); if (fs.existsSync(path.join(root, it.file))) out.push(it); } catch {}
-    }
-    if (out.length >= limit) break;
+/* Auditoría 1 oct 2026 (INF-02): the gallery lives in memory. Every GET /api/media read every .json sidecar TWICE
+   (list() and folders()) with sync I/O on the server's one thread: 600 files froze the whole office for seconds. Now each
+   month folder is read once and kept with its folder's mtime; a month is read again only when that mtime moves (a file
+   added, removed or renamed from outside, e.g. in the Explorer), and the office's own writes patch the index in place.
+   The API is the same: list() hands back copies, never the index's own objects. */
+const MONTH_RE = /^\d{4}-\d{2}$/;
+let IDX = { root: '', months: new Map(), sorted: null };
+const mtimeOf = d => { try { return fs.statSync(d).mtimeMs; } catch { return -1; } };
+function scanMonth(sub) {
+  const dir = path.join(root, sub), items = new Map();
+  let names = []; try { names = fs.readdirSync(dir); } catch { return items; }
+  for (const f of names) {
+    if (!f.endsWith('.json')) continue;
+    try { const it = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (it && typeof it.file === 'string' && fs.existsSync(path.join(root, it.file))) items.set(it.file, it); } catch {}
   }
-  return out.sort((a, b) => b.at - a.at).slice(0, limit);
+  return items;
+}
+function index() {
+  if (IDX.root !== root) IDX = { root, months: new Map(), sorted: null };
+  if (!root || !fs.existsSync(root)) { if (IDX.months.size || !IDX.sorted) { IDX.months.clear(); IDX.sorted = []; } return IDX; }
+  const subs = fs.readdirSync(root).filter(x => MONTH_RE.test(x));
+  for (const k of [...IDX.months.keys()]) if (!subs.includes(k)) { IDX.months.delete(k); IDX.sorted = null; }
+  for (const sub of subs) {
+    const mt = mtimeOf(path.join(root, sub)), cur = IDX.months.get(sub);
+    if (!cur || cur.mtime !== mt) { IDX.months.set(sub, { mtime: mt, items: scanMonth(sub) }); IDX.sorted = null; }
+  }
+  if (!IDX.sorted) IDX.sorted = [...IDX.months.values()].flatMap(m => [...m.items.values()]).sort((a, b) => b.at - a.at);
+  return IDX;
+}
+/** The office wrote into this month itself: patch the index and take the folder's new mtime, so it is not read again. */
+function idxPut(sub, it) {
+  if (IDX.root !== root) return; const m = IDX.months.get(sub); if (!m) return; // not indexed yet: the next read builds it
+  if (it) m.items.set(it.file, it); m.mtime = mtimeOf(path.join(root, sub)); IDX.sorted = null;
+}
+function idxDrop(file) {
+  const sub = String(file).slice(0, 7); if (IDX.root !== root) return; const m = IDX.months.get(sub); if (!m) return;
+  m.items.delete(file); m.mtime = mtimeOf(path.join(root, sub)); IDX.sorted = null;
+}
+/** The whole gallery (copies), for counting and for changes that must reach every file, not one page. */
+const all = () => index().sorted.map(it => ({ ...it }));
+/** Everything in the studio, newest first (from the in-memory index of the .json sidecars). */
+export function list({ limit = 600 } = {}) {
+  return index().sorted.slice(0, limit).map(it => ({ ...it }));
 }
 const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav)$/i; // V4.8: audio too, for Muse Spark to transcribe
 /** A path inside the studio, or null (never outside it: the id comes from the request). */
@@ -530,13 +563,14 @@ export function resolve(id) {
   const p = path.join(root, rel); return fs.existsSync(p) ? p : null;
 }
 export function item(id) { const p = resolve(id); if (!p) return null; try { return JSON.parse(fs.readFileSync(p.replace(/\.[^.]+$/, '.json'), 'utf8')); } catch { return null; } }
-export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j, JSON.stringify(it, null, 2)); return it; }
+export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j, JSON.stringify(it, null, 2)); if (typeof it.file === 'string') idxPut(it.file.slice(0, 7), { ...it }); return it; }
 /** To <media>/.papelera (emptied after 30 days). Returns what `restore` needs to bring it back, or null. */
 export function trash(id) {
   const p = resolve(id); if (!p) return null;
   const bin = path.join(root, '.papelera'); fs.mkdirSync(bin, { recursive: true });
   const stamp = Date.now(), names = [];
   for (const f of [p, p.replace(/\.[^.]+$/, '.json')]) if (fs.existsSync(f)) { const nm = `${stamp}-${path.basename(f)}`, to = path.join(bin, nm); fs.renameSync(f, to); try { fs.utimesSync(to, new Date(stamp), new Date(stamp)); } catch {} names.push(nm); } // dated the day it went in: the 30 days count from here
+  idxDrop(String(id).replace(/\\/g, '/'));
   return { id: String(id).replace(/\\/g, '/'), bin: names };
 }
 export function restore({ id, bin } = {}) {
@@ -553,6 +587,8 @@ export function restore({ id, bin } = {}) {
   }
   fs.mkdirSync(folder, { recursive: true });
   for (const [from, to] of moves) fs.renameSync(from, to);
+  let back = null; try { back = JSON.parse(fs.readFileSync(path.join(folder, stem + '.json'), 'utf8')); } catch {}
+  idxPut(path.dirname(rel), back && back.file === rel ? back : null);
   return true;
 }
 /* V4.4 (25 Sep 2026): the bin, seen from the page — what is in it, its picture, how many days it has left, back or gone for good */
