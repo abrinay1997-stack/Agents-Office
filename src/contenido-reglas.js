@@ -8,6 +8,10 @@
 //   · momentoPublicacion pasó a llamarse `momentoLocal`: allí la hora es Panamá fijo (UTC−5); aquí es la del reloj de esta máquina.
 //     `momentoDeVariante` (la historia sale unos minutos después del post) usa la nueva
 //   · se añadió `postDePieza`, que traduce una pieza de la oficina (nota con cabecera) a la forma que estas funciones esperan
+//   · (1 oct 2026, auditoría CON-03/PRE-02) los medios llevan sus MEDIDAS (`medidaDeItem`, del registro .json del Estudio): sin ellas
+//     ninguna regla de proporción ni de duración se disparaba. Con ellas: la duración del reel (3 s a 15 min) y de la historia (60 s),
+//     la proporción de la historia (9:16, aviso) y la del feed (error con su arreglo, porque aquí todavía nada la ajusta sola: F3).
+//     El aviso del JPEG dice la verdad (la conversión aún no existe). `revisarMomento` (CON-06): con hora, y en el futuro.
 // Los campos siguen llamándose como allá (format, medios, descripcion, hashtagsFinales…) para poder comparar un archivo con el otro.
 // Lo importan el navegador (el panel de la pieza) y el servidor (la cola de programación, en F3).
 // Cubierto por tests/contenido-reglas.test.mjs, que trae los casos de src/lib/publicacion.test.js de allá.
@@ -15,7 +19,7 @@
 
 /** Límites de cada red que hacen fallar una publicación si se pasan. */
 export const LIMITES = Object.freeze({
-  instagram: { caracteres: 2200, hashtags: 30, menciones: 20, carruselMin: 2, carruselMax: 10, reelMaxSeg: 900, historiaMaxSeg: 60 },
+  instagram: { caracteres: 2200, hashtags: 30, menciones: 20, carruselMin: 2, carruselMax: 10, reelMinSeg: 3, reelMaxSeg: 900, historiaMaxSeg: 60 },
   facebook: { caracteres: 63206 },
   tiktok: { caracteres: 2200, videoMaxSeg: 600 },
 });
@@ -92,6 +96,7 @@ export function mediosDe(post) {
       .map((m) => ({
         src: m.src, tipo: esVideo(m.src, m.tipo) ? "video" : "imagen", nombre: m.nombre ?? "",
         ...(m.ancho && m.alto ? { ancho: m.ancho, alto: m.alto } : {}),
+        ...(Number(m.duracion) > 0 ? { duracion: Number(m.duracion) } : {}),
       }));
   }
   if (typeof post?.image === "string" && post.image) {
@@ -290,10 +295,26 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     const fuera = deIG.find((m) => objetivo === "feed" && necesitaAjuste(m, "feed"));
     if (fuera) {
       if (navegador) avisos.push(`Una imagen mide ${fuera.ancho}×${fuera.alto}, fuera de lo que admite el feed (de 4:5 a 1.91:1): al programar se ajusta sola (${AJUSTES[post?.ajusteIG] ?? AJUSTES.difuminado}).`);
-      else errores.push(`Una imagen mide ${fuera.ancho}×${fuera.alto}: el feed de Instagram acepta de 4:5 (vertical) a 1.91:1 (horizontal). Programa desde el panel, que la ajusta sola.`);
+      else {
+        const vertical = fuera.ancho / fuera.alto < PROPORCION_FEED.min;
+        con(errores, `Una imagen mide ${fuera.ancho}×${fuera.alto}: el feed de Instagram acepta de 4:5 (vertical) a 1.91:1 (horizontal). Recórtala en el Estudio${vertical ? " o publícala como historia" : ""}.`,
+          vertical && medios.length === 1 ? { codigo: "formato:historia", etiqueta: "Publicarla como historia" } : null);
+      }
     }
-    if (deIG.some((m) => m.tipo === "imagen" && !esJPEG(m.src))) {
-      avisos.push("Instagram sólo acepta JPEG: las imágenes en otro formato se convierten al programar.");
+    if (post?.format === "historia") {
+      const ancha = medios.find((m) => m.tipo === "imagen" && m.ancho && m.alto && necesitaAjuste(m, "historia"));
+      if (ancha) avisos.push(`Una imagen mide ${ancha.ancho}×${ancha.alto}, no 9:16: en la historia sale con bandas o recortada. Lo ideal es vertical, 1080×1920.`);
+      const larga = videos.find((m) => m.duracion > L.historiaMaxSeg);
+      if (larga) errores.push(`Un video de historia dura como mucho ${L.historiaMaxSeg} s y este dura ${Math.round(larga.duracion)} s.`);
+    }
+    if (destinoInstagram(post) === "reel") {
+      const v = videos[0];
+      if (v?.duracion > L.reelMaxSeg) errores.push(`Un reel dura como mucho ${L.reelMaxSeg / 60} minutos y este dura ${Math.round(v.duracion / 60)}.`);
+      else if (v?.duracion && v.duracion < L.reelMinSeg) errores.push(`Un reel dura al menos ${L.reelMinSeg} segundos y este dura ${v.duracion}.`);
+    }
+    const noJpeg = deIG.filter((m) => m.tipo === "imagen" && !esJPEG(m.src)).length;
+    if (noJpeg) {
+      avisos.push(`Instagram sólo acepta JPEG y ${noJpeg === 1 ? "una imagen es" : noJpeg + " imágenes son"} PNG o WebP: hay que convertir${noJpeg === 1 ? "la" : "las"} a JPEG antes de publicar (la oficina todavía no lo hace sola).`);
     }
     const colab = colaboradoresDe(post);
     if (colab.length > MAX_COLABORADORES) {
@@ -369,12 +390,49 @@ export function aplicarArreglo(post, codigo) {
  * están en español porque se leen y se editan en el Cerebro; aquí se les pone el nombre que tienen en Juancito Ads.
  */
 export function postDePieza(p = {}) {
+  // `medidas` (no se guarda en la nota: lo pone quien la lee) es { id: { ancho, alto, duracion } }, del registro de cada archivo del Estudio
+  const conMedida = (m) => (typeof m === "string" ? { src: m, ...(p.medidas?.[m] ?? {}) } : m);
   return {
     id: p.id, format: p.formato || "post", redes: Array.isArray(p.redes) && p.redes.length ? p.redes : ["instagram"],
-    medios: (p.medios ?? []).map((m) => (typeof m === "string" ? { src: m } : m)),
+    medios: (p.medios ?? []).map(conMedida),
     descripcion: p.texto ?? "", hashtagsFinales: p.hashtags ?? "", hashtagsEnComentario: !!p.hashtagsEnComentario,
     primerComentario: p.comentario ?? "", textoFacebook: p.textoFacebook ?? "",
-    historias: (p.historias ?? []).map((m) => (typeof m === "string" ? { src: m } : m)), historiaTambien: !!p.historiaTambien,
+    historias: (p.historias ?? []).map(conMedida), historiaTambien: !!p.historiaTambien,
     colaboradores: p.colaboradores ?? [], ajusteIG: p.ajusteIG, adaptados: p.adaptados,
   };
+}
+
+/**
+ * Las medidas de un archivo del Estudio, de su registro (.json al lado, o un elemento de /api/media): { ancho, alto, duracion } con lo
+ * que se sepa. Un video no trae ancho y alto (no se lee su cabecera): se toman de su proporción («9:16» → 9×16), que es lo que importa.
+ */
+export function medidaDeItem(it) {
+  if (!it || typeof it !== "object") return null;
+  const out = {};
+  const w = Number(it.w ?? it.ancho), h = Number(it.h ?? it.alto);
+  if (w > 0 && h > 0) { out.ancho = w; out.alto = h; }
+  else {
+    const r = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/.exec(String(it.settings?.aspectRatio ?? it.aspectRatio ?? ""));
+    if (r) { out.ancho = Number(r[1]); out.alto = Number(r[2]); }
+  }
+  const d = Number(it.duracion ?? it.duration ?? it.seconds ?? it.settings?.duration);
+  if (d > 0) out.duracion = d;
+  return Object.keys(out).length ? out : null;
+}
+
+/** Meta programa una publicación de Página entre 10 minutos y 75 días antes; aquí, lo mismo para todo. */
+export const PROGRAMAR = Object.freeze({ minMin: 10, maxDias: 75 });
+
+/**
+ * ¿Se puede aprobar para ESE momento? Sin hora no (la hora la decide el dueño, no un «9:00» de relleno); una hora que ya pasó (o a menos de
+ * 10 minutos), tampoco: nunca saldría. Más allá de 75 días, un aviso. Devuelve { errores, avisos, momento } (momento en ms, o null).
+ */
+export function revisarMomento(fecha, hora, ahora = Date.now()) {
+  const errores = [], avisos = [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha ?? ""))) return { errores: ["Ponle un día para poder aprobarla."], avisos, momento: null };
+  if (!/^\d{2}:\d{2}$/.test(String(hora ?? ""))) return { errores: ["Ponle una hora: sin hora no se sabe cuándo sale."], avisos, momento: null };
+  const momento = new Date(`${fecha}T${hora}:00`).getTime();
+  if (momento < ahora + PROGRAMAR.minMin * 60_000) errores.push(momento < ahora ? "Esa hora ya pasó: elige un día y una hora que vengan." : `Sale en menos de ${PROGRAMAR.minMin} minutos: Meta pide al menos ${PROGRAMAR.minMin} de margen.`);
+  else if (momento > ahora + PROGRAMAR.maxDias * 864e5) avisos.push(`Sale dentro de más de ${PROGRAMAR.maxDias} días: Meta no programa con tanta antelación; quedará esperando aquí hasta entonces.`);
+  return { errores, avisos, momento };
 }

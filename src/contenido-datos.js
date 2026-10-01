@@ -3,13 +3,21 @@
 // de la página, con las mismas reglas, para que se pueda probar todo sin escribir nada en disco. Las dos devuelven lo mismo:
 //   list({ desde, hasta, sinFecha }) → { piezas, resumen }   ·   create(datos) · patch(id, datos) · approve(id) · back(id, estado) · remove(id)
 // Cada pieza trae `revision: { errores, avisos, arreglos }` (las reglas de cada red, portadas de Juancito Ads en contenido-reglas.js).
-import { revisarPublicacion, postDePieza } from './contenido-reglas.js';
+import { revisarPublicacion, postDePieza, revisarMomento } from './contenido-reglas.js';
+
+/** Las medidas de los archivos de muestra de la demo (en la oficina de verdad salen del registro .json de cada archivo del Estudio). */
+export const DEMO_MEDIOS = Object.freeze({
+  'demo/a.jpg': { ancho: 1080, alto: 1350 }, 'demo/b.jpg': { ancho: 1080, alto: 1080 }, 'demo/c.jpg': { ancho: 1080, alto: 1350 },
+  'demo/d.jpg': { ancho: 1080, alto: 1920 }, 'demo/e.jpg': { ancho: 1080, alto: 1920 }, 'demo/f.jpg': { ancho: 1920, alto: 1080 },
+  'demo/v.mp4': { ancho: 9, alto: 16, duracion: 24 },
+});
 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const PUBLICABLES = ['fecha', 'hora', 'formato', 'redes', 'medios', 'texto', 'hashtags', 'hashtagsEnComentario', 'comentario', 'textoFacebook', 'historias', 'historiaTambien'];
 const huella = p => JSON.stringify(PUBLICABLES.map(k => p[k] ?? null));
-const revisar = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }; };
-const conRevision = p => ({ ...p, cambiadaTrasAprobar: p.estado === 'aprobada' && !!p.aprobada && p.aprobada.huella !== huella(p), revision: revisar(p) });
+const medidasDe = p => { const out = { ...(p.medidas || {}) }; for (const m of [...(p.medios || []), ...(p.historias || [])]) if (DEMO_MEDIOS[m] && !out[m]) out[m] = DEMO_MEDIOS[m]; return out; };
+const revisar = p => { const r = revisarPublicacion(postDePieza({ ...p, medidas: medidasDe(p) }), p.redes); return { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }; };
+const conRevision = p => ({ ...p, medidas: medidasDe(p), cambiadaTrasAprobar: p.estado === 'aprobada' && !!p.aprobada && p.aprobada.huella !== huella(p), revision: revisar(p) });
 
 /** Las piezas de la demo: unos días alrededor de hoy, con lo que hace falta para ver cada estado y cada aviso. */
 function piezasDemo() {
@@ -22,7 +30,9 @@ function piezasDemo() {
     ok(mk({ titulo: 'Examen visual gratis', fecha: dia(1), hora: '09:00', formato: 'carrusel', texto: 'Agenda tu examen visual gratis y sal con tus lentes en 40 minutos. ✦', hashtags: '#optica #gafas', medios: ['demo/a.jpg', 'demo/b.jpg'] })),
     mk({ titulo: 'Kit de limpieza de regalo', fecha: dia(2), hora: '12:30', formato: 'post', estado: 'revision', texto: 'Por la compra de tus lentes, elige tu regalo: kit de limpieza, antipho o regalo sorpresa.', medios: ['demo/c.jpg'], origen: 'agente:newt' }),
     mk({ titulo: 'Reel: así se prueba un lente', fecha: dia(3), hora: '18:00', formato: 'reel', texto: 'Mira cómo probamos tus lentes paso a paso.', origen: 'agente:newt' }),
+    mk({ titulo: 'Reel: un día en la óptica', fecha: dia(6), hora: '19:30', formato: 'reel', estado: 'revision', medios: ['demo/v.mp4'], texto: 'Un día cualquiera en PanaClaw, de la primera cita al último par de lentes. ¿Ya agendaste el tuyo?\n\n#optica #panama', comentario: 'Agenda en el enlace de la bio.' }),
     mk({ titulo: 'Gafas de sol de regalo', fecha: dia(5), formato: 'post', texto: 'Gafas de sol GRATIS por la compra de tus lentes.', medios: ['demo/d.jpg'], origen: 'agente:newt' }),
+    ok(mk({ titulo: 'Promo de fin de mes', fecha: dia(-2), hora: '10:00', formato: 'post', texto: 'Último día de la promo de fin de mes.', medios: ['demo/b.jpg'] })),
     mk({ titulo: 'Historia: horario de la semana', fecha: dia(4), hora: '08:00', formato: 'historia', redes: ['instagram'], medios: ['demo/e.jpg'], estado: 'revision' }),
     mk({ titulo: 'Idea: testimonios de clientes', estado: 'idea', texto: 'Tres clientes cuentan cómo cambió su día ver bien.', redes: ['instagram'] }),
     mk({ titulo: 'Idea: mitos de la vista', estado: 'idea', redes: ['instagram', 'facebook'] }),
@@ -77,6 +87,7 @@ export function crearDatos({ served, now = () => new Date() }) {
     approve: async id => {
       const p = mem().find(x => x.id === id); if (!p) throw falla('esa pieza ya no existe', { status: 404 });
       if (!p.fecha) throw falla('ponle un día antes de aprobarla', { errores: ['Sin día'] });
+      const cuando = revisarMomento(p.fecha, p.hora, now().getTime()); if (cuando.errores.length) throw falla(cuando.errores[0].replace(/^./, c => c.toLowerCase()), { errores: cuando.errores, status: 409 });
       const r = revisar(p); if (r.errores.length) throw falla('todavía no puede salir: ' + r.errores[0], { errores: r.errores, status: 409 });
       p.estado = 'aprobada'; p.aprobada = { cuando: new Date().toISOString(), huella: huella(p), por: 'Demo' }; return { ok: true, pieza: conRevision(p), avisos: r.avisos };
     },

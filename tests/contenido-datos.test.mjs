@@ -13,7 +13,7 @@ test('la demo trae piezas en cada estado y en los próximos días, con su revisi
   assert.ok(piezas.every(p => p.revision && Array.isArray(p.revision.errores)));
   assert.ok(piezas.some(p => !p.fecha), 'hay ideas sin día');
   assert.equal(resumen.total, piezas.length); assert.equal(resumen.revisar, piezas.filter(p => p.estado === 'revision').length);
-  const hoy = ymd(new Date()); assert.ok(piezas.filter(p => p.fecha).every(p => p.fecha >= hoy), 'las piezas de la demo son de hoy en adelante');
+  const hoy = ymd(new Date()); assert.equal(piezas.filter(p => p.fecha && p.fecha < hoy).length, 1, 'una sola del pasado: la aprobada que venció, para ver cómo se avisa');
 });
 
 test('listar por rango deja fuera lo de otros días y pide las ideas sin día aparte', async () => {
@@ -27,7 +27,7 @@ test('listar por rango deja fuera lo de otros días y pide las ideas sin día ap
 test('no nace aprobada; aprobar exige día y que cumpla las reglas; la aprobada vuelve a revisión si cambia lo que sale', async () => {
   const d = demo();
   await assert.rejects(d.create({ estado: 'aprobada' }), /no nace aprobada/);
-  const p = await d.create({ titulo: 'Nueva', fecha: ymd(new Date()), texto: 'Hola' });
+  const p = await d.create({ titulo: 'Nueva', fecha: ymd(new Date(Date.now() + 864e5)), hora: '10:00', texto: 'Hola' });
   await assert.rejects(d.approve(p.id), /todavía no puede salir: Instagram necesita al menos una imagen o un video/);
   await d.patch(p.id, { medios: ['demo/z.jpg'] });
   await assert.rejects(d.patch(p.id, { estado: 'aprobada' }), /usa «Aprobar»/);

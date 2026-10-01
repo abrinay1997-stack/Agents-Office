@@ -1015,16 +1015,17 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     await step('server: Contenido — an agent leaves a draft as a note, only the owner approves, a change takes the OK away, the Estudio keeps the files a piece uses', async () => { // V4.7
       const call = async (m, p, b) => { const r = await fetch(base + p, { method: m, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, ...(await r.json().catch(() => ({}))) }; };
       const { job } = await call('POST', '/api/media/jobs', { model: 'prueba', prompt: 'tarjeta de contenido', n: 1, by: 'user', wait: 8000 }); const img = job.items[0];
-      const a = await call('POST', '/api/contenido/piezas', { por: 'agente', agente: 'newt', tarea: 'chk1', titulo: 'Borrador del agente', fecha: '2026-11-03', texto: 'Hola', estado: 'aprobada' });
+      const F = new Date(Date.now() + 30 * 864e5), FD = `${F.getFullYear()}-${String(F.getMonth() + 1).padStart(2, '0')}-${String(F.getDate()).padStart(2, '0')}`, FM = FD.slice(0, 7); // V4.10: aprobar exige día y hora que vengan
+      const a = await call('POST', '/api/contenido/piezas', { por: 'agente', agente: 'newt', tarea: 'chk1', titulo: 'Borrador del agente', fecha: FD, hora: '09:00', texto: 'Hola', estado: 'aprobada' });
       if (a.status !== 200 || a.pieza.estado !== 'borrador') throw new Error('an agent must leave a draft, never an approved piece: ' + JSON.stringify(a).slice(0, 120));
-      const dir = path.join(brainCopy, 'Agents Office', 'contenido', '2026-11'); const note = fs.readdirSync(dir).find(f => f.startsWith('p-20261103')); if (!note || !/estado: borrador/.test(fs.readFileSync(path.join(dir, note), 'utf8'))) throw new Error('the piece is not a note in <brain>/Agents Office/contenido');
+      const dir = path.join(brainCopy, 'Agents Office', 'contenido', FM); const note = fs.readdirSync(dir).find(f => f.startsWith('p-' + FD.replace(/-/g, ''))); if (!note || !/estado: borrador/.test(fs.readFileSync(path.join(dir, note), 'utf8'))) throw new Error('the piece is not a note in <brain>/Agents Office/contenido');
       if ((await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, { por: 'agente' })).status !== 403) throw new Error('an agent approved a piece');
       const no = await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, {}); if (no.status !== 409 || !/imagen o un video/.test(no.error)) throw new Error('a piece with no picture was approved: ' + JSON.stringify(no).slice(0, 120));
       await call('PATCH', `/api/contenido/piezas/${a.pieza.id}`, { medios: [img] });
       const ap = await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, {}); if (ap.status !== 200 || ap.pieza.estado !== 'aprobada') throw new Error('approve failed: ' + JSON.stringify(ap).slice(0, 120));
       const ch = await call('PATCH', `/api/contenido/piezas/${a.pieza.id}`, { texto: 'Hola, con otro precio' }); if (ch.pieza.estado !== 'revision' || !ch.soltada) throw new Error('a change did not take the approval away');
       const del = await fetch(base + '/api/media/item/' + encodeURIComponent(img), { method: 'DELETE' }); if (del.status !== 409) throw new Error('the Estudio trashed a file a piece uses (' + del.status + ')');
-      const list = await call('GET', '/api/contenido?desde=2026-11-01&hasta=2026-11-30'); if (list.piezas.length !== 1 || list.resumen.total !== 1) throw new Error('list: ' + JSON.stringify(list.resumen));
+      const list = await call('GET', `/api/contenido?desde=${FM}-01&hasta=${FM}-31`); if (list.piezas.length !== 1 || list.resumen.total !== 1) throw new Error('list: ' + JSON.stringify(list.resumen));
       const sheet = async id => (await (await fetch(base + '/api/agents/' + id)).json());
       const m = await sheet('newt'), f = await sheet('invo'); if (m.contenido !== true || f.contenido === true) throw new Error(`the agents' Contenido access is wrong: marketing ${m.contenido}, finance ${f.contenido}`);
       return `note ${note} · agent 403 · approve 409 → 200 · change → revisión · file kept · Marketing has the tool, Finanzas does not`;
