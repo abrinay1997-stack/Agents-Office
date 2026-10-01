@@ -95,3 +95,84 @@ body.dark .sb-attn { color: #E8B44A; }
 body.dark .sb-mode.estudio { color: #FFA36B; border-color: rgba(255,163,107,.5); }
 body.dark .sc-go:not(:disabled) { background: #FF8A4C; border-color: #FF8A4C; color: #15161A; }
 body.dark .sc-card.sent.run { border-color: rgba(143,176,255,.55); }
+
+/* V4.11 — preguntas con opciones (DIM-06): chips de 32 px, la elegida rellena y con ✓ (no solo color) */
+#subOv .sb-q { color: var(--ink); background: rgba(242,184,75,.12); border: 1px solid rgba(180,131,11,.35); padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+.sb-qq { display: flex; flex-direction: column; gap: 6px; }
+.sb-qt { font-weight: 600; font-size: 13.5px; line-height: 1.4; color: var(--ink); }
+.sb-qm { font-weight: 400; font-size: 12px; color: var(--grey); }
+.sb-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-opt { font: 600 12.5px var(--ui); min-height: 32px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--ink); background: var(--cream); color: var(--ink); cursor: pointer; text-align: left; line-height: 1.25; max-width: 100%; }
+.sb-opt:hover { background: rgba(21,20,20,.06); }
+.sb-opt[aria-checked="true"] { background: var(--ink); color: var(--cream); }
+.sb-opt[aria-checked="true"]::before { content: '✓ '; }
+.sb-opt[aria-disabled="true"] { cursor: default; border-style: dashed; }
+.sb-opt[aria-disabled="true"][aria-checked="true"] { border-style: solid; }
+.sb-opt.sb-other { font-weight: 500; }
+.sb-otherin { font: 13px var(--ui); min-height: 32px; padding: 4px 10px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: var(--ink); width: 100%; box-sizing: border-box; }
+.sb-qacts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.sb-qgo, .so-go { font: 700 11.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; min-height: 36px; padding: 0 16px; border-radius: 99px; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); cursor: pointer; }
+.sb-qgo:disabled, .so-go:disabled, #subOv .sb-go:disabled { opacity: 1; background: none; color: var(--grey); border-color: var(--hairline); cursor: default; } /* apagado se dice sin atenuar */
+.sb-qhint { font-size: 12px; color: var(--grey); }
+.sb-qa { font-size: 12.5px; color: var(--grey); } .sb-qa b { color: var(--ink); }
+.sb-q.done { background: none; border-style: dashed; }
+
+/* una hora que ya pasó (DIM-13) */
+.sb-past { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(179,38,30,.45); background: rgba(179,38,30,.05); font-size: 12.5px; color: #8C1D16; }
+.sb-pastb { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-pastb button { font: 600 12px var(--ui); min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--ink); background: var(--cream); color: var(--ink); cursor: pointer; }
+
+/* 24 px o más en el plan de reparto (DIM-16), y «no se incluye» sin atenuar */
+#subOv .sb-inc { display: inline-flex; align-items: flex-start; min-width: 24px; min-height: 24px; }
+#subOv .sb-inc input, #subOv .sb-teamc { width: 18px; height: 18px; margin: 3px; accent-color: var(--ink); }
+#subOv .sb-team { min-height: 28px; cursor: pointer; }
+#subOv .sb-atl { min-height: 28px; }
+#subOv .sb-atin { min-height: 26px; }
+#subOv .sb-atx { width: 26px; height: 26px; }
+#subOv .sb-skip, #subOv .sc-skip, #subOv .so-skip { min-height: 32px; padding: 0 8px; }
+#subOv .sb-dept { min-height: 28px; }
+#subOv .sb-det summary { min-height: 24px; display: flex; align-items: center; }
+#subOv .sb-item.off { opacity: 1; border-style: dashed; background: none; }
+#subOv .sb-item.off .sb-t { text-decoration: line-through; text-decoration-thickness: 1px; }
+#subOv .sb-item.skipped { opacity: 1; border-style: dashed; }
+.so-skip { font: 12px var(--ui); background: none; border: 0; color: var(--grey); cursor: pointer; text-decoration: underline; }
+
+/* las ops: el calendario y la oficina (DIM-11) */
+.so-plan { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.so-card { display: flex; gap: 10px; border: 1px solid var(--hairline); border-left: 3px solid #5A3FA0; border-radius: 12px; padding: 10px 12px; background: var(--cream); }
+.so-card.off { border-style: dashed; background: none; } .so-card.off .sc-t { text-decoration: line-through; text-decoration-thickness: 1px; }
+.so-card.sent.done { border-left-color: #13705A; } .so-card.sent.failed { border-left-color: #B3261E; } .so-card.sent .sc-body { gap: 4px; }
+.so-days { display: flex; gap: 4px; flex-wrap: wrap; }
+.so-day { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--ink); background: var(--cream); color: var(--ink); font: 700 12px var(--ui); cursor: pointer; }
+.so-day[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
+.so-in:not(textarea):not([type="checkbox"]) { font: 12.5px var(--ui); min-height: 28px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: var(--ink); }
+.so-text { width: 100%; box-sizing: border-box; font: 13px/1.45 var(--ui); padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; color: var(--ink); resize: vertical; }
+.so-undo { align-self: flex-start; font: 600 12px var(--ui); min-height: 32px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+.sc-chk { cursor: pointer; min-height: 28px; } .sc-chk input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
+.sc-fw { flex: 1 1 200px; } .sc-fw select, .sc-fw input { flex: 1; min-width: 0; }
+.sc-num { width: 72px; } .sc-style { min-width: 0; }
+.sb-retry { font: 600 12px var(--ui); min-height: 32px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; margin-top: 8px; }
+
+/* un audio en la tira (DIM-02): reproductor con su ♪, no una imagen rota */
+.sc-au { display: flex; align-items: center; gap: 6px; flex: 1 1 260px; min-width: 0; padding: 4px 6px 4px 10px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--cream); }
+.sc-au-ic { font-size: 18px; color: var(--ink); }
+.sc-au audio { flex: 1; min-width: 0; height: 32px; }
+.sc-au-open { font: 600 12px var(--ui); min-height: 28px; padding: 0 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+.sb-u .sc-au { background: none; border-color: color-mix(in srgb, var(--cream) 35%, transparent); } .sb-u .sc-au-ic, .sb-u .sc-au-open { color: var(--cream); }
+
+/* «Nueva conversación» con deshacer (DIM-18) */
+.sb-undo { display: flex; align-items: center; gap: 10px; margin: 6px 18px 0; padding: 6px 6px 6px 12px; border-radius: 12px; background: var(--ink); color: var(--cream); font-size: 12.5px; }
+.sb-undo span { flex: 1; }
+.sb-undob { font: 700 11.5px var(--ui); letter-spacing: .08em; text-transform: uppercase; min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--cream); background: none; color: var(--cream); cursor: pointer; }
+
+/* sugerencias en una fila que se desliza, ya en conversación y en el teléfono (DIM-22) */
+#subOv .sb-chips.compact { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
+#subOv .sb-chips.compact button { flex: none; white-space: nowrap; }
+@media (max-width: 899px) { #subOv .sb-chips.compact { scrollbar-width: none; } #subOv .sb-chips.compact::-webkit-scrollbar { display: none; } }
+#subOv .sb-chips button { min-height: 32px; }
+
+body.dark #subOv .sb-q { background: rgba(232,180,74,.08); border-color: rgba(232,180,74,.4); }
+body.dark .sb-otherin, body.dark .so-in:not(textarea):not([type="checkbox"]), body.dark .so-text { background: #1E1F24; color-scheme: dark; }
+body.dark .sb-past { color: #FFB4AB; border-color: rgba(255,180,171,.5); background: rgba(255,180,171,.06); }
+body.dark .so-card { border-left-color: #B9A6F5; } body.dark .so-card.sent.done { border-left-color: #6FD3B4; } body.dark .so-card.sent.failed { border-left-color: #FFB4AB; }
+body.dark .sb-opt:hover { background: rgba(236,234,227,.08); }
