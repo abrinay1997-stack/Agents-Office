@@ -2,6 +2,7 @@
 // Tasks (titles, requests and deliverables), agents, routines, the Brain's notes (the server's search) and the Estudio's
 // gallery, in one list; ↑ ↓ to move, Enter to open, Esc to close.
 import { modal } from './modal.js';
+import { miles } from './galeria-filtro.js'; // the same «5.000» as the Estudio and the picker (toLocaleString('es') leaves 4 digits ungrouped)
 
 const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 export function initSearch({ served, esc, getTasks, agents, getRoutines, openTask, openAgent, openNote, openRoutine, openStudio }) {
@@ -29,8 +30,8 @@ export function initSearch({ served, esc, getTasks, agents, getRoutines, openTas
     // Auditoría 1 oct 2026 (INF-03): the server searches the WHOLE gallery (it used to be the 600 newest, filtered here), and
     // a result opens that very file in the Estudio's viewer, not just the Estudio
     try { const j = await (await fetch('/api/media?n=6&q=' + encodeURIComponent(q))).json(); if (my !== seq) return; const n = j.total || 0;
-      for (const m of j.items || []) items.push({ kind: m.kind === 'video' ? 'Video' : m.kind === 'audio' ? 'Audio' : 'Imagen', title: String(m.prompt || m.name || m.file).slice(0, 80), sub: [m.modelName || m.model || '', n > 6 && m === j.items[0] ? `${n.toLocaleString('es')} en el Estudio` : ''].filter(Boolean).join(' · '), go: () => studioShow({ file: m.file }) });
-      if (n > 6) items.push({ kind: 'Estudio', title: `Ver los ${n.toLocaleString('es')} del Estudio con «${q.trim().slice(0, 40)}»`, sub: 'Abre la galería con esta búsqueda', go: () => studioShow({ q: q.trim() }) });
+      for (const m of j.items || []) items.push({ kind: m.kind === 'video' ? 'Video' : m.kind === 'audio' ? 'Audio' : 'Imagen', title: String(m.prompt || m.name || m.file).slice(0, 80), sub: [m.modelName || m.model || '', n > 6 && m === j.items[0] ? `${miles(n)} en el Estudio` : ''].filter(Boolean).join(' · '), go: () => studioShow({ file: m.file }) });
+      if (n > 6) items.push({ kind: 'Estudio', title: `Ver los ${miles(n)} del Estudio con «${q.trim().slice(0, 40)}»`, sub: 'Abre la galería con esta búsqueda', go: () => studioShow({ q: q.trim() }) });
     } catch {}
     draw();
   }

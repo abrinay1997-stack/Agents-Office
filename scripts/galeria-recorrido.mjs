@@ -87,6 +87,18 @@ try {
     const found = await pg.$$eval('#studioOv .st-card[data-f]', l => l.map(x => x.dataset.f));
     step(found.length === 1 && /\/g0\.png$/.test(found[0]), `${tag}: buscar encuentra la ficha más vieja (${found.join(', ')})`);
     await pg.screenshot({ path: path.join(OUT, `busqueda-${tag}.png`) });
+    // revisión INF-03: la última página se lleva «Cargar más», y el foco del teclado no cae en <body>
+    await pg.fill('#studioOv .st-q', 'zapatillas g1');
+    await pg.waitForFunction(() => document.querySelectorAll('#studioOv .st-card[data-f]').length === 120 && document.querySelector('#studioOv .st-morebtn'), null, { timeout: 15000 }).catch(() => {});
+    await pg.$eval('#studioOv .st-grid', g => { g.scrollTop = 0; }).catch(() => {});
+    const lastBtn = await pg.$('#studioOv .st-morebtn');
+    if (lastBtn) {
+      await lastBtn.focus(); await pg.keyboard.press('Enter');
+      await pg.waitForFunction(() => !document.querySelector('#studioOv .st-morebtn'), null, { timeout: 15000 }).catch(() => {});
+      const where = await pg.evaluate(() => { const a = document.activeElement; return a === document.body ? 'body' : a.closest('.st-card') ? 'tarjeta ' + a.closest('.st-card').dataset.f : a.className; });
+      step(where.startsWith('tarjeta'), `${tag}: tras la última página el foco queda en una tarjeta (${where})`);
+      await pg.screenshot({ path: path.join(OUT, `ultima-pagina-foco-${tag}.png`) });
+    } else step(false, `${tag}: la búsqueda de dos páginas no trae «Cargar más»`);
     await pg.fill('#studioOv .st-q', ''); await pg.waitForTimeout(600);
     await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
     // Ctrl+K
@@ -96,7 +108,7 @@ try {
     const hit = await pg.$$eval('#fdList li', l => l.map(x => x.textContent).find(t => /primera de todas/.test(t)) || '');
     step(!!hit, `${tag}: Ctrl+K encuentra la ficha más vieja`);
     await pg.screenshot({ path: path.join(OUT, `ctrlk-${tag}.png`) });
-    if (hit) { await pg.click('#fdList li:has-text("primera de todas")'); await pg.waitForSelector('#studioOv .st-light:not([hidden])', { timeout: 15000 }).catch(() => {}); step(await pg.$eval('#studioOv .st-light', e => !e.hidden).catch(() => false), `${tag}: y la abre en el visor`); await pg.screenshot({ path: path.join(OUT, `visor-vieja-${tag}.png`) }); }
+    if (hit) { await pg.click('#fdList li:has-text("primera de todas")'); await pg.waitForSelector('#studioOv .st-light:not([hidden])', { timeout: 15000 }).catch(() => {}); step(await pg.$eval('#studioOv .st-light', e => !e.hidden).catch(() => false), `${tag}: y la abre en el visor`); const behind = await pg.$$eval('#studioOv .st-card[data-f]', l => l.length); step(behind <= 125, `${tag}: sin cargar toda la galería detrás (${behind} tarjetas)`); await pg.screenshot({ path: path.join(OUT, `visor-vieja-${tag}.png`) }); }
     await pg.keyboard.press('Escape'); await pg.waitForTimeout(200); await pg.keyboard.press('Escape'); await pg.waitForTimeout(300);
     // Contenido: the picker searches the whole gallery and pages
     await pg.evaluate(() => document.activeElement && document.activeElement.blur());
@@ -112,6 +124,7 @@ try {
     await pg.fill('.ct-pickin', ''); await pg.waitForFunction(() => document.querySelectorAll('.ct-pick .ct-pk').length === 60, null, { timeout: 15000 }).catch(() => {});
     await pg.click('.ct-pmorebtn').catch(() => {}); await pg.waitForFunction(() => document.querySelectorAll('.ct-pick .ct-pk').length > 60, null, { timeout: 15000 }).catch(() => {});
     step((await pg.$$eval('.ct-pick .ct-pk', l => l.length)) === 120, `${tag}: «Cargar más» en el selector`);
+    const pickN = await pg.$eval('.ct-pickn', e => e.textContent).catch(() => ''); step(pickN.includes(`120 de ${miles(N)}`), `${tag}: el selector cuenta «${pickN}»`);
     const sw = await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth); step(sw, `${tag}: sin desplazamiento horizontal`);
     step(!errs.length, `${tag}: sin errores en la página${errs.length ? ': ' + errs.join(' | ') : ''}`);
     await ctx.close();

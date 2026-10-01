@@ -119,7 +119,7 @@ export function initStudio(ctx) {
   // searches, filters and counts over everything: `total` is how many match, `counts` the tabs and «Sin carpeta» over the whole
   // gallery, `nextCur` the cursor of the next page. `known` keeps every record seen, so a reference, a version or a selection
   // outside the loaded pages is still found. `gone`: files sent to the bin here (a reference to them is dropped).
-  const PAGE = 120; let total = 0, counts = null, nextCur = null, loadedKey = null, moreBusy = false, audioPool = []; const known = new Map(), gone = new Set();
+  const PAGE = 120; let total = 0, counts = null, nextCur = null, loadedKey = null, moreBusy = false, audioPool = []; const known = new Map(), gone = new Set(), jumped = new Map(); // jumped (file → its place in the view): an old file opened from afar (Ctrl+K), placed at the end before the pages between reach it
   const remember = l => { for (const it of l) if (it && it.file) known.set(it.file, it); return l; };
   let voices = { mine: [], system: [] }; // V5.0: the owner's MiniMax voices and the system's, for the voice picker (from /api/media, refreshed by the Voces panel)
   let editModels = [], editBlock = null, depts = []; // V4.9: the models that edit a picture (on), the engines to switch on when none is (a 409 says which), the departments a picture can be sent to
@@ -465,12 +465,18 @@ export function initStudio(ctx) {
   let moreIO = null;
   function paintMore(G, n) {
     let box = G.querySelector(':scope > .st-more');
-    if (!nextCur) { if (box) box.remove(); return; }
+    if (!nextCur) { if (box) { const had = box.contains(document.activeElement); box.remove(); if (had) moreFocus(G); } return; }
     if (!box) { box = document.createElement('div'); box.className = 'st-more'; box.innerHTML = '<p class="st-morep"></p><button type="button" class="st-morebtn"></button>'; G.appendChild(box); if (window.IntersectionObserver) { moreIO ||= new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !el.hidden) loadMore(); }, { root: G, rootMargin: '0px 0px 600px 0px' }); moreIO.observe(box); } }
     else if (box !== G.lastElementChild) G.appendChild(box);
     const left = Math.max(0, total - n), next = Math.min(PAGE, left || PAGE);
     box.querySelector('.st-morep').textContent = `Ves ${GF.miles(n)} de ${GF.miles(total)}.`;
     const b = box.querySelector('.st-morebtn'); b.textContent = moreBusy ? 'Cargando…' : `Cargar ${GF.miles(next)} más`; b.setAttribute('aria-busy', String(moreBusy));
+  }
+  /** The last page came and «Cargar más» went with the keyboard on it: the focus goes to the first card it brought (or the last card), never to <body>. */
+  let moreFrom = 0;
+  function moreFocus(G) {
+    const w = lastWant[Math.min(moreFrom, lastWant.length - 1)], to = w && nodes.get(w[0])?.el; // lastWant: the cards in the gallery's order (the columns shuffle the DOM's)
+    (to?.querySelector('.st-thumb, button') || G.querySelector('.st-card .st-thumb'))?.focus();
   }
   function layout(root, force) {
     const n = colCount(); if (!n) return; // hidden (a phone on the Crear tab): laid out when it shows
@@ -512,9 +518,11 @@ export function initStudio(ctx) {
         const n = same ? Math.min(600, Math.max(PAGE, items.length)) : PAGE;
         const j = await api('GET', `/api/media?catalog=1&n=${n}&${viewQS()}${upto ? '&upto=' + encodeURIComponent(upto) : ''}`);
         if (key !== viewKey()) { pendingFull ||= full; return; } // the owner typed or clicked meanwhile: this answer is for another view
-        const top = remember(j.items || []);
-        if (same && items.length > top.length && top.length && !upto) { const last = top[top.length - 1], tail = items.filter(x => GF.cmp(x, last) > 0 && !top.some(t => t.file === x.file)); items = [...top, ...tail]; } // deeper than 600: the top is fresh, the rest stays as loaded (and so does its cursor)
-        else { items = top; nextCur = j.next || null; }
+        const top = remember(j.items || []), inTop = new Set(top.map(t => t.file)), last = top[top.length - 1];
+        const tail = same && last && !upto ? items.filter(x => GF.cmp(x, last) > 0 && !inTop.has(x.file)) : [];
+        if (tail.length) { items = [...top, ...tail]; if (!tail.some(x => !jumped.has(x.file))) nextCur = j.next || null; } // deeper than 600: the top is fresh, the rest stays as loaded (and so does its cursor)
+        else { items = top; nextCur = j.next || null; if (!same) jumped.clear(); }
+        if (j.hit && j.hit.file && !items.some(x => x.file === j.hit.file)) { items.push(remember([j.hit])[0]); jumped.set(j.hit.file, +j.hitAt || 0); } // revisión INF-03: a file further than a page, alone at the end — never the whole gallery down to it
         total = j.total ?? items.length; counts = j.counts || null; loadedKey = key;
         budget = j.budget || null; jobs = j.jobs || []; folders = j.folders || []; loadErr = '';
         depts = ctx.studioDepts && ctx.studioDepts.length ? ctx.studioDepts : (j.departments || []).map(k => ({ key: k, name: DEPT_NAMES[k] || k })); // V4.9
@@ -534,11 +542,12 @@ export function initStudio(ctx) {
   /** INF-03: the next page of this view, after the last one loaded. */
   async function loadMore() {
     if (!nextCur || moreBusy || loading || loadedKey !== viewKey()) return;
-    moreBusy = true; const key = loadedKey, cur0 = nextCur; renderGrid();
+    moreBusy = true; const key = loadedKey, cur0 = nextCur; moreFrom = lastWant.length; renderGrid();
     try {
       const j = await api('GET', `/api/media?n=${PAGE}&before=${encodeURIComponent(cur0)}&${viewQS()}`);
       if (key !== viewKey() || cur0 !== nextCur) return;
       const have = new Set(items.map(x => x.file)); items = items.concat(remember(j.items || []).filter(x => !have.has(x.file)));
+      if (jumped.size) items.sort(GF.cmp); // a file opened from afar sits at the end: the pages between come before it
       nextCur = j.next || null; total = j.total ?? total; if (j.counts) counts = j.counts; if (j.folders) folders = j.folders;
     } catch (e) { say('No pude cargar más: ' + e.message, true); }
     finally { moreBusy = false; }
@@ -1419,7 +1428,7 @@ export function initStudio(ctx) {
     const tools = it.kind === 'audio' ? '' : `<div class="st-ztools" role="toolbar" aria-label="${img ? 'Zoom' : 'Vista'}">${img ? `<button type="button" data-z="out" aria-label="Alejar (−)" title="Alejar (−)">−</button><span class="st-zpct" aria-label="Tamaño"></span><button type="button" data-z="in" aria-label="Acercar (+)" title="Acercar (+, o la rueda del ratón)">+</button><button type="button" data-z="fit" aria-pressed="true" title="Ajustar: la imagen entera (0)">Ajustar</button><button type="button" data-z="real" aria-pressed="false" title="100 %: un píxel de la imagen, un píxel de la pantalla (doble clic sobre la imagen)">100 %</button>` : ''}<button type="button" data-z="full" aria-pressed="false" aria-label="Pantalla completa (F)" title="Pantalla completa (F)">${svg('full')}<span>Pantalla completa</span></button></div>`;
     L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
       <div class="st-lmedia">${it.kind === 'audio' ? `<div class="st-laud${cap.badge === 'MÚSICA' ? ' st-aud-mus' : cap.badge === 'VOZ' ? ' st-aud-voz' : ''}"><span class="st-laic" aria-hidden="true">${cap.badge === 'MÚSICA' ? svg('note') : cap.badge === 'VOZ' ? svg('mic') : '♪'}</span>${cap.voice ? `<span class="st-lvoz">Voz: <b>${esc(cap.voice)}</b></span>` : cap.instrumental ? '<span class="st-lvoz">Instrumental</span>' : ''}<audio src="${src(it)}" controls preload="metadata" aria-label="Escuchar: ${esc(short(it.prompt))}"></audio></div>` : `<div class="st-lstage"${it.w && it.h ? ` style="--ar:${+it.w} / ${+it.h}"` : ''}>${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}" draggable="false">`}</div>${tools}`}</div>
-      <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${GF.miles(i + 1)} de ${GF.miles(nextCur ? total : list.length)}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 || nextCur ? '' : ' disabled'}>›</button></div>
+      <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${GF.miles((jumped.has(it.file) ? jumped.get(it.file) : i) + 1)} de ${GF.miles(nextCur ? total : list.length)}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 || nextCur ? '' : ' disabled'}>›</button></div>
       ${it.versionOf ? `<p class="st-lver">Versión de ${orig ? `<button type="button" class="st-lk" data-vf="${esc(orig.file)}" title="Abrir la original">«${esc(short(orig.prompt))}»</button>` : 'una imagen que ya no está en la galería'}</p>` : ''}
       ${cap.label ? `<h3 class="st-slab st-lslab">${cap.label}</h3>` : ''}<p class="st-lp${cap.label ? ' st-lptext' : ''}">${esc(it.prompt)}</p>
       <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${esc(who(it))}`} · ${esc(when(it.at))}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>

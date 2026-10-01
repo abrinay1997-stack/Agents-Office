@@ -286,12 +286,12 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
         const my = ++seq; busy = true; if (more) { const b = grid.querySelector('[data-a="more"]'); if (b) { b.textContent = 'Cargando…'; b.setAttribute('aria-busy', 'true'); } }
         let got = [];
         try {
-          if (served) { const j = await (await fetch(`/api/media?kind=image,video&n=${PAGE}${q ? '&q=' + encodeURIComponent(q) : ''}${more && next ? '&before=' + encodeURIComponent(next) : ''}`)).json(); if (my !== seq) return; got = j.items || []; next = j.next || null; total = j.total ?? got.length; }
-          else { const all = demo.filter(GF.matcher({ q })); got = all; next = null; total = all.length; }
+          if (served) { const j = await (await fetch(`/api/media?kind=image,video&n=${PAGE}${q ? '&q=' + encodeURIComponent(q) : ''}${more && next ? '&before=' + encodeURIComponent(next) : ''}${actuales.slice(0, 50).map(f => '&not=' + encodeURIComponent(f)).join('')}`)).json(); if (my !== seq) return; got = j.items || []; next = j.next || null; total = j.total ?? got.length; }
+          else { const all = demo.filter(GF.matcher({ q })).filter(it => !actuales.includes(it.file)); got = all; next = null; total = all.length; }
         } catch { if (my !== seq) return; got = []; next = null; if (!more) total = 0; }
         busy = false;
         for (const it of got) { const m = medidaDeItem(it); if (m) medidas[it.file] = m; }
-        got = got.filter(it => !actuales.includes(it.file)); // lo que la pieza ya lleva no se ofrece otra vez
+        got = got.filter(it => !actuales.includes(it.file)); // lo que la pieza ya lleva no se ofrece otra vez (el servidor ya lo dejó fuera de las páginas y del total, ?not=: «Ves X de Y» cuadra)
         if (more) { const have = new Set(items.map(x => x.file)); got = got.filter(x => !have.has(x.file)); items = items.concat(got); const box = grid.querySelector('.ct-pmore'), tmp = document.createElement('div'); tmp.innerHTML = got.map(card).join('') + moreHTML(); const firstNew = tmp.firstElementChild; if (box) box.replaceWith(...tmp.childNodes); else grid.append(...tmp.childNodes); const b = grid.querySelector('[data-a="more"]'); if (document.activeElement === document.body || !dlg.contains(document.activeElement)) ((firstNew && firstNew.matches('.ct-pk') ? firstNew : null) || b)?.focus(); } // «Cargar más» se fue con su caja: el foco pasa a lo primero nuevo
         else { items = got; grid.innerHTML = items.length ? items.map(card).join('') + moreHTML() : `<p class="ct-empty">${q ? `Nada en la galería con «${esc(q)}».` : served ? 'La galería del Estudio está vacía. Crea algo con «Crear con el Estudio».' : 'Sin archivos en la demo.'}</p>`; }
         paintCount();

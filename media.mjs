@@ -681,23 +681,27 @@ export function list({ limit = 600 } = {}) {
    the Estudio, Ctrl+K, the Contenido picker and the folder counts. query() searches, filters and counts over the WHOLE
    index and hands back one page: { items, total (what matches), next (cursor of the next page, or null), counts (the tabs
    and «Sin carpeta», over the whole gallery), rev }. A cursor is «time|file» of the last item seen: a new file arriving at
-   the top never shifts the next page. `upto` stretches the page until that file is in it (the viewer opening one old file). */
+   the top never shifts the next page. `upto` stretches the page until that file is in it (the viewer opening one old file),
+   never past PAGE_MAX: a file further down comes apart as `hit` (its record) and `hitAt` (its place in the view), and the page
+   stays a normal one — stretching to it loaded the whole gallery into the Estudio at once (revisión de INF-03). */
 export const PAGE_MAX = 600; // the old answer's size: a page is never bigger
-export function query({ q = '', filter = 'all', folder = 'all', kind = null, before = null, offset = 0, n = 120, upto = null, extra = null } = {}) {
+export function query({ q = '', filter = 'all', folder = 'all', kind = null, before = null, offset = 0, n = 120, upto = null, extra = null, exclude = null } = {}) {
   const X = index(), fl = readFolders(), ids = new Set(fl.map(f => f.id)), sig = X.rev + ':' + [...ids].join(',');
-  const ok = GF.matcher({ q, filter, folder, kind }, ids, extra), cur = GF.parseCursor(before);
+  const skipF = new Set(Array.isArray(exclude) ? exclude.slice(0, 50).map(String) : []), m0 = GF.matcher({ q, filter, folder, kind }, ids, extra); // exclude: files the asker already has (a piece's own media), out of the pages AND the total, so «Ves X de Y» adds up
+  const ok = skipF.size ? it => !skipF.has(it.file) && m0(it) : m0, cur = GF.parseCursor(before);
   const size = Math.max(0, Math.min(PAGE_MAX, Number.isFinite(+n) ? Math.floor(+n) : 120));
-  let skip = Math.max(0, Math.floor(+offset || 0)), total = 0, after = 0, hit = -1; const page = [];
+  let skip = Math.max(0, Math.floor(+offset || 0)), total = 0, after = 0, hit = -1, far = null, farAt = -1; const page = [];
   for (const it of X.sorted) {
     if (!ok(it)) continue; total++;
     if (cur && GF.cmp(it, cur) <= 0) continue; // at or before the cursor: already seen
     after++; if (skip) { skip--; continue; }
-    if (page.length < size || (upto && hit < 0 && page.length < 20000)) { if (it.file === upto) hit = page.length; page.push(it); }
+    if (page.length < size || (upto && hit < 0 && page.length < PAGE_MAX)) { if (it.file === upto) hit = page.length; page.push(it); }
+    else if (upto && hit < 0 && !far && it.file === upto) { far = it; farAt = after - 1; } // further than a page can reach: apart
   }
   if (upto && hit < 0) page.length = Math.min(page.length, size); // that file is not in this view: a normal page
   const off = Math.max(0, Math.floor(+offset || 0)), more = after - off - page.length > 0;
   if (!X.counts || X.countsSig !== sig) { X.counts = GF.counts(X.sorted, ids); X.countsSig = sig; }
-  return { items: page.map(it => ({ ...it })), total, next: more && page.length ? GF.cursorOf(page[page.length - 1]) : null, counts: { ...X.counts }, folders: folders(X.sorted, fl), rev: X.rev };
+  return { items: page.map(it => ({ ...it })), total, next: more && page.length ? GF.cursorOf(page[page.length - 1]) : null, counts: { ...X.counts }, folders: folders(X.sorted, fl), rev: X.rev, ...(far ? { hit: { ...far }, hitAt: farAt } : {}) };
 }
 const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav|flac|m4a|ogg)$/i; // V4.8: audio too, for Muse Spark to transcribe; V4.10: flac, m4a, ogg
 /** A path inside the studio, or null (never outside it: the id comes from the request). */

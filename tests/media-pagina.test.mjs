@@ -93,6 +93,34 @@ test('upto estira la página hasta un archivo viejo (el visor abre uno que no es
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('revisión INF-03: upto nunca estira más allá de PAGE_MAX; un archivo más lejano llega aparte (hit) y la página es normal', () => {
+  const dir = box();
+  try {
+    seed(md.dir(), 1000);
+    const r = md.query({ n: 120, upto: '2026-02/f1.png' }); // casi la más vieja: antes devolvía las 999 de delante
+    assert.equal(r.items.length, 120, 'una página normal, no toda la galería');
+    assert.ok(r.hit, 'el archivo pedido llega aparte'); assert.equal(r.hit.file, '2026-02/f1.png'); assert.equal(r.hitAt, 998);
+    assert.ok(r.next, 'las páginas siguen desde la primera, no desde el archivo');
+    const near = md.query({ n: 120, upto: '2026-09/f800.png' }); // dentro de PAGE_MAX: se estira como antes
+    assert.equal(near.items.at(-1).file, '2026-09/f800.png'); assert.equal(near.items.length, 200); assert.equal(near.hit, undefined);
+    const last = md.query({ n: 120, upto: '2026-05/f400.png' }); assert.equal(last.items.length, md.PAGE_MAX, 'la 600.ª todavía cabe'); assert.equal(last.hit, undefined);
+    const edge = md.query({ n: 120, upto: '2026-04/f399.png' }); // la 601.ª: fuera del alcance
+    assert.equal(edge.items.length, 120); assert.equal(edge.hit?.file, '2026-04/f399.png'); assert.equal(edge.hitAt, 600);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('exclude: lo que la pieza ya lleva sale de las páginas Y del total (el selector de Contenido cuadra «Ves X de Y»)', () => {
+  const dir = box();
+  try {
+    seed(md.dir(), 50);
+    const all = md.query({ n: 10, kind: 'image,video' }), quit = all.items.slice(0, 3).map(x => x.file);
+    const r = md.query({ n: 10, kind: 'image,video', exclude: quit });
+    assert.equal(r.total, all.total - 3); assert.ok(!r.items.some(x => quit.includes(x.file)));
+    const { seen } = walk({ n: 7, exclude: quit }); assert.equal(seen.length, 47); assert.equal(new Set(seen).size, 47);
+    assert.equal(md.query({ n: 10, exclude: ['2026-01/no-existe.png'] }).total, 50, 'un archivo que no está no cambia nada');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 /** n fichas solo en la foto del índice (data/media-index.json), con sus carpetas de mes de verdad: así se mide la galería
  *  de 5.000 sin escribir 10.000 archivos (en una máquina con antivirus eso solo ya tarda minutos). */
 function seedSnap(dir, n) {
@@ -162,6 +190,10 @@ test('GET /api/media: la respuesta de siempre para quien no pide páginas, y pá
   const kinds = await get('/api/media?kind=image&n=500'); assert.ok(kinds.items.every(x => x.kind === 'image'));
   const byName = await get('/api/media?q=' + encodeURIComponent('prompt 645') + '&n=5'); // f645: i % 5 === 0, an agent's — found by its prompt; the agent's name comes from the roster
   assert.deepEqual(byName.items.map(x => x.file), ['2026-07/f645.png']);
+  const far = await get('/api/media?n=120&upto=' + encodeURIComponent('2026-02/f1.png')); // revisión INF-03: lo lejano llega aparte
+  assert.equal(far.items.length, 120); assert.equal(far.hit.file, '2026-02/f1.png'); assert.equal(far.hitAt, 648);
+  const not = await get('/api/media?n=5&not=' + encodeURIComponent(p1.items[0].file) + '&not=' + encodeURIComponent(p1.items[1].file));
+  assert.equal(not.total, 648); assert.ok(!not.items.some(x => x.file === p1.items[0].file || x.file === p1.items[1].file));
 });
 
 test('buscar_en_galeria pide la búsqueda al servidor (toda la galería) y dice cuántas hay en total', async () => {
