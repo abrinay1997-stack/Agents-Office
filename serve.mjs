@@ -40,6 +40,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { loadConfig, ROOT } from './config.mjs';
 import { layoutGraph, readVault, readOfficeNotes } from './graph-build.mjs';
 import { DEPTS, DEPT_KEYS } from './src/data.js';
@@ -1164,6 +1165,8 @@ function page() {
   return pageCache;
 }
 /* ---------- V4.4 (B6, B7, B8): the office's health — one list of checks, green / amber / red, for the dock's traffic light ---------- */
+// Auditoría 1 oct 2026 (INF-12): how long the server's one thread was stuck (a slow disk, Defender, a huge file): the health light says it
+const LOOP = monitorEventLoopDelay({ resolution: 20 }); LOOP.enable();
 function officeStatus() {
   const now = Date.now(), list = load(), day = 864e5, checks = [];
   const add = (id, label, state, detail, fix = '') => checks.push({ id, label, state, detail, fix });
@@ -1192,6 +1195,8 @@ function officeStatus() {
   // security
   const sec = list.filter(t => t.guard && now - (t.guard.at || 0) < day), taints = sec.filter(t => t.guard.taint);
   add('seguridad', 'Seguridad (24 h)', taints.length ? 'bad' : sec.length ? 'warn' : 'ok', taints.length ? `${taints.length} tarea(s) leyeron algo con órdenes escondidas; no se envió nada.` : sec.length ? `El guardián detuvo algo en ${sec.length} tarea(s).` : 'Sin bloqueos.', taints.length || sec.length ? 'Ábrelas: el detalle dice qué se detuvo y por qué.' : '');
+  { const worst = Math.round(LOOP.max / 1e6), p99 = Math.round(LOOP.percentile(99) / 1e6); LOOP.reset();
+    add('respuesta', 'Respuesta del servidor', p99 > 2000 ? 'warn' : p99 > 200 ? 'info' : 'ok', p99 > 200 ? `La oficina se trabó: hasta ${worst} ms sin responder (99 % de las veces, menos de ${p99} ms).` : `Al día: casi siempre responde en menos de ${Math.max(1, p99)} ms.`, p99 > 200 ? 'Si se repite, cierra lo que use mucho el disco (copias, el antivirus escaneando) o avisa al equipo.' : ''); }
   // H3: company notes that need a look
   vaultIndex(); const stale = [...STALE];
   add('notas', 'Notas de la empresa', stale.length > 5 ? 'warn' : stale.length ? 'info' : 'ok', stale.length ? `${stale.length} por revisar: ${stale.slice(0, 4).map(([n, st]) => `${n} (${st.why})`).join(', ')}${stale.length > 4 ? '…' : ''}.` : 'Todas al día.', stale.length ? 'Ábrelas en el Cerebro, confirma precios y fechas, y pon «actualizado: AAAA-MM-DD» en su cabecera (o «revisar:» con la próxima fecha).' : '');

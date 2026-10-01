@@ -29,7 +29,10 @@ await step('build: braingraph + bundle', async () => {
   const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8');
   if (html.length < 500000) throw new Error('bundle looks too small: ' + html.length);
   if (!/AGENTS OFFICE/.test(html)) throw new Error('shell missing');
-  return out.trim().split('\n').pop();
+  // Auditoría 1 oct 2026 (INF-09): a budget, so the page does not grow without anyone deciding it (1,9 MB / 603 KB gzip that night)
+  const raw = Buffer.byteLength(html), gz = (await import('node:zlib')).gzipSync(html, { level: 9 }).length;
+  if (raw > 2.2 * 1024 * 1024 || gz > 700 * 1024) throw new Error(`the page passed its budget: ${(raw / 1048576).toFixed(2)} MB (max 2,2) · ${Math.round(gz / 1024)} KB gzip (max 700) — load the heavy views on demand before adding more`);
+  return out.trim().split('\n').pop() + ` · ${Math.round(gz / 1024)} KB gzip`;
 });
 await step('build: graph has linked notes', async () => {
   const { BRAIN } = await import('./src/braingraph.js?' + Date.now());
@@ -530,6 +533,10 @@ else {
     });
     await step('smoke: V4.1 — Limpiar listas archives with DESHACER, ARCHIVADAS brings one back, the list says when it is cut', async () => {
       const click = (sel) => page.click(sel, { timeout: 5000 }).catch(e => { throw new Error(`click ${sel}: ${e.message.split('\n')[0]}`); });
+      // Auditoría 1 oct 2026 (INF-11): this step failed now and then — it counts cards while the demo keeps finishing and pruning
+      // work. The demo's theatre is frozen for the step (the board still renders), and every wait is for the state it expects.
+      await page.evaluate(() => window.CC.tasks.pauseSim(true));
+      try {
       await page.evaluate(() => { const s = document.querySelector('.tp-search'); s.value = ''; s.dispatchEvent(new Event('input')); document.querySelector('.tp-chip[data-f="all"]').click(); });
       const cut = await page.evaluate(() => { const shown = document.querySelectorAll('.tp-row').length, m = document.querySelector('.tp-more'); return { shown, more: m ? m.textContent : '' }; });
       if (cut.shown >= 60 && !/Se ven 60 de/.test(cut.more)) throw new Error('60 rows and no «show more»: ' + cut.more);
@@ -538,15 +545,17 @@ else {
       await click('.tp-clear'); await page.waitForFunction(() => !document.querySelector('.tp-toast').hidden, null, { timeout: 4000 });
       const arch = await page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0)); // the demo keeps finishing (and pruning) work, so the count is checked against the toast, not the rows seen before
       const said = await page.evaluate(() => +(document.querySelector('.tp-toast').textContent.match(/\d+/) || [0])[0]); if (!arch || arch !== said) throw new Error(`archived ${arch}, the toast says ${said} (rows before: ${n0})`);
-      await click('.tp-undo'); await page.waitForFunction(() => !document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 }).catch(() => {});
+      await click('.tp-undo'); await page.waitForFunction(() => !document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 }).catch(() => { throw new Error('DESHACER: the ARCHIVADAS chip was still there after 4 s'); });
       const left = await page.evaluate(() => document.querySelector('.tp-chip[data-f="archived"]')?.textContent || ''); if (left) throw new Error('DESHACER left ' + left);
       await click('.tp-clear'); await page.waitForFunction(() => document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 });
       const archN = () => page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0));
       await click('.tp-chip[data-f="archived"]'); const a1 = await archN(); if (!await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length)) throw new Error('ARCHIVADAS shows no rows');
-      await click('.tp-row.archived button[data-act="unarchive"]'); await page.waitForTimeout(400);
+      await click('.tp-row.archived button[data-act="unarchive"]');
+      await page.waitForFunction(want => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0) === want, a1 - 1, { timeout: 4000 }).catch(() => {});
       const a2 = await archN(); if (a2 !== a1 - 1) throw new Error(`unarchive: ${a1} → ${a2}`);
       await page.evaluate(() => document.querySelector('.tp-chip[data-f="all"]').click());
       return `${n0} archived · DESHACER brings them back · ARCHIVADAS ${a1} → ${a2}${cut.more ? ' · ' + cut.more : ''}`;
+      } finally { await page.evaluate(() => window.CC.tasks.pauseSim(false)).catch(() => {}); }
     });
     await step('smoke: V4.1 — Tab stays inside an open view and its top bar, the closed board is inert, ? opens the shortcuts in Ajustes', async () => {
       await page.keyboard.press('e'); await page.waitForFunction(() => document.body.classList.contains('studioOpen'), null, { timeout: 4000 });
@@ -622,8 +631,8 @@ else {
       await page.fill('.pz-ta[data-f="texto"]', 'Por la compra de tus lentes, elige tu regalo.'); await page.waitForTimeout(1200);
       await until(() => /Guardado/.test(document.querySelector('.pz-state').textContent), 'the piece did not save itself');
       await page.click('.pz-go[data-a="approve"]'); await until(() => /APROBADA/.test(document.querySelector('.pz-chip').textContent), 'Aprobar did not approve a piece that can go out');
-      await page.fill('.pz-ta[data-f="texto"]', 'Otro texto.'); await page.waitForTimeout(1200);
-      if (!await page.evaluate(() => /A REVISAR/.test(document.querySelector('.pz-chip').textContent))) throw new Error('changing what goes out did not take the approval away');
+      await page.fill('.pz-ta[data-f="texto"]', 'Otro texto.');
+      await until(() => /A REVISAR/.test(document.querySelector('.pz-chip').textContent), 'changing what goes out did not take the approval away'); // INF-11: waits for the state, not 1,2 s (it failed now and then)
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
       if (!await page.evaluate(() => document.querySelector('.ct-panel').hidden && document.body.classList.contains('ctOpen'))) throw new Error('Esc did not close the piece first and leave Contenido open');
       await page.click('#ctOv .ct-mode [data-m="prog"]'); await page.waitForTimeout(300);
@@ -642,7 +651,8 @@ else {
       try {
         await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
         const vis = id => ph.evaluate(i => { const e = document.getElementById(i); return !!e && e.getBoundingClientRect().width > 0; }, id);
-        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topBrain') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        if (!await vis('topDimitri')) throw new Error('Dimitri is not in the dock on a phone (A11-04)');
         // El aviso «⚠ N» aparece según el momento de la demo (en CI, más tarde que aquí) y ensancha el dock: se fuerza para que el paso no dependa del reloj, y se mide a los anchos de teléfono de verdad.
         await ph.evaluate(() => { const a = document.getElementById('topAppr'); a.style.display = ''; a.querySelector('span').textContent = '12'; });
         for (const w of [390, 360, 320]) {
@@ -653,7 +663,7 @@ else {
         }
         await ph.setViewportSize({ width: 390, height: 844 }); await ph.evaluate(() => { document.getElementById('topAppr').style.display = 'none'; });
         await ph.click('#topMore'); await ph.waitForFunction(() => !document.getElementById('topMoreMenu').hidden, null, { timeout: 3000 });
-        await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
+        await ph.keyboard.press('End'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
         await ph.keyboard.press('Escape'); await ph.waitForFunction(() => document.getElementById('setOv').hidden, null, { timeout: 3000 });
         if (await ph.evaluate(() => document.activeElement && document.activeElement.id) !== 'topMore') throw new Error('focus did not come back to «⋯»');
         await ph.click('#topContenido'); await ph.waitForFunction(() => document.body.classList.contains('ctOpen'), null, { timeout: 4000 });
@@ -663,6 +673,18 @@ else {
         if (r.side) throw new Error('the page scrolls sideways on a phone');
         return 'dock folded · menu opens Ajustes and gives the focus back · the piece is a full sheet · no sideways scroll';
       } finally { await ph.close(); }
+    });
+    await step('smoke: auditoría 1 oct — the «K» line of Atajos opens Contenido (not the search), Dimitri opens from the dock beside a view', async () => {
+      const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 5000 }).catch(() => { throw new Error(what); });
+      for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(150); } await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('?'); await until(() => !document.getElementById('setOv').hidden, '? did not open the shortcuts');
+      await page.click('#setOv .ks-row[data-key="k"]'); await until(() => document.body.classList.contains('ctOpen'), 'the «K» line did not open Contenido (A11-13)');
+      await page.click('#topDimitri'); await until(() => document.body.classList.contains('subOpen') && document.body.classList.contains('ctOpen'), 'the dock\'s Dimitri did not open beside Contenido (A11-04)');
+      if (await page.evaluate(() => document.getElementById('topDimitri').getAttribute('aria-pressed')) !== 'true') throw new Error('Dimitri\'s dock button is not pressed while he is open');
+      await page.click('#topDimitri'); await until(() => !document.body.classList.contains('subOpen'), 'the dock\'s Dimitri did not close him');
+      for (let i = 0; i < 4 && await page.evaluate(() => document.body.classList.contains('ctOpen')); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(250); } // the piece, the day's list, then Contenido
+      if (await page.evaluate(() => document.body.classList.contains('ctOpen'))) throw new Error('Esc did not close Contenido');
+      return '«K» opens Contenido · Dimitri opens and closes from the dock inside a view';
     });
     await step('smoke: V4.7 (F2) — R opens Analíticas: the demo is labelled, six figures, the chart, the heat map, the period and network switches, Esc closes', async () => {
       const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 6000 }).catch(() => { throw new Error(what); });
@@ -879,7 +901,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, notes, Meta, copy)', async () => {
       const st = await (await fetch(base + '/api/status')).json();
       const ids = st.checks.map(c => c.id).join(',');
-      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,notas,redes,respaldo') throw new Error('checks: ' + ids);
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respuesta,notas,redes,respaldo') throw new Error('checks: ' + ids);
       if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
       const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
       return `${st.checks.length} checks · overall ${st.overall}`;
