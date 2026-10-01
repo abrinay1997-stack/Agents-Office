@@ -57,6 +57,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs'; // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
+import { crearLotes } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
 import { sendJson, lightTasks } from './http-json.mjs';
 import { createCache } from './vault-cache.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
@@ -119,6 +120,11 @@ voces.configureVoices(DATA); // V4.10
 // Banco de presets (F1, 1 oct 2026): la fábrica (presets/) y los del dueño (notas en <cerebro>/Estudio/Presets/). Compilar no gasta;
 // aplicar sí, por los topes del Estudio, y solo desde el clic del dueño (POST /api/media/presets/apply).
 const presets = crearPresets({ brainPath: cfg.brainPath, dataDir: DATA, cifras: () => loadCifras(), onNota: () => { rebuildGraph().catch(() => {}); } });
+// Lotes (F2, 1 oct 2026; lotes.mjs): muchas fotos con la misma receta. Nace «previsto» (no gasta); la bomba solo trabaja tras PROBAR o GENERAR,
+// gotea dejando un hueco del Estudio libre y mira los topes antes de cada foto. Va DESPUÉS de media.configure() (engancha el fin de cada trabajo);
+// su reloj arranca con el servidor (lotes.iniciar, abajo) y retoma lo que un reinicio dejó a medias sin duplicar. Los avisos van a Telegram.
+const lotes = crearLotes({ dataDir: DATA, brainPath: cfg.brainPath, presets, cfg: cfg.media?.lotes,
+  avisar: texto => notice('estudio', texto, { level: /^Paus/.test(texto) ? 'warn' : 'info' }), aprender: file => learnFromMedia(file, 1) });
 const minimaxOn = () => media.engines().some(e => e.id === 'minimax' && e.on);
 const STUDIO_DEFAULTS = () => Object.fromEntries(media.KINDS.map(k => [k, media.defaultModel(k)])); // V4.10: image, video, audio (voice) and music
 // the ESTUDIO reaches the agents of these departments as a tool (office.config.json → media.departments; [] = nobody)
@@ -2040,6 +2046,38 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { job: wait ? await media.wait(j.id, wait) : j, budget: media.budget() });
       } catch (e) { return e.code === 'no-edit-engine' ? json(res, 409, { error: e.message, engines: e.engines }) : json(res, 400, { error: e.message }); }
     }
+    if (url.pathname === '/api/media/lotes' || url.pathname.startsWith('/api/media/lotes/')) { // Lotes (F2, §6.4): lotes.mjs, con lo que habla la página traducido por lotes-puente.mjs
+      const lm = url.pathname.match(/^\/api\/media\/lotes(?:\/(L[a-z0-9]{4,30}))?(?:\/(zip|csv|filas))?$/), sp = url.searchParams;
+      const nombreModelo = id => media.models().find(m => m.id === id)?.name || id;
+      try {
+        if (url.pathname === '/api/media/lotes/hoja' && req.method === 'POST') { // lee el Excel o el CSV y lo guarda 2 h; no crea nada
+          const b = await body(req, 40 << 20), r = await lotes.leerHoja({ name: b.name, data: b.data, columnas: puenteLotes.columnasAlMotor(b.columnas) });
+          return json(res, 200, { ...r, mapa: r.columnas, columnas: puenteLotes.columnasParaUI(r) });
+        }
+        if (!lm) return json(res, 404, { error: 'no such route' });
+        const [, id, sub] = lm;
+        if (!id && req.method === 'GET') return json(res, 200, { lotes: lotes.lista().slice(0, 40).map(l => puenteLotes.paraLista(lotes.uno(l.id))), budget: media.budget() }); // los 40 más nuevos, con el estado de cada foto para su barra
+        if (!id && req.method === 'POST') { // crea el lote «previsto» con su vista previa: no gasta nada
+          const b = await body(req, 60 << 20), r = await lotes.crear({ ...b, origen: puenteLotes.origenDelPedido(b.origen) }, { by: puenteLotes.quien(b) });
+          console.log(`✦ estudio: lote ${r.lote.id} «${r.lote.nombre}» previsto · ${r.lote.filas.length} fotos · ~US$${r.vista.total}${r.lote.estado === 'espera_ok' ? ' · espera tu OK' : ''}`);
+          return json(res, 200, { lote: puenteLotes.paraUI(r.lote, r.vista, { nombreModelo }), vista: r.vista, sugerido: r.sugerido, budget: media.budget() });
+        }
+        if (id && !sub && req.method === 'GET') return json(res, 200, { lote: puenteLotes.paraUI(lotes.uno(id)) });
+        if (id && !sub && req.method === 'PATCH') { // probar · iniciar · continuar · pausar · reanudar · cancelar · autorizar (solo el dueño)
+          const b = await body(req), l = lotes.accion(id, String(b.accion || ''), { by: puenteLotes.quien(b) });
+          console.log(`✦ estudio: lote ${id} ${b.accion} → ${l.estado}`);
+          return json(res, 200, { lote: puenteLotes.paraUI(l), budget: media.budget() });
+        }
+        if (id && sub === 'filas' && req.method === 'POST') { const b = await body(req), r = lotes.filas(id, b, { by: puenteLotes.quien(b) }); return json(res, 200, { ...r, lote: puenteLotes.paraUI(r.lote) }); }
+        if (id && sub === 'zip' && req.method === 'GET') { // nombres por SKU y resumen.csv dentro
+          const z = lotes.zip(id, { que: puenteLotes.queZip(sp.get('que')) });
+          res.writeHead(200, { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="${z.nombre}"`, 'content-length': z.buf.length, 'x-content-type-options': 'nosniff' });
+          return res.end(z.buf);
+        }
+        if (id && sub === 'csv' && req.method === 'GET') { const c = Buffer.from(lotes.csv(id), 'utf8'); res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="lote-${id}.csv"`, 'content-length': c.length, 'x-content-type-options': 'nosniff' }); return res.end(c); }
+        return json(res, 404, { error: 'no such route' });
+      } catch (e) { if (!e.status) console.warn('lote:', e.message); return json(res, e.status || 400, { error: e.message }); }
+    }
     if (url.pathname === '/api/media/presets' || url.pathname.startsWith('/api/media/presets/')) { // Banco de presets (F1, §6.4)
       const sp = url.searchParams, pm = url.pathname.match(/^\/api\/media\/presets\/([a-z0-9-]{2,40})(\/versiones)?$/);
       try {
@@ -2233,6 +2271,7 @@ server.listen(cfg.port, HOST, () => {
   console.log(`  routines: ${rl.length} loaded${rl.some(r => r.paused) ? ' (' + rl.filter(r => r.paused).length + ' paused)' : ''}${nx ? ' · next ' + untilText(nx.nextAt) + ' ' + nx.title.toUpperCase() + ' (' + nx.agent + ')' : ''} · ${rlist.path}`);
   setInterval(tickRoutines, 20000); tickRoutines();
   setInterval(pump, 5000); setTimeout(pump, 1500); // pending work left by a restart, or added while every seat was busy
+  lotes.iniciar(); { const vivos = lotes.lista().filter(l => !['hecho', 'cancelado', 'previsto'].includes(l.estado)); if (vivos.length) console.log(`  lotes: ${vivos.length} sin terminar (${vivos.map(l => `«${l.nombre}» ${l.estado}`).join(', ')}) — retomados sin duplicar`); } // F2: el reloj de los lotes
   { const on = media.engines().filter(p => p.on && p.id !== 'prueba'), n = media.models().filter(m => m.on && m.engine !== 'prueba').length, act = media.jobs({ active: true }).length;
     console.log(`  estudio: ${on.length ? on.map(p => p.name).join(', ') + ` (${n} models)` : 'no key yet (only the free «prueba» engines) — setx HF_KEY / GEMINI_API_KEY / XAI_API_KEY / OPENAI_API_KEY / FAL_KEY'} · for ${STUDIO_DEPTS.join(', ') || 'nobody'} · ${(b => b.left == null ? 'no daily cap' : `${b.left}/${b.limit} left today`)(media.budget())}${act ? ` · ${act} job${act > 1 ? 's' : ''} in progress` : ''}`); }
   console.log(`  engine: the server runs every task · ${MAX_RUNS} at once, one per agent (office.config.json → concurrency)`); // the clock: every 20 s; the first tick catches up anything missed while the office was off (once, marked LATE)

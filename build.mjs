@@ -20,7 +20,10 @@ const res = await build({
 const js = res.outputFiles[0].text;
 // V4.7: the views added after V4.6 keep their style in src/css/<name>.css instead of growing shell.html; they are joined, in name order,
 // where shell.html says «/* <css-vistas> */» (the end of its <style>). Nothing else changes: it is still one file that opens by double click.
-const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css')).sort().map(f => `/* ---- src/css/${f} ---- */\n${readFileSync('src/css/' + f, 'utf8')}`).join('\n') : '';
+// Banco de presets F2 (1 oct 2026): sin sus comentarios ni espacios de más (~36 KB), para que la página quepa en su presupuesto (check.mjs,
+// INF-09) con la pestaña Lotes. Solo comentarios y blancos: los espacios que separan selectores (`.lt :is(…)`) y los de los valores quedan.
+const cssCorto = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').replace(/\s*([{};,])\s*/g, '$1').trim();
+const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css')).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
 const shell = readFileSync('src/shell.html', 'utf8').replace('/* <css-vistas> */', () => vistasCss);
 const html = shell.replace('<!--APP-->', () => `<script>${js}</script>`);
 mkdirSync('dist', { recursive: true });

@@ -39,7 +39,7 @@ export const ACTIVOS = Object.freeze(['muestra', 'corriendo']);
 const TERMINAL = new Set(['lista', 'revisar', 'aprobada', 'fallo', 'omitida']);
 export const grupoDe = estado => (ESTADO_FILA[estado] || ESTADO_FILA.en_cola).grupo;
 /** Las columnas de un Excel (§6.1) y lo que significa cada una. */
-export const CAMPOS = Object.freeze([['foto', 'Foto'], ['sku', 'SKU'], ['nombre', 'Nombre'], ['preset', 'Preset'], ['canal', 'Canal'], ['encuadre', 'Encuadre'], ['notas', 'Notas (idea)'], ['', 'No usar']]);
+export const CAMPOS = Object.freeze([['foto', 'Foto'], ['sku', 'SKU'], ['nombre', 'Nombre'], ['preset', 'Preset'], ['canal', 'Canal'], ['encuadre', 'Encuadre'], ['medidas', 'Medidas (cm)'], ['notas', 'Notas (idea)'], ['', 'No usar']]);
 export const MAX_FILAS = 100; // §15.5: el tope de filas por lote (Ajustes lo cambia; el servidor manda)
 
 /** Las cuentas de un lote: cuántas hay en cada grupo, las terminadas, el %, el dinero y los minutos que faltan (estimados). */
@@ -79,7 +79,8 @@ export function pausaDeMuestra(lote) {
 export function controles(lote) {
   const r = resumen(lote);
   switch (lote?.estado) {
-    case 'previsto': case 'espera_ok': return [...(r.total > 3 ? ['probar'] : []), 'iniciar', 'cancelar'];
+    case 'previsto': return [...(r.total > 3 ? ['probar'] : []), 'iniciar', 'cancelar'];
+    case 'espera_ok': return ['autorizar', 'cancelar']; // lo pidió un agente por encima de sus umbrales: primero el OK del dueño (lotes.mjs)
     case 'muestra': case 'corriendo': return ['pausar', 'cancelar'];
     case 'pausado': return [pausaDeMuestra(lote) ? 'continuar' : 'reanudar', 'cancelar'];
     default: return [];
@@ -181,7 +182,7 @@ export function erroresPaso(b, paso, { maxFilas = MAX_FILAS } = {}) {
 function origenPedido(o) {
   if (!o) return null;
   if (o.tipo === 'carpeta') return { tipo: 'carpeta', carpeta: o.carpeta };
-  if (o.tipo === 'hoja') return { tipo: 'hoja', nombre: o.nombre || '', filas: arr(o.filas), columnas: arr(o.columnas), ...(arr(o.files).length ? { fotos: o.files } : {}) };
+  if (o.tipo === 'hoja') return { tipo: 'hoja', ...(o.hoja ? { hoja: o.hoja } : {}), nombre: o.nombre || '', filas: arr(o.filas), columnas: arr(o.columnas), ...(arr(o.files).length ? { fotos: o.files } : {}) }; // hoja: el id con que la oficina la guarda 2 h
   if (o.tipo === 'ejemplo') return { tipo: 'ejemplo', n: num(o.n) };
   return { tipo: o.tipo, files: arr(o.files) };
 }
@@ -455,7 +456,7 @@ export function initLotes(host, ctx = {}) {
   }
   async function releerHoja(columnas) {
     const o = b.origen; if (!o?.data) return;
-    try { const r = await ctx.api('POST', '/api/media/lotes/hoja', { name: o.nombre, data: o.data, ...(columnas ? { columnas } : {}) }); o.filas = arr(r.filas); o.columnas = columnasDe(r.columnas); o.avisos = arr(r.avisos); hojaMsg = ''; }
+    try { const r = await ctx.api('POST', '/api/media/lotes/hoja', { name: o.nombre, data: o.data, ...(columnas ? { columnas } : {}) }); o.hoja = r.id || o.hoja; o.filas = arr(r.filas); o.columnas = columnasDe(r.columnas); o.avisos = arr(r.avisos); hojaMsg = ''; }
     catch (e) { hojaMsg = e.message; }
     pintarConFoco();
   }
@@ -478,7 +479,7 @@ export function initLotes(host, ctx = {}) {
   }
   function cabeceraHTML() {
     const r = resumen(lote), ctl = controles(lote), descargar = r.por.lista + r.por.aprobada > 0;
-    const C = { probar: ['PROBAR CON 3', 'lt-pri', ICO.play], iniciar: [`GENERAR TODAS · ${usd(r.estimado)}`, ctl.includes('probar') ? 'lt-sec' : 'lt-pri', ICO.play], continuar: [`Seguir con ${r.por.cola === 1 ? 'la que queda' : `las ${r.por.cola} restantes`}`, 'lt-pri', ICO.play], reanudar: ['Reanudar', 'lt-pri', ICO.play], pausar: ['Pausar', 'lt-sec', ICO.pausa], cancelar: ['Cancelar el lote', 'lt-sec lt-peligro', ''] };
+    const C = { probar: ['PROBAR CON 3', 'lt-pri', ICO.play], iniciar: [`GENERAR TODAS · ${usd(r.estimado)}`, ctl.includes('probar') ? 'lt-sec' : 'lt-pri', ICO.play], continuar: [`Seguir con ${r.por.cola === 1 ? 'la que queda' : `las ${r.por.cola} restantes`}`, 'lt-pri', ICO.play], reanudar: ['Reanudar', 'lt-pri', ICO.play], autorizar: ['Autorizar el lote', 'lt-pri', ICO.play], pausar: ['Pausar', 'lt-sec', ICO.pausa], cancelar: ['Cancelar el lote', 'lt-sec lt-peligro', ''] };
     return `<p class="lt-agente"><span class="lt-pulso${ACTIVOS.includes(lote.estado) ? ' on' : ''}" aria-hidden="true"></span>${esc(agenteDice(lote))}</p>
       <div class="lt-barra" role="progressbar" aria-label="Progreso del lote" aria-valuemin="0" aria-valuemax="${r.total}" aria-valuenow="${r.hechas}" aria-valuetext="${r.hechas} de ${r.total}"><span style="width:${r.pct}%"></span></div>
       <p class="lt-cifras"><span>${esc(lineaCifras(r))}</span><span>${esc(costoTexto(r))}</span></p>
@@ -548,7 +549,7 @@ export function initLotes(host, ctx = {}) {
     catch (e) { say(e.message, true); anunciar(e.message); }
   }
   async function accionFila(accion, ns, extra) {
-    try { const r = await api('POST', `/api/media/lotes/${encodeURIComponent(lote.id)}/filas`, pedidoFila(accion, ns, extra)); lote = r.lote || r; actualizarSeguir(); anunciar(`${ACCION_ES[accion]}: ${ns.length === 1 ? `foto #${ns[0]}` : `${ns.length} fotos`}.`); }
+    try { const r = await api('POST', `/api/media/lotes/${encodeURIComponent(lote.id)}/filas`, pedidoFila(accion, ns, extra)); lote = r.lote || r; actualizarSeguir(); const no = arr(r.filas).filter(x => x && x.ok === false); if (no.length) say(no.map(x => `#${x.n}: ${x.motivo}`).join(' · '), true); anunciar(no.length ? `No se pudo con ${no.length === 1 ? `la foto #${no[0].n}: ${no[0].motivo}` : `${no.length} fotos`}.` : `${ACCION_ES[accion]}: ${ns.length === 1 ? `foto #${ns[0]}` : `${ns.length} fotos`}.`); }
     catch (e) { say(e.message, true); anunciar(e.message); }
   }
 

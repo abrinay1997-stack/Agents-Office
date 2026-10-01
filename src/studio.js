@@ -14,6 +14,7 @@ import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — th
 import * as GF from './galeria-filtro.js'; // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
 import { initBanco } from './studio-banco.js'; // 1 Oct 2026 (banco de presets, F1): the bank lives in its own module; here only its hooks
+import { initLotes } from './studio-lotes.js'; // banco de presets F2: the Lotes tab (many photos, one recipe) lives in its own module; here only its hooks
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
   voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales', style: 'Estilo de la música', promptExpansion: 'Que el motor amplíe el prompt' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
@@ -56,7 +57,7 @@ export function initStudio(ctx) {
       <span class="st-logo">${svg('vid')}</span><div><div class="st-name" id="stTitle">Estudio</div><div class="st-sub"${store.get('subSeen', false) ? ' hidden' : ''}>Imágenes y video reales. Sigue generando aunque cierres esta ventana; tus agentes también lo usan.</div></div>
       <span class="sp"></span><button type="button" class="st-budget" aria-live="polite" title="Tus topes del Estudio: se cambian en Ajustes → Estudio"></button><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)">${svg('x')}</button>
     </div>
-    <div class="st-ptabs" role="tablist" aria-label="Estudio"><button type="button" role="tab" data-pt="gen" aria-selected="true">Crear</button><button type="button" role="tab" data-pt="gal" aria-selected="false">Galería <b class="st-ptn"></b></button></div>
+    <div class="st-ptabs" role="tablist" aria-label="Estudio"><button type="button" role="tab" data-pt="gen" aria-selected="true">Crear<span class="st-ptg"> y galería</span></button><button type="button" role="tab" data-pt="gal" aria-selected="false">Galería <b class="st-ptn"></b></button><button type="button" role="tab" data-pt="lotes" aria-selected="false" title="Muchas fotos con la misma receta (L)">Lotes <b class="st-ptl"></b></button></div>
     <div class="st-forpiece" hidden role="status"></div>
     <div class="st-body">
       <section class="st-gen" aria-label="Crear">
@@ -101,12 +102,13 @@ export function initStudio(ctx) {
           <button type="button" class="st-vocbtn" title="Tus voces de MiniMax: diseñar una con una descripción, clonar la tuya, usarla">${svg('mic')}<span>Voces</span></button>
         </div>
         <div class="st-folders" role="toolbar" aria-label="Carpetas: arrastra imágenes a una carpeta para guardarlas ahí"></div>
-        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><label class="st-mvw">${svg('folder')}<select class="st-mv" aria-label="Mover las seleccionadas a una carpeta"></select></label><button type="button" data-b="del">${svg('trash')} Papelera</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
+        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><label class="st-mvw">${svg('folder')}<select class="st-mv" aria-label="Mover las seleccionadas a una carpeta"></select></label><button type="button" data-b="del">${svg('trash')} Papelera</button><button type="button" data-b="lote" title="Aplicar la misma receta a todas las seleccionadas, con su costo antes de gastar (L)">${svg('grid')} Editar en lote…</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
         <div class="st-picking" hidden></div>
         <div class="st-count" aria-live="polite"></div>
         <div class="st-grid"></div>
       </section>
     </div>
+    <div class="st-lotes" hidden></div>
     <div class="st-light" hidden role="dialog" aria-modal="true" aria-label="Vista ampliada"></div>
     <div class="st-hist" hidden role="dialog" aria-modal="true" aria-labelledby="stHistT"></div>
     <div class="st-hist st-binov" hidden role="dialog" aria-modal="true" aria-labelledby="stBinT"></div>
@@ -136,6 +138,7 @@ export function initStudio(ctx) {
   const setsOf = store.get('sets', {}); // model id → its settings
   let media = { start: [], end: [], reference: [], video: [] };
   let banco = null; // banco de presets (F1): src/studio-banco.js, created once the composer exists (below)
+  let lotesUI = null; // banco de presets (F2): src/studio-lotes.js, the Lotes tab (below)
 
   const cur = () => models.find(m => m.id === modelOf[kind]) || null;
   const roleName = r => ROLE[r];
@@ -178,6 +181,21 @@ export function initStudio(ctx) {
     trabajos: (js, b) => { jobs.unshift(...js); if (b) budget = b; renderHead(); renderGrid(); watch(); }, recargar: () => load({ full: false }),
     pedirDimitri: ctx.askDimitri ? () => ctx.askDimitri([]) : null });
   $('.st-step').after(banco.el); $('.st-gal').appendChild(banco.sheet);
+  /* ---------- lotes (F2, §6 y §7.4): many photos with the same recipe, in their own tab. Nothing is spent until PROBAR or GENERAR there ---------- */
+  const esImg = f => /\.(png|jpe?g|webp)$/i.test(String(f));
+  lotesUI = initLotes($('.st-lotes'), { esc, api, say, live: () => isLive() && location.protocol.startsWith('http'), src: f => src(f),
+    carpetas: () => folders.map(f => ({ id: f.id, name: f.name, n: f.n ?? items.filter(it => it.folder === f.id).length })),
+    seleccion: () => [...sel].filter(esImg), subir: async files => (await uploadFiles(files, null)).map(it => it.file).filter(esImg),
+    compositor: () => banco.estado(), modelos: () => models.filter(m => m.on && m.kind === 'image' && m.roles?.reference).map(m => ({ id: m.id, name: m.name, cost: m.cost })),
+    abrirArchivo: f => lightFile(f),
+    onCambio: c => { const b = $('.st-ptl'); if (b) { const n = c.activos + c.espera; b.textContent = n ? String(n) : ''; b.title = n ? `${c.activos} en marcha${c.espera ? ` · ${c.espera} esperan tu OK` : ''}${c.revisar ? ` · ${c.revisar} fotos para revisar` : ''}` : ''; } } });
+  /** «Editar en lote…» in the selection bar: the Lotes tab, with these photos as its first step done (§6.1). */
+  function editarEnLote(files) {
+    const ids = files.filter(esImg);
+    if (!ids.length) { say('Para un lote, selecciona fotos (PNG, JPG o WEBP).', true); return; }
+    if (ids.length < files.length) say(`${files.length - ids.length} de las seleccionadas no son fotos: el lote lleva las ${ids.length} que sí.`);
+    showPane('lotes'); lotesUI.nuevo({ tipo: 'seleccion', files: ids });
+  }
   /** With presets in the composer, the bank decides the model and the cost: the steps it covers step aside and the foot says its cost. */
   function bancoState() {
     if (!banco) return;
@@ -520,7 +538,7 @@ export function initStudio(ctx) {
     $('.st-selbar').hidden = !(selecting || sel.size); $('.st-seln').textContent = (sel.size ? `${sel.size} ${sel.size === 1 ? 'seleccionada' : 'seleccionadas'}` : 'Toca las que quieras') + ' · Mayús + clic elige un rango';
     el.classList.toggle('st-selecting', selecting || sel.size > 0);
     $('.st-selbtn').setAttribute('aria-pressed', selecting || sel.size > 0); $('.st-selbtn').classList.toggle('on', selecting || sel.size > 0);
-    el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"], .st-selbar .st-mv').forEach(b => { b.disabled = !sel.size; });
+    el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"], .st-selbar [data-b="lote"], .st-selbar .st-mv').forEach(b => { b.disabled = !sel.size; });
     const mv = $('.st-mv'); if (mv && document.activeElement !== mv) mv.innerHTML = `<option value="">Mover a…</option>${folders.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('')}<option value="none">Sin carpeta</option><option value="__new">+ Nueva carpeta…</option>`;
     $('.st-picking').hidden = !picking;
     if (picking) $('.st-picking').innerHTML = typeof picking === 'object' ? `${esc(picking.label)}: haz clic en una imagen. <button type="button" data-b="unpick">Cancelar</button>` : `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${roleName(picking)}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`; // banco de presets: { label, take(file) }
@@ -1559,6 +1577,7 @@ export function initStudio(ctx) {
       if (b === 'fav') favMany(files);
       if (b === 'zip') zip(files);
       if (b === 'del') trashMany(files); // V4.2 (audit A27): like the card — straight to the bin, with DESHACER
+      if (b === 'lote') editarEnLote(files); // banco de presets F2 (§6.1): «Editar en lote…»
       return;
     }
     if (e.target.closest('.st-enh')) {
@@ -1691,6 +1710,8 @@ export function initStudio(ctx) {
       if (e.key === '/') { e.preventDefault(); showPane('gal'); $('.st-q').focus(); return; }
       if (e.key === 'i' || e.key === 'I') { setKind('image'); return; }
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
+      if ((e.key === 'l' || e.key === 'L') && !el.classList.contains('st-pickmode')) { showPane(el.dataset.pane === 'lotes' ? 'gen' : 'lotes'); return; } // banco de presets F2: the Lotes tab (and back)
+      if (el.dataset.pane === 'lotes' && /^[ivb/]$/i.test(e.key)) return; // the composer's keys stay in the composer
       if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (kind !== 'image') setKind('image'); showPane('gen'); banco.toggle(); return; } // banco de presets (§7.1)
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
@@ -1755,10 +1776,12 @@ export function initStudio(ctx) {
   }
   bgPoll();
   const phone = () => matchMedia('(max-width: 760px)').matches;
-  function showPane(p) { // on a phone one pane at a time; on a wider screen both are always there
-    el.dataset.pane = p;
-    el.querySelectorAll('[data-pt]').forEach(b => b.setAttribute('aria-selected', b.dataset.pt === p));
-    if (p === 'gal') relayout();
+  function showPane(p) { // on a phone one pane at a time; on a wider screen both are always there. «Lotes» (F2) replaces both, on any screen
+    const was = el.dataset.pane; el.dataset.pane = p;
+    el.querySelectorAll('[data-pt]').forEach(b => b.setAttribute('aria-selected', b.dataset.pt === p || (b.dataset.pt === 'gen' && p === 'gal' && !phone()))); // on a wide screen «Crear y galería» is one tab
+    $('.st-body').hidden = p === 'lotes'; $('.st-lotes').hidden = p !== 'lotes';
+    if (p === 'lotes' && was !== 'lotes') lotesUI?.abrir();
+    if (p === 'gal' || (p === 'gen' && was === 'lotes')) relayout();
   }
   showPane('gen');
   /* V4.7: «para la pieza» — the calendar opened the Estudio to make (or pick) the pictures of one piece */

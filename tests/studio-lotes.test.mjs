@@ -26,7 +26,7 @@ test('los botones del lote: probar/generar antes de gastar, pausar en marcha, se
   const muchas = Array.from({ length: 12 }, (_, i) => fila(i + 1, 'en_cola'));
   assert.deepEqual(L.controles(lote('previsto', muchas)), ['probar', 'iniciar', 'cancelar']);
   assert.deepEqual(L.controles(lote('previsto', muchas.slice(0, 3))), ['iniciar', 'cancelar'], 'con 3 o menos no hay muestra');
-  assert.deepEqual(L.controles(lote('espera_ok', muchas)), ['probar', 'iniciar', 'cancelar']);
+  assert.deepEqual(L.controles(lote('espera_ok', muchas)), ['autorizar', 'cancelar'], 'lo de un agente espera el OK antes de poder probar o generar');
   assert.deepEqual(L.controles(lote('corriendo', muchas)), ['pausar', 'cancelar']);
   assert.deepEqual(L.controles(lote('pausado', muchas, { pausa: { por: 'muestra' } })), ['continuar', 'cancelar']);
   assert.deepEqual(L.controles(lote('pausado', muchas, { pausa: { por: 'dueño' } })), ['reanudar', 'cancelar']);

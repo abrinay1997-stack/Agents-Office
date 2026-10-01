@@ -188,3 +188,22 @@ body.dark .lt { --lt-card: #1E1F24; --lt-ok: #9BE2B1; --lt-okb: #183224; --lt-re
   .lt .lt-pulso.on { animation: none; }
   .lt .lt-barra > span { transition: none; }
 }
+
+/* La pestaña Lotes dentro del Estudio (integración F2, src/studio.js): «Crear y galería · Lotes» en escritorio; en el teléfono
+   «Crear · Galería · Lotes» (shell.html ya pinta allí las pestañas). Lotes ocupa el sitio de los dos paneles, en cualquier ancho. */
+@media (min-width: 761px) {
+  .st-ptabs { display: flex; gap: 2px; padding: 4px 14px 0; border-bottom: 1px solid var(--hairline); flex: none; }
+  .st-ptabs [data-pt="gal"] { display: none; }
+  .st-ptabs button { font: 600 13px/1.2 var(--ui); min-height: 34px; padding: 6px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--grey); cursor: pointer; }
+  .st-ptabs button:hover { color: var(--ink); }
+  .st-ptabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+}
+@media (max-width: 760px) { .st-ptg { display: none; } }
+.st-ptabs button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.st-ptl:empty { display: none; }
+.st-ptl { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 99px; background: var(--ink); color: var(--cream); font-size: 11px; line-height: 18px; text-align: center; }
+.st-ptabs button[aria-selected="true"] .st-ptl { background: var(--cream); color: var(--ink); }
+@media (min-width: 761px) { .st-ptabs button[aria-selected="true"] .st-ptl { background: var(--ink); color: var(--cream); } }
+.st-lotes { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 24px; }
+.st-lotes[hidden], #studioOv[data-pane="lotes"] .st-body { display: none; } /* .st-body es display:grid: el atributo hidden solo no basta */
+.st-lotes > .lt { max-width: 1180px; margin: 0 auto; }
