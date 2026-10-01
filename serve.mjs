@@ -629,7 +629,8 @@ async function newTask({ dept, text, team = false, at = null, by = 'you', model,
 // V4.8: the «estudio» mode — Dimitri reads the Estudio (the models that are on, the caps, the folders), the images the owner attached
 // (for its own eyes) and what the owner is looking at; it proposes creatives with their cost. NOTHING is generated here: subStudio is
 // the only place they become jobs, and only the page's GENERAR calls it.
-const STUDIO_ASK = /\b(im[aá]gen(es)?|fotos?|creativos?|videos?|reels?|posts?|historias?|stor(y|ies)|carrusel|banner|flyer|afiche|portada|miniatura|logo|anima(r|ci[oó]n)?|edita(r)?|retoca(r)?|estudio)\b/i;
+// V4.11 (DIM-19): a voice-over, a jingle or music is the Estudio too — it loads the brand's voice, the offer and the figures
+const STUDIO_ASK = /\b(im[aá]gen(es)?|fotos?|creativos?|videos?|reels?|posts?|historias?|stor(y|ies)|carrusel|banner|flyer|afiche|portada|miniatura|logo|anima(r|ci[oó]n)?|edita(r)?|retoca(r)?|estudio|voz|voces|locuci[oó]n|locutor(a)?|narra(r|ci[oó]n|dor)?|m[uú]sica|jingles?|canci[oó]n|audio|podcast|cu[ñn]a)\b/i;
 const STUDIO_NOTES = () => path.join(BRAIN, 'Agents Office', 'estudio'); // <brain>/Agents Office/estudio/AAAA-MM/*.md (this machine's: Agents Office/* does not travel)
 function approvedCreatives(text, n = 4) { // the owner's past approved creatives that look like this request: BM25 × what the Brain learned, only files still liked
   const notes = new Map();
@@ -638,45 +639,112 @@ function approvedCreatives(text, n = 4) { // the owner's past approved creatives
   return knowledge.search(knowledge.buildIndex(notes), text, { n: n * 3, per: 1 }).map(h => ({ ...estudioPlan.approvedFromNote(h.note, notes.get(h.note)), score: h.score * memory.boostOf(MEM, h.note) }))
     .filter(a => { const it = a.file && media.item(a.file); return !!(it && (it.fav || it.used || it.approved)); }).sort((a, b) => b.score - a.score).slice(0, n);
 }
-async function subChat(text, { attach = [], vision: images = [], context = null } = {}) {
+async function subChat(text, { attach = [], vision: images = [], context = null, answers = null } = {}) {
   const st = sub.load(DATA); refreshSkills();
   const list = load(), index = vaultIndex();
+  // V4.11 (DIM-06): the owner answered Dimitri's questions with the buttons — the message says what was chosen, and the question keeps it
+  let picked = null;
+  if (answers && answers.msg) { const q = st.messages.find(x => x.id === answers.msg); if (q?.plan?.questions?.length && !q.plan.answers) { picked = sub.answerText(q.plan.questions, answers.picks); if (picked.answers.length) { if (picked.text) text = picked.text; } else picked = null; } } // the server's own words for what was chosen (the page's text is only its preview)
   const read = relevantNotes(index, null, st.messages.slice(-4).map(m => m.text).join(' ') + ' ' + text, 4); // the company's own notes that touch what is being talked about
   if (context?.view === 'brain' && context.label && index.has(context.label) && !read.includes(context.label)) read.unshift(context.label); // the note the owner has open
-  const studioish = attach.length || images.length || context?.view === 'studio' || STUDIO_ASK.test(text);
+  // DIM-04: the Estudio's catalog only when the message is about it (or the last answer was a plan of creatives): «¿Cómo vamos?» no longer carries 113 models
+  const studioish = attach.length || images.length || context?.view === 'studio' || STUDIO_ASK.test(text) || st.messages.slice(-2).some(m => m.who === 'sub' && m.mode === 'estudio' && m.studio?.creatives?.some(c => c.state === 'proposed'));
   let extra = '', approved = [];
   if (studioish) { // the brand's voice, the figures, the offer and the clients, and what the owner liked before
     for (const k of ['voice', 'oferta', 'clientes']) if (index.has(k) && !read.includes(k)) extra += `\n\n--- ${k}.md ---\n${index.get(k).slice(0, 1800)}`;
     extra += cifrasText(); approved = approvedCreatives(text);
   }
-  if (context?.view === 'contenido' && context.id) { const p = contenido.leer(String(context.id)); if (p) extra += `\n\n--- La pieza que el dueño tiene abierta en Contenido (${p.id}) ---\n«${p.titulo || 'sin título'}» · ${p.formato} · ${p.redes.join(', ')} · ${p.fecha || 'sin día'}${p.hora ? ' ' + p.hora : ''} · estado: ${p.estado}${p.medios.length ? ' · archivos: ' + p.medios.join(', ') : ''}\n${String(p.texto || '').slice(0, 1200)}`; } // the piece, summed up (data, not orders)
-  const studioBlock = estudioPlan.studioPromptBlock({ models: media.models(), budget: media.budget(), folders: media.folders(), attach: attach.map(id => { const it = media.item(id) || {}; return { id, prompt: it.prompt, folder: it.folder ? media.folderOf(it.folder)?.name : null }; }), context, approved });
-  const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => DEPTS[k].name),
-    status: sub.statusText(list, AGENTS, DEPTS), recent: sub.recentText(list, AGENTS), notes: businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : '') + extra, studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock });
-  const convo = st.messages.slice(-12).map(m => `${m.who === 'user' ? 'Dueño' : DEPUTY}: ${m.text}${m.attach?.length ? ' [adjuntó: ' + m.attach.join(', ') + ']' : ''}${m.plan?.tasks?.length ? ' [propuse: ' + m.plan.tasks.map(t => `${t.title} → ${DEPTS[t.dept].name}${t.state === 'sent' ? ' (enviada)' : t.state === 'skipped' ? ' (descartada)' : ' (sin decidir)'}`).join('; ') + ']' : ''}${m.studio?.creatives?.length ? ' [propuse creativos: ' + m.studio.creatives.map(c => `${c.title} · ${c.model} (${{ proposed: 'sin decidir', sent: 'generando', done: 'listo', failed: 'falló', skipped: 'descartado' }[c.state] || c.state})`).join('; ') + ']' : ''}${m.media?.length ? ' [archivos: ' + m.media.join(', ') + ']' : ''}`).join('\n');
-  const out = await ask(system, (convo ? convo + '\n' : '') + `Dueño: ${text}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : ''}\n${DEPUTY} (solo JSON):`, { maxTokens: 5000, timeout: 180000, images: images.length ? images : null });
-  const plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
+  const voices = studioish ? dimitriVoices() : [];
+  const studioBlock = studioish ? estudioPlan.studioPromptBlock({ models: media.models(), budget: media.budget(), folders: media.folders(), attach: attach.map(id => { const it = media.item(id) || {}; return { id, prompt: it.prompt, folder: it.folder ? media.folderOf(it.folder)?.name : null }; }), approved, voices, ask: text, defaults: k => media.defaultModel(k) }) : '';
+  const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => `${DEPTS[k].name} (${k})`),
+    status: sub.statusText(list, AGENTS, DEPTS), office: dimitriOffice(list), recent: sub.recentText(list, AGENTS), notes: businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : '') + extra,
+    studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing: dimitriViewing(context, list), older: sub.olderText(st.messages, 12) });
+  const convo = sub.historyText(st.messages, { name: DEPUTY, depts: DEPTS }, 12); // DIM-05: with what Dimitri asked and what the owner chose · DIM-18: each creative's prompt, settings and files
+  const userMsg = (convo ? convo + '\n' : '') + `Dueño: ${text}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${DEPUTY} (solo JSON):`;
+  const opts = { maxTokens: 6000, timeout: 180000, images: images.length ? images : null, kind: 'dimitri' }; // DIM-21: his own line in «Costos y retorno»
+  let out = await ask(system, userMsg, opts);
+  let plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
+  if (plan.bad) { // DIM-07: the JSON came back broken beyond repair — once more, asked for less (never the raw JSON in the chat)
+    out = await ask(system, userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)', opts).catch(() => '');
+    plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
+  }
   const shield = plan.image_text ? safety.injectionIn(plan.image_text) : null; // what an image says is data: hidden orders mark the message and take its actions away
   let studio = null;
   if (plan.mode === 'estudio') {
     const models = media.models(), budget = media.budget(), has = id => !!media.resolve(id);
-    const creatives = estudioPlan.parseCreatives(plan.creatives, { models, folders: media.folders(), galleryHas: has, maxPerRequest: budget.maxPerRequest, defaultModel: k => media.defaultModel(k), estimate: media.estimate });
+    const creatives = estudioPlan.parseCreatives(plan.creatives, { models, folders: media.folders(), galleryHas: has, maxPerRequest: budget.maxPerRequest, defaultModel: k => media.defaultModel(k), estimate: media.estimate, voices: voices.map(v => v.voiceId) });
     studio = { creatives, actions: shield ? [] : estudioPlan.parseActions(plan.actions, { galleryHas: has }), estimate: estudioPlan.estimatePlan(creatives, { estimate: media.estimate, budget, models }) };
   }
-  const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
-  const reply = (plan.reply || (studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length ? 'Así lo repartiría:' : '¿Me das un poco más de detalle?')) + (shield ? `\n\n🛡 Una imagen traía órdenes escondidas (${shield}): no las sigo.` : '');
-  const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}), ...(studio ? { studio } : {}), ...(shield ? { shield } : {}) });
-  const st2 = sub.load(DATA); st2.messages.push(u, m); sub.save(DATA, st2); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
-  console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}${studio ? ` · ${studio.creatives.length} creative(s), aprox. US$${studio.estimate.total}` : ''}${images.length ? ` · saw ${images.length} image(s)` : ''}${shield ? ' · 🛡 ' + shield : ''}`);
-  return { messages: [u, m] };
+  const ops = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)) }).ops : [];
+  const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
+  const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
+  const reply = (plan.reply || fallback) + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 Una imagen traía órdenes escondidas (${shield}): no las sigo.` : '');
+  const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
+  const st2 = sub.load(DATA); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
+  if (picked) { const q = st2.messages.find(x => x.id === answers.msg); if (q?.plan) q.plan.answers = picked.answers; }
+  st2.messages.push(u, m); sub.save(DATA, st2);
+  console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}${studio ? ` · ${studio.creatives.length} creative(s), aprox. US$${studio.estimate.total}` : ''}${ops.length ? ` · ${ops.length} op(s)` : ''}${plan.questions.length ? ` · ${plan.questions.length} question(s)` : ''}${images.length ? ` · saw ${images.length} image(s)` : ''}${plan.bad ? ' · unreadable answer' : plan.cut ? ' · mended a cut answer' : ''}${shield ? ' · 🛡 ' + shield : ''}`);
+  return { messages: [u, m], ...(picked ? { answered: { msg: answers.msg, answers: picked.answers } } : {}) };
+}
+/** V4.11 (DIM-03): the voices a voice-over of Dimitri's may take — the owner's (cloned, designed) and the system's — only with MiniMax on. */
+function dimitriVoices() {
+  if (!minimaxOn()) return [];
+  try { const s = voces.summary(); return [...s.voices.map(v => ({ voiceId: v.voiceId, name: v.name, kind: v.kind === 'design' ? 'design' : 'clone', at: v.at })), ...(s.system || []).map(v => ({ voiceId: v.voiceId, name: v.name, kind: 'system' }))]; } catch { return []; }
+}
+/** V4.11 (DIM-10): the rest of the office for «¿Cómo vamos?» — Contenido, Analíticas, routines, spend, KPIs, notices — computed, no model. */
+function dimitriOffice(list) {
+  const out = [];
+  try { const d = new Date(); d.setDate(d.getDate() + 13); out.push(sub.contenidoText(contenido.listar({ desde: localDay(Date.now()), hasta: localDay(d.getTime()), sinFecha: true }), { now: new Date(), dias: 7 })); } catch (e) { out.push(`Contenido: no lo pude leer (${e.message}).`); }
+  try { out.push(sub.analiticasText(analiticasResumen())); } catch {}
+  try { out.push(sub.rutinasText(loadRoutines(), list, { agents: AGENTS })); } catch {}
+  try {
+    const kp = loadKpis(), unread = loadNotices().filter(n => !n.read);
+    out.push(sub.oficinaText({ budget: costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()), kpis: kp.defs.map(d => ({ id: d.id, name: d.name, goal: d.goal ?? d.target, value: (kp.values[d.id] || []).at(-1)?.v ?? null })), unread: unread.length, notices: unread.slice(-4).reverse() }));
+  } catch {}
+  return out.filter(Boolean).join('\n');
+}
+/** Analíticas summed up for Dimitri (the same numbers as the view: src/contenido-cifras.js), or why there are none. */
+function analiticasResumen({ dias = 30, red = 'todas' } = {}) {
+  let est = {}; try { est = meta.estado(); } catch {}
+  const r = metricas.leer({ dias: dias * 2 + 5 });
+  if (!r.serie.length) return { conectado: !!est.configurado, ultimaFoto: r.ultimaFoto, dias };
+  const d = new Date(); d.setDate(d.getDate() - dias + 1); const desde = localDay(d.getTime()), hasta = localDay(Date.now());
+  const p = new Date(r.serie[0].fecha + 'T12:00:00'); p.setDate(p.getDate() - 45);
+  const k = cifrasKpis({ serie: r.serie, publicaciones: r.publicaciones }, { desde, hasta, red, cobertura: 0.7, publicacionesDesde: localDay(p.getTime()) });
+  const pubs = r.publicaciones.filter(x => x.publicadaAt && localDay(Date.parse(x.publicadaAt)) >= desde && (red === 'todas' || x.red === red)).sort((a, b) => (b.interacciones || 0) - (a.interacciones || 0));
+  return { conectado: !!est.configurado, ultimaFoto: r.ultimaFoto, dias, k, mejores: pubs.slice(0, 3), peores: pubs.length > 3 ? pubs.slice(-3).reverse() : [] };
+}
+/** V4.11 (DIM-08): «👁 Viendo: …» with its data — the piece, the range's pieces, the routine and its last runs, the task, the metric. */
+function dimitriViewing(c, list) {
+  if (!c || !c.view) return '';
+  const data = {};
+  try {
+    if (c.view === 'contenido' && c.kind === 'pieza' && c.id) { const p = contenido.leer(String(c.id)); if (p) data.pieza = p; else data.none = 'Esa pieza ya no está en Contenido.'; }
+    else if ((c.view === 'contenido' || c.view === 'cal') && c.kind === 'range' && /^\d{4}-\d{2}-\d{2}$/.test(c.id || '')) {
+      const a = new Date(c.id + 'T12:00:00'), d0 = new Date(a), d1 = new Date(a); d0.setDate(d0.getDate() - 7); d1.setDate(d1.getDate() + 21);
+      data.desde = localDay(d0.getTime()); data.hasta = localDay(d1.getTime()); data.piezas = contenido.listar({ desde: data.desde, hasta: data.hasta });
+    } else if (c.view === 'cal' && c.kind === 'routine' && c.id) {
+      const r = loadRoutines().find(x => x.id === c.id);
+      if (r) { data.routine = { ...r, agentName: AGENTS.find(a => a.id === r.agent)?.name }; data.runs = list.filter(t => t.routine === r.id).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0)).slice(0, 3); } else data.none = 'Esa rutina ya no está.';
+    } else if (c.view === 'cal' && c.kind === 'task' && c.id) {
+      const t = list.find(x => x.id === c.id); if (t) data.task = { ...t, agentName: AGENTS.find(a => a.id === t.agent)?.name }; else data.none = 'Esa tarea ya no está.';
+    } else if (c.view === 'analiticas') {
+      const [metrica, red, dias] = String(c.id || '').split(':');
+      data.metric = `Métrica en pantalla: ${metrica || '—'}\n` + sub.analiticasText(analiticasResumen({ dias: Math.max(1, Math.min(365, +dias || 30)), red: ['instagram', 'facebook'].includes(red) ? red : 'todas' }));
+    }
+  } catch (e) { data.none = `No pude leer lo que tiene abierto (${e.message}).`; }
+  return sub.viewingText(c, data);
 }
 function studioAction(a) { // one of the four organising actions of the contract (estudio-plan.parseActions already threw the rest away)
   const find = name => media.folders().find(f => f.name.toLowerCase() === String(name).toLowerCase());
   if (a.type === 'carpeta_crear') { if (!find(a.name)) media.addFolder(a.name); return; }
   if (a.type === 'carpeta_renombrar') { const f = find(a.from); if (!f) throw new Error(`no hay una carpeta «${a.from}»`); media.renameFolder(f.id, a.to); return; }
   if (a.type === 'mover') { const f = find(a.folder) || media.addFolder(a.folder); a.moved = media.moveTo(a.files.filter(x => media.resolve(x)), f.id); return; }
-  if (a.type === 'enviar_contenido') { // an idea in Contenido, never approved: the owner decides there
-    const it = media.item(a.file) || {}; const r = contenido.crear({ titulo: String(it.prompt || 'Idea de Dimitri').replace(/\s+/g, ' ').slice(0, 80), texto: a.texto || '', medios: [a.file], estado: 'idea', origen: 'dimitri' }, { por: 'dimitri' });
+  if (a.type === 'enviar_contenido') { // an idea in Contenido, never approved: the owner decides there · V4.11 (DIM-17): titled in Spanish, with its day, hour, format and networks when given
+    const it = media.item(a.file) || {}, cr = a.creative || null;
+    const titulo = String(a.titulo || cr?.title || it.prompt || 'Idea de Dimitri').replace(/\s+/g, ' ').slice(0, 80);
+    const formato = a.formato || (/\.(mp4|webm)$/i.test(a.file) ? 'reel' : 'post');
+    const r = contenido.crear({ titulo, texto: a.texto || '', medios: [a.file], estado: a.fecha ? 'borrador' : 'idea', origen: 'dimitri', formato, ...(a.fecha ? { fecha: a.fecha } : {}), ...(a.hora ? { hora: a.hora } : {}), ...(a.redes?.length ? { redes: a.redes } : {}) }, { por: 'dimitri' });
     if (r.error) throw new Error(r.error); a.pieza = r.pieza.id; return;
   }
   throw new Error('acción desconocida');
@@ -693,7 +761,7 @@ async function subStudio(msgId, items) { // the owner pressed GENERAR: the ONLY 
     const e = byI.get(c.i); if (!e) continue; // only what the page listed: a creative left out keeps waiting
     if (e.include === false) { c.state = 'skipped'; continue; }
     const ed = { ...c, ...(typeof e.prompt === 'string' && e.prompt.trim() ? { prompt: e.prompt } : {}), ...(e.n != null ? { n: e.n } : {}), ...(typeof e.model === 'string' && e.model ? { model: e.model } : {}), settings: { ...c.settings, ...(e.settings && typeof e.settings === 'object' ? e.settings : {}) }, ...(typeof e.folder === 'string' ? { folder: e.folder } : {}) };
-    const [v] = estudioPlan.parseCreatives([ed], { models, folders: media.folders(), galleryHas: has, maxPerRequest: media.budget().maxPerRequest, defaultModel: k => media.defaultModel(k), estimate: media.estimate }); // the owner's edits are checked again, like the first time
+    const [v] = estudioPlan.parseCreatives([ed], { models, folders: media.folders(), galleryHas: has, maxPerRequest: media.budget().maxPerRequest, defaultModel: k => media.defaultModel(k), estimate: media.estimate, voices: dimitriVoices().map(x => x.voiceId) }); // the owner's edits are checked again, like the first time (a voice too: DIM-03)
     Object.assign(c, { prompt: v.prompt, n: v.n, model: v.model, modelName: v.modelName, kind: v.kind, settings: v.settings, media: v.media, folder: v.folder, cost: v.cost });
     if (v.state !== 'proposed') { c.state = 'skipped'; c.error = v.error; failed++; continue; }
     try {
@@ -704,7 +772,7 @@ async function subStudio(msgId, items) { // the owner pressed GENERAR: the ONLY 
   }
   if (!m.shield) for (const a of m.studio.actions || []) { // the organising goes with the same click
     if (a.state !== 'proposed') continue;
-    try { studioAction(a); a.state = 'done'; done++; } catch (err) { a.state = 'failed'; a.error = err.message; }
+    try { if (a.type === 'enviar_contenido' && !a.titulo) { for (const x of st.messages) { const cr = x.studio?.creatives?.find(c => (c.files || []).includes(a.file)); if (cr) { a.creative = { title: cr.title }; break; } } } studioAction(a); delete a.creative; a.state = 'done'; done++; } catch (err) { a.state = 'failed'; a.error = err.message; }
   }
   const i = st.messages.findIndex(x => x.id === m.id); if (i >= 0) st.messages[i] = m;
   if (sent || failed || done) st.messages.push(sub.message('sub', `${sent ? `Mandé ${sent} ${sent === 1 ? 'creativo' : 'creativos'} al Estudio (aprox. US$${usd.toFixed(2)}). Te aviso aquí cuando estén.` : 'No mandé nada al Estudio.'}${failed ? ` ${failed} no se pudo: lo dice en su tarjeta.` : ''}${done ? ` Ordené ${done} ${done === 1 ? 'cosa' : 'cosas'} en la galería.` : ''}`));
@@ -721,7 +789,7 @@ function subJobDone(j) {
   if (!c || c.doneAt) return;
   Object.assign(c, { state: j.state === 'done' ? 'done' : 'failed', files: j.items || [], doneAt: Date.now() });
   if (j.error) c.error = j.error; if (j.warning) c.warning = j.warning;
-  const n = c.files.length, what = c.kind === 'video' ? (n === 1 ? 'video' : 'videos') : n === 1 ? 'imagen' : 'imágenes';
+  const n = c.files.length, what = estudioPlan.unitWord(c.kind, n); // DIM-02: «1 locución», «1 pieza musical», never «1 imagen» for an mp3
   st.messages.push(c.state === 'done' ? sub.message('sub', `Listos: «${c.title}» (${n} ${what}${c.folder ? `, en la carpeta «${c.folder}»` : ''}).${j.warning ? ' ' + j.warning : ''}`, { media: c.files, ref: { msg: m.id, i: c.i } })
     : sub.message('sub', `No salió «${c.title}»: ${j.error || 'el motor no devolvió nada'}`, { ref: { msg: m.id, i: c.i } }));
   sub.save(DATA, st);
@@ -739,6 +807,8 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
     if (typeof e.instruction === 'string' && e.instruction.trim()) t.instruction = e.instruction.trim().slice(0, 4000);
     if (typeof e.team === 'boolean') t.team = e.team;
     if (e.at === null) t.at = null; else if (typeof e.at === 'number' && e.at > Date.now()) t.at = e.at;
+    if (t.at && t.at <= Date.now() + 30000) { t.error = 'esa hora ya pasó: elige mañana a la misma hora, ahora u otra hora'; continue; } // DIM-13: never «ya» in silence
+    delete t.past; delete t.error;
     todo.push(t);
   }
   if (!todo.length) { sub.save(DATA, st); return { ok: true, message: m, tasks: [] }; }
@@ -750,6 +820,61 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
   st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => DEPTS[t.dept].name))].join(', ')}. Te aviso aquí cómo van.${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
   sub.save(DATA, st2);
   return { ok: true, message: m, tasks: sent, messages: st2.messages.slice(-2) };
+}
+/* V4.11 (DIM-11): Dimitri's «ops» — a routine, skipping a run, a draft piece, moving a piece or a task, cancelling a task. Each one only
+   with the owner's click (POST /api/sub/ops), checked again against the office as it is now, and undoable for UNDO_MS (POST /api/sub/ops/undo).
+   Never approve, schedule in Meta or publish: a piece is born a draft and a moved approved piece loses its OK (contenido.guardar). */
+const OPS_UNDO_MS = 30000;
+const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)) });
+async function runOp(o) {
+  if (o.type === 'rutina_crear') {
+    const r = await makeRoutine({ dept: o.dept, text: o.text, when: o.when, agent: o.agent || undefined, needsOk: o.needsOk }); if (r.error) throw new Error(r.error);
+    const rt = o.titled && o.title && o.title !== r.routine.title ? editRoutine(r.routine.id, { title: String(o.title).slice(0, 90) }) || r.routine : r.routine; // the title Dimitri and the owner saw on the card
+    Object.assign(o, { routineId: rt.id, desc: rt.desc, agent: rt.agent, title: rt.title, undo: { routine: rt.id } }); return;
+  }
+  if (o.type === 'rutina_saltar') { const s = RSTATE[o.id] || (RSTATE[o.id] = {}); s.skip = (s.skip || []).filter(x => x !== o.at); s.skip.push(o.at); routines.saveState(DATA, RSTATE); o.undo = { unskip: o.at }; return; }
+  if (o.type === 'pieza_crear') { const r = contenido.crear({ titulo: o.titulo, fecha: o.fecha, hora: o.hora, formato: o.formato, redes: o.redes, texto: o.texto, estado: 'borrador', origen: 'dimitri' }, { por: 'dimitri' }); if (r.error) throw new Error(r.error); o.pieza = r.pieza.id; o.undo = { pieza: r.pieza.id }; return; }
+  if (o.type === 'pieza_mover') { const prev = contenido.leer(o.id); if (!prev) throw new Error('esa pieza ya no está'); const r = contenido.guardar(o.id, { fecha: o.fecha, ...(o.hora ? { hora: o.hora } : {}) }); if (r.error) throw new Error(r.error); o.soltada = !!r.soltada; o.titulo = o.titulo || prev.titulo; o.undo = { fecha: prev.fecha, hora: prev.hora }; return; }
+  if (o.type === 'tarea_mover') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next') || running.has(t.id)) throw new Error('esa tarea ya empezó o ya no está'); o.undo = { state: t.state, dueAt: t.dueAt ?? null }; t.dueAt = o.at; if (t.state === 'next') { t.state = 'scheduled'; if (t.needsOk === undefined) t.needsOk = routines.guessNeedsOk(t.text || t.title); } save(l); return; }
+  if (o.type === 'tarea_cancelar') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next') || running.has(t.id)) throw new Error('esa tarea ya empezó o ya no está'); save(l.filter(x => x.id !== o.id)); o.undo = { task: t }; return; }
+  throw new Error('no sé hacer eso');
+}
+async function subOps(msgId, items) {
+  const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId);
+  if (!m || !m.ops) return { error: 'esa propuesta ya no existe' };
+  const byK = new Map((Array.isArray(items) ? items : []).filter(e => e && Number.isInteger(e.k)).map(e => [e.k, e]));
+  let done = 0, failed = 0;
+  for (const o of m.ops) {
+    if (o.state !== 'proposed' || !byK.has(o.k)) continue;
+    const e = byK.get(o.k);
+    if (e.include === false) { o.state = 'skipped'; continue; }
+    const pick = k => (e[k] !== undefined ? { [k]: e[k] } : {}); // the owner's edits on the card, checked again like the first time
+    const base = { ...o }; if (o.type === 'rutina_crear' && !o.titled) delete base.title; // a title Dimitri did not give is the router's to write
+    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent') }], opsContext()).ops;
+    if (!v) { o.state = 'failed'; o.error = 'ya no se puede: algo cambió en la oficina, la hora ya pasó o el horario no está completo'; failed++; continue; }
+    Object.assign(o, v, { k: o.k });
+    try { await runOp(o); o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; } catch (err) { o.state = 'failed'; o.error = err.message; failed++; }
+  }
+  const st2 = sub.load(DATA); const i = st2.messages.findIndex(x => x.id === m.id); if (i >= 0) st2.messages[i] = m;
+  if (done || failed) st2.messages.push(sub.message('sub', `${done ? `Hecho: ${done} ${done === 1 ? 'cambio' : 'cambios'} en el calendario y la oficina. Puedes deshacerlo en la tarjeta durante ${OPS_UNDO_MS / 1000} s.` : 'No cambié nada.'}${failed ? ` ${failed} no se pudo: lo dice su tarjeta.` : ''}`));
+  sub.save(DATA, st2); if (done) setImmediate(pump);
+  console.log(`◆ ${DEPUTY.toLowerCase()} ops: ${done} done, ${failed} failed`);
+  return { ok: true, message: m, messages: st2.messages.slice(-1) };
+}
+function subOpUndo(msgId, k) {
+  const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId), o = m?.ops?.find(x => x.k === k);
+  if (!o || o.state !== 'done' || !o.undo) return { error: 'eso ya no se puede deshacer' };
+  if (Date.now() - (o.doneAt || 0) > OPS_UNDO_MS) return { error: 'pasó el tiempo para deshacerlo: cámbialo en el calendario' };
+  const u = o.undo;
+  if (o.type === 'rutina_crear') removeRoutine(u.routine);
+  else if (o.type === 'rutina_saltar') { const s = RSTATE[o.id]; if (s) { s.skip = (s.skip || []).filter(x => x !== u.unskip); routines.saveState(DATA, RSTATE); } }
+  else if (o.type === 'pieza_crear') contenido.borrar(u.pieza);
+  else if (o.type === 'pieza_mover') { const r = contenido.guardar(o.id, { fecha: u.fecha || '', hora: u.hora || '' }); if (r.error) return { error: r.error }; }
+  else if (o.type === 'tarea_mover') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next')) return { error: 'esa tarea ya empezó' }; t.state = u.state; if (u.dueAt == null) delete t.dueAt; else t.dueAt = u.dueAt; save(l); }
+  else if (o.type === 'tarea_cancelar') { const l = load(); if (!l.some(x => x.id === u.task.id)) { l.push(u.task); save(l); setImmediate(pump); } }
+  o.state = 'undone'; delete o.undo;
+  sub.save(DATA, st);
+  return { ok: true, message: m };
 }
 
 /* ---------- routines: the office's own clock (V3.5) ---------- */
@@ -1920,15 +2045,24 @@ const server = http.createServer(async (req, res) => {
       const text = String(b.text || '').trim();
       const attach = Array.isArray(b.attach) ? [...new Set(b.attach.filter(x => typeof x === 'string'))] : [];
       if (attach.length > 4) return json(res, 400, { error: 'como mucho 4 imágenes por mensaje' });
-      if (attach.some(id => !media.resolve(id) || !/\.(png|jpe?g|webp|svg)$/i.test(id))) return json(res, 400, { error: 'una de las imágenes ya no está en el Estudio' });
+      { const gone = attach.find(id => !media.resolve(id)); if (gone) return json(res, 400, { error: `«${String(gone).split('/').pop()}» ya no está en el Estudio (¿en la papelera?)` }); }
+      { const odd = attach.find(id => !/\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav)$/i.test(id)); if (odd) return json(res, 400, { error: `«${String(odd).split('/').pop()}» no se puede adjuntar: solo imágenes (PNG, JPG, WEBP), video (MP4, WEBM) o audio (MP3, WAV)` }); } // V4.11 (DIM-09): a video or an audio goes by its id (Dimitri does not see it)
       const vis = vision.validateVision(b.vision); if (vis.error) return json(res, 400, { error: vis.error });
       if (vis.images.some(im => im.file && !media.resolve(im.file))) return json(res, 400, { error: 'una de las imágenes ya no está en el Estudio' });
       if (!text && !attach.length && !vis.images.length) return json(res, 400, { error: 'mensaje vacío' });
       if (text.length > 8000) return json(res, 400, { error: 'el mensaje es muy largo (máx. 8000 caracteres)' });
       const c = b.context && typeof b.context === 'object' && typeof b.context.view === 'string' ? b.context : null;
       const context = c ? { view: c.view.slice(0, 20), label: String(c.label || '').slice(0, 160), kind: c.kind ? String(c.kind).slice(0, 20) : null, id: c.id ? String(c.id).slice(0, 300) : null } : null;
-      return json(res, 200, await subChat(text || 'Mira estas imágenes.', { attach, vision: vis.images, context }));
+      const ans = b.answers && typeof b.answers === 'object' && typeof b.answers.msg === 'string' && Array.isArray(b.answers.picks) ? { msg: b.answers.msg.slice(0, 40), picks: b.answers.picks.slice(0, 6) } : null; // V4.11 (DIM-06): the options the owner picked
+      return json(res, 200, await subChat(text || (attach.length ? 'Mira esto.' : 'Mira estas imágenes.'), { attach, vision: vis.images, context, answers: ans }));
     }
+    if (url.pathname === '/api/sub/ops' && req.method === 'POST') { // V4.11 (DIM-11): routines, pieces and tasks Dimitri proposed — only with the owner's click
+      const { msg, items } = await body(req);
+      const r = await subOps(String(msg || ''), items);
+      return json(res, r.error ? 404 : 200, r);
+    }
+    if (url.pathname === '/api/sub/ops/undo' && req.method === 'POST') { const { msg, k } = await body(req); const r = subOpUndo(String(msg || ''), +k); return json(res, r.error ? 409 : 200, r); }
+    if (url.pathname === '/api/sub/restore' && req.method === 'POST') { const { id } = await body(req); return sub.restore(DATA, String(id || '')) ? json(res, 200, sub.load(DATA)) : json(res, 404, { error: 'esa conversación ya no se puede recuperar' }); } // DIM-18: «Nueva conversación» → DESHACER
     if (url.pathname === '/api/sub/studio' && req.method === 'POST') { // V4.8: GENERAR — the only route that generates for Dimitri
       const { msg, items } = await body(req);
       const r = await subStudio(String(msg || ''), items);
@@ -1939,7 +2073,7 @@ const server = http.createServer(async (req, res) => {
       const r = await subSend(String(msg || ''), items);
       return json(res, r.error ? 404 : 200, r);
     }
-    if (url.pathname === '/api/sub/clear' && req.method === 'POST') { sub.save(DATA, { messages: [] }); return json(res, 200, { ok: true }); }
+    if (url.pathname === '/api/sub/clear' && req.method === 'POST') { const id = sub.archive(DATA); return json(res, 200, { ok: true, archived: id }); } // V4.11: archived (data/subgerente-archivo.json), not deleted
     if (url.pathname === '/api/chat' && req.method === 'POST') {
       const { agent, text, history } = await body(req);
       if (!text || !String(text).trim()) return json(res, 400, { error: 'mensaje vacío' });

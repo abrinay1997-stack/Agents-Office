@@ -1,7 +1,7 @@
 // estudio-plan.mjs: every rule that keeps Dimitri's creatives honest before the owner presses GENERAR.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { studioPromptBlock, parseCreatives, estimatePlan, parseActions, approvedFromNote, cleanSettings } from '../estudio-plan.mjs';
+import { studioPromptBlock, parseCreatives, estimatePlan, parseActions, approvedFromNote, cleanSettings, COMPACT_OVER, WEIGHT, weightOf, unitWord } from '../estudio-plan.mjs';
 
 const RATIO = { type: 'enum', values: ['1:1', '9:16', '16:9'], default: '1:1' };
 const MODELS = [
@@ -25,7 +25,7 @@ test('the prompt block lists only the models that are on (never a legacy one), w
   assert.match(t, /hoy quedan 10 de 40/); assert.match(t, /dinero del día: quedan US\$1\.50 de US\$2\.00/); assert.doesNotMatch(t, /dinero del mes/);
   assert.match(t, /«Lanzamiento» \(3\)/);
   assert.match(t, /IMÁGENES ADJUNTAS[^\n]*\n- 1\. id: 2026-09\/foto\.png · su prompt: una foto/);
-  assert.match(t, /LO QUE EL DUEÑO ESTÁ VIENDO AHORA: studio — Galería \(image: 2026-09\/foto\.png\)/);
+  assert.doesNotMatch(t, /ESTÁ VIENDO/, 'what the owner looks at is <viendo> in the system prompt now (DIM-08), not under the Estudio');
   assert.match(t, /CREATIVOS APROBADOS PARECIDOS[^\n]*\n- «Reel de agosto» · kling-3-std · 2026-08\/r\.mp4 · prompt: neon claw machine/);
   assert.match(studioPromptBlock({ models: [MODELS[1]] }), /ninguno: el Estudio no tiene motores encendidos/);
 });
@@ -113,4 +113,42 @@ test('an Estudio note in the Brain → title, prompt, model and file', () => {
   assert.deepEqual(n, { title: 'Reel neón', prompt: 'neon claw machine at night', model: 'kling-3-std', file: '2026-09/2026-09-12 neon 120000.mp4' });
   const b = approvedFromNote('2026-09-01 post-lunes', '# Post del lunes\n- **Prompt:** a claw machine\n- **Modelo:** nano-banana-2\n');
   assert.deepEqual(b, { title: 'Post del lunes', prompt: 'a claw machine', model: 'nano-banana-2', file: '' });
+});
+
+/* ---------- V4.11 ---------- */
+test('with many models on, the block is compact: the default in full, two more in short, the rest by id (DIM-04)', () => {
+  const many = Array.from({ length: COMPACT_OVER + 6 }, (_, i) => ({ id: `img-${i}`, engine: 'fal', kind: 'image', name: `Img ${i}`, on: true, cost: 0.01 * (i + 1), roles: {}, needs: [], tier: i === 5 ? 4 : 2, uses: i === 7 ? ['texto en la imagen'] : [], settings: { aspectRatio: RATIO, quality: { type: 'enum', values: ['a', 'b'], default: 'a' } } }));
+  const t = studioPromptBlock({ models: many, ask: 'un post con texto en la imagen', defaults: () => 'img-3' });
+  const lines = t.split('\n').filter(l => /^- img-/.test(l));
+  assert.equal(lines.length, 3, 'three models in full or short lines');
+  assert.match(lines[0], /^- img-3 .*ajustes: aspectRatio/, 'the default first, with its settings');
+  assert.match(lines[1], /^- img-7 /, 'then what the request asks for (uses)'); assert.doesNotMatch(lines[1], /ajustes/);
+  assert.match(t, /otros de imagen \(usa su id; sus ajustes van por defecto\): .*img-0/);
+  assert.ok(t.length < 3000, `compact (${t.length} characters)`);
+});
+
+test('voices: the block lists the owner\'s and the system\'s by id; an invented voiceId falls back and says so (DIM-03)', () => {
+  const VOZ = { id: 'speech-hd', engine: 'minimax', kind: 'audio', name: 'Speech HD', on: true, cost: 0.1, perChar: true, roles: {}, needs: [], settings: { voiceId: { type: 'text', default: 'Spanish_Narrator' } } };
+  const voices = [{ voiceId: 'voz-abrinay-01', name: 'Abrinay', kind: 'clone', at: Date.parse('2026-09-30T12:00:00') }, { voiceId: 'Spanish_Narrator', name: 'Narrador', kind: 'system' }];
+  const t = studioPromptBlock({ models: [VOZ], voices });
+  assert.match(t, /del dueño: voz-abrinay-01 «Abrinay» \(clonada el/); assert.match(t, /del sistema: Spanish_Narrator «Narrador»/);
+  assert.match(studioPromptBlock({ models: [VOZ], voices: [voices[1]] }), /ninguna todavía \(si pide «mi voz», dile que la clone/);
+  const ok = parseCreatives([{ kind: 'audio', model: 'speech-hd', prompt: 'Hola', settings: { voiceId: 'voz-abrinay-01' } }], { models: [VOZ], voices: voices.map(v => v.voiceId) })[0];
+  assert.equal(ok.settings.voiceId, 'voz-abrinay-01'); assert.doesNotMatch(ok.why, /no está/);
+  const bad = parseCreatives([{ kind: 'audio', model: 'speech-hd', prompt: 'Hola', settings: { voiceId: 'voz-inventada' } }], { models: [VOZ], voices: voices.map(v => v.voiceId) })[0];
+  assert.equal(bad.settings.voiceId, 'Spanish_Narrator'); assert.match(bad.why, /«voz-inventada» no está entre tus voces/);
+});
+
+test('a video or an audio attached is listed apart (Dimitri does not see it); the units say what came back (DIM-09, DIM-02)', () => {
+  const t = studioPromptBlock({ models: MODELS, attach: [{ id: '2026-09/clip.mp4', prompt: 'un reel' }, { id: '2026-09/foto.png' }] });
+  assert.match(t, /IMÁGENES ADJUNTAS[^\n]*\n- 1\. id: 2026-09\/foto\.png/); assert.match(t, /VIDEO O AUDIO ADJUNTO[^\n]*\n- video id: 2026-09\/clip\.mp4 · su prompt: un reel/);
+  assert.equal(unitWord('audio', 1), 'locución'); assert.equal(unitWord('music', 2), 'piezas musicales'); assert.equal(unitWord('image', 2), 'imágenes');
+  assert.equal(weightOf('music'), 3); assert.equal(weightOf('audio'), 1); assert.equal(WEIGHT.video, 5);
+});
+
+test('«enviar a Contenido» takes a title in Spanish and the day, hour, format and networks when given (DIM-17)', () => {
+  const [a] = parseActions([{ type: 'enviar_contenido', file: '2026-09/foto.png', titulo: 'Combo del viernes', texto: 'Ven', fecha: '2026-10-09', hora: '18:00', formato: 'reel', redes: ['Instagram', 'tiktok'] }], { galleryHas: id => GALLERY.has(id) });
+  assert.deepEqual(a, { k: 0, type: 'enviar_contenido', file: '2026-09/foto.png', titulo: 'Combo del viernes', texto: 'Ven', fecha: '2026-10-09', hora: '18:00', formato: 'reel', redes: ['instagram'], state: 'proposed' });
+  const [b] = parseActions([{ type: 'enviar_contenido', file: '2026-09/foto.png', fecha: 'viernes', hora: '18:00', formato: 'tiktok' }], { galleryHas: id => GALLERY.has(id) });
+  assert.equal(b.fecha, undefined); assert.equal(b.hora, undefined, 'no hour without a day'); assert.equal(b.formato, undefined);
 });

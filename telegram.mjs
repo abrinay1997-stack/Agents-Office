@@ -123,7 +123,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
     const r = await local('POST', '/api/sub/chat', { text: arg });
     const m = (r.messages || []).find(x => x.who === 'sub') || {};
     const pieces = (m.plan?.tasks || []).filter(t => t.state === 'proposed');
-    const body = esc(m.text || '…') + (pieces.length ? '\n\n' + pieces.map((t, i) => `${i + 1}. <b>${esc(t.title)}</b> → ${esc(t.dept)}${t.team ? ' (equipo)' : ''}`).join('\n') : '') + (m.plan?.questions?.length ? '\n\n' + m.plan.questions.map(q => '❓ ' + esc(q)).join('\n') : '');
+    const body = esc(m.text || '…') + (pieces.length ? '\n\n' + pieces.map((t, i) => `${i + 1}. <b>${esc(t.title)}</b> → ${esc(t.dept)}${t.team ? ' (equipo)' : ''}`).join('\n') : '') + (m.plan?.questions?.length ? '\n\n' + m.plan.questions.map(q => '❓ ' + esc(typeof q === 'string' ? q : q.q + (q.options?.length ? ` — ${q.options.map(o => o.label).join(' / ')}` : ''))).join('\n') : ''); // V4.11: a question may carry options (sub.parseQuestions)
     return send(chat, body, pieces.length ? { reply_markup: { inline_keyboard: [[{ text: `📤 Enviar ${pieces.length === 1 ? 'la pieza' : 'las ' + pieces.length + ' piezas'} a los jefes`, callback_data: 'sd:' + m.id }]] } } : {});
   }
   async function handleCallback(q) {
