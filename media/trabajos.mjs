@@ -4,6 +4,7 @@
 // la memoria (writeStudioNote, learnArgs).
 import fs from 'node:fs';
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import * as mmx from '../minimax.mjs';
 import { S } from './estado.mjs';
 import { ENGINES, KINDS, secret, engineOn, model, allModels, defaultModel, settingsFor, unitCost, hfRoute, editModels, engines } from './catalogo.mjs';
@@ -65,10 +66,29 @@ export function loadJobs() {
   if (changed) saveJobs();
   running = 0; setImmediate(pumpJobs);
 }
+/* Banco de presets F2 (lotes.mjs, §5.9.3 y §6): un trabajo de un lote VIVO no cuenta en la semana ni en los 400 últimos (un lote
+   de 250 fotos echaría fuera a los demás, y el lote perdería el rastro de sus filas). lotes.mjs dice qué lote sigue vivo y
+   recibe cada trabajo suyo al terminar. Va aparte de `hooks` porque configure() los reemplaza. */
+let LOTES = {};
+export function setLotes(h = {}) { LOTES = { ...LOTES, ...h }; }
+const loteVivo = j => { if (!j.lote || typeof LOTES.vivo !== 'function') return false; try { return !!LOTES.vivo(j.lote.id); } catch { return false; } };
+const LOTE_ALS = new AsyncLocalStorage();
+/** Todo lo que se pida a submit() dentro de fn() queda marcado con su lote y su fila (y el SKU, para nombrar el archivo). */
+export const enLote = (info, fn) => LOTE_ALS.run(info, fn);
+/** El lote del pedido en curso ({ id, fila, sku }) o null: para quien construye el pedido por su cuenta. */
+export const loteActual = () => LOTE_ALS.getStore() || null;
+const LOTE_RE = /^L[a-z0-9]{4,30}$/;
+function loteDe(req) {
+  const l = req.lote && typeof req.lote === 'object' ? req.lote : LOTE_ALS.getStore();
+  if (!l || !LOTE_RE.test(String(l.id)) || !Number.isInteger(+l.fila) || +l.fila < 0) return {};
+  const sku = typeof l.sku === 'string' && l.sku.trim() && !req.sku ? { sku: l.sku.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) } : {};
+  return { lote: { id: String(l.id), fila: +l.fila }, ...(sku.sku ? sku : {}) };
+}
 function saveJobs() {
   if (!jobsFile) return;
   const cut = Date.now() - 7 * 864e5; // finished jobs are kept a week (the files themselves live in the gallery)
-  JOBS = JOBS.filter(j => j.state === 'queued' || j.state === 'running' || (j.doneAt || j.at) > cut).slice(-400);
+  const vivos = new Set(JOBS.filter(loteVivo)), otros = new Set(JOBS.filter(j => !vivos.has(j) && (j.state === 'queued' || j.state === 'running' || (j.doneAt || j.at) > cut)).slice(-400));
+  JOBS = JOBS.filter(j => vivos.has(j) || otros.has(j));
   fs.mkdirSync(path.dirname(jobsFile), { recursive: true });
   const tmp = jobsFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(JOBS, null, 1)); fs.renameSync(tmp, jobsFile);
 }
@@ -115,7 +135,7 @@ function submitLocal(req) {
   const px = presetTrail(req); if (!px.post?.length) throw new Error('no hay ningún paso local que hacer');
   const tr = trail({ ...req, versionOf: req.versionOf ?? src });
   const prompt = String(req.prompt || '').replace(/[\x00-\x1f]/g, ' ').trim().slice(0, 300) || 'Edición en tu máquina';
-  const j = { id: jid(), state: 'queued', kind: 'image', model: LOCAL, engine: LOCAL, prompt, n: 1, s: {}, media: { reference: [src] }, weight: 0, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: 0, source: src, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra, ...px };
+  const j = { id: jid(), state: 'queued', kind: 'image', model: LOCAL, engine: LOCAL, prompt, n: 1, s: {}, media: { reference: [src] }, weight: 0, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: 0, source: src, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra, ...px, ...loteDe(req) };
   JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
   return pub(j);
 }
@@ -147,7 +167,7 @@ export function submit(req = {}) {
   }
   const tr = trail(req); // V4.9: who asked (Dimitri too), what for, what it read, which picture it is a version of
   const px = m.kind === 'image' ? presetTrail(req) : (Array.isArray(req.preset) ? { preset: presetTrail({ preset: req.preset }).preset } : {}); // banco de presets: los pasos locales solo sobre imágenes
-  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s, prompt) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra, ...px }; // V4.6: generated inside a folder, it lands there
+  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s, prompt) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra, ...px, ...loteDe(req) }; // V4.6: generated inside a folder, it lands there
   JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
   return pub(j);
 }
@@ -161,7 +181,7 @@ async function runJob(j) {
   j.note = j.remote?.length ? 'retomando tras el reinicio' : 'enviando'; saveJobs();
   const local = j.engine === LOCAL, m = local ? null : model(j.model);
   const guardar = (buf, ext, extra = {}) => {
-    const it = store(buf, ext, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: local ? 'En tu máquina (sin IA)' : m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...(j.versionOf ? { versionOf: j.versionOf } : {}), ...(j.sub ? { sub: j.sub } : {}), ...(j.purpose ? { purpose: j.purpose } : {}), ...(j.read ? { read: j.read } : {}), ...(j.preset ? { preset: j.preset } : {}), ...(j.receta ? { receta: j.receta } : {}), ...extra });
+    const it = store(buf, ext, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: local ? 'En tu máquina (sin IA)' : m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...(j.versionOf ? { versionOf: j.versionOf } : {}), ...(j.sub ? { sub: j.sub } : {}), ...(j.purpose ? { purpose: j.purpose } : {}), ...(j.read ? { read: j.read } : {}), ...(j.preset ? { preset: j.preset } : {}), ...(j.receta ? { receta: j.receta } : {}), ...(j.lote ? { lote: j.lote } : {}), ...extra });
     j.items.push(it.file); saveJobs(); return it;
   };
   // banco de presets (F1): con pasos locales o QA, cada imagen espera aquí y pasa por posproceso antes de ir a la galería
@@ -197,6 +217,7 @@ async function runJob(j) {
   saveJobs(); running--;
   const out = pub(j); for (const w of waiters.get(j.id) || []) w(out); waiters.delete(j.id);
   try { hooks.onDone?.(out); } catch (e) { console.warn('estudio onDone:', e.message); }
+  if (j.lote) { try { LOTES.alTerminar?.(out); } catch (e) { console.warn('estudio lote:', e.message); } }
   setImmediate(pumpJobs);
 }
 /** Resolves with the job once it finished, or as it is after `ms` (the agents wait a little, never a whole video). */
