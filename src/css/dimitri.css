@@ -176,3 +176,23 @@ body.dark .sb-otherin, body.dark .so-in:not(textarea):not([type="checkbox"]), bo
 body.dark .sb-past { color: #FFB4AB; border-color: rgba(255,180,171,.5); background: rgba(255,180,171,.06); }
 body.dark .so-card { border-left-color: #B9A6F5; } body.dark .so-card.sent.done { border-left-color: #6FD3B4; } body.dark .so-card.sent.failed { border-left-color: #FFB4AB; }
 body.dark .sb-opt:hover { background: rgba(236,234,227,.08); }
+
+/* la respuesta mientras se escribe y «Detener» (DIM-14) */
+.sb-livem { display: flex; flex-direction: column; }
+.sb-livea .md > :last-child::after { content: '▍'; margin-left: 1px; color: var(--grey); animation: sbcaret 1s steps(1) infinite; }
+@keyframes sbcaret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sb-livea .md > :last-child::after { animation: none; } }
+#subOv .sb-busy { gap: 6px; flex-wrap: wrap; }
+.sb-stop { margin-left: auto; font: 600 12px var(--ui); font-style: normal; min-height: 32px; padding: 0 14px; border-radius: 99px; border: 1px solid #8C1D16; background: none; color: #8C1D16; cursor: pointer; }
+.sb-stop::before { content: '■ '; font-size: 10px; }
+.sb-stop:hover { background: rgba(140,29,22,.07); }
+.sb-mode.stopped { color: #8C1D16; border-color: rgba(140,29,22,.45); }
+.sb-a.sb-stopped { border-style: dashed; }
+body.dark .sb-stop { color: #FFB4AB; border-color: #FFB4AB; } body.dark .sb-stop:hover { background: rgba(255,180,171,.1); }
+body.dark .sb-mode.stopped { color: #FFB4AB; border-color: rgba(255,180,171,.5); }
+
+/* «¿Cómo vamos?» al instante (DIM-10) */
+.sb-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.sb-quickn { font-size: 11.5px; color: var(--grey); flex: 1 1 200px; }
+.sb-analyze { font: 600 12px var(--ui); min-height: 32px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); cursor: pointer; }
+.sb-analyze:hover { filter: brightness(1.15); }

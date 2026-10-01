@@ -53,6 +53,7 @@ import * as routines from './routines.mjs';
 import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
+import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dimitri's answer while it is written
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs'; // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
 import { sendJson, lightTasks } from './http-json.mjs';
@@ -250,6 +251,7 @@ function ranOn(mu, want) {
 const children = new Set();
 const runsOf = new Map(); // task id → Set of its claude processes (a team has several)
 const stopping = new Set(); // task ids the owner stopped: their failure reads «stopped by you», not an error
+const stoppers = new Map(); // DIM-14: askX's stopKey → how to stop that run (kill the CLI's tree, or abort the SDK's stream)
 function killTree(p) {
   if (!p || p.exitCode !== null) return;
   if (process.platform === 'win32') { try { spawn('taskkill', ['/pid', String(p.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { try { p.kill(); } catch {} } }
@@ -280,9 +282,17 @@ function ledger({ taskId, agent, kind, modelId, usage, reported, ms }) {
   return l.usd;
 }
 try { budgetLevel = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()).level; } catch {} // after a restart the office still knows where the month stands
-async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null, images = null } = {}) { // V4.8: images = [{ media_type, data }] for Claude's own eyes (vision.mjs) · V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null, images = null, onText = null, partial = true, stopKey = null } = {}) { // DIM-14: onText(textSoFar) while it writes (partial: the CLI's own deltas) · stopKey: stoppers.get(key)() stops it · V4.8: images = [{ media_type, data }] for Claude's own eyes (vision.mjs) · V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
-    const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: images?.length ? vision.sdkContent(user, images) : user }] });
+    const req = { model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: images?.length ? vision.sdkContent(user, images) : user }] };
+    let res;
+    if (onText) { // DIM-14: stream: true — and the old call when the stream fails before a word arrives
+      const s = sdk.messages.stream(req); let got = false, ac = null; if (stopKey) stoppers.set(stopKey, () => { s.abort(); ac?.abort(); });
+      s.on('text', (_, snap) => { got = true; try { onText(snap); } catch {} });
+      try { res = await s.finalMessage(); }
+      catch (e) { if (s.aborted || e?.name === 'APIUserAbortError' || got) { if (stopKey) stoppers.delete(stopKey); throw e; } ac = new AbortController(); res = await sdk.messages.create(req, { signal: ac.signal }).finally(() => stopKey && stoppers.delete(stopKey)); }
+      if (stopKey) stoppers.delete(stopKey);
+    } else res = await sdk.messages.create(req);
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
     bumpUsage(res.usage);
     const usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: res.model, usage: res.usage });
@@ -315,6 +325,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   // Auditoría 1 oct 2026 (INF-06): a run with no tools (Dimitri, the router, a summary) does not start every MCP server this
   // machine's Claude Code knows (plugins, claude.ai connectors…: `claude mcp list` took 53 s here). It could not call them anyway.
   if (!tools) args.push('--strict-mcp-config');
+  if (onText && partial) args.push('--include-partial-messages'); // DIM-14: the text as it is written (stream_event deltas)
   if (studio || conContenido) { // the office's own servers, one --mcp-config: the Estudio and Contenido share who is asking
     const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
     args.push('--mcp-config', JSON.stringify({ mcpServers: { ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
@@ -323,21 +334,22 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
-    children.add(p);
+    children.add(p); if (stopKey) stoppers.set(stopKey, () => killTree(p));
     if (taskId) { if (!runsOf.has(taskId)) runsOf.set(taskId, new Set()); runsOf.get(taskId).add(p); }
     p.stdin.on('error', () => {}); p.stdin.end(images?.length ? vision.cliInput(user, images) : user);
     const cleanup = () => {
-      children.delete(p); if (taskId && runsOf.has(taskId)) { runsOf.get(taskId).delete(p); if (!runsOf.get(taskId).size) runsOf.delete(taskId); }
+      children.delete(p); if (stopKey) stoppers.delete(stopKey); if (taskId && runsOf.has(taskId)) { runsOf.get(taskId).delete(p); if (!runsOf.get(taskId).size) runsOf.delete(taskId); }
       if (guardOut) Object.assign(guardOut, guardReport(runId, taintFile));
       for (const f of [sysFile, guardFile, taintFile, settingsFile]) fs.rm(f, { force: true }, () => {});
     };
-    let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null, partial = '', reported = null, usd = 0;
+    let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null, partial = '', reported = null, usd = 0, liveText = '', gotDelta = false;
     const timer = setTimeout(() => { killTree(p); const e = new Error(`Claude took longer than ${timeout / 1000} s`); e.partial = partial.trim(); reject(e); }, timeout); // V4.4 (B4): what it had written so far is kept
     const feed = line => {
       if (!line.trim()) return;
       let j; try { j = JSON.parse(line); } catch { return; }
       if (j.type === 'system' && j.subtype === 'init') mcp.fromInit(j);
-      if (j.type === 'assistant' && j.message?.content) for (const b of j.message.content) { if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name); if (b.type === 'text' && b.text) partial += b.text + '\n'; }
+      if (onText) { const dt = cliDelta(j); if (dt) { liveText += dt; gotDelta = true; try { onText(liveText); } catch {} } } // DIM-14
+      if (j.type === 'assistant' && j.message?.content) { for (const b of j.message.content) { if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name); if (b.type === 'text' && b.text) partial += b.text + '\n'; } if (onText && !gotDelta && partial) try { onText(partial); } catch {} } // no deltas (an older CLI): the whole text at once
       if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); reported = typeof j.total_cost_usd === 'number' ? j.total_cost_usd : null; usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: modelUsed || modelId(model), usage: usageOut, reported, ms: Date.now() - t0 }); }
     };
     p.stdout.on('data', d => { out += d; let i; while ((i = out.indexOf('\n')) >= 0) { feed(out.slice(0, i)); out = out.slice(i + 1); } });
@@ -650,7 +662,13 @@ function approvedCreatives(text, n = 4) { // the owner's past approved creatives
   return knowledge.search(knowledge.buildIndex(notes), text, { n: n * 3, per: 1 }).map(h => ({ ...estudioPlan.approvedFromNote(h.note, notes.get(h.note)), score: h.score * memory.boostOf(MEM, h.note) }))
     .filter(a => { const it = a.file && media.item(a.file); return !!(it && (it.fav || it.used || it.approved)); }).sort((a, b) => b.score - a.score).slice(0, n);
 }
-async function subChat(text, { attach = [], vision: images = [], context = null, answers = null } = {}) {
+// DIM-14: a chat that streams has a run id; «Detener» (POST /api/sub/stop) marks it and stops its Claude — nothing it proposed is kept
+const subRuns = new Set(), subStopped = new Set();
+async function subChat(text, { attach = [], vision: images = [], context = null, answers = null, onText = null, run = null } = {}) {
+  if (run) subRuns.add(run);
+  try { return await subChatRun(text, { attach, images, context, answers, onText, run }); } finally { if (run) { subRuns.delete(run); subStopped.delete(run); } }
+}
+async function subChatRun(text, { attach, images, context, answers, onText, run }) {
   const st = sub.load(DATA); refreshSkills();
   const list = load(), index = vaultIndex();
   // V4.11 (DIM-06): the owner answered Dimitri's questions with the buttons — the message says what was chosen, and the question keeps it
@@ -673,11 +691,27 @@ async function subChat(text, { attach = [], vision: images = [], context = null,
     studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing, older: sub.olderText(st.messages, 12) });
   const convo = sub.historyText(st.messages, { name: DEPUTY, depts: DEPTS }, 12); // DIM-05: with what Dimitri asked and what the owner chose · DIM-18: each creative's prompt, settings and files
   const userMsg = (convo ? convo + '\n' : '') + `Dueño: ${text}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${DEPUTY} (solo JSON):`;
-  const opts = { maxTokens: 6000, timeout: 180000, images: images.length ? images : null, kind: 'dimitri' }; // DIM-21: his own line in «Costos y retorno»
-  let out = await ask(system, userMsg, opts);
+  let shown = ''; const stopped = () => !!run && subStopped.has(run);
+  const live = onText ? raw => { const r = replyFromPartial(raw); if (r.reply) shown = r.reply; onText(r); } : null; // DIM-14: only the «reply» being written reaches the page
+  const opts = { maxTokens: 6000, timeout: 180000, images: images.length ? images : null, kind: 'dimitri', ...(live ? { onText: live, stopKey: run } : {}) }; // DIM-21: his own line in «Costos y retorno»
+  const askLive = async u => { // DIM-14: an older CLI that does not know --include-partial-messages → the same question without it (the whole text at the end)
+    if (stopped()) return '';
+    try { return await ask(system, u, opts); }
+    catch (e) { if (stopped()) return ''; if (live && /include-partial-messages|unknown option/i.test(e.message)) return ask(system, u, { ...opts, partial: false }); throw e; }
+  };
+  const halt = () => { // «Detener»: the message says so, with what had arrived; no plan, ops, creatives or answers are kept
+    const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
+    const m = sub.message('sub', (shown ? shown + '\n\n' : '') + '_Detenido por ti._', { mode: 'charla', stopped: true });
+    const s2 = sub.load(DATA); s2.messages.push(u, m); sub.save(DATA, s2); console.log(`◆ ${DEPUTY.toLowerCase()}: stopped by the owner`);
+    return { messages: [u, m], stopped: true };
+  };
+  let out = await askLive(userMsg);
+  if (stopped()) return halt();
   let plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
   if (plan.bad) { // DIM-07: the JSON came back broken beyond repair — once more, asked for less (never the raw JSON in the chat)
-    out = await ask(system, userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)', opts).catch(() => '');
+    shown = ''; if (live) onText({ reply: '', mode: null, retry: true });
+    out = await askLive(userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)').catch(() => '');
+    if (stopped()) return halt();
     plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
   }
   const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes }, safety.injectionIn); // an image, a task's result (mail, webhooks), what is open, a note: hidden orders mark the message and take its ops and actions away
@@ -697,6 +731,17 @@ async function subChat(text, { attach = [], vision: images = [], context = null,
   st2.messages.push(u, m); sub.save(DATA, st2);
   console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}${studio ? ` · ${studio.creatives.length} creative(s), aprox. US$${studio.estimate.total}` : ''}${ops.length ? ` · ${ops.length} op(s)` : ''}${plan.questions.length ? ` · ${plan.questions.length} question(s)` : ''}${images.length ? ` · saw ${images.length} image(s)` : ''}${plan.bad ? ' · unreadable answer' : plan.cut ? ' · mended a cut answer' : ''}${shield ? ' · 🛡 ' + shield : ''}`);
   return { messages: [u, m], ...(picked ? { answered: { msg: answers.msg, answers: picked.answers } } : {}) };
+}
+/** DIM-10: «¿Cómo vamos?» at once — the same reads as dimitriOffice (tasks, routines, Contenido, the cost ledger, notices), no model. */
+function dimitriQuick() {
+  const list = load(), d = new Date(); d.setDate(d.getDate() + 6);
+  let piezas = [], rts = [], lines = [], unread = 0;
+  try { piezas = contenido.listar({ desde: localDay(Date.now()), hasta: localDay(d.getTime()) }); } catch {}
+  try { rts = loadRoutines(); } catch {}
+  try { lines = costs.read(DATA, Date.now() - 32 * 864e5); } catch {}
+  try { unread = loadNotices().filter(n => !n.read).length; } catch {}
+  const m0 = new Date(); m0.setHours(0, 0, 0, 0);
+  return sub.quickStatus({ tasks: list, agents: AGENTS, piezas, routines: rts, spentToday: lines.filter(l => l.t >= m0.getTime()).reduce((s, l) => s + (+l.usd || 0), 0), budget: costs.budgetState(lines, COSTS()), unread });
 }
 /** V4.11 (DIM-03): the voices a voice-over of Dimitri's may take — the owner's (cloned, designed) and the system's — only with MiniMax on. */
 function dimitriVoices() {
@@ -2079,7 +2124,27 @@ const server = http.createServer(async (req, res) => {
       const c = b.context && typeof b.context === 'object' && typeof b.context.view === 'string' ? b.context : null;
       const context = c ? { view: c.view.slice(0, 20), label: String(c.label || '').slice(0, 160), kind: c.kind ? String(c.kind).slice(0, 20) : null, id: c.id ? String(c.id).slice(0, 300) : null } : null;
       const ans = b.answers && typeof b.answers === 'object' && typeof b.answers.msg === 'string' && Array.isArray(b.answers.picks) ? { msg: b.answers.msg.slice(0, 40), picks: b.answers.picks.slice(0, 6) } : null; // V4.11 (DIM-06): the options the owner picked
-      return json(res, 200, await subChat(text || (attach.length ? 'Mira esto.' : 'Mira estas imágenes.'), { attach, vision: vis.images, context, answers: ans }));
+      const said = text || (attach.length ? 'Mira esto.' : 'Mira estas imágenes.'), how = { attach, vision: vis.images, context, answers: ans };
+      if (b.stream !== true) return json(res, 200, await subChat(said, how)); // Telegram and older pages: one JSON at the end
+      // DIM-14: NDJSON in chunks — {type:'start', run} · {type:'reply', text, mode} while it writes · {type:'done', messages…} | {type:'error', error}
+      const run = 'r' + nid(); res.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
+      const line = o => { try { res.write(JSON.stringify(o) + '\n'); } catch {} };
+      let sent = '', pend = null, tmr = null; const flush = () => { tmr = null; if (pend && pend.reply !== sent) { sent = pend.reply; line({ type: 'reply', text: pend.reply, mode: pend.mode || null }); } };
+      line({ type: 'start', run });
+      try { const out = await subChat(said, { ...how, run, onText: r => { pend = r; if (r.retry) { sent = ''; line({ type: 'reply', text: '', mode: null }); } else if (!tmr) tmr = setTimeout(flush, 60); } }); clearTimeout(tmr); line({ type: 'done', ...out }); }
+      catch (e) { clearTimeout(tmr); line({ type: 'error', error: e.message }); }
+      return res.end();
+    }
+    if (url.pathname === '/api/sub/stop' && req.method === 'POST') { // DIM-14: «Detener» — kills that chat's Claude; the chat answers «Detenido por ti»
+      const { run } = await body(req); const id = String(run || '');
+      if (!subRuns.has(id)) return json(res, 404, { error: 'esa respuesta ya terminó' });
+      subStopped.add(id); const f = stoppers.get(id); if (f) f();
+      return json(res, 200, { ok: true });
+    }
+    if (url.pathname === '/api/sub/estado' && req.method === 'POST') { // DIM-10: «¿Cómo vamos?» at once, no model; «Analizar con Dimitri» asks him after
+      const b = await body(req); const st = sub.load(DATA);
+      const u = sub.message('user', String(b.text || '¿Cómo vamos?').trim().slice(0, 200) || '¿Cómo vamos?'), m = sub.message('sub', dimitriQuick(), { mode: 'estado', quick: true });
+      st.messages.push(u, m); sub.save(DATA, st); return json(res, 200, { messages: [u, m] });
     }
     if (url.pathname === '/api/sub/ops' && req.method === 'POST') { // V4.11 (DIM-11): routines, pieces and tasks Dimitri proposed — only with the owner's click
       const { msg, items } = await body(req);

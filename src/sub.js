@@ -15,6 +15,7 @@ import { mdToHtml } from './md.js';
 import { modal } from './modal.js';
 import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes } from './sub-studio.js';
 import { opsHTML, opsBody, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
+import { isQuickStatus } from './sub-stream.js'; // Auditoría 1 oct 2026: «¿Cómo vamos?» at once (DIM-10); the answer arrives while it is written, with «Detener» (DIM-14)
 
 const MODE = { estado: 'Estado de la oficina', analisis: 'Análisis', plan: 'Propuesta', pregunta: 'Me falta un dato', estudio: 'Plan de creativos' };
 const STATE = { next: 'pendiente', doing: 'en curso', waiting: 'espera tu visto bueno', done: 'lista', scheduled: 'programada' };
@@ -61,6 +62,7 @@ export function initSub(ctx) {
   let attachments = []; // { key, name, file?, preview, vision?, state: 'uploading'|'ready'|'failed', err?, ready: Promise }
   let ctxSel = null, ctxOff = false, ctxKey = '', ctxDrawn = null, chipsDrawn = null;
   let media = null, mediaP = null, folderP = null; const jobs = new Map();
+  let liveText = '', liveMode = null, runId = null, stopWanted = false, stopping = false, streaming = false, livePaint = 0; // DIM-14: the answer being written and its run
   const say = t => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
 
   /* ---------- the Estudio's catalog, budget and folders (only when a plan of creatives or an image needs them) ---------- */
@@ -213,7 +215,13 @@ export function initSub(ctx) {
     return `<div class="sb-u">${c}${(m.attach || []).length ? stripHTML(m.attach, esc) : ''}${m.text ? `<div>${esc(m.text)}</div>` : ''}</div>`;
   }
   function subHTML(m) {
-    return `<div class="sb-a">${MODE[m.mode] ? `<div class="sb-mode ${esc(m.mode)}">${MODE[m.mode]}</div>` : ''}${m.shield ? `<div class="sb-shield" role="note"><span aria-hidden="true">🛡</span> <b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</div>` : ''}<div class="md">${mdToHtml(m.text || '')}</div>${m.retry ? `<div class="sb-acts"><button type="button" class="sb-retry" data-msg="${esc(m.id)}">Repítelo más corto</button></div>` : ''}${planHTML(m)}${m.ops ? opsHTML(m, opsView(m)) : ''}${m.studio ? creativesHTML(m, studioView(m)) : ''}${(m.media || []).length ? stripHTML(m.media, esc) : ''}${m.read?.length ? `<div class="sb-read">Consulté: ${m.read.map(esc).join(' · ')}</div>` : ''}</div>`;
+    const lastOne = messages.length && messages[messages.length - 1] === m;
+    const quickFoot = m.quick ? `<div class="sb-quick"><span class="sb-quickn">Calculado al instante con los datos de la oficina, sin el modelo.</span>${lastOne && !busy ? `<button type="button" class="sb-analyze" data-msg="${esc(m.id)}">Analizar con ${esc(NAME)}</button>` : ''}</div>` : ''; // DIM-10: his reading only when asked
+    const head = m.stopped ? '<div class="sb-mode stopped">Detenido por ti</div>' : MODE[m.mode] ? `<div class="sb-mode ${esc(m.mode)}">${MODE[m.mode]}</div>` : '';
+    return `<div class="sb-a${m.stopped ? ' sb-stopped' : ''}">${head}${m.quick ? `<div class="md">${mdToHtml(m.text || '')}</div>${quickFoot}` : subBody(m)}</div>`;
+  }
+  function subBody(m) {
+    return `${m.shield ? `<div class="sb-shield" role="note"><span aria-hidden="true">🛡</span> <b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</div>` : ''}<div class="md">${mdToHtml(m.stopped ? String(m.text || '').replace(/\s*_Detenido por ti\._\s*$/, '') : m.text || '')}</div>${m.retry ? `<div class="sb-acts"><button type="button" class="sb-retry" data-msg="${esc(m.id)}">Repítelo más corto</button></div>` : ''}${planHTML(m)}${m.ops ? opsHTML(m, opsView(m)) : ''}${m.studio ? creativesHTML(m, studioView(m)) : ''}${(m.media || []).length ? stripHTML(m.media, esc) : ''}${m.read?.length ? `<div class="sb-read">Consulté: ${m.read.map(esc).join(' · ')}</div>` : ''}`;
   }
   const msgHTML = m => `<div class="sb-m" data-id="${esc(m.id)}">${m.who === 'user' ? userHTML(m) : subHTML(m)}</div>`;
   /** What a message's node depends on: the message, its sent tasks as the office has them, its jobs, the owner's edits on it, and whether undo is still offered. */
@@ -224,7 +232,52 @@ export function initSub(ctx) {
     return JSON.stringify([m, tasks, jb, undo, !!media, busy && m.plan?.questions?.length ? 1 : 0]);
   }
   const selectionInside = () => { const s = getSelection && getSelection(); return !!(s && s.rangeCount && !s.isCollapsed && box.contains(s.anchorNode)); };
-  const busyHTML = () => (busy ? `<div class="sb-busy" role="status"><span class="sb-av sm" aria-hidden="true">${esc(NAME.charAt(0))}</span>${esc(NAME)} está pensando<span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>` : '');
+  // DIM-14: while Dimitri writes, his «reply» grows in a bubble of its own (not a .sb-m: patch() counts those) and «Detener» stops him
+  const liveHTML = () => (liveText ? `<div class="sb-livem"><div class="sb-a sb-livea">${MODE[liveMode] ? `<div class="sb-mode ${esc(liveMode)}">${MODE[liveMode]}</div>` : ''}<div class="md">${mdToHtml(liveText)}</div></div></div>` : '');
+  const busyHTML = () => (busy ? `${liveHTML()}<div class="sb-busy"><span class="sb-av sm" aria-hidden="true">${esc(NAME.charAt(0))}</span><span role="status">${stopping ? 'Deteniendo…' : `${esc(NAME)} está ${liveText ? 'escribiendo' : 'pensando'}`}</span><span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span>${streaming && !stopping ? '<button type="button" class="sb-stop" title="Detener la respuesta (Esc)" aria-keyshortcuts="Escape">Detener</button>' : ''}</div>` : '');
+  function paintLive() { // the bubble's text only: never a whole redraw per chunk (the Stop button keeps its focus)
+    if (livePaint) return;
+    livePaint = requestAnimationFrame(() => {
+      livePaint = 0; if (!busy) return;
+      const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80, md = box.querySelector('.sb-livem .md');
+      if (md && liveText) { md.innerHTML = mdToHtml(liveText); const mo = box.querySelector('.sb-livem .sb-mode'); if (!mo && MODE[liveMode]) md.insertAdjacentHTML('beforebegin', `<div class="sb-mode ${esc(liveMode)}">${MODE[liveMode]}</div>`); const st = box.querySelector('.sb-busy [role="status"]'); if (st && !stopping) st.textContent = `${NAME} está escribiendo`; }
+      else { const hadStop = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('sb-stop'); render(); if (hadStop) box.querySelector('.sb-stop')?.focus(); }
+      if (atBottom) box.scrollTop = box.scrollHeight;
+    });
+  }
+  async function stop() { // «Detener» or Esc: the server kills the run; the answer then comes back as «Detenido por ti»
+    if (!busy || !streaming || stopping) return false;
+    stopping = true; const hadFocus = document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('sb-stop'); render(true); if (hadFocus) input.focus();
+    say('Deteniendo la respuesta…');
+    if (!runId) { stopWanted = true; return true; }
+    try { await postJSON('/api/sub/stop', { run: runId }); } catch {} // already finished: its answer arrives as usual
+    return true;
+  }
+  /** The NDJSON answer: start → reply (the text so far) … → done | error. A stream that breaks without «done» is `lost`. */
+  async function readStream(r) {
+    const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+    for (;;) {
+      const { value, done } = await rd.read();
+      if (value) buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const ln = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!ln) continue;
+        let o; try { o = JSON.parse(ln); } catch { continue; }
+        if (o.type === 'start') { runId = o.run; streaming = true; render(true); if (stopWanted) { stopWanted = false; postJSON('/api/sub/stop', { run: runId }).catch(() => {}); } }
+        else if (o.type === 'reply') { liveText = String(o.text || ''); if (o.mode) liveMode = o.mode; paintLive(); }
+        else if (o.type === 'done') return o;
+        else if (o.type === 'error') throw new Error(o.error || 'error');
+      }
+      if (done) { const e = new Error('se cortó la conexión con la oficina'); e.lost = true; throw e; }
+    }
+  }
+  async function recover(since) { // the stream broke: the server still finishes and saves — read the conversation until his answer is there
+    for (let k = 0; k < 100; k++) {
+      await new Promise(r => setTimeout(r, 2000));
+      try { const r = await fetch('/api/sub'); if (!r.ok) continue; const j = await r.json(); const ms = j.messages || []; if (ms.some(m => m.who === 'sub' && m.at >= since)) return ms; } catch {}
+    }
+    return null;
+  }
   function render(stick) {
     const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60, keep = box.scrollTop;
     const openDet = new Set([...box.querySelectorAll('.sb-item[data-msg] details[open]')].map(d => d.closest('.sb-item').dataset.msg + ':' + d.closest('.sb-item').dataset.i)); // what the owner unfolded stays unfolded
@@ -263,18 +316,27 @@ export function initSub(ctx) {
   async function send(text, extra = {}) { // extra: { answers } when the owner answered with the option buttons (V4.11)
     text = String(text || '').trim(); if (busy || sending || !isLive()) return;
     if (!text && !attachments.length) return;
+    if (!extra.answers && !extra.full && !attachments.length && isQuickStatus(text)) return quick(text); // DIM-10: at once, no model
     sending = true; // taken before the wait for the uploads: Enter again meanwhile does nothing
     if (attachments.some(a => a.state === 'uploading')) { sendBtn.disabled = true; await Promise.all(attachments.map(a => a.ready)); }
     const out = outgoing(text, attachments), { ready, lost } = out;
     if (!out.send) { sending = false; renderAtts(); note(lost.length ? `${lost.length === 1 ? 'La imagen no subió' : 'Las imágenes no subieron'}: quítala${lost.length === 1 ? '' : 's'} con ✕ o vuelve a adjuntarla${lost.length === 1 ? '' : 's'}. No envié nada.` : 'No hay nada que enviar.'); return; } // never «Mira estas imágenes» about images that are not there
     if (lost.length) note(`${lost.length === 1 ? 'Una imagen no subió y no va' : `${lost.length} imágenes no subieron y no van`} con el mensaje.`);
     text = out.text;
-    const payload = { text, ...(ready.length ? { attach: ready.map(a => a.file) } : {}), ...(ready.some(a => a.vision) ? { vision: ready.filter(a => a.vision).map(a => a.vision) } : {}), ...(contextOut() ? { context: contextOut() } : {}), ...extra };
+    const { full, ...more } = extra;
+    const payload = { text, ...(ready.length ? { attach: ready.map(a => a.file) } : {}), ...(ready.some(a => a.vision) ? { vision: ready.filter(a => a.vision).map(a => a.vision) } : {}), ...(contextOut() ? { context: contextOut() } : {}), ...more };
     const kept = attachments; busy = true; input.value = ''; sendBtn.disabled = true; attachments = []; renderAtts();
+    liveText = ''; liveMode = null; runId = null; stopWanted = false; stopping = false; streaming = false;
     messages.push({ id: 'tmp', who: 'user', text, attach: payload.attach, context: payload.context }); render(true);
+    const since = Date.now() - 5000;
     try {
-      const r = await fetch('/api/sub/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
+      const r = await fetch('/api/sub/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...payload, stream: true }) });
+      let j;
+      if (r.ok && /ndjson/.test(r.headers.get('content-type') || '') && r.body && r.body.getReader) { // DIM-14: the answer while it is written
+        try { j = await readStream(r); }
+        catch (e) { if (!e.lost) throw e; stopping = false; streaming = false; render(true); const ms = await recover(since); if (!ms) throw e; j = { messages: ms.filter(m => m.at >= since && !messages.some(x => x.id === m.id)) }; if (!j.messages.length) throw e; }
+      } else { j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); } // an older server: one JSON at the end, as before
+      liveText = ''; streaming = false; stopping = false;
       messages = messages.filter(m => m.id !== 'tmp').concat(j.messages);
       for (const a of kept) if (a.preview && a.preview.startsWith('blob:')) URL.revokeObjectURL(a.preview);
       const last = j.messages[j.messages.length - 1];
@@ -282,7 +344,18 @@ export function initSub(ctx) {
       say(`${NAME}: ${String(last?.text || '').slice(0, 200)}${last && last.studio && (last.studio.creatives || []).length ? ` · propone ${last.studio.creatives.length} ${last.studio.creatives.length === 1 ? 'creativo' : 'creativos'}` : ''}`); // the new answer is read out, not the whole chat every 3 s
       if (j.answered) { const q = messages.find(x => x.id === j.answered.msg); if (q && q.plan) q.plan.answers = j.answered.answers; qPicks.delete(j.answered.msg); }
     } catch (e) { messages = messages.filter(m => m.id !== 'tmp'); messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No pude responder ahora (${e.message}). ${extra.answers ? 'Tus respuestas siguen marcadas: pulsa Responder otra vez.' : 'Te dejé tu mensaje en la caja para que lo envíes de nuevo.'}` }); if (!extra.answers) input.value = text; attachments = kept; }
-    busy = false; sending = false; renderAtts(); render(true); input.focus();
+    busy = false; sending = false; liveText = ''; liveMode = null; runId = null; streaming = false; stopping = false; renderAtts(); render(true); input.focus();
+  }
+  /** DIM-10: «¿Cómo vamos?» — the server's summary, computed at once (POST /api/sub/estado); «Analizar con Dimitri» asks him after. */
+  async function quick(text) {
+    busy = true; sending = true; input.value = ''; renderAtts();
+    messages.push({ id: 'tmp', who: 'user', text }); render(true);
+    let ok = false;
+    try { const j = await postJSON('/api/sub/estado', { text }); messages = messages.filter(m => m.id !== 'tmp').concat(j.messages); ok = true; const last = j.messages[j.messages.length - 1]; say(`${NAME}: ${String(last?.text || '').replace(/[*_]/g, '').slice(0, 300)}`); }
+    catch { messages = messages.filter(m => m.id !== 'tmp'); }
+    busy = false; sending = false; renderAtts(); render(true);
+    if (!ok) return send(text, { full: true }); // an older server: Dimitri answers as before
+    input.focus();
   }
   function edit(msgId, i) { if (!drafts.has(msgId)) drafts.set(msgId, new Map()); const d = drafts.get(msgId); if (!d.has(i)) d.set(i, {}); return d.get(i); }
   function sedit(msgId, i) { if (!studioEdits.has(msgId)) studioEdits.set(msgId, new Map()); const d = studioEdits.get(msgId); if (!d.has(i)) d.set(i, {}); return d.get(i); }
@@ -378,6 +451,8 @@ export function initSub(ctx) {
 
   el.addEventListener('click', e => {
     if (e.target.closest('.sb-x')) return close();
+    if (e.target.closest('.sb-stop')) { stop(); return; } // DIM-14
+    if (e.target.closest('.sb-analyze')) return send(`Analiza este estado de la oficina: qué te preocupa, qué haría yo hoy y qué puede esperar.`, { full: true }); // DIM-10: his reading, only when asked
     const clr = e.target.closest('.sb-clear'); if (clr) { if (messages.length) newConversation(clr); return; }
     const opt = e.target.closest('.sb-opt'); if (opt) return choose(opt);
     const qgo = e.target.closest('.sb-qgo'); if (qgo) return answer(qgo.dataset.msg);
@@ -469,7 +544,7 @@ export function initSub(ctx) {
       const nx = all[e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : (k + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length];
       if (g.getAttribute('role') === 'radiogroup' && !nx.dataset.other) { choose(nx, true); } else { all.forEach(b => b.setAttribute('tabindex', b === nx ? '0' : g.getAttribute('role') === 'radiogroup' ? '-1' : '0')); nx.focus(); }
     }
-    else if (e.key === 'Escape') close();
+    else if (e.key === 'Escape') { e.preventDefault(); if (busy && streaming && !stopping) stop(); else if (!stopping) close(); } // DIM-14: while he writes, Esc stops him (a second Esc, after, closes)
     else if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.sb-item[data-sid]')) { e.preventDefault(); e.target.click(); }
   });
   // images in: paste (Ctrl+V), drop files from the computer, or drop cards from the Estudio's gallery
