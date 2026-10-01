@@ -119,7 +119,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const st = `<span class="pz-st pz-tone" style="--c:${e.color};--cd:${e.dark}" aria-hidden="true">${e.glyph}</span>${falta(p) ? '<span class="pz-warn" aria-hidden="true">!</span>' : ''}`;
     const thumb = p.medios[0] ? thumbHTML(p.medios[0], esc, 'pz-ct') : `<span class="pz-ct none" aria-hidden="true">${FICON[p.formato] || ''}</span>`;
     if (line) // el MES: dos filas — miniatura | hora · formato · redes · estado / título
-      return `<div class="${cls} line pz2" ${attrs}>${thumb}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f" aria-hidden="true">${FICON[p.formato] || ''}</span>${netBadges(p)}${st}</span><span class="cv-ev-t">${esc(titleOf(p))}</span></span></div>`;
+      return `<div class="${cls} line pz2" ${attrs}>${thumb}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f" aria-hidden="true">${FICON[p.formato] || ''}<span class="pz-fw">${esc(FORMATO[p.formato] || '')}</span></span>${netBadges(p)}${st}</span><span class="cv-ev-t">${esc(titleOf(p))}</span></span></div>`;
     return `<div class="${cls}" ${attrs}>
       <div class="pz-cardrow">${thumb}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f">${FICON[p.formato] || ''}<span>${esc(FORMATO[p.formato])}</span></span>${netBadges(p)}</div><div class="cv-ev-t">${esc(titleOf(p))}</div><div class="pz-cardst"><b class="pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}${p.cambiadaTrasAprobar ? ' · CAMBIÓ' : ''}</b>${falta(p) ? '<span class="pz-fail">le falta algo</span>' : ''}${vencida(p) ? '<span class="pz-fail">la hora ya pasó</span>' : ''}</div></div></div></div>`;
   }
@@ -175,7 +175,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     E.rail.innerHTML = `<div class="cv-rail-h">IDEAS SIN DÍA <b>${sin.length}</b>${sin.length ? '<span class="cv-rail-hint">arrástralas a un día</span>' : ''}</div>`
       + (sin.length ? sin.map(bk).join('') : '<div class="cv-empty">Ninguna idea suelta.<br>Las ideas que los agentes o tú dejen sin día esperan aquí.</div>')
       + `<button type="button" class="pz-newidea" data-new="idea">+ Nueva idea</button>`
+      + `<div class="ct-legend">${Object.entries(FORMATO).map(([k, l]) => `<span>${FICON[k]}${l}</span>`).join('')}</div>`
       + `<div class="cv-rail-foot">Suelta aquí una pieza del calendario para quitarle el día. Lo que espera tu visto bueno está en PROGRAMACIÓN.</div>`;
+    const rb = $('[data-rail]'); rb.innerHTML = `Ideas <b>${sin.length}</b>`; rb.setAttribute('aria-label', `Ideas sin día: ${sin.length}`);
   }
 
   /* ---------- Programación: la cola ---------- */

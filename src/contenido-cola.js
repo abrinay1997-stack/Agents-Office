@@ -64,3 +64,19 @@ export function colaPorDia(piezas = [], ahora = Date.now(), n = 14) {
   for (const p of [...piezas].filter(p => p.fecha && p.fecha >= desde).sort((a, b) => momentoDe(a) - momentoDe(b))) { if (!dias.has(p.fecha)) dias.set(p.fecha, []); dias.get(p.fecha).push(p); }
   return [...dias.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
+
+/**
+ * Los próximos días para elegir con un clic en el panel, en vez de bajar por 120 opciones (CON-13): hoy, mañana y los siguientes,
+ * cada uno con cuántas piezas ya salen ese día en esas redes (para ver de un vistazo qué día está libre). → [{ fecha, corto, largo, n }]
+ */
+export function diasRapidos(redes = [], otras = [], { ahora = Date.now(), dias = 7, excluir = '' } = {}) {
+  const DOWC = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'], out = [];
+  const t0 = new Date(ahora); t0.setHours(0, 0, 0, 0);
+  for (let i = 0; i < dias; i++) {
+    const d = new Date(t0); d.setDate(d.getDate() + i); const f = ymd(d);
+    const n = otras.filter(o => o.id !== excluir && o.fecha === f && o.estado !== 'idea' && (o.redes || []).some(r => redes.includes(r))).length;
+    const corto = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : `${DOWC[d.getDay()]} ${d.getDate()}`;
+    out.push({ fecha: f, corto, largo: `${i === 0 ? 'hoy, ' : i === 1 ? 'mañana, ' : ''}${['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][d.getDay()]} ${d.getDate()}`, n });
+  }
+  return out;
+}

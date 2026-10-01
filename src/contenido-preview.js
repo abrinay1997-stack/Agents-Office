@@ -156,7 +156,9 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
       // con «ver recortes»: el archivo entero y, sombreado, lo que Instagram deja fuera
       const real = recorta ? prS.real : pr0.real, ventana = recorta ? pr0.ratio : (pr0.fuera === 'alta' ? 0.8 : 1.91);
       const vertical = real < ventana; const cut = vertical ? (1 - real / ventana) / 2 * 100 : (1 - ventana / real) / 2 * 100;
-      m = `<div class="pv-media pv-cut" style="aspect-ratio:${Math.max(0.5, Math.min(2.2, real))}">${medio(cur_.src, esc, 'cover')}<i class="pv-shade ${vertical ? 'tb' : 'lr'}" style="--c:${cut.toFixed(1)}%" aria-hidden="true"></i><span class="pv-flag">${recorta ? 'Instagram recorta lo sombreado: el carrusel toma la proporción de la primera' : 'Fuera del feed: Instagram no la acepta así'}</span>${nav(n)}</div>`;
+      // un archivo muy alto (9:16) se enseña entero pero sin pasar de ~440 px de alto, y el aviso va DEBAJO: dentro quedaba fuera de la vista
+      const ar = Math.max(0.5, Math.min(2.2, real)), ancho = ar < 0.8 ? `width:min(100%, ${Math.round(440 * ar)}px);margin:0 auto;` : '';
+      m = `<div class="pv-media pv-cut" style="${ancho}aspect-ratio:${ar}">${medio(cur_.src, esc, 'cover')}<i class="pv-shade ${vertical ? 'tb' : 'lr'}" style="--c:${cut.toFixed(1)}%" aria-hidden="true"></i>${nav(n)}</div><p class="pv-flag">${recorta ? 'Instagram recorta lo sombreado: el carrusel toma la proporción de la primera.' : pr0.fuera === 'alta' ? 'Fuera del feed: más alta que 4:5, Instagram no la acepta así. Lo sombreado es lo que sobra.' : 'Fuera del feed: más ancha que 1.91:1, Instagram no la acepta así. Lo sombreado es lo que sobra.'}</p>`;
     } else m = `<div class="pv-media" style="aspect-ratio:${pr0.ratio}">${medio(cur_.src, esc, 'cover')}${nav(n)}</div>`;
     const dots = n > 1 ? `<div class="pv-dots" aria-hidden="true">${ms.map((_, i) => `<i class="${i === slide ? 'on' : ''}"></i>`).join('')}</div>` : '';
     return `<div class="pv-card pv-igfeed"><div class="pv-h"><span class="pv-av">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-sp"></span>${ic('dots')}</div>${m}
@@ -243,6 +245,11 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     if ('pvMas' in b.dataset) { abierto = !abierto; text(cur); box.querySelector('[data-pv-mas]')?.focus(); return; }
     if ('pvCom' in b.dataset) { comAbierto = !comAbierto; text(cur); box.querySelector('[data-pv-com]')?.focus(); }
   });
+  // deslizar con el dedo (o el ratón) sobre el archivo pasa al siguiente o al anterior, como en la app (PRE-07)
+  let sx = null;
+  box.addEventListener('pointerdown', e => { sx = e.target.closest('.pv-media, .pv-screen') && !e.target.closest('button') && box.querySelector('[data-pv-sl]') ? { x: e.clientX, y: e.clientY } : null; });
+  box.addEventListener('pointerup', e => { if (!sx) return; const dx = e.clientX - sx.x, dy = e.clientY - sx.y; sx = null; if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) box.querySelector(`[data-pv-sl="${dx < 0 ? 1 : -1}"]:not([disabled])`)?.click(); });
+  box.addEventListener('pointercancel', () => { sx = null; });
   box.addEventListener('change', e => { if (e.target.matches('[data-pv-zonas]')) { zonas = e.target.checked; paint(cur); box.querySelector('[data-pv-zonas]')?.focus(); } });
   box.addEventListener('keydown', e => {
     const t = e.target.closest('[role="tab"]');

@@ -58,3 +58,16 @@ test('la cola trae los 14 días (los vacíos son huecos) y después solo los dí
   assert.equal(c.length, 15); assert.equal(c[0][0], dia(0)); assert.equal(c[0][1].length, 1);
   assert.equal(c.at(-1)[0], dia(20)); assert.equal(c.filter(([, l]) => !l.length).length, 13);
 });
+
+test('los días rápidos del panel: hoy, mañana y los siguientes, con cuántas piezas ya salen ese día en esas redes', async () => {
+  const { diasRapidos } = await import('../src/contenido-cola.js');
+  const otras = [pz({ id: 'a', fecha: dia(1), hora: '09:00' }), pz({ id: 'b', fecha: dia(1), hora: '18:00', redes: ['facebook'] }), pz({ id: 'c', fecha: dia(2), estado: 'idea' }), pz({ id: 'yo', fecha: dia(3) })];
+  const d = diasRapidos(['instagram'], otras, { ahora: AHORA, excluir: 'yo' });
+  assert.equal(d.length, 7);
+  assert.equal(d[0].fecha, dia(0)); assert.equal(d[0].corto, 'Hoy'); assert.equal(d[1].corto, 'Mañana');
+  assert.equal(d[1].n, 1, 'solo cuenta la de Instagram, no la de Facebook');
+  assert.equal(d[2].n, 0, 'una idea no ocupa el día');
+  assert.equal(d[3].n, 0, 'la propia pieza no se cuenta');
+  assert.match(d[2].corto, /^(lun|mar|mié|jue|vie|sáb|dom) \d+$/);
+  assert.equal(diasRapidos(['instagram', 'facebook'], otras, { ahora: AHORA })[1].n, 2);
+});

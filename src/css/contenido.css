@@ -322,3 +322,34 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
   #ctOv .ct-row { flex-wrap: wrap; gap: 6px 10px; padding: 9px 10px; } #ctOv .ct-row .ct-open { flex: 1 1 220px; } #ctOv .ct-row .ct-st { margin-left: 50px; } #ctOv .ct-row .ct-open .pz-rt { width: 38px; height: 46px; }
   .ct-need { padding: 10px; } .ct-banner { font-size: 12px; }
 }
+
+/* ---------- V4.10 (1 oct, revisión de la auditoría): el mes respira hasta 1280 px ---------- */
+/* Con el banco de ideas abierto, a 1024 px cada día medía 100 px y la tarjeta perdía la miniatura y la red (CON-01). Por debajo de 1280 px
+   de VISTA (no de ventana: con Dimitri al lado también cuenta) el banco se pliega tras el botón «Ideas (n)» y se abre encima. */
+#ctOv { container: ctov / inline-size; }
+@container ctov (max-width: 1279.98px) {
+  #ctOv .cv-railbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; }
+  #ctOv:not(.railOpen) .cv-rail { display: none; }
+  #ctOv.railOpen .cv-rail { display: flex; position: absolute; left: 0; top: 0; bottom: 0; z-index: 44; width: min(320px, 86%); background: var(--cream); box-shadow: 20px 0 50px rgba(0,0,0,.2); }
+  /* y los filtros tras «Filtros (n)», como en el teléfono: a 1024 px la cabecera ocupaba 270 px y el panel de la pieza se quedaba sin alto */
+  #ctOv .cv-tools { flex-wrap: wrap; gap: 8px; }
+  #ctOv .ct-fbtn { display: inline-flex; align-items: center; }
+  #ctOv #ctChips { display: none; } #ctOv.chipsOpen #ctChips { display: flex; flex-wrap: wrap; width: 100%; gap: 6px; order: 9; }
+}
+@container ctov (min-width: 761px) and (max-width: 1279.98px) { #ctOv .cv-tools .cv-sw { flex: 0 1 300px; min-width: 160px; } #ctOv #ctSearch { width: 100%; } }
+#ctOv .cv-railbtn b { font-family: var(--serif); font-weight: 400; font-size: 14px; letter-spacing: 0; }
+#ctOv.prog .cv-railbtn { display: none; }
+/* la leyenda de los formatos al pie del banco: el icono de la tarjeta se aprende una vez */
+.ct-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 10px 4px 0; font-size: 11px; color: var(--grey); }
+.ct-legend span { display: inline-flex; align-items: center; gap: 4px; }
+/* con sitio, la tarjeta del mes también dice el formato con su palabra */
+#ctOv .cv-ev.line.pz2 .pz-fw { display: none; font-size: 10.5px; color: var(--grey); } body.dark #ctOv .cv-ev.line.pz2 .pz-fw { color: #C2C0B9; }
+@container ctday (min-width: 200px) { #ctOv .cv-ev.line.pz2 .pz-fw { display: inline; } }
+/* en la semana y el día, la primera línea de la tarjeta baja de renglón antes que cortar la red («IG F…») */
+#ctOv .cv-grid.tg .pz-cardmain .pz-l1, #ctOv #ctPop .pz-cardmain .pz-l1 { flex-wrap: wrap; white-space: normal; row-gap: 2px; }
+/* los días rápidos del panel (CON-13): un clic en vez de bajar por 120 opciones; el número dice cuántas piezas ya salen ese día */
+.pz-qd { position: relative; font-family: var(--ui); font-size: 11.5px; font-weight: 600; color: var(--ink); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 4px 10px; min-height: 28px; cursor: pointer; white-space: nowrap; }
+.pz-qd i { font-style: normal; display: inline-grid; place-items: center; min-width: 16px; height: 16px; margin-left: 5px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; background: color-mix(in srgb, var(--ink) 12%, transparent); font-size: 10.5px; font-weight: 700; }
+.pz-qd[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); } .pz-qd[aria-pressed="true"] i { background: color-mix(in srgb, var(--cream) 22%, transparent); }
+.pz-qd:hover { border-color: var(--ink); } .pz-qd:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pz-qdays { gap: 6px; margin-top: -2px; }

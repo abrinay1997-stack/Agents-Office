@@ -12,7 +12,7 @@ import { modal } from './modal.js';
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento } from './contenido-reglas.js';
 import { initPreview } from './contenido-preview.js';
-import { choqueDe, siguienteHueco } from './contenido-cola.js';
+import { choqueDe, siguienteHueco, diasRapidos } from './contenido-cola.js';
 
 export const ESTADO = {
   idea: { name: 'IDEA', glyph: '◌', color: '#5A5A5A', dark: '#B9B6AE', help: 'Una idea suelta: todavía no es una publicación.' },
@@ -110,6 +110,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const p = cur, ch = choqueDe(p, otras()), m = revisarMomento(p.fecha, p.hora);
     box.innerHTML = `<div class="pz-row"><label for="${I('d')}">Día</label><select id="${I('d')}" class="pz-sel" data-f="fecha"><option value=""${p.fecha ? '' : ' selected'}>Sin día (banco de ideas)</option>${dateOpts(p.fecha)}</select>
         <label for="${I('h')}">Hora</label><select id="${I('h')}" class="pz-sel" data-f="hora"><option value=""${p.hora ? '' : ' selected'}>Sin hora</option>${timeOpts(p.hora)}</select></div>
+      <div class="pz-row pz-quick pz-qdays" role="group" aria-label="Días rápidos">${diasRapidos(p.redes, otras(), { excluir: p.id }).map(d => `<button type="button" class="pz-qd" data-qd="${d.fecha}" aria-pressed="${p.fecha === d.fecha}" aria-label="${esc(d.largo)}${d.n ? `: ya ${d.n === 1 ? 'sale 1 pieza' : `salen ${d.n} piezas`}` : ': libre'}">${esc(d.corto)}${d.n ? `<i aria-hidden="true">${d.n}</i>` : ''}</button>`).join('')}</div>
       <div class="pz-row pz-quick" role="group" aria-label="Horas rápidas">${HORAS_RAPIDAS.map(h => `<button type="button" class="pz-qh" data-qh="${h}" aria-pressed="${p.hora === h}">${h}</button>`).join('')}<button type="button" class="pz-qh wide" data-a="hueco" title="El siguiente día sin nada en estas redes">Siguiente hueco libre</button></div>
       ${ch ? `<p class="pz-inline warn" role="status">Ya hay ${esc(FORMATO[ch.formato]?.toLowerCase() === 'historia' ? 'una historia' : 'un ' + (FORMATO[ch.formato] || 'post').toLowerCase())} a las ${esc(ch.hora)} ese día: «${esc(ch.titulo || 'sin título')}». Sepáralas al menos una hora.</p>` : ''}
       ${p.fecha && m.errores.length ? `<p class="pz-inline err" role="status">${esc(m.errores[0])}</p>` : p.fecha && p.hora ? `<p class="pz-inline ok">Sale ${esc(fmtLong(m.momento))}.</p>` : ''}`;
@@ -198,6 +199,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const b = e.target.closest('button'); if (!b || !cur || b.closest('.pz-preview')) return;
     if (b.dataset.swap) { swap(b.dataset.swap); return; }
     if (b.dataset.fmt) { set({ formato: b.dataset.fmt }); keep(() => paintBody(), `[data-fmt="${b.dataset.fmt}"]`); return; }
+    if (b.dataset.qd) { set({ fecha: b.dataset.qd }); keep(paintCuando, `[data-qd="${b.dataset.qd}"]`); paintPreview(); return; }
     if (b.dataset.qh) { set({ hora: b.dataset.qh }); keep(paintCuando, `[data-qh="${b.dataset.qh}"]`); paintPreview(); return; }
     if (b.dataset.red) { const on = cur.redes.includes(b.dataset.red); const next = on ? cur.redes.filter(r => r !== b.dataset.red) : [...cur.redes, b.dataset.red]; if (!next.length) { setState('Elige al menos una red.', true); return; } set({ redes: next }); keep(() => paintBody(), `[data-red="${b.dataset.red}"]`); return; }
     if (b.dataset.rm !== undefined) { swapMedios(cur.medios.filter((_, i) => i !== +b.dataset.rm)); return; }
