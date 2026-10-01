@@ -138,20 +138,18 @@ export function effective(e, now = Date.now(), neutral = 0.5) {
  * Learn from one finished task: { id, r, cited, read }. The notes it cited move towards r (α), the ones it read but did not
  * cite move half as fast towards 0.4; every pair cited together strengthens its link (a new link is born only from good work).
  * Applying the same task again first undoes what it did before, so a vote that changes is never counted twice.
+ * pairs: false moves the notes only (a gallery file read its notes, it did not cite them together: no link is made up).
  */
-export function reinforce(mem, { id, r, cited: cit = [], read = [] }, now = Date.now()) {
+export function reinforce(mem, { id, r, cited: cit = [], read = [], pairs = true }, now = Date.now()) {
   const prev = mem.applied[id];
   if (prev && prev.r === r && prev.cit === cit.join('|')) return mem; // nothing new
-  if (prev) { // undo the last time this task taught the memory
-    for (const [n, d] of Object.entries(prev.dn)) { const e = mem.notes[n]; if (e) e.w = Math.max(0, Math.min(1, e.w - d)); }
-    for (const [k, d] of Object.entries(prev.de)) { const e = mem.edges[k]; if (e) { e.w = Math.max(0, Math.min(1, e.w - d)); if (e.w < 0.1) delete mem.edges[k]; } }
-  }
+  if (prev) undo(mem, prev); // undo the last time this task taught the memory
   const dn = {}, de = {};
   const move = (n, target, a) => { const e = mem.notes[n] || (mem.notes[n] = { w: 0.5, n: 0, last: now }); const w0 = effective(e, now); const w1 = w0 + a * (target - w0); dn[n] = (dn[n] || 0) + (w1 - e.w); e.w = w1; e.n++; e.last = now; };
   const citSet = new Set(cit);
   for (const n of cit) move(n, r, ALPHA);
   for (const n of read) if (!citSet.has(n)) move(n, 0.4, ALPHA / 2);
-  const list = [...citSet];
+  const list = pairs ? [...citSet] : [];
   for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
     const k = pairKey(list[i], list[j]); let e = mem.edges[k];
     if (!e) { if (r < 0.75) continue; e = mem.edges[k] = { w: 0.2, n: 0, last: now }; de[k] = 0.2; }
@@ -162,6 +160,12 @@ export function reinforce(mem, { id, r, cited: cit = [], read = [] }, now = Date
   const ids = Object.keys(mem.applied); if (ids.length > 3000) for (const old of ids.sort((a, b) => mem.applied[a].at - mem.applied[b].at).slice(0, ids.length - 3000)) delete mem.applied[old];
   return mem;
 }
+function undo(mem, prev) {
+  for (const [n, d] of Object.entries(prev.dn)) { const e = mem.notes[n]; if (e) e.w = Math.max(0, Math.min(1, e.w - d)); }
+  for (const [k, d] of Object.entries(prev.de)) { const e = mem.edges[k]; if (e) { e.w = Math.max(0, Math.min(1, e.w - d)); if (e.w < 0.1) delete mem.edges[k]; } }
+}
+/** Take back what one id taught (a file brought back from the bin): its weights return as if it had never been judged. */
+export function forget(mem, id) { const prev = mem.applied[id]; if (!prev) return false; undo(mem, prev); delete mem.applied[id]; return true; }
 /** The learned weight of a note (0–1, 0.5 neutral) → a factor for its search score: 0.8 … 1.2 (1 when neutral). */
 export const boostOf = (mem, name, now = Date.now()) => 0.8 + 0.4 * effective(mem.notes[name], now);
 /** Learned links [[a, b, w]] still worth anything today. */

@@ -1035,11 +1035,20 @@ export function writeStudioNote(j, now = new Date()) {
   for (const f of j.items) { try { update(f, { note: name }); } catch {} }
   return name;
 }
-/** What the memory learns from one gallery file (r: 1 used or ⭐, 0 thrown away unused), or null when it read no note. Its id is
- *  'm:' + the file, so memory.reinforce counts it once and a new verdict replaces the old one. */
+/** The line an agent's task carries when the owner sent it gallery files to work from (task.refs, set by «Mandar a un
+ *  departamento…»). task.media is what the task itself made: never handed back as an input, or a «revise» would copy it. */
+export const refsLine = t => Array.isArray(t?.refs) && t.refs.length ? `\nImágenes de la galería para esta tarea: ${t.refs.slice(0, 12).join(', ')} (ids del Estudio: úsalas de referencia o para animar)` : '';
+/** The memory learns once per job, not per file: 'm:' + the job (or the file when it has none). */
+export const learnId = it => it ? 'm:' + (it.job || it.file) : null;
+/** What the memory learns from one gallery file (r: 1 used or ⭐, 0 thrown away unused), or null when it read no note or there is
+ *  no verdict yet. A job is one verdict (memory.reinforce counts its id once; a new verdict replaces the old one): any file used
+ *  → 1; 0 only when the last of its files leaves unused (another one still in the gallery may be used yet). The notes were read,
+ *  not cited together, so pairs: false — no learned link between every pair of them. */
 export function learnArgs(file, r) {
   const it = item(file); if (!it || !Array.isArray(it.read) || !it.read.length) return null;
-  return { id: 'm:' + it.file, r: Math.max(0, Math.min(1, +r || 0)), cited: it.read, read: it.read };
+  const v = Math.max(0, Math.min(1, +r || 0));
+  if (v < 1 && it.job) { const j = JOBS.find(x => x.id === it.job); if ((j?.items || []).some(f => f !== it.file && item(f))) return null; }
+  return { id: learnId(it), r: v, cited: it.read, read: it.read, pairs: false };
 }
 /** A file the owner used (as a reference, in a piece, on the calendar): its record says how. */
 const USES = ['ref', 'pieza', 'calendario'];

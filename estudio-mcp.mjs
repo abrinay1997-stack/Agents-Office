@@ -89,7 +89,7 @@ async function call(name, a = {}) {
     const { items, folders = [] } = await office('/api/media'); const q = String(a.buscar || '').toLowerCase().trim();
     const fname = new Map(folders.map(f => [f.id, f.name])); let only = null; // V4.9: the folders the owner and Dimitri organised
     if (String(a.carpeta || '').trim()) {
-      const want = plain(a.carpeta); only = folders.find(f => plain(f.name) === want) || folders.find(f => plain(f.name).includes(want));
+      const want = plain(a.carpeta); only = (want && folders.find(f => plain(f.name) === want)) || (want.length >= 2 && folders.find(f => plain(f.name).includes(want))) || null; // «—» or «#» is no name: '' is inside every name
       if (!only) return `No hay una carpeta «${String(a.carpeta).slice(0, 60)}» en el Estudio.${folders.length ? ` Carpetas: ${folders.map(f => `${f.name} (${f.n})`).join(', ')}.` : ' Aún no hay carpetas.'}`;
     }
     const hits = items.filter(it => (!only || it.folder === only.id) && (!a.solo_subidas || it.upload) && (!q || `${it.prompt} ${it.file}`.toLowerCase().includes(q))).slice(0, Math.min(30, a.cantidad || 12));

@@ -1,7 +1,7 @@
 // V4.9 — el rastro del Estudio en el Cerebro y en la memoria. Run: npm test
 // Un trabajo real (no «prueba») de Dimitri o de un agente, o una edición, deja su nota en <cerebro>/Agents Office/estudio/AAAA-MM/
 // (que no viaja por GitHub); un archivo usado o con ⭐ enseña r = 1 a las notas que se leyeron para hacerlo, y uno tirado sin usar r = 0,
-// una sola vez por archivo. Los agentes buscan en la galería por carpeta (estudio-mcp, contra una oficina de mentira).
+// una sola vez por trabajo (un lote con algo usado no castiga; recuperar de la papelera deshace el r = 0). Los agentes buscan en la galería por carpeta (estudio-mcp, contra una oficina de mentira).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -77,31 +77,66 @@ test('una edición del dueño deja nota con su original; lo hecho con «prueba»
   } finally { g.srv.close(); }
 });
 
-test('usar o marcar ⭐ enseña r = 1 a las notas leídas; tirar sin usar, r = 0; una sola vez por archivo', async () => {
+test('usar o marcar ⭐ enseña r = 1 a las notas leídas, una vez por trabajo y sin inventar sinapsis entre ellas', async () => {
   fresh();
-  const done = await media.wait(media.submit({ model: 'prueba', prompt: 'x', n: 2, by: 'dimitri', read: ['voice', '00-Empresa/oferta'] }).id, 10000);
+  const read = ['voice', '00-Empresa/oferta', '10-Business/precios'];
+  const done = await media.wait(media.submit({ model: 'prueba', prompt: 'x', n: 2, by: 'dimitri', read }).id, 10000);
   const [a, b] = done.items;
-  assert.equal(media.learnArgs(a, 1).id, 'm:' + a);
-  assert.deepEqual(media.learnArgs(a, 1), { id: 'm:' + a, r: 1, cited: ['voice', '00-Empresa/oferta'], read: ['voice', '00-Empresa/oferta'] });
+  assert.deepEqual(media.learnArgs(a, 1), { id: 'm:' + done.id, r: 1, cited: read, read, pairs: false });
+  assert.equal(media.learnArgs(b, 1).id, 'm:' + done.id, 'the two files of one job are one verdict');
   const sinNotas = await media.wait(media.submit({ model: 'prueba', prompt: 'y' }).id, 10000);
   assert.equal(media.learnArgs(sinNotas.items[0], 1), null, 'nothing read, nothing to learn');
 
   const mem = memory.emptyMemory(), now = Date.now();
   memory.reinforce(mem, media.learnArgs(a, 1), now);
   const once = JSON.stringify(mem.notes);
-  memory.reinforce(mem, media.learnArgs(a, 1), now);
-  assert.equal(JSON.stringify(mem.notes), once, 'the same file teaches once');
-  assert.ok(mem.notes.voice.w > 0.5); assert.ok(mem.edges[Object.keys(mem.edges)[0]].w > 0);
+  memory.reinforce(mem, media.learnArgs(b, 1), now);
+  assert.equal(JSON.stringify(mem.notes), once, 'the same job teaches once');
+  assert.ok(mem.notes.voice.w > 0.5);
+  assert.deepEqual(mem.edges, {}, 'read is not cited together: no learned link between every pair');
 
   assert.equal(media.wasUsed(media.item(b)), false);
   assert.deepEqual(media.markUsed(b, 'ref').used, ['ref']); assert.deepEqual(media.markUsed(b, 'ref').used, ['ref']);
   assert.equal(media.markUsed(b, 'otra'), null); assert.equal(media.wasUsed(media.item(b)), true);
   assert.equal(media.wasUsed({ fav: true }), true);
+});
 
-  const m2 = memory.emptyMemory();
-  memory.reinforce(m2, media.learnArgs(b, 0), now); const w0 = m2.notes.voice.w;
-  memory.reinforce(m2, media.learnArgs(b, 0), now); assert.equal(m2.notes.voice.w, w0, 'r = 0 also once');
-  assert.ok(w0 < 0.5);
+test('un lote mixto (⭐ uno, tirar los otros) no castiga las notas; r = 0 solo cuando se tiran todos sin usar', async () => {
+  fresh();
+  const read = ['voice', '00-Empresa/oferta'], now = Date.now();
+  // Dimitri's lot of 4: the owner ⭐ one and throws the other three away
+  const lot = await media.wait(media.submit({ model: 'prueba', prompt: 'lote', n: 4, by: 'dimitri', read }).id, 10000);
+  const [keep, ...rest] = lot.items, mem = memory.emptyMemory();
+  media.update(keep, { fav: true }); memory.reinforce(mem, media.learnArgs(keep, 1), now); const good = mem.notes.voice.w;
+  for (const f of rest) { const a = media.learnArgs(f, 0); assert.equal(a, null, 'a file of the lot is still in the gallery: no verdict'); media.trash(f); }
+  assert.equal(mem.notes.voice.w, good); assert.ok(good > 0.5);
+
+  // a lot thrown away whole, file by file: only the last one teaches r = 0
+  const bad = await media.wait(media.submit({ model: 'prueba', prompt: 'malo', n: 3, by: 'dimitri', read }).id, 10000), m2 = memory.emptyMemory();
+  const [x, y, z] = bad.items;
+  assert.equal(media.learnArgs(x, 0), null); media.trash(x);
+  assert.equal(media.learnArgs(y, 0), null); const ty = media.trash(y);
+  const last = media.learnArgs(z, 0); assert.equal(last.r, 0); assert.equal(last.id, 'm:' + bad.id);
+  memory.reinforce(m2, last, now); const w0 = m2.notes.voice.w; assert.ok(w0 < 0.5);
+  memory.reinforce(m2, media.learnArgs(z, 0), now); assert.equal(m2.notes.voice.w, w0, 'r = 0 also once');
+  const tz = media.trash(z);
+
+  // «Recuperar» (or DESHACER) takes the verdict back: as if it had never been judged
+  assert.ok(media.restore(tz)); assert.equal(media.learnId(media.item(z)), 'm:' + bad.id);
+  assert.equal(memory.forget(m2, media.learnId(media.item(z))), true);
+  assert.equal(m2.notes.voice.w, 0.5); assert.equal(m2.applied['m:' + bad.id], undefined);
+  assert.equal(memory.forget(m2, 'm:' + bad.id), false, 'nothing left to forget');
+  assert.ok(media.restore(ty)); assert.equal(media.learnArgs(z, 0), null, 'back in the gallery: no verdict while another file of the lot is there');
+});
+
+test('una tarea solo ve como referencia lo que se le mandó (task.refs), nunca lo que ella misma generó (task.media)', () => {
+  assert.equal(media.refsLine({ media: ['2026-09/salida.png'] }), '', 'its own output is not an input on a revise');
+  assert.equal(media.refsLine({}), ''); assert.equal(media.refsLine(null), '');
+  const l = media.refsLine({ refs: ['2026-09/producto.png'], media: ['2026-09/salida.png'] });
+  assert.match(l, /^\nImágenes de la galería para esta tarea: 2026-09\/producto\.png \(ids del Estudio/); assert.doesNotMatch(l, /salida/);
+  const src = fs.readFileSync(path.join(ROOT, 'serve.mjs'), 'utf8');
+  assert.match(src, /'\/api\/media\/to-dept'[\s\S]{0,900}extra: \{ refs: \[file\] \}/, 'to-dept hands the file in as refs');
+  assert.doesNotMatch(src, /task\.media\?\.length \? `\nImágenes/, 'run() no longer reads task.media as references');
 });
 
 test('las notas del Estudio no viajan por GitHub (cerebro del equipo y cerebro local)', () => {
@@ -127,6 +162,8 @@ test('buscar_en_galeria filtra por carpeta (sin mayúsculas ni acentos) y dice l
     assert.match(otono, /^2026-09\/a\.png · imagen · carpeta «Campaña Otoño» · «taza roja»$/);
     assert.equal(await call({ carpeta: 'PRODUCTO', buscar: 'roja' }), 'Nada en la galería con eso en la carpeta «Producto».');
     assert.match(await call({ carpeta: 'no existe' }), /No hay una carpeta «no existe».*Campaña Otoño \(1\), Producto \(1\)/);
+    for (const c of ['—', '¡¡', '#']) assert.match(await call({ carpeta: c }), /^No hay una carpeta .*Campaña Otoño \(1\), Producto \(1\)/, `«${c}» has no letters: it is no folder, not the first one`);
+    assert.match(await call({ carpeta: 'o' }), /^No hay una carpeta «o»/, 'one letter is too little to guess a folder');
     const all = await call({});
     assert.equal(all.split('\n').length, 3); assert.match(all, /c\.png · imagen · subida por el dueño · «logo»/);
   } finally { p.kill(); srv.close(); }

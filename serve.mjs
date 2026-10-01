@@ -415,7 +415,9 @@ function learnFrom(t) {
   memory.reinforce(MEM, { id: t.id, r: memory.outcome(t), cited: memory.cited(t.result, t.read), read: t.read }); saveMem();
 }
 /** V4.9: a gallery file teaches the Brain too — used or ⭐ (r = 1), thrown away unused (r = 0); the notes read to make it. Once per file. */
-function learnFromMedia(file, r) { try { const a = media.learnArgs(file, r); if (!a) return; memory.reinforce(MEM, a); saveMem(); } catch (e) { console.warn('memory (estudio):', e.message); } }
+function learnFromMedia(file, r) { try { const a = media.learnArgs(file, r); if (!a || (a.r === 0 && MEM.applied[a.id]?.r > 0)) return; memory.reinforce(MEM, a); saveMem(); } catch (e) { console.warn('memory (estudio):', e.message); } } // a job that served once is never punished later
+/** Back from the bin (or DESHACER): a «thrown away unused» verdict on its job is taken back. */
+function unlearnMedia(file) { try { const id = media.learnId(media.item(file)); if (id && MEM.applied[id]?.r === 0 && memory.forget(MEM, id)) saveMem(); } catch (e) { console.warn('memory (estudio):', e.message); } }
 /** V4.9: the trail of a creative in the Brain — <brain>/Agents Office/estudio/YYYY-MM/… (a real job by Dimitri or an agent, or an edit). */
 function estudioNote(j) { try { const n = media.writeStudioNote(j); if (n) { console.log(`✦ estudio: note «${n}»`); rebuildGraph().catch(() => {}); } return n; } catch (e) { console.warn('estudio note:', e.message); return null; } }
 
@@ -506,7 +508,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
   const routineLine = task.routine ? `\nThis is a routine (${task.when}): it runs on the office's own clock and the owner is not at the keyboard. It is now ${new Date().toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}${task.late ? `; this run is late, it was due ${new Date(task.due).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}. Do the work for now.`
     : task.dueAt ? `\nThis task was scheduled in advance for ${new Date(task.dueAt).toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} and is running now; the owner is not at the keyboard${task.late ? ' and this run is late' : ''}. Do the work for now.` : '';
   const modeLine = modeLineFor(mode, task);
-  const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + (task.media?.length ? `\nImágenes de la galería para esta tarea: ${task.media.slice(0, 12).join(', ')} (ids del Estudio: úsalas de referencia o para animar)` : '') + routineLine + modeLine + // V4.9: sent from the Estudio
+  const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + media.refsLine(task) + routineLine + modeLine + // V4.9: sent from the Estudio
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
   const guard = {};
@@ -1694,7 +1696,7 @@ const server = http.createServer(async (req, res) => {
       if (!STUDIO_DEPTS.includes(b.dept) || !DEPTS[b.dept]) return json(res, 400, { error: 'ese departamento no usa el Estudio' });
       const text = String(b.text || '').trim() || `Trabaja con esta imagen del Estudio: ${file}`;
       if (text.length > 4000) return json(res, 400, { error: 'el texto es muy largo (máx. 4000)' });
-      try { const t = await newTask({ dept: b.dept, text, extra: { media: [file] } }); return json(res, 200, { task: { id: t.id, title: t.title, dept: t.dept, agent: t.agent } }); }
+      try { const t = await newTask({ dept: b.dept, text, extra: { refs: [file] } }); /* refs: what goes in; task.media stays what the task made */ return json(res, 200, { task: { id: t.id, title: t.title, dept: t.dept, agent: t.agent } }); }
       catch (e) { return json(res, 500, { error: 'no pude crear la tarea: ' + e.message }); }
     }
     if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
@@ -1742,7 +1744,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/media/trash' && req.method === 'GET') return json(res, 200, { items: media.trashList(), days: media.BIN_DAYS }); // V4.4: the Estudio's bin
     if (url.pathname === '/api/media/trash/file' && req.method === 'GET') { const f = media.trashFile(url.searchParams.get('n')); if (!f) return json(res, 404, { error: 'no está en la papelera' }); const ext = path.extname(f).slice(1).toLowerCase(); const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav' }[ext] || 'application/octet-stream'; res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(ext === 'svg' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }); return fs.createReadStream(f).pipe(res); }
     if (url.pathname === '/api/media/trash/purge' && req.method === 'POST') { const b = await body(req); return json(res, 200, { ok: true, removed: media.purge(b) }); }
-    if (url.pathname === '/api/media/restore' && req.method === 'POST') { const b = await body(req); return media.restore(b) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)' }); }
+    if (url.pathname === '/api/media/restore' && req.method === 'POST') { const b = await body(req); return media.restore(b) ? (unlearnMedia(b.id), json(res, 200, { ok: true })) : json(res, 409, { error: 'no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)' }); }
     if (url.pathname === '/api/media/zip' && req.method === 'POST') {
       const { ids } = await body(req); const z = media.zip(ids);
       if (!z.count) return json(res, 404, { error: 'nada que descargar' });
