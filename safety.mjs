@@ -13,15 +13,17 @@
 //   safeTools      ["draft"]             words in a tool's name that make it not outbound (a Gmail draft sends nothing)
 //   injection      true                  a page or an email that gives the agent orders stops every send for the rest of that run
 //   checkRecipients true                  after the OK, a send may only go to addresses and numbers that are in the approved draft
+//   toolKinds      { "*test_connection": "read" }   the owner's word on what a tool is (read · write · cost), over the name rule (MCP-01)
 
 export const WRITE_MODES = ['aprobar', 'pedido', 'nunca'];
-export const DEFAULTS = { writes: 'aprobar', departments: {}, browserSites: [], browserBlock: [], limits: { perAgentDay: 40, perRecipientDay: 5 }, safeTools: ['draft', 'borrador'], injection: true, checkRecipients: true };
+export const DEFAULTS = { writes: 'aprobar', departments: {}, browserSites: [], browserBlock: [], limits: { perAgentDay: 40, perRecipientDay: 5 }, safeTools: ['draft', 'borrador'], injection: true, checkRecipients: true, toolKinds: {} };
 
 export function normalize(s = {}) {
   const o = { ...DEFAULTS, ...s, limits: { ...DEFAULTS.limits, ...(s.limits || {}) } };
   if (!WRITE_MODES.includes(o.writes)) o.writes = DEFAULTS.writes;
   o.departments = Object.fromEntries(Object.entries(o.departments || {}).filter(([, v]) => WRITE_MODES.includes(v)));
   for (const k of ['browserSites', 'browserBlock', 'safeTools']) o[k] = Array.isArray(o[k]) ? o[k].map(String).filter(Boolean) : DEFAULTS[k];
+  o.toolKinds = o.toolKinds && typeof o.toolKinds === 'object' && !Array.isArray(o.toolKinds) ? Object.fromEntries(Object.entries(o.toolKinds).filter(([, v]) => KINDS.includes(v))) : {};
   return o;
 }
 /** Problems in plain words, for `npm run check`. */
@@ -30,6 +32,7 @@ export function problems(s = {}) {
   if (s.writes !== undefined && !WRITE_MODES.includes(s.writes)) out.push(`safety.writes «${s.writes}» no existe: usa ${WRITE_MODES.join(', ')}`);
   for (const [d, v] of Object.entries(s.departments || {})) if (!WRITE_MODES.includes(v)) out.push(`safety.departments.${d} «${v}» no existe: usa ${WRITE_MODES.join(', ')}`);
   for (const k of ['browserSites', 'browserBlock', 'safeTools']) if (s[k] !== undefined && !Array.isArray(s[k])) out.push(`safety.${k} debe ser una lista`);
+  for (const [t, v] of Object.entries(s.toolKinds && typeof s.toolKinds === 'object' ? s.toolKinds : {})) if (!KINDS.includes(v)) out.push(`safety.toolKinds «${t}»: «${v}» no existe, usa read, write o cost`);
   return out;
 }
 export const modeFor = (s, dept) => normalize(s).departments[dept] || normalize(s).writes;
@@ -42,24 +45,60 @@ export function writesAllowed(mode, runMode) {
 }
 
 /* ---------- which tools send ---------- */
-const WRITE_VERBS = new Set(['send', 'reply', 'forward', 'post', 'publish', 'create', 'update', 'edit', 'modify', 'patch', 'put', 'delete', 'remove', 'trash', 'archive', 'move', 'pay', 'charge', 'refund', 'transfer', 'payout', 'book', 'schedule', 'cancel', 'invite', 'share', 'upload', 'write', 'insert', 'append', 'set', 'add', 'assign', 'approve', 'submit', 'execute', 'run', 'merge', 'push', 'comment', 'like', 'follow', 'unfollow', 'subscribe', 'unsubscribe', 'import', 'rename', 'label', 'mark', 'void', 'issue', 'dispatch', 'enviar', 'publicar', 'crear', 'borrar', 'eliminar', 'pagar', 'actualizar']);
-const READ_VERBS = new Set(['get', 'list', 'search', 'read', 'fetch', 'find', 'query', 'describe', 'lookup', 'view', 'show', 'check', 'count', 'download', 'retrieve', 'preview', 'status', 'buscar', 'leer', 'listar', 'ver']);
-const CHROME_WRITE = new Set(['form_input', 'computer', 'javascript_tool', 'upload_image', 'file_upload']);
-const INTERNAL = new Set(['estudio', 'contenido']); // the office's own Estudio and Contenido: files and notes on this machine, nothing leaves (Contenido has no tool that approves, schedules or publishes — tests/contenido-mcp.test.mjs)
+// Auditoría MCP (1 oct 2026, MCP-01): in doubt, it SENDS. A tool is a read only when no word of its name changes anything and
+// one of them reads; a name the office does not know (test-digital-products-connection, render_song_widget) counts as a send.
+// STRONG words change something wherever they are; WEAK ones are also nouns (get_schedule, list_posts, get_comment), so they
+// only count when the name does not start with a read verb. tests/mcp-kinds.test.mjs runs every tool of a real machine.
+const STRONG = new Set(['send', 'reply', 'forward', 'publish', 'create', 'update', 'edit', 'modify', 'patch', 'put', 'delete', 'remove', 'trash', 'move', 'pay', 'charge', 'refund', 'cancel', 'invite', 'insert', 'append', 'add', 'assign', 'approve', 'reject', 'submit', 'execute', 'exec', 'merge', 'follow', 'unfollow', 'subscribe', 'unsubscribe', 'rename', 'void', 'dispatch',
+  'mutation', 'mutate', 'sql', 'respond', 'rsvp', 'accept', 'decline', 'copy', 'duplicate', 'clone', 'batch', 'react', 'untrash', 'unlabel', 'unmark', 'unarchive', 'unpublish', 'unshare', 'restore', 'generate', 'switch', 'apply', 'install', 'uninstall', 'migrate', 'revoke', 'grant', 'enable', 'disable', 'trigger', 'launch', 'deploy', 'purge', 'drop', 'truncate', 'resend', 'notify', 'tweet', 'retweet', 'pin', 'unpin', 'star', 'unstar', 'sync', 'reset', 'close', 'complete', 'resolve', 'transfer', 'payout', 'book',
+  'enviar', 'publicar', 'crear', 'borrar', 'eliminar', 'pagar', 'actualizar', 'responder', 'reenviar', 'programar', 'generar', 'copiar', 'mover']);
+const WEAK = new Set(['post', 'schedule', 'comment', 'label', 'mark', 'share', 'issue', 'set', 'run', 'import', 'upload', 'write', 'like', 'push', 'archive', 'order', 'message', 'invoice']);
+const READ_VERBS = new Set(['get', 'list', 'search', 'read', 'fetch', 'find', 'query', 'describe', 'lookup', 'view', 'show', 'check', 'count', 'download', 'retrieve', 'preview', 'status', 'analyze', 'analyse', 'suggest', 'validate', 'inspect', 'browse', 'scan', 'explain', 'summarize', 'summary', 'schema', 'guide', 'docs', 'documentation', 'help', 'info', 'whoami', 'ping',
+  'buscar', 'leer', 'listar', 'ver', 'consultar', 'obtener']);
+const OUTBOUND = new Set(['send', 'publish', 'schedule', 'submit', 'post', 'dispatch', 'enviar', 'publicar', 'programar']); // a «draft» tool with one of these still sends (send_draft, publish_draft)
+const DB = /sql|database|(^|_)db(_|$)|(^|_)d1(_|$)|snowflake|databricks|supabase|bigquery|postgres|mongo|redis|dynamo|sqlite/i; // a «query» on a database can be a DROP TABLE
+const CHROME_WRITE = new Set(['form_input', 'computer', 'javascript_tool', 'upload_image', 'file_upload', 'shortcuts_execute', 'gif_creator', 'browser_batch']); // browser_batch: decided item by item (kindOfCall)
+const CHROME_LOOK = new Set(['screenshot', 'scroll', 'scroll_to', 'zoom', 'wait', 'hover', 'mouse_move', 'cursor_position']); // computer actions that only look
+const INTERNAL = new Set(['estudio', 'contenido']); // the office's own Estudio and Contenido (Contenido has no tool that approves, schedules or publishes — tests/contenido-mcp.test.mjs)
+const ESTUDIO_COST = /^(generar_|analizar_|transcribir_)/; // MCP-08: a prompt or a file goes to a paid engine — «cost»: fine before the OK, never with «nunca»
+export const KINDS = ['read', 'write', 'cost'];
 export function splitTool(name) {
   const m = /^mcp__(.+?)__(.+)$/.exec(String(name)); return m ? { server: m[1], tool: m[2] } : { server: '', tool: String(name) };
 }
 const words = t => String(t).replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-/** 'write' when the tool can change something outside this machine, else 'read'. */
-export function kindOf(name, safeTools = DEFAULTS.safeTools) {
+const glob = p => new RegExp('^' + String(p).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 'i');
+/** safety.toolKinds: { "mcp__x__test_connection": "read", "*graphql_query": "read" } — the owner's word wins (full name or the tool's own name, * allowed). */
+export function forcedKind(name, toolKinds = {}) {
+  const { tool } = splitTool(name);
+  for (const [p, k] of Object.entries(toolKinds || {})) if (KINDS.includes(k) && (glob(p).test(name) || glob(p).test(tool))) return k;
+  return null;
+}
+const dbQuery = (w, server, tool) => w.includes('query') && (DB.test(server) || DB.test(tool));
+/** 'write' when the tool can change something outside this machine, 'cost' when it spends money on a paid engine (the Estudio), else 'read'. */
+export function kindOf(name, safeTools = DEFAULTS.safeTools, toolKinds = {}) {
+  const forced = forcedKind(name, toolKinds); if (forced) return forced;
   const { server, tool } = splitTool(name);
   if (!server) return 'read'; // WebSearch, WebFetch — the office never gives an agent Bash or file tools
+  if (server === 'estudio') return ESTUDIO_COST.test(tool) ? 'cost' : 'read';
   if (INTERNAL.has(server)) return 'read';
   if (server === 'claude-in-chrome') return CHROME_WRITE.has(tool) ? 'write' : 'read';
   const w = words(tool);
-  if (safeTools.some(s => w.includes(String(s).toLowerCase()))) return 'read';
-  for (const x of w) { if (READ_VERBS.has(x)) return 'read'; if (WRITE_VERBS.has(x)) return 'write'; } // the first verb decides: get_schedule reads, schedule_post writes
-  return 'read';
+  if (!w.length) return 'write';
+  if ((safeTools || []).some(s => w.includes(String(s).toLowerCase()))) return w.some(x => OUTBOUND.has(x)) ? 'write' : 'read'; // create_draft is harmless, send_draft is not
+  if (w.some(x => STRONG.has(x))) return 'write';
+  if (READ_VERBS.has(w[0])) return dbQuery(w, server, tool) ? 'write' : 'read'; // get_schedule reads
+  if (w.some(x => WEAK.has(x))) return 'write';
+  if (w.some(x => READ_VERBS.has(x))) return dbQuery(w, server, tool) ? 'write' : 'read';
+  return 'write'; // a name the office does not understand: fail closed
+}
+const batchItems = input => (Array.isArray(input?.actions) ? input.actions : []).map(a => ({ name: /^mcp__/.test(String(a?.name || '')) ? String(a.name) : `mcp__claude-in-chrome__${String(a?.name || a?.tool || '')}`, input: a?.input || a?.args || {} }));
+/** The kind of one CALL: a Chrome `computer` that only looks is a read; a browser_batch is the worst of its items. */
+export function kindOfCall(name, input, safeTools = DEFAULTS.safeTools, toolKinds = {}) {
+  const forced = forcedKind(name, toolKinds); if (forced) return forced;
+  const { server, tool } = splitTool(name);
+  if (server === 'claude-in-chrome' && tool === 'computer' && CHROME_LOOK.has(String(input?.action || ''))) return 'read';
+  if (server === 'claude-in-chrome' && tool === 'browser_batch') { const items = batchItems(input); return !items.length ? 'write' : items.some(i => kindOfCall(i.name, i.input, safeTools, toolKinds) === 'write') ? 'write' : 'read'; }
+  return kindOf(name, safeTools, toolKinds);
 }
 
 /* ---------- who a send reaches ---------- */
@@ -115,16 +154,28 @@ export function siteAllowed(url, allow = [], block = []) {
 export const urlOf = input => input && (input.url || input.href || input.link || '');
 
 /**
- * The decision for one tool call. ctx: { writes, known, safety, tainted, counts: { agentToday, byTarget: { addr: n } } }
+ * The decision for one tool call. ctx: { writes, known, safety, tainted, policy, servers, counts: { agentToday, byTarget: { addr: n } } }
+ *   servers — the MCP servers this run was given (ids); a tool of any other server is refused (MCP-07: a server added after the
+ *             office last looked, or one the owner's own settings allow, never reaches a desk that was not wired to it)
  * → { allow: true, kind } or { allow: false, kind, why } (the why is what the agent reads and the owner sees).
  */
+const NO_WRITES = 'Bloqueado: en esta ejecución no se envía, publica, paga ni cambia nada fuera de la oficina. Prepara el borrador completo (destinatario, asunto, texto, importe) y el dueño lo aprobará.';
 export function decide(toolName, input, ctx) {
-  const s = normalize(ctx.safety), kind = kindOf(toolName, s.safeTools), { server, tool } = splitTool(toolName);
-  if (server === 'claude-in-chrome' && (tool === 'navigate' || tool === 'tabs_create')) {
+  const s = normalize(ctx.safety), { server, tool } = splitTool(toolName);
+  if (server && Array.isArray(ctx.servers) && !ctx.servers.includes(server)) return { allow: false, kind: kindOf(toolName, s.safeTools, s.toolKinds), code: 'server', why: `Bloqueado: el conector de ${toolName} no es de esta mesa. Trabaja sin él y dilo en tu entrega.` };
+  if (server === 'claude-in-chrome' && tool === 'browser_batch') { // MCP-02: every item is checked as if it were called alone (sites, sends); the batch is the worst of them
+    const items = batchItems(input); let kind = items.length ? 'read' : 'write';
+    for (const it of items) { const d = decide(it.name, it.input, ctx); if (!d.allow) return { ...d, why: `En el lote del navegador: ${d.why}` }; if (d.kind === 'write') kind = 'write'; }
+    if (kind === 'write' && !ctx.writes) return { allow: false, kind, code: 'no-writes', why: NO_WRITES };
+    return { allow: true, kind };
+  }
+  const kind = kindOfCall(toolName, input, s.safeTools, s.toolKinds);
+  if (server === 'claude-in-chrome' && (tool === 'navigate' || /^tabs_create/.test(tool))) {
     const u = urlOf(input); if (u) { const r = siteAllowed(u, s.browserSites, s.browserBlock); if (!r.ok) return { allow: false, kind, code: 'site', why: `Sitio bloqueado: ${r.why}. Trabaja sin él y dilo en tu entrega.` }; }
   }
+  if (kind === 'cost') return ctx.policy === 'nunca' ? { allow: false, kind, code: 'cost', why: 'Bloqueado: en este departamento los agentes no gastan en motores de pago (política «nunca»). Deja el prompt listo en tu entrega y el dueño lo genera en el Estudio.' } : { allow: true, kind }; // MCP-08: the Estudio's own budget caps the amount
   if (kind !== 'write') return { allow: true, kind };
-  if (!ctx.writes) return { allow: false, kind, code: 'no-writes', why: 'Bloqueado: en esta ejecución no se envía, publica, paga ni cambia nada fuera de la oficina. Prepara el borrador completo (destinatario, asunto, texto, importe) y el dueño lo aprobará.' };
+  if (!ctx.writes) return { allow: false, kind, code: 'no-writes', why: NO_WRITES };
   if (s.injection && ctx.tainted) return { allow: false, kind, code: 'taint', why: `Bloqueado: algo que leíste en esta ejecución parece traer órdenes escondidas (${ctx.tainted}). No se envía nada; explica en tu entrega qué ibas a hacer.` };
   if (ctx.runMode !== 'approve' && ctx.amountLimit > 0) { const over = amountsIn(input).filter(n => n > ctx.amountLimit); if (over.length) return { allow: false, kind, code: 'amount', why: `Bloqueado: ${over.map(n => '$' + n).join(', ')} pasa del límite de $${ctx.amountLimit} que el dueño aprueba siempre. Deja el borrador listo para su visto bueno.` }; }
   const t = targetsOf(input);

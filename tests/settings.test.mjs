@@ -17,6 +17,8 @@ test('a wrong value is refused in plain words and the rest still applies', () =>
 test('settings that need a restart say so', () => {
   assert.equal(S.apply({}, { 'tools.web': false }).restart, true);
   assert.equal(S.apply({}, { 'costs.hourlyRate': 5 }).restart, false);
+  const m = S.apply({}, { 'mcp.deny': 'Gmail, Shopify', 'mcp.allow': '' }); // auditoría MCP-12: the connectors apply at once
+  assert.equal(m.restart, false); assert.deepEqual(m.local.mcp, { deny: ['Gmail', 'Shopify'], allow: [] });
 });
 
 test('V4.5: the Estudio caps are settings — 0 is allowed (no cap), a bad value is refused', () => {

@@ -59,3 +59,17 @@ test('no rules for the run: reads pass, sends are refused (fail closed)', () => 
   assert.equal(g.call('pre', send, { AO_GUARD: path.join(g.dir, 'missing.json') }).status, 2);
   assert.equal(g.call('pre', { tool_name: 'WebSearch', tool_input: { query: 'x' } }, { AO_GUARD: '' }).status, 0);
 });
+
+test('auditoría MCP: the run\'s servers are a lock (MCP-07), a Chrome batch is checked item by item (MCP-02), the Estudio never spends with «nunca» (MCP-08)', () => {
+  const g = setup({ writes: true, servers: ['plugin_small-business_gmail', 'claude-in-chrome'], safety: { browserBlock: ['*.bank.com'] } });
+  const tg = g.call('pre', { tool_name: 'mcp__plugin_telegram_telegram__reply', tool_input: { chat_id: '1', text: 'hola' } });
+  assert.equal(tg.status, 2); assert.match(tg.stderr, /no es de esta mesa/);
+  assert.equal(g.call('pre', { tool_name: 'mcp__plugin_small-business_gmail__search_threads', tool_input: {} }).status, 0);
+  const batch = g.call('pre', { tool_name: 'mcp__claude-in-chrome__browser_batch', tool_input: { actions: [{ name: 'navigate', input: { url: 'https://www.bank.com' } }, { name: 'computer', input: { action: 'type', text: 'x' } }] } });
+  assert.equal(batch.status, 2); assert.equal(g.audit().at(-1).code, 'site');
+  const n = setup({ writes: false, policy: 'nunca' });
+  assert.equal(n.call('pre', { tool_name: 'mcp__estudio__generar_imagen', tool_input: { prompt: 'x' } }).status, 2);
+  const a = setup({ writes: false, policy: 'aprobar' });
+  assert.equal(a.call('pre', { tool_name: 'mcp__estudio__generar_imagen', tool_input: { prompt: 'x' } }).status, 0);
+  assert.equal(a.audit()[0].kind, 'cost');
+});

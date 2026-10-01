@@ -1,0 +1,132 @@
+Checking MCP server health…
+
+claude.ai Claude Docs: https://api.anthropic.com/v1/pages/mcp - ✔ Connected
+claude.ai Cloudflare Developer Platform: https://bindings.mcp.cloudflare.com/mcp - ✔ Connected
+plugin:atlassian:atlassian: https://mcp.atlassian.com/v2/mcp (HTTP) - ! Needs authentication
+plugin:circleback:circleback: https://app.circleback.ai/api/mcp (HTTP) - ! Needs authentication
+plugin:context7:context7: https://mcp.context7.com/mcp?client=claude-code-plugin (HTTP) - ! Needs authentication
+plugin:github:github: https://api.githubcopilot.com/mcp/ (HTTP) - ✘ Failed to connect — HTTP 400: Error POSTing to endpoint: bad request: Authorization header is badly formatted
+plugin:stripe:stripe: https://mcp.stripe.com (HTTP) - ! Needs authentication
+plugin:firebase:firebase: npx -y firebase-tools@latest mcp - ✘ Failed to connect — Request timed out
+plugin:supabase:supabase: https://mcp.supabase.com/mcp (HTTP) - ! Needs authentication
+plugin:telegram:telegram: bun run --cwd C:/Users/dueno/.claude/plugins/cache/claude-plugins-official/telegram/0.0.7 --shell=bun --silent start - ✔ Connected
+plugin:quickchat:quickchat: https://app.quickchat.ai/v1/api/mcp/rpc (HTTP) - ! Needs authentication
+plugin:kitegtm:kitegtm: https://api.kitegtm.com/mcp (HTTP) - ! Needs authentication
+plugin:unbounce-mcp:unbounce: https://mcp.unbounce.com/mcp (HTTP) - ! Needs authentication
+plugin:sugra-api:sugra-api: https://app.sugra.ai/mcp (HTTP) - ! Needs authentication
+plugin:abracadabrax-song-maker:abracadabrax-song-maker: https://abracadabrax.app/api/claude/song/mcp (HTTP) - ✔ Connected
+plugin:desktop-commander:desktop-commander: npx -y @wonderwhy-er/desktop-commander@latest - ✘ Failed to connect — CONNECTION_CLOSED: Connection closed
+plugin:plori:plori: https://api.plori.ai/mcp (HTTP) - ! Needs authentication
+plugin:cloud-sql-mysql:cloud-sql-mysql: npx -y @toolbox-sdk/server@1.9.0 --prebuilt cloud-sql-mysql --stdio - ✘ Failed to connect — CONNECTION_CLOSED: Connection closed
+plugin:cloudinary:cloudinary-asset-mgmt: https://asset-management.mcp.cloudinary.com/mcp (HTTP) - ! Needs authentication
+plugin:cloudinary:cloudinary-env-config: https://environment-config.mcp.cloudinary.com/mcp (HTTP) - ! Needs authentication
+plugin:cloudinary:cloudinary-smd: https://structured-metadata.mcp.cloudinary.com/mcp (HTTP) - ! Needs authentication
+plugin:cloudinary:cloudinary-analysis: https://analysis.mcp.cloudinary.com/mcp (HTTP) - ! Needs authentication
+plugin:cloudinary:cloudinary-mediaflows: https://mediaflows.mcp.cloudinary.com/v2/mcp (HTTP) - ✘ Failed to connect — Dynamic Client Registration rejected (HTTP 404): {"message":"Cannot POST /register","error":"Not Found","statusCode":404}
+plugin:nimble:nimble: https://mcp.nimbleway.com/mcp (HTTP) - ! Needs authentication
+plugin:dx-office-file-api:dxdocs: https://api.devexpress.com/mcp/docs (HTTP) - ✔ Connected
+plugin:productivity:slack: https://mcp.slack.com/mcp (HTTP) - ! Needs authentication
+plugin:productivity:notion: https://mcp.notion.com/mcp (HTTP) - ! Needs authentication
+plugin:productivity:linear: https://mcp.linear.app/mcp (HTTP) - ! Needs authentication
+plugin:productivity:atlassian: https://mcp.atlassian.com/v1/mcp (HTTP) - ! Needs authentication
+plugin:productivity:monday: https://mcp.monday.com/mcp (HTTP) - ! Needs authentication
+plugin:productivity:clickup: https://mcp.clickup.com/mcp (HTTP) - ! Needs authentication
+plugin:productivity:google calendar:  (HTTP) - - Not configured
+plugin:productivity:gmail:  (HTTP) - - Not configured
+plugin:product-management:figma: https://mcp.figma.com/mcp (HTTP) - ! Needs authentication
+plugin:product-management:amplitude: https://mcp.amplitude.com/mcp (HTTP) - ! Needs authentication
+plugin:product-management:amplitude-eu: https://mcp.eu.amplitude.com/mcp (HTTP) - ! Needs authentication
+plugin:product-management:pendo: https://app.pendo.io/mcp/v0/shttp (HTTP) - ! Needs authentication
+plugin:product-management:intercom: https://mcp.intercom.com/mcp (HTTP) - ! Needs authentication
+plugin:product-management:fireflies: https://api.fireflies.ai/mcp (HTTP) - ! Needs authentication
+plugin:product-management:google calendar:  (HTTP) - - Not configured
+plugin:product-management:gmail:  (HTTP) - - Not configured
+plugin:product-management:similarweb: https://mcp.similarweb.com/mcp (HTTP) - ! Needs authentication
+plugin:sales:salesforce: https://api.salesforce.com/platform/mcp/v1/platform/headless-360 (HTTP) - ! Needs authentication
+plugin:sales:close: https://mcp.close.com/mcp (HTTP) - ! Needs authentication
+plugin:sales:clay: https://api.clay.com/v3/mcp (HTTP) - ! Needs authentication
+plugin:sales:zoominfo: https://mcp.zoominfo.com/mcp (HTTP) - ! Needs authentication
+plugin:sales:apollo: https://mcp.apollo.io/mcp (HTTP) - ! Needs authentication
+plugin:sales:outreach: https://api.outreach.io/mcp/ (HTTP) - ! Needs authentication
+plugin:sales:google calendar:  (HTTP) - - Not configured
+plugin:sales:gmail:  (HTTP) - - Not configured
+plugin:sales:microsoft-365: https://microsoft365.mcp.claude.com/mcp (HTTP) - ! Needs authentication
+plugin:sales:google drive:  (HTTP) - - Not configured
+plugin:sales:gong: https://mcp.gong.io/mcp (HTTP) - ! Needs authentication
+plugin:sales:otter-ai: https://mcp.otter.ai/mcp (HTTP) - ! Needs authentication
+plugin:sales:calendly: https://mcp.calendly.com/ (HTTP) - ! Needs authentication
+plugin:sales:lusha: https://mcp.lusha.com/mcp/claude (HTTP) - ! Needs authentication
+plugin:sales:crunchbase: https://mcp.crunchbase.com/ (HTTP) - ! Needs authentication
+plugin:pdf-viewer:pdf: npx -y @modelcontextprotocol/server-pdf --stdio - ✔ Connected
+plugin:operations:google calendar:  (HTTP) - - Not configured
+plugin:operations:gmail:  (HTTP) - - Not configured
+plugin:marketing:canva: https://mcp.canva.com/mcp (HTTP) - ! Needs authentication
+plugin:marketing:ahrefs: https://api.ahrefs.com/mcp/mcp (HTTP) - ! Needs authentication
+plugin:marketing:similarweb: https://mcp.similarweb.com (HTTP) - ! Needs authentication
+plugin:marketing:klaviyo: https://mcp.klaviyo.com/mcp (HTTP) - ! Needs authentication
+plugin:marketing:supermetrics: https://mcp.supermetrics.com/mcp (HTTP) - ! Needs authentication
+plugin:marketing:google calendar:  (HTTP) - - Not configured
+plugin:marketing:gmail:  (HTTP) - - Not configured
+plugin:finance:snowflake:  (HTTP) - - Not configured
+plugin:finance:databricks:  (HTTP) - - Not configured
+plugin:finance:google calendar:  (HTTP) - - Not configured
+plugin:finance:gmail:  (HTTP) - - Not configured
+plugin:common-room:common-room: https://mcp.commonroom.io/mcp (HTTP) - ! Needs authentication
+plugin:human-resources:google calendar:  (HTTP) - - Not configured
+plugin:human-resources:gmail:  (HTTP) - - Not configured
+plugin:legal:egnyte: https://mcp-server.egnyte.com/mcp (HTTP) - ! Needs authentication
+plugin:legal:docusign: https://mcp.docusign.com/mcp (HTTP) - ! Needs authentication
+plugin:legal:google calendar:  (HTTP) - - Not configured
+plugin:legal:gmail:  (HTTP) - - Not configured
+plugin:small-business:airwallex-agentos: https://mcp.airwallex.com/mcp (HTTP) - ! Needs authentication
+plugin:small-business:emergent: https://mcp.emergent.sh (HTTP) - ! Needs authentication
+plugin:small-business:expensify: https://www.expensify.com/mcp (HTTP) - ! Needs authentication
+plugin:small-business:gmail: https://gmailmcp.googleapis.com/mcp/v1 (HTTP) - ✔ Connected
+plugin:small-business:google-calendar: https://calendarmcp.googleapis.com/mcp/v1 (HTTP) - ✔ Connected
+plugin:small-business:google-drive: https://drivemcp.googleapis.com/mcp/v1 (HTTP) - ✔ Connected
+plugin:small-business:gusto: https://mcp.api.gusto.com/anthropic (HTTP) - ! Needs authentication
+plugin:small-business:intuit-mailchimp: https://ai-inc.mailchimp.com/claude/mcp/v2 (HTTP) - ! Needs authentication
+plugin:small-business:intuit-quickbooks: https://ai-inc.quickbooks.intuit.com/v1/mcp (HTTP) - ! Needs authentication
+plugin:small-business:myob: https://mcp.myob.com/mcp (HTTP) - ! Needs authentication
+plugin:small-business:paypal: https://mcp.paypal.com/mcp (HTTP) - ! Needs authentication
+plugin:small-business:ramp: https://mcp.ramp.com/mcp (HTTP) - ! Needs authentication
+plugin:small-business:ringex-chat: https://mcp.labs.ringcentral.com/ringex/v1.1.0/team-chat (HTTP) - ✘ Failed to connect — Protected resource https://mcp.labs.ringcentral.com/[redacted]/[redacted] does not match expected https://mcp.labs.ringcentral.com (or origin)
+plugin:small-business:shopify: https://setup.shopify.com/mcp (HTTP) - ✔ Connected
+plugin:small-business:square: https://mcp.squareup.com/mcp (HTTP) - ! Needs authentication
+plugin:small-business:tiktok: https://business-api.tiktok.com/open_mcp/tt-ads-mcp-layer (HTTP) - ! Needs authentication
+plugin:small-business:trello: https://mcp.trello.com/v1 (HTTP) - ! Needs authentication
+plugin:small-business:wix: https://mcp.wix.com/mcp (HTTP) - ! Needs authentication
+plugin:small-business:zapier: https://mcp.zapier.com/api/v1/connect (HTTP) - ! Needs authentication
+plugin:small-business:zoho-books: https://claude-zohobooks.zohomcp.com/mcp/message (HTTP) - ! Needs authentication
+plugin:small-business:zoho-crm: https://claude-zohocrm.zohomcp.com/mcp/message (HTTP) - ! Needs authentication
+plugin:small-business:zoho-desk: https://claude-zohodesk.zohomcp.com/mcp/message (HTTP) - ! Needs authentication
+plugin:small-business:zoho-projects: https://claude-zohoprojects.zohomcp.com/mcp/message (HTTP) - ! Needs authentication
+plugin:cloudflare:cloudflare: https://mcp.cloudflare.com/mcp (HTTP) - ! Needs authentication
+plugin:enterprise-search:guru: https://mcp.api.getguru.com/mcp (HTTP) - ! Needs authentication
+plugin:enterprise-search:google calendar:  (HTTP) - - Not configured
+plugin:enterprise-search:gmail:  (HTTP) - - Not configured
+plugin:design:google calendar:  (HTTP) - - Not configured
+plugin:design:gmail:  (HTTP) - - Not configured
+plugin:engineering:datadog: https://mcp.datadoghq.com/api/unstable/mcp-server/mcp (HTTP) - ! Needs authentication
+plugin:engineering:google calendar:  (HTTP) - - Not configured
+plugin:engineering:gmail:  (HTTP) - - Not configured
+plugin:data:snowflake:  (HTTP) - - Not configured
+plugin:data:databricks:  (HTTP) - - Not configured
+plugin:data:hex: https://app.hex.tech/mcp (HTTP) - ! Needs authentication
+plugin:data:definite: https://api.definite.app/v3/mcp/http (HTTP) - ✘ Failed to connect — MCP endpoint not found at https://api.definite.app. Check the URL in your MCP config.
+plugin:bio-research:pubmed: https://pubmed.mcp.claude.com/mcp (HTTP) - ✔ Connected
+plugin:bio-research:biorender: https://mcp.services.biorender.com/mcp (HTTP) - ! Needs authentication
+plugin:bio-research:biorxiv: https://hcls.mcp.claude.com/biorxiv/mcp (HTTP) - ✔ Connected
+plugin:bio-research:consensus: https://mcp.consensus.app/mcp (HTTP) - ✔ Connected
+plugin:bio-research:c-trials: https://hcls.mcp.claude.com/clinical_trials/mcp (HTTP) - ✔ Connected
+plugin:bio-research:chembl: https://hcls.mcp.claude.com/chembl/mcp (HTTP) - ✔ Connected
+plugin:bio-research:synapse: https://mcp.synapse.org/mcp (HTTP) - ! Needs authentication
+plugin:bio-research:wiley: https://connector.scholargateway.ai/mcp (HTTP) - ! Needs authentication
+plugin:bio-research:ot: https://mcp.platform.opentargets.org/mcp (HTTP) - ✔ Connected
+plugin:bio-research:benchling:  (HTTP) - - Not configured
+plugin:miro:miro: https://mcp.miro.com/ (HTTP) - ! Needs authentication
+plugin:zoom-plugin:zoom-mcp: https://mcp-us.zoom.us/mcp/zoom/streamable (HTTP) - ✘ Failed to connect — Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: {"id":0,"error":{"code":-32001,"message":"Invalid access token"},"jsonrpc":"2.0"}
+plugin:zoom-plugin:zoom-docs-mcp: https://mcp.zoom.us/mcp/docs/streamable (HTTP) - ✘ Failed to connect — Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: {"id":0,"error":{"code":-32001,"message":"Invalid access token"},"jsonrpc":"2.0"}
+plugin:zoom-plugin:zoom-whiteboard-mcp: https://mcp-us.zoom.us/mcp/whiteboard/streamable (HTTP) - ✘ Failed to connect — Server rejected the configured Authorization header (HTTP 401). Check that the token is valid for this MCP endpoint — OAuth fallback is disabled when headers.Authorization is set. Error detail: {"id":0,"error":{"message":"Invalid access token","code":-32001},"jsonrpc":"2.0"}
+magic: npx -y @21st-dev/magic@latest - ✔ Connected
+

@@ -1,0 +1,846 @@
+{
+ "note": "Auditoría MCP 1 oct 2026: el evento init de un claude -p real en la máquina del dueño (solo nombres y estados).",
+ "mcp_servers": [
+  {
+   "name": "plugin:atlassian:atlassian",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:circleback:circleback",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:context7:context7",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:github:github",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:stripe:stripe",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:firebase:firebase",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:supabase:supabase",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:telegram:telegram",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:quickchat:quickchat",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:kitegtm:kitegtm",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:unbounce-mcp:unbounce",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sugra-api:sugra-api",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:abracadabrax-song-maker:abracadabrax-song-maker",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:desktop-commander:desktop-commander",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:plori:plori",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:cloud-sql-mysql:cloud-sql-mysql",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:cloudinary:cloudinary-asset-mgmt",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:cloudinary:cloudinary-env-config",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:cloudinary:cloudinary-smd",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:cloudinary:cloudinary-analysis",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:cloudinary:cloudinary-mediaflows",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:nimble:nimble",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:dx-office-file-api:dxdocs",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:slack",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:notion",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:linear",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:atlassian",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:monday",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:clickup",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:productivity:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:figma",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:amplitude",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:amplitude-eu",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:pendo",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:intercom",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:fireflies",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:product-management:similarweb",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:salesforce",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:close",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:clay",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:zoominfo",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:apollo",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:outreach",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:microsoft-365",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:google drive",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:gong",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:otter-ai",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:calendly",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:lusha",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:sales:crunchbase",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:pdf-viewer:pdf",
+   "status": "pending",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:operations:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:operations:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:marketing:canva",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:marketing:ahrefs",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:marketing:similarweb",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:marketing:klaviyo",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:marketing:supermetrics",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:marketing:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:marketing:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:finance:snowflake",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:finance:databricks",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:finance:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:finance:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:common-room:common-room",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:human-resources:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:human-resources:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:legal:egnyte",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:legal:docusign",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:legal:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:legal:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:airwallex-agentos",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:emergent",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:expensify",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:gmail",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:google-calendar",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:google-drive",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:gusto",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:intuit-mailchimp",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:intuit-quickbooks",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:myob",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:paypal",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:ramp",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:ringex-chat",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:shopify",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:square",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:tiktok",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:trello",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:wix",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:zapier",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:zoho-books",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:zoho-crm",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:zoho-desk",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:small-business:zoho-projects",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:cloudflare:cloudflare",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:enterprise-search:guru",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:enterprise-search:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:enterprise-search:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:design:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:design:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:engineering:datadog",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:engineering:google calendar",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:engineering:gmail",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:data:snowflake",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:data:databricks",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:data:hex",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:data:definite",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:pubmed",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:biorender",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:biorxiv",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:consensus",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:c-trials",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:chembl",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:synapse",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:wiley",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:ot",
+   "status": "connected",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:bio-research:benchling",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:miro:miro",
+   "status": "needs-auth",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:zoom-plugin:zoom-mcp",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:zoom-plugin:zoom-docs-mcp",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "plugin:zoom-plugin:zoom-whiteboard-mcp",
+   "status": "failed",
+   "source": "plugin"
+  },
+  {
+   "name": "magic",
+   "status": "pending",
+   "source": "user"
+  },
+  {
+   "name": "flowly",
+   "status": "disabled",
+   "source": "local"
+  },
+  {
+   "name": "meta_developer_tools",
+   "status": "needs-auth",
+   "source": "local"
+  },
+  {
+   "name": "claude.ai Claude Docs",
+   "status": "connected",
+   "source": "claudeai"
+  },
+  {
+   "name": "claude.ai Cloudflare Developer Platform",
+   "status": "connected",
+   "source": "claudeai"
+  }
+ ],
+ "tools": [
+  "Task",
+  "Bash",
+  "CronCreate",
+  "CronDelete",
+  "CronList",
+  "DesignSync",
+  "Edit",
+  "EnterWorktree",
+  "ExitWorktree",
+  "Glob",
+  "Grep",
+  "ListAgents",
+  "ListMcpResourcesTool",
+  "Monitor",
+  "NotebookEdit",
+  "PowerShell",
+  "PushNotification",
+  "Read",
+  "ReadMcpResourceDirTool",
+  "ReadMcpResourceTool",
+  "RemoteTrigger",
+  "ReportFindings",
+  "ScheduleWakeup",
+  "SendMessage",
+  "Skill",
+  "TaskStop",
+  "ToolSearch",
+  "WebFetch",
+  "WebSearch",
+  "Workflow",
+  "Write",
+  "mcp__claude_ai_Claude_Docs__batch",
+  "mcp__claude_ai_Claude_Docs__create",
+  "mcp__claude_ai_Claude_Docs__delete",
+  "mcp__claude_ai_Claude_Docs__export",
+  "mcp__claude_ai_Claude_Docs__guide",
+  "mcp__claude_ai_Claude_Docs__query",
+  "mcp__claude_ai_Claude_Docs__read",
+  "mcp__claude_ai_Claude_Docs__update",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_create",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_delete",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_get",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__d1_database_query",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__d1_databases_list",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_config_delete",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_config_edit",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_config_get",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__hyperdrive_configs_list",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_create",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_delete",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_get",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespace_update",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__kv_namespaces_list",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__migrate_pages_to_workers_guide",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__r2_bucket_create",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__r2_bucket_delete",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__r2_bucket_get",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__r2_buckets_list",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__search_cloudflare_documentation",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__workers_get_worker",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__workers_get_worker_code",
+  "mcp__claude_ai_Cloudflare_Developer_Platform__workers_list",
+  "mcp__plugin_abracadabrax-song-maker_abracadabrax-song-maker__generate_song",
+  "mcp__plugin_abracadabrax-song-maker_abracadabrax-song-maker__get_song_job",
+  "mcp__plugin_abracadabrax-song-maker_abracadabrax-song-maker__prepare_song_project",
+  "mcp__plugin_abracadabrax-song-maker_abracadabrax-song-maker__render_song_widget",
+  "mcp__plugin_bio-research_biorxiv__get_categories",
+  "mcp__plugin_bio-research_biorxiv__get_content_statistics",
+  "mcp__plugin_bio-research_biorxiv__get_preprint",
+  "mcp__plugin_bio-research_biorxiv__get_usage_statistics",
+  "mcp__plugin_bio-research_biorxiv__search_by_funder",
+  "mcp__plugin_bio-research_biorxiv__search_preprints",
+  "mcp__plugin_bio-research_biorxiv__search_published_preprints",
+  "mcp__plugin_bio-research_c-trials__analyze_endpoints",
+  "mcp__plugin_bio-research_c-trials__get_trial_details",
+  "mcp__plugin_bio-research_c-trials__search_by_eligibility",
+  "mcp__plugin_bio-research_c-trials__search_by_sponsor",
+  "mcp__plugin_bio-research_c-trials__search_investigators",
+  "mcp__plugin_bio-research_c-trials__search_trials",
+  "mcp__plugin_bio-research_chembl__compound_search",
+  "mcp__plugin_bio-research_chembl__drug_search",
+  "mcp__plugin_bio-research_chembl__get_admet",
+  "mcp__plugin_bio-research_chembl__get_bioactivity",
+  "mcp__plugin_bio-research_chembl__get_mechanism",
+  "mcp__plugin_bio-research_chembl__target_search",
+  "mcp__plugin_bio-research_consensus__search",
+  "mcp__plugin_bio-research_ot__batch_query_open_targets_graphql",
+  "mcp__plugin_bio-research_ot__get_open_targets_graphql_schema",
+  "mcp__plugin_bio-research_ot__get_type_dependencies",
+  "mcp__plugin_bio-research_ot__query_open_targets_graphql",
+  "mcp__plugin_bio-research_ot__search_entities",
+  "mcp__plugin_bio-research_pubmed__convert_article_ids",
+  "mcp__plugin_bio-research_pubmed__find_related_articles",
+  "mcp__plugin_bio-research_pubmed__get_article_metadata",
+  "mcp__plugin_bio-research_pubmed__get_copyright_status",
+  "mcp__plugin_bio-research_pubmed__get_full_text_article",
+  "mcp__plugin_bio-research_pubmed__lookup_article_by_citation",
+  "mcp__plugin_bio-research_pubmed__search_articles",
+  "mcp__plugin_dx-office-file-api_dxdocs__devexpress_docs_get_content",
+  "mcp__plugin_dx-office-file-api_dxdocs__devexpress_docs_search",
+  "mcp__plugin_small-business_gmail__apply_sensitive_message_label",
+  "mcp__plugin_small-business_gmail__apply_sensitive_thread_label",
+  "mcp__plugin_small-business_gmail__create_draft",
+  "mcp__plugin_small-business_gmail__create_label",
+  "mcp__plugin_small-business_gmail__get_draft",
+  "mcp__plugin_small-business_gmail__get_message",
+  "mcp__plugin_small-business_gmail__get_thread",
+  "mcp__plugin_small-business_gmail__label_message",
+  "mcp__plugin_small-business_gmail__label_thread",
+  "mcp__plugin_small-business_gmail__list_drafts",
+  "mcp__plugin_small-business_gmail__list_labels",
+  "mcp__plugin_small-business_gmail__mark_message_spam",
+  "mcp__plugin_small-business_gmail__mark_thread_spam",
+  "mcp__plugin_small-business_gmail__search_threads",
+  "mcp__plugin_small-business_gmail__trash_message",
+  "mcp__plugin_small-business_gmail__trash_thread",
+  "mcp__plugin_small-business_gmail__unlabel_message",
+  "mcp__plugin_small-business_gmail__unlabel_thread",
+  "mcp__plugin_small-business_gmail__unmark_message_spam",
+  "mcp__plugin_small-business_gmail__unmark_thread_spam",
+  "mcp__plugin_small-business_gmail__untrash_message",
+  "mcp__plugin_small-business_gmail__untrash_thread",
+  "mcp__plugin_small-business_gmail__update_message_labels",
+  "mcp__plugin_small-business_google-calendar__create_event",
+  "mcp__plugin_small-business_google-calendar__delete_event",
+  "mcp__plugin_small-business_google-calendar__get_event",
+  "mcp__plugin_small-business_google-calendar__list_calendars",
+  "mcp__plugin_small-business_google-calendar__list_events",
+  "mcp__plugin_small-business_google-calendar__respond_to_event",
+  "mcp__plugin_small-business_google-calendar__search_events",
+  "mcp__plugin_small-business_google-calendar__suggest_time",
+  "mcp__plugin_small-business_google-calendar__update_event",
+  "mcp__plugin_small-business_google-drive__copy_file",
+  "mcp__plugin_small-business_google-drive__create_file",
+  "mcp__plugin_small-business_google-drive__download_file_content",
+  "mcp__plugin_small-business_google-drive__get_file_metadata",
+  "mcp__plugin_small-business_google-drive__get_file_permissions",
+  "mcp__plugin_small-business_google-drive__list_recent_files",
+  "mcp__plugin_small-business_google-drive__read_file_content",
+  "mcp__plugin_small-business_google-drive__search_files",
+  "mcp__plugin_small-business_shopify__add-to-collection",
+  "mcp__plugin_small-business_shopify__bulk-update-product-status",
+  "mcp__plugin_small-business_shopify__create-collection",
+  "mcp__plugin_small-business_shopify__create-digital-product",
+  "mcp__plugin_small-business_shopify__create-digital-product-from-link",
+  "mcp__plugin_small-business_shopify__create-discount",
+  "mcp__plugin_small-business_shopify__create-product",
+  "mcp__plugin_small-business_shopify__find-mock-shop-catalogs",
+  "mcp__plugin_small-business_shopify__find-sample-product",
+  "mcp__plugin_small-business_shopify__generate-business-names",
+  "mcp__plugin_small-business_shopify__generate-domain-names",
+  "mcp__plugin_small-business_shopify__get-collection",
+  "mcp__plugin_small-business_shopify__get-digital-product",
+  "mcp__plugin_small-business_shopify__get-inventory-levels",
+  "mcp__plugin_small-business_shopify__get-new-store-previews",
+  "mcp__plugin_small-business_shopify__get-order",
+  "mcp__plugin_small-business_shopify__get-product",
+  "mcp__plugin_small-business_shopify__get-shop-info",
+  "mcp__plugin_small-business_shopify__graphql_mutation",
+  "mcp__plugin_small-business_shopify__graphql_query",
+  "mcp__plugin_small-business_shopify__graphql_schema",
+  "mcp__plugin_small-business_shopify__import-mock-shop-catalog",
+  "mcp__plugin_small-business_shopify__list-customers",
+  "mcp__plugin_small-business_shopify__list-orders",
+  "mcp__plugin_small-business_shopify__open-digital-products-install",
+  "mcp__plugin_small-business_shopify__publish-digital-product",
+  "mcp__plugin_small-business_shopify__run-analytics-query",
+  "mcp__plugin_small-business_shopify__search_collections",
+  "mcp__plugin_small-business_shopify__search_docs_chunks",
+  "mcp__plugin_small-business_shopify__search_products",
+  "mcp__plugin_small-business_shopify__search-collective-product-candidates",
+  "mcp__plugin_small-business_shopify__set-inventory",
+  "mcp__plugin_small-business_shopify__show-collective-products",
+  "mcp__plugin_small-business_shopify__switch-shop",
+  "mcp__plugin_small-business_shopify__test-digital-products-connection",
+  "mcp__plugin_small-business_shopify__update-collection",
+  "mcp__plugin_small-business_shopify__update-product",
+  "mcp__plugin_small-business_shopify__upload-digital-product-file",
+  "mcp__plugin_small-business_shopify__upload-digital-product-media",
+  "mcp__plugin_small-business_shopify__validate_graphql_codeblocks",
+  "mcp__plugin_telegram_telegram__download_attachment",
+  "mcp__plugin_telegram_telegram__edit_message",
+  "mcp__plugin_telegram_telegram__react",
+  "mcp__plugin_telegram_telegram__reply"
+ ]
+}

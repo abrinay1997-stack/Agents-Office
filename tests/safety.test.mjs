@@ -6,7 +6,7 @@ import * as S from '../safety.mjs';
 test('which tools send: the first verb decides, drafts and the Estudio do not', () => {
   const w = n => S.kindOf(n);
   for (const n of ['mcp__claude_ai_Gmail__send_email', 'mcp__slack__post_message', 'mcp__stripe__create_refund', 'mcp__hubspot__update_contact', 'mcp__crm__deleteRecord', 'mcp__calendar__schedule_event', 'mcp__claude-in-chrome__form_input', 'mcp__claude-in-chrome__computer']) assert.equal(w(n), 'write', n);
-  for (const n of ['mcp__claude_ai_Gmail__search_threads', 'mcp__claude_ai_Gmail__create_draft', 'mcp__cal__get_schedule', 'mcp__crm__listContacts', 'mcp__estudio__generar_imagen', 'mcp__claude-in-chrome__navigate', 'mcp__claude-in-chrome__read_page', 'WebFetch', 'WebSearch', 'mcp__x__summary']) assert.equal(w(n), 'read', n);
+  for (const n of ['mcp__claude_ai_Gmail__search_threads', 'mcp__claude_ai_Gmail__create_draft', 'mcp__cal__get_schedule', 'mcp__crm__listContacts', 'mcp__estudio__buscar_en_galeria', 'mcp__claude-in-chrome__navigate', 'mcp__claude-in-chrome__read_page', 'WebFetch', 'WebSearch', 'mcp__x__summary']) assert.equal(w(n), 'read', n);
 });
 
 test('who may send: the policy and the kind of run', () => {
