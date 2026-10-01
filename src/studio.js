@@ -11,6 +11,7 @@ import { modal } from './modal.js'; // V4.1: the page outside an open window is 
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested arithmetic
 import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
+import * as GF from './galeria-filtro.js'; // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
@@ -114,6 +115,12 @@ export function initStudio(ctx) {
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
+  // INF-03: `items` is what is loaded of the view (filter · folder · search), page by page, never the whole gallery. The server
+  // searches, filters and counts over everything: `total` is how many match, `counts` the tabs and «Sin carpeta» over the whole
+  // gallery, `nextCur` the cursor of the next page. `known` keeps every record seen, so a reference, a version or a selection
+  // outside the loaded pages is still found. `gone`: files sent to the bin here (a reference to them is dropped).
+  const PAGE = 120; let total = 0, counts = null, nextCur = null, loadedKey = null, moreBusy = false, audioPool = []; const known = new Map(), gone = new Set(), jumped = new Map(); // jumped (file → its place in the view): an old file opened from afar (Ctrl+K), placed at the end before the pages between reach it
+  const remember = l => { for (const it of l) if (it && it.file) known.set(it.file, it); return l; };
   let voices = { mine: [], system: [] }; // V5.0: the owner's MiniMax voices and the system's, for the voice picker (from /api/media, refreshed by the Voces panel)
   let editModels = [], editBlock = null, depts = []; // V4.9: the models that edit a picture (on), the engines to switch on when none is (a 409 says which), the departments a picture can be sent to
   // V4.6 (27 Sep 2026, the owner): folders — labels on each file (nothing moves on disk); drag pictures onto one, rename it, remove it
@@ -131,7 +138,7 @@ export function initStudio(ctx) {
   const cur = () => models.find(m => m.id === modelOf[kind]) || null;
   const roleName = r => ROLE[r];
   const roleHelp = (r, m = cur()) => helpFor(r, m);
-  const itemOf = f => items.find(x => x.file === f);
+  const itemOf = f => items.find(x => x.file === f) || known.get(f);
   // V4.9: who made it — the owner, an agent, or Dimitri (the plan the owner OK'd); «De agentes» shows the agents' and Dimitri's
   const fromBots = x => x.by === 'agent' || x.by === 'dimitri';
   const who = x => (x.by === 'agent' ? agentName(x.agent) || 'agente' : x.by === 'dimitri' ? 'Dimitri' : 'tú');
@@ -336,9 +343,10 @@ export function initStudio(ctx) {
 
   /* ---------- the gallery ---------- */
   function shown() {
-    const w = q.toLowerCase();
-    return items.filter(it => (folderF === 'all' || (folderF === 'none' ? !inFolder(it) : inFolder(it) === folderF)) && (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && fromBots(it)) || (filter === 'you' && !fromBots(it) && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload) || ((filter === 'voice' || filter === 'music') && SV.soundFilter(filter, it)))
-      && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file} ${fromBots(it) ? who(it) : ''} ${it.task && ctx.taskTitle ? ctx.taskTitle(it.task) : ''}`.toLowerCase().includes(w)));
+    // INF-03: the search ran on the server, over the whole gallery; here only the tab and the folder are applied again,
+    // because they change by hand (a star taken off in «Favoritas», a file moved out of the open folder)
+    const ok = GF.matcher({ filter, folder: folderF }, new Set(folders.map(f => f.id)));
+    return items.filter(ok);
   }
   const tileJobs = () => jobs.filter(j => j.state === 'queued' || j.state === 'running' || (j.state === 'failed' && Date.now() - (j.doneAt || j.at) < 3 * 864e5));
   // V4.2 (audit A39): how long this model usually takes — the median of its last finished jobs, else a sensible guess
@@ -414,14 +422,17 @@ export function initStudio(ctx) {
     const list = shown(), tj = tileJobs().filter(j => (folderF === 'all' || (folderF === 'none' ? !j.folder : j.folder === folderF)) && (filter === 'all' || (filter === 'you' && !fromBots(j)) || (filter === 'agent' && fromBots(j)) || (filter === 'video' && j.kind === 'video') || ((filter === 'voice' || filter === 'music') && SV.soundJobFilter(filter, j))));
     renderFolders();
     const active = tileJobs().filter(j => j.state !== 'failed').length;
-    $('.st-count').textContent = `${list.length} ${list.length === 1 ? 'archivo' : 'archivos'}${list.length !== items.length ? ` de ${items.length}` : ''}${active ? ` · ${active} generándose` : ''}`;
-    const cnt = { all: items.length, fav: items.filter(i => i.fav).length, you: items.filter(i => !fromBots(i) && !i.upload).length, agent: items.filter(fromBots).length, video: items.filter(i => i.kind === 'video' || i.wanted === 'video').length, up: items.filter(i => i.upload).length, voice: items.filter(i => SV.soundOf(i) === 'voice').length, music: items.filter(i => SV.soundOf(i) === 'music').length }; // V4.2 (audit A22) · V5.0: Voz and Música
-    el.querySelectorAll('.st-tabs [data-f]').forEach(b => { if (!b.dataset.lbl) b.dataset.lbl = b.textContent; b.innerHTML = `${b.dataset.lbl} <b>${cnt[b.dataset.f]}</b>`; });
-    $('.st-ptn').textContent = active ? `· ${active} en curso` : items.length ? String(items.length) : '';
+    const cnt = counts || GF.counts(items, new Set(folders.map(f => f.id))), all = cnt.all; // INF-03: the server's counts, over the whole gallery
+    $('.st-count').textContent = countLine(list.length, active);
+    el.querySelectorAll('.st-tabs [data-f]').forEach(b => { if (!b.dataset.lbl) b.dataset.lbl = b.textContent; b.innerHTML = `${b.dataset.lbl} <b>${GF.miles(cnt[b.dataset.f])}</b>`; });
+    $('.st-ptn').textContent = active ? `· ${active} en curso` : all ? GF.miles(all) : '';
     renderSel();
     const G = $('.st-grid');
     const empty = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
-      : !tj.length && !list.length ? `<div class="st-empty">${items.length ? `Nada con este filtro. <button type="button" class="st-all">Ver todo</button>` : `<div class="st-start"><h3>Empieza aquí</h3><ol><li>Escribe una idea en el paso 3 y pulsa <b>GENERAR</b>.</li><li>Con <b>Prueba (gratis)</b> ves todo el recorrido sin gastar: salen tarjetas de muestra con tu texto, no imágenes reales.</li><li>Para imágenes y videos de verdad, activa un motor una sola vez: <button type="button" class="st-open-engs">Motores y cómo activarlos</button></li><li>También puedes subir tus fotos (Subir) o pedírsela a un agente de Marketing.</li></ol></div>`}</div>` : '';
+      : !tj.length && !list.length && loadedKey !== viewKey() ? '<div class="st-empty">Buscando…</div>' // INF-03: a new search or tab is on its way
+      : !tj.length && !list.length && nextCur ? '<div class="st-empty">Cargando…</div>' // what was loaded left this view (a star taken off): the next page is coming
+      : !tj.length && !list.length ? `<div class="st-empty">${all ? `Nada ${q.trim() ? `con «${esc(q.trim())}»` : 'con este filtro'}. <button type="button" class="st-all">Ver todo</button>` : `<div class="st-start"><h3>Empieza aquí</h3><ol><li>Escribe una idea en el paso 3 y pulsa <b>GENERAR</b>.</li><li>Con <b>Prueba (gratis)</b> ves todo el recorrido sin gastar: salen tarjetas de muestra con tu texto, no imágenes reales.</li><li>Para imágenes y videos de verdad, activa un motor una sola vez: <button type="button" class="st-open-engs">Motores y cómo activarlos</button></li><li>También puedes subir tus fotos (Subir) o pedírsela a un agente de Marketing.</li></ol></div>`}</div>` : '';
+    if (empty && !list.length && nextCur && loadedKey === viewKey()) loadMore();
     if (empty) { if (G.innerHTML !== empty) G.innerHTML = empty; nodes.clear(); layoutSig = ''; lastWant = []; return; }
     let root = G.querySelector(':scope > .st-days'); if (!root) { G.innerHTML = '<div class="st-days"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
     const flat = selecting || sel.size || picking, byJob = new Map();
@@ -441,7 +452,31 @@ export function initStudio(ctx) {
       if (hadFocus) (fsel && fresh.querySelector(fsel) || fresh.querySelector('button'))?.focus({ preventScroll: true }); // a changed card (a star, a tick) keeps the keyboard where it was
     }
     for (const [k, n] of nodes) if (!keep.has(k)) { n.el.remove(); nodes.delete(k); }
-    lastWant = want; layout(root);
+    lastWant = want; layout(root); paintMore(G, list.length);
+    if (!list.length && nextCur && loadedKey === viewKey()) loadMore(); // everything loaded left the view by hand: fetch on
+  }
+  /* INF-03: «Cargar más» at the end of the gallery — a real button (keyboard, screen reader), and the same page comes by itself
+     when the end scrolls into sight. The line says how much is seen: «120 de 3.412». */
+  function countLine(n, active) {
+    const filtered = (counts ? total !== counts.all : false) || !!q.trim();
+    const head = nextCur ? `${GF.miles(n)} de ${GF.miles(total)} ${total === 1 ? 'archivo' : 'archivos'}` : `${GF.miles(n)} ${n === 1 ? 'archivo' : 'archivos'}`;
+    return `${head}${filtered && counts ? ` · ${GF.miles(counts.all)} en la galería` : ''}${active ? ` · ${active} generándose` : ''}`;
+  }
+  let moreIO = null;
+  function paintMore(G, n) {
+    let box = G.querySelector(':scope > .st-more');
+    if (!nextCur) { if (box) { const had = box.contains(document.activeElement); box.remove(); if (had) moreFocus(G); } return; }
+    if (!box) { box = document.createElement('div'); box.className = 'st-more'; box.innerHTML = '<p class="st-morep"></p><button type="button" class="st-morebtn"></button>'; G.appendChild(box); if (window.IntersectionObserver) { moreIO ||= new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !el.hidden) loadMore(); }, { root: G, rootMargin: '0px 0px 600px 0px' }); moreIO.observe(box); } }
+    else if (box !== G.lastElementChild) G.appendChild(box);
+    const left = Math.max(0, total - n), next = Math.min(PAGE, left || PAGE);
+    box.querySelector('.st-morep').textContent = `Ves ${GF.miles(n)} de ${GF.miles(total)}.`;
+    const b = box.querySelector('.st-morebtn'); b.textContent = moreBusy ? 'Cargando…' : `Cargar ${GF.miles(next)} más`; b.setAttribute('aria-busy', String(moreBusy));
+  }
+  /** The last page came and «Cargar más» went with the keyboard on it: the focus goes to the first card it brought (or the last card), never to <body>. */
+  let moreFrom = 0;
+  function moreFocus(G) {
+    const w = lastWant[Math.min(moreFrom, lastWant.length - 1)], to = w && nodes.get(w[0])?.el; // lastWant: the cards in the gallery's order (the columns shuffle the DOM's)
+    (to?.querySelector('.st-thumb, button') || G.querySelector('.st-card .st-thumb'))?.focus();
   }
   function layout(root, force) {
     const n = colCount(); if (!n) return; // hidden (a phone on the Crear tab): laid out when it shows
@@ -469,12 +504,27 @@ export function initStudio(ctx) {
     if (picking) $('.st-picking').innerHTML = `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${roleName(picking)}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`;
     el.classList.toggle('st-pickmode', !!picking);
   }
-  let loading = null;
-  async function load({ full = true } = {}) { // full: the catalog too (the 20-second refresh only touches the gallery, so an open menu stays open)
-    if (loading) return loading;
+  /* INF-03: the view asked of the server — the tab, the folder and the search. A new one starts from the first page. */
+  const viewKey = () => `${filter}|${folderF}|${q.trim()}`;
+  const viewQS = () => `filter=${encodeURIComponent(filter)}&folder=${encodeURIComponent(folderF)}${q.trim() ? '&q=' + encodeURIComponent(q.trim()) : ''}`;
+  let loading = null, pendingFull = false;
+  async function load({ full = true, upto = null } = {}) { // full: the catalog too (the 20-second refresh only touches the gallery, so an open menu stays open)
+    if (loading) { pendingFull ||= full; await loading.catch(() => {}); if (loading) return load({ full, upto }); if (loadedKey === viewKey() && !pendingFull && !upto) return; } // one load at a time: wait, and load again only if something new was asked
+    full ||= pendingFull; pendingFull = false; const askedKey = viewKey();
     loading = (async () => {
       try { if (!location.protocol.startsWith('http')) throw new Error('el Estudio trabaja con la oficina real: ábrela con el iniciador (.bat)'); // the demo file has no server to ask (it logged a fetch error)
-        const j = await api('GET', '/api/media'); items = j.items || []; budget = j.budget || null; jobs = j.jobs || []; folders = j.folders || []; loadErr = '';
+        const key = viewKey(), same = key === loadedKey;
+        // the same view again (the 20-second refresh, a job that ended): as much as was loaded, up to 600, so nothing jumps; a new view: one page
+        const n = same ? Math.min(600, Math.max(PAGE, items.length)) : PAGE;
+        const j = await api('GET', `/api/media?catalog=1&n=${n}&${viewQS()}${upto ? '&upto=' + encodeURIComponent(upto) : ''}`);
+        if (key !== viewKey()) { pendingFull ||= full; return; } // the owner typed or clicked meanwhile: this answer is for another view
+        const top = remember(j.items || []), inTop = new Set(top.map(t => t.file)), last = top[top.length - 1];
+        const tail = same && last && !upto ? items.filter(x => GF.cmp(x, last) > 0 && !inTop.has(x.file)) : [];
+        if (tail.length) { items = [...top, ...tail]; if (!tail.some(x => !jumped.has(x.file))) nextCur = j.next || null; } // deeper than 600: the top is fresh, the rest stays as loaded (and so does its cursor)
+        else { items = top; nextCur = j.next || null; if (!same) jumped.clear(); }
+        if (j.hit && j.hit.file && !items.some(x => x.file === j.hit.file)) { items.push(remember([j.hit])[0]); jumped.set(j.hit.file, +j.hitAt || 0); } // revisión INF-03: a file further than a page, alone at the end — never the whole gallery down to it
+        total = j.total ?? items.length; counts = j.counts || null; loadedKey = key;
+        budget = j.budget || null; jobs = j.jobs || []; folders = j.folders || []; loadErr = '';
         depts = ctx.studioDepts && ctx.studioDepts.length ? ctx.studioDepts : (j.departments || []).map(k => ({ key: k, name: DEPT_NAMES[k] || k })); // V4.9
         if (folderF !== 'all' && folderF !== 'none' && !folders.some(f => f.id === folderF)) { folderF = 'all'; store.set('folder', 'all'); } // a folder removed elsewhere
         const sig = JSON.stringify((j.models || []).map(m => m.id + (m.on ? 1 : 0)));
@@ -484,9 +534,30 @@ export function initStudio(ctx) {
       } catch (e) { loadErr = e.message; }
       for (const f of [...sel]) if (!itemOf(f)) sel.delete(f);
       renderHead(); if (full) renderModels(); else if (cur()) estimate(); renderGrid(); watch(); // V4.5: the cost line follows the caps too
+      if (full && location.protocol.startsWith('http')) api('GET', '/api/media?kind=audio&n=300').then(j => { audioPool = remember(j.items || []); }).catch(() => {}); // the audios to clone a voice from, wherever they are in the gallery
     })();
     try { await loading; } finally { loading = null; }
+    if (askedKey !== viewKey()) return load({ full: false }); // the view changed while this one loaded
   }
+  /** INF-03: the next page of this view, after the last one loaded. */
+  async function loadMore() {
+    if (!nextCur || moreBusy || loading || loadedKey !== viewKey()) return;
+    moreBusy = true; const key = loadedKey, cur0 = nextCur; moreFrom = lastWant.length; renderGrid();
+    try {
+      const j = await api('GET', `/api/media?n=${PAGE}&before=${encodeURIComponent(cur0)}&${viewQS()}`);
+      if (key !== viewKey() || cur0 !== nextCur) return;
+      const have = new Set(items.map(x => x.file)); items = items.concat(remember(j.items || []).filter(x => !have.has(x.file)));
+      if (jumped.size) items.sort(GF.cmp); // a file opened from afar sits at the end: the pages between come before it
+      nextCur = j.next || null; total = j.total ?? total; if (j.counts) counts = j.counts; if (j.folders) folders = j.folders;
+    } catch (e) { say('No pude cargar más: ' + e.message, true); }
+    finally { moreBusy = false; }
+    renderGrid();
+  }
+  /** INF-03: the view changed (a tab, a folder, the search): from its first page. What is loaded stays on screen, filtered here, until it comes. */
+  let qT = 0;
+  function requery(wait = 0) { clearTimeout(qT); renderGrid(); if (!location.protocol.startsWith('http')) return; qT = setTimeout(() => load({ full: false }), wait); }
+  /** INF-03: after a change by hand (a move, the bin, a star), the tabs' and folders' numbers again — over the whole gallery, no page. */
+  async function refreshCounts() { try { const j = await api('GET', '/api/media?n=0&' + viewQS()); counts = j.counts || counts; folders = j.folders || folders; total = j.total ?? total; renderGrid(); } catch {} }
   // while something generates, the tiles are refreshed every 2.5 s; when one finishes, the gallery reloads
   let jtimer = null;
   function watch() {
@@ -637,7 +708,7 @@ export function initStudio(ctx) {
     const fid = await voiceFolder(), data = await dataURL(t.blob);
     const r = await vocApi('POST', '/api/media/upload', { name: t.name, data, ...(fid ? { folder: fid } : {}) }).catch(() => null);
     if (!r || !r.ok || !r.j.item) throw new Error(r ? r.j.error || r.status : 'sin conexión con la oficina');
-    items.unshift(r.j.item); renderGrid(); t.file = r.j.item.file;
+    items.unshift(r.j.item); remember([r.j.item]); renderGrid(); t.file = r.j.item.file;
     return t.file;
   }
   function step1Err(text) { vocState.err = text; const e = vq('.st-verr'); if (e) { e.textContent = text; e.hidden = !text; } }
@@ -719,7 +790,7 @@ export function initStudio(ctx) {
     return `<ol class="st-vsteps" aria-label="Pasos para clonar">${VC.STEPS.map((t, i) => `<li class="${i + 1 < s ? 'done' : i + 1 === s ? 'now' : ''}"${i + 1 === s ? ' aria-current="step"' : ''}><b>${i + 1 < s ? '✓' : i + 1}</b><span>${t}</span></li>`).join('')}</ol>`;
   }
   function step1HTML() {
-    const R = vocState.rec, audios = SV.cloneable(items);
+    const R = vocState.rec, audios = SV.cloneable([...items, ...audioPool.filter(a => !items.some(x => x.file === a.file) && !gone.has(a.file))]); // INF-03: every audio of the gallery, not only the loaded pages
     if (R) return `<div class="st-vreading">
         ${vocState.improv ? '<p class="st-vimprov">Improvisa: cuenta qué hace tu negocio, cómo atiendes a un cliente, una anécdota. Con preguntas, cifras y algún «¡qué bueno!».</p>' : `<div class="st-vscript" role="region" tabindex="0" aria-label="Guion para leer en voz alta">${esc(VC.scriptAt(vocState.script)).split('\n').map(p => `<p>${p}</p>`).join('')}</div>`}
         <div class="st-vscrrow"><button type="button" data-vo="script-next">Otro texto</button><button type="button" data-vo="improv" aria-pressed="${vocState.improv}">${vocState.improv ? 'Mostrar un texto' : 'Prefiero improvisar'}</button></div>
@@ -1036,7 +1107,7 @@ export function initStudio(ctx) {
     kind = k; store.set('kind', kind);
     const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (it.settings) { setsOf[m.id] = { ...it.settings }; store.set('sets', setsOf); } }
     media = { start: [], end: [], reference: [], video: [], ...(it.media || {}) };
-    for (const r of Object.keys(media)) media[r] = (media[r] || []).filter(f => itemOf(f));
+    for (const r of Object.keys(media)) media[r] = (media[r] || []).filter(f => !gone.has(f)); // INF-03: a reference may be an old file not loaded now; only one sent to the bin here goes
     setMode('one');
     $('.st-prompt').value = it.prompt; renderModels(); $('.st-prompt').focus();
     if (!quiet) say(m ? (SV.SOUND(k) ? 'Mismo texto, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.' : 'Mismo prompt, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.') : 'Ese modelo no está encendido; elige otro.', !m);
@@ -1057,12 +1128,12 @@ export function initStudio(ctx) {
   async function trashMany(files) {
     const undo = []; let failed = 0;
     for (const f of files) { try { const r = await api('DELETE', '/api/media/item/' + encodeURIComponent(f)); if (r.undo) undo.push(r.undo); } catch { failed++; } }
-    items = items.filter(x => !undo.some(u => u.id === x.file)); for (const u of undo) sel.delete(u.id);
+    items = items.filter(x => !undo.some(u => u.id === x.file)); for (const u of undo) { sel.delete(u.id); known.delete(u.id); gone.add(u.id); } if (undo.length) { total = Math.max(0, total - undo.length); refreshCounts(); }
     for (const r of Object.keys(media)) media[r] = media[r].filter(f => !undo.some(u => u.id === f));
     renderGrid(); renderModel(); closeLight();
     if (!undo.length) return say(`No se pudo mover ${failed === 1 ? 'el archivo' : `ninguno de los ${failed}`} a la papelera.`, true);
     toast(`${undo.length} ${undo.length === 1 ? 'archivo movido' : 'archivos movidos'} a la papelera${failed ? ` · ${failed} no se pudo` : ''}: está en «Papelera», 30 días.`, async () => {
-      let back = 0; for (const u of undo) { try { await api('POST', '/api/media/restore', u); back++; } catch {} }
+      let back = 0; for (const u of undo) { try { await api('POST', '/api/media/restore', u); back++; gone.delete(u.id); } catch {} }
       await load({ full: false }); say(back === undo.length ? 'Recuperado.' : `Recuperé ${back} de ${undo.length}.`, back !== undo.length);
     });
   }
@@ -1070,24 +1141,24 @@ export function initStudio(ctx) {
   const FD_ICON = svg('folder');
   function renderFolders() {
     const box = $('.st-folders'); if (!box || (fdEdit && box.contains(document.activeElement) && document.activeElement.classList.contains('st-fdin'))) return; // a name being typed is not redrawn under the caret
-    const none = items.filter(it => !inFolder(it)).length;
+    const none = counts ? counts.none : items.filter(it => !inFolder(it)).length; // INF-03: over the whole gallery
     const chip = (id, label, n, extra = '') => `<button type="button" class="st-fd" data-fd="${esc(id)}"${extra}>${label} <b>${n}</b></button>`;
-    const html = chip('all', 'Todas', items.length) + chip('none', 'Sin carpeta', none, ' title="Suelta aquí para sacarlas de su carpeta"') +
+    const html = chip('all', 'Todas', GF.miles(counts ? counts.all : items.length)) + chip('none', 'Sin carpeta', GF.miles(none), ' title="Suelta aquí para sacarlas de su carpeta"') +
       folders.map(f => fdEdit === f.id
         ? `<input class="st-fdin" data-fdr="${esc(f.id)}" value="${esc(f.name)}" maxlength="60" aria-label="Nuevo nombre de la carpeta">`
-        : `<span class="st-fdw">${chip(f.id, FD_ICON + esc(f.name), items.filter(it => it.folder === f.id).length, ` title="Carpeta «${esc(f.name)}»: clic para verla, suelta imágenes aquí para guardarlas, doble clic para renombrarla"`)}<button type="button" class="st-fdm" data-fdm="${esc(f.id)}" aria-label="Opciones de la carpeta ${esc(f.name)}" aria-haspopup="menu" title="Renombrar o eliminar">⋯</button></span>`).join('') +
+        : `<span class="st-fdw">${chip(f.id, FD_ICON + esc(f.name), GF.miles(f.n ?? items.filter(it => it.folder === f.id).length), ` title="Carpeta «${esc(f.name)}»: clic para verla, suelta imágenes aquí para guardarlas, doble clic para renombrarla"`)}<button type="button" class="st-fdm" data-fdm="${esc(f.id)}" aria-label="Opciones de la carpeta ${esc(f.name)}" aria-haspopup="menu" title="Renombrar o eliminar">⋯</button></span>`).join('') +
       (fdEdit === 'new' ? `<input class="st-fdin" data-fdnew="1" placeholder="Nombre de la carpeta" maxlength="60" aria-label="Nombre de la carpeta nueva">` : `<button type="button" class="st-fdnew">+ Nueva carpeta</button>`);
     if (box._html !== html) { box._html = html; box.innerHTML = html; const inp = box.querySelector('.st-fdin'); if (inp) { inp.focus(); if (inp.dataset.fdr) inp.select(); } } // the same chips stay the same elements: a double click is not lost to a redraw
     box.querySelectorAll('.st-fd').forEach(b => { const on = b.dataset.fd === folderF; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
   }
-  function setFolder(id) { folderF = id; store.set('folder', id); closeFdMenu(); renderGrid(); }
+  function setFolder(id) { folderF = id; store.set('folder', id); closeFdMenu(); requery(); }
   async function moveFiles(files, folder, quiet) { // folder: an id, or null (out of any folder)
     files = files.filter(f => itemOf(f)); if (!files.length) return;
     const prev = new Map(files.map(f => [f, itemOf(f).folder || null]));
     try { const r = await api('POST', '/api/media/move', { files, folder }); folders = r.folders || folders; }
     catch (err) { return say('No se pudo mover: ' + err.message, true); }
     for (const f of files) itemOf(f).folder = folder;
-    sel.clear(); selecting = false; renderGrid();
+    sel.clear(); selecting = false; renderGrid(); refreshCounts();
     if (quiet) return;
     const where = folder ? `a «${folderName(folder)}»` : 'fuera de su carpeta';
     toast(`${files.length} ${files.length === 1 ? 'archivo movido' : 'archivos movidos'} ${where}.`, async () => { // DESHACER: each one back to where it was
@@ -1114,11 +1185,11 @@ export function initStudio(ctx) {
   }
   async function removeFolder(id) {
     const f = folders.find(x => x.id === id); if (!f) return;
-    const n = items.filter(it => it.folder === id).length;
+    const n = f.n ?? items.filter(it => it.folder === id).length; // INF-03: the server's count, past what is loaded
     if (!confirm(`¿Eliminar la carpeta «${f.name}»?\n\n${n ? `Sus ${n} ${n === 1 ? 'archivo no se borra: queda' : 'archivos no se borran: quedan'} en «Sin carpeta».` : 'Está vacía.'}`)) return;
-    try { const r = await api('DELETE', '/api/media/folders/' + id); folders = r.folders || folders.filter(x => x.id !== id); for (const it of items) if (it.folder === id) it.folder = null; }
+    try { const r = await api('DELETE', '/api/media/folders/' + id); folders = r.folders || folders.filter(x => x.id !== id); for (const it of known.values()) if (it.folder === id) it.folder = null; }
     catch (err) { return say('No se pudo eliminar: ' + err.message, true); }
-    if (folderF === id) { folderF = 'all'; store.set('folder', 'all'); }
+    if (folderF === id) { folderF = 'all'; store.set('folder', 'all'); requery(); } else refreshCounts();
     say(`Carpeta «${f.name}» eliminada${n ? `; sus ${n} ${n === 1 ? 'archivo está' : 'archivos están'} en «Sin carpeta»` : ''}.`); renderGrid();
   }
   // the small menu of a folder: rename, remove
@@ -1177,7 +1248,7 @@ export function initStudio(ctx) {
   async function favMany(files) {
     const all = files.every(f => itemOf(f)?.fav);
     await Promise.all(files.map(async f => { const it = itemOf(f); if (!it) return; const was = it.fav; it.fav = !all; try { await api('PATCH', '/api/media/item/' + encodeURIComponent(f), { fav: it.fav }); } catch { it.fav = was; say('No se pudo guardar la favorita.', true); } }));
-    renderGrid();
+    renderGrid(); refreshCounts();
   }
   async function zip(files) {
     say(`Preparando ${files.length} archivo(s)…`);
@@ -1206,11 +1277,11 @@ export function initStudio(ctx) {
           x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} x.status < 300 ? res(j) : rej(new Error(j.error || x.statusText)); };
           x.onerror = () => rej(new Error('sin conexión con la oficina')); x.send(JSON.stringify({ name: file.name, data, ...(folders.some(f => f.id === folderF) ? { folder: folderF } : {}) }));
         });
-        items.unshift(r.item); ok++; done.push(r.item);
+        items.unshift(r.item); remember([r.item]); ok++; done.push(r.item);
         if (slot) { addMedia(slot, r.item.file); placed++; }
       } catch (e) { say(`«${file.name}»: ${e.message}`, true); }
     }
-    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${placed ? ` y ${placed === ok ? (ok === 1 ? 'puesta' : 'puestas') : placed === 1 ? '1 puesta' : placed + ' puestas'} en «${roleName(role)}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); }
+    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${placed ? ` y ${placed === ok ? (ok === 1 ? 'puesta' : 'puestas') : placed === 1 ? '1 puesta' : placed + ' puestas'} en «${roleName(role)}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); refreshCounts(); }
     return done;
   }
 
@@ -1267,16 +1338,19 @@ export function initStudio(ctx) {
   window.addEventListener('ao:media-changed', () => { if (isOn() && $('.st-light').hidden) load({ full: false }); });
   function closeLight() { const L = $('.st-light'); if (L.hidden) return; if (document.fullscreenElement && L.contains(document.fullscreenElement)) document.exitFullscreen?.().catch(() => {}); L.hidden = true; L.innerHTML = ''; lightIdx = -1; lightAt = null; zImg = null; lPanel = null; L.classList.remove('st-zoomed'); modal.close(L); if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
   /** Open the viewer on a file, wherever it is: a filter or a folder that hides it is cleared first. */
-  function lightFile(file, o = {}) {
+  async function lightFile(file, o = {}) {
     let i = shown().findIndex(x => x.file === file);
-    if (i < 0 && itemOf(file)) {
+    if (i < 0) { // INF-03: a filter, a folder, a search or simply not loaded yet (an old file): everything, loaded down to it
       filter = 'all'; q = ''; $('.st-q').value = ''; folderF = 'all'; store.set('folder', 'all');
       el.querySelectorAll('.st-tabs [data-f]').forEach(b => { b.classList.toggle('on', b.dataset.f === 'all'); b.setAttribute('aria-pressed', b.dataset.f === 'all'); });
       renderGrid(); i = shown().findIndex(x => x.file === file);
+      if (i < 0 && location.protocol.startsWith('http')) { await load({ full: false, upto: file }); i = shown().findIndex(x => x.file === file); }
     }
     if (i >= 0) light(i, o);
     return i >= 0;
   }
+  /** INF-03: the next one in the viewer; at the end of what is loaded, the next page first. */
+  async function lightNext(at) { if (at >= shown().length - 1 && nextCur) await loadMore(); const n = lightPos(); if (n >= 0 && n < shown().length - 1) light(n + 1); }
   const short = t => { const x = String(t || '').trim(); return x.length > 60 ? x.slice(0, 58) + '…' : x || 'sin texto'; };
   function editEngines() { // the engines that bring a model that edits a picture, with how to switch each on
     if (editBlock && editBlock.length) return editBlock;
@@ -1354,7 +1428,7 @@ export function initStudio(ctx) {
     const tools = it.kind === 'audio' ? '' : `<div class="st-ztools" role="toolbar" aria-label="${img ? 'Zoom' : 'Vista'}">${img ? `<button type="button" data-z="out" aria-label="Alejar (−)" title="Alejar (−)">−</button><span class="st-zpct" aria-label="Tamaño"></span><button type="button" data-z="in" aria-label="Acercar (+)" title="Acercar (+, o la rueda del ratón)">+</button><button type="button" data-z="fit" aria-pressed="true" title="Ajustar: la imagen entera (0)">Ajustar</button><button type="button" data-z="real" aria-pressed="false" title="100 %: un píxel de la imagen, un píxel de la pantalla (doble clic sobre la imagen)">100 %</button>` : ''}<button type="button" data-z="full" aria-pressed="false" aria-label="Pantalla completa (F)" title="Pantalla completa (F)">${svg('full')}<span>Pantalla completa</span></button></div>`;
     L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
       <div class="st-lmedia">${it.kind === 'audio' ? `<div class="st-laud${cap.badge === 'MÚSICA' ? ' st-aud-mus' : cap.badge === 'VOZ' ? ' st-aud-voz' : ''}"><span class="st-laic" aria-hidden="true">${cap.badge === 'MÚSICA' ? svg('note') : cap.badge === 'VOZ' ? svg('mic') : '♪'}</span>${cap.voice ? `<span class="st-lvoz">Voz: <b>${esc(cap.voice)}</b></span>` : cap.instrumental ? '<span class="st-lvoz">Instrumental</span>' : ''}<audio src="${src(it)}" controls preload="metadata" aria-label="Escuchar: ${esc(short(it.prompt))}"></audio></div>` : `<div class="st-lstage"${it.w && it.h ? ` style="--ar:${+it.w} / ${+it.h}"` : ''}>${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}" draggable="false">`}</div>${tools}`}</div>
-      <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${i + 1} de ${list.length}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 ? '' : ' disabled'}>›</button></div>
+      <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${GF.miles((jumped.has(it.file) ? jumped.get(it.file) : i) + 1)} de ${GF.miles(nextCur ? total : list.length)}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 || nextCur ? '' : ' disabled'}>›</button></div>
       ${it.versionOf ? `<p class="st-lver">Versión de ${orig ? `<button type="button" class="st-lk" data-vf="${esc(orig.file)}" title="Abrir la original">«${esc(short(orig.prompt))}»</button>` : 'una imagen que ya no está en la galería'}</p>` : ''}
       ${cap.label ? `<h3 class="st-slab st-lslab">${cap.label}</h3>` : ''}<p class="st-lp${cap.label ? ' st-lptext' : ''}">${esc(it.prompt)}</p>
       <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${esc(who(it))}`} · ${esc(when(it.at))}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
@@ -1371,7 +1445,7 @@ export function initStudio(ctx) {
       if (e.target === L || e.target.closest('.st-lx')) return closeLight();
       const at = lightPos() < 0 ? i : lightIdx;
       if (e.target.closest('.st-lnav.prev') && at > 0) { light(at - 1); L.querySelector('.st-lnav.prev')?.focus(); return; }
-      if (e.target.closest('.st-lnav.next') && at < shown().length - 1) { light(at + 1); L.querySelector('.st-lnav.next')?.focus(); return; }
+      if (e.target.closest('.st-lnav.next') && (at < shown().length - 1 || nextCur)) { lightNext(at).then(() => L.querySelector('.st-lnav.next')?.focus()); return; }
       const z = e.target.closest('[data-z]')?.dataset.z;
       if (z) { if (z === 'full') return fullScreen(); const d = zDims(); if (!d) return;
         if (z === 'in') zs = Z.zoomAt(zs, 1.5, 0, 0, d); if (z === 'out') zs = Z.zoomAt(zs, 1 / 1.5, 0, 0, d); if (z === 'fit') zs = Z.fitted(); if (z === 'real') zs = Z.zoomTo(zs, Z.realScale(d), 0, 0, d);
@@ -1405,7 +1479,7 @@ export function initStudio(ctx) {
     if (d && arrow && Z.isZoomed(zs)) { e.preventDefault(); zSet(Z.pan(zs, arrow[0], arrow[1], d)); return; } // zoomed: the arrows move around the picture
     const at = lightPos();
     if (e.key === 'ArrowLeft' && at > 0) return light(at - 1);
-    if (e.key === 'ArrowRight' && at >= 0 && at < shown().length - 1) return light(at + 1);
+    if (e.key === 'ArrowRight' && at >= 0 && (at < shown().length - 1 || nextCur)) return lightNext(at);
     if (e.key === 'f' || e.key === 'F') { if ($('.st-light [data-z="full"]')) { e.preventDefault(); fullScreen(); } return; }
     if (!d) return;
     if (e.key === '+' || e.key === '=') { e.preventDefault(); zSet(Z.zoomAt(zs, 1.5, 0, 0, d)); }
@@ -1444,11 +1518,12 @@ export function initStudio(ctx) {
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-new')) { $('.st-prompt').value = ''; media = { start: [], end: [], reference: [], video: [] }; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; clearFieldErr(); armed = false; renderModel(); say('Compositor vacío: empieza una idea nueva.'); $('.st-prompt').focus(); return; }
     const qd = e.target.closest('.st-qty [data-d]'); if (qd) { const max = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8; qty = Math.max(1, Math.min(max, qty + +qd.dataset.d)); estimate(); return; }
-    const f = e.target.closest('[data-f]'); if (f && f.closest('.st-tabs')) { filter = f.dataset.f; el.querySelectorAll('.st-tabs [data-f]').forEach(b => { b.classList.toggle('on', b === f); b.setAttribute('aria-pressed', b === f); }); renderGrid(); return; }
+    const f = e.target.closest('[data-f]'); if (f && f.closest('.st-tabs')) { filter = f.dataset.f; el.querySelectorAll('.st-tabs [data-f]').forEach(b => { b.classList.toggle('on', b === f); b.setAttribute('aria-pressed', b === f); }); requery(); return; }
     if (e.target.closest('.st-upbtn')) { uploadRole = null; $('.st-file').click(); return; }
     if (e.target.closest('.st-selbtn')) { selecting = !(selecting || sel.size); if (!selecting) sel.clear(); renderGrid(); return; }
     if (e.target.closest('.st-retry')) { load(); return; }
-    if (e.target.closest('.st-all')) { el.querySelector('.st-tabs [data-f="all"]').click(); return; }
+    if (e.target.closest('.st-all')) { q = ''; $('.st-q').value = ''; folderF = 'all'; store.set('folder', 'all'); el.querySelector('.st-tabs [data-f="all"]').click(); return; } // INF-03: everything, the search too
+    if (e.target.closest('.st-morebtn')) { loadMore(); return; }
     const sl = e.target.closest('[data-slot]'); if (sl) { uploadRole = sl.dataset.slot; $('.st-file').accept = uploadRole === 'video' ? 'video/mp4,video/webm' : 'image/png,image/jpeg,image/webp'; $('.st-file').click(); return; }
     const gp = e.target.closest('[data-gpick]'); if (gp) { picking = gp.dataset.gpick; renderSel(); return; }
     const us = e.target.closest('[data-unslot]'); if (us) { for (const r of Object.keys(media)) media[r] = media[r].filter(x => x !== us.dataset.unslot); renderModel(); return; }
@@ -1564,7 +1639,7 @@ export function initStudio(ctx) {
     if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; }
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value + (e.target.dataset.set === 'duration' ? ' s' : ''); setSetting(e.target.dataset.set, +e.target.value); }
-    if (e.target.classList.contains('st-q')) { q = e.target.value; renderGrid(); return; }
+    if (e.target.classList.contains('st-q')) { q = e.target.value; requery(250); return; } // INF-03: the server searches the whole gallery
     if (e.target.classList.contains('st-vid')) { const v = e.target.value.trim(); setSetting('voiceId', v); $('#stVidH').textContent = voiceHint(v); } // V5.0: the hint says whose voice it is while typing
     if (e.target.closest('.st-vocov')) return; // the Voces panel's own fields
     estimate();
@@ -1612,7 +1687,7 @@ export function initStudio(ctx) {
     if (!$('.st-light').hidden) { lightKey(e, typing); return; } // V4.9: + − 0 F, and the panel
     if (e.key === 'Escape') {
       if (!$('.st-mlist').hidden) { openList(false); $('.st-mpick').focus(); return; }
-      if (e.target.matches('input[type=search], textarea') && e.target.value && e.target.classList.contains('st-q')) { e.target.value = ''; q = ''; renderGrid(); return; } // Esc empties the search first
+      if (e.target.matches('input[type=search], textarea') && e.target.value && e.target.classList.contains('st-q')) { e.target.value = ''; q = ''; requery(); return; } // Esc empties the search first
       if (picking) { picking = null; renderSel(); } else if (sel.size || selecting) { sel.clear(); selecting = false; renderGrid(); } else close(); return;
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.classList.contains('st-prompt')) { e.preventDefault(); $('.st-go').click(); }
@@ -1679,6 +1754,12 @@ export function initStudio(ctx) {
   function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
   function close(o = {}) { if (!isOn()) return; if (pickFor) { pickFor = null; paintFor(); } seenAt = Date.now(); closeLight(); closeHist(); closeBin(); closeVoices(true); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   views.add('studio', { isOpen: isOn, close });
+  // INF-03: Ctrl+K opens a file of the gallery in the viewer, or the gallery with its search (src/search.js)
+  window.addEventListener('ao:studio-show', e => {
+    const d = e.detail || {}; e.preventDefault();
+    if (d.file) { open(); showPane('gal'); lightFile(d.file).then(ok => { if (!ok) say('Ese archivo ya no está en la galería (¿en la papelera?).', true); }); return; }
+    open(); showPane('gal'); if (typeof d.q === 'string') { q = d.q; $('.st-q').value = d.q; requery(); }
+  });
   return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn,
     /** V4.7: open the Estudio for one piece of content; `onPick(ids)` gets the gallery files chosen when the owner goes back to it. */
     forTarget(target, onPick) { pickFor = { target, onPick, ids: [] }; open(); showPane('gal'); paintFor(); },
@@ -1692,5 +1773,5 @@ export function initStudio(ctx) {
       return { view: 'studio', label: 'Estudio · galería', kind: null };
     },
     /** V4.9: open the Estudio and its viewer on one file (a thumbnail in Dimitri's chat, a deliverable…). */
-    async openFile(file) { open(); await load({ full: false }); showPane('gal'); if (!lightFile(file)) say('Ese archivo ya no está en la galería (¿en la papelera?).', true); } };
+    async openFile(file) { open(); showPane('gal'); if (!(await lightFile(file))) say('Ese archivo ya no está en la galería (¿en la papelera?).', true); } };
 }

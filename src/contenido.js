@@ -18,6 +18,7 @@ import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
 import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover } from './contenido-cola.js';
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem } from './contenido-reglas.js';
+import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.ct.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.ct.' + k, JSON.stringify(v)); } catch {} } };
@@ -270,24 +271,42 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   function pickMedia(actuales = []) {
     return new Promise(async resolve => {
       const dlg = document.createElement('div'); dlg.className = 'ct-pick'; dlg.setAttribute('role', 'dialog'); dlg.setAttribute('aria-modal', 'true'); dlg.setAttribute('aria-labelledby', 'ctPickT'); dlg.setAttribute('data-modal-keep', '');
-      dlg.innerHTML = `<div class="ct-pickbox"><div class="ct-pickh"><h3 id="ctPickT">Elegir de la galería del Estudio</h3><span class="sp"></span><button type="button" class="pz-x" data-a="x" aria-label="Cerrar">✕</button></div><div class="ct-pickg" role="group" aria-label="Archivos"><p class="ct-empty">Cargando…</p></div><div class="ct-pickf"><span class="pz-state" role="status"></span><span class="sp"></span><button type="button" class="pz-go" data-a="ok" disabled>Usar</button></div></div>`;
+      dlg.innerHTML = `<div class="ct-pickbox"><div class="ct-pickh"><h3 id="ctPickT">Elegir de la galería del Estudio</h3><span class="sp"></span><button type="button" class="pz-x" data-a="x" aria-label="Cerrar">✕</button></div><div class="ct-pickq"><input type="search" class="ct-pickin" placeholder="Buscar en la galería…" aria-label="Buscar en la galería del Estudio" aria-controls="ctPickG"><span class="ct-pickn" aria-live="polite"></span></div><div class="ct-pickg" id="ctPickG" role="group" aria-label="Archivos"><p class="ct-empty">Cargando…</p></div><div class="ct-pickf"><span class="pz-state" role="status"></span><span class="sp"></span><button type="button" class="pz-go" data-a="ok" disabled>Usar</button></div></div>`;
       ov.appendChild(dlg); modal.open(dlg); const from = document.activeElement;
-      const sel = new Set(); const grid = dlg.querySelector('.ct-pickg'), ok = dlg.querySelector('[data-a="ok"]'), st = dlg.querySelector('.pz-state');
-      let items = [];
-      try { items = served ? (await (await fetch('/api/media')).json()).items || [] : Object.entries(DEMO_MEDIOS).map(([file, m]) => ({ file, kind: /\.mp4$/.test(file) ? 'video' : 'image', w: m.ancho, h: m.alto, duration: m.duracion, prompt: 'Muestra ' + file.slice(5) })); } catch { items = []; }
-      items = items.filter(it => it.kind !== 'audio');
-      for (const it of items) { const m = medidaDeItem(it); if (m) medidas[it.file] = m; }
-      items = items.filter(it => !actuales.includes(it.file));
+      const sel = new Set(); const grid = dlg.querySelector('.ct-pickg'), ok = dlg.querySelector('[data-a="ok"]'), st = dlg.querySelector('.pz-state'), qin = dlg.querySelector('.ct-pickin'), cnt = dlg.querySelector('.ct-pickn');
+      // Auditoría 1 oct 2026 (INF-03): antes se pedía /api/media (los 600 más nuevos) y se cortaba en 200: lo viejo no se podía elegir.
+      // Ahora el servidor busca en TODA la galería (solo imágenes y videos) y da páginas de 60, con «Cargar más».
+      const PAGE = 60, demo = Object.entries(DEMO_MEDIOS).map(([file, m]) => ({ file, kind: /\.mp4$/.test(file) ? 'video' : 'image', w: m.ancho, h: m.alto, duration: m.duracion, prompt: 'Muestra ' + file.slice(5), at: 0 }));
+      let items = [], next = null, total = 0, seq = 0, busy = false, q = '';
       const dim = it => { const m = medidas[it.file]; return m?.ancho ? (m.ancho > 30 ? `${m.ancho}×${m.alto}` : `${m.ancho}:${m.alto}`) + (m.duracion ? ` · ${Math.round(m.duracion)} s` : '') : ''; };
-      grid.innerHTML = items.length ? items.slice(0, 200).map(it => `<button type="button" class="ct-pk" data-f="${esc(it.file)}" aria-pressed="false" title="${esc(String(it.prompt || it.file).slice(0, 140))}">${thumbHTML(it.file, esc, 'pz-pt')}<span>${esc(String(it.prompt || it.file).slice(0, 48))}</span>${dim(it) ? `<small>${dim(it)}</small>` : ''}</button>`).join('') : `<p class="ct-empty">${served ? 'La galería del Estudio está vacía. Crea algo con «Crear con el Estudio».' : 'Sin archivos en la demo.'}</p>`;
+      const card = it => `<button type="button" class="ct-pk" data-f="${esc(it.file)}" aria-pressed="${sel.has(it.file)}" title="${esc(String(it.prompt || it.file).slice(0, 140))}">${thumbHTML(it.file, esc, 'pz-pt')}<span>${esc(String(it.prompt || it.file).slice(0, 48))}</span>${dim(it) ? `<small>${dim(it)}</small>` : ''}</button>`;
+      const moreHTML = () => next ? `<div class="ct-pmore"><p>Ves ${GF.miles(items.length)} de ${GF.miles(total)}.</p><button type="button" class="ct-pmorebtn" data-a="more"${busy ? ' aria-busy="true"' : ''}>${busy ? 'Cargando…' : `Cargar ${GF.miles(Math.min(PAGE, total - items.length) || PAGE)} más`}</button></div>` : '';
+      const paintCount = () => { cnt.textContent = total ? (next ? `${GF.miles(items.length)} de ${GF.miles(total)}` : `${GF.miles(total)} ${total === 1 ? 'archivo' : 'archivos'}`) : ''; };
+      async function page(more) {
+        const my = ++seq; busy = true; if (more) { const b = grid.querySelector('[data-a="more"]'); if (b) { b.textContent = 'Cargando…'; b.setAttribute('aria-busy', 'true'); } }
+        let got = [];
+        try {
+          if (served) { const j = await (await fetch(`/api/media?kind=image,video&n=${PAGE}${q ? '&q=' + encodeURIComponent(q) : ''}${more && next ? '&before=' + encodeURIComponent(next) : ''}${actuales.slice(0, 50).map(f => '&not=' + encodeURIComponent(f)).join('')}`)).json(); if (my !== seq) return; got = j.items || []; next = j.next || null; total = j.total ?? got.length; }
+          else { const all = demo.filter(GF.matcher({ q })).filter(it => !actuales.includes(it.file)); got = all; next = null; total = all.length; }
+        } catch { if (my !== seq) return; got = []; next = null; if (!more) total = 0; }
+        busy = false;
+        for (const it of got) { const m = medidaDeItem(it); if (m) medidas[it.file] = m; }
+        got = got.filter(it => !actuales.includes(it.file)); // lo que la pieza ya lleva no se ofrece otra vez (el servidor ya lo dejó fuera de las páginas y del total, ?not=: «Ves X de Y» cuadra)
+        if (more) { const have = new Set(items.map(x => x.file)); got = got.filter(x => !have.has(x.file)); items = items.concat(got); const box = grid.querySelector('.ct-pmore'), tmp = document.createElement('div'); tmp.innerHTML = got.map(card).join('') + moreHTML(); const firstNew = tmp.firstElementChild; if (box) box.replaceWith(...tmp.childNodes); else grid.append(...tmp.childNodes); const b = grid.querySelector('[data-a="more"]'); if (document.activeElement === document.body || !dlg.contains(document.activeElement)) ((firstNew && firstNew.matches('.ct-pk') ? firstNew : null) || b)?.focus(); } // «Cargar más» se fue con su caja: el foco pasa a lo primero nuevo
+        else { items = got; grid.innerHTML = items.length ? items.map(card).join('') + moreHTML() : `<p class="ct-empty">${q ? `Nada en la galería con «${esc(q)}».` : served ? 'La galería del Estudio está vacía. Crea algo con «Crear con el Estudio».' : 'Sin archivos en la demo.'}</p>`; }
+        paintCount();
+      }
+      await page(false);
+      let qT = 0; qin.addEventListener('input', () => { clearTimeout(qT); qT = setTimeout(() => { q = qin.value.trim(); page(false); }, 250); });
       const done = v => { modal.close(dlg); dlg.remove(); if (from && document.contains(from)) from.focus({ preventScroll: true }); resolve(v); };
       dlg.addEventListener('click', e => {
         const b = e.target.closest('button'); if (!b) return;
         if (b.dataset.f) { const on = !sel.has(b.dataset.f); on ? sel.add(b.dataset.f) : sel.delete(b.dataset.f); b.setAttribute('aria-pressed', on); ok.disabled = !sel.size; ok.textContent = sel.size ? `Usar ${sel.size}` : 'Usar'; st.textContent = ''; return; }
+        if (b.dataset.a === 'more') { if (!busy) page(true); return; }
         if (b.dataset.a === 'x') done(null); else if (b.dataset.a === 'ok' && sel.size) done([...sel]);
       });
-      dlg.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); done(null); } });
-      (grid.querySelector('button') || dlg.querySelector('[data-a="x"]')).focus();
+      dlg.addEventListener('keydown', e => { if (e.key === 'Escape') { if (e.target === qin && qin.value) { e.stopPropagation(); qin.value = ''; q = ''; page(false); return; } e.stopPropagation(); done(null); } });
+      (grid.querySelector('.ct-pk') || qin).focus();
     });
   }
 

@@ -1,0 +1,14 @@
+/* Auditoría 1 oct 2026 (INF-03) — la galería sin tope: «Cargar más» al final del Estudio y del selector de Contenido.
+   La página siguiente llega sola al acercarse el final (IntersectionObserver), pero el botón es de verdad: teclado y lector. */
+.st-more, .ct-pmore { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; padding: 18px 0 8px; font-size: 12.5px; color: var(--grey); font-variant-numeric: tabular-nums; }
+.ct-pmore { grid-column: 1 / -1; padding: 8px 0 4px; }
+.st-morep, .ct-pmore p { margin: 0; }
+.st-morebtn, .ct-pmorebtn { font: 600 12.5px var(--ui); min-height: 32px; padding: 6px 16px; border-radius: 99px; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+.st-morebtn:hover, .ct-pmorebtn:hover { background: var(--ink); color: var(--cream); }
+.st-morebtn:focus-visible, .ct-pmorebtn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.st-morebtn[aria-busy="true"], .ct-pmorebtn[aria-busy="true"] { cursor: progress; }
+/* el buscador del selector de Contenido */
+.ct-pickq { display: flex; align-items: center; gap: 8px; padding: 10px 16px 0; }
+.ct-pickq input { flex: 1; min-width: 0; min-height: 32px; font: 13px var(--ui); padding: 6px 10px; border: 1.5px solid var(--grey); border-radius: 10px; background: var(--cream); color: var(--ink); }
+.ct-pickq input:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--ink); }
+.ct-pickn { font-size: 12px; color: var(--grey); font-variant-numeric: tabular-nums; white-space: nowrap; }

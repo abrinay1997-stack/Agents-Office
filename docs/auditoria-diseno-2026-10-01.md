@@ -28,7 +28,7 @@ Seis auditores en paralelo, cada uno con las skills de su área, el navegador (P
 - De los 41 altos quedan 3:
   - **DIM-10:** el chip «¿Cómo vamos?» todavía espera al modelo para responder.
   - **DIM-14:** la respuesta de Dimitri no llega por partes y no hay botón Detener.
-  - **INF-03:** la galería se corta en 600 archivos y no tiene paginación.
+  - ~~**INF-03:** la galería se corta en 600 archivos y no tiene paginación.~~ ✅ arreglado (lane/galeria: páginas por cursor sobre toda la galería).
 - Los medios y bajos pendientes llevan su motivo en cada punto. La mayoría son mejoras de una fase siguiente:
   - recurrencia en Contenido;
   - convertir a JPEG al programar en Meta (F3);
@@ -953,7 +953,7 @@ Urgente para mañana: el redibujado de Dimitri, la doble lectura de la galería 
 - **Evidencia:** Oficina temporal con 600 fichas (bench.mjs): GET /api/media con mediana 58.182 ms, máximo 67 s y 437 KB. Un /api/health lanzado junto a 5 /api/media tardó 89.827 ms. Fuera del servidor (prof.mjs): list() 6.550 ms, folders() 3.084 ms. Leer 600 JSON de forma síncrona: 1.781 ms; en asíncrono: 754 ms (fsio.mjs). La máquina estaba al 61 % de CPU con otros auditores y Defender activo, así que las cifras absolutas están infladas, pero la escala es lineal. Con 60 fichas y la máquina tranquila: /api/media 212 ms y health 1.261 ms detrás de 5 media. El dueño ya tiene 55 archivos en brain-panaclaw/Agents Office/media, todos del 30 de septiembre.
 - **Arreglo:** 1) Mantener en media.mjs un índice en memoria de las fichas: se construye una vez al arrancar con fs.promises y se actualiza en saveItem/update/trash/restore/moveTo, así list() no toca el disco. 2) Pasar folders(items) con la lista ya leída en serve.mjs:1819 y en estudio-plan. 3) Separar GET /api/media/catalogo (modelos, motores, por defecto: cambia solo al reiniciar o con keys nuevas) de GET /api/media/items?since=<rev>, con un ETag por revisión del índice para que el refresco de 20 s devuelva 304. 4) Que Dimitri pida solo el catálogo (sub.js:60). 5) Un test que mida list() con 600 fichas y falle por encima de 50 ms.
 
-### INF-03 · alta · ⏳ pendiente (sin tocar esta noche)
+### INF-03 · alta · ✅ arreglado (lane/galeria: /api/media pagina por cursor sobre TODO el índice, con total y recuentos; búsqueda y filtros en el servidor; «Cargar más» en el Estudio y en el selector de Contenido; Ctrl+K y buscar_en_galeria buscan en todo; foto del índice en data/media-index.json. 5.000 fichas: página 17–31 ms, búsqueda 9 ms, primer pintado 340–650 ms; revisión: abrir un archivo lejano ya no carga toda la galería —llega aparte, «upto» con tope de 600—, el foco sigue tras la última página, el selector de Contenido descuenta lo que la pieza ya lleva y Ctrl+K escribe «5.000»)
 
 - **Dónde:** media.mjs:589 (list({ limit = 600 })), serve.mjs:1819 (sin paginación), media.mjs:576-580 (removeFolder recorre list()), src/contenido.js:198 (items.slice(0, 200))
 - **Problema:** La galería tiene un tope de 600 y no hay paginación. A partir del archivo 601, lo más viejo desaparece sin aviso del Estudio, de la búsqueda Ctrl+K, del selector de Contenido (que además corta en 200) y de los recuentos de carpetas. Al borrar una carpeta, removeFolder solo limpia el campo folder de los primeros 600: los demás quedan apuntando a una carpeta que ya no existe (huérfanos). Los archivos siguen en disco, pero el dueño no puede llegar a ellos.
