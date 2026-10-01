@@ -61,7 +61,12 @@ export async function design({ name, prompt, previewText } = {}) {
 }
 
 /** Clones a voice from a recording (mp3/m4a/wav, 10 s – 5 min, ≤ 20 MB) and keeps it. → { voice } */
-export async function clone({ name, voiceId, audio, filename = 'muestra.mp3', model = 'speech-2.8-hd' } = {}) {
+// V4.10 (auditoría EST-15 · EST-17, 1 oct 2026): the most common audio is a phone note or a video's sound, so MiniMax cleans the noise and
+// evens the volume by default (a recording made here was already cleaned by the browser: `recorded:true` skips the noise pass), in Spanish.
+// And no voice is cloned without the owner saying it is theirs or they have that person's written permission: the consent stays in the record.
+export async function clone({ name, voiceId, audio, filename = 'muestra.mp3', model = 'speech-2.8-hd', consent = null, recorded = false, languageBoost = 'Spanish' } = {}) {
+  const ok = consent && typeof consent === 'object' && Number.isFinite(+consent.at) && String(consent.text || '').trim();
+  if (!ok) throw new Error('falta tu confirmación: marca que es tu voz o que tienes permiso por escrito de esa persona');
   const id = String(voiceId || '').trim();
   if (!mmx.VOICE_ID_RE.test(id)) throw new Error('el voiceId debe tener de 8 a 256 caracteres, empezar por letra, llevar solo letras, números, - o _ y no terminar en - ni _');
   if (has(id)) throw new Error('ya tienes una voz con ese voiceId: elige otro');
@@ -69,9 +74,9 @@ export async function clone({ name, voiceId, audio, filename = 'muestra.mp3', mo
   if (audio.length > 20 * 1024 * 1024) throw new Error('la grabación pasa de 20 MB');
   if (!/\.(mp3|m4a|wav)$/i.test(filename)) throw new Error('la grabación debe ser mp3, m4a o wav');
   const fileId = await mmx.uploadFile(audio, filename, 'voice_clone');
-  const r = await mmx.cloneVoice({ fileId, voiceId: id, text: 'Hola, esta es mi voz en la oficina.', model });
+  const r = await mmx.cloneVoice({ fileId, voiceId: id, text: 'Hola, esta es mi voz en la oficina.', model, noiseReduction: !recorded, volumeNormalization: true, languageBoost });
   const pinned = await pin(id);
-  const rec = { voiceId: id, name: clean(name, 60) || id, kind: 'clone', at: Date.now(), pinned, ...(r.demoAudio ? { demoAudio: r.demoAudio } : {}) };
+  const rec = { voiceId: id, name: clean(name, 60) || id, kind: 'clone', at: Date.now(), pinned, consent: { at: +consent.at, text: clean(consent.text, 300) }, ...(r.demoAudio ? { demoAudio: r.demoAudio } : {}) };
   write([...read(), rec]);
   return { voice: pub(rec) };
 }

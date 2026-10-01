@@ -40,6 +40,8 @@ export function explain(code, msg = '') {
     case 1026: return 'MiniMax rechazó el texto por su filtro de contenido sensible; cambia el prompt';
     case 1027: return 'MiniMax bloqueó el resultado por su filtro de contenido sensible; cambia el prompt';
     case 1042: return 'el texto tiene demasiados caracteres invisibles; pégalo de nuevo como texto plano';
+    case 1043: return 'MiniMax no entendió bien lo que se dice en la grabación: graba otra vez, más claro, cerca del micrófono y sin ruido de fondo';
+    case 1044: return 'la muestra no se parece lo suficiente a la voz: usa una grabación más limpia de la misma persona';
     case 2037: return 'el audio para clonar debe durar entre 10 segundos y 5 minutos';
     case 2038: return 'tu cuenta de MiniMax no tiene permiso para clonar voces: verifica la cuenta en platform.minimax.io';
     case 2039: return 'ese nombre de voz (voiceId) ya existe en MiniMax: elige otro';

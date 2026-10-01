@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as voces from '../minimax-voices.mjs';
 import { standIn, env, KEY, BIG_FILE_ID, mp3 } from './minimax-stand.mjs';
+const CONSENT = { at: Date.parse('2026-10-01T09:00:00Z'), text: 'Es mi voz, o tengo permiso por escrito de esa persona.' }; // EST-17: no clone without it
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ao-voces-'));
@@ -37,7 +38,7 @@ test('clone: upload (purpose voice_clone) → clone with the int64 file_id writt
   const st = await standIn(); const restore = on(st.base); const dir = tmp();
   try {
     voces.configureVoices(dir);
-    const { voice } = await voces.clone({ name: 'Abrinay', voiceId: 'AbrinayVoz01', audio: mp3, filename: 'muestra.mp3' });
+    const { voice } = await voces.clone({ consent: CONSENT, name: 'Abrinay', voiceId: 'AbrinayVoz01', audio: mp3, filename: 'muestra.mp3' });
     assert.equal(voice.voiceId, 'AbrinayVoz01'); assert.equal(voice.kind, 'clone'); assert.equal(voice.pinned, true); assert.equal(voice.demoAudio, 'https://example.invalid/demo.mp3');
     const up = st.seen.find(x => x.path === '/v1/files/upload');
     assert.match(up.type, /multipart\/form-data/); assert.match(up.raw, /name="purpose"\r\n\r\nvoice_clone/);
@@ -46,9 +47,9 @@ test('clone: upload (purpose voice_clone) → clone with the int64 file_id writt
     assert.equal(c.body.voice_id, 'AbrinayVoz01'); assert.equal(c.body.model, 'speech-2.8-hd'); assert.ok(c.body.text);
     assert.ok(st.seen.some(x => x.path === '/v1/t2a_v2' && x.body.voice_setting.voice_id === 'AbrinayVoz01'));
     assert.deepEqual(voces.list().map(v => v.voiceId), ['AbrinayVoz01']);
-    await assert.rejects(voces.clone({ voiceId: 'AbrinayVoz01', audio: mp3 }), /ya tienes una voz con ese voiceId/);
-    await assert.rejects(voces.clone({ voiceId: 'corto', audio: mp3 }), /de 8 a 256 caracteres/);
-    await assert.rejects(voces.clone({ voiceId: 'OtraVoz0001', audio: mp3, filename: 'x.ogg' }), /mp3, m4a o wav/);
+    await assert.rejects(voces.clone({ consent: CONSENT, voiceId: 'AbrinayVoz01', audio: mp3 }), /ya tienes una voz con ese voiceId/);
+    await assert.rejects(voces.clone({ consent: CONSENT, voiceId: 'corto', audio: mp3 }), /de 8 a 256 caracteres/);
+    await assert.rejects(voces.clone({ consent: CONSENT, voiceId: 'OtraVoz0001', audio: mp3, filename: 'x.ogg' }), /mp3, m4a o wav/);
     const r = await voces.remove('AbrinayVoz01');
     assert.deepEqual(r, { ok: true, remote: true });
     assert.deepEqual(st.seen.find(x => x.path === '/v1/delete_voice').body, { voice_type: 'voice_cloning', voice_id: 'AbrinayVoz01' });
@@ -56,11 +57,30 @@ test('clone: upload (purpose voice_clone) → clone with the int64 file_id writt
   } finally { restore(); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('clone (auditoría EST-15 · EST-17): no clone without consent; noise cleaned and volume evened, in Spanish; a recording skips the noise pass; the consent stays in the record', async () => {
+  const st = await standIn(); const restore = on(st.base); const dir = tmp();
+  try {
+    voces.configureVoices(dir);
+    await assert.rejects(voces.clone({ voiceId: 'SinPermiso02', audio: mp3 }), /falta tu confirmación/);
+    await assert.rejects(voces.clone({ consent: { at: Date.now(), text: '  ' }, voiceId: 'SinPermiso02', audio: mp3 }), /falta tu confirmación/);
+    assert.equal(st.seen.length, 0, 'nothing reaches MiniMax without the consent');
+    await voces.clone({ consent: CONSENT, voiceId: 'NotaDeVoz01', audio: mp3 });
+    const up = st.seen.filter(x => x.path === '/v1/voice_clone')[0].body;
+    assert.equal(up.need_noise_reduction, true); assert.equal(up.need_volume_normalization, true); assert.equal(up.language_boost, 'Spanish');
+    await voces.clone({ consent: CONSENT, voiceId: 'GrabadaAqui01', audio: mp3, recorded: true });
+    assert.equal(st.seen.filter(x => x.path === '/v1/voice_clone')[1].body.need_noise_reduction, false, 'the browser already cleaned a recording made here');
+    const file = JSON.parse(fs.readFileSync(path.join(dir, 'minimax-voices.json'), 'utf8'));
+    assert.deepEqual(file.voices.map(v => v.consent), [CONSENT, CONSENT]);
+    const { explain } = await import('../minimax.mjs');
+    assert.match(explain(1043), /graba otra vez/); assert.match(explain(1044), /grabación más limpia/);
+  } finally { restore(); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('clone refused by MiniMax (2038, account not verified): the reason in words, nothing written', async () => {
   const st = await standIn({ fail: { '/v1/voice_clone': [2038, 'no cloning permission'] } }); const restore = on(st.base); const dir = tmp();
   try {
     voces.configureVoices(dir);
-    await assert.rejects(voces.clone({ voiceId: 'SinPermiso01', audio: mp3 }), /no tiene permiso para clonar voces: verifica la cuenta/);
+    await assert.rejects(voces.clone({ consent: CONSENT, voiceId: 'SinPermiso01', audio: mp3 }), /no tiene permiso para clonar voces: verifica la cuenta/);
     assert.equal(fs.existsSync(path.join(dir, 'minimax-voices.json')), false);
   } finally { restore(); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -124,11 +144,11 @@ test('routes with the key: design → clone (a gallery mp3) → list → GET /ap
     assert.equal(d.j.voice.kind, 'design'); assert.equal(Buffer.from(d.j.preview, 'base64').toString('hex'), mp3.toString('hex'));
     const up = await c('POST', '/api/media/upload', { name: 'mi voz.mp3', data: 'data:audio/mpeg;base64,' + mp3.toString('base64') });
     assert.equal(up.status, 200, up.text);
-    const cl = await c('POST', '/api/voces/clone', { name: 'Abrinay', voiceId: 'AbrinayVoz01', audio: up.j.item.id });
+    const cl = await c('POST', '/api/voces/clone', { consent: CONSENT, name: 'Abrinay', voiceId: 'AbrinayVoz01', audio: up.j.item.id });
     assert.equal(cl.status, 200, cl.text); assert.equal(cl.j.voice.voiceId, 'AbrinayVoz01');
-    const b64 = await c('POST', '/api/voces/clone', { name: 'Otra', voiceId: 'OtraVoz0001', audioBase64: mp3.toString('base64'), filename: 'otra.wav' });
+    const b64 = await c('POST', '/api/voces/clone', { consent: CONSENT, name: 'Otra', voiceId: 'OtraVoz0001', audioBase64: mp3.toString('base64'), filename: 'otra.wav' });
     assert.equal(b64.status, 200, b64.text);
-    const bad = await c('POST', '/api/voces/clone', { voiceId: 'Mala_', audioBase64: mp3.toString('base64') });
+    const bad = await c('POST', '/api/voces/clone', { consent: CONSENT, voiceId: 'Mala_', audioBase64: mp3.toString('base64') });
     assert.equal(bad.status, 400); assert.match(bad.j.error, /de 8 a 256 caracteres/);
     const l = await c('GET', '/api/voces');
     assert.deepEqual(l.j.voices.map(v => v.voiceId), ['OtraVoz0001', 'AbrinayVoz01', 'ttv-voice-2026093012-abcd']);
@@ -159,7 +179,7 @@ test('design and clone respect the Estudio budget (Ajustes → Estudio): refused
     const seen = st.seen.length;
     const again = await o.call('POST', '/api/voces/design', { prompt: 'Otra voz' });
     assert.equal(again.status, 409); assert.match(again.j.error, /presupuesto del día del Estudio/);
-    const cl = await o.call('POST', '/api/voces/clone', { voiceId: 'AbrinayVoz01', audioBase64: mp3.toString('base64') });
+    const cl = await o.call('POST', '/api/voces/clone', { consent: CONSENT, voiceId: 'AbrinayVoz01', audioBase64: mp3.toString('base64') });
     assert.equal(cl.status, 409); assert.match(cl.j.error, /presupuesto del día del Estudio/);
     assert.equal(st.seen.length, seen, 'nothing reached MiniMax');
   } finally { await o.stop(); await st.close(); }

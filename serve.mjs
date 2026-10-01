@@ -957,7 +957,8 @@ async function vocesRoutes(req, res, url) {
       } else if (typeof b.audioBase64 === 'string' && b.audioBase64) {
         audio = Buffer.from(b.audioBase64.replace(/^data:[^,]*,/, ''), 'base64'); filename = String(b.filename || 'muestra.mp3').replace(/[\\/]/g, '_').slice(0, 120);
       } else return json(res, 400, { error: 'falta la grabación: elige un audio de la galería o súbelo' });
-      const out = await voces.clone({ name: b.name, voiceId: b.voiceId, audio, filename });
+      const recorded = typeof b.audio === 'string' && /^grabaci[oó]n de voz/i.test(String(media.item(b.audio)?.prompt || '')); // made with the panel's microphone: the browser already cleaned the noise
+      const out = await voces.clone({ name: b.name, voiceId: b.voiceId, audio, filename, consent: b.consent, recorded });
       ledger('voice_clone', voces.PRICE.clone); media.charge(voces.PRICE.clone);
       console.log(`✦ voces: cloned ${out.voice.voiceId}${out.voice.pinned ? '' : ' (not pinned)'}`);
       return json(res, 200, out);
