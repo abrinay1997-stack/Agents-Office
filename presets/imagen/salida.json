@@ -1,0 +1,135 @@
+{
+ "grupo": "salida",
+ "presets": [
+  {
+   "id": "sal-canal",
+   "v": 1,
+   "nombre": "Exportar para un canal",
+   "icono": {
+    "id": "exportar",
+    "d": "M12 3v12M8 11l4 4 4-4M4 17v3h16v-3"
+   },
+   "categoria": "salida",
+   "frase": "Tamaño, formato, peso y sRGB del canal, con nombre por SKU.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "salida"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "web"
+    }
+   ],
+   "local": [
+    {
+     "op": "exportar",
+     "srgb": true,
+     "icc": true,
+     "quitarExif": true,
+     "nombre": "{sku}_{n}"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "lado-min",
+    "proporcion",
+    "peso"
+   ],
+   "buscar": [
+    "exportar",
+    "descargar",
+    "tamano",
+    "formato",
+    "jpg",
+    "webp",
+    "peso"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "sal-limpiar-datos",
+   "v": 1,
+   "nombre": "Quitar ubicación y datos de la foto",
+   "tecnico": "EXIF/GPS",
+   "icono": {
+    "id": "gps-x",
+    "d": "M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11zm9.5 7.5 5 5M14.5 7.5l-5 5"
+   },
+   "categoria": "salida",
+   "frase": "Borra el GPS de la bodega y los datos de la cámara. (Exportar ya lo hace siempre.)",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "salida"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "quitar-exif"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "gps",
+    "ubicacion",
+    "exif",
+    "metadatos",
+    "privacidad"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  }
+ ]
+}

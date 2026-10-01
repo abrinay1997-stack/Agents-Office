@@ -1,0 +1,146 @@
+{
+ "grupo": "vsonido",
+ "presets": [
+  {
+   "id": "vs-ambiente",
+   "v": 1,
+   "nombre": "Con sonido ambiente",
+   "icono": {
+    "id": "onda",
+    "d": "M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10"
+   },
+   "categoria": "vsonido",
+   "frase": "Sonidos del lugar y efectos, donde el modelo lo admite.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "audio"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "sfx",
+     "tipo": "texto",
+     "es": "Sonidos",
+     "max": 140,
+     "def": "soft fabric rustle"
+    },
+    {
+     "id": "amb",
+     "tipo": "texto",
+     "es": "Ambiente",
+     "max": 140,
+     "def": "quiet room tone, distant birds"
+    }
+   ],
+   "ia": "{p.sfx}",
+   "ranura": "sfx",
+   "ajustesModelo": {
+    "generateAudio": true
+   },
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "sonido",
+    "audio",
+    "ambiente",
+    "efectos",
+    "sfx"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {p.sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. {look}. {p.sfx}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}. {p.sfx}.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. {look}. {p.sfx}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. {look}. {p.sfx}."
+   }
+  },
+  {
+   "id": "vs-mudo",
+   "v": 1,
+   "nombre": "Sin sonido",
+   "icono": {
+    "id": "onda-x",
+    "d": "M3 12h2M7 8v8M11 5v14M15 9l6 6M21 9l-6 6"
+   },
+   "categoria": "vsonido",
+   "frase": "Video mudo (más barato en algunos modelos).",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "audio"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ajustes",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ajustesModelo": {
+    "generateAudio": false
+   },
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "mudo",
+    "sin sonido",
+    "silencio"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": null
+  }
+ ]
+}

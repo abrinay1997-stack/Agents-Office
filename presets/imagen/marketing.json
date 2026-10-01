@@ -1,0 +1,790 @@
+{
+ "grupo": "marketing",
+ "presets": [
+  {
+   "id": "mkt-anuncio",
+   "v": 1,
+   "nombre": "Anuncio con título",
+   "icono": {
+    "id": "t",
+    "d": "M5 6V4h14v2M12 4v16M9 20h6"
+   },
+   "categoria": "marketing",
+   "frase": "Tu producto con un titular grande y limpio.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "texto",
+     "tipo": "texto",
+     "es": "Titular",
+     "max": 140,
+     "def": ""
+    },
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "ig-feed"
+    }
+   ],
+   "ia": "ad creative with the headline \"{p.texto}\" in clean bold type, product as the hero",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "anuncio",
+    "titulo",
+    "publicidad",
+    "ad",
+    "post"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: ad creative with the headline \"{p.texto}\" in clean bold type, product as the hero. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- ad creative with the headline \"{p.texto}\" in clean bold type, product as the hero\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "ad creative with the headline \"{p.texto}\" in clean bold type, product as the hero. {conservar}",
+    "descriptiva": "{producto}, ad creative with the headline \"{p.texto}\" in clean bold type, product as the hero, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: ad creative with the headline \"{p.texto}\" in clean bold type, product as the hero. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "mkt-oferta",
+   "v": 1,
+   "nombre": "Oferta o precio",
+   "icono": {
+    "id": "precio",
+    "d": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v12"
+   },
+   "categoria": "marketing",
+   "frase": "Una etiqueta de oferta. El precio sale de las cifras de la empresa, nunca de aquí.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "ig-feed"
+    }
+   ],
+   "ia": "promo badge showing {cifras.precio}",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "oferta",
+    "precio",
+    "descuento",
+    "promo",
+    "rebaja",
+    "black friday"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: promo badge showing {cifras.precio}. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- promo badge showing {cifras.precio}\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "promo badge showing {cifras.precio}. {conservar}",
+    "descriptiva": "{producto}, promo badge showing {cifras.precio}, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: promo badge showing {cifras.precio}. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "mkt-espacio-texto",
+   "v": 1,
+   "nombre": "Con espacio para el texto",
+   "icono": {
+    "id": "espacio-texto",
+    "d": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2zM6 8h7M6 11h5M14 12h3a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1z"
+   },
+   "categoria": "marketing",
+   "frase": "Deja un lado vacío para escribir encima.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "lado",
+     "tipo": "lado",
+     "es": "Lado",
+     "valores": [
+      {
+       "v": "izquierda",
+       "es": "Izquierda",
+       "en": "left"
+      },
+      {
+       "v": "derecha",
+       "es": "Derecha",
+       "en": "right"
+      }
+     ],
+     "def": "izquierda"
+    }
+   ],
+   "ia": "leave clean negative space on the {p.lado} for copy, product on the other side",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "espacio para texto",
+    "copy",
+    "aire",
+    "lado vacio"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: leave clean negative space on the {p.lado} for copy, product on the other side. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- leave clean negative space on the {p.lado} for copy, product on the other side\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "leave clean negative space on the {p.lado} for copy, product on the other side. {conservar}",
+    "descriptiva": "{producto}, leave clean negative space on the {p.lado} for copy, product on the other side, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: leave clean negative space on the {p.lado} for copy, product on the other side. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "mkt-banner",
+   "v": 1,
+   "nombre": "Banner de la web",
+   "icono": {
+    "id": "monitor",
+    "d": "M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2zM8 21h8M12 17v4"
+   },
+   "categoria": "marketing",
+   "frase": "Portada ancha con el producto a un lado.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "lado",
+     "tipo": "lado",
+     "es": "Lado",
+     "valores": [
+      {
+       "v": "izquierda",
+       "es": "Izquierda",
+       "en": "left"
+      },
+      {
+       "v": "derecha",
+       "es": "Derecha",
+       "en": "right"
+      }
+     ],
+     "def": "izquierda"
+    },
+    {
+     "id": "proporcion",
+     "tipo": "proporcion",
+     "es": "Proporción",
+     "valores": [
+      {
+       "v": "1:1",
+       "es": "1:1"
+      },
+      {
+       "v": "4:5",
+       "es": "4:5"
+      },
+      {
+       "v": "3:4",
+       "es": "3:4"
+      },
+      {
+       "v": "2:3",
+       "es": "2:3"
+      },
+      {
+       "v": "3:2",
+       "es": "3:2"
+      },
+      {
+       "v": "4:3",
+       "es": "4:3"
+      },
+      {
+       "v": "16:9",
+       "es": "16:9"
+      },
+      {
+       "v": "9:16",
+       "es": "9:16"
+      },
+      {
+       "v": "21:9",
+       "es": "21:9"
+      }
+     ],
+     "def": "21:9"
+    }
+   ],
+   "ia": "wide hero banner, product on the {p.lado}, generous copy space",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "banner",
+    "portada",
+    "hero",
+    "cabecera",
+    "web"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: wide hero banner, product on the {p.lado}, generous copy space. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- wide hero banner, product on the {p.lado}, generous copy space\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "wide hero banner, product on the {p.lado}, generous copy space. {conservar}",
+    "descriptiva": "{producto}, wide hero banner, product on the {p.lado}, generous copy space, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: wide hero banner, product on the {p.lado}, generous copy space. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "mkt-antes-despues",
+   "v": 1,
+   "nombre": "Antes y después",
+   "icono": {
+    "id": "split",
+    "d": "M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2zM12 4v16M7 10l-2 2 2 2M17 10l2 2-2 2"
+   },
+   "categoria": "marketing",
+   "frase": "Mitad la foto original, mitad la mejorada.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [],
+   "ia": "split comparison: left the original as-is, right the improved version",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "antes y despues",
+    "comparacion",
+    "transformacion"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: split comparison: left the original as-is, right the improved version. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- split comparison: left the original as-is, right the improved version\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "split comparison: left the original as-is, right the improved version. {conservar}"
+   }
+  },
+  {
+   "id": "mkt-variantes",
+   "v": 1,
+   "nombre": "Collage de variantes",
+   "icono": {
+    "id": "cuadricula",
+    "d": "M4 3h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1zM14 3h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1zM4 13h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1zM14 13h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1z"
+   },
+   "categoria": "marketing",
+   "frase": "Todas las versiones del producto con la misma luz y escala.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 2,
+     "max": 6,
+     "es": "Fotos de las variantes (2 a 6)",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "grid of the product variants, same light and scale",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "variantes",
+    "collage",
+    "colores",
+    "todas las versiones"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: grid of the product variants, same light and scale. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- grid of the product variants, same light and scale\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "grid of the product variants, same light and scale. {conservar}"
+   }
+  },
+  {
+   "id": "mkt-medidas",
+   "v": 1,
+   "nombre": "Infografía de medidas",
+   "icono": {
+    "id": "regla",
+    "d": "M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2"
+   },
+   "categoria": "marketing",
+   "frase": "Flechas con las medidas (Queen 160×200 cm).",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "medidas",
+     "tipo": "texto",
+     "es": "Medidas",
+     "max": 140,
+     "def": "Queen 160 × 200 cm"
+    }
+   ],
+   "ia": "clean dimension callouts with thin arrows: {p.medidas}",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "medidas",
+    "dimensiones",
+    "tamano",
+    "queen",
+    "king",
+    "infografia"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: clean dimension callouts with thin arrows: {p.medidas}. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- clean dimension callouts with thin arrows: {p.medidas}\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "clean dimension callouts with thin arrows: {p.medidas}. {conservar}",
+    "descriptiva": "{producto}, clean dimension callouts with thin arrows: {p.medidas}, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: clean dimension callouts with thin arrows: {p.medidas}. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "mkt-empaque",
+   "v": 1,
+   "nombre": "Maqueta de empaque",
+   "icono": {
+    "id": "regalo",
+    "d": "M4 8h16a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1zM5 12v8h14v-8M12 8v12M12 8c-2-4-6-3-5-.5M12 8c2-4 6-3 5-.5"
+   },
+   "categoria": "marketing",
+   "frase": "Tu producto en una caja con tu logo.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "extra",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu logo"
+    }
+   ],
+   "parametros": [],
+   "ia": "product packaging mockup with the logo from the second image",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "empaque",
+    "caja",
+    "packaging",
+    "mockup"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: product packaging mockup with the logo from the second image. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- product packaging mockup with the logo from the second image\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "product packaging mockup with the logo from the second image. {conservar}"
+   }
+  },
+  {
+   "id": "mkt-historia",
+   "v": 1,
+   "nombre": "Historia con producto",
+   "icono": {
+    "id": "movil",
+    "d": "M9 2h6a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2v-16a2 2 0 0 1 2 -2zM11 18h2"
+   },
+   "categoria": "marketing",
+   "frase": "Vertical 9:16 respetando la zona segura de arriba y abajo.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "ig-story"
+    }
+   ],
+   "ia": "vertical story layout, product centered inside the safe area, empty top and bottom bands",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "historia",
+    "story",
+    "vertical",
+    "instagram"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: vertical story layout, product centered inside the safe area, empty top and bottom bands. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- vertical story layout, product centered inside the safe area, empty top and bottom bands\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "vertical story layout, product centered inside the safe area, empty top and bottom bands. {conservar}",
+    "descriptiva": "{producto}, vertical story layout, product centered inside the safe area, empty top and bottom bands, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: vertical story layout, product centered inside the safe area, empty top and bottom bands. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "mkt-carrusel",
+   "v": 1,
+   "nombre": "Portada de carrusel",
+   "icono": {
+    "id": "carrusel",
+    "d": "M8 4h8a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2zM3 7v10M21 7v10"
+   },
+   "categoria": "marketing",
+   "frase": "Primera lámina de un carrusel con gancho.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "texto",
+     "tipo": "texto",
+     "es": "Gancho",
+     "max": 140,
+     "def": ""
+    },
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "ig-feed"
+    }
+   ],
+   "ia": "carousel cover slide with a bold hook \"{p.texto}\" and the product",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "carrusel",
+    "portada",
+    "slide",
+    "instagram"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: carousel cover slide with a bold hook \"{p.texto}\" and the product. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- carousel cover slide with a bold hook \"{p.texto}\" and the product\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "carousel cover slide with a bold hook \"{p.texto}\" and the product. {conservar}",
+    "descriptiva": "{producto}, carousel cover slide with a bold hook \"{p.texto}\" and the product, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: carousel cover slide with a bold hook \"{p.texto}\" and the product. Framing: {encuadre}. {idea}"
+   }
+  }
+ ]
+}

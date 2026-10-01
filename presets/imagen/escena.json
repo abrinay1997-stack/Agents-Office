@@ -1,0 +1,2219 @@
+{
+ "grupo": "escena",
+ "presets": [
+  {
+   "id": "esc-dormitorio",
+   "v": 1,
+   "nombre": "Dormitorio",
+   "icono": {
+    "id": "cama",
+    "d": "M3 18V7M3 13h18v5M21 18v-3M6 13v-2.5A1.5 1.5 0 0 1 7.5 9h3A1.5 1.5 0 0 1 12 10.5V13"
+   },
+   "categoria": "escena",
+   "frase": "Una habitación luminosa y moderna.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light",
+    "normal": "place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light",
+    "fuerte": "place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light; make the change clearly visible"
+   },
+   "ia": "place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "dormitorio",
+    "habitacion",
+    "cuarto",
+    "recamara",
+    "cama"
+   ],
+   "estrella": true,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light. {conservar}",
+    "descriptiva": "{producto}, place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product in a bright, modern bedroom with styled bedding and a bedside table, soft morning light. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-sala",
+   "v": 1,
+   "nombre": "Sala",
+   "icono": {
+    "id": "sofa",
+    "d": "M5 11V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3M3 13a2 2 0 0 1 4 0v2h10v-2a2 2 0 0 1 4 0v5H3zM5 18v2M19 18v2"
+   },
+   "categoria": "escena",
+   "frase": "Una sala acogedora con plantas y luz natural.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product in a cozy contemporary living room with a rug, plants and natural light",
+    "normal": "place the product in a cozy contemporary living room with a rug, plants and natural light",
+    "fuerte": "place the product in a cozy contemporary living room with a rug, plants and natural light; make the change clearly visible"
+   },
+   "ia": "place the product in a cozy contemporary living room with a rug, plants and natural light",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "sala",
+    "living",
+    "salon",
+    "sofa"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product in a cozy contemporary living room with a rug, plants and natural light. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product in a cozy contemporary living room with a rug, plants and natural light\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product in a cozy contemporary living room with a rug, plants and natural light. {conservar}",
+    "descriptiva": "{producto}, place the product in a cozy contemporary living room with a rug, plants and natural light, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product in a cozy contemporary living room with a rug, plants and natural light. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-comedor",
+   "v": 1,
+   "nombre": "Comedor",
+   "icono": {
+    "id": "mesa",
+    "d": "M3 9h18M5 9v11M19 9v11M8 9v5h8V9"
+   },
+   "categoria": "escena",
+   "frase": "Un comedor con mesa puesta.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product in a warm dining room, table set simply, daylight",
+    "normal": "place the product in a warm dining room, table set simply, daylight",
+    "fuerte": "place the product in a warm dining room, table set simply, daylight; make the change clearly visible"
+   },
+   "ia": "place the product in a warm dining room, table set simply, daylight",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "comedor",
+    "mesa",
+    "cena"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product in a warm dining room, table set simply, daylight. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product in a warm dining room, table set simply, daylight\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product in a warm dining room, table set simply, daylight. {conservar}",
+    "descriptiva": "{producto}, place the product in a warm dining room, table set simply, daylight, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product in a warm dining room, table set simply, daylight. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-cocina",
+   "v": 1,
+   "nombre": "Cocina",
+   "icono": {
+    "id": "olla",
+    "d": "M4 10h16v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM2 10h2M20 10h2M9 6c0-1 1-1 1-2M14 6c0-1 1-1 1-2"
+   },
+   "categoria": "escena",
+   "frase": "Encimera limpia de mármol y madera.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product on a clean modern kitchen countertop, marble and wood, daylight",
+    "normal": "place the product on a clean modern kitchen countertop, marble and wood, daylight",
+    "fuerte": "place the product on a clean modern kitchen countertop, marble and wood, daylight; make the change clearly visible"
+   },
+   "ia": "place the product on a clean modern kitchen countertop, marble and wood, daylight",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "cocina",
+    "encimera",
+    "barra"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product on a clean modern kitchen countertop, marble and wood, daylight. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product on a clean modern kitchen countertop, marble and wood, daylight\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product on a clean modern kitchen countertop, marble and wood, daylight. {conservar}",
+    "descriptiva": "{producto}, place the product on a clean modern kitchen countertop, marble and wood, daylight, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product on a clean modern kitchen countertop, marble and wood, daylight. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-bano",
+   "v": 1,
+   "nombre": "Baño",
+   "icono": {
+    "id": "gota",
+    "d": "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
+   },
+   "categoria": "escena",
+   "frase": "Un baño tipo spa.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product in a spa-like bathroom, stone and soft towels, soft light",
+    "normal": "place the product in a spa-like bathroom, stone and soft towels, soft light",
+    "fuerte": "place the product in a spa-like bathroom, stone and soft towels, soft light; make the change clearly visible"
+   },
+   "ia": "place the product in a spa-like bathroom, stone and soft towels, soft light",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "bano",
+    "spa",
+    "ducha"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product in a spa-like bathroom, stone and soft towels, soft light. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product in a spa-like bathroom, stone and soft towels, soft light\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product in a spa-like bathroom, stone and soft towels, soft light. {conservar}",
+    "descriptiva": "{producto}, place the product in a spa-like bathroom, stone and soft towels, soft light, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product in a spa-like bathroom, stone and soft towels, soft light. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-oficina",
+   "v": 1,
+   "nombre": "Oficina en casa",
+   "icono": {
+    "id": "monitor",
+    "d": "M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2zM8 21h8M12 17v4"
+   },
+   "categoria": "escena",
+   "frase": "Un escritorio minimalista.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product in a minimal home office desk setup",
+    "normal": "place the product in a minimal home office desk setup",
+    "fuerte": "place the product in a minimal home office desk setup; make the change clearly visible"
+   },
+   "ia": "place the product in a minimal home office desk setup",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "oficina",
+    "escritorio",
+    "home office",
+    "trabajo"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product in a minimal home office desk setup. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product in a minimal home office desk setup\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product in a minimal home office desk setup. {conservar}",
+    "descriptiva": "{producto}, place the product in a minimal home office desk setup, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product in a minimal home office desk setup. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-terraza",
+   "v": 1,
+   "nombre": "Terraza tropical",
+   "icono": {
+    "id": "hoja",
+    "d": "M5 19C5 10 11 5 20 4c-1 9-6 15-15 15zM5 19 14 10"
+   },
+   "categoria": "escena",
+   "frase": "Terraza con plantas tropicales y sol.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product on an outdoor patio with tropical plants, sunny Panamanian light",
+    "normal": "place the product on an outdoor patio with tropical plants, sunny Panamanian light",
+    "fuerte": "place the product on an outdoor patio with tropical plants, sunny Panamanian light; make the change clearly visible"
+   },
+   "ia": "place the product on an outdoor patio with tropical plants, sunny Panamanian light",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "terraza",
+    "jardin",
+    "exterior",
+    "tropical",
+    "balcon",
+    "patio"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product on an outdoor patio with tropical plants, sunny Panamanian light. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product on an outdoor patio with tropical plants, sunny Panamanian light\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product on an outdoor patio with tropical plants, sunny Panamanian light. {conservar}",
+    "descriptiva": "{producto}, place the product on an outdoor patio with tropical plants, sunny Panamanian light, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product on an outdoor patio with tropical plants, sunny Panamanian light. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-tienda",
+   "v": 1,
+   "nombre": "Vitrina de tienda",
+   "icono": {
+    "id": "etiqueta",
+    "d": "M3 12V4h8l10 10-8 8zM6 8.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "escena",
+   "frase": "Exhibición de showroom con focos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product in a retail showroom display with spotlights",
+    "normal": "place the product in a retail showroom display with spotlights",
+    "fuerte": "place the product in a retail showroom display with spotlights; make the change clearly visible"
+   },
+   "ia": "place the product in a retail showroom display with spotlights",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "tienda",
+    "showroom",
+    "vitrina",
+    "exhibicion"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product in a retail showroom display with spotlights. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product in a retail showroom display with spotlights\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product in a retail showroom display with spotlights. {conservar}",
+    "descriptiva": "{producto}, place the product in a retail showroom display with spotlights, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product in a retail showroom display with spotlights. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-podio",
+   "v": 1,
+   "nombre": "Podio de estudio",
+   "icono": {
+    "id": "podio",
+    "d": "M6 14h12a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1zM8 14v-2h8v2M9 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+   },
+   "categoria": "escena",
+   "frase": "Sobre un pedestal minimalista del color que elijas.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    },
+    {
+     "id": "color",
+     "tipo": "color",
+     "es": "Color",
+     "patron": "^#[0-9A-Fa-f]{6}$",
+     "def": "#F2EDE4"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product on a minimalist pedestal, studio backdrop in {p.color}",
+    "normal": "place the product on a minimalist pedestal, studio backdrop in {p.color}",
+    "fuerte": "place the product on a minimalist pedestal, studio backdrop in {p.color}; make the change clearly visible"
+   },
+   "ia": "place the product on a minimalist pedestal, studio backdrop in {p.color}",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "podio",
+    "pedestal",
+    "minimalista",
+    "estudio"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product on a minimalist pedestal, studio backdrop in {p.color}. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product on a minimalist pedestal, studio backdrop in {p.color}\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product on a minimalist pedestal, studio backdrop in {p.color}. {conservar}",
+    "descriptiva": "{producto}, place the product on a minimalist pedestal, studio backdrop in {p.color}, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product on a minimalist pedestal, studio backdrop in {p.color}. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-madera",
+   "v": 1,
+   "nombre": "Mesa de madera",
+   "icono": {
+    "id": "mesa",
+    "d": "M3 9h18M5 9v11M19 9v11M8 9v5h8V9"
+   },
+   "categoria": "escena",
+   "frase": "Sobre madera cálida con fondo desenfocado.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product on a warm wooden table, shallow depth of field",
+    "normal": "place the product on a warm wooden table, shallow depth of field",
+    "fuerte": "place the product on a warm wooden table, shallow depth of field; make the change clearly visible"
+   },
+   "ia": "place the product on a warm wooden table, shallow depth of field",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "madera",
+    "rustico",
+    "mesa"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product on a warm wooden table, shallow depth of field. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product on a warm wooden table, shallow depth of field\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product on a warm wooden table, shallow depth of field. {conservar}",
+    "descriptiva": "{producto}, place the product on a warm wooden table, shallow depth of field, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product on a warm wooden table, shallow depth of field. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-marmol",
+   "v": 1,
+   "nombre": "Mármol de lujo",
+   "icono": {
+    "id": "podio",
+    "d": "M6 14h12a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1zM8 14v-2h8v2M9 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+   },
+   "categoria": "escena",
+   "frase": "Mármol pulido con detalles dorados.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: place the product on polished marble with gold accents, premium mood",
+    "normal": "place the product on polished marble with gold accents, premium mood",
+    "fuerte": "place the product on polished marble with gold accents, premium mood; make the change clearly visible"
+   },
+   "ia": "place the product on polished marble with gold accents, premium mood",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "marmol",
+    "lujo",
+    "premium",
+    "elegante"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product on polished marble with gold accents, premium mood. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product on polished marble with gold accents, premium mood\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product on polished marble with gold accents, premium mood. {conservar}",
+    "descriptiva": "{producto}, place the product on polished marble with gold accents, premium mood, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product on polished marble with gold accents, premium mood. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-agua",
+   "v": 1,
+   "nombre": "Agua y frescura",
+   "icono": {
+    "id": "gota",
+    "d": "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
+   },
+   "categoria": "escena",
+   "frase": "Gotas y salpicaduras, tonos azules limpios.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: splashes of water and fresh droplets around the product, clean blue tones",
+    "normal": "splashes of water and fresh droplets around the product, clean blue tones",
+    "fuerte": "splashes of water and fresh droplets around the product, clean blue tones; make the change clearly visible"
+   },
+   "ia": "splashes of water and fresh droplets around the product, clean blue tones",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "agua",
+    "fresco",
+    "gotas",
+    "salpicadura"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: splashes of water and fresh droplets around the product, clean blue tones. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- splashes of water and fresh droplets around the product, clean blue tones\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "splashes of water and fresh droplets around the product, clean blue tones. {conservar}",
+    "descriptiva": "{producto}, splashes of water and fresh droplets around the product, clean blue tones, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: splashes of water and fresh droplets around the product, clean blue tones. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "esc-sorprendeme",
+   "v": 1,
+   "nombre": "Sorpréndeme",
+   "icono": {
+    "id": "dado",
+    "d": "M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1 -3 3h-10a3 3 0 0 1 -3 -3v-10a3 3 0 0 1 3 -3zM7.5 8.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M14.5 15.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+   },
+   "categoria": "escena",
+   "frase": "Elige un ambiente que le quede al producto (se guarda la semilla para repetirlo).",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "escena",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "medio"
+    }
+   ],
+   "ia": "place the product in a fitting, attractive lifestyle setting chosen for this kind of product",
+   "requiere": {},
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "En una escena la distancia la pone el modelo: la QA dice «no medido».",
+   "buscar": [
+    "sorprendeme",
+    "aleatorio",
+    "ideas",
+    "cualquier"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: place the product in a fitting, attractive lifestyle setting chosen for this kind of product. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- place the product in a fitting, attractive lifestyle setting chosen for this kind of product\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "place the product in a fitting, attractive lifestyle setting chosen for this kind of product. {conservar}",
+    "descriptiva": "{producto}, place the product in a fitting, attractive lifestyle setting chosen for this kind of product, {encuadre}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: place the product in a fitting, attractive lifestyle setting chosen for this kind of product. Framing: {encuadre}. {idea}"
+   }
+  }
+ ]
+}

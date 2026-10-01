@@ -1,0 +1,273 @@
+{
+ "grupo": "musica",
+ "presets": [
+  {
+   "id": "mus-jingle",
+   "v": 1,
+   "nombre": "Jingle de marca (con letra)",
+   "icono": {
+    "id": "nota",
+    "d": "M9 18V5l11-2v13M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M14 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+   },
+   "categoria": "musica",
+   "frase": "Corto y pegadizo, con tu letra.",
+   "medios": [
+    "music"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "estilo"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [
+    {
+     "id": "estilo",
+     "tipo": "texto",
+     "es": "Estilo",
+     "max": 140,
+     "def": "pop latino alegre"
+    }
+   ],
+   "ajustesModelo": {
+    "instrumental": false,
+    "style": "upbeat catchy jingle, {p.estilo}"
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-musica-3",
+    "mmx-musica-3-gratis"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "jingle",
+    "cancion",
+    "marca",
+    "letra"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "musica-minimax": {
+     "style": "upbeat catchy jingle, {p.estilo}",
+     "instrumental": false,
+     "prompt": "Letra del dueño con [Verse] [Chorus]"
+    }
+   }
+  },
+  {
+   "id": "mus-reel",
+   "v": 1,
+   "nombre": "Fondo para reel",
+   "icono": {
+    "id": "nota",
+    "d": "M9 18V5l11-2v13M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M14 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+   },
+   "categoria": "musica",
+   "frase": "Energético, 120 bpm, sin voz.",
+   "medios": [
+    "music"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "estilo"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [],
+   "ajustesModelo": {
+    "instrumental": true,
+    "style": "energetic modern pop beat, 120 bpm"
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-musica-3",
+    "mmx-musica-3-gratis"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "reel",
+    "fondo",
+    "energetico",
+    "tiktok"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "musica-minimax": {
+     "style": "energetic modern pop beat, 120 bpm",
+     "instrumental": true,
+     "prompt": "Descripción breve del video"
+    }
+   }
+  },
+  {
+   "id": "mus-corporativo",
+   "v": 1,
+   "nombre": "Fondo corporativo",
+   "icono": {
+    "id": "nota",
+    "d": "M9 18V5l11-2v13M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M14 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+   },
+   "categoria": "musica",
+   "frase": "Cálido e inspirador, sin voz.",
+   "medios": [
+    "music"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "estilo"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [],
+   "ajustesModelo": {
+    "instrumental": true,
+    "style": "warm inspiring corporate background"
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-musica-3",
+    "mmx-musica-3-gratis"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "corporativo",
+    "presentacion",
+    "institucional"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "musica-minimax": {
+     "style": "warm inspiring corporate background",
+     "instrumental": true,
+     "prompt": "Descripción breve"
+    }
+   }
+  },
+  {
+   "id": "mus-tienda",
+   "v": 1,
+   "nombre": "Lo-fi para la tienda",
+   "icono": {
+    "id": "nota",
+    "d": "M9 18V5l11-2v13M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M14 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+   },
+   "categoria": "musica",
+   "frase": "Relajado, para el local.",
+   "medios": [
+    "music"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "estilo"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [],
+   "ajustesModelo": {
+    "instrumental": true,
+    "style": "chill lo-fi for in-store ambience"
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-musica-3",
+    "mmx-musica-3-gratis"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "tienda",
+    "lofi",
+    "local",
+    "ambiente"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "musica-minimax": {
+     "style": "chill lo-fi for in-store ambience",
+     "instrumental": true,
+     "prompt": "Descripción breve"
+    }
+   }
+  },
+  {
+   "id": "mus-tropical",
+   "v": 1,
+   "nombre": "Tropical latino",
+   "icono": {
+    "id": "nota",
+    "d": "M9 18V5l11-2v13M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M14 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0"
+   },
+   "categoria": "musica",
+   "frase": "Percusión ligera con sabor panameño.",
+   "medios": [
+    "music"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "estilo"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [],
+   "ajustesModelo": {
+    "instrumental": true,
+    "style": "tropical latin, light percussion, Panamanian vibe"
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-musica-3",
+    "mmx-musica-3-gratis"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "tropical",
+    "latino",
+    "panama",
+    "salsa",
+    "tipico"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "musica-minimax": {
+     "style": "tropical latin, light percussion, Panamanian vibe",
+     "instrumental": true,
+     "prompt": "Descripción breve"
+    }
+   }
+  }
+ ]
+}
