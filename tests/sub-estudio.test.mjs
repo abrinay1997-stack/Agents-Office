@@ -47,9 +47,10 @@ const listen = srv => new Promise(r => srv.listen(0, '127.0.0.1', () => r(srv.ad
 async function office(t, answers) {
   const seen = [];
   const claude = http.createServer((rq, rs) => {
-    let b = ''; rq.on('data', d => { b += d; }); rq.on('end', () => {
+    let b = ''; rq.on('data', d => { b += d; }); rq.on('end', async () => {
       const body = JSON.parse(b || '{}'); seen.push({ path: rq.url, body });
-      const text = answers.length ? answers.shift() : JSON.stringify({ mode: 'charla', reply: 'ok' });
+      let text = answers.length ? answers.shift() : JSON.stringify({ mode: 'charla', reply: 'ok' });
+      if (text && typeof text === 'object') { await text.gate; text = text.text; } // { text, gate }: Claude «thinks» until the test opens the gate
       rs.writeHead(200, { 'content-type': 'application/json' });
       rs.end(JSON.stringify({ id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-sonnet-4-5', stop_reason: 'end_turn', content: [{ type: 'text', text }], usage: { input_tokens: 10, output_tokens: 10 } }));
     });
@@ -140,4 +141,46 @@ test('server: hidden orders in an image mark the message 🛡 and take its actio
   assert.equal(c.status, 200); assert.deepEqual(c.j.messages[0].context, { view: 'contenido', label: 'Promo de octubre' });
   const sys = JSON.stringify(o.seen.at(-1).body.system);
   assert.ok(sys.includes('Promo de octubre') && sys.includes('2x1 todo el mes'), 'the piece is not in the prompt');
+});
+
+const until = async (f, what) => { for (let i = 0; i < 80; i++) { const v = await f(); if (v) return v; await new Promise(r => setTimeout(r, 250)); } throw new Error('timed out waiting for ' + what); };
+
+test('server: GENERAR and a job that ends while Dimitri is still thinking are not lost when his answer lands', { timeout: 60000 }, async t => {
+  const answers = [JSON.stringify({ mode: 'estudio', reply: 'Uno.', creatives: [{ title: 'Post', model: 'prueba', prompt: 'a poster', n: 1 }], actions: [], image_text: '' })];
+  const o = await office(t, answers);
+  const m = (await o.call('/api/sub/chat', { text: 'hazme una imagen' })).j.messages[1];
+  let open; answers.push({ text: JSON.stringify({ mode: 'charla', reply: 'Sigo aquí.' }), gate: new Promise(r => { open = r; }) });
+  const asked = o.seen.length, slow = o.call('/api/sub/chat', { text: 'y otra cosa' }); // subChat has read the file and waits for Claude
+  await until(() => o.seen.length > asked, 'the second chat to reach Claude');
+  const g = await o.call('/api/sub/studio', { msg: m.id, items: [{ i: 0, include: true }] }); assert.equal(g.j.message.studio.creatives[0].state, 'sent');
+  await until(async () => (await o.call('/api/sub')).j.messages.some(x => /^Listos/.test(x.text)), '«Listos» while Dimitri thinks');
+  open(); const r = await slow; assert.equal(r.status, 200, JSON.stringify(r.j));
+  const s = (await o.call('/api/sub')).j, c = s.messages.find(x => x.id === m.id).studio.creatives[0];
+  assert.equal(c.state, 'done', 'the late answer put the creative back'); assert.equal(c.files.length, 1); assert.ok(c.jobId);
+  assert.equal(s.messages.filter(x => /^Listos/.test(x.text)).length, 1, 'one «Listos», kept');
+  assert.ok(s.messages.some(x => x.text === 'y otra cosa') && s.messages.some(x => x.text === 'Sigo aquí.'), 'the late exchange is saved too');
+  await o.call('/api/sub/studio', { msg: m.id, items: [{ i: 0, include: true }] });
+  assert.equal((await o.call('/api/media')).j.jobs.length, 1, 'a second GENERAR does not generate (nor pay) again');
+});
+
+test('server: the four organising actions really run — rename, move, create, and an idea in Contenido that is never approved', { timeout: 60000 }, async t => {
+  const answers = [];
+  const o = await office(t, answers);
+  const file = (await o.call('/api/media/upload', { name: 'producto.png', data: 'data:image/png;base64,' + PNG })).j.item.file;
+  assert.equal((await o.call('/api/media/folders', { name: 'Viejo' })).status, 200);
+  answers.push(JSON.stringify({ mode: 'estudio', reply: 'Ordeno la galería.', creatives: [], image_text: '',
+    actions: [{ type: 'carpeta_crear', name: 'Nueva' }, { type: 'carpeta_renombrar', from: 'Viejo', to: 'Renombrada' }, { type: 'mover', files: [file], folder: 'Destino' }, { type: 'enviar_contenido', file, texto: 'Ven por tu peluche.' }] }));
+  const m = (await o.call('/api/sub/chat', { text: 'ordena la galería y manda la foto a contenido', attach: [file] })).j.messages[1];
+  assert.deepEqual(m.studio.actions.map(a => a.type), ['carpeta_crear', 'carpeta_renombrar', 'mover', 'enviar_contenido']);
+  assert.ok(!(await o.call('/api/media')).j.folders.some(f => f.name === 'Nueva'), 'nothing happens before the click');
+  const g = await o.call('/api/sub/studio', { msg: m.id, items: [] }); assert.equal(g.status, 200, JSON.stringify(g.j));
+  const acts = g.j.message.studio.actions; assert.deepEqual(acts.map(a => a.state), ['done', 'done', 'done', 'done'], JSON.stringify(acts));
+  const med = (await o.call('/api/media')).j, names = med.folders.map(f => f.name);
+  assert.ok(names.includes('Nueva') && names.includes('Renombrada') && names.includes('Destino') && !names.includes('Viejo'), names.join(', '));
+  assert.equal(med.items.find(x => x.file === file).folder, med.folders.find(f => f.name === 'Destino').id);
+  const pid = acts[3].pieza; assert.ok(pid, 'no piece id');
+  const pz = await o.call('/api/contenido/piezas/' + pid); assert.equal(pz.status, 200, JSON.stringify(pz.j));
+  assert.equal(pz.j.pieza.estado, 'idea'); assert.ok(!pz.j.pieza.aprobada, 'never approved'); assert.deepEqual(pz.j.pieza.medios, [file]); assert.equal(pz.j.pieza.origen, 'dimitri');
+  assert.ok((await o.call('/api/contenido')).j.piezas.some(p => p.id === pid));
+  assert.equal(med.jobs.length, 0, 'organising generates nothing');
 });

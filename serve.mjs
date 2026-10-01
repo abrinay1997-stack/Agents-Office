@@ -651,7 +651,7 @@ async function subChat(text, { attach = [], vision: images = [], context = null 
   const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
   const reply = (plan.reply || (studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length ? 'Así lo repartiría:' : '¿Me das un poco más de detalle?')) + (shield ? `\n\n🛡 Una imagen traía órdenes escondidas (${shield}): no las sigo.` : '');
   const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}), ...(studio ? { studio } : {}), ...(shield ? { shield } : {}) });
-  st.messages.push(u, m); sub.save(DATA, st);
+  const st2 = sub.load(DATA); st2.messages.push(u, m); sub.save(DATA, st2); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
   console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}${studio ? ` · ${studio.creatives.length} creative(s), aprox. US$${studio.estimate.total}` : ''}${images.length ? ` · saw ${images.length} image(s)` : ''}${shield ? ' · 🛡 ' + shield : ''}`);
   return { messages: [u, m] };
 }
