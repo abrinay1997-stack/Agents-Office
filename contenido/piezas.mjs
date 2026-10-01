@@ -8,12 +8,14 @@
 // las dos cosas se unen al pintar, igual que en Juancito Ads: el estado de la agenda no es la verdad de lo publicado.
 //
 //   parsear(md) · serializar(pieza) · huella(pieza) · normalizar(datos, previa)    → puros, con tests
-//   crearAlmacen({ dir, medioExiste, ahora })                                       → { listar, leer, crear, guardar, aprobar, devolver, borrar, usos }
+//   crearAlmacen({ dir, medioExiste, medida, ahora })                               → { listar, leer, crear, guardar, aprobar, devolver, borrar, usos }
+// (1 oct 2026) Cada pieza que sale de aquí lleva `medidas` ({ id: { ancho, alto, duracion } }, del registro .json de cada archivo del Estudio):
+// sin ellas las reglas de proporción y de duración no se disparaban nunca. Y aprobar exige hora y un momento que venga (revisarMomento).
 // Cubierto por tests/contenido-piezas.test.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { revisarPublicacion, postDePieza } from '../src/contenido-reglas.js';
+import { revisarPublicacion, postDePieza, medidaDeItem, revisarMomento } from '../src/contenido-reglas.js';
 
 export const ESTADOS = ['idea', 'borrador', 'revision', 'aprobada']; // los que se deciden aquí; «en Meta», «publicada» y «falló» son de la cola (F3)
 export const FORMATOS = ['post', 'reel', 'carrusel', 'historia'];
@@ -126,6 +128,12 @@ export function normalizar(d = {}, previa = null) {
 }
 
 /* ---------- el almacén: los archivos ---------- */
+const MEDIO_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm)$/i;
+/** Las medidas de un archivo del Estudio, leídas de su registro (`<cerebro>/Agents Office/media/AAAA-MM/<nombre>.json`, junto a esta carpeta). */
+export const medidaDelEstudio = mediaDir => id => {
+  const rel = String(id ?? '').replace(/\\/g, '/'); if (!MEDIO_RE.test(rel) || rel.includes('..')) return null;
+  try { return medidaDeItem(JSON.parse(fs.readFileSync(path.join(mediaDir, rel.replace(/\.[^.]+$/, '.json')), 'utf8'))); } catch { return null; }
+};
 const mesDe = f => (FECHA_RE.test(f) ? f.slice(0, 7) : SIN_FECHA);
 const nuevoId = (fecha, ahora) => `p-${(FECHA_RE.test(fecha) ? fecha : new Date(ahora()).toISOString().slice(0, 10)).replace(/-/g, '')}-${crypto.randomBytes(2).toString('hex')}`;
 
@@ -133,7 +141,9 @@ const nuevoId = (fecha, ahora) => `p-${(FECHA_RE.test(fecha) ? fecha : new Date(
  * `dir` es la carpeta de las piezas; `medioExiste(id)` dice si un archivo es del Estudio (así una pieza no apunta a algo que no está);
  * `ahora()` el momento actual (para probar). Todo lo que se escribe va a un temporal y se renombra: nunca una nota a medias.
  */
-export function crearAlmacen({ dir, medioExiste = () => true, ahora = Date.now } = {}) {
+export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Date.now } = {}) {
+  const medidaDe = medida || medidaDelEstudio(path.join(dir || '.', '..', 'media'));
+  const medidas = p => { const out = {}; for (const m of [...p.medios, ...p.historias]) { const x = medidaDe(m); if (x) out[m] = x; } return out; };
   const ruta = (id, fecha) => path.join(dir, mesDe(fecha), `${id}.md`);
   const escribir = (p, viejaFecha) => {
     const f = ruta(p.id, p.fecha); fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -144,8 +154,8 @@ export function crearAlmacen({ dir, medioExiste = () => true, ahora = Date.now }
   const deArchivo = f => { try { return parsear(fs.readFileSync(f, 'utf8'), { file: f }); } catch { return null; } };
   const buscar = id => { if (!ID_RE.test(String(id))) return null; for (const c of carpetas()) { const f = path.join(dir, c, `${id}.md`); if (fs.existsSync(f)) return f; } return null; };
   const todas = meses => { const out = []; for (const c of carpetas()) { if (meses && !meses.has(c)) continue; for (const f of fs.readdirSync(path.join(dir, c)).filter(x => x.endsWith('.md'))) { const p = deArchivo(path.join(dir, c, f)); if (p) out.push(p); } } return out; };
-  const conEstado = p => ({ ...p, cambiadaTrasAprobar: p.estado === 'aprobada' && !!p.aprobada && p.aprobada.huella !== huella(p) });
-  const revisar = p => revisarPublicacion(postDePieza(p), p.redes);
+  const conEstado = p => ({ ...p, medidas: medidas(p), cambiadaTrasAprobar: p.estado === 'aprobada' && !!p.aprobada && p.aprobada.huella !== huella(p) });
+  const revisar = p => revisarPublicacion(postDePieza({ ...p, medidas: p.medidas || medidas(p) }), p.redes);
   const medios = p => { for (const m of [...p.medios, ...p.historias]) if (!medioExiste(m)) return `el Estudio no tiene «${m}»`; return null; };
 
   return {
@@ -184,14 +194,15 @@ export function crearAlmacen({ dir, medioExiste = () => true, ahora = Date.now }
       if (p.estado !== 'aprobada') p.aprobada = null;
       escribir(p, previa.fecha); return { pieza: conEstado(p), soltada };
     },
-    /** El OK del dueño: solo si puede salir (sin errores de las reglas de cada red) y tiene día. */
+    /** El OK del dueño: solo si puede salir (sin errores de las reglas de cada red), tiene día y hora, y ese momento todavía no pasó. */
     aprobar(id, { por = 'dueno' } = {}) {
       const f = buscar(id), p = f && deArchivo(f); if (!p) return { error: 'esa pieza ya no existe', nada: true };
       if (!p.fecha) return { error: 'ponle un día antes de aprobarla', errores: ['Sin día'] };
-      const { errores, avisos } = revisar(p); if (errores.length) return { error: 'todavía no puede salir: ' + errores[0], errores, avisos };
+      const cuando = revisarMomento(p.fecha, p.hora, ahora()); if (cuando.errores.length) return { error: cuando.errores[0].replace(/^./, c => c.toLowerCase()), errores: cuando.errores };
+      const { errores, avisos } = revisar(p); if (errores.length) return { error: 'todavía no puede salir: ' + errores[0], errores, avisos: [...avisos, ...cuando.avisos] };
       const mal = medios(p); if (mal) return { error: mal };
       p.estado = 'aprobada'; p.aprobada = { cuando: new Date(ahora()).toISOString(), huella: huella(p), por }; p.actualizada = p.aprobada.cuando;
-      escribir(p); return { pieza: conEstado(p), avisos };
+      escribir(p); return { pieza: conEstado(p), avisos: [...avisos, ...cuando.avisos] };
     },
     /** Devolver una pieza a revisión (o a borrador): quita el OK. */
     devolver(id, estado = 'revision') {

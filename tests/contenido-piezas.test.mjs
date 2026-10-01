@@ -91,7 +91,7 @@ test('aprobar exige que pueda salir y tenga día; el error trae el motivo y el a
   const a = almacen({ medioExiste: m => IMG.includes(m) });
   const sinDia = a.crear({ texto: 'x', medios: [IMG[0]] }).pieza;
   assert.match(a.aprobar(sinDia.id).error, /ponle un día/);
-  const sinMedios = a.crear({ fecha: '2026-10-05', texto: 'x' }).pieza;
+  const sinMedios = a.crear({ fecha: '2026-10-05', hora: '09:00', texto: 'x' }).pieza;
   const r = a.aprobar(sinMedios.id); assert.match(r.error, /todavía no puede salir: Instagram necesita al menos una imagen o un video/); assert.equal(r.errores.length >= 1, true);
   a.guardar(sinMedios.id, { medios: [IMG[0]] });
   const ok = a.aprobar(sinMedios.id, { por: 'Abrinay' });
@@ -102,7 +102,7 @@ test('aprobar exige que pueda salir y tenga día; el error trae el motivo y el a
 
 test('cambiar lo que sale de una pieza aprobada le quita el OK; cambiar lo interno, no', () => {
   const a = almacen({ medioExiste: () => true });
-  const p = a.crear({ fecha: '2026-10-05', texto: 'Hola', medios: [IMG[0]] }).pieza; a.aprobar(p.id);
+  const p = a.crear({ fecha: '2026-10-05', hora: '09:00', texto: 'Hola', medios: [IMG[0]] }).pieza; a.aprobar(p.id);
   const interno = a.guardar(p.id, { notas: 'ojo con el precio', titulo: 'Otro título', responsable: 'Ana' });
   assert.equal(interno.pieza.estado, 'aprobada'); assert.equal(interno.soltada, false); assert.equal(interno.pieza.cambiadaTrasAprobar, false);
   const publico = a.guardar(p.id, { texto: 'Hola con precio nuevo' });
@@ -112,7 +112,7 @@ test('cambiar lo que sale de una pieza aprobada le quita el OK; cambiar lo inter
 });
 
 test('una nota editada a mano después de aprobarla se nota: cambiadaTrasAprobar', () => {
-  const a = almacen(); const p = a.crear({ fecha: '2026-10-05', texto: 'Hola', medios: [IMG[0]] }).pieza; a.aprobar(p.id);
+  const a = almacen(); const p = a.crear({ fecha: '2026-10-05', hora: '09:00', texto: 'Hola', medios: [IMG[0]] }).pieza; a.aprobar(p.id);
   const f = path.join(a.dir, '2026-10', `${p.id}.md`); fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('Hola', 'Hola, editada fuera de la oficina'));
   const leida = a.leer(p.id); assert.equal(leida.estado, 'aprobada'); assert.equal(leida.cambiadaTrasAprobar, true);
 });
@@ -132,7 +132,7 @@ test('una pieza no apunta a un archivo que el Estudio no tiene', () => {
 });
 
 test('devolver quita el OK; borrar manda a la papelera; usos dice qué piezas usan un archivo', () => {
-  const a = almacen(); const p = a.crear({ titulo: 'Con imagen', fecha: '2026-10-05', texto: 'x', medios: [IMG[0]], historias: [IMG[1]] }).pieza; a.aprobar(p.id);
+  const a = almacen(); const p = a.crear({ titulo: 'Con imagen', fecha: '2026-10-05', hora: '09:00', texto: 'x', medios: [IMG[0]], historias: [IMG[1]] }).pieza; a.aprobar(p.id);
   assert.deepEqual(a.usos(IMG[0]).map(u => u.titulo), ['Con imagen']); assert.deepEqual(a.usos(IMG[1]).map(u => u.id), [p.id]); assert.deepEqual(a.usos('2026-10/otra.png'), []);
   const d = a.devolver(p.id); assert.equal(d.pieza.estado, 'revision'); assert.equal(d.pieza.aprobada, null);
   assert.equal(a.devolver(p.id, 'borrador').pieza.estado, 'borrador');
