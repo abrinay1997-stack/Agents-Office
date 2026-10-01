@@ -135,3 +135,42 @@ export function checkCloneFile(f) {
   if (f.size < 1024) return 'Está vacío o es demasiado corto.';
   return '';
 }
+
+/* ---------- V5.0 (1 Oct 2026, the owner: «grabar y clonar esa voz, o subir un fragmento, lo máximo que pueda… entre más aprenda
+   mejor»): no editor — record with the microphone, or upload a fragment as it is; the office uses as much as MiniMax takes. ---------- */
+/** MiniMax's clone limits (docs/minimax/api-verificada.md): 10 s to 5 min, 20 MB. The office records and converts at 24 kHz mono
+    16-bit: 5 min is 14.4 MB, under the cap with room for the upload's base64. */
+export const CLONE = { minS: 10, maxS: 300, maxBytes: 20 * 1024 * 1024, rate: 24000 };
+/** 75 → «1:15». */
+export const clock = s => { const t = Math.max(0, Math.floor(+s || 0)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+/** What the owner reads about a clip's length, for a clone. level: 'bad' (cannot) · 'short' (works, little) · 'good' · 'cut' (over 5 min: the first 5 go). */
+export function cloneLength(seconds) {
+  const s = +seconds || 0, max = clock(CLONE.maxS);
+  if (s < CLONE.minS) return { ok: false, level: 'bad', text: `Dura ${clock(s)}: MiniMax pide al menos ${CLONE.minS} segundos.` };
+  if (s < 60) return { ok: true, level: 'short', text: `Dura ${clock(s)}: sirve, pero aprende mejor con más. Lo ideal: de 1 a ${CLONE.maxS / 60} minutos.` };
+  if (s <= CLONE.maxS) return { ok: true, level: 'good', text: `Dura ${clock(s)} de ${max} posibles: ${s >= 240 ? 'casi el máximo, muy bien' : 'muy bien'}.` };
+  return { ok: true, level: 'cut', text: `Dura ${clock(s)}: MiniMax toma hasta ${max}, así que se usan los primeros ${max}.` };
+}
+/** Several channels → one (the mean), at most `maxS` seconds. */
+export function toMono(channels, rate, maxS = CLONE.maxS) {
+  const n = Math.min(channels[0] ? channels[0].length : 0, Math.floor(rate * maxS)), out = new Float32Array(n);
+  for (const ch of channels) for (let i = 0; i < n; i++) out[i] += ch[i] / channels.length;
+  return out;
+}
+/** Linear resampling, enough for a voice (MiniMax hears it at 24 kHz anyway). */
+export function resample(data, from, to) {
+  if (from === to) return data;
+  const n = Math.max(1, Math.round(data.length * to / from)), out = new Float32Array(n), k = from / to;
+  for (let i = 0; i < n; i++) { const x = i * k, a = Math.floor(x), b = Math.min(a + 1, data.length - 1), f = x - a; out[i] = data[a] * (1 - f) + data[b] * f; }
+  return out;
+}
+/** Mono float samples → a 16-bit PCM WAV file (ArrayBuffer). */
+export function encodeWav(samples, rate) {
+  const n = samples.length, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) { const x = Math.max(-1, Math.min(1, samples[i])); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7FFF, true); }
+  return buf;
+}
+/** Can a picked file go to MiniMax as it is (no conversion)? An mp3/wav/m4a of 5 min or less and 20 MB or less. */
+export const fitsAsIs = (f, seconds) => /\.(mp3|wav|m4a)$/i.test(f && f.name || '') && f.size <= CLONE.maxBytes && seconds <= CLONE.maxS;

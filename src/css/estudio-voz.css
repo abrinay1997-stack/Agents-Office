@@ -123,3 +123,19 @@ body.dark #studioOv .st-vform input:not([type=file]), body.dark #studioOv .st-vf
 }
 /* el deslizador de velocidad, volumen y tono: 24 px de alto para el dedo */
 #studioOv .st-sets input[type=range], #studioOv .st-sets2 input[type=range] { min-height: 24px; margin: 0; }
+
+/* V5.0 (1 Oct 2026): record a voice to clone, or upload a fragment — the tip, the recorder, its level and clock, the chosen audio's
+   player and what its length means (bad · short · good · cut). Colours pass 4.5:1 on the cream box and in dark. */
+#studioOv .st-vsrc .st-vtip { flex: 1 1 100%; margin: 0 0 4px; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+#studioOv .st-vrec { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+#studioOv .st-vrec [data-vo="rec"] { min-height: 36px; padding: 0 16px; border-radius: 99px; font: 700 12.5px var(--ui); }
+#studioOv .st-vrec [data-vo="rec"].on { background: #B3261E; border-color: #B3261E; color: #fff; }
+#studioOv .st-vrect { font: 600 12.5px var(--ui); font-variant-numeric: tabular-nums; color: var(--ink); }
+#studioOv .st-vlvl { flex: 0 0 120px; height: 8px; border-radius: 99px; background: var(--hairline); overflow: hidden; }
+#studioOv .st-vlvl i { display: block; height: 100%; width: 0; background: #1E7A3A; transition: width .12s linear; }
+#studioOv .st-vprev { flex: 1 1 100%; width: 100%; min-height: 32px; margin-top: 4px; }
+#studioOv .st-vprev[hidden] { display: none; }
+#studioOv .st-vsrc .st-vlen { flex: 1 1 100%; margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+#studioOv .st-vlen.bad { color: #B3261E; } #studioOv .st-vlen.short, #studioOv .st-vlen.cut { color: #7A4F00; } #studioOv .st-vlen.good { color: #1E6B34; }
+body.dark #studioOv .st-vlen.bad { color: #FF8A7A; } body.dark #studioOv .st-vlen.short, body.dark #studioOv .st-vlen.cut { color: #F2C26B; } body.dark #studioOv .st-vlen.good { color: #7FD69A; }
+body.dark #studioOv .st-vlvl i { background: #7FD69A; }

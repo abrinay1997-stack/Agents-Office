@@ -592,6 +592,91 @@ export function initStudio(ctx) {
     const n = vq('.st-vn'); if (n) n.textContent = voices.mine.length ? `(${voices.mine.length})` : '';
   }
   function vsay(where, text, bad) { const m = vq(where); if (m) { m.textContent = text; m.classList.toggle('bad', !!bad); } }
+  /* V5.0 (1 Oct 2026, the owner: «grabar y clonar esa voz, o subir un fragmento… lo máximo… no me interesa un editor»): the audio for a
+     clone is recorded here or uploaded as it is, and always lands in the gallery («Grabaciones de voz») — the clone then names it by id.
+     The browser records WebM, which MiniMax does not take: a recording, and a file MiniMax would refuse (another format, over 20 MB,
+     over 5 minutes), becomes a 24 kHz mono WAV of at most 5:00 (src/studio-voz.js). An mp3/wav/m4a that fits goes as it is. */
+  const vcaOptions = audios => audios.length ? `<option value="">Elegir un audio…</option>${audios.map(a => `<option value="${esc(a.file)}">${esc(short(a.prompt))} · ${esc(when(a.at))}</option>`).join('')}` : '<option value="">Todavía no hay audios: graba o sube uno</option>';
+  function vlen(text, level) { const n = vq('.st-vlen'); if (n) { n.textContent = text || ''; n.className = 'st-vlen' + (level ? ' ' + level : ''); } }
+  async function decodeAudio(buf) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('este navegador no lee audio'); const ac = new AC(); try { return await ac.decodeAudioData(buf); } finally { try { ac.close(); } catch {} } }
+  function wavOf(ab) { const ch = Array.from({ length: ab.numberOfChannels }, (_, i) => ab.getChannelData(i)); return new Blob([SV.encodeWav(SV.resample(SV.toMono(ch, ab.sampleRate), ab.sampleRate, SV.CLONE.rate), SV.CLONE.rate)], { type: 'audio/wav' }); }
+  const dataURL = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error('no pude leer el audio')); fr.readAsDataURL(blob); });
+  async function voiceFolder() {
+    const have = folders.find(f => f.name === 'Grabaciones de voz'); if (have) return have.id;
+    const r = await vocApi('POST', '/api/media/folders', { name: 'Grabaciones de voz' }).catch(() => null);
+    if (r && r.ok && r.j.folder) { folders = r.j.folders || [...folders, r.j.folder]; return r.j.folder.id; }
+    return null; // no folder is no reason to lose the recording
+  }
+  function chooseAudio(file) { // into the gallery list, chosen, with its player
+    const s = vq('.st-vca'); if (!s) return;
+    s.innerHTML = vcaOptions(SV.cloneable(items)); s.value = file || '';
+    const p = vq('.st-vprev'), it = file && itemOf(file); if (p) { p.hidden = !it; if (it) p.src = src(it); else p.removeAttribute('src'); }
+    vocState.cloneFile = null; vq('.st-vcfn').textContent = ''; vcheck();
+  }
+  async function keepForClone(blob, name, seconds, note) { // the gallery keeps it; the clone form points at it
+    vlen('Guardando el audio en la galería…');
+    const fid = await voiceFolder(), data = await dataURL(blob);
+    const r = await vocApi('POST', '/api/media/upload', { name, data, ...(fid ? { folder: fid } : {}) }).catch(() => null);
+    if (!r || !r.ok || !r.j.item) throw new Error(r ? r.j.error || r.status : 'sin conexión con la oficina');
+    items.unshift(r.j.item); renderGrid(); chooseAudio(r.j.item.file);
+    const L = SV.cloneLength(seconds); vlen(`${note} ${L.text}`, L.level);
+  }
+  async function pickCloneFile(f) {
+    if (!f) return;
+    if (f.size > 200 * 1024 * 1024) return vlen(`«${f.name}» pasa de 200 MB: sube un fragmento más corto.`, 'bad');
+    vlen(`Leyendo «${f.name}»…`);
+    let ab = null; try { ab = await decodeAudio(await f.arrayBuffer()); } catch {}
+    try {
+      if (!ab) { const err = SV.checkCloneFile(f); if (err) return vlen(`«${f.name}»: no pude leerlo aquí y ${err.charAt(0).toLowerCase() + err.slice(1)}`, 'bad'); return await keepForClone(f, f.name, SV.CLONE.minS, 'Subido tal cual (no pude medir su duración aquí).'); }
+      if (ab.duration < SV.CLONE.minS) return vlen(SV.cloneLength(ab.duration).text, 'bad');
+      if (SV.fitsAsIs(f, ab.duration)) return await keepForClone(f, f.name, ab.duration, `«${f.name}» quedó en la galería, tal cual.`);
+      await keepForClone(wavOf(ab), f.name.replace(/\.[^.]+$/, '') + '.wav', ab.duration, `«${f.name}» quedó en la galería en WAV${ab.duration > SV.CLONE.maxS ? `, con sus primeros ${SV.clock(SV.CLONE.maxS)}` : ''} (así lo acepta MiniMax).`);
+    } catch (e) { vlen('No pude guardar el audio: ' + e.message, 'bad'); }
+  }
+  async function measureChosen(file) { // a gallery audio picked in the list: how long it is, said in the same words
+    const it = itemOf(file); if (!it) return vlen('');
+    vlen('Midiendo el audio…');
+    try { const ab = await decodeAudio(await (await fetch(src(it))).arrayBuffer()); if (vq('.st-vca')?.value !== file) return; const L = SV.cloneLength(ab.duration); vlen(L.text + (L.level === 'cut' ? ' Grábalo o súbelo de nuevo y la oficina lo deja en 5:00.' : ''), L.level); }
+    catch { if (vq('.st-vca')?.value === file) vlen(''); }
+  }
+  async function recToggle(b) {
+    if (vocState.rec) return recStop();
+    if (!window.isSecureContext) return vlen('El micrófono solo funciona con la oficina abierta en esta misma computadora (http://localhost:4520). Desde otro equipo, sube el audio.', 'bad');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return vlen('Este navegador no deja grabar aquí: usa Chrome o Edge, o sube un audio.', 'bad');
+    let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+    catch (e) { return vlen(e && e.name === 'NotAllowedError' ? 'No hay permiso para el micrófono: actívalo en el candado de la barra de direcciones y vuelve a pulsar Grabar.' : 'No encontré un micrófono' + (e && e.message ? ': ' + e.message : '.'), 'bad'); }
+    if ($('.st-vocov').hidden) { stream.getTracks().forEach(t => t.stop()); return; }
+    const AC = window.AudioContext || window.webkitAudioContext, ac = new AC(), an = ac.createAnalyser(); an.fftSize = 512; ac.createMediaStreamSource(stream).connect(an);
+    const mr = new MediaRecorder(stream), R = vocState.rec = { mr, stream, ac, chunks: [], t0: Date.now(), timer: 0 }, wave = new Uint8Array(an.fftSize);
+    mr.ondataavailable = e => { if (e.data && e.data.size) R.chunks.push(e.data); };
+    mr.onstop = () => recDone(R);
+    mr.start(1000);
+    b.textContent = '■ Parar y guardar'; b.setAttribute('aria-pressed', 'true'); b.classList.add('on');
+    vlen(`Grabando. Habla con naturalidad; cuanto más, mejor (hasta ${SV.clock(SV.CLONE.maxS)}, se para sola).`);
+    const tick = () => {
+      const s = (Date.now() - R.t0) / 1000; an.getByteTimeDomainData(wave); let peak = 0; for (const v of wave) peak = Math.max(peak, Math.abs(v - 128));
+      const lv = vq('.st-vlvl i'); if (lv) lv.style.width = Math.min(100, Math.round(peak / 128 * 180)) + '%';
+      const t = vq('.st-vrect'); if (t) t.textContent = `${SV.clock(s)} de ${SV.clock(SV.CLONE.maxS)} · ${s < SV.CLONE.minS ? `mínimo ${SV.CLONE.minS} s` : `quedan ${SV.clock(SV.CLONE.maxS - s)}`}`;
+      if (s >= SV.CLONE.maxS) recStop();
+    };
+    R.timer = setInterval(tick, 200); tick();
+  }
+  function recStop(discard) {
+    const R = vocState.rec; if (!R) return; vocState.rec = null; R.discard = !!discard; clearInterval(R.timer);
+    try { if (R.mr.state !== 'inactive') R.mr.stop(); } catch {} R.stream.getTracks().forEach(t => t.stop()); try { R.ac.close(); } catch {}
+    const b = vq('[data-vo="rec"]'); if (b) { b.textContent = '● Grabar otra vez'; b.setAttribute('aria-pressed', 'false'); b.classList.remove('on'); }
+    const lv = vq('.st-vlvl i'); if (lv) lv.style.width = '0';
+  }
+  async function recDone(R) {
+    if (R.discard || $('.st-vocov').hidden) return;
+    vlen('Preparando la grabación…');
+    try {
+      const ab = await decodeAudio(await new Blob(R.chunks, { type: R.mr.mimeType || 'audio/webm' }).arrayBuffer());
+      if (ab.duration < SV.CLONE.minS) return vlen(`Grabaste ${SV.clock(ab.duration)}: MiniMax pide al menos ${SV.CLONE.minS} segundos. Graba otra vez, un poco más.`, 'bad');
+      const name = 'Grabación de voz ' + new Date().toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      await keepForClone(wavOf(ab), name + '.wav', ab.duration, 'Grabación guardada en la galería («Grabaciones de voz»).');
+    } catch (e) { vlen('No pude guardar la grabación: ' + e.message, 'bad'); }
+  }
   function drawVoices() {
     const audios = SV.cloneable(items);
     $('.st-vocov').innerHTML = `<div class="st-hbox st-vbox"><div class="st-hhead"><h2 id="stVocT">Voces <span class="st-vn"></span></h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar las voces">${svg('x')}</button></div>
@@ -609,9 +694,13 @@ export function initStudio(ctx) {
         <p class="st-vwarn"><b>Antes de empezar:</b> clonar exige una cuenta verificada en MiniMax. El audio: una sola persona hablando, sin música, de 10 segundos a 5 minutos; MP3, WAV o M4A, hasta 20 MB.</p>
         <label class="st-plab" for="stVcN">Nombre</label><input id="stVcN" class="st-vcn" maxlength="60" placeholder="Ej.: Mi voz">
         <fieldset class="st-vsrc"><legend>El audio</legend>
-          ${audios.length ? `<label class="st-plab" for="stVcA">De la galería</label><select id="stVcA" class="st-vca"><option value="">Elegir un audio…</option>${audios.map(a => `<option value="${esc(a.file)}">${esc(short(a.prompt))} · ${esc(when(a.at))}</option>`).join('')}</select><span class="st-vor">o</span>` : ''}
-          <button type="button" data-vo="pick">${svg('up')}<span>Subir un audio…</span></button><span class="st-vcfn" aria-live="polite"></span>
-          <input type="file" class="st-vcf" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a" hidden></fieldset>
+          <p class="st-vtip">Cuanto más audio, mejor aprende: <b>hasta ${SV.clock(SV.CLONE.maxS)}</b> (mínimo ${SV.CLONE.minS} s). Habla con naturalidad, una sola persona, sin música ni ruido de fondo.</p>
+          <div class="st-vrec"><button type="button" class="pri" data-vo="rec" aria-pressed="false">● Grabar con el micrófono</button><span class="st-vrect" aria-live="off"></span><span class="st-vlvl" aria-hidden="true"><i></i></span></div>
+          <span class="st-vor">o</span><button type="button" data-vo="pick">${svg('up')}<span>Subir un audio…</span></button><span class="st-vcfn" aria-live="polite"></span>
+          <input type="file" class="st-vcf" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.webm" hidden>
+          <label class="st-plab" for="stVcA">De la galería (aquí quedan tus grabaciones y lo que subes)</label><select id="stVcA" class="st-vca">${vcaOptions(audios)}</select>
+          <audio class="st-vprev" controls preload="none" hidden aria-label="Escuchar el audio elegido"></audio>
+          <p class="st-vlen" role="status" aria-live="polite"></p></fieldset>
         <label class="st-plab" for="stVcI">Id de la voz</label><input id="stVcI" class="st-vci" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="stVcH" placeholder="Ej.: MiVozPanaclaw01">
         <p class="st-vhint" id="stVcH">${ID_RULE}</p>
         <div class="st-edrow"><button type="button" class="pri" data-vo="clone" disabled aria-disabled="true">Clonar la voz</button></div>
@@ -645,6 +734,7 @@ export function initStudio(ctx) {
   }
   function closeVoices(keepFocus) {
     const V = $('.st-vocov'); if (V.hidden) return;
+    if (vocState.rec) recStop(true); // closing the panel ends a recording and keeps nothing
     V.querySelectorAll('audio').forEach(a => a.pause()); V.hidden = true; V.innerHTML = ''; modal.close(V);
     if (!keepFocus) { // renderModel() repaints step 5 while the panel is open, so the «Voces» button that opened it may be a new node by now
       const back = vocFrom && document.contains(vocFrom) ? vocFrom : vocFromSel ? $(vocFromSel) : null;
@@ -694,7 +784,7 @@ export function initStudio(ctx) {
     if (r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); vq('.st-hx').focus(); return; }
     if (!r.ok || !r.j.voice) { vcheck(); return vsay('.st-vcres', 'No se pudo clonar: ' + (r.j.error || r.status) + (/2038/.test(String(r.j.error || '')) ? ' (tu cuenta de MiniMax aún no está verificada para clonar)' : ''), true); }
     const v = r.j.voice; addVoice(v);
-    vq('.st-vcn').value = ''; vq('.st-vci').value = ''; vocState.idTouched = false; vocState.cloneFile = null; vq('.st-vcfn').textContent = ''; if (vq('.st-vca')) vq('.st-vca').value = ''; vcheck();
+    vq('.st-vcn').value = ''; vq('.st-vci').value = ''; vocState.idTouched = false; chooseAudio(''); vlen('');
     vsay('.st-vcres', `Clonada: «${v.name || v.voiceId}». Ya está en tus voces y en la lista del paso 5.`);
     rowBtn(v.voiceId, 'use')?.focus();
   }
@@ -724,6 +814,7 @@ export function initStudio(ctx) {
       if (a === 'keep') { const vid = vocState.design, nm = (voices.mine.find(x => x.voiceId === vid) || {}).name || vid; vocState.design = null; vq('.st-vdn').value = ''; vq('.st-vdp').value = ''; vsay('.st-vdres', `Guardada: «${nm}». Está arriba, en tus voces, y en la lista del paso 5.`); rowBtn(vid, 'use')?.focus(); return; }
       if (a === 'design') return designVoice(b);
       if (a === 'pick') { vq('.st-vcf').click(); return; }
+      if (a === 'rec') return recToggle(b);
       if (a === 'clone') return cloneVoice(b);
     });
     V.addEventListener('input', e => {
@@ -733,13 +824,9 @@ export function initStudio(ctx) {
     });
     V.addEventListener('change', e => {
       e.stopPropagation();
-      if (e.target.classList.contains('st-vca')) { if (e.target.value) { vocState.cloneFile = null; vq('.st-vcfn').textContent = ''; } vcheck(); }
+      if (e.target.classList.contains('st-vca')) { const f = e.target.value; chooseAudio(f); if (f) measureChosen(f); else vlen(''); }
       if (e.target.classList.contains('st-vcf')) {
-        const f = e.target.files[0], err = SV.checkCloneFile(f), fn = vq('.st-vcfn'); e.target.value = '';
-        if (!f) return;
-        if (err) { vocState.cloneFile = null; fn.textContent = `«${f.name}»: ${err}`; fn.classList.add('bad'); }
-        else { vocState.cloneFile = f; fn.textContent = `«${f.name}» · ${(f.size / 1048576).toFixed(1)} MB`; fn.classList.remove('bad'); if (vq('.st-vca')) vq('.st-vca').value = ''; }
-        vcheck();
+        const f = e.target.files[0]; e.target.value = ''; pickCloneFile(f); // V5.0: into the gallery (as it is, or as a WAV MiniMax takes), and chosen there
       }
     });
   }

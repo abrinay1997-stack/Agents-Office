@@ -129,3 +129,23 @@ test('un audio para clonar: MP3, WAV o M4A, hasta 20 MB', () => {
   assert.match(V.checkCloneFile({ name: 'voz.wav', type: 'audio/wav', size: 10 }), /corto/);
   assert.match(V.checkCloneFile(null), /Elige/);
 });
+
+test('clonar: lo que dice la duración (mínimo 10 s, ideal 1–5 min, más de 5 min se recorta a 5)', () => {
+  assert.equal(V.clock(75), '1:15'); assert.equal(V.clock(300), '5:00'); assert.equal(V.clock(9.9), '0:09');
+  assert.equal(V.cloneLength(8).ok, false); assert.equal(V.cloneLength(8).level, 'bad');
+  assert.equal(V.cloneLength(30).level, 'short'); assert.match(V.cloneLength(30).text, /de 1 a 5 minutos/);
+  assert.equal(V.cloneLength(250).level, 'good'); assert.match(V.cloneLength(250).text, /casi el máximo/);
+  assert.equal(V.cloneLength(420).level, 'cut'); assert.match(V.cloneLength(420).text, /primeros 5:00/);
+});
+
+test('clonar: mono, 24 kHz y un WAV de 16 bits que MiniMax acepta (5 min caben en 20 MB)', () => {
+  const l = new Float32Array([1, 0, -1, 0.5]), r = new Float32Array([0, 0, -1, 0.5]);
+  assert.deepEqual([...V.toMono([l, r], 4)], [0.5, 0, -1, 0.5]);
+  assert.equal(V.toMono([new Float32Array(48000 * 400)], 48000).length, 48000 * 300, 'más de 5 min: solo los primeros 5');
+  assert.equal(V.resample(new Float32Array(48000), 48000, 24000).length, 24000);
+  const wav = new DataView(V.encodeWav(new Float32Array([0, 1, -1]), 24000));
+  assert.equal(String.fromCharCode(...new Uint8Array(wav.buffer, 0, 4)), 'RIFF'); assert.equal(wav.getUint32(24, true), 24000); assert.equal(wav.getUint16(22, true), 1);
+  assert.equal(wav.byteLength, 44 + 3 * 2); assert.equal(wav.getInt16(46, true), 32767); assert.equal(wav.getInt16(48, true), -32768);
+  assert.ok(44 + V.CLONE.maxS * V.CLONE.rate * 2 < V.CLONE.maxBytes, '5 min a 24 kHz mono caben');
+  assert.equal(V.fitsAsIs({ name: 'a.mp3', size: 5e6 }, 120), true); assert.equal(V.fitsAsIs({ name: 'a.ogg', size: 1e6 }, 60), false); assert.equal(V.fitsAsIs({ name: 'a.wav', size: 3e7 }, 60), false); assert.equal(V.fitsAsIs({ name: 'a.mp3', size: 1e6 }, 400), false);
+});
