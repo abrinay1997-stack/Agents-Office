@@ -9,6 +9,8 @@
 //   openai     — OpenAI gpt-image-1                                                 OPENAI_API_KEY
 //   meta       — Meta Muse Image (muse-image-1.0): generates, edits, searches real references itself   META_API_KEY (or MODEL_API_KEY)
 //   fal        — fal.ai: Flux, Seedream, Nano Banana, Ideogram, Kling, Seedance, Hailuo, Veo   FAL_KEY
+//   minimax    — MiniMax direct (V4.10): image-01, video MiniMax-H3/H3-Max, VOICE (speech-2.8/2.6) and MUSIC (music-3.0), one key   MINIMAX_API_KEY
+//                (minimax.mjs is the client; the owner's cloned and designed voices live in minimax-voices.mjs)
 //   prueba     — a free local test card: the whole pipeline without spending anything
 // MODELS. CATALOG below: each model says its engine, the media it takes (start/end frame, references, a video) and its
 // settings. The Higgsfield entries and their request bodies follow open-higgsfield (wide-trace/open-higgsfield,
@@ -22,6 +24,7 @@
 // checked BEFORE a request is sent with the model's estimated price, counting what is still being generated.
 import fs from 'node:fs';
 import path from 'node:path';
+import * as mmx from './minimax.mjs';
 
 export const ENGINES = {
   higgsfield: { name: 'Higgsfield', env: 'HF_KEY', site: 'cloud.higgsfield.ai', how: 'setx HF_KEY "tu-id:tu-secreto"' },
@@ -30,6 +33,7 @@ export const ENGINES = {
   openai: { name: 'OpenAI', env: 'OPENAI_API_KEY', site: 'platform.openai.com' },
   meta: { name: 'Meta (Muse Image)', env: 'META_API_KEY', site: 'dev.meta.ai', how: 'setx META_API_KEY "tu-key-de-meta"' }, // V4.8: also MODEL_API_KEY, the key the office already uses for Muse Spark
   fal: { name: 'fal.ai', env: 'FAL_KEY', site: 'fal.ai' },
+  minimax: { name: 'MiniMax', env: 'MINIMAX_API_KEY', site: 'platform.minimax.io', how: 'setx MINIMAX_API_KEY "tu-key"' }, // V4.10: image, video, voice and music on one key
   prueba: { name: 'Prueba (gratis)', env: null },
 };
 export const NAMES = Object.fromEntries(Object.entries(ENGINES).map(([k, v]) => [k, v.name]));
@@ -50,6 +54,7 @@ const META_BASE = () => (process.env.AO_META_BASE || 'https://api.meta.ai/v1').r
 const E = (values, def) => ({ type: 'enum', values, default: def ?? values[0] });
 const R = (min, max, def, step) => ({ type: 'range', min, max, default: def, ...(step ? { step } : {}) });
 const B = def => ({ type: 'boolean', default: def });
+const T = (def, max, placeholder) => ({ type: 'text', default: def, ...(max ? { max } : {}), ...(placeholder ? { placeholder } : {}) }); // V4.10: free text (a voiceId); the page shows a field with suggestions
 const IMG_ASPECT = ['1:1', '4:5', '3:4', '9:16', '16:9', '4:3', '3:2', '2:3'];
 const HF_IMG_ASPECT = ['auto', '1:1', '4:3', '3:4', '16:9', '9:16'];
 const SOUL_ASPECT = ['9:16', '16:9', '4:3', '3:4', '1:1', '2:3', '3:2'];
@@ -239,6 +244,35 @@ const HF_VIDEOS = [
   { ...hfVideo('dop', 'DoP · Anima una foto', { start: 1 }, { image: 'higgsfield-ai/dop/lite' }, 0.05, 'Movimientos de cámara sobre una foto tuya.' + OLD), needs: ['start'], legacy: true },
 ];
 
+/* ---------- MiniMax direct (V4.10, 30 Sep 2026): one key, MINIMAX_API_KEY — image, video, voice and music ----------
+   Read in MiniMax's own documentation (docs/minimax/api-verificada.md, with each URL). The ids are «mmx-*» and the names say
+   «directo»: MiniMax's video also reaches the Estudio through Higgsfield (minimax-hailuo-2.3, minimax-h3) and fal (hailuo-02-fal).
+   Prices are MiniMax's pay-as-you-go list on that date; the ones it does not publish say «precio aproximado». A voice is charged by
+   the character (perChar; cost is what 1,000 characters cost); a video by the second, its rate by resolution (costBy). */
+const MMX_VOICE_SET = () => ({
+  voiceId: T('Spanish_Narrator', 256, 'Spanish_Narrator o una voz tuya'),
+  emotion: E(['', 'happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'calm', 'fluent', 'whisper'], ''), // '' = the voice's own
+  speed: R(0.5, 2, 1, 0.05), vol: R(0.1, 10, 1, 0.1), pitch: R(-12, 12, 0),
+  format: E(['mp3', 'wav', 'flac'], 'mp3'),
+  languageBoost: E(['auto', 'Spanish', 'English', 'Portuguese', 'French', 'Italian', 'German'], 'auto'),
+});
+const mmxVoice = (id, gid, name, perMillion, note) => ({ id, engine: 'minimax', kind: 'audio', gid, name, cost: +(perMillion / 1000).toFixed(3), perChar: perMillion / 1e6, maxPrompt: 9999, note, roles: {}, settings: MMX_VOICE_SET() });
+const MMX_VIDEO_RATIO = ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+const MMX_MUSIC_SET = () => ({ instrumental: B(false), style: T('', 2000, 'estilo: pop latino, alegre, voz femenina'), format: E(['mp3', 'wav'], 'mp3') });
+const MMX = [
+  { id: 'mmx-image-01', engine: 'minimax', kind: 'image', gid: 'image-01', name: 'MiniMax Image-01 (directo)', cost: 0.0035, maxPrompt: 1500, note: 'Imagen de MiniMax, baratísima. Con UNA foto de una cara (JPG o PNG) pone a esa persona en otra escena.', roles: { reference: 1 }, settings: { aspectRatio: E(mmx.IMAGE_RATIOS, '1:1'), promptOptimizer: B(false) } },
+  { id: 'mmx-h3', engine: 'minimax', kind: 'video', gid: 'MiniMax-H3', name: 'MiniMax H3 (directo)', cost: 0.08, costBy: { resolution: { '768P': 0.08, '2K': 0.13 } }, per: 's', note: 'El video de MiniMax: primer y último fotograma, o hasta 9 imágenes y 3 videos de referencia (no las dos cosas a la vez). 768P o 2K, de 4 a 15 s.', roles: { start: 1, end: 1, reference: 9, video: 3 },
+    settings: { aspectRatio: E(MMX_VIDEO_RATIO, '16:9'), resolution: E(['768P', '2K'], '768P'), duration: R(4, 15, 5), promptExpansion: E(['', 'disabled', 'balanced', 'quality'], '') } },
+  { id: 'mmx-h3-max', engine: 'minimax', kind: 'video', gid: 'MiniMax-H3-Max', name: 'MiniMax H3-Max (directo)', cost: 0.05, costBy: { resolution: { '480P': 0.05, '768P': 0.08 } }, per: 's', note: 'La variante Max de H3: 480P o 768P, de 5 a 15 s. A 768P, precio aproximado.', roles: { start: 1, end: 1, reference: 9, video: 3 },
+    settings: { aspectRatio: E(MMX_VIDEO_RATIO, '16:9'), resolution: E(['768P', '480P'], '768P'), duration: R(5, 15, 5), promptExpansion: E(['', 'disabled', 'balanced', 'quality'], '') } },
+  mmxVoice('mmx-voz-2.8-hd', 'speech-2.8-hd', 'MiniMax Voz 2.8 HD (directo)', 100, 'Locución de estudio: la voz más natural de MiniMax. Pon el texto que se dirá. US$100 por millón de caracteres.'),
+  mmxVoice('mmx-voz-2.8-turbo', 'speech-2.8-turbo', 'MiniMax Voz 2.8 Turbo (directo)', 60, 'Locución rápida y más barata. US$60 por millón de caracteres.'),
+  mmxVoice('mmx-voz-2.6-hd', 'speech-2.6-hd', 'MiniMax Voz 2.6 HD (directo)', 100, 'La generación anterior, HD. Precio aproximado.'),
+  mmxVoice('mmx-voz-2.6-turbo', 'speech-2.6-turbo', 'MiniMax Voz 2.6 Turbo (directo)', 60, 'La generación anterior, Turbo. Precio aproximado.'),
+  { id: 'mmx-musica-3', engine: 'minimax', kind: 'music', gid: 'music-3.0', name: 'MiniMax Música 3.0 (directo)', cost: 0.15, maxPrompt: 3500, note: 'Canciones con tu letra ([Verse] [Chorus]…) o piezas instrumentales, hasta 5 min. Solo cuentas de pago anteriores al 20 ago 2026. Precio aproximado.', roles: {}, settings: MMX_MUSIC_SET() },
+  { id: 'mmx-musica-3-gratis', engine: 'minimax', kind: 'music', gid: 'music-3.0-free', name: 'MiniMax Música 3.0 gratis (directo)', cost: 0, maxPrompt: 3500, note: 'La misma música, para cualquier cuenta y sin costo, pero lenta: 3 pedidos por minuto.', roles: {}, settings: MMX_MUSIC_SET() },
+];
+
 const CATALOG = [
   // ---- images
   ...HF_IMAGES,
@@ -275,12 +309,17 @@ const CATALOG = [
   { id: 'veo-3-fast-fal', engine: 'fal', kind: 'video', name: 'Veo 3 Fast (fal)', cost: 0.4, per: 's', seconds: 8, note: 'Google Veo con voz y sonido. Caro: 8 s ≈ US$3.', roles: { start: 1 }, settings: { aspectRatio: E(['16:9', '9:16'], '16:9'), generateAudio: B(true) },
     fal: j => j.m.start[0] ? { path: 'fal-ai/veo3/fast/image-to-video', body: { prompt: j.prompt, image_url: j.m.start[0], duration: '8s', generate_audio: j.s.generateAudio } } : { path: 'fal-ai/veo3/fast', body: { prompt: j.prompt, aspect_ratio: j.s.aspectRatio, duration: '8s', generate_audio: j.s.generateAudio } } },
   { id: 'prueba-video', engine: 'prueba', kind: 'video', name: 'Prueba de video (gratis)', cost: 0, note: 'Una tarjeta en lugar del video: prueba el flujo (Animar, fotogramas) sin gastar.', roles: { start: 1, end: 1, reference: 8, video: 1 }, settings: { aspectRatio: E(VID_ASPECT, '16:9'), duration: R(3, 15, 5) } },
+  // ---- V4.10: MiniMax direct — image, video, voice (kind 'audio') and music (kind 'music')
+  ...MMX,
 ];
 // V4.9 (30 Sep 2026): the models that EDIT an image (the image goes in as a reference, an instruction says what changes), best first —
 // «Editar» in the Estudio and Dimitri's edits use them; the original is never touched, the result is a new version beside it
 const EDIT_MODELS = ['nano-banana-2', 'nano-banana-pro', 'nano-banana', 'muse-image', 'gpt-image-1', 'qwen-image-3', 'grok-imagine-2', 'flux-kontext', 'seedream-4', 'nano-banana-fal'];
 for (const x of CATALOG) if (EDIT_MODELS.includes(x.id)) x.edit = true;
-const PREFER = { edit: EDIT_MODELS, image: ['nano-banana-2', 'nano-banana', 'muse-image', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image'], video: ['kling-3-std', 'veo-3.1-fast', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal'] };
+const PREFER = { edit: EDIT_MODELS, image: ['nano-banana-2', 'nano-banana', 'muse-image', 'soul-2', 'nano-banana-fal', 'gpt-image-1', 'seedream-4', 'z-image-turbo', 'flux-schnell', 'grok-image', 'mmx-image-01'], video: ['kling-3-std', 'veo-3.1-fast', 'kling-3-turbo', 'seedance-2', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal', 'mmx-h3'],
+  audio: ['mmx-voz-2.8-turbo', 'mmx-voz-2.8-hd', 'mmx-voz-2.6-turbo', 'mmx-voz-2.6-hd'], music: ['mmx-musica-3', 'mmx-musica-3-gratis'] }; // V4.10: voice and music
+/** V4.10: what the Estudio makes — an image, a video, a voice-over (audio) or a piece of music. */
+export const KINDS = ['image', 'video', 'audio', 'music'];
 
 /* V4.4 (27 Sep 2026): what the model picker sorts and filters by — who makes it, its quality tier (1 básica · 2 buena ·
    3 alta · 4 la mejor), how fast it answers, and what it is good for. A model not listed here gets its engine as maker and
@@ -352,6 +391,15 @@ const INFO = {
   'minimax-hailuo-2.3': ['MiniMax', 3, 'normal', ['movimiento natural', '6 o 10 s']],
   'minimax-h3': ['MiniMax', 4, 'lento', ['2K', 'referencias']],
   'hailuo-02-fal': ['MiniMax', 2, 'normal', ['animar una foto']],
+  'mmx-image-01': ['MiniMax', 2, 'rápido', ['barato', 'lotes', 'la misma cara en otra escena']],
+  'mmx-h3': ['MiniMax', 4, 'lento', ['2K', 'referencias', 'primer y último fotograma', 'hasta 15 s']],
+  'mmx-h3-max': ['MiniMax', 3, 'lento', ['referencias', 'primer y último fotograma', 'hasta 15 s']],
+  'mmx-voz-2.8-hd': ['MiniMax', 4, 'rápido', ['locución', 'anuncios', 'voces clonadas', 'emociones']],
+  'mmx-voz-2.8-turbo': ['MiniMax', 3, 'muy rápido', ['locución', 'lotes', 'barato']],
+  'mmx-voz-2.6-hd': ['MiniMax', 3, 'rápido', ['locución']],
+  'mmx-voz-2.6-turbo': ['MiniMax', 2, 'muy rápido', ['locución', 'barato']],
+  'mmx-musica-3': ['MiniMax', 4, 'lento', ['canciones con letra', 'jingles', 'música de fondo']],
+  'mmx-musica-3-gratis': ['MiniMax', 3, 'lento', ['canciones con letra', 'música de fondo', 'gratis']],
   'ltx-2.5-pro': ['Lightricks', 3, 'normal', ['movimientos de cámara', 'con audio']],
   'ltx-2.5-fast': ['Lightricks', 2, 'rápido', ['hasta 4K', 'barato']],
   'pixverse-6': ['PixVerse', 3, 'rápido', ['redes', 'con audio']],
@@ -386,7 +434,7 @@ export function setHooks(h = {}) { hooks = { ...hooks, ...h }; }
 export const model = id => MODELS.find(x => x.id === id) || null;
 /** The catalog as the page and the agents see it (no functions), each model marked on/off by its engine's key. */
 export function models() {
-  return MODELS.map(x => ({ id: x.id, engine: x.engine, engineName: ENGINES[x.engine].name, kind: x.kind, name: x.name, note: x.note || '', cost: x.cost, per: x.per || 'item', seconds: x.seconds || null, roles: x.roles || {}, needs: x.needs || [], settings: x.settings || {}, on: engineOn(x.engine), ...(x.legacy ? { legacy: true } : {}), ...(x.edit ? { edit: true } : {}), ...infoOf(x) }));
+  return MODELS.map(x => ({ id: x.id, engine: x.engine, engineName: ENGINES[x.engine].name, kind: x.kind, name: x.name, note: x.note || '', cost: x.cost, per: x.per || 'item', seconds: x.seconds || null, roles: x.roles || {}, needs: x.needs || [], settings: x.settings || {}, on: engineOn(x.engine), ...(x.legacy ? { legacy: true } : {}), ...(x.edit ? { edit: true } : {}), ...(x.perChar ? { perChar: x.perChar } : {}), ...(x.costBy ? { costBy: x.costBy } : {}), ...(x.maxPrompt ? { maxPrompt: x.maxPrompt } : {}), ...infoOf(x) }));
 }
 /** The models that can edit an image right now (their engine has its key), best first. */
 export function editModels() {
@@ -403,7 +451,10 @@ export function defaultModel(kind = 'image', engine) {
   if (m0 && m0.kind === kind && engineOn(m0.engine) && (!engine || m0.engine === engine)) return m0.id;
   const on = MODELS.filter(x => x.kind === kind && engineOn(x.engine) && x.engine !== 'prueba' && (!engine || x.engine === engine));
   const pick = PREFER[kind].map(model).find(x => x && on.includes(x)) || on[0];
-  return pick ? pick.id : engine && engine !== 'prueba' ? (MODELS.find(x => x.kind === kind && x.engine === engine) || {}).id || null : kind === 'video' ? 'prueba-video' : 'prueba';
+  if (pick) return pick.id;
+  if (engine && engine !== 'prueba') return (MODELS.find(x => x.kind === kind && x.engine === engine) || {}).id || null;
+  if (kind === 'audio' || kind === 'music') { const first = (PREFER[kind] || []).map(model).find(Boolean) || MODELS.find(x => x.kind === kind); return first ? first.id : null; } // V4.10: no free test card for sound
+  return kind === 'video' ? 'prueba-video' : 'prueba';
 }
 export const defaultProvider = () => { const m = model(defaultModel('image')); return m ? m.engine : 'prueba'; };
 /** Settings as the model wants them: defaults filled in, enums checked, ranges clamped. */
@@ -414,32 +465,38 @@ function settingsFor(m, given = {}, legacy = {}) {
     if (f.type === 'enum') { v = v == null ? f.default : String(v); if (!f.values.includes(v)) v = f.default; }
     else if (f.type === 'range') { v = Number(v); if (!Number.isFinite(v)) v = f.default; v = Math.min(f.max, Math.max(f.min, v)); if (!f.step || f.step >= 1) v = Math.round(v); }
     else if (f.type === 'boolean') v = typeof v === 'boolean' ? v : v === 'true' ? true : v === 'false' ? false : f.default;
+    else if (f.type === 'text') { v = v == null ? '' : String(v).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, f.max || 2000); if (!v) v = f.default; } // V4.10: a voiceId, a music style
     s[k] = v;
   }
   return s;
 }
-function unitCost(m, s) { return m.per === 's' ? +(m.cost * (m.seconds || Number(s.duration) || 5)).toFixed(3) : m.cost; }
-export function estimate({ model: id, n = 1, settings = {} } = {}) { const m = model(id); if (!m) return 0; return +(unitCost(m, settingsFor(m, settings)) * Math.max(1, +n || 1) * (m.hf && m.settings.batchSize ? Number(settingsFor(m, settings).batchSize) : 1)).toFixed(3); }
+// V4.10: a rate by setting (MiniMax H3: by resolution) and a voice by the character — `prompt` is the text spoken (1,000 characters when unknown)
+function unitCost(m, s, prompt) {
+  if (m.perChar) return Math.max(0.001, +(m.perChar * (prompt == null ? 1000 : String(prompt).length)).toFixed(4));
+  let rate = m.cost; for (const [k, map] of Object.entries(m.costBy || {})) if (map[s[k]] != null) rate = map[s[k]];
+  return m.per === 's' ? +(rate * (m.seconds || Number(s.duration) || 5)).toFixed(3) : rate;
+}
+export function estimate({ model: id, n = 1, settings = {}, prompt } = {}) { const m = model(id); if (!m) return 0; return +(unitCost(m, settingsFor(m, settings), prompt) * Math.max(1, +n || 1) * (m.hf && m.settings.batchSize ? Number(settingsFor(m, settings).batchSize) : 1)).toFixed(4); }
 
 /* ---------- budget: a count per day and the money spent a day and a month, kept in data/ (a video weighs 5 images) ---------- */
 // V4.5: the owner's day, not UTC's (in Panamá the «day» used to turn at 7 in the evening)
 const localDay = (d = new Date()) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); };
 const today = () => localDay();
-const weightOf = (kind, n) => (kind === 'video' ? 5 : 1) * n;
+const weightOf = (kind, n) => (kind === 'video' ? 5 : kind === 'music' ? 3 : 1) * n; // V4.10: a piece of music weighs 3, a voice-over 1
 function usage() {
   let u = null; try { u = JSON.parse(fs.readFileSync(usageFile, 'utf8')); } catch {}
   const day = today(), month = day.slice(0, 7);
   const monthCost = u && (u.month || String(u.day || '').slice(0, 7)) === month ? +(u.monthCost ?? u.cost ?? 0) : 0; // a file from before V4.5 has no month: today's spend starts it
-  return u && u.day === day ? { ...u, month, monthCost } : { day, images: 0, videos: 0, cost: 0, month, monthCost };
+  return u && u.day === day ? { audios: 0, music: 0, ...u, month, monthCost } : { day, images: 0, videos: 0, audios: 0, music: 0, cost: 0, month, monthCost }; // V4.10: audios = every sound file (voice and music), music = the music among them
 }
-function spend(kind, n, cost) { const u = usage(); u[kind] += n; u.cost = +(u.cost + cost).toFixed(3); u.monthCost = +(u.monthCost + cost).toFixed(3); fs.mkdirSync(path.dirname(usageFile), { recursive: true }); fs.writeFileSync(usageFile, JSON.stringify(u)); return u; }
+function spend(kind, n, cost) { const u = usage(); if (kind === 'music') { u.audios += n; u.music += n; } else u[kind] += n; u.cost = +(u.cost + cost).toFixed(3); u.monthCost = +(u.monthCost + cost).toFixed(3); fs.mkdirSync(path.dirname(usageFile), { recursive: true }); fs.writeFileSync(usageFile, JSON.stringify(u)); return u; }
 const cap = v => (Number.isFinite(+v) && +v > 0 ? +v : 0); // 0, empty or nonsense = no cap
 /** What is left today and this month. left / costLeftDay / costLeftMonth are null when that cap is off. */
 export function budget() {
   const u = usage(), active = JOBS.filter(j => (j.state === 'queued' || j.state === 'running') && j.engine !== 'prueba');
   const reserved = active.reduce((s, j) => s + Math.max(0, j.weight - weightOf(j.kind, j.items.length)), 0);
   const costReserved = +active.reduce((s, j) => s + (+j.unit || 0) * (+j.n || 1), 0).toFixed(3); // a running job is paid when it ends: until then its estimate is held
-  const limit = cap(cfg.dailyLimit), used = u.images + u.videos * 5, dailyBudget = cap(cfg.dailyBudget), monthlyBudget = cap(cfg.monthlyBudget);
+  const limit = cap(cfg.dailyLimit), used = u.images + u.videos * 5 + u.audios + u.music * 2, dailyBudget = cap(cfg.dailyBudget), monthlyBudget = cap(cfg.monthlyBudget);
   const left$ = (b, spent) => (b ? +Math.max(0, b - spent - costReserved).toFixed(3) : null);
   return { ...u, limit, used, reserved, left: limit ? Math.max(0, limit - used - reserved) : null, maxPerRequest: cfg.maxPerRequest,
     dailyBudget, monthlyBudget, costReserved, costLeftDay: left$(dailyBudget, u.cost), costLeftMonth: left$(monthlyBudget, u.monthCost) };
@@ -467,6 +524,7 @@ function taken(folder, name, ext) {
   const bin = path.join(root, '.papelera'); if (!fs.existsSync(bin)) return false;
   const tail = '-' + name + '.'; return fs.readdirSync(bin).some(f => f.includes(tail));
 }
+const AUDIO_EXT = ['mp3', 'wav', 'flac', 'm4a', 'ogg']; // V4.10: MiniMax answers flac too; a voice to clone may come as m4a
 function store(buf, ext, meta) {
   const d = new Date(), sub = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const folder = path.join(root, sub); fs.mkdirSync(folder, { recursive: true });
@@ -477,7 +535,7 @@ function store(buf, ext, meta) {
   for (let n = 2; taken(folder, name, ext); n++) name = `${base}-${n}`;
   fs.writeFileSync(path.join(folder, name + '.' + ext), buf);
   const rel = `${sub}/${name}.${ext}`, wh = dims(buf, ext);
-  const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : ext === 'mp3' || ext === 'wav' ? 'audio' : 'image', ext, at: Date.now(), ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
+  const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : AUDIO_EXT.includes(ext) ? 'audio' : 'image', ext, at: Date.now(), ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
   fs.writeFileSync(path.join(folder, name + '.json'), JSON.stringify(item, null, 2));
   return item;
 }
@@ -531,7 +589,7 @@ export function list({ limit = 600 } = {}) {
   }
   return out.sort((a, b) => b.at - a.at).slice(0, limit);
 }
-const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav)$/i; // V4.8: audio too, for Muse Spark to transcribe
+const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav|flac|m4a|ogg)$/i; // V4.8: audio too, for Muse Spark to transcribe; V4.10: flac, m4a, ogg
 /** A path inside the studio, or null (never outside it: the id comes from the request). */
 export function resolve(id) {
   const rel = String(id || '').replace(/\\/g, '/');
@@ -592,15 +650,15 @@ export function purge({ bin, all } = {}) {
   return n;
 }
 /* uploads: the owner's own photos and videos, to use as a reference or a first frame (never svg: it could carry script) */
-const UPLOAD = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav' }; // V4.8: mp3/wav, for transcribing
-const MAGIC = { png: b => b.length > 8 && b.readUInt32BE(0) === 0x89504E47, jpg: b => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF, webp: b => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP', mp4: b => b.toString('ascii', 4, 8) === 'ftyp', webm: b => b.length > 4 && b.readUInt32BE(0) === 0x1A45DFA3 , mp3: b => b.length > 3 && (b.toString('ascii', 0, 3) === 'ID3' || (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0)), wav: b => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WAVE' };
+const UPLOAD = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/flac': 'flac', 'audio/x-flac': 'flac', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/m4a': 'm4a' }; // V4.8: mp3/wav, for transcribing; V4.10: flac, m4a (a voice to clone)
+const MAGIC = { png: b => b.length > 8 && b.readUInt32BE(0) === 0x89504E47, jpg: b => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF, webp: b => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP', mp4: b => b.toString('ascii', 4, 8) === 'ftyp', webm: b => b.length > 4 && b.readUInt32BE(0) === 0x1A45DFA3 , mp3: b => b.length > 3 && (b.toString('ascii', 0, 3) === 'ID3' || (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0)), wav: b => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WAVE', flac: b => b.length > 4 && b.toString('ascii', 0, 4) === 'fLaC', m4a: b => b.length > 8 && b.toString('ascii', 4, 8) === 'ftyp' };
 export function upload({ name, data, folder } = {}) {
   const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(String(data || ''));
   if (!m) throw new Error('el archivo no llegó bien');
-  const ext = UPLOAD[m[1].toLowerCase()]; if (!ext) throw new Error('solo PNG, JPG, WEBP, MP4, WEBM, MP3 o WAV');
+  const ext = UPLOAD[m[1].toLowerCase()]; if (!ext) throw new Error('solo PNG, JPG, WEBP, MP4, WEBM, MP3, WAV, FLAC o M4A');
   const buf = Buffer.from(m[2], 'base64');
   if (!MAGIC[ext](buf)) throw new Error('el archivo no es lo que dice ser');
-  const audio = ext === 'mp3' || ext === 'wav', vid = ext === 'mp4' || ext === 'webm';
+  const audio = AUDIO_EXT.includes(ext), vid = ext === 'mp4' || ext === 'webm';
   if (buf.length > (vid || audio ? 25 : 12) * 1024 * 1024) throw new Error(vid ? 'el video pasa de 25 MB' : audio ? 'el audio pasa de 25 MB' : 'la imagen pasa de 12 MB');
   const title = String(name || 'subida').replace(/\.[^.]+$/, '').slice(0, 80) || 'subida';
   return store(buf, ext, { prompt: title, provider: 'subida', model: '', by: 'you', upload: true, agent: null, task: null, ...(folder && folderOf(folder) ? { folder } : {}) }); // V4.6: into the folder the owner is looking at
@@ -659,7 +717,7 @@ const SIZE = { '1:1': [1024, 1024], '4:5': [1024, 1280], '3:4': [1024, 1365], '9
 // the media a job uses (gallery ids) → what each engine takes: a data URI (fal), inline base64 (Gemini), a Blob (OpenAI), a public URL (Higgsfield)
 function inputFiles(job) {
   const out = { start: [], end: [], reference: [], video: [], audio: [] };
-  for (const role of Object.keys(out)) for (const id of (job.media?.[role] || [])) { const p = resolve(id); if (!p) throw new Error(`no encuentro el archivo «${id}» en el Estudio`); const ext = p.split('.').pop().toLowerCase(); out[role].push({ id, p, ext, mime: { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm' }[ext] }); }
+  for (const role of Object.keys(out)) for (const id of (job.media?.[role] || [])) { const p = resolve(id); if (!p) throw new Error(`no encuentro el archivo «${id}» en el Estudio`); const ext = p.split('.').pop().toLowerCase(); out[role].push({ id, p, ext, mime: { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav', flac: 'audio/flac', m4a: 'audio/mp4' }[ext] }); }
   return out;
 }
 const asDataUri = f => `data:${f.mime};base64,${fs.readFileSync(f.p).toString('base64')}`;
@@ -819,6 +877,51 @@ const RUN = {
       job.note = 'descargando'; const r = await fromUrl(url); ctx.add(r.buf, extOf(r.mime, url, 'mp4')); rq.done = true; ctx.save();
     }
   },
+  async minimax(m, job, ctx) { // V4.10: MiniMax direct (minimax.mjs). Image, voice and music answer at once; a video is a task polled by its id
+    const s = job.s;
+    if (m.kind === 'image') { // image-01: the reference is ONE face (subject_reference), JPG or PNG
+      const [ref] = inputFiles(job).reference;
+      if (ref && !['png', 'jpg', 'jpeg'].includes(ref.ext)) throw final(new Error('MiniMax Image-01 toma la cara de referencia en JPG o PNG (no WEBP): sube la foto en uno de esos formatos'));
+      const bufs = await mmx.image({ prompt: job.prompt, model: m.gid, aspectRatio: s.aspectRatio, n: job.n, promptOptimizer: !!s.promptOptimizer, subjectRef: ref ? asDataUri(ref) : null });
+      for (const b of bufs) ctx.add(b, MAGIC.png(b) ? 'png' : MAGIC.webp(b) ? 'webp' : 'jpg');
+      return;
+    }
+    if (m.kind === 'audio' || m.kind === 'music') { // the audio comes back in HEX, already decoded by the client; one call per variant
+      for (let i = 0; i < job.n; i++) {
+        if (job.cancel) throw new Error('Cancelado por ti.');
+        job.note = m.kind === 'music' ? 'componiendo' : 'grabando la voz'; ctx.save();
+        const r = m.kind === 'audio'
+          ? await mmx.tts({ text: job.prompt, model: m.gid, voiceId: s.voiceId, speed: s.speed, vol: s.vol, pitch: s.pitch, emotion: s.emotion || null, languageBoost: s.languageBoost, format: s.format })
+          : await mmx.music({ model: m.gid, instrumental: !!s.instrumental, format: s.format, ...(s.instrumental ? { prompt: [job.prompt, s.style].filter(Boolean).join('. ') } : { lyrics: job.prompt, prompt: s.style || '' }) });
+        if (!r.buf.length) throw new Error(`${m.name} devolvió un audio vacío`);
+        ctx.add(r.buf, AUDIO_EXT.includes(r.ext) ? r.ext : 'mp3', { ...(m.kind === 'music' ? { wanted: 'music' } : { voiceId: s.voiceId }), ...(r.seconds ? { seconds: r.seconds } : {}) });
+      }
+      return;
+    }
+    // video: one task per variant; its id is kept in the job (job.remote) so a restart of the office picks the poll up again
+    if (!job.remote?.length) {
+      const f = inputFiles(job), content = mmx.videoContent({ prompt: job.prompt, start: f.start[0] ? asDataUri(f.start[0]) : null, end: f.end[0] ? asDataUri(f.end[0]) : null, references: f.reference.map(asDataUri), videos: f.video.map(asDataUri) });
+      job.remote = [];
+      for (let i = 0; i < job.n; i++) {
+        job.note = 'enviando a MiniMax';
+        const id = await mmx.createVideo({ model: m.gid, content, resolution: s.resolution, duration: s.duration, ratio: s.aspectRatio, promptExpansion: s.promptExpansion || null });
+        job.remote.push({ id }); ctx.save();
+      }
+    }
+    for (const rq of job.remote) {
+      if (rq.done) continue;
+      const q = await pollUntil(job, async () => {
+        const r = await mmx.queryVideo(rq.id);
+        job.note = r.state === 'queued' ? 'en cola' : r.state === 'running' ? 'generando' : r.state === 'succeeded' ? 'descargando' : r.state;
+        if (r.state === 'failed') throw final(new Error(`${m.name}: ${r.error || 'el video falló en MiniMax'}`));
+        if (r.state === 'cancelled') throw final(new Error(`${m.name}: la tarea se canceló en MiniMax`));
+        return r.state === 'succeeded' ? r : null;
+      }, { every: 6000, deadline: 30 * 60e3 });
+      if (!q.url) throw final(new Error(`${m.name} terminó sin enlace al video`));
+      const r = await fromUrl(q.url); // the link expires: the file is saved at once
+      ctx.add(r.buf, 'mp4'); rq.done = true; ctx.save();
+    }
+  },
   async higgsfield(m, job, ctx) { // submit → request_id → GET /requests/{id}/status until completed (images[].url · video.url)
     const auth = { authorization: `Key ${secret('higgsfield')}`, 'content-type': 'application/json' };
     if (!job.remote?.length) {
@@ -890,7 +993,7 @@ function trail(req) {
 }
 /** Queue a generation. Checks everything up front (model, key, prompt, media, budget) so a bad request fails at once. */
 export function submit(req = {}) {
-  const kind = req.kind === 'video' ? 'video' : 'image';
+  const kind = KINDS.includes(req.kind) ? req.kind : 'image'; // V4.10: 'audio' (a voice-over) and 'music' too
   let id = req.model;
   if (!id && req.provider) id = defaultModel(kind, req.provider);
   if (!id) id = defaultModel(kind);
@@ -898,23 +1001,25 @@ export function submit(req = {}) {
   if (!m) throw new Error(`no conozco el modelo «${id}»`);
   if (!engineOn(m.engine)) { const e = ENGINES[m.engine]; throw new Error(`${e.name} no tiene key: guárdala en Windows con  ${e.how || `setx ${e.env} "tu-key"`}  y reinicia la oficina`); }
   const prompt = String(req.prompt || '').trim(); if (!prompt && !(m.needs || []).includes('video')) throw new Error('falta el prompt');
-  if (prompt.length > 4000) throw new Error('el prompt es muy largo (máx. 4000)');
+  const maxPrompt = m.maxPrompt || 4000; // V4.10: a voice-over takes up to 9,999 characters, MiniMax's image 1,500
+  if (prompt.length > maxPrompt) throw new Error(`${m.kind === 'audio' ? 'el texto' : 'el prompt'} es muy largo (máx. ${maxPrompt})`);
   const n = Math.max(1, Math.min(m.kind === 'video' ? 4 : cfg.maxPerRequest, +req.n || 1));
   const media = {};
-  for (const [role, max] of Object.entries(m.roles || {})) { const ids = (req.media?.[role] || []).filter(x => typeof x === 'string').slice(0, max); for (const x of ids) { if (!resolve(x)) throw new Error(`no encuentro «${x}» en el Estudio`); if (/\.(mp3|wav)$/i.test(x)) throw new Error('un audio no sirve de referencia ni de fotograma: los modelos del Estudio toman imágenes y videos'); if (m.engine !== 'prueba' && /\.svg$/i.test(x)) throw new Error('una tarjeta de prueba no sirve de referencia para un motor real: usa una imagen generada o subida'); if (role === 'video' ? !/\.(mp4|webm)$/i.test(x) : /\.(mp4|webm)$/i.test(x)) throw new Error(role === 'video' ? 'ahí va un video' : 'ahí va una imagen, no un video'); } if (ids.length) media[role] = ids; }
+  for (const [role, max] of Object.entries(m.roles || {})) { const ids = (req.media?.[role] || []).filter(x => typeof x === 'string').slice(0, max); for (const x of ids) { if (!resolve(x)) throw new Error(`no encuentro «${x}» en el Estudio`); if (/\.(mp3|wav|flac|m4a|ogg)$/i.test(x)) throw new Error('un audio no sirve de referencia ni de fotograma: los modelos del Estudio toman imágenes y videos'); if (m.engine !== 'prueba' && /\.svg$/i.test(x)) throw new Error('una tarjeta de prueba no sirve de referencia para un motor real: usa una imagen generada o subida'); if (role === 'video' ? !/\.(mp4|webm)$/i.test(x) : /\.(mp4|webm)$/i.test(x)) throw new Error(role === 'video' ? 'ahí va un video' : 'ahí va una imagen, no un video'); } if (ids.length) media[role] = ids; }
   for (const r of m.needs || []) if (!media[r]?.length) throw new Error(`${m.name} necesita ${{ start: 'una imagen inicial', video: 'un video de origen', reference: 'imágenes de referencia' }[r] || r}`);
   if (m.routes) hfRoute(m, Object.fromEntries(Object.entries(media).map(([r, l]) => [r, l.length]))); // a combination its routes do not take is said now, before anything is spent
   const s = settingsFor(m, req.settings || {}, { ratio: req.ratio, seconds: req.seconds });
+  if (m.kind === 'music' && s.instrumental && prompt.length > 2000) throw new Error('la descripción de una pieza instrumental es muy larga (máx. 2000)'); // MiniMax: prompt 1–2000, lyrics 1–3500
   const per = m.hf && s.batchSize ? Number(s.batchSize) : 1, weight = weightOf(m.kind, n * per);
   const b = budget();
   if (m.engine !== 'prueba') { // the free test engine never counts
     if (b.left != null && weight > b.left) throw new Error(`tope diario alcanzado: quedan ${b.left} de ${b.limit} (cámbialo en Ajustes → Estudio)`);
-    const est = +(unitCost(m, s) * per * n).toFixed(3), usd = v => 'US$' + (+v).toFixed(2);
+    const est = +(unitCost(m, s, prompt) * per * n).toFixed(3), usd = v => 'US$' + (+v).toFixed(2);
     if (b.costLeftDay != null && est > b.costLeftDay + 1e-9) throw new Error(`presupuesto del día del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftDay)} de ${usd(b.dailyBudget)} (cámbialo en Ajustes → Estudio)`);
     if (b.costLeftMonth != null && est > b.costLeftMonth + 1e-9) throw new Error(`presupuesto del mes del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftMonth)} de ${usd(b.monthlyBudget)} (cámbialo en Ajustes → Estudio)`);
   }
   const tr = trail(req); // V4.9: who asked (Dimitri too), what for, what it read, which picture it is a version of
-  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra }; // V4.6: generated inside a folder, it lands there
+  const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s, prompt) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra }; // V4.6: generated inside a folder, it lands there
   JOBS.push(j); saveJobs(); setImmediate(pumpJobs);
   return pub(j);
 }
@@ -941,7 +1046,7 @@ async function runJob(j) {
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
   if (j.versionOf && j.items.length) { try { const o = item(j.versionOf); if (o) update(j.versionOf, { versions: [...new Set([...(Array.isArray(o.versions) ? o.versions : []), ...j.items])] }); } catch (e) { console.warn('estudio versions:', e.message); } } // V4.9: the original's record lists its versions; its file is never touched
-  if (j.engine !== 'prueba' && j.items.length) spend(j.kind === 'video' ? 'videos' : 'images', j.items.length, j.cost);
+  if (j.engine !== 'prueba' && j.items.length) spend({ video: 'videos', audio: 'audios', music: 'music' }[j.kind] || 'images', j.items.length, j.cost); // V4.10: a sound file counts in «audios»
   if (j.remote && j.state === 'done') delete j.remote; else if (j.remote && j.cancel) delete j.remote;
   saveJobs(); running--;
   const out = pub(j); for (const w of waiters.get(j.id) || []) w(out); waiters.delete(j.id);
@@ -963,6 +1068,7 @@ export function cancel(id) {
   if (j.state === 'queued') { Object.assign(j, { state: 'failed', error: 'Cancelado por ti.', doneAt: Date.now() }); saveJobs(); const out = pub(j); for (const w of waiters.get(j.id) || []) w(out); waiters.delete(j.id); return out; }
   if (j.state === 'running') {
     j.cancel = true; saveJobs();
+    if (j.engine === 'minimax') { for (const rq of j.remote || []) if (!rq.done) mmx.cancelVideo(rq.id).catch(() => {}); return pub(j); } // V4.10
     const auth = j.engine === 'higgsfield' ? { authorization: `Key ${secret('higgsfield')}` } : { authorization: `Key ${secret('fal')}` };
     for (const rq of j.remote || []) if (!rq.done && rq.cancel) fetch(rq.cancel, { method: j.engine === 'fal' ? 'PUT' : 'POST', headers: auth, signal: AbortSignal.timeout(15000) }).catch(() => {});
   }
@@ -997,7 +1103,7 @@ export function ratioOf(it) {
 export function editRequest({ file, instruction, model: want } = {}) {
   const id = String(file || '').replace(/\\/g, '/'), it = resolve(id) ? item(id) : null;
   if (!it) throw new Error('no encuentro esa imagen en el Estudio');
-  if ((it.kind && it.kind !== 'image') || /\.(mp4|webm|mp3|wav)$/i.test(id)) throw new Error('solo se puede editar una imagen');
+  if ((it.kind && it.kind !== 'image') || /\.(mp4|webm|mp3|wav|flac|m4a|ogg)$/i.test(id)) throw new Error('solo se puede editar una imagen');
   const text = String(instruction || '').trim(); if (!text) throw new Error('di qué quieres cambiar de la imagen');
   if (text.length > 4000) throw new Error('la instrucción es muy larga (máx. 4000)');
   const list = editModels();
@@ -1029,7 +1135,7 @@ export function writeStudioNote(j, now = new Date()) {
   const body = [`# ${String(j.prompt).replace(/\s+/g, ' ').slice(0, 90)}`, '',
     `${j.versionOf ? 'Versión editada' : 'Creativo'} del Estudio, pedido por ${who}, con ${j.modelName || j.model}${fname ? ` · carpeta «${fname}»` : ''}${j.purpose ? ` · para: ${j.purpose}` : ''}.`, '',
     '## Prompt', String(j.prompt), '', ...(j.versionOf ? ['## Original', `![](${src(j.versionOf)})`, ''] : []),
-    '## Archivos', ...j.items.map(f => /\.(mp4|webm)$/i.test(f) ? `[▶ ${f.split('/').pop()}](${src(f)})` : `![](${src(f)})`), '',
+    '## Archivos', ...j.items.map(f => /\.(mp4|webm)$/i.test(f) ? `[▶ ${f.split('/').pop()}](${src(f)})` : /\.(mp3|wav|flac|m4a|ogg)$/i.test(f) ? `[🔊 ${f.split('/').pop()}](${src(f)})` : `![](${src(f)})`), '',
     ...(j.read?.length ? [`Read: ${j.read.map(n => `[[${n}]]`).join(' · ')}`, ''] : [])];
   fs.writeFileSync(path.join(folder, name + '.md'), [...fm, '', ...body].join('\n'));
   for (const f of j.items) { try { update(f, { note: name }); } catch {} }

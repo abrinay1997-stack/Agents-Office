@@ -18,6 +18,7 @@ async function models() { if (!catalog) { try { catalog = await office('/api/med
 
 async function tools() {
   const c = await models(), on = c.models.filter(m => m.on), metaOn = (c.engines || []).some(e => e.id === 'meta' && e.on);
+  const has = kind => on.some(m => m.kind === kind && m.engine !== 'prueba'); // V4.10: voice and music only show when a model of that kind has its key
   const pick = kind => { const l = on.filter(m => m.kind === kind); return l.length ? { type: 'string', enum: l.map(m => m.id), description: `Opcional. ${l.map(m => `${m.id} = ${m.name}${m.note ? ' (' + m.note + ')' : ''}`).join(' · ')}. Sin él, el del dueño (${c.default?.[kind] || '—'}).` } : { type: 'string', description: 'Opcional: el id del modelo.' }; };
   return [
     { name: 'generar_imagen', description: 'Genera imágenes reales con el Estudio de la oficina y las guarda en el cerebro. Úsala cuando la tarea pida imágenes, visuales, fondos, portadas o piezas para redes. Escribe el prompt completo y concreto (sujeto, estilo, luz, encuadre, colores de la marca). Puedes darle imágenes de la galería como referencia (un producto, un logo, un estilo) por su id (buscar_en_galeria). Devuelve las líneas ![…](/media/…) que pones en tu entregable tal cual; si tarda, una línea ⏳ que también pones tal cual.',
@@ -38,6 +39,19 @@ async function tools() {
         imagen_final: { type: 'string', description: 'Opcional: id de la galería con la que termina.' },
         referencias: { type: 'array', items: { type: 'string' }, description: 'Opcional: ids de referencia (personaje, producto) para los modelos que las aceptan.' },
       }, required: ['prompt'] } },
+    ...(has('audio') ? [{ name: 'generar_voz', description: 'Graba una locución REAL (voz en off, narración, un audio para un anuncio o un reel) con el Estudio y la guarda en el cerebro. Escribe el texto EXACTO que se dirá, en el idioma en que se dirá, con la puntuación de la lectura (las comas son pausas). Devuelve una línea [🔊 …](/media/…) que pones en tu entregable tal cual.',
+      inputSchema: { type: 'object', properties: {
+        texto: { type: 'string', description: 'Lo que se dirá, palabra por palabra (hasta 9.999 caracteres).' },
+        voz: { type: 'string', description: `Opcional: el voiceId. Una del sistema (${['Spanish_Narrator', 'Spanish_SereneWoman', 'Spanish_ConfidentWoman', 'Spanish_ThoughtfulMan'].join(', ')}…) o una voz del dueño: ${(c.voices?.voices || []).slice(0, 12).map(v => `${v.voiceId} (${v.name})`).join(', ') || 'aún no tiene voces propias'}. Sin ella, Spanish_Narrator.` },
+        modelo: pick('audio'),
+      }, required: ['texto'] } }] : []),
+    ...(has('music') ? [{ name: 'generar_musica', description: 'Compone una pieza de música REAL (un jingle, una canción con letra o música de fondo instrumental) y la guarda en el cerebro. Con letra: escríbela con [Verse], [Chorus]… y di el estilo en descripcion. Instrumental: solo descripcion e instrumental = true. Tarda; devuelve una línea [🔊 …](/media/…) o una línea ⏳ que pones en tu entregable tal cual.',
+      inputSchema: { type: 'object', properties: {
+        letra: { type: 'string', description: 'La letra, con [Verse] [Chorus] [Bridge]… (hasta 3.500 caracteres). Vacía si es instrumental.' },
+        descripcion: { type: 'string', description: 'El estilo y el ánimo: género, instrumentos, tempo, tipo de voz (hasta 2.000 caracteres).' },
+        instrumental: { type: 'boolean', description: 'Sin voz. Por defecto, sí cuando no hay letra.' },
+        modelo: pick('music'),
+      } } }] : []),
     { name: 'buscar_en_galeria', description: 'Busca en la galería del Estudio (lo generado y lo que subió el dueño: productos, logos, fotos) y devuelve ids para usar como referencia o para animar. Cada resultado dice su carpeta: el dueño y Dimitri agrupan ahí lo preparado para una campaña o un producto.',
       inputSchema: { type: 'object', properties: { buscar: { type: 'string', description: 'Palabras del prompt o del nombre del archivo. Vacío = lo más reciente.' }, carpeta: { type: 'string', description: 'Opcional: solo lo de esta carpeta (su nombre; da igual mayúsculas o acentos).' }, solo_subidas: { type: 'boolean', description: 'Solo lo que subió el dueño.' }, cantidad: { type: 'integer', minimum: 1, maximum: 30 } } } },
     ...(metaOn ? [ // V4.8: Meta Muse Spark reads a video or an audio and answers in text (only with the Meta key)
@@ -63,11 +77,12 @@ async function tools() {
 const plain = t => String(t || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]+/g, ' ').trim(); // a folder name without capitals or accents
 const alt = t => String(t).slice(0, 60).replace(/[[\]()]/g, '');
 const src = f => '/media/' + f.split('/').map(encodeURIComponent).join('/');
+const WORD = { video: ['video', 'videos'], audio: ['locución', 'locuciones'], music: ['pieza de música', 'piezas de música'], image: ['imagen', 'imágenes'] };
 function answer(j, prompt) {
   if (j.state === 'failed') throw new Error(j.error || 'el Estudio no pudo generarlo');
   if (j.state === 'done') {
-    const lines = j.items.map(f => /\.(mp4|webm)$/i.test(f) ? `[▶ ${f.split('/').pop()}](${src(f)})` : `![${alt(prompt)}](${src(f)})`);
-    return `Listo: ${j.items.length} ${j.kind === 'video' ? (j.items.length === 1 ? 'video' : 'videos') : j.items.length === 1 ? 'imagen' : 'imágenes'} con ${j.modelName} (aprox. US$${j.cost}). Pon estas líneas en tu entregable, tal cual:\n${lines.join('\n')}${j.warning ? `\n(Aviso: ${j.warning})` : ''}`;
+    const lines = j.items.map(f => /\.(mp4|webm)$/i.test(f) ? `[▶ ${f.split('/').pop()}](${src(f)})` : /\.(mp3|wav|flac|m4a|ogg)$/i.test(f) ? `[🔊 ${f.split('/').pop()}](${src(f)})` : `![${alt(prompt)}](${src(f)})`);
+    return `Listo: ${j.items.length} ${(WORD[j.kind] || WORD.image)[j.items.length === 1 ? 0 : 1]} con ${j.modelName} (aprox. US$${j.cost}). Pon estas líneas en tu entregable, tal cual:\n${lines.join('\n')}${j.warning ? `\n(Aviso: ${j.warning})` : ''}`;
   }
   return `Sigue en proceso con ${j.modelName} (${j.note || j.state}). No esperes: pon esta línea en tu entregable, tal cual, y la oficina la cambia por el archivo cuando termine:\n⏳ Estudio: ${alt(prompt)} (trabajo ${j.id})`;
 }
@@ -82,7 +97,8 @@ async function call(name, a = {}) {
     const c = await office('/api/media/models'); catalog = c;
     const mine = who.task ? (await office('/api/media/jobs?active=1&task=' + encodeURIComponent(who.task))).jobs : [];
     const on = c.models.filter(m => m.on);
-    return `Motores: ${c.engines.map(e => `${e.name} ${e.on ? 'LISTO' : 'sin key'}`).join(' · ')}.\nModelos de imagen: ${on.filter(m => m.kind === 'image').map(m => m.id).join(', ') || '—'}.\nModelos de video: ${on.filter(m => m.kind === 'video').map(m => m.id).join(', ') || '—'}.\n${c.budget.left == null ? 'Sin tope diario de generaciones' : `Tope diario: quedan ${c.budget.left} de ${c.budget.limit} (un video cuenta 5)`}.${c.budget.costLeftDay != null ? ` Presupuesto del día: quedan US$${c.budget.costLeftDay.toFixed(2)} de US$${c.budget.dailyBudget}.` : ''}${c.budget.costLeftMonth != null ? ` Presupuesto del mes: quedan US$${c.budget.costLeftMonth.toFixed(2)} de US$${c.budget.monthlyBudget}.` : ''} Máximo por pedido: ${c.budget.maxPerRequest}.` +
+    const sound = ['audio', 'music'].map(k => [k, on.filter(m => m.kind === k).map(m => m.id)]).filter(([, l]) => l.length).map(([k, l]) => `\nModelos de ${k === 'audio' ? 'voz' : 'música'}: ${l.join(', ')}.`).join(''); // V4.10
+    return `Motores: ${c.engines.map(e => `${e.name} ${e.on ? 'LISTO' : 'sin key'}`).join(' · ')}.\nModelos de imagen: ${on.filter(m => m.kind === 'image').map(m => m.id).join(', ') || '—'}.\nModelos de video: ${on.filter(m => m.kind === 'video').map(m => m.id).join(', ') || '—'}.${sound}\n${c.budget.left == null ? 'Sin tope diario de generaciones' : `Tope diario: quedan ${c.budget.left} de ${c.budget.limit} (un video cuenta 5, una música 3, una imagen o una locución 1)`}.${c.budget.costLeftDay != null ? ` Presupuesto del día: quedan US$${c.budget.costLeftDay.toFixed(2)} de US$${c.budget.dailyBudget}.` : ''}${c.budget.costLeftMonth != null ? ` Presupuesto del mes: quedan US$${c.budget.costLeftMonth.toFixed(2)} de US$${c.budget.monthlyBudget}.` : ''} Máximo por pedido: ${c.budget.maxPerRequest}.` +
       (mine.length ? `\nEn marcha para esta tarea: ${mine.map(j => `${j.id} (${j.modelName}, ${j.note || j.state})`).join('; ')}.` : '');
   }
   if (name === 'buscar_en_galeria') {
@@ -99,6 +115,14 @@ async function call(name, a = {}) {
   if (name === 'estado_trabajo') {
     const { job } = await office(`/api/media/jobs/${encodeURIComponent(String(a.trabajo || '').replace(/[^a-z0-9]/gi, ''))}?wait=60000`);
     return answer(job, job.prompt);
+  }
+  if (name === 'generar_voz' || name === 'generar_musica') { // V4.10: a voice-over or a piece of music (MiniMax) — a job like any other
+    const voz = name === 'generar_voz', letra = String(a.letra || '').trim(), desc = String(a.descripcion || '').trim();
+    const instrumental = voz ? false : a.instrumental === true || !letra;
+    const prompt = voz ? a.texto : instrumental ? desc : letra;
+    const settings = voz ? (a.voz ? { voiceId: String(a.voz) } : {}) : { instrumental, ...(!instrumental && desc ? { style: desc } : {}) };
+    const { job } = await office('/api/media/jobs', { prompt, n: 1, kind: voz ? 'audio' : 'music', model: a.modelo, settings, wait: WAIT_IMAGE, ...who });
+    return answer(job, prompt);
   }
   const video = name === 'generar_video';
   const media = video ? { start: a.imagen_inicial ? [a.imagen_inicial] : [], end: a.imagen_final ? [a.imagen_final] : [], reference: a.referencias || [] } : { reference: a.referencias || [] };
