@@ -1,0 +1,11 @@
+/* Auditoría 1 oct 2026 (A11-10) — un botón que no se puede usar se dice con forma y texto, nunca con opacity.
+   Había 13 reglas que lo lavaban a 0,35–0,5 (Aprobar, Generar, Enviar a Dimitri, el «−» de Cantidad…): texto claro sobre gris a ~2,3:1,
+   sin decir nada. Ahora, en toda la oficina: texto gris a 4,5:1 en claro y en oscuro, fondo transparente, borde (o contorno) de trazos
+   y cursor de prohibido. La especificidad (html:root body + dos :is) gana a las reglas viejas de cada vista sin tener que borrarlas. */
+html:root body :is(button, [role="button"]):is(:disabled, [aria-disabled="true"]) {
+  opacity: 1; filter: none; color: var(--grey); background: transparent; box-shadow: none; text-shadow: none;
+  border: 1px dashed var(--grey); cursor: not-allowed;
+}
+html:root body :is(button, [role="button"]):is(:disabled, [aria-disabled="true"]) * { opacity: 1; }
+/* sobre un fondo oscuro (la barra negra de las vistas, la vista ampliada del Estudio, la barra de selección) el gris no llega: allí, un claro */
+html:root body :is(.st-mv, .cv-band button):is(:disabled, [aria-disabled="true"]) { color: #B8B6AE; border-color: #B8B6AE; }

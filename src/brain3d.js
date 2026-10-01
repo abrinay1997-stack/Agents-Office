@@ -313,7 +313,7 @@ export function initBrain3D(ctx) {
       if (b._n !== n) { b._n = n; b.dataset.i = n.i; b.textContent = n.id; b.style.setProperty('--c', colOf(n.g)); }
       const near = Math.max(0.35, Math.min(1, 1.6 - (SZ[n.i] - 0.9) * 12)); // far labels fade
       b.classList.toggle('sel', n === sel); b.classList.toggle('foc', n === focus);
-      b.style.transform = `translate(${Math.round(SX[n.i] + 9)}px, ${Math.round(SY[n.i] - 9)}px)`; b.style.opacity = n === sel || n === focus ? 1 : near.toFixed(2);
+      b.style.transform = `translate(${Math.round(SX[n.i] + 9)}px, ${Math.round(SY[n.i] - 9)}px)`; b.style.setProperty('--near', (n === sel || n === focus ? 100 : Math.round(near * 100)) + '%'); // Auditoría 1 oct 2026 (A11-21): far labels go greyer, not transparent (opacity took them under 4,5:1)
     }
   }
   labelLayer.addEventListener('click', e => { const b = e.target.closest('.bv3-lab'); if (b && b._n && ctx.onPick) ctx.onPick(b._n); });

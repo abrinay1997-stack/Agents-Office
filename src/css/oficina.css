@@ -1,0 +1,42 @@
+/* Auditoría 1 oct 2026 — la oficina, el compositor de tareas, el Cerebro y el pie: arreglos de accesibilidad y de rendimiento del
+   equipo «global» (docs: la auditoría de esa noche). Va aquí, no en shell.html: build.mjs lo junta al final de su <style>, así que a
+   igual especificidad gana a las reglas viejas. */
+
+/* A11-14: el compositor es la acción principal de la oficina — sus controles llegan a 28 px de alto y su texto a 10,5 px */
+.tp-dd, .tp-model, .tp-effort, .tp-rep, .tp-team { min-height: 28px; font-size: 10.5px; }
+.tp-model, .tp-effort, .tp-rep, .tp-team { display: inline-flex; align-items: center; }
+.tp-cmd .tp-rep { font-size: 10.5px; }
+.tp-mode { font-size: 10.5px; }
+
+/* A11-15: las 35 pastillas con el nombre de cada agente medían 14 px de alto: el área de clic crece con un ::before invisible
+   (el dibujo no cambia). Va en coordenadas de la pastilla, que se escala: -7 px a escala 0,62 siguen siendo ~24 px en total. */
+.pill::before { content: ''; position: absolute; inset: -7px -4px; border-radius: 99px; }
+
+/* A11-16: a 500 px o menos el zoom (+ − ⌂) se pone en fila, más pequeño, debajo de las tarjetas: en columna caía sobre VENTAS y FINANZAS */
+@media (max-width: 500px) {
+  #zoomCtl { flex-direction: row; gap: 6px; bottom: calc(46vh + 14px); }
+  body.tpMin #zoomCtl { bottom: 14px; }
+  #zoomCtl button { width: 36px; height: 36px; font-size: 17px; }
+}
+
+/* A11-19: la lista de tareas se alcanza y se desplaza con el teclado (tabindex en tasks.js), y en el escritorio se ve que hay más */
+.tp-rows { scrollbar-width: thin; }
+.tp-rows::-webkit-scrollbar { display: block; width: 8px; }
+.tp-rows:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* A11-21: el Cerebro — las etiquetas lejanas se agrisan (color), no se vuelven transparentes; la leyenda y los filtros, legibles y grandes */
+.bv3-lab { opacity: 1 !important; color: color-mix(in srgb, #E8E6DF var(--near, 100%), #8E8C85); }
+.bv-sec h3 small { font-size: 11px; }
+.bv-leg input, .bv-tg input { width: 18px; height: 18px; }
+label.bv-leg, label.bv-tg { min-height: 26px; }
+
+/* A11-22: el pie de versión y firma — color sólido a 4,5:1 sobre un fondo propio, sin opacity ni mezcla con lo de debajo */
+#licence { opacity: 1; mix-blend-mode: normal; color: var(--grey); background: color-mix(in srgb, var(--cream) 88%, transparent); padding: 2px 9px; border-radius: 99px; }
+body.dark #licence { color: #B4B1A9; background: rgba(21,22,26,.86); }
+#licence .wm { color: inherit; }
+
+/* INF-13: con una vista encima, la oficina tapada no anima nada (16 animaciones infinitas seguían corriendo debajo) */
+body:is(.studioOpen, .calOpen, .ctOpen, .anOpen, .brainOpen) :is(#hud, #hud *) { animation-play-state: paused !important; }
+
+/* A11-20: una vista (role=region) que recibe el foco al abrirse lo enseña con el teclado, como todo lo demás */
+html body [data-view]:focus-visible { outline: 2px solid var(--focus) !important; outline-offset: -3px; }

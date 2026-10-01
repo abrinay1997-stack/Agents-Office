@@ -23,7 +23,7 @@ const pct = n => `${Math.abs(n).toLocaleString('es', { maximumFractionDigits: 1 
 export function initAnaliticas({ served, esc, business = () => '' }) {
   const datos = crearDatosAnaliticas({ served });
   const ov = document.createElement('div');
-  ov.id = 'anOv'; ov.setAttribute('role', 'dialog'); ov.setAttribute('data-view', ''); ov.setAttribute('aria-label', 'Analíticas'); ov.inert = true;
+  ov.id = 'anOv'; ov.setAttribute('role', 'region'); ov.setAttribute('data-view', ''); ov.setAttribute('aria-label', 'Analíticas'); ov.inert = true; // A11-20: una vista es la página bajo la barra (region), no un diálogo
   ov.innerHTML = `
     <div class="cv-band">
       <div class="cv-brand">ANALÍTICAS <small id="anCo"></small></div>
