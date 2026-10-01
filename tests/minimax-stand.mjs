@@ -11,9 +11,10 @@ export const mp3 = Buffer.concat([Buffer.from('ID3'), Buffer.from([4, 0, 0, 0, 0
 export const mp4 = Buffer.concat([Buffer.alloc(4), Buffer.from('ftypisom'), Buffer.alloc(64, 7)]);
 const ok = { status_code: 0, status_msg: 'success' };
 
-/** opts.video: the states a task goes through before «succeeded» (default queued → running). opts.fail: { '<path>': [code, msg] } */
+/** opts.video: the states a task goes through before «succeeded» (default queued → running). opts.fail: { '<path>': [code, msg] }.
+    opts.failFrom: { '<path>': [nth, code, msg] } — that path answers normally until its nth call, then fails. */
 export async function standIn(opts = {}) {
-  const seen = [], tasks = new Map(); let n = 0;
+  const seen = [], tasks = new Map(), calls = {}; let n = 0;
   const srv = http.createServer((req, res) => {
     const chunks = []; req.on('data', d => chunks.push(d)); req.on('end', () => {
       const raw = Buffer.concat(chunks), u = new URL(req.url, 'http://x'), p = u.pathname;
@@ -23,6 +24,7 @@ export async function standIn(opts = {}) {
       const out = (code, b) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(typeof b === 'string' ? b : JSON.stringify(b)); };
       if (req.headers.authorization !== `Bearer ${KEY}` && !p.startsWith('/files/')) return out(200, { base_resp: { status_code: 2049, status_msg: 'invalid api key' } });
       const f = opts.fail?.[p]; if (f) return out(f[2] || 200, { base_resp: { status_code: f[0], status_msg: f[1] } });
+      calls[p] = (calls[p] || 0) + 1; const ff = opts.failFrom?.[p]; if (ff && calls[p] >= ff[0]) return out(200, { base_resp: { status_code: ff[1], status_msg: ff[2] } });
       if (req.method === 'POST' && p === '/v1/image_generation') return out(200, { id: 't1', data: { image_base64: Array.from({ length: body.n || 1 }, () => png.toString('base64')) }, metadata: { success_count: body.n || 1, failed_count: 0 }, base_resp: ok });
       if (req.method === 'POST' && p === '/v2/video_generation') { const id = String(424010985738629 + (++n)); tasks.set(id, { i: 0 }); return out(200, `{"task_id":"${id}"}`); }
       const q = p.match(/^\/v2\/query\/video_generation\/(\d+)$/);

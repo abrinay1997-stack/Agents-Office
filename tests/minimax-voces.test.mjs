@@ -85,8 +85,9 @@ test('system voices: from get_voice (cached), or the curated list when MiniMax d
 
 /* ---------- the routes, through the real server ---------- */
 const freePort = () => new Promise(r => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
-async function office(extraEnv) {
+async function office(extraEnv, local = null) {
   const sandbox = tmp(), port = await freePort();
+  if (local) fs.writeFileSync(path.join(sandbox, 'office.config.local.json'), JSON.stringify(local));
   fs.mkdirSync(path.join(sandbox, 'brain'), { recursive: true }); fs.writeFileSync(path.join(sandbox, 'brain', 'inicio.md'), '# Inicio\n');
   const e = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: path.join(sandbox, 'brain'), AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json'),
     AO_HOOK_TOKEN: 'h'.repeat(28), TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: '', MINIMAX_GROUP_ID: '', ...extraEnv };
@@ -142,5 +143,24 @@ test('routes with the key: design → clone (a gallery mp3) → list → GET /ap
     assert.deepEqual(ledger.map(x => [x.kind, x.model, x.source]), [['estudio', 'voice_design', 'estimado'], ['estudio', 'voice_clone', 'estimado'], ['estudio', 'voice_clone', 'estimado']]);
     assert.equal(ledger[1].usd, 1.5); assert.ok(ledger[0].usd >= 3);
     for (const t of answers) assert.ok(!t.includes(KEY), 'the key leaked in an answer');
+  } finally { await o.stop(); await st.close(); }
+});
+
+test('design and clone respect the Estudio budget (Ajustes → Estudio): refused with 409 before any call to MiniMax, and what they cost counts', async () => {
+  const st = await standIn();
+  const o = await office({ MINIMAX_API_KEY: KEY, MINIMAX_API_BASE: st.base }, { media: { dailyBudget: 4 } });
+  try {
+    const b0 = (await o.call('GET', '/api/media')).j.budget;
+    assert.equal(b0.dailyBudget, 4, JSON.stringify(b0) + ' · ' + o.log().slice(-300));
+    const d = await o.call('POST', '/api/voces/design', { name: 'Voz', prompt: 'Mujer, cálida', previewText: 'Hola.' });
+    assert.equal(d.status, 200, d.text);
+    const b1 = (await o.call('GET', '/api/media')).j.budget;
+    assert.ok(b1.cost >= 3 && b1.costLeftDay <= 1, 'the design counts in the Estudio: ' + JSON.stringify(b1));
+    const seen = st.seen.length;
+    const again = await o.call('POST', '/api/voces/design', { prompt: 'Otra voz' });
+    assert.equal(again.status, 409); assert.match(again.j.error, /presupuesto del día del Estudio/);
+    const cl = await o.call('POST', '/api/voces/clone', { voiceId: 'AbrinayVoz01', audioBase64: mp3.toString('base64') });
+    assert.equal(cl.status, 409); assert.match(cl.j.error, /presupuesto del día del Estudio/);
+    assert.equal(st.seen.length, seen, 'nothing reached MiniMax');
   } finally { await o.stop(); await st.close(); }
 });

@@ -133,11 +133,15 @@ export async function cancelVideo(taskId) {
 
 /* ======================= VOICE / TTS ======================= */
 export const EMOTIONS = ['happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'calm', 'fluent', 'whisper'];
+// MiniMax T2A doc: «fluent, whisper is only available for models: speech-2.6-turbo, speech-2.6-hd» — 2.8 refuses them (2013)
+const ONLY_26 = ['fluent', 'whisper'];
+/** The emotions a speech model takes. */
+export const emotionsFor = model => (/^speech-2\.6-/.test(String(model || '')) ? EMOTIONS : EMOTIONS.filter(e => !ONLY_26.includes(e)));
 /** text (< 10,000 characters) → { buf, ext, seconds, chars }. voiceId: a system voice (Spanish_Narrator…) or one of yours. */
 export async function tts({ text, model = 'speech-2.8-hd', voiceId = 'Spanish_Narrator', speed = 1, vol = 1, pitch = 0, emotion = null, languageBoost = 'auto', format = 'mp3', sampleRate = 32000, bitrate = 128000, channel = 1 } = {}) {
   const t = String(text || '').trim(); if (!t) throw new MinimaxError('MiniMax voz: falta el texto', { final: true });
   const voice_setting = { voice_id: String(voiceId || 'Spanish_Narrator'), speed: Number(speed) || 1, vol: Number(vol) || 1, pitch: Math.round(Number(pitch) || 0) };
-  if (emotion && EMOTIONS.includes(emotion)) voice_setting.emotion = emotion;
+  if (emotion && emotionsFor(model).includes(emotion)) voice_setting.emotion = emotion; // one the model does not take is left out: the voice's own
   const audio_setting = { sample_rate: sampleRate, format, channel, ...(format === 'mp3' ? { bitrate } : {}) };
   const j = await call('POST', '/v1/t2a_v2', { body: { model, text: t.slice(0, 9999), stream: false, output_format: 'hex', language_boost: languageBoost || 'auto', voice_setting, audio_setting }, what: 'MiniMax voz' });
   if (!j.data?.audio) throw new MinimaxError('MiniMax voz: no devolvió audio');

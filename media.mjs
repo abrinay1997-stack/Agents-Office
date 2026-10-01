@@ -249,14 +249,14 @@ const HF_VIDEOS = [
    «directo»: MiniMax's video also reaches the Estudio through Higgsfield (minimax-hailuo-2.3, minimax-h3) and fal (hailuo-02-fal).
    Prices are MiniMax's pay-as-you-go list on that date; the ones it does not publish say «precio aproximado». A voice is charged by
    the character (perChar; cost is what 1,000 characters cost); a video by the second, its rate by resolution (costBy). */
-const MMX_VOICE_SET = () => ({
+const MMX_VOICE_SET = gid => ({
   voiceId: T('Spanish_Narrator', 256, 'Spanish_Narrator o una voz tuya'),
-  emotion: E(['', 'happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'calm', 'fluent', 'whisper'], ''), // '' = the voice's own
+  emotion: E(['', ...mmx.emotionsFor(gid)], ''), // '' = the voice's own; fluent and whisper only on speech-2.6 (MiniMax T2A doc)
   speed: R(0.5, 2, 1, 0.05), vol: R(0.1, 10, 1, 0.1), pitch: R(-12, 12, 0),
   format: E(['mp3', 'wav', 'flac'], 'mp3'),
   languageBoost: E(['auto', 'Spanish', 'English', 'Portuguese', 'French', 'Italian', 'German'], 'auto'),
 });
-const mmxVoice = (id, gid, name, perMillion, note) => ({ id, engine: 'minimax', kind: 'audio', gid, name, cost: +(perMillion / 1000).toFixed(3), perChar: perMillion / 1e6, maxPrompt: 9999, note, roles: {}, settings: MMX_VOICE_SET() });
+const mmxVoice = (id, gid, name, perMillion, note) => ({ id, engine: 'minimax', kind: 'audio', gid, name, cost: +(perMillion / 1000).toFixed(3), perChar: perMillion / 1e6, maxPrompt: 9999, note, roles: {}, settings: MMX_VOICE_SET(gid) });
 const MMX_VIDEO_RATIO = ['adaptive', '16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
 const MMX_MUSIC_SET = () => ({ instrumental: B(false), style: T('', 2000, 'estilo: pop latino, alegre, voz femenina'), format: E(['mp3', 'wav'], 'mp3') });
 const MMX = [
@@ -501,6 +501,14 @@ export function budget() {
   return { ...u, limit, used, reserved, left: limit ? Math.max(0, limit - used - reserved) : null, maxPerRequest: cfg.maxPerRequest,
     dailyBudget, monthlyBudget, costReserved, costLeftDay: left$(dailyBudget, u.cost), costLeftMonth: left$(monthlyBudget, u.monthCost) };
 }
+/** Throws, in words, when `est` (US$) does not fit what is left of the Estudio's day or month (Ajustes → Estudio). */
+export function checkBudget(est, b = budget()) {
+  est = +(+est || 0).toFixed(3); const usd = v => 'US$' + (+v).toFixed(2);
+  if (b.costLeftDay != null && est > b.costLeftDay + 1e-9) throw new Error(`presupuesto del día del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftDay)} de ${usd(b.dailyBudget)} (cámbialo en Ajustes → Estudio)`);
+  if (b.costLeftMonth != null && est > b.costLeftMonth + 1e-9) throw new Error(`presupuesto del mes del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftMonth)} de ${usd(b.monthlyBudget)} (cámbialo en Ajustes → Estudio)`);
+}
+/** Money the Estudio spent outside a job (a MiniMax voice designed or cloned): it counts against the day and the month, no file counted. */
+export function charge(usd) { const c = +(+usd || 0).toFixed(3); if (c > 0) spend('images', 0, c); return budget(); }
 /** V4.5: the caps from Ajustes → Estudio, applied at once (the jobs and the catalog stay as they are). */
 export function setLimits(m = {}) {
   for (const k of ['dailyLimit', 'dailyBudget', 'monthlyBudget', 'maxPerRequest', 'concurrency']) if (m[k] !== undefined) cfg[k] = m[k];
@@ -732,7 +740,7 @@ async function hfUpload(f) { // Higgsfield's own storage (files/generate-upload-
 
 // poll a queue until the engine says it finished. Higgsfield: completed/failed/nsfw/canceled; fal: COMPLETED (then the result)
 async function pollUntil(job, check, { every = 4000, deadline = 20 * 60e3 } = {}) {
-  const until = (job.startedAt || Date.now()) + deadline; let misses = 0;
+  const until = (job.pollFrom || job.startedAt || Date.now()) + deadline; let misses = 0; // a resumed job counts from the resume, not from its first start
   for (;;) {
     if (job.cancel) throw new Error('Cancelado por ti.');
     if (Date.now() > until) throw new Error('tardó más de ' + Math.round(deadline / 60e3) + ' minutos; mira en el panel del servicio si terminó');
@@ -904,7 +912,12 @@ const RUN = {
       job.remote = [];
       for (let i = 0; i < job.n; i++) {
         job.note = 'enviando a MiniMax';
-        const id = await mmx.createVideo({ model: m.gid, content, resolution: s.resolution, duration: s.duration, ratio: s.aspectRatio, promptExpansion: s.promptExpansion || null });
+        let id;
+        try { id = await mmx.createVideo({ model: m.gid, content, resolution: s.resolution, duration: s.duration, ratio: s.aspectRatio, promptExpansion: s.promptExpansion || null }); }
+        catch (e) { // the tasks already created are paid for at MiniMax: they are still polled and downloaded; the job only fails when none was created
+          if (!job.remote.length) throw e;
+          job.warning = `se hicieron ${job.remote.length} de ${job.n}: ${friendly(e.message, e.status)}`; ctx.save(); break;
+        }
         job.remote.push({ id }); ctx.save();
       }
     }
@@ -1014,9 +1027,7 @@ export function submit(req = {}) {
   const b = budget();
   if (m.engine !== 'prueba') { // the free test engine never counts
     if (b.left != null && weight > b.left) throw new Error(`tope diario alcanzado: quedan ${b.left} de ${b.limit} (cámbialo en Ajustes → Estudio)`);
-    const est = +(unitCost(m, s, prompt) * per * n).toFixed(3), usd = v => 'US$' + (+v).toFixed(2);
-    if (b.costLeftDay != null && est > b.costLeftDay + 1e-9) throw new Error(`presupuesto del día del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftDay)} de ${usd(b.dailyBudget)} (cámbialo en Ajustes → Estudio)`);
-    if (b.costLeftMonth != null && est > b.costLeftMonth + 1e-9) throw new Error(`presupuesto del mes del Estudio: esto cuesta aprox. ${usd(est)} y quedan ${usd(b.costLeftMonth)} de ${usd(b.monthlyBudget)} (cámbialo en Ajustes → Estudio)`);
+    checkBudget(unitCost(m, s, prompt) * per * n, b);
   }
   const tr = trail(req); // V4.9: who asked (Dimitri too), what for, what it read, which picture it is a version of
   const j = { id: jid(), state: 'queued', kind: m.kind, model: m.id, engine: m.engine, prompt, n, s, media, weight, by: tr.by, agent: req.agent || null, task: req.task || null, at: Date.now(), items: [], cost: 0, unit: unitCost(m, s, prompt) * per, retryOf: req.retryOf || undefined, folder: req.folder && folderOf(req.folder) ? req.folder : undefined, ...tr.extra }; // V4.6: generated inside a folder, it lands there
@@ -1028,7 +1039,9 @@ function pumpJobs() {
   for (const j of JOBS) { if (running >= max) break; if (j.state === 'queued') runJob(j); }
 }
 async function runJob(j) {
-  running++; j.state = 'running'; j.startedAt = j.startedAt || Date.now(); j.note = j.remote?.length ? 'retomando tras el reinicio' : 'enviando'; saveJobs();
+  running++; j.state = 'running'; j.startedAt = j.startedAt || Date.now();
+  if (j.remote?.length) j.pollFrom = Date.now(); else delete j.pollFrom; // the office was off for hours: the engine still holds the task (MiniMax: 7 days), so it is asked at least once
+  j.note = j.remote?.length ? 'retomando tras el reinicio' : 'enviando'; saveJobs();
   const m = model(j.model);
   const ctx = { save: saveJobs, add: (buf, ext, extra = {}) => {
     const it = store(buf, ext, { prompt: j.prompt, provider: j.engine, model: j.model, modelName: m?.name || j.model, ratio: j.s.aspectRatio || null, settings: j.s, media: Object.keys(j.media).length ? j.media : undefined, cost: j.unit, by: j.by, agent: j.agent, task: j.task, job: j.id, ...(j.folder ? { folder: j.folder } : {}), ...(j.versionOf ? { versionOf: j.versionOf } : {}), ...(j.sub ? { sub: j.sub } : {}), ...(j.purpose ? { purpose: j.purpose } : {}), ...(j.read ? { read: j.read } : {}), ...extra });

@@ -938,13 +938,16 @@ async function vocesRoutes(req, res, url) {
     if (url.pathname === '/api/voces' && req.method === 'GET') return json(res, 200, { voices: voces.list(), system: await voces.systemVoices() });
     if (url.pathname === '/api/voces/design' && req.method === 'POST') {
       const b = await body(req);
+      try { media.checkBudget(voces.PRICE.design + (String(b.previewText || '').trim().slice(0, 500).length || 60) * voces.PRICE.previewPerChar); } catch (e) { return json(res, 409, { error: e.message }); } // the Estudio's caps hold here too
       const out = await voces.design({ name: b.name, prompt: b.prompt, previewText: b.previewText });
-      ledger('voice_design', voces.PRICE.design + out.chars * voces.PRICE.previewPerChar);
+      const paid = voces.PRICE.design + out.chars * voces.PRICE.previewPerChar;
+      ledger('voice_design', paid); media.charge(paid);
       console.log(`✦ voces: designed ${out.voice.voiceId}${out.voice.pinned ? '' : ' (not pinned)'}`);
       return json(res, 200, { voice: out.voice, preview: out.preview ? out.preview.toString('base64') : null });
     }
     if (url.pathname === '/api/voces/clone' && req.method === 'POST') {
       const b = await body(req, 30 << 20); // a recording up to 20 MB, in base64
+      try { media.checkBudget(voces.PRICE.clone); } catch (e) { return json(res, 409, { error: e.message }); }
       let audio, filename;
       if (typeof b.audio === 'string' && b.audio) {
         const p = media.resolve(b.audio.replace(/\\/g, '/'));
@@ -955,7 +958,7 @@ async function vocesRoutes(req, res, url) {
         audio = Buffer.from(b.audioBase64.replace(/^data:[^,]*,/, ''), 'base64'); filename = String(b.filename || 'muestra.mp3').replace(/[\\/]/g, '_').slice(0, 120);
       } else return json(res, 400, { error: 'falta la grabación: elige un audio de la galería o súbelo' });
       const out = await voces.clone({ name: b.name, voiceId: b.voiceId, audio, filename });
-      ledger('voice_clone', voces.PRICE.clone);
+      ledger('voice_clone', voces.PRICE.clone); media.charge(voces.PRICE.clone);
       console.log(`✦ voces: cloned ${out.voice.voiceId}${out.voice.pinned ? '' : ' (not pinned)'}`);
       return json(res, 200, out);
     }

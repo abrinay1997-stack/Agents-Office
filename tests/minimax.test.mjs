@@ -121,6 +121,8 @@ test('video: a cancel asks MiniMax to cancel the queued task (DELETE) and the jo
     media.cancel(j.id);
     const d = await media.wait(j.id, 30000);
     assert.equal(d.state, 'failed'); assert.equal(d.error, 'Cancelado por ti.');
+    const del = () => st.seen.some(x => x.method === 'DELETE' && /^\/v2\/video_generation\/\d+$/.test(x.path));
+    for (let i = 0; i < 200 && !del(); i++) await new Promise(r => setTimeout(r, 10)); // the DELETE is sent without waiting for it: it may land just after the job ends
     assert.ok(st.seen.some(x => x.method === 'DELETE' && /^\/v2\/video_generation\/\d+$/.test(x.path)));
   } finally { restore(); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
   const st2 = await standIn({ video: ['queued', 'failed'] }); const restore2 = on(st2.base); const b = box();
@@ -152,6 +154,54 @@ test('voice: the HEX audio becomes an mp3 in the gallery (kind audio), with the 
     const t2 = st.seen.filter(x => x.path === '/v1/t2a_v2')[1];
     assert.equal(t2.body.voice_setting.emotion, undefined); assert.equal(t2.body.voice_setting.voice_id, 'Spanish_Narrator');
     assert.equal(media.estimate({ model: 'mmx-voz-2.8-hd', prompt: 'x'.repeat(2000) }), 0.2, 'US$100 a million characters');
+  } finally { restore(); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('voice: fluent and whisper only on speech-2.6 (MiniMax T2A doc) — the 2.8 models neither offer nor send them', async () => {
+  const opts = id => media.models().find(x => x.id === id).settings.emotion.values;
+  for (const id of ['mmx-voz-2.8-hd', 'mmx-voz-2.8-turbo']) { assert.ok(!opts(id).includes('whisper') && !opts(id).includes('fluent'), id); assert.ok(opts(id).includes('calm')); }
+  for (const id of ['mmx-voz-2.6-hd', 'mmx-voz-2.6-turbo']) assert.ok(opts(id).includes('whisper') && opts(id).includes('fluent'), id);
+  assert.deepEqual(mmx.emotionsFor('speech-2.6-hd'), mmx.EMOTIONS); assert.ok(!mmx.emotionsFor('speech-2.8-hd').includes('fluent'));
+  const st = await standIn(); const restore = on(st.base); const { dir, data } = box();
+  try {
+    media.configure({}, dir, data);
+    const a = await media.wait(media.submit({ model: 'mmx-voz-2.8-hd', prompt: 'En voz baja.', settings: { emotion: 'whisper' } }).id, 30000);
+    assert.equal(a.state, 'done', a.error);
+    await mmx.tts({ text: 'Directo.', model: 'speech-2.8-turbo', emotion: 'fluent' });
+    const b = await media.wait(media.submit({ model: 'mmx-voz-2.6-hd', prompt: 'En voz baja.', settings: { emotion: 'whisper' } }).id, 30000);
+    assert.equal(b.state, 'done', b.error);
+    const sent = st.seen.filter(x => x.path === '/v1/t2a_v2').map(x => [x.body.model, x.body.voice_setting.emotion]);
+    assert.deepEqual(sent, [['speech-2.8-hd', undefined], ['speech-2.8-turbo', undefined], ['speech-2.6-hd', 'whisper']]);
+  } finally { restore(); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('video: a job resumed hours after it started is still asked at MiniMax (the 30-minute limit counts from the resume) and downloaded', async () => {
+  const st = await standIn({ video: [] }); const restore = on(st.base); const { dir, data } = box();
+  try {
+    const twoHours = Date.now() - 2 * 3600e3;
+    const saved = { id: 'jold1', state: 'running', kind: 'video', model: 'mmx-h3', engine: 'minimax', prompt: 'un perro en la playa', n: 1, s: { resolution: '768P', duration: 5 }, media: {}, weight: 5, by: 'owner', at: twoHours, startedAt: twoHours, items: [], unit: 0.4, remote: [{ id: '424010985799999' }] };
+    fs.mkdirSync(data, { recursive: true }); fs.writeFileSync(path.join(data, 'media-jobs.json'), JSON.stringify([saved]));
+    media.configure({}, dir, data);
+    const d = await media.wait('jold1', 30000);
+    assert.equal(d.state, 'done', d.error);
+    assert.ok(st.seen.some(x => x.path === '/v2/query/video_generation/424010985799999'), 'asked at least once');
+    assert.equal(st.seen.filter(x => x.path === '/v2/video_generation').length, 0, 'no new task');
+    assert.equal(d.startedAt, twoHours, 'its first start is kept');
+  } finally { restore(); await new Promise(r => setTimeout(r, 200)); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('video n=2: the second task refused (1008, no balance) — the first, already paid, is still polled and downloaded, with a warning', async () => {
+  const st = await standIn({ video: [], failFrom: { '/v2/video_generation': [2, 1008, 'insufficient balance'] } }); const restore = on(st.base); const { dir, data } = box();
+  try {
+    media.configure({}, dir, data);
+    const d = await media.wait(media.submit({ model: 'mmx-h3', prompt: 'dos tomas', n: 2 }).id, 30000);
+    assert.equal(d.state, 'done', d.error); assert.equal(d.items.length, 1);
+    assert.match(d.warning, /se hicieron 1 de 2/);
+    assert.equal(st.seen.filter(x => x.path.startsWith('/v2/query/')).length, 1);
+    // none created → the job fails with the reason
+    const st2 = await standIn({ fail: { '/v2/video_generation': [1008, 'insufficient balance'] } }); const r2 = on(st2.base);
+    try { const f = await media.wait(media.submit({ model: 'mmx-h3', prompt: 'sin saldo', n: 2 }).id, 30000); assert.equal(f.state, 'failed'); assert.ok(f.error); }
+    finally { r2(); await st2.close(); }
   } finally { restore(); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
