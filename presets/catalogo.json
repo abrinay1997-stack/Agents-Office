@@ -1,0 +1,57 @@
+{
+ "version": 1,
+ "fecha": "2026-10-01",
+ "descripcion": "Fábrica del banco de presets del Estudio, partida de docs/presets-catalogo.json (scripts/presets-partir.mjs). Especificación: docs/propuesta-banco-presets.md.",
+ "leyenda": {
+  "marcadores": {
+   "{idea}": "lo que escribió el dueño (vacío si nada)",
+   "{producto}": "nombre o descripción del producto (fila del lote, o «the product»)",
+   "{conservar}": "la cláusula de conservación de la familia (nunca se quita)",
+   "{encuadre}": "el fragmento «en» del nivel de encuadre elegido",
+   "{n1}": "número de la 1.ª referencia: 2 si hay foto propia (Image 1), 1 si no",
+   "{p.<id>}": "el fragmento «en» (o el valor) del parámetro <id>",
+   "{cifras.precio}": "un número de <cerebro>/Agents Office/cifras.json, nunca del preset"
+  },
+  "ejecutor": {
+   "local": "se hace en esta máquina con sharp: gratis, exacto, el producto intacto",
+   "ia": "lo hace un modelo (rehace la imagen o la zona)",
+   "local+ia": "la IA hace lo creativo y el paso local garantiza el número (blanco 255, ocupación, tamaño)",
+   "ajustes": "solo pone ajustes del modelo (proporción, duración, audio, estilo de música)"
+  },
+  "modos": {
+   "cero": "desde cero, sin foto",
+   "foto": "sobre tu foto (se conserva el producto)",
+   "ref": "con una referencia (sin foto propia)",
+   "foto+ref": "tu foto + una referencia",
+   "texto": "video o audio desde texto",
+   "anima": "anima una foto",
+   "ab": "de un fotograma a otro",
+   "refs": "con referencias de identidad",
+   "video": "a partir de un video"
+  },
+  "capa": {
+   "receta": "un trabajo completo; como mucho una por pila",
+   "ajuste": "una sola cosa; se apilan"
+  },
+  "exclusivos": [
+   "fondo",
+   "sombra",
+   "escena",
+   "encuadre",
+   "angulo",
+   "camara",
+   "plano",
+   "look",
+   "formato",
+   "audio",
+   "salida"
+  ],
+  "fase": {
+   "1": "primer corte (imagen esencial)",
+   "4": "imagen ampliada",
+   "5": "video",
+   "6": "música y voz"
+  },
+  "estado": "beta hasta probarlo con 5 fotos reales por familia de modelo; entonces «estable»"
+ }
+}

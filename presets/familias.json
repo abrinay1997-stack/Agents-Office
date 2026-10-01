@@ -1,0 +1,105 @@
+{
+ "conversacional": {
+  "modelos": [
+   "nano-banana*",
+   "muse-image",
+   "mmx-image-01"
+  ],
+  "conservar": "Preserve the product exactly: same shape, proportions, materials, colors, label, logos and text. Do not add, invent or remove logos, text, parts or accessories. Do not reinterpret the design. Keep everything not mentioned exactly the same.",
+  "refRotulo": "Image {n} is {rol}.",
+  "nota": "Patrón oficial de Nano Banana: qué cambia, qué se queda y el papel de cada imagen. Hasta 14 referencias (Muse 10)."
+ },
+ "instrucciones": {
+  "modelos": [
+   "gpt-image-1"
+  ],
+  "conservar": "Preserve the product exactly: same shape, proportions, materials, colors, label, logos and text. Do not add, invent or remove logos, text, parts or accessories. Do not reinterpret the design. Keep everything not mentioned exactly the same.",
+  "max": 4000,
+  "nota": "GPT Image: lista de requisitos y lista de lo que no cambia. Proporciones 1:1, 3:2, 2:3: el resto sale por «exportar»."
+ },
+ "edicion-corta": {
+  "modelos": [
+   "flux-kontext",
+   "qwen-image-3",
+   "seedream-4",
+   "grok-imagine-2",
+   "nano-banana-fal"
+  ],
+  "conservar": "Keep the product exactly the same.",
+  "max": 600,
+  "nota": "Imperativo corto: los prompts largos se degradan. Flux Kontext toma UNA imagen: nunca recibe un preset con referencia."
+ },
+ "descriptiva": {
+  "modelos": [
+   "soul*",
+   "flux-2*",
+   "flux-schnell",
+   "z-image-turbo",
+   "recraft*",
+   "ideogram*",
+   "marketing-studio*",
+   "grok-image",
+   "qwen-image-3",
+   "prueba"
+  ],
+  "sinEdicion": true,
+  "sep": ", ",
+  "nota": "Solo desde cero: describe la foto final."
+ },
+ "veo": {
+  "modelos": [
+   "veo-*"
+  ],
+  "plantilla": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+  "nota": "Fórmula oficial de Veo 3.1: cinematografía + sujeto + acción + contexto + estilo; audio con SFX: y Ambient noise:. Solo 16:9 y 9:16."
+ },
+ "kling": {
+  "modelos": [
+   "kling-*"
+  ],
+  "plantilla": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. {look}.",
+  "max": 2500,
+  "nota": "Un solo movimiento de cámara por clip; «static camera» cuando es fija."
+ },
+ "seedance": {
+  "modelos": [
+   "seedance-*"
+  ],
+  "plantilla": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}.",
+  "nota": "start/end y reference no van juntos (lo valida capsOf)."
+ },
+ "minimax-video": {
+  "modelos": [
+   "mmx-h3*",
+   "minimax-*",
+   "hailuo-*"
+  ],
+  "plantilla": "{sujeto} {accion}. {escena}. {camara}. {look}.",
+  "nota": "Los comandos de cámara entre corchetes ([Push in]…) NO están en docs/minimax/api-verificada.md: hasta verificarlos, la cámara va en texto llano."
+ },
+ "video-generico": {
+  "modelos": [
+   "wan-*",
+   "ltx-*",
+   "pixverse-*",
+   "happy-horse-*",
+   "grok-imagine-video",
+   "cinema-studio-4",
+   "genjutsu-*",
+   "prueba-video"
+  ],
+  "plantilla": "{camara}. {plano}. {sujeto} {accion}. {escena}. {look}."
+ },
+ "musica-minimax": {
+  "modelos": [
+   "mmx-musica-*"
+  ],
+  "nota": "El preset rellena settings.style e instrumental; el prompt es la letra o la descripción del dueño."
+ },
+ "voz-minimax": {
+  "modelos": [
+   "mmx-voz-*"
+  ],
+  "nota": "El texto es el del dueño, literal; el preset solo pone voz, emoción y velocidad."
+ }
+}

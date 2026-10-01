@@ -1,0 +1,1041 @@
+{
+ "grupo": "referencia",
+ "presets": [
+  {
+   "id": "ref-anuncio",
+   "v": 1,
+   "nombre": "Hazlo como este anuncio",
+   "icono": {
+    "id": "megafono",
+    "d": "M3 10v4h3l8 5V5L6 10zM17 9a4 4 0 0 1 0 6M6 14l1 6h3l-1-5.5"
+   },
+   "categoria": "referencia",
+   "frase": "Pones tu idea (y tu foto) y una referencia de marketing: copia estilo, color, luz y composición, nunca su producto ni su marca.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "ref",
+    "foto+ref"
+   ],
+   "ejes": [
+    "estilo",
+    "color",
+    "luz",
+    "encuadre"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    },
+    {
+     "rol": "referencia",
+     "eje": "anuncio",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "El anuncio que te gusta"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "incluye": [
+    "ref-estilo",
+    "ref-composicion",
+    "ref-luz"
+   ],
+   "ia": "make an ad image for {producto} {p.fuerza} the reference: its visual style, color grading, lighting and layout",
+   "requiere": {
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "seedream-4",
+    "nano-banana",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "como este anuncio",
+    "anuncio",
+    "referencia",
+    "igual a esta",
+    "copiar anuncio",
+    "inspiracion",
+    "como esta foto",
+    "marketing"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for look (style, color grading, lighting and layout) only. Use Image {n1} only for its look (style, color grading, lighting and layout); do not copy its objects, people, products, text, logos or brand names. Change only this: make an ad image for {producto} {p.fuerza} the reference: its visual style, color grading, lighting and layout. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for look (style, color grading, lighting and layout) only. Use Image {n1} only for its look (style, color grading, lighting and layout); do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- make an ad image for {producto} {p.fuerza} the reference: its visual style, color grading, lighting and layout\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "modoCero": "Image {n1} is a reference for look (style, color grading, lighting and layout) only. Use Image {n1} only for its look (style, color grading, lighting and layout); do not copy its objects, people, products, text, logos or brand names. Create a professional photo of {producto}: make an ad image for {producto} {p.fuerza} the reference: its visual style, color grading, lighting and layout. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "ref-estilo",
+   "v": 1,
+   "nombre": "Copiar el estilo",
+   "icono": {
+    "id": "capas",
+    "d": "m12 3 9 5-9 5-9-5zm3 13 9 5 9-5"
+   },
+   "categoria": "referencia",
+   "frase": "El estilo de la referencia (textura, ambiente), no sus objetos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "ref",
+    "foto+ref"
+   ],
+   "ejes": [
+    "estilo"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    },
+    {
+     "rol": "referencia",
+     "eje": "estilo",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Foto con el estilo"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "ia": "render {p.fuerza} the style of the reference (medium, texture, mood); do not copy its subject or objects",
+   "requiere": {
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "seedream-4",
+    "nano-banana",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace la imagen.",
+   "buscar": [
+    "estilo",
+    "copiar estilo",
+    "mismo estilo",
+    "style",
+    "sref"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for visual style (medium, texture, mood) only. Use Image {n1} only for its visual style (medium, texture, mood); do not copy its objects, people, products, text, logos or brand names. Change only this: render {p.fuerza} the style of the reference (medium, texture, mood); do not copy its subject or objects. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for visual style (medium, texture, mood) only. Use Image {n1} only for its visual style (medium, texture, mood); do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- render {p.fuerza} the style of the reference (medium, texture, mood); do not copy its subject or objects\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "modoCero": "Image {n1} is a reference for visual style (medium, texture, mood) only. Use Image {n1} only for its visual style (medium, texture, mood); do not copy its objects, people, products, text, logos or brand names. Create a professional photo of {producto}: render {p.fuerza} the style of the reference (medium, texture, mood); do not copy its subject or objects. {idea}"
+   }
+  },
+  {
+   "id": "ref-color",
+   "v": 1,
+   "nombre": "Copiar el color de una foto",
+   "tecnico": "Igualar color",
+   "icono": {
+    "id": "paleta",
+    "d": "M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5S14 15 15 15h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8zM6.5 11a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M9 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M14 7.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+   },
+   "categoria": "referencia",
+   "frase": "Pasa la paleta y el tono de otra foto a la tuya, sin tocar la forma. Se hace en la máquina, sin IA.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto+ref"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "referencia",
+     "eje": "color",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Foto con el color que te gusta"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "local": [
+    {
+     "op": "transferir-color",
+     "metodo": "reinhard-lab",
+     "fuerza": {
+      "baja": 0.4,
+      "media": 0.7,
+      "alta": 1
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "delta-e"
+   ],
+   "buscar": [
+    "copiar color",
+    "mismo color",
+    "color de esta foto",
+    "tono",
+    "paleta",
+    "lut",
+    "color match",
+    "igualar"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "ref-lut-aplicar",
+   "v": 2,
+   "nombre": "Aplicar un LUT (.cube)",
+   "icono": {
+    "id": "lut",
+    "d": "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9M8 9.8v4.5M16 9.8v4.5"
+   },
+   "categoria": "referencia",
+   "frase": "Usa un archivo .cube (de Lightroom, Premiere o DaVinci) tal cual.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "lut",
+     "medio": "cube",
+     "min": 1,
+     "max": 1,
+     "es": "Tu archivo .cube"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "mezcla",
+     "tipo": "rango",
+     "es": "Cantidad",
+     "max": 100,
+     "def": 100
+    }
+   ],
+   "local": [
+    {
+     "op": "lut3d",
+     "interpolacion": "trilineal",
+     "tamanos": [
+      17,
+      33,
+      65
+     ]
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "lut",
+    "cube",
+    ".cube",
+    "look",
+    "preset de lightroom",
+    "davinci"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "ref-lut-guardar",
+   "v": 2,
+   "nombre": "Guardar este color como LUT",
+   "icono": {
+    "id": "exportar",
+    "d": "M12 3v12M8 11l4 4 4-4M4 17v3h16v-3"
+   },
+   "categoria": "referencia",
+   "frase": "Convierte un ajuste de color que te gustó en un .cube para el lote y el video.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "exportar-lut",
+     "tamano": 33
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "guardar lut",
+    "exportar lut",
+    "crear lut",
+    "cube"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "ref-composicion",
+   "v": 1,
+   "nombre": "Copiar la composición",
+   "icono": {
+    "id": "reticula",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM9 3v18M15 3v18M3 9h18M3 15h18"
+   },
+   "categoria": "referencia",
+   "frase": "El mismo ángulo, encuadre y espacio vacío que la referencia.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "ref",
+    "foto+ref"
+   ],
+   "ejes": [
+    "encuadre",
+    "angulo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    },
+    {
+     "rol": "referencia",
+     "eje": "composicion",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Foto con la composición"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "ia": "use the reference only as a layout guide, {p.fuerza} it: same camera angle, framing, subject placement and negative space; the content is {producto}",
+   "requiere": {
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "seedream-4",
+    "nano-banana",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "composicion",
+    "mismo encuadre",
+    "misma posicion",
+    "layout",
+    "acomodo"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for composition (camera angle, framing, placement, negative space) only. Use Image {n1} only for its composition (camera angle, framing, placement, negative space); do not copy its objects, people, products, text, logos or brand names. Change only this: use the reference only as a layout guide, {p.fuerza} it: same camera angle, framing, subject placement and negative space; the content is {producto}. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for composition (camera angle, framing, placement, negative space) only. Use Image {n1} only for its composition (camera angle, framing, placement, negative space); do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- use the reference only as a layout guide, {p.fuerza} it: same camera angle, framing, subject placement and negative space; the content is {producto}\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "modoCero": "Image {n1} is a reference for composition (camera angle, framing, placement, negative space) only. Use Image {n1} only for its composition (camera angle, framing, placement, negative space); do not copy its objects, people, products, text, logos or brand names. Create a professional photo of {producto}: use the reference only as a layout guide, {p.fuerza} it: same camera angle, framing, subject placement and negative space; the content is {producto}. Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "ref-luz",
+   "v": 1,
+   "nombre": "Copiar la iluminación",
+   "icono": {
+    "id": "bombilla",
+    "d": "M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"
+   },
+   "categoria": "referencia",
+   "frase": "Reilumina tu foto como la referencia: dirección, suavidad y temperatura.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto+ref"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "referencia",
+     "eje": "luz",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Foto con la luz que te gusta"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "ia": "relight the product photo {p.fuerza} the lighting of the reference: direction, softness, color temperature",
+   "requiere": {
+    "edit": true,
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "seedream-4",
+    "nano-banana",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace la imagen.",
+   "buscar": [
+    "copiar luz",
+    "misma luz",
+    "iluminacion",
+    "relight"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for lighting (direction, softness, color temperature) only. Use Image {n1} only for its lighting (direction, softness, color temperature); do not copy its objects, people, products, text, logos or brand names. Change only this: relight the product photo {p.fuerza} the lighting of the reference: direction, softness, color temperature. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for lighting (direction, softness, color temperature) only. Use Image {n1} only for its lighting (direction, softness, color temperature); do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- relight the product photo {p.fuerza} the lighting of the reference: direction, softness, color temperature\n- {idea}\nMust stay unchanged:\n- {conservar}"
+   }
+  },
+  {
+   "id": "ref-pose",
+   "v": 1,
+   "nombre": "Copiar la pose",
+   "icono": {
+    "id": "pose",
+    "d": "M10 4.5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M12 7v6l-3 7M12 13l3 7M6 9l6-1 6 1"
+   },
+   "categoria": "referencia",
+   "frase": "La misma postura y gesto de la persona de la referencia.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "ref",
+    "foto+ref"
+   ],
+   "ejes": [
+    "estilo"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    },
+    {
+     "rol": "referencia",
+     "eje": "pose",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Foto con la pose"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "ia": "same body pose and gesture as the person in the reference",
+   "requiere": {
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "soul-2",
+    "mmx-image-01"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "pose",
+    "postura",
+    "gesto",
+    "posicion"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for body pose only. Use Image {n1} only for its body pose; do not copy its objects, people, products, text, logos or brand names. Change only this: same body pose and gesture as the person in the reference. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for body pose only. Use Image {n1} only for its body pose; do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- same body pose and gesture as the person in the reference\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "modoCero": "Image {n1} is a reference for body pose only. Use Image {n1} only for its body pose; do not copy its objects, people, products, text, logos or brand names. Create a professional photo of {producto}: same body pose and gesture as the person in the reference. {idea}"
+   }
+  },
+  {
+   "id": "ref-producto-en-escena",
+   "v": 1,
+   "nombre": "Mi producto en esa foto",
+   "icono": {
+    "id": "caja",
+    "d": "M3 7.5 12 3l9 4.5v9L12 21l-9-4.5zM3 7.5 12 12l9-4.5M12 12v9M7.5 5.2l9 4.6"
+   },
+   "categoria": "referencia",
+   "frase": "Cambia el producto de la referencia por el tuyo, con su luz y su perspectiva.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto+ref"
+   ],
+   "ejes": [
+    "escena"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "referencia",
+     "eje": "escena",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "La foto donde va tu producto"
+    }
+   ],
+   "parametros": [],
+   "ia": "put the product from Image 1 into the scene of Image 2, replacing its product, matching light and perspective",
+   "requiere": {
+    "edit": true,
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "seedream-4",
+    "nano-banana",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "reemplazar producto",
+    "mi producto ahi",
+    "cambiar producto",
+    "montar"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for scene only. Use Image {n1} only for its scene; do not copy its objects, people, products, text, logos or brand names. Change only this: put the product from Image 1 into the scene of Image 2, replacing its product, matching light and perspective. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for scene only. Use Image {n1} only for its scene; do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- put the product from Image 1 into the scene of Image 2, replacing its product, matching light and perspective\n- {idea}\nMust stay unchanged:\n- {conservar}"
+   }
+  },
+  {
+   "id": "ref-maqueta",
+   "v": 1,
+   "nombre": "Copiar la maqueta de texto",
+   "icono": {
+    "id": "t",
+    "d": "M5 6V4h14v2M12 4v16M9 20h6"
+   },
+   "categoria": "referencia",
+   "frase": "La misma disposición de título, texto y botón que la referencia, con tu texto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "ref",
+    "foto+ref"
+   ],
+   "ejes": [
+    "encuadre"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    },
+    {
+     "rol": "referencia",
+     "eje": "tipografia",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Pieza con la maqueta"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "texto",
+     "tipo": "texto",
+     "es": "Texto",
+     "max": 140,
+     "def": ""
+    }
+   ],
+   "ia": "same layout of headline, copy block and call to action as the reference; text: \"{p.texto}\"",
+   "requiere": {
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "ideogram-4",
+    "gpt-image-1",
+    "recraft-4.1"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "maqueta",
+    "diseno",
+    "plantilla",
+    "texto",
+    "layout"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for text layout only. Use Image {n1} only for its text layout; do not copy its objects, people, products, text, logos or brand names. Change only this: same layout of headline, copy block and call to action as the reference; text: \"{p.texto}\". Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for text layout only. Use Image {n1} only for its text layout; do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- same layout of headline, copy block and call to action as the reference; text: \"{p.texto}\"\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "modoCero": "Image {n1} is a reference for text layout only. Use Image {n1} only for its text layout; do not copy its objects, people, products, text, logos or brand names. Create a professional photo of {producto}: same layout of headline, copy block and call to action as the reference; text: \"{p.texto}\". Framing: {encuadre}. {idea}"
+   }
+  },
+  {
+   "id": "ref-armonizar",
+   "v": 1,
+   "nombre": "Integrar un producto pegado",
+   "tecnico": "Armonizar",
+   "icono": {
+    "id": "iman",
+    "d": "M6 3v8a6 6 0 0 0 12 0V3h-4v8a2 2 0 0 1-4 0V3zM6 7h4M14 7h4"
+   },
+   "categoria": "referencia",
+   "frase": "Hiciste un montaje: iguala luz, color, sombra y perspectiva.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz",
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "harmonize the pasted product with the scene: matching light, color, shadows and perspective",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "montaje",
+    "pegado",
+    "integrar",
+    "armonizar",
+    "photoshop"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: harmonize the pasted product with the scene: matching light, color, shadows and perspective. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- harmonize the pasted product with the scene: matching light, color, shadows and perspective\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "harmonize the pasted product with the scene: matching light, color, shadows and perspective. {conservar}"
+   }
+  },
+  {
+   "id": "ref-serie-patron",
+   "v": 1,
+   "nombre": "Igualar a la foto patrón",
+   "icono": {
+    "id": "flecha-ab",
+    "d": "M3 6h5a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-10a1 1 0 0 1 1 -1zM16 6h5a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-10a1 1 0 0 1 1 -1zM10 12h4M12.5 10.5 14 12l-1.5 1.5"
+   },
+   "categoria": "referencia",
+   "frase": "Todas las fotos del lote con la misma temperatura y exposición que la primera aprobada.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto+ref"
+   ],
+   "ejes": [
+    "color",
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "referencia",
+     "eje": "color",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Foto patrón (la primera aprobada del lote)"
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "igualar-serie",
+     "mide": [
+      "temperatura",
+      "exposicion",
+      "linea-suelo"
+     ]
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "delta-e"
+   ],
+   "buscar": [
+    "igualar",
+    "serie",
+    "todas iguales",
+    "consistencia",
+    "patron"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  }
+ ]
+}

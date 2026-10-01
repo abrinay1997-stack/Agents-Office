@@ -1,0 +1,842 @@
+{
+ "grupo": "limpieza",
+ "presets": [
+  {
+   "id": "limp-polvo",
+   "v": 2,
+   "nombre": "Polvo y pelusas",
+   "icono": {
+    "id": "polvo",
+    "d": "M4 20 13 11M15 6a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M18 10a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M13.4 3a0.6 0.6 0 1 0 1.2 0a0.6 0.6 0 1 0 -1.2 0M19.4 5a0.6 0.6 0 1 0 1.2 0a0.6 0.6 0 1 0 -1.2 0M16.4 13a0.6 0.6 0 1 0 1.2 0a0.6 0.6 0 1 0 -1.2 0"
+   },
+   "categoria": "limpieza",
+   "frase": "Quita polvo, pelusas y puntitos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove dust, lint and specks",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "polvo",
+    "pelusa",
+    "puntos",
+    "sucio",
+    "manchas pequenas"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove dust, lint and specks. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove dust, lint and specks\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove dust, lint and specks. {conservar}"
+   }
+  },
+  {
+   "id": "limp-rayas",
+   "v": 1,
+   "nombre": "Rayas, golpes y rozaduras",
+   "icono": {
+    "id": "parche",
+    "d": "M5.6 15.5 15.5 5.6a2.8 2.8 0 0 1 4 4L9.6 19.4a2.8 2.8 0 0 1-4-4zM11 11h.01M13 13h.01M13 11h.01M11 13h.01"
+   },
+   "categoria": "limpieza",
+   "frase": "Repara rayones y golpes en la madera o el metal.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "repair scratches, dents and scuffs",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "rayas",
+    "rayones",
+    "golpes",
+    "rozaduras",
+    "danado"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: repair scratches, dents and scuffs. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- repair scratches, dents and scuffs\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "repair scratches, dents and scuffs. {conservar}"
+   }
+  },
+  {
+   "id": "limp-huellas",
+   "v": 1,
+   "nombre": "Huellas y manchas",
+   "icono": {
+    "id": "varita",
+    "d": "M4 20 15 9M14 4v3M19 9h3M17.5 5.5l2-2M20 14l-1.5-1.5"
+   },
+   "categoria": "limpieza",
+   "frase": "Quita huellas de dedos en vidrio o superficies brillantes.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove fingerprints and smudges on glossy surfaces",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "huellas",
+    "dedos",
+    "manchas",
+    "vidrio sucio"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove fingerprints and smudges on glossy surfaces. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove fingerprints and smudges on glossy surfaces\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove fingerprints and smudges on glossy surfaces. {conservar}"
+   }
+  },
+  {
+   "id": "limp-arrugas",
+   "v": 1,
+   "nombre": "Arrugas de sábanas y cojines",
+   "icono": {
+    "id": "tela",
+    "d": "M3 7c3-2 6 2 9 0s6-2 9 0M3 12c3-2 6 2 9 0s6-2 9 0M3 17c3-2 6 2 9 0s6-2 9 0"
+   },
+   "categoria": "limpieza",
+   "frase": "Estira la tela sin dejarla de plástico.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "smooth wrinkles in fabric, bedding and cushions, keep natural folds",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "arrugas",
+    "sabana arrugada",
+    "la sabana arrugada",
+    "cojines",
+    "tela",
+    "planchar"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: smooth wrinkles in fabric, bedding and cushions, keep natural folds. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- smooth wrinkles in fabric, bedding and cushions, keep natural folds\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "smooth wrinkles in fabric, bedding and cushions, keep natural folds. {conservar}"
+   }
+  },
+  {
+   "id": "limp-reflejos",
+   "v": 1,
+   "nombre": "Reflejos del fotógrafo o la ventana",
+   "icono": {
+    "id": "quitar",
+    "d": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M5.6 5.6 18.4 18.4"
+   },
+   "categoria": "limpieza",
+   "frase": "Quita tu reflejo o el de la ventana en vidrios y espejos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove reflections of the photographer, windows and lights",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "reflejo",
+    "mi reflejo",
+    "espejo",
+    "vidrio"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove reflections of the photographer, windows and lights. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove reflections of the photographer, windows and lights\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove reflections of the photographer, windows and lights. {conservar}"
+   }
+  },
+  {
+   "id": "limp-objetos",
+   "v": 1,
+   "nombre": "Quitar cosas que sobran",
+   "icono": {
+    "id": "goma",
+    "d": "m7 21-4-4 11-11 7 7-8 8zM10 10l7 7M14 21h7"
+   },
+   "categoria": "limpieza",
+   "frase": "Borra lo que no debe salir (la escoba, las cajas).",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "que",
+     "tipo": "texto",
+     "es": "Qué quitar",
+     "max": 140,
+     "def": "las cajas y la escoba"
+    }
+   ],
+   "ia": "remove {p.que}; fill the area naturally",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "quitar objetos",
+    "borrar",
+    "escoba",
+    "cajas",
+    "sobra",
+    "estorba",
+    "quitar lo de atras"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove {p.que}; fill the area naturally. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove {p.que}; fill the area naturally\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove {p.que}. {conservar}"
+   }
+  },
+  {
+   "id": "limp-personas",
+   "v": 1,
+   "nombre": "Quitar personas",
+   "icono": {
+    "id": "persona-x",
+    "d": "M5.5 8a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M3 20a6 6 0 0 1 12 0M16 8l5 5M21 8l-5 5"
+   },
+   "categoria": "limpieza",
+   "frase": "Borra a la gente del fondo.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove people in the background; fill naturally",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "personas",
+    "gente",
+    "quitar persona"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove people in the background; fill naturally. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove people in the background; fill naturally\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove people in the background. {conservar}"
+   }
+  },
+  {
+   "id": "limp-texto",
+   "v": 1,
+   "nombre": "Quitar textos y marcas de agua",
+   "icono": {
+    "id": "t-tachada",
+    "d": "M5 6V4h14v2M12 4v16M9 20h6M4 20 20 4"
+   },
+   "categoria": "limpieza",
+   "frase": "Borra textos y marcas de agua añadidos, sin tocar la etiqueta del producto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove added text and watermarks; keep the product's own label",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "marca de agua",
+    "texto",
+    "logo ajeno",
+    "watermark",
+    "letras"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove added text and watermarks; keep the product's own label. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove added text and watermarks; keep the product's own label\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove added text and watermarks. {conservar}"
+   }
+  },
+  {
+   "id": "limp-pinzas",
+   "v": 1,
+   "nombre": "Quitar pinzas, cables y soportes",
+   "icono": {
+    "id": "tijera",
+    "d": "M3 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M8.1 8.1 20 20M8.1 15.9 20 4"
+   },
+   "categoria": "limpieza",
+   "frase": "Borra lo que sostiene el producto en la foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove clips, pins, cables and supports",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "pinzas",
+    "cables",
+    "soporte",
+    "hilos",
+    "alfileres"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove clips, pins, cables and supports. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove clips, pins, cables and supports\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove clips, pins, cables and supports. {conservar}"
+   }
+  },
+  {
+   "id": "limp-etiquetas",
+   "v": 1,
+   "nombre": "Quitar etiquetas de precio y stickers",
+   "icono": {
+    "id": "etiqueta",
+    "d": "M3 12V4h8l10 10-8 8zM6 8.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "limpieza",
+   "frase": "Borra precios, códigos y stickers de la tienda.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove price tags, barcodes and store stickers; keep the product's own branding",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "precio",
+    "sticker",
+    "etiqueta de precio",
+    "codigo de barras"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove price tags, barcodes and store stickers; keep the product's own branding. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove price tags, barcodes and store stickers; keep the product's own branding\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove price tags, barcodes and store stickers. {conservar}"
+   }
+  },
+  {
+   "id": "limp-reconstruir",
+   "v": 1,
+   "nombre": "Reconstruir una parte cortada",
+   "icono": {
+    "id": "parche",
+    "d": "M5.6 15.5 15.5 5.6a2.8 2.8 0 0 1 4 4L9.6 19.4a2.8 2.8 0 0 1-4-4zM11 11h.01M13 13h.01M13 11h.01M11 13h.01"
+   },
+   "categoria": "limpieza",
+   "frase": "Completa una pata o una esquina que quedó fuera de la foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "que",
+     "tipo": "texto",
+     "es": "Qué parte",
+     "max": 140,
+     "def": "la pata derecha"
+    }
+   ],
+   "ia": "restore the missing or cut-off {p.que} consistently with the design",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "cortada",
+    "falta una parte",
+    "pata",
+    "esquina",
+    "completar"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: restore the missing or cut-off {p.que} consistently with the design. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- restore the missing or cut-off {p.que} consistently with the design\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "restore the missing or cut-off {p.que} consistently with the design. {conservar}"
+   }
+  },
+  {
+   "id": "limp-todo",
+   "v": 1,
+   "nombre": "Limpieza completa",
+   "icono": {
+    "id": "varita",
+    "d": "M4 20 15 9M14 4v3M19 9h3M17.5 5.5l2-2M20 14l-1.5-1.5"
+   },
+   "categoria": "limpieza",
+   "frase": "Polvo, rayas, huellas, reflejos y pinzas de una vez.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "incluye": [
+    "limp-polvo",
+    "limp-rayas",
+    "limp-huellas",
+    "limp-reflejos",
+    "limp-pinzas"
+   ],
+   "ia": "clean the product: remove dust, scratches, fingerprints, reflections and supports",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace solo esa zona: revisa el resultado en Antes | Después.",
+   "buscar": [
+    "limpiar",
+    "limpieza",
+    "retocar",
+    "imperfecciones",
+    "dejar perfecto"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: clean the product: remove dust, scratches, fingerprints, reflections and supports. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- clean the product: remove dust, scratches, fingerprints, reflections and supports\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "clean the product: remove dust, scratches, fingerprints, reflections and supports. {conservar}"
+   }
+  }
+ ]
+}

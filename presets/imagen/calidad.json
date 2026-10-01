@@ -1,0 +1,531 @@
+{
+ "grupo": "calidad",
+ "presets": [
+  {
+   "id": "cal-nitidez",
+   "v": 1,
+   "nombre": "Más nítida",
+   "tecnico": "Enfoque",
+   "icono": {
+    "id": "nitidez",
+    "d": "M12 3 21 20H3zM12 9v6M12 17.5v.01"
+   },
+   "categoria": "calidad",
+   "frase": "Más definición, sin halos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "calidad"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "nitidez",
+     "sigma": {
+      "suave": 0.6,
+      "normal": 1,
+      "fuerte": 1.5
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "nitidez",
+    "enfocar",
+    "definicion",
+    "sharpen",
+    "blanda"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "cal-ruido",
+   "v": 1,
+   "nombre": "Quitar el granito",
+   "tecnico": "Reducción de ruido",
+   "icono": {
+    "id": "grano",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM7 7h.01M11 9h.01M15 7h.01M9 13h.01M13 12h.01M17 14h.01M7 17h.01M12 16h.01M16 18h.01"
+   },
+   "categoria": "calidad",
+   "frase": "Quita el ruido de las fotos con poca luz.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "calidad"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "ruido",
+     "radio": {
+      "suave": 1,
+      "normal": 2,
+      "fuerte": 3
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "ruido",
+    "granos",
+    "granulada",
+    "poca luz",
+    "noche"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "cal-whatsapp",
+   "v": 1,
+   "nombre": "Arreglar foto de WhatsApp",
+   "tecnico": "Quitar compresión",
+   "icono": {
+    "id": "bloques",
+    "d": "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zm14 17 2 2 4-4"
+   },
+   "categoria": "calidad",
+   "frase": "Quita los cuadritos y manchas de las fotos reenviadas.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "calidad"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove JPEG blocking, banding and compression artifacts; restore fine detail without changing the product",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace los detalles perdidos.",
+   "buscar": [
+    "whatsapp",
+    "foto de whatsapp",
+    "pixelada",
+    "cuadritos",
+    "compresion",
+    "mala calidad",
+    "foto fea",
+    "reenviada"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove JPEG blocking, banding and compression artifacts; restore fine detail without changing the product. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove JPEG blocking, banding and compression artifacts; restore fine detail without changing the product\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove JPEG blocking, banding and compression artifacts. {conservar}"
+   }
+  },
+  {
+   "id": "cal-2k",
+   "v": 1,
+   "nombre": "Más grande (2K)",
+   "icono": {
+    "id": "lupa-mas",
+    "d": "M4.5 11a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0m20 20-4.2-4.2M11 8v6M8 11h6"
+   },
+   "categoria": "calidad",
+   "frase": "La rehace a 2048 px.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "calidad",
+    "salida"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "same image at higher resolution, identical content",
+   "ajustesModelo": {
+    "imageSize": "2K"
+   },
+   "requiere": {
+    "edit": true,
+    "settings": [
+     "imageSize"
+    ]
+   },
+   "prefer": [
+    "nano-banana-2",
+    "nano-banana-pro"
+   ],
+   "post": [],
+   "qa": [
+    "identidad",
+    "lado-min"
+   ],
+   "honestidad": "No es un escalado fiel: el modelo rehace la imagen a 2K. Con un escalador dedicado (Higgsfield o fal) pasa a «fiel».",
+   "buscar": [
+    "agrandar",
+    "mas grande",
+    "2k",
+    "resolucion",
+    "upscale",
+    "pequena"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: same image at higher resolution, identical content. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- same image at higher resolution, identical content\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "same image at higher resolution, identical content. {conservar}"
+   }
+  },
+  {
+   "id": "cal-4k",
+   "v": 1,
+   "nombre": "Más grande (4K)",
+   "icono": {
+    "id": "lupa-mas",
+    "d": "M4.5 11a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0 -13 0m20 20-4.2-4.2M11 8v6M8 11h6"
+   },
+   "categoria": "calidad",
+   "frase": "La rehace a 4096 px.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "calidad",
+    "salida"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "same image at higher resolution, identical content",
+   "ajustesModelo": {
+    "imageSize": "4K"
+   },
+   "requiere": {
+    "edit": true,
+    "settings": [
+     "imageSize"
+    ]
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2"
+   ],
+   "post": [],
+   "qa": [
+    "identidad",
+    "lado-min"
+   ],
+   "honestidad": "No es un escalado fiel: el modelo rehace la imagen a 4K.",
+   "buscar": [
+    "4k",
+    "grande",
+    "imprimir",
+    "upscale",
+    "alta resolucion"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: same image at higher resolution, identical content. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- same image at higher resolution, identical content\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "same image at higher resolution, identical content. {conservar}"
+   }
+  },
+  {
+   "id": "cal-movida",
+   "v": 1,
+   "nombre": "Foto movida o desenfocada",
+   "icono": {
+    "id": "movida",
+    "d": "M9 12a5 5 0 1 0 10 0a5 5 0 1 0 -10 0M3 8h5M2 12h5M3 16h5"
+   },
+   "categoria": "calidad",
+   "frase": "Recupera una foto que salió movida.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "calidad"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "fix motion blur and slight defocus, restore crisp edges without inventing detail",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "La IA rehace la imagen.",
+   "buscar": [
+    "movida",
+    "desenfocada",
+    "borrosa",
+    "temblor"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: fix motion blur and slight defocus, restore crisp edges without inventing detail. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- fix motion blur and slight defocus, restore crisp edges without inventing detail\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "fix motion blur and slight defocus, restore crisp edges without inventing detail. {conservar}"
+   }
+  },
+  {
+   "id": "cal-restaurar",
+   "v": 1,
+   "nombre": "Restaurar foto vieja o mala",
+   "icono": {
+    "id": "nitidez",
+    "d": "M12 3 21 20H3zM12 9v6M12 17.5v.01"
+   },
+   "categoria": "calidad",
+   "frase": "Compresión, ruido, nitidez y blancos en un paso.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "calidad",
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "incluye": [
+    "cal-whatsapp",
+    "cal-ruido",
+    "cal-nitidez",
+    "color-blancos"
+   ],
+   "ia": "restore this low-quality photo: remove compression artifacts and noise, crisp natural detail",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "restaurar",
+    "recuperar",
+    "foto vieja",
+    "mala calidad",
+    "mejorar calidad"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: restore this low-quality photo: remove compression artifacts and noise, crisp natural detail. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- restore this low-quality photo: remove compression artifacts and noise, crisp natural detail\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "restore this low-quality photo: remove compression artifacts and noise, crisp natural detail. {conservar}"
+   }
+  }
+ ]
+}

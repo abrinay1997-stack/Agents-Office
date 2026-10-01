@@ -1,0 +1,288 @@
+{
+ "intensidad": {
+  "es": "Intensidad",
+  "valores": [
+   {
+    "v": "suave",
+    "es": "Suave",
+    "en": "subtly"
+   },
+   {
+    "v": "normal",
+    "es": "Normal",
+    "en": ""
+   },
+   {
+    "v": "fuerte",
+    "es": "Fuerte",
+    "en": "strongly"
+   }
+  ],
+  "def": "normal"
+ },
+ "fuerza": {
+  "es": "Cuánto se parece",
+  "valores": [
+   {
+    "v": "baja",
+    "es": "Poco",
+    "en": "loosely inspired by"
+   },
+   {
+    "v": "media",
+    "es": "Normal",
+    "en": "following"
+   },
+   {
+    "v": "alta",
+    "es": "Mucho",
+    "en": "closely matching"
+   }
+  ],
+  "def": "media"
+ },
+ "encuadre": {
+  "es": "Distancia del producto",
+  "valores": [
+   {
+    "v": "detalle",
+    "es": "Detalle (de muy cerca)",
+    "ocupacion": null,
+    "medido": false,
+    "alinear": "centro",
+    "en": "extreme close-up of a key detail, texture filling the frame"
+   },
+   {
+    "v": "ajustado",
+    "es": "Ajustado · 85 %",
+    "ocupacion": 0.85,
+    "medido": true,
+    "alinear": "centro",
+    "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+   },
+   {
+    "v": "catalogo",
+    "es": "Catálogo · 75 %",
+    "ocupacion": 0.75,
+    "medido": true,
+    "alinear": "centro",
+    "en": "entire product centered, about 75% of the frame, even margins"
+   },
+   {
+    "v": "margen",
+    "es": "Con margen · 60 %",
+    "ocupacion": 0.6,
+    "medido": true,
+    "alinear": "centro",
+    "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+   },
+   {
+    "v": "aire",
+    "es": "Mucho aire para recortar · 45 %",
+    "ocupacion": 0.45,
+    "medido": true,
+    "alinear": "centro",
+    "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+   },
+   {
+    "v": "apoyado",
+    "es": "Apoyado en la línea del suelo · 70 %",
+    "ocupacion": 0.7,
+    "medido": true,
+    "alinear": "base",
+    "base": 0.85,
+    "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+   },
+   {
+    "v": "medio",
+    "es": "Plano medio en su ambiente",
+    "ocupacion": 0.4,
+    "medido": false,
+    "alinear": "escena",
+    "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+   },
+   {
+    "v": "general",
+    "es": "Toda la habitación",
+    "ocupacion": 0.2,
+    "medido": false,
+    "alinear": "escena",
+    "en": "wide shot of the whole room, product clearly the focal point"
+   }
+  ],
+  "def": "catalogo",
+  "nota": "ocupacion = lado largo de la caja del PRODUCTO (sin sombra ni reflejo) ÷ lado del lienzo. medido:true lo garantiza el paso local «encuadrar»; medido:false es solo una indicación al modelo y la QA dice «no medido»."
+ },
+ "escalaSerie": {
+  "es": "En una serie",
+  "valores": [
+   {
+    "v": "llenar",
+    "es": "Cada foto llena su cuadro"
+   },
+   {
+    "v": "misma",
+    "es": "Misma escala en toda la serie (una king se ve más grande que una queen)"
+   }
+  ],
+  "def": "llenar"
+ },
+ "alinear": {
+  "es": "Alinear",
+  "valores": [
+   {
+    "v": "auto",
+    "es": "Automático (muebles por la base)"
+   },
+   {
+    "v": "centro",
+    "es": "Al centro"
+   },
+   {
+    "v": "base",
+    "es": "Por la base"
+   }
+  ],
+  "def": "auto"
+ },
+ "lado": {
+  "es": "Lado",
+  "valores": [
+   {
+    "v": "izquierda",
+    "es": "Izquierda",
+    "en": "left"
+   },
+   {
+    "v": "derecha",
+    "es": "Derecha",
+    "en": "right"
+   }
+  ],
+  "def": "izquierda"
+ },
+ "proporcion": {
+  "es": "Proporción",
+  "valores": [
+   {
+    "v": "1:1",
+    "es": "1:1"
+   },
+   {
+    "v": "4:5",
+    "es": "4:5"
+   },
+   {
+    "v": "3:4",
+    "es": "3:4"
+   },
+   {
+    "v": "2:3",
+    "es": "2:3"
+   },
+   {
+    "v": "3:2",
+    "es": "3:2"
+   },
+   {
+    "v": "4:3",
+    "es": "4:3"
+   },
+   {
+    "v": "16:9",
+    "es": "16:9"
+   },
+   {
+    "v": "9:16",
+    "es": "9:16"
+   },
+   {
+    "v": "21:9",
+    "es": "21:9"
+   }
+  ],
+  "def": "1:1"
+ },
+ "color": {
+  "es": "Color",
+  "tipo": "color",
+  "patron": "^#[0-9A-Fa-f]{6}$",
+  "def": "#F2EDE4"
+ },
+ "texto": {
+  "es": "Texto",
+  "tipo": "texto",
+  "max": 140,
+  "def": ""
+ },
+ "angulo": {
+  "es": "Ángulo",
+  "valores": [
+   {
+    "v": "ojo",
+    "es": "A la altura de los ojos",
+    "en": "eye-level"
+   },
+   {
+    "v": "picado",
+    "es": "Desde arriba",
+    "en": "high angle"
+   },
+   {
+    "v": "contrapicado",
+    "es": "Desde abajo",
+    "en": "low angle"
+   },
+   {
+    "v": "cenital",
+    "es": "Justo desde arriba",
+    "en": "top-down overhead"
+   }
+  ],
+  "def": "ojo"
+ },
+ "duracion": {
+  "es": "Duración",
+  "valores": [
+   {
+    "v": "5",
+    "es": "5 s"
+   },
+   {
+    "v": "8",
+    "es": "8 s"
+   },
+   {
+    "v": "10",
+    "es": "10 s"
+   }
+  ],
+  "def": "5"
+ },
+ "velocidad": {
+  "es": "Velocidad",
+  "valores": [
+   {
+    "v": "lenta",
+    "es": "Lenta",
+    "en": "slow"
+   },
+   {
+    "v": "normal",
+    "es": "Normal",
+    "en": "smooth"
+   },
+   {
+    "v": "rapida",
+    "es": "Rápida",
+    "en": "fast"
+   }
+  ],
+  "def": "lenta"
+ },
+ "canal": {
+  "es": "Para dónde es",
+  "tipo": "canal",
+  "def": "web"
+ }
+}

@@ -1,0 +1,192 @@
+{
+ "grupo": "voz",
+ "presets": [
+  {
+   "id": "voz-anuncio",
+   "v": 2,
+   "nombre": "Locución de anuncio",
+   "icono": {
+    "id": "mic",
+    "d": "M12 3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3v-5a3 3 0 0 1 3 -3zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"
+   },
+   "categoria": "voz",
+   "frase": "Voz alegre y clara para un anuncio.",
+   "medios": [
+    "audio"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "audio"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [
+    {
+     "id": "voz",
+     "tipo": "voz",
+     "es": "Voz",
+     "def": "la de Ajustes → Estudio"
+    }
+   ],
+   "ajustesModelo": {
+    "emotion": "happy",
+    "speed": 1.05
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-voz-2.8-hd",
+    "mmx-voz-2.8-turbo",
+    "mmx-voz-2.6-hd"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "locucion",
+    "anuncio",
+    "voz",
+    "spot de radio",
+    "radio"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "voz-minimax": {
+     "prompt": "{texto exacto del dueño}",
+     "settings": {
+      "emotion": "happy",
+      "speed": 1.05
+     }
+    }
+   }
+  },
+  {
+   "id": "voz-tutorial",
+   "v": 1,
+   "nombre": "Narración de tutorial",
+   "icono": {
+    "id": "mic",
+    "d": "M12 3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3v-5a3 3 0 0 1 3 -3zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"
+   },
+   "categoria": "voz",
+   "frase": "Voz neutra y pausada.",
+   "medios": [
+    "audio"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "audio"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [
+    {
+     "id": "voz",
+     "tipo": "voz",
+     "es": "Voz",
+     "def": "la de Ajustes → Estudio"
+    }
+   ],
+   "ajustesModelo": {
+    "emotion": "neutral",
+    "speed": 0.95
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-voz-2.8-hd",
+    "mmx-voz-2.8-turbo",
+    "mmx-voz-2.6-hd"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "tutorial",
+    "narracion",
+    "explicar",
+    "voz en off"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "voz-minimax": {
+     "prompt": "{texto exacto del dueño}",
+     "settings": {
+      "emotion": "neutral",
+      "speed": 0.95
+     }
+    }
+   }
+  },
+  {
+   "id": "voz-oferta",
+   "v": 1,
+   "nombre": "Promo rápida",
+   "icono": {
+    "id": "mic",
+    "d": "M12 3h0a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3v-5a3 3 0 0 1 3 -3zM5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"
+   },
+   "categoria": "voz",
+   "frase": "Voz enérgica para una oferta corta.",
+   "medios": [
+    "audio"
+   ],
+   "capa": "receta",
+   "modos": [
+    "texto"
+   ],
+   "ejes": [
+    "audio"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ajustes",
+   "entradas": [],
+   "parametros": [
+    {
+     "id": "voz",
+     "tipo": "voz",
+     "es": "Voz",
+     "def": "la de Ajustes → Estudio"
+    }
+   ],
+   "ajustesModelo": {
+    "emotion": "surprised",
+    "speed": 1.15
+   },
+   "requiere": {},
+   "prefer": [
+    "mmx-voz-2.8-hd",
+    "mmx-voz-2.8-turbo",
+    "mmx-voz-2.6-hd"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "promo",
+    "oferta",
+    "rapida",
+    "energica"
+   ],
+   "estrella": false,
+   "fase": 6,
+   "estado": "beta",
+   "prompt": {
+    "voz-minimax": {
+     "prompt": "{texto exacto del dueño}",
+     "settings": {
+      "emotion": "surprised",
+      "speed": 1.15
+     }
+    }
+   }
+  }
+ ]
+}

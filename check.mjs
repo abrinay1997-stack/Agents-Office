@@ -797,6 +797,29 @@ await step('estudio: sharp loads and works (the preset bank\'s local operations;
   if (Math.round(st.channels[0].mean) !== 255) throw new Error('stats: ' + st.channels[0].mean);
   return `sharp ${sharp.versions?.sharp || '?'} · libvips ${sharp.versions?.vips || '?'}`;
 });
+await step('Presets: la fábrica (presets/) cumple el esquema, cada preset lo sirve algún modelo, y las notas de <cerebro>/Estudio/Presets/ se leen', async () => { // banco de presets F1, equipo de datos
+  const { cargarFabrica, cuentas } = await import('./presets/fabrica.mjs');
+  const { validarFabrica } = await import('./presets/validar.mjs');
+  const { notaAPreset, CARPETA } = await import('./presets-notas.mjs');
+  const { allModels, capsOf } = await import('./media/catalogo.mjs');
+  const fab = cargarFabrica();
+  const caps = allModels().map(m => ({ ...capsOf(m), ajustes: Object.keys(m.settings || {}) }));
+  const r = validarFabrica(fab, { capacidades: caps });
+  // los presets del dueño: notas del Cerebro (§15.4). Una nota que no se entiende se nombra, no se borra.
+  const dir = path.join(cfg.brainPath, ...CARPETA.split('/')), propios = [], malas = [];
+  const byId = new Map(fab.presets.map(p => [p.id, p])), canales = new Set(fab.canales.map(c => c.id));
+  if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) {
+    const { preset, problemas } = notaAPreset(fs.readFileSync(path.join(dir, f), 'utf8'), { archivo: `${CARPETA}/${f}`, byId, canales });
+    if (preset) propios.push(preset.id);
+    if (problemas.length) malas.push(`${CARPETA}/${f}: ${problemas.join('; ')}`);
+  }
+  const dup = propios.filter((x, i) => propios.indexOf(x) !== i);
+  if (dup.length) malas.push(`dos notas con el mismo id: ${[...new Set(dup)].join(', ')}`);
+  if (r.problemas.length || malas.length) throw new Error([...r.problemas, ...malas].slice(0, 12).join(' | ') + (r.problemas.length + malas.length > 12 ? ` | … y ${r.problemas.length + malas.length - 12} más` : ''));
+  const c = cuentas(fab.presets), sinServir = r.avisos.filter(a => /sin servir/.test(a));
+  return `${c.total} presets (${c.imagen} de imagen, ${c.video} de video, ${c.musica + c.voz} de sonido) · F1: ${c.fase1} · ${Object.keys(fab.iconos).length} iconos · ${fab.canales.length} canales · ${Object.keys(fab.sinonimos.frases || {}).length} frases de tienda`
+    + ` · propios: ${propios.length}${sinServir.length ? ` · sin servir todavía: ${sinServir.map(a => a.replace(/^«([^»]+)».*$/, '$1')).join(', ')}` : ''}`;
+});
 
 await step('estudio: the free test engine generates, files are stored with their record, paths stay inside', async () => {
   const md = await import('./media.mjs');
