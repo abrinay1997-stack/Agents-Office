@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const OUT = path.join(ROOT, 'data', 'capturas', 'estudio-voz');
+const OUT = path.join(ROOT, 'data', 'capturas', process.env.AO_CAPTURAS || 'estudio-voz');
 const ANCHOS = [[1512, 900], [1024, 768], [390, 844]];
 
 /** Un WAV de `secs` segundos (un tono suave): sirve de audio de la galería y de muestra de una voz. */
@@ -25,6 +25,7 @@ function wav(secs = 1.5, hz = 440) {
 }
 
 const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-voz-'));
+const LARGO = path.join(sandbox, 'mi-voz-12s.wav'); // para el paso 1 de clonar (los audios de la galería duran 1,5 s)
 const brain = path.join(sandbox, 'brain'), media = path.join(brain, 'Agents Office', 'media', '2026-09');
 fs.mkdirSync(media, { recursive: true });
 fs.writeFileSync(path.join(brain, 'index.md'), '# Prueba\n');
@@ -34,6 +35,7 @@ const AUDIOS = [
   ['instrumental', { kind: 'audio', wanted: 'music', prompt: 'Lo-fi relajado con piano y lluvia suave, 80 bpm', model: 'mmx-musica-3', modelName: 'Música 3.0 · MiniMax', provider: 'minimax', settings: { instrumental: true, format: 'mp3' }, by: 'you' }],
   ['subida', { kind: 'audio', prompt: 'Reunión con el cliente', upload: true, by: 'you' }],
 ];
+fs.writeFileSync(LARGO, wav(12, 220));
 AUDIOS.forEach(([id, rec], i) => {
   const file = `2026-09/2026-09-30 ${id} 20000${i}.wav`;
   fs.writeFileSync(path.join(brain, 'Agents Office', 'media', file), wav(1.5, 330 + i * 110));
@@ -148,7 +150,7 @@ try {
     if (phone) { await page.click('#studioOv [data-pt="gal"]'); await page.waitForTimeout(300); }
     await page.click('#studioOv .st-tabs [data-f="voice"]'); await page.waitForTimeout(250);
     const gv = await page.evaluate(() => ({ n: document.querySelectorAll('#studioOv .st-grid .st-card[data-f]').length, play: document.querySelectorAll('#studioOv .st-grid .st-cplay').length, lab: [...document.querySelectorAll('#studioOv .st-tabs [data-f="voice"], #studioOv .st-tabs [data-f="music"]')].map(b => b.textContent.trim()) }));
-    nota(gv.n === 2 && gv.play === 2, `${tag} · filtro Voz: ${gv.n} tarjetas con reproductor (${gv.lab.join(' · ')})`, gv);
+    nota(gv.n >= 2 && gv.play === gv.n, `${tag} · filtro Voz: ${gv.n} tarjetas con reproductor (${gv.lab.join(' · ')})`, gv);
     await page.screenshot({ path: path.join(OUT, `galeria-voz-${tag}.png`) });
     await page.click('#studioOv .st-tabs [data-f="music"]'); await page.waitForTimeout(250);
     const gm = await page.evaluate(() => [...document.querySelectorAll('#studioOv .st-grid .st-slab')].map(x => x.textContent));
@@ -164,53 +166,67 @@ try {
     await page.screenshot({ path: path.join(OUT, `visor-voz-${tag}.png`) });
     await page.click('#studioOv .st-light [data-l="othervoice"]'); await page.waitForTimeout(300);
     const ov = await page.evaluate(() => ({ kind: document.querySelector('#studioOv [data-kind="audio"]').getAttribute('aria-pressed'), foco: document.activeElement && document.activeElement.className, txt: document.querySelector('#studioOv .st-prompt').value.slice(0, 20) }));
-    nota(ov.kind === 'true' && (on ? /st-vid/.test(ov.foco) : true), `${tag} · «Repetir con otra voz»: Voz, mismo texto «${ov.txt}…», foco en ${ov.foco || '—'}`);
+    nota(ov.kind === 'true' && (on ? /st-vsel|st-vid/.test(ov.foco) : true), `${tag} · «Repetir con otra voz»: Voz, mismo texto «${ov.txt}…», foco en ${ov.foco || '—'}`);
     // 5 · el panel «Voces»
     if (phone) { await page.click('#studioOv [data-pt="gal"]'); await page.waitForTimeout(200); }
     await page.click('#studioOv .st-vocbtn'); await page.waitForSelector('#studioOv .st-vocov:not([hidden])'); await page.waitForTimeout(300);
     const pv = await page.evaluate(() => { const V = document.querySelector('#studioOv .st-vocov'); return { foco: V.contains(document.activeElement), filas: V.querySelectorAll('.st-vlist > li[data-vid]').length, off: !!V.querySelector('.st-voff'), botones: [...V.querySelectorAll('button')].map(b => b.textContent.trim()).filter(Boolean) }; });
-    nota(pv.foco && (on ? pv.filas === 2 && !pv.off : pv.off && !pv.botones.some(b => /Clonar|Crear|Usar/.test(b))), `${tag} · panel Voces: foco dentro ${pv.foco}, ${on ? pv.filas + ' voces' : 'sin key: explica cómo activarlo y no ofrece botones que fallen'}`, pv);
+    nota(pv.foco && (on ? pv.filas === 2 && !pv.off && pv.botones.some(b => /Clonar mi voz/.test(b)) : pv.off && !pv.botones.some(b => /Clonar|Crear|Usar/.test(b))), `${tag} · panel Voces: foco dentro ${pv.foco}, ${on ? pv.filas + ' voces' : 'sin key: explica cómo activarlo y no ofrece botones que fallen'}`, pv);
     nota(true, `${tag} · medida panel`, await medir(page));
     await page.screenshot({ path: path.join(OUT, `voces-${tag}.png`) });
     if (on) {
       // Tab da la vuelta dentro del panel
       for (let i = 0; i < 40; i++) await page.keyboard.press('Tab');
       nota(await page.evaluate(() => document.querySelector('#studioOv .st-vocov').contains(document.activeElement)), `${tag} · Tab se queda dentro del panel`);
-      // diseñar: la muestra suena y se anuncia
-      await page.evaluate(() => { const d = document.querySelector('#studioOv .st-vsec'); d.open = true; });
+      // diseñar: la muestra suena y se anuncia; «Quedármela» vuelve a tus voces
+      await page.click('#studioOv [data-vo="go-design"]');
       await page.fill('#studioOv .st-vdn', 'Voz cálida'); await page.fill('#studioOv .st-vdp', 'Mujer de 30 años, cálida, acento panameño suave');
+      const precioD = await page.evaluate(() => document.querySelector('#studioOv [data-vo="design"]').textContent);
       await page.click('#studioOv [data-vo="design"]'); await page.waitForSelector('#studioOv .st-vdres audio');
-      const ds = await page.evaluate(() => ({ live: document.querySelector('#studioOv .st-vdres').getAttribute('aria-live'), filas: document.querySelectorAll('#studioOv .st-vlist > li[data-vid]').length, foco: document.activeElement.tagName }));
-      nota(ds.live === 'polite' && ds.filas === 3, `${tag} · Diseñar: muestra con reproductor (aria-live ${ds.live}), ${ds.filas} voces, foco en ${ds.foco}`);
+      const ds = await page.evaluate(() => ({ live: document.querySelector('#studioOv .st-vdres').getAttribute('aria-live'), foco: document.activeElement.tagName, borrar: document.querySelector('#studioOv [data-vo="discard"]')?.textContent }));
+      nota(ds.live === 'polite' && /US\$3\.00/.test(precioD) && /no se devuelve/.test(ds.borrar || ''), `${tag} · Diseñar: «${precioD}», muestra con reproductor, «${ds.borrar}», foco en ${ds.foco}`);
       await page.evaluate(() => document.querySelector('#studioOv .st-vdres').scrollIntoView({ block: 'center' }));
       await page.screenshot({ path: path.join(OUT, `voces-disenar-${tag}.png`) });
       await page.click('#studioOv [data-vo="keep"]'); await page.waitForTimeout(100);
-      // clonar: el id se valida en vivo
-      await page.evaluate(() => { const d = document.querySelectorAll('#studioOv .st-vsec')[1]; d.open = true; d.scrollIntoView({ block: 'start' }); });
+      nota(await page.evaluate(() => document.querySelectorAll('#studioOv .st-vlist > li[data-vid]').length === 3), `${tag} · «Quedármela» vuelve a tus voces (3)`);
+      // clonar: un audio corto de la galería se rechaza; uno de 12 s pasa; el id va en «Más opciones» y se valida
+      await page.click('#studioOv [data-vo="go-clone"]');
+      await page.selectOption('#studioOv .st-vca', '2026-09/2026-09-30 voz 200000.wav'); await page.waitForFunction(() => !document.querySelector('#studioOv .st-verr')?.hidden, null, { timeout: 5000 }).catch(() => {});
+      nota(/al menos 10 segundos/.test(await page.evaluate(() => document.querySelector('#studioOv .st-verr').textContent)), `${tag} · Clonar: un audio de 1,5 s de la galería se rechaza en el paso 1`);
+      nota(true, `${tag} · medida clonar paso 1`, await medir(page));
+      await page.screenshot({ path: path.join(OUT, `voces-clonar-1-${tag}.png`) });
+      await page.setInputFiles('#studioOv .st-vcf', LARGO); await page.waitForSelector('#studioOv [data-vo="next"]');
+      nota(true, `${tag} · medida clonar paso 2`, await medir(page));
+      await page.screenshot({ path: path.join(OUT, `voces-clonar-2-${tag}.png`) });
+      await page.click('#studioOv [data-vo="next"]');
       await page.fill('#studioOv .st-vcn', 'Mi voz nueva');
-      const sug = await page.inputValue('#studioOv .st-vci');
+      await page.click('#studioOv .st-vadv summary'); const sug = await page.inputValue('#studioOv .st-vci');
       await page.fill('#studioOv .st-vci', '1 voz');
-      const bad = await page.evaluate(() => [document.querySelector('#stVcH').textContent, document.querySelector('#studioOv .st-vci').getAttribute('aria-invalid'), document.querySelector('#studioOv [data-vo="clone"]').disabled]);
-      nota(bad[1] === 'true' && bad[2], `${tag} · Clonar: id sugerido «${sug}»; «1 voz» → «${bad[0]}», botón apagado ${bad[2]}`);
-      await page.screenshot({ path: path.join(OUT, `voces-clonar-${tag}.png`) });
-      await page.fill('#studioOv .st-vci', 'MiVozNueva01');
-      await page.selectOption('#studioOv .st-vca', { index: 1 });
-      const okc = await page.evaluate(() => !document.querySelector('#studioOv [data-vo="clone"]').disabled);
-      await page.click('#studioOv [data-vo="clone"]'); await page.waitForTimeout(300);
-      const cl = await page.evaluate(() => [document.querySelector('#studioOv .st-vcres').textContent, document.querySelectorAll('#studioOv .st-vlist > li[data-vid]').length]);
-      nota(okc && cl[1] === 4, `${tag} · Clonar con un audio de la galería: «${cl[0]}» (${cl[1]} voces)`);
-      // borrar pregunta en su fila; Esc dice que no
-      await page.click('#studioOv .st-vlist > li[data-vid] [data-vo="del"]'); await page.waitForTimeout(100);
+      const bad = await page.evaluate(() => [document.querySelector('#stVcH').textContent, document.querySelector('#studioOv .st-vci').getAttribute('aria-invalid'), document.querySelector('#studioOv .st-vmiss').textContent]);
+      nota(bad[1] === 'true' && /id válido/.test(bad[2]) && /^Voz_MiVozNueva_/.test(sug), `${tag} · Clonar: id puesto por la oficina «${sug}»; «1 voz» → «${bad[0]}» · «${bad[2]}»`);
+      nota(true, `${tag} · medida clonar paso 3`, await medir(page));
+      await page.screenshot({ path: path.join(OUT, `voces-clonar-3-${tag}.png`) });
+      await page.fill('#studioOv .st-vci', 'MiVozNueva01'); await page.check('#studioOv .st-vok');
+      const okc = await page.evaluate(() => document.querySelector('#studioOv [data-vo="clone"]').getAttribute('aria-disabled') === 'false');
+      await page.click('#studioOv [data-vo="clone"]'); await page.waitForSelector('#studioOv .st-vdone', { timeout: 5000 }).catch(() => {});
+      const cl = await page.evaluate(() => ({ h: document.querySelector('#studioOv .st-vdone')?.textContent, foco: document.activeElement?.classList.contains('st-vdone') }));
+      nota(okc && /Mi voz nueva/.test(cl.h || '') && cl.foco, `${tag} · Clonar: «${cl.h}», foco en el resultado`);
+      nota(true, `${tag} · medida clonar resultado`, await medir(page));
+      await page.screenshot({ path: path.join(OUT, `voces-clonada-${tag}.png`) });
+      await page.click('#studioOv [data-vo="home"]');
+      nota(await page.evaluate(() => document.querySelectorAll('#studioOv .st-vlist > li[data-vid]').length === 4), `${tag} · la voz clonada está en tus voces (4)`);
+      // borrar: en el «⋯» de la fila, pregunta en su fila; Esc dice que no
+      await page.click('#studioOv .st-vlist > li[data-vid] .st-vmore summary'); await page.click('#studioOv .st-vlist > li[data-vid] [data-vo="del"]'); await page.waitForTimeout(100);
       const conf = await page.evaluate(() => !!document.querySelector('#studioOv .st-vconf') && document.activeElement.dataset.vo);
       await page.keyboard.press('Escape'); await page.waitForTimeout(100);
       const still = await page.evaluate(() => !document.querySelector('#studioOv .st-vocov').hidden && !document.querySelector('#studioOv .st-vconf'));
       nota(conf === 'del-no' && still, `${tag} · Borrar pregunta en la fila (foco en «No»); Esc la cancela sin cerrar el panel`);
-      await page.click('#studioOv .st-vlist > li[data-vid] [data-vo="del"]'); await page.click('#studioOv [data-vo="del-yes"]'); await page.waitForTimeout(200);
+      await page.click('#studioOv .st-vlist > li[data-vid] .st-vmore summary'); await page.click('#studioOv .st-vlist > li[data-vid] [data-vo="del"]'); await page.click('#studioOv [data-vo="del-yes"]'); await page.waitForTimeout(200);
       nota(await page.evaluate(() => document.querySelectorAll('#studioOv .st-vlist > li[data-vid]').length === 3), `${tag} · Sí, borrar: la voz sale de la lista`);
-      // «Usar esta voz» la pone en el selector
+      // «Usar en un audio» la pone en el selector y lo dice por el título del paso (no «paso 5»)
       await page.click('#studioOv .st-vlist > li[data-vid] [data-vo="use"]'); await page.waitForTimeout(300);
-      const use = await page.evaluate(() => ({ cerrado: document.querySelector('#studioOv .st-vocov').hidden, vid: document.querySelector('#studioOv .st-vid')?.value }));
-      nota(use.cerrado && !!use.vid, `${tag} · «Usar esta voz» cierra el panel y pone «${use.vid}» en el paso 5`);
+      const use = await page.evaluate(() => ({ cerrado: document.querySelector('#studioOv .st-vocov').hidden, vid: document.querySelector('#studioOv .st-vid')?.value, msg: document.querySelector('#studioOv .st-msg')?.textContent || '' }));
+      nota(use.cerrado && !!use.vid && /«Voz y ajustes»/.test(use.msg) && !/paso 5/.test(use.msg), `${tag} · «Usar en un audio» cierra el panel y pone «${use.vid}»: «${use.msg}»`);
       await page.evaluate(() => document.querySelector('#studioOv .st-sets')?.scrollIntoView({ block: 'center' })); await page.waitForTimeout(100);
       await page.screenshot({ path: path.join(OUT, `voz-usada-${tag}.png`) });
     } else {

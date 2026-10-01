@@ -82,7 +82,8 @@ export function checkVoiceId(v) {
 /** A voiceId from a name: «Voz de Panaclaw» → «VozDePanaclaw01» — a suggestion the owner can change. */
 export function suggestVoiceId(name, taken = []) {
   const base = String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('').replace(/^[^A-Za-z]+/, '').slice(0, 40) || 'MiVoz';
-  for (let i = 1; i < 100; i++) { const id = (base + String(i).padStart(2, '0')).padEnd(8, '0'); if (!taken.includes(id)) return id; }
+  const stem = base.length < 6 ? base.padEnd(6, 'x') : base; // filled BEFORE the number (audit EST-05: «Mi voz» gave «MiVoz010»)
+  for (let i = 1; i < 100; i++) { const id = stem + String(i).padStart(2, '0'); if (!taken.includes(id)) return id; }
   return base + Date.now().toString(36);
 }
 /** The voices, whatever shape they come in (/api/voces gives { voices, system }; /api/media.voices the same, or a bare list of the owner's). */

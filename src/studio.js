@@ -11,6 +11,7 @@ import { modal } from './modal.js'; // V4.1: the page outside an open window is 
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested arithmetic
 import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
+import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
   voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales', style: 'Estilo de la música', promptExpansion: 'Que el motor amplíe el prompt' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
@@ -60,7 +61,8 @@ export function initStudio(ctx) {
         <button type="button" class="st-unfold" title="Mostrar el compositor" aria-label="Mostrar el compositor">${svg('spark')}<span>Crear</span></button>
         <div class="st-scroll"><button type="button" class="st-fold" title="Plegar el compositor: más sitio para la galería" aria-label="Plegar el compositor">‹ plegar</button>
           <div class="st-step"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
-            <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button><button type="button" data-kind="audio" aria-pressed="false" title="Un texto leído en voz alta (MiniMax)">${svg('mic')}<span>Voz</span></button><button type="button" data-kind="music" aria-pressed="false" title="Una canción con letra o una pista instrumental (MiniMax)">${svg('note')}<span>Música</span></button></div></div>
+            <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button><button type="button" data-kind="audio" aria-pressed="false" title="Un texto leído en voz alta (MiniMax)">${svg('mic')}<span>Voz</span></button><button type="button" data-kind="music" aria-pressed="false" title="Una canción con letra o una pista instrumental (MiniMax)">${svg('note')}<span>Música</span></button></div>
+            <button type="button" class="st-vcta" hidden>${svg('mic')}<span><b>Clonar tu voz o diseñar una</b><small>Para que tus audios suenen como tú</small></span></button></div>
           <div class="st-step"><div class="st-h"><b>2</b> Modelo</div>
             <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden></div></div>
             <p class="st-mnote" hidden role="note"><b>Aviso:</b> MiniMax cerró su API de música a usuarios nuevos el 20 de agosto de 2026. Si tu cuenta no la tiene, el error lo dirá.</p></div>
@@ -79,7 +81,7 @@ export function initStudio(ctx) {
         <div class="st-foot">
           <div class="st-qty" role="group" aria-label="Cantidad"><span>Cantidad</span><button type="button" data-d="-1" aria-label="Menos">−</button><output class="st-n">1</output><button type="button" data-d="1" aria-label="Más">+</button></div>
           <button type="button" class="st-go" title="Generar (Ctrl + Enter desde la idea)">GENERAR</button>
-          <button type="button" class="st-sum" title="Cambiar el formato y los ajustes (paso 5)"></button>
+          <button type="button" class="st-sum" title="Cambiar el formato y los ajustes"></button>
           <div class="st-est"></div>
           <div class="st-keyhelp" hidden role="alert"></div>
           <div class="st-msg" aria-live="polite"></div>
@@ -232,7 +234,7 @@ export function initStudio(ctx) {
     const m = cur(), inst = !!(m && settingsOf(m).instrumental), st = SV.promptStep(kind, inst), snd = sound();
     $('.st-p3t').textContent = st.title;
     if (snd) { $('.st-prompt').placeholder = st.placeholder; $('.st-prompt').setAttribute('aria-label', st.label); } else $('.st-prompt').setAttribute('aria-label', 'Qué quieres crear');
-    $('.st-modeseg').hidden = snd;
+    $('.st-modeseg').hidden = snd; $('.st-vcta').hidden = kind !== 'audio'; // EST-14: the way to a voice of one's own, where Voz is chosen
     $('.st-ltags').hidden = !(kind === 'music' && !inst);
     $('.st-mnote').hidden = kind !== 'music';
     const noEnh = kind === 'audio'; // a voice reads the text as it is written: nothing to «improve»
@@ -273,17 +275,20 @@ export function initStudio(ctx) {
     qty = Math.min(qty, SV.maxQty(kind, budget && budget.maxPerRequest));
     estimate();
   }
-  /** V5.0: the voice — a text field (any voiceId MiniMax knows), the list of the owner's and the system's voices grouped, and the Voces panel. */
+  /** V5.0: the voice — one list (the owner's voices, then MiniMax's), the Voces panel beside it, and the id by hand folded under it
+   *  (audit EST-13: the same choice was asked three times — a text field, a list and a hint repeating the list). */
   function voiceHint(id) {
-    if (!id) return 'Escribe el id de una voz o elígela de la lista.';
-    const v = voices.mine.find(x => x.voiceId === id); if (v) return `«${v.name || id}», tu voz ${v.kind === 'clone' ? 'clonada' : 'diseñada'}.`;
-    const y = voices.system.find(x => x.voiceId === id); return y ? `${y.name || id}${y.lang ? ` · ${y.lang}` : ''}, voz de MiniMax.` : 'Un id que la oficina no conoce: MiniMax dirá si existe.';
+    if (!id) return 'Elige una voz de la lista.';
+    const v = voices.mine.find(x => x.voiceId === id); if (v) return '';
+    const y = voices.system.find(x => x.voiceId === id); return y ? '' : `«${id}»: un id que la oficina no conoce; MiniMax dirá si existe.`;
   }
   function voicePicker(f, val) {
-    const g = SV.voiceGroups(voices);
-    return `<div class="st-lab st-vpick"><label for="stVid">Voz</label><div class="st-vrow2"><input id="stVid" class="st-vid" type="text" data-set="voiceId" value="${esc(val || '')}" maxlength="${+f.max || 256}" placeholder="${esc(f.placeholder || f.default || 'Spanish_Narrator')}" autocomplete="off" spellcheck="false" aria-describedby="stVidH">
-      <button type="button" class="st-vopen" aria-label="Tus voces" title="Tus voces: diseñar, clonar, elegir">${svg('mic')}<span>Voces</span></button></div>
-      ${g.length ? `<select class="st-vsel" aria-label="Elegir una voz de la lista"><option value="">Elegir de la lista…</option>${g.map(gr => `<optgroup label="${esc(gr.label)}">${gr.voices.map(v => `<option value="${esc(v.voiceId)}"${v.voiceId === val ? ' selected' : ''}>${esc(v.name)}${v.line ? ' · ' + esc(v.line) : ''}</option>`).join('')}</optgroup>`).join('')}</select>` : ''}
+    const g = SV.voiceGroups(voices), known = g.some(gr => gr.voices.some(v => v.voiceId === val));
+    const field = `<input id="stVid" class="st-vid" type="text" data-set="voiceId" value="${esc(val || '')}" maxlength="${+f.max || 256}" placeholder="${esc(f.placeholder || f.default || 'Spanish_Narrator')}" autocomplete="off" spellcheck="false" aria-describedby="stVidH"${g.length ? ' aria-label="Id de la voz"' : ''}>`;
+    return `<div class="st-lab st-vpick">${g.length ? '<label for="stVsel">Voz</label>' : '<label for="stVid">Voz (id de MiniMax)</label>'}<div class="st-vrow2">
+      ${g.length ? `<select id="stVsel" class="st-vsel" aria-describedby="stVidH">${val && !known ? `<option value="${esc(val)}" selected>Otra: ${esc(val)}</option>` : !val ? '<option value="">Elegir una voz…</option>' : ''}${g.map(gr => `<optgroup label="${esc(gr.label)}">${gr.voices.map(v => `<option value="${esc(v.voiceId)}"${v.voiceId === val ? ' selected' : ''}>${esc(v.name)}${v.line ? ' · ' + esc(v.line) : ''}</option>`).join('')}</optgroup>`).join('')}</select>` : field}
+      <button type="button" class="st-vopen" aria-label="Tus voces: clonar o diseñar" title="Tus voces: clonar la tuya, diseñar una, elegir">${svg('mic')}<span>Voces</span></button></div>
+      ${g.length ? `<details class="st-vadv2"${val && !known ? ' open' : ''}><summary>Escribir el id a mano</summary>${field}</details>` : ''}
       <span class="st-vhint" id="stVidH">${esc(voiceHint(val))}</span></div>`;
   }
   function setVoice(id) { setSetting('voiceId', id); const i = $('.st-vid'); if (i) i.value = id; const h = $('#stVidH'); if (h) h.textContent = voiceHint(id); const sl = $('.st-vsel'); if (sl) sl.value = [...sl.options].some(o => o.value === id) ? id : ''; estimate(); }
@@ -368,7 +373,7 @@ export function initStudio(ctx) {
       <div class="st-menu" role="menu" hidden>
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
-      ${aud ? `<audio class="st-cplay" src="${src(it)}" controls preload="none" aria-label="Escuchar: ${esc(label)}"></audio>` : ''}
+      ${aud ? `<audio class="st-cplay" src="${src(it)}" controls preload="metadata" aria-label="Escuchar: ${esc(label)}"></audio>` : ''}
       <figcaption>${aud ? `<span class="st-slab">${cap.label}${cap.voice ? ` · voz <b>${esc(cap.voice)}</b>` : cap.instrumental ? ' · instrumental' : ''}</span>` : ''}<span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(who(it))}${it.versionOf ? ' · versión' : ''}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
       <div class="st-ov" role="group" aria-label="Acciones">
         ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla en la pieza «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? '✓ En la pieza' : 'Usar en la pieza'}</button>` : ''}
@@ -566,38 +571,47 @@ export function initStudio(ctx) {
   }
   function closeBin() { const B = $('.st-binov'); if (B.hidden) return; B.hidden = true; B.innerHTML = ''; modal.close(B); if (binFrom && document.contains(binFrom)) binFrom.focus({ preventScroll: true }); binFrom = null; }
   function closeHist() { const H = $('.st-hist'); if (H.hidden) return; H.hidden = true; H.innerHTML = ''; modal.close(H); if (histFrom && document.contains(histFrom)) histFrom.focus({ preventScroll: true }); }
-  /* ---------- V5.0 (30 Sep 2026, the owner: «toda la plataforma MiniMax»): the Voces panel — the owner's voices: design one from a
-     description and hear its sample, clone one from an audio, copy its id, use it, delete it (asked in its own row). Without the key it
-     says how to switch MiniMax on and offers nothing that would fail. Routes: /api/voces (GET), /design, /clone, DELETE /<id>. ---------- */
-  let vocFrom = null, vocFromSel = '', vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
+  /* ---------- V5.0 (30 Sep 2026, the owner: «toda la plataforma MiniMax»): the Voces panel. Rebuilt on 1 Oct 2026 (the owner: «el panel
+     de la clonación de voz tiene que verse más intuitivo»; audit EST-01…EST-22) as three screens:
+       home   — two big choices («Clonar mi voz», «Diseñar una voz con palabras») and «Tus voces» below;
+       clone  — a guided flow: 1 Graba o sube (a script to read, a level meter that warns) · 2 Escúchalo (length, quality) ·
+                3 Ponle nombre y clona (the price, the consent box; the id is made by the office, editable in «Más opciones») ·
+                and the result: hear the original and the clone, try a sentence, «Usar en un audio»;
+       design — describe it, hear its sample, «Quedármela» or «Borrarla».
+     A recording never vanishes on a stray click: while it records, the backdrop does nothing and Esc or ✕ ask first. A take stays
+     in memory (also when the panel closes) until it is cloned or saved: only what is cloned lands in the gallery («Grabaciones de voz»).
+     The pure parts (prices, script, meter, id, what is missing, advice per error) live in src/studio-clonar.js, with tests.
+     Routes: /api/voces (GET), /design, /clone, DELETE /<id>; «Probar esta voz» is an ordinary voice job (/api/media/jobs). ---------- */
+  const freshVoc = () => ({ off: null, del: null, design: null, busy: false, screen: 'home', step: 1, take: null, rec: null, ask: false, name: 'Mi voz', id: '', idTouched: false, consent: false, result: null, script: 0, improv: false, err: '', trying: false, tried: null });
+  let vocFrom = null, vocFromSel = '', vocState = freshVoc();
   const vocApi = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, j }; };
-  const ID_RULE = '8 a 256 caracteres: empieza por letra; solo letras, números, - y _ (sin tildes ni espacios).';
+  const ID_RULE = 'La oficina lo inventa. Si lo cambias: 8 a 256 caracteres, empieza por letra; solo letras sin tilde, números, - y _.';
+  const TRY_TEXT = 'Hola, esta es mi voz clonada. ¿Suena como yo?';
   function vocOffHTML(off) {
     return `<div class="st-voff" role="note"><p><b>${esc(off.why || 'Las voces usan MiniMax, que aún no está activado en esta oficina.')}</b></p>
       <ol><li>Crea la key en <code>platform.minimax.io</code> (API Keys) y ponle un límite de gasto.</li><li>Abre una ventana de comandos y pega <code>${esc(off.how || 'setx MINIMAX_API_KEY "tu-key"')}</code>.</li><li>Cierra la oficina y ábrela con el iniciador.</li></ol>
-      <p>Con la key puesta, aquí diseñas una voz con una descripción, clonas la tuya de un audio y eliges la voz de cada audio.</p></div>`;
+      <p>Con la key puesta, aquí clonas tu voz grabándola o subiendo un audio, diseñas una voz con palabras y eliges la voz de cada audio.</p></div>`;
   }
   function vocRowHTML(v) {
     const nm = esc(v.name || v.voiceId);
-    return `<li data-vid="${esc(v.voiceId)}"><div class="st-vtop"><b class="st-vname">${nm}</b><span class="st-vk">${SV.voiceKind(v)}</span>${v.pinned ? '<span class="st-vpin" title="La oficina la usó al crearla; MiniMax borra una voz que nadie usa en 7 días">fijada</span>' : '<span class="st-vpin no" title="No se pudo fijar: úsala en un audio antes de 7 días o MiniMax la borra">sin fijar</span>'}</div>
-      <div class="st-vmeta"><code>${esc(v.voiceId)}</code><button type="button" data-vo="copy" aria-label="Copiar el id de ${nm}">Copiar id</button>${v.at ? `<span>${esc(when(v.at))}</span>` : ''}</div>
+    return `<li data-vid="${esc(v.voiceId)}"><div class="st-vtop"><b class="st-vname">${nm}</b><span class="st-vk">${SV.voiceKind(v)}</span>${v.at ? `<span class="st-vwhen">${esc(when(v.at))}</span>` : ''}</div>
+      ${v.pinned ? '' : `<p class="st-vexp">MiniMax la borra el ${esc(VC.expiresOn(v.at))} si nadie la usa. <button type="button" data-vo="try-row" aria-label="Probar ${nm} ahora: así MiniMax la conserva">Probarla ahora</button></p>`}
       ${/^https:\/\//.test(v.demoAudio || '') ? `<audio controls preload="none" src="${esc(v.demoAudio)}" aria-label="Muestra de ${nm}"></audio>` : ''}
+      <div class="st-vrowres" role="status" aria-live="polite"></div>
       ${vocState.del === v.voiceId ? `<div class="st-vconf" role="group" aria-label="Confirmar el borrado"><span>¿Borrar «${nm}»? MiniMax la olvida y no vuelve.</span><button type="button" data-vo="del-yes" class="warn">Sí, borrar</button><button type="button" data-vo="del-no">No</button></div>`
-        : `<div class="st-vacts"><button type="button" data-vo="use" class="pri" aria-label="Usar la voz ${nm}">Usar esta voz</button><button type="button" data-vo="del" class="warn" aria-label="Borrar la voz ${nm}">Borrar</button></div>`}</li>`;
+        : `<div class="st-vacts"><button type="button" data-vo="use" aria-label="Usar la voz ${nm} en un audio">${svg('mic')} Usar en un audio</button>
+          <details class="st-vmore"><summary aria-label="Más de ${nm}">${svg('dots')}</summary><div class="st-vmorebox"><span class="st-vidc">Id: <code>${esc(v.voiceId)}</code></span><button type="button" data-vo="copy" aria-label="Copiar el id de ${nm}">Copiar id</button><button type="button" data-vo="del" class="warn" aria-label="Borrar la voz ${nm}">${svg('trash')} Borrar</button></div></details></div>`}</li>`;
   }
   const vq = s => $('.st-vocov ' + s);
   function paintVList() {
     const L = vq('.st-vlist'); if (!L) return;
-    L.innerHTML = voices.mine.length ? voices.mine.map(vocRowHTML).join('') : '<li class="st-vempty">Todavía no tienes voces propias. Diseña una o clona la tuya aquí abajo.</li>';
+    L.innerHTML = voices.mine.length ? voices.mine.map(vocRowHTML).join('') : '<li class="st-vempty">Todavía no tienes voces propias. Clona la tuya o diseña una arriba.</li>';
     const n = vq('.st-vn'); if (n) n.textContent = voices.mine.length ? `(${voices.mine.length})` : '';
   }
   function vsay(where, text, bad) { const m = vq(where); if (m) { m.textContent = text; m.classList.toggle('bad', !!bad); } }
-  /* V5.0 (1 Oct 2026, the owner: «grabar y clonar esa voz, o subir un fragmento… lo máximo… no me interesa un editor»): the audio for a
-     clone is recorded here or uploaded as it is, and always lands in the gallery («Grabaciones de voz») — the clone then names it by id.
-     The browser records WebM, which MiniMax does not take: a recording, and a file MiniMax would refuse (another format, over 20 MB,
-     over 5 minutes), becomes a 24 kHz mono WAV of at most 5:00 (src/studio-voz.js). An mp3/wav/m4a that fits goes as it is. */
-  const vcaOptions = audios => audios.length ? `<option value="">Elegir un audio…</option>${audios.map(a => `<option value="${esc(a.file)}">${esc(short(a.prompt))} · ${esc(when(a.at))}</option>`).join('')}` : '<option value="">Todavía no hay audios: graba o sube uno</option>';
-  function vlen(text, level) { const n = vq('.st-vlen'); if (n) { n.textContent = text || ''; n.className = 'st-vlen' + (level ? ' ' + level : ''); } }
+  /* The audio: recorded here or uploaded as it is. The browser records WebM, which MiniMax does not take: a recording, and a file MiniMax
+     would refuse (another format, over 20 MB, over 5 minutes), becomes a 24 kHz mono WAV of at most 5:00 (src/studio-voz.js). */
+  const vcaOptions = audios => audios.length ? `<option value="">Elegir un audio de la galería…</option>${audios.map(a => `<option value="${esc(a.file)}">${esc(short(a.prompt))} · ${esc(when(a.at))}</option>`).join('')}` : '';
   async function decodeAudio(buf) { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) throw new Error('este navegador no lee audio'); const ac = new AC(); try { return await ac.decodeAudioData(buf); } finally { try { ac.close(); } catch {} } }
   function wavOf(ab) { const ch = Array.from({ length: ab.numberOfChannels }, (_, i) => ab.getChannelData(i)); return new Blob([SV.encodeWav(SV.resample(SV.toMono(ch, ab.sampleRate), ab.sampleRate, SV.CLONE.rate), SV.CLONE.rate)], { type: 'audio/wav' }); }
   const dataURL = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error('no pude leer el audio')); fr.readAsDataURL(blob); });
@@ -607,153 +621,261 @@ export function initStudio(ctx) {
     if (r && r.ok && r.j.folder) { folders = r.j.folders || [...folders, r.j.folder]; return r.j.folder.id; }
     return null; // no folder is no reason to lose the recording
   }
-  function chooseAudio(file) { // into the gallery list, chosen, with its player
-    const s = vq('.st-vca'); if (!s) return;
-    s.innerHTML = vcaOptions(SV.cloneable(items)); s.value = file || '';
-    const p = vq('.st-vprev'), it = file && itemOf(file); if (p) { p.hidden = !it; if (it) p.src = src(it); else p.removeAttribute('src'); }
-    vocState.cloneFile = null; vq('.st-vcfn').textContent = ''; vcheck();
-  }
-  async function keepForClone(blob, name, seconds, note) { // the gallery keeps it; the clone form points at it
-    vlen('Guardando el audio en la galería…');
-    const fid = await voiceFolder(), data = await dataURL(blob);
-    const r = await vocApi('POST', '/api/media/upload', { name, data, ...(fid ? { folder: fid } : {}) }).catch(() => null);
+  function dropTake() { const t = vocState.take; if (t && t.url && t.blob) { try { URL.revokeObjectURL(t.url); } catch {} } vocState.take = null; }
+  function setTake(t) { dropTake(); vocState.take = t; vocState.err = ''; vocState.step = 2; drawVoices(); focusStep(); }
+  /** The take into the gallery (only when it is cloned, or the owner asks): → its gallery file. */
+  async function saveTake() {
+    const t = vocState.take; if (!t) throw new Error('no hay audio');
+    if (t.file) return t.file;
+    const fid = await voiceFolder(), data = await dataURL(t.blob);
+    const r = await vocApi('POST', '/api/media/upload', { name: t.name, data, ...(fid ? { folder: fid } : {}) }).catch(() => null);
     if (!r || !r.ok || !r.j.item) throw new Error(r ? r.j.error || r.status : 'sin conexión con la oficina');
-    items.unshift(r.j.item); renderGrid(); chooseAudio(r.j.item.file);
-    const L = SV.cloneLength(seconds); vlen(`${note} ${L.text}`, L.level);
+    items.unshift(r.j.item); renderGrid(); t.file = r.j.item.file;
+    return t.file;
   }
+  function step1Err(text) { vocState.err = text; const e = vq('.st-verr'); if (e) { e.textContent = text; e.hidden = !text; } }
   async function pickCloneFile(f) {
     if (!f) return;
-    if (f.size > 200 * 1024 * 1024) return vlen(`«${f.name}» pasa de 200 MB: sube un fragmento más corto.`, 'bad');
-    vlen(`Leyendo «${f.name}»…`);
+    if (f.size > 200 * 1024 * 1024) return step1Err(`«${f.name}» pasa de 200 MB: sube un fragmento más corto.`);
+    step1Err(''); vsay('.st-vbusy', `Leyendo «${f.name}»…`);
     let ab = null; try { ab = await decodeAudio(await f.arrayBuffer()); } catch {}
-    try {
-      if (!ab) { const err = SV.checkCloneFile(f); if (err) return vlen(`«${f.name}»: no pude leerlo aquí y ${err.charAt(0).toLowerCase() + err.slice(1)}`, 'bad'); return await keepForClone(f, f.name, SV.CLONE.minS, 'Subido tal cual (no pude medir su duración aquí).'); }
-      if (ab.duration < SV.CLONE.minS) return vlen(SV.cloneLength(ab.duration).text, 'bad');
-      if (SV.fitsAsIs(f, ab.duration)) return await keepForClone(f, f.name, ab.duration, `«${f.name}» quedó en la galería, tal cual.`);
-      await keepForClone(wavOf(ab), f.name.replace(/\.[^.]+$/, '') + '.wav', ab.duration, `«${f.name}» quedó en la galería en WAV${ab.duration > SV.CLONE.maxS ? `, con sus primeros ${SV.clock(SV.CLONE.maxS)}` : ''} (así lo acepta MiniMax).`);
-    } catch (e) { vlen('No pude guardar el audio: ' + e.message, 'bad'); }
+    vsay('.st-vbusy', '');
+    if (!ab) { const err = SV.checkCloneFile(f); if (err) return step1Err(`«${f.name}»: no pude leerlo aquí y ${err.charAt(0).toLowerCase() + err.slice(1)}`); return setTake({ blob: f, url: URL.createObjectURL(f), name: f.name, seconds: null, source: 'file' }); }
+    if (ab.duration < SV.CLONE.minS) return step1Err(VC.lengthLine(ab.duration).text);
+    if (SV.fitsAsIs(f, ab.duration)) return setTake({ blob: f, url: URL.createObjectURL(f), name: f.name, seconds: ab.duration, source: 'file' });
+    const w = wavOf(ab); setTake({ blob: w, url: URL.createObjectURL(w), name: f.name.replace(/\.[^.]+$/, '') + '.wav', seconds: Math.min(ab.duration, SV.CLONE.maxS), cut: ab.duration > SV.CLONE.maxS, source: 'file' });
   }
-  async function measureChosen(file) { // a gallery audio picked in the list: how long it is, said in the same words
-    const it = itemOf(file); if (!it) return vlen('');
-    vlen('Midiendo el audio…');
-    try { const ab = await decodeAudio(await (await fetch(src(it))).arrayBuffer()); if (vq('.st-vca')?.value !== file) return; const L = SV.cloneLength(ab.duration); vlen(L.text + (L.level === 'cut' ? ' Grábalo o súbelo de nuevo y la oficina lo deja en 5:00.' : ''), L.level); }
-    catch { if (vq('.st-vca')?.value === file) vlen(''); }
+  async function pickGalleryAudio(file) {
+    const it = itemOf(file); if (!it) return;
+    step1Err(''); vsay('.st-vbusy', 'Midiendo el audio…');
+    let secs = null; try { secs = (await decodeAudio(await (await fetch(src(it))).arrayBuffer())).duration; } catch {}
+    vsay('.st-vbusy', '');
+    if (secs != null && secs < SV.CLONE.minS) return step1Err(VC.lengthLine(secs).text);
+    if (secs != null && secs > SV.CLONE.maxS) return step1Err(`Ese audio dura ${SV.clock(secs)}: MiniMax toma hasta ${SV.clock(SV.CLONE.maxS)}. Súbelo con «Subir un audio» y la oficina lo recorta sola.`);
+    setTake({ file, url: src(it), name: it.prompt || file, seconds: secs, source: 'gallery' });
   }
-  async function recToggle(b) {
-    if (vocState.rec) return recStop();
-    if (!window.isSecureContext) return vlen('El micrófono solo funciona con la oficina abierta en esta misma computadora (http://localhost:4520). Desde otro equipo, sube el audio.', 'bad');
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return vlen('Este navegador no deja grabar aquí: usa Chrome o Edge, o sube un audio.', 'bad');
+  /* ---- the recorder: the script to read, the level in dBFS (silence · low · ok · clip), the clock, an announcement every 30 s ---- */
+  async function recStart() {
+    if (!window.isSecureContext) return step1Err('El micrófono solo funciona con la oficina abierta en esta misma computadora (http://localhost:4520). Desde otro equipo, sube el audio.');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) return step1Err('Este navegador no deja grabar aquí: usa Chrome o Edge, o sube un audio.');
     let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
-    catch (e) { return vlen(e && e.name === 'NotAllowedError' ? 'No hay permiso para el micrófono: actívalo en el candado de la barra de direcciones y vuelve a pulsar Grabar.' : 'No encontré un micrófono' + (e && e.message ? ': ' + e.message : '.'), 'bad'); }
+    catch (e) { return step1Err(e && e.name === 'NotAllowedError' ? 'No hay permiso para el micrófono: actívalo en el candado de la barra de direcciones y vuelve a pulsar Grabar.' : 'No encontré un micrófono' + (e && e.message ? ': ' + e.message : '.')); }
     if ($('.st-vocov').hidden) { stream.getTracks().forEach(t => t.stop()); return; }
-    const AC = window.AudioContext || window.webkitAudioContext, ac = new AC(), an = ac.createAnalyser(); an.fftSize = 512; ac.createMediaStreamSource(stream).connect(an);
-    const mr = new MediaRecorder(stream), R = vocState.rec = { mr, stream, ac, chunks: [], t0: Date.now(), timer: 0 }, wave = new Uint8Array(an.fftSize);
+    const AC = window.AudioContext || window.webkitAudioContext, ac = new AC(), an = ac.createAnalyser(); an.fftSize = 1024; ac.createMediaStreamSource(stream).connect(an);
+    const mr = new MediaRecorder(stream), R = vocState.rec = { mr, stream, ac, chunks: [], t0: Date.now(), timer: 0, stats: VC.newStats(), said: 0 }, wave = new Uint8Array(an.fftSize);
     mr.ondataavailable = e => { if (e.data && e.data.size) R.chunks.push(e.data); };
     mr.onstop = () => recDone(R);
     mr.start(1000);
-    b.textContent = '■ Parar y guardar'; b.setAttribute('aria-pressed', 'true'); b.classList.add('on');
-    vlen(`Grabando. Habla con naturalidad; cuanto más, mejor (hasta ${SV.clock(SV.CLONE.maxS)}, se para sola).`);
+    step1Err(''); drawVoices(); vq('[data-vo="rec-stop"]')?.focus();
     const tick = () => {
-      const s = (Date.now() - R.t0) / 1000; an.getByteTimeDomainData(wave); let peak = 0; for (const v of wave) peak = Math.max(peak, Math.abs(v - 128));
-      const lv = vq('.st-vlvl i'); if (lv) lv.style.width = Math.min(100, Math.round(peak / 128 * 180)) + '%';
+      if (vocState.rec !== R) return;
+      const s = (Date.now() - R.t0) / 1000; an.getByteTimeDomainData(wave);
+      const lvl = VC.frameLevel(wave), z = VC.addFrame(R.stats, lvl), zone = VC.levelZone(lvl);
+      const bar = vq('.st-vlvl'); if (bar) { bar.dataset.zone = z; bar.querySelector('i').style.width = VC.meterPct(lvl.db) + '%'; }
+      const zl = vq('.st-vzone'); if (zl && zl.textContent !== zone.label) { zl.textContent = zone.label; zl.dataset.zone = z; }
       const t = vq('.st-vrect'); if (t) t.textContent = `${SV.clock(s)} de ${SV.clock(SV.CLONE.maxS)} · ${s < SV.CLONE.minS ? `mínimo ${SV.CLONE.minS} s` : `quedan ${SV.clock(SV.CLONE.maxS - s)}`}`;
+      const a = VC.announce(s, R.said); if (a) { R.said = a.at; vsay('.st-vann', a.text); }
       if (s >= SV.CLONE.maxS) recStop();
     };
     R.timer = setInterval(tick, 200); tick();
   }
   function recStop(discard) {
-    const R = vocState.rec; if (!R) return; vocState.rec = null; R.discard = !!discard; clearInterval(R.timer);
+    const R = vocState.rec; if (!R) return; vocState.rec = null; vocState.ask = false; R.discard = !!discard; clearInterval(R.timer);
     try { if (R.mr.state !== 'inactive') R.mr.stop(); } catch {} R.stream.getTracks().forEach(t => t.stop()); try { R.ac.close(); } catch {}
-    const b = vq('[data-vo="rec"]'); if (b) { b.textContent = '● Grabar otra vez'; b.setAttribute('aria-pressed', 'false'); b.classList.remove('on'); }
-    const lv = vq('.st-vlvl i'); if (lv) lv.style.width = '0';
+    R.seconds = (Date.now() - R.t0) / 1000;
+    if (!$('.st-vocov').hidden) { drawVoices(); if (!discard) vsay('.st-vbusy', 'Preparando la grabación…'); const f = vq(discard ? '[data-vo="rec"]' : '.st-vstepbody'); if (f) f.focus(); }
   }
   async function recDone(R) {
-    if (R.discard || $('.st-vocov').hidden) return;
-    vlen('Preparando la grabación…');
+    if (R.discard) return;
     try {
       const ab = await decodeAudio(await new Blob(R.chunks, { type: R.mr.mimeType || 'audio/webm' }).arrayBuffer());
-      if (ab.duration < SV.CLONE.minS) return vlen(`Grabaste ${SV.clock(ab.duration)}: MiniMax pide al menos ${SV.CLONE.minS} segundos. Graba otra vez, un poco más.`, 'bad');
-      const name = 'Grabación de voz ' + new Date().toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-      await keepForClone(wavOf(ab), name + '.wav', ab.duration, 'Grabación guardada en la galería («Grabaciones de voz»).');
-    } catch (e) { vlen('No pude guardar la grabación: ' + e.message, 'bad'); }
+      if (ab.duration < SV.CLONE.minS) { if (!$('.st-vocov').hidden) { vsay('.st-vbusy', ''); step1Err(`Grabaste ${SV.clock(ab.duration)}: hacen falta al menos ${SV.CLONE.minS} segundos. Graba otra vez, un poco más.`); vq('[data-vo="rec"]')?.focus(); } return; }
+      const name = 'Grabación de voz ' + new Date().toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + '.wav', w = wavOf(ab);
+      const t = { blob: w, url: URL.createObjectURL(w), name, seconds: Math.min(ab.duration, SV.CLONE.maxS), source: 'rec', verdict: VC.takeVerdict(R.stats) };
+      if ($('.st-vocov').hidden) { dropTake(); vocState.take = t; vocState.step = 2; return; } // closed meanwhile: kept for when it opens again
+      setTake(t);
+    } catch (e) { if (!$('.st-vocov').hidden) { vsay('.st-vbusy', ''); step1Err('No pude preparar la grabación: ' + e.message); } }
   }
-  function drawVoices() {
-    const audios = SV.cloneable(items);
-    $('.st-vocov').innerHTML = `<div class="st-hbox st-vbox"><div class="st-hhead"><h2 id="stVocT">Voces <span class="st-vn"></span></h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar las voces">${svg('x')}</button></div>
-      ${vocState.off ? vocOffHTML(vocState.off) : `<p class="st-hsub">Tus voces de MiniMax para el paso 5 de «Voz»; las del sistema se eligen allí, en la lista. MiniMax borra una voz que nadie usa en 7 días: la oficina la usa una vez al crearla (queda «fijada»).</p>
-      <div class="st-vmsg" role="status" aria-live="polite"></div>
-      <ul class="st-vlist"></ul>
-      <details class="st-vsec"${voices.mine.length ? '' : ' open'}><summary>Diseñar una voz nueva</summary><div class="st-vform">
+  /* ---- the screens ---- */
+  const budgetLine = () => { if (!budget) return ''; const room = moneyLeft(); return `Hoy llevas ${VC.usd(budget.cost)}${budget.dailyBudget ? ` de ${VC.usd(budget.dailyBudget)}` : ''}${room == null ? '' : ` · te quedan ${VC.usd(room)}`}.`; };
+  function homeHTML() {
+    return `<p class="st-hsub">Una voz propia lee tus anuncios, reels y audios con tu tono. Elige cómo crearla:</p>
+      <div class="st-vchoose">
+        <button type="button" class="st-vcard" data-vo="go-clone">${svg('mic')}<span><b>Clonar mi voz</b><small>Graba 1 a 2 minutos o sube un audio · ${VC.usd(VC.PRICE.clone)}</small></span></button>
+        <button type="button" class="st-vcard" data-vo="go-design">${svg('spark')}<span><b>Diseñar una voz con palabras</b><small>Describe cómo suena y escucha una muestra · ~${VC.usd(VC.PRICE.design)}</small></span></button>
+      </div>
+      <h3 class="st-vh3">Tus voces <span class="st-vn"></span></h3>
+      <ul class="st-vlist"></ul>`;
+  }
+  function progressHTML() {
+    const s = vocState.step === 'done' ? 4 : vocState.step;
+    return `<ol class="st-vsteps" aria-label="Pasos para clonar">${VC.STEPS.map((t, i) => `<li class="${i + 1 < s ? 'done' : i + 1 === s ? 'now' : ''}"${i + 1 === s ? ' aria-current="step"' : ''}><b>${i + 1 < s ? '✓' : i + 1}</b><span>${t}</span></li>`).join('')}</ol>`;
+  }
+  function step1HTML() {
+    const R = vocState.rec, audios = SV.cloneable(items);
+    if (R) return `<div class="st-vreading">
+        ${vocState.improv ? '<p class="st-vimprov">Improvisa: cuenta qué hace tu negocio, cómo atiendes a un cliente, una anécdota. Con preguntas, cifras y algún «¡qué bueno!».</p>' : `<div class="st-vscript" tabindex="0" aria-label="Guion para leer en voz alta">${esc(VC.scriptAt(vocState.script)).split('\n').map(p => `<p>${p}</p>`).join('')}</div>`}
+        <div class="st-vscrrow"><button type="button" data-vo="script-next">Otro texto</button><button type="button" data-vo="improv" aria-pressed="${vocState.improv}">${vocState.improv ? 'Mostrar un texto' : 'Prefiero improvisar'}</button></div>
+        <div class="st-vmeter"><span class="st-vdot" aria-hidden="true"></span><span class="st-vrect"></span><span class="st-vlvl" aria-hidden="true" data-zone="silence"><i></i></span><span class="st-vzone" data-zone="silence">…</span></div>
+        <p class="vh st-vann" role="status" aria-live="polite"></p>
+        ${vocState.ask ? `<div class="st-vconf st-vask" role="alertdialog" aria-labelledby="stVaskT"><span id="stVaskT">¿Parar y guardar lo grabado (${SV.clock((Date.now() - R.t0) / 1000)}) o descartarlo?</span><button type="button" class="pri" data-vo="ask-keep">Guardar</button><button type="button" data-vo="ask-drop" class="warn">Descartar</button><button type="button" data-vo="ask-no">Seguir grabando</button></div>`
+          : `<div class="st-edrow"><button type="button" class="pri st-vrecbtn on" data-vo="rec-stop">■ Parar</button></div>`}</div>`;
+    return `<p class="st-vtip">${VC.TIP}</p>
+      <div class="st-vsrcs">
+        <button type="button" class="pri st-vrecbtn" data-vo="rec">● Grabar con el micrófono</button>
+        <p class="st-vrechelp">Te damos un texto para leer en voz alta. Se para sola a los ${SV.clock(SV.CLONE.maxS)}.</p>
+        <div class="st-valt"><span class="st-vor">o usa un audio que ya tengas:</span>
+          <button type="button" data-vo="pick">${svg('up')} Subir un audio…</button>
+          ${audios.length ? `<label class="vh" for="stVcA">De la galería</label><select id="stVcA" class="st-vca">${vcaOptions(audios)}</select>` : ''}</div>
+        <input type="file" class="st-vcf" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.webm" hidden>
+      </div>
+      <p class="st-vbusy" role="status" aria-live="polite"></p>
+      <p class="st-verr" role="alert"${vocState.err ? '' : ' hidden'}>${esc(vocState.err)}</p>`;
+  }
+  function step2HTML() {
+    const t = vocState.take, L = t.seconds == null ? null : VC.lengthLine(t.seconds, t.cut);
+    return `<p class="st-vtake">«${esc(t.name)}»${t.source === 'gallery' ? ' · de la galería' : ''}</p>
+      <audio class="st-vprev" controls preload="metadata" src="${esc(t.url)}" aria-label="Escuchar el audio para clonar"></audio>
+      <ul class="st-vchecks">
+        ${L ? `<li class="${L.level}">${esc(L.text)}</li>` : '<li class="short">No pude medir su duración aquí; MiniMax la revisará al clonar (de 10 s a 5:00).</li>'}
+        ${t.verdict ? `<li class="${t.verdict.level === 'good' ? 'good' : 'short'}">${esc(t.verdict.text)}</li>` : ''}
+        <li>Escúchalo: ¿se oye solo tu voz, clara y sin música?</li></ul>
+      <div class="st-edrow"><button type="button" data-vo="redo">${t.source === 'rec' ? '● Grabar otra vez' : 'Elegir otro audio'}</button>${t.file ? '' : '<button type="button" data-vo="keep-take">Guardar en la galería</button>'}<span class="sp"></span><button type="button" class="pri" data-vo="next" ${L && !L.ok ? 'disabled aria-disabled="true"' : ''}>Suena bien: seguir</button></div>
+      <p class="st-vbusy" role="status" aria-live="polite"></p>`;
+  }
+  function step3HTML() {
+    return `<label class="st-plab" for="stVcN">Nombre de la voz</label><input id="stVcN" class="st-vcn" maxlength="60" value="${esc(vocState.name)}" placeholder="Ej.: Mi voz" autocomplete="off">
+      <label class="st-vconsent"><input type="checkbox" class="st-vok"${vocState.consent ? ' checked' : ''}><span>${VC.CONSENT}</span></label>
+      <details class="st-vadv"><summary>Más opciones</summary>
+        <label class="st-plab" for="stVcI">Id de la voz en MiniMax</label><input id="stVcI" class="st-vci" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="stVcH" value="${esc(vocState.id)}">
+        <p class="st-vhint" id="stVcH">${ID_RULE}</p></details>
+      <p class="st-vprice"><b>Clonar cuesta ${VC.usd(VC.PRICE.clone)}</b>, una sola vez (MiniMax lo cobra al crearla). ${esc(budgetLine())}</p>
+      <p class="st-vverif">${VC.VERIFIED} <a href="${VC.VERIFY_URL}" target="_blank" rel="noopener">Cómo verificarla</a></p>
+      <div class="st-edrow"><button type="button" data-vo="back">Atrás</button><span class="sp"></span><span class="st-vmiss" id="stVmiss" aria-live="polite"></span><button type="button" class="pri" data-vo="clone" aria-describedby="stVmiss">Clonar la voz · ${VC.usd(VC.PRICE.clone)}</button></div>
+      <div class="st-vcres" role="status" aria-live="polite"></div>`;
+  }
+  function doneHTML() {
+    const v = vocState.result || {}, t = vocState.take, nm = esc(v.name || v.voiceId || '');
+    return `<h3 class="st-vh3 st-vdone" tabindex="-1">Lista: «${nm}»</h3>
+      <p class="st-hsub">Ya está en tus voces. Compara: ¿suena como tú?</p>
+      <div class="st-vcompare">
+        ${t && t.url ? `<div><span class="st-plab">Tu grabación</span><audio controls preload="metadata" src="${esc(t.url)}" aria-label="Tu grabación original"></audio></div>` : ''}
+        ${/^https:\/\//.test(v.demoAudio || '') ? `<div><span class="st-plab">Tu voz clonada (muestra de MiniMax)</span><audio controls preload="none" src="${esc(v.demoAudio)}" aria-label="Muestra de la voz clonada"></audio></div>` : ''}
+      </div>
+      <label class="st-plab" for="stVtry">Prueba una frase</label><div class="st-vtryrow"><input id="stVtry" class="st-vtry" maxlength="300" value="${esc(TRY_TEXT)}"><button type="button" data-vo="try">${svg('mic')} Probar esta voz</button></div>
+      <p class="st-vhint">Sale un audio corto (unos centavos) que queda también en la galería.</p>
+      <div class="st-vtryres" role="status" aria-live="polite"></div>
+      <div class="st-edrow"><button type="button" data-vo="again">Clonar otra</button><button type="button" data-vo="home">Ver tus voces</button><span class="sp"></span><button type="button" class="pri" data-vo="use-new">Usar en un audio</button></div>`;
+  }
+  function cloneHTML() {
+    const s = vocState.step, title = s === 'done' ? '' : `<h3 class="st-vh3 st-vstepbody" tabindex="-1">${s}. ${VC.STEPS[s - 1]}</h3>`;
+    return `${progressHTML()}${title}<div class="st-vstep">${s === 1 ? step1HTML() : s === 2 && vocState.take ? step2HTML() : s === 3 ? step3HTML() : s === 'done' ? doneHTML() : step1HTML()}</div>`;
+  }
+  function designHTML() {
+    return `<p class="st-hsub">Describe la voz y MiniMax la crea con una muestra para escucharla. <b>Crear cuesta ~${VC.usd(VC.PRICE.design)}</b>, aunque después la borres.</p>
+      <div class="st-vform">
         <label class="st-plab" for="stVdN">Nombre</label><input id="stVdN" class="st-vdn" maxlength="60" placeholder="Ej.: Voz de Panaclaw">
         <label class="st-plab" for="stVdP">Cómo suena</label><textarea id="stVdP" class="st-vdp" rows="3" maxlength="2000" placeholder="Ej.: mujer de unos 30 años, cálida y cercana, acento panameño suave, ritmo tranquilo"></textarea>
-        <label class="st-plab" for="stVdT">Texto de prueba</label><input id="stVdT" class="st-vdt" maxlength="500" value="Hola, esta es una prueba de mi nueva voz.">
-        <p class="st-edn">MiniMax cobra cada muestra (precio aproximado). La voz se crea con su muestra: si no te gusta, «Descartar» la borra.</p>
-        <div class="st-edrow"><button type="button" class="pri" data-vo="design">Crear y escuchar la muestra</button></div>
-        <div class="st-vdres" role="status" aria-live="polite"></div></div></details>
-      <details class="st-vsec"><summary>Clonar una voz</summary><div class="st-vform">
-        <p class="st-vwarn"><b>Antes de empezar:</b> clonar exige una cuenta verificada en MiniMax. El audio: una sola persona hablando, sin música, de 10 segundos a 5 minutos; MP3, WAV o M4A, hasta 20 MB.</p>
-        <label class="st-plab" for="stVcN">Nombre</label><input id="stVcN" class="st-vcn" maxlength="60" placeholder="Ej.: Mi voz">
-        <fieldset class="st-vsrc"><legend>El audio</legend>
-          <p class="st-vtip">Cuanto más audio, mejor aprende: <b>hasta ${SV.clock(SV.CLONE.maxS)}</b> (mínimo ${SV.CLONE.minS} s). Habla con naturalidad, una sola persona, sin música ni ruido de fondo.</p>
-          <div class="st-vrec"><button type="button" class="pri" data-vo="rec" aria-pressed="false">● Grabar con el micrófono</button><span class="st-vrect" aria-live="off"></span><span class="st-vlvl" aria-hidden="true"><i></i></span></div>
-          <span class="st-vor">o</span><button type="button" data-vo="pick">${svg('up')}<span>Subir un audio…</span></button><span class="st-vcfn" aria-live="polite"></span>
-          <input type="file" class="st-vcf" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.webm" hidden>
-          <label class="st-plab" for="stVcA">De la galería (aquí quedan tus grabaciones y lo que subes)</label><select id="stVcA" class="st-vca">${vcaOptions(audios)}</select>
-          <audio class="st-vprev" controls preload="none" hidden aria-label="Escuchar el audio elegido"></audio>
-          <p class="st-vlen" role="status" aria-live="polite"></p></fieldset>
-        <label class="st-plab" for="stVcI">Id de la voz</label><input id="stVcI" class="st-vci" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="stVcH" placeholder="Ej.: MiVozPanaclaw01">
-        <p class="st-vhint" id="stVcH">${ID_RULE}</p>
-        <div class="st-edrow"><button type="button" class="pri" data-vo="clone" disabled aria-disabled="true">Clonar la voz</button></div>
-        <div class="st-vcres" role="status" aria-live="polite"></div></div></details>`}</div>`;
-    paintVList(); vcheck();
+        <label class="st-plab" for="stVdT">Frase de la muestra</label><input id="stVdT" class="st-vdt" maxlength="500" value="Hola, esta es una prueba de mi nueva voz.">
+        <p class="st-vprice">${esc(budgetLine())}</p>
+        <div class="st-edrow"><button type="button" class="pri" data-vo="design">Crear y escuchar · ~${VC.usd(VC.PRICE.design)}</button></div>
+        <div class="st-vdres" role="status" aria-live="polite"></div></div>`;
   }
-  function vcheck() { // the clone form: the id checked as it is typed, the button on only when the id and the audio are there
-    const i = vq('.st-vci'); if (!i) return false;
-    const val = i.value, c = SV.checkVoiceId(val), taken = voices.mine.some(v => v.voiceId === val), h = vq('#stVcH');
-    const err = !val ? '' : !c.ok ? c.error : taken ? 'Ya tienes una voz con ese id.' : '';
-    h.textContent = err || (val ? '✓ Id válido.' : ID_RULE); h.classList.toggle('bad', !!err); h.classList.toggle('ok', !!val && !err);
-    i.setAttribute('aria-invalid', String(!!err));
-    const audio = !!(vocState.cloneFile || (vq('.st-vca') || {}).value), ok = c.ok && !taken && audio, go = vq('[data-vo="clone"]');
-    go.disabled = !ok || vocState.busy; go.setAttribute('aria-disabled', String(go.disabled));
-    return ok;
+  function drawVoices() {
+    const V = $('.st-vocov'), S = vocState, sc = S.screen;
+    const back = !S.off && sc !== 'home' ? `<button type="button" class="st-vback" data-vo="home" aria-label="Volver a tus voces">‹ Voces</button>` : '';
+    V.innerHTML = `<div class="st-hbox st-vbox"><div class="st-hhead">${back}<h2 id="stVocT">${S.off || sc === 'home' ? 'Voces <span class="st-vn"></span>' : sc === 'clone' ? 'Clonar mi voz' : 'Diseñar una voz'}</h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar las voces">${svg('x')}</button></div>
+      ${S.off ? vocOffHTML(S.off) : `<div class="st-vmsg" role="status" aria-live="polite"></div>${sc === 'clone' ? cloneHTML() : sc === 'design' ? designHTML() : homeHTML()}`}</div>`;
+    paintVList(); if (sc === 'clone' && S.step === 3) vcheck();
   }
-  async function openVoices() {
+  function focusStep() { (vq('.st-vdone') || vq('.st-vstepbody') || vq('.st-hx'))?.focus(); }
+  function go(screen, step) {
+    if (vocState.rec) return; // the recorder asks first (Esc · ✕)
+    vocState.screen = screen; if (step != null) vocState.step = step;
+    if (screen === 'clone' && vocState.step === 3 && !vocState.idTouched) vocState.id = VC.autoVoiceId(vocState.name, voices.mine.map(x => x.voiceId));
+    drawVoices();
+    if (screen === 'home') vq('.st-vcard')?.focus(); else if (screen === 'design') vq('.st-vdn')?.focus(); else focusStep();
+  }
+  function vcheck() { // step 3: the name, the consent, the id (only checked when the owner opens «Más opciones» and changes it); what is missing, beside the button
+    const go = vq('[data-vo="clone"]'); if (!go) return false;
+    const i = vq('.st-vci'), val = i ? i.value.trim() : vocState.id, c = SV.checkVoiceId(val), taken = voices.mine.some(v => v.voiceId === val), h = vq('#stVcH');
+    const err = !c.ok ? c.error : taken ? 'Ya tienes una voz con ese id.' : '';
+    if (h) { h.textContent = err || ID_RULE; h.classList.toggle('bad', !!err); }
+    if (i) i.setAttribute('aria-invalid', String(!!err));
+    if (err) { const d = vq('.st-vadv'); if (d) d.open = true; }
+    const miss = VC.missing({ audio: !!vocState.take, name: vocState.name, consent: vocState.consent, idOk: !err });
+    const m = vq('.st-vmiss'); if (m) m.textContent = vocState.busy ? '' : miss;
+    go.setAttribute('aria-disabled', String(!!miss || vocState.busy)); go.classList.toggle('st-vwait', !!miss || vocState.busy);
+    return !miss && !vocState.busy;
+  }
+  async function openVoices(screen) {
     const V = $('.st-vocov'); if (!V.hidden) return;
-    vocFrom = document.activeElement; vocFromSel = !vocFrom || !vocFrom.closest ? '' : vocFrom.closest('.st-vopen') ? '.st-vopen' : vocFrom.closest('.st-vocbtn') ? '.st-vocbtn' : ''; vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
+    vocFrom = document.activeElement; vocFromSel = !vocFrom || !vocFrom.closest ? '' : vocFrom.closest('.st-vopen') ? '.st-vopen' : vocFrom.closest('.st-vcta') ? '.st-vcta' : vocFrom.closest('.st-vocbtn') ? '.st-vocbtn' : '';
+    const keep = vocState.take && vocState.screen === 'clone' && vocState.step !== 'done' ? vocState : null; // a take not cloned yet is still here
+    vocState = keep ? { ...keep, off: null, del: null, busy: false, rec: null, ask: false } : freshVoc();
+    if (screen && !keep) vocState.screen = screen;
     if (!isLive() || !location.protocol.startsWith('http')) vocState.off = { why: 'Las voces necesitan la oficina real (ábrela con el iniciador) y MiniMax activado.' };
     else if (!mmxOn()) vocState.off = { how: (engines.find(e => e.id === 'minimax') || {}).how };
-    V.hidden = false; modal.open(V); drawVoices(); V.querySelector('.st-hx').focus();
-    if (vocState.off) return;
-    vsay('.st-vmsg', 'Cargando tus voces…');
+    V.hidden = false; modal.open(V); drawVoices();
+    if (vocState.off) { V.querySelector('.st-hx').focus(); return; }
+    if (keep) vsay('.st-vmsg', 'Tu audio sigue aquí: continúa donde lo dejaste.');
+    focusStep(); if (vocState.screen === 'home') vq('.st-vcard')?.focus();
     const r = await vocApi('GET', '/api/voces').catch(() => null);
     if (V.hidden) return;
     if (!r) return vsay('.st-vmsg', 'Sin conexión con la oficina.', true);
     if (r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); V.querySelector('.st-hx').focus(); return; }
     if (!r.ok) return vsay('.st-vmsg', 'No pude leer tus voces: ' + (r.j.error || r.status), true);
-    voices = SV.normVoices(r.j); paintVList(); vcheck(); vsay('.st-vmsg', ''); if (kind === 'audio') renderModel();
+    voices = SV.normVoices(r.j); paintVList(); if (kind === 'audio') renderModel();
   }
+  /** Esc, ✕ or a click outside. While it records, nothing is lost: the backdrop does nothing and Esc / ✕ ask «¿Guardar o descartar?». */
   function closeVoices(keepFocus) {
     const V = $('.st-vocov'); if (V.hidden) return;
-    if (vocState.rec) recStop(true); // closing the panel ends a recording and keeps nothing
+    if (vocState.rec) { if (!vocState.ask) { vocState.ask = true; drawVoices(); vq('[data-vo="ask-keep"]')?.focus(); } return; }
     V.querySelectorAll('audio').forEach(a => a.pause()); V.hidden = true; V.innerHTML = ''; modal.close(V);
-    if (!keepFocus) { // renderModel() repaints step 5 while the panel is open, so the «Voces» button that opened it may be a new node by now
+    if (!keepFocus) { // renderModel() repaints the voice step while the panel is open, so the button that opened it may be a new node by now
       const back = vocFrom && document.contains(vocFrom) ? vocFrom : vocFromSel ? $(vocFromSel) : null;
       if (back) back.focus({ preventScroll: true });
     }
     vocFrom = null; vocFromSel = '';
   }
-  function voicesEscape() { if (vocState.del) { const id = vocState.del; vocState.del = null; paintVList(); vq(`[data-vid="${CSS.escape(id)}"] [data-vo="del"]`)?.focus(); return; } closeVoices(); }
-  function addVoice(v) { voices.mine = [v, ...voices.mine.filter(x => x.voiceId !== v.voiceId)]; paintVList(); vcheck(); if (kind === 'audio') renderModel(); }
+  function voicesEscape() {
+    if (vocState.ask) { vocState.ask = false; drawVoices(); vq('[data-vo="rec-stop"]')?.focus(); return; }
+    if (vocState.del) { const id = vocState.del; vocState.del = null; paintVList(); vq(`[data-vid="${CSS.escape(id)}"] .st-vmore summary`)?.focus(); return; }
+    const open = vq('.st-vmore[open]'); if (open) { open.open = false; open.querySelector('summary').focus(); return; }
+    closeVoices();
+  }
+  function addVoice(v) { voices.mine = [v, ...voices.mine.filter(x => x.voiceId !== v.voiceId)]; paintVList(); if (kind === 'audio') renderModel(); }
   const rowBtn = (id, a) => vq(`[data-vid="${CSS.escape(id)}"] [data-vo="${a}"]`);
-  function useVoice(id) { // «Usar esta voz»: Voz, its model, this voice in step 5
+  const voiceStep = () => `«${$('.st-s5t').textContent}»`; // EST-01: the step by its title — in Voz it is number 4, not 5
+  function useVoice(id) { // «Usar en un audio»: Voz, its model, this voice in «Voz y ajustes»
     closeVoices(true);
     if (kind !== 'audio') setKind('audio');
     showPane('gen'); el.classList.remove('st-folded');
     const m = cur();
     if (!m || !m.settings.voiceId) { say(m ? `${m.name} no elige voz.` : 'No hay un modelo de voz encendido.', true); $('.st-mpick').focus(); return; }
     setVoice(id);
-    const p = $('.st-prompt'); (p.value.trim() ? $('.st-vid') : p).focus();
-    say(`Voz «${SV.voiceName(id, voices)}» puesta en el paso 5${p.value.trim() ? ': pulsa GENERAR.' : ': escribe el texto y pulsa GENERAR.'}`);
+    const p = $('.st-prompt'); (p.value.trim() ? $('.st-go') : p).focus();
+    say(`Voz «${SV.voiceName(id, voices)}» puesta en ${voiceStep()}${p.value.trim() ? ': pulsa GENERAR.' : ': escribe el texto y pulsa GENERAR.'}`);
+  }
+  /** «Probar esta voz»: a short voice job with that voice (it also tells MiniMax the voice is in use). Its file plays here and stays in the gallery. */
+  async function tryVoice(id, text, where) {
+    const m = models.filter(x => x.kind === 'audio' && x.on !== false && x.settings && x.settings.voiceId).sort((a, b) => (/turbo/.test(b.id) ? 1 : 0) - (/turbo/.test(a.id) ? 1 : 0))[0];
+    const out = vq(where); if (!out) return;
+    if (!m) { out.textContent = 'No hay un modelo de voz encendido para probarla.'; out.classList.add('bad'); return; }
+    out.classList.remove('bad'); out.textContent = 'Generando la prueba…';
+    let job; try { const r = await api('POST', '/api/media/jobs', { prompt: String(text || TRY_TEXT).slice(0, 300), n: 1, kind: 'audio', model: m.id, settings: { ...settingsOf(m), voiceId: id }, by: 'you' }); job = r.job; jobs.unshift(job); if (r.budget) budget = r.budget; renderHead(); renderGrid(); watch(); }
+    catch (e) { out.textContent = 'No se pudo probar: ' + e.message; out.classList.add('bad'); return; }
+    for (let i = 0; i < 60 && !$('.st-vocov').hidden; i++) {
+      await new Promise(r => setTimeout(r, 1500));
+      let j; try { j = ((await api('GET', '/api/media/jobs')).jobs || []).find(x => x.id === job.id); } catch { continue; }
+      if (!j || j.state === 'queued' || j.state === 'running') continue;
+      const o = vq(where); if (!o) return;
+      if (j.state !== 'done' || !j.items.length) { o.textContent = 'No salió: ' + (j.error || 'MiniMax no devolvió audio'); o.classList.add('bad'); return; }
+      await load({ full: false }); const it = itemOf(j.items[0]);
+      o.innerHTML = `<audio controls autoplay src="${esc(src(it || j.items[0]))}" aria-label="Prueba de la voz"></audio>`; o.querySelector('audio').focus();
+      const v = voices.mine.find(x => x.voiceId === id); if (v && !v.pinned) { v.pinned = true; vq(`[data-vid="${CSS.escape(id)}"] .st-vexp`)?.remove(); } // used now: MiniMax keeps it (no repaint: it would drop the player)
+      return;
+    }
   }
   async function designVoice(b) {
     const name = vq('.st-vdn').value.trim(), prompt = vq('.st-vdp').value.trim(), previewText = vq('.st-vdt').value.trim();
@@ -761,73 +883,94 @@ export function initStudio(ctx) {
     b.disabled = true; b.textContent = 'Creando la muestra…'; vsay('.st-vdres', 'Creando la voz en MiniMax: tarda unos segundos…');
     const r = await vocApi('POST', '/api/voces/design', { name: name || 'Voz diseñada', prompt, ...(previewText ? { previewText } : {}) }).catch(() => null);
     if ($('.st-vocov').hidden) return;
-    b.disabled = false; b.textContent = 'Crear y escuchar la muestra';
+    b.disabled = false; b.textContent = `Crear y escuchar · ~${VC.usd(VC.PRICE.design)}`;
     if (!r) return vsay('.st-vdres', 'Sin conexión con la oficina.', true);
     if (r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); vq('.st-hx').focus(); return; }
     if (!r.ok || !r.j.voice) return vsay('.st-vdres', 'No se pudo crear: ' + (r.j.error || r.status), true);
+    load({ full: false }); // EST-04: the header shows what was just spent
     const v = r.j.voice, nm = esc(v.name || v.voiceId), pv = typeof r.j.preview === 'string' && /^[A-Za-z0-9+/=\s]+$/.test(r.j.preview) ? r.j.preview.replace(/\s/g, '') : '';
     addVoice(v); vocState.design = v.voiceId;
     const R = vq('.st-vdres'); R.classList.remove('bad');
-    R.innerHTML = `<p>Muestra de «${nm}» lista.${pv ? ' Escúchala; si te gusta, guárdala.' : ' MiniMax no mandó muestra, pero la voz ya existe.'}</p>${pv ? `<audio controls src="data:audio/mpeg;base64,${pv}" aria-label="Muestra de ${nm}"></audio>` : ''}<div class="st-edrow"><button type="button" class="pri" data-vo="keep">Guardar</button><button type="button" data-vo="discard">Descartar</button></div>`;
+    R.innerHTML = `<p>Muestra de «${nm}» lista.${pv ? ' Escúchala.' : ' MiniMax no mandó muestra, pero la voz ya existe.'} Ya está en tus voces.</p>${pv ? `<audio controls src="data:audio/mpeg;base64,${pv}" aria-label="Muestra de ${nm}"></audio>` : ''}<div class="st-edrow"><button type="button" class="pri" data-vo="keep">Quedármela</button><button type="button" data-vo="discard" class="warn">Borrarla (el costo no se devuelve)</button></div>`;
     (R.querySelector('audio') || R.querySelector('[data-vo="keep"]')).focus();
   }
   async function cloneVoice(b) {
-    if (!vcheck()) return;
-    const voiceId = vq('.st-vci').value.trim(), name = vq('.st-vcn').value.trim() || voiceId, gal = (vq('.st-vca') || {}).value || '', body = { name, voiceId };
-    vocState.busy = true; vcheck(); b.textContent = 'Clonando…'; vsay('.st-vcres', 'Subiendo el audio y clonando la voz en MiniMax: puede tardar un minuto…');
-    try { if (gal) body.audio = gal; else { const f = vocState.cloneFile; const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error('no pude leer el audio')); fr.readAsDataURL(f); }); body.audioBase64 = data.split(',')[1] || ''; body.filename = f.name; } }
-    catch (err) { vocState.busy = false; b.textContent = 'Clonar la voz'; vcheck(); return vsay('.st-vcres', err.message, true); }
-    const r = await vocApi('POST', '/api/voces/clone', body).catch(() => null);
+    if (vocState.busy) return;
+    if (!vcheck()) { const miss = vq('.st-vmiss'); if (miss) { miss.classList.remove('st-vflash'); void miss.offsetWidth; miss.classList.add('st-vflash'); } (!vocState.name.trim() ? vq('.st-vcn') : !vocState.consent ? vq('.st-vok') : vq('.st-vci'))?.focus(); return; }
+    const taken = voices.mine.map(x => x.voiceId), voiceId = vocState.idTouched || (vocState.id && !taken.includes(vocState.id)) ? vocState.id.trim() : (vocState.id = VC.autoVoiceId(vocState.name, taken)); // the id the owner saw in «Más opciones»
+    vocState.busy = true; vcheck(); b.textContent = 'Clonando…'; vsay('.st-vcres', 'Guardando el audio y clonando la voz en MiniMax: puede tardar un minuto…');
+    let file; try { file = await saveTake(); } catch (err) { vocState.busy = false; b.textContent = `Clonar la voz · ${VC.usd(VC.PRICE.clone)}`; vcheck(); return vsay('.st-vcres', 'No pude guardar el audio: ' + err.message, true); }
+    const r = await vocApi('POST', '/api/voces/clone', { name: vocState.name.trim(), voiceId, audio: file, consent: { at: Date.now(), text: VC.CONSENT } }).catch(() => null);
+    vocState.busy = false;
+    if (r && r.ok && r.j.voice) { load({ full: false }); if ($('.st-vocov').hidden) { voices.mine = [r.j.voice, ...voices.mine]; if (kind === 'audio') renderModel(); dropTake(); vocState = freshVoc(); return; } } // EST-04: the header shows the US$1.50 at once
     if ($('.st-vocov').hidden) return;
-    vocState.busy = false; b.textContent = 'Clonar la voz';
-    if (!r) { vcheck(); return vsay('.st-vcres', 'Sin conexión con la oficina.', true); }
-    if (r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); vq('.st-hx').focus(); return; }
-    if (!r.ok || !r.j.voice) { vcheck(); return vsay('.st-vcres', 'No se pudo clonar: ' + (r.j.error || r.status) + (/2038/.test(String(r.j.error || '')) ? ' (tu cuenta de MiniMax aún no está verificada para clonar)' : ''), true); }
-    const v = r.j.voice; addVoice(v);
-    vq('.st-vcn').value = ''; vq('.st-vci').value = ''; vocState.idTouched = false; chooseAudio(''); vlen('');
-    vsay('.st-vcres', `Clonada: «${v.name || v.voiceId}». Ya está en tus voces y en la lista del paso 5.`);
-    rowBtn(v.voiceId, 'use')?.focus();
+    if (r && r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); vq('.st-hx').focus(); return; }
+    if (!r || !r.ok || !r.j.voice) {
+      b.textContent = `Clonar la voz · ${VC.usd(VC.PRICE.clone)}`; vcheck();
+      const a = VC.cloneAdvice(r ? r.j.error || r.status : 'sin conexión con la oficina');
+      if (a.code === 'dup' && !vocState.idTouched) vocState.id = VC.autoVoiceId(vocState.name + ' ' + Date.now(), taken);
+      const R = vq('.st-vcres'); R.classList.add('bad'); R.innerHTML = `<p>${esc(a.text)}</p>${a.code === 'other' ? '' : `<p class="st-vhint">Detalle: ${esc(a.raw)}</p>`}${a.code === 'verify' ? `<p><a href="${VC.VERIFY_URL}" target="_blank" rel="noopener">Abrir la verificación en MiniMax</a></p>` : ''}`;
+      return;
+    }
+    vocState.result = r.j.voice; vocState.step = 'done'; vocState.idTouched = false; vocState.id = '';
+    addVoice(r.j.voice); drawVoices(); focusStep();
   }
   {
     const V = $('.st-vocov');
     V.addEventListener('click', async e => {
       e.stopPropagation(); // the Estudio's own click handler reads data-* that are not this panel's
-      if (e.target === V || e.target.closest('.st-hx')) return closeVoices();
+      if (e.target === V) { if (!vocState.rec) closeVoices(); return; } // EST-02: a stray click outside never ends a recording
+      if (e.target.closest('.st-hx')) return closeVoices();
       const b = e.target.closest('[data-vo]'); if (!b || b.disabled) return;
       const a = b.dataset.vo, id = b.closest('[data-vid]')?.dataset.vid;
-      if (a === 'copy') { (navigator.clipboard ? navigator.clipboard.writeText(id) : Promise.reject()).then(() => { b.textContent = 'Copiado ✓'; vsay('.st-vmsg', `Id copiado: ${id}`); }, () => { b.textContent = 'No se pudo copiar'; }).finally(() => setTimeout(() => { if (document.contains(b)) b.textContent = 'Copiar id'; }, 1600)); return; }
+      if (a === 'copy') { (navigator.clipboard ? navigator.clipboard.writeText(id) : Promise.reject()).then(() => { b.textContent = 'Copiado ✓'; }, () => { b.textContent = 'No se pudo copiar'; }).finally(() => setTimeout(() => { if (document.contains(b)) b.textContent = 'Copiar id'; }, 1600)); return; }
       if (a === 'use') return useVoice(id);
+      if (a === 'use-new') return useVoice(vocState.result && vocState.result.voiceId);
+      if (a === 'try') return tryVoice(vocState.result && vocState.result.voiceId, vq('.st-vtry')?.value, '.st-vtryres');
+      if (a === 'try-row') { b.disabled = true; return tryVoice(id, TRY_TEXT, `[data-vid="${CSS.escape(id)}"] .st-vrowres`); }
+      if (a === 'go-clone') return go('clone', vocState.take ? vocState.step : 1);
+      if (a === 'go-design') return go('design');
+      if (a === 'home') { if (vocState.screen === 'clone' && vocState.step === 'done') { dropTake(); Object.assign(vocState, { step: 1, result: null, consent: false, name: 'Mi voz' }); } return go('home'); }
+      if (a === 'again') { dropTake(); Object.assign(vocState, { step: 1, result: null, consent: false, name: 'Mi voz', id: '', idTouched: false }); return go('clone', 1); }
+      if (a === 'rec') return recStart();
+      if (a === 'rec-stop' || a === 'ask-keep') return recStop();
+      if (a === 'ask-drop') { recStop(true); vq('[data-vo="rec"]')?.focus(); return; }
+      if (a === 'ask-no') { vocState.ask = false; drawVoices(); vq('[data-vo="rec-stop"]')?.focus(); return; }
+      if (a === 'script-next') { vocState.script++; vocState.improv = false; const s = vq('.st-vscript'); if (s) { s.innerHTML = esc(VC.scriptAt(vocState.script)).split('\n').map(p => `<p>${p}</p>`).join(''); s.scrollTop = 0; } else drawVoices(); return; }
+      if (a === 'improv') { vocState.improv = !vocState.improv; drawVoices(); vq('[data-vo="improv"]')?.focus(); return; }
+      if (a === 'pick') { vq('.st-vcf').click(); return; }
+      if (a === 'redo') { dropTake(); vocState.step = 1; drawVoices(); vq('[data-vo="rec"]')?.focus(); return; }
+      if (a === 'keep-take') { b.disabled = true; try { await saveTake(); vsay('.st-vbusy', 'Guardado en la galería, carpeta «Grabaciones de voz».'); b.remove(); } catch (err) { b.disabled = false; vsay('.st-vbusy', 'No pude guardarlo: ' + err.message, true); } return; }
+      if (a === 'next') return go('clone', 3);
+      if (a === 'back') return go('clone', 2);
+      if (a === 'clone') return cloneVoice(b);
       if (a === 'del') { vocState.del = id; paintVList(); rowBtn(id, 'del-no')?.focus(); return; }
-      if (a === 'del-no') { vocState.del = null; paintVList(); rowBtn(id, 'del')?.focus(); return; }
+      if (a === 'del-no') { vocState.del = null; paintVList(); vq(`[data-vid="${CSS.escape(id)}"] .st-vmore summary`)?.focus(); return; }
       if (a === 'del-yes' || a === 'discard') {
         const vid = a === 'discard' ? vocState.design : id, nm = (voices.mine.find(x => x.voiceId === vid) || {}).name || vid; if (!vid) return;
         b.disabled = true;
         const r = await vocApi('DELETE', '/api/voces/' + encodeURIComponent(vid)).catch(() => null);
         vocState.del = null;
         if (r && r.ok) {
-          voices.mine = voices.mine.filter(x => x.voiceId !== vid); paintVList(); vcheck(); if (kind === 'audio') renderModel();
-          if (a === 'discard') { vocState.design = null; vsay('.st-vdres', `Descartada: «${nm}» se borró.`); vq('.st-vdp')?.focus(); }
-          else { vsay('.st-vmsg', `Borrada: «${nm}».`); (vq('[data-vo="use"]') || vq('.st-hx')).focus(); }
+          voices.mine = voices.mine.filter(x => x.voiceId !== vid); paintVList(); if (kind === 'audio') renderModel();
+          if (a === 'discard') { vocState.design = null; vsay('.st-vdres', `Borrada: «${nm}».`); vq('.st-vdp')?.focus(); }
+          else { vsay('.st-vmsg', `Borrada: «${nm}».`); (vq('[data-vo="use"]') || vq('.st-vcard')).focus(); }
         } else { b.disabled = false; if (a === 'del-yes') paintVList(); vsay(a === 'discard' ? '.st-vdres' : '.st-vmsg', 'No se pudo borrar: ' + (r ? r.j.error || r.status : 'sin conexión con la oficina'), true); }
         return;
       }
-      if (a === 'keep') { const vid = vocState.design, nm = (voices.mine.find(x => x.voiceId === vid) || {}).name || vid; vocState.design = null; vq('.st-vdn').value = ''; vq('.st-vdp').value = ''; vsay('.st-vdres', `Guardada: «${nm}». Está arriba, en tus voces, y en la lista del paso 5.`); rowBtn(vid, 'use')?.focus(); return; }
+      if (a === 'keep') { const vid = vocState.design, nm = (voices.mine.find(x => x.voiceId === vid) || {}).name || vid; vocState.design = null; vq('.st-vdn').value = ''; vq('.st-vdp').value = ''; vsay('.st-vdres', `Guardada: «${nm}».`); go('home'); vsay('.st-vmsg', `«${nm}» está en tus voces.`); rowBtn(vid, 'use')?.focus(); return; }
       if (a === 'design') return designVoice(b);
-      if (a === 'pick') { vq('.st-vcf').click(); return; }
-      if (a === 'rec') return recToggle(b);
-      if (a === 'clone') return cloneVoice(b);
     });
     V.addEventListener('input', e => {
       e.stopPropagation();
-      if (e.target.classList.contains('st-vci')) { vocState.idTouched = !!e.target.value; vcheck(); }
-      if (e.target.classList.contains('st-vcn') && !vocState.idTouched) { vq('.st-vci').value = e.target.value.trim() ? SV.suggestVoiceId(e.target.value, voices.mine.map(x => x.voiceId)) : ''; vcheck(); } // a suggested id from the name, until the owner writes one
+      if (e.target.classList.contains('st-vci')) { vocState.id = e.target.value; vocState.idTouched = !!e.target.value.trim(); if (!vocState.idTouched) vocState.id = VC.autoVoiceId(vocState.name, voices.mine.map(x => x.voiceId)); vcheck(); }
+      if (e.target.classList.contains('st-vcn')) { vocState.name = e.target.value; if (!vocState.idTouched) { vocState.id = VC.autoVoiceId(vocState.name, voices.mine.map(x => x.voiceId)); const i = vq('.st-vci'); if (i) i.value = vocState.id; } vcheck(); } // the id follows the name until the owner writes one
     });
     V.addEventListener('change', e => {
       e.stopPropagation();
-      if (e.target.classList.contains('st-vca')) { const f = e.target.value; chooseAudio(f); if (f) measureChosen(f); else vlen(''); }
-      if (e.target.classList.contains('st-vcf')) {
-        const f = e.target.files[0]; e.target.value = ''; pickCloneFile(f); // V5.0: into the gallery (as it is, or as a WAV MiniMax takes), and chosen there
-      }
+      if (e.target.classList.contains('st-vok')) { vocState.consent = e.target.checked; vcheck(); }
+      if (e.target.classList.contains('st-vca') && e.target.value) pickGalleryAudio(e.target.value);
+      if (e.target.classList.contains('st-vcf')) { const f = e.target.files[0]; e.target.value = ''; pickCloneFile(f); }
     });
   }
   /** V5.0: a song's lyrics are marked by parts — the tag goes on a line of its own where the caret is. */
@@ -886,9 +1029,9 @@ export function initStudio(ctx) {
   /** V5.0: «Repetir con otra voz» — the same text and settings, the voice field ready to change. */
   function otherVoice(it) {
     reuse(it, true); showPane('gen');
-    const i = $('.st-vid'); if (!i) { $('.st-mpick').focus(); return say('Ese modelo de voz no está encendido: arriba dice cómo activarlo.', true); }
-    i.scrollIntoView({ block: 'center', behavior: 'smooth' }); i.focus({ preventScroll: true }); i.select();
-    say('Mismo texto: elige otra voz (escribe su id o búscala en la lista) y pulsa GENERAR.');
+    const i = $('.st-vsel') || $('.st-vid'); if (!i) { $('.st-mpick').focus(); return say('Ese modelo de voz no está encendido: arriba dice cómo activarlo.', true); }
+    i.scrollIntoView({ block: 'center', behavior: 'smooth' }); i.focus({ preventScroll: true }); if (i.select) i.select();
+    say('Mismo texto: elige otra voz en la lista y pulsa GENERAR.');
   }
   let toastT = null;
   function toast(text, undo) {
@@ -1203,7 +1346,7 @@ export function initStudio(ctx) {
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
       ${vers.length ? `<div class="st-lvers"><h3>Versiones (${vers.length})</h3><div>${vers.map((v, k) => `<button type="button" data-vf="${esc(v.file)}" aria-label="Abrir la versión ${k + 1}: ${esc(short(v.prompt))}" title="${esc(v.prompt)}"><img src="${src(v)}" alt=""></button>`).join('')}</div></div>` : ''}
-      <div class="st-lacts">${!img ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>${cap.badge === 'VOZ' ? `<button type="button" data-l="othervoice" title="El mismo texto con otra voz: elige la voz en el paso 5">${svg('mic')} Repetir con otra voz</button>` : ''}`) :`<button type="button" data-l="edit" class="pri" aria-expanded="false" title="Pide un cambio: sale una versión nueva y la original no se toca">${svg('pen')} Editar</button><button type="button" data-l="anim">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
+      <div class="st-lacts">${!img ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>${cap.badge === 'VOZ' ? `<button type="button" data-l="othervoice" title="El mismo texto con otra voz: elígela en «Voz y ajustes»">${svg('mic')} Repetir con otra voz</button>` : ''}`) :`<button type="button" data-l="edit" class="pri" aria-expanded="false" title="Pide un cambio: sale una versión nueva y la original no se toca">${svg('pen')} Editar</button><button type="button" data-l="anim">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
       <div class="st-lpwrap"></div>
       <div class="st-lacts2">${img ? '<button type="button" data-l="ref">Usar de referencia</button>' : ''}${it.upload || !img ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">${cap.label ? 'Copiar el texto' : 'Copiar prompt'}</button>${ctx.toCalendar && it.kind !== 'audio' ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}${ctx.askDimitri ? '<button type="button" data-l="dimitri">Pedírselo a Dimitri</button>' : ''}<button type="button" data-l="dept" aria-expanded="false">Mandar a un departamento…</button><button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
       <button type="button" class="st-ldel" data-l="del">${svg('trash')} Mover a la papelera</button></div></div>`;
@@ -1281,7 +1424,7 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-open-engs')) { showPane('gen'); el.classList.remove('st-folded'); const d = $('.st-keys'); d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); d.querySelector('summary').focus({ preventScroll: true }); return; }
     if (e.target.closest('.st-histbtn')) { openHist(); return; }
     if (e.target.closest('.st-binbtn')) { openBin(); return; }
-    if (e.target.closest('.st-vocbtn, .st-vopen')) { openVoices(); return; } // V5.0
+    if (e.target.closest('.st-vocbtn, .st-vopen, .st-vcta')) { openVoices(); return; } // V5.0 · EST-14: also from step 1 when Voz is chosen
     const lt = e.target.closest('[data-ltag]'); if (lt) { insertTag(lt.dataset.ltag); return; }
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-new')) { $('.st-prompt').value = ''; media = { start: [], end: [], reference: [], video: [] }; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; clearFieldErr(); armed = false; renderModel(); say('Compositor vacío: empieza una idea nueva.'); $('.st-prompt').focus(); return; }
@@ -1324,7 +1467,7 @@ export function initStudio(ctx) {
       const ps = mode === 'batch' ? lines() : [$('.st-prompt').value.trim()].filter(Boolean);
       if (!ps.length && !(m.needs || []).includes('video')) return fieldErr('prompt', mode === 'batch' ? 'Escribe al menos una idea: una por línea.' : kind === 'audio' ? 'Escribe el texto que leerá la voz.' : kind === 'music' ? (settingsOf(m).instrumental ? 'Describe la música: género, ánimo, instrumentos.' : 'Escribe la letra (o marca «Instrumental» y descríbela).') : 'Escribe qué quieres crear: qué se ve, el estilo, la luz.');
       if (sound()) { const lim = limitNow(), len = $('.st-prompt').value.trim().length; if (len > lim) return fieldErr('prompt', `${m.name} lee como mucho ${SV.num(lim)} caracteres: sobran ${(len - SV.num(lim))}.`); }
-      if (kind === 'audio' && m.settings.voiceId && !String(settingsOf(m).voiceId || '').trim()) { $('.st-vid')?.focus(); return say('Elige una voz en el paso 5.', true); }
+      if (kind === 'audio' && m.settings.voiceId && !String(settingsOf(m).voiceId || '').trim()) { ($('.st-vsel') || $('.st-vid'))?.focus(); return say(`Elige una voz en «${$('.st-s5t').textContent}».`, true); }
       const c = estimate(); if (c >= 0.5 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}${budget && budget.cost ? ` (hoy llevas US$${budget.cost.toFixed(2)})` : ''}. ¿Generar?`)) return; // V4.2 (audit A10): from US$0.50, not only above 1
       const sig = JSON.stringify([ps, m.id, settingsOf(m), media, qty]); // V4.2 (audit A13): the same request twice in a row asks for a second click
       if (sig === lastSig && Date.now() - lastAt < 10 * 60e3 && !armed) { armed = true; say('Es lo mismo que acabas de generar. Pulsa GENERAR otra vez para repetirlo, o cambia algo.', true); return; }

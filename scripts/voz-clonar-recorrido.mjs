@@ -1,8 +1,9 @@
 // Herramienta de desarrollo (no entra en `npm run check`): clonar una voz EN EL NAVEGADOR, sin gastar. Una oficina en una carpeta temporal
 // habla con un MiniMax SIMULADO (tests/minimax-stand.mjs, key falsa) y Chrome usa un micrófono simulado (un pitido).
-//   node scripts/voz-clonar-recorrido.mjs   → ✓/✗ por paso y capturas en data/capturas/voz-clonar/
-// Pasos: Voces → Clonar · Grabar 12 s con el micrófono → la grabación queda en la galería (WAV, «Grabaciones de voz») y elegida ·
-// Clonar → MiniMax recibe el WAV y la voz queda en «tus voces» · subir un fragmento de 7 min → queda en 5:00 · uno de 5 s → se rechaza.
+//   node scripts/voz-clonar-recorrido.mjs   → ✓/✗ por paso y capturas en data/capturas/voz-clonar/ (1512, 1024 y 390 px, claro y oscuro)
+// El flujo guiado del 1 oct 2026 (auditoría EST): Voces → «Clonar mi voz» → 1 Grabar (guion, medidor, un clic fuera o Esc no pierden
+// nada) → 2 Escúchalo (aún no está en la galería) → 3 Nombre, permiso y precio → Clonar (la cabecera suma US$1.50, el id lo pone la
+// oficina, la grabación queda en «Grabaciones de voz») → Probar esta voz · subir 7 min → 5:00 · 5 s → se rechaza · cerrar y volver.
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
@@ -13,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { standIn, KEY } from '../tests/minimax-stand.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const OUT = path.join(ROOT, 'data', 'capturas', 'voz-clonar'); fs.mkdirSync(OUT, { recursive: true });
+const OUT = path.join(ROOT, 'data', 'capturas', process.env.AO_CAPTURAS || 'voz-clonar'); fs.mkdirSync(OUT, { recursive: true });
 const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address().port)));
 function wav(seconds, rate = 8000) { // a tone, mono 16-bit
   const n = Math.round(seconds * rate), b = Buffer.alloc(44 + n * 2);
@@ -37,53 +38,94 @@ const media = async () => (await fetch(base + '/api/media')).json();
 let fails = 0; const step = (ok, what) => { if (!ok) fails++; console.log(`${ok ? '✓' : '✗'} ${what}`); };
 const ARGS = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'];
 let browser; try { browser = await chromium.launch({ args: ARGS }); } catch { browser = await chromium.launch({ channel: 'chrome', args: ARGS }); }
+const V = s => '#studioOv .st-vocov ' + s;
+const txt = (page, s) => page.evaluate(q => document.querySelector(q)?.textContent || '', s);
 try {
   const ctx = await browser.newContext({ viewport: { width: 1512, height: 900 } }); await ctx.grantPermissions(['microphone'], { origin: base });
   const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
   await page.goto(base + '/'); await page.waitForTimeout(1500);
   await page.keyboard.press('e'); await page.waitForSelector('#studioOv .st-vocbtn'); await page.click('#studioOv .st-vocbtn');
-  await page.waitForSelector('#studioOv .st-vocov:not([hidden]) [data-vo="rec"]', { state: 'attached', timeout: 10000 });
-  await page.evaluate(() => { const d = [...document.querySelectorAll('#studioOv .st-vocov details')].find(x => /Clonar/.test(x.textContent)); d.open = true; });
-  // 1 · grabar 12 s
-  await page.click('#studioOv [data-vo="rec"]');
+  await page.waitForSelector(V('[data-vo="go-clone"]'));
+  const home = await page.evaluate(() => [...document.querySelectorAll('#studioOv .st-vcard b')].map(b => b.textContent));
+  step(home.join('|') === 'Clonar mi voz|Diseñar una voz con palabras', `inicio con dos caminos: ${home.join(' · ')}`);
+  await page.screenshot({ path: path.join(OUT, 'inicio.png') });
+  await page.click(V('[data-vo="go-clone"]'));
+  step(/1\. Graba o sube/.test(await txt(page, V('.st-vstepbody'))) && /1 a 2 minutos/.test(await txt(page, V('.st-vtip'))), 'paso 1 con el consejo corto');
+  // 1 · grabar: el guion, el medidor; un clic fuera y Esc no pierden nada
+  await page.click(V('[data-vo="rec"]'));
   await page.waitForFunction(() => /0:0[3-9]|0:1/.test(document.querySelector('#studioOv .st-vrect')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
-  const live = await page.evaluate(() => ({ t: document.querySelector('#studioOv .st-vrect').textContent, lv: document.querySelector('#studioOv .st-vlvl i').style.width, b: document.querySelector('#studioOv [data-vo="rec"]').textContent }));
-  step(/de 5:00/.test(live.t) && /Parar/.test(live.b), `grabando: «${live.t}», botón «${live.b}», nivel ${live.lv}`);
+  const live = await page.evaluate(() => ({ t: document.querySelector('#studioOv .st-vrect').textContent, guion: (document.querySelector('#studioOv .st-vscript')?.textContent || '').length, zona: document.querySelector('#studioOv .st-vzone').textContent, b: document.querySelector('#studioOv [data-vo="rec-stop"]')?.textContent }));
+  step(/de 5:00/.test(live.t) && live.guion > 600 && /Parar/.test(live.b || ''), `grabando: «${live.t}», guion de ${live.guion} caracteres, medidor «${live.zona}»`);
   await page.screenshot({ path: path.join(OUT, 'grabando.png') });
-  await page.waitForTimeout(9500); await page.click('#studioOv [data-vo="rec"]');
-  await page.waitForFunction(() => /Grabación guardada/.test(document.querySelector('#studioOv .st-vlen')?.textContent || ''), null, { timeout: 15000 }).catch(() => {});
-  const after = await page.evaluate(() => ({ len: document.querySelector('#studioOv .st-vlen').textContent, sel: document.querySelector('#studioOv .st-vca').value, prev: !document.querySelector('#studioOv .st-vprev').hidden }));
-  let m = await media(); const rec = m.items.find(i => i.file === after.sel); const fRec = m.folders.find(f => f.name === 'Grabaciones de voz');
-  const recBuf = rec ? fs.readFileSync(path.join(brain, 'Agents Office', 'media', rec.file)) : null;
-  step(!!rec && /\.wav$/.test(rec.file) && rec.folder === fRec?.id, `la grabación quedó en la galería: ${rec ? rec.file : '—'} en «Grabaciones de voz»`);
-  step(recBuf && recBuf.readUInt32LE(24) === 24000 && Math.abs(wavSeconds(recBuf) - 12) < 2, `es un WAV de 24 kHz de ~12 s (${recBuf ? wavSeconds(recBuf).toFixed(1) : '?'} s) y está elegida con su reproductor (${after.prev})`);
-  step(/Dura 0:1/.test(after.len), `lo que dice: «${after.len}»`);
-  await page.screenshot({ path: path.join(OUT, 'grabada.png') });
-  // 2 · clonar
-  await page.fill('#studioOv .st-vcn', 'Mi voz de prueba');
-  await page.click('#studioOv [data-vo="clone"]');
-  await page.waitForFunction(() => /Clonada/.test(document.querySelector('#studioOv .st-vcres')?.textContent || ''), null, { timeout: 20000 }).catch(() => {});
+  await page.mouse.click(5, 895); await page.waitForTimeout(300);
+  step(await page.evaluate(() => !document.querySelector('#studioOv .st-vocov').hidden && !!document.querySelector('#studioOv [data-vo="rec-stop"]')), 'un clic fuera mientras graba no cierra ni borra nada');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  const ask = await page.evaluate(() => ({ t: document.querySelector('#studioOv .st-vask')?.textContent || '', foco: document.activeElement?.dataset?.vo }));
+  step(/Parar y guardar/.test(ask.t) && ask.foco === 'ask-keep', `Esc pregunta «${ask.t.slice(0, 50)}…» con «Guardar» enfocado`);
+  await page.screenshot({ path: path.join(OUT, 'pregunta.png') });
+  await page.click(V('[data-vo="ask-no"]'));
+  await page.waitForTimeout(7500); await page.click(V('[data-vo="rec-stop"]'));
+  await page.waitForSelector(V('[data-vo="next"]'), { timeout: 15000 }).catch(() => {});
+  const s2 = await page.evaluate(() => ({ h: document.querySelector('#studioOv .st-vstepbody')?.textContent, checks: document.querySelector('#studioOv .st-vchecks')?.textContent || '', prev: !!document.querySelector('#studioOv .st-vprev')?.src }));
+  let m = await media();
+  step(/2\. Escúchalo/.test(s2.h || '') && /Dura 0:1/.test(s2.checks) && s2.prev, `paso 2: «${s2.checks.slice(0, 70)}…» con reproductor`);
+  step(!m.items.some(i => i.kind === 'audio'), 'la toma aún no está en la galería (solo se guarda la que se clona)');
+  await page.screenshot({ path: path.join(OUT, 'escuchalo.png') });
+  // 3 · nombre, permiso, precio
+  await page.click(V('[data-vo="next"]'));
+  const s3 = await page.evaluate(() => ({ name: document.querySelector('#studioOv .st-vcn').value, id: document.querySelector('#studioOv .st-vci').value, miss: document.querySelector('#studioOv .st-vmiss').textContent, price: document.querySelector('#studioOv .st-vprice').textContent, go: document.querySelector('#studioOv [data-vo="clone"]').textContent }));
+  step(s3.name === 'Mi voz' && /^Voz_MiVoz_/.test(s3.id) && /permiso/.test(s3.miss) && /US\$1\.50/.test(s3.price) && /US\$1\.50/.test(s3.go), `paso 3: nombre «${s3.name}», id «${s3.id}», «${s3.miss}», botón «${s3.go}»`);
+  await page.click(V('[data-vo="clone"]'), { force: true }); await page.waitForTimeout(300); // aria-disabled: Playwright lo cree apagado, pero se pulsa y dice qué falta
+  step(!mm.seen.some(x => x.path === '/v1/voice_clone') && await page.evaluate(() => document.activeElement?.classList.contains('st-vok')), 'sin el permiso no se clona: el foco va a la casilla');
+  await page.screenshot({ path: path.join(OUT, 'nombre.png') });
+  const headBefore = await txt(page, '#studioOv .st-budget');
+  await page.check(V('.st-vok')); await page.click(V('[data-vo="clone"]'));
+  await page.waitForSelector(V('.st-vdone'), { timeout: 20000 }).catch(() => {});
   const up = mm.seen.find(x => x.path === '/v1/files/upload'), cl = mm.seen.find(x => x.path === '/v1/voice_clone');
-  step(!!up && /\.wav/.test(up.raw) && !!cl, `MiniMax recibió el WAV (${up ? 'subida' : 'sin subida'}) y la clonación (${cl ? cl.body.voice_id : '—'})`);
+  step(!!up && /\.wav/.test(up.raw) && /^Voz_MiVoz_/.test(cl?.body?.voice_id || ''), `MiniMax recibió el WAV y la clonación (${cl ? cl.body.voice_id : '—'})`);
   const voces = await (await fetch(base + '/api/voces')).json();
-  step(voces.voices.some(v => v.name === 'Mi voz de prueba' && v.kind === 'clone'), 'la voz está en «tus voces»');
-  await page.screenshot({ path: path.join(OUT, 'clonada.png') });
-  // 3 · subir un fragmento de 7 min → 5:00
-  await page.setInputFiles('#studioOv .st-vcf', long);
-  await page.waitForFunction(() => /primeros 5:00/.test(document.querySelector('#studioOv .st-vlen')?.textContent || ''), null, { timeout: 30000 }).catch(() => {});
-  const big = await page.evaluate(() => ({ len: document.querySelector('#studioOv .st-vlen').textContent, sel: document.querySelector('#studioOv .st-vca').value }));
-  m = await media(); const bigIt = m.items.find(i => i.file === big.sel); const bigBuf = bigIt ? fs.readFileSync(path.join(brain, 'Agents Office', 'media', bigIt.file)) : null;
-  step(bigBuf && Math.abs(wavSeconds(bigBuf) - 300) < 0.5 && bigBuf.length < 20 * 1024 * 1024, `7 min subidos → ${bigBuf ? wavSeconds(bigBuf).toFixed(1) + ' s, ' + (bigBuf.length / 1048576).toFixed(1) + ' MB' : '—'}: «${big.len}»`);
-  // 4 · uno de 5 s se rechaza sin subir nada
+  step(voces.voices.some(v => v.name === 'Mi voz' && v.kind === 'clone'), 'la voz está en «tus voces»');
+  m = await media(); const rec = m.items.find(i => i.kind === 'audio'); const fRec = m.folders.find(f => f.name === 'Grabaciones de voz');
+  const recBuf = rec ? fs.readFileSync(path.join(brain, 'Agents Office', 'media', rec.file)) : null;
+  step(!!rec && rec.folder === fRec?.id && recBuf && recBuf.readUInt32LE(24) === 24000 && Math.abs(wavSeconds(recBuf) - 12) < 2.5, `la toma clonada quedó en «Grabaciones de voz»: WAV de 24 kHz, ${recBuf ? wavSeconds(recBuf).toFixed(1) : '?'} s`);
+  await page.waitForTimeout(800);
+  const headAfter = await txt(page, '#studioOv .st-budget'), done = await page.evaluate(() => ({ foco: document.activeElement?.classList.contains('st-vdone'), h: document.querySelector('#studioOv .st-vdone')?.textContent, players: document.querySelectorAll('#studioOv .st-vcompare audio').length }));
+  step(/1\.50/.test(headAfter) && !/1\.50/.test(headBefore), `la cabecera suma el gasto al momento: «${headBefore}» → «${headAfter}»`);
+  step(done.foco && /Lista: «Mi voz»/.test(done.h || '') && done.players === 2, `resultado «${done.h}» con el foco, original y clon para comparar`);
+  await page.screenshot({ path: path.join(OUT, 'lista.png') });
+  await page.click(V('[data-vo="try"]'));
+  await page.waitForSelector(V('.st-vtryres audio'), { timeout: 20000 }).catch(() => {});
+  step(await page.evaluate(() => !!document.querySelector('#studioOv .st-vtryres audio')) && mm.seen.some(x => x.path === '/v1/t2a_v2' && /voz clonada/.test(x.raw)), '«Probar esta voz» genera un audio corto con ella y lo reproduce');
+  // 4 · subir 7 min → 5:00, en una sola frase
+  await page.click(V('[data-vo="again"]'));
+  await page.setInputFiles(V('.st-vcf'), long);
+  await page.waitForSelector(V('.st-vchecks'), { timeout: 30000 }).catch(() => {});
+  const big = await txt(page, V('.st-vchecks'));
+  step(/Lo recorté a los primeros 5:00/.test(big) && (big.match(/5:00/g) || []).length === 1, `7 min subidos: «${big.slice(0, 80)}»`);
+  // 5 · cerrar y volver: el audio sigue
+  await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  await page.click('#studioOv .st-vocbtn'); await page.waitForTimeout(400);
+  step(/2\. Escúchalo/.test(await txt(page, V('.st-vstepbody'))), 'al cerrar y volver, el audio sigue en el paso 2');
+  // 6 · uno de 5 s se rechaza sin subir nada
   const before = (await media()).items.length;
-  await page.setInputFiles('#studioOv .st-vcf', tiny);
-  await page.waitForFunction(() => document.querySelector('#studioOv .st-vlen')?.classList.contains('bad'), null, { timeout: 10000 }).catch(() => {});
-  const small = await page.evaluate(() => document.querySelector('#studioOv .st-vlen').textContent);
+  await page.click(V('[data-vo="redo"]'));
+  await page.setInputFiles(V('.st-vcf'), tiny);
+  await page.waitForFunction(() => !document.querySelector('#studioOv .st-verr')?.hidden, null, { timeout: 10000 }).catch(() => {});
+  const small = await txt(page, V('.st-verr'));
   step(/al menos 10 segundos/.test(small) && (await media()).items.length === before, `5 s → «${small}» (nada subido)`);
   await page.screenshot({ path: path.join(OUT, 'corto.png') });
-  // 5 · cerrar el panel a mitad de una grabación no deja nada
-  await page.click('#studioOv [data-vo="rec"]'); await page.waitForTimeout(2500); await page.keyboard.press('Escape'); await page.waitForTimeout(800);
-  step((await media()).items.length === before, 'cerrar el panel mientras graba no guarda nada');
+  // 7 · grabar y descartar a propósito
+  await page.click(V('[data-vo="rec"]')); await page.waitForTimeout(2500); await page.keyboard.press('Escape'); await page.click(V('[data-vo="ask-drop"]')); await page.waitForTimeout(800);
+  step((await media()).items.length === before && !!(await page.$(V('[data-vo="rec"]'))), 'descartar lo grabado no deja nada y vuelve a «Grabar»');
+  // las capturas en los tres anchos, claro y oscuro (pasos 1 grabando y 3)
+  for (const [w, h] of [[1024, 768], [390, 844]]) for (const dark of [false, true]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.evaluate(d => document.body.classList.toggle('dark', d), dark); await page.waitForTimeout(200);
+    await page.click(V('[data-vo="home"]')).catch(() => {}); await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(OUT, `inicio-${w}-${dark ? 'oscuro' : 'claro'}.png`) });
+    const over = await page.evaluate(() => { const b = document.querySelector('#studioOv .st-vbox'); return b.scrollWidth > b.clientWidth + 1; });
+    step(!over, `${w} ${dark ? 'oscuro' : 'claro'}: nada se sale de lado en el panel`);
+  }
   step(!errs.length, `sin errores en la página${errs.length ? ': ' + errs[0] : ''}`);
   step(!mm.seen.some(x => /api\.minimax\.io/.test(x.raw)) && !log.includes(KEY), 'la key nunca sale en el registro de la oficina');
 } finally { await browser.close(); srv.kill(); await mm.close(); try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
