@@ -8,6 +8,14 @@ test('los contadores agrupan los miles con punto, también con cuatro cifras (to
   assert.deepEqual([V.num(65), V.num(999), V.num(1500), V.num(9999), V.num(10000), V.num(1234567)], ['65', '999', '1.500', '9.999', '10.000', '1.234.567']);
 });
 
+test('la lista de voces nunca queda en blanco: un id escrito a mano sale como «Otra: <id>» (revisión EST-13)', () => {
+  const ids = ['Spanish_Narrator', 'mi-voz-1234'];
+  assert.deepEqual(V.voiceSelect(ids, 'mi-voz-1234'), { value: 'mi-voz-1234', add: null });
+  assert.deepEqual(V.voiceSelect(ids, ' raro_id_99 '), { value: 'raro_id_99', add: { value: 'raro_id_99', label: 'Otra: raro_id_99' } });
+  assert.deepEqual(V.voiceSelect(ids, ''), { value: '', add: { value: '', label: 'Elegir una voz…' } });
+  assert.deepEqual(V.voiceSelect(null, 'x'), { value: 'x', add: { value: 'x', label: 'Otra: x' } });
+});
+
 test('cada tipo tiene su botón, su paso 3 y su GENERAR', () => {
   assert.deepEqual(V.KINDS.map(k => V.words(k).btn), ['Imagen', 'Video', 'Voz', 'Música']);
   assert.equal(V.goLabel('audio', 1), 'GENERAR VOZ');

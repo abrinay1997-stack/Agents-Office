@@ -57,6 +57,8 @@ try {
   const live = await page.evaluate(() => ({ t: document.querySelector('#studioOv .st-vrect').textContent, guion: (document.querySelector('#studioOv .st-vscript')?.textContent || '').length, zona: document.querySelector('#studioOv .st-vzone').textContent, b: document.querySelector('#studioOv [data-vo="rec-stop"]')?.textContent }));
   step(/de 5:00/.test(live.t) && live.guion > 600 && /Parar/.test(live.b || ''), `grabando: «${live.t}», guion de ${live.guion} caracteres, medidor «${live.zona}»`);
   await page.screenshot({ path: path.join(OUT, 'grabando.png') });
+  const recUi = await page.evaluate(() => ({ back: !!document.querySelector('#studioOv .st-vback'), role: document.querySelector('#studioOv .st-vscript')?.getAttribute('role') }));
+  step(!recUi.back && recUi.role === 'region', `mientras graba no hay «‹ Voces» que no responda; el guion es una región con nombre (${recUi.role})`);
   await page.mouse.click(5, 895); await page.waitForTimeout(300);
   step(await page.evaluate(() => !document.querySelector('#studioOv .st-vocov').hidden && !!document.querySelector('#studioOv [data-vo="rec-stop"]')), 'un clic fuera mientras graba no cierra ni borra nada');
   await page.keyboard.press('Escape'); await page.waitForTimeout(200);
@@ -93,9 +95,13 @@ try {
   step(/1\.50/.test(headAfter) && !/1\.50/.test(headBefore), `la cabecera suma el gasto al momento: «${headBefore}» → «${headAfter}»`);
   step(done.foco && /Lista: «Mi voz»/.test(done.h || '') && done.players === 2, `resultado «${done.h}» con el foco, original y clon para comparar`);
   await page.screenshot({ path: path.join(OUT, 'lista.png') });
-  await page.click(V('[data-vo="try"]'));
+  const t2a = () => mm.seen.filter(x => x.path === '/v1/t2a_v2').length, t2a0 = t2a();
+  await page.evaluate(() => { const b = document.querySelector('#studioOv [data-vo="try"]'); b.click(); b.click(); b.click(); }); // tres clics impacientes
+  const tryBusy = await page.evaluate(() => document.querySelector('#studioOv [data-vo="try"]').disabled);
   await page.waitForSelector(V('.st-vtryres audio'), { timeout: 20000 }).catch(() => {});
+  await page.waitForTimeout(1500);
   step(await page.evaluate(() => !!document.querySelector('#studioOv .st-vtryres audio')) && mm.seen.some(x => x.path === '/v1/t2a_v2' && /voz clonada/.test(x.raw)), '«Probar esta voz» genera un audio corto con ella y lo reproduce');
+  step(tryBusy && t2a() - t2a0 === 1 && await page.evaluate(() => !document.querySelector('#studioOv [data-vo="try"]').disabled), `tres clics en «Probar esta voz» = ${t2a() - t2a0} audio pagado; el botón descansa mientras genera y vuelve al terminar`);
   // 4 · subir 7 min → 5:00, en una sola frase
   await page.click(V('[data-vo="again"]'));
   await page.setInputFiles(V('.st-vcf'), long);
@@ -106,6 +112,14 @@ try {
   await page.keyboard.press('Escape'); await page.waitForTimeout(200);
   await page.click('#studioOv .st-vocbtn'); await page.waitForTimeout(400);
   step(/2\. Escúchalo/.test(await txt(page, V('.st-vstepbody'))), 'al cerrar y volver, el audio sigue en el paso 2');
+  // 5b · «‹ Voces» en el paso 2, cerrar y volver: el inicio dice que hay un audio sin clonar y «Clonar mi voz» sigue ahí
+  await page.click(V('.st-vback')); await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  await page.click('#studioOv .st-vocbtn'); await page.waitForTimeout(400);
+  const pend = await txt(page, V('.st-vpend'));
+  step(/audio sin clonar \(5:00\): continúa en el paso 2/.test(pend), `desde «‹ Voces» y cerrando, el inicio avisa: «${pend}»`);
+  await page.screenshot({ path: path.join(OUT, 'pendiente.png') });
+  await page.click(V('[data-vo="go-clone"]')); await page.waitForTimeout(200);
+  step(/2\. Escúchalo/.test(await txt(page, V('.st-vstepbody'))), '«Clonar mi voz» sigue en el paso 2 con el mismo audio');
   // 6 · uno de 5 s se rechaza sin subir nada
   const before = (await media()).items.length;
   await page.click(V('[data-vo="redo"]'));
@@ -126,6 +140,15 @@ try {
     const over = await page.evaluate(() => { const b = document.querySelector('#studioOv .st-vbox'); return b.scrollWidth > b.clientWidth + 1; });
     step(!over, `${w} ${dark ? 'oscuro' : 'claro'}: nada se sale de lado en el panel`);
   }
+  // 8 · un id escrito a mano que la lista no conoce: la lista dice «Otra: <id>», nunca en blanco
+  await page.setViewportSize({ width: 1512, height: 900 });
+  await page.click(V('.st-vlist [data-vo="use"]')); await page.waitForTimeout(300);
+  const sel = await page.evaluate(() => {
+    const d = document.querySelector('#studioOv .st-vadv2'); if (d) d.open = true;
+    const i = document.querySelector('#studioOv .st-vid'); i.value = 'raro_id_99'; i.dispatchEvent(new Event('change', { bubbles: true }));
+    const s = document.querySelector('#studioOv .st-vsel'); return { v: s.value, i: s.selectedIndex, t: s.selectedOptions[0]?.textContent };
+  });
+  step(sel.v === 'raro_id_99' && sel.i >= 0 && sel.t === 'Otra: raro_id_99', `un id a mano: la lista muestra «${sel.t}»`);
   step(!errs.length, `sin errores en la página${errs.length ? ': ' + errs[0] : ''}`);
   step(!mm.seen.some(x => /api\.minimax\.io/.test(x.raw)) && !log.includes(KEY), 'la key nunca sale en el registro de la oficina');
 } finally { await browser.close(); srv.kill(); await mm.close(); try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }

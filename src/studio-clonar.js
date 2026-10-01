@@ -145,3 +145,12 @@ export function expiresOn(at, now = Date.now()) {
   const d = new Date((+at || now) + 7 * 864e5);
   return d.toLocaleDateString('es', { day: 'numeric', month: 'long' });
 }
+
+/** Opening the panel again (revisión EST-02): a take not cloned yet stays, whatever screen the owner left it on — the clone step
+ *  or «‹ Voces» from step 2 or 3. Once cloned (`done`) the next opening starts fresh. */
+export const keepTake = s => !!(s && s.take && s.step !== 'done');
+/** The line on the «Clonar mi voz» card while a take waits, so a recording is never dropped without a word. */
+export function pendingLine(s) {
+  if (!keepTake(s)) return '';
+  return `Tienes un audio sin clonar${s.take.seconds ? ` (${clock(s.take.seconds)})` : ''}: continúa en el paso ${s.step === 3 ? 3 : 2}.`;
+}

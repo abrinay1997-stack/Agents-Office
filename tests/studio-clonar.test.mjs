@@ -98,3 +98,24 @@ test('ningún texto del Estudio manda al paso 4 o 5 por su número (se renumeran
   const hits = src.split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => /paso [4-9]/i.test(l.replace(/\/\/.*$/, '')));
   assert.deepEqual(hits.map(([n]) => n), [], 'usa el título del paso o stepNum()');
 });
+
+test('una toma sin clonar sigue al volver a abrir, la hayas dejado en el paso o en «‹ Voces» (revisión EST-02)', () => {
+  const take = { seconds: 83, url: 'blob:x' };
+  assert.equal(C.keepTake({ take, step: 2, screen: 'clone' }), true);
+  assert.equal(C.keepTake({ take, step: 3, screen: 'home' }), true, 'pulsó «‹ Voces» en el paso 3 y cerró');
+  assert.equal(C.keepTake({ take, step: 'done', screen: 'clone' }), false, 'ya clonada: se empieza de nuevo');
+  assert.equal(C.keepTake({ take: null, step: 2 }), false);
+  assert.equal(C.pendingLine({ take, step: 3, screen: 'home' }), 'Tienes un audio sin clonar (1:23): continúa en el paso 3.');
+  assert.equal(C.pendingLine({ take: { url: 'x' }, step: 2 }), 'Tienes un audio sin clonar: continúa en el paso 2.');
+  assert.equal(C.pendingLine({ take, step: 'done' }), '');
+});
+
+test('el panel: una prueba por clic, el guion con nombre, sin «‹ Voces» mudo al grabar (revisión EST)', () => {
+  const src = fs.readFileSync(new URL('../src/studio.js', import.meta.url), 'utf8');
+  assert.match(src, /if \(a === 'try' \|\| a === 'try-row'\) \{[^\n]*\n\s*b\.disabled = true;/, '«Probar esta voz» y «Probarla ahora» se apagan mientras generan');
+  assert.match(src, /if \(a === 'try' \|\| !ok\) \{ b\.disabled = false;/, 'y vuelven si falló, para reintentar');
+  assert.doesNotMatch(src.slice(src.indexOf('async function tryVoice'), src.indexOf('async function designVoice')), /return;/, 'tryVoice siempre dice si salió');
+  assert.match(src, /class="st-vscript" role="region" tabindex="0" aria-label=/, 'aria-label en un div sin rol lo ignoran los lectores');
+  assert.match(src, /const back = !S\.off && sc !== 'home' && !S\.rec \?/, 'mientras graba no se pinta un botón que no responde');
+  assert.match(src, /const keep = VC\.keepTake\(vocState\)/);
+});

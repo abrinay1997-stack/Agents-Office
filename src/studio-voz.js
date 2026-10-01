@@ -109,6 +109,13 @@ export function voiceName(id, voices) {
   return v && v.name ? v.name : id;
 }
 export const voiceKind = v => (v && v.kind === 'clone' ? 'Clonada' : 'Diseñada');
+/** The voice list for an id (revisión EST-13): a known voice selects itself; an id typed by hand that the list does not have gets
+ *  its own «Otra: <id>» option, so the list never shows blank while that voice is set; no id → «Elegir una voz…». */
+export function voiceSelect(ids, id) {
+  const v = String(id || '').trim();
+  if (!v) return { value: '', add: { value: '', label: 'Elegir una voz…' } };
+  return (ids || []).includes(v) ? { value: v, add: null } : { value: v, add: { value: v, label: 'Otra: ' + v } };
+}
 
 /* ---------- the gallery ---------- */
 /** A finished sound: 'music' (its record says wanted: 'music'), 'voice' (any other audio), or null. */
