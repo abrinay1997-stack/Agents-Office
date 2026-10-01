@@ -1,7 +1,7 @@
 // Agents Office — the ESTUDIO on the page (E, or the clapperboard in the bar): generate images and video by hand or in
 // batches, and see everything the agents generated. The work happens on the server (media.mjs) as background jobs.
-//   initStudio(ctx) → { open, close, toggle, isOpen }
-//   ctx: isLive() · esc · agentName(id) · openTask?(taskSid)
+//   initStudio(ctx) → { open, close, toggle, isOpen, forTarget, selection, openFile }
+//   ctx: isLive() · esc · agentName(id) · openTask?(taskSid) · askDimitri?(files) · studioDepts?: [{ key, name }]
 // V2 (24 Sep 2026, after open-higgsfield): a catalog of models with their own settings, start/end frames and references,
 // «Animar», live tiles, a masonry gallery, multi-select with ZIP and undo, an Uploads tab.
 // V2.1 (same day, the owner: «organizar esta suite… más intuitivo»): a guided composer — 1 what, 2 model (a picker that
@@ -9,6 +9,7 @@
 // quantity and GENERAR fixed at the bottom; card actions as icons over the picture; clear names everywhere.
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
+import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested arithmetic
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo' }; // V4.4: the settings Higgsfield's own schemas bring
 const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
@@ -29,9 +30,12 @@ const I = { // line icons (stroke = currentColor)
   down: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>', up: '<path d="M12 16V5M7 10l5-5 5 5M5 20h14"/>',
   plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>', ref: '<rect x="3" y="7" width="13" height="13" rx="2.5"/><circle cx="7.8" cy="11.6" r="1.4"/><path d="m16 17-3.5-3.5L6 20"/><path d="M19.5 2.5v7M16 6h7"/>', again: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', folder: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+  pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', chat: '<path d="M4 5.5h16v10.5H9.5L4 20z"/><path d="M8 9.5h8M8 12.5h5"/>', send: '<path d="M4 12h12M11 6l6 6-6 6"/><path d="M20.5 4v16"/>', full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   cal: '<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><path d="M12 13v5M9.5 15.5h5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
 };
 const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
+const DEPT_NAMES = { emails: 'Emails', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', fin: 'Contabilidad', delivery: 'Entregas' }; // V4.9: «Mandar a un departamento…» when ctx.studioDepts is not given
+const EDIT_EX = ['quita el fondo', 'pon el logo abajo', 'cámbiale la ropa a roja']; // V4.9: examples under «¿Qué cambio?»
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.st.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.st.' + k, JSON.stringify(v)); } catch {} } };
 
 export function initStudio(ctx) {
@@ -101,6 +105,7 @@ export function initStudio(ctx) {
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
+  let editModels = [], editBlock = null, depts = []; // V4.9: the models that edit a picture (on), the engines to switch on when none is (a 409 says which), the departments a picture can be sent to
   // V4.6 (27 Sep 2026, the owner): folders — labels on each file (nothing moves on disk); drag pictures onto one, rename it, remove it
   let folders = [], folderF = store.get('folder', 'all'), dragFiles = null, fdEdit = null, fdNewFor = null; // fdEdit: 'new' or a folder id being renamed · fdNewFor: files waiting for the new folder
   const folderName = id => (folders.find(f => f.id === id) || {}).name || '';
@@ -116,6 +121,11 @@ export function initStudio(ctx) {
   const roleName = r => ROLE[r];
   const roleHelp = (r, m = cur()) => helpFor(r, m);
   const itemOf = f => items.find(x => x.file === f);
+  // V4.9: who made it — the owner, an agent, or Dimitri (the plan the owner OK'd); «De agentes» shows the agents' and Dimitri's
+  const fromBots = x => x.by === 'agent' || x.by === 'dimitri';
+  const who = x => (x.by === 'agent' ? agentName(x.agent) || 'agente' : x.by === 'dimitri' ? 'Dimitri' : 'tú');
+  // V4.9: what was used is what was liked — a reference, a piece, the calendar teach the office's memory (it never blocks the action)
+  const learn = (file, used) => { if (isLive() && location.protocol.startsWith('http')) api('PATCH', '/api/media/item/' + encodeURIComponent(file), { used }).catch(() => {}); };
   // the address carries the file's own moment (?v=): a picture never shows another one that once had its name (the browser keeps them a day)
   const src = it => { const f = String(it.file || it), x = typeof it === 'object' && it.at ? it : itemOf(f); return '/media/' + f.split('/').map(encodeURIComponent).join('/') + (x && x.at ? '?v=' + x.at : ''); };
   const isVid = f => /\.(mp4|webm)$/i.test(f);
@@ -264,8 +274,8 @@ export function initStudio(ctx) {
   /* ---------- the gallery ---------- */
   function shown() {
     const w = q.toLowerCase();
-    return items.filter(it => (folderF === 'all' || (folderF === 'none' ? !inFolder(it) : inFolder(it) === folderF)) && (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && it.by === 'agent') || (filter === 'you' && it.by !== 'agent' && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload))
-      && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file} ${it.by === 'agent' ? agentName(it.agent) || '' : ''} ${it.task && ctx.taskTitle ? ctx.taskTitle(it.task) : ''}`.toLowerCase().includes(w)));
+    return items.filter(it => (folderF === 'all' || (folderF === 'none' ? !inFolder(it) : inFolder(it) === folderF)) && (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && fromBots(it)) || (filter === 'you' && !fromBots(it) && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload))
+      && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file} ${fromBots(it) ? who(it) : ''} ${it.task && ctx.taskTitle ? ctx.taskTitle(it.task) : ''}`.toLowerCase().includes(w)));
   }
   const tileJobs = () => jobs.filter(j => j.state === 'queued' || j.state === 'running' || (j.state === 'failed' && Date.now() - (j.doneAt || j.at) < 3 * 864e5));
   // V4.2 (audit A39): how long this model usually takes — the median of its last finished jobs, else a sensible guess
@@ -282,7 +292,7 @@ export function initStudio(ctx) {
     return `<figure class="st-card st-job ${j.state}" data-job="${j.id}">
       <div class="st-jbody" style="aspect-ratio:${ar(j.s && j.s.aspectRatio) || '1 / 1'}">
         ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : j.kind === 'video' ? 'Generando video' : 'Generando'}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)} · ${slow ? 'tarda más de lo normal' : `suele tardar ${approx(typ)}`}</span>${j.state === 'running' ? `<span class="st-jbar" aria-hidden="true"><i style="width:${pct}%"></i></span>` : ''}` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
-        <p>${esc(j.prompt)}</p><span class="st-meta">${esc(j.modelName)}${j.by === 'agent' ? ' · ' + esc(agentName(j.agent) || 'agente') : ''}</span>
+        <p>${esc(j.prompt)}</p><span class="st-meta">${esc(j.modelName)}${fromBots(j) ? ' · ' + esc(who(j)) : ''}${j.versionOf ? ' · versión' : ''}</span>
       </div>
       <div class="st-jacts">${live ? (askCancel.has(j.id) ? `<span class="st-jq">Ya se envió a ${esc(j.engineName || 'el motor')}: puede cobrarse igual.</span><button type="button" data-j="cancel-yes" class="warn">Cancelar igual</button><button type="button" data-j="cancel-no">Seguir</button>`
         : `<button type="button" data-j="cancel" title="${j.state === 'queued' ? 'Aún no empezó: no se cobra' : paid ? 'Ya se envió al motor: puede cobrarse igual' : 'Gratis: no se cobra'}">Cancelar</button>`) : `<button type="button" data-j="retry" class="pri">Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
@@ -297,7 +307,8 @@ export function initStudio(ctx) {
     const menu = [ // V4.4 (27 Sep 2026): the row shows the main action, Descargar and the bin as icons; the rest lives here
       ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
       ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark']]),
-      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar ? [['cal', 'Enviar al calendario de contenido', 'cal']] : [])];
+      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar ? [['cal', 'Enviar al calendario de contenido', 'cal']] : []),
+      ...(ctx.askDimitri ? [['dimitri', 'Pedírselo a Dimitri', 'chat']] : []), ['dept', 'Mandar a un departamento…', 'send']]; // V4.9
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}" draggable="true">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
       <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${aud ? '<span class="st-aud" aria-hidden="true">♪</span>' : vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
@@ -305,14 +316,15 @@ export function initStudio(ctx) {
       <div class="st-menu" role="menu" hidden>
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(it.by === 'agent' ? (agentName(it.agent) || 'agente') : 'tú')}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
+      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(who(it))}${it.versionOf ? ' · versión' : ''}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
       <div class="st-ov" role="group" aria-label="Acciones">
         ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla en la pieza «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? '✓ En la pieza' : 'Usar en la pieza'}</button>` : ''}
         ${primary ? `<button type="button" data-a="${primary[0]}" class="st-oi" aria-label="${primary[1]}: ${esc(label)}" title="${primary[1]} — ${primary[2].toLowerCase()}">${svg(primary[3])}</button>` : ''}
         ${vid ? '' : `<button type="button" data-a="ref" class="st-oi" aria-label="Usar de referencia: ${esc(label)}" title="Usar de referencia — tu producto, logo, personaje o estilo en lo próximo que crees">${svg('ref')}</button>`}
+        ${vid ? '' : `<button type="button" data-a="edit" class="st-oi" aria-label="Editar: ${esc(label)}" title="Editar — pide un cambio y sale una versión nueva; la original no se toca">${svg('pen')}</button>`}
         <a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar">${svg('down')}</a>
         <button type="button" data-a="del" class="st-oi st-odel" aria-label="Mover a la papelera: ${esc(label)}" title="Mover a la papelera (30 días para recuperarla)">${svg('trash')}</button>
-        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más: favorita, variar, repetir">${svg('dots')}</button>
+        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más: favorita, variar, repetir, carpeta, Dimitri, un departamento">${svg('dots')}</button>
       </div>
     </figure>`;
   }
@@ -327,18 +339,18 @@ export function initStudio(ctx) {
     const f = its[0], n = its.length, vid = f.kind === 'video';
     const thumbs = its.slice(0, 4).map((it, i) => `<button type="button" class="st-gt" data-gf="${esc(it.file)}" aria-label="Ver ${i + 1} de ${n} en grande"${ratioOf(it) ? ` style="aspect-ratio:${ratioOf(it)}"` : ''}>${isVid(it.file) ? `<video src="${src(it)}" muted preload="metadata" playsinline></video>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async">`}${it.fav ? `<span class="st-favb">${svg('star', 'fill')}</span>` : ''}${i === 3 && n > 4 ? `<span class="st-gmore">+${n - 4}</span>` : ''}</button>`).join('');
     return `<figure class="st-card st-group" data-g="${esc(f.job)}" draggable="true"><div class="st-gthumbs n${Math.min(n, 4)}">${thumbs.replace(/<(img|video) /g, '<$1 draggable="false" ')}</div>
-      <figcaption><span class="st-p">${esc(f.prompt)}</span>${f.task && f.by === 'agent' ? `<span class="st-tchip st-tchip-s">para: ${esc((ctx.taskTitle && ctx.taskTitle(f.task)) || 'su tarea')}</span>` : ''}<span class="st-meta"><b>${n} ${vid ? 'videos' : 'imágenes'} de un pedido</b> · ${esc(f.by === 'agent' ? (agentName(f.agent) || 'agente') : 'tú')}${f.modelName ? ' · ' + esc(f.modelName) : ''} · ${esc(when(f.at))}</span>
+      <figcaption><span class="st-p">${esc(f.prompt)}</span>${f.task && f.by === 'agent' ? `<span class="st-tchip st-tchip-s">para: ${esc((ctx.taskTitle && ctx.taskTitle(f.task)) || 'su tarea')}</span>` : ''}<span class="st-meta"><b>${n} ${vid ? 'videos' : 'imágenes'} de un pedido</b> · ${esc(who(f))}${f.modelName ? ' · ' + esc(f.modelName) : ''} · ${esc(when(f.at))}</span>
       <span class="st-gacts"><button type="button" data-ga="split">Ver por separado</button><button type="button" data-ga="zip">${svg('down')} Descargar las ${n}</button></span></figcaption></figure>`;
   }
   const aspect = it => { if (it.w && it.h) return it.h / it.w; const r = String(it.ratio || (it.s && it.s.aspectRatio) || '').split(':').map(Number); return r.length === 2 && r[0] && r[1] ? r[1] / r[0] : 1; };
   const colCount = () => { const w = $('.st-grid').clientWidth - 36; return w > 0 ? Math.max(1, Math.floor((w + 14) / (230 + 14))) : 0; };
   function when(ts) { const d = new Date(ts), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; return d.toDateString() === n.toDateString() ? `hoy ${t}` : d.toDateString() === y.toDateString() ? `ayer ${t}` : d.toLocaleDateString('es', { day: 'numeric', month: 'short', ...(d.getFullYear() !== n.getFullYear() ? { year: 'numeric' } : {}) }); }
   function renderGrid() {
-    const list = shown(), tj = tileJobs().filter(j => (folderF === 'all' || (folderF === 'none' ? !j.folder : j.folder === folderF)) && (filter === 'all' || (filter === 'you' && j.by !== 'agent') || (filter === 'agent' && j.by === 'agent') || (filter === 'video' && j.kind === 'video')));
+    const list = shown(), tj = tileJobs().filter(j => (folderF === 'all' || (folderF === 'none' ? !j.folder : j.folder === folderF)) && (filter === 'all' || (filter === 'you' && !fromBots(j)) || (filter === 'agent' && fromBots(j)) || (filter === 'video' && j.kind === 'video')));
     renderFolders();
     const active = tileJobs().filter(j => j.state !== 'failed').length;
     $('.st-count').textContent = `${list.length} ${list.length === 1 ? 'archivo' : 'archivos'}${list.length !== items.length ? ` de ${items.length}` : ''}${active ? ` · ${active} generándose` : ''}`;
-    const cnt = { all: items.length, fav: items.filter(i => i.fav).length, you: items.filter(i => i.by !== 'agent' && !i.upload).length, agent: items.filter(i => i.by === 'agent').length, video: items.filter(i => i.kind === 'video' || i.wanted === 'video').length, up: items.filter(i => i.upload).length }; // V4.2 (audit A22)
+    const cnt = { all: items.length, fav: items.filter(i => i.fav).length, you: items.filter(i => !fromBots(i) && !i.upload).length, agent: items.filter(fromBots).length, video: items.filter(i => i.kind === 'video' || i.wanted === 'video').length, up: items.filter(i => i.upload).length }; // V4.2 (audit A22)
     el.querySelectorAll('.st-tabs [data-f]').forEach(b => { if (!b.dataset.lbl) b.dataset.lbl = b.textContent; b.innerHTML = `${b.dataset.lbl} <b>${cnt[b.dataset.f]}</b>`; });
     $('.st-ptn').textContent = active ? `· ${active} en curso` : items.length ? String(items.length) : '';
     renderSel();
@@ -398,9 +410,11 @@ export function initStudio(ctx) {
     loading = (async () => {
       try { if (!location.protocol.startsWith('http')) throw new Error('el Estudio trabaja con la oficina real: ábrela con el iniciador (.bat)'); // the demo file has no server to ask (it logged a fetch error)
         const j = await api('GET', '/api/media'); items = j.items || []; budget = j.budget || null; jobs = j.jobs || []; folders = j.folders || []; loadErr = '';
+        depts = ctx.studioDepts && ctx.studioDepts.length ? ctx.studioDepts : (j.departments || []).map(k => ({ key: k, name: DEPT_NAMES[k] || k })); // V4.9
         if (folderF !== 'all' && folderF !== 'none' && !folders.some(f => f.id === folderF)) { folderF = 'all'; store.set('folder', 'all'); } // a folder removed elsewhere
         const sig = JSON.stringify((j.models || []).map(m => m.id + (m.on ? 1 : 0)));
         if (full || sig !== catalogSig) { models = j.models || []; engines = j.engines || []; def = j.default || {}; catalogSig = sig; full = true; }
+        editModels = (j.editModels || []).map(m => (typeof m === 'string' ? models.find(x => x.id === m) : m)).filter(m => m && m.on !== false); if (editModels.length) editBlock = null; // V4.9
       } catch (e) { loadErr = e.message; }
       for (const f of [...sel]) if (!itemOf(f)) sel.delete(f);
       renderHead(); if (full) renderModels(); else if (cur()) estimate(); renderGrid(); watch(); // V4.5: the cost line follows the caps too
@@ -459,7 +473,7 @@ export function initStudio(ctx) {
     const rows = jobs.slice().sort((a, b) => (b.doneAt || b.at) - (a.doneAt || a.at));
     H.innerHTML = `<div class="st-hbox"><div class="st-hhead"><h2 id="stHistT">Historial de trabajos</h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar">${svg('x')}</button></div>
       <p class="st-hsub">La última semana: ${rows.length} ${rows.length === 1 ? 'trabajo' : 'trabajos'}. Los archivos siguen en la galería aunque el trabajo salga de aquí.</p>
-      <ol class="st-hlist">${rows.map(j => { const cancel = j.state === 'failed' && /Cancelado por ti/.test(j.error || ''); return `<li class="${cancel ? 'cancel' : j.state}"><b>${cancel ? 'Cancelado' : ok[j.state] || j.state}</b><span class="st-hp">${esc(j.prompt || '(sin texto)')}</span><span class="st-hm">${esc(j.modelName || j.model)} · ${j.by === 'agent' ? esc(agentName(j.agent) || 'agente') : 'tú'} · ${esc(when(j.doneAt || j.at))}${j.items && j.items.length ? ` · ${j.items.length} ${j.kind === 'video' ? 'video(s)' : 'imagen(es)'}` : ''}${j.cost ? ` · US$${j.cost}` : ''}</span>${j.state === 'failed' && !cancel ? `<span class="st-hr">${esc(j.error || '')}</span>` : ''}</li>`; }).join('') || '<li>Todavía no hay trabajos.</li>'}</ol></div>`;
+      <ol class="st-hlist">${rows.map(j => { const cancel = j.state === 'failed' && /Cancelado por ti/.test(j.error || ''); return `<li class="${cancel ? 'cancel' : j.state}"><b>${cancel ? 'Cancelado' : ok[j.state] || j.state}</b><span class="st-hp">${esc(j.prompt || '(sin texto)')}</span><span class="st-hm">${esc(j.modelName || j.model)} · ${esc(who(j))} · ${esc(when(j.doneAt || j.at))}${j.items && j.items.length ? ` · ${j.items.length} ${j.kind === 'video' ? 'video(s)' : 'imagen(es)'}` : ''}${j.cost ? ` · US$${j.cost}` : ''}</span>${j.state === 'failed' && !cancel ? `<span class="st-hr">${esc(j.error || '')}</span>` : ''}</li>`; }).join('') || '<li>Todavía no hay trabajos.</li>'}</ol></div>`;
     histFrom = document.activeElement; H.hidden = false; modal.open(H); H.querySelector('.st-hx').focus();
     H.onclick = e => { if (e.target === H || e.target.closest('.st-hx')) closeHist(); };
   }
@@ -510,7 +524,7 @@ export function initStudio(ctx) {
   function animate(it) {
     const m = useModelFor('start', 'video'); if (!m) return say('Ningún modelo de video encendido acepta una imagen inicial.', true);
     kind = 'video'; store.set('kind', kind); modelOf.video = m.id; store.set('model.video', m.id);
-    media = { start: [it.file], end: [], reference: [], video: [] };
+    media = { start: [it.file], end: [], reference: [], video: [] }; learn(it.file, 'ref'); // its first frame: used, so liked
     renderModels(); showPane('gen'); $('.st-prompt').focus();
     say(m.engine === 'prueba' ? 'Animar: aún no tienes una key de video (Higgsfield o fal.ai); puedes probar el flujo gratis con «Prueba de video».' : `Animar con ${m.name}: describe el movimiento y pulsa GENERAR.`, m.engine === 'prueba');
   }
@@ -525,7 +539,7 @@ export function initStudio(ctx) {
   function useAsRef(it) {
     let m = cur();
     if (!m || !m.roles.reference) { m = useModelFor('reference', kind); if (!m && kind === 'video') { kind = 'image'; m = useModelFor('reference', 'image'); } if (!m) return say('Ningún modelo encendido acepta referencias.', true); modelOf[kind] = m.id; store.set('model.' + kind, m.id); renderModels(); }
-    if (addMedia('reference', it.file)) { say(`Referencia añadida a ${m.name}. Describe qué hacer con ella.`); if (phone()) showPane('gen'); }
+    if (addMedia('reference', it.file)) { learn(it.file, 'ref'); say(`Referencia añadida a ${m.name}. Describe qué hacer con ella.`); if (phone()) showPane('gen'); }
   }
   function vary(it) { // V4.2 (audit A35): another take close to this one — its prompt and model, the picture itself as the reference
     reuse(it, true);
@@ -710,38 +724,194 @@ export function initStudio(ctx) {
   }
 
   /* ---------- the lightbox ---------- */
-  function closeLight() { const L = $('.st-light'); if (L.hidden) return; L.hidden = true; L.innerHTML = ''; lightIdx = -1; modal.close(L); if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
-  function light(i) {
+  // V4.9 (30 Sep 2026, the owner: «las fotos grandes no caben» · «no se puede editar una imagen»): the picture always fits whole (its stage is a
+  // grid row of minmax(0, 1fr), src/css/estudio.css) and zooms (src/viewer-zoom.js): Ajustar / 100 %, the wheel and a pinch around the pointer,
+  // dragging, a double click, + − 0 and F (full screen). The panel gains Editar (a new version: the original is never touched), «Versión de…» and
+  // «Versiones (n)», «Pedírselo a Dimitri» and «Mandar a un departamento…».
+  let zs = Z.fitted(), zImg = null, lPanel = null, lPanelFrom = null;
+  const zDims = () => (zImg && zImg.naturalWidth && zImg.clientWidth ? { nw: zImg.naturalWidth, nh: zImg.naturalHeight, bw: zImg.clientWidth, bh: zImg.clientHeight } : null);
+  function zPaint() {
+    const L = $('.st-light'), d = zDims(); if (!zImg) return;
+    const on = Z.isZoomed(zs); zImg.style.transform = on ? Z.css(zs) : ''; L.classList.toggle('st-zoomed', on);
+    const pct = d ? Z.percent(zs, d) : 0, p = L.querySelector('.st-zpct'); if (p) p.textContent = d ? pct + ' %' : '';
+    L.querySelector('[data-z="fit"]')?.setAttribute('aria-pressed', String(!on));
+    L.querySelector('[data-z="real"]')?.setAttribute('aria-pressed', String(!!d && pct === 100));
+    const lim = d && Z.limits(d), inB = L.querySelector('[data-z="in"]'), outB = L.querySelector('[data-z="out"]');
+    if (inB) inB.disabled = !d || zs.scale >= lim.max - 1e-6; if (outB) outB.disabled = !on;
+  }
+  function zSet(s) { const d = zDims(); if (!d) return; zs = Z.clampPan(s, d); zPaint(); }
+  const zPoint = (cx, cy) => { const r = zImg.parentElement.getBoundingClientRect(); return { x: cx - (r.left + r.width / 2), y: cy - (r.top + r.height / 2) }; }; // from the stage's centre, which is the picture's
+  function wireZoom(im) {
+    zImg = im; zs = Z.fitted(); if (!im) return;
+    const ptr = new Map(); let drag = null, pin = null;
+    im.addEventListener('load', zPaint);
+    im.addEventListener('wheel', e => { const d = zDims(); if (!d) return; e.preventDefault(); const p = zPoint(e.clientX, e.clientY); zs = Z.zoomAt(zs, Z.wheelFactor(e.deltaY), p.x, p.y, d); zPaint(); }, { passive: false });
+    im.addEventListener('dblclick', e => { const d = zDims(); if (!d) return; const p = zPoint(e.clientX, e.clientY); zs = Z.toggle(zs, p.x, p.y, d); zPaint(); });
+    im.addEventListener('pointerdown', e => {
+      if (e.button > 0) return; ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { im.setPointerCapture(e.pointerId); } catch {}
+      if (ptr.size === 2) { const [a, b] = [...ptr.values()]; pin = { s: zs, p1: zPoint(a.x, a.y), p2: zPoint(b.x, b.y) }; drag = null; } else if (ptr.size === 1) drag = { x: e.clientX, y: e.clientY };
+    });
+    im.addEventListener('pointermove', e => {
+      if (!ptr.has(e.pointerId)) return; ptr.set(e.pointerId, { x: e.clientX, y: e.clientY }); const d = zDims(); if (!d) return;
+      if (pin && ptr.size >= 2) { const [a, b] = [...ptr.values()]; zs = Z.pinch(pin, zPoint(a.x, a.y), zPoint(b.x, b.y), d); zPaint(); return; }
+      if (drag && Z.isZoomed(zs)) { zs = Z.pan(zs, e.clientX - drag.x, e.clientY - drag.y, d); drag = { x: e.clientX, y: e.clientY }; im.classList.add('st-grabbing'); zPaint(); }
+    });
+    const up = e => { ptr.delete(e.pointerId); if (ptr.size < 2) pin = null; if (ptr.size === 1) drag = { ...[...ptr.values()][0] }; if (!ptr.size) { drag = null; im.classList.remove('st-grabbing'); } };
+    im.addEventListener('pointerup', up); im.addEventListener('pointercancel', up);
+  }
+  function fullScreen() {
+    const m = $('.st-light .st-lmedia'); if (!m) return;
+    if (document.fullscreenElement) { document.exitFullscreen?.().catch(() => {}); return; }
+    if (!m.requestFullscreen) return toast('Este navegador no deja ver la imagen a pantalla completa.');
+    m.requestFullscreen().catch(() => toast('Este navegador no dejó abrir la pantalla completa.'));
+  }
+  document.addEventListener('fullscreenchange', () => {
+    const b = el.querySelector('.st-light [data-z="full"]'), on = !!document.fullscreenElement;
+    if (b) { b.setAttribute('aria-pressed', String(on)); b.setAttribute('aria-label', on ? 'Salir de la pantalla completa (F)' : 'Pantalla completa (F)'); b.querySelector('span').textContent = on ? 'Salir' : 'Pantalla completa'; }
+    if (zImg) requestAnimationFrame(() => zSet(zs));
+  });
+  window.addEventListener('resize', () => { if (zImg && !$('.st-light').hidden) zSet(zs); });
+  function closeLight() { const L = $('.st-light'); if (L.hidden) return; if (document.fullscreenElement && L.contains(document.fullscreenElement)) document.exitFullscreen?.().catch(() => {}); L.hidden = true; L.innerHTML = ''; lightIdx = -1; zImg = null; lPanel = null; L.classList.remove('st-zoomed'); modal.close(L); if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
+  /** Open the viewer on a file, wherever it is: a filter or a folder that hides it is cleared first. */
+  function lightFile(file, o = {}) {
+    let i = shown().findIndex(x => x.file === file);
+    if (i < 0 && itemOf(file)) {
+      filter = 'all'; q = ''; $('.st-q').value = ''; folderF = 'all'; store.set('folder', 'all');
+      el.querySelectorAll('.st-tabs [data-f]').forEach(b => { b.classList.toggle('on', b.dataset.f === 'all'); b.setAttribute('aria-pressed', b.dataset.f === 'all'); });
+      renderGrid(); i = shown().findIndex(x => x.file === file);
+    }
+    if (i >= 0) light(i, o);
+    return i >= 0;
+  }
+  const short = t => { const x = String(t || '').trim(); return x.length > 60 ? x.slice(0, 58) + '…' : x || 'sin texto'; };
+  function editEngines() { // the engines that bring a model that edits a picture, with how to switch each on
+    if (editBlock && editBlock.length) return editBlock;
+    return engines.filter(e => e.id !== 'prueba' && models.some(m => m.engine === e.id && m.edit)).map(e => ({ id: e.id, name: e.name, how: e.how || '' }));
+  }
+  function panelHTML(it) {
+    if (lPanel === 'edit') {
+      const ms = editBlock ? [] : editModels, off = !ms.length, engs = off ? editEngines() : [], want = store.get('editModel', ''), fd = inFolder(it) ? folderName(it.folder) : '';
+      return `<section class="st-lpanel" aria-labelledby="stEdT"><h3 id="stEdT">${svg('pen')} Editar: una versión nueva</h3>
+        <label class="st-plab" for="stEdQ">¿Qué cambio?</label><textarea id="stEdQ" class="st-edq" rows="3" maxlength="2000" placeholder="Ej.: quita el fondo · pon el logo abajo · cámbiale la ropa a roja"></textarea>
+        <div class="st-edex" role="group" aria-label="Ejemplos">${EDIT_EX.map(x => `<button type="button" data-ex="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+        ${off ? `<div class="st-edoff" role="alert" tabindex="-1"><b>Ningún motor que edite imágenes está activado.</b> Activa uno una sola vez (pega su comando en una ventana de comandos) y reinicia la oficina:${engs.length ? `<ul>${engs.map(e => `<li><b>${esc(e.name)}</b>${e.how ? `: <code>${esc(e.how)}</code>` : ''}</li>`).join('')}</ul>` : ''}</div>`
+          : `<label class="st-plab">Modelo<select class="st-edm">${ms.map(m => `<option value="${esc(m.id)}"${m.id === want ? ' selected' : ''}>${esc(m.name)} · ${price(m)}</option>`).join('')}</select></label>`}
+        <p class="st-edn">La original no se toca: sale una imagen nueva${fd ? ` en «${esc(fd)}»` : ' en la galería'}, unida a esta como versión.</p>
+        <div class="st-edrow"><button type="button" class="st-edgo pri"${off ? ' disabled aria-disabled="true"' : ''} title="Ctrl + Enter desde el campo">Crear versión</button><button type="button" data-lp="x">Cancelar</button></div>
+        <div class="st-edmsg" role="status" aria-live="polite"></div></section>`;
+    }
+    if (lPanel === 'dept') {
+      const last = store.get('dept', '');
+      return `<section class="st-lpanel" aria-labelledby="stDpT"><h3 id="stDpT">${svg('send')} Mandar a un departamento</h3>
+        ${depts.length ? `<label class="st-plab">Departamento<select class="st-dpd">${depts.map(d => `<option value="${esc(d.key)}"${d.key === last ? ' selected' : ''}>${esc(d.name)}</option>`).join('')}</select></label>
+        <label class="st-plab" for="stDpQ">Qué hacer con ${it.kind === 'video' ? 'este video' : 'esta imagen'}</label><input id="stDpQ" class="st-dpq" maxlength="300" placeholder="Ej.: úsala en el post del lanzamiento del viernes">
+        <p class="st-edn">Se crea una tarea para el departamento; su agente la recibe con este archivo de referencia.</p>
+        <div class="st-edrow"><button type="button" class="st-dpgo pri">Crear la tarea</button><button type="button" data-lp="x">Cancelar</button></div>`
+        : `<p class="st-edn">Ningún departamento usa el Estudio (Ajustes → Estudio).</p><div class="st-edrow"><button type="button" data-lp="x">Cerrar</button></div>`}
+        <div class="st-edmsg" role="status" aria-live="polite"></div></section>`;
+    }
+    return '';
+  }
+  function paintPanel(it, focus = true) {
+    const W = $('.st-light .st-lpwrap'); if (!W) return; W.innerHTML = panelHTML(it);
+    $('.st-light [data-l="edit"]')?.setAttribute('aria-expanded', String(lPanel === 'edit')); $('.st-light [data-l="dept"]')?.setAttribute('aria-expanded', String(lPanel === 'dept'));
+    if (focus && lPanel) { W.scrollIntoView({ block: 'nearest' }); (W.querySelector('textarea, input, select') || W.querySelector('button'))?.focus({ preventScroll: true }); }
+  }
+  function setPanel(it, p, from) { lPanel = lPanel === p ? null : p; lPanelFrom = from || null; paintPanel(it); if (!lPanel && lPanelFrom && document.contains(lPanelFrom)) lPanelFrom.focus({ preventScroll: true }); }
+  function closePanel() { if (!lPanel) return false; lPanel = null; const W = $('.st-light .st-lpwrap'); if (W) W.innerHTML = ''; el.querySelectorAll('.st-light [aria-expanded="true"]').forEach(b => b.setAttribute('aria-expanded', 'false')); (lPanelFrom && document.contains(lPanelFrom) ? lPanelFrom : $('.st-light .st-lx'))?.focus({ preventScroll: true }); return true; }
+  async function sendEdit(it) {
+    const P = $('.st-light .st-lpanel'); if (!P) return; const msg = P.querySelector('.st-edmsg'), q_ = P.querySelector('.st-edq'), go = P.querySelector('.st-edgo');
+    if (!go || go.disabled) return;
+    const instruction = q_.value.trim(); if (!instruction) { msg.textContent = 'Escribe qué cambio quieres: «quita el fondo», «pon el logo abajo»…'; q_.focus(); return; }
+    if (!isLive() || !location.protocol.startsWith('http')) { msg.textContent = 'Editar necesita la oficina real (ábrela con el iniciador).'; return; }
+    const model = P.querySelector('.st-edm')?.value || ''; if (model) store.set('editModel', model);
+    go.disabled = true; go.textContent = 'Enviando…';
+    let r, j = {};
+    try { r = await fetch('/api/media/edit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ file: it.file, instruction, ...(model ? { model } : {}) }) }); j = await r.json().catch(() => ({})); }
+    catch { go.disabled = false; go.textContent = 'Crear versión'; msg.textContent = 'Sin conexión con la oficina.'; return; }
+    if (r.status === 409) { editBlock = j.engines || []; paintPanel(it, false); const t = $('.st-light .st-edq'); if (t) t.value = instruction; $('.st-light .st-edoff')?.focus(); return; } // no engine edits: say which to switch on, and leave the button off
+    if (!r.ok || !j.job) { go.disabled = false; go.textContent = 'Crear versión'; msg.textContent = 'No se pudo: ' + (j.error || r.statusText || 'error'); return; }
+    jobs.unshift(j.job); if (j.budget) budget = j.budget;
+    const mName = j.job.modelName || (editModels.find(m => m.id === model) || {}).name || 'el modelo de edición';
+    closeLight(); renderHead(); renderGrid(); watch(); if (phone()) showPane('gal');
+    toast(`Versión en marcha con ${mName}: aparece en la galería al terminar, junto a la original.`);
+  }
+  async function sendToDept(it) {
+    const P = $('.st-light .st-lpanel'); if (!P) return; const msg = P.querySelector('.st-edmsg'), inp = P.querySelector('.st-dpq'), go = P.querySelector('.st-dpgo'), dept = P.querySelector('.st-dpd')?.value;
+    if (!go || go.disabled) return;
+    const text = inp.value.trim(); if (!text) { msg.textContent = 'Escribe en una línea qué hacer con ella.'; inp.focus(); return; }
+    if (!isLive() || !location.protocol.startsWith('http')) { msg.textContent = 'Esto necesita la oficina real (ábrela con el iniciador).'; return; }
+    store.set('dept', dept); go.disabled = true; go.textContent = 'Creando…';
+    try {
+      const r = await api('POST', '/api/media/to-dept', { file: it.file, dept, text }), name = (depts.find(d => d.key === dept) || {}).name || dept;
+      closePanel(); toast(`Tarea creada en ${name}: «${short((r.task && r.task.title) || text)}».`);
+    } catch (err) { go.disabled = false; go.textContent = 'Crear la tarea'; msg.textContent = 'No se pudo: ' + err.message; }
+  }
+  function light(i, o = {}) {
     const list = shown(); const it = list[i]; if (!it) return; if (lightIdx < 0) lightFrom = document.activeElement; lightIdx = i;
-    const L = $('.st-light'); L.hidden = false; modal.open(L);
+    const L = $('.st-light'); L.hidden = false; modal.open(L); L.classList.remove('st-zoomed');
+    const img = it.kind !== 'video' && it.kind !== 'audio';
+    lPanel = o.panel && (o.panel !== 'edit' || img) ? o.panel : null; lPanelFrom = null;
     const setTxt = it.settings ? Object.entries(it.settings).map(([k, v]) => `${LBL[k] || k}: ${typeof v === 'boolean' ? (v ? 'sí' : 'no') : VAL[v] || v}`).join(' · ') : '';
     const used = it.media ? Object.entries(it.media).flatMap(([r, fs]) => fs.map(f => [r, f])) : [];
+    const orig = it.versionOf ? itemOf(it.versionOf) : null, vers = (it.versions || []).map(itemOf).filter(Boolean);
+    const tools = it.kind === 'audio' ? '' : `<div class="st-ztools" role="toolbar" aria-label="${img ? 'Zoom' : 'Vista'}">${img ? `<button type="button" data-z="out" aria-label="Alejar (−)" title="Alejar (−)">−</button><span class="st-zpct" aria-label="Tamaño"></span><button type="button" data-z="in" aria-label="Acercar (+)" title="Acercar (+, o la rueda del ratón)">+</button><button type="button" data-z="fit" aria-pressed="true" title="Ajustar: la imagen entera (0)">Ajustar</button><button type="button" data-z="real" aria-pressed="false" title="100 %: un píxel de la imagen, un píxel de la pantalla (doble clic sobre la imagen)">100 %</button>` : ''}<button type="button" data-z="full" aria-pressed="false" aria-label="Pantalla completa (F)" title="Pantalla completa (F)">${svg('full')}<span>Pantalla completa</span></button></div>`;
     L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
-      <div class="st-lmedia">${it.kind === 'audio' ? `<div class="st-laud"><span aria-hidden="true">♪</span><audio src="${src(it)}" controls></audio></div>` : it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}">`}</div>
+      <div class="st-lmedia">${it.kind === 'audio' ? `<div class="st-laud"><span aria-hidden="true">♪</span><audio src="${src(it)}" controls></audio></div>` : `<div class="st-lstage"${it.w && it.h ? ` style="--ar:${+it.w} / ${+it.h}"` : ''}>${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}" draggable="false">`}</div>${tools}`}</div>
       <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${i + 1} de ${list.length}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 ? '' : ' disabled'}>›</button></div>
+      ${it.versionOf ? `<p class="st-lver">Versión de ${orig ? `<button type="button" class="st-lk" data-vf="${esc(orig.file)}" title="Abrir la original">«${esc(short(orig.prompt))}»</button>` : 'una imagen que ya no está en la galería'}</p>` : ''}
       <p class="st-lp">${esc(it.prompt)}</p>
-      <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${it.by === 'agent' ? esc(agentName(it.agent) || 'agente') : 'tú'}`} · ${esc(when(it.at))}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
+      <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${esc(who(it))}`} · ${esc(when(it.at))}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
-      <div class="st-lacts">${it.kind === 'video' || it.kind === 'audio' ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>`) : `<button type="button" data-l="anim" class="pri">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
-      <div class="st-lacts2">${it.kind === 'video' || it.kind === 'audio' ? '' : '<button type="button" data-l="ref">Usar de referencia</button>'}${it.upload || it.kind === 'video' || it.kind === 'audio' ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">Copiar prompt</button>${ctx.toCalendar ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}<button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
+      ${vers.length ? `<div class="st-lvers"><h3>Versiones (${vers.length})</h3><div>${vers.map((v, k) => `<button type="button" data-vf="${esc(v.file)}" aria-label="Abrir la versión ${k + 1}: ${esc(short(v.prompt))}" title="${esc(v.prompt)}"><img src="${src(v)}" alt=""></button>`).join('')}</div></div>` : ''}
+      <div class="st-lacts">${!img ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>`) : `<button type="button" data-l="edit" class="pri" aria-expanded="false" title="Pide un cambio: sale una versión nueva y la original no se toca">${svg('pen')} Editar</button><button type="button" data-l="anim">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
+      <div class="st-lpwrap"></div>
+      <div class="st-lacts2">${img ? '<button type="button" data-l="ref">Usar de referencia</button>' : ''}${it.upload || !img ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">Copiar prompt</button>${ctx.toCalendar ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}${ctx.askDimitri ? '<button type="button" data-l="dimitri">Pedírselo a Dimitri</button>' : ''}<button type="button" data-l="dept" aria-expanded="false">Mandar a un departamento…</button><button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
       <button type="button" class="st-ldel" data-l="del">${svg('trash')} Mover a la papelera</button></div></div>`;
-    L.querySelector('.st-lx').focus();
+    wireZoom(img ? L.querySelector('.st-lstage img') : null); zPaint();
+    if (lPanel) paintPanel(it); else L.querySelector('.st-lx').focus();
     L.onclick = e => {
       if (e.target === L || e.target.closest('.st-lx')) return closeLight();
       if (e.target.closest('.st-lnav.prev') && i > 0) { light(i - 1); L.querySelector('.st-lnav.prev')?.focus(); return; }
       if (e.target.closest('.st-lnav.next') && i < list.length - 1) { light(i + 1); L.querySelector('.st-lnav.next')?.focus(); return; }
+      const z = e.target.closest('[data-z]')?.dataset.z;
+      if (z) { if (z === 'full') return fullScreen(); const d = zDims(); if (!d) return;
+        if (z === 'in') zs = Z.zoomAt(zs, 1.5, 0, 0, d); if (z === 'out') zs = Z.zoomAt(zs, 1 / 1.5, 0, 0, d); if (z === 'fit') zs = Z.fitted(); if (z === 'real') zs = Z.zoomTo(zs, Z.realScale(d), 0, 0, d);
+        zPaint(); return; }
+      const vf = e.target.closest('[data-vf]'); if (vf) { lightFile(vf.dataset.vf); return; }
+      const ex = e.target.closest('[data-ex]'); if (ex) { const t = L.querySelector('.st-edq'); if (t) { t.value = t.value.trim() ? `${t.value.trim()}; ${ex.dataset.ex}` : ex.dataset.ex; t.focus(); } return; }
+      if (e.target.closest('[data-lp="x"]')) { closePanel(); return; }
+      if (e.target.closest('.st-edgo')) { sendEdit(it); return; }
+      if (e.target.closest('.st-dpgo')) { sendToDept(it); return; }
       const a = e.target.closest('[data-l]')?.dataset.l; if (!a) return;
       if (a === 'copy') { const btn = e.target.closest('button'); (navigator.clipboard ? navigator.clipboard.writeText(it.prompt) : Promise.reject()).then(() => { btn.textContent = 'Copiado ✓'; }, () => { btn.textContent = 'No se pudo copiar'; }).finally(() => setTimeout(() => { if (document.contains(btn)) btn.textContent = 'Copiar prompt'; }, 1600)); }
+      if (a === 'edit' || a === 'dept') setPanel(it, a, e.target.closest('button'));
+      if (a === 'dimitri' && ctx.askDimitri) { closeLight(); ctx.askDimitri([it.file]); }
       if (a === 'vary') { closeLight(); vary(it); }
       if (a === 'again') { closeLight(); reuse(it); }
       if (a === 'anim') { closeLight(); animate(it); }
       if (a === 'ref') { closeLight(); useAsRef(it); }
-      if (a === 'cal' && ctx.toCalendar) { closeLight(); ctx.toCalendar(it.file, it.kind, it.prompt); }
+      if (a === 'cal' && ctx.toCalendar) { closeLight(); learn(it.file, 'calendario'); ctx.toCalendar(it.file, it.kind, it.prompt); }
       if (a === 'fav') favMany([it.file]).then(() => light(i));
       if (a === 'del') trashMany([it.file]);
       if (a === 'task') { closeLight(); close(); ctx.openTask(it.task); }
     };
+  }
+  /** The viewer's keys: Esc, ← → (a picture to the side, or moving a zoomed one), + − 0, F. Typing in its panel: Esc closes the panel, Ctrl+Enter sends. */
+  function lightKey(e, typing) {
+    if (typing) { if (e.key === 'Escape') { e.preventDefault(); closePanel(); } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('.st-light .st-edgo, .st-light .st-dpgo')?.click(); } return; }
+    if (e.key === 'Escape') { if (!closePanel()) closeLight(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const d = zDims(), arrow = { ArrowLeft: [80, 0], ArrowRight: [-80, 0], ArrowUp: [0, 80], ArrowDown: [0, -80] }[e.key];
+    if (d && arrow && Z.isZoomed(zs)) { e.preventDefault(); zSet(Z.pan(zs, arrow[0], arrow[1], d)); return; } // zoomed: the arrows move around the picture
+    if (e.key === 'ArrowLeft' && lightIdx > 0) return light(lightIdx - 1);
+    if (e.key === 'ArrowRight' && lightIdx < shown().length - 1) return light(lightIdx + 1);
+    if (e.key === 'f' || e.key === 'F') { if ($('.st-light [data-z="full"]')) { e.preventDefault(); fullScreen(); } return; }
+    if (!d) return;
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); zSet(Z.zoomAt(zs, 1.5, 0, 0, d)); }
+    if (e.key === '-' || e.key === '_') { e.preventDefault(); zSet(Z.zoomAt(zs, 1 / 1.5, 0, 0, d)); }
+    if (e.key === '0') { e.preventDefault(); zSet(Z.fitted()); }
   }
 
   /* ---------- events ---------- */
@@ -849,7 +1019,7 @@ export function initStudio(ctx) {
     const it = itemOf(cd.dataset.f); if (!it) return;
     if (picking) { // choosing a file for a slot
       e.preventDefault();
-      if (addMedia(picking, it.file)) { const r = picking; picking = null; renderSel(); say(`Puesta en «${roleName(r)}».`); }
+      if (addMedia(picking, it.file)) { const r = picking; picking = null; renderSel(); learn(it.file, 'ref'); say(`Puesta en «${roleName(r)}».`); }
       return;
     }
     const ck = e.target.closest('.st-ck');
@@ -869,8 +1039,11 @@ export function initStudio(ctx) {
     if (a === 'anim') animate(it);
     if (a === 'ref') useAsRef(it);
     if (a === 'vary') vary(it);
-    if (a === 'cal' && ctx.toCalendar) ctx.toCalendar(it.file, it.kind, it.prompt); // Contenido opens (and the Estudio steps aside) with a new piece that carries this file
-    if (a === 'usar' && pickFor) { const k = pickFor.ids.indexOf(it.file); if (k >= 0) pickFor.ids.splice(k, 1); else pickFor.ids.push(it.file); paintFor(); }
+    if (a === 'cal' && ctx.toCalendar) { learn(it.file, 'calendario'); ctx.toCalendar(it.file, it.kind, it.prompt); } // Contenido opens (and the Estudio steps aside) with a new piece that carries this file
+    if (a === 'usar' && pickFor) { const k = pickFor.ids.indexOf(it.file); if (k >= 0) pickFor.ids.splice(k, 1); else { pickFor.ids.push(it.file); learn(it.file, 'pieza'); } paintFor(); }
+    if (a === 'edit') lightFile(it.file, { panel: 'edit' }); // V4.9: Editar opens the viewer with its small panel
+    if (a === 'dept') lightFile(it.file, { panel: 'dept' });
+    if (a === 'dimitri' && ctx.askDimitri) ctx.askDimitri([it.file]);
     if (a === 'move') { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
     if (a === 'task' && it.task && ctx.openTask) { close(); ctx.openTask(it.task); } // V4.2 (audit A25)
   });
@@ -927,7 +1100,7 @@ export function initStudio(ctx) {
       if (e.key === 'ArrowUp' && i === 0) inList.querySelector('input').focus(); else opts[n]?.focus();
       return;
     }
-    if (!$('.st-light').hidden) { if (e.key === 'Escape') closeLight(); else if (e.key === 'ArrowLeft' && lightIdx > 0) light(lightIdx - 1); else if (e.key === 'ArrowRight' && lightIdx < shown().length - 1) light(lightIdx + 1); return; }
+    if (!$('.st-light').hidden) { lightKey(e, typing); return; } // V4.9: + − 0 F, and the panel
     if (e.key === 'Escape') {
       if (!$('.st-mlist').hidden) { openList(false); $('.st-mpick').focus(); return; }
       if (e.target.matches('input[type=search], textarea') && e.target.value && e.target.classList.contains('st-q')) { e.target.value = ''; q = ''; renderGrid(); return; } // Esc empties the search first
@@ -953,8 +1126,8 @@ export function initStudio(ctx) {
     const parts = [img && `${img} ${img === 1 ? 'imagen' : 'imágenes'}`, vid && `${vid} ${vid === 1 ? 'video' : 'videos'}`].filter(Boolean);
     if (!parts.length && !bad.length) return;
     unseen += img + vid + bad.length; setDock();
-    const agent = ok.find(j => j.by === 'agent');
-    note.querySelector('span').textContent = `Estudio: ${parts.length ? `${parts.join(' y ')} ${img + vid === 1 ? 'lista' : 'listas'}${agent ? ` (de ${agentName(agent.agent) || 'un agente'})` : ''}` : ''}${parts.length && bad.length ? ' · ' : ''}${bad.length ? `${bad.length} no se ${bad.length === 1 ? 'pudo' : 'pudieron'}` : ''}.`;
+    const agent = ok.find(fromBots);
+    note.querySelector('span').textContent = `Estudio: ${parts.length ? `${parts.join(' y ')} ${img + vid === 1 ? 'lista' : 'listas'}${agent ? ` (de ${who(agent)})` : ''}` : ''}${parts.length && bad.length ? ' · ' : ''}${bad.length ? `${bad.length} no se ${bad.length === 1 ? 'pudo' : 'pudieron'}` : ''}.`;
     note.hidden = false; clearTimeout(noteT); noteT = setTimeout(hideNote, 12000);
   }
   function bgPoll() {
@@ -998,5 +1171,16 @@ export function initStudio(ctx) {
   views.add('studio', { isOpen: isOn, close });
   return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn,
     /** V4.7: open the Estudio for one piece of content; `onPick(ids)` gets the gallery files chosen when the owner goes back to it. */
-    forTarget(target, onPick) { pickFor = { target, onPick, ids: [] }; open(); showPane('gal'); paintFor(); } };
+    forTarget(target, onPick) { pickFor = { target, onPick, ids: [] }; open(); showPane('gal'); paintFor(); },
+    /** V4.9: what the owner is looking at, for Dimitri's «Viendo: …» — the picture in the viewer, the selected ones, the open folder, or nothing. */
+    selection() {
+      const it = !$('.st-light').hidden && lightIdx >= 0 ? shown()[lightIdx] : null;
+      if (it) return { view: 'studio', label: `${it.kind === 'video' ? 'Video' : it.kind === 'audio' ? 'Audio' : 'Imagen'} «${short(it.prompt)}»`, kind: 'image', id: it.file };
+      const ids = [...sel].filter(f => itemOf(f));
+      if (ids.length) return { view: 'studio', label: `${ids.length} ${ids.length === 1 ? 'archivo seleccionado' : 'archivos seleccionados'} en el Estudio`, kind: 'images', ids };
+      if (folders.some(f => f.id === folderF)) return { view: 'studio', label: `Carpeta «${folderName(folderF)}» del Estudio`, kind: 'folder', folder: folderF, folderName: folderName(folderF) };
+      return { view: 'studio', label: 'Estudio · galería', kind: null };
+    },
+    /** V4.9: open the Estudio and its viewer on one file (a thumbnail in Dimitri's chat, a deliverable…). */
+    async openFile(file) { open(); await load({ full: false }); showPane('gal'); if (!lightFile(file)) say('Ese archivo ya no está en la galería (¿en la papelera?).', true); } };
 }

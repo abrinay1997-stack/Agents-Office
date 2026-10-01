@@ -80,6 +80,26 @@ try {
       informe.push({ tema, ancho: w, foto: id, ...m, cabe: fits });
       console.log(`${fits ? '✓' : '✗'} ${tema.padEnd(5)} ${String(w).padStart(4)} px · ${id.padEnd(10)} · se ve ${m.visible} % (dibujada ${m.drawn.join('×')}, caja ${m.box.join('×')})`);
       await page.screenshot({ path: path.join(OUT, `visor-${tema}-${w}-${id}.png`) });
+      if (id === 'vertical' && await page.$('#studioOv .st-light [data-z="real"]')) { // V4.9: el zoom al 100 %, las teclas y el panel Editar
+        await page.click('#studioOv .st-light [data-z="real"]'); await page.waitForTimeout(200);
+        const z = await page.evaluate(() => { const L = document.querySelector('#studioOv .st-light'), im = L.querySelector('.st-lstage img'), st = im.parentElement.getBoundingClientRect(), r = im.getBoundingClientRect();
+          return { pct: L.querySelector('.st-zpct').textContent.trim(), zoomed: L.classList.contains('st-zoomed'), cubre: r.left <= st.left + 1 && r.right >= st.right - 1 && r.top <= st.top + 1 && r.bottom >= st.bottom - 1 }; });
+        console.log(`  ${z.pct === '100 %' && z.zoomed ? '✓' : '✗'} 100 %: marca «${z.pct}», ${z.cubre ? 'la imagen llena el escenario' : 'la imagen NO llena el escenario'}`);
+        informe.push({ tema, ancho: w, foto: id, prueba: 'zoom-100', ...z, cabe: z.pct === '100 %' && z.zoomed });
+        await page.screenshot({ path: path.join(OUT, `zoom100-${tema}-${w}-${id}.png`) });
+        await page.keyboard.press('0'); await page.waitForTimeout(100);
+        const back = await page.evaluate(() => document.querySelector('#studioOv .st-light .st-zpct').textContent.trim());
+        await page.keyboard.press('+'); await page.waitForTimeout(100);
+        const mas = await page.evaluate(() => document.querySelector('#studioOv .st-light').classList.contains('st-zoomed'));
+        await page.keyboard.press('0'); await page.waitForTimeout(100);
+        console.log(`  ${mas ? '✓' : '✗'} teclas: 0 vuelve a «${back}», + acerca`); informe.push({ tema, ancho: w, foto: id, prueba: 'teclas', cabe: mas });
+        await page.click('#studioOv .st-light [data-l="edit"]'); await page.waitForSelector('#studioOv .st-light .st-lpanel'); await page.waitForTimeout(200);
+        const ed = await page.evaluate(() => { const P = document.querySelector('#studioOv .st-light .st-lpanel'); return { focus: P.contains(document.activeElement), off: !!P.querySelector('.st-edoff'), go: !!P.querySelector('.st-edgo') }; });
+        console.log(`  ${ed.go && ed.focus ? '✓' : '✗'} panel Editar abierto${ed.off ? ' (sin motor de edición: dice cuál activar)' : ''}, foco dentro: ${ed.focus}`);
+        informe.push({ tema, ancho: w, foto: id, prueba: 'editar', ...ed, cabe: ed.go && ed.focus });
+        await page.screenshot({ path: path.join(OUT, `editar-${tema}-${w}-${id}.png`) });
+        await page.keyboard.press('Escape'); await page.waitForTimeout(100); // cierra el panel; el siguiente Escape, el visor
+      }
       await page.keyboard.press('Escape'); await page.waitForTimeout(150);
     }
     await ctx.close();
@@ -88,6 +108,6 @@ try {
   await browser.close(); srv.kill(); fs.rmSync(sandbox, { recursive: true, force: true });
 }
 fs.writeFileSync(path.join(OUT, 'informe.json'), JSON.stringify(informe, null, 1));
-const malas = informe.filter(x => !x.cabe);
-console.log(`\n${informe.length - malas.length} de ${informe.length} caben enteras · capturas en ${path.relative(ROOT, OUT)}`);
+const malas = informe.filter(x => !x.cabe), fotos = informe.filter(x => !x.prueba);
+console.log(`\n${fotos.filter(x => x.cabe).length} de ${fotos.length} caben enteras · ${malas.length ? malas.length + ' pruebas fallaron' : 'zoom, teclas y Editar bien'} · capturas en ${path.relative(ROOT, OUT)}`);
 process.exitCode = malas.length ? 1 : 0;

@@ -1,0 +1,76 @@
+/* V4.9 (30 Sep 2026, el dueño: «las fotos grandes no caben en el visor» · «no se puede editar una imagen») — el visor del Estudio.
+   Antes la fila del grid de .st-lbox tenía altura auto: el max-height:100 % del <img> no se resolvía y una foto 9:16 de 3840 px
+   crecía hasta su tamaño real (a 1512 px se veía el 43 %). Ahora cada nivel tiene una altura que se resuelve: la caja es una fila
+   minmax(0, 1fr), el escenario (.st-lstage) llena su celda y la imagen ocupa el escenario entero con object-fit (nunca se corta,
+   nunca se agranda por encima de su tamaño). El zoom (src/viewer-zoom.js) solo le pone un transform; el escenario recorta. */
+.st-light { padding: 24px; }
+.st-light .st-lbox { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr); gap: 0; width: min(1480px, 96vw); max-width: none; height: min(92vh, 980px); max-height: none; padding: 0; overflow: hidden; border-radius: 16px; }
+.st-light .st-lmedia { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; place-items: stretch; gap: 10px; padding: 16px; background: #0F1013; overflow: hidden; }
+.st-light .st-lmedia:has(.st-laud) { grid-template-rows: minmax(0, 1fr); place-items: center; }
+.st-lstage { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: grid; }
+.st-light .st-lstage img, .st-light .st-lstage video { width: 100%; height: 100%; min-width: 0; min-height: 0; max-width: none; max-height: none; object-fit: scale-down; background: none; border-radius: 0; box-shadow: none; display: block; transform-origin: 50% 50%; }
+.st-light .st-lstage video { object-fit: contain; }
+.st-light .st-lstage img { touch-action: none; user-select: none; -webkit-user-drag: none; cursor: zoom-in; }
+.st-light.st-zoomed .st-lstage img { cursor: grab; } .st-light .st-lstage img.st-grabbing { cursor: grabbing; }
+.st-light .st-linfo { width: auto; min-width: 0; min-height: 0; overflow-y: auto; padding: 60px 20px 20px; border-left: 1px solid var(--hairline); background: var(--cream); }
+.st-light .st-lx { top: 12px; right: 12px; }
+body.dark .st-light .st-linfo { background: #15161A; }
+
+/* La barra del zoom, bajo la imagen, sobre el fondo oscuro del visor (blanco sobre #0F1013: 17:1) */
+.st-ztools { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; color: #F2EFE8; }
+.st-ztools button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; min-height: 32px; padding: 4px 12px; border-radius: 99px; border: 1px solid rgba(242,239,232,.45); background: none; color: #F2EFE8; font: 12.5px var(--ui); cursor: pointer; }
+.st-ztools button[data-z="in"], .st-ztools button[data-z="out"] { padding: 0; width: 32px; font-size: 18px; line-height: 1; }
+.st-ztools button:hover:not(:disabled), .st-ztools button[aria-pressed="true"] { background: #F2EFE8; color: #151414; border-color: #F2EFE8; }
+.st-ztools button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.st-light .st-ztools button:focus-visible { outline-color: #8FB0FF; } /* el anillo sobre el fondo oscuro del visor, también en claro */
+.st-ztools button:disabled { cursor: default; color: #A3A098; border-color: rgba(163,160,152,.45); } /* 7:1 sobre #0F1013: se lee, no se apaga */
+.st-ztools .ic { width: 15px; height: 15px; }
+.st-zpct { min-width: 52px; text-align: center; font: 600 12.5px var(--ui); font-variant-numeric: tabular-nums; }
+/* Pantalla completa: solo la imagen y su barra, en negro */
+.st-lmedia:fullscreen { padding: 12px; background: #000; }
+.st-lmedia:fullscreen .st-ztools { padding-bottom: 4px; }
+
+/* El panel: «Versión de…», «Versiones (n)», Editar y Mandar a un departamento */
+.st-lver { margin: 0 0 8px; font-size: 12.5px; color: var(--grey); }
+.st-lver .st-lk { color: var(--ink); min-height: 24px; }
+.st-lvers { margin: 12px 0 4px; } .st-lvers h3 { margin: 0 0 6px; font: 700 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--grey); }
+.st-lvers > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-lvers button { width: 56px; height: 56px; padding: 0; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #0F1013; cursor: pointer; }
+.st-lvers img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.st-lvers button:hover { border-color: var(--ink); } .st-lvers button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.st-lpanel { margin: 14px 0 4px; padding: 14px; border: 1.5px solid var(--ink); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+.st-lpanel h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 600 14px var(--ui); } .st-lpanel h3 .ic { width: 16px; height: 16px; }
+.st-lpanel .st-plab { display: flex; flex-direction: column; gap: 4px; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+.st-lpanel textarea, .st-lpanel input, .st-lpanel select { font: 13.5px/1.45 var(--ui); color: var(--ink); background: var(--cream); border: 1px solid var(--grey); border-radius: 9px; padding: 8px 10px; min-height: 36px; text-transform: none; letter-spacing: 0; width: 100%; box-sizing: border-box; }
+body.dark .st-lpanel textarea, body.dark .st-lpanel input, body.dark .st-lpanel select { background: #1E1F24; }
+.st-lpanel textarea { resize: vertical; min-height: 72px; }
+.st-lpanel textarea:focus-visible, .st-lpanel input:focus-visible, .st-lpanel select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.st-edex { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-edex button { min-height: 28px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); font: 12px var(--ui); cursor: pointer; }
+.st-edex button:hover { border-color: var(--ink); }
+.st-edn { margin: 0; font-size: 12px; line-height: 1.45; color: var(--grey); }
+.st-edrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-edrow button { min-height: 34px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); font: 600 12.5px var(--ui); cursor: pointer; }
+.st-edrow button.pri { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+.st-edrow button:disabled { cursor: not-allowed; background: none; color: var(--grey); border: 1px dashed var(--grey); } /* apagado: borde de trazos y texto gris a 4,5:1, sin opacity */
+.st-lpanel button:focus-visible, .st-lacts button:focus-visible, .st-lacts a:focus-visible, .st-lacts2 button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.st-edmsg { font-size: 12.5px; color: #B3261E; } .st-edmsg:empty { display: none; } body.dark .st-edmsg { color: #FF8A7A; }
+.st-edoff { padding: 10px 12px; border-radius: 9px; background: rgba(209,138,0,.12); border: 1px solid #8A5A00; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.st-edoff:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.st-edoff ul { margin: 6px 0 0; padding-left: 18px; } .st-edoff code { font-size: 11.5px; word-break: break-all; }
+body.dark .st-edoff { border-color: #F2C46B; }
+
+/* Apilado (tableta y teléfono): la imagen arriba con su propia altura — la que pide su formato, hasta lo que deja el panel —, el panel debajo */
+@media (max-width: 1100px) {
+  .st-light { padding: 12px; }
+  .st-light .st-lbox { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; width: min(760px, 100%); height: auto; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
+  .st-light .st-lmedia { padding: 58px 12px 12px; grid-template-rows: auto auto; }
+  .st-lstage { width: 100%; aspect-ratio: var(--ar, 1 / 1); max-height: max(34vh, calc(100vh - 400px)); max-height: max(34dvh, calc(100dvh - 400px)); }
+  .st-light .st-linfo { border-left: 0; border-top: 1px solid var(--hairline); padding: 14px 16px 18px; overflow: visible; }
+  .st-lmedia:fullscreen { grid-template-rows: minmax(0, 1fr) auto; padding: 12px; } .st-lmedia:fullscreen .st-lstage { aspect-ratio: auto; max-height: none; }
+}
+@media (max-width: 500px) {
+  .st-light { padding: 0; }
+  .st-light .st-lbox { width: 100%; max-height: 100vh; max-height: 100dvh; border-radius: 0; }
+  .st-ztools [data-z="full"] span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
