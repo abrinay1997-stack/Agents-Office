@@ -206,3 +206,100 @@ test('sin motor que edite: «Fondo blanco» no se cae a otra cosa; dice qué act
     assert.deepEqual(media.jobs(), []);
   } finally { back(); }
 });
+
+/* ---------- revisión de F1 (1 oct 2026) ---------- */
+
+test('revisión F1: guardar una receta con canal funciona, y una nota con canal no tumba el banco', conSharp, () => {
+  const back = sinKeys();
+  try {
+    const { brain, P } = entorno();
+    const r = P.guardar({ receta: { pila: [{ id: 'sal-canal', params: { canal: 'web' } }], canal: 'web' }, nombre: 'Web con canal' });
+    assert.equal(r.preset.receta.canal, 'web');
+    // una nota escrita a mano (o traída por git) con canal
+    const dir = path.join(brain, 'Estudio', 'Presets');
+    fs.writeFileSync(path.join(dir, 'A mano.md'), fs.readFileSync(path.join(dir, 'Web con canal.md'), 'utf8').replace(/^id: .*$/m, 'id: mio-a-mano').replace(/^nombre: .*$/m, 'nombre: A mano'));
+    const l = P.lista({});
+    assert.ok(l.propios.includes('mio-web-con-canal') && l.propios.includes('mio-a-mano'), JSON.stringify(l.problemas));
+    assert.equal(P.compilar({ pila: ['mio-a-mano'] }).plan.preset[0].id, 'sal-canal');
+    assert.throws(() => P.guardar({ receta: { pila: ['sal-canal'], canal: 'no-existe' }, nombre: 'Mal' }), /no es un canal/);
+  } finally { back(); }
+});
+
+test('revisión F1: «Catálogo web» y «Catalogo web» son el mismo preset (una nota, un id, un historial)', conSharp, () => {
+  const back = sinKeys();
+  try {
+    const { brain, data, P } = entorno();
+    P.guardar({ receta: { pila: ['luz-mas-clara'] }, nombre: 'Catálogo web' });
+    const r2 = P.guardar({ receta: { pila: ['luz-mas-oscura'] }, nombre: 'Catalogo web' });
+    assert.equal(r2.archivo, 'Estudio/Presets/Catálogo web.md', 'se guarda en la nota que ya había');
+    assert.equal(r2.preset.v, 2);
+    const dir = path.join(brain, 'Estudio', 'Presets');
+    assert.deepEqual(fs.readdirSync(dir).filter(f => f.endsWith('.md')), ['Catálogo web.md']);
+    assert.equal(fs.readdirSync(path.join(data, 'history', 'presets', 'mio-catalogo-web')).length, 1);
+    // dos notas con el mismo id (copiadas a mano): se carga una y se dice
+    fs.copyFileSync(path.join(dir, 'Catálogo web.md'), path.join(dir, 'Copia.md'));
+    const l = P.lista({});
+    assert.deepEqual(l.propios, ['mio-catalogo-web']);
+    assert.ok(l.problemas.some(x => /mismo id/.test(x)), JSON.stringify(l.problemas));
+  } finally { back(); }
+});
+
+test('revisión F1: lo local sin su LUT no se ofrece ni se hace; un paso que falla no sale «done» limpio', conSharp, async () => {
+  const back = sinKeys();
+  try {
+    const { P } = entorno();
+    const l = P.lista({ medio: 'image' });
+    for (const id of ['color-pastel', 'color-pelicula', 'ref-lut-aplicar']) {
+      const p = l.presets.find(x => x.id === id);
+      assert.ok(p, id); assert.equal(p.on, false, id); assert.ok(p.motivo, id);
+    }
+    const foto = media.upload({ name: 'x.png', data: dataUrl(await fotoBodega()) });
+    assert.ok(P.compilar({ pila: ['color-pastel'], entradas: { foto: [foto.file] } }).plan.errores.some(e => /LUT/.test(e)));
+    await assert.rejects(P.aplicar({ pila: ['color-pastel'], entradas: { foto: [foto.file] } }), /LUT/);
+    // un trabajo local con una LUT que falta: termina, pero lo dice, y sin la ruta de la máquina
+    const j0 = media.submit({ local: true, source: foto.file, post: [{ op: 'lut', archivo: 'presets/luts/no-existe.cube' }] });
+    const j = await media.wait(j0.id, 20000);
+    assert.equal(j.state, 'done', j.error);
+    assert.match(j.warning || '', /no-existe\.cube/);
+    const avisos = media.item(j.items[0]).post.avisos.join(' ');
+    assert.doesNotMatch(avisos + j.warning, /[A-Za-z]:\\|ENOENT|\/tmp\//, 'sin rutas absolutas');
+  } finally { back(); }
+});
+
+test('revisión F1: la LUT del paso (id de la galería) se lee y se aplica', conSharp, async () => {
+  const { procesar } = await import('../media/posproceso.mjs');
+  entorno();
+  const mes = new Date().toISOString().slice(0, 7), d = path.join(media.dir(), mes); fs.mkdirSync(d, { recursive: true });
+  // una LUT que invierte (la galería todavía no recibe .cube: aquí se escribe a mano para probar el cableado)
+  const cube = L.exportarCube(L.lutDeFuncion((r, g, b, o) => { o[0] = 1 - r; o[1] = 1 - g; o[2] = 1 - b; }, 17), 'Invertir');
+  fs.writeFileSync(path.join(d, 'lut-prueba.png'), cube);
+  const r = await procesar(await fotoBodega(64, 48), { post: [{ op: 'lut3d', lut: `${mes}/lut-prueba.png` }] });
+  assert.deepEqual(r.sinHacer, []);
+  assert.ok(r.post.pasos.some(s => s.op === 'lut3d' && s.hecho));
+  const px = (await L.leer(r.buffer)).data; assert.ok(px[0] < 60, 'la pared clara sale oscura');
+});
+
+test('revisión F1: si submit dice que no (presupuesto), la guía y la foto preparada no quedan huérfanas en la galería', conSharp, async () => {
+  const back = sinKeys(); const { srv, seen, base } = await stand();
+  Object.assign(process.env, { GEMINI_API_KEY: 'prueba-key', AO_GEMINI_BASE: base });
+  try {
+    const { brain, data, P } = entorno();
+    const foto = media.upload({ name: 'cama.png', data: dataUrl(await fotoBodega()) });
+    media.setLimits({ dailyBudget: 0.0001 });
+    const n0 = media.list({ limit: 1e6 }).length;
+    const escena = { producto: { tipo: 'cama-queen', ancho: 160, alto: 50, fondo: 200 }, camara: { distancia: 500, azimut: 35, altura: 140, lente: 35 }, cuadro: { proporcion: '4:5' }, fondo: { tipo: 'locacion', valor: 'sala moderna' } };
+    await assert.rejects(P.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena }), /presupuesto/);
+    await assert.rejects(P.aplicar({ pila: ['cat-web-panaclaw'], entradas: { foto: [foto.file] } }), /presupuesto/);
+    await assert.rejects(P.aplicar({ pila: ['cat-web-panaclaw'], entradas: { foto: [foto.file] } }), /presupuesto/);
+    assert.equal(media.list({ limit: 1e6 }).length, n0, 'nada nuevo en la galería');
+    assert.equal(seen.length, 0);
+    // con presupuesto, la guía de esa escena se sube una vez y se reutiliza aunque la caché se pierda (otro crearPresets = reinicio)
+    media.setLimits({ dailyBudget: 0 });
+    const a = await P.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena });
+    await media.wait(a.jobs[0].id, 30000);
+    const P2 = crearPresets({ brainPath: brain, dataDir: data });
+    const b = await P2.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena });
+    await media.wait(b.jobs[0].id, 30000);
+    assert.equal(b.plan.guia.id, a.plan.guia.id, 'la misma guía tras el reinicio');
+  } finally { media.setLimits({ dailyBudget: 0 }); srv.close(); back(); }
+});
