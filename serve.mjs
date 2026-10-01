@@ -40,6 +40,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { loadConfig, ROOT } from './config.mjs';
 import { layoutGraph, readVault, readOfficeNotes } from './graph-build.mjs';
 import { DEPTS, DEPT_KEYS } from './src/data.js';
@@ -54,6 +55,8 @@ import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs'; // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
+import { sendJson, lightTasks } from './http-json.mjs';
+import { createCache } from './vault-cache.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
@@ -200,7 +203,7 @@ const load = () => {
   }
 };
 function dailyBackup() { // one copy a day of the tasks and the routines file, the last 14 kept: data/backups/ — V4.4 (B9): every day the office runs, not only on the day it starts
-  const dir = path.join(DATA, 'backups'), day = new Date().toISOString().slice(0, 10);
+  const dir = path.join(DATA, 'backups'), day = localDay(Date.now()); // Auditoría 1 oct 2026 (INF-17): the owner's day, not UTC's (from 19:00 in Panamá UTC said «tomorrow»)
   try {
     fs.mkdirSync(dir, { recursive: true });
     for (const [src, name] of [[FILE, 'tasks'], [routines.file(BRAIN), 'routines']]) { const dest = path.join(dir, `${name}-${day}.json`); if (fs.existsSync(src) && !fs.existsSync(dest)) fs.copyFileSync(src, dest); }
@@ -267,10 +270,10 @@ function guardReport(runId, taintFile) {
 // V4.4 (C1, C3): every model call is one line in data/costs.jsonl; the month's budget is watched after each one
 const COSTS = () => costs.config(cfg.costs);
 let budgetLevel = null;
-function ledger({ taskId, agent, kind, modelId, usage, reported }) {
+function ledger({ taskId, agent, kind, modelId, usage, reported, ms }) {
   const t = taskId ? load().find(x => x.id === taskId) : null;
   const l = costs.line({ task: taskId || null, agent: agent?.id || null, dept: agent?.department || t?.dept || null, kind, modelId: modelId || (PROVIDER.id === 'anthropic' ? modelId : PROVIDER.model) || PROVIDER.model, provider: PROVIDER.id, usage, reported, cfgPrices: cfg.costs?.prices });
-  costs.append(DATA, l);
+  costs.append(DATA, ms > 0 ? { ...l, ms: Math.round(ms) } : l); // Auditoría 1 oct 2026 (INF-06): how long the run took, to see what each kind of call costs in time
   const b = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS());
   if (b.level !== budgetLevel && (b.level === 'alert' || b.level === 'over')) notice('budget', b.level === 'over' ? `Se llegó al presupuesto del mes: US$${b.spent.toFixed(2)} de US$${b.budget.toFixed(2)}.${COSTS().stopAtBudget ? ' Las tareas nuevas esperan hasta que subas el presupuesto o empiece el mes.' : ''}` : `Van US$${b.spent.toFixed(2)} de US$${b.budget.toFixed(2)} del presupuesto del mes (${Math.round(b.ratio * 100)} %).`, { level: b.level === 'over' ? 'error' : 'warn', key: 'budget-' + b.month + '-' + b.level });
   budgetLevel = b.level;
@@ -309,12 +312,16 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   args.push(...(tools ? mcp.cliArgs() : ['--no-chrome'])); // V3.2 (16 Sep): the owner's Chrome, when tools.browser is on
   args.push(...modelArgs(model, effort));
   if (images?.length) args.push('--input-format', 'stream-json'); // V4.8: the request goes on stdin as one stream-json user line with the image blocks (vision.cliInput)
+  // Auditoría 1 oct 2026 (INF-06): a run with no tools (Dimitri, the router, a summary) does not start every MCP server this
+  // machine's Claude Code knows (plugins, claude.ai connectors…: `claude mcp list` took 53 s here). It could not call them anyway.
+  if (!tools) args.push('--strict-mcp-config');
   if (studio || conContenido) { // the office's own servers, one --mcp-config: the Estudio and Contenido share who is asking
     const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
     args.push('--mcp-config', JSON.stringify({ mcpServers: { ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
   }
   const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes
   return new Promise((resolve, reject) => {
+    const t0 = Date.now();
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
     children.add(p);
     if (taskId) { if (!runsOf.has(taskId)) runsOf.set(taskId, new Set()); runsOf.get(taskId).add(p); }
@@ -331,7 +338,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
       let j; try { j = JSON.parse(line); } catch { return; }
       if (j.type === 'system' && j.subtype === 'init') mcp.fromInit(j);
       if (j.type === 'assistant' && j.message?.content) for (const b of j.message.content) { if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name); if (b.type === 'text' && b.text) partial += b.text + '\n'; }
-      if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); reported = typeof j.total_cost_usd === 'number' ? j.total_cost_usd : null; usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: modelUsed || modelId(model), usage: usageOut, reported }); }
+      if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); reported = typeof j.total_cost_usd === 'number' ? j.total_cost_usd : null; usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: modelUsed || modelId(model), usage: usageOut, reported, ms: Date.now() - t0 }); }
     };
     p.stdout.on('data', d => { out += d; let i; while ((i = out.indexOf('\n')) >= 0) { feed(out.slice(0, i)); out = out.slice(i + 1); } });
     p.stderr.on('data', d => { err += d; });
@@ -355,10 +362,14 @@ function parseJSON(text) {
 /* ---------- the brain: graph + context ---------- */
 let graph = { notes: 0, nodes: [], links: [], floor: [] };
 async function rebuildGraph() {
+  VAULT.invalidate(); // a note changed: the index is read again on its next use, not after the watch catches up
   try { graph = await layoutGraph(BRAIN); } catch (e) { console.warn('brain graph failed:', e.message); }
   return graph;
 }
-function vaultIndex() { // name → text (vault notes + live office notes)
+// Auditoría 1 oct 2026 (INF-05): built once and kept until a note changes (vault-cache.mjs: fs.watch on the Brain, 15 s without it)
+const VAULT = createCache({ build: buildVaultIndex, watchDir: fs.existsSync(BRAIN) ? BRAIN : null });
+const vaultIndex = () => VAULT.get();
+function buildVaultIndex() { // name → text (vault notes + live office notes)
   const { notes } = readVault(BRAIN); const m = new Map(), stale = new Map();
   for (const [name, n] of notes) { m.set(name, n.text); let mt = 0; try { mt = fs.statSync(n.path).mtimeMs; } catch {} const st = knowledge.staleness(name, n.text, mt, n.group); if (st.stale) stale.set(name, st); }
   STALE = stale;
@@ -594,7 +605,7 @@ function writeNote(task) { // the deliverable becomes a note in the brain, linke
   for (let n = 2; fs.existsSync(path.join(NOTES_DIR, name + '.md')) && !fs.readFileSync(path.join(NOTES_DIR, name + '.md'), 'utf8').includes(`\ntask: ${task.id}\n`); n++) name = `${base}-${n}`;
   const body = `---\nagent: ${a.name}\ndepartment: ${DEPTS[a.department].name}\ntask: ${task.id}\ndone: ${new Date(task.doneAt).toISOString()}${task.used?.length ? '\ntools: ' + task.used.join(', ') : ''}${task.skills?.length ? '\nskills: ' + task.skills.join(', ') : ''}${task.routine ? '\nroutine: ' + task.when + (task.late ? ' (late)' : '') : ''}${task.modelUsed ? '\nmodel: ' + modelName(task.modelUsed) + (task.modelFrom && task.modelFrom !== 'office' ? ' (' + task.modelFrom + ')' : '') : ''}${task.effortUsed ? '\neffort: ' + task.effortUsed + (task.effortFrom && task.effortFrom !== 'model' ? ' (' + task.effortFrom + ')' : '') : ''}${task.approved ? '\napproved: ' + new Date(task.approvedAt).toISOString() : ''}${task.team?.pieces?.length ? '\nteam: ' + task.team.pieces.map(p => nameOf(p.agent)).join(', ') : ''}\n---\n` +
     `# ${task.title}\n\n${task.result}\n\n---\nRead: ${(task.read || []).map(n => `[[${n}]]`).join(' · ') || '—'}\n` + teams.noteExtra(task.team, nameOf);
-  fs.writeFileSync(path.join(NOTES_DIR, name + '.md'), body);
+  fs.writeFileSync(path.join(NOTES_DIR, name + '.md'), body); VAULT.invalidate();
   return name;
 }
 async function chat(agentId, text, history) {
@@ -1190,7 +1201,7 @@ async function routinesChat(a, text) {
 }
 
 /* ---------- http ---------- */
-const json = (res, code, body) => { res.writeHead(code, { 'content-type': 'application/json', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+const json = (res, code, body, opts) => sendJson(res, code, body, opts); // Auditoría 1 oct 2026 (INF-04): gzipped past 8 KB when the client takes it (http-json.mjs)
 const MAX_BODY = 1 << 20; // 1 MB: a task, a chat turn or a routine is a few KB
 const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // limit: 1 MB, more only for the Estudio's upload
   let s = '', size = 0;
@@ -1426,10 +1437,12 @@ function trusted(req) {
 let pageCache = { mtime: 0, raw: null, gz: null };
 function page() {
   const st = fs.statSync(HTML);
-  if (st.mtimeMs !== pageCache.mtime) { const raw = fs.readFileSync(HTML); pageCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }) }; }
+  if (st.mtimeMs !== pageCache.mtime) { const raw = fs.readFileSync(HTML); pageCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"p${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; }
   return pageCache;
 }
 /* ---------- V4.4 (B6, B7, B8): the office's health — one list of checks, green / amber / red, for the dock's traffic light ---------- */
+// Auditoría 1 oct 2026 (INF-12): how long the server's one thread was stuck (a slow disk, Defender, a huge file): the health light says it
+const LOOP = monitorEventLoopDelay({ resolution: 20 }); LOOP.enable();
 function officeStatus() {
   const now = Date.now(), list = load(), day = 864e5, checks = [];
   const add = (id, label, state, detail, fix = '') => checks.push({ id, label, state, detail, fix });
@@ -1458,6 +1471,8 @@ function officeStatus() {
   // security
   const sec = list.filter(t => t.guard && now - (t.guard.at || 0) < day), taints = sec.filter(t => t.guard.taint);
   add('seguridad', 'Seguridad (24 h)', taints.length ? 'bad' : sec.length ? 'warn' : 'ok', taints.length ? `${taints.length} tarea(s) leyeron algo con órdenes escondidas; no se envió nada.` : sec.length ? `El guardián detuvo algo en ${sec.length} tarea(s).` : 'Sin bloqueos.', taints.length || sec.length ? 'Ábrelas: el detalle dice qué se detuvo y por qué.' : '');
+  { const worst = Math.round(LOOP.max / 1e6), p99 = Math.round(LOOP.percentile(99) / 1e6); LOOP.reset();
+    add('respuesta', 'Respuesta del servidor', p99 > 2000 ? 'warn' : p99 > 200 ? 'info' : 'ok', p99 > 200 ? `La oficina se trabó: hasta ${worst} ms sin responder (99 % de las veces, menos de ${p99} ms).` : `Al día: casi siempre responde en menos de ${Math.max(1, p99)} ms.`, p99 > 200 ? 'Si se repite, cierra lo que use mucho el disco (copias, el antivirus escaneando) o avisa al equipo.' : ''); }
   // H3: company notes that need a look
   vaultIndex(); const stale = [...STALE];
   add('notas', 'Notas de la empresa', stale.length > 5 ? 'warn' : stale.length ? 'info' : 'ok', stale.length ? `${stale.length} por revisar: ${stale.slice(0, 4).map(([n, st]) => `${n} (${st.why})`).join(', ')}${stale.length > 4 ? '…' : ''}.` : 'Todas al día.', stale.length ? 'Ábrelas en el Cerebro, confirma precios y fechas, y pon «actualizado: AAAA-MM-DD» en su cabecera (o «revisar:» con la próxima fecha).' : '');
@@ -1568,7 +1583,9 @@ const server = http.createServer(async (req, res) => {
       const pc = page();
       if (url.pathname === '/dark') { res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); return res.end(pc.raw.toString('utf8').replace('<body>', '<body class="dark">')); } // /dark: the same file, opened in dark mode
       const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+      // Auditoría 1 oct 2026 (INF-09): revalidated, not downloaded again — the same build answers 304 (it was 600 KB on every reload)
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(pc.etag)) { res.writeHead(304, { etag: pc.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', etag: pc.etag, vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
     }
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, safety: (n => ({ writes: n.writes, departments: n.departments, browserSites: n.browserSites.length, browserBlock: n.browserBlock.length, limits: n.limits }))(SAFETY()), version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, deputy: DEPUTY, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
@@ -1662,7 +1679,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, name: path.basename(dest, '.md'), graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
-    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = rel.queueOf(l, running.size, MAX_RUNS); for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, l); } // V4.4 (B5): where each waiting task sits
+    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = rel.queueOf(l, running.size, MAX_RUNS); for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, url.searchParams.get('light') === '1' ? lightTasks(l) : l, { etag: true }); } // INF-04: ?light=1 (the 6 s poll) leaves out the archived tasks' work; the ETag answers 304 when nothing changed // V4.4 (B5): where each waiting task sits
     if (url.pathname === '/api/status' && req.method === 'GET') return json(res, 200, officeStatus());
     if (url.pathname === '/api/notices/read' && req.method === 'POST') { const l = loadNotices().map(n => ({ ...n, read: true })); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(l, null, 1)); fs.renameSync(NOTICES + '.tmp', NOTICES); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());

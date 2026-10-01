@@ -14,9 +14,22 @@ body.dark #topMore .hl-badge { border-color: #1B1C21; }
 body.dark #topMoreMenu { background: #1B1C21; }
 @media (max-width: 440px) {
   #topMore { display: inline-grid; }
-  #topAnaliticas, #topHealth, #topBiz, #topSettings { display: none; }
+  #topAnaliticas, #topBrain, #topHealth, #topBiz, #topSettings { display: none; }
   /* El dock es lo que no puede salirse: con el aviso «⚠ N» de aprobaciones encendido (el uso normal) y seis botones, la marca de 147 px lo empujaba fuera a 390 px, y sin aviso ya se salía a 360. La marca cede, con puntos suspensivos. */
   #topbar .brand { flex: 0 1 auto; min-width: 0; overflow: hidden; }
   #topbar .brand .bn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   #topAppr { padding: 3px 8px; font-size: 11px; letter-spacing: .02em; gap: 3px; margin-right: 0; }
 }
+
+/* Auditoría 1 oct 2026 (A11-05): el nombre de cada herramienta también se ve con el teclado (al enfocarla) y con el dedo (al mantenerla
+   pulsada) — title solo sale al pasar el ratón. Va abajo y alineado a la derecha del botón, así nunca se sale de la pantalla. */
+#topdock .tb-ic[data-tip] { position: relative; }
+#topdock .tb-ic[data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); right: 0; z-index: 70; white-space: nowrap; pointer-events: none;
+  padding: 5px 9px; border-radius: 7px; background: var(--ink); color: var(--cream); font: 600 12px/1.25 var(--ui); letter-spacing: .01em; box-shadow: 0 6px 18px rgba(21,20,20,.22); }
+@media (hover: none) { #topdock .tb-ic[data-tip]:active::after { content: attr(data-tip); position: absolute; top: calc(100% + 8px); right: 0; z-index: 70; white-space: nowrap; pointer-events: none;
+  padding: 5px 9px; border-radius: 7px; background: var(--ink); color: var(--cream); font: 600 12px/1.25 var(--ui); } }
+/* A11-04: Dimitri en el dock — su inicial en un círculo, como en el centro de la oficina; abierto, el botón queda pulsado */
+#topDimitri .tb-dav { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--cream); font: 700 12px/1 var(--ui); }
+#topDimitri:hover .tb-dav, body.subOpen #topDimitri .tb-dav { background: var(--cream); color: var(--ink); }
+body.subOpen #topDimitri { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+@media (max-width: 440px) { #topDimitri .tb-dav { width: 19px; height: 19px; font-size: 11px; } }

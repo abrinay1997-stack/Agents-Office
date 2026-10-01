@@ -29,6 +29,8 @@ import {
 import { initMcp } from './mcp.js';
 import { loadConnectors } from './connectors.js';
 import { initTasks } from './tasks.js';
+import { keyEventInit } from './keys-run.js';
+import { spread } from './labels.js';
 import { initBrain } from './brain.js';
 import { initHero, HERO } from './hero.js';
 if (HERO) document.body.classList.add('hero'); // the website hero: no Sahni.ai mark or licence line on top of the page that already carries them // sahni.ai/custom hero mode (16 Sep 2026): opt-in via window.HERO, no-op otherwise
@@ -612,6 +614,7 @@ addEventListener('keydown', (e) => {
     if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'k') contenido.toggle(); else if (key === 'r') analiticas.toggle(); else if (key === 'g') brain.toggle();
     else if (key === 's') subger.toggle(); // V4.8: Dimitri beside the view (the view moves over, src/css/dimitri.css)
     else if (key === 'o') health.toggle(); else if (key === 'n') bizWin.toggle(); else if (key === 'u') costsWin.toggle(); else if (key === ',') settingsWin.toggle();
+    else if (key === 's') subger.toggle(); // A11-04: Dimitri sits beside a view — S (and his dock button) open him there too
     return;
   }
   if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
@@ -650,7 +653,7 @@ addEventListener('keydown', (e) => {
 const KEYS = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
-    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['R', 'Analíticas: cómo rinden Instagram y Facebook', 'r'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['R', 'Analíticas: cómo rinden Instagram y Facebook', 'r'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'ctrl+k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
     ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['S', 'Dimitri al lado: la vista se corre y sigue a mano; ve lo que tienes seleccionado', 's'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
@@ -664,7 +667,7 @@ const KEYS = (() => {
   return G;
 })();
 // a line of the list pressed: the same path as the key itself, after the click that closed Ajustes has finished
-const runKey = k => setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: k === 'k' })), 0);
+const runKey = k => setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', keyEventInit(k))), 0); // A11-13: Ctrl only for the Ctrl+K line ('ctrl+k'), never for K (Contenido)
 function showKeys() { // «?»: Ajustes opens on its shortcuts; pressed again there, it closes
   for (const w of [health, costsWin, bizWin]) if (w.isOpen()) w.close();
   if (settingsWin.isOpen() && settingsWin.tab() === 'atajos') settingsWin.close(); else settingsWin.open('atajos');
@@ -1248,7 +1251,7 @@ function decidedLive(id, sid, approved) { // the owner decided on one draft, whe
   settleLive(id);
   if (m && modalOpen === id && modalTab === 'chat') renderChat(id);
 }
-setInterval(() => { for (const id in R) if (R[id].liveAppr) settleLive(id); }, 1500); // a draft approved from another window, archived, or finished on the server
+setInterval(() => { if (document.hidden) return; for (const id in R) if (R[id].liveAppr) settleLive(id); }, 1500); // INF-08: a hidden tab does nothing // a draft approved from another window, archived, or finished on the server
 function resolveApproval(id, approved, sid) {
   const r = R[id];
   if (!r || r.state !== 'stuck') return;
@@ -1623,6 +1626,7 @@ function tickLOD() {
   // (they used to be pinned to the left edge, and half of them hid under the sheet)
   const narrow = innerWidth <= 900, sheet = narrow && !document.body.classList.contains('tpMin');
   const rightEdge = narrow ? innerWidth - 8 : innerWidth - (panelW + 26), bottomEdge = sheet ? innerHeight * 0.54 - 24 : innerHeight - 12;
+  const placedBadges = [];
   for (const [k, d] of Object.entries(deptRT)) {
     if (focused === k && k !== 'brain') continue; // this billboard is docked in the rail
     let [sx, sy] = toScreen(d.badgeAnchor);
@@ -1645,10 +1649,19 @@ function tickLOD() {
       sx = clamp(sx, bw / 2 + 8, rightEdge - bw / 2);
       xf = 'translate(-50%,-100%)';
     }
-    setS(d.badge, 'transform', `translate(${px(sx)}px,${px(sy)}px) ${xf} scale(${sc.toFixed(3)})`);
+    // the visual centre (the scale works around the element's own centre): for the overlap pass below
+    const cx = xf === 'translate(-100%,-50%)' ? sx - bw0 / 2 : xf === 'translate(0,-50%)' ? sx + bw0 / 2 : sx, cy = xf === 'translate(-50%,-100%)' ? sy - bh0 / 2 : sy;
+    placedBadges.push({ k, d, sx, sy, xf, sc, cx, cy, w: bw, h: bh, fixed: k === 'brain' });
+  }
+  // Auditoría 1 oct 2026 (A11-16): the cards are pushed apart where they would overlap (src/labels.js) — on a phone, and also on a wide
+  // screen with Dimitri's chat open, where the room left between his chat and the panel put his tag on VENTAS. Cards that do not touch never move.
+  const dys = placedBadges.length > 1 ? spread(placedBadges, { top: 60, bottom: bottomEdge, gap: 3 }) : null;
+  placedBadges.forEach(({ k, d, sx, sy, xf, sc }, i) => {
+    setS(d.badge, 'transform', `translate(${px(sx)}px,${px(sy + (dys ? dys[i] : 0))}px) ${xf} scale(${sc.toFixed(3)})`);
     setS(d.badge, 'opacity', k === 'brain' ? '1' : (1 - 0.75 * focusDim).toFixed(3)); // unfocused boards recede with the scene; V4.3: the Brain and Dimitri are reachable from every view, so they stay legible (at 33% their text fell to 1.1:1)
     setS(d.badge, 'pointerEvents', 'auto');
-  }
+  });
+  placedBadges.length = 0;
   // name pills stay on at EVERY zoom (AJ's call) — smaller when far, full-size when near
   const pillScale = 0.62 + 0.38 * smooth(1.2, 2.4, z);
   for (const r of Object.values(R)) {
@@ -1705,7 +1718,7 @@ tasks = initTasks({ contenido: { between: (a, b) => contenido.between(a, b), ope
   onLive: (h) => {
     if (mcp && mcp.setProvider) mcp.setProvider(h.provider); // the brain the agents run on: Claude's logo, or Meta's (option 2 of the .bat) — the logo alone says it
     { const br = document.querySelector('#topbar .brand'); br.innerHTML = `<span class="bn">${esc(h.name)}</span><span class="bs">OFICINA</span>`; br.title = `Volver a la oficina · Agents Office ${h.version || ''} · la oficina de ${h.name}`; }
-    if (h.deputy) { const t = document.querySelector('.brainTag .bt-dim'); if (t) { t.querySelector('.bt-t').textContent = String(h.deputy).toUpperCase(); t.querySelector('.bt-av').textContent = String(h.deputy).charAt(0).toUpperCase(); t.title = `Hablar con ${h.deputy}, tu mano derecha (S)`; t.setAttribute('aria-label', `Abrir el chat con ${h.deputy}`); } }
+    if (h.deputy) { const t = document.querySelector('.brainTag .bt-dim'); if (t) { t.querySelector('.bt-t').textContent = String(h.deputy).toUpperCase(); t.querySelector('.bt-av').textContent = String(h.deputy).charAt(0).toUpperCase(); t.title = `Hablar con ${h.deputy}, tu mano derecha (S)`; t.setAttribute('aria-label', `Abrir el chat con ${h.deputy}`); } const d = document.getElementById('topDimitri'); if (d) { d.setAttribute('aria-label', `${h.deputy}, tu mano derecha`); d.title = `${h.deputy}, tu mano derecha (S)`; d.dataset.tip = `${h.deputy} (S)`; const av = d.querySelector('.tb-dav'); if (av) av.textContent = String(h.deputy).charAt(0).toUpperCase(); } }
     document.title = `${h.name} — Agents Office`; brain.setOwner(h.name); brain.setQuiet(true); applyRoster(h.agents); },
   onTools: (agentId, keys) => mcp.onToolsUsed(agentId, keys),
   requestApproval, setStuck: setStuckLive, resolveApproval: (id, ok) => resolveApproval(id, ok), decided: (id, sid, ok) => decidedLive(id, sid, ok), settle: id => settleLive(id),
@@ -1721,8 +1734,9 @@ const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, fi
   openStudioFile: file => (studio.openFile ? studio.openFile(file) : studio.open()) });
 { // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
   const btn = document.getElementById('topPanel');
-  const VIEW_BTN = [['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topContenido', 'ctOpen'], ['topAnaliticas', 'anOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
+  const VIEW_BTN = [['topDimitri', 'subOpen'], ['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topContenido', 'ctOpen'], ['topAnaliticas', 'anOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
   const sync = () => { const cl = document.body.classList, shown = !cl.contains('tpMin'); btn.setAttribute('aria-pressed', shown); btn.classList.toggle('on', shown); for (const [b, c] of VIEW_BTN) b?.setAttribute('aria-pressed', cl.contains(c)); }; // the open view's icon stays pressed
+  document.getElementById('topDimitri')?.addEventListener('click', () => subger.toggle()); // A11-04: Dimitri from any view, with the mouse or a finger (only S before)
   btn.addEventListener('click', () => { if (tasks && tasks.setPanel) tasks.setPanel(document.body.classList.contains('tpMin')); sync(); });
   new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ['class'] }); sync();
 }
