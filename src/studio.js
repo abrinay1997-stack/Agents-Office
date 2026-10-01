@@ -111,7 +111,7 @@ export function initStudio(ctx) {
   const folderName = id => (folders.find(f => f.id === id) || {}).name || '';
   const inFolder = it => (it.folder && folders.some(f => f.id === it.folder) ? it.folder : null);
   let lastSig = '', lastAt = 0, armed = false;
-  let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightFrom = null, prevPrompt = null, qty = 1;
+  let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightAt = null, lightFrom = null, prevPrompt = null, qty = 1;
   const modelOf = { image: store.get('model.image', ''), video: store.get('model.video', '') };
   $('.st-lang').value = store.get('lang', 'en') === 'es' ? 'es' : 'en';
   const setsOf = store.get('sets', {}); // model id → its settings
@@ -737,7 +737,8 @@ export function initStudio(ctx) {
     L.querySelector('[data-z="fit"]')?.setAttribute('aria-pressed', String(!on));
     L.querySelector('[data-z="real"]')?.setAttribute('aria-pressed', String(!!d && pct === 100));
     const lim = d && Z.limits(d), inB = L.querySelector('[data-z="in"]'), outB = L.querySelector('[data-z="out"]');
-    if (inB) inB.disabled = !d || zs.scale >= lim.max - 1e-6; if (outB) outB.disabled = !on;
+    const off = (b, v) => { if (!b) return; if (v && document.activeElement === b) (L.querySelector(b === outB ? '[data-z="in"]:not(:disabled)' : '[data-z="out"]:not(:disabled)') || L.querySelector('[data-z="fit"]'))?.focus({ preventScroll: true }); b.disabled = v; };
+    off(inB, !d || zs.scale >= lim.max - 1e-6); off(outB, !on); // a button that turns off under the focus passes it on first: a disabled one drops it to <body>, inert under modal.js
   }
   function zSet(s) { const d = zDims(); if (!d) return; zs = Z.clampPan(s, d); zPaint(); }
   const zPoint = (cx, cy) => { const r = zImg.parentElement.getBoundingClientRect(); return { x: cx - (r.left + r.width / 2), y: cy - (r.top + r.height / 2) }; }; // from the stage's centre, which is the picture's
@@ -771,7 +772,7 @@ export function initStudio(ctx) {
     if (zImg) requestAnimationFrame(() => zSet(zs));
   });
   window.addEventListener('resize', () => { if (zImg && !$('.st-light').hidden) zSet(zs); });
-  function closeLight() { const L = $('.st-light'); if (L.hidden) return; if (document.fullscreenElement && L.contains(document.fullscreenElement)) document.exitFullscreen?.().catch(() => {}); L.hidden = true; L.innerHTML = ''; lightIdx = -1; zImg = null; lPanel = null; L.classList.remove('st-zoomed'); modal.close(L); if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
+  function closeLight() { const L = $('.st-light'); if (L.hidden) return; if (document.fullscreenElement && L.contains(document.fullscreenElement)) document.exitFullscreen?.().catch(() => {}); L.hidden = true; L.innerHTML = ''; lightIdx = -1; lightAt = null; zImg = null; lPanel = null; L.classList.remove('st-zoomed'); modal.close(L); if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
   /** Open the viewer on a file, wherever it is: a filter or a folder that hides it is cleared first. */
   function lightFile(file, o = {}) {
     let i = shown().findIndex(x => x.file === file);
@@ -847,8 +848,10 @@ export function initStudio(ctx) {
       closePanel(); toast(`Tarea creada en ${name}: «${short((r.task && r.task.title) || text)}».`);
     } catch (err) { go.disabled = false; go.textContent = 'Crear la tarea'; msg.textContent = 'No se pudo: ' + err.message; }
   }
+  /** Where the picture in the viewer sits in shown() now: load() (a job ending while it is open) can move it, so the file is the truth, not lightIdx. */
+  function lightPos() { if (!lightAt) return -1; const k = shown().findIndex(x => x.file === lightAt); if (k >= 0) lightIdx = k; return k; }
   function light(i, o = {}) {
-    const list = shown(); const it = list[i]; if (!it) return; if (lightIdx < 0) lightFrom = document.activeElement; lightIdx = i;
+    const list = shown(); const it = list[i]; if (!it) return; if (lightIdx < 0) lightFrom = document.activeElement; lightIdx = i; lightAt = it.file;
     const L = $('.st-light'); L.hidden = false; modal.open(L); L.classList.remove('st-zoomed');
     const img = it.kind !== 'video' && it.kind !== 'audio';
     lPanel = o.panel && (o.panel !== 'edit' || img) ? o.panel : null; lPanelFrom = null;
@@ -873,8 +876,9 @@ export function initStudio(ctx) {
     if (lPanel) paintPanel(it); else L.querySelector('.st-lx').focus();
     L.onclick = e => {
       if (e.target === L || e.target.closest('.st-lx')) return closeLight();
-      if (e.target.closest('.st-lnav.prev') && i > 0) { light(i - 1); L.querySelector('.st-lnav.prev')?.focus(); return; }
-      if (e.target.closest('.st-lnav.next') && i < list.length - 1) { light(i + 1); L.querySelector('.st-lnav.next')?.focus(); return; }
+      const at = lightPos() < 0 ? i : lightIdx;
+      if (e.target.closest('.st-lnav.prev') && at > 0) { light(at - 1); L.querySelector('.st-lnav.prev')?.focus(); return; }
+      if (e.target.closest('.st-lnav.next') && at < shown().length - 1) { light(at + 1); L.querySelector('.st-lnav.next')?.focus(); return; }
       const z = e.target.closest('[data-z]')?.dataset.z;
       if (z) { if (z === 'full') return fullScreen(); const d = zDims(); if (!d) return;
         if (z === 'in') zs = Z.zoomAt(zs, 1.5, 0, 0, d); if (z === 'out') zs = Z.zoomAt(zs, 1 / 1.5, 0, 0, d); if (z === 'fit') zs = Z.fitted(); if (z === 'real') zs = Z.zoomTo(zs, Z.realScale(d), 0, 0, d);
@@ -893,7 +897,7 @@ export function initStudio(ctx) {
       if (a === 'anim') { closeLight(); animate(it); }
       if (a === 'ref') { closeLight(); useAsRef(it); }
       if (a === 'cal' && ctx.toCalendar) { closeLight(); learn(it.file, 'calendario'); ctx.toCalendar(it.file, it.kind, it.prompt); }
-      if (a === 'fav') favMany([it.file]).then(() => light(i));
+      if (a === 'fav') favMany([it.file]).then(() => { const k = lightPos(); if (k >= 0) light(k); });
       if (a === 'del') trashMany([it.file]);
       if (a === 'task') { closeLight(); close(); ctx.openTask(it.task); }
     };
@@ -905,8 +909,9 @@ export function initStudio(ctx) {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const d = zDims(), arrow = { ArrowLeft: [80, 0], ArrowRight: [-80, 0], ArrowUp: [0, 80], ArrowDown: [0, -80] }[e.key];
     if (d && arrow && Z.isZoomed(zs)) { e.preventDefault(); zSet(Z.pan(zs, arrow[0], arrow[1], d)); return; } // zoomed: the arrows move around the picture
-    if (e.key === 'ArrowLeft' && lightIdx > 0) return light(lightIdx - 1);
-    if (e.key === 'ArrowRight' && lightIdx < shown().length - 1) return light(lightIdx + 1);
+    const at = lightPos();
+    if (e.key === 'ArrowLeft' && at > 0) return light(at - 1);
+    if (e.key === 'ArrowRight' && at >= 0 && at < shown().length - 1) return light(at + 1);
     if (e.key === 'f' || e.key === 'F') { if ($('.st-light [data-z="full"]')) { e.preventDefault(); fullScreen(); } return; }
     if (!d) return;
     if (e.key === '+' || e.key === '=') { e.preventDefault(); zSet(Z.zoomAt(zs, 1.5, 0, 0, d)); }
@@ -1174,7 +1179,7 @@ export function initStudio(ctx) {
     forTarget(target, onPick) { pickFor = { target, onPick, ids: [] }; open(); showPane('gal'); paintFor(); },
     /** V4.9: what the owner is looking at, for Dimitri's «Viendo: …» — the picture in the viewer, the selected ones, the open folder, or nothing. */
     selection() {
-      const it = !$('.st-light').hidden && lightIdx >= 0 ? shown()[lightIdx] : null;
+      const it = !$('.st-light').hidden && lightAt ? itemOf(lightAt) : null; // the file the viewer shows, never shown()[lightIdx]: a job that ends while it is open reorders the gallery
       if (it) return { view: 'studio', label: `${it.kind === 'video' ? 'Video' : it.kind === 'audio' ? 'Audio' : 'Imagen'} «${short(it.prompt)}»`, kind: 'image', id: it.file };
       const ids = [...sel].filter(f => itemOf(f));
       if (ids.length) return { view: 'studio', label: `${ids.length} ${ids.length === 1 ? 'archivo seleccionado' : 'archivos seleccionados'} en el Estudio`, kind: 'images', ids };
