@@ -42,7 +42,9 @@ export const FIELDS = [
   { path: 'deputy.weekly', group: 'avisos', type: 'bool', label: 'Informe semanal de Dimitri el lunes', help: 'Cómo fue la semana, qué decidir; llega a los avisos y a Telegram.' },
   { path: 'tools.web', group: 'conectores', type: 'bool', label: 'Búsqueda web para los agentes', restart: true },
   { path: 'tools.browser', group: 'conectores', type: 'bool', label: 'Tu Chrome para los agentes', restart: true },
-  { path: 'mcp.deny', group: 'conectores', type: 'list', label: 'Conectores que los agentes no pueden usar', help: 'Nombres como salen en la barra (Gmail, Stripe…).', restart: true },
+  // Auditoría MCP (1 oct 2026, MCP-12): the names match the bar's (a plugin's «Gmail» too) and apply at once (mcp.configure on save)
+  { path: 'mcp.deny', group: 'conectores', type: 'list', label: 'Conectores que los agentes no pueden usar', help: 'Nombres como salen en la barra (Gmail, Shopify…). Se aplica al instante.' },
+  { path: 'mcp.allow', group: 'conectores', type: 'list', label: 'Solo estos conectores (lista blanca)', help: 'Vacío = todos los conectados. Si pones nombres, los agentes solo usan esos. Un conector que la oficina no conoce no llega a ninguna mesa hasta que lo asignas en office.config.json → mcp.departments.' },
   { path: 'quality.review.enabled', group: 'calidad', type: 'bool', label: 'Segunda opinión del jefe en lo delicado' },
   { path: 'quality.review.departments', group: 'calidad', type: 'depts', label: 'Departamentos que siempre pasan por su jefe' },
   { path: 'team.people', group: 'equipo', type: 'people', label: 'Personas del equipo', help: 'Para asignarles tareas, mencionarlas en comentarios y pasarles trabajo. El id de Telegram es opcional: si lo pones, les llegan sus avisos.' },

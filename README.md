@@ -146,7 +146,10 @@ Decide what the agents may touch in `office.config.json`:
 
 `allow` empty means every connected server. `deny` keeps a server in the bar but out of the
 agents' hands (`"deny": ["Chrome"]` works the same for the browser). `departments` says which pods
-a server is wired to (known brands have a default; anything else feeds every pod). Set `tools.web`
+a server is wired to (known brands have a default; anything else feeds no pod until you name it
+there — a plugin's server goes by its own name, «Gmail» for `plugin:small-business:gmail`). The
+Telegram plugin, your own line to Claude, is kept from the agents unless you name it. A tool whose
+name the office cannot read counts as a send; `safety.toolKinds` corrects one tool. Set `tools.web`
 to `false` to keep the agents off the web, `tools.browser` to `false` to keep them out of your
 Chrome (see [Claude in Chrome](#claude-in-chrome-the-agents-can-use-your-browser)).
 Tool use needs the Claude Code login; on an `ANTHROPIC_API_KEY` the agents write from your notes only.

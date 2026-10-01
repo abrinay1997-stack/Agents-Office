@@ -6,7 +6,7 @@ import * as S from '../safety.mjs';
 test('which tools send: the first verb decides, drafts and the Estudio do not', () => {
   const w = n => S.kindOf(n);
   for (const n of ['mcp__claude_ai_Gmail__send_email', 'mcp__slack__post_message', 'mcp__stripe__create_refund', 'mcp__hubspot__update_contact', 'mcp__crm__deleteRecord', 'mcp__calendar__schedule_event', 'mcp__claude-in-chrome__form_input', 'mcp__claude-in-chrome__computer']) assert.equal(w(n), 'write', n);
-  for (const n of ['mcp__claude_ai_Gmail__search_threads', 'mcp__claude_ai_Gmail__create_draft', 'mcp__cal__get_schedule', 'mcp__crm__listContacts', 'mcp__estudio__generar_imagen', 'mcp__claude-in-chrome__navigate', 'mcp__claude-in-chrome__read_page', 'WebFetch', 'WebSearch', 'mcp__x__summary']) assert.equal(w(n), 'read', n);
+  for (const n of ['mcp__claude_ai_Gmail__search_threads', 'mcp__claude_ai_Gmail__create_draft', 'mcp__cal__get_schedule', 'mcp__crm__listContacts', 'mcp__estudio__buscar_en_galeria', 'mcp__claude-in-chrome__navigate', 'mcp__claude-in-chrome__read_page', 'WebFetch', 'WebSearch', 'mcp__x__summary']) assert.equal(w(n), 'read', n);
 });
 
 test('who may send: the policy and the kind of run', () => {
@@ -65,4 +65,23 @@ test('a send over the amount limit waits for the OK unless it is the run after t
   assert.equal(S.decide(pay, { amount: '$150' }, { writes: true, runMode: 'task', amountLimit: 200 }).allow, true);
   assert.equal(S.writesAllowed('aprobar', 'autonomous'), true);
   assert.equal(S.writesAllowed('nunca', 'autonomous'), false);
+});
+
+test('revisión MCP: un toolKinds «cost» solo vale para el Estudio; en Gmail cuenta como envío', () => {
+  const ctx = { writes: false, safety: { toolKinds: { send_email: 'cost' } } };
+  const d = S.decide('mcp__gmail__send_email', { to: 'x@y.com' }, ctx);
+  assert.equal(d.allow, false); assert.equal(d.kind, 'write'); assert.equal(d.code, 'no-writes');
+  assert.equal(S.decide('mcp__gmail__send_email', { to: 'x@y.com' }, { writes: false, safety: { toolKinds: { '*': 'cost' } } }).allow, false);
+  assert.equal(S.kindOf('mcp__estudio__mi_motor', undefined, { 'mcp__estudio__mi_motor': 'cost' }), 'cost');
+  assert.ok(S.problems({ toolKinds: { send_email: 'cost' } }).some(p => /solo vale para el Estudio/.test(p)));
+  assert.deepEqual(S.problems({ toolKinds: { 'mcp__estudio__mi_motor': 'cost' } }), []);
+});
+
+test('revisión MCP: en un browser_batch, un elemento de otro servidor se bloquea y los de Chrome se juzgan como de Chrome', () => {
+  const ctx = { writes: false, safety: {} };
+  const foreign = S.decide('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__estudio__ver' }] }, ctx);
+  assert.equal(foreign.allow, false); assert.equal(foreign.code, 'batch-foreign');
+  assert.equal(S.kindOfCall('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__x__form_input' }] }), 'write');
+  assert.equal(S.kindOfCall('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__claude-in-chrome__get_page_text' }] }), 'read');
+  assert.equal(S.decide('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__claude-in-chrome__get_page_text' }, { name: 'navigate', input: { url: 'https://a.com' } }] }, ctx).allow, true);
 });

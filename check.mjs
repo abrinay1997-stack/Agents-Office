@@ -171,6 +171,14 @@ await step('connectors: claude mcp list parses', async () => {
   if (l[0].id !== 'claude_ai_Gmail' || l[0].key !== 'gmail' || l[0].status !== 'connected') throw new Error('gmail: ' + JSON.stringify(l[0]));
   if (l[1].status !== 'needs-auth' || l[1].key !== 'meta') throw new Error('meta: ' + JSON.stringify(l[1]));
   if (l[2].depts.length !== 2) throw new Error('playwright depts: ' + l[2].depts);
+  // auditoría MCP (1 oct 2026): a plugin's server is named and wired by its own name; an empty plugin slot is not a failure; an unknown server reaches no desk
+  const p = m.parseList('plugin:small-business:gmail: https://gmailmcp.googleapis.com/mcp/v1 (HTTP) - ✔ Connected\nplugin:sales:gmail:  (HTTP) - - Not configured\nplugin:bio-research:pubmed: https://pubmed.mcp.claude.com/mcp (HTTP) - ✔ Connected');
+  if (p[0].name !== 'Gmail' || p[0].key !== 'gmail' || p[0].depts.length !== 5) throw new Error('plugin gmail: ' + JSON.stringify(p[0]));
+  if (p[1].status !== 'not-configured') throw new Error('not configured → ' + p[1].status);
+  if (p[2].depts.length) throw new Error('an unknown server went to ' + p[2].depts);
+  const S = await import('./safety.mjs');
+  if (S.kindOf('mcp__plugin_small-business_shopify__graphql_mutation') !== 'write' || S.kindOf('mcp__x__send_draft') !== 'write' || S.kindOf('mcp__x__frobnicate') !== 'write') throw new Error('the guard reads a send as a read');
+  return 'claude.ai + plugin names · «Not configured» apart · unknown → no desk · in doubt, a send';
 });
 
 /* ---------- 1c. routines (V3.5) ---------- */

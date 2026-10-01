@@ -299,6 +299,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
     return { text: res.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(), tools: [], usage: res.usage, modelId: res.model, usd };
   }
   fs.mkdirSync(CLI_CWD, { recursive: true });
+  const opts0 = arguments[2] || {}, long0 = mcp.longToolNames().length; // MCP-05: a tool name over 64 characters fails the run; retried once below, only when safe (mcp.retryLong)
   const allowed = tools ? mcp.allowedTools(agent) : [];
   const studio = tools && agent && STUDIO_DEPTS.includes(agent.department); // images and video for real (media.mjs through estudio-mcp.mjs)
   if (studio) allowed.push('mcp__estudio');
@@ -309,9 +310,12 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   // V4.4: the guard — a hook around every tool call. A run that may not send also loses the send tools outright where it can never need them (a draft, a teammate's piece, «nunca»)
   const pol = safety.modeFor(cfg.safety, agent?.department), writes = safety.writesAllowed(pol, runMode);
   const runId = nid(), guardFile = path.join(CLI_CWD, `guard-${runId}.json`), taintFile = path.join(CLI_CWD, `taint-${runId}.json`), settingsFile = path.join(CLI_CWD, `settings-${runId}.json`);
-  const hardOff = tools && !writes && (runMode === 'draft' || runMode === 'piece' || pol === 'nunca') ? mcp.writeTools(agent, SAFETY().safeTools) : [];
+  const hardOff = tools && !writes && (runMode === 'draft' || runMode === 'piece' || pol === 'nunca') ? mcp.writeTools(agent, SAFETY().safeTools, SAFETY().toolKinds) : [];
+  // auditoría MCP (1 oct 2026): the guard knows which servers this desk was given (MCP-07) and the run starts only those when it can (MCP-06)
+  const ownServers = [...(studio ? ['estudio'] : []), ...(conContenido ? ['contenido'] : [])]; // (the browser is in serverIdsFor when this desk may use it)
+  const iso = tools && agent ? mcp.runConfig(agent) : null, mcpFile = path.join(CLI_CWD, `mcp-${runId}.json`);
   if (tools && agent) {
-    fs.writeFileSync(guardFile, JSON.stringify({ run: runId, task: taskId, agent: agent.id, dept: agent.department, writes, runMode, policy: pol, amountLimit: APPR().amountLimit, known: runMode === 'approve' ? known : null, safety: cfg.safety || {}, auditDir: AUDIT, taintFile }));
+    fs.writeFileSync(guardFile, JSON.stringify({ run: runId, task: taskId, agent: agent.id, dept: agent.department, writes, runMode, policy: pol, amountLimit: APPR().amountLimit, known: runMode === 'approve' ? known : null, safety: cfg.safety || {}, auditDir: AUDIT, taintFile, servers: mcp.serverIdsFor(agent, ownServers) }));
     const cmd = phase => `"${process.execPath}" "${GUARD}" ${phase}`;
     fs.writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: '', hooks: [{ type: 'command', command: cmd('pre'), timeout: 30 }] }], PostToolUse: [{ matcher: '', hooks: [{ type: 'command', command: cmd('post'), timeout: 30 }] }] } }));
   }
@@ -324,13 +328,15 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   if (images?.length) args.push('--input-format', 'stream-json'); // V4.8: the request goes on stdin as one stream-json user line with the image blocks (vision.cliInput)
   // Auditoría 1 oct 2026 (INF-06): a run with no tools (Dimitri, the router, a summary) does not start every MCP server this
   // machine's Claude Code knows (plugins, claude.ai connectors…: `claude mcp list` took 53 s here). It could not call them anyway.
-  if (!tools) args.push('--strict-mcp-config');
+  if (!tools || iso) args.push('--strict-mcp-config'); // MCP-06: with `iso`, only this desk's servers (rebuilt exactly, same tool ids) + the office's own
   if (onText && partial) args.push('--include-partial-messages'); // DIM-14: the text as it is written (stream_event deltas)
-  if (studio || conContenido) { // the office's own servers, one --mcp-config: the Estudio and Contenido share who is asking
+  if (studio || conContenido || iso) { // one --mcp-config, in a file (a server's env can carry a key: never on the command line): the Estudio and Contenido share who is asking
     const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
-    args.push('--mcp-config', JSON.stringify({ mcpServers: { ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
+    fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: { ...(iso || {}), ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
+    try { fs.chmodSync(mcpFile, 0o600); } catch {} args.push('--mcp-config', mcpFile); // its env can carry a key: only this user reads it, and a crash leaves none behind (swept at start)
   }
-  const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes
+  const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', MAX_MCP_OUTPUT_TOKENS: process.env.MAX_MCP_OUTPUT_TOKENS || '60000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes · MCP-13: a long answer stays inline (the agents have no Read to open the file Claude Code would park it in)
+  if (tools && !iso && !mcp.needsClaudeAi(agent)) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false'; // MCP-06: a desk with no claude.ai connector does not start them
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -340,14 +346,15 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
     const cleanup = () => {
       children.delete(p); if (stopKey) stoppers.delete(stopKey); if (taskId && runsOf.has(taskId)) { runsOf.get(taskId).delete(p); if (!runsOf.get(taskId).size) runsOf.delete(taskId); }
       if (guardOut) Object.assign(guardOut, guardReport(runId, taintFile));
-      for (const f of [sysFile, guardFile, taintFile, settingsFile]) fs.rm(f, { force: true }, () => {});
+      for (const f of [sysFile, guardFile, taintFile, settingsFile, mcpFile]) fs.rm(f, { force: true }, () => {});
     };
     let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null, partial = '', reported = null, usd = 0, liveText = '', gotDelta = false;
+    const fail = e => { e.used = used; if (!opts0.retriedLong && mcp.retryLong(e, long0)) return resolve(askX(system, user, { ...opts0, retriedLong: true })); reject(e); }; // MCP-05: one retry, only if no tool ran and a new long name was learnt
     const timer = setTimeout(() => { killTree(p); const e = new Error(`Claude took longer than ${timeout / 1000} s`); e.partial = partial.trim(); reject(e); }, timeout); // V4.4 (B4): what it had written so far is kept
     const feed = line => {
       if (!line.trim()) return;
       let j; try { j = JSON.parse(line); } catch { return; }
-      if (j.type === 'system' && j.subtype === 'init') mcp.fromInit(j);
+      if (j.type === 'system' && j.subtype === 'init') mcp.fromInit(j, { isolated: !!iso });
       if (onText) { const dt = cliDelta(j); if (dt) { liveText += dt; gotDelta = true; try { onText(liveText); } catch {} } } // DIM-14
       if (j.type === 'assistant' && j.message?.content) { for (const b of j.message.content) { if (b.type === 'tool_use' && b.name && !used.includes(b.name)) used.push(b.name); if (b.type === 'text' && b.text) partial += b.text + '\n'; } if (onText && !gotDelta && partial) try { onText(partial); } catch {} } // no deltas (an older CLI): the whole text at once
       if (j.type === 'result') { gotResult = true; text = String(j.result || '').trim(); isError = !!j.is_error; usageOut = j.usage || null; modelUsed = ranOn(j.modelUsage, model); reported = typeof j.total_cost_usd === 'number' ? j.total_cost_usd : null; usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: modelUsed || modelId(model), usage: usageOut, reported, ms: Date.now() - t0 }); }
@@ -357,10 +364,10 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
     p.on('error', e => { clearTimeout(timer); cleanup(); reject(new Error(e.code === 'ENOENT' ? 'Claude Code is not installed (claude not found on PATH — set CLAUDE_BIN to claude.exe)' : e.message)); });
     p.on('close', code => {
       clearTimeout(timer); cleanup(); feed(out);
-      if (code !== 0 && !gotResult) return reject(new Error(`claude exited ${code}${err ? ': ' + err.trim().slice(0, 300) : ''}`));
+      if (code !== 0 && !gotResult) return fail(new Error(`claude exited ${code}${err ? ': ' + err.trim().slice(0, 300) : ''}`));
       if (!gotResult) { try { text = String(JSON.parse(out).result || '').trim(); } catch { text = out.trim(); } }
       bumpUsage(usageOut);
-      if (isError) return reject(new Error(text || 'Claude reported an error with no message')); // an API error is not a deliverable: never saved as a note
+      if (isError) return fail(new Error(text || 'Claude reported an error with no message')); // an API error is not a deliverable: never saved as a note
       resolve({ text, tools: used, usage: usageOut, modelId: modelUsed, usd });
     });
   });
@@ -1325,7 +1332,7 @@ const LOCAL_CFG = process.env.AO_LOCAL_CONFIG || path.join(ROOT, 'office.config.
 function saveSettings(changes) { // J5, I10: validated, written to office.config.local.json, applied now (a few need a restart)
   let local = {}; try { local = JSON.parse(fs.readFileSync(LOCAL_CFG, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') return { errors: ['office.config.local.json no es JSON válido: arréglalo antes de guardar desde aquí'] }; }
   const r = settings.apply(local, changes);
-  if (Object.keys(changes || {}).length > r.errors.length) { fs.writeFileSync(LOCAL_CFG + '.tmp', JSON.stringify(r.local, null, 2) + '\n'); fs.renameSync(LOCAL_CFG + '.tmp', LOCAL_CFG); Object.assign(cfg, loadConfig()); media.setLimits(cfg.media || {}); } // V4.5: the Estudio's caps apply at once
+  if (Object.keys(changes || {}).length > r.errors.length) { fs.writeFileSync(LOCAL_CFG + '.tmp', JSON.stringify(r.local, null, 2) + '\n'); fs.renameSync(LOCAL_CFG + '.tmp', LOCAL_CFG); Object.assign(cfg, loadConfig()); media.setLimits(cfg.media || {}); mcp.configure(cfg); } // V4.5: the Estudio's caps apply at once · MCP-12: so do the connectors (deny, allow, departments)
   return { ok: true, errors: r.errors, restart: r.restart };
 }
 // H4: the company's figures — one place for prices, commissions, goals, hours; every agent reads them before working
@@ -1491,10 +1498,12 @@ function officeStatus() {
   if (claudeLogin.ok === false) add('claude', 'Claude', 'bad', 'La sesión de Claude Code se cerró: ninguna tarea puede correr.', 'Abre una ventana de comandos, escribe `claude` y entra con tu cuenta.');
   else { const last = list.filter(t => t.state === 'done' && !t.error && t.doneAt).sort((a, b) => b.doneAt - a.doneAt)[0]; add('claude', 'Claude', claudeLogin.ok ? 'ok' : 'info', last ? `Última tarea terminada ${agoText(now - last.doneAt)}.` : 'Todavía no terminó ninguna tarea en esta sesión.'); }
   // connectors
-  const srv = mcp.list().filter(x => !x.browser), badS = srv.filter(x => x.status === 'failed'), authS = srv.filter(x => x.status === 'needs-auth');
-  add('conectores', 'Conectores', badS.length ? 'bad' : authS.length ? 'warn' : srv.length ? 'ok' : 'info',
-    !srv.length ? 'No hay conectores (Gmail, CRM…) en esta máquina.' : badS.length || authS.length ? [badS.length ? `sin conexión: ${badS.map(x => x.name).join(', ')}` : '', authS.length ? `piden volver a entrar: ${authS.map(x => x.name).join(', ')}` : ''].filter(Boolean).join(' · ') : `${srv.filter(x => x.status === 'connected').length} conectados.`,
-    badS.length || authS.length ? 'Abre el panel de conectores (la etiqueta de la barra) y vuelve a conectarlos en claude.ai.' : '');
+  { // MCP-04: counts, not 38 names; red only when a connector a desk uses is down («sin configurar» is not a problem)
+    const h = mcp.health(), few = l => l.slice(0, 3).map(x => x.name).join(', ') + (l.length > 3 ? '…' : '');
+    add('conectores', 'Conectores', h.usedFailed.length ? 'bad' : h.usedAuth.length || h.failed.length ? 'warn' : h.total ? 'ok' : 'info',
+      !h.total ? 'No hay conectores (Gmail, CRM…) en esta máquina.' : [`${h.connected} conectados`, h.failed.length ? `${h.failed.length} fallan${h.usedFailed.length ? ` (los usa la oficina: ${few(h.usedFailed)})` : ''}` : '', h.auth.length ? `${h.auth.length} piden entrar${h.usedAuth.length ? ` (${few(h.usedAuth)})` : ''}` : ''].filter(Boolean).join(' · ') + '.',
+      h.usedFailed.length || h.usedAuth.length ? 'Abre el panel de conectores (la etiqueta de la barra): cada uno dice por qué falla y cómo volver a conectarlo.' : '');
+  }
   // disk
   try { const st = fs.statfsSync(DATA_ROOT()); const free = st.bavail * st.bsize; add('disco', 'Disco', free < 200e6 ? 'bad' : free < 1e9 ? 'warn' : 'ok', `${(free / 1e9).toFixed(1)} GB libres.`, free < 1e9 ? 'Libera espacio: las tareas y las imágenes necesitan sitio para guardarse.' : ''); } catch { add('disco', 'Disco', 'info', 'No se pudo medir.'); }
   // routines
@@ -1538,7 +1547,7 @@ const DATA_ROOT = () => { try { fs.mkdirSync(DATA, { recursive: true }); } catch
 setInterval(async () => {
   const before = new Map(mcp.list().map(x => [x.id, x.status]));
   try { await mcp.discover(); } catch { return; }
-  for (const x of mcp.list()) if (!x.browser && before.get(x.id) === 'connected' && (x.status === 'failed' || x.status === 'needs-auth')) notice('connector', `${x.name} dejó de funcionar (${x.status === 'failed' ? 'sin conexión' : 'pide volver a entrar'}). Los agentes no pueden usarlo hasta que lo reconectes.`, { level: 'warn', key: 'conn-' + x.id });
+  for (const x of mcp.list()) if (!x.browser && x.depts?.length && before.get(x.id) === 'connected' && (x.status === 'failed' || x.status === 'needs-auth')) notice('connector', `${x.name} dejó de funcionar (${x.status === 'failed' ? 'sin conexión' + (x.detail ? ': ' + x.detail.slice(0, 120) : '') : 'pide volver a entrar'}). Los agentes no pueden usarlo hasta que lo reconectes.`, { level: 'warn', key: 'conn-' + x.id }); // MCP-04: only a connector a desk uses, with its reason
 }, 3 * 3600e3);
 
 /* ---------- the brain's notes: read one, move an office note to the bin ---------- */
@@ -1607,10 +1616,12 @@ function moveOldArchive() {
 dailyBackup(); autoArchive(); emptyBins(); try { moveOldArchive(); } catch (e) { console.warn('archive:', e.message); }
 setInterval(() => { dailyBackup(); autoArchive(); emptyBins(); try { moveOldArchive(); } catch (e) { console.warn('archive:', e.message); } }, 6 * 3600 * 1000);
 if (PROVIDER.id !== 'anthropic') console.log(`  provider: ${PROVIDER.name} (${PROVIDER.host}) — the claude.ai connectors (Gmail, Canva, Notion, Drive…) are not loaded in this mode`);
-/* one list per provider: Meta's has no claude.ai connectors, Claude's does */ if (mcp.useCache(path.join(DATA, `mcp-cache-${PROVIDER.id}.json`))) console.log('  connectors: showing the last known list while `claude mcp list` checks them (~40 s)');
-const discovering = mcp.discover().then(async l => {
+/* one list per provider: Meta's has no claude.ai connectors, Claude's does */ if (mcp.useCache(path.join(DATA, `mcp-cache-${PROVIDER.id}.json`))) console.log('  connectors: showing the last known list while `claude mcp list` checks them (1–2 min)');
+// MCP-05: the probe runs beside `claude mcp list` (87 s on the owner's machine), not after it: the long tool names are known in ~15 s
+try { for (const f of fs.readdirSync(CLI_CWD)) if (/^mcp-.*\.json$/.test(f)) fs.rmSync(path.join(CLI_CWD, f), { force: true }); } catch {} // a run's --mcp-config can carry a server's key: none outlives a crash
+if (backend === 'claude-cli') mcp.probeTools({ cwd: CLI_CWD }).then(pr => { if (pr) console.log(`  tools: ${pr.tools} in a run${pr.long.length ? ` · ${pr.long.length} with names over 64 characters kept out (the API refuses them)` : ''}`); });
+mcp.discover().then(l => {
   console.log(`  connectors: ${l.filter(s => s.status === 'connected').length} connected of ${l.length} (claude mcp list)`);
-  if (backend === 'claude-cli') { const pr = await mcp.probeTools({ cwd: CLI_CWD }); if (pr) console.log(`  tools: ${pr.tools} in a run${pr.long.length ? ` · ${pr.long.length} with names over 64 characters kept out (the API refuses them)` : ''}`); }
   return mcp.list();
 });
 const agentsOut = () => { const setup = setupMap(); return AGENTS.map(a => ({ id: a.id, name: a.name, role: a.role, does: a.does, tools: a.tools, brief: a.brief || '', model: a.model || '', effort: a.effort || '', skills: skills.names(a), lessons: learn.count(BRAIN, a.id), department: a.department, lead: a.lead,
@@ -1661,7 +1672,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === '/api/skills') return json(res, 200, refreshSkills().summary()); // reloads from disk: edit a skill, hit this, see it
     if (url.pathname === '/api/lessons') return json(res, 200, { dir: learn.dir(BRAIN), agents: AGENTS.map(a => ({ id: a.id, name: a.name, ...learn.read(BRAIN, a.id) })).filter(x => x.rules.length || x.oneOffs.length) });
-    if (url.pathname === '/api/mcp') { if (url.searchParams.get('refresh') === '1') await mcp.discover(); else if (!mcp.list().some(x => !x.browser)) await discovering; /* a known list answers at once; only a first-ever start waits for claude mcp list */ return json(res, 200, { ...mcp.summary(), tools: backend === 'claude-cli' }); }
+    if (url.pathname === '/api/mcp') { if (url.searchParams.get('refresh') === '1') mcp.discover().catch(() => {}); /* MCP-09: always answers at once; `discovering` says a check is running and the page asks again (one `claude mcp list` at a time) */ return json(res, 200, { ...mcp.summary(), tools: backend === 'claude-cli' }); }
     if (url.pathname === '/api/brain') { // V4.6: + what the Brain learned — each note's weight and the links learned from use (live only: never baked into the repo)
       const at = new Map(graph.nodes.map((n, i) => [n.id, i])), now = Date.now(), w = {};
       for (const [name, e] of Object.entries(MEM.notes)) { const v = memory.effective(e, now); if (at.has(name) && Math.abs(v - 0.5) > 0.02) w[at.get(name)] = +v.toFixed(3); }

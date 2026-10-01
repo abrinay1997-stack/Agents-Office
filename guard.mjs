@@ -9,7 +9,7 @@
 // The run's rules come from the JSON file named by AO_GUARD. If anything here breaks, a send is refused (fail closed).
 import fs from 'node:fs';
 import path from 'node:path';
-import { decide, kindOf, injectionIn, targetsOf, normalize } from './safety.mjs';
+import { decide, kindOf, kindOfCall, injectionIn, targetsOf, normalize } from './safety.mjs';
 
 const phase = process.argv[2] === 'post' ? 'post' : 'pre';
 const day = (ts = Date.now()) => { const d = new Date(ts); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -30,7 +30,8 @@ const tainted = () => { try { return JSON.parse(fs.readFileSync(ctx.taintFile, '
 
 try {
   if (phase === 'post') {
-    if (!safety.injection || kindOf(tool, safety.safeTools) === 'write' || tainted()) process.exit(0);
+    // a browser_batch is scanned whatever its kind: one click makes it a «write», but the pages it read come back in the same answer
+    if (!safety.injection || (kindOfCall(tool, ev.tool_input, safety.safeTools, safety.toolKinds) === 'write' && tool !== 'mcp__claude-in-chrome__browser_batch') || tainted()) process.exit(0);
     const res = typeof ev.tool_response === 'string' ? ev.tool_response : JSON.stringify(ev.tool_response ?? '');
     const why = injectionIn(res);
     if (!why) process.exit(0);
@@ -40,11 +41,11 @@ try {
   }
   // pre: count today's sends for the caps
   const counts = { agentToday: 0, byTarget: {} };
-  if (kindOf(tool, safety.safeTools) === 'write') {
+  if (kindOfCall(tool, ev.tool_input, safety.safeTools, safety.toolKinds) === 'write') {
     let lines = []; try { lines = fs.readFileSync(auditFile, 'utf8').split('\n'); } catch {}
     for (const l of lines) { if (!l) continue; let j; try { j = JSON.parse(l); } catch { continue; } if (j.decision !== 'allow' || j.kind !== 'write') continue; if (j.agent === ctx.agent) counts.agentToday++; for (const a of j.targets || []) counts.byTarget[a] = (counts.byTarget[a] || 0) + 1; }
   }
-  const d = decide(tool, ev.tool_input, { writes: !!ctx.writes, known: ctx.known ?? null, safety, tainted: tainted(), counts, runMode: ctx.runMode, amountLimit: +ctx.amountLimit || 0 });
+  const d = decide(tool, ev.tool_input, { writes: !!ctx.writes, known: ctx.known ?? null, safety, tainted: tainted(), counts, runMode: ctx.runMode, amountLimit: +ctx.amountLimit || 0, policy: ctx.policy, servers: Array.isArray(ctx.servers) ? ctx.servers : undefined });
   const t = d.kind === 'write' ? targetsOf(ev.tool_input) : null;
   log({ phase, kind: d.kind, decision: d.allow ? 'allow' : 'block', code: d.code, why: d.why, targets: t ? [...t.emails, ...t.phones] : undefined, url: ev.tool_input?.url || undefined });
   if (!d.allow) refuse(d.why);
