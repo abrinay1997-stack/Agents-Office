@@ -789,6 +789,15 @@ await step('routines: one run can be skipped — the clock moves on without firi
   return 'skipped once · next run fires';
 });
 
+await step('estudio: sharp loads and works (the preset bank\'s local operations; without it they say «no disponible», never fall back to AI)', async () => { // F0 del banco de presets, 1 oct 2026
+  let sharp; try { sharp = (await import('sharp')).default; } catch (e) { throw new Error('sharp does not load on this machine (npm install, or npm rebuild sharp): ' + e.message); }
+  const png = await sharp({ create: { width: 8, height: 6, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }).png().toBuffer();
+  const meta = await sharp(png).metadata(), st = await sharp(png).stats();
+  if (meta.width !== 8 || meta.height !== 6 || meta.format !== 'png') throw new Error('metadata: ' + JSON.stringify({ w: meta.width, h: meta.height, f: meta.format }));
+  if (Math.round(st.channels[0].mean) !== 255) throw new Error('stats: ' + st.channels[0].mean);
+  return `sharp ${sharp.versions?.sharp || '?'} · libvips ${sharp.versions?.vips || '?'}`;
+});
+
 await step('estudio: the free test engine generates, files are stored with their record, paths stay inside', async () => {
   const md = await import('./media.mjs');
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-media-'));

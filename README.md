@@ -455,7 +455,7 @@ first thing to run after any change.
 | `onboard.mjs` | The lead's five-question set-up interview; writes briefs and a skill into the brain |
 | `src/models.js` · `usage.mjs` | The three models by name and their CLI flags; the usage gauge (Claude's numbers, the office's own count underneath) |
 | `routines.mjs` · `src/when.js` | Routines: the timetable in `<brain>/Agents Office/routines.json`, plain words → a schedule, the clock and the catch-up (run state in `data/routines.json`) |
-| `media.mjs` · `estudio-mcp.mjs` · `src/studio.js` | The Estudio: engines and the model catalog, background jobs, uploads; the agents' tool; the window |
+| `media.mjs` (a façade over `media/*.mjs`) · `estudio-mcp.mjs` · `src/studio.js` | The Estudio: engines and the model catalog (`media/catalogo.mjs`, with `capsOf`), the gallery, background jobs, uploads; the agents' tool; the window |
 | `sub.mjs` · `src/sub.js` | Dimitri: chat, status, analysis, and the distribution plan across departments |
 | `SKILLS.md` | The guide to briefs and skills |
 | `CLAUDE.md` | What Claude Code does when you ask it to change agents, write a skill, put a routine on the timetable, or change connectors in this folder |
