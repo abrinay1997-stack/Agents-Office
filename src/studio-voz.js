@@ -5,6 +5,8 @@
 //   A finished voice or song is a gallery item of kind 'audio'; a song's record carries wanted: 'music'.
 
 export const KINDS = ['image', 'video', 'audio', 'music'];
+/** 9999 → «9.999»: Spanish leaves four digits ungrouped (toLocaleString('es') gives «9999»); the counters group from a thousand. */
+export const num = n => String(Math.round(+n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 export const SOUND = k => k === 'audio' || k === 'music';
 
 /** The words each kind uses on the page: the button, the step 3 title, one/many of what it makes, the GENERAR button. */

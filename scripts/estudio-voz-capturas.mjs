@@ -117,7 +117,7 @@ try {
     await page.click('#studioOv [data-kind="audio"]').catch(() => {}); await page.waitForTimeout(200);
     await page.fill('#studioOv .st-prompt', 'Hola, soy Panaclaw. Esta semana tenemos 20 % en todos los planes.');
     const voz = await page.evaluate(() => { const q = s => document.querySelector('#studioOv ' + s); return { t3: q('.st-p3t').textContent, plen: q('.st-plen').textContent, enh: q('.st-enh').hidden, go: q('.st-go').textContent, vid: !!q('.st-vid'), grupos: [...document.querySelectorAll('#studioOv .st-vsel optgroup')].map(g => g.label), off: q('.st-mpick').classList.contains('st-mp-off') }; });
-    nota(voz.t3 === 'Texto que se lee' && voz.enh && /\/10\.000$/.test(voz.plen), `${tag} · Voz: «${voz.t3}», contador ${voz.plen}, «Mejorar» oculto: ${voz.enh}, botón «${voz.go}»`, voz);
+    nota(voz.t3 === 'Texto que se lee' && voz.enh && /\/9\.999$/.test(voz.plen), `${tag} · Voz: «${voz.t3}», contador ${voz.plen}, «Mejorar» oculto: ${voz.enh}, botón «${voz.go}»`, voz);
     if (on) nota(voz.vid && voz.grupos.join('|') === 'Tus voces|Voces de MiniMax', `${tag} · selector de voz con grupos: ${voz.grupos.join(', ')}`);
     else nota(voz.off, `${tag} · sin key: el modelo de voz se ve atenuado con cómo activarlo`);
     const scrollSets = async () => page.evaluate(() => document.querySelector('#studioOv .st-sets')?.scrollIntoView({ block: 'center' }));

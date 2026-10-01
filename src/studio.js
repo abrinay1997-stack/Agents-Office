@@ -291,7 +291,7 @@ export function initStudio(ctx) {
   function estimate() {
     $('.st-n').textContent = qty;
     const m = cur(); const n = (mode === 'batch' ? Math.max(1, lines().length) : 1) * qty;
-    if (!m) { $('.st-est').textContent = ''; $('.st-go').textContent = SV.goLabel(kind, 1); $('.st-sum').hidden = true; const pl = $('.st-plen'), len = $('.st-prompt').value.length, lim = limitNow(); pl.textContent = sound() ? `${len.toLocaleString('es')}/${lim.toLocaleString('es')}` : ''; pl.classList.remove('near'); pl.classList.toggle('over', sound() && len > lim); return 0; } // V5.0: Voz / Música without the key still say what they would make
+    if (!m) { $('.st-est').textContent = ''; $('.st-go').textContent = SV.goLabel(kind, 1); $('.st-sum').hidden = true; const pl = $('.st-plen'), len = $('.st-prompt').value.length, lim = limitNow(); pl.textContent = sound() ? `${SV.num(len)}/${SV.num(lim)}` : ''; pl.classList.remove('near'); pl.classList.toggle('over', sound() && len > lim); return 0; } // V5.0: Voz / Música without the key still say what they would make
     const s = settingsOf(m), per = Number(s.batchSize) || 1, secs = m.seconds || Number(s.duration) || 5;
     const cost = SV.unitCost(m, s, $('.st-prompt').value.length) * n * per, total = n * per; // V5.0: a voice may cost by the characters it reads
     const room = moneyLeft(); // V4.5: the Estudio's own spending caps (Ajustes → Estudio)
@@ -301,8 +301,8 @@ export function initStudio(ctx) {
     $('.st-sum').innerHTML = sum.length ? `${sum.map(esc).join(' · ')} <u>cambiar</u>` : ''; $('.st-sum').hidden = !sum.length;
     $('.st-go').textContent = SV.goLabel(kind, total);
     const len = $('.st-prompt').value.length, lim = limitNow(), pl = $('.st-plen'); // V4.2 (audit A11) · V5.0: the model's own limit (a voice reads up to 9 999)
-    pl.textContent = len || sound() ? `${len.toLocaleString('es')}/${lim.toLocaleString('es')}` : ''; pl.classList.toggle('near', len > lim * 0.875 && len <= lim); pl.classList.toggle('over', len > lim);
-    pl.title = len > lim ? `Sobran ${len - lim} caracteres` : sound() ? `Caben ${lim.toLocaleString('es')} caracteres` : '';
+    pl.textContent = len || sound() ? `${SV.num(len)}/${SV.num(lim)}` : ''; pl.classList.toggle('near', len > lim * 0.875 && len <= lim); pl.classList.toggle('over', len > lim);
+    pl.title = len > lim ? `Sobran ${len - lim} caracteres` : sound() ? `Caben ${SV.num(lim)} caracteres` : '';
     const bc = $('.st-bcount'); bc.hidden = mode !== 'batch'; if (mode === 'batch') { const nl = lines().length; bc.textContent = nl ? `${nl} ${nl === 1 ? 'idea' : 'ideas'} × ${qty} = ${SV.countOf(kind, nl * qty * per)}` : 'Escribe una idea por línea.'; }
     const maxQ = SV.maxQty(kind, budget && budget.maxPerRequest); // V4.2 (audit A12): the ends say why they stop
     const [dn, up] = el.querySelectorAll('.st-qty [data-d]'); dn.disabled = qty <= 1; up.disabled = qty >= maxQ; up.title = qty >= maxQ ? `Máximo ${maxQ} por pedido${kind === 'video' ? ' (un video pesa como 5 imágenes)' : kind === 'music' ? ' (una pista pesa como 3 imágenes)' : ''}` : 'Más';
@@ -1236,7 +1236,7 @@ export function initStudio(ctx) {
       const miss = (m.needs || []).find(r => !media[r].length); if (miss) return fieldErr('slot', `${m.name} necesita «${roleName(miss)}»: súbela o elígela de la galería.`);
       const ps = mode === 'batch' ? lines() : [$('.st-prompt').value.trim()].filter(Boolean);
       if (!ps.length && !(m.needs || []).includes('video')) return fieldErr('prompt', mode === 'batch' ? 'Escribe al menos una idea: una por línea.' : kind === 'audio' ? 'Escribe el texto que leerá la voz.' : kind === 'music' ? (settingsOf(m).instrumental ? 'Describe la música: género, ánimo, instrumentos.' : 'Escribe la letra (o marca «Instrumental» y descríbela).') : 'Escribe qué quieres crear: qué se ve, el estilo, la luz.');
-      if (sound()) { const lim = limitNow(), len = $('.st-prompt').value.trim().length; if (len > lim) return fieldErr('prompt', `${m.name} lee como mucho ${lim.toLocaleString('es')} caracteres: sobran ${(len - lim).toLocaleString('es')}.`); }
+      if (sound()) { const lim = limitNow(), len = $('.st-prompt').value.trim().length; if (len > lim) return fieldErr('prompt', `${m.name} lee como mucho ${SV.num(lim)} caracteres: sobran ${(len - SV.num(lim))}.`); }
       if (kind === 'audio' && m.settings.voiceId && !String(settingsOf(m).voiceId || '').trim()) { $('.st-vid')?.focus(); return say('Elige una voz en el paso 5.', true); }
       const c = estimate(); if (c >= 0.5 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}${budget && budget.cost ? ` (hoy llevas US$${budget.cost.toFixed(2)})` : ''}. ¿Generar?`)) return; // V4.2 (audit A10): from US$0.50, not only above 1
       const sig = JSON.stringify([ps, m.id, settingsOf(m), media, qty]); // V4.2 (audit A13): the same request twice in a row asks for a second click

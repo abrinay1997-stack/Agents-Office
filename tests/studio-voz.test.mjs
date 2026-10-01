@@ -4,6 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as V from '../src/studio-voz.js';
 
+test('los contadores agrupan los miles con punto, también con cuatro cifras (toLocaleString("es") deja «9999»)', () => {
+  assert.deepEqual([V.num(65), V.num(999), V.num(1500), V.num(9999), V.num(10000), V.num(1234567)], ['65', '999', '1.500', '9.999', '10.000', '1.234.567']);
+});
+
 test('cada tipo tiene su botón, su paso 3 y su GENERAR', () => {
   assert.deepEqual(V.KINDS.map(k => V.words(k).btn), ['Imagen', 'Video', 'Voz', 'Música']);
   assert.equal(V.goLabel('audio', 1), 'GENERAR VOZ');
