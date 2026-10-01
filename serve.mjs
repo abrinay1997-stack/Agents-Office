@@ -694,11 +694,7 @@ async function subChatRun(text, { attach, images, context, answers, onText, run 
   let shown = ''; const stopped = () => !!run && subStopped.has(run);
   const live = onText ? raw => { const r = replyFromPartial(raw); if (r.reply) shown = r.reply; onText(r); } : null; // DIM-14: only the «reply» being written reaches the page
   const opts = { maxTokens: 6000, timeout: 180000, images: images.length ? images : null, kind: 'dimitri', ...(live ? { onText: live, stopKey: run } : {}) }; // DIM-21: his own line in «Costos y retorno»
-  const askLive = async u => { // DIM-14: an older CLI that does not know --include-partial-messages → the same question without it (the whole text at the end)
-    if (stopped()) return '';
-    try { return await ask(system, u, opts); }
-    catch (e) { if (stopped()) return ''; if (live && /include-partial-messages|unknown option/i.test(e.message)) return ask(system, u, { ...opts, partial: false }); throw e; }
-  };
+  const askLive = u => sub.askLive(ask, system, u, opts, { live: !!live, stopped }); // DIM-14: an older CLI → the same question without partials; «Detener» holds on both tries
   const halt = () => { // «Detener»: the message says so, with what had arrived; no plan, ops, creatives or answers are kept
     const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
     const m = sub.message('sub', (shown ? shown + '\n\n' : '') + '_Detenido por ti._', { mode: 'charla', stopped: true });

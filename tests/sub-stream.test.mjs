@@ -38,6 +38,31 @@ test('pure: the «reply» of a JSON answer cut anywhere, escapes decoded, never 
   assert.deepEqual(topStrings('{"a":"1","b":{"c":"no"},"d":"2'), { a: '1', d: '2' });
 });
 
+test('pure: a long preamble before the JSON never shows the JSON, cut at any character (revisión DIM-14)', () => {
+  const pre = 'Aquí tienes mi respuesta en el formato JSON pedido, con todo:\n';
+  const full = pre + JSON.stringify({ mode: 'plan', reply: 'Lo haría así.', tasks: [{ dept: 'sales', title: 'x' }] });
+  for (let i = 0; i <= full.length; i++) {
+    const r = replyFromPartial(full.slice(0, i));
+    assert.doesNotMatch(r.reply, /[{}]|"mode"|"rep/, `prefix ${i}: «${r.reply}» shows JSON`);
+  }
+  assert.equal(replyFromPartial(pre + '{"mode":"plan","rep').reply, pre.trim(), 'the preamble alone while «reply» has not come');
+  assert.equal(replyFromPartial(full).reply, 'Lo haría así.');
+  assert.equal(replyFromPartial('Escribe a cada cliente su nombre y la fecha, como en la plantilla {nombre}').plain, true, 'a brace in plain words is still plain words');
+});
+
+test('pure: askLive — the fallback without partials, and «Detener» on both tries (revisión DIM-14)', async () => {
+  const unknown = new Error("error: unknown option '--include-partial-messages'");
+  const calls = [];
+  let r = await sub.askLive(async (s, u, o) => { calls.push(o.partial); if (o.partial !== false) throw unknown; return 'ok'; }, 'sys', 'u', { onText: () => {} }, { live: true });
+  assert.equal(r, 'ok'); assert.deepEqual(calls, [undefined, false]);
+  let stop = false; // the owner stops the second, older-CLI run: the killed process rejects → '' (halt), never an error
+  r = await sub.askLive(async (s, u, o) => { if (o.partial !== false) throw unknown; stop = true; throw new Error('claude exited 1'); }, 'sys', 'u', {}, { live: true, stopped: () => stop });
+  assert.equal(r, '');
+  await assert.rejects(sub.askLive(async (s, u, o) => { if (o.partial !== false) throw unknown; throw new Error('claude exited 1'); }, 'sys', 'u', {}, { live: true }), /exited 1/, 'not stopped: the error still reaches the owner');
+  await assert.rejects(sub.askLive(async () => { throw unknown; }, 'sys', 'u', {}, { live: false }), /unknown option/, 'no live answer asked: no fallback');
+  assert.equal(await sub.askLive(async () => 'never', 'sys', 'u', {}, { stopped: () => true }), '', 'stopped before it started');
+});
+
 test('pure: the CLI deltas, and which messages are «¿Cómo vamos?»', () => {
   assert.equal(cliDelta({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '{"re' } } }), '{"re');
   assert.equal(cliDelta({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{' } } }), null);
@@ -60,6 +85,7 @@ test('pure: quickStatus — what runs, waits, failed today, is due later today, 
     { id: 'f', state: 'scheduled', title: 'Llamar a Pedro', agent: 'mia', dueAt: today(15) },
     { id: 'g', state: 'scheduled', title: 'Mañana', agent: 'mia', dueAt: today(15) + 864e5 },
     { id: 'h', state: 'waiting', title: 'Archivada', archived: true },
+    { id: 'i', state: 'done', error: true, stopped: true, title: 'Detenida a propósito', result: 'Detenida por ti antes de terminar.', doneAt: today(9) },
   ];
   const md = sub.quickStatus({ tasks, agents: [{ id: 'invo', name: 'INVO' }, { id: 'mia', name: 'MIA' }], now,
     piezas: [{ id: 'p1', fecha: '2026-10-02', hora: '09:00', formato: 'reel', redes: ['instagram'], titulo: 'Combo 2x1', estado: 'revision', medios: [] }, { id: 'p2', fecha: '2026-10-20', formato: 'post', redes: ['facebook'], titulo: 'Lejos', estado: 'idea' }],
@@ -67,7 +93,7 @@ test('pure: quickStatus — what runs, waits, failed today, is due later today, 
     spentToday: 0.4234, budget: { spent: 12.3, budget: 50, ratio: 0.246 }, unread: 2 });
   assert.match(md, /Trabajando:\*\* «Conciliar septiembre» \(INVO\) · 1 en cola/);
   assert.match(md, /Esperan tu OK:\*\* 1 — «Correo a Acme» \(MIA\)/);
-  assert.doesNotMatch(md, /Archivada|Ayer|Lejos|Pausada|Mañana/);
+  assert.doesNotMatch(md, /Archivada|Ayer|Lejos|Pausada|Mañana|Detenida/, 'a task the owner stopped is not a failure');
   assert.match(md, /Falló hoy:\*\* 1 — «Informe de ventas»: Gmail no respondió/);
   assert.match(md, /Más tarde hoy:\*\* 15:00 «Llamar a Pedro» \(MIA\) · 17:00 «Facturas vencidas» \(rutina, INVO\)/);
   assert.match(md, /Contenido, próximos 7 días:\*\* 1 pieza — .*09:00 reel IG «Combo 2x1» \(a revisar, falta imagen o video, sin texto\) · 1 a revisar · 6 días sin publicación/);

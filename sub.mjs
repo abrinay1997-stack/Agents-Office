@@ -240,7 +240,7 @@ export function quickStatus({ tasks = [], agents = [], piezas = [], routines = [
   const few = (arr, f, n = 4) => arr.slice(0, n).map(f).join(' · ') + (arr.length > n ? ` · y ${arr.length - n} más` : '');
   const by = st => live.filter(t => t.state === st);
   const doing = by('doing'), queued = by('next'), waiting = by('waiting').sort((a, b) => (a.waitingAt || 0) - (b.waitingAt || 0));
-  const failed = live.filter(t => t.state === 'done' && t.error && (t.doneAt || 0) >= start).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  const failed = live.filter(t => t.state === 'done' && t.error && !t.stopped && (t.doneAt || 0) >= start).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
   const later = [...by('scheduled').filter(t => t.dueAt >= now && t.dueAt < end).map(t => ({ at: t.dueAt, text: `«${clip(t.title, 50)}» (${name(t.agent)})` })),
     ...routines.filter(r => !r.paused && r.nextAt >= now && r.nextAt < end).map(r => ({ at: r.nextAt, text: `«${clip(r.title, 50)}» (rutina, ${name(r.agent)})` }))].sort((a, b) => a.at - b.at);
   const hoy = iso(new Date(now)), fin = (() => { const d = new Date(now); d.setDate(d.getDate() + dias - 1); return iso(d); })();
@@ -460,6 +460,21 @@ export function parsePlan(text, { depts, agents, now = Date.now() }) {
   }
   return { mode, reply: reply.replace(/\n{3,}/g, '\n\n').trim(), tasks: work ? items : [], questions,
     creatives: studio ? creatives : [], actions: studio && Array.isArray(j.actions) ? j.actions.slice(0, 40) : [], ops: work && Array.isArray(j.ops) ? j.ops.slice(0, 12) : [], image_text: String(j.image_text || '').slice(0, 4000), ...(cut ? { cut: true } : {}) };
+}
+
+/**
+ * DIM-14: ask Claude with the answer streaming; an older CLI that does not know --include-partial-messages gets the same question
+ * without it. «Detener» is honoured on both tries: once the owner stopped the run, a rejection (the killed process) is '' and not an error.
+ */
+export async function askLive(ask, system, u, opts, { live = false, stopped = () => false } = {}) {
+  if (stopped()) return '';
+  try { return await ask(system, u, opts); }
+  catch (e) {
+    if (stopped()) return '';
+    if (!(live && /include-partial-messages|unknown option/i.test(e.message))) throw e;
+    try { return await ask(system, u, { ...opts, partial: false }); }
+    catch (e2) { if (stopped()) return ''; throw e2; }
+  }
 }
 
 export const message = (who, text, extra = {}) => ({ id: nid(), who, text, at: Date.now(), ...extra });

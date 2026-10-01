@@ -51,6 +51,8 @@ function scan(raw) {
 export function replyFromPartial(raw) {
   const s = String(raw || '').replace(/^\s*```(?:json)?\s*/i, '');
   const brace = s.indexOf('{');
+  if (brace > 40 && !/"reply"\s*:/.test(s) && /^\{\s*(?:"[a-z_]*(?:"\s*(?::[\s\S]*)?)?)?$/.test(s.slice(brace))) // a long preamble, then JSON whose «reply» has not come yet: the preamble only, never the JSON
+    return { reply: s.slice(0, brace).trim(), mode: null, plain: false };
   if (brace < 0 || (brace > 40 && !/"reply"\s*:/.test(s))) { // no JSON in sight: the model answered in plain words
     const t = s.replace(/```\s*$/, '').trim();
     return { reply: brace < 0 && t.length < 3 ? '' : t, mode: null, plain: true };
