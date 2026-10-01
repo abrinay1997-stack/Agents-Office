@@ -5,7 +5,7 @@
 // The pure parts (the total, the body that is sent, the image reducer for Claude's vision) are tested in tests/sub-studio.test.mjs.
 //
 //   creativesHTML(m, view) · actionsHTML(m, view) · stripHTML(files, esc) · studioBody(msgId, studio, edits) · planTotal(...)
-//   fitsBudget(total, budget, fallback) · fitWithin(w, h, max) · shrinkStep(t, bytes, limit) · b64Bytes(str) · usd(x)
+//   fitsBudget(total, budget, fallback, weight) · discardBody(msgId, studio) · applyDiscards(messages, ids) · fitWithin(w, h, max) · shrinkStep(t, bytes, limit) · b64Bytes(str) · usd(x)
 
 export const MAX_ATTACH = 4;                    // images per message (the server takes ≤4)
 export const VISION_SIDE = 1568;                // Claude's vision gains nothing past this long side
@@ -22,24 +22,27 @@ export function unitCost(c, model, settings = {}) {
   if (model.per === 'second') { const d = +(settings.duration ?? model.settings?.duration?.default ?? model.seconds ?? 5) || 5; return (+model.cost || 0) * d; }
   return +model.cost || 0;
 }
-/** What the creatives still to be sent cost as the owner left them: [{i, cost}] and the total. */
+/** What the creatives still to be sent cost as the owner left them: [{i, cost}], the total, and their weight against the day's count (a video counts 5, as in media.budget). */
 export function planTotal(creatives = [], edits = new Map(), models = []) {
-  const items = [];
+  const items = []; let weight = 0;
   for (const c of creatives) {
     if (c.state && c.state !== 'proposed') continue;
     const e = edits.get(c.i) || {}; if (e.include === false) continue;
     const m = models.find(x => x.id === (e.model || c.model)) || null;
     const n = Math.max(1, +(e.n ?? c.n) || 1), u = unitCost(c, m, { ...(c.settings || {}), ...(e.settings || {}) });
     items.push({ i: c.i, n, cost: +(u * n).toFixed(3) });
+    weight += n * (c.kind === 'video' ? 5 : 1);
   }
-  return { count: items.length, units: items.reduce((s, x) => s + x.n, 0), total: +items.reduce((s, x) => s + x.cost, 0).toFixed(3), items };
+  return { count: items.length, units: items.reduce((s, x) => s + x.n, 0), weight, total: +items.reduce((s, x) => s + x.cost, 0).toFixed(3), items };
 }
-/** Does it fit in what is left of the day's and the month's budget? `fallback` is the server's own verdict (when there is no budget to compare with). */
-export function fitsBudget(total, budget, fallback) {
+/** Does it fit in what is left of the day's count (`weight`: a video counts 5) and of the day's and the month's budget? `fallback` is the server's own verdict (when there is no budget to compare with). */
+export function fitsBudget(total, budget, fallback, weight = 0) {
   if (!budget) return fallback && typeof fallback.fits === 'boolean' ? { fits: fallback.fits, why: fallback.why || '' } : { fits: true, why: '' };
+  const count = budget.left !== null && budget.left !== undefined ? +budget.left : null; // media.submit refuses past the day's count too
+  if (count !== null && weight > count) return { fits: false, why: `no cabe: quedan ${count} hoy en el tope del Estudio (un video cuenta 5)` };
   const lefts = [['hoy', budget.costLeftDay], ['este mes', budget.costLeftMonth]].filter(([, v]) => v !== null && v !== undefined);
   for (const [when, left] of lefts) if (total > left + 1e-9) return { fits: false, why: `no cabe: quedan ${usd(left)} ${when}` };
-  return { fits: true, why: lefts.length ? `cabe en el presupuesto (quedan ${usd(Math.min(...lefts.map(([, v]) => v)))})` : 'sin tope de gasto' };
+  return { fits: true, why: lefts.length ? `cabe en el presupuesto (quedan ${usd(Math.min(...lefts.map(([, v]) => v)))})` : count !== null ? `cabe en el tope de hoy (quedan ${count})` : 'sin tope de gasto' };
 }
 /** The body of POST /api/sub/studio: every creative still proposed, with only what the owner changed; and which actions go. */
 export function studioBody(msgId, studio = {}, edits = new Map(), actionEdits = new Map()) {
@@ -54,6 +57,29 @@ export function studioBody(msgId, studio = {}, edits = new Map(), actionEdits = 
   });
   const actions = (studio.actions || []).map((a, k) => ({ k, include: actionEdits.get(k) !== false })).filter((a, k) => !(studio.actions[k].state && studio.actions[k].state !== 'proposed'));
   return { msg: msgId, items, ...(actions.length ? { actions } : {}) };
+}
+
+/** «Descartar»: the body that skips every creative and carries NO action — or null when an organising action is still proposed,
+ *  because /api/sub/studio runs every proposed action of the message on any call; then the page discards on its own (applyDiscards). */
+export function discardBody(msgId, studio = {}) {
+  if ((studio.actions || []).some(a => !a.state || a.state === 'proposed')) return null;
+  const items = (studio.creatives || []).filter(c => !c.state || c.state === 'proposed').map(c => ({ i: c.i, include: false }));
+  return items.length ? { msg: msgId, items } : null;
+}
+/** The plans the owner discarded on this page: what is still proposed in them reads as skipped (a copy; the messages are not touched). */
+export function applyDiscards(messages = [], ids = new Set()) {
+  if (!ids.size) return messages;
+  const skip = x => (!x.state || x.state === 'proposed' ? { ...x, state: 'skipped' } : x);
+  return messages.map(m => (m && m.studio && ids.has(m.id) ? { ...m, studio: { ...m.studio, creatives: (m.studio.creatives || []).map(skip), actions: (m.studio.actions || []).map(skip) } } : m));
+}
+
+/** What a message takes once the uploads ended: the images that made it, the ones that did not, and the text — or `send: false`
+ *  when there is no text and no image made it (Dimitri would get «Mira estas imágenes» about images that are not there). */
+export function outgoing(text, attachments = []) {
+  text = String(text || '').trim();
+  const ready = attachments.filter(a => a.state === 'ready' && a.file), lost = attachments.filter(a => a.state === 'failed');
+  if (!text && !ready.length) return { send: false, ready, lost, text: '' };
+  return { send: true, ready, lost, text: text || (ready.length === 1 ? 'Mira esta imagen.' : 'Mira estas imágenes.') };
 }
 
 /* ---------- pure: the copy of an image for Claude's vision (the server never rescales) ---------- */
@@ -138,7 +164,7 @@ export function creativesHTML(m, v) {
   if (open) {
     const t = planTotal(s.creatives || [], edits, models);
     const nActs = (s.actions || []).filter((a, k) => (!a.state || a.state === 'proposed') && (v.actionEdits || new Map()).get(k) !== false).length;
-    const f = fitsBudget(t.total, v.budget, s.estimate);
+    const f = fitsBudget(t.total, v.budget, s.estimate, t.weight);
     const label = t.count ? `GENERAR (${t.units}) — ${usd(t.total)}` : nActs ? `HACER (${nActs})` : 'GENERAR (0)';
     foot = `<div class="sc-foot"><div class="sc-total${f.fits ? '' : ' bad'}">Total: <b>${usd(t.total)}</b> · ${esc(f.why || (f.fits ? 'cabe en el presupuesto' : 'no cabe en el presupuesto'))}</div>
       <div class="sb-acts"><button type="button" class="sc-go" data-msg="${esc(m.id)}"${t.count + nActs ? '' : ' disabled'}>${label}</button><button type="button" class="sc-skip" data-msg="${esc(m.id)}">Descartar</button></div>

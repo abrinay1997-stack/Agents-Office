@@ -2,7 +2,7 @@
 // GENERAR posts to /api/sub/studio, and the reducer that makes the copy of an image Claude's vision sees.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planTotal, unitCost, fitsBudget, studioBody, fitWithin, shrinkStep, b64Bytes, usd, creativesHTML, actionsHTML, stripHTML, VISION_SIDE, VISION_BYTES } from '../src/sub-studio.js';
+import { planTotal, unitCost, fitsBudget, studioBody, fitWithin, shrinkStep, b64Bytes, usd, creativesHTML, actionsHTML, stripHTML, discardBody, applyDiscards, outgoing, VISION_SIDE, VISION_BYTES } from '../src/sub-studio.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MODELS = [
@@ -20,7 +20,8 @@ test('el total suma lo que queda por enviar, con la cantidad y el modelo que dej
   const t = planTotal(CREATIVES, new Map(), MODELS);
   assert.equal(t.count, 2); assert.equal(t.units, 3); assert.equal(t.total, 1.28); // 2 × 0,04 + 1,20; lo enviado no cuenta
   const ed = new Map([[0, { n: 4 }], [1, { include: false }]]);
-  assert.deepEqual(planTotal(CREATIVES, ed, MODELS), { count: 1, units: 4, total: 0.16, items: [{ i: 0, n: 4, cost: 0.16 }] });
+  assert.deepEqual(planTotal(CREATIVES, ed, MODELS), { count: 1, units: 4, weight: 4, total: 0.16, items: [{ i: 0, n: 4, cost: 0.16 }] });
+  assert.equal(t.weight, 7); // 2 imágenes + 1 video × 5, como cuenta media.budget
   assert.equal(planTotal(CREATIVES, new Map([[0, { model: 'gpt-image-1' }]]), MODELS).items[0].cost, 0.16); // otro modelo: el precio del catálogo
 });
 
@@ -37,6 +38,39 @@ test('cabe o no cabe en lo que queda del día y del mes', () => {
   assert.match(fitsBudget(3, { costLeftDay: null, costLeftMonth: 2 }).why, /este mes/);
   assert.equal(fitsBudget(9, { costLeftDay: null, costLeftMonth: null }).why, 'sin tope de gasto');
   assert.deepEqual(fitsBudget(9, null, { fits: false, why: 'lo dice el servidor' }), { fits: false, why: 'lo dice el servidor' }); // sin presupuesto en la página: manda el servidor
+});
+
+test('el tope de cantidad del día también cuenta (un video vale 5), aunque no haya tope en dólares', () => {
+  const b = { left: 4, costLeftDay: null, costLeftMonth: null };
+  const no = fitsBudget(0.5, b, null, 7);
+  assert.equal(no.fits, false); assert.match(no.why, /quedan 4 hoy/);
+  assert.deepEqual(fitsBudget(0.5, b, null, 4), { fits: true, why: 'cabe en el tope de hoy (quedan 4)' });
+  assert.equal(fitsBudget(0.5, { left: null, costLeftDay: null, costLeftMonth: null }, null, 99).why, 'sin tope de gasto'); // left null: tope apagado
+  const h = creativesHTML({ id: 'm5', studio: { creatives: [CREATIVES[1]] } }, { esc, models: MODELS, budget: b }); // un video de 8 s pesa 5 > 4
+  assert.match(h, /sc-total bad/); assert.match(h, /quedan 4 hoy/);
+});
+
+test('«Descartar» nunca manda acciones: con una acción propuesta no llama al servidor, y se descarta en la página', () => {
+  const withAct = { creatives: [CREATIVES[0], CREATIVES[2]], actions: [{ type: 'mover', files: ['a.png'], folder: 'X', state: 'proposed' }, { type: 'carpeta_crear', name: 'Y', state: 'done' }] };
+  assert.equal(discardBody('m1', withAct), null); // /api/sub/studio ejecuta toda acción propuesta: ni se le llama
+  const onlyCreatives = { creatives: CREATIVES, actions: [{ type: 'carpeta_crear', name: 'Y', state: 'done' }] };
+  const b = discardBody('m1', onlyCreatives);
+  assert.deepEqual(b, { msg: 'm1', items: [{ i: 0, include: false }, { i: 1, include: false }] }); assert.equal('actions' in b, false);
+  assert.equal(discardBody('m1', { creatives: [CREATIVES[2]] }), null); // nada propuesto: nada que mandar
+  const msgs = [{ id: 'm1', studio: withAct }, { id: 'm2', studio: { creatives: [CREATIVES[0]] } }];
+  const shown = applyDiscards(msgs, new Set(['m1']));
+  assert.deepEqual(shown[0].studio.creatives.map(c => c.state), ['skipped', 'sent']); assert.deepEqual(shown[0].studio.actions.map(a => a.state), ['skipped', 'done']);
+  assert.equal(shown[1], msgs[1]); assert.equal(msgs[0].studio.actions[0].state, 'proposed'); // lo demás intacto, y el original no se toca
+  const h = creativesHTML(shown[0], { esc, models: MODELS });
+  assert.doesNotMatch(h, /sc-go|sc-skip/); assert.match(h, /\(no se hizo\)/);
+});
+
+test('un mensaje sin texto cuyas imágenes no subieron no se envía', () => {
+  const failed = [{ state: 'failed', err: 'x' }, { state: 'failed' }];
+  assert.equal(outgoing('', failed).send, false); assert.equal(outgoing('  ', failed).lost.length, 2);
+  const one = outgoing('', [{ state: 'ready', file: 'a.png' }, { state: 'failed' }]);
+  assert.equal(one.send, true); assert.equal(one.text, 'Mira esta imagen.'); assert.equal(one.lost.length, 1);
+  assert.equal(outgoing('hola', failed).text, 'hola'); assert.equal(outgoing('', [{ state: 'ready', file: 'a' }, { state: 'ready', file: 'b' }]).text, 'Mira estas imágenes.');
 });
 
 test('GENERAR envía solo lo propuesto y solo lo que el dueño cambió', () => {

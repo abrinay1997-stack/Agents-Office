@@ -13,7 +13,7 @@
 //        getContext() → {view, label, kind, id, ids?, folder?} | null · openStudioFile(file)
 import { mdToHtml } from './md.js';
 import { modal } from './modal.js';
-import { creativesHTML, stripHTML, studioBody, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes } from './sub-studio.js';
+import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes } from './sub-studio.js';
 
 const MODE = { estado: 'Estado de la oficina', analisis: 'Análisis', plan: 'Propuesta de reparto', pregunta: 'Me falta un dato', estudio: 'Plan de creativos' };
 const STATE = { next: 'pendiente', doing: 'en curso', waiting: 'espera tu visto bueno', done: 'lista', scheduled: 'programada' };
@@ -43,11 +43,13 @@ export function initSub(ctx) {
   const box = $('.sb-msgs'), input = $('.sb-in textarea'), sendBtn = $('.sb-send'), live = $('.sb-live'), fileIn = $('.sb-file');
   function setName(n) { NAME = String(n || 'Dimitri'); $('.sb-name').textContent = NAME.toUpperCase(); $('.sb-av').textContent = NAME.charAt(0).toUpperCase(); input.placeholder = `Escríbele a ${NAME}: una pregunta, una idea, lo que hay que hacer, o los creativos que quieres (puedes adjuntar fotos)`; }
   setName(NAME);
-  let messages = [], loaded = false, busy = false, timer = null, opener = null, pollAt = 0;
+  let messages = [], loaded = false, busy = false, sending = false, timer = null, opener = null, pollAt = 0; // sending: from the click until the answer, also while the images still upload (a 2nd Enter used to send the text twice)
+  const discarded = new Set((() => { try { return JSON.parse(localStorage.getItem('ao.sub.discarded') || '[]'); } catch { return []; } })()); // plans of creatives discarded with an organising action still proposed: never posted (the server would run the actions)
+  const keepDiscards = () => { try { localStorage.setItem('ao.sub.discarded', JSON.stringify([...discarded].slice(-200))); } catch {} };
   const drafts = new Map(); // msg id → the owner's edits to a plan before SEND: i → { include, dept, instruction, team, at }
   const studioEdits = new Map(), actionEdits = new Map(); // msg id → i → { include, prompt, n, model, settings, folder } · msg id → action k → included?
   let attachments = []; // { key, name, file?, preview, vision?, state: 'uploading'|'ready'|'failed', err?, ready: Promise }
-  let ctxSel = null, ctxOff = false, ctxKey = '';
+  let ctxSel = null, ctxOff = false, ctxKey = '', ctxDrawn = null, chipsDrawn = null;
   let media = null, mediaP = null, folderP = null; const jobs = new Map();
   const say = t => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
 
@@ -68,7 +70,11 @@ export function initSub(ctx) {
     let c = null; try { c = ctx.getContext ? ctx.getContext() : null; } catch { c = null; }
     const key = c ? `${c.view}|${c.label}|${c.id || ''}` : '';
     if (key !== ctxKey) { ctxKey = key; ctxOff = false; }
-    ctxSel = c; renderCtx(); renderChips();
+    ctxSel = c;
+    const a = document.activeElement, held = !!(a && a.closest && el.contains(a) && a.closest('.sb-chips, .sb-ctx')); // never redraw a button under the keyboard's focus (it fell to <body> and the office's one-letter keys woke up)
+    const sig = `${key}|${ctxOff}|${attachments.map(x => x.file || '').join(',')}`, studio = !!(c && c.view === 'studio');
+    if (!held && sig !== ctxDrawn) { ctxDrawn = sig; renderCtx(); }
+    if (!held && studio !== chipsDrawn) { chipsDrawn = studio; renderChips(); }
   }
   function renderCtx() {
     const box2 = $('.sb-ctx'), c = ctxSel;
@@ -107,7 +113,8 @@ export function initSub(ctx) {
       const own = () => m.folders.find(f => f.name.toLowerCase() === DIMITRI_FOLDER.toLowerCase());
       if (own()) return own().id;
       if (!folderP) folderP = fetch('/api/media/folders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: DIMITRI_FOLDER }) })
-        .then(r => r.json().then(j => ({ ok: r.ok, j }))).then(async ({ ok, j }) => { if (ok) { m.folders = j.folders || [...m.folders, j.folder]; return j.folder.id; } const again = await loadMedia(true); const f = again && again.folders.find(x => x.name.toLowerCase() === DIMITRI_FOLDER.toLowerCase()); folderP = null; return f ? f.id : null; });
+        .then(r => r.json().then(j => ({ ok: r.ok, j }))).then(async ({ ok, j }) => { if (ok) { m.folders = j.folders || [...m.folders, j.folder]; return j.folder.id; } const again = await loadMedia(true); const f = again && again.folders.find(x => x.name.toLowerCase() === DIMITRI_FOLDER.toLowerCase()); folderP = null; return f ? f.id : null; })
+        .catch(() => { folderP = null; return null; }); // a network error: this image goes up without a folder, the next one tries again (a rejected promise kept every later upload failing)
       return folderP;
     });
   }
@@ -193,7 +200,7 @@ export function initSub(ctx) {
     const openDet = new Set([...box.querySelectorAll('.sb-item[data-msg] details[open]')].map(d => d.closest('.sb-item').dataset.msg + ':' + d.closest('.sb-item').dataset.i)); // what the owner unfolded stays unfolded
     box.innerHTML = !isLive() ? `<div class="sb-empty">${esc(NAME)} trabaja con la oficina real: abre la oficina desde el iniciador (.bat).</div>`
       : !messages.length ? `<div class="sb-empty">Hola, soy ${esc(NAME)}. Háblame como a tu mano derecha: pregúntame cómo va la oficina, pensemos una decisión, cuéntame qué hay que hacer — una cosa o diez — o pídeme creativos y te propongo el modelo, el prompt y el costo de cada uno. Tú decides qué se envía y qué se genera.</div>`
-      : messages.map(m => (m.who === 'user' ? userHTML(m) : subHTML(m))).join('') + (busy ? `<div class="sb-busy" role="status"><span class="sb-av sm" aria-hidden="true">${esc(NAME.charAt(0))}</span>${esc(NAME)} está pensando<span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>` : '');
+      : applyDiscards(messages, discarded).map(m => (m.who === 'user' ? userHTML(m) : subHTML(m))).join('') + (busy ? `<div class="sb-busy" role="status"><span class="sb-av sm" aria-hidden="true">${esc(NAME.charAt(0))}</span>${esc(NAME)} está pensando<span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>` : '');
     for (const k of openDet) { const [msg, i] = k.split(':'); const d = box.querySelector(`.sb-item[data-msg="${msg}"][data-i="${i}"] details`); if (d) d.open = true; }
     if (stick || atBottom) box.scrollTop = box.scrollHeight; else box.scrollTop = keep;
   }
@@ -207,11 +214,14 @@ export function initSub(ctx) {
     try { const r = await fetch('/api/sub'); if (!r.ok) return; const j = await r.json(); const before = messages.length; messages = j.messages || messages; if (messages.length > before) { const last = messages[messages.length - 1]; if (last && last.who === 'sub') say(`${NAME}: ${String(last.text || '').slice(0, 200)}`); } } catch {}
   }
   async function send(text) {
-    text = String(text || '').trim(); if (busy || !isLive()) return;
+    text = String(text || '').trim(); if (busy || sending || !isLive()) return;
     if (!text && !attachments.length) return;
+    sending = true; // taken before the wait for the uploads: Enter again meanwhile does nothing
     if (attachments.some(a => a.state === 'uploading')) { sendBtn.disabled = true; await Promise.all(attachments.map(a => a.ready)); }
-    const ready = attachments.filter(a => a.state === 'ready' && a.file);
-    if (!text) text = ready.length === 1 ? 'Mira esta imagen.' : 'Mira estas imágenes.';
+    const out = outgoing(text, attachments), { ready, lost } = out;
+    if (!out.send) { sending = false; renderAtts(); note(lost.length ? `${lost.length === 1 ? 'La imagen no subió' : 'Las imágenes no subieron'}: quítala${lost.length === 1 ? '' : 's'} con ✕ o vuelve a adjuntarla${lost.length === 1 ? '' : 's'}. No envié nada.` : 'No hay nada que enviar.'); return; } // never «Mira estas imágenes» about images that are not there
+    if (lost.length) note(`${lost.length === 1 ? 'Una imagen no subió y no va' : `${lost.length} imágenes no subieron y no van`} con el mensaje.`);
+    text = out.text;
     const payload = { text, ...(ready.length ? { attach: ready.map(a => a.file) } : {}), ...(ready.some(a => a.vision) ? { vision: ready.filter(a => a.vision).map(a => a.vision) } : {}), ...(contextOut() ? { context: contextOut() } : {}) };
     const kept = attachments; busy = true; input.value = ''; sendBtn.disabled = true; attachments = []; renderAtts();
     messages.push({ id: 'tmp', who: 'user', text, attach: payload.attach, context: payload.context }); render(true);
@@ -224,7 +234,7 @@ export function initSub(ctx) {
       if (last && last.studio) await loadMedia(true);
       say(`${NAME}: ${String(last?.text || '').slice(0, 200)}${last && last.studio && (last.studio.creatives || []).length ? ` · propone ${last.studio.creatives.length} ${last.studio.creatives.length === 1 ? 'creativo' : 'creativos'}` : ''}`); // the new answer is read out, not the whole chat every 3 s
     } catch (e) { messages = messages.filter(m => m.id !== 'tmp'); messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No pude responder ahora (${e.message}). Te dejé tu mensaje en la caja para que lo envíes de nuevo.` }); input.value = text; attachments = kept; }
-    busy = false; renderAtts(); render(true); input.focus();
+    busy = false; sending = false; renderAtts(); render(true); input.focus();
   }
   function edit(msgId, i) { if (!drafts.has(msgId)) drafts.set(msgId, new Map()); const d = drafts.get(msgId); if (!d.has(i)) d.set(i, {}); return d.get(i); }
   function sedit(msgId, i) { if (!studioEdits.has(msgId)) studioEdits.set(msgId, new Map()); const d = studioEdits.get(msgId); if (!d.has(i)) d.set(i, {}); return d.get(i); }
@@ -246,8 +256,8 @@ export function initSub(ctx) {
   // GENERAR: the one click that spends through Dimitri. The plan as the owner left it goes to /api/sub/studio (re-validated there).
   async function generate(msgId, btn, discard) {
     const m = messages.find(x => x.id === msgId); if (!m || !m.studio) return;
-    if (discard) { for (const c of m.studio.creatives || []) if (!c.state || c.state === 'proposed') sedit(msgId, c.i).include = false; const ae = actionEdits.get(msgId) || new Map(); (m.studio.actions || []).forEach((a, k) => ae.set(k, false)); actionEdits.set(msgId, ae); }
-    const payload = studioBody(msgId, m.studio, studioEdits.get(msgId), actionEdits.get(msgId));
+    const payload = discard ? discardBody(msgId, m.studio) : studioBody(msgId, m.studio, studioEdits.get(msgId), actionEdits.get(msgId));
+    if (!payload) { discarded.add(msgId); keepDiscards(); studioEdits.delete(msgId); actionEdits.delete(msgId); say('Plan de creativos descartado. No se generó ni se movió nada.'); render(true); input.focus(); return; } // the server would run its proposed actions on any call: it never hears of this one
     const label = btn.textContent; btn.disabled = true; btn.textContent = discard ? 'Descartando…' : 'Enviando al Estudio…';
     try {
       const r = await fetch('/api/sub/studio', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
@@ -268,9 +278,9 @@ export function initSub(ctx) {
     const q = e.target.closest('.sb-chips [data-q]'); if (q) { if (q.dataset.img && ctxSel && (ctxSel.kind === 'image' || ctxSel.kind === 'images')) addGallery(ctxSel.kind === 'image' ? [ctxSel.id] : ctxSel.ids || []); return send(q.dataset.q); }
     if (e.target.closest('.sb-send')) return send(input.value);
     if (e.target.closest('.sb-clip')) return fileIn.click();
-    const ax = e.target.closest('.sb-attx'); if (ax) { const k = ax.closest('.sb-att').dataset.key, a = attachments.find(x => x.key === k); attachments = attachments.filter(x => x.key !== k); if (a && a.preview.startsWith('blob:')) URL.revokeObjectURL(a.preview); renderAtts(); refreshContext(); input.focus(); return; }
-    if (e.target.closest('.sb-ctxx')) { ctxOff = true; renderCtx(); input.focus(); return; }
-    if (e.target.closest('.sb-ctxadd')) { addGallery(ctxSel.kind === 'image' ? [ctxSel.id] : ctxSel.ids || []); return; }
+    const ax = e.target.closest('.sb-attx'); if (ax) { const k = ax.closest('.sb-att').dataset.key, a = attachments.find(x => x.key === k); attachments = attachments.filter(x => x.key !== k); if (a && a.preview.startsWith('blob:')) URL.revokeObjectURL(a.preview); renderAtts(); input.focus(); refreshContext(); return; }
+    if (e.target.closest('.sb-ctxx')) { ctxOff = true; input.focus(); refreshContext(); return; } // the focus leaves the button before it goes
+    if (e.target.closest('.sb-ctxadd')) { input.focus(); addGallery(ctxSel.kind === 'image' ? [ctxSel.id] : ctxSel.ids || []); return; }
     const th = e.target.closest('[data-open]'); if (th) return openFile(th.dataset.open);
     const go = e.target.closest('.sb-go'); if (go) return dispatch(go.dataset.msg, go);
     const sgo = e.target.closest('.sc-go'); if (sgo) return generate(sgo.dataset.msg, sgo);
