@@ -226,3 +226,12 @@
 **Fix aplicado:** `:is(#calOv,#ctOv){container:cvview/inline-size}` y las reglas estrechas como `@container cvview (...)` en `src/css/vistas-ancho.css`, un nombre que queda el último. Medido: 14 de 14 sin cortes ni solapes.
 **Prevención:** el estilo de una vista que puede compartir pantalla depende del ancho de la vista (`@container`), no de la ventana. Un CSS de `src/css/` que corrige a otro debe ir después en orden alfabético.
 **Archivos:** `src/css/vistas-ancho.css`
+
+## [2026-09-30] — Al borrar el worktree de un agente se vació el node_modules del repositorio
+
+**Contexto:** Limpieza tras el trabajo en paralelo (cuatro worktrees en `.claude/worktrees/`). Cada agente había enlazado el `node_modules` del repositorio principal con una junction de Windows (`mklink /J`) para correr los tests sin instalar.
+**Error:** `git worktree remove -f -f` del primer worktree respondió «Permission denied», y el `node_modules` del repositorio quedó con 0 paquetes.
+**Causa raíz:** Al borrar recursivamente el worktree, Git siguió la junction y borró el contenido del destino, el `node_modules` real.
+**Fix aplicado:** En los demás worktrees se quitó primero solo el enlace (`cmd /c rmdir <junction>`, sin `/s`; comprobado con `Get-Item … .LinkType`) y luego se borró el worktree. `npm ci` reinstaló las librerías (102 paquetes). `.claude/worktrees/` va en `.gitignore`. Tests 267/267 y check 81/81 después.
+**Prevención:** Nunca borrar recursivamente una carpeta que contenga una junction o un enlace simbólico sin quitar antes el enlace. Mejor aún: que cada worktree haga su propio `npm ci`, o quitar las junctions como primer paso de la limpieza.
+**Archivos:** `.gitignore`, `.claude/worktrees/*` (temporal)

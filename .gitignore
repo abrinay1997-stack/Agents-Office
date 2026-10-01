@@ -16,3 +16,6 @@ brain-panaclaw/Agents Office/*
 # Logs del servidor local (no se suben)
 server.log
 server.err.log
+
+# las copias de trabajo de los agentes en paralelo (Claude Code, isolation: worktree)
+.claude/worktrees/
