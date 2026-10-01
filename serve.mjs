@@ -656,9 +656,10 @@ async function subChat(text, { attach = [], vision: images = [], context = null,
   }
   const voices = studioish ? dimitriVoices() : [];
   const studioBlock = studioish ? estudioPlan.studioPromptBlock({ models: media.models(), budget: media.budget(), folders: media.folders(), attach: attach.map(id => { const it = media.item(id) || {}; return { id, prompt: it.prompt, folder: it.folder ? media.folderOf(it.folder)?.name : null }; }), approved, voices, ask: text, defaults: k => media.defaultModel(k) }) : '';
+  const recent = sub.recentText(list, AGENTS), viewing = dimitriViewing(context, list), notes = businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : '') + extra; // the DATA, read again by the injection check below
   const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => `${DEPTS[k].name} (${k})`),
-    status: sub.statusText(list, AGENTS, DEPTS), office: dimitriOffice(list), recent: sub.recentText(list, AGENTS), notes: businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : '') + extra,
-    studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing: dimitriViewing(context, list), older: sub.olderText(st.messages, 12) });
+    status: sub.statusText(list, AGENTS, DEPTS), office: dimitriOffice(list), recent, notes,
+    studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing, older: sub.olderText(st.messages, 12) });
   const convo = sub.historyText(st.messages, { name: DEPUTY, depts: DEPTS }, 12); // DIM-05: with what Dimitri asked and what the owner chose · DIM-18: each creative's prompt, settings and files
   const userMsg = (convo ? convo + '\n' : '') + `Dueño: ${text}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${DEPUTY} (solo JSON):`;
   const opts = { maxTokens: 6000, timeout: 180000, images: images.length ? images : null, kind: 'dimitri' }; // DIM-21: his own line in «Costos y retorno»
@@ -668,7 +669,7 @@ async function subChat(text, { attach = [], vision: images = [], context = null,
     out = await ask(system, userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)', opts).catch(() => '');
     plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
   }
-  const shield = plan.image_text ? safety.injectionIn(plan.image_text) : null; // what an image says is data: hidden orders mark the message and take its actions away
+  const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes }, safety.injectionIn); // an image, a task's result (mail, webhooks), what is open, a note: hidden orders mark the message and take its ops and actions away
   let studio = null;
   if (plan.mode === 'estudio') {
     const models = media.models(), budget = media.budget(), has = id => !!media.resolve(id);
@@ -678,7 +679,7 @@ async function subChat(text, { attach = [], vision: images = [], context = null,
   const ops = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)) }).ops : [];
   const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
-  const reply = (plan.reply || fallback) + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 Una imagen traía órdenes escondidas (${shield}): no las sigo.` : '');
+  const reply = (plan.reply || fallback) + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
   const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   const st2 = sub.load(DATA); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
   if (picked) { const q = st2.messages.find(x => x.id === answers.msg); if (q?.plan) q.plan.answers = picked.answers; }
@@ -839,7 +840,13 @@ async function runOp(o) {
   if (o.type === 'tarea_cancelar') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next') || running.has(t.id)) throw new Error('esa tarea ya empezó o ya no está'); save(l.filter(x => x.id !== o.id)); o.undo = { task: t }; return; }
   throw new Error('no sé hacer eso');
 }
+const opsBusy = new Set(); // messages whose HACER is running: a second click (or a second tab) while makeRoutine waits for Claude is refused, never run twice
 async function subOps(msgId, items) {
+  if (opsBusy.has(msgId)) return { error: 'ya lo estoy haciendo: espera a que termine', busy: true };
+  opsBusy.add(msgId);
+  try { return await subOpsRun(msgId, items); } finally { opsBusy.delete(msgId); }
+}
+async function subOpsRun(msgId, items) {
   const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId);
   if (!m || !m.ops) return { error: 'esa propuesta ya no existe' };
   const byK = new Map((Array.isArray(items) ? items : []).filter(e => e && Number.isInteger(e.k)).map(e => [e.k, e]));
@@ -850,7 +857,7 @@ async function subOps(msgId, items) {
     if (e.include === false) { o.state = 'skipped'; continue; }
     const pick = k => (e[k] !== undefined ? { [k]: e[k] } : {}); // the owner's edits on the card, checked again like the first time
     const base = { ...o }; if (o.type === 'rutina_crear' && !o.titled) delete base.title; // a title Dimitri did not give is the router's to write
-    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent') }], opsContext()).ops;
+    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent') }], { ...opsContext(), owner: true }).ops; // owner: the card's «pide tu OK» is the owner's to untick
     if (!v) { o.state = 'failed'; o.error = 'ya no se puede: algo cambió en la oficina, la hora ya pasó o el horario no está completo'; failed++; continue; }
     Object.assign(o, v, { k: o.k });
     try { await runOp(o); o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; } catch (err) { o.state = 'failed'; o.error = err.message; failed++; }
@@ -2059,7 +2066,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/sub/ops' && req.method === 'POST') { // V4.11 (DIM-11): routines, pieces and tasks Dimitri proposed — only with the owner's click
       const { msg, items } = await body(req);
       const r = await subOps(String(msg || ''), items);
-      return json(res, r.error ? 404 : 200, r);
+      return json(res, r.busy ? 409 : r.error ? 404 : 200, r);
     }
     if (url.pathname === '/api/sub/ops/undo' && req.method === 'POST') { const { msg, k } = await body(req); const r = subOpUndo(String(msg || ''), +k); return json(res, r.error ? 409 : 200, r); }
     if (url.pathname === '/api/sub/restore' && req.method === 'POST') { const { id } = await body(req); return sub.restore(DATA, String(id || '')) ? json(res, 200, sub.load(DATA)) : json(res, 404, { error: 'esa conversación ya no se puede recuperar' }); } // DIM-18: «Nueva conversación» → DESHACER

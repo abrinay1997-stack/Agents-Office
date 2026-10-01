@@ -14,7 +14,7 @@
 import { mdToHtml } from './md.js';
 import { modal } from './modal.js';
 import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes } from './sub-studio.js';
-import { opsHTML, opsBody, questionsHTML, pickBody, pastChoices, UNDO_MS } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
+import { opsHTML, opsBody, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
 
 const MODE = { estado: 'Estado de la oficina', analisis: 'Análisis', plan: 'Propuesta', pregunta: 'Me falta un dato', estudio: 'Plan de creativos' };
 const STATE = { next: 'pendiente', doing: 'en curso', waiting: 'espera tu visto bueno', done: 'lista', scheduled: 'programada' };
@@ -55,6 +55,7 @@ export function initSub(ctx) {
   const keepDiscards = () => { try { localStorage.setItem('ao.sub.discarded', JSON.stringify([...discarded].slice(-200))); } catch {} };
   const drafts = new Map(); // msg id → the owner's edits to a plan before SEND: i → { include, dept, instruction, team, at }
   const studioEdits = new Map(), actionEdits = new Map(); // msg id → i → { include, prompt, n, model, settings, folder } · msg id → action k → included?
+  const opsBusy = new Set(); // msg ids whose HACER is on its way: a redraw draws «Haciendo…», never HACER again
   const opEdits = new Map(), qPicks = new Map(); // V4.11: msg id → op k → { include, when, at, fecha, hora, … } · msg id → question id → { values, other, otherOn }
   const sigs = new Map(); // V4.11 (DIM-01): msg id → what its node was drawn from; the 3 s tick redraws only the messages whose signature changed
   let attachments = []; // { key, name, file?, preview, vision?, state: 'uploading'|'ready'|'failed', err?, ready: Promise }
@@ -206,7 +207,7 @@ export function initSub(ctx) {
       ${open ? `<div class="sb-acts"><button type="button" class="sb-go" data-msg="${m.id}"${n && !blocked ? '' : ' disabled'}>ENVIAR A LOS JEFES (${n})</button><button type="button" class="sb-skip" data-msg="${m.id}">Descartar el plan</button></div>${blocked ? '<div class="sc-note">Elige primero cuándo se hace lo que tenía una hora pasada.</div>' : ''}` : ''}</div>`;
   }
   const studioView = m => ({ esc, edits: studioEdits.get(m.id) || new Map(), actionEdits: actionEdits.get(m.id) || new Map(), models: media ? media.models : [], budget: media ? media.budget : null, jobs, voices: media && media.voices ? media.voices : { voices: [], system: [] } });
-  const opsView = m => ({ esc, edits: opEdits.get(m.id) || new Map(), deptName: k => (DEPTS[k] ? DEPTS[k].name : k), now: Date.now() });
+  const opsView = m => ({ esc, edits: opEdits.get(m.id) || new Map(), deptName: k => (DEPTS[k] ? DEPTS[k].name : k), now: Date.now(), busy: opsBusy.has(m.id) });
   function userHTML(m) {
     const c = m.context && m.context.label ? `<div class="sb-uctx">Viendo: ${esc(m.context.label)}</div>` : '';
     return `<div class="sb-u">${c}${(m.attach || []).length ? stripHTML(m.attach, esc) : ''}${m.text ? `<div>${esc(m.text)}</div>` : ''}</div>`;
@@ -322,8 +323,8 @@ export function initSub(ctx) {
   function oedit(msgId, k) { if (!opEdits.has(msgId)) opEdits.set(msgId, new Map()); const d = opEdits.get(msgId); if (!d.has(k)) d.set(k, {}); return d.get(k); }
   const postJSON = (url, b) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(r => r.json().then(j => { if (!r.ok) throw new Error(j.error || r.statusText); return j; }));
   async function doOps(msgId, btn, skipAll) {
-    const m = messages.find(x => x.id === msgId); if (!m || !m.ops) return;
-    const label = btn.textContent; btn.disabled = true; btn.textContent = skipAll ? 'Descartando…' : 'Haciendo…';
+    const m = messages.find(x => x.id === msgId); if (!m || !m.ops || opsBusy.has(msgId)) return;
+    const label = btn.textContent; btn.disabled = true; btn.textContent = skipAll ? 'Descartando…' : 'Haciendo…'; opsBusy.add(msgId);
     try {
       const j = await postJSON('/api/sub/ops', opsBody(msgId, m.ops, opEdits.get(msgId), skipAll));
       const k = messages.findIndex(x => x.id === msgId); if (k >= 0 && j.message) messages[k] = j.message;
@@ -331,11 +332,11 @@ export function initSub(ctx) {
       opEdits.delete(msgId); say(skipAll ? 'Descartado: no cambié nada.' : (j.messages && j.messages[0] ? j.messages[0].text : 'Hecho.'));
       if (afterSend) await afterSend();
     } catch (e) { btn.disabled = false; btn.textContent = label; messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No se pudo: ${e.message}` }); }
-    render(true);
+    opsBusy.delete(msgId); render(true);
   }
   async function undoOp(msgId, k, btn) {
     btn.disabled = true;
-    try { const j = await postJSON('/api/sub/ops/undo', { msg: msgId, k }); const i = messages.findIndex(x => x.id === msgId); if (i >= 0 && j.message) messages[i] = j.message; say('Deshecho.'); if (afterSend) await afterSend(); }
+    try { const j = await postJSON('/api/sub/ops/undo', { msg: msgId, k }); const i = messages.findIndex(x => x.id === msgId); if (i >= 0 && j.message) messages[i] = j.message; const uo = j.message?.ops?.find(x => x.k === k); say('Deshecho' + (uo ? undoneNote(uo) : '') + '.'); if (afterSend) await afterSend(); }
     catch (e) { btn.disabled = false; say(`No se pudo deshacer: ${e.message}`); messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No se pudo deshacer: ${e.message}` }); }
     render();
   }

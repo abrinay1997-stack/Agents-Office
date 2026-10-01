@@ -13,6 +13,8 @@ const local = ms => { const d = new Date(ms); return `${ymd(d)}T${two(d.getHours
 const dayText = s => (s ? new Date(s + 'T12:00:00').toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }) : 'sin día');
 const whenText = ms => new Date(ms).toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const whenWords = w => !w ? '' : w.kind === 'daily' ? `todos los días a las ${w.at}` : w.kind === 'weekdays' ? `de lunes a viernes a las ${w.at}` : `cada ${(w.days || []).map(d => DAYS.find(x => x[1] === d)?.[2]).filter(Boolean).join(', ')} a las ${w.at}`;
+/** Undoing a move gives the day and the hour back, not the OK the approved piece lost: the card says so (the owner approves again). */
+export const undoneNote = o => (o.type === 'pieza_mover' && o.soltada ? ' — sigue sin OK: vuelve a aprobarla en Contenido' : '');
 
 /** One line that says what an op does, in the owner's words. */
 export function opLabel(o, { esc = s => s, deptName = k => k } = {}) {
@@ -51,12 +53,12 @@ function fields(m, o, e, esc) {
 /** The ops of one of Dimitri's messages as cards: proposed ones with their box and fields, done ones with DESHACER while it lasts. view: { esc, edits, deptName, now } */
 export function opsHTML(m, v) {
   const list = m.ops || []; if (!list.length) return '';
-  const { esc } = v, ed = v.edits || new Map(), now = v.now || Date.now();
+  const { esc } = v, ed = v.edits || new Map(), now = v.now || Date.now(), busy = !!v.busy; // busy: HACER is running for this message — a redraw never offers it twice
   const cards = list.map(o => {
     const e = ed.get(o.k) || {}, on = e.include !== false, label = opLabel({ ...o, ...e, when: o.when }, v);
     if (o.state && o.state !== 'proposed') {
       const undo = o.state === 'done' && o.doneAt && now - o.doneAt < UNDO_MS;
-      const st = o.state === 'done' ? `hecho${o.type === 'pieza_mover' && o.soltada ? ' — perdió el OK: vuelve a aprobarla en Contenido' : ''}` : o.state === 'failed' ? 'no se pudo' : o.state === 'undone' ? 'deshecho' : 'no se hizo';
+      const st = o.state === 'done' ? `hecho${o.type === 'pieza_mover' && o.soltada ? ' — perdió el OK: vuelve a aprobarla en Contenido' : ''}` : o.state === 'failed' ? 'no se pudo' : o.state === 'undone' ? `deshecho${undoneNote(o)}` : 'no se hizo';
       return `<div class="so-card sent ${o.state}"><div class="sc-body"><div class="sc-t">${label}</div><div class="sc-meta"><b>${esc(st)}</b>${o.error ? ' — ' + esc(o.error) : ''}${o.type === 'rutina_crear' && o.desc && o.state === 'done' ? ' · ' + esc(o.desc) : ''}</div>
         ${undo ? `<button type="button" class="so-undo" data-msg="${esc(m.id)}" data-k="${o.k}">Deshacer</button>` : ''}</div></div>`;
     }
@@ -68,7 +70,7 @@ export function opsHTML(m, v) {
         ${NOTE[o.type] ? `<div class="sc-note">${NOTE[o.type]}</div>` : ''}</div></div>`;
   }).join('');
   const open = list.filter(o => o.state === 'proposed'), n = open.filter(o => (ed.get(o.k) || {}).include !== false).length;
-  const foot = open.length ? `<div class="sc-foot"><div class="sb-acts"><button type="button" class="so-go" data-msg="${esc(m.id)}"${n ? '' : ' disabled'}>HACER (${n})</button><button type="button" class="so-skip" data-msg="${esc(m.id)}">Descartar</button></div>
+  const foot = open.length ? `<div class="sc-foot"><div class="sb-acts"><button type="button" class="so-go" data-msg="${esc(m.id)}"${n && !busy ? '' : ' disabled'}>${busy ? 'Haciendo…' : `HACER (${n})`}</button><button type="button" class="so-skip" data-msg="${esc(m.id)}"${busy ? ' disabled' : ''}>Descartar</button></div>
     <div class="sc-note">Nada cambia hasta que pulses HACER. Nunca aprueba ni publica.</div></div>` : '';
   return `<div class="so-plan" role="group" aria-label="Cambios en el calendario y la oficina"><div class="sc-lab">En el calendario y la oficina</div>${cards}${foot}</div>`;
 }

@@ -20,7 +20,7 @@
 //   data/subgerente.json → { messages: [{ id, who: 'user'|'sub', text, at, mode?, plan?, studio?, ops?, attach?, context?, media?, shield?, answers? }] }   (the last 120 kept)
 import fs from 'node:fs';
 import path from 'node:path';
-import { valid as validWhen } from './src/when.js';
+import { valid as validWhen, nextRun } from './src/when.js';
 
 const MAX = 120;
 export const MODES = ['charla', 'estado', 'analisis', 'plan', 'pregunta', 'estudio'];
@@ -56,7 +56,9 @@ const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 export const nameOf = cfg => String(cfg?.deputy?.name || 'Dimitri').trim().slice(0, 30) || 'Dimitri';
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const clip = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-const tag = (name, body) => `<${name}>\n${String(body || '').trim() || '—'}\n</${name}>`;
+const tag = (name, body) => `<${name}>\n${String(body || '').trim().replace(/<\//g, '<\\/') || '—'}\n</${name}>`; // a «</notas>» inside the data cannot close the tag early
+/** A time as the model reads it and parseOps reads it back: the machine's local clock, never UTC. */
+export const localStamp = ms => { const d = new Date(ms); return `${iso(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
 /**
  * The system prompt (V4.11, DIM-20): identity → the answer's contract → how to pick the mode, with an example per mode → the rules of
@@ -204,7 +206,7 @@ export function rutinasText(list = [], tasks = [], { now = Date.now(), dias = 7,
   const paused = list.filter(r => r.paused);
   const when = ms => new Date(ms).toLocaleString('es', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   return [`Rutinas (${list.length}): ` + list.slice(0, 20).map(r => `«${clip(r.title, 60)}» (${r.desc || ''}${r.paused ? ', PAUSADA' : ''}, ${name(r.agent)}, id ${r.id})`).join('; '),
-    soon.length ? `Próximas ejecuciones: ${soon.slice(0, 10).map(r => `${when(r.nextAt)} «${clip(r.title, 50)}» (at ${new Date(r.nextAt).toISOString().slice(0, 16)})`).join('; ')}` : '',
+    soon.length ? `Próximas ejecuciones: ${soon.slice(0, 10).map(r => `${when(r.nextAt)} «${clip(r.title, 50)}» (at ${localStamp(r.nextAt)})`).join('; ')}` : '',
     failed.length ? `Fallaron la última vez: ${failed.map(r => '«' + clip(r.title, 60) + '»').join(', ')}` : '',
     paused.length ? `Pausadas: ${paused.length}` : ''].filter(Boolean).join('\n');
 }
@@ -334,7 +336,22 @@ const localMs = s => { const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(Strin
  * The ops Claude proposed → checked against the office as it is. ctx: { depts, agents, routineDepts (keys), routines: [{id}], tasks: [{id, state}],
  * piezaHas(id), now }. Anything off the list, or that names something that is not there, is dropped (said in `dropped`).
  */
-export function parseOps(list, { depts = {}, agents = [], routineDepts = [], routines = [], tasks = [], piezaHas = () => false, now = Date.now() } = {}) {
+/** The next runs of a routine (its nextAt, then its clock's own steps), up to 60 days ahead: a skip must land on one of them. */
+export function runsOf(r, now = Date.now(), { max = 60, days = 60 } = {}) {
+  const out = []; if (!r || r.paused || !Number.isFinite(r.nextAt)) return out;
+  for (let t = r.nextAt, i = 0; Number.isFinite(t) && i < max && t - now < days * 864e5; i++) { out.push(t); const n = r.when ? nextRun(r.when, t) : null; if (!(n > t)) break; t = n; }
+  return out;
+}
+/** Hidden orders in the DATA Dimitri reads (task results from mail or webhooks, what the owner has open, the notes) → why, or null.
+ *  check = safety.injectionIn. Like an image's text: the message is marked and its ops and Estudio actions go. */
+export function dataInjection({ recent = '', viewing = '', notes = '', image = '' } = {}, check = () => null) {
+  for (const [what, text] of [['una imagen', image], ['un resultado de tarea', recent], ['lo que tienes abierto', viewing], ['una nota', notes]]) {
+    const why = text ? check(text) : null; if (why) return `${what} traía órdenes escondidas (${why})`;
+  }
+  return null;
+}
+/** ctx.owner: the owner's own edits on the card (POST /api/sub/ops) — only they may untick «pide tu OK» on a routine. */
+export function parseOps(list, { depts = {}, agents = [], routineDepts = [], routines = [], tasks = [], piezaHas = () => false, now = Date.now(), owner = false } = {}) {
   const out = [], dropped = [];
   for (const o of (Array.isArray(list) ? list : []).slice(0, 12)) {
     if (!o || typeof o !== 'object' || !OPS.includes(o.type)) { dropped.push(String(o?.type || '?')); continue; }
@@ -344,10 +361,10 @@ export function parseOps(list, { depts = {}, agents = [], routineDepts = [], rou
       if (when && Array.isArray(when.days)) when.days = [...new Set(when.days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
       if (when && when.kind !== 'daily' && when.kind !== 'weekdays' && when.kind !== 'weekly') { dropped.push(o.type); continue; } // the owner's routines from the chat: by day and hour (hourly and «minutes» stay in the calendar)
       const agent = agents.find(a => a.id === o.agent && a.department === dept)?.id || null;
-      if (dept && text && validWhen(when)) v = { type: o.type, dept, agent, text, title: clip(o.title || text, 90), ...(o.title || o.titled ? { titled: true } : {}), when: { kind: when.kind, at: when.at, ...(when.kind === 'weekly' ? { days: when.days } : {}), ...(when.start && FECHA_RE.test(when.start) ? { start: when.start } : {}) }, needsOk: o.needsOk !== false };
+      if (dept && text && validWhen(when)) v = { type: o.type, dept, agent, text, title: clip(o.title || text, 90), ...(o.title || o.titled ? { titled: true } : {}), when: { kind: when.kind, at: when.at, ...(when.kind === 'weekly' ? { days: when.days } : {}), ...(when.start && FECHA_RE.test(when.start) ? { start: when.start } : {}) }, needsOk: owner ? o.needsOk !== false : true }; // what Dimitri proposes always waits for the OK: only the owner unticks it on the card
     } else if (o.type === 'rutina_saltar') {
-      const at = typeof o.at === 'number' ? o.at : localMs(o.at);
-      if (routines.some(r => r.id === o.id) && at > now) v = { type: o.type, id: o.id, at, title: routines.find(r => r.id === o.id).title || o.id };
+      const at = typeof o.at === 'number' ? o.at : localMs(o.at), r = routines.find(x => x.id === o.id);
+      if (r && at > now && runsOf(r, now).includes(at)) v = { type: o.type, id: o.id, at, title: r.title || o.id }; // only a real run of that routine: the clock skips by the exact millisecond
     } else if (o.type === 'pieza_crear') {
       const fecha = FECHA_RE.test(o.fecha || '') ? o.fecha : '', hora = fecha && HORA_RE.test(o.hora || '') ? o.hora : '';
       const formato = FORMATOS.includes(o.formato) ? o.formato : 'post', redes = [...new Set((Array.isArray(o.redes) ? o.redes : [o.redes]).map(r => String(r || '').toLowerCase()).filter(r => REDES.includes(r)))];

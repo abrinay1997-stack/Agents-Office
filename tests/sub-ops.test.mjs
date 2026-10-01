@@ -1,7 +1,7 @@
 // src/sub-ops.js (V4.11): the cards of Dimitri's ops and his questions with options, as HTML, and the bodies the page posts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { opsHTML, opsBody, opLabel, questionsHTML, pickBody, pastChoices, UNDO_MS } from '../src/sub-ops.js';
+import { opsHTML, opsBody, opLabel, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS } from '../src/sub-ops.js';
 import { stripHTML, creativesHTML, planTotal, promptLabel, KIND } from '../src/sub-studio.js';
 
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -75,4 +75,14 @@ test('a voice-over or a jingle is never «IMAGEN»: its own label, text field, v
   assert.match(h, /data-k="instrumental" checked/); assert.match(h, /data-k="style"[^>]*value="reggaetón"/);
   assert.equal(planTotal(m.studio.creatives, new Map(), [VOZ, MUS]).weight, 1 + 3, 'a music weighs 3 against the day\'s cap, as on the server');
   assert.equal(planTotal(m.studio.creatives.slice(0, 1), new Map([[0, { prompt: 'x'.repeat(1000) }]]), [VOZ]).total, 0.1, 'a voice-over costs by the characters left in the text');
+});
+
+test('HACER on its way: a redraw shows «Haciendo…» and never offers HACER twice; an undone move of an approved piece says it lost its OK', () => {
+  const m = { id: 'm1', ops: [{ k: 0, type: 'tarea_cancelar', id: 't1', title: 'Post', state: 'proposed' }] };
+  const h = opsHTML(m, { esc, busy: true });
+  assert.match(h, /class="so-go" data-msg="m1" disabled>Haciendo…</); assert.match(h, /class="so-skip" data-msg="m1" disabled>/); assert.doesNotMatch(h, /HACER \(/);
+  assert.match(opsHTML(m, { esc }), /class="so-go" data-msg="m1">HACER \(1\)/);
+  const u = { id: 'm2', ops: [{ k: 0, type: 'pieza_mover', id: 'p-1', fecha: '2026-10-10', titulo: 'Combo', soltada: true, state: 'undone' }] };
+  assert.match(opsHTML(u, { esc }), /deshecho — sigue sin OK: vuelve a aprobarla en Contenido/);
+  assert.equal(undoneNote({ type: 'pieza_mover', soltada: false }), '');
 });
