@@ -102,15 +102,21 @@ async function call(name, a = {}) {
       (mine.length ? `\nEn marcha para esta tarea: ${mine.map(j => `${j.id} (${j.modelName}, ${j.note || j.state})`).join('; ')}.` : '');
   }
   if (name === 'buscar_en_galeria') {
-    const { items, folders = [] } = await office('/api/media'); const q = String(a.buscar || '').toLowerCase().trim();
+    // Auditoría 1 oct 2026 (INF-03): the office searches the WHOLE gallery (it used to answer the 600 newest and the search ran
+    // here); first the folders (n=0: no files), then the search itself in that folder. An office without pages (no `total`)
+    // answers everything, and then it is filtered here as before.
+    const { folders = [] } = await office('/api/media?n=0'); const q = String(a.buscar || '').toLowerCase().trim();
     const fname = new Map(folders.map(f => [f.id, f.name])); let only = null; // V4.9: the folders the owner and Dimitri organised
     if (String(a.carpeta || '').trim()) {
       const want = plain(a.carpeta); only = (want && folders.find(f => plain(f.name) === want)) || (want.length >= 2 && folders.find(f => plain(f.name).includes(want))) || null; // «—» or «#» is no name: '' is inside every name
       if (!only) return `No hay una carpeta «${String(a.carpeta).slice(0, 60)}» en el Estudio.${folders.length ? ` Carpetas: ${folders.map(f => `${f.name} (${f.n})`).join(', ')}.` : ' Aún no hay carpetas.'}`;
     }
-    const hits = items.filter(it => (!only || it.folder === only.id) && (!a.solo_subidas || it.upload) && (!q || `${it.prompt} ${it.file}`.toLowerCase().includes(q))).slice(0, Math.min(30, a.cantidad || 12));
+    const want = Math.min(30, a.cantidad || 12), page = await office(`/api/media?n=${want}${q ? '&q=' + encodeURIComponent(q) : ''}${only ? '&folder=' + encodeURIComponent(only.id) : ''}${a.solo_subidas ? '&filter=up' : ''}`);
+    const items = page.items || [], paged = typeof page.total === 'number';
+    const hits = paged ? items.slice(0, want) : items.filter(it => (!only || it.folder === only.id) && (!a.solo_subidas || it.upload) && (!q || `${it.prompt} ${it.file}`.toLowerCase().includes(q))).slice(0, Math.min(30, a.cantidad || 12));
     if (!hits.length) return `Nada en la galería con eso${only ? ` en la carpeta «${only.name}»` : ''}.`;
-    return hits.map(it => `${it.file} · ${it.kind === 'video' ? 'video' : it.kind === 'audio' ? 'audio' : 'imagen'}${it.upload ? ' · subida por el dueño' : ''}${fname.get(it.folder) ? ` · carpeta «${fname.get(it.folder)}»` : ''} · «${String(it.prompt).slice(0, 90)}»${it.w ? ` · ${it.w}×${it.h}` : ''}`).join('\n');
+    return (paged && page.total > hits.length ? `${hits.length} de ${page.total} (lo más nuevo primero; afina la búsqueda o pide más con cantidad, hasta 30):
+` : '') + hits.map(it => `${it.file} · ${it.kind === 'video' ? 'video' : it.kind === 'audio' ? 'audio' : 'imagen'}${it.upload ? ' · subida por el dueño' : ''}${fname.get(it.folder) ? ` · carpeta «${fname.get(it.folder)}»` : ''} · «${String(it.prompt).slice(0, 90)}»${it.w ? ` · ${it.w}×${it.h}` : ''}`).join('\n');
   }
   if (name === 'estado_trabajo') {
     const { job } = await office(`/api/media/jobs/${encodeURIComponent(String(a.trabajo || '').replace(/[^a-z0-9]/gi, ''))}?wait=60000`);

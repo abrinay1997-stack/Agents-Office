@@ -25,6 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as mmx from './minimax.mjs';
+import * as GF from './src/galeria-filtro.js'; // INF-03: qué ficha entra en una vista, igual en el servidor y en la página
 
 export const ENGINES = {
   higgsfield: { name: 'Higgsfield', env: 'HF_KEY', site: 'cloud.higgsfield.ai', how: 'setx HF_KEY "tu-id:tu-secreto"' },
@@ -428,6 +429,8 @@ export function configure(officeCfg, brainPath, dataDir, h = {}) {
       ...(c.engine === 'higgsfield' ? { hf: HF.paths(c.kind === 'image' ? { text: c.path } : t2v(c.path)) } : { fal: j => ({ path: c.path, body: { prompt: j.prompt, ...(c.kind === 'image' ? { num_images: j.n, image_size: FAL_SIZE[j.s.aspectRatio] || 'square_hd', ...(j.m.reference.length ? { image_urls: j.m.reference } : {}) } : { aspect_ratio: j.s.aspectRatio, duration: String(j.s.duration), ...(j.m.start[0] ? { image_url: j.m.start[0] } : {}) }) } }) }) }));
   MODELS = [...CATALOG.filter(x => !custom.some(c => c.id === x.id)), ...custom];
   loadJobs();
+  clearTimeout(snapT); snapT = null; snapFile = path.join(dataDir, 'media-index.json'); loadSnap(); // INF-03
+  if (h.warm !== false) { const r = root; const w = WARM = warm(r).catch(() => {}).finally(() => { if (WARM === w) WARM = null; }); } // INF-03: the gallery's index, read in the background
 }
 export const dir = () => root;
 export function setHooks(h = {}) { hooks = { ...hooks, ...h }; }
@@ -556,9 +559,9 @@ function readFolders() { try { const j = JSON.parse(fs.readFileSync(foldersFile(
 function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ folders: l }, null, 1)); fs.renameSync(f + '.tmp', f); }
 const cleanName = n => String(n ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
 /** The folders, with how many files each holds (the ones in the bin do not count). */
-export function folders(items = all()) {
+export function folders(items = index().sorted, fl = readFolders()) { // INF-03: the index itself (read only), never a copy of 5,000 records per request
   const count = new Map(); for (const it of items) if (it.folder) count.set(it.folder, (count.get(it.folder) || 0) + 1);
-  return readFolders().map(f => ({ ...f, n: count.get(f.id) || 0 }));
+  return fl.map(f => ({ ...f, n: count.get(f.id) || 0 }));
 }
 export const folderOf = id => readFolders().find(f => f.id === id) || null;
 export function addFolder(name) {
@@ -592,19 +595,63 @@ export function moveTo(files, folder) {
    added, removed or renamed from outside, e.g. in the Explorer), and the office's own writes patch the index in place.
    The API is the same: list() hands back copies, never the index's own objects. */
 const MONTH_RE = /^\d{4}-\d{2}$/;
-let IDX = { root: '', months: new Map(), sorted: null };
+let IDX = { root: '', months: new Map(), sorted: null, rev: 0, counts: null };
 const mtimeOf = d => { try { return fs.statSync(d).mtimeMs; } catch { return -1; } };
+/** INF-03: is the record's file there? From the folder's own listing (one readdir), not one existsSync per file: 5,000 of them took seconds. */
+const fileThere = (r, sub, names, it) => it && typeof it.file === 'string' && (it.file.startsWith(sub + '/') && !it.file.slice(8).includes('/') ? names.has(it.file.slice(8)) : fs.existsSync(path.join(r, it.file)));
 function scanMonth(sub) {
   const dir = path.join(root, sub), items = new Map();
   let names = []; try { names = fs.readdirSync(dir); } catch { return items; }
+  const set = new Set(names);
   for (const f of names) {
     if (!f.endsWith('.json')) continue;
-    try { const it = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (it && typeof it.file === 'string' && fs.existsSync(path.join(root, it.file))) items.set(it.file, it); } catch {}
+    try { const it = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (fileThere(root, sub, set, it)) items.set(it.file, it); } catch {}
   }
   return items;
 }
+/* INF-03: the first read of a big gallery (5,000 records) took seconds of sync I/O on the server's one thread. configure()
+   starts reading it in the background with fs.promises; GET /api/media awaits ready() first, so it never blocks the office.
+   A month is taken only if no sync read got there first; its mtime is read BEFORE its listing, so a file written meanwhile
+   moves the mtime and the month is read again on the next index(). */
+let WARM = null;
+export const ready = () => WARM || Promise.resolve();
+async function warm(r) {
+  let subs = []; try { subs = (await fs.promises.readdir(r)).filter(x => MONTH_RE.test(x)); } catch { return; }
+  for (const sub of subs) {
+    if (root !== r) return;
+    const dir = path.join(r, sub); let mt; try { mt = (await fs.promises.stat(dir)).mtimeMs; } catch { continue; }
+    const cur = IDX.root === r ? IDX.months.get(sub) : null; if (cur && cur.mtime === mt) continue; // already read (or in the snapshot) and unchanged
+    let names = []; try { names = await fs.promises.readdir(dir); } catch { continue; }
+    const set = new Set(names), js = names.filter(f => f.endsWith('.json')), items = new Map();
+    for (let i = 0; i < js.length; i += 64) await Promise.all(js.slice(i, i + 64).map(async f => { try { const it = JSON.parse(await fs.promises.readFile(path.join(dir, f), 'utf8')); if (fileThere(r, sub, set, it)) items.set(it.file, it); } catch {} }));
+    if (root !== r) return; if (IDX.root !== r) IDX = { root: r, months: new Map(), sorted: null, rev: IDX.rev + 1, counts: null };
+    if ((IDX.months.get(sub) || null) === cur) { IDX.months.set(sub, { mtime: mt, items }); IDX.sorted = null; } // a sync read that got there meanwhile wins
+  }
+}
+/* INF-03: and a snapshot of the index in data/media-index.json (one file: 5,000 records read in ~35 ms where 5,000 small
+   .json took over a minute on a busy Windows machine with its antivirus). It is only a head start: a month is trusted only
+   while its folder's mtime is the one in the snapshot. Every file the office adds, removes or renames moves that mtime by
+   itself; update() rewrites a record in place, which does not, so it moves the folder's mtime on purpose (bump). */
+let snapFile = '', snapT = null;
+function loadSnap() {
+  if (!snapFile) return;
+  try {
+    const j = JSON.parse(fs.readFileSync(snapFile, 'utf8')); if (!j || j.v !== 1 || j.root !== root || !j.months) return;
+    const months = new Map(); for (const [k, m] of Object.entries(j.months)) if (MONTH_RE.test(k) && m && Array.isArray(m.items)) months.set(k, { mtime: m.mtime, items: new Map(m.items.filter(it => it && typeof it.file === 'string').map(it => [it.file, it])) });
+    IDX = { root, months, sorted: null, rev: IDX.rev + 1, counts: null };
+  } catch {} // none yet, or unreadable: the folders are read as before
+}
+function saveSnapSoon() {
+  if (!snapFile || snapT) return; const f = snapFile, r = root;
+  snapT = setTimeout(() => {
+    snapT = null; if (f !== snapFile || r !== root || IDX.root !== r || !fs.existsSync(r) || !fs.existsSync(path.dirname(f))) return;
+    try { const months = {}; for (const [k, m] of IDX.months) months[k] = { mtime: m.mtime, items: [...m.items.values()] }; fs.writeFileSync(f + '.tmp', JSON.stringify({ v: 1, root: r, at: Date.now(), months })); fs.renameSync(f + '.tmp', f); } catch (e) { console.warn('media index:', e.message); }
+  }, 2000); snapT.unref?.();
+}
+/** A record was rewritten in place: move its folder's mtime, so a snapshot taken before it is not trusted for that month. */
+function bump(dir) { try { const t = Math.max(Date.now(), Math.floor(fs.statSync(dir).mtimeMs) + 1); fs.utimesSync(dir, new Date(t), new Date(t)); } catch {} }
 function index() {
-  if (IDX.root !== root) IDX = { root, months: new Map(), sorted: null };
+  if (IDX.root !== root) IDX = { root, months: new Map(), sorted: null, rev: IDX.rev + 1, counts: null };
   if (!root || !fs.existsSync(root)) { if (IDX.months.size || !IDX.sorted) { IDX.months.clear(); IDX.sorted = []; } return IDX; }
   const subs = fs.readdirSync(root).filter(x => MONTH_RE.test(x));
   for (const k of [...IDX.months.keys()]) if (!subs.includes(k)) { IDX.months.delete(k); IDX.sorted = null; }
@@ -612,7 +659,7 @@ function index() {
     const mt = mtimeOf(path.join(root, sub)), cur = IDX.months.get(sub);
     if (!cur || cur.mtime !== mt) { IDX.months.set(sub, { mtime: mt, items: scanMonth(sub) }); IDX.sorted = null; }
   }
-  if (!IDX.sorted) IDX.sorted = [...IDX.months.values()].flatMap(m => [...m.items.values()]).sort((a, b) => b.at - a.at);
+  if (!IDX.sorted) { IDX.sorted = [...IDX.months.values()].flatMap(m => [...m.items.values()]).sort(GF.cmp); IDX.rev++; IDX.counts = null; saveSnapSoon(); } // INF-03: a tie on the time sorts by name, so a cursor never skips nor repeats
   return IDX;
 }
 /** The office wrote into this month itself: patch the index and take the folder's new mtime, so it is not read again. */
@@ -630,6 +677,28 @@ const all = () => index().sorted.map(it => ({ ...it }));
 export function list({ limit = 600 } = {}) {
   return index().sorted.slice(0, limit).map(it => ({ ...it }));
 }
+/* Auditoría 1 oct 2026 (INF-03): the gallery had a cap of 600 and no pages — from file 601 on, the oldest vanished from
+   the Estudio, Ctrl+K, the Contenido picker and the folder counts. query() searches, filters and counts over the WHOLE
+   index and hands back one page: { items, total (what matches), next (cursor of the next page, or null), counts (the tabs
+   and «Sin carpeta», over the whole gallery), rev }. A cursor is «time|file» of the last item seen: a new file arriving at
+   the top never shifts the next page. `upto` stretches the page until that file is in it (the viewer opening one old file). */
+export const PAGE_MAX = 600; // the old answer's size: a page is never bigger
+export function query({ q = '', filter = 'all', folder = 'all', kind = null, before = null, offset = 0, n = 120, upto = null, extra = null } = {}) {
+  const X = index(), fl = readFolders(), ids = new Set(fl.map(f => f.id)), sig = X.rev + ':' + [...ids].join(',');
+  const ok = GF.matcher({ q, filter, folder, kind }, ids, extra), cur = GF.parseCursor(before);
+  const size = Math.max(0, Math.min(PAGE_MAX, Number.isFinite(+n) ? Math.floor(+n) : 120));
+  let skip = Math.max(0, Math.floor(+offset || 0)), total = 0, after = 0, hit = -1; const page = [];
+  for (const it of X.sorted) {
+    if (!ok(it)) continue; total++;
+    if (cur && GF.cmp(it, cur) <= 0) continue; // at or before the cursor: already seen
+    after++; if (skip) { skip--; continue; }
+    if (page.length < size || (upto && hit < 0 && page.length < 20000)) { if (it.file === upto) hit = page.length; page.push(it); }
+  }
+  if (upto && hit < 0) page.length = Math.min(page.length, size); // that file is not in this view: a normal page
+  const off = Math.max(0, Math.floor(+offset || 0)), more = after - off - page.length > 0;
+  if (!X.counts || X.countsSig !== sig) { X.counts = GF.counts(X.sorted, ids); X.countsSig = sig; }
+  return { items: page.map(it => ({ ...it })), total, next: more && page.length ? GF.cursorOf(page[page.length - 1]) : null, counts: { ...X.counts }, folders: folders(X.sorted, fl), rev: X.rev };
+}
 const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav|flac|m4a|ogg)$/i; // V4.8: audio too, for Muse Spark to transcribe; V4.10: flac, m4a, ogg
 /** A path inside the studio, or null (never outside it: the id comes from the request). */
 export function resolve(id) {
@@ -638,7 +707,7 @@ export function resolve(id) {
   const p = path.join(root, rel); return fs.existsSync(p) ? p : null;
 }
 export function item(id) { const p = resolve(id); if (!p) return null; try { return JSON.parse(fs.readFileSync(p.replace(/\.[^.]+$/, '.json'), 'utf8')); } catch { return null; } }
-export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j, JSON.stringify(it, null, 2)); if (typeof it.file === 'string') idxPut(it.file.slice(0, 7), { ...it }); return it; }
+export function update(id, patch) { const p = resolve(id); if (!p) return null; const j = p.replace(/\.[^.]+$/, '.json'); const it = JSON.parse(fs.readFileSync(j, 'utf8')); Object.assign(it, patch); fs.writeFileSync(j, JSON.stringify(it, null, 2)); bump(path.dirname(j)); if (typeof it.file === 'string') idxPut(it.file.slice(0, 7), { ...it }); return it; }
 /** To <media>/.papelera (emptied after 30 days). Returns what `restore` needs to bring it back, or null. */
 export function trash(id) {
   const p = resolve(id); if (!p) return null;
