@@ -1,5 +1,52 @@
 # Changelog
 
+## V4.11 — 1 oct 2026 (auditoría despiadada del diseño, y lo urgente corregido)
+
+- **La auditoría:** `docs/auditoria-diseno-2026-10-01.md`. 126 hallazgos (6 críticos, 41 altos, 54 medios, 25 bajos) de seis auditores: contenido, previsualizaciones, Dimitri, Estudio y voces, accesibilidad (axe-core en todas las vistas) e infraestructura. Se comparó con Metricool, Meta Business Suite, Later, Buffer y ElevenLabs. **Arreglados:** los 6 críticos, 38 de 41 altos, y lo barato de medios y bajos. Cada punto dice su estado.
+- **Calendario de contenido:**
+  - Cada tarjeta lleva miniatura, hora, formato (post, carrusel, reel, historia), IG/FB y estado, en mes, semana, día y agenda.
+  - La **Programación** es una cola por día con su propia carga, sin depender del mes que se ve.
+  - El panel de la pieza va en dos columnas, con días rápidos y «Siguiente hueco libre».
+  - Aprobar exige una hora futura.
+  - **Las reglas de proporción y duración se aplican por fin**: antes una historia 16:9 decía «cumple».
+- **Previsualizaciones fieles por red y formato.** Pestañas: Instagram Feed, Perfil (la cuadrícula), Reel e Historia, y Facebook Feed y Reel.
+  - El teléfono va a 9:16 con las zonas que tapa la interfaz y el «… más» real.
+  - El carrusel y las historias se pasan deslizando.
+  - Avisos de recorte y de texto tapado.
+- **Dimitri:**
+  - Pregunta en **opción múltiple** cuando conviene: botones, elección múltiple y «Otra…».
+  - Ve toda la oficina: Contenido de los próximos días, rutinas, Analíticas y lo que tienes seleccionado.
+  - Propone cambios del calendario y de las rutinas con un clic y Deshacer; nada se hace sin tu clic.
+  - Prompt reordenado por secciones y un chat que ya no se redibuja entero cada 3 s.
+  - Si la hora que dijiste ya pasó, te pregunta.
+- **Clonar tu voz como asistente de tres pasos** (graba o sube · escúchalo · ponle nombre y clona):
+  - un guion para leer en voz alta mientras grabas;
+  - un medidor en dBFS que avisa «muy bajo» o «satura»;
+  - el id de la voz se genera solo;
+  - el precio y la cuenta verificada se dicen una vez y claro;
+  - la casilla de consentimiento es obligatoria y queda guardada;
+  - al terminar, «Probar esta voz»;
+  - MiniMax limpia el ruido y normaliza el volumen.
+- **Accesibilidad e interfaz:**
+  - Dimitri tiene botón en el dock, y cada icono dice su nombre con el teclado.
+  - Lo deshabilitado ya no se atenúa con opacidad: pasa a 4,5:1.
+  - Las tarjetas de departamento ya no se tapan.
+  - Las vistas son regiones accesibles.
+  - axe-core: 0 fallos críticos o serios en las vistas revisadas.
+- **Rendimiento:**
+  - La galería vive en memoria: `/api/media` ya no lee el disco dos veces.
+  - El sondeo de tareas pesa poco y el Cerebro se lee una vez.
+  - Los turnos sin herramientas (Dimitri, el enrutador) no arrancan los MCP de la máquina: `--strict-mcp-config`, probado con la CLI real.
+  - Nada repinta con la pestaña oculta.
+  - Nuevo punto en el semáforo: «Respuesta del servidor».
+  - `npm run check` falla si la página pasa de 2,2 MB.
+  - El paso intermitente «Limpiar listas» quedó estable.
+- **Pendiente:**
+  - galería de más de 600 archivos sin paginar (INF-03);
+  - streaming y botón Detener en Dimitri (DIM-14);
+  - el resumen instantáneo de «¿Cómo vamos?» (DIM-10);
+  - la lista completa, con su motivo, en el informe.
+
 ## V4.10 — 1 oct 2026 (MiniMax: imagen, video, voz, música y voces propias)
 
 - **Un motor nuevo, MiniMax, con una sola key** (`MINIMAX_API_KEY`; opcionales `MINIMAX_GROUP_ID` y `MINIMAX_API_BASE`).

@@ -1685,7 +1685,7 @@ export function initStudio(ctx) {
     /** V4.9: what the owner is looking at, for Dimitri's «Viendo: …» — the picture in the viewer, the selected ones, the open folder, or nothing. */
     selection() {
       const it = !$('.st-light').hidden && lightAt ? itemOf(lightAt) : null; // the file the viewer shows, never shown()[lightIdx]: a job that ends while it is open reorders the gallery
-      if (it) return { view: 'studio', label: `${it.kind === 'video' ? 'Video' : it.kind === 'audio' ? 'Audio' : 'Imagen'} «${short(it.prompt)}»`, kind: 'image', id: it.file };
+      if (it) return { view: 'studio', label: `${it.kind === 'video' ? 'Video' : it.kind === 'audio' ? 'Audio' : 'Imagen'} «${short(it.prompt)}»`, kind: it.kind === 'video' ? 'video' : it.kind === 'audio' ? 'audio' : 'image', id: it.file }; // auditoría DIM-09: a video or an audio is not offered to Dimitri's vision as a picture
       const ids = [...sel].filter(f => itemOf(f));
       if (ids.length) return { view: 'studio', label: `${ids.length} ${ids.length === 1 ? 'archivo seleccionado' : 'archivos seleccionados'} en el Estudio`, kind: 'images', ids };
       if (folders.some(f => f.id === folderF)) return { view: 'studio', label: `Carpeta «${folderName(folderF)}» del Estudio`, kind: 'folder', folder: folderF, folderName: folderName(folderF) };

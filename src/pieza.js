@@ -17,7 +17,7 @@ import { choqueDe, siguienteHueco, diasRapidos } from './contenido-cola.js';
 export const ESTADO = {
   idea: { name: 'IDEA', glyph: '◌', color: '#5A5A5A', dark: '#B9B6AE', help: 'Una idea suelta: todavía no es una publicación.' },
   borrador: { name: 'BORRADOR', glyph: '✎', color: '#8A6414', dark: '#E8B44A', help: 'Se está escribiendo.' },
-  revision: { name: 'A REVISAR', glyph: '●', color: '#2B6BEB', dark: '#8FB0FF', help: 'Lista para que la mires y la apruebes.' },
+  revision: { name: 'A REVISAR', glyph: '●', color: '#2158CC', dark: '#8FB0FF', help: 'Lista para que la mires y la apruebes.' },
   aprobada: { name: 'APROBADA', glyph: '✓', color: '#13705A', dark: '#4FD1A5', help: 'Aprobada por ti: puede salir.' },
 };
 export const FORMATO = { post: 'Post', carrusel: 'Carrusel', reel: 'Reel', historia: 'Historia' };

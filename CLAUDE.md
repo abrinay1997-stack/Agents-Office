@@ -50,6 +50,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.11 (1 oct, misma rama, en local), auditoría despiadada del diseño: `docs/auditoria-diseno-2026-10-01.md` (126 hallazgos; los 6 críticos y 38 de 41 altos arreglados; cada punto con su estado). Contenido con tarjetas que dicen qué sale cada día, cola por día y previsualizaciones por red y formato; Dimitri con preguntas en opción múltiple y cambios del calendario con un clic; el asistente de clonar voz en tres pasos; accesibilidad y rendimiento. **Al tocar un área, mira primero sus pendientes en ese informe.**
 - V4.10 (1 oct, misma rama, en local), MiniMax en el Estudio, pedido del dueño: imagen, video H3, voz, música, y voces propias (diseñar, y clonar grabando con el micrófono o subiendo un fragmento). Se comprobó contra la doc oficial (`docs/minimax/api-verificada.md`). Ver «MiniMax en el Estudio (V4.10)».
 - V4.9 (30 sep, rama `mejora/dimitri-estudio`, todavía en local), Dimitri maneja el Estudio, pedido del dueño. Se construyó con cuatro equipos de agentes en paralelo (worktrees) más revisión adversarial; ver la sección «Dimitri y el Estudio (V4.9)»:
   - el modo «estudio»: un plan de creativos con su costo y GENERAR;

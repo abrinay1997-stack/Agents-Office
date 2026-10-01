@@ -752,7 +752,7 @@ await step('dimitri: a chat or a status carries no pieces, a plan does; the mode
   return 'charla → no pieces · plan → 1 piece · unknown mode → charla · prompt names Dimitri and the five modes';
 });
 
-await step('subgerente: a plan is parsed, moved pieces named, bad departments and past dates dropped', async () => {
+await step('subgerente: a plan is parsed, moved pieces named, bad departments dropped, a past date kept and flagged for the owner to decide (auditoría DIM-13)', async () => {
   const sb = await import('./sub.mjs'); const { DEPTS } = await import('./src/data.js');
   const agents = [{ id: 'lexi', department: 'sales', lead: true }, { id: 'piper', department: 'sales' }, { id: 'mlead', department: 'marketing', lead: true }];
   const future = new Date(Date.now() + 3 * 864e5); const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T10:00`;
@@ -762,10 +762,10 @@ await step('subgerente: a plan is parsed, moved pieces named, bad departments an
     { dept: 'marketing', title: 'Post', instruction: 'Escribe el post', at: '2020-01-01T10:00' }] }) + '\n```', { depts: DEPTS, agents });
   if (p.tasks.length !== 2) throw new Error('pieces: ' + p.tasks.length);
   if (p.tasks[0].lead !== 'lexi' || p.tasks[0].ownerSaid !== 'marketing' || !(p.tasks[0].at > Date.now())) throw new Error('first piece: ' + JSON.stringify(p.tasks[0]));
-  if (p.tasks[1].at !== null || p.tasks[1].i !== 1) throw new Error('a past date must become «now»');
+  if (p.tasks[1].past !== true || !(p.tasks[1].at < Date.now()) || p.tasks[1].i !== 1) throw new Error('a past date is kept with past:true, so the card asks the owner (DIM-13): ' + JSON.stringify(p.tasks[1]));
   const bad = sb.parsePlan('no json here', { depts: DEPTS, agents }); if (bad.tasks.length || !bad.reply) throw new Error('prose must come back as a reply');
   const sys = sb.systemPrompt({ business: 'X', depts: DEPTS, agents, skillsOf: () => [], routineDepts: [], status: '' });
-  if (!/CALENDARIO \(usa estas fechas/.test(sys) || !/lexi/.test(sys)) throw new Error('prompt lacks the calendar or the roster');
+  if (!/<calendario>[\s\S]*\d{4}-\d{2}-\d{2}/.test(sys) || !/lexi/.test(sys)) throw new Error('prompt lacks the calendar or the roster'); // auditoría DIM-20: the prompt is in tagged sections now
   return '2 pieces · moved from marketing · past date → now · prose → reply';
 });
 
