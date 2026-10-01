@@ -305,6 +305,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   addEventListener('resize', () => { if (openNow && mode === 'cal' && view === 'month') { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!(dnd && dnd.dragging)) render(); }, 150); } }); let resizeT = 0;
   return {
     open, close, toggle: () => (openNow ? close() : open()), isOpen: isOn, openPiece,
+    selection() { if (!openNow) return null; const p = panel.isOpen() ? panel.current() : null; return p && p.id ? { view: 'contenido', label: `Pieza «${p.titulo || (p.texto || '').slice(0, 40) || 'sin título'}»${p.fecha ? ' · ' + p.fecha : ''}`, kind: 'pieza', id: p.id } : { view: 'contenido', label: `Contenido · ${E.title ? E.title.textContent.replace(/\s+/g, ' ').trim().split(' · ')[0] : ''}`.replace(/ · $/, ''), kind: 'range', id: ymd(new Date(anchor)) }; }, // V4.8: what Dimitri sees beside it
     refresh: () => { if (openNow && !panel.isOpen()) load(true); else loadResumen(); },
     panelOpen: () => panel.isOpen(), closePanel: () => panel.close(), popOpen: () => !E.pop.hidden, closePop,
     /** Lo que hay en un rango de días, para la capa del calendario de tareas (solo lectura). */

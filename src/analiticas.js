@@ -292,5 +292,6 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   }
   let resizeT = 0; addEventListener('resize', () => { if (!openNow) return; clearTimeout(resizeT); resizeT = setTimeout(() => { if (openNow && dia()) render(); }, 150); });
   views.add('analiticas', { isOpen: isOn, close });
-  return { open, close, toggle: () => (openNow ? close() : open()), isOpen: isOn };
+  const selection = () => (openNow ? { view: 'analiticas', label: `Analíticas · ${(METRICAS.find(m => m[0] === metrica) || [, metrica])[1]} · ${red === 'todas' ? 'Instagram y Facebook' : red === 'instagram' ? 'Instagram' : 'Facebook'} · ${dias} días`, kind: 'metric', id: `${metrica}:${red}:${dias}` } : null); // V4.8: what Dimitri sees beside it
+  return { open, close, toggle: () => (openNow ? close() : open()), isOpen: isOn, selection };
 }

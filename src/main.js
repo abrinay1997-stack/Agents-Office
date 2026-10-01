@@ -604,12 +604,13 @@ addEventListener('keydown', (e) => {
   if (health.isOpen() || costsWin.isOpen() || settingsWin.isOpen() || bizWin.isOpen()) return; // a window on top: its keys only (a letter used to open another window behind it)
   const key = e.key.toLowerCase();
   // with a drawer or a sheet open, the one-letter keys stay out — except that window's own key, which closes it
-  const topWin = subger.isOpen() ? 's' : (tasks && tasks.detail && tasks.detail.isOpen()) ? '·' : (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) ? '·' : '';
+  const topWin = subger.isOpen() && (!views.current() || subger.isWindow()) ? 's' : (tasks && tasks.detail && tasks.detail.isOpen()) ? '·' : (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) ? '·' : '';
   if (topWin && key !== topWin) return;
   // V4.5 (27 Sep 2026): a view (the Estudio, the calendar, the Brain) keeps the top bar — its dock's keys switch views or open a
   // window on top; the office's own keys (1–6, +, −, T…) wait, and the calendar keeps its own (← → T D W M A)
   if (views.current()) {
     if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'k') contenido.toggle(); else if (key === 'r') analiticas.toggle(); else if (key === 'g') brain.toggle();
+    else if (key === 's') subger.toggle(); // V4.8: Dimitri beside the view (the view moves over, src/css/dimitri.css)
     else if (key === 'o') health.toggle(); else if (key === 'n') bizWin.toggle(); else if (key === 'u') costsWin.toggle(); else if (key === ',') settingsWin.toggle();
     return;
   }
@@ -650,11 +651,11 @@ const KEYS = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
     ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['R', 'Analíticas: cómo rinden Instagram y Facebook', 'r'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
-    ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
+    ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['S', 'Dimitri al lado: la vista se corre y sigue a mano; ve lo que tienes seleccionado', 's'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
     ['Contenido abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['W · M · A · D', 'Semana, mes, agenda o día'], ['Arrastrar una tarjeta', 'Mover la pieza a otro día (si estaba aprobada, vuelve a revisión)'], ['Esc', 'Cerrar la pieza, la lista del día o Contenido']]],
-    ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
+    ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['+  −  0', 'Acercar, alejar y ajustar la imagen en la vista ampliada'], ['F', 'Pantalla completa en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
     ['Cerebro abierto', [['← → ↑ ↓', 'Girarlo (con Mayús, más rápido)'], ['+  −', 'Acercar y alejar'], ['0', 'Centrarlo'], ['Espacio', 'Que gire solo, o pararlo'], ['Esc', 'Cerrar la lista de la búsqueda, la ficha y luego el Cerebro']]],
     ['Calendario abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['D · W · M · A', 'Vista de día, semana, mes o agenda'], ['Clic en una hora', 'Programar algo a esa hora (semana y día)'], ['Mantener pulsada', 'En tablet o teléfono: arrastrar una tarjeta a otro día u hora']]],
     ['Vista', [['V', 'Modo cámara: fondo neutro para grabar la pantalla', 'v']]],
@@ -950,8 +951,8 @@ function enterFocus(k, pendingAgentId) {
 // when it is open) and the task panel (on the right) — the way a department sits beside its own chat. The chat counts only
 // when the room beside it can hold the centre (a tablet with the panel open has none: the centre stays under the chat).
 function chatLeft(rightPx) {
-  if (innerWidth <= 900 || !document.body.classList.contains('subOpen')) return 0;
-  const l = 14 + Math.min(640, innerWidth - 28);
+  if (innerWidth < 900 || !document.body.classList.contains('subOpen')) return 0;
+  const l = Math.max(340, Math.min(440, innerWidth * 0.34)); // V4.8: the panel is pinned to the left, var(--subW) wide (src/css/dimitri.css)
   return innerWidth - rightPx - l >= 240 ? l : 0;
 }
 function centreTarget(zoom) {
@@ -1715,7 +1716,9 @@ tasks = initTasks({ contenido: { between: (a, b) => contenido.between(a, b), ope
 view.target.set(...overviewPos());
 addEventListener('resize', () => { if (!focused && !tween && !HERO) { const atOverview = view.zoom <= 0.82; view.target.set(...overviewPos()); if (atOverview) view.zoom = overviewZoom(); } }); // V4.1: a resized (or rotated) window re-fits the overview
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
-  agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh() });
+  agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh(),
+  getContext: () => { const v = views.current(), src = { studio, cal: tasks && tasks.calendar, contenido, analiticas, brain }[v]; return src && src.selection ? src.selection() : v ? { view: v, label: { studio: 'El Estudio', cal: 'El calendario', contenido: 'Contenido', analiticas: 'Analíticas', brain: 'El Cerebro' }[v] || v, kind: null } : null; }, // V4.8: «Viendo: …» (the views are defined below: only called once the chat is open)
+  openStudioFile: file => (studio.openFile ? studio.openFile(file) : studio.open()) });
 { // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
   const btn = document.getElementById('topPanel');
   const VIEW_BTN = [['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topContenido', 'ctOpen'], ['topAnaliticas', 'anOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
@@ -1743,7 +1746,7 @@ document.getElementById('railSheet').addEventListener('click', () => { if (!moda
   };
   addEventListener('resize', fit); new MutationObserver(fit).observe(tc, { childList: true }); setTimeout(fit, 400); setTimeout(fit, 3000);
 }
-const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', taskTitle: sid => (tasks.findBySid(sid) || {}).title || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); }, openSettings: tab => settingsWin.open(tab), toCalendar: (file, kind, prompt) => contenido.fromMedia(file, kind, prompt) }); // V4.5: the caps chip opens Ajustes → Estudio · V4.7: «Enviar al calendario» (contenido is defined just below: it is only called on a click)
+const studio = initStudio({ isLive: () => tasks.isLive(), esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', taskTitle: sid => (tasks.findBySid(sid) || {}).title || '', openTask: sid => { const t = tasks.findBySid(sid); if (t) tasks.openTask(t); }, openSettings: tab => settingsWin.open(tab), toCalendar: (file, kind, prompt) => contenido.fromMedia(file, kind, prompt), askDimitri: files => subger.open({ attach: files }) }); // V4.8: «Pedírselo a Dimitri» · V4.5: the caps chip opens Ajustes → Estudio · V4.7: «Enviar al calendario» (contenido is defined just below: it is only called on a click)
 const finder = initSearch({ served: SERVED, esc, agents: AGENTS, // V4.4 (J7): Ctrl+K, everything at once
   getTasks: () => (tasks && tasks.tasks) || [], getRoutines: () => (tasks && tasks.routines) || [],
   openTask: t => tasks.openTask(t), openAgent: id => openAgent(id, 'chat'),

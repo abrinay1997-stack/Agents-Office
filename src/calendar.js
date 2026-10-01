@@ -40,6 +40,7 @@ export function initCalendar(ctx) {
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
   let openNow = false, view = 'month', anchor = startOfDay(Date.now()), q = '', deptOn = new Set(DEPT_KEYS), showRoutines = true, showDone = true, onlyRoutine = null, popKind = null, lastDept = 'marketing';
+  let popSel = null; // V4.8: the task or routine open in the little window, for Dimitri's «Viendo: …»
   // V4.2 (audit B13): the week starts on Monday or on Sunday (the owner's choice, remembered on this browser)
   let WS = (() => { try { return localStorage.getItem('ao.cal.ws') === '0' ? 0 : 1; } catch { return 1; } })();
   const wkStart = ts => weekStart(ts, WS);
@@ -242,7 +243,7 @@ export function initCalendar(ctx) {
   }
   let railQ = ''; const railFold = new Set();
   let createDraft = ''; // V4.1 (audit 26): what was typed in «Programar para» survives a click outside and comes back on the next day clicked
-  function closePop() { if (popKind === 'create') { const tx = E.pop.querySelector('.cv-text'); if (tx) createDraft = tx.value; } E.pop.hidden = true; E.pop.innerHTML = ''; popKind = null; ov.querySelectorAll('.cv-day.sel').forEach(n => n.classList.remove('sel')); }
+  function closePop() { popSel = null; if (popKind === 'create') { const tx = E.pop.querySelector('.cv-text'); if (tx) createDraft = tx.value; } E.pop.hidden = true; E.pop.innerHTML = ''; popKind = null; ov.querySelectorAll('.cv-day.sel').forEach(n => n.classList.remove('sel')); }
   function openCreate(dayKey, cell) {
     closePop(); popKind = 'create'; cell.classList.add('sel');
     const slotH = cell.dataset.hour !== undefined ? +cell.dataset.hour : null; // a click on an hour of the week or the day schedules at that hour
@@ -299,7 +300,7 @@ export function initCalendar(ctx) {
       const t = tasks.find(x => String(x.id) === rest[0]); if (!t) return;
       if (t.state !== 'scheduled' && openTask) { openTask(t); return; } // done · running · waiting · pending → the task's detail, over the calendar
       const a = agentOf(t.agent);
-      popKind = 'event';
+      popKind = 'event'; popSel = { kind: 'task', id: String(t.id), title: t.title };
       const edit = t.state === 'scheduled';
       const due = new Date(t.dueAt || Date.now());
       E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">${edit ? 'TAREA PROGRAMADA' : { doing: 'EN CURSO', waiting: 'EN ESPERA DE TU VISTO BUENO', next: 'EN PENDIENTES' }[t.state] || t.state.toUpperCase()}</span><span class="sp"></span><button class="cv-x" type="button" data-act="close" aria-label="Cerrar">✕</button></div>
@@ -334,7 +335,7 @@ export function initCalendar(ctx) {
     const r = routines.find(x => x.id === rest[0]); if (!r) return;
     const a = agentOf(r.agent), at = +rest[1];
     const pk = toPicker(r.when);
-    popKind = 'event';
+    popKind = 'event'; popSel = { kind: 'routine', id: r.id, title: r.title };
     E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">RUTINA</span><span class="sp"></span><button class="cv-x" type="button" data-act="close" aria-label="Cerrar">✕</button></div>
       <textarea class="cv-title" rows="1" aria-label="Título de la rutina" maxlength="90">${esc(r.title)}</textarea>
       <div class="cv-pop-m">${av(r.agent)} ${esc(a ? a.name : r.agent)} · ${esc(r.desc || describe(r.when))}${r.paused ? ' · <span class="cv-paused">PAUSADA</span>' : ''}</div>
@@ -539,5 +540,6 @@ export function initCalendar(ctx) {
     setTimeout(() => { const el = E.grid.querySelector(`.cv-ev[data-ev^="r:${CSS.escape(rid)}:"]`); if (el) { el.scrollIntoView({ block: 'nearest' }); openEvent(el.dataset.ev, el); } }, 80);
     return true;
   }
-  return { open, openAt, openRoutine, close, toggle, isOpen: () => openNow, refresh: () => { if (openNow && E.pop.hidden && !dnd.dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
+  const selection = () => (!openNow ? null : popSel ? { view: 'cal', label: `${popSel.kind === 'routine' ? 'Rutina' : 'Tarea'} «${popSel.title}»`, kind: popSel.kind, id: popSel.id } : { view: 'cal', label: `Calendario · ${E.title.textContent.replace(/\s+/g, ' ').trim().split(' · ')[0]}`, kind: 'range', id: ymd(new Date(anchor)) }); // V4.8: what Dimitri sees beside it
+  return { open, openAt, openRoutine, close, toggle, isOpen: () => openNow, selection, refresh: () => { if (openNow && E.pop.hidden && !dnd.dragging) render(); }, popOpen: () => !E.pop.hidden, closePop, get view() { return view; }, set view(v) { view = v; render(); } };
 }

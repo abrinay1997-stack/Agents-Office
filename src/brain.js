@@ -503,5 +503,7 @@ export function initBrain({ esc }) {
 
   function setTheme(dark) { INK = dark ? '236,234,227' : '21,20,20'; }
   function show(id) { const i = byId.get(id); if (i == null) return false; open(); select(nodes[i]); centre(nodes[i]); return true; } // open the Brain on one note (a [[link]] in the chat)
-  return { show, read, readNote, write, setGraph, setTheme, setOwner, setQuiet, open, close, back, toggle, isOpen: () => openNow, state, get nodes() { return nodes; }, get links() { return links; } };
+  return { show, read, readNote, write, setGraph, setTheme, setOwner, setQuiet, open, close, back, toggle, isOpen: () => openNow, state,
+    selection: () => (openNow ? { view: 'brain', label: sel ? `Nota «${sel.id}»` : 'El Cerebro', kind: sel ? 'note' : null, ...(sel ? { id: sel.id } : {}) } : null), // V4.8: what Dimitri sees beside it
+    get nodes() { return nodes; }, get links() { return links; } };
 }
