@@ -50,15 +50,19 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
   const fab = () => (FAB ||= cargarFabrica());
   const carpeta = () => path.join(brainPath, ...notas.CARPETA.split('/'));
   const guias = new Map(); // hash de la escena → id de la guía ya subida a la galería
+  const canales = () => notas.conjuntoDeCanales(fab().canales); // las notas validan contra un Set de ids, no la lista de la fábrica
 
   /** Los presets del dueño: cada nota de <cerebro>/Estudio/Presets/*.md. Una nota rota se dice, no tumba el banco. */
   function propios() {
     const out = [], problemas = [], byId = new Map(fab().presets.map(p => [p.id, p]));
     let files = []; try { files = fs.readdirSync(carpeta()).filter(f => f.endsWith('.md')); } catch { return { propios: out, problemas }; }
-    for (const f of files) {
+    const vistos = new Map(); // id → archivo: dos notas con el mismo id («Catálogo web» y «Catalogo web») no se cargan las dos
+    for (const f of files.sort()) {
       let md = ''; try { md = fs.readFileSync(path.join(carpeta(), f), 'utf8'); } catch { continue; }
-      const r = notas.notaAPreset(md, { archivo: `${notas.CARPETA}/${f}`, byId, canales: fab().canales });
+      const r = notas.notaAPreset(md, { archivo: `${notas.CARPETA}/${f}`, byId, canales: canales() });
       if (!r.preset) { problemas.push(`${f}: ${r.problemas.join('; ')}`); continue; }
+      if (vistos.has(r.preset.id)) { problemas.push(`${f}: tiene el mismo id (${r.preset.id}) que «${vistos.get(r.preset.id)}»; no se carga: renómbrala o cámbiale el id`); continue; }
+      vistos.set(r.preset.id, f);
       if (r.problemas.length) problemas.push(`${f}: ${r.problemas.join('; ')}`);
       out.push(r.preset);
     }
@@ -78,13 +82,23 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
       cifras: cifrasComoObjeto(cifras()), capacidades: { local: sharpOk !== false }, escena3d: e3 };
   };
 
+  /** Por qué un preset local no se puede hacer en esta versión (o '' si sí): su LUT de fábrica aún no está en presets/luts, o
+   *  pide un archivo que el Estudio no sabe recibir (un .cube). Revisión F1: salían «gratis · en tu máquina» y el trabajo
+   *  terminaba «done» con una copia idéntica. */
+  function faltaLocal(p) {
+    if (!p || p.ejecutor !== 'local') return '';
+    for (const o of arr(p.local)) if (o && typeof o.archivo === 'string' && /\.cube$/i.test(o.archivo) && !fs.existsSync(path.join(L.DIR_LUTS, path.basename(o.archivo)))) return 'su LUT todavía no viene con la oficina';
+    for (const en of arr(p.entradas)) if (en && (en.min || 0) > 0 && !['image', 'video', 'audio', 'music'].includes(en.medio)) return `el Estudio todavía no recibe ${en.medio === 'cube' ? 'archivos .cube' : `archivos «${en.medio}»`}`;
+    return '';
+  }
+
   /** GET /api/media/presets: la mezcla, filtrada por medio, modo y texto, cada uno con si algún modelo encendido (o lo local) lo sirve. */
   function lista({ medio, modo, q } = {}) {
     const t = todos(), ctx = contexto();
     let ps = t.presets.filter(p => !medio || arr(p.medios).includes(medio)).filter(p => !modo || core.modoAdmite(p, modo));
     if (q && String(q).trim()) { const hits = core.buscar(String(q).slice(0, 120), ps, { max: 40 }); const by = new Map(ps.map(p => [p.id, p])); ps = hits.map(h => ({ ...by.get(h.id), score: h.score, por: h.por })).filter(p => p.id); }
     const sirve = p => {
-      if (p.ejecutor === 'local') return { on: sharpOk !== false, modelos: [], motivo: sharpOk === false ? 'no disponible en esta máquina' : '' };
+      if (p.ejecutor === 'local') { const falta = faltaLocal(p); return { on: sharpOk !== false && !falta, modelos: [], motivo: falta || (sharpOk === false ? 'no disponible en esta máquina' : '') }; }
       const kind = arr(p.medios)[0] || 'image';
       const c = core.modelosPara([{ id: p.id, preset: p, params: {} }], ctx.models, ctx.caps, { kind, modo: arr(p.modos)[0], familias: ctx.familias });
       const on = c.filter(x => x.on);
@@ -111,16 +125,20 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
       } else pila.push(it);
     }
     const c = core.compilar({ ...contexto(), byId: presets, pila, params, entradas: { ...P.entradas, referencias: refs }, idea: P.idea, producto: P.producto, model: P.model, escena, n: P.n, orden: P.orden, kind: 'image' });
+    for (const it of pila) { const falta = faltaLocal(byId.get(it.id)); if (falta) c.errores = [...arr(c.errores), `«${byId.get(it.id).nombre || it.id}» aún no se puede: ${falta}`]; }
     return { plan: c, pedido: { ...P, pila, params, escena, entradas: { ...P.entradas, referencias: refs } } };
   }
 
   /** La imagen guía de la escena, subida una vez por escena (la galería la muestra como «Guía de composición»). */
   function guiaDe(escena) {
     const h = createHash('sha1').update(JSON.stringify(e3.normalizar(escena))).digest('hex').slice(0, 16);
-    const ya = guias.get(h); if (ya && media.resolve(ya)) return ya;
+    const ya = guias.get(h); if (ya && media.resolve(ya)) return { file: ya, nueva: false };
+    // tras un reinicio la caché está vacía: la guía de esa escena sigue en la galería, marcada con su hash
+    const vieja = media.list({ limit: 1e6 }).find(x => x.guia === true && x.escena === h && media.resolve(x.file));
+    if (vieja) { guias.set(h, vieja.file); return { file: vieja.file, nueva: false }; }
     const it = media.upload({ name: 'Guía de composición (escenario 3D)', data: e3.guiaPNG(escena, { lado: 768 }) });
     try { media.update(it.file, { guia: true, escena: h }); } catch {}
-    guias.set(h, it.file); return it.file;
+    guias.set(h, it.file); return { file: it.file, nueva: true };
   }
 
   /** Lo de «antes» del modelo (enderezar, quitar la dominante, la luz y el color: §5.2) se hace aquí, sobre tu foto, y lo que va a
@@ -149,16 +167,25 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
       const j = media.submit({ local: true, source: foto, versionOf: foto, kind: 'image', prompt: c0.preset.map(x => byId.get(x.id)?.nombre || x.id).join(' + ') || 'Edición en tu máquina', post: ops, qa: c0.qa, medir: c0.medir, preset: c0.preset, canal, receta, by, folder: P.folder });
       return { plan: c0, jobs: [j] };
     }
-    let c = c0;
-    if (c.guia?.pendiente) c = core.ponerGuia(c, guiaDe(P.escena));
-    const req = { ...c.request, media: { ...c.request.media } };
-    if (req.pre?.length && foto && req.media.reference?.[0] === foto) { // §5.2: lo de antes, antes — la IA recibe tu foto ya preparada
-      if (!(await L.disponible()).ok) { const e = new Error('Lo de antes de la IA (luz y color) no está disponible en esta máquina: no se manda a la IA en su lugar'); e.status = 400; throw e; }
-      req.media.reference = [await preparar(foto, req.pre, P.folder), ...req.media.reference.slice(1)];
+    // Revisión F1: la guía y la foto preparada se suben ANTES de submit (que es donde se miran los topes). Si submit dice que no,
+    // lo que se acaba de crear va a la papelera: un clic repetido en GENERAR con el tope alcanzado no llena la galería de copias.
+    const creados = [];
+    try {
+      let c = c0;
+      if (c.guia?.pendiente) { const g = guiaDe(P.escena); if (g.nueva) creados.push(g.file); c = core.ponerGuia(c, g.file); }
+      const req = { ...c.request, media: { ...c.request.media } };
+      if (req.pre?.length && foto && req.media.reference?.[0] === foto) { // §5.2: lo de antes, antes — la IA recibe tu foto ya preparada
+        if (!(await L.disponible()).ok) { const e = new Error('Lo de antes de la IA (luz y color) no está disponible en esta máquina: no se manda a la IA en su lugar'); e.status = 400; throw e; }
+        const prep = await preparar(foto, req.pre, P.folder); creados.push(prep);
+        req.media.reference = [prep, ...req.media.reference.slice(1)];
+      }
+      delete req.pre;
+      const j = media.submit({ ...req, medir: c.medir, canal, esEscena, receta, by, folder: P.folder, purpose: 'banco de presets' });
+      return { plan: c, jobs: [j] };
+    } catch (e) {
+      for (const f of creados) { try { media.trash(f); } catch {} for (const [h, v] of guias) if (v === f) guias.delete(h); }
+      throw e;
     }
-    delete req.pre;
-    const j = media.submit({ ...req, medir: c.medir, canal, esEscena, receta, by, folder: P.folder, purpose: 'banco de presets' });
-    return { plan: c, jobs: [j] };
   }
 
   /** POST /api/media/presets: «Guardar como preset» — una nota en <cerebro>/Estudio/Presets/<nombre>.md (una neurona del
@@ -178,7 +205,10 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
     const byId = new Map(fab().presets.map(p => [p.id, p]));
     const pila = arr(r.pila).map(x => (typeof x === 'string' ? { id: x, params: {} } : { id: String(x.id), params: x.params && typeof x.params === 'object' ? x.params : {} })).filter(x => byId.has(x.id)).slice(0, 16);
     if (!pila.length) throw Object.assign(new Error('ningún preset de esa receta existe en la fábrica'), { status: 400 });
-    const archivo = notas.archivoDeNombre(nombre), f = path.join(carpeta(), archivo);
+    // Revisión F1: el id quita las tildes y el archivo no. «Catalogo web» cuando ya está «Catálogo web» es el mismo preset:
+    // se guarda en esa nota (y su historial), no en una segunda con el mismo id.
+    const mismo = propios().propios.find(x => x.id === notas.idDesdeNombre(nombre));
+    const archivo = mismo ? path.basename(mismo.archivo) : notas.archivoDeNombre(nombre), f = path.join(carpeta(), archivo);
     const previa = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null;
     const antes = previa ? notas.notaAPreset(previa, { byId }).preset : null;
     const hoy = new Date().toISOString().slice(0, 10);
@@ -191,7 +221,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
       marca: limpio(b.marca, 60) || antes?.marca || null, campana: limpio(b.campana, 60) || antes?.campana || null,
       enlaces: antes?.enlaces || [], buscar: antes?.buscar || [], estado: 'beta', creado: antes?.creado || hoy, actualizado: hoy,
     };
-    const prob = notas.validarPropio(p, { byId, canales: fab().canales });
+    const prob = notas.validarPropio(p, { byId, canales: canales() });
     if (prob.length) throw Object.assign(new Error(prob.join(' · ')), { status: 400 });
     fs.mkdirSync(carpeta(), { recursive: true });
     if (previa) { const h = path.join(dataDir, 'history', 'presets', p.id); fs.mkdirSync(h, { recursive: true }); fs.writeFileSync(path.join(h, `${Date.now()}.md`), previa); }

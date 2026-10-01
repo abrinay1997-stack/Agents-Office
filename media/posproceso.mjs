@@ -47,9 +47,15 @@ export async function procesar(buf, j = {}) {
   const canal = canalDe(pasos, j.canal);
   const ref = pasos.find(p => p && p.op === 'transferir-color' && p.ref)?.ref;
   const original = j.versionOf ? leerArchivo(j.versionOf) : null;
-  const out = await L.pipeline(buf, pasos.map(({ de, ...p }) => p), {
+  // la LUT del dueño (ref-lut-aplicar): el compilador pone en el paso el id de la galería; aquí se lee su .cube (revisión F1)
+  const lutId = pasos.find(p => p && (p.op === 'lut' || p.op === 'lut3d') && typeof p.lut === 'string')?.lut;
+  const lutBuf = lutId ? leerArchivo(lutId) : null;
+  const out = await L.pipeline(buf, pasos.map(({ de, lut, ...p }) => p), {
     canal, referencia: ref ? leerArchivo(ref) : undefined, original: original || undefined, sku: j.sku || undefined, n: j.n || 1,
+    ...(lutBuf ? { lut: lutBuf.toString('utf8') } : {}),
   });
+  // un paso que no se hizo se dice: el trabajo no sale «done» limpio con una copia igual a la foto
+  const sinHacer = out.pasos.filter(p => p && p.hecho === false);
   let qa = null;
   let ids = Array.isArray(j.qa) ? j.qa.filter(x => typeof x === 'string') : [];
   // copiar el color de una referencia cambia el color A PROPÓSITO: medir ΔE contra tu foto daría un «revisar» falso
@@ -75,6 +81,7 @@ export async function procesar(buf, j = {}) {
     post: { pasos: out.pasos, medido, avisos: out.avisos },
     qa: qa ? { estado: qa.estado, checks: qa.checks, motivo: qa.motivo } : null,
     nombre: out.nombre || null,
+    sinHacer: sinHacer.map(p => p.aviso || (p.error ? `${p.op}: ${p.error}` : `${p.op}: no se hizo`)),
   };
 }
 export { L as imagenLocal };

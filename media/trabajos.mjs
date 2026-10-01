@@ -197,6 +197,7 @@ async function runJob(j) {
         const r = await procesar(p.buf, j);
         guardar(r.buffer, r.ext, { ...p.extra, post: r.post, ...(r.qa ? { qa: r.qa } : {}), ...(r.nombre ? { nombre: r.nombre } : {}) });
         if (r.qa?.estado === 'revisar') j.revisar = [...(j.revisar || []), r.qa.motivo || 'la QA pide revisarla'];
+        if (r.sinHacer?.length) j.warning = `no se hizo en tu máquina: ${[...new Set(r.sinHacer)].join(' · ')}`.slice(0, 300); // revisión F1: nunca «done» limpio si un paso falló
       } catch (e) {
         if (local || e.code !== 'no-disponible') throw e;
         guardar(p.buf, p.ext, { ...p.extra, post: { pasos: [], avisos: [e.message] } }); // sin sharp: el resultado del modelo tal cual, y se dice

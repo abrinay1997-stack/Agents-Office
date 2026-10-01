@@ -816,7 +816,8 @@ const DIR_LUTS = path.join(RAIZ, 'presets', 'luts');
 function leerLutDeArchivo(archivo, raiz = RAIZ) {
   const ruta = path.resolve(raiz, archivo), dir = path.resolve(raiz, 'presets', 'luts');
   if (!ruta.startsWith(dir + path.sep) || !ruta.toLowerCase().endsWith('.cube')) throw new Error('Una LUT de fábrica solo se lee de presets/luts/*.cube.');
-  return fs.readFileSync(ruta, 'utf8');
+  // sin la ruta de la máquina en el aviso (revisión F1: «ENOENT C:\\…\\pastel.cube» llegaba a la galería)
+  try { return fs.readFileSync(ruta, 'utf8'); } catch { throw new Error(`falta la LUT «${path.basename(ruta)}» en presets/luts`); }
 }
 export { DIR_LUTS };
 
