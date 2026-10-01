@@ -50,6 +50,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.10 (1 oct, misma rama, en local), MiniMax en el Estudio, pedido del dueño: imagen, video H3, voz, música, y voces propias (diseñar, y clonar grabando con el micrófono o subiendo un fragmento). Se comprobó contra la doc oficial (`docs/minimax/api-verificada.md`). Ver «MiniMax en el Estudio (V4.10)».
 - V4.9 (30 sep, rama `mejora/dimitri-estudio`, todavía en local), Dimitri maneja el Estudio, pedido del dueño. Se construyó con cuatro equipos de agentes en paralelo (worktrees) más revisión adversarial; ver la sección «Dimitri y el Estudio (V4.9)»:
   - el modo «estudio»: un plan de creativos con su costo y GENERAR;
   - imágenes en su chat, que ve con la visión de Claude;
@@ -86,7 +87,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - auditoría de 100 puntos: los 100 arreglados.
 
 **Siguiente, en este orden:**
-0. **MiniMax directo en el Estudio** (imagen, video H3, voz, música, clonar y diseñar voces), pedido el 30 sep. La propuesta del dueño está en `docs/minimax/` (léase su `README.md`: hay que reconciliarla con el código de hoy y comprobarla contra la documentación oficial).
+0. **Probar MiniMax con la key real del dueño:** `node scripts/check-minimax.mjs` (con `--video` y `--music`) y luego una clonación grabando desde el panel «Voces». Ajustar los precios marcados «aproximado» con su primera factura.
 1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
    - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);
@@ -429,6 +430,30 @@ Real image and video generation, for the owner (the clapperboard in the dock, ke
 - **The viewer (V4.4, 27 Sep 2026):** two columns, the picture and its own panel (prompt, details, actions); the picture can only fill its own column, so the text never sits on it. Under 1100 px the panel goes below the picture.
 - **The model list (V4.4, 27 Sep 2026):** sorts by Recomendado, Mejor calidad, Más barato, Más caro, Más rápido or Por creador, filters by maker, and searches by name, maker or use. Each model shows its maker, quality (●●●● 1–4), speed and «Para: …» — from `INFO` in `media.mjs` (a model not listed there gets its engine as maker and quality 2; add a line when you add a model).
 - To make an agent use it well, put the house style for prompts in its skill (e.g. `prompts-visuales`), and which model to prefer for which piece.
+
+## MiniMax en el Estudio (V4.10, 1 oct 2026)
+
+- **Motor `minimax`**, una sola key `MINIMAX_API_KEY` (y opcionales `MINIMAX_GROUP_ID`, `MINIMAX_API_BASE`). Cliente puro: `minimax.mjs`.
+  - Valida HTTP y `base_resp`, y traduce los códigos a español: 1008 sin saldo, 1026 contenido sensible, 2038 sin permiso de clonar, 2049 key mala.
+  - **Lo que manda es `docs/minimax/api-verificada.md`, no la propuesta original:** cada dato lleva su URL. Si MiniMax cambia algo, se corrige allí primero.
+- **Kinds del Estudio:** `image`, `video`, `audio` (voz) y `music`.
+  - El tipo de ajuste `text` (`T()` en `media.mjs`) sirve para el `voiceId` y el estilo.
+  - Un audio generado es `kind:'audio'`; si es música, su ficha lleva `wanted:'music'`.
+  - Pesos para el tope: video 5, música 3, voz 1. `usage` cuenta `audios`.
+  - El costo de la voz va por carácter (`perChar`) y el del video por resolución (`costBy`).
+- **El video es asíncrono:** el `task_id` se guarda en `job.remote`, así que retoma tras un reinicio. Cancelar manda `DELETE /v2/video_generation/<id>` (solo en cola, sin cobro).
+- **Voces** (`minimax-voices.mjs`, rutas `/api/voces`, `/design`, `/clone`, `DELETE /api/voces/<id>`, registro en `data/minimax-voices.json`):
+  - Cada voz se «fija» con un TTS corto para que MiniMax no la borre a los 7 días sin uso.
+  - Borrar la quita también en MiniMax.
+  - Diseñar cuesta ~US$3 y clonar ~US$1,5; los dos pasan por los topes y por el ledger.
+- **Clonar** (pedido del dueño: «grabar o subir un fragmento, lo máximo que pueda»; sin editor):
+  - El panel graba con el micrófono (`MediaRecorder`; necesita `localhost` o https) o recibe un archivo.
+  - Todo va a la galería, a «Grabaciones de voz», y se clona por su id.
+  - WebM, otros formatos, más de 20 MB o más de 5 min → WAV 24 kHz mono con los primeros 5:00, en el navegador (`src/studio-voz.js`: `toMono`, `resample`, `encodeWav`, `cloneLength`). Menos de 10 s se rechaza.
+  - Probar sin gastar: `node scripts/voz-clonar-recorrido.mjs` (micrófono simulado, MiniMax simulado).
+- **Agentes:** `generar_voz` y `generar_musica` en `estudio-mcp.mjs`, solo con modelos encendidos. Dimitri acepta creativos `audio` y `music` (`estudio-plan.mjs`).
+- **Tests:** contra `tests/minimax-stand.mjs` (MiniMax simulado), nunca la key real. Con la key real: `node scripts/check-minimax.mjs`.
+- **Música de pago (`music-3.0`):** solo para cuentas que ya pagaban antes del 20 ago 2026. `mmx-musica-3-gratis` (`music-3.0-free`) sirve para cualquiera.
 
 ## Contenido (V4.7, 30 sep 2026)
 

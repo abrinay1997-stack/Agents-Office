@@ -1,5 +1,39 @@
 # Changelog
 
+## V4.10 — 1 oct 2026 (MiniMax: imagen, video, voz, música y voces propias)
+
+- **Un motor nuevo, MiniMax, con una sola key** (`MINIMAX_API_KEY`; opcionales `MINIMAX_GROUP_ID` y `MINIMAX_API_BASE`).
+  - Antes de escribir código se comprobó todo contra la documentación oficial, con la URL de cada dato: `docs/minimax/api-verificada.md`. Donde la propuesta del dueño difería, mandó la documentación: precios, cancelar un video en cola, `music-3.0-free`, las emociones de la voz y el `file_id` int64.
+  - Cliente: `minimax.mjs`.
+- **Modelos:**
+  - Imagen: `mmx-image-01`, US$0,0035.
+  - Video: `mmx-h3` y `mmx-h3-max`. Hay fotogramas o referencias; el trabajo retoma tras un reinicio con su `task_id`, y cancelar en cola no se cobra.
+  - Voz: `mmx-voz-2.8-hd/turbo` y `2.6-hd/turbo`, hasta 9.999 caracteres, con voz, emoción, velocidad, volumen, tono e idioma.
+  - Música: `mmx-musica-3` y `mmx-musica-3-gratis`, con letra o instrumental y estilo.
+  - Los precios no confirmados en la página oficial van rotulados «aproximado».
+- **El Estudio ahora crea cuatro cosas:** Imagen, Video, **Voz** y **Música**.
+  - Voz: el texto que se lee, con su contador, y un selector de voz con las del sistema y las tuyas.
+  - Música: letra con [Verse] [Chorus]…, o una descripción si es instrumental.
+  - La galería suma los filtros Voz y Música.
+  - En el visor, «Repetir con otra voz».
+  - Topes: un video pesa 5, una canción 3 y una voz 1.
+- **Panel «Voces»:**
+  - **Diseñar** una voz desde una descripción, con una muestra para escuchar.
+  - **Clonar** una voz: **grabarla con el micrófono** o **subir un fragmento**. La oficina usa todo lo que MiniMax admite (de 10 s a 5 min y 20 MB), y lo dice: «cuanto más, mejor».
+    - Grabación: un reloj «0:32 de 5:00», un medidor de nivel, y se para sola a los 5:00.
+    - Grabaciones y fragmentos quedan en la galería, en «Grabaciones de voz», y se clonan desde ahí.
+    - Lo que MiniMax no aceptaría (WebM del navegador, otro formato, más de 20 MB o más de 5 min) se convierte en el navegador a WAV 24 kHz mono con los primeros 5:00. Un MP3, WAV o M4A que cabe va tal cual.
+    - Menos de 10 s se rechaza sin subir nada.
+  - Listar, copiar el id, usar y borrar; borrar también la quita en MiniMax.
+  - Cada voz queda «fijada» para que MiniMax no la borre a los 7 días.
+  - Registro: `data/minimax-voices.json`, que no viaja.
+- **Agentes:** `generar_voz` y `generar_musica` en el Estudio de los agentes, solo cuando hay modelos encendidos; en los entregables, el audio va como `[🔊 archivo](/media/…)`. **Dimitri** también puede proponer creativos de voz y de música.
+- **Pruebas:**
+  - Tests contra un MiniMax simulado (`tests/minimax-stand.mjs`): `minimax.test.mjs`, `minimax-voces.test.mjs` y `studio-voz.test.mjs`; 301 tests en total.
+  - En el navegador: `scripts/estudio-voz-capturas.mjs` (216/216, con y sin key, claro y oscuro, a 1512, 1024 y 390 px) y `scripts/voz-clonar-recorrido.mjs`. Este último graba con un micrófono simulado, clona, recorta 7 min a 5:00, rechaza 5 s, y comprueba que cerrar el panel mientras graba no guarda nada.
+  - Prueba de humo con una key real: `node scripts/check-minimax.mjs` (salida en `data/salida-minimax/`).
+- **Sin probar con una key real:** nada de MiniMax. La música de pago solo funciona para cuentas que ya pagaban antes del 20 de agosto de 2026; la gratis, para todas. Clonar exige una cuenta verificada (error 2038).
+
 ## V4.9 — 30 sep 2026 (Dimitri maneja el Estudio)
 
 - **Dimitri hace creativos.** Un modo nuevo, «estudio», se activa cuando le pides imágenes, video, un reel, un post o editar una foto.
