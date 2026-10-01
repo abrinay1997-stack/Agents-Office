@@ -50,6 +50,14 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V4.9 (30 sep, rama `mejora/dimitri-estudio`, todavía en local), Dimitri maneja el Estudio, pedido del dueño. Se construyó con cuatro equipos de agentes en paralelo (worktrees) más revisión adversarial; ver la sección «Dimitri y el Estudio (V4.9)»:
+  - el modo «estudio»: un plan de creativos con su costo y GENERAR;
+  - imágenes en su chat, que ve con la visión de Claude;
+  - el panel al lado de cada vista, con S y el chip «Viendo»;
+  - el visor que no corta, con zoom y F;
+  - Editar como versión nueva;
+  - notas y memoria de cada creativo;
+  - «Pedírselo a Dimitri» y «Mandar a un departamento».
 - V4.6 (27 sep, rama `mejora/cerebro-3d`), el Cerebro y su memoria, pedido del dueño:
   - El logo lleva a la vista general (cierra la vista, Dimitri y el departamento, y la cámara vuelve).
   - **Cerebro 3D** (`src/brain3d.js`, three.js): notas = neuronas, `[[enlaces]]` = sinapsis. Cada carpeta es un lóbulo (hemisferio y vecinos por afinidad de enlaces), los índices al centro y los detalles hacia la corteza. Gira solo y se para al tocarlo; nombres clicables; vista previa al pasar el cursor; «Explorar» a la izquierda (búsqueda, regiones, cuándo, quién, sinapsis, conexiones, vecindario, herramientas, lista de notas para el teclado); la ficha se oculta (⟩) o se cierra (✕) sin cerrar el Cerebro.
@@ -78,6 +86,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - auditoría de 100 puntos: los 100 arreglados.
 
 **Siguiente, en este orden:**
+0. **MiniMax directo en el Estudio** (imagen, video H3, voz, música, clonar y diseñar voces), pedido el 30 sep. La propuesta del dueño está en `docs/minimax/` (léase su `README.md`: hay que reconciliarla con el código de hoy y comprobarla contra la documentación oficial).
 1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
    - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);
@@ -95,6 +104,9 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - Nada se atenúa con `opacity` para decir «pausado» o «saltado»: el texto debe seguir a 4,5:1.
 - Todo objetivo mide 24 px o más (o está a 24 px de centro a centro del siguiente); ningún texto baja de 10,5 px.
 - Nada que se vea en la oficina depende del ancho de la ventana sin probarlo a 390 px (teléfono), a 1024 px y a 1512 px.
+- (V4.9) **Una vista puede ser más estrecha que la ventana:** Dimitri es un panel fijo a la izquierda y la vista abierta se corre (`body.subOpen :is(#studioOv,#calOv,#ctOv,#anOv,#brainOv){left:var(--subW)}`, `src/css/dimitri.css`). El estilo estrecho de una vista va con `@container` sobre la propia vista, no con `@media` de la ventana (ejemplo: `src/css/vistas-ancho.css`). Una vista nueva se registra en esa regla y se prueba con Dimitri abierto a 1024, 1366 y 1512 px.
+- (V4.9) `build.mjs` junta `src/css/*.css` **por orden alfabético**: un archivo que corrige a otro debe ir después en ese orden (por eso `vistas-ancho.css` se llama así).
+- (V4.9) Una vista nueva expone `selection()` → `{view, label, kind, id?}` para el chip «Viendo» de Dimitri, y se añade a `getContext` en `src/main.js`. Lo que cambia la galería fuera del Estudio dispara `ao:media-changed` (el Estudio abierto se refresca).
 
 ## Changing the agents
 
@@ -354,6 +366,45 @@ When the owner says "as a team", "get the team on it", "spawn three teammates to
 ## Dimitri (the deputy manager, «Subgerente» until 24 Sep 2026)
 
 The owner's right hand, above the six departments: the ◆ tag beside the Brain at the centre of the office, or key S. The name is `office.config.json → "deputy": { "name": "Dimitri" }`. Dimitri (`sub.mjs`, page side `src/sub.js`) reads the company's notes, the office's live state and the latest deliverables, and answers in one of five modes: **charla** (a question or an opinion — it answers), **estado** (how the office is doing, from real data), **analisis** (a decision thought through: options, a recommendation), **plan** (work to be done — it splits it into pieces per department, instructions for each lead, why, a date, one desk or the team, and moves a piece put in the wrong department) or **pregunta** (one missing fact). Only a plan carries pieces, and nothing is sent until the owner presses ENVIAR A LOS JEFES. History: `data/subgerente.json`. To change how it thinks or distributes, edit `sub.mjs → systemPrompt`; better seat descriptions (`does`) and skills make it route better with no code change.
+
+## Dimitri y el Estudio (V4.9, 30 sep 2026)
+
+Dimitri hace creativos con el Estudio, ve las imágenes que le pasas y está a mano en todas las vistas.
+- **Modo «estudio»** (6.º modo de `sub.mjs`): devuelve `creatives` y `actions` en JSON.
+  - **Validación:** `estudio-plan.mjs` (puro) valida cada creativo contra el catálogo real y la galería:
+    - un modelo apagado o desconocido pasa al de por defecto, y lo dice;
+    - los ajustes salen de los valores permitidos;
+    - una referencia que no está en la galería se quita;
+    - un `needs` sin cumplir deja el creativo «skipped» con su motivo.
+  - **Costo:** `estimatePlan` calcula el total contra `media.budget()`.
+  - **Acciones:** lista cerrada: `carpeta_crear`, `carpeta_renombrar`, `mover`, `enviar_contenido`; esta última crea una idea, nunca aprobada.
+  - **GENERAR:** `POST /api/sub/studio` es **la única ruta que genera por Dimitri**, y solo la llama el clic de GENERAR. Entra en `media.submit` con `by:'dimitri'`, `sub:{msg,i}`, `purpose` y `read`. Al terminar, `subJobDone(j)` pone «Listos: …» en su chat con las miniaturas.
+  - **Para cambiar cómo elige modelos o escribe prompts:** `sub.mjs → systemPrompt` y `estudio-plan.mjs → studioPromptBlock`. De cada modelo, Dimitri ve la calidad, la velocidad y los usos que da `INFO` en `media.mjs`.
+- **Imágenes en su chat:**
+  - `POST /api/sub/chat {text, attach, vision, context}`, con un cuerpo de hasta 8 MB.
+  - La página sube el original a «Referencias de Dimitri» y manda una copia reducida (≤1568 px) para la visión.
+  - El servidor la pasa a Claude:
+    - con la CLI, `--input-format stream-json` y bloques `image` por stdin (`vision.mjs`; probado con la CLI 2.1.286);
+    - con el SDK, bloques de contenido.
+  - El texto visible de la imagen (`image_text`) pasa por `safety.injectionIn`: si salta, el mensaje lleva `shield` y el plan pierde sus acciones.
+- **Al lado de cada vista:**
+  - el panel y el corrimiento de la vista están en `src/css/dimitri.css`;
+  - la tecla S funciona dentro de las vistas;
+  - `ctx.getContext()` (en `src/main.js`) junta la `selection()` de la vista abierta para el chip «Viendo».
+- **El visor del Estudio:**
+  - `src/css/estudio.css` (filas `minmax(0,1fr)`) y `src/viewer-zoom.js` (puro, con test) para el zoom;
+  - se mide con `node scripts/estudio-capturas.mjs despues` (24 combinaciones; todas deben caber).
+- **Editar:** `POST /api/media/edit {file, instruction, model?}` y `media.editRequest`. Los modelos llevan `edit:true` en `CATALOG`, en el orden de `PREFER.edit`.
+  - La versión nueva lleva `versionOf` y la original suma `versions[]`.
+  - Si no hay ningún motor de edición encendido: 409 con `engines[].how`.
+- **Rastro y memoria** (solo motores reales, no «prueba»):
+  - Cada trabajo de Dimitri o de un agente, y cada edición, deja una nota en `<cerebro>/Agents Office/estudio/AAAA-MM/`, que no viaja por GitHub.
+  - Lo usado (`PATCH /api/media/item/<id> {used}` o ⭐) enseña a la memoria por trabajo.
+  - Tirar todo un pedido sin usarlo resta, y «Recuperar» lo deshace.
+- **De la galería a la oficina:**
+  - `POST /api/media/to-dept {file, dept, text}` crea una tarea con `refs:[file]`. `task.refs` es lo que entra; `task.media` sigue siendo lo que la tarea produjo.
+  - «Pedírselo a Dimitri» abre su chat con la imagen adjunta.
+- **Probar sin gastar:** `node scripts/dimitri-recorrido.mjs` (Claude simulado, motor «Prueba», navegador a 1512 claro y oscuro y a 390).
 
 ## The top bar (V4, 24 Sep 2026)
 

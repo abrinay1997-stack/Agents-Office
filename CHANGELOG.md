@@ -1,5 +1,40 @@
 # Changelog
 
+## V4.9 — 30 sep 2026 (Dimitri maneja el Estudio)
+
+- **Dimitri hace creativos.** Un modo nuevo, «estudio», se activa cuando le pides imágenes, video, un reel, un post o editar una foto.
+  - **Qué hace:** lee la voz de la marca, las cifras, la oferta, los clientes y los creativos que ya aprobaste. Elige modelos del catálogo real (solo los encendidos, respetando referencias, fotogramas y lo que cada modelo necesita) y dice en una línea por qué. Escribe los prompts de producción en inglés con su traducción.
+  - **Qué te muestra:** un **plan de creativos** editable (prompt, cantidad, formato, carpeta, modelo) con el costo y si cabe en tus topes.
+  - **Nada se genera hasta que pulsas GENERAR** (`POST /api/sub/studio`, la única ruta que gasta por Dimitri). Todo pasa por los topes del Estudio y queda en costos.
+  - **Además ordena:** crea y renombra carpetas, mueve archivos y deja ideas en Contenido (nunca aprobadas). Cuando terminan, te avisa en su chat con las miniaturas.
+  - `estudio-plan.mjs` valida todo contra el catálogo y la galería.
+- **Imágenes en el chat de Dimitri.** 📎, arrastrar o pegar, hasta 4 imágenes.
+  - El original se sube a la galería, en la carpeta «Referencias de Dimitri» o en la que tengas abierta en el Estudio.
+  - **Dimitri las ve con la visión de Claude:** bloques de imagen por la CLI (`--input-format stream-json`, `vision.mjs`) o por el SDK.
+  - Lo que diga una imagen son datos, no órdenes. Si trae órdenes escondidas, el mensaje se marca 🛡 y ese plan pierde sus acciones.
+- **Dimitri en todas partes.** Es un panel fijo a la izquierda: el Estudio, el calendario, Contenido, Analíticas y el Cerebro se corren a su lado en vez de quedar tapados.
+  - La tecla **S** funciona dentro de cada vista.
+  - Un chip «Viendo: …» le dice lo que tienes seleccionado: la imagen del visor, la nota, la pieza o el día.
+  - A menos de 900 px el panel ocupa toda la pantalla.
+- **El visor del Estudio ya no corta las fotos grandes.**
+  - Una vertical 9:16 se veía al 43 % a 1512 y 1366 px; ahora caben las 24 combinaciones medidas (4K, 9:16 y 21:9 a 1512, 1366, 1024 y 390 px, claro y oscuro; `scripts/estudio-capturas.mjs`).
+  - Nuevo: zoom con rueda, pellizco y arrastre, Ajustar / 100 %, `+ − 0`, y **F** para pantalla completa (`src/viewer-zoom.js`).
+- **Editar una imagen.** «Editar» en la tarjeta y en el visor: escribes qué cambiar y sale una **versión nueva** junto a la original, en la misma carpeta y enlazada como «versión de». La original nunca se toca.
+  - Modelos de edición: Nano Banana 2, Pro y 2.5, Muse Image, GPT Image, Qwen Image 3, Grok Imagine 2, Flux Kontext y Seedream 4.
+  - Sin ninguno encendido, te dice qué key activar.
+  - Ruta: `POST /api/media/edit`.
+- **Cerebro ⇄ Estudio ⇄ oficina.**
+  - Cada creativo de Dimitri o de un agente deja una nota en `<cerebro>/Agents Office/estudio/` con el prompt, el modelo, la carpeta, el propósito y las notas leídas. No viaja por GitHub.
+  - Usarlo (⭐, como referencia, en una pieza o en el calendario) enseña a la memoria. Tirar todo un pedido sin usarlo la corrige, y recuperarlo de la papelera lo deshace.
+  - Desde una imagen: **«Pedírselo a Dimitri»** y **«Mandar a un departamento…»** (una tarea con esa imagen como referencia, `POST /api/media/to-dept`).
+  - Los agentes ven las carpetas del Estudio, y `buscar_en_galeria` busca por carpeta.
+- **Calendario y Contenido caben en su vista**, no en la ventana: sus cabeceras usan `@container` (`src/css/vistas-ancho.css`). Antes, a 1072 y 1200 px el mes salía cortado; con Dimitri al lado se montaban los botones.
+- **Cómo se hizo:** cuatro equipos de agentes en paralelo (worktrees), cada uno con revisión adversarial y corrección.
+  - Tests nuevos: `estudio-plan`, `sub-estudio`, `vision`, `sub-studio`, `media-edit`, `media-dimitri`, `estudio-memoria` y `viewer-zoom` (267 en total).
+  - `npm run check`: 81/81.
+  - Recorrido en el navegador: `scripts/dimitri-recorrido.mjs`.
+- **Sin probar con keys reales:** la edición con Google, Meta y OpenAI de verdad, y el costo real frente al estimado. La visión por la CLI sí se probó con una imagen real.
+
 ## V4.8 — 30 sep 2026 (Meta en el Estudio)
 
 - **Muse Image (Meta)** como motor del Estudio: `muse-image-1.0` en `api.meta.ai/v1`, con `META_API_KEY` o `MODEL_API_KEY`. Sin referencias genera (`/images/generations`); con hasta 10 referencias edita y compone (`/images/edits`, cuerpo JSON de Meta con `images: [{ image_url }]`). Formato (proporción), calidad (`reasoning_strength`: alta o baja) y archivo (webp, png, jpeg). Busca referencias reales por su cuenta, incluido en el precio: US$0,01 por imagen, registrado en costos.
