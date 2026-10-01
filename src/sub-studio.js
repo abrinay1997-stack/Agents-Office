@@ -7,6 +7,8 @@
 //   creativesHTML(m, view) · actionsHTML(m, view) · stripHTML(files, esc) · studioBody(msgId, studio, edits) · planTotal(...)
 //   fitsBudget(total, budget, fallback, weight) · discardBody(msgId, studio) · applyDiscards(messages, ids) · fitWithin(w, h, max) · shrinkStep(t, bytes, limit) · b64Bytes(str) · usd(x)
 
+import { weightOf } from '../estudio-plan.mjs'; // V4.11 (DIM-02): one source for what counts against the day's cap (a video 5, a music 3)
+
 export const MAX_ATTACH = 4;                    // images per message (the server takes ≤4)
 export const VISION_SIDE = 1568;                // Claude's vision gains nothing past this long side
 export const VISION_BYTES = 1.5 * 1024 * 1024;  // each copy for the vision stays under 1.5 MB (the server refuses > 1.6 MB)
@@ -15,8 +17,9 @@ export const DIMITRI_FOLDER = 'Referencias de Dimitri';
 /* ---------- pure: money ---------- */
 export const usd = x => { const v = +x || 0; return 'US$' + (v > 0 && v < 0.1 ? v.toFixed(3) : v.toFixed(2)).replace('.', ','); };
 /** The cost of one unit (one image, one video) of a creative: what Dimitri estimated while the model is his, the catalog's price once the owner picks another. */
-export function unitCost(c, model, settings = {}) {
+export function unitCost(c, model, settings = {}, prompt) {
   const mine = +c.cost > 0 ? +c.cost / Math.max(1, +c.n || 1) : 0;
+  if (model && model.perChar && prompt !== undefined) return +(model.perChar * String(prompt).length).toFixed(4); // V4.11: a voice-over costs by the characters of the text the owner left
   const durChanged = settings.duration !== undefined && String(settings.duration) !== String((c.settings || {}).duration ?? settings.duration);
   if (!model || (model.id === c.model && !durChanged && mine)) return mine;
   if (model.per === 'second') { const d = +(settings.duration ?? model.settings?.duration?.default ?? model.seconds ?? 5) || 5; return (+model.cost || 0) * d; }
@@ -29,9 +32,9 @@ export function planTotal(creatives = [], edits = new Map(), models = []) {
     if (c.state && c.state !== 'proposed') continue;
     const e = edits.get(c.i) || {}; if (e.include === false) continue;
     const m = models.find(x => x.id === (e.model || c.model)) || null;
-    const n = Math.max(1, +(e.n ?? c.n) || 1), u = unitCost(c, m, { ...(c.settings || {}), ...(e.settings || {}) });
+    const n = Math.max(1, +(e.n ?? c.n) || 1), u = unitCost(c, m, { ...(c.settings || {}), ...(e.settings || {}) }, e.prompt !== undefined ? e.prompt : (m && m.perChar ? c.prompt || '' : undefined));
     items.push({ i: c.i, n, cost: +(u * n).toFixed(3) });
-    weight += n * (c.kind === 'video' ? 5 : 1);
+    weight += n * weightOf((m && m.kind) || c.kind);
   }
   return { count: items.length, units: items.reduce((s, x) => s + x.n, 0), weight, total: +items.reduce((s, x) => s + x.cost, 0).toFixed(3), items };
 }
@@ -39,7 +42,7 @@ export function planTotal(creatives = [], edits = new Map(), models = []) {
 export function fitsBudget(total, budget, fallback, weight = 0) {
   if (!budget) return fallback && typeof fallback.fits === 'boolean' ? { fits: fallback.fits, why: fallback.why || '' } : { fits: true, why: '' };
   const count = budget.left !== null && budget.left !== undefined ? +budget.left : null; // media.submit refuses past the day's count too
-  if (count !== null && weight > count) return { fits: false, why: `no cabe: quedan ${count} hoy en el tope del Estudio (un video cuenta 5)` };
+  if (count !== null && weight > count) return { fits: false, why: `no cabe: quedan ${count} hoy en el tope del Estudio (un video cuenta 5, una música 3)` };
   const lefts = [['hoy', budget.costLeftDay], ['este mes', budget.costLeftMonth]].filter(([, v]) => v !== null && v !== undefined);
   for (const [when, left] of lefts) if (total > left + 1e-9) return { fits: false, why: `no cabe: quedan ${usd(left)} ${when}` };
   return { fits: true, why: lefts.length ? `cabe en el presupuesto (quedan ${usd(Math.min(...lefts.map(([, v]) => v)))})` : count !== null ? `cabe en el tope de hoy (quedan ${count})` : 'sin tope de gasto' };
@@ -101,14 +104,22 @@ export const b64Bytes = s => { s = String(s || ''); const i = s.indexOf(','); if
 /* ---------- the page: HTML ---------- */
 const mediaSrc = f => '/media/' + String(f).split('/').map(encodeURIComponent).join('/');
 const JOB = { queued: 'en cola', running: 'generando…', done: 'listo', failed: 'falló', canceled: 'cancelado' };
-const KIND = { image: 'IMAGEN', video: 'VIDEO' };
+export const KIND = { image: 'IMAGEN', video: 'VIDEO', audio: 'VOZ', music: 'MÚSICA' }; // V4.11 (DIM-02): a voice-over or a jingle never reads «IMAGEN»
+const AUDIO_RE = /\.(mp3|wav|flac|m4a|ogg)$/i;
 
-/** A strip of gallery thumbnails; each one opens the Estudio's viewer on it. */
+/** A strip of gallery thumbnails; each one opens the Estudio's viewer on it. A sound file is a player with its ♪ (as in the gallery), never a broken image. */
 export function stripHTML(files = [], esc) {
   if (!files.length) return '';
-  return `<div class="sc-strip">${files.map(f => /\.(mp4|webm)$/i.test(f)
+  return `<div class="sc-strip">${files.map(f => AUDIO_RE.test(f)
+    ? `<div class="sc-au"><span class="sc-au-ic" aria-hidden="true">♪</span><audio controls preload="none" src="${esc(mediaSrc(f))}" aria-label="Escuchar ${esc(String(f).split('/').pop())}"></audio><button type="button" class="sc-au-open" data-open="${esc(f)}" aria-label="Abrir el audio en el Estudio" title="Abrir en el Estudio">Abrir</button></div>`
+    : /\.(mp4|webm)$/i.test(f)
     ? `<button type="button" class="sc-th vid" data-open="${esc(f)}" aria-label="Abrir el video en el Estudio" title="Abrir en el Estudio"><video src="${esc(mediaSrc(f))}" muted preload="metadata"></video><span aria-hidden="true">▶</span></button>`
     : `<button type="button" class="sc-th" data-open="${esc(f)}" aria-label="Abrir la imagen en el Estudio" title="Abrir en el Estudio"><img src="${esc(mediaSrc(f))}" alt="" loading="lazy"></button>`).join('')}</div>`;
+}
+/** V4.11 (DIM-02, DIM-03): the voice picker of a voice-over card — the owner's voices first, then the system's; an id that is neither stays, said. */
+export function voiceSelect(val, voices = { voices: [], system: [] }, esc) {
+  const own = voices.voices || [], sys = voices.system || [], known = [...own, ...sys].some(v => v.voiceId === val);
+  return `<label class="sc-f sc-fw"><span>Voz</span><select class="sc-set" data-k="voiceId">${!known && val ? `<option value="${esc(val)}" selected>${esc(val)} (no la encuentro)</option>` : ''}${own.length ? `<optgroup label="Tus voces">${own.map(v => `<option value="${esc(v.voiceId)}"${v.voiceId === val ? ' selected' : ''}>${esc(v.name || v.voiceId)} · ${v.kind === 'design' ? 'diseñada' : 'clonada'}</option>`).join('')}</optgroup>` : ''}<optgroup label="Del sistema">${sys.map(v => `<option value="${esc(v.voiceId)}"${v.voiceId === val ? ' selected' : ''}>${esc(v.name || v.voiceId)}</option>`).join('')}</optgroup></select></label>`;
 }
 
 function settingSelect(m, key, val, esc, label) {
@@ -117,7 +128,22 @@ function settingSelect(m, key, val, esc, label) {
   return `<label class="sc-f"><span>${label}</span><select class="sc-set" data-k="${key}">${s.values.map(x => `<option value="${esc(String(x))}"${String(x) === String(v) ? ' selected' : ''}>${esc(String(x))}</option>`).join('')}</select></label>`;
 }
 
-/** The creative cards of one of Dimitri's messages, with the total and GENERAR. view: { esc, edits, actionEdits, models, budget, jobs, folders } */
+/** What the text box of a creative is: a prompt, the words a voice will say, a song's lyrics or the description of an instrumental piece. */
+export const promptLabel = (kind, set = {}) => (kind === 'audio' ? 'Texto que se dirá' : kind === 'music' ? (set.instrumental ? 'Descripción de la pieza' : 'Letra (con [Verse], [Chorus]…)') : 'Prompt');
+/** V4.11 (DIM-02): the settings of a voice-over (voice, emotion, speed) or of a piece of music (instrumental, style) on the card. */
+function soundRow(kind, m, set, voices, esc) {
+  const s = (m && m.settings) || {};
+  if (kind === 'audio') {
+    const emo = s.emotion && s.emotion.type === 'enum' ? `<label class="sc-f"><span>Emoción</span><select class="sc-set" data-k="emotion">${s.emotion.values.map(x => `<option value="${esc(String(x))}"${String(x) === String(set.emotion ?? s.emotion.default) ? ' selected' : ''}>${esc(x ? String(x) : 'la de la voz')}</option>`).join('')}</select></label>` : '';
+    const spd = s.speed && s.speed.type === 'range' ? `<label class="sc-f"><span>Velocidad</span><input class="sc-set sc-num" data-k="speed" type="number" min="${s.speed.min}" max="${s.speed.max}" step="${s.speed.step || 0.05}" value="${esc(String(set.speed ?? s.speed.default))}"></label>` : '';
+    return `<div class="sc-row">${s.voiceId ? voiceSelect(set.voiceId ?? s.voiceId.default, voices, esc) : ''}${emo}${spd}</div>`;
+  }
+  const inst = s.instrumental ? `<label class="sc-f sc-chk"><input type="checkbox" class="sc-set" data-k="instrumental"${set.instrumental ? ' checked' : ''}> <span>Instrumental (sin letra)</span></label>` : '';
+  const sty = s.style ? `<label class="sc-f sc-fw"><span>Estilo</span><input class="sc-set sc-style" data-k="style" maxlength="${s.style.max || 2000}" value="${esc(String(set.style ?? ''))}" placeholder="género, ánimo, voz"></label>` : '';
+  return `<div class="sc-row">${inst}${sty}</div>`;
+}
+
+/** The creative cards of one of Dimitri's messages, with the total and GENERAR. view: { esc, edits, actionEdits, models, budget, jobs, folders, voices } */
 export function creativesHTML(m, v) {
   const s = m.studio; if (!s || !(s.creatives || []).length && !(s.actions || []).length) return '';
   const { esc } = v, edits = v.edits || new Map(), models = v.models || [];
@@ -133,7 +159,7 @@ export function creativesHTML(m, v) {
         <div class="sc-meta">${esc(c.modelName || c.model || '')}${c.n > 1 ? ` · ${c.n}` : ''} · <b>${esc(st)}</b>${c.state === 'failed' && c.error ? ' — ' + esc(c.error) : ''}${cls === 'run' ? '<span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}</div>
         ${stripHTML(c.files || [], esc)}</div></div>`;
     }
-    const n = Math.max(1, +(e.n ?? c.n) || 1), set = { ...(c.settings || {}), ...(e.settings || {}) };
+    const n = Math.max(1, +(e.n ?? c.n) || 1), set = { ...(c.settings || {}), ...(e.settings || {}) }, sound = c.kind === 'audio' || c.kind === 'music';
     const opts = models.filter(x => x.kind === (c.kind || 'image') && (x.on || x.id === mid));
     const modelSel = opts.length
       ? `<select class="sc-model" aria-label="Modelo">${opts.map(x => `<option value="${esc(x.id)}"${x.id === mid ? ' selected' : ''}>${esc(x.name)}${x.on ? '' : ' (sin key)'}</option>`).join('')}</select>`
@@ -147,12 +173,13 @@ export function creativesHTML(m, v) {
         <div class="sc-t">${esc(c.title || 'Creativo')} ${kindLbl}${on ? '' : ' <span class="sc-offl">no se incluye</span>'}</div>
         <div class="sc-row">${modelSel}<span class="sc-cost" title="Costo estimado de este creativo">${usd(one ? one.cost : 0)}</span></div>
         ${c.why ? `<div class="sc-why">${esc(c.why)}</div>` : ''}
-        <label class="sc-lab" for="scp-${esc(m.id)}-${c.i}">Prompt</label>
+        <label class="sc-lab" for="scp-${esc(m.id)}-${c.i}">${promptLabel(c.kind, set)}</label>
         <textarea class="sc-prompt" id="scp-${esc(m.id)}-${c.i}" rows="3">${esc(e.prompt ?? c.prompt ?? '')}</textarea>
-        ${c.prompt_es && c.prompt_es !== c.prompt ? `<div class="sc-es"><span class="vh">En español: </span>${esc(c.prompt_es)}</div>` : ''}
+        ${sound ? '' : c.prompt_es && c.prompt_es !== c.prompt ? `<div class="sc-es"><span class="vh">En español: </span>${esc(c.prompt_es)}</div>` : ''}
+        ${sound ? soundRow(c.kind, m0, set, v.voices, esc) : ''}
         <div class="sc-row">
           <span class="sc-f"><span>Cantidad</span><span class="sc-qty" role="group" aria-label="Cantidad"><button type="button" class="sc-minus" aria-label="Una menos"${n <= 1 ? ' disabled' : ''}>−</button><output aria-live="polite">${n}</output><button type="button" class="sc-plus" aria-label="Una más"${n >= max ? ' disabled' : ''}>+</button></span></span>
-          ${settingSelect(m0, 'aspectRatio', set.aspectRatio, esc, 'Formato')}${c.kind === 'video' ? settingSelect(m0, 'duration', set.duration, esc, 'Segundos') : ''}
+          ${sound ? '' : settingSelect(m0, 'aspectRatio', set.aspectRatio, esc, 'Formato')}${c.kind === 'video' ? settingSelect(m0, 'duration', set.duration, esc, 'Segundos') : ''}
           <label class="sc-f"><span>Carpeta</span><input class="sc-folder" list="scFolders" value="${esc(e.folder ?? c.folder ?? '')}" placeholder="sin carpeta" maxlength="60"></label>
         </div>
         ${refs.length ? `<div class="sc-refs"><span class="sc-lab">Usa de referencia</span>${stripHTML(refs, esc)}</div>` : ''}

@@ -30,7 +30,7 @@ test('pure: the simulated answer becomes checked creatives and actions, with the
       { title: 'Video', kind: 'video', model: 'veo', prompt: 'animate it' }],
     actions: [{ type: 'carpeta_crear', name: 'Lanzamiento' }, { type: 'borrar_todo' }, { type: 'mover', files: ['2026-09/a.png'], folder: 'Lanzamiento' }], image_text: '' });
   const p = sub.parsePlan(answer, { depts: DEPTS, agents: AGENTS });
-  assert.equal(p.mode, 'estudio'); assert.deepEqual(p.tasks, [], 'the studio mode never carries tasks');
+  assert.equal(p.mode, 'estudio'); assert.deepEqual(p.tasks.map(t => t.dept), ['marketing'], 'V4.11 (DIM-12): a studio answer may carry tasks too (a mixed request)');
   const galleryHas = id => id === '2026-09/a.png';
   const creatives = plan.parseCreatives(p.creatives, { models, galleryHas, maxPerRequest: 4, defaultModel: k => (k === 'video' ? 'veo' : 'prueba'), estimate: ({ model, n }) => (model === 'nano' ? 0.04 * n : 0) });
   assert.deepEqual(creatives.map(c => [c.model, c.state, c.n]), [['prueba', 'proposed', 4], ['nano', 'proposed', 2], ['veo', 'skipped', 1]]); // no video model on: it keeps the name asked for and says why
