@@ -30,7 +30,8 @@ const tainted = () => { try { return JSON.parse(fs.readFileSync(ctx.taintFile, '
 
 try {
   if (phase === 'post') {
-    if (!safety.injection || kindOfCall(tool, ev.tool_input, safety.safeTools, safety.toolKinds) === 'write' || tainted()) process.exit(0);
+    // a browser_batch is scanned whatever its kind: one click makes it a «write», but the pages it read come back in the same answer
+    if (!safety.injection || (kindOfCall(tool, ev.tool_input, safety.safeTools, safety.toolKinds) === 'write' && tool !== 'mcp__claude-in-chrome__browser_batch') || tainted()) process.exit(0);
     const res = typeof ev.tool_response === 'string' ? ev.tool_response : JSON.stringify(ev.tool_response ?? '');
     const why = injectionIn(res);
     if (!why) process.exit(0);

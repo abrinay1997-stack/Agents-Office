@@ -139,3 +139,18 @@ test('MCP-14: the page never sees a local path or a key in a target', () => {
   const k = s.find(x => x.raw === 'plugin:small-business:gmail').kinds; // each tool's kind, for the panel
   assert.ok(!k || typeof k === 'object');
 });
+
+test('revisión MCP: el reintento por un nombre largo solo corre si ninguna herramienta corrió y se aprendió un nombre nuevo', () => {
+  const msg = n => `API Error: 400 tools.3.custom.name: String should have at most 64 characters (${n})`;
+  const before = mcp.longToolNames().length;
+  const fresh = 'mcp__plugin_retry_z__' + 'b'.repeat(60);
+  const e1 = new Error(msg(fresh)); e1.used = ['mcp__gmail__send_email'];
+  assert.equal(mcp.retryLong(e1, before), false, 'ya usó herramientas: un reintento podría enviar dos veces');
+  const before2 = mcp.longToolNames().length; // the name was learnt anyway
+  const e2 = new Error(msg(fresh)); e2.used = [];
+  assert.equal(mcp.retryLong(e2, before2), false, 'nada nuevo aprendido: fallaría igual y se pagaría dos veces');
+  const other = 'mcp__plugin_retry_w__' + 'c'.repeat(60);
+  const e3 = new Error(msg(other)); e3.used = [];
+  assert.equal(mcp.retryLong(e3, mcp.longToolNames().length), true);
+  assert.equal(mcp.retryLong(new Error('Claude took longer than 300 s'), 0), false);
+});

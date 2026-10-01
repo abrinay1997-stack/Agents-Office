@@ -66,3 +66,22 @@ test('a send over the amount limit waits for the OK unless it is the run after t
   assert.equal(S.writesAllowed('aprobar', 'autonomous'), true);
   assert.equal(S.writesAllowed('nunca', 'autonomous'), false);
 });
+
+test('revisión MCP: un toolKinds «cost» solo vale para el Estudio; en Gmail cuenta como envío', () => {
+  const ctx = { writes: false, safety: { toolKinds: { send_email: 'cost' } } };
+  const d = S.decide('mcp__gmail__send_email', { to: 'x@y.com' }, ctx);
+  assert.equal(d.allow, false); assert.equal(d.kind, 'write'); assert.equal(d.code, 'no-writes');
+  assert.equal(S.decide('mcp__gmail__send_email', { to: 'x@y.com' }, { writes: false, safety: { toolKinds: { '*': 'cost' } } }).allow, false);
+  assert.equal(S.kindOf('mcp__estudio__mi_motor', undefined, { 'mcp__estudio__mi_motor': 'cost' }), 'cost');
+  assert.ok(S.problems({ toolKinds: { send_email: 'cost' } }).some(p => /solo vale para el Estudio/.test(p)));
+  assert.deepEqual(S.problems({ toolKinds: { 'mcp__estudio__mi_motor': 'cost' } }), []);
+});
+
+test('revisión MCP: en un browser_batch, un elemento de otro servidor se bloquea y los de Chrome se juzgan como de Chrome', () => {
+  const ctx = { writes: false, safety: {} };
+  const foreign = S.decide('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__estudio__ver' }] }, ctx);
+  assert.equal(foreign.allow, false); assert.equal(foreign.code, 'batch-foreign');
+  assert.equal(S.kindOfCall('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__x__form_input' }] }), 'write');
+  assert.equal(S.kindOfCall('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__claude-in-chrome__get_page_text' }] }), 'read');
+  assert.equal(S.decide('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__claude-in-chrome__get_page_text' }, { name: 'navigate', input: { url: 'https://a.com' } }] }, ctx).allow, true);
+});

@@ -280,9 +280,7 @@ function ledger({ taskId, agent, kind, modelId, usage, reported, ms }) {
   return l.usd;
 }
 try { budgetLevel = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()).level; } catch {} // after a restart the office still knows where the month stands
-// MCP-05 (auditoría MCP, 1 oct 2026): a tool name over 64 characters fails the whole run; the run's own init taught the office its name, so one retry leaves it out
-async function askX(system, user, opts = {}) { try { return await askRun(system, user, opts); } catch (e) { if (!opts.retriedLong && mcp.learnLongToolError(e.message)) return askRun(system, user, { ...opts, retriedLong: true }); throw e; } }
-async function askRun(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null, images = null } = {}) { // V4.8: images = [{ media_type, data }] for Claude's own eyes (vision.mjs) · V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null, images = null } = {}) { // V4.8: images = [{ media_type, data }] for Claude's own eyes (vision.mjs) · V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
     const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: images?.length ? vision.sdkContent(user, images) : user }] });
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
@@ -291,6 +289,7 @@ async function askRun(system, user, { maxTokens = 4000, tools = true, timeout = 
     return { text: res.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim(), tools: [], usage: res.usage, modelId: res.model, usd };
   }
   fs.mkdirSync(CLI_CWD, { recursive: true });
+  const opts0 = arguments[2] || {}, long0 = mcp.longToolNames().length; // MCP-05: a tool name over 64 characters fails the run; retried once below, only when safe (mcp.retryLong)
   const allowed = tools ? mcp.allowedTools(agent) : [];
   const studio = tools && agent && STUDIO_DEPTS.includes(agent.department); // images and video for real (media.mjs through estudio-mcp.mjs)
   if (studio) allowed.push('mcp__estudio');
@@ -323,7 +322,7 @@ async function askRun(system, user, { maxTokens = 4000, tools = true, timeout = 
   if (studio || conContenido || iso) { // one --mcp-config, in a file (a server's env can carry a key: never on the command line): the Estudio and Contenido share who is asking
     const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
     fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: { ...(iso || {}), ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
-    args.push('--mcp-config', mcpFile);
+    try { fs.chmodSync(mcpFile, 0o600); } catch {} args.push('--mcp-config', mcpFile); // its env can carry a key: only this user reads it, and a crash leaves none behind (swept at start)
   }
   const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', MAX_MCP_OUTPUT_TOKENS: process.env.MAX_MCP_OUTPUT_TOKENS || '60000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes · MCP-13: a long answer stays inline (the agents have no Read to open the file Claude Code would park it in)
   if (tools && !iso && !mcp.needsClaudeAi(agent)) env.ENABLE_CLAUDEAI_MCP_SERVERS = 'false'; // MCP-06: a desk with no claude.ai connector does not start them
@@ -339,6 +338,7 @@ async function askRun(system, user, { maxTokens = 4000, tools = true, timeout = 
       for (const f of [sysFile, guardFile, taintFile, settingsFile, mcpFile]) fs.rm(f, { force: true }, () => {});
     };
     let out = '', err = '', text = '', used = [], gotResult = false, isError = false, usageOut = null, modelUsed = null, partial = '', reported = null, usd = 0;
+    const fail = e => { e.used = used; if (!opts0.retriedLong && mcp.retryLong(e, long0)) return resolve(askX(system, user, { ...opts0, retriedLong: true })); reject(e); }; // MCP-05: one retry, only if no tool ran and a new long name was learnt
     const timer = setTimeout(() => { killTree(p); const e = new Error(`Claude took longer than ${timeout / 1000} s`); e.partial = partial.trim(); reject(e); }, timeout); // V4.4 (B4): what it had written so far is kept
     const feed = line => {
       if (!line.trim()) return;
@@ -352,10 +352,10 @@ async function askRun(system, user, { maxTokens = 4000, tools = true, timeout = 
     p.on('error', e => { clearTimeout(timer); cleanup(); reject(new Error(e.code === 'ENOENT' ? 'Claude Code is not installed (claude not found on PATH — set CLAUDE_BIN to claude.exe)' : e.message)); });
     p.on('close', code => {
       clearTimeout(timer); cleanup(); feed(out);
-      if (code !== 0 && !gotResult) return reject(new Error(`claude exited ${code}${err ? ': ' + err.trim().slice(0, 300) : ''}`));
+      if (code !== 0 && !gotResult) return fail(new Error(`claude exited ${code}${err ? ': ' + err.trim().slice(0, 300) : ''}`));
       if (!gotResult) { try { text = String(JSON.parse(out).result || '').trim(); } catch { text = out.trim(); } }
       bumpUsage(usageOut);
-      if (isError) return reject(new Error(text || 'Claude reported an error with no message')); // an API error is not a deliverable: never saved as a note
+      if (isError) return fail(new Error(text || 'Claude reported an error with no message')); // an API error is not a deliverable: never saved as a note
       resolve({ text, tools: used, usage: usageOut, modelId: modelUsed, usd });
     });
   });
@@ -1577,6 +1577,7 @@ setInterval(() => { dailyBackup(); autoArchive(); emptyBins(); try { moveOldArch
 if (PROVIDER.id !== 'anthropic') console.log(`  provider: ${PROVIDER.name} (${PROVIDER.host}) — the claude.ai connectors (Gmail, Canva, Notion, Drive…) are not loaded in this mode`);
 /* one list per provider: Meta's has no claude.ai connectors, Claude's does */ if (mcp.useCache(path.join(DATA, `mcp-cache-${PROVIDER.id}.json`))) console.log('  connectors: showing the last known list while `claude mcp list` checks them (1–2 min)');
 // MCP-05: the probe runs beside `claude mcp list` (87 s on the owner's machine), not after it: the long tool names are known in ~15 s
+try { for (const f of fs.readdirSync(CLI_CWD)) if (/^mcp-.*\.json$/.test(f)) fs.rmSync(path.join(CLI_CWD, f), { force: true }); } catch {} // a run's --mcp-config can carry a server's key: none outlives a crash
 if (backend === 'claude-cli') mcp.probeTools({ cwd: CLI_CWD }).then(pr => { if (pr) console.log(`  tools: ${pr.tools} in a run${pr.long.length ? ` · ${pr.long.length} with names over 64 characters kept out (the API refuses them)` : ''}`); });
 mcp.discover().then(l => {
   console.log(`  connectors: ${l.filter(s => s.status === 'connected').length} connected of ${l.length} (claude mcp list)`);

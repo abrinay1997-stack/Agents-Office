@@ -248,6 +248,12 @@ export function learnLongToolError(message) {
   saveCache();
   return true;
 }
+/** May a failed run be run again without its long-named tools? Only when it failed before any tool ran (no double send) and the
+ *  office learnt a long name it did not know when the run started (else the retry fails the same and is paid twice). */
+export function retryLong(e, before) {
+  if (!learnLongToolError(e?.message)) return false;
+  return !(e.used && e.used.length) && longTools.size > before;
+}
 /** Start `claude -p` just long enough to read its init event (the real tool list), then stop it: no model call is made. */
 export function probeTools({ cwd, timeout = 60000 } = {}) {
   return new Promise(resolve => {

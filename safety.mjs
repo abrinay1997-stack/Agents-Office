@@ -32,7 +32,10 @@ export function problems(s = {}) {
   if (s.writes !== undefined && !WRITE_MODES.includes(s.writes)) out.push(`safety.writes «${s.writes}» no existe: usa ${WRITE_MODES.join(', ')}`);
   for (const [d, v] of Object.entries(s.departments || {})) if (!WRITE_MODES.includes(v)) out.push(`safety.departments.${d} «${v}» no existe: usa ${WRITE_MODES.join(', ')}`);
   for (const k of ['browserSites', 'browserBlock', 'safeTools']) if (s[k] !== undefined && !Array.isArray(s[k])) out.push(`safety.${k} debe ser una lista`);
-  for (const [t, v] of Object.entries(s.toolKinds && typeof s.toolKinds === 'object' ? s.toolKinds : {})) if (!KINDS.includes(v)) out.push(`safety.toolKinds «${t}»: «${v}» no existe, usa read, write o cost`);
+  for (const [t, v] of Object.entries(s.toolKinds && typeof s.toolKinds === 'object' ? s.toolKinds : {})) {
+    if (!KINDS.includes(v)) out.push(`safety.toolKinds «${t}»: «${v}» no existe, usa read, write o cost`);
+    else if (v === 'cost' && !/^mcp__estudio__/i.test(t)) out.push(`safety.toolKinds «${t}»: «cost» solo vale para el Estudio (mcp__estudio__…); en cualquier otro conector la oficina lo trata como envío`);
+  }
   return out;
 }
 export const modeFor = (s, dept) => normalize(s).departments[dept] || normalize(s).writes;
@@ -69,8 +72,8 @@ const words = t => String(t).replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().s
 const glob = p => new RegExp('^' + String(p).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 'i');
 /** safety.toolKinds: { "mcp__x__test_connection": "read", "*graphql_query": "read" } — the owner's word wins (full name or the tool's own name, * allowed). */
 export function forcedKind(name, toolKinds = {}) {
-  const { tool } = splitTool(name);
-  for (const [p, k] of Object.entries(toolKinds || {})) if (KINDS.includes(k) && (glob(p).test(name) || glob(p).test(tool))) return k;
+  const { server, tool } = splitTool(name);
+  for (const [p, k] of Object.entries(toolKinds || {})) if (KINDS.includes(k) && (glob(p).test(name) || glob(p).test(tool))) return k === 'cost' && server !== 'estudio' ? 'write' : k; // «cost» skips every send check: only the office's own Estudio may be one (a typo must not let Gmail send without the OK)
   return null;
 }
 const dbQuery = (w, server, tool) => w.includes('query') && (DB.test(server) || DB.test(tool));
@@ -91,13 +94,15 @@ export function kindOf(name, safeTools = DEFAULTS.safeTools, toolKinds = {}) {
   if (w.some(x => READ_VERBS.has(x))) return dbQuery(w, server, tool) ? 'write' : 'read';
   return 'write'; // a name the office does not understand: fail closed
 }
-const batchItems = input => (Array.isArray(input?.actions) ? input.actions : []).map(a => ({ name: /^mcp__/.test(String(a?.name || '')) ? String(a.name) : `mcp__claude-in-chrome__${String(a?.name || a?.tool || '')}`, input: a?.input || a?.args || {} }));
+// browser_batch only runs Chrome's own tools: an item is always classed as mcp__claude-in-chrome__<its last segment>, and one
+// that names another server (mcp__estudio__…, mcp__gmail__…) is refused outright (fail closed) — never judged by that server's rules
+const batchItems = input => (Array.isArray(input?.actions) ? input.actions : []).map(a => { const raw = String(a?.name || a?.tool || ''), sp = splitTool(raw); return { name: `mcp__claude-in-chrome__${sp.tool.split('__').pop()}`, input: a?.input || a?.args || {}, foreign: !!sp.server && sp.server !== 'claude-in-chrome' }; });
 /** The kind of one CALL: a Chrome `computer` that only looks is a read; a browser_batch is the worst of its items. */
 export function kindOfCall(name, input, safeTools = DEFAULTS.safeTools, toolKinds = {}) {
   const forced = forcedKind(name, toolKinds); if (forced) return forced;
   const { server, tool } = splitTool(name);
   if (server === 'claude-in-chrome' && tool === 'computer' && CHROME_LOOK.has(String(input?.action || ''))) return 'read';
-  if (server === 'claude-in-chrome' && tool === 'browser_batch') { const items = batchItems(input); return !items.length ? 'write' : items.some(i => kindOfCall(i.name, i.input, safeTools, toolKinds) === 'write') ? 'write' : 'read'; }
+  if (server === 'claude-in-chrome' && tool === 'browser_batch') { const items = batchItems(input); return !items.length || items.some(i => i.foreign) ? 'write' : items.some(i => kindOfCall(i.name, i.input, safeTools, toolKinds) === 'write') ? 'write' : 'read'; }
   return kindOf(name, safeTools, toolKinds);
 }
 
@@ -165,6 +170,7 @@ export function decide(toolName, input, ctx) {
   if (server && Array.isArray(ctx.servers) && !ctx.servers.includes(server)) return { allow: false, kind: kindOf(toolName, s.safeTools, s.toolKinds), code: 'server', why: `Bloqueado: el conector de ${toolName} no es de esta mesa. Trabaja sin él y dilo en tu entrega.` };
   if (server === 'claude-in-chrome' && tool === 'browser_batch') { // MCP-02: every item is checked as if it were called alone (sites, sends); the batch is the worst of them
     const items = batchItems(input); let kind = items.length ? 'read' : 'write';
+    const bad = items.find(i => i.foreign); if (bad) return { allow: false, kind: 'write', code: 'batch-foreign', why: 'Bloqueado: en el lote del navegador hay una herramienta que no es del navegador. Un lote solo lleva acciones de Chrome; llama a esa herramienta aparte.' };
     for (const it of items) { const d = decide(it.name, it.input, ctx); if (!d.allow) return { ...d, why: `En el lote del navegador: ${d.why}` }; if (d.kind === 'write') kind = 'write'; }
     if (kind === 'write' && !ctx.writes) return { allow: false, kind, code: 'no-writes', why: NO_WRITES };
     return { allow: true, kind };
