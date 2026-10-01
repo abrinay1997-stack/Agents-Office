@@ -52,6 +52,7 @@ import * as routines from './routines.mjs';
 import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
+import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs'; // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
@@ -272,9 +273,9 @@ function ledger({ taskId, agent, kind, modelId, usage, reported }) {
   return l.usd;
 }
 try { budgetLevel = costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()).level; } catch {} // after a restart the office still knows where the month stands
-async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null } = {}) { // V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
+async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RUN_TIMEOUT, model = cfg.model, effort = null, agent = null, taskId = null, runMode = 'task', known = null, guardOut = null, kind = null, images = null } = {}) { // V4.8: images = [{ media_type, data }] for Claude's own eyes (vision.mjs) · V4.4: runMode (task · draft · approve · piece · chat) decides whether this run may send; known = the approved text a send must name its recipients from; guardOut ← { blocked, taint } // agent: whose desk — its department's connectors (mcp.departments) + its own `tools` // model: sonnet · opus · fable · effort: low…max or null = the model's own (src/models.js)
   if (sdk) {
-    const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }] });
+    const res = await sdk.messages.create({ model: modelId(model), max_tokens: maxTokens, system, messages: [{ role: 'user', content: images?.length ? vision.sdkContent(user, images) : user }] });
     if (res.stop_reason === 'refusal') throw new Error('Claude declined this request');
     bumpUsage(res.usage);
     const usd = ledger({ taskId, agent, kind: kind || (agent ? runMode : 'oficina'), modelId: res.model, usage: res.usage });
@@ -303,6 +304,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   if (allowed.length) args.push('--allowedTools', allowed.join(','));
   args.push(...(tools ? mcp.cliArgs() : ['--no-chrome'])); // V3.2 (16 Sep): the owner's Chrome, when tools.browser is on
   args.push(...modelArgs(model, effort));
+  if (images?.length) args.push('--input-format', 'stream-json'); // V4.8: the request goes on stdin as one stream-json user line with the image blocks (vision.cliInput)
   if (studio || conContenido) { // the office's own servers, one --mcp-config: the Estudio and Contenido share who is asking
     const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
     args.push('--mcp-config', JSON.stringify({ mcpServers: { ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
@@ -312,7 +314,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
     const p = spawn(mcp.CLAUDE_BIN, args, { cwd: CLI_CWD, env, stdio: ['pipe', 'pipe', 'pipe'] });
     children.add(p);
     if (taskId) { if (!runsOf.has(taskId)) runsOf.set(taskId, new Set()); runsOf.get(taskId).add(p); }
-    p.stdin.on('error', () => {}); p.stdin.end(user);
+    p.stdin.on('error', () => {}); p.stdin.end(images?.length ? vision.cliInput(user, images) : user);
     const cleanup = () => {
       children.delete(p); if (taskId && runsOf.has(taskId)) { runsOf.get(taskId).delete(p); if (!runsOf.get(taskId).size) runsOf.delete(taskId); }
       if (guardOut) Object.assign(guardOut, guardReport(runId, taintFile));
@@ -616,19 +618,105 @@ async function newTask({ dept, text, team = false, at = null, by = 'you', model,
 }
 
 /* ---------- DIMITRI, the owner's right hand: one chat above the departments (sub.mjs) ---------- */
-async function subChat(text) {
+// V4.8: the «estudio» mode — Dimitri reads the Estudio (the models that are on, the caps, the folders), the images the owner attached
+// (for its own eyes) and what the owner is looking at; it proposes creatives with their cost. NOTHING is generated here: subStudio is
+// the only place they become jobs, and only the page's GENERAR calls it.
+const STUDIO_ASK = /\b(im[aá]gen(es)?|fotos?|creativos?|videos?|reels?|posts?|historias?|stor(y|ies)|carrusel|banner|flyer|afiche|portada|miniatura|logo|anima(r|ci[oó]n)?|edita(r)?|retoca(r)?|estudio)\b/i;
+const STUDIO_NOTES = () => path.join(BRAIN, 'Agents Office', 'estudio'); // <brain>/Agents Office/estudio/AAAA-MM/*.md (this machine's: Agents Office/* does not travel)
+function approvedCreatives(text, n = 4) { // the owner's past approved creatives that look like this request: BM25 × what the Brain learned, only files still liked
+  const notes = new Map();
+  try { for (const mo of fs.readdirSync(STUDIO_NOTES())) { const d = path.join(STUDIO_NOTES(), mo); if (!/^\d{4}-\d{2}$/.test(mo)) continue; for (const f of fs.readdirSync(d)) if (f.endsWith('.md')) notes.set(f.slice(0, -3), fs.readFileSync(path.join(d, f), 'utf8')); } } catch {}
+  if (!notes.size) return [];
+  return knowledge.search(knowledge.buildIndex(notes), text, { n: n * 3, per: 1 }).map(h => ({ ...estudioPlan.approvedFromNote(h.note, notes.get(h.note)), score: h.score * memory.boostOf(MEM, h.note) }))
+    .filter(a => { const it = a.file && media.item(a.file); return !!(it && (it.fav || it.used || it.approved)); }).sort((a, b) => b.score - a.score).slice(0, n);
+}
+async function subChat(text, { attach = [], vision: images = [], context = null } = {}) {
   const st = sub.load(DATA); refreshSkills();
   const list = load(), index = vaultIndex();
   const read = relevantNotes(index, null, st.messages.slice(-4).map(m => m.text).join(' ') + ' ' + text, 4); // the company's own notes that touch what is being talked about
+  if (context?.view === 'brain' && context.label && index.has(context.label) && !read.includes(context.label)) read.unshift(context.label); // the note the owner has open
+  const studioish = attach.length || images.length || context?.view === 'studio' || STUDIO_ASK.test(text);
+  let extra = '', approved = [];
+  if (studioish) { // the brand's voice, the figures, the offer and the clients, and what the owner liked before
+    for (const k of ['voice', 'oferta', 'clientes']) if (index.has(k) && !read.includes(k)) extra += `\n\n--- ${k}.md ---\n${index.get(k).slice(0, 1800)}`;
+    extra += cifrasText(); approved = approvedCreatives(text);
+  }
+  if (context?.view === 'contenido' && context.id) { const p = contenido.leer(String(context.id)); if (p) extra += `\n\n--- La pieza que el dueño tiene abierta en Contenido (${p.id}) ---\n«${p.titulo || 'sin título'}» · ${p.formato} · ${p.redes.join(', ')} · ${p.fecha || 'sin día'}${p.hora ? ' ' + p.hora : ''} · estado: ${p.estado}${p.medios.length ? ' · archivos: ' + p.medios.join(', ') : ''}\n${String(p.texto || '').slice(0, 1200)}`; } // the piece, summed up (data, not orders)
+  const studioBlock = estudioPlan.studioPromptBlock({ models: media.models(), budget: media.budget(), folders: media.folders(), attach: attach.map(id => { const it = media.item(id) || {}; return { id, prompt: it.prompt, folder: it.folder ? media.folderOf(it.folder)?.name : null }; }), context, approved });
   const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => DEPTS[k].name),
-    status: sub.statusText(list, AGENTS, DEPTS), recent: sub.recentText(list, AGENTS), notes: businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : ''), studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', ') });
-  const convo = st.messages.slice(-12).map(m => `${m.who === 'user' ? 'Dueño' : DEPUTY}: ${m.text}${m.plan?.tasks?.length ? ' [propuse: ' + m.plan.tasks.map(t => `${t.title} → ${DEPTS[t.dept].name}${t.state === 'sent' ? ' (enviada)' : t.state === 'skipped' ? ' (descartada)' : ' (sin decidir)'}`).join('; ') + ']' : ''}`).join('\n');
-  const out = await ask(system, (convo ? convo + '\n' : '') + `Dueño: ${text}\n${DEPUTY} (solo JSON):`, { maxTokens: 3500, timeout: 180000 });
+    status: sub.statusText(list, AGENTS, DEPTS), recent: sub.recentText(list, AGENTS), notes: businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : '') + extra, studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock });
+  const convo = st.messages.slice(-12).map(m => `${m.who === 'user' ? 'Dueño' : DEPUTY}: ${m.text}${m.attach?.length ? ' [adjuntó: ' + m.attach.join(', ') + ']' : ''}${m.plan?.tasks?.length ? ' [propuse: ' + m.plan.tasks.map(t => `${t.title} → ${DEPTS[t.dept].name}${t.state === 'sent' ? ' (enviada)' : t.state === 'skipped' ? ' (descartada)' : ' (sin decidir)'}`).join('; ') + ']' : ''}${m.studio?.creatives?.length ? ' [propuse creativos: ' + m.studio.creatives.map(c => `${c.title} · ${c.model} (${{ proposed: 'sin decidir', sent: 'generando', done: 'listo', failed: 'falló', skipped: 'descartado' }[c.state] || c.state})`).join('; ') + ']' : ''}${m.media?.length ? ' [archivos: ' + m.media.join(', ') + ']' : ''}`).join('\n');
+  const out = await ask(system, (convo ? convo + '\n' : '') + `Dueño: ${text}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : ''}\n${DEPUTY} (solo JSON):`, { maxTokens: 5000, timeout: 180000, images: images.length ? images : null });
   const plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
-  const u = sub.message('user', text), m = sub.message('sub', plan.reply || (plan.tasks.length ? 'Así lo repartiría:' : '¿Me das un poco más de detalle?'), { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}) });
-  st.messages.push(u, m); sub.save(DATA, st);
-  console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}`);
+  const shield = plan.image_text ? safety.injectionIn(plan.image_text) : null; // what an image says is data: hidden orders mark the message and take its actions away
+  let studio = null;
+  if (plan.mode === 'estudio') {
+    const models = media.models(), budget = media.budget(), has = id => !!media.resolve(id);
+    const creatives = estudioPlan.parseCreatives(plan.creatives, { models, folders: media.folders(), galleryHas: has, maxPerRequest: budget.maxPerRequest, defaultModel: k => media.defaultModel(k), estimate: media.estimate });
+    studio = { creatives, actions: shield ? [] : estudioPlan.parseActions(plan.actions, { galleryHas: has }), estimate: estudioPlan.estimatePlan(creatives, { estimate: media.estimate, budget, models }) };
+  }
+  const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
+  const reply = (plan.reply || (studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length ? 'Así lo repartiría:' : '¿Me das un poco más de detalle?')) + (shield ? `\n\n🛡 Una imagen traía órdenes escondidas (${shield}): no las sigo.` : '');
+  const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}), ...(studio ? { studio } : {}), ...(shield ? { shield } : {}) });
+  const st2 = sub.load(DATA); st2.messages.push(u, m); sub.save(DATA, st2); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
+  console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}${studio ? ` · ${studio.creatives.length} creative(s), aprox. US$${studio.estimate.total}` : ''}${images.length ? ` · saw ${images.length} image(s)` : ''}${shield ? ' · 🛡 ' + shield : ''}`);
   return { messages: [u, m] };
+}
+function studioAction(a) { // one of the four organising actions of the contract (estudio-plan.parseActions already threw the rest away)
+  const find = name => media.folders().find(f => f.name.toLowerCase() === String(name).toLowerCase());
+  if (a.type === 'carpeta_crear') { if (!find(a.name)) media.addFolder(a.name); return; }
+  if (a.type === 'carpeta_renombrar') { const f = find(a.from); if (!f) throw new Error(`no hay una carpeta «${a.from}»`); media.renameFolder(f.id, a.to); return; }
+  if (a.type === 'mover') { const f = find(a.folder) || media.addFolder(a.folder); a.moved = media.moveTo(a.files.filter(x => media.resolve(x)), f.id); return; }
+  if (a.type === 'enviar_contenido') { // an idea in Contenido, never approved: the owner decides there
+    const it = media.item(a.file) || {}; const r = contenido.crear({ titulo: String(it.prompt || 'Idea de Dimitri').replace(/\s+/g, ' ').slice(0, 80), texto: a.texto || '', medios: [a.file], estado: 'idea', origen: 'dimitri' }, { por: 'dimitri' });
+    if (r.error) throw new Error(r.error); a.pieza = r.pieza.id; return;
+  }
+  throw new Error('acción desconocida');
+}
+async function subStudio(msgId, items) { // the owner pressed GENERAR: the ONLY place Dimitri's creatives become Estudio jobs (same caps as the page: media.submit)
+  const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId);
+  if (!m || !m.studio) return { error: 'esa propuesta ya no existe' };
+  const byI = new Map((Array.isArray(items) ? items : []).filter(e => e && Number.isInteger(e.i)).map(e => [e.i, e]));
+  const models = media.models(), has = id => !!media.resolve(id), started = [];
+  let sent = 0, failed = 0, usd = 0, done = 0;
+  // everything below is synchronous until the save: a job cannot end (and call subJobDone) before its jobId is in the message
+  for (const c of m.studio.creatives) {
+    if (c.state !== 'proposed') continue;
+    const e = byI.get(c.i); if (!e) continue; // only what the page listed: a creative left out keeps waiting
+    if (e.include === false) { c.state = 'skipped'; continue; }
+    const ed = { ...c, ...(typeof e.prompt === 'string' && e.prompt.trim() ? { prompt: e.prompt } : {}), ...(e.n != null ? { n: e.n } : {}), ...(typeof e.model === 'string' && e.model ? { model: e.model } : {}), settings: { ...c.settings, ...(e.settings && typeof e.settings === 'object' ? e.settings : {}) }, ...(typeof e.folder === 'string' ? { folder: e.folder } : {}) };
+    const [v] = estudioPlan.parseCreatives([ed], { models, folders: media.folders(), galleryHas: has, maxPerRequest: media.budget().maxPerRequest, defaultModel: k => media.defaultModel(k), estimate: media.estimate }); // the owner's edits are checked again, like the first time
+    Object.assign(c, { prompt: v.prompt, n: v.n, model: v.model, modelName: v.modelName, kind: v.kind, settings: v.settings, media: v.media, folder: v.folder, cost: v.cost });
+    if (v.state !== 'proposed') { c.state = 'skipped'; c.error = v.error; failed++; continue; }
+    try {
+      const f = c.folder ? media.folders().find(x => x.name.toLowerCase() === c.folder.toLowerCase()) || media.addFolder(c.folder) : null;
+      const job = media.submit({ model: c.model, kind: c.kind, prompt: c.prompt, n: c.n, settings: c.settings, media: Object.fromEntries(Object.entries(c.media).filter(([, l]) => l.length)), by: 'dimitri', sub: { msg: m.id, i: c.i }, purpose: c.purpose || undefined, read: (m.read || []).slice(0, 20), folder: f?.id });
+      Object.assign(c, { state: 'sent', jobId: job.id }); delete c.error; sent++; usd += +c.cost || 0; started.push(job.id);
+    } catch (err) { c.state = 'failed'; c.error = err.message; failed++; }
+  }
+  if (!m.shield) for (const a of m.studio.actions || []) { // the organising goes with the same click
+    if (a.state !== 'proposed') continue;
+    try { studioAction(a); a.state = 'done'; done++; } catch (err) { a.state = 'failed'; a.error = err.message; }
+  }
+  const i = st.messages.findIndex(x => x.id === m.id); if (i >= 0) st.messages[i] = m;
+  if (sent || failed || done) st.messages.push(sub.message('sub', `${sent ? `Mandé ${sent} ${sent === 1 ? 'creativo' : 'creativos'} al Estudio (aprox. US$${usd.toFixed(2)}). Te aviso aquí cuando estén.` : 'No mandé nada al Estudio.'}${failed ? ` ${failed} no se pudo: lo dice en su tarjeta.` : ''}${done ? ` Ordené ${done} ${done === 1 ? 'cosa' : 'cosas'} en la galería.` : ''}`));
+  sub.save(DATA, st);
+  for (const id of started) media.wait(id).then(subJobDone, () => {}); // belt and braces: afterStudioJob calls it too; subJobDone acts once per job
+  return { ok: true, message: m, messages: st.messages.slice(-2) };
+}
+/** A job Dimitri sent finished: its creative says so, and a message brings the files. Once per job (the Estudio's hook and the wait both call it). */
+function subJobDone(j) {
+  if (!j || (j.state !== 'done' && j.state !== 'failed')) return;
+  const st = sub.load(DATA);
+  let m = j.sub ? st.messages.find(x => x.id === j.sub.msg) : null, c = m?.studio?.creatives?.find(x => x.i === j.sub.i && x.jobId === j.id);
+  if (!c) for (const x of st.messages) { const y = x.studio?.creatives?.find(k => k.jobId === j.id); if (y) { m = x; c = y; break; } }
+  if (!c || c.doneAt) return;
+  Object.assign(c, { state: j.state === 'done' ? 'done' : 'failed', files: j.items || [], doneAt: Date.now() });
+  if (j.error) c.error = j.error; if (j.warning) c.warning = j.warning;
+  const n = c.files.length, what = c.kind === 'video' ? (n === 1 ? 'video' : 'videos') : n === 1 ? 'imagen' : 'imágenes';
+  st.messages.push(c.state === 'done' ? sub.message('sub', `Listos: «${c.title}» (${n} ${what}${c.folder ? `, en la carpeta «${c.folder}»` : ''}).${j.warning ? ' ' + j.warning : ''}`, { media: c.files, ref: { msg: m.id, i: c.i } })
+    : sub.message('sub', `No salió «${c.title}»: ${j.error || 'el motor no devolvió nada'}`, { ref: { msg: m.id, i: c.i } }));
+  sub.save(DATA, st);
 }
 async function subSend(msgId, edits) { // the owner pressed SEND: each included piece becomes a task in its department
   const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId);
@@ -1778,11 +1866,24 @@ const server = http.createServer(async (req, res) => {
     }
     if (mm && req.method === 'DELETE') { const usos = contenido.usos(decodeURIComponent(mm[1])); if (usos.length) return json(res, 409, { error: `Este archivo está en ${usos.length === 1 ? 'una pieza' : usos.length + ' piezas'} de Contenido (${usos.slice(0, 3).map(u => '«' + (u.titulo || u.id) + '»').join(', ')}): quítalo de ahí primero`, piezas: usos }); const id = decodeURIComponent(mm[1]), was = media.item(id); if (was && !media.wasUsed(was)) learnFromMedia(id, 0); /* V4.9: thrown away unused → r = 0 (read before it leaves) */ const t = media.trash(id); return t ? json(res, 200, { ok: true, undo: t }) : json(res, 404, { error: 'no such file' }); }
     if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, { ...sub.load(DATA), name: DEPUTY });
-    if (url.pathname === '/api/sub/chat' && req.method === 'POST') {
-      const { text } = await body(req);
-      if (!text || !String(text).trim()) return json(res, 400, { error: 'mensaje vacío' });
-      if (String(text).length > 8000) return json(res, 400, { error: 'el mensaje es muy largo (máx. 8000 caracteres)' });
-      return json(res, 200, await subChat(String(text).trim()));
+    if (url.pathname === '/api/sub/chat' && req.method === 'POST') { // V4.8: up to 4 gallery images attached, their reduced copies for Claude's eyes (8 MB here only), and what the owner is looking at
+      let b; try { b = await body(req, 8 * 1024 * 1024); } catch (e) { return json(res, e.status || 400, { error: e.status === 413 ? 'las imágenes pesan demasiado (máx. 8 MB en total)' : e.message }); }
+      const text = String(b.text || '').trim();
+      const attach = Array.isArray(b.attach) ? [...new Set(b.attach.filter(x => typeof x === 'string'))] : [];
+      if (attach.length > 4) return json(res, 400, { error: 'como mucho 4 imágenes por mensaje' });
+      if (attach.some(id => !media.resolve(id) || !/\.(png|jpe?g|webp|svg)$/i.test(id))) return json(res, 400, { error: 'una de las imágenes ya no está en el Estudio' });
+      const vis = vision.validateVision(b.vision); if (vis.error) return json(res, 400, { error: vis.error });
+      if (vis.images.some(im => im.file && !media.resolve(im.file))) return json(res, 400, { error: 'una de las imágenes ya no está en el Estudio' });
+      if (!text && !attach.length && !vis.images.length) return json(res, 400, { error: 'mensaje vacío' });
+      if (text.length > 8000) return json(res, 400, { error: 'el mensaje es muy largo (máx. 8000 caracteres)' });
+      const c = b.context && typeof b.context === 'object' && typeof b.context.view === 'string' ? b.context : null;
+      const context = c ? { view: c.view.slice(0, 20), label: String(c.label || '').slice(0, 160), kind: c.kind ? String(c.kind).slice(0, 20) : null, id: c.id ? String(c.id).slice(0, 300) : null } : null;
+      return json(res, 200, await subChat(text || 'Mira estas imágenes.', { attach, vision: vis.images, context }));
+    }
+    if (url.pathname === '/api/sub/studio' && req.method === 'POST') { // V4.8: GENERAR — the only route that generates for Dimitri
+      const { msg, items } = await body(req);
+      const r = await subStudio(String(msg || ''), items);
+      return json(res, r.error ? 404 : 200, r);
     }
     if (url.pathname === '/api/sub/send' && req.method === 'POST') {
       const { msg, items } = await body(req);
