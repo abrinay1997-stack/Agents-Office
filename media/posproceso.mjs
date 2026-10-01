@@ -51,7 +51,11 @@ export async function procesar(buf, j = {}) {
     canal, referencia: ref ? leerArchivo(ref) : undefined, original: original || undefined, sku: j.sku || undefined, n: j.n || 1,
   });
   let qa = null;
-  const ids = Array.isArray(j.qa) ? j.qa.filter(x => typeof x === 'string') : [];
+  let ids = Array.isArray(j.qa) ? j.qa.filter(x => typeof x === 'string') : [];
+  // copiar el color de una referencia cambia el color A PROPÓSITO: medir ΔE contra tu foto daría un «revisar» falso
+  const colorCopiado = !!ref && ids.includes('delta-e'); if (colorCopiado) ids = ids.filter(x => x !== 'delta-e');
+  const extra = colorCopiado ? [{ id: 'delta-e', ok: null, valor: null, objetivo: null, motivo: 'No medido: el color se copió de la referencia a propósito (en tu máquina, sin IA).' }] : [];
+  if (!ids.length && extra.length) qa = { estado: 'ok', checks: extra, motivo: '' };
   if (ids.length) {
     const oc = j.medir?.ocupacion || null, deEscena = oc?.fuente === 'escena';
     // con el escenario 3D la ocupación se compara con la estimada de la escena (±12 puntos), no con la del canal
@@ -63,6 +67,7 @@ export async function procesar(buf, j = {}) {
       escena: deEscena ? { ocupacionEstimada: oc.objetivo, tolerancia: oc.tolerancia ?? 0.12 } : undefined,
       esEscena: !!j.esEscena, original: original || undefined,
     });
+    if (extra.length) qa = { ...qa, checks: [...qa.checks, ...extra] };
   }
   const medido = { ...out.medido, ...(qa?.medido ? Object.fromEntries(Object.entries(qa.medido).filter(([, v]) => v != null)) : {}) };
   return {

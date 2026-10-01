@@ -90,8 +90,8 @@ function trail(req) {
 }
 /* Banco de presets (F1, §5.9): lo que el compilador (presets.mjs) le pone al pedido — los presets con su versión, los pasos
    locales, la QA, qué se mide, el canal y la receta (para «Guardar como preset»). La página no lo puede mandar por
-   /api/media/jobs: mediaReq no deja pasar estos campos. Lo de «antes» del modelo va, en F1, al principio de lo de después
-   (la luz y el color se corrigen igual sobre el resultado; el compilador ya los dejó en su orden). */
+   /api/media/jobs: mediaReq no deja pasar estos campos. Lo de «antes» del modelo lo hace presets.mjs sobre la foto (la IA recibe
+   esa copia preparada); si otro llamador manda `pre`, va al principio de `post`, en el orden en que llegó. */
 const OP_RE = /^[a-z0-9-]{2,30}$/;
 function presetTrail(req) {
   const x = {};

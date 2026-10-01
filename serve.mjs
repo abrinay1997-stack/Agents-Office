@@ -2046,7 +2046,7 @@ const server = http.createServer(async (req, res) => {
         if (url.pathname === '/api/media/presets' && req.method === 'GET') return json(res, 200, presets.lista({ medio: sp.get('medio') || undefined, modo: sp.get('modo') || undefined, q: sp.get('q') || undefined }));
         if (url.pathname === '/api/media/presets/compile' && req.method === 'POST') { const { plan } = presets.compilar(await body(req)); return json(res, 200, { plan, budget: media.budget() }); } // no gasta
         if (url.pathname === '/api/media/presets/apply' && req.method === 'POST') { // gasta: el clic GENERAR del dueño (los agentes y Dimitri llegan en F3, con su propio camino)
-          const out = presets.aplicar(await body(req), { by: 'you' });
+          const out = await presets.aplicar(await body(req), { by: 'you' });
           for (const j of out.jobs) console.log(`✦ estudio: ${j.id} preset ${(j.preset || []).map(x => x.id).join('+') || '—'} con ${j.model}${j.versionOf ? ' · versión de ' + j.versionOf : ''}`);
           return json(res, 200, { plan: out.plan, jobs: out.jobs, budget: media.budget() });
         }
@@ -2135,6 +2135,7 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return json(res, 502, { error: 'no pude mejorarlo ahora: ' + e.message }); }
     }
     const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);
+    if (mm && req.method === 'GET') { const it = media.item(decodeURIComponent(mm[1])); return it ? json(res, 200, it) : json(res, 404, { error: 'no such file' }); } // banco de presets: el registro de un resultado (su QA y sus pasos)
     if (mm && req.method === 'PATCH') { // ⭐, and V4.9: { used: 'ref'|'pieza'|'calendario' } — both teach the memory (r = 1)
       const b = await body(req), id = decodeURIComponent(mm[1]);
       if (b.used !== undefined && !['ref', 'pieza', 'calendario'].includes(b.used)) return json(res, 400, { error: 'used: ref, pieza o calendario' });

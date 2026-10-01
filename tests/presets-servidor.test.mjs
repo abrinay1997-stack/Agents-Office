@@ -64,7 +64,7 @@ test('«Que se vea más clara»: compilar no gasta; aplicar hace un trabajo loca
     const { plan } = P.compilar({ pila: ['luz-mas-clara'], entradas: { foto: [foto.file] } });
     assert.equal(plan.soloLocal, true); assert.equal(plan.model, null); assert.equal(plan.costo.usd, 0);
     assert.deepEqual(media.jobs(), [], 'compilar no crea trabajos');
-    const { jobs } = P.aplicar({ pila: ['luz-mas-clara'], entradas: { foto: [foto.file] } });
+    const { jobs } = await P.aplicar({ pila: ['luz-mas-clara'], entradas: { foto: [foto.file] } });
     assert.equal(jobs[0].engine, 'local');
     const j = await media.wait(jobs[0].id, 20000);
     assert.equal(j.state, 'done', j.error);
@@ -89,12 +89,14 @@ test('«Copiar el color de una foto»: local, con la referencia por ejes y la QA
     const { plan } = P.compilar({ pila: ['ref-color'], entradas: { foto: [foto.file], referencias: [{ id: ref.file, ejes: { color: 3, estilo: 0 } }] } });
     assert.equal(plan.soloLocal, true, plan.errores.join());
     assert.ok(plan.local.antes.some(o => o.op === 'transferir-color' && o.ref === ref.file));
-    const { jobs } = P.aplicar({ pila: ['ref-color'], entradas: { foto: [foto.file], referencias: [{ id: ref.file, ejes: { color: 3, estilo: 0 } }] } });
+    const { jobs } = await P.aplicar({ pila: ['ref-color'], entradas: { foto: [foto.file], referencias: [{ id: ref.file, ejes: { color: 3, estilo: 0 } }] } });
     const j = await media.wait(jobs[0].id, 20000);
     assert.equal(j.state, 'done', j.error);
     const it = media.item(j.items[0]);
     assert.ok(it.post.pasos.find(s => s.op === 'transferir-color').hecho, 'el color se copió');
-    assert.ok(it.qa && it.qa.checks.some(c => c.id === 'delta-e'), 'la QA midió el color');
+    const de = it.qa?.checks.find(c => c.id === 'delta-e');
+    assert.ok(de && de.ok === null && /a propósito/.test(de.motivo), 'el color cambió a propósito: la QA lo dice «no medido», no un «revisar» falso');
+    assert.equal(it.qa.estado, 'ok');
   } finally { back(); }
 });
 
@@ -108,7 +110,7 @@ test('«Fondo blanco» + «Exportar para un canal» con un Google de mentira: la
     const { plan } = P.compilar(pedido);
     assert.ok(plan.model && /nano-banana/.test(plan.model), plan.errores.join());
     assert.equal(seen.length, 0, 'compilar no llama al motor');
-    const { jobs } = P.aplicar(pedido);
+    const { jobs } = await P.aplicar(pedido);
     const j = await media.wait(jobs[0].id, 30000);
     assert.equal(j.state, 'done', j.error);
     assert.equal(seen.length, 1, 'una sola llamada');
@@ -118,6 +120,26 @@ test('«Fondo blanco» + «Exportar para un canal» con un Google de mentira: la
     assert.equal(it.w, 2048, 'el tamaño del canal Web PanaClaw'); assert.ok(it.file.endsWith('.webp'));
     const fondo = it.qa.checks.find(c => c.id === 'fondo-255'); assert.equal(fondo.ok, true, fondo.motivo);
     assert.ok(fs.readdirSync(path.join(media.dir(), '.crudo')).some(f => f.startsWith(j.id)), 'el crudo del modelo se guarda 7 días');
+  } finally { srv.close(); back(); }
+});
+
+test('«Catálogo para la web»: lo de antes (luz y color) se hace sobre tu foto ANTES de la IA; lo de después, sobre el resultado', conSharp, async () => {
+  const back = sinKeys(); const { srv, seen, base } = await stand();
+  Object.assign(process.env, { GEMINI_API_KEY: 'prueba-key', AO_GEMINI_BASE: base });
+  try {
+    const { P } = entorno();
+    const foto = media.upload({ name: 'cama.png', data: dataUrl(await fotoBodega()) });
+    const { jobs, plan } = await P.aplicar({ pila: ['cat-web-panaclaw'], entradas: { foto: [foto.file] } });
+    assert.ok(plan.local.antes.length > 0, 'la receta trae luz y color');
+    const j = await media.wait(jobs[0].id, 30000); assert.equal(j.state, 'done', j.error);
+    const prep = media.item(j.media.reference[0]);
+    assert.notEqual(prep.file, foto.file, 'a la IA va la copia preparada'); assert.equal(prep.prep, true); assert.equal(prep.versionOf, foto.file);
+    assert.ok(prep.post.pasos.some(s => s.op === 'balance' && s.hecho));
+    assert.equal(j.versionOf, foto.file, 'el resultado sigue siendo versión de tu foto');
+    const it = media.item(j.items[0]);
+    assert.ok(!it.post.pasos.some(s => s.op === 'balance'), 'la luz y el color no se repiten sobre el resultado');
+    assert.deepEqual(it.post.pasos.map(s => s.op), ['fondo-blanco', 'encuadrar', 'exportar']);
+    assert.equal(seen.length, 1);
   } finally { srv.close(); back(); }
 });
 
@@ -133,7 +155,7 @@ test('«Sala» con escenario 3D: la imagen guía y la escena en palabras llegan 
     assert.equal(plan.errores.length, 0, plan.errores.join());
     assert.equal(plan.guia?.pendiente, true);
     assert.doesNotMatch(plan.prompt, /Camera and framing:\s*Camera and framing:/, 'el rótulo no se repite');
-    const { jobs, plan: p2 } = P.aplicar(pedido);
+    const { jobs, plan: p2 } = await P.aplicar(pedido);
     assert.ok(media.resolve(p2.guia.id), 'la guía está en la galería');
     assert.equal(media.item(p2.guia.id).guia, true);
     const j = await media.wait(jobs[0].id, 30000);
@@ -156,7 +178,7 @@ test('«Guardar como preset»: una nota en Estudio/Presets que el Cerebro lee y 
   try {
     const { brain, P, notas } = entorno();
     const foto = media.upload({ name: 'cama.png', data: dataUrl(await fotoBodega()) });
-    const { jobs } = P.aplicar({ pila: [{ id: 'luz-mas-clara', params: { intensidad: 'fuerte' } }, 'color-blancos'], entradas: { foto: [foto.file] } });
+    const { jobs } = await P.aplicar({ pila: [{ id: 'luz-mas-clara', params: { intensidad: 'fuerte' } }, 'color-blancos'], entradas: { foto: [foto.file] } });
     const j = await media.wait(jobs[0].id, 20000); assert.equal(j.state, 'done', j.error);
     const r = P.guardar({ desde: j.items[0], nombre: 'Bodega a catálogo', marca: 'PanaClaw' });
     assert.equal(r.archivo, 'Estudio/Presets/Bodega a catálogo.md');
@@ -180,7 +202,7 @@ test('sin motor que edite: «Fondo blanco» no se cae a otra cosa; dice qué act
   try {
     const { P } = entorno();
     const foto = media.upload({ name: 'x.png', data: dataUrl(await fotoBodega()) });
-    assert.throws(() => P.aplicar({ pila: ['fondo-blanco'], entradas: { foto: [foto.file] } }), /motor que edita|key/);
+    await assert.rejects(P.aplicar({ pila: ['fondo-blanco'], entradas: { foto: [foto.file] } }), /motor que edita|key/);
     assert.deepEqual(media.jobs(), []);
   } finally { back(); }
 });

@@ -2,7 +2,12 @@
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync, renameSync, readdirSync, existsSync } from 'fs';
 import { buildBrainGraph } from './graph-build.mjs';
+import { cargarFabrica } from './presets/fabrica.mjs';
 await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/braingraph.js
+
+// Banco de presets (F1): la fábrica de imagen, para la demo file:// (busca y compila sin servidor), va JUNTO a la página, en
+// dist/presets-fabrica.js, y no dentro: pesa ~250 KB y la página tiene su presupuesto (check.mjs). src/presets-fabrica.js la carga.
+const FAB = (() => { const f = cargarFabrica(); return { version: f.version, grupos: f.grupos, tipos: f.tipos, canales: f.canales, familias: f.familias, iconos: f.iconos, sinonimos: f.sinonimos, presets: f.presets.filter(p => (p.medios || []).includes('image')) }; })();
 
 const res = await build({
   entryPoints: ['src/main.js'],
@@ -25,6 +30,7 @@ mkdirSync('dist', { recursive: true });
 
 // dev variant with external script for faster iteration
 mkdirSync('dist', { recursive: true });
+writeFileSync('dist/presets-fabrica.js', `window.AO_PRESETS_FABRICA=${JSON.stringify(FAB)};\n`); // the demo's preset factory, beside the page
 writeFileSync('dist/app.js', js);
 writeFileSync('dist/dev.html', shell.replace('<!--APP-->', '<script src="app.js"></script>'));
 console.log(`built dist/command-centre-v2.html (${(html.length / 1024).toFixed(0)} KB)`);

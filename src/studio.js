@@ -13,6 +13,7 @@ import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested ari
 import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
 import * as GF from './galeria-filtro.js'; // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
+import { initBanco } from './studio-banco.js'; // 1 Oct 2026 (banco de presets, F1): the bank lives in its own module; here only its hooks
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
   voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales', style: 'Estilo de la música', promptExpansion: 'Que el motor amplíe el prompt' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
@@ -134,6 +135,7 @@ export function initStudio(ctx) {
   $('.st-lang').value = store.get('lang', 'en') === 'es' ? 'es' : 'en';
   const setsOf = store.get('sets', {}); // model id → its settings
   let media = { start: [], end: [], reference: [], video: [] };
+  let banco = null; // banco de presets (F1): src/studio-banco.js, created once the composer exists (below)
 
   const cur = () => models.find(m => m.id === modelOf[kind]) || null;
   const roleName = r => ROLE[r];
@@ -168,6 +170,25 @@ export function initStudio(ctx) {
   const tags = m => [m.roles.reference && (m.kind === 'image' ? 'Edita o combina imágenes' : 'Referencias'), m.kind === 'video' && m.roles.start && 'Anima una imagen', m.kind === 'video' && m.roles.end && 'Fotograma final', m.roles.video && 'Parte de un video',
     (m.settings.sound || m.settings.generateAudio) && 'Sonido', /texto/i.test(m.note) && 'Texto legible', m.cost && m.cost < 0.012 && m.per !== 's' && 'Muy barato'].filter(Boolean);
 
+  /* ---------- banco de presets (F1, docs/propuesta-banco-presets.md §7): a step of the composer and a sheet over the gallery ---------- */
+  banco = initBanco({ esc, api, src: f => src(f), live: () => isLive() && location.protocol.startsWith('http'), say,
+    pick: (label, take) => { picking = { label, take }; renderSel(); showPane('gal'); say(`${label}: haz clic en una imagen de la galería.`); },
+    subir: files => uploadFiles(files, null), idea: () => $('.st-prompt').value.trim(), n: () => qty, onState: () => bancoState(),
+    abrirArchivo: f => lightFile(f), mostrarGaleria: () => { if (phone()) showPane('gal'); },
+    trabajos: (js, b) => { jobs.unshift(...js); if (b) budget = b; renderHead(); renderGrid(); watch(); }, recargar: () => load({ full: false }),
+    pedirDimitri: ctx.askDimitri ? () => ctx.askDimitri([]) : null });
+  $('.st-step').after(banco.el); $('.st-gal').appendChild(banco.sheet);
+  /** With presets in the composer, the bank decides the model and the cost: the steps it covers step aside and the foot says its cost. */
+  function bancoState() {
+    if (!banco) return;
+    const on = kind === 'image' && banco.activo();
+    banco.el.hidden = kind !== 'image'; if (kind !== 'image') banco.cerrar(false);
+    el.classList.toggle('st-banco-on', on);
+    if (!on) return;
+    $('.st-n').textContent = qty; $('.st-sum').hidden = true; $('.st-p3t').textContent = 'Opcional: algo más para la IA';
+    $('.st-est').textContent = `Con presets · ${banco.costo()}`; $('.st-est').classList.remove('over'); $('.st-go').textContent = 'GENERAR';
+  }
+
   /* ---------- the composer ---------- */
   function pickModel(k = kind) { // the remembered one if it is on, else the office's default, else the first that is on
     const on = models.filter(m => m.kind === k && m.on);
@@ -182,7 +203,7 @@ export function initStudio(ctx) {
   function renderModels() {
     pickModel();
     el.querySelectorAll('[data-kind]').forEach(b => { const on = b.dataset.kind === kind; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
-    renderPick(); renderModel();
+    renderPick(); renderModel(); bancoState();
   }
   function renderPick() {
     const m = cur(), b = $('.st-mpick');
@@ -309,6 +330,7 @@ export function initStudio(ctx) {
   const lines = () => $('.st-prompt').value.split('\n').map(x => x.trim()).filter(Boolean);
   function estimate() {
     $('.st-n').textContent = qty;
+    if (kind === 'image' && banco && banco.activo()) { banco.replan(); bancoState(); return 0; } // the bank's plan has the cost
     const m = cur(); const n = (mode === 'batch' ? Math.max(1, lines().length) : 1) * qty;
     if (!m) { $('.st-est').textContent = ''; $('.st-go').textContent = SV.goLabel(kind, 1); $('.st-sum').hidden = true; const pl = $('.st-plen'), len = $('.st-prompt').value.length, lim = limitNow(); pl.textContent = sound() ? `${SV.num(len)}/${SV.num(lim)}` : ''; pl.classList.remove('near'); pl.classList.toggle('over', sound() && len > lim); return 0; } // V5.0: Voz / Música without the key still say what they would make
     const s = settingsOf(m), per = Number(s.batchSize) || 1, secs = m.seconds || Number(s.duration) || 5;
@@ -380,7 +402,7 @@ export function initStudio(ctx) {
       ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
       ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark']]),
       ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ...(cap && cap.badge === 'VOZ' ? [['othervoice', 'Repetir con otra voz', 'mic']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar && !aud ? [['cal', 'Enviar al calendario de contenido', 'cal']] : []),
-      ...(ctx.askDimitri ? [['dimitri', 'Pedírselo a Dimitri', 'chat']] : []), ['dept', 'Mandar a un departamento…', 'send']]; // V4.9
+      ...(ctx.askDimitri ? [['dimitri', 'Pedírselo a Dimitri', 'chat']] : []), ['dept', 'Mandar a un departamento…', 'send'], ...(it.receta || it.preset ? [['preset', 'Guardar como preset…', 'star']] : [])]; // V4.9 · banco de presets: a result's recipe, kept as a note of the Brain
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}" draggable="true">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
       <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${aud ? `<span class="st-aud${cap.badge === 'MÚSICA' ? ' st-aud-mus' : cap.badge === 'VOZ' ? ' st-aud-voz' : ''}" aria-hidden="true">${cap.badge === 'MÚSICA' ? svg('note') : cap.badge === 'VOZ' ? svg('mic') : '♪'}</span>` : vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
@@ -389,7 +411,7 @@ export function initStudio(ctx) {
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
       ${aud ? `<audio class="st-cplay" src="${src(it)}" controls preload="metadata" aria-label="Escuchar: ${esc(label)}"></audio>` : ''}
-      <figcaption>${aud ? `<span class="st-slab">${cap.label}${cap.voice ? ` · voz <b>${esc(cap.voice)}</b>` : cap.instrumental ? ' · instrumental' : ''}</span>` : ''}<span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(who(it))}${it.versionOf ? ' · versión' : ''}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
+      <figcaption>${aud ? `<span class="st-slab">${cap.label}${cap.voice ? ` · voz <b>${esc(cap.voice)}</b>` : cap.instrumental ? ' · instrumental' : ''}</span>` : ''}<span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(who(it))}${it.versionOf ? ' · versión' : ''}${it.qa ? ' · ' + banco.qaHTML(it) : ''}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
       <div class="st-ov" role="group" aria-label="Acciones">
         ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla en la pieza «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? '✓ En la pieza' : 'Usar en la pieza'}</button>` : ''}
         ${primary ? `<button type="button" data-a="${primary[0]}" class="st-oi" aria-label="${primary[1]}: ${esc(label)}" title="${primary[1]} — ${primary[2].toLowerCase()}">${svg(primary[3])}</button>` : ''}
@@ -501,7 +523,7 @@ export function initStudio(ctx) {
     el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"], .st-selbar .st-mv').forEach(b => { b.disabled = !sel.size; });
     const mv = $('.st-mv'); if (mv && document.activeElement !== mv) mv.innerHTML = `<option value="">Mover a…</option>${folders.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('')}<option value="none">Sin carpeta</option><option value="__new">+ Nueva carpeta…</option>`;
     $('.st-picking').hidden = !picking;
-    if (picking) $('.st-picking').innerHTML = `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${roleName(picking)}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`;
+    if (picking) $('.st-picking').innerHTML = typeof picking === 'object' ? `${esc(picking.label)}: haz clic en una imagen. <button type="button" data-b="unpick">Cancelar</button>` : `Elige ${picking === 'video' ? 'un video' : 'una imagen'} para «${roleName(picking)}»: haz clic en ella. <button type="button" data-b="unpick">Cancelar</button>`; // banco de presets: { label, take(file) }
     el.classList.toggle('st-pickmode', !!picking);
   }
   /* INF-03: the view asked of the server — the tab, the folder and the search. A new one starts from the first page. */
@@ -528,7 +550,7 @@ export function initStudio(ctx) {
         depts = ctx.studioDepts && ctx.studioDepts.length ? ctx.studioDepts : (j.departments || []).map(k => ({ key: k, name: DEPT_NAMES[k] || k })); // V4.9
         if (folderF !== 'all' && folderF !== 'none' && !folders.some(f => f.id === folderF)) { folderF = 'all'; store.set('folder', 'all'); } // a folder removed elsewhere
         const sig = JSON.stringify((j.models || []).map(m => m.id + (m.on ? 1 : 0)));
-        if (full || sig !== catalogSig) { models = j.models || []; engines = j.engines || []; def = j.default || {}; catalogSig = sig; full = true; }
+        if (full || sig !== catalogSig) { models = j.models || []; engines = j.engines || []; def = j.default || {}; catalogSig = sig; full = true; banco.setModels(models); banco.refrescar(); } // the bank: which presets a model that is on can serve
         if (j.voices) voices = SV.normVoices(j.voices); // V5.0: only when MiniMax is on
         editModels = (j.editModels || []).map(m => (typeof m === 'string' ? models.find(x => x.id === m) : m)).filter(m => m && m.on !== false); if (editModels.length) editBlock = null; // V4.9
       } catch (e) { loadErr = e.message; }
@@ -1551,6 +1573,7 @@ export function initStudio(ctx) {
     }
     if (e.target.closest('.st-undo-enh')) { if (prevPrompt != null) $('.st-prompt').value = prevPrompt; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; return; }
     if (e.target.closest('.st-go')) {
+      if (kind === 'image' && banco.activo()) { banco.generar(); return; } // with presets, GENERAR is the bank's (its plan and its cost)
       if (!isLive()) return say('El Estudio necesita la oficina real (ábrela con el iniciador).', true);
       const m = cur(); if (!m) { const o = offModel(); return o ? keyHelp(o) : say('Elige un modelo.', true); } // V5.0: Voz / Música without the key say how to switch it on
       const miss = (m.needs || []).find(r => !media[r].length); if (miss) return fieldErr('slot', `${m.name} necesita «${roleName(miss)}»: súbela o elígela de la galería.`);
@@ -1597,6 +1620,7 @@ export function initStudio(ctx) {
     const it = itemOf(cd.dataset.f); if (!it) return;
     if (picking) { // choosing a file for a slot
       e.preventDefault();
+      if (typeof picking === 'object') { if (/\.(mp4|webm|mp3|wav|flac|m4a|ogg)$/i.test(it.file)) return say('Ahí va una imagen.', true); const p = picking; picking = null; renderSel(); learn(it.file, 'ref'); say(''); p.take(it.file); showPane('gen'); return; } // the bank's own slots (tu foto, una referencia)
       if (addMedia(picking, it.file)) { const r = picking; picking = null; renderSel(); learn(it.file, 'ref'); say(`Puesta en «${roleName(r)}».`); }
       return;
     }
@@ -1623,6 +1647,7 @@ export function initStudio(ctx) {
     if (a === 'edit') lightFile(it.file, { panel: 'edit' }); // V4.9: Editar opens the viewer with its small panel
     if (a === 'dept') lightFile(it.file, { panel: 'dept' });
     if (a === 'dimitri' && ctx.askDimitri) ctx.askDimitri([it.file]);
+    if (a === 'preset') { if (kind !== 'image') setKind('image'); showPane('gen'); banco.guardarDesde(it); } // banco de presets: «Guardar como preset» (§7.4)
     if (a === 'move') { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
     if (a === 'task' && it.task && ctx.openTask) { close(); ctx.openTask(it.task); } // V4.2 (audit A25)
   });
@@ -1636,7 +1661,7 @@ export function initStudio(ctx) {
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); if (k === 'instrumental') paintStep3(); estimate(); }
   });
   el.addEventListener('input', e => {
-    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; }
+    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (kind === 'image' && e.target.value === '/') { e.target.value = ''; banco.abrir('banco'); return; } if (banco.activo()) banco.replan(); } // «/» at the start opens the bank (§7.1); the idea goes into its plan
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value + (e.target.dataset.set === 'duration' ? ' s' : ''); setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; requery(250); return; } // INF-03: the server searches the whole gallery
@@ -1666,6 +1691,7 @@ export function initStudio(ctx) {
       if (e.key === '/') { e.preventDefault(); showPane('gal'); $('.st-q').focus(); return; }
       if (e.key === 'i' || e.key === 'I') { setKind('image'); return; }
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
+      if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (kind !== 'image') setKind('image'); showPane('gen'); banco.toggle(); return; } // banco de presets (§7.1)
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
     if (!$('.st-binov').hidden) { if (e.key === 'Escape') closeBin(); return; }
@@ -1687,6 +1713,7 @@ export function initStudio(ctx) {
     if (!$('.st-light').hidden) { lightKey(e, typing); return; } // V4.9: + − 0 F, and the panel
     if (e.key === 'Escape') {
       if (!$('.st-mlist').hidden) { openList(false); $('.st-mpick').focus(); return; }
+      if (banco.abierto() && !picking) { banco.cerrar(); return; } // the bank's sheet first, back on its button
       if (e.target.matches('input[type=search], textarea') && e.target.value && e.target.classList.contains('st-q')) { e.target.value = ''; q = ''; requery(); return; } // Esc empties the search first
       if (picking) { picking = null; renderSel(); } else if (sel.size || selecting) { sel.clear(); selecting = false; renderGrid(); } else close(); return;
     }

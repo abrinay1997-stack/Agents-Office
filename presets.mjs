@@ -90,7 +90,9 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
       const on = c.filter(x => x.on);
       return { on: on.length > 0, modelos: on.slice(0, 3).map(x => x.id), motivo: on.length ? '' : c[0]?.motivo || 'ningún modelo encendido' };
     };
-    return { version: fab().version, sharp: sharpOk !== false, presets: ps.map(p => ({ ...p, ...sirve(p) })), propios: t.propios.map(p => p.id), problemas: t.problemas };
+    const f = fab(); // lo que la página necesita para pintar el banco (grupos, canales, iconos…); los presets van aparte, ya filtrados
+    return { version: f.version, sharp: sharpOk !== false, presets: ps.map(p => ({ ...p, ...sirve(p) })), propios: t.propios.map(p => p.id), problemas: t.problemas,
+      fabrica: { version: f.version, grupos: f.grupos, tipos: f.tipos, canales: f.canales, familias: f.familias, iconos: f.iconos, sinonimos: f.sinonimos } };
   }
 
   /** POST /api/media/presets/compile: el plan, sin gastar nada. */
@@ -121,8 +123,19 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
     guias.set(h, it.file); return it.file;
   }
 
+  /** Lo de «antes» del modelo (enderezar, quitar la dominante, la luz y el color: §5.2) se hace aquí, sobre tu foto, y lo que va a
+   *  la IA es esa copia preparada (en la galería, marcada `prep`, versión de tu foto). Tu foto nunca se toca. */
+  async function preparar(foto, ops, folder) {
+    const p = media.resolve(foto); if (!p) throw Object.assign(new Error('no encuentro tu foto en el Estudio'), { status: 400 });
+    const out = await L.pipeline(fs.readFileSync(p), ops.map(({ de, ...o }) => o), {});
+    const ext = out.formato === 'jpeg' || out.formato === 'jpg' ? 'jpeg' : out.formato;
+    const it = media.upload({ name: 'Tu foto, preparada para la IA', data: `data:image/${ext};base64,${out.buffer.toString('base64')}`, folder });
+    try { media.update(it.file, { prep: true, versionOf: foto, post: { pasos: out.pasos, avisos: out.avisos } }); } catch {}
+    return it.file;
+  }
+
   /** POST /api/media/presets/apply: compila y lo manda a hacer. Lo único que gasta, y pasa por los topes del Estudio (submit). */
-  function aplicar(b = {}, { by = 'you' } = {}) {
+  async function aplicar(b = {}, { by = 'you' } = {}) {
     const { plan: c0, pedido: P } = compilar(b);
     if (c0.errores.length) { const e = new Error(c0.errores.join(' · ')); e.status = 400; e.plan = c0; throw e; }
     const foto = P.entradas.foto[0];
@@ -132,12 +145,19 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
     if (c0.soloLocal) {
       if (!foto) { const e = new Error('Lo local trabaja sobre tu foto: súbela o elige una de la galería'); e.status = 400; throw e; }
       const ops = [...c0.local.antes, ...c0.local.despues];
-      const j = media.submit({ local: true, source: foto, versionOf: foto, kind: 'image', prompt: c0.preset.map(x => x.id).join(' + ') || 'Edición en tu máquina', post: ops, qa: c0.qa, medir: c0.medir, preset: c0.preset, canal, receta, by, folder: P.folder });
+      const byId = new Map(todos().presets.map(p => [p.id, p]));
+      const j = media.submit({ local: true, source: foto, versionOf: foto, kind: 'image', prompt: c0.preset.map(x => byId.get(x.id)?.nombre || x.id).join(' + ') || 'Edición en tu máquina', post: ops, qa: c0.qa, medir: c0.medir, preset: c0.preset, canal, receta, by, folder: P.folder });
       return { plan: c0, jobs: [j] };
     }
     let c = c0;
     if (c.guia?.pendiente) c = core.ponerGuia(c, guiaDe(P.escena));
-    const j = media.submit({ ...c.request, medir: c.medir, canal, esEscena, receta, by, folder: P.folder, purpose: 'banco de presets' });
+    const req = { ...c.request, media: { ...c.request.media } };
+    if (req.pre?.length && foto && req.media.reference?.[0] === foto) { // §5.2: lo de antes, antes — la IA recibe tu foto ya preparada
+      if (!(await L.disponible()).ok) { const e = new Error('Lo de antes de la IA (luz y color) no está disponible en esta máquina: no se manda a la IA en su lugar'); e.status = 400; throw e; }
+      req.media.reference = [await preparar(foto, req.pre, P.folder), ...req.media.reference.slice(1)];
+    }
+    delete req.pre;
+    const j = media.submit({ ...req, medir: c.medir, canal, esEscena, receta, by, folder: P.folder, purpose: 'banco de presets' });
     return { plan: c, jobs: [j] };
   }
 

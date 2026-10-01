@@ -235,3 +235,21 @@
 **Fix aplicado:** En los demás worktrees se quitó primero solo el enlace (`cmd /c rmdir <junction>`, sin `/s`; comprobado con `Get-Item … .LinkType`) y luego se borró el worktree. `npm ci` reinstaló las librerías (102 paquetes). `.claude/worktrees/` va en `.gitignore`. Tests 267/267 y check 81/81 después.
 **Prevención:** Nunca borrar recursivamente una carpeta que contenga una junction o un enlace simbólico sin quitar antes el enlace. Mejor aún: que cada worktree haga su propio `npm ci`, o quitar las junctions como primer paso de la limpieza.
 **Archivos:** `.gitignore`, `.claude/worktrees/*` (temporal)
+
+## [2026-10-01] — La receta de catálogo dejaba el producto casi negro (lo de «antes» corría después de la IA)
+
+**Contexto:** Integración F1 del banco de presets: `cat-web-panaclaw` trae luz y color locales (balance de mundo gris, auto niveles, exposición) que el compilador pone en `local.antes`.
+**Error:** En el recorrido del navegador, el resultado salía con el producto casi negro sobre blanco 255.
+**Causa raíz:** Para salir rápido, los pasos de «antes» se habían juntado al principio de los de «después» y corrían sobre la imagen ya limpia de la IA; el mundo gris y los auto niveles por canal, sobre un fondo casi blanco con un mueble, llevan el producto a 0.
+**Fix aplicado:** `presets.mjs → preparar()`: lo de antes se hace sobre la foto del dueño, la copia preparada (`prep: true`) es la que va a la IA y el resultado sigue siendo versión de la foto original; después solo corre lo de después. Test en `tests/presets-servidor.test.mjs`.
+**Prevención:** Respetar el momento de cada paso local (§5.2): «antes» ayuda al modelo; repetirlo sobre su salida la estropea. Mirar las capturas del recorrido, no solo los tests.
+**Archivos:** `presets.mjs`, `media/trabajos.mjs`, `tests/presets-servidor.test.mjs`
+
+## [2026-10-01] — «Copiar el color de una foto» siempre salía «Revisar» en la QA
+
+**Contexto:** La QA `delta-e` de `ref-color` mide el color del producto contra la foto original.
+**Error:** «El color se aparta (ΔE 14,95, el máximo es 3)» en cada copia de color.
+**Causa raíz:** Copiar el color cambia el color a propósito; compararlo con el original es medir lo contrario de lo que se pidió.
+**Fix aplicado:** `media/posproceso.mjs`: si el trabajo copia el color de una referencia, `delta-e` sale «No medido» con el motivo, sin tumbar el estado.
+**Prevención:** Antes de enganchar una comprobación a un preset, preguntarse qué significa «bien» para ESE preset; un «no medido» honesto es mejor que un «revisar» falso.
+**Archivos:** `media/posproceso.mjs`
