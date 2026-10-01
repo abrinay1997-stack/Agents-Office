@@ -303,3 +303,30 @@ test('revisión F1: si submit dice que no (presupuesto), la guía y la foto prep
     assert.equal(b.plan.guia.id, a.plan.guia.id, 'la misma guía tras el reinicio');
   } finally { media.setLimits({ dailyBudget: 0 }); srv.close(); back(); }
 });
+
+// Revisión F1, desde la pantalla: «Guardar como preset» con un canal ELEGIDO en el compositor manda exactamente este cuerpo
+// (src/studio-banco.js → guardar(): pila de { id, params }, ejes, escena, canal, modelo). Y «Guardar como preset…» en una
+// tarjeta de la galería manda { desde }, cuya receta también lleva el canal. Antes daba 400 «canales.has is not a function».
+// No necesita sharp: guardar no toca imágenes.
+test('revisión F1: «Guardar como preset» con canal elegido, desde el compositor y desde la galería', () => {
+  const back = sinKeys();
+  try {
+    const { brain, P } = entorno();
+    const r = P.guardar({ nombre: 'Feed de Instagram', marca: undefined, receta: { pila: [{ id: 'sal-canal', params: { canal: 'ig-feed' } }], ejes: null, escena: null, canal: 'ig-feed', modelo: null } });
+    assert.equal(r.preset.receta.canal, 'ig-feed');
+    assert.ok(fs.existsSync(path.join(brain, 'Estudio', 'Presets', 'Feed de Instagram.md')));
+    // desde una imagen de la galería que salió de una receta con canal
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    const it = media.upload({ name: 'resultado.png', data: dataUrl(png) });
+    media.update(it.file, { receta: { pila: [{ id: 'sal-canal', params: { canal: 'ig-story' } }], canal: 'ig-story' } });
+    const r2 = P.guardar({ nombre: 'Historia', desde: it.file });
+    assert.equal(r2.preset.receta.canal, 'ig-story');
+    // las dos se cargan en el banco y el banco sigue entero
+    const l = P.lista({});
+    assert.ok(l.propios.includes(r.preset.id) && l.propios.includes(r2.preset.id), JSON.stringify(l.problemas));
+    assert.deepEqual(l.problemas, []);
+    assert.ok(l.presets.length > l.propios.length, 'los de fábrica siguen saliendo');
+    // un canal que no existe sigue siendo un error claro (400), no un 500
+    assert.throws(() => P.guardar({ nombre: 'Mal', receta: { pila: [{ id: 'sal-canal', params: { canal: 'tiktok' } }], canal: 'tiktok' } }), e => e.status === 400 && /no es un canal|no existe/.test(e.message));
+  } finally { back(); }
+});
