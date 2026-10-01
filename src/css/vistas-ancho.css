@@ -1,0 +1,43 @@
+/* Named to sort LAST in src/css (build.mjs joins the files by name): these container rules must win over the window rules of contenido.css. */
+/* V4.9 (30 sep 2026): the calendar and Contenido fit the room they are given, not the window's.
+   With Dimitri's panel beside a view (src/css/dimitri.css) a 1512 px screen leaves the view ~1070 px, and the header's rules
+   only looked at the window: «HOY» sat on top of «?», the month read «S…». Each view is a container now, and its narrow rules
+   (the same ones shell.html keeps for a narrow window) also apply when the VIEW is narrow. The window's rules stay as they were. */
+:is(#calOv, #ctOv) { container: cvview / inline-size; }
+
+@container cvview (max-width: 1240px) {
+  .cv-keys { display: none; }
+  .cv-legend { display: none; }
+  .cv-brand small { display: none; }
+  .cv-band { gap: 12px; padding: 0 16px; }
+  .cv-seg { margin-left: 4px; } .cv-seg button { padding: 7px 10px; }
+  .cv-nav { margin-left: 4px; min-width: 0; flex: 0 1 auto; }
+  :is(#cvTitle, #ctTitle) { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; font-size: 20px; }
+  :is(#cvTitle, #ctTitle) small { display: none; }
+}
+@container cvview (max-width: 900px) {
+  .cv-band { height: auto; flex-wrap: wrap; padding: 10px 12px; gap: 8px 10px; }
+  .cv-brand { order: 1; font-size: 18px; }
+  :is(#cvKeys, #ctKeys) { order: 2; margin-left: auto; } /* row 1: the name, then ? and ✕ at the right edge */
+  :is(#cvClose, #ctClose) { order: 3; width: 36px; height: 36px; }
+  .cv-sp { display: none; }
+  .cv-seg { order: 4; margin-left: 0; }
+  .cv-nav { order: 5; margin-left: 0; flex: 1 1 auto; justify-content: flex-end; }
+  :is(#cvTitle, #ctTitle) { font-size: 18px; }
+  .cv-nav :is(#cvToday, #ctToday) { padding: 7px 9px; }
+  .cv-railbtn { display: inline-block; }
+  :is(#calOv, #ctOv).railOpen .cv-rail { display: flex; position: absolute; left: 0; top: 0; bottom: 0; z-index: 44; width: min(320px, 86%); background: var(--cream); box-shadow: 20px 0 50px rgba(0,0,0,.2); }
+  .cv-body { position: relative; }
+}
+@container cvview (max-width: 1000px) { /* Contenido's band carries one switch more (CALENDARIO · PROGRAMACIÓN): it folds a little sooner */
+  #ctOv .cv-band { height: auto; flex-wrap: wrap; padding: 10px 12px; gap: 8px 10px; }
+  /* row 1: CONTENIDO · CALENDARIO|PROGRAMACIÓN · ? ✕ — row 2: DÍA SEMANA MES · ‹ month › HOY */
+  #ctOv .cv-brand { order: 1; } #ctOv .ct-mode { order: 2; margin-left: auto; } #ctOv #ctKeys { order: 3; margin-left: 0; } #ctOv #ctClose { order: 4; margin-left: 0; }
+  #ctOv .cv-sp { display: none; } #ctOv .ct-views { order: 5; margin-left: 0; } #ctOv .cv-nav { order: 6; margin-left: 0; flex: 1 1 auto; justify-content: flex-end; }
+}
+@container cvview (max-width: 760px) {
+  .cv-ev.line .cv-ev-h { display: none; } .cv-ev.line { padding: 1px 3px; } .cv-grid.month .cv-num { margin: 0 0 2px; }
+  .cv-st { display: none; }
+  .cv-num { font-size: 10.5px; }
+  .cv-rail { display: none; } .cv-tools { flex-wrap: wrap; } /* as on a phone: the rail opens over the grid with its button */
+}

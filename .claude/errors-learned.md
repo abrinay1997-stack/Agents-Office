@@ -208,3 +208,21 @@
 **Fix aplicado:** `discover()` aplica `withBrowser` también cuando no hay respuesta; el mosaico sigue a `tools.browser` siempre. Test: `tests/mcp-browser.test.mjs` (con `CLAUDE_BIN` apuntando a un programa que no existe).
 **Prevención:** Lo que la página muestra por configuración no debe depender de que un programa externo responda. Probar el camino «sin Claude CLI» con `CLAUDE_BIN` falso.
 **Archivos:** `mcp.mjs` (discover → finish), `tests/mcp-browser.test.mjs`
+
+## [2026-09-30] — El visor del Estudio cortaba las fotos verticales (solo se veía el 43 %)
+
+**Contexto:** Pedido del dueño: «al abrir una imagen grande en el visor no se ve completa».
+**Error:** A 1512 y 1366 px, una imagen 9:16 (2160×3840) se dibujaba a 1060×1884 dentro de una caja de 828 px de alto. Medido con `scripts/estudio-capturas.mjs antes`: 16 de 24 combinaciones cabían.
+**Causa raíz:** `.st-lmedia` es un grid con `place-items:center`, y la fila del grid de `.st-lbox` tenía altura `auto`. Así, el `max-height:100%` del `<img>` no tenía contra qué resolverse y la imagen crecía hasta su tamaño. Las horizontales no lo delataban porque las frenaba el ancho.
+**Fix aplicado:** filas `minmax(0,1fr)` y el medio a `width/height:100%` con `object-fit:contain` (`src/css/estudio.css`), más zoom y pantalla completa (`src/viewer-zoom.js`). Ahora caben 24 de 24.
+**Prevención:** un `max-height` en % dentro de un grid o un flex necesita un padre con altura definida (`minmax(0,1fr)`, `min-height:0`). Probar los visores con imágenes 9:16 y 21:9 y medir el área visible, no solo mirar.
+**Archivos:** `src/css/estudio.css`, `src/studio.js` (light), `scripts/estudio-capturas.mjs`
+
+## [2026-09-30] — Con el panel de Dimitri al lado, la cabecera del calendario se montaba
+
+**Contexto:** Dimitri pasó a ser un panel fijo a la izquierda que corre las vistas (`src/css/dimitri.css`).
+**Error:** A 1024 px, «HOY» quedaba encima del «?» del calendario. A 1512 y 1366 px, Contenido mostraba el mes como «S…» y tenía botones montados. Sin el panel, ya pasaba a 1072 y 1200 px.
+**Causa raíz:** Las reglas estrechas de la banda (`.cv-band`) eran `@media` por el ancho de la VENTANA, y la vista ahora es más estrecha que la ventana. Además, `build.mjs` junta `src/css/*.css` por orden alfabético: el primer arreglo (`calendario-ancho.css`) iba antes que `contenido.css`, que con la misma especificidad lo pisaba.
+**Fix aplicado:** `:is(#calOv,#ctOv){container:cvview/inline-size}` y las reglas estrechas como `@container cvview (...)` en `src/css/vistas-ancho.css`, un nombre que queda el último. Medido: 14 de 14 sin cortes ni solapes.
+**Prevención:** el estilo de una vista que puede compartir pantalla depende del ancho de la vista (`@container`), no de la ventana. Un CSS de `src/css/` que corrige a otro debe ir después en orden alfabético.
+**Archivos:** `src/css/vistas-ancho.css`
