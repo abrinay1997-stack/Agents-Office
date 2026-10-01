@@ -132,7 +132,7 @@ export function initSub(ctx) {
           const [data, vis, folder] = await Promise.all([readURL(f), visionCopy(a.preview), targetFolder()]);
           const r = await fetch('/api/media/upload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: a.name, data, ...(folder ? { folder } : {}) }) });
           const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
-          a.file = j.item.file; a.vision = { file: a.file, ...vis }; a.state = 'ready';
+          a.file = j.item.file; a.vision = { file: a.file, ...vis }; a.state = 'ready'; mediaChanged();
         } catch (e) { a.state = 'failed'; a.err = e.message; }
         renderAtts();
       })();
@@ -210,8 +210,9 @@ export function initSub(ctx) {
     if (messages.some(m => m.studio)) await loadMedia();
     render(true);
   }
+  const mediaChanged = () => dispatchEvent(new CustomEvent('ao:media-changed')); // V4.9: the Estudio beside Dimitri refreshes its gallery (src/studio.js)
   async function refreshMessages() { // a job of Dimitri's finished: the server updated his message and added «Listos: …»
-    try { const r = await fetch('/api/sub'); if (!r.ok) return; const j = await r.json(); const before = messages.length; messages = j.messages || messages; if (messages.length > before) { const last = messages[messages.length - 1]; if (last && last.who === 'sub') say(`${NAME}: ${String(last.text || '').slice(0, 200)}`); } } catch {}
+    try { const r = await fetch('/api/sub'); if (!r.ok) return; const j = await r.json(); const before = messages.length; messages = j.messages || messages; if (messages.length > before) { mediaChanged(); const last = messages[messages.length - 1]; if (last && last.who === 'sub') say(`${NAME}: ${String(last.text || '').slice(0, 200)}`); } } catch {}
   }
   async function send(text) {
     text = String(text || '').trim(); if (busy || sending || !isLive()) return;
@@ -266,7 +267,7 @@ export function initSub(ctx) {
       if (j.messages) for (const x of j.messages) if (!messages.some(y => y.id === x.id)) messages.push(x);
       studioEdits.delete(msgId); actionEdits.delete(msgId);
       say(discard ? 'Plan de creativos descartado.' : 'Enviado al Estudio. Te aviso aquí cuando estén listos.');
-      pollAt = 0; await pollJobs();
+      pollAt = 0; await pollJobs(); mediaChanged();
     } catch (e) { btn.disabled = false; btn.textContent = label; messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No se pudo ${discard ? 'descartar' : 'generar'}: ${e.message}` }); }
     render(true);
   }

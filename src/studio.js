@@ -772,6 +772,8 @@ export function initStudio(ctx) {
     if (zImg) requestAnimationFrame(() => zSet(zs));
   });
   window.addEventListener('resize', () => { if (zImg && !$('.st-light').hidden) zSet(zs); });
+  // V4.9: Dimitri uploads a photo or sends creatives while the Estudio is open beside him: the gallery shows it now, not at the next 20-second refresh
+  window.addEventListener('ao:media-changed', () => { if (isOn() && $('.st-light').hidden) load({ full: false }); });
   function closeLight() { const L = $('.st-light'); if (L.hidden) return; if (document.fullscreenElement && L.contains(document.fullscreenElement)) document.exitFullscreen?.().catch(() => {}); L.hidden = true; L.innerHTML = ''; lightIdx = -1; lightAt = null; zImg = null; lPanel = null; L.classList.remove('st-zoomed'); modal.close(L); if (lightFrom && document.contains(lightFrom)) lightFrom.focus({ preventScroll: true }); }
   /** Open the viewer on a file, wherever it is: a filter or a folder that hides it is cleared first. */
   function lightFile(file, o = {}) {
