@@ -17,7 +17,12 @@
 //   «ops»    · (V4.11) the calendar and the office: a routine, skipping one run, a draft piece in Contenido, moving a piece,
 //              moving or cancelling a scheduled task — each one a card that waits for the owner's click (POST /api/sub/ops).
 //
-//   data/subgerente.json → { messages: [{ id, who: 'user'|'sub', text, at, mode?, plan?, studio?, ops?, attach?, context?, media?, shield?, answers? }] }   (the last 120 kept)
+//   «¿Cómo vamos?» · (Auditoría 1 oct 2026, DIM-10) the chip and its twins get quickStatus() at once, no model (quick: true); Dimitri
+//              adds his reading only when the owner presses «Analizar con Dimitri».
+//   The answer streams to the page while it is written (DIM-14, src/sub-stream.js) and «Detener» kills the run: the message stays
+//   «Detenido por ti» (stopped: true) and nothing in it is a plan, an op or a creative.
+//
+//   data/subgerente.json → { messages: [{ id, who: 'user'|'sub', text, at, mode?, plan?, studio?, ops?, attach?, context?, media?, shield?, answers?, quick?, stopped? }] }   (the last 120 kept)
 import fs from 'node:fs';
 import path from 'node:path';
 import { valid as validWhen, nextRun } from './src/when.js';
@@ -216,6 +221,40 @@ export function oficinaText({ budget = null, kpis = [], unread = 0, notices = []
   if (budget) out.push(`Gasto del mes en modelos: US$${(+budget.spent || 0).toFixed(2)}${budget.budget ? ` de US$${(+budget.budget).toFixed(2)} (${Math.round((budget.ratio || 0) * 100)} %)` : ' (sin presupuesto puesto)'}`);
   if (kpis.length) out.push('Indicadores del dueño: ' + kpis.slice(0, 8).map(k => `${k.name || k.id} ${k.value == null ? 'sin dato' : fmtN(k.value)}${k.goal ? ` (meta ${fmtN(k.goal)})` : ''}`).join(' · '));
   if (unread) out.push(`Avisos sin leer: ${unread}${notices.length ? ' — ' + notices.slice(0, 4).map(n => clip(n.text, 100)).join('; ') : ''}`);
+  return out.join('\n');
+}
+
+/* ---------- Auditoría 1 oct 2026 (DIM-10): «¿Cómo vamos?» at once — the same office, for the owner's eyes, no model ---------- */
+const hhmm = ms => { const d = new Date(ms); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const usd = v => `US$${(+v || 0).toFixed(2)}`;
+const piezaOwner = p => `${p.fecha ? DIA(p.fecha) : 'sin día'}${p.hora ? ' ' + p.hora : ''} ${p.formato || 'post'} ${(p.redes || []).map(RED_ES).join('+')} «${clip(p.titulo || p.texto || 'sin título', 48)}» (${[ESTADO_ES[p.estado] || p.estado, p.cambiadaTrasAprobar ? 'cambiada tras aprobar' : '', !(p.medios || []).length ? 'falta imagen o video' : '', p.estado !== 'aprobada' && !String(p.texto || '').trim() ? 'sin texto' : ''].filter(Boolean).join(', ')})`;
+/**
+ * The summary the chip «¿Cómo vamos?» paints at once: what runs, what waits for the owner's OK, what failed today, what is still due today,
+ * what Contenido publishes in the next 7 days, today's spend and the month against the budget, unread notices. Markdown, short.
+ * Input is what serve.mjs already reads for Dimitri's <estado> (tasks, routines with nextAt, Contenido's pieces, the cost ledger, notices).
+ */
+export function quickStatus({ tasks = [], agents = [], piezas = [], routines = [], spentToday = 0, budget = null, unread = 0, now = Date.now(), dias = 7 } = {}) {
+  const name = id => agents.find(a => a.id === id)?.name || id || '—';
+  const live = tasks.filter(t => !t.archived);
+  const d0 = new Date(now); d0.setHours(0, 0, 0, 0); const start = d0.getTime(), end = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + 1).getTime();
+  const few = (arr, f, n = 4) => arr.slice(0, n).map(f).join(' · ') + (arr.length > n ? ` · y ${arr.length - n} más` : '');
+  const by = st => live.filter(t => t.state === st);
+  const doing = by('doing'), queued = by('next'), waiting = by('waiting').sort((a, b) => (a.waitingAt || 0) - (b.waitingAt || 0));
+  const failed = live.filter(t => t.state === 'done' && t.error && !t.stopped && (t.doneAt || 0) >= start).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  const later = [...by('scheduled').filter(t => t.dueAt >= now && t.dueAt < end).map(t => ({ at: t.dueAt, text: `«${clip(t.title, 50)}» (${name(t.agent)})` })),
+    ...routines.filter(r => !r.paused && r.nextAt >= now && r.nextAt < end).map(r => ({ at: r.nextAt, text: `«${clip(r.title, 50)}» (rutina, ${name(r.agent)})` }))].sort((a, b) => a.at - b.at);
+  const hoy = iso(new Date(now)), fin = (() => { const d = new Date(now); d.setDate(d.getDate() + dias - 1); return iso(d); })();
+  const prox = piezas.filter(p => p.fecha && p.fecha >= hoy && p.fecha <= fin).sort((a, b) => `${a.fecha} ${a.hora || ''}`.localeCompare(`${b.fecha} ${b.hora || ''}`));
+  const huecos = []; for (let i = 0; i < dias; i++) { const d = new Date(now); d.setDate(d.getDate() + i); const f = iso(d); if (!prox.some(p => p.fecha === f)) huecos.push(DIA(f)); }
+  const out = [`**Ahora mismo** (${hhmm(now)}, calculado al instante):`, ''];
+  out.push(`- **Trabajando:** ${doing.length ? few(doing, t => `«${clip(t.title, 50)}» (${name(t.agent)})`) : 'nadie en este momento'}${queued.length ? ` · ${queued.length} en cola` : ''}`);
+  out.push(`- **Esperan tu OK:** ${waiting.length ? `${waiting.length} — ${few(waiting, t => `«${clip(t.title, 50)}» (${name(t.agent)})`)}` : 'nada'}`);
+  out.push(`- **Falló hoy:** ${failed.length ? `${failed.length} — ${few(failed, t => `«${clip(t.title, 46)}»${t.result ? ': ' + clip(String(t.result).replace(/^Could not complete this task: /, ''), 70) : ''}`, 3)}` : 'nada'}`);
+  if (later.length) out.push(`- **Más tarde hoy:** ${few(later, x => `${hhmm(x.at)} ${x.text}`)}`);
+  const espera = prox.filter(p => p.estado === 'revision').length;
+  out.push(`- **Contenido, próximos ${dias} días:** ${prox.length ? `${prox.length} ${prox.length === 1 ? 'pieza' : 'piezas'} — ${few(prox, piezaOwner)}` : 'nada programado'}${espera ? ` · ${espera} a revisar` : ''}${prox.length && huecos.length ? (huecos.length > 3 ? ` · ${huecos.length} días sin publicación` : ` · sin publicación: ${huecos.join(', ')}`) : ''}`);
+  out.push(`- **Gasto de hoy:** ${usd(spentToday)} en modelos${budget ? ` · el mes: ${usd(budget.spent)}${budget.budget ? ` de ${usd(budget.budget)} (${Math.round((budget.ratio || 0) * 100)} %)` : ''}` : ''}`);
+  if (unread) out.push(`- **Avisos sin leer:** ${unread} (el semáforo, tecla O)`);
   return out.join('\n');
 }
 
@@ -421,6 +460,21 @@ export function parsePlan(text, { depts, agents, now = Date.now() }) {
   }
   return { mode, reply: reply.replace(/\n{3,}/g, '\n\n').trim(), tasks: work ? items : [], questions,
     creatives: studio ? creatives : [], actions: studio && Array.isArray(j.actions) ? j.actions.slice(0, 40) : [], ops: work && Array.isArray(j.ops) ? j.ops.slice(0, 12) : [], image_text: String(j.image_text || '').slice(0, 4000), ...(cut ? { cut: true } : {}) };
+}
+
+/**
+ * DIM-14: ask Claude with the answer streaming; an older CLI that does not know --include-partial-messages gets the same question
+ * without it. «Detener» is honoured on both tries: once the owner stopped the run, a rejection (the killed process) is '' and not an error.
+ */
+export async function askLive(ask, system, u, opts, { live = false, stopped = () => false } = {}) {
+  if (stopped()) return '';
+  try { return await ask(system, u, opts); }
+  catch (e) {
+    if (stopped()) return '';
+    if (!(live && /include-partial-messages|unknown option/i.test(e.message))) throw e;
+    try { return await ask(system, u, { ...opts, partial: false }); }
+    catch (e2) { if (stopped()) return ''; throw e2; }
+  }
 }
 
 export const message = (who, text, extra = {}) => ({ id: nid(), who, text, at: Date.now(), ...extra });
