@@ -10,10 +10,13 @@
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested arithmetic
+import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
-  imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo' }; // V4.4: the settings Higgsfield's own schemas bring
+  imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
+  voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales', style: 'Estilo de la música', promptExpansion: 'Que el motor amplíe el prompt' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
 const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
-  epic: 'Épico', drama: 'Drama', noir: 'Noir', comedy: 'Comedia', horror: 'Terror', action: 'Acción', calm: 'Calmado', dynamic: 'Dinámico', chaotic: 'Caótico', 'single-shot': 'Un solo plano', static: 'Fija', dolly_in: 'Acercarse', dolly_out: 'Alejarse', dolly_left: 'A la izquierda', dolly_right: 'A la derecha', jib_up: 'Subir', jib_down: 'Bajar', focus_shift: 'Cambio de foco' };
+  epic: 'Épico', drama: 'Drama', noir: 'Noir', comedy: 'Comedia', horror: 'Terror', action: 'Acción', calm: 'Calmado', dynamic: 'Dinámico', chaotic: 'Caótico', 'single-shot': 'Un solo plano', static: 'Fija', dolly_in: 'Acercarse', dolly_out: 'Alejarse', dolly_left: 'A la izquierda', dolly_right: 'A la derecha', jib_up: 'Subir', jib_down: 'Bajar', focus_shift: 'Cambio de foco',
+  happy: 'Alegre', sad: 'Triste', angry: 'Enfadada', fearful: 'Con miedo', disgusted: 'Con asco', surprised: 'Sorprendida', neutral: 'Neutra', fluent: 'Fluida', whisper: 'Susurro', mp3: 'MP3', wav: 'WAV', flac: 'FLAC', pcm: 'PCM', Spanish: 'Español', English: 'Inglés', Portuguese: 'Portugués', French: 'Francés', Italian: 'Italiano', German: 'Alemán' }; // V5.0
 const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
 const RATIO_WORD = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Vertical', '16:9': 'Horizontal', '3:4': 'Retrato', '4:3': 'Clásico', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' }; // V4.2 (audit A15): one word that fits; the use goes in the title
 // V4.2 (audit A5): the engine beside the model only when it adds something («Kling 3 · Higgsfield», not «Prueba (gratis) · Prueba (gratis)»)
@@ -31,6 +34,7 @@ const I = { // line icons (stroke = currentColor)
   plus: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8v8M8 12h8"/>', ref: '<rect x="3" y="7" width="13" height="13" rx="2.5"/><circle cx="7.8" cy="11.6" r="1.4"/><path d="m16 17-3.5-3.5L6 20"/><path d="M19.5 2.5v7M16 6h7"/>', again: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', folder: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
   pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', chat: '<path d="M4 5.5h16v10.5H9.5L4 20z"/><path d="M8 9.5h8M8 12.5h5"/>', send: '<path d="M4 12h12M11 6l6 6-6 6"/><path d="M20.5 4v16"/>', full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>', note: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   cal: '<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><path d="M12 13v5M9.5 15.5h5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
 };
 const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
@@ -56,16 +60,17 @@ export function initStudio(ctx) {
         <button type="button" class="st-unfold" title="Mostrar el compositor" aria-label="Mostrar el compositor">${svg('spark')}<span>Crear</span></button>
         <div class="st-scroll"><button type="button" class="st-fold" title="Plegar el compositor: más sitio para la galería" aria-label="Plegar el compositor">‹ plegar</button>
           <div class="st-step"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
-            <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button></div></div>
+            <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button><button type="button" data-kind="audio" aria-pressed="false" title="Un texto leído en voz alta (MiniMax)">${svg('mic')}<span>Voz</span></button><button type="button" data-kind="music" aria-pressed="false" title="Una canción con letra o una pista instrumental (MiniMax)">${svg('note')}<span>Música</span></button></div></div>
           <div class="st-step"><div class="st-h"><b>2</b> Modelo</div>
-            <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden></div></div></div>
-          <div class="st-step"><div class="st-h"><b>3</b> Describe lo que quieres</div>
+            <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden></div></div>
+            <p class="st-mnote" hidden role="note"><b>Aviso:</b> MiniMax cerró su API de música a usuarios nuevos el 20 de agosto de 2026. Si tu cuenta no la tiene, el error lo dirá.</p></div>
+          <div class="st-step"><div class="st-h"><b>3</b> <span class="st-p3t">Describe lo que quieres</span></div>
             <div class="st-modeseg" role="group" aria-label="Cuántas ideas"><button type="button" data-mode="one" aria-pressed="true">Una idea</button><button type="button" data-mode="batch" aria-pressed="false" title="Una idea por línea: cada línea es un pedido aparte">Varias ideas, una por línea</button></div>
             <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
-              <div class="st-bcount" hidden></div><div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span><button type="button" class="st-new" title="Vacía la idea y el material de partida">Nuevo</button></div>
+              <div class="st-ltags" hidden role="group" aria-label="Partes de la canción"><span>Marca las partes:</span>${SV.LYRIC_TAGS.map(t => `<button type="button" data-ltag="${t}" title="Añadir ${t} en una línea nueva">${t}</button>`).join('')}</div><div class="st-bcount" hidden></div><div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span><button type="button" class="st-new" title="Vacía la idea y el material de partida">Nuevo</button></div>
               <div class="st-es" hidden><b>En español:</b> <span></span></div></div></div>
           <div class="st-step st-matstep"><div class="st-h"><b>4</b> <span class="st-mt">Material de partida</span> <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
-          <div class="st-step"><div class="st-h"><b class="st-n5">5</b> Formato y ajustes</div><div class="st-ratios"></div><div class="st-sets"></div>
+          <div class="st-step"><div class="st-h"><b class="st-n5">5</b> <span class="st-s5t">Formato y ajustes</span></div><div class="st-ratios"></div><div class="st-sets"></div>
             <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
           <details class="st-keys"><summary>Motores y cómo activarlos</summary><div class="st-engs"></div>
             <p>La key se guarda en Windows una sola vez (con el comando de arriba en una ventana de comandos, o en «Editar las variables de entorno de esta cuenta») y se reinicia la oficina con el iniciador. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.</p>
@@ -82,13 +87,14 @@ export function initStudio(ctx) {
       </section>
       <section class="st-gal" aria-label="Galería">
         <div class="st-filt">
-          <div class="st-tabs" role="group" aria-label="Mostrar"><button type="button" data-f="all" class="on" aria-pressed="true">Todo</button><button type="button" data-f="fav" aria-pressed="false">Favoritas</button><button type="button" data-f="you" aria-pressed="false">Tuyas</button><button type="button" data-f="agent" aria-pressed="false">De agentes</button><button type="button" data-f="video" aria-pressed="false">Videos</button><button type="button" data-f="up" aria-pressed="false">Subidas</button></div>
+          <div class="st-tabs" role="group" aria-label="Mostrar"><button type="button" data-f="all" class="on" aria-pressed="true">Todo</button><button type="button" data-f="fav" aria-pressed="false">Favoritas</button><button type="button" data-f="you" aria-pressed="false">Tuyas</button><button type="button" data-f="agent" aria-pressed="false">De agentes</button><button type="button" data-f="video" aria-pressed="false">Videos</button><button type="button" data-f="voice" aria-pressed="false">Voz</button><button type="button" data-f="music" aria-pressed="false">Música</button><button type="button" data-f="up" aria-pressed="false">Subidas</button></div>
           <span class="sp"></span>
           <label class="st-qwrap">${svg('search')}<input type="search" class="st-q" placeholder="Buscar…" aria-label="Buscar en la galería"></label>
           <button type="button" class="st-upbtn" title="Sube tus fotos o videos (producto, logo, personaje) para usarlos de referencia o animarlos">${svg('up')}<span>Subir</span></button>
           <button type="button" class="st-selbtn" aria-pressed="false" title="Elegir varias para descargarlas juntas, marcarlas o borrarlas">${svg('grid')}<span>Seleccionar</span></button>
           <button type="button" class="st-histbtn" title="Todos los trabajos de la última semana: hechos, fallados y cancelados, con el motivo">${svg('again')}<span>Historial</span></button>
           <button type="button" class="st-binbtn" title="Lo que mandaste a la papelera: vuelve con un clic durante 30 días">${svg('trash')}<span>Papelera</span></button>
+          <button type="button" class="st-vocbtn" title="Tus voces de MiniMax: diseñar una con una descripción, clonar la tuya, usarla">${svg('mic')}<span>Voces</span></button>
         </div>
         <div class="st-folders" role="toolbar" aria-label="Carpetas: arrastra imágenes a una carpeta para guardarlas ahí"></div>
         <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><label class="st-mvw">${svg('folder')}<select class="st-mv" aria-label="Mover las seleccionadas a una carpeta"></select></label><button type="button" data-b="del">${svg('trash')} Papelera</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
@@ -100,11 +106,13 @@ export function initStudio(ctx) {
     <div class="st-light" hidden role="dialog" aria-modal="true" aria-label="Vista ampliada"></div>
     <div class="st-hist" hidden role="dialog" aria-modal="true" aria-labelledby="stHistT"></div>
     <div class="st-hist st-binov" hidden role="dialog" aria-modal="true" aria-labelledby="stBinT"></div>
+    <div class="st-hist st-vocov" hidden role="dialog" aria-modal="true" aria-labelledby="stVocT"></div>
     <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
-    <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav" multiple hidden>`;
+    <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a" multiple hidden>`;
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   let items = [], models = [], engines = [], budget = null, jobs = [], def = {}, loadErr = '', catalogSig = '';
+  let voices = { mine: [], system: [] }; // V5.0: the owner's MiniMax voices and the system's, for the voice picker (from /api/media, refreshed by the Voces panel)
   let editModels = [], editBlock = null, depts = []; // V4.9: the models that edit a picture (on), the engines to switch on when none is (a 409 says which), the departments a picture can be sent to
   // V4.6 (27 Sep 2026, the owner): folders — labels on each file (nothing moves on disk); drag pictures onto one, rename it, remove it
   let folders = [], folderF = store.get('folder', 'all'), dragFiles = null, fdEdit = null, fdNewFor = null; // fdEdit: 'new' or a folder id being renamed · fdNewFor: files waiting for the new folder
@@ -112,7 +120,8 @@ export function initStudio(ctx) {
   const inFolder = it => (it.folder && folders.some(f => f.id === it.folder) ? it.folder : null);
   let lastSig = '', lastAt = 0, armed = false;
   let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightAt = null, lightFrom = null, prevPrompt = null, qty = 1;
-  const modelOf = { image: store.get('model.image', ''), video: store.get('model.video', '') };
+  const modelOf = { image: store.get('model.image', ''), video: store.get('model.video', ''), audio: store.get('model.audio', ''), music: store.get('model.music', '') };
+  if (!SV.KINDS.includes(kind)) kind = 'image';
   $('.st-lang').value = store.get('lang', 'en') === 'es' ? 'es' : 'en';
   const setsOf = store.get('sets', {}); // model id → its settings
   let media = { start: [], end: [], reference: [], video: [] };
@@ -129,6 +138,9 @@ export function initStudio(ctx) {
   // the address carries the file's own moment (?v=): a picture never shows another one that once had its name (the browser keeps them a day)
   const src = it => { const f = String(it.file || it), x = typeof it === 'object' && it.at ? it : itemOf(f); return '/media/' + f.split('/').map(encodeURIComponent).join('/') + (x && x.at ? '?v=' + x.at : ''); };
   const isVid = f => /\.(mp4|webm)$/i.test(f);
+  const sound = () => SV.SOUND(kind); // V5.0: the composer makes a voice or a song
+  const mmxOn = () => !!(engines.find(e => e.id === 'minimax') || {}).on;
+  const offModel = (k = kind) => models.find(m => m.kind === k && !m.on) || null; // a model of this kind whose engine has no key yet: shown dimmed, with how to switch it on
   const ar = r => (r && /^\d+:\d+$/.test(r) ? r.replace(':', ' / ') : '');
   const dlName = it => { const d = new Date(it.at || Date.now()), ext = String(it.file).split('.').pop(); return `${String(it.prompt || 'estudio').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'estudio'}-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.${ext}`; }; // V4.2 (audit A37)
   const ratioOf = it => (it.w && it.h ? `${it.w} / ${it.h}` : ar(it.ratio) || '');
@@ -143,7 +155,7 @@ export function initStudio(ctx) {
   const say = (t, bad) => { $('.st-msg').textContent = t; $('.st-msg').className = 'st-msg' + (bad ? ' bad' : ''); };
   const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const api = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
-  const price = m => !m.cost ? 'gratis' : m.per === 's' ? `~US$${m.cost.toFixed(2)}/s` : `~US$${m.cost < 0.01 ? m.cost.toFixed(3) : m.cost.toFixed(2)}/imagen`;
+  const price = m => SV.priceText(m); // V5.0: per image, video, audio, song, second or 1000 characters
   const tags = m => [m.roles.reference && (m.kind === 'image' ? 'Edita o combina imágenes' : 'Referencias'), m.kind === 'video' && m.roles.start && 'Anima una imagen', m.kind === 'video' && m.roles.end && 'Fotograma final', m.roles.video && 'Parte de un video',
     (m.settings.sound || m.settings.generateAudio) && 'Sonido', /texto/i.test(m.note) && 'Texto legible', m.cost && m.cost < 0.012 && m.per !== 's' && 'Muy barato'].filter(Boolean);
 
@@ -166,7 +178,13 @@ export function initStudio(ctx) {
   function renderPick() {
     const m = cur(), b = $('.st-mpick');
     b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${esc(m.name)}</span>${engineAdds(m) ? `<span class="st-mp-eng">${esc(m.engineName)}</span>` : ''}<span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
-      : `<span class="st-mp-top"><span class="st-mp-name">Ningún modelo de ${kind === 'video' ? 'video' : 'imagen'} encendido</span><span class="sp"></span><span class="st-mp-caret">▾</span></span><span class="st-mp-note">Abre «Motores y cómo activarlos» abajo.</span>`;
+      : offModel() ? offPick(offModel()) // V5.0: Voz and Música show their model even without the key — dimmed, with how to switch it on
+      : `<span class="st-mp-top"><span class="st-mp-name">Ningún modelo de ${SV.words(kind).none} encendido</span><span class="sp"></span><span class="st-mp-caret">▾</span></span><span class="st-mp-note">Abre «Motores y cómo activarlos» abajo.</span>`;
+    b.classList.toggle('st-mp-off', !m && !!offModel());
+  }
+  function offPick(o) {
+    const e = engines.find(x => x.id === o.engine) || {};
+    return `<span class="st-mp-top"><span class="st-mp-name">${esc(o.name)}</span><span class="st-mp-eng">${esc(o.engineName || e.name || '')} · sin activar</span><span class="sp"></span><span class="st-mp-cost">${price(o)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span><span class="st-mp-note">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b>, ` : ''}pega <code>${esc(e.how || '')}</code> en una ventana de comandos y reinicia la oficina.</span>`;
   }
   // V4.4 (27 Sep 2026): the model list sorts (recommended, best quality, cheapest, most expensive, fastest, by maker) and
   // filters by maker; each model says its maker, its quality (1–4), its speed and what it is good for. The ones without a
@@ -209,9 +227,23 @@ export function initStudio(ctx) {
     L.hidden = !on; b.setAttribute('aria-expanded', on); b.hidden = on; // V4.2 (audit A8): the list takes the card's place — the chosen model is marked in it, not shown twice
     if (on) { renderList(); setTimeout(() => L.querySelector('input').focus(), 20); }
   }
+  /** V5.0: step 3 says what goes in it — the idea, the text a voice reads, a song's lyrics or (instrumental) its description — and counts against the model's limit. */
+  function paintStep3() {
+    const m = cur(), inst = !!(m && settingsOf(m).instrumental), st = SV.promptStep(kind, inst), snd = sound();
+    $('.st-p3t').textContent = st.title;
+    if (snd) { $('.st-prompt').placeholder = st.placeholder; $('.st-prompt').setAttribute('aria-label', st.label); } else $('.st-prompt').setAttribute('aria-label', 'Qué quieres crear');
+    $('.st-modeseg').hidden = snd;
+    $('.st-ltags').hidden = !(kind === 'music' && !inst);
+    $('.st-mnote').hidden = kind !== 'music';
+    const noEnh = kind === 'audio'; // a voice reads the text as it is written: nothing to «improve»
+    $('.st-enh').hidden = noEnh; $('.st-lang').hidden = noEnh; if (noEnh) { $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; }
+    $('.st-s5t').textContent = kind === 'audio' ? 'Voz y ajustes' : kind === 'music' ? 'Ajustes' : 'Formato y ajustes';
+  }
+  const limitNow = () => { const m = cur(); return SV.textLimit(m, kind, !!(m && settingsOf(m).instrumental)); };
   function renderModel() {
     const m = cur();
-    $('.st-prompt').placeholder = mode === 'batch' ? 'Una idea por línea — cada línea genera «Cantidad» archivos. Ej.: los 12 fondos del mes de Instagram.' : kind === 'video' ? (media.start.length ? 'Describe el movimiento: la cámara se acerca despacio, el vapor sube, luz de tarde…' : 'Qué pasa en el video: sujeto, acción, cámara, luz, estilo. Para animar una imagen, pulsa Animar sobre ella en la galería.') : 'Ej.: fondo oscuro de roca volcánica con brillo naranja #FF5100, espacio limpio abajo para el texto';
+    paintStep3();
+    if (!sound()) $('.st-prompt').placeholder = mode === 'batch' ? 'Una idea por línea — cada línea genera «Cantidad» archivos. Ej.: los 12 fondos del mes de Instagram.' : kind === 'video' ? (media.start.length ? 'Describe el movimiento: la cámara se acerca despacio, el vapor sube, luz de tarde…' : 'Qué pasa en el video: sujeto, acción, cámara, luz, estilo. Para animar una imagen, pulsa Animar sobre ella en la galería.') : 'Ej.: fondo oscuro de roca volcánica con brillo naranja #FF5100, espacio limpio abajo para el texto';
     if (!m) { $('.st-slots').innerHTML = ''; $('.st-matstep').hidden = true; $('.st-ratios').innerHTML = ''; $('.st-sets').innerHTML = ''; $('.st-sets2').innerHTML = ''; $('.st-more').hidden = true; estimate(); return; }
     for (const r of Object.keys(media)) media[r] = media[r].slice(0, m.roles[r] || 0); // what no longer fits this model is dropped
     const roles = Object.entries(m.roles).filter(([r, n]) => n > 0 && ROLE[r]);
@@ -227,34 +259,53 @@ export function initStudio(ctx) {
     $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="group" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-pressed="${String(s.aspectRatio) === v}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
     const ctl = ([k, f]) => {
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
+      if (f.type === 'text') return k === 'voiceId' ? voicePicker(f, s[k]) : `<label class="st-lab">${LBL[k] || k}<input type="text" data-set="${k}" value="${esc(s[k] ?? '')}" maxlength="${+f.max || 2000}" placeholder="${esc(f.placeholder || '')}" autocomplete="off"></label>`; // V5.0
       if (f.type === 'range') return `<label class="st-lab st-range">${LBL[k] || k} <output>${s[k]}${k === 'duration' ? ' s' : ''}</output><input type="range" data-set="${k}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${s[k]}"></label>`;
       return `<label class="st-tog"><input type="checkbox" data-set="${k}"${s[k] ? ' checked' : ''}><span>${LBL[k] || k}</span></label>`;
     };
-    const main = ent.filter(([k]) => k === 'duration' || k === 'resolution'), rest = ent.filter(([k]) => k !== 'aspectRatio' && k !== 'duration' && k !== 'resolution');
+    const SOUND_MORE = ['languageBoost', 'sampleRate', 'bitrate', 'channel']; // V5.0: a voice's picker, emotion, speed, volume, pitch and file in sight; the rest folded
+    const isMain = k => (sound() ? k !== 'aspectRatio' && !SOUND_MORE.includes(k) : k === 'duration' || k === 'resolution');
+    const main = ent.filter(([k]) => isMain(k)), rest = ent.filter(([k]) => k !== 'aspectRatio' && !isMain(k));
     $('.st-sets').innerHTML = main.map(ctl).join('');
     $('.st-sets2').innerHTML = rest.map(ctl).join('');
     $('.st-more').hidden = !rest.length;
     $('.st-more summary').textContent = `Más ajustes · ${rest.map(([k]) => (LBL[k] || k).toLowerCase()).slice(0, 3).join(', ')}${rest.length > 3 ? '…' : ''}`;
-    qty = Math.min(qty, kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8);
+    qty = Math.min(qty, SV.maxQty(kind, budget && budget.maxPerRequest));
     estimate();
   }
+  /** V5.0: the voice — a text field (any voiceId MiniMax knows), the list of the owner's and the system's voices grouped, and the Voces panel. */
+  function voiceHint(id) {
+    if (!id) return 'Escribe el id de una voz o elígela de la lista.';
+    const v = voices.mine.find(x => x.voiceId === id); if (v) return `«${v.name || id}», tu voz ${v.kind === 'clone' ? 'clonada' : 'diseñada'}.`;
+    const y = voices.system.find(x => x.voiceId === id); return y ? `${y.name || id}${y.lang ? ` · ${y.lang}` : ''}, voz de MiniMax.` : 'Un id que la oficina no conoce: MiniMax dirá si existe.';
+  }
+  function voicePicker(f, val) {
+    const g = SV.voiceGroups(voices);
+    return `<div class="st-lab st-vpick"><label for="stVid">Voz</label><div class="st-vrow2"><input id="stVid" class="st-vid" type="text" data-set="voiceId" value="${esc(val || '')}" maxlength="${+f.max || 256}" placeholder="${esc(f.placeholder || f.default || 'Spanish_Narrator')}" autocomplete="off" spellcheck="false" aria-describedby="stVidH">
+      <button type="button" class="st-vopen" aria-label="Tus voces" title="Tus voces: diseñar, clonar, elegir">${svg('mic')}<span>Voces</span></button></div>
+      ${g.length ? `<select class="st-vsel" aria-label="Elegir una voz de la lista"><option value="">Elegir de la lista…</option>${g.map(gr => `<optgroup label="${esc(gr.label)}">${gr.voices.map(v => `<option value="${esc(v.voiceId)}"${v.voiceId === val ? ' selected' : ''}>${esc(v.name)}${v.line ? ' · ' + esc(v.line) : ''}</option>`).join('')}</optgroup>`).join('')}</select>` : ''}
+      <span class="st-vhint" id="stVidH">${esc(voiceHint(val))}</span></div>`;
+  }
+  function setVoice(id) { setSetting('voiceId', id); const i = $('.st-vid'); if (i) i.value = id; const h = $('#stVidH'); if (h) h.textContent = voiceHint(id); const sl = $('.st-vsel'); if (sl) sl.value = [...sl.options].some(o => o.value === id) ? id : ''; estimate(); }
   const lines = () => $('.st-prompt').value.split('\n').map(x => x.trim()).filter(Boolean);
   function estimate() {
     $('.st-n').textContent = qty;
     const m = cur(); const n = (mode === 'batch' ? Math.max(1, lines().length) : 1) * qty;
-    if (!m) { $('.st-est').textContent = ''; return 0; }
+    if (!m) { $('.st-est').textContent = ''; $('.st-go').textContent = SV.goLabel(kind, 1); $('.st-sum').hidden = true; const pl = $('.st-plen'), len = $('.st-prompt').value.length, lim = limitNow(); pl.textContent = sound() ? `${len.toLocaleString('es')}/${lim.toLocaleString('es')}` : ''; pl.classList.remove('near'); pl.classList.toggle('over', sound() && len > lim); return 0; } // V5.0: Voz / Música without the key still say what they would make
     const s = settingsOf(m), per = Number(s.batchSize) || 1, secs = m.seconds || Number(s.duration) || 5;
-    const cost = (m.per === 's' ? m.cost * secs : m.cost) * n * per, total = n * per;
+    const cost = SV.unitCost(m, s, $('.st-prompt').value.length) * n * per, total = n * per; // V5.0: a voice may cost by the characters it reads
     const room = moneyLeft(); // V4.5: the Estudio's own spending caps (Ajustes → Estudio)
-    $('.st-est').textContent = `${total} ${kind === 'video' ? (total === 1 ? 'video' : 'videos') : total === 1 ? 'imagen' : 'imágenes'}${m.per === 's' ? ` de ${secs} s` : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}${budget ? ` · hoy llevas US$${(budget.cost || 0).toFixed(2)}${budget.left == null ? '' : ` · te quedan ${budget.left}`}${room == null ? '' : ` · quedan US$${room.toFixed(2)} de tu presupuesto`}` : ''}`;
+    $('.st-est').textContent = `${SV.countOf(kind, total)}${m.per === 's' ? ` de ${secs} s` : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}${budget ? ` · hoy llevas US$${(budget.cost || 0).toFixed(2)}${budget.left == null ? '' : ` · te quedan ${budget.left}`}${room == null ? '' : ` · quedan US$${room.toFixed(2)} de tu presupuesto`}` : ''}`;
     $('.st-est').classList.toggle('over', !!(cost && room != null && cost > room + 1e-9 && m.engine !== 'prueba'));
-    const sum = [s.aspectRatio && s.aspectRatio !== 'auto' ? `${s.aspectRatio}${RATIO_WORD[s.aspectRatio] ? ' ' + RATIO_WORD[s.aspectRatio] : ''}` : s.aspectRatio ? 'formato auto' : '', m.settings.duration ? `${secs} s` : '', s.resolution ? String(s.resolution) : ''].filter(Boolean);
+    const sum = sound() ? [s.voiceId ? SV.voiceName(s.voiceId, voices) : '', s.instrumental ? 'instrumental' : '', s.format ? String(s.format).toUpperCase() : ''].filter(Boolean) : [s.aspectRatio && s.aspectRatio !== 'auto' ? `${s.aspectRatio}${RATIO_WORD[s.aspectRatio] ? ' ' + RATIO_WORD[s.aspectRatio] : ''}` : s.aspectRatio ? 'formato auto' : '', m.settings.duration ? `${secs} s` : '', s.resolution ? String(s.resolution) : ''].filter(Boolean);
     $('.st-sum').innerHTML = sum.length ? `${sum.map(esc).join(' · ')} <u>cambiar</u>` : ''; $('.st-sum').hidden = !sum.length;
-    $('.st-go').textContent = kind === 'video' ? (total > 1 ? `GENERAR ${total} VIDEOS` : 'GENERAR VIDEO') : total > 1 ? `GENERAR ${total} IMÁGENES` : 'GENERAR IMAGEN';
-    const len = $('.st-prompt').value.length; $('.st-plen').textContent = len ? `${len}/4000` : ''; $('.st-plen').classList.toggle('near', len > 3500); // V4.2 (audit A11)
-    const bc = $('.st-bcount'); bc.hidden = mode !== 'batch'; if (mode === 'batch') { const nl = lines().length; bc.textContent = nl ? `${nl} ${nl === 1 ? 'idea' : 'ideas'} × ${qty} = ${nl * qty * per} ${kind === 'video' ? 'videos' : 'imágenes'}` : 'Escribe una idea por línea.'; }
-    const maxQ = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8; // V4.2 (audit A12): the ends say why they stop
-    const [dn, up] = el.querySelectorAll('.st-qty [data-d]'); dn.disabled = qty <= 1; up.disabled = qty >= maxQ; up.title = qty >= maxQ ? `Máximo ${maxQ} por pedido${kind === 'video' ? ' (un video pesa como 5 imágenes)' : ''}` : 'Más';
+    $('.st-go').textContent = SV.goLabel(kind, total);
+    const len = $('.st-prompt').value.length, lim = limitNow(), pl = $('.st-plen'); // V4.2 (audit A11) · V5.0: the model's own limit (a voice reads up to 9 999)
+    pl.textContent = len || sound() ? `${len.toLocaleString('es')}/${lim.toLocaleString('es')}` : ''; pl.classList.toggle('near', len > lim * 0.875 && len <= lim); pl.classList.toggle('over', len > lim);
+    pl.title = len > lim ? `Sobran ${len - lim} caracteres` : sound() ? `Caben ${lim.toLocaleString('es')} caracteres` : '';
+    const bc = $('.st-bcount'); bc.hidden = mode !== 'batch'; if (mode === 'batch') { const nl = lines().length; bc.textContent = nl ? `${nl} ${nl === 1 ? 'idea' : 'ideas'} × ${qty} = ${SV.countOf(kind, nl * qty * per)}` : 'Escribe una idea por línea.'; }
+    const maxQ = SV.maxQty(kind, budget && budget.maxPerRequest); // V4.2 (audit A12): the ends say why they stop
+    const [dn, up] = el.querySelectorAll('.st-qty [data-d]'); dn.disabled = qty <= 1; up.disabled = qty >= maxQ; up.title = qty >= maxQ ? `Máximo ${maxQ} por pedido${kind === 'video' ? ' (un video pesa como 5 imágenes)' : kind === 'music' ? ' (una pista pesa como 3 imágenes)' : ''}` : 'Más';
     return cost;
   }
   // V4.5 (27 Sep 2026): the caps come from Ajustes → Estudio — a count a day (0 = none; a video counts 5) and, new, a spend
@@ -274,14 +325,14 @@ export function initStudio(ctx) {
   /* ---------- the gallery ---------- */
   function shown() {
     const w = q.toLowerCase();
-    return items.filter(it => (folderF === 'all' || (folderF === 'none' ? !inFolder(it) : inFolder(it) === folderF)) && (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && fromBots(it)) || (filter === 'you' && !fromBots(it) && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload))
+    return items.filter(it => (folderF === 'all' || (folderF === 'none' ? !inFolder(it) : inFolder(it) === folderF)) && (filter === 'all' || (filter === 'fav' && it.fav) || (filter === 'agent' && fromBots(it)) || (filter === 'you' && !fromBots(it) && !it.upload) || (filter === 'video' && (it.kind === 'video' || it.wanted === 'video')) || (filter === 'up' && it.upload) || ((filter === 'voice' || filter === 'music') && SV.soundFilter(filter, it)))
       && (!w || `${it.prompt} ${it.modelName || it.model || ''} ${it.file} ${fromBots(it) ? who(it) : ''} ${it.task && ctx.taskTitle ? ctx.taskTitle(it.task) : ''}`.toLowerCase().includes(w)));
   }
   const tileJobs = () => jobs.filter(j => j.state === 'queued' || j.state === 'running' || (j.state === 'failed' && Date.now() - (j.doneAt || j.at) < 3 * 864e5));
   // V4.2 (audit A39): how long this model usually takes — the median of its last finished jobs, else a sensible guess
   function typical(j) {
     const same = jobs.filter(x => x.model === j.model && x.state === 'done' && x.startedAt && x.doneAt).slice(0, 10).map(x => x.doneAt - x.startedAt).sort((a, b) => a - b);
-    return same.length >= 2 ? same[Math.floor(same.length / 2)] : j.engine === 'prueba' ? 5000 : j.kind === 'video' ? 180000 : 25000;
+    return same.length >= 2 ? same[Math.floor(same.length / 2)] : j.engine === 'prueba' ? 5000 : j.kind === 'video' ? 180000 : j.kind === 'music' ? 120000 : j.kind === 'audio' ? 15000 : 25000;
   }
   const approx = ms => ms < 60000 ? `~${Math.max(5, Math.round(ms / 5000) * 5)} s` : `~${Math.round(ms / 60000)} min`;
   const askCancel = new Set(); // V4.2 (audit A40): a job already sent to a paid engine asks once, in the tile, before it is cancelled
@@ -290,8 +341,8 @@ export function initStudio(ctx) {
     const typ = typical(j), pct = j.state === 'running' ? Math.min(95, Math.round(t / typ * 100)) : 0, slow = j.state === 'running' && t > typ * 1.6;
     const paid = j.state === 'running' && j.engine !== 'prueba';
     return `<figure class="st-card st-job ${j.state}" data-job="${j.id}">
-      <div class="st-jbody" style="aspect-ratio:${ar(j.s && j.s.aspectRatio) || '1 / 1'}">
-        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : j.kind === 'video' ? 'Generando video' : 'Generando'}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)} · ${slow ? 'tarda más de lo normal' : `suele tardar ${approx(typ)}`}</span>${j.state === 'running' ? `<span class="st-jbar" aria-hidden="true"><i style="width:${pct}%"></i></span>` : ''}` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
+      <div class="st-jbody" style="aspect-ratio:${SV.SOUND(j.kind) ? '16 / 9' : ar(j.s && j.s.aspectRatio) || '1 / 1'}">
+        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : SV.words(j.kind).busy}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)} · ${slow ? 'tarda más de lo normal' : `suele tardar ${approx(typ)}`}</span>${j.state === 'running' ? `<span class="st-jbar" aria-hidden="true"><i style="width:${pct}%"></i></span>` : ''}` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
         <p>${esc(j.prompt)}</p><span class="st-meta">${esc(j.modelName)}${fromBots(j) ? ' · ' + esc(who(j)) : ''}${j.versionOf ? ' · versión' : ''}</span>
       </div>
       <div class="st-jacts">${live ? (askCancel.has(j.id) ? `<span class="st-jq">Ya se envió a ${esc(j.engineName || 'el motor')}: puede cobrarse igual.</span><button type="button" data-j="cancel-yes" class="warn">Cancelar igual</button><button type="button" data-j="cancel-no">Seguir</button>`
@@ -299,6 +350,7 @@ export function initStudio(ctx) {
   }
   function card(it) {
     const aud = it.kind === 'audio', vid = it.kind === 'video' || aud, on = sel.has(it.file), label = String(it.prompt).slice(0, 70); // V4.8: an audio (for Muse Spark to transcribe) is neither animated nor a reference
+    const cap = SV.soundCaption(it, voices); // V5.0: a voice or a song says what is read or sung, with which voice, and plays right on the card
     // V4.4 (25–27 Sep 2026): a row under the caption, on the card's own background (it used to float over the picture,
     // where a light image swallowed it): the main action as its icon (the clapperboard animates an image; a video repeats),
     // Descargar and the bin always in sight, and «⋯» for the favourite, Variar and Repetir.
@@ -307,16 +359,17 @@ export function initStudio(ctx) {
     const menu = [ // V4.4 (27 Sep 2026): the row shows the main action, Descargar and the bin as icons; the rest lives here
       ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
       ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark']]),
-      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar ? [['cal', 'Enviar al calendario de contenido', 'cal']] : []),
+      ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ...(cap && cap.badge === 'VOZ' ? [['othervoice', 'Repetir con otra voz', 'mic']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar && !aud ? [['cal', 'Enviar al calendario de contenido', 'cal']] : []),
       ...(ctx.askDimitri ? [['dimitri', 'Pedírselo a Dimitri', 'chat']] : []), ['dept', 'Mandar a un departamento…', 'send']]; // V4.9
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}" draggable="true">
       <label class="st-ck" title="Seleccionar (Mayús para un rango)"><input type="checkbox"${on ? ' checked' : ''} aria-label="Seleccionar: ${esc(label)}"></label>
-      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${aud ? '<span class="st-aud" aria-hidden="true">♪</span>' : vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
-        ${aud ? '<span class="st-badge">AUDIO</span>' : it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}</button>
+      <button type="button" class="st-thumb" style="${ratioOf(it) ? `aspect-ratio:${ratioOf(it)}` : ''}" aria-label="Ver en grande: ${esc(label)}">${aud ? `<span class="st-aud${cap.badge === 'MÚSICA' ? ' st-aud-mus' : cap.badge === 'VOZ' ? ' st-aud-voz' : ''}" aria-hidden="true">${cap.badge === 'MÚSICA' ? svg('note') : cap.badge === 'VOZ' ? svg('mic') : '♪'}</span>` : vid ? `<video src="${src(it)}" preload="metadata" muted loop playsinline draggable="false"></video><span class="st-play" aria-hidden="true">▶</span>` : `<img src="${src(it)}" alt="" loading="lazy" decoding="async" draggable="false">`}
+        ${aud ? `<span class="st-badge">${cap.badge}</span>` : it.upload ? '<span class="st-badge">SUBIDA</span>' : it.provider === 'prueba' ? `<span class="st-badge">PRUEBA${it.wanted === 'video' ? ' · VIDEO' : ''}</span>` : ''}</button>
       <div class="st-menu" role="menu" hidden>
         ${menu.map(m => m === '-' ? '<div class="st-msep" role="separator"></div>' : m[0] === 'dl' ? `<a role="menuitem" href="${src(it)}" download="${esc(dlName(it))}" tabindex="-1">${svg('down')}<span>Descargar</span></a>` : `<button type="button" role="menuitem" tabindex="-1" data-a="${m[0]}" class="${m[3] || ''}">${svg(m[2], m[4] || '')}<span>${m[1]}</span></button>`).join('')}
       </div>
-      <figcaption><span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(who(it))}${it.versionOf ? ' · versión' : ''}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
+      ${aud ? `<audio class="st-cplay" src="${src(it)}" controls preload="none" aria-label="Escuchar: ${esc(label)}"></audio>` : ''}
+      <figcaption>${aud ? `<span class="st-slab">${cap.label}${cap.voice ? ` · voz <b>${esc(cap.voice)}</b>` : cap.instrumental ? ' · instrumental' : ''}</span>` : ''}<span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(who(it))}${it.versionOf ? ' · versión' : ''}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>
       <div class="st-ov" role="group" aria-label="Acciones">
         ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla en la pieza «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? '✓ En la pieza' : 'Usar en la pieza'}</button>` : ''}
         ${primary ? `<button type="button" data-a="${primary[0]}" class="st-oi" aria-label="${primary[1]}: ${esc(label)}" title="${primary[1]} — ${primary[2].toLowerCase()}">${svg(primary[3])}</button>` : ''}
@@ -342,15 +395,15 @@ export function initStudio(ctx) {
       <figcaption><span class="st-p">${esc(f.prompt)}</span>${f.task && f.by === 'agent' ? `<span class="st-tchip st-tchip-s">para: ${esc((ctx.taskTitle && ctx.taskTitle(f.task)) || 'su tarea')}</span>` : ''}<span class="st-meta"><b>${n} ${vid ? 'videos' : 'imágenes'} de un pedido</b> · ${esc(who(f))}${f.modelName ? ' · ' + esc(f.modelName) : ''} · ${esc(when(f.at))}</span>
       <span class="st-gacts"><button type="button" data-ga="split">Ver por separado</button><button type="button" data-ga="zip">${svg('down')} Descargar las ${n}</button></span></figcaption></figure>`;
   }
-  const aspect = it => { if (it.w && it.h) return it.h / it.w; const r = String(it.ratio || (it.s && it.s.aspectRatio) || '').split(':').map(Number); return r.length === 2 && r[0] && r[1] ? r[1] / r[0] : 1; };
+  const aspect = it => { if (it.kind === 'audio' || SV.SOUND(it.kind)) return 0.85; /* V5.0: a 16:9 tile, its player and the text */ if (it.w && it.h) return it.h / it.w; const r = String(it.ratio || (it.s && it.s.aspectRatio) || '').split(':').map(Number); return r.length === 2 && r[0] && r[1] ? r[1] / r[0] : 1; };
   const colCount = () => { const w = $('.st-grid').clientWidth - 36; return w > 0 ? Math.max(1, Math.floor((w + 14) / (230 + 14))) : 0; };
   function when(ts) { const d = new Date(ts), n = new Date(), y = new Date(n); y.setDate(n.getDate() - 1); const t = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; return d.toDateString() === n.toDateString() ? `hoy ${t}` : d.toDateString() === y.toDateString() ? `ayer ${t}` : d.toLocaleDateString('es', { day: 'numeric', month: 'short', ...(d.getFullYear() !== n.getFullYear() ? { year: 'numeric' } : {}) }); }
   function renderGrid() {
-    const list = shown(), tj = tileJobs().filter(j => (folderF === 'all' || (folderF === 'none' ? !j.folder : j.folder === folderF)) && (filter === 'all' || (filter === 'you' && !fromBots(j)) || (filter === 'agent' && fromBots(j)) || (filter === 'video' && j.kind === 'video')));
+    const list = shown(), tj = tileJobs().filter(j => (folderF === 'all' || (folderF === 'none' ? !j.folder : j.folder === folderF)) && (filter === 'all' || (filter === 'you' && !fromBots(j)) || (filter === 'agent' && fromBots(j)) || (filter === 'video' && j.kind === 'video') || ((filter === 'voice' || filter === 'music') && SV.soundJobFilter(filter, j))));
     renderFolders();
     const active = tileJobs().filter(j => j.state !== 'failed').length;
     $('.st-count').textContent = `${list.length} ${list.length === 1 ? 'archivo' : 'archivos'}${list.length !== items.length ? ` de ${items.length}` : ''}${active ? ` · ${active} generándose` : ''}`;
-    const cnt = { all: items.length, fav: items.filter(i => i.fav).length, you: items.filter(i => !fromBots(i) && !i.upload).length, agent: items.filter(fromBots).length, video: items.filter(i => i.kind === 'video' || i.wanted === 'video').length, up: items.filter(i => i.upload).length }; // V4.2 (audit A22)
+    const cnt = { all: items.length, fav: items.filter(i => i.fav).length, you: items.filter(i => !fromBots(i) && !i.upload).length, agent: items.filter(fromBots).length, video: items.filter(i => i.kind === 'video' || i.wanted === 'video').length, up: items.filter(i => i.upload).length, voice: items.filter(i => SV.soundOf(i) === 'voice').length, music: items.filter(i => SV.soundOf(i) === 'music').length }; // V4.2 (audit A22) · V5.0: Voz and Música
     el.querySelectorAll('.st-tabs [data-f]').forEach(b => { if (!b.dataset.lbl) b.dataset.lbl = b.textContent; b.innerHTML = `${b.dataset.lbl} <b>${cnt[b.dataset.f]}</b>`; });
     $('.st-ptn').textContent = active ? `· ${active} en curso` : items.length ? String(items.length) : '';
     renderSel();
@@ -360,7 +413,7 @@ export function initStudio(ctx) {
     if (empty) { if (G.innerHTML !== empty) G.innerHTML = empty; nodes.clear(); layoutSig = ''; lastWant = []; return; }
     let root = G.querySelector(':scope > .st-days'); if (!root) { G.innerHTML = '<div class="st-days"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
     const flat = selecting || sel.size || picking, byJob = new Map();
-    if (!flat) for (const it of list) if (it.job && !expanded.has(it.job)) byJob.set(it.job, [...(byJob.get(it.job) || []), it]);
+    if (!flat) for (const it of list) if (it.job && !expanded.has(it.job) && it.kind !== 'audio') byJob.set /* V5.0: each audio keeps its own card and player */(it.job, [...(byJob.get(it.job) || []), it]);
     const want = tj.map(j => ['j:' + j.id, jobTile(j), aspect(j), dayKey(Date.now()), 1, Date.now()]), placed = new Set();
     for (const it of list) {
       const g = !flat && it.job && byJob.get(it.job);
@@ -414,6 +467,7 @@ export function initStudio(ctx) {
         if (folderF !== 'all' && folderF !== 'none' && !folders.some(f => f.id === folderF)) { folderF = 'all'; store.set('folder', 'all'); } // a folder removed elsewhere
         const sig = JSON.stringify((j.models || []).map(m => m.id + (m.on ? 1 : 0)));
         if (full || sig !== catalogSig) { models = j.models || []; engines = j.engines || []; def = j.default || {}; catalogSig = sig; full = true; }
+        if (j.voices) voices = SV.normVoices(j.voices); // V5.0: only when MiniMax is on
         editModels = (j.editModels || []).map(m => (typeof m === 'string' ? models.find(x => x.id === m) : m)).filter(m => m && m.on !== false); if (editModels.length) editBlock = null; // V4.9
       } catch (e) { loadErr = e.message; }
       for (const f of [...sel]) if (!itemOf(f)) sel.delete(f);
@@ -450,7 +504,7 @@ export function initStudio(ctx) {
       try { const r = await api('POST', '/api/media/jobs', { prompt: p, n: qty, kind, model: m.id, settings, media: mediaNow, by: 'you', ...(folders.some(f => f.id === folderF) ? { folder: folderF } : {}) }); jobs.unshift(r.job); budget = r.budget; ok++; }
       catch (e) { if (/key/i.test(e.message)) { keyHelp(m, e.message); break; } say(`No se pudo${prompts.length > 1 ? ` (${ok + 1} de ${prompts.length})` : ''}: ${e.message}`, true); if (/tope|presupuesto/.test(e.message)) break; }
     }
-    if (ok) { say(`${ok === 1 ? 'En marcha' : `${ok} trabajos en marcha`}: ${kind === 'video' ? 'un video tarda unos minutos; ' : ''}aparece en la galería al terminar. Puedes seguir.`); if (phone()) showPane('gal'); } // on a phone, the new tile is what to look at
+    if (ok) { say(`${ok === 1 ? 'En marcha' : `${ok} trabajos en marcha`}: ${kind === 'video' ? 'un video tarda unos minutos; ' : kind === 'music' ? 'una canción tarda uno o dos minutos; ' : ''}aparece en la galería al terminar. Puedes seguir.`); if (phone()) showPane('gal'); } // on a phone, the new tile is what to look at
     busy = false; $('.st-go').disabled = false;
     renderHead(); estimate(); renderGrid(); watch();
   }
@@ -473,7 +527,7 @@ export function initStudio(ctx) {
     const rows = jobs.slice().sort((a, b) => (b.doneAt || b.at) - (a.doneAt || a.at));
     H.innerHTML = `<div class="st-hbox"><div class="st-hhead"><h2 id="stHistT">Historial de trabajos</h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar">${svg('x')}</button></div>
       <p class="st-hsub">La última semana: ${rows.length} ${rows.length === 1 ? 'trabajo' : 'trabajos'}. Los archivos siguen en la galería aunque el trabajo salga de aquí.</p>
-      <ol class="st-hlist">${rows.map(j => { const cancel = j.state === 'failed' && /Cancelado por ti/.test(j.error || ''); return `<li class="${cancel ? 'cancel' : j.state}"><b>${cancel ? 'Cancelado' : ok[j.state] || j.state}</b><span class="st-hp">${esc(j.prompt || '(sin texto)')}</span><span class="st-hm">${esc(j.modelName || j.model)} · ${esc(who(j))} · ${esc(when(j.doneAt || j.at))}${j.items && j.items.length ? ` · ${j.items.length} ${j.kind === 'video' ? 'video(s)' : 'imagen(es)'}` : ''}${j.cost ? ` · US$${j.cost}` : ''}</span>${j.state === 'failed' && !cancel ? `<span class="st-hr">${esc(j.error || '')}</span>` : ''}</li>`; }).join('') || '<li>Todavía no hay trabajos.</li>'}</ol></div>`;
+      <ol class="st-hlist">${rows.map(j => { const cancel = j.state === 'failed' && /Cancelado por ti/.test(j.error || ''); return `<li class="${cancel ? 'cancel' : j.state}"><b>${cancel ? 'Cancelado' : ok[j.state] || j.state}</b><span class="st-hp">${esc(j.prompt || '(sin texto)')}</span><span class="st-hm">${esc(j.modelName || j.model)} · ${esc(who(j))} · ${esc(when(j.doneAt || j.at))}${j.items && j.items.length ? ` · ${SV.countOf(j.kind, j.items.length)}` : ''}${j.cost ? ` · US$${j.cost}` : ''}</span>${j.state === 'failed' && !cancel ? `<span class="st-hr">${esc(j.error || '')}</span>` : ''}</li>`; }).join('') || '<li>Todavía no hay trabajos.</li>'}</ol></div>`;
     histFrom = document.activeElement; H.hidden = false; modal.open(H); H.querySelector('.st-hx').focus();
     H.onclick = e => { if (e.target === H || e.target.closest('.st-hx')) closeHist(); };
   }
@@ -512,12 +566,194 @@ export function initStudio(ctx) {
   }
   function closeBin() { const B = $('.st-binov'); if (B.hidden) return; B.hidden = true; B.innerHTML = ''; modal.close(B); if (binFrom && document.contains(binFrom)) binFrom.focus({ preventScroll: true }); binFrom = null; }
   function closeHist() { const H = $('.st-hist'); if (H.hidden) return; H.hidden = true; H.innerHTML = ''; modal.close(H); if (histFrom && document.contains(histFrom)) histFrom.focus({ preventScroll: true }); }
+  /* ---------- V5.0 (30 Sep 2026, the owner: «toda la plataforma MiniMax»): the Voces panel — the owner's voices: design one from a
+     description and hear its sample, clone one from an audio, copy its id, use it, delete it (asked in its own row). Without the key it
+     says how to switch MiniMax on and offers nothing that would fail. Routes: /api/voces (GET), /design, /clone, DELETE /<id>. ---------- */
+  let vocFrom = null, vocFromSel = '', vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
+  const vocApi = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, j }; };
+  const ID_RULE = '8 a 256 caracteres: empieza por letra; solo letras, números, - y _ (sin tildes ni espacios).';
+  function vocOffHTML(off) {
+    return `<div class="st-voff" role="note"><p><b>${esc(off.why || 'Las voces usan MiniMax, que aún no está activado en esta oficina.')}</b></p>
+      <ol><li>Crea la key en <code>platform.minimax.io</code> (API Keys) y ponle un límite de gasto.</li><li>Abre una ventana de comandos y pega <code>${esc(off.how || 'setx MINIMAX_API_KEY "tu-key"')}</code>.</li><li>Cierra la oficina y ábrela con el iniciador.</li></ol>
+      <p>Con la key puesta, aquí diseñas una voz con una descripción, clonas la tuya de un audio y eliges la voz de cada audio.</p></div>`;
+  }
+  function vocRowHTML(v) {
+    const nm = esc(v.name || v.voiceId);
+    return `<li data-vid="${esc(v.voiceId)}"><div class="st-vtop"><b class="st-vname">${nm}</b><span class="st-vk">${SV.voiceKind(v)}</span>${v.pinned ? '<span class="st-vpin" title="La oficina la usó al crearla; MiniMax borra una voz que nadie usa en 7 días">fijada</span>' : '<span class="st-vpin no" title="No se pudo fijar: úsala en un audio antes de 7 días o MiniMax la borra">sin fijar</span>'}</div>
+      <div class="st-vmeta"><code>${esc(v.voiceId)}</code><button type="button" data-vo="copy" aria-label="Copiar el id de ${nm}">Copiar id</button>${v.at ? `<span>${esc(when(v.at))}</span>` : ''}</div>
+      ${/^https:\/\//.test(v.demoAudio || '') ? `<audio controls preload="none" src="${esc(v.demoAudio)}" aria-label="Muestra de ${nm}"></audio>` : ''}
+      ${vocState.del === v.voiceId ? `<div class="st-vconf" role="group" aria-label="Confirmar el borrado"><span>¿Borrar «${nm}»? MiniMax la olvida y no vuelve.</span><button type="button" data-vo="del-yes" class="warn">Sí, borrar</button><button type="button" data-vo="del-no">No</button></div>`
+        : `<div class="st-vacts"><button type="button" data-vo="use" class="pri" aria-label="Usar la voz ${nm}">Usar esta voz</button><button type="button" data-vo="del" class="warn" aria-label="Borrar la voz ${nm}">Borrar</button></div>`}</li>`;
+  }
+  const vq = s => $('.st-vocov ' + s);
+  function paintVList() {
+    const L = vq('.st-vlist'); if (!L) return;
+    L.innerHTML = voices.mine.length ? voices.mine.map(vocRowHTML).join('') : '<li class="st-vempty">Todavía no tienes voces propias. Diseña una o clona la tuya aquí abajo.</li>';
+    const n = vq('.st-vn'); if (n) n.textContent = voices.mine.length ? `(${voices.mine.length})` : '';
+  }
+  function vsay(where, text, bad) { const m = vq(where); if (m) { m.textContent = text; m.classList.toggle('bad', !!bad); } }
+  function drawVoices() {
+    const audios = SV.cloneable(items);
+    $('.st-vocov').innerHTML = `<div class="st-hbox st-vbox"><div class="st-hhead"><h2 id="stVocT">Voces <span class="st-vn"></span></h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar las voces">${svg('x')}</button></div>
+      ${vocState.off ? vocOffHTML(vocState.off) : `<p class="st-hsub">Tus voces de MiniMax para el paso 5 de «Voz»; las del sistema se eligen allí, en la lista. MiniMax borra una voz que nadie usa en 7 días: la oficina la usa una vez al crearla (queda «fijada»).</p>
+      <div class="st-vmsg" role="status" aria-live="polite"></div>
+      <ul class="st-vlist"></ul>
+      <details class="st-vsec"${voices.mine.length ? '' : ' open'}><summary>Diseñar una voz nueva</summary><div class="st-vform">
+        <label class="st-plab" for="stVdN">Nombre</label><input id="stVdN" class="st-vdn" maxlength="60" placeholder="Ej.: Voz de Panaclaw">
+        <label class="st-plab" for="stVdP">Cómo suena</label><textarea id="stVdP" class="st-vdp" rows="3" maxlength="2000" placeholder="Ej.: mujer de unos 30 años, cálida y cercana, acento panameño suave, ritmo tranquilo"></textarea>
+        <label class="st-plab" for="stVdT">Texto de prueba</label><input id="stVdT" class="st-vdt" maxlength="500" value="Hola, esta es una prueba de mi nueva voz.">
+        <p class="st-edn">MiniMax cobra cada muestra (precio aproximado). La voz se crea con su muestra: si no te gusta, «Descartar» la borra.</p>
+        <div class="st-edrow"><button type="button" class="pri" data-vo="design">Crear y escuchar la muestra</button></div>
+        <div class="st-vdres" role="status" aria-live="polite"></div></div></details>
+      <details class="st-vsec"><summary>Clonar una voz</summary><div class="st-vform">
+        <p class="st-vwarn"><b>Antes de empezar:</b> clonar exige una cuenta verificada en MiniMax. El audio: una sola persona hablando, sin música, de 10 segundos a 5 minutos; MP3, WAV o M4A, hasta 20 MB.</p>
+        <label class="st-plab" for="stVcN">Nombre</label><input id="stVcN" class="st-vcn" maxlength="60" placeholder="Ej.: Mi voz">
+        <fieldset class="st-vsrc"><legend>El audio</legend>
+          ${audios.length ? `<label class="st-plab" for="stVcA">De la galería</label><select id="stVcA" class="st-vca"><option value="">Elegir un audio…</option>${audios.map(a => `<option value="${esc(a.file)}">${esc(short(a.prompt))} · ${esc(when(a.at))}</option>`).join('')}</select><span class="st-vor">o</span>` : ''}
+          <button type="button" data-vo="pick">${svg('up')}<span>Subir un audio…</span></button><span class="st-vcfn" aria-live="polite"></span>
+          <input type="file" class="st-vcf" accept=".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a" hidden></fieldset>
+        <label class="st-plab" for="stVcI">Id de la voz</label><input id="stVcI" class="st-vci" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="stVcH" placeholder="Ej.: MiVozPanaclaw01">
+        <p class="st-vhint" id="stVcH">${ID_RULE}</p>
+        <div class="st-edrow"><button type="button" class="pri" data-vo="clone" disabled aria-disabled="true">Clonar la voz</button></div>
+        <div class="st-vcres" role="status" aria-live="polite"></div></div></details>`}</div>`;
+    paintVList(); vcheck();
+  }
+  function vcheck() { // the clone form: the id checked as it is typed, the button on only when the id and the audio are there
+    const i = vq('.st-vci'); if (!i) return false;
+    const val = i.value, c = SV.checkVoiceId(val), taken = voices.mine.some(v => v.voiceId === val), h = vq('#stVcH');
+    const err = !val ? '' : !c.ok ? c.error : taken ? 'Ya tienes una voz con ese id.' : '';
+    h.textContent = err || (val ? '✓ Id válido.' : ID_RULE); h.classList.toggle('bad', !!err); h.classList.toggle('ok', !!val && !err);
+    i.setAttribute('aria-invalid', String(!!err));
+    const audio = !!(vocState.cloneFile || (vq('.st-vca') || {}).value), ok = c.ok && !taken && audio, go = vq('[data-vo="clone"]');
+    go.disabled = !ok || vocState.busy; go.setAttribute('aria-disabled', String(go.disabled));
+    return ok;
+  }
+  async function openVoices() {
+    const V = $('.st-vocov'); if (!V.hidden) return;
+    vocFrom = document.activeElement; vocFromSel = !vocFrom || !vocFrom.closest ? '' : vocFrom.closest('.st-vopen') ? '.st-vopen' : vocFrom.closest('.st-vocbtn') ? '.st-vocbtn' : ''; vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
+    if (!isLive() || !location.protocol.startsWith('http')) vocState.off = { why: 'Las voces necesitan la oficina real (ábrela con el iniciador) y MiniMax activado.' };
+    else if (!mmxOn()) vocState.off = { how: (engines.find(e => e.id === 'minimax') || {}).how };
+    V.hidden = false; modal.open(V); drawVoices(); V.querySelector('.st-hx').focus();
+    if (vocState.off) return;
+    vsay('.st-vmsg', 'Cargando tus voces…');
+    const r = await vocApi('GET', '/api/voces').catch(() => null);
+    if (V.hidden) return;
+    if (!r) return vsay('.st-vmsg', 'Sin conexión con la oficina.', true);
+    if (r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); V.querySelector('.st-hx').focus(); return; }
+    if (!r.ok) return vsay('.st-vmsg', 'No pude leer tus voces: ' + (r.j.error || r.status), true);
+    voices = SV.normVoices(r.j); paintVList(); vcheck(); vsay('.st-vmsg', ''); if (kind === 'audio') renderModel();
+  }
+  function closeVoices(keepFocus) {
+    const V = $('.st-vocov'); if (V.hidden) return;
+    V.querySelectorAll('audio').forEach(a => a.pause()); V.hidden = true; V.innerHTML = ''; modal.close(V);
+    if (!keepFocus) { // renderModel() repaints step 5 while the panel is open, so the «Voces» button that opened it may be a new node by now
+      const back = vocFrom && document.contains(vocFrom) ? vocFrom : vocFromSel ? $(vocFromSel) : null;
+      if (back) back.focus({ preventScroll: true });
+    }
+    vocFrom = null; vocFromSel = '';
+  }
+  function voicesEscape() { if (vocState.del) { const id = vocState.del; vocState.del = null; paintVList(); vq(`[data-vid="${CSS.escape(id)}"] [data-vo="del"]`)?.focus(); return; } closeVoices(); }
+  function addVoice(v) { voices.mine = [v, ...voices.mine.filter(x => x.voiceId !== v.voiceId)]; paintVList(); vcheck(); if (kind === 'audio') renderModel(); }
+  const rowBtn = (id, a) => vq(`[data-vid="${CSS.escape(id)}"] [data-vo="${a}"]`);
+  function useVoice(id) { // «Usar esta voz»: Voz, its model, this voice in step 5
+    closeVoices(true);
+    if (kind !== 'audio') setKind('audio');
+    showPane('gen'); el.classList.remove('st-folded');
+    const m = cur();
+    if (!m || !m.settings.voiceId) { say(m ? `${m.name} no elige voz.` : 'No hay un modelo de voz encendido.', true); $('.st-mpick').focus(); return; }
+    setVoice(id);
+    const p = $('.st-prompt'); (p.value.trim() ? $('.st-vid') : p).focus();
+    say(`Voz «${SV.voiceName(id, voices)}» puesta en el paso 5${p.value.trim() ? ': pulsa GENERAR.' : ': escribe el texto y pulsa GENERAR.'}`);
+  }
+  async function designVoice(b) {
+    const name = vq('.st-vdn').value.trim(), prompt = vq('.st-vdp').value.trim(), previewText = vq('.st-vdt').value.trim();
+    if (!prompt) { vsay('.st-vdres', 'Describe cómo suena: edad, tono, acento, ritmo.', true); vq('.st-vdp').focus(); return; }
+    b.disabled = true; b.textContent = 'Creando la muestra…'; vsay('.st-vdres', 'Creando la voz en MiniMax: tarda unos segundos…');
+    const r = await vocApi('POST', '/api/voces/design', { name: name || 'Voz diseñada', prompt, ...(previewText ? { previewText } : {}) }).catch(() => null);
+    if ($('.st-vocov').hidden) return;
+    b.disabled = false; b.textContent = 'Crear y escuchar la muestra';
+    if (!r) return vsay('.st-vdres', 'Sin conexión con la oficina.', true);
+    if (r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); vq('.st-hx').focus(); return; }
+    if (!r.ok || !r.j.voice) return vsay('.st-vdres', 'No se pudo crear: ' + (r.j.error || r.status), true);
+    const v = r.j.voice, nm = esc(v.name || v.voiceId), pv = typeof r.j.preview === 'string' && /^[A-Za-z0-9+/=\s]+$/.test(r.j.preview) ? r.j.preview.replace(/\s/g, '') : '';
+    addVoice(v); vocState.design = v.voiceId;
+    const R = vq('.st-vdres'); R.classList.remove('bad');
+    R.innerHTML = `<p>Muestra de «${nm}» lista.${pv ? ' Escúchala; si te gusta, guárdala.' : ' MiniMax no mandó muestra, pero la voz ya existe.'}</p>${pv ? `<audio controls src="data:audio/mpeg;base64,${pv}" aria-label="Muestra de ${nm}"></audio>` : ''}<div class="st-edrow"><button type="button" class="pri" data-vo="keep">Guardar</button><button type="button" data-vo="discard">Descartar</button></div>`;
+    (R.querySelector('audio') || R.querySelector('[data-vo="keep"]')).focus();
+  }
+  async function cloneVoice(b) {
+    if (!vcheck()) return;
+    const voiceId = vq('.st-vci').value.trim(), name = vq('.st-vcn').value.trim() || voiceId, gal = (vq('.st-vca') || {}).value || '', body = { name, voiceId };
+    vocState.busy = true; vcheck(); b.textContent = 'Clonando…'; vsay('.st-vcres', 'Subiendo el audio y clonando la voz en MiniMax: puede tardar un minuto…');
+    try { if (gal) body.audio = gal; else { const f = vocState.cloneFile; const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => rej(new Error('no pude leer el audio')); fr.readAsDataURL(f); }); body.audioBase64 = data.split(',')[1] || ''; body.filename = f.name; } }
+    catch (err) { vocState.busy = false; b.textContent = 'Clonar la voz'; vcheck(); return vsay('.st-vcres', err.message, true); }
+    const r = await vocApi('POST', '/api/voces/clone', body).catch(() => null);
+    if ($('.st-vocov').hidden) return;
+    vocState.busy = false; b.textContent = 'Clonar la voz';
+    if (!r) { vcheck(); return vsay('.st-vcres', 'Sin conexión con la oficina.', true); }
+    if (r.status === 409) { vocState.off = { how: r.j.how, why: r.j.error }; drawVoices(); vq('.st-hx').focus(); return; }
+    if (!r.ok || !r.j.voice) { vcheck(); return vsay('.st-vcres', 'No se pudo clonar: ' + (r.j.error || r.status) + (/2038/.test(String(r.j.error || '')) ? ' (tu cuenta de MiniMax aún no está verificada para clonar)' : ''), true); }
+    const v = r.j.voice; addVoice(v);
+    vq('.st-vcn').value = ''; vq('.st-vci').value = ''; vocState.idTouched = false; vocState.cloneFile = null; vq('.st-vcfn').textContent = ''; if (vq('.st-vca')) vq('.st-vca').value = ''; vcheck();
+    vsay('.st-vcres', `Clonada: «${v.name || v.voiceId}». Ya está en tus voces y en la lista del paso 5.`);
+    rowBtn(v.voiceId, 'use')?.focus();
+  }
+  {
+    const V = $('.st-vocov');
+    V.addEventListener('click', async e => {
+      e.stopPropagation(); // the Estudio's own click handler reads data-* that are not this panel's
+      if (e.target === V || e.target.closest('.st-hx')) return closeVoices();
+      const b = e.target.closest('[data-vo]'); if (!b || b.disabled) return;
+      const a = b.dataset.vo, id = b.closest('[data-vid]')?.dataset.vid;
+      if (a === 'copy') { (navigator.clipboard ? navigator.clipboard.writeText(id) : Promise.reject()).then(() => { b.textContent = 'Copiado ✓'; vsay('.st-vmsg', `Id copiado: ${id}`); }, () => { b.textContent = 'No se pudo copiar'; }).finally(() => setTimeout(() => { if (document.contains(b)) b.textContent = 'Copiar id'; }, 1600)); return; }
+      if (a === 'use') return useVoice(id);
+      if (a === 'del') { vocState.del = id; paintVList(); rowBtn(id, 'del-no')?.focus(); return; }
+      if (a === 'del-no') { vocState.del = null; paintVList(); rowBtn(id, 'del')?.focus(); return; }
+      if (a === 'del-yes' || a === 'discard') {
+        const vid = a === 'discard' ? vocState.design : id, nm = (voices.mine.find(x => x.voiceId === vid) || {}).name || vid; if (!vid) return;
+        b.disabled = true;
+        const r = await vocApi('DELETE', '/api/voces/' + encodeURIComponent(vid)).catch(() => null);
+        vocState.del = null;
+        if (r && r.ok) {
+          voices.mine = voices.mine.filter(x => x.voiceId !== vid); paintVList(); vcheck(); if (kind === 'audio') renderModel();
+          if (a === 'discard') { vocState.design = null; vsay('.st-vdres', `Descartada: «${nm}» se borró.`); vq('.st-vdp')?.focus(); }
+          else { vsay('.st-vmsg', `Borrada: «${nm}».`); (vq('[data-vo="use"]') || vq('.st-hx')).focus(); }
+        } else { b.disabled = false; if (a === 'del-yes') paintVList(); vsay(a === 'discard' ? '.st-vdres' : '.st-vmsg', 'No se pudo borrar: ' + (r ? r.j.error || r.status : 'sin conexión con la oficina'), true); }
+        return;
+      }
+      if (a === 'keep') { const vid = vocState.design, nm = (voices.mine.find(x => x.voiceId === vid) || {}).name || vid; vocState.design = null; vq('.st-vdn').value = ''; vq('.st-vdp').value = ''; vsay('.st-vdres', `Guardada: «${nm}». Está arriba, en tus voces, y en la lista del paso 5.`); rowBtn(vid, 'use')?.focus(); return; }
+      if (a === 'design') return designVoice(b);
+      if (a === 'pick') { vq('.st-vcf').click(); return; }
+      if (a === 'clone') return cloneVoice(b);
+    });
+    V.addEventListener('input', e => {
+      e.stopPropagation();
+      if (e.target.classList.contains('st-vci')) { vocState.idTouched = !!e.target.value; vcheck(); }
+      if (e.target.classList.contains('st-vcn') && !vocState.idTouched) { vq('.st-vci').value = e.target.value.trim() ? SV.suggestVoiceId(e.target.value, voices.mine.map(x => x.voiceId)) : ''; vcheck(); } // a suggested id from the name, until the owner writes one
+    });
+    V.addEventListener('change', e => {
+      e.stopPropagation();
+      if (e.target.classList.contains('st-vca')) { if (e.target.value) { vocState.cloneFile = null; vq('.st-vcfn').textContent = ''; } vcheck(); }
+      if (e.target.classList.contains('st-vcf')) {
+        const f = e.target.files[0], err = SV.checkCloneFile(f), fn = vq('.st-vcfn'); e.target.value = '';
+        if (!f) return;
+        if (err) { vocState.cloneFile = null; fn.textContent = `«${f.name}»: ${err}`; fn.classList.add('bad'); }
+        else { vocState.cloneFile = f; fn.textContent = `«${f.name}» · ${(f.size / 1048576).toFixed(1)} MB`; fn.classList.remove('bad'); if (vq('.st-vca')) vq('.st-vca').value = ''; }
+        vcheck();
+      }
+    });
+  }
+  /** V5.0: a song's lyrics are marked by parts — the tag goes on a line of its own where the caret is. */
+  function insertTag(t) {
+    const p = $('.st-prompt'), a = p.selectionStart ?? p.value.length, b = p.selectionEnd ?? a, before = p.value.slice(0, a);
+    p.setRangeText(`${before && !before.endsWith('\n') ? '\n' : ''}${t}\n`, a, b, 'end'); p.focus(); clearFieldErr(); estimate();
+  }
   function setMode(m) { mode = m; el.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === m)); renderModel(); }
-  function setKind(k) { if (k === kind) return; clearFieldErr(); $('.st-keyhelp').hidden = true; kind = k; store.set('kind', kind); openList(false); renderModels(); }
+  function setKind(k) { if (k === kind || !SV.KINDS.includes(k)) return; clearFieldErr(); $('.st-keyhelp').hidden = true; kind = k; store.set('kind', kind); if (sound() && mode !== 'one') { mode = 'one'; el.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === 'one')); } openList(false); renderModels(); } // V5.0: a voice or a song is one text, not one per line
   function useModelFor(role, want) { // a model of `want` kind that takes `role`: the current one if it does, else the best that is on
     const c = models.find(m => m.id === modelOf[want]);
     if (c && c.on && c.roles[role]) return c;
-    const pref = { image: ['nano-banana', 'nano-banana-fal', 'seedream-4', 'gpt-image-1', 'flux-kontext', 'flux-2'], video: ['kling-3-std', 'seedance-2-fast', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal', 'dop'] }[want];
+    const pref = { image: ['nano-banana', 'nano-banana-fal', 'seedream-4', 'gpt-image-1', 'flux-kontext', 'flux-2'], video: ['kling-3-std', 'seedance-2-fast', 'kling-2.5-fal', 'seedance-1-fal', 'hailuo-02-fal', 'dop'] }[want] || [];
     const on = models.filter(m => m.kind === want && m.on && m.roles[role]);
     return pref.map(id => on.find(m => m.id === id)).find(Boolean) || on.find(m => m.engine !== 'prueba') || on[0] || null;
   }
@@ -538,7 +774,7 @@ export function initStudio(ctx) {
   }
   function useAsRef(it) {
     let m = cur();
-    if (!m || !m.roles.reference) { m = useModelFor('reference', kind); if (!m && kind === 'video') { kind = 'image'; m = useModelFor('reference', 'image'); } if (!m) return say('Ningún modelo encendido acepta referencias.', true); modelOf[kind] = m.id; store.set('model.' + kind, m.id); renderModels(); }
+    if (!m || !m.roles.reference) { m = useModelFor('reference', kind); if (!m && kind !== 'image') { kind = 'image'; store.set('kind', kind); m = useModelFor('reference', 'image'); } if (!m) return say('Ningún modelo encendido acepta referencias.', true); modelOf[kind] = m.id; store.set('model.' + kind, m.id); renderModels(); }
     if (addMedia('reference', it.file)) { learn(it.file, 'ref'); say(`Referencia añadida a ${m.name}. Describe qué hacer con ella.`); if (phone()) showPane('gen'); }
   }
   function vary(it) { // V4.2 (audit A35): another take close to this one — its prompt and model, the picture itself as the reference
@@ -551,14 +787,21 @@ export function initStudio(ctx) {
     generate([it.prompt || 'una variación de esta imagen']).then(() => { if (!$('.st-msg').classList.contains('bad')) say(`Variando con ${m.name}: mismo prompt, esta imagen como referencia. Aparece en la galería al terminar.`); });
   }
   function reuse(it, quiet) {
-    const k = it.kind === 'video' || it.wanted === 'video' ? 'video' : 'image';
+    const k = SV.kindOfItem(it); // V5.0: a voice goes back to Voz, a song to Música
     kind = k; store.set('kind', kind);
     const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (it.settings) { setsOf[m.id] = { ...it.settings }; store.set('sets', setsOf); } }
     media = { start: [], end: [], reference: [], video: [], ...(it.media || {}) };
     for (const r of Object.keys(media)) media[r] = (media[r] || []).filter(f => itemOf(f));
     setMode('one');
     $('.st-prompt').value = it.prompt; renderModels(); $('.st-prompt').focus();
-    if (!quiet) say(m ? 'Mismo prompt, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.' : 'Ese modelo no está encendido; elige otro.', !m);
+    if (!quiet) say(m ? (SV.SOUND(k) ? 'Mismo texto, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.' : 'Mismo prompt, modelo y ajustes: cambia lo que quieras y pulsa GENERAR.') : 'Ese modelo no está encendido; elige otro.', !m);
+  }
+  /** V5.0: «Repetir con otra voz» — the same text and settings, the voice field ready to change. */
+  function otherVoice(it) {
+    reuse(it, true); showPane('gen');
+    const i = $('.st-vid'); if (!i) { $('.st-mpick').focus(); return say('Ese modelo de voz no está encendido: arriba dice cómo activarlo.', true); }
+    i.scrollIntoView({ block: 'center', behavior: 'smooth' }); i.focus({ preventScroll: true }); i.select();
+    say('Mismo texto: elige otra voz (escribe su id o búscala en la lista) y pulsa GENERAR.');
   }
   let toastT = null;
   function toast(text, undo) {
@@ -668,6 +911,7 @@ export function initStudio(ctx) {
     // dragging a card (or all the selected ones, when it is one of them)
     const grid = $('.st-grid');
     grid.addEventListener('dragstart', e => {
+      if (e.target.tagName === 'AUDIO') { e.preventDefault(); return; } // V5.0: moving along a card's player is not dragging the card
       const g = e.target.closest?.('.st-group'), c = e.target.closest?.('.st-card[data-f]');
       const files = g ? items.filter(x => x.job === g.dataset.g).map(x => x.file) : c ? (sel.has(c.dataset.f) && sel.size > 1 ? [...sel] : [c.dataset.f]) : null;
       if (!files || !files.length) return;
@@ -701,11 +945,13 @@ export function initStudio(ctx) {
     } catch (e) { say('No se pudo descargar: ' + e.message, true); }
   }
   async function uploadFiles(files, role) {
-    let ok = 0; const done = [];
+    let ok = 0, placed = 0; const done = [];
     for (const file of files) {
-      const vid = /^video\//.test(file.type);
-      if (!/^(image\/(png|jpeg|webp)|video\/(mp4|webm))$/.test(file.type)) { say(`«${file.name}»: solo PNG, JPG, WEBP, MP4 o WEBM.`, true); continue; }
-      if (file.size > (vid ? 25 : 12) * 1024 * 1024) { say(`«${file.name}» pasa de ${vid ? 25 : 12} MB.`, true); continue; }
+      const vid = /^video\//.test(file.type), aud = /^audio\//.test(file.type) || /\.(mp3|wav|m4a)$/i.test(file.name); // V5.0: an audio too (to clone a voice, to transcribe), up to 20 MB
+      if (!aud && !/^(image\/(png|jpeg|webp)|video\/(mp4|webm))$/.test(file.type)) { say(`«${file.name}»: solo PNG, JPG, WEBP, MP4, WEBM, MP3, WAV o M4A.`, true); continue; }
+      if (aud && SV.checkCloneFile(file)) { say(`«${file.name}»: ${SV.checkCloneFile(file)}`, true); continue; }
+      const cap = aud ? 20 : vid ? 25 : 12; if (file.size > cap * 1024 * 1024) { say(`«${file.name}» pasa de ${cap} MB.`, true); continue; }
+      const slot = aud ? null : role; // an audio is never a frame or a reference — this file only: an image dropped with it still goes in
       say(`Subiendo «${file.name}»…`);
       try {
         const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('no pude leerlo')); fr.readAsDataURL(file); });
@@ -716,10 +962,10 @@ export function initStudio(ctx) {
           x.onerror = () => rej(new Error('sin conexión con la oficina')); x.send(JSON.stringify({ name: file.name, data, ...(folders.some(f => f.id === folderF) ? { folder: folderF } : {}) }));
         });
         items.unshift(r.item); ok++; done.push(r.item);
-        if (role) addMedia(role, r.item.file);
+        if (slot) { addMedia(slot, r.item.file); placed++; }
       } catch (e) { say(`«${file.name}»: ${e.message}`, true); }
     }
-    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${role ? ` y puesta en «${roleName(role)}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); }
+    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${placed ? ` y ${placed === ok ? (ok === 1 ? 'puesta' : 'puestas') : placed === 1 ? '1 puesta' : placed + ' puestas'} en «${roleName(role)}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); }
     return done;
   }
 
@@ -855,24 +1101,24 @@ export function initStudio(ctx) {
   function light(i, o = {}) {
     const list = shown(); const it = list[i]; if (!it) return; if (lightIdx < 0) lightFrom = document.activeElement; lightIdx = i; lightAt = it.file;
     const L = $('.st-light'); L.hidden = false; modal.open(L); L.classList.remove('st-zoomed');
-    const img = it.kind !== 'video' && it.kind !== 'audio';
-    lPanel = o.panel && (o.panel !== 'edit' || img) ? o.panel : null; lPanelFrom = null;
+    const img = it.kind !== 'video' && it.kind !== 'audio', cap = SV.soundCaption(it, voices) || {}; // V5.0: a voice or a song: the big player, what is read or sung, and «Repetir con otra voz»
+    lPanel =o.panel && (o.panel !== 'edit' || img) ? o.panel : null; lPanelFrom = null;
     const setTxt = it.settings ? Object.entries(it.settings).map(([k, v]) => `${LBL[k] || k}: ${typeof v === 'boolean' ? (v ? 'sí' : 'no') : VAL[v] || v}`).join(' · ') : '';
     const used = it.media ? Object.entries(it.media).flatMap(([r, fs]) => fs.map(f => [r, f])) : [];
     const orig = it.versionOf ? itemOf(it.versionOf) : null, vers = (it.versions || []).map(itemOf).filter(Boolean);
     const tools = it.kind === 'audio' ? '' : `<div class="st-ztools" role="toolbar" aria-label="${img ? 'Zoom' : 'Vista'}">${img ? `<button type="button" data-z="out" aria-label="Alejar (−)" title="Alejar (−)">−</button><span class="st-zpct" aria-label="Tamaño"></span><button type="button" data-z="in" aria-label="Acercar (+)" title="Acercar (+, o la rueda del ratón)">+</button><button type="button" data-z="fit" aria-pressed="true" title="Ajustar: la imagen entera (0)">Ajustar</button><button type="button" data-z="real" aria-pressed="false" title="100 %: un píxel de la imagen, un píxel de la pantalla (doble clic sobre la imagen)">100 %</button>` : ''}<button type="button" data-z="full" aria-pressed="false" aria-label="Pantalla completa (F)" title="Pantalla completa (F)">${svg('full')}<span>Pantalla completa</span></button></div>`;
     L.innerHTML = `<div class="st-lbox"><button type="button" class="st-lx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button>
-      <div class="st-lmedia">${it.kind === 'audio' ? `<div class="st-laud"><span aria-hidden="true">♪</span><audio src="${src(it)}" controls></audio></div>` : `<div class="st-lstage"${it.w && it.h ? ` style="--ar:${+it.w} / ${+it.h}"` : ''}>${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}" draggable="false">`}</div>${tools}`}</div>
+      <div class="st-lmedia">${it.kind === 'audio' ? `<div class="st-laud${cap.badge === 'MÚSICA' ? ' st-aud-mus' : cap.badge === 'VOZ' ? ' st-aud-voz' : ''}"><span class="st-laic" aria-hidden="true">${cap.badge === 'MÚSICA' ? svg('note') : cap.badge === 'VOZ' ? svg('mic') : '♪'}</span>${cap.voice ? `<span class="st-lvoz">Voz: <b>${esc(cap.voice)}</b></span>` : cap.instrumental ? '<span class="st-lvoz">Instrumental</span>' : ''}<audio src="${src(it)}" controls preload="metadata" aria-label="Escuchar: ${esc(short(it.prompt))}"></audio></div>` : `<div class="st-lstage"${it.w && it.h ? ` style="--ar:${+it.w} / ${+it.h}"` : ''}>${it.kind === 'video' ? `<video src="${src(it)}" controls autoplay playsinline></video>` : `<img src="${src(it)}" alt="${esc(String(it.prompt).slice(0, 120))}" draggable="false">`}</div>${tools}`}</div>
       <div class="st-linfo"><div class="st-lpos"><button type="button" class="st-lnav prev" aria-label="Anterior" title="Anterior (←)"${i > 0 ? '' : ' disabled'}>‹</button><span aria-live="polite">${i + 1} de ${list.length}</span><button type="button" class="st-lnav next" aria-label="Siguiente" title="Siguiente (→)"${i < list.length - 1 ? '' : ' disabled'}>›</button></div>
       ${it.versionOf ? `<p class="st-lver">Versión de ${orig ? `<button type="button" class="st-lk" data-vf="${esc(orig.file)}" title="Abrir la original">«${esc(short(orig.prompt))}»</button>` : 'una imagen que ya no está en la galería'}</p>` : ''}
-      <p class="st-lp">${esc(it.prompt)}</p>
+      ${cap.label ? `<h3 class="st-slab st-lslab">${cap.label}</h3>` : ''}<p class="st-lp${cap.label ? ' st-lptext' : ''}">${esc(it.prompt)}</p>
       <p class="st-meta">${it.upload ? 'Subida por ti' : `${esc(it.modelName || it.model || it.provider)} · ${esc(who(it))}`} · ${esc(when(it.at))}${it.w ? ` · ${it.w}×${it.h}` : ''}${it.cost ? ` · ~US$${it.cost}` : ''}</p>
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
       ${vers.length ? `<div class="st-lvers"><h3>Versiones (${vers.length})</h3><div>${vers.map((v, k) => `<button type="button" data-vf="${esc(v.file)}" aria-label="Abrir la versión ${k + 1}: ${esc(short(v.prompt))}" title="${esc(v.prompt)}"><img src="${src(v)}" alt=""></button>`).join('')}</div></div>` : ''}
-      <div class="st-lacts">${!img ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>`) : `<button type="button" data-l="edit" class="pri" aria-expanded="false" title="Pide un cambio: sale una versión nueva y la original no se toca">${svg('pen')} Editar</button><button type="button" data-l="anim">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
+      <div class="st-lacts">${!img ? (it.upload ? '' : `<button type="button" data-l="again" class="pri">${svg('again')} Repetir</button>${cap.badge === 'VOZ' ? `<button type="button" data-l="othervoice" title="El mismo texto con otra voz: elige la voz en el paso 5">${svg('mic')} Repetir con otra voz</button>` : ''}`) :`<button type="button" data-l="edit" class="pri" aria-expanded="false" title="Pide un cambio: sale una versión nueva y la original no se toca">${svg('pen')} Editar</button><button type="button" data-l="anim">${svg('vid')} Animar</button><button type="button" data-l="vary" title="Otra versión parecida: mismo prompt, esta imagen como referencia">${svg('spark')} Variar</button>`}<a href="${src(it)}" download="${esc(dlName(it))}">${svg('down')} Descargar</a></div>
       <div class="st-lpwrap"></div>
-      <div class="st-lacts2">${img ? '<button type="button" data-l="ref">Usar de referencia</button>' : ''}${it.upload || !img ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">Copiar prompt</button>${ctx.toCalendar ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}${ctx.askDimitri ? '<button type="button" data-l="dimitri">Pedírselo a Dimitri</button>' : ''}<button type="button" data-l="dept" aria-expanded="false">Mandar a un departamento…</button><button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
+      <div class="st-lacts2">${img ? '<button type="button" data-l="ref">Usar de referencia</button>' : ''}${it.upload || !img ? '' : '<button type="button" data-l="again">Repetir</button>'}<button type="button" data-l="copy">${cap.label ? 'Copiar el texto' : 'Copiar prompt'}</button>${ctx.toCalendar && it.kind !== 'audio' ? '<button type="button" data-l="cal">Enviar al calendario</button>' : ''}${ctx.askDimitri ? '<button type="button" data-l="dimitri">Pedírselo a Dimitri</button>' : ''}<button type="button" data-l="dept" aria-expanded="false">Mandar a un departamento…</button><button type="button" data-l="fav">${it.fav ? 'Quitar de favoritas' : 'Favorita'}</button>${it.task && ctx.openTask ? '<button type="button" data-l="task">Ver la tarea</button>' : ''}</div>
       <button type="button" class="st-ldel" data-l="del">${svg('trash')} Mover a la papelera</button></div></div>`;
     wireZoom(img ? L.querySelector('.st-lstage img') : null); zPaint();
     if (lPanel) paintPanel(it); else L.querySelector('.st-lx').focus();
@@ -891,7 +1137,8 @@ export function initStudio(ctx) {
       if (e.target.closest('.st-edgo')) { sendEdit(it); return; }
       if (e.target.closest('.st-dpgo')) { sendToDept(it); return; }
       const a = e.target.closest('[data-l]')?.dataset.l; if (!a) return;
-      if (a === 'copy') { const btn = e.target.closest('button'); (navigator.clipboard ? navigator.clipboard.writeText(it.prompt) : Promise.reject()).then(() => { btn.textContent = 'Copiado ✓'; }, () => { btn.textContent = 'No se pudo copiar'; }).finally(() => setTimeout(() => { if (document.contains(btn)) btn.textContent = 'Copiar prompt'; }, 1600)); }
+      if (a === 'copy') { const btn = e.target.closest('button'); (navigator.clipboard ? navigator.clipboard.writeText(it.prompt) : Promise.reject()).then(() => { btn.textContent = 'Copiado ✓'; }, () => { btn.textContent = 'No se pudo copiar'; }).finally(() => setTimeout(() => { if (document.contains(btn)) btn.textContent = cap.label ? 'Copiar el texto' : 'Copiar prompt'; }, 1600)); }
+      if (a === 'othervoice') { closeLight(); otherVoice(it); }
       if (a === 'edit' || a === 'dept') setPanel(it, a, e.target.closest('button'));
       if (a === 'dimitri' && ctx.askDimitri) { closeLight(); ctx.askDimitri([it.file]); }
       if (a === 'vary') { closeLight(); vary(it); }
@@ -947,6 +1194,8 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-open-engs')) { showPane('gen'); el.classList.remove('st-folded'); const d = $('.st-keys'); d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); d.querySelector('summary').focus({ preventScroll: true }); return; }
     if (e.target.closest('.st-histbtn')) { openHist(); return; }
     if (e.target.closest('.st-binbtn')) { openBin(); return; }
+    if (e.target.closest('.st-vocbtn, .st-vopen')) { openVoices(); return; } // V5.0
+    const lt = e.target.closest('[data-ltag]'); if (lt) { insertTag(lt.dataset.ltag); return; }
     const md = e.target.closest('[data-mode]'); if (md) { setMode(md.dataset.mode); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-new')) { $('.st-prompt').value = ''; media = { start: [], end: [], reference: [], video: [] }; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; clearFieldErr(); armed = false; renderModel(); say('Compositor vacío: empieza una idea nueva.'); $('.st-prompt').focus(); return; }
     const qd = e.target.closest('.st-qty [data-d]'); if (qd) { const max = kind === 'video' ? 4 : (budget && budget.maxPerRequest) || 8; qty = Math.max(1, Math.min(max, qty + +qd.dataset.d)); estimate(); return; }
@@ -983,10 +1232,12 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-undo-enh')) { if (prevPrompt != null) $('.st-prompt').value = prevPrompt; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; return; }
     if (e.target.closest('.st-go')) {
       if (!isLive()) return say('El Estudio necesita la oficina real (ábrela con el iniciador).', true);
-      const m = cur(); if (!m) return say('Elige un modelo.', true);
+      const m = cur(); if (!m) { const o = offModel(); return o ? keyHelp(o) : say('Elige un modelo.', true); } // V5.0: Voz / Música without the key say how to switch it on
       const miss = (m.needs || []).find(r => !media[r].length); if (miss) return fieldErr('slot', `${m.name} necesita «${roleName(miss)}»: súbela o elígela de la galería.`);
       const ps = mode === 'batch' ? lines() : [$('.st-prompt').value.trim()].filter(Boolean);
-      if (!ps.length && !(m.needs || []).includes('video')) return fieldErr('prompt', mode === 'batch' ? 'Escribe al menos una idea: una por línea.' : 'Escribe qué quieres crear: qué se ve, el estilo, la luz.');
+      if (!ps.length && !(m.needs || []).includes('video')) return fieldErr('prompt', mode === 'batch' ? 'Escribe al menos una idea: una por línea.' : kind === 'audio' ? 'Escribe el texto que leerá la voz.' : kind === 'music' ? (settingsOf(m).instrumental ? 'Describe la música: género, ánimo, instrumentos.' : 'Escribe la letra (o marca «Instrumental» y descríbela).') : 'Escribe qué quieres crear: qué se ve, el estilo, la luz.');
+      if (sound()) { const lim = limitNow(), len = $('.st-prompt').value.trim().length; if (len > lim) return fieldErr('prompt', `${m.name} lee como mucho ${lim.toLocaleString('es')} caracteres: sobran ${(len - lim).toLocaleString('es')}.`); }
+      if (kind === 'audio' && m.settings.voiceId && !String(settingsOf(m).voiceId || '').trim()) { $('.st-vid')?.focus(); return say('Elige una voz en el paso 5.', true); }
       const c = estimate(); if (c >= 0.5 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}${budget && budget.cost ? ` (hoy llevas US$${budget.cost.toFixed(2)})` : ''}. ¿Generar?`)) return; // V4.2 (audit A10): from US$0.50, not only above 1
       const sig = JSON.stringify([ps, m.id, settingsOf(m), media, qty]); // V4.2 (audit A13): the same request twice in a row asks for a second click
       if (sig === lastSig && Date.now() - lastAt < 10 * 60e3 && !armed) { armed = true; say('Es lo mismo que acabas de generar. Pulsa GENERAR otra vez para repetirlo, o cambia algo.', true); return; }
@@ -1048,6 +1299,7 @@ export function initStudio(ctx) {
     if (a === 'vary') vary(it);
     if (a === 'cal' && ctx.toCalendar) { learn(it.file, 'calendario'); ctx.toCalendar(it.file, it.kind, it.prompt); } // Contenido opens (and the Estudio steps aside) with a new piece that carries this file
     if (a === 'usar' && pickFor) { const k = pickFor.ids.indexOf(it.file); if (k >= 0) pickFor.ids.splice(k, 1); else { pickFor.ids.push(it.file); learn(it.file, 'pieza'); } paintFor(); }
+    if (a === 'othervoice') otherVoice(it); // V5.0
     if (a === 'edit') lightFile(it.file, { panel: 'edit' }); // V4.9: Editar opens the viewer with its small panel
     if (a === 'dept') lightFile(it.file, { panel: 'dept' });
     if (a === 'dimitri' && ctx.askDimitri) ctx.askDimitri([it.file]);
@@ -1057,15 +1309,19 @@ export function initStudio(ctx) {
   el.addEventListener('change', e => {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
 
-    if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
+    if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
     if (e.target.matches?.('[data-msort], [data-mmaker]')) { store.set(e.target.hasAttribute('data-msort') ? 'msort' : 'mmaker', e.target.value); const qv = $('.st-mq input')?.value || ''; renderList(qv); $(e.target.hasAttribute('data-msort') ? '[data-msort]' : '[data-mmaker]')?.focus(); return; }
-    const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); estimate(); }
+    if (e.target.classList.contains('st-vsel')) { if (e.target.value) setVoice(e.target.value); return; } // V5.0: a voice from the list fills the field
+    if (e.target.classList.contains('st-vid')) { setVoice(e.target.value.trim()); return; }
+    const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); if (k === 'instrumental') paintStep3(); estimate(); }
   });
   el.addEventListener('input', e => {
     if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; }
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value + (e.target.dataset.set === 'duration' ? ' s' : ''); setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; renderGrid(); return; }
+    if (e.target.classList.contains('st-vid')) { const v = e.target.value.trim(); setSetting('voiceId', v); $('#stVidH').textContent = voiceHint(v); } // V5.0: the hint says whose voice it is while typing
+    if (e.target.closest('.st-vocov')) return; // the Voces panel's own fields
     estimate();
   });
   // drop files: on a slot they go into it, anywhere else they are uploaded to the gallery
@@ -1084,15 +1340,16 @@ export function initStudio(ctx) {
   el.addEventListener('keydown', e => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
     if (!typing && (e.key === '?' || (e.key === '/' && e.shiftKey))) return; // V4.2 (audit A48): the shortcuts sheet opens over the Estudio too
-    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && /^[epgonu,]$/i.test(e.key) && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && !el.querySelector('.st-menu:not([hidden])')) return; // V4.5: the dock's keys reach the office — P and G switch views, O N U , open a window on top
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && /^[epgonu,]$/i.test(e.key) && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && $('.st-vocov').hidden && !el.querySelector('.st-menu:not([hidden])')) return; // V4.5: the dock's keys reach the office — P and G switch views, O N U , open a window on top
     e.stopPropagation();
-    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && !el.querySelector('.st-menu:not([hidden])')) { // V4.2 (audit A47)
+    if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && $('.st-vocov').hidden && !el.querySelector('.st-menu:not([hidden])')) { // V4.2 (audit A47)
       if (e.key === '/') { e.preventDefault(); showPane('gal'); $('.st-q').focus(); return; }
       if (e.key === 'i' || e.key === 'I') { setKind('image'); return; }
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
     if (!$('.st-binov').hidden) { if (e.key === 'Escape') closeBin(); return; }
+    if (!$('.st-vocov').hidden) { if (e.key === 'Escape') { e.preventDefault(); voicesEscape(); } return; } // V5.0: a row asking «¿Borrar?» says no first; then the panel closes
     const om = el.querySelector('.st-menu:not([hidden])');
     if (om) { // the open «⋯» menu: arrows move, Esc and Tab close it, back on its button
       const its = [...om.querySelectorAll('[role="menuitem"]')].filter(x => x.offsetParent), i = its.indexOf(document.activeElement), btn = om.closest('.st-card')?.querySelector('.st-more');
@@ -1129,12 +1386,13 @@ export function initStudio(ctx) {
   function setDock() { if (!dock) return; dock.classList.toggle('st-news', unseen > 0); if (unseen) { dock.dataset.n = unseen > 9 ? '9+' : unseen; dock.setAttribute('aria-label', `${dockLabel} · ${unseen} ${unseen === 1 ? 'nuevo' : 'nuevos'}`); } else { delete dock.dataset.n; dock.setAttribute('aria-label', dockLabel); } }
   function tellFinished(fresh) {
     const ok = fresh.filter(j => j.state === 'done'), bad = fresh.filter(j => j.state === 'failed' && !/Cancelado por ti/.test(j.error || ''));
-    const img = ok.filter(j => j.kind !== 'video').reduce((s, j) => s + (j.items ? j.items.length : 1), 0), vid = ok.filter(j => j.kind === 'video').reduce((s, j) => s + (j.items ? j.items.length : 1), 0);
-    const parts = [img && `${img} ${img === 1 ? 'imagen' : 'imágenes'}`, vid && `${vid} ${vid === 1 ? 'video' : 'videos'}`].filter(Boolean);
+    const nOf = k => ok.filter(j => (k === 'image' ? !['video', 'audio', 'music'].includes(j.kind) : j.kind === k)).reduce((s, j) => s + (j.items ? j.items.length : 1), 0);
+    const per = Object.fromEntries(SV.KINDS.map(k => [k, nOf(k)])), total = SV.KINDS.reduce((s, k) => s + per[k], 0); // V5.0: voices and songs too
+    const parts = SV.KINDS.filter(k => per[k]).map(k => SV.countOf(k, per[k]));
     if (!parts.length && !bad.length) return;
-    unseen += img + vid + bad.length; setDock();
-    const agent = ok.find(fromBots);
-    note.querySelector('span').textContent = `Estudio: ${parts.length ? `${parts.join(' y ')} ${img + vid === 1 ? 'lista' : 'listas'}${agent ? ` (de ${who(agent)})` : ''}` : ''}${parts.length && bad.length ? ' · ' : ''}${bad.length ? `${bad.length} no se ${bad.length === 1 ? 'pudo' : 'pudieron'}` : ''}.`;
+    unseen += total + bad.length; setDock();
+    const agent = ok.find(fromBots), fem = !per.video && !per.audio; // «2 imágenes listas», «1 video listo»
+    note.querySelector('span').textContent = `Estudio: ${parts.length ? `${parts.join(' y ')} ${fem ? (total === 1 ? 'lista' : 'listas') : total === 1 ? 'listo' : 'listos'}${agent ? ` (de ${who(agent)})` : ''}` : ''}${parts.length && bad.length ? ' · ' : ''}${bad.length ? `${bad.length} no se ${bad.length === 1 ? 'pudo' : 'pudieron'}` : ''}.`;
     note.hidden = false; clearTimeout(noteT); noteT = setTimeout(hideNote, 12000);
   }
   function bgPoll() {
@@ -1174,7 +1432,7 @@ export function initStudio(ctx) {
   const isOn = () => document.body.classList.contains('studioOpen'); // not el.hidden: that waits 220 ms for the fade after close
   let hideT = 0;
   function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
-  function close(o = {}) { if (!isOn()) return; if (pickFor) { pickFor = null; paintFor(); } seenAt = Date.now(); closeLight(); closeHist(); closeBin(); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
+  function close(o = {}) { if (!isOn()) return; if (pickFor) { pickFor = null; paintFor(); } seenAt = Date.now(); closeLight(); closeHist(); closeBin(); closeVoices(true); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   views.add('studio', { isOpen: isOn, close });
   return { open, close, toggle: () => (isOn() ? close() : open()), isOpen: isOn,
     /** V4.7: open the Estudio for one piece of content; `onPick(ids)` gets the gallery files chosen when the owner goes back to it. */
