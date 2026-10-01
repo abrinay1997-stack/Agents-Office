@@ -725,7 +725,7 @@ export function compilar(opts = {}) {
     const ejes = arr(p.ejes), slot = p.ranura && slots[p.ranura] ? p.ranura : p.capa === 'receta' ? 'accion' : ejes.includes('escena') ? 'escena' : ejes.includes('estilo') || ejes.includes('look') ? (kind === 'video' ? 'look' : 'estilo') : ejes.length && ejes.every(e => e === 'luz') ? 'luz' : 'accion';
     slots[slot].push(f);
   }
-  if (escD) (kind === 'video' ? slots.plano : slots.camara).push(escD.en);
+  if (escD) (kind === 'video' ? slots.plano : slots.camara).push(kind === 'video' ? escD.en : String(escD.en).replace(/^\s*Camera and framing:\s*/i, '')); // la plantilla ya pone «Camera and framing:»
   const conservar = conFoto || iaRefs.some(r => r.ejes.producto) ? (familias[familia]?.conservar || (familia === 'edicion-corta' ? 'Keep the product exactly the same.' : CONSERVAR)) : '';
   const refLineas = (corta) => {
     const out = [];

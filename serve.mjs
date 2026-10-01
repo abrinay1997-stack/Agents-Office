@@ -56,6 +56,7 @@ import * as sub from './sub.mjs';
 import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dimitri's answer while it is written
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs'; // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
+import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
 import { sendJson, lightTasks } from './http-json.mjs';
 import { createCache } from './vault-cache.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
@@ -115,6 +116,9 @@ const RUN_TIMEOUT = Math.max(60, +cfg.timeout || 300) * 1000; // agents with too
 mcp.configure(cfg);
 media.configure(cfg, cfg.brainPath, process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data')); // the jobs hook (onDone) is set once the tasks store exists, below
 voces.configureVoices(DATA); // V4.10
+// Banco de presets (F1, 1 oct 2026): la fábrica (presets/) y los del dueño (notas en <cerebro>/Estudio/Presets/). Compilar no gasta;
+// aplicar sí, por los topes del Estudio, y solo desde el clic del dueño (POST /api/media/presets/apply).
+const presets = crearPresets({ brainPath: cfg.brainPath, dataDir: DATA, cifras: () => loadCifras(), onNota: () => { rebuildGraph().catch(() => {}); } });
 const minimaxOn = () => media.engines().some(e => e.id === 'minimax' && e.on);
 const STUDIO_DEFAULTS = () => Object.fromEntries(media.KINDS.map(k => [k, media.defaultModel(k)])); // V4.10: image, video, audio (voice) and music
 // the ESTUDIO reaches the agents of these departments as a tool (office.config.json → media.departments; [] = nobody)
@@ -2035,6 +2039,22 @@ const server = http.createServer(async (req, res) => {
         const wait = Math.min(110000, Math.max(0, +b.wait || 0));
         return json(res, 200, { job: wait ? await media.wait(j.id, wait) : j, budget: media.budget() });
       } catch (e) { return e.code === 'no-edit-engine' ? json(res, 409, { error: e.message, engines: e.engines }) : json(res, 400, { error: e.message }); }
+    }
+    if (url.pathname === '/api/media/presets' || url.pathname.startsWith('/api/media/presets/')) { // Banco de presets (F1, §6.4)
+      const sp = url.searchParams, pm = url.pathname.match(/^\/api\/media\/presets\/([a-z0-9-]{2,40})(\/versiones)?$/);
+      try {
+        if (url.pathname === '/api/media/presets' && req.method === 'GET') return json(res, 200, presets.lista({ medio: sp.get('medio') || undefined, modo: sp.get('modo') || undefined, q: sp.get('q') || undefined }));
+        if (url.pathname === '/api/media/presets/compile' && req.method === 'POST') { const { plan } = presets.compilar(await body(req)); return json(res, 200, { plan, budget: media.budget() }); } // no gasta
+        if (url.pathname === '/api/media/presets/apply' && req.method === 'POST') { // gasta: el clic GENERAR del dueño (los agentes y Dimitri llegan en F3, con su propio camino)
+          const out = presets.aplicar(await body(req), { by: 'you' });
+          for (const j of out.jobs) console.log(`✦ estudio: ${j.id} preset ${(j.preset || []).map(x => x.id).join('+') || '—'} con ${j.model}${j.versionOf ? ' · versión de ' + j.versionOf : ''}`);
+          return json(res, 200, { plan: out.plan, jobs: out.jobs, budget: media.budget() });
+        }
+        if (url.pathname === '/api/media/presets' && req.method === 'POST') { const r = presets.guardar(await body(req)); console.log(`✦ estudio: preset «${r.preset.nombre}» → ${r.archivo}`); return json(res, 200, r); }
+        if (pm && req.method === 'GET' && pm[2]) return json(res, 200, { versiones: presets.versiones(pm[1]) });
+        if (pm && req.method === 'DELETE' && !pm[2]) return presets.borrar(pm[1]) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'ese preset no es tuyo o ya no está' });
+        return json(res, 404, { error: 'no such route' });
+      } catch (e) { return json(res, e.status || (e.code === 'no-edit-engine' ? 409 : 400), { error: e.message, ...(e.plan ? { plan: e.plan } : {}) }); }
     }
     if (url.pathname === '/api/media/to-dept' && req.method === 'POST') { // V4.9: «Mandar a un departamento…» — a task whose agent sees this file as a reference. { file, dept, text }
       const b = await body(req); const file = String(b.file || '').replace(/\\/g, '/');
