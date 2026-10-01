@@ -80,3 +80,23 @@ export function diasRapidos(redes = [], otras = [], { ahora = Date.now(), dias =
   }
   return out;
 }
+
+/** Por qué no se puede llevar una pieza a ese día y esa hora (soltar o Mayús + flecha), o null si se puede.
+ *  Un día anterior a hoy: «Ese día ya pasó». Hoy con una hora ya pasada: «Esa hora ya pasó». Sin hora solo cuenta el día:
+ *  una pieza sin hora se guarda sin hora (no se le inventa un 09:00 para decir que «ya pasó»). */
+export function motivoPasado(fecha, hora = '', ahora = Date.now()) {
+  if (!fecha) return null;
+  const hoy = ymd(new Date(ahora));
+  if (fecha < hoy) return 'Ese día ya pasó: elige uno que venga.';
+  if (hora && fecha === hoy && momentoDe({ fecha, hora }) < ahora) return 'Esa hora ya pasó: elige una más tarde.';
+  return null;
+}
+
+/** DESHACER de mover una pieza aprobada: la devuelve a su día y su hora y la vuelve a aprobar. Si volver a aprobar falla
+ *  (p. ej. ya no quedan 10 min hasta su hora), no se calla: el aviso lo dice y va marcado como error.
+ *  `datos` es el de crearDatos (patch, approve). → { pieza, aviso, mal } */
+export async function deshacerMover(datos, id, antes) {
+  const b = await datos.patch(id, antes);
+  try { const a = await datos.approve(id); return { pieza: a.pieza, aviso: 'Deshecho: vuelve a su fecha y sigue aprobada.', mal: false }; }
+  catch (e) { return { pieza: b.pieza, aviso: `Vuelta a su fecha, pero no se pudo volver a aprobar: ${e.message || e}`, mal: true }; }
+}

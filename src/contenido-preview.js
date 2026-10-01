@@ -78,6 +78,14 @@ export function resumenAria(p = {}, tab, { corte, fuera } = {}) {
   return partes.join('; ') + '.';
 }
 
+/** La etiqueta de la maqueta para el lector de pantalla, la MISMA al pintar y al teclear: con una imagen fuera de proporción
+ *  en el feed de Instagram, lo dice siempre (antes, al escribir una letra se perdía el «no la acepta en el feed»). */
+export function ariaMaqueta(p = {}, tab, { corte, medio } = {}) {
+  const v = VISTAS[tab];
+  const fuera = v && v.vista === 'feed' && v.red === 'instagram' ? proporcionFeed(medio).fuera : null;
+  return resumenAria(p, tab, { corte, fuera });
+}
+
 /* ---------- pintar ---------- */
 const esVideo = id => /\.(mp4|webm|mov|m4v)$/i.test(id || '');
 const mediaUrl = id => (typeof id === 'string' && !id.startsWith('demo/') ? '/media/' + id.split('/').map(encodeURIComponent).join('/') : null);
@@ -219,10 +227,9 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     cur = p; const d = datos(p);
     const tabs = `<div class="pv-tabs" role="tablist" aria-label="Ver cómo queda en">${d.tabs.map(t => `<button type="button" role="tab" id="pv-t-${t}" aria-selected="${t === tab}" tabindex="${t === tab ? 0 : -1}" data-pv-tab="${t}"><b class="pv-net ${VISTAS[t].red}">${VISTAS[t].red_}</b>${VISTAS[t].label}</button>`).join('')}</div>`;
     const body = d.v.vista === 'perfil' ? perfil(p, d) : d.v.vista === 'feed' ? (d.v.red === 'instagram' ? feedIG(p, d) : feedFB(p, d)) : vertical(p, d);
-    const fuera = d.v.vista === 'feed' && d.v.red === 'instagram' ? proporcionFeed(d.medios[0]).fuera : null;
     const conZonas = d.v.vista === 'reel' || d.v.vista === 'historia' || (d.v.vista === 'feed' && d.v.red === 'instagram' && d.medios.length > 0);
     box.innerHTML = `${tabs}<div class="pv-stage" role="tabpanel" aria-labelledby="pv-t-${tab}">
-      <div class="pv-mock" role="group" aria-roledescription="vista previa" aria-label="${esc(resumenAria(p, tab, { corte: st.corte, fuera }))}">${body}</div>
+      <div class="pv-mock" role="group" aria-roledescription="vista previa" aria-label="${esc(ariaMaqueta(p, tab, { corte: st.corte, medio: d.medios[0] }))}">${body}</div>
       ${conZonas ? `<label class="pv-zt"><input type="checkbox" data-pv-zonas${zonas ? ' checked' : ''}> Ver ${d.v.vista === 'feed' ? 'recortes' : 'zonas que tapa la interfaz'}</label>` : ''}${notas(p, d)}</div>`;
     mediaKey = key(p);
   }
@@ -235,7 +242,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     const com = box.querySelector('[data-pv="com"]'), nc = comentario(p, d);
     if (com) com.outerHTML = nc || '<span data-pv="com" hidden></span>'; else if (nc) box.querySelector('.pv-likes, .pv-cap')?.insertAdjacentHTML('afterend', nc);
     const n = box.querySelector('.pv-notes'), nn = notas(p, d); if (n) n.outerHTML = nn || ''; else if (nn) box.querySelector('.pv-stage')?.insertAdjacentHTML('beforeend', nn);
-    const mock = box.querySelector('.pv-mock'); if (mock) mock.setAttribute('aria-label', resumenAria(p, tab, { corte: st.corte }));
+    const mock = box.querySelector('.pv-mock'); if (mock) mock.setAttribute('aria-label', ariaMaqueta(p, tab, { corte: st.corte, medio: d.medios[0] }));
   }
 
   box.addEventListener('click', e => {

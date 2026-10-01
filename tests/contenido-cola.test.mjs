@@ -71,3 +71,27 @@ test('los días rápidos del panel: hoy, mañana y los siguientes, con cuántas 
   assert.match(d[2].corto, /^(lun|mar|mié|jue|vie|sáb|dom) \d+$/);
   assert.equal(diasRapidos(['instagram', 'facebook'], otras, { ahora: AHORA })[1].n, 2);
 });
+
+test('motivoPasado separa el día que pasó de la hora que pasó, y sin hora solo mira el día', async () => {
+  const { motivoPasado } = await import('../src/contenido-cola.js');
+  assert.match(motivoPasado(dia(-1), '', AHORA), /Ese día ya pasó/);
+  assert.match(motivoPasado(dia(-1), '18:00', AHORA), /Ese día ya pasó/, 'una franja de un día anterior no dice «de hoy»');
+  assert.match(motivoPasado(dia(0), '09:00', AHORA), /Esa hora ya pasó/);
+  assert.equal(motivoPasado(dia(0), '', AHORA), null, 'hoy sin hora a las 10:00 se puede: no se inventa un 09:00');
+  assert.equal(motivoPasado(dia(0), '18:00', AHORA), null);
+  assert.equal(motivoPasado(dia(1), '08:00', AHORA), null);
+  assert.equal(motivoPasado('', '', AHORA), null, 'al banco de ideas siempre se puede');
+});
+
+test('deshacerMover no se traga que no se pudo volver a aprobar', async () => {
+  const { deshacerMover } = await import('../src/contenido-cola.js');
+  const antes = { fecha: dia(0), hora: '10:05' };
+  const ok = { patch: async (id, c) => ({ pieza: { id, ...c, estado: 'revision' } }), approve: async id => ({ pieza: { id, ...antes, estado: 'aprobada' } }) };
+  const r1 = await deshacerMover(ok, 'a', antes);
+  assert.equal(r1.mal, false); assert.equal(r1.pieza.estado, 'aprobada');
+  const falla = { ...ok, approve: async () => { throw new Error('Falta menos de 10 min para su hora.'); } };
+  const r2 = await deshacerMover(falla, 'a', antes);
+  assert.equal(r2.mal, true); assert.equal(r2.pieza.estado, 'revision');
+  assert.match(r2.aviso, /no se pudo volver a aprobar: Falta menos de 10 min/);
+  await assert.rejects(deshacerMover({ ...ok, patch: async () => { throw new Error('sin red'); } }, 'a', antes), /sin red/, 'si ni siquiera vuelve a su fecha, lanza (el aviso dice «No se pudo deshacer»)');
+});

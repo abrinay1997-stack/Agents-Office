@@ -353,3 +353,7 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
 .pz-qd[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); } .pz-qd[aria-pressed="true"] i { background: color-mix(in srgb, var(--cream) 22%, transparent); }
 .pz-qd:hover { border-color: var(--ink); } .pz-qd:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .pz-qdays { gap: 6px; margin-top: -2px; }
+
+/* Auditoría (revisión del cajón): con una pieza abierta el aviso va sobre el panel y por encima de su pie (src/contenido.js → placeToast);
+   en el teléfono el panel ocupa la vista con z-index 47, así que el aviso sube por encima para no quedar escondido. */
+#ctOv .cv-toast.sobrePanel { z-index: 48; width: max-content; } /* el ancho lo pone el panel (max-width en línea), no el sitio que queda a la derecha del centro */

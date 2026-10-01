@@ -16,7 +16,7 @@ import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHT
 import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
-import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia } from './contenido-cola.js';
+import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover } from './contenido-cola.js';
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem } from './contenido-reglas.js';
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
@@ -65,20 +65,30 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   let cuentas = { empresa: '' };
 
   /* ---------- avisos y deshacer (el mismo gesto que el calendario de tareas: se va al momento, con 8 segundos para volver) ---------- */
-  function note(msg, bad) { if (commitFn || undoFn) return; E.toast.querySelector('span').textContent = msg; E.toast.querySelector('button').hidden = true; E.toast.classList.toggle('bad', !!bad); E.toast.hidden = false; clearTimeout(noteT); noteT = setTimeout(() => { if (!commitFn && !undoFn) E.toast.hidden = true; }, bad ? 7000 : 4500); }
+  /** Con el panel de una pieza abierto, el aviso va sobre el PANEL y por encima de su pie: centrado en la vista tapaba «Aprobar»,
+   *  «Pasar a revisión» y «Quitar el OK» (el cajón mide 840 px) los 8 s del DESHACER. Sin panel, vuelve a su sitio de siempre. */
+  function placeToast() {
+    const t = E.toast, foot = panel.isOpen() && !E.panelHost.hidden && E.panelHost.querySelector('.pz-foot');
+    t.classList.toggle('sobrePanel', !!foot);
+    if (!foot) { t.style.left = t.style.bottom = t.style.maxWidth = ''; return; }
+    const o = ov.getBoundingClientRect(), pr = E.panelHost.getBoundingClientRect(), fr = foot.getBoundingClientRect();
+    t.style.left = `${Math.round(pr.left - o.left + pr.width / 2)}px`; t.style.bottom = `${Math.round(o.bottom - fr.top + 10)}px`; t.style.maxWidth = `${Math.round(pr.width - 24)}px`;
+  }
+  function showToast() { E.toast.hidden = false; placeToast(); }
+  function note(msg, bad) { if (commitFn || undoFn) return; E.toast.querySelector('span').textContent = msg; E.toast.querySelector('button').hidden = true; E.toast.classList.toggle('bad', !!bad); showToast(); clearTimeout(noteT); noteT = setTimeout(() => { if (!commitFn && !undoFn) E.toast.hidden = true; }, bad ? 7000 : 4500); }
   function flushUndo() { clearTimeout(undoT); undoT = null; E.toast.hidden = true; undoFn = null; const f = commitFn; commitFn = null; if (f) f(); }
   function later(key, label, commit) {
     flushUndo(); gone.add(key); render();
     commitFn = async () => { try { await commit(); } catch (e) { note('No se pudo: ' + e.message, true); } gone.delete(key); load(true); };
-    E.toast.querySelector('span').textContent = label; E.toast.querySelector('button').hidden = false; E.toast.classList.remove('bad'); clearTimeout(noteT); E.toast.hidden = false;
+    E.toast.querySelector('span').textContent = label; E.toast.querySelector('button').hidden = false; E.toast.classList.remove('bad'); clearTimeout(noteT); showToast();
     E.toast.querySelector('button').onclick = () => { clearTimeout(undoT); commitFn = null; E.toast.hidden = true; gone.delete(key); render(); note('Deshecho.'); };
     undoT = setTimeout(flushUndo, 8000);
   }
   /** Ya hecho, con 8 segundos para volver atrás (mover una pieza aprobada le quita el OK: DESHACER la devuelve y la vuelve a aprobar). */
   function undoable(label, undo) {
     flushUndo(); undoFn = undo;
-    E.toast.querySelector('span').textContent = label; E.toast.querySelector('button').hidden = false; E.toast.classList.remove('bad'); clearTimeout(noteT); E.toast.hidden = false;
-    E.toast.querySelector('button').onclick = async () => { clearTimeout(undoT); const f = undoFn; undoFn = null; E.toast.hidden = true; try { await f(); note('Deshecho.'); } catch (e) { note('No se pudo deshacer: ' + e.message, true); } };
+    E.toast.querySelector('span').textContent = label; E.toast.querySelector('button').hidden = false; E.toast.classList.remove('bad'); clearTimeout(noteT); showToast();
+    E.toast.querySelector('button').onclick = async () => { clearTimeout(undoT); const f = undoFn; undoFn = null; E.toast.hidden = true; try { const r = await f(); if (r && r.aviso) note(r.aviso, r.mal); else note('Deshecho.'); } catch (e) { note('No se pudo deshacer: ' + e.message, true); } };
     undoT = setTimeout(() => { undoFn = null; E.toast.hidden = true; }, 8000);
   }
 
@@ -127,7 +137,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
 
   function render() {
     if (dnd && dnd.dragging) return;
-    ov.classList.toggle('prog', mode === 'prog'); ov.classList.toggle('panelOpen', panel.isOpen());
+    ov.classList.toggle('prog', mode === 'prog'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
     E.mode.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mode));
     E.views.hidden = mode !== 'cal'; E.wrap.hidden = mode !== 'cal'; E.prog.hidden = mode !== 'prog';
     E.views.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === view); b.setAttribute('aria-pressed', b.dataset.v === view); }); $('.ct-vsel').value = view;
@@ -291,7 +301,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       const put = x => { for (const list of [pieces, cola]) { const i = list.findIndex(y => y.id === x.id); if (i >= 0) list[i] = { ...x, medidas: list[i].medidas }; } };
       put(r.pieza); if (panel.current()?.id === p.id) panel.refresh(r.pieza); render(); loadResumen();
       const donde = r.pieza.fecha ? `al ${fmtDay(at(r.pieza))}${r.pieza.hora ? ' · ' + r.pieza.hora : ''}` : 'al banco de ideas (sin día)';
-      if (r.soltada || eraAprobada) undoable(`Movida ${donde}. Ya no está aprobada: el OK era para otra fecha.`, async () => { const b = await datos.patch(p.id, antes); put(b.pieza); try { const a = await datos.approve(p.id); put(a.pieza); } catch {} render(); loadResumen(); });
+      if (r.soltada || eraAprobada) undoable(`Movida ${donde}. Ya no está aprobada: el OK era para otra fecha.`, async () => { const r = await deshacerMover(datos, p.id, antes); put(r.pieza); render(); loadResumen(); return r; });
       else note(`Movida ${donde}.`);
     } catch (e) { render(); note('No se pudo mover: ' + e.message, true); }
   }
@@ -299,7 +309,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (d.kind !== 'p') return;
     const p = todasConocidas().find(x => x.id === d.id); if (!p) return;
     const fecha = day.dataset.day, hora = day.dataset.hour !== undefined ? `${String(day.dataset.hour).padStart(2, '0')}:${p.hora && +p.hora.slice(0, 2) === +day.dataset.hour ? p.hora.slice(3) : '00'}` : p.hora;
-    if (hora && fecha && new Date(`${fecha}T${hora}:00`).getTime() < Date.now()) { render(); note('Esa hora de hoy ya pasó: suéltala más tarde.', true); return; }
+    const pasado = motivoPasado(fecha, hora); if (pasado) { render(); note(pasado, true); return; }
     await mover(p, fecha, hora);
   }
   dnd = attachDnd({ root: ov, grid: E.grid, onStart: () => {}, onDrop: (day, d) => dropOn(day, d), onCancel: () => render() });
@@ -358,8 +368,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       e.preventDefault(); e.stopPropagation(); const p = todasConocidas().find(x => x.id === card.dataset.ev.slice(2)); if (!p || !p.fecha) return;
       const d = new Date(`${p.fecha}T${p.hora || '09:00'}:00`);
       if (e.key === 'ArrowLeft') d.setDate(d.getDate() - 1); else if (e.key === 'ArrowRight') d.setDate(d.getDate() + 1); else if (e.key === 'ArrowUp') d.setMinutes(d.getMinutes() - 15); else d.setMinutes(d.getMinutes() + 15);
-      if (d.getTime() < Date.now()) { note('Eso ya pasó.', true); return; }
-      mover(p, ymd(d), (e.key === 'ArrowUp' || e.key === 'ArrowDown' || p.hora) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '').then(() => E.grid.querySelector(`[data-ev="p:${CSS.escape(p.id)}"]`)?.focus());
+      const nh = (e.key === 'ArrowUp' || e.key === 'ArrowDown' || p.hora) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
+      const pasado = motivoPasado(ymd(d), nh); if (pasado) { note(pasado, true); return; } // sin hora solo cuenta el día: no se compara con un 09:00 inventado
+      mover(p, ymd(d), nh).then(() => E.grid.querySelector(`[data-ev="p:${CSS.escape(p.id)}"]`)?.focus());
       return;
     }
     if (card && (e.key === 'Enter' || e.key === ' ') && !e.target.closest('button:not(.cv-ev)')) { e.preventDefault(); e.stopPropagation(); openPiece((card.dataset.ev || 'p:' + card.dataset.open).slice(2)); return; }
@@ -428,6 +439,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); loadResumen();
   }
   views.add('contenido', { isOpen: isOn, close });
+  addEventListener('resize', () => { if (openNow && !E.toast.hidden) placeToast(); });
   addEventListener('resize', () => { if (openNow && mode === 'cal' && view === 'month') { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!(dnd && dnd.dragging)) { lastGrid = ''; render(); } }, 150); } }); let resizeT = 0;
   return {
     open, close, toggle: () => (openNow ? close() : open()), isOpen: isOn, openPiece,

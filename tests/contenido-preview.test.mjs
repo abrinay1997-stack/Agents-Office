@@ -55,3 +55,12 @@ test('la cuenta: la de Meta si está, si no la empresa; nunca «tu_cuenta»', ()
   assert.equal(cuentaPara('facebook', { empresa: 'PanaClaw' }).iniciales, 'P');
   assert.notEqual(cuentaPara('instagram', {}).nombre, 'tu_cuenta');
 });
+
+test('ariaMaqueta: lo «fuera del feed» se dice igual al pintar que al teclear, y solo en el feed de Instagram', async () => {
+  const { ariaMaqueta } = await import('../src/contenido-preview.js');
+  const p = { medios: ['a.png'], texto: 'hola' }, alta = { ancho: 1080, alto: 1920 };
+  assert.match(ariaMaqueta(p, 'ig-feed', { medio: alta, corte: { cortado: false } }), /Instagram no la acepta en el feed/);
+  assert.doesNotMatch(ariaMaqueta(p, 'fb-feed', { medio: alta }), /no la acepta/);
+  assert.doesNotMatch(ariaMaqueta(p, 'ig-perfil', { medio: alta }), /no la acepta/);
+  assert.doesNotMatch(ariaMaqueta(p, 'ig-feed', { medio: { ancho: 1080, alto: 1350 } }), /no la acepta/);
+});
