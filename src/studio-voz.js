@@ -82,7 +82,8 @@ export function checkVoiceId(v) {
 /** A voiceId from a name: «Voz de Panaclaw» → «VozDePanaclaw01» — a suggestion the owner can change. */
 export function suggestVoiceId(name, taken = []) {
   const base = String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join('').replace(/^[^A-Za-z]+/, '').slice(0, 40) || 'MiVoz';
-  for (let i = 1; i < 100; i++) { const id = (base + String(i).padStart(2, '0')).padEnd(8, '0'); if (!taken.includes(id)) return id; }
+  const stem = base.length < 6 ? base.padEnd(6, 'x') : base; // filled BEFORE the number (audit EST-05: «Mi voz» gave «MiVoz010»)
+  for (let i = 1; i < 100; i++) { const id = stem + String(i).padStart(2, '0'); if (!taken.includes(id)) return id; }
   return base + Date.now().toString(36);
 }
 /** The voices, whatever shape they come in (/api/voces gives { voices, system }; /api/media.voices the same, or a bare list of the owner's). */
@@ -108,6 +109,13 @@ export function voiceName(id, voices) {
   return v && v.name ? v.name : id;
 }
 export const voiceKind = v => (v && v.kind === 'clone' ? 'Clonada' : 'Diseñada');
+/** The voice list for an id (revisión EST-13): a known voice selects itself; an id typed by hand that the list does not have gets
+ *  its own «Otra: <id>» option, so the list never shows blank while that voice is set; no id → «Elegir una voz…». */
+export function voiceSelect(ids, id) {
+  const v = String(id || '').trim();
+  if (!v) return { value: '', add: { value: '', label: 'Elegir una voz…' } };
+  return (ids || []).includes(v) ? { value: v, add: null } : { value: v, add: { value: v, label: 'Otra: ' + v } };
+}
 
 /* ---------- the gallery ---------- */
 /** A finished sound: 'music' (its record says wanted: 'music'), 'voice' (any other audio), or null. */
