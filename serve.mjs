@@ -414,6 +414,12 @@ function learnFrom(t) {
   if (!t || !t.read?.length || t.piece || (t.error && !t.stopped)) return;
   memory.reinforce(MEM, { id: t.id, r: memory.outcome(t), cited: memory.cited(t.result, t.read), read: t.read }); saveMem();
 }
+/** V4.9: a gallery file teaches the Brain too — used or ⭐ (r = 1), thrown away unused (r = 0); the notes read to make it. Once per file. */
+function learnFromMedia(file, r) { try { const a = media.learnArgs(file, r); if (!a || (a.r === 0 && MEM.applied[a.id]?.r > 0)) return; memory.reinforce(MEM, a); saveMem(); } catch (e) { console.warn('memory (estudio):', e.message); } } // a job that served once is never punished later
+/** Back from the bin (or DESHACER): a «thrown away unused» verdict on its job is taken back. */
+function unlearnMedia(file) { try { const id = media.learnId(media.item(file)); if (id && MEM.applied[id]?.r === 0 && memory.forget(MEM, id)) saveMem(); } catch (e) { console.warn('memory (estudio):', e.message); } }
+/** V4.9: the trail of a creative in the Brain — <brain>/Agents Office/estudio/YYYY-MM/… (a real job by Dimitri or an agent, or an edit). */
+function estudioNote(j) { try { const n = media.writeStudioNote(j); if (n) { console.log(`✦ estudio: note «${n}»`); rebuildGraph().catch(() => {}); } return n; } catch (e) { console.warn('estudio note:', e.message); return null; } }
 
 /* ---------- the roster, as Claude sees it ---------- */
 const persona = a => `${a.name}${a.lead ? ' (lead)' : ''} · ${a.role} · ${a.does}`;
@@ -467,7 +473,8 @@ function studioText(a) {
   return '\n- ESTUDIO (mcp__estudio__*): generar_imagen y generar_video crean imágenes y videos REALES y los guardan en el cerebro. ' +
     (on.length ? `Modelos listos — imagen: ${img.join(', ') || 'ninguno'}; video: ${vid.join(', ') || 'ninguno'}. Si no eliges modelo se usa el del dueño. ` : 'El dueño aún no puso una key de imagen: solo están los motores de «prueba» (tarjetas de muestra); úsalos solo si la tarea pide probar el Estudio. ') +
     'Cuando la tarea pida imágenes o video, GENÉRALOS (no entregues solo prompts) y pon en tu entregable, tal cual, las líneas que devuelve la herramienta: ![…](/media/…) si ya está, o la línea ⏳ si sigue en proceso (un video tarda minutos; la oficina cambia esa línea por el archivo cuando termine, tú no esperes). ' +
-    'Para animar una imagen o usarla de referencia (un producto, un logo, un personaje) búscala con buscar_en_galeria y pasa su id. Un lote grande: consulta estado_estudio antes (tope diario).';
+    'Para animar una imagen o usarla de referencia (un producto, un logo, un personaje) búscala con buscar_en_galeria y pasa su id. Un lote grande: consulta estado_estudio antes (tope diario).' +
+    (fl => fl.length ? ` Carpetas que el dueño o Dimitri organizaron: ${fl.map(f => `${f.name} (${f.n})`).join(', ')}. Antes de generar algo nuevo para una campaña o un producto, mira si ya está preparado ahí (buscar_en_galeria con carpeta).` : '')(media.folders().filter(f => f.n > 0).slice(0, 30)); // V4.9
 }
 function contenidoText(a) { // V4.7: what an agent of these departments may do with the content calendar
   if (!CONTENIDO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
@@ -501,7 +508,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
   const routineLine = task.routine ? `\nThis is a routine (${task.when}): it runs on the office's own clock and the owner is not at the keyboard. It is now ${new Date().toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}${task.late ? `; this run is late, it was due ${new Date(task.due).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}. Do the work for now.`
     : task.dueAt ? `\nThis task was scheduled in advance for ${new Date(task.dueAt).toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} and is running now; the owner is not at the keyboard${task.late ? ' and this run is late' : ''}. Do the work for now.` : '';
   const modeLine = modeLineFor(mode, task);
-  const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + routineLine + modeLine +
+  const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + media.refsLine(task) + routineLine + modeLine + // V4.9: sent from the Estudio
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
   const guard = {};
@@ -1235,7 +1242,15 @@ function insideBrain(p) { // no symlink, and the real path stays inside the brai
 }
 
 await rebuildGraph();
-media.setHooks({ onDone: j => { attachJob(j); if (j.state === 'done' && j.engine !== 'prueba') { const a = AGENTS.find(x => x.id === j.agent); const usd = media.estimate({ model: j.model, n: j.n, settings: j.s }); costs.append(DATA, { t: Date.now(), task: j.task || null, agent: j.agent || null, dept: a?.department || null, kind: 'estudio', model: j.model, provider: j.engine, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, usd, source: 'estimado' }); } } }); // the Estudio's finished jobs reach their task from now on; V4.4 (C5): and their estimated cost joins the ledger, marked «estimado» for the provider's invoice
+/** Every finished Estudio job: it reaches its task; V4.4 (C5): its estimated cost joins the ledger, marked «estimado» for the provider's invoice;
+ *  V4.9: a creative by Dimitri or an agent, or an edit, leaves its note in the Brain, and Dimitri's chat hears of its own (subJobDone). */
+function afterStudioJob(j) {
+  attachJob(j);
+  if (j.state === 'done' && j.engine !== 'prueba') { const a = AGENTS.find(x => x.id === j.agent); const usd = media.estimate({ model: j.model, n: j.n, settings: j.s }); costs.append(DATA, { t: Date.now(), task: j.task || null, agent: j.agent || null, dept: a?.department || null, kind: 'estudio', model: j.model, provider: j.engine, in: 0, out: 0, cacheRead: 0, cacheWrite: 0, usd, source: 'estimado' }); }
+  estudioNote(j);
+  if (j.sub && typeof subJobDone === 'function') subJobDone(j);
+}
+media.setHooks({ onDone: afterStudioJob });
 for (const j of media.jobs()) attachJob(j); // and the ones that finished while the office was off or starting
 { // a restart cut these runs short: say so, instead of leaving them «in progress» forever
   const list = load(); let n = 0;
@@ -1665,7 +1680,25 @@ const server = http.createServer(async (req, res) => {
       if (fm && req.method === 'PATCH') { const b = await body(req); try { return json(res, 200, { folder: media.renameFolder(fm[1], b.name), folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
       if (fm && req.method === 'DELETE') { try { const n = media.removeFolder(fm[1]); return json(res, 200, { ok: true, freed: n, folders: media.folders() }); } catch (e) { return json(res, 404, { error: e.message }); } } }
     if (url.pathname === '/api/media/move' && req.method === 'POST') { const b = await body(req); try { const n = media.moveTo(b.files, b.folder || null); return json(res, 200, { ok: true, moved: n, folders: media.folders() }); } catch (e) { return json(res, 400, { error: e.message }); } }
-    if (url.pathname === '/api/media' && req.method === 'GET') return json(res, 200, { folders: media.folders(), items: media.list(), budget: media.budget(), engines: media.engines(), models: media.models(), jobs: media.jobs(), providers: media.providers(), default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
+    if (url.pathname === '/api/media' && req.method === 'GET') return json(res, 200, { folders: media.folders(), items: media.list(), budget: media.budget(), engines: media.engines(), models: media.models(), jobs: media.jobs(), providers: media.providers(), default: { image: media.defaultModel('image'), video: media.defaultModel('video') }, editModels: media.editModels(), departments: STUDIO_DEPTS });
+    if (url.pathname === '/api/media/edit' && req.method === 'POST') { // V4.9: edit a picture — a new version beside it (the original is never touched). { file, instruction, model?, wait? }
+      const b = await body(req);
+      try {
+        const j = media.submit(media.editRequest({ file: b.file, instruction: b.instruction, model: typeof b.model === 'string' ? b.model : undefined }));
+        console.log(`✦ estudio: ${j.id} edit of ${j.versionOf} with ${j.model}`);
+        const wait = Math.min(110000, Math.max(0, +b.wait || 0));
+        return json(res, 200, { job: wait ? await media.wait(j.id, wait) : j, budget: media.budget() });
+      } catch (e) { return e.code === 'no-edit-engine' ? json(res, 409, { error: e.message, engines: e.engines }) : json(res, 400, { error: e.message }); }
+    }
+    if (url.pathname === '/api/media/to-dept' && req.method === 'POST') { // V4.9: «Mandar a un departamento…» — a task whose agent sees this file as a reference. { file, dept, text }
+      const b = await body(req); const file = String(b.file || '').replace(/\\/g, '/');
+      if (!media.resolve(file)) return json(res, 404, { error: 'no encuentro ese archivo en el Estudio' });
+      if (!STUDIO_DEPTS.includes(b.dept) || !DEPTS[b.dept]) return json(res, 400, { error: 'ese departamento no usa el Estudio' });
+      const text = String(b.text || '').trim() || `Trabaja con esta imagen del Estudio: ${file}`;
+      if (text.length > 4000) return json(res, 400, { error: 'el texto es muy largo (máx. 4000)' });
+      try { const t = await newTask({ dept: b.dept, text, extra: { refs: [file] } }); /* refs: what goes in; task.media stays what the task made */ return json(res, 200, { task: { id: t.id, title: t.title, dept: t.dept, agent: t.agent } }); }
+      catch (e) { return json(res, 500, { error: 'no pude crear la tarea: ' + e.message }); }
+    }
     if ((url.pathname === '/api/media/providers' || url.pathname === '/api/media/models') && req.method === 'GET') return json(res, 200, { providers: media.providers(), engines: media.engines(), models: media.models(), budget: media.budget(), departments: STUDIO_DEPTS, default: { image: media.defaultModel('image'), video: media.defaultModel('video') } });
     if (url.pathname === '/api/media/jobs' && req.method === 'GET') return json(res, 200, { jobs: media.jobs({ task: url.searchParams.get('task') || undefined, active: url.searchParams.get('active') === '1' }), budget: media.budget() });
     if (url.pathname === '/api/media/jobs' && req.method === 'POST') { // queue one generation; `wait` (ms, max 110 s) answers when it finished or at that time, whichever first
@@ -1711,7 +1744,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/media/trash' && req.method === 'GET') return json(res, 200, { items: media.trashList(), days: media.BIN_DAYS }); // V4.4: the Estudio's bin
     if (url.pathname === '/api/media/trash/file' && req.method === 'GET') { const f = media.trashFile(url.searchParams.get('n')); if (!f) return json(res, 404, { error: 'no está en la papelera' }); const ext = path.extname(f).slice(1).toLowerCase(); const type = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', svg: 'image/svg+xml', mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav' }[ext] || 'application/octet-stream'; res.writeHead(200, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(ext === 'svg' ? { 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" } : {}) }); return fs.createReadStream(f).pipe(res); }
     if (url.pathname === '/api/media/trash/purge' && req.method === 'POST') { const b = await body(req); return json(res, 200, { ok: true, removed: media.purge(b) }); }
-    if (url.pathname === '/api/media/restore' && req.method === 'POST') { const b = await body(req); return media.restore(b) ? json(res, 200, { ok: true }) : json(res, 409, { error: 'no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)' }); }
+    if (url.pathname === '/api/media/restore' && req.method === 'POST') { const b = await body(req); return media.restore(b) ? (unlearnMedia(b.id), json(res, 200, { ok: true })) : json(res, 409, { error: 'no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)' }); }
     if (url.pathname === '/api/media/zip' && req.method === 'POST') {
       const { ids } = await body(req); const z = media.zip(ids);
       if (!z.count) return json(res, 404, { error: 'nada que descargar' });
@@ -1735,8 +1768,15 @@ const server = http.createServer(async (req, res) => {
       catch (e) { return json(res, 502, { error: 'no pude mejorarlo ahora: ' + e.message }); }
     }
     const mm = url.pathname.match(/^\/api\/media\/item\/(.+)$/);
-    if (mm && req.method === 'PATCH') { const b = await body(req); const it = media.update(decodeURIComponent(mm[1]), { ...(typeof b.fav === 'boolean' ? { fav: b.fav } : {}) }); return it ? json(res, 200, it) : json(res, 404, { error: 'no such file' }); }
-    if (mm && req.method === 'DELETE') { const usos = contenido.usos(decodeURIComponent(mm[1])); if (usos.length) return json(res, 409, { error: `Este archivo está en ${usos.length === 1 ? 'una pieza' : usos.length + ' piezas'} de Contenido (${usos.slice(0, 3).map(u => '«' + (u.titulo || u.id) + '»').join(', ')}): quítalo de ahí primero`, piezas: usos }); const t = media.trash(decodeURIComponent(mm[1])); return t ? json(res, 200, { ok: true, undo: t }) : json(res, 404, { error: 'no such file' }); }
+    if (mm && req.method === 'PATCH') { // ⭐, and V4.9: { used: 'ref'|'pieza'|'calendario' } — both teach the memory (r = 1)
+      const b = await body(req), id = decodeURIComponent(mm[1]);
+      if (b.used !== undefined && !['ref', 'pieza', 'calendario'].includes(b.used)) return json(res, 400, { error: 'used: ref, pieza o calendario' });
+      let it = media.update(id, { ...(typeof b.fav === 'boolean' ? { fav: b.fav } : {}) }); if (!it) return json(res, 404, { error: 'no such file' });
+      if (b.used) it = media.markUsed(id, b.used) || it;
+      if (b.used || b.fav === true) learnFromMedia(id, 1);
+      return json(res, 200, it);
+    }
+    if (mm && req.method === 'DELETE') { const usos = contenido.usos(decodeURIComponent(mm[1])); if (usos.length) return json(res, 409, { error: `Este archivo está en ${usos.length === 1 ? 'una pieza' : usos.length + ' piezas'} de Contenido (${usos.slice(0, 3).map(u => '«' + (u.titulo || u.id) + '»').join(', ')}): quítalo de ahí primero`, piezas: usos }); const id = decodeURIComponent(mm[1]), was = media.item(id); if (was && !media.wasUsed(was)) learnFromMedia(id, 0); /* V4.9: thrown away unused → r = 0 (read before it leaves) */ const t = media.trash(id); return t ? json(res, 200, { ok: true, undo: t }) : json(res, 404, { error: 'no such file' }); }
     if (url.pathname === '/api/sub' && req.method === 'GET') return json(res, 200, { ...sub.load(DATA), name: DEPUTY });
     if (url.pathname === '/api/sub/chat' && req.method === 'POST') {
       const { text } = await body(req);
