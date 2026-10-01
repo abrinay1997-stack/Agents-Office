@@ -13,10 +13,10 @@ import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested ari
 import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
 const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
-  voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
+  voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales', style: 'Estilo de la música', promptExpansion: 'Que el motor amplíe el prompt' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
 const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
   epic: 'Épico', drama: 'Drama', noir: 'Noir', comedy: 'Comedia', horror: 'Terror', action: 'Acción', calm: 'Calmado', dynamic: 'Dinámico', chaotic: 'Caótico', 'single-shot': 'Un solo plano', static: 'Fija', dolly_in: 'Acercarse', dolly_out: 'Alejarse', dolly_left: 'A la izquierda', dolly_right: 'A la derecha', jib_up: 'Subir', jib_down: 'Bajar', focus_shift: 'Cambio de foco',
-  happy: 'Alegre', sad: 'Triste', angry: 'Enfadada', fearful: 'Con miedo', disgusted: 'Con asco', surprised: 'Sorprendida', neutral: 'Neutra', fluent: 'Fluida', whisper: 'Susurro', mp3: 'MP3', wav: 'WAV', flac: 'FLAC', pcm: 'PCM', Spanish: 'Español', English: 'Inglés', Portuguese: 'Portugués' }; // V5.0
+  happy: 'Alegre', sad: 'Triste', angry: 'Enfadada', fearful: 'Con miedo', disgusted: 'Con asco', surprised: 'Sorprendida', neutral: 'Neutra', fluent: 'Fluida', whisper: 'Susurro', mp3: 'MP3', wav: 'WAV', flac: 'FLAC', pcm: 'PCM', Spanish: 'Español', English: 'Inglés', Portuguese: 'Portugués', French: 'Francés', Italian: 'Italiano', German: 'Alemán' }; // V5.0
 const RATIO_USE = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Reel · Story', '16:9': 'Web · YouTube', '3:4': 'Vertical', '4:3': 'Horizontal', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' };
 const RATIO_WORD = { '1:1': 'Cuadrado', '4:5': 'Feed', '9:16': 'Vertical', '16:9': 'Horizontal', '3:4': 'Retrato', '4:3': 'Clásico', '2:3': 'Póster', '3:2': 'Foto', '21:9': 'Cine', auto: 'Auto' }; // V4.2 (audit A15): one word that fits; the use goes in the title
 // V4.2 (audit A5): the engine beside the model only when it adds something («Kling 3 · Higgsfield», not «Prueba (gratis) · Prueba (gratis)»)
@@ -300,7 +300,7 @@ export function initStudio(ctx) {
     const sum = sound() ? [s.voiceId ? SV.voiceName(s.voiceId, voices) : '', s.instrumental ? 'instrumental' : '', s.format ? String(s.format).toUpperCase() : ''].filter(Boolean) : [s.aspectRatio && s.aspectRatio !== 'auto' ? `${s.aspectRatio}${RATIO_WORD[s.aspectRatio] ? ' ' + RATIO_WORD[s.aspectRatio] : ''}` : s.aspectRatio ? 'formato auto' : '', m.settings.duration ? `${secs} s` : '', s.resolution ? String(s.resolution) : ''].filter(Boolean);
     $('.st-sum').innerHTML = sum.length ? `${sum.map(esc).join(' · ')} <u>cambiar</u>` : ''; $('.st-sum').hidden = !sum.length;
     $('.st-go').textContent = SV.goLabel(kind, total);
-    const len = $('.st-prompt').value.length, lim = limitNow(), pl = $('.st-plen'); // V4.2 (audit A11) · V5.0: the model's own limit (a voice reads up to 10 000)
+    const len = $('.st-prompt').value.length, lim = limitNow(), pl = $('.st-plen'); // V4.2 (audit A11) · V5.0: the model's own limit (a voice reads up to 9 999)
     pl.textContent = len || sound() ? `${len.toLocaleString('es')}/${lim.toLocaleString('es')}` : ''; pl.classList.toggle('near', len > lim * 0.875 && len <= lim); pl.classList.toggle('over', len > lim);
     pl.title = len > lim ? `Sobran ${len - lim} caracteres` : sound() ? `Caben ${lim.toLocaleString('es')} caracteres` : '';
     const bc = $('.st-bcount'); bc.hidden = mode !== 'batch'; if (mode === 'batch') { const nl = lines().length; bc.textContent = nl ? `${nl} ${nl === 1 ? 'idea' : 'ideas'} × ${qty} = ${SV.countOf(kind, nl * qty * per)}` : 'Escribe una idea por línea.'; }
@@ -569,7 +569,7 @@ export function initStudio(ctx) {
   /* ---------- V5.0 (30 Sep 2026, the owner: «toda la plataforma MiniMax»): the Voces panel — the owner's voices: design one from a
      description and hear its sample, clone one from an audio, copy its id, use it, delete it (asked in its own row). Without the key it
      says how to switch MiniMax on and offers nothing that would fail. Routes: /api/voces (GET), /design, /clone, DELETE /<id>. ---------- */
-  let vocFrom = null, vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
+  let vocFrom = null, vocFromSel = '', vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
   const vocApi = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, j }; };
   const ID_RULE = '8 a 256 caracteres: empieza por letra; solo letras, números, - y _ (sin tildes ni espacios).';
   function vocOffHTML(off) {
@@ -630,7 +630,7 @@ export function initStudio(ctx) {
   }
   async function openVoices() {
     const V = $('.st-vocov'); if (!V.hidden) return;
-    vocFrom = document.activeElement; vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
+    vocFrom = document.activeElement; vocFromSel = !vocFrom || !vocFrom.closest ? '' : vocFrom.closest('.st-vopen') ? '.st-vopen' : vocFrom.closest('.st-vocbtn') ? '.st-vocbtn' : ''; vocState = { off: null, del: null, design: null, busy: false, idTouched: false, cloneFile: null };
     if (!isLive() || !location.protocol.startsWith('http')) vocState.off = { why: 'Las voces necesitan la oficina real (ábrela con el iniciador) y MiniMax activado.' };
     else if (!mmxOn()) vocState.off = { how: (engines.find(e => e.id === 'minimax') || {}).how };
     V.hidden = false; modal.open(V); drawVoices(); V.querySelector('.st-hx').focus();
@@ -646,7 +646,11 @@ export function initStudio(ctx) {
   function closeVoices(keepFocus) {
     const V = $('.st-vocov'); if (V.hidden) return;
     V.querySelectorAll('audio').forEach(a => a.pause()); V.hidden = true; V.innerHTML = ''; modal.close(V);
-    if (!keepFocus && vocFrom && document.contains(vocFrom)) vocFrom.focus({ preventScroll: true }); vocFrom = null;
+    if (!keepFocus) { // renderModel() repaints step 5 while the panel is open, so the «Voces» button that opened it may be a new node by now
+      const back = vocFrom && document.contains(vocFrom) ? vocFrom : vocFromSel ? $(vocFromSel) : null;
+      if (back) back.focus({ preventScroll: true });
+    }
+    vocFrom = null; vocFromSel = '';
   }
   function voicesEscape() { if (vocState.del) { const id = vocState.del; vocState.del = null; paintVList(); vq(`[data-vid="${CSS.escape(id)}"] [data-vo="del"]`)?.focus(); return; } closeVoices(); }
   function addVoice(v) { voices.mine = [v, ...voices.mine.filter(x => x.voiceId !== v.voiceId)]; paintVList(); vcheck(); if (kind === 'audio') renderModel(); }
@@ -941,13 +945,13 @@ export function initStudio(ctx) {
     } catch (e) { say('No se pudo descargar: ' + e.message, true); }
   }
   async function uploadFiles(files, role) {
-    let ok = 0; const done = [];
+    let ok = 0, placed = 0; const done = [];
     for (const file of files) {
       const vid = /^video\//.test(file.type), aud = /^audio\//.test(file.type) || /\.(mp3|wav|m4a)$/i.test(file.name); // V5.0: an audio too (to clone a voice, to transcribe), up to 20 MB
       if (!aud && !/^(image\/(png|jpeg|webp)|video\/(mp4|webm))$/.test(file.type)) { say(`«${file.name}»: solo PNG, JPG, WEBP, MP4, WEBM, MP3, WAV o M4A.`, true); continue; }
       if (aud && SV.checkCloneFile(file)) { say(`«${file.name}»: ${SV.checkCloneFile(file)}`, true); continue; }
       const cap = aud ? 20 : vid ? 25 : 12; if (file.size > cap * 1024 * 1024) { say(`«${file.name}» pasa de ${cap} MB.`, true); continue; }
-      if (aud) role = null; // an audio is never a frame or a reference
+      const slot = aud ? null : role; // an audio is never a frame or a reference — this file only: an image dropped with it still goes in
       say(`Subiendo «${file.name}»…`);
       try {
         const data = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(new Error('no pude leerlo')); fr.readAsDataURL(file); });
@@ -958,10 +962,10 @@ export function initStudio(ctx) {
           x.onerror = () => rej(new Error('sin conexión con la oficina')); x.send(JSON.stringify({ name: file.name, data, ...(folders.some(f => f.id === folderF) ? { folder: folderF } : {}) }));
         });
         items.unshift(r.item); ok++; done.push(r.item);
-        if (role) addMedia(role, r.item.file);
+        if (slot) { addMedia(slot, r.item.file); placed++; }
       } catch (e) { say(`«${file.name}»: ${e.message}`, true); }
     }
-    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${role ? ` y puesta en «${roleName(role)}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); }
+    if (ok) { say(`${ok === 1 ? 'Subida' : ok + ' subidas'}${placed ? ` y ${placed === ok ? (ok === 1 ? 'puesta' : 'puestas') : placed === 1 ? '1 puesta' : placed + ' puestas'} en «${roleName(role)}»` : ''}. Están en la pestaña Subidas.`); renderGrid(); }
     return done;
   }
 

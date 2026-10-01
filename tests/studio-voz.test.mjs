@@ -22,7 +22,7 @@ test('cada tipo tiene su botón, su paso 3 y su GENERAR', () => {
 test('el límite del texto: el del modelo si lo dice; si no, el de MiniMax', () => {
   assert.equal(V.textLimit({ maxChars: 5000 }, 'audio'), 5000);
   assert.equal(V.textLimit({ limits: { text: 1200 } }, 'music', false), 1200);
-  assert.equal(V.textLimit({}, 'audio'), 10000);
+  assert.equal(V.textLimit({}, 'audio'), 9999);
   assert.equal(V.textLimit(null, 'music', false), 3500);
   assert.equal(V.textLimit(null, 'music', true), 2000);
   assert.equal(V.textLimit(null, 'image'), 4000);
@@ -42,6 +42,22 @@ test('la cantidad máxima y el precio por unidad', () => {
   assert.equal(V.unitCost({ cost: 0.1, per: 'kchar' }, {}, 2000), 0.2);
   assert.equal(V.unitCost({ cost: 0.05, per: 's' }, { duration: 6 }), 0.30000000000000004);
   assert.equal(V.unitCost({ cost: 0.02 }, {}, 9999), 0.02);
+});
+
+test('una voz con la forma exacta del catálogo del motor (media.mjs mmxVoice): se cobra por carácter, hasta 9.999', () => {
+  const hd = { id: 'mmx-voz-2.8-hd', kind: 'audio', per: 'item', cost: 0.1, perChar: 1e-4, maxPrompt: 9999 };
+  const turbo = { id: 'mmx-voz-2.8-turbo', kind: 'audio', per: 'item', cost: 0.06, perChar: 6e-5, maxPrompt: 9999 };
+  assert.equal(V.priceText(hd), '~US$0.100/1000 car.'); // no «~US$0.10/audio»
+  assert.equal(V.priceText(turbo), '~US$0.060/1000 car.');
+  assert.equal(V.textLimit(hd, 'audio'), 9999);
+  assert.equal(V.unitCost(hd, {}, 9999), 0.9999); // the long text costs ~US$1, not US$0.10
+  assert.equal(V.unitCost(hd, {}, 500), 0.05);
+  assert.equal(V.unitCost(hd, {}, 3), 0.001); // never under US$0.001, as media.mjs estimates it
+  assert.ok(V.unitCost(hd, {}, 9999) * 8 >= 0.5, 'ocho audios largos pasan del aviso de costo de US$0,50');
+  const music = { kind: 'music', per: 'item', cost: 0.15, maxPrompt: 3500 };
+  assert.equal(V.textLimit(music, 'music', false), 3500);
+  assert.equal(V.textLimit(music, 'music', true), 2000);
+  assert.equal(V.priceText({ kind: 'music', cost: 0 }), 'gratis');
 });
 
 test('el id de una voz clonada: 8–256, empieza por letra, letras/números/-/_, no termina en - ni _', () => {

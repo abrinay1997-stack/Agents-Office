@@ -29,20 +29,23 @@ export function promptStep(k, instrumental) {
 /** The section tags of a song's lyrics, in the order they usually go. */
 export const LYRIC_TAGS = ['[Intro]', '[Verse]', '[Pre-Chorus]', '[Chorus]', '[Bridge]', '[Outro]'];
 
-/** How many characters the field takes: the model's own limit when it says one, else MiniMax's (a voice 10 000; music: lyrics 3 500, a description 2 000), else 4 000. */
+/** How many characters the field takes: the model's own limit when it says one (the engine publishes maxPrompt: a voice 9 999),
+ *  else MiniMax's (a voice 9 999; music: lyrics 3 500, a description 2 000), else 4 000. An instrumental's description never passes 2 000. */
 export function textLimit(m, k, instrumental) {
-  const own = m && (Number(m.maxChars) || Number(m.limits && m.limits.text));
-  if (own > 0) return own;
-  if (k === 'audio') return 10000;
+  const own = m && (Number(m.maxChars) || Number(m.limits && m.limits.text) || Number(m.maxPrompt));
+  if (own > 0) return k === 'music' && instrumental ? Math.min(own, 2000) : own;
+  if (k === 'audio') return 9999;
   if (k === 'music') return instrumental ? 2000 : 3500;
   return 4000;
 }
 /** The quantity's top: a video and a song are heavy (4); a voice, like an image, up to the office's maxPerRequest. */
 export const maxQty = (k, maxPerRequest) => (k === 'video' || k === 'music' ? 4 : maxPerRequest || 8);
 
-/** The price of one unit, in words. `per`: 's' (a second of video), 'char' or 'kchar' (characters read), anything else = one item. */
+/** The price of one unit, in words. `perChar` (what the engine publishes for a voice: US$ per character read) wins; then
+ *  `per`: 's' (a second of video), 'char' or 'kchar' (characters read), anything else = one item. */
 export function priceText(m) {
-  if (!m || !m.cost) return 'gratis';
+  if (!m || !(m.cost || m.perChar)) return 'gratis';
+  if (Number(m.perChar) > 0) return `~US$${(m.perChar * 1000).toFixed(3)}/1000 car.`;
   const c = m.cost;
   if (m.per === 's') return `~US$${c.toFixed(2)}/s`;
   if (m.per === 'char') return `~US$${(c * 1000).toFixed(3)}/1000 car.`;
@@ -50,9 +53,11 @@ export function priceText(m) {
   const unit = m.kind === 'video' ? 'video' : m.kind === 'audio' ? 'audio' : m.kind === 'music' ? 'pista' : 'imagen';
   return `~US$${c < 0.01 ? c.toFixed(3) : c.toFixed(2)}/${unit}`;
 }
-/** What one request costs: per second of video, per character read, or per item. */
+/** What one request costs: per character read (perChar, as media.mjs estimates it: never under US$0.001), per second of video, or per item. */
 export function unitCost(m, s = {}, textLen = 0) {
-  if (!m || !m.cost) return 0;
+  if (!m) return 0;
+  if (Number(m.perChar) > 0) return Math.max(0.001, +(m.perChar * Math.max(1, textLen)).toFixed(4));
+  if (!m.cost) return 0;
   if (m.per === 's') return m.cost * (m.seconds || Number(s.duration) || 5);
   if (m.per === 'char') return m.cost * Math.max(1, textLen);
   if (m.per === 'kchar') return m.cost * Math.max(1, textLen) / 1000;
