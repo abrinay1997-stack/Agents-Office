@@ -3,7 +3,7 @@
  "presets": [
   {
    "id": "pla-detalle",
-   "v": 1,
+   "v": 2,
    "nombre": "De muy cerca",
    "tecnico": "Plano detalle",
    "icono": {
@@ -82,17 +82,20 @@
     "detalle",
     "macro",
     "muy cerca",
-    "textura"
+    "textura",
+    "plano detalle",
+    "acercar textura",
+    "close up extremo"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, extreme close-up, macro lens, shallow depth of field, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. extreme close-up, macro lens, shallow depth of field, {p.angulo}. {look}.",
-    "seedance": "extreme close-up, macro lens, shallow depth of field, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. {look}. extreme close-up, macro lens, shallow depth of field, {p.angulo}.",
-    "video-generico": "{camara}. extreme close-up, macro lens, shallow depth of field, {p.angulo}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "{camara}, extreme close-up, macro lens, shallow depth of field, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. extreme close-up, macro lens, shallow depth of field, {p.angulo}. {look}. {sonido}.",
+    "seedance": "extreme close-up, macro lens, shallow depth of field, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. extreme close-up, macro lens, shallow depth of field, {p.angulo}.",
+    "video-generico": "{camara}. extreme close-up, macro lens, shallow depth of field, {p.angulo}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
    }
   },
   {
@@ -283,7 +286,7 @@
   },
   {
    "id": "pla-general",
-   "v": 1,
+   "v": 2,
    "nombre": "Toda la habitación",
    "tecnico": "Plano general",
    "icono": {
@@ -362,17 +365,20 @@
     "general",
     "lejos",
     "abierto",
-    "wide"
+    "wide",
+    "plano general",
+    "toda la escena",
+    "plano abierto"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, wide establishing shot, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. wide establishing shot, {p.angulo}. {look}.",
-    "seedance": "wide establishing shot, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. {look}. wide establishing shot, {p.angulo}.",
-    "video-generico": "{camara}. wide establishing shot, {p.angulo}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "{camara}, wide establishing shot, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. wide establishing shot, {p.angulo}. {look}. {sonido}.",
+    "seedance": "wide establishing shot, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. wide establishing shot, {p.angulo}.",
+    "video-generico": "{camara}. wide establishing shot, {p.angulo}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
    }
   }
  ]

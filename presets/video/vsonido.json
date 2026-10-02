@@ -3,7 +3,7 @@
  "presets": [
   {
    "id": "vs-ambiente",
-   "v": 1,
+   "v": 2,
    "nombre": "Con sonido ambiente",
    "icono": {
     "id": "onda",
@@ -47,7 +47,8 @@
      "tipo": "texto",
      "es": "Ambiente",
      "max": 140,
-     "def": "quiet room tone, distant birds"
+     "def": "quiet room tone, distant birds",
+     "ranura": "ambiente"
     }
    ],
    "ia": "{p.sfx}",
@@ -57,12 +58,12 @@
    },
    "requiere": {},
    "prefer": [
-    "kling-3-std",
     "veo-3.1-fast",
     "seedance-2",
-    "kling-3-pro",
-    "mmx-h3",
-    "kling-2.5-fal"
+    "kling-3-std",
+    "seedance-2.5",
+    "wan-3",
+    "veo-3.1"
    ],
    "post": [],
    "qa": [],
@@ -71,22 +72,25 @@
     "audio",
     "ambiente",
     "efectos",
-    "sfx"
+    "sfx",
+    "con audio",
+    "efectos de sonido",
+    "ruido ambiente"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {p.sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. {look}. {p.sfx}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}. {p.sfx}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. {look}. {p.sfx}.",
-    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. {look}. {p.sfx}."
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {p.sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}. {p.sfx}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. {p.sfx}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. {p.sfx}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}. {p.sfx}."
    }
   },
   {
    "id": "vs-mudo",
-   "v": 1,
+   "v": 2,
    "nombre": "Sin sonido",
    "icono": {
     "id": "onda-x",
@@ -135,7 +139,9 @@
    "buscar": [
     "mudo",
     "sin sonido",
-    "silencio"
+    "silencio",
+    "sin audio",
+    "muted"
    ],
    "estrella": false,
    "fase": 5,

@@ -3,7 +3,7 @@
  "presets": [
   {
    "id": "ved-copiar-movimiento",
-   "v": 1,
+   "v": 2,
    "nombre": "Copiar el movimiento de un video",
    "icono": {
     "id": "pose",
@@ -51,8 +51,8 @@
    "prefer": [
     "kling-3-motion",
     "kling-3-motion-pro",
-    "genjutsu-motion",
-    "kling-2.6-motion"
+    "kling-2.6-motion",
+    "kling-2.6-motion-pro"
    ],
    "post": [],
    "qa": [],
@@ -67,12 +67,13 @@
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} transfer the motion of the guide video to the subject in the image. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} transfer the motion of the guide video to the subject in the image. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} transfer the motion of the guide video to the subject in the image. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} transfer the motion of the guide video to the subject in the image. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} transfer the motion of the guide video to the subject in the image. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} transfer the motion of the guide video to the subject in the image. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} transfer the motion of the guide video to the subject in the image. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} transfer the motion of the guide video to the subject in the image. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} transfer the motion of the guide video to the subject in the image. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} transfer the motion of the guide video to the subject in the image. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Motion control"
   },
   {
    "id": "ved-cambiar-fondo",

@@ -3,7 +3,7 @@
  "presets": [
   {
    "id": "cam-fija",
-   "v": 1,
+   "v": 2,
    "nombre": "Cámara quieta",
    "icono": {
     "id": "tripode",
@@ -34,31 +34,7 @@
      "es": "Foto de partida (opcional)"
     }
    ],
-   "parametros": [
-    {
-     "id": "intensidad",
-     "tipo": "intensidad",
-     "es": "Intensidad",
-     "valores": [
-      {
-       "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
-      },
-      {
-       "v": "normal",
-       "es": "Normal",
-       "en": ""
-      },
-      {
-       "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
-      }
-     ],
-     "def": "normal"
-    }
-   ],
+   "parametros": [],
    "ia": "static locked-off camera",
    "ranura": "camara",
    "requiere": {},
@@ -77,22 +53,32 @@
     "quieta",
     "tripode",
     "sin movimiento",
-    "static"
+    "static",
+    "camara fija",
+    "plano fijo",
+    "sin mover la camara"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "static locked-off camera, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: static locked-off camera. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. static locked-off camera. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. static locked-off camera. {look}.",
-    "video-generico": "static locked-off camera. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "static locked-off camera, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: static locked-off camera. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. static locked-off camera. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. static locked-off camera. {look}. {sonido}.",
+    "video-generico": "static locked-off camera. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Plano fijo",
+   "ajustesModelo": {
+    "cameraMovement": [
+     "static-shot",
+     "static"
+    ]
    }
   },
   {
    "id": "cam-acercar",
-   "v": 1,
+   "v": 2,
    "nombre": "La cámara se acerca",
    "tecnico": "Push in",
    "icono": {
@@ -132,18 +118,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -167,22 +150,39 @@
     "acercarse",
     "zoom",
     "push",
-    "avanzar"
+    "avanzar",
+    "zoom lento",
+    "zoom in",
+    "acercamiento",
+    "push in",
+    "que se acerque",
+    "dolly in"
    ],
    "estrella": true,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "slow push in toward the subject, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: slow push in toward the subject. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. slow push in toward the subject. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. slow push in toward the subject. {look}.",
-    "video-generico": "slow push in toward the subject. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "slow push in toward the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow push in toward the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow push in toward the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow push in toward the subject. {look}. {sonido}.",
+    "video-generico": "slow push in toward the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "dolly-in",
+     "slow-zoom-in"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow, subtle push in toward the subject",
+    "normal": "slow push in toward the subject",
+    "fuerte": "fast, dramatic push in toward the subject"
    }
   },
   {
    "id": "cam-alejar",
-   "v": 1,
+   "v": 2,
    "nombre": "La cámara se aleja",
    "tecnico": "Pull out",
    "icono": {
@@ -222,18 +222,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -256,22 +253,37 @@
     "alejar",
     "revelar",
     "pull",
-    "retroceder"
+    "retroceder",
+    "zoom out",
+    "alejamiento",
+    "que se aleje",
+    "dolly out"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "slow pull back revealing the surroundings, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: slow pull back revealing the surroundings. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. slow pull back revealing the surroundings. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. slow pull back revealing the surroundings. {look}.",
-    "video-generico": "slow pull back revealing the surroundings. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "slow pull back revealing the surroundings, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow pull back revealing the surroundings. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow pull back revealing the surroundings. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow pull back revealing the surroundings. {look}. {sonido}.",
+    "video-generico": "slow pull back revealing the surroundings. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "dolly-out",
+     "slow-zoom-out"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow, subtle pull back revealing the surroundings",
+    "normal": "slow pull back revealing the surroundings",
+    "fuerte": "fast pull back revealing the whole scene"
    }
   },
   {
    "id": "cam-arco",
-   "v": 1,
+   "v": 2,
    "nombre": "Media vuelta alrededor",
    "tecnico": "Arco",
    "icono": {
@@ -311,18 +323,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -344,22 +353,35 @@
    "buscar": [
     "arco",
     "rodear",
-    "media vuelta"
+    "media vuelta",
+    "semicirculo",
+    "arc shot",
+    "girar un poco"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "smooth 90-degree arc around the subject, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: smooth 90-degree arc around the subject. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. smooth 90-degree arc around the subject. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. smooth 90-degree arc around the subject. {look}.",
-    "video-generico": "smooth 90-degree arc around the subject. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "smooth 90-degree arc around the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: smooth 90-degree arc around the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. smooth 90-degree arc around the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. smooth 90-degree arc around the subject. {look}. {sonido}.",
+    "video-generico": "smooth 90-degree arc around the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "arc-right"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle 45-degree arc around the subject",
+    "normal": "smooth 90-degree arc around the subject",
+    "fuerte": "fast 180-degree arc around the subject"
    }
   },
   {
    "id": "cam-orbita",
-   "v": 1,
+   "v": 2,
    "nombre": "Vuelta completa alrededor",
    "tecnico": "Órbita 360",
    "icono": {
@@ -399,18 +421,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -434,22 +453,31 @@
     "360",
     "vuelta",
     "que de vueltas",
-    "alrededor"
+    "alrededor",
+    "girar alrededor",
+    "dar la vuelta",
+    "orbitar",
+    "camara alrededor"
    ],
    "estrella": true,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "full 360-degree orbit around the subject, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: full 360-degree orbit around the subject. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. full 360-degree orbit around the subject. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. full 360-degree orbit around the subject. {look}.",
-    "video-generico": "full 360-degree orbit around the subject. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "full 360-degree orbit around the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: full 360-degree orbit around the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. full 360-degree orbit around the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. full 360-degree orbit around the subject. {look}. {sonido}.",
+    "video-generico": "full 360-degree orbit around the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "iaPorIntensidad": {
+    "suave": "slow, steady full 360-degree orbit around the subject",
+    "normal": "full 360-degree orbit around the subject",
+    "fuerte": "fast full 360-degree orbit around the subject"
    }
   },
   {
    "id": "cam-lateral",
-   "v": 1,
+   "v": 2,
    "nombre": "La cámara se desliza de lado",
    "tecnico": "Travelling",
    "icono": {
@@ -507,18 +535,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -542,22 +567,37 @@
     "travelling",
     "deslizar",
     "dolly",
-    "truck"
+    "truck",
+    "slider",
+    "tracking",
+    "de costado"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "lateral dolly move to the {p.lado}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: lateral dolly move to the {p.lado}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. lateral dolly move to the {p.lado}. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. lateral dolly move to the {p.lado}. {look}.",
-    "video-generico": "lateral dolly move to the {p.lado}. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "lateral dolly move to the {p.lado}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: lateral dolly move to the {p.lado}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. lateral dolly move to the {p.lado}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. lateral dolly move to the {p.lado}. {look}. {sonido}.",
+    "video-generico": "lateral dolly move to the {p.lado}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "truck-{p.lado}",
+     "slider-{p.lado}",
+     "dolly-{p.lado}"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle lateral dolly move to the {p.lado}",
+    "normal": "lateral dolly move to the {p.lado}",
+    "fuerte": "fast lateral tracking move to the {p.lado}"
    }
   },
   {
    "id": "cam-paneo",
-   "v": 1,
+   "v": 2,
    "nombre": "Gira la mirada de lado",
    "tecnico": "Paneo",
    "icono": {
@@ -615,18 +655,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -649,22 +686,34 @@
     "paneo",
     "pan",
     "girar camara",
-    "barrer"
+    "barrer",
+    "panoramica",
+    "girar la camara"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "slow pan {p.lado}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: slow pan {p.lado}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. slow pan {p.lado}. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. slow pan {p.lado}. {look}.",
-    "video-generico": "slow pan {p.lado}. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "slow pan {p.lado}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow pan {p.lado}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow pan {p.lado}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow pan {p.lado}. {look}. {sonido}.",
+    "video-generico": "slow pan {p.lado}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "pan-{p.lado}"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow pan {p.lado}",
+    "normal": "slow pan {p.lado}",
+    "fuerte": "fast pan {p.lado}"
    }
   },
   {
    "id": "cam-inclinar",
-   "v": 1,
+   "v": 2,
    "nombre": "Mira hacia arriba o abajo",
    "tecnico": "Tilt",
    "icono": {
@@ -722,24 +771,21 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
     }
    ],
-   "ia": "tilt {p.dir}",
+   "ia": "slow tilt {p.dir}",
    "ranura": "camara",
    "requiere": {},
    "prefer": [
@@ -756,22 +802,35 @@
     "inclinar",
     "tilt",
     "arriba",
-    "abajo"
+    "abajo",
+    "mirar arriba",
+    "mirar abajo",
+    "de abajo arriba"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "tilt {p.dir}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: tilt {p.dir}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. tilt {p.dir}. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. tilt {p.dir}. {look}.",
-    "video-generico": "tilt {p.dir}. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "slow tilt {p.dir}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow tilt {p.dir}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow tilt {p.dir}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow tilt {p.dir}. {look}. {sonido}.",
+    "video-generico": "slow tilt {p.dir}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "tilt-{p.dir}"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow tilt {p.dir}",
+    "normal": "slow tilt {p.dir}",
+    "fuerte": "fast tilt {p.dir}"
    }
   },
   {
    "id": "cam-sube",
-   "v": 1,
+   "v": 2,
    "nombre": "La cámara sube",
    "tecnico": "Grúa",
    "icono": {
@@ -811,18 +870,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -845,22 +901,37 @@
     "subir",
     "grua",
     "elevar",
-    "crane"
+    "crane",
+    "que suba",
+    "desde arriba",
+    "jib"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "crane up rising above the scene, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: crane up rising above the scene. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. crane up rising above the scene. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. crane up rising above the scene. {look}.",
-    "video-generico": "crane up rising above the scene. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "crane up rising above the scene, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: crane up rising above the scene. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. crane up rising above the scene. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. crane up rising above the scene. {look}. {sonido}.",
+    "video-generico": "crane up rising above the scene. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "crane-up",
+     "jib-up",
+     "pedestal-up"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle crane up rising above the scene",
+    "normal": "crane up rising above the scene",
+    "fuerte": "high crane up soaring above the scene"
    }
   },
   {
    "id": "cam-baja",
-   "v": 1,
+   "v": 2,
    "nombre": "La cámara baja",
    "tecnico": "Grúa abajo",
    "icono": {
@@ -900,18 +971,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -933,22 +1001,37 @@
    "buscar": [
     "bajar",
     "descender",
-    "grua"
+    "grua",
+    "que baje",
+    "crane down",
+    "jib"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "crane down to the subject, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: crane down to the subject. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. crane down to the subject. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. crane down to the subject. {look}.",
-    "video-generico": "crane down to the subject. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "crane down to the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: crane down to the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. crane down to the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. crane down to the subject. {look}. {sonido}.",
+    "video-generico": "crane down to the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "crane-down",
+     "jib-down",
+     "pedestal-down"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle crane down to the subject",
+    "normal": "crane down to the subject",
+    "fuerte": "fast crane down to the subject"
    }
   },
   {
    "id": "cam-dron",
-   "v": 1,
+   "v": 2,
    "nombre": "Vista de dron",
    "icono": {
     "id": "dron",
@@ -987,18 +1070,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -1021,22 +1101,37 @@
     "dron",
     "aereo",
     "drone",
-    "desde el cielo"
+    "desde el cielo",
+    "vista aerea",
+    "desde arriba",
+    "aerial"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "aerial drone pullback, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: aerial drone pullback. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. aerial drone pullback. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. aerial drone pullback. {look}.",
-    "video-generico": "aerial drone pullback. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "aerial drone pullback, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: aerial drone pullback. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. aerial drone pullback. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. aerial drone pullback. {look}. {sonido}.",
+    "video-generico": "aerial drone pullback. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Toma aérea",
+   "ajustesModelo": {
+    "cameraMovement": [
+     "aerial-pullback",
+     "helicopter-shot"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "slow aerial drone glide",
+    "normal": "aerial drone pullback",
+    "fuerte": "fast sweeping aerial drone pullback"
    }
   },
   {
    "id": "cam-vertigo",
-   "v": 1,
+   "v": 2,
    "nombre": "Efecto vértigo",
    "tecnico": "Dolly zoom",
    "icono": {
@@ -1076,18 +1171,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -1109,22 +1201,33 @@
    "buscar": [
     "vertigo",
     "dolly zoom",
-    "efecto"
+    "efecto",
+    "hitchcock"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "dolly zoom, the background stretches while the subject stays the same size, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: dolly zoom, the background stretches while the subject stays the same size. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. dolly zoom, the background stretches while the subject stays the same size. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. dolly zoom, the background stretches while the subject stays the same size. {look}.",
-    "video-generico": "dolly zoom, the background stretches while the subject stays the same size. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "dolly zoom, the background stretches while the subject stays the same size, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: dolly zoom, the background stretches while the subject stays the same size. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. dolly zoom, the background stretches while the subject stays the same size. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. dolly zoom, the background stretches while the subject stays the same size. {look}. {sonido}.",
+    "video-generico": "dolly zoom, the background stretches while the subject stays the same size. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "dolly-zoom"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "subtle dolly zoom, the background stretches slightly while the subject stays the same size",
+    "normal": "dolly zoom, the background stretches while the subject stays the same size",
+    "fuerte": "intense dolly zoom, the background stretches dramatically while the subject stays the same size"
    }
   },
   {
    "id": "cam-zoom-golpe",
-   "v": 1,
+   "v": 2,
    "nombre": "Zoom de golpe",
    "tecnico": "Crash zoom",
    "icono": {
@@ -1164,18 +1267,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -1198,22 +1298,35 @@
     "zoom rapido",
     "golpe",
     "crash",
-    "impacto"
+    "impacto",
+    "zoom de golpe",
+    "zoom brusco",
+    "crash zoom"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "fast crash zoom in, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: fast crash zoom in. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. fast crash zoom in. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. fast crash zoom in. {look}.",
-    "video-generico": "fast crash zoom in. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "fast crash zoom in, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: fast crash zoom in. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. fast crash zoom in. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. fast crash zoom in. {look}. {sonido}.",
+    "video-generico": "fast crash zoom in. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "crush-zoom"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "quick zoom in",
+    "normal": "fast crash zoom in",
+    "fuerte": "violent crash zoom in"
    }
   },
   {
    "id": "cam-barrido",
-   "v": 1,
+   "v": 2,
    "nombre": "Barrido rápido",
    "tecnico": "Whip pan",
    "icono": {
@@ -1253,18 +1366,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -1287,22 +1397,34 @@
     "barrido",
     "transicion",
     "whip",
-    "rapido"
+    "rapido",
+    "whip pan",
+    "barrido rapido"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "quick whip pan transition, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: quick whip pan transition. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. quick whip pan transition. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. quick whip pan transition. {look}.",
-    "video-generico": "quick whip pan transition. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "quick whip pan transition, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: quick whip pan transition. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. quick whip pan transition. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. quick whip pan transition. {look}. {sonido}.",
+    "video-generico": "quick whip pan transition. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "whip-pan"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "quick pan transition",
+    "normal": "quick whip pan transition",
+    "fuerte": "very fast whip pan transition with motion blur"
    }
   },
   {
    "id": "cam-mano",
-   "v": 1,
+   "v": 2,
    "nombre": "Cámara en mano",
    "icono": {
     "id": "mano",
@@ -1341,18 +1463,15 @@
      "valores": [
       {
        "v": "suave",
-       "es": "Suave",
-       "en": "subtly"
+       "es": "Suave"
       },
       {
        "v": "normal",
-       "es": "Normal",
-       "en": ""
+       "es": "Normal"
       },
       {
        "v": "fuerte",
-       "es": "Fuerte",
-       "en": "strongly"
+       "es": "Fuerte"
       }
      ],
      "def": "normal"
@@ -1376,17 +1495,31 @@
     "celular",
     "natural",
     "handheld",
-    "ugc"
+    "ugc",
+    "camara en mano",
+    "movil",
+    "tembloroso"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "subtle handheld camera, natural sway, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: subtle handheld camera, natural sway. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. subtle handheld camera, natural sway. {look}.",
-    "minimax-video": "{sujeto} {accion}. {escena}. subtle handheld camera, natural sway. {look}.",
-    "video-generico": "subtle handheld camera, natural sway. {plano}. {sujeto} {accion}. {escena}. {look}."
+    "veo": "subtle handheld camera, natural sway, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: subtle handheld camera, natural sway. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. subtle handheld camera, natural sway. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. subtle handheld camera, natural sway. {look}. {sonido}.",
+    "video-generico": "subtle handheld camera, natural sway. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Handheld",
+   "ajustesModelo": {
+    "cameraMovement": [
+     "handheld"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very subtle handheld camera, almost steady",
+    "normal": "subtle handheld camera, natural sway",
+    "fuerte": "handheld camera with natural shake, documentary feel"
    }
   }
  ]

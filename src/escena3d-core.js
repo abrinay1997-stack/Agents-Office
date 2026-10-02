@@ -300,8 +300,13 @@ const FORMA = {
 /** Qué forma de frase usa una familia de modelo (§5.8): párrafo (Gemini, GPT), corta (Flux, Seedream) o video. */
 export const formaDe = familia => FORMA[familia] || 'parrafo';
 
+/** ¿Mueve la cámara este movimiento? «static camera», «locked-off» o nada = no (el cuadro se queda como el escenario). */
+export const camaraSeMueve = mov => typeof mov === 'string' && !!mov.trim() && !/\b(static|locked[- ]?off|camera locked|fixed camera)\b/i.test(mov);
+
 /** La escena en palabras para el motor (en inglés, `en`) y su traducción para el dueño (`es`), por familia de modelo.
- *  opts.movimiento: el movimiento de cámara del preset de video (en inglés; se añade a la forma video).
+ *  opts.movimiento: el movimiento de cámara del preset de video (en inglés; se añade a la forma video). Si la cámara se
+ *  mueve, la distancia y la ocupación son las del PRIMER fotograma («at the start of the shot»): el escenario fija dónde
+ *  empieza la cámara y el preset, hacia dónde va. opts.movimientoEs: su nombre para el dueño (va en `resumen`).
  *  Devuelve también `resumen` (la línea en vivo del editor) y `partes` (cada fila de la tabla, por si el compilador las quiere). */
 export function describirEscena(escena, familia = 'conversacional', opts = {}) {
   const e = normalizar(escena), forma = formaDe(familia), n = nombreProducto(e);
@@ -319,9 +324,11 @@ export function describirEscena(escena, familia = 'conversacional', opts = {}) {
     : [`in the ${[cy < 0.44 ? 'upper' : cy > 0.56 ? 'lower' : '', cx < 0.44 ? 'left' : cx > 0.56 ? 'right' : ''].filter(Boolean).join(' ') || 'middle'} part of the frame`,
       `en la parte ${[cy < 0.44 ? 'de arriba' : cy > 0.56 ? 'de abajo' : '', cx < 0.44 ? 'izquierda' : cx > 0.56 ? 'derecha' : ''].filter(Boolean).join(' ') || 'central'} del cuadro`];
   const sujeto = persona ? 'person' : n.en, sujetoEs = `${n.g === 'f' ? 'la' : 'el'} ${persona ? 'persona' : n.es}`;
-  const llena = occ.recortado || pct >= 97
+  let llena = occ.recortado || pct >= 97
     ? { en: `camera ${dEn} away; the ${sujeto} fills the frame edge to edge`, es: `cámara a ${dEs}; ${sujetoEs} llena el cuadro de borde a borde` }
     : { en: `camera ${dEn} away; the ${sujeto} fills about ${pct}% of the frame ${ladoEn}, ${pos[0]}, with even empty space around it`, es: `cámara a ${dEs}; ${sujetoEs} ocupa cerca del ${pct} % del ${ladoEs} del cuadro, ${pos[1]}, con el mismo aire alrededor` };
+  const mueve = forma === 'video' && camaraSeMueve(opts.movimiento);
+  if (mueve) llena = { en: `at the start of the shot, ${llena.en}`, es: `al empezar el clip, ${llena.es}` };
   const partes = [
     { ...A, fila: A.id, id: 'angulo' }, { ...I, fila: I.id, id: 'inclinacion' }, { ...L, fila: L.id, id: 'lente' }, { ...llena, id: 'distancia' }, { ...medidas, id: 'medidas' },
   ];
@@ -330,7 +337,7 @@ export function describirEscena(escena, familia = 'conversacional', opts = {}) {
   partes.push({ ...F, id: 'fondo' });
   if (forma === 'video') {
     const mov = typeof opts.movimiento === 'string' && opts.movimiento.trim() ? opts.movimiento.trim() : '';
-    partes.push(mov ? { id: 'movimiento', en: `camera movement: ${mov}`, es: `movimiento de cámara: ${mov}` }
+    partes.push(mov ? { id: 'movimiento', en: `camera movement: ${mov}`, es: `movimiento de cámara: ${typeof opts.movimientoEs === 'string' && opts.movimientoEs.trim() ? opts.movimientoEs.trim() : mov}` }
       : { id: 'movimiento', en: 'static camera', es: 'cámara fija' });
   }
   const P = Object.fromEntries(partes.map(p => [p.id, p]));
@@ -345,7 +352,8 @@ export function describirEscena(escena, familia = 'conversacional', opts = {}) {
     en = `${ini}: ${A.en}, ${I.en}, ${L.en}. Subject: ${P.medidas.en}. ${cap(llena.en)}.${extra('elevacion', p => ` ${cap(p.en)}.`)}${extra('horizonte', p => ` ${cap(p.en)}.`)} Background: ${F.en}.${extra('movimiento', p => ` ${cap(p.en)}.`)}`;
     es = `${iniEs}: ${A.es}, ${I.es}, ${L.es}. Sujeto: ${P.medidas.es}. ${cap(llena.es)}.${extra('elevacion', p => ` ${cap(p.es)}.`)}${extra('horizonte', p => ` ${cap(p.es)}.`)} Fondo: ${F.es}.${extra('movimiento', p => ` ${cap(p.es)}.`)}`;
   }
-  const resumen = `${A.corto} · ${I.corto} · a ${dEs} con ${e.camara.lente} mm · ${occ.recortado || pct >= 97 ? 'llena el cuadro' : `ocupa ~${pct} % del ${ladoEs}`}`;
+  const movEs = forma === 'video' && typeof opts.movimientoEs === 'string' && opts.movimientoEs.trim() ? ` · ${opts.movimientoEs.trim()}` : '';
+  const resumen = `${A.corto} · ${I.corto} · a ${dEs} con ${e.camara.lente} mm · ${occ.recortado || pct >= 97 ? 'llena el cuadro' : `ocupa ~${pct} % del ${ladoEs}`}${mueve ? ' al empezar' : ''}${movEs}`;
   return { familia, forma, en, es, resumen, partes, ocupacion: occ, inclinacion: inc, anguloRelativo: rel };
 }
 

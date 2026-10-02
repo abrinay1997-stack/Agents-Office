@@ -172,6 +172,10 @@ const FRASES = [
   ['quitar el precio', ['limp-etiquetas'], 1], ['quitar gente', ['limp-personas'], 1], ['quitar ubicación', ['sal-limpiar-datos'], 1],
   ['mi cama de la bodega', ['cat-web-panaclaw'], 1], ['luz de estudio', ['luz-estudio'], 1], ['desde abajo', ['enc-desde-abajo'], 1],
   ['video vertical', ['vf-reel'], 2], ['música para reel', ['mus-reel'], 1], ['locución', ['voz-anuncio'], 1], ['colchón', ['vp-colchon'], 2],
+  // video (F5): las frases del dueño para un clip
+  ['producto girando', ['vp-giro-360'], 1], ['zoom lento', ['cam-acercar'], 1], ['unboxing', ['vp-unboxing'], 1], ['abrir la caja', ['vp-unboxing'], 1],
+  ['antes y después', ['vp-antes-despues', 'mkt-antes-despues'], 2], ['antes/después', ['vp-antes-despues'], 2], ['cámara en mano', ['cam-mano'], 1],
+  ['que se repita', ['vp-bucle-web'], 1], ['sin sonido', ['vs-mudo'], 1], ['copiar movimiento', ['ved-copiar-movimiento'], 1],
   // una letra de más, de menos, cambiada o traspuesta (palabras de 5 letras o más)
   ['exposicon', ['luz-mas-clara'], 2], ['sabana arugada', ['limp-arrugas'], 1], ['fodno blanco', ['fondo-blanco'], 2], ['nitides', ['cal-nitidez'], 2],
 ];

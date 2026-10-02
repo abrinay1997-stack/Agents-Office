@@ -9,6 +9,11 @@
 //   · el margen es un ESCENARIO 3D (cámara a cierta distancia, en cm): lo traduce `describirEscena` de
 //     src/escena3d-core.js (equipo «escena3d»), que se le PASA al compilador (`escena3d`), y su imagen guía de
 //     composición va como referencia rotulada «LAYOUT GUIDE ONLY». La ocupación pasa a ser un RESULTADO que la QA mide.
+//   · VIDEO (F5): cámara, plano, look, formato y sonido son ejes exclusivos (un movimiento por clip); las recetas de producto
+//     hablan de la acción y traen su cámara como ajuste aparte; el bucle pone la foto final = la inicial; dos fotos van de
+//     start a end; la referencia por ejes dice qué es cada imagen (tu producto, la persona, el empaque, el look) y el color
+//     va a la IA (sin ffmpeg); el sonido y el movimiento usan el ajuste de CADA modelo (generateAudio, sound, cameraMovement);
+//     el escenario 3D dice dónde empieza la cámara y el preset, hacia dónde va. Cubierto por tests/presets-video.test.mjs.
 //
 // Lo importan la página (vista previa «Qué hará», también en la demo file://), el servidor (presets.mjs, el lote) y el
 // bloque de Dimitri. Un solo compilador para todos. Cubierto por tests/presets-core.test.mjs y tests/presets-modelo.test.mjs.
@@ -19,6 +24,8 @@ export { buscar, normalizar };
 /* ---------- ejes ---------- */
 /** En estos ejes el último preset elegido sustituye al anterior (y se avisa con DESHACER). */
 export const EJES_EXCLUSIVOS = ['fondo', 'sombra', 'escena', 'encuadre', 'angulo', 'camara', 'plano', 'look', 'formato', 'audio', 'salida'];
+/** El nombre de un eje en un aviso («Cámara: … sustituyó a …»). */
+const EJE_ES = { angulo: 'Ángulo', camara: 'Cámara', audio: 'Sonido' };
 /** En estos se suman. */
 export const EJES_SUMABLES = ['limpieza', 'calidad', 'luz', 'color', 'estilo'];
 /** El orden canónico en que se aplican los ajustes (después de la receta). */
@@ -63,13 +70,28 @@ export const FAMILIAS = {
   'musica-minimax': ['mmx-musica-*'],
   'voz-minimax': ['mmx-voz-*'],
 };
+// {refs}: qué es cada imagen de referencia (el producto, la persona, el look); {sonido}: los efectos y el ambiente en las
+// familias que no tienen las líneas «SFX:» de Veo. Una plantilla vieja sin ellos los recibe igual (ver renderPrompt).
 const PLANTILLAS_VIDEO = {
-  veo: '{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}',
-  kling: '{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. {look}.',
-  seedance: '{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}.',
-  'minimax-video': '{sujeto} {accion}. {escena}. {camara}. {look}.',
-  'video-generico': '{camara}. {plano}. {sujeto} {accion}. {escena}. {look}.',
+  veo: '{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}',
+  kling: '{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.',
+  seedance: '{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.',
+  'minimax-video': '{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.',
+  'video-generico': '{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}.',
 };
+/** En video estos ejes son exclusivos (§3.3): una cámara, un plano, un look, un formato y un sonido por clip. */
+export const EJES_VIDEO = ['camara', 'plano', 'look', 'formato', 'audio'];
+/** Cómo hace sonido un modelo de video: con el ajuste `generateAudio`, con `sound` (Kling), siempre (Veo 3.1 por la API de
+ *  Gemini, que no deja apagarlo) o nunca. Sale de los ajustes de su fila del catálogo, nunca escrito a mano. */
+export function audioDe(row, familia) {
+  const st = row?.settings || {};
+  if (st.generateAudio) return 'generateAudio';
+  if (st.sound) return 'sound';
+  if ((familia ?? familiaDe(row?.id || '')) === 'veo' && row?.kind === 'video') return 'siempre';
+  return 'no';
+}
+/** Lo que se deforma al girar: un preset `soloRigidos` (el giro 360) avisa si el producto o la idea lo nombran. */
+export const BLANDO_RE = /\b(sabanas?|tela|telas|ropa|camisas?|vestidos?|cortinas?|almohadas?|cojin|cojines|colchon|colchones|peluches?|toallas?|edredon|cobijas?|vidrio|cristal|copas?|liquidos?|agua|perfumes?|collar|collares|cadenas?|cables?|plantas?|flores?)\b/;
 const FAMILIAS_VIDEO = Object.keys(PLANTILLAS_VIDEO);
 /** El orden de preferencia de media/catalogo.mjs (PREFER), por si el llamador no lo pasa. */
 export const PREFER_DEF = {
@@ -216,7 +238,7 @@ export function expandir(pila, byId, { kind } = {}) {
       const prev = dueno[e];
       if (prev && prev !== it && !fuera.has(prev)) {
         fuera.add(prev);
-        avisos.push({ tipo: 'sustituye', eje: e, gana: it.id, pierde: prev.id, texto: `${e[0].toUpperCase() + e.slice(1)}: «${nombreDe(it.preset)}» sustituyó a «${nombreDe(prev.preset)}»` });
+        avisos.push({ tipo: 'sustituye', eje: e, gana: it.id, pierde: prev.id, texto: `${EJE_ES[e] || e[0].toUpperCase() + e.slice(1)}: «${nombreDe(it.preset)}» sustituyó a «${nombreDe(prev.preset)}»` });
         if (prev.origen !== 'pila') (sustituidos[prev.origen] ||= []).push(e);
       }
       dueno[e] = it;
@@ -247,7 +269,7 @@ const cuenta = x => arr(x).filter(Boolean).length;
 export function modoDe(entradas = {}, kind = 'image') {
   const e = entradas || {}, fotos = cuenta(e.foto ?? e.sujeto), refs = cuenta(e.referencias ?? e.referencia);
   if (kind === 'video') {
-    if (cuenta(e.origen ?? e.video)) return 'video';
+    if (cuenta(e.origen ?? e.video ?? e.guia)) return 'video'; // la guía de un «copiar movimiento» también es un video
     const ini = cuenta(e.inicial) || fotos;
     if (ini && cuenta(e.final)) return 'ab';
     if (ini) return 'anima';
@@ -270,6 +292,7 @@ function porQueNoModo(p, modo, kind) {
   if (ms.every(m => m === 'video')) return `«${nombreDe(p)}» trabaja sobre un video: súbelo`;
   if (ms.every(m => m === 'ab')) return `«${nombreDe(p)}» necesita la foto de partida y la de llegada`;
   if (ms.every(m => m === 'anima' || m === 'ab')) return `«${nombreDe(p)}» anima una foto: súbela`;
+  if (kind === 'video' && ms.every(m => m === 'anima' || m === 'ab' || m === 'refs')) return `«${nombreDe(p)}» necesita tu foto del producto (para animarla) o como referencia`;
   if (kind === 'image' && ms.every(m => m === 'cero')) return `«${nombreDe(p)}» crea desde cero: no usa tu foto`;
   return `«${nombreDe(p)}» no sirve con estas entradas`;
 }
@@ -330,6 +353,7 @@ export function modelosPara(lista, models, caps, req = {}) {
   const prefer = uniq(items.flatMap(x => arr(x.preset.prefer)));
   const fallback = arr(pref[kind === 'image' && conFoto ? 'edit' : kind]);
   const catalogo = items.some(x => x.preset.categoria === 'catalogo');
+  const quiereAudio = kind === 'video' && items.some(x => x.preset.ajustesModelo?.generateAudio === true);
   const out = [];
   for (const row of arr(models)) {
     if (!row || row.kind !== kind || row.legacy) continue;
@@ -350,9 +374,14 @@ export function modelosPara(lista, models, caps, req = {}) {
       const refs = req.refs || 0, needRefs = Math.max(refs, rq.roles.reference || 0, modo === 'refs' ? 1 : 0);
       if (needRefs > c.maxRefs) no.push(c.maxRefs ? `toma ${c.maxRefs} referencias y hacen falta ${needRefs}` : 'no toma referencias');
       if (necStart && needRefs && !c.refYFotogramas) no.push('no junta foto de partida y referencias en un pedido');
-      if (req.proporcion && c.proporciones.length && !c.proporciones.includes(req.proporcion)) no.push(`no hace ${req.proporcion}`);
+      if (req.proporcion && c.proporciones.length && !c.proporciones.includes(req.proporcion)) {
+        // sin ffmpeg no se recorta un video (§5.5): vale la proporción más cercana si casi no se nota (4:5 → 3:4); 1:1 en Veo, no
+        const cerca = proporcionCercana(req.proporcion, c.proporciones);
+        if (!cerca || Math.abs(Math.log(ratioNum(cerca) / ratioNum(req.proporcion))) > 0.12) no.push(`no hace ${req.proporcion}`);
+      }
       for (const nd of arr(c.necesita)) if (nd === 'video' && modo !== 'video') no.push('necesita un video de origen');
       else if (nd === 'start' && !necStart) no.push('necesita una foto de partida');
+      else if (nd === 'reference' && !needRefs) no.push('necesita una imagen de referencia');
     }
     for (const nd of kind === 'image' ? arr(c.necesita) : []) if (nd === 'reference' && nImg < 1) no.push('necesita una imagen');
     // puntos
@@ -361,13 +390,18 @@ export function modelosPara(lista, models, caps, req = {}) {
     if (catalogo && conFoto && /^(nano-banana-pro|gpt-image-1)$/.test(row.id)) score += 12; // fidelidad en catálogo
     if (catalogo && /muse-image/.test(row.id)) score -= 60; // busca referencias en la web: abajo en catálogo
     if (kind === 'image' && req.proporcion && c.proporciones.includes(req.proporcion)) score += 3;
+    if (kind === 'video' && req.proporcion && c.proporciones.length) score += c.proporciones.includes(req.proporcion) ? 3 : -4; // exacta antes que la cercana
+    const au = kind === 'video' ? audioDe(row, c.familia) : 'no';
+    if (quiereAudio && au === 'no') score -= 40; // pidió sonido: primero los que lo hacen
     if (req.orden === 'barato' || req.grande) score -= (c.costo || 0) * (req.orden === 'barato' ? 300 : 100);
     if (row.engine === 'prueba') score -= 200; // la prueba gratis, siempre al final
     const porque = no.length ? undefined : [
       ip >= 0 ? `de los preferidos para «${nombreDe(items.find(x => arr(x.preset.prefer).includes(row.id))?.preset)}»` : '',
       c.calidad ? `calidad ${'●'.repeat(c.calidad)}${'○'.repeat(Math.max(0, 4 - c.calidad))}` : '',
       kind === 'image' && conFoto ? 'edita tu foto' : '',
-      nImg > 1 ? `toma las ${nImg} imágenes` : '',
+      kind === 'image' && nImg > 1 ? `toma las ${nImg} imágenes` : '',
+      kind === 'video' ? { anima: 'anima tu foto', ab: 'va de una foto a otra', video: 'trabaja sobre tu video', refs: 'toma tus referencias' }[modo] || '' : '',
+      kind === 'video' && quiereAudio && au !== 'no' ? 'hace sonido' : '',
       catalogo && /muse-image/.test(row.id) ? 'en catálogo va al final (busca referencias en la web)' : '',
     ].filter(Boolean).join(' · ');
     out.push({ id: row.id, nombre: row.name || row.id, on: !no.length, ...(no.length ? { motivo: no.join('; ') } : { porque }), score, familia: c.familia, caps: c });
@@ -437,7 +471,7 @@ export function leerDescripcion(d, sep = '; ') {
     const fr = Array.isArray(d.frases) ? leerDescripcion(d.frases, sep) : null;
     const en = d.en ?? d.prompt ?? d.texto ?? fr?.en ?? '', es = d.es ?? d.resumen_es ?? d.resumen ?? fr?.es ?? '';
     const oc = d.ocupacion ?? d.ocupacionEstimada;
-    return { en: limpiaFrase(typeof en === 'string' ? en : leerDescripcion(en, sep)?.en), es: typeof es === 'string' ? es : leerDescripcion(es)?.es || '', ...(oc != null ? { ocupacion: oc } : {}) };
+    return { en: limpiaFrase(typeof en === 'string' ? en : leerDescripcion(en, sep)?.en), es: typeof es === 'string' ? es : leerDescripcion(es)?.es || '', ...(oc != null ? { ocupacion: oc } : {}), ...(typeof d.resumen === 'string' && d.es != null ? { resumen: d.resumen } : {}) };
   }
   return null;
 }
@@ -448,17 +482,19 @@ export function fraccion(o) {
   const n = Number(o); if (!Number.isFinite(n) || n < 0) return null;
   return n > 1 ? Math.min(1, n / 100) : n;
 }
-function escenaPara(escena, familia, escena3d, errores) {
+function escenaPara(escena, familia, escena3d, errores, opts) {
   if (!escena) return null;
   const corta = familia === 'edicion-corta' || familia === 'descriptiva';
   let d = null;
-  try { d = escena3d?.describirEscena ? escena3d.describirEscena(escena, familia) : (escena.descripcion ?? escena.frases ?? null); }
+  try { d = escena3d?.describirEscena ? escena3d.describirEscena(escena, familia, opts) : (escena.descripcion ?? escena.frases ?? null); }
   catch (e) { errores.push(`El escenario 3D no se pudo traducir: ${e.message}`); return null; }
   const r = leerDescripcion(d, corta ? ', ' : '; ');
   if (!r || !r.en) { errores.push('El escenario 3D no se pudo traducir al prompt (falta describirEscena de src/escena3d-core.js)'); return null; }
   let oc = r.ocupacion;
   if (oc == null && escena3d?.ocupacionEstimada) { try { oc = escena3d.ocupacionEstimada(escena); } catch { oc = null; } }
-  return { en: r.en, es: r.es, ocupacion: fraccion(oc), proporcion: escena.cuadro?.proporcion || null, fondo: escena.fondo || null };
+  // conMovimiento: el texto lo hizo describirEscena con opts.movimiento (ya dice la cámara del preset); una descripción
+  // dada a mano no la dice, y la cámara se queda en su hueco
+  return { en: r.en, es: r.es, ...(r.resumen ? { resumen: r.resumen } : {}), ocupacion: fraccion(oc), proporcion: escena.cuadro?.proporcion || null, fondo: escena.fondo || null, conMovimiento: !!escena3d?.describirEscena };
 }
 const esBlanco = c => /^#?(fff|ffffff)$/i.test(String(c || '').trim());
 
@@ -529,7 +565,22 @@ export function compilar(opts = {}) {
   const fotos = arr(E.foto ?? E.sujeto).filter(Boolean);
   const refs = arr(E.referencias ?? E.referencia).filter(Boolean).map(r => (typeof r === 'string' ? { id: r } : r)).filter(r => r.id);
   const ent = { ...E, foto: fotos, referencias: refs };
-  if (kind === 'video' && !cuenta(E.inicial) && fotos.length) ent.inicial = fotos[0];
+  const esVideo = kind === 'video';
+  const bucle = esVideo ? lista.find(it => it.preset.bucle) : null;
+  if (esVideo) {
+    // los fotogramas (§5.2): la foto es la de partida; con dos fotos y un preset que pide la de llegada, la 2.ª es la final
+    if (!cuenta(E.inicial) && fotos.length) ent.inicial = fotos[0];
+    const pideFinal = lista.some(it => arr(it.preset.entradas).some(en => en.rol === 'final'));
+    if (!cuenta(E.inicial) && !cuenta(E.final) && fotos.length > 1) {
+      if (pideFinal) ent.final = fotos[1];
+      else avisos.push({ tipo: 'entrada', texto: 'Va una foto de partida por clip: uso la primera (para ir de una a otra, «De antes a después» o «Pasar de una foto a otra»)' });
+    }
+    // el bucle termina en la misma foto en que empieza: inicial = final, se pone sola
+    if (bucle && cuenta(ent.inicial)) {
+      if (cuenta(ent.final) && arr(ent.final)[0] !== arr(ent.inicial)[0]) avisos.push({ tipo: 'bucle', id: bucle.id, texto: `«${nombreDe(bucle.preset)}» termina en la misma foto en que empieza: no uso la de llegada` });
+      ent.final = arr(ent.inicial)[0];
+    }
+  }
   const modo = modoDe(ent, kind);
   const conFoto = kind === 'image' && fotos.length > 0;
 
@@ -539,18 +590,31 @@ export function compilar(opts = {}) {
     if (!arr(p.medios).includes(kind)) errores.push(`«${nombreDe(p)}» es para ${arr(p.medios).join(' o ') || '¿?'}, no para ${{ image: 'imagen', video: 'video', music: 'música', audio: 'voz' }[kind] || kind}`);
     else if (!modoAdmite(p, modo)) errores.push(porQueNoModo(p, modo, kind));
     else for (const en of arr(p.entradas)) {
-      const tiene = { sujeto: kind === 'video' ? cuenta(ent.inicial) : fotos.length, referencia: refs.length, lut: cuenta(E.lut), inicial: cuenta(ent.inicial), final: cuenta(E.final), origen: cuenta(E.origen ?? E.video), guia: cuenta(E.guia), extra: cuenta(E.extra) }[en.rol] ?? 0;
+      const tiene = { sujeto: kind === 'video' ? cuenta(ent.inicial) : fotos.length, referencia: refs.length, lut: cuenta(E.lut), inicial: cuenta(ent.inicial), final: cuenta(ent.final), origen: cuenta(E.origen ?? E.video), guia: cuenta(E.guia), extra: cuenta(E.extra) }[en.rol] ?? 0;
       if ((en.min || 0) > tiene) errores.push(`«${nombreDe(p)}» necesita: ${en.es || en.rol}`);
+    }
+  }
+  if (esVideo) {
+    // lo que el dueño debe saber de cada preset, en texto (el giro 360 y los objetos rígidos, el bucle…)
+    for (const it of lista) if (it.preset.aviso) avisos.push({ tipo: 'preset', id: it.id, texto: `«${nombreDe(it.preset)}»: ${it.preset.aviso}` });
+    const blando = BLANDO_RE.exec(normalizar(`${producto} ${idea}`));
+    for (const it of lista.filter(x => x.preset.soloRigidos)) if (blando) avisos.push({ tipo: 'rigido', id: it.id, texto: `«${nombreDe(it.preset)}» va con objetos rígidos: «${blando[0]}» suele deformarse al girar. Mejor «Producto protagonista» o «Revelación en detalle»` });
+    // un movimiento por clip: la receta mueve el PRODUCTO con la cámara quieta, y otra cámara le quitó la quietud
+    for (const a of exp.avisos) if (a.tipo === 'sustituye' && a.eje === 'camara' && a.pierde === 'cam-fija') {
+      const receta = lista.find(it => it.preset.capa === 'receta' && arr(it.preset.incluye).includes('cam-fija'));
+      if (receta) avisos.push({ tipo: 'movimiento', id: receta.id, texto: `«${nombreDe(receta.preset)}» ya mueve el producto: con «${nombreDe(by.get(a.gana))}» también se mueve la cámara en el mismo clip. Revisa que no se deforme` });
     }
   }
   if (!lista.length && !idea && kind === 'image' && modo === 'foto' && !escena) errores.push('Elige un preset o escribe qué quieres cambiar');
 
-  // el escenario 3D se queda con el encuadre y el ángulo (§15.3): los ajustes de esos ejes salen, avisando
+  // el escenario 3D se queda con el encuadre y el ángulo (§15.3) y, en video, con el plano (la distancia de la cámara):
+  // los ajustes de esos ejes salen, avisando. El movimiento de cámara del preset se queda: el escenario dice dónde EMPIEZA.
   if (escena) {
+    const del = esVideo ? ['encuadre', 'angulo', 'plano'] : ['encuadre', 'angulo'];
     lista = lista.filter(it => {
-      const ejes = ejesExclusivosDe(it.preset).filter(e => e === 'encuadre' || e === 'angulo');
+      const ejes = ejesExclusivosDe(it.preset).filter(e => del.includes(e));
       if (!ejes.length) return true;
-      avisos.push({ tipo: 'sustituye', eje: ejes[0], gana: 'escena', pierde: it.id, texto: `${ejes[0] === 'angulo' ? 'Ángulo' : 'Encuadre'}: el escenario 3D sustituyó a «${nombreDe(it.preset)}»` });
+      avisos.push({ tipo: 'sustituye', eje: ejes[0], gana: 'escena', pierde: it.id, texto: `${{ angulo: 'Ángulo', encuadre: 'Encuadre', plano: 'Plano' }[ejes[0]]}: el escenario 3D sustituyó a «${nombreDe(it.preset)}»` });
       return false;
     });
   }
@@ -580,12 +644,23 @@ export function compilar(opts = {}) {
   }
 
   // referencias por ejes
-  const refsE = refs.map((r, i) => ({ id: r.id, i, ejes: ejesDeReferencia(r, lista) }));
-  for (const r of refsE) if (r.ejes.producto && !conFoto) { r.ejes.producto = 0; avisos.push({ tipo: 'ref', texto: '«Mi producto en esa foto» necesita tu foto: lo apagué' }); }
-  for (const r of refsE) if (r.ejes.pose) avisos.push({ tipo: 'ref', texto: 'Copiar la pose solo sirve si en las fotos hay una persona' });
+  // en video, cada referencia es la de SU entrada (la 1.ª del probador es la prenda; la 2.ª, la persona): por orden
+  const refEntradas = esVideo ? lista.flatMap(it => arr(it.preset.entradas).filter(en => en.rol === 'referencia' && en.eje).map(en => [it, en])) : [];
+  const refsE = refs.map((r, i) => {
+    const par = esVideo && !(r.ejes && typeof r.ejes === 'object') && refEntradas.length > 1 ? refEntradas[i] : null;
+    if (!par) return { id: r.id, i, ejes: ejesDeReferencia(r, lista), ...(esVideo && refEntradas.length === 1 ? { rol: refEntradas[0][1].eje } : {}) };
+    const ejes = Object.fromEntries(EJES_REF.map(e => [e, 0])), f = FUERZA_DE_VALOR[par[0].params?.fuerza] || 2;
+    for (const e of EJE_DE_ENTRADA[par[1].eje] || []) ejes[e] = Math.max(ejes[e], f);
+    return { id: r.id, i, ejes, rol: par[1].eje };
+  });
+  // «Mi producto en esa foto» pone TU producto en la referencia: sin tu foto no hay qué poner. En video no: allí la
+  // referencia de producto ES tu producto (el unboxing, el probador).
+  for (const r of refsE) if (r.ejes.producto && !conFoto && !esVideo) { r.ejes.producto = 0; avisos.push({ tipo: 'ref', texto: '«Mi producto en esa foto» necesita tu foto: lo apagué' }); }
+  for (const r of refsE) if (r.ejes.pose && r.rol !== 'persona') avisos.push({ tipo: 'ref', texto: 'Copiar la pose solo sirve si en las fotos hay una persona' });
   if (escena) for (const r of refsE) if (r.ejes.composicion) { r.ejes.composicion = 0; avisos.push({ tipo: 'sustituye', eje: 'composicion', gana: 'escena', pierde: r.id, texto: 'Composición: el escenario 3D manda sobre la composición de la referencia' }); }
-  const refsIA = refsE.filter(r => ['estilo', 'composicion', 'luz', 'fondo', 'pose', 'producto'].some(e => r.ejes[e] > 0));
-  const refsColor = refsE.filter(r => r.ejes.color > 0);
+  // el color de una referencia se copia aquí, sin IA (§5.4)… salvo en video: sin ffmpeg, el color va a la IA como «color grade»
+  const refsIA = refsE.filter(r => [...(esVideo ? ['color'] : []), 'estilo', 'composicion', 'luz', 'fondo', 'pose', 'producto'].some(e => r.ejes[e] > 0));
+  const refsColor = esVideo ? [] : refsE.filter(r => r.ejes.color > 0);
 
   // ¿hace falta un modelo?
   const iaItems = lista.filter(it => it.preset.ejecutor === 'ia' || it.preset.ejecutor === 'local+ia' || it.preset.ejecutor === 'ajustes');
@@ -641,7 +716,7 @@ export function compilar(opts = {}) {
   if (!opsU.some(o => o.op === 'fondo-blanco')) { qa = qa.filter(q => q !== 'fondo-255'); for (const o of opsU) if (o.op === 'exportar' && o.fondo && o.ajuste !== 'rellenar') delete o.fondo; }
   if (!conFoto) qa = qa.filter(q => q !== 'identidad');
   const medir = {};
-  if (escena) { medir.ocupacion = { objetivo: null, tolerancia: 0.12, fuente: 'escena', medido: true }; if (!qa.includes('ocupacion')) qa.push('ocupacion'); }
+  if (escena && kind === 'image') { medir.ocupacion = { objetivo: null, tolerancia: 0.12, fuente: 'escena', medido: true }; if (!qa.includes('ocupacion')) qa.push('ocupacion'); }
   else if (qa.includes('ocupacion')) medir.ocupacion = nivel?.medido && nivel.ocupacion != null ? { objetivo: nivel.ocupacion, tolerancia: 0.03, fuente: 'encuadre', medido: true } : { objetivo: nivel?.ocupacion ?? null, medido: false, fuente: 'encuadre', nota: 'no medido' };
 
   const presetOut = lista.filter(it => it.id !== 'libre').map(it => ({ id: it.id, v: it.v, params: it.params }));
@@ -679,22 +754,34 @@ export function compilar(opts = {}) {
   const familia = c.familia || (kind === 'video' ? 'video-generico' : kind === 'image' ? 'descriptiva' : null);
 
   /* ---------- las imágenes y sus números ---------- */
-  const media = {}; let versionOf;
+  const media = {}; let versionOf, refsVideo = [];
   const imgs = []; // lo que va en reference, en orden
   if (kind === 'image') {
     if (conFoto) { imgs.push(fotos[0]); versionOf = fotos[0]; if (fotos.length > 1) avisos.push({ tipo: 'entrada', texto: `Va una foto por pedido: uso la primera (para varias, un lote)` }); }
     for (const r of iaRefs) { r.n = imgs.length + 1; imgs.push(r.id); }
   } else if (kind === 'video') {
-    const ini = arr(ent.inicial)[0], fin = arr(E.final)[0], org = arr(E.origen ?? E.video)[0];
-    if (org) { media.video = [org]; versionOf = org; if (ini) media.start = [ini]; }
+    // los roles de media.mjs (§5.2): start = la foto de partida, end = la de llegada (en el bucle, la misma), video = tu
+    // video (o la guía de «copiar movimiento», que no es lo que se versiona), reference = tus referencias y el empaque
+    const ini = arr(ent.inicial)[0], fin = arr(ent.final)[0], org = arr(E.origen ?? E.video)[0], guiaV = arr(E.guia)[0];
+    // un video por pedido: si un preset pide la guía («copiar movimiento»), va la guía aunque también haya un video tuyo
+    const pideGuia = lista.some(it => arr(it.preset.entradas).some(en => en.rol === 'guia'));
+    if (org && guiaV && org !== guiaV) avisos.push({ tipo: 'entrada', texto: pideGuia ? 'Va un video por pedido: uso el video guía para copiar su movimiento; tu otro video no se usa' : 'Va un video por pedido: uso tu video; el video guía no se usa' });
+    if (guiaV && (pideGuia || !org)) { media.video = [guiaV]; if (ini) media.start = [ini]; }
+    else if (org) { media.video = [org]; versionOf = org; if (ini) media.start = [ini]; }
     else if (ini) { media.start = [ini]; if (fin) media.end = [fin]; }
-    const rr = refs.map(r => r.id).slice(0, c.maxRefs || 0);
-    if (rr.length && (!media.start || c.refYFotogramas)) media.reference = rr;
-    else if (refs.length) avisos.push({ tipo: 'entrada', texto: `${elegidoM.nombre} no junta la foto de partida con referencias: van solo como inspiración del texto` });
+    const extras = refs.length ? arr(E.extra).filter(Boolean) : [];
+    const todas = [...refs.map(r => r.id), ...extras];
+    const rr = todas.slice(0, c.maxRefs || 0);
+    if (rr.length && (!media.start || c.refYFotogramas)) {
+      media.reference = rr;
+      if (rr.length < todas.length) avisos.push({ tipo: 'entrada', texto: `${elegidoM.nombre} toma ${c.maxRefs} referencia${c.maxRefs === 1 ? '' : 's'}: van las primeras` });
+      refsVideo = rr.map((id, k) => ({ n: k + 1, ref: k < refs.length ? refsE[k] : null, extra: k >= refs.length }));
+    } else if (refs.length) avisos.push({ tipo: 'entrada', texto: `${elegidoM.nombre} no junta la foto de partida con referencias: van solo como inspiración del texto` });
+    if (bucle && media.start && !media.end) avisos.push({ tipo: 'bucle', id: bucle.id, texto: `${elegidoM.nombre} no toma la foto final: el bucle se pide solo con palabras` });
   }
-  // la imagen guía del escenario 3D, si cabe
+  // la imagen guía del escenario 3D, si cabe (en video el escenario va en el texto, con el movimiento del preset: más abajo)
   let guia = null;
-  const escD = escenaPara(escena, familia, escena3d, errores);
+  let escD = esVideo ? null : escenaPara(escena, familia, escena3d, errores);
   if (escD && kind === 'image') {
     if (imgs.length < (c.maxRefs || 0)) {
       const n = imgs.length + 1, dada = arr(E.guiaEscena)[0];
@@ -714,8 +801,11 @@ export function compilar(opts = {}) {
   for (const it of lista) {
     const p = it.preset;
     if (p.ejecutor === 'local') continue;
-    if (!it.explicito && cubierto(it)) continue; // la frase de la receta ya lo dice
-    if (p.capa === 'receta' && sustituidas.has(it.id)) continue; // otro preset le quitó un eje: hablan sus piezas, no su frase entera
+    // en imagen la frase de la receta ya dice lo que trae dentro; en video no: la receta es la acción y su cámara, su plano
+    // y su sonido son ajustes aparte, cada uno en su hueco (así otra cámara la sustituye limpia: un movimiento por clip)
+    if (!esVideo && !it.explicito && cubierto(it)) continue; // la frase de la receta ya lo dice
+    if (!esVideo && p.capa === 'receta' && sustituidas.has(it.id)) continue; // otro preset le quitó un eje: hablan sus piezas, no su frase entera
+    for (const q of arr(p.parametros)) if (q.ranura && slots[q.ranura] && it.params[q.id] != null && String(it.params[q.id]).trim()) slots[q.ranura].push(limpiaFrase(enDe(p, q.id, it.params[q.id], tipos)));
     const int = it.params.intensidad;
     let f = p.iaPorIntensidad?.[int] ?? p.ia;
     if (!f) continue;
@@ -725,7 +815,13 @@ export function compilar(opts = {}) {
     const ejes = arr(p.ejes), slot = p.ranura && slots[p.ranura] ? p.ranura : p.capa === 'receta' ? 'accion' : ejes.includes('escena') ? 'escena' : ejes.includes('estilo') || ejes.includes('look') ? (kind === 'video' ? 'look' : 'estilo') : ejes.length && ejes.every(e => e === 'luz') ? 'luz' : 'accion';
     slots[slot].push(f);
   }
-  if (escD) (kind === 'video' ? slots.plano : slots.camara).push(kind === 'video' ? escD.en : String(escD.en).replace(/^\s*Camera and framing:\s*/i, '')); // la plantilla ya pone «Camera and framing:»
+  let camaraEnEscena = false;
+  if (esVideo && escena) {
+    // el escenario 3D en video (§16.2): dónde empieza la cámara (distancia, altura, lente) + el movimiento del preset
+    const cam = lista.find(it => arr(it.preset.ejes).includes('camara') && it.preset.capa === 'ajuste');
+    escD = escenaPara(escena, familia, escena3d, errores, { movimiento: slots.camara.join(', '), movimientoEs: cam ? nombreDe(cam.preset).toLowerCase() : '' });
+    if (escD) { slots.plano.push(escD.en); if (escD.conMovimiento) { slots.camara = []; camaraEnEscena = true; } }
+  } else if (escD) slots.camara.push(String(escD.en).replace(/^\s*Camera and framing:\s*/i, '')); // la plantilla ya pone «Camera and framing:»
   const conservar = conFoto || iaRefs.some(r => r.ejes.producto) ? (familias[familia]?.conservar || (familia === 'edicion-corta' ? 'Keep the product exactly the same.' : CONSERVAR)) : '';
   const refLineas = (corta) => {
     const out = [];
@@ -739,7 +835,11 @@ export function compilar(opts = {}) {
     return out;
   };
   const ideaEnPrompt = lista.some(it => it.id === 'libre' && it.preset.ia === idea) ? '' : idea; // la idea hecha «instrucción libre» no se repite
-  const render = (s) => renderPrompt({ familia, kind, conFoto, slots: s, idea: ideaEnPrompt, producto, conservar, refLineas, encuadreEn: ctx.encuadreEn, plantilla: familias[familia]?.plantilla, iaRefs, guia });
+  // video: qué es cada referencia (§5.4 en video) y si el modelo hace sonido
+  const refsVideoTxt = esVideo ? lineasRefVideo(refsVideo) : [];
+  const auM = esVideo ? audioDe(row, familia) : 'no';
+  if (esVideo && auM === 'no' && (slots.sfx.length || slots.ambiente.length)) { slots.sfx = []; slots.ambiente = []; }
+  const render = (s) => renderPrompt({ familia, kind, conFoto, slots: s, idea: ideaEnPrompt, producto, conservar, refLineas, encuadreEn: ctx.encuadreEn, plantilla: familias[familia]?.plantilla, iaRefs, guia, refsVideo: refsVideoTxt, camaraFija: !camaraEnEscena && modo !== 'video' });
   let prompt = render(slots);
   const maxP = Math.min(c.maxPrompt || 4000, familias[familia]?.max || Infinity);
   const recortado = [];
@@ -750,12 +850,21 @@ export function compilar(opts = {}) {
 
   /* ---------- ajustes del modelo ---------- */
   const settings = {};
-  for (const it of lista) for (const [k, v] of Object.entries(it.preset.ajustesModelo || {})) settings[k] = typeof v === 'string' ? limpiaFrase(rellenar(v, { ...ctx, params: it.params }, avisos, it.preset)) : v;
+  const relleno = (v, it) => limpiaFrase(rellenar(v, { ...ctx, params: it.params }, avisos, it.preset));
+  for (const it of lista) for (const [k, v] of Object.entries(it.preset.ajustesModelo || {})) settings[k] = typeof v === 'string' ? relleno(v, it) : Array.isArray(v) ? v.map(x => (typeof x === 'string' ? relleno(x, it) : x)) : v;
   const durP = lista.map(it => arr(it.preset.parametros).find(q => q.tipo === 'duracion') && it.params[arr(it.preset.parametros).find(q => q.tipo === 'duracion').id]).filter(Boolean).at(-1);
   if (durP != null && kind === 'video') settings.duration = Number(durP);
   if (target) settings.aspectRatio = target;
   const lado = canal ? Math.max(canal.ancho || 0, canal.alto || 0) : 0;
   const st = row.settings || {};
+  let sonidoAnulado = ''; // el modelo no hace caso al ajuste de sonido del preset: «Qué hará» lo dice en su línea
+  if (esVideo && settings.generateAudio != null) {
+    // el sonido, con el ajuste que tenga ESTE modelo: generateAudio, sound (Kling), siempre (Veo 3.1) o ninguno
+    const quiere = settings.generateAudio === true || settings.generateAudio === 'true';
+    if (auM === 'sound') { settings.sound = quiere; delete settings.generateAudio; }
+    else if (auM === 'siempre') { delete settings.generateAudio; if (!quiere) { sonidoAnulado = `no se puede, ${elegidoM.nombre} siempre trae sonido`; avisos.push({ tipo: 'sonido', texto: `${elegidoM.nombre} siempre trae sonido: no se puede apagar (quítalo al publicar)` }); } }
+    else if (auM === 'no') { delete settings.generateAudio; if (quiere) { sonidoAnulado = `${elegidoM.nombre} no hace sonido, sale mudo`; avisos.push({ tipo: 'sonido', texto: `${elegidoM.nombre} no hace sonido: el video sale mudo` }); } }
+  }
   if (kind === 'image' && lado > 1024 && settings.imageSize == null && settings.resolution == null) {
     if (arr(st.imageSize?.values).includes('2K')) settings.imageSize = '2K';
     else if (arr(st.resolution?.values).includes('2k')) settings.resolution = '2k';
@@ -765,12 +874,27 @@ export function compilar(opts = {}) {
   for (const [k, v] of Object.entries(settings)) {
     const f = st[k]; if (!f) continue;
     if (k === 'aspectRatio') { const vals = arr(f.values).filter(x => RATIO_RE.test(x)); const r = vals.includes(v) ? v : proporcionCercana(v, vals); if (r) { limpios[k] = r; if (r !== v) avisos.push({ tipo: 'proporcion', texto: `${elegidoM.nombre} no hace ${v}: lo pido en ${r}${kind === 'image' ? ' y se deja exacto al exportar' : ''}` }); } continue; }
+    if (Array.isArray(v)) { // candidatos en orden («dolly-in» o «dolly_in»): el primero que este modelo admite; si ninguno, nada
+      const nk = x => String(x).toLowerCase().replace(/[\s_]+/g, '-');
+      const x = v.map(c => arr(f.values).find(o => o !== '' && nk(o) === nk(c))).find(o => o !== undefined);
+      if (x !== undefined) limpios[k] = x;
+      continue;
+    }
     if (f.type === 'enum') { // el valor con el tipo del modelo («8» o 8, según lo declare)
-      const x = arr(f.values).find(o => String(o) === String(v));
+      let x = arr(f.values).find(o => String(o) === String(v));
+      if (x === undefined && k === 'duration' && Number.isFinite(Number(v))) { // la duración más cercana que hace (Veo: 4, 6 u 8 s)
+        x = arr(f.values).filter(o => Number.isFinite(Number(o))).sort((a, b) => Math.abs(a - v) - Math.abs(b - v) || b - a)[0];
+        if (x !== undefined) avisos.push({ tipo: 'ajuste', texto: `${elegidoM.nombre} no hace ${v} s: lo pido en ${x} s` });
+      }
       if (x === undefined) avisos.push({ tipo: 'ajuste', texto: `${elegidoM.nombre} no admite ${k} = ${v}` }); else limpios[k] = x;
       continue;
     }
-    if (f.type === 'range') { const n = Number(v); if (Number.isFinite(n)) limpios[k] = Math.min(f.max, Math.max(f.min, n)); continue; }
+    if (f.type === 'range') {
+      const n = Number(v); if (!Number.isFinite(n)) continue;
+      limpios[k] = Math.min(f.max, Math.max(f.min, n));
+      if (k === 'duration' && limpios[k] !== n) avisos.push({ tipo: 'ajuste', texto: `${elegidoM.nombre} hace de ${f.min} a ${f.max} s: lo pido en ${limpios[k]} s` });
+      continue;
+    }
     if (f.type === 'boolean') { limpios[k] = v === true || v === 'true'; continue; }
     limpios[k] = v;
   }
@@ -786,7 +910,22 @@ export function compilar(opts = {}) {
     ...(versionOf ? { versionOf } : {}),
     preset: presetOut, ...(local.antes.length ? { pre: local.antes } : {}), ...(local.despues.length ? { post: local.despues } : {}), ...(qa.length ? { qa } : {}),
   };
-  const pasos_es = pasosEs(lista, refsE, elegidoM, nivel, canal, escD);
+  const pasos_es = pasosEs(lista, refsE, elegidoM, nivel, canal, escD, kind);
+  if (esVideo) { // lo que el dueño ve del clip antes de gastar: los fotogramas, el formato y el sonido
+    for (const { n, extra } of refsVideo) if (extra) pasos_es.push(`Referencia ${n}: el empaque`); // va, se nombra y se cobra
+    if (sonidoAnulado) { // el preset de sonido que el modelo no puede cumplir no se lista como si se cumpliera
+      const deAudio = new Map(lista.filter(it => it.preset.ejecutor === 'ajustes' && it.preset.ajustesModelo?.generateAudio != null).map(it => [`${nombreDe(it.preset)} (${DONDE.ajustes})`, nombreDe(it.preset)]));
+      let dicho = false;
+      for (let k = 0; k < pasos_es.length; k++) if (deAudio.has(pasos_es[k])) { pasos_es[k] = `${deAudio.get(pasos_es[k])}: ${sonidoAnulado}`; dicho = true; }
+      if (!dicho) pasos_es.push(`Sonido: ${sonidoAnulado}`); // lo pedía una receta (la portada web va muda)
+    }
+    if (bucle && media.end) pasos_es.push('Bucle: la misma foto al principio y al final');
+    else if (media.start && media.end) pasos_es.push('De la foto de partida a la de llegada');
+    const fmt = [limpios.aspectRatio, limpios.duration != null ? `${limpios.duration} s` : ''].filter(Boolean).join(' · ');
+    if (fmt) pasos_es.push(`Formato: ${fmt}`);
+    if (limpios.generateAudio === true || limpios.sound === true || (auM === 'siempre' && (slots.sfx.length || slots.ambiente.length))) pasos_es.push('Con sonido');
+    else if (limpios.generateAudio === false || limpios.sound === false) pasos_es.push('Sin sonido');
+  }
   return {
     ...base, model: elegidoM.id, familia, alternativas: buenos.filter(x => x.id !== elegidoM.id).slice(0, 5).map(x => ({ id: x.id, nombre: x.nombre, porque: x.porque })),
     porque: `${elegidoM.nombre}: ${elegidoM.porque || 'el único que puede'}`,
@@ -798,16 +937,38 @@ export function compilar(opts = {}) {
     guia, escena: escD ? { en: escD.en, es: escD.es, ocupacion: escD.ocupacion } : null,
   };
 }
+/** Video: una frase por imagen de referencia, en el orden en que van (§5.4). Tu producto se conserva tal cual; la persona,
+ *  su identidad; lo demás («el look», «la luz»…) solo para eso, con el negativo de siempre. */
+const NOMBRE_EJE_VIDEO = { estilo: 'visual style', color: 'color grade', composicion: 'composition', luz: 'lighting', fondo: 'background', pose: 'pose and movement' };
+function lineasRefVideo(refsVideo) {
+  const out = [];
+  for (const { n, ref, extra } of refsVideo) {
+    if (extra) { out.push(`Reference image ${n} is the packaging`); continue; }
+    if (!ref) continue;
+    if (ref.ejes.producto) { out.push(`Reference image ${n} is the product: it must look exactly the same (shape, proportions, colors, label and logos)`); continue; }
+    if (ref.rol === 'persona') { out.push(`Reference image ${n} is the person: keep the same face, body and look`); continue; }
+    // la pidió un preset («Copiar el look de una foto»): su propia frase dice para qué es, pero dice «the reference image»;
+    // con más de una imagen, el número dice cuál (si no, el modelo puede copiar el color de la foto del producto)
+    if (ref.rol && refsVideo.length < 2) continue;
+    const on = EJES_REF.filter(e => e !== 'producto' && ref.ejes[e] > 0);
+    if (!on.length) continue;
+    const f = Math.max(...on.map(e => ref.ejes[e]));
+    out.push(`Use reference image ${n} only for its ${y(on.map(e => NOMBRE_EJE_VIDEO[e]))}, ${FUERZA_EN[f]} it; ${NEGATIVO_REF}`);
+  }
+  return out;
+}
 const MODO_ES = { cero: 'Desde cero', foto: 'Sobre tu foto', ref: 'Con una referencia', 'foto+ref': 'Tu foto + referencia', texto: 'Desde texto', anima: 'Anima tu foto', ab: 'De una foto a otra', refs: 'Con referencias', video: 'Sobre tu video' };
 const DONDE = { local: 'en esta máquina, gratis', ia: 'la IA', 'local+ia': 'la IA, y aquí se garantiza', ajustes: 'ajuste del modelo' };
-function pasosEs(lista, refsE, m, nivel, canal, escD) {
-  const out = [];
+function pasosEs(lista, refsE, m, nivel, canal, escD, kind = 'image') {
+  const out = [], video = kind === 'video';
   for (const it of lista) out.push(`${nombreDe(it.preset)} (${DONDE[it.preset.ejecutor] || it.preset.ejecutor})`);
   for (const r of refsE) {
+    if (video && r.ejes.producto) { out.push(`Referencia ${r.i + 1}: tu producto, tal cual`); continue; }
+    if (video && r.rol === 'persona') { out.push(`Referencia ${r.i + 1}: la persona`); continue; }
     const on = EJES_REF.filter(e => r.ejes[e] > 0);
-    if (on.length) out.push(`Referencia ${r.i + 1}: ${on.map(e => `${EJES_REF_ES[e][0].toLowerCase() + EJES_REF_ES[e].slice(1)} ${FUERZA_ES[r.ejes[e]]}${e === 'color' ? ' (aquí, sin IA)' : ''}`).join(', ')}`);
+    if (on.length) out.push(`Referencia ${r.i + 1}: ${on.map(e => `${EJES_REF_ES[e][0].toLowerCase() + EJES_REF_ES[e].slice(1)} ${FUERZA_ES[r.ejes[e]]}${e === 'color' && !video ? ' (aquí, sin IA)' : ''}`).join(', ')}`);
   }
-  if (escD) out.push(`Escenario 3D: ${escD.es || 'cámara y distancia del escenario'}${escD.ocupacion != null ? ` · ocupa ~${Math.round(escD.ocupacion * 100)} % (se mide al final)` : ''}`);
+  if (escD) out.push(`Escenario 3D: ${escD.resumen || escD.es || 'cámara y distancia del escenario'}${escD.ocupacion != null && !video ? ` · ocupa ~${Math.round(escD.ocupacion * 100)} % (se mide al final)` : ''}`);
   else if (nivel) out.push(nivel.medido && nivel.ocupacion != null ? `Producto al ${Math.round(nivel.ocupacion * 100)} % del cuadro, medido aquí` : `${nivel.es || nivel.v} (no medido)`);
   if (canal) out.push(`Para ${canal.nombre}: ${canal.ancho}×${canal.alto}${canal.formato ? ` ${canal.formato}` : ''}`);
   return out;
@@ -823,15 +984,24 @@ export function limpiaPlantilla(s) {
     return x.replace(/(^|[.!?]\s+)([a-z])/g, (m, a, b) => a + b.toUpperCase()); // cada frase empieza en mayúscula
   }).filter(l => l && !/^(SFX|Ambient noise):?\s*[.,]?$/i.test(l)).join('\n');
 }
-function renderPrompt({ familia, kind, conFoto, slots, idea, producto, conservar, refLineas, encuadreEn, plantilla, iaRefs, guia }) {
+function renderPrompt({ familia, kind, conFoto, slots, idea, producto, conservar, refLineas, encuadreEn, plantilla, iaRefs, guia, refsVideo = [], camaraFija = true }) {
   const prod = producto || 'the product';
   if (kind === 'music') return idea;
   if (kind === 'audio') return idea;
   if (kind === 'video' || FAMILIAS_VIDEO.includes(familia)) {
-    const tpl = plantilla || PLANTILLAS_VIDEO[familia] || PLANTILLAS_VIDEO['video-generico'];
+    let tpl = plantilla || PLANTILLAS_VIDEO[familia] || PLANTILLAS_VIDEO['video-generico'];
+    // una plantilla de antes (sin {refs} ni {sonido}) los recibe detrás de la acción y al final
+    if (!tpl.includes('{refs}')) tpl = tpl.replace('{accion}', '{accion}. {refs}');
+    if (!tpl.includes('{sonido}') && !/\{sfx\}/.test(tpl)) tpl = tpl.replace(/^([^\n]*)/, '$1 {sonido}.');
     const j = a => a.join(', ');
-    const accion = [idea, ...slots.accion, ...slots.estilo].filter(Boolean).join('; ') || (producto ? '' : 'The product');
-    const val = { camara: j(slots.camara) || (familia === 'kling' ? 'static camera' : ''), plano: j(slots.plano), lente: '', sujeto: producto, accion, escena: j(slots.escena), look: j(slots.look), luz: j(slots.luz), sfx: j(slots.sfx), ambiente: j(slots.ambiente) };
+    let accion = [idea, ...slots.accion, ...slots.estilo].filter(Boolean).join('; ') || (producto ? '' : 'The product');
+    // «Cafetera roja» + «the product makes a turntable rotation…» → «Cafetera roja makes…»; si no, «Cafetera roja: …»
+    let sujeto = producto;
+    if (producto && accion && /^the product\b/i.test(accion)) { accion = accion.replace(/^the product\b/i, () => producto); sujeto = ''; } // una función: «$&» en el nombre se queda tal cual
+    else if (producto && accion) sujeto = `${producto}:`;
+    const sonido = [slots.sfx.length ? `Sound: ${slots.sfx.join('; ')}` : '', slots.ambiente.length ? `Ambient noise: ${slots.ambiente.join('; ')}` : ''].filter(Boolean).join('. ');
+    if (!slots.camara.length && (familia !== 'kling' || !camaraFija)) tpl = tpl.replace(/Camera:\s*\{camara\}\.?/, '');
+    const val = { camara: j(slots.camara) || (familia === 'kling' && camaraFija ? 'static camera' : ''), plano: j(slots.plano), lente: '', sujeto, accion, refs: refsVideo.join('. '), escena: j(slots.escena), look: j(slots.look), luz: j(slots.luz), sfx: j(slots.sfx), ambiente: j(slots.ambiente), sonido };
     return limpiaPlantilla(tpl.replace(/\{(\w+)\}/g, (m, k) => val[k] ?? ''));
   }
   const encuadre = encuadreEn ? encuadreEn : '';

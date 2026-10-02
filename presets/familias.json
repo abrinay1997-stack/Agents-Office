@@ -50,14 +50,14 @@
   "modelos": [
    "veo-*"
   ],
-  "plantilla": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+  "plantilla": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
   "nota": "Fórmula oficial de Veo 3.1: cinematografía + sujeto + acción + contexto + estilo; audio con SFX: y Ambient noise:. Solo 16:9 y 9:16."
  },
  "kling": {
   "modelos": [
    "kling-*"
   ],
-  "plantilla": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. {look}.",
+  "plantilla": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
   "max": 2500,
   "nota": "Un solo movimiento de cámara por clip; «static camera» cuando es fija."
  },
@@ -65,7 +65,7 @@
   "modelos": [
    "seedance-*"
   ],
-  "plantilla": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}.",
+  "plantilla": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.",
   "nota": "start/end y reference no van juntos (lo valida capsOf)."
  },
  "minimax-video": {
@@ -74,7 +74,7 @@
    "minimax-*",
    "hailuo-*"
   ],
-  "plantilla": "{sujeto} {accion}. {escena}. {camara}. {look}.",
+  "plantilla": "{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.",
   "nota": "Los comandos de cámara entre corchetes ([Push in]…) NO están en docs/minimax/api-verificada.md: hasta verificarlos, la cámara va en texto llano."
  },
  "video-generico": {
@@ -88,7 +88,7 @@
    "genjutsu-*",
    "prueba-video"
   ],
-  "plantilla": "{camara}. {plano}. {sujeto} {accion}. {escena}. {look}."
+  "plantilla": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
  },
  "musica-minimax": {
   "modelos": [
