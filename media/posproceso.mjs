@@ -47,12 +47,13 @@ export async function procesar(buf, j = {}) {
   const canal = canalDe(pasos, j.canal);
   const ref = pasos.find(p => p && p.op === 'transferir-color' && p.ref)?.ref;
   const original = j.versionOf ? leerArchivo(j.versionOf) : null;
-  // la LUT del dueño (ref-lut-aplicar): el compilador pone en el paso el id de la galería; aquí se lee su .cube (revisión F1)
-  const lutId = pasos.find(p => p && (p.op === 'lut' || p.op === 'lut3d') && typeof p.lut === 'string')?.lut;
-  const lutBuf = lutId ? leerArchivo(lutId) : null;
-  const out = await L.pipeline(buf, pasos.map(({ de, lut, ...p }) => p), {
+  // la LUT del dueño (ref-lut-aplicar): el compilador pone en el paso el id de la galería; aquí se lee su .cube y va DENTRO de
+  // ese paso (revisión F1). Antes iba como ctx.lut a todo el pipeline y pisaba la LUT de fábrica (p.archivo) de otro paso.
+  const deLut = p => p && (p.op === 'lut' || p.op === 'lut3d') && typeof p.lut === 'string';
+  const leidas = new Map();
+  for (const p of pasos) if (deLut(p) && !leidas.has(p.lut)) leidas.set(p.lut, leerArchivo(p.lut)?.toString('utf8') || null);
+  const out = await L.pipeline(buf, pasos.map(({ de, lut, ...p }) => (deLut({ ...p, lut }) && leidas.get(lut) ? { ...p, lutTexto: leidas.get(lut) } : p)), {
     canal, referencia: ref ? leerArchivo(ref) : undefined, original: original || undefined, sku: j.sku || undefined, n: j.n || 1,
-    ...(lutBuf ? { lut: lutBuf.toString('utf8') } : {}),
   });
   // un paso que no se hizo se dice: el trabajo no sale «done» limpio con una copia igual a la foto
   const sinHacer = out.pasos.filter(p => p && p.hecho === false);
@@ -83,5 +84,13 @@ export async function procesar(buf, j = {}) {
     nombre: out.nombre || null,
     sinHacer: sinHacer.map(p => p.aviso || (p.error ? `${p.op}: ${p.error}` : `${p.op}: no se hizo`)),
   };
+}
+/** El aviso de un trabajo con varias imágenes (revisión F1): el del motor, más lo de cada imagen, sin repetir y en 300
+ *  caracteres. Antes cada imagen reescribía j.warning y solo quedaba lo de la última. → texto, o null si no hay nada. */
+export function juntarAvisos(previo, avisos = [], sinHacer = []) {
+  const l = [previo, ...avisos], sh = [...new Set(sinHacer)].filter(Boolean);
+  if (sh.length) l.push(`no se hizo en tu máquina: ${sh.join(' · ')}`);
+  const t = [...new Set(l.filter(Boolean))].join(' · ');
+  return t ? t.slice(0, 300) : null;
 }
 export { L as imagenLocal };

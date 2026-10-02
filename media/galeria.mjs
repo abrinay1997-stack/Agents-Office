@@ -175,6 +175,12 @@ const all = () => index().sorted.map(it => ({ ...it }));
 export function list({ limit = 600 } = {}) {
   return index().sorted.slice(0, limit).map(it => ({ ...it }));
 }
+/** The first record that passes `pred` (newest first), as a copy; null if none. Walks the index without copying it all
+   (revisión F1: the presets' scene guide was looked up with list({ limit: 1e6 }), 5,000 copies per request). */
+export function find(pred) {
+  const it = index().sorted.find(x => { try { return !!pred(x); } catch { return false; } });
+  return it ? { ...it } : null;
+}
 /* Auditoría 1 oct 2026 (INF-03): the gallery had a cap of 600 and no pages — from file 601 on, the oldest vanished from
    the Estudio, Ctrl+K, the Contenido picker and the folder counts. query() searches, filters and counts over the WHOLE
    index and hands back one page: { items, total (what matches), next (cursor of the next page, or null), counts (the tabs

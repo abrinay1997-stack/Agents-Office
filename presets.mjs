@@ -14,6 +14,7 @@ import * as core from './src/presets-core.js';
 import * as e3 from './src/escena3d-core.js';
 import * as notas from './presets-notas.mjs';
 import * as media from './media.mjs';
+import { find as buscarEnGaleria } from './media/galeria.mjs'; // revisión F1: buscar sin copiar la galería (no es API de la fachada)
 import * as L from './imagen-local.mjs';
 
 const ID_RE = /^[a-z0-9-]{2,40}$/;
@@ -50,6 +51,9 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
   const fab = () => (FAB ||= cargarFabrica());
   const carpeta = () => path.join(brainPath, ...notas.CARPETA.split('/'));
   const guias = new Map(); // hash de la escena → id de la guía ya subida a la galería
+  // revisión F1: las guías que la caché ya entregó a otra petición. Una guía nueva solo va a la papelera si su submit falla
+  // y nadie más la recibió mientras tanto (si no, el trabajo de la otra petición quedaría sin su guía).
+  const entregadas = new Set();
   const canales = () => notas.conjuntoDeCanales(fab().canales); // las notas validan contra un Set de ids, no la lista de la fábrica
 
   /** Los presets del dueño: cada nota de <cerebro>/Estudio/Presets/*.md. Una nota rota se dice, no tumba el banco. */
@@ -132,10 +136,11 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
   /** La imagen guía de la escena, subida una vez por escena (la galería la muestra como «Guía de composición»). */
   function guiaDe(escena) {
     const h = createHash('sha1').update(JSON.stringify(e3.normalizar(escena))).digest('hex').slice(0, 16);
-    const ya = guias.get(h); if (ya && media.resolve(ya)) return { file: ya, nueva: false };
-    // tras un reinicio la caché está vacía: la guía de esa escena sigue en la galería, marcada con su hash
-    const vieja = media.list({ limit: 1e6 }).find(x => x.guia === true && x.escena === h && media.resolve(x.file));
-    if (vieja) { guias.set(h, vieja.file); return { file: vieja.file, nueva: false }; }
+    const ya = guias.get(h); if (ya && media.resolve(ya)) { entregadas.add(ya); return { file: ya, nueva: false }; }
+    // tras un reinicio la caché está vacía: la guía de esa escena sigue en la galería, marcada con su hash (find recorre el
+    // índice sin copiar la galería entera, revisión F1)
+    const vieja = buscarEnGaleria(x => x.guia === true && x.escena === h && media.resolve(x.file));
+    if (vieja) { guias.set(h, vieja.file); entregadas.add(vieja.file); return { file: vieja.file, nueva: false }; }
     const it = media.upload({ name: 'Guía de composición (escenario 3D)', data: e3.guiaPNG(escena, { lado: 768 }) });
     try { media.update(it.file, { guia: true, escena: h }); } catch {}
     guias.set(h, it.file); return { file: it.file, nueva: true };
@@ -183,7 +188,10 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
       const j = media.submit({ ...req, medir: c.medir, canal, esEscena, receta, by, folder: P.folder, purpose: 'banco de presets' });
       return { plan: c, jobs: [j] };
     } catch (e) {
-      for (const f of creados) { try { media.trash(f); } catch {} for (const [h, v] of guias) if (v === f) guias.delete(h); }
+      for (const f of creados) {
+        if (entregadas.has(f)) continue; // otra petición en vuelo ya usa esta guía: se queda (y en la caché)
+        try { media.trash(f); } catch {} for (const [h, v] of guias) if (v === f) guias.delete(h);
+      }
       throw e;
     }
   }

@@ -825,7 +825,7 @@ export { DIR_LUTS };
  * Corre los pasos locales en orden sobre el buffer que devolvió el modelo (o la foto del dueño, si todo es local).
  * pasos: ['fondo-blanco', 'encuadrar', 'exportar'] o [{ op: 'exposicion', ev: { suave, normal, fuerte } }, …]
  * ctx: { intensidad, canal, encuadre: { ocupacion, alinear, base }, aireMinPx, sombra, original (buffer), referencia (buffer),
- *        lut (texto .cube), fuerza, zona, sku, n, patron (medirSerie), escalaFija, canales[], formatoEntrada, raiz }
+ *        lut (texto .cube, para un paso lut sin p.lutTexto ni p.archivo), fuerza, zona, sku, n, patron (medirSerie), escalaFija, canales[], formatoEntrada, raiz }
  * Sin sharp lanza NoDisponible. Un paso que necesita la IA no se hace: queda { hecho: false, necesitaIA: true, aviso }.
  */
 export async function pipeline(buf, pasos = [], ctx = {}) {
@@ -867,7 +867,8 @@ export async function pipeline(buf, pasos = [], ctx = {}) {
         case 'ruido': r = await ruido(r, v('radio') ?? 1); break;
         case 'rotar-horizonte': { const o = await rotarHorizonte(r, { angulo: p.angulo }); if (o.necesitaIA) { reg.hecho = false; reg.necesitaIA = true; reg.aviso = o.aviso; avisos.push(o.aviso); } else { r = o.raw; m = null; reg.angulo = o.angulo; } break; }
         case 'lut': case 'lut3d': {
-          const texto = ctx.lut || (p.archivo ? leerLutDeArchivo(p.archivo, ctx.raiz) : null);
+          // la de cada paso primero (la del dueño, p.lutTexto; la de fábrica, p.archivo); ctx.lut solo para un paso que no trae la suya
+          const texto = (typeof p.lutTexto === 'string' && p.lutTexto) || (p.archivo ? leerLutDeArchivo(p.archivo, ctx.raiz) : null) || ctx.lut;
           if (!texto) { reg.hecho = false; reg.aviso = 'Falta el archivo .cube.'; avisos.push(reg.aviso); break; }
           r = aplicarLut(r, texto, ctx.fuerza ?? v('fuerza') ?? 1); break;
         }

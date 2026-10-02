@@ -10,7 +10,7 @@ import { S } from './estado.mjs';
 import { ENGINES, KINDS, secret, engineOn, model, allModels, defaultModel, settingsFor, unitCost, hfRoute, editModels, engines } from './catalogo.mjs';
 import { dir, slug, store, resolve, item, update, folderOf } from './galeria.mjs';
 import { RUN, friendly } from './motores.mjs';
-import { procesar, guardarCrudo } from './posproceso.mjs'; // banco de presets (F1): lo local y la QA, después del modelo
+import { procesar, guardarCrudo, juntarAvisos } from './posproceso.mjs'; // banco de presets (F1): lo local y la QA, después del modelo
 
 let usageFile = '', jobsFile = '', hooks = {};
 /** configure(): where the day's count and the jobs are kept, and the hooks (onDone…), replaced. */
@@ -190,6 +190,8 @@ async function runJob(j) {
   try {
     if (local) { const p = resolve(j.source); if (!p) throw new Error('tu foto ya no está en el Estudio'); j.note = 'en tu máquina'; ctx.add(fs.readFileSync(p), path.extname(p).slice(1).toLowerCase()); }
     else { if (!m) throw new Error('el modelo ya no está en el catálogo'); await RUN[m.engine](m, j, ctx); }
+    // revisión F1: con varias imágenes, los avisos se juntan (antes el de la última pisaba al de las anteriores y al del motor)
+    const avisos = new Set(), sinHacer = new Set();
     for (const [i, p] of pend.entries()) {
       if (!local) guardarCrudo(j, i + 1, p.buf, p.ext);
       j.note = 'retocando en tu máquina'; saveJobs();
@@ -197,13 +199,14 @@ async function runJob(j) {
         const r = await procesar(p.buf, j);
         guardar(r.buffer, r.ext, { ...p.extra, post: r.post, ...(r.qa ? { qa: r.qa } : {}), ...(r.nombre ? { nombre: r.nombre } : {}) });
         if (r.qa?.estado === 'revisar') j.revisar = [...(j.revisar || []), r.qa.motivo || 'la QA pide revisarla'];
-        if (r.sinHacer?.length) j.warning = `no se hizo en tu máquina: ${[...new Set(r.sinHacer)].join(' · ')}`.slice(0, 300); // revisión F1: nunca «done» limpio si un paso falló
+        for (const x of r.sinHacer || []) sinHacer.add(x); // revisión F1: nunca «done» limpio si un paso falló
       } catch (e) {
         if (local || e.code !== 'no-disponible') throw e;
         guardar(p.buf, p.ext, { ...p.extra, post: { pasos: [], avisos: [e.message] } }); // sin sharp: el resultado del modelo tal cual, y se dice
-        j.warning = 'lo local no está disponible en esta máquina: va la imagen del modelo sin retocar';
+        avisos.add('lo local no está disponible en esta máquina: va la imagen del modelo sin retocar');
       }
     }
+    const w = juntarAvisos(j.warning, avisos, sinHacer); if (w) j.warning = w;
     if (!j.items.length) throw new Error(local ? 'no salió ninguna imagen' : 'el motor terminó sin devolver nada');
     j.state = 'done';
   } catch (e) {

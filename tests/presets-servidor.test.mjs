@@ -330,3 +330,81 @@ test('revisión F1: «Guardar como preset» con canal elegido, desde el composit
     assert.throws(() => P.guardar({ nombre: 'Mal', receta: { pila: [{ id: 'sal-canal', params: { canal: 'tiktok' } }], canal: 'tiktok' } }), e => e.status === 400 && /no es un canal|no existe/.test(e.message));
   } finally { back(); }
 });
+
+// Revisión F1 (hallazgo 1): dos peticiones a la vez con la misma escena. A crea la guía y espera (prepara su foto); B la
+// recibe de la caché y la manda. Si después el submit de A dice que no, la guía NO va a la papelera: el trabajo de B la usa.
+test('revisión F1: la guía que otra petición en vuelo ya usa no va a la papelera cuando A falla', conSharp, async () => {
+  const back = sinKeys(); const { srv, base } = await stand();
+  Object.assign(process.env, { GEMINI_API_KEY: 'prueba-key', AO_GEMINI_BASE: base });
+  try {
+    const { P } = entorno();
+    const foto = media.upload({ name: 'cama.png', data: dataUrl(await fotoBodega()) });
+    media.setLimits({ dailyLimit: 2 });
+    const escena = { producto: { tipo: 'cama-queen', ancho: 160, alto: 50, fondo: 200 }, camara: { distancia: 500, azimut: 35, altura: 140, lente: 35 }, cuadro: { proporcion: '4:5' }, fondo: { tipo: 'locacion', valor: 'sala moderna' } };
+    // A: con «luz más clara» (prepara la foto: hay un await antes de submit) y 3 imágenes, más que el tope; B: una, sin preparar
+    const [ra, rb] = await Promise.allSettled([
+      P.aplicar({ pila: ['esc-sala', 'luz-mas-clara'], entradas: { foto: [foto.file] }, escena, n: 3 }),
+      P.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena, n: 1 }),
+    ]);
+    assert.equal(ra.status, 'rejected'); assert.match(ra.reason.message, /tope diario/);
+    assert.equal(rb.status, 'fulfilled', rb.reason?.message);
+    const guia = rb.value.plan.guia.id;
+    assert.ok(media.resolve(guia), 'la guía sigue en la galería');
+    assert.ok(!JSON.stringify(media.trashList()).includes(path.basename(guia)), 'y no está en la papelera');
+    const j = await media.wait(rb.value.jobs[0].id, 30000);
+    assert.equal(j.state, 'done', j.error);
+    // la foto preparada de A sí va a la papelera: nadie más la usa
+    assert.equal(media.list({ limit: 1e6 }).filter(x => x.prep).length, 0);
+  } finally { media.setLimits({ dailyLimit: 0 }); srv.close(); back(); }
+});
+
+// Revisión F1 (hallazgo 3): buscar la guía tras un reinicio no copia la galería entera; find() de la galería da una copia del primero.
+test('revisión F1: find (galería) recorre el índice y devuelve una copia', async () => {
+  const { find } = await import('../media/galeria.mjs');
+  entorno();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  const a = media.upload({ name: 'a.png', data: dataUrl(png) }); media.update(a.file, { guia: true, escena: 'abc' });
+  media.upload({ name: 'b.png', data: dataUrl(png) });
+  const f = find(x => x.guia === true && x.escena === 'abc');
+  assert.equal(f.file, a.file);
+  f.escena = 'otra'; assert.equal(find(x => x.file === a.file).escena, 'abc', 'es una copia');
+  assert.equal(find(x => x.escena === 'no-existe'), null);
+  assert.equal(find(() => { throw new Error('x'); }), null, 'un filtro que falla no rompe la búsqueda');
+});
+
+// Revisión F1 (hallazgo 2): la LUT del dueño va en SU paso. Antes iba como ctx.lut a todo el pipeline y la LUT de fábrica de
+// otro paso (p.archivo) nunca se aplicaba: los dos pasos aplicaban la del dueño y salían «hechos».
+test('revisión F1: dos LUT en la misma pila, cada paso con la suya', conSharp, async () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-luts-')); fs.mkdirSync(path.join(raiz, 'presets', 'luts'), { recursive: true });
+  const cube = (fn, t) => L.exportarCube(L.lutDeFuncion(fn, 17), t);
+  const invertir = cube((r, g, b, o) => { o[0] = 1 - r; o[1] = 1 - g; o[2] = 1 - b; }, 'Invertir');
+  const rojo = cube((r, g, b, o) => { o[0] = 1; o[1] = 0; o[2] = 0; }, 'Rojo');
+  const verde = cube((r, g, b, o) => { o[0] = 0; o[1] = 1; o[2] = 0; }, 'Verde');
+  fs.writeFileSync(path.join(raiz, 'presets', 'luts', 'rojo.cube'), rojo);
+  const foto = await fotoBodega(64, 48);
+  const rgb = async b => { const d = (await L.leer(b)).data; return [d[0], d[1], d[2]].map(v => v > 128); };
+  // la de fábrica (rojo) y después la del dueño (invertir): cian. ctx.lut (verde) no se usa: los dos pasos traen la suya
+  const r = await L.pipeline(foto, [{ op: 'lut', archivo: 'presets/luts/rojo.cube' }, { op: 'lut3d', lutTexto: invertir }], { raiz, lut: verde });
+  assert.deepEqual(await rgb(r.buffer), [false, true, true], 'cian');
+  // un paso lut sin la suya sigue usando ctx.lut
+  const s = await L.pipeline(foto, [{ op: 'lut' }], { lut: verde });
+  assert.deepEqual(await rgb(s.buffer), [false, true, false], 'verde');
+  // por posproceso: la del dueño no tapa una de fábrica que falta (antes ese paso salía «hecho» con la LUT del dueño)
+  const { procesar } = await import('../media/posproceso.mjs');
+  entorno();
+  const mes = new Date().toISOString().slice(0, 7), d = path.join(media.dir(), mes); fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, 'lut-dueno.png'), invertir);
+  const p = await procesar(foto, { post: [{ op: 'lut3d', lut: `${mes}/lut-dueno.png` }, { op: 'lut', archivo: 'presets/luts/no-existe.cube' }] });
+  assert.equal(p.post.pasos.filter(x => x.hecho).length, 1, JSON.stringify(p.post.pasos));
+  assert.equal(p.sinHacer.length, 1); assert.match(p.sinHacer[0], /no-existe\.cube/);
+});
+
+// Revisión F1 (hallazgo 4): con varias imágenes, el aviso del trabajo junta lo de todas (y lo del motor), sin repetir.
+test('revisión F1: juntarAvisos no pierde el aviso de una imagen anterior ni el del motor', async () => {
+  const { juntarAvisos } = await import('../media/posproceso.mjs');
+  assert.equal(juntarAvisos(undefined, [], []), null);
+  const t = juntarAvisos('se hicieron 2 de 3', new Set(['lo local no está disponible']), new Set(['lut: falta', 'lut: falta', 'grano: no se hizo']));
+  assert.equal(t, 'se hicieron 2 de 3 · lo local no está disponible · no se hizo en tu máquina: lut: falta · grano: no se hizo');
+  assert.equal(juntarAvisos('x', ['x'], []), 'x');
+  assert.ok(juntarAvisos(null, ['a'.repeat(500)], []).length <= 300);
+});
