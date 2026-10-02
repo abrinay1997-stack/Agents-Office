@@ -6,6 +6,9 @@
 //
 //   creativesHTML(m, view) · actionsHTML(m, view) · stripHTML(files, esc) · studioBody(msgId, studio, edits) · planTotal(...)
 //   fitsBudget(total, budget, fallback, weight) · discardBody(msgId, studio) · applyDiscards(messages, ids) · fitWithin(w, h, max) · shrinkStep(t, bytes, limit) · b64Bytes(str) · usd(x)
+//   Banco de presets F3 (E7): loteHTML(m, view) · loteRefHTML(m, view) · loteVivo(m) · esHoja(name) — the lote Dimitri
+//   proposes (PROBAR CON 3 · GENERAR LAS N · Descartar), its live card (bar, counts, before/after) and SEGUIR after the sample. Every button posts
+//   to /api/sub/studio with { lote: { accion } } (studioBody's 5th argument): the only route that spends through Dimitri.
 
 import { weightOf } from '../estudio-plan.mjs'; // V4.11 (DIM-02): one source for what counts against the day's cap (a video 5, a music 3)
 
@@ -48,7 +51,11 @@ export function fitsBudget(total, budget, fallback, weight = 0) {
   return { fits: true, why: lefts.length ? `cabe en el presupuesto (quedan ${usd(Math.min(...lefts.map(([, v]) => v)))})` : count !== null ? `cabe en el tope de hoy (quedan ${count})` : 'sin tope de gasto' };
 }
 /** The body of POST /api/sub/studio: every creative still proposed, with only what the owner changed; and which actions go. */
-export function studioBody(msgId, studio = {}, edits = new Map(), actionEdits = new Map()) {
+export function studioBody(msgId, studio = {}, edits = new Map(), actionEdits = new Map(), lote = '') {
+  if (lote) { // a lote button carries only the lote: the creatives and the actions of the message wait for their own GENERAR
+    const e = (edits && edits.get(-1)) || {}, canal = e.settings && e.settings.canal;
+    return { msg: msgId, items: [], lote: { accion: String(lote), ...(canal && canal !== (studio.lote?.receta?.canal) ? { canal } : {}), ...(e.model && e.model !== studio.lote?.modelo ? { modelo: e.model } : {}) } };
+  }
   const items = (studio.creatives || []).filter(c => !c.state || c.state === 'proposed').map(c => {
     const e = edits.get(c.i) || {}, o = { i: c.i, include: e.include !== false };
     if (e.prompt !== undefined && e.prompt !== c.prompt) o.prompt = e.prompt;
@@ -67,22 +74,32 @@ export function studioBody(msgId, studio = {}, edits = new Map(), actionEdits = 
 export function discardBody(msgId, studio = {}) {
   if ((studio.actions || []).some(a => !a.state || a.state === 'proposed')) return null;
   const items = (studio.creatives || []).filter(c => !c.state || c.state === 'proposed').map(c => ({ i: c.i, include: false }));
-  return items.length ? { msg: msgId, items } : null;
+  const lote = studio.lote && studio.lote.state === 'proposed' ? { lote: { accion: 'descartar' } } : {}; // F3: a lote that never started is discarded with the rest
+  return items.length || lote.lote ? { msg: msgId, items, ...lote } : null;
 }
 /** The plans the owner discarded on this page: what is still proposed in them reads as skipped (a copy; the messages are not touched). */
 export function applyDiscards(messages = [], ids = new Set()) {
   if (!ids.size) return messages;
   const skip = x => (!x.state || x.state === 'proposed' ? { ...x, state: 'skipped' } : x);
-  return messages.map(m => (m && m.studio && ids.has(m.id) ? { ...m, studio: { ...m.studio, creatives: (m.studio.creatives || []).map(skip), actions: (m.studio.actions || []).map(skip) } } : m));
+  return messages.map(m => (m && m.studio && ids.has(m.id) ? { ...m, studio: { ...m.studio, creatives: (m.studio.creatives || []).map(skip), actions: (m.studio.actions || []).map(skip), ...(m.studio.lote && !m.studio.lote.id ? { lote: skip(m.studio.lote) } : {}) } } : m));
 }
 
 /** What a message takes once the uploads ended: the images that made it, the ones that did not, and the text — or `send: false`
  *  when there is no text and no image made it (Dimitri would get «Mira estas imágenes» about images that are not there). */
 export function outgoing(text, attachments = []) {
   text = String(text || '').trim();
-  const ready = attachments.filter(a => a.state === 'ready' && a.file), lost = attachments.filter(a => a.state === 'failed');
-  if (!text && !ready.length) return { send: false, ready, lost, text: '' };
-  return { send: true, ready, lost, text: text || (ready.length === 1 ? 'Mira esta imagen.' : 'Mira estas imágenes.') };
+  const ready = attachments.filter(a => a.state === 'ready' && a.file && !a.hoja), lost = attachments.filter(a => a.state === 'failed');
+  const hoja = attachments.find(a => a.state === 'ready' && a.hoja) || null; // F3: an Excel or a CSV, read by /api/media/lotes/hoja (Dimitri gets its summary)
+  if (!text && !ready.length && !hoja) return { send: false, ready, lost, text: '', hoja: null };
+  return { send: true, ready, lost, hoja: hoja ? hoja.hoja : null, text: text || (hoja && !ready.length ? 'Mira esta hoja.' : ready.length === 1 ? 'Mira esta imagen.' : 'Mira estas imágenes.') };
+}
+/** F3: an Excel or a CSV goes to Dimitri as a sheet (its rows), never as an image. */
+export const esHoja = name => /\.(xlsx|csv)$/i.test(String(name || ''));
+/** A lote of this message still moves (its card polls the office): started and not finished, or a sample waiting for SEGUIR. */
+export function loteVivo(m) {
+  const L = m && m.studio && m.studio.lote;
+  if (L && L.id && !(L.progreso && ['hecho', 'cancelado'].includes(L.progreso.estado))) return true;
+  return !!(m && m.studio && m.studio.loteRef && m.studio.loteRef.seguir);
 }
 
 /* ---------- pure: the copy of an image for Claude's vision (the server never rescales) ---------- */
@@ -145,7 +162,7 @@ function soundRow(kind, m, set, voices, esc) {
 
 /** The creative cards of one of Dimitri's messages, with the total and GENERAR. view: { esc, edits, actionEdits, models, budget, jobs, folders, voices } */
 export function creativesHTML(m, v) {
-  const s = m.studio; if (!s || !(s.creatives || []).length && !(s.actions || []).length) return '';
+  const s = m.studio; if (!s || !(s.creatives || []).length && !(s.actions || []).length && !s.lote && !s.loteRef) return '';
   const { esc } = v, edits = v.edits || new Map(), models = v.models || [];
   const cards = (s.creatives || []).map(c => {
     const e = edits.get(c.i) || {}, on = e.include !== false;
@@ -159,8 +176,9 @@ export function creativesHTML(m, v) {
         <div class="sc-meta">${esc(c.modelName || c.model || '')}${c.n > 1 ? ` · ${c.n}` : ''} · <b>${esc(st)}</b>${c.state === 'failed' && c.error ? ' — ' + esc(c.error) : ''}${cls === 'run' ? '<span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span>' : ''}</div>
         ${stripHTML(c.files || [], esc)}</div></div>`;
     }
+    const pre = Array.isArray(c.presets); // F3: an edit by presets — the recipe and its steps, not a prompt box; only the models that serve it
     const n = Math.max(1, +(e.n ?? c.n) || 1), set = { ...(c.settings || {}), ...(e.settings || {}) }, sound = c.kind === 'audio' || c.kind === 'music';
-    const opts = models.filter(x => x.kind === (c.kind || 'image') && (x.on || x.id === mid));
+    const opts = pre ? uniq([{ id: c.model, name: c.modelName }, ...(c.alternativas || [])]).map(x => ({ ...x, on: 1 })) : models.filter(x => x.kind === (c.kind || 'image') && (x.on || x.id === mid));
     const modelSel = opts.length
       ? `<select class="sc-model" aria-label="Modelo">${opts.map(x => `<option value="${esc(x.id)}"${x.id === mid ? ' selected' : ''}>${esc(x.name)}${x.on ? '' : ' (sin key)'}</option>`).join('')}</select>`
       : `<span class="sc-mname">${esc(c.modelName || c.model || '')}</span>`;
@@ -173,13 +191,13 @@ export function creativesHTML(m, v) {
         <div class="sc-t">${esc(c.title || 'Creativo')} ${kindLbl}${on ? '' : ' <span class="sc-offl">no se incluye</span>'}</div>
         <div class="sc-row">${modelSel}<span class="sc-cost" title="Costo estimado de este creativo">${usd(one ? one.cost : 0)}</span></div>
         ${c.why ? `<div class="sc-why">${esc(c.why)}</div>` : ''}
-        <label class="sc-lab" for="scp-${esc(m.id)}-${c.i}">${promptLabel(c.kind, set)}</label>
+        ${pre ? `<div class="sl-chips">${chips([...(c.recetaEs || []), c.canalEs, c.escenaEs].filter(Boolean), esc)}</div>${lis(c.avisosPreset, esc)}${queHara(c, esc)}` : `<label class="sc-lab" for="scp-${esc(m.id)}-${c.i}">${promptLabel(c.kind, set)}</label>
         <textarea class="sc-prompt" id="scp-${esc(m.id)}-${c.i}" rows="3">${esc(e.prompt ?? c.prompt ?? '')}</textarea>
-        ${sound ? '' : c.prompt_es && c.prompt_es !== c.prompt ? `<div class="sc-es"><span class="vh">En español: </span>${esc(c.prompt_es)}</div>` : ''}
+        ${sound ? '' : c.prompt_es && c.prompt_es !== c.prompt ? `<div class="sc-es"><span class="vh">En español: </span>${esc(c.prompt_es)}</div>` : ''}`}
         ${sound ? soundRow(c.kind, m0, set, v.voices, esc) : ''}
         <div class="sc-row">
           <span class="sc-f"><span>Cantidad</span><span class="sc-qty" role="group" aria-label="Cantidad"><button type="button" class="sc-minus" aria-label="Una menos"${n <= 1 ? ' disabled' : ''}>−</button><output aria-live="polite">${n}</output><button type="button" class="sc-plus" aria-label="Una más"${n >= max ? ' disabled' : ''}>+</button></span></span>
-          ${sound ? '' : settingSelect(m0, 'aspectRatio', set.aspectRatio, esc, 'Formato')}${c.kind === 'video' ? settingSelect(m0, 'duration', set.duration, esc, 'Segundos') : ''}
+          ${sound || pre ? '' : settingSelect(m0, 'aspectRatio', set.aspectRatio, esc, 'Formato')}${c.kind === 'video' ? settingSelect(m0, 'duration', set.duration, esc, 'Segundos') : ''}
           <label class="sc-f"><span>Carpeta</span><input class="sc-folder" list="scFolders" value="${esc(e.folder ?? c.folder ?? '')}" placeholder="sin carpeta" maxlength="60"></label>
         </div>
         ${refs.length ? `<div class="sc-refs"><span class="sc-lab">Usa de referencia</span>${stripHTML(refs, esc)}</div>` : ''}
@@ -197,7 +215,55 @@ export function creativesHTML(m, v) {
       <div class="sb-acts"><button type="button" class="sc-go" data-msg="${esc(m.id)}"${t.count + nActs ? '' : ' disabled'}>${label}</button><button type="button" class="sc-skip" data-msg="${esc(m.id)}">Descartar</button></div>
       <div class="sc-note">Nada se genera hasta que pulses ${t.count ? 'GENERAR' : 'HACER'}. Cada pedido pasa por tus topes del Estudio.</div></div>`;
   }
-  return `<div class="sc-plan">${cards}${acts}${foot}</div>`;
+  return `<div class="sc-plan">${cards}${loteHTML(m, v)}${loteRefHTML(m, v)}${acts}${foot}</div>`;
+}
+
+/* ---------- F3: the presets and the lote in Dimitri's chat (compact markup: the page has a size budget, check.mjs) ---------- */
+const chips = (list, esc) => list.map(x => `<span class="sl-chip">${esc(typeof x === 'string' ? x : x.nombre + (x.intensidad ? ' · ' + x.intensidad : ''))}</span>`).join('');
+const selectOf = (cls, label, opts, cur, esc) => `<select class="${cls}" aria-label="${label}">${opts.map(x => `<option value="${esc(x.id)}"${x.id === cur ? ' selected' : ''}>${esc(x.name || x.nombre || x.id)}</option>`).join('')}</select>`;
+const uniq = l => l.filter((x, k, a) => x.id && a.findIndex(y => y.id === x.id) === k);
+const lis = (l, esc, cls = 'sl-avisos') => (l && l.length ? `<ul class="${cls}">${l.map(a => `<li>${esc(a)}</li>`).join('')}</ul>` : '');
+const why = (t, esc) => (t ? `<div class="sc-why">${esc(t)}</div>` : '');
+/** «Qué hará»: the compiler's steps in Spanish, folded; the prompt it will send folded under it (the bank's: not editable). */
+function queHara(c, esc) {
+  const p = c.pasos || []; if (!p.length && !c.prompt) return '';
+  return `<details class="sl-que"><summary>Qué hará${p.length ? ` · ${p.length} pasos` : ''}</summary>${p.length ? `<ol>${p.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}${c.prompt ? `<p lang="en">${esc(c.prompt)}</p>` : ''}</details>`;
+}
+const zip = (id, esc) => `<a class="sl-b" href="/api/media/lotes/${esc(encodeURIComponent(id))}/zip?que=listas" download>Descargar ZIP</a>`;
+const ver = (id, esc) => `<button type="button" class="sl-b sl-ver" data-lote="${esc(id)}">Ver el lote</button>`;
+/** The lote Dimitri proposes (PROBAR CON 3 · GENERAR LAS N · Descartar) or, once started, its live card (bar, counts, before → after). */
+export function loteHTML(m, v) {
+  const L = m.studio && m.studio.lote; if (!L) return '';
+  const { esc } = v, e = (v.edits || new Map()).get(-1) || {}, msg = esc(m.id), est = L.estimate || {};
+  const open = (cls, at = '') => `<div class="sc-card sl-card${cls}"${at} role="group" aria-label="Lote «${esc(L.nombre)}»"><div class="sc-body"><div class="sc-t">${esc(L.nombre)} <span class="sc-kind">LOTE</span></div>`;
+  const vistas = (L.muestras || []).slice(0, 6);
+  const fotos = `<div class="sl-fotos">${stripHTML(vistas, esc)}${vistas.length && L.n > vistas.length ? `<span class="sl-mas">+${L.n - vistas.length}<span class="vh"> más</span></span>` : ''}<span class="sc-lab">${esc(L.fotosEs || `${L.n} fotos`)}</span></div>`;
+  if (L.state === 'skipped' && !L.id) return open(' sent skip') + `<div class="sc-meta"><b>${esc(L.error || 'descartado')}</b></div></div></div>`;
+  if (L.id) { // started: the live card
+    const p = L.progreso || { estado: 'previsto', hechas: 0, total: L.n, quedan: L.n, gastado: 0, pares: [] }, txt = p.texto || `${p.hechas} de ${p.total}`, muestra = p.estado === 'pausado' && p.motivo === 'muestra';
+    const pares = (p.pares || []).map(x => `<li class="sl-par ${esc(x.estado)}"><button type="button" class="sc-th" data-open="${esc(x.src)}" aria-label="Antes #${x.n}"><img src="${esc(mediaSrc(x.src))}" alt="" loading="lazy"></button><span aria-hidden="true">→</span><button type="button" class="sc-th" data-open="${esc(x.out)}" aria-label="Después #${x.n}"><img src="${esc(mediaSrc(x.out))}" alt="" loading="lazy"></button><span class="sc-lab">#${x.n}${x.sku ? ' · ' + esc(x.sku) : ''} <b>${esc(x.marca || '')}</b>${x.motivo ? '<br>' + esc(x.motivo) : ''}</span></li>`).join('');
+    return open(` sent ${p.estado === 'hecho' ? 'ok' : p.fallo ? 'bad' : 'run'}`)
+      + `<div class="sl-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${p.total}" aria-valuenow="${p.hechas}" aria-label="Fotos hechas"><i style="width:${p.total ? Math.round(p.hechas / p.total * 100) : 0}%"></i></div>`
+      + `<div class="sc-meta"><b>${esc(p.estadoEs || p.estado)}</b> · ${esc(txt)} · ${usd(p.gastado)} de ${usd(p.estimado || est.total)}</div>`
+      + why(p.motivo && !muestra ? p.motivo : '', esc) + (pares ? `<ul class="sl-pares" aria-label="Antes y después">${pares}</ul>` : fotos)
+      + `<div class="sb-acts">${ver(L.id, esc)}</div></div></div>`;
+  }
+  // proposed: nothing exists yet, nothing is spent until a button
+  const k = L.muestra > 0 ? L.muestra : 3, prueba = L.n > k, pf = +est.porFoto || 0, total = +est.total || 0, canales = v.canales || L.canales || [];
+  const go = (lote, txt, sec) => `<button type="button" class="sc-go${sec ? ' sl-b' : ''}" data-msg="${msg}" data-lote="${lote}">${txt} · ${pf ? usd(lote === 'probar' ? pf * k : total) : 'gratis'}</button>`;
+  return open('', ` data-msg="${msg}" data-i="-1"`) + fotos + `<div class="sl-chips">${chips([...(L.recetaEs || []), L.escenaEs].filter(Boolean), esc)}</div>`
+    + `<div class="sc-row">${canales.length ? `<label class="sc-f"><span>Canal</span>${selectOf('sc-set" data-k="canal', 'Canal', canales, (e.settings && e.settings.canal) || L.receta.canal, esc)}</label>` : ''}`
+    + `${L.soloLocal || !L.alternativas || !L.alternativas.length ? `<span class="sc-mname">${esc(L.modelName || '')}</span>` : selectOf('sc-model', 'Modelo del lote', uniq([{ id: L.modelo, name: L.modelName }, ...L.alternativas]), e.model || L.modelo, esc)}<span class="sc-cost">${pf ? 'aprox. ' + usd(total) : 'gratis'}</span></div>`
+    + `<div class="sc-total${est.fits === false ? ' bad' : ''}">${esc(est.why || '')}</div>` + why(L.porQue, esc) + lis((L.avisos || []).slice(0, 6), esc)
+    + (L.error ? `<div class="sc-total bad" role="alert">${esc(L.error)}</div>` : '') + queHara(L, esc)
+    + `<div class="sb-acts">${prueba ? go('probar', `PROBAR CON ${k}`, L.n < 10) : ''}${go('todas', `GENERAR ${L.n === 1 ? 'LA FOTO' : `LAS ${L.n}`}`, prueba && L.n >= 10)}<button type="button" class="sc-skip" data-msg="${msg}">Descartar</button></div>`
+    + `<div class="sc-note">Nada se gasta sin tu clic${prueba ? `; PROBAR hace ${k} y te pregunta` : ''}.</div></div></div>`;
+}
+/** A message about a lote (the sample is ready, a pause, the end): SEGUIR, CAMBIAR RECETA, «Ver el lote», the ZIP. */
+export function loteRefHTML(m, v) {
+  const r = m.studio && m.studio.loteRef; if (!r) return '';
+  const { esc } = v;
+  return `<div class="sb-acts sl-ref">${r.seguir ? `<button type="button" class="sc-go" data-msg="${esc(m.id)}" data-lote="seguir">SEGUIR CON LAS ${r.quedan}${r.costo ? ` · ${usd(r.costo)}` : ''}</button><button type="button" class="sl-b sl-cambiar" data-msg="${esc(r.msg)}">CAMBIAR RECETA</button>` : ''}${ver(r.id, esc)}${r.fin ? zip(r.id, esc) : ''}</div>`;
 }
 
 /** The tidy-up actions Dimitri proposes (closed list), each with its box; done ones say how they went. */
@@ -207,7 +273,8 @@ export function actionsHTML(m, v) {
   const say = a => a.type === 'carpeta_crear' ? `Crear la carpeta «${esc(a.name)}»`
     : a.type === 'carpeta_renombrar' ? `Renombrar «${esc(a.from)}» a «${esc(a.to)}»`
     : a.type === 'mover' ? `Mover ${(a.files || []).length} ${(a.files || []).length === 1 ? 'archivo' : 'archivos'} a «${esc(a.folder)}»`
-    : a.type === 'enviar_contenido' ? 'Enviar a Contenido como idea (no se aprueba ni se publica)' : '';
+    : a.type === 'enviar_contenido' ? 'Enviar a Contenido como idea (no se aprueba ni se publica)'
+    : /^lote_/.test(a.type) ? esc(a.texto || a.type) : ''; // F3: pausar, reanudar, reintentar (gasta, y lo dice) o aprobar un lote — the server words it (estudio-lote.accionLoteEs)
   const rows = list.map((a, k) => {
     const txt = say(a); if (!txt) return '';
     if (a.state && a.state !== 'proposed') return `<li class="sc-act ${a.state === 'failed' ? 'bad' : 'ok'}"><span aria-hidden="true">${a.state === 'failed' ? '⚠' : a.state === 'skipped' ? '–' : '✓'}</span> ${txt}${a.state === 'failed' && a.error ? ' — ' + esc(a.error) : a.state === 'skipped' ? ' (no se hizo)' : ''}</li>`;
