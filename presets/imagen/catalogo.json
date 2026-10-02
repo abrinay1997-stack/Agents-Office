@@ -1,0 +1,2376 @@
+{
+ "grupo": "catalogo",
+ "presets": [
+  {
+   "id": "cat-web-panaclaw",
+   "v": 1,
+   "nombre": "Catálogo para la web, con margen",
+   "icono": {
+    "id": "marco",
+    "d": "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M9 8h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1z"
+   },
+   "categoria": "catalogo",
+   "frase": "Tu foto cruda → producto sobre blanco, centrado y con aire para recortarlo en la web.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "web"
+    },
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "margen"
+    },
+    {
+     "id": "alinear",
+     "tipo": "alinear",
+     "es": "Alinear",
+     "valores": [
+      {
+       "v": "auto",
+       "es": "Automático (muebles por la base)"
+      },
+      {
+       "v": "centro",
+       "es": "Al centro"
+      },
+      {
+       "v": "base",
+       "es": "Por la base"
+      }
+     ],
+     "def": "auto"
+    },
+    {
+     "id": "escalaSerie",
+     "tipo": "escalaSerie",
+     "es": "En una serie",
+     "valores": [
+      {
+       "v": "llenar",
+       "es": "Cada foto llena su cuadro"
+      },
+      {
+       "v": "misma",
+       "es": "Misma escala en toda la serie (una king se ve más grande que una queen)"
+      }
+     ],
+     "def": "llenar"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "incluye": [
+    "limp-polvo",
+    "luz-arreglar",
+    "color-blancos",
+    "fondo-blanco",
+    "sombra-contacto"
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: turn this raw product photo into a clean, professional e-commerce catalog image on a pure white seamless background with a soft contact shadow",
+    "normal": "turn this raw product photo into a clean, professional e-commerce catalog image on a pure white seamless background with a soft contact shadow",
+    "fuerte": "turn this raw product photo into a clean, professional e-commerce catalog image on a pure white seamless background with a soft contact shadow; make the change clearly visible"
+   },
+   "ia": "turn this raw product photo into a clean, professional e-commerce catalog image on a pure white seamless background with a soft contact shadow",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "web",
+    "pagina",
+    "tienda",
+    "catalogo",
+    "margen",
+    "recortar",
+    "cama",
+    "mueble",
+    "producto",
+    "blanco",
+    "para la web",
+    "para vender",
+    "que se vea pro",
+    "bodega"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: turn this raw product photo into a clean, professional e-commerce catalog image on a pure white seamless background with a soft contact shadow. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- turn this raw product photo into a clean, professional e-commerce catalog image on a pure white seamless background with a soft contact shadow\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "turn this raw product photo into a clean, professional e-commerce catalog image on a pure white seamless background with a soft contact shadow. {conservar}"
+   }
+  },
+  {
+   "id": "cat-amazon",
+   "v": 1,
+   "nombre": "Amazon · foto principal",
+   "icono": {
+    "id": "etiqueta",
+    "d": "M3 12V4h8l10 10-8 8zM6 8.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "catalogo",
+   "frase": "Blanco 255, producto al 85 %, 2000 px, sin textos añadidos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "amazon"
+    },
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "ajustado"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "incluye": [
+    "limp-todo",
+    "luz-arreglar",
+    "fondo-blanco",
+    "sombra-contacto"
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: turn this product photo into an Amazon main image: pure white RGB 255 background, no added text, badges or props",
+    "normal": "turn this product photo into an Amazon main image: pure white RGB 255 background, no added text, badges or props",
+    "fuerte": "turn this product photo into an Amazon main image: pure white RGB 255 background, no added text, badges or props; make the change clearly visible"
+   },
+   "ia": "turn this product photo into an Amazon main image: pure white RGB 255 background, no added text, badges or props",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad",
+    "sin-texto"
+   ],
+   "buscar": [
+    "amazon",
+    "marketplace",
+    "fondo blanco",
+    "foto principal",
+    "85"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: turn this product photo into an Amazon main image: pure white RGB 255 background, no added text, badges or props. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- turn this product photo into an Amazon main image: pure white RGB 255 background, no added text, badges or props\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "turn this product photo into an Amazon main image: pure white RGB 255 background, no added text, badges or props. {conservar}"
+   }
+  },
+  {
+   "id": "cat-mercadolibre",
+   "v": 1,
+   "nombre": "Mercado Libre",
+   "icono": {
+    "id": "etiqueta",
+    "d": "M3 12V4h8l10 10-8 8zM6 8.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "catalogo",
+   "frase": "Blanco puro, cuadrada de 1600 px, producto al 80 %.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "mercadolibre"
+    },
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "catalogo"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "incluye": [
+    "limp-todo",
+    "luz-arreglar",
+    "fondo-blanco",
+    "sombra-contacto"
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: turn this product photo into a clean marketplace listing image on pure white",
+    "normal": "turn this product photo into a clean marketplace listing image on pure white",
+    "fuerte": "turn this product photo into a clean marketplace listing image on pure white; make the change clearly visible"
+   },
+   "ia": "turn this product photo into a clean marketplace listing image on pure white",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "mercado libre",
+    "mercadolibre",
+    "meli",
+    "marketplace",
+    "publicacion"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: turn this product photo into a clean marketplace listing image on pure white. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- turn this product photo into a clean marketplace listing image on pure white\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "turn this product photo into a clean marketplace listing image on pure white. {conservar}"
+   }
+  },
+  {
+   "id": "cat-shopify",
+   "v": 1,
+   "nombre": "Shopify / tienda propia",
+   "icono": {
+    "id": "etiqueta",
+    "d": "M3 12V4h8l10 10-8 8zM6 8.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "catalogo",
+   "frase": "Cuadrada 2048 px, webp de menos de 400 KB.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "shopify"
+    },
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "catalogo"
+    }
+   ],
+   "incluye": [
+    "limp-polvo",
+    "luz-arreglar",
+    "fondo-blanco",
+    "sombra-contacto"
+   ],
+   "ia": "turn this product photo into a clean online store product image on pure white",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "shopify",
+    "tienda online",
+    "ecommerce",
+    "woocommerce"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: turn this product photo into a clean online store product image on pure white. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- turn this product photo into a clean online store product image on pure white\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "turn this product photo into a clean online store product image on pure white. {conservar}"
+   }
+  },
+  {
+   "id": "cat-etsy",
+   "v": 1,
+   "nombre": "Etsy (4:3 con zona segura)",
+   "icono": {
+    "id": "etiqueta",
+    "d": "M3 12V4h8l10 10-8 8zM6 8.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "catalogo",
+   "frase": "2000×1500, el producto dentro del cuadrado central.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "etsy"
+    }
+   ],
+   "incluye": [
+    "limp-polvo",
+    "luz-arreglar"
+   ],
+   "ia": "product placed inside the central square safe area of a 4:3 frame, clean light background",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "etsy",
+    "artesania",
+    "handmade"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: product placed inside the central square safe area of a 4:3 frame, clean light background. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- product placed inside the central square safe area of a 4:3 frame, clean light background\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "product placed inside the central square safe area of a 4:3 frame, clean light background. {conservar}"
+   }
+  },
+  {
+   "id": "cat-fbshop",
+   "v": 1,
+   "nombre": "Facebook / Instagram Shop",
+   "icono": {
+    "id": "etiqueta",
+    "d": "M3 12V4h8l10 10-8 8zM6 8.5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "catalogo",
+   "frase": "Cuadrada de 1200 px sobre blanco, lista para la tienda de Meta.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "fbshop"
+    },
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "catalogo"
+    }
+   ],
+   "incluye": [
+    "limp-polvo",
+    "luz-arreglar",
+    "fondo-blanco",
+    "sombra-contacto"
+   ],
+   "ia": "turn this product photo into a clean social shop catalog image on pure white",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "facebook",
+    "instagram shop",
+    "tienda de facebook",
+    "meta",
+    "catalogo de meta"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: turn this product photo into a clean social shop catalog image on pure white. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- turn this product photo into a clean social shop catalog image on pure white\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "turn this product photo into a clean social shop catalog image on pure white. {conservar}"
+   }
+  },
+  {
+   "id": "cat-whatsapp",
+   "v": 1,
+   "nombre": "Catálogo de WhatsApp Business",
+   "icono": {
+    "id": "movil",
+    "d": "M9 2h6a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2v-16a2 2 0 0 1 2 -2zM11 18h2"
+   },
+   "categoria": "catalogo",
+   "frase": "Cuadrada de 1080 px, nítida y liviana para enviarla por WhatsApp.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "whatsapp"
+    },
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "catalogo"
+    }
+   ],
+   "incluye": [
+    "cal-whatsapp",
+    "luz-arreglar",
+    "fondo-blanco"
+   ],
+   "ia": "clean product catalog image on white, crisp and light",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "whatsapp",
+    "catalogo de whatsapp",
+    "wa",
+    "enviar por whatsapp"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: clean product catalog image on white, crisp and light. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- clean product catalog image on white, crisp and light\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "clean product catalog image on white, crisp and light. {conservar}"
+   }
+  },
+  {
+   "id": "cat-margen-recortar",
+   "v": 1,
+   "nombre": "Mucho aire para recortar",
+   "icono": {
+    "id": "expandir",
+    "d": "M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5"
+   },
+   "categoria": "catalogo",
+   "frase": "El producto pequeño y centrado: luego lo recortas a cualquier formato sin cortarlo.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "aire"
+    },
+    {
+     "id": "proporcion",
+     "tipo": "proporcion",
+     "es": "Proporción",
+     "valores": [
+      {
+       "v": "1:1",
+       "es": "1:1"
+      },
+      {
+       "v": "4:5",
+       "es": "4:5"
+      },
+      {
+       "v": "3:4",
+       "es": "3:4"
+      },
+      {
+       "v": "2:3",
+       "es": "2:3"
+      },
+      {
+       "v": "3:2",
+       "es": "3:2"
+      },
+      {
+       "v": "4:3",
+       "es": "4:3"
+      },
+      {
+       "v": "16:9",
+       "es": "16:9"
+      },
+      {
+       "v": "9:16",
+       "es": "9:16"
+      },
+      {
+       "v": "21:9",
+       "es": "21:9"
+      }
+     ],
+     "def": "1:1"
+    }
+   ],
+   "incluye": [
+    "luz-arreglar",
+    "fondo-blanco"
+   ],
+   "ia": "clean product image on pure white with a wide empty margin on all sides",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "margen",
+    "espacio",
+    "recortar",
+    "que no se corte",
+    "mas espacio alrededor",
+    "aire"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: clean product image on pure white with a wide empty margin on all sides. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- clean product image on pure white with a wide empty margin on all sides\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "clean product image on pure white with a wide empty margin on all sides. {conservar}"
+   }
+  },
+  {
+   "id": "cat-serie-muebles",
+   "v": 1,
+   "nombre": "Serie de muebles alineada",
+   "icono": {
+    "id": "cama",
+    "d": "M3 18V7M3 13h18v5M21 18v-3M6 13v-2.5A1.5 1.5 0 0 1 7.5 9h3A1.5 1.5 0 0 1 12 10.5V13"
+   },
+   "categoria": "catalogo",
+   "frase": "Todas las camas o sofás con la base en la misma línea, mismo ángulo y misma altura de cámara.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "apoyado"
+    },
+    {
+     "id": "escalaSerie",
+     "tipo": "escalaSerie",
+     "es": "En una serie",
+     "valores": [
+      {
+       "v": "llenar",
+       "es": "Cada foto llena su cuadro"
+      },
+      {
+       "v": "misma",
+       "es": "Misma escala en toda la serie (una king se ve más grande que una queen)"
+      }
+     ],
+     "def": "misma"
+    },
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "web"
+    }
+   ],
+   "incluye": [
+    "limp-polvo",
+    "limp-arrugas",
+    "luz-arreglar",
+    "fondo-blanco",
+    "sombra-contacto",
+    "ref-serie-patron"
+   ],
+   "ia": "catalog photo of furniture on pure white, resting on the same floor line, same camera height and three-quarter angle across the series, soft contact shadow",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "igualar-serie",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad",
+    "linea-suelo"
+   ],
+   "buscar": [
+    "serie",
+    "muebles",
+    "camas",
+    "sofa",
+    "alinear",
+    "misma altura",
+    "catalogo completo",
+    "colchon",
+    "todas iguales"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: catalog photo of furniture on pure white, resting on the same floor line, same camera height and three-quarter angle across the series, soft contact shadow. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- catalog photo of furniture on pure white, resting on the same floor line, same camera height and three-quarter angle across the series, soft contact shadow\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "catalog photo of furniture on pure white, resting on the same floor line, same camera height and three-quarter angle across the series, soft contact shadow. {conservar}"
+   }
+  },
+  {
+   "id": "cat-proveedor",
+   "v": 1,
+   "nombre": "Foto de proveedor a catálogo",
+   "icono": {
+    "id": "bloques",
+    "d": "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zm14 17 2 2 4-4"
+   },
+   "categoria": "catalogo",
+   "frase": "La foto que llegó por WhatsApp (borrosa, con marca de agua) → catálogo limpio.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canal",
+     "tipo": "canal",
+     "es": "Para dónde es",
+     "def": "web"
+    },
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "margen"
+    }
+   ],
+   "incluye": [
+    "cal-whatsapp",
+    "limp-texto",
+    "luz-arreglar",
+    "color-blancos",
+    "fondo-blanco",
+    "sombra-contacto"
+   ],
+   "ia": "restore this low-quality supplier photo and turn it into a clean catalog image on pure white; remove added watermarks but keep the product's own label",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "honestidad": "La IA rehace los detalles perdidos: revisa que la etiqueta y las costuras sigan siendo las reales.",
+   "buscar": [
+    "proveedor",
+    "whatsapp",
+    "foto fea",
+    "marca de agua",
+    "baja calidad",
+    "foto de whatsapp",
+    "china",
+    "importacion"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: restore this low-quality supplier photo and turn it into a clean catalog image on pure white; remove added watermarks but keep the product's own label. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- restore this low-quality supplier photo and turn it into a clean catalog image on pure white; remove added watermarks but keep the product's own label\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "restore this low-quality supplier photo and turn it into a clean catalog image on pure white. {conservar}"
+   }
+  },
+  {
+   "id": "cat-detalle",
+   "v": 1,
+   "nombre": "Detalle del material",
+   "icono": {
+    "id": "macro",
+    "d": "M4 11a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M8.5 11a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0m21 21-5-5"
+   },
+   "categoria": "catalogo",
+   "frase": "De muy cerca: la veta de la madera, la tela, las costuras.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz",
+    "encuadre",
+    "calidad"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "detalle"
+    }
+   ],
+   "incluye": [
+    "luz-arreglar",
+    "cal-nitidez"
+   ],
+   "ia": "extreme close-up of the material texture, sharp detail, soft raking light",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "exportar"
+   ],
+   "qa": [
+    "lado-min",
+    "identidad"
+   ],
+   "buscar": [
+    "detalle",
+    "textura",
+    "tela",
+    "madera",
+    "costuras",
+    "acabado",
+    "macro",
+    "de cerca"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: extreme close-up of the material texture, sharp detail, soft raking light. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- extreme close-up of the material texture, sharp detail, soft raking light\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "extreme close-up of the material texture, sharp detail, soft raking light. {conservar}"
+   }
+  },
+  {
+   "id": "cat-sin-fondo",
+   "v": 1,
+   "nombre": "Sin fondo (PNG transparente)",
+   "tecnico": "Recorte",
+   "icono": {
+    "id": "tijera",
+    "d": "M3 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M8.1 8.1 20 20M8.1 15.9 20 4"
+   },
+   "categoria": "catalogo",
+   "frase": "El producto solo, con transparencia de verdad, para montarlo donde quieras.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "fondo",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "incluye": [
+    "limp-polvo"
+   ],
+   "ia": "isolated product, transparent background, clean anti-aliased edges",
+   "requiere": {
+    "edit": true,
+    "settings": [
+     "background"
+    ]
+   },
+   "prefer": [
+    "gpt-image-1"
+   ],
+   "post": [
+    "exportar"
+   ],
+   "qa": [
+    "alfa",
+    "identidad"
+   ],
+   "honestidad": "Solo se ofrece con un modelo que dé transparencia real (GPT Image con background=transparent) o una segmentación dedicada. Sin eso, `check` lo marca «sin servir».",
+   "buscar": [
+    "sin fondo",
+    "png",
+    "transparente",
+    "recortar",
+    "quitar lo de atras",
+    "aislar",
+    "remove background"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: isolated product, transparent background, clean anti-aliased edges. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- isolated product, transparent background, clean anti-aliased edges\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "isolated product, transparent background, clean anti-aliased edges. {conservar}"
+   }
+  },
+  {
+   "id": "cat-maniqui",
+   "v": 1,
+   "nombre": "Ropa sin maniquí",
+   "tecnico": "Maniquí invisible",
+   "icono": {
+    "id": "percha",
+    "d": "M12 7a2 2 0 1 1 2-2c0 1-2 1.5-2 3l9 6.5a1 1 0 0 1-.6 1.8H3.6a1 1 0 0 1-.6-1.8L12 8"
+   },
+   "categoria": "catalogo",
+   "frase": "Quita el maniquí y deja la prenda con su volumen y el cuello por dentro.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "catalogo"
+    }
+   ],
+   "incluye": [
+    "limp-pinzas",
+    "fondo-blanco"
+   ],
+   "ia": "ghost mannequin: remove the mannequin, keep the garment's 3D shape and the inner neckline visible",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "maniqui",
+    "ropa",
+    "prenda",
+    "camisa",
+    "ghost",
+    "invisible"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: ghost mannequin: remove the mannequin, keep the garment's 3D shape and the inner neckline visible. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- ghost mannequin: remove the mannequin, keep the garment's 3D shape and the inner neckline visible\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "ghost mannequin: remove the mannequin, keep the garment's 3D shape and the inner neckline visible. {conservar}"
+   }
+  },
+  {
+   "id": "cat-flatlay",
+   "v": 1,
+   "nombre": "Ropa extendida, vista desde arriba",
+   "tecnico": "Flat lay",
+   "icono": {
+    "id": "cenital",
+    "d": "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2zM8 8h3v3H8zM13 8h3v5h-3zM8 13h3v3H8zM13 15h3v1h-3z"
+   },
+   "categoria": "catalogo",
+   "frase": "La prenda bien estirada, sin arrugas, vista desde arriba.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "limpieza",
+    "luz",
+    "color",
+    "fondo",
+    "sombra",
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fondoFlat",
+     "tipo": "enum",
+     "es": "Superficie",
+     "valores": [
+      {
+       "v": "blanco",
+       "es": "Blanco",
+       "en": "white"
+      },
+      {
+       "v": "madera",
+       "es": "Madera",
+       "en": "light wood"
+      },
+      {
+       "v": "color",
+       "es": "Color de marca",
+       "en": "brand-colored"
+      }
+     ],
+     "def": "blanco"
+    }
+   ],
+   "incluye": [
+    "limp-arrugas"
+   ],
+   "ia": "garment laid flat, top-down view, neatly arranged on a {p.fondoFlat} surface, wrinkles smoothed",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco",
+    "encuadrar",
+    "exportar"
+   ],
+   "qa": [
+    "fondo-255",
+    "ocupacion",
+    "lado-min",
+    "sin-recorte",
+    "identidad"
+   ],
+   "buscar": [
+    "flat lay",
+    "desde arriba",
+    "ropa",
+    "extendida",
+    "plana"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: garment laid flat, top-down view, neatly arranged on a {p.fondoFlat} surface, wrinkles smoothed. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- garment laid flat, top-down view, neatly arranged on a {p.fondoFlat} surface, wrinkles smoothed\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "garment laid flat, top-down view, neatly arranged on a {p.fondoFlat} surface, wrinkles smoothed. {conservar}"
+   }
+  },
+  {
+   "id": "cat-otro-color",
+   "v": 1,
+   "nombre": "El mismo producto en otro color",
+   "icono": {
+    "id": "paleta",
+    "d": "M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5S14 15 15 15h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8zM6.5 11a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M9 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M14 7.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+   },
+   "categoria": "catalogo",
+   "frase": "Cambia el color de una parte (la tela, las patas) y deja todo lo demás igual.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "color",
+     "tipo": "color",
+     "es": "Color",
+     "patron": "^#[0-9A-Fa-f]{6}$",
+     "def": "#3A5A40"
+    },
+    {
+     "id": "zona",
+     "tipo": "texto",
+     "es": "Qué parte",
+     "max": 140,
+     "def": "la tela"
+    }
+   ],
+   "incluye": [],
+   "ia": "recolor only {p.zona} to {p.color}; keep texture, shading, stitching and everything else identical",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "exportar"
+   ],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "otro color",
+    "variante",
+    "color",
+    "cambiar color",
+    "tela",
+    "version"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: recolor only {p.zona} to {p.color}; keep texture, shading, stitching and everything else identical. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- recolor only {p.zona} to {p.color}; keep texture, shading, stitching and everything else identical\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "recolor only {p.zona} to {p.color}. {conservar}"
+   }
+  }
+ ]
+}

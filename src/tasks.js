@@ -643,7 +643,7 @@ export function initTasks(ctx) {
     el.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); rtActAsk(b.closest('[data-rid]').dataset.rid, b.dataset.act); }));
   }
   /* ---------- V3.5 live: the page keeps up with a server that runs things on its own ---------- */
-  let pollN = 0, usageDue = true;
+  let pollN = 0, usageDue = true, lastTasksText = '', sameN = 0;
   async function pollUsage(force) { // V3.6: the plan's gauge — every 30 s, and after every run
     try { const u = await fetch(API + '/usage' + (force ? '?refresh=1' : '')).then(r => r.json()); if (onUsage) onUsage(u); } catch {}
   }
@@ -651,8 +651,12 @@ export function initTasks(ctx) {
     if (!live || polling) return; polling = true;
     if (usageDue || ++pollN % 5 === 0) { usageDue = false; pollUsage(); }
     try {
-      const [rl, tl] = await Promise.all([fetch(API + '/routines').then(r => r.json()), fetch(API + '/tasks').then(r => r.json())]);
+      // Auditoría 1 oct 2026 (INF-04): the light list (archived tasks without their work), revalidated by ETag — when nothing
+      // changed the browser gets a 304 and the same text, and the page skips the whole reconcile
+      const [rl, tt] = await Promise.all([fetch(API + '/routines').then(r => r.json()), fetch(API + '/tasks?light=1').then(r => { if (!r.ok) throw new Error('tasks ' + r.status); return r.text(); })]);
       if (Array.isArray(rl.routines)) setRoutines(rl.routines);
+      const same = tt === lastTasksText && ++sameN % 5 !== 0; lastTasksText = tt; if (!same) sameN = 0; // still a full pass every 30 s
+      const tl = same ? null : JSON.parse(tt);
       if (Array.isArray(tl)) {
         for (const st of tl) reconcile(st);
         const keep = new Set(tl.filter(x => !x.archived).map(x => x.id)), arch = new Map(tl.filter(x => x.archived).map(x => [x.id, x]));
@@ -1160,10 +1164,11 @@ export function initTasks(ctx) {
   }
 
   /* ---------- per-frame ---------- */
+  let simPaused = false; // Auditoría 1 oct 2026 (INF-11): npm run check freezes the demo's theatre while it counts cards (the board still renders)
   function tick(now) {
-    if (!live) { const w = Date.now(); for (const r of routines) if (!r.paused && r.nextAt && r.nextAt <= w) fireDemo(r, false); // demo: this page is the clock
+    if (!live && !simPaused) { const w = Date.now(); for (const r of routines) if (!r.paused && r.nextAt && r.nextAt <= w) fireDemo(r, false); // demo: this page is the clock
       for (const t of tasks) if (t.state === 'scheduled' && t.dueAt <= w) { t.state = 'next'; t.addedAt = w; touch(t, 'added'); spawnEmote(R[t.agent], '⏱'); feedPush(R[t.agent], '⏱', `Tarea programada en marcha: ${t.title}`); } }
-    for (const id in R) {
+    for (const id in (simPaused ? {} : R)) {
       const r = R[id];
       if (r.state === 'stuck') continue;
       const d = agentTasks(id, 'doing')[0];
@@ -1405,7 +1410,7 @@ export function initTasks(ctx) {
   toast.addEventListener('focusin', () => clearTimeout(toastTimer));
   addEventListener('pagehide', () => { if (pendingUndo) finishUndo(true); }); // closing the page carries the delete out (keepalive)
   const calendar = initCalendar({ contenido: ctx.contenido, tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create: createScheduled, createRoutine: createRoutineAt, cancelTask: cancelScheduled, updateTask: updateScheduled, updateRoutine, rtAct, openTask, act, skipRun: async (rid, at, on) => { try { const j = await req('POST', `/routines/${encodeURIComponent(rid)}/${on ? 'skip' : 'unskip'}`, { at }); setRoutines(j.routines); return { ok: true }; } catch (e) { return { ok: false, error: e.message }; } }, backlog: () => tasks.filter(t => t.state === 'next' && !t.piece && !t.routine && !t.isAsk), archivedTasks: () => archived.map(x => x.t), EFFORT_KEYS, effortName, teamsOn: () => teamsCfg.enabled, openAgent: (id, tab) => openAgent && openAgent(id, tab), esc, isLive: () => live, officeModel: () => officeModel, MODEL_KEYS, modelName, business: () => document.title.replace(/ — Agents Office$/, ''), currentDept: () => dept });
-  return { tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
+  return { pauseSim: on => { simPaused = !!on; }, tick, toggle, open, close, openFor, isOpen, boardWidth, onFocusChange, onStuck, onResolve, calendar, createScheduled, cancelScheduled, detail, openTask, act,
            findBySid: sid => tasks.find(t => t.live && t.sid === sid),
            handleChat, addTask, revise, rowHTML, showDept, setDept, tasks, setPanel: show => setPanelMin(!show), panelWidth: () => document.body.classList.contains('tpMin') ? 40 : panel.offsetWidth, isLive: () => live,
            routines, addRoutine, rtAct, railFor, syncPills, refresh: poll, resolveLive, rejectLive, waitingFor, officeModel: () => officeModel, chosenModel, chosenEffort };

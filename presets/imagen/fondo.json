@@ -1,0 +1,599 @@
+{
+ "grupo": "fondo",
+ "presets": [
+  {
+   "id": "fondo-blanco",
+   "v": 1,
+   "nombre": "Fondo blanco puro",
+   "icono": {
+    "id": "fondo",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM9 16h6l-1-6h-4z"
+   },
+   "categoria": "fondo",
+   "frase": "Blanco 255 de verdad, sin comerse el borde de las sábanas ni del mueble blanco.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "fondo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "replace the background with a pure seamless white background RGB 255,255,255, no gradient, no vignette",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [
+    "fondo-blanco"
+   ],
+   "qa": [
+    "fondo-255",
+    "identidad"
+   ],
+   "buscar": [
+    "fondo blanco",
+    "blanco",
+    "blanco puro",
+    "255",
+    "quitar fondo",
+    "quitar lo de atras",
+    "fondo limpio"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: replace the background with a pure seamless white background RGB 255,255,255, no gradient, no vignette. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- replace the background with a pure seamless white background RGB 255,255,255, no gradient, no vignette\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "replace the background with a pure seamless white background RGB 255,255,255, no gradient, no vignette. {conservar}"
+   }
+  },
+  {
+   "id": "fondo-gris",
+   "v": 1,
+   "nombre": "Fondo gris de estudio",
+   "icono": {
+    "id": "fondo",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM9 16h6l-1-6h-4z"
+   },
+   "categoria": "fondo",
+   "frase": "Un gris liso de estudio, claro, medio u oscuro.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "fondo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "tono",
+     "tipo": "enum",
+     "es": "Tono",
+     "valores": [
+      {
+       "v": "claro",
+       "es": "Claro",
+       "en": "light"
+      },
+      {
+       "v": "medio",
+       "es": "Medio",
+       "en": "mid"
+      },
+      {
+       "v": "oscuro",
+       "es": "Oscuro",
+       "en": "dark"
+      }
+     ],
+     "def": "claro"
+    }
+   ],
+   "ia": "replace the background with a seamless {p.tono} grey studio sweep",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "gris",
+    "estudio",
+    "fondo gris",
+    "neutro"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: replace the background with a seamless {p.tono} grey studio sweep. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- replace the background with a seamless {p.tono} grey studio sweep\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "replace the background with a seamless {p.tono} grey studio sweep. {conservar}"
+   }
+  },
+  {
+   "id": "fondo-color",
+   "v": 1,
+   "nombre": "Fondo del color de la marca",
+   "icono": {
+    "id": "paleta",
+    "d": "M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5S14 15 15 15h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8zM6.5 11a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M9 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M14 7.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+   },
+   "categoria": "fondo",
+   "frase": "Un color liso a tu elección.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "fondo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "color",
+     "tipo": "color",
+     "es": "Color",
+     "patron": "^#[0-9A-Fa-f]{6}$",
+     "def": "#F2EDE4"
+    }
+   ],
+   "ia": "replace the background with a solid flat background in {p.color}",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "color de fondo",
+    "fondo de color",
+    "marca",
+    "liso"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: replace the background with a solid flat background in {p.color}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- replace the background with a solid flat background in {p.color}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "replace the background with a solid flat background in {p.color}. {conservar}"
+   }
+  },
+  {
+   "id": "fondo-degradado",
+   "v": 1,
+   "nombre": "Fondo degradado suave",
+   "icono": {
+    "id": "fondo",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM9 16h6l-1-6h-4z"
+   },
+   "categoria": "fondo",
+   "frase": "Un degradado suave del color que elijas.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "fondo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "color",
+     "tipo": "color",
+     "es": "Color",
+     "patron": "^#[0-9A-Fa-f]{6}$",
+     "def": "#F2EDE4"
+    }
+   ],
+   "ia": "replace the background with a soft radial gradient from {p.color} to a lighter tone",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "degradado",
+    "gradiente",
+    "fondo suave"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: replace the background with a soft radial gradient from {p.color} to a lighter tone. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- replace the background with a soft radial gradient from {p.color} to a lighter tone\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "replace the background with a soft radial gradient from {p.color} to a lighter tone. {conservar}"
+   }
+  },
+  {
+   "id": "fondo-desenfocar",
+   "v": 1,
+   "nombre": "Desenfocar el fondo",
+   "tecnico": "Bokeh",
+   "icono": {
+    "id": "macro",
+    "d": "M4 11a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M8.5 11a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0m21 21-5-5"
+   },
+   "categoria": "fondo",
+   "frase": "Deja el lugar, pero borroso, para que el producto resalte.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "fondo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: keep the background but blur it with natural lens bokeh, subject tack sharp",
+    "normal": "keep the background but blur it with natural lens bokeh, subject tack sharp",
+    "fuerte": "keep the background but blur it with natural lens bokeh, subject tack sharp; make the change clearly visible"
+   },
+   "ia": "keep the background but blur it with natural lens bokeh, subject tack sharp",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "desenfocar",
+    "borroso",
+    "bokeh",
+    "fondo borroso",
+    "resaltar"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: keep the background but blur it with natural lens bokeh, subject tack sharp. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- keep the background but blur it with natural lens bokeh, subject tack sharp\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "keep the background but blur it with natural lens bokeh, subject tack sharp. {conservar}"
+   }
+  },
+  {
+   "id": "fondo-pared",
+   "v": 1,
+   "nombre": "De la bodega a una pared limpia",
+   "icono": {
+    "id": "ventana",
+    "d": "M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-14a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1zM12 3v18M4 12h16"
+   },
+   "categoria": "fondo",
+   "frase": "Cambia el fondo desordenado por una pared y un piso limpios, sin moverle nada al producto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "fondo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "pared",
+     "tipo": "enum",
+     "es": "Pared",
+     "valores": [
+      {
+       "v": "blanca",
+       "es": "Blanca",
+       "en": "clean white"
+      },
+      {
+       "v": "beige",
+       "es": "Beige",
+       "en": "warm beige"
+      },
+      {
+       "v": "gris",
+       "es": "Gris claro",
+       "en": "light grey"
+      }
+     ],
+     "def": "blanca"
+    }
+   ],
+   "ia": "replace the cluttered warehouse background with a {p.pared} plain wall and a clean light floor, same perspective; the product stays exactly where it is",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "bodega",
+    "pared",
+    "fondo desordenado",
+    "deposito",
+    "almacen",
+    "limpiar fondo"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: replace the cluttered warehouse background with a {p.pared} plain wall and a clean light floor, same perspective; the product stays exactly where it is. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- replace the cluttered warehouse background with a {p.pared} plain wall and a clean light floor, same perspective; the product stays exactly where it is\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "replace the cluttered warehouse background with a {p.pared} plain wall and a clean light floor, same perspective. {conservar}"
+   }
+  },
+  {
+   "id": "fondo-como-ref",
+   "v": 1,
+   "nombre": "Fondo como el de la referencia",
+   "icono": {
+    "id": "copiar",
+    "d": "M10 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-9a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2zM16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"
+   },
+   "categoria": "fondo",
+   "frase": "Pon tu producto en un fondo como el de otra foto, sin copiar sus objetos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto+ref"
+   ],
+   "ejes": [
+    "fondo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "referencia",
+     "eje": "fondo",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Foto con el fondo que te gusta"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "ia": "replace the background with one {p.fuerza} the setting of the reference (materials, colors, depth); do not copy its objects",
+   "requiere": {
+    "edit": true,
+    "refsMin": 1
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "seedream-4",
+    "nano-banana",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "fondo como",
+    "mismo fondo",
+    "referencia de fondo"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Image {n1} is a reference for background setting only. Use Image {n1} only for its background setting; do not copy its objects, people, products, text, logos or brand names. Change only this: replace the background with one {p.fuerza} the setting of the reference (materials, colors, depth); do not copy its objects. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nImage {n1} is a reference for background setting only. Use Image {n1} only for its background setting; do not copy its objects, people, products, text, logos or brand names.\nRequirements:\n- replace the background with one {p.fuerza} the setting of the reference (materials, colors, depth); do not copy its objects\n- {idea}\nMust stay unchanged:\n- {conservar}"
+   }
+  }
+ ]
+}

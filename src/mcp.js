@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { MCP_LOGOS, MCP_BY_DEPT } from './mcplogos.js';
 import { applyAgentTools, profileShared } from './profile.js';
+import { tile, waitSummary } from './connectors.js';
 // a logo's centre on screen, measured at most once a second (and on resize): measuring each logo every frame,
 // between SVG writes, forced ~10 layouts a frame
 const cxCache = new Map(); let cxAt = 0;
@@ -187,54 +188,123 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       topconn.appendChild(img);
       topImgs[k] = img;
     });
-    if (LIVE && !uniqKeys.length) { // honest empty state — nothing is wired until the user connects something
+    if (LIVE && connectors.hidden) { // MCP-10: the servers waiting for a login, connecting or switched off are a count, not 113 grey icons
+      const more = document.createElement('button');
+      more.type = 'button'; more.className = 'tc-more';
+      more.textContent = '+' + connectors.hidden;
+      more.title = `${connectors.hidden} conectores más, sin usar (piden entrar, conectando o desactivados): ver el panel`;
+      more.setAttribute('aria-label', more.title);
+      more.addEventListener('click', e => { e.stopPropagation(); togglePanel(); });
+      topconn.appendChild(more);
+    }
+    if (LIVE && !uniqKeys.length && !connectors.hidden) { // honest empty state — nothing is wired until the user connects something
       const none = document.createElement('span');
       none.className = 'tc-none';
       none.textContent = 'nada aún — conecta en claude.ai o ejecuta: claude mcp add';
       topconn.appendChild(none);
     }
   }
-  // V4 (24 Sep 2026): the connectors' own panel — every server, its state in words and the departments it feeds.
-  // The label opens it; the bar keeps the icons (or folds them away: the switch inside) and never moves.
+  // V4 (24 Sep 2026): the connectors' own panel. Auditoría MCP (1 oct 2026, MCP-10/11): every server by its own name (the
+  // plugin under it), its state and the exact reason, the departments in words, its tools marked lee · envía · gasta (as the
+  // guard sees them), how to connect it, and «Volver a comprobar». A disclosure under the bar label, not a dialog.
   const escH = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const REASON = { 'needs-auth': 'necesita autenticación: abre Claude Code y usa /mcp', failed: 'no se pudo conectar', pending: 'conectando… (o la extensión de Chrome sin vincular)', denied: 'conectado, pero bloqueado para los agentes (office.config.json)' };
-  let panel = null;
-  const pretty = n => { const m = /^plugin:([^:]+):/.exec(String(n)); const s = m ? m[1] : String(n).replace(/^claude\.ai\s+/i, ''); return s.charAt(0).toUpperCase() + s.slice(1); }; // «plugin:context7:context7» → «Context7»
-  function panelHTML() {
-    const deptsOf = k => Object.keys(BY_DEPT).filter(d => BY_DEPT[d].includes(k));
-    const card = k => {
-      const st = STATUS[k] || 'connected', ds = deptsOf(k), ok = st === 'connected';
-      return `<button type="button" class="cp-c${ok ? '' : ' off'}" data-k="${escH(k)}" title="${ok ? 'Ver su flujo hacia los departamentos' : escH(REASON[st] || st)}"><img src="${LOGOS[k].img}" alt=""><span class="cp-n" title="${escH(NAMES[k] || LOGOS[k].name)}">${escH(pretty(NAMES[k] || LOGOS[k].name))}</span>` +
-        `<span class="cp-d">${ok ? (ds.length >= 6 ? '<em>toda la oficina</em>' : ds.map(d => `<i style="background:${DEPTS[d].chip}" title="${escH(DEPTS[d].name)}"></i>`).join('') || '<em>sin departamento</em>') : `<em>${escH(REASON[st] || st)}</em>`}</span></button>`;
-    };
-    const ready = uniqKeys.filter(k => !STATUS[k] || STATUS[k] === 'connected'), attn = uniqKeys.filter(k => STATUS[k] && STATUS[k] !== 'connected' && STATUS[k] !== 'denied'), denied = uniqKeys.filter(k => STATUS[k] === 'denied');
-    const sec = (t, l) => l.length ? `<div class="cp-sec">${t} · ${l.length}</div><div class="cp-g">${l.map(card).join('')}</div>` : '';
-    return `<div class="cp-h"><b>Conectores</b><span>${ready.length} listos${uniqKeys.length !== ready.length ? ` de ${uniqKeys.length}` : ''}</span><span class="sp"></span>` +
-      `<label class="cp-sw"><input type="checkbox" class="cp-icons"${document.body.classList.contains('connFold') ? '' : ' checked'}><span>Iconos en la barra</span></label><button type="button" class="cp-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div>` +
-      `<div class="cp-body">${sec('Listos para los agentes', ready)}${sec('Necesitan atención', attn)}${sec('Bloqueados para los agentes', denied)}` +
-      (uniqKeys.length ? '' : '<p class="cp-foot">Aún no hay conectores.</p>') +
-      `<p class="cp-foot">Para añadir uno: conéctalo en claude.ai o ejecuta <code>claude mcp add …</code>; la oficina lo ve al reiniciar. Qué departamento usa cuál: <code>office.config.json → mcp.departments</code>.</p></div>`;
+  const STATE_TXT = { connected: 'conectado', 'needs-auth': 'pide entrar', failed: 'no conecta', pending: 'conectando…', disabled: 'desactivado', denied: 'bloqueado para los agentes', 'not-configured': 'sin configurar' };
+  const KIND_TXT = { read: 'lee', write: 'envía', cost: 'gasta' };
+  let panel = null, opener = null, liveServers = LIVE ? connectors.servers : null, checking = false;
+  const pretty = n => String(n).replace(/^plugin:[^:]+:/i, '').replace(/^claude\.ai\s+/i, '').replace(/[-_]+/g, ' ').replace(/^\w/, c => c.toUpperCase()); // «plugin:small-business:gmail» → «Gmail» (it said «Small-business»)
+  const stOf = s => (s.denied || s.allowed === false ? 'denied' : s.status);
+  // the demo (opened as a file) has no server list: its logos become servers that are all connected
+  const demoServers = () => uniqKeys.map(k => ({ id: k, key: k, name: LOGOS[k].name, status: 'connected', allowed: true, depts: Object.keys(BY_DEPT).filter(d => BY_DEPT[d].includes(k)), tools: [], source: 'demo' }));
+  const servers = () => (liveServers || demoServers()).filter(s => !s.browser || LIVE);
+  function howTo(s) {
+    if (s.browser) return 'Ejecuta <code>claude --chrome</code> una vez en esta computadora para vincular la extensión Claude in Chrome y reinicia la oficina.';
+    if (s.source === 'claude.ai') return 'Se conecta en <a href="https://claude.ai/settings/connectors" target="_blank" rel="noopener">claude.ai → Ajustes → Conectores</a>.';
+    if (s.source === 'plugin') return `Abre Claude Code en esta computadora, escribe <code>/mcp</code>, elige «${escH(s.raw || s.name)}» y entra. Después, «Volver a comprobar».`;
+    if (s.source === 'local') return `Revisa su configuración con <code>claude mcp get ${escH(s.raw || s.name)}</code>.`;
+    return '';
   }
-  function closePanel() { if (!panel) return; panel.remove(); panel = null; document.removeEventListener('mousedown', outside, true); topconn && topconn.querySelector('.tc-lab')?.setAttribute('aria-expanded', 'false'); }
-  function outside(e) { if (panel && !panel.contains(e.target) && !e.target.closest('#topconn .tc-lab')) closePanel(); }
+  function detailHTML(s) {
+    const st = stOf(s), ds = (s.depts || []).filter(d => DEPTS[d]);
+    const deptTxt = ds.length >= 6 ? 'Toda la oficina.' : ds.length ? ds.map(d => escH(DEPTS[d].name)).join(', ') + '.' : 'Ninguno todavía: un conector que la oficina no conoce no llega a ninguna mesa. Asígnalo en <code>office.config.json → mcp.departments</code> (o en las herramientas de un agente).';
+    const kinds = s.kinds || {}, tools = s.tools || [];
+    const chips = tools.slice(0, 40).map(t => `<li class="cp-t k-${kinds[t] || 'read'}"><span>${escH(t)}</span><b>${KIND_TXT[kinds[t]] || 'lee'}</b></li>`).join('') + (tools.length > 40 ? `<li class="cp-t"><span>y ${tools.length - 40} más</span></li>` : '');
+    const why = st === 'denied' ? (s.defaultDenied ? 'Bloqueado por defecto: es tu canal personal con Claude, no un conector del negocio. Para dárselo a un departamento, nómbralo en <code>office.config.json → mcp.departments</code>.' : 'Conectado, pero lo bloqueaste para los agentes (Ajustes → Conectores).')
+      : s.fresh ? 'Apareció después de la última comprobación: ninguna mesa lo usa hasta «Volver a comprobar».' : '';
+    return `<dl class="cp-dl"><dt>Estado</dt><dd>${escH(STATE_TXT[st] || st)}${s.detail ? ` — <span class="cp-why">${escH(s.detail)}</span>` : ''}${why ? `<br>${why}` : ''}</dd>` +
+      `<dt>Departamentos</dt><dd>${deptTxt}</dd>` +
+      (s.target ? `<dt>Dónde</dt><dd>${escH(s.target === 'local' ? 'en esta computadora' : s.target)}${s.plugin ? ` · plugin ${escH(s.plugin)}` : ''}</dd>` : '') +
+      (tools.length ? `<dt>Herramientas · ${tools.length}</dt><dd><ul class="cp-tools">${chips}</ul><span class="cp-legend">«envía» y «gasta» esperan tu OK según Ajustes → Seguridad.</span></dd>` : '') +
+      (st !== 'connected' && howTo(s) ? `<dt>Cómo conectarlo</dt><dd>${howTo(s)}</dd>` : '') + '</dl>' +
+      (st === 'connected' && s.key && uniqKeys.includes(s.key || s.id) ? `<button type="button" class="cp-fire" data-k="${escH(s.key || s.id)}">Ver su flujo hacia los departamentos</button>` : '');
+  }
+  // the panel is three parts: the header and the body are repainted; the live line (.cp-live) stays the same node, so a screen
+  // reader announces what is written in it after a check (a region that has just entered the page is often not read)
+  const LIVE_HTML = '<p class="cp-live" role="status" aria-live="polite"></p>';
+  function panelHTML() {
+    const list = servers(), empty = list.filter(s => s.status === 'not-configured'), live = list.filter(s => s.status !== 'not-configured');
+    let n = 0;
+    const card = s => {
+      const st = stOf(s), i = 'cpd' + (n++), logo = LOGOS[s.key] || LOGOS[s.id];
+      const img = logo ? logo.img : tile(s.name);
+      const sub = s.plugin ? `plugin ${s.plugin}` : s.source === 'claude.ai' ? 'claude.ai' : s.browser ? 'tu navegador' : s.source === 'local' ? 'en esta computadora' : '';
+      return `<div class="cp-item" data-sid="${escH(s.id)}"><button type="button" class="cp-c${st === 'connected' ? '' : ' off'}" aria-expanded="false" aria-controls="${i}"><img src="${img}" alt=""><span class="cp-n">${escH(pretty(s.name))}</span>` +
+        `<span class="cp-d">${escH(STATE_TXT[st] || st)}${sub ? ' · ' + escH(sub) : ''}</span></button><div class="cp-det" id="${i}" hidden>${detailHTML(s)}</div></div>`;
+    };
+    const ready = live.filter(s => stOf(s) === 'connected'), bad = live.filter(s => stOf(s) === 'failed'), auth = live.filter(s => ['needs-auth', 'pending', 'disabled'].includes(stOf(s))), denied = live.filter(s => stOf(s) === 'denied');
+    const sec = (t, l, fold) => !l.length ? '' : fold ? `<details class="cp-fold"><summary class="cp-sec">${t} · ${l.length}</summary><div class="cp-g">${l.map(card).join('')}</div></details>` : `<div class="cp-sec">${t} · ${l.length}</div><div class="cp-g">${l.map(card).join('')}</div>`;
+    return `<div class="cp-h"><b>Conectores</b><span class="cp-count">${ready.length} listos${live.length !== ready.length ? ` de ${live.length}` : ''}</span><span class="sp"></span>` +
+      (LIVE ? `<button type="button" class="cp-re"${checking ? ' disabled' : ''}>${checking ? 'Comprobando…' : 'Volver a comprobar'}</button>` : '') +
+      `<label class="cp-sw"><input type="checkbox" class="cp-icons"${document.body.classList.contains('connFold') ? '' : ' checked'}><span>Iconos en la barra</span></label><button type="button" class="cp-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div>` +
+      LIVE_HTML +
+      `<div class="cp-body">${sec('Listos para los agentes', ready)}${sec('No conectan', bad)}${sec('Piden entrar, conectando o desactivados', auth, auth.length > 6)}${sec('Bloqueados para los agentes', denied)}` +
+      (live.length ? '' : '<p class="cp-foot">Aún no hay conectores.</p>') +
+      (empty.length ? `<p class="cp-foot">${empty.length} huecos de plugins sin configurar (no cuentan ni fallan).</p>` : '') +
+      `<p class="cp-foot">Para añadir uno: conéctalo en claude.ai o ejecuta <code>claude mcp add …</code>, y «Volver a comprobar». Qué departamento usa cuál: <code>office.config.json → mcp.departments</code>; cuáles nunca: Ajustes → Conectores.</p></div>`;
+  }
+  function render(keepFocus) {
+    if (!panel) return;
+    const sc = panel.querySelector('.cp-body')?.scrollTop || 0;
+    const open = new Set([...panel.querySelectorAll('.cp-c[aria-expanded="true"]')].map(c => c.closest('.cp-item')?.dataset.sid)); // the cards the owner had open stay open
+    const tmp = document.createElement('div'); tmp.innerHTML = panelHTML();
+    for (const sel of ['.cp-h', '.cp-body']) { const now = panel.querySelector(sel), next = tmp.querySelector(sel); if (now && next) now.replaceWith(next); }
+    for (const it of panel.querySelectorAll('.cp-item')) if (open.has(it.dataset.sid)) setCard(it.querySelector('.cp-c'), true);
+    const b = panel.querySelector('.cp-body'); if (b) b.scrollTop = sc;
+    if (keepFocus) panel.querySelector(keepFocus)?.focus();
+  }
+  function setCard(c, open) { const det = c && panel.querySelector('#' + c.getAttribute('aria-controls')); if (!det) return; c.setAttribute('aria-expanded', String(open)); det.hidden = !open; c.parentElement.classList.toggle('open', open); }
+  const say = t => { const l = panel && panel.querySelector('.cp-live'); if (l) l.textContent = t; };
+  async function recheck() {
+    if (checking) return; checking = true; render('.cp-x'); say('Comprobando todos los conectores con Claude Code (1–2 min)…');
+    const m = await waitSummary({ refresh: true });
+    checking = false;
+    if (m && m.servers) liveServers = m.servers;
+    render('.cp-re');
+    say(m ? `Comprobado: ${(m.servers || []).filter(s => s.status === 'connected' && !s.browser).length} conectados. Los iconos de la barra cambian al recargar la página.` : 'No se pudo comprobar: ¿está la oficina abierta?');
+  }
+  function closePanel(focusBack) { if (!panel) return; panel.remove(); panel = null; if (focusBack) (opener && opener.isConnected ? opener : topconn.querySelector('.tc-lab'))?.focus(); opener = null; document.removeEventListener('mousedown', outside, true); topconn && topconn.querySelector('.tc-lab')?.setAttribute('aria-expanded', 'false'); }
+  function outside(e) { if (panel && !panel.contains(e.target) && !e.target.closest('#topconn .tc-lab, #topconn .tc-more')) closePanel(); }
   function togglePanel() {
     if (panel) return closePanel();
-    panel = document.createElement('div'); panel.id = 'connPanel'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Conectores');
+    opener = document.activeElement && document.activeElement.closest?.('#topconn .tc-lab, #topconn .tc-more') || null; // Esc and ✕ give the focus back to what opened it («+N» or the label)
+    panel = document.createElement('div'); panel.id = 'connPanel'; panel.setAttribute('role', 'region'); panel.setAttribute('aria-label', 'Conectores');
     panel.innerHTML = panelHTML(); document.body.appendChild(panel);
     const lab = topconn.querySelector('.tc-lab'); lab.setAttribute('aria-expanded', 'true');
     const r = lab.getBoundingClientRect(); panel.style.left = Math.max(12, Math.min(r.left, innerWidth - panel.offsetWidth - 12)) + 'px';
     panel.addEventListener('click', e => {
-      if (e.target.closest('.cp-x')) return closePanel();
-      const c = e.target.closest('.cp-c:not(.off)'); if (c) fireConnector(c.dataset.k);
+      if (e.target.closest('.cp-x')) { closePanel(true); return; }
+      if (e.target.closest('.cp-re')) return recheck();
+      const f = e.target.closest('.cp-fire'); if (f) return fireConnector(f.dataset.k);
+      const c = e.target.closest('.cp-c'); if (!c) return;
+      setCard(c, c.getAttribute('aria-expanded') !== 'true');
     });
     panel.addEventListener('change', e => { if (!e.target.classList.contains('cp-icons')) return; const fold = !e.target.checked; document.body.classList.toggle('connFold', fold); try { localStorage.setItem('ao.connFold', fold ? '1' : '0'); } catch {} dispatchEvent(new Event('resize')); });
-    panel.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { closePanel(); lab.focus(); } });
+    panel.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') closePanel(true); });
     setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
     panel.querySelector('.cp-x').focus();
   }
   if (topconn) {
     const lab = topconn.querySelector('.tc-lab');
-    lab.setAttribute('role', 'button'); lab.tabIndex = 0; lab.setAttribute('aria-haspopup', 'dialog'); lab.setAttribute('aria-expanded', 'false'); lab.title = 'Ver los conectores';
+    lab.setAttribute('role', 'button'); lab.tabIndex = 0; lab.setAttribute('aria-controls', 'connPanel'); lab.setAttribute('aria-expanded', 'false'); lab.title = 'Ver los conectores';
     lab.addEventListener('click', e => { e.stopPropagation(); togglePanel(); });
     lab.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); togglePanel(); } });
   }

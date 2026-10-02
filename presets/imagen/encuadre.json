@@ -1,0 +1,993 @@
+{
+ "grupo": "encuadre",
+ "presets": [
+  {
+   "id": "enc-distancia",
+   "v": 1,
+   "nombre": "Distancia del producto",
+   "icono": {
+    "id": "marco",
+    "d": "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M9 8h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1z"
+   },
+   "categoria": "encuadre",
+   "frase": "Cuánto ocupa el producto en el cuadro: medido, no adivinado.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "encuadre"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "encuadre",
+     "tipo": "encuadre",
+     "es": "Distancia del producto",
+     "valores": [
+      {
+       "v": "detalle",
+       "es": "Detalle (de muy cerca)",
+       "ocupacion": null,
+       "medido": false,
+       "alinear": "centro",
+       "en": "extreme close-up of a key detail, texture filling the frame"
+      },
+      {
+       "v": "ajustado",
+       "es": "Ajustado · 85 %",
+       "ocupacion": 0.85,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product visible, centered, filling about 85% of the frame, small even margin"
+      },
+      {
+       "v": "catalogo",
+       "es": "Catálogo · 75 %",
+       "ocupacion": 0.75,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 75% of the frame, even margins"
+      },
+      {
+       "v": "margen",
+       "es": "Con margen · 60 %",
+       "ocupacion": 0.6,
+       "medido": true,
+       "alinear": "centro",
+       "en": "entire product centered, about 60% of the frame, generous even empty margin on all four sides, nothing cropped"
+      },
+      {
+       "v": "aire",
+       "es": "Mucho aire para recortar · 45 %",
+       "ocupacion": 0.45,
+       "medido": true,
+       "alinear": "centro",
+       "en": "product small in the frame (about 45%), wide empty margin on all sides so it can be cropped to any shape"
+      },
+      {
+       "v": "apoyado",
+       "es": "Apoyado en la línea del suelo · 70 %",
+       "ocupacion": 0.7,
+       "medido": true,
+       "alinear": "base",
+       "base": 0.85,
+       "en": "product resting on the floor line in the lower part of the frame, same floor line and camera height across the series"
+      },
+      {
+       "v": "medio",
+       "es": "Plano medio en su ambiente",
+       "ocupacion": 0.4,
+       "medido": false,
+       "alinear": "escena",
+       "en": "medium shot, product as the hero with some of its surroundings visible, about 40% of the frame width"
+      },
+      {
+       "v": "general",
+       "es": "Toda la habitación",
+       "ocupacion": 0.2,
+       "medido": false,
+       "alinear": "escena",
+       "en": "wide shot of the whole room, product clearly the focal point"
+      }
+     ],
+     "def": "margen"
+    },
+    {
+     "id": "alinear",
+     "tipo": "alinear",
+     "es": "Alinear",
+     "valores": [
+      {
+       "v": "auto",
+       "es": "Automático (muebles por la base)"
+      },
+      {
+       "v": "centro",
+       "es": "Al centro"
+      },
+      {
+       "v": "base",
+       "es": "Por la base"
+      }
+     ],
+     "def": "auto"
+    },
+    {
+     "id": "escalaSerie",
+     "tipo": "escalaSerie",
+     "es": "En una serie",
+     "valores": [
+      {
+       "v": "llenar",
+       "es": "Cada foto llena su cuadro"
+      },
+      {
+       "v": "misma",
+       "es": "Misma escala en toda la serie (una king se ve más grande que una queen)"
+      }
+     ],
+     "def": "llenar"
+    },
+    {
+     "id": "proporcion",
+     "tipo": "proporcion",
+     "es": "Proporción",
+     "valores": [
+      {
+       "v": "1:1",
+       "es": "1:1"
+      },
+      {
+       "v": "4:5",
+       "es": "4:5"
+      },
+      {
+       "v": "3:4",
+       "es": "3:4"
+      },
+      {
+       "v": "2:3",
+       "es": "2:3"
+      },
+      {
+       "v": "3:2",
+       "es": "3:2"
+      },
+      {
+       "v": "4:3",
+       "es": "4:3"
+      },
+      {
+       "v": "16:9",
+       "es": "16:9"
+      },
+      {
+       "v": "9:16",
+       "es": "9:16"
+      },
+      {
+       "v": "21:9",
+       "es": "21:9"
+      }
+     ],
+     "def": "1:1"
+    }
+   ],
+   "local": [
+    {
+     "op": "encuadrar"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [
+    "encuadrar"
+   ],
+   "qa": [
+    "ocupacion",
+    "sin-recorte"
+   ],
+   "aviso": "Medido sobre fondo liso. En una escena, la distancia va al modelo y la QA dice «no medido».",
+   "buscar": [
+    "distancia",
+    "margen",
+    "mas espacio alrededor",
+    "que no se corte",
+    "tamano del producto",
+    "lejos",
+    "cerca",
+    "encuadre",
+    "padding"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "enc-centrar",
+   "v": 1,
+   "nombre": "Centrar y alinear",
+   "icono": {
+    "id": "centrar",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM8 8h8v8h-8zM12 3v3M12 18v3M3 12h3M18 12h3"
+   },
+   "categoria": "encuadre",
+   "frase": "Centra el producto o lo apoya en la base, sin gastar modelo.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "encuadre"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "alinear",
+     "tipo": "alinear",
+     "es": "Alinear",
+     "valores": [
+      {
+       "v": "auto",
+       "es": "Automático (muebles por la base)"
+      },
+      {
+       "v": "centro",
+       "es": "Al centro"
+      },
+      {
+       "v": "base",
+       "es": "Por la base"
+      }
+     ],
+     "def": "auto"
+    }
+   ],
+   "local": [
+    {
+     "op": "encuadrar",
+     "mantenerOcupacion": true
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "sin-recorte"
+   ],
+   "buscar": [
+    "centrar",
+    "alinear",
+    "torcido",
+    "descentrado"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "enc-enderezar",
+   "v": 1,
+   "nombre": "Enderezar líneas",
+   "tecnico": "Perspectiva",
+   "icono": {
+    "id": "nivel",
+    "d": "M5 9h14a3 3 0 0 1 3 3v0a3 3 0 0 1 -3 3h-14a3 3 0 0 1 -3 -3v0a3 3 0 0 1 3 -3zM10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0"
+   },
+   "categoria": "encuadre",
+   "frase": "Pone rectas las patas, las paredes y el horizonte.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "encuadre"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "rotar-horizonte"
+    }
+   ],
+   "ia": "straighten verticals and the horizon, correct lens perspective distortion",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "enderezar",
+    "torcida",
+    "chueca",
+    "perspectiva",
+    "lineas",
+    "horizonte",
+    "inclinada"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: straighten verticals and the horizon, correct lens perspective distortion. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- straighten verticals and the horizon, correct lens perspective distortion\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "straighten verticals and the horizon, correct lens perspective distortion. {conservar}"
+   }
+  },
+  {
+   "id": "enc-frontal",
+   "v": 1,
+   "nombre": "Vista de frente",
+   "icono": {
+    "id": "cubo-frente",
+    "d": "M6 5h12a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1v-12a1 1 0 0 1 1 -1zM9 12h6"
+   },
+   "categoria": "encuadre",
+   "frase": "El producto de frente, a su altura.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "angulo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "straight-on front view at product height",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "Cambiar el ángulo rehace el producto: revisa la forma.",
+   "buscar": [
+    "frente",
+    "frontal",
+    "de frente"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: straight-on front view at product height. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- straight-on front view at product height\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "straight-on front view at product height. {conservar}"
+   }
+  },
+  {
+   "id": "enc-tres-cuartos",
+   "v": 1,
+   "nombre": "Vista en diagonal (3/4)",
+   "icono": {
+    "id": "cubo",
+    "d": "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9"
+   },
+   "categoria": "encuadre",
+   "frase": "Ligeramente de lado: se ve el frente y un costado.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "angulo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "lado",
+     "tipo": "lado",
+     "es": "Lado",
+     "valores": [
+      {
+       "v": "izquierda",
+       "es": "Izquierda",
+       "en": "left"
+      },
+      {
+       "v": "derecha",
+       "es": "Derecha",
+       "en": "right"
+      }
+     ],
+     "def": "izquierda"
+    }
+   ],
+   "ia": "three-quarter view from the {p.lado}",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "honestidad": "Cambiar el ángulo rehace el producto: revisa la forma.",
+   "buscar": [
+    "3/4",
+    "tres cuartos",
+    "diagonal",
+    "de lado"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: three-quarter view from the {p.lado}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- three-quarter view from the {p.lado}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "three-quarter view from the {p.lado}. {conservar}"
+   }
+  },
+  {
+   "id": "enc-perfil",
+   "v": 1,
+   "nombre": "De perfil",
+   "icono": {
+    "id": "cubo-lado",
+    "d": "M4 6h10l6 3v9H4zM14 6v12"
+   },
+   "categoria": "encuadre",
+   "frase": "Totalmente de lado.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "angulo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "clean side profile view",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "perfil",
+    "lateral",
+    "de lado"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: clean side profile view. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- clean side profile view\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "clean side profile view. {conservar}"
+   }
+  },
+  {
+   "id": "enc-desde-arriba",
+   "v": 1,
+   "nombre": "Fotos desde arriba, ordenadas",
+   "tecnico": "Knolling",
+   "icono": {
+    "id": "cenital",
+    "d": "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2zM8 8h3v3H8zM13 8h3v5h-3zM8 13h3v3H8zM13 15h3v1h-3z"
+   },
+   "categoria": "encuadre",
+   "frase": "Vista cenital con las piezas alineadas en ángulo recto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto",
+    "cero"
+   ],
+   "ejes": [
+    "angulo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Tu foto (opcional)",
+     "ayuda": "Sin foto, se crea desde cero con tu idea."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "ordenado",
+     "tipo": "enum",
+     "es": "Ordenado",
+     "valores": [
+      {
+       "v": "si",
+       "es": "Sí",
+       "en": ", knolling: items arranged at right angles"
+      },
+      {
+       "v": "no",
+       "es": "No",
+       "en": ""
+      }
+     ],
+     "def": "si"
+    }
+   ],
+   "ia": "top-down flat lay{p.ordenado}",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "desde arriba",
+    "cenital",
+    "knolling",
+    "ordenado",
+    "flat lay"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: top-down flat lay{p.ordenado}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- top-down flat lay{p.ordenado}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "top-down flat lay{p.ordenado}. {conservar}",
+    "descriptiva": "{producto}, top-down flat lay{p.ordenado}, {idea}, professional product photography",
+    "modoCero": "Create a professional photo of {producto}: top-down flat lay{p.ordenado}. {idea}"
+   }
+  },
+  {
+   "id": "enc-desde-abajo",
+   "v": 1,
+   "nombre": "Desde abajo, que se vea imponente",
+   "tecnico": "Contrapicado",
+   "icono": {
+    "id": "contrapicado",
+    "d": "M12 3 6 21h12zM3 21h18"
+   },
+   "categoria": "encuadre",
+   "frase": "Cámara baja: el producto se ve grande y protagonista.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "angulo"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "low-angle hero shot, the product looks monumental",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "desde abajo",
+    "imponente",
+    "heroe",
+    "contrapicado",
+    "grande"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: low-angle hero shot, the product looks monumental. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- low-angle hero shot, the product looks monumental\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "low-angle hero shot, the product looks monumental. {conservar}"
+   }
+  },
+  {
+   "id": "enc-ampliar",
+   "v": 1,
+   "nombre": "Dar más espacio alrededor",
+   "tecnico": "Ampliar lienzo",
+   "icono": {
+    "id": "expandir",
+    "d": "M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5M4 4l5 5M20 4l-5 5M4 20l5-5M20 20l-5-5"
+   },
+   "categoria": "encuadre",
+   "frase": "Agranda el cuadro hacia los lados sin estirar el producto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "encuadre",
+    "salida"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local+ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "proporcion",
+     "tipo": "proporcion",
+     "es": "Proporción",
+     "valores": [
+      {
+       "v": "1:1",
+       "es": "1:1"
+      },
+      {
+       "v": "4:5",
+       "es": "4:5"
+      },
+      {
+       "v": "3:4",
+       "es": "3:4"
+      },
+      {
+       "v": "2:3",
+       "es": "2:3"
+      },
+      {
+       "v": "3:2",
+       "es": "3:2"
+      },
+      {
+       "v": "4:3",
+       "es": "4:3"
+      },
+      {
+       "v": "16:9",
+       "es": "16:9"
+      },
+      {
+       "v": "9:16",
+       "es": "9:16"
+      },
+      {
+       "v": "21:9",
+       "es": "21:9"
+      }
+     ],
+     "def": "4:5"
+    }
+   ],
+   "local": [
+    {
+     "op": "extender",
+     "soloSiFondoLiso": true
+    }
+   ],
+   "ia": "extend the canvas to {p.proporcion}, continue the background seamlessly, do not stretch or move the product",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad",
+    "proporcion"
+   ],
+   "aviso": "Con fondo liso se extiende en local (gratis, exacto); con escena, la IA continúa el fondo.",
+   "buscar": [
+    "ampliar",
+    "mas espacio",
+    "expandir",
+    "outpaint",
+    "cambiar formato",
+    "que no se corte",
+    "mas fondo"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: extend the canvas to {p.proporcion}, continue the background seamlessly, do not stretch or move the product. Framing: {encuadre}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- extend the canvas to {p.proporcion}, continue the background seamlessly, do not stretch or move the product\n- Framing: {encuadre}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "extend the canvas to {p.proporcion}, continue the background seamlessly, do not stretch or move the product. {conservar}"
+   }
+  },
+  {
+   "id": "enc-recortes-redes",
+   "v": 1,
+   "nombre": "Recortar para cada red",
+   "icono": {
+    "id": "recortes",
+    "d": "M4 5h8a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-8a1 1 0 0 1 -1 -1v-12a1 1 0 0 1 1 -1zM16 3h4a1 1 0 0 1 1 1v8a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-8a1 1 0 0 1 1 -1zM16 15h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z"
+   },
+   "categoria": "encuadre",
+   "frase": "Un archivo por canal (web, feed, historia, anuncio) desde la misma foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "salida"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "canales",
+     "tipo": "multi",
+     "es": "Canales",
+     "valores": [
+      {
+       "v": "web",
+       "es": "Web PanaClaw"
+      },
+      {
+       "v": "ig-feed",
+       "es": "Instagram · feed 4:5"
+      },
+      {
+       "v": "ig-story",
+       "es": "Historia / Reel 9:16"
+      },
+      {
+       "v": "ig-perfil",
+       "es": "Cuadrícula del perfil 3:4"
+      },
+      {
+       "v": "fbshop",
+       "es": "Facebook / Instagram Shop"
+      },
+      {
+       "v": "fb-anuncio",
+       "es": "Anuncio de Facebook 1,91:1"
+      },
+      {
+       "v": "whatsapp",
+       "es": "Catálogo de WhatsApp Business"
+      },
+      {
+       "v": "amazon",
+       "es": "Amazon · foto principal"
+      },
+      {
+       "v": "mercadolibre",
+       "es": "Mercado Libre"
+      },
+      {
+       "v": "shopify",
+       "es": "Shopify / tienda propia"
+      },
+      {
+       "v": "etsy",
+       "es": "Etsy (4:3, zona segura)"
+      },
+      {
+       "v": "yt",
+       "es": "YouTube / web horizontal"
+      }
+     ],
+     "def": "web,ig-feed,ig-story"
+    }
+   ],
+   "local": [
+    {
+     "op": "exportar-varios"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "sin-recorte",
+    "proporcion"
+   ],
+   "buscar": [
+    "todas las redes",
+    "recortar",
+    "instagram",
+    "historia",
+    "formatos",
+    "tamanos"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  }
+ ]
+}

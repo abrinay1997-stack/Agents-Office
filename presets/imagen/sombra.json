@@ -1,0 +1,578 @@
+{
+ "grupo": "sombra",
+ "presets": [
+  {
+   "id": "sombra-contacto",
+   "v": 1,
+   "nombre": "Sombra suave debajo",
+   "icono": {
+    "id": "sombra",
+    "d": "M8 9a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M5 19a7 2 0 1 0 14 0a7 2 0 1 0 -14 0"
+   },
+   "categoria": "sombra",
+   "frase": "Una sombra natural justo debajo: el producto «pisa» el suelo.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "sombra"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: soft natural contact shadow directly under the product, grounded",
+    "normal": "soft natural contact shadow directly under the product, grounded",
+    "fuerte": "soft natural contact shadow directly under the product, grounded; make the change clearly visible"
+   },
+   "ia": "soft natural contact shadow directly under the product, grounded",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "sombra",
+    "sombra suave",
+    "apoyado",
+    "que no flote",
+    "natural"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: soft natural contact shadow directly under the product, grounded. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- soft natural contact shadow directly under the product, grounded\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "soft natural contact shadow directly under the product, grounded. {conservar}"
+   }
+  },
+  {
+   "id": "sombra-dura",
+   "v": 1,
+   "nombre": "Sombra de sol marcada",
+   "icono": {
+    "id": "sol",
+    "d": "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+   },
+   "categoria": "sombra",
+   "frase": "Sombra nítida, como con luz de sol.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "sombra"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "lado",
+     "tipo": "lado",
+     "es": "Lado",
+     "valores": [
+      {
+       "v": "izquierda",
+       "es": "Izquierda",
+       "en": "left"
+      },
+      {
+       "v": "derecha",
+       "es": "Derecha",
+       "en": "right"
+      }
+     ],
+     "def": "derecha"
+    }
+   ],
+   "ia": "crisp hard-light shadow cast to the {p.lado}",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "sombra dura",
+    "sol",
+    "sombra marcada"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: crisp hard-light shadow cast to the {p.lado}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- crisp hard-light shadow cast to the {p.lado}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "crisp hard-light shadow cast to the {p.lado}. {conservar}"
+   }
+  },
+  {
+   "id": "sombra-flotante",
+   "v": 1,
+   "nombre": "Producto flotando",
+   "icono": {
+    "id": "sombra",
+    "d": "M8 9a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M5 19a7 2 0 1 0 14 0a7 2 0 1 0 -14 0"
+   },
+   "categoria": "sombra",
+   "frase": "Levita un poco, con una sombra difusa debajo.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "sombra"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "altura",
+     "tipo": "enum",
+     "es": "Altura",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "slightly"
+      },
+      {
+       "v": "media",
+       "es": "Más",
+       "en": "noticeably"
+      }
+     ],
+     "def": "baja"
+    }
+   ],
+   "ia": "product levitating {p.altura} with a soft diffuse shadow below",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "flotando",
+    "flotante",
+    "levitar",
+    "drop shadow"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: product levitating {p.altura} with a soft diffuse shadow below. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- product levitating {p.altura} with a soft diffuse shadow below\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "product levitating {p.altura} with a soft diffuse shadow below. {conservar}"
+   }
+  },
+  {
+   "id": "sombra-reflejo",
+   "v": 1,
+   "nombre": "Reflejo en piso brillante",
+   "icono": {
+    "id": "sombra",
+    "d": "M8 9a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M5 19a7 2 0 1 0 14 0a7 2 0 1 0 -14 0"
+   },
+   "categoria": "sombra",
+   "frase": "Un reflejo sutil debajo, como sobre vidrio o piso pulido.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "sombra"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "iaPorIntensidad": {
+    "suave": "Subtly: subtle mirror reflection on a glossy surface below the product",
+    "normal": "subtle mirror reflection on a glossy surface below the product",
+    "fuerte": "subtle mirror reflection on a glossy surface below the product; make the change clearly visible"
+   },
+   "ia": "subtle mirror reflection on a glossy surface below the product",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "reflejo",
+    "espejo",
+    "piso brillante",
+    "vidrio"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: subtle mirror reflection on a glossy surface below the product. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- subtle mirror reflection on a glossy surface below the product\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "subtle mirror reflection on a glossy surface below the product. {conservar}"
+   }
+  },
+  {
+   "id": "sombra-ventana",
+   "v": 1,
+   "nombre": "Sombra de ventana o plantas",
+   "icono": {
+    "id": "hoja",
+    "d": "M5 19C5 10 11 5 20 4c-1 9-6 15-15 15zM5 19 14 10"
+   },
+   "categoria": "sombra",
+   "frase": "Un patrón de sombra que cae sobre la escena.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "sombra"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "patron",
+     "tipo": "enum",
+     "es": "Patrón",
+     "valores": [
+      {
+       "v": "ventana",
+       "es": "Ventana",
+       "en": "window frame"
+      },
+      {
+       "v": "hojas",
+       "es": "Hojas",
+       "en": "palm leaves"
+      },
+      {
+       "v": "persiana",
+       "es": "Persiana",
+       "en": "blinds"
+      }
+     ],
+     "def": "hojas"
+    }
+   ],
+   "ia": "{p.patron} shadow pattern falling softly across the scene",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "sombra de hojas",
+    "persiana",
+    "ventana",
+    "plantas",
+    "tropical"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: {p.patron} shadow pattern falling softly across the scene. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- {p.patron} shadow pattern falling softly across the scene\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "{p.patron} shadow pattern falling softly across the scene. {conservar}"
+   }
+  },
+  {
+   "id": "sombra-conservar",
+   "v": 1,
+   "nombre": "Conservar la sombra original",
+   "icono": {
+    "id": "sombra",
+    "d": "M8 9a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M5 19a7 2 0 1 0 14 0a7 2 0 1 0 -14 0"
+   },
+   "categoria": "sombra",
+   "frase": "Al cambiar el fondo, guarda la sombra real que tenía la foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "sombra"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "capa-sombra",
+     "modo": "conservar"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "mantener sombra",
+    "sombra original",
+    "sombra real"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "sombra-quitar",
+   "v": 1,
+   "nombre": "Quitar sombras",
+   "icono": {
+    "id": "quitar",
+    "d": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M5.6 5.6 18.4 18.4"
+   },
+   "categoria": "sombra",
+   "frase": "Luz pareja, sin sombras proyectadas.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "sombra"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove all cast shadows; even, shadowless light",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [
+    "identidad"
+   ],
+   "buscar": [
+    "quitar sombra",
+    "sin sombra",
+    "sombras feas"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove all cast shadows; even, shadowless light. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove all cast shadows; even, shadowless light\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove all cast shadows. {conservar}"
+   }
+  }
+ ]
+}

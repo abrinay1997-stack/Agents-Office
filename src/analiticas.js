@@ -23,7 +23,7 @@ const pct = n => `${Math.abs(n).toLocaleString('es', { maximumFractionDigits: 1 
 export function initAnaliticas({ served, esc, business = () => '' }) {
   const datos = crearDatosAnaliticas({ served });
   const ov = document.createElement('div');
-  ov.id = 'anOv'; ov.setAttribute('role', 'dialog'); ov.setAttribute('data-view', ''); ov.setAttribute('aria-label', 'Analíticas'); ov.inert = true;
+  ov.id = 'anOv'; ov.setAttribute('role', 'region'); ov.setAttribute('data-view', ''); ov.setAttribute('aria-label', 'Analíticas'); ov.inert = true; // A11-20: una vista es la página bajo la barra (region), no un diálogo
   ov.innerHTML = `
     <div class="cv-band">
       <div class="cv-brand">ANALÍTICAS <small id="anCo"></small></div>
@@ -292,5 +292,6 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   }
   let resizeT = 0; addEventListener('resize', () => { if (!openNow) return; clearTimeout(resizeT); resizeT = setTimeout(() => { if (openNow && dia()) render(); }, 150); });
   views.add('analiticas', { isOpen: isOn, close });
-  return { open, close, toggle: () => (openNow ? close() : open()), isOpen: isOn };
+  const selection = () => (openNow ? { view: 'analiticas', label: `Analíticas · ${(METRICAS.find(m => m[0] === metrica) || [, metrica])[1]} · ${red === 'todas' ? 'Instagram y Facebook' : red === 'instagram' ? 'Instagram' : 'Facebook'} · ${dias} días`, kind: 'metric', id: `${metrica}:${red}:${dias}` } : null); // V4.8: what Dimitri sees beside it
+  return { open, close, toggle: () => (openNow ? close() : open()), isOpen: isOn, selection };
 }

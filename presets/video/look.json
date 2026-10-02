@@ -1,0 +1,548 @@
+{
+ "grupo": "look",
+ "presets": [
+  {
+   "id": "look-cine",
+   "v": 2,
+   "nombre": "De cine",
+   "icono": {
+    "id": "pelicula",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4"
+   },
+   "categoria": "look",
+   "frase": "Gradación cinematográfica con contraste suave.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "cinematic grade, anamorphic feel, gentle contrast",
+   "ranura": "look",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "cine",
+    "cinematografico",
+    "pelicula",
+    "cinematic",
+    "como pelicula",
+    "cinematografia",
+    "look de cine"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. cinematic grade, anamorphic feel, gentle contrast, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. cinematic grade, anamorphic feel, gentle contrast. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. cinematic grade, anamorphic feel, gentle contrast. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. cinematic grade, anamorphic feel, gentle contrast. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. cinematic grade, anamorphic feel, gentle contrast. {sonido}."
+   },
+   "tecnico": "Cinematic"
+  },
+  {
+   "id": "look-calido",
+   "v": 1,
+   "nombre": "Película cálida",
+   "icono": {
+    "id": "atardecer",
+    "d": "M3 18h18M7 18a5 5 0 0 1 10 0M12 6v3M4.9 10.9l1.4 1.4M19.1 10.9l-1.4 1.4M8 22h8"
+   },
+   "categoria": "look",
+   "frase": "Película de 35 mm cálida, grano fino (tipo Kodak).",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "warm 35mm film look, soft highlights, fine grain",
+   "ranura": "look",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "calido",
+    "kodak",
+    "film",
+    "analogico",
+    "lut"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. warm 35mm film look, soft highlights, fine grain, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. warm 35mm film look, soft highlights, fine grain.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. warm 35mm film look, soft highlights, fine grain.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. warm 35mm film look, soft highlights, fine grain.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. warm 35mm film look, soft highlights, fine grain."
+   }
+  },
+  {
+   "id": "look-frio",
+   "v": 1,
+   "nombre": "Película fría",
+   "icono": {
+    "id": "gota",
+    "d": "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
+   },
+   "categoria": "look",
+   "frase": "Tono frío verdoso con sombras nítidas (tipo Fuji).",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "cool greenish film look, crisp shadows",
+   "ranura": "look",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "frio",
+    "fuji",
+    "verdoso",
+    "lut"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. cool greenish film look, crisp shadows, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. cool greenish film look, crisp shadows.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. cool greenish film look, crisp shadows.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. cool greenish film look, crisp shadows.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. cool greenish film look, crisp shadows."
+   }
+  },
+  {
+   "id": "look-bn",
+   "v": 1,
+   "nombre": "Blanco y negro",
+   "icono": {
+    "id": "contraste",
+    "d": "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 4v16M12 8h4M12 12h6M12 16h4"
+   },
+   "categoria": "look",
+   "frase": "Contraste rico en blanco y negro.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "black and white, rich contrast",
+   "ranura": "look",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "blanco y negro",
+    "byn",
+    "monocromo"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. black and white, rich contrast, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. black and white, rich contrast.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. black and white, rich contrast.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. black and white, rich contrast.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. black and white, rich contrast."
+   }
+  },
+  {
+   "id": "look-anime",
+   "v": 1,
+   "nombre": "Anime",
+   "icono": {
+    "id": "estrella",
+    "d": "m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3l-5.5 2.9 1-6.2L3 9.6l6.2-.9z"
+   },
+   "categoria": "look",
+   "frase": "Estilo de animación japonesa.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "anime style",
+   "ranura": "look",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "anime",
+    "dibujo",
+    "animado"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. anime style, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. anime style.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. anime style.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. anime style.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. anime style."
+   }
+  },
+  {
+   "id": "look-plastilina",
+   "v": 1,
+   "nombre": "Plastilina",
+   "icono": {
+    "id": "bloque",
+    "d": "M6 18c-2 0-3-1.5-3-3.5S5 9 8 8s5-3 8-2 5 4 5 7-3 5-6 5z"
+   },
+   "categoria": "look",
+   "frase": "Animación de plastilina.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "claymation stop-motion style",
+   "ranura": "look",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "plastilina",
+    "clay",
+    "stop motion"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. claymation stop-motion style, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. claymation stop-motion style.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. claymation stop-motion style.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. claymation stop-motion style.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. claymation stop-motion style."
+   }
+  },
+  {
+   "id": "look-3d",
+   "v": 1,
+   "nombre": "3D",
+   "icono": {
+    "id": "cubo",
+    "d": "M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5 12 12l8-4.5M12 12v9"
+   },
+   "categoria": "look",
+   "frase": "Render 3D estilizado.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "stylized 3D render style",
+   "ranura": "look",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "3d",
+    "render",
+    "animacion 3d"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. stylized 3D render style, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. stylized 3D render style.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. stylized 3D render style.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. stylized 3D render style.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. stylized 3D render style."
+   }
+  },
+  {
+   "id": "look-ref",
+   "v": 3,
+   "nombre": "Copiar el look de una foto",
+   "icono": {
+    "id": "copiar",
+    "d": "M10 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-9a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2zM16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"
+   },
+   "categoria": "look",
+   "frase": "El color y el ambiente de una imagen de referencia.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "refs",
+    "anima"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "referencia",
+     "eje": "look",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Imagen con el look"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "fuerza",
+     "tipo": "fuerza",
+     "es": "Cuánto se parece",
+     "valores": [
+      {
+       "v": "baja",
+       "es": "Poco",
+       "en": "loosely inspired by"
+      },
+      {
+       "v": "media",
+       "es": "Normal",
+       "en": "following"
+      },
+      {
+       "v": "alta",
+       "es": "Mucho",
+       "en": "closely matching"
+      }
+     ],
+     "def": "media"
+    }
+   ],
+   "ia": "color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos",
+   "ranura": "look",
+   "requiere": {
+    "roles": {
+     "reference": 1
+    }
+   },
+   "prefer": [
+    "kling-o3",
+    "veo-3.1",
+    "seedance-2",
+    "kling-o1"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "copiar look",
+    "mismo color",
+    "referencia",
+    "lut",
+    "estilo",
+    "copiar el color",
+    "mismo look",
+    "como esta foto"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}."
+   }
+  }
+ ]
+}

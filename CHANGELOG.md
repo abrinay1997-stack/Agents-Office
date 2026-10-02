@@ -1,5 +1,167 @@
 # Changelog
 
+## V5.1 — 2 oct 2026 (Básico y Avanzado en el Estudio)
+
+Pedido del dueño tras probar el banco: «este modo debería activarse como modo avanzado», «prefiero poner la relación de aspecto yo mismo», «el modelo prefiero siempre verlo y ajustarlo».
+- **Básico · Avanzado** en el paso 1 del compositor de imagen (se recuerda, `ao.st.modo`). Básico es el compositor de siempre y no descarga el banco; Avanzado suma los presets y el escenario 3D. B y «/» pasan a Avanzado.
+- **El modelo y el formato, siempre a la vista y siempre los tuyos**, también con presets: el plan los usa tal cual (`pedido.model`, `pedido.proporcion`, que gana a la escena, al preset y al canal). El cuadro del escenario 3D sigue al formato, y cambiarlo en el escenario cambia el formato.
+- **Fuera** «Para dónde va», «Qué hará» y «Resultado». Lo hecho va solo a la galería (antes cada GENERAR dejaba una entrada que no se borraba). El costo o el problema del plan salen junto a GENERAR.
+- **Pruebas:** el formato y el modelo que eliges ganan (`presets-core`, `presets-servidor`, `studio-banco`); `scripts/presets-recorrido.mjs` (28 pasos en el navegador) y `scripts/estudio-modos-capturas.mjs` (Básico y Avanzado a 390, 1024 y 1512 px, claro y oscuro).
+
+## V5.0 — 2 oct 2026 (el banco de presets del Estudio)
+
+- **Diseño:** 3 investigaciones de mercado, 3 arquitectos y un debate de 3 críticos (fotógrafo de producto, diseñador de marketing, ingeniero): `docs/propuesta-banco-presets.md`. §15 y §16 recogen las decisiones del dueño.
+- **El banco** (tecla **B** en el Estudio):
+  - 127 presets de imagen con icono y un buscador que entiende palabras de tienda;
+  - tres puertas como atajos combinables: Desde cero · Mejorar mi foto · Copiar de una referencia;
+  - pila de presets con DESHACER, referencia por ejes (estilo, color/LUT, composición, luz, fondo, pose; el producto nunca por defecto), canal;
+  - «Qué hará», que dice lo que se hace gratis en tu máquina, lo que rehace la IA, lo que no cambia y el costo.
+- **Local antes que IA** (`sharp`): luz, sombras, color, LUT (aplicar y exportar .cube), copiar el color de una referencia, fondo blanco con máscara (no se come lo blanco), encuadre y exportación sRGB sin EXIF. Nada cae a la IA sin decirlo.
+- **Control de calidad:** forma y color dentro del producto, y la ocupación medida. Lo que no cuadra queda en «revisar».
+- **Escenario 3D:**
+  - el producto con sus medidas reales, que gira y se sube para el contrapicado;
+  - la cámara en órbita sobre el piso, de 0 a 90°, con la distancia en cm o m y el lente;
+  - atajos de toma y de distancia;
+  - todo se traduce al prompt y a una imagen guía de composición, así que el producto se achica por la distancia, el fondo no cambia y nada se recorta.
+- **Tus presets son notas del Cerebro** (`<cerebro>/Estudio/Presets/`): neuronas del gráfico. Se crean con «Guardar como preset».
+- **Lotes** (tecla **L**):
+  - entradas: Excel o CSV (con fotos incrustadas o nombradas, SKU, medidas, notas), carpeta, ZIP o selección;
+  - «Probar con 3», el seguimiento foto por foto con antes y después y una bitácora;
+  - pausar, reanudar, reintentar (más fuerte o con otro modelo), y reanudar si la oficina se reinicia;
+  - salida: ZIP y CSV con nombres por SKU.
+- **Dimitri** arma y sigue lotes y presets: «convierte estas 40 fotos en catálogo para la web». Nada arranca sin tu clic, y si el costo real supera el del botón, pide un segundo clic.
+- **Agentes de los departamentos:** buscar y aplicar presets y crear lotes. Los pedidos grandes esperan tu OK en Aprobaciones.
+- **Video:** los 53 presets y su traductor, con el escenario 3D en movimiento. Su pantalla viene en la próxima entrega.
+- **Rendimiento:** el banco, los lotes y el escenario 3D se cargan al abrir el Estudio (`dist/estudio-extra.js`, 201 KB); la página queda en 2.075 KB, dentro de su presupuesto.
+- **Cómo se hizo:** unos 50 agentes en fases (F0 → F3, y F5 adelantada), con revisión adversarial y remate en cada una, más ayudantes en paralelo.
+  - Al integrar se arreglaron 2 cosas: la página arrastraba lo diferido, y una receta de fila de pago salía «gratis».
+  - Tests 694/694 y `npm run check` 85/85.
+  - Recorridos en el navegador: banco 19/19, lotes 14/14, carga 44/44, Dimitri con lote y agentes, todos en verde.
+- **Sin probar con keys reales:** las ediciones con Google, Meta u OpenAI de verdad, ni el costo real frente al estimado.
+
+## V4.11 — 1 oct 2026 (auditoría despiadada del diseño, y lo urgente corregido)
+
+- **La auditoría:** `docs/auditoria-diseno-2026-10-01.md`. 126 hallazgos (6 críticos, 41 altos, 54 medios, 25 bajos) de seis auditores: contenido, previsualizaciones, Dimitri, Estudio y voces, accesibilidad (axe-core en todas las vistas) e infraestructura. Se comparó con Metricool, Meta Business Suite, Later, Buffer y ElevenLabs. **Arreglados:** los 6 críticos, 38 de 41 altos, y lo barato de medios y bajos. Cada punto dice su estado.
+- **Calendario de contenido:**
+  - Cada tarjeta lleva miniatura, hora, formato (post, carrusel, reel, historia), IG/FB y estado, en mes, semana, día y agenda.
+  - La **Programación** es una cola por día con su propia carga, sin depender del mes que se ve.
+  - El panel de la pieza va en dos columnas, con días rápidos y «Siguiente hueco libre».
+  - Aprobar exige una hora futura.
+  - **Las reglas de proporción y duración se aplican por fin**: antes una historia 16:9 decía «cumple».
+- **Previsualizaciones fieles por red y formato.** Pestañas: Instagram Feed, Perfil (la cuadrícula), Reel e Historia, y Facebook Feed y Reel.
+  - El teléfono va a 9:16 con las zonas que tapa la interfaz y el «… más» real.
+  - El carrusel y las historias se pasan deslizando.
+  - Avisos de recorte y de texto tapado.
+- **Dimitri:**
+  - Pregunta en **opción múltiple** cuando conviene: botones, elección múltiple y «Otra…».
+  - Ve toda la oficina: Contenido de los próximos días, rutinas, Analíticas y lo que tienes seleccionado.
+  - Propone cambios del calendario y de las rutinas con un clic y Deshacer; nada se hace sin tu clic.
+  - Prompt reordenado por secciones y un chat que ya no se redibuja entero cada 3 s.
+  - Si la hora que dijiste ya pasó, te pregunta.
+- **Clonar tu voz como asistente de tres pasos** (graba o sube · escúchalo · ponle nombre y clona):
+  - un guion para leer en voz alta mientras grabas;
+  - un medidor en dBFS que avisa «muy bajo» o «satura»;
+  - el id de la voz se genera solo;
+  - el precio y la cuenta verificada se dicen una vez y claro;
+  - la casilla de consentimiento es obligatoria y queda guardada;
+  - al terminar, «Probar esta voz»;
+  - MiniMax limpia el ruido y normaliza el volumen.
+- **Accesibilidad e interfaz:**
+  - Dimitri tiene botón en el dock, y cada icono dice su nombre con el teclado.
+  - Lo deshabilitado ya no se atenúa con opacidad: pasa a 4,5:1.
+  - Las tarjetas de departamento ya no se tapan.
+  - Las vistas son regiones accesibles.
+  - axe-core: 0 fallos críticos o serios en las vistas revisadas.
+- **Rendimiento:**
+  - La galería vive en memoria: `/api/media` ya no lee el disco dos veces.
+  - El sondeo de tareas pesa poco y el Cerebro se lee una vez.
+  - Los turnos sin herramientas (Dimitri, el enrutador) no arrancan los MCP de la máquina: `--strict-mcp-config`, probado con la CLI real.
+  - Nada repinta con la pestaña oculta.
+  - Nuevo punto en el semáforo: «Respuesta del servidor».
+  - `npm run check` falla si la página pasa de 2,2 MB.
+  - El paso intermitente «Limpiar listas» quedó estable.
+- **Pendiente:**
+  - galería de más de 600 archivos sin paginar (INF-03);
+  - streaming y botón Detener en Dimitri (DIM-14);
+  - el resumen instantáneo de «¿Cómo vamos?» (DIM-10);
+  - la lista completa, con su motivo, en el informe.
+
+## V4.10 — 1 oct 2026 (MiniMax: imagen, video, voz, música y voces propias)
+
+- **Un motor nuevo, MiniMax, con una sola key** (`MINIMAX_API_KEY`; opcionales `MINIMAX_GROUP_ID` y `MINIMAX_API_BASE`).
+  - Antes de escribir código se comprobó todo contra la documentación oficial, con la URL de cada dato: `docs/minimax/api-verificada.md`. Donde la propuesta del dueño difería, mandó la documentación: precios, cancelar un video en cola, `music-3.0-free`, las emociones de la voz y el `file_id` int64.
+  - Cliente: `minimax.mjs`.
+- **Modelos:**
+  - Imagen: `mmx-image-01`, US$0,0035.
+  - Video: `mmx-h3` y `mmx-h3-max`. Hay fotogramas o referencias; el trabajo retoma tras un reinicio con su `task_id`, y cancelar en cola no se cobra.
+  - Voz: `mmx-voz-2.8-hd/turbo` y `2.6-hd/turbo`, hasta 9.999 caracteres, con voz, emoción, velocidad, volumen, tono e idioma.
+  - Música: `mmx-musica-3` y `mmx-musica-3-gratis`, con letra o instrumental y estilo.
+  - Los precios no confirmados en la página oficial van rotulados «aproximado».
+- **El Estudio ahora crea cuatro cosas:** Imagen, Video, **Voz** y **Música**.
+  - Voz: el texto que se lee, con su contador, y un selector de voz con las del sistema y las tuyas.
+  - Música: letra con [Verse] [Chorus]…, o una descripción si es instrumental.
+  - La galería suma los filtros Voz y Música.
+  - En el visor, «Repetir con otra voz».
+  - Topes: un video pesa 5, una canción 3 y una voz 1.
+- **Panel «Voces»:**
+  - **Diseñar** una voz desde una descripción, con una muestra para escuchar.
+  - **Clonar** una voz: **grabarla con el micrófono** o **subir un fragmento**. La oficina usa todo lo que MiniMax admite (de 10 s a 5 min y 20 MB), y lo dice: «cuanto más, mejor».
+    - Grabación: un reloj «0:32 de 5:00», un medidor de nivel, y se para sola a los 5:00.
+    - Grabaciones y fragmentos quedan en la galería, en «Grabaciones de voz», y se clonan desde ahí.
+    - Lo que MiniMax no aceptaría (WebM del navegador, otro formato, más de 20 MB o más de 5 min) se convierte en el navegador a WAV 24 kHz mono con los primeros 5:00. Un MP3, WAV o M4A que cabe va tal cual.
+    - Menos de 10 s se rechaza sin subir nada.
+  - Listar, copiar el id, usar y borrar; borrar también la quita en MiniMax.
+  - Cada voz queda «fijada» para que MiniMax no la borre a los 7 días.
+  - Registro: `data/minimax-voices.json`, que no viaja.
+- **Agentes:** `generar_voz` y `generar_musica` en el Estudio de los agentes, solo cuando hay modelos encendidos; en los entregables, el audio va como `[🔊 archivo](/media/…)`. **Dimitri** también puede proponer creativos de voz y de música.
+- **Pruebas:**
+  - Tests contra un MiniMax simulado (`tests/minimax-stand.mjs`): `minimax.test.mjs`, `minimax-voces.test.mjs` y `studio-voz.test.mjs`; 301 tests en total.
+  - En el navegador: `scripts/estudio-voz-capturas.mjs` (216/216, con y sin key, claro y oscuro, a 1512, 1024 y 390 px) y `scripts/voz-clonar-recorrido.mjs`. Este último graba con un micrófono simulado, clona, recorta 7 min a 5:00, rechaza 5 s, y comprueba que cerrar el panel mientras graba no guarda nada.
+  - Prueba de humo con una key real: `node scripts/check-minimax.mjs` (salida en `data/salida-minimax/`).
+- **Sin probar con una key real:** nada de MiniMax. La música de pago solo funciona para cuentas que ya pagaban antes del 20 de agosto de 2026; la gratis, para todas. Clonar exige una cuenta verificada (error 2038).
+
+## V4.9 — 30 sep 2026 (Dimitri maneja el Estudio)
+
+- **Dimitri hace creativos.** Un modo nuevo, «estudio», se activa cuando le pides imágenes, video, un reel, un post o editar una foto.
+  - **Qué hace:** lee la voz de la marca, las cifras, la oferta, los clientes y los creativos que ya aprobaste. Elige modelos del catálogo real (solo los encendidos, respetando referencias, fotogramas y lo que cada modelo necesita) y dice en una línea por qué. Escribe los prompts de producción en inglés con su traducción.
+  - **Qué te muestra:** un **plan de creativos** editable (prompt, cantidad, formato, carpeta, modelo) con el costo y si cabe en tus topes.
+  - **Nada se genera hasta que pulsas GENERAR** (`POST /api/sub/studio`, la única ruta que gasta por Dimitri). Todo pasa por los topes del Estudio y queda en costos.
+  - **Además ordena:** crea y renombra carpetas, mueve archivos y deja ideas en Contenido (nunca aprobadas). Cuando terminan, te avisa en su chat con las miniaturas.
+  - `estudio-plan.mjs` valida todo contra el catálogo y la galería.
+- **Imágenes en el chat de Dimitri.** 📎, arrastrar o pegar, hasta 4 imágenes.
+  - El original se sube a la galería, en la carpeta «Referencias de Dimitri» o en la que tengas abierta en el Estudio.
+  - **Dimitri las ve con la visión de Claude:** bloques de imagen por la CLI (`--input-format stream-json`, `vision.mjs`) o por el SDK.
+  - Lo que diga una imagen son datos, no órdenes. Si trae órdenes escondidas, el mensaje se marca 🛡 y ese plan pierde sus acciones.
+- **Dimitri en todas partes.** Es un panel fijo a la izquierda: el Estudio, el calendario, Contenido, Analíticas y el Cerebro se corren a su lado en vez de quedar tapados.
+  - La tecla **S** funciona dentro de cada vista.
+  - Un chip «Viendo: …» le dice lo que tienes seleccionado: la imagen del visor, la nota, la pieza o el día.
+  - A menos de 900 px el panel ocupa toda la pantalla.
+- **El visor del Estudio ya no corta las fotos grandes.**
+  - Una vertical 9:16 se veía al 43 % a 1512 y 1366 px; ahora caben las 24 combinaciones medidas (4K, 9:16 y 21:9 a 1512, 1366, 1024 y 390 px, claro y oscuro; `scripts/estudio-capturas.mjs`).
+  - Nuevo: zoom con rueda, pellizco y arrastre, Ajustar / 100 %, `+ − 0`, y **F** para pantalla completa (`src/viewer-zoom.js`).
+- **Editar una imagen.** «Editar» en la tarjeta y en el visor: escribes qué cambiar y sale una **versión nueva** junto a la original, en la misma carpeta y enlazada como «versión de». La original nunca se toca.
+  - Modelos de edición: Nano Banana 2, Pro y 2.5, Muse Image, GPT Image, Qwen Image 3, Grok Imagine 2, Flux Kontext y Seedream 4.
+  - Sin ninguno encendido, te dice qué key activar.
+  - Ruta: `POST /api/media/edit`.
+- **Cerebro ⇄ Estudio ⇄ oficina.**
+  - Cada creativo de Dimitri o de un agente deja una nota en `<cerebro>/Agents Office/estudio/` con el prompt, el modelo, la carpeta, el propósito y las notas leídas. No viaja por GitHub.
+  - Usarlo (⭐, como referencia, en una pieza o en el calendario) enseña a la memoria. Tirar todo un pedido sin usarlo la corrige, y recuperarlo de la papelera lo deshace.
+  - Desde una imagen: **«Pedírselo a Dimitri»** y **«Mandar a un departamento…»** (una tarea con esa imagen como referencia, `POST /api/media/to-dept`).
+  - Los agentes ven las carpetas del Estudio, y `buscar_en_galeria` busca por carpeta.
+- **Calendario y Contenido caben en su vista**, no en la ventana: sus cabeceras usan `@container` (`src/css/vistas-ancho.css`). Antes, a 1072 y 1200 px el mes salía cortado; con Dimitri al lado se montaban los botones.
+- **Cómo se hizo:** cuatro equipos de agentes en paralelo (worktrees), cada uno con revisión adversarial y corrección.
+  - Tests nuevos: `estudio-plan`, `sub-estudio`, `vision`, `sub-studio`, `media-edit`, `media-dimitri`, `estudio-memoria` y `viewer-zoom` (267 en total).
+  - `npm run check`: 81/81.
+  - Recorrido en el navegador: `scripts/dimitri-recorrido.mjs`.
+- **Sin probar con keys reales:** la edición con Google, Meta y OpenAI de verdad, y el costo real frente al estimado. La visión por la CLI sí se probó con una imagen real.
+
+## V4.8 — 30 sep 2026 (Meta en el Estudio)
+
+- **Muse Image (Meta)** como motor del Estudio: `muse-image-1.0` en `api.meta.ai/v1`, con `META_API_KEY` o `MODEL_API_KEY`. Sin referencias genera (`/images/generations`); con hasta 10 referencias edita y compone (`/images/edits`, cuerpo JSON de Meta con `images: [{ image_url }]`). Formato (proporción), calidad (`reasoning_strength`: alta o baja) y archivo (webp, png, jpeg). Busca referencias reales por su cuenta, incluido en el precio: US$0,01 por imagen, registrado en costos.
+- **Entender video y audio con Muse Spark**: `understand.mjs`, la ruta `POST /api/media/understand` y dos herramientas para los agentes, `analizar_video` (mp4 de la galería o una URL https; también lee lo que se dice) y `transcribir_audio` (mp3/wav). `muse-spark-1.3` para video y `muse-spark-1.2` para audio. Solo aparecen con la key de Meta. El texto le llega al agente marcado como material, no como órdenes. Cada consulta se registra en costos como «entendimiento». No genera video: eso sigue con Veo, Kling y Seedance.
+- La galería del Estudio acepta **mp3 y wav** (tarjeta ♪ con reproductor); un audio nunca se usa como referencia ni como fotograma.
+- Pruebas nuevas: `tests/meta.test.mjs` y `tests/understand.test.mjs`, contra un Meta simulado. Todavía sin probar con una key real.
+
 ## 3.2.1-beta.2 — 19 Sep 2026
 
 - **Licence.** LICENSE now opens with the Required Notices (Copyright 2026 Sahni.ai; Agents Office is a Sahni.ai product) and Sahni.ai's additional terms: the name and mark stay, no renaming or rebranding, no wiring it into or bundling it with another product, agent system or workforce, and anything else needs written permission. The PolyForm Noncommercial 1.0.0 text below them is unchanged. README says the same in plain English. No change to the office itself.

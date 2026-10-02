@@ -3,11 +3,58 @@
   "brain": "./brain-panaclaw",
   "mcp": {
     "allow": [],
-    "deny": ["Netlify", "GoDaddy", "Firebase", "Supabase", "Spotify", "Telegram", "magic"],
+    "deny": [
+      "Netlify",
+      "GoDaddy",
+      "Firebase",
+      "Supabase",
+      "Spotify",
+      "Telegram",
+      "magic"
+    ],
     "departments": {
-      "Metricool": ["marketing"],
-      "Canva": ["marketing", "delivery"],
-      "Resend": ["emails"]
+      "Metricool": [
+        "marketing"
+      ],
+      "Canva": [
+        "marketing",
+        "delivery"
+      ],
+      "Resend": [
+        "emails"
+      ],
+      "Gmail": [
+        "emails",
+        "sales",
+        "marketing",
+        "ops",
+        "fin",
+        "delivery"
+      ],
+      "Google Calendar": [
+        "emails",
+        "sales",
+        "marketing",
+        "ops",
+        "fin",
+        "delivery"
+      ],
+      "Google Drive": [
+        "emails",
+        "sales",
+        "marketing",
+        "ops",
+        "fin",
+        "delivery"
+      ],
+      "Shopify": [
+        "emails",
+        "sales",
+        "marketing",
+        "ops",
+        "fin",
+        "delivery"
+      ]
     }
   }
 }

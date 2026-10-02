@@ -12,6 +12,8 @@ import { crearAlmacen } from '../contenido/piezas.mjs';
 import { crearRutas } from '../contenido/rutas.mjs';
 import { kindOf } from '../safety.mjs';
 
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const EN = n => ymd(new Date(Date.now() + n * 864e5)); // un día que viene: aprobar exige un momento futuro
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const json = (res, code, b) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
 const body = req => new Promise((ok, no) => { let s = ''; req.on('data', d => { s += d; }); req.on('end', () => { try { ok(s ? JSON.parse(s) : {}); } catch (e) { no(e); } }); });
@@ -84,7 +86,7 @@ test('un agente que inventa una imagen o un dato malo recibe el motivo en palabr
 test('la API no deja a quien llega como agente aprobar, devolver, elegir un estado ni tocar lo aprobado', async () => {
   const o = await oficina();
   try {
-    const c = await o.api('POST', '/api/contenido/piezas', { por: 'agente', agente: 'newt', titulo: 'A', texto: 'hola', fecha: '2026-10-05', estado: 'aprobada', medios: ['2026-10/a.png'] });
+    const c = await o.api('POST', '/api/contenido/piezas', { por: 'agente', agente: 'newt', titulo: 'A', texto: 'hola', fecha: EN(3), hora: '09:00', estado: 'aprobada', medios: ['2026-10/a.png'] });
     assert.equal(c.status, 200); assert.equal(c.pieza.estado, 'borrador', 'un agente no puede crearla aprobada: queda borrador');
     const id = c.pieza.id;
     assert.equal((await o.api('POST', `/api/contenido/piezas/${id}/aprobar`, { por: 'agente' })).status, 403);
@@ -100,7 +102,7 @@ test('la API no deja a quien llega como agente aprobar, devolver, elegir un esta
 test('el dueño aprueba lo que puede salir, y la pantalla recibe el motivo de lo que no', async () => {
   const o = await oficina();
   try {
-    const p = (await o.api('POST', '/api/contenido/piezas', { titulo: 'B', fecha: '2026-10-06', texto: 'Hola' })).pieza;
+    const p = (await o.api('POST', '/api/contenido/piezas', { titulo: 'B', fecha: EN(4), hora: '10:00', texto: 'Hola' })).pieza;
     const no = await o.api('POST', `/api/contenido/piezas/${p.id}/aprobar`, {});
     assert.equal(no.status, 409); assert.match(no.error, /todavía no puede salir/); assert.ok(no.errores.length);
     assert.ok(p.revision.errores.length && 'arreglos' in p.revision, 'cada pieza trae su revisión: errores, avisos y el arreglo de cada uno');
@@ -109,7 +111,7 @@ test('el dueño aprueba lo que puede salir, y la pantalla recibe el motivo de lo
     const cambio = await o.api('PATCH', `/api/contenido/piezas/${p.id}`, { texto: 'Hola, con otro precio' }); assert.equal(cambio.soltada, true); assert.equal(cambio.pieza.estado, 'revision');
     const r = (await o.api('GET', '/api/contenido/resumen')); assert.deepEqual([r.total, r.revisar, r.aprobadas], [1, 1, 0]);
     assert.equal((await o.api('POST', `/api/contenido/piezas/${p.id}/devolver`, { estado: 'borrador' })).pieza.estado, 'borrador');
-    assert.equal((await o.api('GET', '/api/contenido?desde=2026-10-01&hasta=2026-10-31')).piezas.length, 1);
+    assert.equal((await o.api('GET', `/api/contenido?desde=${EN(0)}&hasta=${EN(30)}`)).piezas.length, 1);
     assert.equal((await o.api('GET', '/api/contenido/usos?medio=2026-10/b.jpg')).usos.length, 1);
     assert.equal((await o.api('DELETE', `/api/contenido/piezas/${p.id}`)).ok, true);
     assert.equal((await o.api('GET', `/api/contenido/piezas/${p.id}`)).status, 404);

@@ -1,0 +1,13 @@
+{
+ "nota": "Banco de presets F2 (§6.1): las columnas de un Excel o CSV de lote se emparejan solas por estos sinónimos, sin mayúsculas ni tildes. El dueño puede corregirlas con el desplegable. lotes-hoja.mjs los lee.",
+ "campos": {
+  "foto": { "es": "Foto", "sinonimos": ["foto", "fotos", "imagen", "imagenes", "archivo", "file", "image", "picture", "id", "id galeria", "ruta", "url", "enlace", "link"] },
+  "sku": { "es": "SKU", "sinonimos": ["sku", "codigo", "cod", "referencia", "ref", "item", "articulo", "codigo de producto", "part number"] },
+  "nombre": { "es": "Nombre", "sinonimos": ["nombre", "producto", "titulo", "title", "name", "descripcion corta", "modelo"] },
+  "preset": { "es": "Preset", "sinonimos": ["preset", "presets", "receta", "edicion", "estilo", "tratamiento", "retoque"] },
+  "canal": { "es": "Canal", "sinonimos": ["canal", "destino", "tienda", "marketplace", "red social", "publicar en"] },
+  "encuadre": { "es": "Distancia", "sinonimos": ["encuadre", "distancia", "margen", "aire", "ocupacion"] },
+  "medidas": { "es": "Medidas (cm)", "sinonimos": ["medidas", "dimensiones", "tamano", "medida", "ancho x alto x fondo", "cm"] },
+  "notas": { "es": "Notas", "sinonimos": ["notas", "nota", "instrucciones", "idea", "comentario", "comentarios", "observaciones", "detalle"] }
+ }
+}

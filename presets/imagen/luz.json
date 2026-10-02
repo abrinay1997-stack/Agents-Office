@@ -1,0 +1,1140 @@
+{
+ "grupo": "luz",
+ "presets": [
+  {
+   "id": "luz-mas-clara",
+   "v": 1,
+   "nombre": "Que se vea más clara",
+   "tecnico": "Exposición +",
+   "icono": {
+    "id": "sol-sube",
+    "d": "M8.5 15a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M12 22v-1.5M5 15H3.5M20.5 15H19M12 9V3M9 6l3-3 3 3"
+   },
+   "categoria": "luz",
+   "frase": "Sube la luz de toda la foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "exposicion",
+     "ev": {
+      "suave": 0.2,
+      "normal": 0.4,
+      "fuerte": 0.7
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "se ve oscura",
+    "oscura",
+    "mas luz",
+    "aclarar",
+    "iluminar",
+    "subexpuesta",
+    "exposicion",
+    "brillo"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "luz-mas-oscura",
+   "v": 1,
+   "nombre": "Bajarle la luz",
+   "tecnico": "Exposición −",
+   "icono": {
+    "id": "sol-baja",
+    "d": "M8.5 9a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M12 2v1.5M5 9H3.5M20.5 9H19M6.3 3.3l1 1M17.7 3.3l-1 1M12 15v6M9 18l3 3 3-3"
+   },
+   "categoria": "luz",
+   "frase": "Baja la luz de toda la foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "exposicion",
+     "ev": {
+      "suave": -0.2,
+      "normal": -0.4,
+      "fuerte": -0.7
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "muy clara",
+    "sobreexpuesta",
+    "oscurecer",
+    "menos luz",
+    "lavada"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "luz-abrir-sombras",
+   "v": 1,
+   "nombre": "Ver lo que está oscuro",
+   "tecnico": "Abrir sombras",
+   "icono": {
+    "id": "lunamedia",
+    "d": "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 4a8 8 0 0 0 0 16M8.5 9h.01M7.5 12h.01M8.5 15h.01"
+   },
+   "categoria": "luz",
+   "frase": "Aclara solo las partes oscuras, sin aplanar la foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "sombras",
+     "cantidad": {
+      "suave": 0.2,
+      "normal": 0.4,
+      "fuerte": 0.6
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "sombras",
+    "abrir sombras",
+    "partes oscuras",
+    "no se ve",
+    "oscura abajo"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "luz-recuperar-quemado",
+   "v": 1,
+   "nombre": "Recuperar lo quemado",
+   "tecnico": "Bajar altas luces",
+   "icono": {
+    "id": "sol-baja",
+    "d": "M8.5 9a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0M12 2v1.5M5 9H3.5M20.5 9H19M6.3 3.3l1 1M17.7 3.3l-1 1M12 15v6M9 18l3 3 3-3"
+   },
+   "categoria": "luz",
+   "frase": "Devuelve detalle a lo que quedó blanco de más (ventanas, sábanas).",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "altas",
+     "cantidad": {
+      "suave": -0.2,
+      "normal": -0.4,
+      "fuerte": -0.6
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "quemada",
+    "quemado",
+    "muy blanco",
+    "cielo blanco",
+    "altas luces",
+    "reventado"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "luz-mas-contraste",
+   "v": 1,
+   "nombre": "Más contraste",
+   "icono": {
+    "id": "contraste",
+    "d": "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 4v16M12 8h4M12 12h6M12 16h4"
+   },
+   "categoria": "luz",
+   "frase": "Más diferencia entre claros y oscuros.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "contraste",
+     "cantidad": {
+      "suave": 0.1,
+      "normal": 0.2,
+      "fuerte": 0.35
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "contraste",
+    "mas fuerza",
+    "plana",
+    "sin vida"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "luz-menos-contraste",
+   "v": 1,
+   "nombre": "Más suave",
+   "tecnico": "Menos contraste",
+   "icono": {
+    "id": "contraste",
+    "d": "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 4v16M12 8h4M12 12h6M12 16h4"
+   },
+   "categoria": "luz",
+   "frase": "Suaviza la diferencia entre claros y oscuros.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "contraste",
+     "cantidad": {
+      "suave": -0.1,
+      "normal": -0.2,
+      "fuerte": -0.35
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "menos contraste",
+    "suave",
+    "dura",
+    "muy contrastada"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "luz-todo-visible",
+   "v": 1,
+   "nombre": "Todo visible, de lo oscuro a lo claro",
+   "tecnico": "HDR natural",
+   "icono": {
+    "id": "hdr",
+    "d": "M5 6h14a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2zM6.5 9v6M6.5 12h3M9.5 9v6M13 9v6h1.5a3 3 0 0 0 0-6z"
+   },
+   "categoria": "luz",
+   "frase": "Abre sombras y recupera claros a la vez, sin halos.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "sombras",
+     "cantidad": {
+      "suave": 0.2,
+      "normal": 0.35,
+      "fuerte": 0.5
+     }
+    },
+    {
+     "op": "altas",
+     "cantidad": {
+      "suave": -0.2,
+      "normal": -0.35,
+      "fuerte": -0.5
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "hdr",
+    "equilibrar",
+    "todo visible",
+    "ventana quemada"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "luz-quitar-brillos",
+   "v": 1,
+   "nombre": "Quitar brillos de flash",
+   "icono": {
+    "id": "quitar",
+    "d": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M5.6 5.6 18.4 18.4"
+   },
+   "categoria": "luz",
+   "frase": "Quita los puntos blancos del flash y el reflejo duro en superficies brillantes.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "remove specular hot spots and flash glare, keep the material's natural sheen",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "honestidad": "La IA rehace esas zonas.",
+   "buscar": [
+    "brillo",
+    "flash",
+    "reflejo del flash",
+    "puntos blancos",
+    "lacado",
+    "brillante"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: remove specular hot spots and flash glare, keep the material's natural sheen. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- remove specular hot spots and flash glare, keep the material's natural sheen\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "remove specular hot spots and flash glare, keep the material's natural sheen. {conservar}"
+   }
+  },
+  {
+   "id": "luz-contraluz",
+   "v": 1,
+   "nombre": "Arreglar foto a contraluz",
+   "icono": {
+    "id": "contraluz",
+    "d": "M13 8a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M6 11a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M4 21a5 5 0 0 1 10 0"
+   },
+   "categoria": "luz",
+   "frase": "El producto quedó oscuro contra una ventana: ilumínalo de frente.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "fix backlighting: evenly light the subject from the camera side, keep the window bright but not blown",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "honestidad": "La IA rehace la imagen (reiluminar exige regenerar).",
+   "buscar": [
+    "contraluz",
+    "ventana atras",
+    "oscuro contra la luz"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: fix backlighting: evenly light the subject from the camera side, keep the window bright but not blown. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- fix backlighting: evenly light the subject from the camera side, keep the window bright but not blown\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "fix backlighting: evenly light the subject from the camera side, keep the window bright but not blown. {conservar}"
+   }
+  },
+  {
+   "id": "luz-estudio",
+   "v": 1,
+   "nombre": "Luz de estudio profesional",
+   "tecnico": "Reiluminar",
+   "icono": {
+    "id": "softbox",
+    "d": "M4 4h9l5 4v8l-5 4H4zM18 12h3M13 4v16"
+   },
+   "categoria": "luz",
+   "frase": "Reilumina como en un estudio: luz suave que envuelve.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "esquema",
+     "tipo": "enum",
+     "es": "Luz",
+     "valores": [
+      {
+       "v": "frontal",
+       "es": "Frontal suave",
+       "en": "large frontal softbox"
+      },
+      {
+       "v": "lateral",
+       "es": "Lateral",
+       "en": "side softbox with gentle fill"
+      },
+      {
+       "v": "tres",
+       "es": "Tres puntos",
+       "en": "three-point lighting"
+      }
+     ],
+     "def": "frontal"
+    }
+   ],
+   "ia": "relight as a professional studio product shot: {p.esquema}, soft wrap-around light",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "honestidad": "La IA rehace la imagen.",
+   "buscar": [
+    "estudio",
+    "luz de estudio",
+    "profesional",
+    "reiluminar",
+    "softbox",
+    "que se vea pro"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: relight as a professional studio product shot: {p.esquema}, soft wrap-around light. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- relight as a professional studio product shot: {p.esquema}, soft wrap-around light\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "relight as a professional studio product shot: {p.esquema}, soft wrap-around light. {conservar}"
+   }
+  },
+  {
+   "id": "luz-ventana",
+   "v": 1,
+   "nombre": "Luz natural de ventana",
+   "icono": {
+    "id": "ventana",
+    "d": "M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-14a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1zM12 3v18M4 12h16"
+   },
+   "categoria": "luz",
+   "frase": "Luz de día suave entrando de lado.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "lado",
+     "tipo": "lado",
+     "es": "Lado",
+     "valores": [
+      {
+       "v": "izquierda",
+       "es": "Izquierda",
+       "en": "left"
+      },
+      {
+       "v": "derecha",
+       "es": "Derecha",
+       "en": "right"
+      }
+     ],
+     "def": "izquierda"
+    }
+   ],
+   "ia": "soft daylight from a large window on the {p.lado}",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "honestidad": "La IA rehace la imagen.",
+   "buscar": [
+    "luz natural",
+    "ventana",
+    "dia",
+    "luz de dia"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: soft daylight from a large window on the {p.lado}. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- soft daylight from a large window on the {p.lado}\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "soft daylight from a large window on the {p.lado}. {conservar}"
+   }
+  },
+  {
+   "id": "luz-atardecer",
+   "v": 1,
+   "nombre": "Luz de atardecer",
+   "tecnico": "Hora dorada",
+   "icono": {
+    "id": "atardecer",
+    "d": "M3 18h18M7 18a5 5 0 0 1 10 0M12 6v3M4.9 10.9l1.4 1.4M19.1 10.9l-1.4 1.4M8 22h8"
+   },
+   "categoria": "luz",
+   "frase": "Sol bajo y cálido, sombras largas y suaves.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "warm low golden-hour sunlight, long soft shadows",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "honestidad": "La IA rehace la imagen.",
+   "buscar": [
+    "atardecer",
+    "hora dorada",
+    "golden hour",
+    "calida",
+    "sol"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: warm low golden-hour sunlight, long soft shadows. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- warm low golden-hour sunlight, long soft shadows\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "warm low golden-hour sunlight, long soft shadows. {conservar}"
+   }
+  },
+  {
+   "id": "luz-dramatica",
+   "v": 1,
+   "nombre": "Luz dramática",
+   "icono": {
+    "id": "foco",
+    "d": "M4 4l6 6M10 4v6H4M10 10l9 9M13 17a4 2 0 1 0 8 0a4 2 0 1 0 -8 0"
+   },
+   "categoria": "luz",
+   "frase": "Un solo foco y el resto en penumbra, para piezas premium.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "ia": "dramatic single spotlight on the product, rest falling into soft darkness",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "honestidad": "La IA rehace la imagen.",
+   "buscar": [
+    "dramatica",
+    "foco",
+    "premium",
+    "oscura elegante",
+    "lujo"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: dramatic single spotlight on the product, rest falling into soft darkness. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- dramatic single spotlight on the product, rest falling into soft darkness\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "dramatic single spotlight on the product, rest falling into soft darkness. {conservar}"
+   }
+  },
+  {
+   "id": "luz-arreglar",
+   "v": 1,
+   "nombre": "Arreglar la luz (todo)",
+   "icono": {
+    "id": "sol",
+    "d": "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+   },
+   "categoria": "luz",
+   "frase": "Exposición, sombras y claros en un paso, ajustado a cada foto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "incluye": [
+    "luz-mas-clara",
+    "luz-abrir-sombras",
+    "luz-recuperar-quemado"
+   ],
+   "local": [
+    {
+     "op": "auto-niveles"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "arreglar luz",
+    "luz",
+    "iluminacion",
+    "mejorar luz",
+    "auto"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  }
+ ]
+}

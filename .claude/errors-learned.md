@@ -208,3 +208,60 @@
 **Fix aplicado:** `discover()` aplica `withBrowser` también cuando no hay respuesta; el mosaico sigue a `tools.browser` siempre. Test: `tests/mcp-browser.test.mjs` (con `CLAUDE_BIN` apuntando a un programa que no existe).
 **Prevención:** Lo que la página muestra por configuración no debe depender de que un programa externo responda. Probar el camino «sin Claude CLI» con `CLAUDE_BIN` falso.
 **Archivos:** `mcp.mjs` (discover → finish), `tests/mcp-browser.test.mjs`
+
+## [2026-09-30] — El visor del Estudio cortaba las fotos verticales (solo se veía el 43 %)
+
+**Contexto:** Pedido del dueño: «al abrir una imagen grande en el visor no se ve completa».
+**Error:** A 1512 y 1366 px, una imagen 9:16 (2160×3840) se dibujaba a 1060×1884 dentro de una caja de 828 px de alto. Medido con `scripts/estudio-capturas.mjs antes`: 16 de 24 combinaciones cabían.
+**Causa raíz:** `.st-lmedia` es un grid con `place-items:center`, y la fila del grid de `.st-lbox` tenía altura `auto`. Así, el `max-height:100%` del `<img>` no tenía contra qué resolverse y la imagen crecía hasta su tamaño. Las horizontales no lo delataban porque las frenaba el ancho.
+**Fix aplicado:** filas `minmax(0,1fr)` y el medio a `width/height:100%` con `object-fit:contain` (`src/css/estudio.css`), más zoom y pantalla completa (`src/viewer-zoom.js`). Ahora caben 24 de 24.
+**Prevención:** un `max-height` en % dentro de un grid o un flex necesita un padre con altura definida (`minmax(0,1fr)`, `min-height:0`). Probar los visores con imágenes 9:16 y 21:9 y medir el área visible, no solo mirar.
+**Archivos:** `src/css/estudio.css`, `src/studio.js` (light), `scripts/estudio-capturas.mjs`
+
+## [2026-09-30] — Con el panel de Dimitri al lado, la cabecera del calendario se montaba
+
+**Contexto:** Dimitri pasó a ser un panel fijo a la izquierda que corre las vistas (`src/css/dimitri.css`).
+**Error:** A 1024 px, «HOY» quedaba encima del «?» del calendario. A 1512 y 1366 px, Contenido mostraba el mes como «S…» y tenía botones montados. Sin el panel, ya pasaba a 1072 y 1200 px.
+**Causa raíz:** Las reglas estrechas de la banda (`.cv-band`) eran `@media` por el ancho de la VENTANA, y la vista ahora es más estrecha que la ventana. Además, `build.mjs` junta `src/css/*.css` por orden alfabético: el primer arreglo (`calendario-ancho.css`) iba antes que `contenido.css`, que con la misma especificidad lo pisaba.
+**Fix aplicado:** `:is(#calOv,#ctOv){container:cvview/inline-size}` y las reglas estrechas como `@container cvview (...)` en `src/css/vistas-ancho.css`, un nombre que queda el último. Medido: 14 de 14 sin cortes ni solapes.
+**Prevención:** el estilo de una vista que puede compartir pantalla depende del ancho de la vista (`@container`), no de la ventana. Un CSS de `src/css/` que corrige a otro debe ir después en orden alfabético.
+**Archivos:** `src/css/vistas-ancho.css`
+
+## [2026-09-30] — Al borrar el worktree de un agente se vació el node_modules del repositorio
+
+**Contexto:** Limpieza tras el trabajo en paralelo (cuatro worktrees en `.claude/worktrees/`). Cada agente había enlazado el `node_modules` del repositorio principal con una junction de Windows (`mklink /J`) para correr los tests sin instalar.
+**Error:** `git worktree remove -f -f` del primer worktree respondió «Permission denied», y el `node_modules` del repositorio quedó con 0 paquetes.
+**Causa raíz:** Al borrar recursivamente el worktree, Git siguió la junction y borró el contenido del destino, el `node_modules` real.
+**Fix aplicado:** En los demás worktrees se quitó primero solo el enlace (`cmd /c rmdir <junction>`, sin `/s`; comprobado con `Get-Item … .LinkType`) y luego se borró el worktree. `npm ci` reinstaló las librerías (102 paquetes). `.claude/worktrees/` va en `.gitignore`. Tests 267/267 y check 81/81 después.
+**Prevención:** Nunca borrar recursivamente una carpeta que contenga una junction o un enlace simbólico sin quitar antes el enlace. Mejor aún: que cada worktree haga su propio `npm ci`, o quitar las junctions como primer paso de la limpieza.
+**Archivos:** `.gitignore`, `.claude/worktrees/*` (temporal)
+
+## [2026-10-01] — La receta de catálogo dejaba el producto casi negro (lo de «antes» corría después de la IA)
+
+**Contexto:** Integración F1 del banco de presets: `cat-web-panaclaw` trae luz y color locales (balance de mundo gris, auto niveles, exposición) que el compilador pone en `local.antes`.
+**Error:** En el recorrido del navegador, el resultado salía con el producto casi negro sobre blanco 255.
+**Causa raíz:** Para salir rápido, los pasos de «antes» se habían juntado al principio de los de «después» y corrían sobre la imagen ya limpia de la IA; el mundo gris y los auto niveles por canal, sobre un fondo casi blanco con un mueble, llevan el producto a 0.
+**Fix aplicado:** `presets.mjs → preparar()`: lo de antes se hace sobre la foto del dueño, la copia preparada (`prep: true`) es la que va a la IA y el resultado sigue siendo versión de la foto original; después solo corre lo de después. Test en `tests/presets-servidor.test.mjs`.
+**Prevención:** Respetar el momento de cada paso local (§5.2): «antes» ayuda al modelo; repetirlo sobre su salida la estropea. Mirar las capturas del recorrido, no solo los tests.
+**Archivos:** `presets.mjs`, `media/trabajos.mjs`, `tests/presets-servidor.test.mjs`
+
+## [2026-10-01] — «Copiar el color de una foto» siempre salía «Revisar» en la QA
+
+**Contexto:** La QA `delta-e` de `ref-color` mide el color del producto contra la foto original.
+**Error:** «El color se aparta (ΔE 14,95, el máximo es 3)» en cada copia de color.
+**Causa raíz:** Copiar el color cambia el color a propósito; compararlo con el original es medir lo contrario de lo que se pidió.
+**Fix aplicado:** `media/posproceso.mjs`: si el trabajo copia el color de una referencia, `delta-e` sale «No medido» con el motivo, sin tumbar el estado.
+**Prevención:** Antes de enganchar una comprobación a un preset, preguntarse qué significa «bien» para ESE preset; un «no medido» honesto es mejor que un «revisar» falso.
+**Archivos:** `media/posproceso.mjs`
+
+## [2026-10-02] — Un `// comentario` metido a mitad de una línea larga se traga el resto del código
+
+**Contexto:** Modos Básico y Avanzado del Estudio. Había que poner una condición en `open()` de `src/studio.js`, que es una sola línea muy larga, y en una línea encadenada de `scripts/presets-recorrido.mjs`.
+**Error:** `node build.mjs`: «Unexpected end of file (src/studio.js:1846)». El recorrido marcó «0 tarjetas» porque las órdenes que seguían al comentario no se ejecutaron. El build falló, pero la tubería `| tail -1` lo escondió y el recorrido siguió con la página anterior.
+**Causa raíz:** Un `sed` añadió `// …` a mitad de la línea. Todo lo que venía detrás en esa línea quedó comentado: el cierre de la función y las llamadas siguientes.
+**Fix aplicado:** Cambiar el comentario por `/* … */` en las dos líneas.
+**Prevención:**
+- En una línea que sigue después del punto de inserción, comentar solo con `/* */`.
+- Después de un build, mirar su código de salida, no solo la última línea de la salida.
+- Si el recorrido da un resultado raro, comprobar primero que `dist/` sea nuevo.
+**Archivos:** `src/studio.js` (open), `scripts/presets-recorrido.mjs` (la demo)

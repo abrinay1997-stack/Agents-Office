@@ -1,0 +1,385 @@
+{
+ "grupo": "plano",
+ "presets": [
+  {
+   "id": "pla-detalle",
+   "v": 2,
+   "nombre": "De muy cerca",
+   "tecnico": "Plano detalle",
+   "icono": {
+    "id": "macro",
+    "d": "M4 11a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M8.5 11a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0m21 21-5-5"
+   },
+   "categoria": "plano",
+   "frase": "La textura llena la pantalla.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "plano"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "angulo",
+     "tipo": "angulo",
+     "es": "Ángulo",
+     "valores": [
+      {
+       "v": "ojo",
+       "es": "A la altura de los ojos",
+       "en": "eye-level"
+      },
+      {
+       "v": "picado",
+       "es": "Desde arriba",
+       "en": "high angle"
+      },
+      {
+       "v": "contrapicado",
+       "es": "Desde abajo",
+       "en": "low angle"
+      },
+      {
+       "v": "cenital",
+       "es": "Justo desde arriba",
+       "en": "top-down overhead"
+      }
+     ],
+     "def": "ojo"
+    }
+   ],
+   "ia": "extreme close-up, macro lens, shallow depth of field, {p.angulo}",
+   "ranura": "plano",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "detalle",
+    "macro",
+    "muy cerca",
+    "textura",
+    "plano detalle",
+    "acercar textura",
+    "close up extremo"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, extreme close-up, macro lens, shallow depth of field, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. extreme close-up, macro lens, shallow depth of field, {p.angulo}. {look}. {sonido}.",
+    "seedance": "extreme close-up, macro lens, shallow depth of field, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. extreme close-up, macro lens, shallow depth of field, {p.angulo}.",
+    "video-generico": "{camara}. extreme close-up, macro lens, shallow depth of field, {p.angulo}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   }
+  },
+  {
+   "id": "pla-primer",
+   "v": 1,
+   "nombre": "De cerca",
+   "tecnico": "Primer plano",
+   "icono": {
+    "id": "cara",
+    "d": "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0M9 10h.01M15 10h.01M9 15a4 4 0 0 0 6 0"
+   },
+   "categoria": "plano",
+   "frase": "El producto llena el cuadro.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "plano"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "angulo",
+     "tipo": "angulo",
+     "es": "Ángulo",
+     "valores": [
+      {
+       "v": "ojo",
+       "es": "A la altura de los ojos",
+       "en": "eye-level"
+      },
+      {
+       "v": "picado",
+       "es": "Desde arriba",
+       "en": "high angle"
+      },
+      {
+       "v": "contrapicado",
+       "es": "Desde abajo",
+       "en": "low angle"
+      },
+      {
+       "v": "cenital",
+       "es": "Justo desde arriba",
+       "en": "top-down overhead"
+      }
+     ],
+     "def": "ojo"
+    }
+   ],
+   "ia": "close-up shot, {p.angulo}",
+   "ranura": "plano",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "primer plano",
+    "cerca",
+    "close up"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, close-up shot, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. close-up shot, {p.angulo}. {look}.",
+    "seedance": "close-up shot, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. {look}. close-up shot, {p.angulo}.",
+    "video-generico": "{camara}. close-up shot, {p.angulo}. {sujeto} {accion}. {escena}. {look}."
+   }
+  },
+  {
+   "id": "pla-medio",
+   "v": 1,
+   "nombre": "A media distancia",
+   "tecnico": "Plano medio",
+   "icono": {
+    "id": "marco",
+    "d": "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M9 8h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1z"
+   },
+   "categoria": "plano",
+   "frase": "El producto con algo de su entorno.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "plano"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "angulo",
+     "tipo": "angulo",
+     "es": "Ángulo",
+     "valores": [
+      {
+       "v": "ojo",
+       "es": "A la altura de los ojos",
+       "en": "eye-level"
+      },
+      {
+       "v": "picado",
+       "es": "Desde arriba",
+       "en": "high angle"
+      },
+      {
+       "v": "contrapicado",
+       "es": "Desde abajo",
+       "en": "low angle"
+      },
+      {
+       "v": "cenital",
+       "es": "Justo desde arriba",
+       "en": "top-down overhead"
+      }
+     ],
+     "def": "ojo"
+    }
+   ],
+   "ia": "medium shot, {p.angulo}",
+   "ranura": "plano",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "plano medio",
+    "medio",
+    "media distancia"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, medium shot, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. medium shot, {p.angulo}. {look}.",
+    "seedance": "medium shot, {p.angulo}, {lente}. {sujeto} {accion}. {escena}. {camara}. {look}.",
+    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. {look}. medium shot, {p.angulo}.",
+    "video-generico": "{camara}. medium shot, {p.angulo}. {sujeto} {accion}. {escena}. {look}."
+   }
+  },
+  {
+   "id": "pla-general",
+   "v": 2,
+   "nombre": "Toda la habitación",
+   "tecnico": "Plano general",
+   "icono": {
+    "id": "paisaje",
+    "d": "M3 19l6-8 4 5 3-3 5 6zM15 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"
+   },
+   "categoria": "plano",
+   "frase": "Se ve el lugar completo.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "plano"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "angulo",
+     "tipo": "angulo",
+     "es": "Ángulo",
+     "valores": [
+      {
+       "v": "ojo",
+       "es": "A la altura de los ojos",
+       "en": "eye-level"
+      },
+      {
+       "v": "picado",
+       "es": "Desde arriba",
+       "en": "high angle"
+      },
+      {
+       "v": "contrapicado",
+       "es": "Desde abajo",
+       "en": "low angle"
+      },
+      {
+       "v": "cenital",
+       "es": "Justo desde arriba",
+       "en": "top-down overhead"
+      }
+     ],
+     "def": "ojo"
+    }
+   ],
+   "ia": "wide establishing shot, {p.angulo}",
+   "ranura": "plano",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "general",
+    "lejos",
+    "abierto",
+    "wide",
+    "plano general",
+    "toda la escena",
+    "plano abierto"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, wide establishing shot, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. wide establishing shot, {p.angulo}. {look}. {sonido}.",
+    "seedance": "wide establishing shot, {p.angulo}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. wide establishing shot, {p.angulo}.",
+    "video-generico": "{camara}. wide establishing shot, {p.angulo}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   }
+  }
+ ]
+}

@@ -2,6 +2,7 @@
 // Tasks (titles, requests and deliverables), agents, routines, the Brain's notes (the server's search) and the Estudio's
 // gallery, in one list; ↑ ↓ to move, Enter to open, Esc to close.
 import { modal } from './modal.js';
+import { miles } from './galeria-filtro.js'; // the same «5.000» as the Estudio and the picker (toLocaleString('es') leaves 4 digits ungrouped)
 
 const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 export function initSearch({ served, esc, getTasks, agents, getRoutines, openTask, openAgent, openNote, openRoutine, openStudio }) {
@@ -12,7 +13,9 @@ export function initSearch({ served, esc, getTasks, agents, getRoutines, openTas
     <ul id="fdList" role="listbox" aria-label="Resultados"></ul><p class="fd-foot">↑ ↓ para moverte · Enter para abrir · también por lo que hizo un agente o por el nombre de un cliente</p></div>`;
   document.body.appendChild(el);
   const input = el.querySelector('#fdQ'), list = el.querySelector('#fdList');
-  let items = [], sel = 0, opener = null, seq = 0, media = null;
+  let items = [], sel = 0, opener = null, seq = 0;
+  // the Estudio opens on that file (or with that search) if it is listening; otherwise it just opens (INF-03)
+  const studioShow = detail => { if (dispatchEvent(new CustomEvent('ao:studio-show', { detail, cancelable: true }))) openStudio(); };
   const snip = (text, words) => { const t = String(text || '').replace(/\s+/g, ' '), f = fold(t); let i = -1; for (const w of words) { i = f.indexOf(w); if (i >= 0) break; } return i < 0 ? t.slice(0, 90) : (i > 30 ? '…' : '') + t.slice(Math.max(0, i - 30), i + 70) + '…'; };
   async function run(q) {
     const my = ++seq, words = fold(q).split(/\s+/).filter(w => w.length > 1); if (!words.length) { items = []; return draw(); }
@@ -24,7 +27,12 @@ export function initSearch({ served, esc, getTasks, agents, getRoutines, openTas
     items = out; sel = 0; draw();
     if (!served) return;
     try { const j = await (await fetch('/api/brain/search?q=' + encodeURIComponent(q))).json(); if (my !== seq) return; for (const h of (j.hits || []).slice(0, 12)) items.push({ kind: 'Nota', title: h.name, sub: h.snippet || h.group || '', go: () => openNote(h.name) }); } catch {}
-    try { if (!media) media = (await (await fetch('/api/media')).json()).items || []; if (my !== seq) return; for (const m of media.filter(m => hit(`${m.prompt || ''} ${m.name || ''} ${m.agent || ''} ${m.taskTitle || ''}`)).slice(0, 6)) items.push({ kind: 'Imagen', title: String(m.prompt || m.name || m.file).slice(0, 80), sub: m.model || '', go: () => openStudio() }); } catch {}
+    // Auditoría 1 oct 2026 (INF-03): the server searches the WHOLE gallery (it used to be the 600 newest, filtered here), and
+    // a result opens that very file in the Estudio's viewer, not just the Estudio
+    try { const j = await (await fetch('/api/media?n=6&q=' + encodeURIComponent(q))).json(); if (my !== seq) return; const n = j.total || 0;
+      for (const m of j.items || []) items.push({ kind: m.kind === 'video' ? 'Video' : m.kind === 'audio' ? 'Audio' : 'Imagen', title: String(m.prompt || m.name || m.file).slice(0, 80), sub: [m.modelName || m.model || '', n > 6 && m === j.items[0] ? `${miles(n)} en el Estudio` : ''].filter(Boolean).join(' · '), go: () => studioShow({ file: m.file }) });
+      if (n > 6) items.push({ kind: 'Estudio', title: `Ver los ${miles(n)} del Estudio con «${q.trim().slice(0, 40)}»`, sub: 'Abre la galería con esta búsqueda', go: () => studioShow({ q: q.trim() }) });
+    } catch {}
     draw();
   }
   function draw() {
@@ -42,7 +50,7 @@ export function initSearch({ served, esc, getTasks, agents, getRoutines, openTas
   list.addEventListener('click', e => { const li = e.target.closest('[data-i]'); if (!li) return; const it = items[+li.dataset.i]; close(); setTimeout(() => it.go(), 0); });
   el.addEventListener('click', e => { if (e.target === el) close(); });
   el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
-  function open() { if (!el.hidden) return; opener = document.activeElement; media = null; el.hidden = false; modal.open(el); requestAnimationFrame(() => el.classList.add('on')); input.value = ''; items = []; draw(); input.focus(); }
+  function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; modal.open(el); requestAnimationFrame(() => el.classList.add('on')); input.value = ''; items = []; draw(); input.focus(); }
   function close() { if (el.hidden) return; modal.close(el); el.classList.remove('on'); el.hidden = true; if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); el.hidden ? open() : close(); } }, true);
   return { open, close, isOpen: () => !el.hidden };

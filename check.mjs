@@ -29,7 +29,10 @@ await step('build: braingraph + bundle', async () => {
   const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8');
   if (html.length < 500000) throw new Error('bundle looks too small: ' + html.length);
   if (!/AGENTS OFFICE/.test(html)) throw new Error('shell missing');
-  return out.trim().split('\n').pop();
+  // Auditoría 1 oct 2026 (INF-09): a budget, so the page does not grow without anyone deciding it (1,9 MB / 603 KB gzip that night)
+  const raw = Buffer.byteLength(html), gz = (await import('node:zlib')).gzipSync(html, { level: 9 }).length;
+  if (raw > 2.2 * 1024 * 1024 || gz > 700 * 1024) throw new Error(`the page passed its budget: ${(raw / 1048576).toFixed(2)} MB (max 2,2) · ${Math.round(gz / 1024)} KB gzip (max 700) — load the heavy views on demand before adding more`);
+  return out.trim().split('\n').pop() + ` · ${Math.round(gz / 1024)} KB gzip`;
 });
 await step('build: graph has linked notes', async () => {
   const { BRAIN } = await import('./src/braingraph.js?' + Date.now());
@@ -45,8 +48,31 @@ await step('build: the views\' own style (src/css/*.css) reaches the page once e
   if (marks !== 1) throw new Error(`shell.html must carry exactly one «/* <css-vistas> */» marker at the end of its <style> (it has ${marks}): without it, no view's own CSS reaches the page`);
   if (html.includes('<css-vistas>')) throw new Error('the marker is still in the built page: build.mjs did not replace it');
   const dir = path.join(ROOT, 'src', 'css'), files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.css')) : [];
-  for (const f of files) { const n = html.split(`/* ---- src/css/${f} ---- */`).length - 1; if (n !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page (it must be exactly 1)`); }
-  return `${files.length} stylesheet(s): ${files.join(', ')}`;
+  // 1 oct 2026 (carga bajo demanda): the stylesheets in CSS_APARTE (build-extra.mjs) travel with dist/estudio-extra.js instead of the page
+  const { CSS_APARTE } = await import('./build-extra.mjs'), extra = fs.readFileSync(path.join(ROOT, 'dist', 'estudio-extra.js'), 'utf8');
+  for (const f of files) {
+    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, aparte = CSS_APARTE.includes(f);
+    if (n + x !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page and ${x} in dist/estudio-extra.js (it must be exactly 1 in all)`);
+    if (aparte && n) throw new Error(`src/css/${f} is in CSS_APARTE but reached the page: it must travel only with dist/estudio-extra.js`);
+  }
+  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete aparte)' : f).join(', ')}`;
+});
+await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own file beside the page, of the same build, and the page does not carry it', async () => { // 1 oct 2026, INF-09
+  const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8'), file = path.join(ROOT, 'dist', 'estudio-extra.js');
+  if (!fs.existsSync(file)) throw new Error('dist/estudio-extra.js is missing: build.mjs must write it beside the page');
+  const extra = fs.readFileSync(file, 'utf8');
+  if (!/AO_ESTUDIO_EXTRA=\{/.test(extra)) throw new Error('dist/estudio-extra.js does not define window.AO_ESTUDIO_EXTRA');
+  if (/AO_ESTUDIO_EXTRA=\{/.test(html)) throw new Error('the page defines window.AO_ESTUDIO_EXTRA itself: the heavy part went back into the page');
+  const { versionDelExtra } = await import('./estudio-extra-version.mjs'), v = versionDelExtra(extra);
+  if (!v) throw new Error('dist/estudio-extra.js carries no version');
+  if (!html.includes(`"${v}"`)) throw new Error(`the page asks for another build of dist/estudio-extra.js (it does not know ${v})`);
+  for (const [txt, what] of [['Ver el plan y el costo', 'Lotes (src/studio-lotes.js)'], ['e3d-hrow', 'the 3D stage (src/escena3d.js)']]) {
+    if (!extra.includes(txt)) throw new Error(`dist/estudio-extra.js lacks ${what}`);
+    if (html.includes(txt)) throw new Error(`the page carries ${what}: it belongs in dist/estudio-extra.js`);
+  }
+  if (/WebGLRenderer:/.test(extra) || Buffer.byteLength(extra) > 400 * 1024) throw new Error(`dist/estudio-extra.js carries its own three.js (${Math.round(Buffer.byteLength(extra) / 1024)} KB): it must use the page's (window.AO_THREE)`);
+  const gz = (await import('node:zlib')).gzipSync(extra, { level: 9 }).length;
+  return `dist/estudio-extra.js ${Math.round(Buffer.byteLength(extra) / 1024)} KB · ${Math.round(gz / 1024)} KB gzip · version ${v}`;
 });
 
 /* ---------- 1a. V4.4: the unit tests, the secrets check, the agents' safety rules ---------- */
@@ -168,6 +194,14 @@ await step('connectors: claude mcp list parses', async () => {
   if (l[0].id !== 'claude_ai_Gmail' || l[0].key !== 'gmail' || l[0].status !== 'connected') throw new Error('gmail: ' + JSON.stringify(l[0]));
   if (l[1].status !== 'needs-auth' || l[1].key !== 'meta') throw new Error('meta: ' + JSON.stringify(l[1]));
   if (l[2].depts.length !== 2) throw new Error('playwright depts: ' + l[2].depts);
+  // auditoría MCP (1 oct 2026): a plugin's server is named and wired by its own name; an empty plugin slot is not a failure; an unknown server reaches no desk
+  const p = m.parseList('plugin:small-business:gmail: https://gmailmcp.googleapis.com/mcp/v1 (HTTP) - ✔ Connected\nplugin:sales:gmail:  (HTTP) - - Not configured\nplugin:bio-research:pubmed: https://pubmed.mcp.claude.com/mcp (HTTP) - ✔ Connected');
+  if (p[0].name !== 'Gmail' || p[0].key !== 'gmail' || p[0].depts.length !== 5) throw new Error('plugin gmail: ' + JSON.stringify(p[0]));
+  if (p[1].status !== 'not-configured') throw new Error('not configured → ' + p[1].status);
+  if (p[2].depts.length) throw new Error('an unknown server went to ' + p[2].depts);
+  const S = await import('./safety.mjs');
+  if (S.kindOf('mcp__plugin_small-business_shopify__graphql_mutation') !== 'write' || S.kindOf('mcp__x__send_draft') !== 'write' || S.kindOf('mcp__x__frobnicate') !== 'write') throw new Error('the guard reads a send as a read');
+  return 'claude.ai + plugin names · «Not configured» apart · unknown → no desk · in doubt, a send';
 });
 
 /* ---------- 1c. routines (V3.5) ---------- */
@@ -530,6 +564,10 @@ else {
     });
     await step('smoke: V4.1 — Limpiar listas archives with DESHACER, ARCHIVADAS brings one back, the list says when it is cut', async () => {
       const click = (sel) => page.click(sel, { timeout: 5000 }).catch(e => { throw new Error(`click ${sel}: ${e.message.split('\n')[0]}`); });
+      // Auditoría 1 oct 2026 (INF-11): this step failed now and then — it counts cards while the demo keeps finishing and pruning
+      // work. The demo's theatre is frozen for the step (the board still renders), and every wait is for the state it expects.
+      await page.evaluate(() => window.CC.tasks.pauseSim(true));
+      try {
       await page.evaluate(() => { const s = document.querySelector('.tp-search'); s.value = ''; s.dispatchEvent(new Event('input')); document.querySelector('.tp-chip[data-f="all"]').click(); });
       const cut = await page.evaluate(() => { const shown = document.querySelectorAll('.tp-row').length, m = document.querySelector('.tp-more'); return { shown, more: m ? m.textContent : '' }; });
       if (cut.shown >= 60 && !/Se ven 60 de/.test(cut.more)) throw new Error('60 rows and no «show more»: ' + cut.more);
@@ -538,15 +576,17 @@ else {
       await click('.tp-clear'); await page.waitForFunction(() => !document.querySelector('.tp-toast').hidden, null, { timeout: 4000 });
       const arch = await page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0)); // the demo keeps finishing (and pruning) work, so the count is checked against the toast, not the rows seen before
       const said = await page.evaluate(() => +(document.querySelector('.tp-toast').textContent.match(/\d+/) || [0])[0]); if (!arch || arch !== said) throw new Error(`archived ${arch}, the toast says ${said} (rows before: ${n0})`);
-      await click('.tp-undo'); await page.waitForFunction(() => !document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 }).catch(() => {});
+      await click('.tp-undo'); await page.waitForFunction(() => !document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 }).catch(() => { throw new Error('DESHACER: the ARCHIVADAS chip was still there after 4 s'); });
       const left = await page.evaluate(() => document.querySelector('.tp-chip[data-f="archived"]')?.textContent || ''); if (left) throw new Error('DESHACER left ' + left);
       await click('.tp-clear'); await page.waitForFunction(() => document.querySelector('.tp-chip[data-f="archived"]'), null, { timeout: 4000 });
       const archN = () => page.evaluate(() => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0));
       await click('.tp-chip[data-f="archived"]'); const a1 = await archN(); if (!await page.evaluate(() => document.querySelectorAll('.tp-row.archived').length)) throw new Error('ARCHIVADAS shows no rows');
-      await click('.tp-row.archived button[data-act="unarchive"]'); await page.waitForTimeout(400);
+      await click('.tp-row.archived button[data-act="unarchive"]');
+      await page.waitForFunction(want => +(document.querySelector('.tp-chip[data-f="archived"] b')?.textContent || 0) === want, a1 - 1, { timeout: 4000 }).catch(() => {});
       const a2 = await archN(); if (a2 !== a1 - 1) throw new Error(`unarchive: ${a1} → ${a2}`);
       await page.evaluate(() => document.querySelector('.tp-chip[data-f="all"]').click());
       return `${n0} archived · DESHACER brings them back · ARCHIVADAS ${a1} → ${a2}${cut.more ? ' · ' + cut.more : ''}`;
+      } finally { await page.evaluate(() => window.CC.tasks.pauseSim(false)).catch(() => {}); }
     });
     await step('smoke: V4.1 — Tab stays inside an open view and its top bar, the closed board is inert, ? opens the shortcuts in Ajustes', async () => {
       await page.keyboard.press('e'); await page.waitForFunction(() => document.body.classList.contains('studioOpen'), null, { timeout: 4000 });
@@ -622,8 +662,8 @@ else {
       await page.fill('.pz-ta[data-f="texto"]', 'Por la compra de tus lentes, elige tu regalo.'); await page.waitForTimeout(1200);
       await until(() => /Guardado/.test(document.querySelector('.pz-state').textContent), 'the piece did not save itself');
       await page.click('.pz-go[data-a="approve"]'); await until(() => /APROBADA/.test(document.querySelector('.pz-chip').textContent), 'Aprobar did not approve a piece that can go out');
-      await page.fill('.pz-ta[data-f="texto"]', 'Otro texto.'); await page.waitForTimeout(1200);
-      if (!await page.evaluate(() => /A REVISAR/.test(document.querySelector('.pz-chip').textContent))) throw new Error('changing what goes out did not take the approval away');
+      await page.fill('.pz-ta[data-f="texto"]', 'Otro texto.');
+      await until(() => /A REVISAR/.test(document.querySelector('.pz-chip').textContent), 'changing what goes out did not take the approval away'); // INF-11: waits for the state, not 1,2 s (it failed now and then)
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
       if (!await page.evaluate(() => document.querySelector('.ct-panel').hidden && document.body.classList.contains('ctOpen'))) throw new Error('Esc did not close the piece first and leave Contenido open');
       await page.click('#ctOv .ct-mode [data-m="prog"]'); await page.waitForTimeout(300);
@@ -642,7 +682,8 @@ else {
       try {
         await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
         const vis = id => ph.evaluate(i => { const e = document.getElementById(i); return !!e && e.getBoundingClientRect().width > 0; }, id);
-        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topBrain') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        if (!await vis('topDimitri')) throw new Error('Dimitri is not in the dock on a phone (A11-04)');
         // El aviso «⚠ N» aparece según el momento de la demo (en CI, más tarde que aquí) y ensancha el dock: se fuerza para que el paso no dependa del reloj, y se mide a los anchos de teléfono de verdad.
         await ph.evaluate(() => { const a = document.getElementById('topAppr'); a.style.display = ''; a.querySelector('span').textContent = '12'; });
         for (const w of [390, 360, 320]) {
@@ -653,7 +694,7 @@ else {
         }
         await ph.setViewportSize({ width: 390, height: 844 }); await ph.evaluate(() => { document.getElementById('topAppr').style.display = 'none'; });
         await ph.click('#topMore'); await ph.waitForFunction(() => !document.getElementById('topMoreMenu').hidden, null, { timeout: 3000 });
-        await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('ArrowDown'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
+        await ph.keyboard.press('End'); await ph.keyboard.press('Enter'); await ph.waitForFunction(() => !document.getElementById('setOv').hidden, null, { timeout: 4000 }).catch(() => { throw new Error('the «⋯» menu did not open Ajustes'); });
         await ph.keyboard.press('Escape'); await ph.waitForFunction(() => document.getElementById('setOv').hidden, null, { timeout: 3000 });
         if (await ph.evaluate(() => document.activeElement && document.activeElement.id) !== 'topMore') throw new Error('focus did not come back to «⋯»');
         await ph.click('#topContenido'); await ph.waitForFunction(() => document.body.classList.contains('ctOpen'), null, { timeout: 4000 });
@@ -663,6 +704,18 @@ else {
         if (r.side) throw new Error('the page scrolls sideways on a phone');
         return 'dock folded · menu opens Ajustes and gives the focus back · the piece is a full sheet · no sideways scroll';
       } finally { await ph.close(); }
+    });
+    await step('smoke: auditoría 1 oct — the «K» line of Atajos opens Contenido (not the search), Dimitri opens from the dock beside a view', async () => {
+      const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 5000 }).catch(() => { throw new Error(what); });
+      for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(150); } await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('?'); await until(() => !document.getElementById('setOv').hidden, '? did not open the shortcuts');
+      await page.click('#setOv .ks-row[data-key="k"]'); await until(() => document.body.classList.contains('ctOpen'), 'the «K» line did not open Contenido (A11-13)');
+      await page.click('#topDimitri'); await until(() => document.body.classList.contains('subOpen') && document.body.classList.contains('ctOpen'), 'the dock\'s Dimitri did not open beside Contenido (A11-04)');
+      if (await page.evaluate(() => document.getElementById('topDimitri').getAttribute('aria-pressed')) !== 'true') throw new Error('Dimitri\'s dock button is not pressed while he is open');
+      await page.click('#topDimitri'); await until(() => !document.body.classList.contains('subOpen'), 'the dock\'s Dimitri did not close him');
+      for (let i = 0; i < 4 && await page.evaluate(() => document.body.classList.contains('ctOpen')); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(250); } // the piece, the day's list, then Contenido
+      if (await page.evaluate(() => document.body.classList.contains('ctOpen'))) throw new Error('Esc did not close Contenido');
+      return '«K» opens Contenido · Dimitri opens and closes from the dock inside a view';
     });
     await step('smoke: V4.7 (F2) — R opens Analíticas: the demo is labelled, six figures, the chart, the heat map, the period and network switches, Esc closes', async () => {
       const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 6000 }).catch(() => { throw new Error(what); });
@@ -730,7 +783,7 @@ await step('dimitri: a chat or a status carries no pieces, a plan does; the mode
   return 'charla → no pieces · plan → 1 piece · unknown mode → charla · prompt names Dimitri and the five modes';
 });
 
-await step('subgerente: a plan is parsed, moved pieces named, bad departments and past dates dropped', async () => {
+await step('subgerente: a plan is parsed, moved pieces named, bad departments dropped, a past date kept and flagged for the owner to decide (auditoría DIM-13)', async () => {
   const sb = await import('./sub.mjs'); const { DEPTS } = await import('./src/data.js');
   const agents = [{ id: 'lexi', department: 'sales', lead: true }, { id: 'piper', department: 'sales' }, { id: 'mlead', department: 'marketing', lead: true }];
   const future = new Date(Date.now() + 3 * 864e5); const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T10:00`;
@@ -740,10 +793,10 @@ await step('subgerente: a plan is parsed, moved pieces named, bad departments an
     { dept: 'marketing', title: 'Post', instruction: 'Escribe el post', at: '2020-01-01T10:00' }] }) + '\n```', { depts: DEPTS, agents });
   if (p.tasks.length !== 2) throw new Error('pieces: ' + p.tasks.length);
   if (p.tasks[0].lead !== 'lexi' || p.tasks[0].ownerSaid !== 'marketing' || !(p.tasks[0].at > Date.now())) throw new Error('first piece: ' + JSON.stringify(p.tasks[0]));
-  if (p.tasks[1].at !== null || p.tasks[1].i !== 1) throw new Error('a past date must become «now»');
+  if (p.tasks[1].past !== true || !(p.tasks[1].at < Date.now()) || p.tasks[1].i !== 1) throw new Error('a past date is kept with past:true, so the card asks the owner (DIM-13): ' + JSON.stringify(p.tasks[1]));
   const bad = sb.parsePlan('no json here', { depts: DEPTS, agents }); if (bad.tasks.length || !bad.reply) throw new Error('prose must come back as a reply');
   const sys = sb.systemPrompt({ business: 'X', depts: DEPTS, agents, skillsOf: () => [], routineDepts: [], status: '' });
-  if (!/CALENDARIO \(usa estas fechas/.test(sys) || !/lexi/.test(sys)) throw new Error('prompt lacks the calendar or the roster');
+  if (!/<calendario>[\s\S]*\d{4}-\d{2}-\d{2}/.test(sys) || !/lexi/.test(sys)) throw new Error('prompt lacks the calendar or the roster'); // auditoría DIM-20: the prompt is in tagged sections now
   return '2 pieces · moved from marketing · past date → now · prose → reply';
 });
 
@@ -757,6 +810,38 @@ await step('routines: one run can be skipped — the clock moves on without firi
   if (!(st.skipme.nextAt > due) || st.skipme.skip.length) throw new Error('the clock did not move on');
   const again = rt.due([r], st, st.skipme.nextAt + 1000); if (again.length !== 1 || again[0].skipped) throw new Error('the next run did not fire');
   return 'skipped once · next run fires';
+});
+
+await step('estudio: sharp loads and works (the preset bank\'s local operations; without it they say «no disponible», never fall back to AI)', async () => { // F0 del banco de presets, 1 oct 2026
+  let sharp; try { sharp = (await import('sharp')).default; } catch (e) { throw new Error('sharp does not load on this machine (npm install, or npm rebuild sharp): ' + e.message); }
+  const png = await sharp({ create: { width: 8, height: 6, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } }).png().toBuffer();
+  const meta = await sharp(png).metadata(), st = await sharp(png).stats();
+  if (meta.width !== 8 || meta.height !== 6 || meta.format !== 'png') throw new Error('metadata: ' + JSON.stringify({ w: meta.width, h: meta.height, f: meta.format }));
+  if (Math.round(st.channels[0].mean) !== 255) throw new Error('stats: ' + st.channels[0].mean);
+  return `sharp ${sharp.versions?.sharp || '?'} · libvips ${sharp.versions?.vips || '?'}`;
+});
+await step('Presets: la fábrica (presets/) cumple el esquema, cada preset lo sirve algún modelo, y las notas de <cerebro>/Estudio/Presets/ se leen', async () => { // banco de presets F1, equipo de datos
+  const { cargarFabrica, cuentas } = await import('./presets/fabrica.mjs');
+  const { validarFabrica } = await import('./presets/validar.mjs');
+  const { notaAPreset, CARPETA } = await import('./presets-notas.mjs');
+  const { allModels, capsOf } = await import('./media/catalogo.mjs');
+  const fab = cargarFabrica();
+  const caps = allModels().map(m => ({ ...capsOf(m), ajustes: Object.keys(m.settings || {}) }));
+  const r = validarFabrica(fab, { capacidades: caps });
+  // los presets del dueño: notas del Cerebro (§15.4). Una nota que no se entiende se nombra, no se borra.
+  const dir = path.join(cfg.brainPath, ...CARPETA.split('/')), propios = [], malas = [];
+  const byId = new Map(fab.presets.map(p => [p.id, p])), canales = new Set(fab.canales.map(c => c.id));
+  if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) {
+    const { preset, problemas } = notaAPreset(fs.readFileSync(path.join(dir, f), 'utf8'), { archivo: `${CARPETA}/${f}`, byId, canales });
+    if (preset) propios.push(preset.id);
+    if (problemas.length) malas.push(`${CARPETA}/${f}: ${problemas.join('; ')}`);
+  }
+  const dup = propios.filter((x, i) => propios.indexOf(x) !== i);
+  if (dup.length) malas.push(`dos notas con el mismo id: ${[...new Set(dup)].join(', ')}`);
+  if (r.problemas.length || malas.length) throw new Error([...r.problemas, ...malas].slice(0, 12).join(' | ') + (r.problemas.length + malas.length > 12 ? ` | … y ${r.problemas.length + malas.length - 12} más` : ''));
+  const c = cuentas(fab.presets), sinServir = r.avisos.filter(a => /sin servir/.test(a));
+  return `${c.total} presets (${c.imagen} de imagen, ${c.video} de video, ${c.musica + c.voz} de sonido) · F1: ${c.fase1} · ${Object.keys(fab.iconos).length} iconos · ${fab.canales.length} canales · ${Object.keys(fab.sinonimos.frases || {}).length} frases de tienda`
+    + ` · propios: ${propios.length}${sinServir.length ? ` · sin servir todavía: ${sinServir.map(a => a.replace(/^«([^»]+)».*$/, '$1')).join(', ')}` : ''}`;
 });
 
 await step('estudio: the free test engine generates, files are stored with their record, paths stay inside', async () => {
@@ -879,7 +964,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, notes, Meta, copy)', async () => {
       const st = await (await fetch(base + '/api/status')).json();
       const ids = st.checks.map(c => c.id).join(',');
-      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,notas,redes,respaldo') throw new Error('checks: ' + ids);
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respuesta,notas,redes,respaldo') throw new Error('checks: ' + ids);
       if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
       const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
       return `${st.checks.length} checks · overall ${st.overall}`;
@@ -1015,16 +1100,17 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     await step('server: Contenido — an agent leaves a draft as a note, only the owner approves, a change takes the OK away, the Estudio keeps the files a piece uses', async () => { // V4.7
       const call = async (m, p, b) => { const r = await fetch(base + p, { method: m, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, ...(await r.json().catch(() => ({}))) }; };
       const { job } = await call('POST', '/api/media/jobs', { model: 'prueba', prompt: 'tarjeta de contenido', n: 1, by: 'user', wait: 8000 }); const img = job.items[0];
-      const a = await call('POST', '/api/contenido/piezas', { por: 'agente', agente: 'newt', tarea: 'chk1', titulo: 'Borrador del agente', fecha: '2026-11-03', texto: 'Hola', estado: 'aprobada' });
+      const F = new Date(Date.now() + 30 * 864e5), FD = `${F.getFullYear()}-${String(F.getMonth() + 1).padStart(2, '0')}-${String(F.getDate()).padStart(2, '0')}`, FM = FD.slice(0, 7); // V4.10: aprobar exige día y hora que vengan
+      const a = await call('POST', '/api/contenido/piezas', { por: 'agente', agente: 'newt', tarea: 'chk1', titulo: 'Borrador del agente', fecha: FD, hora: '09:00', texto: 'Hola', estado: 'aprobada' });
       if (a.status !== 200 || a.pieza.estado !== 'borrador') throw new Error('an agent must leave a draft, never an approved piece: ' + JSON.stringify(a).slice(0, 120));
-      const dir = path.join(brainCopy, 'Agents Office', 'contenido', '2026-11'); const note = fs.readdirSync(dir).find(f => f.startsWith('p-20261103')); if (!note || !/estado: borrador/.test(fs.readFileSync(path.join(dir, note), 'utf8'))) throw new Error('the piece is not a note in <brain>/Agents Office/contenido');
+      const dir = path.join(brainCopy, 'Agents Office', 'contenido', FM); const note = fs.readdirSync(dir).find(f => f.startsWith('p-' + FD.replace(/-/g, ''))); if (!note || !/estado: borrador/.test(fs.readFileSync(path.join(dir, note), 'utf8'))) throw new Error('the piece is not a note in <brain>/Agents Office/contenido');
       if ((await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, { por: 'agente' })).status !== 403) throw new Error('an agent approved a piece');
       const no = await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, {}); if (no.status !== 409 || !/imagen o un video/.test(no.error)) throw new Error('a piece with no picture was approved: ' + JSON.stringify(no).slice(0, 120));
       await call('PATCH', `/api/contenido/piezas/${a.pieza.id}`, { medios: [img] });
       const ap = await call('POST', `/api/contenido/piezas/${a.pieza.id}/aprobar`, {}); if (ap.status !== 200 || ap.pieza.estado !== 'aprobada') throw new Error('approve failed: ' + JSON.stringify(ap).slice(0, 120));
       const ch = await call('PATCH', `/api/contenido/piezas/${a.pieza.id}`, { texto: 'Hola, con otro precio' }); if (ch.pieza.estado !== 'revision' || !ch.soltada) throw new Error('a change did not take the approval away');
       const del = await fetch(base + '/api/media/item/' + encodeURIComponent(img), { method: 'DELETE' }); if (del.status !== 409) throw new Error('the Estudio trashed a file a piece uses (' + del.status + ')');
-      const list = await call('GET', '/api/contenido?desde=2026-11-01&hasta=2026-11-30'); if (list.piezas.length !== 1 || list.resumen.total !== 1) throw new Error('list: ' + JSON.stringify(list.resumen));
+      const list = await call('GET', `/api/contenido?desde=${FM}-01&hasta=${FM}-31`); if (list.piezas.length !== 1 || list.resumen.total !== 1) throw new Error('list: ' + JSON.stringify(list.resumen));
       const sheet = async id => (await (await fetch(base + '/api/agents/' + id)).json());
       const m = await sheet('newt'), f = await sheet('invo'); if (m.contenido !== true || f.contenido === true) throw new Error(`the agents' Contenido access is wrong: marketing ${m.contenido}, finance ${f.contenido}`);
       return `note ${note} · agent 403 · approve 409 → 200 · change → revisión · file kept · Marketing has the tool, Finanzas does not`;

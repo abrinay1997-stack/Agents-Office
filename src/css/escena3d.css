@@ -1,0 +1,108 @@
+/* El escenario 3D del Estudio (src/escena3d.js, docs/propuesta-banco-presets.md §16.4): el escenario y «lo que ve la cámara»
+   lado a lado; a 600 px o menos (del contenedor, no de la ventana) son dos pestañas y los controles van debajo del lienzo.
+   Todo objetivo mide 24 px o más (44 en el teléfono), ningún texto baja de 10,5 px, el foco es var(--focus) también en los
+   campos y los colores pasan 4,5:1 en claro y en oscuro (body.dark). Todo lleva .e3d delante: no pisa nada del Estudio. */
+
+.e3d { container: e3d / inline-size; display: flex; flex-direction: column; gap: 10px; min-width: 0; color: var(--ink); font: 13px/1.4 var(--ui); }
+.e3d *, .e3d *::before, .e3d *::after { box-sizing: border-box; }
+.e3d .e3d-vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
+.e3d button, .e3d input, .e3d select, .e3d summary { font: inherit; color: inherit; }
+.e3d button { cursor: pointer; }
+.e3d :is(button, input, select, summary, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* ---- las dos vistas ---- */
+.e3d .e3d-tabs { display: none; gap: 4px; padding: 3px; border-radius: 12px; background: rgba(127,127,127,.12); }
+.e3d .e3d-tabs button { flex: 1 1 0; min-height: 44px; border: 0; border-radius: 9px; background: none; font-weight: 600; }
+.e3d .e3d-tabs button[aria-selected="true"] { background: var(--cream); box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.e3d .e3d-views { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.e3d .e3d-stage, .e3d .e3d-cam { min-width: 0; margin: 0; }
+.e3d .e3d-hrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; margin-bottom: 4px; }
+.e3d .e3d-h { margin: 0; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+.e3d .e3d-h .e3d-prop { text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 600; }
+.e3d .e3d-mini { min-height: 28px; min-width: 32px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; font-size: 12px; font-weight: 600; }
+.e3d .e3d-mini:hover { border-color: var(--ink); }
+.e3d .e3d-mini[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+
+/* el lienzo del escenario: el arrastre es del lienzo, no de la página */
+.e3d .e3d-canvas { position: relative; height: clamp(280px, 46vh, 480px); border-radius: 12px; overflow: hidden; border: 1px solid var(--hairline); background: #F4F3EE; touch-action: none; user-select: none; -webkit-user-select: none; }
+body.dark .e3d .e3d-canvas { background: #1E1F24; }
+.e3d .e3d-canvas:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.e3d .e3d-gl { display: block; width: 100%; height: 100%; cursor: move; }
+.e3d .e3d-canvas[data-sobre="camara"] .e3d-gl, .e3d .e3d-canvas[data-sobre="producto"] .e3d-gl { cursor: grab; }
+.e3d .e3d-canvas[data-sobre="manija"] .e3d-gl { cursor: ns-resize; }
+.e3d .e3d-canvas.e3d-arrastrando .e3d-gl { cursor: grabbing; }
+.e3d .e3d-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.e3d .e3d-lab { position: absolute; transform: translate(-50%, -50%); padding: 1px 6px; border-radius: 6px; font: 600 11px var(--ui); white-space: nowrap; color: var(--ink); background: color-mix(in srgb, var(--cream) 82%, transparent); }
+.e3d .e3d-lab-m { font-weight: 500; color: var(--grey); background: none; text-shadow: 0 0 3px var(--cream), 0 0 3px var(--cream); }
+.e3d .e3d-lab-cam { font-weight: 700; }
+.e3d .e3d-lab-fr { color: #1F4FB8; } body.dark .e3d .e3d-lab-fr { color: #9DB8FF; }
+.e3d .e3d-sin3d { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 20px; text-align: center; color: var(--ink); }
+.e3d .e3d-ayuda, .e3d .e3d-nota { margin: 6px 2px 0; font-size: 11.5px; line-height: 1.45; color: var(--grey); }
+
+/* lo que ve la cámara: el cuadro con su proporción, sin pasarse de alto */
+.e3d .e3d-frame { --e3d-hmax: 460px; width: min(100%, calc(var(--e3d-hmax) * var(--e3d-ar, .8))); aspect-ratio: var(--e3d-ar, .8); margin: 0 auto; border-radius: 6px; overflow: hidden; border: 1px solid var(--hairline); background: #fff; }
+.e3d .e3d-guia { display: block; width: 100%; height: 100%; }
+
+/* ---- la línea en vivo y los atajos ---- */
+.e3d .e3d-live { margin: 0; padding: 8px 12px; border-radius: 10px; background: rgba(127,127,127,.1); font-weight: 600; font-variant-numeric: tabular-nums; }
+.e3d .e3d-row { display: flex; align-items: flex-start; gap: 8px 10px; flex-wrap: wrap; }
+.e3d .e3d-lbl { flex: none; width: 72px; padding-top: 7px; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+.e3d .e3d-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 0; min-width: 0; }
+.e3d .e3d-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; font-size: 12.5px; font-weight: 600; }
+.e3d .e3d-chip small { font-size: 11px; font-weight: 500; color: var(--grey); }
+.e3d .e3d-chip:hover { border-color: var(--ink); }
+.e3d .e3d-chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+
+/* ---- los controles con número ---- */
+.e3d .e3d-ctls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.e3d .e3d-set { position: relative; min-width: 0; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--hairline); border-radius: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; align-content: start; }
+.e3d .e3d-set legend { padding: 0 4px; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+.e3d .e3d-units { grid-column: 1 / -1; display: flex; gap: 4px; justify-content: flex-end; margin-top: -4px; }
+.e3d .e3d-f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.e3d .e3d-f > span:first-child { font-size: 11.5px; color: var(--grey); }
+.e3d .e3d-wide { grid-column: 1 / -1; }
+.e3d .e3d-num { display: flex; align-items: stretch; min-width: 0; border: 1px solid var(--grey); border-radius: 10px; background: #fff; }
+.e3d .e3d-num:focus-within { outline: 2px solid var(--focus); outline-offset: 1px; }
+.e3d .e3d-num input { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 34px; padding: 6px 4px 6px 10px; border: 0; border-radius: 10px; background: none; font-variant-numeric: tabular-nums; }
+.e3d .e3d-num input:focus-visible { outline: none; } /* el anillo lo pone su caja (:focus-within) */
+.e3d .e3d-u { display: grid; place-items: center; padding: 0 9px 0 2px; font-size: 12px; color: var(--grey); }
+.e3d .e3d-f select, .e3d .e3d-f input[type="text"] { width: 100%; min-width: 0; min-height: 36px; padding: 6px 9px; border: 1px solid var(--grey); border-radius: 10px; background: #fff; }
+body.dark .e3d .e3d-num, body.dark .e3d .e3d-f select, body.dark .e3d .e3d-f input[type="text"] { background: #1E1F24; }
+body.dark .e3d .e3d-frame { background: #fff; } /* la guía es blanca y gris en los dos temas: es la imagen que va al modelo */
+
+/* ---- el texto del prompt, plegado ---- */
+.e3d .e3d-prompt { border: 1px solid var(--hairline); border-radius: 12px; padding: 0 12px; }
+.e3d .e3d-prompt summary { min-height: 40px; display: list-item; padding: 10px 0; font-weight: 600; cursor: pointer; }
+.e3d .e3d-prompt[open] { padding-bottom: 12px; }
+.e3d .e3d-plbl { margin: 6px 0 2px; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+.e3d .e3d-en, .e3d .e3d-es { margin: 0; font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.e3d .e3d-en { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+
+/* ---- más estrecho: los controles en dos columnas ---- */
+@container e3d (max-width: 900px) {
+  .e3d .e3d-ctls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .e3d .e3d-ctls .e3d-set:last-child { grid-column: 1 / -1; }
+}
+/* ---- 600 px o menos: dos pestañas, una vista a la vez, todo de 44 px ---- */
+@container e3d (max-width: 600px) {
+  .e3d .e3d-tabs { display: flex; }
+  .e3d .e3d-views { grid-template-columns: minmax(0, 1fr); }
+  .e3d[data-tab="escenario"] .e3d-cam, .e3d[data-tab="camara"] .e3d-stage { display: none; }
+  .e3d .e3d-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .e3d .e3d-hrow { justify-content: flex-end; }
+  .e3d .e3d-cam .e3d-hrow { display: none; } /* la pestaña ya dice «Lo que ve la cámara» */
+  .e3d .e3d-canvas { height: min(62vh, 340px); }
+  .e3d .e3d-frame { --e3d-hmax: 380px; }
+  .e3d .e3d-ctls { grid-template-columns: minmax(0, 1fr); }
+  .e3d .e3d-ctls .e3d-set:last-child { grid-column: auto; }
+  .e3d .e3d-set { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .e3d .e3d-lbl { width: 100%; padding-top: 0; }
+  .e3d .e3d-chip, .e3d .e3d-mini { min-height: 44px; }
+  .e3d .e3d-mini { min-width: 44px; }
+  .e3d .e3d-num input, .e3d .e3d-f select, .e3d .e3d-f input[type="text"] { min-height: 44px; font-size: 16px; } /* 16 px: iOS no amplía */
+  .e3d .e3d-prompt summary { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .e3d *, .e3d *::before, .e3d *::after { transition: none !important; animation: none !important; }
+}

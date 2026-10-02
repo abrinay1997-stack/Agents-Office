@@ -17,7 +17,7 @@
 // office.config.json →  "mcp": { "allow": [], "deny": [], "departments": { "<server>": ["sales"] } }
 //   allow  — empty = every connected server; otherwise only these (name, id or key)
 //   deny   — servers the agents may see in the bar but never call
-//   departments — which pods a server is wired to (default: a built-in map, else every pod)
+//   departments — which pods a server is wired to (default: a built-in map, else NO pod: the owner wires it — auditoría MCP-03)
 import { kindOf as kindOfTool } from './safety.mjs';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -49,6 +49,8 @@ const ALIASES = {
   googlecalendar: ['googlecalendar', 'gcal', 'calendar'], googledrive: ['googledrive', 'gdrive', 'drive'], webflow: ['webflow'], playwright: ['playwright'],
   higgsfield: ['higgsfield', 'higgfield'], territool: ['territool'],
   chrome: ['claudeinchrome', 'chrome', 'claudechrome', 'browser'],
+  shopify: ['shopify'], cloudflare: ['cloudflare', 'cloudflaredeveloperplatform'], telegram: ['telegram'], github: ['github'], linear: ['linear'],
+  hubspot: ['hubspot'], salesforce: ['salesforce'], zapier: ['zapier'], figma: ['figma'], jira: ['jira', 'atlassian'],
 };
 // which pods a known brand feeds (mirrors the demo's MCP_BY_DEPT)
 const DEPTS_BY_KEY = {
@@ -60,49 +62,84 @@ const DEPTS_BY_KEY = {
   hubspot: ['sales', 'marketing'], salesforce: ['sales'], zapier: DEPT_KEYS, figma: ['marketing', 'delivery'],
   webflow: ['marketing', 'delivery'], higgsfield: ['marketing'], territool: ['sales'],
   chrome: DEPT_KEYS, // the owner's browser: every desk may need a web app
+  shopify: ['sales', 'marketing', 'ops'], cloudflare: ['ops'],
+  telegram: [], // the owner's own channel with Claude Code, not a business connector (and denied by default, below)
 };
+// Auditoría MCP (1 oct 2026, MCP-03): a server the office does not know reaches NO desk until the owner wires it
+// (mcp.departments, Ajustes or an agent's `tools`): before, it went to all six, and a plugin's name never matched a known one.
+// MCP-07: the plugin «telegram» is the owner's personal line to Claude: never in the agents' hands unless mcp.allow names it.
+const DEFAULT_DENY = [/^plugin:telegram:/i];
 
-export const norm = s => String(s).toLowerCase().replace(/^claude\.ai\s+/, '').replace(/\s+mcp$/, '').replace(/[^a-z0-9]/g, '');
+// «plugin:small-business:google-calendar» → its last segment. A plugin server keeps the plugin as `plugin` (the panel's subtitle).
+const lastSeg = s => String(s).replace(/^plugin:[^:]+:/i, '');
+export const norm = s => lastSeg(String(s).toLowerCase()).replace(/^claude\.ai\s+/, '').replace(/\s+mcp$/, '').replace(/[^a-z0-9]/g, '');
 export const toolId = name => String(name).replace(/[^A-Za-z0-9_-]+/g, '_'); // "claude.ai Gmail" → mcp__claude_ai_Gmail__* · "claude-in-chrome" keeps its hyphens
-const display = name => String(name).replace(/^claude\.ai\s+/, '').replace(/\s+MCP$/, '');
+export const pluginOf = name => (/^plugin:([^:]+):/i.exec(String(name)) || [])[1] || '';
+export const display = name => {
+  const s = String(name).replace(/^claude\.ai\s+/, '').replace(/\s+MCP$/, '');
+  if (!pluginOf(s)) return s;
+  return lastSeg(s).replace(/[-_]+/g, ' ').trim().replace(/\b[a-z]/g, c => c.toUpperCase()); // «google-calendar» → «Google Calendar»
+};
 function logoKey(name) {
   const n = norm(name);
   for (const [key, list] of Object.entries(ALIASES)) if (list.includes(n)) return key;
   return null;
 }
-const STATUS = { '✔': 'connected', '✓': 'connected', '!': 'needs-auth', '✗': 'failed', '✘': 'failed', '⏸': 'pending' };
+// «- Not configured» is a plugin's slot with nothing in it (28 on the owner's machine): not a failure, and never in the light
+const STATUS = { '✔': 'connected', '✓': 'connected', '!': 'needs-auth', '✗': 'failed', '✘': 'failed', '⏸': 'pending', '-': 'not-configured' };
+export const STATES = ['connected', 'needs-auth', 'failed', 'pending', 'disabled', 'not-configured'];
+const mask = t => String(t || '').replace(/([?&][^=&]*(key|token|secret|auth)[^=&]*=)[^&\s]+/gi, '$1***').replace(/(--?[\w-]*(key|token|secret)[\w-]*[= ])\S+/gi, '$1***')
+  .replace(/(Bearer|Basic|Key)\s+[\w.:\-+/=]{8,}/gi, '$1 ***').replace(/\/[A-Za-z0-9_-]{24,}(?=\/|$|\s)/g, '/***'); // a server's command line, URL or error can carry a key (MCP-14: a long random path segment too)
+/** What the browser may see of a server's target (MCP-14): the host of a URL, or «local» for a command on this machine. */
+export function publicTarget(t) {
+  const s = String(t || '').trim(); if (!s || s === '(HTTP)') return '';
+  const u = /^(https?:\/\/[^\s]+)/i.exec(s); if (u) { try { return new URL(u[1]).host; } catch { return ''; } }
+  return 'local';
+}
 
 let servers = [];        // the last discovery, enriched by fromInit()
 let discoveredAt = 0;
 let cfgMcp = { allow: [], deny: [], departments: {} };
 let cfgWeb = true;
 let cfgBrowser = true; // V3.2 (16 Sep): Claude in Chrome for the agents
+let cfgSafety = {};
 
 export function configure(cfg) {
   cfgMcp = { allow: [], deny: [], departments: {}, ...(cfg.mcp || {}) };
+  for (const k of ['allow', 'deny']) if (!Array.isArray(cfgMcp[k])) cfgMcp[k] = [];
+  if (!cfgMcp.departments || typeof cfgMcp.departments !== 'object') cfgMcp.departments = {};
   cfgWeb = cfg.tools?.web !== false;
   cfgBrowser = cfg.tools?.browser !== false;
+  cfgSafety = cfg.safety || {};
+  servers = withBrowser(servers); // the Chrome tile is there from the first answer (/api/mcp no longer waits for `claude mcp list`)
+  for (const s of servers) if (!s.browser) s.depts = deptsFor(s); // Ajustes applies at once, no restart (MCP-12)
 }
-const matches = (s, x) => { const n = norm(x); return n && (norm(s.name) === n || s.id === x || s.key === n || toolId(x) === s.id); };
-const denied = s => cfgMcp.deny.some(x => matches(s, x));
+// a name the owner writes («Gmail»), the raw one («plugin:small-business:gmail»), the id or the key all name the same server
+export const matches = (s, x) => { const n = norm(x); return !!n && (norm(s.name) === n || norm(s.raw || '') === n || s.raw === x || s.id === x || s.key === n || toolId(x) === s.id); };
+const defaultDenied = s => DEFAULT_DENY.some(re => re.test(s.raw || '')) && !cfgMcp.allow.some(x => matches(s, x)) && !Object.keys(cfgMcp.departments).some(x => matches(s, x)); // the owner naming it (allow or departments) brings it back
+const denied = s => cfgMcp.deny.some(x => matches(s, x)) || defaultDenied(s);
 const allowed = s => !denied(s) && (!cfgMcp.allow.length || cfgMcp.allow.some(x => matches(s, x)));
 
-function deptsFor(name, key) {
-  for (const [k, v] of Object.entries(cfgMcp.departments || {})) if (norm(k) === norm(name) || (key && norm(k) === key)) return v.filter(d => DEPT_KEYS.includes(d));
-  return DEPTS_BY_KEY[key || norm(name)] || DEPT_KEYS; // unknown → every pod (drawn as a shared connector)
+function deptsFor(s) {
+  for (const [k, v] of Object.entries(cfgMcp.departments || {})) if (matches(s, k)) return (Array.isArray(v) ? v : []).filter(d => DEPT_KEYS.includes(d));
+  return DEPTS_BY_KEY[s.key || norm(s.name)] || []; // unknown → no desk until the owner wires it (MCP-03)
 }
-function make(name, target, status) {
+function make(name, target, status, detail = '') {
   const key = logoKey(name);
-  return { id: toolId(name), raw: name, name: display(name), key, status, target: target || '', source: /^claude\.ai\s/i.test(name) ? 'claude.ai' : 'local',
-    depts: deptsFor(name, key), tools: [] };
+  const s = { id: toolId(name), raw: name, name: display(name), key, plugin: pluginOf(name), status, detail: mask(detail).slice(0, 300), target: target || '',
+    source: /^claude\.ai\s/i.test(name) ? 'claude.ai' : pluginOf(name) ? 'plugin' : 'local', tools: [] };
+  s.depts = deptsFor(s);
+  return s;
 }
 export function parseList(text) {
   const out = [];
   for (const raw of String(text).split('\n')) {
     const line = raw.replace(/\x1b\[[0-9;]*m/g, '').trim();
-    const m = line.match(/^(.+?):\s+(.+?)\s+-\s+(\S)\s*(.*)$/); // "name: target - ✔ Connected"
+    const m = line.match(/^(.+?):\s+(.*?)\s+-\s+(\S)\s*(.*)$/); // "name: target - ✔ Connected" · "plugin:sales:gmail:  (HTTP) - - Not configured"
     if (!m) continue;
-    out.push(make(m[1], m[2], STATUS[m[3]] || (/connected/i.test(m[4]) ? 'connected' : /auth/i.test(m[4]) ? 'needs-auth' : 'failed')));
+    const st = STATUS[m[3]] || (/not configured/i.test(m[4]) ? 'not-configured' : /disabled/i.test(m[4]) ? 'disabled' : /connected/i.test(m[4]) && !/fail/i.test(m[4]) ? 'connected' : /auth/i.test(m[4]) ? 'needs-auth' : 'failed');
+    const detail = (/\s[—–]\s(.*)$/.exec(m[4]) || [])[1] || ''; // «Failed to connect — HTTP 400: …» keeps the why (MCP-04)
+    out.push(make(m[1], m[2], st, detail));
   }
   return out;
 }
@@ -125,16 +162,33 @@ const withBrowser = list => { const rest = list.filter(s => s.id !== BROWSER); r
 export const browserOn = () => cfgBrowser;
 export function cliArgs() { return cfgBrowser ? ['--chrome'] : ['--no-chrome']; } // explicit both ways: the login's "enabled by default" must not decide for the office
 
-// `claude mcp list` checks every server's health before it prints anything: with ~27 connectors that is ~40 s, so a
-// busy machine ran past the old 45 s limit and the bar was left with Chrome alone. The last good list is kept in
-// data/mcp-cache.json and shown at once on start; a slow or failed check never replaces a known list with less.
-let cacheFile = null;
+// `claude mcp list` checks every server's health before it prints anything: 87 s with 129 servers on the owner's machine
+// (auditoría MCP, 1 oct 2026), so the last good list is kept in data/mcp-cache-<provider>.json and shown at once on start;
+// a slow or failed check never replaces a known list with less. The cache also keeps the tool names over 64 characters
+// (MCP-05): a run started before the first probe already leaves them out.
+let cacheFile = null, cachedList = [];
+function saveCache() {
+  if (!cacheFile) return;
+  try { fs.writeFileSync(cacheFile, JSON.stringify({ at: discoveredAt, servers: cachedList.map(c => ({ ...c, tools: servers.find(s => s.raw === c.raw)?.tools?.length ? servers.find(s => s.raw === c.raw).tools : (c.tools || []) })), long: [...longTools] })); } catch {}
+}
 export function useCache(file) {
   cacheFile = file;
-  try { const j = JSON.parse(fs.readFileSync(file, 'utf8')); if (Array.isArray(j.servers) && j.servers.length && !servers.length) { servers = withBrowser(j.servers.map(x => make(x.raw || x.name, x.target, x.status))); discoveredAt = j.at || 0; } } catch {}
+  try {
+    const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+    for (const t of Array.isArray(j.long) ? j.long : []) if (typeof t === 'string' && t.length > 64) longTools.add(t);
+    if (Array.isArray(j.servers) && j.servers.length && !servers.some(s => !s.browser)) { cachedList = j.servers; servers = withBrowser(j.servers.map(x => Object.assign(make(x.raw || x.name, x.target, x.status, x.detail), { tools: Array.isArray(x.tools) ? x.tools.map(String) : [] }))); discoveredAt = j.at || 0; } // the tools too: a draft right after a restart already loses the send tools (writeTools)
+  } catch {}
   return servers.length;
 }
-export function discover({ timeout = 120000 } = {}) {
+// one `claude mcp list` at a time (MCP-09): a second caller (the page's «Volver a comprobar», the 3-hour check) shares the one running
+let inflight = null;
+export const discovering = () => !!inflight;
+export function discover(opts = {}) {
+  if (inflight) return inflight;
+  inflight = discoverOnce(opts).finally(() => { inflight = null; });
+  return inflight;
+}
+function discoverOnce({ timeout = 180000 } = {}) {
   return new Promise(resolve => {
     const env = { ...process.env }; delete env.CLAUDECODE;
     let out = '', done = false;
@@ -144,7 +198,7 @@ export function discover({ timeout = 120000 } = {}) {
       if (list && (complete ? list.length : list.length >= known)) { // a partial answer never shrinks what the bar already knew
         const prev = new Map(servers.map(s => [s.id, s]));
         servers = withBrowser(list.map(s => { const o = prev.get(s.id); return o && o.tools?.length ? { ...s, tools: o.tools } : s; })); discoveredAt = Date.now();
-        if (cacheFile && complete && list.length) try { fs.writeFileSync(cacheFile, JSON.stringify({ at: discoveredAt, servers: list.map(s => ({ raw: s.raw, name: s.name, target: s.target, status: s.status })) })); } catch {}
+        if (complete && list.length) { cachedList = list.map(s => ({ raw: s.raw, name: s.name, target: s.target, status: s.status, detail: s.detail })); saveCache(); }
       } else servers = withBrowser(servers); // no answer (no Claude CLI on this machine, or it failed): the Chrome tile still follows tools.browser
       resolve(servers);
     };
@@ -157,24 +211,49 @@ export function discover({ timeout = 120000 } = {}) {
   });
 }
 // a run's `system init` event lists the servers the agent actually got, with live status + tool names
-export function fromInit(init) {
+export function fromInit(init, { isolated = false } = {}) {
+  if (isolated) isolationFailed(init); // MCP-06: a server an isolated run could not reach is not «down»: it goes back to the full load
   if (!init || !Array.isArray(init.mcp_servers)) return;
   const tools = Array.isArray(init.tools) ? init.tools : [];
   for (const m of init.mcp_servers) {
+    const st = STATES.includes(m.status) ? m.status : 'failed';
+    if (isolated && servers.find(x => x.id === toolId(m.name))?.noIsolate && st !== 'connected') continue;
     let s = servers.find(x => x.id === toolId(m.name));
-    if (!s) { if (m.name === BROWSER) { if (!cfgBrowser) continue; s = browserServer(null); } else s = make(m.name, '', 'connected'); servers.push(s); }
-    if (m.status === 'connected' || m.status === 'needs-auth' || m.status === 'failed') s.status = m.status;
-    else if (m.status === 'pending' && s.status !== 'connected') s.status = 'pending';
+    if (!s) {
+      if (m.name === BROWSER) { if (!cfgBrowser) continue; s = browserServer(null); }
+      else if (m.name === 'estudio' || m.name === 'contenido') continue; // the office's own servers are not connectors
+      else { s = make(m.name, '', st); s.fresh = true; } // MCP-07: not in the last `claude mcp list` — no desk gets it until the next one
+      servers.push(s);
+    }
+    if (st === 'connected' || st === 'needs-auth' || st === 'failed' || st === 'disabled') s.status = st; // MCP-04: a server that arrives disabled or pending is not «connected»
+    else if (st === 'pending' && s.status !== 'connected') s.status = 'pending';
     const mine = tools.filter(t => t.startsWith(`mcp__${s.id}__`)).map(t => t.slice(s.id.length + 7));
-    if (mine.length) { s.tools = mine; s.status = 'connected'; }
+    if (mine.length) { s.tools = mine; if (st !== 'disabled') s.status = 'connected'; }
   }
-  for (const t of tools) if (t.length > 64) longTools.add(t);
+  let learnt = false;
+  for (const t of tools) if (t.length > 64 && !longTools.has(t)) { longTools.add(t); learnt = true; }
+  if (learnt) saveCache();
   discoveredAt = discoveredAt || Date.now();
 }
 // The API refuses a tool whose name is longer than 64 characters ("`name` must be at most 64 characters, got 66") —
 // and one such tool fails the WHOLE run (claude.ai Cloudflare Developer Platform ships several). They are learnt from
-// each run's init event, and from probeTools() at start-up, and are always passed to --disallowedTools.
+// each run's init event, from probeTools() at start-up and from the cache, and are always passed to --disallowedTools.
 const longTools = new Set();
+export const longToolNames = () => [...longTools];
+/** MCP-05: is this run's error the 64-character one? The names it carries (if any) are learnt; serve.mjs then retries once. */
+export function learnLongToolError(message) {
+  const m = String(message || '');
+  if (!/(at most|maximum of|max(imum)?)\s*64\s*char|64 characters/i.test(m)) return false;
+  for (const t of m.match(/mcp__[A-Za-z0-9_-]+/g) || []) if (t.length > 64) longTools.add(t);
+  saveCache();
+  return true;
+}
+/** May a failed run be run again without its long-named tools? Only when it failed before any tool ran (no double send) and the
+ *  office learnt a long name it did not know when the run started (else the retry fails the same and is paid twice). */
+export function retryLong(e, before) {
+  if (!learnLongToolError(e?.message)) return false;
+  return !(e.used && e.used.length) && longTools.size > before;
+}
 /** Start `claude -p` just long enough to read its init event (the real tool list), then stop it: no model call is made. */
 export function probeTools({ cwd, timeout = 60000 } = {}) {
   return new Promise(resolve => {
@@ -195,10 +274,12 @@ export function probeTools({ cwd, timeout = 60000 } = {}) {
   });
 }
 export function list() { return servers; }
-export function usable() { return servers.filter(s => s.status === 'connected' && allowed(s)); }
+export function usable() { return servers.filter(s => s.status === 'connected' && !s.fresh && allowed(s)); }
 // a server reaches an agent when it is usable AND wired to the agent's department (mcp.departments) — or named in the agent's own `tools`
 const forAgent = (s, agent) => !agent || s.browser || s.depts.includes(agent.department) || (agent.tools || []).some(k => k === s.key || norm(k) === norm(s.name));
 export function usableFor(agent) { return usable().filter(s => forAgent(s, agent)); }
+/** MCP-07: the server ids a run may call (the guard refuses any other): the desk's connectors, plus the office's own. */
+export function serverIdsFor(agent, extra = []) { return [...usableFor(agent).map(s => s.id), ...extra]; }
 export function allowedTools(agent) {
   const t = usableFor(agent).map(s => `mcp__${s.id}`);
   if (cfgWeb) t.push('WebSearch', 'WebFetch');
@@ -208,22 +289,88 @@ export function allowedTools(agent) {
  *  tools = false (routing, the lessons classifier): every MCP server is left out — a JSON job needs none of them. */
 export function disallowedTools(agent, tools = true) {
   const ok = new Set(tools ? usableFor(agent).map(s => s.id) : []);
-  const out = servers.filter(s => !ok.has(s.id) && !s.browser).map(s => `mcp__${s.id}`);
+  const out = servers.filter(s => !ok.has(s.id) && !s.browser && s.status !== 'not-configured').map(s => `mcp__${s.id}`);
   for (const t of longTools) if (!out.some(x => t.startsWith(x + '__'))) out.push(t);
   return out;
 }
 /** V4.4: the send / change tools this desk could reach (safety.kindOf), for a run that may never send: they leave the run entirely. */
-export function writeTools(agent, safeTools) {
+export function writeTools(agent, safeTools, toolKinds = cfgSafety.toolKinds) {
   const out = [];
-  for (const s of usableFor(agent)) for (const t of s.tools || []) { const name = `mcp__${s.id}__${t}`; if (kindOfTool(name, safeTools) === 'write') out.push(name); }
+  for (const s of usableFor(agent)) for (const t of s.tools || []) { const name = `mcp__${s.id}__${t}`; if (kindOfTool(name, safeTools, toolKinds) === 'write') out.push(name); }
   return out;
 }
 export const keyOf = toolName => { const m = /^mcp__(.+?)__/.exec(toolName); if (!m) return null; const s = servers.find(x => x.id === m[1]); return s ? (s.key || s.id) : m[1]; };
 export const namesOf = toolNames => [...new Set(toolNames.map(n => { const m = /^mcp__(.+?)__/.exec(n); if (m) { const s = servers.find(x => x.id === m[1]); return s ? s.name : m[1]; } return n === 'WebSearch' ? 'web search' : n === 'WebFetch' ? 'web fetch' : null; }).filter(Boolean))];
-export function summary() {
-  const mask = t => String(t || '').replace(/([?&][^=&]*(key|token|secret|auth)[^=&]*=)[^&\s]+/gi, '$1***').replace(/(--?[\w-]*(key|token|secret)[\w-]*[= ])\S+/gi, '$1***'); // a server's command line or URL can carry a key
-  return { discoveredAt, web: cfgWeb, browser: { on: cfgBrowser, ...browserState() }, servers: servers.map(s => ({ ...s, target: mask(s.target), allowed: allowed(s), denied: denied(s) })) };
+/** The light's line (MCP-04): counts, not a list of 38 names. «Not configured» is not a problem. */
+export function health() {
+  const srv = servers.filter(s => !s.browser && s.status !== 'not-configured');
+  const by = st => srv.filter(s => s.status === st);
+  const used = srv.filter(s => allowed(s) && s.depts.length); // a failure only hurts when a desk would use it
+  return { total: srv.length, connected: by('connected').length, failed: by('failed'), auth: by('needs-auth'), usedFailed: by('failed').filter(s => used.includes(s)), usedAuth: by('needs-auth').filter(s => used.includes(s)) };
 }
+export function summary() {
+  const sk = cfgSafety.safeTools, tk = cfgSafety.toolKinds; // each tool's kind as the guard sees it: lee · envía · gasta
+  return { discoveredAt, discovering: discovering(), web: cfgWeb, browser: { on: cfgBrowser, ...browserState() },
+    servers: servers.map(s => ({ ...s, target: publicTarget(s.target), detail: mask(s.detail), allowed: allowed(s), denied: denied(s), defaultDenied: defaultDenied(s) && !cfgMcp.deny.some(x => matches(s, x)),
+      kinds: Object.fromEntries((s.tools || []).map(t => [t, kindOfTool(`mcp__${s.id}__${t}`, sk, tk)])) })) };
+}
+/* ---------- MCP-06: a desk's run starts only its own servers ----------
+ * Without this, every `claude -p` of an agent started all 131 servers this machine's Claude Code knows (npx firebase-tools,
+ * 74 HTTP servers waiting for OAuth…), 13–15 s and a pile of processes per task, and --disallowedTools only hid them.
+ * Measured on the owner's machine (1 oct 2026): `--strict-mcp-config` + `--mcp-config` with a plugin's HTTP server under its
+ * own id (plugin_small-business_gmail) connects with the OAuth Claude Code already holds, and the tool names do not change
+ * (mcp__plugin_small-business_gmail__*); --chrome still adds the browser. A server the office cannot rebuild exactly
+ * (a claude.ai connector, a plugin's command with ${CLAUDE_PLUGIN_ROOT}, a header with ${VAR}) sends the run back to the
+ * full load, so nothing a desk used is ever lost. `mcp.isolate: false` turns it off. */
+let pluginIndex = null;
+const readJSON = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
+export function pluginConfigs(root = process.env.AO_PLUGINS_DIR || path.join(os.homedir(), '.claude', 'plugins')) {
+  if (pluginIndex && pluginIndex.root === root) return pluginIndex.map;
+  const map = new Map(); // "plugin:server" → [config, …] (one per installed copy)
+  const walk = (dir, depth) => {
+    if (depth > 6) return;
+    const meta = readJSON(path.join(dir, '.claude-plugin', 'plugin.json'));
+    if (meta && meta.name) {
+      let list = meta.mcpServers && typeof meta.mcpServers === 'object' ? meta.mcpServers : null;
+      if (!list) { const j = readJSON(path.join(dir, typeof meta.mcpServers === 'string' ? meta.mcpServers : '.mcp.json')); list = j ? (j.mcpServers || j) : null; }
+      for (const [k, v] of Object.entries(list || {})) if (v && typeof v === 'object') { const key = `${meta.name}:${k}`; if (!map.has(key)) map.set(key, []); map.get(key).push(v); }
+      return;
+    }
+    let ents = []; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) if (e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules') walk(path.join(dir, e.name), depth + 1);
+  };
+  walk(root, 0);
+  pluginIndex = { root, map };
+  return map;
+}
+const userServers = () => readJSON(process.env.AO_CLAUDE_JSON || path.join(os.homedir(), '.claude.json'))?.mcpServers || {};
+const hasVar = c => /\$\{/.test(JSON.stringify(c));
+/** The exact config of one server, or null when the office cannot rebuild it. */
+export function serverConfig(s) {
+  if (!s || s.source === 'claude.ai' || s.browser || s.noIsolate) return null;
+  const url = (/^(https?:\/\/\S+)/i.exec(s.target || '') || [])[1] || '';
+  if (s.plugin) {
+    const c = (pluginConfigs().get(`${s.plugin}:${String(s.raw).replace(/^plugin:[^:]+:/i, '')}`) || []).find(c => c.url && c.url === url);
+    if (!c || hasVar(c) || c.command) return null;
+    return { ...c, type: c.type || 'http' };
+  }
+  const u = userServers()[s.raw];
+  return u && typeof u === 'object' && !hasVar(u) ? u : null;
+}
+/** The servers of this desk's run as one --mcp-config (keyed by their tool id), or null = load everything as before. */
+export function runConfig(agent) {
+  if (!agent || cfgMcp.isolate === false) return null;
+  const out = {};
+  for (const s of usableFor(agent)) { if (s.browser) continue; const c = serverConfig(s); if (!c) return null; out[s.id] = c; }
+  return out;
+}
+/** A full-load run whose desk uses no claude.ai connector does not start them either (ENABLE_CLAUDEAI_MCP_SERVERS=false). */
+export const needsClaudeAi = agent => usableFor(agent).some(s => s.source === 'claude.ai');
+/** An isolated run that could not reach a server the full load reaches: that server goes back to the full load (fromInit). */
+export function isolationFailed(init) {
+  for (const m of init?.mcp_servers || []) { const s = servers.find(x => x.id === m.name); if (s && s.status === 'connected' && m.status !== 'connected' && m.status !== 'pending') s.noIsolate = true; }
+}
+
 const browserUsable = () => usable().some(s => s.id === BROWSER);
 // the line an agent reads about its tools
 export function promptText(agentOrTools = []) { // an agent (its desk's connectors) — or, as before, just its `tools` list

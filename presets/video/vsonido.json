@@ -1,0 +1,152 @@
+{
+ "grupo": "vsonido",
+ "presets": [
+  {
+   "id": "vs-ambiente",
+   "v": 2,
+   "nombre": "Con sonido ambiente",
+   "icono": {
+    "id": "onda",
+    "d": "M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10"
+   },
+   "categoria": "vsonido",
+   "frase": "Sonidos del lugar y efectos, donde el modelo lo admite.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "audio"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "sfx",
+     "tipo": "texto",
+     "es": "Sonidos",
+     "max": 140,
+     "def": "soft fabric rustle"
+    },
+    {
+     "id": "amb",
+     "tipo": "texto",
+     "es": "Ambiente",
+     "max": 140,
+     "def": "quiet room tone, distant birds",
+     "ranura": "ambiente"
+    }
+   ],
+   "ia": "{p.sfx}",
+   "ranura": "sfx",
+   "ajustesModelo": {
+    "generateAudio": true
+   },
+   "requiere": {},
+   "prefer": [
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-std",
+    "seedance-2.5",
+    "wan-3",
+    "veo-3.1"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "sonido",
+    "audio",
+    "ambiente",
+    "efectos",
+    "sfx",
+    "con audio",
+    "efectos de sonido",
+    "ruido ambiente"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {p.sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}. {p.sfx}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. {p.sfx}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. {look}. {sonido}. {p.sfx}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}. {p.sfx}."
+   }
+  },
+  {
+   "id": "vs-mudo",
+   "v": 2,
+   "nombre": "Sin sonido",
+   "icono": {
+    "id": "onda-x",
+    "d": "M3 12h2M7 8v8M11 5v14M15 9l6 6M21 9l-6 6"
+   },
+   "categoria": "vsonido",
+   "frase": "Video mudo (más barato en algunos modelos).",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "audio"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ajustes",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ajustesModelo": {
+    "generateAudio": false
+   },
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "mudo",
+    "sin sonido",
+    "silencio",
+    "sin audio",
+    "muted"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": null
+  }
+ ]
+}

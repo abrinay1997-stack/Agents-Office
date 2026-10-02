@@ -1,0 +1,1526 @@
+{
+ "grupo": "camara",
+ "presets": [
+  {
+   "id": "cam-fija",
+   "v": 2,
+   "nombre": "Cámara quieta",
+   "icono": {
+    "id": "tripode",
+    "d": "M8 3h8a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-8a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1zM12 10v4M12 14l-6 7M12 14l6 7M12 14v7"
+   },
+   "categoria": "camara",
+   "frase": "Nada se mueve salvo el sujeto.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [],
+   "ia": "static locked-off camera",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "fija",
+    "quieta",
+    "tripode",
+    "sin movimiento",
+    "static",
+    "camara fija",
+    "plano fijo",
+    "sin mover la camara"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "static locked-off camera, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: static locked-off camera. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. static locked-off camera. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. static locked-off camera. {look}. {sonido}.",
+    "video-generico": "static locked-off camera. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Plano fijo",
+   "ajustesModelo": {
+    "cameraMovement": [
+     "static-shot",
+     "static"
+    ]
+   }
+  },
+  {
+   "id": "cam-acercar",
+   "v": 2,
+   "nombre": "La cámara se acerca",
+   "tecnico": "Push in",
+   "icono": {
+    "id": "push-in",
+    "d": "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2zM7 9l3 3-3 3M17 9l-3 3 3 3"
+   },
+   "categoria": "camara",
+   "frase": "Avanza despacio hacia el producto.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "slow push in toward the subject",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "acercar",
+    "acercarse",
+    "zoom",
+    "push",
+    "avanzar",
+    "zoom lento",
+    "zoom in",
+    "acercamiento",
+    "push in",
+    "que se acerque",
+    "dolly in"
+   ],
+   "estrella": true,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "slow push in toward the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow push in toward the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow push in toward the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow push in toward the subject. {look}. {sonido}.",
+    "video-generico": "slow push in toward the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "dolly-in",
+     "slow-zoom-in"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow, subtle push in toward the subject",
+    "normal": "slow push in toward the subject",
+    "fuerte": "fast, dramatic push in toward the subject"
+   }
+  },
+  {
+   "id": "cam-alejar",
+   "v": 2,
+   "nombre": "La cámara se aleja",
+   "tecnico": "Pull out",
+   "icono": {
+    "id": "pull-out",
+    "d": "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2zM10 9l-3 3 3 3M14 9l3 3-3 3"
+   },
+   "categoria": "camara",
+   "frase": "Retrocede y revela el lugar.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "slow pull back revealing the surroundings",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "alejar",
+    "revelar",
+    "pull",
+    "retroceder",
+    "zoom out",
+    "alejamiento",
+    "que se aleje",
+    "dolly out"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "slow pull back revealing the surroundings, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow pull back revealing the surroundings. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow pull back revealing the surroundings. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow pull back revealing the surroundings. {look}. {sonido}.",
+    "video-generico": "slow pull back revealing the surroundings. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "dolly-out",
+     "slow-zoom-out"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow, subtle pull back revealing the surroundings",
+    "normal": "slow pull back revealing the surroundings",
+    "fuerte": "fast pull back revealing the whole scene"
+   }
+  },
+  {
+   "id": "cam-arco",
+   "v": 2,
+   "nombre": "Media vuelta alrededor",
+   "tecnico": "Arco",
+   "icono": {
+    "id": "arco",
+    "d": "M4 16a8 8 0 0 1 16 0m18 13 2 3 2-3M10 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"
+   },
+   "categoria": "camara",
+   "frase": "Rodea el producto un cuarto de vuelta.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "smooth 90-degree arc around the subject",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "arco",
+    "rodear",
+    "media vuelta",
+    "semicirculo",
+    "arc shot",
+    "girar un poco"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "smooth 90-degree arc around the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: smooth 90-degree arc around the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. smooth 90-degree arc around the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. smooth 90-degree arc around the subject. {look}. {sonido}.",
+    "video-generico": "smooth 90-degree arc around the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "arc-right"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle 45-degree arc around the subject",
+    "normal": "smooth 90-degree arc around the subject",
+    "fuerte": "fast 180-degree arc around the subject"
+   }
+  },
+  {
+   "id": "cam-orbita",
+   "v": 2,
+   "nombre": "Vuelta completa alrededor",
+   "tecnico": "Órbita 360",
+   "icono": {
+    "id": "orbita",
+    "d": "M3 12a9 4 0 1 0 18 0a9 4 0 1 0 -18 0M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0M19 8.5 21 8l-.5 2"
+   },
+   "categoria": "camara",
+   "frase": "La cámara da la vuelta entera.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "full 360-degree orbit around the subject",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "orbita",
+    "360",
+    "vuelta",
+    "que de vueltas",
+    "alrededor",
+    "girar alrededor",
+    "dar la vuelta",
+    "orbitar",
+    "camara alrededor"
+   ],
+   "estrella": true,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "full 360-degree orbit around the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: full 360-degree orbit around the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. full 360-degree orbit around the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. full 360-degree orbit around the subject. {look}. {sonido}.",
+    "video-generico": "full 360-degree orbit around the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "iaPorIntensidad": {
+    "suave": "slow, steady full 360-degree orbit around the subject",
+    "normal": "full 360-degree orbit around the subject",
+    "fuerte": "fast full 360-degree orbit around the subject"
+   }
+  },
+  {
+   "id": "cam-lateral",
+   "v": 2,
+   "nombre": "La cámara se desliza de lado",
+   "tecnico": "Travelling",
+   "icono": {
+    "id": "pan",
+    "d": "M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"
+   },
+   "categoria": "camara",
+   "frase": "Se desplaza en paralelo al producto.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "lado",
+     "tipo": "lado",
+     "es": "Lado",
+     "valores": [
+      {
+       "v": "izquierda",
+       "es": "Izquierda",
+       "en": "left"
+      },
+      {
+       "v": "derecha",
+       "es": "Derecha",
+       "en": "right"
+      }
+     ],
+     "def": "izquierda"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "lateral dolly move to the {p.lado}",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "de lado",
+    "travelling",
+    "deslizar",
+    "dolly",
+    "truck",
+    "slider",
+    "tracking",
+    "de costado"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "lateral dolly move to the {p.lado}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: lateral dolly move to the {p.lado}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. lateral dolly move to the {p.lado}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. lateral dolly move to the {p.lado}. {look}. {sonido}.",
+    "video-generico": "lateral dolly move to the {p.lado}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "truck-{p.lado}",
+     "slider-{p.lado}",
+     "dolly-{p.lado}"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle lateral dolly move to the {p.lado}",
+    "normal": "lateral dolly move to the {p.lado}",
+    "fuerte": "fast lateral tracking move to the {p.lado}"
+   }
+  },
+  {
+   "id": "cam-paneo",
+   "v": 2,
+   "nombre": "Gira la mirada de lado",
+   "tecnico": "Paneo",
+   "icono": {
+    "id": "pan",
+    "d": "M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"
+   },
+   "categoria": "camara",
+   "frase": "La cámara gira sobre sí misma.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "lado",
+     "tipo": "lado",
+     "es": "Lado",
+     "valores": [
+      {
+       "v": "izquierda",
+       "es": "Izquierda",
+       "en": "left"
+      },
+      {
+       "v": "derecha",
+       "es": "Derecha",
+       "en": "right"
+      }
+     ],
+     "def": "izquierda"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "slow pan {p.lado}",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "paneo",
+    "pan",
+    "girar camara",
+    "barrer",
+    "panoramica",
+    "girar la camara"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "slow pan {p.lado}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow pan {p.lado}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow pan {p.lado}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow pan {p.lado}. {look}. {sonido}.",
+    "video-generico": "slow pan {p.lado}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "pan-{p.lado}"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow pan {p.lado}",
+    "normal": "slow pan {p.lado}",
+    "fuerte": "fast pan {p.lado}"
+   }
+  },
+  {
+   "id": "cam-inclinar",
+   "v": 2,
+   "nombre": "Mira hacia arriba o abajo",
+   "tecnico": "Tilt",
+   "icono": {
+    "id": "tilt",
+    "d": "M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4"
+   },
+   "categoria": "camara",
+   "frase": "Inclina la cámara.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "dir",
+     "tipo": "enum",
+     "es": "Hacia",
+     "valores": [
+      {
+       "v": "up",
+       "es": "Arriba",
+       "en": "up"
+      },
+      {
+       "v": "down",
+       "es": "Abajo",
+       "en": "down"
+      }
+     ],
+     "def": "up"
+    },
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "slow tilt {p.dir}",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "inclinar",
+    "tilt",
+    "arriba",
+    "abajo",
+    "mirar arriba",
+    "mirar abajo",
+    "de abajo arriba"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "slow tilt {p.dir}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: slow tilt {p.dir}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. slow tilt {p.dir}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. slow tilt {p.dir}. {look}. {sonido}.",
+    "video-generico": "slow tilt {p.dir}. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "tilt-{p.dir}"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very slow tilt {p.dir}",
+    "normal": "slow tilt {p.dir}",
+    "fuerte": "fast tilt {p.dir}"
+   }
+  },
+  {
+   "id": "cam-sube",
+   "v": 2,
+   "nombre": "La cámara sube",
+   "tecnico": "Grúa",
+   "icono": {
+    "id": "grua",
+    "d": "M4 20h6M7 20V8l12-4M7 8l5 7M18 4a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+   },
+   "categoria": "camara",
+   "frase": "Se eleva por encima de la escena.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "crane up rising above the scene",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "subir",
+    "grua",
+    "elevar",
+    "crane",
+    "que suba",
+    "desde arriba",
+    "jib"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "crane up rising above the scene, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: crane up rising above the scene. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. crane up rising above the scene. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. crane up rising above the scene. {look}. {sonido}.",
+    "video-generico": "crane up rising above the scene. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "crane-up",
+     "jib-up",
+     "pedestal-up"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle crane up rising above the scene",
+    "normal": "crane up rising above the scene",
+    "fuerte": "high crane up soaring above the scene"
+   }
+  },
+  {
+   "id": "cam-baja",
+   "v": 2,
+   "nombre": "La cámara baja",
+   "tecnico": "Grúa abajo",
+   "icono": {
+    "id": "grua",
+    "d": "M4 20h6M7 20V8l12-4M7 8l5 7M18 4a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+   },
+   "categoria": "camara",
+   "frase": "Desciende hasta el producto.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "crane down to the subject",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "bajar",
+    "descender",
+    "grua",
+    "que baje",
+    "crane down",
+    "jib"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "crane down to the subject, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: crane down to the subject. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. crane down to the subject. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. crane down to the subject. {look}. {sonido}.",
+    "video-generico": "crane down to the subject. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "crane-down",
+     "jib-down",
+     "pedestal-down"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "gentle crane down to the subject",
+    "normal": "crane down to the subject",
+    "fuerte": "fast crane down to the subject"
+   }
+  },
+  {
+   "id": "cam-dron",
+   "v": 2,
+   "nombre": "Vista de dron",
+   "icono": {
+    "id": "dron",
+    "d": "M3 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M17 6a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M3 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M17 18a2 2 0 1 0 4 0a2 2 0 1 0 -4 0M10 9h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1zM7 8l2 2M17 8l-2 2M7 16l2-2M17 16l-2-2"
+   },
+   "categoria": "camara",
+   "frase": "Toma aérea que se aleja.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "aerial drone pullback",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "dron",
+    "aereo",
+    "drone",
+    "desde el cielo",
+    "vista aerea",
+    "desde arriba",
+    "aerial"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "aerial drone pullback, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: aerial drone pullback. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. aerial drone pullback. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. aerial drone pullback. {look}. {sonido}.",
+    "video-generico": "aerial drone pullback. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Toma aérea",
+   "ajustesModelo": {
+    "cameraMovement": [
+     "aerial-pullback",
+     "helicopter-shot"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "slow aerial drone glide",
+    "normal": "aerial drone pullback",
+    "fuerte": "fast sweeping aerial drone pullback"
+   }
+  },
+  {
+   "id": "cam-vertigo",
+   "v": 2,
+   "nombre": "Efecto vértigo",
+   "tecnico": "Dolly zoom",
+   "icono": {
+    "id": "vertigo",
+    "d": "M3 4l6 6M21 4l-6 6M3 20l6-6M21 20l-6-6M9 9h6v6h-6z"
+   },
+   "categoria": "camara",
+   "frase": "El fondo se estira y el producto queda igual.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "dolly zoom, the background stretches while the subject stays the same size",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "vertigo",
+    "dolly zoom",
+    "efecto",
+    "hitchcock"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "dolly zoom, the background stretches while the subject stays the same size, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: dolly zoom, the background stretches while the subject stays the same size. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. dolly zoom, the background stretches while the subject stays the same size. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. dolly zoom, the background stretches while the subject stays the same size. {look}. {sonido}.",
+    "video-generico": "dolly zoom, the background stretches while the subject stays the same size. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "dolly-zoom"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "subtle dolly zoom, the background stretches slightly while the subject stays the same size",
+    "normal": "dolly zoom, the background stretches while the subject stays the same size",
+    "fuerte": "intense dolly zoom, the background stretches dramatically while the subject stays the same size"
+   }
+  },
+  {
+   "id": "cam-zoom-golpe",
+   "v": 2,
+   "nombre": "Zoom de golpe",
+   "tecnico": "Crash zoom",
+   "icono": {
+    "id": "rayo",
+    "d": "M13 2 4 14h7l-1 8 9-12h-7z"
+   },
+   "categoria": "camara",
+   "frase": "Acercamiento rápido y enérgico.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "fast crash zoom in",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "zoom rapido",
+    "golpe",
+    "crash",
+    "impacto",
+    "zoom de golpe",
+    "zoom brusco",
+    "crash zoom"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "fast crash zoom in, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: fast crash zoom in. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. fast crash zoom in. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. fast crash zoom in. {look}. {sonido}.",
+    "video-generico": "fast crash zoom in. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "crush-zoom"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "quick zoom in",
+    "normal": "fast crash zoom in",
+    "fuerte": "violent crash zoom in"
+   }
+  },
+  {
+   "id": "cam-barrido",
+   "v": 2,
+   "nombre": "Barrido rápido",
+   "tecnico": "Whip pan",
+   "icono": {
+    "id": "rayo",
+    "d": "M13 2 4 14h7l-1 8 9-12h-7z"
+   },
+   "categoria": "camara",
+   "frase": "Giro veloz, sirve de transición.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "quick whip pan transition",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "barrido",
+    "transicion",
+    "whip",
+    "rapido",
+    "whip pan",
+    "barrido rapido"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "quick whip pan transition, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: quick whip pan transition. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. quick whip pan transition. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. quick whip pan transition. {look}. {sonido}.",
+    "video-generico": "quick whip pan transition. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "cameraMovement": [
+     "whip-pan"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "quick pan transition",
+    "normal": "quick whip pan transition",
+    "fuerte": "very fast whip pan transition with motion blur"
+   }
+  },
+  {
+   "id": "cam-mano",
+   "v": 2,
+   "nombre": "Cámara en mano",
+   "icono": {
+    "id": "mano",
+    "d": "M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4.5a1.5 1.5 0 0 1 3 0V12M14 11.5V6a1.5 1.5 0 0 1 3 0v8a7 7 0 0 1-7 7c-3 0-4.5-1.5-6-4l-2-3.5a1.5 1.5 0 0 1 2.5-1.5L8 15"
+   },
+   "categoria": "camara",
+   "frase": "Leve vaivén natural, tipo celular.",
+   "medios": [
+    "video"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "texto",
+    "anima",
+    "refs"
+   ],
+   "ejes": [
+    "camara"
+   ],
+   "exclusivo": true,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "inicial",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto de partida (opcional)"
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave"
+      },
+      {
+       "v": "normal",
+       "es": "Normal"
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "ia": "subtle handheld camera, natural sway",
+   "ranura": "camara",
+   "requiere": {},
+   "prefer": [
+    "kling-3-std",
+    "veo-3.1-fast",
+    "seedance-2",
+    "kling-3-pro",
+    "mmx-h3",
+    "kling-2.5-fal"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "en mano",
+    "celular",
+    "natural",
+    "handheld",
+    "ugc",
+    "camara en mano",
+    "movil",
+    "tembloroso"
+   ],
+   "estrella": false,
+   "fase": 5,
+   "estado": "beta",
+   "prompt": {
+    "veo": "subtle handheld camera, natural sway, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: subtle handheld camera, natural sway. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. subtle handheld camera, natural sway. {look}. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. subtle handheld camera, natural sway. {look}. {sonido}.",
+    "video-generico": "subtle handheld camera, natural sway. {plano}. {sujeto} {accion}. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Handheld",
+   "ajustesModelo": {
+    "cameraMovement": [
+     "handheld"
+    ]
+   },
+   "iaPorIntensidad": {
+    "suave": "very subtle handheld camera, almost steady",
+    "normal": "subtle handheld camera, natural sway",
+    "fuerte": "handheld camera with natural shake, documentary feel"
+   }
+  }
+ ]
+}

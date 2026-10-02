@@ -18,7 +18,7 @@ body.ctOpen #sahniMark, body.ctOpen #licence { display: none; }
 #ctOv .cv-stats span { white-space: nowrap; }
 #ctOv .cv-chip i.pz-cg { width: auto; height: auto; font-size: 11px; opacity: 1; margin-right: 2px; }
 #ctOv .cv-body { position: relative; min-height: 0; }
-#ctOv.prog .cv-rail { display: none; }
+#ctOv.prog .cv-rail, #ctOv.prog .cv-nav, #ctOv.prog [data-rail] { display: none; }
 
 /* el color de cada estado: uno para el fondo claro y otro para el oscuro (4,5:1 en los dos) */
 .pz-tone { color: var(--c); } body.dark .pz-tone { color: var(--cd); }
@@ -39,7 +39,11 @@ body.ctOpen #sahniMark, body.ctOpen #licence { display: none; }
 .pz-cardst { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 2px; font-size: 10.5px; letter-spacing: .06em; }
 .pz-cardst b { font-weight: 700; } .pz-cardst i { font-style: normal; }
 .cv-ev.pz .cv-ev-m { justify-content: flex-start; }
-.pz-nb { font-size: 10.5px; letter-spacing: .06em; margin-right: 3px; }
+.pz-nb { display: inline-grid; place-items: center; min-width: 19px; height: 16px; padding: 0 3px; box-sizing: border-box; border-radius: 4px; font-family: var(--ui); font-size: 10.5px; font-weight: 800; letter-spacing: .02em; line-height: 1; color: #fff; background: #4A4A4A; flex: none; }
+.pz-nb.instagram { background: #B1306C; } .pz-nb.facebook { background: #0F5BD8; } /* blanco encima: 5,8:1 y 5,9:1 */
+.pz-fi { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vertical-align: -2px; flex: none; }
+.pz-fi .fill { fill: currentColor; stroke: none; }
+.pz-f { display: inline-flex; align-items: center; gap: 3px; color: var(--grey); } body.dark .pz-f { color: #C2C0B9; }
 body.dark .cv-ev.pz { background: color-mix(in srgb, var(--chip) 16%, var(--cv-card)); }
 body.dark .cv-ev.pz.pz-idea, body.dark .cv-ev.pz.pz-aprobada { background: var(--cv-card); }
 
@@ -47,10 +51,9 @@ body.dark .cv-ev.pz.pz-idea, body.dark .cv-ev.pz.pz-aprobada { background: var(-
 .pz-th, .pz-ct, .pz-bt, .pz-rt, .pz-mt, .pz-pt, .pz-igt { position: relative; display: block; flex: none; overflow: hidden; border-radius: 6px; background: color-mix(in srgb, var(--ink) 8%, var(--cv-card)); }
 .pz-th img, .pz-ct img, .pz-bt img, .pz-rt img, .pz-mt img, .pz-pt img, .pz-igt img, .pz-th video, .pz-ct video, .pz-bt video, .pz-rt video, .pz-mt video, .pz-pt video, .pz-igt video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pz-th.ph, .pz-ct.ph, .pz-bt.ph, .pz-rt.ph, .pz-mt.ph, .pz-pt.ph, .pz-igt.ph { background: linear-gradient(135deg, hsl(var(--h) 55% 78%), hsl(calc(var(--h) + 40) 50% 64%)); }
-.pz-th i, .pz-ct i, .pz-bt i, .pz-rt i, .pz-mt i, .pz-pt i { position: absolute; inset: auto 3px 3px auto; font-style: normal; font-size: 10.5px; color: #fff; background: rgba(21,20,20,.65); border-radius: 4px; padding: 0 4px; line-height: 15px; }
-.pz-ct { width: 30px; height: 38px; } .pz-bt { width: 36px; height: 44px; } .pz-rt { width: 46px; height: 56px; } .pz-rt.none { background: var(--cv-soft); border: 1px dashed var(--hairline); }
+.pz-th i, .pz-ct i, .pz-bt i, .pz-rt i, .pz-mt i, .pz-pt i, .pz-igt i { position: absolute; inset: auto 3px 3px auto; font-style: normal; font-size: 10.5px; color: #fff; background: rgba(21,20,20,.65); border-radius: 4px; padding: 0 4px; line-height: 15px; }
+.pz-ct { width: 30px; height: 38px; } .pz-ct.none, .pz-bt.none { display: grid; place-items: center; color: var(--grey); background: var(--cv-soft); border: 1px dashed var(--hairline); } .pz-rt.none { display: grid; place-items: center; color: var(--grey); } .pz-bt { width: 36px; height: 44px; } .pz-rt { width: 46px; height: 56px; } .pz-rt.none { background: var(--cv-soft); border: 1px dashed var(--hairline); }
 .pz-mt { width: 100%; aspect-ratio: 4 / 5; border-radius: 8px; } .pz-pt { width: 100%; aspect-ratio: 1; border-radius: 8px; }
-.pz-igt { width: 100%; aspect-ratio: 4 / 5; border-radius: 0; } .pz-igt.none { display: grid; place-items: center; font-size: 12px; color: var(--grey); }
 
 /* la columna de la izquierda */
 .pz-bk { display: flex; gap: 9px; align-items: center; margin-bottom: 6px; }
@@ -62,7 +65,49 @@ body.dark .cv-ev.pz.pz-idea, body.dark .cv-ev.pz.pz-aprobada { background: var(-
 
 /* ---------- el panel de una pieza ---------- */
 .ct-panel[hidden] { display: none; }
-.ct-panel { flex: none; width: 448px; max-width: 46%; display: flex; flex-direction: column; min-height: 0; background: var(--cream); border-left: 1px solid var(--cv-line); box-shadow: -18px 0 40px rgba(21,20,20,.06); }
+/* V4.10 (CON-07/08): un cajón SOBRE el calendario (no lo estruja: el mes sigue legible debajo) que se mide por la vista, no por la ventana:
+   con Dimitri abierto la vista es más estrecha y el panel lo sabe (@container). Con sitio, dos columnas: editar | vista previa. */
+#ctOv .cv-body { container: ctbody / inline-size; }
+.ct-panel { position: absolute; top: 0; right: 0; bottom: 0; z-index: 40; width: min(840px, 100%); display: flex; flex-direction: column; min-height: 0; background: var(--cream); border-left: 1px solid var(--cv-line); box-shadow: -24px 0 60px rgba(21,20,20,.16); container: pzpanel / inline-size; }
+body.dark .ct-panel { box-shadow: -24px 0 60px rgba(0,0,0,.5); }
+.pz-body { flex: 1; min-height: 0; display: flex; }
+.pz-body .pz-scroll { flex: 1; min-width: 0; }
+.pz-side { display: none; flex: none; min-height: 0; overflow-y: auto; padding: 14px 16px 22px; background: var(--cv-soft); border-left: 1px solid var(--cv-line); }
+.pz-side-h { font-family: var(--ui); font-size: 10.5px; letter-spacing: .16em; font-weight: 700; text-transform: uppercase; color: var(--grey); margin: 0 0 10px; }
+.pz-swap { display: flex; gap: 4px; padding: 8px 14px; border-bottom: 1px solid var(--cv-line); flex: none; }
+.pz-swap button { flex: 1; font-family: var(--ui); font-size: 11.5px; letter-spacing: .1em; font-weight: 700; text-transform: uppercase; min-height: 34px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+.pz-swap button[aria-selected="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+.pz-swap button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@container pzpanel (min-width: 700px) {
+  .pz-swap { display: none; }
+  .pz-side { display: block; width: 44%; max-width: 400px; }
+}
+@container pzpanel (max-width: 699.98px) {
+  .pz-body .pz-side { width: auto; }
+}
+.ct-panel[data-swap="ver"] .pz-body .pz-scroll { display: none; }
+.ct-panel[data-swap="ver"] .pz-body .pz-side { display: block; flex: 1; border-left: 0; }
+@container ctbody (max-width: 980px) { .ct-panel { width: 100%; border-left: 0; box-shadow: none; } }
+.pz-quick { gap: 6px; margin-top: -2px; }
+.pz-qh { font-family: var(--ui); font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 4px 10px; min-height: 28px; cursor: pointer; }
+.pz-qh[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+.pz-qh.wide { font-weight: 700; letter-spacing: .02em; }
+.pz-qh:hover { border-color: var(--ink); } .pz-qh:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pz-inline { margin: 0 0 10px; font-size: 12px; line-height: 1.4; padding: 6px 10px; border-radius: 10px; border-left: 3px solid; }
+.pz-inline.err { color: #B4391E; border-color: #B4391E; background: color-mix(in srgb, #B4391E 7%, transparent); }
+.pz-inline.warn { color: #7A5810; border-color: #8A6414; background: #FBF3DF; }
+.pz-inline.ok { color: #13705A; border-color: #13705A; background: color-mix(in srgb, #13705A 7%, transparent); }
+body.dark .pz-inline.err { color: #FF8A73; border-color: #FF8A73; } body.dark .pz-inline.warn { color: #E8B44A; background: #3A2F14; } body.dark .pz-inline.ok { color: #4FD1A5; border-color: #4FD1A5; }
+.pz-seg button { display: inline-flex; align-items: center; gap: 5px; }
+.pz-k { font-weight: 700; }
+.pz-vline { margin-bottom: 8px; min-height: 20px; }
+.pz-verd { font-family: var(--ui); font-size: 12.5px; line-height: 1.35; font-weight: 600; }
+.pz-verd.ok { color: #13705A; } body.dark .pz-verd.ok { color: #4FD1A5; }
+button.pz-verd.bad { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: left; width: 100%; background: none; border: 0; padding: 2px 0; min-height: 24px; color: #B4391E; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+body.dark button.pz-verd.bad { color: #FF8A73; }
+span.pz-verd.bad { color: #B4391E; } body.dark span.pz-verd.bad { color: #FF8A73; }
+button.pz-verd.bad:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pz-foot .pz-state { margin: 6px 0 0; min-height: 16px; }
 .pz-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--cv-line); flex: none; }
 .pz-chip { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; letter-spacing: .14em; font-weight: 700; border: 1px solid currentColor; border-radius: 99px; padding: 4px 9px; white-space: nowrap; }
 .pz-chip i { font-style: normal; }
@@ -95,7 +140,8 @@ body.dark .cv-ev.pz.pz-idea, body.dark .cv-ev.pz.pz-aprobada { background: var(-
 .pz-btn { color: var(--ink); } .pz-btn:hover { border-color: var(--ink); }
 .pz-go { font-family: var(--ui); font-size: 11.5px; letter-spacing: .14em; font-weight: 700; text-transform: uppercase; background: var(--ink); color: var(--cream); border: 1px solid var(--ink); border-radius: 99px; padding: 8px 16px; min-height: 34px; cursor: pointer; }
 .pz-go.sm { padding: 5px 12px; min-height: 30px; }
-.pz-go[aria-disabled="true"], .pz-go:disabled { opacity: .4; cursor: default; }
+/* bloqueado: contorno y candado, nunca atenuado (CON-10: el texto queda a más de 4,5:1) */
+.pz-go[aria-disabled="true"], .pz-go:disabled, .pz-go.locked { background: transparent; color: var(--ink); border: 1px dashed var(--grey); cursor: help; }
 .pz-lk { font-family: var(--ui); font-size: 11.5px; background: none; border: 0; border-bottom: 1px solid currentColor; color: var(--grey); cursor: pointer; padding: 4px 0; min-height: 24px; } .pz-lk.warn { color: #B4391E; }
 .pz-help { margin: 4px 0 8px; font-size: 11px; line-height: 1.4; color: var(--grey); }
 .pz-empty, .ct-empty { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--grey); margin: 6px 0; }
@@ -103,10 +149,6 @@ body.dark .cv-ev.pz.pz-idea, body.dark .cv-ev.pz.pz-aprobada { background: var(-
 .pz-medios .pz-empty { grid-column: 1 / -1; margin: 0; }
 .pz-m { min-width: 0; } .pz-mn { display: block; margin-top: 3px; font-size: 10.5px; color: var(--grey); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pz-ma { display: flex; gap: 4px; margin-top: 2px; } .pz-ma button { flex: 1; min-height: 26px; font-size: 13px; background: none; border: 1px solid var(--hairline); border-radius: 8px; color: var(--ink); cursor: pointer; } .pz-ma button:disabled { opacity: .35; cursor: default; }
-.pz-ig { max-width: 250px; border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; background: var(--cv-card); font-size: 12px; }
-.pz-ig-h { display: flex; align-items: center; gap: 7px; padding: 8px 10px; } .pz-ig-h i { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #C43E00, #B3261E); display: block; }
-.pz-ig-m { position: relative; background: var(--cv-soft); } .pz-ig-n { position: absolute; right: 8px; top: 8px; font-size: 10.5px; background: rgba(21,20,20,.7); color: #fff; border-radius: 99px; padding: 1px 8px; }
-.pz-ig-c, .pz-ig-cm { padding: 8px 10px 0; line-height: 1.4; white-space: pre-wrap; word-break: break-word; } .pz-ig-c:last-child, .pz-ig-cm:last-child { padding-bottom: 10px; } .pz-ig-cm { color: var(--grey); } .pz-ig .pz-help { padding: 0 10px 8px; margin: 6px 0 0; }
 .pz-list { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .pz-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12.5px; line-height: 1.4; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hairline); border-left-width: 3px; }
 .pz-list li.err { border-left-color: #B4391E; } .pz-list li.warn { border-left-color: #8A6414; background: #FBF3DF; } body.dark .pz-list li.warn { background: #3A2F14; }
@@ -146,7 +188,6 @@ body.dark .cv-ev.pz.pz-idea, body.dark .cv-ev.pz.pz-aprobada { background: var(-
 .ct-pickf { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--cv-line); }
 
 /* ---------- el teléfono y las pantallas medianas ---------- */
-@media (max-width: 1100px) { .ct-panel { width: 400px; max-width: 52%; } }
 @media (max-width: 900px) {
   #ctOv .cv-body { position: static; }
   #ctOv .ct-panel { position: absolute; inset: 0; z-index: 47; width: auto; max-width: none; border-left: 0; box-shadow: none; }
@@ -175,8 +216,10 @@ body.dark .cv-ev.pz.pz-idea, body.dark .cv-ev.pz.pz-aprobada { background: var(-
 #studioOv .st-ov .st-use.on { background: var(--ink); color: var(--cream); }
 #studioOv .st-ov .st-use:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-/* la semana es estrecha: la tarjeta va sin miniatura (la ves en el día, la agenda y el panel) */
-.cv-grid.tg-week .pz-ct { display: none; }
+/* la semana: miniatura pequeña si la columna da para ello (CON-14) */
+#ctGrid.tg .cv-day { container: ctslot / inline-size; }
+.cv-grid.tg-week .pz-ct { width: 24px; height: 30px; }
+@container ctslot (max-width: 119px) { .cv-grid.tg-week .pz-ct { display: none; } .cv-grid.tg-week .pz-f span { display: none; } }
 .cv-grid.tg-week .cv-ev.pz { padding: 5px 7px; }
 
 /* la banda en dos filas cuando no cabe (pantallas de hasta 1180 px): marca y modo arriba, vista y fecha debajo */
@@ -198,3 +241,119 @@ body.dark .pz-ok, body.dark .pz-when { color: #4FD1A5; }
 body.dark .pz-state.bad, body.dark .pz-lk.warn { color: #FF8A73; }
 body.dark .pz-list li.err { border-left-color: #FF8A73; }
 body.dark .pz-cnt.over { color: #FF8A73; }
+
+/* ---------- V4.10: la tarjeta de pieza que se lee de un vistazo (CON-01, 11, 12) ---------- */
+/* el MES: dos filas, 40 px — miniatura | hora · formato · red · estado / título. Cada celda es un contenedor: si es estrecha, sin miniatura */
+#ctGrid.month .cv-day { container: ctday / inline-size; }
+#ctGrid.month .cv-evs { gap: 3px; }
+#ctOv .cv-ev.line.pz2 { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 3px 6px 3px 4px; border-radius: 7px; box-sizing: border-box; }
+#ctOv .cv-ev.line.pz2 .pz-ct { width: 26px; height: 32px; border-radius: 4px; }
+#ctOv .cv-ev.line.pz2 .cv-ev-t { font-size: 11px; font-weight: 600; }
+.pz-l2 { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pz-l1 { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 10.5px; line-height: 16px; white-space: nowrap; overflow: hidden; }
+.pz-h { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--ink); letter-spacing: .01em; }
+.pz-st { font-weight: 800; margin-left: auto; flex: none; }
+.pz-l1 .pz-warn { flex: none; margin: 0; }
+.cv-ev.pz .pz-l1 .pz-f span { font-size: 10.5px; }
+body.dark .pz-h { color: #ECEAE3; }
+.cv-ev.pz.pz-venc { border-left-color: #B4391E; } body.dark .cv-ev.pz.pz-venc { border-left-color: #FF8A73; }
+@container ctday (max-width: 118px) { #ctOv .cv-ev.line.pz2 .pz-ct { display: none; } #ctOv .cv-ev.line.pz2 { padding-left: 6px; } }
+@container ctday (max-width: 150px) { #ctOv .cv-ev.line.pz2 .pz-nb { min-width: 0; width: 7px; height: 7px; padding: 0; border-radius: 50%; font-size: 0; } }
+body.dark #ctOv .cv-ev.pz { border-left-color: var(--chipd, var(--chip)); }
+
+/* ---------- «+ Crear» (CON-16) ---------- */
+.ct-create { position: relative; margin-left: 14px; }
+.ct-new { font-family: var(--ui); font-size: 11.5px; letter-spacing: .12em; font-weight: 700; text-transform: uppercase; white-space: nowrap; min-height: 34px; padding: 6px 16px; border-radius: 99px; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); cursor: pointer; }
+.ct-new:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ct-newmenu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; width: 240px; background: var(--cv-card); color: var(--ink); border: 1.5px solid var(--ink); border-radius: 14px; padding: 6px; box-shadow: 0 24px 60px rgba(21,20,20,.28); }
+.ct-newmenu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 38px; padding: 6px 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); font-family: var(--ui); font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.ct-newmenu button .pz-fi { width: 16px; height: 16px; }
+.ct-newmenu button:hover, .ct-newmenu button:focus-visible { background: var(--cv-soft); outline: 2px solid var(--focus); outline-offset: -2px; }
+.ct-newhint { margin: 4px 8px 4px; font-size: 11px; color: var(--grey); line-height: 1.35; }
+.ct-vsel { display: none; font-family: var(--ui); font-size: 12px; font-weight: 600; min-height: 34px; padding: 4px 8px; border-radius: 99px; border: 1px solid rgba(253,255,248,.4); background: #151414; color: #FDFFF8; }
+.ct-vsel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ct-fbtn { display: none; font-family: var(--ui); font-size: 11.5px; font-weight: 700; letter-spacing: .06em; min-height: 34px; padding: 6px 12px; border-radius: 99px; border: 1px solid var(--hairline); background: var(--cv-card); color: var(--ink); cursor: pointer; }
+.ct-fbtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#ctOv .cv-chip .pz-nb { margin-right: 5px; }
+#ctOv .cv-rail.drop { background: color-mix(in srgb, var(--focus) 8%, transparent); outline: 2px dashed var(--focus); outline-offset: -6px; }
+
+/* ---------- Programación: la cola (CON-04, 05) ---------- */
+.ct-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; }
+.ct-banner span { flex: 1; min-width: 220px; }
+.ct-bx { font-family: var(--ui); font-size: 11px; font-weight: 700; letter-spacing: .08em; min-height: 28px; padding: 4px 12px; border-radius: 99px; border: 1px solid currentColor; background: none; color: inherit; cursor: pointer; }
+.ct-bx:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ct-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; max-width: none; align-items: start; }
+@container ctbody (min-width: 1080px) { .ct-cols { grid-template-columns: minmax(0, 1fr) 360px; } .ct-aside { position: sticky; top: 0; } }
+.ct-main { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.ct-need { padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 16px; background: var(--cv-card); }
+.ct-need .ct-row { background: var(--cream); }
+.ct-freq { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 11.5px; color: var(--grey); }
+.ct-day { margin-top: 10px; }
+.ct-day h4 { margin: 0 0 6px; font-family: var(--ui); font-size: 11.5px; font-weight: 400; letter-spacing: .02em; color: var(--grey); text-transform: none; }
+.ct-day h4 b { color: var(--ink); font-weight: 700; } .ct-day h4 small { margin-left: 6px; font-size: 11px; }
+.ct-gap { width: 100%; min-height: 36px; text-align: left; padding: 6px 12px; font-family: var(--ui); font-size: 12px; color: var(--grey); background: none; border: 1px dashed var(--hairline); border-radius: 12px; cursor: pointer; }
+.ct-gap b { color: var(--ink); font-weight: 700; margin-left: 2px; }
+.ct-gap:hover { border-color: var(--ink); } .ct-gap:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ct-day.gap h4 { margin-bottom: 4px; }
+.ct-hour { flex: none; width: 46px; font-variant-numeric: tabular-nums; font-weight: 700; font-size: 13px; color: var(--ink); }
+.ct-hour small { font-weight: 400; font-size: 10.5px; color: var(--grey); }
+.ct-rs { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ct-cd { font-size: 11px; font-weight: 600; color: #13705A; } .ct-cd.late { color: #B4391E; }
+body.dark .ct-cd { color: #4FD1A5; } body.dark .ct-cd.late { color: #FF8A73; } body.dark .ct-hour, body.dark .ct-gap b, body.dark .ct-day h4 b { color: #ECEAE3; }
+body.dark .ct-need .ct-row { background: var(--cv-soft); }
+.ct-pk small { font-size: 10.5px; color: var(--grey); font-variant-numeric: tabular-nums; }
+
+/* ---------- el teléfono: la cabecera en ≤ 140 px (CON-17) ---------- */
+@media (max-width: 760px) {
+  #ctOv .cv-band { gap: 6px 8px; padding: 8px 12px; }
+  #ctOv .cv-brand { display: none; } #ctOv .ct-mode { order: 1; flex: 1; min-width: 0; } #ctOv .ct-create { order: 2; margin-left: 0; } #ctOv .cv-band > .cv-sp { display: none; } #ctOv #ctKeys { display: none; } #ctOv #ctClose { order: 3; }
+  #ctOv .ct-views { display: none; } #ctOv .cv-nav { order: 4; width: 100%; flex: 1 1 100%; justify-content: space-between; } #ctOv .ct-vsel { display: inline-block; }
+  #ctOv .ct-newt { display: none; } #ctOv .ct-new { padding: 6px 13px; font-size: 16px; }
+  #ctOv .ct-mode button { flex: 1; }
+  #ctOv .ct-mode button, #ctOv .ct-views button { padding: 6px 8px; font-size: 10.5px; }
+  #ctOv .cv-tools { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
+  #ctOv .cv-tools .cv-sw { flex: 1; min-width: 0; } #ctOv #ctSearch { width: 100%; }
+  #ctOv .ct-fbtn { display: inline-flex; align-items: center; }
+  #ctOv #ctChips { display: none; } #ctOv.chipsOpen #ctChips { display: flex; flex-wrap: wrap; width: 100%; gap: 6px; }
+  #ctOv .cv-tools .cv-stats { display: none; }
+  .ct-newmenu { position: fixed; left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; }
+  .ct-hour { width: 40px; font-size: 12px; }
+  #ctOv.prog .cv-nav { display: none; }
+  #ctOv .ct-row { flex-wrap: wrap; gap: 6px 10px; padding: 9px 10px; } #ctOv .ct-row .ct-open { flex: 1 1 220px; } #ctOv .ct-row .ct-st { margin-left: 50px; } #ctOv .ct-row .ct-open .pz-rt { width: 38px; height: 46px; }
+  .ct-need { padding: 10px; } .ct-banner { font-size: 12px; }
+}
+
+/* ---------- V4.10 (1 oct, revisión de la auditoría): el mes respira hasta 1280 px ---------- */
+/* Con el banco de ideas abierto, a 1024 px cada día medía 100 px y la tarjeta perdía la miniatura y la red (CON-01). Por debajo de 1280 px
+   de VISTA (no de ventana: con Dimitri al lado también cuenta) el banco se pliega tras el botón «Ideas (n)» y se abre encima. */
+#ctOv { container: ctov / inline-size; }
+@container ctov (max-width: 1279.98px) {
+  #ctOv .cv-railbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; }
+  #ctOv:not(.railOpen) .cv-rail { display: none; }
+  #ctOv.railOpen .cv-rail { display: flex; position: absolute; left: 0; top: 0; bottom: 0; z-index: 44; width: min(320px, 86%); background: var(--cream); box-shadow: 20px 0 50px rgba(0,0,0,.2); }
+  /* y los filtros tras «Filtros (n)», como en el teléfono: a 1024 px la cabecera ocupaba 270 px y el panel de la pieza se quedaba sin alto */
+  #ctOv .cv-tools { flex-wrap: wrap; gap: 8px; }
+  #ctOv .ct-fbtn { display: inline-flex; align-items: center; }
+  #ctOv #ctChips { display: none; } #ctOv.chipsOpen #ctChips { display: flex; flex-wrap: wrap; width: 100%; gap: 6px; order: 9; }
+}
+@container ctov (min-width: 761px) and (max-width: 1279.98px) { #ctOv .cv-tools .cv-sw { flex: 0 1 300px; min-width: 160px; } #ctOv #ctSearch { width: 100%; } }
+#ctOv .cv-railbtn b { font-family: var(--serif); font-weight: 400; font-size: 14px; letter-spacing: 0; }
+#ctOv.prog .cv-railbtn { display: none; }
+/* la leyenda de los formatos al pie del banco: el icono de la tarjeta se aprende una vez */
+.ct-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 10px 4px 0; font-size: 11px; color: var(--grey); }
+.ct-legend span { display: inline-flex; align-items: center; gap: 4px; }
+/* con sitio, la tarjeta del mes también dice el formato con su palabra */
+#ctOv .cv-ev.line.pz2 .pz-fw { display: none; font-size: 10.5px; color: var(--grey); } body.dark #ctOv .cv-ev.line.pz2 .pz-fw { color: #C2C0B9; }
+@container ctday (min-width: 200px) { #ctOv .cv-ev.line.pz2 .pz-fw { display: inline; } }
+/* en la semana y el día, la primera línea de la tarjeta baja de renglón antes que cortar la red («IG F…») */
+#ctOv .cv-grid.tg .pz-cardmain .pz-l1, #ctOv #ctPop .pz-cardmain .pz-l1 { flex-wrap: wrap; white-space: normal; row-gap: 2px; }
+/* los días rápidos del panel (CON-13): un clic en vez de bajar por 120 opciones; el número dice cuántas piezas ya salen ese día */
+.pz-qd { position: relative; font-family: var(--ui); font-size: 11.5px; font-weight: 600; color: var(--ink); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 4px 10px; min-height: 28px; cursor: pointer; white-space: nowrap; }
+.pz-qd i { font-style: normal; display: inline-grid; place-items: center; min-width: 16px; height: 16px; margin-left: 5px; padding: 0 4px; box-sizing: border-box; border-radius: 99px; background: color-mix(in srgb, var(--ink) 12%, transparent); font-size: 10.5px; font-weight: 700; }
+.pz-qd[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); } .pz-qd[aria-pressed="true"] i { background: color-mix(in srgb, var(--cream) 22%, transparent); }
+.pz-qd:hover { border-color: var(--ink); } .pz-qd:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pz-qdays { gap: 6px; margin-top: -2px; }
+
+/* Auditoría (revisión del cajón): con una pieza abierta el aviso va sobre el panel y por encima de su pie (src/contenido.js → placeToast);
+   en el teléfono el panel ocupa la vista con z-index 47, así que el aviso sube por encima para no quedar escondido. */
+#ctOv .cv-toast.sobrePanel { z-index: 48; width: max-content; } /* el ancho lo pone el panel (max-width en línea), no el sitio que queda a la derecha del centro */

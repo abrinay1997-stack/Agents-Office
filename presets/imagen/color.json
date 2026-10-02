@@ -1,0 +1,929 @@
+{
+ "grupo": "color",
+ "presets": [
+  {
+   "id": "color-blancos",
+   "v": 1,
+   "nombre": "Que el blanco se vea blanco",
+   "tecnico": "Balance de blancos",
+   "icono": {
+    "id": "termometro",
+    "d": "M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0zM12 9v7"
+   },
+   "categoria": "color",
+   "frase": "Quita el tono amarillo de los focos o azul de la sombra.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "balance",
+     "metodo": "mundo-gris"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "balance de blancos",
+    "blanco amarillo",
+    "amarillenta",
+    "azulada",
+    "blancos",
+    "temperatura"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-quitar-tono",
+   "v": 1,
+   "nombre": "Quitar un tono de color",
+   "tecnico": "Dominante",
+   "icono": {
+    "id": "cuentagotas",
+    "d": "m14 4 6 6-3 3-6-6zM11 7l-7 7v4h4l7-7"
+   },
+   "categoria": "color",
+   "frase": "Quita la dominante verde, magenta, amarilla o azul.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "dominante",
+     "tipo": "enum",
+     "es": "Tono",
+     "valores": [
+      {
+       "v": "auto",
+       "es": "Automático"
+      },
+      {
+       "v": "amarilla",
+       "es": "Amarilla"
+      },
+      {
+       "v": "verde",
+       "es": "Verde"
+      },
+      {
+       "v": "azul",
+       "es": "Azul"
+      },
+      {
+       "v": "magenta",
+       "es": "Magenta"
+      }
+     ],
+     "def": "auto"
+    }
+   ],
+   "local": [
+    {
+     "op": "dominante"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "dominante",
+    "verdosa",
+    "tono raro",
+    "color raro",
+    "magenta"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-mas-vivo",
+   "v": 1,
+   "nombre": "Colores más vivos",
+   "tecnico": "Saturación +",
+   "icono": {
+    "id": "gota",
+    "d": "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
+   },
+   "categoria": "color",
+   "frase": "Más color, sin volver fosforescentes la piel ni el producto.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "saturacion",
+     "cantidad": {
+      "suave": 0.1,
+      "normal": 0.2,
+      "fuerte": 0.35
+     },
+     "protegerPiel": true
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "mas color",
+    "vivo",
+    "saturacion",
+    "apagada",
+    "sin color"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-mas-sobrio",
+   "v": 1,
+   "nombre": "Colores más sobrios",
+   "tecnico": "Saturación −",
+   "icono": {
+    "id": "gota",
+    "d": "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
+   },
+   "categoria": "color",
+   "frase": "Menos color, más elegante.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "saturacion",
+     "cantidad": {
+      "suave": -0.1,
+      "normal": -0.2,
+      "fuerte": -0.35
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "menos color",
+    "sobrio",
+    "chillon",
+    "desaturar"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-fiel",
+   "v": 1,
+   "nombre": "Color fiel al producto real",
+   "icono": {
+    "id": "cuentagotas",
+    "d": "m14 4 6 6-3 3-6-6zM11 7l-7 7v4h4l7-7"
+   },
+   "categoria": "color",
+   "frase": "Iguala el color a una muestra real (foto de la tela con buena luz).",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto",
+    "foto+ref"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    },
+    {
+     "rol": "referencia",
+     "eje": "color-real",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Muestra con el color real (opcional)"
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "transferir-color",
+     "zona": "producto",
+     "desde": "referencia"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [
+    "delta-e"
+   ],
+   "buscar": [
+    "color real",
+    "color fiel",
+    "no es ese color",
+    "muestra",
+    "tela",
+    "igualar color"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-calido",
+   "v": 1,
+   "nombre": "Tono cálido",
+   "icono": {
+    "id": "atardecer",
+    "d": "M3 18h18M7 18a5 5 0 0 1 10 0M12 6v3M4.9 10.9l1.4 1.4M19.1 10.9l-1.4 1.4M8 22h8"
+   },
+   "categoria": "color",
+   "frase": "Un poco más cálido, acogedor.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "temperatura",
+     "k": {
+      "suave": 300,
+      "normal": 600,
+      "fuerte": 1000
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "calido",
+    "acogedor",
+    "naranja",
+    "warm"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-frio",
+   "v": 1,
+   "nombre": "Tono frío",
+   "icono": {
+    "id": "gota",
+    "d": "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
+   },
+   "categoria": "color",
+   "frase": "Más frío y limpio.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "temperatura",
+     "k": {
+      "suave": -300,
+      "normal": -600,
+      "fuerte": -1000
+     }
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "frio",
+    "azul",
+    "limpio",
+    "cool"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-bn",
+   "v": 1,
+   "nombre": "Blanco y negro",
+   "icono": {
+    "id": "contraste",
+    "d": "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 4v16M12 8h4M12 12h6M12 16h4"
+   },
+   "categoria": "color",
+   "frase": "Blanco y negro con buen contraste.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "blanco-y-negro",
+     "contraste": 0.15
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "blanco y negro",
+    "byn",
+    "b/n",
+    "monocromo",
+    "gris"
+   ],
+   "estrella": false,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-pastel",
+   "v": 1,
+   "nombre": "Pastel suave",
+   "icono": {
+    "id": "paleta",
+    "d": "M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5S14 15 15 15h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8zM6.5 11a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M9 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0M14 7.5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"
+   },
+   "categoria": "color",
+   "frase": "Colores pastel, aireados.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [],
+   "local": [
+    {
+     "op": "lut",
+     "archivo": "presets/luts/pastel.cube"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "pastel",
+    "suave",
+    "aireado",
+    "claro"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-pelicula",
+   "v": 1,
+   "nombre": "Look de película",
+   "icono": {
+    "id": "pelicula",
+    "d": "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2zM7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4"
+   },
+   "categoria": "color",
+   "frase": "Color apagado de película con grano fino.",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "look"
+   ],
+   "exclusivo": true,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "local": [
+    {
+     "op": "lut",
+     "archivo": "presets/luts/pelicula-calida.cube"
+    },
+    {
+     "op": "grano",
+     "cantidad": 0.05
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "pelicula",
+    "film",
+    "analogico",
+    "kodak",
+    "vintage",
+    "lut"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-arreglar",
+   "v": 1,
+   "nombre": "Arreglar color, luz y sombras",
+   "icono": {
+    "id": "gota",
+    "d": "M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"
+   },
+   "categoria": "color",
+   "frase": "Blancos, tono, exposición, sombras y claros en un solo paso.",
+   "medios": [
+    "image"
+   ],
+   "capa": "receta",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color",
+    "luz"
+   ],
+   "exclusivo": false,
+   "ejecutor": "local",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "intensidad",
+     "tipo": "intensidad",
+     "es": "Intensidad",
+     "valores": [
+      {
+       "v": "suave",
+       "es": "Suave",
+       "en": "subtly"
+      },
+      {
+       "v": "normal",
+       "es": "Normal",
+       "en": ""
+      },
+      {
+       "v": "fuerte",
+       "es": "Fuerte",
+       "en": "strongly"
+      }
+     ],
+     "def": "normal"
+    }
+   ],
+   "incluye": [
+    "color-blancos",
+    "color-quitar-tono",
+    "luz-mas-clara",
+    "luz-abrir-sombras",
+    "luz-recuperar-quemado",
+    "color-mas-vivo"
+   ],
+   "local": [
+    {
+     "op": "auto-niveles"
+    }
+   ],
+   "requiere": {
+    "local": true
+   },
+   "prefer": [],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "arreglar color",
+    "arreglar todo",
+    "mejorar foto",
+    "corregir",
+    "color y luz",
+    "auto"
+   ],
+   "estrella": true,
+   "fase": 1,
+   "estado": "beta",
+   "prompt": null
+  },
+  {
+   "id": "color-un-color",
+   "v": 1,
+   "nombre": "Cambiar un solo color",
+   "tecnico": "Color puntual",
+   "icono": {
+    "id": "cuentagotas",
+    "d": "m14 4 6 6-3 3-6-6zM11 7l-7 7v4h4l7-7"
+   },
+   "categoria": "color",
+   "frase": "Ajusta solo un color (el verde de las plantas, el rojo de un cojín).",
+   "medios": [
+    "image"
+   ],
+   "capa": "ajuste",
+   "modos": [
+    "foto"
+   ],
+   "ejes": [
+    "color"
+   ],
+   "exclusivo": false,
+   "ejecutor": "ia",
+   "entradas": [
+    {
+     "rol": "sujeto",
+     "medio": "image",
+     "min": 1,
+     "max": 1,
+     "es": "Tu foto del producto",
+     "ayuda": "Aunque sea en la bodega: lo que no es el producto se puede cambiar."
+    }
+   ],
+   "parametros": [
+    {
+     "id": "cual",
+     "tipo": "texto",
+     "es": "Qué color",
+     "max": 140,
+     "def": "el verde de las plantas"
+    },
+    {
+     "id": "como",
+     "tipo": "texto",
+     "es": "Cómo",
+     "max": 140,
+     "def": "más apagado"
+    }
+   ],
+   "ia": "adjust only {p.cual} to be {p.como}; every other color stays the same",
+   "requiere": {
+    "edit": true
+   },
+   "prefer": [
+    "nano-banana-pro",
+    "nano-banana-2",
+    "gpt-image-1",
+    "qwen-image-3",
+    "nano-banana",
+    "flux-kontext",
+    "seedream-4",
+    "muse-image"
+   ],
+   "post": [],
+   "qa": [],
+   "buscar": [
+    "un color",
+    "solo un color",
+    "cambiar el verde",
+    "color puntual"
+   ],
+   "estrella": false,
+   "fase": 4,
+   "estado": "beta",
+   "prompt": {
+    "conversacional": "Image 1 is the product photo to edit. Change only this: adjust only {p.cual} to be {p.como}; every other color stays the same. {idea} {conservar}",
+    "instrucciones": "Edit the attached product photo.\nRequirements:\n- adjust only {p.cual} to be {p.como}; every other color stays the same\n- {idea}\nMust stay unchanged:\n- {conservar}",
+    "edicion-corta": "adjust only {p.cual} to be {p.como}. {conservar}"
+   }
+  }
+ ]
+}

@@ -1,0 +1,186 @@
+[
+ {
+  "id": "catalogo",
+  "nombre": "Catálogo y tiendas",
+  "medio": "image",
+  "icono": "etiqueta",
+  "frase": "¿Que quede listo para subir a…?",
+  "orden": 1
+ },
+ {
+  "id": "fondo",
+  "nombre": "Fondo",
+  "medio": "image",
+  "icono": "fondo",
+  "frase": "Solo el fondo",
+  "orden": 2
+ },
+ {
+  "id": "sombra",
+  "nombre": "Sombra y reflejo",
+  "medio": "image",
+  "icono": "sombra",
+  "frase": "Solo la sombra",
+  "orden": 3
+ },
+ {
+  "id": "luz",
+  "nombre": "Luz",
+  "medio": "image",
+  "icono": "sol",
+  "frase": "Solo la luz, por partes",
+  "orden": 4
+ },
+ {
+  "id": "color",
+  "nombre": "Color",
+  "medio": "image",
+  "icono": "gota",
+  "frase": "Solo el color, por partes",
+  "orden": 5
+ },
+ {
+  "id": "limpieza",
+  "nombre": "Limpieza",
+  "medio": "image",
+  "icono": "varita",
+  "frase": "Quitar imperfecciones, una por una",
+  "orden": 6
+ },
+ {
+  "id": "calidad",
+  "nombre": "Calidad",
+  "medio": "image",
+  "icono": "nitidez",
+  "frase": "Nitidez, ruido, fotos de WhatsApp, tamaño",
+  "orden": 7
+ },
+ {
+  "id": "encuadre",
+  "nombre": "Encuadre y ángulo",
+  "medio": "image",
+  "icono": "marco",
+  "frase": "Distancia, ángulo, enderezar, dar espacio",
+  "orden": 8
+ },
+ {
+  "id": "escena",
+  "nombre": "Ambientes",
+  "medio": "image",
+  "icono": "sofa",
+  "frase": "Poner el producto en un lugar",
+  "orden": 9
+ },
+ {
+  "id": "personas",
+  "nombre": "Personas y ropa",
+  "medio": "image",
+  "icono": "persona",
+  "frase": "Retrato, modelo, probador",
+  "orden": 10
+ },
+ {
+  "id": "referencia",
+  "nombre": "Con una referencia",
+  "medio": "image",
+  "icono": "copiar",
+  "frase": "Copiar estilo, color, LUT, composición…",
+  "orden": 11
+ },
+ {
+  "id": "marketing",
+  "nombre": "Piezas de marketing",
+  "medio": "image",
+  "icono": "megafono",
+  "frase": "Anuncio, oferta, medidas, antes/después",
+  "orden": 12
+ },
+ {
+  "id": "salida",
+  "nombre": "Exportar",
+  "medio": "image",
+  "icono": "exportar",
+  "frase": "Tamaños, formatos y datos de la foto",
+  "orden": 13
+ },
+ {
+  "id": "camara",
+  "nombre": "Movimiento de cámara",
+  "medio": "video",
+  "icono": "video",
+  "frase": "Un movimiento por clip",
+  "orden": 14
+ },
+ {
+  "id": "plano",
+  "nombre": "Distancia de la cámara",
+  "medio": "video",
+  "icono": "marco",
+  "frase": "De muy cerca a muy lejos",
+  "orden": 15
+ },
+ {
+  "id": "vproducto",
+  "nombre": "Producto en video",
+  "medio": "video",
+  "icono": "caja",
+  "frase": "Recetas cerradas: giro, unboxing…",
+  "orden": 16
+ },
+ {
+  "id": "look",
+  "nombre": "Look",
+  "medio": "video",
+  "icono": "pelicula",
+  "frase": "El acabado creativo",
+  "orden": 17
+ },
+ {
+  "id": "veditar",
+  "nombre": "Editar un video",
+  "medio": "video",
+  "icono": "tijera",
+  "frase": "Video a video",
+  "orden": 18
+ },
+ {
+  "id": "vformato",
+  "nombre": "Formato de salida",
+  "medio": "video",
+  "icono": "movil",
+  "frase": "Reel, feed, YouTube",
+  "orden": 19
+ },
+ {
+  "id": "vsonido",
+  "nombre": "Sonido del video",
+  "medio": "video",
+  "icono": "onda",
+  "frase": "Con o sin audio",
+  "orden": 20
+ },
+ {
+  "id": "musica",
+  "nombre": "Música",
+  "medio": "music",
+  "icono": "nota",
+  "frase": "Jingles y fondos",
+  "orden": 21
+ },
+ {
+  "id": "voz",
+  "nombre": "Voz",
+  "medio": "audio",
+  "icono": "mic",
+  "frase": "Locuciones",
+  "orden": 22
+ },
+ {
+  "id": "mios",
+  "nombre": "De PanaClaw",
+  "medio": "todos",
+  "icono": "marca",
+  "frase": "Los presets del dueño (en el Cerebro)",
+  "orden": 23
+ }
+]
