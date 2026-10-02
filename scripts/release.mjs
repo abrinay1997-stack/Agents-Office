@@ -21,7 +21,7 @@ const push = process.argv.includes('--push');
 const OUT = path.join(ROOT, 'dist', 'release');
 
 const FILES = ['src', 'assets/mcp/tiles', 'assets/mcp/bake.py', 'assets/mcp/rebake.py', 'assets/kode-mono-600.woff2', 'brain', 'scripts/release.mjs',
-  'build.mjs', 'graph-build.mjs', 'serve.mjs', 'config.mjs', 'mcp.mjs', 'roster.mjs', 'check.mjs', 'setup', 'package.json', 'package-lock.json',
+  'build.mjs', 'build-extra.mjs', 'graph-build.mjs', 'serve.mjs', 'config.mjs', 'mcp.mjs', 'roster.mjs', 'check.mjs', 'setup', 'package.json', 'package-lock.json',
   'office.config.json', 'office.agents.json', 'skills.mjs', 'skills', 'learn.mjs', 'onboard.mjs', 'routines.mjs', 'usage.mjs', 'teams.mjs', 'CLAUDE.md', 'README.md', 'SKILLS.md', 'CHANGELOG.md', 'LICENSE', 'assets/readme-hero.jpg', 'assets/readme-calendar.jpg'];
 
 const run = (cmd, args, opts = {}) => { const r = spawnSync(cmd, args, { stdio: 'pipe', encoding: 'utf8', ...opts }); if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')}: ${(r.stderr || r.stdout).trim()}`); return r.stdout; };
@@ -36,7 +36,7 @@ for (const f of FILES) {
   fs.cpSync(src, path.join(OUT, f), { recursive: true, filter: p => !/(^|\/)(Agents Office|\.DS_Store|node_modules)(\/|$)/.test(p) });
 }
 fs.copyFileSync(path.join(ROOT, '.gitignore.release'), path.join(OUT, '.gitignore'));
-fs.mkdirSync(path.join(OUT, 'dist'), { recursive: true }); fs.copyFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), path.join(OUT, 'dist', 'command-centre-v2.html')); // the built page: the only thing under dist/ that ships
+fs.mkdirSync(path.join(OUT, 'dist'), { recursive: true }); fs.copyFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), path.join(OUT, 'dist', 'command-centre-v2.html')); fs.copyFileSync(path.join(ROOT, 'dist', 'estudio-extra.js'), path.join(OUT, 'dist', 'estudio-extra.js')); // the built page and the Estudio's part it loads on demand (same build): what ships under dist/
 // the shipped braingraph.js must come from the sample brain — guard against a private vault leaking
 const bg = fs.readFileSync(path.join(OUT, 'src', 'braingraph.js'), 'utf8');
 if (!/MOC-Sales/.test(bg) || /sahni|territool/i.test(bg)) throw new Error('braingraph.js does not look like the sample brain — refusing to release');
