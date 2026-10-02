@@ -33,17 +33,23 @@ function falso({ costo = 0.05, presupuestoDia = null } = {}) {
     query: ({ folder }) => ({ items: [...items.values()].filter(it => it.folder === folder) }),
     upload: ({ name, folder }) => { const file = `2026-10/subida-${++seq}.png`; items.set(file, { file, prompt: name, folder, upload: true }); return { file }; },
   };
-  const presetsList = [{ id: 'cat-web', nombre: 'Catálogo web', parametros: [{ id: 'intensidad' }] }, { id: 'limp-arrugas', nombre: 'Quitar arrugas', parametros: [{ id: 'intensidad' }] }];
+  const presetsList = [{ id: 'cat-web', nombre: 'Catálogo web', parametros: [{ id: 'intensidad' }] }, { id: 'limp-arrugas', nombre: 'Quitar arrugas', parametros: [{ id: 'intensidad' }] },
+    { id: 'color-blancos', nombre: 'Blancos limpios', parametros: [{ id: 'intensidad' }] }];
+  // como el compilador de verdad (src/presets-core.js): una pila toda local va gratis en la máquina, pero una idea escrita sobre
+  // presets locales la manda a la IA. `ia` simula un preset local que pasa a necesitar la IA (otro ajuste, otra versión).
+  const LOCALES = new Set(['color-blancos']), ia = new Set();
+  const esLocal = b => b.pila.length > 0 && b.pila.every(x => LOCALES.has(x.id) && !ia.has(x.id)) && !b.idea && !b.escena;
   const presets = {
     todos: () => ({ presets: presetsList }), fabrica: () => ({ canales: [{ id: 'web', nombre: 'Web PanaClaw' }, { id: 'amazon', nombre: 'Amazon' }] }),
-    compilar: b => ({ plan: { errores: b.entradas.foto[0] ? [] : ['necesita tu foto'], avisos: [], costo: { usd: costo }, model: b.model || 'nano-banana-2', porque: 'el mejor', prompt: `edit ${b.idea}`, alternativas: [{ id: 'gpt-image-1' }, { id: 'nano-banana-2' }], soloLocal: false, pasos_es: ['paso'] }, pedido: b }),
+    compilar: b => { const local = esLocal(b); return { plan: { errores: b.entradas.foto[0] ? [] : ['necesita tu foto'], avisos: [], costo: { usd: local ? 0 : costo }, model: local ? null : b.model || 'nano-banana-2', porque: 'el mejor', prompt: `edit ${b.idea}`, alternativas: [{ id: 'gpt-image-1' }, { id: 'nano-banana-2' }], soloLocal: local, pasos_es: ['paso'] }, pedido: b }; },
     aplicar: async (b, { by }) => {
       await esperar();
       const lt = loteActual(); // lo que submit() marcaría en el trabajo de verdad
       const id = 'j' + (++seq);
       const j = { id, state: 'queued', lote: lt ? { id: lt.id, fila: lt.fila } : undefined, sku: lt?.sku, cost: 0, items: [], at: Date.now(), by, pedido: b };
+      if (esLocal(b)) j.cost = 0;
       jobs.set(id, j); pedidos.push({ ...b, job: id, lote: j.lote });
-      return { plan: { model: b.model || 'nano-banana-2' }, jobs: [j] };
+      return { plan: { model: esLocal(b) ? null : b.model || 'nano-banana-2' }, jobs: [j] };
     },
   };
   /** El Estudio termina un trabajo: bien (con su QA) o con un error. */
@@ -53,7 +59,7 @@ function falso({ costo = 0.05, presupuestoDia = null } = {}) {
     else { const out = `2026-10/res-${id}.jpg`; items.set(out, { file: out, qa: qa || { estado: 'ok', checks: [] }, post: { medido } }); Object.assign(j, { state: 'done', items: [out], cost }); gastoDia += cost; }
     return motor.terminar(j);
   }
-  return { media, presets, pedidos, jobs, items, acabar };
+  return { media, presets, pedidos, jobs, items, acabar, ia };
 }
 function motor(F, extra = {}) {
   const dir = tmp(), avisos = [], aprendidas = [];
@@ -332,6 +338,121 @@ test('un ZIP de fotos sueltas con su hoja: la hoja nombra los archivos del ZIP',
   assert.deepEqual(r.lote.filas.map(f => [f.sku, !!f.src, f.estado]), [['R-1', true, 'en_cola'], ['M-2', true, 'en_cola'], ['X', false, 'revisar']]);
   assert.match(r.lote.filas[2].error, /no encuentro el archivo «no-esta\.jpg»/);
   assert.ok(F.media.folders().some(f => /^Lote \d{4}-\d{2}-\d{2}/.test(f.name)), 'las fotos sueltas van a una carpeta «Lote <fecha>»');
+});
+
+/* ---------- revisión de F2: lo que se anuncia gratis, la cancelación en el aire, la receta por fila, el gasto real ---------- */
+const csvB64 = s => Buffer.from(s).toString('base64');
+
+test('un lote local anunciado gratis no gasta en IA: ni la QA «revisar», ni las notas, ni «más fuerte», ni un preset que cambió', async () => {
+  const F = falso(), { m } = motor(F);
+  const csv = 'foto,sku,notas\n2026-10/foto-1.jpg,A,madera clara\n2026-10/foto-2.jpg,B,\n';
+  const h = await m.leerHoja({ name: 'l.csv', data: csvB64(csv) });
+  const r = await m.crear({ origen: { hoja: h.id }, receta: { pila: ['color-blancos'] }, concurrencia: 3 });
+  assert.equal(r.vista.total, 0); assert.equal(r.vista.conIA, 0, 'la nota de la hoja no convierte la fila en una edición de pago');
+  assert.match(r.lote.bitacora[0].t, /costo 0 \(todo en tu máquina\)/);
+  m.accion(r.lote.id, 'iniciar'); await m.tick();
+  assert.equal(F.pedidos.length, 2); assert.ok(F.pedidos.every(p => p.idea === ''), 'ni la nota ni nada de la fila va como idea');
+  const qa = { estado: 'revisar', motivo: 'El blanco quedó en 250.', checks: [{ id: 'fondo-255', ok: false }] };
+  F.acabar(m, F.pedidos[0].job, { qa, cost: 0 }); F.acabar(m, F.pedidos[1].job, { cost: 0 });
+  await m.tick();
+  let l = m.uno(r.lote.id);
+  assert.equal(l.filas[0].estado, 'revisar', 'sin reintento «más fiel»: el texto FIEL la mandaría a la IA'); assert.equal(l.filas[0].error, qa.motivo);
+  assert.equal(F.jobs.size, 2); assert.equal(l.costo.gastado, 0); assert.equal(l.estado, 'hecho');
+  // «Reintentar más fuerte»: sube la intensidad del preset local, sin el refuerzo en texto
+  const rf = m.filas(r.lote.id, { accion: 'reintentar', filas: [2], mas_fuerte: true });
+  assert.equal(rf.costo, 0); await m.tick();
+  assert.equal(F.pedidos.at(-1).idea, ''); assert.equal(F.pedidos.at(-1).pila[0].params.intensidad, 'fuerte');
+  F.acabar(m, F.pedidos.at(-1).job, { cost: 0 });
+  // el preset pasa a necesitar la IA después de la vista previa: la fila no se manda, queda para revisar con el precio
+  F.ia.add('color-blancos');
+  m.filas(r.lote.id, { accion: 'reintentar', filas: [3] }, { by: 'agent' });
+  const n0 = F.jobs.size; await m.tick();
+  l = m.uno(r.lote.id);
+  assert.equal(F.jobs.size, n0, 'no se gastó sin el clic del dueño');
+  assert.equal(l.filas[1].estado, 'revisar'); assert.match(l.filas[1].error, /necesitaría la IA \(US\$0,05\)\. No la mando sin tu clic/);
+  // el clic del dueño (que ve el costo en la respuesta) sí la manda
+  const ok = m.filas(r.lote.id, { accion: 'reintentar', filas: [2, 3] });
+  assert.equal(ok.costo, 0.1); await m.tick();
+  assert.equal(F.jobs.size, n0 + 2);
+  assert.match(F.pedidos.filter(p => p.lote.fila === 2).at(-1).idea, /madera clara/, 'ya de pago, la nota de la hoja sí ayuda al modelo');
+});
+
+test('cancelar mientras presets.aplicar está en el aire: el trabajo que vuelve se cancela y la fila queda omitida', async () => {
+  const F = falso(), { m } = motor(F);
+  const { lote } = await m.crear({ origen: { ids: ['2026-10/foto-1.jpg', '2026-10/foto-2.jpg', '2026-10/foto-3.jpg'] }, receta: { pila: ['cat-web'] }, muestra: 0 });
+  m.accion(lote.id, 'iniciar');
+  const t = m.tick(); // la fila 1 queda «editando», sin trabajo todavía: aplicar espera
+  assert.equal(m.uno(lote.id).filas[0].estado, 'editando'); assert.equal(m.uno(lote.id).filas[0].job, null);
+  const c = m.accion(lote.id, 'cancelar');
+  assert.equal(c.estado, 'cancelado'); assert.equal(c.filas[0].estado, 'omitida');
+  await t;
+  const l = m.uno(lote.id);
+  assert.equal(F.jobs.size, 1, 'solo la que ya estaba en el aire; nada más se manda');
+  const j = [...F.jobs.values()][0];
+  assert.equal(j.state, 'failed', 'su trabajo se canceló al volver'); assert.equal(l.filas[0].job, j.id);
+  assert.equal(l.filas[0].estado, 'omitida'); assert.equal(l.estado, 'cancelado');
+  assert.ok(l.filas.every(f => f.estado === 'omitida'));
+});
+
+test('cancelar con un trabajo ya en marcha: lo que el motor cobró al terminar entra en «Gastado», el CSV y la fila', async () => {
+  const F = falso(), { m } = motor(F);
+  const { lote } = await m.crear({ origen: { ids: ['2026-10/foto-1.jpg', '2026-10/foto-2.jpg'] }, receta: { pila: ['cat-web'] }, muestra: 0 });
+  m.accion(lote.id, 'iniciar'); await m.tick();
+  const [a, b] = vuelo(F); F.jobs.get(a.id).state = 'running'; // media.cancel solo detiene los que están en cola
+  m.accion(lote.id, 'cancelar');
+  assert.equal(F.jobs.get(b.id).state, 'failed');
+  F.acabar(m, a.id, { cost: 0.07 });
+  const l = m.uno(lote.id);
+  assert.equal(l.costo.gastado, 0.07); assert.equal(l.filas[0].costo, 0.07); assert.equal(l.filas[0].estado, 'omitida');
+  assert.match(m.csv(lote.id), /\r\n1,,foto 1,,2026-10\/foto-1\.jpg,,omitida,lote cancelado,0\.0700,/);
+  F.acabar(m, a.id, { cost: 0.07 }); assert.equal(m.uno(lote.id).costo.gastado, 0.07, 'una vez');
+});
+
+test('una hoja con su preset por fila y sin receta general: vale; la receta del lote se SUMA a la de la fila', async () => {
+  const F = falso(), { m } = motor(F);
+  const csv = 'foto,sku,preset\n2026-10/foto-1.jpg,A,limp-arrugas\n2026-10/foto-2.jpg,B,\n2026-10/foto-3.jpg,C,cat-web + limp-arrugas\n';
+  const h = await m.leerHoja({ name: 'l.csv', data: csvB64(csv) });
+  const r = await m.crear({ origen: { hoja: h.id }, receta: { pila: [] }, concurrencia: 3 });
+  assert.equal(r.lote.estado, 'previsto'); assert.match(r.lote.bitacora[0].t, /Receta: la de cada fila/);
+  assert.deepEqual(filasEn(r.lote, 'revisar'), [3], 'la fila sin preset (ni receta general) queda para revisar sin gastar');
+  assert.match(r.lote.filas[1].error, /no trae preset/);
+  await assert.rejects(m.crear({ origen: { carpeta: 'Bodega' }, receta: {} }), e => e.status === 400 && /elige una receta/.test(e.message));
+  const h2 = await m.leerHoja({ name: 'l.csv', data: csvB64('foto,sku\n2026-10/foto-1.jpg,A\n') });
+  await assert.rejects(m.crear({ origen: { hoja: h2.id }, receta: {} }), e => e.status === 400 && /elige una receta/.test(e.message));
+  // con receta general: se suma a la de cada fila, una vez, con los ajustes del lote y al final
+  const s = await m.crear({ origen: { hoja: h.id }, receta: { pila: [{ id: 'cat-web', params: { intensidad: 'suave' } }] }, concurrencia: 3 });
+  assert.deepEqual(filasEn(s.lote, 'revisar'), []);
+  m.accion(s.lote.id, 'iniciar');
+  for (let k = 0; k < 3; k++) { await m.tick(); for (const j of vuelo(F)) F.acabar(m, j.id); }
+  const pilas = Object.fromEntries(F.pedidos.filter(p => p.lote.id === s.lote.id).map(p => [p.lote.fila, p.pila]));
+  assert.deepEqual(pilas[2].map(x => x.id), ['limp-arrugas', 'cat-web']);
+  assert.deepEqual(pilas[3].map(x => x.id), ['cat-web']);
+  assert.deepEqual(pilas[4], [{ id: 'limp-arrugas' }, { id: 'cat-web', params: { intensidad: 'suave' } }], 'sin repetidos');
+});
+
+test('un ZIP que no cabe se rechaza antes de subir nada; una hoja con fotos incrustadas no las vuelve a subir en cada vista previa', async () => {
+  const F = falso(), { m } = motor(F);
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const subidas = () => [...F.items.values()].filter(it => it.upload).length;
+  const z = L.zipDe([1, 2, 3].map(i => ({ name: `f${i}.png`, data: PNG })));
+  await assert.rejects(m.crear({ origen: { zip: { name: 'z.zip', data: z.toString('base64') } }, receta: { pila: ['cat-web'] }, tope: { fotos: 2 } }), e => e.status === 400 && /3 fotos.*tope del lote es 2/.test(e.message));
+  assert.equal(subidas(), 0); assert.ok(!F.media.folders().some(f => /^Lote /.test(f.name)), 'ni una carpeta huérfana');
+  await assert.rejects(m.crear({ origen: { zip: { name: 'z.zip', data: z.toString('base64') } }, receta: {} }), e => e.status === 400 && /elige una receta/.test(e.message));
+  assert.equal(subidas(), 0);
+  // un ZIP con hoja: solo se suben las fotos que la hoja nombra
+  const zh = L.zipDe([{ name: 'a.png', data: PNG }, { name: 'sobra.png', data: PNG }, { name: 'l.csv', data: Buffer.from('archivo,sku\na.png,A\n') }]);
+  await m.crear({ origen: { zip: { name: 'z.zip', data: zh.toString('base64') } }, receta: { pila: ['cat-web'] } });
+  assert.equal(subidas(), 1);
+  // fotos incrustadas: la misma hoja en dos vistas previas sube cada foto una vez
+  const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Camas');
+  ws.addRow(['Foto', 'SKU']);
+  for (let i = 0; i < 2; i++) { ws.addRow(['', `CM-${i}`]); ws.addImage(wb.addImage({ buffer: PNG, extension: 'png' }), { tl: { col: 0, row: i + 1 }, ext: { width: 20, height: 20 } }); }
+  const h = await m.leerHoja({ name: 'c.xlsx', data: Buffer.from(await wb.xlsx.writeBuffer()).toString('base64') });
+  const a = await m.crear({ origen: { hoja: h.id }, receta: { pila: ['cat-web'] } });
+  const b = await m.crear({ origen: { hoja: h.id }, receta: { pila: ['limp-arrugas'] } });
+  assert.equal(subidas(), 3, 'dos incrustadas, subidas una vez');
+  assert.deepEqual(b.lote.filas.map(f => f.src), a.lote.filas.map(f => f.src));
+  await assert.rejects(m.crear({ origen: { hoja: h.id }, receta: { pila: ['cat-web'] }, tope: { fotos: 1 } }), e => e.status === 400 && /tope del lote es 1/.test(e.message));
 });
 
 /* ---------- (2) de punta a punta con el Estudio de verdad ---------- */
