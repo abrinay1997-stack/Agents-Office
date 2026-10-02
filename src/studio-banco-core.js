@@ -91,7 +91,7 @@ export function pedidoDe(st) {
     pila: st.pila.map(x => ({ id: x.id, ...(x.params && Object.keys(x.params).length ? { params: x.params } : {}) })),
     params: st.canal ? { canal: st.canal } : {},
     entradas: { foto: st.foto ? [st.foto] : [], referencias: st.refs.map(r => ({ id: r.id, ejes: { ...r.ejes } })) },
-    idea: st.idea || '', ...(st.escena ? { escena: st.escena } : {}), ...(st.modelo ? { model: st.modelo } : {}), n: st.n || 1,
+    idea: st.idea || '', ...(st.escena ? { escena: st.escena } : {}), ...(st.modelo ? { model: st.modelo } : {}), ...(st.proporcion ? { proporcion: st.proporcion } : {}), n: st.n || 1,
   };
 }
 /** El modo que sale de lo que pusiste (las puertas solo son atajos). */
@@ -211,9 +211,9 @@ export function capaEsc({ chip = false, guardar = false, enBuscador = false, q =
   if (hoja) return 'hoja';
   return null;
 }
-/** A partir de qué ancho la hoja deja de tener columnas y pasa a pestañas (Elegir · Mi receta · Qué hará). */
+/** A partir de qué ancho la hoja deja de tener columnas y pasa a pestañas (Elegir · Mi receta). */
 export const ESTRECHO = 700;
-export const PESTANAS = [['elegir', 'Elegir'], ['receta', 'Mi receta'], ['que', 'Qué hará']];
+export const PESTANAS = [['elegir', 'Elegir'], ['receta', 'Mi receta']];
 /** El número de resultados, para aria-live: «Ninguno» también se dice. */
 export const cuantos = n => (n ? `${n} ${n === 1 ? 'resultado' : 'resultados'}` : 'Ningún resultado');
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## V5.1 — 2 oct 2026 (Básico y Avanzado en el Estudio)
+
+Pedido del dueño tras probar el banco: «este modo debería activarse como modo avanzado», «prefiero poner la relación de aspecto yo mismo», «el modelo prefiero siempre verlo y ajustarlo».
+- **Básico · Avanzado** en el paso 1 del compositor de imagen (se recuerda, `ao.st.modo`). Básico es el compositor de siempre y no descarga el banco; Avanzado suma los presets y el escenario 3D. B y «/» pasan a Avanzado.
+- **El modelo y el formato, siempre a la vista y siempre los tuyos**, también con presets: el plan los usa tal cual (`pedido.model`, `pedido.proporcion`, que gana a la escena, al preset y al canal). El cuadro del escenario 3D sigue al formato, y cambiarlo en el escenario cambia el formato.
+- **Fuera** «Para dónde va», «Qué hará» y «Resultado». Lo hecho va solo a la galería (antes cada GENERAR dejaba una entrada que no se borraba). El costo o el problema del plan salen junto a GENERAR.
+- **Pruebas:** el formato y el modelo que eliges ganan (`presets-core`, `presets-servidor`, `studio-banco`); `scripts/presets-recorrido.mjs` (28 pasos en el navegador) y `scripts/estudio-modos-capturas.mjs` (Básico y Avanzado a 390, 1024 y 1512 px, claro y oscuro).
+
 ## V5.0 — 2 oct 2026 (el banco de presets del Estudio)
 
 - **Diseño:** 3 investigaciones de mercado, 3 arquitectos y un debate de 3 críticos (fotógrafo de producto, diseñador de marketing, ingeniero): `docs/propuesta-banco-presets.md`. §15 y §16 recogen las decisiones del dueño.

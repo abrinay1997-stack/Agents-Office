@@ -52,6 +52,8 @@ test('pedidoLimpio y las cifras: nada pasa sin forma conocida', () => {
   assert.deepEqual(p.entradas.foto, ['a.png']);
   assert.deepEqual(p.entradas.referencias[0].ejes, { estilo: 0, color: 3 });
   assert.ok(p.escena.camara.altura >= 0, 'el piso es el cero');
+  assert.equal(pedidoLimpio({ proporcion: '9:16' }).proporcion, '9:16'); assert.equal(pedidoLimpio({ proporcion: '1.91:1' }).proporcion, '1.91:1');
+  assert.equal(pedidoLimpio({ proporcion: 'auto' }).proporcion, undefined); assert.equal(pedidoLimpio({ proporcion: '<b>' }).proporcion, undefined);
   assert.deepEqual(cifrasComoObjeto([{ name: 'Precio de la cama', value: ' 199 ' }, { name: 'vacía', value: '' }]), { precio_de_la_cama: '199' });
 });
 

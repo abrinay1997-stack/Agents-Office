@@ -308,6 +308,15 @@ test('escenario 3D: sus frases van al prompt, su guía como referencia rotulada,
   assert.deepEqual(r.request.media.reference, [FOTO, core.GUIA], 'ponerGuia no cambia el original');
 });
 
+test('modo avanzado (2 oct 2026): el formato del compositor gana a la escena, y el modelo elegido se respeta', () => {
+  const r = compila({ pila: ['cat-web-panaclaw', 'enc-frontal'], entradas: { foto: FOTO }, escena: ESCENA, escena3d: doble(), proporcion: '9:16', model: 'nano-banana-2' });
+  assert.deepEqual(r.errores, []);
+  assert.equal(r.model, 'nano-banana-2', 'el modelo que elegiste, aunque el banco recomiende otro');
+  assert.equal(r.request.settings.aspectRatio, '9:16', 'tu formato, no el 4:5 de la escena');
+  const sin = compila({ pila: ['cat-web-panaclaw', 'enc-frontal'], entradas: { foto: FOTO }, escena: ESCENA, escena3d: doble() });
+  assert.equal(sin.request.settings.aspectRatio, '4:5', 'sin formato elegido, el de la escena');
+});
+
 test('escenario 3D: acepta texto, lista u objeto; una guía ya subida va directa; sin traductor es un error', () => {
   const t = compila({ pila: ['limp-polvo'], entradas: { foto: FOTO }, escena: ESCENA, escena3d: doble('texto') });
   assert.match(t.prompt, /Camera and framing: three-quarter view from the left, slightly elevated/);

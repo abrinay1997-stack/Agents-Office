@@ -120,8 +120,9 @@ body.dark :is(.bk, .st-bank) .bk-chip { background: #1E1F24; }
 .bk-q-revisar { color: #8A3B00; background: #FCEBDD; } body.dark .bk-q-revisar { color: #FFC08F; background: #3A2414; }
 body.dark .bk .bk-doors button, body.dark .bk .bk-add, body.dark .bk .bk-addrow button, body.dark .bk .bk-otras select, body.dark .bk .bk-alt select, body.dark .bk .bk-guardar input, body.dark .bk .bk-chip, body.dark .bk .bk-que, body.dark .bk .bk-th img, body.dark .bk .bk-ref img, body.dark .bk .bk-ba { background: #1E1F24; }
 
-/* con presets, el banco decide el modelo, el formato y el material: esos pasos se apartan (vuelven al quitar los presets) */
-#studioOv.st-banco-on .st-matstep, #studioOv.st-banco-on .st-step:has(.st-mwrap), #studioOv.st-banco-on .st-step:has(.st-ratios), #studioOv.st-banco-on .st-modeseg { display: none; }
+/* con presets, el material es el del banco (tu foto y las referencias) y es una sola idea: esos dos se apartan. El modelo y el formato
+   siguen a la vista y son los tuyos (2 oct 2026). */
+#studioOv.st-banco-on .st-matstep, #studioOv.st-banco-on .st-modeseg { display: none; }
 
 /* ---- la hoja sobre la galería ----
    Mide su propio ancho (@container bk). Con sitio: la lista y, si el compositor no se ve (plegado, o el teléfono apaisado), una
@@ -226,3 +227,11 @@ body.dark .st-bank .bk-card { background: #1E1F24; }
   .bk .bk-add, .bk .bk-addrow button, .bk .bk-chips > button, .bk .bk-open, .bk .bk-atajos button, .bk .bk-seg button, .bk .bk-disc, .bk .bk-toast button, .bk .bk-eje [role="switch"], .bk .bk-que > summary, .bk .bk-ejes summary { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .st-bank, .bk * { transition: none !important; animation: none !important; } }
+
+/* Básico · Avanzado (2 oct 2026), en el paso 1 y solo en Imagen: el mismo segmento que «Una idea / Varias ideas».
+   Básico es el compositor de siempre (el banco ni se carga); Avanzado suma los presets y el escenario 3D. */
+#studioOv .st-nivel { display: inline-flex; gap: 2px; padding: 3px; border-radius: 99px; border: 1px solid var(--hairline); margin: 10px 0 0; }
+#studioOv .st-nivel[hidden] { display: none; }
+#studioOv .st-nivel button { font: 600 12px var(--ui); min-height: 28px; padding: 4px 14px; border-radius: 99px; border: 0; background: none; color: var(--grey); cursor: pointer; }
+#studioOv .st-nivel button[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
+#studioOv .st-nivel button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

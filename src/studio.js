@@ -68,6 +68,7 @@ export function initStudio(ctx) {
         <div class="st-scroll"><button type="button" class="st-fold" title="Plegar el compositor: más sitio para la galería" aria-label="Plegar el compositor">‹ plegar</button>
           <div class="st-step"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
             <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button><button type="button" data-kind="audio" aria-pressed="false" title="Un texto leído en voz alta (MiniMax)">${svg('mic')}<span>Voz</span></button><button type="button" data-kind="music" aria-pressed="false" title="Una canción con letra o una pista instrumental (MiniMax)">${svg('note')}<span>Música</span></button></div>
+            <div class="st-nivel" role="group" aria-label="Modo de imagen"><button type="button" data-nivel="basico" aria-pressed="true" title="Describe y genera: modelo, idea y formato">Básico</button><button type="button" data-nivel="avanzado" aria-pressed="false" title="Presets, tu foto, referencias y el escenario 3D (B)">Avanzado</button></div>
             <button type="button" class="st-vcta" hidden>${svg('mic')}<span><b>Clonar tu voz o diseñar una</b><small>Para que tus audios suenen como tú</small></span></button></div>
           <div class="st-step"><div class="st-h"><b>2</b> Modelo</div>
             <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden></div></div>
@@ -135,6 +136,7 @@ export function initStudio(ctx) {
   const inFolder = it => (it.folder && folders.some(f => f.id === it.folder) ? it.folder : null);
   let lastSig = '', lastAt = 0, armed = false;
   let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightAt = null, lightFrom = null, prevPrompt = null, qty = 1;
+  let nivel = store.get('modo', 'basico') === 'avanzado' ? 'avanzado' : 'basico'; // 2 Oct 2026: images in Básico (the plain composer) or Avanzado (presets and the 3D stage)
   const modelOf = { image: store.get('model.image', ''), video: store.get('model.video', ''), audio: store.get('model.audio', ''), music: store.get('model.music', '') };
   if (!SV.KINDS.includes(kind)) kind = 'image';
   $('.st-lang').value = store.get('lang', 'en') === 'es' ? 'es' : 'en';
@@ -182,8 +184,11 @@ export function initStudio(ctx) {
     subir: files => uploadFiles(files, null), idea: () => $('.st-prompt').value.trim(), n: () => qty, onState: () => bancoState(),
     abrirArchivo: f => lightFile(f), mostrarGaleria: () => { if (phone()) showPane('gal'); },
     trabajos: (js, b) => { jobs.unshift(...js); if (b) budget = b; renderHead(); renderGrid(); watch(); }, recargar: () => load({ full: false }),
-    pedirDimitri: ctx.askDimitri ? () => ctx.askDimitri([]) : null });
-  $('.st-step').after(banco.el); $('.st-gal').appendChild(banco.sheet);
+    pedirDimitri: ctx.askDimitri ? () => ctx.askDimitri([]) : null,
+    // the model and the format are always the composer's (2 Oct 2026): the bank reads them and never picks them
+    modelo: () => (kind === 'image' ? modelOf.image || '' : ''), proporcion: () => ratioNow(),
+    setProporcion: v => { const m = cur(), vals = m?.settings.aspectRatio?.values || []; if (vals.includes(v)) { setSetting('aspectRatio', v); renderModel(); } else { say(m ? `${m.name} no hace ${v}: el cuadro se queda en el de «Formato y ajustes».` : 'Elige antes un modelo.', true); banco.replan(); } } });
+  $('.st-mwrap').closest('.st-step').after(banco.el); $('.st-gal').appendChild(banco.sheet);
   /* ---------- lotes (F2, §6 y §7.4): many photos with the same recipe, in their own tab. Nothing is spent until PROBAR or GENERAR there ---------- */
   const esImg = f => /\.(png|jpe?g|webp)$/i.test(String(f));
   lotesUI = initLotes($('.st-lotes'), { esc, api, say, live: () => isLive() && location.protocol.startsWith('http'), src: f => src(f),
@@ -200,17 +205,24 @@ export function initStudio(ctx) {
     if (ids.length < files.length) say(`${files.length - ids.length} de las seleccionadas no son fotos: el lote lleva las ${ids.length} que sí.`);
     showPane('lotes'); lotesUI.nuevo({ tipo: 'seleccion', files: ids });
   }
-  /** With presets in the composer, the bank decides the model and the cost: the steps it covers step aside and the foot says its cost. */
+  /** The chosen format, when it is a ratio (the bank and the 3D stage follow it). */
+  function ratioNow() { const m = cur(), v = m && m.settings.aspectRatio ? String(settingsOf(m).aspectRatio || '') : ''; return /^\d+(\.\d+)?:\d+$/.test(v) ? v : null; }
+  /** Avanzado shows the bank's step; with presets in it, GENERAR is the bank's (its plan and its cost), with the model and the format still yours. */
+  const avanzado = () => kind === 'image' && nivel === 'avanzado';
+  const bancoManda = () => !!banco && avanzado() && banco.activo();
   function bancoState() {
     if (!banco) return;
-    const on = kind === 'image' && banco.activo();
-    banco.el.hidden = kind !== 'image'; if (kind !== 'image') banco.cerrar(false);
-    else if (document.body.classList.contains('studioOpen')) banco.preparar(); // the image composer shows the bank's step: it comes now (once)
+    const av = avanzado(), on = av && banco.activo();
+    const nv = $('.st-nivel'); nv.hidden = kind !== 'image'; nv.querySelectorAll('[data-nivel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.nivel === nivel)));
+    banco.el.hidden = !av; if (!av) banco.cerrar(false);
+    else if (document.body.classList.contains('studioOpen')) banco.preparar(); // Avanzado shows the bank's step: it comes now (once); Básico never loads it
     el.classList.toggle('st-banco-on', on);
     if (!on) return;
-    $('.st-n').textContent = qty; $('.st-sum').hidden = true; $('.st-p3t').textContent = 'Opcional: algo más para la IA';
-    $('.st-est').textContent = `Con presets · ${banco.costo()}`; $('.st-est').classList.remove('over'); $('.st-go').textContent = 'GENERAR';
+    const err = banco.error ? banco.error() : '';
+    $('.st-n').textContent = qty; $('.st-p3t').textContent = 'Opcional: algo más para la IA';
+    $('.st-est').textContent = err || `Con presets · ${banco.costo()}`; $('.st-est').classList.toggle('over', !!err); $('.st-go').textContent = 'GENERAR';
   }
+  function setNivel(v) { if (v === nivel || !['basico', 'avanzado'].includes(v)) return; nivel = v; store.set('modo', v); bancoState(); renderModel(); }
 
   /* ---------- the composer ---------- */
   function pickModel(k = kind) { // the remembered one if it is on, else the office's default, else the first that is on
@@ -353,7 +365,7 @@ export function initStudio(ctx) {
   const lines = () => $('.st-prompt').value.split('\n').map(x => x.trim()).filter(Boolean);
   function estimate() {
     $('.st-n').textContent = qty;
-    if (kind === 'image' && banco && banco.activo()) { banco.replan(); bancoState(); return 0; } // the bank's plan has the cost
+    if (bancoManda()) { banco.replan(); bancoState(); return 0; } // the bank's plan has the cost
     const m = cur(); const n = (mode === 'batch' ? Math.max(1, lines().length) : 1) * qty;
     if (!m) { $('.st-est').textContent = ''; $('.st-go').textContent = SV.goLabel(kind, 1); $('.st-sum').hidden = true; const pl = $('.st-plen'), len = $('.st-prompt').value.length, lim = limitNow(); pl.textContent = sound() ? `${SV.num(len)}/${SV.num(lim)}` : ''; pl.classList.remove('near'); pl.classList.toggle('over', sound() && len > lim); return 0; } // V5.0: Voz / Música without the key still say what they would make
     const s = settingsOf(m), per = Number(s.batchSize) || 1, secs = m.seconds || Number(s.duration) || 5;
@@ -1552,6 +1564,7 @@ export function initStudio(ctx) {
     const kb = e.target.closest('[data-kind]'); if (kb) return setKind(kb.dataset.kind);
     if (e.target.closest('.st-mpick')) return openList();
     const mo = e.target.closest('.st-mo'); if (mo && !mo.disabled) { $('.st-keyhelp').hidden = true; modelOf[kind] = mo.dataset.id; store.set('model.' + kind, mo.dataset.id); openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; }
+    const nvb = e.target.closest('[data-nivel]'); if (nvb) { setNivel(nvb.dataset.nivel); return; }
     const arb = e.target.closest('[data-ar]'); if (arb) { setSetting('aspectRatio', arb.dataset.ar); renderModel(); return; }
     if (e.target.closest('.st-fold')) { el.classList.add('st-folded'); store.set('fold', true); relayout(); $('.st-unfold').focus(); return; }
     if (e.target.closest('.st-unfold')) { el.classList.remove('st-folded'); store.set('fold', false); relayout(); $('.st-prompt').focus(); return; }
@@ -1597,7 +1610,7 @@ export function initStudio(ctx) {
     }
     if (e.target.closest('.st-undo-enh')) { if (prevPrompt != null) $('.st-prompt').value = prevPrompt; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; return; }
     if (e.target.closest('.st-go')) {
-      if (kind === 'image' && banco.activo()) { banco.generar(); return; } // with presets, GENERAR is the bank's (its plan and its cost)
+      if (bancoManda()) { banco.generar(); return; } // with presets (Avanzado), GENERAR is the bank's (its plan and its cost)
       if (!isLive()) return say('El Estudio necesita la oficina real (ábrela con el iniciador).', true);
       const m = cur(); if (!m) { const o = offModel(); return o ? keyHelp(o) : say('Elige un modelo.', true); } // V5.0: Voz / Música without the key say how to switch it on
       const miss = (m.needs || []).find(r => !media[r].length); if (miss) return fieldErr('slot', `${m.name} necesita «${roleName(miss)}»: súbela o elígela de la galería.`);
@@ -1671,7 +1684,7 @@ export function initStudio(ctx) {
     if (a === 'edit') lightFile(it.file, { panel: 'edit' }); // V4.9: Editar opens the viewer with its small panel
     if (a === 'dept') lightFile(it.file, { panel: 'dept' });
     if (a === 'dimitri' && ctx.askDimitri) ctx.askDimitri([it.file]);
-    if (a === 'preset') { if (kind !== 'image') setKind('image'); showPane('gen'); banco.guardarDesde(it); } // banco de presets: «Guardar como preset» (§7.4)
+    if (a === 'preset') { if (kind !== 'image') setKind('image'); setNivel('avanzado'); showPane('gen'); banco.guardarDesde(it); } // banco de presets: «Guardar como preset» (§7.4)
     if (a === 'move') { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
     if (a === 'task' && it.task && ctx.openTask) { close(); ctx.openTask(it.task); } // V4.2 (audit A25)
   });
@@ -1685,7 +1698,7 @@ export function initStudio(ctx) {
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); if (k === 'instrumental') paintStep3(); estimate(); }
   });
   el.addEventListener('input', e => {
-    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (kind === 'image' && e.target.value === '/') { e.target.value = ''; banco.abrir('banco'); return; } if (banco.activo()) banco.replan(); } // «/» at the start opens the bank (§7.1); the idea goes into its plan
+    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (kind === 'image' && e.target.value === '/') { e.target.value = ''; setNivel('avanzado'); banco.abrir('banco'); return; } if (bancoManda()) banco.replan(); } // «/» at the start opens the bank (§7.1); the idea goes into its plan
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value + (e.target.dataset.set === 'duration' ? ' s' : ''); setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; requery(250); return; } // INF-03: the server searches the whole gallery
@@ -1717,7 +1730,7 @@ export function initStudio(ctx) {
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
       if ((e.key === 'l' || e.key === 'L') && !el.classList.contains('st-pickmode')) { showPane(el.dataset.pane === 'lotes' ? 'gen' : 'lotes'); return; } // banco de presets F2: the Lotes tab (and back)
       if (el.dataset.pane === 'lotes' && /^[ivb/]$/i.test(e.key)) return; // the composer's keys stay in the composer
-      if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (kind !== 'image') setKind('image'); showPane('gen'); banco.toggle(); return; } // banco de presets (§7.1)
+      if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (kind !== 'image') setKind('image'); setNivel('avanzado'); showPane('gen'); banco.toggle(); return; } // banco de presets (§7.1): it lives in Avanzado
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
     if (!$('.st-binov').hidden) { if (e.key === 'Escape') closeBin(); return; }
@@ -1806,7 +1819,7 @@ export function initStudio(ctx) {
   el.classList.toggle('st-folded', !!store.get('fold', false));
   const isOn = () => document.body.classList.contains('studioOpen'); // not el.hidden: that waits 220 ms for the fade after close
   let hideT = 0;
-  function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); if (kind === 'image') banco.preparar(); timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
+  function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); if (avanzado()) banco.preparar(); /* Básico never brings the bank */ timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
   function close(o = {}) { if (!isOn()) return; if (pickFor) { pickFor = null; paintFor(); } seenAt = Date.now(); closeLight(); closeHist(); closeBin(); closeVoices(true); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   views.add('studio', { isOpen: isOn, close });
   // INF-03: Ctrl+K opens a file of the gallery in the viewer, or the gallery with its search (src/search.js)

@@ -5,6 +5,9 @@
 //   1. «Que se vea más clara» (local, gratis)        2. «Catálogo para la web» (la IA de mentira + el blanco 255 y el canal, local)
 //   3. «Copiar el color de una foto» (local)         4. «Sala» con el escenario 3D (la guía y las frases llegan a la petición)
 //   5. «Guardar como preset» (la nota en <cerebro>/Estudio/Presets y en /api/brain)
+// 2 oct 2026: el banco vive en el modo AVANZADO (Básico es el compositor de siempre y no lo carga); el modelo y el formato son los
+// del compositor y ganan; no hay «Para dónde», ni «Qué hará», ni «Resultado»: el costo o el problema salen junto a GENERAR y lo
+// hecho va a la galería.
 // y después captura el compositor, el banco y el escenario a 390, 1024 y 1512 px, en claro y en oscuro.
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -54,12 +57,14 @@ if (!up) { srv.kill(); g.close(); throw new Error('la oficina de prueba no arran
 const ARGS = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'];
 let browser; try { browser = await chromium.launch({ executablePath: process.env.AO_CHROME || undefined, args: ARGS }); } catch { browser = await chromium.launch({ channel: 'chrome', args: ARGS }); }
 const S = '#studioOv';
-async function abrirEstudio(page, w, tema = 'light') {
+async function abrirEstudio(page, w, tema = 'light', avanzado = true) {
   await page.goto(base + '/'); await page.waitForTimeout(1200);
   await page.evaluate(t => { document.body.classList.toggle('dark', t === 'dark'); document.documentElement.dataset.theme = t; }, tema);
   await page.keyboard.press('e'); await page.waitForSelector(`${S}.on`); await page.waitForTimeout(500);
   await page.click(`${S} [data-kind="image"]`);
+  if (avanzado) { await page.click(`${S} [data-nivel="avanzado"]`); await page.waitForSelector(`${S} .bk-doors`, { timeout: 15000 }); }
 }
+const elegirModelo = async (page, id) => { await page.click(`${S} .st-mpick`); await page.click(`${S} .st-mo[data-id="${id}"]`); await page.waitForTimeout(150); };
 const elegirDeGaleria = async (page, quien) => { await page.waitForSelector(`${S}.st-pickmode`); await page.click(`${S} .st-card[data-f*="${quien}"] .st-thumb`); await page.waitForTimeout(200); };
 const banco = async (page, q, id) => {
   if (!(await page.isVisible(`${S} .st-bank`))) await page.click(`${S} .bk-open`);
@@ -67,14 +72,17 @@ const banco = async (page, q, id) => {
   await page.click(`${S} .bk-card[data-pid="${id}"]`); await page.waitForTimeout(100);
 };
 const limpiar = async page => { for (let i = 0; i < 12 && await page.$(`${S} [data-unpila]`); i++) await page.click(`${S} [data-unpila]`); if (await page.$(`${S} [data-escena="quitar"]`)) await page.click(`${S} [data-escena="quitar"]`); };
+const tarjetas = page => page.$$eval(`${S} .st-card[data-f]`, l => l.map(x => x.dataset.f));
 const generar = async page => {
-  await page.waitForFunction(s => { const q = document.querySelector(s + ' .bk-que summary'); return q && !/calculando/.test(q.textContent); }, S, { timeout: 15000 });
-  const que = await page.textContent(`${S} .bk-que summary`);
-  const antes = await page.$$eval(`${S} .bk-r`, l => l.length);
+  await page.waitForFunction(s => { const t = document.querySelector(s + ' .st-est')?.textContent || ''; return t && !/calculando/.test(t); }, S, { timeout: 15000 });
+  const est = (await page.textContent(`${S} .st-est`)).replace(/\s+/g, ' ').trim();
+  const antes = new Set(await tarjetas(page));
   await page.click(`${S} .st-go`);
-  await page.waitForFunction(([s, n]) => [...document.querySelectorAll(s + ' .bk-r')].length > n || /no |falta|necesita/i.test(document.querySelector(s + ' .st-msg')?.textContent || ''), [S, antes], { timeout: 15000 });
-  await page.waitForFunction(s => { const r = document.querySelector(s + ' .bk-r'); return r && !/Haciéndose/.test(r.textContent); }, S, { timeout: 60000 });
-  return { que: que.replace(/\s+/g, ' ').trim(), res: (await page.textContent(`${S} .bk-r`)).replace(/\s+/g, ' ').trim(), msg: await page.textContent(`${S} .st-msg`) };
+  await page.waitForFunction(s => /marcha|Haciéndose|no |falta|necesita/i.test(document.querySelector(s + ' .st-msg')?.textContent || ''), S, { timeout: 15000 });
+  let nuevo = null; for (let i = 0; i < 120 && !nuevo; i++) { await page.waitForTimeout(500); nuevo = (await tarjetas(page)).find(f => !antes.has(f) && !/Guía de composición|preparada/i.test(f)) || null; }
+  const it = nuevo ? await (await fetch(base + '/api/media/item/' + encodeURIComponent(nuevo))).json().catch(() => null) : null;
+  const res = it ? [it.versionOf ? 'versión de tu foto' : '', ...((it.qa?.checks) || []).map(c => `${c.id} ${c.motivo || ''}`)].join(' · ') : '';
+  return { que: est, est, res, item: it, nuevo, msg: await page.textContent(`${S} .st-msg`) };
 };
 
 try {
@@ -83,24 +91,36 @@ try {
   const page = await ctx.newPage();
   page.on('pageerror', e => informe.errores.push(String(e.message || e)));
   page.on('console', m => { if (m.type() === 'error' && !/favicon|404/.test(m.text())) informe.errores.push(m.text()); });
-  await abrirEstudio(page, 1512);
+  const extra = []; page.on('request', q => { if (/estudio-extra/.test(q.url())) extra.push(q.url()); });
+  await abrirEstudio(page, 1512, 'light', false);
+  ok('Básico por defecto: el interruptor se ve y el banco no', await page.isVisible(`${S} .st-nivel`) && !(await page.isVisible(`${S} .bk`)) && await page.getAttribute(`${S} [data-nivel="basico"]`, 'aria-pressed') === 'true');
+  await page.waitForTimeout(800);
+  ok('Básico: el banco ni se descarga (estudio-extra.js)', extra.length === 0, extra.join(' '));
+  await page.click(`${S} [data-nivel="avanzado"]`); await page.waitForSelector(`${S} .bk-doors`, { timeout: 15000 });
+  ok('Avanzado: el banco, el modelo y el formato a la vista; sin «Para dónde»', await page.isVisible(`${S} .st-mpick`) && await page.isVisible(`${S} .st-ratios`) && !(await page.$(`${S} .bk-canal`)));
+  ok('Avanzado se recuerda (ao.st.modo)', await page.evaluate(() => localStorage.getItem('ao.st.modo')) === '"avanzado"');
   await page.click(`${S} [data-puerta="foto"]`); await elegirDeGaleria(page, 'cama-bodega');
   ok('Mejorar mi foto: la foto entra en el banco', await page.$(`${S} .bk-th img`));
 
   // 1. Más luz (local)
   await banco(page, 'se ve oscura', 'luz-mas-clara'); await page.keyboard.press('Escape');
   let r = await generar(page);
-  ok('«Que se vea más clara»: «Qué hará» dice gratis y en tu máquina', /gratis/.test(r.que) && /máquina/.test(r.que), r.que);
-  ok('«Que se vea más clara»: sale el resultado con antes y después', /Resultado/.test(r.res) && await page.$(`${S} .bk-ba`), r.res.slice(0, 120));
+  ok('«Que se vea más clara»: junto a GENERAR dice gratis, con el modelo a la vista', /gratis/.test(r.est) && await page.isVisible(`${S} .st-mpick`), r.est);
+  ok('«Que se vea más clara»: lo hecho va a la galería (versión de tu foto), sin «Resultado» en el compositor', !!r.nuevo && /versión/.test(r.res) && !(await page.$(`${S} .bk-r, ${S} .bk-res, ${S} .bk-que`)), r.res.slice(0, 120));
   ok('«Que se vea más clara»: ninguna llamada a la IA', vistos.length === 0);
   await page.screenshot({ path: path.join(OUT, 'recorrido-1-mas-luz.png') });
 
   // 2. Catálogo para la web (IA de mentira + fondo 255 y canal en local)
   await limpiar(page);
   await banco(page, 'catalogo web', 'cat-web-panaclaw'); await page.keyboard.press('Escape');
+  await elegirModelo(page, 'nano-banana-pro');
+  if (await page.$(`${S} [data-ar="9:16"]`)) await page.click(`${S} [data-ar="9:16"]`);
   r = await generar(page);
-  ok('«Catálogo para la web»: «Qué hará» dice el costo y el modelo antes de gastar', /US\$|Nano Banana/i.test(r.que), r.que);
+  ok('«Catálogo para la web»: el costo junto a GENERAR antes de gastar', /US\$/.test(r.est), r.est);
   ok('«Catálogo para la web»: una sola llamada a la IA', vistos.length === 1);
+  const pet2 = vistos[0] || {};
+  ok('El modelo que elegiste gana (Nano Banana Pro, no el recomendado)', /gemini-3-pro-image/.test(pet2.url || ''), pet2.url);
+  ok('El formato que elegiste gana (9:16)', JSON.stringify(pet2.body || {}).includes('"9:16"'), JSON.stringify(pet2.body?.generationConfig || {}).slice(0, 200));
   ok('«Catálogo para la web»: la QA del fondo 255 y la ocupación en el resultado', /blanco|Fondo/i.test(r.res) && /ocupa/i.test(r.res), r.res.slice(0, 300));
   await page.screenshot({ path: path.join(OUT, 'recorrido-2-catalogo.png') });
 
@@ -118,7 +138,12 @@ try {
   // 4. Sala con escenario 3D
   await limpiar(page);
   await banco(page, 'sala', 'esc-sala'); await page.keyboard.press('Escape');
+  await elegirModelo(page, 'nano-banana-2'); if (await page.$(`${S} [data-ar="3:4"]`)) await page.click(`${S} [data-ar="3:4"]`);
   await page.click(`${S} [data-escena="abrir"]`); await page.waitForSelector(`${S} .st-bank .e3d`);
+  ok('El escenario 3D toma el formato del compositor (3:4)', /3:4/.test(await page.textContent(`${S} .st-bank .e3d-prop`)), await page.textContent(`${S} .st-bank .e3d-prop`));
+  await page.click(`${S} [data-ar="1:1"]`); await page.waitForTimeout(400);
+  ok('Cambiar el formato cambia «Lo que ve la cámara» (1:1)', /1:1/.test(await page.textContent(`${S} .st-bank .e3d-prop`)));
+  await page.click(`${S} [data-ar="3:4"]`); await page.waitForTimeout(300);
   const toma = await page.$(`${S} .st-bank .e3d [data-toma="tres-cuartos"], ${S} .st-bank .e3d button:has-text("3/4")`); if (toma) await toma.click();
   const dist = await page.$(`${S} .st-bank .e3d [data-dist="margen"], ${S} .st-bank .e3d button:has-text("Con margen")`); if (dist) await dist.click();
   await page.waitForTimeout(400);
@@ -132,8 +157,9 @@ try {
   ok('«Sala» + escena: la QA compara la ocupación con la de la escena', /escena|ocupa|No medido/i.test(r.res), r.res.slice(0, 200));
   await page.screenshot({ path: path.join(OUT, 'recorrido-4-sala.png') });
 
-  // 5. Guardar como preset desde el resultado
-  await page.click(`${S} .bk-r [data-guardar]`);
+  ok('Tres generaciones y nada se acumula en el compositor', !(await page.$(`${S} .bk-r, ${S} .bk-res`)));
+  // 5. Guardar como preset (la receta del compositor)
+  await page.click(`${S} [data-guardar="receta"]`);
   await page.fill(`${S} .bk-guardar input[name=nombre]`, 'Sala de PanaClaw'); await page.fill(`${S} .bk-guardar input[name=marca]`, 'PanaClaw');
   await page.click(`${S} .bk-guardar button[type=submit]`); await page.waitForTimeout(1500);
   const nota = path.join(brain, 'Estudio', 'Presets', 'Sala de PanaClaw.md');
@@ -149,13 +175,13 @@ try {
   const dp = await dctx.newPage(); dp.on('pageerror', e => informe.errores.push('demo: ' + e.message));
   await dp.goto('file:///' + path.join(ROOT, 'dist', 'command-centre-v2.html').replace(/\\/g, '/')); await dp.waitForTimeout(1500);
   await dp.keyboard.press('e'); await dp.waitForSelector(`${S}.on`); await dp.click(`${S} [data-kind="image"]`);
-  await dp.keyboard.press('b'); await dp.waitForSelector(`${S} .st-bank:not([hidden]) .bk-qi`); await dp.fill(`${S} .bk-qi`, 'fondo blanco'); await dp.waitForTimeout(300);
+  await dp.keyboard.press('b'); /* B pasa a Avanzado y abre el banco */ await dp.waitForSelector(`${S} .st-bank:not([hidden]) .bk-qi`); await dp.fill(`${S} .bk-qi`, 'fondo blanco'); await dp.waitForFunction(s => document.querySelectorAll(s + ' .bk-card').length > 3, S, { timeout: 10000 }).catch(() => {}); // la fábrica llega con el banco (B lo trae ahora)
   const nDemo = await dp.$$eval(`${S} .bk-card`, l => l.length);
   ok('Demo file://: el banco busca con la fábrica junto a la página', nDemo > 3, `${nDemo} tarjetas`);
   await dp.fill(`${S} .bk-qi`, 'se ve oscura'); await dp.waitForTimeout(200);
   await dp.click(`${S} .bk-card[data-pid="luz-mas-clara"]`); await dp.keyboard.press('Escape'); await dp.waitForTimeout(500);
-  const qd = (await dp.textContent(`${S} .bk-que`)).replace(/\s+/g, ' ');
-  ok('Demo file://: «Qué hará» se arma sin servidor (y pide la foto)', /foto/i.test(qd), qd.slice(0, 160));
+  const qd = (await dp.textContent(`${S} .st-est`)).replace(/\s+/g, ' ');
+  ok('Demo file://: el plan se arma sin servidor (y junto a GENERAR pide la foto)', /foto/i.test(qd) && await dp.$eval(`${S} .st-est`, x => x.classList.contains('over')), qd.slice(0, 160));
   await dp.screenshot({ path: path.join(OUT, 'demo-file.png') });
   await dctx.close();
 

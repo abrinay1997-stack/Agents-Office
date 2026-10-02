@@ -166,6 +166,7 @@ export function bancoDiferido(ctx) {
     replan: () => (real ? real.replan() : Promise.resolve(null)),
     estado: () => (real ? real.estado() : { puerta: 'foto', foto: null, refs: [], pila: [], canal: null, escena: null, modelo: null, idea: '', n: 1, plan: null }),
     costo: () => (real ? real.costo() : 'calculando…'),
+    error: () => (real ? real.error() : ''),
     /** La galería lo usa siempre: no espera al banco. */
     qaHTML(it) { if (real) return real.qaHTML(it); const r = qaResumen(it?.qa); return r ? `<span class="bk-q bk-q-${r.estado}">${ctx.esc(r.texto)}</span>` : ''; },
     guardarDesde: it => pedir(r => r.guardarDesde(it), { texto: 'Cargando el banco de presets para guardar el preset…' }),

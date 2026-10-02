@@ -253,3 +253,15 @@
 **Fix aplicado:** `media/posproceso.mjs`: si el trabajo copia el color de una referencia, `delta-e` sale «No medido» con el motivo, sin tumbar el estado.
 **Prevención:** Antes de enganchar una comprobación a un preset, preguntarse qué significa «bien» para ESE preset; un «no medido» honesto es mejor que un «revisar» falso.
 **Archivos:** `media/posproceso.mjs`
+
+## [2026-10-02] — Un `// comentario` metido a mitad de una línea larga se traga el resto del código
+
+**Contexto:** Modos Básico y Avanzado del Estudio. Había que poner una condición en `open()` de `src/studio.js`, que es una sola línea muy larga, y en una línea encadenada de `scripts/presets-recorrido.mjs`.
+**Error:** `node build.mjs`: «Unexpected end of file (src/studio.js:1846)». El recorrido marcó «0 tarjetas» porque las órdenes que seguían al comentario no se ejecutaron. El build falló, pero la tubería `| tail -1` lo escondió y el recorrido siguió con la página anterior.
+**Causa raíz:** Un `sed` añadió `// …` a mitad de la línea. Todo lo que venía detrás en esa línea quedó comentado: el cierre de la función y las llamadas siguientes.
+**Fix aplicado:** Cambiar el comentario por `/* … */` en las dos líneas.
+**Prevención:**
+- En una línea que sigue después del punto de inserción, comentar solo con `/* */`.
+- Después de un build, mirar su código de salida, no solo la última línea de la salida.
+- Si el recorrido da un resultado raro, comprobar primero que `dist/` sea nuevo.
+**Archivos:** `src/studio.js` (open), `scripts/presets-recorrido.mjs` (la demo)

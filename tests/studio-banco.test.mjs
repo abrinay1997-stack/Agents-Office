@@ -39,6 +39,10 @@ test('el pedido del compositor: las puertas son atajos; el modo sale de lo que p
   assert.deepEqual(p.entradas, { foto: ['f.png'], referencias: [{ id: 'r.png', ejes: { color: 2 } }] });
   assert.equal(p.idea, 'que se vea la madera'); assert.equal(p.escena, undefined);
   assert.equal(B.modoDeEstado({ foto: null, refs: [] }), 'cero');
+  // modo avanzado (2 oct 2026): el modelo y el formato del compositor viajan en el pedido
+  const p2 = B.pedidoDe({ ...st, canal: null, modelo: 'nano-banana-2', proporcion: '9:16' });
+  assert.equal(p2.model, 'nano-banana-2'); assert.equal(p2.proporcion, '9:16'); assert.deepEqual(p2.params, {});
+  assert.equal(B.pedidoDe({ ...st, proporcion: null }).proporcion, undefined);
 });
 
 test('apilar: una vez cada uno; en un eje exclusivo gana el último, con DESHACER', () => {
@@ -160,7 +164,7 @@ test('el teclado: roving tabindex con ↑ ↓ Inicio Fin, y Esc por capas', () =
   assert.equal(K.capaEsc({ enBuscador: true, q: '', hoja: true }), 'hoja', 'con el buscador vacío, Esc cierra la hoja');
   assert.equal(K.capaEsc({ q: 'luz', hoja: true }), 'hoja', 'fuera del buscador, lo escrito no retiene Esc');
   assert.equal(K.capaEsc({}), null, 'sin nada del banco abierto, Esc es del Estudio');
-  assert.deepEqual(K.PESTANAS.map(x => x[1]), ['Elegir', 'Mi receta', 'Qué hará']); assert.equal(K.ESTRECHO, 700);
+  assert.deepEqual(K.PESTANAS.map(x => x[1]), ['Elegir', 'Mi receta'], '«Qué hará» ya no existe (2 oct 2026)'); assert.equal(K.ESTRECHO, 700);
   assert.equal(K.cuantos(0), 'Ningún resultado'); assert.equal(K.cuantos(1), '1 resultado'); assert.equal(K.cuantos(4), '4 resultados');
 });
 

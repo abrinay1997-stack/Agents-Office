@@ -729,7 +729,8 @@ export function compilar(opts = {}) {
   }
 
   /* ---------- elegir el modelo ---------- */
-  const target = escena?.cuadro?.proporcion || lista.map(it => it.preset.ajustesModelo?.aspectRatio).filter(Boolean).at(-1) || canal?.proporcion || elegido('proporcion') || null;
+  // el formato que eligió el dueño en el compositor gana a todo (2 oct 2026: «prefiero poner la relación de aspecto yo mismo»)
+  const target = opts.proporcion || escena?.cuadro?.proporcion || lista.map(it => it.preset.ajustesModelo?.aspectRatio).filter(Boolean).at(-1) || canal?.proporcion || elegido('proporcion') || null;
   const fotoEnModelo = conFoto ? 1 : 0;
   const nBase = fotoEnModelo + iaRefs.length;
   const cands = modelosPara(lista, models, caps, { kind, modo, nImagenes: kind === 'image' ? nBase : undefined, refs: kind === 'video' ? refs.length : iaRefs.length, proporcion: target, orden: opts.orden, grande: !!opts.lote, preferencia: opts.preferencia, familias });

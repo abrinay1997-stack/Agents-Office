@@ -42,6 +42,7 @@ export function pedidoLimpio(b = {}) {
   const escena = b.escena && typeof b.escena === 'object' ? e3.normalizar(b.escena) : null;
   const params = b.params && typeof b.params === 'object' && !Array.isArray(b.params) ? b.params : {};
   return { pila, params, entradas, escena, idea: limpio(b.idea, 2000), producto: limpio(b.producto, 120), model: typeof b.model === 'string' && ID_RE.test(b.model) ? b.model : undefined,
+    proporcion: typeof b.proporcion === 'string' && /^\d{1,2}(\.\d{1,2})?:\d{1,2}$/.test(b.proporcion) ? b.proporcion : undefined,
     n: Math.max(1, Math.min(4, +b.n || 1)), orden: b.orden === 'barato' ? 'barato' : undefined, folder: typeof b.folder === 'string' ? b.folder : undefined };
 }
 
@@ -128,7 +129,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
         if (p.propio.ejes && refs.length) refs = refs.map(r => ({ ...r, ejes: { ...p.propio.ejes, ...(r.ejes || {}) } }));
       } else pila.push(it);
     }
-    const c = core.compilar({ ...contexto(), byId: presets, pila, params, entradas: { ...P.entradas, referencias: refs }, idea: P.idea, producto: P.producto, model: P.model, escena, n: P.n, orden: P.orden, kind: 'image' });
+    const c = core.compilar({ ...contexto(), byId: presets, pila, params, entradas: { ...P.entradas, referencias: refs }, idea: P.idea, producto: P.producto, model: P.model, proporcion: P.proporcion, escena, n: P.n, orden: P.orden, kind: 'image' });
     for (const it of pila) { const falta = faltaLocal(byId.get(it.id)); if (falta) c.errores = [...arr(c.errores), `«${byId.get(it.id).nombre || it.id}» aún no se puede: ${falta}`]; }
     return { plan: c, pedido: { ...P, pila, params, escena, entradas: { ...P.entradas, referencias: refs } } };
   }
