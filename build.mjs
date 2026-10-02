@@ -3,12 +3,20 @@ import { build } from 'esbuild';
 import { readFileSync, writeFileSync, mkdirSync, renameSync, readdirSync, existsSync } from 'fs';
 import { buildBrainGraph } from './graph-build.mjs';
 import { cargarFabrica } from './presets/fabrica.mjs';
+import { createHash } from 'node:crypto';
+// lo que el paquete aparte comparte con la página (pequeño, lo usan los dos); todo lo demás suyo no debe entrar en la página
+const COMPARTIDOS = ['src/studio-qa.js'];
+const APARTE = [];
 await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/braingraph.js
 
 // Banco de presets (F1): la fábrica de imagen, para la demo file:// (busca y compila sin servidor), va JUNTO a la página, en
 // dist/presets-fabrica.js, y no dentro: pesa ~250 KB y la página tiene su presupuesto (check.mjs). src/presets-fabrica.js la carga.
 const FAB = (() => { const f = cargarFabrica(); return { version: f.version, grupos: f.grupos, tipos: f.tipos, canales: f.canales, familias: f.familias, iconos: f.iconos, sinonimos: f.sinonimos, presets: f.presets.filter(p => (p.medios || []).includes('image')) }; })();
 
+// CARGA BAJO DEMANDA (1 oct 2026, INF-09): lo que solo usa el Estudio (el banco de presets con su compilador y su buscador, el
+// escenario 3D y los lotes) va en un paquete aparte, dist/estudio-extra.js, junto a la página; src/estudio-carga.js lo trae la
+// primera vez que hace falta. three.js no viaja dos veces: en el paquete aparte `three` es window.AO_THREE (src/three-compartido.js).
+const extra = await construirExtra();
 const res = await build({
   entryPoints: ['src/main.js'],
   bundle: true,
@@ -16,8 +24,15 @@ const res = await build({
   minify: true,
   write: false,
   target: 'es2020',
+  metafile: true,
+  define: { __AO_EXTRA_VERSION__: JSON.stringify(extra.version) },
 });
 const js = res.outputFiles[0].text;
+{ // lo que va aparte no vuelve a entrar en la página
+  const dentro = Object.keys(res.metafile.outputs[Object.keys(res.metafile.outputs)[0]].inputs).map(f => f.replace(/\\/g, '/'));
+  const colado = dentro.filter(f => APARTE.includes(f));
+  if (colado.length) throw new Error(`la página volvió a llevar lo del paquete aparte (${colado.join(', ')}): impórtalo solo desde src/estudio-extra.js y úsalo a través de src/estudio-carga.js`);
+}
 // V4.7: the views added after V4.6 keep their style in src/css/<name>.css instead of growing shell.html; they are joined, in name order,
 // where shell.html says «/* <css-vistas> */» (the end of its <style>). Nothing else changes: it is still one file that opens by double click.
 // Banco de presets F2 (1 oct 2026): sin sus comentarios ni espacios de más (~36 KB), para que la página quepa en su presupuesto (check.mjs,
@@ -37,6 +52,33 @@ mkdirSync('dist', { recursive: true });
 // dev variant with external script for faster iteration
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/presets-fabrica.js', `window.AO_PRESETS_FABRICA=${JSON.stringify(FAB)};\n`); // the demo's preset factory, beside the page
+writeFileSync('dist/estudio-extra.js', extra.js); // the Estudio's heavy part, beside the page (src/estudio-carga.js loads it on demand)
 writeFileSync('dist/app.js', js);
 writeFileSync('dist/dev.html', shell.replace('<!--APP-->', '<script src="app.js"></script>'));
-console.log(`built dist/command-centre-v2.html (${(html.length / 1024).toFixed(0)} KB)`);
+console.log(`built dist/command-centre-v2.html (${(html.length / 1024).toFixed(0)} KB) + dist/estudio-extra.js (${(extra.js.length / 1024).toFixed(0)} KB, on demand)`);
+
+/** El paquete aparte del Estudio: { js, version }. Falla si three.js se colara dentro o si usa algo de three que la página no comparte. */
+async function construirExtra() {
+  const threeDeLaPagina = {
+    name: 'three-de-la-pagina',
+    setup(b) {
+      b.onResolve({ filter: /^three(\/.*)?$/ }, a => ({ path: a.path, namespace: 'three-de-la-pagina' }));
+      b.onLoad({ filter: /.*/, namespace: 'three-de-la-pagina' }, a => {
+        if (a.path === 'three') return { contents: 'module.exports = window.AO_THREE;', loader: 'js' };
+        if (a.path === 'three/examples/jsm/controls/OrbitControls.js') return { contents: 'module.exports = { OrbitControls: window.AO_THREE.OrbitControls };', loader: 'js' };
+        return { errors: [{ text: `${a.path}: el paquete aparte solo puede usar el three.js que comparte la página (src/three-compartido.js)` }] };
+      });
+    },
+  };
+  const MARCA = '@@AO_EXTRA_VERSION@@';
+  const r = await build({ entryPoints: ['src/estudio-extra.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020', metafile: true, plugins: [threeDeLaPagina], define: { __AO_EXTRA_VERSION__: JSON.stringify(MARCA) } });
+  const ins = Object.keys(r.metafile.outputs[Object.keys(r.metafile.outputs)[0]].inputs).map(f => f.replace(/\\/g, '/'));
+  if (ins.some(f => f.includes('node_modules/three'))) throw new Error('three.js se coló en dist/estudio-extra.js: la página ya lo lleva');
+  const compartido = new Set([...readFileSync('src/three-compartido.js', 'utf8').matchAll(/^export function threeCompartido[\s\S]*?return \{([\s\S]*?)\};/gm)].flatMap(m => m[1].split(',').map(x => x.trim()).filter(Boolean)));
+  const usados = new Set(ins.filter(f => f.startsWith('src/')).flatMap(f => [...readFileSync(f, 'utf8').matchAll(/\bTHREE\.([A-Za-z_]\w*)/g)].map(m => m[1])));
+  const faltan = [...usados].filter(n => !compartido.has(n));
+  if (faltan.length) throw new Error(`el paquete aparte usa THREE.${faltan.join(', THREE.')} y la página no lo comparte: añádelo a src/three-compartido.js`);
+  APARTE.push(...ins.filter(f => f.startsWith('src/') || f.startsWith('presets/')).filter(f => !COMPARTIDOS.includes(f)));
+  const text = r.outputFiles[0].text, version = createHash('sha256').update(text).digest('hex').slice(0, 12);
+  return { js: text.split(MARCA).join(version), version };
+}

@@ -218,11 +218,6 @@ export const PESTANAS = [['elegir', 'Elegir'], ['receta', 'Mi receta'], ['que', 
 export const cuantos = n => (n ? `${n} ${n === 1 ? 'resultado' : 'resultados'}` : 'Ningún resultado');
 
 /* ---------- la QA y el dinero ---------- */
-/** El resumen de la QA de un archivo para su tarjeta: { estado, texto } o null. */
-export function qaResumen(qa) {
-  if (!qa || !Array.isArray(qa.checks)) return null;
-  const mal = qa.checks.filter(c => c.ok === false), sin = qa.checks.filter(c => c.ok == null), bien = qa.checks.filter(c => c.ok === true);
-  if (mal.length) return { estado: 'revisar', texto: `Revisar: ${mal[0].motivo}` };
-  return { estado: 'ok', texto: `QA ✓ ${bien.length} de ${qa.checks.length}${sin.length ? ` · ${sin.length} sin medir` : ''}` };
-}
+/** El resumen de la QA de un archivo para su tarjeta: { estado, texto } o null. Vive en src/studio-qa.js (la galería lo usa sin el banco). */
+export { qaResumen } from './studio-qa.js';
 export const usd = n => (n ? 'US$' + (+n).toFixed(2).replace('.', ',') : 'gratis');
