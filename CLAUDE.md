@@ -50,6 +50,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
+- V5.0 (2 oct, rama `mejora/dimitri-estudio`, en local), el **banco de presets** del Estudio: 127 de imagen + 53 de video (datos), local antes que IA con `sharp`, el **escenario 3D**, los presets propios como notas del Cerebro, **lotes** con seguimiento, Dimitri y los agentes. Ver «Banco de presets del Estudio» y `docs/propuesta-banco-presets.md`. **Falta:** la pantalla de video del banco (F5) y música/voz (F6), y probar con keys reales.
 - V4.11 (1 oct, misma rama, en local), auditoría despiadada del diseño: `docs/auditoria-diseno-2026-10-01.md` (126 hallazgos; los 6 críticos y 38 de 41 altos arreglados; cada punto con su estado). Contenido con tarjetas que dicen qué sale cada día, cola por día y previsualizaciones por red y formato; Dimitri con preguntas en opción múltiple y cambios del calendario con un clic; el asistente de clonar voz en tres pasos; accesibilidad y rendimiento. **Al tocar un área, mira primero sus pendientes en ese informe.**
 - V4.10 (1 oct, misma rama, en local), MiniMax en el Estudio, pedido del dueño: imagen, video H3, voz, música, y voces propias (diseñar, y clonar grabando con el micrófono o subiendo un fragmento). Se comprobó contra la doc oficial (`docs/minimax/api-verificada.md`). Ver «MiniMax en el Estudio (V4.10)».
 - V4.9 (30 sep, rama `mejora/dimitri-estudio`, todavía en local), Dimitri maneja el Estudio, pedido del dueño. Se construyó con cuatro equipos de agentes en paralelo (worktrees) más revisión adversarial; ver la sección «Dimitri y el Estudio (V4.9)»:
@@ -500,6 +501,30 @@ Muchas fotos con la misma receta, como un trabajo de agente (§6 y §7.4 de la e
 - **API** (`serve.mjs`; `lotes-puente.mjs` traduce lo que habla la página al idioma del motor, con tests): `POST /api/media/lotes/hoja` (lee la hoja, la guarda 2 h; no crea nada) · `POST /api/media/lotes` (lote «previsto» con `previa`) · `GET /api/media/lotes[/<id>]` · `PATCH /api/media/lotes/<id> {accion: probar|iniciar|continuar|pausar|reanudar|cancelar|autorizar}` · `POST /api/media/lotes/<id>/filas {accion: aprobar|reintentar|omitir, filas, modelo?, mas_fuerte?}` · `GET /api/media/lotes/<id>/zip?que=listas|aprobadas` · `GET …/csv`. Configuración: `office.config.json → media.lotes { max: 100, agenteSinOk: 10, agenteUsd: 2, url: false, concurrencia: 2, muestra: 3, muestraDesde: 10 }`.
 - **La interfaz** (`src/studio-lotes.js`, `src/css/estudio-lotes.css`): crear en 3 pasos (fotos → receta con el mismo banco, canal y un escenario 3D para toda la serie → el plan con las 5 primeras, el modelo y el costo) y el seguimiento como un agente (progreso, cada foto con antes/después, bitácora, filtros, Aprobar las listas, Descargar todo). En la demo `file://` corre un lote de mentira en memoria.
 - **Probarlo en el navegador:** `node scripts/lotes-capturas.mjs` (oficina temporal sin keys, un Excel de 12 fotos y un preset local: probar con 3, seguir, pausar, reanudar, la oficina se cae y vuelve, otra versión, aprobar, ZIP; y las capturas a 390, 1024 y 1512 px en claro y oscuro) → `data/capturas/presets/integracion-f2/`. `tests/lotes-servidor.test.mjs` hace lo mismo por la API dentro de `npm test`.
+
+### Dimitri, los agentes y el video (F3 y F5 adelantada, 1–2 oct 2026)
+
+- **Dimitri y los lotes** (`estudio-lote.mjs`, el bloque de presets de `estudio-plan.mjs`, la tarjeta en `src/sub-studio.js` + `src/css/dimitri-lote.css`):
+  - entiende «convierte estas 40 fotos de la bodega en catálogo para la web» o un Excel adjunto, y elige presets y escena 3D (lee la fábrica y las notas de `<cerebro>/Estudio/Presets/`);
+  - propone el lote con su costo: **PROBAR CON 3 / GENERAR TODAS** por `/api/sub/studio`, la única puerta;
+  - si falta el canal o la carpeta de las fotos que nombra la hoja, pregunta con opciones;
+  - sigue el lote en vivo en su tarjeta, y `lote_pausar · lote_reanudar · lote_reintentar · lote_aprobar` solo actúan con un clic.
+- **El costo que se ve es el que se gasta:** si la estimación fila por fila supera lo que decía el botón, el lote NO arranca (409, con el costo nuevo en la tarjeta) y hace falta un segundo clic. El escudo de inyección lee la hoja entera: cabeceras, nombre del archivo y notas.
+- **La receta de la fila gana a la del lote** (`pilaDe` en `lotes.mjs`): la pila de la fila va después, porque el compilador hace ganar al último en los ejes exclusivos y una receta seguida de sus ajustes se sustituye. Con el orden al revés, una fila de pago salía «gratis».
+- **Agentes** (`estudio-mcp.mjs`): `buscar_presets`, `aplicar_preset`, `crear_lote` y `estado_lote`. Un pedido de agente desde 10 fotos o US$2 nace en `espera_ok` y va a Aprobaciones.
+  - Se suma lo que esa tarea y ese agente ya pidieron hoy (`pideOkAgente`), así que partir el trabajo no salta el OK.
+  - El lote de un agente vuelve a su tarea al terminar.
+  - La skill de ejemplo es `skills/catalogo-fotos/`.
+- **Video (F5, solo datos y compilador):** los 53 presets de video en `presets/video/` y su soporte en `src/presets-core.js`:
+  - un movimiento por clip;
+  - giro 360 con aviso;
+  - bucle;
+  - antes→después;
+  - roles y `capsOf` de cada modelo;
+  - el escenario 3D con el movimiento de cámara.
+
+  **Falta su pantalla** (pestaña de video del banco) y los de música y voz (F6).
+- **Regla de la página:** nada que viva en el paquete aparte (`src/estudio-extra.js`: banco, lotes, escenario, compilador, buscador) puede importarse desde un archivo de la página; `build.mjs` falla si pasa. Un dato pequeño que necesitan los dos va en su propio archivo (ejemplo: `estudio-pesos.mjs`, con `weightOf`).
 
 ## Contenido (V4.7, 30 sep 2026)
 

@@ -1,5 +1,36 @@
 # Changelog
 
+## V5.0 — 2 oct 2026 (el banco de presets del Estudio)
+
+- **Diseño:** 3 investigaciones de mercado, 3 arquitectos y un debate de 3 críticos (fotógrafo de producto, diseñador de marketing, ingeniero): `docs/propuesta-banco-presets.md`. §15 y §16 recogen las decisiones del dueño.
+- **El banco** (tecla **B** en el Estudio):
+  - 127 presets de imagen con icono y un buscador que entiende palabras de tienda;
+  - tres puertas como atajos combinables: Desde cero · Mejorar mi foto · Copiar de una referencia;
+  - pila de presets con DESHACER, referencia por ejes (estilo, color/LUT, composición, luz, fondo, pose; el producto nunca por defecto), canal;
+  - «Qué hará», que dice lo que se hace gratis en tu máquina, lo que rehace la IA, lo que no cambia y el costo.
+- **Local antes que IA** (`sharp`): luz, sombras, color, LUT (aplicar y exportar .cube), copiar el color de una referencia, fondo blanco con máscara (no se come lo blanco), encuadre y exportación sRGB sin EXIF. Nada cae a la IA sin decirlo.
+- **Control de calidad:** forma y color dentro del producto, y la ocupación medida. Lo que no cuadra queda en «revisar».
+- **Escenario 3D:**
+  - el producto con sus medidas reales, que gira y se sube para el contrapicado;
+  - la cámara en órbita sobre el piso, de 0 a 90°, con la distancia en cm o m y el lente;
+  - atajos de toma y de distancia;
+  - todo se traduce al prompt y a una imagen guía de composición, así que el producto se achica por la distancia, el fondo no cambia y nada se recorta.
+- **Tus presets son notas del Cerebro** (`<cerebro>/Estudio/Presets/`): neuronas del gráfico. Se crean con «Guardar como preset».
+- **Lotes** (tecla **L**):
+  - entradas: Excel o CSV (con fotos incrustadas o nombradas, SKU, medidas, notas), carpeta, ZIP o selección;
+  - «Probar con 3», el seguimiento foto por foto con antes y después y una bitácora;
+  - pausar, reanudar, reintentar (más fuerte o con otro modelo), y reanudar si la oficina se reinicia;
+  - salida: ZIP y CSV con nombres por SKU.
+- **Dimitri** arma y sigue lotes y presets: «convierte estas 40 fotos en catálogo para la web». Nada arranca sin tu clic, y si el costo real supera el del botón, pide un segundo clic.
+- **Agentes de los departamentos:** buscar y aplicar presets y crear lotes. Los pedidos grandes esperan tu OK en Aprobaciones.
+- **Video:** los 53 presets y su traductor, con el escenario 3D en movimiento. Su pantalla viene en la próxima entrega.
+- **Rendimiento:** el banco, los lotes y el escenario 3D se cargan al abrir el Estudio (`dist/estudio-extra.js`, 201 KB); la página queda en 2.075 KB, dentro de su presupuesto.
+- **Cómo se hizo:** unos 50 agentes en fases (F0 → F3, y F5 adelantada), con revisión adversarial y remate en cada una, más ayudantes en paralelo.
+  - Al integrar se arreglaron 2 cosas: la página arrastraba lo diferido, y una receta de fila de pago salía «gratis».
+  - Tests 694/694 y `npm run check` 85/85.
+  - Recorridos en el navegador: banco 19/19, lotes 14/14, carga 44/44, Dimitri con lote y agentes, todos en verde.
+- **Sin probar con keys reales:** las ediciones con Google, Meta u OpenAI de verdad, ni el costo real frente al estimado.
+
 ## V4.11 — 1 oct 2026 (auditoría despiadada del diseño, y lo urgente corregido)
 
 - **La auditoría:** `docs/auditoria-diseno-2026-10-01.md`. 126 hallazgos (6 críticos, 41 altos, 54 medios, 25 bajos) de seis auditores: contenido, previsualizaciones, Dimitri, Estudio y voces, accesibilidad (axe-core en todas las vistas) e infraestructura. Se comparó con Metricool, Meta Business Suite, Later, Buffer y ElevenLabs. **Arreglados:** los 6 críticos, 38 de 41 altos, y lo barato de medios y bajos. Cada punto dice su estado.
