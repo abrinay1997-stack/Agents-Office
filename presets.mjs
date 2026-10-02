@@ -158,7 +158,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
   }
 
   /** POST /api/media/presets/apply: compila y lo manda a hacer. Lo único que gasta, y pasa por los topes del Estudio (submit). */
-  async function aplicar(b = {}, { by = 'you' } = {}) {
+  async function aplicar(b = {}, { by = 'you', agent = null, task = null } = {}) { // E8: un agente llega con su id y su tarea (el trabajo y su archivo dicen para qué tarea fue)
     const { plan: c0, pedido: P } = compilar(b);
     if (c0.errores.length) { const e = new Error(c0.errores.join(' · ')); e.status = 400; e.plan = c0; throw e; }
     const foto = P.entradas.foto[0];
@@ -169,7 +169,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
       if (!foto) { const e = new Error('Lo local trabaja sobre tu foto: súbela o elige una de la galería'); e.status = 400; throw e; }
       const ops = [...c0.local.antes, ...c0.local.despues];
       const byId = new Map(todos().presets.map(p => [p.id, p]));
-      const j = media.submit({ local: true, source: foto, versionOf: foto, kind: 'image', prompt: c0.preset.map(x => byId.get(x.id)?.nombre || x.id).join(' + ') || 'Edición en tu máquina', post: ops, qa: c0.qa, medir: c0.medir, preset: c0.preset, canal, receta, by, folder: P.folder });
+      const j = media.submit({ local: true, source: foto, versionOf: foto, kind: 'image', prompt: c0.preset.map(x => byId.get(x.id)?.nombre || x.id).join(' + ') || 'Edición en tu máquina', post: ops, qa: c0.qa, medir: c0.medir, preset: c0.preset, canal, receta, by, agent, task, folder: P.folder });
       return { plan: c0, jobs: [j] };
     }
     // Revisión F1: la guía y la foto preparada se suben ANTES de submit (que es donde se miran los topes). Si submit dice que no,
@@ -185,7 +185,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
         req.media.reference = [prep, ...req.media.reference.slice(1)];
       }
       delete req.pre;
-      const j = media.submit({ ...req, medir: c.medir, canal, esEscena, receta, by, folder: P.folder, purpose: 'banco de presets' });
+      const j = media.submit({ ...req, medir: c.medir, canal, esEscena, receta, by, agent, task, folder: P.folder, purpose: 'banco de presets' });
       return { plan: c, jobs: [j] };
     } catch (e) {
       for (const f of creados) {

@@ -57,7 +57,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs'; // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
-import { crearLotes } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
+import { crearLotes, DEFAULTS as LOTES_DEFAULTS } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
 import { sendJson, lightTasks } from './http-json.mjs';
 import { createCache } from './vault-cache.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
@@ -124,7 +124,7 @@ const presets = crearPresets({ brainPath: cfg.brainPath, dataDir: DATA, cifras: 
 // gotea dejando un hueco del Estudio libre y mira los topes antes de cada foto. Va DESPUÉS de media.configure() (engancha el fin de cada trabajo);
 // su reloj arranca con el servidor (lotes.iniciar, abajo) y retoma lo que un reinicio dejó a medias sin duplicar. Los avisos van a Telegram.
 const lotes = crearLotes({ dataDir: DATA, brainPath: cfg.brainPath, presets, cfg: cfg.media?.lotes,
-  avisar: texto => notice('estudio', texto, { level: /^Paus/.test(texto) ? 'warn' : 'info' }), aprender: file => learnFromMedia(file, 1) });
+  avisar: texto => notice('estudio', texto, { level: /^Paus/.test(texto) ? 'warn' : 'info' }), aprender: file => learnFromMedia(file, 1), alCambiar: l => loteATarea(l) }); // E8: el lote de un agente, al terminar, vuelve a su tarea
 const minimaxOn = () => media.engines().some(e => e.id === 'minimax' && e.on);
 const STUDIO_DEFAULTS = () => Object.fromEntries(media.KINDS.map(k => [k, media.defaultModel(k)])); // V4.10: image, video, audio (voice) and music
 // the ESTUDIO reaches the agents of these departments as a tool (office.config.json → media.departments; [] = nobody)
@@ -1079,6 +1079,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
     if (!approve && !task.needsOk && wanted && !g.taint && safety.modeFor(cfg.safety, AGENTS.find(x => x.id === task.agent)?.department) !== 'nunca') { task.needsOk = true; task.heldForOk = true; }
     Object.assign(task, { read: out.read, tools: [...new Set([...(task.tools || []), ...out.tools])], used: [...new Set([...(task.used || []), ...out.used])], skills: out.skills, error: false, modelUsed: out.modelUsed, modelFrom: out.modelFrom, modelId: out.modelId, effortUsed: out.effortUsed, effortFrom: out.effortFrom, ...(out.team ? { team: out.team } : {}) });
     for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) { applyJob(task, j, ['result']); media.markAttached(j.id); } // images an agent made during its run
+    if (!approve) esperaLotes(task); // E8: un lote de esta tarea que espera tu OK la pone a esperar, con «Lo que saldrá»
     if (task.needsOk && !approve) { task.state = 'waiting'; task.draft = task.result; task.waitingAt = Date.now(); task.ask = routines.askLine(task); delete task.editedDraft; delete task.remindedAt; draftFacts(task); }
     else { task.state = 'done'; task.doneAt = Date.now(); task.note = writeNote(task); learnFrom(task); await rebuildGraph(); }
   } catch (e) {
@@ -1099,7 +1100,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
   }
   stopping.delete(task.id);
   list = load(); const i = list.findIndex(t => t.id === task.id); if (i >= 0) list[i] = task; save(list);
-  setImmediate(() => { for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) attachJob(j); }); // one that finished while this run was being saved
+  setImmediate(() => { for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) attachJob(j); for (const l of lotesDeTarea(task.id)) loteATarea(l); }); // one that finished while this run was being saved (a job or an agent's lote, E8)
   for (const h of taskHooks) try { h({ ...task, agentName: agentName(task.agent), deptName: DEPTS[task.dept]?.name || task.dept }); } catch {} // V4.4: a draft waiting, a failure, a finished task → Telegram
   console.log(`${task.error ? '✗' : task.state === 'waiting' ? '⏸' : '✓'} ${task.id} ${task.error ? 'failed' : task.state === 'waiting' ? 'waiting for your OK' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
   return task;
@@ -1175,6 +1176,54 @@ function mediaReq(b, by) { // what the page or an agent may ask the Estudio for
   return { prompt: b.prompt, n: b.n, kind: b.kind, model: typeof b.model === 'string' ? b.model : undefined, provider: typeof b.provider === 'string' ? b.provider : undefined, ratio: b.ratio, seconds: b.seconds,
     settings: b.settings && typeof b.settings === 'object' && !Array.isArray(b.settings) ? b.settings : {}, media: m, by: by || (b.by === 'agent' ? 'agent' : 'you'), folder: typeof b.folder === 'string' ? b.folder : undefined,
     agent: b.agent && AGENTS.some(a => a.id === b.agent) ? b.agent : null, task: typeof b.task === 'string' && /^[a-z0-9]{4,20}$/i.test(b.task) ? b.task : null };
+}
+/* ---------- E8 (banco de presets, §8.4 y §15.5): el lote que pide un agente → ⚠ Aprobaciones ----------
+   Hasta sus umbrales (media.lotes.agenteSinOk fotos, agenteUsd US$) un agente lo arranca solo, dentro de los topes del Estudio.
+   Por encima nace «espera_ok» (lotes.mjs) y su tarea, al terminar la ejecución, espera tu OK con «Lo que saldrá» (approvals.mjs).
+   Aprobar la tarea lo autoriza y lo arranca; devolverla o dejarla caducar lo cancela sin gastar. Ningún agente aprueba. */
+const LOTES_CFG = () => ({ ...LOTES_DEFAULTS, ...(cfg.media?.lotes || {}) });
+const agenteDe = b => ({ agent: b?.agent && AGENTS.some(a => a.id === b.agent) ? b.agent : null, task: typeof b?.task === 'string' && /^[a-z0-9]{4,20}$/i.test(b.task) ? b.task : null });
+function lotesDeTarea(taskId, estado) {
+  if (!taskId) return [];
+  return lotes.lista().filter(l => l.by === 'agent' && (!estado || l.estado === estado)).map(l => { try { return lotes.uno(l.id); } catch { return null; } }).filter(l => l && l.task === taskId);
+}
+function nombresLote() {
+  let ps = [], cs = []; try { ps = presets.todos().presets || []; } catch {} try { cs = presets.fabrica().canales || []; } catch {}
+  return { nombreDe: id => ps.find(p => p.id === id)?.nombre || id, canalDe: id => cs.find(c => c.id === id)?.nombre || id };
+}
+function esperaLotes(task) { // al terminar una ejecución (no la del envío)
+  const ls = lotesDeTarea(task.id, 'espera_ok');
+  if (!ls.length) { delete task.lotesOk; return false; }
+  const n = nombresLote(); task.lotesOk = ls.map(l => approvals.loteParaAprobar(l, n));
+  if (!task.needsOk) { task.needsOk = true; task.loteOnly = true; } // solo esperaba por el lote: tu OK lo autoriza y la tarea termina, sin otra ejecución
+  task.result = `${task.result || ''}\n\n---\n${task.lotesOk.map(approvals.bloqueLote).join('\n\n')}`;
+  return true;
+}
+function arrancarLotes(t) {
+  for (const x of t.lotesOk || []) {
+    try {
+      const l = lotes.uno(x.id); if (l.estado !== 'espera_ok') continue;
+      lotes.accion(x.id, 'autorizar', { by: 'you' });
+      const r = lotes.accion(x.id, l.muestra > 0 ? 'probar' : 'iniciar', { by: 'you' });
+      console.log(`✦ estudio: lote ${x.id} autorizado con la tarea ${t.id} → ${r.estado}`);
+    } catch (e) { console.warn('lote:', e.message); notice('estudio', `No pude arrancar el lote «${x.nombre}» de «${t.title}»: ${e.message}. Ábrelo en el Estudio, pestaña Lotes.`, { level: 'warn', task: t.id }); }
+  }
+}
+function soltarLotes(t, por) { // devolver o caducar: el lote que esperaba se cancela (no gastó nada)
+  if (!t) return;
+  for (const x of t.lotesOk || []) { try { if (lotes.uno(x.id).estado === 'espera_ok') { lotes.accion(x.id, 'cancelar', { by: 'you' }); console.log(`✦ estudio: lote ${x.id} cancelado (${por})`); } } catch {} }
+  delete t.lotesOk; if (t.loteOnly) { t.needsOk = false; delete t.loteOnly; }
+}
+function loteATarea(l) { // al terminar: la línea «⏳ Estudio: lote … (lote <id>)» de la entrega pasa a ser el resumen con miniaturas
+  if (!l || l.by !== 'agent' || !l.task || !['hecho', 'cancelado'].includes(l.estado)) return;
+  let list; try { list = load(); } catch { return; }
+  const t = list.find(x => x.id === l.task); if (!t || t.state === 'doing' || t.state === 'next') return; // la ejecución sigue: lo hace al terminar
+  const res = approvals.resumenLote(l); let puesto = false;
+  for (const k of ['result', 'draft']) if (typeof t[k] === 'string' && approvals.marcaLote(l.id).test(t[k])) { t[k] = approvals.ponerResumenLote(t[k], l, res); puesto = true; }
+  if (!puesto) return; // una vez: después ya no está la línea
+  t.media = [...new Set([...(t.media || []), ...l.filas.filter(f => (f.estado === 'lista' || f.estado === 'aprobada') && f.out).map(f => f.out)])];
+  save(list);
+  if (t.state === 'done' && t.note) { try { writeNote(t); } catch (e) { console.warn('lote nota:', e.message); } }
 }
 function tickRoutines() { // the clock never throws: an exception in a setInterval would stop the office
   try {
@@ -1289,6 +1338,7 @@ function decideDraft(id, verb, note, by) {
   if (t.approving) return { status: 409, error: 'ya está aprobada: se envía en unos segundos (puedes deshacerlo)' };
   t.seenAt = t.seenAt || Date.now();
   if (verb === 'reject') {
+    soltarLotes(t, 'devuelto'); // E8: devolver la tarea cancela su lote que esperaba el OK, sin gastar
     t.state = 'doing'; t.startedAt = Date.now(); t.rejected = true; logApproval(t, 'reject', by, { note: note.slice(0, 300) }); save(l);
     console.log(`↩ ${t.id} sent back by ${by}: ${note.slice(0, 80)}`);
     enqueue(() => startRun(t.id, { feedback: note || 'No es esto. Retrabájalo.' }))
@@ -1309,7 +1359,12 @@ function decideDraft(id, verb, note, by) {
 function commitApproval(id) {
   undoTimers.delete(id);
   const l = load(), t = l.find(x => x.id === id); if (!t || t.state !== 'waiting') return;
-  delete t.approving; t.state = 'doing'; t.startedAt = Date.now(); save(l);
+  delete t.approving;
+  if (t.lotesOk?.length) { // E8: tu OK autoriza el lote del agente y lo arranca (con la prueba de 3 desde 10 fotos)
+    arrancarLotes(t);
+    if (t.loteOnly) { Object.assign(t, { state: 'done', doneAt: Date.now(), approved: true, approvedAt: Date.now() }); t.note = writeNote(t); save(l); learnFrom(t); rebuildGraph().catch(() => {}); console.log(`✅ ${t.id} lote del Estudio autorizado`); return; }
+  }
+  t.state = 'doing'; t.startedAt = Date.now(); save(l);
   console.log(`✅ ${t.id} ${agentName(t.agent)} is sending`);
   enqueue(() => startRun(t.id, { approve: true })).then(x => { if (x && !x.error) offerAutonomy(x); }).catch(e => console.warn('approval:', e.message));
 }
@@ -1323,13 +1378,13 @@ function offerAutonomy(t) { // G2: after N clean approvals in a row, the routine
   if (!t.routine) return; const r = rlist.routines.find(x => x.id === t.routine); if (!r || r.autonomous || !r.needsOk) return;
   if (approvals.earnedAutonomy(load(), t.routine, APPR())) notice('autonomy', `Aprobaste las últimas ${APPR().autonomyAfter} entregas de «${r.title}» sin cambios. Si quieres, deja que envíe sola: en el calendario, abre la rutina y quítale «pedir mi OK» (los importes de más de $${APPR().amountLimit} siempre esperarán).`, { key: 'autonomy-' + r.id });
 }
-function draftFacts(t) { const d = t.draft || t.result || ''; t.risk = approvals.risk(d, APPR()); t.preview = approvals.preview(d); } // G2, G3
+function draftFacts(t) { const d = t.draft || t.result || ''; t.risk = approvals.risk(d, APPR()); t.preview = approvals.preview(d); if (t.lotesOk?.length) { t.preview = approvals.previewConLotes(t.preview, t.lotesOk); t.risk = approvals.riesgoConLotes(t.risk, t.lotesOk, APPR()); } } // G2, G3 · E8: el lote del Estudio
 function tickApprovals() { // G4: reminders and expiry
   const now = Date.now(), c = APPR(); let l; try { l = load(); } catch { return; }
   for (const t of l) if (t.approving && t.approving.sendAt <= now && !undoTimers.has(t.id)) setImmediate(() => commitApproval(t.id)); // an approval pending across a restart goes out
   const d = approvals.due(l, c, now); if (!d.remind.length && !d.expire.length) return;
   for (const id of d.remind) { const t = l.find(x => x.id === id); t.remindedAt = now; notice('remind', `«${t.title}» espera tu visto bueno desde hace ${agoText(now - t.waitingAt).replace('hace ', '')}.`, { task: t.id }); for (const h of taskHooks) try { h({ ...t, agentName: agentName(t.agent), deptName: DEPTS[t.dept]?.name }); } catch {} }
-  for (const id of d.expire) { const t = l.find(x => x.id === id); Object.assign(t, { state: 'done', doneAt: now, expired: true, result: `${t.draft || t.result || ''}\n\n---\n⌛ CADUCÓ: pasaron ${c.expireAfterDays} días sin tu visto bueno y no se envió nada.` }); logApproval(t, 'expire', 'la oficina'); notice('expired', `«${t.title}» caducó sin tu visto bueno; no se envió nada.`, { task: t.id }); }
+  for (const id of d.expire) { const t = l.find(x => x.id === id); soltarLotes(t, 'caducó'); Object.assign(t, { state: 'done', doneAt: now, expired: true, result: `${t.draft || t.result || ''}\n\n---\n⌛ CADUCÓ: pasaron ${c.expireAfterDays} días sin tu visto bueno y no se envió nada.` }); logApproval(t, 'expire', 'la oficina'); notice('expired', `«${t.title}» caducó sin tu visto bueno; no se envió nada.`, { task: t.id }); }
   save(l);
 }
 setInterval(tickApprovals, 60000); setTimeout(tickApprovals, 5000);
@@ -2058,13 +2113,30 @@ const server = http.createServer(async (req, res) => {
         const [, id, sub] = lm;
         if (!id && req.method === 'GET') return json(res, 200, { lotes: lotes.lista().slice(0, 40).map(l => puenteLotes.paraLista(lotes.uno(l.id))), budget: media.budget() }); // los 40 más nuevos, con el estado de cada foto para su barra
         if (!id && req.method === 'POST') { // crea el lote «previsto» con su vista previa: no gasta nada
-          const b = await body(req, 60 << 20), r = await lotes.crear({ ...b, origen: puenteLotes.origenDelPedido(b.origen) }, { by: puenteLotes.quien(b) });
+          const b = await body(req, 60 << 20), by = puenteLotes.quien(b);
+          if (by === 'agent') { // E8: un agente (estudio-mcp.mjs → crear_lote) toma las fotos de la galería, con la prueba y el ritmo de siempre
+            const o = b.origen && typeof b.origen === 'object' ? b.origen : {};
+            if (!(typeof o.carpeta === 'string' && o.carpeta.trim()) && !Array.isArray(o.ids)) return json(res, 400, { error: 'un agente toma las fotos de una carpeta de la galería o por sus ids' });
+            const w = agenteDe(b); b.origen = typeof o.carpeta === 'string' && o.carpeta.trim() ? { carpeta: o.carpeta } : { ids: o.ids }; b.agent = w.agent; b.task = w.task;
+            delete b.muestra; delete b.concurrencia; delete b.qa; delete b.sub;
+            const nombre = String(b.nombre || '').trim();
+            const ya = w.task && nombre ? lotesDeTarea(w.task).find(l => l.nombre === nombre.slice(0, 80) && l.estado !== 'cancelado') : null; // la misma tarea lo vuelve a pedir (el envío tras tu OK, un reintento): no se duplica
+            if (ya) return json(res, 200, { lote: puenteLotes.paraUI(ya), existente: true, budget: media.budget() });
+          }
+          const r = await lotes.crear({ ...b, origen: puenteLotes.origenDelPedido(b.origen) }, { by });
           console.log(`✦ estudio: lote ${r.lote.id} «${r.lote.nombre}» previsto · ${r.lote.filas.length} fotos · ~US$${r.vista.total}${r.lote.estado === 'espera_ok' ? ' · espera tu OK' : ''}`);
+          if (by === 'agent' && r.lote.estado === 'espera_ok') notice('estudio', `${agentName(r.lote.agent) || 'Un agente'} pide tu OK para el lote «${r.lote.nombre}»: ${r.lote.filas.length} fotos, unos US$${(+r.vista.total).toFixed(2)}. ${r.lote.task ? 'Lo verás en ⚠ Aprobaciones cuando termine su tarea.' : 'Está en el Estudio, pestaña Lotes.'}`, { task: r.lote.task || null });
           return json(res, 200, { lote: puenteLotes.paraUI(r.lote, r.vista, { nombreModelo }), vista: r.vista, sugerido: r.sugerido, budget: media.budget() });
         }
         if (id && !sub && req.method === 'GET') return json(res, 200, { lote: puenteLotes.paraUI(lotes.uno(id)) });
         if (id && !sub && req.method === 'PATCH') { // probar · iniciar · continuar · pausar · reanudar · cancelar · autorizar (solo el dueño)
-          const b = await body(req), l = lotes.accion(id, String(b.accion || ''), { by: puenteLotes.quien(b) });
+          const b = await body(req), by = puenteLotes.quien(b);
+          if (by === 'agent') { // E8: un agente solo arranca su propio lote recién creado (por debajo de sus umbrales), o lo pausa o lo cancela
+            const l0 = lotes.uno(id), acc = String(b.accion || '');
+            if (l0.by !== 'agent') return json(res, 403, { error: 'ese lote no es de un agente' });
+            if (!['iniciar', 'probar', 'pausar', 'cancelar'].includes(acc) || ((acc === 'iniciar' || acc === 'probar') && l0.estado !== 'previsto')) return json(res, 403, { error: l0.estado === 'espera_ok' ? 'ese lote espera el OK del dueño' : 'un agente no hace eso con un lote: lo decide el dueño' });
+          }
+          const l = lotes.accion(id, String(b.accion || ''), { by });
           console.log(`✦ estudio: lote ${id} ${b.accion} → ${l.estado}`);
           return json(res, 200, { lote: puenteLotes.paraUI(l), budget: media.budget() });
         }
@@ -2084,9 +2156,13 @@ const server = http.createServer(async (req, res) => {
         if (url.pathname === '/api/media/presets' && req.method === 'GET') return json(res, 200, presets.lista({ medio: sp.get('medio') || undefined, modo: sp.get('modo') || undefined, q: sp.get('q') || undefined }));
         if (url.pathname === '/api/media/presets/compile' && req.method === 'POST') { const { plan } = presets.compilar(await body(req)); return json(res, 200, { plan, budget: media.budget() }); } // no gasta
         if (url.pathname === '/api/media/presets/apply' && req.method === 'POST') { // gasta: el clic GENERAR del dueño (los agentes y Dimitri llegan en F3, con su propio camino)
-          const out = await presets.aplicar(await body(req), { by: 'you' });
-          for (const j of out.jobs) console.log(`✦ estudio: ${j.id} preset ${(j.preset || []).map(x => x.id).join('+') || '—'} con ${j.model}${j.versionOf ? ' · versión de ' + j.versionOf : ''}`);
-          return json(res, 200, { plan: out.plan, jobs: out.jobs, budget: media.budget() });
+          const b = await body(req), ag = puenteLotes.quien(b) === 'agent'; // E8: un agente (aplicar_preset) gasta sin tu OK solo por debajo de agenteUsd
+          if (ag) { const { plan } = presets.compilar(b); const lim = +LOTES_CFG().agenteUsd || 0; if (!plan.errores?.length && lim > 0 && (+plan.costo?.usd || 0) >= lim) return json(res, 409, { error: `eso cuesta unos US$${(+plan.costo.usd).toFixed(2)} y un agente, sin el OK del dueño, gasta menos de US$${lim.toFixed(2)} por pedido: pídelo con crear_lote (esperará su OK) o deja el pedido en tu entrega`, plan }); }
+          const out = await presets.aplicar(b, ag ? { by: 'agent', ...agenteDe(b) } : { by: 'you' });
+          for (const j of out.jobs) console.log(`✦ estudio: ${j.id} preset ${(j.preset || []).map(x => x.id).join('+') || '—'} con ${j.model}${j.versionOf ? ' · versión de ' + j.versionOf : ''}${ag ? ' · agente ' + (j.agent || '?') : ''}`);
+          const wait = ag ? Math.min(110000, Math.max(0, +b.wait || 0)) : 0; // el agente espera la imagen dentro de su llamada, como en generar_imagen
+          const jobs = wait ? await Promise.all(out.jobs.map(j => media.wait(j.id, wait).then(x => x || j))) : out.jobs;
+          return json(res, 200, { plan: out.plan, jobs, budget: media.budget() });
         }
         if (url.pathname === '/api/media/presets' && req.method === 'POST') { const r = presets.guardar(await body(req)); console.log(`✦ estudio: preset «${r.preset.nombre}» → ${r.archivo}`); return json(res, 200, r); }
         if (pm && req.method === 'GET' && pm[2]) return json(res, 200, { versiones: presets.versiones(pm[1]) });
