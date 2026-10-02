@@ -1498,6 +1498,16 @@ function page() {
   if (st.mtimeMs !== pageCache.mtime) { const raw = fs.readFileSync(HTML); pageCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"p${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; }
   return pageCache;
 }
+// 1 oct 2026 (INF-09, carga bajo demanda): the Estudio's heavy part — the preset bank, the 3D stage, Lotes — beside the page, like the
+// demo's dist/presets-fabrica.js: build.mjs writes dist/estudio-extra.js and src/estudio-carga.js asks for /estudio-extra.js?v=<its hash>
+// the first time it is needed. Gzipped once per build and revalidated (304), the same as the page.
+const EXTRA = path.join(ROOT, 'dist', 'estudio-extra.js');
+let extraCache = { mtime: 0 };
+function extraFile() {
+  const st = fs.statSync(EXTRA);
+  if (st.mtimeMs !== extraCache.mtime) { const raw = fs.readFileSync(EXTRA); extraCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"x${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; }
+  return extraCache;
+}
 /* ---------- V4.4 (B6, B7, B8): the office's health — one list of checks, green / amber / red, for the dock's traffic light ---------- */
 // Auditoría 1 oct 2026 (INF-12): how long the server's one thread was stuck (a slow disk, Defender, a huge file): the health light says it
 const LOOP = monitorEventLoopDelay({ resolution: 20 }); LOOP.enable();
@@ -1649,6 +1659,13 @@ const server = http.createServer(async (req, res) => {
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(pc.etag)) { res.writeHead(304, { etag: pc.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', etag: pc.etag, vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/estudio-extra.js') {
+      let x; try { x = extraFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/estudio-extra.js no está: node build.mjs'); }
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
+      const gz = /gzip/.test(req.headers['accept-encoding'] || '');
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+      return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
     }
     if (url.pathname === '/api/health') return json(res, 200, { ok: true, safety: (n => ({ writes: n.writes, departments: n.departments, browserSites: n.browserSites.length, browserBlock: n.browserBlock.length, limits: n.limits }))(SAFETY()), version, backend, provider: PROVIDER, model: cfg.model, modelName: modelName(cfg.model), models: MODEL_KEYS, effort: cfg.effort || '', efforts: EFFORT_KEYS, name: cfg.name, deputy: DEPUTY, brain: BRAIN, notes: graph.notes, depts: DEPT_KEYS,
       agents: agentsOut(), setup: setupMap(), routines: (l => ({ count: l.length, paused: l.filter(r => r.paused).length, depts: routines.ALLOWED }))(loadRoutines()), roster: { customised: roster.customised, briefed: roster.briefed, files: roster.files, problems: roster.problems }, skills: (({ count, shipped, brain, problems }) => ({ count, shipped, brain, problems }))(skills.summary()), tools: backend === 'claude-cli', mcp: mcp.summary(), teams: TEAMS, browser: mcp.summary().browser });

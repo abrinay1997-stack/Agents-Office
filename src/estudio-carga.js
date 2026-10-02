@@ -1,9 +1,10 @@
 // CARGA BAJO DEMANDA de lo pesado del Estudio (1 oct 2026; auditoría INF-09: la página tiene su presupuesto en check.mjs).
 // El banco de presets (con su compilador y su buscador), el escenario 3D y los lotes van en un paquete aparte,
 // dist/estudio-extra.js (build.mjs; entrada src/estudio-extra.js), junto a la página como dist/presets-fabrica.js. Se carga con un
-// <script src> la PRIMERA vez que hace falta: al abrir el banco (botón, B, «/»), el escenario 3D o los lotes (L, «Editar en
-// lote…»), al guardar un resultado como preset, o al abrir el Estudio con una receta guardada (el compositor la enseña). Funciona en
-// file:// y servido (serve.mjs lo sirve en /estudio-extra.js).
+// <script src> la PRIMERA vez que hace falta: cuando el Estudio enseña el compositor de imagen (su paso «Presets» es del banco:
+// preparar()), al abrir el banco (botón, B, «/»), el escenario 3D o los lotes (la pestaña, «Editar en lote…»), o al guardar un
+// resultado como preset. Nunca con la oficina sola: quien no abre el Estudio no lo descarga. Funciona en file:// y servido
+// (serve.mjs lo sirve en /estudio-extra.js).
 //   bancoDiferido(ctx)          → la misma cara que initBanco(ctx) (src/studio-banco.js); hasta que llega, un paso pequeño en el
 //                                 compositor y, si se pidió la hoja, la hoja con «Cargando…» (o el error con «Reintentar»).
 //   lotesDiferidos(host, ctx)   → la misma cara que initLotes(host, ctx) (src/studio-lotes.js), igual.
@@ -16,6 +17,7 @@ import { qaResumen } from './studio-qa.js';
 /** La huella del paquete con el que se construyó esta página (build.mjs): uno de otra construcción no se usa. */
 export const VERSION = typeof __AO_EXTRA_VERSION__ === 'string' ? __AO_EXTRA_VERSION__ : '';
 export const ARCHIVO = 'estudio-extra.js';
+export const LOTE_ACTIVO = ['muestra', 'corriendo']; // = ACTIVOS de src/studio-lotes.js (tests/estudio-extra.test.mjs lo comprueba)
 const ESPERA_MAX = 30000; // un archivo que no contesta en 30 s se da por fallido (y se puede reintentar)
 
 let pedida = null, intentos = 0;
@@ -81,11 +83,12 @@ const recetaGuardada = () => { try { const g = JSON.parse(localStorage.getItem('
 /** El banco de presets, diferido: la misma cara que initBanco(ctx). */
 export function bancoDiferido(ctx) {
   const U = 'bkd' + (++uid);
-  let real = null, models = null, refrescado = false, pendiente = null, ultimo = '';
+  let real = null, models = null, refrescado = false, pendiente = null, ultimo = '', preparado = false;
   const el = document.createElement('div'); el.className = 'st-step bk bk-dif'; el.setAttribute('role', 'group'); el.setAttribute('aria-labelledby', U + 'T');
   el.innerHTML = `<div class="st-h" id="${U}T"><b>${ESTRELLA}</b> Presets <span class="st-hn">opcional · combínalos</span></div>
+    <div class="bk-pilah"><span class="bk-lbl">Lo que se hará</span><button type="button" class="bk-open" data-ir="banco" aria-expanded="false" title="Abrir el banco de presets (B)">${REJILLA}<span>Banco · B</span></button></div>
     <p class="bk-vacio">Ningún preset todavía: ábrelo con «Banco» o escribe <kbd>/</kbd> al principio de la idea.</p>
-    <span class="bk-addrow"><button type="button" class="bk-open" data-ir="banco" aria-expanded="false" title="Abrir el banco de presets (B)">${REJILLA}<span>Banco · B</span></button><button type="button" class="bk-add" data-ir="escena">Usar un escenario 3D</button></span>`;
+    <div class="bk-esc"><span class="bk-lbl">Escenario 3D <small>la cámara a una distancia, en cm o m</small></span><span class="bk-addrow"><button type="button" class="bk-add" data-ir="escena">Usar un escenario 3D</button></span></div>`; // como el paso de verdad (src/studio-banco.js), en el mismo orden
   const paso = cajaEstado(); el.appendChild(paso.box);
   const sheet = document.createElement('aside'); sheet.className = 'st-bank bk-dif'; sheet.hidden = true; sheet.setAttribute('role', 'region'); sheet.setAttribute('aria-label', 'Banco de presets');
   const hoja = cajaEstado();
@@ -154,8 +157,8 @@ export function bancoDiferido(ctx) {
     qaHTML(it) { if (real) return real.qaHTML(it); const r = qaResumen(it?.qa); return r ? `<span class="bk-q bk-q-${r.estado}">${ctx.esc(r.texto)}</span>` : ''; },
     guardarDesde: it => pedir(r => r.guardarDesde(it), { texto: 'Cargando el banco de presets para guardar el preset…' }),
     barra: texto => (real ? real.barra(texto) : /^\/\S*$/.test(texto) ? (pedir(r => r.barra(texto), { modo: 'banco' }), true) : false),
-    /** Al abrir el Estudio: con una receta guardada, el compositor la enseña, así que el banco se trae ya. */
-    preparar() { if (!real && recetaGuardada()) pedir(null, { texto: 'Cargando tu receta de presets…', enfocar: false }); },
+    /** Cuando el Estudio enseña el compositor de imagen (una vez): su paso «Presets» es del banco, así que se trae ya. */
+    preparar() { if (real || preparado) return; preparado = true; pedir(null, { texto: recetaGuardada() ? 'Cargando tu receta de presets…' : 'Cargando el banco de presets…', enfocar: false }); },
     cargado: () => !!real,
   };
 }
@@ -169,6 +172,16 @@ export function lotesDiferidos(host, ctx = {}) {
     <p class="lt-sub">Muchas fotos con la misma receta. Primero ves el plan y el costo; nada se gasta hasta que pulses PROBAR o GENERAR.</p></div>`;
   const caja = cajaEstado(); ph.querySelector('.lt-cuerpo').appendChild(caja.box);
   host.appendChild(ph);
+  // la pestaña dice cuántos lotes van en marcha o esperan tu OK sin traer el paquete (una sola lectura, como hacía initLotes al
+  // empezar); si hay alguno, el paquete se trae en silencio para seguirlos. Sin servidor (la demo) no hay lotes que contar.
+  if (typeof ctx.live === 'function' && ctx.live() && ctx.api) {
+    Promise.resolve().then(() => ctx.api('GET', '/api/media/lotes')).then(r => {
+      if (real) return;
+      const l = Array.isArray(r?.lotes) ? r.lotes : [], c = { activos: l.filter(x => LOTE_ACTIVO.includes(x?.estado)).length, espera: l.filter(x => x?.estado === 'espera_ok').length, revisar: 0 };
+      ctx.onCambio?.(c);
+      if (c.activos + c.espera) cargarExtra().catch(() => {});
+    }).catch(() => {});
+  }
   const cargar = () => { caja.cargando('Cargando los lotes…'); cargarExtra().catch(e => { if (!real) caja.error(e.message, ph.contains(document.activeElement) || document.activeElement === document.body); }); };
   caja.alReintentar(cargar);
   function pedir(f) { if (real) return f(real); cola.push(f); cargar(); }

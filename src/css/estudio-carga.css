@@ -1,0 +1,23 @@
+/* La CARGA BAJO DEMANDA del Estudio (src/estudio-carga.js, 1 oct 2026): lo que se ve mientras llega dist/estudio-extra.js
+   (el banco, el escenario 3D y los lotes) o, si no llega, por qué y «Reintentar». Va en la página, no en el paquete: se ve antes.
+   El estilo de los lotes (estudio-lotes.css) viaja con el paquete, así que la tarjeta provisional de Lotes lleva aquí lo mínimo.
+   Objetivos de 24 px o más (44 en el teléfono), el foco es var(--focus), los colores pasan 4,5:1 en claro y en oscuro. */
+.exc-caja { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.exc-caja:not([aria-busy]) .exc:empty { display: none; }
+.exc { display: flex; align-items: center; gap: 8px; margin: 0; font: 12.5px/1.45 var(--ui); color: var(--grey); }
+.exc[hidden], .exc-mal[hidden] { display: none; }
+.exc-caja[aria-busy="true"] .exc::before { content: ''; flex: none; width: 12px; height: 12px; border-radius: 99px; border: 2px solid var(--grey); border-right-color: transparent; animation: exc-gira .8s linear infinite; }
+@keyframes exc-gira { to { transform: rotate(1turn); } }
+.exc-mal { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px 10px; border: 1px solid #A1261B; border-radius: 10px; }
+.exc-mal p { margin: 0; font: 600 12.5px/1.45 var(--ui); color: #A1261B; }
+body.dark .exc-mal { border-color: #FF9A8C; } body.dark .exc-mal p { color: #FF9A8C; }
+.exc-re { min-height: 32px; padding: 5px 14px; border-radius: 9px; border: 1px solid var(--ink); background: none; color: var(--ink); font: 700 12.5px var(--ui); cursor: pointer; }
+.exc-re:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.st-bank.bk-dif .exc-caja { padding: 14px; }
+.lt-dif { display: flex; flex-direction: column; min-width: 0; font: 13px/1.45 var(--ui); color: var(--ink); }
+.lt-dif .lt-cuerpo { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 4px 2px 12px; }
+.lt-dif h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.lt-dif h2:focus { outline: none; } .lt-dif h2:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lt-dif .lt-sub { margin: 0; font-size: 12.5px; color: var(--grey); }
+@media (max-width: 640px) { .exc-re { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .exc-caja[aria-busy="true"] .exc::before { animation: none; border-right-color: var(--grey); } }

@@ -48,8 +48,31 @@ await step('build: the views\' own style (src/css/*.css) reaches the page once e
   if (marks !== 1) throw new Error(`shell.html must carry exactly one «/* <css-vistas> */» marker at the end of its <style> (it has ${marks}): without it, no view's own CSS reaches the page`);
   if (html.includes('<css-vistas>')) throw new Error('the marker is still in the built page: build.mjs did not replace it');
   const dir = path.join(ROOT, 'src', 'css'), files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.css')) : [];
-  for (const f of files) { const n = html.split(`/* ---- src/css/${f} ---- */`).length - 1; if (n !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page (it must be exactly 1)`); }
-  return `${files.length} stylesheet(s): ${files.join(', ')}`;
+  // 1 oct 2026 (carga bajo demanda): the stylesheets in CSS_APARTE (build-extra.mjs) travel with dist/estudio-extra.js instead of the page
+  const { CSS_APARTE } = await import('./build-extra.mjs'), extra = fs.readFileSync(path.join(ROOT, 'dist', 'estudio-extra.js'), 'utf8');
+  for (const f of files) {
+    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, aparte = CSS_APARTE.includes(f);
+    if (n + x !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page and ${x} in dist/estudio-extra.js (it must be exactly 1 in all)`);
+    if (aparte && n) throw new Error(`src/css/${f} is in CSS_APARTE but reached the page: it must travel only with dist/estudio-extra.js`);
+  }
+  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete aparte)' : f).join(', ')}`;
+});
+await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own file beside the page, of the same build, and the page does not carry it', async () => { // 1 oct 2026, INF-09
+  const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8'), file = path.join(ROOT, 'dist', 'estudio-extra.js');
+  if (!fs.existsSync(file)) throw new Error('dist/estudio-extra.js is missing: build.mjs must write it beside the page');
+  const extra = fs.readFileSync(file, 'utf8');
+  if (!/AO_ESTUDIO_EXTRA=\{/.test(extra)) throw new Error('dist/estudio-extra.js does not define window.AO_ESTUDIO_EXTRA');
+  if (/AO_ESTUDIO_EXTRA=\{/.test(html)) throw new Error('the page defines window.AO_ESTUDIO_EXTRA itself: the heavy part went back into the page');
+  const v = /version:"([0-9a-f]{12})"/.exec(extra)?.[1];
+  if (!v) throw new Error('dist/estudio-extra.js carries no version');
+  if (!html.includes(`"${v}"`)) throw new Error(`the page asks for another build of dist/estudio-extra.js (it does not know ${v})`);
+  for (const [txt, what] of [['Ver el plan y el costo', 'Lotes (src/studio-lotes.js)'], ['e3d-hrow', 'the 3D stage (src/escena3d.js)']]) {
+    if (!extra.includes(txt)) throw new Error(`dist/estudio-extra.js lacks ${what}`);
+    if (html.includes(txt)) throw new Error(`the page carries ${what}: it belongs in dist/estudio-extra.js`);
+  }
+  if (/WebGLRenderer:/.test(extra) || Buffer.byteLength(extra) > 400 * 1024) throw new Error(`dist/estudio-extra.js carries its own three.js (${Math.round(Buffer.byteLength(extra) / 1024)} KB): it must use the page's (window.AO_THREE)`);
+  const gz = (await import('node:zlib')).gzipSync(extra, { level: 9 }).length;
+  return `dist/estudio-extra.js ${Math.round(Buffer.byteLength(extra) / 1024)} KB · ${Math.round(gz / 1024)} KB gzip · version ${v}`;
 });
 
 /* ---------- 1a. V4.4: the unit tests, the secrets check, the agents' safety rules ---------- */
