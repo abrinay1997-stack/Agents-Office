@@ -224,7 +224,7 @@ export function initSub(ctx) {
   function subHTML(m) {
     const lastOne = messages.length && messages[messages.length - 1] === m;
     const quickFoot = m.quick ? `<div class="sb-quick"><span class="sb-quickn">Calculado al instante con los datos de la oficina, sin el modelo.</span>${lastOne && !busy ? `<button type="button" class="sb-analyze" data-msg="${esc(m.id)}">Analizar con ${esc(NAME)}</button>` : ''}</div>` : ''; // DIM-10: his reading only when asked
-    const head = m.stopped ? '<div class="sb-mode stopped">Detenido por ti</div>' : MODE[m.mode] ? `<div class="sb-mode ${esc(m.mode)}">${MODE[m.mode]}</div>` : '';
+    const head = m.stopped ? '<div class="sb-mode stopped">Detenido por ti</div>' : MODE[m.mode] ? `<div class="sb-mode ${esc(m.mode)}">${m.studio && !(m.studio.creatives || []).length && (m.studio.lote || m.studio.loteRef || ((m.studio.actions || []).length && m.studio.actions.every(a => /^lote_/.test(a.type)))) ? 'Lote del Estudio' : MODE[m.mode]}</div>` : ''; // F3: a lote is not «creatives»
     return `<div class="sb-a${m.stopped ? ' sb-stopped' : ''}">${head}${m.quick ? `<div class="md">${mdToHtml(m.text || '')}</div>${quickFoot}` : subBody(m)}</div>`;
   }
   function subBody(m) {
@@ -389,11 +389,13 @@ export function initSub(ctx) {
     const label = btn.textContent; btn.disabled = true; btn.textContent = discard ? 'Descartando…' : 'Enviando al Estudio…';
     try {
       const r = await fetch('/api/sub/studio', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
+      const j = await r.json();
       const k = messages.findIndex(x => x.id === msgId); if (k >= 0 && j.message) messages[k] = j.message;
+      if (!r.ok && j.conflict && j.message && j.message.studio && j.message.studio.lote && j.message.studio.lote.error) { say(`No empezó el lote: ${j.error}`); render(true); return; } // F3: the lote card says why, in place (nothing was spent)
+      if (!r.ok) throw new Error(j.error || r.statusText);
       if (j.messages) for (const x of j.messages) if (!messages.some(y => y.id === x.id)) messages.push(x);
       studioEdits.delete(msgId); actionEdits.delete(msgId);
-      say(discard ? 'Plan de creativos descartado.' : 'Enviado al Estudio. Te aviso aquí cuando estén listos.');
+      say(discard ? 'Plan de creativos descartado.' : btn.dataset.lote ? 'El lote está en marcha. Lo sigues en su tarjeta.' : 'Enviado al Estudio. Te aviso aquí cuando estén listos.');
       pollAt = 0; await pollJobs(); mediaChanged();
     } catch (e) { btn.disabled = false; btn.textContent = label; messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No se pudo ${discard ? 'descartar' : 'generar'}: ${e.message}` }); }
     render(true);

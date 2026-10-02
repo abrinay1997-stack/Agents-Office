@@ -169,6 +169,7 @@ test('una edición con presets: receta en chips y «Qué hará», sin caja de pr
   assert.match(h, /<option value="gpt-image-1">GPT Image</); assert.doesNotMatch(h, /Formato/); assert.match(h, /GENERAR \(1\) — US\$0,040/);
   const a = actionsHTML({ id: 'm2', studio: { actions: [{ k: 0, type: 'lote_reintentar', lote: 'L9', nombre: 'Camas', cuantas: 2, costo: 0.08, texto: 'Reintentar 2 fotos del lote «Camas» · gasta aprox. US$0,080', state: 'proposed' }] } }, { esc });
   assert.match(a, /Reintentar 2 fotos del lote «Camas» · gasta aprox\. US\$0,080/); assert.match(a, /class="sc-acton"/);
+  assert.match(a, /Sobre el lote \(cada una espera tu clic\)/); assert.doesNotMatch(a, /para ordenar/, 'pausar o aprobar un lote no es «ordenar»');
 });
 
 test('un Excel adjunto va como hoja: el mensaje sale aunque no haya imágenes ni texto', () => {

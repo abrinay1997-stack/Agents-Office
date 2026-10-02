@@ -6,7 +6,7 @@
 // POST /api/sub/studio (la única puerta, serve.mjs → subStudio → lotes.crear).
 //
 //   parseLote(raw, ctx)            → { lote, preguntas, avisos }    lote.state: 'proposed' | 'skipped' (con error) | null si hay preguntas
-//   preguntasLote(faltan, ctx)     → [{ id, q, options, multi, other }]  (la forma de sub.parseQuestions)
+//   preguntasLote(faltan, ctx)     → [{ id, q, options, multi, other }]  (la forma de sub.parseQuestions); faltan: fotos · canal · carpetaHoja
 //   cuerpoCrear(lote, edits, msg)  → el cuerpo de lotes.crear (sin gastar: el lote nace «previsto»)
 //   escenaDe(raw)                  → la escena 3D normalizada, desde la forma corta que escribe Claude o la larga del editor (§16)
 //   progresoDe(lotePublico)        → lo que pinta la tarjeta viva del chat (barra, cuentas, antes/después)
@@ -15,8 +15,8 @@
 import * as e3 from './src/escena3d-core.js';
 import { modoAdmite } from './src/presets-core.js';
 
-export const ACCIONES_LOTE = Object.freeze(['lote_pausar', 'lote_reanudar', 'lote_reintentar', 'lote_aprobar']);
-export const CANALES_PRIMERO = Object.freeze(['web', 'ig-feed', 'fbshop', 'amazon']); // D14: los de Panamá primero; Amazon por el 85 %
+export const ACCIONES_LOTE = /* @__PURE__ */ Object.freeze(['lote_pausar', 'lote_reanudar', 'lote_reintentar', 'lote_aprobar']);
+export const CANALES_PRIMERO = /* @__PURE__ */ Object.freeze(['web', 'ig-feed', 'fbshop', 'amazon']); // D14: los de Panamá primero; Amazon por el 85 %
 export const MAX_PILA = 12;
 const IMG_RE = /\.(png|jpe?g|webp)$/i;
 const ACTIVOS = new Set(['muestra', 'corriendo']);
@@ -64,6 +64,10 @@ export function preguntasLote(faltan = [], { canales = [], folders = [] } = {}) 
     const top = folders.filter(f => (+f.n || 0) > 0).sort((a, b) => (+b.n || 0) - (+a.n || 0)).slice(0, 3);
     out.push({ id: 'fotos', q: '¿Qué fotos uso para el lote?', options: top.length >= 2 ? top.map((f, k) => ({ label: limpio(`«${f.name}» (${f.n})${k === 0 ? ' (recomendado)' : ''}`, 40), value: `la carpeta «${f.name}»` })) : [], multi: false, other: true, why: 'Un lote sale de una carpeta del Estudio, de las fotos seleccionadas o de un Excel.' });
   }
+  if (faltan.includes('carpetaHoja')) {
+    const top = folders.filter(f => (+f.n || 0) > 0).sort((a, b) => (+b.n || 0) - (+a.n || 0)).slice(0, 4);
+    out.push({ id: 'fotos', q: '¿En qué carpeta están las fotos que nombra la hoja?', options: top.length >= 2 ? top.map((f, k) => ({ label: limpio(`«${f.name}» (${f.n})${k === 0 ? ' (recomendado)' : ''}`, 40), value: `las fotos de la hoja están en la carpeta «${f.name}»` })) : [], multi: false, other: true, why: 'La hoja dice el nombre de cada archivo; los busco en esa carpeta del Estudio.' });
+  }
   if (faltan.includes('canal')) {
     const by = new Map(canales.map(c => [c.id, c]));
     const opts = CANALES_PRIMERO.map(id => by.get(id)).filter(Boolean).map((c, k) => {
@@ -108,8 +112,8 @@ export function pilaLimpia(pila, presets = [], { conRef = false } = {}) {
 }
 
 /**
- * raw: { nombre, fotos: { carpeta } | { ids } | { hoja }, receta: { pila, canal, escena, refs, ejes, idea }, modelo, muestra, carpeta_destino, por_que }
- * ctx: { presets, canales, folders: [{ id, name, n }], fotosDe(folderId) → [ids], galleryHas(id), hojas(id) → { nombre, filas, sinFoto } | null,
+ * raw: { nombre, fotos: { carpeta } | { ids } | { hoja, carpeta?, ids? }, receta: { pila, canal, escena, refs, ejes, idea }, modelo, muestra, carpeta_destino, por_que }
+ * ctx: { presets, canales, folders: [{ id, name, n }], fotosDe(folderId) → [ids], galleryHas(id), hojas(id) → { nombre, filas, sinFoto, porArchivo } | null,
  *        compile(pedido) → plan, models, budget, max (100), muestraDesde (10), muestra (3) }
  * → { lote, preguntas, avisos }. Con preguntas, lote es null: Dimitri pregunta en vez de proponer (§8.1).
  */
@@ -125,8 +129,17 @@ export function parseLote(raw, ctx = {}) {
   let fotos = null, n = 0, muestras = [], fotosEs = '', primera = null;
   if (typeof F.hoja === 'string' && F.hoja) {
     const h = hojas(F.hoja);
-    if (h) { fotos = { hoja: F.hoja }; n = +h.filas || 0; fotosEs = `${plural(n, 'fila', 'filas')} de «${limpio(h.nombre, 60)}»`; if (h.sinFoto?.length) avisos.push(`${plural(h.sinFoto.length, 'fila no tiene', 'filas no tienen')} foto (${h.sinFoto.slice(0, 8).map(x => '#' + x).join(', ')}): ${h.sinFoto.length === 1 ? 'queda' : 'quedan'} para revisar sin gastar.`); }
-    else avisos.push('Esa hoja ya no está en memoria: vuelve a adjuntarla.');
+    if (h) {
+      fotos = { hoja: F.hoja }; n = +h.filas || 0; fotosEs = `${plural(n, 'fila', 'filas')} de «${limpio(h.nombre, 60)}»`;
+      if (h.sinFoto?.length) avisos.push(`${plural(h.sinFoto.length, 'fila no tiene', 'filas no tienen')} foto (${h.sinFoto.slice(0, 8).map(x => '#' + x).join(', ')}): ${h.sinFoto.length === 1 ? 'queda' : 'quedan'} para revisar sin gastar.`);
+      // §6.1: la hoja que NOMBRA archivos («cama-roma.jpg») los busca en una carpeta de la galería o entre las fotos adjuntas; sin ellas, se pregunta
+      const ids = Array.isArray(F.ids) ? [...new Set(F.ids.filter(x => typeof x === 'string' && IMG_RE.test(x) && galleryHas(x)))] : [];
+      const c = typeof F.carpeta === 'string' && F.carpeta.trim() ? carpetaDe(F.carpeta, folders) : null;
+      if (F.carpeta && !c) avisos.push(`No encuentro la carpeta «${limpio(F.carpeta, 60)}» en el Estudio.`);
+      if (c) { fotos.carpeta = c.id; fotosEs += ` · fotos en «${c.name}»`; muestras = (fotosDe(c.id) || []).filter(x => IMG_RE.test(x)).slice(0, 8); primera = muestras[0] || null; }
+      else if (ids.length) { fotos.ids = ids; fotosEs += ` · ${plural(ids.length, 'foto adjunta', 'fotos adjuntas')}`; muestras = ids.slice(0, 8); primera = ids[0]; }
+      else if ((+h.porArchivo || 0) > 0) faltan.push('carpetaHoja');
+    } else avisos.push('Esa hoja ya no está en memoria: vuelve a adjuntarla.');
   } else if (Array.isArray(F.ids)) {
     const ids = [...new Set(F.ids.filter(x => typeof x === 'string' && IMG_RE.test(x) && galleryHas(x)))];
     if (ids.length < F.ids.length) avisos.push(`${plural(F.ids.length - ids.length, 'foto no está', 'fotos no están')} en la galería: no ${F.ids.length - ids.length === 1 ? 'va' : 'van'}.`);
@@ -187,7 +200,9 @@ export function estimarLote({ total = 0, n = 0, budget = null } = {}) {
 /** El cuerpo de lotes.crear para un lote propuesto, con lo que el dueño cambió en la tarjeta (canal, modelo) y si prueba primero. */
 export function cuerpoCrear(lote, { canal, modelo, probar = false } = {}, msg = null) {
   const receta = { ...lote.receta, ...(typeof canal === 'string' && canal ? { canal } : {}), ...(typeof modelo === 'string' && modelo ? { modelo } : lote.modelo ? { modelo: lote.modelo } : {}) };
-  return { nombre: lote.nombre, origen: lote.fotos, receta, muestra: probar ? Math.max(1, lote.muestra || 3) : 0, carpetaDestino: lote.carpetaDestino, ...(msg ? { sub: { msg } } : {}) };
+  const F = lote.fotos || {}; // una hoja con su carpeta (o sus fotos adjuntas): lotes.mjs busca ahí los archivos que nombra (§6.1)
+  const origen = F.hoja ? { hoja: F.hoja, ...(F.carpeta ? { fotosHoja: { carpeta: F.carpeta } } : F.ids ? { fotosHoja: { ids: F.ids } } : {}) } : F;
+  return { nombre: lote.nombre, origen, receta, muestra: probar ? Math.max(1, lote.muestra || 3) : 0, carpetaDestino: lote.carpetaDestino, ...(msg ? { sub: { msg } } : {}) };
 }
 
 /* ---------- la tarjeta viva ---------- */

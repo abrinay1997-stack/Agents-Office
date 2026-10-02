@@ -280,5 +280,6 @@ export function actionsHTML(m, v) {
     if (a.state && a.state !== 'proposed') return `<li class="sc-act ${a.state === 'failed' ? 'bad' : 'ok'}"><span aria-hidden="true">${a.state === 'failed' ? '⚠' : a.state === 'skipped' ? '–' : '✓'}</span> ${txt}${a.state === 'failed' && a.error ? ' — ' + esc(a.error) : a.state === 'skipped' ? ' (no se hizo)' : ''}</li>`;
     return `<li class="sc-act"><label><input type="checkbox" class="sc-acton" data-msg="${esc(m.id)}" data-k="${k}"${ae.get(k) !== false ? ' checked' : ''}> ${txt}</label></li>`;
   }).join('');
-  return rows ? `<div class="sc-acts"><div class="sc-lab">Además, para ordenar</div><ul>${rows}</ul></div>` : '';
+  const soloLote = list.every(a => /^lote_/.test(a.type)); // F3: «Pausar el lote…» is not tidying up
+  return rows ? `<div class="sc-acts"><div class="sc-lab">${soloLote ? 'Sobre el lote (cada una espera tu clic)' : 'Además, para ordenar'}</div><ul>${rows}</ul></div>` : '';
 }

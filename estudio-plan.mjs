@@ -94,7 +94,7 @@ export const PRESETS_MAX = 2500; // §8.1 y §13.4: compacto, y solo en los mens
 /** Las reglas del lote y de la escena 3D: van con el bloque (solo en los mensajes del Estudio), no en cada mensaje de Dimitri. */
 export const LOTE_REGLAS = `CÓMO PROPONES CON PRESETS
 - Una edición de UNA o pocas fotos (≤ 4): un creativo {"kind":"image","title","presets":[{"id","params":{}}],"input":"<id de su foto en la galería>","canal":"<id de canal>","refs":[],"escena":null,"idea":"<opcional>","model":null}. Sin "prompt": lo escribe el banco.
-- Un LOTE (más de 4 fotos, una carpeta o un Excel adjunto): UN "lote", no creativos: {"nombre":"<≤60>","fotos":{"carpeta":"<nombre>"}|{"ids":[…]}|{"hoja":"<id>"},"receta":{"pila":[{"id","params":{}}],"canal":"<id>","escena":null,"idea":""},"modelo":null,"muestra":3,"carpeta_destino":"<nombre>","por_que":"<una frase>"}.
+- Un LOTE (más de 4 fotos, una carpeta o un Excel adjunto): UN "lote", no creativos: {"nombre":"<≤60>","fotos":{"carpeta":"<nombre>"}|{"ids":[…]}|{"hoja":"<id>","carpeta":"<dónde están las fotos que nombra>"},"receta":{"pila":[{"id","params":{}}],"canal":"<id>","escena":null,"idea":""},"modelo":null,"muestra":3,"carpeta_destino":"<nombre>","por_que":"<una frase>"}.
 - ESCENA 3D cuando hablan de distancia, ángulo, picado, cenital, contrapicado («desde sus pies») o medidas: {"tipo":"cama-queen|cama-king|sofa|cafetera|televisor-55|persona|producto","toma":"frontal|tres-cuartos|lateral|picado-45|cenital|contrapicado|ras-piso","distancia":"ajustado|catalogo|margen|aire","proporcion":"4:5","fondo":{"tipo":"color|set|locacion","valor":"#FFFFFF"}} (opcional "ancho","alto","fondoCm" en cm). El margen es DISTANCIA de cámara: no se recorta nada.
 - Si falta el canal o qué fotos, NO propongas el lote: modo "pregunta" con UNA pregunta de 2 a 4 opciones (p. ej. «¿Para dónde son?»: Web con margen 60 % (recomendado) · Instagram 4:5 · FB/IG Shop · Amazon 85 %).
 - Un lote en marcha (LOTES): "actions" {"type":"lote_pausar","lote":"<id>"} · {"type":"lote_reanudar","lote"} · {"type":"lote_reintentar","lote","filas":"fallidas"|[n],"modelo":null} (gasta: dilo) · {"type":"lote_aprobar","lote","filas":"listas"|[n]}. Cada una espera el clic del dueño.
@@ -124,10 +124,13 @@ export function presetsBlock({ presets = [], canales = [], grupos = [], ask = ''
     lotes: lotesText(lotes),
   };
   const grupoLinea = g => { const l = enGrupo(g); return l.length ? `${gnombre(g)}: ${l.map(p => p.id).join(', ')}` : ''; };
-  const armar = gs => [cab, partes.top, partes.propios, 'Por grupo — ' + gs.map(grupoLinea).filter(Boolean).join(' · '), partes.canales, partes.ejes, partes.lotes].filter(Boolean).join('\n');
+  // the recent lotes go whole, kept apart from the cut: a cut there would lose the ids Dimitri needs for «aprueba las listas»
+  const lotesTxt = partes.lotes.slice(0, Math.floor(max / 3)), room = max - (lotesTxt ? lotesTxt.length + 1 : 0);
+  const armar = gs => [cab, partes.top, partes.propios, 'Por grupo — ' + gs.map(grupoLinea).filter(Boolean).join(' · '), partes.canales, partes.ejes].filter(Boolean).join('\n');
   let out = armar(cats);
-  if (out.length > max) out = armar([...new Set(top.map(p => p.categoria))].filter(g => g !== 'mios').concat(['catalogo']).filter((g, k, a) => a.indexOf(g) === k)); // §13.4: solo los grupos que tocan el pedido
-  return out.length > max ? out.slice(0, max - 1) + '…' : out;
+  if (out.length > room) out = armar([...new Set(top.map(p => p.categoria))].filter(g => g !== 'mios').concat(['catalogo']).filter((g, k, a) => a.indexOf(g) === k)); // §13.4: solo los grupos que tocan el pedido
+  if (out.length > room) out = out.slice(0, room - 1) + '…';
+  return lotesTxt ? out + '\n' + lotesTxt : out;
 }
 /** A creative with presets (§8.2): compiled, never a free prompt. Unknown ids out (said), the photo and the references must be in the gallery. */
 function presetCreative(c, i, { presets = [], canales = [], galleryHas = () => false, compile, models = [], maxPerRequest = 8 } = {}) {

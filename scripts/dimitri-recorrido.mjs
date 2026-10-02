@@ -109,7 +109,9 @@ async function recorridoLote() {
   }
   const RECETA = { pila: [{ id: 'luz-arreglar' }, { id: 'color-blancos' }], canal: 'web' };
   responder = body => {
-    const last = JSON.stringify(body.messages?.at(-1) || '').split('Dueño: ').pop();
+    const last = JSON.stringify(body.messages?.at(-1) || '').split('Dueño: ').pop(), sys = JSON.stringify(body.system || '');
+    if (/esta hoja/i.test(last)) { const hoja = (sys.match(/HOJA ADJUNTA «[^»]*» \(id: (h[a-z0-9]+)/) || [])[1]; return { mode: 'estudio', reply: 'Con tu hoja: cada fila con su foto de «Bodega».', lote: { nombre: 'Camas de la hoja', fotos: { hoja, carpeta: 'Bodega' }, receta: RECETA, muestra: 3 } }; }
+    if (/aprueba las listas/i.test(last)) { const lote = (sys.match(/- (L[a-z0-9]+) «Camas de la bodega/) || [])[1]; return { mode: 'estudio', reply: '¿Apruebo las que quedaron listas? Solo con tu clic; nada sale de tu máquina.', actions: [{ type: 'lote_aprobar', lote, filas: 'listas' }] }; }
     if (/Para d[oó]nde|Canal|Web/i.test(last)) return { mode: 'estudio', reply: 'Este es el lote: arreglo la luz y los blancos en tu máquina (gratis) y las dejo listas para la web. Pruebo primero con 3.', lote: { nombre: 'Camas de la bodega → web', fotos: { carpeta: 'Bodega' }, receta: RECETA, muestra: 3, carpeta_destino: 'Catálogo web', por_que: 'Las 12 con la misma luz, para que la web se vea pareja.' } };
     return { mode: 'estudio', reply: 'Lo preparo como un lote.', lote: { nombre: 'Camas de la bodega → web', fotos: { carpeta: 'bodega' }, receta: { pila: RECETA.pila } } }; // sin canal: la oficina pregunta
   };
@@ -156,6 +158,29 @@ async function recorridoLote() {
     step(fin.pares > 0 && fin.zip, `${tag}: antes → después a la vista (${fin.pares}) y el ZIP`);
     await page.$eval('#subOv .sl-card', el => el.scrollIntoView({ block: 'start' }));
     await page.screenshot({ path: path.join(OUT_LOTE, `4-listo-${tag}.png`) });
+    // una acción cerrada sobre el lote: Dimitri la propone, solo corre con el clic (HACER), y no envía nada fuera
+    const loteId = (await api('/api/media/lotes')).lotes.find(l => !antes.has(l.id))?.id;
+    await page.fill('#subOv textarea', 'Aprueba las listas'); await page.click('#subOv .sb-send');
+    await page.waitForFunction(() => /Aprobar \d+ fotos? del lote/.test(document.querySelector('#subOv').textContent), null, { timeout: 25000 }).catch(() => {});
+    const aprobadas = async () => (await api('/api/media/lotes/' + loteId)).lote?.filas.filter(f => f.estado === 'aprobada').length;
+    step(/Sobre el lote/.test(await page.evaluate(() => document.querySelector('#subOv').textContent)) && (await aprobadas()) === 0, `${tag}: «Aprobar las listas» espera el clic (0 aprobadas)`);
+    await page.screenshot({ path: path.join(OUT_LOTE, `5-accion-${tag}.png`) });
+    const hacer = await page.$$('#subOv .sc-foot .sc-go'); if (hacer.length) await hacer.at(-1).click();
+    await page.waitForFunction(() => /: hecho\./.test(document.querySelector('#subOv').textContent), null, { timeout: 15000 }).catch(() => {});
+    step((await aprobadas()) >= 10, `${tag}: HACER → ${await aprobadas()} aprobadas`);
+    if (tag === '1512-light') { // un Excel (aquí un CSV) adjunto al chat: Dimitri lee su resumen y propone el lote de la hoja
+      const csvFile = path.join(dir, 'camas.csv'); fs.writeFileSync(csvFile, 'sku,foto,nombre\n' + Array.from({ length: 12 }, (_, i) => `CM-${100 + i},cama bodega ${i + 1}.png,Cama ${i + 1}`).join('\n'));
+      await page.setInputFiles('#subOv .sb-file', csvFile);
+      await page.waitForFunction(() => /12 filas/.test(document.querySelector('#subOv .sb-atts')?.textContent || ''), null, { timeout: 15000 }).catch(() => {});
+      step(/12 filas/.test(await page.evaluate(() => document.querySelector('#subOv .sb-atts').textContent)), `${tag}: el CSV adjunto se lee como hoja (12 filas)`);
+      await page.screenshot({ path: path.join(OUT_LOTE, `6-hoja-adjunta-${tag}.png`) });
+      await page.fill('#subOv textarea', 'Haz el catálogo con esta hoja'); await page.click('#subOv .sb-send');
+      await page.waitForFunction(() => /12 filas de «camas.csv»/.test(document.querySelector('#subOv').textContent), null, { timeout: 25000 }).catch(() => {});
+      const th = await page.evaluate(() => [...document.querySelectorAll('#subOv .sl-card')].at(-1)?.textContent || '');
+      step(/12 filas de «camas.csv» · fotos en «Bodega»/.test(th) && /PROBAR CON 3/.test(th), `${tag}: la tarjeta del lote de la hoja, con sus fotos de «Bodega»`);
+      await page.$$eval('#subOv .sl-card', els => els.at(-1).scrollIntoView({ block: 'center' }));
+      await page.screenshot({ path: path.join(OUT_LOTE, `7-lote-hoja-${tag}.png`) });
+    }
     step(!errs.length, `${tag}: sin errores en la página${errs.length ? ': ' + errs[0] : ''}`);
     await ctx.close();
   }
