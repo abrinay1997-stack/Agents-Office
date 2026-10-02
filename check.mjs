@@ -63,7 +63,7 @@ await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own
   const extra = fs.readFileSync(file, 'utf8');
   if (!/AO_ESTUDIO_EXTRA=\{/.test(extra)) throw new Error('dist/estudio-extra.js does not define window.AO_ESTUDIO_EXTRA');
   if (/AO_ESTUDIO_EXTRA=\{/.test(html)) throw new Error('the page defines window.AO_ESTUDIO_EXTRA itself: the heavy part went back into the page');
-  const v = /version:"([0-9a-f]{12})"/.exec(extra)?.[1];
+  const { versionDelExtra } = await import('./estudio-extra-version.mjs'), v = versionDelExtra(extra);
   if (!v) throw new Error('dist/estudio-extra.js carries no version');
   if (!html.includes(`"${v}"`)) throw new Error(`the page asks for another build of dist/estudio-extra.js (it does not know ${v})`);
   for (const [txt, what] of [['Ver el plan y el costo', 'Lotes (src/studio-lotes.js)'], ['e3d-hrow', 'the 3D stage (src/escena3d.js)']]) {

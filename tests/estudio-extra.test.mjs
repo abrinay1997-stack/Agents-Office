@@ -64,3 +64,35 @@ test('si no llega, el mensaje dice qué hacer: en file:// construir, servido rev
   assert.match(motivoFallo('http:', 'red'), /oficina/);
   assert.match(motivoFallo('http:', 'version'), /recarga/);
 });
+
+test('serve.mjs reconstruye si el paquete falta o es de otra construcción: la página y el paquete van juntos por su versión', async () => {
+  const { versionDelExtra, extraAlDia } = await import('../estudio-extra-version.mjs');
+  const x = await elExtra();
+  assert.equal(versionDelExtra(x.js), x.version, 'la versión se lee del paquete tal como lo escribe build-extra.mjs');
+  assert.equal(versionDelExtra(''), '');
+  assert.equal(versionDelExtra(undefined), '');
+  const pagina = `<script>var V="${x.version}";</script>`;
+  assert.equal(extraAlDia(pagina, x.js), true);
+  assert.equal(extraAlDia('<script>var V="000000000000";</script>', x.js), false, 'una página de otra construcción');
+  assert.equal(extraAlDia(pagina, ''), false, 'sin paquete (dist/* no viaja por GitHub)');
+  assert.equal(extraAlDia(pagina, x.js.slice(0, 50)), false, 'un paquete a medio escribir no lleva su versión');
+});
+
+test('servido, el aviso de «otra construcción» pide recargar (la oficina ya se reconstruyó); en file://, el iniciador', () => {
+  assert.match(motivoFallo('http:', 'version'), /recarga la página/);
+  assert.match(motivoFallo('file:', 'version'), /iniciador/);
+});
+
+test('la cara diferida del banco no deja que GENERAR gaste sin la receta guardada, y «Reintentar» vuelve a intentar el init', () => {
+  const src = readFileSync('src/estudio-carga.js', 'utf8');
+  assert.match(src, /activo: \(\) => \(real \? real\.activo\(\) : recetaGuardada\(\)\)/, 'con una receta guardada, el Estudio no toma GENERAR por suyo antes de que llegue el banco');
+  assert.ok(!/generar: \(\) => real\?\.generar\(\)/.test(src), 'GENERAR antes del banco no puede ser un no-op silencioso');
+  assert.equal((src.match(/if \(!real && yaEstaba\) iniciar\(x\)/g) || []).length, 2, 'el banco y los lotes reintentan su init si el paquete ya estaba');
+});
+
+test('build.mjs escribe el paquete y la página enteros (a un temporal y renombrar): nadie lee medio archivo', () => {
+  const src = readFileSync('build.mjs', 'utf8');
+  assert.match(src, /escribirEntero\('dist\/estudio-extra\.js'/);
+  assert.match(src, /escribirEntero\('dist\/command-centre-v2\.html'/);
+  assert.ok(!/writeFileSync\('dist\/estudio-extra\.js'/.test(src));
+});

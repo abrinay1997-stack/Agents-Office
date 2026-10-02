@@ -44,11 +44,14 @@ const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => 
 const shell = sinComentarios(readFileSync('src/shell.html', 'utf8')).replace('/* <css-vistas> */', () => vistasCss);
 const html = shell.replace('<!--APP-->', () => `<script>${js}</script>`);
 mkdirSync('dist', { recursive: true });
+// write-then-rename, retried: on Windows the running office may be reading the file at that instant (EBUSY / UNKNOWN), and a reader
+// never sees half a file (serve.mjs caches dist/estudio-extra.js by its mtime: a half-written one stayed cached until the next build).
+// The temporary name carries the pid: serve.mjs may rebuild while someone else runs node build.mjs.
+const escribirEntero = (out, data) => { const tmp = `${out}.${process.pid}.tmp`; writeFileSync(tmp, data);
+  for (let i = 0; ; i++) { try { renameSync(tmp, out); break; } catch (e) { if (i >= 20) throw e; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150); } } };
 // the Estudio's heavy part, beside the page (src/estudio-carga.js loads it on demand): before the page, so a page never asks for a part older than itself
-writeFileSync('dist/estudio-extra.js', extra.js);
-// write-then-rename, retried: on Windows the running office may be reading the page at that instant (EBUSY / UNKNOWN)
-{ const out = 'dist/command-centre-v2.html', tmp = out + '.tmp'; writeFileSync(tmp, html);
-  for (let i = 0; ; i++) { try { renameSync(tmp, out); break; } catch (e) { if (i >= 20) throw e; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150); } } }
+escribirEntero('dist/estudio-extra.js', extra.js);
+escribirEntero('dist/command-centre-v2.html', html);
 
 // dev variant with external script for faster iteration
 mkdirSync('dist', { recursive: true });

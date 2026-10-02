@@ -26,11 +26,15 @@ const avisar = []; // las caras diferidas que esperan el paquete
 const elExtra = () => (typeof window !== 'undefined' && window.AO_ESTUDIO_EXTRA && typeof window.AO_ESTUDIO_EXTRA.initBanco === 'function' ? window.AO_ESTUDIO_EXTRA : null);
 /** El mensaje claro cuando no llega: qué pasó y qué hacer. */
 export function motivoFallo(protocolo, causa) {
-  if (causa === 'version') return 'La página y esta parte del Estudio son de construcciones distintas. Vuelve a abrir la oficina con el iniciador (la reconstruye) y recarga.';
+  if (causa === 'version') return protocolo === 'file:'
+    ? 'La página y esta parte del Estudio son de construcciones distintas. Vuelve a abrir la oficina con el iniciador (la reconstruye) y recarga.'
+    : 'La página y esta parte del Estudio son de construcciones distintas: la oficina acaba de reconstruirla, así que recarga la página (F5).'; // serve.mjs reconstruye al pedírselo
   if (protocolo === 'file:') return `No está ${ARCHIVO} junto a la página. Construye la oficina otra vez (node build.mjs, o ábrela con el iniciador) y vuelve a intentarlo.`;
   return 'No se pudo traer esta parte del Estudio de la oficina. Revisa que la oficina siga abierta y vuelve a intentarlo.';
 }
 
+/** ¿Ya está el paquete en la página? (llegó antes, aunque su init fallara). */
+export const extraPresente = () => !!elExtra();
 /** Cuando el paquete llega (o ya, si llegó): fn(extra). */
 export function alLlegar(fn) { const x = elExtra(); if (x) fn(x); else avisar.push(fn); }
 
@@ -78,7 +82,7 @@ function cajaEstado() {
     alReintentar(fn) { mal.querySelector('button').addEventListener('click', fn); },
   };
 }
-const recetaGuardada = () => { try { const g = JSON.parse(localStorage.getItem('ao.studio.banco') || '{}') || {}; return (Array.isArray(g.pila) && g.pila.length > 0) || !!g.escena; } catch { return false; } };
+export const recetaGuardada = () => { try { const g = JSON.parse(localStorage.getItem('ao.studio.banco') || '{}') || {}; return (Array.isArray(g.pila) && g.pila.some(x => x && typeof x.id === 'string')) || !!g.escena; } catch { return false; } };
 
 /** El banco de presets, diferido: la misma cara que initBanco(ctx). */
 export function bancoDiferido(ctx) {
@@ -87,7 +91,7 @@ export function bancoDiferido(ctx) {
   const el = document.createElement('div'); el.className = 'st-step bk bk-dif'; el.setAttribute('role', 'group'); el.setAttribute('aria-labelledby', U + 'T');
   el.innerHTML = `<div class="st-h" id="${U}T"><b>${ESTRELLA}</b> Presets <span class="st-hn">opcional · combínalos</span></div>
     <div class="bk-pilah"><span class="bk-lbl">Lo que se hará</span><button type="button" class="bk-open" data-ir="banco" aria-expanded="false" title="Abrir el banco de presets (B)">${REJILLA}<span>Banco · B</span></button></div>
-    <p class="bk-vacio">Ningún preset todavía: ábrelo con «Banco» o escribe <kbd>/</kbd> al principio de la idea.</p>
+    <p class="bk-vacio">${recetaGuardada() ? 'Tienes una receta de presets guardada: llega con el banco. GENERAR la usará, nunca el modelo solo.' : 'Ningún preset todavía: ábrelo con «Banco» o escribe <kbd>/</kbd> al principio de la idea.'}</p>
     <div class="bk-esc"><span class="bk-lbl">Escenario 3D <small>la cámara a una distancia, en cm o m</small></span><span class="bk-addrow"><button type="button" class="bk-add" data-ir="escena">Usar un escenario 3D</button></span></div>`; // como el paso de verdad (src/studio-banco.js), en el mismo orden
   const paso = cajaEstado(); el.appendChild(paso.box);
   const sheet = document.createElement('aside'); sheet.className = 'st-bank bk-dif'; sheet.hidden = true; sheet.setAttribute('role', 'region'); sheet.setAttribute('aria-label', 'Banco de presets');
@@ -111,7 +115,8 @@ export function bancoDiferido(ctx) {
   }
   function cargar(texto, enfocar) { // enfocar: lo pidió la persona (un clic, una tecla), así que el error con «Reintentar» recibe el foco
     ultimo = texto; mostrar('cargando', texto);
-    cargarExtra().catch(e => { if (!real) mostrar('error', e.message, enfocar); });
+    const yaEstaba = extraPresente(); // llegó, pero initBanco falló: «Reintentar» vuelve a intentarlo (alLlegar ya no avisa)
+    cargarExtra().then(x => { if (!real && yaEstaba) iniciar(x); }).catch(e => { if (!real) mostrar('error', e.message, enfocar); });
   }
   /** Hazlo ya si el banco está; si no, en cuanto llegue (lo último pedido gana). */
   function pedir(accion, { modo = null, texto = 'Cargando el banco de presets…', enfocar = true } = {}) {
@@ -125,7 +130,7 @@ export function bancoDiferido(ctx) {
   sheet.addEventListener('click', e => { if (e.target.closest('[data-cerrar]')) cerrarHoja(); });
   sheet.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) { e.preventDefault(); e.stopPropagation(); cerrarHoja(); } });
 
-  alLlegar(x => { // el paquete llegó (por el banco o por los lotes): el banco de verdad ocupa el sitio del provisional
+  function iniciar(x) { // el paquete llegó (por el banco o por los lotes): el banco de verdad ocupa el sitio del provisional
     if (real) return;
     const teniaFoco = el.contains(document.activeElement) || sheet.contains(document.activeElement);
     try { real = x.initBanco(ctx); } catch (e) { console.error(e); mostrar('error', 'El banco de presets no pudo empezar: ' + e.message, true); return; }
@@ -137,13 +142,21 @@ export function bancoDiferido(ctx) {
     ctx.onState?.();
     const p = pendiente; pendiente = null;
     if (p) p(real); else if (teniaFoco) real.el.querySelector('.bk-open')?.focus({ preventScroll: true });
-  });
+  }
+  alLlegar(iniciar);
 
   return {
     get el() { return real ? real.el : el; },
     get sheet() { return real ? real.sheet : sheet; },
-    activo: () => (real ? real.activo() : false),
-    generar: () => real?.generar(),
+    // Con una receta guardada (ao.studio.banco) el banco de verdad la restaura al llegar: hasta entonces el Estudio no debe
+    // tomar GENERAR por suyo y gastar con el modelo solo, sin la receta del dueño. GENERAR no espera ni se encola (nada se
+    // genera sin su clic): trae el banco y pide pulsarlo otra vez.
+    activo: () => (real ? real.activo() : recetaGuardada()),
+    generar() {
+      if (real) return real.generar();
+      ctx.say?.('Tu receta de presets todavía está llegando: pulsa GENERAR otra vez en cuanto aparezca. Sin ella no se genera nada.', true);
+      pedir(null, { texto: 'Cargando tu receta de presets…' });
+    },
     toggle: () => (real ? real.toggle() : sheet.hidden ? pedir(r => r.abrir('banco'), { modo: 'banco' }) : cerrarHoja()),
     abrir: (modo = 'banco') => pedir(r => r.abrir(modo), { modo }),
     cerrar: (devolver = true) => (real ? real.cerrar(devolver) : cerrarHoja(devolver)),
@@ -182,15 +195,20 @@ export function lotesDiferidos(host, ctx = {}) {
       if (c.activos + c.espera) cargarExtra().catch(() => {});
     }).catch(() => {});
   }
-  const cargar = () => { caja.cargando('Cargando los lotes…'); cargarExtra().catch(e => { if (!real) caja.error(e.message, ph.contains(document.activeElement) || document.activeElement === document.body); }); };
+  const cargar = () => {
+    caja.cargando('Cargando los lotes…');
+    const yaEstaba = extraPresente(); // llegó, pero initLotes falló: «Reintentar» vuelve a intentarlo
+    cargarExtra().then(x => { if (!real && yaEstaba) iniciar(x); }).catch(e => { if (!real) caja.error(e.message, ph.contains(document.activeElement) || document.activeElement === document.body); });
+  };
   caja.alReintentar(cargar);
   function pedir(f) { if (real) return f(real); cola.push(f); cargar(); }
-  alLlegar(x => {
+  function iniciar(x) {
     if (real) return;
     try { real = x.initLotes(host, ctx); } catch (e) { console.error(e); caja.error('Los lotes no pudieron empezar: ' + e.message, true); return; }
     ph.remove();
     for (const f of cola.splice(0)) f(real);
-  });
+  }
+  alLlegar(iniciar);
   return {
     get el() { return real ? real.el : ph; },
     abrir() { if (real) return real.abrir(); pedir(r => r.abrir()); setTimeout(() => { if (!real && !ph.contains(document.activeElement)) ph.querySelector('h2')?.focus({ preventScroll: true }); }, 0); },

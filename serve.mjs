@@ -83,6 +83,7 @@ import * as documents from './documents.mjs';
 import * as business from './business.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
+import { extraAlDia } from './estudio-extra-version.mjs'; // 1 oct 2026: the page and its on-demand part, of the same build
 
 const cfg = loadConfig();
 const HTML = path.join(ROOT, 'dist', 'command-centre-v2.html'); // built by build.mjs; shipped so npm start works without a build
@@ -1505,8 +1506,28 @@ const EXTRA = path.join(ROOT, 'dist', 'estudio-extra.js');
 let extraCache = { mtime: 0 };
 function extraFile() {
   const st = fs.statSync(EXTRA);
-  if (st.mtimeMs !== extraCache.mtime) { const raw = fs.readFileSync(EXTRA); extraCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"x${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; }
+  if (st.mtimeMs !== extraCache.mtime || st.size !== extraCache.raw?.length) { const raw = fs.readFileSync(EXTRA); extraCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"x${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; }
   return extraCache;
+}
+// dist/command-centre-v2.html travels by GitHub (npm start works without a build) but dist/estudio-extra.js does not (dist/* is ignored):
+// after a clone or a pull without a build, the page asked for a part that was missing or of another build. When it is asked for and
+// does not match the page, the office rebuilds itself once (node build.mjs) and serves the new one; the open page then says «recarga».
+let rebuilding = null, rebuildFailedAt = 0;
+function extraMatchesPage() { try { return extraAlDia(page().raw.toString('utf8'), extraFile().raw.toString('utf8')); } catch { return false; } }
+function rebuildOffice() {
+  if (rebuilding) return rebuilding;
+  if (Date.now() - rebuildFailedAt < 60e3) return Promise.resolve(false); // a build that just failed is not run again on every request
+  console.log('  dist/estudio-extra.js is missing or of another build: rebuilding the office (node build.mjs)…');
+  rebuilding = new Promise(resolve => {
+    let err = '', done = false, t = 0;
+    const end = ok => { if (done) return; done = true; clearTimeout(t); rebuilding = null; if (!ok) { rebuildFailedAt = Date.now(); console.warn(`  the rebuild failed (run node build.mjs to see why): ${err.trim().split('\n').slice(-3).join(' · ')}`); } else console.log('  rebuilt: dist/command-centre-v2.html + dist/estudio-extra.js'); resolve(ok); };
+    const p = spawn(process.execPath, ['build.mjs'], { cwd: ROOT, stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+    t = setTimeout(() => { err += 'it took more than 3 minutes'; p.kill(); }, 180e3);
+    p.stderr.on('data', d => { err = (err + d).slice(-2000); });
+    p.on('error', e => { err += e.message; end(false); });
+    p.on('close', code => end(code === 0));
+  });
+  return rebuilding;
 }
 /* ---------- V4.4 (B6, B7, B8): the office's health — one list of checks, green / amber / red, for the dock's traffic light ---------- */
 // Auditoría 1 oct 2026 (INF-12): how long the server's one thread was stuck (a slow disk, Defender, a huge file): the health light says it
@@ -1661,6 +1682,7 @@ const server = http.createServer(async (req, res) => {
       return res.end(gz ? pc.gz : pc.raw);
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/estudio-extra.js') {
+      if (!extraMatchesPage()) await rebuildOffice();
       let x; try { x = extraFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/estudio-extra.js no está: node build.mjs'); }
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
       const gz = /gzip/.test(req.headers['accept-encoding'] || '');
