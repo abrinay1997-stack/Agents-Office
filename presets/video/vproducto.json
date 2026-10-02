@@ -3,7 +3,7 @@
  "presets": [
   {
    "id": "vp-giro-360",
-   "v": 1,
+   "v": 2,
    "nombre": "Giro 360 de catálogo",
    "icono": {
     "id": "giro",
@@ -20,8 +20,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -79,7 +78,7 @@
      "def": "5"
     }
    ],
-   "ia": "the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation, camera locked, neutral studio light, soft shadow",
+   "ia": "the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
@@ -100,22 +99,34 @@
     "que de vueltas",
     "plato giratorio",
     "turntable",
-    "lazy susan"
+    "lazy susan",
+    "producto girando",
+    "girando",
+    "que gire",
+    "rotando",
+    "vuelta completa",
+    "girar el producto",
+    "mostrar todos los lados"
    ],
    "estrella": true,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation, camera locked, neutral studio light, soft shadow. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation, camera locked, neutral studio light, soft shadow. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation, camera locked, neutral studio light, soft shadow. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation, camera locked, neutral studio light, soft shadow. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation, camera locked, neutral studio light, soft shadow. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Turntable 360",
+   "incluye": [
+    "cam-fija"
+   ],
+   "soloRigidos": true
   },
   {
    "id": "vp-heroe",
-   "v": 1,
+   "v": 2,
    "nombre": "Producto protagonista",
    "tecnico": "Hero shot",
    "icono": {
@@ -133,8 +144,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -169,7 +179,7 @@
      "def": "5"
     }
    ],
-   "ia": "cinematic slow push in on the product while a soft light sweeps across it",
+   "ia": "cinematic hero shot of the product while a soft light sweeps slowly across it",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
@@ -187,22 +197,27 @@
     "protagonista",
     "cine",
     "lujo",
-    "presentacion"
+    "presentacion",
+    "que luzca",
+    "anuncio de lujo"
    ],
    "estrella": true,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} cinematic slow push in on the product while a soft light sweeps across it. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} cinematic slow push in on the product while a soft light sweeps across it. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} cinematic slow push in on the product while a soft light sweeps across it. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} cinematic slow push in on the product while a soft light sweeps across it. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} cinematic slow push in on the product while a soft light sweeps across it. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} cinematic hero shot of the product while a soft light sweeps slowly across it. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} cinematic hero shot of the product while a soft light sweeps slowly across it. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} cinematic hero shot of the product while a soft light sweeps slowly across it. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} cinematic hero shot of the product while a soft light sweeps slowly across it. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} cinematic hero shot of the product while a soft light sweeps slowly across it. {refs} {escena}. {look}. {sonido}."
+   },
+   "incluye": [
+    "cam-acercar"
+   ]
   },
   {
    "id": "vp-macro",
-   "v": 1,
+   "v": 2,
    "nombre": "Revelación en detalle",
    "icono": {
     "id": "macro",
@@ -219,8 +234,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -234,7 +248,7 @@
     }
    ],
    "parametros": [],
-   "ia": "macro slider across the textures, then reveal the full product",
+   "ia": "glide across the textures in close detail, then reveal the full product",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
@@ -251,22 +265,28 @@
     "revelar",
     "detalle",
     "textura",
-    "macro"
+    "macro",
+    "detalles",
+    "acabados",
+    "de cerca"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} macro slider across the textures, then reveal the full product. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} macro slider across the textures, then reveal the full product. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} macro slider across the textures, then reveal the full product. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} macro slider across the textures, then reveal the full product. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} macro slider across the textures, then reveal the full product. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} glide across the textures in close detail, then reveal the full product. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} glide across the textures in close detail, then reveal the full product. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} glide across the textures in close detail, then reveal the full product. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} glide across the textures in close detail, then reveal the full product. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} glide across the textures in close detail, then reveal the full product. {refs} {escena}. {look}. {sonido}."
+   },
+   "incluye": [
+    "cam-lateral"
+   ]
   },
   {
    "id": "vp-unboxing",
-   "v": 2,
+   "v": 3,
    "nombre": "Abriendo la caja",
    "tecnico": "Unboxing",
    "icono": {
@@ -284,8 +304,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -307,7 +326,7 @@
     }
    ],
    "parametros": [],
-   "ia": "hands open the box and reveal the product, the product stays identical to the reference",
+   "ia": "hands open the box and reveal the product; the product looks exactly like the reference",
    "ranura": "accion",
    "requiere": {
     "roles": {
@@ -326,22 +345,29 @@
     "unboxing",
     "abrir caja",
     "empaque",
-    "desempacar"
+    "desempacar",
+    "caja",
+    "abrir el paquete",
+    "unbox",
+    "abriendo"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} hands open the box and reveal the product, the product stays identical to the reference. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} hands open the box and reveal the product, the product stays identical to the reference. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} hands open the box and reveal the product, the product stays identical to the reference. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} hands open the box and reveal the product, the product stays identical to the reference. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} hands open the box and reveal the product, the product stays identical to the reference. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} hands open the box and reveal the product; the product looks exactly like the reference. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} hands open the box and reveal the product; the product looks exactly like the reference. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} hands open the box and reveal the product; the product looks exactly like the reference. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} hands open the box and reveal the product; the product looks exactly like the reference. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} hands open the box and reveal the product; the product looks exactly like the reference. {refs} {escena}. {look}. {sonido}."
+   },
+   "incluye": [
+    "cam-fija"
+   ]
   },
   {
    "id": "vp-antes-despues",
-   "v": 1,
+   "v": 2,
    "nombre": "De antes a después",
    "icono": {
     "id": "flecha-ab",
@@ -358,8 +384,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -380,7 +405,7 @@
     }
    ],
    "parametros": [],
-   "ia": "smooth transformation from the first frame to the last frame",
+   "ia": "smooth transformation from the first frame (before) to the last frame (after); the framing stays the same",
    "ranura": "accion",
    "requiere": {
     "roles": {
@@ -401,22 +426,31 @@
     "antes y despues",
     "transformacion",
     "cambio",
-    "renovacion"
+    "renovacion",
+    "antes despues",
+    "before after",
+    "comparar",
+    "reforma",
+    "restaurar"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} smooth transformation from the first frame to the last frame. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} smooth transformation from the first frame to the last frame. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} smooth transformation from the first frame to the last frame. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} smooth transformation from the first frame to the last frame. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} smooth transformation from the first frame to the last frame. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} smooth transformation from the first frame (before) to the last frame (after); the framing stays the same. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} smooth transformation from the first frame (before) to the last frame (after); the framing stays the same. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} smooth transformation from the first frame (before) to the last frame (after); the framing stays the same. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} smooth transformation from the first frame (before) to the last frame (after); the framing stays the same. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} smooth transformation from the first frame (before) to the last frame (after); the framing stays the same. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Antes / después",
+   "incluye": [
+    "cam-fija"
+   ]
   },
   {
    "id": "vp-en-uso",
-   "v": 1,
+   "v": 2,
    "nombre": "Alguien usándolo",
    "icono": {
     "id": "mano",
@@ -443,9 +477,17 @@
     {
      "rol": "inicial",
      "medio": "image",
-     "min": 1,
+     "min": 0,
      "max": 1,
-     "es": "Foto del producto"
+     "es": "Foto del producto (de partida)"
+    },
+    {
+     "rol": "referencia",
+     "eje": "producto",
+     "medio": "image",
+     "min": 0,
+     "max": 1,
+     "es": "Foto del producto (como referencia)"
     }
    ],
    "parametros": [
@@ -474,22 +516,27 @@
     "en uso",
     "usando",
     "persona",
-    "lifestyle"
+    "lifestyle",
+    "alguien usandolo",
+    "gente usando"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} a person naturally uses the product in {p.escena}. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} a person naturally uses the product in {p.escena}. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} a person naturally uses the product in {p.escena}. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} a person naturally uses the product in {p.escena}. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} a person naturally uses the product in {p.escena}. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} a person naturally uses the product in {p.escena}. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} a person naturally uses the product in {p.escena}. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} a person naturally uses the product in {p.escena}. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} a person naturally uses the product in {p.escena}. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} a person naturally uses the product in {p.escena}. {refs} {escena}. {look}. {sonido}."
+   },
+   "incluye": [
+    "cam-mano"
+   ]
   },
   {
    "id": "vp-ambiente-vivo",
-   "v": 1,
+   "v": 2,
    "nombre": "Habitación con vida",
    "icono": {
     "id": "cama",
@@ -521,7 +568,7 @@
     }
    ],
    "parametros": [],
-   "ia": "subtle life in the room: curtains move gently, light shifts, the camera drifts slowly; furniture stays still",
+   "ia": "subtle life in the room: curtains move gently and the light shifts slowly; the furniture stays perfectly still",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
@@ -546,16 +593,20 @@
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} subtle life in the room: curtains move gently, light shifts, the camera drifts slowly; furniture stays still. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} subtle life in the room: curtains move gently, light shifts, the camera drifts slowly; furniture stays still. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} subtle life in the room: curtains move gently, light shifts, the camera drifts slowly; furniture stays still. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} subtle life in the room: curtains move gently, light shifts, the camera drifts slowly; furniture stays still. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} subtle life in the room: curtains move gently, light shifts, the camera drifts slowly; furniture stays still. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} subtle life in the room: curtains move gently and the light shifts slowly; the furniture stays perfectly still. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} subtle life in the room: curtains move gently and the light shifts slowly; the furniture stays perfectly still. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} subtle life in the room: curtains move gently and the light shifts slowly; the furniture stays perfectly still. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} subtle life in the room: curtains move gently and the light shifts slowly; the furniture stays perfectly still. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} subtle life in the room: curtains move gently and the light shifts slowly; the furniture stays perfectly still. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Cinemagraph",
+   "incluye": [
+    "cam-fija"
+   ]
   },
   {
    "id": "vp-se-arma",
-   "v": 1,
+   "v": 2,
    "nombre": "Se arma solo",
    "icono": {
     "id": "caja",
@@ -572,8 +623,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -587,7 +637,7 @@
     }
    ],
    "parametros": [],
-   "ia": "the furniture assembles itself piece by piece, stop-motion feel, ending as in the photo",
+   "ia": "the furniture assembles itself piece by piece, stop-motion feel, ending exactly as in the photo",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
@@ -611,16 +661,19 @@
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending as in the photo. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending as in the photo. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending as in the photo. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending as in the photo. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending as in the photo. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending exactly as in the photo. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending exactly as in the photo. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending exactly as in the photo. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending exactly as in the photo. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} the furniture assembles itself piece by piece, stop-motion feel, ending exactly as in the photo. {refs} {escena}. {look}. {sonido}."
+   },
+   "incluye": [
+    "cam-fija"
+   ]
   },
   {
    "id": "vp-colchon",
-   "v": 1,
+   "v": 2,
    "nombre": "Prueba de firmeza",
    "icono": {
     "id": "colchon",
@@ -638,7 +691,7 @@
    "ejes": [
     "producto",
     "camara",
-    "escena"
+    "plano"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -652,7 +705,7 @@
     }
    ],
    "parametros": [],
-   "ia": "a hand presses into the mattress and it slowly recovers its shape, close-up",
+   "ia": "a hand presses into the mattress and it slowly recovers its shape",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
@@ -677,16 +730,20 @@
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} a hand presses into the mattress and it slowly recovers its shape, close-up. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} a hand presses into the mattress and it slowly recovers its shape, close-up. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} a hand presses into the mattress and it slowly recovers its shape, close-up. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} a hand presses into the mattress and it slowly recovers its shape, close-up. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} a hand presses into the mattress and it slowly recovers its shape, close-up. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} a hand presses into the mattress and it slowly recovers its shape. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} a hand presses into the mattress and it slowly recovers its shape. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} a hand presses into the mattress and it slowly recovers its shape. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} a hand presses into the mattress and it slowly recovers its shape. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} a hand presses into the mattress and it slowly recovers its shape. {refs} {escena}. {look}. {sonido}."
+   },
+   "incluye": [
+    "cam-fija",
+    "pla-primer"
+   ]
   },
   {
    "id": "vp-probador",
-   "v": 2,
+   "v": 3,
    "nombre": "Probador con giro",
    "icono": {
     "id": "percha",
@@ -703,8 +760,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -747,22 +803,27 @@
     "ropa",
     "vuelta",
     "try on",
-    "modelo"
+    "modelo",
+    "probarse",
+    "como queda puesto"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} the model wears the garment and turns around slowly. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} the model wears the garment and turns around slowly. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} the model wears the garment and turns around slowly. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} the model wears the garment and turns around slowly. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} the model wears the garment and turns around slowly. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} the model wears the garment and turns around slowly. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} the model wears the garment and turns around slowly. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} the model wears the garment and turns around slowly. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} the model wears the garment and turns around slowly. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} the model wears the garment and turns around slowly. {refs} {escena}. {look}. {sonido}."
+   },
+   "incluye": [
+    "cam-fija"
+   ]
   },
   {
    "id": "vp-ugc",
-   "v": 2,
+   "v": 3,
    "nombre": "Reseña tipo creador",
    "tecnico": "UGC",
    "icono": {
@@ -780,8 +841,7 @@
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -801,15 +861,18 @@
      "tipo": "texto",
      "es": "Lo que dice",
      "max": 140,
-     "def": ""
+     "def": "Lo pedí y llegó igualito a la foto. ¡Me encanta!"
     }
    ],
-   "ia": "selfie-style creator talks about the product holding the phone: \"{p.texto}\"",
+   "ia": "a selfie-style creator holds the phone, shows the product and says to the camera: \"{p.texto}\"",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
     "veo-3.1",
-    "kling-o3"
+    "veo-3.1-fast",
+    "kling-o3",
+    "seedance-2.5",
+    "seedance-2"
    ],
    "post": [],
    "qa": [],
@@ -825,16 +888,22 @@
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} selfie-style creator talks about the product holding the phone: \"{p.texto}\". {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} selfie-style creator talks about the product holding the phone: \"{p.texto}\". {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} selfie-style creator talks about the product holding the phone: \"{p.texto}\". {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} selfie-style creator talks about the product holding the phone: \"{p.texto}\". {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} selfie-style creator talks about the product holding the phone: \"{p.texto}\". {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} a selfie-style creator holds the phone, shows the product and says to the camera: \"{p.texto}\". {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} a selfie-style creator holds the phone, shows the product and says to the camera: \"{p.texto}\". {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} a selfie-style creator holds the phone, shows the product and says to the camera: \"{p.texto}\". {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} a selfie-style creator holds the phone, shows the product and says to the camera: \"{p.texto}\". {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} a selfie-style creator holds the phone, shows the product and says to the camera: \"{p.texto}\". {refs} {escena}. {look}. {sonido}."
+   },
+   "ajustesModelo": {
+    "generateAudio": true
+   },
+   "incluye": [
+    "cam-mano"
+   ]
   },
   {
    "id": "vp-bucle-web",
-   "v": 1,
+   "v": 2,
    "nombre": "Bucle sin corte para la web",
    "icono": {
     "id": "bucle",
@@ -847,12 +916,12 @@
    ],
    "capa": "receta",
    "modos": [
+    "anima",
     "ab"
    ],
    "ejes": [
     "producto",
-    "camara",
-    "escena"
+    "camara"
    ],
    "exclusivo": false,
    "ejecutor": "ia",
@@ -866,7 +935,7 @@
     }
    ],
    "parametros": [],
-   "ia": "seamless loop, the last frame matches the first; gentle motion",
+   "ia": "seamless loop: gentle, subtle motion, and the last frame is identical to the first",
    "ranura": "accion",
    "requiere": {
     "roles": {
@@ -883,28 +952,36 @@
    ],
    "post": [],
    "qa": [],
-   "aviso": "Usa la misma foto como inicial y final.",
+   "aviso": "La misma foto va al principio y al final: se pone sola.",
    "buscar": [
     "bucle",
     "loop",
     "repetir",
     "web",
-    "portada"
+    "portada",
+    "sin corte",
+    "en bucle",
+    "que se repita"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} seamless loop, the last frame matches the first; gentle motion. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} seamless loop, the last frame matches the first; gentle motion. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} seamless loop, the last frame matches the first; gentle motion. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} seamless loop, the last frame matches the first; gentle motion. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} seamless loop, the last frame matches the first; gentle motion. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} seamless loop: gentle, subtle motion, and the last frame is identical to the first. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} seamless loop: gentle, subtle motion, and the last frame is identical to the first. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} seamless loop: gentle, subtle motion, and the last frame is identical to the first. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} seamless loop: gentle, subtle motion, and the last frame is identical to the first. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} seamless loop: gentle, subtle motion, and the last frame is identical to the first. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Loop",
+   "incluye": [
+    "cam-fija"
+   ],
+   "bucle": true
   },
   {
    "id": "vp-fotos-transicion",
-   "v": 1,
+   "v": 2,
    "nombre": "Pasar de una foto a otra",
    "icono": {
     "id": "flecha-ab",
@@ -964,18 +1041,22 @@
     "transicion",
     "de una a otra",
     "morph",
-    "cambiar de foto"
+    "cambiar de foto",
+    "morphing",
+    "fundido",
+    "pasar de una foto a otra"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} smooth creative transition from the first image to the second. {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} smooth creative transition from the first image to the second. {escena}. Camera: {camara}. {plano}. {look}.",
-    "seedance": "{plano}, {lente}. {sujeto} smooth creative transition from the first image to the second. {escena}. {camara}. {look}.",
-    "minimax-video": "{sujeto} smooth creative transition from the first image to the second. {escena}. {camara}. {look}.",
-    "video-generico": "{camara}. {plano}. {sujeto} smooth creative transition from the first image to the second. {escena}. {look}."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} smooth creative transition from the first image to the second. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} smooth creative transition from the first image to the second. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} smooth creative transition from the first image to the second. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} smooth creative transition from the first image to the second. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} smooth creative transition from the first image to the second. {refs} {escena}. {look}. {sonido}."
+   },
+   "tecnico": "Morph"
   }
  ]
 }

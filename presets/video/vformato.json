@@ -64,7 +64,7 @@
   },
   {
    "id": "vf-feed",
-   "v": 1,
+   "v": 2,
    "nombre": "Feed 4:5",
    "icono": {
     "id": "marco",
@@ -101,12 +101,12 @@
    },
    "requiere": {},
    "prefer": [
-    "kling-3-std",
-    "veo-3.1-fast",
     "seedance-2",
-    "kling-3-pro",
     "mmx-h3",
-    "kling-2.5-fal"
+    "wan-3",
+    "pixverse-6",
+    "kling-o3",
+    "seedance-2.5"
    ],
    "post": [],
    "qa": [],
@@ -118,11 +118,12 @@
    "estrella": false,
    "fase": 5,
    "estado": "beta",
-   "prompt": null
+   "prompt": null,
+   "honestidad": "Ningún modelo de video hace 4:5 exacto: se pide en 3:4, el más cercano, sin recortar nada."
   },
   {
    "id": "vf-cuadrado",
-   "v": 1,
+   "v": 2,
    "nombre": "Cuadrado",
    "icono": {
     "id": "marco",
@@ -160,7 +161,6 @@
    "requiere": {},
    "prefer": [
     "kling-3-std",
-    "veo-3.1-fast",
     "seedance-2",
     "kling-3-pro",
     "mmx-h3",
@@ -241,7 +241,7 @@
   },
   {
    "id": "vf-portada-web",
-   "v": 1,
+   "v": 2,
    "nombre": "Portada web en bucle",
    "icono": {
     "id": "bucle",
@@ -295,18 +295,22 @@
     "bucle",
     "hero",
     "web",
-    "fondo de pagina"
+    "fondo de pagina",
+    "loop",
+    "sin corte",
+    "video de fondo"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. seamless loop, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. seamless loop.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. seamless loop.",
-    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. seamless loop.",
-    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. seamless loop."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. seamless loop, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. seamless loop. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. seamless loop. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. seamless loop. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. seamless loop. {sonido}."
+   },
+   "bucle": true
   }
  ]
 }

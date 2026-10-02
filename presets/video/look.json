@@ -3,7 +3,7 @@
  "presets": [
   {
    "id": "look-cine",
-   "v": 1,
+   "v": 2,
    "nombre": "De cine",
    "icono": {
     "id": "pelicula",
@@ -52,18 +52,22 @@
     "cine",
     "cinematografico",
     "pelicula",
-    "cinematic"
+    "cinematic",
+    "como pelicula",
+    "cinematografia",
+    "look de cine"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. cinematic grade, anamorphic feel, gentle contrast, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. cinematic grade, anamorphic feel, gentle contrast.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. cinematic grade, anamorphic feel, gentle contrast.",
-    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. cinematic grade, anamorphic feel, gentle contrast.",
-    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. cinematic grade, anamorphic feel, gentle contrast."
-   }
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. cinematic grade, anamorphic feel, gentle contrast, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. cinematic grade, anamorphic feel, gentle contrast. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. cinematic grade, anamorphic feel, gentle contrast. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. cinematic grade, anamorphic feel, gentle contrast. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. cinematic grade, anamorphic feel, gentle contrast. {sonido}."
+   },
+   "tecnico": "Cinematic"
   },
   {
    "id": "look-calido",
@@ -448,7 +452,7 @@
   },
   {
    "id": "look-ref",
-   "v": 2,
+   "v": 3,
    "nombre": "Copiar el look de una foto",
    "icono": {
     "id": "copiar",
@@ -524,17 +528,20 @@
     "mismo color",
     "referencia",
     "lut",
-    "estilo"
+    "estilo",
+    "copiar el color",
+    "mismo look",
+    "como esta foto"
    ],
    "estrella": false,
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {escena}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} {accion}. {escena}. Camera: {camara}. {plano}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos.",
-    "seedance": "{plano}, {lente}. {sujeto} {accion}. {escena}. {camara}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos.",
-    "minimax-video": "{sujeto} {accion}. {escena}. {camara}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos.",
-    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {escena}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos."
+    "veo": "{camara}, {plano}, {lente}. {sujeto} {accion}. {refs} {escena}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} {accion}. {refs} {escena}. Camera: {camara}. {plano}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} {accion}. {refs} {escena}. {camara}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}.",
+    "minimax-video": "{sujeto} {accion}. {refs} {escena}. {camara}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} {accion}. {refs} {escena}. color grade and mood {p.fuerza} the reference image; do not copy its objects, text or logos. {sonido}."
    }
   }
  ]

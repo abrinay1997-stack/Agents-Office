@@ -70,3 +70,16 @@ test('filtros: medio, modo y grupo; sin texto, la portada (estrella, favoritos, 
   assert.deepEqual(buscar('xyzw qqq', C.presets), []);
   assert.deepEqual(buscar('luz', null), []);
 });
+
+test('video (F5): con la fábrica de presets/, el buscador encuentra «producto girando», «zoom lento», «unboxing» y «antes y después»', async () => {
+  const { cargarFabrica } = await import('../presets/fabrica.mjs');
+  const F = cargarFabrica().presets;
+  const primero = (q, opts = { medio: 'video' }) => buscar(q, F, opts)[0]?.id;
+  assert.equal(primero('producto girando'), 'vp-giro-360');
+  assert.equal(primero('zoom lento'), 'cam-acercar');
+  assert.equal(primero('unboxing'), 'vp-unboxing');
+  assert.equal(primero('antes y después'), 'vp-antes-despues');
+  assert.equal(primero('antes y despues'), 'vp-antes-despues', 'sin tildes');
+  assert.equal(primero('acercamieto'), 'cam-acercar', 'una letra de menos');
+  assert.ok(buscar('antes y después', F).slice(0, 2).some(r => r.id === 'vp-antes-despues'), 'sin filtro de medio también sale entre los dos primeros');
+});

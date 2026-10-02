@@ -29,15 +29,19 @@ export const OPS_LOCALES = ['mascara', 'fondo-blanco', 'capa-sombra', 'sombra-co
   'saturacion', 'balance', 'dominante', 'temperatura', 'blanco-y-negro', 'auto-niveles', 'lut', 'lut3d', 'transferir-color', 'exportar-lut', 'grano',
   'igualar-serie', 'nitidez', 'ruido', 'rotar-horizonte', 'exportar', 'exportar-varios', 'quitar-exif'];
 export const REQUIERE = ['edit', 'refsMin', 'roles', 'settings', 'local'];
-export const RANURAS = ['camara', 'plano', 'accion', 'look', 'sfx', 'escena', 'luz'];
+export const RANURAS = ['camara', 'plano', 'accion', 'look', 'sfx', 'ambiente', 'escena', 'luz'];
+/** Video: qué ranura del prompt llena un ajuste de cada eje exclusivo (un movimiento de cámara por clip va en «camara»). */
+export const RANURA_DE_EJE_VIDEO = { camara: 'camara', plano: 'plano' };
+export const ROLES_MODELO = ['start', 'end', 'video', 'reference']; // los roles de media.mjs que puede pedir `requiere.roles`
 export const FASES = { image: [1, 4], video: [5], music: [6], audio: [6] };
 export const ESTADOS = ['beta', 'estable'];
 export const INTENSIDADES = ['suave', 'normal', 'fuerte'];
 // los marcadores de una plantilla (§5.8): los del preset, y las ranuras que rellena el compilador en video
-export const MARCADORES = ['idea', 'producto', 'conservar', 'encuadre', 'n1', 'camara', 'plano', 'lente', 'sujeto', 'accion', 'escena', 'look', 'luz', 'sfx', 'ambiente'];
+export const MARCADORES = ['idea', 'producto', 'conservar', 'encuadre', 'n1', 'camara', 'plano', 'lente', 'sujeto', 'accion', 'refs', 'escena', 'look', 'luz', 'sfx', 'ambiente', 'sonido'];
 const CAMPOS = new Set(['id', 'v', 'nombre', 'tecnico', 'icono', 'categoria', 'frase', 'medios', 'capa', 'modos', 'ejes', 'exclusivo', 'ejecutor', 'entradas',
   'parametros', 'incluye', 'excluye', 'ia', 'iaPorIntensidad', 'local', 'requiere', 'prefer', 'ajustesModelo', 'post', 'qa', 'honestidad', 'aviso', 'buscar',
-  'estrella', 'fase', 'estado', 'prompt', 'ranura', 'basadoEn', 'fijas']);
+  'estrella', 'fase', 'estado', 'prompt', 'ranura', 'basadoEn', 'fijas',
+  'bucle', 'soloRigidos']); // video: «bucle» (la foto final es la inicial) y «soloRigidos» (avisa si el producto es blando o transparente)
 const PATH_RE = /^[Mm][MmLlHhVvCcSsQqTtAaZz0-9.,\s-]*$/;
 const RATIO_RE = /^\d+(\.\d+)?:\d+$/;
 
@@ -210,6 +214,22 @@ export function validarPreset(p, ctx = {}) {
     }
   }
   if (p.excluye !== undefined) for (const x of lista(p.excluye)) if (byId && !byId.has(x)) mal('excluye', `«${x}» no existe`);
+
+  // video (§3.3, §5.2): un movimiento de cámara por clip, el bucle, los fotogramas y los ajustes del modelo
+  for (const [i, x] of params.entries()) if (x?.ranura !== undefined && (medio !== 'video' || !RANURAS.includes(x.ranura))) mal(`parametros[${i}]`, `«ranura» solo en video y una de ${RANURAS.join(', ')}`);
+  for (const k of ['bucle', 'soloRigidos']) if (p[k] !== undefined && (p[k] !== true || medio !== 'video')) mal(k, 'solo en un preset de video, y vale true');
+  if (medio === 'video') {
+    if (p.capa === 'ajuste') for (const [eje, r] of Object.entries(RANURA_DE_EJE_VIDEO)) if (ejes.includes(eje) && p.ia && p.ranura !== r) mal('ranura', `un ajuste de ${eje} va en la ranura «${r}» (tiene «${p.ranura ?? 'ninguna'}»)`);
+    if (p.bucle && !modos.some(m => m === 'anima' || m === 'ab' || m === 'texto')) mal('bucle', 'un bucle anima una foto: modos «anima» o «ab»');
+    if (entradas.some(e => e.rol === 'final') && !modos.includes('ab')) mal('modos', 'pide la foto de llegada (final): lleva el modo «ab»');
+    if (entradas.some(e => (e.rol === 'origen' || e.rol === 'guia') && e.medio === 'video') && !modos.includes('video')) mal('modos', 'trabaja sobre un video: lleva el modo «video»');
+    const am = p.ajustesModelo || {};
+    if (am.aspectRatio !== undefined && !RATIO_RE.test(String(am.aspectRatio))) mal('ajustesModelo', `aspectRatio «${am.aspectRatio}» no es «ancho:alto»`);
+    if (am.duration !== undefined && !(Number.isFinite(+am.duration) && +am.duration > 0)) mal('ajustesModelo', 'duration es un número de segundos');
+    for (const k of ['generateAudio']) if (am[k] !== undefined && typeof am[k] !== 'boolean') mal('ajustesModelo', `${k} es true o false`);
+  }
+  for (const k of Object.keys(p.requiere?.roles || {})) if (!ROLES_MODELO.includes(k)) mal('requiere', `rol «${k}» desconocido (${ROLES_MODELO.join(', ')})`);
+  for (const v of Object.values(p.ajustesModelo || {}).flat()) for (const m of typeof v === 'string' ? marcadoresDe(v) : []) if (!m.startsWith('p.') || !pids.has(m.slice(2))) mal('ajustesModelo', `«{${m}}» no es un parámetro del preset`);
 
   // buscar, estrella, fase, estado
   const buscar = lista(p.buscar);

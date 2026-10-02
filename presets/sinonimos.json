@@ -75,6 +75,17 @@
   "muebles": ["serie", "catalogo completo"],
   "todas las fotos": ["serie", "todas iguales"],
   "catalogo web": ["catalogo", "para la web"],
-  "pagina web": ["para la web", "web"]
+  "pagina web": ["para la web", "web"],
+  "antes/despues": ["antes y despues"],
+  "antes o despues": ["antes y despues"],
+  "entre fotos": ["de una a otra", "transicion"],
+  "girando": ["giro", "que de vueltas"],
+  "rotar": ["giro", "que de vueltas"],
+  "zoom lento": ["acercar", "push in"],
+  "acercar la camara": ["acercar", "push in"],
+  "alejar la camara": ["alejar", "pull"],
+  "sin audio": ["mudo", "sin sonido"],
+  "abrir el producto": ["unboxing", "abrir caja"],
+  "abrir paquete": ["unboxing", "abrir caja"]
  }
 }
