@@ -168,6 +168,27 @@ export function ponerIntensidad(pila, i, v) {
 /** Elegir un atajo de la referencia i (los demás quedan como están). */
 export const conAtajo = (refs, i, atajo) => { const a = ATAJOS_REF.find(x => x.id === atajo); return a && refs[i] ? refs.map((r, k) => (k === i ? { ...r, ejes: { ...a.ejes } } : r)) : refs; };
 
+/* ---------- DESHACER ---------- */
+const copiar = {
+  pila: v => (v || []).map(x => ({ ...x, params: { ...(x.params || {}) } })),
+  refs: v => (v || []).map(r => ({ ...r, ejes: { ...(r.ejes || {}) } })),
+  escena: v => (v == null ? v : JSON.parse(JSON.stringify(v))),
+};
+/** Lo que DESHACER devolverá: solo los campos que cambia la acción que avisa ('pila', 'foto', 'refs', 'canal', 'escena'),
+ *  copiados. Así deshacer una sustitución no se lleva la foto o el atajo que elegiste después. */
+export function instantanea(st, campos) {
+  const v = {};
+  for (const k of campos) v[k] = (copiar[k] || (x => x))(st[k]);
+  return { campos: [...campos], v };
+}
+/** Devuelve a `st` lo de la instantánea (y nada más). */
+export function restaurar(st, snap) {
+  for (const k of snap?.campos || []) st[k] = (copiar[k] || (x => x))(snap.v[k]);
+  return st;
+}
+/** ¿Una acción sin aviso que cambia `campos` pisa lo que guarda el DESHACER pendiente? Entonces se anula: ya no sabría a qué volver. */
+export const tocaDeshacer = (snap, campos) => !!snap && campos.some(k => snap.campos.includes(k));
+
 /* ---------- el teclado ---------- */
 /**
  * Roving tabindex en la lista de tarjetas: el índice al que va el foco, o 'buscar' (↑ en la primera vuelve al buscador),

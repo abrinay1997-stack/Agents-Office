@@ -144,7 +144,8 @@ body.dark .st-bank .bk-tabs button[aria-selected="true"] { background: #2A2B31; 
 .st-bank .bk-side { min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--hairline); overflow: auto; overscroll-behavior: contain; }
 .st-bank .bk-pr, .st-bank .bk-pq { flex: none; padding: 12px 14px; } /* sin flex: none, la columna los encoge y se montan */
 .st-bank .bk-pr { border-bottom: 1px solid var(--hairline); }
-.st-bank .bk-pr::before { content: 'Mi receta'; display: block; margin-bottom: 8px; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+/* «Mi receta»: un título de verdad (antes, un ::before y un h3 oculto lo decían dos veces) */
+.st-bank .bk-pt { margin: 0 0 8px; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
 .st-bank .bk-qb { font-size: 12.5px; line-height: 1.45; }
 .st-bank .bk-qb .bk-qr { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
 .st-bank .bk-qb ol, .st-bank .bk-qb ul { margin: 4px 0 8px; padding-left: 20px; }
@@ -208,7 +209,7 @@ body.dark .st-bank .bk-card { background: #1E1F24; }
   .st-bank .bk-pane { display: none; overflow: auto; overscroll-behavior: contain; }
   .st-bank[data-tab="elegir"] .bk-pe { display: flex; overflow: hidden; }
   .st-bank[data-tab="receta"] .bk-pr, .st-bank[data-tab="que"] .bk-pq { display: block; border: 0; padding-bottom: 72px; }
-  .st-bank .bk-pr::before { display: none; }
+  .st-bank .bk-pt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; } /* con pestañas, la pestaña ya lo dice */
   .st-bank .bk-cards { grid-template-columns: 1fr; }
   .st-bank .bk-sh { padding: 6px 8px 6px 14px; }
   .st-bank :is(.bk-x, .bk-pri, .bk-star) { min-width: 44px; min-height: 44px; }

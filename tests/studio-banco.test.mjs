@@ -170,3 +170,24 @@ test('la marca y su tipo: el color acompaña al texto, nunca lo sustituye', () =
   assert.equal(K.tipoMarca(P('esc-sala'), { sirve: { on: false } }), 'falta');
   assert.equal(K.tipoMarca(P('fondo-pared')), 'ia');
 });
+
+test('DESHACER vuelve atrás solo lo que cambió la acción que avisó (revisión del injerto)', () => {
+  // sustituyo «fondo-blanco» por «fondo-gris» (sale DESHACER) y, en esos 8 s, elijo mi foto y un atajo de la referencia
+  const st = { foto: null, refs: [{ id: 'r.png', ejes: { ...core.EJES_REF_DEF } }], pila: [{ id: 'fondo-blanco', params: {} }], canal: null, escena: null };
+  const snap = K.instantanea(st, ['pila']);
+  st.pila = K.anadir(st.pila, P('fondo-gris'), byId).pila;
+  st.foto = 'mia.png';
+  assert.equal(K.tocaDeshacer(snap, ['foto']), false, 'elegir la foto no anula un DESHACER de la pila');
+  st.refs = K.conAtajo(st.refs, 0, 'color');
+  K.restaurar(st, snap);
+  assert.deepEqual(st.pila.map(x => x.id), ['fondo-blanco'], 'la pila vuelve');
+  assert.equal(st.foto, 'mia.png', 'DESHACER no borra la foto recién elegida');
+  assert.equal(K.atajoDe(st.refs[0].ejes), 'color', 'ni el atajo marcado después');
+  // la instantánea es una copia: lo que se toque después no la cambia
+  const s2 = { pila: [{ id: 'a', params: { intensidad: 'fuerte' } }], refs: [{ id: 'r', ejes: { color: 2 } }], foto: 'f' };
+  const sn = K.instantanea(s2, ['pila', 'refs']);
+  s2.pila[0].params.intensidad = 'suave'; s2.refs[0].ejes.color = 0;
+  assert.equal(sn.v.pila[0].params.intensidad, 'fuerte'); assert.equal(sn.v.refs[0].ejes.color, 2);
+  assert.equal(K.tocaDeshacer(sn, ['refs']), true, 'una acción sin aviso sobre lo mismo anula el DESHACER (ya no sabría a qué volver)');
+  assert.equal(K.tocaDeshacer(null, ['pila']), false);
+});

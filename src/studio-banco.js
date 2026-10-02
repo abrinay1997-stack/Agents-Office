@@ -83,7 +83,11 @@ export function initBanco(ctx) {
       t.innerHTML = aqui ? `<span>${esc(texto)}</span>${deshacer ? '<button type="button" data-deshacer data-f="deshacer">DESHACER</button>' : ''}` : '';
     }
   }
-  const foto0 = () => ({ pila: st.pila.map(x => ({ ...x, params: { ...(x.params || {}) } })), foto: st.foto, refs: st.refs.map(r => ({ ...r, ejes: { ...r.ejes } })) });
+  /** DESHACER guarda solo lo que cambia la acción que avisa (revisión del injerto: antes volvía también la foto y las
+   *  referencias, y se llevaba la foto elegida en esos 8 s). */
+  const snap = (...campos) => K.instantanea(st, campos);
+  /** Una acción sin aviso sobre lo mismo que guarda el DESHACER pendiente lo anula: ya no sabría a qué volver. */
+  function toco(...campos) { if (deshacer && K.tocaDeshacer(deshacer.antes, campos)) { deshacer = null; clearTimeout(toastT); pintarToast(''); } }
 
   /* ---------- el paso del compositor ---------- */
   function chipsHTML(w) {
@@ -242,9 +246,11 @@ export function initBanco(ctx) {
     pintarTabs();
   }
   function pintarTabs() {
-    const r = $$('[data-tn="receta"]'); if (r) r.textContent = st.pila.length ? String(st.pila.length) : '';
-    const qn = $$('[data-tn="que"]'); if (qn) qn.textContent = plan?.errores?.length ? '!' : '';
-    if (qn) qn.title = plan?.errores?.length ? 'Hay algo que revisar antes de generar' : '';
+    const n = st.pila.length, mal = !!plan?.errores?.length; // el número y la «!» se ven; el lector oye su frase (no «Mi receta3»)
+    const r = $$('[data-tn="receta"]'); if (r) r.textContent = n ? String(n) : '';
+    const rs = $$('[data-tns="receta"]'); if (rs) rs.textContent = n ? `, ${n} ${n === 1 ? 'elegido' : 'elegidos'}` : '';
+    const qn = $$('[data-tn="que"]'); if (qn) { qn.textContent = mal ? '!' : ''; qn.title = mal ? 'Hay algo que revisar antes de generar' : ''; }
+    const qs = $$('[data-tns="que"]'); if (qs) qs.textContent = mal ? ', hay algo que revisar' : '';
   }
   function ponTab(k, enfocar) {
     tab = k; sheet.dataset.tab = k;
@@ -268,24 +274,25 @@ export function initBanco(ctx) {
       if (editor) { editor.destroy(); editor = null; }
       favVista = [...fav]; recVista = [...rec];
       sheet.innerHTML = `<div class="bk-sh"><b id="${U}-sh">Banco de presets</b><span class="bk-shm"></span><span class="sp"></span><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el banco" title="Cerrar (Esc)">✕</button></div>
-        <div class="bk-tabs" aria-label="Partes del banco">${K.PESTANAS.map(([k, t]) => `<button type="button" id="${U}-t-${k}" data-tab="${k}" aria-controls="${U}-p-${k}" aria-selected="${tab === k}"${tab === k ? '' : ' tabindex="-1"'}>${t}<span class="bk-tn" data-tn="${k}"></span></button>`).join('')}</div>
+        <div class="bk-tabs" aria-label="Partes del banco">${K.PESTANAS.map(([k, t]) => `<button type="button" id="${U}-t-${k}" data-tab="${k}" aria-controls="${U}-p-${k}" aria-selected="${tab === k}"${tab === k ? '' : ' tabindex="-1"'}>${t}<span class="bk-tn" data-tn="${k}" aria-hidden="true"></span><span class="bk-sr" data-tns="${k}"></span></button>`).join('')}</div>
         <div class="bk-cols">
           <section class="bk-pane bk-pe" id="${U}-p-elegir" data-pane="elegir" aria-labelledby="${U}-t-elegir">
             <div class="bk-qw"><label class="bk-q"><span class="e3d-vh">Buscar un preset</span><input type="search" class="bk-qi" data-f="q" placeholder="Qué quieres: «se ve oscura», «fondo blanco», «como este anuncio»…" value="${esc(q)}" autocomplete="off" spellcheck="false" aria-describedby="${U}-qn"></label>
             <p class="bk-n" id="${U}-qn" aria-live="polite"></p></div><div class="bk-body"></div></section>
           <div class="bk-side">
-            <section class="bk-pane bk-pr" id="${U}-p-receta" data-pane="receta" aria-labelledby="${U}-t-receta"><h3 class="bk-sr">Mi receta</h3><div class="bk-pl"></div></section>
-            <section class="bk-pane bk-pq" id="${U}-p-que" data-pane="que" aria-labelledby="${U}-t-que"><h3 class="bk-sr">Qué hará</h3><div class="bk-qb"></div></section>
+            <section class="bk-pane bk-pr" id="${U}-p-receta" data-pane="receta" aria-labelledby="${U}-h-receta"><h3 class="bk-pt" id="${U}-h-receta">Mi receta</h3><div class="bk-pl"></div></section>
+            <section class="bk-pane bk-pq" id="${U}-p-que" data-pane="que" aria-labelledby="${U}-h-que"><h3 class="bk-sr" id="${U}-h-que">Qué hará</h3><div class="bk-qb"></div></section>
           </div>
         </div>
         <div class="bk-toast" role="status" hidden></div>`;
       sheet.dataset.tab = tab; ponRoles(); pintarHoja(); pintarLado(); pintarQue();
+      if (deshacer) pintarToast(deshacer.texto); // un DESHACER pendiente del compositor pasa a la hoja (en el teléfono el compositor no se ve)
       setTimeout(() => { if (tab === 'elegir' || !estrecho) $$('.bk-qi')?.focus(); else $$(`.bk-tabs [data-tab="${tab}"]`)?.focus(); }, 30);
     } else {
       sheet.innerHTML = `<div class="bk-sh"><b>Escenario 3D</b><span class="sp"></span><button type="button" class="bk-pri" data-cerrar>Listo</button><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el escenario" title="Cerrar (Esc)">✕</button></div>
         <p class="bk-ayuda">El producto se achica por la distancia de la cámara; el fondo no cambia y nada se recorta. La imagen gris de «Lo que ve la cámara» va al modelo como guía de composición.</p><div class="bk-e3d"></div>`;
-      if (!st.escena) { st.escena = E3.normalizar({ ...E3.ESCENA_DEFECTO, cuadro: { proporcion: (fab.canales.find(c => c.id === st.canal)?.proporcion) || E3.ESCENA_DEFECTO.cuadro.proporcion } }); cambio(); }
-      editor = initEscena3d($$('.bk-e3d'), { value: st.escena, familia: plan?.familia || 'conversacional', onChange: e => { st.escena = e; keep(); const l = $('.bk-escl'); if (l) l.textContent = E3.describirEscena(e, plan?.familia || 'conversacional').resumen || ''; else pintar(); replan(); } });
+      if (!st.escena) { toco('escena'); st.escena = E3.normalizar({ ...E3.ESCENA_DEFECTO, cuadro: { proporcion: (fab.canales.find(c => c.id === st.canal)?.proporcion) || E3.ESCENA_DEFECTO.cuadro.proporcion } }); cambio(); }
+      editor = initEscena3d($$('.bk-e3d'), { value: st.escena, familia: plan?.familia || 'conversacional', onChange: e => { toco('escena'); st.escena = e; keep(); const l = $('.bk-escl'); if (l) l.textContent = E3.describirEscena(e, plan?.familia || 'conversacional').resumen || ''; else pintar(); replan(); } });
       setTimeout(() => sheet.querySelector('.e3d-canvas, button')?.focus(), 30);
     }
     pintar();
@@ -299,7 +306,7 @@ export function initBanco(ctx) {
   const toggle = () => (sheet.hidden || sheet.dataset.modo !== 'banco' ? abrir('banco') : cerrar());
 
   function usar(p) {
-    const antes = foto0();
+    const antes = p.propio ? snap('pila', 'canal', 'escena', 'refs') : snap('pila');
     if (p.propio) { // un preset propio: su receta entra entera (pila, canal, escena, ejes)
       st.pila = p.propio.pila.filter(x => byId.has(x.id)).map(x => ({ id: x.id, params: { ...(x.params || {}) } }));
       if (p.propio.canal) st.canal = p.propio.canal; if (p.propio.escena) st.escena = E3.normalizar(p.propio.escena);
@@ -316,10 +323,11 @@ export function initBanco(ctx) {
   }
   function quitarDePila(i) {
     const x = st.pila[i]; if (!x) return;
-    const antes = foto0(); st.pila.splice(i, 1); if (chipAbierto === x.id) chipAbierto = null;
+    const antes = snap('pila'); st.pila.splice(i, 1); if (chipAbierto === x.id) chipAbierto = null;
     avisar(`Quitado: «${byId.get(x.id)?.nombre || x.id}»`, antes); cambio(); pintarHoja();
   }
   function setCanal(id) {
+    toco('canal', 'pila');
     st.canal = id || null;
     st.pila = st.pila.map(x => (x.id === 'sal-canal' ? { ...x, params: { ...x.params, canal: st.canal } } : x)).filter(x => x.id !== 'sal-canal' || st.canal);
     if (st.canal && st.pila.length && !K.exportaYa(st.pila, byId) && byId.has('sal-canal')) st.pila.push({ id: 'sal-canal', params: { canal: st.canal } });
@@ -328,6 +336,7 @@ export function initBanco(ctx) {
   }
   function tomar(rol, f) {
     if (/\.(mp4|webm|mp3|wav|flac|m4a|ogg)$/i.test(f)) return say?.('Ahí va una imagen.', true);
+    toco(rol === 'foto' ? 'foto' : 'refs');
     if (rol === 'foto') { st.foto = f; if (st.puerta === 'cero') st.puerta = 'foto'; }
     else if (!st.refs.some(r => r.id === f) && st.refs.length < 3) st.refs.push({ id: f, ejes: { ...core.EJES_REF_DEF } });
     cambio();
@@ -373,7 +382,7 @@ export function initBanco(ctx) {
   function accionComun(t, box) {
     if (t.hasAttribute('data-deshacer')) {
       if (!deshacer) return true;
-      const a = deshacer.antes; st.pila = a.pila; st.foto = a.foto; st.refs = a.refs; deshacer = null; clearTimeout(toastT); pintarToast('');
+      K.restaurar(st, deshacer.antes); deshacer = null; clearTimeout(toastT); pintarToast('');
       cambio(); pintarHoja(); say?.('Deshecho.');
       (box === sheet ? ($$('.bk-card[tabindex="0"]') || $$('.bk-qi')) : $('.bk-open'))?.focus({ preventScroll: true });
       return true;
@@ -384,7 +393,7 @@ export function initBanco(ctx) {
       if (sig) foco(box === sheet ? $$('.bk-pr') : main, `un-${w}-${sig.id}`); else (box === sheet ? $$('.bk-qi') : $('.bk-open'))?.focus({ preventScroll: true });
       return true;
     }
-    if (t.dataset.int) { st.pila = K.ponerIntensidad(st.pila, +t.dataset.pi, t.dataset.int); cambio(); return true; }
+    if (t.dataset.int) { toco('pila'); st.pila = K.ponerIntensidad(st.pila, +t.dataset.pi, t.dataset.int); cambio(); return true; }
     if (t.dataset.chip) { chipAbierto = chipAbierto === t.dataset.chip ? null : t.dataset.chip; pintar(); return true; }
     return false;
   }
@@ -410,15 +419,15 @@ export function initBanco(ctx) {
     }
     if (t.dataset.subir) { fileFor = t.dataset.subir; file.click(); return; }
     if (t.dataset.galeria) { cerrar(false); const rol = t.dataset.galeria; pick(rol === 'foto' ? 'Elige tu foto' : 'Elige la referencia', f => tomar(rol, f)); return; }
-    if (t.hasAttribute('data-unfoto')) { const antes = foto0(); st.foto = null; avisar('Quitaste tu foto', antes); cambio(); foco(main, 'gal-foto'); return; }
-    if (t.dataset.unref != null) { const antes = foto0(), i = +t.dataset.unref; st.refs.splice(i, 1); avisar(`Quitaste la referencia ${i + 1}`, antes); cambio(); foco(main, st.refs.length ? `unref-${Math.min(i, st.refs.length - 1)}` : 'gal-ref'); return; }
-    if (t.dataset.atajo) { st.refs = K.conAtajo(st.refs, +t.dataset.ri, t.dataset.atajo); cambio(); return; }
-    if (t.getAttribute('role') === 'switch' && t.dataset.eje) { const r = st.refs[+t.dataset.ri]; if (r) { r.ejes[t.dataset.eje] = r.ejes[t.dataset.eje] > 0 ? 0 : 2; cambio(); } return; }
-    if (t.dataset.fz) { const r = st.refs[+t.dataset.ri]; if (r) { r.ejes[t.dataset.eje] = +t.dataset.fz; cambio(); } return; }
+    if (t.hasAttribute('data-unfoto')) { const antes = snap('foto'); st.foto = null; avisar('Quitaste tu foto', antes); cambio(); foco(main, 'gal-foto'); return; }
+    if (t.dataset.unref != null) { const antes = snap('refs'), i = +t.dataset.unref; st.refs.splice(i, 1); avisar(`Quitaste la referencia ${i + 1}`, antes); cambio(); foco(main, st.refs.length ? `unref-${Math.min(i, st.refs.length - 1)}` : 'gal-ref'); return; }
+    if (t.dataset.atajo) { toco('refs'); st.refs = K.conAtajo(st.refs, +t.dataset.ri, t.dataset.atajo); cambio(); return; }
+    if (t.getAttribute('role') === 'switch' && t.dataset.eje) { const r = st.refs[+t.dataset.ri]; if (r) { toco('refs'); r.ejes[t.dataset.eje] = r.ejes[t.dataset.eje] > 0 ? 0 : 2; cambio(); } return; }
+    if (t.dataset.fz) { const r = st.refs[+t.dataset.ri]; if (r) { toco('refs'); r.ejes[t.dataset.eje] = +t.dataset.fz; cambio(); } return; }
     if (t.classList.contains('bk-open')) { toggle(); return; }
     if (t.dataset.canal != null) { setCanal(t.dataset.canal); if (!t.dataset.canal) foco(main, 'otras'); return; }
     if (t.dataset.escena === 'abrir') { abrir('escena'); return; }
-    if (t.dataset.escena === 'quitar') { st.escena = null; cerrar(false); cambio(); foco(main, 'esc-abrir'); return; }
+    if (t.dataset.escena === 'quitar') { toco('escena'); st.escena = null; cerrar(false); cambio(); foco(main, 'esc-abrir'); return; }
     if (t.dataset.guardar) { guardarPara = t.dataset.guardar === 'no' ? null : t.dataset.guardar === 'receta' ? { desde: null, nombre: '' } : { desde: t.dataset.guardar, nombre: '' }; pintar(); setTimeout(() => (guardarPara ? $('.bk-guardar input') : $('[data-guardar="receta"]'))?.focus(), 0); return; }
     if (t.dataset.ver) { abrirArchivo?.(t.dataset.ver); return; }
   });
