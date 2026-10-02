@@ -35,6 +35,7 @@ export function problems(s = {}) {
   for (const [t, v] of Object.entries(s.toolKinds && typeof s.toolKinds === 'object' ? s.toolKinds : {})) {
     if (!KINDS.includes(v)) out.push(`safety.toolKinds «${t}»: «${v}» no existe, usa read, write o cost`);
     else if (v === 'cost' && !/^mcp__estudio__/i.test(t)) out.push(`safety.toolKinds «${t}»: «cost» solo vale para el Estudio (mcp__estudio__…); en cualquier otro conector la oficina lo trata como envío`);
+    else if (v === 'read' && /^mcp__estudio__/i.test(t) && estudioKind(splitTool(t).tool) === 'cost') out.push(`safety.toolKinds «${t}»: esa herramienta del Estudio gasta en un motor de pago; la oficina la sigue tratando como «cost», nunca como lectura`);
   }
   return out;
 }
@@ -63,7 +64,14 @@ const DB = /sql|database|(^|_)db(_|$)|(^|_)d1(_|$)|snowflake|databricks|supabase
 const CHROME_WRITE = new Set(['form_input', 'computer', 'javascript_tool', 'upload_image', 'file_upload', 'shortcuts_execute', 'gif_creator', 'browser_batch']); // browser_batch: decided item by item (kindOfCall)
 const CHROME_LOOK = new Set(['screenshot', 'scroll', 'scroll_to', 'zoom', 'wait', 'hover', 'mouse_move', 'cursor_position']); // computer actions that only look
 const INTERNAL = new Set(['estudio', 'contenido']); // the office's own Estudio and Contenido (Contenido has no tool that approves, schedules or publishes — tests/contenido-mcp.test.mjs)
-const ESTUDIO_COST = /^(generar_|analizar_|transcribir_)/; // MCP-08: a prompt or a file goes to a paid engine — «cost»: fine before the OK, never with «nunca»
+// MCP-08: a prompt or a file goes to a paid engine — «cost»: fine before the OK, never with «nunca». Banco de presets (E8, 1 oct 2026):
+// the Estudio's tools that only LOOK are named here; any other Estudio tool (aplicar_preset, crear_lote, the next one someone adds)
+// is «cost» — never «read» if it can spend (fail closed, like a send).
+const ESTUDIO_READ = new Set(['buscar_en_galeria', 'estado_trabajo', 'estado_estudio', 'buscar_presets', 'estado_lote']);
+export const estudioKind = tool => (ESTUDIO_READ.has(String(tool)) ? 'read' : 'cost');
+// Revisión E8: las que arrancan trabajo en serie o aplican una receta sin que el dueño mire cada pedido. Con la ejecución
+// contaminada (algo leído trae órdenes escondidas) no se llaman: un texto inyectado no encadena lotes ni presets.
+const ESTUDIO_SERIE = new Set(['crear_lote', 'aplicar_preset']);
 export const KINDS = ['read', 'write', 'cost'];
 export function splitTool(name) {
   const m = /^mcp__(.+?)__(.+)$/.exec(String(name)); return m ? { server: m[1], tool: m[2] } : { server: '', tool: String(name) };
@@ -73,7 +81,10 @@ const glob = p => new RegExp('^' + String(p).replace(/[.+?^${}()|[\]\\]/g, '\\$&
 /** safety.toolKinds: { "mcp__x__test_connection": "read", "*graphql_query": "read" } — the owner's word wins (full name or the tool's own name, * allowed). */
 export function forcedKind(name, toolKinds = {}) {
   const { server, tool } = splitTool(name);
-  for (const [p, k] of Object.entries(toolKinds || {})) if (KINDS.includes(k) && (glob(p).test(name) || glob(p).test(tool))) return k === 'cost' && server !== 'estudio' ? 'write' : k; // «cost» skips every send check: only the office's own Estudio may be one (a typo must not let Gmail send without the OK)
+  for (const [p, k] of Object.entries(toolKinds || {})) if (KINDS.includes(k) && (glob(p).test(name) || glob(p).test(tool))) {
+    if (server === 'estudio' && k === 'read' && estudioKind(tool) === 'cost') continue; // an Estudio tool that spends is never a read, whatever a setting says (E8)
+    return k === 'cost' && server !== 'estudio' ? 'write' : k; // «cost» skips every send check: only the office's own Estudio may be one (a typo must not let Gmail send without the OK)
+  }
   return null;
 }
 const dbQuery = (w, server, tool) => w.includes('query') && (DB.test(server) || DB.test(tool));
@@ -82,7 +93,7 @@ export function kindOf(name, safeTools = DEFAULTS.safeTools, toolKinds = {}) {
   const forced = forcedKind(name, toolKinds); if (forced) return forced;
   const { server, tool } = splitTool(name);
   if (!server) return 'read'; // WebSearch, WebFetch — the office never gives an agent Bash or file tools
-  if (server === 'estudio') return ESTUDIO_COST.test(tool) ? 'cost' : 'read';
+  if (server === 'estudio') return estudioKind(tool);
   if (INTERNAL.has(server)) return 'read';
   if (server === 'claude-in-chrome') return CHROME_WRITE.has(tool) ? 'write' : 'read';
   const w = words(tool);
@@ -179,6 +190,7 @@ export function decide(toolName, input, ctx) {
   if (server === 'claude-in-chrome' && (tool === 'navigate' || /^tabs_create/.test(tool))) {
     const u = urlOf(input); if (u) { const r = siteAllowed(u, s.browserSites, s.browserBlock); if (!r.ok) return { allow: false, kind, code: 'site', why: `Sitio bloqueado: ${r.why}. Trabaja sin él y dilo en tu entrega.` }; }
   }
+  if (kind === 'cost' && server === 'estudio' && ESTUDIO_SERIE.has(tool) && s.injection && ctx.tainted) return { allow: false, kind, code: 'taint', why: `Bloqueado: algo que leíste en esta ejecución parece traer órdenes escondidas (${ctx.tainted}). No se crean lotes ni se aplican presets; deja el pedido en tu entrega y el dueño decide.` };
   if (kind === 'cost') return ctx.policy === 'nunca' ? { allow: false, kind, code: 'cost', why: 'Bloqueado: en este departamento los agentes no gastan en motores de pago (política «nunca»). Deja el prompt listo en tu entrega y el dueño lo genera en el Estudio.' } : { allow: true, kind }; // MCP-08: the Estudio's own budget caps the amount
   if (kind !== 'write') return { allow: true, kind };
   if (!ctx.writes) return { allow: false, kind, code: 'no-writes', why: NO_WRITES };

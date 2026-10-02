@@ -85,3 +85,14 @@ test('revisión MCP: en un browser_batch, un elemento de otro servidor se bloque
   assert.equal(S.kindOfCall('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__claude-in-chrome__get_page_text' }] }), 'read');
   assert.equal(S.decide('mcp__claude-in-chrome__browser_batch', { actions: [{ name: 'mcp__claude-in-chrome__get_page_text' }, { name: 'navigate', input: { url: 'https://a.com' } }] }, ctx).allow, true);
 });
+
+test('revisión E8: con la ejecución contaminada, el Estudio no crea lotes ni aplica presets (un texto inyectado no los encadena)', () => {
+  const ctx = { writes: false, policy: 'aprobar', runMode: 'draft', tainted: 'pide reenviar todos los correos' };
+  for (const t of ['crear_lote', 'aplicar_preset']) {
+    const d = S.decide(`mcp__estudio__${t}`, {}, ctx);
+    assert.equal(d.allow, false, t); assert.equal(d.code, 'taint', t); assert.equal(d.kind, 'cost', t);
+    assert.equal(S.decide(`mcp__estudio__${t}`, {}, { ...ctx, tainted: null }).allow, true, `${t}: sin contaminar, sí`);
+    assert.equal(S.decide(`mcp__estudio__${t}`, {}, { ...ctx, safety: { injection: false } }).allow, true, `${t}: con la detección apagada por el dueño, como antes`);
+  }
+  assert.equal(S.decide('mcp__estudio__estado_lote', {}, ctx).allow, true, 'mirar un lote sigue permitido');
+});

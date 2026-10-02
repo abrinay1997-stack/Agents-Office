@@ -54,6 +54,18 @@ export function transicion(lote, accion) {
   if (accion === 'probar' && lote.muestraHecha) throw e409('la muestra ya se hizo: sigue con el resto o cambia la receta');
   return sig === '*' ? (lote.reanudarA && ACTIVOS.has(lote.reanudarA) ? lote.reanudarA : 'corriendo') : sig;
 }
+/** §15.5: ¿un pedido de un agente necesita el OK del dueño? Suma lo que esa tarea, y ese agente hoy, ya pidieron (`previo`:
+ *  fotos y US$ estimados de sus lotes y de aplicar_preset): partir el trabajo en pedidos pequeños no lo salta. La misma regla para
+ *  crear_lote y aplicar_preset; agenteSinOk o agenteUsd en 0 = pedir siempre el OK. → null, o el porqué en palabras. Puro. */
+export function pideOkAgente({ fotos = 0, usd: u = 0 } = {}, previo = {}, cfg = DEFAULTS) {
+  const pf = Math.max(0, +previo.fotos || 0), pu = Math.max(0, +previo.usd || 0);
+  const f = pf + Math.max(0, +fotos || 0), d = +(pu + Math.max(0, +u || 0)).toFixed(4);
+  const sinOk = +(cfg.agenteSinOk ?? DEFAULTS.agenteSinOk), tope = +(cfg.agenteUsd ?? DEFAULTS.agenteUsd);
+  const antes = pf || pu ? ` contando lo que ya pidió en esta tarea u hoy (${pf} foto${pf === 1 ? '' : 's'}, ${usd(pu)})` : '';
+  if (f >= sinOk) return `Lo pidió un agente y llega a ${f} fotos${antes} (el tope sin tu OK es ${Math.max(0, sinOk - 1)}): espera tu OK.`;
+  if (d >= tope) return `Lo pidió un agente y llega a ${usd(d)}${antes} (el tope sin tu OK es menos de ${usd(tope)}): espera tu OK.`;
+  return null;
+}
 /** Cuántas de prueba por defecto: «Probar con 3» viene encendido a partir de 10 fotos (D11). Puro. */
 export const muestraPorDefecto = (n, cfg = DEFAULTS) => (n >= (cfg.muestraDesde ?? 10) ? (cfg.muestra ?? 3) : 0);
 const INTENSIDAD = ['suave', 'normal', 'fuerte'];
@@ -356,7 +368,7 @@ export function crearLotes(o = {}) {
    *         receta: { pila, params, canal, encuadre, ejes, refs, escena, modelo, idea }, tope: { usd, fotos }, muestra?, concurrencia?, qa?,
    *         carpetaDestino?, agent?, task?, sub? }
    */
-  async function crear(b = {}, { by = 'you' } = {}) {
+  async function crear(b = {}, { by = 'you', previo = null } = {}) { // previo: lo que el agente ya pidió (pideOkAgente)
     const quien = ['you', 'dimitri', 'agent'].includes(by) ? by : 'you';
     const receta = recetaLimpia(b.receta), origen = b.origen || {};
     const sinReceta = recetaVacia(receta);
@@ -385,10 +397,8 @@ export function crearLotes(o = {}) {
     const sinFoto = l.filas.filter(f => f.estado === 'revisar').length;
     const nombres = receta.pila.map(x => todosPresets().find(p => p.id === x.id)?.nombre || x.id).join(' + ') || (sinReceta ? 'la de cada fila' : 'tu idea');
     bit(l, `Recibí ${l.filas.length} foto${l.filas.length === 1 ? '' : 's'}. Receta: ${nombres}${receta.canal ? ` para ${canales().find(c => c.id === receta.canal)?.nombre || receta.canal}` : ''}${receta.escena ? ', con una misma escena 3D para toda la serie' : ''}. Calculo ${vista.total ? `unos ${usd(vista.total)}` : 'costo 0 (todo en tu máquina)'}${vista.filas[0]?.modelo ? ` con ${vista.filas[0].modelo}` : ''}.${sinFoto ? ` ${sinFoto} no ${sinFoto === 1 ? 'se puede' : 'se pueden'} editar todavía: ${sinFoto === 1 ? 'queda' : 'quedan'} para revisar sin gastar nada.` : ''}`);
-    if (quien === 'agent' && (l.filas.length >= cfg.agenteSinOk || vista.total >= cfg.agenteUsd)) { // §15.5: desde 10 fotos o US$2
-      l.estado = 'espera_ok'; l.motivo = `Lo pidió un agente y llega a ${l.filas.length >= cfg.agenteSinOk ? `${l.filas.length} fotos (el tope sin tu OK es ${cfg.agenteSinOk - 1})` : `${usd(vista.total)} (el tope sin tu OK es menos de ${usd(cfg.agenteUsd)})`}: espera tu OK.`;
-      bit(l, l.motivo);
-    }
+    const porque = quien === 'agent' ? pideOkAgente({ fotos: l.filas.length, usd: vista.total }, previo || {}, cfg) : null; // §15.5: desde 10 fotos o US$2, sumando lo ya pedido
+    if (porque) { l.estado = 'espera_ok'; l.motivo = porque; bit(l, l.motivo); }
     LOTES.push(l); cambio(l);
     return { lote: pub(l), vista, sugerido: l.estado === 'espera_ok' ? 'autorizar' : l.muestra > 0 ? 'probar' : 'iniciar' };
   }
@@ -425,7 +435,7 @@ export function crearLotes(o = {}) {
       cambio(l); return pub(l);
     }
     if (acc === 'pausar') { pausar(l, by === 'you' ? 'lo pausaste tú.' : 'pausado.'); cambio(l); return pub(l); }
-    if (acc === 'autorizar') { l.estado = 'previsto'; l.motivo = null; bit(l, 'Tienes el OK: queda listo para empezar.'); cambio(l); return pub(l); }
+    if (acc === 'autorizar') { l.estado = 'previsto'; l.motivo = null; l.autorizado = ahora(); /* lo gastado con tu OK no cuenta para lo que el agente gasta sin él (pideOkAgente) */ bit(l, 'Tienes el OK: queda listo para empezar.'); cambio(l); return pub(l); }
     if (acc === 'probar') {
       const k = l.muestra || DEFAULTS.muestra;
       l.muestraFilas = l.filas.filter(f => f.estado === 'en_cola').slice(0, k).map(f => f.n);
