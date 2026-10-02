@@ -130,8 +130,17 @@ export function escenaEnPalabras(e) {
 /* ---------- validar la receta ---------- */
 const lista = x => Array.isArray(x) ? x : [];
 const esIdGaleria = s => typeof s === 'string' && /^[^\\:]{1,240}$/.test(s) && !s.startsWith('/') && !/(^|\/)\.\.(\/|$)/.test(s) && !/^data:|^https?:/i.test(s);
+/** Los canales como Set de ids: vale un Set, una lista de ids o la lista de la fábrica ([{ id, … }]). Revisión F1: presets.mjs
+ *  pasaba la lista de la fábrica y `canales.has` tumbaba el banco entero en cuanto una nota llevaba canal. */
+export function conjuntoDeCanales(canales) {
+  if (canales == null) return null;
+  if (canales instanceof Set) return canales;
+  if (Array.isArray(canales)) return new Set(canales.map(c => (typeof c === 'string' ? c : c?.id)).filter(x => typeof x === 'string'));
+  return null;
+}
 /** Los problemas de un preset propio, en frases. `byId`: los presets (de fábrica y propios) por id; `canales`: ids. */
-export function validarPropio(p, { byId = null, canales = null } = {}) {
+export function validarPropio(p, { byId = null, canales: canales0 = null } = {}) {
+  const canales = conjuntoDeCanales(canales0);
   const out = [], mal = (campo, frase) => out.push(`${campo}: ${frase}`);
   if (!p || typeof p !== 'object') return ['la nota no tiene receta'];
   if (!ID_PROPIO.test(p.id || '')) mal('id', '«mio-» y de 1 a 36 letras minúsculas, números o guiones');

@@ -206,3 +206,205 @@ test('sin motor que edite: «Fondo blanco» no se cae a otra cosa; dice qué act
     assert.deepEqual(media.jobs(), []);
   } finally { back(); }
 });
+
+/* ---------- revisión de F1 (1 oct 2026) ---------- */
+
+test('revisión F1: guardar una receta con canal funciona, y una nota con canal no tumba el banco', conSharp, () => {
+  const back = sinKeys();
+  try {
+    const { brain, P } = entorno();
+    const r = P.guardar({ receta: { pila: [{ id: 'sal-canal', params: { canal: 'web' } }], canal: 'web' }, nombre: 'Web con canal' });
+    assert.equal(r.preset.receta.canal, 'web');
+    // una nota escrita a mano (o traída por git) con canal
+    const dir = path.join(brain, 'Estudio', 'Presets');
+    fs.writeFileSync(path.join(dir, 'A mano.md'), fs.readFileSync(path.join(dir, 'Web con canal.md'), 'utf8').replace(/^id: .*$/m, 'id: mio-a-mano').replace(/^nombre: .*$/m, 'nombre: A mano'));
+    const l = P.lista({});
+    assert.ok(l.propios.includes('mio-web-con-canal') && l.propios.includes('mio-a-mano'), JSON.stringify(l.problemas));
+    assert.equal(P.compilar({ pila: ['mio-a-mano'] }).plan.preset[0].id, 'sal-canal');
+    assert.throws(() => P.guardar({ receta: { pila: ['sal-canal'], canal: 'no-existe' }, nombre: 'Mal' }), /no es un canal/);
+  } finally { back(); }
+});
+
+test('revisión F1: «Catálogo web» y «Catalogo web» son el mismo preset (una nota, un id, un historial)', conSharp, () => {
+  const back = sinKeys();
+  try {
+    const { brain, data, P } = entorno();
+    P.guardar({ receta: { pila: ['luz-mas-clara'] }, nombre: 'Catálogo web' });
+    const r2 = P.guardar({ receta: { pila: ['luz-mas-oscura'] }, nombre: 'Catalogo web' });
+    assert.equal(r2.archivo, 'Estudio/Presets/Catálogo web.md', 'se guarda en la nota que ya había');
+    assert.equal(r2.preset.v, 2);
+    const dir = path.join(brain, 'Estudio', 'Presets');
+    assert.deepEqual(fs.readdirSync(dir).filter(f => f.endsWith('.md')), ['Catálogo web.md']);
+    assert.equal(fs.readdirSync(path.join(data, 'history', 'presets', 'mio-catalogo-web')).length, 1);
+    // dos notas con el mismo id (copiadas a mano): se carga una y se dice
+    fs.copyFileSync(path.join(dir, 'Catálogo web.md'), path.join(dir, 'Copia.md'));
+    const l = P.lista({});
+    assert.deepEqual(l.propios, ['mio-catalogo-web']);
+    assert.ok(l.problemas.some(x => /mismo id/.test(x)), JSON.stringify(l.problemas));
+  } finally { back(); }
+});
+
+test('revisión F1: lo local sin su LUT no se ofrece ni se hace; un paso que falla no sale «done» limpio', conSharp, async () => {
+  const back = sinKeys();
+  try {
+    const { P } = entorno();
+    const l = P.lista({ medio: 'image' });
+    for (const id of ['color-pastel', 'color-pelicula', 'ref-lut-aplicar']) {
+      const p = l.presets.find(x => x.id === id);
+      assert.ok(p, id); assert.equal(p.on, false, id); assert.ok(p.motivo, id);
+    }
+    const foto = media.upload({ name: 'x.png', data: dataUrl(await fotoBodega()) });
+    assert.ok(P.compilar({ pila: ['color-pastel'], entradas: { foto: [foto.file] } }).plan.errores.some(e => /LUT/.test(e)));
+    await assert.rejects(P.aplicar({ pila: ['color-pastel'], entradas: { foto: [foto.file] } }), /LUT/);
+    // un trabajo local con una LUT que falta: termina, pero lo dice, y sin la ruta de la máquina
+    const j0 = media.submit({ local: true, source: foto.file, post: [{ op: 'lut', archivo: 'presets/luts/no-existe.cube' }] });
+    const j = await media.wait(j0.id, 20000);
+    assert.equal(j.state, 'done', j.error);
+    assert.match(j.warning || '', /no-existe\.cube/);
+    const avisos = media.item(j.items[0]).post.avisos.join(' ');
+    assert.doesNotMatch(avisos + j.warning, /[A-Za-z]:\\|ENOENT|\/tmp\//, 'sin rutas absolutas');
+  } finally { back(); }
+});
+
+test('revisión F1: la LUT del paso (id de la galería) se lee y se aplica', conSharp, async () => {
+  const { procesar } = await import('../media/posproceso.mjs');
+  entorno();
+  const mes = new Date().toISOString().slice(0, 7), d = path.join(media.dir(), mes); fs.mkdirSync(d, { recursive: true });
+  // una LUT que invierte (la galería todavía no recibe .cube: aquí se escribe a mano para probar el cableado)
+  const cube = L.exportarCube(L.lutDeFuncion((r, g, b, o) => { o[0] = 1 - r; o[1] = 1 - g; o[2] = 1 - b; }, 17), 'Invertir');
+  fs.writeFileSync(path.join(d, 'lut-prueba.png'), cube);
+  const r = await procesar(await fotoBodega(64, 48), { post: [{ op: 'lut3d', lut: `${mes}/lut-prueba.png` }] });
+  assert.deepEqual(r.sinHacer, []);
+  assert.ok(r.post.pasos.some(s => s.op === 'lut3d' && s.hecho));
+  const px = (await L.leer(r.buffer)).data; assert.ok(px[0] < 60, 'la pared clara sale oscura');
+});
+
+test('revisión F1: si submit dice que no (presupuesto), la guía y la foto preparada no quedan huérfanas en la galería', conSharp, async () => {
+  const back = sinKeys(); const { srv, seen, base } = await stand();
+  Object.assign(process.env, { GEMINI_API_KEY: 'prueba-key', AO_GEMINI_BASE: base });
+  try {
+    const { brain, data, P } = entorno();
+    const foto = media.upload({ name: 'cama.png', data: dataUrl(await fotoBodega()) });
+    media.setLimits({ dailyBudget: 0.0001 });
+    const n0 = media.list({ limit: 1e6 }).length;
+    const escena = { producto: { tipo: 'cama-queen', ancho: 160, alto: 50, fondo: 200 }, camara: { distancia: 500, azimut: 35, altura: 140, lente: 35 }, cuadro: { proporcion: '4:5' }, fondo: { tipo: 'locacion', valor: 'sala moderna' } };
+    await assert.rejects(P.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena }), /presupuesto/);
+    await assert.rejects(P.aplicar({ pila: ['cat-web-panaclaw'], entradas: { foto: [foto.file] } }), /presupuesto/);
+    await assert.rejects(P.aplicar({ pila: ['cat-web-panaclaw'], entradas: { foto: [foto.file] } }), /presupuesto/);
+    assert.equal(media.list({ limit: 1e6 }).length, n0, 'nada nuevo en la galería');
+    assert.equal(seen.length, 0);
+    // con presupuesto, la guía de esa escena se sube una vez y se reutiliza aunque la caché se pierda (otro crearPresets = reinicio)
+    media.setLimits({ dailyBudget: 0 });
+    const a = await P.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena });
+    await media.wait(a.jobs[0].id, 30000);
+    const P2 = crearPresets({ brainPath: brain, dataDir: data });
+    const b = await P2.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena });
+    await media.wait(b.jobs[0].id, 30000);
+    assert.equal(b.plan.guia.id, a.plan.guia.id, 'la misma guía tras el reinicio');
+  } finally { media.setLimits({ dailyBudget: 0 }); srv.close(); back(); }
+});
+
+// Revisión F1, desde la pantalla: «Guardar como preset» con un canal ELEGIDO en el compositor manda exactamente este cuerpo
+// (src/studio-banco.js → guardar(): pila de { id, params }, ejes, escena, canal, modelo). Y «Guardar como preset…» en una
+// tarjeta de la galería manda { desde }, cuya receta también lleva el canal. Antes daba 400 «canales.has is not a function».
+// No necesita sharp: guardar no toca imágenes.
+test('revisión F1: «Guardar como preset» con canal elegido, desde el compositor y desde la galería', () => {
+  const back = sinKeys();
+  try {
+    const { brain, P } = entorno();
+    const r = P.guardar({ nombre: 'Feed de Instagram', marca: undefined, receta: { pila: [{ id: 'sal-canal', params: { canal: 'ig-feed' } }], ejes: null, escena: null, canal: 'ig-feed', modelo: null } });
+    assert.equal(r.preset.receta.canal, 'ig-feed');
+    assert.ok(fs.existsSync(path.join(brain, 'Estudio', 'Presets', 'Feed de Instagram.md')));
+    // desde una imagen de la galería que salió de una receta con canal
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    const it = media.upload({ name: 'resultado.png', data: dataUrl(png) });
+    media.update(it.file, { receta: { pila: [{ id: 'sal-canal', params: { canal: 'ig-story' } }], canal: 'ig-story' } });
+    const r2 = P.guardar({ nombre: 'Historia', desde: it.file });
+    assert.equal(r2.preset.receta.canal, 'ig-story');
+    // las dos se cargan en el banco y el banco sigue entero
+    const l = P.lista({});
+    assert.ok(l.propios.includes(r.preset.id) && l.propios.includes(r2.preset.id), JSON.stringify(l.problemas));
+    assert.deepEqual(l.problemas, []);
+    assert.ok(l.presets.length > l.propios.length, 'los de fábrica siguen saliendo');
+    // un canal que no existe sigue siendo un error claro (400), no un 500
+    assert.throws(() => P.guardar({ nombre: 'Mal', receta: { pila: [{ id: 'sal-canal', params: { canal: 'tiktok' } }], canal: 'tiktok' } }), e => e.status === 400 && /no es un canal|no existe/.test(e.message));
+  } finally { back(); }
+});
+
+// Revisión F1 (hallazgo 1): dos peticiones a la vez con la misma escena. A crea la guía y espera (prepara su foto); B la
+// recibe de la caché y la manda. Si después el submit de A dice que no, la guía NO va a la papelera: el trabajo de B la usa.
+test('revisión F1: la guía que otra petición en vuelo ya usa no va a la papelera cuando A falla', conSharp, async () => {
+  const back = sinKeys(); const { srv, base } = await stand();
+  Object.assign(process.env, { GEMINI_API_KEY: 'prueba-key', AO_GEMINI_BASE: base });
+  try {
+    const { P } = entorno();
+    const foto = media.upload({ name: 'cama.png', data: dataUrl(await fotoBodega()) });
+    media.setLimits({ dailyLimit: 2 });
+    const escena = { producto: { tipo: 'cama-queen', ancho: 160, alto: 50, fondo: 200 }, camara: { distancia: 500, azimut: 35, altura: 140, lente: 35 }, cuadro: { proporcion: '4:5' }, fondo: { tipo: 'locacion', valor: 'sala moderna' } };
+    // A: con «luz más clara» (prepara la foto: hay un await antes de submit) y 3 imágenes, más que el tope; B: una, sin preparar
+    const [ra, rb] = await Promise.allSettled([
+      P.aplicar({ pila: ['esc-sala', 'luz-mas-clara'], entradas: { foto: [foto.file] }, escena, n: 3 }),
+      P.aplicar({ pila: ['esc-sala'], entradas: { foto: [foto.file] }, escena, n: 1 }),
+    ]);
+    assert.equal(ra.status, 'rejected'); assert.match(ra.reason.message, /tope diario/);
+    assert.equal(rb.status, 'fulfilled', rb.reason?.message);
+    const guia = rb.value.plan.guia.id;
+    assert.ok(media.resolve(guia), 'la guía sigue en la galería');
+    assert.ok(!JSON.stringify(media.trashList()).includes(path.basename(guia)), 'y no está en la papelera');
+    const j = await media.wait(rb.value.jobs[0].id, 30000);
+    assert.equal(j.state, 'done', j.error);
+    // la foto preparada de A sí va a la papelera: nadie más la usa
+    assert.equal(media.list({ limit: 1e6 }).filter(x => x.prep).length, 0);
+  } finally { media.setLimits({ dailyLimit: 0 }); srv.close(); back(); }
+});
+
+// Revisión F1 (hallazgo 3): buscar la guía tras un reinicio no copia la galería entera; find() de la galería da una copia del primero.
+test('revisión F1: find (galería) recorre el índice y devuelve una copia', async () => {
+  const { find } = await import('../media/galeria.mjs');
+  entorno();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+  const a = media.upload({ name: 'a.png', data: dataUrl(png) }); media.update(a.file, { guia: true, escena: 'abc' });
+  media.upload({ name: 'b.png', data: dataUrl(png) });
+  const f = find(x => x.guia === true && x.escena === 'abc');
+  assert.equal(f.file, a.file);
+  f.escena = 'otra'; assert.equal(find(x => x.file === a.file).escena, 'abc', 'es una copia');
+  assert.equal(find(x => x.escena === 'no-existe'), null);
+  assert.equal(find(() => { throw new Error('x'); }), null, 'un filtro que falla no rompe la búsqueda');
+});
+
+// Revisión F1 (hallazgo 2): la LUT del dueño va en SU paso. Antes iba como ctx.lut a todo el pipeline y la LUT de fábrica de
+// otro paso (p.archivo) nunca se aplicaba: los dos pasos aplicaban la del dueño y salían «hechos».
+test('revisión F1: dos LUT en la misma pila, cada paso con la suya', conSharp, async () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-luts-')); fs.mkdirSync(path.join(raiz, 'presets', 'luts'), { recursive: true });
+  const cube = (fn, t) => L.exportarCube(L.lutDeFuncion(fn, 17), t);
+  const invertir = cube((r, g, b, o) => { o[0] = 1 - r; o[1] = 1 - g; o[2] = 1 - b; }, 'Invertir');
+  const rojo = cube((r, g, b, o) => { o[0] = 1; o[1] = 0; o[2] = 0; }, 'Rojo');
+  const verde = cube((r, g, b, o) => { o[0] = 0; o[1] = 1; o[2] = 0; }, 'Verde');
+  fs.writeFileSync(path.join(raiz, 'presets', 'luts', 'rojo.cube'), rojo);
+  const foto = await fotoBodega(64, 48);
+  const rgb = async b => { const d = (await L.leer(b)).data; return [d[0], d[1], d[2]].map(v => v > 128); };
+  // la de fábrica (rojo) y después la del dueño (invertir): cian. ctx.lut (verde) no se usa: los dos pasos traen la suya
+  const r = await L.pipeline(foto, [{ op: 'lut', archivo: 'presets/luts/rojo.cube' }, { op: 'lut3d', lutTexto: invertir }], { raiz, lut: verde });
+  assert.deepEqual(await rgb(r.buffer), [false, true, true], 'cian');
+  // un paso lut sin la suya sigue usando ctx.lut
+  const s = await L.pipeline(foto, [{ op: 'lut' }], { lut: verde });
+  assert.deepEqual(await rgb(s.buffer), [false, true, false], 'verde');
+  // por posproceso: la del dueño no tapa una de fábrica que falta (antes ese paso salía «hecho» con la LUT del dueño)
+  const { procesar } = await import('../media/posproceso.mjs');
+  entorno();
+  const mes = new Date().toISOString().slice(0, 7), d = path.join(media.dir(), mes); fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, 'lut-dueno.png'), invertir);
+  const p = await procesar(foto, { post: [{ op: 'lut3d', lut: `${mes}/lut-dueno.png` }, { op: 'lut', archivo: 'presets/luts/no-existe.cube' }] });
+  assert.equal(p.post.pasos.filter(x => x.hecho).length, 1, JSON.stringify(p.post.pasos));
+  assert.equal(p.sinHacer.length, 1); assert.match(p.sinHacer[0], /no-existe\.cube/);
+});
+
+// Revisión F1 (hallazgo 4): con varias imágenes, el aviso del trabajo junta lo de todas (y lo del motor), sin repetir.
+test('revisión F1: juntarAvisos no pierde el aviso de una imagen anterior ni el del motor', async () => {
+  const { juntarAvisos } = await import('../media/posproceso.mjs');
+  assert.equal(juntarAvisos(undefined, [], []), null);
+  const t = juntarAvisos('se hicieron 2 de 3', new Set(['lo local no está disponible']), new Set(['lut: falta', 'lut: falta', 'grano: no se hizo']));
+  assert.equal(t, 'se hicieron 2 de 3 · lo local no está disponible · no se hizo en tu máquina: lut: falta · grano: no se hizo');
+  assert.equal(juntarAvisos('x', ['x'], []), 'x');
+  assert.ok(juntarAvisos(null, ['a'.repeat(500)], []).length <= 300);
+});
