@@ -57,7 +57,7 @@ import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dim
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs'; // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
-import { crearLotes, DEFAULTS as LOTES_DEFAULTS } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
+import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
 import { sendJson, lightTasks } from './http-json.mjs';
 import { createCache } from './vault-cache.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
@@ -1187,6 +1187,25 @@ function lotesDeTarea(taskId, estado) {
   if (!taskId) return [];
   return lotes.lista().filter(l => l.by === 'agent' && (!estado || l.estado === estado)).map(l => { try { return lotes.uno(l.id); } catch { return null; } }).filter(l => l && l.task === taskId);
 }
+/** Revisión E8: lo que esta tarea, y este agente hoy, ya pidieron al Estudio SIN tu OK por crear_lote y aplicar_preset (fotos y US$
+   estimados, también lo que sigue en marcha o espera tu OK; no lo que ya autorizaste ni lo cancelado sin gastar). Se suma al pedido nuevo: partirlo en lotes de 9 fotos o en presets sueltos no salta el OK del dueño. */
+function yaPidioAgente({ agent, task } = {}) {
+  const hoy = localDay(Date.now()), suyo = (a, t, at) => !!((task && t === task) || (agent && a === agent && at && localDay(at) === hoy));
+  let fotos = 0, usd = 0;
+  for (const x of lotes.lista()) {
+    if (x.by !== 'agent') continue; let l; try { l = lotes.uno(x.id); } catch { continue; }
+    if (!suyo(l.agent, l.task, l.creado)) continue;
+    if (l.autorizado) continue; // ese ya tuvo el OK del dueño
+    const gastado = +l.costo?.gastado || 0; if (l.estado === 'cancelado' && !gastado) continue; // cancelado sin gastar: no cuenta
+    fotos += l.filas.length; usd += Math.max(+l.costo?.estimado || 0, gastado);
+  }
+  for (const j of media.jobs()) {
+    if (j.by !== 'agent' || !j.preset || j.lote || !suyo(j.agent, j.task, j.at)) continue; // las fotos de un lote ya cuentan arriba
+    if (j.state === 'failed' && !(+j.cost > 0)) continue;
+    fotos += Math.max(1, +j.n || 1); usd += Math.max(+j.cost || 0, (+j.unit || 0) * Math.max(1, +j.n || 1));
+  }
+  return { fotos, usd: +usd.toFixed(4) };
+}
 function nombresLote() {
   let ps = [], cs = []; try { ps = presets.todos().presets || []; } catch {} try { cs = presets.fabrica().canales || []; } catch {}
   return { nombreDe: id => ps.find(p => p.id === id)?.nombre || id, canalDe: id => cs.find(c => c.id === id)?.nombre || id };
@@ -1199,15 +1218,17 @@ function esperaLotes(task) { // al terminar una ejecución (no la del envío)
   task.result = `${task.result || ''}\n\n---\n${task.lotesOk.map(approvals.bloqueLote).join('\n\n')}`;
   return true;
 }
-function arrancarLotes(t) {
+function arrancarLotes(t) { // → los ids que arrancaron (o que ya no esperaban: los movió el dueño desde el Estudio)
+  const ok = [];
   for (const x of t.lotesOk || []) {
     try {
-      const l = lotes.uno(x.id); if (l.estado !== 'espera_ok') continue;
+      const l = lotes.uno(x.id); if (l.estado !== 'espera_ok') { ok.push(x.id); continue; }
       lotes.accion(x.id, 'autorizar', { by: 'you' });
       const r = lotes.accion(x.id, l.muestra > 0 ? 'probar' : 'iniciar', { by: 'you' });
-      console.log(`✦ estudio: lote ${x.id} autorizado con la tarea ${t.id} → ${r.estado}`);
+      console.log(`✦ estudio: lote ${x.id} autorizado con la tarea ${t.id} → ${r.estado}`); ok.push(x.id);
     } catch (e) { console.warn('lote:', e.message); notice('estudio', `No pude arrancar el lote «${x.nombre}» de «${t.title}»: ${e.message}. Ábrelo en el Estudio, pestaña Lotes.`, { level: 'warn', task: t.id }); }
   }
+  return ok;
 }
 function soltarLotes(t, por) { // devolver o caducar: el lote que esperaba se cancela (no gastó nada)
   if (!t) return;
@@ -1219,8 +1240,9 @@ function loteATarea(l) { // al terminar: la línea «⏳ Estudio: lote … (lote
   let list; try { list = load(); } catch { return; }
   const t = list.find(x => x.id === l.task); if (!t || t.state === 'doing' || t.state === 'next') return; // la ejecución sigue: lo hace al terminar
   const res = approvals.resumenLote(l); let puesto = false;
-  for (const k of ['result', 'draft']) if (typeof t[k] === 'string' && approvals.marcaLote(l.id).test(t[k])) { t[k] = approvals.ponerResumenLote(t[k], l, res); puesto = true; }
+  for (const k of ['result', 'draft']) if (typeof t[k] === 'string' && approvals.marcaLote(l.id).test(t[k])) { t[k] = approvals.ponerResumenLote(t[k], l, res); puesto = true; } // un borrador editado a mano también es t.draft/t.result (editedDraft es solo la marca)
   if (!puesto) return; // una vez: después ya no está la línea
+  if (t.state === 'waiting') draftFacts(t); // revisión E8: «Lo que saldrá» y el riesgo, con el borrador que el dueño va a aprobar
   t.media = [...new Set([...(t.media || []), ...l.filas.filter(f => (f.estado === 'lista' || f.estado === 'aprobada') && f.out).map(f => f.out)])];
   save(list);
   if (t.state === 'done' && t.note) { try { writeNote(t); } catch (e) { console.warn('lote nota:', e.message); } }
@@ -1361,8 +1383,13 @@ function commitApproval(id) {
   const l = load(), t = l.find(x => x.id === id); if (!t || t.state !== 'waiting') return;
   delete t.approving;
   if (t.lotesOk?.length) { // E8: tu OK autoriza el lote del agente y lo arranca (con la prueba de 3 desde 10 fotos)
-    arrancarLotes(t);
-    if (t.loteOnly) { Object.assign(t, { state: 'done', doneAt: Date.now(), approved: true, approvedAt: Date.now() }); t.note = writeNote(t); save(l); learnFrom(t); rebuildGraph().catch(() => {}); console.log(`✅ ${t.id} lote del Estudio autorizado`); return; }
+    const arrancados = arrancarLotes(t), at = Date.now();
+    for (const k of ['result', 'draft']) if (typeof t[k] === 'string') t[k] = approvals.loteAutorizado(t[k], t.lotesOk, { at, arrancados }); // revisión E8: la entrega ya no dice «espera tu OK»
+    if (t.loteOnly) {
+      Object.assign(t, { state: 'done', doneAt: at, approved: true, approvedAt: at }); t.note = writeNote(t); save(l); learnFrom(t); rebuildGraph().catch(() => {}); console.log(`✅ ${t.id} lote del Estudio autorizado`);
+      for (const h of taskHooks) try { h({ ...t, agentName: agentName(t.agent), deptName: DEPTS[t.dept]?.name || t.dept }); } catch {} // como al terminar una ejecución: Telegram dice que terminó
+      return;
+    }
   }
   t.state = 'doing'; t.startedAt = Date.now(); save(l);
   console.log(`✅ ${t.id} ${agentName(t.agent)} is sending`);
@@ -2123,7 +2150,7 @@ const server = http.createServer(async (req, res) => {
             const ya = w.task && nombre ? lotesDeTarea(w.task).find(l => l.nombre === nombre.slice(0, 80) && l.estado !== 'cancelado') : null; // la misma tarea lo vuelve a pedir (el envío tras tu OK, un reintento): no se duplica
             if (ya) return json(res, 200, { lote: puenteLotes.paraUI(ya), existente: true, budget: media.budget() });
           }
-          const r = await lotes.crear({ ...b, origen: puenteLotes.origenDelPedido(b.origen) }, { by });
+          const r = await lotes.crear({ ...b, origen: puenteLotes.origenDelPedido(b.origen) }, { by, previo: by === 'agent' ? yaPidioAgente(agenteDe(b)) : null }); // revisión E8: con lo que el agente ya pidió
           console.log(`✦ estudio: lote ${r.lote.id} «${r.lote.nombre}» previsto · ${r.lote.filas.length} fotos · ~US$${r.vista.total}${r.lote.estado === 'espera_ok' ? ' · espera tu OK' : ''}`);
           if (by === 'agent' && r.lote.estado === 'espera_ok') notice('estudio', `${agentName(r.lote.agent) || 'Un agente'} pide tu OK para el lote «${r.lote.nombre}»: ${r.lote.filas.length} fotos, unos US$${(+r.vista.total).toFixed(2)}. ${r.lote.task ? 'Lo verás en ⚠ Aprobaciones cuando termine su tarea.' : 'Está en el Estudio, pestaña Lotes.'}`, { task: r.lote.task || null });
           return json(res, 200, { lote: puenteLotes.paraUI(r.lote, r.vista, { nombreModelo }), vista: r.vista, sugerido: r.sugerido, budget: media.budget() });
@@ -2157,7 +2184,11 @@ const server = http.createServer(async (req, res) => {
         if (url.pathname === '/api/media/presets/compile' && req.method === 'POST') { const { plan } = presets.compilar(await body(req)); return json(res, 200, { plan, budget: media.budget() }); } // no gasta
         if (url.pathname === '/api/media/presets/apply' && req.method === 'POST') { // gasta: el clic GENERAR del dueño (los agentes y Dimitri llegan en F3, con su propio camino)
           const b = await body(req), ag = puenteLotes.quien(b) === 'agent'; // E8: un agente (aplicar_preset) gasta sin tu OK solo por debajo de agenteUsd
-          if (ag) { const { plan } = presets.compilar(b); const lim = +LOTES_CFG().agenteUsd || 0; if (!plan.errores?.length && lim > 0 && (+plan.costo?.usd || 0) >= lim) return json(res, 409, { error: `eso cuesta unos US$${(+plan.costo.usd).toFixed(2)} y un agente, sin el OK del dueño, gasta menos de US$${lim.toFixed(2)} por pedido: pídelo con crear_lote (esperará su OK) o deja el pedido en tu entrega`, plan }); }
+          if (ag) { // revisión E8: la misma regla que crear_lote (lotes.mjs → pideOkAgente), sumando lo que esta tarea y este agente hoy ya pidieron; 0 = pedir siempre
+            const { plan } = presets.compilar(b);
+            const porque = plan.errores?.length ? null : pideOkAgente({ fotos: 1, usd: +plan.costo?.usd || 0 }, yaPidioAgente(agenteDe(b)), LOTES_CFG());
+            if (porque) return json(res, 409, { error: `${porque.replace(/: espera tu OK\.$/, '')}. Un agente no lo aplica sin el OK del dueño: pídelo con crear_lote (esperará su OK) o deja el pedido en tu entrega`, plan });
+          }
           const out = await presets.aplicar(b, ag ? { by: 'agent', ...agenteDe(b) } : { by: 'you' });
           for (const j of out.jobs) console.log(`✦ estudio: ${j.id} preset ${(j.preset || []).map(x => x.id).join('+') || '—'} con ${j.model}${j.versionOf ? ' · versión de ' + j.versionOf : ''}${ag ? ' · agente ' + (j.agent || '?') : ''}`);
           const wait = ag ? Math.min(110000, Math.max(0, +b.wait || 0)) : 0; // el agente espera la imagen dentro de su llamada, como en generar_imagen

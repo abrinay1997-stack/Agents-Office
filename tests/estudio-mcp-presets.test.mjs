@@ -17,6 +17,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as S from '../safety.mjs';
 import * as A from '../approvals.mjs';
+import * as L from '../lotes.mjs';
 import { escenaDeAgente, escenaEnPalabras, pilaDe, presetEnLinea, avisoFuera } from '../estudio-mcp.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -77,6 +78,22 @@ test('approvals: al terminar, la línea ⏳ del lote pasa a ser el resumen con m
   assert.ok(!nuevo.includes('⏳'), 'la línea ⏳ ya no está'); assert.match(nuevo, /^Listo el catálogo\.\n✓ Estudio/); assert.match(nuevo, /Fuentes: x$/);
   assert.equal(A.ponerResumenLote('Sin línea', l).split('\n')[2].slice(0, 9), '✓ Estudio', 'si el agente no dejó la línea, va al final');
   assert.match(A.resumenLote({ ...l, estado: 'cancelado' }), /^✗ Estudio: el lote .* se canceló/);
+});
+test('revisión E8: tras tu OK, el bloque «espera tu OK» de la entrega dice que lo autorizaste (y si no arrancó)', () => {
+  const x = A.loteParaAprobar(LOTE), texto = `Listo.\n${A.lineaLote(LOTE)}\n\n---\n${A.bloqueLote(x)}`;
+  const at = new Date(2026, 9, 1, 15, 30).getTime(), r = A.loteAutorizado(texto, [x], { at, arrancados: [x.id] });
+  assert.ok(!/espera tu OK|Si apruebas/.test(r), r); assert.match(r, /✓ Estudio: autorizaste el lote «Camas bodega → web» · Labcd1234 el 1 de octubre de 2026/);
+  assert.ok(A.marcaLote(LOTE.id).test(r) && r.split('\n')[1].startsWith('⏳'), 'la línea ⏳ sigue para el resumen al terminar');
+  assert.match(A.loteAutorizado(texto, [x], { at, arrancados: [] }), /⚠ Estudio: autorizaste .* pero no arrancó/);
+  assert.equal(A.loteAutorizado('Sin bloque', [x]), 'Sin bloque');
+});
+test('revisión E8: el umbral sin tu OK suma lo que el agente ya pidió, y 0 = pedir siempre (crear_lote y aplicar_preset)', () => {
+  const cfg = L.DEFAULTS;
+  assert.equal(L.pideOkAgente({ fotos: 9, usd: 0.5 }, {}, cfg), null, '9 fotos y US$0,50: sin OK');
+  assert.match(L.pideOkAgente({ fotos: 9, usd: 0.5 }, { fotos: 9, usd: 0.5 }, cfg), /llega a 18 fotos contando lo que ya pidió .*9 fotos.*: espera tu OK\.$/, 'el segundo lote de 9 de la misma tarea espera');
+  assert.match(L.pideOkAgente({ fotos: 1, usd: 0.3 }, { fotos: 2, usd: 1.8 }, cfg), /US\$2,10/, 'presets sueltos que suman US$2');
+  assert.match(L.pideOkAgente({ fotos: 1, usd: 0 }, {}, { ...cfg, agenteUsd: 0 }), /espera tu OK/, 'agenteUsd 0: siempre el OK, también gratis');
+  assert.match(L.pideOkAgente({ fotos: 1, usd: 0 }, {}, { ...cfg, agenteSinOk: 0 }), /espera tu OK/, 'agenteSinOk 0: siempre el OK');
 });
 
 /* ---------- las funciones puras del MCP ---------- */
@@ -285,4 +302,18 @@ test('oficina: el lote de un agente pasa por ⚠ Aprobaciones; tu OK lo arranca,
   assert.ok(!d3.result.includes('⏳'), 'la línea ⏳ se cambió'); assert.equal((d3.result.match(/!\[/g) || []).length, 5); assert.equal(d3.media.length, 5);
   assert.ok(!d3.lotesOk, 'nunca esperó tu OK');
   assert.match(o.log(), /lote .* autorizado con la tarea/);
+
+  // 4) revisión E8: partirlo no salta el OK. Dos lotes de 9 fotos de la misma tarea: el segundo espera; un preset suelto, también
+  const mesas = (await o.call('/api/media/folders', { name: 'Mesas' })).j.folder.id; let foto = null;
+  for (let i = 0; i < 9; i++) { const u = await o.call('/api/media/upload', { name: `mesa ${i}.png`, data: await png(i + 40), folder: mesas }); assert.equal(u.status, 200); foto ||= u.j.item.file; }
+  const pideLote = nombre => o.call('/api/media/lotes', { by: 'agent', agent: 'ada', task: 'tk9mesas', nombre, receta: { pila: [{ id: 'luz-mas-clara' }] }, origen: { carpeta: 'Mesas' } });
+  const a4 = await pideLote('Mesas 1'); assert.equal(a4.status, 200, JSON.stringify(a4.j)); assert.equal(a4.j.lote.estado, 'previsto', '9 fotos: por debajo del tope');
+  const b4 = await pideLote('Mesas 2'); assert.equal(b4.status, 200, JSON.stringify(b4.j));
+  assert.equal(b4.j.lote.estado, 'espera_ok', 'el segundo lote de 9 de la misma tarea espera tu OK'); assert.match((await o.call(`/api/media/lotes/${b4.j.lote.id}`)).j.lote.motivo, /18 fotos contando lo que ya pidió/);
+  const ap4 = await o.call('/api/media/presets/apply', { by: 'agent', agent: 'ada', task: 'tk9mesas', pila: [{ id: 'luz-mas-clara' }], entradas: { foto: [foto] } });
+  assert.equal(ap4.status, 409, JSON.stringify(ap4.j)); assert.match(ap4.j.error, /sin el OK del dueño/);
+  assert.equal((await o.call('/api/media/jobs')).j.jobs.filter(j => j.task === 'tk9mesas').length, 0, 'nada se gastó');
+  const otro = await o.call('/api/media/presets/apply', { by: 'agent', agent: 'newt', task: 'tk9otra', pila: [{ id: 'luz-mas-clara' }], entradas: { foto: [foto] } });
+  assert.equal(otro.status, 200, 'otro agente, otra tarea, por debajo del tope: sí ' + JSON.stringify(otro.j));
+  assert.ok(d1.result.includes('✓ Estudio: autorizaste el lote «Camas bodega → web»') && !d1.result.includes('Lote del Estudio que espera tu OK'), 'la entrega ya no dice que espera tu OK: ' + d1.result.slice(-400));
 });

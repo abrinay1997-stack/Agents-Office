@@ -79,6 +79,22 @@ export function bloqueLote(x) {
     x.motivo ? `- Por qué espera: ${x.motivo}` : '',
     `Si apruebas, la oficina lo autoriza y lo empieza${x.fotos >= 10 ? ' con una prueba de 3 fotos (las revisas antes de seguir)' : ''}, dentro de los topes del Estudio. Si lo devuelves o caduca, se cancela sin gastar nada.`].filter(Boolean).join('\n');
 }
+/** Revisión E8: tras tu OK, el bloque «Lote del Estudio que espera tu OK» de la entrega ya no es verdad: pasa a una línea que dice
+ *  que lo autorizaste y cuándo (o que no arrancó). `arrancados` son los ids que sí empezaron. Puro. */
+export function loteAutorizado(text, lotes, { at = Date.now(), arrancados = null } = {}) {
+  let t = String(text || '');
+  const cuando = new Date(at).toLocaleString('es', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  for (const x of Array.isArray(lotes) ? lotes : []) {
+    if (!x?.id) continue;
+    const id = String(x.id).replace(/[^A-Za-z0-9]/g, '');
+    const re = new RegExp(String.raw`^\*\*Lote del Estudio que espera tu OK:\*\* «[^»\n]*» · ` + id + String.raw`[ \t]*\n(?:.*\n)*?Si apruebas, la oficina lo autoriza[^\n]*$`, 'm');
+    const ok = !arrancados || arrancados.includes(x.id);
+    const linea = ok ? `✓ Estudio: autorizaste el lote «${limpia(x.nombre)}» · ${id} el ${cuando}; está en marcha (dentro de los topes del Estudio).`
+      : `⚠ Estudio: autorizaste el lote «${limpia(x.nombre)}» · ${id} el ${cuando}, pero no arrancó: ábrelo en el Estudio, pestaña Lotes.`;
+    t = t.replace(re, () => linea);
+  }
+  return t;
+}
 /** «Lo que saldrá» con los lotes: el canal dice Estudio, las fotos y la receta; el costo va en los importes. */
 export function previewConLotes(p, lotes) {
   const ls = (Array.isArray(lotes) ? lotes : []).filter(Boolean); if (!ls.length) return p;

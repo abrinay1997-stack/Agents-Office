@@ -69,6 +69,9 @@ const INTERNAL = new Set(['estudio', 'contenido']); // the office's own Estudio 
 // is «cost» — never «read» if it can spend (fail closed, like a send).
 const ESTUDIO_READ = new Set(['buscar_en_galeria', 'estado_trabajo', 'estado_estudio', 'buscar_presets', 'estado_lote']);
 export const estudioKind = tool => (ESTUDIO_READ.has(String(tool)) ? 'read' : 'cost');
+// Revisión E8: las que arrancan trabajo en serie o aplican una receta sin que el dueño mire cada pedido. Con la ejecución
+// contaminada (algo leído trae órdenes escondidas) no se llaman: un texto inyectado no encadena lotes ni presets.
+const ESTUDIO_SERIE = new Set(['crear_lote', 'aplicar_preset']);
 export const KINDS = ['read', 'write', 'cost'];
 export function splitTool(name) {
   const m = /^mcp__(.+?)__(.+)$/.exec(String(name)); return m ? { server: m[1], tool: m[2] } : { server: '', tool: String(name) };
@@ -187,6 +190,7 @@ export function decide(toolName, input, ctx) {
   if (server === 'claude-in-chrome' && (tool === 'navigate' || /^tabs_create/.test(tool))) {
     const u = urlOf(input); if (u) { const r = siteAllowed(u, s.browserSites, s.browserBlock); if (!r.ok) return { allow: false, kind, code: 'site', why: `Sitio bloqueado: ${r.why}. Trabaja sin él y dilo en tu entrega.` }; }
   }
+  if (kind === 'cost' && server === 'estudio' && ESTUDIO_SERIE.has(tool) && s.injection && ctx.tainted) return { allow: false, kind, code: 'taint', why: `Bloqueado: algo que leíste en esta ejecución parece traer órdenes escondidas (${ctx.tainted}). No se crean lotes ni se aplican presets; deja el pedido en tu entrega y el dueño decide.` };
   if (kind === 'cost') return ctx.policy === 'nunca' ? { allow: false, kind, code: 'cost', why: 'Bloqueado: en este departamento los agentes no gastan en motores de pago (política «nunca»). Deja el prompt listo en tu entrega y el dueño lo genera en el Estudio.' } : { allow: true, kind }; // MCP-08: the Estudio's own budget caps the amount
   if (kind !== 'write') return { allow: true, kind };
   if (!ctx.writes) return { allow: false, kind, code: 'no-writes', why: NO_WRITES };
