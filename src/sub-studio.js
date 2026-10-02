@@ -5,7 +5,7 @@
 // The pure parts (the total, the body that is sent, the image reducer for Claude's vision) are tested in tests/sub-studio.test.mjs.
 //
 //   creativesHTML(m, view) · actionsHTML(m, view) · stripHTML(files, esc) · studioBody(msgId, studio, edits) · planTotal(...)
-//   fitsBudget(total, budget, fallback, weight) · discardBody(msgId, studio) · applyDiscards(messages, ids) · fitWithin(w, h, max) · shrinkStep(t, bytes, limit) · b64Bytes(str) · usd(x)
+//   fitsBudget(total, budget, fallback, weight) · actionsCost(actions, actionEdits) · discardBody(msgId, studio) · applyDiscards(messages, ids) · fitWithin(w, h, max) · shrinkStep(t, bytes, limit) · b64Bytes(str) · usd(x)
 //   Banco de presets F3 (E7): loteHTML(m, view) · loteRefHTML(m, view) · loteVivo(m) · esHoja(name) — the lote Dimitri
 //   proposes (PROBAR CON 3 · GENERAR LAS N · Descartar), its live card (bar, counts, before/after) and SEGUIR after the sample. Every button posts
 //   to /api/sub/studio with { lote: { accion } } (studioBody's 5th argument): the only route that spends through Dimitri.
@@ -49,6 +49,12 @@ export function fitsBudget(total, budget, fallback, weight = 0) {
   const lefts = [['hoy', budget.costLeftDay], ['este mes', budget.costLeftMonth]].filter(([, v]) => v !== null && v !== undefined);
   for (const [when, left] of lefts) if (total > left + 1e-9) return { fits: false, why: `no cabe: quedan ${usd(left)} ${when}` };
   return { fits: true, why: lefts.length ? `cabe en el presupuesto (quedan ${usd(Math.min(...lefts.map(([, v]) => v)))})` : count !== null ? `cabe en el tope de hoy (quedan ${count})` : 'sin tope de gasto' };
+}
+/** F3: what the ticked lote actions still proposed spend with the same click (only «reintentar» spends): { usd, weight } — the foot's total counts it. */
+export function actionsCost(actions = [], actionEdits = new Map()) {
+  let u = 0, w = 0;
+  actions.forEach((a, k) => { if (a.type === 'lote_reintentar' && (!a.state || a.state === 'proposed') && actionEdits.get(k) !== false) { u += +a.costo || 0; w += +a.cuantas || 0; } });
+  return { usd: +u.toFixed(3), weight: w };
 }
 /** The body of POST /api/sub/studio: every creative still proposed, with only what the owner changed; and which actions go. */
 export function studioBody(msgId, studio = {}, edits = new Map(), actionEdits = new Map(), lote = '') {
@@ -207,11 +213,11 @@ export function creativesHTML(m, v) {
   const open = (s.creatives || []).some(c => !c.state || c.state === 'proposed') || (s.actions || []).some(a => !a.state || a.state === 'proposed');
   let foot = '';
   if (open) {
-    const t = planTotal(s.creatives || [], edits, models);
-    const nActs = (s.actions || []).filter((a, k) => (!a.state || a.state === 'proposed') && (v.actionEdits || new Map()).get(k) !== false).length;
-    const f = fitsBudget(t.total, v.budget, s.estimate, t.weight);
-    const label = t.count ? `GENERAR (${t.units}) — ${usd(t.total)}` : nActs ? `HACER (${nActs})` : 'GENERAR (0)';
-    foot = `<div class="sc-foot"><div class="sc-total${f.fits ? '' : ' bad'}">Total: <b>${usd(t.total)}</b> · ${esc(f.why || (f.fits ? 'cabe en el presupuesto' : 'no cabe en el presupuesto'))}</div>
+    const t = planTotal(s.creatives || [], edits, models), ae = v.actionEdits || new Map(), x = actionsCost(s.actions, ae), all = +(t.total + x.usd).toFixed(3);
+    const nActs = (s.actions || []).filter((a, k) => (!a.state || a.state === 'proposed') && ae.get(k) !== false).length;
+    const f = fitsBudget(all, v.budget, s.estimate, t.weight + x.weight);
+    const label = t.count ? `GENERAR (${t.units}) — ${usd(all)}` : nActs ? `HACER (${nActs})${x.usd ? ' — ' + usd(all) : ''}` : 'GENERAR (0)';
+    foot = `<div class="sc-foot"><div class="sc-total${f.fits ? '' : ' bad'}">Total: <b>${usd(all)}</b> · ${esc(f.why || (f.fits ? 'cabe en el presupuesto' : 'no cabe en el presupuesto'))}</div>
       <div class="sb-acts"><button type="button" class="sc-go" data-msg="${esc(m.id)}"${t.count + nActs ? '' : ' disabled'}>${label}</button><button type="button" class="sc-skip" data-msg="${esc(m.id)}">Descartar</button></div>
       <div class="sc-note">Nada se genera hasta que pulses ${t.count ? 'GENERAR' : 'HACER'}. Cada pedido pasa por tus topes del Estudio.</div></div>`;
   }
@@ -250,7 +256,7 @@ export function loteHTML(m, v) {
   }
   // proposed: nothing exists yet, nothing is spent until a button
   const k = L.muestra > 0 ? L.muestra : 3, prueba = L.n > k, pf = +est.porFoto || 0, total = +est.total || 0, canales = v.canales || L.canales || [];
-  const go = (lote, txt, sec) => `<button type="button" class="sc-go${sec ? ' sl-b' : ''}" data-msg="${msg}" data-lote="${lote}">${txt} · ${pf ? usd(lote === 'probar' ? pf * k : total) : 'gratis'}</button>`;
+  const go = (lote, txt, sec) => `<button type="button" class="sc-go${sec ? ' sl-b' : ''}" data-msg="${msg}" data-lote="${lote}">${txt} · ${pf ? usd(lote === 'probar' ? est.muestraUsd ?? pf * k : total) : 'gratis'}</button>`; // the server starts only what this said (estudio-lote.costoSinVer)
   return open('', ` data-msg="${msg}" data-i="-1"`) + fotos + `<div class="sl-chips">${chips([...(L.recetaEs || []), L.escenaEs].filter(Boolean), esc)}</div>`
     + `<div class="sc-row">${canales.length ? `<label class="sc-f"><span>Canal</span>${selectOf('sc-set" data-k="canal', 'Canal', canales, (e.settings && e.settings.canal) || L.receta.canal, esc)}</label>` : ''}`
     + `${L.soloLocal || !L.alternativas || !L.alternativas.length ? `<span class="sc-mname">${esc(L.modelName || '')}</span>` : selectOf('sc-model', 'Modelo del lote', uniq([{ id: L.modelo, name: L.modelName }, ...L.alternativas]), e.model || L.modelo, esc)}<span class="sc-cost">${pf ? 'aprox. ' + usd(total) : 'gratis'}</span></div>`

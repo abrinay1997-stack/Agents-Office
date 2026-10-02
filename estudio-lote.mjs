@@ -12,6 +12,8 @@
 //   progresoDe(lotePublico)        → lo que pinta la tarjeta viva del chat (barra, cuentas, antes/después)
 //   parseAccionesLote(list, ctx)   → solo lote_pausar · lote_reanudar · lote_reintentar · lote_aprobar, validadas contra el lote real
 //   lotesText(lotes)               → los lotes recientes en pocas líneas, para que Dimitri los nombre por su id
+//   costoSinVer(P, accion, creado, vista) → null, o el costo fila por fila que el botón no decía (pide un segundo clic)
+//   pideEstudio(text, { hayLotes }) → ¿el mensaje es del Estudio? (solo entonces viajan el catálogo, el banco y las reglas del lote)
 import * as e3 from './src/escena3d-core.js';
 import { modoAdmite } from './src/presets-core.js';
 
@@ -274,3 +276,36 @@ export function lotesText(lotes = [], n = 5) {
     return `- ${x.id} «${limpio(x.nombre, 60)}» · ${ES[x.estado] || x.estado}${x.motivo ? ` (${limpio(x.motivo, 80)})` : ''} · ${c.hechas ?? '?'}/${c.total ?? '?'}${c.revisar ? ` · ${c.revisar} revisar` : ''}${c.fallo ? ` · ${c.fallo} fallo` : ''}${c.lista ? ` · ${c.lista} listas` : ''} · gastado ${usd(x.costo?.gastado)}${x.costo?.estimado ? ` de ${usd(x.costo.estimado)}` : ''}`;
   }).join('\n');
 }
+
+/* ---------- ¿lo que el dueño vio es lo que se va a gastar? (revisión E7, hallazgo 1) ---------- */
+/**
+ * La tarjeta calcula el costo compilando la pila de Dimitri UNA vez, sobre una foto; lotes.crear lo recalcula fila por fila, y cada
+ * fila de una hoja puede traer su propio preset o unas notas que necesitan la IA. P: el lote como lo ve la tarjeta (P.estimate, P.muestra);
+ * creado: el lote recién creado (pub, con filas[].estimado y su muestra); vista: la de lotes.crear (total, porFoto, cabe).
+ * → null si lo que se va a gastar cabe en lo que decía el botón (con un margen pequeño), o { real, visto, estimate } para pedir un
+ *   segundo clic: el botón dirá el costo nuevo (estimate reemplaza al de la tarjeta).
+ */
+export function costoSinVer(P, accion, creado, vista) {
+  const est = (P && P.estimate) || {}, pf = +est.porFoto || 0, k = Math.max(1, +(P && P.muestra) || 3);
+  const visto = !pf ? 0 : accion === 'probar' ? (Number.isFinite(+est.muestraUsd) && est.muestraUsd !== null ? +est.muestraUsd : pf * k) : +est.total || 0; // lo que decía el botón («gratis» = 0)
+  const filas = (creado && creado.filas) || [], cola = filas.filter(f => f.estado === 'en_cola');
+  const suma = l => +l.reduce((s, f) => s + (+f.estimado || 0), 0).toFixed(4);
+  const muestraReal = suma(cola.slice(0, Math.max(1, +(creado && creado.muestra) || k)));
+  const total = Number.isFinite(+(vista && vista.total)) ? +vista.total : suma(cola);
+  const real = accion === 'probar' ? muestraReal : total;
+  if (real <= visto + (visto ? Math.max(0.005, visto * 0.05) : 1e-9)) return null;
+  const nIA = (vista && vista.conIA) || cola.filter(f => +f.estimado > 0).length;
+  const cabe = (vista && vista.cabe) || {};
+  return { real, visto, estimate: { ...est, total: +total.toFixed(3), porFoto: +(vista && vista.porFoto) || (nIA ? +(total / nIA).toFixed(4) : 0), muestraUsd: muestraReal, fits: cabe.todo !== false, why: cabe.todo === false && cabe.por ? cabe.por : `Fila por fila: aprox. ${usd(total)}.` } };
+}
+/** El aviso del segundo clic, en palabras. */
+export const costoSinVerEs = (c, accion) => `Fila por fila, ${accion === 'probar' ? 'la prueba' : 'el lote'} cuesta aprox. ${usd(c.real)} y la tarjeta decía ${c.visto ? usd(c.visto) : 'gratis'} (algunas filas traen su propio preset o notas para la IA). No empecé nada: si te parece bien, pulsa de nuevo.`;
+
+/* ---------- ¿este mensaje es del Estudio? (DIM-04; revisión E7, hallazgo 4) ---------- */
+// Solo entonces viaja el catálogo del Estudio, el banco de presets y las reglas del lote: «¿Qué margen dejó la venta?» no los lleva.
+export const STUDIO_ASK = /\b(im[aá]gen(es)?|fotos?|creativos?|videos?|reels?|posts?|historias?|stor(y|ies)|carrusel|banner|flyer|afiche|portada|miniatura|logo|anima(r|ci[oó]n)?|edita(r)?|retoca(r)?|estudio|voz|voces|locuci[oó]n|locutor(a)?|narra(r|ci[oó]n|dor)?|m[uú]sica|jingles?|canci[oó]n|audio|podcast|cu[ñn]a)\b/i;
+// F3 (§8.1): una edición de fotos o un lote también es el Estudio, pero «margen», «recorte», «hoja», «luz» o «Amazon» solos no: van con producto
+export const STUDIO_ASK_LOTE = /\bpresets?\b|fondo blanco|\bluts?\b|\blotes? de (fotos|im[aá]genes|productos)\b|\b(cat[aá]logo|amazon|mercado ?libre|shopify)\b[^.?!\n]{0,40}\bproductos?\b|\b(recort|retoc)\w*\b[^.?!\n]{0,30}\bproductos?\b/i;
+const LOTE_DICHO = /\b(el|ese|este|mi|del|al) lote\b(?! de (factura|pago|env[ií]o|pedido|inventario|mercanc))/i;
+/** text: lo que escribió el dueño; hayLotes: hay algún lote en el Estudio («¿cómo va el lote?» solo es del Estudio si lo hay). */
+export const pideEstudio = (text, { hayLotes = false } = {}) => STUDIO_ASK.test(text) || STUDIO_ASK_LOTE.test(text) || (hayLotes && LOTE_DICHO.test(text));

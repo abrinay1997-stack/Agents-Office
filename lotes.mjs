@@ -631,6 +631,7 @@ export function crearLotes(o = {}) {
     crear, leerHoja, accion, filas: accionFilas, tick, iniciar, parar, reconciliar, terminar, zip, csv, nota: id => escribirNota(exigir(id)),
     lista: () => LOTES.slice().reverse().map(l => { const p = pub(l); return { id: p.id, nombre: p.nombre, estado: p.estado, by: p.by, motivo: p.motivo, cuentas: p.cuentas, resumen: p.resumen, costo: p.costo, creado: p.creado, fin: p.fin, carpeta: p.carpeta }; }),
     uno: id => pub(exigir(id)), vivo: id => vivo(get(id)), _estado: () => LOTES,
+    tieneHoja: id => { const c = HOJAS.get(String(id || '')); return !!c && ahora() - c.at <= 2 * 3600e3; }, // the chat asks before Dimitri proposes a lote with it
   };
 }
 

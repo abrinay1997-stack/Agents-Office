@@ -395,8 +395,8 @@ export function runsOf(r, now = Date.now(), { max = 60, days = 60 } = {}) {
 }
 /** Hidden orders in the DATA Dimitri reads (task results from mail or webhooks, what the owner has open, the notes) → why, or null.
  *  check = safety.injectionIn. Like an image's text: the message is marked and its ops and Estudio actions go. */
-export function dataInjection({ recent = '', viewing = '', notes = '', image = '', hoja = '' } = {}, check = () => null) {
-  for (const [what, text] of [['una imagen', image], ['un resultado de tarea', recent], ['lo que tienes abierto', viewing], ['una nota', notes], ['la hoja adjunta', hoja]]) {
+export function dataInjection({ recent = '', viewing = '', notes = '', image = '', hoja = '', lotes = '' } = {}, check = () => null) {
+  for (const [what, text] of [['una imagen', image], ['un resultado de tarea', recent], ['lo que tienes abierto', viewing], ['una nota', notes], ['la hoja adjunta', hoja], ['un lote del Estudio', lotes]]) {
     const why = text ? check(text) : null; if (why) return `${what} traía órdenes escondidas (${why})`;
   }
   return null;

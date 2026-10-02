@@ -2,7 +2,7 @@
 // GENERAR posts to /api/sub/studio, and the reducer that makes the copy of an image Claude's vision sees.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planTotal, unitCost, fitsBudget, studioBody, fitWithin, shrinkStep, b64Bytes, usd, creativesHTML, actionsHTML, stripHTML, discardBody, applyDiscards, outgoing, VISION_SIDE, VISION_BYTES, loteHTML, loteRefHTML, loteVivo, esHoja } from '../src/sub-studio.js';
+import { planTotal, unitCost, fitsBudget, studioBody, fitWithin, shrinkStep, b64Bytes, usd, creativesHTML, actionsHTML, stripHTML, discardBody, applyDiscards, outgoing, VISION_SIDE, VISION_BYTES, loteHTML, loteRefHTML, loteVivo, esHoja, actionsCost } from '../src/sub-studio.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MODELS = [
@@ -177,4 +177,25 @@ test('un Excel adjunto va como hoja: el mensaje sale aunque no haya imágenes ni
   const o = outgoing('', [{ state: 'ready', hoja: 'h123', name: 'camas.xlsx' }]);
   assert.equal(o.send, true); assert.equal(o.hoja, 'h123'); assert.equal(o.ready.length, 0); assert.equal(o.text, 'Mira esta hoja.');
   assert.equal(outgoing('', [{ state: 'uploading', hoja: null }]).send, false);
+});
+
+test('revisión E7: un «reintentar» marcado que gasta con el mismo clic entra en el total y en el presupuesto del pie', () => {
+  const re = { k: 0, type: 'lote_reintentar', lote: 'L1', nombre: 'Camas', filas: 'fallidas', cuantas: 3, costo: 0.12, texto: 'Reintentar 3 fotos del lote «Camas» · gasta aprox. US$0,12', state: 'proposed' };
+  const ap = { k: 1, type: 'lote_aprobar', lote: 'L1', nombre: 'Camas', filas: 'listas', cuantas: 5, texto: 'Aprobar 5 fotos', state: 'proposed' };
+  assert.deepEqual(actionsCost([re, ap]), { usd: 0.12, weight: 3 });
+  assert.deepEqual(actionsCost([re, ap], new Map([[0, false]])), { usd: 0, weight: 0 }, 'desmarcado no cuenta');
+  assert.deepEqual(actionsCost([{ ...re, state: 'done' }]), { usd: 0, weight: 0 }, 'hecho no cuenta');
+  const m = { id: 'm9', studio: { creatives: [CREATIVES[0]], actions: [re, ap], estimate: { total: 0.08, fits: true } } };
+  const h = creativesHTML(m, { esc, models: MODELS, budget: { costLeftDay: 0.1, costLeftMonth: 10, left: 20, maxPerRequest: 4 } });
+  assert.match(h, /GENERAR \(2\) — US\$0,20/); assert.match(h, /Total: <b>US\$0,20<\/b>/);
+  assert.match(h, /sc-total bad/, 'US$0,20 no cabe en los US$0,10 que quedan hoy'); assert.match(h, /no cabe: quedan US\$0,10 hoy/);
+  const sin = creativesHTML(m, { esc, models: MODELS, actionEdits: new Map([[0, false]]), budget: { costLeftDay: 0.1, costLeftMonth: 10, maxPerRequest: 4 } });
+  assert.match(sin, /GENERAR \(2\) — US\$0,080/); assert.doesNotMatch(sin, /sc-total bad/);
+  const solo = creativesHTML({ id: 'm10', studio: { creatives: [], actions: [re] } }, { esc, models: MODELS });
+  assert.match(solo, /HACER \(1\) — US\$0,12/);
+});
+
+test('revisión E7: PROBAR dice el costo de la muestra que calculó el servidor fila por fila', () => {
+  const h = loteHTML({ id: 'm11', studio: { lote: { ...LOTE, estimate: { ...LOTE.estimate, muestraUsd: 0.5 } } } }, { esc });
+  assert.match(h, /data-lote="probar">PROBAR CON 3 · US\$0,50</);
 });
