@@ -18,8 +18,8 @@ export const MAX_CREATIVES = 8;
 export const KINDS = ['image', 'video', 'audio', 'music']; // V4.10: a voice-over (audio) and a piece of music too — MiniMax
 const KIND_ES = { image: 'imagen', video: 'video', audio: 'voz', music: 'música' }, KIND_UP = { image: 'IMAGEN', video: 'VIDEO', audio: 'VOZ', music: 'MÚSICA' };
 const UNIT_ES = { image: 'imagen', video: 'video', audio: 'locución', music: 'pieza' };
-export const WEIGHT = { video: 5, music: 3 }; // the same weights as media.mjs: an image or a voice-over 1 (src/sub-studio.js imports these: one source)
-export const weightOf = kind => WEIGHT[kind] || 1;
+import { WEIGHT, weightOf } from './estudio-pesos.mjs'; // one source, also for the page (src/sub-studio.js)
+export { WEIGHT, weightOf };
 /** «1 imagen», «2 videos», «1 locución», «2 piezas musicales» — what a finished creative brought (V4.11, DIM-02). */
 export const unitWord = (kind, n = 1) => (kind === 'video' ? (n === 1 ? 'video' : 'videos') : kind === 'audio' ? (n === 1 ? 'locución' : 'locuciones') : kind === 'music' ? (n === 1 ? 'pieza musical' : 'piezas musicales') : n === 1 ? 'imagen' : 'imágenes');
 export const COMPACT_OVER = 12; // V4.11 (DIM-04): past this many models on, the block lists the best few per kind in full and only the ids of the rest

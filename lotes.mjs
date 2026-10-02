@@ -209,7 +209,11 @@ export function crearLotes(o = {}) {
   const recetaVacia = r => !r.pila.length && !r.escena && !r.idea;
   /** La pila de una fila: la de su hoja y, al final, la del lote (lo que el dueño eligió en el paso 2 se SUMA a todas, como
    *  promete la página; un preset que está en las dos va una vez, con los ajustes del lote). Puro. */
-  const pilaDe = (rp = [], fp) => { const ids = new Set(rp.map(x => x.id)); return [...(fp || []).filter(x => !ids.has(x.id)), ...rp]; };
+  // Cierre (1 oct 2026): la fila va DESPUÉS, porque el compilador hace ganar al último en los ejes exclusivos y una receta seguida
+  // de sus propios ajustes se sustituye. Con la del lote al final, «cat-web-panaclaw» en la fila + «luz-arreglar · color-blancos»
+  // en el lote salía gratis y en local, y la fila pedía IA de pago: el costo que veía el dueño no era el que se iba a gastar.
+  // Lo de la fila (lo que el dueño dijo para ESA foto) manda; un preset que está en las dos va una vez, con los ajustes de la fila.
+  const pilaDe = (rp = [], fp) => { const ids = new Set((fp || []).map(x => x.id)); return [...rp.filter(x => !ids.has(x.id)), ...(fp || [])]; };
   /** extras = el texto que sale de la fila (sus notas, el refuerzo de «más fuerte» o de la QA, «más fiel»). Si la receta de la fila
    *  es toda local (f.local, medido en la vista previa), ese texto NO va: convertiría una foto gratis en una edición de pago sin
    *  el clic del dueño (el compilador manda a la IA una idea escrita sobre presets locales). */

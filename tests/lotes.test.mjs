@@ -419,15 +419,16 @@ test('una hoja con su preset por fila y sin receta general: vale; la receta del 
   await assert.rejects(m.crear({ origen: { carpeta: 'Bodega' }, receta: {} }), e => e.status === 400 && /elige una receta/.test(e.message));
   const h2 = await m.leerHoja({ name: 'l.csv', data: csvB64('foto,sku\n2026-10/foto-1.jpg,A\n') });
   await assert.rejects(m.crear({ origen: { hoja: h2.id }, receta: {} }), e => e.status === 400 && /elige una receta/.test(e.message));
-  // con receta general: se suma a la de cada fila, una vez, con los ajustes del lote y al final
+  // con receta general: se suma a la de cada fila, una vez; la de la fila va al final y gana (el cierre del 1 oct: si no, una
+  // receta de la fila se sustituía por los ajustes del lote y el costo que se veía no era el que se iba a gastar)
   const s = await m.crear({ origen: { hoja: h.id }, receta: { pila: [{ id: 'cat-web', params: { intensidad: 'suave' } }] }, concurrencia: 3 });
   assert.deepEqual(filasEn(s.lote, 'revisar'), []);
   m.accion(s.lote.id, 'iniciar');
   for (let k = 0; k < 3; k++) { await m.tick(); for (const j of vuelo(F)) F.acabar(m, j.id); }
   const pilas = Object.fromEntries(F.pedidos.filter(p => p.lote.id === s.lote.id).map(p => [p.lote.fila, p.pila]));
-  assert.deepEqual(pilas[2].map(x => x.id), ['limp-arrugas', 'cat-web']);
+  assert.deepEqual(pilas[2].map(x => x.id), ['cat-web', 'limp-arrugas']);
   assert.deepEqual(pilas[3].map(x => x.id), ['cat-web']);
-  assert.deepEqual(pilas[4], [{ id: 'limp-arrugas' }, { id: 'cat-web', params: { intensidad: 'suave' } }], 'sin repetidos');
+  assert.deepEqual(pilas[4], [{ id: 'cat-web' }, { id: 'limp-arrugas' }], 'sin repetidos, con los ajustes de la fila');
 });
 
 test('un ZIP que no cabe se rechaza antes de subir nada; una hoja con fotos incrustadas no las vuelve a subir en cada vista previa', async () => {

@@ -10,7 +10,7 @@
 //   proposes (PROBAR CON 3 · GENERAR LAS N · Descartar), its live card (bar, counts, before/after) and SEGUIR after the sample. Every button posts
 //   to /api/sub/studio with { lote: { accion } } (studioBody's 5th argument): the only route that spends through Dimitri.
 
-import { weightOf } from '../estudio-plan.mjs'; // V4.11 (DIM-02): one source for what counts against the day's cap (a video 5, a music 3)
+import { weightOf } from '../estudio-pesos.mjs'; // V4.11 (DIM-02): one source for what counts against the day's cap (a video 5, a music 3)
 
 export const MAX_ATTACH = 4;                    // images per message (the server takes ≤4)
 export const VISION_SIDE = 1568;                // Claude's vision gains nothing past this long side
