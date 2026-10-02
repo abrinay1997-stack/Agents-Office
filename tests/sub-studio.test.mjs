@@ -2,7 +2,7 @@
 // GENERAR posts to /api/sub/studio, and the reducer that makes the copy of an image Claude's vision sees.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planTotal, unitCost, fitsBudget, studioBody, fitWithin, shrinkStep, b64Bytes, usd, creativesHTML, actionsHTML, stripHTML, discardBody, applyDiscards, outgoing, VISION_SIDE, VISION_BYTES } from '../src/sub-studio.js';
+import { planTotal, unitCost, fitsBudget, studioBody, fitWithin, shrinkStep, b64Bytes, usd, creativesHTML, actionsHTML, stripHTML, discardBody, applyDiscards, outgoing, VISION_SIDE, VISION_BYTES, loteHTML, loteRefHTML, loteVivo, esHoja, actionsCost } from '../src/sub-studio.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const MODELS = [
@@ -116,4 +116,86 @@ test('las tarjetas: GENERAR con la cuenta, «no se incluye» con texto y nada si
   assert.equal(actionsHTML({ studio: { actions: [{ type: 'borrar_todo' }] } }, { esc }), ''); // una acción fuera de la lista no se pinta
   assert.match(stripHTML(['v/clip.mp4'], esc), /<video/);
   assert.equal(usd(0.004), 'US$0,004'); assert.equal(usd(12), 'US$12,00');
+});
+
+/* ---------- banco de presets F3 (E7): el lote y las ediciones con presets en el chat ---------- */
+const LOTE = { nombre: 'Camas <bodega>', n: 40, fotosEs: '40 fotos de «Bodega»', muestras: ['2026-10/a.png', '2026-10/b.png'], muestra: 3, receta: { pila: [{ id: 'cat-serie-muebles' }], canal: 'web' },
+  recetaEs: [{ id: 'cat-serie-muebles', nombre: 'Serie de muebles' }, { id: 'limp-arrugas', nombre: 'Arrugas', intensidad: 'fuerte' }], canalEs: 'Web PanaClaw', canales: [{ id: 'web', nombre: 'Web PanaClaw' }, { id: 'amazon', nombre: 'Amazon' }],
+  modelo: 'nano-banana-2', modelName: 'Nano Banana 2', alternativas: [{ id: 'gpt-image-1', name: 'GPT Image' }], estimate: { total: 1.56, porFoto: 0.039, muestraUsd: 0.117, fits: true, why: 'Cabe hoy: aprox. US$1,56.' }, pasos: ['Limpia el polvo'], state: 'proposed' };
+
+test('la tarjeta del lote: PROBAR CON 3 y GENERAR LAS 40 con su costo, canal y modelo editables, nada sin escapar', () => {
+  const h = loteHTML({ id: 'm7', studio: { creatives: [], actions: [], lote: LOTE } }, { esc });
+  assert.match(h, /data-lote="probar">PROBAR CON 3 · US\$0,12</); assert.match(h, /data-lote="todas">GENERAR LAS 40 · US\$1,56</);
+  assert.match(h, /data-i="-1"/); assert.match(h, /<select class="sc-set" data-k="canal"/); assert.match(h, /<option value="gpt-image-1">GPT Image/);
+  assert.match(h, /Camas &lt;bodega&gt;/); assert.doesNotMatch(h, /<bodega>/); assert.match(h, /Arrugas · fuerte/); assert.match(h, /\+38/);
+  assert.match(h, /Nada se gasta sin tu clic; PROBAR hace 3 y te pregunta/);
+  const pocas = loteHTML({ id: 'm8', studio: { lote: { ...LOTE, n: 2, muestra: 0, estimate: { ...LOTE.estimate, total: 0, porFoto: 0 } } } }, { esc });
+  assert.doesNotMatch(pocas, /PROBAR/); assert.match(pocas, /GENERAR LAS 2 · gratis/);
+  const plan = creativesHTML({ id: 'm7', studio: { creatives: [], actions: [], lote: LOTE } }, { esc, models: MODELS }); // el lote va dentro del plan, sin un GENERAR de creativos vacío
+  assert.match(plan, /sl-card/); assert.doesNotMatch(plan, /GENERAR \(0\)/);
+});
+
+test('los botones del lote solo llevan el lote; Descartar lo descarta; un lote en marcha mantiene viva su tarjeta', () => {
+  const studio = { creatives: [CREATIVES[0]], actions: [], lote: LOTE };
+  assert.deepEqual(studioBody('m7', studio, new Map([[-1, { settings: { canal: 'amazon' }, model: 'gpt-image-1' }], [0, { n: 4 }]]), new Map(), 'probar'), { msg: 'm7', items: [], lote: { accion: 'probar', canal: 'amazon', modelo: 'gpt-image-1' } });
+  assert.deepEqual(studioBody('m7', studio, new Map(), new Map(), 'seguir'), { msg: 'm7', items: [], lote: { accion: 'seguir' } });
+  assert.equal(studioBody('m7', studio).lote, undefined, 'GENERAR de creativos no toca el lote');
+  assert.deepEqual(discardBody('m7', { creatives: [], lote: LOTE }), { msg: 'm7', items: [], lote: { accion: 'descartar' } });
+  assert.equal(applyDiscards([{ id: 'm7', studio: { creatives: [], lote: LOTE } }], new Set(['m7']))[0].studio.lote.state, 'skipped');
+  assert.equal(loteVivo({ studio: { lote: LOTE } }), false, 'propuesto: nada que seguir');
+  assert.equal(loteVivo({ studio: { lote: { ...LOTE, id: 'L1', progreso: { estado: 'corriendo' } } } }), true);
+  assert.equal(loteVivo({ studio: { lote: { ...LOTE, id: 'L1', progreso: { estado: 'hecho' } } } }), false);
+  assert.equal(loteVivo({ studio: { loteRef: { id: 'L1', seguir: true } } }), true);
+});
+
+test('la tarjeta viva: barra con su valor, antes → después que abren el visor, y SEGUIR cuando la muestra espera', () => {
+  const vivo = { ...LOTE, id: 'L9', state: 'sent', progreso: { estado: 'pausado', motivo: 'muestra', total: 40, hechas: 3, listas: 2, aprobadas: 0, revisar: 1, fallo: 0, quedan: 37, gastado: 0.117, estimado: 1.56, texto: '3 de 40 · 2 listas · 1 para revisar', estadoEs: 'muestra lista',
+    pares: [{ n: 1, src: '2026-10/a.png', out: '2026-10/a-out.png', estado: 'lista', marca: '✓ lista', sku: 'CM-1' }, { n: 2, src: '2026-10/b.png', out: '2026-10/b-out.png', estado: 'revisar', marca: '⚠ revisar', motivo: 'el fondo quedó en 248' }] } };
+  const h = loteHTML({ id: 'm7', studio: { lote: vivo } }, { esc });
+  assert.match(h, /role="progressbar" aria-valuemin="0" aria-valuemax="40" aria-valuenow="3"/); assert.match(h, /muestra lista/); assert.match(h, /3 de 40 · 2 listas · 1 para revisar/);
+  assert.match(h, /data-open="2026-10\/a.png" aria-label="Antes #1"/); assert.match(h, /data-open="2026-10\/a-out.png" aria-label="Después #1"/); assert.match(h, /⚠ revisar/); assert.match(h, /248/);
+  assert.doesNotMatch(h, /data-lote="seguir"/, 'SEGUIR va una vez, en el mensaje de la muestra'); assert.match(h, /sl-ver" data-lote="L9"/); assert.doesNotMatch(h, /PROBAR/);
+  const fin = loteHTML({ id: 'm7', studio: { lote: { ...vivo, progreso: { ...vivo.progreso, estado: 'hecho', motivo: null, hechas: 40, quedan: 0 } } } }, { esc });
+  assert.doesNotMatch(fin, /SEGUIR/); assert.match(fin, /terminado|Ver el lote/);
+  const ref = loteRefHTML({ id: 'm9', studio: { loteRef: { msg: 'm7', id: 'L9', seguir: true, quedan: 37, costo: 1.44 } } }, { esc });
+  assert.match(ref, /data-msg="m9" data-lote="seguir">SEGUIR CON LAS 37 · US\$1,44/); assert.match(ref, /sl-cambiar" data-msg="m7"/);
+  assert.doesNotMatch(loteRefHTML({ id: 'm9', studio: { loteRef: { msg: 'm7', id: 'L9', seguir: false } } }, { esc }), /SEGUIR/);
+});
+
+test('una edición con presets: receta en chips y «Qué hará», sin caja de prompt; y las acciones de lote dicen lo que gastan', () => {
+  const c = { i: 0, title: 'Lámpara', kind: 'image', presets: [{ id: 'cat-web-panaclaw' }], recetaEs: ['Catálogo para la web'], canalEs: 'Web PanaClaw', input: '2026-10/l.png', refs: [], n: 1, cost: 0.04, model: 'nano-banana-2', modelName: 'Nano Banana 2', alternativas: [{ id: 'gpt-image-1', name: 'GPT Image' }], pasos: ['Fondo blanco 255'], prompt: 'Image 1 is the product photo', state: 'proposed' };
+  const h = creativesHTML({ id: 'm1', studio: { creatives: [{ ...c, media: { reference: ['2026-10/l.png'] } }] } }, { esc, models: MODELS });
+  assert.doesNotMatch(h, /<textarea/); assert.match(h, /Catálogo para la web/); assert.match(h, /Qué hará · 1 pasos/); assert.match(h, /lang="en">Image 1/); assert.match(h, /US\$0,040/); assert.match(h, /data-open="2026-10\/l.png"/);
+  assert.match(h, /<option value="gpt-image-1">GPT Image</); assert.doesNotMatch(h, /Formato/); assert.match(h, /GENERAR \(1\) — US\$0,040/);
+  const a = actionsHTML({ id: 'm2', studio: { actions: [{ k: 0, type: 'lote_reintentar', lote: 'L9', nombre: 'Camas', cuantas: 2, costo: 0.08, texto: 'Reintentar 2 fotos del lote «Camas» · gasta aprox. US$0,080', state: 'proposed' }] } }, { esc });
+  assert.match(a, /Reintentar 2 fotos del lote «Camas» · gasta aprox\. US\$0,080/); assert.match(a, /class="sc-acton"/);
+  assert.match(a, /Sobre el lote \(cada una espera tu clic\)/); assert.doesNotMatch(a, /para ordenar/, 'pausar o aprobar un lote no es «ordenar»');
+});
+
+test('un Excel adjunto va como hoja: el mensaje sale aunque no haya imágenes ni texto', () => {
+  assert.equal(esHoja('camas.XLSX'), true); assert.equal(esHoja('camas.csv'), true); assert.equal(esHoja('cama.png'), false);
+  const o = outgoing('', [{ state: 'ready', hoja: 'h123', name: 'camas.xlsx' }]);
+  assert.equal(o.send, true); assert.equal(o.hoja, 'h123'); assert.equal(o.ready.length, 0); assert.equal(o.text, 'Mira esta hoja.');
+  assert.equal(outgoing('', [{ state: 'uploading', hoja: null }]).send, false);
+});
+
+test('revisión E7: un «reintentar» marcado que gasta con el mismo clic entra en el total y en el presupuesto del pie', () => {
+  const re = { k: 0, type: 'lote_reintentar', lote: 'L1', nombre: 'Camas', filas: 'fallidas', cuantas: 3, costo: 0.12, texto: 'Reintentar 3 fotos del lote «Camas» · gasta aprox. US$0,12', state: 'proposed' };
+  const ap = { k: 1, type: 'lote_aprobar', lote: 'L1', nombre: 'Camas', filas: 'listas', cuantas: 5, texto: 'Aprobar 5 fotos', state: 'proposed' };
+  assert.deepEqual(actionsCost([re, ap]), { usd: 0.12, weight: 3 });
+  assert.deepEqual(actionsCost([re, ap], new Map([[0, false]])), { usd: 0, weight: 0 }, 'desmarcado no cuenta');
+  assert.deepEqual(actionsCost([{ ...re, state: 'done' }]), { usd: 0, weight: 0 }, 'hecho no cuenta');
+  const m = { id: 'm9', studio: { creatives: [CREATIVES[0]], actions: [re, ap], estimate: { total: 0.08, fits: true } } };
+  const h = creativesHTML(m, { esc, models: MODELS, budget: { costLeftDay: 0.1, costLeftMonth: 10, left: 20, maxPerRequest: 4 } });
+  assert.match(h, /GENERAR \(2\) — US\$0,20/); assert.match(h, /Total: <b>US\$0,20<\/b>/);
+  assert.match(h, /sc-total bad/, 'US$0,20 no cabe en los US$0,10 que quedan hoy'); assert.match(h, /no cabe: quedan US\$0,10 hoy/);
+  const sin = creativesHTML(m, { esc, models: MODELS, actionEdits: new Map([[0, false]]), budget: { costLeftDay: 0.1, costLeftMonth: 10, maxPerRequest: 4 } });
+  assert.match(sin, /GENERAR \(2\) — US\$0,080/); assert.doesNotMatch(sin, /sc-total bad/);
+  const solo = creativesHTML({ id: 'm10', studio: { creatives: [], actions: [re] } }, { esc, models: MODELS });
+  assert.match(solo, /HACER \(1\) — US\$0,12/);
+});
+
+test('revisión E7: PROBAR dice el costo de la muestra que calculó el servidor fila por fila', () => {
+  const h = loteHTML({ id: 'm11', studio: { lote: { ...LOTE, estimate: { ...LOTE.estimate, muestraUsd: 0.5 } } } }, { esc });
+  assert.match(h, /data-lote="probar">PROBAR CON 3 · US\$0,50</);
 });

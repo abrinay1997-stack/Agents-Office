@@ -13,7 +13,7 @@
 //        getContext() → {view, label, kind, id, ids?, folder?} | null · openStudioFile(file)
 import { mdToHtml } from './md.js';
 import { modal } from './modal.js';
-import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes } from './sub-studio.js';
+import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes, loteVivo, esHoja } from './sub-studio.js'; // F3: the lote's live card and a sheet attached
 import { opsHTML, opsBody, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
 import { isQuickStatus } from './sub-stream.js'; // Auditoría 1 oct 2026: «¿Cómo vamos?» at once (DIM-10); the answer arrives while it is written, with «Detener» (DIM-14)
 
@@ -43,7 +43,7 @@ export function initSub(ctx) {
     <div class="sb-chips"></div>
     <div class="sb-ctx" hidden></div>
     <div class="sb-atts" hidden role="list" aria-label="Imágenes adjuntas"></div>
-    <div class="sb-in"><button type="button" class="sb-clip" aria-label="Adjuntar imágenes (también puedes arrastrarlas o pegarlas)" title="Adjuntar imágenes: PNG, JPG o WEBP, hasta ${MAX_ATTACH}. También puedes arrastrarlas aquí o pegarlas (Ctrl+V)"><span aria-hidden="true">📎</span></button><input type="file" class="sb-file" accept="image/png,image/jpeg,image/webp" multiple hidden>
+    <div class="sb-in"><button type="button" class="sb-clip" aria-label="Adjuntar imágenes (también puedes arrastrarlas o pegarlas)" title="Adjuntar imágenes: PNG, JPG o WEBP, hasta ${MAX_ATTACH}. También puedes arrastrarlas aquí o pegarlas (Ctrl+V)"><span aria-hidden="true">📎</span></button><input type="file" class="sb-file" accept="image/png,image/jpeg,image/webp,.xlsx,.csv" multiple hidden>
       <textarea rows="2" aria-label="Mensaje (Enter envía, Shift+Enter salto de línea)"></textarea><button type="button" class="sb-send">ENVIAR</button></div>
     <datalist id="scFolders"></datalist>`;
   document.body.appendChild(el);
@@ -75,7 +75,7 @@ export function initSub(ctx) {
   async function pollJobs() {
     try { const r = await fetch('/api/media/jobs?active=1'); if (!r.ok) return; const j = await r.json(); jobs.clear(); for (const x of j.jobs || []) jobs.set(x.id, x); if (media && j.budget) media.budget = j.budget; } catch {}
   }
-  const pending = () => messages.some(m => m.studio && (m.studio.creatives || []).some(c => c.state === 'sent'));
+  const pending = () => messages.some(m => m.studio && ((m.studio.creatives || []).some(c => c.state === 'sent') || loteVivo(m))); // F3: a lote in motion keeps its card polling
 
   /* ---------- «Viendo: …» — what the open view has selected ---------- */
   function refreshContext() {
@@ -137,6 +137,7 @@ export function initSub(ctx) {
   function addFiles(files) {
     if (!isLive()) return note('Las imágenes necesitan la oficina real (ábrela desde el iniciador).');
     for (const f of [...files]) {
+      if (esHoja(f.name)) { addSheet(f); continue; } // F3: an Excel or a CSV is a sheet for a lote, not an image
       if (attachments.length >= MAX_ATTACH) { note(`Como mucho ${MAX_ATTACH} imágenes por mensaje.`); break; }
       if (!IMG_TYPES.test(f.type)) { note(`«${f.name || 'eso'}»: solo PNG, JPG o WEBP.`); continue; }
       if (f.size > 12 * 1024 * 1024) { note(`«${f.name}» pasa de 12 MB.`); continue; }
@@ -154,6 +155,12 @@ export function initSub(ctx) {
     }
     renderAtts();
   }
+  function addSheet(f) { // F3: /api/media/lotes/hoja reads it (2 h in memory); Dimitri gets its summary as data. One sheet per message
+    attachments = attachments.filter(a => !a.hoja);
+    const a = { key: 'h' + Date.now(), name: f.name, preview: '', state: 'uploading', kind: 'hoja' }; attachments.push(a);
+    a.ready = readURL(f).then(data => postJSON('/api/media/lotes/hoja', { name: f.name, data })).then(j => { a.hoja = j.id; a.state = 'ready'; a.err = j.filas.length + ' filas'; }, e => { a.state = 'failed'; a.err = e.message; }).then(renderAtts);
+    renderAtts();
+  }
   function addGallery(ids = []) {
     for (const id of ids) {
       if (!id || attachments.some(a => a.file === id)) continue;
@@ -169,7 +176,7 @@ export function initSub(ctx) {
     const n = $('.sb-atts');
     n.hidden = !attachments.length && !n.querySelector('.sb-attn');
     n.querySelectorAll('.sb-att').forEach(x => x.remove());
-    n.insertAdjacentHTML('afterbegin', attachments.map(a => `<div class="sb-att ${a.state}" role="listitem" data-key="${a.key}" title="${esc(a.err || a.name)}">${a.preview ? `<img src="${esc(a.preview)}" alt="">` : `<span class="sb-attv" aria-hidden="true">${/\.(mp3|wav|flac|m4a|ogg)$/i.test(a.file || '') ? '♪' : '▶'}</span>`}<span class="sb-atts-st">${a.state === 'uploading' ? 'subiendo…' : a.state === 'failed' ? '⚠ no subió' : a.err ? 'sin vista' : 'lista'}</span><button type="button" class="sb-attx" aria-label="Quitar «${esc(a.name)}»" title="Quitar">✕</button></div>`).join(''));
+    n.insertAdjacentHTML('afterbegin', attachments.map(a => `<div class="sb-att ${a.state}" role="listitem" data-key="${a.key}" title="${esc(a.err || a.name)}">${a.preview ? `<img src="${esc(a.preview)}" alt="">` : `<span class="sb-attv" aria-hidden="true">${a.kind === 'hoja' ? '▦' : /\.(mp3|wav|flac|m4a|ogg)$/i.test(a.file || '') ? '♪' : '▶'}</span>`}<span class="sb-atts-st">${a.state === 'uploading' ? (a.kind === 'hoja' ? 'leyendo…' : 'subiendo…') : a.state === 'failed' ? '⚠ no subió' : a.kind === 'hoja' ? esc(a.err || 'hoja') : a.err ? 'sin vista' : 'lista'}</span><button type="button" class="sb-attx" aria-label="Quitar «${esc(a.name)}»" title="Quitar">✕</button></div>`).join(''));
     sendBtn.disabled = busy || attachments.some(a => a.state === 'uploading');
   }
 
@@ -217,7 +224,7 @@ export function initSub(ctx) {
   function subHTML(m) {
     const lastOne = messages.length && messages[messages.length - 1] === m;
     const quickFoot = m.quick ? `<div class="sb-quick"><span class="sb-quickn">Calculado al instante con los datos de la oficina, sin el modelo.</span>${lastOne && !busy ? `<button type="button" class="sb-analyze" data-msg="${esc(m.id)}">Analizar con ${esc(NAME)}</button>` : ''}</div>` : ''; // DIM-10: his reading only when asked
-    const head = m.stopped ? '<div class="sb-mode stopped">Detenido por ti</div>' : MODE[m.mode] ? `<div class="sb-mode ${esc(m.mode)}">${MODE[m.mode]}</div>` : '';
+    const head = m.stopped ? '<div class="sb-mode stopped">Detenido por ti</div>' : MODE[m.mode] ? `<div class="sb-mode ${esc(m.mode)}">${m.studio && !(m.studio.creatives || []).length && (m.studio.lote || m.studio.loteRef || ((m.studio.actions || []).length && m.studio.actions.every(a => /^lote_/.test(a.type)))) ? 'Lote del Estudio' : MODE[m.mode]}</div>` : ''; // F3: a lote is not «creatives»
     return `<div class="sb-a${m.stopped ? ' sb-stopped' : ''}">${head}${m.quick ? `<div class="md">${mdToHtml(m.text || '')}</div>${quickFoot}` : subBody(m)}</div>`;
   }
   function subBody(m) {
@@ -324,7 +331,7 @@ export function initSub(ctx) {
     if (lost.length) note(`${lost.length === 1 ? 'Una imagen no subió y no va' : `${lost.length} imágenes no subieron y no van`} con el mensaje.`);
     text = out.text;
     const { full, ...more } = extra;
-    const payload = { text, ...(ready.length ? { attach: ready.map(a => a.file) } : {}), ...(ready.some(a => a.vision) ? { vision: ready.filter(a => a.vision).map(a => a.vision) } : {}), ...(contextOut() ? { context: contextOut() } : {}), ...more };
+    const payload = { text, ...(out.hoja ? { hoja: out.hoja } : {}), ...(ready.length ? { attach: ready.map(a => a.file) } : {}), ...(ready.some(a => a.vision) ? { vision: ready.filter(a => a.vision).map(a => a.vision) } : {}), ...(contextOut() ? { context: contextOut() } : {}), ...more };
     const kept = attachments; busy = true; input.value = ''; sendBtn.disabled = true; attachments = []; renderAtts();
     liveText = ''; liveMode = null; runId = null; stopWanted = false; stopping = false; streaming = false;
     messages.push({ id: 'tmp', who: 'user', text, attach: payload.attach, context: payload.context }); render(true);
@@ -377,16 +384,18 @@ export function initSub(ctx) {
   // GENERAR: the one click that spends through Dimitri. The plan as the owner left it goes to /api/sub/studio (re-validated there).
   async function generate(msgId, btn, discard) {
     const m = messages.find(x => x.id === msgId); if (!m || !m.studio) return;
-    const payload = discard ? discardBody(msgId, m.studio) : studioBody(msgId, m.studio, studioEdits.get(msgId), actionEdits.get(msgId));
+    const payload = discard ? discardBody(msgId, m.studio) : studioBody(msgId, m.studio, studioEdits.get(msgId), actionEdits.get(msgId), btn.dataset.lote || ''); // F3: PROBAR / GENERAR LAS N / SEGUIR carry only the lote
     if (!payload) { discarded.add(msgId); keepDiscards(); studioEdits.delete(msgId); actionEdits.delete(msgId); say('Plan de creativos descartado. No se generó ni se movió nada.'); render(true); input.focus(); return; } // the server would run its proposed actions on any call: it never hears of this one
     const label = btn.textContent; btn.disabled = true; btn.textContent = discard ? 'Descartando…' : 'Enviando al Estudio…';
     try {
       const r = await fetch('/api/sub/studio', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
+      const j = await r.json();
       const k = messages.findIndex(x => x.id === msgId); if (k >= 0 && j.message) messages[k] = j.message;
+      if (!r.ok && j.conflict && j.message && j.message.studio && j.message.studio.lote && j.message.studio.lote.error) { say(`No empezó el lote: ${j.error}`); render(true); return; } // F3: the lote card says why, in place (nothing was spent)
+      if (!r.ok) throw new Error(j.error || r.statusText);
       if (j.messages) for (const x of j.messages) if (!messages.some(y => y.id === x.id)) messages.push(x);
       studioEdits.delete(msgId); actionEdits.delete(msgId);
-      say(discard ? 'Plan de creativos descartado.' : 'Enviado al Estudio. Te aviso aquí cuando estén listos.');
+      say(discard ? 'Plan de creativos descartado.' : btn.dataset.lote ? 'El lote está en marcha. Lo sigues en su tarjeta.' : 'Enviado al Estudio. Te aviso aquí cuando estén listos.');
       pollAt = 0; await pollJobs(); mediaChanged();
     } catch (e) { btn.disabled = false; btn.textContent = label; messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No se pudo ${discard ? 'descartar' : 'generar'}: ${e.message}` }); }
     render(true);
@@ -469,6 +478,8 @@ export function initSub(ctx) {
     if (e.target.closest('.sb-ctxx')) { ctxOff = true; input.focus(); refreshContext(); return; } // the focus leaves the button before it goes
     if (e.target.closest('.sb-ctxadd')) { input.focus(); addGallery(ctxSel.kind === 'image' ? [ctxSel.id] : ctxSel.ids || []); return; }
     const th = e.target.closest('[data-open]'); if (th) return openFile(th.dataset.open);
+    const lver = e.target.closest('.sl-ver'); if (lver) { dispatchEvent(new CustomEvent('ao:ver-lote', { detail: { id: lver.dataset.lote } })); if (narrow.matches) close(); return; } // F3: the Estudio's Lotes tab follows it (src/studio.js listens)
+    if (e.target.closest('.sl-cambiar')) { input.value = 'Cambia la receta del lote: '; input.focus(); return; } // F3: the owner says how, Dimitri proposes again
     const go = e.target.closest('.sb-go'); if (go) return dispatch(go.dataset.msg, go);
     const sgo = e.target.closest('.sc-go'); if (sgo) return generate(sgo.dataset.msg, sgo);
     const sskip = e.target.closest('.sc-skip'); if (sskip) return generate(sskip.dataset.msg, sskip, true);

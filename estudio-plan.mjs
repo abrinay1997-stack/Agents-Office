@@ -7,6 +7,11 @@
 //   estimatePlan(creatives, { estimate, budget, models? }) → { total, perItem, fits, why }
 //   parseActions(list, { galleryHas }) → only carpeta_crear · carpeta_renombrar · mover · enviar_contenido
 //   approvedFromNote(name, text) → { title, prompt, model, file } (an Estudio note in the Brain, as Dimitri sees it)
+//   presetsBlock({ presets, canales, ask, propios, lotes }) → «PRESETS (usa SOLO estos ids)», ≤ PRESETS_MAX (banco de presets F3, §8.1)
+//   A creative may carry `presets` instead of a prompt (§8.2): parseCreatives then compiles it with ctx.compile (presets.compilar),
+//   the same compiler the Estudio uses, and the card shows its steps, its model and its cost; the prompt is the compiler's.
+import { buscar as buscarPresets } from './src/presets-buscar.js';
+import { escenaDe, escenaEs, pilaLimpia, lotesText } from './estudio-lote.mjs';
 export const ROLES = ['reference', 'start', 'end', 'video'];
 export const ACTIONS = ['carpeta_crear', 'carpeta_renombrar', 'mover', 'enviar_contenido'];
 export const MAX_CREATIVES = 8;
@@ -84,6 +89,81 @@ export function studioPromptBlock({ models = [], budget = null, folders = [], at
   return out.join('\n');
 }
 
+/* ---------- banco de presets F3 (E7): lo que Dimitri lee del banco, y cómo propone con presets ---------- */
+export const PRESETS_MAX = 2500; // §8.1 y §13.4: compacto, y solo en los mensajes del Estudio (DIM-04)
+/** Las reglas del lote y de la escena 3D: van con el bloque (solo en los mensajes del Estudio), no en cada mensaje de Dimitri. */
+export const LOTE_REGLAS = `CÓMO PROPONES CON PRESETS
+- Una edición de UNA o pocas fotos (≤ 4): un creativo {"kind":"image","title","presets":[{"id","params":{}}],"input":"<id de su foto en la galería>","canal":"<id de canal>","refs":[],"escena":null,"idea":"<opcional>","model":null}. Sin "prompt": lo escribe el banco.
+- Un LOTE (más de 4 fotos, una carpeta o un Excel adjunto): UN "lote", no creativos: {"nombre":"<≤60>","fotos":{"carpeta":"<nombre>"}|{"ids":[…]}|{"hoja":"<id>","carpeta":"<dónde están las fotos que nombra>"},"receta":{"pila":[{"id","params":{}}],"canal":"<id>","escena":null,"idea":""},"modelo":null,"muestra":3,"carpeta_destino":"<nombre>","por_que":"<una frase>"}.
+- ESCENA 3D cuando hablan de distancia, ángulo, picado, cenital, contrapicado («desde sus pies») o medidas: {"tipo":"cama-queen|cama-king|sofa|cafetera|televisor-55|persona|producto","toma":"frontal|tres-cuartos|lateral|picado-45|cenital|contrapicado|ras-piso","distancia":"ajustado|catalogo|margen|aire","proporcion":"4:5","fondo":{"tipo":"color|set|locacion","valor":"#FFFFFF"}} (opcional "ancho","alto","fondoCm" en cm). El margen es DISTANCIA de cámara: no se recorta nada.
+- Si falta el canal o qué fotos, NO propongas el lote: modo "pregunta" con UNA pregunta de 2 a 4 opciones (p. ej. «¿Para dónde son?»: Web con margen 60 % (recomendado) · Instagram 4:5 · FB/IG Shop · Amazon 85 %).
+- Un lote en marcha (LOTES): "actions" {"type":"lote_pausar","lote":"<id>"} · {"type":"lote_reanudar","lote"} · {"type":"lote_reintentar","lote","filas":"fallidas"|[n],"modelo":null} (gasta: dilo) · {"type":"lote_aprobar","lote","filas":"listas"|[n]}. Cada una espera el clic del dueño.
+- Nada empieza hasta PROBAR CON 3 o GENERAR: tú solo propones, con su costo.`;
+const presetLinea = p => `${p.id} «${p.nombre}»`;
+/**
+ * «PRESETS (usa SOLO estos ids)»: los 5 más a propósito del mensaje con su frase, los del dueño, los ids de imagen por grupo (los de la
+ * primera fase; si no cabe, solo los grupos de lo encontrado), los canales y los ejes de referencia. Nunca pasa de `max`.
+ * presets: el banco (presets.todos().presets); grupos: [{ id, nombre }]; lotes: lotes.lista() (para que nombre los suyos por id).
+ */
+export function presetsBlock({ presets = [], canales = [], grupos = [], ask = '', lotes = [], max = PRESETS_MAX, buscar = buscarPresets } = {}) {
+  const img = presets.filter(p => (p.medios || []).includes('image'));
+  if (!img.length) return '';
+  const hits = (() => { try { return String(ask).trim() ? buscar(ask, img, { max: 5 }) : []; } catch { return []; } })();
+  const byId = new Map(img.map(p => [p.id, p]));
+  const top = hits.map(h => byId.get(h.id)).filter(Boolean);
+  const propios = img.filter(p => p.propio || /^mio-/.test(p.id) || p.categoria === 'mios');
+  const gnombre = id => grupos.find(g => g.id === id)?.nombre || id;
+  const enGrupo = g => img.filter(p => p.categoria === g && !propios.includes(p) && (p.fase || 1) <= 1);
+  const cats = [...new Set(img.map(p => p.categoria))].filter(g => g !== 'mios');
+  const cab = 'PRESETS DEL BANCO (usa SOLO estos ids; los del dueño mandan sobre los de fábrica):';
+  const partes = {
+    top: top.length ? 'Para este pedido: ' + top.map(p => `${presetLinea(p)} — ${String(p.frase || '').slice(0, 90)}`).join(' · ') : '',
+    propios: propios.length ? 'De PanaClaw (del dueño): ' + propios.slice(0, 8).map(presetLinea).join(', ') : '',
+    canales: canales.length ? 'CANALES: ' + canales.map(c => `${c.id} (${c.nombre}${c.ocupacion ? ` ${Math.round(c.ocupacion * 100)} %` : ''})`).join(', ') : '',
+    ejes: 'REFERENCIA por ejes (0–3): estilo, color, composicion, luz, fondo, pose, producto (producto nunca encendido sin que lo pida).',
+    lotes: lotesText(lotes),
+  };
+  const grupoLinea = g => { const l = enGrupo(g); return l.length ? `${gnombre(g)}: ${l.map(p => p.id).join(', ')}` : ''; };
+  // the recent lotes go whole, kept apart from the cut: a cut there would lose the ids Dimitri needs for «aprueba las listas»
+  const lotesTxt = partes.lotes.slice(0, Math.floor(max / 3)), room = max - (lotesTxt ? lotesTxt.length + 1 : 0);
+  const armar = gs => [cab, partes.top, partes.propios, 'Por grupo — ' + gs.map(grupoLinea).filter(Boolean).join(' · '), partes.canales, partes.ejes].filter(Boolean).join('\n');
+  let out = armar(cats);
+  if (out.length > room) out = armar([...new Set(top.map(p => p.categoria))].filter(g => g !== 'mios').concat(['catalogo']).filter((g, k, a) => a.indexOf(g) === k)); // §13.4: solo los grupos que tocan el pedido
+  if (out.length > room) out = out.slice(0, room - 1) + '…';
+  return lotesTxt ? out + '\n' + lotesTxt : out;
+}
+/** A creative with presets (§8.2): compiled, never a free prompt. Unknown ids out (said), the photo and the references must be in the gallery. */
+function presetCreative(c, i, { presets = [], canales = [], galleryHas = () => false, compile, models = [], maxPerRequest = 8 } = {}) {
+  const VID = /\.(mp4|webm)$/i;
+  const input = typeof c.input === 'string' && galleryHas(c.input) && !VID.test(c.input) && !AUDIO_RE.test(c.input) ? c.input : null;
+  const refs = (Array.isArray(c.refs) ? c.refs : []).slice(0, 4).map(x => (typeof x === 'string' ? { id: x } : x)).filter(x => x && typeof x.id === 'string' && galleryHas(x.id) && !VID.test(x.id) && !AUDIO_RE.test(x.id))
+    .map(x => ({ id: x.id, ...(x.ejes && typeof x.ejes === 'object' ? { ejes: x.ejes } : c.ejes && typeof c.ejes === 'object' ? { ejes: c.ejes } : {}) }));
+  const notes = [];
+  if (c.input && !input) notes.push(`(«${str(c.input, 60)}» no está en la galería.)`);
+  // the pile: known ids only (a creative may start from scratch, so the mode is not forced here: the compiler says it)
+  const byId = new Map(presets.map(p => [p.id, p])), pila = [];
+  for (const x of c.presets.slice(0, 12)) { const it = typeof x === 'string' ? { id: x } : x; if (!it || typeof it.id !== 'string') continue; if (!byId.has(it.id)) { notes.push(`(No conozco el preset «${str(it.id, 40)}»: lo quité.)`); continue; } pila.push({ id: it.id, ...(it.params && typeof it.params === 'object' && !Array.isArray(it.params) ? { params: it.params } : {}) }); }
+  const canal = typeof c.canal === 'string' ? canales.find(k => k.id === c.canal || k.nombre.toLowerCase() === c.canal.toLowerCase()) || null : null;
+  if (c.canal && !canal) notes.push(`(No conozco el canal «${str(c.canal, 30)}».)`);
+  const escena = escenaDe(c.escena), idea = str(c.idea, 600);
+  const n = Math.max(1, Math.min(Math.min(4, maxPerRequest), Math.round(+c.n) || 1));
+  const why = [str(c.why, 400), ...notes].filter(Boolean).join(' ');
+  const base = { i, title: str(c.title, 90) || `Edición ${i + 1}`, kind: 'image', why, presets: pila, input, refs, canal: canal ? canal.id : null, canalEs: canal ? canal.nombre : '', ...(escena ? { escena, escenaEs: escenaEs(escena) } : {}), idea,
+    recetaEs: pila.map(x => byId.get(x.id)?.nombre || x.id), n, settings: {}, media: { reference: [input, ...refs.map(r => r.id)].filter(Boolean), start: [], end: [], video: [] },
+    purpose: str(c.purpose, 200), folder: c.folder ? str(c.folder, 60) : null, prompt: '', prompt_es: '' };
+  if (!pila.length && !escena && !idea) return { ...base, model: null, modelName: '', cost: 0, state: 'skipped', error: 'ningún preset de los que pidió existe en el banco' };
+  if (typeof compile !== 'function') return { ...base, model: null, modelName: '', cost: 0, state: 'skipped', error: 'el banco de presets no está disponible' };
+  const pedido = { pila, params: canal ? { canal: canal.id } : {}, entradas: { foto: input ? [input] : [], referencias: refs }, escena, idea, n, ...(typeof c.model === 'string' && c.model ? { model: c.model } : {}) };
+  let plan; try { plan = compile(pedido); } catch (e) { return { ...base, model: null, modelName: '', cost: 0, state: 'skipped', error: `no pude preparar la receta: ${e.message}` }; }
+  const nm = id => models.find(m => m.id === id)?.name || id;
+  const out = { ...base, model: plan.model || 'local', modelName: plan.model ? nm(plan.model) : 'En tu máquina (gratis)', soloLocal: !!plan.soloLocal, porque: str(plan.porque, 200),
+    pasos: (plan.pasos_es || []).slice(0, 14), conserva: str(plan.conserva_es, 200), prompt: str(plan.prompt, 4000), prompt_es: str(plan.prompt_es, 4000), avisosPreset: (plan.avisos || []).map(a => str(a.texto || a, 200)).slice(0, 6),
+    alternativas: (plan.alternativas || []).filter(a => a && a.id && a.on !== false).slice(0, 5).map(a => ({ id: a.id, name: nm(a.id) })),
+    cost: plan.soloLocal ? 0 : +(+plan.costo?.usd || 0).toFixed(4), state: 'proposed' }; // costo.usd already counts the n
+  if (plan.errores?.length) return { ...out, state: 'skipped', error: plan.errores.join(' · ') };
+  return out;
+}
+
 /** The settings as the model takes them: unknown keys out, a value off its list → that setting's default, a range clamped. */
 export function cleanSettings(m, given = {}) {
   const s = {}, g = given && typeof given === 'object' ? given : {};
@@ -103,10 +183,15 @@ export function cleanSettings(m, given = {}) {
  * A model that is off or unknown → the default for its kind, said in «why». Media not in the gallery, in a role the model does not take, or
  * of the wrong kind → out; each role up to its maximum. A need left unmet → state «skipped» with the reason (nothing to generate).
  */
-export function parseCreatives(json, { models = [], folders = [], galleryHas = () => false, maxPerRequest = 8, defaultModel = () => null, estimate = null, voices = null } = {}) { // voices: the voiceIds that exist (the owner's and the system's), V4.11
+export function parseCreatives(json, { models = [], folders = [], galleryHas = () => false, maxPerRequest = 8, defaultModel = () => null, estimate = null, voices = null, presets = null, canales = [], compile = null } = {}) { // voices: the voiceIds that exist (the owner's and the system's), V4.11 · presets/canales/compile: the bank (F3)
   const raw = Array.isArray(json) ? json : Array.isArray(json?.creatives) ? json.creatives : [];
   const byId = new Map(models.map(m => [m.id, m]));
   return raw.filter(c => c && typeof c === 'object').slice(0, MAX_CREATIVES).map((c, i) => {
+    if (Array.isArray(c.presets) && c.presets.length && (c.kind || 'image') === 'image') { // §8.2: a creative with presets needs no prompt
+      const pc = presetCreative(c, i, { presets: presets || [], canales, galleryHas, compile, models, maxPerRequest });
+      if (pc.folder) pc.folder = cleanName(folders.find(f => f.id === pc.folder)?.name || pc.folder) || null;
+      return pc;
+    }
     let kind = KINDS.includes(c.kind) ? c.kind : 'image';
     const asked = str(c.model, 80); let m = byId.get(asked); let why = str(c.why, 400);
     if (m && m.on && !m.legacy) kind = m.kind;
@@ -141,9 +226,9 @@ export function parseCreatives(json, { models = [], folders = [], galleryHas = (
 export function estimatePlan(creatives = [], { estimate = () => 0, budget = null, models = [] } = {}) {
   const free = id => (models.find(m => m.id === id)?.engine || (/^prueba/.test(id) ? 'prueba' : '')) === 'prueba';
   const live = creatives.filter(c => c.state === 'proposed' && c.include !== false);
-  const perItem = live.map(c => ({ i: c.i, cost: free(c.model) ? 0 : +(+estimate({ model: c.model, n: c.n, settings: c.settings, prompt: c.prompt }) || 0).toFixed(3) }));
+  const perItem = live.map(c => ({ i: c.i, cost: free(c.model) || c.soloLocal ? 0 : Array.isArray(c.presets) ? +(+c.cost || 0).toFixed(3) : +(+estimate({ model: c.model, n: c.n, settings: c.settings, prompt: c.prompt }) || 0).toFixed(3) })); // a creative with presets: the compiler's cost
   const total = +perItem.reduce((s, x) => s + x.cost, 0).toFixed(3);
-  const weight = live.filter(c => !free(c.model)).reduce((s, c) => s + (WEIGHT[c.kind] || 1) * c.n, 0);
+  const weight = live.filter(c => !free(c.model) && !c.soloLocal).reduce((s, c) => s + (WEIGHT[c.kind] || 1) * c.n, 0);
   const no = [];
   if (budget) {
     if (budget.left != null && weight > budget.left) no.push(`el tope de hoy: esto son ${weight} y quedan ${budget.left}`);

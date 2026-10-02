@@ -192,6 +192,7 @@ export function initStudio(ctx) {
     compositor: () => banco.estado(), modelos: () => models.filter(m => m.on && m.kind === 'image' && m.roles?.reference).map(m => ({ id: m.id, name: m.name, cost: m.cost })),
     abrirArchivo: f => lightFile(f),
     onCambio: c => { const b = $('.st-ptl'); if (b) { const n = c.activos + c.espera; b.textContent = n ? String(n) : ''; b.title = n ? `${c.activos} en marcha${c.espera ? ` · ${c.espera} esperan tu OK` : ''}${c.revisar ? ` · ${c.revisar} fotos para revisar` : ''}` : ''; } } });
+  addEventListener('ao:ver-lote', e => { const id = e.detail && e.detail.id; if (!id) return; open(); showPane('lotes'); lotesUI?.seguir(id); }); // F3: «Ver el lote» on Dimitri's card
   /** «Editar en lote…» in the selection bar: the Lotes tab, with these photos as its first step done (§6.1). */
   function editarEnLote(files) {
     const ids = files.filter(esImg);
