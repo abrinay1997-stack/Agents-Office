@@ -492,7 +492,9 @@ function escenaPara(escena, familia, escena3d, errores, opts) {
   if (!r || !r.en) { errores.push('El escenario 3D no se pudo traducir al prompt (falta describirEscena de src/escena3d-core.js)'); return null; }
   let oc = r.ocupacion;
   if (oc == null && escena3d?.ocupacionEstimada) { try { oc = escena3d.ocupacionEstimada(escena); } catch { oc = null; } }
-  return { en: r.en, es: r.es, ...(r.resumen ? { resumen: r.resumen } : {}), ocupacion: fraccion(oc), proporcion: escena.cuadro?.proporcion || null, fondo: escena.fondo || null };
+  // conMovimiento: el texto lo hizo describirEscena con opts.movimiento (ya dice la cámara del preset); una descripción
+  // dada a mano no la dice, y la cámara se queda en su hueco
+  return { en: r.en, es: r.es, ...(r.resumen ? { resumen: r.resumen } : {}), ocupacion: fraccion(oc), proporcion: escena.cuadro?.proporcion || null, fondo: escena.fondo || null, conMovimiento: !!escena3d?.describirEscena };
 }
 const esBlanco = c => /^#?(fff|ffffff)$/i.test(String(c || '').trim());
 
@@ -761,8 +763,11 @@ export function compilar(opts = {}) {
     // los roles de media.mjs (§5.2): start = la foto de partida, end = la de llegada (en el bucle, la misma), video = tu
     // video (o la guía de «copiar movimiento», que no es lo que se versiona), reference = tus referencias y el empaque
     const ini = arr(ent.inicial)[0], fin = arr(ent.final)[0], org = arr(E.origen ?? E.video)[0], guiaV = arr(E.guia)[0];
-    if (org) { media.video = [org]; versionOf = org; if (ini) media.start = [ini]; }
-    else if (guiaV) { media.video = [guiaV]; if (ini) media.start = [ini]; }
+    // un video por pedido: si un preset pide la guía («copiar movimiento»), va la guía aunque también haya un video tuyo
+    const pideGuia = lista.some(it => arr(it.preset.entradas).some(en => en.rol === 'guia'));
+    if (org && guiaV && org !== guiaV) avisos.push({ tipo: 'entrada', texto: pideGuia ? 'Va un video por pedido: uso el video guía para copiar su movimiento; tu otro video no se usa' : 'Va un video por pedido: uso tu video; el video guía no se usa' });
+    if (guiaV && (pideGuia || !org)) { media.video = [guiaV]; if (ini) media.start = [ini]; }
+    else if (org) { media.video = [org]; versionOf = org; if (ini) media.start = [ini]; }
     else if (ini) { media.start = [ini]; if (fin) media.end = [fin]; }
     const extras = refs.length ? arr(E.extra).filter(Boolean) : [];
     const todas = [...refs.map(r => r.id), ...extras];
@@ -815,7 +820,7 @@ export function compilar(opts = {}) {
     // el escenario 3D en video (§16.2): dónde empieza la cámara (distancia, altura, lente) + el movimiento del preset
     const cam = lista.find(it => arr(it.preset.ejes).includes('camara') && it.preset.capa === 'ajuste');
     escD = escenaPara(escena, familia, escena3d, errores, { movimiento: slots.camara.join(', '), movimientoEs: cam ? nombreDe(cam.preset).toLowerCase() : '' });
-    if (escD) { slots.plano.push(escD.en); slots.camara = []; camaraEnEscena = true; }
+    if (escD) { slots.plano.push(escD.en); if (escD.conMovimiento) { slots.camara = []; camaraEnEscena = true; } }
   } else if (escD) slots.camara.push(String(escD.en).replace(/^\s*Camera and framing:\s*/i, '')); // la plantilla ya pone «Camera and framing:»
   const conservar = conFoto || iaRefs.some(r => r.ejes.producto) ? (familias[familia]?.conservar || (familia === 'edicion-corta' ? 'Keep the product exactly the same.' : CONSERVAR)) : '';
   const refLineas = (corta) => {
@@ -852,12 +857,13 @@ export function compilar(opts = {}) {
   if (target) settings.aspectRatio = target;
   const lado = canal ? Math.max(canal.ancho || 0, canal.alto || 0) : 0;
   const st = row.settings || {};
+  let sonidoAnulado = ''; // el modelo no hace caso al ajuste de sonido del preset: «Qué hará» lo dice en su línea
   if (esVideo && settings.generateAudio != null) {
     // el sonido, con el ajuste que tenga ESTE modelo: generateAudio, sound (Kling), siempre (Veo 3.1) o ninguno
     const quiere = settings.generateAudio === true || settings.generateAudio === 'true';
     if (auM === 'sound') { settings.sound = quiere; delete settings.generateAudio; }
-    else if (auM === 'siempre') { delete settings.generateAudio; if (!quiere) avisos.push({ tipo: 'sonido', texto: `${elegidoM.nombre} siempre trae sonido: no se puede apagar (quítalo al publicar)` }); }
-    else if (auM === 'no') { delete settings.generateAudio; if (quiere) avisos.push({ tipo: 'sonido', texto: `${elegidoM.nombre} no hace sonido: el video sale mudo` }); }
+    else if (auM === 'siempre') { delete settings.generateAudio; if (!quiere) { sonidoAnulado = `no se puede, ${elegidoM.nombre} siempre trae sonido`; avisos.push({ tipo: 'sonido', texto: `${elegidoM.nombre} siempre trae sonido: no se puede apagar (quítalo al publicar)` }); } }
+    else if (auM === 'no') { delete settings.generateAudio; if (quiere) { sonidoAnulado = `${elegidoM.nombre} no hace sonido, sale mudo`; avisos.push({ tipo: 'sonido', texto: `${elegidoM.nombre} no hace sonido: el video sale mudo` }); } }
   }
   if (kind === 'image' && lado > 1024 && settings.imageSize == null && settings.resolution == null) {
     if (arr(st.imageSize?.values).includes('2K')) settings.imageSize = '2K';
@@ -906,6 +912,13 @@ export function compilar(opts = {}) {
   };
   const pasos_es = pasosEs(lista, refsE, elegidoM, nivel, canal, escD, kind);
   if (esVideo) { // lo que el dueño ve del clip antes de gastar: los fotogramas, el formato y el sonido
+    for (const { n, extra } of refsVideo) if (extra) pasos_es.push(`Referencia ${n}: el empaque`); // va, se nombra y se cobra
+    if (sonidoAnulado) { // el preset de sonido que el modelo no puede cumplir no se lista como si se cumpliera
+      const deAudio = new Map(lista.filter(it => it.preset.ejecutor === 'ajustes' && it.preset.ajustesModelo?.generateAudio != null).map(it => [`${nombreDe(it.preset)} (${DONDE.ajustes})`, nombreDe(it.preset)]));
+      let dicho = false;
+      for (let k = 0; k < pasos_es.length; k++) if (deAudio.has(pasos_es[k])) { pasos_es[k] = `${deAudio.get(pasos_es[k])}: ${sonidoAnulado}`; dicho = true; }
+      if (!dicho) pasos_es.push(`Sonido: ${sonidoAnulado}`); // lo pedía una receta (la portada web va muda)
+    }
     if (bucle && media.end) pasos_es.push('Bucle: la misma foto al principio y al final');
     else if (media.start && media.end) pasos_es.push('De la foto de partida a la de llegada');
     const fmt = [limpios.aspectRatio, limpios.duration != null ? `${limpios.duration} s` : ''].filter(Boolean).join(' · ');
@@ -934,7 +947,9 @@ function lineasRefVideo(refsVideo) {
     if (!ref) continue;
     if (ref.ejes.producto) { out.push(`Reference image ${n} is the product: it must look exactly the same (shape, proportions, colors, label and logos)`); continue; }
     if (ref.rol === 'persona') { out.push(`Reference image ${n} is the person: keep the same face, body and look`); continue; }
-    if (ref.rol) continue; // la pidió un preset («Copiar el look de una foto»): su propia frase ya dice para qué es
+    // la pidió un preset («Copiar el look de una foto»): su propia frase dice para qué es, pero dice «the reference image»;
+    // con más de una imagen, el número dice cuál (si no, el modelo puede copiar el color de la foto del producto)
+    if (ref.rol && refsVideo.length < 2) continue;
     const on = EJES_REF.filter(e => e !== 'producto' && ref.ejes[e] > 0);
     if (!on.length) continue;
     const f = Math.max(...on.map(e => ref.ejes[e]));
@@ -982,7 +997,7 @@ function renderPrompt({ familia, kind, conFoto, slots, idea, producto, conservar
     let accion = [idea, ...slots.accion, ...slots.estilo].filter(Boolean).join('; ') || (producto ? '' : 'The product');
     // «Cafetera roja» + «the product makes a turntable rotation…» → «Cafetera roja makes…»; si no, «Cafetera roja: …»
     let sujeto = producto;
-    if (producto && accion && /^the product\b/i.test(accion)) { accion = accion.replace(/^the product\b/i, producto); sujeto = ''; }
+    if (producto && accion && /^the product\b/i.test(accion)) { accion = accion.replace(/^the product\b/i, () => producto); sujeto = ''; } // una función: «$&» en el nombre se queda tal cual
     else if (producto && accion) sujeto = `${producto}:`;
     const sonido = [slots.sfx.length ? `Sound: ${slots.sfx.join('; ')}` : '', slots.ambiente.length ? `Ambient noise: ${slots.ambiente.join('; ')}` : ''].filter(Boolean).join('. ');
     if (!slots.camara.length && (familia !== 'kling' || !camaraFija)) tpl = tpl.replace(/Camera:\s*\{camara\}\.?/, '');

@@ -78,7 +78,7 @@
      "def": "5"
     }
    ],
-   "ia": "the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical",
+   "ia": "the product makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical",
    "ranura": "accion",
    "requiere": {},
    "prefer": [
@@ -112,11 +112,11 @@
    "fase": 5,
    "estado": "beta",
    "prompt": {
-    "veo": "{camara}, {plano}, {lente}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
-    "kling": "{sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
-    "seedance": "{plano}, {lente}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {camara}. {look}. {sonido}.",
-    "minimax-video": "{sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {camara}. {look}. {sonido}.",
-    "video-generico": "{camara}. {plano}. {sujeto} the product is a rigid object and makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {look}. {sonido}."
+    "veo": "{camara}, {plano}, {lente}. {sujeto} the product makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {look}, {luz}.\nSFX: {sfx}\nAmbient noise: {ambiente}",
+    "kling": "{sujeto} the product makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. Camera: {camara}. {plano}. {look}. {sonido}.",
+    "seedance": "{plano}, {lente}. {sujeto} the product makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "minimax-video": "{sujeto} the product makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {camara}. {look}. {sonido}.",
+    "video-generico": "{camara}. {plano}. {sujeto} the product makes a {p.velocidad} 360-degree turntable rotation on a hidden turntable; neutral studio light, soft contact shadow; its shape, colors and logos stay identical. {refs} {escena}. {look}. {sonido}."
    },
    "tecnico": "Turntable 360",
    "incluye": [

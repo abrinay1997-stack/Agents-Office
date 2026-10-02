@@ -24,7 +24,10 @@ const js = res.outputFiles[0].text;
 // INF-09) con la pestaña Lotes. Solo comentarios y blancos: los espacios que separan selectores (`.lt :is(…)`) y los de los valores quedan.
 const cssCorto = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').replace(/\s*([{};,])\s*/g, '$1').trim();
 const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css')).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
-const shell = readFileSync('src/shell.html', 'utf8').replace('/* <css-vistas> */', () => vistasCss);
+// Banco de presets F5 (1 oct 2026): el <style> de shell.html también llega sin sus comentarios (~16 KB; los blancos y lo demás,
+// tal cual) para que el compilador de video quepa en el presupuesto sin subir el tope. El marcador se queda para el reemplazo.
+const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => `<style>${css.replace(/\/\*(?! <css-vistas> \*\/)[\s\S]*?\*\//g, '')}</style>`);
+const shell = sinComentarios(readFileSync('src/shell.html', 'utf8')).replace('/* <css-vistas> */', () => vistasCss);
 const html = shell.replace('<!--APP-->', () => `<script>${js}</script>`);
 mkdirSync('dist', { recursive: true });
 // write-then-rename, retried: on Windows the running office may be reading the page at that instant (EBUSY / UNKNOWN)

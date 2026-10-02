@@ -161,7 +161,8 @@ test('giro 360: anima tu foto (start), avisa siempre de los objetos rígidos y m
   const r = compila({ pila: ['vp-giro-360'], entradas: { foto: FOTO }, producto: 'Cafetera roja', model: 'kling-3-std' });
   assert.deepEqual(r.errores, []);
   assert.equal(r.modo, 'anima'); assert.deepEqual(r.request.media, { start: [FOTO] });
-  assert.match(r.prompt, /^Cafetera roja is a rigid object and makes a slow 360-degree turntable rotation/);
+  assert.match(r.prompt, /^Cafetera roja makes a slow 360-degree turntable rotation/);
+  assert.doesNotMatch(r.prompt, /rigid/, 'el prompt no afirma que es rígido: una sábana no lo es');
   assert.match(r.prompt, /Camera: static locked-off camera\./);
   assert.match(textos(r), /«Giro 360 de catálogo»: Telas, vidrio y piezas finas pueden deformarse/);
   assert.ok(!r.avisos.some(a => a.tipo === 'rigido'), 'una cafetera es rígida');
@@ -432,4 +433,37 @@ test('el buscador encuentra los de video con las palabras del dueño (los dos: e
   // en la portada de video salen las estrellas de video
   const portada = buscar('', fab.presets, { medio: 'video' }).map(r => r.id);
   for (const id of ['vp-giro-360', 'cam-acercar', 'cam-orbita']) assert.ok(portada.includes(id), id);
+});
+
+/* ---------- arreglos de la revisión de video-datos ---------- */
+test('revisión: el nombre del producto va tal cual («$&» no es un patrón), la cámara no se pierde con una descripción a mano', () => {
+  const r = compila({ pila: ['vp-giro-360'], entradas: { foto: FOTO }, producto: 'Pack $& oferta $1', model: 'kling-3-std' });
+  assert.match(r.prompt, /^Pack \$& oferta \$1 makes a slow 360-degree/);
+  // sin describirEscena (una descripción dada): la órbita sigue en el prompt
+  const d = compila({ pila: ['vp-heroe', 'cam-orbita'], entradas: { foto: FOTO }, escena: { descripcion: { en: 'camera 40 cm away' } }, model: 'kling-3-std' });
+  assert.deepEqual(d.errores, []);
+  assert.match(d.prompt, /full 360-degree orbit around the subject/);
+  assert.match(d.prompt, /Camera 40 cm away/);
+  // con describirEscena el movimiento va una sola vez, dentro del escenario
+  const e = compila({ pila: ['vp-heroe', 'cam-orbita'], entradas: { foto: FOTO }, escena: ESC, escena3d: e3d, model: 'kling-3-std' });
+  assert.equal((e.prompt.match(/orbit/g) || []).length, 1, e.prompt);
+});
+
+test('revisión: el look con dos referencias dice cuál; la guía gana al origen y se avisa; el empaque y el sonido en «Qué hará»', () => {
+  const l = compila({ pila: ['vp-ugc', 'look-ref'], entradas: { referencias: [FOTO, REF] }, model: 'veo-3.1' });
+  assert.deepEqual(l.errores, []);
+  assert.match(l.prompt, /Reference image 1 is the product/);
+  assert.match(l.prompt, /Use reference image 2 only for its visual style and color grade/);
+  const m = compila({ pila: ['ved-copiar-movimiento'], entradas: { origen: CLIP, guia: '2026-10/guia.mp4', inicial: FOTO } });
+  assert.deepEqual(m.request.media.video, ['2026-10/guia.mp4']);
+  assert.equal(m.request.versionOf, undefined);
+  assert.match(textos(m), /Va un video por pedido: uso el video guía/);
+  const u = compila({ pila: ['vp-unboxing'], entradas: { referencias: [FOTO, FOTO2], extra: '2026-10/caja.jpg' }, model: 'veo-3.1' });
+  assert.equal(u.request.media.reference.length, 3);
+  assert.ok(u.pasos_es.includes('Referencia 3: el empaque'), u.pasos_es.join(' / '));
+  const mudo = compila({ pila: ['vp-heroe', 'vs-mudo'], entradas: { foto: FOTO }, model: 'veo-3.1' });
+  assert.ok(!mudo.pasos_es.includes('Sin sonido (ajuste del modelo)'), mudo.pasos_es.join(' / '));
+  assert.ok(mudo.pasos_es.includes('Sin sonido: no se puede, Veo 3.1 siempre trae sonido'), mudo.pasos_es.join(' / '));
+  const k = compila({ pila: ['vp-heroe', 'vs-mudo'], entradas: { foto: FOTO }, model: 'kling-3-std' });
+  assert.ok(k.pasos_es.includes('Sin sonido (ajuste del modelo)'), 'donde se puede apagar, la línea se queda');
 });
