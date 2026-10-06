@@ -14,6 +14,7 @@ import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisa
 import { initPreview } from './contenido-preview.js';
 import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-cola.js';
 import { mejoresDelDia, siguienteBuena } from './contenido-hora.js';
+import { CADA, MAX_VECES } from './contenido-repetir.js';
 
 export const ESTADO = {
   idea: { name: 'IDEA', glyph: '◌', color: '#5A5A5A', dark: '#B9B6AE', help: 'Una idea suelta: todavía no es una publicación.' },
@@ -73,7 +74,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   const head = host.querySelector('.pz-head'), scroll = host.querySelector('.pz-scroll'), foot = host.querySelector('.pz-foot'), side = host.querySelector('.pz-side');
   const preview = initPreview(host.querySelector('.pz-preview'), { esc, cuenta, otras: () => otras().map(o => (cur && o.id === cur.id ? cur : o)) });
   let horaK = '', horaSug = null; // plan M3: la mejor hora de las redes de esta pieza
-  let masRedes = false; // «Más redes»: las que el negocio no usa, a la vista solo si se piden
+  let masRedes = false, repAbierto = false; // plan M5 · U7: «Repetir…» abierto en el pie // «Más redes»: las que el negocio no usa, a la vista solo si se piden
   let cur = null, dirty = {}, timer = null, saving = Promise.resolve(), opener = null, isModal = false, gone = false, stateText = '', stateBad = false;
   // la revisión se calcula aquí, con las mismas reglas que el servidor: se ve al instante, sin esperar al guardado. El servidor la vuelve a comprobar al aprobar.
   const rev = () => {
@@ -213,7 +214,8 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     foot.innerHTML = `<div class="pz-vline">${veredicto}</div>
       <div class="pz-acts">${p.estado === 'aprobada' ? `<button type="button" class="pz-btn" data-a="back"${sal && ['en_red', 'entregando'].includes(sal.clave) ? ' title="Vuelve a revisión y se retira del conductor"' : ''}>${sal && ['en_red', 'entregando'].includes(sal.clave) ? 'Quitar el OK y retirarla' : 'Quitar el OK'}</button>`
         : `${p.estado === 'borrador' || p.estado === 'idea' ? '<button type="button" class="pz-btn" data-a="review">Pasar a revisión</button>' : '<button type="button" class="pz-btn" data-a="draft">Volver a borrador</button>'}<button type="button" class="pz-go${listo ? '' : ' locked'}" data-a="approve"${listo ? '' : ' aria-disabled="true"'} title="${listo ? 'Aprobarla: queda lista para salir' : 'Todavía no puede salir: ' + esc(r.errores[0] || '')}">${listo ? 'Aprobar' : '<span aria-hidden="true">🔒</span> Aprobar'}</button>`}
-        <span class="sp"></span><button type="button" class="pz-lk" data-a="dup">Duplicar</button><button type="button" class="pz-lk warn" data-a="delete">Eliminar</button></div>
+        <span class="sp"></span><button type="button" class="pz-lk" data-a="dup">Duplicar</button><button type="button" class="pz-lk" data-a="rep" aria-expanded="${repAbierto}">Repetir…</button><button type="button" class="pz-lk warn" data-a="delete">Eliminar</button></div>
+      ${repAbierto ? `<div class="pz-rep" role="group" aria-label="Repetir esta pieza">${p.fecha ? `<label>Cada <select class="pz-sel" data-rep="cada">${Object.entries(CADA).map(([k, l]) => `<option value="${k}"${k === 'semana' ? ' selected' : ''}>${l.replace('Cada ', '')}</option>`).join('')}</select></label><label>Veces <select class="pz-sel" data-rep="veces">${Array.from({ length: MAX_VECES }, (_, i) => i + 1).map(n => `<option${n === 4 ? ' selected' : ''}>${n}</option>`).join('')}</select></label><button type="button" class="pz-btn" data-a="rep-ok">Crear los borradores</button><small class="pz-hn">Salen como borradores: cada una se revisa y se aprueba.</small>` : '<small class="pz-hn">Ponle un día primero: las copias se cuentan desde ese día.</small>'}</div>` : ''}
       <div class="pz-state${stateBad ? ' bad' : ''}" role="status" aria-live="polite">${esc(stateText)}</div>`;
   }
 
@@ -265,6 +267,14 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (b.dataset.fix) { if (b.dataset.fix === 'medios') { const ids = await pickMedia(cur.medios); if (ids?.length) swapMedios([...cur.medios, ...ids.filter(x => !cur.medios.includes(x))]); return; } const patch = parchePorArreglo(cur, b.dataset.fix); if (Object.keys(patch).length) { set(patch); await flush(); paintBody(); } return; }
     const a = b.dataset.a; if (!a) return;
     if (a === 'close') return close();
+    if (a === 'rep') { repAbierto = !repAbierto; paintFoot(); foot.querySelector(repAbierto ? '[data-rep="cada"], [data-a="rep"]' : '[data-a="rep"]')?.focus(); return; }
+    if (a === 'rep-ok') {
+      await flush(); if (!cur.id) return;
+      const cada = foot.querySelector('[data-rep="cada"]').value, veces = +foot.querySelector('[data-rep="veces"]').value;
+      try { setState('Creando…'); const r = await datos.repetir(cur.id, cada, veces); for (const c of r.creadas || []) onChange(c, { creada: true }); repAbierto = false; paintFoot(); setState(`${(r.creadas || []).length} borradores creados (${CADA[cada].toLowerCase()}): revísalos en el calendario.`); }
+      catch (err) { setState(err.message, true); }
+      return;
+    }
     if (a === 'mas-redes') { masRedes = !masRedes; keep(() => paintBody(), '[data-a="mas-redes"]'); return; }
     if (a === 'hueco') { const f = siguienteHueco(cur.redes, otras().filter(o => o.id !== cur.id)); set({ fecha: f, hora: cur.hora || '18:00' }); keep(paintCuando, '[data-a="hueco"]'); paintPreview(); setState(`Siguiente hueco: ${fmtDay(new Date(f + 'T00:00:00').getTime())}.`); return; }
     if (a === 'hist-post') { if (cur.medios[0]) { set({ historias: [cur.medios[0]] }); keep(() => paintBody(), '[data-a="hist-post"]'); } return; }
@@ -296,7 +306,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   function open(p) {
     gone = false; if (!isOpen()) opener = document.activeElement;
     cur = p.id ? JSON.parse(JSON.stringify(p)) : { id: '', titulo: '', fecha: p.fecha || '', hora: p.hora || '', formato: p.formato || 'post', redes: p.redes || [...redesUsadas()], estado: 'borrador', responsable: '', medios: p.medios || [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', aprobada: null, medidas: {}, ...(p.extra || {}) };
-    cur.medidas ||= {}; cur.textos ||= {}; masRedes = false; horaK = ''; horaSug = null;
+    cur.medidas ||= {}; cur.textos ||= {}; masRedes = false; repAbierto = false; horaK = ''; horaSug = null;
     dirty = {}; stateText = ''; stateBad = false; if (!cur.id && (cur.medios.length || cur.fecha)) dirty = { medios: cur.medios, ...(cur.fecha ? { fecha: cur.fecha, hora: cur.hora, formato: cur.formato } : {}) };
     host.hidden = false; host.classList.add('on'); isModal = narrow(); host.setAttribute('role', isModal ? 'dialog' : 'complementary'); if (isModal) host.setAttribute('aria-modal', 'true'); else host.removeAttribute('aria-modal');
     host.setAttribute('aria-label', 'Pieza de contenido'); if (isModal) modal.open(host);

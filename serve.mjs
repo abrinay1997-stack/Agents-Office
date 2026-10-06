@@ -75,6 +75,7 @@ import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './c
 import { crearMejorHora } from './contenido/mejor-hora.mjs';
 import { resumenAnaliticas } from './contenido/resumen-analiticas.mjs';
 import { crearBandeja } from './contenido/bandeja.mjs';
+import { informeDelMes } from './contenido/informe.mjs';
 import { crearProgramador } from './contenido/programador.mjs';
 import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
@@ -1539,7 +1540,16 @@ const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALI
 // plan M4 (6 oct 2026): la bandeja de todas las redes (Metricool); los agentes redactan, el dueño envía
 const bandeja = crearBandeja({ metricool, archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o), injectionIn: safety.injectionIn });
 if (metricool.configurado()) { setInterval(() => bandeja.sincronizar().catch(e => console.warn('contenido: bandeja —', e.message)), 10 * 60e3); setTimeout(() => bandeja.sincronizar().catch(() => {}), 30e3); }
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja,
+// plan M5 · U10: el informe del mes, con los datos de la oficina; guardado como nota en <cerebro>/Agents Office/informes/ (no viaja)
+async function informeRedes(mes, { guardar = false } = {}) {
+  const [y, mm] = mes.split('-').map(Number), hasta = `${mes}-${String(new Date(y, mm, 0).getDate()).padStart(2, '0')}`;
+  const r = informeDelMes({ mes, piezas: contenido.listar({ desde: `${mes}-01`, hasta }), salidaDe: id => programador.salidaDe(id), analiticas: metricas.leer({ dias: 180 }), bandeja: bandeja.listar().items, hora: await mejorHora.horas(Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook']) });
+  if (!guardar) return r;
+  const dir = path.join(BRAIN, 'Agents Office', 'informes'); fs.mkdirSync(dir, { recursive: true });
+  const archivo = path.join(dir, `${mes} redes.md`); fs.writeFileSync(archivo, `---\ntipo: informe\nmes: ${mes}\ncreado: ${new Date().toISOString()}\n---\n${r.texto}`);
+  return { ...r, nota: path.relative(BRAIN, archivo).replace(/\\/g, '/') };
+}
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja, informe: informeRedes,
   analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo

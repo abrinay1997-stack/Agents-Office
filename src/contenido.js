@@ -12,7 +12,7 @@
 //   initContenido({ served, esc, agentName, openStudio, business }) → { open, close, toggle, isOpen, openPiece(id), refresh, week(range) }
 import { modal } from './modal.js';
 import { views } from './views.js';
-import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, DOW_LONG } from './calendar-core.js';
+import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, DOW_LONG, dateOpts } from './calendar-core.js';
 import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
@@ -20,6 +20,7 @@ import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motiv
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS } from './contenido-reglas.js';
 import { nivel as nivelHora, FUENTE as FUENTE_HORA } from './contenido-hora.js';
 import { initBandeja } from './contenido-bandeja.js';
+import { casillas, intercambio, perfilHTML } from './contenido-perfil.js';
 import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
@@ -38,8 +39,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <div class="ct-create"><button type="button" class="ct-new" id="ctNew" aria-haspopup="true" aria-expanded="false" aria-label="Crear una pieza" title="Crear una pieza">+<span class="ct-newt"> Crear</span></button>
         <div class="ct-newmenu" role="menu" aria-label="Qué crear" hidden>${Object.entries(FORMATO).map(([k, l]) => `<button type="button" role="menuitem" data-newf="${k}">${FICON[k]}${l}</button>`).join('')}<p class="ct-newhint">Se abre con el siguiente hueco libre y las dos redes.</p></div></div>
       <div class="cv-seg ct-mode" role="group" aria-label="Qué ver"><button type="button" data-m="cal" aria-pressed="true">CALENDARIO</button><button type="button" data-m="prog" aria-pressed="false"><span class="ct-ml">PROGRAMACIÓN</span><span class="ct-ms">COLA</span><b class="ct-n" hidden></b></button><button type="button" data-m="bandeja" aria-pressed="false">BANDEJA<b class="ct-n ct-nbj" hidden></b></button></div>
-      <div class="cv-seg ct-views" role="group" aria-label="Vista del calendario"><button type="button" data-v="agenda">AGENDA</button><button type="button" data-v="day">DÍA</button><button type="button" data-v="week">SEMANA</button><button type="button" data-v="month" class="on">MES</button></div>
-      <div class="cv-nav"><button id="ctPrev" type="button" aria-label="Anterior" title="anterior (←)">‹</button><div id="ctTitle"></div><button id="ctNext" type="button" aria-label="Siguiente" title="siguiente (→)">›</button><button id="ctToday" type="button" title="hoy (T)">HOY</button><select class="ct-vsel" aria-label="Vista del calendario"><option value="agenda">Agenda</option><option value="day">Día</option><option value="week">Semana</option><option value="month">Mes</option></select></div>
+      <div class="cv-seg ct-views" role="group" aria-label="Vista del calendario"><button type="button" data-v="agenda">AGENDA</button><button type="button" data-v="day">DÍA</button><button type="button" data-v="week">SEMANA</button><button type="button" data-v="month" class="on">MES</button><button type="button" data-v="perfil" title="Así queda tu perfil de Instagram">PERFIL</button></div>
+      <div class="cv-nav"><button id="ctPrev" type="button" aria-label="Anterior" title="anterior (←)">‹</button><div id="ctTitle"></div><button id="ctNext" type="button" aria-label="Siguiente" title="siguiente (→)">›</button><button id="ctToday" type="button" title="hoy (T)">HOY</button><select class="ct-vsel" aria-label="Vista del calendario"><option value="agenda">Agenda</option><option value="day">Día</option><option value="week">Semana</option><option value="month">Mes</option><option value="perfil">Perfil de Instagram</option></select></div>
       <div class="cv-sp"></div>
       <button id="ctKeys" type="button" aria-label="Atajos" title="atajos (?)">?</button>
       <button id="ctClose" type="button" aria-label="Cerrar Contenido" title="cerrar (Esc · K)">✕</button>
@@ -64,6 +65,10 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it), as in the tasks calendar
   let colaInfo = null; // M1: el modo y el conductor (GET /api/contenido/cola)
   let openNow = false, mode = 'cal', view = 'month', anchor = startOfDay(Date.now()), q = '', pieces = [], cola = [], resumen = null, loadedKey = '', errorMsg = '', timer = null, opener = null, dnd = null, lastGrid = '', lastProg = '';
+  // plan M5 · U7: selección múltiple en Programación — aprobar, pasar a revisión, mover de día o a la papelera, varias de una vez
+  const selP = new Set();
+  const selBarHTML = () => { const ids = [...selP].filter(id => todasConocidas().some(p => p.id === id)); if (!ids.length) return '';
+    return `<div class="ct-selbar" role="toolbar" aria-label="Con las seleccionadas"><b>${ids.length} ${ids.length === 1 ? 'seleccionada' : 'seleccionadas'}</b><button type="button" class="pz-btn" data-selacc="aprobar">Aprobar las que pueden salir</button><button type="button" class="pz-btn" data-selacc="revision">Pasar a revisión</button><label class="ct-selmv">Mover al <select class="pz-sel" data-selmover><option value="">elige un día…</option>${dateOpts('')}</select></label><button type="button" class="pz-btn warn" data-selacc="borrar">A la papelera</button><button type="button" class="pz-lk" data-selacc="ninguna">Ninguna</button></div>`; };
   let estadoOn = new Set(store.get('estados', ORDEN)), redOn = new Set(store.get('redes', Object.keys(RED)));
   // M2 (6 oct 2026): las redes que usa el negocio (Ajustes → Contenido), más las que ya tenga alguna pieza: solo esas salen en los filtros y en el resumen
   let redesNegocio = ['instagram', 'facebook'];
@@ -111,7 +116,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
 
   /* ---------- cargar ---------- */
   const range = () => rangeOf(view, anchor, 1);
-  function want() { const r = range(); const a = new Date(r.from - 7 * DAY), b = new Date(r.to + 7 * DAY); return { desde: ymd(a), hasta: ymd(b) }; }
+  function want() { if (view === 'perfil') { const h = Date.now(); return { desde: ymd(new Date(h - 120 * DAY)), hasta: ymd(new Date(h + 120 * DAY)) }; } const r = range(); const a = new Date(r.from - 7 * DAY), b = new Date(r.to + 7 * DAY); return { desde: ymd(a), hasta: ymd(b) }; }
   const conMedidas = list => { for (const p of list) { if (p.medidas) Object.assign(medidas, p.medidas); p.medidas = { ...Object.fromEntries((p.medios || []).concat(p.historias || []).filter(m => medidas[m]).map(m => [m, medidas[m]])), ...(p.medidas || {}) }; } return list; };
   async function load(force = false) {
     const w = want(), key = `${w.desde}|${w.hasta}`;
@@ -154,7 +159,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
 
   function render() {
     if (dnd && dnd.dragging) return;
-    ov.classList.toggle('prog', mode === 'prog' || mode === 'bandeja'); ov.classList.toggle('bj', mode === 'bandeja'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
+    ov.classList.toggle('prog', mode === 'prog' || mode === 'bandeja'); ov.classList.toggle('bj', mode === 'bandeja'); ov.classList.toggle('perfilv', mode === 'cal' && view === 'perfil'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
     E.mode.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mode));
     E.views.hidden = mode !== 'cal'; E.wrap.hidden = mode !== 'cal'; E.prog.hidden = mode !== 'prog'; E.bj.hidden = mode !== 'bandeja';
     E.views.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === view); b.setAttribute('aria-pressed', b.dataset.v === view); }); $('.ct-vsel').value = view;
@@ -169,6 +174,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     E.grid.className = 'cv-grid ' + view; E.grid.style.setProperty('--rows', r.days / 7);
     let html;
     if (view === 'month') html = monthHTML({ ...grid, anchor });
+    else if (view === 'perfil') { E.grid.className = 'cv-grid perfil'; E.title.innerHTML = '<b>Perfil de Instagram</b>'; html = perfilHTML(casillas(todasConocidas().filter(visible), { hoy: ymd(new Date()) }), { esc, mediaUrl: id => (typeof id === 'string' && !id.startsWith('demo/') ? '/media/' + id.split('/').map(encodeURIComponent).join('/') : null), color: e => (ESTADO[e] || ESTADO.borrador).color }); } // plan M5 · U2
     else if (view === 'agenda') { E.grid.className = 'cv-grid agenda'; html = agendaHTML({ ...grid, emptyDay: 'Nada programado. Un buen hueco para publicar.', emptyAll: 'Nada en estos 14 días.' }); }
     else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', r.days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, live: ev => !ev.p.hora, liveLabel: 'SIN HORA', slot: horaInfo?.grid ? (k, h) => ['', 'hb1', 'hb2'][nivelHora(horaInfo.grid, k, h)] : null })}</div>`; }
     const key = view + ':' + r.from; if (view !== 'month' && key === tgKey) tgScroll = E.grid.scrollTop;
@@ -229,7 +235,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const puede = !r.length && m && !m.errores.length;
     const cuando = p.fecha && p.hora ? `<span class="ct-cd${at(p) < Date.now() ? ' late' : ''}">${cuentaAtras(at(p))}</span>` : '';
     const sal = textoSalida(p);
-    return `<div class="ct-row${sal ? ' con-salida' : ''}" style="--chip:${e.color}">
+    return `<div class="ct-row${sal ? ' con-salida' : ''}${selP.has(p.id) ? ' sel' : ''}" style="--chip:${e.color}">
+      <label class="ct-ck" title="Seleccionar para hacer algo con varias"><input type="checkbox" data-selp="${esc(p.id)}"${selP.has(p.id) ? ' checked' : ''} aria-label="Seleccionar: ${esc(titleOf(p))}"></label>
       <span class="ct-hour">${p.hora ? esc(p.hora) : p.fecha ? '<small>sin hora</small>' : '<small>sin día</small>'}</span>
       <button type="button" class="ct-open" data-open="${esc(p.id)}" aria-label="Abrir la pieza: ${esc(ariaOf(p))}">
         ${p.medios[0] ? thumbHTML(p.medios[0], esc, 'pz-rt') : `<span class="pz-rt none" aria-hidden="true">${FICON[p.formato] || ''}</span>`}
@@ -254,7 +261,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     // la frecuencia de la semana que empieza hoy, por red
     const sem = futuras.filter(p => at(p) < hoy + 7 * DAY && p.estado !== 'idea'), porRed = redesUsadas().map(r => [r, sem.filter(p => p.redes.includes(r)).length]);
     const sinDia = todas.filter(p => !p.fecha);
-    const html = `${bannerHTML()}
+    const html = `${bannerHTML()}${selBarHTML()}
       <div class="ct-cols">
         <div class="ct-main">
           <section class="ct-sec ct-need" aria-labelledby="ctp-acc"><div class="ct-sh"><h3 id="ctp-acc">Requiere tu acción <b>${accion.length}</b></h3>${listasAprobar > 1 ? `<button type="button" class="pz-btn" data-okall>Aprobar las ${listasAprobar} que pueden salir</button>` : ''}</div>
@@ -288,6 +295,18 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
   let bjCargada = false;
   const bj = initBandeja({ host: E.bj, datos, esc, note, onCount: n => { const b = E.mode.querySelector('.ct-nbj'); b.hidden = !n; b.textContent = n; b.setAttribute('aria-label', `${n} por responder`); } });
+  /** plan M5 · U2: dos piezas de la cuadrícula del perfil se cambian el día y la hora; una aprobada vuelve a revisión, y DESHACER la reaprueba. */
+  async function cambiarDeSitio(aId, bId) {
+    const A = todasConocidas().find(p => p.id === aId), B = todasConocidas().find(p => p.id === bId); if (!A || !B || aId === bId) return;
+    const [x, y] = intercambio(A, B), apr = [A, B].filter(p => p.estado === 'aprobada');
+    try { await datos.patch(x.id, { fecha: x.fecha, hora: x.hora }); await datos.patch(y.id, { fecha: y.fecha, hora: y.hora }); } catch (e) { note('No se pudo: ' + e.message, true); return; }
+    await load(true); render();
+    undoable(`Cambiadas de sitio${apr.length ? ': ' + (apr.length === 1 ? 'la aprobada vuelve' : 'las aprobadas vuelven') + ' a revisión' : ''}.`, async () => {
+      await datos.patch(A.id, { fecha: A.fecha, hora: A.hora }); await datos.patch(B.id, { fecha: B.fecha, hora: B.hora });
+      for (const p of apr) await datos.approve(p.id).catch(() => {});
+      await load(true); render(); return { aviso: apr.length ? 'Deshecho: vuelven a estar aprobadas.' : 'Deshecho.' };
+    });
+  }
   async function openPiece(id, addIds) {
     if (!openNow) open();
     let p = todasConocidas().find(x => x.id === id);
@@ -374,6 +393,12 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   E.railBox.addEventListener('drop', e => { E.railBox.classList.remove('drop'); const d = dnd.dragging; if (d?.kind !== 'p') return; e.preventDefault(); const p = todasConocidas().find(x => x.id === d.id); if (p && p.fecha) mover(p, '', ''); });
 
   /* ---------- eventos ---------- */
+  // plan M5 · U2: arrastrar una casilla del perfil sobre otra las cambia de sitio (con el teclado o el dedo: ‹ ›)
+  let pfArr = null;
+  E.grid.addEventListener('dragstart', e => { const li = e.target.closest?.('.pf-t[draggable="true"]'); if (!li) return; pfArr = li.dataset.pf; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', pfArr); } catch {} li.classList.add('arr'); e.stopPropagation(); }, true);
+  E.grid.addEventListener('dragover', e => { if (!pfArr) return; const li = e.target.closest?.('.pf-t[draggable="true"]'); if (!li || li.dataset.pf === pfArr) return; e.preventDefault(); e.stopPropagation(); E.grid.querySelectorAll('.pf-t.sobre').forEach(x => x !== li && x.classList.remove('sobre')); li.classList.add('sobre'); }, true);
+  E.grid.addEventListener('drop', async e => { if (!pfArr) return; const li = e.target.closest?.('.pf-t[draggable="true"]'); e.preventDefault(); e.stopPropagation(); const a = pfArr; pfArr = null; if (li && li.dataset.pf !== a) await cambiarDeSitio(a, li.dataset.pf); }, true);
+  E.grid.addEventListener('dragend', () => { pfArr = null; E.grid.querySelectorAll('.pf-t.arr, .pf-t.sobre').forEach(x => x.classList.remove('arr', 'sobre')); }, true);
   ov.addEventListener('click', async e => {
     const t = e.target;
     if (t.closest('#ctNew')) { const on = E.newMenu.hidden; E.newMenu.hidden = !on; E.newBtn.setAttribute('aria-expanded', on); if (on) E.newMenu.querySelector('button').focus(); return; }
@@ -391,10 +416,13 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     }
     const ok = t.closest('[data-ok]'); if (ok) { e.stopPropagation(); await aprobar(ok.dataset.ok, ok); return; }
     if (t.closest('[data-okall]')) { await aprobarTodas(); return; }
+    const sa = t.closest('[data-selacc]'); if (sa) { await accionVarias(sa.dataset.selacc); return; }
     const gap = t.closest('[data-gap]'); if (gap) { openNew({ fecha: gap.dataset.gap, hora: '18:00' }); return; }
     const open_ = t.closest('[data-open]'); if (open_) { openPiece(open_.dataset.open); return; }
     const nw = t.closest('[data-new]'); if (nw) { openNew({}); return; }
     const evc = t.closest('.cv-ev, .cv-bk'); if (evc) { openPiece(evc.dataset.ev.slice(2)); return; }
+    const pfo = t.closest('[data-pfo]'); if (pfo) { openPiece(pfo.dataset.pfo); return; } // plan M5 · U2: la cuadrícula del perfil
+    const pfm = t.closest('[data-pfm]'); if (pfm) { const [a, b] = pfm.dataset.pfm.split(':'); await cambiarDeSitio(a, b); E.grid.querySelector(`[data-pf="${CSS.escape(a)}"] .pf-open`)?.focus(); return; }
     const more = t.closest('.cv-more'); if (more) { openMore(more.dataset.day, more.closest('.cv-day')); return; }
     const dh = t.closest('.cv-tg-d'); if (dh && view === 'week') { anchor = new Date(dh.dataset.day + 'T00:00:00').getTime(); view = 'day'; load(); render(); return; }
     const add = t.closest('.cv-add'); if (add) { const cell = add.closest('.cv-day'); if (cell.classList.contains('past')) { note('Ese día ya pasó: elige uno que venga.', true); return; } openNew({ fecha: cell.dataset.day, hora: cell.dataset.hour !== undefined ? String(cell.dataset.hour).padStart(2, '0') + ':00' : '' }); return; }
@@ -437,6 +465,11 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     else if (e.key === 'a' || e.key === 'A') { view = 'agenda'; load(); render(); } else if (e.key === 'd' || e.key === 'D') { view = 'day'; load(); render(); }
   });
   ov.addEventListener('dblclick', e => { const day = e.target.closest('.cv-day[data-day]'); if (!day || view !== 'month' || e.target.closest('.cv-ev')) return; anchor = new Date(day.dataset.day + 'T00:00:00').getTime(); view = 'day'; load(); render(); });
+  // plan M5 · U7: la selección múltiple de Programación
+  ov.addEventListener('change', async e => {
+    const ck = e.target.closest?.('[data-selp]'); if (ck) { ck.checked ? selP.add(ck.dataset.selp) : selP.delete(ck.dataset.selp); render(); ov.querySelector(`[data-selp="${CSS.escape(ck.dataset.selp)}"]`)?.focus(); return; }
+    const mv = e.target.closest?.('[data-selmover]'); if (mv && mv.value) await accionVarias('mover', mv.value);
+  });
   $('.ct-vsel').addEventListener('change', e => { view = e.target.value; store.set('view', view); load(); render(); });
   E.search.addEventListener('input', () => { q = E.search.value.trim().toLowerCase(); render(); });
   E.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { E.search.value = ''; q = ''; render(); E.search.blur(); } });
@@ -447,6 +480,35 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (btn?.getAttribute('aria-disabled') === 'true') { const m = p?.fecha ? revisarMomento(p.fecha, p.hora) : null; note(!p?.fecha ? 'Ponle un día antes de aprobarla.' : m?.errores[0] || p.revision?.errores?.[0] || 'Todavía no puede salir.', true); return; }
     try { const r = await datos.approve(id); put(r.pieza); render(); loadResumen(); note('Aprobada. Queda lista en la cola.'); }
     catch (e) { note(e.message, true); }
+  }
+  /** plan M5 · U7: lo mismo a varias piezas. Mover y pasar a revisión se deshacen (las aprobadas se vuelven a aprobar); la papelera espera 8 s. */
+  async function accionVarias(que, fecha) {
+    const ps = [...selP].map(id => todasConocidas().find(p => p.id === id)).filter(Boolean);
+    if (que === 'ninguna' || !ps.length) { selP.clear(); render(); return; }
+    if (que === 'borrar') {
+      const keys = ps.map(p => 'p:' + p.id); flushUndo(); keys.forEach(k => gone.add(k)); selP.clear(); render();
+      commitFn = async () => { for (const p of ps) { try { await datos.remove(p.id); } catch (e) { note('No se pudo: ' + e.message, true); } } keys.forEach(k => gone.delete(k)); load(true); };
+      E.toast.querySelector('span').textContent = `${ps.length} a la papelera.`; E.toast.querySelector('button').hidden = false; E.toast.classList.remove('bad'); clearTimeout(noteT); showToast();
+      E.toast.querySelector('button').onclick = () => { clearTimeout(undoT); commitFn = null; E.toast.hidden = true; keys.forEach(k => gone.delete(k)); render(); note('Deshecho.'); };
+      undoT = setTimeout(flushUndo, 8000); return;
+    }
+    let ok = 0, mal = 0; const antes = ps.map(p => ({ id: p.id, fecha: p.fecha, estado: p.estado }));
+    for (const p of ps) {
+      try {
+        if (que === 'aprobar') { if (p.estado === 'aprobada') continue; const r = await datos.approve(p.id); put(r.pieza); }
+        else if (que === 'revision') { if (p.estado === 'revision') continue; put(await datos.back(p.id, 'revision')); }
+        else if (que === 'mover') { const r = await datos.patch(p.id, { fecha }); put(r.pieza); }
+        ok++;
+      } catch { mal++; }
+    }
+    selP.clear(); await load(true); render(); loadResumen();
+    const hecho = que === 'aprobar' ? 'aprobadas' : que === 'revision' ? 'pasadas a revisión' : `movidas al ${fmtDay(new Date(fecha + 'T00:00:00').getTime())}`;
+    const texto = `${ok} ${hecho}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}${que === 'aprobar' ? ' (les falta algo para salir)' : ''}` : ''}.`;
+    if (que === 'aprobar' || !ok) { note(texto, !!mal); return; }
+    undoable(texto, async () => {
+      for (const a of antes) { try { if (que === 'mover') await datos.patch(a.id, { fecha: a.fecha }); if (a.estado === 'aprobada') await datos.approve(a.id); else if (que === 'revision') await datos.back(a.id, a.estado); } catch {} }
+      await load(true); render(); return { aviso: 'Deshecho.' };
+    });
   }
   async function aprobarTodas() {
     const lista = todasConocidas().filter(p => p.estado === 'revision' && !errN(p) && p.fecha && p.hora && !revisarMomento(p.fecha, p.hora).errores.length && visible(p)); let ok = 0, mal = 0;

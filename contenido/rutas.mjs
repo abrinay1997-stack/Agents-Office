@@ -1,4 +1,5 @@
 // Agents Office V4.7 (30 sep 2026) — las rutas de Contenido: /api/contenido/*. Un solo import en serve.mjs.
+import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repetir.js';
 //   GET    /api/contenido?desde=&hasta=&sin_fecha=1&estado=&formato=&red=&q=   → { piezas, resumen, ajustes }
 //   GET    /api/contenido/resumen                                               → los números del icono del dock
 //   POST   /api/contenido/piezas                                                → crea (una pieza no nace aprobada)
@@ -17,7 +18,7 @@ import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, mejorHora = null, analiticasTexto = null, bandeja = null }) {
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null }) {
   const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? programador.salidaDe(p.id) : null }; };
   const resumen = () => {
     const todas = almacen.listar({ sinFecha: true });
@@ -54,6 +55,12 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         return json(res, 200, { ok: true, pieza: revisado(r.pieza) }), true;
       }
       // plan M4 (6 oct 2026): la bandeja — leer, sincronizar, el borrador (agente o dueño) y enviar/descartar (solo el dueño)
+      if (p === '/api/contenido/informe' && (req.method === 'GET' || req.method === 'POST')) { // plan M5 · U10: el informe del mes; POST lo guarda en el Cerebro
+        if (!informe) return json(res, 404, { error: 'sin informe' }), true;
+        const b = req.method === 'POST' ? await body(req) : {}, mes = String(b.mes || url.searchParams.get('mes') || new Date().toISOString().slice(0, 7));
+        if (!/^\d{4}-\d{2}$/.test(mes)) return json(res, 400, { error: 'el mes va como AAAA-MM' }), true;
+        const r = await informe(mes, { guardar: req.method === 'POST' }); return json(res, 200, r), true;
+      }
       if (p === '/api/contenido/bandeja' && req.method === 'GET') {
         if (!bandeja) return json(res, 200, { items: [], cuenta: {}, pendientes: 0, fuente: { ok: false, motivo: 'sin bandeja' } }), true;
         const q = url.searchParams; return json(res, 200, bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '' })), true;
@@ -87,6 +94,16 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (!metricool || !metricool.configurado()) return json(res, 200, { ok: false, error: 'Faltan METRICOOL_USER_TOKEN y METRICOOL_USER_ID: ponlas como variables de Windows (Metricool → Ajustes de la cuenta → API; es del plan Advanced) y reinicia la oficina.' }), true;
         try { const marcas = await metricool.marcas({ fresco: true }), marca = await metricool.marca(); return json(res, 200, { ok: true, marca, marcas }), true; }
         catch (e) { return json(res, 200, { ok: false, error: e.message }), true; }
+      }
+      const rp = new RegExp(`^/api/contenido/piezas/(${ID})/repetir$`).exec(p); // plan M5 · U7: copias como borradores, en los días que tocan
+      if (rp && req.method === 'POST') {
+        const b = await body(req); if (b.por === 'agente') return json(res, 403, { error: 'repetir piezas es del dueño' }), true;
+        const pz = almacen.leer(rp[1]); if (!pz) return json(res, 404, { error: 'esa pieza ya no existe' }), true;
+        if (!pz.fecha) return json(res, 409, { error: 'ponle un día antes de repetirla: las copias se cuentan desde ese día' }), true;
+        const fechas = fechasRepetidas(pz.fecha, b.cada, b.veces); if (!fechas.length) return json(res, 400, { error: `di cada cuánto (${Object.keys(CADA).join(', ')}) y cuántas veces (1 a ${MAX_VECES})` }), true;
+        const creadas = [];
+        for (const f of fechas) { const r = almacen.crear({ ...copiaDe(pz), fecha: f, estado: 'borrador', origen: 'repetida' }, { por: 'dueno' }); if (r.pieza) creadas.push(revisado(r.pieza)); }
+        return json(res, 200, { ok: true, creadas }), true;
       }
       const mc = new RegExp(`^/api/contenido/piezas/(${ID})/(reintentar|entregar|quitar)$`).exec(p);
       if (mc && req.method === 'POST') {

@@ -221,6 +221,7 @@ La interfaz es la misma, así que cambiar de conductor es un ajuste (`contenido.
 - ✅ **M2** — nueve redes con sus reglas (`longitudPara`, topes, historias), texto propio por red, opciones de Pinterest/YouTube/TikTok, «Redes que usas» en Ajustes y una vista previa por red. Recorrido: `scripts/redes-recorrido.mjs`.
 - ✅ **M3** — mejor hora (Metricool o lo ya publicado, con mínimo de datos) sombreada en la semana y sugerida en el panel; `ver_analiticas` y `ver_mejor_hora` para agentes, ya resumido. Recorrido: `scripts/mejor-hora-recorrido.mjs`.
 - ✅ **M4** — bandeja de mensajes, comentarios y reseñas (Metricool), borradores de agente, envío solo del dueño con doble clic y según el modo, escudo contra órdenes escondidas. Recorrido: `scripts/bandeja-recorrido.mjs`.
+- ✅ **M5** — cuadrícula del perfil con reordenar (U2), repetir y selección múltiple (U7), informe del mes (U10) y evaluaciones de skills (`evals/plan-contenido`, `scripts/evals-skill.mjs`). Fuera por ahora: competidores, hashtags y smart links. Recorrido: `scripts/m5-recorrido.mjs`.
 
 Cada fase termina con `npm run check` en verde, tests nuevos, las pantallas probadas a 390, 1024 y 1512 px, y su recorrido en el navegador.
 

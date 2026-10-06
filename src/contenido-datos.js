@@ -3,6 +3,7 @@
 // de la página, con las mismas reglas, para que se pueda probar todo sin escribir nada en disco. Las dos devuelven lo mismo:
 //   list({ desde, hasta, sinFecha }) → { piezas, resumen }   ·   create(datos) · patch(id, datos) · approve(id) · back(id, estado) · remove(id)
 // Cada pieza trae `revision: { errores, avisos, arreglos }` (las reglas de cada red, portadas de Juancito Ads en contenido-reglas.js).
+import { fechasRepetidas, copiaDe } from './contenido-repetir.js';
 import { revisarPublicacion, postDePieza, revisarMomento } from './contenido-reglas.js';
 
 /** Las medidas de los archivos de muestra de la demo (en la oficina de verdad salen del registro .json de cada archivo del Estudio). */
@@ -71,6 +72,7 @@ export function crearDatos({ served, now = () => new Date() }) {
     // plan M4: la bandeja
     bandeja: async (f = {}) => http('GET', '/api/contenido/bandeja?' + new URLSearchParams(Object.entries(f).filter(([, v]) => v))),
     bandejaTraer: async () => http('POST', '/api/contenido/bandeja/sincronizar', {}),
+    repetir: async (id, cada, veces) => http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/repetir`, { cada, veces }), // plan M5 · U7
     bandejaBorrador: async (id, borrador) => http('PATCH', `/api/contenido/bandeja/${encodeURIComponent(id)}`, { borrador }),
     bandejaAccion: async (id, que, texto) => http('POST', `/api/contenido/bandeja/${encodeURIComponent(id)}/${que}`, texto === undefined ? {} : { texto }),
     pedirBorradores: async () => http('POST', '/api/tasks', { dept: 'marketing', text: 'Contesta la bandeja de Contenido: lee lo pendiente con ver_bandeja y deja, para cada mensaje, comentario o reseña que lo necesite, el borrador de la respuesta con crear_borrador_respuesta (la voz de la marca, corto, sin prometer nada que no esté en el cerebro). No envíes nada: yo los reviso y los envío.' }),
@@ -111,6 +113,7 @@ export function crearDatos({ served, now = () => new Date() }) {
     mejorHora: async () => ({ fuente: 'ejemplo', fuentes: {}, grid: GRID_EJEMPLO, motivo: '' }), // la demo enseña cómo se ve, rotulado «de ejemplo»
     bandeja: async ({ estado = '', tipo = '' } = {}) => { const todos = bandejaDemo(); const items = todos.filter(x => (!estado || (estado === 'pendiente' ? ['nuevo', 'borrador', 'fallo'].includes(x.estado) : x.estado === estado)) && (!tipo || x.tipo === tipo)); const cuenta = {}; for (const x of todos) cuenta[x.estado] = (cuenta[x.estado] || 0) + 1; return { items, cuenta, pendientes: todos.filter(x => ['nuevo', 'borrador', 'fallo'].includes(x.estado)).length, ultimo: null, error: '', fuente: { ok: false, motivo: 'Demo: estos mensajes son de ejemplo.' }, modo: 'demo' }; },
     bandejaTraer: async () => ({ ok: false, error: 'En la demo no hay de dónde traer: son mensajes de ejemplo.' }),
+    async repetir(id, cada, veces) { const p = mem().find(x => x.id === id); if (!p) throw falla('esa pieza ya no existe'); if (!p.fecha) throw falla('ponle un día antes de repetirla'); const creadas = []; for (const f of fechasRepetidas(p.fecha, cada, veces)) creadas.push(await this.create({ ...copiaDe(p), fecha: f, estado: 'borrador' })); return { ok: true, creadas }; },
     bandejaBorrador: async (id, borrador) => { const m = bandejaDemo().find(x => x.id === id); if (!m) throw falla('ese mensaje ya no está'); m.borrador = borrador ? { texto: borrador, por: 'dueno', cuando: new Date().toISOString() } : null; m.estado = borrador ? 'borrador' : 'nuevo'; return { ok: true, item: m }; },
     bandejaAccion: async (id, que, texto) => { const m = bandejaDemo().find(x => x.id === id); if (!m) throw falla('ese mensaje ya no está'); if (que === 'enviar') { if (!String(texto ?? m.borrador?.texto ?? '').trim()) throw falla('escribe la respuesta antes de enviarla'); m.estado = 'respondido'; m.respuesta = { texto: texto ?? m.borrador.texto, cuando: new Date().toISOString(), simulada: true }; } else if (que === 'descartar') m.estado = 'descartado'; else m.estado = m.borrador ? 'borrador' : 'nuevo'; return { ok: true, item: m, simulada: true }; },
     pedirBorradores: async () => { throw falla('En la demo no hay agentes: abre la oficina con el iniciador.'); },
