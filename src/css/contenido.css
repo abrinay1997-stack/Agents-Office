@@ -41,6 +41,10 @@ body.ctOpen #sahniMark, body.ctOpen #licence { display: none; }
 .cv-ev.pz .cv-ev-m { justify-content: flex-start; }
 .pz-nb { display: inline-grid; place-items: center; min-width: 19px; height: 16px; padding: 0 3px; box-sizing: border-box; border-radius: 4px; font-family: var(--ui); font-size: 10.5px; font-weight: 800; letter-spacing: .02em; line-height: 1; color: #fff; background: #4A4A4A; flex: none; }
 .pz-nb.instagram { background: #B1306C; } .pz-nb.facebook { background: #0F5BD8; } /* blanco encima: 5,8:1 y 5,9:1 */
+/* M2 (6 oct 2026): las redes nuevas; blanco encima, todas ≥ 5,2:1 */
+.pz-nb.linkedin, .pv-net.linkedin { background: #0A66C2; } .pz-nb.x, .pv-net.x { background: #14171A; } .pz-nb.threads, .pv-net.threads { background: #3D3D3D; }
+.pz-nb.bluesky, .pv-net.bluesky { background: #0B5FCC; } .pz-nb.tiktok, .pv-net.tiktok { background: #00787A; } .pz-nb.pinterest, .pv-net.pinterest { background: #BD081C; } .pz-nb.youtube, .pv-net.youtube { background: #CC0000; }
+:is(.pz-nb, .pv-net):is(.x, .threads) { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); } /* en oscuro, que no se pierdan en el fondo */
 .pz-fi { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vertical-align: -2px; flex: none; }
 .pz-fi .fill { fill: currentColor; stroke: none; }
 .pz-f { display: inline-flex; align-items: center; gap: 3px; color: var(--grey); } body.dark .pz-f { color: #C2C0B9; }
@@ -368,3 +372,9 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
 .ct-salbox a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; min-height: 24px; display: inline-flex; align-items: center; }
 .ct-salbox .pz-lk { min-height: 28px; }
 @media (max-width: 760px) { .ct-salbox { margin-left: 0; } }
+
+/* M2 (6 oct 2026): «Más redes» y las opciones de Pinterest, YouTube y TikTok */
+.pz-net.more { border-style: dashed; color: var(--ink); }
+.pz-op { border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px 12px; margin: 12px 0 4px; display: grid; gap: 4px; }
+.pz-op legend { font-family: var(--ui); font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 0 6px; color: var(--ink); }
+.pz-op .pz-sel { justify-self: start; }

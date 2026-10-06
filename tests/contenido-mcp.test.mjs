@@ -78,7 +78,7 @@ test('un agente que inventa una imagen o un dato malo recibe el motivo en palabr
     await m.rpc('initialize', {});
     const a = await m.llamar('crear_borrador', { texto: 'x', medios: ['2026-10/no-existe.gif'] }); assert.equal(a.isError, true); assert.match(texto(a), /el Estudio no tiene/);
     const b = await m.llamar('crear_borrador', { texto: 'x', fecha: 'pronto' }); assert.equal(b.isError, true); assert.match(texto(b), /AAAA-MM-DD/);
-    const c = await m.llamar('crear_borrador', { texto: 'x', redes: ['tiktok'] }); assert.equal(c.isError, true); assert.match(texto(c), /no es una red/);
+    const c = await m.llamar('crear_borrador', { texto: 'x', redes: ['myspace'] }); assert.equal(c.isError, true); assert.match(texto(c), /no es una red/);
     assert.equal(o.almacen.listar().length, 0);
   } finally { m.cerrar(); o.cerrar(); }
 });

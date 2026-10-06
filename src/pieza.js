@@ -10,7 +10,7 @@
 // demás piezas (choques, huecos, la cuadrícula del perfil); `cuenta()` con qué cuenta sale; `medidaDe(id)` las medidas de un archivo.
 import { modal } from './modal.js';
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
-import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento } from './contenido-reglas.js';
+import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento, longitudPara, CON_HISTORIAS } from './contenido-reglas.js';
 import { initPreview } from './contenido-preview.js';
 import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-cola.js';
 
@@ -21,7 +21,16 @@ export const ESTADO = {
   aprobada: { name: 'APROBADA', glyph: '✓', color: '#13705A', dark: '#4FD1A5', help: 'Aprobada por ti: puede salir.' },
 };
 export const FORMATO = { post: 'Post', carrusel: 'Carrusel', reel: 'Reel', historia: 'Historia' };
-export const RED = { instagram: { name: 'Instagram', short: 'IG' }, facebook: { name: 'Facebook', short: 'FB' } };
+export const RED = { instagram: { name: 'Instagram', short: 'IG' }, facebook: { name: 'Facebook', short: 'FB' }, linkedin: { name: 'LinkedIn', short: 'IN' }, x: { name: 'X', short: 'X' }, threads: { name: 'Threads', short: 'TH' }, bluesky: { name: 'Bluesky', short: 'BS' }, tiktok: { name: 'TikTok', short: 'TT' }, pinterest: { name: 'Pinterest', short: 'PI' }, youtube: { name: 'YouTube', short: 'YT' } };
+// M2 (6 oct 2026): las redes que llevan su propio texto si hace falta (Instagram usa el principal; Facebook, «Otro texto para Facebook»)
+const CON_TEXTO_PROPIO = ['linkedin', 'x', 'threads', 'bluesky', 'tiktok', 'pinterest', 'youtube'];
+const PRIV = { youtube: [['public', 'Público'], ['unlisted', 'Oculto (con el enlace)'], ['private', 'Privado']], tiktok: [['PUBLIC_TO_EVERYONE', 'Todos'], ['MUTUAL_FOLLOW_FRIENDS', 'Amigos'], ['FOLLOWER_OF_CREATOR', 'Seguidores'], ['SELF_ONLY', 'Solo yo']] };
+/** Con qué red se mide el texto principal: la más estricta de las que lo usan (sin texto propio). */
+export function limitePrincipal(p = {}) {
+  const post = postDePieza(p), usan = (p.redes || []).filter(r => r !== 'facebook' && !String(p.textos?.[r] ?? '').trim() && LIMITES[r]?.caracteres);
+  const red = usan.sort((a, b) => LIMITES[a].caracteres - LIMITES[b].caracteres)[0] || 'instagram';
+  return { red, max: LIMITES[red].caracteres, n: longitudPara(textoPara(post, red), red) };
+}
 /** El icono de cada formato (trazos, el color del texto): en las tarjetas del calendario, la programación y el panel. */
 export const FICON = {
   post: '<svg class="pz-fi" viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/></svg>',
@@ -54,7 +63,7 @@ export function thumbHTML(src, esc, cls = 'pz-th') {
   return esVideo(src) ? `<span class="${cls} vid" aria-hidden="true"><video src="${esc(u)}#t=0.1" preload="metadata" muted playsinline></video><i>▶</i></span>` : `<span class="${cls}" aria-hidden="true"><img src="${esc(u)}" alt="" loading="lazy" decoding="async"></span>`;
 }
 
-export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange = () => {}, note = () => {}, otras = () => [], cuenta = () => ({}), medidaDe = () => null }) {
+export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange = () => {}, note = () => {}, otras = () => [], cuenta = () => ({}), medidaDe = () => null, redesUsadas = () => ['instagram', 'facebook'] }) {
   const id0 = ++uid, I = k => `pz${id0}-${k}`;
   host.innerHTML = `<div class="pz-head"></div>
     <div class="pz-swap" role="tablist" aria-label="Qué ver"><button type="button" role="tab" data-swap="edit" aria-selected="true">Editar</button><button type="button" role="tab" data-swap="ver" aria-selected="false">Vista previa</button></div>
@@ -62,6 +71,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     <div class="pz-foot"></div>`;
   const head = host.querySelector('.pz-head'), scroll = host.querySelector('.pz-scroll'), foot = host.querySelector('.pz-foot'), side = host.querySelector('.pz-side');
   const preview = initPreview(host.querySelector('.pz-preview'), { esc, cuenta, otras: () => otras().map(o => (cur && o.id === cur.id ? cur : o)) });
+  let masRedes = false; // «Más redes»: las que el negocio no usa, a la vista solo si se piden
   let cur = null, dirty = {}, timer = null, saving = Promise.resolve(), opener = null, isModal = false, gone = false, stateText = '', stateBad = false;
   // la revisión se calcula aquí, con las mismas reglas que el servidor: se ve al instante, sin esperar al guardado. El servidor la vuelve a comprobar al aprobar.
   const rev = () => {
@@ -69,6 +79,8 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     return { errores: [...m.errores, ...r.errores], avisos: [...m.avisos, ...r.avisos], arreglos: r.arreglos, momento: m };
   };
   const narrow = () => matchMedia('(max-width: 900px)').matches;
+  /** Las redes que se ven en el panel: las del negocio y las de esta pieza; con «Más redes», todas. */
+  const redesVisibles = () => { if (masRedes) return Object.keys(RED); const u = new Set([...redesUsadas(), ...(cur?.redes || [])]); return Object.keys(RED).filter(r => u.has(r)); };
   const isOpen = () => !host.hidden;
 
   /* ---------- guardar ---------- */
@@ -116,21 +128,28 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
       ${p.fecha && m.errores.length ? `<p class="pz-inline err" role="status">${esc(m.errores[0])}</p>` : p.fecha && p.hora ? `<p class="pz-inline ok">Sale ${esc(fmtLong(m.momento))}.</p>` : ''}`;
   }
   function paintBody() {
-    const p = cur, post = postDePieza(p), chars = textoPara(post, 'instagram').length, charsFb = textoPara(post, 'facebook').length, hist = p.formato === 'historia';
+    const p = cur, post = postDePieza(p), lp = limitePrincipal(p), charsFb = textoPara(post, 'facebook').length, hist = p.formato === 'historia';
+    const propios = CON_TEXTO_PROPIO.filter(r => p.redes.includes(r)).map(r => { const n = longitudPara(textoPara(post, r), r), max = LIMITES[r].caracteres, mio = String(p.textos?.[r] ?? '');
+      return `<details class="pz-more" data-red-txt="${r}"${mio.trim() || n > max ? ' open' : ''}><summary>Texto propio para ${RED[r].name}${n > max && !mio.trim() ? ' <small class="pz-cnt over">no cabe</small>' : ''}</summary><label class="pz-lab" for="${I('r-' + r)}">Texto de ${RED[r].name} <small class="pz-cnt${n > max ? ' over' : ''}" data-cnt-red="${r}">${cnt(n, max)}</small></label><textarea id="${I('r-' + r)}" class="pz-ta" data-tx="${r}" rows="3" placeholder="Vacío = el texto principal${p.hashtags ? ' con sus hashtags' : ''}. Lo que escribas aquí sale tal cual.">${esc(mio)}</textarea></details>`; }).join('');
     const textos = `
-        <label for="${I('tx')}" class="pz-lab">Texto de la publicación <small class="pz-cnt" data-cnt="texto">${cnt(chars, LIMITES.instagram.caracteres)}</small></label>
+        <label for="${I('tx')}" class="pz-lab">Texto de la publicación <small class="pz-cnt${lp.n > lp.max ? ' over' : ''}" data-cnt="texto" title="Se mide con ${RED[lp.red].name}, la red más estricta que lo usa">${cnt(lp.n, lp.max)}${lp.red !== 'instagram' ? ` · ${RED[lp.red].name}` : ''}</small></label>
         <textarea id="${I('tx')}" class="pz-ta" data-f="texto" rows="6" placeholder="Escribe aquí lo que se publica, listo para salir. La primera línea es el gancho: es lo que se lee antes de «más».">${esc(p.texto)}</textarea>
         <label for="${I('ht')}" class="pz-lab">Hashtags <small class="pz-cnt" data-cnt="hashtags">${contarHashtags(p.hashtags)} / ${LIMITES.instagram.hashtags}</small></label>
         <input id="${I('ht')}" class="pz-in" data-f="hashtags" value="${esc(p.hashtags)}" placeholder="#optica #gafas">
         <label class="pz-chk"><input type="checkbox" data-f="hashtagsEnComentario"${p.hashtagsEnComentario ? ' checked' : ''}> Los hashtags van en el primer comentario, no en el texto</label>
         <label for="${I('cm')}" class="pz-lab">Primer comentario <small class="pz-hn">opcional · solo Instagram</small></label>
         <textarea id="${I('cm')}" class="pz-ta" data-f="comentario" rows="2" placeholder="Lo que se publica justo después.">${esc(p.comentario)}</textarea>
-        ${p.redes.includes('facebook') ? `<details class="pz-more"${p.textoFacebook ? ' open' : ''}><summary>Otro texto para Facebook</summary><label class="pz-lab" for="${I('fb')}">Texto de Facebook <small class="pz-cnt" data-cnt="fb">${cnt(charsFb, LIMITES.facebook.caracteres)}</small></label><textarea id="${I('fb')}" class="pz-ta" data-f="textoFacebook" rows="4" placeholder="Si en Facebook debe decir otra cosa. Vacío = el mismo.">${esc(p.textoFacebook)}</textarea></details>` : ''}`;
+        ${p.redes.includes('facebook') ? `<details class="pz-more"${p.textoFacebook ? ' open' : ''}><summary>Otro texto para Facebook</summary><label class="pz-lab" for="${I('fb')}">Texto de Facebook <small class="pz-cnt" data-cnt="fb">${cnt(charsFb, LIMITES.facebook.caracteres)}</small></label><textarea id="${I('fb')}" class="pz-ta" data-f="textoFacebook" rows="4" placeholder="Si en Facebook debe decir otra cosa. Vacío = el mismo.">${esc(p.textoFacebook)}</textarea></details>` : ''}${propios}`;
+    const op = (red, k) => esc(String(p[red]?.[k] ?? ''));
+    const opciones = [
+      p.redes.includes('pinterest') ? `<fieldset class="pz-op" data-op-red="pinterest"><legend>Pinterest</legend><label class="pz-lab" for="${I('pi-t')}">Tablero <small class="pz-hn">su id en Pinterest o Metricool</small></label><input id="${I('pi-t')}" class="pz-in" data-op="pinterest.tablero" value="${op('pinterest', 'tablero')}" maxlength="80"><label class="pz-lab" for="${I('pi-n')}">Título del pin <small class="pz-hn">hasta 100</small></label><input id="${I('pi-n')}" class="pz-in" data-op="pinterest.titulo" value="${op('pinterest', 'titulo')}" maxlength="100"><label class="pz-lab" for="${I('pi-l')}">Enlace <small class="pz-hn">opcional · https://</small></label><input id="${I('pi-l')}" class="pz-in" data-op="pinterest.enlace" type="url" inputmode="url" value="${op('pinterest', 'enlace')}" placeholder="https://"></fieldset>` : '',
+      p.redes.includes('youtube') ? `<fieldset class="pz-op" data-op-red="youtube"><legend>YouTube${p.formato === 'reel' ? ' · Short' : ''}</legend><label class="pz-lab" for="${I('yt-t')}">Título <small class="pz-hn">obligatorio · hasta 100 · el texto principal es la descripción</small></label><input id="${I('yt-t')}" class="pz-in" data-op="youtube.titulo" value="${op('youtube', 'titulo')}" maxlength="100"><label class="pz-lab" for="${I('yt-p')}">Quién lo ve</label><select id="${I('yt-p')}" class="pz-sel" data-op="youtube.privacidad">${PRIV.youtube.map(([k, t]) => `<option value="${k}"${(p.youtube?.privacidad || 'public') === k ? ' selected' : ''}>${t}</option>`).join('')}</select><label class="pz-chk"><input type="checkbox" data-op="youtube.paraNinos"${p.youtube?.paraNinos ? ' checked' : ''}> Es contenido para niños</label></fieldset>` : '',
+      p.redes.includes('tiktok') ? `<fieldset class="pz-op" data-op-red="tiktok"><legend>TikTok</legend><label class="pz-lab" for="${I('tt-p')}">Quién lo ve</label><select id="${I('tt-p')}" class="pz-sel" data-op="tiktok.privacidad">${PRIV.tiktok.map(([k, t]) => `<option value="${k}"${(p.tiktok?.privacidad || 'PUBLIC_TO_EVERYONE') === k ? ' selected' : ''}>${t}</option>`).join('')}</select></fieldset>` : ''].join('');
     scroll.innerHTML = `
       <section class="pz-sec" aria-labelledby="${I('h1')}"><h3 id="${I('h1')}">1 · Cuándo, cómo y dónde</h3>
         <div class="pz-cuando"></div>
         <div class="pz-row"><span class="pz-lab" id="${I('fm')}">Formato</span><div class="pz-seg" role="group" aria-labelledby="${I('fm')}">${Object.entries(FORMATO).map(([k, l]) => `<button type="button" data-fmt="${k}" aria-pressed="${p.formato === k}">${FICON[k]}${l}</button>`).join('')}</div></div>
-        <div class="pz-row"><span class="pz-lab" id="${I('rd')}">Redes</span><div class="pz-nets" role="group" aria-labelledby="${I('rd')}">${Object.entries(RED).map(([k, r]) => `<button type="button" class="pz-net" data-red="${k}" aria-pressed="${p.redes.includes(k)}"><b class="pz-nb ${k}">${r.short}</b> ${r.name}</button>`).join('')}</div></div>
+        <div class="pz-row"><span class="pz-lab" id="${I('rd')}">Redes</span><div class="pz-nets" role="group" aria-labelledby="${I('rd')}">${redesVisibles().map(k => `<button type="button" class="pz-net" data-red="${k}" aria-pressed="${p.redes.includes(k)}"><b class="pz-nb ${k}">${RED[k].short}</b> ${RED[k].name}</button>`).join('')}${Object.keys(RED).length > redesVisibles().length || masRedes ? `<button type="button" class="pz-net more" data-a="mas-redes" aria-expanded="${masRedes}">${masRedes ? 'Menos redes' : `+ Más redes (${Object.keys(RED).length - redesVisibles().length})`}</button>` : ''}</div></div>
         ${!hist && p.redes.includes('instagram') ? `<label class="pz-chk"><input type="checkbox" data-f="historiaTambien"${p.historiaTambien ? ' checked' : ''}> También como historia de Instagram, 15 minutos después${p.historiaTambien ? ` <small class="pz-hn">· ${(p.historias || []).length ? `con ${(p.historias || []).length === 1 ? 'su imagen' : (p.historias || []).length + ' archivos'}` : 'falta su imagen'}</small>` : ''}</label>${p.historiaTambien ? `<div class="pz-row"><button type="button" class="pz-btn" data-a="hist-post"${p.medios.length ? '' : ' disabled'}>Usar la del post</button><button type="button" class="pz-btn" data-a="hist-pick">Elegir para la historia</button></div>` : ''}` : ''}
       </section>
       <section class="pz-sec" aria-labelledby="${I('h2')}"><h3 id="${I('h2')}">2 · Imágenes o video</h3>
@@ -140,6 +159,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
       </section>
       <section class="pz-sec" aria-labelledby="${I('h3')}"><h3 id="${I('h3')}">3 · Lo que dice</h3>
         ${hist ? `<p class="pz-help">Una historia no muestra texto ni hashtags: lo que deba leerse va dentro de la imagen o el video.</p><details class="pz-more"${p.texto || p.hashtags ? ' open' : ''}><summary>Escribir texto de todos modos</summary>${textos}</details>` : textos}
+        ${opciones}
         <label for="${I('nt')}" class="pz-lab">Notas para el equipo <small class="pz-hn">no se publican</small></label>
         <textarea id="${I('nt')}" class="pz-ta" data-f="notas" rows="2" placeholder="Por qué esta idea, qué falta, qué dato confirmar.">${esc(p.notas)}</textarea>
       </section>
@@ -176,15 +196,23 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
 
   /* ---------- eventos ---------- */
   host.addEventListener('input', e => {
-    const f = e.target.dataset?.f; if (e.target.classList.contains('pz-title')) { set({ titulo: e.target.value }); return; } if (!f || e.target.tagName === 'SELECT' || e.target.type === 'checkbox') return;
-    set({ [f]: e.target.value });
+    const f = e.target.dataset?.f; if (e.target.classList.contains('pz-title')) { set({ titulo: e.target.value }); return; }
+    if (e.target.dataset?.tx) { set({ textos: { ...(cur.textos || {}), [e.target.dataset.tx]: e.target.value } }); contadores(); preview.text(cur); return; }
+    if (e.target.dataset?.op && e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') { opcion(e.target.dataset.op, e.target.value); return; }
+    if (!f || e.target.tagName === 'SELECT' || e.target.type === 'checkbox') return;
+    set({ [f]: e.target.value }); contadores(); preview.text(cur);
+  });
+  /** Una opción de red (Pinterest, YouTube, TikTok): se guarda el objeto entero de esa red. */
+  function opcion(ruta, v) { const [red, k] = ruta.split('.'); set({ [red]: { ...(cur[red] || {}), [k]: v } }); preview.text(cur); }
+  function contadores() {
     const post = postDePieza(cur), c1 = scroll.querySelector('[data-cnt="texto"]'), c2 = scroll.querySelector('[data-cnt="hashtags"]'), c3 = scroll.querySelector('[data-cnt="fb"]');
-    if (c1) { const n = textoPara(post, 'instagram').length; c1.textContent = cnt(n, LIMITES.instagram.caracteres); c1.classList.toggle('over', n > LIMITES.instagram.caracteres); }
+    if (c1) { const lp = limitePrincipal(cur); c1.textContent = `${cnt(lp.n, lp.max)}${lp.red !== 'instagram' ? ` · ${RED[lp.red].name}` : ''}`; c1.classList.toggle('over', lp.n > lp.max); }
+    for (const c of scroll.querySelectorAll('[data-cnt-red]')) { const r = c.dataset.cntRed, n = longitudPara(textoPara(post, r), r), max = LIMITES[r].caracteres; c.textContent = cnt(n, max); c.classList.toggle('over', n > max); }
     if (c2) { const n = contarHashtags(cur.hashtags); c2.textContent = `${n} / ${LIMITES.instagram.hashtags}`; c2.classList.toggle('over', n > LIMITES.instagram.hashtags); }
     if (c3) { const n = textoPara(post, 'facebook').length; c3.textContent = cnt(n, LIMITES.facebook.caracteres); c3.classList.toggle('over', n > LIMITES.facebook.caracteres); }
-    preview.text(cur);
-  });
+  }
   host.addEventListener('change', e => {
+    if (e.target.dataset?.op && (e.target.tagName === 'SELECT' || e.target.type === 'checkbox')) { opcion(e.target.dataset.op, e.target.type === 'checkbox' ? e.target.checked : e.target.value); return; }
     const f = e.target.dataset?.f; if (!f) return;
     if (e.target.type === 'checkbox') {
       if (f === 'historiaTambien') { set({ historiaTambien: e.target.checked, ...(e.target.checked && !(cur.historias || []).length && cur.medios[0] ? { historias: [cur.medios[0]] } : {}) }); keep(() => paintBody(), `[data-f="historiaTambien"]`); return; }
@@ -205,9 +233,15 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (b.dataset.red) { const on = cur.redes.includes(b.dataset.red); const next = on ? cur.redes.filter(r => r !== b.dataset.red) : [...cur.redes, b.dataset.red]; if (!next.length) { setState('Elige al menos una red.', true); return; } set({ redes: next }); keep(() => paintBody(), `[data-red="${b.dataset.red}"]`); return; }
     if (b.dataset.rm !== undefined) { swapMedios(cur.medios.filter((_, i) => i !== +b.dataset.rm)); return; }
     if (b.dataset.mv) { const [i, d] = b.dataset.mv.split(':').map(Number), l = [...cur.medios], j = i + d; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; swapMedios(l); return; }
+    if (b.dataset.fix && /^(texto-red|opciones):/.test(b.dataset.fix)) { // M2: lo escribe el dueño: se abre ese campo
+      const [k, red] = b.dataset.fix.split(':'), box = scroll.querySelector(k === 'texto-red' ? `[data-red-txt="${red}"]` : `[data-op-red="${red}"]`);
+      if (box) { if (box.tagName === 'DETAILS') box.open = true; box.scrollIntoView({ block: 'center', behavior: 'smooth' }); box.querySelector('textarea, input, select')?.focus({ preventScroll: true }); }
+      return;
+    }
     if (b.dataset.fix) { if (b.dataset.fix === 'medios') { const ids = await pickMedia(cur.medios); if (ids?.length) swapMedios([...cur.medios, ...ids.filter(x => !cur.medios.includes(x))]); return; } const patch = parchePorArreglo(cur, b.dataset.fix); if (Object.keys(patch).length) { set(patch); await flush(); paintBody(); } return; }
     const a = b.dataset.a; if (!a) return;
     if (a === 'close') return close();
+    if (a === 'mas-redes') { masRedes = !masRedes; keep(() => paintBody(), '[data-a="mas-redes"]'); return; }
     if (a === 'hueco') { const f = siguienteHueco(cur.redes, otras().filter(o => o.id !== cur.id)); set({ fecha: f, hora: cur.hora || '18:00' }); keep(paintCuando, '[data-a="hueco"]'); paintPreview(); setState(`Siguiente hueco: ${fmtDay(new Date(f + 'T00:00:00').getTime())}.`); return; }
     if (a === 'hist-post') { if (cur.medios[0]) { set({ historias: [cur.medios[0]] }); keep(() => paintBody(), '[data-a="hist-post"]'); } return; }
     if (a === 'hist-pick') { const ids = await pickMedia(cur.historias || []); if (ids?.length) { set({ historias: ids.slice(0, 10) }); keep(() => paintBody(), '[data-a="hist-pick"]'); } return; }
@@ -224,7 +258,8 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (a === 'review' || a === 'draft') { await flush(); if (!cur.id) return; try { const p = await datos.back(cur.id, a === 'review' ? 'revision' : 'borrador'); adopt(p); onChange(p, {}); setState(a === 'review' ? 'Pasó a revisión' : 'Vuelve a ser borrador'); } catch (err) { setState(err.message, true); } return; }
     if (a === 'back') { await flush(); try { const p = await datos.back(cur.id, 'revision'); adopt(p); paintBody(); onChange(p, {}); setState('Ya no está aprobada'); } catch (err) { setState(err.message, true); } return; }
     if (a === 'dup') {
-      await flush(); const src = cur; const copia = {}; for (const k of ['titulo', 'fecha', 'hora', 'formato', 'redes', 'medios', 'historiaTambien', 'historias', 'texto', 'comentario', 'hashtags', 'hashtagsEnComentario', 'textoFacebook', 'notas']) copia[k] = JSON.parse(JSON.stringify(src[k] ?? ''));
+      await flush(); const src = cur; const copia = {}; for (const k of ['titulo', 'fecha', 'hora', 'formato', 'redes', 'medios', 'historiaTambien', 'historias', 'texto', 'comentario', 'hashtags', 'hashtagsEnComentario', 'textoFacebook', 'notas', 'textos', 'pinterest', 'youtube', 'tiktok']) copia[k] = JSON.parse(JSON.stringify(src[k] ?? (['textos', 'pinterest', 'youtube', 'tiktok'].includes(k) ? null : '')));
+      if (!copia.textos) delete copia.textos;
       copia.titulo = (src.titulo || 'Pieza') + ' (copia)'; copia.fecha = ''; copia.hora = ''; copia.estado = 'borrador';
       try { const nueva = await datos.create(copia); nueva.medidas = { ...(src.medidas || {}), ...(nueva.medidas || {}) }; onChange(nueva, { creada: true }); open(nueva); setState('Duplicada sin día: elige cuándo sale.'); } catch (err) { setState(err.message, true); }
       return;
@@ -236,8 +271,8 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   /* ---------- abrir y cerrar ---------- */
   function open(p) {
     gone = false; if (!isOpen()) opener = document.activeElement;
-    cur = p.id ? JSON.parse(JSON.stringify(p)) : { id: '', titulo: '', fecha: p.fecha || '', hora: p.hora || '', formato: p.formato || 'post', redes: p.redes || ['instagram', 'facebook'], estado: 'borrador', responsable: '', medios: p.medios || [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', origen: 'dueno', tarea: '', aprobada: null, medidas: {}, ...(p.extra || {}) };
-    cur.medidas ||= {};
+    cur = p.id ? JSON.parse(JSON.stringify(p)) : { id: '', titulo: '', fecha: p.fecha || '', hora: p.hora || '', formato: p.formato || 'post', redes: p.redes || [...redesUsadas()], estado: 'borrador', responsable: '', medios: p.medios || [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', aprobada: null, medidas: {}, ...(p.extra || {}) };
+    cur.medidas ||= {}; cur.textos ||= {}; masRedes = false;
     dirty = {}; stateText = ''; stateBad = false; if (!cur.id && (cur.medios.length || cur.fecha)) dirty = { medios: cur.medios, ...(cur.fecha ? { fecha: cur.fecha, hora: cur.hora, formato: cur.formato } : {}) };
     host.hidden = false; host.classList.add('on'); isModal = narrow(); host.setAttribute('role', isModal ? 'dialog' : 'complementary'); if (isModal) host.setAttribute('aria-modal', 'true'); else host.removeAttribute('aria-modal');
     host.setAttribute('aria-label', 'Pieza de contenido'); if (isModal) modal.open(host);

@@ -218,6 +218,7 @@ La interfaz es la misma, así que cambiar de conductor es un ajuste (`contenido.
 **Estado (6 oct 2026):**
 - ✅ **M0** — `contenido/metricool.mjs`, su doble `tests/metricool-stand.mjs` y `scripts/check-metricool.mjs`. Falta correrlo con la key real del dueño.
 - ✅ **M1** — `contenido/entrega.mjs`, `contenido/conductores.mjs` (simulacro · Metricool · Meta, que aún no programa) y `contenido/programador.mjs` (la cola), la vista Programación, «Publicación» en Salud y el guardián, que bloquea escrituras en Metricool. Recorrido: `scripts/programacion-recorrido.mjs`.
+- ✅ **M2** — nueve redes con sus reglas (`longitudPara`, topes, historias), texto propio por red, opciones de Pinterest/YouTube/TikTok, «Redes que usas» en Ajustes y una vista previa por red. Recorrido: `scripts/redes-recorrido.mjs`.
 
 Cada fase termina con `npm run check` en verde, tests nuevos, las pantallas probadas a 390, 1024 y 1512 px, y su recorrido en el navegador.
 

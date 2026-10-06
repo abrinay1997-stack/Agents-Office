@@ -44,6 +44,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
     if (f.type === 'time') return `<div class="sg-f">${lab}<input type="time" id="${id}" data-p="${f.path}" value="${esc(v || '')}"${desc}>${help}</div>`;
     if (f.type === 'list') return `<div class="sg-f">${lab}<textarea id="${id}" data-p="${f.path}" rows="3" placeholder="uno por línea"${desc}>${esc((v || []).join('\n'))}</textarea>${help}</div>`;
     if (f.type === 'depts') return `<fieldset class="sg-f sg-depts"><legend>${esc(f.label)}</legend>${Object.entries(DEPT).map(([k, t]) => `<label><input type="checkbox" data-p="${f.path}" data-d="${k}"${(v || []).includes(k) ? ' checked' : ''}> ${t}</label>`).join('')}${help}</fieldset>`;
+    if (f.type === 'checks') return `<fieldset class="sg-f sg-depts"><legend>${esc(f.label)}</legend>${f.options.map(([k, t]) => `<label><input type="checkbox" data-p="${f.path}" data-d="${k}"${(v ?? f.default ?? []).includes(k) ? ' checked' : ''}> ${esc(t)}</label>`).join('')}${help}</fieldset>`;
     if (f.type === 'people') return `<div class="sg-f"><span class="sg-l">${esc(f.label)}</span>${help}<div class="sg-people" data-p="${f.path}">${(v || []).map((p, i) => personRow(p, i)).join('')}</div><button type="button" class="sg-btn" data-a="add-person">+ Añadir una persona</button></div>`;
     return `<div class="sg-f">${lab}<input type="text" id="${id}" data-p="${f.path}" value="${esc(v ?? '')}" maxlength="${f.max || 200}"${desc}>${help}</div>`;
   }
@@ -84,13 +85,13 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
       const p = i.dataset.p, f = data.fields.find(x => x.path === p); if (!f) continue;
       let v;
       if (f.type === 'bool') v = i.checked;
-      else if (f.type === 'depts') v = [...el.querySelectorAll(`[data-p="${p}"][data-d]`)].filter(x => x.checked).map(x => x.dataset.d);
+      else if (f.type === 'depts' || f.type === 'checks') v = [...el.querySelectorAll(`[data-p="${p}"][data-d]`)].filter(x => x.checked).map(x => x.dataset.d);
       else if (f.type === 'people') v = readPeople();
       else if (f.type === 'list') v = i.value.split('\n').map(s => s.trim()).filter(Boolean);
       else v = i.value;
       // V4.5: only what changed goes to the server — an empty number keeps its default (it was sent as 0, and «0» now means
       // «sin tope» for the Estudio), an untouched switch or list stays unset instead of being written as off or empty
-      const o = data.values[p];
+      const o = data.values[p] ?? (f.type === 'checks' ? f.default : undefined);
       const same = f.type === 'number' ? v === '' || (o != null && +v === +o)
         : f.type === 'bool' ? (o == null ? !v : !!o === v)
         : Array.isArray(v) ? (o == null && !v.length) || JSON.stringify(v) === JSON.stringify(o)

@@ -24,7 +24,7 @@ test('la cabecera se puede escribir a mano: listas en línea o en bloque, y lo q
   const p = parsear('---\nid: p-20261006-ffff\nfecha: 2026-10-06\nformato: reel\nredes: [instagram, "facebook"]\nmedios:\n  - 2026-10/v.mp4\nestado: revision\n---\nHola\n');
   assert.equal(p.formato, 'reel'); assert.deepEqual(p.redes, ['instagram', 'facebook']); assert.deepEqual(p.medios, ['2026-10/v.mp4']);
   assert.equal(p.estado, 'revision'); assert.equal(p.texto, 'Hola'); assert.equal(p.hora, ''); assert.equal(p.aprobada, null);
-  const mala = parsear('---\nid: p-20261006-ffff\nfecha: pronto\nformato: tiktok\nredes: [tiktok, instagram]\nestado: publicada\n---\n');
+  const mala = parsear('---\nid: p-20261006-ffff\nfecha: pronto\nformato: tiktok\nredes: [myspace, instagram]\nestado: publicada\n---\n');
   assert.deepEqual([mala.fecha, mala.formato, mala.redes, mala.estado], ['', 'post', ['instagram'], 'borrador']);
   assert.equal(parsear('sin cabecera, solo texto').texto, 'sin cabecera, solo texto');
 });
@@ -34,7 +34,7 @@ test('normalizar dice en palabras qué está mal, y solo toca lo que viene', () 
   assert.match(normalizar({ fecha: '2026-02-31' }).error, /no existe/);
   assert.match(normalizar({ hora: '25:00' }).error, /HH:MM/);
   assert.match(normalizar({ formato: 'directo' }).error, /post, reel, carrusel, historia/);
-  assert.match(normalizar({ redes: ['tiktok'] }).error, /«tiktok» no es una red/);
+  assert.match(normalizar({ redes: ['myspace'] }).error, /«myspace» no es una red/);
   assert.match(normalizar({ estado: 'publicada' }).error, /idea, borrador, revision, aprobada/);
   const p = nueva(); const q = normalizar({ texto: 'Otro' }, p).pieza;
   assert.equal(q.texto, 'Otro'); assert.equal(q.fecha, '2026-10-05'); assert.deepEqual(q.redes, ['instagram', 'facebook']);

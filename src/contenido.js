@@ -17,7 +17,7 @@ import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
 import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida } from './contenido-cola.js';
-import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem } from './contenido-reglas.js';
+import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS } from './contenido-reglas.js';
 import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
@@ -62,6 +62,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   let colaInfo = null; // M1: el modo y el conductor (GET /api/contenido/cola)
   let openNow = false, mode = 'cal', view = 'month', anchor = startOfDay(Date.now()), q = '', pieces = [], cola = [], resumen = null, loadedKey = '', errorMsg = '', timer = null, opener = null, dnd = null, lastGrid = '', lastProg = '';
   let estadoOn = new Set(store.get('estados', ORDEN)), redOn = new Set(store.get('redes', Object.keys(RED)));
+  // M2 (6 oct 2026): las redes que usa el negocio (Ajustes → Contenido), más las que ya tenga alguna pieza: solo esas salen en los filtros y en el resumen
+  let redesNegocio = ['instagram', 'facebook'];
+  const redesUsadas = () => { const u = new Set(redesNegocio); for (const p of todasConocidas()) for (const r of p.redes) u.add(r); return Object.keys(RED).filter(r => u.has(r)); };
   const gone = new Set(); let undoT = null, commitFn = null, undoFn = null, noteT = null;
   const medidas = { ...DEMO_MEDIOS }; // lo que se sabe de cada archivo del Estudio (de /api/media al elegir): la vista previa y las reglas lo usan
   let cuentas = { empresa: '' };
@@ -101,13 +104,13 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   async function load(force = false) {
     const w = want(), key = `${w.desde}|${w.hasta}`;
     if (!force && key === loadedKey && pieces.length) { if (mode === 'prog') loadCola(); return; }
-    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; loadedKey = key; errorMsg = ''; }
+    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; loadedKey = key; errorMsg = ''; }
     catch (e) { errorMsg = e.message || 'No pude leer las piezas'; }
     if (mode === 'prog' || force) await loadCola();
     if (openNow) render(); paintDock();
   }
   /** La cola tiene su propia carga: de hace 14 días (para ver lo vencido) en adelante, sin tope, más las ideas sin día. */
-  async function loadCola() { try { colaInfo = await datos.cola(); } catch {} try { const r = await datos.list({ desde: ymd(new Date(Date.now() - 14 * DAY)), sinFecha: true }); cola = conMedidas(r.piezas || []); resumen = r.resumen || resumen; } catch (e) { errorMsg = e.message || 'No pude leer las piezas'; } }
+  async function loadCola() { try { colaInfo = await datos.cola(); } catch {} try { const r = await datos.list({ desde: ymd(new Date(Date.now() - 14 * DAY)), sinFecha: true }); cola = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; } catch (e) { errorMsg = e.message || 'No pude leer las piezas'; } }
   const todasConocidas = () => { const m = new Map(); for (const p of [...cola, ...pieces]) m.set(p.id, p); return [...m.values()]; };
 
   /* ---------- qué se ve ---------- */
@@ -176,10 +179,10 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     E.stats.innerHTML = `<span><b>${n}</b> ${n === 1 ? 'pieza' : 'piezas'}</span>` + cuenta.map(([s, c]) => `<span class="pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}"><b>${c}</b> ${ESTADO[s].name.toLowerCase()}</span>`).join('');
   }
   function renderChips() {
-    const off = ORDEN.length - estadoOn.size + Object.keys(RED).length - redOn.size;
+    const usadas = redesUsadas(), off = ORDEN.length - estadoOn.size + usadas.filter(r => !redOn.has(r)).length;
     $('[data-filters]').textContent = off ? `Filtros (${off})` : 'Filtros';
     E.chips.innerHTML = ORDEN.map(s => `<button type="button" class="cv-chip${estadoOn.has(s) ? ' on' : ''}" data-e="${s}" aria-pressed="${estadoOn.has(s)}" title="${esc(ESTADO[s].help)}"><i class="pz-cg pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}" aria-hidden="true">${ESTADO[s].glyph}</i>${ESTADO[s].name}</button>`).join('')
-      + '<span class="cv-sep"></span>' + Object.entries(RED).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${r.short}</b>${r.name}</button>`).join('');
+      + '<span class="cv-sep"></span>' + usadas.map(k => [k, RED[k]]).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${r.short}</b>${r.name}</button>`).join('');
   }
   function renderRail() {
     const sin = todasConocidas().filter(p => !p.fecha && visible(p));
@@ -234,7 +237,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       ? `<section class="ct-day" aria-label="${esc(diaH(k).replace(/<[^>]+>/g, ''))}"><h4>${diaH(k)} <small>${l.length} ${l.length === 1 ? 'pieza' : 'piezas'}</small></h4>${l.map(p => filaCola(p, { accion: true })).join('')}</section>`
       : `<section class="ct-day gap"><h4>${diaH(k)}</h4><button type="button" class="ct-gap" data-gap="${k}">Hueco: nada programado · <b>+ Programar aquí</b></button></section>`).join('');
     // la frecuencia de la semana que empieza hoy, por red
-    const sem = futuras.filter(p => at(p) < hoy + 7 * DAY && p.estado !== 'idea'), porRed = Object.keys(RED).map(r => [r, sem.filter(p => p.redes.includes(r)).length]);
+    const sem = futuras.filter(p => at(p) < hoy + 7 * DAY && p.estado !== 'idea'), porRed = redesUsadas().map(r => [r, sem.filter(p => p.redes.includes(r)).length]);
     const sinDia = todas.filter(p => !p.fecha);
     const html = `${bannerHTML()}
       <div class="ct-cols">
@@ -265,7 +268,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { render(); loadResumen(); }
   }
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
-  const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
+  const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
   async function openPiece(id, addIds) {
     if (!openNow) open();
@@ -277,7 +280,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   async function openNew(extra) { flushUndo(); closeMenu(); await panel.flush(); panel.open(extra); render(); }
   /** «+ Crear» con un formato: el siguiente hueco libre, a las 18:00, en las dos redes (una historia, solo Instagram). */
   function crear(formato) {
-    const redes = formato === 'historia' ? ['instagram'] : ['instagram', 'facebook'];
+    const conH = redesNegocio.filter(r => CON_HISTORIAS.includes(r)), redes = formato === 'historia' ? (conH.length ? conH : ['instagram']) : [...redesNegocio]; // M2: las redes que usas (una historia, solo las que tienen)
     openNew({ formato, redes, fecha: siguienteHueco(redes, todasConocidas().filter(p => p.estado !== 'idea')), hora: '18:00' });
   }
   function closeMenu(focus) { if (E.newMenu.hidden) return; E.newMenu.hidden = true; E.newBtn.setAttribute('aria-expanded', 'false'); if (focus) E.newBtn.focus(); }
@@ -493,7 +496,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     async between(desde, hasta) { try { return (await datos.list({ desde, hasta })).piezas; } catch { return []; } },
     /** Desde el Estudio: una imagen o un video pasa a ser una pieza nueva (sin día, como idea) y se abre para terminarla. */
     async fromMedia(file, kind, prompt) {
-      try { const p = await datos.create({ titulo: String(prompt || '').slice(0, 60), formato: kind === 'video' ? 'reel' : 'post', medios: [file], estado: 'idea', redes: ['instagram', 'facebook'] }); open(); pieces.push(p); cola.push(p); await openPiece(p.id); return p; }
+      try { const p = await datos.create({ titulo: String(prompt || '').slice(0, 60), formato: kind === 'video' ? 'reel' : 'post', medios: [file], estado: 'idea', redes: [...redesNegocio] }); open(); pieces.push(p); cola.push(p); await openPiece(p.id); return p; }
       catch (e) { return { error: e.message }; }
     },
   };
