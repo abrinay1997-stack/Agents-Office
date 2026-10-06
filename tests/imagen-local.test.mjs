@@ -229,3 +229,10 @@ test('sin sharp: «no disponible en esta máquina», y nada cae a la IA', async 
   } finally { L.usarSharp(); }
   if (sharp) assert.equal((await L.disponible()).ok, true);
 });
+
+// CI del 6 oct 2026: dos fotos de un lote a la vez, justo al cargar sharp, y la segunda decía «sharp no carga» con sharp funcionando.
+t('sharp: llamadas simultáneas mientras carga esperan la misma carga (nunca «no carga» por llegar a la vez)', async () => {
+  L.usarSharp(); // como recién arrancada: sharp aún sin cargar
+  const r = await Promise.all([L.disponible(), L.disponible(), L.disponible()]);
+  assert.deepEqual(r.map(x => x.ok), [true, true, true], JSON.stringify(r));
+});
