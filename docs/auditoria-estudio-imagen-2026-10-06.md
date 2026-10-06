@@ -9,7 +9,7 @@ Pedido: auditoría integral de UX, UI, usabilidad, intuitividad, funcionalidad, 
 - **Código:** se leyeron `src/studio.js`, `src/studio-banco*.js`, `src/escena3d*.js` y sus estilos.
 - **Para repetirlo:** `node scripts/estudio-imagen-recorrido.mjs`. Las capturas van a `data/capturas/estudio-imagen/`, que no viaja por GitHub.
 
-**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 en lo mínimo, completo en la Fase 6) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-24 🟡) la **Fase 4** (IMG-25 a 30 ✅) la **Fase 5** (IMG-31 a 38 ✅; IMG-21 completo) y la **Fase 6** (IMG-14, 39, 42, 43, 44, 46, 47 ✅; IMG-45 🟡). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
+**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 en lo mínimo, completo en la Fase 6) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-24 🟡) la **Fase 4** (IMG-25 a 30 ✅) la **Fase 5** (IMG-31 a 38 ✅; IMG-21 completo) la **Fase 6** (IMG-14, 39, 42, 43, 44, 46, 47 ✅; IMG-45 🟡) y la **Fase 7** (IMG-12, 51, 53 ✅ y las microinteracciones: lo nuevo entra, el botón que confirma late, nada se mueve con «reducir movimiento»). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Quedan en parte IMG-24 (componentes de toda la oficina) e IMG-45 (fidelidad, zona y prompt negativo).
 
 **Estado de cada punto:** ✅ hecho · 🟡 en parte · ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
 
@@ -198,11 +198,12 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
 - **Hecho (6 oct, Fase 3):** `src/studio-confirmar.js` (con test). Desde US$0,50 el primer clic arma GENERAR («Confirmar · US$0.80», unos 6 s) y el segundo gasta; Variar lo pide con «VARIAR» en el aviso; los presets pasan por la misma puerta. Ya no hay `confirm()` para gastar.
 - **Prioridad:** Fase 3.
 
-### IMG-12 · 🟡 medio · ⏳ — Las acciones del visor sacan del visor
+### IMG-12 · 🟡 medio · ✅ — Las acciones del visor sacan del visor
 - **Dónde:** el visor: `a === 'vary' | 'again' | 'anim' | 'ref'` → `closeLight()`.
 - **Evidencia:** Variar, Repetir, Animar y Usar de referencia cierran el visor y llevan al compositor.
 - **Impacto:** cambio de contexto: para ver otra vez la imagen hay que volver a buscarla.
 - **Solución:** después de la acción, un aviso con «Volver a la imagen». Con IMG-01, Variar ya no necesita salir del visor.
+- **Hecho (6 oct, Fase 7):** Variar ya no sale del visor: su costo se confirma en el propio botón y lo que pasa se dice dentro del visor. Repetir, Animar y Usar de referencia llevan al compositor y el aviso trae «VOLVER A LA IMAGEN», que reabre la misma.
 - **Prioridad:** Fase 7.
 
 ### IMG-13 · 🟡 medio · ✅ — Los contadores no cuadran
@@ -666,8 +667,9 @@ Columnas: **Nec.** = ¿es necesario? · **Lugar** = ¿está donde debe? · **Cla
 - **Hecho (6 oct, Fase 2):** «Motores y keys» es un panel propio, abierto desde el «⋯» de la galería, desde «Empieza aquí» y desde la ayuda de una key. **Cambio:** no va en Ajustes porque allí no se ve qué modelos trae cada motor; el panel enlaza a Ajustes → Estudio para los topes.
 - **Prioridad:** Fase 2.
 
-### IMG-51 · 🟢 bajo · ⏳ — «‹ plegar» se descubre poco
+### IMG-51 · 🟢 bajo · ✅ — «‹ plegar» se descubre poco
 - **Solución:** un icono de panel en la cabecera del compositor, con el atajo en el `title`.
+- **Hecho (6 oct, Fase 7):** «Plegar» es un botón con icono de panel y texto, arriba a la derecha del compositor (sin atajo nuevo: no hacía falta otra tecla).
 - **Prioridad:** Fase 7.
 
 ### Responsive y rendimiento percibido
@@ -685,9 +687,10 @@ Columnas: **Nec.** = ¿es necesario? · **Lugar** = ¿está donde debe? · **Cla
 - **Hecho (6 oct, Fase 2):** a 760 px o menos, la cabecera es una fila (pestañas, topes, cerrar; el título queda para el lector de pantalla), la barra de la galería son iconos, los tipos van en una fila de cuatro y la tarjeta del modelo, sin su descripción. A 390×844 la primera imagen empieza a 242 px y la idea se ve sin desplazarse. La idea va la primera desde la Fase 5 (IMG-32).
 - **Prioridad:** Fase 2.
 
-### IMG-53 · 🟡 medio · ⏳ — El visor en el teléfono esconde las acciones
+### IMG-53 · 🟡 medio · ✅ — El visor en el teléfono esconde las acciones
 - **Evidencia:** la imagen ocupa un 45 % de la pantalla y las acciones obligan a desplazarse; «Mover a la papelera» queda fuera de la vista (captura `27`). El pellizco para hacer zoom sí funciona (`pointer` con dos dedos).
 - **Solución:** una barra inferior fija con Editar, Variar, Descargar y «⋯»; la información, en una hoja que se despliega.
+- **Hecho (6 oct, Fase 7):** en el teléfono, Editar, Variar, Descargar y «⋯» van en una barra fija abajo; «⋯» lleva a «Crear a partir de esta», «Organizar», «Enviar a…» y la papelera.
 - **Prioridad:** Fase 7.
 
 **Rendimiento percibido (bien):**

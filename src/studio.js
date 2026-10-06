@@ -50,6 +50,7 @@ const I = { // line icons (stroke = currentColor)
   pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', chat: '<path d="M4 5.5h16v10.5H9.5L4 20z"/><path d="M8 9.5h8M8 12.5h5"/>', send: '<path d="M4 12h12M11 6l6 6-6 6"/><path d="M20.5 4v16"/>', full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>', note: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   anim: '<rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="m7.8 9.3 4.4 2.7-4.4 2.7z"/><path d="M19 8.5v7M21.5 10.5v3"/>', // IMG-18: Animar has its own icon (the clapperboard is the Estudio and «Video»)
+  panel: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16M15.5 9.5 13 12l2.5 2.5"/>', // IMG-51: fold the composer
   cal: '<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><path d="M12 13v5M9.5 15.5h5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
 };
 const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
@@ -73,7 +74,7 @@ export function initStudio(ctx) {
     <div class="st-body">
       <section class="st-gen" aria-label="Crear">
         <button type="button" class="st-unfold" title="Mostrar el compositor" aria-label="Mostrar el compositor">${svg('spark')}<span>Crear</span></button>
-        <div class="st-scroll"><button type="button" class="st-fold" title="Plegar el compositor: más sitio para la galería" aria-label="Plegar el compositor">‹ plegar</button>
+        <div class="st-scroll"><button type="button" class="st-fold" title="Plegar el compositor: más sitio para la galería" aria-label="Plegar el compositor">${svg('panel')}<span>Plegar</span></button>
           <div class="st-step st-s1"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
             <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button><button type="button" data-kind="audio" aria-pressed="false" title="Un texto leído en voz alta (MiniMax)">${svg('mic')}<span>Voz</span></button><button type="button" data-kind="music" aria-pressed="false" title="Una canción con letra o una pista instrumental (MiniMax)">${svg('note')}<span>Música</span></button></div>
             <div class="st-nivel" role="group" aria-label="Modo de imagen"><button type="button" data-nivel="basico" aria-pressed="true" title="Describe y genera: modelo, idea y formato">Básico</button><button type="button" data-nivel="avanzado" aria-pressed="false" title="Presets, tu foto, referencias y el escenario 3D (B)">Avanzado</button></div>
@@ -132,7 +133,7 @@ export function initStudio(ctx) {
       <p class="st-hsub">Cada motor se enciende con su key, guardada en Windows una sola vez. Lo que ya está listo sale con ●.</p><div class="st-engs"></div>
       <p class="st-hsub">La key se guarda en Windows una sola vez (con el comando de su línea en una ventana de comandos, o en «Editar las variables de entorno de esta cuenta») y se reinicia la oficina con el iniciador. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.</p>
       <p class="st-hsub">El tope de generaciones al día y el gasto máximo (del día y del mes) se cambian en <button type="button" class="st-lk" data-open="settings">Ajustes → Estudio</button> (un video cuenta como 5 imágenes).</p></div></div>
-    <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
+    <div class="st-toast" hidden role="status"><span></span><button type="button">DESHACER</button><button type="button" class="st-tback" hidden>VOLVER A LA IMAGEN</button></div>
     <input type="file" class="st-file" accept="image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a" multiple hidden>`;
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
@@ -1300,15 +1301,22 @@ export function initStudio(ctx) {
     return false;
   }
   function variarPedido(it) { return BR.pedidoVariar({ ...it, folder: inFolder(it) }, models, { respaldo: useModelFor('reference', 'image'), settingsDe: m => settingsOf(m) }); }
-  async function vary(it) { // V4.2 (audit A35) · IMG-01: another take close to this one — its prompt, model and settings, the picture as the reference; the composer is not touched
-    if (!isLive() || !location.protocol.startsWith('http')) return say('Variar necesita la oficina real (ábrela con el iniciador).', true);
-    const p = variarPedido(it); if (p.error) return say(p.error, true);
+  async function vary(it, en = null) { // V4.2 (audit A35) · IMG-01: another take close to this one — its prompt, model and settings, the picture as the reference; the composer is not touched. en = { btn, decir }: from the viewer, which stays open (IMG-12)
+    const decir = en ? (t, malo) => { en.decir(t, malo); say(t, malo); } : say;
+    if (!isLive() || !location.protocol.startsWith('http')) return decir('Variar necesita la oficina real (ábrela con el iniciador).', true);
+    const p = variarPedido(it); if (p.error) return decir(p.error, true);
     const m = p.modelo, cost = SV.unitCost(m, p.req.settings, p.req.prompt.length) * (Number(p.req.settings.batchSize) || 1);
-    if (!okCosto(cost, 'vary:' + it.file)) return toast(`Variar con ${m.name} cuesta aprox. US$${cost.toFixed(2)}.`, () => vary(it), 'VARIAR'); // IMG-11: the toast's button is the second click
+    if (!okCosto(cost, 'vary:' + it.file)) {
+      if (!en || !en.btn) return toast(`Variar con ${m.name} cuesta aprox. US$${cost.toFixed(2)}.`, () => vary(it), 'VARIAR'); // IMG-11: the toast's button is the second click
+      const b = en.btn, was = b.innerHTML; b.innerHTML = `${svg('spark')} Confirmar · US$${cost.toFixed(2)}`; b.classList.add('st-armado'); // in the viewer, the button itself is the second click
+      setTimeout(() => { if (document.contains(b) && b.classList.contains('st-armado')) { b.innerHTML = was; b.classList.remove('st-armado'); } }, CF.VENTANA);
+      return decir(`Variar con ${m.name} cuesta aprox. US$${cost.toFixed(2)}. Pulsa otra vez para variar.`);
+    }
+    if (en && en.btn) { en.btn.classList.remove('st-armado'); en.btn.innerHTML = `${svg('spark')} Variar`; }
     try { const r = await api('POST', '/api/media/jobs', p.req); jobs.unshift(r.job); budget = r.budget; }
-    catch (e) { if (/key/i.test(e.message)) return keyHelp(m, e.message); return say('No se pudo variar: ' + e.message, true); }
-    learn(it.file, 'ref'); renderHead(); estimate(); renderGrid(); watch(); if (phone()) showPane('gal');
-    say(`Variando con ${m.name}${p.cambio ? ' (el modelo de esa imagen no acepta referencias)' : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}. Tu compositor sigue igual; sale en la galería al terminar.`);
+    catch (e) { if (/key/i.test(e.message)) { if (en) closeLight(); return keyHelp(m, e.message); } return decir('No se pudo variar: ' + e.message, true); }
+    learn(it.file, 'ref'); renderHead(); estimate(); renderGrid(); watch(); if (phone() && !en) showPane('gal');
+    decir(`Variando con ${m.name}${p.cambio ? ' (el modelo de esa imagen no acepta referencias)' : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}. Tu compositor sigue igual; sale en la galería al terminar.`);
   }
   function reuseRaw(it, quiet) {
     const k = SV.kindOfItem(it); // V5.0: a voice goes back to Voz, a song to Música
@@ -1365,11 +1373,15 @@ export function initStudio(ctx) {
     try { if (isLive()) await api('DELETE', '/api/media/plantillas/' + encodeURIComponent(id)); else plLocal.set(plLocal.get().filter(x => x.id !== id)); await cargarPlantillas(); $('.st-plsel').focus(); say(`Plantilla «${p.nombre}» borrada${isLive() ? ' (queda en Estudio/Plantillas/.papelera del Cerebro)' : ''}.`); }
     catch (err) { say('No se pudo borrar: ' + err.message, true); }
   }
+  /* IMG-12 (6 Oct 2026): what the viewer sends to the composer (Repetir, Animar, Usar de referencia) leaves a way back: «VOLVER A LA IMAGEN» in the toast. */
+  let volverA = null;
+  function pintarVolver() { const b = $('.st-tback'), f = volverA; b.hidden = !f; if (f) b.onclick = () => { $('.st-toast').hidden = true; lightFile(f); }; }
+  function desdeVisor(it, fn) { closeLight(); volverA = it.file; try { fn(); if ($('.st-toast').hidden) toast('Listo en el compositor.', null); else pintarVolver(); } finally { volverA = null; } }
   let toastT = null;
   function toast(text, undo, label = 'DESHACER') {
     const T = $('.st-toast'); T.querySelector('span').textContent = text; T.hidden = false;
     T.querySelector('button').hidden = !undo; T.querySelector('button').textContent = label; T.querySelector('button').onclick = async () => { T.hidden = true; await undo(); };
-    clearTimeout(toastT); toastT = setTimeout(() => { T.hidden = true; }, 9000);
+    pintarVolver(); clearTimeout(toastT); toastT = setTimeout(() => { T.hidden = true; }, 9000);
   }
   async function trashMany(files) {
     const undo = []; let failed = 0;
@@ -1686,7 +1698,8 @@ export function initStudio(ctx) {
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
       ${vers.length ? `<div class="st-lvers"><h3>Versiones (${vers.length})</h3><div>${vers.map((v, k) => `<button type="button" data-vf="${esc(v.file)}" aria-label="Abrir la versión ${k + 1}: ${esc(short(v.prompt))}" title="${esc(v.prompt)}"><img src="${src(v)}" alt=""></button>`).join('')}</div></div>` : ''}
-      <div class="st-lacts">${lac.primarias.map((x, k) => lbtn(x, k === 0)).join('')}${pareja ? `<button type="button" data-l="cmp" title="${esc(pareja.titulo)}, con una cortina">${it.versionOf ? 'Comparar con la original' : 'Comparar con su versión'}</button>` : ''}</div>
+      <div class="st-lacts">${lac.primarias.map((x, k) => lbtn(x, k === 0)).join('')}<button type="button" class="st-lmas" data-l="mas" aria-label="Más acciones" data-tip="Más acciones">${svg('dots')}</button>${pareja ? `<button type="button" data-l="cmp" title="${esc(pareja.titulo)}, con una cortina">${it.versionOf ? 'Comparar con la original' : 'Comparar con su versión'}</button>` : ''}</div>
+      <p class="st-lsay" role="status"></p>
       <div class="st-lpwrap"></div>
       <div class="st-lacts2">${lgrupos.map(g => `<div class="st-lgrp" role="group" aria-labelledby="stLg${g.id}"><span class="st-lgt" id="stLg${g.id}">${esc(g.titulo)}</span>${g.items.map(x => lbtn(x)).join('')}</div>`).join('')}</div>
       <button type="button" class="st-ldel" data-l="del">${svg('trash')} Mover a la papelera</button></div></div>`;
@@ -1711,10 +1724,11 @@ export function initStudio(ctx) {
       if (a === 'othervoice') { closeLight(); otherVoice(it); }
       if (a === 'edit' || a === 'dept') setPanel(it, a, e.target.closest('button'));
       if (a === 'dimitri' && ctx.askDimitri) { closeLight(); ctx.askDimitri([it.file]); }
-      if (a === 'vary') { closeLight(); vary(it); }
-      if (a === 'again') { closeLight(); reuse(it); }
-      if (a === 'anim') { closeLight(); animate(it); }
-      if (a === 'ref') { closeLight(); useAsRef(it); }
+      if (a === 'vary') { const b = e.target.closest('button'); vary(it, { btn: b, decir: (t, malo) => { const o = L.querySelector('.st-lsay'); if (o) { o.textContent = t; o.classList.toggle('err', !!malo); } } }); } // IMG-12: Variar stays in the viewer
+      if (a === 'again') desdeVisor(it, () => reuse(it));
+      if (a === 'anim') desdeVisor(it, () => animate(it));
+      if (a === 'ref') desdeVisor(it, () => useAsRef(it));
+      if (a === 'mas') { const g = L.querySelector('.st-lacts2'); g.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); g.querySelector('button')?.focus({ preventScroll: true }); } // IMG-53
       if (a === 'cal' && ctx.toCalendar) { closeLight(); learn(it.file, 'calendario'); ctx.toCalendar(it.file, it.kind, it.prompt); }
       if (a === 'fav') favMany([it.file]).then(() => { const k = lightPos(); if (k >= 0) light(k); });
       if (a === 'del') trashMany([it.file]);

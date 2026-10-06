@@ -175,6 +175,21 @@ try {
   ok('IMG-01 · Variar no toca la idea, la cantidad ni las referencias, y genera', report.trasVariar.prompt === 'TEXTO A MEDIO ESCRIBIR' && trasVariar.n === antesVariar.n && trasVariar.refs === antesVariar.refs && report.trasVariar.trabajos > antesVariar.jobs, JSON.stringify({ antesVariar, trasVariar, ...report.trasVariar }));
   await p.waitForTimeout(9000); // que termine la variación antes del fallo
   await shot(p, '12-tras-variar');
+  // ===== Fase 7 =====
+  const fold = await p.evaluate(() => { const b = document.querySelector('#studioOv .st-fold'); return { icono: !!b?.querySelector('svg'), texto: b?.textContent.trim(), visible: !!b?.offsetParent }; });
+  ok('IMG-51 · «Plegar» es un botón con icono y texto, a la vista', fold.icono && fold.texto === 'Plegar' && fold.visible, JSON.stringify(fold));
+  await p.locator(`${S} .st-grid .st-thumb:visible`).first().click(); await p.waitForTimeout(700);
+  const enVisor = await p.textContent(`${S} .st-light .st-lp`);
+  await p.click(`${S} .st-light .st-lacts [data-l="vary"]`); await p.waitForTimeout(1200);
+  const vv = await p.evaluate(() => ({ abierto: !document.querySelector('#studioOv .st-light').hidden, dice: document.querySelector('#studioOv .st-light .st-lsay')?.textContent || '' }));
+  ok('IMG-12 · Variar desde el visor no lo cierra y lo dice dentro', vv.abierto && /Variando/.test(vv.dice), JSON.stringify(vv));
+  await p.waitForTimeout(8500);
+  await p.click(`${S} .st-light [data-l="again"]`); await p.waitForTimeout(500);
+  const vt = await p.evaluate(() => ({ cerrado: document.querySelector('#studioOv .st-light').hidden, toast: document.querySelector('#studioOv .st-toast:not([hidden])')?.innerText || '' }));
+  await p.click(`${S} .st-toast .st-tback`).catch(() => {}); await p.waitForTimeout(800);
+  const vuelta = await p.evaluate(() => ({ abierto: !document.querySelector('#studioOv .st-light').hidden, prompt: document.querySelector('#studioOv .st-light .st-lp')?.textContent }));
+  ok('IMG-12 · Repetir desde el visor deja «VOLVER A LA IMAGEN», que vuelve a la misma', vt.cerrado && /VOLVER A LA IMAGEN/.test(vt.toast) && vuelta.abierto && vuelta.prompt === enVisor, JSON.stringify({ vt, vuelta }));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   // IMG-11: desde US$0,50, el primer clic arma y no hay diálogo del navegador
   let dialogos = 0; p.on('dialog', d => { dialogos++; d.dismiss(); });
   await p.click(`${S} .st-mpick`); await p.waitForTimeout(300); await p.locator(`${S} .st-mo:has-text("Nano Banana Pro")`).first().click(); await p.waitForTimeout(300);
@@ -182,6 +197,8 @@ try {
   const antesConf = await p.locator(`${S} .st-job`).count();
   await p.click(`${S} .st-go`); await p.waitForTimeout(400);
   const conf = { go: await p.textContent(`${S} .st-go`), dialogos, trabajos: await p.locator(`${S} .st-job`).count() - antesConf };
+  const late = await p.evaluate(() => getComputedStyle(document.querySelector('#studioOv .st-go')).animationName);
+  ok('Fase 7 · con «reducir movimiento», el botón que confirma no late', late === 'none', late);
   ok('IMG-11 · un gasto desde US$0,50 se confirma con un segundo clic en el botón, sin diálogo', /^Confirmar · US\$/.test(conf.go) && !conf.dialogos && conf.trabajos === 0, JSON.stringify(conf));
   await p.waitForTimeout(6500);
   ok('IMG-11 · sin el segundo clic, el botón vuelve a ser GENERAR', /^GENERAR/.test(await p.textContent(`${S} .st-go`)), await p.textContent(`${S} .st-go`));
@@ -206,7 +223,7 @@ try {
   ok('IMG-50 · los motores tienen su panel y ya no están en el compositor', eng.abierto && eng.motores > 0 && !eng.enCompositor && await p.evaluate(() => document.querySelector('#studioOv .st-engov').hidden), JSON.stringify(eng));
   await p.fill(`${S} .st-prompt`, 'idea que no quiero perder'); await p.click(`${S} .st-new`); await p.waitForTimeout(300);
   const vac = await p.evaluate(() => ({ prompt: document.querySelector('#studioOv .st-prompt').value, toast: document.querySelector('#studioOv .st-toast:not([hidden])')?.innerText || '' }));
-  await p.locator(`${S} .st-toast button`).click(); await p.waitForTimeout(300);
+  await p.locator(`${S} .st-toast button:not(.st-tback)`).click(); await p.waitForTimeout(300);
   ok('IMG-10 · «Vaciar» vacía y DESHACER lo devuelve', vac.prompt === '' && /DESHACER/.test(vac.toast) && await p.inputValue(`${S} .st-prompt`) === 'idea que no quiero perder', JSON.stringify(vac));
   // ===== Avanzado =====
   await p.click(`${S} [data-nivel="avanzado"]`); await p.waitForSelector(`${S} .bk-doors`, { timeout: 20000 }); await p.waitForTimeout(800);
@@ -318,6 +335,11 @@ try {
   ok('IMG-52 · en el teléfono la primera imagen empieza a 260 px o menos', mg <= 260, mg + ' px');
   ok('IMG-52 · nada se sale del ancho en el teléfono', !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)));
   await p.locator(`${S} .st-grid .st-thumb:visible, ${S} .st-grid .st-gt:visible`).first().tap().catch(() => {}); await p.waitForTimeout(800); await shot(p, '27-movil-visor');
+  const mv = await p.evaluate(() => { const a = document.querySelector('#studioOv .st-light .st-lacts').getBoundingClientRect(), m = document.querySelector('#studioOv .st-light .st-lmas'); return { abajo: Math.round(a.bottom), alto: innerHeight, mas: !!m?.offsetParent, botones: document.querySelectorAll('#studioOv .st-light .st-lacts > :is(a, button)').length }; });
+  ok('IMG-53 · en el teléfono las acciones del visor se ven sin desplazarse, con «⋯»', mv.abajo <= mv.alto + 1 && mv.mas, JSON.stringify(mv));
+  await p.tap(`${S} .st-light .st-lmas`).catch(() => {}); await p.waitForTimeout(500); await shot(p, '27b-movil-visor-mas');
+  const fm2 = await p.evaluate(() => document.activeElement?.closest('.st-lacts2') ? 'grupos' : document.activeElement?.className);
+  ok('IMG-53 · «⋯» lleva a las demás acciones', fm2 === 'grupos', fm2);
   await p.keyboard.press('Escape'); await p.click(`${S} [data-pt="gen"]`).catch(() => {}); await p.click(`${S} [data-nivel="avanzado"]`).catch(() => {}); await p.waitForTimeout(2500); await shot(p, '28-movil-avanzado');
   await c.close();
 } catch (e) { console.error('ERROR', e); report.error = String(e.stack || e); }
