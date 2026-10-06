@@ -96,3 +96,12 @@ test('revisión E8: con la ejecución contaminada, el Estudio no crea lotes ni a
   }
   assert.equal(S.decide('mcp__estudio__estado_lote', {}, ctx).allow, true, 'mirar un lote sigue permitido');
 });
+
+test('plan M1: programar o publicar en redes con el conector de Metricool se bloquea siempre; leer, no', () => {
+  for (const n of ['mcp__Metricool__post_Schedule_Post', 'mcp__claude_ai_Metricool__update_Schedule_Post']) {
+    const d = S.decide(n, { text: 'hola' }, { writes: true, runMode: 'approve' });
+    assert.equal(d.allow, false, n); assert.equal(d.code, 'redes'); assert.match(d.why, /va por Contenido/);
+  }
+  assert.equal(S.decide('mcp__Metricool__get_Best_Time_To_Post', {}, { writes: false }).allow, true, 'leer la mejor hora sí');
+  assert.equal(S.decide('mcp__gmail__send_email', { to: 'a@b.com' }, { writes: true }).allow, true, 'el resto no cambia');
+});

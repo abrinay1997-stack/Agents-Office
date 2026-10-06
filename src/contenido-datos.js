@@ -63,6 +63,10 @@ export function crearDatos({ served, now = () => new Date() }) {
     back: async (id, estado) => (await http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/devolver`, { estado })).pieza,
     remove: async id => http('DELETE', `/api/contenido/piezas/${encodeURIComponent(id)}`),
     resumen: async () => http('GET', '/api/contenido/resumen'),
+    // plan M1 (6 oct 2026): la cola que lleva lo aprobado al conductor
+    cola: async () => http('GET', '/api/contenido/cola'),
+    salida: async (id, que) => http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/${que}`, {}),
+    comprobar: async () => http('POST', '/api/contenido/conductor/comprobar', {}),
   };
 
   /* ---------- la demo: lo mismo, en la memoria de la página ---------- */
@@ -94,5 +98,8 @@ export function crearDatos({ served, now = () => new Date() }) {
     back: async (id, estado = 'revision') => { const p = mem().find(x => x.id === id); if (!p) throw falla('esa pieza ya no existe', { status: 404 }); p.estado = ['idea', 'borrador', 'revision'].includes(estado) ? estado : 'revision'; p.aprobada = null; return conRevision(p); },
     remove: async id => { demo = mem().filter(p => p.id !== id); return { ok: true }; },
     resumen: async () => resumenDe(mem().map(conRevision)),
+    cola: async () => ({ modo: 'demo', conductor: { id: 'demo', nombre: 'Demo', ok: false, motivo: '' }, horasAntes: 24, cuenta: {}, entradas: {} }),
+    salida: async () => { throw falla('En la demo no sale nada: abre la oficina con el iniciador.'); },
+    comprobar: async () => ({ ok: false, error: 'En la demo no hay conexión: abre la oficina con el iniciador.' }),
   };
 }

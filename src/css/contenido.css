@@ -357,3 +357,14 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
 /* Auditoría (revisión del cajón): con una pieza abierta el aviso va sobre el panel y por encima de su pie (src/contenido.js → placeToast);
    en el teléfono el panel ocupa la vista con z-index 47, así que el aviso sube por encima para no quedar escondido. */
 #ctOv .cv-toast.sobrePanel { z-index: 48; width: max-content; } /* el ancho lo pone el panel (max-width en línea), no el sitio que queda a la derecha del centro */
+
+/* Plan M1 (6 oct 2026): la cola que lleva lo aprobado al conductor — el aviso de arriba y lo que pasó con cada pieza */
+.ct-banner.ok { color: #0E5A48; background: #E4F4EE; border-color: #A9DCC9; } body.dark .ct-banner.ok { color: #9FE8CF; background: #12332A; border-color: #1F5A48; }
+.ct-banner.bad { color: #8C1D18; background: #FCEBEA; border-color: #F0B8B4; } body.dark .ct-banner.bad { color: #FFB4AB; background: #3A1715; border-color: #6B2A26; }
+.ct-row.con-salida { flex-wrap: wrap; }
+.ct-salbox { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-left: 50px; padding-top: 6px; border-top: 1px dashed var(--hairline); font-size: 12.5px; color: var(--ink); }
+.ct-salbox.bad .ct-saltxt { color: #8C1D18; font-weight: 600; } body.dark .ct-salbox.bad .ct-saltxt { color: #FFB4AB; }
+.ct-salbox .ct-saltxt { flex: 1 1 220px; min-width: 0; }
+.ct-salbox a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; min-height: 24px; display: inline-flex; align-items: center; }
+.ct-salbox .pz-lk { min-height: 28px; }
+@media (max-width: 760px) { .ct-salbox { margin-left: 0; } }

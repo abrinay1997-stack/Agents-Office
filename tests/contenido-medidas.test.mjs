@@ -31,9 +31,9 @@ test('una historia horizontal avisa; un video de historia de más de 60 s y un r
   assert.equal(rev(pieza({ formato: 'reel', medios: ['2026-10/r.mp4'], medidas: { '2026-10/r.mp4': { duracion: 30 } } })).errores.length, 0);
 });
 
-test('el aviso del JPEG dice la verdad: hoy hay que convertirla, la oficina no lo hace sola', () => {
+test('el aviso del JPEG dice la verdad: la oficina la convierte sola al programar (M1)', () => {
   const r = rev(pieza({ medios: ['2026-10/a.png'] }));
-  assert.match(r.avisos.join(' '), /todavía no lo hace sola/); assert.doesNotMatch(r.avisos.join(' '), /se convierten al programar/);
+  assert.match(r.avisos.join(' '), /la oficina la convierte a JPEG sola/); // M1: el conductor la convierte al programar
 });
 
 test('medidaDeItem lee el registro del Estudio: ancho y alto de una imagen, proporción y duración de un video', () => {

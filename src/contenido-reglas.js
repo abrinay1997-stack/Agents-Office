@@ -314,7 +314,7 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     }
     const noJpeg = deIG.filter((m) => m.tipo === "imagen" && !esJPEG(m.src)).length;
     if (noJpeg) {
-      avisos.push(`Instagram sólo acepta JPEG y ${noJpeg === 1 ? "una imagen es" : noJpeg + " imágenes son"} PNG o WebP: hay que convertir${noJpeg === 1 ? "la" : "las"} a JPEG antes de publicar (la oficina todavía no lo hace sola).`);
+      avisos.push(`Instagram sólo acepta JPEG y ${noJpeg === 1 ? "una imagen es" : noJpeg + " imágenes son"} PNG o WebP: al programarla, la oficina ${noJpeg === 1 ? "la convierte" : "las convierte"} a JPEG sola (el original del Estudio no se toca).`); // M1 (6 oct 2026): el conductor la convierte (contenido/conductores.mjs)
     }
     const colab = colaboradoresDe(post);
     if (colab.length > MAX_COLABORADORES) {

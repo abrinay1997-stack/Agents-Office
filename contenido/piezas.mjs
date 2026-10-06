@@ -46,7 +46,7 @@ function splitList(s) { // «a, "b, c", d»: las comas dentro de comillas no sep
   for (let i = 0; i < s.length; i++) { const c = s[i]; if (c === '"' && s[i - 1] !== '\\') q = !q; if (c === ',' && !q) { out.push(cur); cur = ''; } else cur += c; }
   out.push(cur); return out.map(x => x.trim()).filter(x => x !== '');
 }
-const ORDEN = ['tipo', 'id', 'titulo', 'fecha', 'hora', 'formato', 'redes', 'estado', 'responsable', 'medios', 'historiaTambien', 'historias', 'hashtagsEnComentario', 'origen', 'tarea', 'creada', 'actualizada', 'aprobada'];
+const ORDEN = ['tipo', 'id', 'titulo', 'fecha', 'hora', 'formato', 'redes', 'estado', 'responsable', 'medios', 'historiaTambien', 'historias', 'hashtagsEnComentario', 'origen', 'tarea', 'creada', 'actualizada', 'aprobada', 'entregada'];
 
 /** La nota → la pieza. Lo que la cabecera no traiga toma su valor de siempre; el cuerpo se parte en sus secciones. */
 export function parsear(md, { file = '' } = {}) {
@@ -71,16 +71,18 @@ export function parsear(md, { file = '' } = {}) {
     texto: t('texto'), comentario: t('comentario'), hashtags: t('hashtags'), hashtagsEnComentario: head.hashtagsEnComentario === true, textoFacebook: t('textoFacebook'), notas: t('notas'),
     origen: String(head.origen ?? 'dueno'), tarea: head.tarea ? String(head.tarea) : '', creada: String(head.creada ?? ''), actualizada: String(head.actualizada ?? ''),
     aprobada: head.aprobada && typeof head.aprobada === 'object' && !Array.isArray(head.aprobada) ? { cuando: String(head.aprobada.cuando ?? ''), huella: String(head.aprobada.huella ?? ''), por: String(head.aprobada.por ?? '') } : null,
+    // M1 (6 oct 2026): el doble testigo de lo entregado al conductor (Metricool, simulacro): la cola lo apunta, y la nota también
+    entregada: head.entregada && typeof head.entregada === 'object' && !Array.isArray(head.entregada) ? { conductor: String(head.entregada.conductor ?? ''), huella: String(head.entregada.huella ?? ''), cuando: String(head.entregada.cuando ?? ''), remoto: head.entregada.remoto && typeof head.entregada.remoto === 'object' ? head.entregada.remoto : {} } : null,
   };
 }
 
 /** La pieza → la nota. `parsear(serializar(p))` devuelve la misma pieza. */
 export function serializar(p) {
-  const v = { tipo: 'pieza', ...p, aprobada: p.aprobada ? JSON.stringify({ cuando: p.aprobada.cuando, huella: p.aprobada.huella, por: p.aprobada.por ?? '' }) : null };
+  const v = { tipo: 'pieza', ...p, aprobada: p.aprobada ? JSON.stringify({ cuando: p.aprobada.cuando, huella: p.aprobada.huella, por: p.aprobada.por ?? '' }) : null, entregada: p.entregada ? JSON.stringify(p.entregada) : null };
   const cab = ORDEN.map(k => {
     const x = v[k];
     if (Array.isArray(x)) return x.length ? `${k}:\n${x.map(i => `  - ${scalar(i)}`).join('\n')}` : `${k}: []`;
-    if (k === 'aprobada') return `${k}: ${x === null ? 'null' : x}`;
+    if (k === 'aprobada' || k === 'entregada') return `${k}: ${x === null || x === undefined ? 'null' : x}`;
     return `${k}: ${scalar(x === '' ? null : x)}`;
   });
   const cuerpo = [p.texto.trim(), p.comentario.trim() && `## Primer comentario\n${p.comentario.trim()}`, p.hashtags.trim() && `## Hashtags\n${p.hashtags.trim()}`, p.textoFacebook.trim() && `## Texto de Facebook\n${p.textoFacebook.trim()}`, p.notas.trim() && `## Notas\n${p.notas.trim()}`].filter(Boolean).join('\n\n');
@@ -103,7 +105,7 @@ const lista = (v, max = 30) => (Array.isArray(v) ? v : String(v ?? '').split(/[\
  * un campo ausente conserva su valor. Devuelve { pieza } o { error } en palabras.
  */
 export function normalizar(d = {}, previa = null) {
-  const p = previa ? { ...previa } : { id: '', titulo: '', fecha: '', hora: '', formato: 'post', redes: ['instagram'], estado: 'borrador', responsable: '', medios: [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', origen: 'dueno', tarea: '', creada: '', actualizada: '', aprobada: null };
+  const p = previa ? { ...previa } : { id: '', titulo: '', fecha: '', hora: '', formato: 'post', redes: ['instagram'], estado: 'borrador', responsable: '', medios: [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', origen: 'dueno', tarea: '', creada: '', actualizada: '', aprobada: null, entregada: null };
   const has = k => Object.prototype.hasOwnProperty.call(d, k) && d[k] !== undefined;
   if (has('titulo')) p.titulo = cadena(d.titulo, 140).replace(/\n/g, ' ').trim();
   if (has('fecha')) { const f = String(d.fecha ?? ''); if (f && !FECHA_RE.test(f)) return { error: 'la fecha va como AAAA-MM-DD' }; if (f && !existe(f)) return { error: 'esa fecha no existe' }; p.fecha = f; }
@@ -209,6 +211,12 @@ export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Da
       const f = buscar(id), p = f && deArchivo(f); if (!p) return { error: 'esa pieza ya no existe', nada: true };
       p.estado = ['idea', 'borrador', 'revision'].includes(estado) ? estado : 'revision'; p.aprobada = null; p.actualizada = new Date(ahora()).toISOString();
       escribir(p); return { pieza: conEstado(p) };
+    },
+    /** M1: apunta (o borra, con null) en la nota lo entregado al conductor. No toca nada más ni la fecha de cambio: no es una edición. */
+    marcarEntregada(id, valor) {
+      const f = buscar(id), p = f && deArchivo(f); if (!p) return { error: 'esa pieza ya no existe', nada: true };
+      p.entregada = valor ? { conductor: String(valor.conductor || ''), huella: String(valor.huella || ''), cuando: String(valor.cuando || ''), remoto: valor.remoto || {} } : null;
+      escribir(p); return { ok: true };
     },
     /** A la papelera de las piezas (`.papelera/`, junto a ellas): nada se pierde sin querer. */
     borrar(id) {

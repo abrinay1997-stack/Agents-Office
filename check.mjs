@@ -648,7 +648,7 @@ else {
         return `${r.n} one-line cards, all above the sheet · no sideways scroll`;
       } finally { await ph.close(); }
     });
-    await step('smoke: V4.7 — K opens Contenido: a piece opens, saves and is approved; Programación says Meta is not connected; the calendar shows the pieces as a layer; Esc closes the piece first', async () => {
+    await step('smoke: V4.7 — K opens Contenido: a piece opens, saves and is approved; Programación says the demo sends nothing; the calendar shows the pieces as a layer; Esc closes the piece first', async () => {
       const until = (fn, what) => page.waitForFunction(fn, null, { timeout: 6000 }).catch(() => { throw new Error(what); });
       for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(150); } await page.evaluate(() => document.activeElement && document.activeElement.blur());
       await page.keyboard.press('k'); await until(() => document.body.classList.contains('ctOpen'), 'K did not open Contenido');
@@ -667,7 +667,7 @@ else {
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
       if (!await page.evaluate(() => document.querySelector('.ct-panel').hidden && document.body.classList.contains('ctOpen'))) throw new Error('Esc did not close the piece first and leave Contenido open');
       await page.click('#ctOv .ct-mode [data-m="prog"]'); await page.waitForTimeout(300);
-      if (!await page.evaluate(() => /Meta todavía no está conectada/.test(document.querySelector('.ct-banner').textContent) && document.querySelector('#ctOv .cv-wrap').offsetParent === null)) throw new Error('Programación must say Meta is not connected and hide the calendar');
+      if (!await page.evaluate(() => /Demo:.*aquí no sale nada/.test(document.querySelector('.ct-banner').textContent) && document.querySelector('#ctOv .cv-wrap').offsetParent === null)) throw new Error('Programación must say the demo sends nothing and hide the calendar');
       await page.keyboard.press('Escape'); await until(() => !document.body.classList.contains('ctOpen'), 'Esc did not close Contenido');
       await page.keyboard.press('p'); await until(() => document.body.classList.contains('calOpen'), 'P did not open the calendar'); await page.waitForTimeout(400);
       await page.click('#cvChips [data-tog="content"]'); await page.waitForTimeout(500);
@@ -952,7 +952,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     out(400, { error: { message: 'ruta no simulada: ' + ruta, code: 100 } });
   });
   await new Promise(r => graphStub.listen(0, '127.0.0.1', r));
-  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: TOKEN_FALSO, META_APP_SECRET: '', META_GRAPH_HOST: `http://127.0.0.1:${graphStub.address().port}`, AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: TOKEN_FALSO, META_APP_SECRET: '', METRICOOL_USER_TOKEN: '', METRICOOL_USER_ID: '', METRICOOL_BLOG_ID: '', META_GRAPH_HOST: `http://127.0.0.1:${graphStub.address().port}`, AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   const base = `http://localhost:${port}`;
@@ -964,7 +964,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, notes, Meta, copy)', async () => {
       const st = await (await fetch(base + '/api/status')).json();
       const ids = st.checks.map(c => c.id).join(',');
-      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respuesta,notas,redes,respaldo') throw new Error('checks: ' + ids);
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respuesta,notas,redes,publicacion,respaldo') throw new Error('checks: ' + ids);
       if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
       const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
       return `${st.checks.length} checks · overall ${st.overall}`;

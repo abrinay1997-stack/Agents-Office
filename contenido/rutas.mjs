@@ -4,6 +4,12 @@
 //   POST   /api/contenido/piezas                                                → crea (una pieza no nace aprobada)
 //   GET|PATCH|DELETE /api/contenido/piezas/<id>                                 → leer · cambiar lo que venga · a la papelera
 //   POST   /api/contenido/piezas/<id>/aprobar | /devolver                       → el OK del dueño · quitarlo
+// Plan M1 (6 oct 2026), la cola que lleva lo aprobado al conductor (contenido/programador.mjs):
+//   GET    /api/contenido/cola                                                  → { modo, conductor, horasAntes, cuenta, ultimo, entradas }
+//   POST   /api/contenido/cola/tick                                             → una vuelta ya (no espera al minuto)
+//   POST   /api/contenido/piezas/<id>/reintentar | /entregar | /quitar         → reintentar lo que falló · entregar ya · quitar de la cola
+//   POST   /api/contenido/conductor/comprobar                                   → ¿la key de Metricool sirve? (marcas, sin publicar nada)
+// Cada pieza que sale de aquí lleva `salida` (lo que pasó al entregarla) cuando la cola la conoce.
 // Los agentes llegan por aquí con `por: 'agente'` (contenido-mcp.mjs): pueden dejar borradores y leer, NUNCA aprobar. Eso se comprueba
 // aquí y no solo en la herramienta, porque cualquier proceso de esta máquina puede llamar a la API.
 import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
@@ -11,8 +17,8 @@ import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}) }) {
-  const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos } }; };
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null }) {
+  const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? programador.salidaDe(p.id) : null }; };
   const resumen = () => {
     const todas = almacen.listar({ sinFecha: true });
     const hoy = new Date(); const y = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -25,6 +31,7 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
       cambiadas: todas.filter(p => p.cambiadaTrasAprobar).length,
       sinFecha: todas.filter(p => !p.fecha).length,
       proximas7: todas.filter(p => p.fecha && p.fecha >= y(hoy) && p.fecha <= y(en7)).length,
+      fallos: programador ? Object.values(programador.estado().entradas).filter(e => e.estado === 'fallo' || e.estado === 'parcial').length : 0, // M1: lo que no pudo salir
     };
   };
 
@@ -45,6 +52,22 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (r.error) return json(res, 400, { error: r.error }), true;
         if (deAgente && r.pieza.tarea) notice('contenido', `Un agente dejó un borrador en Contenido: «${r.pieza.titulo || 'sin título'}»${r.pieza.fecha ? ' para el ' + r.pieza.fecha : ''}. Revísalo y apruébalo cuando esté bien.`, { key: 'contenido-' + r.pieza.tarea });
         return json(res, 200, { ok: true, pieza: revisado(r.pieza) }), true;
+      }
+      if (p === '/api/contenido/cola' && req.method === 'GET') return json(res, 200, programador ? programador.estado() : { modo: 'apagado', entradas: {} }), true;
+      if (p === '/api/contenido/cola/tick' && req.method === 'POST') { if (!programador) return json(res, 404, { error: 'sin cola' }), true; const u = await programador.tick(); return json(res, 200, { ok: true, ultimo: u, ...programador.estado() }), true; }
+      if (p === '/api/contenido/conductor/comprobar' && req.method === 'POST') {
+        if (!metricool || !metricool.configurado()) return json(res, 200, { ok: false, error: 'Faltan METRICOOL_USER_TOKEN y METRICOOL_USER_ID: ponlas como variables de Windows (Metricool → Ajustes de la cuenta → API; es del plan Advanced) y reinicia la oficina.' }), true;
+        try { const marcas = await metricool.marcas({ fresco: true }), marca = await metricool.marca(); return json(res, 200, { ok: true, marca, marcas }), true; }
+        catch (e) { return json(res, 200, { ok: false, error: e.message }), true; }
+      }
+      const mc = new RegExp(`^/api/contenido/piezas/(${ID})/(reintentar|entregar|quitar)$`).exec(p);
+      if (mc && req.method === 'POST') {
+        const b = await body(req); if (b.por === 'agente') return json(res, 403, { error: 'los agentes no programan ni quitan piezas de la cola: es del dueño' }), true;
+        if (!programador) return json(res, 404, { error: 'sin cola' }), true;
+        const r = mc[2] === 'reintentar' ? programador.reintentar(mc[1]) : mc[2] === 'entregar' ? programador.entregarYa(mc[1]) : programador.cancelar(mc[1]);
+        if (r.error) return json(res, 409, { error: r.error }), true;
+        programador.tick().catch(() => {});
+        const pz = almacen.leer(mc[1]); return json(res, 200, { ok: true, pieza: pz ? revisado(pz) : null }), true;
       }
       const m = new RegExp(`^/api/contenido/piezas/(${ID})(?:/(aprobar|devolver))?$`).exec(p);
       if (m) {

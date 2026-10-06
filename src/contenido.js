@@ -16,7 +16,7 @@ import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHT
 import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
-import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover } from './contenido-cola.js';
+import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida } from './contenido-cola.js';
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem } from './contenido-reglas.js';
 import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
@@ -59,6 +59,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const E = { title: $('#ctTitle'), dow: $('#ctDow'), grid: $('#ctGrid'), chips: $('#ctChips'), stats: $('#ctStats'), search: $('#ctSearch'), rail: $('.ct-rail'), railBox: $('.cv-rail'), prog: $('.ct-prog'), wrap: $('.cv-wrap'), panelHost: $('.ct-panel'), pop: $('#ctPop'), toast: $('.cv-toast'), views: $('.ct-views'), mode: $('.ct-mode'), newBtn: $('#ctNew'), newMenu: $('.ct-newmenu') };
   const narrow = () => matchMedia('(max-width: 760px)').matches;
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it), as in the tasks calendar
+  let colaInfo = null; // M1: el modo y el conductor (GET /api/contenido/cola)
   let openNow = false, mode = 'cal', view = 'month', anchor = startOfDay(Date.now()), q = '', pieces = [], cola = [], resumen = null, loadedKey = '', errorMsg = '', timer = null, opener = null, dnd = null, lastGrid = '', lastProg = '';
   let estadoOn = new Set(store.get('estados', ORDEN)), redOn = new Set(store.get('redes', Object.keys(RED)));
   const gone = new Set(); let undoT = null, commitFn = null, undoFn = null, noteT = null;
@@ -106,7 +107,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) render(); paintDock();
   }
   /** La cola tiene su propia carga: de hace 14 días (para ver lo vencido) en adelante, sin tope, más las ideas sin día. */
-  async function loadCola() { try { const r = await datos.list({ desde: ymd(new Date(Date.now() - 14 * DAY)), sinFecha: true }); cola = conMedidas(r.piezas || []); resumen = r.resumen || resumen; } catch (e) { errorMsg = e.message || 'No pude leer las piezas'; } }
+  async function loadCola() { try { colaInfo = await datos.cola(); } catch {} try { const r = await datos.list({ desde: ymd(new Date(Date.now() - 14 * DAY)), sinFecha: true }); cola = conMedidas(r.piezas || []); resumen = r.resumen || resumen; } catch (e) { errorMsg = e.message || 'No pude leer las piezas'; } }
   const todasConocidas = () => { const m = new Map(); for (const p of [...cola, ...pieces]) m.set(p.id, p); return [...m.values()]; };
 
   /* ---------- qué se ve ---------- */
@@ -122,7 +123,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const errN = p => (p.revision?.errores || []).length;
   const falta = p => errN(p) && p.estado !== 'idea';
   /** Lo que un lector de pantalla oye de una tarjeta: todo lo que el ojo ve de un vistazo. */
-  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) ? ', la hora ya pasó' : ''}`;
+  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) ? ', la hora ya pasó' : ''}`;
   function card(ev, line) {
     const p = ev.p, e = ESTADO[p.estado] || ESTADO.borrador, sel = panel.current()?.id === p.id;
     const cls = `cv-ev pz pz-${p.estado}${falta(p) ? ' pz-falta' : ''}${vencida(p) ? ' pz-venc' : ''}${sel ? ' sel' : ''}`;
@@ -192,17 +193,32 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   }
 
   /* ---------- Programación: la cola ---------- */
+  /* M1 (6 oct 2026): lo que pasó al entregarla — en cola, programada, publicada (con sus enlaces), falló — y lo que se puede hacer */
+  const SAL_COLOR = { espera: ['#2158CC', '#8FB0FF'], entregando: ['#2158CC', '#8FB0FF'], en_red: ['#13705A', '#4FD1A5'], publicada: ['#13705A', '#4FD1A5'], parcial: ['#B3261E', '#FFB4AB'], fallo: ['#B3261E', '#FFB4AB'] };
+  const SAL_GLYPH = { espera: '◷', entregando: '↗', en_red: '✓', publicada: '●', parcial: '!', fallo: '!' };
+  const SAL_BTN = { entregar: ['Entregar ya', 'Entregarla al conductor ahora (desde ese momento, cambiarla depende del conductor)'], quitar: ['Quitar de la cola', 'Le quita el OK y la retira del conductor si ya estaba allí'], reintentar: ['Reintentar', 'Volver a intentar entregarla'] };
+  const salidaBox = (p, sal) => `<div class="ct-salbox${sal.malo ? ' bad' : ''}"><span class="ct-saltxt">${esc(sal.texto)}</span>${sal.enlaces.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">Ver en ${esc(l.red)}</a>`).join('')}${sal.acciones.map(a => `<button type="button" class="pz-lk${a === 'quitar' ? ' warn' : ''}" data-sal="${a}" data-id="${esc(p.id)}" title="${esc(SAL_BTN[a][1])}">${SAL_BTN[a][0]}</button>`).join('')}</div>`;
+  const bannerHTML = () => {
+    const c = colaInfo; if (!c) return '';
+    if (c.modo === 'demo') return '<div class="ct-banner" role="note"><span><b>Demo:</b> aquí no sale nada. En la oficina, lo que apruebas lo programa el simulacro o Metricool.</span></div>';
+    if (c.modo === 'apagado') return '<div class="ct-banner bad" role="note"><span><b>Publicación apagada:</b> nada sale de la oficina. Cámbialo en Ajustes → Contenido.</span></div>';
+    if (c.modo === 'simulacro') return '<div class="ct-banner" role="note"><span><b>Modo simulacro:</b> lo que apruebas «sale» de mentira, para probar todo el circuito sin tocar tus redes. Para publicar de verdad: Ajustes → Contenido → Real.</span><button type="button" class="pz-btn" data-comprobar>Comprobar Metricool</button></div>';
+    if (!c.conductor?.ok) return `<div class="ct-banner bad" role="alert"><span><b>No se puede publicar:</b> ${esc(c.conductor?.motivo || 'el conductor no está listo')}</span><button type="button" class="pz-btn" data-comprobar>Comprobar de nuevo</button></div>`;
+    return `<div class="ct-banner ok" role="note"><span><b>Publica ${esc(c.conductor.nombre)}</b>: lo que apruebas se le entrega ${c.horasAntes ? `${c.horasAntes} h antes de salir` : 'al aprobarlo'} y sale solo, con esta computadora apagada.${c.cuenta?.fallo ? ` <b>${c.cuenta.fallo} ${c.cuenta.fallo === 1 ? 'falló' : 'fallaron'}.</b>` : ''}</span><button type="button" class="pz-btn" data-comprobar>Comprobar conexión</button></div>`;
+  };
   const filaCola = (p, { accion = true, motivo = '' } = {}) => {
     const e = ESTADO[p.estado] || ESTADO.borrador, r = p.revision?.errores || [], m = p.fecha ? revisarMomento(p.fecha, p.hora) : null;
     const puede = !r.length && m && !m.errores.length;
     const cuando = p.fecha && p.hora ? `<span class="ct-cd${at(p) < Date.now() ? ' late' : ''}">${cuentaAtras(at(p))}</span>` : '';
-    return `<div class="ct-row" style="--chip:${e.color}">
+    const sal = textoSalida(p);
+    return `<div class="ct-row${sal ? ' con-salida' : ''}" style="--chip:${e.color}">
       <span class="ct-hour">${p.hora ? esc(p.hora) : p.fecha ? '<small>sin hora</small>' : '<small>sin día</small>'}</span>
       <button type="button" class="ct-open" data-open="${esc(p.id)}" aria-label="Abrir la pieza: ${esc(ariaOf(p))}">
         ${p.medios[0] ? thumbHTML(p.medios[0], esc, 'pz-rt') : `<span class="pz-rt none" aria-hidden="true">${FICON[p.formato] || ''}</span>`}
         <span class="ct-rm"><span class="ct-rt">${esc(titleOf(p))}</span><span class="ct-rs"><span class="pz-f">${FICON[p.formato] || ''}${esc(FORMATO[p.formato])}</span>${netBadges(p)}${cuando}${p.origen.startsWith('agente:') ? ` · <em>${esc(agentName(p.origen.slice(7)) || 'un agente')}</em>` : ''}</span>
         ${motivo ? `<span class="ct-rf">${esc(motivo)}</span>` : r.length && p.estado !== 'idea' ? `<span class="ct-rf">Le falta: ${esc(r[0])}${r.length > 1 ? ` (+${r.length - 1})` : ''}</span>` : p.cambiadaTrasAprobar ? '<span class="ct-rf">Cambió después de aprobarla: vuelve a aprobarla.</span>' : ''}</span></button>
-      <span class="ct-st pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}</span>
+      ${sal ? `<span class="ct-st pz-tone ct-sst ${sal.clave}" style="--c:${SAL_COLOR[sal.clave][0]};--cd:${SAL_COLOR[sal.clave][1]}"><i aria-hidden="true">${SAL_GLYPH[sal.clave]}</i> ${sal.etiqueta}</span>` : `<span class="ct-st pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}</span>`}
+      ${sal ? salidaBox(p, sal) : ''}
       ${accion && p.estado === 'revision' ? `<button type="button" class="pz-go sm${puede ? '' : ' locked'}" data-ok="${esc(p.id)}"${puede ? '' : ' aria-disabled="true"'} title="${puede ? 'Aprobarla' : 'Todavía no puede salir'}">${puede ? 'Aprobar' : '<span aria-hidden="true">🔒</span> Aprobar'}</button>` : ''}</div>`;
   };
   function renderProg() {
@@ -220,8 +236,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     // la frecuencia de la semana que empieza hoy, por red
     const sem = futuras.filter(p => at(p) < hoy + 7 * DAY && p.estado !== 'idea'), porRed = Object.keys(RED).map(r => [r, sem.filter(p => p.redes.includes(r)).length]);
     const sinDia = todas.filter(p => !p.fecha);
-    let metaOff = false; try { metaOff = localStorage.getItem('ao.ct.metaBanner') === '0'; } catch {}
-    const html = `${metaOff ? '' : `<div class="ct-banner" role="note"><span><b>Meta todavía no está conectada:</b> nada sale solo. Lo aprobado queda listo aquí; la entrega a Instagram y Facebook llega en la fase siguiente.</span><button type="button" class="ct-bx" data-banner aria-label="Entendido, ocultar este aviso">Entendido</button></div>`}
+    const html = `${bannerHTML()}
       <div class="ct-cols">
         <div class="ct-main">
           <section class="ct-sec ct-need" aria-labelledby="ctp-acc"><div class="ct-sh"><h3 id="ctp-acc">Requiere tu acción <b>${accion.length}</b></h3>${listasAprobar > 1 ? `<button type="button" class="pz-btn" data-okall>Aprobar las ${listasAprobar} que pueden salir</button>` : ''}</div>
@@ -346,7 +361,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const b = t.closest('.ct-mode button'); if (b) { mode = b.dataset.m; store.set('mode', mode); await panel.flush(); if (mode === 'prog') await loadCola(); render(); return; }
     const v = t.closest('.ct-views button'); if (v) { view = v.dataset.v; store.set('view', view); load(); render(); return; }
     if (t.closest('[data-filters]')) { const on = !ov.classList.contains('chipsOpen'); ov.classList.toggle('chipsOpen', on); t.closest('[data-filters]').setAttribute('aria-expanded', on); return; }
-    if (t.closest('[data-banner]')) { try { localStorage.setItem('ao.ct.metaBanner', '0'); } catch {} render(); E.prog.querySelector('h3')?.setAttribute('tabindex', '-1'); E.prog.querySelector('h3')?.focus(); return; }
+    const sb = t.closest('[data-sal]'); if (sb) { e.stopPropagation(); await accionSalida(sb); return; }
+    if (t.closest('[data-comprobar]')) { const b = t.closest('[data-comprobar]'); b.disabled = true; try { const r = await datos.comprobar(); note(r.ok ? `Metricool responde: marca «${r.marca?.nombre || '—'}»${r.marca?.zona ? ' · ' + r.marca.zona : ''}.` : r.error, !r.ok); } catch (er) { note(er.message, true); } b.disabled = false; return; }
     const chip = t.closest('.cv-chip'); if (chip) {
       if (chip.dataset.e) { estadoOn.has(chip.dataset.e) ? estadoOn.delete(chip.dataset.e) : estadoOn.add(chip.dataset.e); if (!estadoOn.size) estadoOn = new Set(ORDEN); store.set('estados', [...estadoOn]); }
       else if (chip.dataset.r) { redOn.has(chip.dataset.r) ? redOn.delete(chip.dataset.r) : redOn.add(chip.dataset.r); if (!redOn.size) redOn = new Set(Object.keys(RED)); store.set('redes', [...redOn]); }
@@ -415,6 +431,14 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const lista = todasConocidas().filter(p => p.estado === 'revision' && !errN(p) && p.fecha && p.hora && !revisarMomento(p.fecha, p.hora).errores.length && visible(p)); let ok = 0, mal = 0;
     for (const p of lista) { try { const r = await datos.approve(p.id); put(r.pieza); ok++; } catch { mal++; } }
     render(); loadResumen(); note(`${ok} ${ok === 1 ? 'aprobada' : 'aprobadas'}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}` : ''}.`, !!mal);
+  }
+  /** M1: entregar ya, reintentar o quitar de la cola. Quitar pide un segundo clic (le quita el OK y la retira del conductor). */
+  async function accionSalida(b) {
+    const que = b.dataset.sal, id = b.dataset.id;
+    if (que === 'quitar' && b.dataset.armed !== '1') { b.dataset.armed = '1'; const was = b.textContent; b.textContent = 'Pulsa otra vez para quitarla'; setTimeout(() => { if (document.contains(b)) { b.dataset.armed = ''; b.textContent = was; } }, 5000); return; }
+    b.disabled = true;
+    try { const r = await datos.salida(id, que); if (r.pieza) put(r.pieza); await loadCola(); render(); loadResumen(); note(que === 'quitar' ? 'Quitada de la cola: vuelve a revisión, y si ya estaba en el conductor se retira en un momento.' : que === 'entregar' ? 'Se entrega en un momento.' : 'Se vuelve a intentar en un momento.'); }
+    catch (er) { note(er.message, true); b.disabled = false; }
   }
   function closePop() { E.pop.hidden = true; E.pop.innerHTML = ''; }
   function openMore(dayKey, cell) {

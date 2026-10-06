@@ -12,7 +12,7 @@ import { modal } from './modal.js';
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento } from './contenido-reglas.js';
 import { initPreview } from './contenido-preview.js';
-import { choqueDe, siguienteHueco, diasRapidos } from './contenido-cola.js';
+import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-cola.js';
 
 export const ESTADO = {
   idea: { name: 'IDEA', glyph: '◌', color: '#5A5A5A', dark: '#B9B6AE', help: 'Una idea suelta: todavía no es una publicación.' },
@@ -165,9 +165,10 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const p = cur, r = rev(), listo = !r.errores.length, n = r.errores.length;
     const cuando = p.fecha ? fmtLong(new Date(`${p.fecha}T${p.hora || '00:00'}:00`).getTime()).replace(/, \d{2}:\d{2}$/, p.hora ? `, ${p.hora}` : ' (sin hora)') : '';
     const paso = p.fecha && p.hora && new Date(`${p.fecha}T${p.hora}:00`).getTime() < Date.now();
-    const veredicto = p.estado === 'aprobada' ? (paso ? `<span class="pz-verd bad">Vencida: era para el ${esc(cuando)} y no salió. Cámbiale el día.</span>` : `<span class="pz-when">✓ Sale ${esc(cuando)}</span>`) : listo ? `<span class="pz-verd ok">✓ Lista para salir${p.fecha ? ' el ' + esc(cuando) : ''}</span>` : `<button type="button" class="pz-verd bad" data-a="ver-problemas">${n === 1 ? '1 problema' : n + ' problemas'}: ${esc(r.errores[0])}</button>`;
+    const sal = textoSalida(p); // M1: lo que pasó al entregarla, cuando la cola la conoce
+    const veredicto = p.estado === 'aprobada' && sal ? `<span class="pz-verd ${sal.malo ? 'bad' : 'ok'}">${esc(sal.texto)}</span>${sal.enlaces.map(l => ` <a class="pz-lk" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">Ver en ${esc(l.red)}</a>`).join('')}` : p.estado === 'aprobada' ? (paso ? `<span class="pz-verd bad">Vencida: era para el ${esc(cuando)} y no salió. Cámbiale el día.</span>` : `<span class="pz-when">✓ Sale ${esc(cuando)}</span>`) : listo ? `<span class="pz-verd ok">✓ Lista para salir${p.fecha ? ' el ' + esc(cuando) : ''}</span>` : `<button type="button" class="pz-verd bad" data-a="ver-problemas">${n === 1 ? '1 problema' : n + ' problemas'}: ${esc(r.errores[0])}</button>`;
     foot.innerHTML = `<div class="pz-vline">${veredicto}</div>
-      <div class="pz-acts">${p.estado === 'aprobada' ? `<button type="button" class="pz-btn" data-a="back">Quitar el OK</button>`
+      <div class="pz-acts">${p.estado === 'aprobada' ? `<button type="button" class="pz-btn" data-a="back"${sal && ['en_red', 'entregando'].includes(sal.clave) ? ' title="Vuelve a revisión y se retira del conductor"' : ''}>${sal && ['en_red', 'entregando'].includes(sal.clave) ? 'Quitar el OK y retirarla' : 'Quitar el OK'}</button>`
         : `${p.estado === 'borrador' || p.estado === 'idea' ? '<button type="button" class="pz-btn" data-a="review">Pasar a revisión</button>' : '<button type="button" class="pz-btn" data-a="draft">Volver a borrador</button>'}<button type="button" class="pz-go${listo ? '' : ' locked'}" data-a="approve"${listo ? '' : ' aria-disabled="true"'} title="${listo ? 'Aprobarla: queda lista para salir' : 'Todavía no puede salir: ' + esc(r.errores[0] || '')}">${listo ? 'Aprobar' : '<span aria-hidden="true">🔒</span> Aprobar'}</button>`}
         <span class="sp"></span><button type="button" class="pz-lk" data-a="dup">Duplicar</button><button type="button" class="pz-lk warn" data-a="delete">Eliminar</button></div>
       <div class="pz-state${stateBad ? ' bad' : ''}" role="status" aria-live="polite">${esc(stateText)}</div>`;
