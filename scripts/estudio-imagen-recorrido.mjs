@@ -108,6 +108,16 @@ try {
   report.msgListo = await p.textContent(`${S} .st-msg`);
   ok('IMG-03 · «Listo» con su plural, sin «archivo(s)»', /^Listo: 2 archivos nuevos/.test(report.msgListo) && !/\(s\)/.test(report.msgListo), report.msgListo);
   await medir(p, 'galeria-1440'); await axe(p, 'galeria-1440');
+  // ===== Fase 2 =====
+  const res = await p.evaluate(() => {
+    const cards = [...document.querySelectorAll('#studioOv .st-grid .st-card[data-f]')].filter(c => c.offsetParent);
+    const tops = [...document.querySelectorAll('#studioOv .st-grid .st-card')].filter(c => c.offsetParent).map(c => c.getBoundingClientRect().top);
+    return { nuevo: !!document.querySelector('#studioOv .st-card.st-nueva > .st-nuevo'), cards: cards.length, primarias: cards.every(c => c.querySelector('.st-ov [data-a="edit"]') && c.querySelector('.st-ov [data-a="vary"]') && c.querySelector('.st-ov a[download]')), top: Math.round(Math.min(...tops)), voces: !!document.querySelector('#studioOv .st-vocbtn'), mostrar: !!document.querySelector('#studioOv .st-fsel'), sub: !!document.querySelector('#studioOv .st-group .st-card.st-sub') };
+  });
+  ok('IMG-07 · lo recién hecho sale marcado «Nuevo»', res.nuevo, JSON.stringify(res));
+  ok('IMG-08 · la ficha de un pedido trae cada imagen con Editar, Variar y Descargar', res.sub && res.cards >= 2 && res.primarias, JSON.stringify(res));
+  ok('IMG-23 · a 1440×900 la galería empieza a 220 px o menos', res.top <= 220, res.top + ' px');
+  ok('IMG-49 · la galería ya no tiene «Voces» y los filtros son un «Mostrar ▾»', !res.voces && res.mostrar);
   report.grupoHTML = await p.evaluate(() => document.querySelector('#studioOv .st-grid .st-card:not(.st-job)')?.innerText);
   await p.locator(`${S} button:has-text("Ver por separado"):visible`).first().click().catch(e => console.log('sep?', e.message)); await p.waitForTimeout(800);
   await shot(p, '07b-por-separado');
@@ -115,18 +125,22 @@ try {
   const card = `${S} .st-grid .st-card:not(.st-job):visible`; await p.hover(card).catch(() => {}); await p.waitForTimeout(300); await shot(p, '08-tarjeta-hover', { clip: await p.locator(card).first().boundingBox().then(b => ({ x: b.x - 10, y: b.y - 10, width: Math.min(700, b.width + 20), height: b.height + 20 })) });
   report.tarjetaHTML = await p.locator(card).first().evaluate(e => e.innerText);
   await p.locator(`${card} [data-a="menu"], ${card} .st-more`).first().click().catch(() => {}); await p.waitForTimeout(300); await shot(p, '09-menu-tarjeta');
+  const menu = await p.evaluate(() => { const m = document.querySelector('#studioOv .st-menu:not([hidden])'); return m ? { grupos: [...m.querySelectorAll('.st-mh')].map(x => x.textContent), enviar: [...(m.querySelector('[role=group]:last-of-type') || m).querySelectorAll('[data-a]')].map(x => x.dataset.a), ultimo: [...m.querySelectorAll('[role=menuitem]')].pop()?.dataset.a } : null; });
+  ok('IMG-09 · el «⋯» va por grupos y la papelera al final', menu && menu.grupos.join('|') === 'Crear a partir de esta|Organizar|Enviar a…' && menu.ultimo === 'del', JSON.stringify(menu));
+  ok('IMG-48 · calendario, Dimitri y departamento van juntos en «Enviar a…»', menu && ['cal', 'dimitri', 'dept'].every(a => menu.enviar.includes(a)), JSON.stringify(menu && menu.enviar));
   await p.keyboard.press('Escape');
   // visor
   await p.locator(`${S} .st-grid .st-thumb:visible, ${S} .st-grid .st-gt:visible`).first().click(); await p.waitForTimeout(800); await shot(p, '10-visor');
   report.visorAcciones = await p.evaluate(() => [...document.querySelectorAll('#studioOv .st-light button, #studioOv .st-light a')].filter(e => e.offsetParent).map(e => (e.getAttribute('aria-label') || e.textContent).trim().replace(/\s+/g, ' ')));
   await axe(p, 'visor', '#studioOv .st-light');
+  const vg = await p.evaluate(() => [...document.querySelectorAll('#studioOv .st-light .st-lgt')].map(x => x.textContent));
+  ok('IMG-48 · el visor usa los mismos grupos', vg.join('|') === 'Crear a partir de esta|Organizar|Enviar a…', vg.join('|'));
   await p.click(`${S} .st-light [data-l="edit"]`).catch(() => {}); await p.waitForTimeout(500); await shot(p, '11-visor-editar');
   await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   // Variar: ¿qué pasa con lo que había en el compositor?
   await p.fill(`${S} .st-prompt`, 'TEXTO A MEDIO ESCRIBIR');
   const antesVariar = await p.evaluate(() => ({ n: document.querySelector('#studioOv .st-n').textContent, refs: document.querySelectorAll('#studioOv .st-matstep .st-chip').length, jobs: document.querySelectorAll('#studioOv .st-job').length }));
-  await p.locator(card).first().hover(); await p.locator(`${card} .st-more`).first().click(); await p.waitForTimeout(200);
-  await p.locator(`${S} .st-menu:not([hidden]) [data-a="vary"]`).first().click().catch(e => console.log('vary?', e.message)); await p.waitForTimeout(1500);
+  await p.locator(`${card} .st-ov [data-a="vary"]`).first().click().catch(e => console.log('vary?', e.message)); await p.waitForTimeout(1500);
   report.trasVariar = { prompt: await p.inputValue(`${S} .st-prompt`), msg: await p.textContent(`${S} .st-msg`), trabajos: await p.locator(`${S} .st-job`).count() };
   const trasVariar = await p.evaluate(() => ({ n: document.querySelector('#studioOv .st-n').textContent, refs: document.querySelectorAll('#studioOv .st-matstep .st-chip').length }));
   ok('IMG-01 · Variar no toca la idea, la cantidad ni las referencias, y genera', report.trasVariar.prompt === 'TEXTO A MEDIO ESCRIBIR' && trasVariar.n === antesVariar.n && trasVariar.refs === antesVariar.refs && report.trasVariar.trabajos > antesVariar.jobs, JSON.stringify({ antesVariar, trasVariar, ...report.trasVariar }));
@@ -138,11 +152,20 @@ try {
   ok('IMG-04 · el fallo se lee en español, con el original aparte y «Otro modelo…»', /no aceptó el pedido/.test(report.fallo.tile || '') && !/Request contains/.test((report.fallo.tile || '').split('Detalles técnicos')[0]) && report.fallo.raw && report.fallo.otro, report.fallo.tile);
   ok('IMG-03 · con una ficha fallida a la vista, el pie no dice solo «Listo»', !/^Listo: \d+ archivos? nuevos? en la galería\.$/.test(report.fallo.msg || ''), report.fallo.msg);
   // una referencia en el paso 4, para ver qué hace Avanzado con ella (IMG-39); «Usar de referencia» ofrece DESHACER (IMG-02)
-  await p.locator(`${card} [data-a="ref"]`).first().click(); await p.waitForTimeout(500);
+  await p.locator(`${card} .st-ov [data-a="menu"]`).first().click(); await p.waitForTimeout(200); await p.locator(`${S} .st-menu:not([hidden]) [data-a="ref"]`).first().click(); await p.waitForTimeout(500);
   report.toastRef = await p.evaluate(() => { const t = document.querySelector('#studioOv .st-toast'); return t && !t.hidden ? t.innerText : ''; });
   ok('IMG-02 · cargar el compositor ofrece DESHACER', /se guardó/.test(report.toastRef) && /DESHACER/.test(report.toastRef), report.toastRef);
   // Historial
+  await p.click(`${S} .st-gmas > summary`); await p.waitForTimeout(200); await shot(p, '13b-galeria-mas');
   await p.click(`${S} .st-histbtn`); await p.waitForTimeout(800); await shot(p, '14-historial'); await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  await p.click(`${S} .st-gmas > summary`); await p.click(`${S} .st-engbtn`); await p.waitForTimeout(500); await shot(p, '14b-motores');
+  const eng = await p.evaluate(() => ({ abierto: !document.querySelector('#studioOv .st-engov').hidden, motores: document.querySelectorAll('#studioOv .st-engov .st-eng').length, enCompositor: !!document.querySelector('#studioOv .st-gen .st-keys') }));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  ok('IMG-50 · los motores tienen su panel y ya no están en el compositor', eng.abierto && eng.motores > 0 && !eng.enCompositor && await p.evaluate(() => document.querySelector('#studioOv .st-engov').hidden), JSON.stringify(eng));
+  await p.fill(`${S} .st-prompt`, 'idea que no quiero perder'); await p.click(`${S} .st-new`); await p.waitForTimeout(300);
+  const vac = await p.evaluate(() => ({ prompt: document.querySelector('#studioOv .st-prompt').value, toast: document.querySelector('#studioOv .st-toast:not([hidden])')?.innerText || '' }));
+  await p.locator(`${S} .st-toast button`).click(); await p.waitForTimeout(300);
+  ok('IMG-10 · «Vaciar» vacía y DESHACER lo devuelve', vac.prompt === '' && /DESHACER/.test(vac.toast) && await p.inputValue(`${S} .st-prompt`) === 'idea que no quiero perder', JSON.stringify(vac));
   // ===== Avanzado =====
   await p.click(`${S} [data-nivel="avanzado"]`); await p.waitForSelector(`${S} .bk-doors`, { timeout: 20000 }); await p.waitForTimeout(800);
   await p.evaluate(() => document.querySelector('#studioOv .st-scroll').scrollTop = 0);
@@ -199,9 +222,14 @@ try {
   await p.keyboard.press('e'); await p.waitForSelector(`${S}.on`); await p.waitForTimeout(1200);
   await shot(p, '23-movil-entrada');
   await p.click(`${S} [data-pt="gen"]`).catch(() => {}); await p.waitForTimeout(400); await shot(p, '24-movil-crear');
+  const mc = await p.evaluate(() => { const t = document.querySelector('#studioOv .st-prompt').getBoundingClientRect(), f = document.querySelector('#studioOv .st-foot').getBoundingClientRect(); return { idea: Math.round(t.top), pie: Math.round(f.top) }; });
+  ok('IMG-52 · en el teléfono la idea se ve sin desplazarse', mc.idea + 40 <= mc.pie, JSON.stringify(mc));
   await p.evaluate(() => document.querySelector('#studioOv .st-scroll').scrollTop = 600); await p.waitForTimeout(300); await shot(p, '25-movil-crear-abajo');
   await medir(p, 'movil-crear');
   await p.click(`${S} [data-pt="gal"]`).catch(() => {}); await p.waitForTimeout(600); await shot(p, '26-movil-galeria'); await medir(p, 'movil-galeria');
+  const mg = await p.evaluate(() => Math.round(Math.min(...[...document.querySelectorAll('#studioOv .st-grid .st-card')].filter(c => c.offsetParent).map(c => c.getBoundingClientRect().top))));
+  ok('IMG-52 · en el teléfono la primera imagen empieza a 260 px o menos', mg <= 260, mg + ' px');
+  ok('IMG-52 · nada se sale del ancho en el teléfono', !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)));
   await p.locator(`${S} .st-grid .st-thumb:visible, ${S} .st-grid .st-gt:visible`).first().tap().catch(() => {}); await p.waitForTimeout(800); await shot(p, '27-movil-visor');
   await p.keyboard.press('Escape'); await p.click(`${S} [data-pt="gen"]`).catch(() => {}); await p.click(`${S} [data-nivel="avanzado"]`).catch(() => {}); await p.waitForTimeout(2500); await shot(p, '28-movil-avanzado');
   await c.close();

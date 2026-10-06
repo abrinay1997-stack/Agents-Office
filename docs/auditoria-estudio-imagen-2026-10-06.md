@@ -9,7 +9,7 @@ Pedido: auditoría integral de UX, UI, usabilidad, intuitividad, funcionalidad, 
 - **Código:** se leyeron `src/studio.js`, `src/studio-banco*.js`, `src/escena3d*.js` y sus estilos.
 - **Para repetirlo:** `node scripts/estudio-imagen-recorrido.mjs`. Las capturas van a `data/capturas/estudio-imagen/`, que no viaja por GitHub.
 
-**Estado al 6 oct 2026:** la **Fase 1** está hecha: IMG-01, 02, 03, 04, 05, 06, 19, 40 y 41 ✅, e IMG-39 🟡 en parte (lo mínimo). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
+**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) y la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
 
 **Estado de cada punto:** ✅ hecho · 🟡 en parte · ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
 
@@ -145,7 +145,7 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
 - **Hecho (6 oct, Fase 1):** en un campo, Esc solo quita el foco; un segundo Esc cierra el Estudio.
 - **Prioridad:** Fase 1.
 
-### IMG-07 · 🟠 alto · ⏳ — El resultado no es protagonista
+### IMG-07 · 🟠 alto · ✅ — El resultado no es protagonista
 - **Dónde:** `generate()` → `watch()` → `load()`; `renderGrid()`.
 - **Evidencia:** a 1440 px, las imágenes nuevas aparecen como una tarjeta de 235 px en la esquina superior izquierda de un lienzo de 1.000 px, sin resaltar ni desplazarse a ellas. El mensaje de «listo» va al pie del compositor, lejos (captura `07-resultado`).
 - **Impacto:** el momento más importante (¿salió bien?) se vive en miniatura. Para comparar o editar hay que abrir el visor.
@@ -153,16 +153,18 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
   - Al terminar, la galería se desplaza a lo nuevo, que queda marcado con «Nuevo» y un borde que dura 3 s.
   - En un pedido de N imágenes, una **tira de resultados** grande arriba de la galería, con las N juntas y sus acciones, hasta el siguiente pedido.
   - En el teléfono ya se cambia a Galería; falta desplazarse hasta lo nuevo.
+- **Hecho (6 oct, Fase 2):** lo recién hecho sale con la marca «NUEVO» y un borde durante unos segundos, y la galería lo trae a la vista sin mover el foco (`marcarNuevos`). **En lugar de la tira de resultados:** lo nuevo ya llega el primero, arriba de «Hoy», así que una tira repetía lo mismo.
 - **Prioridad:** Fase 2.
 
-### IMG-08 · 🟠 alto · ⏳ — La ficha de un pedido de N imágenes no tiene acciones
+### IMG-08 · 🟠 alto · ✅ — La ficha de un pedido de N imágenes no tiene acciones
 - **Dónde:** `groupCard()` (`src/studio.js:468`).
 - **Evidencia:** la ficha «2 imágenes de un pedido» solo ofrece «Ver por separado» y «Descargar las 2» (`grupoHTML`, captura `07-resultado`). No hay Editar, Variar, Usar de referencia, Papelera ni «⋯».
 - **Impacto:** para editar una de las dos hace falta un paso de más, que además cambia toda la galería a fichas sueltas.
 - **Solución:** cada miniatura de la ficha agrupada lleva su propio «⋯» y, al pasar el cursor, las 3 acciones primarias. La agrupación pasa a ser un **encabezado de pedido** («Taza de café · 2 imágenes · Nano Banana 2») sobre tarjetas normales.
+- **Hecho (6 oct, Fase 2):** la ficha de un pedido es un encabezado (prompt, «N imágenes de un pedido», Ver por separado, Descargar las N) y, debajo, cada imagen como tarjeta con Editar, Variar, Descargar y «⋯». Cada una se arrastra sola.
 - **Prioridad:** Fase 2.
 
-### IMG-09 · 🟡 medio · ⏳ — Cuatro juegos de acciones para la misma imagen
+### IMG-09 · 🟡 medio · ✅ — Cuatro juegos de acciones para la misma imagen
 - **Dónde:** la fila de iconos de `card()` (Animar, Usar de referencia, Editar, Descargar, Papelera, ⋯), el menú `menu` (Favorita, Variar, Repetir, Carpeta, Calendario, Dimitri, Departamento, Preset), el visor (`visorAcciones`: 20 controles) y `groupCard` (2).
 - **Evidencia:**
   - «Repetir» está en el menú de la tarjeta y en el visor, pero no en la fila.
@@ -177,13 +179,15 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
   | Crear a partir de esta | Usar de referencia · Animar · Repetir | en «⋯» | fila secundaria |
   | Organizar | Favorita · Carpeta · Papelera | estrella sobre la imagen; el resto en «⋯» | fila secundaria |
   | Enviar a… | Calendario · Dimitri · Departamento | submenú en «⋯» | botón «Enviar a…» |
+- **Hecho (6 oct, Fase 2):** `src/studio-acciones.js` (con test) es la única lista. La tarjeta enseña las primarias (Editar, Variar, Descargar); «⋯» lleva el resto en tres grupos y la papelera al final; el visor, las mismas en filas con su nombre. **Cambio:** la estrella no va sobre la imagen (la regla del dueño: nada encima de una imagen); sigue en «⋯ → Organizar».
 - **Prioridad:** Fase 2.
 
-### IMG-10 · 🟡 medio · ⏳ — «Nuevo» vacía la idea y las referencias sin deshacer
+### IMG-10 · 🟡 medio · ✅ — «Nuevo» vacía la idea y las referencias sin deshacer
 - **Dónde:** `src/studio.js:1577`.
 - **Evidencia:** el botón, en negrita junto al contador, borra el prompt y todo el material.
 - **Impacto:** se pierde trabajo con un clic. Además, «Nuevo» puede leerse como «nueva imagen».
 - **Solución:** renombrarlo «Vaciar» y añadir DESHACER 8 s (el toast ya existe).
+- **Hecho (6 oct, Fase 2):** «Vaciar», con DESHACER (el mismo borrador de la Fase 1).
 - **Prioridad:** Fase 2.
 
 ### IMG-11 · 🟡 medio · ⏳ — La confirmación de costo usa `confirm()` del navegador
@@ -290,7 +294,7 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 - **Solución:** el costo dentro del botón (IMG-05); el resumen como chips sobre el botón («1:1 ▾ · ×2 ▾ · Nano Banana 2 ▾»); el estado en toasts (IMG-03).
 - **Prioridad:** Fase 3.
 
-### IMG-23 · 🟡 medio · ⏳ — Demasiado cromo antes de la primera imagen
+### IMG-23 · 🟡 medio · ✅ — Demasiado cromo antes de la primera imagen
 - **Evidencia:** a 1440×900, las imágenes empiezan a 365 px (el 40 % de la altura). Por encima van:
   - la barra de la oficina (52 px);
   - la cabecera del Estudio con su subtítulo (62);
@@ -304,6 +308,7 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
   - Historial, Papelera y Voces en un «⋯».
   - Las carpetas en un desplegable junto a «Mostrar», o una barra lateral plegable.
   - Meta: imágenes desde unos 200 px.
+- **Hecho (6 oct, Fase 2):** las pestañas van en la fila de la cabecera; los 8 filtros son un «Mostrar ▾» con sus números; las carpetas comparten la fila y se desplazan; Historial, Papelera y Motores van en un «⋯»; la línea «N archivos» solo sale cuando dice más que el encabezado del día. A 1440×900 la galería empieza a 213 px (antes, 365).
 - **Prioridad:** Fase 2.
 
 ### IMG-24 · 🟡 medio · ⏳ — Componentes duplicados con estilos distintos
@@ -611,19 +616,22 @@ Columnas: **Nec.** = ¿es necesario? · **Lugar** = ¿está donde debe? · **Cla
 | Aviso al terminar con el Estudio cerrado | Sí | Sí | Sí | Bien | Sí | — | Toast | Ambos | Mantener |
 | Confirmación de costo (`confirm()`) | Sí | No | Sí | — | Rompe el estilo | Segundo clic en el botón | — | Ambos | **Reemplazar** (IMG-11) |
 
-### IMG-48 · 🟡 medio · ⏳ — Las integraciones de la oficina compiten con las acciones de imagen
+### IMG-48 · 🟡 medio · ✅ — Las integraciones de la oficina compiten con las acciones de imagen
 - **Evidencia:** en el visor, «Enviar al calendario», «Pedírselo a Dimitri» y «Mandar a un departamento…» van al mismo nivel que «Usar de referencia», «Repetir» o «Copiar prompt» (captura `10`).
 - **Solución:** un botón «Enviar a… ▾» con las tres opciones.
+- **Hecho (6 oct, Fase 2):** «Enviar a…» agrupa calendario, Dimitri y departamento, en el «⋯» y en el visor.
 - **Prioridad:** Fase 2.
 
-### IMG-49 · 🟡 medio · ⏳ — La galería de imagen enseña Voz, Música y Voces
+### IMG-49 · 🟡 medio · ✅ — La galería de imagen enseña Voz, Música y Voces
 - **Evidencia:** los filtros Videos, Voz y Música y el botón «Voces» se ven también trabajando con imágenes.
 - **Solución:** filtros en el desplegable (IMG-23); Voces solo en el compositor de Voz, donde ya está.
+- **Hecho (6 oct, Fase 2):** Voz y Música quedan como opciones de «Mostrar ▾»; el botón «Voces» sale de la galería y se abre desde Voz («Clonar tu voz o diseñar una» y el selector de voz).
 - **Prioridad:** Fase 2.
 
-### IMG-50 · 🟡 medio · ⏳ — «Motores y cómo activarlos» es configuración dentro del flujo creativo
+### IMG-50 · 🟡 medio · ✅ — «Motores y cómo activarlos» es configuración dentro del flujo creativo
 - **Evidencia:** está al final del compositor, plegado, y repite lo de Ajustes → Estudio.
 - **Solución:** moverlo a Ajustes → Estudio → Motores. En el compositor, solo un enlace cuando el modelo elegido no está activo.
+- **Hecho (6 oct, Fase 2):** «Motores y keys» es un panel propio, abierto desde el «⋯» de la galería, desde «Empieza aquí» y desde la ayuda de una key. **Cambio:** no va en Ajustes porque allí no se ve qué modelos trae cada motor; el panel enlaza a Ajustes → Estudio para los topes.
 - **Prioridad:** Fase 2.
 
 ### IMG-51 · 🟢 bajo · ⏳ — «‹ plegar» se descubre poco
@@ -632,7 +640,7 @@ Columnas: **Nec.** = ¿es necesario? · **Lugar** = ¿está donde debe? · **Cla
 
 ### Responsive y rendimiento percibido
 
-### IMG-52 · 🟠 alto · ⏳ — El teléfono gasta media pantalla en controles
+### IMG-52 · 🟠 alto · ✅ — El teléfono gasta media pantalla en controles
 - **Evidencia (390×844):**
   - En **Galería**, unos 400 px de controles (8 filtros en dos filas, buscar, Subir, Seleccionar, Historial, Papelera, Voces y carpetas) antes de la primera imagen (captura `26`).
   - En **Crear**, la idea queda en el borde inferior, tras el tipo, el modo, la tarjeta del modelo y «Una idea/Varias»; el pie fijo ocupa unos 140 px (captura `24`).
@@ -642,6 +650,7 @@ Columnas: **Nec.** = ¿es necesario? · **Lugar** = ¿está donde debe? · **Cla
   - los filtros en una hoja inferior («Filtrar»);
   - la cabecera del Estudio sin logo;
   - el pie en una sola línea («Generar · US$0,07»).
+- **Hecho (6 oct, Fase 2):** a 760 px o menos, la cabecera es una fila (pestañas, topes, cerrar; el título queda para el lector de pantalla), la barra de la galería son iconos, los tipos van en una fila de cuatro y la tarjeta del modelo, sin su descripción. A 390×844 la primera imagen empieza a 242 px y la idea se ve sin desplazarse. **Queda para la Fase 5:** poner la idea la primera.
 - **Prioridad:** Fase 2.
 
 ### IMG-53 · 🟡 medio · ⏳ — El visor en el teléfono esconde las acciones

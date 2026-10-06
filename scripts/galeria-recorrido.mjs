@@ -64,8 +64,8 @@ try {
     const count = await pg.$eval('#studioOv .st-count', e => e.textContent);
     step(cards > 0 && cards <= 120, `${tag}: primer pintado ${paint} ms con ${cards} tarjetas`);
     step(count.includes(`120 de ${miles(N)}`), `${tag}: el recuento dice «${count}»`);
-    const tab = await pg.$eval('#studioOv .st-tabs [data-f="all"] b', e => e.textContent).catch(() => '');
-    step(tab === miles(N), `${tag}: la pestaña Todo cuenta ${tab}`);
+    const tab = await pg.$eval('#studioOv .st-fsel option[value="all"]', e => (e.textContent.match(/\(([^)]+)\)/) || [])[1] || '').catch(() => ''); // IMG-23: «Mostrar ▾»
+    step(tab === miles(N), `${tag}: «Mostrar: Todo» cuenta ${tab}`);
     await pg.screenshot({ path: path.join(OUT, `estudio-${tag}.png`) });
     // «Cargar más»: a real button at the end
     await pg.$eval('#studioOv .st-grid', g => { g.scrollTop = g.scrollHeight; });

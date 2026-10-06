@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+const abrirVoces = async pg => { if (await pg.$('#studioOv [data-pt="gen"]:visible')) await pg.click('#studioOv [data-pt="gen"]').catch(() => {}); await pg.waitForSelector('#studioOv [data-kind="audio"]'); if (await pg.getAttribute('#studioOv [data-kind="audio"]', 'aria-pressed') !== 'true') await pg.click('#studioOv [data-kind="audio"]'); await pg.click('#studioOv .st-vcta'); }; // 6 oct 2026 (IMG-49): «Voces» ya no está en la galería; se abre desde Voz
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const OUT = path.join(ROOT, 'data', 'capturas', process.env.AO_CAPTURAS || 'estudio-voz');
@@ -148,17 +149,17 @@ try {
     await page.screenshot({ path: path.join(OUT, `musica-${tag}.png`) });
     // 3 · Galería: filtros Voz y Música, tarjetas de sonido con su reproductor
     if (phone) { await page.click('#studioOv [data-pt="gal"]'); await page.waitForTimeout(300); }
-    await page.click('#studioOv .st-tabs [data-f="voice"]'); await page.waitForTimeout(250);
-    const gv = await page.evaluate(() => ({ n: document.querySelectorAll('#studioOv .st-grid .st-card[data-f]').length, play: document.querySelectorAll('#studioOv .st-grid .st-cplay').length, lab: [...document.querySelectorAll('#studioOv .st-tabs [data-f="voice"], #studioOv .st-tabs [data-f="music"]')].map(b => b.textContent.trim()) }));
+    await page.selectOption('#studioOv .st-fsel', 'voice'); await page.waitForTimeout(250);
+    const gv = await page.evaluate(() => ({ n: document.querySelectorAll('#studioOv .st-grid .st-card[data-f]').length, play: document.querySelectorAll('#studioOv .st-grid .st-cplay').length, lab: [...document.querySelectorAll('#studioOv .st-fsel option[value="voice"], #studioOv .st-fsel option[value="music"]')].map(b => b.textContent.trim()) }));
     nota(gv.n >= 2 && gv.play === gv.n, `${tag} · filtro Voz: ${gv.n} tarjetas con reproductor (${gv.lab.join(' · ')})`, gv);
     await page.screenshot({ path: path.join(OUT, `galeria-voz-${tag}.png`) });
-    await page.click('#studioOv .st-tabs [data-f="music"]'); await page.waitForTimeout(250);
+    await page.selectOption('#studioOv .st-fsel', 'music'); await page.waitForTimeout(250);
     const gm = await page.evaluate(() => [...document.querySelectorAll('#studioOv .st-grid .st-slab')].map(x => x.textContent));
     nota(gm.length === 2, `${tag} · filtro Música: ${gm.join(' | ')}`);
     nota(true, `${tag} · medida galería`, await medir(page));
     await page.screenshot({ path: path.join(OUT, `galeria-musica-${tag}.png`) });
     // 4 · el visor de una voz: reproductor grande y «Repetir con otra voz»
-    await page.click('#studioOv .st-tabs [data-f="voice"]'); await page.waitForTimeout(200);
+    await page.selectOption('#studioOv .st-fsel', 'voice'); await page.waitForTimeout(200);
     await page.evaluate(() => [...document.querySelectorAll('#studioOv .st-card[data-f]')].find(c => c.dataset.f.includes(' voz '))?.querySelector('.st-thumb').click());
     await page.waitForSelector('#studioOv .st-light:not([hidden]) .st-laud audio');
     const vis = await page.evaluate(() => ({ voz: document.querySelector('#studioOv .st-lvoz')?.textContent, otra: !!document.querySelector('#studioOv .st-light [data-l="othervoice"]'), lab: document.querySelector('#studioOv .st-lslab')?.textContent }));
@@ -169,7 +170,7 @@ try {
     nota(ov.kind === 'true' && (on ? /st-vsel|st-vid/.test(ov.foco) : true), `${tag} · «Repetir con otra voz»: Voz, mismo texto «${ov.txt}…», foco en ${ov.foco || '—'}`);
     // 5 · el panel «Voces»
     if (phone) { await page.click('#studioOv [data-pt="gal"]'); await page.waitForTimeout(200); }
-    await page.click('#studioOv .st-vocbtn'); await page.waitForSelector('#studioOv .st-vocov:not([hidden])'); await page.waitForTimeout(300);
+    await abrirVoces(page); await page.waitForSelector('#studioOv .st-vocov:not([hidden])'); await page.waitForTimeout(300);
     const pv = await page.evaluate(() => { const V = document.querySelector('#studioOv .st-vocov'); return { foco: V.contains(document.activeElement), filas: V.querySelectorAll('.st-vlist > li[data-vid]').length, off: !!V.querySelector('.st-voff'), botones: [...V.querySelectorAll('button')].map(b => b.textContent.trim()).filter(Boolean) }; });
     nota(pv.foco && (on ? pv.filas === 2 && !pv.off && pv.botones.some(b => /Clonar mi voz/.test(b)) : pv.off && !pv.botones.some(b => /Clonar|Crear|Usar/.test(b))), `${tag} · panel Voces: foco dentro ${pv.foco}, ${on ? pv.filas + ' voces' : 'sin key: explica cómo activarlo y no ofrece botones que fallen'}`, pv);
     nota(true, `${tag} · medida panel`, await medir(page));

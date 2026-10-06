@@ -95,3 +95,75 @@ body.dark #studioOv .st-go.st-go-falta { border-color: #FF9A8C; }
 #studioOv .st-foot { grid-template-columns: auto minmax(0, 1fr); }
 #studioOv .st-go { white-space: normal; min-width: 0; letter-spacing: .08em; line-height: 1.25; }
 #studioOv .st-jacts { flex-wrap: wrap; }
+
+/* Auditoría del Estudio de imagen, Fase 2 (6 oct 2026) */
+/* IMG-09: la fila de la tarjeta son sus acciones primarias, con su nombre (Editar, Variar) y Descargar; el resto, en «⋯» por grupos */
+#studioOv .st-card .st-ov { flex-wrap: wrap; gap: 4px; padding-left: 8px; padding-right: 8px; }
+#studioOv .st-card .st-ov button, #studioOv .st-card .st-ov a { width: 30px; height: 30px; }
+#studioOv .st-card .st-ov .st-oiw { width: auto; padding: 0 7px 0 5px; gap: 4px; display: inline-flex; align-items: center; font: 600 12px var(--ui); }
+#studioOv .st-card .st-ov .st-oiw .ic { width: 15px; height: 15px; }
+#studioOv .st-menu .st-mh { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--grey); padding: 8px 10px 3px; }
+#studioOv .st-menu [role="group"] + [role="group"] { border-top: 1px solid var(--hairline); margin-top: 4px; }
+/* IMG-08: el pedido de varias imágenes es un encabezado y, debajo, cada imagen como una tarjeta con sus acciones */
+#studioOv .st-group .st-ghead { padding: 8px 10px 7px; border-bottom: 1px solid var(--hairline); gap: 2px; }
+#studioOv .st-group .st-ghead .st-p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#studioOv .st-group .st-ghead .st-gacts { margin-top: 4px; gap: 4px; }
+#studioOv .st-group .st-ghead .st-gacts button { min-height: 26px; padding: 3px 9px; }
+#studioOv .st-gsubs { display: flex; flex-direction: column; }
+#studioOv .st-card.st-sub { border: 0; border-radius: 0; margin: 0; border-bottom: 1px solid var(--hairline); background: none; }
+#studioOv .st-card.st-sub:last-child { border-bottom: 0; }
+#studioOv .st-card.st-sub .st-ov { padding-top: 8px; }
+#studioOv .st-gmorebtn { margin: 8px 10px 10px; align-self: flex-start; font: 600 12px var(--ui); min-height: 28px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-gmorebtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-48: en el visor, las acciones por grupos con su nombre (Crear a partir de esta · Organizar · Enviar a…) */
+#studioOv .st-lacts2 { flex-direction: column; gap: 10px; }
+#studioOv .st-lgrp { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
+#studioOv .st-lgt { flex: 0 0 100%; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--grey); }
+/* IMG-07: lo recién hecho se marca unos segundos («NUEVO» y un borde), sin mover el foco */
+#studioOv .st-card.st-nueva { box-shadow: 0 0 0 2px #C43E00; }
+#studioOv .st-card.st-sub.st-nueva { box-shadow: inset 0 0 0 2px #C43E00; }
+#studioOv .st-nuevo { position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none; font-size: 11px; letter-spacing: .1em; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: #C43E00; color: #fff; }
+/* IMG-23: menos cromo antes de las imágenes. La cabecera lleva las pestañas en su misma fila */
+#studioOv .st-head { flex-wrap: wrap; row-gap: 6px; }
+@media (min-width: 761px) {
+  #studioOv .st-head .st-ptabs { border-bottom: 0; padding: 0; margin-left: 14px; align-self: stretch; align-items: stretch; }
+  #studioOv .st-head .st-ptabs button { min-height: 0; }
+}
+/* la barra de la galería en una fila: «Mostrar ▾», las carpetas (se desplazan), buscar, Subir, Seleccionar y «⋯» */
+#studioOv .st-filt { row-gap: 8px; padding: 8px 18px; }
+#studioOv .st-fwrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--grey); }
+#studioOv .st-fsel { font: 600 13px var(--ui); min-height: 34px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; color: var(--ink); cursor: pointer; }
+body.dark #studioOv .st-fsel { background: #1E1F24; border-color: rgba(236,234,227,.3); }
+#studioOv .st-fsel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-filt .st-folders { flex: 1 1 160px; min-width: 0; padding: 2px 0; border-bottom: 0; }
+#studioOv .st-gmas { position: relative; }
+#studioOv .st-gmas > summary { list-style: none; width: 36px; height: 34px; box-sizing: border-box; display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: 99px; cursor: pointer; color: var(--ink); }
+#studioOv .st-gmas > summary::-webkit-details-marker { display: none; }
+#studioOv .st-gmas[open] > summary, #studioOv .st-gmas > summary:hover { border-color: var(--ink); }
+#studioOv .st-gmas > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-gmasl { position: absolute; right: 0; top: calc(100% + 6px); z-index: 8; min-width: 210px; padding: 6px; border-radius: 12px; background: var(--cream); border: 1px solid var(--hairline); box-shadow: 0 16px 40px rgba(21,20,20,.22); display: flex; flex-direction: column; }
+body.dark #studioOv .st-gmasl { background: #15161A; }
+#studioOv .st-gmasl button { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: 13px var(--ui); text-align: left; cursor: pointer; }
+#studioOv .st-gmasl button:hover { background: rgba(127,127,127,.12); }
+#studioOv .st-gmasl button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+#studioOv .st-engov .st-engs { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; font-size: 12.5px; }
+/* IMG-52: en el teléfono, la cabecera es una sola fila (pestañas, topes, cerrar), la barra de la galería son iconos y el compositor se aprieta */
+@media (max-width: 760px) {
+  #studioOv .st-head { padding: 6px 10px; gap: 8px; flex-wrap: nowrap; }
+  #studioOv .st-head .st-logo, #studioOv .st-head .sp, #studioOv .st-bm { display: none; }
+  #studioOv .st-head > div:not(.st-ptabs) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #studioOv .st-head .st-ptabs { flex: 1 1 auto; min-width: 0; border-bottom: 0; padding: 0; }
+  #studioOv .st-head .st-ptabs button { padding: 8px 6px; }
+  #studioOv .st-filt { padding: 8px 12px; gap: 6px; flex-wrap: wrap; }
+  #studioOv .st-fwrap > span { display: none; }
+  #studioOv .st-qwrap { flex: 1 1 90px; min-width: 0; }
+  #studioOv .st-qwrap input { min-width: 0; width: 100%; }
+  #studioOv .st-upbtn span, #studioOv .st-selbtn span { display: none; }
+  #studioOv .st-upbtn, #studioOv .st-selbtn { min-width: 36px; min-height: 34px; justify-content: center; padding: 6px 9px; }
+  #studioOv .st-filt .st-folders { order: 9; flex: 1 1 100%; }
+  #studioOv .st-kind { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  #studioOv .st-kind button { flex-direction: column; gap: 3px; padding: 8px 4px; font-size: 12px; }
+  #studioOv .st-kind button .ic { width: 18px; height: 18px; }
+  #studioOv .st-mpick .st-mp-note, #studioOv .st-mpick .st-tags { display: none; }
+  #studioOv .st-est:not(.over) { display: none; }
+}
