@@ -14,7 +14,8 @@ import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — th
 import * as GF from './galeria-filtro.js';
 import * as BR from './studio-borrador.js'; // 6 Oct 2026 (audit IMG-01/02): the composer's draft with DESHACER, and Variar as a request of its own
 import * as AV from './studio-avisos.js';
-import * as AC from './studio-acciones.js'; // 6 Oct 2026 (audit IMG-09/48): one list of what can be done with a file — card, «⋯», group card and viewer // 6 Oct 2026 (audit IMG-03): what the Estudio says when jobs end, with its plurals // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
+import * as AC from './studio-acciones.js';
+import * as CF from './studio-confirmar.js'; // 6 Oct 2026 (audit IMG-11): a spend is confirmed with a second click, not the browser's confirm() // 6 Oct 2026 (audit IMG-09/48): one list of what can be done with a file — card, «⋯», group card and viewer // 6 Oct 2026 (audit IMG-03): what the Estudio says when jobs end, with its plurals // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
 // 1 Oct 2026 (banco de presets F1, F2): the bank and the Lotes tab live in their own modules; here only their hooks. They load on demand
 // (INF-09: the page's budget): dist/estudio-extra.js comes the first time the Studio shows the image composer (its Presets step), or the
@@ -45,6 +46,7 @@ const I = { // line icons (stroke = currentColor)
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', folder: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/>', spark: '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
   pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', chat: '<path d="M4 5.5h16v10.5H9.5L4 20z"/><path d="M8 9.5h8M8 12.5h5"/>', send: '<path d="M4 12h12M11 6l6 6-6 6"/><path d="M20.5 4v16"/>', full: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>', note: '<path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  anim: '<rect x="2.5" y="5" width="14" height="14" rx="3"/><path d="m7.8 9.3 4.4 2.7-4.4 2.7z"/><path d="M19 8.5v7M21.5 10.5v3"/>', // IMG-18: Animar has its own icon (the clapperboard is the Estudio and «Video»)
   cal: '<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/><path d="M12 13v5M9.5 15.5h5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', dots: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
 };
 const svg = (k, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
@@ -189,6 +191,7 @@ export function initStudio(ctx) {
     pick: (label, take) => { picking = { label, take }; renderSel(); showPane('gal'); say(`${label}: haz clic en una imagen de la galería.`); },
     subir: files => uploadFiles(files, null), idea: () => $('.st-prompt').value.trim(), n: () => qty, onState: () => bancoState(),
     abrirArchivo: f => lightFile(f), mostrarGaleria: () => { if (phone()) showPane('gal'); },
+    confirmar: c => okCosto(c, 'banco'), // IMG-11: the presets spend through the same gate
     trabajos: (js, b) => { jobs.unshift(...js); if (b) budget = b; renderHead(); renderGrid(); watch(); }, recargar: () => load({ full: false }),
     pedirDimitri: ctx.askDimitri ? () => ctx.askDimitri([]) : null,
     // the model and the format are always the composer's (2 Oct 2026): the bank reads them and never picks them
@@ -516,7 +519,7 @@ export function initStudio(ctx) {
     let root = G.querySelector(':scope > .st-days'); if (!root) { G.innerHTML = '<div class="st-days"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
     const flat = selecting || sel.size || picking, byJob = new Map();
     if (!flat) for (const it of list) if (it.job && !expanded.has(it.job) && it.kind !== 'audio') byJob.set /* V5.0: each audio keeps its own card and player */(it.job, [...(byJob.get(it.job) || []), it]);
-    const want = tj.map(j => ['j:' + j.id, jobTile(j), aspect(j), dayKey(Date.now()), 1, Date.now()]), placed = new Set();
+    const want = tj.map(j => ['j:' + j.id, jobTile(j), aspect(j), dayKey(Date.now()), 0, Date.now(), j.state]), placed = new Set(); // IMG-13: a job's tile is not a file: the day counts it apart
     for (const it of list) {
       const g = !flat && it.job && byJob.get(it.job);
       if (g && g.length > 1) { if (placed.has(it.job)) continue; placed.add(it.job); const a = aspect(g[0]); want.push(['g:' + it.job, groupCard(g), 0.45 + g.slice(0, 4).reduce((t, x) => t + aspect(x) + 0.22, 0), dayKey(it.at), g.length, it.at]); continue; }
@@ -559,12 +562,12 @@ export function initStudio(ctx) {
   }
   function layout(root, force) {
     const n = colCount(); if (!n) return; // hidden (a phone on the Crear tab): laid out when it shows
-    const sig = n + '|' + lastWant.map(w => w[3] + ':' + w[0]).join(',');
+    const sig = n + '|' + lastWant.map(w => w[3] + ':' + w[0] + (w[6] || '')).join(',');
     if (!force && sig === layoutSig) return; layoutSig = sig;
-    const days = []; for (const w of lastWant) { let d = days.find(x => x.k === w[3]); if (!d) days.push(d = { k: w[3], at: w[5], n: 0, list: [] }); d.list.push(w); d.n += w[4]; }
+    const days = []; for (const w of lastWant) { let d = days.find(x => x.k === w[3]); if (!d) days.push(d = { k: w[3], at: w[5], n: 0, fallo: 0, curso: 0, list: [] }); d.list.push(w); d.n += w[4]; if (w[6] === 'failed') d.fallo++; else if (w[6]) d.curso++; }
     const out = [];
     for (const d of days) { // V4.2 (audit A23): a heading per day, the day's cards in their own columns
-      const hd = document.createElement('h3'); hd.className = 'st-day'; hd.innerHTML = `${esc(dayName(d.at))} <span>${d.n}</span>`;
+      const hd = document.createElement('h3'); hd.className = 'st-day'; hd.innerHTML = `${esc(dayName(d.at))} <span>${d.n ? `${GF.miles(d.n)} ${d.n === 1 ? 'archivo' : 'archivos'}` : ''}${d.curso ? `${d.n ? ' · ' : ''}${d.curso} en curso` : ''}${d.fallo ? `${d.n || d.curso ? ' · ' : ''}${d.fallo} ${d.fallo === 1 ? 'falló' : 'fallaron'}` : ''}</span>`;
       const cols = [...Array(n)].map(() => { const c = document.createElement('div'); c.className = 'st-col'; return c; }), h = new Array(n).fill(0);
       for (const [k, , a] of d.list) { const j = h.indexOf(Math.min(...h)); cols[j].appendChild(nodes.get(k).el); h[j] += a + 0.3; } // 0.3: the caption under each picture
       const box = document.createElement('div'); box.className = 'st-cols'; box.replaceChildren(...cols); out.push(hd, box);
@@ -1230,14 +1233,23 @@ export function initStudio(ctx) {
   function useAsRef(it) { return cargar(() => useAsRefRaw(it)); }
   function moverA(it) { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
   function presetDe(it) { if (kind !== 'image') setKind('image'); setNivel('avanzado'); showPane('gen'); banco.guardarDesde(it); }
-  /** The one gate before spending (GENERAR and Variar): from US$0.50 it asks. */
-  function okCosto(c) { return !(c >= 0.5 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}${budget && budget.cost ? ` (hoy llevas US$${budget.cost.toFixed(2)})` : ''}. ¿Generar?`)); }
+  /** The one gate before spending (GENERAR, Variar, the presets): from US$0.50 the first click arms and the second spends (IMG-11). */
+  let armado = null, armadoT = 0;
+  function okCosto(c, clave = 'go') {
+    const r = CF.pedirOk(armado, clave, c); armado = r.armado; clearTimeout(armadoT);
+    const go = $('.st-go'); go.classList.remove('st-armado');
+    if (r.ok) return true;
+    const usd = 'US$' + c.toFixed(2), hoy = budget && budget.cost ? ` (hoy llevas US$${budget.cost.toFixed(2)})` : '';
+    if (clave.startsWith('go') || clave === 'banco') { go.textContent = `Confirmar · ${usd}`; go.classList.add('st-armado'); say(`Esto cuesta aprox. ${usd}${hoy}. Pulsa otra vez para generar.`); }
+    armadoT = setTimeout(() => { armado = null; go.classList.remove('st-armado'); if (bancoManda()) bancoState(); else estimate(); }, CF.VENTANA);
+    return false;
+  }
   function variarPedido(it) { return BR.pedidoVariar({ ...it, folder: inFolder(it) }, models, { respaldo: useModelFor('reference', 'image'), settingsDe: m => settingsOf(m) }); }
   async function vary(it) { // V4.2 (audit A35) · IMG-01: another take close to this one — its prompt, model and settings, the picture as the reference; the composer is not touched
     if (!isLive() || !location.protocol.startsWith('http')) return say('Variar necesita la oficina real (ábrela con el iniciador).', true);
     const p = variarPedido(it); if (p.error) return say(p.error, true);
     const m = p.modelo, cost = SV.unitCost(m, p.req.settings, p.req.prompt.length) * (Number(p.req.settings.batchSize) || 1);
-    if (!okCosto(cost)) return;
+    if (!okCosto(cost, 'vary:' + it.file)) return toast(`Variar con ${m.name} cuesta aprox. US$${cost.toFixed(2)}.`, () => vary(it), 'VARIAR'); // IMG-11: the toast's button is the second click
     try { const r = await api('POST', '/api/media/jobs', p.req); jobs.unshift(r.job); budget = r.budget; }
     catch (e) { if (/key/i.test(e.message)) return keyHelp(m, e.message); return say('No se pudo variar: ' + e.message, true); }
     learn(it.file, 'ref'); renderHead(); estimate(); renderGrid(); watch(); if (phone()) showPane('gal');
@@ -1261,9 +1273,9 @@ export function initStudio(ctx) {
     say('Mismo texto: elige otra voz en la lista y pulsa GENERAR.');
   }
   let toastT = null;
-  function toast(text, undo) {
+  function toast(text, undo, label = 'DESHACER') {
     const T = $('.st-toast'); T.querySelector('span').textContent = text; T.hidden = false;
-    T.querySelector('button').hidden = !undo; T.querySelector('button').onclick = async () => { T.hidden = true; await undo(); };
+    T.querySelector('button').hidden = !undo; T.querySelector('button').textContent = label; T.querySelector('button').onclick = async () => { T.hidden = true; await undo(); };
     clearTimeout(toastT); toastT = setTimeout(() => { T.hidden = true; }, 9000);
   }
   async function trashMany(files) {

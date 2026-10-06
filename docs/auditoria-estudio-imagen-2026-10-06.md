@@ -9,7 +9,7 @@ Pedido: auditoría integral de UX, UI, usabilidad, intuitividad, funcionalidad, 
 - **Código:** se leyeron `src/studio.js`, `src/studio-banco*.js`, `src/escena3d*.js` y sus estilos.
 - **Para repetirlo:** `node scripts/estudio-imagen-recorrido.mjs`. Las capturas van a `data/capturas/estudio-imagen/`, que no viaja por GitHub.
 
-**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) y la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
+**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) y la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-21 y 24 🟡). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
 
 **Estado de cada punto:** ✅ hecho · 🟡 en parte · ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
 
@@ -190,11 +190,12 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
 - **Hecho (6 oct, Fase 2):** «Vaciar», con DESHACER (el mismo borrador de la Fase 1).
 - **Prioridad:** Fase 2.
 
-### IMG-11 · 🟡 medio · ⏳ — La confirmación de costo usa `confirm()` del navegador
+### IMG-11 · 🟡 medio · ✅ — La confirmación de costo usa `confirm()` del navegador
 - **Dónde:** `src/studio.js:1621`.
 - **Evidencia:** es un diálogo nativo, que bloquea la página y no lleva el estilo de la oficina. En algunos sistemas sale en el idioma del navegador («OK / Cancel»).
 - **Impacto:** rompe la experiencia y no se puede probar bien.
 - **Solución:** confirmar en el propio botón, como ya se hace con el pedido repetido: el primer clic lo cambia a «Confirmar · US$0,64» durante 6 s.
+- **Hecho (6 oct, Fase 3):** `src/studio-confirmar.js` (con test). Desde US$0,50 el primer clic arma GENERAR («Confirmar · US$0.80», unos 6 s) y el segundo gasta; Variar lo pide con «VARIAR» en el aviso; los presets pasan por la misma puerta. Ya no hay `confirm()` para gastar.
 - **Prioridad:** Fase 3.
 
 ### IMG-12 · 🟡 medio · ⏳ — Las acciones del visor sacan del visor
@@ -204,11 +205,12 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
 - **Solución:** después de la acción, un aviso con «Volver a la imagen». Con IMG-01, Variar ya no necesita salir del visor.
 - **Prioridad:** Fase 7.
 
-### IMG-13 · 🟡 medio · ⏳ — Los contadores no cuadran
+### IMG-13 · 🟡 medio · ✅ — Los contadores no cuadran
 - **Dónde:** la cabecera (`budgetHTML`), `countLine` y el encabezado del día.
 - **Evidencia:** a la vez se ven «Hoy 3 de 40» (cabecera), «3 archivos» (contador) y «Hoy 4» (el encabezado del día cuenta la ficha fallida). El pie dice «2 archivo(s)».
 - **Impacto:** el usuario duda de qué cuenta cada número.
 - **Solución:** el día cuenta archivos, y los fallidos van aparte («Hoy 3 · 1 falló»). Plurales correctos.
+- **Hecho (6 oct, Fase 3):** el día dice «Hoy 3 archivos · 1 en curso · 1 falló»: la ficha de un trabajo ya no cuenta como archivo.
 - **Prioridad:** Fase 3.
 
 ### IMG-14 · 🟡 medio · ⏳ — No hay manera de comparar
@@ -239,33 +241,37 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 | Aviso | `.st-msg`, `.st-toast`, `.bk-toast`, `.st-note`, `.st-keyhelp` | `toast()` único con cola y acción |
 | Panel lateral u hoja | `.st-bank`, `.st-lpanel`, `.st-hist` | `.sheet` (lateral en escritorio, inferior en el teléfono) |
 
-### IMG-15 · 🟡 medio · ⏳ — Escala tipográfica sin sistema
+### IMG-15 · 🟡 medio · ✅ — Escala tipográfica sin sistema
 - **Evidencia:** en el Estudio a 1440 px (medidas `basico-1440`) hay 13 tamaños: 10,5 · 11 · 11,5 · 12 · 12,5 · 13 · 13,5 · 14 · 15 · 16 · 19 · 22 · 24 px. Aparece la familia **Arial**: algún control no hereda `var(--ui)`.
 - **Impacto:** jerarquía borrosa: 12 y 12,5, o 11 y 11,5, no se distinguen, pero sí suman ruido.
 - **Solución:**
   - Cinco pasos como tokens: `--fs-xs: 11.5px` · `--fs-s: 12.5px` · `--fs-m: 14px` · `--fs-l: 16px` · `--fs-xl: 22px` (serif).
   - `button, input, select, textarea { font: inherit }` en `#studioOv`.
+- **Hecho (6 oct, Fase 3):** las reglas del Estudio usan 11,5 · 12,5 · 14 · 16 · 22 (tokens `--fs-*` en `src/css/componentes.css`); los controles heredan la letra de la interfaz (sin Arial). El recorrido mide 5 tamaños.
 - **Prioridad:** Fase 3.
 
-### IMG-16 · 🟡 medio · ⏳ — Siete radios de borde en los botones
+### IMG-16 · 🟡 medio · ✅ — Siete radios de borde en los botones
 - **Evidencia:** 0 · 9 · 10 · 11 · 12 · 99 px y 50 % (medidas `avanzado-1440`).
 - **Solución:** tres tokens: `--r-s: 8px` (controles), `--r-m: 12px` (tarjetas y paneles) y `--r-pill: 999px` (segmentados y chips).
+- **Hecho (6 oct, Fase 3):** radios de 8, 12 y pastilla (`--r-*`); las formas dibujadas (los cuadritos de proporción) conservan el suyo.
 - **Prioridad:** Fase 3.
 
-### IMG-17 · 🟡 medio · ⏳ — El borde discontinuo significa dos cosas opuestas
+### IMG-17 · 🟡 medio · ✅ — El borde discontinuo significa dos cosas opuestas
 - **Dónde:** `src/css/estados.css:7` (deshabilitado = `1px dashed`); «+ Nueva carpeta» y las ranuras de referencias también son discontinuas.
 - **Evidencia:** el «−» de Cantidad en 1 y el «‹» del visor en la primera imagen parecen casillas para soltar o elementos pendientes (capturas `02`, `10`).
 - **Impacto:** el usuario intenta pulsarlos o soltar algo encima.
 - **Solución:** discontinuo **solo** para las zonas de soltar. Un control deshabilitado lleva el borde sólido atenuado, el texto a 4,5:1 y un `title` o texto que diga por qué.
+- **Hecho (6 oct, Fase 3):** en el Estudio, un botón deshabilitado lleva borde sólido y texto gris; el discontinuo queda para «suelta aquí». La regla global de `estados.css` no se tocó (otras vistas).
 - **Prioridad:** Fase 3.
 
-### IMG-18 · 🟡 medio · ⏳ — Iconos ambiguos en la ficha
+### IMG-18 · 🟡 medio · ✅ — Iconos ambiguos en la ficha
 - **Evidencia:** la claqueta significa tres cosas: el Estudio (logo y dock), el tipo «Video» y la acción «Animar» (captura `08-tarjeta-hover`). El icono de «Usar de referencia» (imagen con +) no se reconoce sin el `title`.
 - **Impacto:** el usuario tiene que pasar el cursor por cada icono para saber qué hace; en el teléfono no hay cursor.
 - **Solución:**
   - Animar con un icono de movimiento (play con estela).
   - En la ficha, solo 3 iconos primarios (Editar, Variar, Descargar) y lo demás en «⋯» (IMG-09).
   - Un tooltip propio en foco y al mantener pulsado (`data-tip`, como en el dock).
+- **Hecho (6 oct, Fases 2 y 3):** Animar tiene su icono propio (ya no la claqueta); la tarjeta enseña Editar y Variar con su nombre (Fase 2). El tooltip en foco y al mantener pulsado va con IMG-27.
 - **Prioridad:** Fase 3.
 
 ### IMG-19 · 🟡 medio · ✅ — «Más ajustes» se pinta roto
@@ -278,20 +284,23 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 - **Hecho (6 oct, Fase 1):** la causa era un choque de nombres: el pie «Cargar más» de la galería también se llamaba `.st-more` y `galeria.css` le daba `display:flex` centrado a «Más ajustes» (y relleno al «⋯» de las tarjetas). El pie pasa a `.st-loadmore`; «Más ajustes» es un bloque y sus selectores miden 96 px o más. Queda para la Fase 5 sacar el Tamaño de lo plegado.
 - **Prioridad:** Fase 1 (quick win).
 
-### IMG-20 · 🟢 bajo · ⏳ — El nombre del modelo se parte
+### IMG-20 · 🟢 bajo · ✅ — El nombre del modelo se parte
 - **Evidencia:** en la tarjeta de modelo se lee «Nano Banana / 2», porque «GOOGLE (GEMINI API)» en versalitas comparte la fila (capturas `02`, `24`).
 - **Solución:** el motor debajo del nombre, en la línea de meta. El nombre siempre en una línea.
+- **Hecho (6 oct, Fase 3):** el motor va debajo del nombre, que queda en una línea.
 - **Prioridad:** Fase 3.
 
-### IMG-21 · 🟢 bajo · ⏳ — Formato: etiqueta pegada y formatos sin nombre
+### IMG-21 · 🟢 bajo · 🟡 en parte — Formato: etiqueta pegada y formatos sin nombre
 - **Evidencia:** «Formato» (11,5 px) toca la cuadrícula sin aire. Cinco de los 16 formatos no tienen nombre (5:4, 1:4, 4:1, 1:8, 8:1).
 - **Solución:** 6 px de separación; los formatos raros, solo bajo «Más formatos» y con un uso («Banner», «Tira»).
+- **Hecho en la Fase 3 (6 oct):** la etiqueta «Formato» con aire. **Los formatos sin nombre** se resuelven en la Fase 5 (IMG-33: 4 y «Más formatos»).
 - **Prioridad:** Fase 3.
 
-### IMG-22 · 🟡 medio · ⏳ — El pie no tiene jerarquía
+### IMG-22 · 🟡 medio · ✅ — El pie no tiene jerarquía
 - **Evidencia:** debajo de GENERAR hay tres líneas grises de 12 px que compiten: el resumen («1:1 Cuadrado cambiar»), el costo y el estado.
 - **Impacto:** el dato que más importa antes de gastar es el menos visible.
 - **Solución:** el costo dentro del botón (IMG-05); el resumen como chips sobre el botón («1:1 ▾ · ×2 ▾ · Nano Banana 2 ▾»); el estado en toasts (IMG-03).
+- **Hecho (6 oct, Fases 1 y 3):** el costo va en el botón (IMG-05); el resumen («1:1 Cuadrado cambiar») sube encima de la cantidad y GENERAR; debajo quedan solo el costo del día y los avisos.
 - **Prioridad:** Fase 3.
 
 ### IMG-23 · 🟡 medio · ✅ — Demasiado cromo antes de la primera imagen
@@ -311,9 +320,10 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 - **Hecho (6 oct, Fase 2):** las pestañas van en la fila de la cabecera; los 8 filtros son un «Mostrar ▾» con sus números; las carpetas comparten la fila y se desplazan; Historial, Papelera y Motores van en un «⋯»; la línea «N archivos» solo sale cuando dice más que el encabezado del día. A 1440×900 la galería empieza a 213 px (antes, 365).
 - **Prioridad:** Fase 2.
 
-### IMG-24 · 🟡 medio · ⏳ — Componentes duplicados con estilos distintos
+### IMG-24 · 🟡 medio · 🟡 en parte — Componentes duplicados con estilos distintos
 - **Evidencia:** la tabla de arriba. Ejemplo: subir una referencia es una tarjeta de 88×56 con icono en Básico y un botón de texto plano en el banco de Avanzado (capturas `02` y `15`).
 - **Solución:** los componentes de la tabla, en `src/css/componentes.css` (que vaya antes en el orden alfabético que los que lo usan; ver la regla de `build.mjs`).
+- **Hecho en la Fase 3 (6 oct):** `src/css/componentes.css` con los tokens y un segmentado común (Básico · Avanzado, Una idea · Varias, Suave · Normal · Fuerte). **Falta:** fusionar las tarjetas de opción, los chips y los botones de subir en componentes propios.
 - **Prioridad:** Fase 3.
 
 ---

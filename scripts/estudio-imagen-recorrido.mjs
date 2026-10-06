@@ -118,6 +118,13 @@ try {
   ok('IMG-08 · la ficha de un pedido trae cada imagen con Editar, Variar y Descargar', res.sub && res.cards >= 2 && res.primarias, JSON.stringify(res));
   ok('IMG-23 · a 1440×900 la galería empieza a 220 px o menos', res.top <= 220, res.top + ' px');
   ok('IMG-49 · la galería ya no tiene «Voces» y los filtros son un «Mostrar ▾»', !res.voces && res.mostrar);
+  // ===== Fase 3 =====
+  const ui = report['medidas:galeria-1440'], radios = Object.keys(ui.radiosBotones).filter(r => r !== '0px' && r !== '50%');
+  ok('IMG-15 · seis tamaños de letra o menos en el Estudio', Object.keys(ui.tamaños).length <= 6, Object.keys(ui.tamaños).sort((a, b) => a - b).join(' · '));
+  ok('IMG-15 · sin Arial', !ui.familias.some(f => /Arial/i.test(f)), ui.familias.join(' · '));
+  ok('IMG-16 · tres radios en los botones (sin contar 0 y los círculos)', radios.length <= 3, radios.join(' · '));
+  const dia = await p.evaluate(() => document.querySelector('#studioOv .st-day')?.textContent.replace(/\s+/g, ' ').trim());
+  ok('IMG-13 · el día cuenta archivos, con su palabra', /^Hoy 2 archivos$/.test(dia), dia);
   report.grupoHTML = await p.evaluate(() => document.querySelector('#studioOv .st-grid .st-card:not(.st-job)')?.innerText);
   await p.locator(`${S} button:has-text("Ver por separado"):visible`).first().click().catch(e => console.log('sep?', e.message)); await p.waitForTimeout(800);
   await shot(p, '07b-por-separado');
@@ -146,6 +153,19 @@ try {
   ok('IMG-01 · Variar no toca la idea, la cantidad ni las referencias, y genera', report.trasVariar.prompt === 'TEXTO A MEDIO ESCRIBIR' && trasVariar.n === antesVariar.n && trasVariar.refs === antesVariar.refs && report.trasVariar.trabajos > antesVariar.jobs, JSON.stringify({ antesVariar, trasVariar, ...report.trasVariar }));
   await p.waitForTimeout(9000); // que termine la variación antes del fallo
   await shot(p, '12-tras-variar');
+  // IMG-11: desde US$0,50, el primer clic arma y no hay diálogo del navegador
+  let dialogos = 0; p.on('dialog', d => { dialogos++; d.dismiss(); });
+  await p.click(`${S} .st-mpick`); await p.waitForTimeout(300); await p.locator(`${S} .st-mo:has-text("Nano Banana Pro")`).first().click(); await p.waitForTimeout(300);
+  for (let k = 0; k < 4; k++) await p.click(`${S} .st-qty [data-d="1"]`).catch(() => {});
+  const antesConf = await p.locator(`${S} .st-job`).count();
+  await p.click(`${S} .st-go`); await p.waitForTimeout(400);
+  const conf = { go: await p.textContent(`${S} .st-go`), dialogos, trabajos: await p.locator(`${S} .st-job`).count() - antesConf };
+  ok('IMG-11 · un gasto desde US$0,50 se confirma con un segundo clic en el botón, sin diálogo', /^Confirmar · US\$/.test(conf.go) && !conf.dialogos && conf.trabajos === 0, JSON.stringify(conf));
+  await p.waitForTimeout(6500);
+  ok('IMG-11 · sin el segundo clic, el botón vuelve a ser GENERAR', /^GENERAR/.test(await p.textContent(`${S} .st-go`)), await p.textContent(`${S} .st-go`));
+  for (let k = 0; k < 4; k++) await p.click(`${S} .st-qty [data-d="-1"]`).catch(() => {});
+  const dis = await p.evaluate(() => getComputedStyle(document.querySelector('#studioOv .st-qty [data-d="-1"]')).borderStyle);
+  ok('IMG-17 · un botón deshabilitado no lleva borde de trazos', dis === 'solid', dis);
   // fallo
   await p.fill(`${S} .st-prompt`, 'FALLA esta a propósito'); await p.click(`${S} .st-go`); await p.waitForSelector(`${S} .st-job.failed`, { timeout: 60000 }).catch(() => {}); await p.waitForTimeout(3000);
   await shot(p, '13-fallo'); report.fallo = await p.evaluate(() => ({ tile: document.querySelector('#studioOv .st-job.failed')?.innerText, msg: document.querySelector('#studioOv .st-msg')?.textContent, raw: !!document.querySelector('#studioOv .st-job.failed .st-jraw'), otro: !!document.querySelector('#studioOv .st-job.failed [data-j="other"]') }));

@@ -26,7 +26,7 @@ export function acciones(it, cap = {}) {
   const primarias = t === 'img' ? [A('edit', 'Editar', 'pen', 'Pide un cambio: sale una versión nueva y la original no se toca'), variar, descargar]
     : t === 'vid' ? [...(subida ? [] : [repetir]), descargar]
     : [...(cap.voz ? [A('othervoice', 'Repetir con otra voz', 'mic', 'El mismo texto con otra voz', 'Otra voz')] : subida ? [] : [repetir]), descargar];
-  const crear = t === 'img' ? [A('ref', 'Usar de referencia', 'ref', 'Tu producto, logo, personaje o estilo en lo próximo que crees'), A('anim', 'Animar', 'vid', 'Convertirla en video: será su primer fotograma'), ...(subida ? [] : [repetir])]
+  const crear = t === 'img' ? [A('ref', 'Usar de referencia', 'ref', 'Tu producto, logo, personaje o estilo en lo próximo que crees'), A('anim', 'Animar', 'anim', 'Convertirla en video: será su primer fotograma'), ...(subida ? [] : [repetir])]
     : t === 'aud' && cap.voz && !subida ? [repetir] : [];
   const organizar = [
     A('fav', it?.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star'),

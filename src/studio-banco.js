@@ -323,7 +323,7 @@ export function initBanco(ctx) {
     await replan(true);
     if (plan?.errores?.length) { intentado = true; pintar(); onState?.(); enfocarFalta(); return say?.(plan.errores[0], true); }
     const c = plan?.costo?.usd || 0;
-    if (c >= 0.5 && !confirm(`Esto cuesta aprox. ${K.usd(c)}. ¿Generar?`)) return;
+    if (ctx.confirmar ? !ctx.confirmar(c) : c >= 0.5 && !confirm(`Esto cuesta aprox. ${K.usd(c)}. ¿Generar?`)) return; // IMG-11: the Estudio's second click
     try {
       const r = await api('POST', '/api/media/presets/apply', K.pedidoDe({ ...st, idea: idea?.() || '', n: cantidad?.() || 1 }));
       say?.(r.plan?.soloLocal ? 'Haciéndose en tu máquina: gratis, en unos segundos. Sale en la galería.' : `En marcha con ${models.find(m => m.id === r.plan?.model)?.name || r.plan?.model}: sale en la galería, con su comprobación.`);
