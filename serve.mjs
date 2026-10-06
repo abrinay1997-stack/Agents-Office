@@ -66,7 +66,11 @@ import { crearBus } from './tareas/eventos.mjs'; // plan T0 (6 oct 2026): el mó
 import { crearAlmacenTareas } from './tareas/almacen.mjs';
 import { crearTarea, leerCampos as leerCamposTarea, normalizarPasos } from './tareas/modelo.mjs';
 import { crearCatalogo } from './tareas/catalogo.mjs';
+import { progresoProyecto } from './tareas/progreso.mjs';
+import { resumenTareas } from './tareas/resumen.mjs';
+import { siguiente as siguienteRepeticion, avisosLimite } from './tareas/ritmo.mjs';
 import { crearRutasTareas, despachadorDependencias } from './tareas/rutas.mjs';
+import { crearWebhooks } from './tareas/webhooks.mjs';
 import { revisar as revisarPermisos } from './tareas/permisos.mjs';
 import { limpiar as limpiarBloqueos, ciclo as cicloBloqueos, pendientes as bloqueosPendientes } from './tareas/dependencias.mjs';
 import { agenda as agendaTareas, agendaTexto } from './tareas/agenda.mjs';
@@ -711,20 +715,20 @@ async function chat(agentId, text, history) {
 /* ---------- a new task: the department's routing picks the desk (or the lead takes it as a team) ---------- */
 // plan T0 (6 oct 2026): THE way a task is born — the bar, the API, Dimitri, a routine, a trigger, «repetir», the Estudio. crearTarea
 // (tareas/modelo.mjs) gives it its shape; the office's own rules are applied here, once: an amount over the owner's limit waits for the OK.
-function altaTarea(campos, { por = null, arrancar = true } = {}) {
-  const task = crearTarea(campos, { id: nid });
+function altaTarea(campos, { por = null, arrancar = true, id = null } = {}) {
+  const task = crearTarea(campos, { id: id || nid }); // id: given when the caller must know it first (Dimitri's pieces that wait for each other)
   if (approvals.overLimit(task.text, APPR().amountLimit).length) task.needsOk = true; // V4.4 (G9)
   const list = load(); list.push(task); save(list, { por: por || undefined });
   if (arrancar && task.state === 'next') setImmediate(pump);
   return task;
 }
-async function newTask({ dept, text, team = false, at = null, by = 'you', model, effort, agent: fixedAgent = null, title: fixedTitle = null, needsOk: fixedOk, extra = {}, por = null }) {
+async function newTask({ dept, text, team = false, at = null, by = 'you', model, effort, agent: fixedAgent = null, title: fixedTitle = null, needsOk: fixedOk, extra = {}, por = null, id = null }) {
   const fixed = fixedAgent && AGENTS.find(a => a.id === fixedAgent && a.department === dept); // V4.2 (audit B30): one run of a routine, moved — its own desk, no routing
   const r = fixed ? { agent: fixed.id, title: String(fixedTitle || text).slice(0, 90), plan: [], eta: 15, why: 'una ejecución de rutina, movida', needsOk: typeof fixedOk === 'boolean' ? fixedOk : routines.guessNeedsOk(text) } : await route(dept, String(text).trim());
   const asTeam = TEAMS.enabled && (team === true || teams.intent(text)); // TEAM in the bar, or "as a team" in the sentence → the lead owns it and splits it
   const task = altaTarea({ dept, agent: asTeam ? leadOf(dept).id : r.agent, title: extra.title || r.title, text, plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, by,
     model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: asTeam ? { lead: leadOf(dept).id, asked: team === true ? (by === 'you' ? 'you' : by) : 'text' } : undefined,
-    ...(at ? { dueAt: at, needsOk: r.needsOk } : {}), ...extra }, { por });
+    ...(at ? { dueAt: at, needsOk: r.needsOk } : {}), ...extra }, { por, id });
   console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${at ? ' · scheduled ' + untilText(at) : ''}${by === 'sub' ? ' (via ' + DEPUTY + ')' : ''}`);
   return task;
 }
@@ -843,7 +847,7 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
   const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.lote ? 'Te propongo este lote. Nada se gasta hasta que pulses PROBAR o GENERAR.' : studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : studio.actions.length ? 'Esto puedo hacer con el lote; pulsa HACER si te parece.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
   const reply = (plan.reply || fallback) + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
-  const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
+  const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   const st2 = sub.load(DATA); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
   if (picked) { const q = st2.messages.find(x => x.id === answers.msg); if (q?.plan) q.plan.answers = picked.answers; }
   st2.messages.push(u, m); sub.save(DATA, st2);
@@ -867,11 +871,16 @@ function dimitriVoices() {
   try { const s = voces.summary(); return [...s.voices.map(v => ({ voiceId: v.voiceId, name: v.name, kind: v.kind === 'design' ? 'design' : 'clone', at: v.at })), ...(s.system || []).map(v => ({ voiceId: v.voiceId, name: v.name, kind: 'system' }))]; } catch { return []; }
 }
 /** V4.11 (DIM-10): the rest of the office for «¿Cómo vamos?» — Contenido, Analíticas, routines, spend, KPIs, notices — computed, no model. */
+function agendaResumen(l) { // plan T4: what is overdue or blocked, in one line each (the full agenda is the ver_agenda tool)
+  const a = agendaTareas(l, { ahora: Date.now() }), it = x => `«${String(x.title).slice(0, 50)}» (${x.person ? x.person : agentName(x.agent)}${x.limite ? ', límite ' + x.limite : ''})`;
+  return [a.vencidas.length ? `Tareas vencidas (${a.vencidas.length}): ${a.vencidas.slice(0, 5).map(it).join('; ')}` : '', a.bloqueadas.length ? `Tareas bloqueadas (${a.bloqueadas.length}): ${a.bloqueadas.slice(0, 5).map(it).join('; ')}` : '', a.hoy.length ? `Para hoy (${a.hoy.length}): ${a.hoy.slice(0, 5).map(it).join('; ')}` : ''].filter(Boolean).join('\n');
+}
 function dimitriOffice(list) {
   const out = [];
   try { const d = new Date(); d.setDate(d.getDate() + 13); out.push(sub.contenidoText(contenido.listar({ desde: localDay(Date.now()), hasta: localDay(d.getTime()), sinFecha: true }), { now: new Date(), dias: 7 })); } catch (e) { out.push(`Contenido: no lo pude leer (${e.message}).`); }
   try { out.push(sub.analiticasText(analiticasResumen())); } catch {}
   try { out.push(sub.rutinasText(loadRoutines(), list, { agents: AGENTS })); } catch {}
+  try { const l = list || load(); out.push(sub.proyectosText(catalogoT.proyectos().map(p => ({ ...p, progreso: progresoProyecto(p, l) })), l, { name: agentName })); out.push(agendaResumen(l)); } catch {} // plan T4: projects, deadlines, blocks
   try {
     const kp = loadKpis(), unread = loadNotices().filter(n => !n.read);
     out.push(sub.oficinaText({ budget: costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()), kpis: kp.defs.map(d => ({ id: d.id, name: d.name, goal: d.goal ?? d.target, value: (kp.values[d.id] || []).at(-1)?.v ?? null })), unread: unread.length, notices: unread.slice(-4).reverse() }));
@@ -1117,12 +1126,22 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
     todo.push(t);
   }
   if (!todo.length) { sub.save(DATA, st); return { ok: true, message: m, tasks: [] }; }
-  const made = await Promise.all(todo.map(t => newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', extra: { title: t.title, sub: { msg: m.id, i: t.i } } })
+  // plan T4 (6 oct 2026): one project for the pieces (new, or one that exists), and the order between them — each piece knows its id
+  // before any is born, so «waits for the photos» is set before the queue could start it
+  let proyecto = null;
+  if (m.plan.proyecto && edits?.proyecto !== false) {
+    const pp = m.plan.proyecto;
+    proyecto = pp.id ? catalogoT.proyecto(pp.id) : catalogoT.proyectos().find(x => x.nombre.toLowerCase() === String(pp.nombre).toLowerCase() && x.estado !== 'archivado') || catalogoT.crearProyecto({ nombre: pp.nombre, objetivo: pp.objetivo, limite: pp.limite }).proyecto || null;
+    if (proyecto) m.plan.proyecto = { ...pp, id: proyecto.id, nombre: proyecto.nombre };
+  }
+  const ids = new Map(todo.map(t => [t.i, nid()]));
+  const made = await Promise.all(todo.map(t => newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) } })
     .then(task => { t.state = 'sent'; t.taskId = task.id; t.agent = task.agent; return task; })
     .catch(err => { t.state = 'failed'; t.error = err.message; return null; })));
   const st2 = sub.load(DATA); const i = st2.messages.findIndex(x => x.id === m.id); if (i >= 0) st2.messages[i] = m; // re-read: another message may have landed while routing
   const sent = made.filter(Boolean);
-  st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => DEPTS[t.dept].name))].join(', ')}. Te aviso aquí cómo van.${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
+  const esperan = sent.filter(t => t.bloqueadaPor?.length).length;
+  st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => DEPTS[t.dept].name))].join(', ')}${proyecto ? `, en el proyecto «${proyecto.nombre}»` : ''}.${esperan ? ` ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} a que termine otra antes de empezar.` : ''} Te aviso aquí cómo van (y en Tareas, H).${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
   sub.save(DATA, st2);
   return { ok: true, message: m, tasks: sent, messages: st2.messages.slice(-2) };
 }
@@ -1201,14 +1220,21 @@ function icsFeed() {
     const start = w.start ? new Date(w.start + 'T00:00:00') : new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const [h, m] = String(w.at || w.from || '09:00').split(':').map(Number); start.setHours(h, m, 0, 0);
     const rule = w.kind === 'daily' ? 'FREQ=DAILY' : w.kind === 'weekdays' ? 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' : w.kind === 'weekly' ? `FREQ=WEEKLY;BYDAY=${w.days.map(d => BY[d]).join(',')}`
+      : w.kind === 'monthly' ? `FREQ=MONTHLY;${w.nth ? `BYDAY=${w.nth}${BY[w.weekday]}` : `BYMONTHDAY=${w.day}`}` // plan T5
       : w.kind === 'hourly' ? (() => { const a = +String(w.from).split(':')[0], b = +String(w.to).split(':')[0], hs = []; for (let x = a; x <= b; x += Math.max(1, w.every || 1)) hs.push(x); return `FREQ=WEEKLY;BYDAY=${w.weekdaysOnly ? 'MO,TU,WE,TH,FR' : BY.join(',')};BYHOUR=${hs.join(',')};BYMINUTE=${+String(w.from).split(':')[1] || 0}`; })() : null;
     if (!rule) continue;
     const a = AGENTS.find(x => x.id === r.agent);
-    ev.push(['BEGIN:VEVENT', `UID:rutina-${r.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(start)}`, 'DURATION:PT30M', `RRULE:${rule}`, `SUMMARY:${txt('⏱ ' + r.title)}`, `DESCRIPTION:${txt(`${r.text || r.title}\n${DEPTS[r.dept]?.name || r.dept} · ${a ? a.name : r.agent}${r.needsOk ? ' · pide tu OK' : ''}`)}`, 'END:VEVENT']);
+    const fin = w.end ? `;UNTIL=${w.end.replace(/-/g, '')}T235959` : w.count ? `;COUNT=${w.count}` : ''; // plan T5
+    ev.push(['BEGIN:VEVENT', `UID:rutina-${r.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(start)}`, 'DURATION:PT30M', `RRULE:${rule}${fin}`, `SUMMARY:${txt('⏱ ' + r.title)}`, `DESCRIPTION:${txt(`${r.text || r.title}\n${DEPTS[r.dept]?.name || r.dept} · ${a ? a.name : r.agent}${r.needsOk ? ' · pide tu OK' : ''}`)}`, 'END:VEVENT']);
   }
-  for (const t of load()) if (t.state === 'scheduled' && t.dueAt) {
-    const a = AGENTS.find(x => x.id === t.agent);
-    ev.push(['BEGIN:VEVENT', `UID:tarea-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(new Date(t.dueAt))}`, 'DURATION:PT30M', `SUMMARY:${txt('◷ ' + t.title)}`, `DESCRIPTION:${txt(`${t.text || t.title}\n${DEPTS[t.dept]?.name || t.dept} · ${a ? a.name : t.agent}`)}`, 'END:VEVENT']);
+  const dur = min => `DURATION:PT${Math.max(5, Math.min(24 * 60, Math.round(min || 30)))}M`; // plan T2: the task's estimate (30 min when it has none)
+  for (const t of load()) {
+    const a = AGENTS.find(x => x.id === t.agent), quien = `${DEPTS[t.dept]?.name || t.dept} · ${a ? a.name : t.agent}${t.prioridad === 'alta' ? ' · prioridad alta' : ''}`;
+    if (t.state === 'scheduled' && t.dueAt) ev.push(['BEGIN:VEVENT', `UID:tarea-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(new Date(t.dueAt))}`, dur(t.estimacion), `SUMMARY:${txt('◷ ' + t.title)}`, `DESCRIPTION:${txt(`${t.text || t.title}\n${quien}`)}`, 'END:VEVENT']);
+    if (t.limite && t.state !== 'done' && !t.archived) { // the deadline: an all-day event (or at its hour)
+      const s = String(t.limite), d = s.slice(0, 10).replace(/-/g, '');
+      ev.push(['BEGIN:VEVENT', `UID:limite-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, ...(s.length > 10 ? [`DTSTART:${stamp(new Date(s))}`, 'DURATION:PT15M'] : [`DTSTART;VALUE=DATE:${d}`]), `SUMMARY:${txt('⚑ Vence: ' + t.title)}`, `DESCRIPTION:${txt(quien)}`, 'END:VEVENT']);
+    }
   }
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Agents Office//Calendario//ES', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${txt(cfg.name + ' · oficina')}`, ...ev.flat(), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
 }
@@ -1272,7 +1298,7 @@ const basesRun = new Map(); // plan T0: task id → the copy a run last saved; i
 const clonar = t => JSON.parse(JSON.stringify(t));
 function guardarRun(task) { // a run's copy → disk, keeping what the owner did meanwhile (a comment, a vote, a person, a priority)
   const r = tareasAlm.guardarEjecucion(basesRun.get(task.id) || null, task, { por: 'agente:' + task.agent });
-  if (r.tarea) { basesRun.set(task.id, clonar(task)); for (const k of ['comments', 'person', 'prioridad', 'etiquetas', 'limite', 'proyecto', 'vote', 'voteReason', 'archived', 'bloqueadaPor', 'version']) { if (r.tarea[k] === undefined) delete task[k]; else task[k] = r.tarea[k]; } }
+  if (r.tarea) { basesRun.set(task.id, clonar(task)); for (const k of ['comments', 'person', 'prioridad', 'etiquetas', 'limite', 'proyecto', 'vote', 'voteReason', 'archived', 'bloqueadaPor', 'repetir', 'cronometro', 'version']) { if (r.tarea[k] === undefined) delete task[k]; else task[k] = r.tarea[k]; } }
   if (r.choques?.length) console.log(`  ⇄ ${task.id}: you changed ${r.choques.join(', ')} while it ran — yours kept`);
   return r;
 }
@@ -1603,8 +1629,33 @@ async function informeRedes(mes, { guardar = false } = {}) {
 const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja, informe: informeRedes,
   analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
-const tareasRoutes = crearRutasTareas({ alm: tareasAlm, cat: catalogoT, json, body, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id) });
+const webhooksT = crearWebhooks({ config: () => cfg.tareas?.webhooks || [], dataDir: DATA, avisar: t => notice('webhook', t, { level: 'warn', key: 'webhook' }) }); webhooksT.escuchar(busTareas); // plan T6: Zapier, Make, n8n… (tareas/webhooks.mjs)
+const tareasRoutes = crearRutasTareas({ alm: tareasAlm, cat: catalogoT, json, body, webhooks: webhooksT, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id) });
 despachadorDependencias({ bus: busTareas, alm: tareasAlm, pump: () => pump(), avisar: (k, t, o) => notice(k, t, o), nombre: id => agentName(id) });
+// plan T5 (6 oct 2026): a task that repeats — when it ends well, the next one is born (one open at a time; «al completar» counts from that day)
+busTareas.on('tarea.estado', ({ tarea, a }) => {
+  if (a !== 'done' || !tarea.repetir) return;
+  const c = siguienteRepeticion(tarea); if (!c) return;
+  if (load().some(t => t.repeatOf === tarea.id && t.state !== 'done')) return; // already born (a second «done» of the same task)
+  const n = altaTarea(c, { por: 'oficina' });
+  console.log(`↻ ${n.id} repeats ${tarea.id} (${c.limite})`);
+});
+// plan T5: deadline reminders — the eve (if it has not started), the day (a person's) and when it is overdue; once each, to the person by Telegram
+function tickLimites() {
+  try {
+    const l = load(), av = avisosLimite(l); if (!av.length) return;
+    const porId = new Map(l.map(t => [t.id, t]));
+    for (const x of av) { const t = porId.get(x.id); (t.avisos ||= {})[x.tipo] = Date.now();
+      const quien = t.person ? t.person : agentName(t.agent), txt = x.tipo === 'vencida' ? `Venció «${t.title}» (${quien}, límite ${String(t.limite).replace('T', ' ')}).` : x.tipo === 'vispera' ? `Mañana vence «${t.title}» y aún no empezó (${quien}).` : `Hoy vence «${t.title}».`;
+      notice('limite', txt, { level: x.tipo === 'vencida' ? 'warn' : 'info', task: t.id, key: `limite-${x.tipo}-${t.id}` });
+      if (t.person && t.person !== 'Tú') tellPerson(t.person, `⚑ ${txt}`); }
+    save(l, { por: 'oficina' });
+    // the projects that went late today: once a day each
+    const hoy = localDay(Date.now());
+    for (const p of catalogoT.proyectos().filter(x => x.estado === 'activo')) { const g = progresoProyecto(p, l); if (g.atrasado && p.avisoAtraso !== hoy) { catalogoT.cambiarProyecto(p.id, { avisoAtraso: hoy }); notice('proyecto', `El proyecto «${p.nombre}» va atrasado: ${g.hechas}/${g.total} hechas${g.vencidas ? `, ${g.vencidas} tareas vencidas` : ''}${g.bloqueadas ? `, ${g.bloqueadas} bloqueadas` : ''}. Míralo en Tareas → Proyectos (H).`, { level: 'warn', key: 'proyecto-' + p.id }); } }
+  } catch (e) { console.warn('límites:', e.message); }
+}
+setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
@@ -1783,13 +1834,21 @@ async function companyBootstrap(url, about) {
 }
 // J8: Dimitri's weekly report, Monday morning — how the week went and what to decide
 const WEEKLY = path.join(DATA, 'weekly.json');
+function tareasSemana(l) { // plan T5: the week in tasks — from the log (cycle time, waiting for the OK, late), and the projects that are late
+  try {
+    const desde = Date.now() - 7 * 864e5, r = resumenTareas({ tareas: l, lineas: tareasAlm.bitacoraDesde(desde, { tipos: ['estado', 'creada'] }), desde, nombre: agentName, depts: DEPTS });
+    const min = m => (m == null ? 'sin datos' : m < 60 ? `${m} min` : `${Math.round(m / 6) / 10} h`);
+    const atr = catalogoT.proyectos().filter(p => p.estado === 'activo').map(p => ({ p, g: progresoProyecto(p, l) })).filter(x => x.g.atrasado);
+    return `Tareas (7 días): ${r.hechas.valor} hechas, ${r.fallidas.valor} fallaron, ${r.tarde.valor} tarde de ${r.tarde.de} con fecha límite; de pedido a hecha ${min(r.cicloMin.valor)}; tu OK tarda ${min(r.esperaOkMin.valor)}; ahora ${r.vencidas.valor} vencidas, ${r.bloqueadas.valor} bloqueadas, ${r.esperanOk.valor} esperan tu OK.${atr.length ? ` Proyectos atrasados: ${atr.map(x => `«${x.p.nombre}» (${x.g.hechas}/${x.g.total})`).join(', ')}.` : ''}`;
+  } catch (e) { return `Tareas: no las pude resumir (${e.message}).`; }
+}
 async function weeklyReport(force = false) {
   const now = new Date(); const wk = `${now.getFullYear()}-${Math.ceil(((now - new Date(now.getFullYear(), 0, 1)) / 864e5 + new Date(now.getFullYear(), 0, 1).getDay() + 1) / 7)}`;
   let st = {}; try { st = JSON.parse(fs.readFileSync(WEEKLY, 'utf8')); } catch {}
   if (!force && (st.week === wk || now.getDay() !== 1 || now.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
   st.week = wk; fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(WEEKLY, JSON.stringify(st));
   const l = load(), c = costs.report(costs.read(DATA, Date.now() - 70 * 864e5), l, AGENTS, cfg.costs), q = quality.byAgent(l, AGENTS), k = loadKpis();
-  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`].join('\n');
+  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l)].join('\n');
   const text = await ask(`Eres ${DEPUTY}, la mano derecha del dueño de ${cfg.name}. Escribes el informe del lunes: claro, concreto, en español, 180–260 palabras, sin relleno.`, `Datos de la semana:\n${facts}\n\nEscribe: 1) cómo fue la semana en tres líneas, 2) lo que salió bien, 3) lo que falló o se atasca, 4) tres decisiones que el dueño debería tomar esta semana, cada una con el porqué. Solo texto.`, { maxTokens: 1200, timeout: 180000, model: 'sonnet', kind: 'informe' });
   const ss = sub.load(DATA); ss.messages.push(sub.message('sub', '📋 Informe de la semana\n\n' + text, { mode: 'analisis' })); sub.save(DATA, ss);
   notice('weekly', `📋 Informe de la semana de ${DEPUTY}:\n${text}`);
@@ -1850,6 +1909,10 @@ function page() {
 // 1 oct 2026 (INF-09, carga bajo demanda): the Estudio's heavy part — the preset bank, the 3D stage, Lotes — beside the page, like the
 // demo's dist/presets-fabrica.js: build.mjs writes dist/estudio-extra.js and src/estudio-carga.js asks for /estudio-extra.js?v=<its hash>
 // the first time it is needed. Gzipped once per build and revalidated (304), the same as the page.
+const TAREAS_VISTA = path.join(ROOT, 'dist', 'tareas-vista.js');
+let tvCache = { mtime: 0 };
+function tareasVistaAlDia(x) { const v = /^\/\*ao-tareas:([0-9a-f]{12})\*\//.exec(x.raw.subarray(0, 40).toString('utf8'))?.[1]; try { return !!v && page().raw.includes(v); } catch { return true; } } // dist/* does not travel by GitHub: after a pull the page may be newer than the view
+function tareasVistaFile() { const st = fs.statSync(TAREAS_VISTA); if (st.mtimeMs !== tvCache.mtime || st.size !== tvCache.raw?.length) { const raw = fs.readFileSync(TAREAS_VISTA); tvCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"t${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return tvCache; }
 const EXTRA = path.join(ROOT, 'dist', 'estudio-extra.js');
 let extraCache = { mtime: 0 };
 function extraFile() {
@@ -2034,6 +2097,13 @@ const server = http.createServer(async (req, res) => {
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(pc.etag)) { res.writeHead(304, { etag: pc.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', etag: pc.etag, vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/tareas-vista.js') { // plan T2: the Tareas view, on demand (build-tareas.mjs)
+      let x; try { x = tareasVistaFile(); if (!tareasVistaAlDia(x)) throw new Error('otra construcción'); } catch { await rebuildOffice(); try { x = tareasVistaFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/tareas-vista.js no está: node build.mjs'); } }
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
+      const gz = /gzip/.test(req.headers['accept-encoding'] || '');
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+      return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/estudio-extra.js') {
       if (!extraMatchesPage()) await rebuildOffice();
@@ -2324,7 +2394,7 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req);
       const cur = load().find(t => t.id === m[1]);
       if (!cur) return json(res, 404, { error: 'esa tarea ya no existe' });
-      if (cur.state !== 'scheduled' && cur.state !== 'next') return json(res, 409, { error: 'solo se edita una tarea que aún no empezó' });
+      if (cur.state !== 'scheduled' && cur.state !== 'next' && cur.state !== 'idea') return json(res, 409, { error: 'solo se edita una tarea que aún no empezó' }); // T2: an idea too
       if (cur.routine && cur.state === 'next') return json(res, 409, { error: 'es una ejecución de rutina: edita la rutina en el calendario' });
       const patch = {};
       if (b.state === 'done') { // «ya está hecha» — closed by the owner without running
@@ -2343,7 +2413,7 @@ const server = http.createServer(async (req, res) => {
         const at = typeof b.at === 'number' ? b.at : /T\d/.test(String(b.at)) ? Date.parse(b.at) : NaN; // a date with no time would be read as UTC midnight: refused
         if (!(at > Date.now() - 60000)) return json(res, 400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
         if (at > Date.now() + 2 * 365 * 864e5) return json(res, 400, { error: 'como mucho dos años adelante' });
-        patch.dueAt = at; if (cur.state === 'next') { patch.state = 'scheduled'; if (cur.needsOk === undefined) patch.needsOk = routines.guessNeedsOk(cur.text || cur.title); }
+        patch.dueAt = at; if (cur.state === 'next' || cur.state === 'idea') { patch.state = 'scheduled'; if (cur.needsOk === undefined) patch.needsOk = routines.guessNeedsOk(cur.text || cur.title); }
       }
       if (typeof b.text === 'string') {
         const t = b.text.trim(); if (!t || t.length > 4000) return json(res, 400, { error: 'el texto debe tener entre 1 y 4000 caracteres' });
@@ -2353,7 +2423,7 @@ const server = http.createServer(async (req, res) => {
       if (b.model !== undefined) patch.model = normModel(b.model) || undefined;
       if (b.effort !== undefined) patch.effort = normEffort(b.effort) || undefined;
       if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk;
-      { const t1 = camposT1(b, { tareaId: m[1] }); if (t1.error) return json(res, 400, t1); if (t1.pasos) t1.pasos = normalizarPasos(t1.pasos, cur.pasos); Object.assign(patch, t1); for (const k of ['prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'pasos']) if (b[k] === null || (Array.isArray(b[k]) && !b[k].length)) patch[k] = undefined; } // T1: also from the edit (any state: /api/tareas/<id>/organizar)
+      { const t1 = camposT1(b, { tareaId: m[1] }); if (t1.error) return json(res, 400, t1); if (t1.pasos) t1.pasos = normalizarPasos(t1.pasos, cur.pasos); Object.assign(patch, t1); for (const k of ['prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'pasos', 'repetir']) if (b[k] === null || (Array.isArray(b[k]) && !b[k].length)) patch[k] = undefined; } // T1: also from the edit (any state: /api/tareas/<id>/organizar)
       const list = load(); const task = list.find(t => t.id === m[1]); // re-read: routing took a moment and the clock (or the page) may have started it
       if (!task || task.state !== cur.state) return json(res, 409, { error: 'la tarea ya empezó mientras la editabas' });
       Object.assign(task, patch); for (const k of Object.keys(patch)) if (patch[k] === undefined) delete task[k]; save(list); if (task.state === 'next') setImmediate(pump);

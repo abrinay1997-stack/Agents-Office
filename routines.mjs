@@ -112,9 +112,11 @@ export function withState(routines, st, now = Date.now()) {
   let changed = false;
   const out = routines.map(r => {
     const s = st[r.id] || (st[r.id] = {});
-    if (!s.nextAt || s.when !== JSON.stringify(r.when)) { s.nextAt = nextRun(r.when, now); s.when = JSON.stringify(r.when); changed = true; }
+    const agotada = r.when?.count && (s.runs || 0) >= r.when.count; // plan T5: «6 veces» — after the sixth it stays still
+    if (agotada) { if (s.nextAt !== null) { s.nextAt = null; changed = true; } }
+    else if (!s.nextAt || s.when !== JSON.stringify(r.when)) { s.nextAt = nextRun(r.when, now); s.when = JSON.stringify(r.when); changed = true; }
     if (Array.isArray(s.skip)) { const keep = s.skip.filter(x => x > now - 864e5); if (keep.length !== s.skip.length) { s.skip = keep; changed = true; } }
-    return { ...r, desc: describe(r.when), skips: s.skip || [], nextAt: r.paused ? null : s.nextAt, lastAt: s.lastAt || null, runs: s.runs || 0, lastTaskId: s.lastTaskId || null, lastLate: !!s.lastLate };
+    return { ...r, desc: describe(r.when), skips: s.skip || [], terminada: !!(r.when?.count && (s.runs || 0) >= r.when.count) || (!!r.when?.end && !s.nextAt), nextAt: r.paused ? null : s.nextAt, lastAt: s.lastAt || null, runs: s.runs || 0, lastTaskId: s.lastTaskId || null, lastLate: !!s.lastLate };
   });
   for (const id of Object.keys(st)) if (!routines.some(r => r.id === id)) { delete st[id]; changed = true; } // deleted routines drop their state
   return { list: out, changed };
@@ -142,7 +144,7 @@ export function due(routines, st, now = Date.now()) {
 export function advance(st, r, now = Date.now(), taskId = null, late = false) {
   const s = st[r.id] || (st[r.id] = {});
   s.lastAt = now; s.runs = (s.runs || 0) + 1; s.lastTaskId = taskId; s.lastLate = late;
-  s.nextAt = nextRun(r.when, now);
+  s.nextAt = r.when?.count && s.runs >= r.when.count ? null : nextRun(r.when, now); // plan T5: a routine with a count stops after its last run
   return s;
 }
 

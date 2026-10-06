@@ -1,0 +1,6 @@
+/* Plan T2 (6 oct 2026): en el calendario (P), la FECHA LÍMITE de una tarea es una marca propia («⚑ vence»), distinta de cuándo arranca:
+   borde punteado del color de su departamento; vencida, en rojo (con texto, no solo color); prioridad alta, borde izquierdo grueso. */
+#calOv .cv-ev.limite { border-style: dashed; background: var(--cv-card); }
+#calOv .cv-ev.limite.vencida { border-color: #B42318; } #calOv .cv-ev.limite.vencida .cv-ev-h, #calOv .cv-ev.limite.vencida .cv-ev-m span { color: #B42318; font-weight: 600; }
+body.dark #calOv .cv-ev.limite.vencida { border-color: #FF8A80; } body.dark #calOv .cv-ev.limite.vencida .cv-ev-h, body.dark #calOv .cv-ev.limite.vencida .cv-ev-m span { color: #FF8A80; }
+#calOv .cv-ev.limite.alta { border-left-width: 4px; border-left-style: solid; }

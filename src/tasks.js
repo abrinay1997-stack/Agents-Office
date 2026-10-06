@@ -682,7 +682,8 @@ export function initTasks(ctx) {
     if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
     else say('Conexión recuperada.');
   }
-  const extraOf = st => Object.fromEntries(['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'person', 'handoff', 'comments', 'example'].map(k => [k, st[k]]));
+  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft', 'person', 'handoff', 'comments', 'example', 'prioridad', 'etiquetas', 'limite', 'estimacion', 'proyecto', 'pasos', 'bloqueadaPor']; // V4.4: what the detail shows (G, D) · plan T1: the task's organisation (the calendar, the bar from the real steps)
+  const extraOf = st => Object.fromEntries(EXTRA.filter(k => !['cost', 'guard', 'heldForOk', 'draft'].includes(k)).map(k => [k, st[k]])); // one list with apply() (it used to be copied here by hand)
   const fromServer = st => ({ ...extraOf(st), id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
     addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, guard: st.guard, heldForOk: !!st.heldForOk, cost: st.cost, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
@@ -729,7 +730,6 @@ export function initTasks(ctx) {
       if (R[to]) { feedPush(R[to], '📨', `Nota de ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `nota de ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
     }
   }
-  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft', 'person', 'handoff', 'comments', 'example']; // V4.4: what the detail shows (G, D)
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
     for (const k of EXTRA) if (JSON.stringify(t[k]) !== JSON.stringify(st[k])) { t[k] = st[k]; dirty = true; }
@@ -1183,6 +1183,7 @@ export function initTasks(ctx) {
         if (d.live) {
           if (!d.running) d.running = true; // the server runs it; apply() brings the result
           if (d.ready) { d.progress = 1; complete(d); }
+          else if (d.pasos?.length) d.progress = Math.min(0.96, d.pasos.filter(p => p.hecho).length / d.pasos.length); // plan T1: the steps the agent marked (tareas-mcp → marcar_paso), not a guess
           else d.progress = Math.min(0.92, (now - (d.startedAt || now)) / 45000);
         } else if (d.teamHold) { // demo lead: the card fills as the pieces come in, finishes when the last one lands
           const ps = tasks.filter(x => x.parent === d.id);

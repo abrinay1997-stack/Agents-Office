@@ -22,7 +22,7 @@ export function crearCatalogo({ dataDir, ahora = () => Date.now() } = {}) {
     if (!nombre) return { error: 'el proyecto necesita un nombre' };
     const lim = datos.limite === undefined ? previo.limite ?? null : limiteValido(datos.limite);
     if (lim === undefined) return { error: 'la fecha límite va como AAAA-MM-DD' };
-    const p = { ...previo, nombre,
+    const p = { ...previo, ...(/^\d{4}-\d{2}-\d{2}$/.test(datos.avisoAtraso || '') ? { avisoAtraso: datos.avisoAtraso } : {}), nombre, // avisoAtraso: el día que la oficina ya avisó que va atrasado (serve.mjs)
       color: COLORES.includes(datos.color) ? datos.color : previo.color || COLORES[Math.floor(Math.random() * 6)],
       objetivo: String(datos.objetivo ?? previo.objetivo ?? '').trim().slice(0, 500),
       estado: ESTADOS_PROYECTO.includes(datos.estado) ? datos.estado : previo.estado || 'activo',

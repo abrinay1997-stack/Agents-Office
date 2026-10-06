@@ -7,6 +7,8 @@
 //   sigue siendo cuándo ARRANCA) · estimacion minutos · pasos [{ id, texto, hecho, por, at }] · bloqueadaPor [id] · proyecto id ·
 //   orden número (orden manual dentro de su estado, ver orden.mjs) · version (sube en cada cambio, almacen.mjs) · v 2 (el esquema).
 
+import { leerRepetir } from './ritmo.mjs';
+
 export const ESQUEMA = 2;
 export const PRIORIDADES = ['alta', 'media', 'baja'];
 export const PESO_PRIORIDAD = { alta: 0, media: 1, baja: 2 };
@@ -71,6 +73,7 @@ export function crearTarea(campos = {}, { id = nidBase, ahora = Date.now() } = {
   const bl = lista(c.bloqueadaPor, MAX.bloqueadaPor).filter(x => x !== t.id); if (bl.length) t.bloqueadaPor = bl;
   if (c.proyecto) t.proyecto = String(c.proyecto);
   if (Number.isFinite(c.orden)) t.orden = c.orden;
+  { const r = leerRepetir(c.repetir); if (r.repetir) t.repetir = r.repetir; } // plan T5
   t.v = ESQUEMA; t.version = 1;
   return t;
 }
@@ -105,5 +108,6 @@ export function leerCampos(b = {}, { existeProyecto = () => true, existeEtiqueta
   if (b.pasos !== undefined) { if (!Array.isArray(b.pasos)) return { error: 'los pasos van en una lista' }; if (b.pasos.length > MAX.pasos) return { error: `como mucho ${MAX.pasos} pasos` }; c.pasos = b.pasos; }
   if (b.bloqueadaPor !== undefined) { if (!Array.isArray(b.bloqueadaPor)) return { error: 'los bloqueos van en una lista de tareas' }; if (b.bloqueadaPor.length > MAX.bloqueadaPor) return { error: `como mucho ${MAX.bloqueadaPor} bloqueos` }; c.bloqueadaPor = b.bloqueadaPor.map(String); }
   if (b.orden !== undefined) { if (!Number.isFinite(+b.orden)) return { error: 'el orden es un número' }; c.orden = +b.orden; }
+  if (b.repetir !== undefined) { const r = leerRepetir(b.repetir); if (r.error) return { error: r.error }; c.repetir = r.repetir; } // plan T5
   return { campos: c };
 }

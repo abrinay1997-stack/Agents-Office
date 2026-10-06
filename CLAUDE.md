@@ -92,7 +92,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 **Siguiente, en este orden:**
 0. **Auditoría del Estudio de imagen (6 oct 2026):** `docs/auditoria-estudio-imagen-2026-10-06.md`. Son 53 puntos (4 críticos) y un plan en 7 fases. **La Fase 1 está hecha (6 oct):** Variar es un pedido propio con su costo, lo que carga el compositor ofrece DESHACER (`src/studio-borrador.js`), los errores del proveedor se leen en español (`media/errores.mjs`), el precio va en GENERAR y Avanzado ya no se contradice. **La Fase 2 también (6 oct):** una sola lista de acciones por archivo (`src/studio-acciones.js`), la ficha de un pedido con las acciones de cada imagen, lo nuevo marcado, «Vaciar» con DESHACER, la barra de la galería en una fila («Mostrar ▾», carpetas, «⋯» con Historial, Papelera y Motores), «Voces» solo en Voz, y el teléfono más compacto. **Fase 3 (6 oct):** tokens de letra y radios (`src/css/componentes.css`), confirmar un gasto con un segundo clic (`src/studio-confirmar.js`), el día cuenta archivos, Animar con su icono. **Fase 4 (6 oct):** los atajos de una tecla se apagan en Ajustes → Atajos de teclado (`src/teclas1.js`, compartido con el paquete aparte en `build-extra.mjs → COMPARTIDOS`): un atajo nuevo de una letra debe respetar `ignorar(e)`. **Fase 5 (6 oct):** el Básico de imagen (`#studioOv.st-basico`) es la idea primero, «Automático» (`src/studio-auto.js`), «Formato» y «Cantidad» como selectores, «Imagen» junto a la idea y la mejora como propuesta en español: 14 controles. **Fase 6 (6 oct):** Avanzado tiene un solo Material (las referencias pasan al banco y vuelven al salir), el banco va al lado de la galería desde 1100 px, Comparar (`src/studio-comparar.js`: 2–4 seleccionadas o una versión con su original), la semilla en los modelos que la documentan, plantillas como notas del Cerebro (`plantillas.mjs`, `<cerebro>/Estudio/Plantillas/`, `/api/media/plantillas`) y B avisa que pasó a Avanzado. **Fase 7 (6 oct):** Variar se queda en el visor, Repetir/Animar/Usar de referencia dejan «VOLVER A LA IMAGEN» (`desdeVisor`), «Plegar» con icono, la barra fija del visor en el teléfono y microinteracciones que respetan «reducir movimiento». Quedan en parte IMG-24 e IMG-45. **Después, pedido del dueño (6 oct):** en la tarjeta, Usar de referencia, Descargar y la papelera van a la vista (`fila` de `src/studio-acciones.js`; el «⋯» ya no las repite y Editar/Variar se quedan en su icono en una tarjeta angosta); los dos paneles se ensanchan arrastrando su borde (`src/studio-paneles.js`: compositor 420–760 px, banco/escenario 460–1100; lo de siempre es lo más angosto; teclado ← →, Inicio, Fin; doble clic vuelve; se recuerda en `ao.st.izq` y `ao.st.der`) y el derecho se **oculta** sin cerrarse (pestaña al borde) o va a **toda la ventana**; en Básico formato, tamaño/calidad y cantidad son botones a la vista (también la calidad en Avanzado: `CALIDAD` en `src/studio.js`). Al tocar el compositor, la galería o el visor, mira antes sus puntos. Para medir: `node scripts/estudio-imagen-recorrido.mjs` (con `AO_AXE=<axe.min.js>` para pasar axe).
 0. **Redes sociales más allá de Metricool (6 oct 2026):** `docs/analisis-metricool-cli-2026-10-06.md` analiza metricool-cli y propone un **conductor de publicación** (simulacro · Metricool · Meta) detrás de nuestra cola y aprobaciones, en fases M0–M5. El dueño dijo «mejora todo»: se asumió simulacro por defecto, Metricool como conductor real, las nueve redes y la bandeja con su OK. **Hechas M0 a M5** (ver «Publicar en redes»; de M5 quedan fuera competidores, hashtags y smart links). Lo primero con la key real del dueño: `node scripts/check-metricool.mjs` (solo crea y borra un borrador) y anotar en el análisis qué rutas «por verificar» respondieron.
-0. **Tareas a otro nivel, ideas de TaskView (6 oct 2026):** `docs/analisis-taskview-2026-10-06.md`. **Su licencia prohíbe productos competidores: solo ideas, nada de su código.** Plan T0–T6; **T0 (cimientos) va primero y no se salta**: módulo `tareas/` con una sola fábrica (`crearTarea`), estados de verdad, almacén con versión y mezcla, bitácora y bus de eventos. Luego prioridad, etiquetas, fecha límite, pasos, dependencias, proyectos, las vistas Inicio/Lista/Tablero/Proyectos y `tareas-mcp.mjs` para los agentes. Faltan las 5 decisiones del dueño (§11). T0 encoge `serve.mjs` y `src/tasks.js`: avisar al equipo antes.
+0. **Tareas a otro nivel, ideas de TaskView (6 oct 2026):** `docs/analisis-taskview-2026-10-06.md` (**su licencia prohíbe productos competidores: solo ideas, nada de su código**). El dueño dijo «empieza con todo»: **hechas T0 a T6** (ver «Tareas»). Queda por probar con agentes de verdad (Claude real) que marquen pasos y pidan bloqueos, y ajustar la skill de cada departamento si hace falta; los webhooks con un Zapier de verdad.
 0. **Probar MiniMax con la key real del dueño:** `node scripts/check-minimax.mjs` (con `--video` y `--music`) y luego una clonación grabando desde el panel «Voces». Ajustar los precios marcados «aproximado» con su primera factura.
 1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
@@ -210,7 +210,8 @@ When the owner says "every Monday …", "each morning …", "on a schedule", "au
 
 - `id` short, unique, lower-case. `dept` one of the six. `agent` an id from the roster in that department; pick the seat whose `does` matches, and say which one you chose.
 - `text` is what the agent is asked to do, written as the owner would type it. `title` is the card on the board (under 90 characters).
-- `when`: `{"kind":"daily","at":"HH:MM"}` · `{"kind":"weekdays","at":"HH:MM"}` · `{"kind":"weekly","days":[1,4],"at":"HH:MM"}` (0 = Sunday) · `{"kind":"hourly","every":1,"from":"09:00","to":"17:00","weekdaysOnly":true}` · `{"kind":"minutes","every":2}` (filming only). Times are the machine's local clock, 24-hour.
+- `when`: `{"kind":"daily","at":"HH:MM"}` · `{"kind":"weekdays","at":"HH:MM"}` · `{"kind":"weekly","days":[1,4],"at":"HH:MM"}` (0 = Sunday) · `{"kind":"monthly","day":15,"at":"HH:MM"}` (`day: -1` = the last day) · `{"kind":"monthly","nth":2,"weekday":2,"at":"HH:MM"}` (the second Tuesday; `nth: -1` = the last) · `{"kind":"hourly","every":1,"from":"09:00","to":"17:00","weekdaysOnly":true}` · `{"kind":"minutes","every":2}` (filming only). Times are the machine's local clock, 24-hour.
+- `when.end`: `"YYYY-MM-DD"`, optional (plan T5, 6 Oct 2026) — nothing fires after that day («until 30 November»). `when.count`: N, optional — N runs and it stops («6 times»); the calendar and `/api/routines` say `terminada`.
 - `when.start`: `"YYYY-MM-DD"`, optional (V3.2.1) — the routine starts on that date and never fires before it ("from next Monday", "starting 5 October"). Leave it out to start now. The owner can also set one by clicking a day in the calendar (P) with REPEAT on.
 - `needsOk` (default true): the result waits in WAITING ON APPROVAL for the owner's tick before the agent sends, pays or changes anything. Leave it on unless the routine only reads and reports (a triage, a list, a reconciliation), and say which you chose and why.
 - `paused: true` keeps it on the timetable without firing.
@@ -582,7 +583,48 @@ Plan y decisiones: `docs/analisis-taskview-2026-10-06.md` (ideas de TaskView, **
   - `rutas.mjs`: `/api/tareas/*` (organizar, estado, paso, nota, bloqueo, orden, lote, proyectos, etiquetas, agenda, resumen, borrador, registro). Las de siempre (`/api/tasks`) siguen en `serve.mjs`.
   - El despachador de dependencias desbloquea y avisa al terminar una tarea.
 - **Los agentes** (`tareas-mcp.mjs`, en todas las mesas; `tareas` va en `INTERNAL` de `safety.mjs`): `ver_mi_tarea`, `ver_tareas`, `ver_agenda`, `marcar_paso`, `anotar_en_bitacora`, `pedir_bloqueo` (con un texto, nace «Para ti: …» para el dueño, prioridad alta; la tarea se para con lo que lleva y sigue sola), `crear_borrador_tarea` (nace **idea**) y `registrar_trabajo`. **Ninguna aprueba, envía, borra ni cambia estado, prioridad o fecha límite**; `tests/tareas-servidor.test.mjs` falla si aparece una así. Una tarea en curso está **tomada** (`tomadaPor`).
-- Tests: `tests/tareas-modelo.test.mjs` (puros), `tests/tareas-servidor.test.mjs` (almacén, rutas, MCP), `tests/tareas-ejecucion.test.mjs` (serve.mjs real: el comentario durante una ejecución sobrevive; la cola espera a la bloqueada).
+- **La vista Tareas** (tecla **H**, botón del dock; en el teléfono va en el «⋯»):
+  - Va en un **paquete aparte**: `dist/tareas-vista.js`, que arma `build-tareas.mjs` desde `src/tareas/vista.js` con `src/css/tareas.css`. La página solo lleva `src/tareas-carga.js`, que lo trae al abrir. `serve.mjs` lo sirve en `/tareas-vista.js` y lo reconstruye si es de otra construcción (su primera línea `/*ao-tareas:<versión>*/`). Un módulo de la vista se importa solo desde `src/tareas/`; si la página lo importa, `build.mjs` falla.
+  - Las pestañas:
+    - Inicio (`inicio.js`).
+    - Lista (`lista.js`, con filtros en la dirección `#tareas=lista&prio=alta&t=<id>`).
+    - Tablero (`tablero.js`, con `movimiento()` puro).
+    - Proyectos (`proyectos.js`, con el mapa: `capas()`).
+    - Medidas (`medidas.js`).
+  - El detalle (`detalle.js`) se guarda solo a los 500 ms; sus campos se ordenan y se ocultan («Personalizar», `ao.tv.campos`).
+  - La fila es una sola (`comun.js → filaHTML`): el título es el botón que la abre.
+  - Arrastrar nunca usa `confirm()`: hace el cambio y ofrece DESHACER.
+  - En la demo, los datos de ejemplo de `src/tareas/demo.js`.
+  - Recorrido: `node scripts/tareas-recorrido.mjs` (con `AO_AXE=<axe.min.js>` pasa axe).
+- **Añadir rápido** (`tareas/rapida.mjs`):
+  - `#etiqueta` (se crea al vuelo) y `!alta` o «urgente» para la prioridad.
+  - «para el viernes», «antes del 20» o «hasta el 3 de noviembre» son la **fecha límite**.
+  - «el lunes a las 9», sin «para», es cuándo **arranca** (`parseOnce`).
+- **Calendario (P):** la fecha límite sale como «⚑ vence» (`kind: 'limite'`, `src/css/calendario-limite.css`) y lo programado dice su duración. El `.ics` lleva la duración de la estimación y la fecha límite como evento de día.
+- **Dimitri y los proyectos (T4):**
+  - Su plan puede traer `proyecto` (nuevo, o `{id}` de uno de `<proyectos>`). Cada pieza puede traer `prioridad`, `limite` y `espera` (índices de otras piezas; los círculos se rompen en `sub.parsePlan`).
+  - Al pulsar ENVIAR, cada pieza nace con su id ya puesto (`newTask({ id })`), así que «espera a las fotos» existe antes de que la cola pueda arrancarla.
+  - Ve `sub.proyectosText` (progreso, atrasos y quién bloquea a quién) y las vencidas y bloqueadas en `<estado>`.
+- **Ritmo (T5):**
+  - Las rutinas pueden ser `monthly` (`day` 1..31 o −1, o `nth` + `weekday`), con `end` y `count` (ver «Routines»).
+  - Una tarea puede llevar `repetir { cada, modo: fijo|alcompletar, hasta? }` (`tareas/ritmo.mjs`): al terminar bien nace la siguiente, y solo hay una abierta a la vez.
+  - Los avisos de fecha límite llegan la víspera, el día (si es de una persona) y al vencer, una vez cada uno (`t.avisos`). Si es de una persona, también por Telegram.
+  - Un proyecto atrasado avisa una vez al día.
+  - El resumen del lunes trae las cifras de las tareas (`tareasSemana`).
+- **Pulido (T6):**
+  - Cronómetro de las personas (`tareas/cronometro.mjs`): uno activo por persona, a mano en Inicio y en el detalle.
+  - **Webhooks salientes** (`tareas/webhooks.mjs`), en `office.config(.local).json → tareas.webhooks: [{ id, url, eventos, secreto }]`:
+    - `secreto` es el NOMBRE de una variable de entorno: la clave nunca va en un archivo. Con ella se firma `X-AO-Firma: sha256=…`.
+    - Solo https, nunca a una red privada.
+    - 3 intentos; tras 10 fallos seguidos se apaga y avisa. Su estado se ve en Medidas, con «Encender».
+    - Sale lo justo: nunca el resultado ni los comentarios.
+- Tests:
+  - `tests/tareas-modelo.test.mjs`: lo puro.
+  - `tests/tareas-servidor.test.mjs`: el almacén, las rutas y el MCP.
+  - `tests/tareas-ejecucion.test.mjs`: con el serve.mjs real, el comentario hecho durante una ejecución sobrevive y la cola espera a la bloqueada.
+  - `tests/tareas-vista.test.mjs`: la vista y su paquete.
+  - `tests/tareas-ritmo.test.mjs`: Dimitri, las rutinas mensuales, repetir y los avisos.
+  - `tests/tareas-pulido.test.mjs`: el cronómetro, los webhooks y los campos.
 
 ## Everything else
 

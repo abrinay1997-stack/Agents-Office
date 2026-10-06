@@ -5,17 +5,17 @@
 // ORGANIZACIÓN (prioridad, etiquetas, fecha límite, proyecto, estimación, bloqueos, orden, pasos) en cualquier momento salvo hecha.
 
 export const TRABAJO = ['text', 'title', 'agent', 'model', 'effort', 'at', 'needsOk'];
-export const ORGANIZACION = ['prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'orden', 'pasos'];
+export const ORGANIZACION = ['prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'orden', 'pasos', 'repetir'];
 
 const PUEDE = {
   dueno: new Set([...TRABAJO, ...ORGANIZACION]),
-  persona: new Set(['pasos', 'etiquetas', 'estimacion']),
-  jefe: new Set(['agent', 'prioridad', 'etiquetas', 'limite', 'pasos', 'estimacion', 'bloqueadaPor', 'orden']),
-  dimitri: new Set(['text', 'title', 'at', 'prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor']),
+  persona: new Set(['pasos', 'etiquetas', 'estimacion', 'repetir']),
+  jefe: new Set(['agent', 'prioridad', 'etiquetas', 'limite', 'pasos', 'estimacion', 'bloqueadaPor', 'orden', 'repetir']),
+  dimitri: new Set(['text', 'title', 'at', 'prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'repetir']),
   agente: new Set(['pasos']), // y solo marcar los de SU tarea en curso: ver puedeMarcarPaso
   telegram: new Set([]),
 };
-const NOMBRE = { text: 'el texto', title: 'el título', agent: 'el agente', model: 'el modelo', effort: 'el esfuerzo', at: 'la hora', needsOk: '«necesita tu OK»', prioridad: 'la prioridad', etiquetas: 'las etiquetas', limite: 'la fecha límite', proyecto: 'el proyecto', estimacion: 'la estimación', bloqueadaPor: 'los bloqueos', orden: 'el orden', pasos: 'los pasos' };
+const NOMBRE = { text: 'el texto', title: 'el título', agent: 'el agente', model: 'el modelo', effort: 'el esfuerzo', at: 'la hora', needsOk: '«necesita tu OK»', prioridad: 'la prioridad', etiquetas: 'las etiquetas', limite: 'la fecha límite', proyecto: 'el proyecto', estimacion: 'la estimación', bloqueadaPor: 'los bloqueos', orden: 'el orden', pasos: 'los pasos', repetir: 'cómo se repite' };
 
 // → { ok } | { ok: false, campo, motivo }
 export function revisar(t, campos, quien = 'dueno') {
@@ -25,7 +25,7 @@ export function revisar(t, campos, quien = 'dueno') {
     if (!(k in NOMBRE)) continue;
     if (!lista.has(k)) return { ok: false, campo: k, motivo: `${quien === 'agente' ? 'un agente' : quien === 'persona' ? 'una persona del equipo' : quien === 'jefe' ? 'el jefe' : quien} no puede cambiar ${NOMBRE[k]}` };
     if (TRABAJO.includes(k) && empezada) return { ok: false, campo: k, motivo: `${NOMBRE[k]} solo se cambia antes de que empiece` };
-    if (ORGANIZACION.includes(k) && t.state === 'done' && !t.error && !['etiquetas', 'proyecto'].includes(k)) return { ok: false, campo: k, motivo: `ya está hecha: ${NOMBRE[k]} no cambia` };
+    if (ORGANIZACION.includes(k) && t.state === 'done' && !t.error && !['etiquetas', 'proyecto', 'repetir'].includes(k)) return { ok: false, campo: k, motivo: `ya está hecha: ${NOMBRE[k]} no cambia` };
   }
   return { ok: true };
 }

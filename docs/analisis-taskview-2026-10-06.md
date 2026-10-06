@@ -712,13 +712,21 @@ Cada fase termina con:
 
 | Fase | Qué entrega | «Hecho» cuando |
 |---|---|---|
-| **T0 · Cimientos** (sin cambios visibles) | `tareas/` con modelo, estados, almacén con versión y mezcla, bitácora, bus y despachadores. Las **seis fábricas** pasan a llamar a `crearTarea()`. Migración v1→v2 con copia. Rutas fuera de `serve.mjs`. Se arreglan: cambios perdidos, `!t.piece` muerto, tope de concurrencia con equipos, orden NaN de la pizarra, `confirm()`/`alert()`. | Todo funciona igual que hoy, más rápido y sin perder cambios. Test de puertas y de cambios simultáneos en verde. |
-| **T1 · La tarea completa** | prioridad, etiquetas, fecha límite, estimación, **pasos** (el plan del enrutador y las piezas de equipo), dependencias con detección de ciclos, proyecto. El detalle nuevo con campos únicos, guardado solo, bitácora legible y `#tarea=` en la dirección. | Una tarea se puede describir entera y los agentes marcan sus pasos. |
-| **T2 · Las vistas** | Inicio (6 secciones), Lista (filtros en la dirección, chips, selección múltiple, agrupar), Tablero (estados, orden fraccional, sin `confirm`), Calendario con fecha límite y duración. Ctrl+K «crear con este texto». | El dueño encuentra «qué hay hoy» en una mirada y ordena arrastrando. |
-| **T3 · Los agentes** | `tareas-mcp.mjs` (§7.1), tomar la tarea, permisos por campo en todas las puertas, la cola con prioridad, límite y bloqueos, skills al día, evals de una skill de tareas. | Un agente marca pasos, pide bloqueo y propone trabajo a otro departamento sin poder aprobar nada. |
-| **T4 · Proyectos y Dimitri** | Proyectos con progreso, Dimitri planifica proyectos con dependencias y fechas, avisos de atraso con el porqué, vista Proyectos. | El ejemplo del §7.3 funciona de punta a punta. |
-| **T5 · Ritmo y medida** | Recurrencia ampliada (mensual, n-ésimo, fin, veces, al completar, vista previa de 5), recordatorios de fecha límite, `.ics` con duración, Analíticas de tareas con «ver las tareas», mapa de dependencias. | El resumen del lunes dice tiempos de ciclo y atrasos reales. |
-| **T6 · Pulido** | Campos ordenables y ocultables en Ajustes, modal o panel lateral, cronómetro para personas, webhooks salientes, auditoría de accesibilidad con axe. | Auditoría limpia y recorridos en verde. |
+| **T0 · Cimientos** (sin cambios visibles) ✅ | `tareas/` con modelo, estados, almacén con versión y mezcla, bitácora, bus y despachadores. Las **seis fábricas** pasan a llamar a `crearTarea()`. Migración v1→v2 con copia. Rutas fuera de `serve.mjs`. Se arreglan: cambios perdidos, `!t.piece` muerto, tope de concurrencia con equipos, orden NaN de la pizarra, `confirm()`/`alert()`. | Todo funciona igual que hoy, más rápido y sin perder cambios. Test de puertas y de cambios simultáneos en verde. |
+| **T1 · La tarea completa** ✅ | prioridad, etiquetas, fecha límite, estimación, **pasos** (el plan del enrutador y las piezas de equipo), dependencias con detección de ciclos, proyecto. El detalle nuevo con campos únicos, guardado solo, bitácora legible y `#tarea=` en la dirección. | Una tarea se puede describir entera y los agentes marcan sus pasos. |
+| **T2 · Las vistas** ✅ | Inicio (6 secciones), Lista (filtros en la dirección, chips, selección múltiple, agrupar), Tablero (estados, orden fraccional, sin `confirm`), Calendario con fecha límite y duración. Ctrl+K «crear con este texto». | El dueño encuentra «qué hay hoy» en una mirada y ordena arrastrando. |
+| **T3 · Los agentes** ✅ | `tareas-mcp.mjs` (§7.1), tomar la tarea, permisos por campo en todas las puertas, la cola con prioridad, límite y bloqueos, skills al día, evals de una skill de tareas. | Un agente marca pasos, pide bloqueo y propone trabajo a otro departamento sin poder aprobar nada. |
+| **T4 · Proyectos y Dimitri** ✅ | Proyectos con progreso, Dimitri planifica proyectos con dependencias y fechas, avisos de atraso con el porqué, vista Proyectos. | El ejemplo del §7.3 funciona de punta a punta. |
+| **T5 · Ritmo y medida** ✅ | Recurrencia ampliada (mensual, n-ésimo, fin, veces, al completar, vista previa de 5), recordatorios de fecha límite, `.ics` con duración, Analíticas de tareas con «ver las tareas», mapa de dependencias. | El resumen del lunes dice tiempos de ciclo y atrasos reales. |
+| **T6 · Pulido** ✅ | Campos ordenables y ocultables en Ajustes, modal o panel lateral, cronómetro para personas, webhooks salientes, auditoría de accesibilidad con axe. | Auditoría limpia y recorridos en verde. |
+
+**Estado (6 oct 2026):** el dueño dijo «empieza con todo» y se tomaron las recomendaciones del §11. Proyectos transversales: sí. Estados fijos: sí. Tareas de personas: sí (recordatorios, repetir al completar y cronómetro). Tablero por estados con carriles por departamento: sí. T0 primero: sí. **Hechas T0 a T6.**
+
+Lo que se hizo distinto de lo escrito arriba:
+- Las tareas siguen en `data/tasks.json`, no en `data/tareas/tareas.json`. Se migran al leer (`normalizar`), así las copias diarias y `Volver-Atras.bat` no cambian.
+- Los estados guardados son los de siempre, más `idea`; lo demás (fallida, bloqueada, en manos de una persona) se deduce con `visible()`. Así ni la página, ni Telegram, ni las cuentas tuvieron que cambiar de golpe.
+- «Tomar» una tarea es `tomadaPor` mientras corre, y la mezcla (`guardarEjecucion`) evita perder lo del dueño. No hace falta comparar versiones a mano.
+- La vista Tareas convive con el panel (T) y la pizarra (B). No los reemplaza: el panel sigue siendo el chat y el pulso de la oficina en 3D.
 
 **Orden recomendado:** T0 → T1 → T2 → T3 → T4 → T5 → T6. **T0 no se salta.** Todo lo demás se apoya en la fábrica única, la bitácora y el bus; sin ellos, cada mejora repetiría los defectos del §3.3.
 

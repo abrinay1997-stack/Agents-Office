@@ -4,7 +4,7 @@
 #subOv { top: 52px; left: 0; bottom: 0; width: var(--subW); min-width: 340px; border: 0; border-right: 1px solid var(--hairline); border-radius: 0; box-shadow: 8px 0 30px rgba(21,20,20,.08); transform: translateX(-12px); }
 #subOv.on { transform: none; }
 @media (min-width: 900px) {
-  body.subOpen :is(#studioOv, #calOv, #ctOv, #anOv, #brainOv) { left: max(var(--subW), 340px); }
+  body.subOpen :is(#studioOv, #calOv, #ctOv, #anOv, #brainOv, #tvOv) { left: max(var(--subW), 340px); }
 }
 @media (max-width: 899px) {
   #subOv { inset: 0; width: auto; min-width: 0; z-index: 66; border-right: 0; box-shadow: none; }
@@ -196,3 +196,10 @@ body.dark .sb-mode.stopped { color: #FFB4AB; border-color: rgba(255,180,171,.5);
 .sb-quickn { font-size: 11.5px; color: var(--grey); flex: 1 1 200px; }
 .sb-analyze { font: 600 12px var(--ui); min-height: 32px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); cursor: pointer; }
 .sb-analyze:hover { filter: brightness(1.15); }
+/* Plan T4 (6 oct 2026): el plan de Dimitri dice el proyecto, la prioridad, para cuándo y a qué pieza espera cada una */
+#subOv .sb-proy { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; background: rgba(43,107,235,.08); font-size: 13px; }
+#subOv .sb-proy span { width: 100%; color: var(--grey); font-size: 12px; }
+#subOv .sb-org { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; font-size: 12px; }
+#subOv .sb-org span { padding: 1px 8px; border-radius: 99px; background: rgba(21,20,20,.06); min-height: 22px; display: inline-flex; align-items: center; }
+#subOv .sb-org .sb-alta { color: #B42318; background: rgba(180,35,24,.1); font-weight: 600; }
+body.dark #subOv .sb-proy { background: rgba(143,176,255,.12); } body.dark #subOv .sb-org span { background: rgba(236,234,227,.08); } body.dark #subOv .sb-org .sb-alta { color: #FF8A80; background: rgba(255,138,128,.12); }

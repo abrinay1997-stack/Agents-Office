@@ -12,11 +12,12 @@ import { agenda, agendaTexto } from './agenda.mjs';
 import { progresoProyecto } from './progreso.mjs';
 import { COLORES, ESTADOS_PROYECTO } from './catalogo.mjs';
 import { resumenTareas } from './resumen.mjs';
+import { iniciar as iniciarCrono, parar as pararCrono, activo as activoCrono } from './cronometro.mjs';
 
 const ID = /^[a-z0-9]{4,24}$/i;
 const MAX_NOTAS = 60;
 
-export function crearRutasTareas({ alm, cat, json, body, pump = () => {}, agentes = [], depts = {}, leadOf = () => null, avisar = () => {}, altaTarea, nombre = id => id, ahora = () => Date.now() }) {
+export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump = () => {}, agentes = [], depts = {}, leadOf = () => null, avisar = () => {}, altaTarea, nombre = id => id, ahora = () => Date.now() }) {
   const agente = id => agentes.find(a => a.id === id);
   // quién llama: un agente (su MCP manda por: 'agente' y su id), Dimitri, Telegram (cabecera) o el dueño (la página)
   function quien(req, b = {}) {
@@ -69,7 +70,7 @@ export function crearRutasTareas({ alm, cat, json, body, pump = () => {}, agente
 
   return async function rutas(req, res, url) {
     const p = url.pathname; if (!p.startsWith('/api/tareas')) return false;
-    const m = p.match(/^\/api\/tareas\/([a-z0-9]{4,24})(?:\/(bitacora|organizar|paso|nota|bloqueo|estado))?$/i);
+    const m = p.match(/^\/api\/tareas\/([a-z0-9]{4,24})(?:\/(bitacora|organizar|paso|nota|bloqueo|estado|cronometro))?$/i);
     try {
       if (p === '/api/tareas/catalogo' && req.method === 'GET') return json(res, 200, catalogo()), true;
       if (p === '/api/tareas/agenda' && req.method === 'GET') {
@@ -77,6 +78,9 @@ export function crearRutasTareas({ alm, cat, json, body, pump = () => {}, agente
         const pl = l => l.map(t => ({ id: t.id, title: t.title, agent: t.agent, dept: t.dept, state: t.state, prioridad: t.prioridad, limite: t.limite || null, dueAt: t.dueAt || null, pasos: t.pasos ? [t.pasos.filter(x => x.hecho).length, t.pasos.length] : null }));
         return json(res, 200, { ...Object.fromEntries(['esperanOk', 'hoy', 'vencidas', 'enCurso', 'bloqueadas', 'proximas', 'recientes'].map(k => [k, pl(a[k])])), texto: agendaTexto(a, { nombre }) }), true;
       }
+      if (p === '/api/tareas/cronometro' && req.method === 'GET') { const a = activoCrono(alm.load(), String(url.searchParams.get('quien') || 'Tú')); return json(res, 200, { activo: a ? { id: a.tarea.id, title: a.tarea.title, desde: a.desde } : null }), true; }
+      if (p === '/api/tareas/webhooks' && req.method === 'GET') return json(res, 200, webhooks ? webhooks.estado() : { destinos: [], historial: [], apagados: {} }), true;
+      { const wm = p.match(/^\/api\/tareas\/webhooks\/([a-z0-9_-]{1,40})\/encender$/i); if (wm && req.method === 'POST') { if (quien(req, {}).rol !== 'dueno') return json(res, 403, { error: 'solo el dueño' }), true; webhooks?.encender(wm[1]); return json(res, 200, { ok: true }), true; } }
       if (p === '/api/tareas/resumen' && req.method === 'GET') {
         const dias = Math.max(7, Math.min(180, +url.searchParams.get('dias') || 30)), desde = ahora() - dias * 864e5;
         return json(res, 200, resumenTareas({ tareas: alm.load(), lineas: alm.bitacoraDesde(desde, { tipos: ['estado', 'creada'] }), desde, ahora: ahora(), nombre, depts })), true;
@@ -170,6 +174,14 @@ export function crearRutasTareas({ alm, cat, json, body, pump = () => {}, agente
       if (accion === 'estado') {
         if (q.rol === 'agente') return json(res, 403, { error: 'un agente no cambia el estado de una tarea: entrega su trabajo' }), true;
         const r = cambiarEstado(id, String(b.a || ''), q); return json(res, r.status || 200, r), true;
+      }
+      if (accion === 'cronometro') { // plan T6: el tiempo de una persona (uno activo por persona: empezar otro para el anterior)
+        if (q.rol === 'agente') return json(res, 403, { error: 'los agentes miden su tiempo solos' }), true;
+        const quienEs = q.rol === 'telegram' ? q.por.slice(9) || 'Tú' : String(b.quien || 'Tú').slice(0, 60);
+        const l = alm.load(); let r;
+        if (b.accion === 'iniciar') { r = iniciarCrono(l, id, quienEs, ahora()); if (r.error) return json(res, 409, r), true; }
+        else { const t = l.find(x => x.id === id); if (!t) return json(res, 404, { error: 'esa tarea ya no existe' }), true; r = { paradas: pararCrono(t, quienEs, ahora()) ? [id] : [] }; }
+        alm.save(l, { por: q.por }); return json(res, 200, { ok: true, ...r, activo: (({ tarea, desde } = {}) => tarea ? { id: tarea.id, title: tarea.title, desde } : null)(activoCrono(l, quienEs) || {}) }), true;
       }
       if (accion === 'paso') { // marcar un paso (el agente: solo de su tarea en curso)
         const r = alm.cambiar(id, t => {
