@@ -195,3 +195,42 @@ body.dark #studioOv .st-go.st-armado { background: var(--cream); color: #151414;
 #studioOv .st-kbh + .st-new { margin-left: 8px; }
 @media (max-width: 760px), (hover: none) { #studioOv .st-kbh { display: none; } }
 #studioOv .st-open-engs { min-height: 24px; } /* IMG-29: el enlace «Motores y keys» de «Empieza aquí» */
+/* Fase 5 (modo básico) */
+/* IMG-34: el tipo de medio son pestañas compactas arriba, y los pasos van por su título (los números cambiaban según el modelo) */
+#studioOv .st-step > .st-h > b:not(:has(svg)) { display: none; }
+#studioOv .st-s1 > .st-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#studioOv .st-kind { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+#studioOv .st-kind button { padding: 7px 6px; min-height: 36px; font-size: var(--fs-s); gap: 6px; }
+#studioOv .st-kind button .ic { width: 16px; height: 16px; }
+#studioOv .st-bchips, #studioOv .st-addimg { display: none; }
+#studioOv .st-addimg { align-items: center; gap: 5px; font: 600 var(--fs-s) var(--ui); min-height: 28px; padding: 3px 11px 3px 8px; border-radius: var(--r-pill); border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-addimg .ic { width: 15px; height: 15px; }
+#studioOv .st-addimg:hover { border-color: var(--ink); }
+#studioOv .st-addimg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-pwrap.st-dropref { box-shadow: 0 0 0 2px var(--focus); }
+#studioOv .st-mp-why { font-size: var(--fs-xs); color: var(--grey); }
+#studioOv .st-moff > summary { cursor: pointer; font-size: var(--fs-s); color: var(--grey); padding: 8px 6px; min-height: 24px; }
+#studioOv .st-moauto { border: 1px dashed transparent; }
+/* IMG-33: los formatos poco usados, bajo «Más formatos» */
+#studioOv .st-ars:not(.ver-mas) .st-ar-mas { display: none; }
+#studioOv .st-armas { align-self: flex-start; margin-top: 6px; font: 600 var(--fs-s) var(--ui); min-height: 28px; padding: 3px 11px; border-radius: var(--r-pill); border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-armas:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-35: la mejora es una propuesta que tomas o dejas */
+#studioOv .st-sug { border-top: 1px solid var(--hairline); padding: 8px 12px 10px; font-size: var(--fs-s); line-height: 1.45; background: rgba(127,127,127,.06); }
+#studioOv .st-sug[hidden] { display: none; }
+#studioOv .st-sugb { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+#studioOv .st-sugb button { font: 600 var(--fs-s) var(--ui); min-height: 28px; padding: 3px 12px; border-radius: var(--r-pill); border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-sugb button.pri { background: var(--ink); color: var(--cream); }
+#studioOv .st-sugb button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-32: Básico = la idea primero; debajo, el modelo y «Formato · Cantidad» como selectores; nada más */
+#studioOv.st-basico .st-s1 { order: 1; } #studioOv.st-basico .st-s3 { order: 2; } #studioOv.st-basico .st-matstep { order: 3; }
+#studioOv.st-basico .st-s2 { order: 4; } #studioOv.st-basico .st-bchips { order: 5; display: flex; flex-direction: row; gap: 10px; }
+#studioOv.st-basico .st-mpick .st-mp-top { flex-wrap: nowrap; } #studioOv.st-basico .st-mpick .st-mp-name { white-space: normal; } #studioOv.st-basico .st-mpick .st-mp-eng { display: none; }
+#studioOv.st-basico .st-bchips > label { flex: 1 1 0; }
+#studioOv.st-basico .st-bchips select { width: 100%; min-height: 36px; }
+#studioOv.st-basico :is(.st-s5, .st-modeseg, .st-lang, .st-matstep.st-vacio, .st-foot .st-qty, .st-foot .st-sum, .st-nivel [data-nivel="basico"]) { display: none; }
+#studioOv.st-basico .st-addimg { display: inline-flex; }
+#studioOv.st-basico :is(.st-s2, .st-s3) > .st-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#studioOv.st-basico .st-mpick :is(.st-mp-note, .st-tags) { display: none; }
+#studioOv.st-basico .st-nivel { justify-content: flex-end; border: 0; background: none; padding: 0; }
+#studioOv.st-basico .st-foot { grid-template-columns: 1fr; }

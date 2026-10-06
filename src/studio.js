@@ -16,6 +16,7 @@ import * as BR from './studio-borrador.js'; // 6 Oct 2026 (audit IMG-01/02): the
 import * as AV from './studio-avisos.js';
 import * as AC from './studio-acciones.js';
 import * as CF from './studio-confirmar.js';
+import { elegirAuto } from './studio-auto.js'; // 6 Oct 2026 (audit IMG-36): «Automático» in Básico picks the model by what is asked
 import { ignorar as ignorarTecla } from './teclas1.js'; // IMG-26: single-key shortcuts can be turned off // 6 Oct 2026 (audit IMG-11): a spend is confirmed with a second click, not the browser's confirm() // 6 Oct 2026 (audit IMG-09/48): one list of what can be done with a file — card, «⋯», group card and viewer // 6 Oct 2026 (audit IMG-03): what the Estudio says when jobs end, with its plurals // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
 // 1 Oct 2026 (banco de presets F1, F2): the bank and the Lotes tab live in their own modules; here only their hooks. They load on demand
@@ -72,20 +73,22 @@ export function initStudio(ctx) {
       <section class="st-gen" aria-label="Crear">
         <button type="button" class="st-unfold" title="Mostrar el compositor" aria-label="Mostrar el compositor">${svg('spark')}<span>Crear</span></button>
         <div class="st-scroll"><button type="button" class="st-fold" title="Plegar el compositor: más sitio para la galería" aria-label="Plegar el compositor">‹ plegar</button>
-          <div class="st-step"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
+          <div class="st-step st-s1"><div class="st-h"><b>1</b> ¿Qué quieres crear?</div>
             <div class="st-kind" role="group" aria-label="Tipo"><button type="button" data-kind="image" aria-pressed="false">${svg('img')}<span>Imagen</span></button><button type="button" data-kind="video" aria-pressed="false">${svg('vid')}<span>Video</span></button><button type="button" data-kind="audio" aria-pressed="false" title="Un texto leído en voz alta (MiniMax)">${svg('mic')}<span>Voz</span></button><button type="button" data-kind="music" aria-pressed="false" title="Una canción con letra o una pista instrumental (MiniMax)">${svg('note')}<span>Música</span></button></div>
             <div class="st-nivel" role="group" aria-label="Modo de imagen"><button type="button" data-nivel="basico" aria-pressed="true" title="Describe y genera: modelo, idea y formato">Básico</button><button type="button" data-nivel="avanzado" aria-pressed="false" title="Presets, tu foto, referencias y el escenario 3D (B)">Avanzado</button></div>
             <button type="button" class="st-vcta" hidden>${svg('mic')}<span><b>Clonar tu voz o diseñar una</b><small>Para que tus audios suenen como tú</small></span></button></div>
-          <div class="st-step"><div class="st-h"><b>2</b> Modelo</div>
+          <div class="st-step st-s2"><div class="st-h"><b>2</b> Modelo</div>
             <div class="st-mwrap"><button type="button" class="st-mpick" aria-haspopup="listbox" aria-expanded="false"></button><div class="st-mlist" hidden></div></div>
             <p class="st-mnote" hidden role="note"><b>Aviso:</b> MiniMax cerró su API de música a usuarios nuevos el 20 de agosto de 2026. Si tu cuenta no la tiene, el error lo dirá.</p></div>
-          <div class="st-step"><div class="st-h"><b>3</b> <span class="st-p3t">Describe lo que quieres</span></div>
+          <div class="st-step st-s3"><div class="st-h"><b>3</b> <span class="st-p3t">Describe lo que quieres</span></div>
             <div class="st-modeseg" role="group" aria-label="Cuántas ideas"><button type="button" data-mode="one" aria-pressed="true">Una idea</button><button type="button" data-mode="batch" aria-pressed="false" title="Una idea por línea: cada línea es un pedido aparte">Varias ideas, una por línea</button></div>
             <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
-              <div class="st-ltags" hidden role="group" aria-label="Partes de la canción"><span>Marca las partes:</span>${SV.LYRIC_TAGS.map(t => `<button type="button" data-ltag="${t}" title="Añadir ${t} en una línea nueva">${t}</button>`).join('')}</div><div class="st-bcount" hidden></div><div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span><span class="st-kbh" aria-hidden="true">Ctrl + Enter genera</span><button type="button" class="st-new" title="Vacía la idea y el material de partida (con DESHACER)">Vaciar</button></div>
-              <div class="st-es" hidden><b>En español:</b> <span></span></div></div></div>
+              <div class="st-ltags" hidden role="group" aria-label="Partes de la canción"><span>Marca las partes:</span>${SV.LYRIC_TAGS.map(t => `<button type="button" data-ltag="${t}" title="Añadir ${t} en una línea nueva">${t}</button>`).join('')}</div><div class="st-bcount" hidden></div><div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><button type="button" class="st-addimg" title="Añade una imagen de referencia: tu producto, tu logo, un estilo (o suéltala aquí)">${svg('up')}<span>Imagen</span></button><span class="sp"></span><span class="st-plen"></span><span class="st-kbh" title="Ctrl + Enter genera">Ctrl+Enter</span><button type="button" class="st-new" title="Vacía la idea y el material de partida (con DESHACER)">Vaciar</button></div>
+              <div class="st-es" hidden><b>En español:</b> <span></span></div>
+              <div class="st-sug" hidden role="status"><b>Propuesta:</b> <span class="st-sugt"></span><span class="st-sugb"><button type="button" data-sug="usar" class="pri">Usar esta</button><button type="button" data-sug="no">Seguir con la mía</button></span></div></div></div>
           <div class="st-step st-matstep"><div class="st-h"><b>4</b> <span class="st-mt">Material de partida</span> <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
-          <div class="st-step"><div class="st-h"><b class="st-n5">5</b> <span class="st-s5t">Formato y ajustes</span></div><div class="st-ratios"></div><div class="st-sets"></div>
+          <div class="st-step st-bchips" role="group" aria-label="Formato y cantidad"><label class="st-lab">Formato<select class="st-arsel" data-set="aspectRatio"></select></label><label class="st-lab">Cantidad<select class="st-qsel"></select></label></div>
+          <div class="st-step st-s5"><div class="st-h"><b class="st-n5">5</b> <span class="st-s5t">Formato y ajustes</span></div><div class="st-ratios"></div><div class="st-sets"></div>
             <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
         </div>
         <div class="st-foot">
@@ -142,7 +145,7 @@ export function initStudio(ctx) {
   let folders = [], folderF = store.get('folder', 'all'), dragFiles = null, fdEdit = null, fdNewFor = null; // fdEdit: 'new' or a folder id being renamed · fdNewFor: files waiting for the new folder
   const folderName = id => (folders.find(f => f.id === id) || {}).name || '';
   const inFolder = it => (it.folder && folders.some(f => f.id === it.folder) ? it.folder : null);
-  let lastSig = '', lastAt = 0, armed = false;
+  let lastSig = '', lastAt = 0, armed = false, verMasFormatos = false;
   const nuevos = new Set(); let nuevosT = 0; // IMG-07: the files that just came out, marked «Nuevo» for a few seconds
   let kind = store.get('kind', 'image'), mode = 'one', filter = 'all', q = '', sel = new Set(), selecting = false, lastPick = -1, picking = null, uploadRole = null, busy = false, opener = null, lightIdx = -1, lightAt = null, lightFrom = null, prevPrompt = null, qty = 1;
   let nivel = store.get('modo', 'basico') === 'avanzado' ? 'avanzado' : 'basico'; // 2 Oct 2026: images in Básico (the plain composer) or Avanzado (presets and the 3D stage)
@@ -154,7 +157,17 @@ export function initStudio(ctx) {
   let banco = null; // banco de presets (F1): src/studio-banco.js, created once the composer exists (below)
   let lotesUI = null; // banco de presets (F2): src/studio-lotes.js, the Lotes tab (below)
 
-  const cur = () => models.find(m => m.id === modelOf[kind]) || null;
+  // IMG-36 (6 Oct 2026): in Básico, «Automático» (on by default) picks the image model by what is asked; the owner's own choice stays in modelOf
+  let auto = store.get('auto.image', true), autoSel = null;
+  const basico = () => kind === 'image' && nivel === 'basico';
+  const autoOn = () => basico() && auto && !!autoSel;
+  const cur = () => models.find(m => m.id === (kind === 'image' && autoOn() ? autoSel.id : modelOf[kind])) || null;
+  /** Picks the automatic model again; true when it changed. `masRefs`: an image is about to be added. */
+  function aplicarAuto(masRefs = 0) {
+    if (!basico() || !auto) return false;
+    const prev = autoSel && autoSel.id; autoSel = elegirAuto(models, { refs: (media.reference || []).length + masRefs, prompt: $('.st-prompt').value, def: def.image });
+    return (autoSel && autoSel.id) !== prev;
+  }
   const roleName = r => ROLE[r];
   const roleHelp = (r, m = cur()) => helpFor(r, m);
   const itemOf = f => items.find(x => x.file === f) || known.get(f);
@@ -227,6 +240,7 @@ export function initStudio(ctx) {
     banco.el.hidden = !av; if (!av) banco.cerrar(false);
     else if (document.body.classList.contains('studioOpen')) banco.preparar(); // Avanzado shows the bank's step: it comes now (once); Básico never loads it
     el.classList.toggle('st-banco-on', on);
+    el.classList.toggle('st-basico', basico()); if (basico() && mode !== 'one') setMode('one'); // IMG-32: Básico is the plain composer — one idea, the format and the quantity as selects
     const refs = on ? media.reference.length : 0, W = $('.st-refwarn'); // IMG-39: with presets, the composer's references are not used — said, with the way to pass them over
     W.hidden = !refs; if (refs) W.querySelector('span').textContent = `${refs === 1 ? 'Tu referencia del paso «Imágenes de referencia» no se usa' : `Tus ${refs} referencias del paso «Imágenes de referencia» no se usan`} con presets.`;
     if (!on) { $('.st-n5').textContent = $('.st-matstep').hidden ? '4' : '5'; return; }
@@ -251,13 +265,13 @@ export function initStudio(ctx) {
   }
   function setSetting(k, v) { const m = cur(); if (!m) return; const s = settingsOf(m); s[k] = v; setsOf[m.id] = s; store.set('sets', setsOf); }
   function renderModels() {
-    pickModel();
+    pickModel(); aplicarAuto();
     el.querySelectorAll('[data-kind]').forEach(b => { const on = b.dataset.kind === kind; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
     renderPick(); renderModel(); bancoState();
   }
   function renderPick() {
     const m = cur(), b = $('.st-mpick');
-    b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${esc(m.name)}</span>${engineAdds(m) ? `<span class="st-mp-eng">${esc(m.engineName)}</span>` : ''}<span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
+    b.innerHTML = m ? `<span class="st-mp-top"><span class="st-mp-name">${autoOn() ? `Automático · ${esc(m.name)}` : esc(m.name)}</span>${engineAdds(m) ? `<span class="st-mp-eng">${esc(m.engineName)}</span>` : ''}<span class="sp"></span><span class="st-mp-cost">${price(m)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span>${autoOn() ? `<span class="st-mp-why">Elegido porque ${esc(autoSel.porque)}. Cambia con «▾».</span>` : ''}${m.note ? `<span class="st-mp-note">${esc(m.note)}</span>` : ''}${tags(m).length ? `<span class="st-tags">${tags(m).map(t => `<i>${t}</i>`).join('')}</span>` : ''}`
       : offModel() ? offPick(offModel()) // V5.0: Voz and Música show their model even without the key — dimmed, with how to switch it on
       : `<span class="st-mp-top"><span class="st-mp-name">Ningún modelo de ${SV.words(kind).none} encendido</span><span class="sp"></span><span class="st-mp-caret">▾</span></span><span class="st-mp-note">Mira «Motores y keys» en el «⋯» de la galería.</span>`;
     b.classList.toggle('st-mp-off', !m && !!offModel());
@@ -288,18 +302,18 @@ export function initStudio(ctx) {
     if (sort === 'rec') { // as before: by engine, the ones that are on first
       const engs = engines.filter(e => mine.some(x => x.engine === e.id)).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
       body = engs.filter(e => e.on).map(e => `<div class="st-mg" role="group" aria-label="${esc(e.name)}, listo"><div class="st-mg-h" aria-hidden="true">${esc(e.name)} <span class="ok">● listo</span></div>${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') +
-        engs.filter(e => !e.on).map(e => `<div class="st-mg off" role="group" aria-label="${esc(e.name)}, sin activar"><div class="st-mg-h">${esc(e.name)} <span class="st-mg-off">sin activar</span></div>${how(e)}${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('');
+        (n => n ? `<details class="st-moff"><summary>Ver los ${n} sin activar</summary>` : '')(mine.filter(x => !x.on).length) + engs.filter(e => !e.on).map(e => `<div class="st-mg off" role="group" aria-label="${esc(e.name)}, sin activar"><div class="st-mg-h">${esc(e.name)} <span class="st-mg-off">sin activar</span></div>${how(e)}${mine.filter(x => x.engine === e.id).map(row).join('')}</div>`).join('') + (mine.some(x => !x.on) ? '</details>' : '');
     } else if (sort === 'maker') {
       const ms = [...new Set(mine.slice().sort(cmp).map(x => x.maker))];
       body = ms.map(mk => { const l = mine.filter(x => x.maker === mk).sort((a, b) => (b.on - a.on) || cmp(a, b)); return `<div class="st-mg" role="group" aria-label="${esc(mk)}"><div class="st-mg-h" aria-hidden="true">${esc(mk)} <span class="st-mg-n">${l.length}</span></div>${l.map(row).join('')}</div>`; }).join('');
     } else {
       const on = mine.filter(x => x.on).sort(cmp), off = mine.filter(x => !x.on).sort(cmp);
       body = (on.length ? `<div class="st-mg" role="group" aria-label="Listos"><div class="st-mg-h" aria-hidden="true">Listos para usar <span class="ok">● ${on.length}</span></div>${on.map(row).join('')}</div>` : '') +
-        (off.length ? `<div class="st-mg off" role="group" aria-label="Sin activar"><div class="st-mg-h">Sin activar <span class="st-mg-off">${off.length} · su motor necesita una key</span></div>${off.map(row).join('')}</div>` : '');
+        (off.length ? `<details class="st-moff"><summary>Ver los ${off.length} sin activar</summary><div class="st-mg off" role="group" aria-label="Sin activar"><div class="st-mg-h">Sin activar <span class="st-mg-off">${off.length} · su motor necesita una key</span></div>${off.map(row).join('')}</div></details>` : '');
     }
     L.innerHTML = `<label class="st-mq">${svg('search')}<input type="search" placeholder="Buscar modelo, creador o uso…" aria-label="Buscar modelo" value="${esc(qs)}"></label>` +
       `<div class="st-mctl"><label>Ordenar<select data-msort aria-label="Ordenar los modelos">${SORTS.map(([k, t]) => `<option value="${k}"${k === sort ? ' selected' : ''}>${t}</option>`).join('')}</select></label><label>Creador<select data-mmaker aria-label="Filtrar por creador"><option value="">Todos (${all.length})</option>${makers.map(mk => `<option${mk === maker ? ' selected' : ''}>${esc(mk)}</option>`).join('')}</select></label></div>` +
-      `<div role="listbox" aria-label="Modelos">${body}</div>` + (mine.length ? '' : '<div class="st-empty-s">Ningún modelo con eso.</div>');
+      `<div role="listbox" aria-label="Modelos">${basico() && !w ? `<div class="st-mg" role="group" aria-label="Automático"><button type="button" role="option" class="st-mo st-moauto${auto ? ' on' : ''}" data-id="auto" aria-selected="${auto}" tabindex="-1"><span class="st-mo-top"><b>Automático (recomendado)</b></span><span class="st-mo-note">La oficina elige por lo que pides: con una imagen tuya, uno que edita; con texto que se tiene que leer, uno que lo escribe bien; si no, el de uso general. Siempre dice cuál usó.</span></button></div>` : ''}${body}</div>` + (mine.length ? '' : '<div class="st-empty-s">Ningún modelo con eso.</div>');
   }
   function openList(on) {
     const L = $('.st-mlist'), b = $('.st-mpick');
@@ -321,6 +335,7 @@ export function initStudio(ctx) {
   }
   const limitNow = () => { const m = cur(); return SV.textLimit(m, kind, !!(m && settingsOf(m).instrumental)); };
   function renderModel() {
+    if (aplicarAuto()) renderPick(); // IMG-36: the references just changed, so may the automatic model
     const m = cur();
     paintStep3();
     if (!sound()) $('.st-prompt').placeholder = mode === 'batch' ? 'Una idea por línea — cada línea genera «Cantidad» archivos. Ej.: los 12 fondos del mes de Instagram.' : kind === 'video' ? (media.start.length ? 'Describe el movimiento: la cámara se acerca despacio, el vapor sube, luz de tarde…' : 'Qué pasa en el video: sujeto, acción, cámara, luz, estilo. Para animar una imagen, pulsa Animar sobre ella en la galería.') : 'Ej.: fondo oscuro de roca volcánica con brillo naranja #FF5100, espacio limpio abajo para el texto';
@@ -336,7 +351,11 @@ export function initStudio(ctx) {
           ${media[r].length < n ? `<button type="button" class="st-add" data-slot="${r}">${svg('up')}<span>Subir</span></button><button type="button" class="st-add" data-gpick="${r}">${svg('grid')}<span>De la galería</span></button>` : ''}</div></div>`).join('');
     const s = settingsOf(m), ent = Object.entries(m.settings);
     const ratio = m.settings.aspectRatio;
-    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="radiogroup" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" role="radio" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-checked="${String(s.aspectRatio) === v}" tabindex="${String(s.aspectRatio) === v ? 0 : -1}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
+    const COMUNES = ['1:1', '4:5', '9:16', '16:9'], cur_ = String(s.aspectRatio), raro = v => !COMUNES.includes(v) && v !== cur_; // IMG-33 (6 Oct 2026): four formats in sight, the rest under «Más formatos»
+    const nRaros = ratio ? ratio.values.filter(raro).length : 0;
+    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars${verMasFormatos ? ' ver-mas' : ''}" role="radiogroup" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" role="radio" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}${raro(v) ? ' st-ar-mas' : ''}" data-ar="${esc(v)}" aria-checked="${String(s.aspectRatio) === v}" tabindex="${String(s.aspectRatio) === v ? 0 : -1}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>${nRaros ? `<button type="button" class="st-armas" aria-expanded="${verMasFormatos}">${verMasFormatos ? 'Menos formatos' : `Más formatos (${nRaros})`}</button>` : ''}` : '';
+    const sel_ = $('.st-arsel'); sel_.closest('label').hidden = !ratio; if (ratio) { sel_.innerHTML = ratio.values.map(v => `<option value="${esc(v)}"${String(s.aspectRatio) === v ? ' selected' : ''}>${esc(v === 'auto' ? 'Auto' : v)}${RATIO_WORD[v] ? ' · ' + esc(RATIO_WORD[v]) : ''}</option>`).join(''); } // IMG-32: Básico's format is one select
+    $('.st-matstep').classList.toggle('st-vacio', !Object.values(media).some(l => l.length) && !(m.needs || []).length); // Básico shows the references only once there is one
     const ctl = ([k, f]) => {
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
       if (f.type === 'text') return k === 'voiceId' ? voicePicker(f, s[k]) : `<label class="st-lab">${LBL[k] || k}<input type="text" data-set="${k}" value="${esc(s[k] ?? '')}" maxlength="${+f.max || 2000}" placeholder="${esc(f.placeholder || '')}" autocomplete="off"></label>`; // V5.0
@@ -397,6 +416,7 @@ export function initStudio(ctx) {
     pl.title = len > lim ? `Sobran ${len - lim} caracteres` : sound() ? `Caben ${SV.num(lim)} caracteres` : '';
     const bc = $('.st-bcount'); bc.hidden = mode !== 'batch'; if (mode === 'batch') { const nl = lines().length; bc.textContent = nl ? `${nl} ${nl === 1 ? 'idea' : 'ideas'} × ${qty} = ${SV.countOf(kind, nl * qty * per)}` : 'Escribe una idea por línea.'; }
     const maxQ = SV.maxQty(kind, budget && budget.maxPerRequest); // V4.2 (audit A12): the ends say why they stop
+    { const qs = $('.st-qsel'), ops = [...new Set([1, 2, 4, qty])].filter(n => n <= maxQ || n === qty).sort((a, b) => a - b); const h = ops.map(n => `<option value="${n}"${n === qty ? ' selected' : ''}>${n}</option>`).join(''); if (qs.innerHTML !== h) qs.innerHTML = h; qs.value = String(qty); } // IMG-37: 1 · 2 · 4
     const [dn, up] = el.querySelectorAll('.st-qty [data-d]'); dn.disabled = qty <= 1; up.disabled = qty >= maxQ; up.title = qty >= maxQ ? `Máximo ${maxQ} por pedido${kind === 'video' ? ' (un video pesa como 5 imágenes)' : kind === 'music' ? ' (una pista pesa como 3 imágenes)' : ''}` : 'Más';
     return cost;
   }
@@ -514,7 +534,7 @@ export function initStudio(ctx) {
     const empty = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
       : !tj.length && !list.length && loadedKey !== viewKey() ? '<div class="st-empty">Buscando…</div>' // INF-03: a new search or tab is on its way
       : !tj.length && !list.length && nextCur ? '<div class="st-empty">Cargando…</div>' // what was loaded left this view (a star taken off): the next page is coming
-      : !tj.length && !list.length ? `<div class="st-empty">${all ? `Nada ${q.trim() ? `con «${esc(q.trim())}»` : 'con este filtro'}. <button type="button" class="st-all">Ver todo</button>` : `<div class="st-start"><h3>Empieza aquí</h3><ol><li>Escribe una idea en el paso 3 y pulsa <b>GENERAR</b>.</li><li>${empiezaModelo()}</li><li>Para imágenes y videos de verdad, activa un motor una sola vez: <button type="button" class="st-open-engs">Motores y keys</button></li><li>También puedes subir tus fotos (Subir) o pedírsela a un agente de Marketing.</li></ol></div>`}</div>` : '';
+      : !tj.length && !list.length ? `<div class="st-empty">${all ? `Nada ${q.trim() ? `con «${esc(q.trim())}»` : 'con este filtro'}. <button type="button" class="st-all">Ver todo</button>` : `<div class="st-start"><h3>Empieza aquí</h3><ol><li>Escribe tu idea y pulsa <b>GENERAR</b>.</li><li>${empiezaModelo()}</li><li>Para imágenes y videos de verdad, activa un motor una sola vez: <button type="button" class="st-open-engs">Motores y keys</button></li><li>También puedes subir tus fotos (Subir) o pedírsela a un agente de Marketing.</li></ol></div>`}</div>` : '';
     if (empty && !list.length && nextCur && loadedKey === viewKey()) loadMore();
     if (empty) { if (G.innerHTML !== empty) G.innerHTML = empty; nodes.clear(); layoutSig = ''; lastWant = []; return; }
     let root = G.querySelector(':scope > .st-days'); if (!root) { G.innerHTML = '<div class="st-days"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
@@ -1202,6 +1222,7 @@ export function initStudio(ctx) {
     media[role].push(f); renderModel(); return true;
   }
   function useAsRefRaw(it) { // IMG-02: a model it has to change is said, with its price; what was composed can come back (DESHACER)
+    if (basico() && auto && kind === 'image') { aplicarAuto(1); renderPick(); } // IMG-36: Automático takes a model that edits
     const prev = cur();
     let m = prev;
     if (!m || !m.roles.reference) { m = useModelFor('reference', kind); if (!m && kind !== 'image') { kind = 'image'; store.set('kind', kind); m = useModelFor('reference', 'image'); } if (!m) return say('Ningún modelo encendido acepta referencias.', true); modelOf[kind] = m.id; store.set('model.' + kind, m.id); renderModels(); }
@@ -1212,10 +1233,10 @@ export function initStudio(ctx) {
      composing (the idea, the model, the references, the quantity) with no way back. Now what was there is kept and a toast
      offers DESHACER. Variar no longer touches the composer at all: it is a request of its own, through the same cost gate. */
   const borrador = BR.pila(10);
-  function fotoBorrador() { return ({ kind, mode, prompt: $('.st-prompt').value, modelOf: { ...modelOf }, media: BR.copia(media), qty, sets: BR.copia(setsOf) }); }
+  function fotoBorrador() { return ({ auto, kind, mode, prompt: $('.st-prompt').value, modelOf: { ...modelOf }, media: BR.copia(media), qty, sets: BR.copia(setsOf) }); }
   function volverBorrador(e) {
     if (!e) return;
-    kind = e.kind; store.set('kind', kind); mode = e.mode; qty = e.qty; media = e.media;
+    kind = e.kind; store.set('kind', kind); mode = e.mode; qty = e.qty; media = e.media; if (typeof e.auto === 'boolean') auto = e.auto;
     for (const k of Object.keys(e.modelOf)) { modelOf[k] = e.modelOf[k]; store.set('model.' + k, modelOf[k]); }
     for (const k of Object.keys(setsOf)) delete setsOf[k]; Object.assign(setsOf, e.sets); store.set('sets', setsOf);
     $('.st-prompt').value = e.prompt;
@@ -1259,7 +1280,7 @@ export function initStudio(ctx) {
   function reuseRaw(it, quiet) {
     const k = SV.kindOfItem(it); // V5.0: a voice goes back to Voz, a song to Música
     kind = k; store.set('kind', kind);
-    const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (it.settings) { setsOf[m.id] = { ...it.settings }; store.set('sets', setsOf); } }
+    const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (k === 'image') auto = false; /* IMG-36: Repetir keeps its model, not Automático's */ if (it.settings) { setsOf[m.id] = { ...it.settings }; store.set('sets', setsOf); } }
     media = { start: [], end: [], reference: [], video: [], ...(it.media || {}) };
     for (const r of Object.keys(media)) media[r] = (media[r] || []).filter(f => !gone.has(f)); // INF-03: a reference may be an old file not loaded now; only one sent to the bin here goes
     setMode('one');
@@ -1667,8 +1688,15 @@ export function initStudio(ctx) {
     if (!e.target.closest('.st-mwrap')) openList(false);
     const kb = e.target.closest('[data-kind]'); if (kb) return setKind(kb.dataset.kind);
     if (e.target.closest('.st-mpick')) return openList();
-    const mo = e.target.closest('.st-mo'); if (mo && !mo.disabled) { $('.st-keyhelp').hidden = true; modelOf[kind] = mo.dataset.id; store.set('model.' + kind, mo.dataset.id); openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; }
+    const mo = e.target.closest('.st-mo'); if (mo && !mo.disabled) { $('.st-keyhelp').hidden = true; if (mo.dataset.id === 'auto') { auto = true; store.set('auto.image', true); aplicarAuto(); openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; } if (basico()) { auto = false; store.set('auto.image', false); } modelOf[kind] = mo.dataset.id; store.set('model.' + kind, mo.dataset.id); /* IMG-36: a model chosen by hand turns «Automático» off */ openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; }
     const nvb = e.target.closest('[data-nivel]'); if (nvb) { setNivel(nvb.dataset.nivel); return; }
+    if (e.target.closest('.st-armas')) { verMasFormatos = !verMasFormatos; renderModel(); $('.st-armas')?.focus(); return; } // IMG-33
+    if (e.target.closest('.st-addimg')) { // IMG-38: «Imagen» beside the idea: a reference, like attaching it in a chat
+      if (basico() && auto) { aplicarAuto(1); renderPick(); renderModel(); }
+      const m = cur(); if (!m || !m.roles.reference) return say(m ? `${m.name} no acepta imágenes: elige «Automático» u otro modelo en «Modelo».` : 'Elige antes un modelo.', true);
+      uploadRole = 'reference'; $('.st-file').accept = 'image/png,image/jpeg,image/webp'; $('.st-file').click(); return;
+    }
+    const sg = e.target.closest('[data-sug]'); if (sg) { const S_ = $('.st-sug'); if (sg.dataset.sug === 'usar') { prevPrompt = $('.st-prompt').value; $('.st-prompt').value = S_.dataset.p || ''; $('.st-undo-enh').hidden = false; say('Usando la propuesta. «Volver al mío» lo deshace.'); if (aplicarAuto()) { renderPick(); renderModel(); } estimate(); } S_.hidden = true; $('.st-prompt').focus(); return; } // IMG-35
     const arb = e.target.closest('[data-ar]'); if (arb) { setSetting('aspectRatio', arb.dataset.ar); renderModel(); return; }
     if (e.target.closest('.st-fold')) { el.classList.add('st-folded'); store.set('fold', true); relayout(); $('.st-unfold').focus(); return; }
     if (e.target.closest('.st-unfold')) { el.classList.remove('st-folded'); store.set('fold', false); relayout(); $('.st-prompt').focus(); return; }
@@ -1706,9 +1734,10 @@ export function initStudio(ctx) {
       const p = $('.st-prompt').value.trim(); if (!p) { $('.st-prompt').focus(); return say('Escribe primero la idea, aunque sea corta.', true); }
       if (!isLive()) return say('Mejorar el prompt necesita la oficina real.', true);
       const b = $('.st-enh'); b.disabled = true; b.querySelector('span').textContent = 'Pensando…';
-      try { const lang = $('.st-lang').value; const r = await api('POST', '/api/media/enhance', { prompt: p, kind, lang }); prevPrompt = p; $('.st-prompt').value = r.prompt; $('.st-undo-enh').hidden = false;
+      try { const lang = basico() ? 'es' : $('.st-lang').value; const r = await api('POST', '/api/media/enhance', { prompt: p, kind, lang });
+        if (basico()) { const S_ = $('.st-sug'); S_.dataset.p = r.prompt; S_.querySelector('.st-sugt').textContent = r.prompt; S_.hidden = false; say(''); S_.querySelector('[data-sug="usar"]').focus(); } else { prevPrompt = p; $('.st-prompt').value = r.prompt; $('.st-undo-enh').hidden = false;
         const es = $('.st-es'); es.hidden = !(r.lang === 'en' && r.es); es.querySelector('span').textContent = r.es || '';
-        say(r.lang === 'en' ? 'Prompt mejorado, en inglés (los motores lo entienden mejor). Debajo tienes lo que dice en español; «Volver al mío» lo deshace.' : 'Prompt mejorado, en español. «Volver al mío» lo deshace.'); estimate(); }
+        say(r.lang === 'en' ? 'Prompt mejorado, en inglés (los motores lo entienden mejor). Debajo tienes lo que dice en español; «Volver al mío» lo deshace.' : 'Prompt mejorado, en español. «Volver al mío» lo deshace.'); estimate(); } } // IMG-35: in Básico it is a suggestion, in Spanish, that the owner takes or leaves
       catch (err) { say(err.message, true); }
       b.disabled = false; b.querySelector('span').textContent = 'Mejorar el prompt'; return;
     }
@@ -1797,15 +1826,17 @@ export function initStudio(ctx) {
   el.addEventListener('change', e => {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
     if (e.target.classList.contains('st-fsel')) { filter = e.target.value; requery(); return; } // IMG-23
+    if (e.target.classList.contains('st-qsel')) { qty = +e.target.value || 1; estimate(); return; } // IMG-37
 
     if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
     if (e.target.matches?.('[data-msort], [data-mmaker]')) { store.set(e.target.hasAttribute('data-msort') ? 'msort' : 'mmaker', e.target.value); const qv = $('.st-mq input')?.value || ''; renderList(qv); $(e.target.hasAttribute('data-msort') ? '[data-msort]' : '[data-mmaker]')?.focus(); return; }
     if (e.target.classList.contains('st-vsel')) { if (e.target.value) setVoice(e.target.value); return; } // V5.0: a voice from the list fills the field
     if (e.target.classList.contains('st-vid')) { setVoice(e.target.value.trim()); return; }
-    const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); if (k === 'instrumental') paintStep3(); estimate(); }
+    const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); if (k === 'instrumental') paintStep3(); if (k === 'aspectRatio') renderModel(); else estimate(); }
   });
   el.addEventListener('input', e => {
-    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (kind === 'image' && e.target.value === '/') { e.target.value = ''; setNivel('avanzado'); banco.abrir('banco'); return; } if (bancoManda()) banco.replan(); } // «/» at the start opens the bank (§7.1); the idea goes into its plan
+    if (e.target.classList.contains('st-qsel')) { qty = +e.target.value || 1; estimate(); return; } // IMG-37: before estimate() paints the select again
+    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (kind === 'image' && e.target.value === '/') { e.target.value = ''; setNivel('avanzado'); banco.abrir('banco'); return; } if (bancoManda()) banco.replan(); if (aplicarAuto()) { renderPick(); renderModel(); } } // «/» at the start opens the bank (§7.1); the idea goes into its plan
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value + (e.target.dataset.set === 'duration' ? ' s' : ''); setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; requery(250); return; } // INF-03: the server searches the whole gallery
@@ -1814,9 +1845,16 @@ export function initStudio(ctx) {
     estimate();
   });
   // drop files: on a slot they go into it, anywhere else they are uploaded to the gallery
-  el.addEventListener('dragover', e => { if (!dragFiles && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.add('st-drop'); } });
+  // IMG-38 (6 Oct 2026): dropped on the idea, a picture (from the computer or the gallery) is a reference; anywhere else it is uploaded
+  const enIdea = e => e.target.closest && e.target.closest('.st-pwrap') && !$('.st-gen').hidden && kind === 'image';
+  el.addEventListener('dragover', e => { const pw = $('.st-pwrap'), aqui = enIdea(e); pw.classList.toggle('st-dropref', !!aqui); if (aqui && dragFiles) e.preventDefault(); if (!dragFiles && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); el.classList.toggle('st-drop', !aqui); } });
   el.addEventListener('dragleave', e => { if (e.target === el || !el.contains(e.relatedTarget)) el.classList.remove('st-drop'); });
-  el.addEventListener('drop', e => { if (dragFiles || !e.dataTransfer?.files?.length) return; e.preventDefault(); el.classList.remove('st-drop'); const slot = e.target.closest('.st-slot'); uploadFiles([...e.dataTransfer.files], slot ? slot.dataset.role : null); });
+  el.addEventListener('drop', e => {
+    const aqui = enIdea(e); $('.st-pwrap').classList.remove('st-dropref');
+    if (aqui && (dragFiles || e.dataTransfer?.files?.length) && basico() && auto) { aplicarAuto(1); renderPick(); renderModel(); }
+    if (aqui && dragFiles) { e.preventDefault(); const fs = dragFiles.filter(f => !isVid(f) && !/\.(mp3|wav|m4a)$/i.test(f)); let n = 0; for (const f of fs) if (addMedia('reference', f)) { n++; learn(f, 'ref'); } say(n ? `${n === 1 ? 'Imagen puesta' : `${n} imágenes puestas`} de referencia.` : 'Este modelo no acepta imágenes: elige «Automático» u otro.', !n); return; }
+    if (dragFiles || !e.dataTransfer?.files?.length) return; e.preventDefault(); el.classList.remove('st-drop'); const slot = e.target.closest('.st-slot'); uploadFiles([...e.dataTransfer.files], slot ? slot.dataset.role : aqui && cur()?.roles.reference ? 'reference' : null);
+  });
   el.addEventListener('paste', async e => { const fs = [...(e.clipboardData?.files || [])].filter(f => /^image\//.test(f.type)); if (!fs.length) return; e.preventDefault(); const m = cur(); const role = m && m.roles.reference ? 'reference' : m && m.roles.start ? 'start' : null;
     const up = await uploadFiles(fs, role); if (!up.length) return;
     toast(`${up.length === 1 ? 'Imagen pegada' : up.length + ' imágenes pegadas'}${role ? ` como «${roleName(role)}»` : ' en Subidas'}.`, async () => { // V4.2 (audit A14): pasting no longer uploads silently
@@ -1852,7 +1890,7 @@ export function initStudio(ctx) {
       if (e.key === 'Escape' || e.key === 'Tab') { if (e.key === 'Escape') e.preventDefault(); closeMenus(); btn?.focus(); if (e.key === 'Escape') return; }
     }
     const arg = e.target.closest && e.target.closest('.st-ars'); // IMG-28: the formats are one stop for Tab; the arrows move and choose
-    if (arg && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const bs = [...arg.querySelectorAll('[data-ar]')], i = bs.indexOf(e.target.closest('[data-ar]')); const n = e.key === 'Home' ? 0 : e.key === 'End' ? bs.length - 1 : (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; setSetting('aspectRatio', bs[n].dataset.ar); renderModel(); el.querySelector(`.st-ars [data-ar="${CSS.escape(bs[n].dataset.ar)}"]`)?.focus(); return; }
+    if (arg && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const bs = [...arg.querySelectorAll('[data-ar]')].filter(b => b.offsetParent), i = bs.indexOf(e.target.closest('[data-ar]')); const n = e.key === 'Home' ? 0 : e.key === 'End' ? bs.length - 1 : (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; setSetting('aspectRatio', bs[n].dataset.ar); renderModel(); el.querySelector(`.st-ars [data-ar="${CSS.escape(bs[n].dataset.ar)}"]`)?.focus(); return; }
     const inList = e.target.closest && e.target.closest('.st-mlist');
     if (inList && e.target.tagName !== 'SELECT' && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { // V4.2 (audit A7): the model list moves with the arrows, like a real list
       const opts = [...inList.querySelectorAll('.st-mo:not([disabled])')], i = opts.indexOf(document.activeElement); e.preventDefault();

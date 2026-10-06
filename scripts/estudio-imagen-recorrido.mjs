@@ -75,6 +75,18 @@ try {
   await p.keyboard.press('e'); await p.waitForSelector(`${S}.on`); await p.waitForTimeout(1500);
   await p.click(`${S} [data-kind="image"]`).catch(() => {}); await p.waitForTimeout(500);
   await shot(p, '01-basico-1440');
+  // ===== Fase 5 =====
+  const bas = await p.evaluate(() => { const v = e => !!e && !!e.offsetParent, q = s => document.querySelector('#studioOv ' + s), sc = q('.st-scroll');
+    const ctl = [...q('.st-gen').querySelectorAll('button, a[href], input, select, textarea, summary')].filter(e => v(e) && !e.closest('[hidden]'));
+    return { controles: ctl.length, lista: ctl.map(e => (e.getAttribute('aria-label') || e.textContent || e.className).trim().slice(0, 18)), cabe: sc.scrollHeight <= sc.clientHeight + 2, ideaArriba: q('.st-prompt').getBoundingClientRect().top < q('.st-mpick').getBoundingClientRect().top, modelo: q('.st-mpick .st-mp-name')?.textContent, qsel: [...q('.st-qsel').options].map(o => o.value).join(','), imagen: v(q('.st-addimg')), formato: v(q('.st-arsel')), numeros: [...document.querySelectorAll('#studioOv .st-step > .st-h > b')].some(v) }; });
+  ok('IMG-32 · Básico: 14 controles o menos y cabe sin desplazarse', bas.controles <= 14 && bas.cabe, JSON.stringify({ n: bas.controles, cabe: bas.cabe, lista: bas.lista }));
+  ok('IMG-34 · la idea va primero y los pasos sin números', bas.ideaArriba && !bas.numeros, JSON.stringify(bas));
+  ok('IMG-36 · el modelo es «Automático» y dice cuál usa', /^Automático · /.test(bas.modelo || ''), bas.modelo);
+  ok('IMG-37 · la cantidad es 1 · 2 · 4', bas.qsel.startsWith('1,2,4'), bas.qsel);
+  ok('IMG-38 · «Imagen» junto a la idea; el formato es un selector', bas.imagen && bas.formato);
+  await p.fill(`${S} .st-prompt`, 'Un logo que diga «PANA»'); await p.waitForTimeout(300);
+  const autoTexto = await p.textContent(`${S} .st-mpick .st-mp-name`); await p.fill(`${S} .st-prompt`, ''); await p.waitForTimeout(200);
+  ok('IMG-36 · con texto que se lee, Automático cambia a un modelo que lo escribe', /Automático · Nano Banana Pro/.test(autoTexto), autoTexto);
   await medir(p, 'basico-1440'); await axe(p, 'basico-1440');
   // compositor entero
   report.compositorAlto = await p.evaluate(() => document.querySelector('#studioOv .st-scroll').scrollHeight);
@@ -92,18 +104,13 @@ try {
   // Más ajustes
   await p.evaluate(() => { const d = document.querySelector('#studioOv .st-more'); if (d) d.open = true; document.querySelector('#studioOv .st-ratios')?.scrollIntoView(); }); await p.waitForTimeout(300);
   await shot(p, '04-formato-y-ajustes');
-  const mas = await p.evaluate(() => { const d = document.querySelector('#studioOv details.st-more'), sel = d && d.querySelector('select'); return { display: d ? getComputedStyle(d).display : '', ancho: sel ? Math.round(sel.getBoundingClientRect().width) : 96 }; });
+  const mas = await p.evaluate(() => { const d = document.querySelector('#studioOv details.st-more'), sel = d && d.querySelector('select'); return { display: d ? getComputedStyle(d).display : '', ancho: sel ? parseFloat(getComputedStyle(sel).minWidth) || 0 : 96 }; });
   ok('IMG-19 · «Más ajustes» es un bloque y su selector no se aplasta', mas.display === 'block' && mas.ancho >= 96, JSON.stringify(mas));
   // GENERAR vacío
   await p.click(`${S} .st-go`); await p.waitForTimeout(600); await shot(p, '05-error-prompt-vacio');
   report.errorVacio = await p.evaluate(() => ({ ferr: document.querySelector('#studioOv .st-ferr')?.textContent, msg: document.querySelector('#studioOv .st-msg')?.textContent, ariaInvalid: document.querySelector('#studioOv .st-prompt').getAttribute('aria-invalid'), describedby: document.querySelector('#studioOv .st-prompt').getAttribute('aria-describedby') }));
   // ===== Fase 4 =====
   ok('IMG-25 · el error de la idea va unido al campo', report.errorVacio.ariaInvalid === 'true' && report.errorVacio.describedby === 'stFerr', JSON.stringify(report.errorVacio));
-  const ars = await p.evaluate(() => { const g = document.querySelector('#studioOv .st-ars'); return { rol: g?.getAttribute('role'), paradas: [...g.querySelectorAll('[data-ar]')].filter(b => b.tabIndex === 0).length, marcado: g.querySelector('[aria-checked="true"]')?.dataset.ar }; });
-  await p.focus(`${S} .st-ars [aria-checked="true"]`); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
-  const ars2 = await p.evaluate(() => ({ marcado: document.querySelector('#studioOv .st-ars [aria-checked="true"]')?.dataset.ar, foco: document.activeElement?.dataset?.ar }));
-  ok('IMG-28 · los formatos son un grupo de opciones: una parada de Tab y las flechas eligen', ars.rol === 'radiogroup' && ars.paradas === 1 && ars2.marcado !== ars.marcado && ars2.foco === ars2.marcado, JSON.stringify({ ars, ars2 }));
-  await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
   await p.evaluate(() => localStorage.setItem('ao.keys1', 'false')); await p.click(`${S} .st-name`); await p.keyboard.press('v'); await p.waitForTimeout(200);
   const k1 = await p.getAttribute(`${S} [data-kind="image"]`, 'aria-pressed');
   await p.evaluate(() => localStorage.removeItem('ao.keys1'));
@@ -112,7 +119,7 @@ try {
   ok('IMG-30 · ningún texto del Estudio baja de 11,5 px', Math.min(...Object.keys(report['medidas:basico-1440'].tamaños).map(Number)) >= 11.5, Object.keys(report['medidas:basico-1440'].tamaños).join(' · '));
   // generar 2
   await p.fill(`${S} .st-prompt`, 'Taza de café humeante sobre una mesa de madera, luz de mañana');
-  await p.click(`${S} .st-qty [data-d="1"]`); await p.waitForTimeout(200);
+  await p.selectOption(`${S} .st-qsel`, '2'); await p.waitForTimeout(200);
   ok('IMG-05 · el costo va dentro de GENERAR', /US\$\d|gratis/i.test(await p.textContent(`${S} .st-go`)), await p.textContent(`${S} .st-go`));
   report.estimacion = await p.textContent(`${S} .st-est`); report.resumenPie = await p.textContent(`${S} .st-sum`); report.botonGo = await p.textContent(`${S} .st-go`);
   await p.click(`${S} .st-go`); await p.waitForTimeout(2600); await shot(p, '06-generando');
@@ -171,14 +178,14 @@ try {
   // IMG-11: desde US$0,50, el primer clic arma y no hay diálogo del navegador
   let dialogos = 0; p.on('dialog', d => { dialogos++; d.dismiss(); });
   await p.click(`${S} .st-mpick`); await p.waitForTimeout(300); await p.locator(`${S} .st-mo:has-text("Nano Banana Pro")`).first().click(); await p.waitForTimeout(300);
-  for (let k = 0; k < 4; k++) await p.click(`${S} .st-qty [data-d="1"]`).catch(() => {});
+  await p.selectOption(`${S} .st-qsel`, '4');
   const antesConf = await p.locator(`${S} .st-job`).count();
   await p.click(`${S} .st-go`); await p.waitForTimeout(400);
   const conf = { go: await p.textContent(`${S} .st-go`), dialogos, trabajos: await p.locator(`${S} .st-job`).count() - antesConf };
   ok('IMG-11 · un gasto desde US$0,50 se confirma con un segundo clic en el botón, sin diálogo', /^Confirmar · US\$/.test(conf.go) && !conf.dialogos && conf.trabajos === 0, JSON.stringify(conf));
   await p.waitForTimeout(6500);
   ok('IMG-11 · sin el segundo clic, el botón vuelve a ser GENERAR', /^GENERAR/.test(await p.textContent(`${S} .st-go`)), await p.textContent(`${S} .st-go`));
-  for (let k = 0; k < 4; k++) await p.click(`${S} .st-qty [data-d="-1"]`).catch(() => {});
+  await p.selectOption(`${S} .st-qsel`, '1');
   const dis = await p.evaluate(() => getComputedStyle(document.querySelector('#studioOv .st-qty [data-d="-1"]')).borderStyle);
   ok('IMG-17 · un botón deshabilitado no lleva borde de trazos', dis === 'solid', dis);
   // fallo
@@ -205,6 +212,14 @@ try {
   await p.click(`${S} [data-nivel="avanzado"]`); await p.waitForSelector(`${S} .bk-doors`, { timeout: 20000 }); await p.waitForTimeout(800);
   await p.evaluate(() => document.querySelector('#studioOv .st-scroll').scrollTop = 0);
   await shot(p, '15-avanzado');
+  await p.evaluate(() => document.querySelector('#studioOv .st-ars')?.scrollIntoView({ block: 'center' }));
+  const ars = await p.evaluate(() => { const g = document.querySelector('#studioOv .st-ars'); return { rol: g?.getAttribute('role'), paradas: [...g.querySelectorAll('[data-ar]')].filter(b => b.tabIndex === 0).length, marcado: g.querySelector('[aria-checked="true"]')?.dataset.ar }; });
+  await p.focus(`${S} .st-ars [aria-checked="true"]`); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
+  const ars2 = await p.evaluate(() => ({ marcado: document.querySelector('#studioOv .st-ars [aria-checked="true"]')?.dataset.ar, foco: document.activeElement?.dataset?.ar }));
+  ok('IMG-28 · los formatos son un grupo de opciones: una parada de Tab y las flechas eligen', ars.rol === 'radiogroup' && ars.paradas === 1 && ars2.marcado !== ars.marcado && ars2.foco === ars2.marcado, JSON.stringify({ ars, ars2 }));
+  await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
+  const fm = await p.evaluate(() => ({ vistos: [...document.querySelectorAll('#studioOv .st-ars [data-ar]')].filter(b => b.offsetParent).length, mas: document.querySelector('#studioOv .st-armas')?.textContent }));
+  ok('IMG-33 · cuatro formatos a la vista y el resto en «Más formatos»', fm.vistos <= 5 && /Más formatos \(\d+\)/.test(fm.mas || ''), JSON.stringify(fm));
   const entrada = await p.evaluate(() => ({ rojo: !!document.querySelector('#studioOv .bk-falta')?.offsetParent, modo: document.querySelector('#studioOv .bk-modo')?.textContent, puerta: document.querySelector('#studioOv [data-puerta][aria-pressed="true"]')?.textContent }));
   ok('IMG-40 · al entrar en Avanzado no hay error rojo y la línea nombra la puerta pulsada', !entrada.rojo && entrada.modo.includes(entrada.puerta), JSON.stringify(entrada));
   report.avanzado = await p.evaluate(() => { const v = s => { const e = document.querySelector(s); return !!e && !!e.offsetParent; }; return { pasos: [...document.querySelectorAll('#studioOv .st-gen .st-h')].filter(e => e.offsetParent).map(h => h.textContent.trim().replace(/\s+/g, ' ')), matstepVisible: v('#studioOv .st-matstep'), bancoRefs: v('#studioOv .bk'), modo: document.querySelector('#studioOv .bk-modo')?.textContent, puertaPulsada: document.querySelector('#studioOv [data-puerta][aria-pressed="true"]')?.textContent }; });

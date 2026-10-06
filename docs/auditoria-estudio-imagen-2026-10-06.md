@@ -9,7 +9,7 @@ Pedido: auditoría integral de UX, UI, usabilidad, intuitividad, funcionalidad, 
 - **Código:** se leyeron `src/studio.js`, `src/studio-banco*.js`, `src/escena3d*.js` y sus estilos.
 - **Para repetirlo:** `node scripts/estudio-imagen-recorrido.mjs`. Las capturas van a `data/capturas/estudio-imagen/`, que no viaja por GitHub.
 
-**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-21 y 24 🟡) y la **Fase 4** (IMG-25 a 30 ✅). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
+**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-24 🟡) la **Fase 4** (IMG-25 a 30 ✅) y la **Fase 5** (IMG-31 a 38 ✅; IMG-21 completo). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
 
 **Estado de cada punto:** ✅ hecho · 🟡 en parte · ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
 
@@ -290,10 +290,10 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 - **Hecho (6 oct, Fase 3):** el motor va debajo del nombre, que queda en una línea.
 - **Prioridad:** Fase 3.
 
-### IMG-21 · 🟢 bajo · 🟡 en parte — Formato: etiqueta pegada y formatos sin nombre
+### IMG-21 · 🟢 bajo · ✅ — Formato: etiqueta pegada y formatos sin nombre
 - **Evidencia:** «Formato» (11,5 px) toca la cuadrícula sin aire. Cinco de los 16 formatos no tienen nombre (5:4, 1:4, 4:1, 1:8, 8:1).
 - **Solución:** 6 px de separación; los formatos raros, solo bajo «Más formatos» y con un uso («Banner», «Tira»).
-- **Hecho en la Fase 3 (6 oct):** la etiqueta «Formato» con aire. **Los formatos sin nombre** se resuelven en la Fase 5 (IMG-33: 4 y «Más formatos»).
+- **Hecho en la Fase 3 (6 oct):** la etiqueta «Formato» con aire. Los formatos sin nombre quedan bajo «Más formatos» desde la Fase 5 (IMG-33).
 - **Prioridad:** Fase 3.
 
 ### IMG-22 · 🟡 medio · ✅ — El pie no tiene jerarquía
@@ -387,13 +387,14 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 - **Hecho (6 oct, Fases 3 y 4):** con la escala, ningún texto del Estudio baja de 11,5 px.
 - **Prioridad:** Fase 4.
 
-### IMG-31 · 🟡 medio · ⏳ — Carga cognitiva
+### IMG-31 · 🟡 medio · ✅ — Carga cognitiva
 - **Evidencia:**
   - 38 controles en Básico y 48 en Avanzado (95 en todo el Estudio con Avanzado);
   - 127 presets;
   - 29 modelos de imagen, 24 de ellos «sin activar» en la misma lista.
 - **Impacto:** es la mayor barrera para personas con dificultades cognitivas o de atención, y para cualquier principiante.
 - **Solución:** las fases 5 y 6 (revelado progresivo, valores por defecto inteligentes, listas filtradas a lo que está listo).
+- **Hecho (6 oct, Fase 5):** Básico pasa de 38 controles a 14 y cabe en una pantalla de 900 px; la lista de modelos pliega los que no están activos.
 - **Prioridad:** Fase 5.
 
 ---
@@ -421,45 +422,52 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 
 Resultado esperado: **unos 12 controles** y todo en una pantalla de 900 px, con la idea arriba.
 
-### IMG-32 · 🟠 alto · ⏳ — Básico no es básico
+### IMG-32 · 🟠 alto · ✅ — Básico no es básico
 - **Evidencia:** 38 controles en el compositor (`controlesCompositor: 38`) y `scrollHeight` de 1.195 px (captura `02-basico-compositor-entero`).
 - **Impacto:** un principiante no sabe qué es obligatorio y qué es opcional: tiene que leerlo todo antes de atreverse a pulsar.
 - **Solución:** la tabla de arriba.
+- **Hecho (6 oct, Fase 5):** Básico (`#studioOv.st-basico`) es: el tipo de medio, «Avanzado», la idea (con Mejorar, «Imagen» y Vaciar), el modelo, «Formato» y «Cantidad» como selectores y GENERAR con su precio. Fuera de Básico: Varias ideas, el idioma de la mejora, los 16 formatos, «Más ajustes» y la descripción del modelo. **Cambio:** en Básico el Tamaño (1K/2K/4K) va por defecto; se elige en Avanzado.
 - **Prioridad:** Fase 5.
 
-### IMG-33 · 🟠 alto · ⏳ — 16 formatos a la vista
+### IMG-33 · 🟠 alto · ✅ — 16 formatos a la vista
 - **Evidencia:** Nano Banana 2 ofrece 16 proporciones; todas salen como botones en Básico, incluidas 1:4, 4:1, 1:8 y 8:1 (captura `04`).
 - **Impacto:** 3 filas de botones para algo que el 95 % resuelve con 4.
 - **Solución:** 4 formatos con su uso y «Más formatos ▾» con el resto. Si el modelo no hace uno de los 4, se muestra atenuado con «Este modelo no lo hace».
+- **Hecho (6 oct, Fase 5):** en Avanzado, 1:1, 4:5, 9:16 y 16:9 (y el elegido) a la vista; el resto bajo «Más formatos (N)». En Básico, un selector con todos y su nombre.
 - **Prioridad:** Fase 5.
 
-### IMG-34 · 🟡 medio · ⏳ — El paso 1 mezcla dos decisiones
+### IMG-34 · 🟡 medio · ✅ — El paso 1 mezcla dos decisiones
 - **Evidencia:** «1 ¿Qué quieres crear?» lleva el tipo de medio y, sin número, el interruptor Básico/Avanzado; los pasos se renumeran según el modelo (4 o 5).
 - **Solución:** el tipo de medio fuera del formulario, en pestañas arriba (Imagen · Video · Audio). El nivel, en la cabecera del compositor. Los pasos, por título y sin números, porque los números cambian (ya pasó en EST-01).
+- **Hecho (6 oct, Fase 5):** el tipo de medio es una fila compacta arriba; en Básico, «Avanzado» es un solo botón; los pasos van por su título, sin números, y los textos ya no dicen «paso 3».
 - **Prioridad:** Fase 5.
 
-### IMG-35 · 🟡 medio · ⏳ — Mejorar el prompt cambia el idioma
+### IMG-35 · 🟡 medio · ✅ — Mejorar el prompt cambia el idioma
 - **Evidencia:** por defecto «en inglés»: el texto del usuario se reemplaza por uno en inglés, con la traducción debajo y «Volver al mío» (`src/studio.js:1607`).
 - **Impacto:** para quien escribe en español, su idea desaparece del campo.
 - **Solución:** en Básico, mejorar en español por defecto (los modelos de Google lo entienden). Mostrar la mejora como **sugerencia** que se acepta («Usar esta» o «Seguir con la mía»), en lugar de reemplazar el texto.
+- **Hecho (6 oct, Fase 5):** en Básico, «Mejorar el prompt» trae una **propuesta en español** («Usar esta» o «Seguir con la mía»); en Avanzado sigue como antes (inglés o español, con «Volver al mío»).
 - **Prioridad:** Fase 5.
 
-### IMG-36 · 🟡 medio · ⏳ — Elegir modelo: demasiado y confuso
+### IMG-36 · 🟡 medio · ✅ — Elegir modelo: demasiado y confuso
 - **Evidencia:** la lista tiene 29 modelos de imagen, 24 de ellos «sin activar» (`modelosImagen`). «Nano Banana (2.5)» y «Nano Banana 2» se confunden. En Básico, la tarjeta del modelo ocupa unos 110 px.
 - **Solución:**
   - En Básico, un chip compacto con la opción **«Automático (recomendado)»**, que elige según lo que hay en el pedido (con referencia → el mejor editor; texto legible → Ideogram; si no, el de por defecto) y dice cuál usó.
   - La lista enseña solo los modelos listos, y al final «Ver los 24 sin activar».
   - Renombrar «Nano Banana (2.5)» a «Nano Banana 2.5 (anterior)».
+- **Hecho (6 oct, Fase 5):** «Automático (recomendado)» es el modelo por defecto de Básico (`src/studio-auto.js`, con test): con una imagen tuya, uno que edita; con texto que se lee, uno que lo escribe; si no, el de uso general. La tarjeta dice «Automático · Nano Banana 2» y por qué. Elegir un modelo a mano lo apaga; Repetir usa el modelo de esa imagen. La lista pliega «Ver los N sin activar». «Nano Banana (2.5)» pasa a «Nano Banana 2.5 (anterior)».
 - **Prioridad:** Fase 5.
 
-### IMG-37 · 🟢 bajo · ⏳ — Cantidad como contador
+### IMG-37 · 🟢 bajo · ✅ — Cantidad como contador
 - **Solución:** segmentado 1 · 2 · 4 (el máximo depende del tope), que da una decisión en un clic.
+- **Hecho (6 oct, Fase 5):** en Básico, «Cantidad» es un selector 1 · 2 · 4 (hasta el tope); en Avanzado sigue el − 1 +.
 - **Prioridad:** Fase 5.
 
-### IMG-38 · 🟡 medio · ⏳ — Referencias: soltar no va donde se espera
+### IMG-38 · 🟡 medio · ✅ — Referencias: soltar no va donde se espera
 - **Evidencia:** soltar un archivo en cualquier parte del Estudio lo **sube a la galería** («Suelta aquí para subir»), no lo pone como referencia. El bloque de referencias explica en 2 líneas qué es una referencia.
 - **Impacto:** el gesto natural (arrastrar la foto del producto a la idea) no hace lo que el usuario espera.
 - **Solución:** soltar sobre la idea o sobre «+ Imagen» = referencia; soltar sobre la galería = subir. Cada zona se ilumina con su texto.
+- **Hecho (6 oct, Fase 5):** «Imagen» junto a la idea añade una referencia (con Automático, pasa a un modelo que edita); soltar una foto del ordenador o una tarjeta de la galería sobre la idea la pone de referencia (el recuadro se ilumina); fuera de la idea, se sube a la galería como antes. Las referencias de Básico solo se ven cuando hay alguna.
 - **Prioridad:** Fase 5.
 
 **Regenerar, variar, editar, descargar y compartir, en Básico:**
@@ -666,7 +674,7 @@ Columnas: **Nec.** = ¿es necesario? · **Lugar** = ¿está donde debe? · **Cla
   - los filtros en una hoja inferior («Filtrar»);
   - la cabecera del Estudio sin logo;
   - el pie en una sola línea («Generar · US$0,07»).
-- **Hecho (6 oct, Fase 2):** a 760 px o menos, la cabecera es una fila (pestañas, topes, cerrar; el título queda para el lector de pantalla), la barra de la galería son iconos, los tipos van en una fila de cuatro y la tarjeta del modelo, sin su descripción. A 390×844 la primera imagen empieza a 242 px y la idea se ve sin desplazarse. **Queda para la Fase 5:** poner la idea la primera.
+- **Hecho (6 oct, Fase 2):** a 760 px o menos, la cabecera es una fila (pestañas, topes, cerrar; el título queda para el lector de pantalla), la barra de la galería son iconos, los tipos van en una fila de cuatro y la tarjeta del modelo, sin su descripción. A 390×844 la primera imagen empieza a 242 px y la idea se ve sin desplazarse. La idea va la primera desde la Fase 5 (IMG-32).
 - **Prioridad:** Fase 2.
 
 ### IMG-53 · 🟡 medio · ⏳ — El visor en el teléfono esconde las acciones

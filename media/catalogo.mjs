@@ -252,7 +252,7 @@ const MMX = [
 export const CATALOG = [
   // ---- images
   ...HF_IMAGES,
-  { id: 'nano-banana', engine: 'gemini', kind: 'image', name: 'Nano Banana (2.5)', cost: 0.039, note: 'Edita y mezcla fotos: dale hasta 3 referencias (tu producto, tu logo, un estilo).', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '9:16', '16:9', '4:3', '3:2', '2:3', '21:9'], '1:1') } },
+  { id: 'nano-banana', engine: 'gemini', kind: 'image', name: 'Nano Banana 2.5 (anterior)', cost: 0.039, note: 'Edita y mezcla fotos: dale hasta 3 referencias (tu producto, tu logo, un estilo).', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '9:16', '16:9', '4:3', '3:2', '2:3', '21:9'], '1:1') } },
   // V4.4 (27 Sep 2026): Google's current image models on the same GEMINI_API_KEY (ids from Google's own cookbook, google-gemini/cookbook,
   // Sep 2026). Imagen was shut down on 17 Aug 2026, so it is not here. Prices are estimates: the note says so.
   { id: 'nano-banana-2', engine: 'gemini', kind: 'image', gid: 'gemini-3.1-flash-image', name: 'Nano Banana 2', cost: 0.067, note: 'El todoterreno de Google: hasta 14 referencias, formatos muy anchos o altos, hasta 4K. Precio aproximado.', roles: { reference: 14 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '5:4', '21:9', '1:4', '4:1', '1:8', '8:1'], '1:1'), imageSize: E(['1K', '2K', '4K'], '1K') } },
