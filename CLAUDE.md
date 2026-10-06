@@ -90,6 +90,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 - auditoría de 100 puntos: los 100 arreglados.
 
 **Siguiente, en este orden:**
+0. **Auditoría del Estudio de imagen (6 oct 2026):** `docs/auditoria-estudio-imagen-2026-10-06.md`. Son 53 puntos (4 críticos) y un plan en 7 fases. Se empieza por la Fase 1: lo que gasta sin confirmar, pierde el borrador o se contradice («Variar», las referencias que el banco esconde, la entrada de Avanzado). Al tocar el compositor, la galería o el visor, mira antes sus puntos. Para medir: `node scripts/estudio-imagen-recorrido.mjs` (con `AO_AXE=<axe.min.js>` para pasar axe).
 0. **Probar MiniMax con la key real del dueño:** `node scripts/check-minimax.mjs` (con `--video` y `--music`) y luego una clonación grabando desde el panel «Voces». Ajustar los precios marcados «aproximado» con su primera factura.
 1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
