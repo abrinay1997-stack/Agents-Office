@@ -91,7 +91,8 @@ export function monthHTML({ from, days, anchor, by, card, live = () => false, ad
  * La semana o el día: columnas = días, filas = horas de 00:00 a 24:00; una casilla es un destino de arrastre y un clic programa a esa
  * hora. Lo que está en marcha no tiene hora: va en una fila propia («EN MARCHA») sobre la cuadrícula, nunca en una hora falsa.
  */
-export function timeGridHTML({ from, days, by, card, live = () => false, now = Date.now(), liveLabel = 'EN MARCHA' }) {
+// `slot(día, hora)` (plan M3, opcional) devuelve una clase más para esa hora: Contenido sombrea las mejores horas. Sin él, el HTML no cambia.
+export function timeGridHTML({ from, days, by, card, live = () => false, now = Date.now(), liveLabel = 'EN MARCHA', slot = null }) {
   const nowD = new Date(now), today = ymd(nowD);
   const cols = []; for (let i = 0; i < days; i++) { const ts = from + i * DAY, d = new Date(ts); cols.push({ ts, d, k: ymd(d), list: by[ymd(d)] || [] }); }
   let html = '<div class="cv-tg-c"></div>' + cols.map(({ d, k }) => `<div class="cv-tg-d${k === today ? ' today' : ''}" data-day="${k}"><span>${days === 1 ? DOW_LONG[d.getDay()] : DOW[(d.getDay() + 6) % 7]}</span><b>${d.getDate()}</b>${days === 1 ? `<span>de ${MONTHS[d.getMonth()].toLowerCase()}</span>` : ''}</div>`).join('');
@@ -103,7 +104,8 @@ export function timeGridHTML({ from, days, by, card, live = () => false, now = D
       const end = new Date(c.ts); end.setHours(h + 1, 0, 0, 0);
       const isNow = c.k === today && h === nowD.getHours(), wk = (c.d.getDay() + 6) % 7 >= 5;
       const list = c.list.filter(ev => !live(ev) && new Date(ev.at).getHours() === h);
-      html += `<div class="cv-day cv-slot${end.getTime() <= now ? ' past' : ''}${isNow ? ' now' : ''}${wk ? ' wknd' : ''}" data-day="${c.k}" data-hour="${h}">${isNow ? `<i class="cv-nowline" style="top:${Math.round(nowD.getMinutes() / 60 * 100)}%" aria-hidden="true"></i>` : ''}<div class="cv-evs">${list.map(ev => card(ev)).join('')}</div></div>`;
+      const extra = slot ? slot(c.k, h) : '';
+      html += `<div class="cv-day cv-slot${end.getTime() <= now ? ' past' : ''}${isNow ? ' now' : ''}${wk ? ' wknd' : ''}${extra ? ' ' + extra : ''}" data-day="${c.k}" data-hour="${h}">${isNow ? `<i class="cv-nowline" style="top:${Math.round(nowD.getMinutes() / 60 * 100)}%" aria-hidden="true"></i>` : ''}<div class="cv-evs">${list.map(ev => card(ev)).join('')}</div></div>`;
     }
   }
   return html;

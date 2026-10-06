@@ -72,6 +72,8 @@ import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
 import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
+import { crearMejorHora } from './contenido/mejor-hora.mjs';
+import { resumenAnaliticas } from './contenido/resumen-analiticas.mjs';
 import { crearProgramador } from './contenido/programador.mjs';
 import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
@@ -1531,7 +1533,10 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
   req.on('data', d => { size += d.length; if (size > limit) { if (s !== null) reject(Object.assign(new Error('request too large'), { status: 413 })); s = null; return; } if (s !== null) s += d; }); // over the limit: stop keeping it, drain the rest, answer 413
   req.on('end', () => { if (s === null) return; try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('the body is not valid JSON'), { status: 400 })); } });
 });
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
+// plan M3 (6 oct 2026): la mejor hora (Metricool o lo ya publicado) y Analíticas en palabras para los agentes
+const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALITICAS_DIR, 'mejores-horas.json') });
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora,
+  analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:

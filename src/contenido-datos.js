@@ -67,6 +67,7 @@ export function crearDatos({ served, now = () => new Date() }) {
     cola: async () => http('GET', '/api/contenido/cola'),
     salida: async (id, que) => http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/${que}`, {}),
     comprobar: async () => http('POST', '/api/contenido/conductor/comprobar', {}),
+    mejorHora: async (redes = ['instagram']) => http('GET', '/api/contenido/mejor-hora?redes=' + encodeURIComponent(redes.join(','))), // plan M3
   };
 
   /* ---------- la demo: lo mismo, en la memoria de la página ---------- */
@@ -101,5 +102,12 @@ export function crearDatos({ served, now = () => new Date() }) {
     cola: async () => ({ modo: 'demo', conductor: { id: 'demo', nombre: 'Demo', ok: false, motivo: '' }, horasAntes: 24, cuenta: {}, entradas: {} }),
     salida: async () => { throw falla('En la demo no sale nada: abre la oficina con el iniciador.'); },
     comprobar: async () => ({ ok: false, error: 'En la demo no hay conexión: abre la oficina con el iniciador.' }),
+    mejorHora: async () => ({ fuente: 'ejemplo', fuentes: {}, grid: GRID_EJEMPLO, motivo: '' }), // la demo enseña cómo se ve, rotulado «de ejemplo»
   };
 }
+
+/** La mejor hora de la demo: picos típicos (mediodía y noche entre semana, media mañana el fin de semana). Nunca se mezcla con datos reales. */
+const GRID_EJEMPLO = Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => {
+  const finde = d === 0 || d === 6, pico = finde ? (h >= 10 && h <= 12 ? 85 : h >= 18 && h <= 20 ? 60 : 0) : (h === 13 ? 80 : h >= 19 && h <= 20 ? 95 : h === 9 ? 58 : 0);
+  return pico && (d === 3 || d === 4) ? Math.min(100, pico + 5) : pico;
+}));

@@ -18,6 +18,7 @@ import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
 import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida } from './contenido-cola.js';
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS } from './contenido-reglas.js';
+import { nivel as nivelHora, FUENTE as FUENTE_HORA } from './contenido-hora.js';
 import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
@@ -64,6 +65,15 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   let estadoOn = new Set(store.get('estados', ORDEN)), redOn = new Set(store.get('redes', Object.keys(RED)));
   // M2 (6 oct 2026): las redes que usa el negocio (Ajustes → Contenido), más las que ya tenga alguna pieza: solo esas salen en los filtros y en el resumen
   let redesNegocio = ['instagram', 'facebook'];
+  // plan M3: la mejor hora de las redes a la vista (Metricool o lo ya publicado), para sombrear la semana y sugerir en el panel
+  const horas = new Map(); let horaInfo = null;
+  async function mejorHora(redes) {
+    const k = [...redes].sort().join(','), c = horas.get(k);
+    if (c && Date.now() - c.t < 10 * 60e3) return c.v;
+    const v = await datos.mejorHora(redes).catch(() => null); horas.set(k, { t: Date.now(), v }); return v;
+  }
+  async function loadHora() { const v = await mejorHora(redesUsadas().filter(r => redOn.has(r))); if (JSON.stringify(v?.grid) !== JSON.stringify(horaInfo?.grid)) { horaInfo = v; if (view !== 'month' && view !== 'agenda' && mode !== 'prog') render(); } }
+  const fuenteHora = v => (v?.fuente === 'ejemplo' ? 'de ejemplo' : FUENTE_HORA[v?.fuente] || 'según Metricool y lo ya publicado');
   const redesUsadas = () => { const u = new Set(redesNegocio); for (const p of todasConocidas()) for (const r of p.redes) u.add(r); return Object.keys(RED).filter(r => u.has(r)); };
   const gone = new Set(); let undoT = null, commitFn = null, undoFn = null, noteT = null;
   const medidas = { ...DEMO_MEDIOS }; // lo que se sabe de cada archivo del Estudio (de /api/media al elegir): la vista previa y las reglas lo usan
@@ -104,7 +114,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   async function load(force = false) {
     const w = want(), key = `${w.desde}|${w.hasta}`;
     if (!force && key === loadedKey && pieces.length) { if (mode === 'prog') loadCola(); return; }
-    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; loadedKey = key; errorMsg = ''; }
+    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; loadedKey = key; errorMsg = ''; loadHora(); }
     catch (e) { errorMsg = e.message || 'No pude leer las piezas'; }
     if (mode === 'prog' || force) await loadCola();
     if (openNow) render(); paintDock();
@@ -157,7 +167,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     let html;
     if (view === 'month') html = monthHTML({ ...grid, anchor });
     else if (view === 'agenda') { E.grid.className = 'cv-grid agenda'; html = agendaHTML({ ...grid, emptyDay: 'Nada programado. Un buen hueco para publicar.', emptyAll: 'Nada en estos 14 días.' }); }
-    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', r.days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, live: ev => !ev.p.hora, liveLabel: 'SIN HORA' })}</div>`; }
+    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', r.days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, live: ev => !ev.p.hora, liveLabel: 'SIN HORA', slot: horaInfo?.grid ? (k, h) => ['', 'hb1', 'hb2'][nivelHora(horaInfo.grid, k, h)] : null })}</div>`; }
     const key = view + ':' + r.from; if (view !== 'month' && key === tgKey) tgScroll = E.grid.scrollTop;
     const out = errorMsg ? `<div class="cv-empty">${esc(errorMsg)}</div>` : html;
     // el sondeo cada 20 s repinta: si nada cambió no se toca la cuadrícula, y si cambió el foco vuelve a la misma tarjeta (CON-12)
@@ -177,6 +187,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     let n = 0; for (const k in by) n += by[k].length;
     const cuenta = ORDEN.map(s => [s, pieces.filter(p => p.estado === s && p.fecha && p.fecha >= ymd(new Date(r.from)) && p.fecha < ymd(new Date(r.to)) && visible(p)).length]).filter(([, c]) => c);
     E.stats.innerHTML = `<span><b>${n}</b> ${n === 1 ? 'pieza' : 'piezas'}</span>` + cuenta.map(([s, c]) => `<span class="pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}"><b>${c}</b> ${ESTADO[s].name.toLowerCase()}</span>`).join('');
+    // plan M3: la leyenda de las horas sombreadas va junto a las cifras (dentro de la cuadrícula se iba con el desplazamiento)
+    if (horaInfo?.grid && view !== 'month' && view !== 'agenda') E.stats.insertAdjacentHTML('afterbegin', `<span class="ct-hbleg"><i class="hb2" aria-hidden="true"></i>Mejores horas, ${esc(fuenteHora(horaInfo))} · <i class="hb1" aria-hidden="true"></i>buenas</span>`);
   }
   function renderChips() {
     const usadas = redesUsadas(), off = ORDEN.length - estadoOn.size + usadas.filter(r => !redOn.has(r)).length;
@@ -268,7 +280,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { render(); loadResumen(); }
   }
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
-  const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
+  const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
   async function openPiece(id, addIds) {
     if (!openNow) open();
@@ -368,7 +380,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (t.closest('[data-comprobar]')) { const b = t.closest('[data-comprobar]'); b.disabled = true; try { const r = await datos.comprobar(); note(r.ok ? `Metricool responde: marca «${r.marca?.nombre || '—'}»${r.marca?.zona ? ' · ' + r.marca.zona : ''}.` : r.error, !r.ok); } catch (er) { note(er.message, true); } b.disabled = false; return; }
     const chip = t.closest('.cv-chip'); if (chip) {
       if (chip.dataset.e) { estadoOn.has(chip.dataset.e) ? estadoOn.delete(chip.dataset.e) : estadoOn.add(chip.dataset.e); if (!estadoOn.size) estadoOn = new Set(ORDEN); store.set('estados', [...estadoOn]); }
-      else if (chip.dataset.r) { redOn.has(chip.dataset.r) ? redOn.delete(chip.dataset.r) : redOn.add(chip.dataset.r); if (!redOn.size) redOn = new Set(Object.keys(RED)); store.set('redes', [...redOn]); }
+      else if (chip.dataset.r) { redOn.has(chip.dataset.r) ? redOn.delete(chip.dataset.r) : redOn.add(chip.dataset.r); if (!redOn.size) redOn = new Set(Object.keys(RED)); store.set('redes', [...redOn]); loadHora(); }
       render(); E.chips.querySelector(chip.dataset.e ? `[data-e="${chip.dataset.e}"]` : `[data-r="${chip.dataset.r}"]`)?.focus(); return;
     }
     const ok = t.closest('[data-ok]'); if (ok) { e.stopPropagation(); await aprobar(ok.dataset.ok, ok); return; }

@@ -44,7 +44,7 @@ test('las herramientas que reciben los agentes no aprueban, no programan y no pu
   try {
     const init = await m.rpc('initialize', {}); assert.equal(init.result.serverInfo.name, 'contenido');
     const nombres = (await m.tools()).map(t => t.name);
-    assert.deepEqual(nombres.sort(), ['crear_borrador', 'mejorar_borrador', 'ver_calendario_contenido', 'ver_pieza']);
+    assert.deepEqual(nombres.sort(), ['crear_borrador', 'mejorar_borrador', 'ver_analiticas', 'ver_calendario_contenido', 'ver_mejor_hora', 'ver_pieza']);
     for (const n of nombres) assert.doesNotMatch(n, /aprob|program|public|enviar|entreg|approve|schedule|publish|send/i, `«${n}» suena a una acción que un agente no debe tener`);
     const props = (await m.tools()).flatMap(t => Object.keys(t.inputSchema.properties || {}));
     assert.ok(!props.includes('estado') && !props.includes('aprobada'), 'ninguna herramienta deja elegir el estado');

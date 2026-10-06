@@ -13,6 +13,7 @@ import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento, longitudPara, CON_HISTORIAS } from './contenido-reglas.js';
 import { initPreview } from './contenido-preview.js';
 import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-cola.js';
+import { mejoresDelDia, siguienteBuena } from './contenido-hora.js';
 
 export const ESTADO = {
   idea: { name: 'IDEA', glyph: '◌', color: '#5A5A5A', dark: '#B9B6AE', help: 'Una idea suelta: todavía no es una publicación.' },
@@ -63,7 +64,7 @@ export function thumbHTML(src, esc, cls = 'pz-th') {
   return esVideo(src) ? `<span class="${cls} vid" aria-hidden="true"><video src="${esc(u)}#t=0.1" preload="metadata" muted playsinline></video><i>▶</i></span>` : `<span class="${cls}" aria-hidden="true"><img src="${esc(u)}" alt="" loading="lazy" decoding="async"></span>`;
 }
 
-export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange = () => {}, note = () => {}, otras = () => [], cuenta = () => ({}), medidaDe = () => null, redesUsadas = () => ['instagram', 'facebook'] }) {
+export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange = () => {}, note = () => {}, otras = () => [], cuenta = () => ({}), medidaDe = () => null, redesUsadas = () => ['instagram', 'facebook'], mejorHora = async () => null, fuenteHora = () => '' }) {
   const id0 = ++uid, I = k => `pz${id0}-${k}`;
   host.innerHTML = `<div class="pz-head"></div>
     <div class="pz-swap" role="tablist" aria-label="Qué ver"><button type="button" role="tab" data-swap="edit" aria-selected="true">Editar</button><button type="button" role="tab" data-swap="ver" aria-selected="false">Vista previa</button></div>
@@ -71,6 +72,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     <div class="pz-foot"></div>`;
   const head = host.querySelector('.pz-head'), scroll = host.querySelector('.pz-scroll'), foot = host.querySelector('.pz-foot'), side = host.querySelector('.pz-side');
   const preview = initPreview(host.querySelector('.pz-preview'), { esc, cuenta, otras: () => otras().map(o => (cur && o.id === cur.id ? cur : o)) });
+  let horaK = '', horaSug = null; // plan M3: la mejor hora de las redes de esta pieza
   let masRedes = false; // «Más redes»: las que el negocio no usa, a la vista solo si se piden
   let cur = null, dirty = {}, timer = null, saving = Promise.resolve(), opener = null, isModal = false, gone = false, stateText = '', stateBad = false;
   // la revisión se calcula aquí, con las mismas reglas que el servidor: se ve al instante, sin esperar al guardado. El servidor la vuelve a comprobar al aprobar.
@@ -123,9 +125,30 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     box.innerHTML = `<div class="pz-row"><label for="${I('d')}">Día</label><select id="${I('d')}" class="pz-sel" data-f="fecha"><option value=""${p.fecha ? '' : ' selected'}>Sin día (banco de ideas)</option>${dateOpts(p.fecha)}</select>
         <label for="${I('h')}">Hora</label><select id="${I('h')}" class="pz-sel" data-f="hora"><option value=""${p.hora ? '' : ' selected'}>Sin hora</option>${timeOpts(p.hora)}</select></div>
       <div class="pz-row pz-quick pz-qdays" role="group" aria-label="Días rápidos">${diasRapidos(p.redes, otras(), { excluir: p.id }).map(d => `<button type="button" class="pz-qd" data-qd="${d.fecha}" aria-pressed="${p.fecha === d.fecha}" aria-label="${esc(d.largo)}${d.n ? `: ya ${d.n === 1 ? 'sale 1 pieza' : `salen ${d.n} piezas`}` : ': libre'}">${esc(d.corto)}${d.n ? `<i aria-hidden="true">${d.n}</i>` : ''}</button>`).join('')}</div>
+      <div class="pz-best">${bestHTML()}</div>
       <div class="pz-row pz-quick" role="group" aria-label="Horas rápidas">${HORAS_RAPIDAS.map(h => `<button type="button" class="pz-qh" data-qh="${h}" aria-pressed="${p.hora === h}">${h}</button>`).join('')}<button type="button" class="pz-qh wide" data-a="hueco" title="El siguiente día sin nada en estas redes">Siguiente hueco libre</button></div>
       ${ch ? `<p class="pz-inline warn" role="status">Ya hay ${esc(FORMATO[ch.formato]?.toLowerCase() === 'historia' ? 'una historia' : 'un ' + (FORMATO[ch.formato] || 'post').toLowerCase())} a las ${esc(ch.hora)} ese día: «${esc(ch.titulo || 'sin título')}». Sepáralas al menos una hora.</p>` : ''}
       ${p.fecha && m.errores.length ? `<p class="pz-inline err" role="status">${esc(m.errores[0])}</p>` : p.fecha && p.hora ? `<p class="pz-inline ok">Sale ${esc(fmtLong(m.momento))}.</p>` : ''}`;
+  }
+  /** Las mejores horas (Metricool o lo ya publicado): las de ese día, o el siguiente hueco bueno si aún no tiene día. */
+  function bestHTML() {
+    const p = cur; if (!p) return '';
+    const hk = [...p.redes].sort().join(',');
+    if (hk !== horaK) {
+      horaK = hk; horaSug = null;
+      mejorHora(p.redes).then(v => { if (cur && [...cur.redes].sort().join(',') === hk) { horaSug = v; const b = scroll.querySelector('.pz-best'); if (b && !b.contains(document.activeElement)) b.innerHTML = bestHTML(); } }).catch(() => {});
+      return '';
+    }
+    const v = horaSug; if (!v) return '';
+    if (!v.grid) return v.motivo ? `<p class="pz-help">${esc(v.motivo)}</p>` : '';
+    const de = fuenteHora(v);
+    if (p.fecha) {
+      const tops = mejoresDelDia(v.grid, p.fecha, 3); if (!tops.length) return `<p class="pz-help">Ese día no tiene ninguna hora destacada (${esc(de)}).</p>`;
+      return `<div class="pz-row pz-quick" role="group" aria-label="Mejores horas ese día, ${esc(de)}"><span class="pz-lab">Mejores ese día <small class="pz-hn">${esc(de)}</small></span>${tops.map(t => `<button type="button" class="pz-qh best" data-qh="${t.hora}" aria-pressed="${p.hora === t.hora}"><i aria-hidden="true">★</i> ${t.hora}</button>`).join('')}</div>`;
+    }
+    const ocup = otras().filter(o => o.id !== p.id && o.fecha && o.hora && o.redes.some(r => p.redes.includes(r))).map(o => new Date(`${o.fecha}T${o.hora}:00`).getTime());
+    const s = siguienteBuena(v.grid, { ocupadas: ocup }); if (!s) return '';
+    return `<div class="pz-row pz-quick"><button type="button" class="pz-qh wide best" data-buena="${s.fecha}|${s.hora}"><i aria-hidden="true">★</i> Siguiente buena hora: ${esc(fmtDay(new Date(s.fecha + 'T00:00:00').getTime()))}, ${s.hora}</button><small class="pz-hn">${esc(de)}</small></div>`;
   }
   function paintBody() {
     const p = cur, post = postDePieza(p), lp = limitePrincipal(p), charsFb = textoPara(post, 'facebook').length, hist = p.formato === 'historia';
@@ -229,6 +252,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (b.dataset.swap) { swap(b.dataset.swap); return; }
     if (b.dataset.fmt) { set({ formato: b.dataset.fmt }); keep(() => paintBody(), `[data-fmt="${b.dataset.fmt}"]`); return; }
     if (b.dataset.qd) { set({ fecha: b.dataset.qd }); keep(paintCuando, `[data-qd="${b.dataset.qd}"]`); paintPreview(); return; }
+    if (b.dataset.buena) { const [f, h] = b.dataset.buena.split('|'); set({ fecha: f, hora: h }); keep(paintCuando, `[data-qh="${h}"]`); paintPreview(); setState(`Sale el ${fmtDay(new Date(f + 'T00:00:00').getTime())} a las ${h}: una buena hora.`); return; }
     if (b.dataset.qh) { set({ hora: b.dataset.qh }); keep(paintCuando, `[data-qh="${b.dataset.qh}"]`); paintPreview(); return; }
     if (b.dataset.red) { const on = cur.redes.includes(b.dataset.red); const next = on ? cur.redes.filter(r => r !== b.dataset.red) : [...cur.redes, b.dataset.red]; if (!next.length) { setState('Elige al menos una red.', true); return; } set({ redes: next }); keep(() => paintBody(), `[data-red="${b.dataset.red}"]`); return; }
     if (b.dataset.rm !== undefined) { swapMedios(cur.medios.filter((_, i) => i !== +b.dataset.rm)); return; }
@@ -272,7 +296,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   function open(p) {
     gone = false; if (!isOpen()) opener = document.activeElement;
     cur = p.id ? JSON.parse(JSON.stringify(p)) : { id: '', titulo: '', fecha: p.fecha || '', hora: p.hora || '', formato: p.formato || 'post', redes: p.redes || [...redesUsadas()], estado: 'borrador', responsable: '', medios: p.medios || [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', aprobada: null, medidas: {}, ...(p.extra || {}) };
-    cur.medidas ||= {}; cur.textos ||= {}; masRedes = false;
+    cur.medidas ||= {}; cur.textos ||= {}; masRedes = false; horaK = ''; horaSug = null;
     dirty = {}; stateText = ''; stateBad = false; if (!cur.id && (cur.medios.length || cur.fecha)) dirty = { medios: cur.medios, ...(cur.fecha ? { fecha: cur.fecha, hora: cur.hora, formato: cur.formato } : {}) };
     host.hidden = false; host.classList.add('on'); isModal = narrow(); host.setAttribute('role', isModal ? 'dialog' : 'complementary'); if (isModal) host.setAttribute('aria-modal', 'true'); else host.removeAttribute('aria-modal');
     host.setAttribute('aria-label', 'Pieza de contenido'); if (isModal) modal.open(host);

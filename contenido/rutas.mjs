@@ -17,7 +17,7 @@ import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null }) {
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, mejorHora = null, analiticasTexto = null }) {
   const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? programador.salidaDe(p.id) : null }; };
   const resumen = () => {
     const todas = almacen.listar({ sinFecha: true });
@@ -52,6 +52,17 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (r.error) return json(res, 400, { error: r.error }), true;
         if (deAgente && r.pieza.tarea) notice('contenido', `Un agente dejó un borrador en Contenido: «${r.pieza.titulo || 'sin título'}»${r.pieza.fecha ? ' para el ' + r.pieza.fecha : ''}. Revísalo y apruébalo cuando esté bien.`, { key: 'contenido-' + r.pieza.tarea });
         return json(res, 200, { ok: true, pieza: revisado(r.pieza) }), true;
+      }
+      if (p === '/api/contenido/mejor-hora' && req.method === 'GET') { // plan M3: la tabla 7 × 24 de las redes pedidas y de dónde sale
+        if (!mejorHora) return json(res, 200, { fuente: 'ninguna', grid: null, motivo: 'sin fuente' }), true;
+        const redes = (url.searchParams.get('redes') || 'instagram').split(',').map(x => x.trim()).filter(Boolean).slice(0, 9);
+        return json(res, 200, await mejorHora.horas(redes)), true;
+      }
+      if (p === '/api/contenido/analiticas/resumen' && req.method === 'GET') { // plan M3: Analíticas en palabras, para los agentes
+        if (!analiticasTexto) return json(res, 200, { texto: 'Analíticas no está disponible aquí.' }), true;
+        const dias = Math.min(90, Math.max(7, parseInt(url.searchParams.get('dias') || '30', 10) || 30));
+        const redes = (url.searchParams.get('redes') || (ajustes().redes || ['instagram', 'facebook']).join(',')).split(',').filter(Boolean).slice(0, 9);
+        return json(res, 200, await analiticasTexto(dias, redes)), true;
       }
       if (p === '/api/contenido/cola' && req.method === 'GET') return json(res, 200, programador ? programador.estado() : { modo: 'apagado', entradas: {} }), true;
       if (p === '/api/contenido/cola/tick' && req.method === 'POST') { if (!programador) return json(res, 404, { error: 'sin cola' }), true; const u = await programador.tick(); return json(res, 200, { ok: true, ultimo: u, ...programador.estado() }), true; }

@@ -378,3 +378,15 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
 .pz-op { border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px 12px; margin: 12px 0 4px; display: grid; gap: 4px; }
 .pz-op legend { font-family: var(--ui); font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 0 6px; color: var(--ink); }
 .pz-op .pz-sel { justify-self: start; }
+
+/* plan M3 (6 oct 2026): la mejor hora — sombreada en la semana y el día, y sugerida en el panel */
+#ctOv .cv-slot.hb1 { background-image: linear-gradient(rgba(19,112,90,.07), rgba(19,112,90,.07)); }
+#ctOv .cv-slot.hb2 { background-image: linear-gradient(rgba(19,112,90,.16), rgba(19,112,90,.16)); box-shadow: inset 3px 0 0 #13705A; }
+.ct-hbleg { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-right: 12px; font-size: 11.5px; color: var(--grey); letter-spacing: 0; text-transform: none; }
+.ct-hbleg i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--hairline); }
+.ct-hbleg i.hb2 { background: rgba(19,112,90,.16); box-shadow: inset 3px 0 0 #13705A; } .ct-hbleg i.hb1 { background: rgba(19,112,90,.07); }
+.pz-qh.best i { color: #13705A; font-style: normal; } .pz-best .pz-lab { margin-right: 4px; }
+.pz-best:empty { display: none; }
+body.dark :is(#ctOv .cv-slot.hb1, .ct-hbleg i.hb1) { background-image: none; background-color: rgba(79,209,165,.08); }
+body.dark :is(#ctOv .cv-slot.hb2, .ct-hbleg i.hb2) { background-image: none; background-color: rgba(79,209,165,.17); box-shadow: inset 3px 0 0 #4FD1A5; }
+body.dark .pz-qh.best i { color: #4FD1A5; }
