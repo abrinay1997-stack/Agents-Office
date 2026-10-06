@@ -1825,7 +1825,7 @@ window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval,
 
 let last = performance.now(), lastFrame = 0, frameN = 0, lastInput = performance.now();
 for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
-const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen') || document.body.classList.contains('ctOpen') || document.body.classList.contains('anOpen'); // a full-screen view hides the office
+const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen') || document.body.classList.contains('ctOpen') || document.body.classList.contains('anOpen') || document.body.classList.contains('tvOpen'); // a full-screen view hides the office (Tareas too, 6 Oct 2026: it drew the 3D office behind it at full rate)
 // Frame budget: full rate while the camera flies or the owner is moving the pointer; 30 fps when the office just lives;
 // 5 fps of simulation and NO drawing while the Brain or the calendar covers it. The tab hidden → the browser stops rAF.
 function loop(now) {

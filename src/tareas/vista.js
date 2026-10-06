@@ -76,7 +76,7 @@ function init(ov, ctx) {
     if (!S.personas.length && ctx.servida) { try { S.personas = ((await (await fetch('/api/team')).json()).people || []).map(p => p.name); } catch {} }
     pintar();
   }
-  let reloj = 0; const escribiendo = () => { const a = document.activeElement; return !!a && ov.contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName); };
+  let reloj = 0; const escribiendo = () => { const a = document.activeElement; return !!a && ov.contains(a) && (/TEXTAREA|SELECT/.test(a.tagName) || (a.tagName === 'INPUT' && !/checkbox|radio|button/.test(a.type))); };
   const vigilar = () => { clearInterval(reloj); reloj = setInterval(() => { if (!document.hidden && !escribiendo() && !arr) cargar().then(() => S.detalle && refrescarDetalle(false)); }, 8000); }; // lo que hacen los agentes aparece solo
 
   /* ---------- pintar ---------- */
@@ -88,14 +88,21 @@ function init(ov, ctx) {
   function pintar() {
     contar(); escribirHash();
     if (!S.cargado) { main.innerHTML = S.error ? `<div class="tv-vacio"><b>No se pudieron traer las tareas</b><span>${esc(S.error)}</span><button type="button" class="tv-btn" data-reintentar>Reintentar</button></div>` : '<p class="tv-cargando">Cargando…</p>'; return; }
-    const scroll = main.scrollTop;
+    const scroll = main.scrollTop, foco = clavFoco();
     if (S.tab === 'inicio') main.innerHTML = inicioHTML(S.tareas, c, S.plegadas, { crono: activoCrono(S.tareas, 'Tú') });
     else if (S.tab === 'lista') { const r = listaHTML(S.tareas, S.f, c, { orden: S.orden, grupo: S.grupo, sel: S.sel }); S.idsLista = r.ids; main.innerHTML = `${barraFiltros(S.f, c, { orden: S.orden, grupo: S.grupo })}<div class="tv-fchips">${chipsFiltro(S.f, c)}<span class="tv-total">${r.total} ${r.total === 1 ? 'tarea' : 'tareas'}</span></div>${barraSeleccion(S.sel.size, c)}<div class="tv-lista">${r.html}</div>`; }
     else if (S.tab === 'tablero') main.innerHTML = `<div class="tv-tbh"><label class="tv-tog"><input type="checkbox" data-carriles${S.carriles ? ' checked' : ''}> Un carril por departamento</label><span class="tv-ayuda">Arrastra una tarjeta para cambiarla de estado, de turno o de departamento; todo se puede deshacer.</span></div>${tableroHTML(S.tareas, c, { carriles: S.carriles, colMovil: S.colMovil })}`;
     else if (S.tab === 'proyectos') { const p = S.proyecto && c.proyecto(S.proyecto) || (S.proyecto && S.cat.proyectos.find(x => x.id === S.proyecto)); main.innerHTML = S.formP ? formProyectoHTML(S.formP) : p ? proyectoHTML(p, S.tareas, c, { mapa: S.mapa }) : proyectosHTML(S.cat, c, { mostrarCerrados: S.cerrados }); }
     else if (S.tab === 'medidas') { main.innerHTML = medidasHTML(S.resumen, c, { dias: S.dias, abierta: S.kpi, webhooks: S.webhooks }); if (!S.resumen) cargarResumen(); }
-    main.scrollTop = scroll;
+    main.scrollTop = scroll; volverFoco(foco);
   }
+  // repintar no le quita el foco a quien usa el teclado (cada 8 s y al elegir): se busca el mismo control por sus data-*
+  function clavFoco() {
+    const a = document.activeElement; if (!a || !main.contains(a) || a === main) return null;
+    const datos = [...a.attributes].filter(x => x.name.startsWith('data-')).map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
+    return datos ? a.tagName.toLowerCase() + datos : null;
+  }
+  function volverFoco(sel) { if (!sel) return; try { main.querySelector(sel)?.focus({ preventScroll: true }); } catch {} }
   async function cargarResumen() { try { S.webhooks = await datos.webhooks().catch(() => null); S.resumen = await datos.resumen(S.dias); } catch (e) { S.resumen = null; aviso('No pude calcular las medidas: ' + e.message); return; } if (S.tab === 'medidas') pintar(); }
 
   /* ---------- avisos con DESHACER ---------- */

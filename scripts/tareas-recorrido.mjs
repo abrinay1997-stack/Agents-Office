@@ -59,6 +59,7 @@ try {
   try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ channel: 'chrome' }); }
   const axe = process.env.AO_AXE && fs.existsSync(process.env.AO_AXE) ? fs.readFileSync(process.env.AO_AXE, 'utf8') : null;
   for (const [w, h, tema] of [[1512, 900, 'light'], [1512, 900, 'dark'], [1024, 768, 'light'], [390, 844, 'light']]) {
+    if (process.env.AO_SOLO && process.env.AO_SOLO !== `${w}-${tema}`) continue; // AO_SOLO=1024-light: un solo ancho
     const tag = `${w}-${tema}`, o = await oficina(), movil = w < 500; let pagina = null, errs = [];
     try {
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: movil, isMobile: movil, colorScheme: tema });
@@ -89,7 +90,8 @@ try {
       await page.screenshot({ path: path.join(OUT, `${tag}-lista.png`) });
       await page.click('#tvOv .tv-fchip[data-quitar="prio"]'); await page.waitForTimeout(300);
       // varias a la vez, con DESHACER
-      for (const i of [0, 1]) await page.locator('#tvOv .tv-lista .tv-ck').nth(i).check(); await page.waitForTimeout(200);
+      await page.waitForSelector('#tvOv .tv-lista .tv-ck'); await page.waitForTimeout(500); // quitar el chip repinta la lista
+      for (const i of [0, 1]) { await page.locator('#tvOv .tv-lista .tv-ck').nth(i).check({ timeout: 10000 }); await page.waitForSelector(`#tvOv .tv-selbar`, { timeout: 5000 }).catch(() => {}); } await page.waitForTimeout(200);
       step(/2 elegidas/.test(await page.textContent('#tvOv .tv-selbar')), `${tag}: la barra dice «2 elegidas»`);
       const ids2 = await page.$$eval('#tvOv .tv-lista .tv-ck:checked', l => l.map(x => x.dataset.sel));
       await page.selectOption('#tvOv .tv-selbar [data-lote="prioridad"]', 'baja'); await page.waitForTimeout(1500);
@@ -118,7 +120,8 @@ try {
           f.dispatchEvent(new DragEvent('dragstart', o)); z.dispatchEvent(new DragEvent('dragover', o)); z.dispatchEvent(new DragEvent('drop', o)); f.dispatchEvent(new DragEvent('dragend', o)); }, idea.id); } // el ratón simulado no siempre acierta con el tablero desplazable: los mismos eventos, a mano
         await page.waitForTimeout(1500);
         step((await o.api('/api/tasks')).find(t => t.id === idea.id)?.state !== 'idea', `${tag}: arrastrar una idea a «En cola» la pide`);
-        await page.click('#tvOv .tv-toast [data-deshacer]'); await page.waitForTimeout(1500);
+        await page.click('#tvOv .tv-toast [data-deshacer]');
+        await page.waitForFunction(() => { const t = document.querySelector('#tvOv .tv-toast'); return !t.hidden && !/^Pedida/.test(t.querySelector('span').textContent); }, null, { timeout: 8000 }).catch(() => {}); // deshacer va al servidor y luego avisa
         const tras2 = (await o.api('/api/tasks')).find(t => t.id === idea.id), msg = await page.textContent('#tvOv .tv-toast span');
         step(tras2?.state === 'idea' || (tras2?.state === 'doing' && /Ya la empezó el agente/.test(msg)), `${tag}: DESHACER la devuelve a ideas (o, si el agente ya la empezó, lo dice claro: «${msg}»)`);
       } else {

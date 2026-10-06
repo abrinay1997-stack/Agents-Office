@@ -100,3 +100,12 @@ test('el paquete aparte: se construye, lleva su estilo y dice de qué construcci
   assert.ok(r.aparte.includes('src/tareas/vista.js') && r.aparte.includes('tareas/estados.mjs'));
   const pagina = fs.readFileSync('src/main.js', 'utf8'); assert.doesNotMatch(pagina, /from '\.\/tareas\/(?!.*carga)/, 'la página importa solo el cargador');
 });
+
+test('con Tareas abierta la oficina 3D no se dibuja detrás; el tablero no deja listas vacías (axe)', () => {
+  const main = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(main.match(/const covered = .*$/m)[0], /contains\('tvOpen'\)/, 'covered() cuenta la vista Tareas: antes la oficina se dibujaba a pleno ritmo detrás');
+  const t = { id: 'a', state: 'next', dept: 'sales', agent: 'piper', title: 'A' };
+  const h = tableroHTML([t], ctxDe([t]), { carriles: true });
+  for (const m of h.matchAll(/<div class="tv-drop[^"]*"[^>]*role="list"[^>]*>(.*?)<\/div>(?=<div class="tv-drop|<div class="tv-ld|<\/div>)/g)) assert.match(m[1], /role="listitem"/, 'una lista siempre lleva elementos');
+  assert.ok(/role="group"/.test(h), 'la casilla vacía es un grupo con nombre');
+});
