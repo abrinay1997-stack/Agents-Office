@@ -39,7 +39,8 @@ export function initBanco(ctx) {
   let presets = fab.presets.filter(p => arr(p.medios).includes('image')), info = new Map(), sharp = true, models = [];
   let byId = new Map(presets.map(p => [p.id, p]));
   const guardado = LS.get(EST, {});
-  const st = { puerta: K.PUERTAS.some(p => p.id === guardado.puerta) ? guardado.puerta : 'foto', foto: null, refs: [], pila: Array.isArray(guardado.pila) ? guardado.pila.filter(x => x && typeof x.id === 'string') : [], /* se limpia al llegar los presets */ canal: null, proporcion: null, escena: guardado.escena ? E3.normalizar(guardado.escena) : null, modelo: null, idea: '', n: 1 };
+  const st = { puerta: K.PUERTAS.some(p => p.id === guardado.puerta) ? guardado.puerta : 'cero', foto: null, refs: [], pila: Array.isArray(guardado.pila) ? guardado.pila.filter(x => x && typeof x.id === 'string') : [], /* se limpia al llegar los presets */ canal: null, proporcion: null, escena: guardado.escena ? E3.normalizar(guardado.escena) : null, modelo: null, idea: '', n: 1 };
+  let intentado = false; // IMG-40: lo que falta pasa de pista (gris) a error (rojo) solo cuando ya intentaste generar
   let plan = null, planSig = '', planT = null, planBusy = 0, deshacer = null, toastT = 0, q = '', grupoAbierto = null, editor = null, guardarPara = null;
   let chipAbierto = null, tab = 'elegir', rov = '', estrecho = false, favVista = [], recVista = []; // las secciones se arman con lo de al abrir: la lista no salta mientras eliges
   const fav = new Set(LS.get(FAV, [])), rec = LS.get(REC, []);
@@ -120,11 +121,11 @@ export function initBanco(ctx) {
         <span class="bk-seg" role="group" aria-label="Fuerza de ${esc(inf.es)}">${[1, 2, 3].map(v => `<button type="button" data-fz="${v}" data-eje="${k}" data-ri="${i}" data-f="fz-${i}-${k}-${v}" aria-pressed="${r.ejes[k] === v}"${r.ejes[k] > 0 ? '' : ' disabled'}>${K.INTENSIDADES[v - 1][1]}</button>`).join('')}</span></div>`; }).join('')}</details></div></div>`; }).join('');
   }
   function pintar() {
-    const modo = K.modoDeEstado(st), propio = st.pila.length || st.escena, falta = K.faltaEnPuerta(st);
+    const propio = st.pila.length || st.escena, ep = K.estadoPuerta(st, { intentado });
     const chips = chipsHTML('c');
     rehacer(main, `<div class="st-h" id="${U}T"><b>${iconoSVG('M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z', { tam: 14 })}</b> Presets <span class="st-hn">opcional · combínalos</span></div>
       <div class="bk-doors" role="group" aria-label="¿De dónde partes? (atajos: nada se borra al cambiar)">${K.PUERTAS.map(p => `<button type="button" data-puerta="${p.id}" data-f="door-${p.id}" aria-pressed="${st.puerta === p.id}" title="${esc(p.ayuda)}">${esc(p.es)}</button>`).join('')}</div>
-      <p class="bk-modo" aria-live="polite">Ahora: <b>${K.MODO_ES[modo] || modo}</b>${st.escena ? ' · con escenario 3D' : ''}${falta ? ` · <span class="bk-falta">${esc(falta)}</span>` : ''}</p>
+      <p class="bk-modo" aria-live="polite">Ahora: <b>${esc(ep.etiqueta)}</b>${st.escena ? ' · con escenario 3D' : ''}${ep.falta ? ` · <span class="${ep.grave ? 'bk-falta' : 'bk-pista'}">${esc(ep.falta)}</span>` : ''}</p>
       <div class="bk-in">
         <div class="bk-slot"><span class="bk-lbl">Tu foto <small>se conserva</small></span>${st.foto ? `<span class="bk-th"><img src="${esc(src(st.foto))}" alt=""><button type="button" class="bk-x" data-unfoto data-f="unfoto" aria-label="Quitar tu foto">✕</button></span>` : `<button type="button" class="bk-add" data-subir="foto" data-f="sub-foto">Subir</button><button type="button" class="bk-add" data-galeria="foto" data-f="gal-foto">De la galería</button>`}</div>
         <div class="bk-slot bk-slotr"><span class="bk-lbl">Referencias <small>se imita, nunca se copia su producto</small></span>${refsHTML()}${st.refs.length < 3 ? `<span class="bk-addrow"><button type="button" class="bk-add" data-subir="ref" data-f="sub-ref">Subir</button><button type="button" class="bk-add" data-galeria="ref" data-f="gal-ref">De la galería</button></span>` : ''}</div>
@@ -304,11 +305,23 @@ export function initBanco(ctx) {
     else if (!st.refs.some(r => r.id === f) && st.refs.length < 3) st.refs.push({ id: f, ejes: { ...core.EJES_REF_DEF } });
     cambio();
   }
+  /** IMG-41: GENERAR con un plan imposible lleva a lo que falta (tu foto, la referencia) en vez de no hacer nada. */
+  function enfocarFalta() {
+    const e = plan?.errores?.[0] || '', f = /tu foto/i.test(e) && !st.foto ? 'sub-foto' : /referencia/i.test(e) && !st.refs.length ? 'sub-ref' : '';
+    const b = f && main.querySelector(`[data-f="${f}"]`); if (b) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); b.focus({ preventScroll: true }); }
+  }
+  /** IMG-39: las referencias del paso 4 del compositor pasan a «Referencias» del banco (como mucho 3). Devuelve las que entraron. */
+  function anadirRefs(files) {
+    const ok = [];
+    for (const f of files || []) { if (st.refs.length >= 3) break; if (/\.(mp4|webm|mp3|wav|flac|m4a|ogg)$/i.test(f) || st.refs.some(r => r.id === f)) continue; st.refs.push({ id: f, ejes: { ...core.EJES_REF_DEF } }); ok.push(f); }
+    if (ok.length) { toco('refs'); cambio(); }
+    return ok;
+  }
   /** GENERAR con presets: el único gasto, por /api/media/presets/apply (pasa por los topes del Estudio). */
   async function generar() {
     if (!live()) return say?.('En la demo solo se ve el plan: abre la oficina con el iniciador para generar.', true);
     await replan(true);
-    if (plan?.errores?.length) { onState?.(); return say?.(plan.errores[0], true); }
+    if (plan?.errores?.length) { intentado = true; pintar(); onState?.(); enfocarFalta(); return say?.(plan.errores[0], true); }
     const c = plan?.costo?.usd || 0;
     if (c >= 0.5 && !confirm(`Esto cuesta aprox. ${K.usd(c)}. ¿Generar?`)) return;
     try {
@@ -446,6 +459,9 @@ export function initBanco(ctx) {
     costo: () => (plan ? plan.costo?.texto || '—' : 'calculando…'),
     /** El primer problema del plan (o ''), para decirlo junto a GENERAR. */
     error: () => (plan?.errores?.[0] || ''),
+    anadirRefs, enfocarFalta,
+    /** IMG-41: el texto de GENERAR cuando el plan no se puede hacer (o ''). */
+    bloqueado: () => K.botonBloqueado(plan?.errores?.[0]),
     /** Para la tarjeta de la galería: el resumen de la QA de un archivo que salió de un preset. */
     qaHTML(it) { const r = K.qaResumen(it?.qa); return r ? `<span class="bk-q bk-q-${r.estado}">${esc(r.texto)}</span>` : ''; },
     guardarDesde(it) { guardarPara = { desde: it.file, nombre: '' }; pintar(); setTimeout(() => $('.bk-guardar input')?.focus(), 0); },

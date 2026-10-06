@@ -11,7 +11,9 @@ import { modal } from './modal.js'; // V4.1: the page outside an open window is 
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested arithmetic
 import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
-import * as GF from './galeria-filtro.js'; // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
+import * as GF from './galeria-filtro.js';
+import * as BR from './studio-borrador.js'; // 6 Oct 2026 (audit IMG-01/02): the composer's draft with DESHACER, and Variar as a request of its own
+import * as AV from './studio-avisos.js'; // 6 Oct 2026 (audit IMG-03): what the Estudio says when jobs end, with its plurals // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
 // 1 Oct 2026 (banco de presets F1, F2): the bank and the Lotes tab live in their own modules; here only their hooks. They load on demand
 // (INF-09: the page's budget): dist/estudio-extra.js comes the first time the Studio shows the image composer (its Presets step), or the
@@ -90,6 +92,7 @@ export function initStudio(ctx) {
           <button type="button" class="st-go" title="Generar (Ctrl + Enter desde la idea)">GENERAR</button>
           <button type="button" class="st-sum" title="Cambiar el formato y los ajustes"></button>
           <div class="st-est"></div>
+          <div class="st-refwarn" hidden role="status"><span></span><button type="button" data-refpass>Pasarlas a «Referencias»</button></div>
           <div class="st-keyhelp" hidden role="alert"></div>
           <div class="st-msg" aria-live="polite"></div>
         </div>
@@ -217,10 +220,15 @@ export function initStudio(ctx) {
     banco.el.hidden = !av; if (!av) banco.cerrar(false);
     else if (document.body.classList.contains('studioOpen')) banco.preparar(); // Avanzado shows the bank's step: it comes now (once); Básico never loads it
     el.classList.toggle('st-banco-on', on);
-    if (!on) return;
-    const err = banco.error ? banco.error() : '';
+    const refs = on ? media.reference.length : 0, W = $('.st-refwarn'); // IMG-39: with presets, the composer's references are not used — said, with the way to pass them over
+    W.hidden = !refs; if (refs) W.querySelector('span').textContent = `${refs === 1 ? 'Tu referencia del paso «Imágenes de referencia» no se usa' : `Tus ${refs} referencias del paso «Imágenes de referencia» no se usan`} con presets.`;
+    if (!on) { $('.st-n5').textContent = $('.st-matstep').hidden ? '4' : '5'; return; }
+    $('.st-n5').textContent = '4'; // the step «Imágenes de referencia» is hidden with presets: the numbers go on without a gap
+    const err = banco.error ? banco.error() : '', bl = banco.bloqueado ? banco.bloqueado() : '';
     $('.st-n').textContent = qty; $('.st-p3t').textContent = 'Opcional: algo más para la IA';
-    $('.st-est').textContent = err || `Con presets · ${banco.costo()}`; $('.st-est').classList.toggle('over', !!err); $('.st-go').textContent = 'GENERAR';
+    $('.st-est').textContent = err || `Con presets · ${banco.costo()}`; $('.st-est').classList.toggle('over', !!err);
+    const go = $('.st-go'); go.textContent = bl || 'GENERAR'; go.classList.toggle('st-go-falta', !!bl); // IMG-41: the button says what is missing; its click takes you there
+    $('.st-est').id = 'stEst'; if (bl) go.setAttribute('aria-describedby', 'stEst'); else go.removeAttribute('aria-describedby'); // not aria-disabled: the click works — it takes you to what is missing
   }
   function setNivel(v) { if (v === nivel || !['basico', 'avanzado'].includes(v)) return; nivel = v; store.set('modo', v); bancoState(); renderModel(); }
 
@@ -337,6 +345,7 @@ export function initStudio(ctx) {
     $('.st-more summary').textContent = `Más ajustes · ${rest.map(([k]) => (LBL[k] || k).toLowerCase()).slice(0, 3).join(', ')}${rest.length > 3 ? '…' : ''}`;
     qty = Math.min(qty, SV.maxQty(kind, budget && budget.maxPerRequest));
     estimate();
+    if (loadedKey !== null && !items.length && !jobs.length) renderGrid(); // IMG-05: «Empieza aquí» names the model now chosen
   }
   /** V5.0: the voice — one list (the owner's voices, then MiniMax's), the Voces panel beside it, and the id by hand folded under it
    *  (audit EST-13: the same choice was asked three times — a text field, a list and a hint repeating the list). */
@@ -375,7 +384,7 @@ export function initStudio(ctx) {
     $('.st-est').classList.toggle('over', !!(cost && room != null && cost > room + 1e-9 && m.engine !== 'prueba'));
     const sum = sound() ? [s.voiceId ? SV.voiceName(s.voiceId, voices) : '', s.instrumental ? 'instrumental' : '', s.format ? String(s.format).toUpperCase() : ''].filter(Boolean) : [s.aspectRatio && s.aspectRatio !== 'auto' ? `${s.aspectRatio}${RATIO_WORD[s.aspectRatio] ? ' ' + RATIO_WORD[s.aspectRatio] : ''}` : s.aspectRatio ? 'formato auto' : '', m.settings.duration ? `${secs} s` : '', s.resolution ? String(s.resolution) : ''].filter(Boolean);
     $('.st-sum').innerHTML = sum.length ? `${sum.map(esc).join(' · ')} <u>cambiar</u>` : ''; $('.st-sum').hidden = !sum.length;
-    $('.st-go').textContent = SV.goLabel(kind, total);
+    $('.st-go').textContent = `${SV.goLabel(kind, total)} · ${cost ? 'US$' + cost.toFixed(2) : 'gratis'}`; $('.st-go').classList.remove('st-go-falta'); $('.st-go').removeAttribute('aria-describedby'); // IMG-05: the price is in the button, where the decision is
     const len = $('.st-prompt').value.length, lim = limitNow(), pl = $('.st-plen'); // V4.2 (audit A11) · V5.0: the model's own limit (a voice reads up to 9 999)
     pl.textContent = len || sound() ? `${SV.num(len)}/${SV.num(lim)}` : ''; pl.classList.toggle('near', len > lim * 0.875 && len <= lim); pl.classList.toggle('over', len > lim);
     pl.title = len > lim ? `Sobran ${len - lim} caracteres` : sound() ? `Caben ${SV.num(lim)} caracteres` : '';
@@ -413,17 +422,24 @@ export function initStudio(ctx) {
   }
   const approx = ms => ms < 60000 ? `~${Math.max(5, Math.round(ms / 5000) * 5)} s` : `~${Math.round(ms / 60000)} min`;
   const askCancel = new Set(); // V4.2 (audit A40): a job already sent to a paid engine asks once, in the tile, before it is cancelled
+  /** IMG-05: the empty gallery names the model that will be used and what it costs (it used to promise «Prueba (gratis)» while a paid model was chosen). */
+  function empiezaModelo() {
+    const m = cur(), free = models.find(x => x.kind === kind && x.engine === 'prueba' && x.on);
+    if (!m) return 'Con <b>Prueba (gratis)</b> ves todo el recorrido sin gastar: salen tarjetas de muestra con tu texto, no imágenes reales.';
+    if (m.engine === 'prueba') return `Ahora usas <b>${esc(m.name)}</b>: tarjetas de muestra con tu texto, sin gastar. Para imágenes de verdad, elige otro modelo en «Modelo».`;
+    return `Ahora usas <b>${esc(m.name)}</b> (${esc(price(m))}): cada archivo se cobra en tu cuenta del servicio.${free ? ` <button type="button" class="st-lk" data-free="${esc(free.id)}">Probar gratis primero</button>, con tarjetas de muestra.` : ''}`;
+  }
   function jobTile(j) {
     const live = j.state !== 'failed', t = Date.now() - (j.startedAt || j.at);
     const typ = typical(j), pct = j.state === 'running' ? Math.min(95, Math.round(t / typ * 100)) : 0, slow = j.state === 'running' && t > typ * 1.6;
     const paid = j.state === 'running' && j.engine !== 'prueba';
     return `<figure class="st-card st-job ${j.state}" data-job="${j.id}">
       <div class="st-jbody" style="aspect-ratio:${SV.SOUND(j.kind) ? '16 / 9' : ar(j.s && j.s.aspectRatio) || '1 / 1'}">
-        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : SV.words(j.kind).busy}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)} · ${slow ? 'tarda más de lo normal' : `suele tardar ${approx(typ)}`}</span>${j.state === 'running' ? `<span class="st-jbar" aria-hidden="true"><i style="width:${pct}%"></i></span>` : ''}` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>`}
+        ${live ? `<div class="st-spin" aria-hidden="true"></div><b>${j.state === 'queued' ? 'En cola' : SV.words(j.kind).busy}${j.n > 1 ? ` · ${j.items.length} de ${j.n}` : ''}</b><span class="st-jt">${esc(j.note || '')}${j.note ? ' · ' : ''}${fmtDur(t)} · ${slow ? 'tarda más de lo normal' : `suele tardar ${approx(typ)}`}</span>${j.state === 'running' ? `<span class="st-jbar" aria-hidden="true"><i style="width:${pct}%"></i></span>` : ''}` : `<b>No se pudo</b><span class="st-jerr">${esc(j.error || '')}</span>${j.errorRaw ? `<details class="st-jraw"><summary>Detalles técnicos</summary><code>${esc(j.errorRaw)}</code></details>` : ''}`}
         <p>${esc(j.prompt)}</p><span class="st-meta">${esc(j.modelName)}${fromBots(j) ? ' · ' + esc(who(j)) : ''}${j.versionOf ? ' · versión' : ''}</span>
       </div>
       <div class="st-jacts">${live ? (askCancel.has(j.id) ? `<span class="st-jq">Ya se envió a ${esc(j.engineName || 'el motor')}: puede cobrarse igual.</span><button type="button" data-j="cancel-yes" class="warn">Cancelar igual</button><button type="button" data-j="cancel-no">Seguir</button>`
-        : `<button type="button" data-j="cancel" title="${j.state === 'queued' ? 'Aún no empezó: no se cobra' : paid ? 'Ya se envió al motor: puede cobrarse igual' : 'Gratis: no se cobra'}">Cancelar</button>`) : `<button type="button" data-j="retry" class="pri">Reintentar</button><button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
+        : `<button type="button" data-j="cancel" title="${j.state === 'queued' ? 'Aún no empezó: no se cobra' : paid ? 'Ya se envió al motor: puede cobrarse igual' : 'Gratis: no se cobra'}">Cancelar</button>`) : `<button type="button" data-j="retry" class="pri">Reintentar</button>${j.errorClass && !/^(key|saldo|cancelado)$/.test(j.errorClass) && !j.lote && !j.versionOf ? '<button type="button" data-j="other" title="Lleva este pedido al compositor para elegir otro modelo">Otro modelo…</button>' : ''}<button type="button" data-j="forget">Quitar</button>`}</div></figure>`;
   }
   function card(it) {
     const aud = it.kind === 'audio', vid = it.kind === 'video' || aud, on = sel.has(it.file), label = String(it.prompt).slice(0, 70); // V4.8: an audio (for Muse Spark to transcribe) is neither animated nor a reference
@@ -435,7 +451,7 @@ export function initStudio(ctx) {
     const primary = aud ? null : !vid ? ['anim', 'Animar', 'Convertirla en video', 'vid'] : !it.upload ? ['again', 'Repetir', 'Otra vez, con el mismo prompt y ajustes', 'again'] : null;
     const menu = [ // V4.4 (27 Sep 2026): the row shows the main action, Descargar and the bin as icons; the rest lives here
       ['fav', it.fav ? 'Quitar de favoritas' : 'Marcar favorita', 'star', '', it.fav ? 'fill' : ''],
-      ...(vid ? [] : [['vary', 'Variar: otra versión parecida', 'spark']]),
+      ...(vid ? [] : [['vary', (pv => pv.modelo ? `Variar: otra parecida (${price(pv.modelo)})` : 'Variar: otra versión parecida')(variarPedido(it)), 'spark']]),
       ...(!it.upload && !vid ? [['again', 'Repetir con el mismo prompt', 'again']] : []), ...(cap && cap.badge === 'VOZ' ? [['othervoice', 'Repetir con otra voz', 'mic']] : []), ['move', 'Mover a una carpeta…', 'folder'], ...(ctx.toCalendar && !aud ? [['cal', 'Enviar al calendario de contenido', 'cal']] : []),
       ...(ctx.askDimitri ? [['dimitri', 'Pedírselo a Dimitri', 'chat']] : []), ['dept', 'Mandar a un departamento…', 'send'], ...(it.receta || it.preset ? [['preset', 'Guardar como preset…', 'star']] : [])]; // V4.9 · banco de presets: a result's recipe, kept as a note of the Brain
     return `<figure class="st-card${on ? ' sel' : ''}" data-f="${esc(it.file)}" draggable="true">
@@ -488,7 +504,7 @@ export function initStudio(ctx) {
     const empty = loadErr && !items.length ? `<div class="st-empty">No pude cargar la galería (${esc(loadErr)}). <button type="button" class="st-retry">Reintentar</button></div>`
       : !tj.length && !list.length && loadedKey !== viewKey() ? '<div class="st-empty">Buscando…</div>' // INF-03: a new search or tab is on its way
       : !tj.length && !list.length && nextCur ? '<div class="st-empty">Cargando…</div>' // what was loaded left this view (a star taken off): the next page is coming
-      : !tj.length && !list.length ? `<div class="st-empty">${all ? `Nada ${q.trim() ? `con «${esc(q.trim())}»` : 'con este filtro'}. <button type="button" class="st-all">Ver todo</button>` : `<div class="st-start"><h3>Empieza aquí</h3><ol><li>Escribe una idea en el paso 3 y pulsa <b>GENERAR</b>.</li><li>Con <b>Prueba (gratis)</b> ves todo el recorrido sin gastar: salen tarjetas de muestra con tu texto, no imágenes reales.</li><li>Para imágenes y videos de verdad, activa un motor una sola vez: <button type="button" class="st-open-engs">Motores y cómo activarlos</button></li><li>También puedes subir tus fotos (Subir) o pedírsela a un agente de Marketing.</li></ol></div>`}</div>` : '';
+      : !tj.length && !list.length ? `<div class="st-empty">${all ? `Nada ${q.trim() ? `con «${esc(q.trim())}»` : 'con este filtro'}. <button type="button" class="st-all">Ver todo</button>` : `<div class="st-start"><h3>Empieza aquí</h3><ol><li>Escribe una idea en el paso 3 y pulsa <b>GENERAR</b>.</li><li>${empiezaModelo()}</li><li>Para imágenes y videos de verdad, activa un motor una sola vez: <button type="button" class="st-open-engs">Motores y cómo activarlos</button></li><li>También puedes subir tus fotos (Subir) o pedírsela a un agente de Marketing.</li></ol></div>`}</div>` : '';
     if (empty && !list.length && nextCur && loadedKey === viewKey()) loadMore();
     if (empty) { if (G.innerHTML !== empty) G.innerHTML = empty; nodes.clear(); layoutSig = ''; lastWant = []; return; }
     let root = G.querySelector(':scope > .st-days'); if (!root) { G.innerHTML = '<div class="st-days"></div>'; root = G.firstElementChild; nodes.clear(); layoutSig = ''; }
@@ -521,9 +537,9 @@ export function initStudio(ctx) {
   }
   let moreIO = null;
   function paintMore(G, n) {
-    let box = G.querySelector(':scope > .st-more');
+    let box = G.querySelector(':scope > .st-loadmore');
     if (!nextCur) { if (box) { const had = box.contains(document.activeElement); box.remove(); if (had) moreFocus(G); } return; }
-    if (!box) { box = document.createElement('div'); box.className = 'st-more'; box.innerHTML = '<p class="st-morep"></p><button type="button" class="st-morebtn"></button>'; G.appendChild(box); if (window.IntersectionObserver) { moreIO ||= new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !el.hidden) loadMore(); }, { root: G, rootMargin: '0px 0px 600px 0px' }); moreIO.observe(box); } }
+    if (!box) { box = document.createElement('div'); box.className = 'st-loadmore'; /* IMG-19: «Más ajustes» is .st-more; they shared the class and its centred flex */ box.innerHTML = '<p class="st-morep"></p><button type="button" class="st-morebtn"></button>'; G.appendChild(box); if (window.IntersectionObserver) { moreIO ||= new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !el.hidden) loadMore(); }, { root: G, rootMargin: '0px 0px 600px 0px' }); moreIO.observe(box); } }
     else if (box !== G.lastElementChild) G.appendChild(box);
     const left = Math.max(0, total - n), next = Math.min(PAGE, left || PAGE);
     box.querySelector('.st-morep').textContent = `Ves ${GF.miles(n)} de ${GF.miles(total)}.`;
@@ -617,18 +633,32 @@ export function initStudio(ctx) {
   async function refreshCounts() { try { const j = await api('GET', '/api/media?n=0&' + viewQS()); counts = j.counts || counts; folders = j.folders || folders; total = j.total ?? total; renderGrid(); } catch {} }
   // while something generates, the tiles are refreshed every 2.5 s; when one finishes, the gallery reloads
   let jtimer = null;
+  /* IMG-03 (6 Oct 2026): a job seen queued or running here is said ONCE when it ends, whichever refresh brought its end (the
+     2.5 s ticks, the 20 s reload, a load after another job). Before, the tick compared with the list it had just read: when a
+     reload got there first, the end was never said and the foot kept «En marcha» with the picture already in the gallery. */
+  const vivos = new Set();
+  function anunciar() {
+    const ids = new Set(jobs.map(j => j.id)), fin = jobs.filter(j => vivos.has(j.id) && (j.state === 'done' || j.state === 'failed'));
+    for (const id of [...vivos]) if (!ids.has(id)) vivos.delete(id);
+    for (const j of jobs) if (j.state === 'queued' || j.state === 'running') vivos.add(j.id);
+    if (!fin.length) return false;
+    fin.forEach(j => vivos.delete(j.id));
+    const ok = fin.filter(j => j.state === 'done'), bad = fin.filter(j => j.state === 'failed');
+    const m = AV.terminados({ archivos: ok.reduce((n, j) => n + j.items.length, 0), fallidos: bad.length, error: bad[0]?.error, fallidasVisibles: tileJobs().filter(j => j.state === 'failed').length });
+    if (m.texto) say(m.texto, m.malo); // a «Listo» never hides a failed tile still in sight
+    return true;
+  }
   function watch() {
+    anunciar();
     const active = jobs.some(j => j.state === 'queued' || j.state === 'running');
     if (!active || el.hidden) { clearTimeout(jtimer); jtimer = null; return; }
     if (jtimer) return;
     jtimer = setTimeout(async () => {
       jtimer = null;
       try {
-        const before = new Map(jobs.map(j => [j.id, j.state]));
         const r = await api('GET', '/api/media/jobs'); jobs = r.jobs; budget = r.budget;
-        const finished = jobs.filter(j => (j.state === 'done' || j.state === 'failed') && (before.get(j.id) === 'running' || before.get(j.id) === 'queued'));
-        if (finished.length) { await load({ full: false }); const ok = finished.filter(j => j.state === 'done'), bad = finished.filter(j => j.state === 'failed'); if (ok.length && !bad.length) say(`Listo: ${ok.reduce((s, j) => s + j.items.length, 0)} archivo(s) nuevos en la galería.`); if (bad.length) say(`${bad.length} no se pudo: ${bad[0].error}`, true); return; }
-        renderHead(); if (cur()) estimate(); renderGrid();
+        if (jobs.some(j => vivos.has(j.id) && (j.state === 'done' || j.state === 'failed'))) { await load({ full: false }); anunciar(); renderGrid(); } // the new files come with the reload
+        else { renderHead(); if (cur()) estimate(); renderGrid(); }
       } catch {}
       watch();
     }, 2500);
@@ -1130,7 +1160,7 @@ export function initStudio(ctx) {
     const on = models.filter(m => m.kind === want && m.on && m.roles[role]);
     return pref.map(id => on.find(m => m.id === id)).find(Boolean) || on.find(m => m.engine !== 'prueba') || on[0] || null;
   }
-  function animate(it) {
+  function animateRaw(it) {
     const m = useModelFor('start', 'video'); if (!m) return say('Ningún modelo de video encendido acepta una imagen inicial.', true);
     kind = 'video'; store.set('kind', kind); modelOf.video = m.id; store.set('model.video', m.id);
     media = { start: [it.file], end: [], reference: [], video: [] }; learn(it.file, 'ref'); // its first frame: used, so liked
@@ -1145,21 +1175,51 @@ export function initStudio(ctx) {
     if (media[role].length >= m.roles[role]) { if (m.roles[role] === 1) media[role] = []; else { say(`${roleName(role)}: como mucho ${m.roles[role]}.`, true); return false; } }
     media[role].push(f); renderModel(); return true;
   }
-  function useAsRef(it) {
-    let m = cur();
+  function useAsRefRaw(it) { // IMG-02: a model it has to change is said, with its price; what was composed can come back (DESHACER)
+    const prev = cur();
+    let m = prev;
     if (!m || !m.roles.reference) { m = useModelFor('reference', kind); if (!m && kind !== 'image') { kind = 'image'; store.set('kind', kind); m = useModelFor('reference', 'image'); } if (!m) return say('Ningún modelo encendido acepta referencias.', true); modelOf[kind] = m.id; store.set('model.' + kind, m.id); renderModels(); }
-    if (addMedia('reference', it.file)) { learn(it.file, 'ref'); say(`Referencia añadida a ${m.name}. Describe qué hacer con ella.`); if (phone()) showPane('gen'); }
+    if (addMedia('reference', it.file)) { learn(it.file, 'ref'); say(prev && prev.id !== m.id ? `Referencia añadida. Cambié a ${m.name} (${price(m)}) porque ${prev.name} no acepta referencias. Describe qué hacer con ella.` : `Referencia añadida a ${m.name}. Describe qué hacer con ella.`); if (phone()) showPane('gen'); }
   }
-  function vary(it) { // V4.2 (audit A35): another take close to this one — its prompt and model, the picture itself as the reference
-    reuse(it, true);
-    let m = cur();
-    if (!m || !m.roles.reference) { m = useModelFor('reference', 'image'); if (!m) return say('Ningún modelo encendido acepta una imagen de referencia para variarla.', true); kind = 'image'; modelOf.image = m.id; store.set('model.image', m.id); renderModels(); }
-    if (!addMedia('reference', it.file)) return;
-    qty = 1; estimate();
-    if (!isLive()) return say('Variar necesita la oficina real.', true);
-    generate([it.prompt || 'una variación de esta imagen']).then(() => { if (!$('.st-msg').classList.contains('bad')) say(`Variando con ${m.name}: mismo prompt, esta imagen como referencia. Aparece en la galería al terminar.`); });
+  /* ---------- IMG-01 · IMG-02 (6 Oct 2026): the draft with DESHACER ----------
+     Repetir, Animar, Usar de referencia and «Otro modelo…» load the composer; before, they wrote over what the owner was
+     composing (the idea, the model, the references, the quantity) with no way back. Now what was there is kept and a toast
+     offers DESHACER. Variar no longer touches the composer at all: it is a request of its own, through the same cost gate. */
+  const borrador = BR.pila(10);
+  function fotoBorrador() { return ({ kind, mode, prompt: $('.st-prompt').value, modelOf: { ...modelOf }, media: BR.copia(media), qty, sets: BR.copia(setsOf) }); }
+  function volverBorrador(e) {
+    if (!e) return;
+    kind = e.kind; store.set('kind', kind); mode = e.mode; qty = e.qty; media = e.media;
+    for (const k of Object.keys(e.modelOf)) { modelOf[k] = e.modelOf[k]; store.set('model.' + k, modelOf[k]); }
+    for (const k of Object.keys(setsOf)) delete setsOf[k]; Object.assign(setsOf, e.sets); store.set('sets', setsOf);
+    $('.st-prompt').value = e.prompt;
+    el.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    clearFieldErr(); openList(false); renderModels(); showPane('gen'); $('.st-prompt').focus();
+    say('El compositor vuelve a estar como lo tenías.');
   }
-  function reuse(it, quiet) {
+  /** Runs `fn` (something that loads the composer); if the composer changed, the old one is kept and the toast offers DESHACER. */
+  function cargar(fn) {
+    const antes = fotoBorrador(), r = fn();
+    if (!BR.igual(antes, fotoBorrador()) && !BR.vacio(antes)) { borrador.guardar(antes); toast('Cargado en el compositor. Lo que tenías se guardó.', () => volverBorrador(borrador.deshacer())); }
+    return r;
+  }
+  function reuse(it, quiet) { return cargar(() => reuseRaw(it, quiet)); }
+  function animate(it) { return cargar(() => animateRaw(it)); }
+  function useAsRef(it) { return cargar(() => useAsRefRaw(it)); }
+  /** The one gate before spending (GENERAR and Variar): from US$0.50 it asks. */
+  function okCosto(c) { return !(c >= 0.5 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}${budget && budget.cost ? ` (hoy llevas US$${budget.cost.toFixed(2)})` : ''}. ¿Generar?`)); }
+  function variarPedido(it) { return BR.pedidoVariar({ ...it, folder: inFolder(it) }, models, { respaldo: useModelFor('reference', 'image'), settingsDe: m => settingsOf(m) }); }
+  async function vary(it) { // V4.2 (audit A35) · IMG-01: another take close to this one — its prompt, model and settings, the picture as the reference; the composer is not touched
+    if (!isLive() || !location.protocol.startsWith('http')) return say('Variar necesita la oficina real (ábrela con el iniciador).', true);
+    const p = variarPedido(it); if (p.error) return say(p.error, true);
+    const m = p.modelo, cost = SV.unitCost(m, p.req.settings, p.req.prompt.length) * (Number(p.req.settings.batchSize) || 1);
+    if (!okCosto(cost)) return;
+    try { const r = await api('POST', '/api/media/jobs', p.req); jobs.unshift(r.job); budget = r.budget; }
+    catch (e) { if (/key/i.test(e.message)) return keyHelp(m, e.message); return say('No se pudo variar: ' + e.message, true); }
+    learn(it.file, 'ref'); renderHead(); estimate(); renderGrid(); watch(); if (phone()) showPane('gal');
+    say(`Variando con ${m.name}${p.cambio ? ' (el modelo de esa imagen no acepta referencias)' : ''} · ${cost ? 'aprox. US$' + cost.toFixed(2) : 'gratis'}. Tu compositor sigue igual; sale en la galería al terminar.`);
+  }
+  function reuseRaw(it, quiet) {
     const k = SV.kindOfItem(it); // V5.0: a voice goes back to Voz, a song to Música
     kind = k; store.set('kind', kind);
     const m = models.find(x => x.id === it.model && x.on); if (m) { modelOf[k] = m.id; if (it.settings) { setsOf[m.id] = { ...it.settings }; store.set('sets', setsOf); } }
@@ -1610,7 +1670,7 @@ export function initStudio(ctx) {
     }
     if (e.target.closest('.st-undo-enh')) { if (prevPrompt != null) $('.st-prompt').value = prevPrompt; prevPrompt = null; $('.st-undo-enh').hidden = true; $('.st-es').hidden = true; return; }
     if (e.target.closest('.st-go')) {
-      if (bancoManda()) { banco.generar(); return; } // with presets (Avanzado), GENERAR is the bank's (its plan and its cost)
+      if (bancoManda()) { banco.generar(); return; } // with presets (Avanzado), GENERAR is the bank's (its plan and its cost); a plan that cannot run lights up what is missing (IMG-41)
       if (!isLive()) return say('El Estudio necesita la oficina real (ábrela con el iniciador).', true);
       const m = cur(); if (!m) { const o = offModel(); return o ? keyHelp(o) : say('Elige un modelo.', true); } // V5.0: Voz / Música without the key say how to switch it on
       const miss = (m.needs || []).find(r => !media[r].length); if (miss) return fieldErr('slot', `${m.name} necesita «${roleName(miss)}»: súbela o elígela de la galería.`);
@@ -1618,7 +1678,7 @@ export function initStudio(ctx) {
       if (!ps.length && !(m.needs || []).includes('video')) return fieldErr('prompt', mode === 'batch' ? 'Escribe al menos una idea: una por línea.' : kind === 'audio' ? 'Escribe el texto que leerá la voz.' : kind === 'music' ? (settingsOf(m).instrumental ? 'Describe la música: género, ánimo, instrumentos.' : 'Escribe la letra (o marca «Instrumental» y descríbela).') : 'Escribe qué quieres crear: qué se ve, el estilo, la luz.');
       if (sound()) { const lim = limitNow(), len = $('.st-prompt').value.trim().length; if (len > lim) return fieldErr('prompt', `${m.name} lee como mucho ${SV.num(lim)} caracteres: sobran ${(len - SV.num(lim))}.`); }
       if (kind === 'audio' && m.settings.voiceId && !String(settingsOf(m).voiceId || '').trim()) { ($('.st-vsel') || $('.st-vid'))?.focus(); return say(`Elige una voz en «${$('.st-s5t').textContent}».`, true); }
-      const c = estimate(); if (c >= 0.5 && !confirm(`Esto cuesta aprox. US$${c.toFixed(2)}${budget && budget.cost ? ` (hoy llevas US$${budget.cost.toFixed(2)})` : ''}. ¿Generar?`)) return; // V4.2 (audit A10): from US$0.50, not only above 1
+      const c = estimate(); if (!okCosto(c)) return; // V4.2 (audit A10): from US$0.50 · IMG-01: the same gate for Variar
       const sig = JSON.stringify([ps, m.id, settingsOf(m), media, qty]); // V4.2 (audit A13): the same request twice in a row asks for a second click
       if (sig === lastSig && Date.now() - lastAt < 10 * 60e3 && !armed) { armed = true; say('Es lo mismo que acabas de generar. Pulsa GENERAR otra vez para repetirlo, o cambia algo.', true); return; }
       armed = false; lastSig = sig; lastAt = Date.now();
@@ -1630,6 +1690,8 @@ export function initStudio(ctx) {
       if (kh.dataset.kh === 'engs') { const d = $('.st-keys'); d.open = true; d.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
       return;
     }
+    const fr = e.target.closest('[data-free]'); if (fr) { modelOf[kind] = fr.dataset.free; store.set('model.' + kind, fr.dataset.free); renderPick(); renderModel(); renderGrid(); showPane('gen'); $('.st-prompt').focus(); say('Con el motor de prueba: gratis, tarjetas de muestra para ver el flujo. Escribe la idea y pulsa GENERAR.'); return; } // IMG-05
+    if (e.target.closest('[data-refpass]')) { const ok = banco.anadirRefs(media.reference); media.reference = media.reference.filter(f => !ok.includes(f)); renderModel(); bancoState(); say(ok.length ? `${ok.length === 1 ? 'Pasé tu referencia' : `Pasé ${ok.length} referencias`} a «Referencias» de los presets${media.reference.length ? ` (caben 3: ${media.reference.length} se quedan fuera)` : ''}.` : 'Las referencias de los presets ya están completas (caben 3).', !ok.length); return; } // IMG-39
     if (e.target.closest('.st-sum')) { const st = $('.st-ratios').closest('.st-step'); st.scrollIntoView({ block: 'start', behavior: 'smooth' }); st.classList.add('st-flash'); setTimeout(() => st.classList.remove('st-flash'), 1200); (st.querySelector('.st-ar.on') || st.querySelector('select, button'))?.focus({ preventScroll: true }); return; }
     const pt = e.target.closest('[data-pt]'); if (pt) { showPane(pt.dataset.pt); return; }
     const jt = e.target.closest('.st-job');
@@ -1642,6 +1704,7 @@ export function initStudio(ctx) {
         if (a === 'cancel' || a === 'cancel-yes') { askCancel.delete(id); const r = await api('POST', `/api/media/jobs/${id}/cancel`); jobs = jobs.map(j => j.id === id ? r.job : j); say(jj && jj.state === 'queued' ? 'Cancelado antes de empezar: no se cobra.' : 'Cancelado.'); }
         if (a === 'retry') { const r = await api('POST', `/api/media/jobs/${id}/retry`); await api('DELETE', `/api/media/jobs/${id}`).catch(() => {}); jobs = [r.job, ...jobs.filter(j => j.id !== id)]; say('Reintentando…'); }
         if (a === 'forget') { await api('DELETE', `/api/media/jobs/${id}`); jobs = jobs.filter(j => j.id !== id); }
+        if (a === 'other' && jj) { reuse({ prompt: jj.prompt, model: jj.model, settings: jj.s, media: jj.media, kind: jj.kind, wanted: jj.wanted }, true); showPane('gen'); openList(true); say('Mismo pedido en el compositor: elige otro modelo y pulsa GENERAR.'); return; } // IMG-04: the fix the error points at
       } catch (err) { say(err.message, true); }
       renderGrid(); watch(); return;
     }
@@ -1754,6 +1817,7 @@ export function initStudio(ctx) {
       if (!$('.st-mlist').hidden) { openList(false); $('.st-mpick').focus(); return; }
       if (banco.abierto() && !picking) { banco.cerrar(); return; } // the bank's sheet first, back on its button
       if (e.target.matches('input[type=search], textarea') && e.target.value && e.target.classList.contains('st-q')) { e.target.value = ''; q = ''; requery(); return; } // Esc empties the search first
+      if (typing) { e.target.blur(); return; } // IMG-06: in a field, Esc only leaves the field; a second Esc closes the Estudio
       if (picking) { picking = null; renderSel(); } else if (sel.size || selecting) { sel.clear(); selecting = false; renderGrid(); } else close(); return;
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.classList.contains('st-prompt')) { e.preventDefault(); $('.st-go').click(); }
@@ -1787,7 +1851,7 @@ export function initStudio(ctx) {
       if (el.hidden && isLive() && location.protocol.startsWith('http') && !document.hidden) {
         try { const r = await api('GET', '/api/media/jobs'); jobs = r.jobs || []; budget = r.budget || budget;
           const fresh = jobs.filter(j => (j.state === 'done' || j.state === 'failed') && (j.doneAt || 0) > seenAt);
-          if (fresh.length) { seenAt = Math.max(...fresh.map(j => j.doneAt)); tellFinished(fresh); } } catch {}
+          if (fresh.length) { seenAt = Math.max(...fresh.map(j => j.doneAt)); tellFinished(fresh); fresh.forEach(j => vivos.delete(j.id)); } } catch {}
       }
       bgPoll();
     }, 15000);

@@ -195,3 +195,23 @@ test('DESHACER vuelve atrás solo lo que cambió la acción que avisó (revisió
   assert.equal(K.tocaDeshacer(sn, ['refs']), true, 'una acción sin aviso sobre lo mismo anula el DESHACER (ya no sabría a qué volver)');
   assert.equal(K.tocaDeshacer(null, ['pila']), false);
 });
+
+test('IMG-40: la línea «Ahora» no contradice a la puerta y lo que falta es pista hasta que intentas generar', () => {
+  const vacio = { puerta: 'foto', foto: null, refs: [], pila: [] };
+  const a = K.estadoPuerta(vacio);
+  assert.equal(a.etiqueta, 'Mejorar mi foto', 'nombra la puerta pulsada, no «Desde cero»');
+  assert.match(a.falta, /Sube tu foto/);
+  assert.equal(a.grave, false, 'sin haber intentado nada, no es un error');
+  assert.equal(K.estadoPuerta(vacio, { intentado: true }).grave, true);
+  const conFoto = K.estadoPuerta({ ...vacio, foto: 'f.png' }, { intentado: true });
+  assert.equal(conFoto.falta, ''); assert.equal(conFoto.grave, false); assert.equal(conFoto.etiqueta, 'Sobre tu foto');
+  assert.equal(K.estadoPuerta({ puerta: 'cero', foto: null, refs: [], pila: [] }).etiqueta, 'Desde cero');
+  assert.match(K.estadoPuerta({ puerta: 'ref', foto: null, refs: [], pila: [] }).falta, /referencia/);
+});
+
+test('IMG-41: GENERAR dice lo que falta cuando el plan no se puede hacer', () => {
+  assert.equal(K.botonBloqueado('«Catálogo para la web» trabaja sobre tu foto: súbela o elige uno de «Desde cero»'), 'Falta tu foto');
+  assert.equal(K.botonBloqueado('Falta la referencia de la que se copia'), 'Falta la referencia');
+  assert.equal(K.botonBloqueado('ese modelo no puede con la receta'), 'Revisa el plan');
+  assert.equal(K.botonBloqueado(''), '');
+});

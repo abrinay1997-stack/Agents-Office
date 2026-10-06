@@ -9,7 +9,9 @@ Pedido: auditoría integral de UX, UI, usabilidad, intuitividad, funcionalidad, 
 - **Código:** se leyeron `src/studio.js`, `src/studio-banco*.js`, `src/escena3d*.js` y sus estilos.
 - **Para repetirlo:** `node scripts/estudio-imagen-recorrido.mjs`. Las capturas van a `data/capturas/estudio-imagen/`, que no viaja por GitHub.
 
-**Estado de cada punto:** ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
+**Estado al 6 oct 2026:** la **Fase 1** está hecha: IMG-01, 02, 03, 04, 05, 06, 19, 40 y 41 ✅, e IMG-39 🟡 en parte (lo mínimo). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
+
+**Estado de cada punto:** ✅ hecho · 🟡 en parte · ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
 
 ---
 
@@ -80,7 +82,7 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
 
 ## 3. Auditoría UX
 
-### IMG-01 · 🔴 crítico · ⏳ — «Variar» gasta sin confirmar, pisa el borrador y contamina el pedido siguiente
+### IMG-01 · 🔴 crítico · ✅ — «Variar» gasta sin confirmar, pisa el borrador y contamina el pedido siguiente
 - **Dónde:** `src/studio.js:1153` (`vary`), que llama a `reuse(it, true)`, a `addMedia('reference', …)`, pone `qty = 1` y llama a `generate()` directamente. Se salta la confirmación de `src/studio.js:1621` (≥ US$0,50) y la firma de pedido repetido (1622-1624).
 - **Evidencia:** en el recorrido, con «TEXTO A MEDIO ESCRIBIR» en la idea, pulsar ⋯ → Variar dejó en el campo el prompt de la imagen; el texto propio se perdió sin deshacer. La cantidad pasó de 2 a 1. La imagen quedó como «Referencias · 1 de 14», y el pedido siguiente, sin relación («FALLA esta a propósito»), salió **con esa referencia** (captura `13-fallo`).
 - **Impacto:**
@@ -91,16 +93,18 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
   - Pasa por la misma puerta de costo que GENERAR, y el menú muestra el precio: «Variar · US$0,07».
   - No toca el compositor.
   - Si el usuario quiere cambiar algo, «Variar con cambios…» abre el compositor tras guardar el borrador actual (con DESHACER).
+- **Hecho (6 oct, Fase 1):** «Variar» es un pedido propio (`src/studio-borrador.js → pedidoVariar`, con test): el prompt, el modelo y los ajustes de esa imagen, ella como única referencia, 1 archivo, por la misma puerta de costo que GENERAR (`okCosto`). El menú dice su precio. El compositor no se toca.
 - **Prioridad:** Fase 1.
 
-### IMG-02 · 🔴 crítico · ⏳ — Las acciones de la galería reescriben el compositor sin deshacer
+### IMG-02 · 🔴 crítico · ✅ — Las acciones de la galería reescriben el compositor sin deshacer
 - **Dónde:** `reuse` (1162), `animate` (1133), `useAsRef` (1148). `animate` cambia el tipo a Video y reemplaza todo el material. `useAsRef` puede **cambiar el modelo** si el actual no admite referencias.
 - **Evidencia:** en el código, `media = { start: [it.file], end: [], reference: [], video: [] }` en `animate`. `reuse` escribe `$('.st-prompt').value = it.prompt`. Ninguna guarda el estado anterior.
 - **Impacto:** el usuario pierde lo que componía. Además, el modelo cambia solo y el precio cambia con él, sin una decisión consciente (WCAG 3.2.2, cambio de contexto sin pedirlo).
 - **Solución:** un **borrador con historia**: antes de cualquier acción que cargue el compositor, se guarda el estado y sale un aviso «Cargado en el compositor · DESHACER». Si la acción tiene que cambiar el modelo, lo dice en el aviso con el precio nuevo: «Cambié a Nano Banana 2 (US$0,07) porque el anterior no acepta referencias».
+- **Hecho (6 oct, Fase 1):** Repetir, Animar, Usar de referencia y «Otro modelo…» pasan por `cargar()`: lo que había se guarda (`BR.pila`) y un aviso ofrece DESHACER. Si «Usar de referencia» cambia de modelo, lo dice con el precio nuevo.
 - **Prioridad:** Fase 1.
 
-### IMG-03 · 🟠 alto · ⏳ — Una sola línea de avisos al pie, y los mensajes se pisan
+### IMG-03 · 🟠 alto · ✅ — Una sola línea de avisos al pie, y los mensajes se pisan
 - **Dónde:** `say()` en `src/studio.js:174`, que escribe en `.st-msg`; `watch()` (`src/studio.js:620`).
 - **Evidencia:** con la ficha «No se pudo» en pantalla, el pie decía «Listo: 1 archivo(s) nuevos en la galería.» (captura `13-fallo`). El mensaje de un trabajo terminado pisa el del fallo y al revés.
 - **Impacto:** el sistema se contradice. Con el lector de pantalla, solo se anuncia el último mensaje.
@@ -109,9 +113,10 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
   - Los avisos entre trabajos van en **toasts apilables** (máximo 3, cada uno con su acción: VER o REINTENTAR).
   - El pie queda solo para la validación del formulario.
   - Escribir «archivo nuevo / archivos nuevos» según el número, nunca «archivo(s)».
+- **Hecho (6 oct, Fase 1):** `src/studio-avisos.js` (con test) dice lo nuevo con su plural y no esconde una ficha fallida a la vista. Además había una carrera: si la recarga de 20 s llegaba antes que el sondeo, el final no se decía nunca y el pie seguía en «En marcha». Ahora cada trabajo visto en marcha se anuncia una vez, venga de donde venga (`anunciar()`).
 - **Prioridad:** Fase 1.
 
-### IMG-04 · 🟠 alto · ⏳ — Errores del proveedor en inglés crudo
+### IMG-04 · 🟠 alto · ✅ — Errores del proveedor en inglés crudo
 - **Dónde:** la ficha fallida (`jobTile`) y el Historial muestran `j.error` tal cual.
 - **Evidencia:** «Nano Banana 2: 400 Request contains an invalid argument.» (capturas `13-fallo`, `14-historial`, `26-movil-galeria`).
 - **Impacto:** el usuario no sabe qué hacer. «Reintentar» repite el mismo pedido y falla igual.
@@ -119,22 +124,25 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
   - Traducir el error por clase en `media/motores.mjs`, como ya hace `minimax.mjs`. Ejemplo para un 400: «Google no aceptó el pedido. Suele ser el formato o el tamaño con este modelo».
   - Proponer acciones: «Reintentar con 1:1», «Reintentar con otro modelo ▾».
   - Dejar el original en «Detalles técnicos», plegado.
+- **Hecho (6 oct, Fase 1):** `media/errores.mjs` (con test): clase y frase en español; el original queda en `errorRaw` y la ficha lo enseña plegado en «Detalles técnicos». La ficha ofrece «Otro modelo…» (salvo key, saldo o cancelado). Un error que ya llega en español (MiniMax, la oficina) pasa tal cual.
 - **Prioridad:** Fase 1.
 
-### IMG-05 · 🟠 alto · ⏳ — El primer uso promete gratis y cobra
+### IMG-05 · 🟠 alto · ✅ — El primer uso promete gratis y cobra
 - **Dónde:** el estado vacío («Empieza aquí», `src/studio.js:491`), `estimate()` y el pie.
 - **Evidencia:** el paso 2 de «Empieza aquí» dice «Con **Prueba (gratis)** ves todo el recorrido sin gastar». Sin embargo, el modelo elegido por defecto es Nano Banana 2 (~US$0,07 por imagen). El costo solo se ve en la tercera línea gris, de 12 px, bajo GENERAR (capturas `02`, `06`).
 - **Impacto:** el principiante gasta sin saberlo. La confianza se rompe al ver el gasto en la cabecera.
 - **Solución:**
   - **El costo va dentro del botón**: «Generar 2 imágenes · US$0,13», o «Generar · gratis».
   - El estado vacío nombra el modelo activo y su precio, con un enlace «Probar gratis primero», que cambia a Prueba.
+- **Hecho (6 oct, Fase 1):** el precio va dentro de GENERAR («GENERAR 2 IMÁGENES · US$0.13», o «· gratis»), que salta de línea dentro de su columna. «Empieza aquí» nombra el modelo elegido y su precio, con «Probar gratis primero».
 - **Prioridad:** Fase 1.
 
-### IMG-06 · 🟠 alto · ⏳ — Esc dentro de la idea cierra todo el Estudio
+### IMG-06 · 🟠 alto · ✅ — Esc dentro de la idea cierra todo el Estudio
 - **Dónde:** el manejador de teclado, `src/studio.js:1753-1758`: si no hay lista, banco, selección ni búsqueda que vaciar, llama a `close()`, también con el foco en la `textarea`.
 - **Evidencia:** en el recorrido, Esc con el foco en el prompt cerró el Estudio (`escEnPromptCierra: true`). El texto sobrevive en el DOM, pero la vista desaparece.
 - **Impacto:** un gesto reflejo (Esc para cerrar un autocompletado del navegador o del IME) saca al usuario de su tarea.
 - **Solución:** con el foco en un campo de texto, Esc solo quita el foco (`blur`). Un segundo Esc, fuera del campo, cierra el Estudio.
+- **Hecho (6 oct, Fase 1):** en un campo, Esc solo quita el foco; un segundo Esc cierra el Estudio.
 - **Prioridad:** Fase 1.
 
 ### IMG-07 · 🟠 alto · ⏳ — El resultado no es protagonista
@@ -256,13 +264,14 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
   - Un tooltip propio en foco y al mantener pulsado (`data-tip`, como en el dock).
 - **Prioridad:** Fase 3.
 
-### IMG-19 · 🟡 medio · ⏳ — «Más ajustes» se pinta roto
+### IMG-19 · 🟡 medio · ✅ — «Más ajustes» se pinta roto
 - **Dónde:** `.st-more` dentro de `.st-step` (`src/shell.html`).
 - **Evidencia:**
   - Abierto, el resumen «▼ Más ajustes · tamaño» queda centrado y el selector «Tamaño» a su lado, en la misma fila (captura `04-formato-y-ajustes`).
   - Plegado, el selector mide **20 px** de ancho (`select "1K2K4K" 20×35`).
 - **Impacto:** se ve como un error de maquetación, y el tamaño (1K, 2K o 4K), que cambia la calidad y el precio, queda escondido y mal dibujado.
 - **Solución:** `details.st-more { display:block }` con el contenido debajo y `select { min-width: 96px }`. Con Nano Banana 2, el Tamaño debería ir con el Formato (cambia el precio), no plegado.
+- **Hecho (6 oct, Fase 1):** la causa era un choque de nombres: el pie «Cargar más» de la galería también se llamaba `.st-more` y `galeria.css` le daba `display:flex` centrado a «Más ajustes» (y relleno al «⋯» de las tarjetas). El pie pasa a `.st-loadmore`; «Más ajustes» es un bloque y sus selectores miden 96 px o más. Queda para la Fase 5 sacar el Tamaño de lo plegado.
 - **Prioridad:** Fase 1 (quick win).
 
 ### IMG-20 · 🟢 bajo · ⏳ — El nombre del modelo se parte
@@ -474,7 +483,7 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
 | Herramientas de edición | Solo texto | Visor → Editar | Añadir zona (IMG-45) |
 | Comparar | Solo en Lotes | — | IMG-14 |
 
-### IMG-39 · 🔴 crítico · ⏳ — Dos sistemas de referencias; con un preset, las tuyas se esconden y no se usan
+### IMG-39 · 🔴 crítico · 🟡 en parte (Fase 1) — Dos sistemas de referencias; con un preset, las tuyas se esconden y no se usan
 - **Dónde:** el banco (`src/studio-banco.js`: «Tu foto», «Referencias») y el paso 4 del compositor. `src/css/estudio-banco.css:125` oculta `.st-matstep` con `#studioOv.st-banco-on`; `bancoManda()` → `banco.generar()` usa `st.foto` y `st.refs` del banco, no `media.reference`.
 - **Evidencia:** en Avanzado se ven las dos cosas a la vez: «TU FOTO · se conserva», «REFERENCIAS · se imita…» y «4 Imágenes de referencia · 1 de 14» con la imagen verde (`avanzado.pasos`, captura `16`). Al elegir un preset, el paso 4 desaparece con la imagen dentro, y los pasos saltan de «3» a «5» (captura `18`).
 - **Impacto:** el usuario pone su referencia, elige un preset, genera, y su referencia **no se usó**, sin ningún aviso. Dos lugares para el mismo concepto.
@@ -485,9 +494,10 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
   - **Personaje o logo**.
 
   Básico enseña solo «+ Imagen», que es rol automático: con un preset que necesita foto, es «Tu foto»; si no, «Estilo». Avanzado deja elegir el rol con un menú en cada miniatura. El banco y el compositor leen el mismo estado, y nada se esconde con material dentro. Un test que falle si `.st-banco-on` oculta algo que contiene archivos.
+- **Hecho en la Fase 1 (6 oct):** con un preset activo y referencias en el paso 4, un aviso junto a GENERAR lo dice y «Pasarlas a «Referencias»» las lleva al banco (`banco.anadirRefs`). Los pasos ya no saltan de 3 a 5. **Falta (Fase 6):** la fusión en un solo bloque «Material» con roles.
 - **Prioridad:** Fase 1 (lo mínimo: el plan del banco usa `media.reference` o avisa «Tus 2 referencias no se usan con este preset»), y Fase 6 (la fusión completa).
 
-### IMG-40 · 🔴 crítico · ⏳ — Entrada contradictoria y un error antes de tocar nada
+### IMG-40 · 🔴 crítico · ✅ — Entrada contradictoria y un error antes de tocar nada
 - **Dónde:** `src/studio-banco.js:42` (la puerta por defecto es `'foto'`), `:126-127` (la puerta pulsada y «Ahora: <modo deducido>») y `src/studio-banco-core.js:101` (`faltaEnPuerta`).
 - **Evidencia:** al pasar a Avanzado, se pulsa «Mejorar mi foto», el texto dice «Ahora: **Desde cero**» y, en rojo, «Falta tu foto: el producto que se va a conservar.» (`avanzado.modo`, `avanzado.puertaPulsada`, captura `15`). El bloque «Para empezar · Mejorar mi foto» del banco abre con presets que **necesitan** foto.
 - **Impacto:** el primer contacto con Avanzado dice tres cosas distintas y regaña al usuario. Es el patrón que hace que un profesional desconfíe de la herramienta.
@@ -495,11 +505,13 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
   - Las puertas son atajos: ninguna aparece pulsada, o aparece la que coincide con el modo deducido.
   - Por defecto, «Desde cero».
   - «Falta tu foto» solo aparece al elegir un preset que la necesita o al pulsar GENERAR, y como error **del campo «Tu foto»**, que se ilumina.
+- **Hecho (6 oct, Fase 1):** la puerta por defecto es «Desde cero». La línea «Ahora» nombra la puerta pulsada cuando aún le falta algo (`estadoPuerta`, con test), y lo que falta es una pista gris que solo pasa a rojo cuando ya intentaste generar.
 - **Prioridad:** Fase 1.
 
-### IMG-41 · 🟠 alto · ⏳ — GENERAR sigue activo con un plan imposible
+### IMG-41 · 🟠 alto · ✅ — GENERAR sigue activo con un plan imposible
 - **Evidencia:** con «Catálogo para la web» elegido y sin foto, el botón sigue naranja con «GENERAR». Junto a él, en rojo: «trabaja sobre tu foto: súbela o elige uno de «Desde cero»» (`trasPreset`, captura `18`).
 - **Solución:** el botón dice lo que falta («Falta tu foto»), con `aria-disabled` y su explicación; el clic lleva al campo. Es el mismo patrón que `fieldErr` en Básico.
+- **Hecho (6 oct, Fase 1):** GENERAR dice «Falta tu foto» o «Falta la referencia» (`botonBloqueado`, con test), y su clic lleva y da el foco a lo que falta. **Cambio respecto a la propuesta:** sin `aria-disabled`, porque el botón sí hace algo (lleva a lo que falta); va con `aria-describedby` a la explicación.
 - **Prioridad:** Fase 1.
 
 ### IMG-42 · 🟠 alto · ⏳ — El banco y el escenario tapan la galería

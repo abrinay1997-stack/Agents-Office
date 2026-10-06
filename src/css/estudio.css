@@ -74,3 +74,24 @@ body.dark .st-edoff { border-color: #F2C46B; }
   .st-light .st-lbox { width: 100%; max-height: 100vh; max-height: 100dvh; border-radius: 0; }
   .st-ztools [data-z="full"] span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+
+/* Auditoría del Estudio de imagen, Fase 1 (6 oct 2026) */
+/* IMG-19: «Más ajustes» es un bloque: el resumen arriba, los ajustes debajo, y un selector nunca se aplasta */
+#studioOv details.st-more { display: block; }
+#studioOv .st-sets select, #studioOv .st-sets2 select { min-width: 96px; }
+/* IMG-04: el error original, aparte y plegado */
+#studioOv .st-jraw { margin-top: 6px; font-size: 11.5px; text-align: left; max-width: 100%; }
+#studioOv .st-jraw summary { cursor: pointer; color: var(--grey); min-height: 24px; }
+#studioOv .st-jraw code { display: block; white-space: pre-wrap; word-break: break-word; font-size: 11.5px; color: var(--ink); background: rgba(127,127,127,.1); border-radius: 6px; padding: 6px 8px; margin-top: 4px; }
+/* IMG-39: las referencias que no se usan con presets, y cómo pasarlas */
+#studioOv .st-refwarn { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--ink); background: rgba(224,160,32,.12); border: 1px solid rgba(201,138,0,.45); border-radius: 10px; padding: 6px 10px; }
+#studioOv .st-refwarn[hidden] { display: none; }
+#studioOv .st-refwarn button { font: 600 12px var(--ui); min-height: 28px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-refwarn button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-41: GENERAR dice lo que falta (no es un botón muerto: lleva a lo que falta) */
+#studioOv .st-go.st-go-falta { background: var(--cream); color: var(--ink); border: 2px solid #A1261B; letter-spacing: .04em; }
+body.dark #studioOv .st-go.st-go-falta { border-color: #FF9A8C; }
+/* IMG-05: con el precio dentro, GENERAR puede pedir dos líneas: salta de línea dentro de su columna, nunca la empuja */
+#studioOv .st-foot { grid-template-columns: auto minmax(0, 1fr); }
+#studioOv .st-go { white-space: normal; min-width: 0; letter-spacing: .08em; line-height: 1.25; }
+#studioOv .st-jacts { flex-wrap: wrap; }

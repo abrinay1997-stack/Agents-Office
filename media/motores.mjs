@@ -13,6 +13,7 @@ const HF_BASE = () => (process.env.HF_API_BASE_URL || 'https://api.higgsfield.ai
 const FAL_RUN = () => process.env.AO_FAL_RUN || 'https://fal.run', FAL_QUEUE = () => process.env.AO_FAL_QUEUE || 'https://queue.fal.run', GEMINI_BASE = () => process.env.AO_GEMINI_BASE || 'https://generativelanguage.googleapis.com';
 const META_BASE = () => (process.env.AO_META_BASE || 'https://api.meta.ai/v1').replace(/\/$/, '');
 /* ---------- talking to the engines ---------- */
+import { explicar } from './errores.mjs';
 class EngineError extends Error { constructor(msg, status) { super(msg); this.status = status; } }
 async function http(url, opts, what) {
   const r = await fetch(url, { ...opts, signal: AbortSignal.timeout(opts.timeout || 180000) });
@@ -25,16 +26,8 @@ async function http(url, opts, what) {
 }
 const fromUrl = async url => { const r = await fetch(url, { signal: AbortSignal.timeout(300000) }); if (!r.ok) throw new Error('no pude descargar el resultado: ' + r.status); return { buf: Buffer.from(await r.arrayBuffer()), mime: r.headers.get('content-type') || '' }; };
 const extOf = (mime, url, fallback = 'png') => { const s = (mime || '') + ' ' + (url || '').split('?')[0].slice(-6); return /jpe?g/.test(s) ? 'jpg' : /webp/.test(s) ? 'webp' : /webm/.test(s) ? 'webm' : /mp4|quicktime|\.mov/.test(s) ? 'mp4' : /png/.test(s) ? 'png' : fallback; };
-export function friendly(msg, status) { // what the owner reads on the red tile
-  const m = String(msg || '');
-  if (status === 403 && /Higgsfield/.test(m)) return 'sin créditos en Higgsfield: recarga en cloud.higgsfield.ai (' + m.slice(0, 100) + ')'; // Higgsfield answers 403 for «Not enough credits» (its own client), not for a bad key
-  if (status === 401 || status === 403 || /unauthori[sz]ed|invalid (api )?key|forbidden/i.test(m)) return 'la key no es válida o no tiene permiso (' + m.slice(0, 120) + ')';
-  if (status === 402 || /insufficient|credits?|balance|quota|billing/i.test(m)) return 'sin saldo o créditos en el servicio (' + m.slice(0, 120) + ')';
-  if (status === 429 || /rate.?limit|too many/i.test(m)) return 'el servicio pide esperar un poco (demasiadas peticiones); reintenta en un minuto';
-  if (/nsfw|safety|blocked|moderation|policy/i.test(m)) return 'el motor lo bloqueó por su filtro de contenido; cambia el prompt';
-  if (/timeout|timed out|aborted/i.test(m)) return 'el servicio no respondió a tiempo; reintenta';
-  return m.slice(0, 300);
-}
+/** What the owner reads on the red tile: the error in words, by class (media/errores.mjs, audit IMG-04). */
+export function friendly(msg, status) { return explicar(msg, status).texto; }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const SIZE = { '1:1': [1024, 1024], '4:5': [1024, 1280], '3:4': [1024, 1365], '9:16': [1024, 1792], '16:9': [1792, 1024], '4:3': [1365, 1024], '3:2': [1536, 1024], '2:3': [1024, 1536], '21:9': [1792, 768] };
 

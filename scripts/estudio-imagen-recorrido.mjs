@@ -20,6 +20,8 @@ const AXE = process.env.AO_AXE && fs.existsSync(process.env.AO_AXE) ? fs.readFil
 const listen = s => new Promise(r => s.listen(0, '127.0.0.1', () => r(s.address().port)));
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const report = {};
+// Fase 1 de la auditoría (6 oct 2026): lo que ya no debe pasar. Cada ✗ cuenta y el proceso sale con 1.
+let malos = 0; const ok = (paso, cond, detalle) => { if (!cond) malos++; console.log(`${cond ? '✓' : '✗'} ${paso}${detalle ? ' — ' + detalle : ''}`); report.fase1 = [...(report.fase1 || []), { paso, ok: !!cond, detalle: detalle || '' }]; };
 
 // --- Google simulado: tarda 7 s, falla si el prompt dice FALLA
 let n = 0;
@@ -90,17 +92,21 @@ try {
   // Más ajustes
   await p.evaluate(() => { const d = document.querySelector('#studioOv .st-more'); if (d) d.open = true; document.querySelector('#studioOv .st-ratios')?.scrollIntoView(); }); await p.waitForTimeout(300);
   await shot(p, '04-formato-y-ajustes');
+  const mas = await p.evaluate(() => { const d = document.querySelector('#studioOv details.st-more'), sel = d && d.querySelector('select'); return { display: d ? getComputedStyle(d).display : '', ancho: sel ? Math.round(sel.getBoundingClientRect().width) : 96 }; });
+  ok('IMG-19 · «Más ajustes» es un bloque y su selector no se aplasta', mas.display === 'block' && mas.ancho >= 96, JSON.stringify(mas));
   // GENERAR vacío
   await p.click(`${S} .st-go`); await p.waitForTimeout(600); await shot(p, '05-error-prompt-vacio');
   report.errorVacio = await p.evaluate(() => ({ ferr: document.querySelector('#studioOv .st-ferr')?.textContent, msg: document.querySelector('#studioOv .st-msg')?.textContent, ariaInvalid: document.querySelector('#studioOv .st-prompt').getAttribute('aria-invalid'), describedby: document.querySelector('#studioOv .st-prompt').getAttribute('aria-describedby') }));
   // generar 2
   await p.fill(`${S} .st-prompt`, 'Taza de café humeante sobre una mesa de madera, luz de mañana');
   await p.click(`${S} .st-qty [data-d="1"]`); await p.waitForTimeout(200);
+  ok('IMG-05 · el costo va dentro de GENERAR', /US\$\d|gratis/i.test(await p.textContent(`${S} .st-go`)), await p.textContent(`${S} .st-go`));
   report.estimacion = await p.textContent(`${S} .st-est`); report.resumenPie = await p.textContent(`${S} .st-sum`); report.botonGo = await p.textContent(`${S} .st-go`);
   await p.click(`${S} .st-go`); await p.waitForTimeout(2600); await shot(p, '06-generando');
   report.msgGenerando = await p.textContent(`${S} .st-msg`);
-  await p.waitForTimeout(17000); await shot(p, '07-resultado');
+  await p.waitForFunction(() => /^Listo|no se pud/.test(document.querySelector('#studioOv .st-msg')?.textContent || ''), null, { timeout: 60000 }).catch(() => {}); await p.waitForTimeout(500); await shot(p, '07-resultado');
   report.msgListo = await p.textContent(`${S} .st-msg`);
+  ok('IMG-03 · «Listo» con su plural, sin «archivo(s)»', /^Listo: 2 archivos nuevos/.test(report.msgListo) && !/\(s\)/.test(report.msgListo), report.msgListo);
   await medir(p, 'galeria-1440'); await axe(p, 'galeria-1440');
   report.grupoHTML = await p.evaluate(() => document.querySelector('#studioOv .st-grid .st-card:not(.st-job)')?.innerText);
   await p.locator(`${S} button:has-text("Ver por separado"):visible`).first().click().catch(e => console.log('sep?', e.message)); await p.waitForTimeout(800);
@@ -118,30 +124,59 @@ try {
   await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   // Variar: ¿qué pasa con lo que había en el compositor?
   await p.fill(`${S} .st-prompt`, 'TEXTO A MEDIO ESCRIBIR');
+  const antesVariar = await p.evaluate(() => ({ n: document.querySelector('#studioOv .st-n').textContent, refs: document.querySelectorAll('#studioOv .st-matstep .st-chip').length, jobs: document.querySelectorAll('#studioOv .st-job').length }));
   await p.locator(card).first().hover(); await p.locator(`${card} .st-more`).first().click(); await p.waitForTimeout(200);
   await p.locator(`${S} .st-menu:not([hidden]) [data-a="vary"]`).first().click().catch(e => console.log('vary?', e.message)); await p.waitForTimeout(1500);
   report.trasVariar = { prompt: await p.inputValue(`${S} .st-prompt`), msg: await p.textContent(`${S} .st-msg`), trabajos: await p.locator(`${S} .st-job`).count() };
+  const trasVariar = await p.evaluate(() => ({ n: document.querySelector('#studioOv .st-n').textContent, refs: document.querySelectorAll('#studioOv .st-matstep .st-chip').length }));
+  ok('IMG-01 · Variar no toca la idea, la cantidad ni las referencias, y genera', report.trasVariar.prompt === 'TEXTO A MEDIO ESCRIBIR' && trasVariar.n === antesVariar.n && trasVariar.refs === antesVariar.refs && report.trasVariar.trabajos > antesVariar.jobs, JSON.stringify({ antesVariar, trasVariar, ...report.trasVariar }));
+  await p.waitForTimeout(9000); // que termine la variación antes del fallo
   await shot(p, '12-tras-variar');
   // fallo
-  await p.fill(`${S} .st-prompt`, 'FALLA esta a propósito'); await p.click(`${S} .st-go`); await p.waitForTimeout(12000);
-  await shot(p, '13-fallo'); report.fallo = await p.evaluate(() => ({ tile: document.querySelector('#studioOv .st-job.failed')?.innerText, msg: document.querySelector('#studioOv .st-msg')?.textContent }));
+  await p.fill(`${S} .st-prompt`, 'FALLA esta a propósito'); await p.click(`${S} .st-go`); await p.waitForSelector(`${S} .st-job.failed`, { timeout: 60000 }).catch(() => {}); await p.waitForTimeout(3000);
+  await shot(p, '13-fallo'); report.fallo = await p.evaluate(() => ({ tile: document.querySelector('#studioOv .st-job.failed')?.innerText, msg: document.querySelector('#studioOv .st-msg')?.textContent, raw: !!document.querySelector('#studioOv .st-job.failed .st-jraw'), otro: !!document.querySelector('#studioOv .st-job.failed [data-j="other"]') }));
+  ok('IMG-04 · el fallo se lee en español, con el original aparte y «Otro modelo…»', /no aceptó el pedido/.test(report.fallo.tile || '') && !/Request contains/.test((report.fallo.tile || '').split('Detalles técnicos')[0]) && report.fallo.raw && report.fallo.otro, report.fallo.tile);
+  ok('IMG-03 · con una ficha fallida a la vista, el pie no dice solo «Listo»', !/^Listo: \d+ archivos? nuevos? en la galería\.$/.test(report.fallo.msg || ''), report.fallo.msg);
+  // una referencia en el paso 4, para ver qué hace Avanzado con ella (IMG-39); «Usar de referencia» ofrece DESHACER (IMG-02)
+  await p.locator(`${card} [data-a="ref"]`).first().click(); await p.waitForTimeout(500);
+  report.toastRef = await p.evaluate(() => { const t = document.querySelector('#studioOv .st-toast'); return t && !t.hidden ? t.innerText : ''; });
+  ok('IMG-02 · cargar el compositor ofrece DESHACER', /se guardó/.test(report.toastRef) && /DESHACER/.test(report.toastRef), report.toastRef);
   // Historial
   await p.click(`${S} .st-histbtn`); await p.waitForTimeout(800); await shot(p, '14-historial'); await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   // ===== Avanzado =====
   await p.click(`${S} [data-nivel="avanzado"]`); await p.waitForSelector(`${S} .bk-doors`, { timeout: 20000 }); await p.waitForTimeout(800);
   await p.evaluate(() => document.querySelector('#studioOv .st-scroll').scrollTop = 0);
   await shot(p, '15-avanzado');
+  const entrada = await p.evaluate(() => ({ rojo: !!document.querySelector('#studioOv .bk-falta')?.offsetParent, modo: document.querySelector('#studioOv .bk-modo')?.textContent, puerta: document.querySelector('#studioOv [data-puerta][aria-pressed="true"]')?.textContent }));
+  ok('IMG-40 · al entrar en Avanzado no hay error rojo y la línea nombra la puerta pulsada', !entrada.rojo && entrada.modo.includes(entrada.puerta), JSON.stringify(entrada));
   report.avanzado = await p.evaluate(() => { const v = s => { const e = document.querySelector(s); return !!e && !!e.offsetParent; }; return { pasos: [...document.querySelectorAll('#studioOv .st-gen .st-h')].filter(e => e.offsetParent).map(h => h.textContent.trim().replace(/\s+/g, ' ')), matstepVisible: v('#studioOv .st-matstep'), bancoRefs: v('#studioOv .bk'), modo: document.querySelector('#studioOv .bk-modo')?.textContent, puertaPulsada: document.querySelector('#studioOv [data-puerta][aria-pressed="true"]')?.textContent }; });
   await p.setViewportSize({ width: 1440, height: 2000 }); await p.waitForTimeout(300); await shot(p, '16-avanzado-entero'); await p.setViewportSize({ width: 1440, height: 900 });
   await medir(p, 'avanzado-1440'); await axe(p, 'avanzado-1440');
   await p.click(`${S} .st-prompt`); await p.keyboard.press('Escape'); await p.waitForTimeout(400);
   report.escEnPromptCierra = await p.evaluate(() => !document.querySelector('#studioOv').classList.contains('on') || document.querySelector('#studioOv').hidden);
+  ok('IMG-06 · Esc en la idea no cierra el Estudio', !report.escEnPromptCierra);
   if (report.escEnPromptCierra) { await p.keyboard.press('e'); await p.waitForTimeout(1000); }
+  await p.click(`${S} [data-puerta="foto"]`); await p.waitForTimeout(500); // la puerta que promete tu foto: su portada trae presets que la necesitan
+  const pista = await p.evaluate(() => ({ gris: !!document.querySelector('#studioOv .bk-pista')?.offsetParent, rojo: !!document.querySelector('#studioOv .bk-falta')?.offsetParent, modo: document.querySelector('#studioOv .bk-modo')?.textContent }));
+  ok('IMG-40 · elegir «Mejorar mi foto» sin foto da una pista gris, no un error', pista.gris && !pista.rojo && /Mejorar mi foto/.test(pista.modo), JSON.stringify(pista));
   await p.locator(`${S} button:has-text("Banco"):visible`).first().click(); await p.waitForTimeout(1200); await shot(p, '17-banco');
   report.banco = await p.evaluate(() => ({ grupos: [...document.querySelectorAll('#studioOv .st-bank [data-grupo], #studioOv .st-bank .bk-g')].length, tarjetas: [...document.querySelectorAll('#studioOv .st-bank [role=option], #studioOv .st-bank .bk-card')].length, texto: document.querySelector('#studioOv .st-bank')?.innerText.slice(0, 1500) }));
   await axe(p, 'banco', '#studioOv .st-bank');
   const first = p.locator(`${S} .st-bank .bk-card, ${S} .st-bank [role=option]`).first(); await first.click().catch(() => {}); await p.waitForTimeout(800);
   await shot(p, '18-banco-preset-elegido');
+  const conPreset = await p.evaluate(() => ({ aviso: document.querySelector('#studioOv .st-refwarn')?.hidden === false ? document.querySelector('#studioOv .st-refwarn').innerText : '', go: document.querySelector('#studioOv .st-go').textContent, aria: document.querySelector('#studioOv .st-go').getAttribute('aria-describedby'), n5: document.querySelector('#studioOv .st-n5').textContent }));
+  ok('IMG-39 · con un preset, las referencias del paso 4 que no se usan se dicen, con cómo pasarlas', /no se usa/.test(conPreset.aviso) && /Pasarlas/.test(conPreset.aviso), JSON.stringify(conPreset));
+  ok('IMG-41 · GENERAR dice lo que falta', conPreset.go === 'Falta tu foto' && conPreset.aria === 'stEst', conPreset.go);
+  ok('IMG-39 · los pasos siguen sin hueco con presets', conPreset.n5 === '4', conPreset.n5);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  await shot(p, '18b-antes-de-generar');
+  await p.click(`${S} .st-go`); await p.waitForTimeout(900);
+  const trasGo = await p.evaluate(() => ({ rojo: !!document.querySelector('#studioOv .bk-falta')?.offsetParent, foco: document.activeElement?.dataset?.f || '' }));
+  ok('IMG-41 · su clic lleva a lo que falta y la pista pasa a rojo', trasGo.rojo && trasGo.foco === 'sub-foto', JSON.stringify(trasGo));
+  await p.locator(`${S} [data-refpass]`).click(); await p.waitForTimeout(800);
+  const pasadas = await p.evaluate(() => ({ aviso: !document.querySelector('#studioOv .st-refwarn').hidden, refsBanco: document.querySelectorAll('#studioOv .bk-slotr img').length }));
+  ok('IMG-39 · «Pasarlas a Referencias» las lleva al banco', !pasadas.aviso && pasadas.refsBanco >= 1, JSON.stringify(pasadas));
+  await p.locator(`${S} button:has-text("Banco"):visible`).first().click(); await p.waitForTimeout(600);
   report.trasPreset = await p.evaluate(() => ({ est: document.querySelector('#studioOv .st-est')?.textContent, go: document.querySelector('#studioOv .st-go')?.textContent, p3: document.querySelector('#studioOv .st-p3t')?.textContent, modo: document.querySelector('#studioOv .bk-modo')?.textContent }));
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   const e3 = p.locator(`${S} button:has-text("escenario 3D")`).first(); if (await e3.count()) { await e3.click(); await p.waitForTimeout(2500); await shot(p, '19-escenario-3d'); report.escena = await p.evaluate(() => document.querySelector('#studioOv .st-bank')?.innerText.slice(0, 1500)); await axe(p, 'escena3d', '#studioOv .st-bank'); }
@@ -172,4 +207,6 @@ try {
   await c.close();
 } catch (e) { console.error('ERROR', e); report.error = String(e.stack || e); }
 finally { await browser.close(); srv.kill(); g.close(); fs.writeFileSync(path.join(OUT, 'informe.json'), JSON.stringify(report, null, 1)); fs.writeFileSync(path.join(OUT, 'servidor.log'), log); fs.rmSync(dir, { recursive: true, force: true }); }
-console.log(`hecho · ${OUT}${AXE ? '' : ' (sin axe: AO_AXE no apunta a axe.min.js)'}`);
+if (report.error) console.log('✗ el recorrido se cortó: ' + report.error.split('\n')[0]);
+console.log(`${malos || report.error ? (malos + (report.error ? 1 : 0)) + ' mal' : 'todo bien'} · ${OUT}${AXE ? '' : ' (sin axe: AO_AXE no apunta a axe.min.js)'}`);
+process.exitCode = malos || report.error ? 1 : 0;

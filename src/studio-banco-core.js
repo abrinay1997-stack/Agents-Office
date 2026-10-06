@@ -102,6 +102,27 @@ export function faltaEnPuerta(st) {
   if (st.puerta === 'ref' && !st.refs.length) return 'Falta la referencia: la imagen de la que se copia.';
   return '';
 }
+/**
+ * IMG-40 (auditoría del Estudio de imagen, 6 oct 2026): lo que dice la línea «Ahora: …» sin contradecir a la puerta pulsada.
+ * Antes, al entrar en Avanzado, la puerta «Mejorar mi foto» salía pulsada, la línea decía «Ahora: Desde cero» y en rojo «Falta tu
+ * foto» sin que el dueño hubiera hecho nada. Ahora: si la puerta promete algo que aún no está, la línea nombra la puerta y lo que
+ * falta es una PISTA (gris); solo pasa a ERROR (rojo) cuando el dueño ya intentó generar.
+ *   estadoPuerta(st, { intentado }) → { etiqueta, falta, grave }
+ */
+export function estadoPuerta(st, { intentado = false } = {}) {
+  const falta = st.puerta === 'foto' && !st.foto ? 'Sube tu foto: el producto que se va a conservar.'
+    : st.puerta === 'ref' && !st.refs.length ? 'Sube la referencia: la imagen de la que se copia.' : '';
+  const etiqueta = falta ? (PUERTAS.find(p => p.id === st.puerta)?.es || '') : (MODO_ES[modoDeEstado(st)] || modoDeEstado(st));
+  return { etiqueta, falta, grave: !!falta && intentado };
+}
+/** IMG-41: el texto de GENERAR cuando el plan no se puede hacer (el botón lo dice, y el clic lleva a lo que falta). */
+export function botonBloqueado(err) {
+  const e = String(err || '');
+  if (!e) return '';
+  if (/tu foto/i.test(e)) return 'Falta tu foto';
+  if (/referencia/i.test(e)) return 'Falta la referencia';
+  return 'Revisa el plan';
+}
 /** ¿Algún preset de la pila ya exporta para un canal? Si no, elegir un canal añade «Exportar para un canal». */
 export function exportaYa(pila, byId) {
   return pila.some(x => { const p = byId.get(x.id); return p && (arr(p.parametros).some(q => q.tipo === 'canal') || arr(p.post).includes('exportar') || arr(p.local).some(o => o.op === 'exportar')); });

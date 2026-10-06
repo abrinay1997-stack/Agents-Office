@@ -235,3 +235,5 @@ body.dark .st-bank .bk-card { background: #1E1F24; }
 #studioOv .st-nivel button { font: 600 12px var(--ui); min-height: 28px; padding: 4px 14px; border-radius: 99px; border: 0; background: none; color: var(--grey); cursor: pointer; }
 #studioOv .st-nivel button[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
 #studioOv .st-nivel button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-40 (6 oct 2026): lo que le falta a la puerta es una pista gris hasta que intentas generar; entonces pasa a .bk-falta */
+.bk .bk-pista { color: var(--grey); }
