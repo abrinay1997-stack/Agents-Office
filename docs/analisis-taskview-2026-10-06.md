@@ -320,7 +320,7 @@ Patrones buenos:
    - `tarea_mover` de Dimitri se salta las reglas del PATCH.
    - La pizarra usa `confirm()` y `alert()`, contra la regla de `modal.js`.
    - El detalle no deja cambiar el esfuerzo, el «necesita OK» ni el título.
-8. **La barra de progreso es inventada** (tiempo / 45 s), y el orden de la pizarra compara ids de texto con una resta, lo que da NaN.
+8. **La barra de progreso es inventada** (tiempo / 45 s). *(Corrección del 6 oct, al implementar T0: el orden de la pizarra no da NaN, porque los ids de la página son números.)*
 9. **Archivos enormes y sin tests propios.**
    - `serve.mjs` tiene 2.660 líneas; las rutas son una cadena de `if`.
    - `src/tasks.js` tiene 1.417 líneas: panel, pizarra, demo, chat y sincronización juntos.

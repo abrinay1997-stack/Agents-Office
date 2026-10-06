@@ -62,6 +62,15 @@ import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cual
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
 import { sendJson, lightTasks } from './http-json.mjs';
 import { createCache } from './vault-cache.mjs';
+import { crearBus } from './tareas/eventos.mjs'; // plan T0 (6 oct 2026): el módulo de tareas — un solo modelo, una bitácora, un bus
+import { crearAlmacenTareas } from './tareas/almacen.mjs';
+import { crearTarea, leerCampos as leerCamposTarea, normalizarPasos } from './tareas/modelo.mjs';
+import { crearCatalogo } from './tareas/catalogo.mjs';
+import { crearRutasTareas, despachadorDependencias } from './tareas/rutas.mjs';
+import { revisar as revisarPermisos } from './tareas/permisos.mjs';
+import { limpiar as limpiarBloqueos, ciclo as cicloBloqueos, pendientes as bloqueosPendientes } from './tareas/dependencias.mjs';
+import { agenda as agendaTareas, agendaTexto } from './tareas/agenda.mjs';
+import * as colaTareas from './tareas/cola.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
@@ -147,6 +156,7 @@ const STUDIO_MCP = path.join(ROOT, 'estudio-mcp.mjs');
 // approving is the owner's, in the Contenido view — see contenido/rutas.mjs.
 const CONTENIDO_DEPTS = Array.isArray(cfg.contenido?.departments) ? cfg.contenido.departments : ['marketing', 'delivery'];
 const CONTENIDO_MCP = path.join(ROOT, 'contenido-mcp.mjs');
+const TAREAS_MCP = path.join(ROOT, 'tareas-mcp.mjs'); // plan T3: every desk's own tasks (steps, notes, blocks, proposals)
 const CONTENIDO_DIR = path.join(cfg.brainPath, 'Agents Office', 'contenido');
 const contenido = crearAlmacen({ dir: CONTENIDO_DIR, medioExiste: id => !!media.resolve(id) });
 // V4.7 (F2): ANALÍTICAS — Meta en solo lectura. El token es META_ACCESS_TOKEN (variable de Windows, nunca un archivo); lo leído vive en data/contenido/
@@ -224,22 +234,19 @@ if (process.env.ANTHROPIC_API_KEY) {
 
 /* ---------- storage ---------- */
 // a missing file is an empty office; an unreadable one is NOT (reading it as [] and saving would wipe every task): it is kept aside and the request fails
-const load = () => {
-  let raw; try { raw = fs.readFileSync(FILE, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return []; throw e; }
-  try { return JSON.parse(raw); } catch {
-    const aside = FILE.replace(/\.json$/, `.unreadable-${Date.now()}.json`); try { fs.copyFileSync(FILE, aside); } catch {}
-    // V4.4 (B9): a damaged tasks.json comes back from the newest daily copy instead of stopping the office
-    const dir = path.join(DATA, 'backups'); let copy = null;
-    try { copy = fs.readdirSync(dir).filter(f => /^tasks-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().reverse().find(f => { try { JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); return true; } catch { return false; } }); } catch {}
-    if (copy) {
-      const list = JSON.parse(fs.readFileSync(path.join(dir, copy), 'utf8')); save(list);
-      console.error(`tasks.json could not be read — restored from backups/${copy} (the damaged file is at ${aside})`);
-      setImmediate(() => notice('restored', `El archivo de tareas estaba dañado y se recuperó de la copia ${copy.slice(6, 16)}. Lo de después de esa fecha puede faltar; el archivo dañado quedó en ${path.basename(aside)}.`, { level: 'warn' }));
-      return list;
-    }
-    console.error(`tasks.json could not be read — a copy is at ${aside}`); throw new Error('no se pudo leer data/tasks.json (se guardó una copia al lado)');
-  }
-};
+const busTareas = crearBus(); // plan T0 (6 oct 2026): cada cambio de una tarea, al bus (tareas/eventos.mjs); los despachadores escuchan
+const tareasAlm = crearAlmacenTareas({ file: FILE, dataDir: DATA, bus: busTareas,
+  avisarRestaurado: copy => notice('restored', `El archivo de tareas estaba dañado y se recuperó de la copia ${copy.slice(6, 16)}. Lo de después de esa fecha puede faltar; el archivo dañado quedó al lado.`, { level: 'warn' }) });
+const catalogoT = crearCatalogo({ dataDir: DATA }); // plan T1/T4: proyectos y etiquetas (data/tareas/)
+// los campos de T1 de un pedido (prioridad, etiquetas, fecha límite, estimación, proyecto, pasos, bloqueos) → { … } o { error }
+function camposT1(b, { tareaId = null } = {}) {
+  const r = leerCamposTarea(b, { existeProyecto: id => !!catalogoT.proyecto(id), existeEtiqueta: id => catalogoT.etiquetas().some(e => e.id === id) });
+  if (r.error) return r; const c = r.campos;
+  if (c.bloqueadaPor) { const l = load(); c.bloqueadaPor = limpiarBloqueos(l, tareaId || '-', c.bloqueadaPor); if (tareaId && c.bloqueadaPor.length && cicloBloqueos(l, tareaId, c.bloqueadaPor)) return { error: 'eso haría un círculo: dos tareas esperándose' }; }
+  for (const k of Object.keys(c)) if (c[k] === null) delete c[k];
+  return c;
+}
+const load = () => tareasAlm.load(); // each task in today's shape (tareas/modelo.normalizar); a damaged file comes back from the newest daily copy
 function dailyBackup() { // one copy a day of the tasks and the routines file, the last 14 kept: data/backups/ — V4.4 (B9): every day the office runs, not only on the day it starts
   const dir = path.join(DATA, 'backups'), day = localDay(Date.now()); // Auditoría 1 oct 2026 (INF-17): the owner's day, not UTC's (from 19:00 in Panamá UTC said «tomorrow»)
   try {
@@ -257,7 +264,7 @@ function dailyBackup() { // one copy a day of the tasks and the routines file, t
     for (const kind of ['tasks', 'routines']) { const mine = all.filter(f => f.startsWith(kind + '-')); for (const f of mine.slice(0, -14)) fs.rmSync(path.join(dir, f), { force: true }); }
   } catch (e) { console.warn('backup:', e.message); }
 }
-const save = list => { fs.mkdirSync(DATA, { recursive: true }); const tmp = FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(list, null, 2)); fs.renameSync(tmp, FILE); }; // write-then-rename: never a half-written tasks.json
+const save = (list, opts) => tareasAlm.save(list, opts); // write-then-rename; every change lands in data/tareas/bitacora/ and on the bus (who, what, when)
 const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 /* ---------- the usage gauge (V3.6, A3): Claude's own numbers, the office's count underneath ---------- */
 const USTATE = usage.loadState(DATA);
@@ -342,6 +349,8 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   if (studio) allowed.push('mcp__estudio');
   const conContenido = tools && agent && CONTENIDO_DEPTS.includes(agent.department); // V4.7: read the content calendar and leave drafts (never approve, schedule or publish)
   if (conContenido) allowed.push('mcp__contenido');
+  const conTareas = tools && !!agent; // plan T3 (6 oct 2026): every desk marks its steps, notes, asks for a block, proposes work (tareas-mcp.mjs; nothing there approves or sends)
+  if (conTareas) allowed.push('mcp__tareas');
   // the system prompt goes in a file and the request on stdin: skills + notes + a revise can pass Windows' 32,767-character command line
   const sysFile = path.join(CLI_CWD, `system-${nid()}.txt`); fs.writeFileSync(sysFile, system);
   // V4.4: the guard — a hook around every tool call. A run that may not send also loses the send tools outright where it can never need them (a draft, a teammate's piece, «nunca»)
@@ -349,7 +358,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   const runId = nid(), guardFile = path.join(CLI_CWD, `guard-${runId}.json`), taintFile = path.join(CLI_CWD, `taint-${runId}.json`), settingsFile = path.join(CLI_CWD, `settings-${runId}.json`);
   const hardOff = tools && !writes && (runMode === 'draft' || runMode === 'piece' || pol === 'nunca') ? mcp.writeTools(agent, SAFETY().safeTools, SAFETY().toolKinds) : [];
   // auditoría MCP (1 oct 2026): the guard knows which servers this desk was given (MCP-07) and the run starts only those when it can (MCP-06)
-  const ownServers = [...(studio ? ['estudio'] : []), ...(conContenido ? ['contenido'] : [])]; // (the browser is in serverIdsFor when this desk may use it)
+  const ownServers = [...(studio ? ['estudio'] : []), ...(conContenido ? ['contenido'] : []), ...(conTareas ? ['tareas'] : [])]; // (the browser is in serverIdsFor when this desk may use it)
   const iso = tools && agent ? mcp.runConfig(agent) : null, mcpFile = path.join(CLI_CWD, `mcp-${runId}.json`);
   if (tools && agent) {
     fs.writeFileSync(guardFile, JSON.stringify({ run: runId, task: taskId, agent: agent.id, dept: agent.department, writes, runMode, policy: pol, amountLimit: APPR().amountLimit, known: runMode === 'approve' ? known : null, safety: cfg.safety || {}, auditDir: AUDIT, taintFile, servers: mcp.serverIdsFor(agent, ownServers) }));
@@ -367,9 +376,9 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   // machine's Claude Code knows (plugins, claude.ai connectors…: `claude mcp list` took 53 s here). It could not call them anyway.
   if (!tools || iso) args.push('--strict-mcp-config'); // MCP-06: with `iso`, only this desk's servers (rebuilt exactly, same tool ids) + the office's own
   if (onText && partial) args.push('--include-partial-messages'); // DIM-14: the text as it is written (stream_event deltas)
-  if (studio || conContenido || iso) { // one --mcp-config, in a file (a server's env can carry a key: never on the command line): the Estudio and Contenido share who is asking
+  if (studio || conContenido || conTareas || iso) { // one --mcp-config, in a file (a server's env can carry a key: never on the command line): the Estudio and Contenido share who is asking
     const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
-    fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: { ...(iso || {}), ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}) } }));
+    fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: { ...(iso || {}), ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}), ...(conTareas ? { tareas: { command: process.execPath, args: [TAREAS_MCP], env: who } } : {}) } }));
     try { fs.chmodSync(mcpFile, 0o600); } catch {} args.push('--mcp-config', mcpFile); // its env can carry a key: only this user reads it, and a crash leaves none behind (swept at start)
   }
   const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', MAX_MCP_OUTPUT_TOKENS: process.env.MAX_MCP_OUTPUT_TOKENS || '60000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes · MCP-13: a long answer stays inline (the agents have no Read to open the file Claude Code would park it in)
@@ -537,7 +546,7 @@ function agentSystem(a, index, read, { extra = '', words = 260 } = {}) {
     'FUENTES: cada cifra, precio, fecha o dato de un cliente sale de algún lado; al final, una línea «Fuentes:» con las notas (por su nombre) o las páginas que usaste; lo que no tenga fuente va marcado (assumed). ' + // V4.4 (D3)
     'ANTES DE ENTREGAR, revisa tu trabajo en silencio contra las reglas de tu skill, las lecciones y la petición del dueño (¿falta un precio, un nombre, un paso, el tono?) y corrige lo que falle; no muestres la revisión. ' + // V4.4 (D4)
     'Si de verdad no puedes hacerlo (falta un acceso, una decisión del dueño, algo físico o una llamada), empieza tu respuesta con «PASAR A UNA PERSONA:» y di en dos líneas qué hace falta y lo que ya adelantaste.\n\n' + // V4.4 (I6)
-    `${mcp.promptText(a)}${studioText(a)}${contenidoText(a)}${cifrasText()}${examplesText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
+    `${mcp.promptText(a)}${studioText(a)}${contenidoText(a)}${tareasText()}${cifrasText()}${examplesText(a)}\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, read)}`;
 }
 function studioText(a) {
   if (!STUDIO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
@@ -552,6 +561,12 @@ function studioText(a) {
     'Cuando la tarea pida imágenes o video, GENÉRALOS (no entregues solo prompts) y pon en tu entregable, tal cual, las líneas que devuelve la herramienta: ![…](/media/…) si ya está, o la línea ⏳ si sigue en proceso (un video tarda minutos; la oficina cambia esa línea por el archivo cuando termine, tú no esperes). ' +
     'Para animar una imagen o usarla de referencia (un producto, un logo, un personaje) búscala con buscar_en_galeria y pasa su id. Un lote grande: consulta estado_estudio antes (tope diario).' +
     (fl => fl.length ? ` Carpetas que el dueño o Dimitri organizaron: ${fl.map(f => `${f.name} (${f.n})`).join(', ')}. Antes de generar algo nuevo para una campaña o un producto, mira si ya está preparado ahí (buscar_en_galeria con carpeta).` : '')(media.folders().filter(f => f.n > 0).slice(0, 30)); // V4.9
+}
+function tareasText() { // plan T3 (6 oct 2026): the desk's own task, as tools (tareas-mcp.mjs)
+  if (backend !== 'claude-cli') return '';
+  return '\n- TAREAS (mcp__tareas__*): ver_mi_tarea al empezar (pasos con su id, fecha límite, comentarios del dueño); marcar_paso en cuanto termines cada paso (el dueño ve el avance); anotar_en_bitacora para lo que encontraste o decidiste; ' +
+    'pedir_bloqueo si NO puedes seguir sin un dato, una decisión o que otra tarea termine (no lo inventes: tu tarea se para con lo que llevas y sigue sola después); crear_borrador_tarea para pedirle trabajo a otro departamento (nace idea); registrar_trabajo para algo hecho fuera de una tarea. ' +
+    'Nada de esto aprueba ni envía.';
 }
 function contenidoText(a) { // V4.7: what an agent of these departments may do with the content calendar
   if (!CONTENIDO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
@@ -570,7 +585,7 @@ const pickFor = (task, a) => { // model + effort: four places, one precedence (t
   return { pick, eff };
 };
 // persist a task mid-run (a team's pieces move while the run is still going; the page polls /api/tasks)
-function persist(task) { const l = load(); const i = l.findIndex(t => t.id === task.id); if (i >= 0) { l[i] = task; save(l); } }
+function persist(task) { guardarRun(task); } // T0: merged, so a comment made while the team works is not lost
 async function run(task, feedback, mode) { // mode: undefined (a task from the bar) · 'routine' (read-only routine) · 'draft' (routine that waits for the OK) · 'approve' (the owner ticked it)
   if (task.team && TEAMS.enabled) { // V3.2 (16 Sep): a team task — the lead plans, the desks work at once, the lead writes the final
     if (mode === 'approve') return runTeamLead(task, feedback, mode); // the outbound step after the OK is the lead's alone
@@ -585,7 +600,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
   const routineLine = task.routine ? `\nThis is a routine (${task.when}): it runs on the office's own clock and the owner is not at the keyboard. It is now ${new Date().toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}${task.late ? `; this run is late, it was due ${new Date(task.due).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}. Do the work for now.`
     : task.dueAt ? `\nThis task was scheduled in advance for ${new Date(task.dueAt).toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} and is running now; the owner is not at the keyboard${task.late ? ' and this run is late' : ''}. Do the work for now.` : '';
   const modeLine = modeLineFor(mode, task);
-  const user = `Task: ${task.title}\nOwner's request: ${task.text}` + (task.plan?.length ? `\nAgreed plan: ${task.plan.join(' → ')}` : '') + media.refsLine(task) + routineLine + modeLine + // V4.9: sent from the Estudio
+  const user = `Task: ${task.title}\nOwner's request: ${task.text}` + pasosLine(task) + reanudaLine(task) + media.refsLine(task) + routineLine + modeLine + // V4.9: sent from the Estudio · T1/T3: its steps, and what it had if it stopped for a block
     (feedback && mode !== 'approve' ? `\n\nThe owner reviewed your previous version and asked for changes: "${feedback}"\nPrevious version:\n${task.result}` : '');
   const { pick, eff } = pickFor(task, a);
   const guard = {};
@@ -594,6 +609,20 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
   return { usd, result: text, read, tools: toolKeys(tools), used: mcp.namesOf(tools), skills: skills.names(a), modelUsed: pick.model, modelFrom: pick.from, modelId: ran, effortUsed: eff.effort || '', effortFrom: eff.from, guard };
 }
 
+// T1/T3 (6 oct 2026): the steps the agent marks as it goes (tareas-mcp → marcar_paso), its deadline and priority, and — after a block — what it had
+function pasosLine(task) {
+  const p = task.pasos || [], bits = [];
+  if (p.length) bits.push(`\nSteps (mark each one with the tool marcar_paso as soon as it is done; if one cannot be done, say why in anotar_en_bitacora):\n${p.map((x, i) => `${i + 1}. ${x.hecho ? '[done] ' : ''}${x.texto} (id ${x.id})`).join('\n')}`);
+  else if (task.plan?.length) bits.push(`\nAgreed plan: ${task.plan.join(' → ')}`);
+  if (task.limite) bits.push(`\nDeadline: ${task.limite.replace('T', ' ')}.`);
+  if (task.prioridad === 'alta') bits.push('\nThe owner marked this HIGH priority.');
+  if (task.proyecto) { const pr = catalogoT.proyecto(task.proyecto); if (pr) bits.push(`\nPart of the project «${pr.nombre}»${pr.objetivo ? ' — goal: ' + pr.objetivo : ''}.`); }
+  return bits.join('');
+}
+function reanudaLine(task) {
+  const b = task.pidioBloqueo; if (!b || !task.partial) return '';
+  return `\n\nYou paused this task earlier because: ${b.porque}. That is resolved now. What you had so far:\n${String(task.partial).slice(0, 6000)}\nContinue from there.`;
+}
 /* ---------- V3.2 (16 Sep) Agent Teams: the lead plans, the desks work at once, the lead writes the final ---------- */
 const nameOf = id => id === 'lead' ? 'the lead' : (AGENTS.find(a => a.id === id)?.name || id);
 const routineLineFor = task => task.routine ? `\nThis is a routine (${task.when}): it runs on the office's own clock and the owner is not at the keyboard. It is now ${new Date().toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}. Do the work for now.`
@@ -680,15 +709,23 @@ async function chat(agentId, text, history) {
 }
 
 /* ---------- a new task: the department's routing picks the desk (or the lead takes it as a team) ---------- */
-async function newTask({ dept, text, team = false, at = null, by = 'you', model, effort, extra = {} }) {
-  const r = await route(dept, String(text).trim());
-  const asTeam = TEAMS.enabled && (team === true || teams.intent(text));
-  const task = { id: nid(), dept, agent: asTeam ? leadOf(dept).id : r.agent, title: extra.title || r.title, text: String(text).trim(), plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, state: 'next', addedAt: Date.now(), by,
-    model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: asTeam ? { lead: leadOf(dept).id, asked: by } : undefined, ...extra };
-  if (at) { task.state = 'scheduled'; task.dueAt = at; task.needsOk = r.needsOk; }
-  const list = load(); list.push(task); save(list);
-  console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${at ? ' · scheduled ' + untilText(at) : ''}${by === 'sub' ? ' (via the Subgerente)' : ''}`);
-  if (!at) setImmediate(pump);
+// plan T0 (6 oct 2026): THE way a task is born — the bar, the API, Dimitri, a routine, a trigger, «repetir», the Estudio. crearTarea
+// (tareas/modelo.mjs) gives it its shape; the office's own rules are applied here, once: an amount over the owner's limit waits for the OK.
+function altaTarea(campos, { por = null, arrancar = true } = {}) {
+  const task = crearTarea(campos, { id: nid });
+  if (approvals.overLimit(task.text, APPR().amountLimit).length) task.needsOk = true; // V4.4 (G9)
+  const list = load(); list.push(task); save(list, { por: por || undefined });
+  if (arrancar && task.state === 'next') setImmediate(pump);
+  return task;
+}
+async function newTask({ dept, text, team = false, at = null, by = 'you', model, effort, agent: fixedAgent = null, title: fixedTitle = null, needsOk: fixedOk, extra = {}, por = null }) {
+  const fixed = fixedAgent && AGENTS.find(a => a.id === fixedAgent && a.department === dept); // V4.2 (audit B30): one run of a routine, moved — its own desk, no routing
+  const r = fixed ? { agent: fixed.id, title: String(fixedTitle || text).slice(0, 90), plan: [], eta: 15, why: 'una ejecución de rutina, movida', needsOk: typeof fixedOk === 'boolean' ? fixedOk : routines.guessNeedsOk(text) } : await route(dept, String(text).trim());
+  const asTeam = TEAMS.enabled && (team === true || teams.intent(text)); // TEAM in the bar, or "as a team" in the sentence → the lead owns it and splits it
+  const task = altaTarea({ dept, agent: asTeam ? leadOf(dept).id : r.agent, title: extra.title || r.title, text, plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, by,
+    model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: asTeam ? { lead: leadOf(dept).id, asked: team === true ? (by === 'you' ? 'you' : by) : 'text' } : undefined,
+    ...(at ? { dueAt: at, needsOk: r.needsOk } : {}), ...extra }, { por });
+  console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${at ? ' · scheduled ' + untilText(at) : ''}${by === 'sub' ? ' (via ' + DEPUTY + ')' : ''}`);
   return task;
 }
 
@@ -1191,19 +1228,13 @@ const agentName = id => AGENTS.find(a => a.id === id)?.name || id;
 const MAX_RUNS = Math.max(1, Math.min(8, +cfg.concurrency || 3));
 const running = new Set(); // task ids with a run in flight
 let pumping = false;
-function pump() {
+function pump() { // plan T0/T3: tareas/cola.planear decides (priority → deadline → manual order → oldest; blocked, a person's, a retry or a busy desk wait; a team counts each piece)
   if (pumping) return; pumping = true;
   try {
     let list; try { list = load(); } catch (e) { console.error('engine:', e.message); return; }
-    const busy = new Set(list.filter(t => t.state === 'doing').map(t => t.agent));
-    for (const t of list.filter(x => x.state === 'next' && !x.archived).sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0))) {
-      if (running.size >= MAX_RUNS) break;
-      if (running.has(t.id) || busy.has(t.agent)) continue;
-      if (t.retryAt && t.retryAt > Date.now()) continue; // V4.4 (B1): waits for its retry time
-      if (budgetLevel === 'over' && COSTS().stopAtBudget) continue;
-      if (t.person) continue; // V4.4 (I3): a person's task — no agent runs it // V4.4 (C3): the month's budget is spent and the owner asked to stop there
-      busy.add(t.agent); startRun(t.id);
-    }
+    const procesos = [...runsOf.values()].reduce((n, s) => n + s.size, 0);
+    const { arrancar } = colaTareas.planear(list, { enVuelo: Math.max(running.size, procesos), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget });
+    for (const id of arrancar) if (!running.has(id)) startRun(id);
   } finally { pumping = false; }
 }
 function startRun(id, opts = {}) { // one run, tracked; when it ends the next pending task starts
@@ -1213,8 +1244,8 @@ function startRun(id, opts = {}) { // one run, tracked; when it ends the next pe
 }
 const enqueue = fn => fn(); // kept for the approve/reject path: those runs start at once (the owner is waiting on them)
 function fire(r, { due = Date.now(), late = false, by = 'routine', missed = 0 } = {}) { // the routine becomes a task and runs here, page or no page
-  const task = { id: nid(), dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', state: 'next', addedAt: Date.now(), by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, autonomous: r.autonomous || undefined, due, late, missed: missed > 1 ? missed : undefined, timeout: r.timeout, minutesSaved: r.minutesSaved, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined };
-  const list = load(); list.push(task); save(list);
+  const task = altaTarea({ dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, autonomous: r.autonomous || undefined, due, late, missed: missed > 1 ? missed : undefined, timeout: r.timeout, minutesSaved: r.minutesSaved, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && TEAMS.enabled ? { lead: r.agent, asked: 'routine' } : undefined,
+    prioridad: r.prioridad, etiquetas: r.etiquetas, proyecto: r.proyecto, estimacion: r.estimacion }, { por: by === 'routine' ? 'rutina' : 'dueno', arrancar: false });
   routines.advance(RSTATE, r, Date.now(), task.id, late); routines.saveState(DATA, RSTATE);
   if (late) notice('late', `«${r.title}» se hizo tarde${missed > 1 ? ` (se perdieron ${missed} ejecuciones mientras la computadora dormía; se hace una)` : ''}: tocaba el ${new Date(due).toLocaleString('es-PA', { weekday: 'long', hour: '2-digit', minute: '2-digit' })}`);
   console.log(`⏱ ${task.id} → ${task.agent}: ${task.title}${late ? ' (LATE · was due ' + new Date(due).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ')' : ''}`);
@@ -1237,9 +1268,18 @@ async function reviewDraft(task, result) {
   try { const j = parseJSON(await ask(system, user, { maxTokens: 700, timeout: 120000, model: 'sonnet', taskId: task.id, kind: 'revision' })); return { ok: !!j.ok, fixes: Array.isArray(j.fixes) ? j.fixes.slice(0, 5).map(String) : [], by: lead.id, at: Date.now() }; }
   catch (e) { console.warn('review:', e.message); return null; }
 }
+const basesRun = new Map(); // plan T0: task id → the copy a run last saved; its next save MERGES with the disk (tareas/cambios.mezclar), never overwrites
+const clonar = t => JSON.parse(JSON.stringify(t));
+function guardarRun(task) { // a run's copy → disk, keeping what the owner did meanwhile (a comment, a vote, a person, a priority)
+  const r = tareasAlm.guardarEjecucion(basesRun.get(task.id) || null, task, { por: 'agente:' + task.agent });
+  if (r.tarea) { basesRun.set(task.id, clonar(task)); for (const k of ['comments', 'person', 'prioridad', 'etiquetas', 'limite', 'proyecto', 'vote', 'voteReason', 'archived', 'bloqueadaPor', 'version']) { if (r.tarea[k] === undefined) delete task[k]; else task[k] = r.tarea[k]; } }
+  if (r.choques?.length) console.log(`  ⇄ ${task.id}: you changed ${r.choques.join(', ')} while it ran — yours kept`);
+  return r;
+}
 async function runServerTask(id, { feedback, approve } = {}) {
   let list = load(); const task = list.find(t => t.id === id); if (!task) return null;
-  task.state = 'doing'; task.startedAt = Date.now(); delete task.ask; save(list);
+  task.state = 'doing'; task.startedAt = Date.now(); task.tomadaPor = 'agente:' + task.agent; delete task.ask; save(list, { por: 'oficina' });
+  basesRun.set(task.id, clonar(task)); // T3: «tomada» — nobody else runs it; the merge base for this run
   try {
     let out = await run(task, feedback, approve ? 'approve' : task.needsOk ? 'draft' : 'routine');
     if (!approve && !feedback && needsReview(task, out.result)) { // D5
@@ -1254,6 +1294,17 @@ async function runServerTask(id, { feedback, approve } = {}) {
         }
       }
     }
+    { // T3: the agent asked for a block during this run (pedir_bloqueo): it stops here and waits, with what it had — it resumes when the block is done
+      const enDisco = load(), yo = enDisco.find(t => t.id === task.id);
+      if (!approve && yo?.pidioBloqueo?.at >= task.startedAt && bloqueosPendientes(enDisco, yo).length) {
+        Object.assign(task, { state: 'next', result: out.result, partial: out.result, bloqueadaPor: yo.bloqueadaPor, pidioBloqueo: yo.pidioBloqueo, addedAt: Date.now() });
+        task.cost = Math.round(((task.cost || 0) + (out.usd || 0)) * 1e6) / 1e6;
+        Object.assign(task, { read: out.read, tools: out.tools, used: out.used, modelUsed: out.modelUsed });
+        delete task.tomadaPor; guardarRun(task); basesRun.delete(task.id); stopping.delete(task.id);
+        console.log(`⛔ ${task.id} blocked by the agent: ${yo.pidioBloqueo.porque.slice(0, 100)}`);
+        return task;
+      }
+    }
     if (approve) { task.result = (task.draft || task.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; task.approved = true; task.approvedAt = Date.now(); }
     else task.result = out.result;
     delete task.retryAt; delete task.lastError; delete task.partial; claudeLogin.ok = true;
@@ -1263,7 +1314,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
       task.handoff = { at: Date.now(), from: task.agent, why: out.result.replace(HANDOFF, '').split('\n').slice(0, 3).join(' ').slice(0, 300) };
       task.person = who; task.result = out.result.replace(HANDOFF, ''); task.state = 'next'; task.needsOk = false; task.addedAt = Date.now();
       Object.assign(task, { read: out.read, tools: out.tools, used: out.used, modelUsed: out.modelUsed }); task.cost = Math.round(((task.cost || 0) + (out.usd || 0)) * 1e6) / 1e6;
-      list = load(); const hi = list.findIndex(t => t.id === task.id); if (hi >= 0) list[hi] = task; save(list);
+      delete task.tomadaPor; guardarRun(task); basesRun.delete(task.id);
       notice('handoff', `${agentName(task.agent)} pasa «${task.title}» a ${who}: ${task.handoff.why}`, { task: task.id }); tellPerson(who, `👤 ${agentName(task.agent)} te pasa «${task.title}»: ${task.handoff.why}`);
       console.log(`👤 ${task.id} handed to ${who}`); stopping.delete(task.id); return task;
     }
@@ -1297,7 +1348,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
     }
   }
   stopping.delete(task.id);
-  list = load(); const i = list.findIndex(t => t.id === task.id); if (i >= 0) list[i] = task; save(list);
+  delete task.tomadaPor; guardarRun(task); basesRun.delete(task.id); // merged with what changed on disk while it ran (T0)
   setImmediate(() => { for (const j of media.jobs({ task: task.id })) if ((j.state === 'done' || j.state === 'failed') && !j.attached) attachJob(j); for (const l of lotesDeTarea(task.id)) loteATarea(l); }); // one that finished while this run was being saved (a job or an agent's lote, E8)
   for (const h of taskHooks) try { h({ ...task, agentName: agentName(task.agent), deptName: DEPTS[task.dept]?.name || task.dept }); } catch {} // V4.4: a draft waiting, a failure, a finished task → Telegram
   console.log(`${task.error ? '✗' : task.state === 'waiting' ? '⏸' : '✓'} ${task.id} ${task.error ? 'failed' : task.state === 'waiting' ? 'waiting for your OK' : 'done'} (${task.result.length} chars${task.tools?.length ? ', tools: ' + task.tools.join(' ') : ''}${task.note ? ', note: ' + task.note : ''})`);
@@ -1552,6 +1603,8 @@ async function informeRedes(mes, { guardar = false } = {}) {
 const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja, informe: informeRedes,
   analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
+const tareasRoutes = crearRutasTareas({ alm: tareasAlm, cat: catalogoT, json, body, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id) });
+despachadorDependencias({ bus: busTareas, alm: tareasAlm, pump: () => pump(), avisar: (k, t, o) => notice(k, t, o), nombre: id => agentName(id) });
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
@@ -1770,8 +1823,8 @@ async function hookIn(req, res, url, id) {
   const fixed = tr.agent && AGENTS.find(x => x.id === tr.agent);
   const r = fixed ? { agent: fixed.id, title: (tr.title || a.summary || tr.text).slice(0, 90), plan: [], eta: 15, why: 'disparador ' + id } : await route(tr.dept, text);
   const asTeam = TEAMS.enabled && tr.team;
-  const task = { id: nid(), dept: tr.dept, agent: asTeam ? leadOf(tr.dept).id : r.agent, title: tr.title ? triggers.render(tr.title, a.fields).slice(0, 90) : r.title, text, plan: r.plan || [], eta: r.eta || 15, why: r.why, state: 'next', addedAt: Date.now(), by: 'trigger', trigger: id, needsOk: tr.needsOk || !!inj, team: asTeam ? { lead: leadOf(tr.dept).id, asked: 'trigger' } : undefined, ...(inj ? { guard: { blocked: [], taint: { why: inj, tool: 'webhook ' + id }, at: Date.now() } } : {}) };
-  const l = load(); l.push(task); save(l);
+  const task = altaTarea({ dept: tr.dept, agent: asTeam ? leadOf(tr.dept).id : r.agent, title: tr.title ? triggers.render(tr.title, a.fields).slice(0, 90) : r.title, text, plan: r.plan || [], eta: r.eta || 15, why: r.why, by: 'trigger', trigger: id, needsOk: tr.needsOk || !!inj, team: asTeam ? { lead: leadOf(tr.dept).id, asked: 'trigger' } : undefined, ...(inj ? { guard: { blocked: [], taint: { why: inj, tool: 'webhook ' + id }, at: Date.now() } } : {}),
+    prioridad: tr.prioridad, etiquetas: tr.etiquetas, proyecto: tr.proyecto }, { por: 'disparador', arrancar: false });
   console.log(`⚡ ${task.id} trigger ${id} → ${task.agent}: ${task.title}${inj ? ' (⚠ ' + inj + ')' : ''}`);
   if (inj) notice('trigger', `Lo que llegó por «${id}» ${inj}. La tarea «${task.title}» esperará tu visto bueno.`, { level: 'warn', task: task.id });
   setImmediate(pump);
@@ -2081,7 +2134,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, name: path.basename(dest, '.md'), graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
-    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = rel.queueOf(l, running.size, MAX_RUNS); for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, url.searchParams.get('light') === '1' ? lightTasks(l) : l, { etag: true }); } // INF-04: ?light=1 (the 6 s poll) leaves out the archived tasks' work; the ETag answers 304 when nothing changed // V4.4 (B5): where each waiting task sits
+    if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = colaTareas.planear(l, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget }).puestos; for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, url.searchParams.get('light') === '1' ? lightTasks(l) : l, { etag: true }); } // INF-04: ?light=1 (the 6 s poll) leaves out the archived tasks' work; the ETag answers 304 when nothing changed // V4.4 (B5): where each waiting task sits
     if (url.pathname === '/api/status' && req.method === 'GET') return json(res, 200, officeStatus());
     if (url.pathname === '/api/notices/read' && req.method === 'POST') { const l = loadNotices().map(n => ({ ...n, read: true })); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(l, null, 1)); fs.renameSync(NOTICES + '.tmp', NOTICES); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
@@ -2126,22 +2179,14 @@ const server = http.createServer(async (req, res) => {
       const out = editRoutine(r.id, patch); return json(res, 200, { ok: true, routine: out, routines: loadRoutines() });
     }
     if (url.pathname === '/api/tasks' && req.method === 'POST') {
-      const { dept, text, model, effort, team, at, agent: fixedAgent, title: fixedTitle, needsOk: fixedOk } = await body(req);
+      const b = await body(req); const { dept, text, model, effort, team, at } = b;
       if (!DEPTS[dept] || dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
       if (!text || !String(text).trim()) return json(res, 400, { error: 'la tarea está vacía' });
       const dueAt = at ? (typeof at === 'number' ? at : Date.parse(at)) : null; // V3.2.1: a task for a date
       if (at && !(dueAt > 0)) return json(res, 400, { error: 'at must be a time (ms or ISO)' });
       if (dueAt && dueAt < Date.now() - 60000) return json(res, 400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
-      const fixed = fixedAgent && AGENTS.find(a => a.id === fixedAgent && a.department === dept); // V4.2 (audit B30): one run of a routine, moved — its own desk, no routing
-      const r = fixed ? { agent: fixed.id, title: String(fixedTitle || text).slice(0, 90), plan: [], eta: 15, why: 'una ejecución de rutina, movida', needsOk: typeof fixedOk === 'boolean' ? fixedOk : routines.guessNeedsOk(text) } : await route(dept, String(text).trim());
-      const asTeam = TEAMS.enabled && (team === true || teams.intent(text)); // V3.2 (16 Sep): TEAM in the bar, or "as a team" in the sentence → the lead owns it and splits it
-      const task = { id: nid(), dept, agent: asTeam ? leadOf(dept).id : r.agent, title: r.title, text: String(text).trim(), plan: r.plan, eta: r.eta, why: asTeam ? `team — ${leadOf(dept).name} splits it across the desks` : r.why, state: 'next', addedAt: Date.now(), by: 'you', model: normModel(model) || undefined, effort: normEffort(effort) || undefined, // model/effort: set on this task (beats routine, agent, office)
-        team: asTeam ? { lead: leadOf(dept).id, asked: team === true ? 'you' : 'text' } : undefined };
-      if (dueAt) { task.state = 'scheduled'; task.dueAt = dueAt; task.needsOk = r.needsOk; } // waits for its minute; needsOk decides whether it then waits for the OK
-      if (approvals.overLimit(task.text, APPR().amountLimit).length) task.needsOk = true; // V4.4 (G9): an amount over the owner's limit always waits for the OK
-      const list = load(); list.push(task); save(list);
-      console.log(`+ ${task.id} → ${task.agent}: ${task.title}${asTeam ? ' (team)' : ''}${dueAt ? ' · scheduled ' + untilText(dueAt) : ''}`);
-      if (!dueAt) setImmediate(pump);
+      const extra = camposT1(b); if (extra.error) return json(res, 400, extra);
+      const task = await newTask({ dept, text, model, effort, team, at: dueAt, agent: b.agent, title: b.title, needsOk: b.needsOk, extra: b.idea ? { ...extra, state: 'idea' } : extra, por: 'dueno' });
       return json(res, 200, task);
     }
     if (url.pathname === '/api/settings' && req.method === 'GET') return json(res, 200, { groups: settings.GROUPS, fields: settings.FIELDS, values: settings.values(cfg), telegram: { on: telegram.configured(), owners: telegram.owners().length }, hookToken: !!process.env.AO_HOOK_TOKEN && process.env.AO_HOOK_TOKEN.length >= 16, embeddings: EMB?.name || null, localFile: path.basename(LOCAL_CFG) }); // J5
@@ -2270,9 +2315,8 @@ const server = http.createServer(async (req, res) => {
     if (m && m[2] === 'repeat' && req.method === 'POST') { // the same work again, as a new task (same agent, same words)
       const src = load().find(x => x.id === m[1]);
       if (!src) return json(res, 404, { error: 'esa tarea ya no existe' });
-      const t = { id: nid(), dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', state: 'next', addedAt: Date.now(), by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
-        team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id };
-      const l = load(); l.push(t); save(l);
+      const t = altaTarea({ dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
+        team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id, prioridad: src.prioridad, etiquetas: src.etiquetas, proyecto: src.proyecto, estimacion: src.estimacion }, { por: 'dueno', arrancar: false });
       console.log(`↻ ${t.id} repeats ${src.id}: ${t.title}`); setImmediate(pump);
       return json(res, 200, t);
     }
@@ -2309,6 +2353,7 @@ const server = http.createServer(async (req, res) => {
       if (b.model !== undefined) patch.model = normModel(b.model) || undefined;
       if (b.effort !== undefined) patch.effort = normEffort(b.effort) || undefined;
       if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk;
+      { const t1 = camposT1(b, { tareaId: m[1] }); if (t1.error) return json(res, 400, t1); if (t1.pasos) t1.pasos = normalizarPasos(t1.pasos, cur.pasos); Object.assign(patch, t1); for (const k of ['prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'pasos']) if (b[k] === null || (Array.isArray(b[k]) && !b[k].length)) patch[k] = undefined; } // T1: also from the edit (any state: /api/tareas/<id>/organizar)
       const list = load(); const task = list.find(t => t.id === m[1]); // re-read: routing took a moment and the clock (or the page) may have started it
       if (!task || task.state !== cur.state) return json(res, 409, { error: 'la tarea ya empezó mientras la editabas' });
       Object.assign(task, patch); for (const k of Object.keys(patch)) if (patch[k] === undefined) delete task[k]; save(list); if (task.state === 'next') setImmediate(pump);
@@ -2344,6 +2389,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, trashed, graph: trashed ? await rebuildGraph() : undefined });
     }
     /* ---------- V4.7: Contenido — the pieces, their review and approval ---------- */
+    if (url.pathname.startsWith('/api/tareas') && await tareasRoutes(req, res, url)) return; // plan T1–T4: organizar, bitácora, proyectos, etiquetas, agenda, lo de los agentes
     if (url.pathname.startsWith('/api/contenido/') && await analiticasRoutes(req, res, url)) return; // V4.7 (F2): Analíticas y la conexión con Meta
     if (url.pathname.startsWith('/api/contenido') && await contenidoRoutes(req, res, url)) return;
     /* ---------- the Estudio ---------- */

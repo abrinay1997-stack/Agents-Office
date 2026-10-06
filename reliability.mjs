@@ -4,6 +4,7 @@
 //   and how many runs of a routine were missed while the computer slept (B2).
 // office.config.json → "retries": { "max": 2, "backoff": [60, 300, 900] }   (seconds before each retry; max 0 = never)
 //                      "timeout": 300                                       (seconds per agent run; a retry after a timeout gets twice as long, up to 4×)
+import { planear } from './tareas/cola.mjs';
 
 export const RETRY_DEFAULTS = { max: 2, backoff: [60, 300, 900] };
 export const retryConfig = r => { const o = { ...RETRY_DEFAULTS, ...(r || {}) }; o.max = Math.max(0, Math.min(5, +o.max || 0)); o.backoff = (Array.isArray(o.backoff) && o.backoff.length ? o.backoff : RETRY_DEFAULTS.backoff).map(n => Math.max(5, +n || 60)); return o; };
@@ -47,19 +48,7 @@ export function nextStep(task, message, cfg = {}, now = Date.now()) {
  * Where each waiting task sits. tasks: the list; running: count in flight; max: runs at once; now.
  * → { [id]: { pos, why, retryAt? } } — why: 'agente' (its desk is busy) · 'oficina' (every run slot is taken) · 'reintento' (waits for its retry) · 'turno'
  */
-export function queueOf(tasks, runningCount, max, now = Date.now()) {
-  const busy = new Set(tasks.filter(t => t.state === 'doing').map(t => t.agent));
-  const waiting = tasks.filter(t => t.state === 'next' && !t.archived).sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
-  const out = {}; let pos = 0, free = Math.max(0, max - runningCount);
-  for (const t of waiting) {
-    pos++;
-    if (t.retryAt && t.retryAt > now) { out[t.id] = { pos, why: 'reintento', retryAt: t.retryAt }; continue; }
-    if (busy.has(t.agent)) { out[t.id] = { pos, why: 'agente' }; continue; }
-    if (free > 0) { free--; busy.add(t.agent); out[t.id] = { pos, why: 'turno' }; continue; }
-    out[t.id] = { pos, why: 'oficina' };
-  }
-  return out;
-}
+export function queueOf(tasks, runningCount, max, now = Date.now()) { return planear(tasks, { enVuelo: runningCount, max, ahora: now }).puestos; } // plan T0: one rule with pump() (tareas/cola.mjs)
 
 /** How many runs fell between the missed due time and now (the computer slept or the office was off). next(t) → the run after t. */
 export function missedRuns(firstDue, now, next, cap = 1000) {
