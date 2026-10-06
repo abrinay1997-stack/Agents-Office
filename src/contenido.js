@@ -19,6 +19,7 @@ import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
 import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida } from './contenido-cola.js';
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS } from './contenido-reglas.js';
 import { nivel as nivelHora, FUENTE as FUENTE_HORA } from './contenido-hora.js';
+import { initBandeja } from './contenido-bandeja.js';
 import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
@@ -36,7 +37,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <div class="cv-brand">CONTENIDO <small id="ctCo"></small></div>
       <div class="ct-create"><button type="button" class="ct-new" id="ctNew" aria-haspopup="true" aria-expanded="false" aria-label="Crear una pieza" title="Crear una pieza">+<span class="ct-newt"> Crear</span></button>
         <div class="ct-newmenu" role="menu" aria-label="Qué crear" hidden>${Object.entries(FORMATO).map(([k, l]) => `<button type="button" role="menuitem" data-newf="${k}">${FICON[k]}${l}</button>`).join('')}<p class="ct-newhint">Se abre con el siguiente hueco libre y las dos redes.</p></div></div>
-      <div class="cv-seg ct-mode" role="group" aria-label="Qué ver"><button type="button" data-m="cal" aria-pressed="true">CALENDARIO</button><button type="button" data-m="prog" aria-pressed="false">PROGRAMACIÓN<b class="ct-n" hidden></b></button></div>
+      <div class="cv-seg ct-mode" role="group" aria-label="Qué ver"><button type="button" data-m="cal" aria-pressed="true">CALENDARIO</button><button type="button" data-m="prog" aria-pressed="false"><span class="ct-ml">PROGRAMACIÓN</span><span class="ct-ms">COLA</span><b class="ct-n" hidden></b></button><button type="button" data-m="bandeja" aria-pressed="false">BANDEJA<b class="ct-n ct-nbj" hidden></b></button></div>
       <div class="cv-seg ct-views" role="group" aria-label="Vista del calendario"><button type="button" data-v="agenda">AGENDA</button><button type="button" data-v="day">DÍA</button><button type="button" data-v="week">SEMANA</button><button type="button" data-v="month" class="on">MES</button></div>
       <div class="cv-nav"><button id="ctPrev" type="button" aria-label="Anterior" title="anterior (←)">‹</button><div id="ctTitle"></div><button id="ctNext" type="button" aria-label="Siguiente" title="siguiente (→)">›</button><button id="ctToday" type="button" title="hoy (T)">HOY</button><select class="ct-vsel" aria-label="Vista del calendario"><option value="agenda">Agenda</option><option value="day">Día</option><option value="week">Semana</option><option value="month">Mes</option></select></div>
       <div class="cv-sp"></div>
@@ -51,13 +52,14 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <aside class="cv-rail" aria-label="Ideas sin día"><div class="ct-rail"></div></aside>
       <div class="cv-wrap"><div class="cv-dow" id="ctDow"></div><div class="cv-grid month" id="ctGrid"></div></div>
       <div class="ct-prog" hidden></div>
+      <div class="ct-bj" hidden></div>
       <aside class="ct-panel" hidden></aside>
     </div>
     <div class="cv-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <div id="ctPop" hidden></div>`;
   document.body.appendChild(ov);
   const $ = s => ov.querySelector(s);
-  const E = { title: $('#ctTitle'), dow: $('#ctDow'), grid: $('#ctGrid'), chips: $('#ctChips'), stats: $('#ctStats'), search: $('#ctSearch'), rail: $('.ct-rail'), railBox: $('.cv-rail'), prog: $('.ct-prog'), wrap: $('.cv-wrap'), panelHost: $('.ct-panel'), pop: $('#ctPop'), toast: $('.cv-toast'), views: $('.ct-views'), mode: $('.ct-mode'), newBtn: $('#ctNew'), newMenu: $('.ct-newmenu') };
+  const E = { bj: $('.ct-bj'), title: $('#ctTitle'), dow: $('#ctDow'), grid: $('#ctGrid'), chips: $('#ctChips'), stats: $('#ctStats'), search: $('#ctSearch'), rail: $('.ct-rail'), railBox: $('.cv-rail'), prog: $('.ct-prog'), wrap: $('.cv-wrap'), panelHost: $('.ct-panel'), pop: $('#ctPop'), toast: $('.cv-toast'), views: $('.ct-views'), mode: $('.ct-mode'), newBtn: $('#ctNew'), newMenu: $('.ct-newmenu') };
   const narrow = () => matchMedia('(max-width: 760px)').matches;
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it), as in the tasks calendar
   let colaInfo = null; // M1: el modo y el conductor (GET /api/contenido/cola)
@@ -114,7 +116,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   async function load(force = false) {
     const w = want(), key = `${w.desde}|${w.hasta}`;
     if (!force && key === loadedKey && pieces.length) { if (mode === 'prog') loadCola(); return; }
-    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; loadedKey = key; errorMsg = ''; loadHora(); }
+    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; loadedKey = key; errorMsg = ''; loadHora(); if (!bjCargada || mode === 'bandeja') { bjCargada = true; bj.load(); } }
     catch (e) { errorMsg = e.message || 'No pude leer las piezas'; }
     if (mode === 'prog' || force) await loadCola();
     if (openNow) render(); paintDock();
@@ -152,14 +154,15 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
 
   function render() {
     if (dnd && dnd.dragging) return;
-    ov.classList.toggle('prog', mode === 'prog'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
+    ov.classList.toggle('prog', mode === 'prog' || mode === 'bandeja'); ov.classList.toggle('bj', mode === 'bandeja'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
     E.mode.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mode));
-    E.views.hidden = mode !== 'cal'; E.wrap.hidden = mode !== 'cal'; E.prog.hidden = mode !== 'prog';
+    E.views.hidden = mode !== 'cal'; E.wrap.hidden = mode !== 'cal'; E.prog.hidden = mode !== 'prog'; E.bj.hidden = mode !== 'bandeja';
     E.views.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === view); b.setAttribute('aria-pressed', b.dataset.v === view); }); $('.ct-vsel').value = view;
     $('.cv-nav').style.visibility = mode === 'cal' ? 'visible' : 'hidden';
     const nP = resumen ? resumen.revisar : 0, nb = E.mode.querySelector('.ct-n'); nb.hidden = !nP; nb.textContent = nP; nb.setAttribute('aria-label', `${nP} por revisar`);
     renderChips(); renderRail();
     if (mode === 'prog') { renderProg(); return; }
+    if (mode === 'bandeja') { E.title.innerHTML = ''; return; } // plan M4: la bandeja se pinta sola (contenido-bandeja.js)
     const r = range(), by = eventsByDay(), grid = { from: r.from, days: r.days, by, card, addLabel };
     E.title.innerHTML = titleHTML(view, anchor, r);
     E.dow.hidden = view !== 'month'; E.dow.innerHTML = dowHTML(view, anchor, 1);
@@ -282,6 +285,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
   const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
+  // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
+  let bjCargada = false;
+  const bj = initBandeja({ host: E.bj, datos, esc, note, onCount: n => { const b = E.mode.querySelector('.ct-nbj'); b.hidden = !n; b.textContent = n; b.setAttribute('aria-label', `${n} por responder`); } });
   async function openPiece(id, addIds) {
     if (!openNow) open();
     let p = todasConocidas().find(x => x.id === id);
@@ -373,7 +379,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (t.closest('#ctNew')) { const on = E.newMenu.hidden; E.newMenu.hidden = !on; E.newBtn.setAttribute('aria-expanded', on); if (on) E.newMenu.querySelector('button').focus(); return; }
     const nf = t.closest('[data-newf]'); if (nf) { crear(nf.dataset.newf); return; }
     if (!E.newMenu.hidden && !t.closest('.ct-create')) closeMenu();
-    const b = t.closest('.ct-mode button'); if (b) { mode = b.dataset.m; store.set('mode', mode); await panel.flush(); if (mode === 'prog') await loadCola(); render(); return; }
+    const b = t.closest('.ct-mode button'); if (b) { mode = b.dataset.m; store.set('mode', mode); await panel.flush(); if (mode === 'prog') await loadCola(); if (mode === 'bandeja') bj.load(); render(); return; }
     const v = t.closest('.ct-views button'); if (v) { view = v.dataset.v; store.set('view', view); load(); render(); return; }
     if (t.closest('[data-filters]')) { const on = !ov.classList.contains('chipsOpen'); ov.classList.toggle('chipsOpen', on); t.closest('[data-filters]').setAttribute('aria-expanded', on); return; }
     const sb = t.closest('[data-sal]'); if (sb) { e.stopPropagation(); await accionSalida(sb); return; }

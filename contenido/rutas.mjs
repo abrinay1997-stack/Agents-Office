@@ -17,7 +17,7 @@ import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, mejorHora = null, analiticasTexto = null }) {
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, mejorHora = null, analiticasTexto = null, bandeja = null }) {
   const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? programador.salidaDe(p.id) : null }; };
   const resumen = () => {
     const todas = almacen.listar({ sinFecha: true });
@@ -52,6 +52,23 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (r.error) return json(res, 400, { error: r.error }), true;
         if (deAgente && r.pieza.tarea) notice('contenido', `Un agente dejó un borrador en Contenido: «${r.pieza.titulo || 'sin título'}»${r.pieza.fecha ? ' para el ' + r.pieza.fecha : ''}. Revísalo y apruébalo cuando esté bien.`, { key: 'contenido-' + r.pieza.tarea });
         return json(res, 200, { ok: true, pieza: revisado(r.pieza) }), true;
+      }
+      // plan M4 (6 oct 2026): la bandeja — leer, sincronizar, el borrador (agente o dueño) y enviar/descartar (solo el dueño)
+      if (p === '/api/contenido/bandeja' && req.method === 'GET') {
+        if (!bandeja) return json(res, 200, { items: [], cuenta: {}, pendientes: 0, fuente: { ok: false, motivo: 'sin bandeja' } }), true;
+        const q = url.searchParams; return json(res, 200, bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '' })), true;
+      }
+      if (p === '/api/contenido/bandeja/sincronizar' && req.method === 'POST') { if (!bandeja) return json(res, 404, { error: 'sin bandeja' }), true; return json(res, 200, await bandeja.sincronizar()), true; }
+      const bj = /^\/api\/contenido\/bandeja\/([^/]+)(?:\/(enviar|descartar|reabrir))?$/.exec(p);
+      if (bj && bandeja) {
+        const id = decodeURIComponent(bj[1]), b = req.method === 'GET' ? {} : await body(req);
+        if (!bj[2] && req.method === 'GET') { const m = bandeja.leer(id); return m ? json(res, 200, { item: m }) : json(res, 404, { error: 'ese mensaje ya no está en la bandeja' }), true; }
+        if (!bj[2] && req.method === 'PATCH') { const r = bandeja.borrador(id, b.borrador, { por: b.por === 'agente' ? 'agente' : 'dueno', agente: b.agente }); return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true; }
+        if (bj[2] && req.method === 'POST') {
+          if (b.por === 'agente') return json(res, 403, { error: 'los agentes no envían ni descartan respuestas: dejan el borrador y el dueño decide' }), true;
+          const r = bj[2] === 'enviar' ? await bandeja.enviar(id, b.texto) : bj[2] === 'descartar' ? bandeja.descartar(id) : bandeja.reabrir(id);
+          return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true;
+        }
       }
       if (p === '/api/contenido/mejor-hora' && req.method === 'GET') { // plan M3: la tabla 7 × 24 de las redes pedidas y de dónde sale
         if (!mejorHora) return json(res, 200, { fuente: 'ninguna', grid: null, motivo: 'sin fuente' }), true;

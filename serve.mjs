@@ -74,6 +74,7 @@ import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 20
 import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
 import { crearMejorHora } from './contenido/mejor-hora.mjs';
 import { resumenAnaliticas } from './contenido/resumen-analiticas.mjs';
+import { crearBandeja } from './contenido/bandeja.mjs';
 import { crearProgramador } from './contenido/programador.mjs';
 import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
@@ -1535,7 +1536,10 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
 });
 // plan M3 (6 oct 2026): la mejor hora (Metricool o lo ya publicado) y Analíticas en palabras para los agentes
 const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALITICAS_DIR, 'mejores-horas.json') });
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora,
+// plan M4 (6 oct 2026): la bandeja de todas las redes (Metricool); los agentes redactan, el dueño envía
+const bandeja = crearBandeja({ metricool, archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o), injectionIn: safety.injectionIn });
+if (metricool.configurado()) { setInterval(() => bandeja.sincronizar().catch(e => console.warn('contenido: bandeja —', e.message)), 10 * 60e3); setTimeout(() => bandeja.sincronizar().catch(() => {}), 30e3); }
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja,
   analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
