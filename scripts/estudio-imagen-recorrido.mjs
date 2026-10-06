@@ -97,6 +97,19 @@ try {
   // GENERAR vacío
   await p.click(`${S} .st-go`); await p.waitForTimeout(600); await shot(p, '05-error-prompt-vacio');
   report.errorVacio = await p.evaluate(() => ({ ferr: document.querySelector('#studioOv .st-ferr')?.textContent, msg: document.querySelector('#studioOv .st-msg')?.textContent, ariaInvalid: document.querySelector('#studioOv .st-prompt').getAttribute('aria-invalid'), describedby: document.querySelector('#studioOv .st-prompt').getAttribute('aria-describedby') }));
+  // ===== Fase 4 =====
+  ok('IMG-25 · el error de la idea va unido al campo', report.errorVacio.ariaInvalid === 'true' && report.errorVacio.describedby === 'stFerr', JSON.stringify(report.errorVacio));
+  const ars = await p.evaluate(() => { const g = document.querySelector('#studioOv .st-ars'); return { rol: g?.getAttribute('role'), paradas: [...g.querySelectorAll('[data-ar]')].filter(b => b.tabIndex === 0).length, marcado: g.querySelector('[aria-checked="true"]')?.dataset.ar }; });
+  await p.focus(`${S} .st-ars [aria-checked="true"]`); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
+  const ars2 = await p.evaluate(() => ({ marcado: document.querySelector('#studioOv .st-ars [aria-checked="true"]')?.dataset.ar, foco: document.activeElement?.dataset?.ar }));
+  ok('IMG-28 · los formatos son un grupo de opciones: una parada de Tab y las flechas eligen', ars.rol === 'radiogroup' && ars.paradas === 1 && ars2.marcado !== ars.marcado && ars2.foco === ars2.marcado, JSON.stringify({ ars, ars2 }));
+  await p.keyboard.press('ArrowLeft'); await p.waitForTimeout(150);
+  await p.evaluate(() => localStorage.setItem('ao.keys1', 'false')); await p.click(`${S} .st-name`); await p.keyboard.press('v'); await p.waitForTimeout(200);
+  const k1 = await p.getAttribute(`${S} [data-kind="image"]`, 'aria-pressed');
+  await p.evaluate(() => localStorage.removeItem('ao.keys1'));
+  ok('IMG-26 · con los atajos de una tecla apagados, «V» no cambia a Video', k1 === 'true', k1);
+  ok('IMG-29 · ningún objetivo del compositor mide menos de 24 px', report['medidas:basico-1440'].nMenores24 === 0, JSON.stringify(report['medidas:basico-1440'].menoresDe24));
+  ok('IMG-30 · ningún texto del Estudio baja de 11,5 px', Math.min(...Object.keys(report['medidas:basico-1440'].tamaños).map(Number)) >= 11.5, Object.keys(report['medidas:basico-1440'].tamaños).join(' · '));
   // generar 2
   await p.fill(`${S} .st-prompt`, 'Taza de café humeante sobre una mesa de madera, luz de mañana');
   await p.click(`${S} .st-qty [data-d="1"]`); await p.waitForTimeout(200);
@@ -141,6 +154,8 @@ try {
   report.visorAcciones = await p.evaluate(() => [...document.querySelectorAll('#studioOv .st-light button, #studioOv .st-light a')].filter(e => e.offsetParent).map(e => (e.getAttribute('aria-label') || e.textContent).trim().replace(/\s+/g, ' ')));
   await axe(p, 'visor', '#studioOv .st-light');
   const vg = await p.evaluate(() => [...document.querySelectorAll('#studioOv .st-light .st-lgt')].map(x => x.textContent));
+  const tips = await p.evaluate(() => [...document.querySelectorAll('#studioOv .st-grid .st-ov a.st-oi, #studioOv .st-grid .st-ov .st-more, #studioOv .st-gmas > summary')].filter(e => e.offsetParent || e.closest('details')).every(e => e.dataset.tip && e.getAttribute('aria-label')));
+  ok('IMG-27 · los botones que solo son un icono dicen su nombre (aria-label y data-tip)', tips);
   ok('IMG-48 · el visor usa los mismos grupos', vg.join('|') === 'Crear a partir de esta|Organizar|Enviar a…', vg.join('|'));
   await p.click(`${S} .st-light [data-l="edit"]`).catch(() => {}); await p.waitForTimeout(500); await shot(p, '11-visor-editar');
   await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await p.waitForTimeout(300);

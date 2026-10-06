@@ -9,7 +9,7 @@ Pedido: auditoría integral de UX, UI, usabilidad, intuitividad, funcionalidad, 
 - **Código:** se leyeron `src/studio.js`, `src/studio-banco*.js`, `src/escena3d*.js` y sus estilos.
 - **Para repetirlo:** `node scripts/estudio-imagen-recorrido.mjs`. Las capturas van a `data/capturas/estudio-imagen/`, que no viaja por GitHub.
 
-**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) y la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-21 y 24 🟡). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
+**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-21 y 24 🟡) y la **Fase 4** (IMG-25 a 30 ✅). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
 
 **Estado de cada punto:** ✅ hecho · 🟡 en parte · ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
 
@@ -332,27 +332,30 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
 
 **Automático:** axe-core da **0 violaciones** en las 7 vistas: básico claro, galería, visor, avanzado, banco, escenario 3D y básico oscuro. Las auditorías anteriores dejaron bien el contraste, los landmarks, los nombres accesibles y el foco visible. Lo que sigue es lo que un analizador **no** ve:
 
-### IMG-25 · 🟡 medio · ⏳ — El error de la idea vacía no está unido al campo
+### IMG-25 · 🟡 medio · ✅ — El error de la idea vacía no está unido al campo
 - **Dónde:** `fieldErr('prompt', …)` (`src/studio.js:166`).
 - **Evidencia:** tras GENERAR con la idea vacía, el campo tiene `aria-invalid: null` y `aria-describedby: null`; el texto del error vive en `.st-ferr`, sin relación con el campo (`errorVacio`).
 - **Impacto:** con el lector de pantalla, se oye el campo pero no el error.
 - **Solución:** `aria-invalid="true"` y `aria-describedby="<id de .st-ferr>"` mientras dure el error. Igual en las ranuras obligatorias y en el «Tu foto» del banco.
+- **Hecho (6 oct, Fase 4):** la idea vacía lleva `aria-invalid` y `aria-describedby` hacia su error; una ranura obligatoria vacía, el botón que la llena lleva el motivo.
 - **Prioridad:** Fase 4.
 
-### IMG-26 · 🟡 medio · ⏳ — Atajos de una sola tecla que no se pueden apagar
+### IMG-26 · 🟡 medio · ✅ — Atajos de una sola tecla que no se pueden apagar
 - **Dónde:** el teclado del Estudio (`src/studio.js:1722-1734`): E, I, V, B, L, «/», y en el visor +, −, 0, F.
 - **Evidencia:** no hay ningún ajuste para desactivarlos (WCAG 2.1.4, «Atajos de una tecla»).
 - **Impacto:** quien usa control por voz o tiene temblor puede cambiar de modo o de vista sin querer.
 - **Solución:** en Ajustes → Atajos de teclado, un interruptor «Atajos de una tecla» (activado por defecto) que todos respeten.
+- **Hecho (6 oct, Fase 4):** Ajustes → Atajos de teclado tiene «Atajos de una tecla» (`src/teclas1.js`, con test; `ao.keys1` en el navegador). Apagados, la oficina, el Estudio, el visor y el banco ignoran las letras sueltas; Ctrl + K, Esc y las flechas siguen.
 - **Prioridad:** Fase 4.
 
-### IMG-27 · 🟡 medio · ⏳ — Iconos sin texto visible
+### IMG-27 · 🟡 medio · ✅ — Iconos sin texto visible
 - **Evidencia:** la ficha tiene 6 botones que solo son un icono. Tienen `aria-label` (bien), pero su texto solo aparece con `title`, que no sale con el teclado ni en el táctil.
 - **Impacto:** la gente con dificultades cognitivas o visuales tiene que adivinar.
 - **Solución:** IMG-18, más un tooltip propio en `:focus-visible` y al mantener pulsado.
+- **Hecho (6 oct, Fase 4):** los botones que solo son un icono (Descargar, «⋯», Subir y Seleccionar en el teléfono, Cerrar, Quitar) llevan `data-tip`: su nombre sale con el foco del teclado y al mantenerlos pulsados.
 - **Prioridad:** Fase 4.
 
-### IMG-28 · 🟡 medio · ⏳ — Orden de foco: la idea es la parada 15
+### IMG-28 · 🟡 medio · ✅ — Orden de foco: la idea es la parada 15
 - **Evidencia:** al abrir el Estudio y pulsar Tab, las paradas son:
   - el medidor de presupuesto, Cerrar y las pestañas;
   - Plegar y los 4 tipos;
@@ -365,20 +368,23 @@ En parte. Hay tokens de color (`--ink`, `--cream`, `--grey`, `--hairline`, `--fo
   - Al abrir el Estudio sin nada más que hacer, el foco va a la idea.
   - Los formatos como un `radiogroup` (una parada, con flechas).
   - Mostrar «Ctrl+Enter» como pista dentro del campo.
+- **Hecho (6 oct, Fase 4):** al abrir, el foco ya iba a la idea. Los formatos son un `radiogroup` (una parada de Tab; las flechas eligen); «Ctrl + Enter genera» se ve junto a la idea y GENERAR lleva `aria-keyshortcuts`.
 - **Prioridad:** Fase 4.
 
-### IMG-29 · 🟢 bajo · ⏳ — Objetivos de menos de 24 px
+### IMG-29 · 🟢 bajo · ✅ — Objetivos de menos de 24 px
 - **Evidencia:**
   - «Quitar» de la miniatura de referencia: 22×22.
   - El enlace «Ajustes → Estudio»: 19 px de alto.
   - «Motores y cómo activarlos»: 21 px de alto (medidas).
 - **Solución:** 24 px como mínimo (la regla de la casa), con relleno o `min-height`.
+- **Hecho (6 oct, Fase 4):** «Quitar» de 24 px y los enlaces del Estudio con 24 px de alto. El recorrido mide 0 objetivos por debajo.
 - **Prioridad:** Fase 4.
 
-### IMG-30 · 🟡 medio · ⏳ — Texto informativo en el mínimo, en versalitas
+### IMG-30 · 🟡 medio · ✅ — Texto informativo en el mínimo, en versalitas
 - **Evidencia:** 10 textos a 10,5 px, como las insignias (PRUEBA, SUBIDA) y las cabeceras de grupo de la lista de modelos («GOOGLE (GEMINI API) · listo»), en mayúsculas espaciadas.
 - **Impacto:** cumple la regla de 10,5 px, pero en mayúsculas con espaciado cuesta leer, sobre todo a quien tiene baja visión o dislexia.
 - **Solución:** 11,5 px como mínimo para el texto que informa; las versalitas solo para rótulos de sección, nunca para datos.
+- **Hecho (6 oct, Fases 3 y 4):** con la escala, ningún texto del Estudio baja de 11,5 px.
 - **Prioridad:** Fase 4.
 
 ### IMG-31 · 🟡 medio · ⏳ — Carga cognitiva

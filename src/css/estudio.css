@@ -181,3 +181,17 @@ body.dark #studioOv .st-gmasl { background: #15161A; }
 #studioOv .st-go.st-armado { background: #151414; border-color: #151414; color: #fff; }
 body.dark #studioOv .st-go.st-armado { background: var(--cream); color: #151414; border-color: var(--cream); }
 #studioOv .st-ar small { font-size: var(--fs-xs); } /* IMG-15: venía de una regla compartida con otras vistas a 10,5 px */
+/* Fase 4 (accesibilidad) */
+/* IMG-27: un botón que solo es un icono dice su nombre con el foco del teclado y al mantenerlo pulsado (como el dock) */
+#studioOv [data-tip] { position: relative; }
+#studioOv [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 9; white-space: nowrap; pointer-events: none; padding: 5px 9px; border-radius: var(--r-s); background: var(--ink); color: var(--cream); font: 600 12px/1.25 var(--ui); box-shadow: 0 6px 18px rgba(21,20,20,.22); }
+#studioOv .st-head [data-tip]:focus-visible::after, #studioOv .st-filt [data-tip]:focus-visible::after { bottom: auto; top: calc(100% + 6px); }
+@media (hover: none) { #studioOv [data-tip]:active::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 9; white-space: nowrap; pointer-events: none; padding: 5px 9px; border-radius: var(--r-s); background: var(--ink); color: var(--cream); font: 600 12px/1.25 var(--ui); } }
+/* IMG-29: nada por debajo de 24 px */
+#studioOv .st-chip button { width: 24px; height: 24px; }
+#studioOv .st-lk { display: inline-block; min-height: 24px; line-height: 24px; }
+/* IMG-28: «Ctrl + Enter genera», a la vista donde se usa (no en el teléfono) */
+#studioOv .st-kbh { font-size: var(--fs-xs); color: var(--grey); margin-left: auto; white-space: nowrap; }
+#studioOv .st-kbh + .st-new { margin-left: 8px; }
+@media (max-width: 760px), (hover: none) { #studioOv .st-kbh { display: none; } }
+#studioOv .st-open-engs { min-height: 24px; } /* IMG-29: el enlace «Motores y keys» de «Empieza aquí» */

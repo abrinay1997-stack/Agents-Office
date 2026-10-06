@@ -15,7 +15,8 @@ import * as GF from './galeria-filtro.js';
 import * as BR from './studio-borrador.js'; // 6 Oct 2026 (audit IMG-01/02): the composer's draft with DESHACER, and Variar as a request of its own
 import * as AV from './studio-avisos.js';
 import * as AC from './studio-acciones.js';
-import * as CF from './studio-confirmar.js'; // 6 Oct 2026 (audit IMG-11): a spend is confirmed with a second click, not the browser's confirm() // 6 Oct 2026 (audit IMG-09/48): one list of what can be done with a file — card, «⋯», group card and viewer // 6 Oct 2026 (audit IMG-03): what the Estudio says when jobs end, with its plurals // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
+import * as CF from './studio-confirmar.js';
+import { ignorar as ignorarTecla } from './teclas1.js'; // IMG-26: single-key shortcuts can be turned off // 6 Oct 2026 (audit IMG-11): a spend is confirmed with a second click, not the browser's confirm() // 6 Oct 2026 (audit IMG-09/48): one list of what can be done with a file — card, «⋯», group card and viewer // 6 Oct 2026 (audit IMG-03): what the Estudio says when jobs end, with its plurals // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
 // 1 Oct 2026 (banco de presets F1, F2): the bank and the Lotes tab live in their own modules; here only their hooks. They load on demand
 // (INF-09: the page's budget): dist/estudio-extra.js comes the first time the Studio shows the image composer (its Presets step), or the
@@ -64,7 +65,7 @@ export function initStudio(ctx) {
     <div class="st-head">
       <span class="st-logo">${svg('vid')}</span><div><div class="st-name" id="stTitle">Estudio</div><div class="st-sub"${store.get('subSeen', false) ? ' hidden' : ''}>Imágenes y video reales. Sigue generando aunque cierres esta ventana; tus agentes también lo usan.</div></div>
       <div class="st-ptabs" role="tablist" aria-label="Estudio"><button type="button" role="tab" data-pt="gen" aria-selected="true">Crear<span class="st-ptg"> y galería</span></button><button type="button" role="tab" data-pt="gal" aria-selected="false">Galería <b class="st-ptn"></b></button><button type="button" role="tab" data-pt="lotes" aria-selected="false" title="Muchas fotos con la misma receta (L)">Lotes <b class="st-ptl"></b></button></div> <!-- IMG-23 (6 Oct 2026): the tabs share the header row -->
-      <span class="sp"></span><button type="button" class="st-budget" aria-live="polite" title="Tus topes del Estudio: se cambian en Ajustes → Estudio"></button><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)">${svg('x')}</button>
+      <span class="sp"></span><button type="button" class="st-budget" aria-live="polite" title="Tus topes del Estudio: se cambian en Ajustes → Estudio"></button><button type="button" class="st-x" aria-label="Cerrar el Estudio" title="Cerrar (Esc)" data-tip="Cerrar (Esc)">${svg('x')}</button>
     </div>
     <div class="st-forpiece" hidden role="status"></div>
     <div class="st-body">
@@ -81,7 +82,7 @@ export function initStudio(ctx) {
           <div class="st-step"><div class="st-h"><b>3</b> <span class="st-p3t">Describe lo que quieres</span></div>
             <div class="st-modeseg" role="group" aria-label="Cuántas ideas"><button type="button" data-mode="one" aria-pressed="true">Una idea</button><button type="button" data-mode="batch" aria-pressed="false" title="Una idea por línea: cada línea es un pedido aparte">Varias ideas, una por línea</button></div>
             <div class="st-pwrap"><textarea class="st-prompt" rows="4" aria-label="Qué quieres crear"></textarea>
-              <div class="st-ltags" hidden role="group" aria-label="Partes de la canción"><span>Marca las partes:</span>${SV.LYRIC_TAGS.map(t => `<button type="button" data-ltag="${t}" title="Añadir ${t} en una línea nueva">${t}</button>`).join('')}</div><div class="st-bcount" hidden></div><div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span><button type="button" class="st-new" title="Vacía la idea y el material de partida (con DESHACER)">Vaciar</button></div>
+              <div class="st-ltags" hidden role="group" aria-label="Partes de la canción"><span>Marca las partes:</span>${SV.LYRIC_TAGS.map(t => `<button type="button" data-ltag="${t}" title="Añadir ${t} en una línea nueva">${t}</button>`).join('')}</div><div class="st-bcount" hidden></div><div class="st-ferr" hidden role="alert"></div><div class="st-prow"><button type="button" class="st-enh" title="Claude lo reescribe como un prompt de producción">${svg('spark')}<span>Mejorar el prompt</span></button><select class="st-lang" aria-label="Idioma del prompt mejorado" title="En inglés los motores suelen entenderlo mejor; te muestro la traducción debajo"><option value="en">en inglés</option><option value="es">en español</option></select><button type="button" class="st-undo-enh" hidden>Volver al mío</button><span class="sp"></span><span class="st-plen"></span><span class="st-kbh" aria-hidden="true">Ctrl + Enter genera</span><button type="button" class="st-new" title="Vacía la idea y el material de partida (con DESHACER)">Vaciar</button></div>
               <div class="st-es" hidden><b>En español:</b> <span></span></div></div></div>
           <div class="st-step st-matstep"><div class="st-h"><b>4</b> <span class="st-mt">Material de partida</span> <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
           <div class="st-step"><div class="st-h"><b class="st-n5">5</b> <span class="st-s5t">Formato y ajustes</span></div><div class="st-ratios"></div><div class="st-sets"></div>
@@ -89,7 +90,7 @@ export function initStudio(ctx) {
         </div>
         <div class="st-foot">
           <div class="st-qty" role="group" aria-label="Cantidad"><span>Cantidad</span><button type="button" data-d="-1" aria-label="Menos">−</button><output class="st-n">1</output><button type="button" data-d="1" aria-label="Más">+</button></div>
-          <button type="button" class="st-go" title="Generar (Ctrl + Enter desde la idea)">GENERAR</button>
+          <button type="button" class="st-go" title="Generar (Ctrl + Enter desde la idea)" aria-keyshortcuts="Control+Enter">GENERAR</button>
           <button type="button" class="st-sum" title="Cambiar el formato y los ajustes"></button>
           <div class="st-est"></div>
           <div class="st-refwarn" hidden role="status"><span></span><button type="button" data-refpass>Pasarlas a «Referencias»</button></div>
@@ -102,9 +103,9 @@ export function initStudio(ctx) {
           <label class="st-fwrap"><span>Mostrar</span><select class="st-fsel" aria-label="Mostrar en la galería"><option value="all">Todo</option><option value="fav">Favoritas</option><option value="you">Tuyas</option><option value="agent">De agentes</option><option value="video">Videos</option><option value="voice">Voz</option><option value="music">Música</option><option value="up">Subidas</option></select></label>
           <div class="st-folders" role="toolbar" aria-label="Carpetas: arrastra imágenes a una carpeta para guardarlas ahí"></div>
           <label class="st-qwrap">${svg('search')}<input type="search" class="st-q" placeholder="Buscar…" aria-label="Buscar en la galería"></label>
-          <button type="button" class="st-upbtn" title="Sube tus fotos o videos (producto, logo, personaje) para usarlos de referencia o animarlos" aria-label="Subir">${svg('up')}<span>Subir</span></button>
-          <button type="button" class="st-selbtn" aria-pressed="false" title="Elegir varias para descargarlas juntas, marcarlas o borrarlas" aria-label="Seleccionar">${svg('grid')}<span>Seleccionar</span></button>
-          <details class="st-gmas"><summary aria-label="Más: historial, papelera, motores" title="Historial, Papelera y Motores">${svg('dots')}</summary><div class="st-gmasl">
+          <button type="button" class="st-upbtn" title="Sube tus fotos o videos (producto, logo, personaje) para usarlos de referencia o animarlos" aria-label="Subir" data-tip="Subir">${svg('up')}<span>Subir</span></button>
+          <button type="button" class="st-selbtn" aria-pressed="false" title="Elegir varias para descargarlas juntas, marcarlas o borrarlas" aria-label="Seleccionar" data-tip="Seleccionar">${svg('grid')}<span>Seleccionar</span></button>
+          <details class="st-gmas"><summary aria-label="Más: historial, papelera, motores" title="Historial, Papelera y Motores" data-tip="Historial, Papelera, Motores">${svg('dots')}</summary><div class="st-gmasl">
             <button type="button" class="st-histbtn" title="Todos los trabajos de la última semana: hechos, fallados y cancelados, con el motivo">${svg('again')}<span>Historial</span></button>
             <button type="button" class="st-binbtn" title="Lo que mandaste a la papelera: vuelve con un clic durante 30 días">${svg('trash')}<span>Papelera</span></button>
             <button type="button" class="st-engbtn" title="Qué motores están listos y cómo activar los demás">${svg('spark')}<span>Motores y keys</span></button></div></details>
@@ -174,11 +175,11 @@ export function initStudio(ctx) {
   function fieldErr(where, text) { // V4.2 (audit A4): the field that is missing lights up and says so, in view — not a red line at the foot
     const step = where === 'slot' ? $('.st-matstep') : $('.st-prompt').closest('.st-step');
     step.classList.add('st-need'); step.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    if (where === 'slot') { const sl = el.querySelector('.st-slot.need') || el.querySelector('.st-slot'); if (sl) sl.querySelector('button')?.focus({ preventScroll: true }); say(text, true); }
-    else { const fe = $('.st-ferr'); fe.textContent = text; fe.hidden = false; $('.st-prompt').focus({ preventScroll: true }); say(''); }
+    if (where === 'slot') { const sl = el.querySelector('.st-slot.need') || el.querySelector('.st-slot'), b = sl && sl.querySelector('button'); $('.st-msg').id = 'stMsg'; if (b) { b.setAttribute('aria-describedby', 'stMsg'); b.focus({ preventScroll: true }); } say(text, true); } // IMG-25: the button that fixes it carries the reason
+    else { const fe = $('.st-ferr'); fe.id = 'stFerr'; fe.textContent = text; fe.hidden = false; const pr = $('.st-prompt'); pr.setAttribute('aria-invalid', 'true'); pr.setAttribute('aria-describedby', 'stFerr'); pr.focus({ preventScroll: true }); say(''); } // IMG-25
     showPane('gen');
   }
-  function clearFieldErr() { el.querySelectorAll('.st-need').forEach(n => n.classList.remove('st-need')); $('.st-ferr').hidden = true; }
+  function clearFieldErr() { el.querySelectorAll('.st-need').forEach(n => n.classList.remove('st-need')); $('.st-ferr').hidden = true; const pr = $('.st-prompt'); pr.removeAttribute('aria-invalid'); pr.removeAttribute('aria-describedby'); }
   const say = (t, bad) => { $('.st-msg').textContent = t; $('.st-msg').className = 'st-msg' + (bad ? ' bad' : ''); };
   const fmtDur = ms => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   const api = async (method, url, body) => { const r = await fetch(url, body === undefined ? { method } : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || r.statusText); return j; };
@@ -331,11 +332,11 @@ export function initStudio(ctx) {
     $('.st-mt').textContent = m.kind === 'image' ? 'Imágenes de referencia' : roles.some(([r]) => r === 'start' || r === 'end') ? 'Fotogramas y material' : 'Material de partida'; // the title says what this model takes
     $('.st-slots').innerHTML = roles.map(([r, n]) => `<div class="st-slot${(m.needs || []).includes(r) && !media[r].length ? ' need' : ''}" data-role="${r}">
         <div class="st-slot-h"><b>${roleName(r, m)}</b> <span>${roleHelp(r, m)}${n > 1 ? ` · ${media[r].length} de ${n}` : ''}</span></div>
-        <div class="st-chips">${media[r].map(f => `<span class="st-chip" data-f="${esc(f)}">${isVid(f) ? `<video src="${src(f)}" muted preload="metadata"></video>` : `<img src="${src(f)}" alt="">`}<button type="button" data-unslot="${esc(f)}" aria-label="Quitar">${svg('x')}</button></span>`).join('')}
+        <div class="st-chips">${media[r].map(f => `<span class="st-chip" data-f="${esc(f)}">${isVid(f) ? `<video src="${src(f)}" muted preload="metadata"></video>` : `<img src="${src(f)}" alt="">`}<button type="button" data-unslot="${esc(f)}" aria-label="Quitar" data-tip="Quitar">${svg('x')}</button></span>`).join('')}
           ${media[r].length < n ? `<button type="button" class="st-add" data-slot="${r}">${svg('up')}<span>Subir</span></button><button type="button" class="st-add" data-gpick="${r}">${svg('grid')}<span>De la galería</span></button>` : ''}</div></div>`).join('');
     const s = settingsOf(m), ent = Object.entries(m.settings);
     const ratio = m.settings.aspectRatio;
-    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="group" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-pressed="${String(s.aspectRatio) === v}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
+    $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars" role="radiogroup" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" role="radio" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}" data-ar="${esc(v)}" aria-checked="${String(s.aspectRatio) === v}" tabindex="${String(s.aspectRatio) === v ? 0 : -1}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>` : '';
     const ctl = ([k, f]) => {
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
       if (f.type === 'text') return k === 'voiceId' ? voicePicker(f, s[k]) : `<label class="st-lab">${LBL[k] || k}<input type="text" data-set="${k}" value="${esc(s[k] ?? '')}" maxlength="${+f.max || 2000}" placeholder="${esc(f.placeholder || '')}" autocomplete="off"></label>`; // V5.0
@@ -466,7 +467,7 @@ export function initStudio(ctx) {
     // light image swallowed it). IMG-09 (6 Oct 2026): the row is the file's primary actions (Editar, Variar, Descargar for a
     // picture) and «⋯» holds the rest by groups, from the same list as the viewer (src/studio-acciones.js).
     const ac = AC.acciones(it, capDe(it));
-    const row = ac.primarias.map(x => x.id === 'dl' ? `<a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar">${svg('down')}</a>`
+    const row = ac.primarias.map(x => x.id === 'dl' ? `<a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar" data-tip="Descargar">${svg('down')}</a>`
       : `<button type="button" data-a="${x.id}" class="st-oi st-oiw" aria-label="${esc(x.label)}: ${esc(label)}" title="${esc(x.title)}">${svg(x.icon)}<span class="st-oit">${esc(x.corto)}</span></button>`).join('');
     return `<figure class="st-card${on ? ' sel' : ''}${sub ? ' st-sub' : ''}${nuevos.has(it.file) ? ' st-nueva' : ''}" data-f="${esc(it.file)}" draggable="true">
       ${nuevos.has(it.file) ? '<span class="st-nuevo" aria-hidden="true">NUEVO</span>' : ''}
@@ -479,7 +480,7 @@ export function initStudio(ctx) {
       <div class="st-ov" role="group" aria-label="Acciones">
         ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla en la pieza «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? '✓ En la pieza' : 'Usar en la pieza'}</button>` : ''}
         ${row}
-        <button type="button" data-a="menu" class="st-oi st-more" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más: ${esc(ac.grupos.flatMap(g => g.items).map(x => x.corto.toLowerCase()).join(', '))} y la papelera">${svg('dots')}</button>
+        <button type="button" data-a="menu" class="st-oi st-more" data-tip="Más acciones" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más: ${esc(ac.grupos.flatMap(g => g.items).map(x => x.corto.toLowerCase()).join(', '))} y la papelera">${svg('dots')}</button>
       </div>
     </figure>`;
   }
@@ -1827,6 +1828,7 @@ export function initStudio(ctx) {
   el.addEventListener('mouseout', e => { const t = e.target.closest('.st-card .st-thumb'); if (t && !t.contains(e.relatedTarget)) { const v = t.querySelector('video'); if (v) { v.pause(); } } });
   el.addEventListener('keydown', e => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (!typing && ignorarTecla(e) && !e.target.closest('.st-menu, .st-mlist, .st-ars, .bk-lista, [role="listbox"], [role="menu"]')) return; // IMG-26: the owner turned single-key shortcuts off (a key inside a widget still moves in it)
     if (!typing && (e.key === '?' || (e.key === '/' && e.shiftKey))) return; // V4.2 (audit A48): the shortcuts sheet opens over the Estudio too
     if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey && /^[epgonu,]$/i.test(e.key) && $('.st-light').hidden && $('.st-hist').hidden && $('.st-binov').hidden && $('.st-vocov').hidden && $('.st-engov').hidden && !el.querySelector('.st-menu:not([hidden])')) return; // V4.5: the dock's keys reach the office — P and G switch views, O N U , open a window on top
     e.stopPropagation();
@@ -1849,6 +1851,8 @@ export function initStudio(ctx) {
       if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); its[e.key === 'Home' ? 0 : its.length - 1]?.focus(); return; }
       if (e.key === 'Escape' || e.key === 'Tab') { if (e.key === 'Escape') e.preventDefault(); closeMenus(); btn?.focus(); if (e.key === 'Escape') return; }
     }
+    const arg = e.target.closest && e.target.closest('.st-ars'); // IMG-28: the formats are one stop for Tab; the arrows move and choose
+    if (arg && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const bs = [...arg.querySelectorAll('[data-ar]')], i = bs.indexOf(e.target.closest('[data-ar]')); const n = e.key === 'Home' ? 0 : e.key === 'End' ? bs.length - 1 : (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; setSetting('aspectRatio', bs[n].dataset.ar); renderModel(); el.querySelector(`.st-ars [data-ar="${CSS.escape(bs[n].dataset.ar)}"]`)?.focus(); return; }
     const inList = e.target.closest && e.target.closest('.st-mlist');
     if (inList && e.target.tagName !== 'SELECT' && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { // V4.2 (audit A7): the model list moves with the arrows, like a real list
       const opts = [...inList.querySelectorAll('.st-mo:not([disabled])')], i = opts.indexOf(document.activeElement); e.preventDefault();

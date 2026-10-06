@@ -22,6 +22,7 @@ import { initEscena3d } from './escena3d.js';
 import { iconoSVG } from '../presets/iconos.mjs';
 import { cargarFabricaDemo } from './presets-fabrica.js';
 import * as K from './studio-banco-core.js';
+import { ignorar as ignorarTecla } from './teclas1.js'; // IMG-26: «/» is a single-key shortcut too
 
 // lo puro, con el mismo nombre de siempre (src/studio-lotes.js importa marca, anadir y usd de aquí)
 export * from './studio-banco-core.js';
@@ -398,7 +399,7 @@ export function initBanco(ctx) {
   file.addEventListener('change', async () => { const fs = [...file.files]; file.value = ''; if (!fs.length) return; const items = await subir(fs); if (items[0]) tomar(fileFor === 'ref' ? 'ref' : 'foto', items[0].file); });
   el.addEventListener('keydown', e => {
     if (e.key === 'Escape' && escape(e, false)) { e.preventDefault(); e.stopPropagation(); return; } // si no, el Estudio: cierra la hoja o el Estudio
-    if (e.key === '/' && !TYPING(e.target) && hojaBanco()) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
+    if (e.key === '/' && !TYPING(e.target) && !ignorarTecla(e) && hojaBanco()) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
   });
 
   /* eventos de la hoja */
@@ -429,7 +430,7 @@ export function initBanco(ctx) {
       if (n !== -1 && cs[n]) { e.preventDefault(); e.stopPropagation(); rov = cs[n].dataset.k; rovingListo(); cs[n].focus(); cs[n].scrollIntoView({ block: 'nearest' }); return; }
     }
     if (t.matches?.('.bk-qi') && e.key === 'ArrowDown') { const c = $$('.bk-card[tabindex="0"]') || $$('.bk-card'); if (c) { e.preventDefault(); e.stopPropagation(); c.focus(); } return; }
-    if (e.key === '/' && !TYPING(t)) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
+    if (e.key === '/' && !TYPING(t) && !ignorarTecla(e)) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
   });
   sheet.addEventListener('keyup', e => { if (e.target.classList?.contains('bk-card') && (e.key === ' ' || e.key === 'Spacebar')) e.preventDefault(); }); // Espacio no «pulsa» la tarjeta
 

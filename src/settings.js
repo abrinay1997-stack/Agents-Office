@@ -6,6 +6,7 @@
 // «Apariencia» (the theme: Claro by default, Oscuro, Automático) and «Atajos de teclado» (the list that was the ? sheet;
 // ? still opens it, here). Both apply at once, with no Guardar. The Estudio's caps are a server group («Estudio»).
 import { modal } from './modal.js';
+import { unaTeclaOn, setUnaTecla } from './teclas1.js'; // IMG-26 (6 Oct 2026)
 
 const DEPT = { emails: 'Correos', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', fin: 'Finanzas', delivery: 'Entregas' };
 export function initSettings({ served, esc, keys = [], runKey, theme }) {
@@ -28,7 +29,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
       <fieldset class="sg-theme"><legend>Tema</legend>${opt('light', 'El de siempre. Es el predeterminado.')}${opt('dark', 'Para la noche o una sala a oscuras.')}${opt('auto', `Sigue a tu sistema y cambia con él (ahora: ${sys}).`)}</fieldset>
       <p class="sg-lead">¿Grabas la pantalla? El modo cámara (tecla V) pone un fondo neutro que no se quema en video.</p>`;
   }
-  const keysHTML = () => `<div class="sg-keys"><p class="sg-lead">Funcionan cuando no estás escribiendo. Pulsa una línea para hacerlo ahora. <kbd>?</kbd> abre esta lista desde cualquier sitio.</p>
+  const keysHTML = () => `<div class="sg-keys"><label class="sg-k1"><input type="checkbox" class="sg-k1c"${unaTeclaOn() ? ' checked' : ''}> <span><b>Atajos de una tecla</b> (una letra sola, sin Ctrl). Apágalos si usas control por voz o si a veces pulsas teclas sin querer: Ctrl + K, Esc y las flechas siguen.</span></label><p class="sg-lead">Funcionan cuando no estás escribiendo. Pulsa una línea para hacerlo ahora. <kbd>?</kbd> abre esta lista desde cualquier sitio.</p>
     <div class="ks-grid">${keys.map(([h, rows]) => `<section><h3>${esc(h)}</h3>${rows.map(([k, t, key]) => key
       ? `<button type="button" class="ks-row" data-key="${esc(key)}"><kbd>${esc(k)}</kbd><span>${esc(t)}</span></button>`
       : `<div class="ks-row"><kbd>${esc(k)}</kbd><span>${esc(t)}</span></div>`).join('')}</section>`).join('')}</div></div>`;
@@ -126,6 +127,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
     const t = e.target.closest('[role=tab]'); if (t && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); const l = [...el.querySelectorAll('[role=tab]')], i = l.indexOf(t), n = l[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + l.length) % l.length]; n.click(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
   });
+  el.addEventListener('change', e => { if (e.target.classList?.contains('sg-k1c')) { setUnaTecla(e.target.checked); msg(e.target.checked ? 'Atajos de una tecla encendidos.' : 'Atajos de una tecla apagados: solo Ctrl + K, Esc y las flechas.'); return; } }); // IMG-26
   el.addEventListener('change', e => { // Apariencia: the theme applies at once, remembered in this browser
     if (e.target.name !== 'sgTheme' || !theme) return;
     theme.set(e.target.value); msg(`Tema: ${THEME_NAME[e.target.value] || e.target.value}. Se recuerda en este navegador.`);
