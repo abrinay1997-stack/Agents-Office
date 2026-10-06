@@ -212,6 +212,9 @@ try {
   await p.click(`${S} [data-nivel="avanzado"]`); await p.waitForSelector(`${S} .bk-doors`, { timeout: 20000 }); await p.waitForTimeout(800);
   await p.evaluate(() => document.querySelector('#studioOv .st-scroll').scrollTop = 0);
   await shot(p, '15-avanzado');
+  await p.waitForFunction(() => document.querySelectorAll('#studioOv .bk-slotr img').length >= 1, null, { timeout: 8000 }).catch(() => {});
+  const mat = await p.evaluate(() => ({ refsBanco: document.querySelectorAll('#studioOv .bk-slotr img').length, paso4: !!document.querySelector('#studioOv .st-matstep')?.offsetParent }));
+  ok('IMG-39 · al entrar en Avanzado, tu referencia pasa a «Tu foto · Referencias»: un solo Material', mat.refsBanco >= 1 && !mat.paso4, JSON.stringify(mat));
   await p.evaluate(() => document.querySelector('#studioOv .st-ars')?.scrollIntoView({ block: 'center' }));
   const ars = await p.evaluate(() => { const g = document.querySelector('#studioOv .st-ars'); return { rol: g?.getAttribute('role'), paradas: [...g.querySelectorAll('[data-ar]')].filter(b => b.tabIndex === 0).length, marcado: g.querySelector('[aria-checked="true"]')?.dataset.ar }; });
   await p.focus(`${S} .st-ars [aria-checked="true"]`); await p.keyboard.press('ArrowRight'); await p.waitForTimeout(150);
@@ -238,7 +241,7 @@ try {
   const first = p.locator(`${S} .st-bank .bk-card, ${S} .st-bank [role=option]`).first(); await first.click().catch(() => {}); await p.waitForTimeout(800);
   await shot(p, '18-banco-preset-elegido');
   const conPreset = await p.evaluate(() => ({ aviso: document.querySelector('#studioOv .st-refwarn')?.hidden === false ? document.querySelector('#studioOv .st-refwarn').innerText : '', go: document.querySelector('#studioOv .st-go').textContent, aria: document.querySelector('#studioOv .st-go').getAttribute('aria-describedby'), n5: document.querySelector('#studioOv .st-n5').textContent }));
-  ok('IMG-39 · con un preset, las referencias del paso 4 que no se usan se dicen, con cómo pasarlas', /no se usa/.test(conPreset.aviso) && /Pasarlas/.test(conPreset.aviso), JSON.stringify(conPreset));
+  ok('IMG-39 · con un preset, nada queda escondido: no hay referencias sin usar que avisar', !conPreset.aviso, JSON.stringify(conPreset));
   ok('IMG-41 · GENERAR dice lo que falta', conPreset.go === 'Falta tu foto' && conPreset.aria === 'stEst', conPreset.go);
   ok('IMG-39 · los pasos siguen sin hueco con presets', conPreset.n5 === '4', conPreset.n5);
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
@@ -246,9 +249,43 @@ try {
   await p.click(`${S} .st-go`); await p.waitForTimeout(900);
   const trasGo = await p.evaluate(() => ({ rojo: !!document.querySelector('#studioOv .bk-falta')?.offsetParent, foco: document.activeElement?.dataset?.f || '' }));
   ok('IMG-41 · su clic lleva a lo que falta y la pista pasa a rojo', trasGo.rojo && trasGo.foco === 'sub-foto', JSON.stringify(trasGo));
-  await p.locator(`${S} [data-refpass]`).click(); await p.waitForTimeout(800);
   const pasadas = await p.evaluate(() => ({ aviso: !document.querySelector('#studioOv .st-refwarn').hidden, refsBanco: document.querySelectorAll('#studioOv .bk-slotr img').length }));
-  ok('IMG-39 · «Pasarlas a Referencias» las lleva al banco', !pasadas.aviso && pasadas.refsBanco >= 1, JSON.stringify(pasadas));
+  ok('IMG-39 · las referencias siguen en el banco con un preset elegido', !pasadas.aviso && pasadas.refsBanco >= 1, JSON.stringify(pasadas));
+  // ===== Fase 6 =====
+  await p.locator(`${S} button:has-text("Banco"):visible`).first().click(); await p.waitForTimeout(800);
+  const hoja = await p.evaluate(() => { const ov = document.querySelector('#studioOv'), bk = ov.querySelector('.st-gal > .st-bank:not([hidden])'), g = ov.querySelector('.st-grid'); if (!bk || !g) return { bk: !!bk };
+    const a = bk.getBoundingClientRect(), b = g.getBoundingClientRect(); return { clase: ov.classList.contains('st-hoja'), banco: Math.round(a.left), galeria: Math.round(b.right), visible: b.width > 200 }; });
+  await shot(p, '18c-banco-al-lado');
+  ok('IMG-42 · a 1440 el banco va al lado: la galería se sigue viendo', hoja.clase && hoja.visible && hoja.galeria <= hoja.banco + 1, JSON.stringify(hoja));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  const tarjeta = await p.evaluate(() => ({ marca: document.querySelectorAll('#studioOv .st-bank .bk-marca, #studioOv .bk-card .bk-tag').length }));
+  report.tarjetasPreset = tarjeta;
+  // IMG-47: B desde Básico pasa a Avanzado y lo dice, con VOLVER A BÁSICO
+  await p.click(`${S} [data-nivel="basico"]`); await p.waitForTimeout(300); const focoNivel = await p.evaluate(() => document.activeElement?.dataset?.nivel || document.activeElement?.tagName); await p.keyboard.press('b'); await p.waitForTimeout(900);
+  const bt = await p.evaluate(() => ({ nivel: document.querySelector('#studioOv [data-nivel="avanzado"]').getAttribute('aria-pressed'), toast: document.querySelector('#studioOv .st-toast:not([hidden])')?.innerText || '', cls: document.querySelector('#studioOv').className, act: document.activeElement?.className, k1: localStorage.getItem('ao.keys1'), abiertos: [...document.querySelectorAll('#studioOv .st-hist, #studioOv .st-light, #studioOv .st-menu')].filter(x => !x.hidden).map(x => x.className) }));
+  ok('IMG-28 · tras pulsar «Básico» el foco pasa a «Avanzado» (el botón pulsado se oculta)', focoNivel === 'avanzado', focoNivel);
+  ok('IMG-47 · B desde Básico pasa a Avanzado y lo dice, con VOLVER A BÁSICO', bt.nivel === 'true' && /Pasaste a Avanzado/.test(bt.toast) && /VOLVER A BÁSICO/.test(bt.toast), JSON.stringify(bt));
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300);
+  // IMG-46: una plantilla con cualquier configuración
+  await p.fill(`${S} .st-prompt`, 'fondo blanco, luz suave'); await p.evaluate(() => document.querySelector('#studioOv .st-plant').scrollIntoView({ block: 'center' }));
+  await p.click(`${S} .st-plsave`); await p.fill(`${S} .st-plname`, 'Catálogo 4:5'); await p.keyboard.press('Enter'); await p.waitForTimeout(800);
+  const pl = await p.evaluate(() => ({ opciones: [...document.querySelectorAll('#studioOv .st-plsel option')].map(o => o.textContent), elegida: document.querySelector('#studioOv .st-plsel').value }));
+  await shot(p, '18d-plantilla');
+  await p.fill(`${S} .st-prompt`, 'otra cosa'); await p.selectOption(`${S} .st-plsel`, ''); await p.selectOption(`${S} .st-plsel`, pl.elegida); await p.waitForTimeout(400);
+  const pl2 = { prompt: await p.inputValue(`${S} .st-prompt`), toast: await p.evaluate(() => document.querySelector('#studioOv .st-toast:not([hidden])')?.innerText || '') };
+  const nota = fs.existsSync(path.join(brain, 'Estudio', 'Plantillas')) ? fs.readdirSync(path.join(brain, 'Estudio', 'Plantillas')).filter(f => f.endsWith('.md')) : [];
+  ok('IMG-46 · «Guardar como plantilla» guarda cualquier configuración como nota del Cerebro y se carga con DESHACER', pl.opciones.includes('Catálogo 4:5') && nota.length === 1 && pl2.prompt === 'fondo blanco, luz suave' && /DESHACER/.test(pl2.toast), JSON.stringify({ pl, nota, pl2 }));
+  // IMG-14: Comparar 2 de la galería
+  await p.click(`${S} .st-selbtn`); await p.waitForTimeout(300);
+  const cks = p.locator(`${S} .st-grid .st-card:not(.st-gcard) .st-ck input:visible`); await cks.nth(0).check().catch(() => {}); await cks.nth(1).check().catch(() => {}); await p.waitForTimeout(300);
+  const cmpOn = await p.evaluate(() => ({ n: document.querySelector('#studioOv .st-seln')?.textContent, dis: document.querySelector('#studioOv .st-selbar [data-b="cmp"]')?.disabled }));
+  await p.click(`${S} .st-selbar [data-b="cmp"]`).catch(() => {}); await p.waitForTimeout(600); await shot(p, '18e-comparar');
+  const cm = await p.evaluate(() => { const d = document.querySelector('#studioOv .st-cmpov'), b = d?.querySelector('.st-cmpbar'); return { abierto: d && !d.hidden, imgs: d ? d.querySelectorAll('img').length : 0, foco: document.activeElement === b, v: b?.getAttribute('aria-valuenow') }; });
+  await p.keyboard.press('ArrowLeft'); await p.keyboard.press('ArrowLeft'); const v2 = await p.evaluate(() => document.querySelector('#studioOv .st-cmpbar')?.getAttribute('aria-valuenow'));
+  await axe(p, 'comparar', '#studioOv .st-cmpov');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(300); const cerrado = await p.evaluate(() => document.querySelector('#studioOv .st-cmpov').hidden && document.querySelector('#studioOv').classList.contains('on'));
+  ok('IMG-14 · con 2 seleccionadas, «Comparar» abre la cortina; ← la mueve y Esc la cierra sin cerrar el Estudio', !cmpOn.dis && cm.abierto && cm.imgs === 2 && cm.foco && v2 === '40' && cerrado, JSON.stringify({ cmpOn, cm, v2, cerrado }));
+  await p.click(`${S} .st-selbar [data-b="none"]`).catch(() => {}); await p.click(`${S} [data-pt="gen"]`).catch(() => {}); await p.waitForTimeout(300);
   await p.locator(`${S} button:has-text("Banco"):visible`).first().click(); await p.waitForTimeout(600);
   report.trasPreset = await p.evaluate(() => ({ est: document.querySelector('#studioOv .st-est')?.textContent, go: document.querySelector('#studioOv .st-go')?.textContent, p3: document.querySelector('#studioOv .st-p3t')?.textContent, modo: document.querySelector('#studioOv .bk-modo')?.textContent }));
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);

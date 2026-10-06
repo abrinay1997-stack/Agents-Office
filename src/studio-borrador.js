@@ -40,7 +40,7 @@ export function pedidoVariar(it, models, { respaldo = null, settingsDe = () => (
   if (!m) return { error: 'Ningún modelo encendido acepta una imagen de referencia para variarla.' };
   const base = { ...settingsDe(m) }, previos = m.id === it.model ? it.settings || {} : {};
   const settings = { ...base };
-  for (const [k, v] of Object.entries(previos)) { const f = m.settings?.[k]; if (!f) continue; if (f.type === 'enum' && !f.values.includes(String(v))) continue; settings[k] = v; }
+  for (const [k, v] of Object.entries(previos)) { const f = m.settings?.[k]; if (!f || k === 'seed') continue; /* IMG-45: Variar is another one, so never the same seed */ if (f.type === 'enum' && !f.values.includes(String(v))) continue; settings[k] = v; }
   // con otro modelo, el formato de la imagen se conserva si ese modelo lo hace
   const ar = it.settings?.aspectRatio; if (m.id !== it.model && ar && m.settings?.aspectRatio?.values?.includes(String(ar))) settings.aspectRatio = ar;
   return {

@@ -77,7 +77,7 @@ const falImg = (id, name, cost, text, edit, maxRefs, note, extra = s => ({})) =>
    field or a value Higgsfield refuses (Hailuo at 5 s, LTX at 1:1, Seedance 2.5 with output_format…). */
 const HFS = (() => { try { return JSON.parse(fs.readFileSync(new URL('../higgsfield-schemas.json', import.meta.url), 'utf8')).endpoints || {}; } catch { return {}; } })();
 export const hfSchemas = () => HFS;
-const HF_SET = { aspect_ratio: 'aspectRatio', resolution: 'resolution', duration: 'duration', mode: 'mode', quality: 'quality', rendering_speed: 'renderingSpeed', batch_size: 'batchSize',
+const HF_SET = { seed: 'seed', aspect_ratio: 'aspectRatio', resolution: 'resolution', duration: 'duration', mode: 'mode', quality: 'quality', rendering_speed: 'renderingSpeed', batch_size: 'batchSize',
   generate_audio: 'generateAudio', sound: 'sound', enhance_prompt: 'enhancePrompt', prompt_optimizer: 'promptOptimizer', prompt_extend: 'promptExtend', cfg_scale: 'cfgScale', keep_original_sound: 'keepOriginalSound',
   character_orientation: 'characterOrientation', camera_movement: 'cameraMovement', fps: 'fps', genre: 'genre', era: 'era', light: 'light', pacing: 'pacing', camera_model: 'cameraModel', camera_lens: 'cameraLens',
   camera_aperture: 'cameraAperture', color_palette: 'colorPalette', bitrate_mode: 'bitrateMode', output_format: 'outputFormat' };
@@ -135,6 +135,7 @@ function hfSettings(kind, routes) {
   }
   const out = {};
   for (const [key, a] of Object.entries(acc)) {
+    if (key === 'seed') { out.seed = T('', 10, 'Al azar'); continue; } // IMG-45 (Fase 6): empty = a new one each time; a number repeats the result. Never a slider
     if (a.sw) { out[key] = B(typeof a.def === 'boolean' ? a.def : YESNO[a.name] ? a.def === YESNO[a.name][0] : false); continue; }
     if (a.num && Number.isFinite(a.min)) { if (key === 'duration' && a.min < 1) a.min = 1; const d = a.def ?? a.min; out[key] = R(a.min, a.max, Math.min(a.max, Math.max(a.min, d)), a.real ? 0.01 : undefined); continue; }
     if (!a.vals.length) continue;

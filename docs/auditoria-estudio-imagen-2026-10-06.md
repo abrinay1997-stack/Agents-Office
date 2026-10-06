@@ -9,7 +9,7 @@ Pedido: auditoría integral de UX, UI, usabilidad, intuitividad, funcionalidad, 
 - **Código:** se leyeron `src/studio.js`, `src/studio-banco*.js`, `src/escena3d*.js` y sus estilos.
 - **Para repetirlo:** `node scripts/estudio-imagen-recorrido.mjs`. Las capturas van a `data/capturas/estudio-imagen/`, que no viaja por GitHub.
 
-**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 🟡 en lo mínimo) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-24 🟡) la **Fase 4** (IMG-25 a 30 ✅) y la **Fase 5** (IMG-31 a 38 ✅; IMG-21 completo). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
+**Estado al 6 oct 2026:** hechas la **Fase 1** (IMG-01, 02, 03, 04, 05, 06, 19, 40, 41 ✅; IMG-39 en lo mínimo, completo en la Fase 6) la **Fase 2** (IMG-07, 08, 09, 10, 23, 48, 49, 50, 52 ✅) la **Fase 3** (IMG-11, 13, 15, 16, 17, 18, 20, 22 ✅; IMG-24 🟡) la **Fase 4** (IMG-25 a 30 ✅) la **Fase 5** (IMG-31 a 38 ✅; IMG-21 completo) y la **Fase 6** (IMG-14, 39, 42, 43, 44, 46, 47 ✅; IMG-45 🟡). `node scripts/estudio-imagen-recorrido.mjs` comprueba cada uno en el navegador. Lo demás, ⏳ pendiente.
 
 **Estado de cada punto:** ✅ hecho · 🟡 en parte · ⏳ pendiente. Al arreglar uno, se marca ✅ en este archivo en el mismo commit (regla 5 de CLAUDE.md).
 
@@ -213,13 +213,14 @@ El Estudio ya pasó cuatro auditorías y se nota. axe-core no encuentra **ningun
 - **Hecho (6 oct, Fase 3):** el día dice «Hoy 3 archivos · 1 en curso · 1 falló»: la ficha de un trabajo ya no cuenta como archivo.
 - **Prioridad:** Fase 3.
 
-### IMG-14 · 🟡 medio · ⏳ — No hay manera de comparar
+### IMG-14 · 🟡 medio · ✅ — No hay manera de comparar
 - **Dónde:** el visor.
 - **Evidencia:** el antes y después solo existe en Lotes (`lt-ab`, `src/studio-lotes.js:472`). Una versión hecha con «Editar» se abre por separado, y no hay comparación lado a lado de un pedido.
 - **Impacto:** comparar es el corazón del flujo profesional (editar → ¿mejoró?).
 - **Solución:**
   - Reutilizar `lt-ab` en el visor cuando la imagen tiene `versionOf` o `versions`.
   - Con 2 a 4 seleccionadas, añadir «Comparar» en la barra de selección.
+- **Hecho (6 oct, Fase 6):** «Comparar» en la barra de selección (2 a 4 imágenes) y «Comparar con la original / con su versión» en el visor (`src/studio-comparar.js`, con test). Dos imágenes: una cortina que se arrastra o se mueve con ← → Inicio Fin (un `slider` con su valor); tres o cuatro: cuadrícula. Esc la cierra sin cerrar el Estudio.
 - **Prioridad:** Fase 6.
 
 ---
@@ -512,7 +513,7 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
 | Herramientas de edición | Solo texto | Visor → Editar | Añadir zona (IMG-45) |
 | Comparar | Solo en Lotes | — | IMG-14 |
 
-### IMG-39 · 🔴 crítico · 🟡 en parte (Fase 1) — Dos sistemas de referencias; con un preset, las tuyas se esconden y no se usan
+### IMG-39 · 🔴 crítico · ✅ — Dos sistemas de referencias; con un preset, las tuyas se esconden y no se usan
 - **Dónde:** el banco (`src/studio-banco.js`: «Tu foto», «Referencias») y el paso 4 del compositor. `src/css/estudio-banco.css:125` oculta `.st-matstep` con `#studioOv.st-banco-on`; `bancoManda()` → `banco.generar()` usa `st.foto` y `st.refs` del banco, no `media.reference`.
 - **Evidencia:** en Avanzado se ven las dos cosas a la vez: «TU FOTO · se conserva», «REFERENCIAS · se imita…» y «4 Imágenes de referencia · 1 de 14» con la imagen verde (`avanzado.pasos`, captura `16`). Al elegir un preset, el paso 4 desaparece con la imagen dentro, y los pasos saltan de «3» a «5» (captura `18`).
 - **Impacto:** el usuario pone su referencia, elige un preset, genera, y su referencia **no se usó**, sin ningún aviso. Dos lugares para el mismo concepto.
@@ -524,6 +525,7 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
 
   Básico enseña solo «+ Imagen», que es rol automático: con un preset que necesita foto, es «Tu foto»; si no, «Estilo». Avanzado deja elegir el rol con un menú en cada miniatura. El banco y el compositor leen el mismo estado, y nada se esconde con material dentro. Un test que falle si `.st-banco-on` oculta algo que contiene archivos.
 - **Hecho en la Fase 1 (6 oct):** con un preset activo y referencias en el paso 4, un aviso junto a GENERAR lo dice y «Pasarlas a «Referencias»» las lleva al banco (`banco.anadirRefs`). Los pasos ya no saltan de 3 a 5. **Falta (Fase 6):** la fusión en un solo bloque «Material» con roles.
+- **Hecho (6 oct, Fase 6):** un solo Material. Al pasar a Avanzado, las referencias del compositor van a «Tu foto · Referencias» del banco (la puerta «Desde cero» pasa a «Copiar de una referencia», como ya hacía la foto) y el paso del compositor desaparece salvo que guarde algo que no cupo. GENERAR sin presets en Avanzado usa ese material, o dice por qué no si el modelo no acepta imágenes. «Usar de referencia» en Avanzado va al banco. Al volver a Básico, el material vuelve al compositor: nada queda escondido (`material`, `vaciarMaterial` en `src/studio-banco.js`). El aviso «Pasarlas a Referencias» de la Fase 1 queda para lo que no cupo.
 - **Prioridad:** Fase 1 (lo mínimo: el plan del banco usa `media.reference` o avisa «Tus 2 referencias no se usan con este preset»), y Fase 6 (la fusión completa).
 
 ### IMG-40 · 🔴 crítico · ✅ — Entrada contradictoria y un error antes de tocar nada
@@ -543,12 +545,13 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
 - **Hecho (6 oct, Fase 1):** GENERAR dice «Falta tu foto» o «Falta la referencia» (`botonBloqueado`, con test), y su clic lleva y da el foco a lo que falta. **Cambio respecto a la propuesta:** sin `aria-disabled`, porque el botón sí hace algo (lleva a lo que falta); va con `aria-describedby` a la explicación.
 - **Prioridad:** Fase 1.
 
-### IMG-42 · 🟠 alto · ⏳ — El banco y el escenario tapan la galería
+### IMG-42 · 🟠 alto · ✅ — El banco y el escenario tapan la galería
 - **Evidencia:** la hoja `.st-bank` ocupa toda la columna de la galería (capturas `17`, `19`). Mientras eliges una receta, no ves tu foto, tus referencias ni los resultados. Con Dimitri abierto, la columna es aún más estrecha.
 - **Solución:** la hoja como **panel lateral** de unos 420 px que reduce la galería (ya mide su ancho con `@container bk`), o un selector grande con vista previa de la receta **sobre tu foto**. En el teléfono, la hoja inferior a pantalla completa está bien.
+- **Hecho (6 oct, Fase 6):** desde 1100 px el banco y el escenario son un panel lateral de 460 px y la galería se encoge a su lado (`#studioOv.st-hoja`); en el teléfono sigue la hoja a pantalla completa.
 - **Prioridad:** Fase 6.
 
-### IMG-43 · 🟡 medio · ⏳ — Ruido en las tarjetas de preset
+### IMG-43 · 🟡 medio · ✅ — Ruido en las tarjetas de preset
 - **Evidencia:**
   - Las 127 tarjetas dicen «beta», y muchas «receta» en una píldora.
   - «necesita tu foto · la IA y aquí se garantiza» no se entiende.
@@ -558,17 +561,19 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
   - «receta» como icono de capas con el tooltip «Combina varios pasos».
   - Tres niveles de garantía en palabras claras: «Gratis, en tu equipo» · «Con IA» · «Con IA · se comprueba el fondo blanco».
   - La estrella, dentro de la tarjeta.
+- **Hecho (6 oct, Fase 6):** «en beta» una sola vez, en la cabecera del banco; «receta» es un icono de capas con «Combina varios pasos»; tres niveles en palabras claras («gratis · en tu equipo», «con IA (rehace la imagen)», «con IA · se comprueba el resultado»); la estrella va dentro de la tarjeta.
 - **Prioridad:** Fase 6.
 
-### IMG-44 · 🟡 medio · ⏳ — Escenario 3D: duplica el formato y habla como un fotógrafo
+### IMG-44 · 🟡 medio · ✅ — Escenario 3D: duplica el formato y habla como un fotógrafo
 - **Evidencia:** «Proporción del cuadro» repite el Formato del compositor y añade 1.91:1, que el modelo puede no hacer. En el primer nivel hay lente (mm), altura (m), alrededor (°), giro y «Subir el producto» (`escena`, captura `19`).
 - **Solución:**
   - Primer nivel: **Toma** y **Distancia** (ya existen como chips) y las medidas del producto.
   - «Cámara (ajuste fino)», plegado.
   - Sin selector de proporción: se muestra la del compositor, con «cambiar», que lleva allí.
+- **Hecho (6 oct, Fase 6):** Toma, Distancia y las medidas en el primer nivel; «Cámara (ajuste fino)» plegado; la proporción ya no es un selector: se muestra la del Formato del compositor y dice que se cambia allí.
 - **Prioridad:** Fase 6.
 
-### IMG-45 · 🟡 medio · ⏳ — Faltan controles técnicos para los profesionales
+### IMG-45 · 🟡 medio · 🟡 en parte — Faltan controles técnicos para los profesionales
 - **Evidencia:** no hay semilla, prompt negativo, fidelidad a la referencia ni máscara (`grep seed|negative|guidance|strength|mask media/catalogo.mjs` = 0 ajustes). «Editar» es solo texto. Solo en Lotes se puede comparar.
 - **Impacto:** un profesional no puede reproducir un resultado ni editar una zona concreta.
 - **Solución:** no añadirlo todo, solo lo que da control real, en un grupo plegable «Técnico»:
@@ -576,16 +581,19 @@ El banco (127 presets, 13 grupos) y el escenario 3D se abren como una **hoja que
   2. **Fidelidad a tu foto**: Suave/Normal/Fuerte, generalizado fuera de los presets.
   3. **Zona** en Editar: un pincel o rectángulo sobre la imagen en el visor. Con modelos de máscara (GPT Image, Flux Kontext en fal) se manda la máscara; con Nano Banana, la zona se traduce a texto («en la esquina superior derecha»).
   4. **Prompt negativo**, solo donde el modelo lo admite; si no, no se muestra.
+- **Hecho (6 oct, Fase 6):** la **semilla**, solo en los modelos que la documentan (12 de Higgsfield: Soul, Soul 2, Soul Cinema, Qwen Image 3, Z-Image Turbo, Wan, PixVerse 6, Happy Horse), en «Más ajustes»: vacía = al azar; un número repite el resultado; «Repetir» la conserva y «Variar» nunca la copia (`tests/studio-semilla.test.mjs`). **Falta:** la fidelidad fuera de los presets, la zona en Editar y el prompt negativo (ningún modelo del catálogo lo expone hoy; hay que añadirlo desde los esquemas de cada motor y probarlo con una key real).
 - **Prioridad:** Fase 6.
 
-### IMG-46 · 🟡 medio · ⏳ — Solo se guarda lo que tiene receta
+### IMG-46 · 🟡 medio · ✅ — Solo se guarda lo que tiene receta
 - **Evidencia:** «Guardar esta receta como preset…» solo aparece con un preset activo. No se puede guardar «Nano Banana 2 · 4:5 · 2K · ×4 · estilo de marca» como plantilla.
 - **Solución:** «Guardar como plantilla» con cualquier configuración del compositor (modelo, formato, tamaño, cantidad, material de estilo, receta y prompt base), como nota del Cerebro, igual que los presets.
+- **Hecho (6 oct, Fase 6):** «Guardar como plantilla…» al final de «Formato y ajustes» guarda modelo, formato y ajustes, cantidad, la idea y las imágenes de referencia como nota del Cerebro (`Estudio/Plantillas/<nombre>.md`, `plantillas.mjs`, `/api/media/plantillas`, `tests/plantillas.test.mjs`). Elegir una la carga con DESHACER; borrar la manda a `.papelera`. En la demo vive en el navegador.
 - **Prioridad:** Fase 6.
 
-### IMG-47 · 🟢 bajo · ⏳ — La tecla B cambia el modo sin preguntar
+### IMG-47 · 🟢 bajo · ✅ — La tecla B cambia el modo sin preguntar
 - **Evidencia:** B pasa a Avanzado y abre el banco (`src/studio.js:1733`).
 - **Solución:** que lo diga en un aviso: «Pasé a Avanzado para abrir el banco · Volver a Básico».
+- **Hecho (6 oct, Fase 6):** B desde Básico pasa a Avanzado y lo dice: «Pasaste a Avanzado: aquí vive el banco de presets» con VOLVER A BÁSICO. Además, al pulsar «Básico» el foco pasa a «Avanzado» (el botón pulsado se oculta) y una elección pendiente del banco se cancela.
 - **Prioridad:** Fase 6.
 
 **Qué debe estar visible, plegado o fuera, en Avanzado:**

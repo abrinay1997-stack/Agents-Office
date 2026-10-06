@@ -13,11 +13,12 @@ const byId = new Map(fab.presets.map(p => [p.id, p]));
 const P = id => byId.get(id);
 
 test('la marca de la tarjeta dice en texto cómo se hace (§7.4)', () => {
-  assert.equal(B.marca(P('luz-mas-clara')), 'gratis · en tu máquina');
+  assert.equal(B.marca(P('luz-mas-clara')), 'gratis · en tu equipo');
   assert.equal(B.marca(P('luz-mas-clara'), { sharp: false }), 'no disponible en esta máquina');
   assert.match(B.marca(P('fondo-blanco')), /necesita tu foto/);
   assert.equal(B.marca(P('esc-sala'), { sirve: { on: false } }), 'sin motor: actívalo');
-  assert.match(B.marca(P('ref-estilo')), /la IA rehace la imagen/i, 'la honestidad del preset, en texto');
+  assert.match(B.marca(P('ref-estilo')), /con IA|rehace la imagen/i, 'la honestidad del preset, en texto');
+  assert.doesNotMatch(B.marca(P('fondo-blanco')), /aquí se garantiza/, 'IMG-43: sin la frase que no se entendía');
 });
 
 test('la portada: favoritos, de PanaClaw, recientes y las estrella que encajan con la puerta', () => {
@@ -204,9 +205,11 @@ test('IMG-40: la línea «Ahora» no contradice a la puerta y lo que falta es pi
   assert.equal(a.grave, false, 'sin haber intentado nada, no es un error');
   assert.equal(K.estadoPuerta(vacio, { intentado: true }).grave, true);
   const conFoto = K.estadoPuerta({ ...vacio, foto: 'f.png' }, { intentado: true });
-  assert.equal(conFoto.falta, ''); assert.equal(conFoto.grave, false); assert.equal(conFoto.etiqueta, 'Sobre tu foto');
+  assert.equal(conFoto.falta, ''); assert.equal(conFoto.grave, false); assert.equal(conFoto.etiqueta, 'Mejorar mi foto', 'cumplida, con las palabras de la puerta (Fase 6)');
   assert.equal(K.estadoPuerta({ puerta: 'cero', foto: null, refs: [], pila: [] }).etiqueta, 'Desde cero');
   assert.match(K.estadoPuerta({ puerta: 'ref', foto: null, refs: [], pila: [] }).falta, /referencia/);
+  const ref = K.estadoPuerta({ puerta: 'ref', foto: null, refs: [{ id: 'r.png' }], pila: [] }); // IMG-39/40 (Fase 6): la puerta cumplida se nombra con sus palabras
+  assert.equal(ref.etiqueta, K.PUERTAS.find(p => p.id === 'ref').es); assert.equal(ref.falta, '');
 });
 
 test('IMG-41: GENERAR dice lo que falta cuando el plan no se puede hacer', () => {

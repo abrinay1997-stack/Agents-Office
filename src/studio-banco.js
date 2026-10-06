@@ -184,7 +184,7 @@ export function initBanco(ctx) {
   /* ---------- la hoja: el banco o el escenario ---------- */
   function cards(ids, sec) {
     return `<ul class="bk-cards" data-sec="${esc(sec)}">${ids.map(id => byId.get(id)).filter(Boolean).map(p => { const on = st.pila.some(x => x.id === p.id), s = info.get(p.id), k = `${sec}|${p.id}`, mid = `${U}-m-${sec}-${p.id}`.replace(/[^\w-]/g, '_');
-      return `<li class="bk-cw"><button type="button" class="bk-card" data-pid="${esc(p.id)}" data-k="${esc(k)}" data-f="card-${esc(k)}" tabindex="-1" aria-pressed="${on}" aria-describedby="${mid}"><span class="bk-ci">${ico(p)}</span><span class="bk-cn"><b>${esc(p.nombre)}${p.capa === 'receta' ? ' <span class="bk-rc">receta</span>' : ''}</b>${p.tecnico ? `<small>${esc(p.tecnico)}</small>` : ''}<small class="bk-mk bk-mk-${K.tipoMarca(p, { sharp, sirve: s })}" id="${mid}">${esc(K.marca(p, { sharp, sirve: s }))}${p.estado === 'beta' ? ' · beta' : ''}</small></span></button><button type="button" class="bk-star" data-star="${esc(p.id)}" tabindex="-1" aria-pressed="${fav.has(p.id)}" aria-label="Favorito: ${esc(p.nombre)}" title="${fav.has(p.id) ? 'Quitar de favoritos' : 'Marcar favorito'} (Espacio)">${fav.has(p.id) ? '★' : '☆'}</button></li>`; }).join('')}</ul>`;
+      return `<li class="bk-cw"><button type="button" class="bk-card" data-pid="${esc(p.id)}" data-k="${esc(k)}" data-f="card-${esc(k)}" tabindex="-1" aria-pressed="${on}" aria-describedby="${mid}"><span class="bk-ci">${ico(p)}</span><span class="bk-cn"><b>${esc(p.nombre)}${p.capa === 'receta' ? ` <span class="bk-rc" title="Receta: combina varios pasos">${iconoSVG('M12 3 3 7.5l9 4.5 9-4.5L12 3zM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5', { tam: 13 })}<span class="bk-sr">receta</span></span>` : ''}</b>${p.tecnico ? `<small>${esc(p.tecnico)}</small>` : ''}<small class="bk-mk bk-mk-${K.tipoMarca(p, { sharp, sirve: s })}" id="${mid}">${esc(K.marca(p, { sharp, sirve: s }))}</small></span></button><button type="button" class="bk-star" data-star="${esc(p.id)}" tabindex="-1" aria-pressed="${fav.has(p.id)}" aria-label="Favorito: ${esc(p.nombre)}" title="${fav.has(p.id) ? 'Quitar de favoritos' : 'Marcar favorito'} (Espacio)">${fav.has(p.id) ? '★' : '☆'}</button></li>`; }).join('')}</ul>`;
   }
   /** Una sola tarjeta de la lista entra con Tab (roving tabindex): la última que tuvo el foco, o la primera. */
   function rovingListo() {
@@ -248,7 +248,7 @@ export function initBanco(ctx) {
     if (modo === 'banco') {
       if (editor) { editor.destroy(); editor = null; }
       favVista = [...fav]; recVista = [...rec];
-      sheet.innerHTML = `<div class="bk-sh"><b id="${U}-sh">Banco de presets</b><span class="bk-shm"></span><span class="sp"></span><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el banco" title="Cerrar (Esc)">✕</button></div>
+      sheet.innerHTML = `<div class="bk-sh"><b id="${U}-sh">Banco de presets</b><small class="bk-beta" title="Los presets se están afinando: revisa cada resultado">en beta</small><span class="bk-shm"></span><span class="sp"></span><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el banco" title="Cerrar (Esc)">✕</button></div>
         <div class="bk-tabs" aria-label="Partes del banco">${K.PESTANAS.map(([k, t]) => `<button type="button" id="${U}-t-${k}" data-tab="${k}" aria-controls="${U}-p-${k}" aria-selected="${tab === k}"${tab === k ? '' : ' tabindex="-1"'}>${t}<span class="bk-tn" data-tn="${k}" aria-hidden="true"></span><span class="bk-sr" data-tns="${k}"></span></button>`).join('')}</div>
         <div class="bk-cols">
           <section class="bk-pane bk-pe" id="${U}-p-elegir" data-pane="elegir" aria-labelledby="${U}-t-elegir">
@@ -315,7 +315,7 @@ export function initBanco(ctx) {
   function anadirRefs(files) {
     const ok = [];
     for (const f of files || []) { if (st.refs.length >= 3) break; if (/\.(mp4|webm|mp3|wav|flac|m4a|ogg)$/i.test(f) || st.refs.some(r => r.id === f)) continue; st.refs.push({ id: f, ejes: { ...core.EJES_REF_DEF } }); ok.push(f); }
-    if (ok.length) { toco('refs'); cambio(); }
+    if (ok.length) { if (st.puerta === 'cero') { st.puerta = 'ref'; keep(); } toco('refs'); cambio(); } // como la foto (arriba): la puerta sigue a lo que pusiste (IMG-40)
     return ok;
   }
   /** GENERAR con presets: el único gasto, por /api/media/presets/apply (pasa por los topes del Estudio). */
@@ -461,6 +461,9 @@ export function initBanco(ctx) {
     /** El primer problema del plan (o ''), para decirlo junto a GENERAR. */
     error: () => (plan?.errores?.[0] || ''),
     anadirRefs, enfocarFalta,
+    /** IMG-39 (Fase 6): tu foto y las referencias, para que GENERAR sin presets las use y Básico las recupere. */
+    material: () => [st.foto, ...st.refs.map(r => r.id)].filter(Boolean),
+    vaciarMaterial() { const out = [st.foto, ...st.refs.map(r => r.id)].filter(Boolean); if (out.length) { toco('foto', 'refs'); st.foto = null; st.refs = []; cambio(); } return out; },
     /** IMG-41: el texto de GENERAR cuando el plan no se puede hacer (o ''). */
     bloqueado: () => K.botonBloqueado(plan?.errores?.[0]),
     /** Para la tarjeta de la galería: el resumen de la QA de un archivo que salió de un preset. */

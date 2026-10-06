@@ -16,6 +16,7 @@ import * as BR from './studio-borrador.js'; // 6 Oct 2026 (audit IMG-01/02): the
 import * as AV from './studio-avisos.js';
 import * as AC from './studio-acciones.js';
 import * as CF from './studio-confirmar.js';
+import * as CMP from './studio-comparar.js'; // 6 Oct 2026 (audit IMG-14): compare 2–4 pictures, or a version with its original
 import { elegirAuto } from './studio-auto.js'; // 6 Oct 2026 (audit IMG-36): «Automático» in Básico picks the model by what is asked
 import { ignorar as ignorarTecla } from './teclas1.js'; // IMG-26: single-key shortcuts can be turned off // 6 Oct 2026 (audit IMG-11): a spend is confirmed with a second click, not the browser's confirm() // 6 Oct 2026 (audit IMG-09/48): one list of what can be done with a file — card, «⋯», group card and viewer // 6 Oct 2026 (audit IMG-03): what the Estudio says when jobs end, with its plurals // Auditoría 1 oct 2026 (INF-03): the gallery's filters, the same on the server and here
 import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a voice as a guided flow — prices, script, meter, id, advice
@@ -24,7 +25,7 @@ import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a v
 // bank, the 3D stage or Lotes is asked for — never with the office alone. Until then a stand-in with the same face
 // (src/estudio-carga.js) says «Cargando…», or why it failed with «Reintentar»
 import { bancoDiferido as initBanco, lotesDiferidos as initLotes } from './estudio-carga.js';
-const LBL = { aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
+const LBL = { seed: 'Semilla (vacía = al azar; un número repite el resultado)', aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
   voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales', style: 'Estilo de la música', promptExpansion: 'Que el motor amplíe el prompt' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
 const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
@@ -89,7 +90,9 @@ export function initStudio(ctx) {
           <div class="st-step st-matstep"><div class="st-h"><b>4</b> <span class="st-mt">Material de partida</span> <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
           <div class="st-step st-bchips" role="group" aria-label="Formato y cantidad"><label class="st-lab">Formato<select class="st-arsel" data-set="aspectRatio"></select></label><label class="st-lab">Cantidad<select class="st-qsel"></select></label></div>
           <div class="st-step st-s5"><div class="st-h"><b class="st-n5">5</b> <span class="st-s5t">Formato y ajustes</span></div><div class="st-ratios"></div><div class="st-sets"></div>
-            <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details></div>
+            <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details>
+            <div class="st-plant" role="group" aria-label="Plantillas"><label class="st-lab">Plantilla<select class="st-plsel"></select></label><button type="button" class="st-plsave" title="Guarda el modelo, el formato y los ajustes, la cantidad, la idea y las imágenes de referencia como una plantilla (una nota del Cerebro)">Guardar como plantilla…</button><button type="button" class="st-pldel" hidden data-tip="Borrar la plantilla elegida" aria-label="Borrar la plantilla elegida">${svg('trash')}</button>
+              <div class="st-plform" hidden><input type="text" class="st-plname" maxlength="48" aria-label="Nombre de la plantilla" placeholder="Nombre, p. ej. Catálogo 4:5"><button type="button" class="st-plok pri">Guardar</button><button type="button" class="st-plno">Cancelar</button></div></div></div>
         </div>
         <div class="st-foot">
           <div class="st-qty" role="group" aria-label="Cantidad"><span>Cantidad</span><button type="button" data-d="-1" aria-label="Menos">−</button><output class="st-n">1</output><button type="button" data-d="1" aria-label="Más">+</button></div>
@@ -113,7 +116,7 @@ export function initStudio(ctx) {
             <button type="button" class="st-binbtn" title="Lo que mandaste a la papelera: vuelve con un clic durante 30 días">${svg('trash')}<span>Papelera</span></button>
             <button type="button" class="st-engbtn" title="Qué motores están listos y cómo activar los demás">${svg('spark')}<span>Motores y keys</span></button></div></details>
         </div>
-        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><label class="st-mvw">${svg('folder')}<select class="st-mv" aria-label="Mover las seleccionadas a una carpeta"></select></label><button type="button" data-b="del">${svg('trash')} Papelera</button><button type="button" data-b="lote" title="Aplicar la misma receta a todas las seleccionadas, con su costo antes de gastar (L)">${svg('grid')} Editar en lote…</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
+        <div class="st-selbar" hidden><b class="st-seln"></b><button type="button" data-b="all">Todas las visibles</button><button type="button" data-b="clear">Ninguna</button><button type="button" data-b="fav">${svg('star')} Favoritas</button><button type="button" data-b="zip">${svg('down')} Descargar ZIP</button><label class="st-mvw">${svg('folder')}<select class="st-mv" aria-label="Mover las seleccionadas a una carpeta"></select></label><button type="button" data-b="del">${svg('trash')} Papelera</button><button type="button" data-b="cmp" title="Ver de 2 a 4 imágenes lado a lado; con dos, una cortina para el antes y el después">Comparar</button><button type="button" data-b="lote" title="Aplicar la misma receta a todas las seleccionadas, con su costo antes de gastar (L)">${svg('grid')} Editar en lote…</button><span class="sp"></span><button type="button" data-b="none">Listo</button></div>
         <div class="st-picking" hidden></div>
         <div class="st-count" aria-live="polite"></div>
         <div class="st-grid"></div>
@@ -124,6 +127,7 @@ export function initStudio(ctx) {
     <div class="st-hist" hidden role="dialog" aria-modal="true" aria-labelledby="stHistT"></div>
     <div class="st-hist st-binov" hidden role="dialog" aria-modal="true" aria-labelledby="stBinT"></div>
     <div class="st-hist st-vocov" hidden role="dialog" aria-modal="true" aria-labelledby="stVocT"></div>
+    <div class="st-hist st-cmpov" hidden role="dialog" aria-modal="true" aria-labelledby="stCmpT"></div>
     <div class="st-hist st-engov" hidden role="dialog" aria-modal="true" aria-labelledby="stEngT"><div class="st-hbox"><div class="st-hhead"><h2 id="stEngT">Motores y keys</h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar">${svg('x')}</button></div>
       <p class="st-hsub">Cada motor se enciende con su key, guardada en Windows una sola vez. Lo que ya está listo sale con ●.</p><div class="st-engs"></div>
       <p class="st-hsub">La key se guarda en Windows una sola vez (con el comando de su línea en una ventana de comandos, o en «Editar las variables de entorno de esta cuenta») y se reinicia la oficina con el iniciador. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.</p>
@@ -212,6 +216,9 @@ export function initStudio(ctx) {
     modelo: () => (kind === 'image' ? modelOf.image || '' : ''), proporcion: () => ratioNow(),
     setProporcion: v => { const m = cur(), vals = m?.settings.aspectRatio?.values || []; if (vals.includes(v)) { setSetting('aspectRatio', v); renderModel(); } else { say(m ? `${m.name} no hace ${v}: el cuadro se queda en el de «Formato y ajustes».` : 'Elige antes un modelo.', true); banco.replan(); } } });
   $('.st-mwrap').closest('.st-step').after(banco.el); $('.st-gal').appendChild(banco.sheet);
+  // IMG-42 (6 Oct 2026): with room, the bank's sheet is a panel beside the gallery, not over it — the class says when it is open
+  $('.st-plname').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardarPlantilla(e.target.value); } if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); $('.st-plform').hidden = true; $('.st-plsave').focus(); } }); // IMG-46
+  new MutationObserver(() => el.classList.toggle('st-hoja', !!el.querySelector('.st-gal > .st-bank:not([hidden])'))).observe($('.st-gal'), { attributes: true, attributeFilter: ['hidden'], subtree: true, childList: true });
   /* ---------- lotes (F2, §6 y §7.4): many photos with the same recipe, in their own tab. Nothing is spent until PROBAR or GENERAR there ---------- */
   const esImg = f => /\.(png|jpe?g|webp)$/i.test(String(f));
   lotesUI = initLotes($('.st-lotes'), { esc, api, say, live: () => isLive() && location.protocol.startsWith('http'), src: f => src(f),
@@ -239,7 +246,8 @@ export function initStudio(ctx) {
     const nv = $('.st-nivel'); nv.hidden = kind !== 'image'; nv.querySelectorAll('[data-nivel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.nivel === nivel)));
     banco.el.hidden = !av; if (!av) banco.cerrar(false);
     else if (document.body.classList.contains('studioOpen')) banco.preparar(); // Avanzado shows the bank's step: it comes now (once); Básico never loads it
-    el.classList.toggle('st-banco-on', on);
+    el.classList.toggle('st-banco-on', on); el.classList.toggle('st-avz', av);
+    if (av && media.reference.length) { const ok = banco.anadirRefs(media.reference.slice()); if (ok.length) { media.reference = media.reference.filter(f => !ok.includes(f)); renderModel(); } } // IMG-39 (Fase 6): in Avanzado, the references live in «Tu foto · Referencias»; what does not fit stays in sight
     el.classList.toggle('st-basico', basico()); if (basico() && mode !== 'one') setMode('one'); // IMG-32: Básico is the plain composer — one idea, the format and the quantity as selects
     const refs = on ? media.reference.length : 0, W = $('.st-refwarn'); // IMG-39: with presets, the composer's references are not used — said, with the way to pass them over
     W.hidden = !refs; if (refs) W.querySelector('span').textContent = `${refs === 1 ? 'Tu referencia del paso «Imágenes de referencia» no se usa' : `Tus ${refs} referencias del paso «Imágenes de referencia» no se usan`} con presets.`;
@@ -251,7 +259,7 @@ export function initStudio(ctx) {
     const go = $('.st-go'); go.textContent = bl || 'GENERAR'; go.classList.toggle('st-go-falta', !!bl); // IMG-41: the button says what is missing; its click takes you there
     $('.st-est').id = 'stEst'; if (bl) go.setAttribute('aria-describedby', 'stEst'); else go.removeAttribute('aria-describedby'); // not aria-disabled: the click works — it takes you to what is missing
   }
-  function setNivel(v) { if (v === nivel || !['basico', 'avanzado'].includes(v)) return; nivel = v; store.set('modo', v); bancoState(); renderModel(); }
+  function setNivel(v) { if (v === nivel || !['basico', 'avanzado'].includes(v)) return; nivel = v; store.set('modo', v); if (v === 'basico' && picking && typeof picking === 'object') { picking = null; renderSel(); } /* a pick for the bank's photo ends with Avanzado */ if (v === 'basico' && banco) { const back = banco.vaciarMaterial(); if (back.length) media.reference = [...new Set([...media.reference, ...back])]; } bancoState(); renderModel(); } // IMG-39: nothing is left behind when the level changes
 
   /* ---------- the composer ---------- */
   function pickModel(k = kind) { // the remembered one if it is on, else the office's default, else the first that is on
@@ -265,7 +273,7 @@ export function initStudio(ctx) {
   }
   function setSetting(k, v) { const m = cur(); if (!m) return; const s = settingsOf(m); s[k] = v; setsOf[m.id] = s; store.set('sets', setsOf); }
   function renderModels() {
-    pickModel(); aplicarAuto();
+    pickModel(); aplicarAuto(); pintarPlantillas();
     el.querySelectorAll('[data-kind]').forEach(b => { const on = b.dataset.kind === kind; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
     renderPick(); renderModel(); bancoState();
   }
@@ -358,7 +366,7 @@ export function initStudio(ctx) {
     $('.st-matstep').classList.toggle('st-vacio', !Object.values(media).some(l => l.length) && !(m.needs || []).length); // Básico shows the references only once there is one
     const ctl = ([k, f]) => {
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
-      if (f.type === 'text') return k === 'voiceId' ? voicePicker(f, s[k]) : `<label class="st-lab">${LBL[k] || k}<input type="text" data-set="${k}" value="${esc(s[k] ?? '')}" maxlength="${+f.max || 2000}" placeholder="${esc(f.placeholder || '')}" autocomplete="off"></label>`; // V5.0
+      if (f.type === 'text') return k === 'voiceId' ? voicePicker(f, s[k]) : `<label class="st-lab">${LBL[k] || k}<input type="text" data-set="${k}" value="${esc(s[k] ?? '')}" maxlength="${+f.max || 2000}" placeholder="${esc(f.placeholder || '')}"${k === 'seed' ? ' inputmode="numeric" pattern="[0-9]*"' : ''} autocomplete="off"></label>`; // V5.0
       if (f.type === 'range') return `<label class="st-lab st-range">${LBL[k] || k} <output>${s[k]}${k === 'duration' ? ' s' : ''}</output><input type="range" data-set="${k}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${s[k]}"></label>`;
       return `<label class="st-tog"><input type="checkbox" data-set="${k}"${s[k] ? ' checked' : ''}><span>${LBL[k] || k}</span></label>`;
     };
@@ -601,6 +609,7 @@ export function initStudio(ctx) {
     $('.st-selbar').hidden = !(selecting || sel.size); $('.st-seln').textContent = (sel.size ? `${sel.size} ${sel.size === 1 ? 'seleccionada' : 'seleccionadas'}` : 'Toca las que quieras') + ' · Mayús + clic elige un rango';
     el.classList.toggle('st-selecting', selecting || sel.size > 0);
     $('.st-selbtn').setAttribute('aria-pressed', selecting || sel.size > 0); $('.st-selbtn').classList.toggle('on', selecting || sel.size > 0);
+    { const b = el.querySelector('.st-selbar [data-b="cmp"]'); b.disabled = sel.size < CMP.MIN || sel.size > CMP.MAX; b.title = sel.size > CMP.MAX ? `Se comparan hasta ${CMP.MAX} a la vez` : 'Ver de 2 a 4 imágenes lado a lado; con dos, una cortina para el antes y el después'; } // IMG-14
     el.querySelectorAll('.st-selbar [data-b="fav"], .st-selbar [data-b="zip"], .st-selbar [data-b="del"], .st-selbar [data-b="lote"], .st-selbar .st-mv').forEach(b => { b.disabled = !sel.size; });
     const mv = $('.st-mv'); if (mv && document.activeElement !== mv) mv.innerHTML = `<option value="">Mover a…</option>${folders.map(f => `<option value="${esc(f.id)}">${esc(f.name)}</option>`).join('')}<option value="none">Sin carpeta</option><option value="__new">+ Nueva carpeta…</option>`;
     $('.st-picking').hidden = !picking;
@@ -711,6 +720,7 @@ export function initStudio(ctx) {
     const m = cur(); if (!m) return say('Elige un modelo.', true);
     if (busy) return; busy = true; $('.st-go').disabled = true;
     const settings = settingsOf(m), mediaNow = Object.fromEntries(Object.entries(media).filter(([, v]) => v.length));
+    if (avanzado() && banco) { const mat = banco.material(); if (mat.length) { if (!(m.roles.reference > 0)) { busy = false; $('.st-go').disabled = false; return say(`${m.name} no acepta imágenes: tus ${mat.length} de «Tu foto · Referencias» no irían. Elige otro modelo o quítalas.`, true); } mediaNow.reference = [...new Set([...(mediaNow.reference || []), ...mat])].slice(0, m.roles.reference); } } // IMG-39: the one Material is used, never dropped in silence
     let ok = 0;
     for (const p of prompts) {
       try { const r = await api('POST', '/api/media/jobs', { prompt: p, n: qty, kind, model: m.id, settings, media: mediaNow, by: 'you', ...(folders.some(f => f.id === folderF) ? { folder: folderF } : {}) }); jobs.unshift(r.job); budget = r.budget; ok++; }
@@ -780,6 +790,29 @@ export function initStudio(ctx) {
   let engFrom = null;
   function openEngs() { const E = $('.st-engov'); renderHead(); engFrom = document.activeElement; E.hidden = false; modal.open(E); E.querySelector('.st-hx').focus(); E.onclick = e => { if (e.target === E || e.target.closest('.st-hx')) closeEngs(); }; }
   function closeEngs() { const E = $('.st-engov'); if (E.hidden) return; E.hidden = true; modal.close(E); if (engFrom && document.contains(engFrom)) engFrom.focus({ preventScroll: true }); }
+  /* IMG-14 (6 Oct 2026): Comparar. Two pictures: one over the other with a curtain (drag it, or ← → Inicio Fin on its handle); three or four: a grid. */
+  let cmpFrom = null;
+  function comparar(list, titulo) {
+    const r = CMP.queComparar(list); if (r.error) return say(r.error, true);
+    const C = $('.st-cmpov'), two = r.items.length === 2, [a, b] = r.items;
+    const lab = it => esc(it.upload ? 'Subida por ti' : it.modelName || it.model || '');
+    cmpFrom = document.activeElement;
+    C.innerHTML = `<div class="st-hbox st-cmpbox"><div class="st-hhead"><h2 id="stCmpT">${esc(titulo || `Comparar ${r.items.length} imágenes`)}</h2><span class="sp"></span><button type="button" class="st-hx" aria-label="Cerrar" title="Cerrar (Esc)">${svg('x')}</button></div>
+      ${two ? `<div class="st-cmpab" style="--p:50%"><img src="${src(a)}" alt="Antes: ${esc(short(a.prompt))}"><img class="st-cmpdes" src="${src(b)}" alt="Después: ${esc(short(b.prompt))}"><div class="st-cmpbar" role="slider" tabindex="0" aria-label="Cortina: a la izquierda la primera, a la derecha la segunda" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="la cortina en el medio"><span aria-hidden="true">‹ ›</span></div></div>
+      <p class="st-cmpcap"><span><b>Antes</b> · ${lab(a)} · ${esc(short(a.prompt))}</span><span><b>Después</b> · ${lab(b)} · ${esc(short(b.prompt))}</span></p>`
+      : `<div class="st-cmpgrid" data-n="${r.items.length}">${r.items.map(it => `<figure><img src="${src(it)}" alt="${esc(short(it.prompt))}"><figcaption><b>${lab(it)}</b> ${esc(short(it.prompt))}</figcaption></figure>`).join('')}</div>`}</div>`;
+    C.hidden = false; modal.open(C); (C.querySelector('.st-cmpbar') || C.querySelector('.st-hx')).focus();
+    const ab = C.querySelector('.st-cmpab'), bar = C.querySelector('.st-cmpbar');
+    const poner = p => { ab.style.setProperty('--p', p + '%'); bar.setAttribute('aria-valuenow', Math.round(p)); bar.setAttribute('aria-valuetext', p <= 0 ? 'toda la segunda' : p >= 100 ? 'toda la primera' : `${Math.round(p)} % de la primera`); };
+    if (ab) {
+      const desde = e => { const r_ = ab.getBoundingClientRect(); poner(Math.max(0, Math.min(100, (e.clientX - r_.left) / r_.width * 100))); };
+      ab.onpointerdown = e => { ab.setPointerCapture?.(e.pointerId); desde(e); ab.onpointermove = desde; };
+      ab.onpointerup = ab.onpointercancel = () => { ab.onpointermove = null; };
+      bar.onkeydown = e => { const p = CMP.cortina(parseFloat(ab.style.getPropertyValue('--p')), e.key); if (p === null) return; e.preventDefault(); e.stopPropagation(); poner(p); };
+    }
+    C.onclick = e => { if (e.target === C || e.target.closest('.st-hx')) closeCmp(); };
+  }
+  function closeCmp() { const C = $('.st-cmpov'); if (!C || C.hidden) return; C.hidden = true; C.innerHTML = ''; modal.close(C); if (cmpFrom && document.contains(cmpFrom)) cmpFrom.focus({ preventScroll: true }); cmpFrom = null; }
   function cerrarMas(foco) { const d = el.querySelector('details.st-gmas[open]'); if (!d) return false; d.open = false; if (foco) d.querySelector('summary').focus(); return true; }
   function closeHist() { const H = $('.st-hist'); if (H.hidden) return; H.hidden = true; H.innerHTML = ''; modal.close(H); if (histFrom && document.contains(histFrom)) histFrom.focus({ preventScroll: true }); }
   /* ---------- V5.0 (30 Sep 2026, the owner: «toda la plataforma MiniMax»): the Voces panel. Rebuilt on 1 Oct 2026 (the owner: «el panel
@@ -1252,7 +1285,7 @@ export function initStudio(ctx) {
   }
   function reuse(it, quiet) { return cargar(() => reuseRaw(it, quiet)); }
   function animate(it) { return cargar(() => animateRaw(it)); }
-  function useAsRef(it) { return cargar(() => useAsRefRaw(it)); }
+  function useAsRef(it) { if (avanzado() && banco && banco.anadirRefs([it.file]).length) { learn(it.file, 'ref'); showPane('gen'); return say('Puesta en «Referencias» (Avanzado).'); } return cargar(() => useAsRefRaw(it)); } // IMG-39
   function moverA(it) { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
   function presetDe(it) { if (kind !== 'image') setKind('image'); setNivel('avanzado'); showPane('gen'); banco.guardarDesde(it); }
   /** The one gate before spending (GENERAR, Variar, the presets): from US$0.50 the first click arms and the second spends (IMG-11). */
@@ -1293,6 +1326,44 @@ export function initStudio(ctx) {
     const i = $('.st-vsel') || $('.st-vid'); if (!i) { $('.st-mpick').focus(); return say('Ese modelo de voz no está encendido: arriba dice cómo activarlo.', true); }
     i.scrollIntoView({ block: 'center', behavior: 'smooth' }); i.focus({ preventScroll: true }); if (i.select) i.select();
     say('Mismo texto: elige otra voz en la lista y pulsa GENERAR.');
+  }
+  /* IMG-46 (6 Oct 2026): templates — any composer setup (model, format and settings, quantity, the idea, the style pictures) as a Brain
+     note (plantillas.mjs, /api/media/plantillas). In the demo they live in this browser. Choosing one loads it with DESHACER. */
+  let plantillasL = [];
+  const plLocal = { get: () => store.get('plantillas', []), set: l => store.set('plantillas', l) };
+  async function cargarPlantillas() { try { plantillasL = isLive() ? (await api('GET', '/api/media/plantillas')).plantillas || [] : plLocal.get(); } catch { plantillasL = []; } pintarPlantillas(); }
+  function pintarPlantillas() {
+    const S = $('.st-plsel'); if (!S) return; const mias = plantillasL.filter(p => p.kind === kind), was = S.value;
+    S.innerHTML = `<option value="">${mias.length ? `Elegir (${mias.length})…` : 'Aún no tienes'}</option>${mias.map(p => `<option value="${esc(p.id)}">${esc(p.nombre)}</option>`).join('')}`;
+    S.disabled = !mias.length; if (mias.some(p => p.id === was)) S.value = was; $('.st-pldel').hidden = !S.value;
+  }
+  function aplicarPlantilla(p) {
+    return cargar(() => {
+      if (p.kind !== kind) setKind(p.kind);
+      const m = p.modelo && models.find(x => x.id === p.modelo && x.on);
+      if (m) { modelOf[p.kind] = m.id; store.set('model.' + p.kind, m.id); if (p.kind === 'image') auto = false; setsOf[m.id] = { ...settingsOf(m), ...(p.ajustes || {}) }; store.set('sets', setsOf); }
+      qty = Math.max(1, Math.min(8, p.n || 1));
+      const est = (p.estilo || []).filter(f => !gone.has(f)); if (est.length) media = { ...media, reference: [...new Set([...media.reference, ...est])] };
+      if (p.prompt) $('.st-prompt').value = p.prompt;
+      renderModels(); estimate();
+      say(m || !p.modelo ? `Plantilla «${p.nombre}» cargada: cambia lo que quieras y pulsa GENERAR.` : `Plantilla «${p.nombre}» cargada, pero su modelo no está encendido aquí: elige otro.`, !!p.modelo && !m);
+    });
+  }
+  async function guardarPlantilla(nombre) {
+    const m = cur(); nombre = String(nombre || '').trim(); if (!nombre) { $('.st-plname').focus(); return say('Ponle un nombre a la plantilla.', true); }
+    const b = { nombre, kind, modelo: m ? m.id : '', ajustes: m ? settingsOf(m) : {}, n: qty, prompt: $('.st-prompt').value.trim(), estilo: media.reference.slice() };
+    try {
+      let p;
+      if (isLive()) p = (await api('POST', '/api/media/plantillas', b)).plantilla;
+      else { p = { ...b, id: 'pl-' + (nombre.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'plantilla') }; plLocal.set([...plLocal.get().filter(x => x.id !== p.id), p]); }
+      $('.st-plform').hidden = true; $('.st-plname').value = ''; await cargarPlantillas(); $('.st-plsel').value = p.id; $('.st-pldel').hidden = false; $('.st-plsel').focus();
+      say(isLive() ? `Plantilla «${p.nombre}» guardada en el Cerebro (Estudio/Plantillas).` : `Plantilla «${p.nombre}» guardada en este navegador (en la oficina va al Cerebro).`);
+    } catch (err) { say('No se pudo guardar la plantilla: ' + err.message, true); }
+  }
+  async function borrarPlantilla() {
+    const id = $('.st-plsel').value, p = plantillasL.find(x => x.id === id); if (!p) return;
+    try { if (isLive()) await api('DELETE', '/api/media/plantillas/' + encodeURIComponent(id)); else plLocal.set(plLocal.get().filter(x => x.id !== id)); await cargarPlantillas(); $('.st-plsel').focus(); say(`Plantilla «${p.nombre}» borrada${isLive() ? ' (queda en Estudio/Plantillas/.papelera del Cerebro)' : ''}.`); }
+    catch (err) { say('No se pudo borrar: ' + err.message, true); }
   }
   let toastT = null;
   function toast(text, undo, label = 'DESHACER') {
@@ -1599,7 +1670,7 @@ export function initStudio(ctx) {
     lPanel =o.panel && (o.panel !== 'edit' || img) ? o.panel : null; lPanelFrom = null;
     const setTxt = it.settings ? Object.entries(it.settings).map(([k, v]) => `${LBL[k] || k}: ${typeof v === 'boolean' ? (v ? 'sí' : 'no') : VAL[v] || v}`).join(' · ') : '';
     const used = it.media ? Object.entries(it.media).flatMap(([r, fs]) => fs.map(f => [r, f])) : [];
-    const orig = it.versionOf ? itemOf(it.versionOf) : null, vers = (it.versions || []).map(itemOf).filter(Boolean);
+    const orig = it.versionOf ? itemOf(it.versionOf) : null, vers = (it.versions || []).map(itemOf).filter(Boolean), pareja = CMP.conSuPareja(it, itemOf); // IMG-14
     // IMG-09 · IMG-48 (6 Oct 2026): the same list as the card — the primary ones as buttons, then «Crear a partir de esta», «Organizar», «Enviar a…»
     const lac = AC.acciones(it, capDe(it)), copiar = { id: 'copy', label: cap.label ? 'Copiar el texto' : 'Copiar prompt', icon: 'note', title: 'Copiar al portapapeles' };
     const lgrupos = lac.grupos.some(g => g.id === 'crear') ? lac.grupos.map(g => (g.id === 'crear' ? { ...g, items: [...g.items, copiar] } : g)) : [{ id: 'crear', titulo: 'Crear a partir de esta', items: [copiar] }, ...lac.grupos];
@@ -1615,7 +1686,7 @@ export function initStudio(ctx) {
       ${setTxt ? `<p class="st-meta">${esc(setTxt)}</p>` : ''}
       ${used.length ? `<div class="st-lused">${used.map(([r, f]) => `<span title="${esc(ROLE[r] || r)}">${isVid(f) ? svg('vid') : `<img src="${src(f)}" alt="">`}<i>${esc(ROLE[r] || r)}</i></span>`).join('')}</div>` : ''}
       ${vers.length ? `<div class="st-lvers"><h3>Versiones (${vers.length})</h3><div>${vers.map((v, k) => `<button type="button" data-vf="${esc(v.file)}" aria-label="Abrir la versión ${k + 1}: ${esc(short(v.prompt))}" title="${esc(v.prompt)}"><img src="${src(v)}" alt=""></button>`).join('')}</div></div>` : ''}
-      <div class="st-lacts">${lac.primarias.map((x, k) => lbtn(x, k === 0)).join('')}</div>
+      <div class="st-lacts">${lac.primarias.map((x, k) => lbtn(x, k === 0)).join('')}${pareja ? `<button type="button" data-l="cmp" title="${esc(pareja.titulo)}, con una cortina">${it.versionOf ? 'Comparar con la original' : 'Comparar con su versión'}</button>` : ''}</div>
       <div class="st-lpwrap"></div>
       <div class="st-lacts2">${lgrupos.map(g => `<div class="st-lgrp" role="group" aria-labelledby="stLg${g.id}"><span class="st-lgt" id="stLg${g.id}">${esc(g.titulo)}</span>${g.items.map(x => lbtn(x)).join('')}</div>`).join('')}</div>
       <button type="button" class="st-ldel" data-l="del">${svg('trash')} Mover a la papelera</button></div></div>`;
@@ -1650,6 +1721,7 @@ export function initStudio(ctx) {
       if (a === 'task') { closeLight(); close(); ctx.openTask(it.task); }
       if (a === 'move') { closeLight(); moverA(it); }
       if (a === 'preset') { closeLight(); presetDe(it); }
+      if (a === 'cmp') { const p = CMP.conSuPareja(it, itemOf); if (p) { closeLight(); comparar(p.items, p.titulo); } }
     };
   }
   /** The viewer's keys: Esc, ← → (a picture to the side, or moving a zoomed one), + − 0, F. Typing in its panel: Esc closes the panel, Ctrl+Enter sends. */
@@ -1689,7 +1761,7 @@ export function initStudio(ctx) {
     const kb = e.target.closest('[data-kind]'); if (kb) return setKind(kb.dataset.kind);
     if (e.target.closest('.st-mpick')) return openList();
     const mo = e.target.closest('.st-mo'); if (mo && !mo.disabled) { $('.st-keyhelp').hidden = true; if (mo.dataset.id === 'auto') { auto = true; store.set('auto.image', true); aplicarAuto(); openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; } if (basico()) { auto = false; store.set('auto.image', false); } modelOf[kind] = mo.dataset.id; store.set('model.' + kind, mo.dataset.id); /* IMG-36: a model chosen by hand turns «Automático» off */ openList(false); renderPick(); renderModel(); $('.st-mpick').focus(); return; }
-    const nvb = e.target.closest('[data-nivel]'); if (nvb) { setNivel(nvb.dataset.nivel); return; }
+    const nvb = e.target.closest('[data-nivel]'); if (nvb) { setNivel(nvb.dataset.nivel); if (!nvb.offsetParent) [...el.querySelectorAll('.st-nivel [data-nivel]')].find(b => b.offsetParent)?.focus(); return; } // Fase 6: the pressed one may hide (Básico shows only «Avanzado»): the focus is not lost
     if (e.target.closest('.st-armas')) { verMasFormatos = !verMasFormatos; renderModel(); $('.st-armas')?.focus(); return; } // IMG-33
     if (e.target.closest('.st-addimg')) { // IMG-38: «Imagen» beside the idea: a reference, like attaching it in a chat
       if (basico() && auto) { aplicarAuto(1); renderPick(); renderModel(); }
@@ -1715,6 +1787,10 @@ export function initStudio(ctx) {
     if (e.target.closest('.st-all')) { q = ''; $('.st-q').value = ''; folderF = 'all'; store.set('folder', 'all'); filter = 'all'; $('.st-fsel').value = 'all'; requery(); return; } // INF-03: everything, the search too
     if (e.target.closest('.st-morebtn')) { loadMore(); return; }
     const sl = e.target.closest('[data-slot]'); if (sl) { uploadRole = sl.dataset.slot; $('.st-file').accept = uploadRole === 'video' ? 'video/mp4,video/webm' : 'image/png,image/jpeg,image/webp'; $('.st-file').click(); return; }
+    if (e.target.closest('.st-plsave')) { const f = $('.st-plform'); f.hidden = !f.hidden; if (!f.hidden) { const sel_ = plantillasL.find(x => x.id === $('.st-plsel').value); $('.st-plname').value = sel_ ? sel_.nombre : ''; $('.st-plname').focus(); } return; } // IMG-46
+    if (e.target.closest('.st-plok')) { guardarPlantilla($('.st-plname').value); return; }
+    if (e.target.closest('.st-plno')) { $('.st-plform').hidden = true; $('.st-plsave').focus(); return; }
+    if (e.target.closest('.st-pldel')) { borrarPlantilla(); return; }
     const gp = e.target.closest('[data-gpick]'); if (gp) { picking = gp.dataset.gpick; renderSel(); return; }
     const us = e.target.closest('[data-unslot]'); if (us) { for (const r of Object.keys(media)) media[r] = media[r].filter(x => x !== us.dataset.unslot); renderModel(); return; }
     const bb = e.target.closest('[data-b]');
@@ -1727,6 +1803,7 @@ export function initStudio(ctx) {
       if (b === 'fav') favMany(files);
       if (b === 'zip') zip(files);
       if (b === 'del') trashMany(files); // V4.2 (audit A27): like the card — straight to the bin, with DESHACER
+      if (b === 'cmp') comparar(files.map(itemOf)); // IMG-14
       if (b === 'lote') editarEnLote(files); // banco de presets F2 (§6.1): «Editar en lote…»
       return;
     }
@@ -1827,6 +1904,7 @@ export function initStudio(ctx) {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
     if (e.target.classList.contains('st-fsel')) { filter = e.target.value; requery(); return; } // IMG-23
     if (e.target.classList.contains('st-qsel')) { qty = +e.target.value || 1; estimate(); return; } // IMG-37
+    if (e.target.classList.contains('st-plsel')) { const p = plantillasL.find(x => x.id === e.target.value); $('.st-pldel').hidden = !p; if (p) aplicarPlantilla(p); return; } // IMG-46
 
     if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
     if (e.target.matches?.('[data-msort], [data-mmaker]')) { store.set(e.target.hasAttribute('data-msort') ? 'msort' : 'mmaker', e.target.value); const qv = $('.st-mq input')?.value || ''; renderList(qv); $(e.target.hasAttribute('data-msort') ? '[data-msort]' : '[data-mmaker]')?.focus(); return; }
@@ -1876,11 +1954,12 @@ export function initStudio(ctx) {
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
       if ((e.key === 'l' || e.key === 'L') && !el.classList.contains('st-pickmode')) { showPane(el.dataset.pane === 'lotes' ? 'gen' : 'lotes'); return; } // banco de presets F2: the Lotes tab (and back)
       if (el.dataset.pane === 'lotes' && /^[ivb/]$/i.test(e.key)) return; // the composer's keys stay in the composer
-      if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (kind !== 'image') setKind('image'); setNivel('avanzado'); showPane('gen'); banco.toggle(); return; } // banco de presets (§7.1): it lives in Avanzado
+      if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (kind !== 'image') setKind('image'); const era = nivel; setNivel('avanzado'); showPane('gen'); banco.toggle(); if (era !== 'avanzado') toast('Pasaste a Avanzado: aquí vive el banco de presets.', () => setNivel('basico'), 'VOLVER A BÁSICO'); return; } // IMG-47 // banco de presets (§7.1): it lives in Avanzado
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
     if (!$('.st-binov').hidden) { if (e.key === 'Escape') closeBin(); return; }
     if (!$('.st-engov').hidden) { if (e.key === 'Escape') closeEngs(); return; }
+    if (!$('.st-cmpov').hidden) { if (e.key === 'Escape') closeCmp(); return; }
     if (!$('.st-vocov').hidden) { if (e.key === 'Escape') { e.preventDefault(); voicesEscape(); } return; } // V5.0: a row asking «¿Borrar?» says no first; then the panel closes
     const om = el.querySelector('.st-menu:not([hidden])');
     if (om) { // the open «⋯» menu: arrows move, Esc and Tab close it, back on its button
@@ -1970,8 +2049,8 @@ export function initStudio(ctx) {
   el.classList.toggle('st-folded', !!store.get('fold', false));
   const isOn = () => document.body.classList.contains('studioOpen'); // not el.hidden: that waits 220 ms for the fade after close
   let hideT = 0;
-  function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); if (avanzado()) banco.preparar(); /* Básico never brings the bank */ timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
-  function close(o = {}) { if (!isOn()) return; if (pickFor) { pickFor = null; paintFor(); } seenAt = Date.now(); closeLight(); closeHist(); closeBin(); closeVoices(true); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
+  function open() { if (isOn()) return; clearTimeout(hideT); views.opening('studio'); if (!store.get('subSeen', false)) setTimeout(() => store.set('subSeen', true), 1000); unseen = 0; setDock(); hideNote(); seenAt = Date.now(); opener = document.activeElement; el.hidden = false; modal.open(el); document.body.classList.add('studioOpen'); requestAnimationFrame(() => el.classList.add('on')); load(); cargarPlantillas(); if (avanzado()) banco.preparar(); /* Básico never brings the bank */ timer = setInterval(() => { if (!busy && $('.st-light').hidden && $('.st-mlist').hidden) load({ full: false }); }, 20000); setTimeout(() => { if (document.body.classList.contains('studioOpen')) $('.st-prompt').focus(); }, 60); } // closed again before the timer: the focus must not land in a hidden window
+  function close(o = {}) { if (!isOn()) return; if (pickFor) { pickFor = null; paintFor(); } seenAt = Date.now(); closeLight(); closeHist(); closeBin(); closeCmp(); closeVoices(true); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); document.body.classList.remove('studioOpen'); clearInterval(timer); clearTimeout(jtimer); jtimer = null; picking = null; openList(false); hideT = setTimeout(() => { el.hidden = true; }, 220); if (!o.quiet && opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   views.add('studio', { isOpen: isOn, close });
   // INF-03: Ctrl+K opens a file of the gallery in the viewer, or the gallery with its search (src/search.js)
   window.addEventListener('ao:studio-show', e => {

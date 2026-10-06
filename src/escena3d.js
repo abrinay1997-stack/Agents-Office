@@ -61,15 +61,15 @@ export function initEscena3d(host, { value, onChange, familia = 'conversacional'
     <div class="e3d-row"><span class="e3d-lbl" id="${id}-ld">Distancia</span>
       <div class="e3d-chips" role="group" aria-labelledby="${id}-ld">${C.DISTANCIAS.map(d => chip(`data-dist="${d.id}" aria-pressed="false"`, d.es, `~${Math.round(d.ocupacion * 100)} %`)).join('')}</div></div>
     <div class="e3d-ctls">
-      <fieldset class="e3d-set"><legend>Cámara</legend>
+      <details class="e3d-fino"><summary>Cámara (ajuste fino): distancia, altura, ángulo y lente</summary><fieldset class="e3d-set"><legend>Cámara</legend>
         <div class="e3d-units" role="group" aria-label="Unidad de distancia y altura">
           <button type="button" class="e3d-mini" data-unidad="cm" aria-pressed="false">cm</button><button type="button" class="e3d-mini" data-unidad="m" aria-pressed="false">m</button></div>
         ${num('distancia', 'Distancia al producto', 'm', 'min="0"')}
         ${num('altura', 'Altura de la cámara', 'm', 'min="0"')}
         ${num('azimut', 'Alrededor', '°', 'min="-180" max="180" step="5"')}
         <label class="e3d-f"><span>Lente</span><select data-k="lente">${C.LENTES.map(l => `<option value="${l}">${l} mm</option>`).join('')}</select></label>
-        <label class="e3d-f"><span>Proporción del cuadro</span><select data-k="proporcion">${C.PROPORCIONES.map(p => `<option value="${p}">${p}</option>`).join('')}</select></label>
-      </fieldset>
+      </fieldset></details>
+      <p class="e3d-f e3d-propf"><span>Proporción del cuadro</span><b class="e3d-propv"></b><small>la de «Formato» en el compositor: cámbiala allí</small></p> <!-- IMG-44 (6 oct 2026): una sola fuente para el formato -->
       <fieldset class="e3d-set"><legend>Producto</legend>
         <label class="e3d-f e3d-wide"><span>Medidas de</span><select data-k="tipo">${C.TIPOS.map(t => `<option value="${t.id}">${esc(t.es)} · ${t.ancho}×${t.alto}×${t.fondo} cm</option>`).join('')}<option value="__otro">Otro (medidas a mano)</option></select></label>
         ${num('ancho', 'Ancho', 'cm', 'min="1" step="1"')}
@@ -264,7 +264,7 @@ export function initEscena3d(host, { value, onChange, familia = 'conversacional'
     const d = C.describirEscena(e, fam, { movimiento: mov });
     live.textContent = d.resumen;
     $('.e3d-en').textContent = d.en; $('.e3d-es').textContent = d.es;
-    $('.e3d-prop').textContent = '· ' + e.cuadro.proporcion;
+    $('.e3d-prop').textContent = '· ' + e.cuadro.proporcion; const pv = $('.e3d-propv'); if (pv) pv.textContent = e.cuadro.proporcion;
     guia.setAttribute('aria-label', `Guía de composición ${e.cuadro.proporcion}: ${d.resumen}`);
     for (const b of $$('[data-dist]')) { const t = C.DISTANCIAS.find(x => x.id === b.dataset.dist); b.setAttribute('aria-pressed', String(!d.ocupacion.recortado && Math.abs(d.ocupacion.max - t.ocupacion) < 0.02)); }
     if (anunciar) { clearTimeout(anuncioT); anuncioT = setTimeout(() => { anuncio.textContent = d.resumen; }, 500); }
