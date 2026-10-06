@@ -38,16 +38,19 @@ let sharpMod, sharpError, sharpCargado = false;
 export class NoDisponible extends Error {
   constructor(motivo) { super('Las operaciones locales no están disponibles en esta máquina' + (motivo ? ' (' + motivo + ')' : '') + '. No se usa la IA en su lugar.'); this.code = 'no-disponible'; }
 }
+let cargando = null;
 async function cargar() {
+  // Una sola carga, y quien llega mientras tanto la espera: antes se marcaba «cargado» antes del import, y una segunda llamada
+  // simultánea (dos fotos de un lote a la vez) veía `undefined` y decía «sharp no carga» con sharp funcionando (falló en CI).
   if (!sharpCargado) {
-    sharpCargado = true;
-    try { sharpMod = (await import('sharp')).default; } catch (e) { sharpMod = null; sharpError = e.message; }
+    if (!cargando) cargando = import('sharp').then(m => { sharpMod = m.default; }, e => { sharpMod = null; sharpError = e.message; }).finally(() => { sharpCargado = true; cargando = null; });
+    await cargando;
   }
   return sharpMod;
 }
 /** Solo para tests: usarSharp(null) simula una máquina sin sharp; usarSharp() vuelve a cargarlo. */
 export function usarSharp(mod) {
-  if (mod === undefined) { sharpCargado = false; sharpMod = undefined; sharpError = undefined; return; }
+  if (mod === undefined) { sharpCargado = false; cargando = null; sharpMod = undefined; sharpError = undefined; return; }
   sharpCargado = true; sharpMod = mod; sharpError = mod ? undefined : 'simulado: sharp no está';
 }
 async function S() { const s = await cargar(); if (!s) throw new NoDisponible(sharpError || 'sharp no carga'); return s; }

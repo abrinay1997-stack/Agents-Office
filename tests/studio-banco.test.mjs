@@ -13,11 +13,12 @@ const byId = new Map(fab.presets.map(p => [p.id, p]));
 const P = id => byId.get(id);
 
 test('la marca de la tarjeta dice en texto cómo se hace (§7.4)', () => {
-  assert.equal(B.marca(P('luz-mas-clara')), 'gratis · en tu máquina');
+  assert.equal(B.marca(P('luz-mas-clara')), 'gratis · en tu equipo');
   assert.equal(B.marca(P('luz-mas-clara'), { sharp: false }), 'no disponible en esta máquina');
   assert.match(B.marca(P('fondo-blanco')), /necesita tu foto/);
   assert.equal(B.marca(P('esc-sala'), { sirve: { on: false } }), 'sin motor: actívalo');
-  assert.match(B.marca(P('ref-estilo')), /la IA rehace la imagen/i, 'la honestidad del preset, en texto');
+  assert.match(B.marca(P('ref-estilo')), /con IA|rehace la imagen/i, 'la honestidad del preset, en texto');
+  assert.doesNotMatch(B.marca(P('fondo-blanco')), /aquí se garantiza/, 'IMG-43: sin la frase que no se entendía');
 });
 
 test('la portada: favoritos, de PanaClaw, recientes y las estrella que encajan con la puerta', () => {
@@ -194,4 +195,26 @@ test('DESHACER vuelve atrás solo lo que cambió la acción que avisó (revisió
   assert.equal(sn.v.pila[0].params.intensidad, 'fuerte'); assert.equal(sn.v.refs[0].ejes.color, 2);
   assert.equal(K.tocaDeshacer(sn, ['refs']), true, 'una acción sin aviso sobre lo mismo anula el DESHACER (ya no sabría a qué volver)');
   assert.equal(K.tocaDeshacer(null, ['pila']), false);
+});
+
+test('IMG-40: la línea «Ahora» no contradice a la puerta y lo que falta es pista hasta que intentas generar', () => {
+  const vacio = { puerta: 'foto', foto: null, refs: [], pila: [] };
+  const a = K.estadoPuerta(vacio);
+  assert.equal(a.etiqueta, 'Mejorar mi foto', 'nombra la puerta pulsada, no «Desde cero»');
+  assert.match(a.falta, /Sube tu foto/);
+  assert.equal(a.grave, false, 'sin haber intentado nada, no es un error');
+  assert.equal(K.estadoPuerta(vacio, { intentado: true }).grave, true);
+  const conFoto = K.estadoPuerta({ ...vacio, foto: 'f.png' }, { intentado: true });
+  assert.equal(conFoto.falta, ''); assert.equal(conFoto.grave, false); assert.equal(conFoto.etiqueta, 'Mejorar mi foto', 'cumplida, con las palabras de la puerta (Fase 6)');
+  assert.equal(K.estadoPuerta({ puerta: 'cero', foto: null, refs: [], pila: [] }).etiqueta, 'Desde cero');
+  assert.match(K.estadoPuerta({ puerta: 'ref', foto: null, refs: [], pila: [] }).falta, /referencia/);
+  const ref = K.estadoPuerta({ puerta: 'ref', foto: null, refs: [{ id: 'r.png' }], pila: [] }); // IMG-39/40 (Fase 6): la puerta cumplida se nombra con sus palabras
+  assert.equal(ref.etiqueta, K.PUERTAS.find(p => p.id === 'ref').es); assert.equal(ref.falta, '');
+});
+
+test('IMG-41: GENERAR dice lo que falta cuando el plan no se puede hacer', () => {
+  assert.equal(K.botonBloqueado('«Catálogo para la web» trabaja sobre tu foto: súbela o elige uno de «Desde cero»'), 'Falta tu foto');
+  assert.equal(K.botonBloqueado('Falta la referencia de la que se copia'), 'Falta la referencia');
+  assert.equal(K.botonBloqueado('ese modelo no puede con la receta'), 'Revisa el plan');
+  assert.equal(K.botonBloqueado(''), '');
 });

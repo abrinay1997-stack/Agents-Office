@@ -1,0 +1,11 @@
+/* Auditoría del Estudio de imagen, Fase 3 (6 oct 2026, IMG-15 · IMG-16 · IMG-24): las medidas comunes del Estudio como tokens, y los
+   componentes que se repetían con estilos distintos. Se llama «componentes» para ir antes que estudio*.css en el orden alfabético de
+   build.mjs: lo que lo usa va después.
+   Letra: 11.5 · 12.5 · 14 · 16 · 22 (serif). Radios: 8 (controles) · 12 (tarjetas y paneles) · pastilla. */
+:root { --fs-xs: 11.5px; --fs-s: 12.5px; --fs-m: 14px; --fs-l: 16px; --fs-xl: 22px; --r-s: 8px; --r-m: 12px; --r-pill: 99px; }
+/* los controles del Estudio usan la letra de la interfaz (sin especificidad: cualquier regla de clase manda; antes, el navegador ponía Arial) */
+:where(#studioOv) :where(button, input, select, textarea, summary) { font-family: var(--ui); }
+/* el SEGMENTADO del Estudio (Básico · Avanzado, Una idea · Varias, Suave · Normal · Fuerte): una sola medida */
+#studioOv :is(.st-nivel, .st-modeseg, .bk-seg) button { font-size: var(--fs-s); min-height: 28px; border-radius: var(--r-pill); }
+/* IMG-17: deshabilitado es borde sólido y texto gris; el borde de trazos queda solo para «suelta aquí» */
+html:root body #studioOv :is(button, [role="button"]):is(:disabled, [aria-disabled="true"]) { border-style: solid; }

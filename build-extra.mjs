@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 
 export const ENTRADA = 'src/estudio-extra.js';
 /** Lo que el paquete aparte comparte con la página: pequeño, y la galería lo usa siempre (sin esperar al banco). */
-export const COMPARTIDOS = ['src/studio-qa.js'];
+export const COMPARTIDOS = ['src/studio-qa.js', 'src/teclas1.js']; // teclas1: los atajos de una tecla que se pueden apagar (IMG-26), unas líneas
 /** El estilo que viaja con el paquete y no con la página: solo lo usa lo que el paquete pinta (todo lleva .e3d o .lt delante). */
 export const CSS_APARTE = ['escena3d.css', 'estudio-lotes.css'];
 const MARCA = '@@AO_EXTRA_VERSION@@';

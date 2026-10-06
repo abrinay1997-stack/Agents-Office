@@ -58,6 +58,7 @@ import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vi
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
 import * as media from './media.mjs';
 import { crearPresets } from './presets.mjs'; // el banco de presets del Estudio (F1)
+import { crearPlantillas } from './plantillas.mjs'; // IMG-46 (6 oct 2026): cualquier configuración del compositor, como nota del Cerebro
 import { crearLotes, DEFAULTS as LOTES_DEFAULTS, pideOkAgente } from './lotes.mjs'; import * as puenteLotes from './lotes-puente.mjs'; // los lotes del Estudio (F2): el motor y su traducción para la pestaña Lotes
 import { sendJson, lightTasks } from './http-json.mjs';
 import { createCache } from './vault-cache.mjs';
@@ -121,6 +122,7 @@ media.configure(cfg, cfg.brainPath, process.env.AO_DATA ? path.resolve(process.e
 voces.configureVoices(DATA); // V4.10
 // Banco de presets (F1, 1 oct 2026): la fábrica (presets/) y los del dueño (notas en <cerebro>/Estudio/Presets/). Compilar no gasta;
 // aplicar sí, por los topes del Estudio, y solo desde el clic del dueño (POST /api/media/presets/apply).
+const plantillas = crearPlantillas({ brainPath: cfg.brainPath, onNota: () => { rebuildGraph().catch(() => {}); } });
 const presets = crearPresets({ brainPath: cfg.brainPath, dataDir: DATA, cifras: () => loadCifras(), onNota: () => { rebuildGraph().catch(() => {}); } });
 // Lotes (F2, 1 oct 2026; lotes.mjs): muchas fotos con la misma receta. Nace «previsto» (no gasta); la bomba solo trabaja tras PROBAR o GENERAR,
 // gotea dejando un hueco del Estudio libre y mira los topes antes de cada foto. Va DESPUÉS de media.configure() (engancha el fin de cada trabajo);
@@ -2389,6 +2391,15 @@ const server = http.createServer(async (req, res) => {
         if (id && sub === 'csv' && req.method === 'GET') { const c = Buffer.from(lotes.csv(id), 'utf8'); res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="lote-${id}.csv"`, 'content-length': c.length, 'x-content-type-options': 'nosniff' }); return res.end(c); }
         return json(res, 404, { error: 'no such route' });
       } catch (e) { if (!e.status) console.warn('lote:', e.message); return json(res, e.status || 400, { error: e.message }); }
+    }
+    if (url.pathname === '/api/media/plantillas' || url.pathname.startsWith('/api/media/plantillas/')) { // IMG-46: plantillas del Estudio (no gastan)
+      const pm = url.pathname.match(/^\/api\/media\/plantillas\/(pl-[a-z0-9-]{1,40})$/);
+      try {
+        if (url.pathname === '/api/media/plantillas' && req.method === 'GET') return json(res, 200, plantillas.lista());
+        if (url.pathname === '/api/media/plantillas' && req.method === 'POST') { const r = plantillas.guardar(await body(req)); console.log(`✦ estudio: plantilla «${r.plantilla.nombre}» → ${r.archivo}`); return json(res, 200, r); }
+        if (pm && req.method === 'DELETE') return plantillas.borrar(pm[1]) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'esa plantilla ya no está' });
+        return json(res, 404, { error: 'no such route' });
+      } catch (e) { return json(res, e.status || 400, { error: e.message }); }
     }
     if (url.pathname === '/api/media/presets' || url.pathname.startsWith('/api/media/presets/')) { // Banco de presets (F1, §6.4)
       const sp = url.searchParams, pm = url.pathname.match(/^\/api\/media\/presets\/([a-z0-9-]{2,40})(\/versiones)?$/);

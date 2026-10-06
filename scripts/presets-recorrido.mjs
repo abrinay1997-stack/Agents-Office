@@ -17,6 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+/** 6 oct 2026 (IMG-33): los formatos poco usados van bajo «Más formatos»; se abre antes de pulsar uno de ellos. */
+const formato = async (page, v) => { const b = page.locator(`#studioOv [data-ar="${v}"]`); if (!(await b.isVisible()) && await page.$('#studioOv .st-armas')) await page.click('#studioOv .st-armas'); await page.click(`#studioOv [data-ar="${v}"]`); };
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const OUT = path.join(ROOT, 'data', 'capturas', 'presets', 'integracion');
@@ -114,7 +116,7 @@ try {
   await limpiar(page);
   await banco(page, 'catalogo web', 'cat-web-panaclaw'); await page.keyboard.press('Escape');
   await elegirModelo(page, 'nano-banana-pro');
-  if (await page.$(`${S} [data-ar="9:16"]`)) await page.click(`${S} [data-ar="9:16"]`);
+  if (await page.$(`${S} [data-ar="9:16"]`)) await formato(page, '9:16');
   r = await generar(page);
   ok('«Catálogo para la web»: el costo junto a GENERAR antes de gastar', /US\$/.test(r.est), r.est);
   ok('«Catálogo para la web»: una sola llamada a la IA', vistos.length === 1);
@@ -138,12 +140,12 @@ try {
   // 4. Sala con escenario 3D
   await limpiar(page);
   await banco(page, 'sala', 'esc-sala'); await page.keyboard.press('Escape');
-  await elegirModelo(page, 'nano-banana-2'); if (await page.$(`${S} [data-ar="3:4"]`)) await page.click(`${S} [data-ar="3:4"]`);
+  await elegirModelo(page, 'nano-banana-2'); if (await page.$(`${S} [data-ar="3:4"]`)) await formato(page, '3:4');
   await page.click(`${S} [data-escena="abrir"]`); await page.waitForSelector(`${S} .st-bank .e3d`);
   ok('El escenario 3D toma el formato del compositor (3:4)', /3:4/.test(await page.textContent(`${S} .st-bank .e3d-prop`)), await page.textContent(`${S} .st-bank .e3d-prop`));
-  await page.click(`${S} [data-ar="1:1"]`); await page.waitForTimeout(400);
+  await formato(page, '1:1'); await page.waitForTimeout(400);
   ok('Cambiar el formato cambia «Lo que ve la cámara» (1:1)', /1:1/.test(await page.textContent(`${S} .st-bank .e3d-prop`)));
-  await page.click(`${S} [data-ar="3:4"]`); await page.waitForTimeout(300);
+  await formato(page, '3:4'); await page.waitForTimeout(300);
   const toma = await page.$(`${S} .st-bank .e3d [data-toma="tres-cuartos"], ${S} .st-bank .e3d button:has-text("3/4")`); if (toma) await toma.click();
   const dist = await page.$(`${S} .st-bank .e3d [data-dist="margen"], ${S} .st-bank .e3d button:has-text("Con margen")`); if (dist) await dist.click();
   await page.waitForTimeout(400);

@@ -22,6 +22,7 @@ import { initEscena3d } from './escena3d.js';
 import { iconoSVG } from '../presets/iconos.mjs';
 import { cargarFabricaDemo } from './presets-fabrica.js';
 import * as K from './studio-banco-core.js';
+import { ignorar as ignorarTecla } from './teclas1.js'; // IMG-26: «/» is a single-key shortcut too
 
 // lo puro, con el mismo nombre de siempre (src/studio-lotes.js importa marca, anadir y usd de aquí)
 export * from './studio-banco-core.js';
@@ -39,7 +40,8 @@ export function initBanco(ctx) {
   let presets = fab.presets.filter(p => arr(p.medios).includes('image')), info = new Map(), sharp = true, models = [];
   let byId = new Map(presets.map(p => [p.id, p]));
   const guardado = LS.get(EST, {});
-  const st = { puerta: K.PUERTAS.some(p => p.id === guardado.puerta) ? guardado.puerta : 'foto', foto: null, refs: [], pila: Array.isArray(guardado.pila) ? guardado.pila.filter(x => x && typeof x.id === 'string') : [], /* se limpia al llegar los presets */ canal: null, proporcion: null, escena: guardado.escena ? E3.normalizar(guardado.escena) : null, modelo: null, idea: '', n: 1 };
+  const st = { puerta: K.PUERTAS.some(p => p.id === guardado.puerta) ? guardado.puerta : 'cero', foto: null, refs: [], pila: Array.isArray(guardado.pila) ? guardado.pila.filter(x => x && typeof x.id === 'string') : [], /* se limpia al llegar los presets */ canal: null, proporcion: null, escena: guardado.escena ? E3.normalizar(guardado.escena) : null, modelo: null, idea: '', n: 1 };
+  let intentado = false; // IMG-40: lo que falta pasa de pista (gris) a error (rojo) solo cuando ya intentaste generar
   let plan = null, planSig = '', planT = null, planBusy = 0, deshacer = null, toastT = 0, q = '', grupoAbierto = null, editor = null, guardarPara = null;
   let chipAbierto = null, tab = 'elegir', rov = '', estrecho = false, favVista = [], recVista = []; // las secciones se arman con lo de al abrir: la lista no salta mientras eliges
   const fav = new Set(LS.get(FAV, [])), rec = LS.get(REC, []);
@@ -120,11 +122,11 @@ export function initBanco(ctx) {
         <span class="bk-seg" role="group" aria-label="Fuerza de ${esc(inf.es)}">${[1, 2, 3].map(v => `<button type="button" data-fz="${v}" data-eje="${k}" data-ri="${i}" data-f="fz-${i}-${k}-${v}" aria-pressed="${r.ejes[k] === v}"${r.ejes[k] > 0 ? '' : ' disabled'}>${K.INTENSIDADES[v - 1][1]}</button>`).join('')}</span></div>`; }).join('')}</details></div></div>`; }).join('');
   }
   function pintar() {
-    const modo = K.modoDeEstado(st), propio = st.pila.length || st.escena, falta = K.faltaEnPuerta(st);
+    const propio = st.pila.length || st.escena, ep = K.estadoPuerta(st, { intentado });
     const chips = chipsHTML('c');
     rehacer(main, `<div class="st-h" id="${U}T"><b>${iconoSVG('M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z', { tam: 14 })}</b> Presets <span class="st-hn">opcional · combínalos</span></div>
       <div class="bk-doors" role="group" aria-label="¿De dónde partes? (atajos: nada se borra al cambiar)">${K.PUERTAS.map(p => `<button type="button" data-puerta="${p.id}" data-f="door-${p.id}" aria-pressed="${st.puerta === p.id}" title="${esc(p.ayuda)}">${esc(p.es)}</button>`).join('')}</div>
-      <p class="bk-modo" aria-live="polite">Ahora: <b>${K.MODO_ES[modo] || modo}</b>${st.escena ? ' · con escenario 3D' : ''}${falta ? ` · <span class="bk-falta">${esc(falta)}</span>` : ''}</p>
+      <p class="bk-modo" aria-live="polite">Ahora: <b>${esc(ep.etiqueta)}</b>${st.escena ? ' · con escenario 3D' : ''}${ep.falta ? ` · <span class="${ep.grave ? 'bk-falta' : 'bk-pista'}">${esc(ep.falta)}</span>` : ''}</p>
       <div class="bk-in">
         <div class="bk-slot"><span class="bk-lbl">Tu foto <small>se conserva</small></span>${st.foto ? `<span class="bk-th"><img src="${esc(src(st.foto))}" alt=""><button type="button" class="bk-x" data-unfoto data-f="unfoto" aria-label="Quitar tu foto">✕</button></span>` : `<button type="button" class="bk-add" data-subir="foto" data-f="sub-foto">Subir</button><button type="button" class="bk-add" data-galeria="foto" data-f="gal-foto">De la galería</button>`}</div>
         <div class="bk-slot bk-slotr"><span class="bk-lbl">Referencias <small>se imita, nunca se copia su producto</small></span>${refsHTML()}${st.refs.length < 3 ? `<span class="bk-addrow"><button type="button" class="bk-add" data-subir="ref" data-f="sub-ref">Subir</button><button type="button" class="bk-add" data-galeria="ref" data-f="gal-ref">De la galería</button></span>` : ''}</div>
@@ -182,7 +184,7 @@ export function initBanco(ctx) {
   /* ---------- la hoja: el banco o el escenario ---------- */
   function cards(ids, sec) {
     return `<ul class="bk-cards" data-sec="${esc(sec)}">${ids.map(id => byId.get(id)).filter(Boolean).map(p => { const on = st.pila.some(x => x.id === p.id), s = info.get(p.id), k = `${sec}|${p.id}`, mid = `${U}-m-${sec}-${p.id}`.replace(/[^\w-]/g, '_');
-      return `<li class="bk-cw"><button type="button" class="bk-card" data-pid="${esc(p.id)}" data-k="${esc(k)}" data-f="card-${esc(k)}" tabindex="-1" aria-pressed="${on}" aria-describedby="${mid}"><span class="bk-ci">${ico(p)}</span><span class="bk-cn"><b>${esc(p.nombre)}${p.capa === 'receta' ? ' <span class="bk-rc">receta</span>' : ''}</b>${p.tecnico ? `<small>${esc(p.tecnico)}</small>` : ''}<small class="bk-mk bk-mk-${K.tipoMarca(p, { sharp, sirve: s })}" id="${mid}">${esc(K.marca(p, { sharp, sirve: s }))}${p.estado === 'beta' ? ' · beta' : ''}</small></span></button><button type="button" class="bk-star" data-star="${esc(p.id)}" tabindex="-1" aria-pressed="${fav.has(p.id)}" aria-label="Favorito: ${esc(p.nombre)}" title="${fav.has(p.id) ? 'Quitar de favoritos' : 'Marcar favorito'} (Espacio)">${fav.has(p.id) ? '★' : '☆'}</button></li>`; }).join('')}</ul>`;
+      return `<li class="bk-cw"><button type="button" class="bk-card" data-pid="${esc(p.id)}" data-k="${esc(k)}" data-f="card-${esc(k)}" tabindex="-1" aria-pressed="${on}" aria-describedby="${mid}"><span class="bk-ci">${ico(p)}</span><span class="bk-cn"><b>${esc(p.nombre)}${p.capa === 'receta' ? ` <span class="bk-rc" title="Receta: combina varios pasos">${iconoSVG('M12 3 3 7.5l9 4.5 9-4.5L12 3zM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5', { tam: 13 })}<span class="bk-sr">receta</span></span>` : ''}</b>${p.tecnico ? `<small>${esc(p.tecnico)}</small>` : ''}<small class="bk-mk bk-mk-${K.tipoMarca(p, { sharp, sirve: s })}" id="${mid}">${esc(K.marca(p, { sharp, sirve: s }))}</small></span></button><button type="button" class="bk-star" data-star="${esc(p.id)}" tabindex="-1" aria-pressed="${fav.has(p.id)}" aria-label="Favorito: ${esc(p.nombre)}" title="${fav.has(p.id) ? 'Quitar de favoritos' : 'Marcar favorito'} (Espacio)">${fav.has(p.id) ? '★' : '☆'}</button></li>`; }).join('')}</ul>`;
   }
   /** Una sola tarjeta de la lista entra con Tab (roving tabindex): la última que tuvo el foco, o la primera. */
   function rovingListo() {
@@ -246,7 +248,7 @@ export function initBanco(ctx) {
     if (modo === 'banco') {
       if (editor) { editor.destroy(); editor = null; }
       favVista = [...fav]; recVista = [...rec];
-      sheet.innerHTML = `<div class="bk-sh"><b id="${U}-sh">Banco de presets</b><span class="bk-shm"></span><span class="sp"></span><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el banco" title="Cerrar (Esc)">✕</button></div>
+      sheet.innerHTML = `<div class="bk-sh"><b id="${U}-sh">Banco de presets</b><small class="bk-beta" title="Los presets se están afinando: revisa cada resultado">en beta</small><span class="bk-shm"></span><span class="sp"></span><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el banco" title="Cerrar (Esc)">✕</button></div>
         <div class="bk-tabs" aria-label="Partes del banco">${K.PESTANAS.map(([k, t]) => `<button type="button" id="${U}-t-${k}" data-tab="${k}" aria-controls="${U}-p-${k}" aria-selected="${tab === k}"${tab === k ? '' : ' tabindex="-1"'}>${t}<span class="bk-tn" data-tn="${k}" aria-hidden="true"></span><span class="bk-sr" data-tns="${k}"></span></button>`).join('')}</div>
         <div class="bk-cols">
           <section class="bk-pane bk-pe" id="${U}-p-elegir" data-pane="elegir" aria-labelledby="${U}-t-elegir">
@@ -304,13 +306,25 @@ export function initBanco(ctx) {
     else if (!st.refs.some(r => r.id === f) && st.refs.length < 3) st.refs.push({ id: f, ejes: { ...core.EJES_REF_DEF } });
     cambio();
   }
+  /** IMG-41: GENERAR con un plan imposible lleva a lo que falta (tu foto, la referencia) en vez de no hacer nada. */
+  function enfocarFalta() {
+    const e = plan?.errores?.[0] || '', f = /tu foto/i.test(e) && !st.foto ? 'sub-foto' : /referencia/i.test(e) && !st.refs.length ? 'sub-ref' : '';
+    const b = f && main.querySelector(`[data-f="${f}"]`); if (b) { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); b.focus({ preventScroll: true }); }
+  }
+  /** IMG-39: las referencias del paso 4 del compositor pasan a «Referencias» del banco (como mucho 3). Devuelve las que entraron. */
+  function anadirRefs(files) {
+    const ok = [];
+    for (const f of files || []) { if (st.refs.length >= 3) break; if (/\.(mp4|webm|mp3|wav|flac|m4a|ogg)$/i.test(f) || st.refs.some(r => r.id === f)) continue; st.refs.push({ id: f, ejes: { ...core.EJES_REF_DEF } }); ok.push(f); }
+    if (ok.length) { if (st.puerta === 'cero') { st.puerta = 'ref'; keep(); } toco('refs'); cambio(); } // como la foto (arriba): la puerta sigue a lo que pusiste (IMG-40)
+    return ok;
+  }
   /** GENERAR con presets: el único gasto, por /api/media/presets/apply (pasa por los topes del Estudio). */
   async function generar() {
     if (!live()) return say?.('En la demo solo se ve el plan: abre la oficina con el iniciador para generar.', true);
     await replan(true);
-    if (plan?.errores?.length) { onState?.(); return say?.(plan.errores[0], true); }
+    if (plan?.errores?.length) { intentado = true; pintar(); onState?.(); enfocarFalta(); return say?.(plan.errores[0], true); }
     const c = plan?.costo?.usd || 0;
-    if (c >= 0.5 && !confirm(`Esto cuesta aprox. ${K.usd(c)}. ¿Generar?`)) return;
+    if (ctx.confirmar ? !ctx.confirmar(c) : c >= 0.5 && !confirm(`Esto cuesta aprox. ${K.usd(c)}. ¿Generar?`)) return; // IMG-11: the Estudio's second click
     try {
       const r = await api('POST', '/api/media/presets/apply', K.pedidoDe({ ...st, idea: idea?.() || '', n: cantidad?.() || 1 }));
       say?.(r.plan?.soloLocal ? 'Haciéndose en tu máquina: gratis, en unos segundos. Sale en la galería.' : `En marcha con ${models.find(m => m.id === r.plan?.model)?.name || r.plan?.model}: sale en la galería, con su comprobación.`);
@@ -385,7 +399,7 @@ export function initBanco(ctx) {
   file.addEventListener('change', async () => { const fs = [...file.files]; file.value = ''; if (!fs.length) return; const items = await subir(fs); if (items[0]) tomar(fileFor === 'ref' ? 'ref' : 'foto', items[0].file); });
   el.addEventListener('keydown', e => {
     if (e.key === 'Escape' && escape(e, false)) { e.preventDefault(); e.stopPropagation(); return; } // si no, el Estudio: cierra la hoja o el Estudio
-    if (e.key === '/' && !TYPING(e.target) && hojaBanco()) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
+    if (e.key === '/' && !TYPING(e.target) && !ignorarTecla(e) && hojaBanco()) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
   });
 
   /* eventos de la hoja */
@@ -416,7 +430,7 @@ export function initBanco(ctx) {
       if (n !== -1 && cs[n]) { e.preventDefault(); e.stopPropagation(); rov = cs[n].dataset.k; rovingListo(); cs[n].focus(); cs[n].scrollIntoView({ block: 'nearest' }); return; }
     }
     if (t.matches?.('.bk-qi') && e.key === 'ArrowDown') { const c = $$('.bk-card[tabindex="0"]') || $$('.bk-card'); if (c) { e.preventDefault(); e.stopPropagation(); c.focus(); } return; }
-    if (e.key === '/' && !TYPING(t)) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
+    if (e.key === '/' && !TYPING(t) && !ignorarTecla(e)) { e.preventDefault(); e.stopPropagation(); ponTab('elegir'); $$('.bk-qi')?.focus(); $$('.bk-qi')?.select(); }
   });
   sheet.addEventListener('keyup', e => { if (e.target.classList?.contains('bk-card') && (e.key === ' ' || e.key === 'Spacebar')) e.preventDefault(); }); // Espacio no «pulsa» la tarjeta
 
@@ -446,6 +460,12 @@ export function initBanco(ctx) {
     costo: () => (plan ? plan.costo?.texto || '—' : 'calculando…'),
     /** El primer problema del plan (o ''), para decirlo junto a GENERAR. */
     error: () => (plan?.errores?.[0] || ''),
+    anadirRefs, enfocarFalta,
+    /** IMG-39 (Fase 6): tu foto y las referencias, para que GENERAR sin presets las use y Básico las recupere. */
+    material: () => [st.foto, ...st.refs.map(r => r.id)].filter(Boolean),
+    vaciarMaterial() { const out = [st.foto, ...st.refs.map(r => r.id)].filter(Boolean); if (out.length) { toco('foto', 'refs'); st.foto = null; st.refs = []; cambio(); } return out; },
+    /** IMG-41: el texto de GENERAR cuando el plan no se puede hacer (o ''). */
+    bloqueado: () => K.botonBloqueado(plan?.errores?.[0]),
     /** Para la tarjeta de la galería: el resumen de la QA de un archivo que salió de un preset. */
     qaHTML(it) { const r = K.qaResumen(it?.qa); return r ? `<span class="bk-q bk-q-${r.estado}">${esc(r.texto)}</span>` : ''; },
     guardarDesde(it) { guardarPara = { desde: it.file, nombre: '' }; pintar(); setTimeout(() => $('.bk-guardar input')?.focus(), 0); },

@@ -4,7 +4,7 @@
    minmax(0, 1fr), el escenario (.st-lstage) llena su celda y la imagen ocupa el escenario entero con object-fit (nunca se corta,
    nunca se agranda por encima de su tamaño). El zoom (src/viewer-zoom.js) solo le pone un transform; el escenario recorta. */
 .st-light { padding: 24px; }
-.st-light .st-lbox { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr); gap: 0; width: min(1480px, 96vw); max-width: none; height: min(92vh, 980px); max-height: none; padding: 0; overflow: hidden; border-radius: 16px; }
+.st-light .st-lbox { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: minmax(0, 1fr); gap: 0; width: min(1480px, 96vw); max-width: none; height: min(92vh, 980px); max-height: none; padding: 0; overflow: hidden; border-radius: 12px; }
 .st-light .st-lmedia { min-width: 0; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; place-items: stretch; gap: 10px; padding: 16px; background: #0F1013; overflow: hidden; }
 .st-light .st-lmedia:has(.st-laud) { grid-template-rows: minmax(0, 1fr); place-items: center; }
 .st-lstage { position: relative; min-width: 0; min-height: 0; overflow: hidden; display: grid; }
@@ -19,7 +19,7 @@ body.dark .st-light .st-linfo { background: #15161A; }
 /* La barra del zoom, bajo la imagen, sobre el fondo oscuro del visor (blanco sobre #0F1013: 17:1) */
 .st-ztools { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; color: #F2EFE8; }
 .st-ztools button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; min-height: 32px; padding: 4px 12px; border-radius: 99px; border: 1px solid rgba(242,239,232,.45); background: none; color: #F2EFE8; font: 12.5px var(--ui); cursor: pointer; }
-.st-ztools button[data-z="in"], .st-ztools button[data-z="out"] { padding: 0; width: 32px; font-size: 18px; line-height: 1; }
+.st-ztools button[data-z="in"], .st-ztools button[data-z="out"] { padding: 0; width: 32px; font-size: 16px; line-height: 1; }
 .st-ztools button:hover:not(:disabled), .st-ztools button[aria-pressed="true"] { background: #F2EFE8; color: #151414; border-color: #F2EFE8; }
 .st-ztools button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .st-light .st-ztools button:focus-visible { outline-color: #8FB0FF; } /* el anillo sobre el fondo oscuro del visor, también en claro */
@@ -33,29 +33,29 @@ body.dark .st-light .st-linfo { background: #15161A; }
 /* El panel: «Versión de…», «Versiones (n)», Editar y Mandar a un departamento */
 .st-lver { margin: 0 0 8px; font-size: 12.5px; color: var(--grey); }
 .st-lver .st-lk { color: var(--ink); min-height: 24px; }
-.st-lvers { margin: 12px 0 4px; } .st-lvers h3 { margin: 0 0 6px; font: 700 11px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--grey); }
+.st-lvers { margin: 12px 0 4px; } .st-lvers h3 { margin: 0 0 6px; font: 700 11.5px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--grey); }
 .st-lvers > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.st-lvers button { width: 56px; height: 56px; padding: 0; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #0F1013; cursor: pointer; }
+.st-lvers button { width: 56px; height: 56px; padding: 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: #0F1013; cursor: pointer; }
 .st-lvers img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .st-lvers button:hover { border-color: var(--ink); } .st-lvers button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .st-lpanel { margin: 14px 0 4px; padding: 14px; border: 1.5px solid var(--ink); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
 .st-lpanel h3 { display: flex; align-items: center; gap: 8px; margin: 0; font: 600 14px var(--ui); } .st-lpanel h3 .ic { width: 16px; height: 16px; }
-.st-lpanel .st-plab { display: flex; flex-direction: column; gap: 4px; font: 700 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
-.st-lpanel textarea, .st-lpanel input, .st-lpanel select { font: 13.5px/1.45 var(--ui); color: var(--ink); background: var(--cream); border: 1px solid var(--grey); border-radius: 9px; padding: 8px 10px; min-height: 36px; text-transform: none; letter-spacing: 0; width: 100%; box-sizing: border-box; }
+.st-lpanel .st-plab { display: flex; flex-direction: column; gap: 4px; font: 700 11.5px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+.st-lpanel textarea, .st-lpanel input, .st-lpanel select { font: 14px/1.45 var(--ui); color: var(--ink); background: var(--cream); border: 1px solid var(--grey); border-radius: 8px; padding: 8px 10px; min-height: 36px; text-transform: none; letter-spacing: 0; width: 100%; box-sizing: border-box; }
 body.dark .st-lpanel textarea, body.dark .st-lpanel input, body.dark .st-lpanel select { background: #1E1F24; }
 .st-lpanel textarea { resize: vertical; min-height: 72px; }
 .st-lpanel textarea:focus-visible, .st-lpanel input:focus-visible, .st-lpanel select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .st-edex { display: flex; flex-wrap: wrap; gap: 6px; }
-.st-edex button { min-height: 28px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); font: 12px var(--ui); cursor: pointer; }
+.st-edex button { min-height: 28px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); font: 12.5px var(--ui); cursor: pointer; }
 .st-edex button:hover { border-color: var(--ink); }
-.st-edn { margin: 0; font-size: 12px; line-height: 1.45; color: var(--grey); }
+.st-edn { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--grey); }
 .st-edrow { display: flex; flex-wrap: wrap; gap: 8px; }
 .st-edrow button { min-height: 34px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); font: 600 12.5px var(--ui); cursor: pointer; }
 .st-edrow button.pri { background: var(--ink); color: var(--cream); border-color: var(--ink); }
 .st-edrow button:disabled { cursor: not-allowed; background: none; color: var(--grey); border: 1px dashed var(--grey); } /* apagado: borde de trazos y texto gris a 4,5:1, sin opacity */
 .st-lpanel button:focus-visible, .st-lacts button:focus-visible, .st-lacts a:focus-visible, .st-lacts2 button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .st-edmsg { font-size: 12.5px; color: #B3261E; } .st-edmsg:empty { display: none; } body.dark .st-edmsg { color: #FF8A7A; }
-.st-edoff { padding: 10px 12px; border-radius: 9px; background: rgba(209,138,0,.12); border: 1px solid #8A5A00; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
+.st-edoff { padding: 10px 12px; border-radius: 8px; background: rgba(209,138,0,.12); border: 1px solid #8A5A00; font-size: 12.5px; line-height: 1.5; color: var(--ink); }
 .st-edoff:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .st-edoff ul { margin: 6px 0 0; padding-left: 18px; } .st-edoff code { font-size: 11.5px; word-break: break-all; }
 body.dark .st-edoff { border-color: #F2C46B; }
@@ -74,3 +74,245 @@ body.dark .st-edoff { border-color: #F2C46B; }
   .st-light .st-lbox { width: 100%; max-height: 100vh; max-height: 100dvh; border-radius: 0; }
   .st-ztools [data-z="full"] span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
+
+/* Auditoría del Estudio de imagen, Fase 1 (6 oct 2026) */
+/* IMG-19: «Más ajustes» es un bloque: el resumen arriba, los ajustes debajo, y un selector nunca se aplasta */
+#studioOv details.st-more { display: block; }
+#studioOv .st-sets select, #studioOv .st-sets2 select { min-width: 96px; }
+/* IMG-04: el error original, aparte y plegado */
+#studioOv .st-jraw { margin-top: 6px; font-size: 11.5px; text-align: left; max-width: 100%; }
+#studioOv .st-jraw summary { cursor: pointer; color: var(--grey); min-height: 24px; }
+#studioOv .st-jraw code { display: block; white-space: pre-wrap; word-break: break-word; font-size: 11.5px; color: var(--ink); background: rgba(127,127,127,.1); border-radius: 8px; padding: 6px 8px; margin-top: 4px; }
+/* IMG-39: las referencias que no se usan con presets, y cómo pasarlas */
+#studioOv .st-refwarn { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--ink); background: rgba(224,160,32,.12); border: 1px solid rgba(201,138,0,.45); border-radius: 10px; padding: 6px 10px; }
+#studioOv .st-refwarn[hidden] { display: none; }
+#studioOv .st-refwarn button { font: 600 12.5px var(--ui); min-height: 28px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-refwarn button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-41: GENERAR dice lo que falta (no es un botón muerto: lleva a lo que falta) */
+#studioOv .st-go.st-go-falta { background: var(--cream); color: var(--ink); border: 2px solid #A1261B; letter-spacing: .04em; }
+body.dark #studioOv .st-go.st-go-falta { border-color: #FF9A8C; }
+/* IMG-05: con el precio dentro, GENERAR puede pedir dos líneas: salta de línea dentro de su columna, nunca la empuja */
+#studioOv .st-foot { grid-template-columns: auto minmax(0, 1fr); }
+#studioOv .st-go { white-space: normal; min-width: 0; letter-spacing: .08em; line-height: 1.25; }
+#studioOv .st-jacts { flex-wrap: wrap; }
+
+/* Auditoría del Estudio de imagen, Fase 2 (6 oct 2026) */
+/* IMG-09: la fila de la tarjeta son sus acciones primarias, con su nombre (Editar, Variar) y Descargar; el resto, en «⋯» por grupos */
+#studioOv .st-card .st-ov { flex-wrap: wrap; gap: 4px; padding-left: 8px; padding-right: 8px; }
+#studioOv .st-card .st-ov button, #studioOv .st-card .st-ov a { width: 30px; height: 30px; }
+#studioOv .st-card .st-ov .st-oiw { width: auto; padding: 0 7px 0 5px; gap: 4px; display: inline-flex; align-items: center; font: 600 12.5px var(--ui); }
+#studioOv .st-card .st-ov .st-oiw .ic { width: 15px; height: 15px; }
+#studioOv .st-menu .st-mh { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--grey); padding: 8px 10px 3px; }
+#studioOv .st-menu [role="group"] + [role="group"] { border-top: 1px solid var(--hairline); margin-top: 4px; }
+/* IMG-08: el pedido de varias imágenes es un encabezado y, debajo, cada imagen como una tarjeta con sus acciones */
+#studioOv .st-group .st-ghead { padding: 8px 10px 7px; border-bottom: 1px solid var(--hairline); gap: 2px; }
+#studioOv .st-group .st-ghead .st-p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#studioOv .st-group .st-ghead .st-gacts { margin-top: 4px; gap: 4px; }
+#studioOv .st-group .st-ghead .st-gacts button { min-height: 26px; padding: 3px 9px; }
+#studioOv .st-gsubs { display: flex; flex-direction: column; }
+#studioOv .st-card.st-sub { border: 0; border-radius: 0; margin: 0; border-bottom: 1px solid var(--hairline); background: none; }
+#studioOv .st-card.st-sub:last-child { border-bottom: 0; }
+#studioOv .st-card.st-sub .st-ov { padding-top: 8px; }
+#studioOv .st-gmorebtn { margin: 8px 10px 10px; align-self: flex-start; font: 600 12.5px var(--ui); min-height: 28px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-gmorebtn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-48: en el visor, las acciones por grupos con su nombre (Crear a partir de esta · Organizar · Enviar a…) */
+#studioOv .st-lacts2 { flex-direction: column; gap: 10px; }
+#studioOv .st-lgrp { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; }
+#studioOv .st-lgt { flex: 0 0 100%; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; color: var(--grey); }
+/* IMG-07: lo recién hecho se marca unos segundos («NUEVO» y un borde), sin mover el foco */
+#studioOv .st-card.st-nueva { box-shadow: 0 0 0 2px #C43E00; }
+#studioOv .st-card.st-sub.st-nueva { box-shadow: inset 0 0 0 2px #C43E00; }
+#studioOv .st-nuevo { position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none; font-size: 11.5px; letter-spacing: .1em; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: #C43E00; color: #fff; }
+/* IMG-23: menos cromo antes de las imágenes. La cabecera lleva las pestañas en su misma fila */
+#studioOv .st-head { flex-wrap: wrap; row-gap: 6px; }
+@media (min-width: 761px) {
+  #studioOv .st-head .st-ptabs { border-bottom: 0; padding: 0; margin-left: 14px; align-self: stretch; align-items: stretch; }
+  #studioOv .st-head .st-ptabs button { min-height: 0; }
+}
+/* la barra de la galería en una fila: «Mostrar ▾», las carpetas (se desplazan), buscar, Subir, Seleccionar y «⋯» */
+#studioOv .st-filt { row-gap: 8px; padding: 8px 18px; }
+#studioOv .st-fwrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--grey); }
+#studioOv .st-fsel { font: 600 12.5px var(--ui); min-height: 34px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; color: var(--ink); cursor: pointer; }
+body.dark #studioOv .st-fsel { background: #1E1F24; border-color: rgba(236,234,227,.3); }
+#studioOv .st-fsel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-filt .st-folders { flex: 1 1 160px; min-width: 0; padding: 2px 0; border-bottom: 0; }
+#studioOv .st-gmas { position: relative; }
+#studioOv .st-gmas > summary { list-style: none; width: 36px; height: 34px; box-sizing: border-box; display: grid; place-items: center; border: 1px solid var(--hairline); border-radius: 99px; cursor: pointer; color: var(--ink); }
+#studioOv .st-gmas > summary::-webkit-details-marker { display: none; }
+#studioOv .st-gmas[open] > summary, #studioOv .st-gmas > summary:hover { border-color: var(--ink); }
+#studioOv .st-gmas > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-gmasl { position: absolute; right: 0; top: calc(100% + 6px); z-index: 8; min-width: 210px; padding: 6px; border-radius: 12px; background: var(--cream); border: 1px solid var(--hairline); box-shadow: 0 16px 40px rgba(21,20,20,.22); display: flex; flex-direction: column; }
+body.dark #studioOv .st-gmasl { background: #15161A; }
+#studioOv .st-gmasl button { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: 12.5px var(--ui); text-align: left; cursor: pointer; }
+#studioOv .st-gmasl button:hover { background: rgba(127,127,127,.12); }
+#studioOv .st-gmasl button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+#studioOv .st-engov .st-engs { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; font-size: 12.5px; }
+/* IMG-52: en el teléfono, la cabecera es una sola fila (pestañas, topes, cerrar), la barra de la galería son iconos y el compositor se aprieta */
+@media (max-width: 760px) {
+  #studioOv .st-head { padding: 6px 10px; gap: 8px; flex-wrap: nowrap; }
+  #studioOv .st-head .st-logo, #studioOv .st-head .sp, #studioOv .st-bm { display: none; }
+  #studioOv .st-head > div:not(.st-ptabs) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #studioOv .st-head .st-ptabs { flex: 1 1 auto; min-width: 0; border-bottom: 0; padding: 0; }
+  #studioOv .st-head .st-ptabs button { padding: 8px 6px; }
+  #studioOv .st-filt { padding: 8px 12px; gap: 6px; flex-wrap: wrap; }
+  #studioOv .st-fwrap > span { display: none; }
+  #studioOv .st-qwrap { flex: 1 1 90px; min-width: 0; }
+  #studioOv .st-qwrap input { min-width: 0; width: 100%; }
+  #studioOv .st-upbtn span, #studioOv .st-selbtn span { display: none; }
+  #studioOv .st-upbtn, #studioOv .st-selbtn { min-width: 36px; min-height: 34px; justify-content: center; padding: 6px 9px; }
+  #studioOv .st-filt .st-folders { order: 9; flex: 1 1 100%; }
+  #studioOv .st-kind { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  #studioOv .st-kind button { flex-direction: column; gap: 3px; padding: 8px 4px; font-size: 12.5px; }
+  #studioOv .st-kind button .ic { width: 18px; height: 18px; }
+  #studioOv .st-mpick .st-mp-note, #studioOv .st-mpick .st-tags { display: none; }
+  #studioOv .st-est:not(.over) { display: none; }
+}
+/* Fase 3 (UI) */
+/* IMG-20: el motor va debajo del nombre del modelo: el nombre, en una línea */
+#studioOv .st-mpick .st-mp-top { flex-wrap: wrap; row-gap: 0; }
+#studioOv .st-mpick .st-mp-name { white-space: nowrap; }
+#studioOv .st-mpick .st-mp-eng { order: 5; flex-basis: 100%; }
+/* IMG-21: la etiqueta «Formato» con aire */
+#studioOv .st-ratios > .st-lab { margin-bottom: 6px; }
+/* IMG-22: el resumen (formato · duración…) arriba de la cantidad y GENERAR; debajo, solo el costo del día y los avisos */
+#studioOv .st-foot .st-sum { order: -1; }
+#studioOv .st-foot .st-est { font-size: var(--fs-xs); }
+/* IMG-11: GENERAR armado espera el segundo clic */
+#studioOv .st-go.st-armado { background: #151414; border-color: #151414; color: #fff; }
+body.dark #studioOv .st-go.st-armado { background: var(--cream); color: #151414; border-color: var(--cream); }
+#studioOv .st-ar small { font-size: var(--fs-xs); } /* IMG-15: venía de una regla compartida con otras vistas a 10,5 px */
+/* Fase 4 (accesibilidad) */
+/* IMG-27: un botón que solo es un icono dice su nombre con el foco del teclado y al mantenerlo pulsado (como el dock) */
+#studioOv [data-tip] { position: relative; }
+#studioOv [data-tip]:focus-visible::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 9; white-space: nowrap; pointer-events: none; padding: 5px 9px; border-radius: var(--r-s); background: var(--ink); color: var(--cream); font: 600 12px/1.25 var(--ui); box-shadow: 0 6px 18px rgba(21,20,20,.22); }
+#studioOv .st-head [data-tip]:focus-visible::after, #studioOv .st-filt [data-tip]:focus-visible::after { bottom: auto; top: calc(100% + 6px); }
+@media (hover: none) { #studioOv [data-tip]:active::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 9; white-space: nowrap; pointer-events: none; padding: 5px 9px; border-radius: var(--r-s); background: var(--ink); color: var(--cream); font: 600 12px/1.25 var(--ui); } }
+/* IMG-29: nada por debajo de 24 px */
+#studioOv .st-chip button { width: 24px; height: 24px; }
+#studioOv .st-lk { display: inline-block; min-height: 24px; line-height: 24px; }
+/* IMG-28: «Ctrl + Enter genera», a la vista donde se usa (no en el teléfono) */
+#studioOv .st-kbh { font-size: var(--fs-xs); color: var(--grey); margin-left: auto; white-space: nowrap; }
+#studioOv .st-kbh + .st-new { margin-left: 8px; }
+@media (max-width: 760px), (hover: none) { #studioOv .st-kbh { display: none; } }
+#studioOv .st-open-engs { min-height: 24px; } /* IMG-29: el enlace «Motores y keys» de «Empieza aquí» */
+/* Fase 5 (modo básico) */
+/* IMG-34: el tipo de medio son pestañas compactas arriba, y los pasos van por su título (los números cambiaban según el modelo) */
+#studioOv .st-step > .st-h > b:not(:has(svg)) { display: none; }
+#studioOv .st-s1 > .st-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#studioOv .st-kind { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+#studioOv .st-kind button { padding: 7px 6px; min-height: 36px; font-size: var(--fs-s); gap: 6px; }
+#studioOv .st-kind button .ic { width: 16px; height: 16px; }
+#studioOv .st-bchips, #studioOv .st-addimg { display: none; }
+#studioOv .st-addimg { align-items: center; gap: 5px; font: 600 var(--fs-s) var(--ui); min-height: 28px; padding: 3px 11px 3px 8px; border-radius: var(--r-pill); border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-addimg .ic { width: 15px; height: 15px; }
+#studioOv .st-addimg:hover { border-color: var(--ink); }
+#studioOv .st-addimg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-pwrap.st-dropref { box-shadow: 0 0 0 2px var(--focus); }
+#studioOv .st-mp-why { font-size: var(--fs-xs); color: var(--grey); }
+#studioOv .st-moff > summary { cursor: pointer; font-size: var(--fs-s); color: var(--grey); padding: 8px 6px; min-height: 24px; }
+#studioOv .st-moauto { border: 1px dashed transparent; }
+/* IMG-33: los formatos poco usados, bajo «Más formatos» */
+#studioOv .st-ars:not(.ver-mas) .st-ar-mas { display: none; }
+#studioOv .st-armas { align-self: flex-start; margin-top: 6px; font: 600 var(--fs-s) var(--ui); min-height: 28px; padding: 3px 11px; border-radius: var(--r-pill); border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-armas:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-35: la mejora es una propuesta que tomas o dejas */
+#studioOv .st-sug { border-top: 1px solid var(--hairline); padding: 8px 12px 10px; font-size: var(--fs-s); line-height: 1.45; background: rgba(127,127,127,.06); }
+#studioOv .st-sug[hidden] { display: none; }
+#studioOv .st-sugb { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+#studioOv .st-sugb button { font: 600 var(--fs-s) var(--ui); min-height: 28px; padding: 3px 12px; border-radius: var(--r-pill); border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+#studioOv .st-sugb button.pri { background: var(--ink); color: var(--cream); }
+#studioOv .st-sugb button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* IMG-32: Básico = la idea primero; debajo, el modelo y «Formato · Cantidad» como selectores; nada más */
+#studioOv.st-basico .st-s1 { order: 1; } #studioOv.st-basico .st-s3 { order: 2; } #studioOv.st-basico .st-matstep { order: 3; }
+#studioOv.st-basico .st-s2 { order: 4; } #studioOv.st-basico .st-bchips { order: 5; display: flex; flex-direction: row; gap: 10px; }
+#studioOv.st-basico .st-mpick .st-mp-top { flex-wrap: nowrap; } #studioOv.st-basico .st-mpick .st-mp-name { white-space: normal; } #studioOv.st-basico .st-mpick .st-mp-eng { display: none; }
+#studioOv.st-basico .st-bchips > label { flex: 1 1 0; }
+#studioOv.st-basico .st-bchips select { width: 100%; min-height: 36px; }
+#studioOv.st-basico :is(.st-s5, .st-modeseg, .st-lang, .st-matstep.st-vacio, .st-foot .st-qty, .st-foot .st-sum, .st-nivel [data-nivel="basico"]) { display: none; }
+#studioOv.st-basico .st-addimg { display: inline-flex; }
+#studioOv.st-basico :is(.st-s2, .st-s3) > .st-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#studioOv.st-basico .st-mpick :is(.st-mp-note, .st-tags) { display: none; }
+#studioOv.st-basico .st-nivel { justify-content: flex-end; border: 0; background: none; padding: 0; }
+#studioOv.st-basico .st-foot { grid-template-columns: 1fr; }
+/* Fase 6 (modo avanzado) */
+/* IMG-42: con sitio, el banco y el escenario 3D son un panel al lado de la galería: tu foto y los resultados siguen a la vista */
+@media (min-width: 1100px) {
+  #studioOv.st-hoja .st-gal > :not(.st-bank) { margin-right: 460px; }
+  #studioOv.st-hoja .st-gal > .st-bank { left: auto; width: 460px; box-shadow: -12px 0 30px rgba(21,20,20,.08); }
+}
+/* IMG-43: la estrella dentro de la tarjeta; «beta» una vez, en la cabecera; «receta» es un icono */
+#studioOv .st-bank .bk-cw { position: relative; }
+#studioOv .st-bank .bk-cw > .bk-card { flex: 1 1 auto; padding-right: 40px; }
+#studioOv .st-bank .bk-star { position: absolute; top: 4px; right: 4px; width: 32px; min-height: 32px; border: 0; background: none; }
+#studioOv .st-bank .bk-beta { font-size: var(--fs-xs); color: var(--grey); border: 1px solid var(--hairline); border-radius: var(--r-pill); padding: 1px 8px; }
+#studioOv .bk-rc { display: inline-flex; vertical-align: middle; color: var(--grey); }
+/* IMG-44: el escenario: la cámara fina, plegada; la proporción, solo para leer (es la del compositor) */
+#studioOv .e3d-fino > summary { cursor: pointer; font: 600 var(--fs-s) var(--ui); min-height: 28px; padding: 4px 0; }
+#studioOv .e3d-propf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+#studioOv .e3d-propf small { color: var(--grey); font-size: var(--fs-xs); }
+/* IMG-39: en Avanzado el material está en «Tu foto · Referencias»; el paso del compositor solo se ve si guarda algo que no cupo */
+#studioOv.st-avz .st-matstep.st-vacio { display: none; }
+#studioOv.st-banco-on .st-matstep:not(.st-vacio):not([hidden]) { display: flex; }
+/* IMG-14 (Fase 6): Comparar — dos con cortina, tres o cuatro en cuadrícula */
+#studioOv .st-cmpbox { width: min(1100px, 100%); max-height: 94vh; display: flex; flex-direction: column; gap: 10px; }
+#studioOv .st-cmpab { position: relative; height: min(68vh, 680px); background: var(--cv-soft); border-radius: var(--r-m); overflow: hidden; touch-action: none; cursor: ew-resize; }
+#studioOv .st-cmpab img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
+#studioOv .st-cmpab .st-cmpdes { clip-path: inset(0 0 0 var(--p)); }
+#studioOv .st-cmpbar { position: absolute; top: 0; bottom: 0; left: var(--p); width: 3px; margin-left: -1.5px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.45); }
+#studioOv .st-cmpbar span { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 36px; min-height: 36px; display: grid; place-items: center; border-radius: var(--r-pill); background: #fff; color: #111; font: 700 var(--fs-m)/1 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+#studioOv .st-cmpbar:focus-visible { outline: none; } #studioOv .st-cmpbar:focus-visible span { outline: 3px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-cmpcap { display: flex; justify-content: space-between; gap: 12px; margin: 0; font-size: var(--fs-s); }
+#studioOv .st-cmpcap span:last-child { text-align: right; }
+#studioOv .st-cmpgrid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); overflow: auto; }
+#studioOv .st-cmpgrid figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+#studioOv .st-cmpgrid img { width: 100%; height: min(36vh, 380px); object-fit: contain; background: var(--cv-soft); border-radius: var(--r-m); }
+#studioOv .st-cmpgrid figcaption { font-size: var(--fs-s); }
+@media (prefers-reduced-motion: no-preference) { #studioOv .st-cmpbar span { transition: transform .12s; } #studioOv .st-cmpab:active .st-cmpbar span { transform: translate(-50%, -50%) scale(1.08); } }
+/* IMG-46 (Fase 6): plantillas, al final de «Formato y ajustes» */
+#studioOv .st-plant { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+#studioOv .st-plant .st-lab { flex: 1 1 160px; min-width: 0; }
+#studioOv .st-plant button { min-height: 32px; padding: 5px 12px; border-radius: var(--r-s); border: 1px solid var(--hairline); background: var(--cv-card, #fff); color: var(--ink); font: 600 var(--fs-s)/1.2 var(--ui, system-ui), sans-serif; cursor: pointer; }
+#studioOv .st-plant button.pri { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+#studioOv .st-plant button:hover:not(:disabled) { border-color: var(--ink); }
+#studioOv .st-cmpov { z-index: 12; } /* above the selection bar (6) that opened it */
+#studioOv .st-plant .st-pldel { width: 32px; display: inline-grid; place-items: center; padding: 0; }
+#studioOv .st-pldel svg { width: 16px; height: 16px; }
+#studioOv .st-plform { flex: 1 1 100%; display: flex; gap: 6px; }
+#studioOv .st-plform[hidden] { display: none; }
+#studioOv .st-plform input { flex: 1 1 auto; min-width: 0; min-height: 32px; }
+
+/* ===== Fase 7 de la auditoría del Estudio de imagen (6 oct 2026): refinamiento ===== */
+/* IMG-51: «Plegar» con su icono, a la vista */
+#studioOv .st-fold { display: inline-flex; align-items: center; gap: 6px; margin: -4px 0 8px auto; padding: 4px 10px; min-height: 28px; border: 1px solid var(--hairline); border-radius: var(--r-pill); background: none; color: var(--ink); font: 600 var(--fs-xs)/1 var(--ui); cursor: pointer; float: right; }
+#studioOv .st-fold svg { width: 16px; height: 16px; }
+#studioOv .st-fold:hover { border-color: var(--ink); }
+#studioOv .st-scroll > .st-fold + * { clear: both; }
+@media (max-width: 760px) { #studioOv .st-fold { display: none; } }
+/* IMG-12: el aviso con dos salidas (DESHACER y VOLVER A LA IMAGEN) */
+#studioOv .st-toast .st-tback { background: none; color: inherit; box-shadow: inset 0 0 0 1px currentColor; }
+#studioOv .st-toast .st-tback[hidden] { display: none; }
+/* Variar en el visor: su aviso, dentro del visor */
+.st-light .st-lsay { margin: 6px 0 0; font-size: var(--fs-s); min-height: 0; }
+.st-light .st-lsay:empty { display: none; }
+.st-light .st-lsay.err { color: #B3261E; } body.dark .st-light .st-lsay.err { color: #FFB4AB; }
+.st-light .st-lacts button.st-armado { background: #151414; color: #fff; border-color: #151414; }
+body.dark .st-light .st-lacts button.st-armado { background: var(--cream); color: #151414; }
+/* IMG-53: en el teléfono, las acciones en una barra fija abajo; «⋯» lleva al resto */
+.st-light .st-lmas { display: none; }
+@media (max-width: 500px) {
+  .st-light .st-lacts { position: sticky; bottom: 0; z-index: 3; display: flex; flex-wrap: nowrap; gap: 6px; margin: 10px -16px 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--cream); border-top: 1px solid var(--hairline); box-shadow: 0 -6px 14px rgba(0,0,0,.06); }
+  body.dark .st-light .st-lacts { background: #15161A; }
+  .st-light .st-lacts > * { flex: 1 1 0; min-width: 0; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 40px; }
+  .st-light .st-lacts .st-lmas { display: inline-grid; place-items: center; flex: 0 0 44px; padding: 0; }
+  .st-light .st-lacts .st-lmas svg { width: 18px; height: 18px; }
+}
+/* Microinteracciones: lo nuevo entra, el botón que confirma late; nada se mueve con «reducir movimiento» */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes st-entra { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+  @keyframes st-late { 0%, 100% { box-shadow: 0 0 0 0 rgba(196, 62, 0, .45); } 50% { box-shadow: 0 0 0 6px rgba(196, 62, 0, 0); } }
+  #studioOv .st-card.st-nueva { animation: st-entra .32s var(--ease, ease-out) both; }
+  #studioOv .st-go.st-armado, .st-light .st-lacts button.st-armado { animation: st-late 1.2s ease-in-out infinite; }
+  #studioOv :is(.st-plant button, .st-fold, .st-selbar button, .st-toast button):active:not(:disabled) { transform: translateY(1px); }
+  .st-light .st-lacts button:active:not(:disabled), .st-light .st-lacts a:active { transform: translateY(1px); }
+}
+#studioOv .st-plsel:disabled { cursor: not-allowed; color: var(--grey); }

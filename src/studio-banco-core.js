@@ -49,12 +49,12 @@ export const atajoDe = ejes => ATAJOS_REF.find(a => core.EJES_REF.every(k => (a.
 
 /* ---------- la marca de cada tarjeta (§7.4): en texto, nunca solo con color u opacidad ---------- */
 export function marca(p, { sharp = true, sirve = null } = {}) {
-  if (p.ejecutor === 'local') return sharp ? 'gratis · en tu máquina' : 'no disponible en esta máquina';
+  if (p.ejecutor === 'local') return sharp ? 'gratis · en tu equipo' : 'no disponible en esta máquina'; // IMG-43 (6 oct 2026): tres niveles en palabras claras
   if (sirve && sirve.on === false) return 'sin motor: actívalo';
   if (p.honestidad) return String(p.honestidad);
   const soloFoto = arr(p.modos).length && arr(p.modos).every(m => m === 'foto' || m === 'foto+ref');
-  if (p.ejecutor === 'local+ia') return soloFoto ? 'necesita tu foto · la IA y aquí se garantiza' : 'la IA, y aquí se garantiza';
-  return soloFoto ? 'necesita tu foto · la IA rehace la imagen' : 'la IA rehace la imagen';
+  if (p.ejecutor === 'local+ia') return soloFoto ? 'necesita tu foto · con IA · se comprueba el resultado' : 'con IA · se comprueba el resultado';
+  return soloFoto ? 'necesita tu foto · con IA (rehace la imagen)' : 'con IA (rehace la imagen)';
 }
 /** El tipo de la marca, para su color (el texto ya lo dice): gratis · ia · falta. */
 export function tipoMarca(p, { sharp = true, sirve = null } = {}) {
@@ -101,6 +101,28 @@ export function faltaEnPuerta(st) {
   if (st.puerta === 'foto' && !st.foto) return 'Falta tu foto: el producto que se va a conservar.';
   if (st.puerta === 'ref' && !st.refs.length) return 'Falta la referencia: la imagen de la que se copia.';
   return '';
+}
+/**
+ * IMG-40 (auditoría del Estudio de imagen, 6 oct 2026): lo que dice la línea «Ahora: …» sin contradecir a la puerta pulsada.
+ * Antes, al entrar en Avanzado, la puerta «Mejorar mi foto» salía pulsada, la línea decía «Ahora: Desde cero» y en rojo «Falta tu
+ * foto» sin que el dueño hubiera hecho nada. Ahora: si la puerta promete algo que aún no está, la línea nombra la puerta y lo que
+ * falta es una PISTA (gris); solo pasa a ERROR (rojo) cuando el dueño ya intentó generar.
+ *   estadoPuerta(st, { intentado }) → { etiqueta, falta, grave }
+ */
+export function estadoPuerta(st, { intentado = false } = {}) {
+  const falta = st.puerta === 'foto' && !st.foto ? 'Sube tu foto: el producto que se va a conservar.'
+    : st.puerta === 'ref' && !st.refs.length ? 'Sube la referencia: la imagen de la que se copia.' : '';
+  const door = PUERTAS.find(p => p.id === st.puerta)?.es || '', modo = modoDeEstado(st);
+  const etiqueta = falta || (door && modo === modoDePuerta(st.puerta, { foto: st.foto })) ? door : (MODO_ES[modo] || modo); // what the door promised is there: the line says the door's own words
+  return { etiqueta, falta, grave: !!falta && intentado };
+}
+/** IMG-41: el texto de GENERAR cuando el plan no se puede hacer (el botón lo dice, y el clic lleva a lo que falta). */
+export function botonBloqueado(err) {
+  const e = String(err || '');
+  if (!e) return '';
+  if (/tu foto/i.test(e)) return 'Falta tu foto';
+  if (/referencia/i.test(e)) return 'Falta la referencia';
+  return 'Revisa el plan';
 }
 /** ¿Algún preset de la pila ya exporta para un canal? Si no, elegir un canal añade «Exportar para un canal». */
 export function exportaYa(pila, byId) {

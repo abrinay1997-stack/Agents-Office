@@ -51,3 +51,11 @@ test('the bin: listed with its days left, back to the gallery, or gone for good;
   assert.equal(media.trashList().length, 0);
   assert.equal(media.purge({ bin: ['../x'] }), 0);
 });
+
+test('files stored in the same millisecond keep the order they were made in (the gallery sorts by `at`)', () => {
+  const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-media-orden-'));
+  media.configure({}, brain, path.join(brain, 'data'));
+  const made = [up(), up(), up(), up()];
+  for (let i = 1; i < made.length; i++) assert.ok(made[i].at > made[i - 1].at, `${made[i].at} > ${made[i - 1].at}`);
+  assert.deepEqual(media.list({ limit: 4 }).map(x => x.id), made.map(x => x.id).reverse(), 'newest first, in the order they were made');
+});

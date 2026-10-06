@@ -34,6 +34,7 @@ function taken(folder, name, ext) {
   const tail = '-' + name + '.'; return fs.readdirSync(bin).some(f => f.includes(tail));
 }
 export const AUDIO_EXT = ['mp3', 'wav', 'flac', 'm4a', 'ogg']; // V4.10: MiniMax answers flac too; a voice to clone may come as m4a
+let lastAt = 0;
 export function store(buf, ext, meta) {
   const d = new Date(), sub = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   const folder = path.join(root, sub); fs.mkdirSync(folder, { recursive: true });
@@ -44,7 +45,8 @@ export function store(buf, ext, meta) {
   for (let n = 2; taken(folder, name, ext); n++) name = `${base}-${n}`;
   fs.writeFileSync(path.join(folder, name + '.' + ext), buf);
   const rel = `${sub}/${name}.${ext}`, wh = dims(buf, ext);
-  const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : AUDIO_EXT.includes(ext) ? 'audio' : 'image', ext, at: Date.now(), ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
+  const at = lastAt = Math.max(Date.now(), lastAt + 1); // 6 Oct 2026: two files stored in the same millisecond keep the order they were made in (the gallery sorts by `at`; a tie fell back to the name)
+  const item = { id: rel, file: rel, kind: ext === 'mp4' || ext === 'webm' ? 'video' : AUDIO_EXT.includes(ext) ? 'audio' : 'image', ext, at, ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
   fs.writeFileSync(path.join(folder, name + '.json'), JSON.stringify(item, null, 2));
   idxPut(sub, { ...item });
   return item;

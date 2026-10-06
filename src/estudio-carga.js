@@ -164,9 +164,14 @@ export function bancoDiferido(ctx) {
     refrescar: () => { if (real) return real.refrescar(); refrescado = true; },
     setModels(l) { if (real) real.setModels(l); else models = l; },
     replan: () => (real ? real.replan() : Promise.resolve(null)),
-    estado: () => (real ? real.estado() : { puerta: 'foto', foto: null, refs: [], pila: [], canal: null, escena: null, modelo: null, idea: '', n: 1, plan: null }),
+    estado: () => (real ? real.estado() : { puerta: 'cero', foto: null, refs: [], pila: [], canal: null, escena: null, modelo: null, idea: '', n: 1, plan: null }),
     costo: () => (real ? real.costo() : 'calculando…'),
     error: () => (real ? real.error() : ''),
+    bloqueado: () => (real && real.bloqueado ? real.bloqueado() : ''), // IMG-41: the text GENERAR shows when the plan cannot run
+    anadirRefs: files => (real && real.anadirRefs ? real.anadirRefs(files) : []), // IMG-39
+    material: () => (real && real.material ? real.material() : []),
+    vaciarMaterial: () => (real && real.vaciarMaterial ? real.vaciarMaterial() : []),
+    enfocarFalta: () => { if (real && real.enfocarFalta) real.enfocarFalta(); },
     /** La galería lo usa siempre: no espera al banco. */
     qaHTML(it) { if (real) return real.qaHTML(it); const r = qaResumen(it?.qa); return r ? `<span class="bk-q bk-q-${r.estado}">${ctx.esc(r.texto)}</span>` : ''; },
     guardarDesde: it => pedir(r => r.guardarDesde(it), { texto: 'Cargando el banco de presets para guardar el preset…' }),

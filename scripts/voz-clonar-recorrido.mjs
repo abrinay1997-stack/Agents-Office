@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { standIn, KEY } from '../tests/minimax-stand.mjs';
+const abrirVoces = async pg => { if (await pg.$('#studioOv [data-pt="gen"]:visible')) await pg.click('#studioOv [data-pt="gen"]').catch(() => {}); await pg.waitForSelector('#studioOv [data-kind="audio"]'); if (await pg.getAttribute('#studioOv [data-kind="audio"]', 'aria-pressed') !== 'true') await pg.click('#studioOv [data-kind="audio"]'); await pg.click('#studioOv .st-vcta'); }; // 6 oct 2026 (IMG-49): «Voces» ya no está en la galería; se abre desde Voz
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const OUT = path.join(ROOT, 'data', 'capturas', process.env.AO_CAPTURAS || 'voz-clonar'); fs.mkdirSync(OUT, { recursive: true });
@@ -44,7 +45,7 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 1512, height: 900 } }); await ctx.grantPermissions(['microphone'], { origin: base });
   const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
   await page.goto(base + '/'); await page.waitForTimeout(1500);
-  await page.keyboard.press('e'); await page.waitForSelector('#studioOv .st-vocbtn'); await page.click('#studioOv .st-vocbtn');
+  await page.keyboard.press('e'); await abrirVoces(page);
   await page.waitForSelector(V('[data-vo="go-clone"]'));
   const home = await page.evaluate(() => [...document.querySelectorAll('#studioOv .st-vcard b')].map(b => b.textContent));
   step(home.join('|') === 'Clonar mi voz|Diseñar una voz con palabras', `inicio con dos caminos: ${home.join(' · ')}`);
@@ -110,11 +111,11 @@ try {
   step(/Lo recorté a los primeros 5:00/.test(big) && (big.match(/5:00/g) || []).length === 1, `7 min subidos: «${big.slice(0, 80)}»`);
   // 5 · cerrar y volver: el audio sigue
   await page.keyboard.press('Escape'); await page.waitForTimeout(200);
-  await page.click('#studioOv .st-vocbtn'); await page.waitForTimeout(400);
+  await abrirVoces(page); await page.waitForTimeout(400);
   step(/2\. Escúchalo/.test(await txt(page, V('.st-vstepbody'))), 'al cerrar y volver, el audio sigue en el paso 2');
   // 5b · «‹ Voces» en el paso 2, cerrar y volver: el inicio dice que hay un audio sin clonar y «Clonar mi voz» sigue ahí
   await page.click(V('.st-vback')); await page.keyboard.press('Escape'); await page.waitForTimeout(200);
-  await page.click('#studioOv .st-vocbtn'); await page.waitForTimeout(400);
+  await abrirVoces(page); await page.waitForTimeout(400);
   const pend = await txt(page, V('.st-vpend'));
   step(/audio sin clonar \(5:00\): continúa en el paso 2/.test(pend), `desde «‹ Voces» y cerrando, el inicio avisa: «${pend}»`);
   await page.screenshot({ path: path.join(OUT, 'pendiente.png') });

@@ -77,7 +77,7 @@ const falImg = (id, name, cost, text, edit, maxRefs, note, extra = s => ({})) =>
    field or a value Higgsfield refuses (Hailuo at 5 s, LTX at 1:1, Seedance 2.5 with output_format…). */
 const HFS = (() => { try { return JSON.parse(fs.readFileSync(new URL('../higgsfield-schemas.json', import.meta.url), 'utf8')).endpoints || {}; } catch { return {}; } })();
 export const hfSchemas = () => HFS;
-const HF_SET = { aspect_ratio: 'aspectRatio', resolution: 'resolution', duration: 'duration', mode: 'mode', quality: 'quality', rendering_speed: 'renderingSpeed', batch_size: 'batchSize',
+const HF_SET = { seed: 'seed', aspect_ratio: 'aspectRatio', resolution: 'resolution', duration: 'duration', mode: 'mode', quality: 'quality', rendering_speed: 'renderingSpeed', batch_size: 'batchSize',
   generate_audio: 'generateAudio', sound: 'sound', enhance_prompt: 'enhancePrompt', prompt_optimizer: 'promptOptimizer', prompt_extend: 'promptExtend', cfg_scale: 'cfgScale', keep_original_sound: 'keepOriginalSound',
   character_orientation: 'characterOrientation', camera_movement: 'cameraMovement', fps: 'fps', genre: 'genre', era: 'era', light: 'light', pacing: 'pacing', camera_model: 'cameraModel', camera_lens: 'cameraLens',
   camera_aperture: 'cameraAperture', color_palette: 'colorPalette', bitrate_mode: 'bitrateMode', output_format: 'outputFormat' };
@@ -135,6 +135,7 @@ function hfSettings(kind, routes) {
   }
   const out = {};
   for (const [key, a] of Object.entries(acc)) {
+    if (key === 'seed') { out.seed = T('', 10, 'Al azar'); continue; } // IMG-45 (Fase 6): empty = a new one each time; a number repeats the result. Never a slider
     if (a.sw) { out[key] = B(typeof a.def === 'boolean' ? a.def : YESNO[a.name] ? a.def === YESNO[a.name][0] : false); continue; }
     if (a.num && Number.isFinite(a.min)) { if (key === 'duration' && a.min < 1) a.min = 1; const d = a.def ?? a.min; out[key] = R(a.min, a.max, Math.min(a.max, Math.max(a.min, d)), a.real ? 0.01 : undefined); continue; }
     if (!a.vals.length) continue;
@@ -252,7 +253,7 @@ const MMX = [
 export const CATALOG = [
   // ---- images
   ...HF_IMAGES,
-  { id: 'nano-banana', engine: 'gemini', kind: 'image', name: 'Nano Banana (2.5)', cost: 0.039, note: 'Edita y mezcla fotos: dale hasta 3 referencias (tu producto, tu logo, un estilo).', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '9:16', '16:9', '4:3', '3:2', '2:3', '21:9'], '1:1') } },
+  { id: 'nano-banana', engine: 'gemini', kind: 'image', name: 'Nano Banana 2.5 (anterior)', cost: 0.039, note: 'Edita y mezcla fotos: dale hasta 3 referencias (tu producto, tu logo, un estilo).', roles: { reference: 3 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '9:16', '16:9', '4:3', '3:2', '2:3', '21:9'], '1:1') } },
   // V4.4 (27 Sep 2026): Google's current image models on the same GEMINI_API_KEY (ids from Google's own cookbook, google-gemini/cookbook,
   // Sep 2026). Imagen was shut down on 17 Aug 2026, so it is not here. Prices are estimates: the note says so.
   { id: 'nano-banana-2', engine: 'gemini', kind: 'image', gid: 'gemini-3.1-flash-image', name: 'Nano Banana 2', cost: 0.067, note: 'El todoterreno de Google: hasta 14 referencias, formatos muy anchos o altos, hasta 4K. Precio aproximado.', roles: { reference: 14 }, settings: { aspectRatio: E(['1:1', '4:5', '3:4', '2:3', '9:16', '16:9', '4:3', '3:2', '5:4', '21:9', '1:4', '4:1', '1:8', '8:1'], '1:1'), imageSize: E(['1K', '2K', '4K'], '1K') } },

@@ -47,7 +47,7 @@ const vigilar = (page, donde, permitido = null) => {
   page.on('response', r => { if (r.status() >= 400 && !/favicon/.test(r.url())) informe.errores.push(`${donde}: ${r.status()} ${r.url()}`); });
 };
 const contar = page => { const n = { v: 0 }; page.on('request', r => { if (/estudio-extra\.js/.test(r.url())) n.v++; }); return n; };
-async function abrirEstudio(page) { await page.keyboard.press('e'); await page.waitForSelector(`${S}.on`); await page.waitForTimeout(300); if (await page.isVisible(`${S} [data-kind="image"]`)) await page.click(`${S} [data-kind="image"]`); }
+async function abrirEstudio(page) { await page.keyboard.press('e'); await page.waitForSelector(`${S}.on`); await page.waitForTimeout(300); if (await page.isVisible(`${S} [data-pt="gen"]`)) await page.click(`${S} [data-pt="gen"]`); if (await page.isVisible(`${S} [data-kind="image"]`)) await page.click(`${S} [data-kind="image"]`); if (await page.isVisible(`${S} [data-nivel="avanzado"]`)) await page.click(`${S} [data-nivel="avanzado"]`); } // V5.1 (2 oct): el banco vive en Avanzado; Básico no lo descarga
 async function medir(page) {
   return page.evaluate(() => {
     const scroll = document.documentElement.scrollWidth > innerWidth + 1;
@@ -102,7 +102,7 @@ try {
     const ctx = await browser.newContext({ viewport: { width: 1512, height: 900 }, reducedMotion: 'reduce' });
     const page = await ctx.newPage(); vigilar(page, 'tarde');
     await page.route('**/estudio-extra.js*', async r => { await new Promise(x => setTimeout(x, 2500)); await r.continue(); });
-    await page.goto(base + '/'); await page.waitForTimeout(1200); await abrirEstudio(page);
+    await page.goto(base + '/'); await page.waitForTimeout(1200); await abrirEstudio(page); await page.waitForTimeout(150);
     const paso = await page.textContent(`${S} .bk-dif .exc`).catch(() => '');
     ok('tarde: el paso del compositor dice «Cargando…» (role=status)', /Cargando/.test(paso || '') && !!(await page.$(`${S} .bk-dif .exc[role="status"]`)), paso);
     await page.click(`${S} .bk-dif [data-ir="banco"]`); await page.waitForTimeout(150);

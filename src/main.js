@@ -33,6 +33,7 @@ import { keyEventInit } from './keys-run.js';
 import { spread } from './labels.js';
 import { initBrain } from './brain.js';
 import { initHero, HERO } from './hero.js';
+import { ignorar as ignorarTecla } from './teclas1.js'; // IMG-26 (6 Oct 2026): single-key shortcuts can be turned off (Ajustes → Atajos de teclado)
 if (HERO) document.body.classList.add('hero'); // the website hero: no Sahni.ai mark or licence line on top of the page that already carries them // sahni.ai/custom hero mode (16 Sep 2026): opt-in via window.HERO, no-op otherwise
 let tasks = null; // V3 task boards — initialised after the rail constants exist
 const SERVED = location.protocol.startsWith('http'); // opened as a file = the demo showcase; served = the owner's real office
@@ -584,6 +585,7 @@ addEventListener('pointerup', (e) => {
 addEventListener('keydown', (e) => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; // typing in the bar, the big editor or a menu never fires a hotkey
   if (e.target.isContentEditable || ((e.ctrlKey || e.metaKey || e.altKey) && e.key !== 'Escape')) return; // Ctrl+C, Alt+… belong to the browser and to screen readers
+  if (ignorarTecla(e)) return; // IMG-26: the owner turned single-key shortcuts off
   // Esc closes the window on top, one at a time, newest first; only with nothing open does it leave the department
   if (e.key === 'Escape') {
     if (health.isOpen()) { health.close(); return; }

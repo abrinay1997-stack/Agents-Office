@@ -9,7 +9,8 @@ import * as mmx from '../minimax.mjs';
 import { S } from './estado.mjs';
 import { ENGINES, KINDS, secret, engineOn, model, allModels, defaultModel, settingsFor, unitCost, hfRoute, editModels, engines } from './catalogo.mjs';
 import { dir, slug, store, resolve, item, update, folderOf } from './galeria.mjs';
-import { RUN, friendly } from './motores.mjs';
+import { RUN } from './motores.mjs';
+import { explicar } from './errores.mjs';
 import { procesar, guardarCrudo, juntarAvisos } from './posproceso.mjs'; // banco de presets (F1): lo local y la QA, después del modelo
 
 let usageFile = '', jobsFile = '', hooks = {};
@@ -210,8 +211,9 @@ async function runJob(j) {
     if (!j.items.length) throw new Error(local ? 'no salió ninguna imagen' : 'el motor terminó sin devolver nada');
     j.state = 'done';
   } catch (e) {
-    const why = j.cancel ? 'Cancelado por ti.' : friendly(e.message, e.status);
-    if (j.items.length) { j.state = 'done'; j.warning = why; } else { j.state = 'failed'; j.error = why; }
+    const ex = j.cancel ? { texto: 'Cancelado por ti.', clase: 'cancelado', detalle: '' } : explicar(e.message, e.status); // IMG-04: the words, the class and the original apart
+    const why = ex.texto;
+    if (j.items.length) { j.state = 'done'; j.warning = why; } else { j.state = 'failed'; j.error = why; j.errorClass = ex.clase; if (ex.detalle) j.errorRaw = ex.detalle.slice(0, 400); }
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${e.message}`);
   }
   j.doneAt = Date.now(); j.cost = +(j.unit * j.items.length).toFixed(3); delete j.note;
