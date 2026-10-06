@@ -224,11 +224,17 @@ body.dark #studioOv .st-go.st-armado { background: var(--cream); color: #151414;
 #studioOv .st-sugb button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* IMG-32: Básico = la idea primero; debajo, el modelo y «Formato · Cantidad» como selectores; nada más */
 #studioOv.st-basico .st-s1 { order: 1; } #studioOv.st-basico .st-s3 { order: 2; } #studioOv.st-basico .st-matstep { order: 3; }
-#studioOv.st-basico .st-s2 { order: 4; } #studioOv.st-basico .st-bchips { order: 5; display: flex; flex-direction: row; gap: 10px; }
+#studioOv.st-basico .st-s2 { order: 4; } #studioOv.st-basico .st-s5 { order: 5; }
+/* 6 oct 2026 (el dueño): en Básico, formato, tamaño y cantidad como botones; tamaño y cantidad en una fila para que quepa todo */
+#studioOv.st-basico .st-s5 { display: grid; grid-template-columns: auto 1fr; column-gap: 18px; align-items: start; }
+#studioOv.st-basico .st-s5 > :is(.st-h, .st-ratios, .st-more, .st-plant) { grid-column: 1 / -1; }
+#studioOv.st-basico .st-s5 > .st-sets:empty { display: none; }
+#studioOv.st-basico .st-s5 > .st-sets:empty + .st-bchips { grid-column: 1 / -1; }
+#studioOv.st-basico .st-bchips { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
+#studioOv.st-basico .st-s5 > .st-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#studioOv.st-basico .st-ratios { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; } #studioOv.st-basico .st-ratios > .st-lab { flex-basis: 100%; }
 #studioOv.st-basico .st-mpick .st-mp-top { flex-wrap: nowrap; } #studioOv.st-basico .st-mpick .st-mp-name { white-space: normal; } #studioOv.st-basico .st-mpick .st-mp-eng { display: none; }
-#studioOv.st-basico .st-bchips > label { flex: 1 1 0; }
-#studioOv.st-basico .st-bchips select { width: 100%; min-height: 36px; }
-#studioOv.st-basico :is(.st-s5, .st-modeseg, .st-lang, .st-matstep.st-vacio, .st-foot .st-qty, .st-foot .st-sum, .st-nivel [data-nivel="basico"]) { display: none; }
+#studioOv.st-basico :is(.st-s5 .st-more, .st-s5 .st-n5, .st-modeseg, .st-lang, .st-matstep.st-vacio, .st-foot .st-qty, .st-foot .st-sum, .st-nivel [data-nivel="basico"]) { display: none; }
 #studioOv.st-basico .st-addimg { display: inline-flex; }
 #studioOv.st-basico :is(.st-s2, .st-s3) > .st-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 #studioOv.st-basico .st-mpick :is(.st-mp-note, .st-tags) { display: none; }
@@ -237,9 +243,36 @@ body.dark #studioOv .st-go.st-armado { background: var(--cream); color: #151414;
 /* Fase 6 (modo avanzado) */
 /* IMG-42: con sitio, el banco y el escenario 3D son un panel al lado de la galería: tu foto y los resultados siguen a la vista */
 @media (min-width: 1100px) {
-  #studioOv.st-hoja .st-gal > :not(.st-bank) { margin-right: 460px; }
-  #studioOv.st-hoja .st-gal > .st-bank { left: auto; width: 460px; box-shadow: -12px 0 30px rgba(21,20,20,.08); }
+  #studioOv.st-hoja:not(.st-hoja-oculta):not(.st-hoja-max) .st-gal > :not(.st-bank):not(.st-rsz):not(.st-hmandos):not(.st-hver) { margin-right: var(--st-der, 460px); }
+  #studioOv.st-hoja .st-gal > .st-bank { left: auto; width: var(--st-der, 460px); box-shadow: -12px 0 30px rgba(21,20,20,.08); }
+  /* 6 oct 2026 (el dueño): el compositor se ensancha arrastrando su borde; su tamaño de siempre es el más angosto */
+  #studioOv:not(.st-folded) .st-body { grid-template-columns: var(--st-izq, 420px) minmax(0, 1fr); }
 }
+/* los bordes que se arrastran (studio-paneles.js): una línea fina que se marca al pasar o con el foco */
+#studioOv .st-gen { position: relative; }
+#studioOv .st-rsz { position: absolute; top: 0; bottom: 0; width: 24px; z-index: 12; cursor: col-resize; touch-action: none; display: flex; justify-content: center; }
+#studioOv .st-rsz[hidden] { display: none; }
+#studioOv .st-rsz::after { content: ''; width: 3px; margin: 0 auto; border-radius: 3px; background: transparent; transition: background .15s; }
+#studioOv .st-rsz:hover::after, #studioOv .st-rsz:focus-visible::after, #studioOv.st-rsz-on .st-rsz::after { background: var(--ink); }
+#studioOv .st-rsz:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+#studioOv .st-rsz-izq { right: -12px; }
+#studioOv .st-rsz-der { right: calc(var(--st-der, 460px) - 12px); }
+#studioOv.st-rsz-on, #studioOv.st-rsz-on * { cursor: col-resize !important; user-select: none; }
+/* los mandos del panel derecho: toda la ventana y ocultar, en su cabecera junto al ✕ */
+#studioOv .st-hmandos { display: inline-flex; gap: 6px; flex: none; }
+#studioOv .st-hmandos[hidden], #studioOv .st-hver[hidden] { display: none; }
+#studioOv .st-hmandos button { min-width: 32px; min-height: 32px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); font: 600 15px var(--ui); cursor: pointer; }
+#studioOv .st-hmandos button:hover, #studioOv .st-hver:hover { background: var(--ink); color: var(--cream); }
+#studioOv .st-hmandos button:focus-visible, #studioOv .st-hver:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+#studioOv .st-hver { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); font: 600 12.5px var(--ui); cursor: pointer; box-shadow: 0 2px 8px rgba(21,20,20,.1); }
+/* oculto: el panel sigue abierto (lo que tenías no se pierde), una pestaña al borde lo vuelve a mostrar */
+#studioOv.st-hoja-oculta .st-gal > .st-bank { display: none; }
+#studioOv .st-hver { position: absolute; z-index: 11; right: 0; top: 30%; border-radius: 12px 0 0 12px; border-right: 0; flex-direction: column; padding: 12px 8px; }
+#studioOv .st-hver span { writing-mode: vertical-rl; letter-spacing: .06em; }
+/* en toda la ventana: tapa también el compositor */
+#studioOv.st-hoja-max .st-body { position: relative; }
+#studioOv.st-hoja-max .st-gal { position: static; }
+#studioOv.st-hoja.st-hoja-max .st-gal > .st-bank { left: 0; width: auto; box-shadow: none; border-left: 0; }
 /* IMG-43: la estrella dentro de la tarjeta; «beta» una vez, en la cabecera; «receta» es un icono */
 #studioOv .st-bank .bk-cw { position: relative; }
 #studioOv .st-bank .bk-cw > .bk-card { flex: 1 1 auto; padding-right: 40px; }
@@ -271,7 +304,7 @@ body.dark #studioOv .st-go.st-armado { background: var(--cream); color: #151414;
 /* IMG-46 (Fase 6): plantillas, al final de «Formato y ajustes» */
 #studioOv .st-plant { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); }
 #studioOv .st-plant .st-lab { flex: 1 1 160px; min-width: 0; }
-#studioOv .st-plant button { min-height: 32px; padding: 5px 12px; border-radius: var(--r-s); border: 1px solid var(--hairline); background: var(--cv-card, #fff); color: var(--ink); font: 600 var(--fs-s)/1.2 var(--ui, system-ui), sans-serif; cursor: pointer; }
+#studioOv .st-plant button { min-height: 32px; padding: 5px 12px; border-radius: var(--r-s); border: 1px solid var(--hairline); background: transparent; color: var(--ink); font: 600 var(--fs-s)/1.2 var(--ui, system-ui), sans-serif; cursor: pointer; }
 #studioOv .st-plant button.pri { background: var(--ink); color: var(--cream); border-color: var(--ink); }
 #studioOv .st-plant button:hover:not(:disabled) { border-color: var(--ink); }
 #studioOv .st-cmpov { z-index: 12; } /* above the selection bar (6) that opened it */
@@ -316,3 +349,18 @@ body.dark .st-light .st-lacts button.st-armado { background: var(--cream); color
   .st-light .st-lacts button:active:not(:disabled), .st-light .st-lacts a:active { transform: translateY(1px); }
 }
 #studioOv .st-plsel:disabled { cursor: not-allowed; color: var(--grey); }
+/* 6 oct 2026, pedido del dueño: la papelera va en la fila de la tarjeta; se distingue al pasar */
+#studioOv .st-card .st-ov .st-oidel:hover { background: #B3261E; color: #fff; border-color: #B3261E; }
+
+/* 6 oct 2026 (el dueño): la calidad y la cantidad como botones a la vista, igual que el formato — en Básico y en Avanzado */
+#studioOv .st-qgrp { margin-top: 8px; }
+#studioOv .st-qch { display: flex; flex-wrap: wrap; gap: 6px; }
+#studioOv .st-qc { min-width: 44px; min-height: 32px; padding: 0 12px; border-radius: var(--r-pill, 99px); border: 1px solid var(--hairline); background: none; color: var(--ink); font: 600 12.5px var(--ui); cursor: pointer; }
+#studioOv .st-qc.on { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+#studioOv .st-qc:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* con las tres de siempre a la vista (6 oct), en una tarjeta angosta Editar y Variar se quedan en su icono: toda la fila en una línea */
+#studioOv .st-grid .st-card { container: stcard / inline-size; }
+@container stcard (max-width: 330px) {
+  #studioOv .st-card .st-ov .st-oiw { width: 30px; padding: 0; justify-content: center; }
+  #studioOv .st-card .st-ov .st-oiw .st-oit { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
