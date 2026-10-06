@@ -2,7 +2,7 @@
    El orden viene de repetir lo mismo: una fila, un chip, un campo, una sección. Colores por tono (no hex sueltos): cada tono pasa 4,5:1
    como texto sobre la tarjeta, en claro y en oscuro. Objetivos de 24 px o más; nada por debajo de 11,5 px. */
 #tvOv { container: tvview / inline-size; --tv-card: #fff; --tv-soft: rgba(21,20,20,.04); --tv-line: rgba(21,20,20,.1); --tv-mut: #5A5A5A;
-  --t-azul: #1F5FD0; --t-verde: #1C7A43; --t-ambar: #8A5A00; --t-rojo: #B42318; --t-violeta: #6B3FB5; --t-cian: #0B6E80; --t-rosa: #A3266B; --t-gris: #5A5A5A; }
+  --t-azul: #1F5FD0; --t-verde: #176638; --t-ambar: #8A5A00; --t-rojo: #B42318; --t-violeta: #6B3FB5; --t-cian: #0B6E80; --t-rosa: #A3266B; --t-gris: #5A5A5A; }
 body.dark #tvOv { --tv-card: #1E1F24; --tv-soft: rgba(236,234,227,.05); --tv-line: rgba(236,234,227,.12); --tv-mut: #B5B2AA;
   --t-azul: #8FB0FF; --t-verde: #6FD39A; --t-ambar: #F2B84B; --t-rojo: #FF8A80; --t-violeta: #C3A6FF; --t-cian: #6ED3E6; --t-rosa: #F59AC8; --t-gris: #B5B2AA; }
 #tvOv :where(button, input, select, textarea) { font-family: var(--ui); color: inherit; }
