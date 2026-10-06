@@ -84,6 +84,10 @@ export function initCalendar(ctx) {
       if (t.state === 'done') { if (showDone && t.doneAt >= from && t.doneAt < to) push({ kind: 'done', at: t.doneAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'scheduled') { if (showSched && t.dueAt >= from && t.dueAt < to) push({ kind: 'sched', at: t.dueAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'waiting' || t.state === 'doing' || t.state === 'next') { if (today >= from && today < to) push({ kind: t.state, at: Math.max(today + 1, Math.min(today + DAY - 1, t.changedAt || Date.now())), title: t.title, dept: t.dept, agent: t.agent, t }); }
+      if (t.limite && t.state !== 'done' && showSched) { // plan T2 (6 oct 2026): the DEADLINE is its own mark (when it is due), apart from when it starts
+        const s = String(t.limite), at = new Date(s.length > 10 ? s : s + 'T23:59').getTime();
+        if (at >= from && at < to) push({ kind: 'limite', at, title: t.title, dept: t.dept, agent: t.agent, t, conHora: s.length > 10 });
+      }
     }
     if (showRoutines) for (const r of routines) {
       if (gone.has('r:' + r.id)) continue;
@@ -134,7 +138,13 @@ export function initCalendar(ctx) {
   function cardHTML(ev, line) {
     if (ev.kind === 'content') return contentCard(ev, line);
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
-    const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'run' ? `${hm(ev.at)} · ${ev.status === 'skipped' ? 'saltada' : 'no corrió'}` : ev.kind === 'done' ? `${ev.t?.error ? 'falló' : 'listo'} ${hm(ev.at)}${ev.t?.routine ? ' · rutina' : ''}${ev.t?.late ? ' · atrasada' : ''}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
+    if (ev.kind === 'limite') { // plan T2: «vence» — a mark, not a run: a click opens the task; it does not move (change the date in the task)
+      const vencida = ev.at < Date.now(), when = ev.conHora ? hm(ev.at) : 'todo el día', est = ev.t.estimacion ? ` · ${ev.t.estimacion < 60 ? ev.t.estimacion + ' min' : Math.round(ev.t.estimacion / 6) / 10 + ' h'}` : '';
+      const tip = `${ev.title} · ${vencida ? 'venció' : 'vence'} ${when}${est}${ev.t.prioridad === 'alta' ? ' · prioridad alta' : ''} · clic: abrir la tarea`;
+      if (line) return `<div class="cv-ev line limite${vencida ? ' vencida' : ''}${ev.t.prioridad === 'alta' ? ' alta' : ''}" data-ev="l:${ev.t.id}" style="--chip:${chip}" title="${attr(tip)}" role="button" tabindex="0"><span class="cv-ev-h">${vencida ? 'venció' : 'vence'}</span><span class="cv-ev-t"><span class="cv-rt">⚑</span>${esc(ev.title)}</span></div>`;
+      return `<div class="cv-ev limite${vencida ? ' vencida' : ''}${ev.t.prioridad === 'alta' ? ' alta' : ''}" data-ev="l:${ev.t.id}" style="--chip:${chip}" title="${attr(tip)}" role="button" tabindex="0"><div class="cv-ev-t"><span class="cv-rt">⚑</span>${esc(ev.title)}</div><div class="cv-ev-m"><span>${vencida ? 'venció' : 'vence'} · ${esc(when)}${esc(est)}</span>${av(ev.agent)}</div></div>`;
+    }
+    const time = ev.kind === 'routine' ? (ev.hourly ? describe(ev.r.when).replace(/ · desde .*$/, '') : hm(ev.at)) : ev.kind === 'run' ? `${hm(ev.at)} · ${ev.status === 'skipped' ? 'saltada' : 'no corrió'}` : ev.kind === 'done' ? `${ev.t?.error ? 'falló' : 'listo'} ${hm(ev.at)}${ev.t?.routine ? ' · rutina' : ''}${ev.t?.late ? ' · atrasada' : ''}` : ev.kind === 'sched' ? `${hm(ev.at)} · programado${ev.t?.estimacion ? ` · ${ev.t.estimacion < 60 ? ev.t.estimacion + ' min' : Math.round(ev.t.estimacion / 6) / 10 + ' h'}` : ''}` : ev.kind === 'doing' ? 'en curso' : ev.kind === 'waiting' ? 'en espera de tu visto bueno' : 'en pendientes';
     const id = ev.t ? `t:${ev.t.id}` : `r:${ev.r.id}:${ev.at}`;
     const drag = (ev.kind === 'sched') || (ev.kind === 'routine' && !ev.paused && (ev.r.when.kind === 'weekly' || (view !== 'month' && (ev.r.when.kind === 'daily' || ev.r.when.kind === 'weekdays'))));
     const why = drag ? ' · arrastra para moverla' : ev.kind === 'routine' ? (ev.paused ? ' · pausada: reanúdala para moverla' : ev.hourly || ev.r.when.kind === 'hourly' ? ' · cada hora: cámbiala desde su ventanita' : view === 'month' ? ' · en el mes se mueven las semanales; las diarias, en la semana o el día' : '') : ev.kind === 'done' || ev.kind === 'run' ? ' · ya pasó' : LIVE.includes(ev.kind) ? ' · ya está en marcha' : '';
@@ -149,7 +159,7 @@ export function initCalendar(ctx) {
   }
   // V4.2 (audit B42): what the calendar shows, in one string — the 30-second tick redraws only when it changes (or every 5 minutes, for «now»)
   let lastSig = '';
-  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), showContent ? ctPieces.map(p => [p.id, p.actualizada, p.estado, p.fecha, p.hora]) : 0, Math.floor(Date.now() / 300000)]);
+  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error, t.limite, t.prioridad, t.estimacion]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), showContent ? ctPieces.map(p => [p.id, p.actualizada, p.estado, p.fecha, p.hora]) : 0, Math.floor(Date.now() / 300000)]);
   function render() {
     if (dnd && dnd.dragging) return; // a re-render mid-drag would pull the card out from under the pointer
     lastSig = sig();
@@ -296,6 +306,7 @@ export function initCalendar(ctx) {
     closePop();
     const [kind, ...rest] = id.split(':');
     if (kind === 'c') { if (contenido) { close(); contenido.openPiece(rest[0]); } return; } // a content piece opens in Contenido
+    if (kind === 'l') { const t = tasks.find(x => String(x.id) === rest[0]); if (t && openTask) openTask(t); return; } // plan T2: a deadline opens its task
     if (kind === 't') {
       const t = tasks.find(x => String(x.id) === rest[0]); if (!t) return;
       if (t.state !== 'scheduled' && openTask) { openTask(t); return; } // done · running · waiting · pending → the task's detail, over the calendar

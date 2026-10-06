@@ -181,6 +181,7 @@ export function initSub(ctx) {
   }
 
   /* ---------- the conversation ---------- */
+  const fechaCorta = ymd => { const d = new Date(String(ymd).slice(0, 10) + 'T12:00'); return Number.isNaN(d.getTime()) ? ymd : d.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }); }; // plan T4
   function planHTML(m) {
     const p = m.plan; if (!p) return '';
     const open = p.tasks.some(t => t.state === 'proposed');
@@ -202,6 +203,7 @@ export function initSub(ctx) {
             ${t.error ? `<div class="sb-moved">${esc(t.error)}</div>` : ''}
             ${t.ownerSaid ? `<div class="sb-moved">La moví de ${esc(DEPTS[t.ownerSaid].name)} a ${esc(DEPTS[t.dept].name)}.</div>` : ''}
             ${t.why ? `<div class="sb-why">${esc(t.why)}</div>` : ''}
+            ${t.prioridad === 'alta' || t.limite || t.espera?.length ? `<div class="sb-org">${t.prioridad === 'alta' ? '<span class="sb-alta">Prioridad alta</span>' : ''}${t.limite ? `<span>Para el ${esc(fechaCorta(t.limite))}</span>` : ''}${(t.espera || []).map(x => p.tasks[x]).filter(Boolean).map(d => `<span>Espera a «${esc(d.title.slice(0, 40))}»</span>`).join('')}</div>` : ''}
             <details class="sb-det"><summary>Instrucciones para el jefe</summary><textarea class="sb-ins" rows="4" aria-label="Instrucciones para el jefe de ${esc(DEPTS[dept].name)}">${esc(e.instruction ?? t.instruction)}</textarea></details>
           </div></div>`;
       }
@@ -212,7 +214,8 @@ export function initSub(ctx) {
           <div class="sb-body"><div class="sb-t">${esc(t.title)}</div><div class="sb-meta">${esc(DEPTS[t.dept].name)}${task ? ' · ' + esc(ctx.agentName(task.agent)) : ''} · <b>${esc(st)}</b>${t.error ? ' — ' + esc(t.error) : ''}</div></div></div>`;
     }).join('');
     const n = p.tasks.filter(t => t.state === 'proposed' && (ed.get(t.i)?.include !== false)).length, blocked = p.tasks.some(unresolved);
-    return `<div class="sb-plan">${items}${questionsHTML(m, qPicks.get(m.id) || new Map(), { esc, busy })}
+    const pr = p.proyecto ? `<div class="sb-proy">Proyecto: <b>${esc(p.proyecto.nombre || '')}</b>${p.proyecto.limite ? ` · vence el ${esc(fechaCorta(p.proyecto.limite))}` : ''}${p.proyecto.objetivo ? `<span>${esc(p.proyecto.objetivo)}</span>` : ''}${p.proyecto.id && !open ? '<span>Míralo en Tareas → Proyectos (H).</span>' : ''}</div>` : '';
+    return `<div class="sb-plan">${pr}${items}${questionsHTML(m, qPicks.get(m.id) || new Map(), { esc, busy })}
       ${open ? `<div class="sb-acts"><button type="button" class="sb-go" data-msg="${m.id}"${n && !blocked ? '' : ' disabled'}>ENVIAR A LOS JEFES (${n})</button><button type="button" class="sb-skip" data-msg="${m.id}">Descartar el plan</button></div>${blocked ? '<div class="sc-note">Elige primero cuándo se hace lo que tenía una hora pasada.</div>' : ''}` : ''}</div>`;
   }
   const studioView = m => ({ esc, edits: studioEdits.get(m.id) || new Map(), actionEdits: actionEdits.get(m.id) || new Map(), models: media ? media.models : [], budget: media ? media.budget : null, jobs, voices: media && media.voices ? media.voices : { voices: [], system: [] } });

@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, renameSync, readdirSync, exists
 import { buildBrainGraph } from './graph-build.mjs';
 import { cargarFabrica } from './presets/fabrica.mjs';
 import { construirExtra, CSS_APARTE } from './build-extra.mjs';
+import { construirTareas, CSS_TAREAS } from './build-tareas.mjs'; // plan T2 (6 oct 2026): la vista Tareas, también aparte
 await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/braingraph.js
 
 // Banco de presets (F1): la fábrica de imagen, para la demo file:// (busca y compila sin servidor), va JUNTO a la página, en
@@ -16,6 +17,7 @@ const FAB = (() => { const f = cargarFabrica(); return { version: f.version, gru
 // Su estilo (CSS_APARTE: el escenario y los lotes) viaja con él. Cómo se arma: build-extra.mjs.
 const cssCorto = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').replace(/\s*([{};,])\s*/g, '$1').trim();
 const extra = await construirExtra({ cssCorto });
+const tareasV = await construirTareas({ cssCorto }); // dist/tareas-vista.js: la página la trae al abrir Tareas (src/tareas-carga.js)
 const res = await build({
   entryPoints: ['src/main.js'],
   bundle: true,
@@ -24,20 +26,22 @@ const res = await build({
   write: false,
   target: 'es2020',
   metafile: true,
-  define: { __AO_EXTRA_VERSION__: JSON.stringify(extra.version) },
+  define: { __AO_EXTRA_VERSION__: JSON.stringify(extra.version), __AO_TAREAS_VERSION__: JSON.stringify(tareasV.version) },
 });
 const js = res.outputFiles[0].text;
 { // lo que va aparte no vuelve a entrar en la página
   const dentro = Object.keys(res.metafile.outputs[Object.keys(res.metafile.outputs)[0]].inputs).map(f => f.replace(/\\/g, '/'));
   const colado = dentro.filter(f => extra.aparte.includes(f));
   if (colado.length) throw new Error(`la página volvió a llevar lo del paquete aparte (${colado.join(', ')}): impórtalo solo desde src/estudio-extra.js y úsalo a través de src/estudio-carga.js`);
+  const coladoT = dentro.filter(f => tareasV.aparte.includes(f) && !f.startsWith('tareas/'));
+  if (coladoT.length) throw new Error(`la página volvió a llevar la vista Tareas (${coladoT.join(', ')}): impórtala solo desde src/tareas/vista.js y ábrela con src/tareas-carga.js`);
 }
 // V4.7: the views added after V4.6 keep their style in src/css/<name>.css instead of growing shell.html; they are joined, in name order,
 // where shell.html says «/* <css-vistas> */» (the end of its <style>). Nothing else changes: it is still one file that opens by double click.
 // Banco de presets F2 (1 oct 2026): sin sus comentarios ni espacios de más (~36 KB), para que la página quepa en su presupuesto (check.mjs,
 // INF-09) con la pestaña Lotes. Solo comentarios y blancos: los espacios que separan selectores (`.lt :is(…)`) y los de los valores quedan.
 // (cssCorto, arriba). Los de CSS_APARTE no: viajan con dist/estudio-extra.js.
-const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css') && !CSS_APARTE.includes(f)).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
+const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css') && !CSS_APARTE.includes(f) && !CSS_TAREAS.includes(f)).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
 // Banco de presets F5 (1 oct 2026): el <style> de shell.html también llega sin sus comentarios (~16 KB; los blancos y lo demás,
 // tal cual) para que el compilador de video quepa en el presupuesto sin subir el tope. El marcador se queda para el reemplazo.
 const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => `<style>${css.replace(/\/\*(?! <css-vistas> \*\/)[\s\S]*?\*\//g, '')}</style>`);
@@ -51,6 +55,7 @@ const escribirEntero = (out, data) => { const tmp = `${out}.${process.pid}.tmp`;
   for (let i = 0; ; i++) { try { renameSync(tmp, out); break; } catch (e) { if (i >= 20) throw e; Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150); } } };
 // the Estudio's heavy part, beside the page (src/estudio-carga.js loads it on demand): before the page, so a page never asks for a part older than itself
 escribirEntero('dist/estudio-extra.js', extra.js);
+escribirEntero('dist/tareas-vista.js', tareasV.js); // la vista Tareas, antes que la página por la misma razón
 escribirEntero('dist/command-centre-v2.html', html);
 
 // dev variant with external script for faster iteration

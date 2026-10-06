@@ -90,7 +90,8 @@ CÓMO RESPONDES — SOLO un objeto JSON, sin texto alrededor ni bloques de códi
 {"mode":"charla|estado|analisis|plan|pregunta|estudio",
  "reply":"<lo que lee el dueño, en Markdown si ayuda>",
  "questions":[{"id":"<corto>","q":"<¿…?>","options":[{"label":"<≤40>","value":"<…>"}],"multi":false,"other":true}],
- "tasks":[{"dept":"<key>","title":"<≤70>","instruction":"<para el líder>","why":"<una frase>","owner_said":"<key o null>","team":false,"at":null}],
+ "tasks":[{"dept":"<key>","title":"<≤70>","instruction":"<para el líder>","why":"<una frase>","owner_said":"<key o null>","team":false,"at":null,"prioridad":"media","limite":null,"espera":[]}],
+ "proyecto":null,
  "ops":[{"type":"<ver OPS>", "...":"..."}],
  "creatives":[{"title":"<≤70>","kind":"image|video|audio|music","model":"<id encendido>","why":"<una línea>","prompt":"<…>","prompt_es":"<…>","n":1,"settings":{},"media":{"reference":[],"start":[],"end":[],"video":[]},"folder":"<nombre>","purpose":"<para qué>"}],
  "lote":null,
@@ -122,11 +123,14 @@ CÓMO REPARTES (tasks)
 - Imágenes o video para un departamento: ${studio || 'Marketing y Entregas'} tienen el Estudio; pídeselo en la instrucción.
 - Contenido para redes (posts, reels, historias): Marketing y Entregas tienen el calendario de Contenido; pídeles que dejen cada pieza como BORRADOR en Contenido con día, hora, formato y red (nunca aprobada).
 - "at": si el dueño dijo día u hora, "YYYY-MM-DDTHH:MM" local, de <calendario>. «Temprano» = 09:00; «en la tarde» = 15:00. Sin cuándo: null (se hace ya). Si la hora ya pasó, ponla igual: la oficina le pregunta al dueño si es mañana o ahora.
+- "prioridad": "alta" solo si el dueño dijo urgente o hay una fecha encima; si no, "media". "limite": "YYYY-MM-DD" si hay para cuándo (no es cuándo arranca: eso es "at").
+- "espera": los índices (0, 1…) de las piezas de ESTE plan que tienen que terminar antes (las fotos antes del post; el post antes del correo). La pieza no arranca hasta que esas terminen. Sin dependencias: [].
+- "proyecto": si las piezas sirven a una misma meta con fecha (un lanzamiento, un cierre de mes, un cliente grande), {"nombre":"<≤60>","objetivo":"<una frase medible>","limite":"YYYY-MM-DD"}; si ya existe en <proyectos>, {"id":"<su id>"}. Una tarea suelta no es un proyecto: null.
 - Algo que se repite («cada lunes…»): propón una rutina en ops (no una tarea).
 - Tú nunca envías, publicas ni pagas nada: solo propones. Nada sale hasta que el dueño pulsa ENVIAR A LOS JEFES.
 
 OPS — el calendario y la oficina (cada una es una tarjeta que espera el clic del dueño; usa ids exactos de los datos)
-- {"type":"rutina_crear","dept":"<key>","agent":"<id o null>","text":"<lo que se pide cada vez>","when":{"kind":"daily|weekdays|weekly","days":[1],"at":"HH:MM"},"needsOk":true} — departamentos con rutinas: ${routineDepts.join(', ')}. days: 0 = domingo. needsOk false solo si solo lee y reporta.
+- {"type":"rutina_crear","dept":"<key>","agent":"<id o null>","text":"<lo que se pide cada vez>","when":{"kind":"daily|weekdays|weekly|monthly","days":[1],"at":"HH:MM"},"needsOk":true} — monthly: "day":15 (o -1 = último día) o "nth":2,"weekday":2 (el segundo martes); opcionales "end":"YYYY-MM-DD" (hasta) y "count":6 (veces) — departamentos con rutinas: ${routineDepts.join(', ')}. days: 0 = domingo. needsOk false solo si solo lee y reporta.
 - {"type":"rutina_saltar","id":"<id de una rutina de <estado>>","at":"YYYY-MM-DDTHH:MM"} — saltar UNA ejecución, sin pausar la rutina.
 - {"type":"pieza_crear","titulo":"<…>","fecha":"YYYY-MM-DD o vacío","hora":"HH:MM o vacío","formato":"post|reel|carrusel|historia","redes":["instagram","facebook"],"texto":"<el texto de la publicación>"} — nace BORRADOR en Contenido.
 - {"type":"pieza_mover","id":"<id de una pieza de <estado>>","fecha":"YYYY-MM-DD","hora":"HH:MM"} — si estaba aprobada, pierde el OK (el dueño la vuelve a aprobar).
@@ -229,6 +233,21 @@ export function oficinaText({ budget = null, kpis = [], unread = 0, notices = []
   if (kpis.length) out.push('Indicadores del dueño: ' + kpis.slice(0, 8).map(k => `${k.name || k.id} ${k.value == null ? 'sin dato' : fmtN(k.value)}${k.goal ? ` (meta ${fmtN(k.goal)})` : ''}`).join(' · '));
   if (unread) out.push(`Avisos sin leer: ${unread}${notices.length ? ' — ' + notices.slice(0, 4).map(n => clip(n.text, 100)).join('; ') : ''}`);
   return out.join('\n');
+}
+
+/** Plan T4 (6 oct 2026): the projects for Dimitri's <estado> — how each one goes, what blocks it and why, with ids (he attaches a plan to
+ *  an existing one by its id). proyectos: [{ id, nombre, limite, estado, progreso }] (tareas/progreso.mjs); tareas: the office's. */
+export function proyectosText(proyectos = [], tareas = [], { name = id => id } = {}) {
+  const activos = proyectos.filter(p => p.estado === 'activo' || p.estado === 'pausa');
+  if (!activos.length) return '';
+  const porId = new Map(tareas.map(t => [t.id, t]));
+  const lin = activos.slice(0, 8).map(p => {
+    const g = p.progreso || {}, suyas = tareas.filter(t => t.proyecto === p.id && !t.archived && t.state !== 'done');
+    const bloq = suyas.filter(t => (t.bloqueadaPor || []).some(id => { const d = porId.get(id); return d && !(d.state === 'done' && !d.error); }));
+    const por = bloq.slice(0, 2).map(t => { const d = porId.get((t.bloqueadaPor || []).find(id => { const x = porId.get(id); return x && x.state !== 'done'; })); return `«${clip(t.title, 40)}» espera a «${clip(d?.title || '?', 40)}»${d?.person ? ` (la tiene ${d.person})` : d ? ` (${name(d.agent)})` : ''}`; });
+    return `- ${p.id} · «${clip(p.nombre, 50)}»${p.estado === 'pausa' ? ' (en pausa)' : ''} · ${g.hechas || 0}/${g.total || 0} hechas${p.limite ? ` · vence ${p.limite}${g.diasRestantes != null ? ` (${g.diasRestantes < 0 ? `hace ${-g.diasRestantes} días` : g.diasRestantes === 0 ? 'hoy' : `en ${g.diasRestantes} días`})` : ''}` : ''}${g.vencidas ? ` · ${g.vencidas} tareas vencidas` : ''}${g.atrasado ? ' · VA ATRASADO' : ''}${por.length ? ` · bloqueos: ${por.join('; ')}` : ''}`;
+  });
+  return `Proyectos (${activos.length}):\n${lin.join('\n')}`;
 }
 
 /* ---------- Auditoría 1 oct 2026 (DIM-10): «¿Cómo vamos?» at once — the same office, for the owner's eyes, no model ---------- */
@@ -410,9 +429,9 @@ export function parseOps(list, { depts = {}, agents = [], routineDepts = [], rou
     if (o.type === 'rutina_crear') {
       const dept = routineDepts.includes(o.dept) ? o.dept : null, text = clip(o.text || o.title, 4000), when = o.when && typeof o.when === 'object' ? { ...o.when } : null;
       if (when && Array.isArray(when.days)) when.days = [...new Set(when.days.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
-      if (when && when.kind !== 'daily' && when.kind !== 'weekdays' && when.kind !== 'weekly') { dropped.push(o.type); continue; } // the owner's routines from the chat: by day and hour (hourly and «minutes» stay in the calendar)
+      if (when && !['daily', 'weekdays', 'weekly', 'monthly'].includes(when.kind)) { dropped.push(o.type); continue; } // plan T5: monthly too // the owner's routines from the chat: by day and hour (hourly and «minutes» stay in the calendar)
       const agent = agents.find(a => a.id === o.agent && a.department === dept)?.id || null;
-      if (dept && text && validWhen(when)) v = { type: o.type, dept, agent, text, title: clip(o.title || text, 90), ...(o.title || o.titled ? { titled: true } : {}), when: { kind: when.kind, at: when.at, ...(when.kind === 'weekly' ? { days: when.days } : {}), ...(when.start && FECHA_RE.test(when.start) ? { start: when.start } : {}) }, needsOk: owner ? o.needsOk !== false : true }; // what Dimitri proposes always waits for the OK: only the owner unticks it on the card
+      if (dept && text && validWhen(when)) v = { type: o.type, dept, agent, text, title: clip(o.title || text, 90), ...(o.title || o.titled ? { titled: true } : {}), when: { kind: when.kind, at: when.at, ...(when.kind === 'weekly' ? { days: when.days } : {}), ...(when.kind === 'monthly' ? (when.nth ? { nth: when.nth, weekday: when.weekday } : { day: when.day }) : {}), ...(when.start && FECHA_RE.test(when.start) ? { start: when.start } : {}), ...(when.end && FECHA_RE.test(when.end) ? { end: when.end } : {}), ...(Number.isInteger(when.count) && when.count > 0 ? { count: when.count } : {}) }, needsOk: owner ? o.needsOk !== false : true }; // what Dimitri proposes always waits for the OK: only the owner unticks it on the card
     } else if (o.type === 'rutina_saltar') {
       const at = typeof o.at === 'number' ? o.at : localMs(o.at), r = routines.find(x => x.id === o.id);
       if (r && at > now && runsOf(r, now).includes(at)) v = { type: o.type, id: o.id, at, title: r.title || o.id }; // only a real run of that routine: the clock skips by the exact millisecond
@@ -455,8 +474,16 @@ export function parsePlan(text, { depts, agents, now = Date.now() }) {
     let at = null, past = false;
     if (t.at && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(t.at))) { const ms = new Date(String(t.at).slice(0, 16)).getTime(); if (ms > now + 30000) at = ms; else if (Number.isFinite(ms)) { at = ms; past = true; } } // DIM-13: a time that already went is kept and said, never dropped in silence
     const lead = dept && agents.find(x => x.department === dept && x.lead);
-    return dept && String(t.instruction || t.title || '').trim() ? { i, dept, lead: lead?.id || null, title: String(t.title || t.instruction).trim().slice(0, 90), instruction: String(t.instruction || t.title).trim().slice(0, 4000), why: String(t.why || '').trim().slice(0, 400), ownerSaid: keys.includes(t.owner_said) && t.owner_said !== dept ? t.owner_said : null, team: t.team === true, at, ...(past ? { past: true } : {}), include: true, state: 'proposed' } : null;
+    const prioridad = ['alta', 'media', 'baja'].includes(t.prioridad) ? t.prioridad : 'media', limite = /^\d{4}-\d{2}-\d{2}$/.test(String(t.limite || '')) ? String(t.limite) : null; // plan T4: priority and deadline per piece
+    const espera = Array.isArray(t.espera) ? [...new Set(t.espera.map(Number).filter(x => Number.isInteger(x) && x >= 0 && x !== i))] : [];
+    return dept && String(t.instruction || t.title || '').trim() ? { i, orig: i, dept, lead: lead?.id || null, title: String(t.title || t.instruction).trim().slice(0, 90), instruction: String(t.instruction || t.title).trim().slice(0, 4000), why: String(t.why || '').trim().slice(0, 400), ownerSaid: keys.includes(t.owner_said) && t.owner_said !== dept ? t.owner_said : null, team: t.team === true, at, ...(past ? { past: true } : {}), prioridad, ...(limite ? { limite } : {}), espera, include: true, state: 'proposed' } : null;
   }).filter(Boolean).map((t, i) => ({ ...t, i }));
+  { // «espera» named the pieces by their place in Dimitri's list: after dropping the unreadable ones, the same pieces by their new place (and no circle)
+    const nuevo = new Map(items.map(t => [t.orig, t.i]));
+    for (const t of items) { t.espera = t.espera.map(x => nuevo.get(x)).filter(x => x !== undefined && x !== t.i); delete t.orig; }
+    const espera = i => items[i]?.espera || [], llega = (de, a, visto = new Set()) => de === a || (!visto.has(de) && (visto.add(de), espera(de).some(x => llega(x, a, visto))));
+    for (const t of items) t.espera = t.espera.filter(x => !llega(x, t.i)); // x already waits (maybe far down the line) for t: a circle — dropped
+  }
   const creatives = (Array.isArray(j.creatives) ? j.creatives : []).filter(c => c && typeof c === 'object').slice(0, 8);
   const mode = MODES.includes(j.mode) ? j.mode : items.length ? 'plan' : creatives.length || (j.lote && typeof j.lote === 'object') ? 'estudio' : 'charla';
   // a chat, a status report or a question never carries work: the model sometimes adds a piece «just in case». The studio mode may carry
@@ -470,7 +497,9 @@ export function parsePlan(text, { depts, agents, now = Date.now() }) {
     const qs = new Set(questions.map(q => bare(q.q)));
     reply = reply.split('\n').filter(l => !qs.has(bare(l))).join('\n');
   }
-  return { mode, reply: reply.replace(/\n{3,}/g, '\n\n').trim(), tasks: work ? items : [], questions,
+  const pj = j.proyecto && typeof j.proyecto === 'object' && !Array.isArray(j.proyecto) ? j.proyecto : null; // plan T4: one goal across departments
+  const proyecto = work && items.length && pj ? (/^pr-[a-z0-9-]{1,40}$/.test(String(pj.id || '')) ? { id: String(pj.id) } : String(pj.nombre || '').trim() ? { nombre: String(pj.nombre).trim().slice(0, 80), objetivo: String(pj.objetivo || '').trim().slice(0, 500), ...(/^\d{4}-\d{2}-\d{2}$/.test(String(pj.limite || '')) ? { limite: String(pj.limite) } : {}) } : null) : null;
+  return { mode, reply: reply.replace(/\n{3,}/g, '\n\n').trim(), tasks: work ? items : [], questions, ...(proyecto ? { proyecto } : {}),
     creatives: studio ? creatives : [], actions: studio && Array.isArray(j.actions) ? j.actions.filter(a => !(a && ACCIONES_LOTE.includes(a.type))).slice(0, 40) : [], ops: work && Array.isArray(j.ops) ? j.ops.slice(0, 12) : [],
     // F3: a «lote» only in the studio mode; the closed actions on a running lote in any mode (each one waits for the owner's click)
     lote: studio && j.lote && typeof j.lote === 'object' && !Array.isArray(j.lote) ? j.lote : null, loteActions: (Array.isArray(j.actions) ? j.actions : []).filter(a => a && typeof a === 'object' && ACCIONES_LOTE.includes(a.type)).slice(0, 8),

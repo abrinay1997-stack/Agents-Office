@@ -50,12 +50,13 @@ await step('build: the views\' own style (src/css/*.css) reaches the page once e
   const dir = path.join(ROOT, 'src', 'css'), files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.endsWith('.css')) : [];
   // 1 oct 2026 (carga bajo demanda): the stylesheets in CSS_APARTE (build-extra.mjs) travel with dist/estudio-extra.js instead of the page
   const { CSS_APARTE } = await import('./build-extra.mjs'), extra = fs.readFileSync(path.join(ROOT, 'dist', 'estudio-extra.js'), 'utf8');
+  const { CSS_TAREAS } = await import('./build-tareas.mjs'), tv = fs.readFileSync(path.join(ROOT, 'dist', 'tareas-vista.js'), 'utf8'); // plan T2 (6 oct 2026): the Tareas view's own bundle
   for (const f of files) {
-    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, aparte = CSS_APARTE.includes(f);
-    if (n + x !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page and ${x} in dist/estudio-extra.js (it must be exactly 1 in all)`);
-    if (aparte && n) throw new Error(`src/css/${f} is in CSS_APARTE but reached the page: it must travel only with dist/estudio-extra.js`);
+    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, y = tv.split(mark).length - 1, aparte = CSS_APARTE.includes(f) || CSS_TAREAS.includes(f);
+    if (n + x + y !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page, ${x} in dist/estudio-extra.js and ${y} in dist/tareas-vista.js (it must be exactly 1 in all)`);
+    if (aparte && n) throw new Error(`src/css/${f} travels in a bundle of its own but reached the page`);
   }
-  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete aparte)' : f).join(', ')}`;
+  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete del Estudio)' : CSS_TAREAS.includes(f) ? f + ' (con la vista Tareas)' : f).join(', ')}`;
 });
 await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own file beside the page, of the same build, and the page does not carry it', async () => { // 1 oct 2026, INF-09
   const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8'), file = path.join(ROOT, 'dist', 'estudio-extra.js');

@@ -4,6 +4,7 @@ import { initSheet } from './agentsheet.js'; // the agent sheet: edit who an age
 import { MODEL_KEYS as SHEET_MODELS, modelName as sheetModelName, EFFORT_KEYS as SHEET_EFFORTS } from './models.js';
 import { initStudio } from './studio.js'; // the Estudio: images and video, by hand and by the agents
 import { initAnaliticas } from './analiticas.js'; // V4.7 (F2): Analíticas — how Instagram and Facebook are doing, read only (R)
+import { initTareasCarga } from './tareas-carga.js'; // plan T2 (6 oct 2026): la vista Tareas (H) — Inicio, Lista, Tablero, Proyectos, Medidas; se descarga al abrirla
 import { initContenido } from './contenido.js'; // V4.7: Contenido — the calendar of what is published, its schedule, the piece panel (K)
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
@@ -597,6 +598,7 @@ addEventListener('keydown', (e) => {
     if (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) { agentSheet.close(); return; }
     if (subger.isOpen()) { subger.close(); return; }
     if (studio.isOpen()) { studio.close(); return; }
+    if (tareasV.isOpen()) { if (!tareasV.back()) tareasV.close(); return; } // plan T2: the task's detail (and a form, a project, a figure) before the view
     if (analiticas.isOpen()) { analiticas.close(); return; } // V4.7 (F2): Analíticas
     if (contenido.isOpen()) { if (contenido.panelOpen()) contenido.closePanel(); else if (contenido.popOpen()) contenido.closePop(); else contenido.close(); return; } // V4.7: the piece, then the day's list, then Contenido
     if (tasks && tasks.calendar && tasks.calendar.isOpen()) { if (tasks.calendar.popOpen()) tasks.calendar.closePop(); else tasks.calendar.close(); return; }
@@ -613,7 +615,7 @@ addEventListener('keydown', (e) => {
   // V4.5 (27 Sep 2026): a view (the Estudio, the calendar, the Brain) keeps the top bar — its dock's keys switch views or open a
   // window on top; the office's own keys (1–6, +, −, T…) wait, and the calendar keeps its own (← → T D W M A)
   if (views.current()) {
-    if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'k') contenido.toggle(); else if (key === 'r') analiticas.toggle(); else if (key === 'g') brain.toggle();
+    if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'k') contenido.toggle(); else if (key === 'r') analiticas.toggle(); else if (key === 'g') brain.toggle(); else if (key === 'h') tareasV.toggle();
     else if (key === 's') subger.toggle(); // V4.8: Dimitri beside the view (the view moves over, src/css/dimitri.css)
     else if (key === 'o') health.toggle(); else if (key === 'n') bizWin.toggle(); else if (key === 'u') costsWin.toggle(); else if (key === ',') settingsWin.toggle();
     else if (key === 's') subger.toggle(); // A11-04: Dimitri sits beside a view — S (and his dock button) open him there too
@@ -621,6 +623,7 @@ addEventListener('keydown', (e) => {
   }
   if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } // V3.2.1 (16 Sep 2026): the calendar
   else if (key === 'k') contenido.toggle(); // V4.7: Contenido
+  else if (key === 'h') tareasV.toggle(); // plan T2: Tareas
   else if (key === 'r') analiticas.toggle(); // V4.7 (F2): Analíticas
   else if (key === 'g') brain.toggle(); // V3.6: the full-screen Brain graph
   else if (key === 'b') { if (tasks) tasks.toggle(); } // V3: the company-wide board
@@ -655,8 +658,9 @@ addEventListener('keydown', (e) => {
 const KEYS = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
-    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['R', 'Analíticas: cómo rinden Instagram y Facebook', 'r'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'ctrl+k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
-    ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['S', 'Dimitri al lado: la vista se corre y sigue a mano; ve lo que tienes seleccionado', 's'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['H', 'Tareas: hoy, lista, tablero, proyectos y medidas', 'h'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['R', 'Analíticas: cómo rinden Instagram y Facebook', 'r'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'ctrl+k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Tareas abierta', [['/', 'Ir al campo de arriba: añadir o buscar'], ['← →', 'Sobre las pestañas: Inicio, Lista, Tablero, Proyectos, Medidas'], ['Arrastrar una tarjeta', 'Cambiarla de estado, de turno o de departamento (con DESHACER)'], ['Esc', 'Cerrar el detalle; luego, Tareas']]],
+    ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · H · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['S', 'Dimitri al lado: la vista se corre y sigue a mano; ve lo que tienes seleccionado', 's'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
     ['Contenido abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['W · M · A · D', 'Semana, mes, agenda o día'], ['Arrastrar una tarjeta', 'Mover la pieza a otro día (si estaba aprobada, vuelve a revisión)'], ['Esc', 'Cerrar la pieza, la lista del día o Contenido']]],
@@ -1732,11 +1736,11 @@ view.target.set(...overviewPos());
 addEventListener('resize', () => { if (!focused && !tween && !HERO) { const atOverview = view.zoom <= 0.82; view.target.set(...overviewPos()); if (atOverview) view.zoom = overviewZoom(); } }); // V4.1: a resized (or rotated) window re-fits the overview
 const subger = initSub({ isLive: () => tasks.isLive(), esc, DEPTS, DEPT_KEYS, findBySid: sid => tasks.findBySid(sid), openTask: t => tasks.openTask(t),
   agentName: id => (AGENTS.find(a => a.id === id) || {}).name || id, afterSend: () => tasks.refresh(),
-  getContext: () => { const v = views.current(), src = { studio, cal: tasks && tasks.calendar, contenido, analiticas, brain }[v]; return src && src.selection ? src.selection() : v ? { view: v, label: { studio: 'El Estudio', cal: 'El calendario', contenido: 'Contenido', analiticas: 'Analíticas', brain: 'El Cerebro' }[v] || v, kind: null } : null; }, // V4.8: «Viendo: …» (the views are defined below: only called once the chat is open)
+  getContext: () => { const v = views.current(), src = { studio, cal: tasks && tasks.calendar, contenido, analiticas, brain, tareas: tareasV }[v]; return src && src.selection ? src.selection() : v ? { view: v, label: { studio: 'El Estudio', cal: 'El calendario', contenido: 'Contenido', analiticas: 'Analíticas', brain: 'El Cerebro', tareas: 'Tareas' }[v] || v, kind: null } : null; }, // V4.8: «Viendo: …» (the views are defined below: only called once the chat is open)
   openStudioFile: file => (studio.openFile ? studio.openFile(file) : studio.open()) });
 { // the task panel's switch in the dock (and T): the panel hides to give the office the whole width
   const btn = document.getElementById('topPanel');
-  const VIEW_BTN = [['topDimitri', 'subOpen'], ['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topContenido', 'ctOpen'], ['topAnaliticas', 'anOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
+  const VIEW_BTN = [['topDimitri', 'subOpen'], ['topStudio', 'studioOpen'], ['topCal', 'calOpen'], ['topContenido', 'ctOpen'], ['topTareas', 'tvOpen'], ['topAnaliticas', 'anOpen'], ['topBrain', 'brainOpen']].map(([id, c]) => [document.getElementById(id), c]);
   const sync = () => { const cl = document.body.classList, shown = !cl.contains('tpMin'); btn.setAttribute('aria-pressed', shown); btn.classList.toggle('on', shown); for (const [b, c] of VIEW_BTN) b?.setAttribute('aria-pressed', cl.contains(c)); }; // the open view's icon stays pressed
   document.getElementById('topDimitri')?.addEventListener('click', () => subger.toggle()); // A11-04: Dimitri from any view, with the mouse or a finger (only S before)
   btn.addEventListener('click', () => { if (tasks && tasks.setPanel) tasks.setPanel(document.body.classList.contains('tpMin')); sync(); });
@@ -1770,6 +1774,9 @@ const finder = initSearch({ served: SERVED, esc, agents: AGENTS, // V4.4 (J7): C
 document.getElementById('topStudio').addEventListener('click', () => studio.toggle());
 const contenido = initContenido({ served: SERVED, esc, agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', business: () => document.title.replace(/ — Agents Office$/, ''), openStudio: (target, onPick) => studio.forTarget(target, onPick) }); // V4.7
 document.getElementById('topContenido').addEventListener('click', () => contenido.toggle());
+const tareasV = initTareasCarga({ servida: SERVED, AGENTS, DEPTS, DEPT_KEYS, alCambiar: () => tasks && tasks.refresh && tasks.refresh(), // plan T2: what changes there reaches the 3D office and the panel at once
+  abrirEnOficina: sid => { const t = tasks && tasks.findBySid(sid); if (!t) return; tareasV.close({ quiet: true }); tasks.openTask(t); } });
+document.getElementById('topTareas').addEventListener('click', () => tareasV.toggle());
 const analiticas = initAnaliticas({ served: SERVED, esc, business: () => document.title.replace(/ — Agents Office$/, '') }); // V4.7 (F2)
 document.getElementById('topAnaliticas').addEventListener('click', () => analiticas.toggle());
 document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)
@@ -1778,7 +1785,7 @@ document.getElementById('topBrain').addEventListener('click', () => brain.toggle
 // chat and a department's chat close, and the camera flies back to the overview, all in one click
 document.querySelector('#topbar .brand').addEventListener('click', () => {
   const v = views.current();
-  if (v === 'studio') studio.close({ quiet: true }); else if (v === 'cal') tasks.calendar.close({ quiet: true }); else if (v === 'brain') brain.close({ quiet: true });
+  if (v === 'studio') studio.close({ quiet: true }); else if (v === 'cal') tasks.calendar.close({ quiet: true }); else if (v === 'brain') brain.close({ quiet: true }); else if (v === 'tareas') tareasV.close({ quiet: true });
   if (subger.isOpen()) subger.close();
   zoomOut();
 });
@@ -1818,7 +1825,7 @@ window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval,
 
 let last = performance.now(), lastFrame = 0, frameN = 0, lastInput = performance.now();
 for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
-const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen') || document.body.classList.contains('ctOpen') || document.body.classList.contains('anOpen'); // a full-screen view hides the office
+const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen') || document.body.classList.contains('ctOpen') || document.body.classList.contains('anOpen') || document.body.classList.contains('tvOpen'); // a full-screen view hides the office (Tareas too, 6 Oct 2026: it drew the 3D office behind it at full rate)
 // Frame budget: full rate while the camera flies or the owner is moving the pointer; 30 fps when the office just lives;
 // 5 fps of simulation and NO drawing while the Brain or the calendar covers it. The tab hidden → the browser stops rAF.
 function loop(now) {

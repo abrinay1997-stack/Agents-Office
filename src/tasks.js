@@ -602,7 +602,10 @@ export function initTasks(ctx) {
   }
   async function rtActAsk(rid, act) { // from the panel and the chat rail: deleting a routine is asked first (the calendar asks on its own), and a failure is said
     const r = routines.find(x => x.id === rid); if (!r) return;
-    if (act === 'delete' && !confirm(`¿Eliminar la rutina «${r.title}»? Sale del horario (las tareas que ya hizo se quedan).`)) return;
+    if (act === 'delete') { // plan T0: no confirm() — it goes when the toast closes, and DESHACER keeps it (the calendar does the same)
+      offerUndo(`Rutina eliminada: «${esc(short(r.title))}». Las tareas que ya hizo se quedan.`, { undo: () => true, commit: () => rtAct(rid, 'delete').then(res => { if (res && !res.ok) say(`No se pudo: ${esc(res.error)}`, 'amber'); }) });
+      return;
+    }
     const res = await rtAct(rid, act); if (res && !res.ok) say(`No se pudo: ${esc(res.error)}`, 'amber');
   }
   async function rtAct(rid, act) { // RUN NOW · PAUSE · RESUME · DELETE — from a SCHEDULED row, a board card or the rail strip
@@ -679,7 +682,8 @@ export function initTasks(ctx) {
     if (off) say('Se perdió la conexión con la oficina. ¿Cerraste la ventana del servidor? Vuelve a abrir el iniciador.', 'err');
     else say('Conexión recuperada.');
   }
-  const extraOf = st => Object.fromEntries(['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'person', 'handoff', 'comments', 'example'].map(k => [k, st[k]]));
+  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft', 'person', 'handoff', 'comments', 'example', 'prioridad', 'etiquetas', 'limite', 'estimacion', 'proyecto', 'pasos', 'bloqueadaPor']; // V4.4: what the detail shows (G, D) · plan T1: the task's organisation (the calendar, the bar from the real steps)
+  const extraOf = st => Object.fromEntries(EXTRA.filter(k => !['cost', 'guard', 'heldForOk', 'draft'].includes(k)).map(k => [k, st[k]])); // one list with apply() (it used to be copied here by hand)
   const fromServer = st => ({ ...extraOf(st), id: seq++, dept: agentOf(st.agent).dept, agent: st.agent, title: st.title, text: st.text, plan: st.plan, state: st.state, progress: 1, live: true, srv: true, sid: st.id,
     addedAt: st.addedAt, doneAt: st.doneAt, changedAt: st.doneAt || st.addedAt, result: st.result, read: st.read || [], note: st.note, tools: st.tools || [], used: st.used || [], error: !!st.error, approved: !!st.approved, routine: st.routine, when: st.when, due: st.due, late: !!st.late, guard: st.guard, heldForOk: !!st.heldForOk, cost: st.cost, last: 'done' }); // due: which routine run it was (the calendar marks past runs by it)
   function reconcile(st) { // a server task the page did not start (a routine firing, a catch-up, an approval finishing) → the same cards, the same moves
@@ -726,7 +730,6 @@ export function initTasks(ctx) {
       if (R[to]) { feedPush(R[to], '📨', `Nota de ${agentOf(m.from)?.name || m.from}: ${m.text}`); chatPush(to, { who: 'work', i: '📨', text: `nota de ${agentOf(m.from)?.name || m.from}: ${m.text}` }); }
     }
   }
-  const EXTRA = ['preview', 'risk', 'approvals', 'review', 'vote', 'voteReason', 'editedDraft', 'read', 'cost', 'guard', 'heldForOk', 'draft', 'person', 'handoff', 'comments', 'example']; // V4.4: what the detail shows (G, D)
   function apply(t, st) {
     if (st.team) syncTeam(t, st);
     for (const k of EXTRA) if (JSON.stringify(t[k]) !== JSON.stringify(st[k])) { t[k] = st[k]; dirty = true; }
@@ -871,7 +874,7 @@ export function initTasks(ctx) {
         const src = t.piece ? `parte del equipo de ${agentOf(t.leadId)?.name || 'el líder'}` : t.routine ? `rutina · ${t.when}${t.late ? ' · <span class="tp-late">atrasada · tocaba a las ' + timeStr(t.due) + '</span>' : ''}` : t.by === 'you' ? 'la pediste tú' : t.by === 'sub' ? 'vía Dimitri' : t.last === 'handoff' && t.from ? `de ${agentOf(t.from).name}` : t.revised ? 'devuelta para revisar' : 'del Cerebro';
         const w = now - t.addedAt;
         const q = t.retryAt && t.retryAt > now ? ` · <span class="tp-retry">↻ reintento ${t.attempts || 1} a las ${timeStr(t.retryAt)}${t.lastError ? ' (' + esc(retryWhy(t.lastError)) + ')' : ''}</span>`
-          : t.queue && t.queue.why !== 'turno' ? ` · <span class="tp-queue">${t.queue.why === 'agente' ? `espera a que ${esc(a.name)} termine lo suyo` : `turno ${t.queue.pos}: todos los agentes que pueden trabajar a la vez están ocupados`}</span>` : ''; // V4.4 (B5): why it waits
+          : t.queue && t.queue.why !== 'turno' ? ` · <span class="tp-queue">${t.queue.why === 'agente' ? `espera a que ${esc(a.name)} termine lo suyo` : t.queue.why === 'bloqueada' ? 'bloqueada: espera otra tarea' : t.queue.why === 'persona' ? 'la tiene una persona' : t.queue.why === 'presupuesto' ? 'el presupuesto del mes se acabó' : t.queue.why === 'reintento' ? 'espera su reintento' : `turno ${t.queue.pos}: todos los agentes que pueden trabajar a la vez están ocupados`}</span>` : ''; // V4.4 (B5): why it waits
         return `${who} · ${w < 60000 ? 'recién agregada' : 'en espera ' + span(w)}${q} · ${src}${teamBit(t)}${modelBit(t)}`;
       }
       case 'doing': return `${who}${t.live ? (t.approved === undefined && t.draftAt ? ' · enviando con Claude' : t.team?.members?.length ? ' · liderando el equipo con Claude' : ' · trabajando con Claude') : t.agent === 'vid' ? ' · renderizando' : t.teamHold ? ' · esperando las partes' : ''}${t.routine ? ' · rutina' : ''}${teamBit(t)}${modelBit(t)}`;
@@ -948,7 +951,7 @@ export function initTasks(ctx) {
     renderNext();
     if (!structural && html === lastRows) return; // nothing in the list changed: the rows stay the same elements (a click on a row that was being replaced got lost)
     P_.rows.innerHTML = lastRows = html;
-    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t && confirm(`¿Cancelar «${t.title}»?`)) cancelScheduled(t); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
+    P_.rows.querySelectorAll('.tp-act button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const row = b.closest('.tp-row'); if (row.dataset.rid) rtActAsk(row.dataset.rid, b.dataset.act); else if (b.dataset.act === 'unarchive') { const x = archived.find(y => String(y.t.sid || y.t.id) === row.dataset.xid); if (x) { b.disabled = true; unarchive([x.t]).then(ok => { say(ok ? `De vuelta en la lista: «${esc(short(x.t.title))}».` : 'No se pudo devolver a la lista.', ok ? '' : 'err'); render(true); }); } } else if (b.dataset.act === 'cancel') { const t = tasks.find(t => String(t.id) === row.dataset.id); if (t) offerUndo(`Cancelada: «${esc(short(t.title))}».`, { undo: () => true, commit: () => cancelScheduled(t).then(r => { if (!r.ok) say(`No se pudo cancelar: ${esc(r.error)}`, 'err'); render(true); }) }); } else if (b.dataset.act === 'calendar' && calendar) { const t = tasks.find(t => String(t.id) === row.dataset.id); calendar.openAt(t && t.dueAt); } }));
     P_.rows.querySelectorAll('.tp-row[data-id]:not([data-rid])').forEach(n => { n.addEventListener('click', () => openTask(tasks.find(t => String(t.id) === n.dataset.id))); if (n.querySelector('.tp-act button')) { const t = n.querySelector('.tp-t'); t.innerHTML = `<button type="button" class="tp-open">${t.innerHTML}</button>`; return; } n.tabIndex = 0; n.setAttribute('role', 'button'); }); // every row opens its detail; V4.3: a row with its own buttons opens from its title (a button inside a button is two controls a screen reader cannot tell apart)
     if (!structural) flip(before);
     if (fid) P_.rows.querySelector(`.tp-row[data-id="${CSS.escape(fid)}"]`)?.focus({ preventScroll: true });
@@ -1073,14 +1076,17 @@ export function initTasks(ctx) {
     const lane = e.target.closest('.lc[data-col]'); const t = boardDrag; if (!lane || !t) return;
     e.preventDefault(); boardDrag = null;
     const move = boardMove(t, lane.dataset.col, lane.dataset.dept); if (!move) return renderBoard();
-    let r = { ok: true };
-    if (move === 'reassign') { const lead = AGENTS.find(a => a.dept === lane.dataset.dept && a.lead); if (!confirm(`¿Pasar «${t.title}» a ${DEPTS[lane.dataset.dept].name}? La toma ${lead.name}, que la da al escritorio correcto.`)) return renderBoard(); r = await act(t, 'save', { agent: lead.id }); }
+    // plan T0 (6 oct 2026): no confirm() / alert() (they block the page and skip modal.js) — the move happens, and the toast offers DESHACER
+    let r = { ok: true }, undo = null, msg = '';
+    const L = live && t.live && t.sid;
+    if (move === 'reassign') { const lead = AGENTS.find(a => a.dept === lane.dataset.dept && a.lead), was = t.agent; r = await act(t, 'save', { agent: lead.id }); msg = `«${esc(short(t.title))}» pasa a ${esc(DEPTS[lane.dataset.dept].name)}: la toma ${esc(lead.name)}.`; undo = async () => (await act(t, 'save', { agent: was })).ok; }
     else if (move === 'schedule') { renderBoard(); openTask(t); setTimeout(() => { const d = document.querySelector('#tdDrawer .td-date'); if (d) { d.focus(); if (d.showPicker) try { d.showPicker(); } catch {} } }, 120); return; } // a date is needed: the detail opens on it
-    else if (move === 'done') { if (!confirm(`¿Marcar «${t.title}» como hecha sin ejecutarla?`)) return renderBoard(); r = await act(t, 'done'); }
-    else if (move === 'approve') { if (!confirm(`¿Aprobar «${t.title}»? El agente lo envía.`)) return renderBoard(); r = await act(t, 'approve'); }
+    else if (move === 'done') { r = await act(t, 'done'); msg = `«${esc(short(t.title))}» marcada como hecha, sin ejecutarla.`; undo = async () => { if (!L) { t.state = 'next'; t.manual = false; delete t.doneAt; touch(t, 'edited'); return true; } try { await req('POST', `/tareas/${t.sid}/estado`, { a: 'next' }); return true; } catch { return false; } }; }
+    else if (move === 'approve') { r = await act(t, 'approve'); msg = `Aprobada: «${esc(short(t.title))}». ${esc(agentOf(t.agent).name)} lo envía.`; if (L) undo = async () => { try { await req('POST', `/tasks/${t.sid}/undo`, {}); return true; } catch { return false; } }; }
     else r = await act(t, move);
     renderBoard(); render(true);
-    if (!r || !r.ok) alert('No se pudo: ' + ((r && r.error) || 'error'));
+    if (!r || !r.ok) say(`No se pudo: ${esc((r && r.error) || 'error')}`, 'err');
+    else if (msg) offerUndo(msg, undo ? { undo } : {});
   });
   function open() {
     board.open = true; boardOpener = document.activeElement; el.inert = false; modal.open(el); el.tabIndex = -1;
@@ -1177,6 +1183,7 @@ export function initTasks(ctx) {
         if (d.live) {
           if (!d.running) d.running = true; // the server runs it; apply() brings the result
           if (d.ready) { d.progress = 1; complete(d); }
+          else if (d.pasos?.length) d.progress = Math.min(0.96, d.pasos.filter(p => p.hecho).length / d.pasos.length); // plan T1: the steps the agent marked (tareas-mcp → marcar_paso), not a guess
           else d.progress = Math.min(0.92, (now - (d.startedAt || now)) / 45000);
         } else if (d.teamHold) { // demo lead: the card fills as the pieces come in, finishes when the last one lands
           const ps = tasks.filter(x => x.parent === d.id);
@@ -1387,7 +1394,7 @@ export function initTasks(ctx) {
   function offerUndo(html, { undo, commit, ms = 10000 }) { // one toast at a time: a new one commits the previous action
     if (pendingUndo) finishUndo(true);
     pendingUndo = { undo, commit };
-    toast.innerHTML = `<span class="tt-x">${html}</span><button type="button" class="tp-undo">DESHACER</button><button type="button" class="tp-tclose" aria-label="Cerrar el aviso">✕</button>`;
+    toast.innerHTML = `<span class="tt-x">${html}</span>${undo ? '<button type="button" class="tp-undo">DESHACER</button>' : ''}<button type="button" class="tp-tclose" aria-label="Cerrar el aviso">✕</button>`; // nothing to undo: no DESHACER that does nothing
     toast.hidden = false; requestAnimationFrame(() => toast.classList.add('on'));
     clearTimeout(toastTimer); toastTimer = setTimeout(() => finishUndo(true), ms);
   }

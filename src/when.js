@@ -9,7 +9,12 @@
 //          every: N             (hourly: every N hours · minutes: every N minutes)
 //          from, to: 'HH:MM'    (hourly: the window, default the whole day)
 //          weekdaysOnly: true   (hourly: skip Saturday and Sunday)
-//          start: 'YYYY-MM-DD'  (optional, V3.2.1 calendar: nothing fires before this date — a routine set for the future) }
+//          start: 'YYYY-MM-DD'  (optional, V3.2.1 calendar: nothing fires before this date — a routine set for the future)
+//          plan T5 (6 oct 2026):
+//          kind 'monthly' + at + day: 1..31 | -1 (the last day)      — «el 15 de cada mes», «el último día de cada mes»
+//          kind 'monthly' + at + nth: 1..4 | -1 + weekday: 0..6      — «el segundo martes de cada mes», «el último viernes»
+//          end: 'YYYY-MM-DD'    (optional: nothing fires after that day — «hasta el 30 de noviembre»)
+//          count: N             (optional: N runs and it stops — «6 veces»; routines.mjs counts them) }
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -59,9 +64,52 @@ function tidy(s) { // the task text with the schedule taken out
 }
 
 /** Plain words → { when, text, guessed, needsTime, needsDay } or null when there is no schedule in the sentence. */
+const ORD = { primer: 1, primero: 1, primera: 1, '1': 1, '1er': 1, '1.º': 1, segundo: 2, segunda: 2, '2': 2, '2.º': 2, tercer: 3, tercero: 3, tercera: 3, '3': 3, '3.º': 3, cuarto: 4, cuarta: 4, '4': 4, '4.º': 4, ultimo: -1, 'último': -1, ultima: -1, 'última': -1 };
+const MESES_ES = { enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12 };
+// plan T5: «hasta el 30 de noviembre» → end · «6 veces» / «durante 6 semanas» → count (weeks × the days of a weekly)
+function findLimits(s, now = new Date()) {
+  const out = { s };
+  let m = /\bhasta\s+(?:el\s+)?(\d{1,2})(?:\s*(?:\/|de)\s*(\d{1,2}|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre))?(?:\s*(?:\/|de)\s*(\d{4}))?\b/i.exec(out.s);
+  if (m) {
+    const dia = +m[1], mes = m[2] ? (MESES_ES[m[2].toLowerCase()] || +m[2]) : now.getMonth() + 1; let y = m[3] ? +m[3] : now.getFullYear();
+    const d = new Date(y, mes - 1, dia); if (!m[3] && d < new Date(now.getFullYear(), now.getMonth(), now.getDate())) d.setFullYear(y + 1);
+    if (d.getDate() === dia) { out.end = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; out.s = cut(out.s, [m.index, m.index + m[0].length]); }
+  }
+  m = /\b(?:(\d{1,3})\s+veces|durante\s+(\d{1,2})\s+(semanas|meses))\b/i.exec(out.s);
+  if (m) { out.count = m[1] ? +m[1] : null; out.durante = m[2] ? { n: +m[2], que: m[3].toLowerCase() } : null; out.s = cut(out.s, [m.index, m.index + m[0].length]); }
+  return out;
+}
+function withLimits(r, lim) {
+  if (!r || !r.when) return r;
+  if (lim.end) r.when.end = lim.end;
+  const n = lim.count || (lim.durante ? (lim.durante.que.startsWith('semana') ? lim.durante.n * (r.when.kind === 'weekly' ? Math.max(1, (r.when.days || []).length) : r.when.kind === 'weekdays' ? 5 : r.when.kind === 'daily' ? 7 : 1) : lim.durante.n) : 0);
+  if (n > 0 && r.when.kind !== 'minutes' && r.when.kind !== 'hourly') r.when.count = Math.min(999, n);
+  return r;
+}
+/** Plain words → { when, text, guessed, needsTime, needsDay } or null when there is no schedule in the sentence. */
 export function parseWhen(input) {
+  const lim = findLimits(String(input || ''));
+  const r = parseWhenBase(lim.s);
+  return lim.end || lim.count || lim.durante ? withLimits(r, lim) : r;
+}
+function parseWhenBase(input) {
   const src = String(input || '');
   let s = src, m;
+  // plan T5: MONTHLY — «el segundo martes de cada mes», «el último día de cada mes», «el 15 de cada mes», «cada mes el 15», «mensualmente»
+  if ((m = /\b(?:el\s+)?(primer[oa]?|segund[oa]|tercer[oa]?|cuart[oa]|[uú]ltim[oa]|[1-4](?:\.?º|er)?)\s+(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?|domingos?)\s+de\s+(?:cada|todos\s+los)\s+mes(?:es)?\b/i.exec(s))) {
+    const nth = ORD[m[1].toLowerCase().replace('.', '')] ?? ORD[m[1].toLowerCase()], wd = dayIndex(m[2]);
+    if (nth && wd >= 0) { s = cut(s, [m.index, m.index + m[0].length]); const t = findTime(s); if (t) s = cut(s, t.span); return { when: { kind: 'monthly', nth, weekday: wd, at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), needsTime: !t }; }
+  }
+  if ((m = /\b(?:el\s+)?(?:[uú]ltimo\s+d[ií]a\s+de\s+(?:cada|todos\s+los)\s+mes(?:es)?|(?:a|cada)\s+fin\s+de\s+mes)\b/i.exec(s))) {
+    s = cut(s, [m.index, m.index + m[0].length]); const t = findTime(s); if (t) s = cut(s, t.span);
+    return { when: { kind: 'monthly', day: -1, at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), needsTime: !t };
+  }
+  if ((m = /\b(?:(?:el|los)\s+(?:d[ií]as?\s+)?(\d{1,2})\s+de\s+(?:cada|todos\s+los)\s+mes(?:es)?|(?:cada\s+mes|mensual(?:mente)?|todos\s+los\s+meses)(?:\s*,?\s*(?:el|los)\s+(?:d[ií]as?\s+)?(\d{1,2})\b)?)/i.exec(s))) {
+    const day = +(m[1] || m[2] || 0);
+    s = cut(s, [m.index, m.index + m[0].length]); const t = findTime(s); if (t) s = cut(s, t.span);
+    if (day >= 1 && day <= 31) return { when: { kind: 'monthly', day, at: t ? t.at : null }, text: tidy(s), guessed: !!(t && t.guessed), needsTime: !t };
+    return { when: { kind: 'monthly', day: null, at: t ? t.at : null }, text: tidy(s), needsDay: true, needsTime: !t };
+  }
   // every N minutes (filming cadence — accepted, never offered)
   if ((m = /\b(?:every\s+(\d+)\s*(?:min|mins|minutes?)|cada\s+(\d+)\s*(?:min|minutos?))\b/i.exec(s))) {
     return { when: { kind: 'minutes', every: Math.max(1, +(m[1] || m[2])) }, text: tidy(cut(s, [m.index, m.index + m[0].length])) };
@@ -189,9 +237,15 @@ export function describe(when) {
   const s = startMs(when);
   return base && s && s > Date.now() ? `${base} · desde el ${shortDate(s)}` : base;
 }
+const ORD_ES = { 1: 'primer', 2: 'segundo', 3: 'tercer', 4: 'cuarto', '-1': 'último' };
 function describeBase(when) {
+  const b = describeKind(when); if (!b) return '';
+  return b + (when.end ? ` · hasta el ${shortDate(new Date(when.end + 'T12:00').getTime())}` : '') + (when.count ? ` · ${when.count} ${when.count === 1 ? 'vez' : 'veces'}` : '');
+}
+function describeKind(when) {
   const at = when.at ? ' a las ' + when.at : '';
   switch (when.kind) {
+    case 'monthly': return when.nth ? `el ${ORD_ES[when.nth]} ${DAYS_ES[when.weekday].replace('miercoles', 'miércoles').replace('sabado', 'sábado')} de cada mes${at}` : when.day === -1 ? `el último día de cada mes${at}` : `el ${when.day} de cada mes${at}`;
     case 'minutes': return `cada ${when.every} min`;
     case 'hourly': return (when.every > 1 ? `cada ${when.every} horas` : 'cada hora') + (when.from ? ` de ${when.from} a ${when.to}` : '') + (when.weekdaysOnly ? ' · días hábiles' : '');
     case 'daily': return 'todos los días' + at;
@@ -210,18 +264,44 @@ function describeBase(when) {
 export function valid(when) {
   if (!when || typeof when !== 'object') return false;
   if (when.start !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(when.start || '')) return false; // a start date, if given, is YYYY-MM-DD
+  if (when.end !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(when.end || '')) return false; // plan T5
+  if (when.count !== undefined && !(Number.isInteger(when.count) && when.count >= 1 && when.count <= 999)) return false;
   const t = s => /^\d{2}:\d{2}$/.test(s || '');
   if (when.kind === 'minutes') return Number.isInteger(when.every) && when.every >= 1;
   if (when.kind === 'hourly') return Number.isInteger(when.every) && when.every >= 1 && (!when.from || (t(when.from) && t(when.to) && when.from < when.to));
   if (when.kind === 'daily' || when.kind === 'weekdays') return t(when.at);
   if (when.kind === 'weekly') return t(when.at) && Array.isArray(when.days) && when.days.length > 0 && when.days.every(d => Number.isInteger(d) && d >= 0 && d <= 6);
+  if (when.kind === 'monthly') return t(when.at) && (when.nth !== undefined ? [1, 2, 3, 4, -1].includes(when.nth) && Number.isInteger(when.weekday) && when.weekday >= 0 && when.weekday <= 6 : Number.isInteger(when.day) && (when.day === -1 || (when.day >= 1 && when.day <= 31)));
   return false;
 }
+// plan T5: the day of month `m` (0-based) of year `y` a monthly schedule falls on, or null (a 31 in a 30-day month falls on the 30th: «el 31» means «a fin de mes»)
+function diaDelMes(when, y, m) {
+  const ult = new Date(y, m + 1, 0).getDate();
+  if (when.nth === undefined) return when.day === -1 ? ult : Math.min(when.day, ult);
+  if (when.nth === -1) { const d = new Date(y, m, ult); return ult - ((d.getDay() - when.weekday + 7) % 7); }
+  const first = new Date(y, m, 1).getDay(), d = 1 + ((when.weekday - first + 7) % 7) + (when.nth - 1) * 7;
+  return d <= ult ? d : null;
+}
+const endMs = when => when && /^\d{4}-\d{2}-\d{2}$/.test(when.end || '') ? new Date(when.end + 'T23:59:59').getTime() : null;
 
 const mins = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
 /** The next time the schedule is due, strictly after `from` (ms, local time). */
 export function nextRun(when, from = Date.now()) {
+  const t = nextRunBase(when, from), e = endMs(when);
+  return t && e && t > e ? null : t; // plan T5: nothing after its end date
+}
+function nextRunBase(when, from) {
   if (!valid(when)) return null;
+  if (when.kind === 'monthly') {
+    const s0 = startMs(when); if (s0 && s0 - 1 > from) from = s0 - 1;
+    const [hh, mi] = when.at.split(':').map(Number), f = new Date(from);
+    for (let i = 0; i < 26; i++) {
+      const y = f.getFullYear() + Math.floor((f.getMonth() + i) / 12), mo = (f.getMonth() + i) % 12, d = diaDelMes(when, y, mo);
+      if (d == null) continue;
+      const at = new Date(y, mo, d, hh, mi, 0, 0).getTime(); if (at > from) return at;
+    }
+    return null;
+  }
   const s = startMs(when); if (s && s - 1 > from) from = s - 1; // a routine that starts on a date: nothing before that midnight
   const f = new Date(from);
   if (when.kind === 'minutes') { const step = when.every * 60000; return Math.floor(from / step) * step + step; }
