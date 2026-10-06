@@ -59,10 +59,10 @@ try {
   try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ channel: 'chrome' }); }
   const axe = process.env.AO_AXE && fs.existsSync(process.env.AO_AXE) ? fs.readFileSync(process.env.AO_AXE, 'utf8') : null;
   for (const [w, h, tema] of [[1512, 900, 'light'], [1512, 900, 'dark'], [1024, 768, 'light'], [390, 844, 'light']]) {
-    const tag = `${w}-${tema}`, o = await oficina(), movil = w < 500;
+    const tag = `${w}-${tema}`, o = await oficina(), movil = w < 500; let pagina = null, errs = [];
     try {
       const ctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: movil, isMobile: movil, colorScheme: tema });
-      const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
+      const page = await ctx.newPage(); pagina = page; page.on('pageerror', e => errs.push(e.message));
       await page.goto(o.base + '/'); await page.waitForTimeout(1500);
       await page.evaluate(t => { if (t === 'dark') document.body.classList.add('dark'); }, tema);
       await page.keyboard.press('h'); await page.waitForSelector('#tvOv .tv-sec', { timeout: 15000 });
@@ -135,8 +135,8 @@ try {
       await page.screenshot({ path: path.join(OUT, `${tag}-mapa.png`) });
       // Medidas
       await page.click('#tvOv [data-tab="medidas"]'); await page.waitForSelector('#tvOv .tv-kpi', { timeout: 8000 });
-      const kb = await page.$('#tvOv .tv-kpi:not([disabled])');
-      if (kb) { await kb.click(); await page.waitForTimeout(300); }
+      const kb = await page.locator('#tvOv .tv-kpi:not([disabled])').count(); // la vista se repinta sola cada 8 s: un localizador, no un elemento suelto
+      if (kb) { await page.locator('#tvOv .tv-kpi:not([disabled])').first().click(); await page.waitForTimeout(300); }
       step(!!kb && await page.$$eval('#tvOv .tv-kpid .tv-fila', l => l.length) >= 1, `${tag}: Medidas — una cifra abre sus tareas`);
       await page.screenshot({ path: path.join(OUT, `${tag}-medidas.png`) });
       if (axe) { await page.addScriptTag({ content: axe }); for (const tab of ['inicio', 'lista', 'tablero', 'medidas']) { await page.click(`#tvOv [data-tab="${tab}"]`); await page.waitForTimeout(400); const r = await page.evaluate(async () => (await window.axe.run('#tvOv', { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map(v => `${v.id}(${v.nodes.length})`)); step(!r.length, `${tag}: axe en ${tab}${r.length ? ': ' + r.join(' ') : ''}`); } }
@@ -147,6 +147,9 @@ try {
       step(!(await page.$eval('#tvOv', o => o.classList.contains('on'))), `${tag}: Esc cierra Tareas`);
       step(!errs.length, `${tag}: sin errores de la página${errs.length ? ': ' + errs[0] : ''}`);
       await ctx.close();
+    } catch (e) { // un paso que revienta no se lleva los demás anchos: se dice cuál, con la captura y los errores de la página
+      fails++; console.log(`✗ ${tag}: ${e.message.split('\n')[0]}${errs.length ? ' · página: ' + errs[0] : ''}`);
+      await pagina?.screenshot({ path: path.join(OUT, `${tag}-fallo.png`) }).catch(() => {});
     } finally { o.cerrar(); }
   }
   // la demo (file://): sin oficina, con datos de ejemplo rotulados
