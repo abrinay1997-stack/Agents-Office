@@ -137,6 +137,17 @@ await step('skills: shipped skills load and bind', async () => {
   const sum = sk.summary();
   return `${sum.count} skills (${sum.shipped} shipped, ${sum.brain} in the brain) · ` + sum.skills.map(x => `${x.name}→${x.everyone ? 'everyone' : [...x.agents, ...x.departments].join('+')}`).join(' ');
 });
+await step('biblioteca: las habilidades de la oficina y las del Cerebro cargan, cada una atada a puestos que existen', async () => {
+  const { cargarBiblioteca, AREAS } = await import('./biblioteca.mjs'); const { loadRoster } = await import('./roster.mjs'); const { loadSkills } = await import('./skills.mjs');
+  const r = loadRoster(), sk = loadSkills(cfg.brainPath, r.agents);
+  const b = cargarBiblioteca({ raiz: ROOT, brainPath: cfg.brainPath, agentes: r.agents, deptos: ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'], skillsDelDueno: sk.skills.map(x => x.name) });
+  if (b.problemas.length) throw new Error(b.problemas.join(' | '));
+  const rotas = b.todas.flatMap(h => b.rotas(h).map(x => `${h.id}→${x}`)); if (rotas.length) throw new Error('habilidades relacionadas que no existen: ' + rotas.join(', '));
+  const porArea = Object.keys(AREAS).map(k => [k, b.todas.filter(h => h.area === k).length]).filter(x => x[1]);
+  const mlead = r.agents.find(a => a.id === 'mlead'); const p = b.promptText(mlead, 'plan de marketing del trimestre');
+  if (b.todas.length && !/BIBLIOTECA DE HABILIDADES/.test(p)) throw new Error('el jefe de Marketing no ve su índice');
+  return `${b.todas.length} habilidades (${b.todas.filter(h => h.fuente === 'cerebro').length} del Cerebro) · ${porArea.map(([k, n]) => `${AREAS[k]} ${n}`).join(' · ')} · índice del jefe de Marketing: ${p.length} caracteres`;
+});
 await step('skills: a broken skill is refused, not applied', async () => {
   const { loadSkills } = await import('./skills.mjs'); const { loadRoster } = await import('./roster.mjs');
   const os = await import('node:os'); const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-skills-')); const dir = path.join(tmp, 'Agents Office', 'skills');

@@ -10,6 +10,7 @@ brain-panaclaw/Agents Office/*
 !brain-panaclaw/Agents Office/agents.json
 !brain-panaclaw/Agents Office/routines.json
 !brain-panaclaw/Agents Office/skills/
+!brain-panaclaw/Agents Office/biblioteca/
 .DS_Store
 *.backup-*
 

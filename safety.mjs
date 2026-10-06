@@ -63,7 +63,7 @@ const OUTBOUND = new Set(['send', 'publish', 'schedule', 'submit', 'post', 'disp
 const DB = /sql|database|(^|_)db(_|$)|(^|_)d1(_|$)|snowflake|databricks|supabase|bigquery|postgres|mongo|redis|dynamo|sqlite/i; // a «query» on a database can be a DROP TABLE
 const CHROME_WRITE = new Set(['form_input', 'computer', 'javascript_tool', 'upload_image', 'file_upload', 'shortcuts_execute', 'gif_creator', 'browser_batch']); // browser_batch: decided item by item (kindOfCall)
 const CHROME_LOOK = new Set(['screenshot', 'scroll', 'scroll_to', 'zoom', 'wait', 'hover', 'mouse_move', 'cursor_position']); // computer actions that only look
-const INTERNAL = new Set(['estudio', 'contenido', 'tareas']); // the office's own Estudio, Contenido and Tareas (neither Contenido nor Tareas has a tool that approves, schedules, publishes or sends — tests/contenido-mcp.test.mjs, tests/tareas-mcp.test.mjs)
+const INTERNAL = new Set(['estudio', 'contenido', 'tareas', 'habilidades']); // the office's own Estudio, Contenido and Tareas (neither Contenido nor Tareas has a tool that approves, schedules, publishes or sends — tests/contenido-mcp.test.mjs, tests/tareas-mcp.test.mjs)
 // MCP-08: a prompt or a file goes to a paid engine — «cost»: fine before the OK, never with «nunca». Banco de presets (E8, 1 oct 2026):
 // the Estudio's tools that only LOOK are named here; any other Estudio tool (aplicar_preset, crear_lote, the next one someone adds)
 // is «cost» — never «read» if it can spend (fail closed, like a send).

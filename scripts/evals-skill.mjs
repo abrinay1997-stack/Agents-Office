@@ -44,11 +44,13 @@ function claude(prompt, sistema = '') {
 async function main() {
   const skill = process.argv[2], correr = process.argv.includes('--correr');
   if (!skill) { console.log('Uso: node scripts/evals-skill.mjs <skill> [--correr]'); process.exit(1); }
-  const archivo = path.join(ROOT, 'evals', skill, 'evals.json');
+  // una skill (evals/<skill>/evals.json + skills/<skill>/SKILL.md) o una habilidad de la biblioteca (biblioteca/<colección>/<id>/{SKILL.md,evals.json})
+  const enBiblioteca = (fs.existsSync(path.join(ROOT, 'biblioteca')) ? fs.readdirSync(path.join(ROOT, 'biblioteca')) : []).map(c => path.join(ROOT, 'biblioteca', c, skill)).find(d => fs.existsSync(path.join(d, 'evals.json')));
+  const archivo = enBiblioteca ? path.join(enBiblioteca, 'evals.json') : path.join(ROOT, 'evals', skill, 'evals.json');
   if (!fs.existsSync(archivo)) { console.log(`✗ No hay ${path.relative(ROOT, archivo)}.`); process.exit(1); }
   const e = JSON.parse(fs.readFileSync(archivo, 'utf8')), mal = validarEvals(e);
   if (mal.length) { for (const m of mal) console.log('✗ ' + m); process.exit(1); }
-  const skillMd = [path.join(ROOT, 'skills', skill, 'SKILL.md')].find(f => fs.existsSync(f));
+  const skillMd = [...(enBiblioteca ? [path.join(enBiblioteca, 'SKILL.md')] : []), path.join(ROOT, 'skills', skill, 'SKILL.md')].find(f => fs.existsSync(f));
   console.log(`✓ ${e.evals.length} pedidos, ${e.evals.reduce((n, x) => n + x.expectations.length, 0)} expectativas${skillMd ? '' : ' · ✗ no encuentro skills/' + skill + '/SKILL.md'}`);
   if (!correr) { console.log('Sin --correr no se gasta nada. Con --correr: 4 llamadas a Claude por pedido (con la skill, sin ella y el juez dos veces).'); return; }
   const texto = fs.readFileSync(skillMd, 'utf8').replace(/^---[\s\S]*?---\n/, '');
