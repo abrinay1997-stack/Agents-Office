@@ -9,6 +9,7 @@ import { modal } from './modal.js';
 import { views } from './views.js';
 import { fmtDay } from './calendar-core.js';
 import { crearDatosAnaliticas, datosDeEjemplo } from './analiticas-datos.js';
+import { informeHTML, mesesAtras, nombreMes } from './analiticas-informe.js';
 import { kpis, serieDiaria, porFormato, mejoresMomentos, horaSugerida, mejoresPublicaciones, enfoque, enLocal, numeroCorto, sumarDias, DIAS_SEMANA, BLOQUES_HORA, DIAS_DE_MADURACION } from './contenido-cifras.js';
 
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.an.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.an.' + k, JSON.stringify(v)); } catch {} } };
@@ -30,6 +31,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
       <div class="cv-seg an-dias" role="group" aria-label="Periodo"></div>
       <div class="cv-seg an-redes" role="group" aria-label="Red"></div>
       <div class="cv-sp"></div>
+      <button id="anInforme" type="button" class="an-band-btn" aria-pressed="false" title="Lo publicado, lo que funcionó y qué repetir, en una página">INFORME DEL MES</button>
       <button id="anRefresh" type="button" class="an-band-btn" title="Leer de Meta las cifras de hoy">ACTUALIZAR</button>
       <button id="anClose" type="button" aria-label="Cerrar Analíticas" title="cerrar (Esc · R)">✕</button>
     </div>
@@ -37,7 +39,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     <div class="an-live" role="status" aria-live="polite"></div>`;
   document.body.appendChild(ov);
   const $ = s => ov.querySelector(s);
-  const E = { dias: $('.an-dias'), redes: $('.an-redes'), wrap: $('#anWrap'), body: $('.an-body'), live: $('.an-live'), refresh: $('#anRefresh') };
+  const E = { inf: $('#anInforme'), dias: $('.an-dias'), redes: $('.an-redes'), wrap: $('#anWrap'), body: $('.an-body'), live: $('.an-live'), refresh: $('#anRefresh') };
 
   let openNow = false, opener = null, payload = null, error = '', cargando = false, pollT = null, ejemplo = false;
   let dias = store.get('dias', 30), red = store.get('red', 'todas'), metrica = store.get('metrica', 'seguidores');
@@ -226,7 +228,25 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   }
 
   /* ---------- la pantalla ---------- */
+  // plan M5 · U10: el informe del mes, en lugar de las cifras mientras se mira
+  let verInforme = false, informe = null, mesInf = mesesAtras()[0];
+  async function cargarInforme(guardar = false) {
+    if (!served) { informe = { error: 'En la demo no hay informe: se arma con los datos de la oficina. Abre la oficina con el iniciador.' }; render(); return; }
+    try {
+      const r = guardar ? await fetch('/api/contenido/informe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mes: mesInf }) }) : await fetch('/api/contenido/informe?mes=' + encodeURIComponent(mesInf));
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || `la oficina respondió ${r.status}`);
+      informe = j; if (guardar && j.nota) say(`Guardado en el Cerebro: ${j.nota}`);
+    }
+    catch (e) { informe = { error: e.message }; }
+    render();
+  }
+  const informeVista = () => `<section class="an-card an-inf" aria-labelledby="anInfT"><div class="an-inf-h"><h2 id="anInfT" class="an-vh">Informe del mes</h2>
+      <label>Mes <select class="an-inf-mes">${mesesAtras().map(m => `<option value="${m}"${m === mesInf ? ' selected' : ''}>${nombreMes(m)}</option>`).join('')}</select></label>
+      <span class="an-sp"></span>${btn('inf-guardar', 'GUARDAR EN EL CEREBRO')}${btn('inf-copiar', 'COPIAR')}${btn('inf-volver', 'VOLVER A LAS CIFRAS')}</div>
+      ${!informe ? '<p class="an-empty">Armando el informe…</p>' : informe.error ? banner('warn', 'NO SE PUDO', esc(informe.error)) : `<article class="an-inf-t">${informeHTML(informe.texto, esc)}</article>${informe.nota ? `<p class="an-cap">Guardado en el Cerebro: <b>${esc(informe.nota)}</b></p>` : ''}`}</section>`;
   function render() {
+    E.inf.setAttribute('aria-pressed', String(verInforme));
+    if (verInforme) { E.wrap.innerHTML = informeVista(); return; }
     E.dias.innerHTML = [7, 30, 90].map(n => `<button type="button" data-d="${n}" aria-pressed="${n === dias}" class="${n === dias ? 'on' : ''}">${n} DÍAS</button>`).join('');
     E.redes.innerHTML = [['todas', 'TODAS'], ['instagram', 'INSTAGRAM'], ['facebook', 'FACEBOOK']].map(([k, t]) => `<button type="button" data-r="${k}" aria-pressed="${k === red}" class="${k === red ? 'on' : ''}">${t}</button>`).join('');
     const sc = E.body.scrollTop;
@@ -250,13 +270,18 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     if (openNow && payload?.actualizando) pollT = setTimeout(() => load({ quiet: true }), 3000); // mientras Meta responde, se mira cada 3 s
   }
 
+  ov.addEventListener('change', async e => { if (e.target.matches('.an-inf-mes')) { mesInf = e.target.value; informe = null; render(); await cargarInforme(); ov.querySelector('.an-inf-mes')?.focus(); } });
   ov.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.d) { dias = Number(b.dataset.d); store.set('dias', dias); render(); return; }
     if (b.dataset.r) { red = b.dataset.r; store.set('red', red); render(); return; }
     if (b === $('#anClose')) { close(); return; }
     if (b === E.refresh) { await act('actualizar'); return; }
+    if (b === E.inf) { verInforme = !verInforme; if (verInforme) { informe = null; render(); await cargarInforme(); } else render(); E.inf.focus(); return; }
     const a = b.dataset.a; if (!a) return;
+    if (a === 'inf-volver') { verInforme = false; render(); E.inf.focus(); return; }
+    if (a === 'inf-guardar') { await cargarInforme(true); return; }
+    if (a === 'inf-copiar') { try { await navigator.clipboard.writeText(informe?.texto || ''); say('Copiado.'); } catch { say('No se pudo copiar: selecciona el texto.'); } return; }
     if (a === 'metrica') { metrica = b.dataset.k; store.set('metrica', metrica); render(); }
     else if (a === 'ejemplo') { ejemplo = true; render(); say('Estás viendo datos de ejemplo.'); }
     else if (a === 'salir') { ejemplo = false; render(); }

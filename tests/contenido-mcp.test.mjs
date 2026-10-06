@@ -44,7 +44,7 @@ test('las herramientas que reciben los agentes no aprueban, no programan y no pu
   try {
     const init = await m.rpc('initialize', {}); assert.equal(init.result.serverInfo.name, 'contenido');
     const nombres = (await m.tools()).map(t => t.name);
-    assert.deepEqual(nombres.sort(), ['crear_borrador', 'mejorar_borrador', 'ver_calendario_contenido', 'ver_pieza']);
+    assert.deepEqual(nombres.sort(), ['crear_borrador', 'crear_borrador_respuesta', 'mejorar_borrador', 'ver_analiticas', 'ver_bandeja', 'ver_calendario_contenido', 'ver_informe_mes', 'ver_mejor_hora', 'ver_pieza']);
     for (const n of nombres) assert.doesNotMatch(n, /aprob|program|public|enviar|entreg|approve|schedule|publish|send/i, `«${n}» suena a una acción que un agente no debe tener`);
     const props = (await m.tools()).flatMap(t => Object.keys(t.inputSchema.properties || {}));
     assert.ok(!props.includes('estado') && !props.includes('aprobada'), 'ninguna herramienta deja elegir el estado');
@@ -78,7 +78,7 @@ test('un agente que inventa una imagen o un dato malo recibe el motivo en palabr
     await m.rpc('initialize', {});
     const a = await m.llamar('crear_borrador', { texto: 'x', medios: ['2026-10/no-existe.gif'] }); assert.equal(a.isError, true); assert.match(texto(a), /el Estudio no tiene/);
     const b = await m.llamar('crear_borrador', { texto: 'x', fecha: 'pronto' }); assert.equal(b.isError, true); assert.match(texto(b), /AAAA-MM-DD/);
-    const c = await m.llamar('crear_borrador', { texto: 'x', redes: ['tiktok'] }); assert.equal(c.isError, true); assert.match(texto(c), /no es una red/);
+    const c = await m.llamar('crear_borrador', { texto: 'x', redes: ['myspace'] }); assert.equal(c.isError, true); assert.match(texto(c), /no es una red/);
     assert.equal(o.almacen.listar().length, 0);
   } finally { m.cerrar(); o.cerrar(); }
 });

@@ -3,9 +3,10 @@
 // visor y las 2 acciones de la ficha de un pedido; «Repetir» estaba en unos y no en otros, «Favorita» se llamaba de dos maneras y
 // las integraciones de la oficina (calendario, Dimitri, departamento) iban al mismo nivel que editar la imagen. Ahora la página
 // pinta esta lista en tres densidades:
-//   tarjeta  → las primarias en la fila; el resto en «⋯», por grupos
+//   tarjeta  → `fila`: las primarias con su nombre y, como iconos, Usar de referencia, Descargar y la papelera (pedido del dueño,
+//              6 oct 2026: «las uso demasiado, no deberían estar en los tres puntitos»); el resto en «⋯», por grupos, sin repetirlas
 //   visor    → las primarias como botones; los grupos como filas con su nombre
-// acciones(it, cap) → { primarias, grupos: [{ id, titulo, items }], borrar }   cada acción: { id, label, corto, icon, title }
+// acciones(it, cap) → { primarias, grupos: [{ id, titulo, items }], borrar, fila }   cada acción: { id, label, corto, icon, title }
 //   cap: { calendario, dimitri, tarea, preset, voz, precioVariar }  (lo que esta oficina y este archivo permiten)
 // Puro, con test (tests/studio-acciones.test.mjs). Los `id` son los data-a / data-l que ya entiende src/studio.js.
 
@@ -44,5 +45,9 @@ export function acciones(it, cap = {}) {
     { id: 'organizar', titulo: 'Organizar', items: organizar },
     { id: 'enviar', titulo: 'Enviar a…', items: enviar },
   ].filter(g => g.items.length);
-  return { tipo: t, primarias, grupos, borrar: A('del', 'Mover a la papelera', 'trash', 'Mover a la papelera (30 días para recuperarla)') };
+  const borrar = A('del', 'Mover a la papelera', 'trash', 'Mover a la papelera (30 días para recuperarla)', 'Papelera');
+  const icono = x => ({ ...x, icono: true });
+  const ref = crear.find(x => x.id === 'ref');
+  const fila = [...primarias.filter(x => x.id !== 'dl'), ...(ref ? [icono(ref)] : []), icono(descargar), icono(borrar)];
+  return { tipo: t, primarias, grupos, borrar, fila };
 }

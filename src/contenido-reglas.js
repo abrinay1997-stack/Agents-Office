@@ -22,13 +22,41 @@ export const LIMITES = Object.freeze({
   instagram: { caracteres: 2200, hashtags: 30, menciones: 20, carruselMin: 2, carruselMax: 10, reelMinSeg: 3, reelMaxSeg: 900, historiaMaxSeg: 60 },
   facebook: { caracteres: 63206 },
   tiktok: { caracteres: 2200, videoMaxSeg: 600 },
+  // M2 (6 oct 2026): las redes que también publica Metricool. Fuente: la ayuda de cada red y de Metricool (oct 2026); los topes que las
+  // redes cambian a menudo (imágenes por post, duración del video) van al valor más prudente. Por verificar con la API real.
+  linkedin: { caracteres: 3000, imagenesMax: 9, videoMaxSeg: 600 },
+  x: { caracteres: 280, imagenesMax: 4, videoMaxSeg: 140, enlace: 23 },
+  threads: { caracteres: 500, mediosMax: 10, videoMaxSeg: 300 },
+  bluesky: { caracteres: 300, imagenesMax: 4, videoMaxSeg: 180 },
+  pinterest: { titulo: 100, caracteres: 500 },
+  youtube: { titulo: 100, caracteres: 5000, shortMaxSeg: 180 },
 });
 
 export const REDES = Object.freeze({
   instagram: { nombre: "Instagram", icono: "photo" },
   facebook: { nombre: "Facebook", icono: "globe" },
   tiktok: { nombre: "TikTok", icono: "video" },
+  linkedin: { nombre: "LinkedIn", icono: "briefcase" },
+  x: { nombre: "X", icono: "text" },
+  threads: { nombre: "Threads", icono: "text" },
+  bluesky: { nombre: "Bluesky", icono: "text" },
+  pinterest: { nombre: "Pinterest", icono: "pin" },
+  youtube: { nombre: "YouTube", icono: "video" },
 });
+
+/** Las redes con historias (las demás no las tienen, ni por API). */
+export const CON_HISTORIAS = Object.freeze(["instagram", "facebook"]);
+
+/**
+ * Cuánto mide un texto para una red, como lo cuenta ella: X cuenta cada enlace como 23 (t.co); Bluesky cuenta grafemas (un emoji
+ * compuesto es uno); las demás, caracteres.
+ */
+export function longitudPara(texto, red) {
+  const t = String(texto ?? "");
+  if (red === "x") return t.replace(/https?:\/\/\S+/g, "x".repeat(LIMITES.x.enlace)).length;
+  if (red === "bluesky" && typeof Intl !== "undefined" && Intl.Segmenter) return [...new Intl.Segmenter("es", { granularity: "grapheme" }).segment(t)].length;
+  return t.length;
+}
 
 const esVideo = (src = "", tipo = "") => tipo === "video" || /\.(mp4|mov|m4v|webm)(\?|$)/i.test(src);
 
@@ -215,6 +243,9 @@ export const contarMenciones = (texto) => (String(texto ?? "").match(/(^|\s)@[\w
  * van en el primer comentario. Facebook puede llevar su propio texto.
  */
 export function textoPara(post, red = "instagram") {
+  // M2: una red con su propio texto (`textos[red]`) lo lleva tal cual, sin añadirle los hashtags: se escribió a la medida de esa red
+  const propio = red !== "facebook" && String(post?.textos?.[red] ?? "").trim();
+  if (propio) return propio;
   const base = red === "facebook" && post?.textoFacebook?.trim()
     ? post.textoFacebook
     : String(post?.descripcion || post?.script || "");
@@ -314,7 +345,7 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     }
     const noJpeg = deIG.filter((m) => m.tipo === "imagen" && !esJPEG(m.src)).length;
     if (noJpeg) {
-      avisos.push(`Instagram sólo acepta JPEG y ${noJpeg === 1 ? "una imagen es" : noJpeg + " imágenes son"} PNG o WebP: hay que convertir${noJpeg === 1 ? "la" : "las"} a JPEG antes de publicar (la oficina todavía no lo hace sola).`);
+      avisos.push(`Instagram sólo acepta JPEG y ${noJpeg === 1 ? "una imagen es" : noJpeg + " imágenes son"} PNG o WebP: al programarla, la oficina ${noJpeg === 1 ? "la convierte" : "las convierte"} a JPEG sola (el original del Estudio no se toca).`); // M1 (6 oct 2026): el conductor la convierte (contenido/conductores.mjs)
     }
     const colab = colaboradoresDe(post);
     if (colab.length > MAX_COLABORADORES) {
@@ -342,6 +373,51 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     if (texto.length > LIMITES.tiktok.caracteres) errores.push(`El texto de TikTok tiene ${texto.length} caracteres; el máximo es ${LIMITES.tiktok.caracteres}.`);
   }
 
+  if (redes.includes("tiktok") && post?.format === "historia") con(errores, "TikTok no tiene historias.", quitarRed(redes, "tiktok"));
+
+  // M2 (6 oct 2026): LinkedIn, X, Threads, Bluesky, Pinterest y YouTube
+  const imagenes = medios.filter((m) => m.tipo !== "video");
+  const nombre = (red) => REDES[red].nombre;
+  const largo = (red, max) => {
+    const n = longitudPara(textoPara(post, red), red);
+    if (n > max) con(errores, `El texto de ${nombre(red)} tiene ${n} caracteres; el máximo es ${max}.`, String(post?.textos?.[red] ?? "").trim() ? null : { codigo: `texto-red:${red}`, etiqueta: `Escribir uno para ${nombre(red)}` });
+  };
+  const sinHistorias = (red) => { if (post?.format === "historia") con(errores, `${nombre(red)} no tiene historias.`, quitarRed(redes, red)); };
+  const algo = (red) => { if (!medios.length && !textoPara(post, red)) con(errores, `${nombre(red)} necesita texto o al menos una imagen o un video.`, quitarRed(redes, red)); };
+  const videoLargo = (red, max) => { const v = videos.find((m) => m.duracion > max); if (v) errores.push(`Un video de ${nombre(red)} dura como mucho ${max % 60 === 0 ? `${max / 60} min` : `${max} s`} y este dura ${Math.round(v.duracion)} s.`); };
+  const mezcla = (red) => { if (videos.length && medios.length > 1) con(errores, `${nombre(red)} no mezcla un video con otros archivos: deja solo el video o solo las imágenes.`, quitarRed(redes, red)); };
+  for (const red of ["linkedin", "x", "threads", "bluesky"]) {
+    if (!redes.includes(red)) continue;
+    const L = LIMITES[red];
+    sinHistorias(red); algo(red); largo(red, L.caracteres); videoLargo(red, L.videoMaxSeg);
+    if (red !== "threads") mezcla(red);
+    if (L.imagenesMax && imagenes.length > L.imagenesMax) errores.push(`${nombre(red)} admite hasta ${L.imagenesMax} imágenes por publicación y hay ${imagenes.length}.`);
+    if (L.mediosMax && medios.length > L.mediosMax) con(errores, `${nombre(red)} admite hasta ${L.mediosMax} archivos por publicación y hay ${medios.length}.`, { codigo: "recortar-medios", etiqueta: `Quedarse con los ${L.carruselMax ?? 10} primeros` });
+  }
+  if (redes.includes("pinterest")) {
+    const L = LIMITES.pinterest, pin = post?.pinterest || {};
+    sinHistorias("pinterest");
+    if (!medios.length) con(errores, "Pinterest necesita una imagen o un video.", quitarRed(redes, "pinterest"));
+    else if (medios.length > 1) avisos.push("Pinterest publica un pin con el primer archivo: los demás no salen allí.");
+    if (!String(pin.tablero ?? "").trim()) con(errores, "Pinterest necesita un tablero: escribe su id en «Pinterest», en el paso 3.", { codigo: "opciones:pinterest", etiqueta: "Elegir el tablero" });
+    if (String(pin.titulo ?? "").length > L.titulo) errores.push(`El título del pin tiene ${String(pin.titulo).length} caracteres; el máximo es ${L.titulo}.`);
+    if (pin.enlace && !/^https:\/\/\S+$/.test(pin.enlace)) errores.push("El enlace del pin tiene que empezar por https://.");
+    largo("pinterest", L.caracteres);
+  }
+  if (redes.includes("youtube")) {
+    const L = LIMITES.youtube, yt = post?.youtube || {};
+    sinHistorias("youtube");
+    if (!videos.length) con(errores, "YouTube necesita un video.", quitarRed(redes, "youtube"));
+    else if (medios.length > 1) avisos.push("YouTube publica solo el video: las imágenes no salen allí.");
+    const titulo = String(yt.titulo ?? "").trim();
+    if (!titulo) con(errores, "YouTube necesita un título: escríbelo en «YouTube», en el paso 3.", { codigo: "opciones:youtube", etiqueta: "Escribir el título" });
+    else if (titulo.length > L.titulo) errores.push(`El título de YouTube tiene ${titulo.length} caracteres; el máximo es ${L.titulo}.`);
+    largo("youtube", L.caracteres);
+    const v = videos[0];
+    if (post?.format === "reel" && v?.duracion > L.shortMaxSeg) con(errores, `Un Short dura como mucho ${L.shortMaxSeg / 60} minutos y este dura ${Math.round(v.duracion / 60)}.`, { codigo: "formato:post", etiqueta: "Publicarlo como video normal" });
+    if (post?.format === "reel" && v?.ancho && v?.alto && v.ancho >= v.alto) avisos.push("Un Short es vertical: este video es horizontal y YouTube lo publicará como video normal.");
+  }
+
   // La historia que acompaña al post.
   if (post?.historiaTambien && !["historia", "live"].includes(post?.format)) {
     const hs = historiasDe(post);
@@ -349,7 +425,8 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
       con(errores, "Marcaste «también como historia», pero no hay ninguna imagen de historia: créala con IA o usa la del post.", { codigo: "sin-historia", etiqueta: "No publicar historia" });
     }
     else if (hs.length > LIMITES.instagram.carruselMax) errores.push(`Como mucho ${LIMITES.instagram.carruselMax} historias por publicación.`);
-    else if (redes.every((r) => r === "tiktok")) avisos.push("TikTok no tiene historias por API: la historia saldrá sólo en Instagram y Facebook.");
+    else if (!redes.some((r) => CON_HISTORIAS.includes(r))) avisos.push(`${redes.map((r) => REDES[r]?.nombre || r).join(", ")} no ${redes.length === 1 ? "tiene" : "tienen"} historias: la historia no saldrá.`);
+    else if (redes.some((r) => !CON_HISTORIAS.includes(r))) avisos.push("La historia sale sólo en Instagram y Facebook: las demás redes no tienen historias.");
   }
 
   return { errores, avisos, arreglos };
@@ -381,6 +458,8 @@ export function aplicarArreglo(post, codigo) {
     case "quitar-colaboradores": return { ...post, colaboradores: [] };
     case "quitar-red": return { ...post, redes: redes.filter((r) => r !== valor) };
     case "sin-historia": return { ...post, historiaTambien: false };
+    // «texto-red:x» y «opciones:pinterest» no cambian nada aquí: el panel abre ese campo para que lo escribas tú
+
     default: return post;
   }
 }
@@ -399,6 +478,7 @@ export function postDePieza(p = {}) {
     primerComentario: p.comentario ?? "", textoFacebook: p.textoFacebook ?? "",
     historias: (p.historias ?? []).map(conMedida), historiaTambien: !!p.historiaTambien,
     colaboradores: p.colaboradores ?? [], ajusteIG: p.ajusteIG, adaptados: p.adaptados,
+    textos: p.textos ?? {}, pinterest: p.pinterest ?? null, youtube: p.youtube ?? null, tiktok: p.tiktok ?? null, // M2
   };
 }
 

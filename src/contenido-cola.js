@@ -35,8 +35,36 @@ export function siguienteHueco(redes = ['instagram'], otras = [], ahora = Date.n
   const m = new Date(ahora); m.setDate(m.getDate() + 1); return ymd(m);
 }
 
-/** ¿Pasó su hora sin salir? Una aprobada o por revisar con día y hora ya pasados (hasta F3 nada publica solo: hay que moverla). */
-export const vencida = (p, ahora = Date.now()) => (p.estado === 'aprobada' || p.estado === 'revision') && !!p.fecha && !!p.hora && momentoDe(p) < ahora;
+/** ¿Pasó su hora sin salir? Una aprobada o por revisar con día y hora ya pasados que el conductor no tiene (M1: lo entregado no está vencido). */
+export const vencida = (p, ahora = Date.now()) => (p.estado === 'aprobada' || p.estado === 'revision') && !!p.fecha && !!p.hora && momentoDe(p) < ahora
+  && !['entregando', 'en_red', 'publicada', 'parcial'].includes(p.salida?.estado);
+
+const NOMBRE_RED = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', x: 'X', tiktok: 'TikTok', threads: 'Threads', bluesky: 'Bluesky', pinterest: 'Pinterest', youtube: 'YouTube' };
+const redTxt = k => { const [r, h] = String(k).split('·'); return `${NOMBRE_RED[r] || r}${h ? ' (historia)' : ''}`; };
+const conductorTxt = c => ({ metricool: 'Metricool', simulacro: 'el simulacro', meta: 'Meta' })[c] || c || 'el conductor';
+const cuandoTxt = (ms, ahora) => { const d = new Date(ms), hoy = ymd(new Date(ahora)), man = ymd(new Date(ahora + DIA)), k = ymd(d), h = `${pad(d.getHours())}:${pad(d.getMinutes())}`; return k === hoy ? `hoy a las ${h}` : k === man ? `mañana a las ${h}` : `el ${d.getDate()}/${d.getMonth() + 1} a las ${h}`; };
+
+/**
+ * M1 (6 oct 2026): qué pasó con una pieza aprobada, en palabras, para la fila de la cola y el pie del panel.
+ * → { clave, etiqueta, texto, malo, enlaces: [{ red, url }], acciones: ['entregar' | 'quitar' | 'reintentar'] } o null si la cola no la conoce.
+ */
+export function textoSalida(p, ahora = Date.now()) {
+  const s = p?.salida; if (!s || p.estado !== 'aprobada' || s.estado === 'cancelada') return null;
+  const quien = conductorTxt(s.conductor), aQuien = !s.conductor ? '' : /^el /.test(quien) ? ' al ' + quien.slice(3) : ' a ' + quien, simul = s.conductor === 'simulacro';
+  const enlaces = Object.entries(s.redes || {}).filter(([, x]) => x?.url && !/simulacro\.invalid/.test(x.url)).map(([r, x]) => ({ red: redTxt(r), url: x.url }));
+  const fallidas = Object.entries(s.redes || {}).filter(([, x]) => x?.estado === 'fallo').map(([r, x]) => `${redTxt(r)}${x.detalle ? ` (${x.detalle})` : ''}`);
+  switch (s.estado) {
+    case 'espera': return { clave: 'espera', etiqueta: 'EN COLA', malo: !!s.error, enlaces, acciones: ['entregar', 'quitar'],
+      texto: s.error ? `Esperando: ${s.error}` : s.entregarDesde > ahora ? `Se entrega${aQuien} ${cuandoTxt(s.entregarDesde, ahora)}; hasta entonces la cambias sin límites.` : `Se entrega${aQuien} en un momento.` };
+    case 'entregando': return { clave: 'entregando', etiqueta: 'ENTREGANDO', malo: false, enlaces, acciones: [], texto: `Entregándola${aQuien}…` };
+    case 'en_red': return { clave: 'en_red', etiqueta: simul ? 'EN SIMULACRO' : 'PROGRAMADA', malo: false, enlaces, acciones: ['quitar'],
+      texto: simul ? 'En el simulacro: «sale» a su hora sin publicar de verdad.' : `Programada en ${quien}: sale sola a su hora, aunque esta computadora esté apagada.` };
+    case 'publicada': return { clave: 'publicada', etiqueta: 'PUBLICADA', malo: false, enlaces, acciones: [], texto: simul ? 'Publicada en el simulacro (no salió de verdad).' : 'Publicada.' };
+    case 'parcial': return { clave: 'parcial', etiqueta: 'EN PARTE', malo: true, enlaces, acciones: [], texto: `Salió, pero no en ${fallidas.join(', ')}.` };
+    case 'fallo': return { clave: 'fallo', etiqueta: 'FALLÓ', malo: true, enlaces, acciones: fallidas.length ? ['quitar'] : ['reintentar', 'quitar'], texto: fallidas.length ? `No se pudo publicar en ${fallidas.join(', ')}.` : `No salió: ${s.error || 'error del conductor'}` };
+    default: return null;
+  }
+}
 
 /**
  * Lo que pide una acción del dueño, con el porqué, en el orden en que sale: vencidas, cambiadas tras aprobarlas, por revisar, aprobadas sin hora.
@@ -47,7 +75,9 @@ export function requiereAccion(piezas = [], ahora = Date.now()) {
   for (const p of [...piezas].filter(p => p.fecha).sort((a, b) => momentoDe(a) - momentoDe(b))) {
     const errores = p.revision?.errores || [];
     const puede = p.estado === 'revision' && !errores.length && !revisarMomento(p.fecha, p.hora, ahora).errores.length;
-    if (vencida(p, ahora)) out.push({ pieza: p, puede: false, motivo: p.estado === 'aprobada' ? 'Vencida: su hora pasó y no salió (la publicación automática llega al conectar Meta). Cámbiale el día.' : 'Su hora ya pasó sin aprobarla: cámbiale el día.' });
+    const sal = textoSalida(p, ahora);
+    if (sal && sal.malo && ['fallo', 'parcial', 'espera'].includes(sal.clave)) { out.push({ pieza: p, puede: false, motivo: sal.texto }); continue; }
+    if (vencida(p, ahora)) out.push({ pieza: p, puede: false, motivo: p.estado === 'aprobada' ? 'Vencida: su hora pasó y no salió. Cámbiale el día y vuelve a aprobarla.' : 'Su hora ya pasó sin aprobarla: cámbiale el día.' });
     else if (p.fecha < hoy) continue;
     else if (p.cambiadaTrasAprobar) out.push({ pieza: p, puede: false, motivo: 'Cambió después de aprobarla: vuelve a aprobarla.' });
     else if (p.estado === 'revision') out.push({ pieza: p, puede, motivo: errores.length ? '' : !p.hora ? 'Ponle una hora para poder aprobarla.' : 'Lista para tu visto bueno.' });

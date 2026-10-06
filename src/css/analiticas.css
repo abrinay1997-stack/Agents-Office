@@ -148,3 +148,15 @@ body.dark #anOv .an-hint { border-left-color: #5CD1AE; }
   #anOv .an-top { grid-template-columns: 1fr; }
   #anOv .an-bars li { grid-template-columns: minmax(84px, 34%) 1fr auto; }
 }
+/* plan M5 · U10 (6 oct 2026): el informe del mes */
+#anOv .an-band-btn[aria-pressed="true"] { background: #FDFFF8; color: #151414; border-color: #FDFFF8; }
+#anOv .an-inf-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+#anOv .an-inf-h label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+#anOv .an-inf-h select { min-height: 32px; border-radius: 8px; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); font: 500 13px var(--ui); padding: 0 8px; }
+#anOv .an-inf-h .an-sp { flex: 1; }
+#anOv .an-vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#anOv .an-inf-t { max-width: 760px; font-size: 14px; line-height: 1.55; }
+#anOv .an-inf-t h2 { font: 400 26px var(--serif, Georgia, serif); margin: 0 0 6px; }
+#anOv .an-inf-t h3 { font: 700 12px var(--ui); letter-spacing: .1em; text-transform: uppercase; color: var(--grey); margin: 18px 0 6px; }
+#anOv .an-inf-t ul { margin: 0; padding-left: 20px; } #anOv .an-inf-t li { margin: 3px 0; }
+#anOv .an-inf-t p { margin: 4px 0; } #anOv .an-inf-t a { color: inherit; }

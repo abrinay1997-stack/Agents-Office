@@ -78,12 +78,12 @@ try {
   // ===== Fase 5 =====
   const bas = await p.evaluate(() => { const v = e => !!e && !!e.offsetParent, q = s => document.querySelector('#studioOv ' + s), sc = q('.st-scroll');
     const ctl = [...q('.st-gen').querySelectorAll('button, a[href], input, select, textarea, summary')].filter(e => v(e) && !e.closest('[hidden]'));
-    return { controles: ctl.length, lista: ctl.map(e => (e.getAttribute('aria-label') || e.textContent || e.className).trim().slice(0, 18)), cabe: sc.scrollHeight <= sc.clientHeight + 2, ideaArriba: q('.st-prompt').getBoundingClientRect().top < q('.st-mpick').getBoundingClientRect().top, modelo: q('.st-mpick .st-mp-name')?.textContent, qsel: [...q('.st-qsel').options].map(o => o.value).join(','), imagen: v(q('.st-addimg')), formato: v(q('.st-arsel')), numeros: [...document.querySelectorAll('#studioOv .st-step > .st-h > b')].some(v) }; });
-  ok('IMG-32 · Básico: 14 controles o menos y cabe sin desplazarse', bas.controles <= 14 && bas.cabe, JSON.stringify({ n: bas.controles, cabe: bas.cabe, lista: bas.lista }));
+    return { controles: ctl.length, lista: ctl.map(e => (e.getAttribute('aria-label') || e.textContent || e.className).trim().slice(0, 18)), cabe: sc.scrollHeight <= sc.clientHeight + 2, ideaArriba: q('.st-prompt').getBoundingClientRect().top < q('.st-mpick').getBoundingClientRect().top, modelo: q('.st-mpick .st-mp-name')?.textContent, qsel: [...q('.st-qn').querySelectorAll('[data-qty]')].map(o => o.dataset.qty).join(','), imagen: v(q('.st-addimg')), formato: v(q('.st-ars [data-ar]')), calidad: [...document.querySelectorAll('#studioOv .st-qgrp [data-qset]')].filter(v).length, numeros: [...document.querySelectorAll('#studioOv .st-step > .st-h > b')].some(v) }; });
+  ok('IMG-32 · Básico: 25 controles o menos (formato, calidad y cantidad son botones a la vista, pedido del dueño del 6 oct; GENERAR va fijo abajo)', bas.controles <= 25, JSON.stringify({ n: bas.controles, cabe: bas.cabe, lista: bas.lista }));
   ok('IMG-34 · la idea va primero y los pasos sin números', bas.ideaArriba && !bas.numeros, JSON.stringify(bas));
   ok('IMG-36 · el modelo es «Automático» y dice cuál usa', /^Automático · /.test(bas.modelo || ''), bas.modelo);
   ok('IMG-37 · la cantidad es 1 · 2 · 4', bas.qsel.startsWith('1,2,4'), bas.qsel);
-  ok('IMG-38 · «Imagen» junto a la idea; el formato es un selector', bas.imagen && bas.formato);
+  ok('IMG-38 · «Imagen» junto a la idea; el formato y la calidad son botones a la vista (6 oct, el dueño)', bas.imagen && bas.formato && bas.calidad > 0, JSON.stringify({ calidad: bas.calidad }));
   await p.fill(`${S} .st-prompt`, 'Un logo que diga «PANA»'); await p.waitForTimeout(300);
   const autoTexto = await p.textContent(`${S} .st-mpick .st-mp-name`); await p.fill(`${S} .st-prompt`, ''); await p.waitForTimeout(200);
   ok('IMG-36 · con texto que se lee, Automático cambia a un modelo que lo escribe', /Automático · Nano Banana Pro/.test(autoTexto), autoTexto);
@@ -104,8 +104,8 @@ try {
   // Más ajustes
   await p.evaluate(() => { const d = document.querySelector('#studioOv .st-more'); if (d) d.open = true; document.querySelector('#studioOv .st-ratios')?.scrollIntoView(); }); await p.waitForTimeout(300);
   await shot(p, '04-formato-y-ajustes');
-  const mas = await p.evaluate(() => { const d = document.querySelector('#studioOv details.st-more'), sel = d && d.querySelector('select'); return { display: d ? getComputedStyle(d).display : '', ancho: sel ? parseFloat(getComputedStyle(sel).minWidth) || 0 : 96 }; });
-  ok('IMG-19 · «Más ajustes» es un bloque y su selector no se aplasta', mas.display === 'block' && mas.ancho >= 96, JSON.stringify(mas));
+  const mas = await p.evaluate(() => { const d = document.querySelector('#studioOv details.st-more'), sel = d && d.querySelector('select'); return { display: d ? getComputedStyle(d).display : '', vacio: !d || !d.querySelector('.st-sets2 > *'), ancho: sel ? parseFloat(getComputedStyle(sel).minWidth) || 0 : 96 }; });
+  ok('IMG-19 · «Más ajustes» es un bloque y su selector no se aplasta (sin nada más que ajustar, no sale)', (mas.display === 'block' || mas.vacio) && mas.ancho >= 96, JSON.stringify(mas));
   // GENERAR vacío
   await p.click(`${S} .st-go`); await p.waitForTimeout(600); await shot(p, '05-error-prompt-vacio');
   report.errorVacio = await p.evaluate(() => ({ ferr: document.querySelector('#studioOv .st-ferr')?.textContent, msg: document.querySelector('#studioOv .st-msg')?.textContent, ariaInvalid: document.querySelector('#studioOv .st-prompt').getAttribute('aria-invalid'), describedby: document.querySelector('#studioOv .st-prompt').getAttribute('aria-describedby') }));
@@ -119,7 +119,7 @@ try {
   ok('IMG-30 · ningún texto del Estudio baja de 11,5 px', Math.min(...Object.keys(report['medidas:basico-1440'].tamaños).map(Number)) >= 11.5, Object.keys(report['medidas:basico-1440'].tamaños).join(' · '));
   // generar 2
   await p.fill(`${S} .st-prompt`, 'Taza de café humeante sobre una mesa de madera, luz de mañana');
-  await p.selectOption(`${S} .st-qsel`, '2'); await p.waitForTimeout(200);
+  await p.click(`${S} .st-qn [data-qty="2"]`); await p.waitForTimeout(200);
   ok('IMG-05 · el costo va dentro de GENERAR', /US\$\d|gratis/i.test(await p.textContent(`${S} .st-go`)), await p.textContent(`${S} .st-go`));
   report.estimacion = await p.textContent(`${S} .st-est`); report.resumenPie = await p.textContent(`${S} .st-sum`); report.botonGo = await p.textContent(`${S} .st-go`);
   await p.click(`${S} .st-go`); await p.waitForTimeout(2600); await shot(p, '06-generando');
@@ -153,7 +153,8 @@ try {
   report.tarjetaHTML = await p.locator(card).first().evaluate(e => e.innerText);
   await p.locator(`${card} [data-a="menu"], ${card} .st-more`).first().click().catch(() => {}); await p.waitForTimeout(300); await shot(p, '09-menu-tarjeta');
   const menu = await p.evaluate(() => { const m = document.querySelector('#studioOv .st-menu:not([hidden])'); return m ? { grupos: [...m.querySelectorAll('.st-mh')].map(x => x.textContent), enviar: [...(m.querySelector('[role=group]:last-of-type') || m).querySelectorAll('[data-a]')].map(x => x.dataset.a), ultimo: [...m.querySelectorAll('[role=menuitem]')].pop()?.dataset.a } : null; });
-  ok('IMG-09 · el «⋯» va por grupos y la papelera al final', menu && menu.grupos.join('|') === 'Crear a partir de esta|Organizar|Enviar a…' && menu.ultimo === 'del', JSON.stringify(menu));
+  const fila = await p.locator(card).first().evaluate(e => ({ a: [...e.querySelectorAll('.st-ov [data-a]')].map(x => x.dataset.a), dl: !!e.querySelector('.st-ov a[download]') }));
+  ok('IMG-09 · el «⋯» va por grupos; Usar de referencia, Descargar y la papelera están en la fila y no se repiten (el dueño, 6 oct)', menu && menu.grupos.join('|') === 'Crear a partir de esta|Organizar|Enviar a…' && menu.ultimo !== 'del' && fila.dl && ['ref', 'del'].every(x => fila.a.includes(x)), JSON.stringify({ menu, fila }));
   ok('IMG-48 · calendario, Dimitri y departamento van juntos en «Enviar a…»', menu && ['cal', 'dimitri', 'dept'].every(a => menu.enviar.includes(a)), JSON.stringify(menu && menu.enviar));
   await p.keyboard.press('Escape');
   // visor
@@ -193,7 +194,7 @@ try {
   // IMG-11: desde US$0,50, el primer clic arma y no hay diálogo del navegador
   let dialogos = 0; p.on('dialog', d => { dialogos++; d.dismiss(); });
   await p.click(`${S} .st-mpick`); await p.waitForTimeout(300); await p.locator(`${S} .st-mo:has-text("Nano Banana Pro")`).first().click(); await p.waitForTimeout(300);
-  await p.selectOption(`${S} .st-qsel`, '4');
+  await p.click(`${S} .st-qn [data-qty="4"]`);
   const antesConf = await p.locator(`${S} .st-job`).count();
   await p.click(`${S} .st-go`); await p.waitForTimeout(400);
   const conf = { go: await p.textContent(`${S} .st-go`), dialogos, trabajos: await p.locator(`${S} .st-job`).count() - antesConf };
@@ -202,7 +203,7 @@ try {
   ok('IMG-11 · un gasto desde US$0,50 se confirma con un segundo clic en el botón, sin diálogo', /^Confirmar · US\$/.test(conf.go) && !conf.dialogos && conf.trabajos === 0, JSON.stringify(conf));
   await p.waitForTimeout(6500);
   ok('IMG-11 · sin el segundo clic, el botón vuelve a ser GENERAR', /^GENERAR/.test(await p.textContent(`${S} .st-go`)), await p.textContent(`${S} .st-go`));
-  await p.selectOption(`${S} .st-qsel`, '1');
+  await p.click(`${S} .st-qn [data-qty="1"]`);
   const dis = await p.evaluate(() => getComputedStyle(document.querySelector('#studioOv .st-qty [data-d="-1"]')).borderStyle);
   ok('IMG-17 · un botón deshabilitado no lleva borde de trazos', dis === 'solid', dis);
   // fallo
@@ -211,7 +212,7 @@ try {
   ok('IMG-04 · el fallo se lee en español, con el original aparte y «Otro modelo…»', /no aceptó el pedido/.test(report.fallo.tile || '') && !/Request contains/.test((report.fallo.tile || '').split('Detalles técnicos')[0]) && report.fallo.raw && report.fallo.otro, report.fallo.tile);
   ok('IMG-03 · con una ficha fallida a la vista, el pie no dice solo «Listo»', !/^Listo: \d+ archivos? nuevos? en la galería\.$/.test(report.fallo.msg || ''), report.fallo.msg);
   // una referencia en el paso 4, para ver qué hace Avanzado con ella (IMG-39); «Usar de referencia» ofrece DESHACER (IMG-02)
-  await p.locator(`${card} .st-ov [data-a="menu"]`).first().click(); await p.waitForTimeout(200); await p.locator(`${S} .st-menu:not([hidden]) [data-a="ref"]`).first().click(); await p.waitForTimeout(500);
+  await p.locator(`${card} .st-ov [data-a="ref"]`).first().click(); // 6 oct (el dueño): «Usar de referencia» está en la fila de la tarjeta await p.waitForTimeout(500);
   report.toastRef = await p.evaluate(() => { const t = document.querySelector('#studioOv .st-toast'); return t && !t.hidden ? t.innerText : ''; });
   ok('IMG-02 · cargar el compositor ofrece DESHACER', /se guardó/.test(report.toastRef) && /DESHACER/.test(report.toastRef), report.toastRef);
   // Historial
@@ -273,6 +274,28 @@ try {
   const hoja = await p.evaluate(() => { const ov = document.querySelector('#studioOv'), bk = ov.querySelector('.st-gal > .st-bank:not([hidden])'), g = ov.querySelector('.st-grid'); if (!bk || !g) return { bk: !!bk };
     const a = bk.getBoundingClientRect(), b = g.getBoundingClientRect(); return { clase: ov.classList.contains('st-hoja'), banco: Math.round(a.left), galeria: Math.round(b.right), visible: b.width > 200 }; });
   await shot(p, '18c-banco-al-lado');
+  // 6 oct 2026 (el dueño): los dos paneles se ensanchan arrastrando su borde (lo de siempre es lo más angosto); el derecho se oculta o va a toda la ventana
+  const anchoDe = sel => p.evaluate(s => Math.round(document.querySelector(s)?.getBoundingClientRect().width || 0), sel);
+  const arrastrar = async (sel, dx) => { const r = await p.locator(sel).boundingBox(); await p.mouse.move(r.x + r.width / 2, r.y + 200); await p.mouse.down(); await p.mouse.move(r.x + r.width / 2 + dx, r.y + 200, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(300); };
+  const pan0 = { izq: await anchoDe(`${S} .st-gen`), der: await anchoDe(`${S} .st-gal > .st-bank`) };
+  await arrastrar(`${S} .st-rsz-der`, -150); await arrastrar(`${S} .st-rsz-izq`, 60);
+  const pan1 = { izq: await anchoDe(`${S} .st-gen`), der: await anchoDe(`${S} .st-gal > .st-bank`), galeria: await anchoDe(`${S} .st-grid`) };
+  ok('Paneles · lo de siempre es lo más angosto (420 y 460) y arrastrando el borde se ensanchan', pan0.izq === 420 && pan0.der === 460 && pan1.der >= 590 && pan1.izq >= 470 && pan1.galeria >= 300, JSON.stringify({ pan0, pan1 }));
+  await shot(p, '18d-paneles-anchos');
+  await p.focus(`${S} .st-rsz-izq`); await p.keyboard.press('Home'); await p.waitForTimeout(200);
+  await p.dblclick(`${S} .st-rsz-der`); await p.waitForTimeout(300);
+  ok('Paneles · con el teclado (Inicio) y con doble clic vuelven a lo más angosto', await anchoDe(`${S} .st-gen`) === 420 && await anchoDe(`${S} .st-gal > .st-bank`) === 460);
+  await p.click(`${S} .st-hmandos [data-h="max"]`); await p.waitForTimeout(400);
+  const maxi = await p.evaluate(() => { const b = document.querySelector('#studioOv .st-gal > .st-bank').getBoundingClientRect(), c = document.querySelector('#studioOv .st-body').getBoundingClientRect(); return { izq: Math.round(b.left - c.left), ancho: Math.round(b.width), cuerpo: Math.round(c.width) }; });
+  ok('Paneles · «Toda la ventana» tapa también el compositor', maxi.izq <= 1 && maxi.ancho >= maxi.cuerpo - 2, JSON.stringify(maxi));
+  await shot(p, '18e-banco-toda-la-ventana');
+  await p.click(`${S} .st-hmandos [data-h="max"]`); await p.waitForTimeout(300);
+  await p.click(`${S} .st-hmandos [data-h="ocultar"]`); await p.waitForTimeout(300);
+  const oc = await p.evaluate(() => ({ banco: !!document.querySelector('#studioOv .st-gal > .st-bank')?.offsetParent, pestana: !!document.querySelector('#studioOv .st-hver')?.offsetParent, foco: document.activeElement?.className }));
+  await shot(p, '18f-banco-oculto');
+  await p.click(`${S} .st-hver`); await p.waitForTimeout(300);
+  const vuelve = await p.evaluate(() => !!document.querySelector('#studioOv .st-gal > .st-bank')?.offsetParent);
+  ok('Paneles · «Ocultar» lo esconde sin cerrarlo y la pestaña del borde lo vuelve a mostrar', !oc.banco && oc.pestana && /st-hver/.test(oc.foco) && vuelve, JSON.stringify({ oc, vuelve }));
   ok('IMG-42 · a 1440 el banco va al lado: la galería se sigue viendo', hoja.clase && hoja.visible && hoja.galeria <= hoja.banco + 1, JSON.stringify(hoja));
   await p.keyboard.press('Escape'); await p.waitForTimeout(300);
   const tarjeta = await p.evaluate(() => ({ marca: document.querySelectorAll('#studioOv .st-bank .bk-marca, #studioOv .bk-card .bk-tag').length }));

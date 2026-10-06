@@ -1,0 +1,46 @@
+{
+  "skill": "plan-contenido",
+  "nota": "Pedidos como los escribiría el dueño y lo que debe cumplir la respuesta. Se corre con scripts/evals-skill.mjs: con la skill y sin ella, y un juez dice qué expectativas se cumplen, con su evidencia (idea de metricool-cli, evals.json). Ningún pedido trae precios: la skill no debe inventarlos.",
+  "evals": [
+    {
+      "id": "semana-octubre",
+      "prompt": "Prepárame las publicaciones de la semana que viene para Instagram y Facebook. Tenemos lentes de sol polarizados nuevos.",
+      "expectations": [
+        "Propone entre tres y cinco piezas para la semana, cada una con su día",
+        "Cada pieza tiene formato (post, carrusel, reel o historia) y redes",
+        "El texto de cada pieza está listo para publicar, sin marcadores como «[poner aquí]»",
+        "Los hashtags van aparte, entre 5 y 10",
+        "No inventa precios, descuentos ni plazos que no estén en el pedido",
+        "Dice que deja borradores y que el dueño los aprueba; no dice que publicó ni programó nada"
+      ]
+    },
+    {
+      "id": "x-y-linkedin",
+      "prompt": "Quiero anunciar el horario de sábado (9 a 14) en Instagram, X y LinkedIn.",
+      "expectations": [
+        "El texto para X cabe en 280 caracteres o propone uno propio para X",
+        "Usa el horario tal cual: sábado de 9 a 14",
+        "No pone hashtags dentro del texto de LinkedIn como si fuera Instagram, o los separa",
+        "No dice que publicó; deja borradores"
+      ]
+    },
+    {
+      "id": "sin-datos",
+      "prompt": "Hazme el plan de contenido de noviembre según lo que mejor funcionó.",
+      "expectations": [
+        "Si no tiene cifras de lo que funcionó, lo dice en lugar de inventarlas",
+        "Pide o nombra el dato que falta (Analíticas, el informe del mes)",
+        "No inventa cifras de alcance, seguidores ni interacciones"
+      ]
+    },
+    {
+      "id": "reel-sin-video",
+      "prompt": "Haz un reel para mañana sobre cómo limpiar las gafas.",
+      "expectations": [
+        "Reconoce que un reel necesita un video y dice cómo conseguirlo (Estudio o el dueño)",
+        "El texto del reel tiene un gancho en la primera línea",
+        "Pone la pieza para mañana o dice que la hora la decide el dueño"
+      ]
+    }
+  ]
+}

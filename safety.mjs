@@ -175,6 +175,7 @@ export const urlOf = input => input && (input.url || input.href || input.link ||
  *             office last looked, or one the owner's own settings allow, never reaches a desk that was not wired to it)
  * → { allow: true, kind } or { allow: false, kind, why } (the why is what the agent reads and the owner sees).
  */
+const REDES_SOCIALES = /metricool/i; // los conectores que publican en redes: escribir con ellos es de la cola de Contenido
 const NO_WRITES = 'Bloqueado: en esta ejecución no se envía, publica, paga ni cambia nada fuera de la oficina. Prepara el borrador completo (destinatario, asunto, texto, importe) y el dueño lo aprobará.';
 export function decide(toolName, input, ctx) {
   const s = normalize(ctx.safety), { server, tool } = splitTool(toolName);
@@ -187,6 +188,9 @@ export function decide(toolName, input, ctx) {
     return { allow: true, kind };
   }
   const kind = kindOfCall(toolName, input, s.safeTools, s.toolKinds);
+  // plan M1 (6 oct 2026): programar o publicar en redes va SIEMPRE por Contenido (la cola de la oficina, con el OK del dueño en cada pieza),
+  // nunca por el conector de un agente, ni siquiera después de un OK a su tarea: así nada sale dos veces ni se salta la vista previa.
+  if (kind === 'write' && REDES_SOCIALES.test(server || '')) return { allow: false, kind, code: 'redes', why: 'Bloqueado: publicar o programar en redes va por Contenido. Deja la pieza como borrador (mcp__contenido__crear_borrador); el dueño la aprueba y la oficina la programa.' };
   if (server === 'claude-in-chrome' && (tool === 'navigate' || /^tabs_create/.test(tool))) {
     const u = urlOf(input); if (u) { const r = siteAllowed(u, s.browserSites, s.browserBlock); if (!r.ok) return { allow: false, kind, code: 'site', why: `Sitio bloqueado: ${r.why}. Trabaja sin él y dilo en tu entrega.` }; }
   }

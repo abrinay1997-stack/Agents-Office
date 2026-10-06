@@ -95,3 +95,23 @@ test('deshacerMover no se traga que no se pudo volver a aprobar', async () => {
   assert.match(r2.aviso, /no se pudo volver a aprobar: Falta menos de 10 min/);
   await assert.rejects(deshacerMover({ ...ok, patch: async () => { throw new Error('sin red'); } }, 'a', antes), /sin red/, 'si ni siquiera vuelve a su fecha, lanza (el aviso dice «No se pudo deshacer»)');
 });
+
+test('M1: lo que pasó con una pieza aprobada, en palabras; lo entregado no está vencido y lo que falló pide acción', async () => {
+  const { textoSalida, vencida: venc, requiereAccion: req } = await import('../src/contenido-cola.js');
+  const ahora = new Date(2026, 9, 6, 10, 0).getTime();
+  const p = (salida, extra = {}) => ({ id: 'p1', estado: 'aprobada', fecha: '2026-10-08', hora: '09:00', redes: ['instagram'], salida, ...extra });
+  assert.equal(textoSalida(p(null), ahora), null);
+  const esp = textoSalida(p({ estado: 'espera', conductor: 'metricool', entregarDesde: new Date(2026, 9, 7, 9, 0).getTime(), redes: {} }), ahora);
+  assert.equal(esp.etiqueta, 'EN COLA'); assert.match(esp.texto, /Se entrega a Metricool mañana a las 09:00/); assert.deepEqual(esp.acciones, ['entregar', 'quitar']);
+  const prog = textoSalida(p({ estado: 'en_red', conductor: 'metricool', redes: {} }), ahora); assert.equal(prog.etiqueta, 'PROGRAMADA'); assert.match(prog.texto, /aunque esta computadora esté apagada/);
+  const pub = textoSalida(p({ estado: 'publicada', conductor: 'metricool', redes: { instagram: { estado: 'publicada', url: 'https://instagram.com/p/1' }, 'facebook·historia': { estado: 'publicada', url: 'https://fb/x' } } }), ahora);
+  assert.deepEqual(pub.enlaces, [{ red: 'Instagram', url: 'https://instagram.com/p/1' }, { red: 'Facebook (historia)', url: 'https://fb/x' }]);
+  const par = textoSalida(p({ estado: 'parcial', conductor: 'metricool', redes: { instagram: { estado: 'publicada' }, linkedin: { estado: 'fallo', detalle: 'token' } } }), ahora);
+  assert.equal(par.malo, true); assert.match(par.texto, /no en LinkedIn \(token\)/);
+  const fal = textoSalida(p({ estado: 'fallo', conductor: 'metricool', error: 'Metricool está fallando', redes: {} }), ahora); assert.deepEqual(fal.acciones, ['reintentar', 'quitar']);
+  assert.equal(textoSalida(p({ estado: 'en_red', conductor: 'simulacro', redes: {} }), ahora).etiqueta, 'EN SIMULACRO');
+  const pasada = { estado: 'aprobada', fecha: '2026-10-05', hora: '09:00', redes: ['instagram'] };
+  assert.equal(venc(pasada, ahora), true); assert.equal(venc({ ...pasada, salida: { estado: 'publicada' } }, ahora), false);
+  const r = req([p({ estado: 'fallo', conductor: 'metricool', error: 'sin saldo', redes: {} })], ahora);
+  assert.equal(r.length, 1); assert.match(r[0].motivo, /No salió: sin saldo/);
+});

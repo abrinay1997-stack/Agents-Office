@@ -41,3 +41,10 @@ test('lo que la oficina no tiene no aparece, y la favorita cambia su nombre', ()
   assert.equal(a.grupos.find(g => g.id === 'organizar').items[0].label, 'Quitar de favoritas');
   assert.equal(tipoDe({ file: 'b.webm' }), 'vid'); assert.equal(tipoDe(null), 'img');
 });
+
+test('la fila de la tarjeta lleva a la vista Usar de referencia, Descargar y la papelera (pedido del dueño, 6 oct 2026)', () => {
+  assert.deepEqual(ids(acciones({ file: 'a.png' }, todo).fila), ['edit', 'vary', 'ref', 'dl', 'del']);
+  assert.deepEqual(acciones({ file: 'a.png' }, todo).fila.filter(x => x.icono).map(x => x.id), ['ref', 'dl', 'del'], 'las tres como iconos: caben');
+  assert.deepEqual(ids(acciones({ file: 'v.mp4', kind: 'video' }, todo).fila), ['again', 'dl', 'del'], 'un video no se usa de referencia');
+  assert.deepEqual(ids(acciones({ file: 'x.mp3', kind: 'audio' }, todo).fila), ['again', 'dl', 'del']);
+});

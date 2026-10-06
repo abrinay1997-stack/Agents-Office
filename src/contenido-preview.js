@@ -8,7 +8,7 @@
 // tests/contenido-preview.test.mjs; `initPreview` es el controlador del panel (pestañas, carrusel, «más», zonas) y repinta los medios
 // solo cuando cambian: al teclear se cambia solo el texto (PRE-13).
 //   initPreview(box, { esc, cuenta: () => ({ instagram, facebook }), otras: () => piezas }) → { paint(pieza), text(pieza) }
-import { textoPara, primerComentario, postDePieza, PROPORCION_FEED } from './contenido-reglas.js';
+import { textoPara, primerComentario, postDePieza, PROPORCION_FEED, REDES, LIMITES, longitudPara } from './contenido-reglas.js';
 
 export const ZONAS = Object.freeze({ reel: { arriba: 0.14, abajo: 0.35, lados: 0.06 }, historia: { arriba: 0.14, abajo: 0.20, lados: 0.06 } });
 const VISTAS = {
@@ -19,8 +19,17 @@ const VISTAS = {
   'fb-feed': { red: 'facebook', vista: 'feed', label: 'Feed', red_: 'FB' },
   'fb-reel': { red: 'facebook', vista: 'reel', label: 'Reel', red_: 'FB' },
   'fb-historia': { red: 'facebook', vista: 'historia', label: 'Historia', red_: 'FB' },
+  // M2 (6 oct 2026): una vista por red nueva; TikTok y el Short de YouTube, en vertical como el reel
+  'li-feed': { red: 'linkedin', vista: 'texto', label: 'Feed', red_: 'IN' },
+  'x-feed': { red: 'x', vista: 'texto', label: 'Post', red_: 'X' },
+  'th-feed': { red: 'threads', vista: 'texto', label: 'Post', red_: 'TH' },
+  'bs-feed': { red: 'bluesky', vista: 'texto', label: 'Post', red_: 'BS' },
+  'tt-video': { red: 'tiktok', vista: 'reel', label: 'Video', red_: 'TT' },
+  'pi-pin': { red: 'pinterest', vista: 'pin', label: 'Pin', red_: 'PI' },
+  'yt-video': { red: 'youtube', vista: 'video', label: 'Video', red_: 'YT' },
+  'yt-short': { red: 'youtube', vista: 'reel', label: 'Short', red_: 'YT' },
 };
-export const NOMBRE_VISTA = id => { const v = VISTAS[id]; return v ? `${v.red === 'instagram' ? 'Instagram' : 'Facebook'} · ${v.label}` : ''; };
+export const NOMBRE_VISTA = id => { const v = VISTAS[id]; return v ? `${REDES[v.red]?.nombre || v.red} · ${v.label}` : ''; };
 
 /** Las pestañas que tiene sentido mirar para esta pieza, según sus redes y su formato (la primera es la principal). */
 export function pestanasDe(p = {}) {
@@ -32,6 +41,10 @@ export function pestanasDe(p = {}) {
     if (p.historiaTambien && f !== 'historia') out.push('ig-historia');
   }
   if (redes.includes('facebook')) out.push(f === 'historia' ? 'fb-historia' : f === 'reel' ? 'fb-reel' : 'fb-feed');
+  if (f !== 'historia') { // las demás no tienen historias (las reglas lo dicen)
+    for (const [r, t] of [['linkedin', 'li-feed'], ['x', 'x-feed'], ['threads', 'th-feed'], ['bluesky', 'bs-feed'], ['tiktok', 'tt-video'], ['pinterest', 'pi-pin']]) if (redes.includes(r)) out.push(t);
+    if (redes.includes('youtube')) out.push(f === 'reel' ? 'yt-short' : 'yt-video');
+  }
   return out;
 }
 
@@ -132,6 +145,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
 
   function caption(p, d) {
     if (d.v.vista === 'historia' || d.v.vista === 'perfil') return '';
+    if (!['instagram', 'facebook'].includes(d.v.red) && d.v.vista !== 'reel') return captionGen(p, d);
     const txt = textoPara(d.post, d.v.red);
     const reel = d.v.vista === 'reel', fb = d.v.red === 'facebook';
     const c = cortePie(txt, { lineas: reel ? 1 : fb ? 3 : 2, cpl: reel ? 34 : fb ? 44 : 40, prefijo: fb ? 0 : d.ac.nombre.length + 1 });
@@ -140,6 +154,49 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     const cuerpo = abierto || !c.cortado ? txt : c.visible;
     const mas = c.cortado ? `<button type="button" class="pv-mas" data-pv-mas aria-expanded="${abierto}">${abierto ? 'menos' : fb ? 'Ver más' : 'más'}</button>` : '';
     return `<div class="pv-cap" data-pv="cap">${fb || reel ? '' : `<b>${esc(d.ac.nombre)}</b> `}${realzar(esc(cuerpo))}${c.cortado && !abierto ? '<span class="pv-ell">… </span>' : ' '}${mas}</div>`;
+  }
+  /** El texto en las redes nuevas: X, Threads y Bluesky lo enseñan entero (y marcan lo que pasa del límite); LinkedIn lo pliega a 3 líneas. */
+  function captionGen(p, d) {
+    const red = d.v.red, txt = textoPara(d.post, red), max = LIMITES[red]?.caracteres, n = longitudPara(txt, red);
+    if (!txt) { st.corte = null; return `<div class="pv-cap" data-pv="cap"><em class="pv-none">Sin texto todavía</em></div>`; }
+    const pliega = red === 'linkedin' || red === 'pinterest' || red === 'youtube';
+    const c = pliega ? cortePie(txt, { lineas: red === 'linkedin' ? 3 : 2, cpl: 44 }) : { visible: txt, cortado: false, antes: txt.length };
+    st.corte = pliega ? c : null;
+    const cuerpo = abierto || !c.cortado ? txt : c.visible;
+    const sobra = max && n > max ? `<p class="pv-flag">Pasa de ${max} en ${n - max}: ${REDES[red].nombre} no lo publica así.</p>` : '';
+    const mas = c.cortado ? `<button type="button" class="pv-mas" data-pv-mas aria-expanded="${abierto}">${abierto ? 'menos' : red === 'linkedin' ? '…ver más' : 'más'}</button>` : '';
+    return `<div class="pv-cap" data-pv="cap">${realzar(esc(cuerpo))}${c.cortado && !abierto ? '<span class="pv-ell">… </span>' : ' '}${mas}${sobra}</div>`;
+  }
+  /** El título del pin o del video: se cambia al teclear sin repintar los archivos. */
+  function titulo(p, d) {
+    const t = d.v.red === 'pinterest' ? p.pinterest?.titulo : d.v.red === 'youtube' ? p.youtube?.titulo : '';
+    if (d.v.red !== 'pinterest' && d.v.red !== 'youtube') return '';
+    return `<div class="pv-tit" data-pv="tit">${t ? esc(t) : `<em class="pv-none">${d.v.red === 'youtube' ? 'Falta el título (obligatorio)' : 'Sin título'}</em>`}</div>`;
+  }
+  /** LinkedIn, X, Threads y Bluesky: cabecera, texto arriba, archivos debajo (hasta 4 en mosaico). */
+  function feedTexto(p, d) {
+    const ms = d.medios, n = ms.length, vid = ms.find(esVideoM);
+    let m = '';
+    if (vid) m = `<div class="pv-media" style="aspect-ratio:${proporcionFeed(vid).medida ? proporcionFeed(vid).ratio : 16 / 9}">${medio(vid.src, esc)}</div>`;
+    else if (n === 1) m = `<div class="pv-media" style="aspect-ratio:${Math.max(0.8, Math.min(1.91, proporcionFeed(ms[0]).real || 1))}">${medio(ms[0].src, esc)}</div>`;
+    else if (n > 1) m = `<div class="pv-mosaic n${Math.min(n, 4)}">${ms.slice(0, 4).map((x, i) => `<span class="pv-tile">${medio(x.src, esc)}${i === 3 && n > 4 ? `<b class="pv-more">+${n - 4}</b>` : ''}</span>`).join('')}</div>`;
+    const arroba = d.v.red === 'linkedin' ? '' : ` <small>@${esc(d.ac.nombre.toLowerCase().replace(/\s+/g, ''))}</small>`;
+    const propio = String(p.textos?.[d.v.red] ?? '').trim();
+    return `<div class="pv-card pv-gen ${d.v.red}"><div class="pv-h"><span class="pv-av${d.v.red === 'linkedin' ? ' sq' : ''}">${esc(d.ac.iniciales)}</span><span class="pv-fbn"><b>${esc(d.ac.nombre)}${arroba}</b><small>${p.fecha ? 'Programada · ' + esc(fechaCorta(p)) : 'Sin día'}</small></span><span class="pv-sp"></span>${ic('dots')}</div>
+      ${caption(p, d)}${m}<div class="pv-fbbar" aria-hidden="true"><span>${ic(d.v.red === 'linkedin' ? 'like' : 'heart')}</span><span>${ic('comment')}</span><span>${ic('share')}</span></div></div>
+      ${propio ? `<p class="pv-hint">${esc(REDES[d.v.red].nombre)} lleva su propio texto.</p>` : ''}`;
+  }
+  /** Pinterest: el pin (el primer archivo), el título y la descripción. */
+  function pin(p, d) {
+    const m0 = d.medios[0], ar = proporcionFeed(m0).medida ? Math.max(0.5, Math.min(1.5, proporcionFeed(m0).real)) : 2 / 3;
+    return `<div class="pv-card pv-pin"><div class="pv-media" style="aspect-ratio:${ar}">${m0 ? medio(m0.src, esc) : '<span class="pv-empty">Sin imagen todavía</span>'}</div>${titulo(p, d)}${caption(p, d)}
+      <div class="pv-h"><span class="pv-av sm">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b>${p.pinterest?.enlace ? `<span class="pv-sp"></span><small class="pv-link">${esc(p.pinterest.enlace.replace(/^https:\/\//, '').slice(0, 30))}</small>` : ''}</div></div>`;
+  }
+  /** YouTube: el video a 16:9, el título y la descripción plegada. */
+  function videoYT(p, d) {
+    const v = d.medios.find(esVideoM);
+    return `<div class="pv-card pv-yt"><div class="pv-media" style="aspect-ratio:16/9">${v ? medio(v.src, esc, 'contain') : '<span class="pv-empty">YouTube necesita un video</span>'}</div>${titulo(p, d)}
+      <div class="pv-h"><span class="pv-av sm">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-sp"></span><small>${{ public: 'Público', unlisted: 'Oculto', private: 'Privado' }[p.youtube?.privacidad || 'public']}</small></div>${caption(p, d)}</div>`;
   }
   function comentario(p, d) {
     if (d.v.red !== 'instagram' || d.v.vista !== 'feed') return '';
@@ -181,7 +238,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     const capa = !n ? `<span class="pv-empty dk">${reel ? 'Un reel necesita un video' : 'Una historia necesita una imagen o un video'}</span>` : medio(m.src, esc, no916 ? 'contain' : 'cover');
     const zon = zonas ? `<i class="pv-zone t" style="height:${z.arriba * 100}%" aria-hidden="true"><span>lo tapa la interfaz</span></i><i class="pv-zone b" style="height:${z.abajo * 100}%" aria-hidden="true"><span>lo tapa la interfaz · ${Math.round(z.abajo * 100)} %</span></i><i class="pv-zone l" style="width:${z.lados * 100}%" aria-hidden="true"></i><i class="pv-zone r" style="width:${z.lados * 100}%" aria-hidden="true"></i>` : '';
     let ui;
-    if (reel) ui = `<div class="pv-ui" aria-hidden="true"><div class="pv-top"><b>${fb ? 'Reels' : 'Reels'}</b><span class="pv-sp"></span>${ic('cam')}</div>
+    if (reel) ui = `<div class="pv-ui" aria-hidden="true"><div class="pv-top"><b>${d.v.red === 'tiktok' ? 'Para ti' : d.v.red === 'youtube' ? 'Shorts' : 'Reels'}</b>${d.v.red === 'youtube' ? titulo(p, d) : ''}<span class="pv-sp"></span>${ic('cam')}</div>
         <div class="pv-side">${ic(fb ? 'like' : 'heart')}${ic('comment')}${ic(fb ? 'share' : 'send')}${ic('dots')}</div></div>
         <div class="pv-low"><div class="pv-who"><span class="pv-av sm">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-follow" aria-hidden="true">Seguir</span></div>${caption(p, d)}<div class="pv-audio" aria-hidden="true">${ic('music')} Audio original · ${esc(d.ac.nombre)}</div></div>`;
     else ui = `<div class="pv-ui" aria-hidden="true"><div class="pv-prog">${(n ? ms : [0]).map((_, i) => `<i class="${i < slide ? 'done' : i === slide ? 'on' : ''}"></i>`).join('')}</div>
@@ -226,19 +283,20 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
   function paint(p) {
     cur = p; const d = datos(p);
     const tabs = `<div class="pv-tabs" role="tablist" aria-label="Ver cómo queda en">${d.tabs.map(t => `<button type="button" role="tab" id="pv-t-${t}" aria-selected="${t === tab}" tabindex="${t === tab ? 0 : -1}" data-pv-tab="${t}"><b class="pv-net ${VISTAS[t].red}">${VISTAS[t].red_}</b>${VISTAS[t].label}</button>`).join('')}</div>`;
-    const body = d.v.vista === 'perfil' ? perfil(p, d) : d.v.vista === 'feed' ? (d.v.red === 'instagram' ? feedIG(p, d) : feedFB(p, d)) : vertical(p, d);
+    const body = d.v.vista === 'perfil' ? perfil(p, d) : d.v.vista === 'feed' ? (d.v.red === 'instagram' ? feedIG(p, d) : feedFB(p, d)) : d.v.vista === 'texto' ? feedTexto(p, d) : d.v.vista === 'pin' ? pin(p, d) : d.v.vista === 'video' ? videoYT(p, d) : vertical(p, d);
     const conZonas = d.v.vista === 'reel' || d.v.vista === 'historia' || (d.v.vista === 'feed' && d.v.red === 'instagram' && d.medios.length > 0);
     box.innerHTML = `${tabs}<div class="pv-stage" role="tabpanel" aria-labelledby="pv-t-${tab}">
       <div class="pv-mock" role="group" aria-roledescription="vista previa" aria-label="${esc(ariaMaqueta(p, tab, { corte: st.corte, medio: d.medios[0] }))}">${body}</div>
       ${conZonas ? `<label class="pv-zt"><input type="checkbox" data-pv-zonas${zonas ? ' checked' : ''}> Ver ${d.v.vista === 'feed' ? 'recortes' : 'zonas que tapa la interfaz'}</label>` : ''}${notas(p, d)}</div>`;
     mediaKey = key(p);
   }
-  const key = p => JSON.stringify([tab, slide, zonas, p.formato, p.redes, p.medios, p.medidas, p.historiaTambien, p.fecha, p.hora, cuenta()]);
+  const key = p => JSON.stringify([tab, slide, zonas, p.formato, p.redes, p.medios, p.medidas, p.historiaTambien, p.fecha, p.hora, p.youtube?.privacidad, p.pinterest?.enlace, cuenta()]);
   /** Al teclear: si solo cambió el texto, se cambia solo el pie (los <img> y <video> se quedan). */
   function text(p) {
     if (!box.firstChild || key(p) !== mediaKey) return paint(p);
     cur = p; const d = datos(p);
     const cap = box.querySelector('[data-pv="cap"]'); if (cap) cap.outerHTML = caption(p, d);
+    const tit = box.querySelector('[data-pv="tit"]'); if (tit) tit.outerHTML = titulo(p, d);
     const com = box.querySelector('[data-pv="com"]'), nc = comentario(p, d);
     if (com) com.outerHTML = nc || '<span data-pv="com" hidden></span>'; else if (nc) box.querySelector('.pv-likes, .pv-cap')?.insertAdjacentHTML('afterend', nc);
     const n = box.querySelector('.pv-notes'), nn = notas(p, d); if (n) n.outerHTML = nn || ''; else if (nn) box.querySelector('.pv-stage')?.insertAdjacentHTML('beforeend', nn);

@@ -10,7 +10,7 @@ body.ctOpen #cornerBL { display: none; }
 body.ctOpen #sahniMark, body.ctOpen #licence { display: none; }
 
 /* ---------- la banda: dos segmentos ---------- */
-#ctOv .ct-mode { margin-left: 14px; }
+#ctOv .ct-mode { margin-left: 14px; } #ctOv .ct-ms { display: none; }
 #ctOv .ct-views { margin-left: 4px; }
 #ctOv .ct-mode button[aria-pressed="true"] { background: #FDFFF8; color: #151414; }
 #ctOv .ct-n { display: inline-block; min-width: 16px; padding: 0 5px; margin-left: 6px; border-radius: 99px; background: #2B6BEB; color: #fff; font-size: 10.5px; letter-spacing: 0; line-height: 16px; text-align: center; }
@@ -41,6 +41,10 @@ body.ctOpen #sahniMark, body.ctOpen #licence { display: none; }
 .cv-ev.pz .cv-ev-m { justify-content: flex-start; }
 .pz-nb { display: inline-grid; place-items: center; min-width: 19px; height: 16px; padding: 0 3px; box-sizing: border-box; border-radius: 4px; font-family: var(--ui); font-size: 10.5px; font-weight: 800; letter-spacing: .02em; line-height: 1; color: #fff; background: #4A4A4A; flex: none; }
 .pz-nb.instagram { background: #B1306C; } .pz-nb.facebook { background: #0F5BD8; } /* blanco encima: 5,8:1 y 5,9:1 */
+/* M2 (6 oct 2026): las redes nuevas; blanco encima, todas ≥ 5,2:1 */
+.pz-nb.linkedin, .pv-net.linkedin { background: #0A66C2; } .pz-nb.x, .pv-net.x { background: #14171A; } .pz-nb.threads, .pv-net.threads { background: #3D3D3D; }
+.pz-nb.bluesky, .pv-net.bluesky { background: #0B5FCC; } .pz-nb.tiktok, .pv-net.tiktok { background: #00787A; } .pz-nb.pinterest, .pv-net.pinterest { background: #BD081C; } .pz-nb.youtube, .pv-net.youtube { background: #CC0000; }
+:is(.pz-nb, .pv-net):is(.x, .threads) { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); } /* en oscuro, que no se pierdan en el fondo */
 .pz-fi { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vertical-align: -2px; flex: none; }
 .pz-fi .fill { fill: currentColor; stroke: none; }
 .pz-f { display: inline-flex; align-items: center; gap: 3px; color: var(--grey); } body.dark .pz-f { color: #C2C0B9; }
@@ -311,6 +315,7 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
   #ctOv .ct-newt { display: none; } #ctOv .ct-new { padding: 6px 13px; font-size: 16px; }
   #ctOv .ct-mode button { flex: 1; }
   #ctOv .ct-mode button, #ctOv .ct-views button { padding: 6px 8px; font-size: 10.5px; }
+  #ctOv .ct-mode button { letter-spacing: .05em; padding: 6px 6px; } #ctOv .ct-ml { display: none; } #ctOv .ct-ms { display: inline; } /* M4: con BANDEJA, «PROGRAMACIÓN» pasa a «COLA» en el teléfono */
   #ctOv .cv-tools { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
   #ctOv .cv-tools .cv-sw { flex: 1; min-width: 0; } #ctOv #ctSearch { width: 100%; }
   #ctOv .ct-fbtn { display: inline-flex; align-items: center; }
@@ -357,3 +362,96 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
 /* Auditoría (revisión del cajón): con una pieza abierta el aviso va sobre el panel y por encima de su pie (src/contenido.js → placeToast);
    en el teléfono el panel ocupa la vista con z-index 47, así que el aviso sube por encima para no quedar escondido. */
 #ctOv .cv-toast.sobrePanel { z-index: 48; width: max-content; } /* el ancho lo pone el panel (max-width en línea), no el sitio que queda a la derecha del centro */
+
+/* Plan M1 (6 oct 2026): la cola que lleva lo aprobado al conductor — el aviso de arriba y lo que pasó con cada pieza */
+.ct-banner.ok { color: #0E5A48; background: #E4F4EE; border-color: #A9DCC9; } body.dark .ct-banner.ok { color: #9FE8CF; background: #12332A; border-color: #1F5A48; }
+.ct-banner.bad { color: #8C1D18; background: #FCEBEA; border-color: #F0B8B4; } body.dark .ct-banner.bad { color: #FFB4AB; background: #3A1715; border-color: #6B2A26; }
+.ct-row.con-salida { flex-wrap: wrap; }
+.ct-salbox { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-left: 50px; padding-top: 6px; border-top: 1px dashed var(--hairline); font-size: 12.5px; color: var(--ink); }
+.ct-salbox.bad .ct-saltxt { color: #8C1D18; font-weight: 600; } body.dark .ct-salbox.bad .ct-saltxt { color: #FFB4AB; }
+.ct-salbox .ct-saltxt { flex: 1 1 220px; min-width: 0; }
+.ct-salbox a { color: var(--ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; min-height: 24px; display: inline-flex; align-items: center; }
+.ct-salbox .pz-lk { min-height: 28px; }
+@media (max-width: 760px) { .ct-salbox { margin-left: 0; } }
+
+/* M2 (6 oct 2026): «Más redes» y las opciones de Pinterest, YouTube y TikTok */
+.pz-net.more { border-style: dashed; color: var(--ink); }
+.pz-op { border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px 12px; margin: 12px 0 4px; display: grid; gap: 4px; }
+.pz-op legend { font-family: var(--ui); font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 0 6px; color: var(--ink); }
+.pz-op .pz-sel { justify-self: start; }
+
+/* plan M3 (6 oct 2026): la mejor hora — sombreada en la semana y el día, y sugerida en el panel */
+#ctOv .cv-slot.hb1 { background-image: linear-gradient(rgba(19,112,90,.07), rgba(19,112,90,.07)); }
+#ctOv .cv-slot.hb2 { background-image: linear-gradient(rgba(19,112,90,.16), rgba(19,112,90,.16)); box-shadow: inset 3px 0 0 #13705A; }
+.ct-hbleg { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-right: 12px; font-size: 11.5px; color: var(--grey); letter-spacing: 0; text-transform: none; }
+.ct-hbleg i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--hairline); }
+.ct-hbleg i.hb2 { background: rgba(19,112,90,.16); box-shadow: inset 3px 0 0 #13705A; } .ct-hbleg i.hb1 { background: rgba(19,112,90,.07); }
+.pz-qh.best i { color: #13705A; font-style: normal; } .pz-best .pz-lab { margin-right: 4px; }
+.pz-best:empty { display: none; }
+body.dark :is(#ctOv .cv-slot.hb1, .ct-hbleg i.hb1) { background-image: none; background-color: rgba(79,209,165,.08); }
+body.dark :is(#ctOv .cv-slot.hb2, .ct-hbleg i.hb2) { background-image: none; background-color: rgba(79,209,165,.17); box-shadow: inset 3px 0 0 #4FD1A5; }
+body.dark .pz-qh.best i { color: #4FD1A5; }
+
+/* plan M4 (6 oct 2026): la bandeja — mensajes, comentarios y reseñas, en acordeón */
+.ct-bj { flex: 1; min-width: 0; overflow-y: auto; padding: 16px 22px 40px; } .ct-bj[hidden] { display: none; }
+#ctOv.bj .cv-tools { display: none; }
+.bj-acts { display: inline-flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.bj-filtros { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.bj-filtros .pz-seg { display: inline-flex; gap: 6px; flex-wrap: wrap; } .bj-filtros .pz-seg button { min-height: 32px; }
+.bj-list { display: grid; gap: 8px; max-width: 920px; }
+.bj-it { border: 1px solid var(--hairline); border-radius: 14px; background: var(--cv-card); }
+.bj-it.on { border-color: var(--ink); }
+.bj-it.sos { border-left: 4px solid #B3261E; }
+.bj-h { all: unset; box-sizing: border-box; display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 12px 14px; cursor: pointer; border-radius: 14px; font-family: var(--ui); color: var(--ink); min-height: 44px; }
+.bj-h:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.bj-h .pz-nb { margin-top: 2px; flex: none; }
+.bj-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.bj-who small { color: var(--grey); font-size: 11.5px; }
+.bj-ex { color: var(--ink); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bj-it.on .bj-ex { display: none; }
+.bj-est { flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; margin-top: 3px; }
+.bj-det { padding: 0 14px 14px 44px; display: grid; gap: 8px; }
+.bj-texto { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.bj-pub, .bj-resp { margin: 0; font-size: 12.5px; color: var(--grey); }
+.bj-resp { color: var(--ink); }
+.bj-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.bj-shield { margin: 0; padding: 8px 10px; border-radius: 10px; background: #FDECEA; color: #8C1D18; font-size: 12.5px; }
+body.dark .bj-shield { background: #3B1715; color: #FFB4AB; }
+body.dark .bj-it.sos { border-left-color: #FF8A80; }
+@media (max-width: 600px) { .ct-bj { padding: 12px 12px 40px; } .bj-det { padding-left: 14px; } .bj-acts { margin-left: 0; } }
+
+/* plan M5 · U2 (6 oct 2026): la cuadrícula del perfil de Instagram, a 3:4 */
+#ctOv .cv-grid.perfil { display: block; overflow-y: auto; padding: 12px 16px 40px; }
+.pf-wrap { max-width: 640px; margin: 0 auto; }
+.pf-help { margin: 0 0 10px; font-size: 12.5px; color: var(--grey); }
+.pf-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; }
+.pf-t { position: relative; aspect-ratio: 3 / 4; background: var(--hairline); overflow: hidden; }
+.pf-t.arr { opacity: .55; } .pf-t.sobre { outline: 3px solid var(--ink); outline-offset: -3px; }
+.pf-t[draggable="true"] { cursor: grab; }
+.pf-open { all: unset; box-sizing: border-box; position: absolute; inset: 0; cursor: pointer; display: block; }
+.pf-open:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.pf-open img, .pf-open video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf-ph { position: absolute; inset: 0; background: hsl(var(--h) 45% 72%); }
+.pf-gi { position: absolute; top: 6px; right: 8px; color: #fff; font-style: normal; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.pf-lab { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.94); color: var(--c); font: 700 10.5px var(--ui); letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-t.pasada .pf-lab { color: #3D3D3D; }
+.pf-mv { position: absolute; top: 4px; left: 4px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; }
+.pf-t:hover .pf-mv, .pf-t:focus-within .pf-mv { opacity: 1; }
+@media (hover: none) { .pf-mv { opacity: 1; } }
+.pf-mv button { width: 28px; height: 28px; border-radius: 99px; border: 0; background: rgba(255,255,255,.94); color: #151414; font: 700 15px var(--ui); cursor: pointer; }
+.pf-mv button:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; opacity: 1; }
+#ctOv.perfilv :is(#ctPrev, #ctNext, #ctToday) { visibility: hidden; }
+/* plan M5 · U7: repetir una pieza */
+.pz-rep { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 10px; border: 1px dashed var(--hairline); border-radius: 12px; font-size: 12.5px; }
+.pz-rep label { display: inline-flex; align-items: center; gap: 6px; }
+/* plan M5 · U7: la selección múltiple de Programación */
+.ct-ck { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; cursor: pointer; }
+.ct-ck input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); cursor: pointer; }
+.ct-ck input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.ct-row.sel { box-shadow: 0 0 0 2px var(--ink); }
+.ct-selbar { position: sticky; top: 0; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--ink); color: var(--cream); }
+.ct-selbar .pz-btn, .ct-selbar .pz-lk { color: var(--cream); border-color: rgba(253,255,248,.4); }
+.ct-selbar .pz-btn.warn { border-color: #FF8A80; color: #FFB4AB; }
+.ct-selmv { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.ct-selbar .pz-sel { background: var(--cream); color: var(--ink); }
+body.dark .ct-selbar .pz-btn.warn { color: #8C1D18; border-color: #8C1D18; } body.dark .ct-selbar .pz-btn, body.dark .ct-selbar .pz-lk { border-color: rgba(21,20,20,.4); }

@@ -70,6 +70,13 @@ import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectu
 import { crearMetricas } from './contenido/metricas.mjs';
 import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
+import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
+import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
+import { crearMejorHora } from './contenido/mejor-hora.mjs';
+import { resumenAnaliticas } from './contenido/resumen-analiticas.mjs';
+import { crearBandeja } from './contenido/bandeja.mjs';
+import { informeDelMes } from './contenido/informe.mjs';
+import { crearProgramador } from './contenido/programador.mjs';
 import * as safety from './safety.mjs';
 import * as rel from './reliability.mjs';
 import * as telegram from './telegram.mjs';
@@ -150,6 +157,21 @@ const INDICADORES_META = [
   { id: 'meta_alcance', name: 'Alcance de los últimos 30 días', unit: '', better: 'up' },
 ];
 const meta = crearMeta({ dir: ANALITICAS_DIR });
+// plan M1 (6 oct 2026): la COLA que lleva lo aprobado al conductor (simulacro por defecto; Metricool en modo real) — contenido/programador.mjs
+const metricool = crearMetricool();
+const CONDUCTORES = {
+  simulacro: crearSimulacro({ archivo: path.join(ANALITICAS_DIR, 'simulacro.json') }),
+  metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg: async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(), cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json') }),
+  meta: crearConductorMeta(),
+};
+const contenidoModo = () => (['apagado', 'simulacro', 'real'].includes(cfg.contenido?.modo) ? cfg.contenido.modo : 'simulacro');
+const conductorActual = () => (contenidoModo() === 'real' ? CONDUCTORES[cfg.contenido?.conductor] || CONDUCTORES.metricool : CONDUCTORES.simulacro);
+const programador = crearProgramador({
+  almacen: contenido, archivo: path.join(ANALITICAS_DIR, 'cola.json'), conductor: conductorActual, modo: contenidoModo,
+  horasAntes: () => { const h = Number(cfg.contenido?.entregarHorasAntes); return Number.isFinite(h) && h >= 0 ? Math.min(h, 720) : 24; },
+  avisar: (t, o) => notice('contenido', t, o),
+  auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'contenido', ...a }) + '\n'); } catch {} },
+});
 const metricas = crearMetricas({
   meta, dir: ANALITICAS_DIR, avisar: (t, o) => notice('analiticas', t, o),
   alFotografiar: ({ serie, publicaciones }) => llevarIndicadoresMeta(serie, publicaciones), // cada foto buena pone al día los indicadores del dueño (si los tiene)
@@ -1513,7 +1535,23 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
   req.on('data', d => { size += d.length; if (size > limit) { if (s !== null) reject(Object.assign(new Error('request too large'), { status: 413 })); s = null; return; } if (s !== null) s += d; }); // over the limit: stop keeping it, drain the rest, answer 413
   req.on('end', () => { if (s === null) return; try { resolve(s ? JSON.parse(s) : {}); } catch { reject(Object.assign(new Error('the body is not valid JSON'), { status: 400 })); } });
 });
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, ajustes: () => ({ departamentos: CONTENIDO_DEPTS }) });
+// plan M3 (6 oct 2026): la mejor hora (Metricool o lo ya publicado) y Analíticas en palabras para los agentes
+const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALITICAS_DIR, 'mejores-horas.json') });
+// plan M4 (6 oct 2026): la bandeja de todas las redes (Metricool); los agentes redactan, el dueño envía
+const bandeja = crearBandeja({ metricool, archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o), injectionIn: safety.injectionIn });
+if (metricool.configurado()) { setInterval(() => bandeja.sincronizar().catch(e => console.warn('contenido: bandeja —', e.message)), 10 * 60e3); setTimeout(() => bandeja.sincronizar().catch(() => {}), 30e3); }
+// plan M5 · U10: el informe del mes, con los datos de la oficina; guardado como nota en <cerebro>/Agents Office/informes/ (no viaja)
+async function informeRedes(mes, { guardar = false } = {}) {
+  const [y, mm] = mes.split('-').map(Number), hasta = `${mes}-${String(new Date(y, mm, 0).getDate()).padStart(2, '0')}`;
+  const r = informeDelMes({ mes, piezas: contenido.listar({ desde: `${mes}-01`, hasta }), salidaDe: id => programador.salidaDe(id), analiticas: metricas.leer({ dias: 180 }), bandeja: bandeja.listar().items, hora: await mejorHora.horas(Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook']) });
+  if (!guardar) return r;
+  const dir = path.join(BRAIN, 'Agents Office', 'informes'); fs.mkdirSync(dir, { recursive: true });
+  const archivo = path.join(dir, `${mes} redes.md`); fs.writeFileSync(archivo, `---\ntipo: informe\nmes: ${mes}\ncreado: ${new Date().toISOString()}\n---\n${r.texto}`);
+  return { ...r, nota: path.relative(BRAIN, archivo).replace(/\\/g, '/') };
+}
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja, informe: informeRedes,
+  analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
+setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
@@ -1831,6 +1869,12 @@ function officeStatus() {
     else if (m.error || faltan.length) add('redes', 'Redes (Meta)', 'warn', m.error || `Al token le faltan permisos: ${faltan.join(', ')}.`, 'Genera el token de nuevo en Business Manager con esos permisos.');
     else if (viejaMs !== null && viejaMs > 3 * day) add('redes', 'Redes (Meta)', 'warn', `La última foto de métricas es de ${foto}.`, 'Abre Analíticas (R) → «Actualizar ahora»; si falla, el motivo sale ahí.');
     else add('redes', 'Redes (Meta)', 'ok', `${m.cuentas.length} cuenta(s) conectada(s)${foto ? `; última foto de ${foto}` : '; todavía sin foto (se hace desde las 6:00)'}.`); }
+  // plan M1 (6 oct 2026): la publicación — el modo, el conductor y lo que falló
+  { const c = programador.estado(), fal = (c.cuenta.fallo || 0) + (c.cuenta.parcial || 0);
+    if (c.modo === 'apagado') add('publicacion', 'Publicación (Contenido)', 'info', 'Apagada: nada de lo que apruebas sale de la oficina.', 'Ajustes → Contenido → «Qué pasa con lo que apruebas».');
+    else if (c.modo === 'simulacro') add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'info', `Simulacro: lo aprobado «sale» de mentira${c.cuenta.en_red ? ` (${c.cuenta.en_red} en espera de su hora)` : ''}.`, 'Para publicar de verdad: Ajustes → Contenido → Real, con la key de Metricool.');
+    else if (!c.conductor.ok) add('publicacion', 'Publicación (Contenido)', 'bad', c.conductor.motivo, 'Pon la key y abre Contenido → Programación → «Comprobar de nuevo».');
+    else add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'ok', fal ? `${fal} pieza(s) no salieron bien: míralas en Contenido → Programación.` : `Publica ${c.conductor.nombre}: ${c.cuenta.en_red || 0} programada(s), ${c.cuenta.espera || 0} en cola.`); }
   // backup
   let lastB = null; try { lastB = fs.readdirSync(path.join(DATA, 'backups')).filter(f => /^tasks-/.test(f)).sort().pop(); } catch {}
   add('respaldo', 'Copia diaria', lastB ? 'ok' : 'info', lastB ? `Última copia: ${lastB.slice(6, 16)} (14 días en data/backups).` : 'Aún no hay copia (se hace al tener tareas).');

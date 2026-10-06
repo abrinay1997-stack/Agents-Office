@@ -24,10 +24,12 @@ import * as VC from './studio-clonar.js'; // 1 Oct 2026 (audit EST): cloning a v
 // (INF-09: the page's budget): dist/estudio-extra.js comes the first time the Studio shows the image composer (its Presets step), or the
 // bank, the 3D stage or Lotes is asked for — never with the office alone. Until then a stand-in with the same face
 // (src/estudio-carga.js) says «Cargando…», or why it failed with «Reintentar»
+import { initPaneles } from './studio-paneles.js';
 import { bancoDiferido as initBanco, lotesDiferidos as initLotes } from './estudio-carga.js';
 const LBL = { seed: 'Semilla (vacía = al azar; un número repite el resultado)', aspectRatio: 'Formato', resolution: 'Resolución', duration: 'Duración (segundos)', batchSize: 'Imágenes por pedido', enhancePrompt: 'Que el motor mejore el prompt', sound: 'Con sonido', cfgScale: 'Fidelidad al prompt', multiShots: 'Varias tomas', generateAudio: 'Con audio', outputFormat: 'Archivo', quality: 'Calidad', keepOriginalSound: 'Mantener el sonido del video', characterOrientation: 'Orientación del personaje',
   imageSize: 'Tamaño', mode: 'Modo', renderingSpeed: 'Velocidad', promptOptimizer: 'Que el motor mejore el prompt', promptExtend: 'Que el motor amplíe el prompt', cameraMovement: 'Movimiento de cámara', fps: 'Cuadros por segundo', genre: 'Género', era: 'Época', light: 'Luz', pacing: 'Ritmo', cameraModel: 'Cámara', cameraLens: 'Lente', cameraAperture: 'Apertura', colorPalette: 'Paleta de color', bitrateMode: 'Calidad del archivo',
   voiceId: 'Voz', emotion: 'Emoción', speed: 'Velocidad', vol: 'Volumen', pitch: 'Tono', format: 'Archivo', languageBoost: 'Reforzar el idioma', instrumental: 'Instrumental (sin voz)', sampleRate: 'Frecuencia de muestreo', bitrate: 'Calidad (bitrate)', channel: 'Canales', style: 'Estilo de la música', promptExpansion: 'Que el motor amplíe el prompt' }; // V5.0: MiniMax's voice and music // V4.4: the settings Higgsfield's own schemas bring
+const CALIDAD = ['imageSize', 'resolution', 'quality', 'renderingSpeed']; // 6 Oct 2026: shown as buttons for a picture
 const VAL = { '': 'El motor decide', auto: 'Auto', adaptive: 'Se adapta', low: 'Baja', medium: 'Media', high: 'Alta', xhigh: 'Muy alta', max: 'Máxima', standard: 'Estándar', video: 'la del video', image: 'la de la imagen', std: 'Estándar', pro: 'Pro', '4k': '4K', TURBO: 'Rápida', DEFAULT: 'Normal', QUALITY: 'Máxima calidad',
   epic: 'Épico', drama: 'Drama', noir: 'Noir', comedy: 'Comedia', horror: 'Terror', action: 'Acción', calm: 'Calmado', dynamic: 'Dinámico', chaotic: 'Caótico', 'single-shot': 'Un solo plano', static: 'Fija', dolly_in: 'Acercarse', dolly_out: 'Alejarse', dolly_left: 'A la izquierda', dolly_right: 'A la derecha', jib_up: 'Subir', jib_down: 'Bajar', focus_shift: 'Cambio de foco',
   happy: 'Alegre', sad: 'Triste', angry: 'Enfadada', fearful: 'Con miedo', disgusted: 'Con asco', surprised: 'Sorprendida', neutral: 'Neutra', fluent: 'Fluida', whisper: 'Susurro', mp3: 'MP3', wav: 'WAV', flac: 'FLAC', pcm: 'PCM', Spanish: 'Español', English: 'Inglés', Portuguese: 'Portugués', French: 'Francés', Italian: 'Italiano', German: 'Alemán' }; // V5.0
@@ -89,8 +91,7 @@ export function initStudio(ctx) {
               <div class="st-es" hidden><b>En español:</b> <span></span></div>
               <div class="st-sug" hidden role="status"><b>Propuesta:</b> <span class="st-sugt"></span><span class="st-sugb"><button type="button" data-sug="usar" class="pri">Usar esta</button><button type="button" data-sug="no">Seguir con la mía</button></span></div></div></div>
           <div class="st-step st-matstep"><div class="st-h"><b>4</b> <span class="st-mt">Material de partida</span> <span class="st-hn">opcional</span></div><div class="st-slots"></div></div>
-          <div class="st-step st-bchips" role="group" aria-label="Formato y cantidad"><label class="st-lab">Formato<select class="st-arsel" data-set="aspectRatio"></select></label><label class="st-lab">Cantidad<select class="st-qsel"></select></label></div>
-          <div class="st-step st-s5"><div class="st-h"><b class="st-n5">5</b> <span class="st-s5t">Formato y ajustes</span></div><div class="st-ratios"></div><div class="st-sets"></div>
+          <div class="st-step st-s5"><div class="st-h"><b class="st-n5">5</b> <span class="st-s5t">Formato y ajustes</span></div><div class="st-ratios"></div><div class="st-sets"></div><div class="st-bchips" role="group" aria-label="Cantidad"><div class="st-lab" id="stQnL">Cantidad</div><div class="st-qch st-qn" role="radiogroup" aria-labelledby="stQnL"></div></div>
             <details class="st-more"><summary>Más ajustes</summary><div class="st-sets2"></div></details>
             <div class="st-plant" role="group" aria-label="Plantillas"><label class="st-lab">Plantilla<select class="st-plsel"></select></label><button type="button" class="st-plsave" title="Guarda el modelo, el formato y los ajustes, la cantidad, la idea y las imágenes de referencia como una plantilla (una nota del Cerebro)">Guardar como plantilla…</button><button type="button" class="st-pldel" hidden data-tip="Borrar la plantilla elegida" aria-label="Borrar la plantilla elegida">${svg('trash')}</button>
               <div class="st-plform" hidden><input type="text" class="st-plname" maxlength="48" aria-label="Nombre de la plantilla" placeholder="Nombre, p. ej. Catálogo 4:5"><button type="button" class="st-plok pri">Guardar</button><button type="button" class="st-plno">Cancelar</button></div></div></div>
@@ -220,6 +221,7 @@ export function initStudio(ctx) {
   // IMG-42 (6 Oct 2026): with room, the bank's sheet is a panel beside the gallery, not over it — the class says when it is open
   $('.st-plname').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); guardarPlantilla(e.target.value); } if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); $('.st-plform').hidden = true; $('.st-plsave').focus(); } }); // IMG-46
   new MutationObserver(() => el.classList.toggle('st-hoja', !!el.querySelector('.st-gal > .st-bank:not([hidden])'))).observe($('.st-gal'), { attributes: true, attributeFilter: ['hidden'], subtree: true, childList: true });
+  initPaneles({ el, store }); // 6 Oct 2026 (the owner): both side panels widen by dragging their edge; the right one hides or fills the window
   /* ---------- lotes (F2, §6 y §7.4): many photos with the same recipe, in their own tab. Nothing is spent until PROBAR or GENERAR there ---------- */
   const esImg = f => /\.(png|jpe?g|webp)$/i.test(String(f));
   lotesUI = initLotes($('.st-lotes'), { esc, api, say, live: () => isLive() && location.protocol.startsWith('http'), src: f => src(f),
@@ -363,16 +365,17 @@ export function initStudio(ctx) {
     const COMUNES = ['1:1', '4:5', '9:16', '16:9'], cur_ = String(s.aspectRatio), raro = v => !COMUNES.includes(v) && v !== cur_; // IMG-33 (6 Oct 2026): four formats in sight, the rest under «Más formatos»
     const nRaros = ratio ? ratio.values.filter(raro).length : 0;
     $('.st-ratios').innerHTML = ratio ? `<div class="st-lab">Formato</div><div class="st-ars${verMasFormatos ? ' ver-mas' : ''}" role="radiogroup" aria-label="Formato">${ratio.values.map(v => { const [w, h] = /^\d+:\d+$/.test(v) ? v.split(':').map(Number) : [1, 1]; const k = Math.min(26 / Math.max(w, h), 26); return `<button type="button" role="radio" class="st-ar${String(s.aspectRatio) === v ? ' on' : ''}${raro(v) ? ' st-ar-mas' : ''}" data-ar="${esc(v)}" aria-checked="${String(s.aspectRatio) === v}" tabindex="${String(s.aspectRatio) === v ? 0 : -1}" title="${esc(!/^\d+:\d+$/.test(v) ? 'El motor elige' : `${v} · ${RATIO_USE[v] || ''}`)}"><i style="width:${Math.round(w * k)}px;height:${Math.round(h * k)}px"></i><b>${esc(v === 'auto' ? 'Auto' : v)}</b><small>${esc(RATIO_WORD[v] || '')}</small></button>`; }).join('')}</div>${nRaros ? `<button type="button" class="st-armas" aria-expanded="${verMasFormatos}">${verMasFormatos ? 'Menos formatos' : `Más formatos (${nRaros})`}</button>` : ''}` : '';
-    const sel_ = $('.st-arsel'); sel_.closest('label').hidden = !ratio; if (ratio) { sel_.innerHTML = ratio.values.map(v => `<option value="${esc(v)}"${String(s.aspectRatio) === v ? ' selected' : ''}>${esc(v === 'auto' ? 'Auto' : v)}${RATIO_WORD[v] ? ' · ' + esc(RATIO_WORD[v]) : ''}</option>`).join(''); } // IMG-32: Básico's format is one select
     $('.st-matstep').classList.toggle('st-vacio', !Object.values(media).some(l => l.length) && !(m.needs || []).length); // Básico shows the references only once there is one
     const ctl = ([k, f]) => {
+      // 6 Oct 2026 (the owner): the quality of a picture as buttons in sight, like the format — not a menu (Básico and Avanzado)
+      if (f.type === 'enum' && kind === 'image' && CALIDAD.includes(k) && f.values.length <= 6) { const on = String(s[k]); return `<div class="st-qgrp"><div class="st-lab" id="stQ${k}">${LBL[k] || k}</div><div class="st-qch" role="radiogroup" aria-labelledby="stQ${k}">${f.values.map(v => `<button type="button" role="radio" class="st-qc${on === v ? ' on' : ''}" data-qset="${k}" data-v="${esc(v)}" aria-checked="${on === v}" tabindex="${on === v ? 0 : -1}">${esc(VAL[v] || v)}</button>`).join('')}</div></div>`; }
       if (f.type === 'enum') return `<label class="st-lab">${LBL[k] || k}<select data-set="${k}">${f.values.map(v => `<option value="${esc(v)}"${String(s[k]) === v ? ' selected' : ''}>${esc(VAL[v] || v)}</option>`).join('')}</select></label>`;
       if (f.type === 'text') return k === 'voiceId' ? voicePicker(f, s[k]) : `<label class="st-lab">${LBL[k] || k}<input type="text" data-set="${k}" value="${esc(s[k] ?? '')}" maxlength="${+f.max || 2000}" placeholder="${esc(f.placeholder || '')}"${k === 'seed' ? ' inputmode="numeric" pattern="[0-9]*"' : ''} autocomplete="off"></label>`; // V5.0
       if (f.type === 'range') return `<label class="st-lab st-range">${LBL[k] || k} <output>${s[k]}${k === 'duration' ? ' s' : ''}</output><input type="range" data-set="${k}" min="${f.min}" max="${f.max}" step="${f.step || 1}" value="${s[k]}"></label>`;
       return `<label class="st-tog"><input type="checkbox" data-set="${k}"${s[k] ? ' checked' : ''}><span>${LBL[k] || k}</span></label>`;
     };
     const SOUND_MORE = ['languageBoost', 'sampleRate', 'bitrate', 'channel']; // V5.0: a voice's picker, emotion, speed, volume, pitch and file in sight; the rest folded
-    const isMain = k => (sound() ? k !== 'aspectRatio' && !SOUND_MORE.includes(k) : k === 'duration' || k === 'resolution');
+    const isMain = k => (sound() ? k !== 'aspectRatio' && !SOUND_MORE.includes(k) : k === 'duration' || k === 'resolution' || (kind === 'image' && CALIDAD.includes(k)));
     const main = ent.filter(([k]) => isMain(k)), rest = ent.filter(([k]) => k !== 'aspectRatio' && !isMain(k));
     $('.st-sets').innerHTML = main.map(ctl).join('');
     $('.st-sets2').innerHTML = rest.map(ctl).join('');
@@ -425,7 +428,7 @@ export function initStudio(ctx) {
     pl.title = len > lim ? `Sobran ${len - lim} caracteres` : sound() ? `Caben ${SV.num(lim)} caracteres` : '';
     const bc = $('.st-bcount'); bc.hidden = mode !== 'batch'; if (mode === 'batch') { const nl = lines().length; bc.textContent = nl ? `${nl} ${nl === 1 ? 'idea' : 'ideas'} × ${qty} = ${SV.countOf(kind, nl * qty * per)}` : 'Escribe una idea por línea.'; }
     const maxQ = SV.maxQty(kind, budget && budget.maxPerRequest); // V4.2 (audit A12): the ends say why they stop
-    { const qs = $('.st-qsel'), ops = [...new Set([1, 2, 4, qty])].filter(n => n <= maxQ || n === qty).sort((a, b) => a - b); const h = ops.map(n => `<option value="${n}"${n === qty ? ' selected' : ''}>${n}</option>`).join(''); if (qs.innerHTML !== h) qs.innerHTML = h; qs.value = String(qty); } // IMG-37: 1 · 2 · 4
+    { const qs = $('.st-qn'), ops = [...new Set([1, 2, 4, qty])].filter(n => n <= maxQ || n === qty).sort((a, b) => a - b); const h = ops.map(n => `<button type="button" role="radio" class="st-qc${n === qty ? ' on' : ''}" data-qty="${n}" aria-checked="${n === qty}" tabindex="${n === qty ? 0 : -1}">${n}</button>`).join(''); if (qs.innerHTML !== h) qs.innerHTML = h; } // 6 Oct 2026: buttons, not a menu // IMG-37: 1 · 2 · 4
     const [dn, up] = el.querySelectorAll('.st-qty [data-d]'); dn.disabled = qty <= 1; up.disabled = qty >= maxQ; up.title = qty >= maxQ ? `Máximo ${maxQ} por pedido${kind === 'video' ? ' (un video pesa como 5 imágenes)' : kind === 'music' ? ' (una pista pesa como 3 imágenes)' : ''}` : 'Más';
     return cost;
   }
@@ -483,10 +486,13 @@ export function initStudio(ctx) {
     return { calendario: !!ctx.toCalendar, dimitri: !!ctx.askDimitri, tarea: !!(it.task && ctx.openTask), preset: !!(it.receta || it.preset), voz: !!(cap && cap.badge === 'VOZ'), precioVariar: pv && pv.modelo ? price(pv.modelo) : '' };
   }
   const hid = s => { let h = 0; for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); }; // a stable id: the card's html stays the same between refreshes
-  function menuHTML(it, ac) { // IMG-09 · IMG-48: «⋯» by groups — create from it, organise, send to (the office), and the bin last
-    const item = x => x.id === 'dl' ? '' : `<button type="button" role="menuitem" tabindex="-1" data-a="${x.id}"${x.id === 'del' ? ' class="warn"' : ''} title="${esc(x.title)}">${svg(x.icon, x.id === 'fav' && it.fav ? 'fill' : '')}<span>${esc(x.label)}</span></button>`;
+  function menuHTML(it, ac) { // IMG-09 · IMG-48: «⋯» by groups — create from it, organise, send to (the office); what the row already shows is not repeated
+    const enFila = new Set((ac.fila || []).map(x => x.id));
+    const item = x => x.id === 'dl' || enFila.has(x.id) ? '' : `<button type="button" role="menuitem" tabindex="-1" data-a="${x.id}"${x.id === 'del' ? ' class="warn"' : ''} title="${esc(x.title)}">${svg(x.icon, x.id === 'fav' && it.fav ? 'fill' : '')}<span>${esc(x.label)}</span></button>`;
     const k = hid(it.file);
-    return `<div class="st-menu" role="menu" hidden>${ac.grupos.map(g => `<div role="group" aria-labelledby="m${k}${g.id}"><div class="st-mh" id="m${k}${g.id}">${esc(g.titulo)}</div>${g.items.map(item).join('')}</div>`).join('')}<div class="st-msep" role="separator"></div>${item(ac.borrar)}</div>`;
+    const gs = ac.grupos.map(g => ({ ...g, items: g.items.filter(x => !enFila.has(x.id)) })).filter(g => g.items.length);
+    const del = item(ac.borrar);
+    return `<div class="st-menu" role="menu" hidden>${gs.map(g => `<div role="group" aria-labelledby="m${k}${g.id}"><div class="st-mh" id="m${k}${g.id}">${esc(g.titulo)}</div>${g.items.map(item).join('')}</div>`).join('')}${del ? `<div class="st-msep" role="separator"></div>${del}` : ''}</div>`;
   }
   /** One file's card. `sub`: inside a request's card (IMG-08), which already says the prompt, who and when. */
   function card(it, { sub = false } = {}) {
@@ -496,7 +502,8 @@ export function initStudio(ctx) {
     // light image swallowed it). IMG-09 (6 Oct 2026): the row is the file's primary actions (Editar, Variar, Descargar for a
     // picture) and «⋯» holds the rest by groups, from the same list as the viewer (src/studio-acciones.js).
     const ac = AC.acciones(it, capDe(it));
-    const row = ac.primarias.map(x => x.id === 'dl' ? `<a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar" data-tip="Descargar">${svg('down')}</a>`
+    const row = ac.fila.map(x => x.id === 'dl' ? `<a class="st-oi" href="${src(it)}" download="${esc(dlName(it))}" aria-label="Descargar: ${esc(label)}" title="Descargar" data-tip="Descargar">${svg('down')}</a>`
+      : x.icono ? `<button type="button" data-a="${x.id}" class="st-oi${x.id === 'del' ? ' st-oidel' : ''}" aria-label="${esc(x.label)}: ${esc(label)}" title="${esc(x.title)}" data-tip="${esc(x.corto)}">${svg(x.icon)}</button>`
       : `<button type="button" data-a="${x.id}" class="st-oi st-oiw" aria-label="${esc(x.label)}: ${esc(label)}" title="${esc(x.title)}">${svg(x.icon)}<span class="st-oit">${esc(x.corto)}</span></button>`).join('');
     return `<figure class="st-card${on ? ' sel' : ''}${sub ? ' st-sub' : ''}${nuevos.has(it.file) ? ' st-nueva' : ''}" data-f="${esc(it.file)}" draggable="true">
       ${nuevos.has(it.file) ? '<span class="st-nuevo" aria-hidden="true">NUEVO</span>' : ''}
@@ -1784,6 +1791,8 @@ export function initStudio(ctx) {
     }
     const sg = e.target.closest('[data-sug]'); if (sg) { const S_ = $('.st-sug'); if (sg.dataset.sug === 'usar') { prevPrompt = $('.st-prompt').value; $('.st-prompt').value = S_.dataset.p || ''; $('.st-undo-enh').hidden = false; say('Usando la propuesta. «Volver al mío» lo deshace.'); if (aplicarAuto()) { renderPick(); renderModel(); } estimate(); } S_.hidden = true; $('.st-prompt').focus(); return; } // IMG-35
     const arb = e.target.closest('[data-ar]'); if (arb) { setSetting('aspectRatio', arb.dataset.ar); renderModel(); return; }
+    const qcb = e.target.closest('[data-qset]'); if (qcb) { setSetting(qcb.dataset.qset, qcb.dataset.v); renderModel(); el.querySelector(`[data-qset="${qcb.dataset.qset}"][data-v="${CSS.escape(qcb.dataset.v)}"]`)?.focus(); return; }
+    const qnb = e.target.closest('[data-qty]'); if (qnb) { qty = +qnb.dataset.qty || 1; estimate(); el.querySelector(`[data-qty="${qty}"]`)?.focus(); return; }
     if (e.target.closest('.st-fold')) { el.classList.add('st-folded'); store.set('fold', true); relayout(); $('.st-unfold').focus(); return; }
     if (e.target.closest('.st-unfold')) { el.classList.remove('st-folded'); store.set('fold', false); relayout(); $('.st-prompt').focus(); return; }
     if (e.target.closest('.st-open-engs, .st-engbtn')) { cerrarMas(); openEngs(); return; } // IMG-50: the engines, in their own panel (they were at the bottom of the composer)
@@ -1917,7 +1926,6 @@ export function initStudio(ctx) {
   el.addEventListener('change', e => {
     if (e.target.classList.contains('st-lang')) { store.set('lang', e.target.value); return; }
     if (e.target.classList.contains('st-fsel')) { filter = e.target.value; requery(); return; } // IMG-23
-    if (e.target.classList.contains('st-qsel')) { qty = +e.target.value || 1; estimate(); return; } // IMG-37
     if (e.target.classList.contains('st-plsel')) { const p = plantillasL.find(x => x.id === e.target.value); $('.st-pldel').hidden = !p; if (p) aplicarPlantilla(p); return; } // IMG-46
 
     if (e.target.classList.contains('st-file')) { const fs = [...e.target.files]; e.target.value = ''; e.target.accept = 'image/png,image/jpeg,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,audio/mp4,audio/x-m4a,.m4a'; uploadFiles(fs, uploadRole); uploadRole = null; return; }
@@ -1927,7 +1935,6 @@ export function initStudio(ctx) {
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); if (k === 'instrumental') paintStep3(); if (k === 'aspectRatio') renderModel(); else estimate(); }
   });
   el.addEventListener('input', e => {
-    if (e.target.classList.contains('st-qsel')) { qty = +e.target.value || 1; estimate(); return; } // IMG-37: before estimate() paints the select again
     if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (kind === 'image' && e.target.value === '/') { e.target.value = ''; setNivel('avanzado'); banco.abrir('banco'); return; } if (bancoManda()) banco.replan(); if (aplicarAuto()) { renderPick(); renderModel(); } } // «/» at the start opens the bank (§7.1); the idea goes into its plan
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value + (e.target.dataset.set === 'duration' ? ' s' : ''); setSetting(e.target.dataset.set, +e.target.value); }
@@ -1983,6 +1990,8 @@ export function initStudio(ctx) {
       if (e.key === 'Escape' || e.key === 'Tab') { if (e.key === 'Escape') e.preventDefault(); closeMenus(); btn?.focus(); if (e.key === 'Escape') return; }
     }
     const arg = e.target.closest && e.target.closest('.st-ars'); // IMG-28: the formats are one stop for Tab; the arrows move and choose
+    const qg = e.target.closest && e.target.closest('.st-qch'); // 6 Oct 2026: quality and quantity buttons, one Tab stop, the arrows choose
+    if (qg && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const bs = [...qg.querySelectorAll('button')], i = bs.indexOf(e.target.closest('button')); const n = e.key === 'Home' ? 0 : e.key === 'End' ? bs.length - 1 : (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; bs[n].click(); return; }
     if (arg && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { e.preventDefault(); const bs = [...arg.querySelectorAll('[data-ar]')].filter(b => b.offsetParent), i = bs.indexOf(e.target.closest('[data-ar]')); const n = e.key === 'Home' ? 0 : e.key === 'End' ? bs.length - 1 : (i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + bs.length) % bs.length; setSetting('aspectRatio', bs[n].dataset.ar); renderModel(); el.querySelector(`.st-ars [data-ar="${CSS.escape(bs[n].dataset.ar)}"]`)?.focus(); return; }
     const inList = e.target.closest && e.target.closest('.st-mlist');
     if (inList && e.target.tagName !== 'SELECT' && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) { // V4.2 (audit A7): the model list moves with the arrows, like a real list

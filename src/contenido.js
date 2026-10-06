@@ -12,12 +12,15 @@
 //   initContenido({ served, esc, agentName, openStudio, business }) → { open, close, toggle, isOpen, openPiece(id), refresh, week(range) }
 import { modal } from './modal.js';
 import { views } from './views.js';
-import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, DOW_LONG } from './calendar-core.js';
+import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, DOW_LONG, dateOpts } from './calendar-core.js';
 import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
-import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover } from './contenido-cola.js';
-import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem } from './contenido-reglas.js';
+import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida } from './contenido-cola.js';
+import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS } from './contenido-reglas.js';
+import { nivel as nivelHora, FUENTE as FUENTE_HORA } from './contenido-hora.js';
+import { initBandeja } from './contenido-bandeja.js';
+import { casillas, intercambio, perfilHTML } from './contenido-perfil.js';
 import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
@@ -35,9 +38,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <div class="cv-brand">CONTENIDO <small id="ctCo"></small></div>
       <div class="ct-create"><button type="button" class="ct-new" id="ctNew" aria-haspopup="true" aria-expanded="false" aria-label="Crear una pieza" title="Crear una pieza">+<span class="ct-newt"> Crear</span></button>
         <div class="ct-newmenu" role="menu" aria-label="Qué crear" hidden>${Object.entries(FORMATO).map(([k, l]) => `<button type="button" role="menuitem" data-newf="${k}">${FICON[k]}${l}</button>`).join('')}<p class="ct-newhint">Se abre con el siguiente hueco libre y las dos redes.</p></div></div>
-      <div class="cv-seg ct-mode" role="group" aria-label="Qué ver"><button type="button" data-m="cal" aria-pressed="true">CALENDARIO</button><button type="button" data-m="prog" aria-pressed="false">PROGRAMACIÓN<b class="ct-n" hidden></b></button></div>
-      <div class="cv-seg ct-views" role="group" aria-label="Vista del calendario"><button type="button" data-v="agenda">AGENDA</button><button type="button" data-v="day">DÍA</button><button type="button" data-v="week">SEMANA</button><button type="button" data-v="month" class="on">MES</button></div>
-      <div class="cv-nav"><button id="ctPrev" type="button" aria-label="Anterior" title="anterior (←)">‹</button><div id="ctTitle"></div><button id="ctNext" type="button" aria-label="Siguiente" title="siguiente (→)">›</button><button id="ctToday" type="button" title="hoy (T)">HOY</button><select class="ct-vsel" aria-label="Vista del calendario"><option value="agenda">Agenda</option><option value="day">Día</option><option value="week">Semana</option><option value="month">Mes</option></select></div>
+      <div class="cv-seg ct-mode" role="group" aria-label="Qué ver"><button type="button" data-m="cal" aria-pressed="true">CALENDARIO</button><button type="button" data-m="prog" aria-pressed="false"><span class="ct-ml">PROGRAMACIÓN</span><span class="ct-ms">COLA</span><b class="ct-n" hidden></b></button><button type="button" data-m="bandeja" aria-pressed="false">BANDEJA<b class="ct-n ct-nbj" hidden></b></button></div>
+      <div class="cv-seg ct-views" role="group" aria-label="Vista del calendario"><button type="button" data-v="agenda">AGENDA</button><button type="button" data-v="day">DÍA</button><button type="button" data-v="week">SEMANA</button><button type="button" data-v="month" class="on">MES</button><button type="button" data-v="perfil" title="Así queda tu perfil de Instagram">PERFIL</button></div>
+      <div class="cv-nav"><button id="ctPrev" type="button" aria-label="Anterior" title="anterior (←)">‹</button><div id="ctTitle"></div><button id="ctNext" type="button" aria-label="Siguiente" title="siguiente (→)">›</button><button id="ctToday" type="button" title="hoy (T)">HOY</button><select class="ct-vsel" aria-label="Vista del calendario"><option value="agenda">Agenda</option><option value="day">Día</option><option value="week">Semana</option><option value="month">Mes</option><option value="perfil">Perfil de Instagram</option></select></div>
       <div class="cv-sp"></div>
       <button id="ctKeys" type="button" aria-label="Atajos" title="atajos (?)">?</button>
       <button id="ctClose" type="button" aria-label="Cerrar Contenido" title="cerrar (Esc · K)">✕</button>
@@ -50,17 +53,35 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <aside class="cv-rail" aria-label="Ideas sin día"><div class="ct-rail"></div></aside>
       <div class="cv-wrap"><div class="cv-dow" id="ctDow"></div><div class="cv-grid month" id="ctGrid"></div></div>
       <div class="ct-prog" hidden></div>
+      <div class="ct-bj" hidden></div>
       <aside class="ct-panel" hidden></aside>
     </div>
     <div class="cv-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <div id="ctPop" hidden></div>`;
   document.body.appendChild(ov);
   const $ = s => ov.querySelector(s);
-  const E = { title: $('#ctTitle'), dow: $('#ctDow'), grid: $('#ctGrid'), chips: $('#ctChips'), stats: $('#ctStats'), search: $('#ctSearch'), rail: $('.ct-rail'), railBox: $('.cv-rail'), prog: $('.ct-prog'), wrap: $('.cv-wrap'), panelHost: $('.ct-panel'), pop: $('#ctPop'), toast: $('.cv-toast'), views: $('.ct-views'), mode: $('.ct-mode'), newBtn: $('#ctNew'), newMenu: $('.ct-newmenu') };
+  const E = { bj: $('.ct-bj'), title: $('#ctTitle'), dow: $('#ctDow'), grid: $('#ctGrid'), chips: $('#ctChips'), stats: $('#ctStats'), search: $('#ctSearch'), rail: $('.ct-rail'), railBox: $('.cv-rail'), prog: $('.ct-prog'), wrap: $('.cv-wrap'), panelHost: $('.ct-panel'), pop: $('#ctPop'), toast: $('.cv-toast'), views: $('.ct-views'), mode: $('.ct-mode'), newBtn: $('#ctNew'), newMenu: $('.ct-newmenu') };
   const narrow = () => matchMedia('(max-width: 760px)').matches;
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it), as in the tasks calendar
+  let colaInfo = null; // M1: el modo y el conductor (GET /api/contenido/cola)
   let openNow = false, mode = 'cal', view = 'month', anchor = startOfDay(Date.now()), q = '', pieces = [], cola = [], resumen = null, loadedKey = '', errorMsg = '', timer = null, opener = null, dnd = null, lastGrid = '', lastProg = '';
+  // plan M5 · U7: selección múltiple en Programación — aprobar, pasar a revisión, mover de día o a la papelera, varias de una vez
+  const selP = new Set();
+  const selBarHTML = () => { const ids = [...selP].filter(id => todasConocidas().some(p => p.id === id)); if (!ids.length) return '';
+    return `<div class="ct-selbar" role="toolbar" aria-label="Con las seleccionadas"><b>${ids.length} ${ids.length === 1 ? 'seleccionada' : 'seleccionadas'}</b><button type="button" class="pz-btn" data-selacc="aprobar">Aprobar las que pueden salir</button><button type="button" class="pz-btn" data-selacc="revision">Pasar a revisión</button><label class="ct-selmv">Mover al <select class="pz-sel" data-selmover><option value="">elige un día…</option>${dateOpts('')}</select></label><button type="button" class="pz-btn warn" data-selacc="borrar">A la papelera</button><button type="button" class="pz-lk" data-selacc="ninguna">Ninguna</button></div>`; };
   let estadoOn = new Set(store.get('estados', ORDEN)), redOn = new Set(store.get('redes', Object.keys(RED)));
+  // M2 (6 oct 2026): las redes que usa el negocio (Ajustes → Contenido), más las que ya tenga alguna pieza: solo esas salen en los filtros y en el resumen
+  let redesNegocio = ['instagram', 'facebook'];
+  // plan M3: la mejor hora de las redes a la vista (Metricool o lo ya publicado), para sombrear la semana y sugerir en el panel
+  const horas = new Map(); let horaInfo = null;
+  async function mejorHora(redes) {
+    const k = [...redes].sort().join(','), c = horas.get(k);
+    if (c && Date.now() - c.t < 10 * 60e3) return c.v;
+    const v = await datos.mejorHora(redes).catch(() => null); horas.set(k, { t: Date.now(), v }); return v;
+  }
+  async function loadHora() { const v = await mejorHora(redesUsadas().filter(r => redOn.has(r))); if (JSON.stringify(v?.grid) !== JSON.stringify(horaInfo?.grid)) { horaInfo = v; if (view !== 'month' && view !== 'agenda' && mode !== 'prog') render(); } }
+  const fuenteHora = v => (v?.fuente === 'ejemplo' ? 'de ejemplo' : FUENTE_HORA[v?.fuente] || 'según Metricool y lo ya publicado');
+  const redesUsadas = () => { const u = new Set(redesNegocio); for (const p of todasConocidas()) for (const r of p.redes) u.add(r); return Object.keys(RED).filter(r => u.has(r)); };
   const gone = new Set(); let undoT = null, commitFn = null, undoFn = null, noteT = null;
   const medidas = { ...DEMO_MEDIOS }; // lo que se sabe de cada archivo del Estudio (de /api/media al elegir): la vista previa y las reglas lo usan
   let cuentas = { empresa: '' };
@@ -95,18 +116,18 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
 
   /* ---------- cargar ---------- */
   const range = () => rangeOf(view, anchor, 1);
-  function want() { const r = range(); const a = new Date(r.from - 7 * DAY), b = new Date(r.to + 7 * DAY); return { desde: ymd(a), hasta: ymd(b) }; }
+  function want() { if (view === 'perfil') { const h = Date.now(); return { desde: ymd(new Date(h - 120 * DAY)), hasta: ymd(new Date(h + 120 * DAY)) }; } const r = range(); const a = new Date(r.from - 7 * DAY), b = new Date(r.to + 7 * DAY); return { desde: ymd(a), hasta: ymd(b) }; }
   const conMedidas = list => { for (const p of list) { if (p.medidas) Object.assign(medidas, p.medidas); p.medidas = { ...Object.fromEntries((p.medios || []).concat(p.historias || []).filter(m => medidas[m]).map(m => [m, medidas[m]])), ...(p.medidas || {}) }; } return list; };
   async function load(force = false) {
     const w = want(), key = `${w.desde}|${w.hasta}`;
     if (!force && key === loadedKey && pieces.length) { if (mode === 'prog') loadCola(); return; }
-    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; loadedKey = key; errorMsg = ''; }
+    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; loadedKey = key; errorMsg = ''; loadHora(); if (!bjCargada || mode === 'bandeja') { bjCargada = true; bj.load(); } }
     catch (e) { errorMsg = e.message || 'No pude leer las piezas'; }
     if (mode === 'prog' || force) await loadCola();
     if (openNow) render(); paintDock();
   }
   /** La cola tiene su propia carga: de hace 14 días (para ver lo vencido) en adelante, sin tope, más las ideas sin día. */
-  async function loadCola() { try { const r = await datos.list({ desde: ymd(new Date(Date.now() - 14 * DAY)), sinFecha: true }); cola = conMedidas(r.piezas || []); resumen = r.resumen || resumen; } catch (e) { errorMsg = e.message || 'No pude leer las piezas'; } }
+  async function loadCola() { try { colaInfo = await datos.cola(); } catch {} try { const r = await datos.list({ desde: ymd(new Date(Date.now() - 14 * DAY)), sinFecha: true }); cola = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; } catch (e) { errorMsg = e.message || 'No pude leer las piezas'; } }
   const todasConocidas = () => { const m = new Map(); for (const p of [...cola, ...pieces]) m.set(p.id, p); return [...m.values()]; };
 
   /* ---------- qué se ve ---------- */
@@ -122,7 +143,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const errN = p => (p.revision?.errores || []).length;
   const falta = p => errN(p) && p.estado !== 'idea';
   /** Lo que un lector de pantalla oye de una tarjeta: todo lo que el ojo ve de un vistazo. */
-  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) ? ', la hora ya pasó' : ''}`;
+  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) ? ', la hora ya pasó' : ''}`;
   function card(ev, line) {
     const p = ev.p, e = ESTADO[p.estado] || ESTADO.borrador, sel = panel.current()?.id === p.id;
     const cls = `cv-ev pz pz-${p.estado}${falta(p) ? ' pz-falta' : ''}${vencida(p) ? ' pz-venc' : ''}${sel ? ' sel' : ''}`;
@@ -138,22 +159,24 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
 
   function render() {
     if (dnd && dnd.dragging) return;
-    ov.classList.toggle('prog', mode === 'prog'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
+    ov.classList.toggle('prog', mode === 'prog' || mode === 'bandeja'); ov.classList.toggle('bj', mode === 'bandeja'); ov.classList.toggle('perfilv', mode === 'cal' && view === 'perfil'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
     E.mode.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mode));
-    E.views.hidden = mode !== 'cal'; E.wrap.hidden = mode !== 'cal'; E.prog.hidden = mode !== 'prog';
+    E.views.hidden = mode !== 'cal'; E.wrap.hidden = mode !== 'cal'; E.prog.hidden = mode !== 'prog'; E.bj.hidden = mode !== 'bandeja';
     E.views.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === view); b.setAttribute('aria-pressed', b.dataset.v === view); }); $('.ct-vsel').value = view;
     $('.cv-nav').style.visibility = mode === 'cal' ? 'visible' : 'hidden';
     const nP = resumen ? resumen.revisar : 0, nb = E.mode.querySelector('.ct-n'); nb.hidden = !nP; nb.textContent = nP; nb.setAttribute('aria-label', `${nP} por revisar`);
     renderChips(); renderRail();
     if (mode === 'prog') { renderProg(); return; }
+    if (mode === 'bandeja') { E.title.innerHTML = ''; return; } // plan M4: la bandeja se pinta sola (contenido-bandeja.js)
     const r = range(), by = eventsByDay(), grid = { from: r.from, days: r.days, by, card, addLabel };
     E.title.innerHTML = titleHTML(view, anchor, r);
     E.dow.hidden = view !== 'month'; E.dow.innerHTML = dowHTML(view, anchor, 1);
     E.grid.className = 'cv-grid ' + view; E.grid.style.setProperty('--rows', r.days / 7);
     let html;
     if (view === 'month') html = monthHTML({ ...grid, anchor });
+    else if (view === 'perfil') { E.grid.className = 'cv-grid perfil'; E.title.innerHTML = '<b>Perfil de Instagram</b>'; html = perfilHTML(casillas(todasConocidas().filter(visible), { hoy: ymd(new Date()) }), { esc, mediaUrl: id => (typeof id === 'string' && !id.startsWith('demo/') ? '/media/' + id.split('/').map(encodeURIComponent).join('/') : null), color: e => (ESTADO[e] || ESTADO.borrador).color }); } // plan M5 · U2
     else if (view === 'agenda') { E.grid.className = 'cv-grid agenda'; html = agendaHTML({ ...grid, emptyDay: 'Nada programado. Un buen hueco para publicar.', emptyAll: 'Nada en estos 14 días.' }); }
-    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', r.days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, live: ev => !ev.p.hora, liveLabel: 'SIN HORA' })}</div>`; }
+    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', r.days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, live: ev => !ev.p.hora, liveLabel: 'SIN HORA', slot: horaInfo?.grid ? (k, h) => ['', 'hb1', 'hb2'][nivelHora(horaInfo.grid, k, h)] : null })}</div>`; }
     const key = view + ':' + r.from; if (view !== 'month' && key === tgKey) tgScroll = E.grid.scrollTop;
     const out = errorMsg ? `<div class="cv-empty">${esc(errorMsg)}</div>` : html;
     // el sondeo cada 20 s repinta: si nada cambió no se toca la cuadrícula, y si cambió el foco vuelve a la misma tarjeta (CON-12)
@@ -173,12 +196,14 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     let n = 0; for (const k in by) n += by[k].length;
     const cuenta = ORDEN.map(s => [s, pieces.filter(p => p.estado === s && p.fecha && p.fecha >= ymd(new Date(r.from)) && p.fecha < ymd(new Date(r.to)) && visible(p)).length]).filter(([, c]) => c);
     E.stats.innerHTML = `<span><b>${n}</b> ${n === 1 ? 'pieza' : 'piezas'}</span>` + cuenta.map(([s, c]) => `<span class="pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}"><b>${c}</b> ${ESTADO[s].name.toLowerCase()}</span>`).join('');
+    // plan M3: la leyenda de las horas sombreadas va junto a las cifras (dentro de la cuadrícula se iba con el desplazamiento)
+    if (horaInfo?.grid && view !== 'month' && view !== 'agenda') E.stats.insertAdjacentHTML('afterbegin', `<span class="ct-hbleg"><i class="hb2" aria-hidden="true"></i>Mejores horas, ${esc(fuenteHora(horaInfo))} · <i class="hb1" aria-hidden="true"></i>buenas</span>`);
   }
   function renderChips() {
-    const off = ORDEN.length - estadoOn.size + Object.keys(RED).length - redOn.size;
+    const usadas = redesUsadas(), off = ORDEN.length - estadoOn.size + usadas.filter(r => !redOn.has(r)).length;
     $('[data-filters]').textContent = off ? `Filtros (${off})` : 'Filtros';
     E.chips.innerHTML = ORDEN.map(s => `<button type="button" class="cv-chip${estadoOn.has(s) ? ' on' : ''}" data-e="${s}" aria-pressed="${estadoOn.has(s)}" title="${esc(ESTADO[s].help)}"><i class="pz-cg pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}" aria-hidden="true">${ESTADO[s].glyph}</i>${ESTADO[s].name}</button>`).join('')
-      + '<span class="cv-sep"></span>' + Object.entries(RED).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${r.short}</b>${r.name}</button>`).join('');
+      + '<span class="cv-sep"></span>' + usadas.map(k => [k, RED[k]]).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${r.short}</b>${r.name}</button>`).join('');
   }
   function renderRail() {
     const sin = todasConocidas().filter(p => !p.fecha && visible(p));
@@ -192,17 +217,33 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   }
 
   /* ---------- Programación: la cola ---------- */
+  /* M1 (6 oct 2026): lo que pasó al entregarla — en cola, programada, publicada (con sus enlaces), falló — y lo que se puede hacer */
+  const SAL_COLOR = { espera: ['#2158CC', '#8FB0FF'], entregando: ['#2158CC', '#8FB0FF'], en_red: ['#13705A', '#4FD1A5'], publicada: ['#13705A', '#4FD1A5'], parcial: ['#B3261E', '#FFB4AB'], fallo: ['#B3261E', '#FFB4AB'] };
+  const SAL_GLYPH = { espera: '◷', entregando: '↗', en_red: '✓', publicada: '●', parcial: '!', fallo: '!' };
+  const SAL_BTN = { entregar: ['Entregar ya', 'Entregarla al conductor ahora (desde ese momento, cambiarla depende del conductor)'], quitar: ['Quitar de la cola', 'Le quita el OK y la retira del conductor si ya estaba allí'], reintentar: ['Reintentar', 'Volver a intentar entregarla'] };
+  const salidaBox = (p, sal) => `<div class="ct-salbox${sal.malo ? ' bad' : ''}"><span class="ct-saltxt">${esc(sal.texto)}</span>${sal.enlaces.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer">Ver en ${esc(l.red)}</a>`).join('')}${sal.acciones.map(a => `<button type="button" class="pz-lk${a === 'quitar' ? ' warn' : ''}" data-sal="${a}" data-id="${esc(p.id)}" title="${esc(SAL_BTN[a][1])}">${SAL_BTN[a][0]}</button>`).join('')}</div>`;
+  const bannerHTML = () => {
+    const c = colaInfo; if (!c) return '';
+    if (c.modo === 'demo') return '<div class="ct-banner" role="note"><span><b>Demo:</b> aquí no sale nada. En la oficina, lo que apruebas lo programa el simulacro o Metricool.</span></div>';
+    if (c.modo === 'apagado') return '<div class="ct-banner bad" role="note"><span><b>Publicación apagada:</b> nada sale de la oficina. Cámbialo en Ajustes → Contenido.</span></div>';
+    if (c.modo === 'simulacro') return '<div class="ct-banner" role="note"><span><b>Modo simulacro:</b> lo que apruebas «sale» de mentira, para probar todo el circuito sin tocar tus redes. Para publicar de verdad: Ajustes → Contenido → Real.</span><button type="button" class="pz-btn" data-comprobar>Comprobar Metricool</button></div>';
+    if (!c.conductor?.ok) return `<div class="ct-banner bad" role="alert"><span><b>No se puede publicar:</b> ${esc(c.conductor?.motivo || 'el conductor no está listo')}</span><button type="button" class="pz-btn" data-comprobar>Comprobar de nuevo</button></div>`;
+    return `<div class="ct-banner ok" role="note"><span><b>Publica ${esc(c.conductor.nombre)}</b>: lo que apruebas se le entrega ${c.horasAntes ? `${c.horasAntes} h antes de salir` : 'al aprobarlo'} y sale solo, con esta computadora apagada.${c.cuenta?.fallo ? ` <b>${c.cuenta.fallo} ${c.cuenta.fallo === 1 ? 'falló' : 'fallaron'}.</b>` : ''}</span><button type="button" class="pz-btn" data-comprobar>Comprobar conexión</button></div>`;
+  };
   const filaCola = (p, { accion = true, motivo = '' } = {}) => {
     const e = ESTADO[p.estado] || ESTADO.borrador, r = p.revision?.errores || [], m = p.fecha ? revisarMomento(p.fecha, p.hora) : null;
     const puede = !r.length && m && !m.errores.length;
     const cuando = p.fecha && p.hora ? `<span class="ct-cd${at(p) < Date.now() ? ' late' : ''}">${cuentaAtras(at(p))}</span>` : '';
-    return `<div class="ct-row" style="--chip:${e.color}">
+    const sal = textoSalida(p);
+    return `<div class="ct-row${sal ? ' con-salida' : ''}${selP.has(p.id) ? ' sel' : ''}" style="--chip:${e.color}">
+      <label class="ct-ck" title="Seleccionar para hacer algo con varias"><input type="checkbox" data-selp="${esc(p.id)}"${selP.has(p.id) ? ' checked' : ''} aria-label="Seleccionar: ${esc(titleOf(p))}"></label>
       <span class="ct-hour">${p.hora ? esc(p.hora) : p.fecha ? '<small>sin hora</small>' : '<small>sin día</small>'}</span>
       <button type="button" class="ct-open" data-open="${esc(p.id)}" aria-label="Abrir la pieza: ${esc(ariaOf(p))}">
         ${p.medios[0] ? thumbHTML(p.medios[0], esc, 'pz-rt') : `<span class="pz-rt none" aria-hidden="true">${FICON[p.formato] || ''}</span>`}
         <span class="ct-rm"><span class="ct-rt">${esc(titleOf(p))}</span><span class="ct-rs"><span class="pz-f">${FICON[p.formato] || ''}${esc(FORMATO[p.formato])}</span>${netBadges(p)}${cuando}${p.origen.startsWith('agente:') ? ` · <em>${esc(agentName(p.origen.slice(7)) || 'un agente')}</em>` : ''}</span>
         ${motivo ? `<span class="ct-rf">${esc(motivo)}</span>` : r.length && p.estado !== 'idea' ? `<span class="ct-rf">Le falta: ${esc(r[0])}${r.length > 1 ? ` (+${r.length - 1})` : ''}</span>` : p.cambiadaTrasAprobar ? '<span class="ct-rf">Cambió después de aprobarla: vuelve a aprobarla.</span>' : ''}</span></button>
-      <span class="ct-st pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}</span>
+      ${sal ? `<span class="ct-st pz-tone ct-sst ${sal.clave}" style="--c:${SAL_COLOR[sal.clave][0]};--cd:${SAL_COLOR[sal.clave][1]}"><i aria-hidden="true">${SAL_GLYPH[sal.clave]}</i> ${sal.etiqueta}</span>` : `<span class="ct-st pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}</span>`}
+      ${sal ? salidaBox(p, sal) : ''}
       ${accion && p.estado === 'revision' ? `<button type="button" class="pz-go sm${puede ? '' : ' locked'}" data-ok="${esc(p.id)}"${puede ? '' : ' aria-disabled="true"'} title="${puede ? 'Aprobarla' : 'Todavía no puede salir'}">${puede ? 'Aprobar' : '<span aria-hidden="true">🔒</span> Aprobar'}</button>` : ''}</div>`;
   };
   function renderProg() {
@@ -218,10 +259,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       ? `<section class="ct-day" aria-label="${esc(diaH(k).replace(/<[^>]+>/g, ''))}"><h4>${diaH(k)} <small>${l.length} ${l.length === 1 ? 'pieza' : 'piezas'}</small></h4>${l.map(p => filaCola(p, { accion: true })).join('')}</section>`
       : `<section class="ct-day gap"><h4>${diaH(k)}</h4><button type="button" class="ct-gap" data-gap="${k}">Hueco: nada programado · <b>+ Programar aquí</b></button></section>`).join('');
     // la frecuencia de la semana que empieza hoy, por red
-    const sem = futuras.filter(p => at(p) < hoy + 7 * DAY && p.estado !== 'idea'), porRed = Object.keys(RED).map(r => [r, sem.filter(p => p.redes.includes(r)).length]);
+    const sem = futuras.filter(p => at(p) < hoy + 7 * DAY && p.estado !== 'idea'), porRed = redesUsadas().map(r => [r, sem.filter(p => p.redes.includes(r)).length]);
     const sinDia = todas.filter(p => !p.fecha);
-    let metaOff = false; try { metaOff = localStorage.getItem('ao.ct.metaBanner') === '0'; } catch {}
-    const html = `${metaOff ? '' : `<div class="ct-banner" role="note"><span><b>Meta todavía no está conectada:</b> nada sale solo. Lo aprobado queda listo aquí; la entrega a Instagram y Facebook llega en la fase siguiente.</span><button type="button" class="ct-bx" data-banner aria-label="Entendido, ocultar este aviso">Entendido</button></div>`}
+    const html = `${bannerHTML()}${selBarHTML()}
       <div class="ct-cols">
         <div class="ct-main">
           <section class="ct-sec ct-need" aria-labelledby="ctp-acc"><div class="ct-sh"><h3 id="ctp-acc">Requiere tu acción <b>${accion.length}</b></h3>${listasAprobar > 1 ? `<button type="button" class="pz-btn" data-okall>Aprobar las ${listasAprobar} que pueden salir</button>` : ''}</div>
@@ -250,8 +290,23 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { render(); loadResumen(); }
   }
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
-  const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
+  const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
+  // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
+  let bjCargada = false;
+  const bj = initBandeja({ host: E.bj, datos, esc, note, onCount: n => { const b = E.mode.querySelector('.ct-nbj'); b.hidden = !n; b.textContent = n; b.setAttribute('aria-label', `${n} por responder`); } });
+  /** plan M5 · U2: dos piezas de la cuadrícula del perfil se cambian el día y la hora; una aprobada vuelve a revisión, y DESHACER la reaprueba. */
+  async function cambiarDeSitio(aId, bId) {
+    const A = todasConocidas().find(p => p.id === aId), B = todasConocidas().find(p => p.id === bId); if (!A || !B || aId === bId) return;
+    const [x, y] = intercambio(A, B), apr = [A, B].filter(p => p.estado === 'aprobada');
+    try { await datos.patch(x.id, { fecha: x.fecha, hora: x.hora }); await datos.patch(y.id, { fecha: y.fecha, hora: y.hora }); } catch (e) { note('No se pudo: ' + e.message, true); return; }
+    await load(true); render();
+    undoable(`Cambiadas de sitio${apr.length ? ': ' + (apr.length === 1 ? 'la aprobada vuelve' : 'las aprobadas vuelven') + ' a revisión' : ''}.`, async () => {
+      await datos.patch(A.id, { fecha: A.fecha, hora: A.hora }); await datos.patch(B.id, { fecha: B.fecha, hora: B.hora });
+      for (const p of apr) await datos.approve(p.id).catch(() => {});
+      await load(true); render(); return { aviso: apr.length ? 'Deshecho: vuelven a estar aprobadas.' : 'Deshecho.' };
+    });
+  }
   async function openPiece(id, addIds) {
     if (!openNow) open();
     let p = todasConocidas().find(x => x.id === id);
@@ -262,7 +317,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   async function openNew(extra) { flushUndo(); closeMenu(); await panel.flush(); panel.open(extra); render(); }
   /** «+ Crear» con un formato: el siguiente hueco libre, a las 18:00, en las dos redes (una historia, solo Instagram). */
   function crear(formato) {
-    const redes = formato === 'historia' ? ['instagram'] : ['instagram', 'facebook'];
+    const conH = redesNegocio.filter(r => CON_HISTORIAS.includes(r)), redes = formato === 'historia' ? (conH.length ? conH : ['instagram']) : [...redesNegocio]; // M2: las redes que usas (una historia, solo las que tienen)
     openNew({ formato, redes, fecha: siguienteHueco(redes, todasConocidas().filter(p => p.estado !== 'idea')), hora: '18:00' });
   }
   function closeMenu(focus) { if (E.newMenu.hidden) return; E.newMenu.hidden = true; E.newBtn.setAttribute('aria-expanded', 'false'); if (focus) E.newBtn.focus(); }
@@ -338,26 +393,36 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   E.railBox.addEventListener('drop', e => { E.railBox.classList.remove('drop'); const d = dnd.dragging; if (d?.kind !== 'p') return; e.preventDefault(); const p = todasConocidas().find(x => x.id === d.id); if (p && p.fecha) mover(p, '', ''); });
 
   /* ---------- eventos ---------- */
+  // plan M5 · U2: arrastrar una casilla del perfil sobre otra las cambia de sitio (con el teclado o el dedo: ‹ ›)
+  let pfArr = null;
+  E.grid.addEventListener('dragstart', e => { const li = e.target.closest?.('.pf-t[draggable="true"]'); if (!li) return; pfArr = li.dataset.pf; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', pfArr); } catch {} li.classList.add('arr'); e.stopPropagation(); }, true);
+  E.grid.addEventListener('dragover', e => { if (!pfArr) return; const li = e.target.closest?.('.pf-t[draggable="true"]'); if (!li || li.dataset.pf === pfArr) return; e.preventDefault(); e.stopPropagation(); E.grid.querySelectorAll('.pf-t.sobre').forEach(x => x !== li && x.classList.remove('sobre')); li.classList.add('sobre'); }, true);
+  E.grid.addEventListener('drop', async e => { if (!pfArr) return; const li = e.target.closest?.('.pf-t[draggable="true"]'); e.preventDefault(); e.stopPropagation(); const a = pfArr; pfArr = null; if (li && li.dataset.pf !== a) await cambiarDeSitio(a, li.dataset.pf); }, true);
+  E.grid.addEventListener('dragend', () => { pfArr = null; E.grid.querySelectorAll('.pf-t.arr, .pf-t.sobre').forEach(x => x.classList.remove('arr', 'sobre')); }, true);
   ov.addEventListener('click', async e => {
     const t = e.target;
     if (t.closest('#ctNew')) { const on = E.newMenu.hidden; E.newMenu.hidden = !on; E.newBtn.setAttribute('aria-expanded', on); if (on) E.newMenu.querySelector('button').focus(); return; }
     const nf = t.closest('[data-newf]'); if (nf) { crear(nf.dataset.newf); return; }
     if (!E.newMenu.hidden && !t.closest('.ct-create')) closeMenu();
-    const b = t.closest('.ct-mode button'); if (b) { mode = b.dataset.m; store.set('mode', mode); await panel.flush(); if (mode === 'prog') await loadCola(); render(); return; }
+    const b = t.closest('.ct-mode button'); if (b) { mode = b.dataset.m; store.set('mode', mode); await panel.flush(); if (mode === 'prog') await loadCola(); if (mode === 'bandeja') bj.load(); render(); return; }
     const v = t.closest('.ct-views button'); if (v) { view = v.dataset.v; store.set('view', view); load(); render(); return; }
     if (t.closest('[data-filters]')) { const on = !ov.classList.contains('chipsOpen'); ov.classList.toggle('chipsOpen', on); t.closest('[data-filters]').setAttribute('aria-expanded', on); return; }
-    if (t.closest('[data-banner]')) { try { localStorage.setItem('ao.ct.metaBanner', '0'); } catch {} render(); E.prog.querySelector('h3')?.setAttribute('tabindex', '-1'); E.prog.querySelector('h3')?.focus(); return; }
+    const sb = t.closest('[data-sal]'); if (sb) { e.stopPropagation(); await accionSalida(sb); return; }
+    if (t.closest('[data-comprobar]')) { const b = t.closest('[data-comprobar]'); b.disabled = true; try { const r = await datos.comprobar(); note(r.ok ? `Metricool responde: marca «${r.marca?.nombre || '—'}»${r.marca?.zona ? ' · ' + r.marca.zona : ''}.` : r.error, !r.ok); } catch (er) { note(er.message, true); } b.disabled = false; return; }
     const chip = t.closest('.cv-chip'); if (chip) {
       if (chip.dataset.e) { estadoOn.has(chip.dataset.e) ? estadoOn.delete(chip.dataset.e) : estadoOn.add(chip.dataset.e); if (!estadoOn.size) estadoOn = new Set(ORDEN); store.set('estados', [...estadoOn]); }
-      else if (chip.dataset.r) { redOn.has(chip.dataset.r) ? redOn.delete(chip.dataset.r) : redOn.add(chip.dataset.r); if (!redOn.size) redOn = new Set(Object.keys(RED)); store.set('redes', [...redOn]); }
+      else if (chip.dataset.r) { redOn.has(chip.dataset.r) ? redOn.delete(chip.dataset.r) : redOn.add(chip.dataset.r); if (!redOn.size) redOn = new Set(Object.keys(RED)); store.set('redes', [...redOn]); loadHora(); }
       render(); E.chips.querySelector(chip.dataset.e ? `[data-e="${chip.dataset.e}"]` : `[data-r="${chip.dataset.r}"]`)?.focus(); return;
     }
     const ok = t.closest('[data-ok]'); if (ok) { e.stopPropagation(); await aprobar(ok.dataset.ok, ok); return; }
     if (t.closest('[data-okall]')) { await aprobarTodas(); return; }
+    const sa = t.closest('[data-selacc]'); if (sa) { await accionVarias(sa.dataset.selacc); return; }
     const gap = t.closest('[data-gap]'); if (gap) { openNew({ fecha: gap.dataset.gap, hora: '18:00' }); return; }
     const open_ = t.closest('[data-open]'); if (open_) { openPiece(open_.dataset.open); return; }
     const nw = t.closest('[data-new]'); if (nw) { openNew({}); return; }
     const evc = t.closest('.cv-ev, .cv-bk'); if (evc) { openPiece(evc.dataset.ev.slice(2)); return; }
+    const pfo = t.closest('[data-pfo]'); if (pfo) { openPiece(pfo.dataset.pfo); return; } // plan M5 · U2: la cuadrícula del perfil
+    const pfm = t.closest('[data-pfm]'); if (pfm) { const [a, b] = pfm.dataset.pfm.split(':'); await cambiarDeSitio(a, b); E.grid.querySelector(`[data-pf="${CSS.escape(a)}"] .pf-open`)?.focus(); return; }
     const more = t.closest('.cv-more'); if (more) { openMore(more.dataset.day, more.closest('.cv-day')); return; }
     const dh = t.closest('.cv-tg-d'); if (dh && view === 'week') { anchor = new Date(dh.dataset.day + 'T00:00:00').getTime(); view = 'day'; load(); render(); return; }
     const add = t.closest('.cv-add'); if (add) { const cell = add.closest('.cv-day'); if (cell.classList.contains('past')) { note('Ese día ya pasó: elige uno que venga.', true); return; } openNew({ fecha: cell.dataset.day, hora: cell.dataset.hour !== undefined ? String(cell.dataset.hour).padStart(2, '0') + ':00' : '' }); return; }
@@ -400,6 +465,11 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     else if (e.key === 'a' || e.key === 'A') { view = 'agenda'; load(); render(); } else if (e.key === 'd' || e.key === 'D') { view = 'day'; load(); render(); }
   });
   ov.addEventListener('dblclick', e => { const day = e.target.closest('.cv-day[data-day]'); if (!day || view !== 'month' || e.target.closest('.cv-ev')) return; anchor = new Date(day.dataset.day + 'T00:00:00').getTime(); view = 'day'; load(); render(); });
+  // plan M5 · U7: la selección múltiple de Programación
+  ov.addEventListener('change', async e => {
+    const ck = e.target.closest?.('[data-selp]'); if (ck) { ck.checked ? selP.add(ck.dataset.selp) : selP.delete(ck.dataset.selp); render(); ov.querySelector(`[data-selp="${CSS.escape(ck.dataset.selp)}"]`)?.focus(); return; }
+    const mv = e.target.closest?.('[data-selmover]'); if (mv && mv.value) await accionVarias('mover', mv.value);
+  });
   $('.ct-vsel').addEventListener('change', e => { view = e.target.value; store.set('view', view); load(); render(); });
   E.search.addEventListener('input', () => { q = E.search.value.trim().toLowerCase(); render(); });
   E.search.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') { E.search.value = ''; q = ''; render(); E.search.blur(); } });
@@ -411,10 +481,47 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     try { const r = await datos.approve(id); put(r.pieza); render(); loadResumen(); note('Aprobada. Queda lista en la cola.'); }
     catch (e) { note(e.message, true); }
   }
+  /** plan M5 · U7: lo mismo a varias piezas. Mover y pasar a revisión se deshacen (las aprobadas se vuelven a aprobar); la papelera espera 8 s. */
+  async function accionVarias(que, fecha) {
+    const ps = [...selP].map(id => todasConocidas().find(p => p.id === id)).filter(Boolean);
+    if (que === 'ninguna' || !ps.length) { selP.clear(); render(); return; }
+    if (que === 'borrar') {
+      const keys = ps.map(p => 'p:' + p.id); flushUndo(); keys.forEach(k => gone.add(k)); selP.clear(); render();
+      commitFn = async () => { for (const p of ps) { try { await datos.remove(p.id); } catch (e) { note('No se pudo: ' + e.message, true); } } keys.forEach(k => gone.delete(k)); load(true); };
+      E.toast.querySelector('span').textContent = `${ps.length} a la papelera.`; E.toast.querySelector('button').hidden = false; E.toast.classList.remove('bad'); clearTimeout(noteT); showToast();
+      E.toast.querySelector('button').onclick = () => { clearTimeout(undoT); commitFn = null; E.toast.hidden = true; keys.forEach(k => gone.delete(k)); render(); note('Deshecho.'); };
+      undoT = setTimeout(flushUndo, 8000); return;
+    }
+    let ok = 0, mal = 0; const antes = ps.map(p => ({ id: p.id, fecha: p.fecha, estado: p.estado }));
+    for (const p of ps) {
+      try {
+        if (que === 'aprobar') { if (p.estado === 'aprobada') continue; const r = await datos.approve(p.id); put(r.pieza); }
+        else if (que === 'revision') { if (p.estado === 'revision') continue; put(await datos.back(p.id, 'revision')); }
+        else if (que === 'mover') { const r = await datos.patch(p.id, { fecha }); put(r.pieza); }
+        ok++;
+      } catch { mal++; }
+    }
+    selP.clear(); await load(true); render(); loadResumen();
+    const hecho = que === 'aprobar' ? 'aprobadas' : que === 'revision' ? 'pasadas a revisión' : `movidas al ${fmtDay(new Date(fecha + 'T00:00:00').getTime())}`;
+    const texto = `${ok} ${hecho}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}${que === 'aprobar' ? ' (les falta algo para salir)' : ''}` : ''}.`;
+    if (que === 'aprobar' || !ok) { note(texto, !!mal); return; }
+    undoable(texto, async () => {
+      for (const a of antes) { try { if (que === 'mover') await datos.patch(a.id, { fecha: a.fecha }); if (a.estado === 'aprobada') await datos.approve(a.id); else if (que === 'revision') await datos.back(a.id, a.estado); } catch {} }
+      await load(true); render(); return { aviso: 'Deshecho.' };
+    });
+  }
   async function aprobarTodas() {
     const lista = todasConocidas().filter(p => p.estado === 'revision' && !errN(p) && p.fecha && p.hora && !revisarMomento(p.fecha, p.hora).errores.length && visible(p)); let ok = 0, mal = 0;
     for (const p of lista) { try { const r = await datos.approve(p.id); put(r.pieza); ok++; } catch { mal++; } }
     render(); loadResumen(); note(`${ok} ${ok === 1 ? 'aprobada' : 'aprobadas'}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}` : ''}.`, !!mal);
+  }
+  /** M1: entregar ya, reintentar o quitar de la cola. Quitar pide un segundo clic (le quita el OK y la retira del conductor). */
+  async function accionSalida(b) {
+    const que = b.dataset.sal, id = b.dataset.id;
+    if (que === 'quitar' && b.dataset.armed !== '1') { b.dataset.armed = '1'; const was = b.textContent; b.textContent = 'Pulsa otra vez para quitarla'; setTimeout(() => { if (document.contains(b)) { b.dataset.armed = ''; b.textContent = was; } }, 5000); return; }
+    b.disabled = true;
+    try { const r = await datos.salida(id, que); if (r.pieza) put(r.pieza); await loadCola(); render(); loadResumen(); note(que === 'quitar' ? 'Quitada de la cola: vuelve a revisión, y si ya estaba en el conductor se retira en un momento.' : que === 'entregar' ? 'Se entrega en un momento.' : 'Se vuelve a intentar en un momento.'); }
+    catch (er) { note(er.message, true); b.disabled = false; }
   }
   function closePop() { E.pop.hidden = true; E.pop.innerHTML = ''; }
   function openMore(dayKey, cell) {
@@ -469,7 +576,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     async between(desde, hasta) { try { return (await datos.list({ desde, hasta })).piezas; } catch { return []; } },
     /** Desde el Estudio: una imagen o un video pasa a ser una pieza nueva (sin día, como idea) y se abre para terminarla. */
     async fromMedia(file, kind, prompt) {
-      try { const p = await datos.create({ titulo: String(prompt || '').slice(0, 60), formato: kind === 'video' ? 'reel' : 'post', medios: [file], estado: 'idea', redes: ['instagram', 'facebook'] }); open(); pieces.push(p); cola.push(p); await openPiece(p.id); return p; }
+      try { const p = await datos.create({ titulo: String(prompt || '').slice(0, 60), formato: kind === 'video' ? 'reel' : 'post', medios: [file], estado: 'idea', redes: [...redesNegocio] }); open(); pieces.push(p); cola.push(p); await openPiece(p.id); return p; }
       catch (e) { return { error: e.message }; }
     },
   };
