@@ -6,6 +6,7 @@ area: seo
 departments: [marketing, delivery]
 agents: [riley, mlead, crep]
 origen: marketingskills/seo-audit (MIT, Corey Haines)
+palabras: [SEO, posicionamiento en Google, auditoría SEO, tráfico orgánico, Google]
 ---
 # Auditoría SEO
 

@@ -71,7 +71,7 @@ test('leer: la habilidad con su lista de referencias, una referencia por nombre 
     assert.match(b.leer('campanas-pagadas', 'estructura').texto, /Campañas, conjuntos, anuncios/, 'por parte del nombre');
     assert.match(b.leer('campanas-pagadas', '../../SKILL').error, /no tiene la referencia/);
     assert.match(b.leer('nada').error, /no hay ninguna habilidad «nada»/);
-    assert.ok(raices('Campañas de anuncios').includes('campa') && !raices('para las de').length);
+    assert.ok(raices('Campañas de anuncios').includes('campan') && !raices('para las de').length); assert.ok(!raices('contesta').some(r => raices('contexto').includes(r)), 'el verbo de un pedido no encuentra otra palabra');
   } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
 });
 

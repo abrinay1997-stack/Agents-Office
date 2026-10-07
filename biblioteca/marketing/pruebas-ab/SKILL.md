@@ -6,6 +6,7 @@ area: conversion
 departments: [marketing, ops]
 agents: [mlead, ada, newt, dash]
 origen: marketingskills/ab-testing (MIT, Corey Haines)
+palabras: [prueba A/B, experimento, variante, test, hipótesis, significancia]
 ---
 # Pruebas A/B y experimentos
 

@@ -6,6 +6,7 @@ area: seo
 departments: [marketing]
 agents: [mlead, riley]
 origen: marketingskills/schema (MIT, Corey Haines)
+palabras: [schema, datos estructurados, rich snippets, JSON-LD]
 ---
 # Datos estructurados (schema)
 

@@ -6,6 +6,7 @@ area: conversion
 departments: [marketing]
 agents: [mlead, newt, gfx]
 origen: marketingskills/popups (MIT, Corey Haines)
+palabras: [popup, ventana emergente, modal, barra, captura de correos]
 ---
 # Ventanas emergentes
 

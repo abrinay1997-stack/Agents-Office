@@ -6,6 +6,7 @@ area: pagados-y-medicion
 departments: [marketing, sales]
 agents: [ada, mlead, riley, gfx]
 origen: marketingskills/ads (MIT, Corey Haines)
+palabras: [campaña, Meta Ads, Facebook Ads, Google Ads, TikTok Ads, publicidad pagada, presupuesto de anuncios, pauta, ROAS, CPA]
 ---
 # Campañas de anuncios pagados
 

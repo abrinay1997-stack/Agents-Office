@@ -23,9 +23,11 @@ export const TOPES = { indice: 60, adelanto: 14000, leer: 30000, referencia: 300
 const LEGIBLE = /\.(md|txt|csv|json)$/i;
 
 const lista = v => v === undefined ? [] : Array.isArray(v) ? v : String(v).split(',').map(s => s.trim()).filter(Boolean);
-// palabras para buscar: minúsculas, sin acentos, sin palabras vacías, raíz de 5 letras («campañas» y «campaña» se encuentran)
-const VACIAS = new Set('para como cuando que con por los las del una uno unos unas sus mas pero este esta esto estos estas ese esa eso entre sobre desde hasta donde quiere quieres usala usalo tambien hacer haga hace the and for with your you from that this when want wants user what into also any are can how not our out use using'.split(' '));
-export const raices = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9ñ]+/).filter(w => w.length > 2 && !VACIAS.has(w)).map(w => w.slice(0, 5));
+// palabras para buscar: minúsculas, sin acentos, sin palabras vacías, raíz de 6 letras («campañas» y «campaña» se encuentran; «contesta» y «contexto» no)
+const VACIAS = new Set(('para como cuando que con por los las del una uno unos unas sus mas pero este esta esto estos estas ese esa eso entre sobre desde hasta donde quiere quieres usala usalo tambien hacer haga hace the and for with your you from that this when want wants user what into also any are can how not our out use using ' +
+  // los verbos de un pedido no dicen de qué trata («prepara», «arma», «revisa»…): sin ellos, «contesta» no encuentra «contexto»
+  'prepara preparar preparame arma armar armame haz hazme escribe escribir escribeme revisa revisar mejora mejorar disena disenar contesta contestar responde responder investiga investigar crea crear creame necesito quiero dame ayuda ayudame semana proximo proxima nuestro nuestra nuestros nuestras haya').split(' '));
+export const raices = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9ñ]+/).filter(w => w.length > 2 && !VACIAS.has(w)).map(w => w.slice(0, 6));
 
 function leerUna(dir, id, fuente, problemas) {
   const archivo = path.join(dir, 'SKILL.md');

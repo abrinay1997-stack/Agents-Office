@@ -6,6 +6,7 @@ area: canales
 departments: [marketing, sales, emails]
 agents: [mlead, newt, folo]
 origen: marketingskills/sms (MIT, Corey Haines)
+palabras: [WhatsApp, SMS, mensajes de texto, difusión, carrito abandonado]
 ---
 # SMS y WhatsApp
 

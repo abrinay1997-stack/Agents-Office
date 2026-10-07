@@ -6,6 +6,7 @@ area: seo
 departments: [marketing]
 agents: [riley, mlead, iggy]
 origen: marketingskills/ai-seo (MIT, Corey Haines)
+palabras: [ChatGPT, Perplexity, IA, búsqueda con IA, citado por IA, AI Overviews, GEO]
 ---
 # SEO para IA
 

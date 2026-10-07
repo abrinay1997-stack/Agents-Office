@@ -6,6 +6,7 @@ area: canales
 departments: [marketing, delivery]
 agents: [gfx, iggy, mlead, dasst]
 origen: marketingskills/image (MIT, Corey Haines)
+palabras: [imagen, foto, gráfico, arte, diseño, portada, visual, banner]
 ---
 # Imágenes de marketing
 

@@ -1,0 +1,104 @@
+{ "skill": "correo-en-frio", "origen": "marketingskills/cold-email/evals", "evals": [
+  { "id": "vp-marketing-analitica",
+    "prompt": "Escríbeme un correo en frío para directores de marketing de empresas medianas de software. Vendemos una plataforma de analítica de contenido que muestra qué artículos del blog generan oportunidades de venta. Nuestra prueba principal: los clientes ven 3 veces más ingresos atribuidos al contenido en 90 días.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta, y no inventa la prueba: usa la cifra de 3 veces que dio el dueño",
+      "Suena como un par, no como un proveedor",
+      "Usa uno de los marcos de estructura (observación → problema → prueba → petición o similar)",
+      "El asunto tiene de 2 a 4 palabras, en minúsculas y con aspecto interno",
+      "Cada frase se gana su lugar (es corto)",
+      "La personalización conecta con el problema del prospecto, no solo con su nombre",
+      "La prueba de 3 veces se usa como prueba social, no como una función",
+      "El llamado a la acción es de poca fricción (no «agenda una demostración»)",
+      "Entrega 2 o 3 variaciones y una revisión de calidad contra las pautas",
+      "No dice que envió nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "diagnostico-ciberseguridad",
+    "prompt": "Ayúdame a escribir un correo en frío para directores de tecnología de grandes empresas. Vendo capacitación en ciberseguridad. Mi correo actual tiene 2 % de apertura y 0 % de respuesta.",
+    "expectations": [
+      "Diagnostica primero con las cifras: 2 % de apertura apunta al asunto (y a la lista o la entregabilidad) y 0 % de respuesta apunta al cuerpo o a la relevancia",
+      "Pide el texto del correo actual o los números reales que falten",
+      "Ajusta la voz para directores de tecnología: respeta su tiempo, credibilidad técnica y lenguaje ejecutivo",
+      "El asunto tiene de 2 a 4 palabras, en minúsculas y con aspecto interno",
+      "Adapta el tono a una gran empresa: más formal que para una startup pero entre pares",
+      "Usa un marco de estructura de la habilidad",
+      "Explica por qué funciona cada elemento",
+      "No inventa pruebas ni clientes: las marca como [FALTA: …]"
+    ] },
+  { "id": "seguimiento-informal",
+    "prompt": "hazme una secuencia de seguimiento. el prospecto no contestó mi primer correo sobre nuestro software de recursos humanos. cuántos mando y cada cuánto?",
+    "expectations": [
+      "Se activa con una frase informal",
+      "Recomienda de 3 a 5 correos de seguimiento con espacios cada vez más largos",
+      "Cada seguimiento aporta algo nuevo (otro ángulo, otra prueba, otro valor)",
+      "No usa «solo para dar seguimiento», «te escribo de nuevo» ni «retomando»",
+      "Da el tiempo entre correos",
+      "Escribe el texto real de cada seguimiento, con ángulos distintos",
+      "Termina con un correo de despedida",
+      "Cada seguimiento es más corto que el anterior",
+      "No dice que envió nada: deja la secuencia como borrador para el OK del dueño"
+    ] },
+  { "id": "criticar-correo-malo",
+    "prompt": "Revisa este correo en frío y dime qué está mal: 'Estimado señor/señora: Espero que este correo lo encuentre bien. Quería contactarlo para presentarle nuestra innovadora plataforma en la nube que aprovecha la IA para optimizar las operaciones de su empresa. Hemos ayudado a más de 500 empresas a transformar sus procesos. Me encantaría agendar una llamada de 30 minutos para conversar sobre cómo podemos ayudar a su organización. Saludos cordiales, Juan'",
+    "expectations": [
+      "Aplica la lista de control de calidad de la habilidad",
+      "Señala la falta de personalización («Estimado señor/señora»)",
+      "Señala las frases de relleno («Espero que este correo lo encuentre bien»)",
+      "Señala la jerga y las palabras de moda («innovadora plataforma en la nube», «aprovecha la IA», «optimizar», «transformar»)",
+      "Señala el lenguaje de proveedor frente al lenguaje de par",
+      "Señala que el llamado es de demasiada fricción (30 minutos en el primer contacto)",
+      "Nota que todo el correo habla del remitente y no del prospecto",
+      "Cuestiona la cifra de «500 empresas» si no sale de las notas o las cifras de la empresa",
+      "Entrega una versión reescrita que sigue los principios (par, estructura, una petición de poca fricción)"
+    ] },
+  { "id": "mejores-asuntos",
+    "prompt": "Cuáles son los mejores asuntos para correos en frío? Quiero subir al máximo la tasa de apertura.",
+    "expectations": [
+      "Aplica las pautas de asuntos: de 2 a 4 palabras, minúsculas, con aspecto interno",
+      "Da ejemplos concretos en español",
+      "Explica por qué funciona el formato (parece de un colega, no de un proveedor)",
+      "Advierte contra los patrones malos: mayúsculas, emojis, gancho engañoso, asuntos largos, «Re:» falsos, el nombre de pila",
+      "Aclara que el asunto logra que abran, pero el cuerpo logra que respondan",
+      "Avisa que las cifras vienen de estudios en inglés y recomienda probar con la propia lista"
+    ] },
+  { "id": "goteo-es-otra-habilidad",
+    "prompt": "¿Me ayudas a armar una secuencia automática de correos para las personas que descargan nuestra guía en PDF?",
+    "expectations": [
+      "Reconoce que es una secuencia de ciclo de vida o de nutrición y no un correo en frío",
+      "Remite a la habilidad secuencias-correo",
+      "Explica la diferencia: el correo en frío es para prospectos que no han dado permiso; aquí la persona sí lo dio al descargar",
+      "No intenta diseñar la secuencia con los patrones del correo en frío"
+    ] },
+  { "id": "sin-señales-de-ia",
+    "prompt": "Escribe un correo en frío para la directora de finanzas de una empresa de 200 personas ofreciéndole nuestra herramienta de rendición de gastos.",
+    "expectations": [
+      "Es un correo corto de par a par, que sigue los principios de la habilidad",
+      "Sin contraste revelado («no se trata de X, sino de Y») ni listas de «sin X, sin Y, sin Z»",
+      "Sin preguntas con respuesta propia («¿El resultado? …»)",
+      "Sin «La verdad es que» ni «Una pregunta rápida» como apertura",
+      "Sin rayas",
+      "Una sola petición de poca fricción",
+      "No dice que envió nada: deja el borrador para el OK del dueño"
+    ] },
+  { "id": "constructora-a-desarrolladoras",
+    "prompt": "Somos una constructora mediana en Bogotá y queremos que las desarrolladoras inmobiliarias nos tengan en cuenta para sus próximos proyectos de vivienda. Escríbeme un correo en frío y sus seguimientos. Tenemos tres edificios entregados a tiempo en los últimos dos años.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta, y usa solo la prueba de los tres edificios entregados a tiempo, sin inventar nombres ni cifras",
+      "Elige el trato («usted» o «tú») según la voz de la empresa y el sector, y lo mantiene en toda la secuencia",
+      "Usa una señal o gancho concreto (un proyecto anunciado, una licitación, una compra de terreno) o la marca como [FALTA: señal]",
+      "El primer correo tiene un asunto de 2 a 4 palabras con aspecto interno y una sola petición de poca fricción",
+      "Entrega la secuencia completa con día de envío, ángulo distinto en cada seguimiento y una despedida",
+      "Menciona la baja y las leyes de datos del país, y pide al dueño que lo confirme, sin dar consejo legal",
+      "No dice que envió nada: deja borradores con las direcciones exactas para el OK del dueño"
+    ] },
+  { "id": "convenio-clinica-empresas",
+    "prompt": "Tengo una clínica dental y quiero ofrecerles convenios de salud oral a empresas de la zona para sus empleados. Nunca les he escrito. Qué les mando?",
+    "expectations": [
+      "Pregunta o revisa en las notas a quién exactamente le escribe (cargo, tamaño de empresa) y cuál es la prueba, sin inventarla",
+      "Escribe un correo corto con un marco de la habilidad, centrado en el problema del cargo (por ejemplo, ausentismo o beneficios) y no en la clínica",
+      "Ofrece un llamado de poca fricción (una pregunta de interés, no una reunión de 30 minutos)",
+      "Avisa de los límites legales de escribirle a personas que no lo han autorizado y de incluir una forma de darse de baja",
+      "Entrega 2 o 3 variaciones, una revisión de calidad y los pendientes (direcciones y OK del dueño)",
+      "No dice que envió nada: deja borradores para el OK del dueño"
+    ] }
+] }

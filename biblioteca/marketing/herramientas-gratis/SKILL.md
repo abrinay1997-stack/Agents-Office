@@ -6,6 +6,7 @@ area: crecimiento-y-retencion
 departments: [marketing]
 agents: [mlead, riley]
 origen: marketingskills/free-tools (MIT, Corey Haines)
+palabras: [calculadora, herramienta gratis, generador, plantilla gratis, recurso gratuito]
 ---
 # Herramientas gratis (ingeniería como marketing)
 

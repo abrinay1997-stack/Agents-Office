@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing]
 agents: [mlead, riley]
 origen: marketingskills/marketing-council (MIT, Corey Haines)
+palabras: [opiniones, perspectivas, consejo, asesores, debate, segunda opinión]
 ---
 # Consejo asesor de marketing
 

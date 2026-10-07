@@ -6,6 +6,7 @@ area: crecimiento-y-retencion
 departments: [marketing, sales]
 agents: [mlead, newt, folo]
 origen: marketingskills/referrals (MIT, Corey Haines)
+palabras: [referidos, recomendación, programa de referidos, afiliados, boca a boca]
 ---
 # Referidos y programas de afiliados
 

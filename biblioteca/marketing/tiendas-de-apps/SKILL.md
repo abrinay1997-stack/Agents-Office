@@ -6,6 +6,7 @@ area: seo
 departments: [marketing]
 agents: [riley, gfx, mlead]
 origen: marketingskills/aso (MIT, Corey Haines)
+palabras: [App Store, Google Play, aplicación, app, ASO, ficha de la app]
 ---
 
 # Auditoría de la ficha en tiendas de apps (ASO)

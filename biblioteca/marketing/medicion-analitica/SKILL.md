@@ -6,6 +6,7 @@ area: pagados-y-medicion
 departments: [marketing, ops]
 agents: [mlead, report, dash, ada]
 origen: marketingskills/analytics (MIT, Corey Haines)
+palabras: [analítica, GA4, Google Analytics, píxel, eventos, medición, seguimiento, UTM, tablero]
 ---
 # Medición y analítica
 

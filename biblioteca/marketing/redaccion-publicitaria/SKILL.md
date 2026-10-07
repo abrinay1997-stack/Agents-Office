@@ -6,6 +6,7 @@ area: contenido-y-texto
 departments: [marketing, sales]
 agents: [mlead, gfx, iggy, piper]
 origen: marketingskills/copywriting (MIT, Corey Haines)
+palabras: [texto, copy, redactar, página de inicio, landing, titular, propuesta de valor, llamado a la acción]
 ---
 # Redacción publicitaria
 

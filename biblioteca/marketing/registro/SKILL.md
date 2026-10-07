@@ -6,6 +6,7 @@ area: conversion
 departments: [marketing, delivery]
 agents: [mlead, ona, gfx]
 origen: marketingskills/signup (MIT, Corey Haines)
+palabras: [registro, crear cuenta, formulario de registro, alta de usuario]
 ---
 # Registro y alta de cuentas
 

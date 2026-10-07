@@ -6,6 +6,7 @@ area: seo
 departments: [marketing]
 agents: [mlead, riley]
 origen: marketingskills/programmatic-seo (MIT, Corey Haines)
+palabras: [páginas a escala, SEO programático, plantillas de páginas, páginas por ciudad]
 ---
 # SEO programático
 

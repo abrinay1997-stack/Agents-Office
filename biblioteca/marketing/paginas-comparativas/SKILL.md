@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, sales]
 agents: [riley, mlead, lexi]
 origen: marketingskills/competitors (MIT, Corey Haines)
+palabras: [comparativa, alternativa a, versus, vs, comparar con]
 ---
 # Páginas comparativas y de alternativas
 

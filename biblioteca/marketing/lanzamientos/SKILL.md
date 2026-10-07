@@ -6,6 +6,7 @@ area: ventas-y-gtm
 departments: [marketing, sales, emails]
 agents: [mlead, newt, iggy, lexi]
 origen: marketingskills/launch (MIT, Corey Haines)
+palabras: [lanzamiento, lanzar, novedad, nuevo producto, anuncio de lanzamiento, Product Hunt]
 ---
 # Lanzamientos
 

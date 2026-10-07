@@ -6,6 +6,7 @@ area: canales
 departments: [marketing, sales]
 agents: [mlead, riley, iggy, lexi]
 origen: marketingskills/events (MIT, Corey Haines)
+palabras: [evento, webinar, feria, conferencia, taller, stand, patrocinio]
 ---
 # Marketing de eventos
 

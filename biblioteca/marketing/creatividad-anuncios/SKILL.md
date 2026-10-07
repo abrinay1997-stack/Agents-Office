@@ -6,6 +6,7 @@ area: pagados-y-medicion
 departments: [marketing]
 agents: [ada, gfx, mlead, vid]
 origen: marketingskills/ad-creative (MIT, Corey Haines)
+palabras: [anuncio, creatividad, titular, texto del anuncio, copy de anuncio, banner, arte para anuncio, imagen del anuncio]
 ---
 # Creatividad de anuncios
 

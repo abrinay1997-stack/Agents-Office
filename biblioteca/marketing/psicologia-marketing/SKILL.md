@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, sales, delivery]
 agents: [mlead, riley, gfx]
 origen: marketingskills/marketing-psychology (MIT, Corey Haines)
+palabras: [psicología, persuasión, sesgos, prueba social, escasez, comportamiento]
 ---
 # Psicología y modelos mentales del marketing
 

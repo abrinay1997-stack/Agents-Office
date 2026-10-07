@@ -6,6 +6,7 @@ area: seo
 departments: [marketing, delivery]
 agents: [mlead, gfx, riley, dasst]
 origen: marketingskills/site-architecture (MIT, Corey Haines)
+palabras: [estructura del sitio, menú, navegación, mapa del sitio, URLs, páginas del sitio]
 ---
 # Arquitectura del sitio web
 

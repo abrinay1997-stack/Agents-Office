@@ -6,6 +6,7 @@ area: conversion
 departments: [marketing, delivery]
 agents: [mlead, gfx, ona]
 origen: marketingskills/paywalls (MIT, Corey Haines)
+palabras: [muro de pago, mejorar plan, upgrade, plan premium, prueba gratis]
 ---
 # Pantallas de mejora de plan
 

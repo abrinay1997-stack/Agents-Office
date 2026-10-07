@@ -6,6 +6,7 @@ area: ventas-y-gtm
 departments: [sales, marketing]
 agents: [pros, enzo, lexi, riley]
 origen: marketingskills/prospecting (MIT, Corey Haines)
+palabras: [prospectos, lista de clientes potenciales, leads, prospectar, base de datos de contactos]
 ---
 # Prospección
 

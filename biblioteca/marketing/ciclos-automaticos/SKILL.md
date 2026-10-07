@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, ops]
 agents: [mlead, riley, report]
 origen: marketingskills/marketing-loops (MIT, Corey Haines)
+palabras: [rutina, cada semana, recurrente, automático, ciclo, todos los lunes]
 ---
 # Ciclos de marketing automáticos
 

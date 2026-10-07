@@ -6,6 +6,7 @@ area: canales
 departments: [marketing, delivery]
 agents: [vid, gfx, iggy, mlead]
 origen: marketingskills/video (MIT, Corey Haines)
+palabras: [video, reel, clip, TikTok, YouTube, guion de video, short]
 ---
 # Producción de video de marketing
 

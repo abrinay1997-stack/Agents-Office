@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, sales, ops]
 agents: [mlead, riley, olead]
 origen: marketingskills/product-marketing (MIT, Corey Haines)
+palabras: [posicionamiento, cliente ideal, ICP, propuesta de valor, contexto de marketing]
 ---
 # Contexto de marketing de la empresa
 

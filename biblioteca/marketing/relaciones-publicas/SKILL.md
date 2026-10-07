@@ -6,6 +6,7 @@ area: canales
 departments: [marketing, emails]
 agents: [mlead, riley, iggy, elead]
 origen: marketingskills/public-relations (MIT, Corey Haines)
+palabras: [prensa, periodistas, comunicado, nota de prensa, medios, crisis, podcast]
 ---
 # Relaciones públicas y medios ganados
 

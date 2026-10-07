@@ -6,6 +6,7 @@ area: ventas-y-gtm
 departments: [marketing, sales]
 agents: [piper, lexi, gfx, riley]
 origen: marketingskills/sales-enablement (MIT, Corey Haines)
+palabras: [presentación de ventas, one-pager, objeciones, guion de demo, folleto, material de ventas]
 ---
 # Material de ventas
 

@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, sales, delivery]
 agents: [riley, mlead, enzo]
 origen: marketingskills/customer-research (MIT, Corey Haines)
+palabras: [entrevistas, encuesta, reseñas, voz del cliente, investigación de clientes, personas]
 ---
 # Investigación de clientes
 

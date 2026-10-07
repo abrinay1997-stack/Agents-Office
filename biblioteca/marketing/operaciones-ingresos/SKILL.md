@@ -6,6 +6,7 @@ area: ventas-y-gtm
 departments: [marketing, sales]
 agents: [lexi, ilm, mlead]
 origen: marketingskills/revops (MIT, Corey Haines)
+palabras: [embudo de ventas, CRM, calificación de leads, MQL, pipeline, traspaso a ventas]
 ---
 
 # Operaciones de ingresos (RevOps)

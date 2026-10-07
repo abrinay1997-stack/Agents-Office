@@ -6,6 +6,7 @@ area: crecimiento-y-retencion
 departments: [marketing, delivery, emails]
 agents: [dlead, ona, cmail, newt]
 origen: marketingskills/churn-prevention (MIT, Corey Haines)
+palabras: [cancelación, bajas, churn, retener, retención, pagos fallidos, recuperar clientes]
 ---
 
 # Retención de clientes (prevenir bajas)

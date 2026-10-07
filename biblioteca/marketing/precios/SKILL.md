@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, sales, fin]
 agents: [mlead, riley, lexi, piper]
 origen: marketingskills/pricing (MIT, Corey Haines)
+palabras: [precio, tarifa, planes, cuánto cobrar, subir precios, paquetes de precio]
 ---
 # Estrategia de precios
 

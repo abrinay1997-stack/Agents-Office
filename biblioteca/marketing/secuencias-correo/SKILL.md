@@ -6,6 +6,7 @@ area: crecimiento-y-retencion
 departments: [marketing, emails, delivery, sales]
 agents: [newt, elead, ona, mlead]
 origen: marketingskills/emails (MIT, Corey Haines)
+palabras: [correo, email, newsletter, boletín, secuencia, bienvenida, goteo, automatización de correo]
 ---
 # Secuencias de correo
 

@@ -6,6 +6,7 @@ area: contenido-y-texto
 departments: [marketing, emails, sales]
 agents: [mlead, newt, iggy, cmail]
 origen: marketingskills/copy-editing (MIT, Corey Haines)
+palabras: [corregir texto, editar, revisar texto, pulir, mejorar redacción, actualizar contenido]
 ---
 # Edición de textos de marketing
 

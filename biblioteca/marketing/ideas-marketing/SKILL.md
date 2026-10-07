@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, sales]
 agents: [mlead, riley, iggy]
 origen: marketingskills/marketing-ideas (MIT, Corey Haines)
+palabras: [ideas, lluvia de ideas, tácticas, cómo conseguir clientes, crecer]
 ---
 # Ideas de marketing
 

@@ -6,6 +6,7 @@ area: estrategia
 departments: [marketing, sales]
 agents: [mlead, lexi, piper]
 origen: marketingskills/offers (MIT, Corey Haines)
+palabras: [oferta, promoción, paquete, bono, garantía, combo]
 ---
 # Diseño de ofertas
 
