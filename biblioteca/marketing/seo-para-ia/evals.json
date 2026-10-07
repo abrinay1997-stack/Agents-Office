@@ -1,0 +1,107 @@
+{ "skill": "seo-para-ia", "origen": "marketingskills/ai-seo/evals", "evals": [
+  { "id": "aparecer-en-ia-saas", "prompt": "¿Cómo hacemos para que nuestro software de gestión de proyectos aparezca en los resultados de búsqueda con IA? Cuando la gente le pregunta a ChatGPT o a Perplexity por software de gestión de proyectos, nunca nos recomiendan.", "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Aplica los tres pilares: Estructura (extraíble), Autoridad (citable) y Presencia (estar donde la IA mira)",
+    "Recorre la auditoría de visibilidad en IA en varias plataformas (resúmenes de Google, ChatGPT, Perplexity…)",
+    "Revisa la extraibilidad del contenido (definiciones claras, comparaciones estructuradas, estadísticas)",
+    "Cita los hallazgos de la investigación GEO de Princeton (citar fuentes +40 %, estadísticas +37 %) como orientación, no como garantía",
+    "Revisa el acceso de los bots de IA en robots.txt, separando descubrimiento de entrenamiento",
+    "Entrega un plan de acción priorizado",
+    "Distingue ser citado de ser recomendado",
+    "No inventa lo que responden las plataformas: pide que alguien corra las consultas o lo marca como supuesto"
+  ] },
+  { "id": "bloquear-rastreadores", "prompt": "¿Deberíamos bloquear a GPTBot y PerplexityBot en el robots.txt de nuestra tienda en línea de ropa? Nos preocupa que copien nuestros textos y fotos.", "expectations": [
+    "Responde directo la disyuntiva del bloqueo",
+    "Distingue los controles de descubrimiento de búsqueda de los de entrenamiento de modelos",
+    "Lista agentes de usuario concretos (GPTBot, ClaudeBot, OAI-SearchBot, PerplexityBot, Claude-SearchBot, ChatGPT-User, Google-Extended…) y explica qué hace cada uno",
+    "Explica que bloquear GPTBot o ClaudeBot es optar por no entrenar y no bloquea por sí solo las citas de búsqueda, mientras que bloquear PerplexityBot, OAI-SearchBot o Claude-SearchBot puede reducir la visibilidad",
+    "Aclara que Google-Extended no afecta la inclusión ni el ranking en Búsqueda",
+    "Propone un robots.txt por propósito y recomienda verificar la documentación vigente de cada proveedor y las reglas del firewall",
+    "Da una recomendación matizada según las metas del negocio (la tienda quiere ser encontrada)",
+    "No dice que cambió el robots.txt: deja el texto propuesto para que lo aplique quien administra la web con el OK del dueño"
+  ] },
+  { "id": "contenido-mas-citado", "prompt": "¿Qué tipo de contenido cita más la IA? Queremos crear contenido pensado específicamente para la búsqueda con IA. Somos una clínica dental.", "expectations": [
+    "Menciona los tipos de contenido que más se citan (comparativas, guías definitivas, investigación original, páginas oficiales) y aclara que el mix es volátil",
+    "Explica por qué funcionan: dan información estructurada, extraíble y autoritativa",
+    "Da recomendaciones específicas: definiciones claras, datos estructurados, estadísticas con fuente, tablas, citas de expertos reales",
+    "Cita la investigación GEO de Princeton como orientación",
+    "Advierte contra escribir contenido aparte «para IA» o partirlo en fragmentos (postura de Google)",
+    "Adapta al negocio local: servicios y precios o rangos en páginas propias, preguntas frecuentes reales, ficha de Google Business Profile y reseñas",
+    "No inventa citas de expertos ni estadísticas: usa [FALTA: …] o pide el dato"
+  ] },
+  { "id": "competidores-en-resumenes", "prompt": "nos dimos cuenta de que nuestros competidores salen en los resúmenes de IA de google y nosotros no. ¿qué tenemos que cambiar? somos una ferretería con tienda en línea", "expectations": [
+    "Se activa con una redacción informal",
+    "Se enfoca específicamente en los resúmenes de IA de Google",
+    "Explica cómo se eligen las fuentes (ranking central, E-E-A-T, respuestas directas y bien estructuradas) y la postura oficial de Google (sin marcado especial, sin contenido aparte para IA)",
+    "Recorre el pilar de Estructura (extraibilidad, jerarquía de títulos, respuesta primero, datos estructurados)",
+    "Revisa las señales de Autoridad (E-E-A-T, citas, fuentes)",
+    "Recomienda cambios concretos de estructura de contenido y de la ficha de comercio (Merchant Center, Google Business Profile)",
+    "Propone cómo monitorear (consultas, tasa con varias corridas, Search Console estándar)"
+  ] },
+  { "id": "auditoria-completa-ia", "prompt": "¿Pueden auditar nuestro sitio para ver qué tan listo está para la búsqueda con IA? Queremos saber qué tan visibles somos en ChatGPT, Perplexity, los resúmenes de Google y otras plataformas. Somos una agencia de marketing.", "expectations": [
+    "Corre la auditoría completa de visibilidad en IA con la tabla de consultas probadas",
+    "Revisa varias plataformas (resúmenes de Google, ChatGPT, Perplexity, Claude, Gemini, Copilot)",
+    "Evalúa los tres pilares: Estructura, Autoridad y Presencia",
+    "Revisa la extraibilidad del contenido y el acceso de los bots de IA",
+    "Organiza los hallazgos por pilar",
+    "Entrega un plan de acción priorizado con arreglos concretos",
+    "Pide que alguien corra las consultas en las plataformas (o usa la búsqueda web si está encendida) y no inventa los resultados",
+    "No dice que cambió nada en el sitio: deja las propuestas para el OK del dueño"
+  ] },
+  { "id": "auditoria-seo-clasico", "prompt": "El tráfico orgánico de nuestro sitio bajó 30 % este trimestre. ¿Pueden hacer una auditoría de SEO completa para ver qué está pasando? Somos un consultorio de nutrición.", "expectations": [
+    "Reconoce que es un pedido de auditoría de SEO tradicional y no una tarea de SEO para IA",
+    "Remite a la habilidad auditoria-seo o la usa como principal",
+    "No intenta hacer una auditoría de SEO clásico con los patrones de SEO para IA",
+    "Puede mencionar la búsqueda con IA como un factor a investigar"
+  ] },
+  { "id": "listas-autopromocionales", "prompt": "Somos una startup de calidad de datos recién nacida (casi nadie nos conoce). El plan es publicar 20 listas tipo «mejores herramientas de calidad de datos» donde nosotros salimos primeros, para que ChatGPT y los resúmenes de IA nos recomienden. ¿Buena idea?", "expectations": [
+    "No avala las 20 listas autoclasificadas como camino para que recomienden a una marca de baja autoridad",
+    "Distingue citas de recomendaciones y los criterios distintos que las gobiernan",
+    "Presenta la escalera de visibilidad (recuperado, citado, mencionado, recomendado)",
+    "Advierte que las guías pueden poner a los competidores en las respuestas de IA (el mecanismo de «voto por la competencia»), citando el dato del 69 % como orientación de un estudio concreto",
+    "Recomienda construir consenso fuera del sitio (reseñas, comunidades, analistas, prensa) como la palanca de la recomendación",
+    "No dice que dejen de publicar guías: replantea la expectativa hacia citas y encuadre de la categoría",
+    "Menciona el punto ciego de atribución y al menos dos de: seguimiento de consultas, atribución declarada, grabaciones de llamadas"
+  ] },
+  { "id": "youtube-sin-citas", "prompt": "Publicamos tutoriales en YouTube para las consultas más grandes de cómo hacer de nuestra categoría (somos una escuela de cocina en línea), pero la IA nunca nos cita, mientras que los videos más feos de un competidor salen siempre en los resúmenes de Google y en ChatGPT. Los nuestros están muy bien producidos. ¿Qué nos falta?", "expectations": [
+    "Explica que los modelos leen la capa de texto (transcripción, subtítulos, título, capítulos, descripción, comentario fijado) y no ven el video",
+    "Recomienda limpiar o subir subtítulos y decir las respuestas clave como frases completas y citables, con las entidades dichas en voz alta",
+    "Recomienda títulos en forma de pregunta, capítulos titulados por subpregunta, una descripción estructurada y un comentario fijado con el resumen",
+    "No atribuye la brecha a la calidad de producción ni recomienda volver a grabar como arreglo principal",
+    "Aclara que la interacción y la miniatura alimentan el posicionamiento de YouTube, que a su vez alimenta lo que la IA muestra",
+    "Propone el texto de título, descripción y comentario fijado como borrador, sin decir que publicó nada"
+  ] },
+  { "id": "listo-para-agentes-y-reddit", "prompt": "Nuestro contenido está bien escrito y tenemos datos estructurados, pero los asistentes de IA parecen no usar nuestro sitio. Alguien dijo que nuestro sitio podría no estar «listo para agentes». Además, este año pusimos casi todo el esfuerzo de visibilidad en IA en Reddit porque ahí cita ChatGPT. ¿Qué hacemos? Vendemos software de contabilidad.", "expectations": [
+    "Recomienda una herramienta de puntaje de preparación para agentes (is-agentic o el verificador de Frase) y estructura la auditoría como acceso / descubrimiento / legibilidad, indicando que lo corre una persona",
+    "Identifica el contenido que solo existe con JavaScript y el bloqueo por bots o firewall como fallos de acceso de primer orden",
+    "Cubre la pila de archivos: robots.txt con postura sobre IA, sitemap, llms.txt o llms-full.txt, datos estructurados y una representación en Markdown (negociación de contenido o cabecera Link)",
+    "Señala la estrategia solo-Reddit como frágil, citando la volatilidad de fuentes (cambio de ChatGPT de ago 2026, informado por profesionales) y recomienda un portafolio más los fundamentos del sitio propio",
+    "No presenta las estadísticas de participación de citas como hechos estables: recomienda verificar con el propio seguimiento",
+    "Puede mencionar WebMCP como capa emergente, rotulada como tal"
+  ] },
+  { "id": "plan-de-hojas-comparativas", "prompt": "Somos un SaaS B2B y planeamos para el próximo año 40 páginas «nosotros vs competidor» y 20 listas de «mejores herramientas», sobre todo para ganar citas en ChatGPT. Y otra cosa: ¿cómo sé si está funcionando? Revisé ChatGPT una vez la semana pasada y no nos mencionaba.", "expectations": [
+    "Cuestiona la razón con el cambio de ChatGPT 5.6 (ago 2026, datos de Peec AI): las citas a listas cayeron ~50 % y las de comparativas ~32 %, y el fan-out dejó de usar «mejor/vs/top» a favor de site: y «oficial»",
+    "No dice que las comparativas estén muertas: siguen convirtiendo a humanos y citándose en Google AIO, Gemini y Perplexity; la estrategia de formatos es por plataforma",
+    "Orienta la inversión hacia páginas propias «oficiales» (producto, documentación, precios, investigación original)",
+    "Puede sugerir extraer las búsquedas de fondo reales de ChatGPT, advirtiendo contra generar una página por cada consulta (contenido a escala)",
+    "Sobre la medición: una sola revisión es una anécdota; corre cada consulta 3–5 veces por plataforma y sigue la tasa con su muestra («citado 3/5, n=5»)",
+    "Trata las cifras como fotos con fecha que hay que verificar con el propio seguimiento"
+  ] },
+  { "id": "reposicionamiento", "prompt": "Llevamos diez años siendo conocidos como una plataforma de RR. HH. para empresas medianas. El próximo trimestre nos reposicionamos hacia empresas grandes y vamos a reescribir todo el sitio de una vez. ¿Cómo hacemos para que ChatGPT y la IA de Google empiecen a recomendarnos para software de RR. HH. empresarial?", "expectations": [
+    "Advierte que las asociaciones de marca en los modelos se mueven despacio y que reescribir todo de golpe puede perder las respuestas del mercado medio antes de ganar las de empresas grandes",
+    "Recomienda registrar una línea base de las consultas del segmento antiguo y del nuevo y avisar que puede haber una caída",
+    "Prioriza mover primero las señales fuera del sitio (perfiles de G2/Capterra/Gartner, reseñas, cobertura de analistas y prensa) para que coincidan con la nueva página «Quiénes somos»",
+    "Sugiere escalonar la reescritura del sitio en vez de cambiarlo todo a la vez",
+    "Sugiere extraer las búsquedas de fondo reales para ver qué dominios de terceros importan en la categoría",
+    "Rotula esto como experiencia de profesionales y no como dato probado, y no recomienda premios inventados ni sitios de reseñas propios"
+  ] },
+  { "id": "linkedin-republicar", "prompt": "Escuché que ChatGPT cita artículos de LinkedIn. ¿Deberíamos republicar todas las entradas de nuestro blog como artículos de LinkedIn para tener más citas de IA? Somos una consultora de logística.", "expectations": [
+    "No recomienda republicar todo sin más",
+    "Explica la división por motor: ChatGPT favorece hoy las publicaciones del feed; Perplexity, Copilot y las funciones de IA de Google siguen citando artículos y páginas de empresa; Gemini casi no cita LinkedIn",
+    "Advierte sobre la canónica y la duplicación: recomienda publicar primero en el sitio y luego versiones adaptadas o resúmenes",
+    "Menciona revisar los artículos por noindex de rastreadores (lo hace una persona con la herramienta adecuada)",
+    "Señala que la interacción y los seguidores casi no predicen la cita, y sí el contenido original, específico y técnico",
+    "Rotula las cifras como datos con fecha informados por proveedores o por la plataforma",
+    "Deja las publicaciones de LinkedIn como borradores en Contenido para el OK del dueño, sin decir que las publicó"
+  ] }
+] }
