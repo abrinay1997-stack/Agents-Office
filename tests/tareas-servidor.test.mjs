@@ -128,7 +128,7 @@ test('el MCP de tareas: un agente ve su tarea, marca SUS pasos, anota, pide un b
   try {
     const init = await rpc('initialize', {}); assert.equal(init.result.serverInfo.name, 'tareas'); assert.match(init.result.instructions, /nunca los adivines/);
     const nombres = (await rpc('tools/list', {})).result.tools.map(x => x.name).sort();
-    assert.deepEqual(nombres, ['anotar_en_bitacora', 'crear_borrador_tarea', 'marcar_paso', 'pedir_bloqueo', 'registrar_trabajo', 'ver_agenda', 'ver_mi_tarea', 'ver_tareas']);
+    assert.deepEqual(nombres, ['anotar_en_bitacora', 'crear_borrador_tarea', 'marcar_paso', 'pedir_bloqueo', 'registrar_trabajo', 'sugerir_al_dueno', 'ver_agenda', 'ver_mi_tarea', 'ver_tareas']); // plan D: sugerir_al_dueno (nace idea en su Bandeja)
     assert.ok(!nombres.some(n => /aprob|enviar|publicar|borrar|eliminar|estado|prioridad/.test(n)), 'ninguna herramienta aprueba, envía, borra ni cambia estado o prioridad');
     for (const n of nombres) assert.equal(kindOf(`mcp__tareas__${n}`), 'read', 'el candado de envío trata a Tareas como interno');
     const mi = texto(await llamar('ver_mi_tarea', {})); assert.match(mi, /PASOS:\n1\. \[ \] Leer la nota \(id (p\w+)\)/);

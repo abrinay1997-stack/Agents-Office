@@ -1,6 +1,7 @@
 // La VISTA TAREAS (plan T2, 6 oct 2026; docs/analisis-taskview-2026-10-06.md §6). Entra en el paquete aparte dist/tareas-vista.js
-// (build-tareas.mjs) y la página la trae al abrir Tareas (src/tareas-carga.js). Cinco pestañas: INICIO (lo de hoy), LISTA (todo, con
-// filtros, orden, agrupar y varias a la vez), TABLERO (por estado, con carriles por departamento), PROYECTOS (con su mapa) y MEDIDAS.
+// (build-tareas.mjs) y la página la trae al abrir Tareas (src/tareas-carga.js). Seis pestañas: MÍAS (plan D, 7 oct 2026: la lista
+// personal del dueño, al estilo TaskView — src/tareas/mias.js), INICIO (lo de hoy), LISTA (todo, con filtros, orden, agrupar y varias
+// a la vez), TABLERO (por estado, con carriles por departamento), PROYECTOS (con su mapa) y MEDIDAS.
 // Arriba, un solo campo que AÑADE o BUSCA. Al lado, el DETALLE de la tarea abierta. La dirección guarda dónde estás
 // (#tareas=lista&prio=alta&t=<id>): volver atrás funciona y una tarea se puede enlazar.
 import { crearDatos } from './datos.js';
@@ -10,18 +11,21 @@ import { listaHTML, barraFiltros, chipsFiltro, barraSeleccion, FILTROS } from '.
 import { tableroHTML, movimiento, columnaDe } from './tablero.js';
 import { proyectosHTML, proyectoHTML, formProyectoHTML } from './proyectos.js';
 import { medidasHTML } from './medidas.js';
-import { detalleHTML, ORDEN_CAMPOS } from './detalle.js';
+import { detalleHTML, ORDEN_CAMPOS, agentesDelegar } from './detalle.js';
+import { railHTML, miasHTML, presetLista, nombreLista } from './mias.js'; // plan D (7 oct 2026): las tareas del dueño
+import { cuentas as cuentasMias, columnaMia, movimientoMio, esDelDueno, agenteDeOrigen } from '../../tareas/dueno.mjs';
 import { leerRapida } from '../../tareas/rapida.mjs';
 import { activo as activoCrono } from '../../tareas/cronometro.mjs';
 
 /* global __AO_TAREAS_VERSION__ */
 const VERSION = typeof __AO_TAREAS_VERSION__ === 'string' ? __AO_TAREAS_VERSION__ : '';
-const TABS = [['inicio', 'Inicio'], ['lista', 'Lista'], ['tablero', 'Tablero'], ['proyectos', 'Proyectos'], ['medidas', 'Medidas']];
+const TABS = [['mias', 'Mías'], ['inicio', 'Inicio'], ['lista', 'Lista'], ['tablero', 'Tablero'], ['proyectos', 'Proyectos'], ['medidas', 'Medidas']];
 const guarda = { get: (k, d) => { try { const v = localStorage.getItem('ao.tv.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('ao.tv.' + k, JSON.stringify(v)); } catch {} } };
 
 function init(ov, ctx) {
   const datos = crearDatos({ servida: ctx.servida, agentes: ctx.AGENTS });
   const S = { tab: guarda.get('tab', 'inicio'), tareas: [], cat: { proyectos: [], etiquetas: [] }, f: {}, orden: guarda.get('orden', 'cola'), grupo: guarda.get('grupo', 'nada'), sel: new Set(), plegadas: new Set(guarda.get('plegadas', [])),
+    mlista: guarda.get('mlista', 'hoy'), mmodo: guarda.get('mmodo', 'lista'), // plan D: la lista del dueño que está abierta, y si va como lista o tablero
     carriles: guarda.get('carriles', false), colMovil: 'cola', proyecto: null, mapa: false, cerrados: false, dias: 30, kpi: null, resumen: null, detalle: null, modo: 'anadir', dept: guarda.get('dept', ctx.DEPT_KEYS[0]), personas: [], abierta: false, cargado: false, error: '' };
   const agentes = new Map(ctx.AGENTS.map(a => [a.id, a]));
   const c = {
@@ -30,6 +34,7 @@ function init(ov, ctx) {
     proyectos: () => S.cat.proyectos.filter(p => p.estado !== 'archivado'), etiquetas: () => S.cat.etiquetas, tareas: () => S.tareas,
     agentesDe: d => ctx.AGENTS.filter(a => a.dept === d), personas: () => S.personas, enOficina: !!ctx.abrirEnOficina,
     prefCampos: () => guarda.get('campos', { orden: [], ocultos: [] }), quienSoy: () => 'Tú', // plan T6
+    ultimoDept: () => S.dept, // plan D: el departamento al que suele delegar
   };
   ov.innerHTML = `<div class="tv">
     <div class="tv-top"><h1 class="tv-h1">Tareas</h1>
@@ -37,7 +42,7 @@ function init(ov, ctx) {
       <button type="button" class="tv-icb tv-x" data-cerrarvista aria-label="Cerrar Tareas" title="Cerrar (Esc)">${svg('x')}</button></div>
     <form class="tv-rapida" autocomplete="off">
       <div class="tv-modo" role="group" aria-label="El campo de arriba"><button type="button" data-modo="anadir" aria-pressed="true">${svg('mas')}Añadir</button><button type="button" data-modo="buscar" aria-pressed="false">${svg('buscar')}Buscar</button></div>
-      <label class="tv-sel tv-rdept"><span class="tv-sr">Departamento</span><select data-rdept>${ctx.DEPT_KEYS.map(k => `<option value="${k}">${esc(ctx.DEPTS[k].name)}</option>`).join('')}</select></label>
+      <label class="tv-sel tv-rdept"><span class="tv-sr">Quién la hace</span><select data-rdept><option value="yo">Para mí</option>${ctx.DEPT_KEYS.map(k => `<option value="${k}">${esc(ctx.DEPTS[k].name)}</option>`).join('')}</select></label>
       <input class="tv-rin" data-rin placeholder="Qué hay que hacer… (#etiqueta, !alta, «para el viernes»)" aria-label="Añadir una tarea" maxlength="4000">
       <label class="tv-tog tv-ridea"><input type="checkbox" data-ridea> Como idea</label>
       <button type="submit" class="tv-btn pri" data-rok>Añadir</button>
@@ -47,7 +52,9 @@ function init(ov, ctx) {
     <div class="tv-toast" role="status" hidden><span></span><button type="button" data-deshacer>DESHACER</button><button type="button" class="tv-icb" data-cerrartoast aria-label="Cerrar el aviso">${svg('x')}</button></div></div>`;
   const $ = s => ov.querySelector(s);
   const main = $('.tv-main'), det = $('.tv-det'), rin = $('[data-rin]'), rdept = $('[data-rdept]'), toast = $('.tv-toast'), hint = $('.tv-rhint');
-  rdept.value = S.dept; $('.tv-demo').hidden = !datos.demo;
+  const paraMi = () => rdept.value === 'yo';
+  function elegirDestino() { rdept.value = S.tab === 'mias' ? 'yo' : S.dept; $('.tv-rapida').classList.toggle('mia', paraMi()); } // plan D: en Mías, lo que escribes es para ti
+  elegirDestino(); $('.tv-demo').hidden = !datos.demo;
 
   /* ---------- la dirección ---------- */
   function leerHash() {
@@ -55,16 +62,17 @@ function init(ov, ctx) {
     const tab = h.get('tareas'); if (TABS.some(([k]) => k === tab)) S.tab = tab;
     S.f = {}; for (const k of FILTROS) if (h.get(k)) S.f[k] = k === 'hechas' ? true : h.get(k);
     if (h.get('p')) S.proyecto = h.get('p');
+    if (h.get('l')) S.mlista = h.get('l'); // plan D: la lista del dueño (#tareas=mias&l=hoy)
     return h.get('t');
   }
   function escribirHash() {
     if (!S.abierta) return;
-    const h = new URLSearchParams(location.hash.slice(1)); for (const k of ['tareas', 't', 'p', ...FILTROS]) h.delete(k);
-    h.set('tareas', S.tab); if (S.tab === 'lista') for (const k of FILTROS) if (S.f[k]) h.set(k, S.f[k] === true ? '1' : S.f[k]);
+    const h = new URLSearchParams(location.hash.slice(1)); for (const k of ['tareas', 't', 'p', 'l', ...FILTROS]) h.delete(k);
+    h.set('tareas', S.tab); if (S.tab === 'mias') h.set('l', S.mlista); if (S.tab === 'lista') for (const k of FILTROS) if (S.f[k]) h.set(k, S.f[k] === true ? '1' : S.f[k]);
     if (S.tab === 'proyectos' && S.proyecto) h.set('p', S.proyecto); if (S.detalle) h.set('t', S.detalle);
     const nuevo = '#' + h.toString().replace(/=(?=&|$)/g, ''); if (nuevo !== location.hash) history.replaceState(null, '', nuevo);
   }
-  function limpiarHash() { const h = new URLSearchParams(location.hash.slice(1)); for (const k of ['tareas', 't', 'p', ...FILTROS]) h.delete(k); const s = h.toString(); history.replaceState(null, '', s ? '#' + s : location.pathname + location.search); }
+  function limpiarHash() { const h = new URLSearchParams(location.hash.slice(1)); for (const k of ['tareas', 't', 'p', 'l', ...FILTROS]) h.delete(k); const s = h.toString(); history.replaceState(null, '', s ? '#' + s : location.pathname + location.search); }
 
   /* ---------- cargar ---------- */
   async function cargar() {
@@ -81,15 +89,16 @@ function init(ov, ctx) {
 
   /* ---------- pintar ---------- */
   function contar() {
-    const n = { inicio: S.tareas.filter(t => t.state === 'waiting').length };
-    for (const [k] of TABS) { const b = ov.querySelector(`[data-tab="${k}"]`), x = b.querySelector('.tv-n'); b.setAttribute('aria-selected', String(k === S.tab)); b.tabIndex = k === S.tab ? 0 : -1; x.hidden = !n[k]; x.textContent = n[k] || ''; if (n[k]) b.setAttribute('aria-label', `${b.textContent.replace(/\d+$/, '').trim()}: ${n[k]} esperan tu OK`); else b.removeAttribute('aria-label'); }
+    const n = { inicio: S.tareas.filter(t => t.state === 'waiting').length, mias: cuentasMias(S.tareas).hoy }; // plan D: Mías cuenta lo tuyo de hoy
+    for (const [k] of TABS) { const b = ov.querySelector(`[data-tab="${k}"]`), x = b.querySelector('.tv-n'); b.setAttribute('aria-selected', String(k === S.tab)); b.tabIndex = k === S.tab ? 0 : -1; x.hidden = !n[k]; x.textContent = n[k] || ''; x.classList.toggle('mia', k === 'mias'); if (n[k]) b.setAttribute('aria-label', `${b.textContent.replace(/\d+$/, '').trim()}: ${n[k]} ${k === 'mias' ? 'para hoy' : 'esperan tu OK'}`); else b.removeAttribute('aria-label'); }
     main.setAttribute('aria-labelledby', 'tvTab-' + S.tab);
   }
   function pintar() {
     contar(); escribirHash();
     if (!S.cargado) { main.innerHTML = S.error ? `<div class="tv-vacio"><b>No se pudieron traer las tareas</b><span>${esc(S.error)}</span><button type="button" class="tv-btn" data-reintentar>Reintentar</button></div>` : '<p class="tv-cargando">Cargando…</p>'; return; }
     const scroll = main.scrollTop, foco = clavFoco();
-    if (S.tab === 'inicio') main.innerHTML = inicioHTML(S.tareas, c, S.plegadas, { crono: activoCrono(S.tareas, 'Tú') });
+    if (S.tab === 'mias') main.innerHTML = `<div class="tv-mias">${railHTML(S.tareas, c, { lista: S.mlista })}<div class="tv-mmain">${miasHTML(S.tareas, c, { lista: S.mlista, modo: S.mmodo, plegadas: S.plegadas })}</div></div>`; // plan D
+    else if (S.tab === 'inicio') main.innerHTML = inicioHTML(S.tareas, c, S.plegadas, { crono: activoCrono(S.tareas, 'Tú') });
     else if (S.tab === 'lista') { const r = listaHTML(S.tareas, S.f, c, { orden: S.orden, grupo: S.grupo, sel: S.sel }); S.idsLista = r.ids; main.innerHTML = `${barraFiltros(S.f, c, { orden: S.orden, grupo: S.grupo })}<div class="tv-fchips">${chipsFiltro(S.f, c)}<span class="tv-total">${r.total} ${r.total === 1 ? 'tarea' : 'tareas'}</span></div>${barraSeleccion(S.sel.size, c)}<div class="tv-lista">${r.html}</div>`; }
     else if (S.tab === 'tablero') main.innerHTML = `<div class="tv-tbh"><label class="tv-tog"><input type="checkbox" data-carriles${S.carriles ? ' checked' : ''}> Un carril por departamento</label><span class="tv-ayuda">Arrastra una tarjeta para cambiarla de estado, de turno o de departamento; todo se puede deshacer.</span></div>${tableroHTML(S.tareas, c, { carriles: S.carriles, colMovil: S.colMovil })}`;
     else if (S.tab === 'proyectos') { const p = S.proyecto && c.proyecto(S.proyecto) || (S.proyecto && S.cat.proyectos.find(x => x.id === S.proyecto)); main.innerHTML = S.formP ? formProyectoHTML(S.formP) : p ? proyectoHTML(p, S.tareas, c, { mapa: S.mapa }) : proyectosHTML(S.cat, c, { mostrarCerrados: S.cerrados }); }
@@ -116,7 +125,7 @@ function init(ov, ctx) {
     if (e.target.closest('[data-cerrartoast]')) { toast.hidden = true; deshacer = null; return; }
     if (!e.target.closest('[data-deshacer]') || !deshacer) return;
     const fn = deshacer; deshacer = null; toast.hidden = true;
-    try { await fn(); aviso('Deshecho.'); } catch (er) { aviso(/En curso|ya empezó|está en curso/.test(er.message) ? 'Ya la empezó el agente: si no la quieres, detenla en su detalle.' : 'No se pudo deshacer: ' + er.message); }
+    try { await fn(); aviso('Deshecho.'); } catch (er) { aviso(/En curso|ya empezó|está en curso|está trabajando/.test(er.message) ? 'Ya la empezó el agente: si no la quieres, detenla en su detalle.' : 'No se pudo deshacer: ' + er.message); }
     await cargar(); if (S.detalle) refrescarDetalle(false); ctx.alCambiar?.();
   });
   async function hacer(fn, ok, fnDeshacer) { try { const r = await fn(); if (ok) aviso(typeof ok === 'function' ? ok(r) : ok, fnDeshacer ? () => fnDeshacer(r) : null); await cargar(); if (S.detalle) refrescarDetalle(false); ctx.alCambiar?.(); return r; } catch (e) { aviso('No se pudo: ' + e.message); return null; } }
@@ -129,8 +138,16 @@ function init(ov, ctx) {
     hint.textContent = rin.value.trim() && bits.length ? 'Entendí: ' + bits.join(' · ') : '';
   }
   async function etiquetasDe(nombres = []) { const ids = []; for (const n of nombres) { const ya = S.cat.etiquetas.find(e => e.nombre.toLowerCase() === n); if (ya) ids.push(ya.id); else { try { ids.push((await datos.etiqueta.crear({ nombre: n })).etiqueta.id); } catch {} } } return ids; }
+  // plan D: una tarea para el dueño (sin enrutador ni agente) — desde el campo de arriba con «Para mí», o desde «+ Añadir tarea» de su lista
+  async function anadirMia(raw, extra = {}) {
+    const r = leerRapida(raw); if (!r.texto) { aviso('Escribe qué tienes que hacer.'); return null; }
+    const etiquetas = await etiquetasDe(r.etiquetas);
+    const cuerpo = { title: r.texto, ...(S.tab === 'mias' ? presetLista(S.mlista) : {}), ...(r.prioridad ? { prioridad: r.prioridad } : {}), ...(r.limite ? { limite: r.limite } : {}), ...(r.at ? { at: r.at } : {}), ...(etiquetas.length ? { etiquetas } : {}), ...extra };
+    return hacer(() => datos.mias.crear(cuerpo), x => `Para ti: «${x.title}»${S.tab === 'mias' ? '' : ' — está en Mías'}.`, x => datos.accion.borrar(x.id));
+  }
   async function anadir(extra = {}) {
     const raw = rin.value.trim(); if (!raw) { rin.focus(); return; }
+    if (paraMi()) { rin.value = ''; pista(); $('[data-rok]').disabled = true; const t = await anadirMia(raw, extra); $('[data-rok]').disabled = false; if (!t) rin.value = raw; S.preset = null; return; }
     const r = leerRapida(raw); if (!r.texto) { aviso('Escribe qué hay que hacer.'); return; }
     const etiquetas = await etiquetasDe(r.etiquetas), idea = $('[data-ridea]').checked;
     const cuerpo = { dept: rdept.value, text: r.texto, ...(r.prioridad ? { prioridad: r.prioridad } : {}), ...(r.limite ? { limite: r.limite } : {}), ...(r.at ? { at: r.at } : {}), ...(etiquetas.length ? { etiquetas } : {}), ...(idea ? { idea: true } : {}), ...extra };
@@ -164,7 +181,7 @@ function init(ov, ctx) {
   async function guardarYa() {
     clearTimeout(espera); const p = pend; pend = null; if (!p) return;
     const trabajo = {}, org = {};
-    for (const [k, v] of Object.entries(p.campos)) (['text', 'title', 'agent', 'at'].includes(k) ? trabajo : org)[k] = v;
+    for (const [k, v] of Object.entries(p.campos)) (['text', 'title', 'agent', 'at', 'dept'].includes(k) ? trabajo : org)[k] = v;
     try {
       if (Object.keys(trabajo).length) await datos.editar(p.id, { ...trabajo, reroute: false });
       if (Object.keys(org).length) await datos.organizar(p.id, org);
@@ -189,6 +206,24 @@ function init(ov, ctx) {
     if (k === 'archivar') { const r = await hacer(() => datos.accion.archivar(id, true), `Archivada: ${nombre}.`, () => datos.accion.archivar(id, false)); if (r) cerrarDetalle(); return; }
     if (k === 'comentar') { const i = det.querySelector('[data-comentar]'); const txt = i.value.trim(); if (!txt) return i.focus(); i.value = ''; return hacer(() => datos.accion.comentar(id, txt)); }
     if (k === 'oficina') return ctx.abrirEnOficina?.(id);
+    // plan D: lo del dueño — hacerla, empezarla, delegarla, devolverla, y «Lo hago yo» con la de un agente
+    if (k === 'aceptar') return hacer(() => datos.estado(id, 'next'), `Aceptada: ${nombre} está en tu lista.`, () => datos.estado(id, 'idea'));
+    if (k === 'hecha-mia') return hacer(() => datos.estado(id, 'done'), `Hecha: ${nombre}.`, () => datos.estado(id, 'next'));
+    if (k === 'reabrir') return hacer(() => datos.estado(id, 'next'), `${nombre} vuelve a tu lista.`, () => datos.estado(id, 'done'));
+    if (k === 'empezar') return hacer(() => datos.mias.empezar(id, true), `Empezaste ${nombre}: corre tu cronómetro.`, () => datos.mias.empezar(id, false));
+    if (k === 'pausar') return hacer(() => datos.mias.empezar(id, false), `${nombre} queda para luego.`, () => datos.mias.empezar(id, true));
+    if (k === 'delegar') { const f = det.querySelector('.tv-delegar'); f.hidden = false; f.querySelector('[data-dg="dept"]')?.focus(); return; }
+    if (k === 'delegar-no') { det.querySelector('.tv-delegar').hidden = true; det.querySelector('[data-acc="delegar"]')?.focus(); return; }
+    if (k === 'delegar-ok') {
+      const f = det.querySelector('.tv-delegar'), val = q => f.querySelector(`[data-dg="${q}"]`), a = f.querySelector('[data-dg="a"]:checked')?.value || 'agente';
+      const cuerpo = a === 'persona' ? { a, persona: val('persona').value, nota: val('nota').value } : { a, dept: val('dept').value, agente: val('agente').value || undefined, nota: val('nota').value, needsOk: val('ok').checked };
+      if (a === 'agente') { S.dept = cuerpo.dept; guarda.set('dept', S.dept); }
+      const prev = { deAgente: t.deAgente || null };
+      return hacer(() => datos.mias.delegar(id, cuerpo), x => `Delegada: ${nombre} → ${a === 'persona' ? x.a : c.agente(x.a)?.name || 'el agente'}${x.como === 'enrutador' ? ' (la eligió la oficina)' : ''}. Síguela en Mías → Delegadas.`, () => datos.mias.tomar(id, { deshacer: true, ...prev }));
+    }
+    if (k === 'devolver-agente') { const o = c.agente(agenteDeOrigen(t)); if (!o) return; return hacer(() => datos.mias.delegar(id, { a: 'agente', dept: o.dept, agente: o.id }), `${nombre} vuelve a ${o.name}.`, () => datos.mias.tomar(id, { deshacer: true, deAgente: o.id })); }
+    if (k === 'tomar') { const antes = t.state, prev = { agente: t.agent, dept: t.dept, estado: antes, dueAt: t.dueAt }; return hacer(() => datos.mias.tomar(id), `Es tuya: ${nombre}. Está en Mías${antes === 'waiting' ? ', con el borrador del agente' : ''}.`, ['next', 'idea', 'scheduled'].includes(antes) ? () => datos.mias.delegar(id, { a: 'agente', ...prev, deshacer: true }) : null); }
+    if (k === 'descartar') return accion('borrar');
     if (k === 'borrar') { // se va al cerrar el aviso; DESHACER la deja
       const t1 = c.porId.get(id); cerrarDetalle(false); S.tareas = S.tareas.filter(x => x.id !== id); c.porId.delete(id); pintar();
       let vuelve = false; aviso(`Eliminada: ${nombre}.`, async () => { vuelve = true; });
@@ -202,14 +237,18 @@ function init(ov, ctx) {
     const b = e.target.closest('button, [data-abrir]'); if (!b || !ov.contains(b)) return;
     const d = b.dataset;
     if (d.cerrarvista !== undefined) return ctx.cerrar();
-    if (d.tab) { S.tab = d.tab; guarda.set('tab', S.tab); S.kpi = null; if (d.tab !== 'proyectos') { S.proyecto = null; S.formP = null; } pintar(); return; }
+    if (d.tab) { S.tab = d.tab; guarda.set('tab', S.tab); S.kpi = null; if (d.tab !== 'proyectos') { S.proyecto = null; S.formP = null; } elegirDestino(); pintar(); return; }
+    if (d.mlista) { S.mlista = d.mlista; guarda.set('mlista', S.mlista); pintar(); main.querySelector(`[data-mlista="${CSS.escape(d.mlista)}"]`)?.focus(); return; } // plan D
+    if (d.mmodo) { S.mmodo = d.mmodo; guarda.set('mmodo', S.mmodo); pintar(); main.querySelector(`[data-mmodo="${d.mmodo}"]`)?.focus(); return; }
+    if (d.aceptar) { const t = c.porId.get(d.aceptar); return hacer(() => datos.estado(d.aceptar, 'next'), `Aceptada: «${(t?.title || '').slice(0, 50)}» está en tu lista.`, () => datos.estado(d.aceptar, 'idea')); }
+    if (d.irmias !== undefined) { S.tab = 'mias'; S.mlista = d.irmias || S.mlista; guarda.set('tab', S.tab); guarda.set('mlista', S.mlista); elegirDestino(); pintar(); ov.querySelector('[data-tab="mias"]')?.focus(); return; }
     if (d.modo) { S.modo = d.modo; for (const x of ov.querySelectorAll('[data-modo]')) x.setAttribute('aria-pressed', String(x.dataset.modo === S.modo)); ov.querySelector('.tv-rapida').classList.toggle('buscar', S.modo === 'buscar'); rin.placeholder = S.modo === 'buscar' ? 'Buscar en las tareas…' : 'Qué hay que hacer… (#etiqueta, !alta, «para el viernes»)'; rin.setAttribute('aria-label', S.modo === 'buscar' ? 'Buscar en las tareas' : 'Añadir una tarea'); if (S.modo === 'anadir') { delete S.f.q; } else if (rin.value.trim()) { S.f.q = rin.value.trim(); S.tab = 'lista'; } pintar(); pista(); rin.focus(); return; }
     if (d.reintentar !== undefined) return cargar();
     if (d.abrir) return abrirDetalle(d.abrir);
     if (d.cerrar !== undefined) return cerrarDetalle();
     if (d.ok) return hacer(() => datos.accion.aprobar(d.ok), 'Aprobada: el agente la envía.', () => datos.accion.deshacerAprobar(d.ok));
     if (d.plegar) { const k = d.plegar; S.plegadas.has(k) ? S.plegadas.delete(k) : S.plegadas.add(k); guarda.set('plegadas', [...S.plegadas]); pintar(); main.querySelector(`[data-plegar="${k}"]`)?.focus(); return; }
-    if (d.anadir) { S.preset = PRESET_SECCION[d.anadir]?.() || null; S.modo = 'anadir'; rin.focus(); hint.textContent = S.preset?.limite ? `Con fecha límite ${S.preset.limite}.` : ''; return; }
+    if (d.anadir) { S.preset = PRESET_SECCION[d.anadir]?.() || null; S.modo = 'anadir'; if (d.anadir === 'mias') { rdept.value = 'yo'; $('.tv-rapida').classList.add('mia'); } rin.focus(); hint.textContent = S.preset?.limite ? `Con fecha límite ${S.preset.limite}.` : ''; return; }
     if (d.quitar) { if (d.quitar === '*') S.f = {}; else delete S.f[d.quitar]; if (d.quitar === 'q' || d.quitar === '*') rin.value = ''; pintar(); return; }
     if (d.lotebtn) {
       if (d.lotebtn === 'ninguna') { S.sel.clear(); pintar(); return; }
@@ -250,13 +289,17 @@ function init(ov, ctx) {
     if (d.carriles !== undefined) { S.carriles = el.checked; guarda.set('carriles', S.carriles); pintar(); return; }
     if (d.cerrados !== undefined) { S.cerrados = el.checked; pintar(); return; }
     if (d.dias !== undefined) { S.dias = +el.value; S.resumen = null; S.kpi = null; pintar(); return; }
-    if (d.rdept !== undefined) { S.dept = el.value; guarda.set('dept', S.dept); return; }
+    if (d.rdept !== undefined) { if (el.value !== 'yo') { S.dept = el.value; guarda.set('dept', S.dept); } $('.tv-rapida').classList.toggle('mia', paraMi()); return; }
+    if (d.hecha) { const t = c.porId.get(d.hecha), n = `«${(t?.title || '').slice(0, 50)}»`; return el.checked ? hacer(() => datos.estado(d.hecha, 'done'), `Hecha: ${n}.`, () => datos.estado(d.hecha, 'next')) : hacer(() => datos.estado(d.hecha, 'next'), `${n} vuelve a tu lista.`, () => datos.estado(d.hecha, 'done')); } // plan D: la casilla redonda
+    if (d.dg === 'dept') { const sel = det.querySelector('[data-dg="agente"]'); if (sel) sel.innerHTML = agentesDelegar(c, el.value, c.agente(agenteDeOrigen(c.porId.get(S.detalle) || {}))); return; }
+    if (d.dg === 'a') { const f = det.querySelector('.tv-delegar'), persona = el.value === 'persona'; for (const x of f.querySelectorAll('.tv-dg-agente')) x.hidden = persona; for (const x of f.querySelectorAll('.tv-dg-persona')) x.hidden = !persona; return; }
     if (d.sel) { el.checked ? S.sel.add(d.sel) : S.sel.delete(d.sel); const bar = main.querySelector('.tv-selbar'); const nueva = barraSeleccion(S.sel.size, c); if (bar) bar.outerHTML = nueva || ''; else if (nueva) main.querySelector('.tv-lista')?.insertAdjacentHTML('beforebegin', nueva); el.closest('.tv-fila')?.classList.toggle('sel', el.checked); return; }
     if (d.lote) { const v = el.value; if (!v && d.lote !== 'limite') return; const ids = [...S.sel]; const valor = v === 'null' ? null : v || null; await hacer(() => datos.lote(ids, d.lote, valor), x => `${x.hechas.length} ${x.hechas.length === 1 ? 'cambiada' : 'cambiadas'}${x.saltadas.length ? ` · ${x.saltadas.length} no se podían (hechas o en curso)` : ''}.`, x => datos.deshacerLote(x.antes)); return; }
     if (!S.detalle) return;
     if (d.c) {
       if (d.c === 'proyecto' && el.value === '+') { el.value = c.porId.get(S.detalle)?.proyecto || ''; S.tab = 'proyectos'; S.formP = {}; pintar(); main.querySelector('[name="nombre"]')?.focus(); return; }
-      const v = d.c === 'at' ? (el.value ? new Date(el.value).getTime() : null) : d.c === 'estimacion' ? (el.value ? +el.value : null) : el.value || null;
+      let v = d.c === 'at' ? (el.value ? new Date(el.value).getTime() : null) : d.c === 'estimacion' ? (el.value ? +el.value : null) : el.value || null;
+      if (d.c === 'limite' && v) { const prev = String(c.porId.get(S.detalle)?.limite || ''); if (prev.length > 10) v += prev.slice(10); } // otro día, la misma hora
       programar(S.detalle, { [d.c]: v }); if (el.tagName === 'SELECT' || el.type === 'date' || el.type === 'datetime-local') guardarYa(); return;
     }
     if (d.campover) { const p = c.prefCampos(), oc = new Set(p.ocultos || []); el.checked ? oc.delete(d.campover) : oc.add(d.campover); guarda.set('campos', { ...p, ocultos: [...oc] }); await refrescarDetalle(false); const det2 = det.querySelector('.tv-pers'); if (det2) det2.open = true; det.querySelector(`[data-campover="${d.campover}"]`)?.focus(); return; } // plan T6
@@ -268,6 +311,8 @@ function init(ov, ctx) {
   ov.addEventListener('input', e => { const d = e.target.dataset; if (S.detalle && (d.c === 'text' || d.c === 'title')) programar(S.detalle, { [d.c]: e.target.value }); });
   ov.addEventListener('focusout', e => { if (pend && det.contains(e.target)) guardarYa(); });
   ov.addEventListener('submit', async e => {
+    const fm = e.target.closest('[data-maddf]'); // plan D: «+ Añadir tarea» de la lista del dueño (con la fecha o el proyecto de esa lista)
+    if (fm) { e.preventDefault(); const i = fm.querySelector('[data-madd]'), raw = i.value.trim(); if (!raw) return; i.value = ''; const t = await anadirMia(raw); if (!t) i.value = raw; main.querySelector('[data-madd]')?.focus(); return; }
     const f = e.target.closest('[data-formp]'); if (!f) return; e.preventDefault();
     const datosP = Object.fromEntries(new FormData(f)); const id = f.dataset.formp;
     try { const r = id ? await datos.proyecto.cambiar(id, datosP) : await datos.proyecto.crear(datosP); S.formP = null; S.proyecto = r.proyecto.id; aviso(id ? 'Proyecto guardado.' : `Proyecto creado: «${r.proyecto.nombre}». Añádele tareas arriba.`); if (!id) S.preset = { proyecto: r.proyecto.id }; await cargar(); }
@@ -287,6 +332,8 @@ function init(ov, ctx) {
     }
   });
 
+  ov.addEventListener('toggle', e => { const k = e.target.dataset?.hechask; if (!k) return; if (e.target.open) S.plegadas.delete(k); else S.plegadas.add(k); guarda.set('plegadas', [...S.plegadas]); }, true); // COMPLETADAS · N se recuerda
+
   /* ---------- arrastrar (ratón): tablero y el turno de la lista ---------- */
   let arr = null;
   ov.addEventListener('dragstart', e => { const f = e.target.closest('.tv-fila[draggable="true"]'); if (!f) return; arr = c.porId.get(f.dataset.t); if (!arr) return; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', arr.id); f.classList.add('arrastrando'); });
@@ -294,7 +341,7 @@ function init(ov, ctx) {
   const destino = e => e.target.closest('.tv-drop, .tv-lista .tv-filas');
   ov.addEventListener('dragover', e => {
     if (!arr) return; const z = destino(e); if (!z) return;
-    const ok = z.classList.contains('tv-drop') ? !!movimiento(arr, columnaDe(arr, c.porId), z.dataset.col, { dept: z.dataset.dept || null }) : arr.state === 'next';
+    const ok = z.dataset.mcol ? esDelDueno(arr) && !!movimientoMio(columnaMia(arr), z.dataset.mcol) : z.classList.contains('tv-drop') ? !!movimiento(arr, columnaDe(arr, c.porId), z.dataset.col, { dept: z.dataset.dept || null }) : arr.state === 'next';
     z.classList.toggle('si', ok); z.classList.toggle('no', !ok); if (ok) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
   });
   ov.addEventListener('dragleave', e => { const z = destino(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove('si', 'no'); });
@@ -303,12 +350,23 @@ function init(ov, ctx) {
     const despues = [...z.querySelectorAll('.tv-fila')].find(n => { const r = n.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
     const ordenIds = () => { const ids = [...z.querySelectorAll('.tv-fila')].map(n => n.dataset.t).filter(x => x !== t.id); const i = despues ? ids.indexOf(despues.dataset.t) : ids.length; ids.splice(i < 0 ? ids.length : i, 0, t.id); return ids; };
     if (!z.classList.contains('tv-drop')) { if (t.state === 'next') await hacer(() => datos.orden(t.id, ordenIds()), 'Turno cambiado.'); return; }
+    if (z.dataset.mcol) { // plan D: el tablero del dueño — Por hacer · Haciendo · Hecha
+      const mm = esDelDueno(t) && movimientoMio(columnaMia(t), z.dataset.mcol); if (!mm) return; const nm = `«${t.title.slice(0, 50)}»`;
+      if (mm.accion === 'orden') return hacer(() => datos.orden(t.id, ordenIds()), 'Orden cambiado.');
+      if (mm.accion === 'empezar') return hacer(() => datos.mias.empezar(t.id, true), `Empezaste ${nm}: corre tu cronómetro.`, () => datos.mias.empezar(t.id, false));
+      if (mm.accion === 'pausar') return hacer(() => datos.mias.empezar(t.id, false), `${nm} queda para luego.`, () => datos.mias.empezar(t.id, true));
+      if (mm.accion === 'hecha') return hacer(() => datos.estado(t.id, 'done'), `Hecha: ${nm}.`, () => datos.estado(t.id, 'next'));
+      if (mm.accion === 'reabrir') return hacer(() => datos.estado(t.id, 'next'), `${nm} vuelve a tu lista.`, () => datos.estado(t.id, 'done'));
+      return;
+    }
     const de = columnaDe(t, c.porId), m = movimiento(t, de, z.dataset.col, { dept: z.dataset.dept || null }); if (!m) return;
     const n = `«${t.title.slice(0, 50)}»`;
     if (m.accion === 'orden') return hacer(() => datos.orden(t.id, ordenIds()), 'Turno cambiado.');
     if (m.accion === 'pedir') return hacer(() => datos.estado(t.id, 'next'), `Pedida: ${n}.`, () => datos.estado(t.id, 'idea'));
     if (m.accion === 'aparcar') return hacer(() => datos.estado(t.id, 'idea'), `${n} vuelve a ideas.`, () => datos.estado(t.id, 'next'));
-    if (m.accion === 'hecha') return hacer(() => datos.estado(t.id, 'done'), `${n} marcada como hecha, sin ejecutarla.`, () => datos.estado(t.id, 'next'));
+    if (m.accion === 'hecha') return hacer(() => datos.estado(t.id, 'done'), esDelDueno(t) ? `Hecha: ${n}.` : `${n} marcada como hecha, sin ejecutarla.`, () => datos.estado(t.id, 'next'));
+    if (m.accion === 'tomar') { const prev = { agente: t.agent, dept: t.dept, estado: t.state, dueAt: t.dueAt }; return hacer(() => datos.mias.tomar(t.id), `Es tuya: ${n}. Está en Mías.`, () => datos.mias.delegar(t.id, { a: 'agente', ...prev, deshacer: true })); } // plan D
+    if (m.accion === 'devolver') { if (!esDelDueno(t)) return hacer(() => datos.accion.persona(t.id, null), `${n} vuelve a los agentes.`, () => datos.accion.persona(t.id, t.person)); const o = c.agente(agenteDeOrigen(t) || t.agent); if (!o) return; return hacer(() => datos.mias.delegar(t.id, { a: 'agente', dept: o.dept, agente: o.id }), `${n} vuelve a ${o.name}.`, () => datos.mias.tomar(t.id, { deshacer: true, deAgente: o.id })); }
     if (m.accion === 'ya') { const prev = t.dueAt; return hacer(() => datos.editar(t.id, { at: null }), `${n} arranca ya.`, prev > Date.now() ? () => datos.editar(t.id, { at: prev }) : null); }
     if (m.accion === 'aprobar') return hacer(() => datos.accion.aprobar(t.id), `Aprobada: ${n}. El agente la envía.`, () => datos.accion.deshacerAprobar(t.id));
     if (m.accion === 'repetir') return hacer(() => datos.accion.repetir(t.id), r => `Otra vez: «${r.title}».`, r => datos.accion.borrar(r.id));
@@ -320,7 +378,7 @@ function init(ov, ctx) {
     version: VERSION,
     open(o = {}) {
       S.abierta = true; const t = leerHash();
-      if (o.tab) S.tab = o.tab; if (o.filtros) S.f = { ...o.filtros };
+      if (o.tab) S.tab = o.tab; if (o.filtros) S.f = { ...o.filtros }; if (o.lista) S.mlista = o.lista; elegirDestino();
       vigilar(); pintar(); cargar().then(() => { const id = o.tarea || t; if (id) abrirDetalle(id); });
       setTimeout(() => (o.tarea || t ? null : ov.querySelector(`[data-tab="${S.tab}"]`)?.focus()), 30);
     },
@@ -330,6 +388,7 @@ function init(ov, ctx) {
     selection() {
       if (S.detalle) { const t = c.porId.get(S.detalle); return { view: 'tareas', label: `Tarea «${(t?.title || '').slice(0, 50)}»`, kind: 'task', id: S.detalle }; }
       if (S.tab === 'proyectos' && S.proyecto) { const p = c.proyecto(S.proyecto); return { view: 'tareas', label: `Proyecto «${p?.nombre || ''}»`, kind: 'proyecto', id: S.proyecto }; }
+      if (S.tab === 'mias') return { view: 'tareas', label: `Tus tareas · ${nombreLista(S.mlista, c)}`, kind: null }; // plan D
       return { view: 'tareas', label: `Tareas · ${TABS.find(([k]) => k === S.tab)?.[1] || ''}`, kind: null };
     },
     abrirTarea: id => { S.abierta = true; abrirDetalle(id); },

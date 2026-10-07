@@ -12,6 +12,7 @@
 // goes through the office's own local API, so the same rules apply as in the page (the guard, the approvals, the logs).
 import fs from 'node:fs';
 import path from 'node:path';
+import { leerRapida } from './tareas/rapida.mjs'; // plan D: «/yo llamar al banco el viernes»
 
 const API = process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'; // tests point it at a local fake
 export const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -32,7 +33,8 @@ export function parseCommand(text) {
   const m = /^\/(\w+)(?:@\w+)?\s*([\s\S]*)$/.exec(t);
   if (!m) return { cmd: 'dimitri', arg: t };
   const cmd = m[1].toLowerCase(), arg = m[2].trim();
-  const alias = { start: 'ayuda', help: 'ayuda', ayuda: 'ayuda', estado: 'estado', status: 'estado', pendientes: 'pendientes', aprobaciones: 'pendientes', tarea: 'tarea', task: 'tarea', silencio: 'silencio', quiet: 'silencio', id: 'id' };
+  const alias = { start: 'ayuda', help: 'ayuda', ayuda: 'ayuda', estado: 'estado', status: 'estado', pendientes: 'pendientes', aprobaciones: 'pendientes', tarea: 'tarea', task: 'tarea', silencio: 'silencio', quiet: 'silencio', id: 'id',
+    mias: 'mias', mías: 'mias', hoy: 'mias', yo: 'yo', mia: 'yo', mía: 'yo' }; // plan D (7 oct 2026): tus tareas
   return { cmd: alias[cmd] || 'desconocido', arg };
 }
 const DEPT_WORDS = { emails: ['correos', 'emails', 'correo'], sales: ['ventas', 'sales'], marketing: ['marketing', 'mercadeo'], ops: ['operaciones', 'ops'], fin: ['finanzas', 'contabilidad', 'fin'], delivery: ['entregas', 'delivery'] };
@@ -102,7 +104,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
       return;
     }
     const { cmd, arg } = parseCommand(text);
-    if (cmd === 'ayuda') return send(chat, `Hola, soy <b>${esc(cfg.deputy?.name || 'Dimitri')}</b>, desde tu oficina ${esc(cfg.name || '')}.\n\nEscríbeme lo que necesites, como en la oficina.\n/estado · cómo va la oficina\n/pendientes · lo que espera tu visto bueno\n/tarea ventas: … · una tarea para un departamento\n/silencio 2 · no molestar durante 2 horas (sin número: vuelve a avisar)\n\nLas aprobaciones te llegan con botones.`);
+    if (cmd === 'ayuda') return send(chat, `Hola, soy <b>${esc(cfg.deputy?.name || 'Dimitri')}</b>, desde tu oficina ${esc(cfg.name || '')}.\n\nEscríbeme lo que necesites, como en la oficina.\n/estado · cómo va la oficina\n/pendientes · lo que espera tu visto bueno\n/tarea ventas: … · una tarea para un departamento\n/mias · lo tuyo de hoy (con ✅ para marcarlo hecho)\n/yo llamar al banco el viernes · una tarea para ti\n/silencio 2 · no molestar durante 2 horas (sin número: vuelve a avisar)\n\nLas aprobaciones te llegan con botones.`);
     if (cmd === 'id') return send(chat, `Tu id de Telegram: <code>${esc(chat)}</code>`);
     if (cmd === 'estado') { const s = await local('GET', '/api/status'); const mark = { ok: '🟢', info: '⚪', warn: '🟡', bad: '🔴' }; return send(chat, `<b>Estado de la oficina</b>\n` + s.checks.map(c => `${mark[c.state]} <b>${esc(c.label)}</b>: ${esc(c.detail)}${c.fix ? '\n   → ' + esc(c.fix) : ''}`).join('\n')); }
     if (cmd === 'pendientes') {
@@ -115,6 +117,18 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
     if (cmd === 'tarea') {
       const p = parseTask(arg); if (!p) return send(chat, 'Así: <code>/tarea ventas: prepara la propuesta para Sol</code> (correos, ventas, marketing, operaciones, finanzas, entregas).');
       const r = await local('POST', '/api/tasks', { dept: p.dept, text: p.text }); return send(chat, `➕ Tarea para ${esc(p.dept)}: «${esc(r.title || p.text)}».`);
+    }
+    if (cmd === 'mias') { // plan D: lo tuyo de hoy, cada una con su ✅
+      const r = await local('GET', '/api/tareas/mias'), hoy = r.listas?.hoy?.pendientes || [], b = r.cuentas?.bandeja || 0;
+      if (!hoy.length) return send(chat, `Nada tuyo para hoy. ✓${b ? `\nEn tu bandeja hay ${b} sin fecha.` : ''}`);
+      await send(chat, `<b>Lo tuyo hoy</b> (${hoy.length})${b ? ` · ${b} en tu bandeja` : ''}:`);
+      for (const t of hoy.slice(0, 10)) await send(chat, `${t.empezada ? '▶ ' : ''}<b>${esc(t.title)}</b>${t.limite ? ' · ' + esc(String(t.limite).replace('T', ' ')) : ''}${t.prioridad === 'alta' ? ' · prioridad alta' : ''}`, { reply_markup: { inline_keyboard: [[{ text: '✅ Hecha', callback_data: 'mh:' + t.id }]] } });
+      return;
+    }
+    if (cmd === 'yo') { // plan D: una tarea para ti, con la fecha en palabras
+      if (!arg) return send(chat, 'Así: <code>/yo llamar al banco el viernes a las 10</code>');
+      const p = leerRapida(arg), r = await local('POST', '/api/tareas/mias', { title: p.texto || arg, ...(p.prioridad ? { prioridad: p.prioridad } : {}), ...(p.limite ? { limite: p.limite } : {}), ...(p.at ? { at: p.at } : {}) });
+      return send(chat, `➕ Para ti: «${esc(r.tarea.title)}»${r.tarea.limite ? ' · ' + esc(String(r.tarea.limite).replace('T', ' ')) : ' · en tu bandeja'}.`);
     }
     if (cmd === 'silencio') { const h = Math.max(0, Math.min(24, +arg || 0)); st.snoozeUntil = h ? Date.now() + h * 3600e3 : 0; saveSt(); if (!h) flushHeld(); return send(chat, h ? `🔕 Sin avisos durante ${h} h (salvo lo urgente).` : '🔔 Avisos activados.'); }
     if (cmd === 'desconocido') return send(chat, 'No conozco ese comando. /ayuda');
@@ -141,6 +155,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
       if (k === 'rj') { st.pendingReject[chat] = { id, by }; saveSt(); await done(''); return send(chat, '↩ ¿Qué debe cambiar? Escríbelo en tu próximo mensaje.', { reply_markup: { force_reply: true } }); }
       if (k === 'vw') { const t = (await local('GET', '/api/tasks')).find(x => x.id === id); local('POST', `/api/tasks/${id}/seen`, {}).catch(() => {}); await done(''); return send(chat, t ? esc(t.draft || t.result || '') : 'Esa tarea ya no existe.'); }
       if (k === 'rp') { await local('POST', `/api/tasks/${id}/repeat`); await strip(); await done('Otra vez'); return send(chat, '↻ Va de nuevo a la cola.'); }
+      if (k === 'mh') { await local('POST', `/api/tareas/${id}/estado`, { a: 'done' }); await strip(); await done('Hecha'); return send(chat, '✅ Hecha. Lo que la esperaba sigue solo.'); } // plan D: una tarea tuya, desde /mias
       if (k === 'sd') { const r = await local('POST', '/api/sub/send', { msg: id }); await strip(); await done('Enviado'); return send(chat, `📤 Enviado a los jefes${r.tasks?.filter(Boolean).length ? ': ' + r.tasks.filter(Boolean).length + ' tarea(s)' : ''}.`); }
       await done('');
     } catch (e) { await done('No se pudo'); return send(chat, '✗ ' + esc(e.message)); }
@@ -170,7 +185,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console }) {
       } catch (e) { if (stopped) break; log.warn('telegram:', e.message); await new Promise(r => setTimeout(r, +process.env.TELEGRAM_RETRY_MS || 15000)); }
     }
   }
-  call('setMyCommands', { commands: [{ command: 'estado', description: 'Cómo va la oficina' }, { command: 'pendientes', description: 'Lo que espera tu visto bueno' }, { command: 'tarea', description: 'ventas: … — una tarea' }, { command: 'silencio', description: 'No molestar N horas' }, { command: 'ayuda', description: 'Qué puedo hacer' }] }).catch(() => {});
+  call('setMyCommands', { commands: [{ command: 'estado', description: 'Cómo va la oficina' }, { command: 'pendientes', description: 'Lo que espera tu visto bueno' }, { command: 'tarea', description: 'ventas: … — una tarea' }, { command: 'mias', description: 'Lo tuyo de hoy' }, { command: 'yo', description: 'Una tarea para ti' }, { command: 'silencio', description: 'No molestar N horas' }, { command: 'ayuda', description: 'Qué puedo hacer' }] }).catch(() => {});
   loop();
   return { owners: who.length, send: text => toOwners(text), sendTo: (id, text) => send(String(id), esc(text)), stop: () => { stopped = true; clearInterval(flushTimer); } };
 }

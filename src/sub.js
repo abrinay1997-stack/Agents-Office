@@ -29,6 +29,7 @@ const STUDIO_CHIPS = [['Hazme 3 creativos con esta foto para Instagram: propón 
 const VIEW_CHIPS = {
   contenido: [['¿Qué se publica esta semana? Dime día, hora, formato y red de cada pieza, y qué falta.', '¿Qué se publica esta semana?'], ['Mira los días sin publicación de las próximas dos semanas y propón borradores para rellenarlos.', 'Rellena los huecos'], ['¿Qué piezas esperan mi OK y qué les falta para poder salir?', '¿Qué espera mi OK?']],
   analiticas: [['¿Qué funcionó mejor estos 30 días y por qué crees que fue?', '¿Qué funcionó?'], ['Con estas cifras, ¿qué debería publicar más y qué menos?', '¿Qué publico más?'], ['¿Cómo van los seguidores y el alcance contra el mes pasado?', '¿Cómo van las redes?']],
+  tareas: [['¿Qué tengo yo hoy? Lo mío (lo que hago en persona), por orden, y qué puedo delegar.', '¿Qué tengo yo hoy?'], ['De mis tareas abiertas, ¿cuáles puede hacer un agente? Propón a quién delegarlas.', '¿Qué puedo delegar?'], ['¿Cómo va lo que delegué? Dime qué está en curso, qué espera mi OK y qué se atrasó.', '¿Cómo va lo delegado?']], // plan D: las tareas del dueño
   cal: [['¿Qué corre mañana? Tareas y rutinas, con su hora.', '¿Qué corre mañana?'], ['¿Qué rutinas fallaron la última vez y qué hago con eso?', '¿Qué rutina falló?'], ['Ayúdame a priorizar lo de esta semana: ¿qué es lo más importante y qué puede esperar?', 'Priorizar la semana']],
 };
 
@@ -181,6 +182,8 @@ export function initSub(ctx) {
   }
 
   /* ---------- the conversation ---------- */
+  const DUENO_DEPT = { name: 'Tú (tu lista)', short: 'TÚ', chip: '#6B3FB5' }; // plan D (7 oct 2026): una pieza que hace el dueño en persona va a su lista (Tareas → Mías)
+  const deptOf = k => (k === 'dueno' ? DUENO_DEPT : DEPTS[k] || { name: k, chip: '#999' });
   const fechaCorta = ymd => { const d = new Date(String(ymd).slice(0, 10) + 'T12:00'); return Number.isNaN(d.getTime()) ? ymd : d.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }); }; // plan T4
   function planHTML(m) {
     const p = m.plan; if (!p) return '';
@@ -196,22 +199,22 @@ export function initSub(ctx) {
           <label class="sb-inc"><input type="checkbox" class="sb-on"${include ? ' checked' : ''} aria-label="Incluir «${esc(t.title)}»"></label>
           <div class="sb-body">
             <div class="sb-t">${esc(t.title)}${include ? '' : ' <span class="sc-offl">no se incluye</span>'}</div>
-            <div class="sb-row"><select class="sb-dept" aria-label="Departamento">${DEPT_KEYS.map(k => `<option value="${k}"${k === dept ? ' selected' : ''}>${esc(DEPTS[k].name)}</option>`).join('')}</select>
-              <label class="sb-team"><input type="checkbox" class="sb-teamc"${team ? ' checked' : ''}> <span>todo el equipo</span></label>
+            <div class="sb-row"><select class="sb-dept" aria-label="Quién la hace">${[...DEPT_KEYS, 'dueno'].map(k => `<option value="${k}"${k === dept ? ' selected' : ''}>${esc(deptOf(k).name)}</option>`).join('')}</select>
+              ${dept === 'dueno' ? '' : `<label class="sb-team"><input type="checkbox" class="sb-teamc"${team ? ' checked' : ''}> <span>todo el equipo</span></label>`}
               <span class="sb-when"><label class="sb-atl" title="${at && !gone ? 'Se hace el ' + esc(when(at)) : 'Se hace en cuanto lo envíes'}"><span aria-hidden="true">◷</span><input type="datetime-local" class="sb-atin" value="${at && !gone ? toInput(at) : ''}" min="${toInput(Date.now())}" aria-label="Cuándo se hace (vacío: en cuanto lo envíes)"></label>${at && !gone ? '<button type="button" class="sb-atx" aria-label="Quitar la fecha: se hace en cuanto lo envíes" title="Quitar la fecha">✕</button>' : gone ? '' : '<span class="sb-at now">ya</span>'}</span></div>
             ${gone ? `<div class="sb-past" role="note"><span>Esa hora ya pasó (${esc(when(t.at))}). ¿Cuándo la hago?</span><span class="sb-pastb"><button type="button" class="sb-pastt" data-at="${pc.tomorrow}">${esc(pc.label)}</button><button type="button" class="sb-pastn">Ahora</button></span></div>` : ''}
             ${t.error ? `<div class="sb-moved">${esc(t.error)}</div>` : ''}
-            ${t.ownerSaid ? `<div class="sb-moved">La moví de ${esc(DEPTS[t.ownerSaid].name)} a ${esc(DEPTS[t.dept].name)}.</div>` : ''}
+            ${t.ownerSaid ? `<div class="sb-moved">La moví de ${esc(deptOf(t.ownerSaid).name)} a ${esc(deptOf(t.dept).name)}.</div>` : ''}
             ${t.why ? `<div class="sb-why">${esc(t.why)}</div>` : ''}
             ${t.prioridad === 'alta' || t.limite || t.espera?.length ? `<div class="sb-org">${t.prioridad === 'alta' ? '<span class="sb-alta">Prioridad alta</span>' : ''}${t.limite ? `<span>Para el ${esc(fechaCorta(t.limite))}</span>` : ''}${(t.espera || []).map(x => p.tasks[x]).filter(Boolean).map(d => `<span>Espera a «${esc(d.title.slice(0, 40))}»</span>`).join('')}</div>` : ''}
-            <details class="sb-det"><summary>Instrucciones para el jefe</summary><textarea class="sb-ins" rows="4" aria-label="Instrucciones para el jefe de ${esc(DEPTS[dept].name)}">${esc(e.instruction ?? t.instruction)}</textarea></details>
+            <details class="sb-det"><summary>${dept === 'dueno' ? 'Notas para ti' : 'Instrucciones para el jefe'}</summary><textarea class="sb-ins" rows="4" aria-label="${dept === 'dueno' ? 'Notas de la tarea para ti' : `Instrucciones para el jefe de ${esc(deptOf(dept).name)}`}">${esc(e.instruction ?? t.instruction)}</textarea></details>
           </div></div>`;
       }
       const task = t.taskId ? findBySid(t.taskId) : null;
       const st = task ? (task.state === 'done' && task.error ? 'con error' : STATE[task.state] || task.state) : t.state === 'sent' ? 'enviada' : t.state === 'skipped' ? 'descartada' : t.state === 'failed' ? 'no se pudo enviar' : '';
       return `<div class="sb-item sent ${t.state}${task ? ' st-' + task.state + (task.error ? ' err' : '') : ''}"${task ? ` data-sid="${esc(t.taskId)}" role="button" tabindex="0"` : ''}>
-          <span class="sb-dot" style="background:${DEPTS[t.dept].chip}"></span>
-          <div class="sb-body"><div class="sb-t">${esc(t.title)}</div><div class="sb-meta">${esc(DEPTS[t.dept].name)}${task ? ' · ' + esc(ctx.agentName(task.agent)) : ''} · <b>${esc(st)}</b>${t.error ? ' — ' + esc(t.error) : ''}</div></div></div>`;
+          <span class="sb-dot" style="background:${deptOf(t.dept).chip}"></span>
+          <div class="sb-body"><div class="sb-t">${esc(t.title)}</div><div class="sb-meta">${esc(deptOf(t.dept).name)}${task ? ' · ' + esc(ctx.agentName(task.agent)) : ''} · <b>${esc(st)}</b>${t.error ? ' — ' + esc(t.error) : ''}</div></div></div>`;
     }).join('');
     const n = p.tasks.filter(t => t.state === 'proposed' && (ed.get(t.i)?.include !== false)).length, blocked = p.tasks.some(unresolved);
     const pr = p.proyecto ? `<div class="sb-proy">Proyecto: <b>${esc(p.proyecto.nombre || '')}</b>${p.proyecto.limite ? ` · vence el ${esc(fechaCorta(p.proyecto.limite))}` : ''}${p.proyecto.objetivo ? `<span>${esc(p.proyecto.objetivo)}</span>` : ''}${p.proyecto.id && !open ? '<span>Míralo en Tareas → Proyectos (H).</span>' : ''}</div>` : '';

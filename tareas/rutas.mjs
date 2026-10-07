@@ -13,6 +13,7 @@ import { progresoProyecto } from './progreso.mjs';
 import { COLORES, ESTADOS_PROYECTO } from './catalogo.mjs';
 import { resumenTareas } from './resumen.mjs';
 import { iniciar as iniciarCrono, parar as pararCrono, activo as activoCrono } from './cronometro.mjs';
+import { DUENO, esDelDueno, dia } from './dueno.mjs';
 
 const ID = /^[a-z0-9]{4,24}$/i;
 const MAX_NOTAS = 60;
@@ -59,8 +60,9 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
       antes = t.state;
       const p = puede(t.state, a, q.rol === 'telegram' ? 'telegram' : q.rol); if (!p.ok) return { error: p.motivo, status: p.codigo === 'permiso' ? 403 : 409 };
       if (t.routine && a === 'idea') return { error: 'una ejecución de rutina no vuelve a ideas', status: 409 };
-      if (a === 'done') Object.assign(t, { doneAt: ahora(), result: t.result || 'Marcada como hecha, sin ejecutarla.', manual: true });
-      if (a === 'next') { t.addedAt = ahora(); delete t.dueAt; delete t.doneAt; delete t.error; }
+      if (a === 'done' && esDelDueno(t)) { pararCrono(t, DUENO, ahora()); delete t.empezada; Object.assign(t, { doneAt: ahora(), manual: true, hechaPor: q.rol === 'telegram' ? q.por : DUENO, ...(t.result ? {} : { result: 'Hecha por ti.' }) }); } // plan D: la hizo él
+      else if (a === 'done') Object.assign(t, { doneAt: ahora(), result: t.result || 'Marcada como hecha, sin ejecutarla.', manual: true });
+      if (a === 'next') { t.addedAt = ahora(); delete t.dueAt; delete t.doneAt; delete t.error; if (t.hechaPor) { delete t.hechaPor; delete t.manual; if (t.result === 'Hecha por ti.') delete t.result; } }
       t.state = a;
     }, { por: q.por });
     if (r.error) return { status: r.status || 400, error: r.error };
@@ -75,7 +77,7 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
       if (p === '/api/tareas/catalogo' && req.method === 'GET') return json(res, 200, catalogo()), true;
       if (p === '/api/tareas/agenda' && req.method === 'GET') {
         const sp = url.searchParams, a = agenda(alm.load(), { ahora: ahora(), agente: sp.get('agente') || null, dept: sp.get('dept') || null, dias: Math.min(30, +sp.get('dias') || 7) });
-        const pl = l => l.map(t => ({ id: t.id, title: t.title, agent: t.agent, dept: t.dept, state: t.state, prioridad: t.prioridad, limite: t.limite || null, dueAt: t.dueAt || null, pasos: t.pasos ? [t.pasos.filter(x => x.hecho).length, t.pasos.length] : null }));
+        const pl = l => l.map(t => ({ id: t.id, title: t.title, agent: t.agent, dept: t.dept, person: t.person || null, state: t.state, prioridad: t.prioridad, limite: t.limite || null, dueAt: t.dueAt || null, pasos: t.pasos ? [t.pasos.filter(x => x.hecho).length, t.pasos.length] : null }));
         return json(res, 200, { ...Object.fromEntries(['esperanOk', 'hoy', 'vencidas', 'enCurso', 'bloqueadas', 'proximas', 'recientes'].map(k => [k, pl(a[k])])), texto: agendaTexto(a, { nombre }) }), true;
       }
       if (p === '/api/tareas/cronometro' && req.method === 'GET') { const a = activoCrono(alm.load(), String(url.searchParams.get('quien') || 'Tú')); return json(res, 200, { activo: a ? { id: a.tarea.id, title: a.tarea.title, desde: a.desde } : null }), true; }
@@ -204,7 +206,7 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
         let dep = b.tarea ? l0.find(x => x.id === String(b.tarea)) : null;
         if (b.tarea && !dep) return json(res, 404, { error: 'esa tarea no existe: usa ver_tareas para el id, o describe lo que falta' }), true;
         if (dep && ciclo(l0, id, [dep.id])) return json(res, 409, { error: 'esa tarea ya espera a esta: sería un círculo' }), true;
-        if (!dep) dep = altaTarea({ dept: t0.dept, agent: t0.agent, title: `Para ti: ${String(b.texto || porque).slice(0, 80)}`, text: `${nombre(t0.agent)} necesita esto para seguir con «${t0.title}»:\n${porque}\n\nCuando lo tengas, márcala hecha (o pon el dato en el Cerebro) y la tarea sigue sola.`, by: 'agente', agenteOrigen: q.id, person: 'Tú', prioridad: 'alta', proyecto: t0.proyecto }, { por: q.por, arrancar: false });
+        if (!dep) dep = altaTarea({ dept: t0.dept, deAgente: t0.agent, title: `Para ti: ${String(b.texto || porque).slice(0, 80)}`, text: `${nombre(t0.agent)} necesita esto para seguir con «${t0.title}»:\n${porque}\n\nCuando lo tengas, márcala hecha (o pon el dato en el Cerebro) y la tarea sigue sola.`, by: 'agente', agenteOrigen: q.id, person: 'Tú', prioridad: 'alta', limite: dia(ahora()), proyecto: t0.proyecto }, { por: q.por, arrancar: false }); // en su Hoy: un agente espera
         alm.cambiar(id, t => { t.bloqueadaPor = [...new Set([...(t.bloqueadaPor || []), dep.id])]; t.pidioBloqueo = { at: ahora(), por: q.por, porque, tarea: dep.id }; (t.notas ||= []).push({ at: ahora(), por: q.por, texto: 'Bloqueada: ' + porque }); }, { por: q.por });
         avisar('bloqueo', `${nombre(t0.agent)} se bloqueó en «${t0.title}»: ${porque}${dep.person === 'Tú' ? ' — te dejé la tarea «' + dep.title + '» en Hoy.' : ''}`, { level: 'warn', task: id });
         return json(res, 200, { ok: true, bloqueadaPor: dep.id, para: dep.person === 'Tú' ? 'el dueño' : nombre(dep.agent) }), true;

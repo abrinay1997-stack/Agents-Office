@@ -126,6 +126,7 @@ CÓMO REPARTES (tasks)
 - "prioridad": "alta" solo si el dueño dijo urgente o hay una fecha encima; si no, "media". "limite": "YYYY-MM-DD" si hay para cuándo (no es cuándo arranca: eso es "at").
 - "espera": los índices (0, 1…) de las piezas de ESTE plan que tienen que terminar antes (las fotos antes del post; el post antes del correo). La pieza no arranca hasta que esas terminen. Sin dependencias: [].
 - "proyecto": si las piezas sirven a una misma meta con fecha (un lanzamiento, un cierre de mes, un cliente grande), {"nombre":"<≤60>","objetivo":"<una frase medible>","limite":"YYYY-MM-DD"}; si ya existe en <proyectos>, {"id":"<su id>"}. Una tarea suelta no es un proyecto: null.
+- Lo que SOLO puede hacer el dueño en persona (llamar, firmar, visitar, decidir, conseguir un dato que nadie tiene) es una pieza con "dept":"dueno": va a SU lista de tareas (Tareas → Mías), con su "limite" si hay fecha. No le pases al dueño trabajo que un escritorio puede hacer; y lo que ya tiene en «Las tareas del dueño» de <estado> no lo repitas.
 - Algo que se repite («cada lunes…»): propón una rutina en ops (no una tarea).
 - Tú nunca envías, publicas ni pagas nada: solo propones. Nada sale hasta que el dueño pulsa ENVIAR A LOS JEFES.
 
@@ -470,13 +471,13 @@ export function parsePlan(text, { depts, agents, now = Date.now() }) {
   const keys = Object.keys(depts).filter(k => k !== 'brain');
   const items = (Array.isArray(j.tasks) ? j.tasks : []).slice(0, 12).map((t, i) => {
     if (!t || typeof t !== 'object') return null;
-    const dept = keys.includes(t.dept) ? t.dept : null;
+    const dept = keys.includes(t.dept) || t.dept === 'dueno' ? t.dept : null; // plan D (7 oct 2026): 'dueno' = lo hace el dueño en persona (su lista)
     let at = null, past = false;
     if (t.at && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(t.at))) { const ms = new Date(String(t.at).slice(0, 16)).getTime(); if (ms > now + 30000) at = ms; else if (Number.isFinite(ms)) { at = ms; past = true; } } // DIM-13: a time that already went is kept and said, never dropped in silence
-    const lead = dept && agents.find(x => x.department === dept && x.lead);
+    const lead = dept && dept !== 'dueno' && agents.find(x => x.department === dept && x.lead);
     const prioridad = ['alta', 'media', 'baja'].includes(t.prioridad) ? t.prioridad : 'media', limite = /^\d{4}-\d{2}-\d{2}$/.test(String(t.limite || '')) ? String(t.limite) : null; // plan T4: priority and deadline per piece
     const espera = Array.isArray(t.espera) ? [...new Set(t.espera.map(Number).filter(x => Number.isInteger(x) && x >= 0 && x !== i))] : [];
-    return dept && String(t.instruction || t.title || '').trim() ? { i, orig: i, dept, lead: lead?.id || null, title: String(t.title || t.instruction).trim().slice(0, 90), instruction: String(t.instruction || t.title).trim().slice(0, 4000), why: String(t.why || '').trim().slice(0, 400), ownerSaid: keys.includes(t.owner_said) && t.owner_said !== dept ? t.owner_said : null, team: t.team === true, at, ...(past ? { past: true } : {}), prioridad, ...(limite ? { limite } : {}), espera, include: true, state: 'proposed' } : null;
+    return dept && String(t.instruction || t.title || '').trim() ? { i, orig: i, dept, lead: lead?.id || null, title: String(t.title || t.instruction).trim().slice(0, 90), instruction: String(t.instruction || t.title).trim().slice(0, 4000), why: String(t.why || '').trim().slice(0, 400), ownerSaid: keys.includes(t.owner_said) && t.owner_said !== dept ? t.owner_said : null, team: t.team === true && dept !== 'dueno', at, ...(past ? { past: true } : {}), prioridad, ...(limite ? { limite } : {}), espera, include: true, state: 'proposed' } : null;
   }).filter(Boolean).map((t, i) => ({ ...t, i }));
   { // «espera» named the pieces by their place in Dimitri's list: after dropping the unreadable ones, the same pieces by their new place (and no circle)
     const nuevo = new Map(items.map(t => [t.orig, t.i]));

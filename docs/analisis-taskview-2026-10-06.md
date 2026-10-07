@@ -728,6 +728,8 @@ Lo que se hizo distinto de lo escrito arriba:
 - «Tomar» una tarea es `tomadaPor` mientras corre, y la mezcla (`guardarEjecucion`) evita perder lo del dueño. No hace falta comparar versiones a mano.
 - La vista Tareas convive con el panel (T) y la pizarra (B). No los reemplaza: el panel sigue siendo el chat y el pulso de la oficina en 3D.
 
+**Después (7 oct 2026), plan D:** el dueño también trabaja — su lista personal (la pestaña Mías), delegar, «Lo hago yo», y los agentes que la leen como «DEL DUEÑO». Ver `docs/analisis-tareas-del-dueno-2026-10-07.md`.
+
 **Orden recomendado:** T0 → T1 → T2 → T3 → T4 → T5 → T6. **T0 no se salta.** Todo lo demás se apoya en la fábrica única, la bitácora y el bus; sin ellos, cada mejora repetiría los defectos del §3.3.
 
 ---

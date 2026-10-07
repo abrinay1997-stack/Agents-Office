@@ -8,7 +8,7 @@
 //   diferencias(antes, despues): las líneas de la bitácora (estado, campos, pasos, comentarios).
 
 const igual = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
-export const DEL_DUENO = new Set(['prioridad', 'etiquetas', 'limite', 'proyecto', 'person', 'estimacion', 'bloqueadaPor', 'orden', 'repetir', 'vote', 'voteReason', 'archived', 'archivedAt', 'example', 'seenAt', 'cronometro']);
+export const DEL_DUENO = new Set(['prioridad', 'etiquetas', 'limite', 'proyecto', 'person', 'estimacion', 'bloqueadaPor', 'orden', 'repetir', 'vote', 'voteReason', 'archived', 'archivedAt', 'example', 'seenAt', 'cronometro', 'empezada', 'delegada']);
 const AGREGAR = new Set(['comments']); // listas a las que solo se añade
 
 export function mezclar(base, mio, actual) {
@@ -50,7 +50,7 @@ function mezclarPasos(base = [], mio = [], actual = []) {
 }
 
 // los campos que la bitácora cuenta uno por uno (el resultado y el borrador no: son largos y ya están en la tarea)
-export const CAMPOS = ['title', 'text', 'agent', 'dept', 'dueAt', 'needsOk', 'person', 'model', 'effort', 'prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'repetir', 'archived', 'approved', 'vote', 'tomadaPor'];
+export const CAMPOS = ['title', 'text', 'agent', 'dept', 'dueAt', 'needsOk', 'person', 'model', 'effort', 'prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'repetir', 'archived', 'approved', 'vote', 'tomadaPor', 'empezada', 'delegada'];
 const corto = v => (v === undefined ? null : typeof v === 'string' ? v.slice(0, 200) : v);
 
 export function diferencias(antes, despues) {

@@ -4,11 +4,13 @@
 import { agenda } from '../../tareas/agenda.mjs';
 import { esc, svg, filaHTML, vacioHTML, hoyYmd } from './comun.js';
 import { textoDuracion } from '../../tareas/cronometro.mjs';
+import { deLista, esDelDueno } from '../../tareas/dueno.mjs';
 
 const localDia = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const SECCIONES = [
   { k: 'esperanOk', titulo: 'Esperan tu OK', sub: 'Borradores listos: apruébalos o devuélvelos', icono: 'ok', tono: 'ambar' },
-  { k: 'hoy', titulo: 'Hoy', sub: 'Lo que vence o arranca hoy, y lo vencido', icono: 'hoy', tono: 'azul', anadir: () => ({ limite: hoyYmd() }) },
+  { k: 'mias', titulo: 'Lo tuyo hoy', sub: 'Lo que haces tú: vence hoy, se venció o lo estás haciendo', icono: 'mias', tono: 'violeta', anadir: () => ({ limite: hoyYmd() }) }, // plan D
+  { k: 'hoy', titulo: 'Hoy en la oficina', sub: 'Lo que los agentes tienen para hoy, y lo vencido', icono: 'hoy', tono: 'azul', anadir: () => ({ limite: hoyYmd() }) },
   { k: 'enCurso', titulo: 'En curso', sub: 'Lo que los agentes hacen ahora, paso a paso', icono: 'curso', tono: 'verde' },
   { k: 'bloqueadas', titulo: 'Bloqueadas', sub: 'Esperan otra tarea o algo tuyo', icono: 'bloq', tono: 'rojo' },
   { k: 'proximas', titulo: 'Próximos días', sub: 'Lo de los próximos 7 días', icono: 'prox', tono: 'violeta', anadir: () => { const d = new Date(); d.setDate(d.getDate() + 1); return { limite: localDia(d.getTime()) }; } },
@@ -18,20 +20,25 @@ const SECCIONES = [
 
 export function inicioHTML(tareas, ctx, plegadas, { crono = null } = {}) {
   const a = agenda(tareas, { ahora: Date.now() });
-  a.ideas = tareas.filter(t => t.state === 'idea' && !t.archived).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));
-  a.hoy = [...a.vencidas, ...a.hoy];
+  a.ideas = tareas.filter(t => t.state === 'idea' && !t.archived && !esDelDueno(t)).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0));
+  a.hoy = [...a.vencidas, ...a.hoy].filter(t => !esDelDueno(t)); // plan D: lo tuyo va en su propia sección (y en Mías)
+  a.proximas = a.proximas.filter(t => !esDelDueno(t));
+  a.mias = deLista(tareas, 'hoy').pendientes; const mHechas = deLista(tareas, 'hoy').hechas;
   const hoy = hoyYmd(), hechasHoy = tareas.filter(t => t.state === 'done' && !t.error && t.doneAt && localDia(t.doneAt) === hoy && !t.archived);
   const out = [];
   if (crono) out.push(`<div class="tv-crono" role="status"><span>⏱ Llevas <b>${esc(textoDuracion(Date.now() - crono.desde))}</b> en <button type="button" class="tv-tit" data-abrir="${esc(crono.tarea.id)}">${esc(crono.tarea.title)}</button></span><button type="button" class="tv-btn" data-cronoid="${esc(crono.tarea.id)}">■ Parar</button></div>`); // plan T6
   for (const s of SECCIONES) {
     const l = a[s.k] || [];
     if (!l.length && ['bloqueadas', 'ideas', 'esperanOk'].includes(s.k)) continue; // lo que no hay, no ocupa sitio
+    if (s.k === 'mias' && !l.length && !mHechas.length) continue;
     const cerrada = plegadas.has(s.k);
     let cuenta = String(l.length), barra = '';
     if (s.k === 'hoy') { const tot = l.length + hechasHoy.length; cuenta = `${hechasHoy.length}/${tot}`; barra = tot ? `<span class="tv-bar" aria-hidden="true"><i style="width:${Math.round(100 * hechasHoy.length / tot)}%"></i></span>` : ''; }
+    if (s.k === 'mias') { const tot = l.length + mHechas.length; cuenta = `${mHechas.length}/${tot}`; barra = `<span class="tv-bar" aria-hidden="true"><i style="width:${tot ? Math.round(100 * mHechas.length / tot) : 0}%"></i></span>`; }
     if (s.k === 'enCurso') { const p = l.flatMap(t => t.pasos || []), h = p.filter(x => x.hecho).length; if (p.length) { cuenta = `${l.length} · pasos ${h}/${p.length}`; barra = `<span class="tv-bar" aria-hidden="true"><i style="width:${Math.round(100 * h / p.length)}%"></i></span>`; } }
-    const filas = l.length ? `<div class="tv-filas" role="list">${l.map(t => filaHTML(t, ctx)).join('')}</div>` : vacioHTML(s.k === 'hoy' ? 'Nada para hoy' : 'Nada por aquí', s.k === 'hoy' ? 'Añade algo o mira los próximos días.' : 'Cuando haya algo, aparece aquí.');
-    const pie = s.anadir ? `<button type="button" class="tv-anadir" data-anadir="${s.k}">${svg('mas')}Añadir tarea${s.k === 'hoy' ? ' para hoy' : ''}</button>` : '';
+    const filas = l.length ? `<div class="tv-filas" role="list">${l.map(t => filaHTML(t, ctx, { mia: s.k === 'mias' })).join('')}</div>` : s.k === 'mias' ? vacioHTML('Todo lo tuyo de hoy está hecho', 'Mira lo que viene en Mías.') : vacioHTML(s.k === 'hoy' ? 'Nada para hoy' : 'Nada por aquí', s.k === 'hoy' ? 'Añade algo o mira los próximos días.' : 'Cuando haya algo, aparece aquí.');
+    const pie = s.k === 'mias' ? `<div class="tv-mpie"><button type="button" class="tv-anadir" data-anadir="mias">${svg('mas')}Añadir una tarea tuya para hoy</button><button type="button" class="tv-btn" data-irmias="hoy">Abrir Mías ${svg('flecha')}</button></div>`
+      : s.anadir ? `<button type="button" class="tv-anadir" data-anadir="${s.k}">${svg('mas')}Añadir tarea${s.k === 'hoy' ? ' para hoy' : ''}</button>` : '';
     const hechas = s.k === 'hoy' && hechasHoy.length ? `<details class="tv-hechas"><summary>HECHAS HOY · ${hechasHoy.length}</summary><div class="tv-filas" role="list">${hechasHoy.map(t => filaHTML(t, ctx)).join('')}</div></details>` : '';
     out.push(`<section class="tv-sec t-${s.tono}${cerrada ? ' cerrada' : ''}" data-sec="${s.k}" aria-labelledby="tvs-${s.k}">
       <header class="tv-sech"><span class="tv-ico">${svg(s.icono)}</span>

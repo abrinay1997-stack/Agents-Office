@@ -24,7 +24,7 @@ export function demoTareas(agentes) {
   const post = T({ dept: 'marketing', agent: jefe('marketing').id, text: 'Post de lanzamiento para Instagram y Facebook', limite: dia(5), proyecto: 'pr-lentes', etiquetas: ['e-lanzamiento'], bloqueadaPor: [fotos.id], plan: ['Texto con la voz de la marca', 'Elegir la foto', 'Dejarlo en Contenido'] });
   const correo = T({ dept: 'emails', agent: de('emails').id, text: 'Correo a clientes anunciando los lentes, con 10 % de descuento la primera semana', limite: dia(6), proyecto: 'pr-lentes', etiquetas: ['e-lanzamiento', 'e-cliente'], bloqueadaPor: [post.id] });
   const ficha = T({ dept: 'delivery', agent: de('delivery').id, text: 'Ficha de los lentes en la web', limite: dia(4), proyecto: 'pr-lentes', etiquetas: ['e-web'], bloqueadaPor: [fotos.id], estimacion: 45 });
-  const precio = T({ dept: 'fin', agent: jefe('fin').id, text: 'Para ti: confirmar el precio de los lentes polarizados', prioridad: 'alta', limite: dia(0), proyecto: 'pr-lentes', person: 'Tú' });
+  const precio = T({ dept: 'fin', deAgente: jefe('fin').id, text: 'Para ti: confirmar el precio de los lentes polarizados', prioridad: 'alta', limite: dia(0), proyecto: 'pr-lentes', person: 'Tú', by: 'agente' });
   const prop = T({ dept: 'sales', agent: de('sales').id, text: 'Propuesta para Óptica del Centro: 50 pares al por mayor', prioridad: 'alta', etiquetas: ['e-cliente'] }, { state: 'waiting', waitingAt: ahora - 3 * 3600e3, result: 'Propuesta lista: 50 pares a US$38 c/u, entrega en 10 días.' });
   const vencida = T({ dept: 'fin', agent: de('fin').id, text: 'Facturas vencidas de septiembre: lista y recordatorios', limite: dia(-1), proyecto: 'pr-cierre' });
   const inv = T({ dept: 'ops', agent: de('ops').id, text: 'Revisar el inventario de monturas', prioridad: 'baja', limite: dia(3), proyecto: 'pr-cierre' });
@@ -33,5 +33,14 @@ export function demoTareas(agentes) {
   const hecha1 = T({ dept: 'marketing', agent: de('marketing').id, text: 'Calendario de contenido de la semana', proyecto: 'pr-lentes' }, { state: 'done', doneAt: ahora - 5 * 3600e3, result: '7 piezas en Contenido.' });
   const hecha2 = T({ dept: 'emails', agent: de('emails').id, text: 'Responder las consultas del fin de semana' }, { state: 'done', doneAt: ahora - 26 * 3600e3, result: '14 respuestas enviadas.' });
   const fallo = T({ dept: 'sales', agent: de('sales').id, text: 'Actualizar el CRM con los leads de la feria' }, { state: 'done', error: true, doneAt: ahora - 2 * 3600e3, result: 'No pude: el conector del CRM no responde.' });
-  return [fotos, post, correo, ficha, precio, prop, vencida, inv, prog, idea, hecha1, hecha2, fallo];
+  // plan D (7 oct 2026): lo del dueño — su lista personal, lo que delegó, lo que le sugirieron
+  const yo = (c, extra = {}) => T({ person: 'Tú', by: 'you', ...c }, extra);
+  const banco = yo({ title: 'Llamar al banco por la línea de crédito', limite: dia(0) + 'T10:30', prioridad: 'alta', pasos: ['Tener a mano el estado de cuenta', 'Preguntar la tasa'] }, { empezada: ahora - 25 * 60e3, cronometro: [{ quien: 'Tú', inicio: ahora - 25 * 60e3 }] });
+  const firma = yo({ title: 'Firmar el contrato del local', limite: dia(-1), dept: 'ops' });
+  const visita = yo({ title: 'Visitar la feria de ópticas', limite: dia(3), proyecto: 'pr-lentes', etiquetas: ['e-cliente'] });
+  const libro = yo({ title: 'Leer el informe de ventas de septiembre' });
+  const idea2 = yo({ title: 'Llamar a Óptica Sol: preguntaron por precio al por mayor', text: 'Llamar a Óptica Sol: preguntaron por precio al por mayor\n\nPor qué: escribieron dos veces esta semana.', why: 'escribieron dos veces esta semana', dept: 'sales', by: 'agente' }, { state: 'idea', sugeridaPor: de('sales').id, deAgente: de('sales').id });
+  const hechaYo = yo({ title: 'Pagar la luz de la tienda' }, { state: 'done', doneAt: ahora - 2 * 3600e3, result: 'Hecha por ti.', hechaPor: 'Tú' });
+  const delegada = T({ dept: 'marketing', agent: de('marketing').id, text: 'Encuesta a los clientes sobre los lentes', limite: dia(4) }, { delegada: { at: ahora - 3 * 3600e3, a: 'agente:' + de('marketing').id, nota: 'Cinco preguntas, cortas.' } });
+  return [fotos, post, correo, ficha, precio, prop, vencida, inv, prog, idea, hecha1, hecha2, fallo, banco, firma, visita, libro, idea2, hechaYo, delegada];
 }

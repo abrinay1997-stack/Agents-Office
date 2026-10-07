@@ -1,5 +1,16 @@
 # Changelog
 
+## Plan D — 7 oct 2026 (las tareas del dueño)
+
+Pedido del dueño: «la oficina está pensada para que trabajen los agentes, pero no contempla que yo tenga tareas para mí mismo; quiero tenerlas, delegarlas o trabajarlas yo, como en TaskView, y que los agentes entiendan que esto es del jefe». Diseño: `docs/analisis-tareas-del-dueno-2026-10-07.md`.
+- **Mías**, la primera pestaña de Tareas: Bandeja, Hoy, Próximos 7 días, Todas (por fecha), Delegadas, Hechas y tus proyectos, con su número; la casilla redonda que la marca hecha (DESHACER), «+ Añadir tarea» con la fecha o el proyecto de la lista, COMPLETADAS · N y el tablero Por hacer · Haciendo · Hecha.
+- **«Para mí»** en el campo de arriba: una tarea tuya, sin enrutador ni agente (y «el lunes a las 9» es su hora).
+- **El detalle de lo tuyo:** Hecha, Empezar (con tu cronómetro) o Dejar para luego, **Delegar…** a un agente o a una persona con una nota, Devolver a quien la tenía; área, notas, pasos y lo de siempre.
+- **«Lo hago yo» / «Lo termino yo»** sobre la tarea de un agente (también arrastrándola a «Tuyas y de personas» en el Tablero), con DESHACER que la devuelve como estaba.
+- **Los agentes:** lo tuyo sale «DEL DUEÑO» y no lo tocan; `sugerir_al_dueno` te deja sugerencias en la Bandeja (cinco como mucho); lo delegado les llega con tu nota; un «Para ti» de un bloqueo nace tuyo y para hoy.
+- **Dimitri** lee tu lista y puede asignarte una pieza («Tú (tu lista)»); **Inicio** abre con «Lo tuyo hoy»; la **Lista** filtra por «Quién»; el **calendario** tiene la capa TUYAS y el `.ics` las lleva; **Telegram** suma `/mias` (con ✅) y `/yo`.
+- **Pruebas:** `tests/tareas-dueno.test.mjs` (lo puro, las rutas, el MCP, la vista, Dimitri), `tests/telegram.test.mjs`; `node scripts/mias-recorrido.mjs` en el navegador a 390, 1024 (con Dimitri) y 1512 px, claro y oscuro.
+
 ## V5.1 — 2 oct 2026 (Básico y Avanzado en el Estudio)
 
 Pedido del dueño tras probar el banco: «este modo debería activarse como modo avanzado», «prefiero poner la relación de aspecto yo mismo», «el modelo prefiero siempre verlo y ajustarlo».

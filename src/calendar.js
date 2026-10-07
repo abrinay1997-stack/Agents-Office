@@ -35,7 +35,7 @@ function pickWhen(cad, at, days, start) { // the menu → a schedule; «Algunos 
 const cadOf = when => !when ? 'weekdays' : when.kind === 'weekly' ? 'days' : toPicker(when).custom ? 'custom' : toPicker(when).cadence;
 
 export function initCalendar(ctx) {
-  const { contenido, tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, EFFORT_KEYS, effortName, teamsOn, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
+  const { contenido, mias, tasks, routines, agentOf, DEPTS, DEPT_KEYS, RT_DEPTS, rtRefuse, create, createRoutine, cancelTask, updateTask, updateRoutine, rtAct, openTask, act, backlog, archivedTasks, EFFORT_KEYS, effortName, teamsOn, skipRun, openAgent, esc, isLive, officeModel, MODEL_KEYS, modelName, business, currentDept } = ctx;
   const ov = document.getElementById('calOv'); if (!ov) return null;
   const $ = s => ov.querySelector(s);
   const E = { title: $('#cvTitle'), grid: $('#cvGrid'), dow: $('#cvDow'), rail: $('#cvRail'), railN: $('#cvRtN'), chips: $('#cvChips'), search: $('#cvSearch'), stats: $('#cvStats'), pop: $('#cvPop'), co: $('#cvCo'), seg: $('.cv-seg') };
@@ -47,6 +47,8 @@ export function initCalendar(ctx) {
   let showSched = true; // B44: the counts are filters too
   // V4.7: the «Contenido» layer — the content pieces on their days, next to the tasks (read only: a click opens the piece in Contenido). Off until turned on.
   let showContent = (() => { try { return localStorage.getItem('ao.cal.ct') === '1'; } catch { return false; } })(), ctPieces = [], ctKey = '';
+  // plan D (7 oct 2026): the «Tuyas» layer — the owner's own tasks on the day they are due (read only: a click opens it in Tareas → Mías). On unless turned off.
+  let showMias = (() => { try { return localStorage.getItem('ao.cal.mias') !== '0'; } catch { return true; } })(), mTasks = [], mKey = '';
   // V4.2 (audit B2–B4): the week and the day are one time grid, 00:00–24:00 — the day view used to stop at 06–22 and put a 23:30 task in the 22:00 row
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it)
   const attr = v => esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // inside title="…": a quote in a title must not end the attribute
@@ -84,7 +86,7 @@ export function initCalendar(ctx) {
       if (t.state === 'done') { if (showDone && t.doneAt >= from && t.doneAt < to) push({ kind: 'done', at: t.doneAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'scheduled') { if (showSched && t.dueAt >= from && t.dueAt < to) push({ kind: 'sched', at: t.dueAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'waiting' || t.state === 'doing' || t.state === 'next') { if (today >= from && today < to) push({ kind: t.state, at: Math.max(today + 1, Math.min(today + DAY - 1, t.changedAt || Date.now())), title: t.title, dept: t.dept, agent: t.agent, t }); }
-      if (t.limite && t.state !== 'done' && showSched) { // plan T2 (6 oct 2026): the DEADLINE is its own mark (when it is due), apart from when it starts
+      if (t.limite && t.state !== 'done' && showSched && !(mias && t.person === 'Tú')) { // plan T2 (6 oct 2026): the DEADLINE is its own mark (when it is due), apart from when it starts · plan D: the owner's own go in the «Tuyas» layer
         const s = String(t.limite), at = new Date(s.length > 10 ? s : s + 'T23:59').getTime();
         if (at >= from && at < to) push({ kind: 'limite', at, title: t.title, dept: t.dept, agent: t.agent, t, conHora: s.length > 10 });
       }
@@ -118,8 +120,22 @@ export function initCalendar(ctx) {
       if (at < from || at >= to) continue; const title = p.titulo || (p.texto || '').split('\n')[0].slice(0, 60) || 'Sin título';
       if (!matches(title)) continue; (by[ymd(new Date(at))] ||= []).push({ kind: 'content', at, title, p });
     }
+    if (showMias && mias) for (const t of mTasks) { // plan D: due at its hour, or at the end of its day
+      const s = String(t.limite || ''); if (!s) continue; const at = new Date(s.length > 10 ? s : s + 'T23:59').getTime();
+      if (at < from || at >= to || !matches(t.title)) continue; (by[ymd(new Date(at))] ||= []).push({ kind: 'mia', at, title: t.title, t, conHora: s.length > 10 });
+    }
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
+  }
+  function syncMias(from, to) { // plan D: the owner's tasks of the days on screen, fetched once per range
+    if (!showMias || !mias) return;
+    const key = ymd(new Date(from)) + '|' + ymd(new Date(to - 1)); if (key === mKey) return; mKey = key;
+    Promise.resolve(mias.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { mTasks = l || []; if (openNow) render(); }, () => { mTasks = []; });
+  }
+  function miaCard(ev, line) {
+    const t = ev.t, hecha = t.state === 'done', vencida = !hecha && ev.at < Date.now(), hora = ev.conHora ? hm(ev.at) : 'todo el día', tip = `Tuya · ${ev.title} · ${hecha ? 'hecha' : vencida ? 'vencida' : 'vence ' + hora} · clic: abrirla en Tareas → Mías`;
+    if (line) return `<div class="cv-ev line mia${hecha ? ' done' : ''}${vencida ? ' late' : ''}" data-ev="m:${attr(t.id)}" title="${attr(tip)}" role="button" tabindex="0"><span class="cv-ev-h">${esc(ev.conHora ? hm(ev.at) : '—')}</span><span class="cv-ev-t"><span class="cv-rt" aria-hidden="true">${hecha ? '☑' : '☐'}</span>${esc(ev.title)}</span></div>`;
+    return `<div class="cv-ev mia${hecha ? ' done' : ''}${vencida ? ' late' : ''}" data-ev="m:${attr(t.id)}" title="${attr(tip)}" role="button" tabindex="0"><div class="cv-ev-t"><span class="cv-rt" aria-hidden="true">${hecha ? '☑' : '☐'}</span>${esc(ev.title)}</div><div class="cv-ev-m"><span>Tuya · ${esc(hecha ? 'hecha' : vencida ? 'vencida' : hora)}</span></div></div>`;
   }
   function syncContent(from, to) { // the pieces of the days on screen, fetched once per range
     if (!showContent || !contenido) return;
@@ -137,6 +153,7 @@ export function initCalendar(ctx) {
   const av = (id) => { const a = agentOf(id); const c = a ? DEPTS[a.dept].chip : '#ccc'; return `<i class="cv-av" style="border-color:${c};background:${c}55" title="${attr(a ? a.name : id)}">${esc(a ? initials(a.name) : '?')}</i>`; };
   function cardHTML(ev, line) {
     if (ev.kind === 'content') return contentCard(ev, line);
+    if (ev.kind === 'mia') return miaCard(ev, line); // plan D
     const chip = DEPTS[ev.dept].chip, a = agentOf(ev.agent);
     if (ev.kind === 'limite') { // plan T2: «vence» — a mark, not a run: a click opens the task; it does not move (change the date in the task)
       const vencida = ev.at < Date.now(), when = ev.conHora ? hm(ev.at) : 'todo el día', est = ev.t.estimacion ? ` · ${ev.t.estimacion < 60 ? ev.t.estimacion + ' min' : Math.round(ev.t.estimacion / 6) / 10 + ' h'}` : '';
@@ -159,14 +176,14 @@ export function initCalendar(ctx) {
   }
   // V4.2 (audit B42): what the calendar shows, in one string — the 30-second tick redraws only when it changes (or every 5 minutes, for «now»)
   let lastSig = '';
-  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error, t.limite, t.prioridad, t.estimacion]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), showContent ? ctPieces.map(p => [p.id, p.actualizada, p.estado, p.fecha, p.hora]) : 0, Math.floor(Date.now() / 300000)]);
+  const sig = () => JSON.stringify([tasks.map(t => [t.id, t.state, t.dueAt, t.doneAt, t.title, t.agent, t.error, t.limite, t.prioridad, t.estimacion]), routines.map(r => [r.id, r.nextAt, r.paused, r.when, r.skips, r.title]), showContent ? ctPieces.map(p => [p.id, p.actualizada, p.estado, p.fecha, p.hora]) : 0, showMias ? mTasks.map(t => [t.id, t.state, t.limite, t.title]) : 0, Math.floor(Date.now() / 300000)]);
   function render() {
     if (dnd && dnd.dragging) return; // a re-render mid-drag would pull the card out from under the pointer
     lastSig = sig();
     const fa = document.activeElement, fkey = fa && ov.contains(fa) && fa.dataset ? (fa.dataset.ev ? `[data-ev="${CSS.escape(fa.dataset.ev)}"]` : fa.dataset.rid ? `[data-rid="${CSS.escape(fa.dataset.rid)}"]` : null) : null;
     queueMicrotask(() => { if (fkey && !ov.contains(document.activeElement)) ov.querySelector(fkey)?.focus({ preventScroll: true }); }); // the keyboard stays where it was
     const { from, to, days } = range();
-    syncContent(from, to);
+    syncContent(from, to); syncMias(from, to);
     const by = events(from, to);
     const a = new Date(anchor);
     E.title.innerHTML = titleHTML(view, anchor, { from, to, days });
@@ -212,7 +229,7 @@ export function initCalendar(ctx) {
   function renderLoad() { // who has how much in the days on screen: tasks and routine runs per agent
     const { from, to } = range(); const by = events(from, to), n = {};
     const kinds = {}; // V4.2 (audit B36): what the bar counts, in words — routine runs and tasks
-    for (const k in by) for (const ev of by[k]) if (!ev.skipped && !ev.paused && ev.kind !== 'done' && ev.kind !== 'run') { n[ev.agent] = (n[ev.agent] || 0) + 1; const x = kinds[ev.agent] ||= { r: 0, t: 0 }; if (ev.kind === 'routine') x.r++; else x.t++; }
+    for (const k in by) for (const ev of by[k]) if (!ev.skipped && !ev.paused && ev.kind !== 'done' && ev.kind !== 'run' && ev.agent) { n[ev.agent] = (n[ev.agent] || 0) + 1; const x = kinds[ev.agent] ||= { r: 0, t: 0 }; if (ev.kind === 'routine') x.r++; else x.t++; } // plan D: lo tuyo (sin agente) no es carga de un escritorio
     const top = Object.entries(n).sort((a, b) => b[1] - a[1]).slice(0, 8), max = top.length ? top[0][1] : 1;
     if (!E.load) { E.load = document.createElement('details'); E.load.className = 'cv-load'; E.load.open = true; E.rail.parentElement.appendChild(E.load); }
     const wasOpen = E.load.open;
@@ -239,8 +256,9 @@ export function initCalendar(ctx) {
     const all = deptOn.size === DEPT_KEYS.length;
     E.chips.innerHTML = `<button type="button" class="cv-chip${all ? ' on' : ''}" data-dept="*" aria-pressed="${all}" title="Todos los departamentos">TODOS</button>` + DEPT_KEYS.map(k => `<button type="button" class="cv-chip${!all && deptOn.has(k) ? ' on' : ''}" data-dept="${k}" aria-pressed="${!all && deptOn.has(k)}" title="Ver solo ${attr(DEPTS[k].name)} (Mayús + clic: sumarlo a los que ya ves)"><i style="background:${DEPTS[k].chip}"></i>${DEPTS[k].short}</button>`).join('') +
       `<span class="cv-sep"></span><button type="button" class="cv-chip${showRoutines ? ' on' : ''}" data-tog="routines" aria-pressed="${showRoutines}"><i class="rt" aria-hidden="true">⏱</i>RUTINAS</button><button type="button" class="cv-chip${showDone ? ' on' : ''}" data-tog="done" aria-pressed="${showDone}"><i class="tick" aria-hidden="true">✓</i>LISTAS</button>` + (contenido ? `<button type="button" class="cv-chip${showContent ? ' on' : ''}" data-tog="content" aria-pressed="${showContent}" title="Las piezas de contenido en sus días (se editan en Contenido, K)"><i class="rt" aria-hidden="true">▣</i>CONTENIDO</button>` : '') +
+      (mias ? `<button type="button" class="cv-chip${showMias ? ' on' : ''}" data-tog="mias" aria-pressed="${showMias}" title="Tus tareas, en el día que vencen (se hacen en Tareas → Mías, H)"><i class="rt" aria-hidden="true">☐</i>TUYAS</button>` : '') +
       (onlyRoutine ? `<button class="cv-chip only on" data-tog="only">SOLO ESTA RUTINA ✕</button>` : '') +
-      '<span class="cv-legend" aria-label="Qué significa cada marca">⏱ rutina · ◷ programada · ✓ lista · <span class="cv-fail">⚠</span> falló · <s>tachada</s> saltada · <i>no corrió</i> sin tarea' + (showContent ? ' · ▣ contenido' : '') + '</span>';
+      '<span class="cv-legend" aria-label="Qué significa cada marca">⏱ rutina · ◷ programada · ✓ lista · <span class="cv-fail">⚠</span> falló · <s>tachada</s> saltada · <i>no corrió</i> sin tarea' + (showContent ? ' · ▣ contenido' : '') + (showMias && mias ? ' · ☐ tuya' : '') + '</span>';
   }
 
   /* ---------- the popovers: a day (create), an event (details), "n more" (the whole day) ---------- */
@@ -306,6 +324,7 @@ export function initCalendar(ctx) {
     closePop();
     const [kind, ...rest] = id.split(':');
     if (kind === 'c') { if (contenido) { close(); contenido.openPiece(rest[0]); } return; } // a content piece opens in Contenido
+    if (kind === 'm') { if (mias) { close({ quiet: true }); mias.open(rest[0]); } return; } // plan D: a task of yours opens in Tareas → Mías
     if (kind === 'l') { const t = tasks.find(x => String(x.id) === rest[0]); if (t && openTask) openTask(t); return; } // plan T2: a deadline opens its task
     if (kind === 't') {
       const t = tasks.find(x => String(x.id) === rest[0]); if (!t) return;
@@ -498,7 +517,7 @@ export function initCalendar(ctx) {
         if (k === '*') deptOn = new Set(DEPT_KEYS);
         else if (e.shiftKey && !all) { if (deptOn.has(k)) { deptOn.delete(k); if (!deptOn.size) deptOn = new Set(DEPT_KEYS); } else deptOn.add(k); }
         else deptOn = !all && deptOn.size === 1 && deptOn.has(k) ? new Set(DEPT_KEYS) : new Set([k]); }
-      else if (chip.dataset.tog === 'routines') showRoutines = !showRoutines; else if (chip.dataset.tog === 'done') showDone = !showDone; else if (chip.dataset.tog === 'content') { showContent = !showContent; ctKey = ''; try { localStorage.setItem('ao.cal.ct', showContent ? '1' : '0'); } catch {} } else if (chip.dataset.tog === 'only') onlyRoutine = null;
+      else if (chip.dataset.tog === 'routines') showRoutines = !showRoutines; else if (chip.dataset.tog === 'done') showDone = !showDone; else if (chip.dataset.tog === 'content') { showContent = !showContent; ctKey = ''; try { localStorage.setItem('ao.cal.ct', showContent ? '1' : '0'); } catch {} } else if (chip.dataset.tog === 'mias') { showMias = !showMias; mKey = ''; try { localStorage.setItem('ao.cal.mias', showMias ? '1' : '0'); } catch {} } else if (chip.dataset.tog === 'only') onlyRoutine = null;
       render(); return;
     }
     const day = e.target.closest('.cv-day'); if (day && !E.pop.contains(e.target)) { if (e.target === day || e.target.classList.contains('cv-evs') || e.target.closest('.cv-num')) { openCreate(day.dataset.day, day); return; } }
