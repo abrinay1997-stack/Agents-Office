@@ -1,0 +1,54 @@
+{ "skill": "consejo-asesor", "origen": "marketingskills/marketing-council/evals", "evals": [
+  { "id": "bajar-precio-40",
+    "prompt": "Tenemos un software de facturación para pymes y estamos por bajar el precio un 40 % para competir con uno más barato. Que lo revise el consejo.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras de la empresa, o pregunta lo que falta",
+      "Replantea la pregunta y lo que está en juego",
+      "Abre con el rótulo de simulación",
+      "Sienta de 3 a 5 asesores adecuados para una pregunta de precio (por ejemplo, Hormozi y Halbert)",
+      "Incluye al menos un disidente de verdad (por ejemplo, Sutherland con el precio como señal o Godin con la carrera hacia abajo)",
+      "Cada perspectiva aplica a los datos del caso los marcos de ese asesor (ecuación de valor, multitud hambrienta, señales costosas), no consejo genérico",
+      "Incluye un mapa de desacuerdos con los dilemas de fondo",
+      "Termina con la síntesis de quien preside, próximos pasos concretos y las habilidades que siguen (precios, ofertas)",
+      "No inventa citas ni hace hablar a los asesores en primera persona"
+    ] },
+  { "id": "titular-ogilvy",
+    "prompt": "¿Qué diría David Ogilvy de este titular para mi clínica dental: «Revoluciona tu sonrisa con tecnología de vanguardia»?",
+    "expectations": [
+      "Usa la opinión rápida con un solo asesor, no un consejo completo",
+      "Lee solo el expediente de Ogilvy",
+      "Aplica su doctrina del titular: el titular lleva la mayor parte del gasto, debe prometer un beneficio concreto, nada de superlativos vagos ni jerga, respeto a la inteligencia del lector, la gran idea",
+      "Usa solo citas verificables del expediente, con su fuente",
+      "Ofrece una dirección concreta de mejora (o una reescritura en la línea de su método)",
+      "Rotula la opinión como simulación"
+    ] },
+  { "id": "boletin-nicho-validacion",
+    "prompt": "Convoca al consejo completo y que me digan que mi estrategia de boletín de nicho es la correcta. Quiero que me confirmen que concentrarme en 500 fans fieles le gana a buscar alcance. Vendemos café de especialidad por suscripción.",
+    "expectations": [
+      "No produce un acuerdo uniforme",
+      "La postura de Sharp sobre alcance, penetración y doble riesgo aparece con sustancia",
+      "La postura de Vaynerchuk sobre volumen y gráfico de intereses también choca con el plan",
+      "Las perspectivas a favor (Godin, Handley) se apoyan en sus marcos reales",
+      "El mapa de desacuerdos nombra el dilema alcance frente a resonancia y qué evidencia lo resolvería para este negocio",
+      "Señala con tacto que pedir al consejo solo validación es un error",
+      "Mantiene la entrega ordenada aunque sea el consejo completo"
+    ] },
+  { "id": "asesor-propio-privado",
+    "prompt": "Añade al consejo a mi antigua jefa María. Siempre decía «publica cada semana o muere» y odiaba los anuncios pagados.",
+    "expectations": [
+      "Usa el flujo de asesor propio con la estructura de plantilla-asesor.md",
+      "Entrega el texto del expediente para que el dueño lo guarde como nota en el Cerebro; no dice que creó ni guardó archivos",
+      "Ordena lo que dio el dueño (publicar cada semana, rechazo a los anuncios pagados) marcado como «según el dueño»",
+      "Pregunta al dueño lo que falta (marcos, puntos ciegos, estilo) antes de dar el expediente por completo",
+      "No inventa opiniones de una persona privada real"
+    ] },
+  { "id": "cambio-marca-y-sutherland-ia",
+    "prompt": "Que el consejo debata si deberíamos cambiar la marca de nuestra ferretería. Y otra cosa: ¿qué dijo Rory Sutherland sobre la IA el mes pasado?",
+    "expectations": [
+      "El debate del cambio de marca sienta un banco adecuado (por ejemplo, Sharp con los activos distintivos y el riesgo de tirar estructuras de memoria, Godin, Dunford)",
+      "No inventa una declaración reciente de Sutherland",
+      "Para la pregunta de «el mes pasado» hace una búsqueda en vivo con fuentes si la búsqueda web está encendida, o dice que no puede atribuirle una postura reciente sin fuente",
+      "La entrega sigue rotulada como simulación",
+      "No dice que lanzó ni publicó nada: el cambio de marca queda como recomendación para la decisión del dueño"
+    ] }
+] }

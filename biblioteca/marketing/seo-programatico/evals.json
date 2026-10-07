@@ -1,0 +1,63 @@
+{ "skill": "seo-programatico", "origen": "marketingskills/programmatic-seo/evals", "evals": [
+  { "id": "crm-por-sector", "prompt": "Queremos hacer páginas de SEO programático para nuestro CRM. Pensamos en páginas «CRM para [sector]»: «CRM para inmobiliarias», «CRM para clínicas», etc. ¿Cómo lo enfocamos?", "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Identifica la jugada de perfiles de cliente (páginas por sector)",
+    "Aplica los principios: valor único por página (no solo cambiar el sector), datos o ideas propias por sector, direcciones limpias",
+    "Recomienda investigar las palabras clave de cada variación",
+    "Explica qué datos por sector hacen única cada página",
+    "Da pautas para diseñar la plantilla",
+    "Incluye la estrategia de enlaces internos y de indexación",
+    "Advierte contra el contenido pobre (plantilla + palabra clave cambiada)"
+  ] },
+  { "id": "comparativas-15", "prompt": "Arma una estrategia de páginas comparativas. Queremos páginas como «Notion vs Asana», «Notion vs Monday», etc. para todos nuestros competidores. Tenemos 15.", "expectations": [
+    "Identifica la jugada de comparativas",
+    "Recomienda una estructura de plantilla que escale",
+    "Exige datos propios en cada comparación (no la misma plantilla con los nombres cambiados)",
+    "Incluye investigar las palabras clave de cada variación",
+    "Recomienda la estructura de la dirección (/comparar/x-vs-y)",
+    "Incluye enlaces internos entre las comparativas",
+    "Remite a la habilidad paginas-comparativas para el contenido",
+    "Aplica la lista de revisión de calidad"
+  ] },
+  { "id": "integraciones-casual", "prompt": "queremos salir en google para «integración con [herramienta]». nos integramos con más de 50 herramientas y queremos una página para cada una, tipo «integración con Shopify», «integración con WhatsApp».", "expectations": [
+    "Se activa aunque el pedido sea informal",
+    "Identifica la jugada de integraciones",
+    "Recomienda una plantilla con contenido único por integración",
+    "Incluye pasos de configuración y casos de uso en cada página",
+    "Recomienda la estructura de la dirección (/integraciones/shopify)",
+    "Recomienda una página eje que enlace todas las integraciones",
+    "Insiste en que cada página tenga valor real, no solo «nos integramos con X»"
+  ] },
+  { "id": "ubicaciones-servicio", "prompt": "Tenemos una empresa de mantenimiento de aires acondicionados en Monterrey y su área metropolitana. Queremos una página por colonia o municipio para salir en Google. ¿Cómo lo hacemos sin que Google nos castigue?", "expectations": [
+    "Identifica la jugada de ubicaciones",
+    "Exige datos locales reales por zona (no solo el nombre cambiado)",
+    "Advierte que crear páginas para zonas que no se atienden son páginas puerta",
+    "Propone estructura de dirección, plantilla y enlaces internos con una página eje",
+    "Recomienda datos estructurados de negocio local o servicio",
+    "No inventa volúmenes de búsqueda: los marca como por medir o usa una fuente"
+  ] },
+  { "id": "indexacion", "prompt": "Hicimos 500 páginas programáticas pero Google no indexa la mayoría. Solo 80 están en el índice. ¿Qué está fallando?", "expectations": [
+    "Diagnostica el problema de indexación",
+    "Investiga el contenido pobre como causa probable",
+    "Considera el presupuesto de rastreo según la autoridad de la web",
+    "Revisa los enlaces internos hacia esas páginas",
+    "Revisa el mapa del sitio XML y robots.txt",
+    "Recomienda arreglos concretos para la indexación",
+    "Advierte que Google puede no indexar páginas pobres de todos modos"
+  ] },
+  { "id": "glosario", "prompt": "Ayúdame a crear un glosario para nuestra plataforma de automatización de marketing. Queremos definir más de 200 términos y salir en búsquedas tipo «[término] definición».", "expectations": [
+    "Identifica la jugada de glosario",
+    "Da una plantilla para cada término (definición, ejemplos, términos relacionados, cómo aplica al producto)",
+    "Recomienda una página índice",
+    "Propone la estructura de la dirección",
+    "Exige más valor que un diccionario",
+    "Incluye la estrategia de enlaces internos",
+    "Recomienda empezar por los términos con más búsquedas"
+  ] },
+  { "id": "no-es-pseo", "prompt": "¿Puedes auditar los problemas técnicos de nuestras páginas programáticas? Tenemos errores de rastreo y algunas páginas dan 404.", "expectations": [
+    "Reconoce que es una auditoría de SEO técnico, no una estrategia de SEO programático",
+    "Remite a la habilidad auditoria-seo",
+    "Explica que seo-programatico es para la estrategia y la plantilla",
+    "No intenta la auditoría técnica completa"
+  ] }
+] }

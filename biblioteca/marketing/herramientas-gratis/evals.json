@@ -1,0 +1,60 @@
+{ "skill": "herramientas-gratis", "origen": "marketingskills/free-tools/evals", "evals": [
+  { "id": "seo-auditor-o-palabras", "prompt": "Queremos hacer una herramienta gratis para conseguir prospectos para nuestro software de SEO. Pensamos en un auditor SEO o en una herramienta de palabras clave. ¿Cuál conviene más y cómo lo enfocamos?", "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Aplica la ficha de evaluación para comparar las dos ideas",
+    "Usa los tipos de herramienta de la habilidad (analizadores, probadores)",
+    "Recomienda una con una razón clara",
+    "Explica qué es libre y qué se pide a cambio del correo",
+    "Define el alcance de la primera versión",
+    "Da recomendaciones de construcción"
+  ] },
+  { "id": "calculadora-rrhh", "prompt": "Quiero hacer una calculadora gratis de retorno para nuestro software de recursos humanos. El usuario pone el tamaño de su empresa y cómo trabaja hoy, y le muestra cuánto tiempo y dinero se ahorraría.", "expectations": [
+    "La identifica como una calculadora",
+    "Aplica el marco para idear y validar el concepto",
+    "Discute qué resultado es gratis y qué informe detallado se pide a cambio del correo",
+    "Aborda construir a medida, sin código o insertar",
+    "Define la primera versión: entradas, resultado y fórmula, con los supuestos marcados",
+    "Incluye el SEO de la página de la herramienta",
+    "Usa la ficha de evaluación para puntuar la idea"
+  ] },
+  { "id": "ideas-ferreteria", "prompt": "dame ideas de herramientas gratis que podríamos hacer. somos una ferretería con tienda en línea y despachos en la ciudad.", "expectations": [
+    "Se activa aunque el pedido sea informal",
+    "Aplica el marco para idear desde los dolores del cliente",
+    "Da ideas de varios tipos de herramienta (calculadoras, generadores, cuestionarios, probadores)",
+    "Las ideas son propias de una ferretería (p. ej., calculadora de pintura o cemento por metro cuadrado)",
+    "Da entre 5 y 8 ideas",
+    "Evalúa brevemente cada una",
+    "Recomienda las 2 o 3 mejores"
+  ] },
+  { "id": "sin-trafico", "prompt": "Hicimos un test gratis de velocidad de páginas web hace 6 meses y casi no tiene tráfico. ¿Qué salió mal y cómo lo arreglamos?", "expectations": [
+    "Diagnostica las posibles causas de la falta de tráfico",
+    "Revisa la estrategia SEO de la página de la herramienta",
+    "Evalúa la competencia (herramientas gratuitas dominantes)",
+    "Cuestiona qué la hace distinta",
+    "Aplica los principios de la ingeniería como marketing",
+    "Propone un plan de recuperación con acciones concretas",
+    "No dice que publicó o lanzó nada: deja borradores para el OK del dueño"
+  ] },
+  { "id": "pedir-correo", "prompt": "Tenemos un cotizador de tratamientos en la web de nuestra clínica dental. ¿Pedimos el correo o el WhatsApp para ver el resultado o lo dejamos libre? Queremos prospectos pero no matar el uso.", "expectations": [
+    "Aplica la estrategia de captura de prospectos",
+    "Presenta el abanico: libre, en parte, todo tras el formulario",
+    "Recomienda el enfoque en parte (resultado básico libre, detalle a cambio del dato)",
+    "Explica las ventajas y desventajas de cada enfoque",
+    "Da recomendaciones concretas para este tipo de herramienta",
+    "Explica el efecto de cada opción en el SEO",
+    "Menciona las leyes de datos de su país al pedir el dato"
+  ] },
+  { "id": "no-es-herramienta", "prompt": "¿Cómo mejoro la página de nuestra herramienta gratis para que se registre más gente? La herramienta es buena pero nadie se registra.", "expectations": [
+    "Reconoce que es optimizar la conversión de una página, no estrategia de herramienta",
+    "Remite a la habilidad conversion-paginas",
+    "Puede dar contexto propio de herramientas gratis (qué pedir a cambio, demostrar valor)",
+    "No intenta la optimización completa de la página con los patrones de esta habilidad"
+  ] },
+  { "id": "vale-la-pena", "prompt": "Estamos decidiendo si vale la pena hacer una herramienta gratis para nuestro SaaS. ¿Qué resultados consiguen de verdad estas herramientas y qué suele salir mal?", "expectations": [
+    "Cita los casos de referencia con sus cifras (Unsplash, Website Grader de HubSpot, Keyword Explorer de Moz, Salary Calculator de Buffer, Hatchful de Shopify) como orientación, no como promesa",
+    "Usa el marco «tu producto es mi oportunidad de marketing»",
+    "Enumera los errores comunes: sobrediseñar, sin conexión con el producto, deuda de mantenimiento y seguridad, métricas de vanidad",
+    "Relaciona los resultados esperados con el tipo de herramienta",
+    "Recomienda medir prospectos y conversión, no visitas"
+  ] }
+] }

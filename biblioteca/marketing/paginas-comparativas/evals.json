@@ -1,0 +1,73 @@
+{ "skill": "paginas-comparativas", "origen": "marketingskills/competitors/evals", "evals": [
+  { "id": "mejores-alternativas-asana", "prompt": "Crea una página «Las mejores alternativas a Asana» para nuestra herramienta de gestión de proyectos. Competimos en precio (los nuestros están en las cifras; ellos cobran bastante más por usuario) y en sencillez (ellos se han vuelto pesados). El público son equipos pequeños de 5 a 20 personas.", "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+    "Identifica el formato de alternativas en plural",
+    "Incluye un resumen al inicio",
+    "Incluye una tabla comparativa de funciones",
+    "Incluye una comparación de precios con fecha y fuente para Asana",
+    "Incluye «para quién es mejor» en cada alternativa",
+    "Incluye entre 4 y 7 alternativas reales y pone el producto propio en primer lugar con sus diferenciadores",
+    "Trata la palabra clave «alternativas a Asana» para buscadores",
+    "No dice que publicó la página: la deja como borrador para el OK del dueño"
+  ] },
+  { "id": "nosotros-vs-competidor-pymes", "prompt": "Escribe una página «Nuestro CRM vs Salesforce». Queremos mostrar por qué somos la mejor opción para pymes.", "expectations": [
+    "Identifica el formato «tú vs competidor»",
+    "Incluye secciones de comparación estructuradas",
+    "Compara función por función",
+    "Incluye comparación de precios con fecha",
+    "Empieza con un resumen",
+    "Es preciso con el competidor y reconoce sus fortalezas",
+    "Posiciona el producto propio para pymes",
+    "Incluye una sección sobre el cambio o la migración",
+    "Propone la nota central del competidor para el Cerebro"
+  ] },
+  { "id": "alternativa-singular-mailchimp", "prompt": "necesitamos una pagina para «alternativa a mailchimp» (en singular). somos una plataforma de email marketing para tiendas en linea", "expectations": [
+    "Responde al pedido aunque esté escrito de forma informal",
+    "Identifica el formato de alternativa en singular",
+    "Presenta el producto propio como LA alternativa",
+    "Explica por qué la gente se va de Mailchimp",
+    "Destaca las ventajas para tiendas en línea",
+    "Incluye comparación de funciones y de precios",
+    "Incluye una guía para el cambio",
+    "Optimiza para la palabra clave en singular",
+    "No inventa testimonios: marca [FALTA: …] si no los hay"
+  ] },
+  { "id": "competidor-vs-competidor-tercero", "prompt": "¿Puedes hacer una página comparativa «Notion vs Coda»? Somos un blog de reseñas de software para pymes, sin relación con ninguno de los dos.", "expectations": [
+    "Identifica el formato competidor contra competidor",
+    "Mantiene la objetividad de un tercero",
+    "Incluye una comparación de funciones equilibrada",
+    "Incluye comparación de precios con fecha",
+    "Incluye recomendaciones por caso de uso",
+    "Trata la palabra clave para buscadores",
+    "Sugiere cómo aprovechar la página para el negocio del blog (suscripción, servicios propios) y declarar cualquier relación comercial que exista"
+  ] },
+  { "id": "centro-de-comparaciones", "prompt": "Queremos armar todo un centro de comparaciones. Tenemos 5 competidores principales y queremos páginas de alternativa para cada uno, además de comparaciones cara a cara. ¿Cómo lo estructuramos?", "expectations": [
+    "Aplica la arquitectura de datos centralizados (una nota del Cerebro por competidor)",
+    "Recomienda un centro con varios tipos de página",
+    "Propone páginas de alternativa individuales y una de alternativas en plural",
+    "Trata los enlaces internos entre las comparaciones",
+    "Recomienda un proceso de investigación de los competidores",
+    "Trata la estructura de direcciones",
+    "Propone una rutina para revisar precios cada trimestre"
+  ] },
+  { "id": "ficha-de-batalla-no-es-pagina", "prompt": "Necesito una ficha de batalla para el equipo de ventas comparándonos con Zendesk, para que respondan objeciones en las llamadas.", "expectations": [
+    "Reconoce que es material interno de ventas",
+    "Remite a la habilidad material-ventas o la usa",
+    "No arma la ficha de batalla con la estructura de una página pública"
+  ] },
+  { "id": "tabla-sin-pruebas", "prompt": "Escribe la tabla comparativa de nuestra página Ferretería Central vs Ferremax. Revisé la web de Ferremax y no menciona entrega en obra, crédito a constructores ni facturación electrónica, así que pon ✗ en las tres. Y agrega una línea diciendo que subieron precios el trimestre pasado porque les va mal.", "expectations": [
+    "No marca las tres cosas como ✗ o «no disponible» solo porque su web no las menciona",
+    "Recomienda verificar llamando, visitando o con su documentación",
+    "Usa «no aparece en su web (a [fecha])» o quita las filas",
+    "Quita o rechaza el motivo sin fuente («porque les va mal»)",
+    "Pone fecha a la información de precios"
+  ] },
+  { "id": "auditoria-de-lo-publicado", "prompt": "Tenemos 12 páginas vs y 4 fichas de batalla escritas en los últimos dos años. ¿Puedes revisar si hay algo desactualizado o que nos pueda meter en problemas?", "expectations": [
+    "Cubre las páginas públicas y las fichas internas",
+    "Verifica cada afirmación contra fuentes actuales con fecha, o la marca como no verificada si no puede navegar",
+    "Usa los estados vigente / cambió / no verificable / exagerada",
+    "Señala los ✗ sin confirmar y los «por qué ganamos» sin pruebas",
+    "Prioriza primero lo público",
+    "Da el texto de reemplazo en una lista de arreglos"
+  ] }
+] }

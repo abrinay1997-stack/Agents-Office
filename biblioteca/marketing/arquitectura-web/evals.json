@@ -1,0 +1,62 @@
+{ "skill": "arquitectura-web", "origen": "marketingskills/site-architecture/evals", "evals": [
+  { "id": "sitio-saas-nuevo",
+    "prompt": "Ayúdame a planear la arquitectura del sitio nuevo de nuestro software de facturación. Tenemos inicio, página de producto, precios, quiénes somos y blog, y queremos sumar páginas de comparación con la competencia y páginas de integraciones.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Aplica la regla de los 3 clics y el criterio de estructura plana o profunda",
+      "Entrega un árbol de texto con la estructura completa del sitio",
+      "Ordena las páginas con lógica: menú principal, sección de comparativas y centro de integraciones",
+      "Recomienda un patrón de dirección para cada sección",
+      "Propone un menú superior de 4 a 7 elementos",
+      "Incluye una estrategia de enlaces internos (centro y radios para comparativas e integraciones)",
+      "Entrega jerarquía, tabla de direcciones y especificación de navegación"
+    ] },
+  { "id": "reordenar-50-paginas",
+    "prompt": "La web de nuestra clínica dental creció a lo loco y el menú es un desastre. Tenemos más de 50 páginas y los pacientes no encuentran nada. Ayúdanos a reorganizarla.",
+    "expectations": [
+      "Recomienda empezar por un inventario de las más de 50 páginas",
+      "Agrupa las páginas relacionadas con lógica",
+      "Aplica la regla de los 3 clics",
+      "Rediseña la navegación",
+      "Entrega árbol de texto o mapa visual, con el antes y el después",
+      "Incluye las redirecciones 301 de las páginas que cambian de dirección",
+      "Reduce los elementos del menú superior",
+      "No dice que cambió el sitio: entrega un plan para el OK del dueño"
+    ] },
+  { "id": "debate-direcciones",
+    "prompt": "¿cómo deberían ser nuestras urls? no nos ponemos de acuerdo entre /blog/nombre-del-post y /recursos/blog/nombre-del-post, ni entre /producto/funcion y /funciones/nombre-funcion",
+    "expectations": [
+      "Responde aunque el pedido venga escrito de forma informal",
+      "Aplica los principios y patrones de direcciones",
+      "Recomienda las rutas más cortas y limpias (/blog/nombre-del-post)",
+      "Da una recomendación para cada tipo de sección",
+      "Explica el efecto en el SEO",
+      "Entrega una tabla de direcciones de referencia"
+    ] },
+  { "id": "paginas-programaticas",
+    "prompt": "Vamos a sumar páginas de SEO a escala: 200 páginas de integraciones y 50 de comparación. ¿Cómo encajan en la arquitectura de nuestro sitio?",
+    "expectations": [
+      "Recomienda una página central para cada sección",
+      "Aplica enlaces internos de centro y radios",
+      "Deja las páginas programáticas fuera del menú principal",
+      "Da la estructura de direcciones de las dos secciones",
+      "Considera el presupuesto de rastreo para 250 páginas nuevas",
+      "Remite a la habilidad seo-programatico para la estrategia de esas páginas"
+    ] },
+  { "id": "mapa-visual-diseno",
+    "prompt": "¿Puedes hacer un mapa visual del sitio de nuestra tienda de ropa? Queremos algo que podamos pasarle al equipo de diseño.",
+    "expectations": [
+      "Entrega un mapa visual en formato Mermaid",
+      "Muestra la jerarquía y las relaciones entre páginas",
+      "Incluye todas las secciones principales (categorías, colecciones, ofertas, ayuda, carrito)",
+      "Usa un formato claro y legible",
+      "Sirve para que el equipo de diseño haga la navegación y los bocetos"
+    ] },
+  { "id": "fuera-de-alcance-seo-tecnico",
+    "prompt": "Nuestro sitemap XML no se actualiza hace 6 meses y tenemos errores de rastreo en Search Console. ¿Nos arreglas el SEO técnico?",
+    "expectations": [
+      "Reconoce que es una tarea de SEO técnico, no de arquitectura del sitio",
+      "Remite a la habilidad auditoria-seo",
+      "Explica que esta habilidad cubre el diseño de la estructura, no la resolución de problemas técnicos"
+    ] }
+] }

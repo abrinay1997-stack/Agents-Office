@@ -1,0 +1,68 @@
+{ "skill": "retencion-clientes", "origen": "marketingskills/churn-prevention/evals", "evals": [
+  { "id": "estrategia-completa-saas",
+    "prompt": "Nuestro software de gestión de proyectos pierde el 7 % de los clientes cada mes. Cobramos 49 al mes y tenemos unos 2.000 clientes de pago. ¿Nos ayudas a diseñar una estrategia para retenerlos?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Trata las bajas voluntarias y las involuntarias",
+      "Diseña el flujo de cancelación: disparador, encuesta, oferta según motivo, confirmación y después",
+      "Incluye una encuesta de salida con varios motivos",
+      "Asigna una oferta a cada motivo de cancelación",
+      "Trata la recuperación de cobros fallidos (prevención, reintentos, avisos, gracia)",
+      "Recomienda un puntaje de salud",
+      "Da un plan de implementación por prioridades",
+      "No dice que envió mensajes ni aplicó descuentos: deja borradores para el OK del dueño"
+    ] },
+  { "id": "tarjetas-vencidas",
+    "prompt": "Perdemos suscriptores de nuestra caja mensual de café porque se les vencen las tarjetas. Más o menos el 15 % de las bajas son por pagos fallidos. ¿Cómo lo arreglamos?",
+    "expectations": [
+      "Lo identifica como baja involuntaria / recuperación de cobros",
+      "Aplica la secuencia prevención, reintento, avisos, gracia y baja",
+      "Incluye avisos de tarjeta por vencer antes del fallo",
+      "Incluye reintentos según el tipo de rechazo",
+      "Da una secuencia de avisos con urgencia creciente",
+      "Recomienda un periodo de gracia antes de la baja",
+      "Menciona la actualización automática de tarjetas o un segundo medio de pago",
+      "Da referencias de recuperación como orientación"
+    ] },
+  { "id": "boton-cancelar-sin-flujo",
+    "prompt": "qué le mostramos a la gente cuando pulsa cancelar? ahora mismo se da de baja directo sin que intentemos nada",
+    "expectations": [
+      "Reconoce el pedido aunque esté escrito de forma informal",
+      "Diseña un flujo de cancelación de varios pasos",
+      "Incluye una encuesta de salida con alrededor de 7 motivos",
+      "Asigna ofertas a cada motivo",
+      "Incluye los textos de cada pantalla",
+      "Advierte contra los patrones engañosos que impiden cancelar",
+      "Incluye la confirmación y lo que pasa después de la baja"
+    ] },
+  { "id": "clientes-en-riesgo-gimnasio",
+    "prompt": "¿Cómo detectamos qué socios de nuestro gimnasio están por darse de baja antes de que lo hagan? Queremos adelantarnos.",
+    "expectations": [
+      "Aplica el modelo de puntaje de salud",
+      "Define señales de uso (frecuencia de asistencia, uso de lo principal)",
+      "Define señales de interacción (consultas, recomendación, respuesta a mensajes)",
+      "Define señales de la cuenta (tipo de plan, antigüedad, estado de pago)",
+      "Propone una forma de puntuar de 0 a 100",
+      "Define niveles de riesgo con su intervención",
+      "Sugiere de dónde sacar los datos y cómo implementarlo (por ejemplo, una rutina semanal)"
+    ] },
+  { "id": "muy-caro-ofertas",
+    "prompt": "La encuesta de salida de nuestra academia en línea dice que el 40 % se va porque «es muy caro». ¿Qué ofertas deberíamos probar?",
+    "expectations": [
+      "Usa las ofertas que corresponden al motivo «muy caro»",
+      "Propone varios tipos (descuento temporal, bajar de plan, plan anual, pausa)",
+      "Recomienda probar las ofertas para ver cuál funciona",
+      "Advierte que «muy caro» a menudo esconde otros problemas (no ve el valor, no lo usa)",
+      "Sugiere preguntas de seguimiento en la encuesta",
+      "Da la estructura o el texto concreto de la oferta",
+      "No inventa descuentos que el dueño no autorizó: los deja como propuesta"
+    ] },
+  { "id": "fuera-de-alcance-recuperacion",
+    "prompt": "Queremos una secuencia de correos para recuperar a los clientes que ya se fueron de nuestra agencia. ¿Nos ayudas a escribirlos?",
+    "expectations": [
+      "Reconoce que se cruza con el trabajo de secuencias de correo",
+      "Remite a la habilidad secuencias-correo",
+      "Puede dar contexto propio de retención (momentos tras la baja, ganchos, oferta de recuperación)",
+      "No intenta escribir la secuencia completa"
+    ] }
+] }

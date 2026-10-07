@@ -1,0 +1,61 @@
+{ "skill": "registro", "origen": "marketingskills/signup/evals", "evals": [
+  { "id": "auditoria-tres-pasos",
+    "prompt": "Audita nuestro registro. Tenemos 3 pasos: el 1 pide correo, contraseña y nombre completo; el 2 pide nombre de la empresa, tamaño, cargo e industria; el 3 pide para qué lo van a usar y cómo nos conocieron. Hoy termina el 45 %.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Identifica el tipo de flujo (probablemente prueba de un SaaS para empresas)",
+      "Aplica el principio de los mínimos campos obligatorios",
+      "Evalúa cada campo según si es imprescindible antes de usar el producto",
+      "Recomienda aplazar casi todo el paso 2 y todo el paso 3 (perfil progresivo, bienvenida)",
+      "Entrega los hallazgos en formato Problema, Impacto, Arreglo, Prioridad",
+      "Incluye arreglos rápidos, cambios de alto impacto e hipótesis para probar"
+    ] },
+  { "id": "google-microsoft-b2b",
+    "prompt": "¿Deberíamos añadir registro con Google y Microsoft? Somos una herramienta de gestión de proyectos para empresas y hoy solo hay correo y contraseña.",
+    "expectations": [
+      "Aplica la guía de registro con cuentas externas",
+      "Recomienda Google y Microsoft como opciones principales para empresas",
+      "Explica los beneficios: menos fricción, correo ya verificado, alta más rápida",
+      "Recomienda ponerlo bien a la vista",
+      "Trata la separación visual del registro con correo",
+      "Da recomendaciones de implementación (texto «Regístrate con Google», cuál destacar según el público)"
+    ] },
+  { "id": "solo-correo-35-por-ciento",
+    "prompt": "nuestro formulario de la tienda de cosméticos es solo correo y contraseña pero igual solo termina el 35 %. ¿qué más puede estar mal?",
+    "expectations": [
+      "Responde aunque el pedido sea informal",
+      "Investiga más allá de los campos, porque el formulario ya es mínimo",
+      "Aplica la guía de confianza y fricción",
+      "Revisa si hay mensajes como «Sin tarjeta» o de privacidad (solo si son verdad)",
+      "Revisa el manejo de errores y la experiencia de la contraseña",
+      "Considera factores antes del formulario (propuesta de valor, la página) y deriva a conversion-paginas",
+      "Entrega una lista de diagnóstico"
+    ] },
+  { "id": "verificacion-correo",
+    "prompt": "En el portal de pacientes de nuestra clínica pedimos verificar el correo antes de poder entrar. ¿Eso nos está quitando registros? ¿Deberíamos cambiarlo?",
+    "expectations": [
+      "Aplica la guía de verificación",
+      "Explica la fricción que crea verificar antes de entrar",
+      "Recomienda aplazar la verificación hasta que haga falta",
+      "Sugiere dejar explorar mientras está pendiente",
+      "Explica cuándo sí debe ir antes (cumplimiento, datos sensibles de salud, abusos)",
+      "Da mejoras para la verificación si se mantiene (reenviar, revisar no deseado, corregir el correo)"
+    ] },
+  { "id": "experimentos-prueba-gratis",
+    "prompt": "¿Qué experimentos deberíamos correr en la página de registro de nuestro software de facturación? Queremos más altas a la prueba gratis.",
+    "expectations": [
+      "Aplica la lista de experimentos",
+      "Cubre experimentos de diseño del formulario (disposición, cantidad de campos, registro con cuentas)",
+      "Cubre experimentos de textos (titular, botón, confianza)",
+      "Cubre experimentos de prueba y compromiso (con o sin tarjeta, duración)",
+      "Prioriza por impacto probable",
+      "Deriva a pruebas-ab para diseñar los experimentos"
+    ] },
+  { "id": "no-activan",
+    "prompt": "Los usuarios de nuestra app de finanzas personales se registran bien pero luego no la usan. Solo el 20 % termina la bienvenida. ¿Qué hacemos?",
+    "expectations": [
+      "Reconoce que es un problema de activación después del registro, no del formulario",
+      "Deriva a activacion-clientes",
+      "Explica que registro cubre el formulario de alta, no lo que pasa después"
+    ] }
+] }
