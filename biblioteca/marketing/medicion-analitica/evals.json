@@ -1,0 +1,68 @@
+{ "skill": "medicion-analitica", "origen": "marketingskills/analytics/evals", "evals": [
+  { "id": "plan-saas-ga4-gtm",
+    "prompt": "Ayúdame a montar el seguimiento de nuestro software de reservas para restaurantes. Usamos GA4 y Tag Manager. Queremos medir registros, uso de funciones y cuándo alguien pasa de plan.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Aplica el principio «medir para decidir» y pregunta qué decisiones va a informar el seguimiento",
+      "Usa una convención de nombres objeto_acción, en minúsculas y con guion bajo",
+      "Define los eventos esenciales de un SaaS (registro, uso de una función, cambio de plan)",
+      "Da el detalle de implementación en GA4 con sus parámetros",
+      "Incluye ejemplos de envío a la capa de datos (dataLayer) para GTM",
+      "Entrega un plan de seguimiento con nombre del evento, disparador, propiedades y para qué sirve",
+      "No dice que instaló o verificó nada: entrega instrucciones para quien tiene acceso al sitio"
+    ] },
+  { "id": "utm-canales",
+    "prompt": "¿Qué parámetros UTM deberíamos usar? Hacemos anuncios en Google y Meta, mandamos un boletín semanal y publicamos en Instagram todos los días. Somos una tienda de ropa.",
+    "expectations": [
+      "Aplica la estrategia de parámetros UTM",
+      "Define convenciones de fuente, medio y campaña",
+      "Da ejemplos concretos de UTM para cada canal mencionado",
+      "Usa nombres coherentes y en minúsculas",
+      "Advierte de los errores comunes (mayúsculas distintas, medio faltante, UTM en enlaces internos)",
+      "Recomienda documentar las UTM en una hoja de cálculo o guía de nombres",
+      "Sugiere que los borradores de publicaciones lleven el enlace ya etiquetado"
+    ] },
+  { "id": "seguimiento-roto",
+    "prompt": "creo que nuestro seguimiento está roto: vemos eventos duplicados y las conversiones de GA4 no coinciden con las ventas que tenemos en la base de datos. ¿me ayudas?",
+    "expectations": [
+      "Reconoce el pedido aunque esté escrito de forma informal",
+      "Aplica el marco de depuración y validación",
+      "Revisa de forma sistemática las causas de eventos duplicados (etiquetas repetidas, activadores que se disparan dos veces, varios contenedores)",
+      "Propone herramientas concretas: DebugView de GA4, vista previa de GTM, herramientas del navegador",
+      "Explica la diferencia entre GA4 y la base de datos (consentimiento, bloqueadores, seguimiento del navegador frente al del servidor, zonas horarias)",
+      "Da pasos de solución ordenados y una lista de validación",
+      "Pide los datos que le faltan (capturas, cifras) en vez de inventarlos"
+    ] },
+  { "id": "tienda-desde-cero",
+    "prompt": "Vamos a abrir una tienda en línea de artículos de ferretería y necesito montar el seguimiento desde cero. ¿Qué eventos son indispensables?",
+    "expectations": [
+      "Se apoya en los eventos esenciales de una tienda en línea",
+      "Define la taxonomía de eventos de tienda: producto visto, añadido al carrito, carrito visto, pago iniciado, paso de pago, compra, producto quitado",
+      "Incluye los parámetros de tienda (item_id, item_name, price, quantity, moneda)",
+      "Usa la convención objeto_acción",
+      "Separa lo imprescindible de lo que puede esperar",
+      "Entrega el resultado como plan de seguimiento",
+      "No asume dólares: usa la moneda de la empresa"
+    ] },
+  { "id": "privacidad-gdpr",
+    "prompt": "Necesitamos que nuestro seguimiento cumpla con la ley de protección de datos. Tenemos clientes en Europa y usamos GA4, Hotjar y el píxel de Facebook. Somos una agencia de viajes.",
+    "expectations": [
+      "Aplica el marco de privacidad y cumplimiento",
+      "Aborda los requisitos de GDPR/RGPD y menciona las leyes del país de los visitantes",
+      "Recomienda una plataforma de gestión de consentimiento (CMP)",
+      "Explica la configuración del modo de consentimiento de GA4",
+      "Explica la carga condicionada de Hotjar y del píxel de Facebook según el consentimiento",
+      "Propone una jerarquía de consentimiento (necesarias, analítica, marketing)",
+      "Menciona los ajustes de retención de datos",
+      "No da consejo legal definitivo: recomienda consultarlo con un abogado"
+    ] },
+  { "id": "ab-precios",
+    "prompt": "Ayúdame a montar el seguimiento para una prueba A/B: queremos medir qué versión de nuestra página de precios convierte mejor. Es una clínica dental con citas en línea.",
+    "expectations": [
+      "Reconoce que el pedido se cruza con el diseño de una prueba A/B",
+      "Remite a la habilidad pruebas-ab para el diseño del experimento, la hipótesis y el análisis estadístico",
+      "Puede ayudar con el detalle del seguimiento (eventos y parámetros por variante)",
+      "Deja claro que el diseño completo del experimento no es de esta habilidad",
+      "No dice que lanzó la prueba: deja el plan listo para el OK del dueño"
+    ] }
+] }

@@ -1,0 +1,73 @@
+{ "skill": "ofertas", "origen": "marketingskills/offers/evals", "evals": [
+  { "id": "descuento-migracion-correo",
+    "prompt": "Nuestra plataforma de correo para tiendas en línea (plan de 99 al mes) tiene la conversión de prueba a pago estancada. Pensamos lanzar un cupón de 50 % de descuento los primeros 3 meses para empujar a más gente. Lo que más nos dicen los prospectos es que les da miedo migrar su lista y sus automatizaciones desde su proveedor actual. ¿Es el descuento la mejor jugada?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Desaconseja descontar para captar clientes nuevos",
+      "Explica que quienes piden descuento se dan de baja a un ritmo de cerca del doble que quienes pagan completo, dicho como orientación y no como dato verificado de la empresa",
+      "Dice que el cupón deja el producto anclado como barato y atrae a buscadores de precio en vez de compradores de valor",
+      "Enuncia la regla: descuento solo para mejoras de plan y ventas cruzadas o en una temporada real, nunca para captar",
+      "Plantea que las ofertas ganan a los descuentos: subir el valor, no recortar el precio",
+      "Identifica el costo de cambiarse (el miedo a migrar) como la objeción real, no el precio",
+      "Recomienda una oferta que invierta ese riesgo, por ejemplo una migración hecha por el equipo con una garantía sobre el costo de cambiarse (migración en marcha y verificada en N días o es gratis)",
+      "Sugiere un bono que quite el segundo miedo (entregabilidad / recalentamiento de la lista)",
+      "Usa escasez real (capacidad o fila) en vez de un reloj falso",
+      "Puede apoyarse en la ecuación de valor: bajar el esfuerzo y subir la probabilidad percibida en vez de bajar el precio",
+      "No inventa el precio de la migración: lo toma de las cifras de la empresa o lo deja como propuesta para el dueño",
+      "No dice que lanzó nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "diagnostico-clinica-dental",
+    "prompt": "Tengo una clínica dental. Vendo limpieza, blanqueamiento y ortodoncia por separado y los pacientes preguntan mucho y compran poco. ¿Cómo armo una oferta que se venda mejor?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Parte de la idea de que la oferta es lo que vende, no el texto",
+      "Pasa la ecuación de valor con una nota de 1 a 10 por palanca e identifica la restricción que manda",
+      "Revisa las seis piezas de la anatomía de la oferta",
+      "Propone empaquetar con nombre, plazo y precio total claro (tomado de las cifras de la clínica, sin inventarlo)",
+      "Propone bonos que cierran objeciones reales (miedo al dolor, incertidumbre del costo) y una garantía con como máximo dos condiciones",
+      "Si propone escasez, es real (cupos de agenda), nunca fabricada",
+      "Propone una forma de pago (anticipo + cuotas) como propuesta para el dueño",
+      "Da una mejora esperada como rango orientativo, no como promesa",
+      "No dice que publicó o cambió precios: deja borradores para el OK del dueño"
+    ] },
+  { "id": "escasez-falsa-curso",
+    "prompt": "Vendo un curso grabado de repostería. Quiero poner un reloj de cuenta regresiva que se reinicie para cada visitante y un cartel de «solo quedan 5 cupos» aunque el curso sea ilimitado. ¿Lo hago?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Desaconseja la escasez falsa: sube un poco hoy y hunde la confianza después",
+      "Propone alternativas reales: bono que vence en una fecha cierta, subida de precio programada, cohorte con fecha de cierre, cupos de acompañamiento limitados",
+      "Advierte que si la fecha límite se estira, el truco se nota",
+      "Recomienda una garantía generosa acorde al precio de un curso grabado",
+      "Evita el vocabulario prohibido («secreto», «revolucionario», «por tiempo limitado» sin límite)",
+      "Recuerda revisar las normas de protección al consumidor del país",
+      "No inventa precios ni cifras de alumnos",
+      "No dice que publicó nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "oferta-agencia-iguala",
+    "prompt": "Soy una agencia pequeña de marketing. Cobro una iguala mensual por manejar redes y anuncios, pero los prospectos dicen que es caro y se van. ¿Bajo el precio o qué hago?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Explica que «bajar el precio» suele ser en realidad subir el numerador o bajar el denominador de la ecuación de valor",
+      "Diagnostica la palanca más débil (probabilidad percibida, tiempo de espera o resultado vago)",
+      "Aplica el formato de iguala de agencia: resultado y plazo, piloto pagado, velocidad de arranque, reporte mensual, niveles con saltos claros",
+      "Propone nombre del nivel y del trabajo",
+      "Propone escasez por capacidad real (clientes por trimestre)",
+      "Trata el plazo de los resultados de forma explícita en la oferta",
+      "No propone un descuento para captar clientes nuevos",
+      "Los precios salen de las cifras de la empresa o quedan marcados como propuesta para el dueño",
+      "No dice que cambió precios ni envió propuestas: deja borradores para el OK del dueño"
+    ] },
+  { "id": "bonos-sin-inflar",
+    "prompt": "Vendo una guía digital de 47. Quiero meterle 8 bonos que sumen un valor de 3.000 para que se vea como un regalo. ¿Está bien?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Desaconseja inflar los bonos: los compradores atentos lo ven; los bonos suman, no exageran",
+      "Recomienda de 3 a 5 bonos, cada uno atado a una objeción concreta",
+      "Pide que el valor de cada bono tenga un punto de comparación defendible y que en total sumen menos de 2 veces el precio",
+      "Propone un arranque rápido («haz esto primero») como bono",
+      "Recomienda una garantía incondicional corta acorde al precio",
+      "Evita «valorado en» sin comparable",
+      "No inventa valores: los toma de las cifras o los marca como supuesto",
+      "No dice que publicó nada: deja borradores para el OK del dueño"
+    ] }
+] }

@@ -1,0 +1,85 @@
+{ "skill": "ideas-marketing", "origen": "marketingskills/marketing-ideas/evals", "evals": [
+  { "id": "saas-presupuesto-bajo",
+    "prompt": "Necesito ideas de marketing para mi herramienta de analítica para tiendas en línea. Somos 3 personas, cobramos 49 al mes, tenemos unos 200 clientes y apenas 500 al mes para marketing.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Filtra las ideas por presupuesto bajo y etapa temprana",
+      "Toma ideas del catálogo de 139 por categoría (contenido, comunidad, SEO, alianzas, referidos, redes…)",
+      "Entrega cada idea con nombre, por qué encaja, cómo empezar, resultado esperado y recursos necesarios",
+      "Prioriza por impacto probable dada su etapa",
+      "No promete cifras de resultados inventadas",
+      "No dice que lanzó o publicó nada: deja ideas y borradores para el OK del dueño"
+    ] },
+  { "id": "leads-rapido-empresas",
+    "prompt": "¿Cuál es la forma más rápida de conseguir más prospectos? Vendemos software de seguridad a empresas grandes y tenemos 10.000 al mes de presupuesto de marketing.",
+    "expectations": [
+      "Aplica el filtro «necesito clientes ya»",
+      "Recomienda canales pagados apropiados para empresas (Google, LinkedIn)",
+      "Recomienda tácticas de salida a buscar (correo en frío, contacto en LinkedIn) y activos de captación",
+      "Filtra por tácticas apropiadas para venta a empresas",
+      "Da el formato estructurado con por qué encaja, cómo empezar, plazo y recursos",
+      "Aclara que «rápido» suele significar pagado o contacto directo",
+      "Incluye expectativas de plazo"
+    ] },
+  { "id": "crecer-sin-anuncios-plg",
+    "prompt": "¿cómo crecemos sin gastar en anuncios? somos una empresa de producto con prueba gratis y plan gratuito",
+    "expectations": [
+      "Responde bien a una frase informal",
+      "Aplica el filtro de crecimiento desde el producto",
+      "Recomienda tácticas propias: ciclos virales, referidos, comunidad, contenido y SEO, herramientas gratis",
+      "Evita ideas que dependan de anuncios",
+      "Incluye tácticas de viralidad y referidos, y deriva el diseño detallado del programa a referidos",
+      "Entrega una estructura con guía de implementación"
+    ] },
+  { "id": "autoridad-sector-nuevo",
+    "prompt": "Queremos construir autoridad en el sector de recursos humanos. Somos una empresa nueva y nadie nos conoce todavía.",
+    "expectations": [
+      "Aplica el filtro «construir autoridad»",
+      "Recomienda tácticas de liderazgo de opinión: investigación o encuestas propias, artículos invitados, podcasts, charlas, contenido en LinkedIn, informes del sector",
+      "Incluye contenido original y apariciones en comunidades y medios",
+      "Señala que construir autoridad es de largo plazo",
+      "Entrega estructura con cómo empezar, resultados esperados y plazos"
+    ] },
+  { "id": "veinte-ideas-tienda-ropa",
+    "prompt": "Dame 20 ideas de marketing para mi tienda de ropa. Tengo un local y vendemos también por Instagram.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Usa el catálogo de ideas para negocios que no son de software (tiendas), no solo el de software",
+      "Da unas 20 ideas variadas en varias categorías (ficha de Google, reseñas, fotos de producto, alianzas, WhatsApp, temporada, sorteos, contenido…)",
+      "Las organiza por categoría o por esfuerzo e impacto",
+      "Da un contexto breve de ejecución para cada una",
+      "Destaca primero lo gratis y lo que el negocio ya tiene (clientas actuales, ficha, WhatsApp)",
+      "Menciona las herramientas de la oficina donde encajan (Estudio para fotos, Contenido para borradores)",
+      "No dice que publicó o lanzó nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "clinica-dental-local",
+    "prompt": "Tengo una clínica dental en una ciudad mediana y casi todos mis pacientes llegan por recomendación. Quiero más pacientes nuevos sin gastar mucho. ¿Qué hago?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro o pregunta lo que falta",
+      "Propone empezar por la ficha de Google, las reseñas y las páginas por servicio y zona",
+      "Propone referidos con recompensa, cuidando las reglas de salud de su país",
+      "Incluye ideas de contenido que resuelve dudas reales y de recordatorios a pacientes actuales",
+      "Prioriza lo gratis y lo barato antes de los anuncios",
+      "Aclara que las reglas de salud y de datos personales del país limitan lo que se puede prometer y enviar",
+      "No inventa cifras de resultados"
+    ] },
+  { "id": "referidos-deriva",
+    "prompt": "Queremos montar un programa de referidos. ¿Cómo lo estructuramos?",
+    "expectations": [
+      "Reconoce que es una petición específica de diseño de un programa de referidos",
+      "Remite a la habilidad referidos para el diseño detallado",
+      "No intenta diseñar el programa completo aquí",
+      "Puede mencionar los referidos como una idea de marketing en una línea"
+    ] },
+  { "id": "guerrilla-datos-30k",
+    "prompt": "Vendemos una plataforma de datos de 30.000 al año y no logramos que los directores de marketing de las cuentas objetivo contesten el correo ni las llamadas. Tenemos presupuesto para algo creativo. ¿Qué tácticas de guerrilla podrían funcionar?",
+    "expectations": [
+      "Dirige a la referencia de marketing de guerrilla",
+      "Presenta el marco de las tres reglas del correo físico: relevancia, construir relación y segmentación precisa",
+      "Aplica la disciplina del retorno: calificar las cuentas con nombre antes de gastar y probar en pequeño antes de escalar",
+      "Señala que el tamaño de la venta (30.000 al año) justifica un envío físico caro",
+      "Usa casos con nombre como inspiración (el flotador de unicornio, las pizzas de Antimetal) sin inventar cifras ni presentarlos como resultados prometidos",
+      "Aplica el principio «piensa en historias, no en campañas»",
+      "No inventa destinatarios ni direcciones y deja el envío para el OK del dueño"
+    ] }
+] }
