@@ -69,7 +69,7 @@
       "Explica la diferencia: el correo en frío es para prospectos que no han dado permiso; aquí la persona sí lo dio al descargar",
       "No intenta diseñar la secuencia con los patrones del correo en frío"
     ] },
-  { "id": "sin-señales-de-ia",
+  { "id": "sin-senales-de-ia",
     "prompt": "Escribe un correo en frío para la directora de finanzas de una empresa de 200 personas ofreciéndole nuestra herramienta de rendición de gastos.",
     "expectations": [
       "Es un correo corto de par a par, que sigue los principios de la habilidad",

@@ -6,6 +6,7 @@ area: ventas-y-gtm
 departments: [sales, marketing]
 agents: [lexi, folo, enzo, pros]
 origen: marketingskills/cold-email (MIT, Corey Haines)
+palabras: [correo en frío, prospección, outbound, seguimiento, asunto, nadie responde]
 ---
 # Correo en frío
 
