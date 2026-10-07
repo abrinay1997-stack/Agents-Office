@@ -1,0 +1,89 @@
+{ "skill": "psicologia-marketing", "origen": "marketingskills/marketing-psychology/evals", "evals": [
+  { "id": "pagina-de-precios-tres-planes",
+    "prompt": "¿Cómo uso la psicología para subir las conversiones de la página de precios de nuestra herramienta para empresas? Tenemos tres planes: 29, 79 y 199 al mes.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Aplica modelos de precios con sus nombres: anclaje, precio de encanto, regla del 100, bueno-mejor-óptimo",
+      "Aplica la aversión a la pérdida para diferenciar los niveles",
+      "Propone prueba social junto al precio y el efecto por defecto (plan recomendado preseleccionado)",
+      "Da recomendaciones concretas para esos tres precios, no definiciones sueltas",
+      "Dice que los umbrales en dólares (regla del 100) se ajustan a la moneda y que conviene probarlos",
+      "Propone probarlo con una prueba A/B y no promete un porcentaje de mejora",
+      "No cambia nada en la web: deja las recomendaciones como borrador para el OK del dueño"
+    ] },
+  { "id": "escasez-etica",
+    "prompt": "Explícame el principio de escasez y cómo usarlo de forma ética en la venta de cupos de nuestro taller de cerámica, sin ser manipuladores.",
+    "expectations": [
+      "Explica la escasez como modelo mental: la disponibilidad limitada aumenta el valor percibido",
+      "Da aplicaciones legítimas con cupos reales: grupos pequeños, fechas de inscripción reales, tiradas limitadas",
+      "Distingue la escasez real de la urgencia fabricada (relojes falsos, «quedan 2» inventado)",
+      "Da ejemplos concretos y de implementación",
+      "Relaciona con aversión a la pérdida y urgencia",
+      "Aborda directamente las consideraciones éticas y legales sobre las prácticas engañosas"
+    ] },
+  { "id": "psicologia-para-textos",
+    "prompt": "¿qué principios psicológicos debería usar para escribir mejores textos de venta? Vendemos ropa deportiva en línea.",
+    "expectations": [
+      "Responde bien a una frase informal",
+      "Recomienda modelos útiles para textos: prueba social, reciprocidad, aversión a la pérdida, anclaje, escasez real, efecto IKEA, dotación, compromiso y coherencia",
+      "Explica brevemente cada principio y da una aplicación de redacción concreta para ropa deportiva",
+      "Organiza los principios por dónde aplican en el texto (titular, cuerpo, precio, botón, testimonios)",
+      "Usa la guía rápida de retos",
+      "Remite a redaccion-publicitaria para escribir los textos",
+      "No inventa cifras de efecto"
+    ] },
+  { "id": "activacion-clientes-nuevos",
+    "prompt": "Estoy diseñando el recorrido de bienvenida de los clientes nuevos de nuestra aplicación y quiero usar psicología conductual para que lo terminen. ¿Qué modelos aplico?",
+    "expectations": [
+      "Aplica el efecto de gradiente de meta",
+      "Aplica la ley de Hick (reducir opciones)",
+      "Aplica el efecto IKEA o el efecto de dotación",
+      "Aplica el efecto Zeigarnik o el compromiso y la coherencia (pedir poco primero)",
+      "Explica cómo aplica cada uno a la activación en particular",
+      "Da recomendaciones concretas por modelo",
+      "Remite a activacion-clientes para el diseño del recorrido"
+    ] },
+  { "id": "prueba-gratis-vs-gratuito",
+    "prompt": "¿Qué psicología hay detrás de que las pruebas gratis funcionen mejor que el plan gratuito en algunos productos?",
+    "expectations": [
+      "Aplica la aversión a la pérdida al contexto de la prueba",
+      "Aplica el efecto de dotación",
+      "Aplica el efecto precio cero",
+      "Menciona el costo hundido o el sesgo del statu quo",
+      "Explica cómo interactúan los modelos en prueba frente a plan gratuito",
+      "Indica cuándo funciona mejor cada enfoque (prueba si el producto exige mucho esfuerzo de activación, plan gratuito si hay efectos de red)",
+      "Da una explicación clara y didáctica"
+    ] },
+  { "id": "ab-escasez-vs-prueba-social",
+    "prompt": "Ayúdame a montar una prueba A/B para ver qué principio funciona mejor en el botón: escasez o prueba social.",
+    "expectations": [
+      "Reconoce que es una tarea de montar una prueba A/B y no de psicología",
+      "Remite a pruebas-ab para el diseño del experimento",
+      "Puede aportar contexto psicológico de ambos principios para formular la hipótesis",
+      "Avisa de que la escasez solo se prueba si es real",
+      "No intenta diseñar la prueba completa con patrones psicológicos"
+    ] },
+  { "id": "precio-restaurante-menu",
+    "prompt": "Tengo un restaurante y quiero que la gente pida más platos de mayor margen. ¿Cómo puede ayudarme la psicología al diseñar el menú y los precios?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras de márgenes, o pregunta lo que falta",
+      "Aplica la paradoja de la elección (menú más corto) y la ley de Hick",
+      "Aplica el anclaje y la relatividad de precios (un plato caro real que hace ver razonable el que quieres vender)",
+      "Aplica el efecto por defecto o la recomendación del chef y la prueba social («el más pedido», solo si es cierto)",
+      "Aplica la contabilidad mental o el encuadre con cuidado de no esconder el precio total",
+      "No inventa los márgenes ni las ventas de cada plato",
+      "Propone probarlo cambiando el menú por periodos y comparando",
+      "Evita manipulaciones: cualquier «más pedido» o escasez debe ser cierto"
+    ] },
+  { "id": "retencion-gimnasio",
+    "prompt": "Mi gimnasio pierde muchos socios después del tercer mes. ¿Qué modelos psicológicos me ayudan a entender por qué se van y qué hacer?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro o pregunta lo que falta",
+      "Usa modelos de retención: efecto de dotación, costos de cambio, sesgo del statu quo, gradiente de meta, compromiso y coherencia",
+      "Aplica el error fundamental de atribución (no culpar al socio: revisar el proceso)",
+      "Aplica la teoría de las restricciones o el principio de Pareto para encontrar el cuello de botella",
+      "Da acciones concretas (seguimiento de la semana 2 y 8, metas visibles, comunidad)",
+      "Advierte de no retener con obstáculos para cancelar",
+      "Propone medir la retención antes y después, sin prometer una cifra"
+    ] }
+] }

@@ -28,80 +28,34 @@ Reúne este contexto (pregunta lo que falte):
 
 ## Principios
 
-### Ventas usa lo que ventas cree
-Involucra a los vendedores en la creación. Usa su lenguaje, no el de marketing. Si los vendedores reescriben tu presentación antes de enviarla, escribiste la presentación equivocada. Prueba los borradores con los mejores primero (pídele al dueño que se los muestre).
-
-### Para una situación concreta, no genérico
-Adapta a la persona, la etapa del trato y el caso de uso. Una presentación para el gerente técnico no se parece a la del gerente comercial. Una hoja para después de una reunión sirve a otro fin que la de una feria.
-
-### Que se pueda escanear, no que lo diga todo
-El vendedor necesita la información en 3 segundos, no en 30. Títulos en negrita, viñetas cortas, jerarquía visual. Si no encuentra la respuesta en plena llamada, el documento falló.
-
-### Atado a resultados del negocio
-Cada afirmación conecta con ingresos, eficiencia o menos riesgo. Una función sin el «¿y eso qué?» no vale nada. Cambia «analítica con IA» por «el informe que tomaba un día ahora toma una hora» (solo si es cierto y sale de datos de la empresa).
-
-### Afirmaciones que el vendedor puede defender
-El vendedor repite lo que escribes ante compradores que pueden comprobarlo. Todo lo que un comprador pueda desmentir en un minuto cuesta más de lo que aporta.
-- **«Por qué ganamos» necesita evidencia**: entrevistas de ganadas y perdidas, grabaciones de llamadas, citas de clientes o razones del CRM respaldadas por alguna de esas (ver `referencias/analisis-ganadas-perdidas.md`). Sin ella, escribe las ventajas como **hipótesis** para que el equipo las pruebe, y di qué evidencia las confirmaría.
-- **Lo que se dice de un competidor** sigue las reglas de evidencia de `paginas-comparativas`: con fecha, con fuente, «no aparece en su sitio» en vez de «no lo tienen», y sin afirmar como hecho sus motivos. El vendedor puede razonar por qué un competidor hizo algo, rotulado como suposición.
-- **Incluye dónde pierden.** Un documento competitivo que admite cuándo el competidor es la mejor opción es uno en el que el equipo confía delante de un comprador.
+- **Ventas usa lo que ventas cree.** Usa el lenguaje de los vendedores, no el de marketing. Si reescriben tu presentación antes de enviarla, escribiste la equivocada. Pide al dueño que pruebe los borradores con los mejores primero.
+- **Para una situación concreta, no genérico.** Adapta a la persona, la etapa del trato y el caso de uso.
+- **Escaneable, no exhaustivo.** El vendedor necesita la información en 3 segundos. Títulos en negrita, viñetas cortas. Si no la encuentra en plena llamada, el documento falló.
+- **Atado a resultados.** Cada afirmación conecta con ingresos, eficiencia o menos riesgo; una función sin el «¿y eso qué?» no vale nada.
+- **Afirmaciones que el vendedor puede defender.** Repite lo que escribes ante compradores que pueden comprobarlo.
+  - **«Por qué ganamos» necesita evidencia** (entrevistas, llamadas, citas de clientes, razones del CRM respaldadas): ver `referencias/analisis-ganadas-perdidas.md`. Sin ella, escríbelo como **hipótesis** y di qué evidencia la confirmaría.
+  - **Lo que se dice de un competidor** va con fecha y fuente, «no aparece en su sitio» en vez de «no lo tienen», y sin afirmar como hecho sus motivos (como suposición rotulada, sí).
+  - **Incluye dónde pierden.** Un documento competitivo que admite cuándo el competidor es mejor es uno en el que el equipo confía.
 
 ## Presentación de ventas (pitch deck)
 
-### Marco de 10 a 12 láminas
+**Marco de 10 a 12 láminas** (arco: situación → complicación → resolución): 1 el problema del mundo actual · 2 el costo del problema · 3 el cambio que está ocurriendo · 4 tu enfoque · 5 recorrido del producto o servicio (3–4 flujos, no un desfile de funciones) · 6 pruebas · 7 un caso de éxito · 8 implementación y plazos · 9 retorno y valor · 10 resumen de precios · 11 próximos pasos con fecha.
 
-1. **El problema del mundo actual**: el dolor que vive hoy el comprador.
-2. **El costo del problema**: qué cuesta no hacer nada (tiempo, dinero, riesgo).
-3. **El cambio que está ocurriendo**: un cambio del mercado o la tecnología que crea urgencia.
-4. **Tu enfoque**: cómo lo resuelves distinto.
-5. **Recorrido del producto o servicio**: 3 o 4 flujos clave, no un desfile de funciones.
-6. **Pruebas**: cifras, logotipos, reconocimientos.
-7. **Un caso de éxito**, bien contado.
-8. **Implementación y plazos**: cómo llegan de aquí a estar funcionando.
-9. **Retorno y valor**: retorno esperado y tiempo de recuperación.
-10. **Resumen de precios**: transparente, por niveles si aplica.
-11. **Próximos pasos**: una acción clara con fecha.
-
-### Principios de la presentación
-
-- **Arco de historia, no desfile de funciones.** El mundo tiene un problema, hay una mejor manera, aquí está la prueba, así se llega.
-- **Una idea por lámina.** Si necesitas dos puntos, usa dos láminas.
-- **Diseñada para presentarse, no para leerse.** Las láminas apoyan la conversación; no la reemplazan. Poco texto, imágenes fuertes (puedes pedir imágenes al Estudio con `generar_imagen` o buscar en la galería con `buscar_en_galeria`).
-
-### Adaptación según el comprador
+Una idea por lámina; para presentarse, no para leerse (poco texto; imágenes con el Estudio: `generar_imagen`, `buscar_en_galeria`).
 
 | Comprador | Destaca | Resta peso a |
 |-----------|---------|--------------|
-| Técnico | Arquitectura, seguridad, integraciones, especificaciones | Cálculos de retorno, métricas de negocio |
-| Quien paga (económico) | Retorno, tiempo de recuperación, costo total, riesgo | Detalle técnico, especificidades de la implementación |
-| El contacto que te defiende por dentro | Argumentos para vender internamente, victorias rápidas, prueba de pares | Detalle técnico o financiero profundo |
+| Técnico | Arquitectura, seguridad, integraciones | Cálculos de retorno |
+| Quien paga | Retorno, tiempo de recuperación, costo total, riesgo | Detalle técnico |
+| Contacto que te defiende por dentro | Argumentos para vender internamente, victorias rápidas, prueba de pares | Detalle técnico o financiero profundo |
 
-**Guía lámina por lámina, versiones por comprador y errores comunes:** `referencias/marcos-de-presentacion.md`.
+**Guía lámina por lámina, versiones por comprador y antipatrones:** `referencias/marcos-de-presentacion.md`.
 
 ## Hojas de una página (leave-behind)
 
-### Cuándo usarlas
+Usos: resumen posterior a la reunión, hoja para que tu contacto venda por dentro, hoja para ferias o eventos. Estructura: **el problema** en una frase · **tu solución** · **3 diferencias** · **una prueba** (una cifra o una cita de cliente) · **llamada a la acción** con un contacto con nombre (no `info@`). Una página, escaneable en 30 segundos, con la marca pero limpia, en PDF y en versión editable.
 
-- **Resumen posterior a la reunión**: refuerza lo conversado y mantiene el impulso.
-- **Para que tu contacto venda por dentro**: lo arma para vender por ti.
-- **Para ferias o eventos**: introducción rápida que lleva al seguimiento.
-
-### Estructura
-
-1. **El problema** en una frase.
-2. **Tu solución**: qué haces y cómo.
-3. **3 diferencias**: por qué tú y no las alternativas.
-4. **Una prueba**: una cifra o una cita de cliente fuertes.
-5. **Llamada a la acción**: siguiente paso claro, con un contacto concreto.
-
-### Principios de diseño
-
-- Una página, literalmente. Solo el frente, o frente y vuelta como máximo.
-- Escaneable en 30 segundos: títulos en negrita, viñetas cortas, espacio en blanco.
-- Logotipo, sitio web y un contacto con nombre (no `info@`).
-- Con la marca, pero limpia: es una herramienta de ventas, no una pieza de marca.
-
-**Plantillas por caso de uso y guía de diseño:** `referencias/plantillas-hoja-una-pagina.md`.
+**Cuatro plantillas (producto, caso de uso, después de una reunión, para el contacto interno) y guía de diseño:** `referencias/plantillas-hoja-una-pagina.md`.
 
 ## Documentos de objeciones
 
@@ -147,74 +101,19 @@ Después, sugiere que el vendedor registre la objeción y cómo salió. Las obje
 
 ## Fichas de competidor (battle cards)
 
-Una ficha de competidor es una guía reutilizable de **un** competidor, para usarse en muchos tratos. Para una sola objeción en vivo, usa «Objeción de un trato en vivo». Para páginas públicas de comparación, `paginas-comparativas`. Cada línea sigue lo de «Afirmaciones que el vendedor puede defender».
-
-**Pregunta cuál competidor.** Si el pedido no lo nombra y el contexto no lo identifica, pregúntalo en una sola pregunta corta. Puedes proponer al candidato más probable para que el dueño lo confirme, pero no redactes hasta que lo confirme. Una ficha pulida del competidor equivocado parece terminada y nadie la cuestiona.
-
-### Estructura
-
-1. **Cuándo lo verás**: segmentos, tamaños de trato y situaciones en que aparece.
-2. **Por qué los compradores lo consideran**: su atractivo real, en palabras del comprador.
-3. **Dónde es fuerte**: con honestidad, para que no tomen al equipo por sorpresa.
-4. **Dónde ganamos y para quién**: atado a evidencia.
-5. **Preguntas de descubrimiento**: sacan a la luz los criterios en que eres más fuerte, sin hablar mal del otro.
-6. **Objeciones principales**: con respuesta de una línea y prueba.
-7. **Cuándo retirarse**: perfiles de trato donde el otro es la mejor opción.
-8. **Última verificación**: fecha y qué cambió desde la versión anterior.
-
-### Mantenerla al día
-
-- Verifica de nuevo precios y paquetes cada trimestre, y cada vez que los vendedores oigan algo nuevo en los tratos.
-- Etiqueta cada dato del competidor con su fuente y fecha, para poder encontrar y corregir una línea vieja.
-- Una página. Si no encuentran la respuesta en plena llamada, recorta hasta que la encuentren.
-
-Toma los datos del competidor de los expedientes de `perfil-competidores` cuando existan. Para revisar si las fichas existentes tienen afirmaciones viejas, mira la auditoría de materiales competitivos en `paginas-comparativas`.
+Una guía reutilizable de **un** competidor. **Pregunta cuál** si el pedido no lo nombra y el contexto no lo identifica (una pregunta corta; puedes proponer al candidato más probable para que el dueño lo confirme; no redactes hasta entonces). Cada línea sigue las reglas de evidencia de arriba. Estructura: cuándo lo verás · por qué los compradores lo consideran · dónde es fuerte · dónde ganamos y para quién · preguntas de descubrimiento · objeciones principales · cuándo retirarse · última verificación (fecha y qué cambió). Una página; verificada cada trimestre; cada dato con fuente y fecha. Plantilla completa: `referencias/fichas-de-competidor.md`. Los datos salen de los expedientes de `perfil-competidores`.
 
 ## Análisis de ganadas y perdidas
 
-Convierte los resultados del CRM, las grabaciones o notas de llamadas y las entrevistas con compradores en una respuesta con evidencia a «¿por qué ganamos y perdemos, y contra quién?». Es la evidencia que las fichas de competidor y las secciones «por qué ganamos» necesitan.
+Convierte el CRM, las llamadas y las entrevistas en una respuesta con evidencia a «¿por qué ganamos y perdemos, y contra quién?». Flujo: (1) inventaría las fuentes y su sesgo (las razones del CRM las anota el vendedor y se inclinan a precio y momento); (2) incluye las ganadas; (3) segmenta antes de contar (competidor, segmento, tamaño, etapa); (4) codifica cada trato con una razón principal, una cita y la fuente; (5) reporta **conteos con el tamaño de la muestra** («6 de 9»), no porcentajes, y con menos de ~5 tratos es una señal que vigilar, no un hallazgo; (6) convierte los hallazgos en fichas, respuestas y preguntas, y un trato con solo una razón de una palabra es de baja confianza hasta confirmarlo con llamadas o entrevistas. Si la empresa no lleva registro, no inventes el análisis: propón un registro mínimo. **Esquema de codificación, preguntas de entrevista y formato del informe:** `referencias/analisis-ganadas-perdidas.md`.
 
-### Flujo
+## Calculadoras, casos de éxito, propuestas, guías de ventas y fichas de persona
 
-1. **Inventaría las fuentes** y su sesgo: razones de pérdida del CRM (las anota el vendedor, sesgadas a precio y momento), llamadas (lo que dijo el comprador durante el trato), entrevistas con compradores (las más francas, la muestra más pequeña).
-2. **Incluye las ganadas.** Una razón de pérdida significa poco sin los tratos que ganaste contra el mismo competidor.
-3. **Segmenta antes de contar.** Separa por competidor, segmento, tamaño del trato y etapa en que se perdió. «Perdemos por precio» en todo suele esconder «perdemos los tratos medianos contra un competidor por el tiempo de arranque».
-4. **Codifica cada trato** con una razón principal (más las secundarias), una cita de respaldo y la fuente, para que las cuentas sumen. Que una sola persona codifique, o que dos codifiquen una muestra, para que «principal» signifique lo mismo siempre.
-5. **Reporta conteos con el tamaño de la muestra.** «6 de 9 pérdidas contra Acme citan el tiempo de arranque» vale más que «el arranque es un tema principal». Di siempre el n. Los grupos pequeños son orientación, y con menos de unos 5 tratos es una señal que vigilar, no un hallazgo.
-6. **Convierte los hallazgos en material.** Un trato con solo una razón de una palabra en el CRM es de baja confianza: confírmalo con llamadas o entrevistas antes de que cambie una ficha. Luego actualiza fichas, biblioteca de objeciones y preguntas de descubrimiento, y manda los vacíos del producto a quien lo desarrolla.
-
-**Esquemas de codificación, preguntas de entrevista y formato del informe:** `referencias/analisis-ganadas-perdidas.md`.
-
-## Calculadoras de retorno y propuesta de valor por persona, casos de éxito, propuestas, guías de ventas y fichas de persona
-
-Todo esto, con sus estructuras completas, está en `referencias/otros-materiales.md`: diseño de calculadora de retorno (entradas, cálculos, salidas), propuesta de valor por rol, guion de demostración resumido, casos de éxito en formato de ventas, plantilla de propuesta, guía de ventas y ficha de persona compradora. Léelo cuando el pedido sea alguno de esos.
+Con estructuras completas en `referencias/otros-materiales.md`: **calculadora de retorno** (entradas del prospecto, cálculos, salidas: retorno anual, meses de recuperación, valor a 3 años; supuestos conservadores y a la vista), **propuesta de valor por rol**, **casos de éxito en formato de ventas** (perfil, reto, solución, 3 resultados, cita, etiquetas), **propuesta** (resumen ejecutivo, solución, plan, inversión, próximos pasos; de 5 a 7 páginas), **guía de ventas** (perfil del comprador, calificación, descubrimiento, objeciones, competencia, flujo de demostración, plantillas de mensaje) y **ficha de persona compradora**. Léelo cuando el pedido sea alguno de esos.
 
 ## Guiones de demostración
 
-### Estructura del guion
-
-1. **Apertura** (2 min): contexto, agenda, confirmar objetivos de la llamada.
-2. **Resumen del descubrimiento** (3 min): lo que aprendiste, confirmar prioridades.
-3. **Recorrido de la solución** (15–20 min): 3 o 4 flujos clave ligados a su dolor.
-4. **Puntos de interacción**: preguntas durante la demostración, no solo al final.
-5. **Cierre** (5 min): resume el valor y propone próximos pasos con fecha.
-
-### Tipos de guion
-
-| Tipo | Duración | Enfoque |
-|------|----------|---------|
-| Llamada de descubrimiento | 30 min | Calificar, entender el dolor, mapear el proceso de compra |
-| Primera demostración | 30–45 min | Mostrar 3–4 flujos ligados a su dolor |
-| Revisión técnica a fondo | 45–60 min | Arquitectura, seguridad, integraciones |
-| Resumen ejecutivo | 20–30 min | Resultados de negocio, retorno, alineación estratégica |
-
-### Principios
-
-- **Demostración después del descubrimiento, no antes.** Si no conoces su dolor, adivinas qué funciones importan.
-- **Personaliza a su caso.** Sus términos, sus datos (si se puede), su flujo.
-- **Deja tiempo para preguntas.** Una demostración en la que el prospecto no habla es una que no cierra.
-
-**Guiones completos por escena:** `referencias/guiones-de-demostracion.md`.
+Estructura: **apertura** (2 min: agenda y objetivos) · **resumen del descubrimiento** (3 min) · **recorrido** (15–20 min: 3–4 flujos ligados a su dolor) · **puntos de interacción** (no solo al final) · **cierre** (5 min: valor y próximos pasos con fecha). Tipos: descubrimiento (30 min), primera demostración (30–45), revisión técnica (45–60), resumen ejecutivo (20–30). Demostración después del descubrimiento, no antes; con su lenguaje y su caso; y tiempo para sus preguntas. En un negocio de servicios, la «demostración» es la visita de valoración, el diagnóstico o el recorrido por un trabajo terminado. **Guiones completos por escena:** `referencias/guiones-de-demostracion.md`.
 
 ## Cómo entregarlo
 
@@ -261,6 +160,7 @@ Pídelas por nombre con `leer_habilidad`:
 - `biblioteca-de-objeciones` — al armar el documento de objeciones o responder una: tabla rápida y respuestas detalladas por categoría.
 - `guiones-de-demostracion` — al escribir el guion de una llamada de descubrimiento, demostración, revisión técnica o resumen ejecutivo.
 - `analisis-ganadas-perdidas` — al analizar por qué se ganan o se pierden tratos: fuentes, esquema de codificación, preguntas de entrevista, formato del informe.
+- `fichas-de-competidor` — al armar una ficha de un competidor: estructura, plantilla y reglas de evidencia.
 - `otros-materiales` — calculadoras de retorno, propuesta de valor por rol, casos de éxito, propuestas, guías de ventas y fichas de persona.
 
 ## Habilidades relacionadas
