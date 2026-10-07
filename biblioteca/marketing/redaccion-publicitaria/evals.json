@@ -1,0 +1,88 @@
+{ "skill": "redaccion-publicitaria", "origen": "marketingskills/copywriting/evals", "evals": [
+  { "id": "inicio-saas-onboarding", "prompt": "Escribe el texto de la página de inicio de nuestro software que automatiza la incorporación de empleados. El público son directores de recursos humanos de empresas medianas (200 a 2.000 empleados). Lo que nos diferencia: se conecta con los principales sistemas de nómina y RR. HH. y baja la incorporación de 2 semanas a 2 días.", "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Escribe la página completa organizada por secciones",
+    "Incluye titular, subtítulo y botón en la parte de arriba",
+    "Incluye prueba social, problema, solución/beneficios y cómo funciona",
+    "Usa el dato concreto «de 2 semanas a 2 días» en el texto",
+    "Los botones están orientados a la acción, no son genéricos",
+    "Da 2 o 3 titulares alternativos con su razón",
+    "Incluye anotaciones que explican las decisiones",
+    "Incluye título para buscadores y meta descripción",
+    "No inventa testimonios ni logos: marca [FALTA: …] donde no hay prueba",
+    "No dice que publicó nada: deja el borrador para el OK del dueño"
+  ] },
+  { "id": "titular-con-jerga", "prompt": "Reescribe este titular: «Una plataforma innovadora impulsada por IA para optimizar las operaciones empresariales». Es para un programa que ayuda a pequeños negocios a facturar y cobrar.", "expectations": [
+    "Identifica la jerga del titular original (innovadora, impulsada por IA, optimizar, operaciones empresariales)",
+    "Señala que es vago",
+    "Señala que habla con palabras de la empresa y no del cliente",
+    "Da 2 o 3 titulares alternativos",
+    "Las alternativas usan fórmulas de titulares de la habilidad",
+    "Cada alternativa lleva su razón",
+    "Propone un subtítulo"
+  ] },
+  { "id": "precios-tres-planes", "prompt": "necesito el texto de mi pagina de precios. tenemos tres planes: inicial, pro y negocio (los precios estan en las cifras). es una herramienta para programar publicaciones en redes para agencias", "expectations": [
+    "Responde al pedido aunque esté escrito de forma informal",
+    "Toma los precios de las cifras de la empresa, sin inventarlos",
+    "Aplica la guía de página de precios",
+    "Responde la duda «¿qué plan es para mí?»",
+    "Hace evidente el plan recomendado",
+    "Escribe las funciones como beneficios, no solo como nombres",
+    "Incluye un titular de página",
+    "Cada plan tiene un botón específico",
+    "Incluye preguntas frecuentes u objeciones",
+    "Da alternativas para los elementos clave"
+  ] },
+  { "id": "quienes-somos-panaderia", "prompt": "Escribe el texto de «Quiénes somos» de nuestra panadería de barrio. Somos tres hermanos que retomamos la receta de masa madre de la abuela porque en la zona solo había pan industrial. Tono profesional pero cercano.", "expectations": [
+    "Aplica la guía de la página «Quiénes somos»",
+    "Cuenta la historia de por qué existe el negocio",
+    "Une la misión con el beneficio para el cliente",
+    "Incluye un llamado a la acción (visitar, pedir, encargar)",
+    "Ajusta el tono a profesional pero cercano",
+    "Usa la historia real de los fundadores sin inventar datos",
+    "Une el dolor de los fundadores con el del cliente",
+    "Usa voz activa",
+    "Evita la jerga corporativa y frases como «más que una panadería»"
+  ] },
+  { "id": "boton-mas-informacion", "prompt": "¿Puedes mejorar este botón? Ahora dice «Más información» en la página de servicio de nuestra clínica dental, en la sección de ortodoncia invisible.", "expectations": [
+    "Identifica «Más información» como un botón débil",
+    "Aplica la fórmula del botón de la habilidad",
+    "Da 2 o 3 alternativas fuertes",
+    "Cada alternativa lleva su razón",
+    "Considera la jerarquía (botón principal o secundario)",
+    "Sugiere botones complementarios"
+  ] },
+  { "id": "secuencia-bienvenida-no-es-pagina", "prompt": "Escríbeme una secuencia de 5 correos de bienvenida para quienes empiezan la prueba de nuestra herramienta de gestión de proyectos.", "expectations": [
+    "Reconoce que es trabajo de secuencia de correos",
+    "Remite a la habilidad secuencias-correo o la usa",
+    "No escribe la secuencia completa con la estructura de una página"
+  ] },
+  { "id": "revisar-texto-euforico", "prompt": "Revisa este texto y dime qué está mal: «¡Estamos súper emocionados de anunciar nuestra revolucionaria plataforma de vanguardia que transformará totalmente la manera en que las empresas optimizan sus procesos! Regístrate ya!!»", "expectations": [
+    "Señala el exceso de exclamaciones y el signo de apertura que falta",
+    "Señala las palabras de moda sin sustancia (revolucionaria, de vanguardia, transformará, optimizan)",
+    "Señala el lenguaje vago (procesos)",
+    "Señala el calco «estamos emocionados de anunciar»",
+    "Aplica las reglas de estilo",
+    "Reescribe el texto siguiendo los principios",
+    "Da alternativas",
+    "El resultado es concreto, claro y sin jerga"
+  ] },
+  { "id": "encabezado-agenda-dos-publicos", "prompt": "Escribe el texto de arriba de la página para una herramienta de agenda. Lo que nos diferencia: quien recibe la invitación puede superponer su propio calendario, así que elegir hora se siente justo para los dos. Tiene que servir para emprendedores y para equipos de operaciones de empresas grandes.", "expectations": [
+    "Arma el encabezado como incomodidad → visión → camino (modelo de acción humana)",
+    "Pasa los titulares candidatos por la prueba «Ahora puedes…»",
+    "Menciona el caso de SavvyCal y su frase del enlace incómodo como modelo de ajuste mensaje-mercado",
+    "Señala la brecha de percepción entre los dos segmentos",
+    "Propone dos enfoques: uno para emprendedores (rapidez, sin llamada de ventas) y otro para gran empresa (seguridad, garantías)",
+    "Prefiere la claridad al ingenio",
+    "Da 2 o 3 titulares alternativos con su razón"
+  ] },
+  { "id": "sin-senales-de-ia-shopify", "prompt": "Escribe el encabezado de la página (titular, subtítulo y botón) y una publicación corta de lanzamiento para X de nuestra app de inventario para Shopify. Se instala desde la tienda de apps de Shopify con un clic, no pide formulario de registro ni tarjeta, y manda alertas de poco stock, correos de reposición y órdenes de compra a proveedores con los datos de productos y ventas que la tienda ya tiene, así que no hay nada que importar.", "expectations": [
+    "No usa contrastes revelados («no es X, es Y», «no se trata de X, sino de Y»)",
+    "No usa listas de negaciones («sin X, sin Y, sin Z»); cualquier ausencia se dice una vez",
+    "No tiene frases que se arrastran en comas o gerundios tras la afirmación principal",
+    "No usa rayas en el encabezado ni en la publicación",
+    "No usa preguntas que se responden solas, revelaciones con dos puntos ni frases hechas («Di adiós a», «sin fricciones»)",
+    "Describe el mecanismo en concreto (instalación con un clic, funciona con los datos que Shopify ya tiene)",
+    "Deja la publicación como borrador (por ejemplo con crear_borrador) y no dice que la publicó"
+  ] }
+] }

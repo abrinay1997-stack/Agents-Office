@@ -1,0 +1,108 @@
+{ "skill": "material-ventas", "origen": "marketingskills/sales-enablement/evals", "evals": [
+  { "id": "presentacion-rrhh",
+    "prompt": "Ayúdame a armar una presentación de ventas para nuestra plataforma de clima laboral. Se la vendemos a directores de recursos humanos de empresas de entre 500 y 5.000 empleados. Lo que nos distingue son las encuestas rápidas en tiempo real con análisis automático.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Aplica el marco de 10 a 12 láminas: problema, costo del problema, cambio, enfoque, recorrido, pruebas, caso, implementación, retorno, precios, próximos pasos",
+      "Incluye las láminas de problema, solución, pruebas, precios y próximos pasos",
+      "Adapta la presentación a la dirección de recursos humanos",
+      "Incorpora el diferenciador declarado (encuestas en tiempo real con análisis automático)",
+      "Da el contenido lámina por lámina, con notas del orador",
+      "Sugiere dirección visual (por ejemplo, un prompt para el Estudio o una guía de diseño)",
+      "No inventa cifras, logotipos ni casos: deja los huecos marcados",
+      "No dice que envió nada: deja el borrador para el OK del dueño"
+    ] },
+  { "id": "objeciones-recurrentes",
+    "prompt": "Mi equipo de ventas oye siempre las mismas objeciones. Las principales: «ya usamos una hoja de cálculo», «ahora no hay presupuesto» y «somos muy pocos para necesitar esto». Ayúdame a armar un documento de objeciones.",
+    "expectations": [
+      "Aplica el marco de respuesta a objeciones",
+      "Clasifica las tres objeciones en categorías (statu quo o competencia, precio, necesidad o momento)",
+      "Para cada una da: por qué la dicen, enfoque, guion, prueba y pregunta de seguimiento",
+      "Da dos o tres variaciones de respuesta por objeción para distintos contextos",
+      "Lo organiza para consultarse rápido en plena llamada (tabla rápida y detalle)",
+      "No inventa pruebas: si falta una, dice qué evidencia reunir",
+      "Los precios se toman de las cifras de la empresa o se dejan pendientes"
+    ] },
+  { "id": "hoja-una-pagina-clinica",
+    "prompt": "necesito una hoja de una página para dejar después de las reuniones con empresas que quieren contratar los chequeos médicos para sus empleados. algo que resuma el servicio y los beneficios principales.",
+    "expectations": [
+      "Entiende el pedido aunque esté escrito de manera informal",
+      "Aplica la estructura de la hoja de una página: problema, solución, tres diferencias, prueba, llamada a la acción",
+      "Incluye titular, beneficios, prueba social, cómo funciona y llamada a la acción",
+      "Se mantiene en una sola página",
+      "Recomienda un diseño escaneable (jerarquía visual, poco texto)",
+      "Da el texto concreto de cada sección, sin inventar cifras ni testimonios",
+      "Propone la versión «después de una reunión» con los puntos tratados y siguientes pasos con fecha",
+      "No dice que la envió: deja el borrador para el OK del dueño"
+    ] },
+  { "id": "guion-demo-30-min",
+    "prompt": "Crea un guion de demostración de 30 minutos para nuestro tablero de analítica de ventas. Normalmente se la presentamos a la gerente de marketing de una empresa.",
+    "expectations": [
+      "Aplica la estructura del guion: apertura, resumen del descubrimiento, recorrido de la solución, puntos de interacción y cierre",
+      "Incluye preguntas de descubrimiento en la apertura",
+      "Valida el problema con la persona antes de mostrar",
+      "Incluye un recorrido de 3 o 4 flujos ligados a su dolor",
+      "Incluye una prueba o caso (sin inventarlo)",
+      "Cierra con próximos pasos concretos y con fecha",
+      "Reparte el tiempo para que quepa en 30 minutos",
+      "Indica cuándo personalizar según lo que responda la persona"
+    ] },
+  { "id": "calculadora-retorno-ferreteria",
+    "prompt": "Ayúdame a diseñar una calculadora de retorno para usar en las llamadas. Vendemos un sistema de inventario a ferreterías medianas y queremos mostrarles cuánto ahorran al cambiarse.",
+    "expectations": [
+      "Aplica el marco de la calculadora de retorno: entradas, cálculos y salidas",
+      "Define las entradas que da el prospecto (productos, tiempo en conteos, mermas, costos actuales)",
+      "Da la metodología de cálculo y las fórmulas",
+      "Recomienda supuestos conservadores y mostrar las cuentas",
+      "Incluye retorno anual, tiempo de recuperación y valor a 3 años",
+      "Sugiere validar los supuestos con el prospecto durante la llamada",
+      "El precio del sistema sale de las cifras de la empresa o queda como dato pendiente; los números de ejemplo van rotulados como ejemplo"
+    ] },
+  { "id": "pagina-comparativa-publica",
+    "prompt": "Necesitamos una página pública en nuestro sitio que compare nuestro servicio contra el de dos agencias competidoras.",
+    "expectations": [
+      "Reconoce que es una página pública de comparación y no material interno de ventas",
+      "Remite a la habilidad paginas-comparativas, que se encarga de ese tipo de página",
+      "Explica la diferencia entre material interno (fichas, objeciones) y páginas públicas orientadas a búsqueda",
+      "No arma la página pública con los patrones de material de ventas"
+    ] },
+  { "id": "objecion-competidor-sin-datos",
+    "prompt": "Haz un documento de objeciones para cuando los prospectos dicen «también estamos viendo a Constructora Norte». Incluye una sección de «por qué ganamos». Todavía no registramos por qué ganamos o perdemos tratos.",
+    "expectations": [
+      "Arma el documento con el marco de respuesta a objeciones",
+      "Presenta «por qué ganamos» como hipótesis, porque no hay datos de ganadas y perdidas",
+      "Sugiere cómo reunir la evidencia que falta (registrar razones de pérdida, fragmentos de llamadas, citas de clientes)",
+      "Evita afirmaciones del tipo «ellos no tienen X» sin verificar, y fecha y cita la fuente de cada dato",
+      "Incluye situaciones en las que el competidor es la mejor opción"
+    ] },
+  { "id": "ficha-sin-competidor",
+    "prompt": "¿Me haces una ficha de competidor? Nos los encontramos siempre en los tratos.",
+    "expectations": [
+      "Reconoce que la ficha de competidor es de esta habilidad",
+      "Como no se nombra un competidor ni el contexto lo identifica, pregunta cuál en una sola pregunta corta",
+      "No redacta una ficha de un competidor adivinado ni una de relleno",
+      "Puede proponer al candidato más probable según las notas de la empresa para que el dueño lo confirme",
+      "Menciona lo que afinaría la ficha (segmento, notas de ganadas y perdidas)"
+    ] },
+  { "id": "trato-en-vivo-mitad-de-precio",
+    "prompt": "La gerente de finanzas de un prospecto, una empresa de logística de 300 personas, le dijo a mi vendedora «Acme hace esto por la mitad del precio». Ella tiene una llamada de seguimiento en una hora. ¿Qué le digo?",
+    "expectations": [
+      "Lo trata como una objeción de un trato en vivo, no como un documento genérico de objeciones",
+      "Nombra la preocupación probable (valor por el precio frente a presupuesto duro)",
+      "Da una pregunta para distinguir entre las posibles preocupaciones",
+      "Da una respuesta lista para decir: reconoce, atiende la preocupación, una prueba, termina con una pregunta",
+      "No inventa cifras, clientes ni precios de Acme; si no hay prueba, dice qué reunir o verificar",
+      "Sugiere preguntar qué incluye la cifra de la competencia (el alcance puede no ser el mismo)",
+      "Menciona cuándo conviene descartar o acotar el trato en vez de pelearlo"
+    ] },
+  { "id": "razones-de-perdida-crm",
+    "prompt": "Estas son las razones de «perdido» del último trimestre en nuestro CRM: 14 dicen «precio», 6 «momento», 4 «se fue con Acme» y 3 «sin decisión». Dime por qué estamos perdiendo y actualiza nuestra ficha de competidor.",
+    "expectations": [
+      "Hace un análisis de ganadas y perdidas y advierte que las razones que anota el vendedor sesgan hacia precio y momento",
+      "Separa las pérdidas competitivas de las de sin decisión o momento",
+      "Reporta conteos con el tamaño de la muestra, no porcentajes",
+      "Trata los hallazgos de razones de una sola palabra como de baja confianza",
+      "No escribe afirmaciones nuevas de «por qué perdemos» en la ficha a partir de esas razones solas",
+      "Recomienda entrevistas con compradores o revisión de llamadas, con preguntas de ejemplo, antes de cambiar la ficha"
+    ] }
+] }

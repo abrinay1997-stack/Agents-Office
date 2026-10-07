@@ -1,0 +1,112 @@
+{ "skill": "activacion-clientes", "origen": "marketingskills/onboarding/evals", "evals": [
+  { "id": "gestion-proyectos-30-por-ciento",
+    "prompt": "Ayúdame a optimizar el flujo de bienvenida de nuestra herramienta de gestión de proyectos. Solo el 30 % de los usuarios de prueba crea su primer proyecto en la primera semana. Necesitamos que lleguen al valor más rápido.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Empieza definiendo la activación o momento de valor (aquí, crear el primer proyecto) y lo trata como hipótesis hasta comprobarlo con datos",
+      "Evalúa el tiempo hasta el valor e identifica los puntos de fricción",
+      "Recomienda un enfoque de flujo (producto primero, configuración guiada o valor primero)",
+      "Aplica el patrón de lista de pasos con 3 a 7 elementos",
+      "Trata los estados vacíos como oportunidades de guiar",
+      "Da ideas de experimentos",
+      "Incluye métricas de medición",
+      "No dice que cambió o envió nada: deja diseño y borradores para el OK del dueño"
+    ] },
+  { "id": "lista-de-pasos-diseno-colaborativo",
+    "prompt": "¿Qué debería incluir nuestra lista de pasos iniciales? Somos una herramienta de colaboración en diseño. Los usuarios deben subir un diseño, invitar a alguien del equipo y dejar un comentario para sacarle todo el valor.",
+    "expectations": [
+      "Aplica el patrón de lista de pasos",
+      "Incluye las 3 acciones de activación que dio el usuario (subir un diseño, invitar al equipo, comentar)",
+      "Limita la lista a un total de 3 a 7 elementos",
+      "Ordena por compromiso creciente",
+      "Empieza con el logro más rápido para crear impulso",
+      "Recomienda indicadores de progreso y celebración al completar (por ejemplo, empezar con un paso ya hecho)",
+      "Atiende qué pasa cuando alguien se salta elementos",
+      "Da recomendaciones concretas de experiencia de uso para la lista"
+    ] },
+  { "id": "casual-no-vuelven",
+    "prompt": "la gente se registra y después nunca vuelve. como el 50 % ni siquiera entra una segunda vez. qué hacemos?",
+    "expectations": [
+      "Se activa con la frase informal",
+      "Lo trata como un problema de usuarios estancados y aplica el marco de «cómo tratar a quienes se estancan»",
+      "Identifica causas posibles (primera experiencia compleja, valor no evidente, configuración larga)",
+      "Recomienda mejoras inmediatas de la primera sesión y la ruta mínima al valor",
+      "Sugiere incorporación en varios canales con secuencias de correo para traerlos de vuelta",
+      "Remite a secuencias-correo para los correos de reactivación",
+      "Da disparadores concretos de reactivación (por ejemplo, a las 24 y 72 horas)",
+      "Los correos son borradores para el OK del dueño; no dice que los envió"
+    ] },
+  { "id": "estado-vacio-panel-en-blanco",
+    "prompt": "¿Qué hacemos con la pantalla vacía cuando un usuario nuevo entra por primera vez? Ahora solo ve un panel en blanco.",
+    "expectations": [
+      "Aplica la guía de estados vacíos como oportunidades",
+      "Recomienda alternativas al panel en blanco",
+      "Sugiere datos de ejemplo o plantillas",
+      "Da un llamado claro a la primera acción",
+      "Atiende la parálisis ante el lienzo en blanco",
+      "Da recomendaciones concretas de diseño del estado vacío (qué mostrar, qué acción pedir, el texto)"
+    ] },
+  { "id": "globos-recorrido-o-asistente",
+    "prompt": "¿Usamos globos de ayuda, un recorrido por el producto o un asistente de configuración para la bienvenida? ¿Qué funciona mejor?",
+    "expectations": [
+      "Compara los globos de ayuda, los recorridos y los asistentes de configuración",
+      "Explica cuándo funciona mejor cada uno",
+      "Nota que las combinaciones suelen funcionar",
+      "Da buenas prácticas de cada uno (máximo de 3 a 5 pasos, que se puedan cerrar, no repetirlos)",
+      "Atiende el cansancio de los globos y el largo del recorrido",
+      "Recomienda probar enfoques distintos"
+    ] },
+  { "id": "formulario-de-registro-es-otra-habilidad",
+    "prompt": "El formulario de registro de nuestra aplicación tiene 8 campos y la gente lo abandona. ¿Me ayudas a arreglar el flujo de registro?",
+    "expectations": [
+      "Reconoce que es la optimización del registro y no de la incorporación posterior",
+      "Remite a la habilidad registro",
+      "Explica que la activación de clientes cubre lo que pasa después del registro",
+      "No intenta rediseñar el formulario con los patrones de incorporación"
+    ] },
+  { "id": "modelo-de-prueba-analitica-b2b",
+    "prompt": "Vamos a lanzar un producto nuevo de analítica para empresas y no sabemos cómo dejar que lo prueben. ¿Nivel gratis, prueba gratis, pedir tarjeta u otra cosa? Y una vez dentro, ¿cómo hacemos que lleguen rápido al valor?",
+    "expectations": [
+      "Recorre los 5 modelos de activación (gratuito con límites, prueba gratis de 3, 7, 14 o 30 días, prueba de pago, garantía de devolución, consultoría)",
+      "Ayuda a elegir con el ajuste modelo-mercado (el mercado dicta el modelo)",
+      "Explica el dilema de pedir tarjeta: reduce los registros entre 50 % y 70 % pero convierte de 2 a 3 veces mejor, como orientación y no promesa",
+      "Menciona la lección de Evernote y Notion: enganchar y luego limitar frente a regalar demasiado",
+      "Diseña la ruta mínima al valor basada en la ley de Hick, con el proceso inventario → quitar → reconstruir",
+      "Cita el abandono tras la primera sesión y el primer día como orientación, con la salvedad de que son cifras del software",
+      "Puede mencionar los mecanismos de psicología (progreso dotado, pico y final, Fogg, impulsores y bloqueos)",
+      "Apunta a las referencias modelos-de-activacion y ruta-minima-al-valor",
+      "Deja las condiciones de precio, descuentos y garantías como propuesta para el OK del dueño"
+    ] },
+  { "id": "agencia-primeras-semanas",
+    "prompt": "Somos una agencia de diseño web. Los clientes nuevos firman y luego tardamos 3 o 4 semanas en mostrarles algo; varios se enfrían o piden cancelar antes de la primera entrega. ¿Cómo mejoramos las primeras semanas?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta (cuántos clientes nuevos, en qué paso se enfrían)",
+      "Define el momento de valor del cliente (por ejemplo, ver y aprobar una primera entrega) como hipótesis a comprobar",
+      "Hace el inventario de pasos entre la firma y la primera entrega, quita o aplaza lo no esencial y reconstruye la ruta mínima al valor",
+      "Propone una lista de «lo que necesitamos de ti» y «lo que haremos nosotros» con fechas, y una primera entrega pequeña y rápida",
+      "Propone la secuencia de mensajes de las primeras semanas (bienvenida, reunión de inicio, recordatorios si falta material) como borradores para el OK del dueño",
+      "Sugiere una rutina semanal para revisar a los clientes nuevos que no han avanzado, con el OK del dueño",
+      "No inventa cifras de la agencia ni dice que envió nada"
+    ] },
+  { "id": "tienda-segunda-compra",
+    "prompt": "Tengo una tienda en línea de café de especialidad. Casi todos compran una vez y no regresan. ¿Qué hago desde el momento en que hacen su primer pedido?",
+    "expectations": [
+      "Define el momento de valor del cliente (recibir y disfrutar el primer pedido, y una segunda compra) como hipótesis",
+      "Propone la ruta desde la confirmación hasta la segunda compra: seguimiento del envío, guía de preparación, pedido de reseña, oferta de la segunda compra",
+      "Propone disparadores con tiempos (por ejemplo, tras la entrega, a los 7 y 14 días) y mensajes que refuerzan el producto y no duplican lo ya enviado",
+      "Escribe borradores de los mensajes de correo o WhatsApp y recuerda que el cliente debe haber dado su permiso",
+      "Deja el incentivo o descuento como propuesta para el OK del dueño",
+      "Da métricas para medirlo (tasa de segunda compra, tiempo hasta la segunda compra) y una o dos ideas de experimentos",
+      "No inventa cifras y no dice que envió nada"
+    ] },
+  { "id": "clinica-primera-visita",
+    "prompt": "Tengo una clínica de fisioterapia. Muchos pacientes vienen a la primera sesión y no agendan las siguientes. ¿Cómo hago que sigan con el tratamiento?",
+    "expectations": [
+      "Define el momento de valor (por ejemplo, completar las primeras sesiones del plan y notar una mejoría) como hipótesis a comprobar con los datos de la clínica",
+      "Mapea el camino del paciente: reserva, recordatorio, primera visita, plan, siguiente cita agendada antes de salir, seguimiento a la semana",
+      "Propone los mensajes de recordatorio y de seguimiento como borradores y avisa de cuidar los datos de salud y el permiso del paciente según la ley del país",
+      "Propone un estado «estancado» (por ejemplo, sin cita agendada a los 7 días) y un contacto humano para ese caso",
+      "Incluye métricas y experimentos concretos sin inventar cifras",
+      "No dice que envió ni agendó nada: deja los borradores para el OK del dueño"
+    ] }
+] }

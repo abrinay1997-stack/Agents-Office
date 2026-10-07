@@ -1,0 +1,67 @@
+{ "skill": "imagenes-marketing", "origen": "marketingskills/image/evals", "evals": [
+  { "id": "portada-entregabilidad",
+    "prompt": "Necesito la imagen de portada para un artículo del blog de nuestro software de correo sobre entregabilidad. Que impacte.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Recomienda generar con IA (el Estudio, generar_imagen) para una portada única",
+      "Propone una metáfora visual para la entregabilidad (por ejemplo, cartas atravesando un laberinto o una señal que rompe un muro)",
+      "Especifica 1200x630 (sirve de portada y de imagen OG)",
+      "Recomienda un modelo adecuado (fotorrealista, o fuerte en tipografía si lleva texto) y confirma cuáles están encendidos con estado_estudio",
+      "Entrega un pedido estructurado: sujeto, escena, estilo, luz, composición y datos técnicos",
+      "Menciona la optimización: WebP con respaldo y menos de 200 KB",
+      "No usa IA para fingir capturas de una interfaz",
+      "No dice que publicó ni subió nada: deja la imagen como borrador para el OK del dueño"
+    ] },
+  { "id": "panel-de-la-app",
+    "prompt": "Genérame una imagen del panel de control de nuestra aplicación para el sitio web.",
+    "expectations": [
+      "Se niega a usar IA para la pantalla de un producto y explica que los modelos inventan interfaces que no coinciden con la real",
+      "Recomienda capturas reales a doble resolución (2x)",
+      "Propone enmarcarlas en un dispositivo (navegador, portátil o celular)",
+      "Sugiere añadir flechas, etiquetas de funciones o antes/después",
+      "Le pide al dueño las capturas reales (con pedir_bloqueo o una pregunta) en vez de inventarlas",
+      "Lo señala como un error común"
+    ] },
+  { "id": "banner-ferreteria-x",
+    "prompt": "Necesito el encabezado de X de mi ferretería, con una foto de la tienda y el eslogan «Todo para tu obra».",
+    "expectations": [
+      "Indica 1500x500 (3:1) para el encabezado de X",
+      "Avisa de que el avatar tapa una parte y pone lo importante al centro, lejos de esa zona",
+      "Recomienda poco texto, porque se ve pequeño en el celular",
+      "Propone partir de una foto real de la tienda en vez de inventar el local con IA",
+      "Sugiere Canva o Figma (si están conectados) para respetar la marca, o un modelo fuerte en tipografía si se hornea el eslogan",
+      "Recomienda probarlo en su tamaño real",
+      "No dice que lo publicó: queda como borrador para el OK del dueño"
+    ] },
+  { "id": "una-imagen-cinco-redes",
+    "prompt": "Tengo una foto de un vestido de la nueva colección. Necesito versiones para X, LinkedIn, Instagram feed, Instagram historias y Facebook. ¿Cuál es la forma más rápida?",
+    "expectations": [
+      "Recomienda cambiar el tamaño de una imagen madre (cambio de tamaño de Canva o variantes pedidas al Estudio con la imagen como referencia) en vez de generar cinco imágenes desde cero",
+      "Lista las medidas: X 1200x675, LinkedIn 1200x627, Instagram feed 1080x1080 (y 1080x1350), historias 1080x1920, Facebook 1200x630",
+      "Señala la variante 4:5 de Instagram",
+      "Propone crear la imagen en la resolución más alta que se necesite y añadir los textos después",
+      "Usa la foto real del vestido (buscar_en_galeria, buscar_presets o aplicar_preset) y no inventa la prenda",
+      "Ofrece dejar cada formato como borrador de pieza con crear_borrador para el OK del dueño"
+    ] },
+  { "id": "formato-para-la-web",
+    "prompt": "¿Qué formato de imagen conviene para la web de mi clínica dental? Las fotos pesan muchísimo.",
+    "expectations": [
+      "Recomienda WebP como formato por defecto con JPEG o PNG de respaldo",
+      "Explica los formatos: WebP, AVIF, JPEG, PNG y SVG y para qué sirve cada uno",
+      "Da la lista de revisión: ajustar al tamaño real, comprimir (75 a 85 % en fotos), carga diferida, width y height explícitos, CDN, texto alternativo",
+      "Menciona width y height para evitar saltos de la página (CLS)",
+      "Sugiere una herramienta como opción neutra (por ejemplo, cwebp, ImageMagick o un plugin de WordPress) sin dar a entender que la oficina ejecuta comandos",
+      "Señala que no optimizar es de lo que más frena una página",
+      "Propone un texto alternativo y un nombre de archivo claros para las fotos"
+    ] },
+  { "id": "og-por-articulo",
+    "prompt": "Tenemos una tienda en línea con un blog y publicamos dos artículos por semana. Hacer la imagen para compartir cada uno a mano nos está matando.",
+    "expectations": [
+      "Recomienda generar imágenes OG de forma programática con una plantilla y datos dinámicos (título, autor, imagen)",
+      "Nombra opciones neutras como Vercel OG, Satori, Cloudinary o complementos de Shopify o WordPress",
+      "Diseña la plantilla (qué lleva, dónde, tamaño) y deja la instalación a quien administre la web",
+      "Da las etiquetas og:image, og:image:width, og:image:height, twitter:card (summary_large_image) y twitter:image",
+      "Especifica 1200x630",
+      "No dice que instaló nada: deja las instrucciones y el diseño como borrador para el OK del dueño"
+    ] }
+] }

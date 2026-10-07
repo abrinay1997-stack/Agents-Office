@@ -1,0 +1,102 @@
+{ "skill": "auditoria-seo", "origen": "marketingskills/seo-audit/evals", "evals": [
+  { "id": "auditoria-saas-completa",
+    "prompt": "¿Puedes hacer una auditoría SEO del sitio de nuestro software de inventarios? Tenemos unas 2.000 visitas orgánicas al mes y sentimos que deberían ser más. Dirección: https://ejemplo.com",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Pregunta por las palabras clave prioritarias, el acceso a Search Console y los cambios recientes",
+      "Sigue el orden de prioridad: rastreo e indexación primero, luego base técnica, en página, contenido y autoridad",
+      "Revisa robots.txt y el sitemap XML",
+      "Evalúa títulos, meta descripciones y encabezados",
+      "No afirma «no hay datos estructurados» solo por haber leído el texto de la página",
+      "Explica el límite para detectar datos estructurados",
+      "El informe tiene resumen ejecutivo",
+      "El informe tiene un plan de acción por prioridad",
+      "Cada hallazgo tiene problema, impacto, evidencia, arreglo y prioridad",
+      "No inventa cifras de tráfico ni posiciones que no midió"
+    ] },
+  { "id": "por-que-no-posiciono",
+    "prompt": "¿Por qué no salgo para «zapatos de cuero para hombre»? Tenemos una página para esa búsqueda en nuestra tienda en línea pero sigue en la página 3 de Google.",
+    "expectations": [
+      "Responde aunque el pedido venga de forma informal («por qué no salgo»)",
+      "Revisa que título, H1 y dirección estén alineados con la palabra clave",
+      "Compara la profundidad del contenido con la competencia",
+      "Revisa la canibalización de palabras clave",
+      "Revisa el estado de indexación y las etiquetas canónicas",
+      "Evalúa las señales E-E-A-T",
+      "Propone analizar las páginas que hoy están arriba en Google",
+      "Da arreglos concretos ordenados por prioridad"
+    ] },
+  { "id": "migracion-caida-trafico",
+    "prompt": "Acabamos de pasar la web de la agencia de WordPress a Next.js y el tráfico orgánico bajó 40 % en el último mes. ¡Ayuda!",
+    "expectations": [
+      "Lo trata como un diagnóstico urgente de migración",
+      "Revisa el mapa de redirecciones 301 de las direcciones viejas a las nuevas",
+      "Revisa las etiquetas canónicas de las páginas nuevas",
+      "Revisa que robots.txt no bloquee a los rastreadores",
+      "Revisa que el sitemap XML esté actualizado y enviado",
+      "Revisa cadenas o bucles de redirecciones",
+      "Revisa los 404 blandos",
+      "Remite al informe de cobertura (páginas) de Search Console",
+      "Da un plan de recuperación por prioridad",
+      "Explica cuánto suele tardar la recuperación"
+    ] },
+  { "id": "tienda-facetas-50000",
+    "prompt": "Revisa el SEO técnico de nuestra tienda en línea de repuestos. Tenemos unos 50.000 productos y usamos filtros (navegación por facetas).",
+    "expectations": [
+      "Trata el contenido duplicado que crean los filtros",
+      "Trata el presupuesto de rastreo de un catálogo grande",
+      "Revisa los problemas de direcciones con parámetros",
+      "Menciona el marcado de producto con la advertencia sobre el límite de detección",
+      "Revisa las categorías pobres",
+      "Revisa las descripciones de producto duplicadas",
+      "Trata cómo manejar los productos agotados",
+      "Trata la paginación y el scroll infinito",
+      "Los hallazgos tienen impacto y arreglo concreto"
+    ] },
+  { "id": "blog-estancado",
+    "prompt": "¿Puedes revisar el SEO en página de los artículos del blog de nuestra clínica veterinaria? Publicamos 4 a la semana pero el tráfico lleva 6 meses plano.",
+    "expectations": [
+      "Aplica el marco de sitios de contenido o blog",
+      "Revisa el contenido desactualizado",
+      "Revisa la canibalización",
+      "Revisa los grupos de temas",
+      "Revisa la calidad de los enlaces internos",
+      "Revisa las páginas de autor y las señales E-E-A-T",
+      "Revisa títulos, meta descripciones y encabezados",
+      "Evalúa si el contenido responde a la intención de búsqueda",
+      "Recomienda un proceso de auditoría del contenido",
+      "Da un plan de acción por prioridad"
+    ] },
+  { "id": "negocio-local-tres-sedes",
+    "prompt": "Tengo una plomería con 3 sucursales. Mi web casi no aparece cuando la gente busca «plomero cerca de mí» en nuestras zonas. ¿Qué pasa?",
+    "expectations": [
+      "Aplica el marco de negocio local",
+      "Revisa que nombre, dirección y teléfono sean coherentes",
+      "Revisa el marcado de negocio local con la advertencia sobre el límite de detección",
+      "Trata la optimización del Perfil de Empresa de Google",
+      "Recomienda una página propia para cada una de las 3 sucursales",
+      "Recomienda contenido local",
+      "Revisa también lo técnico y lo de la página",
+      "Da un plan de SEO local por prioridad"
+    ] },
+  { "id": "sitio-lento-movil",
+    "prompt": "La web de nuestro restaurante carga lentísimo, sobre todo en el celular. Las páginas tardan 5-6 segundos. ¿Eso nos afecta en Google?",
+    "expectations": [
+      "Se centra en Core Web Vitals",
+      "Explica los umbrales (LCP, INP, CLS)",
+      "Dice que 5-6 segundos está muy por encima de lo aceptable",
+      "Investiga factores concretos de velocidad",
+      "Recomienda herramientas concretas de diagnóstico",
+      "Confirma que la velocidad influye en el posicionamiento",
+      "Da arreglos de velocidad por prioridad",
+      "Trata el rendimiento en el teléfono"
+    ] },
+  { "id": "fuera-de-alcance-faq-schema",
+    "prompt": "Quiero añadir el marcado de preguntas frecuentes (FAQ schema) a mis páginas de producto. ¿Me ayudas a configurarlo?",
+    "expectations": [
+      "Reconoce que es una tarea de implementar datos estructurados",
+      "Remite a la habilidad datos-estructurados",
+      "No hace una auditoría SEO completa",
+      "Puede mencionar brevemente para qué sirve el marcado de preguntas frecuentes"
+    ] }
+] }

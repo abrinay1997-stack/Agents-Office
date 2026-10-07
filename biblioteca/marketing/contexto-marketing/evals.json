@@ -1,0 +1,70 @@
+{ "skill": "contexto-marketing", "origen": "marketingskills/product-marketing/evals", "evals": [
+  { "id": "crear-plataforma-opiniones",
+    "prompt": "Quiero armar el contexto de marketing de la empresa. Somos un SaaS para empresas que vende una plataforma de opiniones de clientes a equipos de producto.",
+    "expectations": [
+      "Revisa si ya existe la nota contexto-marketing en el Cerebro",
+      "Si no existe, ofrece dos caminos: borrador a partir de lo que ya hay (recomendado) o desde cero",
+      "Si es desde cero, recorre las secciones una por una en conversación",
+      "Cubre las secciones que aplican: producto, público, personas, problemas, competencia, diferenciación, objeciones, dinámica del cambio, palabras del cliente, voz, pruebas y objetivos",
+      "Entrega el texto completo de la nota con versión v1 y su registro de cambios, para que el dueño la guarde como contexto-marketing"
+    ] },
+  { "id": "nuevo-plan-empresarial",
+    "prompt": "Actualiza el contexto de marketing. Acabamos de sumar un plan empresarial y ahora también le vendemos a directores de ingeniería, no solo a jefes de producto.",
+    "expectations": [
+      "Lee la nota contexto-marketing existente y dice su versión y sus últimos cambios",
+      "Identifica las secciones afectadas: público, personas, producto (con el plan nuevo y su precio de las cifras), objeciones y competencia",
+      "Añade al director de ingeniería en el público",
+      "Añade la persona nueva",
+      "Actualiza el producto con el plan empresarial sin inventar su precio",
+      "Conserva sin cambios las secciones no afectadas",
+      "Sube la versión y agrega una línea arriba en el registro de cambios"
+    ] },
+  { "id": "app-senderismo",
+    "prompt": "arma un documento de contexto para mi app. es una app para encontrar rutas de senderismo. recién estamos empezando.",
+    "expectations": [
+      "Responde aunque el pedido sea informal",
+      "Revisa si ya existe la nota",
+      "Ofrece el borrador a partir de lo que hay o empezar de cero",
+      "Adapta las preguntas a una app de consumo que recién empieza",
+      "Avisa que algunas secciones pueden quedar cortas al principio y está bien",
+      "Omite lo que no aplica (Personas) en lugar de forzar las 12",
+      "Entrega el texto de la nota contexto-marketing con v1"
+    ] },
+  { "id": "borrador-desde-lo-existente",
+    "prompt": "¿Puedes hacer un borrador del contexto de marketing de nuestra clínica dental con lo que ya tienes de nosotros?",
+    "expectations": [
+      "Usa el camino del borrador a partir de lo que ya hay",
+      "Lee las notas 00-Empresa, los documentos del Cerebro y, si la búsqueda web está encendida, la web de la clínica",
+      "Busca palabras reales de pacientes (ver_bandeja, reseñas) en lugar de inventarlas",
+      "Redacta las secciones con lo encontrado",
+      "Marca con [falta: …] lo que necesita datos del dueño",
+      "Presenta el borrador para revisión antes de darlo por final"
+    ] },
+  { "id": "ya-tenemos-contexto",
+    "prompt": "¿Tenemos armado el contexto de marketing? Quiero asegurarme de que los demás agentes sepan de qué se trata nuestra tienda de muebles.",
+    "expectations": [
+      "Busca la nota contexto-marketing en el Cerebro (y las demás 00-Empresa)",
+      "Dice si existe o no",
+      "Si existe, resume su contenido, su versión y sus últimos cambios",
+      "Si no existe, ofrece crearla y explica por qué vale la pena",
+      "Explica que los agentes la leen antes de cada trabajo de marketing y ventas"
+    ] },
+  { "id": "texto-pagina-inicio",
+    "prompt": "Escribe el texto de la página de inicio de nuestro software de facturación.",
+    "expectations": [
+      "Reconoce que es un trabajo de redacción, no de armar el contexto",
+      "Puede revisar si existe contexto-marketing o sugerir crearla primero",
+      "Deriva a redaccion-publicitaria para escribir el texto",
+      "No intenta escribir la página de inicio con los pasos de esta habilidad"
+    ] },
+  { "id": "reposicionamiento",
+    "prompt": "Nos reposicionamos: ya no somos una «herramienta de correo», somos una «plataforma de entregabilidad», y nuestro público ahora incluye a los equipos de RevOps. Actualiza el contexto de marketing.",
+    "expectations": [
+      "Lee la nota existente y muestra su versión actual y sus últimos cambios",
+      "Actualiza solo las secciones afectadas (producto y posicionamiento, público)",
+      "Sube la versión y actualiza la fecha de última actualización",
+      "Agrega arriba una línea del registro que dice qué cambió y por qué (por ejemplo, el paso de herramienta de correo a plataforma de entregabilidad y la suma de RevOps)",
+      "Conserva sin cambios las líneas anteriores del registro",
+      "Avisa que, al guardarla, los demás agentes trabajarán con el contexto nuevo"
+    ] }
+] }

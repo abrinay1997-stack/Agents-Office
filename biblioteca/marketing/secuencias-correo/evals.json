@@ -1,0 +1,81 @@
+{ "skill": "secuencias-correo", "origen": "marketingskills/emails/evals", "evals": [
+  { "id": "bienvenida-prueba-14-dias",
+    "prompt": "Crea una secuencia de bienvenida para quienes se registran en la prueba gratis de 14 días de nuestro software de gestión de proyectos. Queremos que lleguen a su momento «ajá»: crear su primer proyecto e invitar a un compañero.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Crea una secuencia de bienvenida de 5 a 7 correos",
+      "Sigue el principio «un correo, un trabajo»",
+      "Mapea los correos a la línea de tiempo de 14 días",
+      "Incluye los tiempos o esperas entre correos",
+      "Cada correo sigue la estructura gancho, contexto, valor, botón, despedida",
+      "Incluye asunto (y vista previa) para cada correo",
+      "Se alinea con el momento «ajá» indicado (primer proyecto e invitación)",
+      "Entrega el formato estructurado: resumen de la secuencia y ficha de cada correo",
+      "No dice que activó ni envió nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "nutricion-informe-descargado",
+    "prompt": "Necesitamos una secuencia de nutrición para quienes descargan nuestro informe «Estado del sector de la construcción 2026». La meta es que agenden una visita o una cotización con nuestra constructora.",
+    "expectations": [
+      "Crea una secuencia de nutrición de 6 a 8 correos",
+      "Sigue «valor antes de pedir»: los primeros correos aportan valor relacionado, sin empujar enseguida a la cotización",
+      "Va de la conciencia (descarga) a la consideración (contenido, casos) y a la decisión (cotización)",
+      "Incluye los tiempos entre correos",
+      "Cada correo tiene asunto claro y un solo botón",
+      "Aumenta de forma gradual la petición de compromiso",
+      "Conecta con el tema del informe descargado",
+      "Los casos y testimonios son reales o se marcan como pendientes; no los inventa"
+    ] },
+  { "id": "apertura-cayo",
+    "prompt": "se nos cayó la apertura de los correos de nuestra tienda de ropa. antes era 35 % y ahora estamos en 18 %. ¿qué está pasando y cómo arreglamos los asuntos?",
+    "expectations": [
+      "Reconoce el pedido aunque esté escrito de forma informal",
+      "Diagnostica causas posibles más allá de los asuntos: reputación del remitente, higiene de la lista, frecuencia, entregabilidad",
+      "Aborda la reputación del remitente y la entregabilidad (autenticación del dominio, spam)",
+      "Recomienda higiene de la lista o una secuencia de reactivación",
+      "Aplica la estrategia de asuntos con fórmulas concretas y ejemplos",
+      "Propone un marco para probar asuntos",
+      "Advierte que las cifras de referencia son orientativas",
+      "No inventa datos sobre la lista ni sobre la reputación: pide los que necesita"
+    ] },
+  { "id": "reactivacion-90-dias",
+    "prompt": "Arma una secuencia de reactivación para suscriptores que no han abierto ningún correo en 90 días. Tenemos unos 5.000 inactivos. Somos una cadena de clínicas veterinarias.",
+    "expectations": [
+      "Crea una secuencia de reactivación de 3 a 4 correos",
+      "El primer correo reconoce la ausencia y ofrece valor",
+      "Los correos intermedios escalan con motivos convincentes para volver",
+      "El último es una «última oportunidad» clara antes de retirarlos",
+      "Propone asuntos que logren romper la indiferencia, sin anzuelos ni «Re:» falsos",
+      "Incluye una política de salida (retirar de la lista a quien no responde al terminar)",
+      "Aborda el impacto de mantener suscriptores inactivos en la entregabilidad",
+      "Incentivos solo si la empresa los autoriza; no inventa descuentos"
+    ] },
+  { "id": "tiempos-activacion",
+    "prompt": "¿Cuál es el momento ideal para los correos de nuestra secuencia de activación? El primero lo mandamos de inmediato al registrarse, pero no sabemos cómo seguir.",
+    "expectations": [
+      "Da orientación de tiempos para secuencias de activación",
+      "Recomienda un primer correo inmediato",
+      "Contrasta los disparadores por conducta con los tiempos fijos",
+      "Recomienda disparadores por conducta cuando sea posible, con tiempo como plan B",
+      "Da patrones de tiempo típicos (día 0, 1, 3, 5, 7…)",
+      "Aclara que el tiempo ideal depende de la complejidad del producto y del largo de la prueba",
+      "No afirma cifras como garantizadas"
+    ] },
+  { "id": "activacion-en-producto",
+    "prompt": "Ayúdame a mejorar la experiencia de activación después del registro. Los usuarios se registran, pero el 60 % nunca termina de configurar su cuenta. Es una app de reservas para gimnasios.",
+    "expectations": [
+      "Reconoce que es un trabajo de activación dentro del producto, no de secuencias de correo",
+      "Remite a la habilidad activacion-clientes",
+      "No intenta rediseñar toda la activación con patrones de correo",
+      "Puede ofrecer apoyar con la parte de correo de la activación"
+    ] },
+  { "id": "primer-correo-sin-ia",
+    "prompt": "Escribe el primer correo de una secuencia de bienvenida para nuestra app de planificación de comidas, con asunto y texto de vista previa.",
+    "expectations": [
+      "El asunto no lleva «Re:» ni «RV:» falsos, anzuelos ni rayas",
+      "La apertura no es una frase hecha como «Espero que este correo te encuentre bien»",
+      "No hay contraste revelado ni lista de negaciones",
+      "No hay preguntas con respuesta propia",
+      "Termina con una sola acción concreta, no con «no dudes en contactarnos»",
+      "Es un borrador para el OK del dueño: no dice que lo envió"
+    ] }
+] }

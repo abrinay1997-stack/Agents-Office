@@ -1,0 +1,111 @@
+{
+ "skill": "marketing-conjunto",
+ "origen": "marketingskills/co-marketing/evals",
+ "evals": [
+  {
+   "id": "buscar-aliados-agencia",
+   "prompt": "Tenemos un programa de gestión de proyectos para agencias de diseño. ¿Con quién deberíamos buscar alianzas de marketing conjunto?",
+   "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Aplica el marco de identificación de aliados con el análisis de público compartido",
+    "Identifica la característica del aliado ideal: mismo comprador, otro problema que resuelve, cerca en el flujo de trabajo",
+    "Sugiere categorías concretas de aliados en el flujo (herramientas de diseño, propuestas y contratos, comunicación con clientes, facturación y pagos, almacenamiento y entrega de archivos)",
+    "Menciona una herramienta de coincidencia de cuentas o los datos de cruce de clientes como fuente, sin darla por conectada",
+    "Enumera varias fuentes para encontrar aliados (ecosistema de integraciones, encuestas a clientes, categorías vecinas, podcasts y boletines que patrocinan)",
+    "Aplica los criterios de puntuación de aliados",
+    "No inventa datos de empresas concretas: las nombra como categorías o con su fuente",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "ideas-campana-crm",
+   "prompt": "Vamos a aliarnos con una empresa de CRM que complementa lo nuestro (nosotros hacemos facturación para pequeños negocios). Ayúdanos a pensar 5 ideas de campaña que podamos correr juntos.",
+   "expectations": [
+    "Aplica el marco de lluvia de ideas: momentos de público compartido, propuestas de valor combinadas y activos únicos de cada parte",
+    "Propone ideas de varios tipos (contenido, seminarios o eventos, producto o integración, comunidad)",
+    "Las ideas son concretas y accionables: qué pone cada parte, esfuerzo, reparto de contactos y cómo se mediría",
+    "Incluye el ángulo de integración o de la página «mejor juntos»",
+    "Usa las preguntas para generar ideas («¿qué crearíamos si tuviéramos que lanzar algo en 2 semanas?»)",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "mensaje-aliado-nube",
+   "prompt": "Escribe el mensaje para contactar a un posible aliado: es una plataforma de gestión de contenidos y nosotros hacemos una herramienta de analítica de marketing. Las dos servimos a equipos de marketing de empresas.",
+   "expectations": [
+    "El asunto incluye los nombres de las dos empresas",
+    "Incluye una observación específica sobre el público compartido, no genérica",
+    "Incluye una idea de campaña concreta, no «hagamos algo juntos»",
+    "Incluye un pedido claro de una llamada corta",
+    "Es corto y personal",
+    "Menciona qué preparar para la llamada (cruce de cuentas, 2–3 ideas, métricas del público, alianzas anteriores, pedido claro)",
+    "No inventa el nombre del contacto ni datos del aliado: marca [POR CONFIRMAR] donde falte",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "elegir-un-aliado-de-cinco",
+   "prompt": "Identificamos 5 posibles aliados (somos una tienda de plantas y hemos hablado con un vivero, una cafetería, una tienda de muebles, un estudio de yoga y una floristería) pero solo tenemos tiempo para una campaña este trimestre. ¿Cómo elegimos?",
+   "expectations": [
+    "Aplica los criterios de puntuación de aliados",
+    "Incluye las seis dimensiones (encaje, tamaño, alineación de marca, calidad de la interacción, reciprocidad, facilidad de ejecución)",
+    "Pondera según la meta (captar contactos o construir la relación)",
+    "Considera la facilidad de ejecución y el historial de trabajos conjuntos",
+    "Recomienda empezar con un formato de poco esfuerzo para probar la relación",
+    "Hace la tabla de puntuación 1–5 con los datos que tiene y marca lo que falta confirmar (no inventa públicos ni tamaños)",
+    "Adapta las ideas a negocios locales (descuento cruzado, evento compartido, recomendación mutua)",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "repartir-contactos-seminario",
+   "prompt": "Nuestro seminario en línea con otra empresa tuvo 200 inscritos. ¿Cómo repartimos los contactos?",
+   "expectations": [
+    "Explica las opciones de reparto (cada uno conserva los suyos; todos compartidos; por fuente de público)",
+    "Recomienda documentarlo por adelantado en un acuerdo",
+    "Enumera los componentes del acuerdo (descripción, responsabilidades, calendario, manejo de contactos, promoción, marca, costos, métricas)",
+    "Menciona medir la calidad de los contactos y no solo el volumen",
+    "Recomienda una revisión al terminar y hablar de futuras colaboraciones",
+    "Advierte que compartir listas de contactos exige el consentimiento que piden las leyes del país",
+    "Aclara que es un esquema para conversar y que el dueño (y un abogado si hace falta) revisa cualquier acuerdo con consecuencias legales",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "referidos-no-es-esto",
+   "prompt": "El equipo de atención al cliente de mi gimnasio quiere lanzar un programa de referidos. ¿Me ayudas a diseñarlo?",
+   "expectations": [
+    "Reconoce que se trata de referidos de clientes y no de marketing conjunto entre empresas",
+    "Redirige a la habilidad `referidos`",
+    "Distingue el marketing conjunto (entre empresas aliadas) del programa de referidos (clientes que traen clientes)",
+    "No intenta una estrategia completa de marketing conjunto"
+   ]
+  },
+  {
+   "id": "que-alianzas-existen",
+   "prompt": "Somos un software para agendar citas. Todo el mundo nos dice que hagamos alianzas pero ni siquiera sé qué tipos hay. ¿Qué opciones tenemos y por dónde empezamos?",
+   "expectations": [
+    "Enumera los cinco tipos de alianza: integraciones, reventa, afiliados, marketing conjunto y tienda de aplicaciones o mercado",
+    "Aclara que el marketing conjunto es uno de los cinco y no todo el panorama",
+    "Cita la prueba de que importan (el programa de aliados de HubSpot: ~100 millones de ingresos recurrentes, ~40 % de los ingresos, más de 3.400 aliados; programas maduros ~28 % de los ingresos y el doble de crecimiento) con su fuente y como orientación",
+    "Da jugadas concretas por tipo (formas de integración, escalera de Calendly, ley de potencia 20/80 y cláusulas de compra de afiliados, marketing conjunto sin permiso, tienda de aplicaciones con comisión como costo efectivo)",
+    "Recomienda un punto de partida adecuado a un software de citas (integraciones: calendario y herramientas de ventas)",
+    "Remite a la referencia `tipos-de-alianza` y a `referidos` para la mecánica de afiliados",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "alianza-negocio-local",
+   "prompt": "Tengo una ferretería de barrio. ¿Con quién podría hacer promociones cruzadas y cómo lo hago sin gastar casi nada?",
+   "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Propone aliados reales de un negocio local (contratistas, plomeros, electricistas, tiendas de pintura, constructoras pequeñas, asociaciones de comerciantes) y los puntúa",
+    "Propone formatos de poco esfuerzo y poco costo: descuento cruzado, recomendación mutua, precio de obra, evento o taller compartido, sorteo conjunto",
+    "Deja el borrador de un mensaje breve para el aliado y de una publicación conjunta en Contenido, para el OK del dueño",
+    "Define cómo se mediría (cupones canjeados, clientes nuevos que llegan por el aliado) sin inventar cifras",
+    "No promete exclusividad, descuentos ni reparto de ingresos que el dueño no haya aprobado",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  }
+ ]
+}

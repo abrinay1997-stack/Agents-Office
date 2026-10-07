@@ -1,0 +1,67 @@
+{ "skill": "pantallas-de-mejora", "origen": "marketingskills/paywalls/evals", "evals": [
+  { "id": "limite-cuarto-proyecto",
+    "prompt": "Ayúdame a diseñar la pantalla para pasar a pago de nuestra herramienta de gestión de proyectos. En el plan gratis se pueden tener 3 proyectos y queremos mostrar la pantalla cuando intenten crear el cuarto.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Identifica el momento como un límite de uso",
+      "Aplica las piezas de la pantalla: titular, demostración del valor, comparación, prueba social, botón y salida",
+      "El titular comunica el valor de mejorar, no solo el límite",
+      "Da el texto exacto de cada pieza",
+      "Tiene en cuenta el estado de ánimo del usuario al chocar con el límite (frustración)",
+      "Incluye una salida visible (por ejemplo, borrar un proyecto o seguir gratis)",
+      "Advierte contra los patrones que hay que evitar",
+      "No inventa el precio del plan: lo toma de las cifras o lo deja pendiente"
+    ] },
+  { "id": "fin-de-prueba-2-por-ciento",
+    "prompt": "Nuestra prueba gratis de un software para clínicas dentales dura 14 días y al vencer el usuario ve una pantalla genérica de «Tu prueba terminó». Solo el 2 % pasa a pago desde ahí. ¿Cómo la mejoramos?",
+    "expectations": [
+      "Identifica el momento como fin de la prueba",
+      "Aplica la guía de fin de prueba",
+      "Recomienda mostrar lo que el usuario logró durante la prueba (efecto de dotación)",
+      "Usa el encuadre de pérdida (lo que dejará de tener)",
+      "Da opciones de plan claras",
+      "Incluye prueba social de usuarios parecidos, sin inventar cifras",
+      "Explica por qué el 2 % es bajo (propuesta débil, sin personalización, sin encuadre de pérdida)",
+      "Da recomendaciones concretas de rediseño, incluidos avisos 7, 3 y 1 día antes"
+    ] },
+  { "id": "cuando-invitar-sin-molestar",
+    "prompt": "¿cuándo deberíamos mostrar las invitaciones a pagar? no queremos molestar pero sí necesitamos que los usuarios gratis de nuestra app de recetas pasen a pago",
+    "expectations": [
+      "Responde aunque el pedido sea informal",
+      "Aplica las reglas de momento y frecuencia",
+      "Recomienda disparos concretos: función bloqueada, límite de uso, después de un momento de valor y por tiempo",
+      "Trata los topes de frecuencia y la espera tras descartar",
+      "Advierte contra bloquear tareas básicas, invitaciones demasiado frecuentes y patrones oscuros",
+      "Equilibra la experiencia del usuario con la conversión",
+      "Da recomendaciones concretas para cada tipo de disparo"
+    ] },
+  { "id": "funcion-bloqueada-analiticas",
+    "prompt": "Diseña la pantalla de función bloqueada: cuando un usuario gratis de nuestra plataforma para tiendas en línea hace clic en «Analíticas avanzadas» del panel, queremos invitarlo a mejorar.",
+    "expectations": [
+      "Identifica el momento como función bloqueada",
+      "Aplica la plantilla de función bloqueada",
+      "Recomienda mostrar una vista previa de la función",
+      "Explica el beneficio concreto (qué decisiones o ventas le ayuda a ver), no solo que es de pago",
+      "Incluye una comparación de planes relevante para las analíticas",
+      "Da un botón claro y una salida para volver a las analíticas básicas",
+      "Da el texto de la pantalla"
+    ] },
+  { "id": "errores-sin-presionar",
+    "prompt": "¿Qué errores hay que evitar con los muros de pago dentro de la app de nuestro gimnasio? No quiero presionar ni que la gente se sienta engañada.",
+    "expectations": [
+      "Aplica la sección de lo que hay que evitar",
+      "Cubre los patrones oscuros (cerrar escondido, planes confusos, textos que culpan)",
+      "Cubre lo que mata la conversión (pedir antes del valor, bloquear lo básico, sin salida)",
+      "Cubre la frecuencia excesiva",
+      "Da una alternativa positiva para cada error",
+      "Insiste en que una buena pantalla se siente útil, no insistente"
+    ] },
+  { "id": "pagina-publica-precios",
+    "prompt": "¿Puedes optimizar la página pública de precios de nuestra agencia de software? Queremos que más visitantes elijan el plan Pro en lugar del Básico.",
+    "expectations": [
+      "Reconoce que es la optimización de una página pública de precios, no una pantalla dentro del producto",
+      "Deriva a conversion-paginas",
+      "Explica que pantallas-de-mejora es para los momentos de mejora dentro del producto o servicio",
+      "No intenta optimizar la página pública con esta habilidad"
+    ] }
+] }

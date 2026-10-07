@@ -1,0 +1,49 @@
+{ "skill": "datos-estructurados", "origen": "marketingskills/schema/evals", "evals": [
+  { "id": "inicio-saas", "prompt": "Pon datos estructurados en la página de inicio de nuestro SaaS. Somos una herramienta de gestión de proyectos que se llama TaskFlow. Necesitamos el schema Organization y cualquier otro tipo que convenga.", "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Escribe el schema Organization en JSON-LD",
+    "Incluye las propiedades obligatorias y las recomendadas (name, url, logo, description, sameAs)",
+    "Recomienda otros tipos útiles para la página de inicio de un SaaS: WebSite (con SearchAction si aplica) y SoftwareApplication o Product",
+    "Usa @graph para juntar varios tipos en una página",
+    "Entrega el JSON-LD completo, listo para pegar",
+    "Recomienda validar con la prueba de resultados enriquecidos de Google y el validador de Schema.org"
+  ] },
+  { "id": "faq-clinica", "prompt": "Tenemos una página de preguntas frecuentes de nuestra clínica dental con 20 preguntas. ¿Cómo le pongo el schema de FAQ para que salgan los resultados enriquecidos en Google?", "expectations": [
+    "Escribe el schema FAQPage en JSON-LD",
+    "Muestra la estructura anidada correcta (FAQPage > Question > acceptedAnswer)",
+    "Da un ejemplo de código completo con 2 o 3 preguntas de muestra",
+    "Explica qué aporta el resultado enriquecido sin prometer que Google lo mostrará",
+    "Recuerda las directrices de Google para FAQ (respuestas informativas, no publicitarias, visibles en la página)",
+    "Recomienda cómo validarlo"
+  ] },
+  { "id": "blog-casual", "prompt": "ponle schema a los artículos del blog. publicamos consejos de marketing.", "expectations": [
+    "Se activa aunque el pedido sea informal",
+    "Escribe schema Article o BlogPosting",
+    "Incluye author (Person con name y url), datePublished, dateModified, image y publisher (Organization)",
+    "Recomienda BreadcrumbList junto al del artículo",
+    "Entrega una plantilla reutilizable para todas las entradas",
+    "Explica cómo rellenar los campos dinámicos (fecha, autor, título) desde el CMS"
+  ] },
+  { "id": "ferreteria-productos", "prompt": "Somos una ferretería con tienda en línea que vende productos físicos. ¿Qué datos estructurados necesitan nuestras páginas de producto?", "expectations": [
+    "Escribe schema Product con todas sus propiedades: name, description, image, brand, sku y offers",
+    "Incluye Offer con price, priceCurrency (en la moneda de la empresa), availability y url",
+    "Recomienda AggregateRating y Review solo si hay reseñas visibles",
+    "Incluye BreadcrumbList",
+    "Entrega el JSON-LD completo",
+    "Explica que Product puede mostrar precio, disponibilidad y estrellas en la búsqueda",
+    "No inventa precios ni valoraciones: usa las cifras de la empresa o los deja marcados como dato que falta"
+  ] },
+  { "id": "depurar", "prompt": "Pusimos datos estructurados en la web de nuestra tienda de ropa pero en Google no salen resultados enriquecidos. ¿Nos ayudas a ver qué pasa?", "expectations": [
+    "Recomienda las herramientas de validación para depurar",
+    "Revisa los errores comunes (anidamiento, propiedades obligatorias, dónde está el script)",
+    "Explica que un schema válido no garantiza el resultado enriquecido: Google decide",
+    "Recomienda los informes de datos estructurados de Search Console",
+    "Distingue advertencias de errores",
+    "Da un proceso de depuración ordenado, paso a paso"
+  ] },
+  { "id": "no-es-schema", "prompt": "El tráfico orgánico de nuestra agencia cayó después de rediseñar la web. ¿Puedes hacer una auditoría de SEO técnico?", "expectations": [
+    "Reconoce que es un pedido de auditoría de SEO técnico, no de datos estructurados",
+    "Remite a la habilidad auditoria-seo",
+    "No intenta hacer la auditoría completa con los patrones de schema"
+  ] }
+] }

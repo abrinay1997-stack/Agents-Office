@@ -1,0 +1,81 @@
+{ "skill": "comunidad", "origen": "marketingskills/community-marketing/evals", "evals": [
+  { "id": "discord-o-slack",
+    "prompt": "Somos una empresa de software de contabilidad para pymes y queremos empezar una comunidad. ¿Usamos Discord o Slack?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Aplica la guía para elegir plataforma",
+      "Recomienda Slack para una comunidad B2B de software: es familiar para compradores y tiene contexto profesional",
+      "Advierte de sus costos: el plan gratuito limita el historial y puede sentirse como trabajo",
+      "Explica que Discord va mejor para comunidades de desarrolladores, videojuegos o creadores con conversación en tiempo real",
+      "Considera la identidad del público: profesionales en horario laboral frente a aficionados",
+      "Menciona Circle u otra alternativa, y también los grupos de WhatsApp si los dueños de pymes ya viven ahí",
+      "Pregunta por el miembro ideal y el objetivo principal antes de comprometerse"
+    ] },
+  { "id": "lanzamiento-40-miembros",
+    "prompt": "Lanzamos la comunidad de nuestro gimnasio por WhatsApp hace 3 semanas. Tenemos 40 miembros pero solo 2 o 3 escriben seguido; el resto solo mira. ¿Qué hacemos?",
+    "expectations": [
+      "Diagnostica una etapa de lanzamiento y un problema de activación de los miembros nuevos",
+      "Aplica la guía de «lanzar desde cero» y busca la etapa que «gotea»",
+      "Recomienda mensajes directos a cada miembro nuevo, bienvenida por su nombre y una llamada o encuentro semanal (cosas que no escalan)",
+      "Propone un recorrido para el miembro nuevo: mensaje fijado, presentación, camino de «empieza aquí»",
+      "Propone sembrar de 5 a 10 conversaciones que muestren la conducta deseada",
+      "Define el ciclo central: la acción semanal que se espera de cada miembro",
+      "Menciona que unos pocos miembros generan la mayor parte del valor (regla 90-9-1, como orientación) y que conviene invertir en ellos",
+      "Señala como alerta que la mayoría de las publicaciones sean del equipo",
+      "No dice que envió ni publicó nada: deja los mensajes como borradores para el OK del dueño"
+    ] },
+  { "id": "reglas-de-convivencia",
+    "prompt": "Ayúdame a escribir las reglas de convivencia de nuestro Discord. La comunidad es para desarrolladores independientes de videojuegos.",
+    "expectations": [
+      "Construye sobre la identidad compartida de desarrolladores independientes",
+      "Describe el ambiente, no solo las prohibiciones: cómo se ve aquí una gran participación",
+      "Incluye reglas (sin spam, sin acoso, sin piratería) y guía aspiracional (compartir trabajos en curso, dar críticas constructivas, apoyar a otros)",
+      "El tono encaja con el público: directo, sin lenguaje corporativo",
+      "Puede sugerir una estructura de canales que refuerce la identidad (por ejemplo, devlog, pruebas de juego, consejos de publicación)",
+      "Deja el texto como borrador para el OK del dueño"
+    ] },
+  { "id": "programa-de-embajadores",
+    "prompt": "Diseña un programa de embajadores para nuestra comunidad de clientes de una tienda de productos de pastelería en línea. Tenemos unos 5.000 miembros y algunos siempre ayudan a los demás. Queremos darles más reconocimiento.",
+    "expectations": [
+      "Aplica la guía de programa de embajadores",
+      "Identifica candidatos entre quienes ya ayudan y recomiendan sin que se lo pidan (publicaciones, respuestas, reseñas, menciones)",
+      "Recomienda invitar de forma personal, uno a uno, explicando por qué se eligió a esa persona",
+      "Propone beneficios que valgan más que el acceso anticipado (acceso exclusivo, regalos, participación en ingresos, reconocimiento público, voz en el producto)",
+      "Incluye herramientas para los embajadores (enlaces, material para compartir, mensajes clave, canal privado)",
+      "Incluye un plan de medición (tráfico, registros y participación que traen)",
+      "Remite a `referidos` para incentivos estructurados y no inventa montos: los toma de las cifras de la empresa o los deja como supuesto para el dueño",
+      "Advierte contra formularios genéricos y contra invitaciones impersonales"
+    ] },
+  { "id": "comunidad-muerta",
+    "prompt": "Nuestra comunidad se siente muerta. Los miembros entraron hace 6 meses y casi nadie ha publicado en meses. ¿Cómo sé si se puede salvar?",
+    "expectations": [
+      "Usa el formato de informe de salud",
+      "Cita las métricas de salud con sus referencias: relación DAU/MAU (más del 20 % es sana), tasa de publicación de nuevos, respuesta a hilos, inactivos y % de contenido ajeno al equipo",
+      "Enumera las señales de alerta (casi todo es del equipo, preguntas sin respuesta más de 24 horas, las mismas 5 personas, nuevos que dejan de publicar)",
+      "Pide los datos o la exportación al dueño en vez de inventarlos",
+      "Recomienda pasos de diagnóstico concretos: sacar las métricas, mirar los patrones de publicación, hablar con miembros inactivos",
+      "Considera con honestidad que algunas comunidades no se salvan y a veces conviene relanzar con otra identidad, y otras se reviven con unos pocos rituales",
+      "Propone las tres prioridades principales para arreglar"
+    ] },
+  { "id": "soporte-en-comunidad",
+    "prompt": "Usamos nuestra comunidad sobre todo para soporte. ¿Cómo reducimos los tickets sin que los clientes se sientan ignorados?",
+    "expectations": [
+      "Aplica la guía de soporte dentro de la comunidad",
+      "Recomienda una base de conocimiento que se pueda buscar a partir de las preguntas frecuentes de la comunidad",
+      "Recomienda reconocer a quienes ayudan a otros (insignias de experto, clasificaciones, menciones)",
+      "Recomienda cerrar el círculo con el producto: anunciar en público los cambios que vienen de la comunidad y dar el crédito",
+      "Recomienda vigilar el ánimo cada semana para detectar señales de baja",
+      "Advierte del umbral de preguntas sin respuesta (más de 24 horas)",
+      "Aclara que el soporte entre pares debe sentirse valorado, no usado para evadir la responsabilidad de la empresa"
+    ] },
+  { "id": "modelo-y-fases",
+    "prompt": "Somos una startup técnica de herramientas para desarrolladores y todavía somos muy pocos. Nuestros usuarios son ingenieros con mucha opinión y su retroalimentación casi dicta la hoja de ruta. ¿Qué tipo de comunidad deberíamos construir y cómo cambiará el trabajo al crecer?",
+    "expectations": [
+      "Usa la referencia de modelos de comunidad",
+      "Recomienda el modelo impulsado por el desarrollo del producto, citando el caso de Ydata (Slack que generó estrellas en GitHub y opiniones del producto)",
+      "Señala que, por ser tan pocos, empieza liderada por el fundador (casos Bento y Postaga)",
+      "Describe el cambio de rol con rangos: arquitecto de la comunidad de 0 a 100, gestor de 100 a 1.000, facilitador a partir de 1.000",
+      "Puede citar la referencia de Notion (más de 300 embajadores, más de 1 millón de descargas de plantillas, 25 % de usuarios nuevos por la comunidad) como norte, no como meta inmediata",
+      "Insiste en ajustar el esfuerzo a la etapa en vez de llevar una comunidad pequeña como una grande"
+    ] }
+] }

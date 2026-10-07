@@ -1,0 +1,71 @@
+{ "skill": "ventanas-emergentes", "origen": "marketingskills/popups/evals", "evals": [
+  { "id": "salida-herramienta-redes",
+    "prompt": "Ayúdame a crear una ventana al salir para la página de nuestra herramienta para programar publicaciones en redes. Queremos captar el correo de quienes se van sin registrarse.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Identifica el tipo como ventana al salir para captar correos",
+      "Propone un titular convincente (por qué se va o qué valor extra hay)",
+      "Propone un incentivo o recurso gratis, sin inventar condiciones que no estén en las cifras",
+      "Pide solo el correo",
+      "Usa las fórmulas de texto de la habilidad",
+      "Explica la configuración del disparador al salir y su alternativa en el teléfono",
+      "Recomienda reglas de frecuencia (no volver a mostrarla si la cerró)",
+      "Da la orientación de conversión (alrededor del 3–10 % al salir) sin presentarla como cifra de la empresa"
+    ] },
+  { "id": "descuento-tienda-ropa",
+    "prompt": "Tenemos una tienda de ropa en línea y queremos ofrecer 10 % de descuento a quienes visitan por primera vez con una ventana. ¿Cuándo la mostramos y qué dice?",
+    "expectations": [
+      "Identifica el tipo como ventana de descuento",
+      "Desaconseja mostrarla apenas carga la página",
+      "Propone mejores disparadores (30–60 segundos, desplazamiento, al salir)",
+      "Aplica la estructura del texto de descuento: titular de valor, condiciones claras, urgencia real, correo y botón",
+      "Incluye un elemento de urgencia solo si el plazo es real",
+      "Trata los topes de frecuencia",
+      "Trata el consentimiento y la protección de datos según el país",
+      "Confirma que el 10 % esté en las cifras de la empresa o lo deja como supuesto"
+    ] },
+  { "id": "quejas-pero-suscriptores",
+    "prompt": "nuestras ventanas tienen a todos fastidiados. nos llegan quejas pero también muchos suscriptores al boletín del restaurante. ¿cómo equilibramos esto?",
+    "expectations": [
+      "Responde aunque el pedido sea informal",
+      "Aplica la guía de frecuencia y reglas",
+      "Busca el equilibrio entre conversión y experiencia",
+      "Recomienda topes de frecuencia (una por sesión o cada X días)",
+      "Sugiere excluir a quienes ya son suscriptores y a quien la cerró",
+      "Recomienda formatos menos intrusivos (aviso deslizante, barra de anuncio)",
+      "Trata accesibilidad y cumplimiento",
+      "Sugiere pruebas A/B para encontrar el equilibrio"
+    ] },
+  { "id": "blog-marketing-correo",
+    "prompt": "¿Qué ventanas deberíamos usar en el blog de nuestra agencia? Publicamos sobre marketing por correo y queremos crecer la lista.",
+    "expectations": [
+      "Recomienda tipos de ventana apropiados para un blog",
+      "Incluye la ventana por desplazamiento y la de salida",
+      "Sugiere formatos menos intrusivos (aviso deslizante)",
+      "Recomienda recursos gratis relacionados con el tema (plantillas, lista de revisión)",
+      "Trata la ubicación en el artículo (a mitad, al final, en la barra lateral)",
+      "Prefiere disparadores por comportamiento antes que por tiempo",
+      "Aplica las fórmulas de texto con ganchos propios del blog"
+    ] },
+  { "id": "barra-lanzamiento",
+    "prompt": "Diseña una barra de anuncio para el lanzamiento de nuestro nuevo servicio de entrega a domicilio. Queremos que se vea arriba de la web durante 2 semanas.",
+    "expectations": [
+      "Identifica el tipo como barra de anuncio",
+      "Propone un titular corto y claro",
+      "Incluye un beneficio breve y un botón para saber más",
+      "Incluye la opción de cerrarla",
+      "Trata la posición (arriba, fija o estática)",
+      "Respeta la duración de 2 semanas y su retiro",
+      "Recomienda a quién mostrarla",
+      "Da el texto exacto",
+      "No dice que la publicó: deja el borrador para el OK del dueño"
+    ] },
+  { "id": "formulario-cuatro-campos",
+    "prompt": "Tenemos que optimizar el formulario dentro de la ventana de nuestra ferretería. Hoy pide nombre, correo, empresa y teléfono. ¿Son demasiados campos?",
+    "expectations": [
+      "Reconoce que se cruza con la optimización de formularios",
+      "Deriva a conversion-paginas para el detalle del formulario",
+      "Señala que una ventana necesita los mínimos campos por la atención breve",
+      "No intenta un rediseño detallado del formulario con esta habilidad"
+    ] }
+] }

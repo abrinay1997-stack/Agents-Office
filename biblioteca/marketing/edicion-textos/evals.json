@@ -1,0 +1,85 @@
+{ "skill": "edicion-textos", "origen": "marketingskills/copy-editing/evals", "evals": [
+  { "id": "inicio-generico",
+    "prompt": "Edítame el texto de inicio de nuestra web: «¡Bienvenido a NubeSync! Estamos muy emocionados de ofrecerte una plataforma innovadora y de vanguardia que se integra a la perfección con tus herramientas actuales. Nuestra potente solución ayuda a empresas de todos los tamaños a optimizar sus flujos de trabajo y lograr resultados significativos. ¡Empieza hoy y descubre la diferencia!»",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Aplica el marco de las siete pasadas de forma sistemática",
+      "Claridad: señala el lenguaje vago («optimizar flujos de trabajo», «resultados significativos», «descubre la diferencia»)",
+      "Voz y tono: señala «Bienvenido a» como apertura débil y «estamos muy emocionados» como texto centrado en la empresa",
+      "¿Y a mí qué?: cuestiona qué valor concreto se ofrece",
+      "Demuéstralo: nota que no hay pruebas, cifras ni evidencia",
+      "Especificidad: marca «empresas de todos los tamaños», «herramientas actuales» y «potente solución» como genéricos",
+      "Entrega una versión reescrita que atiende los problemas y marca [FALTA: …] donde necesita un dato en vez de inventarlo",
+      "No dice que publicó nada: es un borrador para el OK del dueño"
+    ] },
+  { "id": "edicion-rapida-cta",
+    "prompt": "Edición rápida de esta sección de cierre de nuestro estudio de arquitectura: «¿Listo para llevar tu proyecto al siguiente nivel? Nuestro equipo de profesionales dedicados está a tu disposición para ayudarte a lograr tus metas. Haz clic aquí para saber más sobre cómo podemos ayudarte a triunfar.»",
+    "expectations": [
+      "Aplica las revisiones rápidas de palabra, frase y párrafo",
+      "Identifica los clichés y el relleno («llevar al siguiente nivel», «equipo de profesionales dedicados», «a tu disposición»)",
+      "Señala «haz clic aquí» y «saber más» como botón y acción débiles",
+      "Reescribe con una propuesta de valor concreta, voz activa y un botón orientado a la acción",
+      "Mantiene la respuesta breve, porque se pidió una edición rápida",
+      "No inventa plazos, cifras ni garantías: las marca como pendientes si hacen falta"
+    ] },
+  { "id": "descripcion-larga",
+    "prompt": "edita esta descripción de producto, siento que es muy larga y enredada: «Nuestra solución integral de gestión de proyectos ofrece a los equipos un conjunto robusto de herramientas que les permiten planificar, ejecutar y supervisar sus proyectos de principio a fin de manera eficiente. Con nuestra interfaz intuitiva, nuestro potente panel de analítica y nuestras capacidades de integración sin fricciones, puedes asegurarte de que cada aspecto de tu proyecto se gestione con precisión y cuidado. Tanto si eres una pequeña startup como una gran empresa, nuestra plataforma se adapta a tus necesidades y requisitos únicos, ayudándote a entregar los proyectos a tiempo y dentro del presupuesto, siempre.»",
+    "expectations": [
+      "Reconoce el pedido aunque esté escrito de forma informal",
+      "Aplica sobre todo las pasadas de Claridad y Especificidad",
+      "Identifica redundancias («planificar, ejecutar y supervisar» frente a «de principio a fin»)",
+      "Identifica relleno y expresiones de relleno («integral», «robusto», «eficiente», «sin fricciones», «únicos»)",
+      "Identifica afirmaciones genéricas («se adapta a tus necesidades», «a tiempo y dentro del presupuesto, siempre»)",
+      "Identifica la falsa disyuntiva «tanto si eres… como si eres…» y la cola de gerundio «ayudándote a…»",
+      "Recorta el texto de forma notable (más o menos la mitad)",
+      "Entrega una versión más corta y específica, sin inventar datos ni cifras"
+    ] },
+  { "id": "testimonio-vago",
+    "prompt": "Revisa y mejora esta sección de testimonios de nuestro taller mecánico: «¡Excelente taller! Nos ayudaron mucho. El equipo fue muy atento y el trabajo quedó bien. Lo recomendaríamos a cualquiera que busque un servicio. — Juan P., gerente»",
+    "expectations": [
+      "Aplica las pasadas Demuéstralo y Especificidad",
+      "Identifica el testimonio como demasiado vago para convencer («excelente», «nos ayudaron mucho», «quedó bien», «cualquiera»)",
+      "Recomienda sustituirlo por resultados, contexto y desenlaces específicos",
+      "Propone preguntas para pedirle al cliente un testimonio mejor",
+      "No inventa cifras ni hechos: da una plantilla que muestra cómo es un buen testimonio",
+      "Aclara que el testimonio mejorado debe ser aprobado por quien lo dio antes de publicarse"
+    ] },
+  { "id": "dos-pasadas-precios",
+    "prompt": "Aplica solo las pasadas «¿Y a mí qué?» y «Riesgo cero» a este texto de la página de precios de nuestro gimnasio: «El plan Pro incluye clases ilimitadas, evaluación física, entrenador personal y acceso a las sedes. Desde 49 al mes.»",
+    "expectations": [
+      "Aplica específicamente las pasadas ¿Y a mí qué? y Riesgo cero, como se pidió",
+      "¿Y a mí qué?: por cada característica pregunta qué significa para la persona (clases ilimitadas, evaluación, entrenador, sedes)",
+      "Riesgo cero: identifica señales de confianza que faltan (garantía, prueba, prueba social, «cancela cuando quieras»)",
+      "Sugiere garantía, clase de prueba o cancelación solo como opciones que el dueño debe confirmar, sin afirmar que existen",
+      "No inventa el precio ni cambia el «49 al mes»: lo toma tal cual de las cifras o del texto",
+      "Entrega el texto reescrito atendiendo las dos pasadas"
+    ] },
+  { "id": "texto-nuevo-no-edicion",
+    "prompt": "Escríbeme el texto completo de la página de inicio de nuestro nuevo producto. Lanzamos un sistema de gestión para inmobiliarias.",
+    "expectations": [
+      "Reconoce que es escribir un texto nuevo y no editar uno existente",
+      "Remite a la habilidad redaccion-publicitaria, que escribe textos desde cero",
+      "Explica que edicion-textos es para mejorar un texto que ya existe",
+      "No intenta escribir la página completa desde cero con esta habilidad"
+    ] },
+  { "id": "se-nota-ia",
+    "prompt": "Mi cliente dice que este texto suena a IA. Arréglalo:\n\n1. La mayoría de las agencias tiene una carpeta de ideas de campaña que nunca se lanzan. No porque sean malas ideas. Porque cada una necesita un programador.\n2. Sin llamada de incorporación, sin plantillas de hojas de cálculo, sin perseguir aprobaciones por correo. Sin contrato.\n3. Los reportes, las alertas y los paneles de clientes se actualizan directo desde las cuentas de anuncios que ya conectaste, sin exportaciones, sin refrescar a mano, sin una segunda copia de los datos que mantener.",
+    "expectations": [
+      "Nombra la señal de cada línea: (1) contraste revelado con cadencia de fragmentos, (2) lista de negaciones rematada con un fragmento, (3) frase larga que arrastra una lista de negaciones tras la afirmación",
+      "Reescribe la línea 1 como una afirmación directa con su razón (cada idea necesita un programador)",
+      "Reescribe la línea 2 diciendo lo que sí pasa, con una ausencia como máximo si importa",
+      "Reescribe la línea 3 terminando la frase en la afirmación y dando el beneficio en una frase corta aparte",
+      "Las reescrituras no introducen señales nuevas: ni rayas, ni preguntas con respuesta propia, ni nuevas listas de «sin…», ni sinónimos de moda como «sin esfuerzo»",
+      "No inventa cifras ni pruebas"
+    ] },
+  { "id": "texto-ya-bueno",
+    "prompt": "Pasa tu revisión de textos de IA por esta sección de una página antes de que salga. Cambia solo lo que de verdad lo necesite.\n\nTitular: Cierra los libros en dos días en lugar de diez.\nSubtítulo: Contabix concilia cada noche las transacciones del banco con las facturas y conserva tus códigos de cuenta.\nBotón: Empieza una prueba de 14 días. Sin tarjeta.\nFunciones: Conciliación bancaria, rutas de aprobación y pistas de auditoría.\nPreguntas frecuentes: ¿Funciona con SAP? Sí. Sincroniza en ambos sentidos cada hora.",
+    "expectations": [
+      "Reconoce que el texto ya es específico y casi no tiene señales de IA, y lo deja casi igual",
+      "No marca la pregunta del FAQ",
+      "Conserva el único «Sin tarjeta» junto al botón",
+      "No marca la lista de tres funciones reales como un tres por reflejo",
+      "No marca como cola de comas la cláusula que añade un hecho («y conserva tus códigos de cuenta»)",
+      "No reescribe por reescribir ni introduce señales nuevas; los cambios opcionales van rotulados como opcionales, con su razón"
+    ] }
+] }

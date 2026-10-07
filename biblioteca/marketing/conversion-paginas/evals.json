@@ -1,0 +1,99 @@
+{ "skill": "conversion-paginas", "origen": "marketingskills/cro/evals", "evals": [
+  { "id": "landing-anuncios-prueba-gratis",
+    "prompt": "Esta es la página de aterrizaje de mi software: https://ejemplo.com/producto. Recibimos unas 5.000 visitas al mes desde anuncios de Google pero solo el 1,2 % se registra a la prueba gratis. ¿Me ayudas a ver qué está mal?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta, y dice qué pudo ver de la página y qué no",
+      "Identifica el tipo de página (de aterrizaje) y la meta de conversión (registro a la prueba gratis)",
+      "Analiza la claridad de la propuesta de valor",
+      "Analiza la ubicación y el texto del llamado a la acción",
+      "Señala la coherencia de mensaje entre los anuncios de Google y la página",
+      "La entrega tiene las secciones Victorias rápidas, Cambios de alto impacto e Ideas para probar",
+      "Da de 2 a 3 alternativas de titular o de botón con su razón",
+      "No dice que cambió ni publicó nada: deja recomendaciones para el OK del dueño"
+    ] },
+  { "id": "precios-nadie-elige-el-medio",
+    "prompt": "Mi página de precios tiene tres planes pero nadie elige el del medio. El 60 % escoge el más barato y el 30 % se va sin hacer nada. ¿Qué cambio?",
+    "expectations": [
+      "Aplica el marco de conversión para páginas de precios",
+      "Atiende la indicación del plan recomendado",
+      "Atiende la ansiedad de «¿cuál plan es el mío?»",
+      "Analiza si el plan del medio está bien diferenciado",
+      "Recomienda señales de confianza y prueba social cerca de los precios sin inventarlas",
+      "Sugiere experimentos concretos (nombres de planes, diferenciación de funciones, interruptor anual, resaltar el recomendado)",
+      "La entrega tiene Victorias rápidas, Cambios de alto impacto e Ideas para probar",
+      "Usa los precios de las cifras de la empresa o los pide, sin inventarlos"
+    ] },
+  { "id": "casual-esta-pagina-no-convierte",
+    "prompt": "esta página no convierte, la miras? es el inicio de nuestra tienda de ropa en línea",
+    "expectations": [
+      "Se activa con la frase informal «no convierte»",
+      "La identifica como análisis de una página de inicio",
+      "Pregunta por la tasa de conversión actual y por el origen del tráfico (y por la meta)",
+      "Aplica el marco de análisis empezando por la claridad de la propuesta de valor",
+      "Atiende a varios públicos y a caminos claros según la intención del visitante (comprar ya, mirar, buscar un regalo)",
+      "Revisa la versión de celular y las señales de confianza de una tienda (envíos, devoluciones, medios de pago, reseñas)",
+      "La entrega está estructurada con Victorias rápidas, Cambios de alto impacto, Ideas para probar y Alternativas de texto"
+    ] },
+  { "id": "blog-sin-clics",
+    "prompt": "Tenemos un blog con 20.000 visitas al mes desde Google, pero casi nadie hace clic hacia nuestros servicios de contabilidad. ¿Cómo logramos más conversiones de los lectores del blog?",
+    "expectations": [
+      "Aplica el marco de conversión para entradas de blog",
+      "Recomienda llamados contextuales que coincidan con el tema del artículo",
+      "Recomienda llamados dentro del texto en puntos naturales de pausa",
+      "Revisa si los llamados actuales son relevantes o genéricos",
+      "Sugiere ubicaciones concretas (dentro del texto, al final, barra lateral, barra fija)",
+      "Sugiere probar distintos formatos de llamado (enlace en el texto, tarjeta, descargable relacionado)",
+      "Remite a redaccion-publicitaria o a una habilidad relacionada para mejorar el texto de los llamados"
+    ] },
+  { "id": "rediseno-cayo-la-conversion",
+    "prompt": "Rediseñamos la página de reservas de nuestra clínica dental y las citas pasaron de 4,2 % a 2,8 % de las visitas. Esta es la nueva página. ¿Qué salió mal?",
+    "expectations": [
+      "Lo aborda como una auditoría de diagnóstico centrada en lo que cambió",
+      "Revisa si se perdieron señales de confianza (reseñas, fotos reales, certificaciones)",
+      "Revisa si la propuesta de valor quedó menos clara",
+      "Revisa cambios en la jerarquía del llamado a la acción",
+      "Revisa si se añadió fricción (campos, pasos, ventanas)",
+      "Revisa si se rompió la coherencia de mensaje con la fuente de tráfico, la velocidad y la versión de celular",
+      "Da los arreglos ordenados por impacto",
+      "Recomienda revertir primero los cambios de mayor riesgo y probar el resto de uno en uno"
+    ] },
+  { "id": "formulario-de-registro-es-otra-habilidad",
+    "prompt": "El formulario de registro de nuestra aplicación tiene demasiados campos y la gente lo abandona a la mitad. ¿Me ayudas a optimizarlo?",
+    "expectations": [
+      "Reconoce que es la optimización de un flujo de registro y no de una página de marketing general",
+      "Remite a la habilidad registro",
+      "Puede dar consejos generales de reducción de fricción, pero deja claro que registro es la habilidad adecuada",
+      "No intenta un análisis completo de conversión de página sobre un formulario de registro"
+    ] },
+  { "id": "pagina-de-servicio-busqueda-organica",
+    "prompt": "Revisa la página de nuestro servicio de monitoreo de APIs. La mayoría del tráfico viene de la búsqueda orgánica de «herramientas de monitoreo de API». Queremos que empiecen una prueba gratis.",
+    "expectations": [
+      "Aplica el marco para páginas de función o de servicio: conectar la función con el beneficio, casos de uso y ejemplos, camino claro a probar o comprar",
+      "Conecta las funciones con beneficios y sugiere casos de uso y ejemplos",
+      "Señala el origen orgánico del tráfico y revisa la coherencia con la intención de búsqueda",
+      "Sugiere hipótesis de experimentos priorizadas para la sección principal, las señales de confianza y el llamado a la acción",
+      "Remite a pruebas-ab para implementar bien las pruebas"
+    ] },
+  { "id": "ferreteria-whatsapp-y-celular",
+    "prompt": "Tengo una ferretería en Quito y una página web sencilla. Casi nadie nos escribe desde la página, aunque sí llegan visitas. La mayoría de los clientes pregunta por WhatsApp. ¿Qué le cambio?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta (tipo de página, cuántas visitas, de dónde vienen, qué se mide hoy)",
+      "Aplica el marco de página de un negocio local: qué venden, dónde están, horario, teléfono y mapa arriba y sin buscar",
+      "Recomienda llamar y escribir por WhatsApp a un toque desde el celular, con un mensaje precargado",
+      "Revisa primero la versión de celular y los tiempos de carga",
+      "Propone medir lo mínimo primero (clics al botón de WhatsApp, llamadas) y contar a mano si no hay analíticas",
+      "Señala fotos reales del local y reseñas, y no inventa reseñas ni cifras",
+      "No dice que cambió la página: deja recomendaciones y textos para el OK del dueño"
+    ] },
+  { "id": "formulario-cotizacion-constructora",
+    "prompt": "En el formulario de cotización de nuestra constructora piden 11 campos y casi todos lo dejan a medias. Aquí está el formulario. ¿Cómo lo acorto sin perder la información que necesitamos?",
+    "expectations": [
+      "Hace la auditoría con el formato de la referencia de formularios: problema, impacto, arreglo y prioridad",
+      "Pregunta o revisa qué campos se usan de verdad en el seguimiento, y cuáles se pueden pedir después",
+      "Propone un formulario de varios pasos con indicador de progreso, empezando por lo fácil y dejando lo sensible al final",
+      "Propone el diseño recomendado: campos obligatorios y opcionales, orden, textos, botón con acción y beneficio, mensajes de error",
+      "Considera adjuntar fotos o planos y la elección de WhatsApp como canal de respuesta",
+      "Señala el aviso de privacidad y el consentimiento según la ley del país y pide al dueño que lo confirme",
+      "Incluye hipótesis para probar (por ejemplo, 3 campos frente a varios pasos) sin inventar resultados"
+    ] }
+] }

@@ -1,0 +1,136 @@
+{
+ "skill": "plan-marketing",
+ "origen": "marketingskills/marketing-plan/evals",
+ "evals": [
+  {
+   "id": "plan-saas-serie-a",
+   "prompt": "Estamos empezando con una empresa de software de gestión de proyectos para constructoras: 2 millones al año de ingresos recurrentes, 12 personas con una sola persona de marketing y 20.000 al mes de presupuesto. Quieren un plan de marketing que podamos compartir con el equipo y con la junta. Hazlo.",
+   "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+    "Pide el nombre de la empresa o usa uno claro para titular el documento",
+    "Recorre las tres fases (preparar, redactar, cerrar) y empieza con la entrevista: etapa de dinero, equipo, presupuesto, canales, lo ya hecho, en marcha, herramientas",
+    "Produce las 13 secciones ordenadas por AARRR: resumen ejecutivo, marco estratégico, estado actual, Adquisición, Activación, Retención, Referidos, Ingresos, hoja de ruta de 90 días, panorama de 12 meses, mapa de operaciones, banco de ideas, medición",
+    "La Sección 3 puntúa el estado actual con la rúbrica de 17 puntos",
+    "La Sección 9 (hoja de ruta de 90 días) tiene jugadas con responsable, no solo acciones",
+    "La Sección 10 nombra de forma explícita lo que se libera con cada nivel de recursos",
+    "La Sección 11 asigna habilidades y herramientas de la oficina a cada etapa AARRR",
+    "La Sección 12 cruza las 139 ideas con un estado propio de esta empresa",
+    "El documento es de unas 8.000 a 12.000 palabras, en Markdown listo para pegar",
+    "Es específico de esta empresa (su presupuesto, su equipo, sus canales), no genérico",
+    "No inventa cifras: lo que falta va como [POR CONFIRMAR] y a las decisiones abiertas",
+    "No dice que envió, publicó o lanzó nada: deja borradores y piezas para el OK del dueño"
+   ]
+  },
+  {
+   "id": "plan-tienda-autofinanciada",
+   "prompt": "Tenemos una tienda en línea de ropa para bebés, de 4 personas, sin presupuesto de anuncios por ahora. La fundadora quiere un plan de 90 días y una hoja de ruta de 12 meses para enseñarle a un posible inversionista. La tienda abre al público en dos meses.",
+   "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+    "Reconoce el nivel de arranque (autofinanciado) y no recomienda adquisición pagada hasta que se libere presupuesto",
+    "La Adquisición se apoya en orgánico, ciclo de vida (correo y mensajes) y embajadoras o referidos",
+    "Nombra qué se libera cuando entre el dinero (presupuesto de prueba, primera contratación)",
+    "Tiene en cuenta que la tienda aún no abrió y los puntos de apertura",
+    "Identifica la etapa AARRR que es la restricción principal y lo dice en el resumen",
+    "El resumen ejecutivo se puede copiar a un informe para un inversionista",
+    "Es honesto: no finge que hay presupuesto de anuncios que no existe",
+    "Adapta la economía por cliente a una tienda (valor de la compra, recompra, devoluciones), no a una suscripción de software",
+    "No dice que envió, publicó o lanzó nada: deja borradores y piezas para el OK del dueño"
+   ]
+  },
+  {
+   "id": "plan-desde-auditoria",
+   "prompt": "ya tenemos una auditoría de marketing de la clínica dental hecha el mes pasado, ¿puedes tomarla y convertirla en un plan de verdad?",
+   "expectations": [
+    "Pide la auditoría (que la pegue o la comparta) en vez de empezar de cero",
+    "Ingiere los puntajes de la auditoría directamente en la Sección 3 sin volver a puntuar lo ya puntuado",
+    "Anota la fecha de la puntuación y marca lo que haya cambiado desde entonces",
+    "Usa los huecos de la auditoría para armar la hoja de ruta de 90 días y las jugadas de cada etapa AARRR",
+    "Sigue produciendo el plan completo de 13 secciones, no solo la Sección 3",
+    "Adapta el plan a un negocio local de servicios de salud (citas, reseñas, referidos de pacientes)",
+    "No promete resultados clínicos ni inventa cifras",
+    "No dice que envió, publicó o lanzó nada: deja borradores y piezas para el OK del dueño"
+   ]
+  },
+  {
+   "id": "plan-retomar",
+   "prompt": "Retoma el plan de marketing de la agencia de diseño que dejamos a medias. Ya aprobé las secciones 1 a 6.",
+   "expectations": [
+    "Busca el avance en la tarea o en el Cerebro en vez de empezar de cero",
+    "Retoma desde la siguiente sección sin aprobar (la 7) sin reescribir las ya aprobadas",
+    "No reinicia en silencio el plan desde cero",
+    "Si el plan ya estaba terminado, pregunta si se revisa como versión 2, se empieza de nuevo o se reabre una sección",
+    "Entrega por partes y pide la aprobación del dueño de cada parte antes de seguir",
+    "No dice que envió, publicó o lanzó nada: deja borradores y piezas para el OK del dueño"
+   ]
+  },
+  {
+   "id": "plan-hardware-software",
+   "prompt": "Necesito un plan para una empresa de bienestar que vende un producto físico (un purificador de aire inteligente) y una aplicación por suscripción. Están en etapa de Serie A, con 100.000 al mes de presupuesto y un equipo de 8 personas que incluye a una jefa de marketing.",
+   "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+    "Reconoce el arquetipo de hardware + software y consulta las variaciones de `tipos-de-cliente`",
+    "La Adquisición se apoya en prensa, tiendas, mercados en línea, SEO de la tienda y lo pagado",
+    "La Activación cubre el desempaque, la instalación, la primera sesión y la pantalla de pago",
+    "La Retención cubre ciclo de vida y comunidad; los Referidos cubren regalos y reseñas",
+    "Los Ingresos usan el valor de vida combinado de hardware + suscripción + accesorios",
+    "Reconoce el nivel de Serie A en las recomendaciones de presupuesto",
+    "El banco de ideas descarta con razón explícita las ideas que chocan con el posicionamiento o con las limitaciones del hardware",
+    "No dice que envió, publicó o lanzó nada: deja borradores y piezas para el OK del dueño"
+   ]
+  },
+  {
+   "id": "plan-corto-no",
+   "prompt": "Hazme rápido un plan de marketing para mi ferretería. Que no sea largo.",
+   "expectations": [
+    "No entrega en silencio un plan recortado que se salte el mapa de operaciones o el banco de ideas",
+    "Explica que el plan completo es el documento de referencia (unas 8.000–12.000 palabras)",
+    "Ofrece alternativas claras: (a) el plan completo, (b) una versión de una página declarada como tal, (c) la habilidad de un canal concreto si de verdad necesita eso",
+    "Nombra `plan-marketing` como el entregable completo y recomienda habilidades de un solo canal (por ejemplo `redes-sociales`, `campanas-pagadas` o `auditoria-seo`) para lo puntual",
+    "Si hace una versión de una página, la declara como tal y trae resumen, tres apuestas, 90 días y métricas",
+    "Adapta el ejemplo a una ferretería local (reseñas, WhatsApp, contratistas), no a un software"
+   ]
+  },
+  {
+   "id": "plan-no-hay-bala-de-plata",
+   "prompt": "Un fundador no deja de preguntar «¿cuál es el único canal que nos va a hacer explotar?». También quiere una forma defendible de repartir el presupuesto para no dejar sin fondos el crecimiento futuro, y una manera de saber cuándo un canal se está agotando. Plantea el pensamiento estratégico del plan.",
+   "expectations": [
+    "Rechaza la idea de la bala de plata con el encuadre de marketing como inversión: una cartera que se compone",
+    "Usa «no hay balas de plata: hay cien perdigones de oro» y «una audición, no una subasta»",
+    "Invoca «la esperanza no es una estrategia»: cada jugada tiene un mecanismo y un indicador adelantado",
+    "Aplica la puerta de calidad del mercado: tamaño × frecuencia del problema",
+    "Presenta la regla 70/20/10 de reparto de recursos (actual / siguiente / experimental)",
+    "Presenta una cadencia semanal con alertas de meseta (suma semanal que se aplana, costo por cliente que sube, esfuerzo que sube y producción que no)",
+    "Ata las alertas de meseta a mover peso hacia la siguiente curva S",
+    "Lo conecta con la Sección 2 (marco estratégico), la Sección 10 (panorama de 12 meses) y la Sección 13 (medición)"
+   ]
+  },
+  {
+   "id": "tamano-mercado",
+   "prompt": "Antes de armar el plan: ¿qué tan grande es el mercado de un programa que resume llamadas de ventas con IA para equipos comerciales de empresas medianas? El fundador le repite a los inversionistas que «el mercado de productividad con IA vale 12.000 millones».",
+   "expectations": [
+    "Define el límite del mercado en una frase (geografía, comprador, uso, modelo de precio) antes de estimar",
+    "Discute la cifra única de arriba hacia abajo en vez de adoptarla: no prueba demanda",
+    "Separa TAM, SAM y SOM y trata el SOM como la cifra que importa para el plan",
+    "Cruza al menos dos de los cuatro métodos (de abajo hacia arriba, por búsquedas, por competidores, por canales) con las cuentas a la vista y explica cualquier brecha mayor a 3 veces",
+    "Presenta rangos con los supuestos aparte de los hechos observados, nunca una cifra precisa sin fuente",
+    "Etiqueta cada estimación con su confianza (alta, media, baja, desconocida)",
+    "Nombra el supuesto de mayor impacto y cómo comprobarlo",
+    "Las cifras de terceros que cite llevan su fuente; las que no tengan fuente no entran"
+   ]
+  },
+  {
+   "id": "plan-repartir-oficina",
+   "prompt": "Ya revisé y apruebo el plan de marketing de la cafetería. Ahora repártelo: quiero que cada departamento sepa qué le toca, con qué prioridad y para cuándo.",
+   "expectations": [
+    "Entrega la hoja de ruta como piezas repartibles con departamento, puesto sugerido, prioridad (alta, media o baja) y fecha límite",
+    "Las piezas que dependen de otras dicen «espera a» la pieza anterior",
+    "Pone cada pieza en el departamento que mejor encaja y explica por qué si mueve alguna",
+    "Sugiere agrupar las piezas del plan en un proyecto de la vista Tareas",
+    "Propone lo recurrente (revisión semanal de indicadores, informe mensual, calendario de contenido) como rutinas, con su agente, su horario y si esperan el OK",
+    "Sugiere pedirle a Dimitri que lo convierta en un plan con piezas por departamento, o deja cada pieza como borrador con `crear_borrador_tarea`",
+    "No arranca nada sin el visto bueno del dueño: las piezas nacen como ideas o borradores",
+    "No dice que envió, publicó o lanzó nada: deja borradores y piezas para el OK del dueño"
+   ]
+  }
+ ]
+}

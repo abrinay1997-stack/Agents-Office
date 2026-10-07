@@ -1,0 +1,77 @@
+{ "skill": "lanzamientos", "origen": "marketingskills/launch/evals", "evals": [
+  { "id": "saas-diseno-6-semanas",
+    "prompt": "Vamos a lanzar en 6 semanas un software para que los equipos de diseño revisen su trabajo. Tenemos poca audiencia: 500 suscriptores por correo y 2.000 seguidores en LinkedIn. Ayúdanos a planear el lanzamiento.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Aplica el marco ORB (propios, rentados, prestados) con los recursos reales del usuario",
+      "Ubica la lista de 500 y la web como propios, LinkedIn como rentado y alianzas, comunidades y Product Hunt como prestados",
+      "Propone las cinco fases con un calendario ajustado a las 6 semanas",
+      "Da tácticas concretas para cada fase",
+      "Recomienda crecer la audiencia antes del día del lanzamiento",
+      "Incluye la lista de revisión del día del lanzamiento",
+      "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "product-hunt-primera-vez",
+    "prompt": "Queremos lanzar nuestra app de presupuestos en Product Hunt. ¿Consejos? Nunca lo hicimos.",
+    "expectations": [
+      "Aplica la guía de Product Hunt",
+      "Trata la elección del día y la hora",
+      "Trata la preparación de materiales (imágenes, video, frase corta)",
+      "Trata la red de apoyo y cómo activarla sin romper las reglas",
+      "Recomienda empezar 2 a 4 semanas antes",
+      "Menciona errores comunes",
+      "Pone expectativas realistas (es un pico, no un canal estable)"
+    ] },
+  { "id": "funcion-grande",
+    "prompt": "acabamos de sacar una función grande en nuestro sistema de reservas para restaurantes. ¿cómo la anunciamos? no es un lanzamiento completo, solo una función importante.",
+    "expectations": [
+      "Responde aunque el pedido sea informal",
+      "Aplica la estrategia de lanzamientos continuos y la matriz mayor/mediana/menor",
+      "La identifica como una novedad mayor",
+      "Escala las tácticas sin tratarla como lanzamiento completo",
+      "Recomienda los canales del anuncio",
+      "Incluye correo, artículo, redes y aviso dentro del producto",
+      "Entrega un marco de anuncio de la función",
+      "Deja las piezas como borradores (correo, publicaciones con crear_borrador) para el OK del dueño"
+    ] },
+  { "id": "lanzamiento-flojo",
+    "prompt": "Nuestro lanzamiento fue un fracaso. Abrimos la tienda en línea de café de especialidad hace 3 semanas y solo hubo 50 pedidos. Esperábamos al menos 500. ¿Qué salió mal y qué hacemos ahora?",
+    "expectations": [
+      "Aplica la guía posterior al lanzamiento",
+      "Diagnostica causas posibles (audiencia, canales, mensaje, ejecución, público)",
+      "Señala la falta de audiencia previa como causa probable",
+      "Recomienda tácticas de recuperación",
+      "Sugiere averiguar de dónde vinieron los 50 y reforzar ese canal",
+      "Entrega un plan de recuperación concreto (por ejemplo, de 30 días)"
+    ] },
+  { "id": "audiencia-prestada",
+    "prompt": "¿Cómo usamos alianzas y audiencias de otros para lanzar la nueva sede de nuestra academia de inglés? No tenemos mucha audiencia propia.",
+    "expectations": [
+      "Se centra en el canal prestado del marco ORB",
+      "Da tácticas concretas de audiencia prestada (podcasts, aliados complementarios, creadores, comunidades, prensa local, contenido invitado)",
+      "Explica cómo encontrar y acercarse a posibles aliados",
+      "Advierte que lo prestado lleva tiempo",
+      "Recomienda empezar bastante antes del lanzamiento",
+      "Indica cómo convertir esa atención en relación propia",
+      "Los mensajes a aliados quedan como borradores para el OK del dueño"
+    ] },
+  { "id": "ideas-sin-presupuesto",
+    "prompt": "Dame ideas creativas de marketing para promocionar nuestra ferretería. No tenemos mucho presupuesto.",
+    "expectations": [
+      "Reconoce que es un pedido general de ideas, no un lanzamiento",
+      "Deriva a ideas-marketing",
+      "No arma una lluvia de ideas completa con los patrones de lanzamiento",
+      "Puede sugerir alguna táctica relacionada con lanzamientos"
+    ] },
+  { "id": "siempre-una-funcion-mas",
+    "prompt": "Llevamos 8 meses construyendo nuestra plataforma de cursos en privado y seguimos corriendo la fecha porque siempre falta una función más. ¿Cómo sabemos cuándo estamos listos para lanzar?",
+    "expectations": [
+      "Aplica la puerta de preparación antes de las fases",
+      "Nombra las dos fallas: modo secreto y «solo una función más»",
+      "Diagnostica que el usuario está atrapado en ambas",
+      "Presenta SLC (simple, querible, completo) como punto medio frente a un producto mínimo pelado",
+      "Explica por separado simple, querible y completo",
+      "Aconseja recortar alcance hasta llegar a SLC en vez de añadir funciones",
+      "Recomienda lanzar en cuanto pase la puerta"
+    ] }
+] }

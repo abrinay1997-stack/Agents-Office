@@ -1,0 +1,98 @@
+{ "skill": "referidos", "origen": "marketingskills/referrals/evals", "evals": [
+  { "id": "referidos-software-49",
+    "prompt": "Ayúdame a diseñar un programa de referidos para nuestra herramienta de gestión de proyectos. Cuesta 49 al mes y tenemos unos 1.000 clientes. Queremos impulsar el boca a boca.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Distingue entre referidos de clientes y afiliados (aquí son referidos: clientes actuales que recomiendan)",
+      "Diseña el ciclo: momento detonante, mecanismo para compartir, experiencia del recomendado y recompensa",
+      "Recomienda un incentivo de dos lados",
+      "Propone incentivos concretos para ese precio (por ejemplo, un mes gratis para los dos), sin inventar márgenes",
+      "Incluye la lista de lanzamiento",
+      "Menciona herramientas como opciones neutras",
+      "No dice que lanzó nada: deja el diseño y los textos como borrador para el OK del dueño"
+    ] },
+  { "id": "baja-participacion-5",
+    "prompt": "Tenemos un programa de referidos pero solo el 5 % de los clientes ha recomendado a alguien. ¿Cómo subimos la participación?",
+    "expectations": [
+      "Aplica la guía de optimización del programa",
+      "Diagnostica causas posibles: conocimiento del programa, momento, incentivo y fricción",
+      "Recomienda pedir la recomendación en momentos de máxima satisfacción",
+      "Propone mejorar la visibilidad, simplificar el compartir y añadir recordatorios por correo y en el producto",
+      "Da ideas concretas de pruebas A/B",
+      "No inventa estadísticas de mejora"
+    ] },
+  { "id": "referidos-o-afiliados-cursos",
+    "prompt": "¿hacemos referidos o afiliados? vendemos cursos en línea de 199 a 499 y queremos que otros creadores e influencers nos promocionen",
+    "expectations": [
+      "Responde bien a una frase informal",
+      "Distingue con claridad referidos de afiliados",
+      "Recomienda afiliados para este caso (terceros que promocionan, no clientes actuales)",
+      "Da una estructura de comisión para productos digitales como rango orientativo, y la ajusta a las cifras y márgenes de la empresa",
+      "Trata la duración de la cookie y las condiciones de pago",
+      "Menciona la exigencia de que los afiliados avisen que reciben comisión",
+      "Recomienda plataformas de afiliados como opciones neutras"
+    ] },
+  { "id": "incentivo-no-funciona-29",
+    "prompt": "¿Qué estructura de incentivos funciona mejor? Llevamos tiempo ofreciendo 10 de descuento a quien recomienda pero no funciona. El producto cuesta 29 al mes.",
+    "expectations": [
+      "Evalúa el incentivo actual y señala que es de un solo lado",
+      "Recomienda probar incentivos de dos lados",
+      "Habla de varios tipos de incentivo: crédito, meses gratis, mejoras de función, dinero",
+      "Aplica el concepto de niveles",
+      "Propone alternativas concretas para probar",
+      "Señala que el incentivo puede no ser el único problema: también cuentan la ubicación y el momento",
+      "Calcula el tope de recompensa con las cifras de la empresa o lo deja pendiente"
+    ] },
+  { "id": "medir-referidos",
+    "prompt": "¿Cómo medimos el éxito de nuestro programa de referidos? ¿Qué métricas seguimos?",
+    "expectations": [
+      "Define las métricas: participación, referidos por recomendador, conversión, coeficiente viral",
+      "Compara el CAC por referidos con el de otros canales",
+      "Compara el LTV de los referidos con el de los clientes orgánicos",
+      "Recomienda cómo registrar (herramienta o registro sencillo)",
+      "Da rangos de referencia como orientativos, no como metas garantizadas",
+      "Dice «no medido» cuando falten datos en vez de estimar"
+    ] },
+  { "id": "correos-de-invitacion",
+    "prompt": "¿Puedes escribir los correos de invitación a recomendar? Necesito el que sale cuando alguien comparte su enlace.",
+    "expectations": [
+      "Aplica la sección de secuencias de correo de la habilidad",
+      "Entrega el correo de invitación o de lanzamiento con texto concreto",
+      "Remite a secuencias-correo para el diseño de una secuencia de varios correos",
+      "Propone también una versión por WhatsApp si encaja",
+      "Deja los textos como borradores: enviarlos lo aprueba el dueño"
+    ] },
+  { "id": "viralidad-herramienta-diseno",
+    "prompt": "Hacemos una herramienta colaborativa de diseño. Todo el mundo dice «haz un programa de referidos», pero yo quiero saber si el producto puede difundirse solo. ¿Qué opciones tenemos?",
+    "expectations": [
+      "Ubica el producto en el espectro de potencial viral (extremo natural)",
+      "Recomienda diseñar viralidad en el producto antes que un programa de recompensas",
+      "Advierte que no se debe forzar la viralidad donde no encaja",
+      "Repasa los mecanismos aplicables: bucles de exposición, insertar, compartir en redes e insignias o marcas de agua en el plan gratis",
+      "Presenta los referidos como la alternativa basada en incentivos",
+      "Remite a mecanismos-virales"
+    ] },
+  { "id": "referidos-dentista",
+    "prompt": "Tengo una clínica dental con dos sucursales. Mis pacientes sí me recomiendan pero nunca he hecho nada formal. ¿Cómo armo un programa de referidos?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro o pregunta lo que falta",
+      "Reconoce que es un negocio de recomendación por conversación y no de producto digital",
+      "Identifica los momentos detonantes (al terminar un tratamiento y ver al paciente contento, tras una buena reseña)",
+      "Propone un mecanismo sencillo (código, tarjeta o mensaje de WhatsApp ya escrito)",
+      "Avisa de que las reglas de salud del país pueden limitar lo que se puede prometer o pagar por recomendar y pide confirmarlo con un asesor",
+      "Sugiere gestos no monetarios o de dos lados si las reglas lo permiten",
+      "Define cómo se medirá con un registro sencillo de la procedencia de cada paciente nuevo",
+      "No inventa montos de recompensa: los pone «por confirmar con el dueño»"
+    ] },
+  { "id": "referidos-ferreteria",
+    "prompt": "Tengo una ferretería y quiero que los maestros de obra me traigan clientes. ¿Qué les ofrezco?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro o pregunta lo que falta",
+      "Trata a los maestros de obra como afiliados o aliados con comisión o descuento, distinto de un cliente que recomienda",
+      "Propone un código o forma de registrar de dónde viene cada cliente (no hay clic en línea)",
+      "Calcula el tope de lo que puede ofrecer con las cifras de márgenes o lo deja pendiente",
+      "Propone estructuras como porcentaje por compra, nivel por volumen o un beneficio de cuenta",
+      "Incluye reglas simples de pago y de qué cuenta como referido",
+      "No dice que lanzó nada: deja el programa y el mensaje a los maestros como borrador para el OK del dueño"
+    ] }
+] }

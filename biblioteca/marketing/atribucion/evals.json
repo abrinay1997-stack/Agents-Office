@@ -1,0 +1,85 @@
+{ "skill": "atribucion", "origen": "marketingskills/attribution/evals", "evals": [
+  { "id": "cifras-que-no-coinciden",
+    "prompt": "Google Ads dice que tuvimos 50 conversiones el mes pasado, Meta dice 40, Analytics dice 60 y mi hoja de ventas muestra 35 ventas cerradas en la tienda. ¿Cuál es la correcta? Necesito saber mis números reales antes de definir el presupuesto del próximo trimestre.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Dice que ninguna fuente es objetivamente la correcta",
+      "Advierte explícitamente contra sumar conversiones entre plataformas (reclamos que se solapan)",
+      "Elige una sola fuente de verdad para el conteo de ventas (la hoja de ventas o el sistema de la tienda)",
+      "Explica el sesgo sistemático de al menos tres fuentes",
+      "Recomienda leer las tendencias en dirección y no esperar una coincidencia absoluta",
+      "Presenta la brecha de atribución como esperada y por explicar, no por eliminar",
+      "No fabrica un único número «conciliado» como si fuera la verdad",
+      "No dice que cambió presupuestos ni apagó canales: deja la recomendación para el OK del dueño"
+    ] },
+  { "id": "primer-o-ultimo-contacto",
+    "prompt": "¿Usamos atribución de primer contacto o de último contacto? Somos una constructora que vende remodelaciones: el ciclo de decisión dura unos dos meses y en cada venta participan varias personas de la familia o de la empresa.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "No recomienda un solo modelo aislado",
+      "Recomienda mostrar primer y último contacto juntos",
+      "Explica qué distorsiona cada uno (el primero ignora lo que cerró; el último sobreacredita la búsqueda de marca y el directo)",
+      "Recomienda el modelo basado en posición como principal sobre sus propios datos (no como opción del menú de Google)",
+      "Insiste en la atribución declarada por el cliente («¿cómo nos conociste?») para ciclos largos y contactos fuera de línea",
+      "Señala la libreta o el CRM de ventas como fuente de verdad de los ingresos",
+      "Dice que el modelo basado en datos necesita un volumen que probablemente no tienen"
+    ] },
+  { "id": "reserva-en-dominio-ajeno",
+    "prompt": "Nuestra conversión más importante es una cita de evaluación que la gente agenda en Calendly, pero eso ocurre en calendly.com y nuestra analítica pierde todo el recorrido. ¿Cómo conectamos la cita con el lugar de donde vino el visitante? Controlamos nuestro sitio web.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Reconoce que es atribución con datos propios en un dominio de terceros y que entrega una especificación para quien la implemente, no ejecuta nada",
+      "Describe el patrón de paso de metadatos + webhook",
+      "Describe agregar el identificador ANÓNIMO al enlace al hacer clic, con un detector a nivel de documento",
+      "Describe la fusión de identidad en el webhook (identificador anónimo + correo) más el evento de conversión",
+      "Subraya la guardia de anonimato que cierra ante la duda (nunca mandar identificadores ya identificados ni datos personales)",
+      "Advierte que Calendly solo admite UTM estándar, así que el identificador debe ir en un UTM admitido",
+      "Incluye el endurecimiento del webhook (firma, límite de tiempo, no registrar correos)",
+      "Recomienda auditar primero si ya se identifica en el resto del embudo, y menciona la privacidad y las leyes de protección de datos",
+      "Remite a la referencia seguimiento-propio"
+    ] },
+  { "id": "roas-alto-ingresos-planos",
+    "prompt": "Meta dice que nuestra campaña de remarketing de la tienda de ropa tiene un ROAS de 6 y por eso la seguimos subiendo, pero las ventas realmente no crecen. ¿Qué está pasando?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Explica que el ROAS de la plataforma está inflado y no es incremental",
+      "Distingue entre conversiones reportadas y conversiones incrementales",
+      "Recomienda una prueba de incrementalidad (audiencia retenida, zonas o apagar y prender) para medir el aumento real",
+      "Explica que un ROAS alto con ventas planas es la firma típica de baja incrementalidad, sobre todo en remarketing",
+      "Plantea el CPA o ROAS incremental como el número que debe mover el presupuesto",
+      "No dice que apagó ni pausó la campaña: propone la prueba para que el dueño la apruebe"
+    ] },
+  { "id": "directo-y-marca-dominan",
+    "prompt": "La mitad de las ventas de nuestra clínica dental aparecen como «directo» en la analítica y buena parte del resto es búsqueda de marca. ¿Eso quiere decir que el tráfico directo es nuestro mejor canal?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Dice que directo no es un canal real (es un cajón de sastre o hueco de medición)",
+      "Explica que la búsqueda de marca refleja demanda creada por otros canales",
+      "Advierte que acreditarlos desfinancia la parte alta del embudo",
+      "Recomienda separar búsqueda de marca y sin marca",
+      "Recomienda la atribución declarada por el cliente (preguntar «¿cómo nos conociste?» al agendar) para revelar el tráfico privado y las recomendaciones",
+      "Menciona el tráfico de IA y lo fuera de línea (recomendación, Google Maps) como parte del punto ciego, y remite a seo-para-ia para lo de IA"
+    ] },
+  { "id": "montar-ga4-no-es-atribucion",
+    "prompt": "¿Puedes configurar GA4 y nuestro plan de eventos para empezar a medir conversiones? No tenemos nada de analítica instalado todavía. Somos una ferretería con tienda en línea.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Reconoce que es una tarea de instrumentación y plan de medición, no de atribución",
+      "Remite a medicion-analitica",
+      "Explica el límite: la atribución supone que el seguimiento ya existe",
+      "No intenta armar aquí el plan completo de medición de GA4",
+      "No dice que instaló ni configuró nada"
+    ] },
+  { "id": "mezcla-con-podcasts",
+    "prompt": "Somos una marca de suplementos que vende directo al consumidor y gastamos cerca de 200.000 al mes (en nuestra moneda) entre Meta, Google, TikTok y patrocinios de podcasts. ¿Cómo medimos de verdad qué funciona para repartir el presupuesto?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras, o pregunta lo que falta",
+      "Fija el conteo de pedidos de la tienda como fuente de verdad, no la suma de las plataformas",
+      "Recomienda un modelo de mezcla de medios (MMM) dado el gasto material, incluyendo los podcasts",
+      "Recomienda pruebas de incrementalidad para validar y encontrar el aumento real en los canales que las plataformas favorecen",
+      "Recomienda una encuesta posterior a la compra para el tráfico privado y el efecto de los podcasts",
+      "Advierte contra confiar en el ROAS reportado por las plataformas para repartir presupuesto",
+      "Señala que el último contacto solo es defendible en compras rápidas",
+      "Remite a las referencias por-tipo-de-negocio o paradigmas-de-medicion"
+    ] }
+] }

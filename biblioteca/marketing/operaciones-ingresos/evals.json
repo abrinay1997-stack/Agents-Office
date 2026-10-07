@@ -1,0 +1,67 @@
+{ "skill": "operaciones-ingresos", "origen": "marketingskills/revops/evals", "evals": [
+  { "id": "etapas-ciclo-de-vida",
+    "prompt": "Ayúdame a definir las etapas de nuestros prospectos. Somos un SaaS B2B que vende a empresas medianas, usamos HubSpot y marketing y ventas no se ponen de acuerdo en qué es un prospecto calificado.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Aplica el ciclo completo: suscriptor, prospecto, MQL, SQL, oportunidad, cliente, promotor",
+      "Define el criterio de entrada y salida de cada etapa",
+      "Aborda la falta de alineación con definiciones compartidas y SLA",
+      "Da pasos de implementación en HubSpot",
+      "Incluye la puntuación de prospectos",
+      "Describe el proceso de traspaso entre marketing y ventas",
+      "No dice que cambió el CRM: deja la especificación para el OK del dueño"
+    ] },
+  { "id": "puntuacion-cuentas-grandes",
+    "prompt": "Arma la puntuación de prospectos. Queremos saber a quién llamar primero. Vendemos software industrial a grandes empresas con contratos de más de 50.000 al año.",
+    "expectations": [
+      "Usa las tres dimensiones: explícita (encaje), implícita (interés) y negativa",
+      "Da criterios concretos para cuentas grandes",
+      "Le da más peso al encaje, con señales de presupuesto y autoridad",
+      "Incluye señales de comportamiento",
+      "Incluye señales negativas",
+      "Define umbrales de MQL y SQL",
+      "Recomienda cómo asignar según la puntuación",
+      "No inventa cifras de la empresa: los tramos y umbrales salen de sus datos o van como supuestos"
+    ] },
+  { "id": "embudo-desordenado",
+    "prompt": "nuestro embudo de ventas es un desastre. las cotizaciones se quedan meses en la misma etapa y no sabemos qué se va a cerrar. somos una constructora. ¿cómo lo arreglamos?",
+    "expectations": [
+      "Reconoce el pedido aunque esté escrito de forma informal",
+      "Aplica la gestión de etapas del embudo adaptada a un negocio de servicios",
+      "Define etapas con criterio de entrada y salida",
+      "Recomienda un tiempo máximo por etapa",
+      "Aborda la higiene: revisiones del embudo, alertas de estancados, análisis de ganadas y perdidas",
+      "Recomienda automatizaciones o rutinas para hacer cumplir las reglas",
+      "Da un plan práctico para limpiar lo que hay hoy"
+    ] },
+  { "id": "tablero-direccion",
+    "prompt": "¿Qué cifras comerciales deberíamos seguir? Queremos un tablero para la dirección de nuestra agencia de marketing.",
+    "expectations": [
+      "Aplica el tablero de métricas de RevOps",
+      "Cubre el embudo completo, desde volumen por origen hasta cierre",
+      "Incluye la conversión entre etapas",
+      "Incluye velocidad y cobertura del embudo",
+      "Incluye CAC, valor de vida y su relación",
+      "Organiza las cifras por público (marketing, ventas, dirección)",
+      "Recomienda estructura del tablero y cada cuánto revisarlo",
+      "Presenta las referencias del sector como orientación, no como metas de la empresa"
+    ] },
+  { "id": "crm-sucio",
+    "prompt": "Los datos de nuestro CRM son un caos: registros duplicados, campos vacíos y nombres escritos de mil formas. Tenemos una distribuidora de ferretería. ¿Cómo lo limpiamos y lo mantenemos limpio?",
+    "expectations": [
+      "Aplica la guía de higiene de datos",
+      "Propone cómo detectar y fusionar duplicados",
+      "Propone campos obligatorios por etapa",
+      "Propone nombres estandarizados (listas desplegables en vez de texto libre)",
+      "Cubre la limpieza de una vez y la prevención continua",
+      "Propone automatizaciones o una rutina de revisión",
+      "Da un plan de limpieza priorizado por impacto"
+    ] },
+  { "id": "fuera-de-alcance-correo-frio",
+    "prompt": "¿Me ayudas a escribir correos en frío para los prospectos que tenemos en el embudo?",
+    "expectations": [
+      "Reconoce que es redacción de correos en frío, no RevOps",
+      "Remite a la habilidad correo-en-frio",
+      "Explica que RevOps cubre sistemas, procesos y datos, no el texto de los mensajes"
+    ] }
+] }

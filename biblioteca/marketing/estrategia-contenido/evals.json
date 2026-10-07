@@ -1,0 +1,79 @@
+{ "skill": "estrategia-contenido", "origen": "marketingskills/content-strategy/evals", "evals": [
+  { "id": "estrategia-desde-cero-saas", "prompt": "Ayúdame a armar una estrategia de contenido para nuestro software de control de gastos. Se lo vendemos a equipos de finanzas de empresas de 50 a 500 empleados. Hoy no tenemos blog y queremos empezar desde cero.", "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Define de 3 a 5 pilares de contenido (3–5 áreas temáticas centrales)",
+    "Organiza el contenido por etapa del comprador (descubrimiento, consideración, decisión, implementación)",
+    "Incluye investigación de palabras clave por etapa del comprador, sin inventar volúmenes ni dificultades (los marca como supuestos o pide una exportación)",
+    "Recomienda una mezcla de contenido buscable y compartible",
+    "Usa el marco de puntuación para priorizar (impacto en el cliente 40 %, encaje contenido-mercado 30 %, potencial de búsqueda 20 %, recursos 10 %)",
+    "Da una cadencia o calendario inicial acorde con los recursos reales",
+    "Recomienda tipos de contenido adecuados para empezar desde cero",
+    "No dice que publicó nada: entrega una propuesta para el OK del dueño"
+  ] },
+  { "id": "blog-200-entradas-sin-rumbo", "prompt": "Tenemos más de 200 entradas en el blog de nuestra agencia de viajes y el tráfico lleva un año plano. El contenido se siente aleatorio, sin una estrategia clara. ¿Cómo lo arreglamos?", "expectations": [
+    "Diagnostica el problema del contenido «aleatorio»",
+    "Recomienda una auditoría del contenido existente (pide Search Console o analíticas del sitio al dueño si hacen falta)",
+    "Introduce pilares de contenido y grupos de temas para ordenar la biblioteca",
+    "Identifica oportunidades de centro y radios a partir del contenido existente",
+    "Recomienda qué entradas actualizar, consolidar o retirar",
+    "Usa el marco de puntuación para planear los siguientes pasos",
+    "Aborda cómo construir autoridad temática mediante grupos",
+    "No inventa datos de tráfico ni de posicionamiento"
+  ] },
+  { "id": "que-contenido-herramienta-desarrolladores", "prompt": "que tipo de contenido deberiamos crear? somos una herramienta para probar APIs y nuestro publico son desarrolladores backend e ingenieros de QA", "expectations": [
+    "Responde al pedido aunque esté escrito de forma informal",
+    "Recomienda tipos de contenido para un público de desarrolladores (tutoriales técnicos, guías tipo documentación, contenido por caso de uso, bibliotecas de plantillas o ejemplos, comparativas con datos)",
+    "Subraya la profundidad técnica y el valor práctico",
+    "Señala que este público prefiere sustancia a relleno de marketing",
+    "Propone pilares de contenido acordes con los intereses de los desarrolladores",
+    "Usa las fuentes de ideas (palabras clave, foros como Stack Overflow o Reddit, huecos de la competencia)",
+    "Menciona canales de comunidad de desarrolladores"
+  ] },
+  { "id": "priorizar-50-ideas-recursos-limitados", "prompt": "¿Cómo priorizamos qué contenido hacer primero? Tenemos una lista de 50 ideas de entradas de blog para nuestra tienda de ropa deportiva, pero pocos recursos: una sola persona de contenido que escribe 2 entradas por semana.", "expectations": [
+    "Aplica el marco de puntuación con sus pesos (40/30/20/10)",
+    "Explica cada dimensión de la puntuación",
+    "Ayuda a puntuar u ordenar las ideas (pide la lista si no la tiene) y marca como supuesto lo que no tiene datos",
+    "Recomienda empezar por lo de mayor impacto y menor esfuerzo",
+    "Considera la distribución por etapa del comprador (no escribir solo de lo más alto del embudo)",
+    "Propone un flujo práctico para una sola persona con recursos limitados, con una cadencia que se pueda sostener"
+  ] },
+  { "id": "grupo-de-temas-bienestar-laboral", "prompt": "Queremos construir autoridad temática en «bienestar de los empleados». ¿Cómo se ve un grupo de contenido para este tema? Somos una consultora de recursos humanos.", "expectations": [
+    "Aplica el modelo de centro y radios",
+    "Diseña una página pilar para el tema central (una guía completa)",
+    "Identifica entre 8 y 15 artículos de apoyo (radios) dirigidos a palabras clave de cola larga",
+    "Dibuja el enlazado interno entre el centro y los radios",
+    "Aborda la investigación de palabras clave para el grupo sin inventar volúmenes",
+    "Recomienda un tipo de contenido para cada pieza (guía, cómo hacerlo, plantilla, basado en datos, etc.)"
+  ] },
+  { "id": "escribir-una-entrada-no-es-estrategia", "prompt": "¿Puedes escribirme una entrada de blog sobre buenas prácticas del trabajo remoto para el blog de nuestro software de recursos humanos?", "expectations": [
+    "Reconoce que es una tarea de redacción de contenido y no de estrategia",
+    "Remite a la habilidad redaccion-publicitaria (o la usa) para escribir la pieza",
+    "Puede dar contexto estratégico (dónde encaja la pieza, palabra clave, público) sin escribir toda la entrada como estrategia",
+    "No dice que la publicó: deja un borrador para el OK del dueño"
+  ] },
+  { "id": "objetivo-enlaces-entrantes", "prompt": "Nuestro objetivo de contenido de este trimestre es ganar enlaces entrantes para subir la autoridad del dominio. Dudo entre encargar un informe de investigación original, escribir otra guía definitiva o armar una página de recopilación de estadísticas de nuestra categoría (somos un software contable para pymes). ¿Cuál priorizamos y por qué?", "expectations": [
+    "Recomienda la página de recopilación de estadísticas para el objetivo específico de enlaces, citando los multiplicadores por formato (~4,25x frente a ~0,80x de la investigación original y ~0,77x de las guías)",
+    "Presenta el dato como el estudio de un solo proveedor (Foundation Inc., 2026, sitios B2B) y como orientativo, no como ley",
+    "Explica el mecanismo de la facilidad de cita y la jugada de combinar la investigación con su propia recopilación de hallazgos citables",
+    "Señala que la página de estadísticas también ayuda a la visibilidad en IA (seo-para-ia)",
+    "Aclara que los otros formatos sirven para otros trabajos (posicionamiento, conversión, marca) y no los llama inútiles",
+    "No inventa estadísticas: cada dato de la página lleva su fuente"
+  ] },
+  { "id": "contenido-que-nadie-lee-distribucion", "prompt": "Publicamos una buena entrada de blog por semana en nuestra ferretería en línea pero nadie la lee: solo ponemos el enlace una vez en Facebook y en Instagram y seguimos. ¿Cómo hacemos para que de verdad se vea nuestro contenido y cómo equilibramos lo que producimos?", "expectations": [
+    "Replantea el contenido como superficie de marca y cada pieza como su propio lanzamiento; nombra la distribución como la mitad que falta",
+    "Presenta «crear una vez, distribuir dos veces» con atomización y ganchos de distribución incorporados desde la creación",
+    "Nombra los modos de fallo: disparar a todo, dependencia de la plataforma y paradoja de la propiedad",
+    "Presenta ORB (prestado, alquilado, propio) como un embudo de descubrimiento a conversión que desemboca en lo propio, y remite a lanzamientos y redes-sociales sin volver a deducirlos",
+    "Recomienda el reparto 60/30/10 como proporción de partida",
+    "Puede mencionar el volante de distribución y la disciplina por formato (10 títulos, ~5 pasadas de edición)",
+    "Si propone piezas para redes o correo, las deja como borradores para el OK del dueño; no dice que publicó nada"
+  ] },
+  { "id": "contenido-consultorio-dental-local", "prompt": "Soy dueña de un consultorio dental en Medellín. No sé sobre qué escribir en el blog ni en redes. ¿Por dónde empiezo?", "expectations": [
+    "Responde a «no sé sobre qué escribir» con un método (pilares, etapas del comprador, fuentes de ideas) y no con una lista al azar",
+    "Usa las preguntas reales de los pacientes (mostrador, WhatsApp, citas) como fuente de ideas y pide ejemplos sin datos personales",
+    "Piensa en búsquedas locales («cerca de mí») y la ficha de Google",
+    "Propone pocos pilares y una cadencia que una sola persona pueda sostener",
+    "No usa casos de pacientes ni resultados sin permiso y no inventa estadísticas",
+    "No dice que publicó nada: deja la propuesta y los borradores para el OK del dueño"
+  ] }
+] }

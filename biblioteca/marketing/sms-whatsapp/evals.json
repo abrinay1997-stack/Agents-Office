@@ -1,0 +1,94 @@
+{ "skill": "sms-whatsapp", "origen": "marketingskills/sms/evals", "evals": [
+  { "id": "tienda-cosmetica-por-donde-empezar",
+    "prompt": "Somos una marca de cosmética natural que vende en línea, con ventas de unos 400 mil dólares al año. Tenemos 80 mil suscriptores de correo pero ningún programa de mensajes de texto. ¿Por dónde empezamos?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Pregunta en qué país están los clientes y hace la revisión de normas antes de nada (registro A2P 10DLC si es EE. UU., permiso, ley local)",
+      "Recomienda una plataforma con su razón (la que ya usan para correo, o una especializada en tiendas) como opción, sin darla por contratada",
+      "Prioriza el carrito abandonado como el flujo de mayor retorno",
+      "Menciona la reposición para un producto de uso continuo como la cosmética",
+      "Advierte contra tratar el mensaje como correo (frecuencia, relevancia, costo real por envío)",
+      "Remite al aviso de permiso y a las horas de silencio",
+      "No dice que envió ni programó nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "carrito-ropa-personalizada",
+    "prompt": "Escríbeme una secuencia de mensajes de texto para el carrito abandonado. Vendemos ropa personalizada y el pedido promedio es de 80 dólares.",
+    "expectations": [
+      "Entrega 3 mensajes con tiempos: a los 30 minutos, a las 4 horas y a las 24 horas",
+      "El primer mensaje no lleva descuento y el tercero sí puede llevarlo",
+      "Cada mensaje trae la identidad de la marca, una sola acción y un enlace corto",
+      "Muestra el conteo de caracteres, apuntando a 160 para un solo segmento",
+      "El primer envío lleva el pie de baja (STOP)",
+      "Advierte por qué no poner descuento en el primer mensaje",
+      "Da las reglas de salida: compra, baja o 48 horas",
+      "Recomienda marcar los enlaces con UTM y medir la atribución",
+      "Los descuentos salen de las cifras de la empresa o se marcan como ejemplo"
+    ] },
+  { "id": "sin-permiso-numero-del-checkout",
+    "prompt": "¿Puedo mandar mensajes de texto promocionales a todos los que me dieron su teléfono al pagar, aunque no hayan aceptado nada?",
+    "expectations": [
+      "Responde que no: el teléfono dado al pagar solo autoriza los mensajes de esa compra, no el marketing",
+      "Distingue el mensaje de marketing del transaccional",
+      "Enumera lo que debe tener el permiso: aviso junto al campo del teléfono, frecuencia, tarifas, cómo darse de baja, enlace a los términos, registro con fecha y hora",
+      "Menciona la exposición legal (por ejemplo, daños por mensaje y demandas colectivas bajo la ley de EE. UU.) sin inventar cifras de otros países",
+      "Pregunta el país de los clientes y no cita de memoria la ley local: sugiere revisión de un abogado",
+      "Recomienda un flujo de alta correcto (casilla sin marcar + aviso) y da el texto"
+    ] },
+  { "id": "bajas-altas-en-restaurante",
+    "prompt": "Tenemos una lista de 50 mil clientes de nuestra cadena de restaurantes y mandamos 3 promociones por semana por mensaje de texto. Las bajas subieron al 4 % por envío. ¿Qué pasa?",
+    "expectations": [
+      "Diagnostica cansancio de la audiencia por exceso de envíos",
+      "Cita la referencia sana (menos del 2 % de bajas por envío y menos del 0,5 % en promociones) como orientación",
+      "Recomienda bajar la frecuencia a 1 o 2 por semana, sobre todo para suscriptores nuevos",
+      "Recomienda segmentar por interacción, cercanía a la sucursal y recencia de visita",
+      "Propone un flujo de reactivación para los fríos antes de seguir con promociones",
+      "Calcula la erosión de la lista con 4 % por envío",
+      "Cita el principio de que cada envío debe justificarse"
+    ] },
+  { "id": "escalar-envios-masivos",
+    "prompt": "Ya registramos el A2P 10DLC y los envíos funcionan. ¿Podemos pasar a mandar más de 100 mil mensajes al día?",
+    "expectations": [
+      "Pregunta qué tipo de número usan (10DLC, gratuito o código corto)",
+      "Explica los límites de ritmo con números (msg/seg) por tipo y puntuación de confianza",
+      "Calcula el tiempo de envío de 100 mil mensajes y lo cruza con las horas de silencio",
+      "Recomienda código corto para volumen alto sostenido",
+      "Advierte del filtrado de las operadoras en ráfagas y del control de ritmo",
+      "Recuerda que el texto de ejemplo del registro debe coincidir con los envíos",
+      "Sugiere vigilar la puntuación de confianza y la entregabilidad"
+    ] },
+  { "id": "emojis-y-tildes",
+    "prompt": "¿Ponemos emojis en nuestros SMS? Veo que otras marcas los usan mucho. Además nuestros mensajes siempre salen en 2 segmentos y no sé por qué.",
+    "expectations": [
+      "Explica que los emojis fuerzan la codificación UCS-2 (70 caracteres por segmento en vez de 160)",
+      "Señala que en español algunas vocales con tilde, las comillas curvas y los guiones largos también pueden forzar UCS-2, y que copiar desde un procesador de texto es una causa silenciosa",
+      "Recomienda máximo un emoji por mensaje y solo si vale su costo",
+      "Recomienda previsualizar el conteo de segmentos en la plataforma antes de programar",
+      "Calcula el impacto del costo a escala",
+      "Aclara que en WhatsApp los emojis no cambian el costo"
+    ] },
+  { "id": "whatsapp-carrito-brasil-mexico",
+    "prompt": "Vendemos accesorios de moda en Brasil y México y tenemos unos 1.500 carritos abandonados por semana. Casi todos nuestros clientes usan WhatsApp, no mensajes de texto. ¿Podemos mandar recordatorios de carrito por WhatsApp una hora después y cuánto costaría?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Confirma que WhatsApp encaja mejor que el SMS en Brasil y México",
+      "Explica que un recordatorio una hora después queda fuera de la ventana de 24 horas y exige una plantilla aprobada por Meta",
+      "Clasifica el recordatorio de carrito como plantilla de marketing (no de utilidad)",
+      "Exige un permiso que nombre a la empresa (e idealmente a WhatsApp) y cumpla la ley local, sin citar de memoria artículos de la ley",
+      "Incluye un botón o pie de baja en cada plantilla de marketing",
+      "Explica el precio por mensaje (cada plantilla de marketing se cobra por entrega, con tarifa por país) y manda a consultar la lista de precios vigente en vez de inventar tarifas",
+      "Advierte de la calificación de calidad, el marcado del número y los límites de mensajes por los bloqueos",
+      "Recomienda verificar la empresa y calentar el número, y limitar a 1 o 2 toques con salida al comprar o darse de baja",
+      "Diseña la plantilla con nombre, producto y un botón de pago, reservando el descuento para un toque posterior",
+      "No dice que envió ni programó nada: deja los textos para que el dueño los cargue y los apruebe"
+    ] },
+  { "id": "clinica-recordatorios-de-cita",
+    "prompt": "Tengo una clínica dental con unos 1.200 pacientes. Se nos van muchas citas sin cancelar. ¿Podemos usar WhatsApp para recordatorios y para ofrecerles una limpieza cada seis meses?",
+    "expectations": [
+      "Distingue el recordatorio de cita (utilidad) de la oferta de limpieza (marketing) y explica que mezclarlos lo vuelve marketing",
+      "Propone recordatorios 24 horas y 2 horas antes con botones de confirmar, reprogramar o cancelar",
+      "Sugiere empezar con la aplicación WhatsApp Business o una plataforma pequeña según el volumen",
+      "Pide el permiso de los pacientes por separado para avisos y para ofertas, y respeta datos de salud con cuidado y revisión del dueño",
+      "Da textos concretos de las plantillas y del recordatorio semestral con baja fácil",
+      "No inventa tarifas de WhatsApp para el país y no cita de memoria la ley local"
+    ] }
+] }

@@ -1,0 +1,77 @@
+{ "skill": "imanes-de-prospectos", "origen": "marketingskills/lead-magnets/evals", "evals": [
+  { "id": "saas-agencias",
+    "prompt": "Somos una empresa de software de gestión de proyectos para agencias de marketing. ¿Qué imán de prospectos deberíamos crear?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Pregunta por la captación actual, los contenidos que ya existen y la meta principal (crecer la lista, calidad o educación)",
+      "Aplica los cinco principios: problema específico, etapa del comprador, mucho valor con poco tiempo, camino natural al producto, fácil de consumir",
+      "Recomienda un formato concreto para una audiencia ocupada (probablemente plantilla o lista de verificación antes que un ebook) y justifica la elección por etapa y por relación esfuerzo-valor",
+      "Los ejemplos encajan con el público y el producto (por ejemplo, calculadora de rentabilidad de proyectos, lista de incorporación de clientes, plantilla de planificación de capacidad)",
+      "Entrega las cinco secciones: recomendación, esquema del contenido, plan de candado y captación, plan de distribución y plan de medición",
+      "No dice que publicó o lanzó nada: deja borradores para el OK del dueño"
+    ] },
+  { "id": "ebook-baja-conversion",
+    "prompt": "Tenemos un ebook de 50 páginas que nos tomó 3 meses escribir. La página de descarga convierte solo el 4 %. ¿Seguimos iterando? Somos una firma de asesoría contable.",
+    "expectations": [
+      "Diagnostica un desajuste con el principio de mucho valor y poco tiempo de consumo: 50 páginas pueden ser demasiado esfuerzo para el lector",
+      "Recomienda probar el formato con A/B: dividir el ebook en un minicurso por correo de 5 partes, o en una lista de verificación + guía, o en guías cortas por tema",
+      "Revisa la estructura de la página de destino: titular, vista previa, qué incluye, prueba social, formulario y preguntas frecuentes",
+      "Sugiere probar un candado parcial (vista previa de las primeras páginas) frente al candado completo",
+      "Pregunta por el origen del tráfico: un 4 % con tráfico frío puede ser aceptable, con tráfico cálido es bajo",
+      "Remite a conversion-paginas y pruebas-ab",
+      "Aclara que las referencias de conversión son orientación general y no una promesa"
+    ] },
+  { "id": "formulario-largo",
+    "prompt": "Nuestro formulario para recibir el catálogo de una distribuidora de materiales eléctricos pide nombre, correo, empresa, cargo, tamaño de empresa y teléfono. No logramos suficientes registros. ¿Será el formulario?",
+    "expectations": [
+      "Señala de inmediato la longitud del formulario como posible causa",
+      "Cita la regla práctica de que cada campo extra reduce la conversión entre un 5 % y un 10 % (como orientación, no cifra exacta)",
+      "Recomienda reducirlo al mínimo necesario: idealmente solo correo (o solo WhatsApp), o correo + nombre si importa personalizar",
+      "Explica cuándo se justifican varios campos (ofertas de gran valor como seminarios o demostraciones)",
+      "Pregunta qué datos se usan de verdad en el seguimiento y propone quitar los que no se usan",
+      "Sugiere el perfilado progresivo: pedir más datos después, en el seguimiento",
+      "Recuerda el consentimiento y el aviso de privacidad según las leyes del país",
+      "Remite a conversion-paginas para la optimización del formulario"
+    ] },
+  { "id": "iman-o-herramienta",
+    "prompt": "¿Cuál es la diferencia entre un imán de prospectos y una herramienta gratuita? ¿Construyo uno u otra? Soy dueño de una inmobiliaria.",
+    "expectations": [
+      "Distingue el contenido estático (ebook, lista, plantilla) de la herramienta interactiva (calculadora, evaluador, cuestionario)",
+      "Compara el esfuerzo de construcción: horas o días frente a semanas o meses",
+      "Compara el SEO y la posibilidad de compartirse: las herramientas pueden posicionar por búsquedas del tipo «calculadora de…» y son más compartibles",
+      "Recomienda según la disyuntiva rapidez frente a inversión: imán primero si importa la velocidad; herramienta si se puede invertir y hay entradas repetibles con un resultado significativo (por ejemplo, una calculadora de hipoteca para una inmobiliaria)",
+      "Remite a herramientas-gratis para la estrategia de la herramienta"
+    ] },
+  { "id": "mejora-de-contenido",
+    "prompt": "Tenemos un artículo de blog muy visitado sobre asuntos de correo para una tienda de ropa en línea. ¿Podemos usarlo como imán de prospectos?",
+    "expectations": [
+      "Recomienda una mejora de contenido específica del artículo en vez de poner candado al artículo mismo",
+      "Cita que las mejoras de contenido suelen convertir de 2 a 5 veces mejor que los llamados genéricos de la barra lateral, como orientación",
+      "Propone mejoras concretas con su formato y etapa (por ejemplo, 50 plantillas de asuntos, una hoja de referencia en PDF, un archivo de ejemplos anotados)",
+      "Explica por qué convierten mejor: relevancia e intención más altas, porque coinciden con lo que el lector ya está leyendo",
+      "Mantiene el artículo sin candado para preservar el SEO y ofrece el extra como llamado dentro del texto o al final",
+      "Remite a conversion-paginas para la ubicación y a redaccion-publicitaria para el texto"
+    ] },
+  { "id": "muchas-descargas-pocas-pruebas",
+    "prompt": "Nuestra lista de verificación se descarga mucho pero casi nadie de esos contactos pide una cita en la clínica. ¿Está roto el imán?",
+    "expectations": [
+      "Diagnostica un desajuste de calidad de contactos o de etapa del comprador",
+      "Pregunta si la lista atrae a gente de la etapa de conocimiento que aún no está lista para comprar",
+      "Revisa las señales de calidad: interacción con los correos, avance a cita al ritmo esperado, bajas, encaje con el cliente ideal",
+      "Recuerda que un imán debe tener un camino natural al producto y que quien está en conocimiento necesita seguimiento",
+      "Remite a secuencias-correo para revisar el seguimiento",
+      "Puede sugerir un imán de consideración o decisión (plantilla, calculadora, primera consulta) que atraiga contactos de más intención",
+      "Recomienda medir el tiempo hasta convertir por origen del imán"
+    ] },
+  { "id": "cupon-tienda-local",
+    "prompt": "Tengo una ferretería con tienda en línea y un grupo de WhatsApp de clientes. Quiero un regalo para captar contactos nuevos sin gastar mucho. ¿Qué hacemos?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) y las cifras de la empresa, o pregunta lo que falta",
+      "Propone imanes adecuados a un negocio local: cupón de bienvenida, catálogo o lista de precios, guía o lista de verificación de obra, calendario de temporada",
+      "El monto y las condiciones de un cupón salen de las cifras de la empresa o se pide al dueño que los defina, no se inventan",
+      "Elige el canal de captación que la empresa ya usa (WhatsApp o correo) y pide permiso expreso y aviso de privacidad según la ley del país",
+      "Advierte contra regalos que atraen solo a cazadores de gratis",
+      "Incluye la página o mensaje de captación, la entrega, la promoción y cómo medir",
+      "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+    ] }
+] }

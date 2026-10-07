@@ -12,7 +12,7 @@ export function initSheet(ctx) {
   const { host, esc, isLive, onSaved, openTask, MODEL_KEYS, modelName, EFFORT_KEYS } = ctx;
   const el = document.createElement('section'); el.className = 'ag-sheet'; el.hidden = true; el.setAttribute('aria-label', 'Ficha del agente');
   host.appendChild(el);
-  let cur = null, data = null, busy = false;
+  let cur = null, data = null, busy = false; const bibText = {}; // el texto de cada habilidad, traído al abrirla
   const open = {}; // which sections are unfolded, remembered while the page lives
   const sec = (key, title, body, count) => `<details class="ag-sec" data-k="${key}"${open[key] ?? key === 'who' ? ' open' : ''}><summary>${title}${count !== undefined ? ` <b>${count}</b>` : ''}</summary><div class="ag-body">${body}</div></details>`;
   function render() {
@@ -31,6 +31,11 @@ export function initSheet(ctx) {
       <div class="ag-acts"><button type="button" class="ag-save">GUARDAR</button><span class="ag-msg" aria-live="polite"></span></div>`;
     const skills = d.skills.length ? d.skills.map(s => `<details class="ag-skill"><summary><b>${esc(s.name)}</b>${s.description ? ' — ' + esc(s.description) : ''}${s.everyone ? ' <i>(toda la oficina)</i>' : ''}</summary><div class="md ag-skilltext">${mdToHtml(s.text || '')}</div>${s.files.length ? `<p class="ag-note">Archivos: ${s.files.map(esc).join(', ')}</p>` : ''}</details>`).join('') + '<p class="ag-note">Para enseñarle un proceso nuevo, escribe «configurar» al líder del departamento, o pídeselo a Claude Code («así hacemos X»).</p>'
       : '<p class="ag-note">Sin skills todavía. Escribe «configurar» al líder del departamento para crear una.</p>';
+    // 7 oct 2026: la BIBLIOTECA — métodos que el agente lee cuando la tarea lo pide (biblioteca.mjs); el texto se trae al abrir uno
+    const bib = d.biblioteca || [], hab = h => `<details class="ag-skill ag-hab" data-hab="${esc(h.id)}"><summary><b>${esc(h.titulo)}</b> — ${esc(h.description.replace(/^Úsala cuando\s*/i, 'cuando '))}${h.fuente === 'cerebro' ? ' <i>(tu versión)</i>' : ''}</summary><div class="md ag-skilltext">${bibText[h.id] ? mdToHtml(bibText[h.id]) : '<p class="ag-note">Cargando…</p>'}</div>${h.referencias.length ? `<p class="ag-note">Referencias que pide cuando le hacen falta: ${h.referencias.map(esc).join(', ')}</p>` : ''}</details>`;
+    const suyas = bib.filter(h => h.suya), depto = bib.filter(h => !h.suya);
+    const biblioteca = bib.length ? `${suyas.length ? `<p class="ag-lab">De su puesto</p>${suyas.map(hab).join('')}` : ''}${depto.length ? `<p class="ag-lab">De su departamento</p>${depto.map(hab).join('')}` : ''}<p class="ag-note">No las lee todas en cada tarea: ve la lista, la que encaja con el pedido se le adelanta entera y el resto lo pide cuando le hace falta. Lo de tu empresa (posicionamiento, clientes, voz, precios) lo saca del Cerebro. Para cambiar cómo hace algo, pídeselo a Claude Code («adapta la habilidad X a nuestro negocio»): tu versión va a tu Cerebro y gana a la de la oficina.</p>`
+      : '<p class="ag-note">Su departamento todavía no tiene habilidades en la biblioteca.</p>';
     const L = d.lessons, line = (t, k) => `<li><span>${esc(t)}</span><button type="button" class="ag-forget" data-line="${esc(t)}" aria-label="Olvidar esta lección" title="Olvidar">✕</button></li>`;
     const lessons = (L.rules.length || L.oneOffs.length) ? `${L.rules.length ? `<p class="ag-lab">Reglas que sigue siempre</p><ul class="ag-ls">${L.rules.map(t => line(t)).join('')}</ul>` : ''}${L.oneOffs.length ? `<p class="ag-lab">Correcciones puntuales</p><ul class="ag-ls">${L.oneOffs.map(t => line(t)).join('')}</ul>` : ''}`
       : '<p class="ag-note">Aún no aprendió nada. Cada vez que devuelves un trabajo con «revise: …» o con una nota, la corrección queda aquí.</p>';
@@ -38,7 +43,7 @@ export function initSheet(ctx) {
     const record = `<div class="ag-stats"><span><b>${st.done}</b> listas</span><span><b>${st.failed}</b> con error</span><span><b>${st.running}</b> en curso</span><span><b>${st.waiting}</b> esperan tu OK</span><span><b>${st.pending}</b> en cola</span>${st.avgMinutes !== null ? `<span><b>${st.avgMinutes}</b> min de promedio</span>` : ''}</div>` +
       (d.recent.length ? `<ul class="ag-recent">${d.recent.map(t => `<li><button type="button" data-sid="${esc(t.id)}"><span class="ag-st ${t.error ? 'err' : t.state}">${t.error ? 'error' : STATE[t.state] || t.state}</span>${esc(t.title)}</button></li>`).join('')}</ul>` : '<p class="ag-note">Sin tareas todavía.</p>');
     el.innerHTML = `<div class="ag-head"><div><div class="ag-title">${esc(a.name)}${a.lead ? ' <span class="star">★</span>' : ''}</div><div class="ag-sub">${esc(a.role || '')}</div></div><span class="sp"></span><button type="button" class="ag-x" aria-label="Volver al chat">✕</button></div>
-      <div class="ag-scroll">${sec('who', 'Quién es', who)}${sec('skills', 'Skills', skills, d.skills.length)}${sec('lessons', 'Lecciones aprendidas', lessons, L.rules.length + L.oneOffs.length)}${sec('record', 'Historial', record, st.done + st.failed)}${sec('versions', 'Versiones de sus skills y brief', versionsHTML(), (data.versions || []).reduce((n, x) => n + x.versions.length, 0) || undefined)}</div>`;
+      <div class="ag-scroll">${sec('who', 'Quién es', who)}${sec('skills', 'Skills', skills, d.skills.length)}${sec('biblioteca', 'Biblioteca de habilidades', biblioteca, bib.length || undefined)}${sec('lessons', 'Lecciones aprendidas', lessons, L.rules.length + L.oneOffs.length)}${sec('record', 'Historial', record, st.done + st.failed)}${sec('versions', 'Versiones de sus skills y brief', versionsHTML(), (data.versions || []).reduce((n, x) => n + x.versions.length, 0) || undefined)}</div>`;
     count(); snap = formNow();
   }
   // V4.1 (audit 25): closing with unsaved changes asks first — it used to throw them away without a word
@@ -75,7 +80,9 @@ export function initSheet(ctx) {
     } catch (e) { msg('No se guardó: ' + e.message, true); }
     busy = false;
   }
-  el.addEventListener('toggle', e => { const d = e.target.closest('.ag-sec'); if (d) open[d.dataset.k] = d.open; }, true);
+  el.addEventListener('toggle', e => { const d = e.target.closest('.ag-sec'); if (d && e.target === d) open[d.dataset.k] = d.open;
+    const h = e.target.closest?.('.ag-hab'); if (h && e.target === h && h.open && !bibText[h.dataset.hab]) { const id = h.dataset.hab; // se trae una vez, al abrirla
+      fetch('/api/biblioteca/' + encodeURIComponent(id)).then(r => r.json()).then(j => { bibText[id] = j.texto || j.error || ''; const box = el.querySelector(`.ag-hab[data-hab="${CSS.escape(id)}"] .ag-skilltext`); if (box) box.innerHTML = mdToHtml(bibText[id]); }).catch(() => {}); } }, true);
   el.addEventListener('input', e => { if (e.target.classList.contains('ag-brief')) count(); });
   el.addEventListener('click', async e => {
     if (e.target.closest('.ag-x')) return close();
