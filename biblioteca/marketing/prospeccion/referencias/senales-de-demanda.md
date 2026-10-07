@@ -31,7 +31,7 @@ Define, con la precisión suficiente para *rechazar* coincidencias débiles:
 - límite de zona o idioma;
 - descalificadores claros.
 
-No empieces a reunir material en general hasta que la ficha esté afilada. Sácala de `00-Empresa/marketing` en el Cerebro si existe; si no, pregúntala al dueño o déjala como supuesto marcado.
+No empieces a reunir material en general hasta que la ficha esté afilada. Sácala de `contexto-marketing` en el Cerebro si existe; si no, pregúntala al dueño o déjala como supuesto marcado.
 
 ## Paso 2: mina los cinco grupos de señales
 
@@ -43,7 +43,7 @@ Busca desde varios ángulos, no una consulta repetida. Adapta las palabras a có
 4. **Cambio de proveedor:** cancelaciones, migraciones, «me voy de [competidor]», una función que falta, una queja de precio, frustración con la competencia.
 5. **Momento:** un lanzamiento público, la contratación de alguien para esa función, una expansión, un proceso o una norma nuevos, el anuncio de una integración: un hecho *actual* que hace que el producto importe ahora.
 
-**Cómo buscar desde la oficina.** Usa la búsqueda web si la oficina la tiene encendida, con filtros de fecha reciente (la recencia *es* la señal de momento). Lee la página original (hilo, issue, reseña), nunca califiques solo con el fragmento que muestra el buscador. Si la empresa tiene conectado algún otro lector de redes o de comunidades, úsalo; no lo des por hecho. Las reseñas de la competencia y los competidores que ya están en `00-Empresa/marketing` (y la habilidad `perfil-competidores`) dan señales de cambio de proveedor y el lenguaje del dolor; `investigacion-clientes` ayuda a minar ese lenguaje. Si el tema es muy amplio, repártelo: propón con `crear_borrador_tarea` una tarea de investigación a Marketing (`riley`) o a Ventas (`enzo`).
+**Cómo buscar desde la oficina.** Usa la búsqueda web si la oficina la tiene encendida, con filtros de fecha reciente (la recencia *es* la señal de momento). Lee la página original (hilo, issue, reseña), nunca califiques solo con el fragmento que muestra el buscador. Si la empresa tiene conectado algún otro lector de redes o de comunidades, úsalo; no lo des por hecho. Las reseñas de la competencia y los competidores que ya están en `contexto-marketing` (y la habilidad `perfil-competidores`) dan señales de cambio de proveedor y el lenguaje del dolor; `investigacion-clientes` ayuda a minar ese lenguaje. Si el tema es muy amplio, repártelo: propón con `crear_borrador_tarea` una tarea de investigación a Marketing (`riley`) o a Ventas (`enzo`).
 
 ## Paso 3: mezcla de fuentes (solo públicas)
 

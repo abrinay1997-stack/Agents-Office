@@ -17,7 +17,7 @@ Sirve igual para un SaaS que para una clínica dental («tu agenda de citas es u
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `00-Empresa/marketing` y `00-Empresa/voz`) y las cifras de la empresa. Necesitas: la idea única del video, el público, la oferta o el llamado a la acción y los colores y la tipografía de la marca (para los estilos del segundo nivel). Si falta algo, pregúntalo en una línea o márcalo como supuesto.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `contexto-marketing` y `00-Empresa/voz`) y las cifras de la empresa. Necesitas: la idea única del video, el público, la oferta o el llamado a la acción y los colores y la tipografía de la marca (para los estilos del segundo nivel). Si falta algo, pregúntalo en una línea o márcalo como supuesto.
 
 ## El flujo (vale para cualquier proveedor)
 
@@ -64,7 +64,7 @@ Cinco looks probados. Cada uno es una fórmula de prompt con huecos. Usa **UN es
 
 Los cinco looks de arriba tienen **carácter propio**: imponen su paleta. Este segundo nivel es **la marca primero**: cada estilo se define por huecos, de modo que los elementos de cualquier empresa entran y el resultado se lee como el sistema de diseño de esa marca.
 
-**El contrato de huecos de marca.** Antes de generar, resuelve esto desde las guías de marca (o desde `00-Empresa/marketing` y `00-Empresa/voz`; si la empresa no tiene guía, pídele al dueño sus colores y su tipografía):
+**El contrato de huecos de marca.** Antes de generar, resuelve esto desde las guías de marca (o desde `contexto-marketing` y `00-Empresa/voz`; si la empresa no tiene guía, pídele al dueño sus colores y su tipografía):
 
 - `FIELD`: el fondo neutro (blanco o blanco roto de la marca, o su oscuro).
 - `INK`: el color del trazo y del texto (gris de la marca, carbón, casi negro).

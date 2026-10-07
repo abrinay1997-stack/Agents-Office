@@ -103,7 +103,7 @@ Todo lo que sale hacia fuera (publicar, enviar, pagar, lanzar) lo aprueba el due
 
 | Habilidad | Qué hace | Uso principal |
 |---|---|---|
-| `contexto-marketing` | Fija en `00-Empresa/marketing` el posicionamiento, el cliente ideal y la voz | Fundamental: se corre primero; cada sección del plan se apoya en él |
+| `contexto-marketing` | Fija en `contexto-marketing` el posicionamiento, el cliente ideal y la voz | Fundamental: se corre primero; cada sección del plan se apoya en él |
 | `investigacion-clientes` | Entrevistas y encuestas a clientes | Secciones 2 y 3 (estado actual) |
 | `psicologia-marketing` | Ciencia del comportamiento | Textos, conversión, pagos |
 | `ideas-marketing` | La biblioteca de 139 ideas | Sección 12 del plan (banco de ideas) |

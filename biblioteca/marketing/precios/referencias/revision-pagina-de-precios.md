@@ -44,7 +44,7 @@ Las dimensiones 7 y 10 pasan a `datos-estructurados` (Product/Offer en JSON-LD) 
 
 ## Cómo hacerla
 
-1. **Carga el contexto:** lee `00-Empresa/marketing` en el Cerebro (cliente ideal, posicionamiento) y las cifras de la empresa, para juzgar la «claridad» frente al comprador *correcto* y comparar los precios de la página con los vigentes.
+1. **Carga el contexto:** lee `contexto-marketing` en el Cerebro (cliente ideal, posicionamiento) y las cifras de la empresa, para juzgar la «claridad» frente al comprador *correcto* y comparar los precios de la página con los vigentes.
 2. **Lee la página como la leería un agente:** el texto o el HTML ya renderizado, no una captura. Anota de inmediato si los precios aparecen en el texto (eso es la dimensión 7). Si no puedes leer la página (sin búsqueda web), pide al dueño que pegue el texto.
 3. **Haz la prueba de pegar:** pídele a una IA los planes y precios de la dirección; anota lo que se equivoca o se salta.
 4. **Califica las 10 dimensiones** con Pasa / Parcial / Falla y una razón en una línea cada una.

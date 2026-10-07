@@ -16,7 +16,7 @@ No se trata de listar cuantas más ideas mejor. Se trata de elegir pocas, ponerl
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. Los precios, los márgenes y los presupuestos salen de las cifras de la empresa.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. Los precios, los márgenes y los presupuestos salen de las cifras de la empresa.
 
 Mira también lo que ya se ha hecho: `ver_calendario_contenido` (qué se publica y qué huecos hay) y `ver_analiticas` (qué ha funcionado en redes), si la empresa tiene eso conectado. No propongas lo que ya se hace.
 

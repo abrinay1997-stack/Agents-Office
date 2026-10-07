@@ -4,7 +4,7 @@ Una ficha de competidor es una guía reutilizable de **un** competidor, para usa
 
 ## Pregunta cuál competidor
 
-Si el pedido no lo nombra y el contexto no lo identifica, pregúntalo en una sola pregunta corta. Puedes proponer al candidato más probable (por ejemplo, el que aparece en `00-Empresa/marketing` como competidor principal) para que el dueño lo confirme, pero no redactes hasta que lo confirme. Una ficha pulida del competidor equivocado parece terminada y nadie la cuestiona.
+Si el pedido no lo nombra y el contexto no lo identifica, pregúntalo en una sola pregunta corta. Puedes proponer al candidato más probable (por ejemplo, el que aparece en `contexto-marketing` como competidor principal) para que el dueño lo confirme, pero no redactes hasta que lo confirme. Una ficha pulida del competidor equivocado parece terminada y nadie la cuestiona.
 
 ## Estructura
 

@@ -22,7 +22,7 @@ Trabajas con nivel de **director de marketing por horas** (el «fCMO»: quien da
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa (precios, comisiones: se usan tal cual). Si falta el contexto de marketing (posicionamiento, cliente ideal, voz), propón correr primero `contexto-marketing`: la Sección 2 del plan se apoya en él. Si ya existe un plan guardado en el Cerebro, léelo y propón la **versión 2 con lo que cambió**; nunca lo reemplaces en silencio.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa (precios, comisiones: se usan tal cual). Si falta el contexto de marketing (posicionamiento, cliente ideal, voz), propón correr primero `contexto-marketing`: la Sección 2 del plan se apoya en él. Si ya existe un plan guardado en el Cerebro, léelo y propón la **versión 2 con lo que cambió**; nunca lo reemplaces en silencio.
 
 Si el dueño ya tiene una auditoría con puntajes, **no la repitas**: ingiérela tal cual en la Sección 3, anota su fecha y marca lo que cambió desde entonces (sus huecos se vuelven jugadas del plan).
 
@@ -161,7 +161,7 @@ Pídelas por nombre con `leer_habilidad`.
 
 ## Habilidades relacionadas
 
-- **contexto-marketing**: córrela primero; fija el posicionamiento, el cliente ideal y la voz en `00-Empresa/marketing`, que es la base de la Sección 2.
+- **contexto-marketing**: córrela primero; fija el posicionamiento, el cliente ideal y la voz en `contexto-marketing`, que es la base de la Sección 2.
 - **ideas-marketing**: fuente de las 139 ideas de la Sección 12.
 - **investigacion-clientes**: profundiza el cliente ideal y las palabras del cliente de la Sección 2.
 - **activacion-clientes** / **registro**: trabajo profundo de la Sección 5.

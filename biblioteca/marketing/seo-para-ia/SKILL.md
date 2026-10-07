@@ -16,7 +16,7 @@ El SEO clásico te posiciona; el SEO para IA hace que te **citen**. Una página 
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
 
 Reúne (pregunta lo que falte): **visibilidad actual** (¿aparece la marca hoy en respuestas de IA?, ¿qué consultas importan al negocio?) · **contenido y dominio** (blog, documentación, comparativas, páginas de producto o servicio, ficha de negocio local; fuerza del SEO tradicional; datos estructurados) · **metas** (que lo citen, aparecer en los resúmenes de Google, competir con quien ya sale, optimizar lo existente o crear nuevo) · **competencia** (quién sale hoy y dónde).
 
@@ -120,4 +120,4 @@ Un documento en Markdown: **Resumen** (dónde está la marca y la prioridad n.º
 
 - `auditoria-seo` — SEO clásico. `datos-estructurados` — el marcado. `estrategia-contenido` — qué crear. `paginas-comparativas` — comparativas. `seo-programatico` — páginas a escala. `redaccion-publicitaria` — texto para personas y extraíble.
 - `relaciones-publicas`, `directorios`, `comunidad`, `video-marketing`, `redes-sociales` — presencia fuera del sitio.
-- `contexto-marketing` — si `00-Empresa/marketing` no existe o está vacía.
+- `contexto-marketing` — si `contexto-marketing` no existe o está vacía.

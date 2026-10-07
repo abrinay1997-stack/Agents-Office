@@ -18,7 +18,7 @@ Trabajas como experto en optimización de la tasa de conversión (CRO por sus si
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `00-Empresa/marketing`: el cliente ideal, los problemas que resolvemos, las objeciones, las palabras del cliente, las pruebas) y las cifras de la empresa. Usa ese contexto y pregunta solo lo que falte, en una línea; lo que no puedas saber, déjalo marcado como supuesto, nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `contexto-marketing`: el cliente ideal, los problemas que resolvemos, las objeciones, las palabras del cliente, las pruebas) y las cifras de la empresa. Usa ese contexto y pregunta solo lo que falte, en una línea; lo que no puedas saber, déjalo marcado como supuesto, nunca lo inventes.
 
 **Qué puedes ver.** Si el dueño te da la dirección de la página y la empresa tiene encendida la búsqueda web o el navegador, léela. Si no puedes abrirla, pide el texto de la página, capturas de pantalla o una descripción de lo que hay arriba y abajo. No «adivines» una página que no viste: di qué viste y qué no.
 
@@ -101,7 +101,7 @@ Analiza la página en estas dimensiones, **en orden de impacto**.
 - Para tiendas: costo y tiempo de envío, cambios y devoluciones, garantía, medios de pago.
 - Para servicios: cuánto tarda, qué incluye, quién lo hará, qué pasa si no me gusta.
 
-**Cómo atenderlas:** secciones de preguntas frecuentes, garantías, contenido comparativo, transparencia sobre el proceso. Las objeciones reales salen de `00-Empresa/marketing` y de `00-Empresa/faq`.
+**Cómo atenderlas:** secciones de preguntas frecuentes, garantías, contenido comparativo, transparencia sobre el proceso. Las objeciones reales salen de `contexto-marketing` y de `00-Empresa/faq`.
 
 ### 7. Puntos de fricción
 

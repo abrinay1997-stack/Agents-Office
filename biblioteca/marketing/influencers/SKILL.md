@@ -16,7 +16,7 @@ Tú preparas la lista de candidatos, el análisis, el borrador del acuerdo, el e
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `oferta`, `voz`, `clientes`, `faq` y, sobre todo, `00-Empresa/marketing`: el cliente ideal, el posicionamiento y la oferta anclan cada decisión de encaje) y las cifras de la empresa. Si falta algo, pregúntalo en una línea (o con `pedir_bloqueo`) o déjalo como supuesto; nunca lo inventes. Reúne: **la meta** (conocimiento, ventas, contenido o confianza), **el presupuesto** (en dinero o en producto; lo fija el dueño), **las plataformas** y **las líneas rojas de la marca**.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `oferta`, `voz`, `clientes`, `faq` y, sobre todo, `contexto-marketing`: el cliente ideal, el posicionamiento y la oferta anclan cada decisión de encaje) y las cifras de la empresa. Si falta algo, pregúntalo en una línea (o con `pedir_bloqueo`) o déjalo como supuesto; nunca lo inventes. Reúne: **la meta** (conocimiento, ventas, contenido o confianza), **el presupuesto** (en dinero o en producto; lo fija el dueño), **las plataformas** y **las líneas rojas de la marca**.
 
 **Sirve para cualquier negocio:** una tienda de ropa que envía prendas a microcreadoras, un restaurante que invita a un bloguero gastronómico, una clínica con una creadora de salud (con las reglas de publicidad sanitaria de su país), un SaaS con un youtuber del sector. Para un negocio local, el creador de la zona suele valer más que uno famoso y lejano.
 

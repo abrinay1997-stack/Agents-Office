@@ -91,7 +91,7 @@ export function cargarBiblioteca({ raiz, brainPath, agentes = [], deptos = [], s
   function promptText(a, texto = '') {
     const mias = de(a); if (!mias.length) return '';
     const propias = mias.filter(h => h.agents.includes(a.id)), resto = mias.filter(h => !h.agents.includes(a.id));
-    const linea = h => `- ${h.id} — ${h.titulo}: ${h.description.replace(/^Úsala cuando\s*/i, 'cuando ').slice(0, 170)}`;
+    const linea = h => `- ${h.id} — ${h.titulo}: ${h.description.replace(/^Úsala cuando\s*/i, 'cuando ').slice(0, 140)}`;
     const elegida = texto ? elegir(texto, a, 1)[0] : null;
     const adelanto = elegida ? `\nHABILIDAD QUE APLICA A ESTA TAREA: ${elegida.titulo} (${elegida.id}). Síguela; sus referencias se piden con leer_habilidad.\n${elegida.cuerpo.length > TOPES.adelanto ? elegida.cuerpo.slice(0, TOPES.adelanto) + `\n[… sigue: lee el resto con leer_habilidad id="${elegida.id}"]` : elegida.cuerpo}\n` : '';
     return `${adelanto}\nBIBLIOTECA DE HABILIDADES (mcp__habilidades__*): métodos probados para este trabajo. Si la tarea encaja con una, léela ANTES de empezar con leer_habilidad (id) y síguela; sus referencias (plantillas, listas, ejemplos) se piden con leer_habilidad (id, referencia). Lo de la empresa no está ahí: está en las notas del Cerebro (00-Empresa) y en las cifras.\n` +

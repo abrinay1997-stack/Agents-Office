@@ -18,7 +18,7 @@ Vale para el registro de un SaaS o una app, la creación de cuenta de una tienda
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Lo que se promete en el formulario («sin tarjeta», «14 días gratis») tiene que ser verdad: confírmalo en las cifras o en `00-Empresa/oferta`.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Lo que se promete en el formulario («sin tarjeta», «14 días gratis») tiene que ser verdad: confírmalo en las cifras o en `00-Empresa/oferta`.
 
 Lo que necesitas entender:
 

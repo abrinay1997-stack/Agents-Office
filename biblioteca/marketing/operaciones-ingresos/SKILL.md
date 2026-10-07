@@ -19,7 +19,7 @@ Sirve para diseñar y mejorar los sistemas que conectan marketing, ventas y aten
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, sobre todo `00-Empresa/marketing` con el cliente ideal) y las cifras de la empresa (precios, comisiones, ticket medio). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, sobre todo `contexto-marketing` con el cliente ideal) y las cifras de la empresa (precios, comisiones, ticket medio). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
 
 Reúne este contexto (pregunta solo lo que no esté):
 1. **Forma de vender:** ¿el producto se vende solo (prueba gratis, compra en línea, PLG), lo vende un vendedor, o una mezcla?

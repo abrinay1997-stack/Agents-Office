@@ -88,7 +88,7 @@ Una señal de alarma: si el negocio no tiene ni ficha de Google, ni reseñas, ni
 
 ## 7. Qué necesita la oficina para ejecutarlas
 
-- **Notas del Cerebro al día:** `00-Empresa/marketing` (cliente ideal, objeciones, palabras del cliente), `00-Empresa/oferta` y las cifras (precios, márgenes).
+- **Notas del Cerebro al día:** `contexto-marketing` (cliente ideal, objeciones, palabras del cliente), `00-Empresa/oferta` y las cifras (precios, márgenes).
 - **Datos del dueño:** acceso o capturas de la ficha de Google, lista de clientes con consentimiento para escribirles, fotos reales del negocio.
 - **Conectores, si los tiene:** Meta, Gmail, WhatsApp Business, Google. Si no están conectados, el trabajo se entrega como texto y listas para que el dueño lo ponga.
 - **Herramientas de la oficina:** Estudio (imágenes, video, voz), Contenido (borradores de publicaciones y calendario), Tareas y rutinas (lo que debe repetirse cada semana o cada mes).

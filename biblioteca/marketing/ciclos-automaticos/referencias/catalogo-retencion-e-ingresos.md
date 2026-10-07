@@ -88,7 +88,7 @@ En un negocio que no es de suscripción, «cuenta» es el cliente y «abandono»
 - **Autocomprobación**: ¿un tema es un patrón real o una sola voz fuerte? Exige un mínimo de casos antes de actuar sobre él.
 - **Memoria**: los identificadores de opiniones ya procesadas; nunca encaminar dos veces la misma.
 - **Para o escala**: sin opinión nueva → se salta. Las quejas delicadas o legales se escalan al dueño.
-- **Entrega**: acciones encaminadas + un resumen de lenguaje e ideas para marketing (las frases textuales sirven para actualizar `00-Empresa/marketing`).
+- **Entrega**: acciones encaminadas + un resumen de lenguaje e ideas para marketing (las frases textuales sirven para actualizar `contexto-marketing`).
 - **Rutina**: puesto `riley` (marketing) · `{"kind":"weekly","days":[5],"at":"09:00"}` · espera el OK: no.
 - **Texto de la tarea**: «Reúne la opinión nueva de esta semana (reseñas, mensajes, comentarios, correos de clientes) y dime: qué clientes necesitan una atención de rescate, quiénes están contentos y a quién podríamos pedirle una reseña o un referido, y qué frases textuales de clientes valen para nuestros textos. Pide al menos 3 casos antes de llamar patrón a algo. Si no hay opinión nueva, dilo.»
 - **Necesita**: las reseñas, encuestas y mensajes (bandeja de Contenido, correo, o lo que el dueño pegue).

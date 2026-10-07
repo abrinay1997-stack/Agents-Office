@@ -16,7 +16,7 @@ No es para los directorios de startups, SaaS o IA (eso es `directorios`), ni par
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes` y sobre todo `00-Empresa/marketing`: posicionamiento, cliente ideal, pruebas, competidores) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Pregunta solo lo que el Cerebro no responda.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes` y sobre todo `contexto-marketing`: posicionamiento, cliente ideal, pruebas, competidores) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Pregunta solo lo que el Cerebro no responda.
 
 Para este trabajo suele faltar: quién da la cara (el dueño o un vocero), qué historias tiene con números reales, qué datos propios existen y si hay una página de prensa. Si el Cerebro tiene una nota con la lista de medios (p. ej. `Marketing/lista-de-medios`), úsala.
 

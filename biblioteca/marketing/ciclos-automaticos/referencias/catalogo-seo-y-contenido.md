@@ -46,7 +46,7 @@ Los datos que un ciclo necesita (Search Console, un rastreador de posiciones, la
 - **Entrega**: un informe de regresión con el arreglo recomendado.
 - **Rutina**: puesto `riley` (marketing) · `{"kind":"weekly","days":[2],"at":"08:00"}` · espera el OK: no.
 - **Texto de la tarea**: «Revisa las posiciones de nuestras palabras y páginas prioritarias. Si alguna cayó más de 5 posiciones frente a su promedio de las últimas 4 semanas, diagnostica la causa probable y propón el arreglo. Si todo está estable, responde "estable".»
-- **Necesita**: un rastreador de posiciones o Search Console y la lista de palabras prioritarias (que el dueño la dé o esté en `00-Empresa/marketing`).
+- **Necesita**: un rastreador de posiciones o Search Console y la lista de palabras prioritarias (que el dueño la dé o esté en `contexto-marketing`).
 
 ### El ciclo de contenido que se desgasta (`contenido-que-se-desgasta`)
 - **Cada cuánto revisa**: mensual.

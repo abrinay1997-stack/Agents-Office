@@ -33,7 +33,7 @@ Reúne:
 2. **URL de entrada y lista de escenas:** una línea por escena. La lista de escenas es también los subtítulos, así que escribe cada línea como el subtítulo que quieres en pantalla.
 3. **Estado de sesión:** ¿la demostración empieza con la sesión iniciada? Planea un usuario de prueba más un inicio de sesión programático o cookies inyectadas.
 4. **Narración:** por defecto, en silencio con subtítulos. Añade voz solo si se pide.
-5. **Marca:** nombre de la app, dominio de demostración para la barra de direcciones falsa, colores del fondo y del acento de la tarjeta de título, logo opcional en SVG. Sácalos del contexto de marketing (`00-Empresa/marketing`) si existe.
+5. **Marca:** nombre de la app, dominio de demostración para la barra de direcciones falsa, colores del fondo y del acento de la tarjeta de título, logo opcional en SVG. Sácalos del contexto de marketing (`contexto-marketing`) si existe.
 
 ## Flujo de grabación
 

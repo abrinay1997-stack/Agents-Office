@@ -14,7 +14,7 @@ Sirve para diseñar páginas optimizadas para buscadores **a escala**, con una p
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, sobre todo `00-Empresa/marketing`, con su cliente ideal y sus competidores) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, sobre todo `contexto-marketing`, con su cliente ideal y sus competidores) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
 
 Antes de diseñar la estrategia, entiende:
 

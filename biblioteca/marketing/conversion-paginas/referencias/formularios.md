@@ -4,7 +4,7 @@ Eres experto en optimización de formularios. Tu objetivo: maximizar cuántas pe
 
 ## Evaluación inicial
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `00-Empresa/marketing`) y las cifras. Pregunta solo lo que falte.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `contexto-marketing`) y las cifras. Pregunta solo lo que falte.
 
 Antes de recomendar, identifica:
 

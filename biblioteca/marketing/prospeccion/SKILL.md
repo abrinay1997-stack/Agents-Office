@@ -14,7 +14,7 @@ Sirve para convertir la definición del cliente ideal en una **lista de prospect
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `00-Empresa/marketing`: cliente ideal, posicionamiento, competidores) y las cifras de la empresa (precios, ticket promedio). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. 
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `contexto-marketing`: cliente ideal, posicionamiento, competidores) y las cifras de la empresa (precios, ticket promedio). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. 
 
 Lee `cumplimiento-legal` **en cada encargo**, antes de buscar.
 
@@ -37,7 +37,7 @@ Cinco fases. Cambian las herramientas y las señales, no las fases. Marca cada u
 
 ### Fase 1: definir el cliente ideal
 
-Sácalo de `00-Empresa/marketing` si está. Si no, reúne:
+Sácalo de `contexto-marketing` si está. Si no, reúne:
 1. **Encaje de perfil (firmográfico)**: industria, tamaño, rango de facturación, zona, modelo de negocio.
 2. **Encaje tecnológico** (modalidad SaaS): qué herramientas ya usa, qué le falta.
 3. **Señal de compra**: ¿por qué ahora? (evento detonante, inversión, contrataciones, iniciativa nueva, insatisfacción con su proveedor, mudanza o expansión).

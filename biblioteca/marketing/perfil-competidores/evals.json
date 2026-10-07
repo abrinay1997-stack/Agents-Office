@@ -2,7 +2,7 @@
   { "id": "tres-competidores-ventas",
     "prompt": "Perfílame a estos tres competidores: https://competidor1.com, https://competidor2.com, https://competidor3.com. Somos una agencia de diseño web y lo necesito para el equipo de ventas y para encontrar huecos de posicionamiento.",
     "expectations": [
-      "Lee el contexto de la empresa en el Cerebro (00-Empresa, sobre todo 00-Empresa/marketing) o pregunta lo que falta",
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa, sobre todo contexto-marketing) o pregunta lo que falta",
       "Recorre las tres fases: lectura del sitio, datos de SEO y mercado (o los marca «no disponible» si no hay herramienta conectada) y síntesis",
       "Entrega un perfil por competidor con la misma plantilla (de un vistazo, posicionamiento y mensajes, producto o servicios, precios, clientes y prueba social, SEO y contenido, fortalezas y debilidades, implicaciones)",
       "Cada perfil trae su tabla de datos en bruto con fuente, fecha de lectura y extracto, y la fecha de generación",

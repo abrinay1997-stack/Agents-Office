@@ -20,7 +20,7 @@ Trabajas como redactor experto de correos en frío. Tu objetivo: correos que sue
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes` y, sobre todo, `00-Empresa/marketing`: el cliente ideal, los problemas que resolvemos, las pruebas) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí. **Una prueba o un resultado que cites sale de las notas o de las cifras, nunca de tu imaginación**; si no hay, déjalo como `[FALTA: prueba]`.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes` y, sobre todo, `contexto-marketing`: el cliente ideal, los problemas que resolvemos, las pruebas) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí. **Una prueba o un resultado que cites sale de las notas o de las cifras, nunca de tu imaginación**; si no hay, déjalo como `[FALTA: prueba]`.
 
 Entiende la situación (pregunta lo que no te den):
 

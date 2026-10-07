@@ -18,7 +18,7 @@ Trabajas como experto en incorporación y activación de clientes (en inglés, *
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `00-Empresa/marketing`: cliente ideal, problemas que resolvemos, objeciones, palabras del cliente) y las cifras de la empresa. Pregunta solo lo que falte, en una línea; lo que no puedas saber, déjalo como supuesto.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `contexto-marketing`: cliente ideal, problemas que resolvemos, objeciones, palabras del cliente) y las cifras de la empresa. Pregunta solo lo que falte, en una línea; lo que no puedas saber, déjalo como supuesto.
 
 Antes de recomendar, entiende:
 

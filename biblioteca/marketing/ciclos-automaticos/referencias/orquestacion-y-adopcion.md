@@ -26,7 +26,7 @@ Los hilos que los unen:
 - **`revision-semanal-de-marketing` es el enrutador.** Lee las cifras principales y reparte cada movimiento notable al ciclo que lo atiende. Es el único que ve todo el tablero.
 - **`control-de-la-medicion` y `anomalias-de-medicion` son el cimiento.** Todos los demás ciclos leen la analítica. Si la medición está rota, todo lo que viene después actúa sobre mentiras. Van primero.
 - **`cajon-de-experimentos` es el sumidero.** Las hipótesis que generan muchos ciclos (fugas en el registro, precios, activación, voz del cliente) llegan aquí y de aquí pasan a `pruebas-ab`. Que cada ciclo no haga sus propias pruebas.
-- **`voz-del-cliente` es una fuente.** El lenguaje del cliente que extrae alimenta el texto de la fatiga de anuncios, las secuencias de correo, las páginas de destino y los precios (y la nota `00-Empresa/marketing`).
+- **`voz-del-cliente` es una fuente.** El lenguaje del cliente que extrae alimenta el texto de la fatiga de anuncios, las secuencias de correo, las páginas de destino y los precios (y la nota `contexto-marketing`).
 - **`balance-de-campanas` cierra el círculo.** Sus aprendizajes son las hipótesis y los insumos del próximo plan.
 
 Evita la propiedad duplicada: cuando dos ciclos podrían actuar sobre la misma señal, uno es el dueño de la acción y el otro solo avisa. (Un cliente en riesgo es de `senales-de-abandono`, no de `ampliacion-y-venta-adicional`: nunca le vendas más a quien se está yendo.) En la oficina eso se traduce en que cada rutina tiene un solo puesto responsable, y en que el texto de una dice «si ves X, dáselo a la rutina Y» en vez de hacerlo ella.

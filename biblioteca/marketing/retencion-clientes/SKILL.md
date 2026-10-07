@@ -19,7 +19,7 @@ Sirve para reducir las dos clases de bajas de clientes recurrentes: la **volunta
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/voz` y sobre todo `00-Empresa/marketing`) y las cifras de la empresa (precios, planes, descuentos permitidos). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Los descuentos que propongas deben caber en lo que el dueño permite: si no está en las cifras, pregúntalo.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/voz` y sobre todo `contexto-marketing`) y las cifras de la empresa (precios, planes, descuentos permitidos). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Los descuentos que propongas deben caber en lo que el dueño permite: si no está en las cifras, pregúntalo.
 
 Reúne este contexto (pregunta solo lo que falte):
 

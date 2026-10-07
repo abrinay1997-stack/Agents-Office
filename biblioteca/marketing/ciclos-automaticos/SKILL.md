@@ -18,7 +18,7 @@ Es el primo operativo de `ideas-marketing`: las ideas dicen *qué probar una vez
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `00-Empresa/marketing`) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Además:
+Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `contexto-marketing`) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Además:
 
 1. **Aclara el trabajo.** ¿Qué resultado debe proteger o hacer crecer este ciclo? (posiciones, eficiencia de los anuncios, activación, retención, ingresos, recomendaciones). Si el dueño pide «automatizar todo el marketing», no entregues una lista: pregunta primero qué etapa del embudo duele más.
 2. **Mira qué tiene la empresa.** Un ciclo es tan bueno como los datos que lee. Pregunta qué hay conectado (analítica de redes, Metricool, Meta, el programa de correo, el sistema de cobros, la agenda de reservas) y qué puede pasar el dueño a mano. Un ciclo sin datos es un ciclo que inventa: no lo propongas.

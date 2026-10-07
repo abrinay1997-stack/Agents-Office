@@ -16,7 +16,7 @@ Sirve para reunir un **consejo asesor simulado**: perspectivas inspiradas en el 
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/voz` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa (precios, márgenes, comisiones: se usan tal cual). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/voz` y, sobre todo, `contexto-marketing`) y las cifras de la empresa (precios, márgenes, comisiones: se usan tal cual). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
 
 Después aclara solo lo que falte:
 1. **La pregunta**: qué decisión o qué trabajo revisa el consejo (una estrategia, una página, un cambio de precio, un plan de lanzamiento, un cambio de marca, una cuenta de anuncios, el menú de un restaurante, la vitrina de una tienda).
@@ -185,7 +185,7 @@ La entrega es el **texto completo del expediente** para que el dueño lo guarde 
 
 ## Habilidades relacionadas
 
-- **contexto-marketing**: cuando gana la mirada de Dunford, para fijar el posicionamiento en `00-Empresa/marketing`.
+- **contexto-marketing**: cuando gana la mirada de Dunford, para fijar el posicionamiento en `contexto-marketing`.
 - **ofertas** / **precios**: cuando gana la dirección de Hormozi o Halbert.
 - **redaccion-publicitaria** / **edicion-textos**: cuando el consejo revisó textos.
 - **campanas-pagadas** / **creatividad-anuncios**: cuando el debate fue de medios o de creatividad.

@@ -144,4 +144,4 @@ Las guías mueren cuando no se actualizan. Revísala cada trimestre, recoge apor
 - **Quien te defiende por dentro (campeón)** — aboga internamente. Necesita munición para vender por ti.
 - **Quien se opone (bloqueador)** — se opone a la compra. Entiende su preocupación para neutralizarla.
 
-Las fichas se construyen con lo que dice `00-Empresa/clientes` y `00-Empresa/marketing` (cliente ideal, objeciones, palabras del cliente); lo que falte se marca como supuesto a validar con el equipo de ventas.
+Las fichas se construyen con lo que dice `00-Empresa/clientes` y `contexto-marketing` (cliente ideal, objeciones, palabras del cliente); lo que falte se marca como supuesto a validar con el equipo de ventas.

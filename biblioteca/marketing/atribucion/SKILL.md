@@ -21,7 +21,7 @@ La mayoría de los pedidos empiezan en (A). Pasa a (B) solo cuando hay control d
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Si falta algo, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. **Las cifras que dé el dueño (ventas, gasto, conversiones por herramienta) se usan tal cual.**
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Si falta algo, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. **Las cifras que dé el dueño (ventas, gasto, conversiones por herramienta) se usan tal cual.**
 
 Pregunta solo lo que falte: ¿qué decisión informa esto (presupuesto, apagar un canal)? · ¿cuál es la conversión principal y dónde ocurre (compra, cita, llamada, WhatsApp, visita a la tienda)? · ¿qué cifra reporta cada herramienta (Google, Meta, analítica, CRM o libro de ventas)? · ¿cuánto dura el ciclo y cuántas personas deciden? · ¿cuánto se invierte al mes y en qué canales, dentro y fuera de línea? · ¿se pregunta «¿cómo nos conociste?» y dónde se guarda?
 

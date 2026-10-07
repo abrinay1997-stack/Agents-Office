@@ -242,7 +242,7 @@ Más lento que con herramientas, pero da listas pequeñas de buena calidad si ha
 
 Un flujo completo típico de prospección:
 
-1. **Define el cliente ideal** a partir de `00-Empresa/marketing` (sin herramientas).
+1. **Define el cliente ideal** a partir de `contexto-marketing` (sin herramientas).
 2. **Lista inicial** con Apollo o ZoomInfo (filtro de perfil de empresa), si la empresa los tiene.
 3. **Enriquece** con Clay (en cascada: tecnología, inversión, detonantes).
 4. **Ubica a quien decide** en LinkedIn Sales Navigator (a mano, por el equipo).

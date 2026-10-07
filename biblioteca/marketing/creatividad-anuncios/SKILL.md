@@ -14,7 +14,7 @@ Sirve para producir creatividades de anuncios que consiguen clics y conversiones
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `00-Empresa/marketing`: posicionamiento, cliente ideal, objeciones, palabras del cliente, pruebas, voz) y las cifras de la empresa (precios, ofertas: se usan tal cual, nunca se inventan). Si falta algo que necesitas, pregúntalo en una línea (`pedir_bloqueo` si solo el dueño lo sabe) o márcalo como supuesto. Aclara solo lo que no esté cubierto:
+Lee las notas de la empresa en el Cerebro (`00-Empresa/…`, sobre todo `contexto-marketing`: posicionamiento, cliente ideal, objeciones, palabras del cliente, pruebas, voz) y las cifras de la empresa (precios, ofertas: se usan tal cual, nunca se inventan). Si falta algo que necesitas, pregúntalo en una línea (`pedir_bloqueo` si solo el dueño lo sabe) o márcalo como supuesto. Aclara solo lo que no esté cubierto:
 
 1. **Plataforma y formato:** Google (RSA, display), Meta (feed, historias, video), LinkedIn, TikTok o X; ¿hay anuncios existentes para iterar o se parte de cero?
 2. **Producto y oferta:** qué se promociona (producto, servicio, promoción, cita, imán de prospectos), la propuesta de valor y qué lo diferencia.

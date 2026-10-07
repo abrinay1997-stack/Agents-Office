@@ -14,7 +14,7 @@ Sirve para construir ofertas que se venden: no escribiendo mejor texto sobre una
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/faq`, `00-Empresa/voz`, sobre todo `00-Empresa/marketing`, con sus objeciones, palabras del cliente y pruebas) y las cifras de la empresa (precios, márgenes, capacidad). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Los precios, las comisiones y los descuentos salen de las cifras de la empresa: si propones uno nuevo, se presenta como propuesta para que el dueño decida, nunca como hecho.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/faq`, `00-Empresa/voz`, sobre todo `contexto-marketing`, con sus objeciones, palabras del cliente y pruebas) y las cifras de la empresa (precios, márgenes, capacidad). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Los precios, las comisiones y los descuentos salen de las cifras de la empresa: si propones uno nuevo, se presenta como propuesta para que el dueño decida, nunca como hecho.
 
 Si hay correos de devoluciones, notas de llamadas de ventas o mensajes en la bandeja (`ver_bandeja`), léelos: ahí están las objeciones reales.
 

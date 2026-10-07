@@ -16,7 +16,7 @@ Sirve para planear, construir y mejorar programas de mensajes de texto (SMS, MMS
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. **Precios, descuentos y códigos salen de las cifras de la empresa, tal cual.**
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. **Precios, descuentos y códigos salen de las cifras de la empresa, tal cual.**
 
 Reúne (pregunta lo que falte):
 1. **Tipo de negocio y escala**: tienda en línea, servicios, clínica, restaurante, app, empresa a empresa; tamaño de la lista o volumen de pedidos.

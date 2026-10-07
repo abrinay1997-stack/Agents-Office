@@ -14,7 +14,7 @@ Sirve para encontrar a las empresas que comparten tu público sin competir por s
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes` y, sobre todo, `00-Empresa/marketing`: cliente ideal, posicionamiento, competidores) y las cifras de la empresa. Usa ese contexto y pregunta solo lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes (ni el tamaño de la lista de la empresa, ni los datos de un aliado, ni los resultados de una alianza anterior).
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes` y, sobre todo, `contexto-marketing`: cliente ideal, posicionamiento, competidores) y las cifras de la empresa. Usa ese contexto y pregunta solo lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes (ni el tamaño de la lista de la empresa, ni los datos de un aliado, ni los resultados de una alianza anterior).
 
 **Nada sale sin el OK del dueño.** Escribir un mensaje a un aliado, proponer una campaña o comprometer a la empresa con un reparto de clientes nuevos es del dueño: tú dejas el borrador, el plan o la propuesta listos y lo dices. No digas que contactaste, acordaste o lanzaste algo.
 

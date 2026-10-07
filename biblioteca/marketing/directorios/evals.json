@@ -1,0 +1,99 @@
+{ "skill": "directorios", "origen": "marketingskills/directory-submissions/evals", "evals": [
+  { "id": "plan-lanzamiento-app-ia",
+    "prompt": "Vamos a lanzar nuestra aplicación de IA para contadores dentro de 3 semanas. Ayúdame a planear todos los directorios en los que deberíamos listarnos.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Hace la evaluación de preparación de la fase 0 (las 9 preguntas) antes de recomendar envíos",
+      "Trata un «no» en los puntos 1 a 7 como bloqueo duro y explica por qué",
+      "Recomienda una mezcla de niveles adecuada a un producto de IA: lanzamiento (Product Hunt como ancla), startups y SaaS, directorios de IA, y agentes o MCP solo si aplica",
+      "Nombra a Product Hunt como el evento ancla",
+      "Ubica el calendario de preparación de 3 semanas de Product Hunt en fechas reales",
+      "Advierte que no se envía antes de que existan las páginas de destino",
+      "Recomienda el protocolo de reseñas de 10 en 30 para G2 y Capterra",
+      "Fija metas a 30 y 90 días con la tabla de indicadores y dice que son orientación, no promesa",
+      "Remite a las referencias de catálogo y de variantes de posicionamiento",
+      "No dice que creó cuentas ni envió nada: deja el paquete listo para que lo envíe una persona con el OK del dueño"
+    ] },
+  { "id": "misma-descripcion-en-todos",
+    "prompt": "¿Puedo copiar y pegar la misma descripción de mi herramienta en todos los directorios y ya?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Dice que no y cita la regla de que el posicionamiento cambia según el tipo de directorio",
+      "Explica que las IA penalizan el contenido duplicado",
+      "Enumera el enfoque distinto por superficie (startups: resultado; SaaS: alternativa; IA: nativo de IA; MCP: ángulo de agentes; reseñas B2B: retorno y caso de uso)",
+      "Especifica el largo de cada variante: eslogan de menos de 10 palabras, descripción corta de 60 caracteres, larga de 150 palabras y de 5 a 8 etiquetas",
+      "Remite a la referencia de variantes de posicionamiento"
+    ] },
+  { "id": "servicio-de-envio-masivo",
+    "prompt": "Una empresa nos ofrece enviar nuestra clínica veterinaria a 200 directorios por US$99. ¿Contratamos ese servicio?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Recomienda no contratarlo y cita la regla de no pagar servicios de envío",
+      "Explica que el envío manual es una tarde de trabajo",
+      "Advierte que esos servicios suelen enviar a directorios basura sin tráfico ni calidad editorial",
+      "Advierte del riesgo de penalización por spam",
+      "Aprovecha que es un negocio local y pone primero las fichas locales (Google Business Profile, Bing Places, Apple Business Connect, directorio del gremio) con nombre, dirección y teléfono idénticos",
+      "Recomienda envío manual a pocos directorios de calidad con su texto propio"
+    ] },
+  { "id": "lanzamiento-product-hunt",
+    "prompt": "Guíame para lanzar nuestra aplicación de reservas para restaurantes en Product Hunt el mes que viene. Nunca lo hemos hecho.",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Arma el calendario de 3 semanas con marcas de día específicas (−21 a −14, −14, −10, −7, −3, −1)",
+      "Indica el lanzamiento a las 12:01 a. m. hora del Pacífico y ayuda a calcular la hora local",
+      "Restringe el lanzamiento a martes, miércoles o jueves",
+      "Subraya que las primeras 2 horas lo son todo (más de 50 personas que apoyen)",
+      "Advierte que nunca se piden votos, se piden opiniones",
+      "Advierte que no se escribe a desconocidos",
+      "Incluye el balance posterior y su publicación en otros sitios",
+      "Los textos y comentarios quedan como borradores: no dice que publicó nada"
+    ] },
+  { "id": "g2-con-pocos-clientes",
+    "prompt": "Queremos listar nuestro programa de facturación para ferreterías en G2, pero solo tenemos 4 clientes por ahora. ¿Vale la pena?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Explica que una ficha sin reseñas no vale nada y que con 10 se aparece en la cuadrícula",
+      "Recomienda no enviar todavía, o reclamar la ficha y preparar en paralelo una campaña de reseñas",
+      "Explica el protocolo de 10 en 30 (20 usuarios, correo personal con enlace directo, agradecimiento modesto, un solo seguimiento a los 5 días, 50 % de conversión)",
+      "Menciona que se permiten incentivos pequeños pero que hay que revisar las reglas vigentes",
+      "Menciona la insignia «Users Love Us» (20 reseñas con 4,0 o más) y que no se paga un plan de G2 el primer año",
+      "Menciona los cortes de los informes de verano y otoño",
+      "Los correos a clientes quedan como borradores para el OK del dueño"
+    ] },
+  { "id": "ya-enviamos-a-50",
+    "prompt": "La semana pasada enviamos nuestra agencia de diseño a 50 directorios. ¿Y ahora qué?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Advierte contra tratar los envíos como la estrategia y contra obsesionarse con el pico del lanzamiento",
+      "Recomienda verificar que los enlaces existen y si son dofollow",
+      "Pasa a la estrategia de páginas de destino (alternativas, por caso de uso, listados propios)",
+      "Menciona tácticas de GEO (un H1, FAQ, tablas de comparación, Reddit y HN, Crunchbase, LinkedIn y Wikidata)",
+      "Incluye distribución continua en comunidades con la regla 90/10",
+      "Recomienda medir los indicadores cada semana e investigar antes de enviar más",
+      "Propone una rutina para revisar las fichas cada trimestre"
+    ] },
+  { "id": "servidor-mcp-y-dominios-parecidos",
+    "prompt": "Acabamos de publicar en npm un servidor MCP para nuestra herramienta de facturación. Planea los envíos de las próximas dos semanas. Vi en una lista en línea launchstreak.com y launchpanda.com, ¿los agregas?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Pone primero el registro oficial de MCP con la herramienta mcp-publisher (server.json, marca mcpName, espacio de nombres de GitHub o DNS)",
+      "Explica que agregadores como PulseMCP y Glama se construyen a partir del registro oficial",
+      "Planea después Smithery, Glama, MCP.so y MCP Market, y las listas de GitHub avisando que son nofollow y que hay que ver si siguen aceptando cambios",
+      "Señala que launchstreak.com y launchpanda.com son dominios parecidos que están a la venta y usa launchstreak.dev y launchpanda.dev, tras comprobar que están activos",
+      "Advierte que los sitios independientes de DR alto y tráfico casi cero son anillos de insignias y que el enlace gratis suele exigir mantener su insignia",
+      "Aplica la comprobación de seguridad: dominios que abren, aprobación del dueño antes de cada envío",
+      "No dice que publicó ni envió nada"
+    ] },
+  { "id": "fichas-para-un-taller-mecanico",
+    "prompt": "Tenemos un taller mecánico en Quito y casi nadie nos encuentra en internet. ¿En qué directorios nos conviene aparecer?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Reconoce que es un negocio local y que la mayoría de los directorios de software y startups no aplican",
+      "Pone primero Google Business Profile, y después Bing Places, Apple Business Connect, la página de Facebook e Instagram y WhatsApp Business",
+      "Insiste en que nombre, dirección y teléfono sean idénticos en todas las fichas",
+      "Recomienda un directorio de páginas amarillas del país, la cámara o asociación local y directorios del rubro, avisando que hay que comprobar que existan y estén activos",
+      "Pide reseñas reales a clientes reales y advierte contra comprarlas o duplicar fichas",
+      "Propone indicadores propios de un negocio local (llamadas, solicitudes de ruta, reseñas nuevas, «te encontré en Google») sin inventar metas",
+      "No dice que creó ninguna ficha: deja el paquete de textos y datos para que el dueño apruebe y lo envíe"
+    ] }
+] }

@@ -14,7 +14,7 @@ Sirve para diseñar precios y paquetes que capturen el valor que el cliente reci
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y sobre todo `00-Empresa/marketing`, con sus competidores y objeciones) y las **cifras de la empresa**. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y sobre todo `contexto-marketing`, con sus competidores y objeciones) y las **cifras de la empresa**. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
 
 **Los precios reales salen de las cifras de la empresa, siempre.** El precio actual de cada producto, plan o servicio, las comisiones, los descuentos vigentes y los costos los tomas de ahí, tal cual. Si un precio no está, no lo supongas: pregúntalo o márcalo «falta el precio actual de X». Lo que propongas es una **propuesta para que el dueño decida**, rotulada y separada de los precios vigentes; no la uses en un texto para clientes antes de que el dueño la apruebe y la cargue en las cifras.
 

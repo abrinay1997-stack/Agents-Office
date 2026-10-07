@@ -14,7 +14,7 @@ Sirve para crear, optimizar y escalar campañas de publicidad pagada que consiga
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa (precios, márgenes, valor de un cliente). Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. Si la empresa tiene conectada una cuenta de anuncios (Meta, Google), trabaja en **solo lectura**; si no, pide al dueño las exportaciones que necesites.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa (precios, márgenes, valor de un cliente). Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. Si la empresa tiene conectada una cuenta de anuncios (Meta, Google), trabaja en **solo lectura**; si no, pide al dueño las exportaciones que necesites.
 
 Reúne este contexto (pregunta lo que no esté ya en el Cerebro):
 

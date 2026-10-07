@@ -1,7 +1,7 @@
 ---
 name: contexto-marketing
 titulo: Contexto de marketing de la empresa
-description: Úsala cuando haya que crear o actualizar la nota `00-Empresa/marketing` del Cerebro: posicionamiento, cliente ideal, problemas, competidores, objeciones, palabras del cliente, voz y pruebas. También ante «¿quién es mi cliente ideal?» o un cambio de posicionamiento.
+description: Úsala cuando haya que crear o actualizar la nota `contexto-marketing` del Cerebro: posicionamiento, cliente ideal, problemas, competidores, objeciones, palabras del cliente, voz y pruebas. También ante «¿quién es mi cliente ideal?» o un cambio de posicionamiento.
 area: estrategia
 departments: [marketing, sales, ops]
 agents: [mlead, riley, olead]
@@ -10,13 +10,13 @@ palabras: [posicionamiento, cliente ideal, ICP, propuesta de valor, contexto de 
 ---
 # Contexto de marketing de la empresa
 
-Sirve para crear y mantener la nota `00-Empresa/marketing` del Cerebro: el contexto de marketing que leen todos los agentes antes de cualquier trabajo de marketing o ventas, para que el dueño no tenga que repetirlo en cada pedido.
+Sirve para crear y mantener la nota `contexto-marketing` del Cerebro: el contexto de marketing que leen todos los agentes antes de cualquier trabajo de marketing o ventas, para que el dueño no tenga que repetirlo en cada pedido.
 
-**Tu entrega es el texto completo de la nota**, con sus 12 secciones y su registro de cambios, listo para que el dueño lo guarde en el Cerebro como `00-Empresa/marketing`. Si la nota ya existe, entregas la versión nueva completa (no solo los cambios), con la versión subida y una línea nueva en el registro.
+**Tu entrega es el texto completo de la nota**, con sus 12 secciones y su registro de cambios, listo para que el dueño lo guarde en el Cerebro como `contexto-marketing`. Si la nota ya existe, entregas la versión nueva completa (no solo los cambios), con la versión subida y una línea nueva en el registro.
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro: `00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, si existe, `00-Empresa/marketing`. Lee también las cifras de la empresa (precios, planes, comisiones: se copian tal cual, nunca se inventan). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro: `00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, si existe, `contexto-marketing`. Lee también las cifras de la empresa (precios, planes, comisiones: se copian tal cual, nunca se inventan). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
 
 ### Paso 1: ¿ya existe la nota?
 
@@ -178,9 +178,9 @@ Salta lo que no aplique (por ejemplo, Personas en un negocio de consumo) en luga
 ## Cómo entregarlo
 
 1. Una línea de estado: «Nota nueva (v1)» o «Versión nueva: v2 → v3; cambian Producto y Público».
-2. **El texto completo de la nota**, dentro de un bloque de Markdown, listo para copiar como `00-Empresa/marketing`.
+2. **El texto completo de la nota**, dentro de un bloque de Markdown, listo para copiar como `contexto-marketing`.
 3. Debajo: la lista de **huecos marcados** «[falta: …]» y las preguntas para completarlos (máximo 5, las más importantes primero).
-4. Una nota final: «Guárdala en el Cerebro como `00-Empresa/marketing`. Los agentes la leen antes de cada trabajo de marketing y ventas. El registro de cambios al final muestra cómo evoluciona tu posicionamiento; pídeme actualizarla cuando cambie algo.»
+4. Una nota final: «Guárdala en el Cerebro como `contexto-marketing`. Los agentes la leen antes de cada trabajo de marketing y ventas. El registro de cambios al final muestra cómo evoluciona tu posicionamiento; pídeme actualizarla cuando cambie algo.»
 
 ## Consejos
 

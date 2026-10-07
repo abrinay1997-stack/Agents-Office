@@ -16,7 +16,7 @@ Vale para cualquier negocio con algo que comparar: dos titulares de una página,
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Si hay una nota de experimentos anteriores (el libro de jugadas, ver abajo), léela primero. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes, y menos una tasa de conversión o un volumen de tráfico.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Si hay una nota de experimentos anteriores (el libro de jugadas, ver abajo), léela primero. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes, y menos una tasa de conversión o un volumen de tráfico.
 
 Lo que necesitas entender:
 1. **Contexto:** qué se quiere mejorar, qué cambio se considera y por qué, y si ya se probó algo en esa zona.

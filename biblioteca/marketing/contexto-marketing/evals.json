@@ -2,16 +2,16 @@
   { "id": "crear-plataforma-opiniones",
     "prompt": "Quiero armar el contexto de marketing de la empresa. Somos un SaaS para empresas que vende una plataforma de opiniones de clientes a equipos de producto.",
     "expectations": [
-      "Revisa si ya existe la nota 00-Empresa/marketing en el Cerebro",
+      "Revisa si ya existe la nota contexto-marketing en el Cerebro",
       "Si no existe, ofrece dos caminos: borrador a partir de lo que ya hay (recomendado) o desde cero",
       "Si es desde cero, recorre las secciones una por una en conversación",
       "Cubre las secciones que aplican: producto, público, personas, problemas, competencia, diferenciación, objeciones, dinámica del cambio, palabras del cliente, voz, pruebas y objetivos",
-      "Entrega el texto completo de la nota con versión v1 y su registro de cambios, para que el dueño la guarde como 00-Empresa/marketing"
+      "Entrega el texto completo de la nota con versión v1 y su registro de cambios, para que el dueño la guarde como contexto-marketing"
     ] },
   { "id": "nuevo-plan-empresarial",
     "prompt": "Actualiza el contexto de marketing. Acabamos de sumar un plan empresarial y ahora también le vendemos a directores de ingeniería, no solo a jefes de producto.",
     "expectations": [
-      "Lee la nota 00-Empresa/marketing existente y dice su versión y sus últimos cambios",
+      "Lee la nota contexto-marketing existente y dice su versión y sus últimos cambios",
       "Identifica las secciones afectadas: público, personas, producto (con el plan nuevo y su precio de las cifras), objeciones y competencia",
       "Añade al director de ingeniería en el público",
       "Añade la persona nueva",
@@ -28,7 +28,7 @@
       "Adapta las preguntas a una app de consumo que recién empieza",
       "Avisa que algunas secciones pueden quedar cortas al principio y está bien",
       "Omite lo que no aplica (Personas) en lugar de forzar las 12",
-      "Entrega el texto de la nota 00-Empresa/marketing con v1"
+      "Entrega el texto de la nota contexto-marketing con v1"
     ] },
   { "id": "borrador-desde-lo-existente",
     "prompt": "¿Puedes hacer un borrador del contexto de marketing de nuestra clínica dental con lo que ya tienes de nosotros?",
@@ -43,7 +43,7 @@
   { "id": "ya-tenemos-contexto",
     "prompt": "¿Tenemos armado el contexto de marketing? Quiero asegurarme de que los demás agentes sepan de qué se trata nuestra tienda de muebles.",
     "expectations": [
-      "Busca la nota 00-Empresa/marketing en el Cerebro (y las demás 00-Empresa)",
+      "Busca la nota contexto-marketing en el Cerebro (y las demás 00-Empresa)",
       "Dice si existe o no",
       "Si existe, resume su contenido, su versión y sus últimos cambios",
       "Si no existe, ofrece crearla y explica por qué vale la pena",
@@ -53,7 +53,7 @@
     "prompt": "Escribe el texto de la página de inicio de nuestro software de facturación.",
     "expectations": [
       "Reconoce que es un trabajo de redacción, no de armar el contexto",
-      "Puede revisar si existe 00-Empresa/marketing o sugerir crearla primero",
+      "Puede revisar si existe contexto-marketing o sugerir crearla primero",
       "Deriva a redaccion-publicitaria para escribir el texto",
       "No intenta escribir la página de inicio con los pasos de esta habilidad"
     ] },

@@ -18,7 +18,7 @@ Trabajas como investigador de clientes. Tu entrega es un documento en Markdown c
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Usa ese contexto para no repetir preguntas ya respondidas. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Usa ese contexto para no repetir preguntas ya respondidas. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes.
 
 Las preguntas que ordenan el trabajo (no las hagas todas juntas: empieza por 1 y 2):
 
@@ -155,7 +155,7 @@ Antes de generar, confirma qué entrega(s) quieren. Opciones:
 5. **Resumen de inteligencia competitiva:** lo que los clientes dicen de la competencia frente a lo que dicen de la empresa.
 6. **Análisis de brechas:** lo que todavía no se sabe y cómo averiguarlo.
 
-Toda entrega lleva: el objetivo y el material usado (con fechas y fuentes), los hallazgos con su nivel de confianza, las citas exactas con su fuente, las implicaciones concretas (qué cambiar en mensaje, oferta o servicio) y los supuestos y huecos pendientes. Si el hallazgo debe llegar a otro departamento (por ejemplo, un dolor frecuente para Entregas), propónlo con `crear_borrador_tarea`. Si la investigación es periódica (revisar reseñas cada mes), propón una **rutina** al dueño. Si el resultado cambia el posicionamiento, el cliente ideal o el vocabulario, sugiere actualizar la nota `00-Empresa/marketing` (con la habilidad `contexto-marketing`).
+Toda entrega lleva: el objetivo y el material usado (con fechas y fuentes), los hallazgos con su nivel de confianza, las citas exactas con su fuente, las implicaciones concretas (qué cambiar en mensaje, oferta o servicio) y los supuestos y huecos pendientes. Si el hallazgo debe llegar a otro departamento (por ejemplo, un dolor frecuente para Entregas), propónlo con `crear_borrador_tarea`. Si la investigación es periódica (revisar reseñas cada mes), propón una **rutina** al dueño. Si el resultado cambia el posicionamiento, el cliente ideal o el vocabulario, sugiere actualizar la nota `contexto-marketing` (con la habilidad `contexto-marketing`).
 
 ## Reglas
 
@@ -186,4 +186,4 @@ Toda entrega lleva: el objetivo y el material usado (con fechas y fuentes), los 
 - `prospeccion`: traducir la investigación en un cliente ideal para prospección.
 - `estrategia-contenido`: planear contenido con los temas descubiertos.
 - `plan-marketing`: integrar la investigación en un plan completo (incluye dimensionar el mercado).
-- `contexto-marketing`: guardar lo aprendido en la nota `00-Empresa/marketing`.
+- `contexto-marketing`: guardar lo aprendido en la nota `contexto-marketing`.

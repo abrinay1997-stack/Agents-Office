@@ -16,7 +16,7 @@ Vale para cualquier negocio que compite por búsquedas: un software contra otro,
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`, que tiene los competidores y las pruebas) y las cifras de la empresa. Si hay notas de competidores en el Cerebro, léelas también. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Los precios propios salen de las cifras de la empresa, tal cual.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`, que tiene los competidores y las pruebas) y las cifras de la empresa. Si hay notas de competidores en el Cerebro, léelas también. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Los precios propios salen de las cifras de la empresa, tal cual.
 
 **Nunca adivines el competidor.** Si el pedido no lo nombra y el Cerebro no lo identifica, pregúntalo y detente ahí. No redactes una página pulida sobre el candidato más probable.
 

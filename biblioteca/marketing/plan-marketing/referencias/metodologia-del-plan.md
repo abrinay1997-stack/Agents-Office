@@ -22,7 +22,7 @@ Si el dueño dice «empieza de cero», confirma si el plan viejo se conserva a u
 
 ### Paso 1.2. Leer los materiales
 
-Lee todo lo que haya: las notas de `00-Empresa` y, en particular, `00-Empresa/marketing`; las cifras; documentos que el dueño subió al Cerebro (presentación a socios, documento de posicionamiento o de voz, investigación de clientes, métricas de tienda o de analítica, inventario de correos del ciclo de vida, auditorías anteriores con puntaje, investigación de SEO, notas de una reunión de arranque). Captura los hechos clave para la ficha de investigación.
+Lee todo lo que haya: las notas de `00-Empresa` y, en particular, `contexto-marketing`; las cifras; documentos que el dueño subió al Cerebro (presentación a socios, documento de posicionamiento o de voz, investigación de clientes, métricas de tienda o de analítica, inventario de correos del ciclo de vida, auditorías anteriores con puntaje, investigación de SEO, notas de una reunión de arranque). Captura los hechos clave para la ficha de investigación.
 
 ### Paso 1.3. Traer datos en vivo donde haya conexión
 

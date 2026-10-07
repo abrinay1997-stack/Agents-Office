@@ -16,7 +16,7 @@ Abarca el diseño de la estructura. Si el pedido es técnico (sitemap XML desact
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y sobre todo `00-Empresa/marketing`) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Pregunta solo lo que el Cerebro no responda.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y sobre todo `contexto-marketing`) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Pregunta solo lo que el Cerebro no responda.
 
 Reúne este contexto:
 

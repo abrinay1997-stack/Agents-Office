@@ -8,7 +8,7 @@
 - [ ] Conoces al público al que va.
 - [ ] Identificaste la acción que se busca.
 - [ ] Lo leíste una vez completo sin editar.
-- [ ] Leíste la voz de la marca y las palabras del cliente en el Cerebro (`00-Empresa/voz`, `00-Empresa/marketing`).
+- [ ] Leíste la voz de la marca y las palabras del cliente en el Cerebro (`00-Empresa/voz`, `contexto-marketing`).
 
 ## Claridad (pasada 1)
 

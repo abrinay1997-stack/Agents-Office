@@ -16,7 +16,7 @@ Vale para cualquier web con visitas: una tienda en línea que quiere el primer p
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. **Un descuento, un envío gratis o un regalo sale de las cifras de la empresa: si no está ahí, se pregunta, no se promete.**
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. **Un descuento, un envío gratis o un regalo sale de las cifras de la empresa: si no está ahí, se pregunta, no se promete.**
 
 Lo que necesitas entender:
 

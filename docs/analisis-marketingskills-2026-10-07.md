@@ -72,6 +72,68 @@ Los agentes con habilidades la reciben entera. Si no existe, se les dice y sugie
 La tabla la genera `node scripts/biblioteca-tabla.mjs` desde la Biblioteca. El id, el área y los puestos se leen de la cabecera de cada habilidad.
 
 <!-- tabla -->
+50 habilidades, 244 referencias.
+
+| Id | Habilidad | Puestos que más la usan | Referencias | Original |
+|---|---|---|---|---|
+| **Estrategia** | | | | |
+| `ciclos-automaticos` | Ciclos de marketing automáticos | MARKETING LEAD, RESEARCH, INTERNAL REPORTING | 10 | marketing-loops |
+| `consejo-asesor` | Consejo asesor de marketing | MARKETING LEAD, RESEARCH | 13 | marketing-council |
+| `contexto-marketing` | Contexto de marketing de la empresa | MARKETING LEAD, RESEARCH, OPERATIONS LEAD | 0 | product-marketing |
+| `ofertas` | Diseño de ofertas | MARKETING LEAD, SALES LEAD, PROPOSALS | 8 | offers |
+| `precios` | Estrategia de precios | MARKETING LEAD, RESEARCH, SALES LEAD, PROPOSALS | 6 | pricing |
+| `ideas-marketing` | Ideas de marketing | MARKETING LEAD, RESEARCH, INSTAGRAM ORGANIC | 3 | marketing-ideas |
+| `investigacion-clientes` | Investigación de clientes | RESEARCH, MARKETING LEAD, LEAD ENRICHER | 4 | customer-research |
+| `paginas-comparativas` | Páginas comparativas | RESEARCH, MARKETING LEAD, SALES LEAD | 2 | competitors |
+| `perfil-competidores` | Perfiles de competidores | RESEARCH, INTEL, MARKETING LEAD, SALES LEAD | 2 | competitor-profiling |
+| `plan-marketing` | Plan de marketing completo | MARKETING LEAD, RESEARCH, SALES LEAD, OPERATIONS LEAD | 18 | marketing-plan |
+| `psicologia-marketing` | Psicología y modelos mentales del marketing | MARKETING LEAD, RESEARCH, GRAPHICS DESIGNER | 4 | marketing-psychology |
+| **Contenido y textos** | | | | |
+| `edicion-textos` | Edición de textos de marketing | MARKETING LEAD, NEWSLETTER, INSTAGRAM ORGANIC, CLIENT EMAILS | 6 | copy-editing |
+| `estrategia-contenido` | Estrategia de contenido | MARKETING LEAD, RESEARCH, NEWSLETTER | 5 | content-strategy |
+| `redaccion-publicitaria` | Redacción publicitaria | MARKETING LEAD, GRAPHICS DESIGNER, INSTAGRAM ORGANIC, PROPOSALS | 3 | copywriting |
+| **SEO y búsqueda** | | | | |
+| `arquitectura-web` | Arquitectura del sitio web | MARKETING LEAD, GRAPHICS DESIGNER, RESEARCH, DESIGNER ASSISTANT | 3 | site-architecture |
+| `auditoria-seo` | Auditoría SEO | RESEARCH, MARKETING LEAD, CLIENT REPORTS | 2 | seo-audit |
+| `datos-estructurados` | Datos estructurados (schema) | MARKETING LEAD, RESEARCH | 1 | schema |
+| `directorios` | Directorios y fichas en línea | MARKETING LEAD, RESEARCH, INSTAGRAM ORGANIC, GRAPHICS DESIGNER | 7 | directory-submissions |
+| `tiendas-de-apps` | Optimización en tiendas de apps (ASO) | RESEARCH, GRAPHICS DESIGNER, MARKETING LEAD | 5 | aso |
+| `seo-para-ia` | SEO para IA | RESEARCH, MARKETING LEAD, INSTAGRAM ORGANIC | 14 | ai-seo |
+| `seo-programatico` | SEO programático | MARKETING LEAD, RESEARCH | 1 | programmatic-seo |
+| **Conversión** | | | | |
+| `conversion-paginas` | Conversión de páginas | MARKETING LEAD, META ADS, GRAPHICS DESIGNER | 2 | cro |
+| `pantallas-de-mejora` | Pantallas de mejora de plan | MARKETING LEAD, GRAPHICS DESIGNER, ONBOARDER | 1 | paywalls |
+| `pruebas-ab` | Pruebas A/B y experimentos | MARKETING LEAD, META ADS, NEWSLETTER, INTERNAL DASHBOARDS | 2 | ab-testing |
+| `registro` | Registro y alta de cuentas | MARKETING LEAD, ONBOARDER, GRAPHICS DESIGNER | 1 | signup |
+| `ventanas-emergentes` | Ventanas emergentes | MARKETING LEAD, NEWSLETTER, GRAPHICS DESIGNER | 1 | popups |
+| **Pagados y medición** | | | | |
+| `atribucion` | Atribución de marketing | MARKETING LEAD, META ADS, RESEARCH, INTERNAL REPORTING | 5 | attribution |
+| `campanas-pagadas` | Campañas de anuncios pagados | META ADS, MARKETING LEAD, RESEARCH, GRAPHICS DESIGNER | 16 | ads |
+| `creatividad-anuncios` | Creatividad de anuncios | META ADS, GRAPHICS DESIGNER, MARKETING LEAD, VIDEO EDITOR | 12 | ad-creative |
+| `medicion-analitica` | Medición y analítica | MARKETING LEAD, INTERNAL REPORTING, INTERNAL DASHBOARDS, META ADS | 3 | analytics |
+| **Crecimiento y retención** | | | | |
+| `activacion-clientes` | Activación de clientes nuevos | ONBOARDER, DELIVERY LEAD, MARKETING LEAD | 4 | onboarding |
+| `herramientas-gratis` | Herramientas gratis | MARKETING LEAD, RESEARCH | 2 | free-tools |
+| `imanes-de-prospectos` | Imanes de prospectos | NEWSLETTER, MARKETING LEAD, INBOUND LEADS MANAGER, GRAPHICS DESIGNER | 3 | lead-magnets |
+| `comunidad` | Marketing de comunidad | INSTAGRAM ORGANIC, MARKETING LEAD, ONBOARDER | 2 | community-marketing |
+| `referidos` | Referidos y afiliados | MARKETING LEAD, NEWSLETTER, FOLLOW UPS | 3 | referrals |
+| `retencion-clientes` | Retención de clientes | DELIVERY LEAD, ONBOARDER, CLIENT EMAILS, NEWSLETTER | 2 | churn-prevention |
+| `secuencias-correo` | Secuencias de correo | NEWSLETTER, EMAILS LEAD, ONBOARDER, MARKETING LEAD | 3 | emails |
+| **Ventas y salida al mercado** | | | | |
+| `correo-en-frio` | Correo en frío | SALES LEAD, FOLLOW UPS, LEAD ENRICHER, PROSPECTOR | 5 | cold-email |
+| `lanzamientos` | Lanzamientos | MARKETING LEAD, NEWSLETTER, INSTAGRAM ORGANIC, SALES LEAD | 2 | launch |
+| `material-ventas` | Material de ventas | PROPOSALS, SALES LEAD, GRAPHICS DESIGNER, RESEARCH | 7 | sales-enablement |
+| `operaciones-ingresos` | Operaciones de ingresos (RevOps) | SALES LEAD, INBOUND LEADS MANAGER, MARKETING LEAD | 4 | revops |
+| `prospeccion` | Prospección | PROSPECTOR, LEAD ENRICHER, SALES LEAD, RESEARCH | 6 | prospecting |
+| **Canales** | | | | |
+| `imagenes-marketing` | Imágenes de marketing | GRAPHICS DESIGNER, INSTAGRAM ORGANIC, MARKETING LEAD, DESIGNER ASSISTANT | 3 | image |
+| `influencers` | Influencers y creadores de contenido | MARKETING LEAD, INSTAGRAM ORGANIC, RESEARCH | 4 | influencer-marketing |
+| `marketing-conjunto` | Marketing conjunto y alianzas | MARKETING LEAD, SALES LEAD, RESEARCH | 1 | co-marketing |
+| `eventos` | Marketing de eventos | MARKETING LEAD, RESEARCH, INSTAGRAM ORGANIC, SALES LEAD | 6 | events |
+| `video-marketing` | Producción de video de marketing | VIDEO EDITOR, GRAPHICS DESIGNER, INSTAGRAM ORGANIC, MARKETING LEAD | 4 | video |
+| `redes-sociales` | Redes sociales | INSTAGRAM ORGANIC, MARKETING LEAD, VIDEO EDITOR, GRAPHICS DESIGNER | 11 | social |
+| `relaciones-publicas` | Relaciones públicas | MARKETING LEAD, RESEARCH, INSTAGRAM ORGANIC, EMAILS LEAD | 8 | public-relations |
+| `sms-whatsapp` | SMS y WhatsApp | MARKETING LEAD, NEWSLETTER, FOLLOW UPS | 4 | sms |
 
 ## 5. Lo que queda fuera o pendiente
 

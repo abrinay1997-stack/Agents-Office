@@ -14,7 +14,7 @@ Sirve para escribir el marcado schema.org en formato JSON-LD que ayuda a los bus
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/faq`, sobre todo `00-Empresa/marketing`) y las cifras de la empresa. De ahí salen el nombre exacto, la dirección, el teléfono, los horarios, los precios y las redes sociales. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Un precio, una valoración o un número de reseñas que no conste en las cifras o en la propia página no se escribe.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/faq`, sobre todo `contexto-marketing`) y las cifras de la empresa. De ahí salen el nombre exacto, la dirección, el teléfono, los horarios, los precios y las redes sociales. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Un precio, una valoración o un número de reseñas que no conste en las cifras o en la propia página no se escribe.
 
 Antes de escribir el marcado, entiende tres cosas:
 

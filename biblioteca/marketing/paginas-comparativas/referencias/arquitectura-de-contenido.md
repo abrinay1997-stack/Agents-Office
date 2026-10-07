@@ -110,7 +110,7 @@ Para un negocio local cambian los campos, no la idea: sedes y horarios, servicio
 
 ## Los datos de tu propia empresa
 
-La misma estructura para ti, con honestidad. Mucho ya está en `00-Empresa/oferta`, `00-Empresa/marketing` y las cifras de la empresa: úsalo, no lo dupliques.
+La misma estructura para ti, con honestidad. Mucho ya está en `00-Empresa/oferta`, `contexto-marketing` y las cifras de la empresa: úsalo, no lo dupliques.
 
 ```yaml
 nombre: [Tu producto o negocio]

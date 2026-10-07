@@ -16,12 +16,12 @@ Decides qué se produce y por qué; redactar cada pieza es trabajo de `redaccion
 
 ## Antes de planear
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `oferta`, `voz`, `clientes`, `faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `oferta`, `voz`, `clientes`, `faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes.
 
 Reúne (pregunta lo que falte):
 
 1. **Contexto del negocio:** qué hace la empresa (producto, servicio, tienda, consultorio), quién es el cliente ideal, cuál es el objetivo principal del contenido (tráfico, clientes potenciales, reconocimiento, liderazgo de opinión, citas o ventas en el local) y qué problemas resuelve.
-2. **Investigación de clientes:** qué preguntas hacen antes de comprar, qué objeciones salen en las llamadas, qué temas se repiten en los mensajes de soporte o de WhatsApp, y con qué palabras describen su problema (`00-Empresa/marketing` suele tenerlas; si no, `investigacion-clientes`).
+2. **Investigación de clientes:** qué preguntas hacen antes de comprar, qué objeciones salen en las llamadas, qué temas se repiten en los mensajes de soporte o de WhatsApp, y con qué palabras describen su problema (`contexto-marketing` suele tenerlas; si no, `investigacion-clientes`).
 3. **Estado actual:** qué contenido existe y qué funciona (`ver_analiticas` si hay redes conectadas; Search Console o analíticas del sitio si el dueño las comparte), qué recursos hay (redactores, presupuesto, tiempo) y qué formatos se pueden producir (texto, video, audio).
 4. **Panorama competitivo:** quiénes son los competidores principales y qué huecos de contenido hay en el mercado. Y, para cerrar: qué contenido existente genera más conversiones y por qué, y qué ideas únicas de la investigación con clientes no se están compartiendo.
 

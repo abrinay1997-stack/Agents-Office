@@ -26,7 +26,7 @@ Identifica de 10 a 20 creadores de tu sector que logren interacción alta de for
 - X: mira a quién sigue y con quién interactúa tu público objetivo.
 - Herramientas como SparkToro o Followerwonk, o investigación manual.
 - Quiénes salen en los boletines del sector.
-- Para un negocio local: las cuentas de la misma ciudad o rubro que tu cliente ideal sigue y comenta, y los competidores directos (en `00-Empresa/marketing`).
+- Para un negocio local: las cuentas de la misma ciudad o rubro que tu cliente ideal sigue y comenta, y los competidores directos (en `contexto-marketing`).
 
 ### 2. REUNIR: junta publicaciones a escala
 

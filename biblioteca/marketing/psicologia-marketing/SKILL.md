@@ -18,7 +18,7 @@ Los modelos mentales son herramientas de pensamiento que ayudan a decidir mejor,
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`: cliente ideal, objeciones, palabras del cliente, pruebas) y las cifras de la empresa. Usa ese contexto para adaptar las recomendaciones al producto y al público concretos. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. Los precios, los descuentos y las garantías salen de las cifras de la empresa.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`: cliente ideal, objeciones, palabras del cliente, pruebas) y las cifras de la empresa. Usa ese contexto para adaptar las recomendaciones al producto y al público concretos. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo` si sin eso no puedes seguir) o déjalo marcado como supuesto; nunca lo inventes. Los precios, los descuentos y las garantías salen de las cifras de la empresa.
 
 Cuando ayudes:
 1. Identifica qué modelos mentales aplican a la situación.

@@ -6,13 +6,13 @@ Arma un resumen de preparación antes de que el dueño (o el vocero) vaya como i
 
 ## Contexto que cargar primero
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/marketing`) y las cifras de la empresa: la empresa, el posicionamiento y el cliente ideal. Esas notas casi nunca traen el *banco de historias* del invitado, así que pídelo en un solo mensaje (no de a poco), con `pedir_bloqueo` si hace falta:
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `contexto-marketing`) y las cifras de la empresa: la empresa, el posicionamiento y el cliente ideal. Esas notas casi nunca traen el *banco de historias* del invitado, así que pídelo en un solo mensaje (no de a poco), con `pedir_bloqueo` si hace falta:
 
 1. ¿Qué construiste o hiciste antes de esto que sale en las conversaciones?
 2. ¿Cuáles son 2–3 historias que cuentas bien, con números reales?
 3. ¿Qué opinión tienes que la mayoría en tu sector no comparte?
 
-Propón guardar las respuestas como nota del Cerebro (p. ej. en `00-Empresa/marketing` o `Marketing/banco-de-historias`) para que la próxima vez no haya que preguntar.
+Propón guardar las respuestas como nota del Cerebro (p. ej. en `contexto-marketing` o `Marketing/banco-de-historias`) para que la próxima vez no haya que preguntar.
 
 Del pedido, establece (pregunta solo si falta y si importa): el nombre o enlace del podcast, si el invitado ya estuvo antes (pide el enlace de ese episodio: ancla el análisis de la evolución y las referencias), y más o menos cuándo se graba.
 

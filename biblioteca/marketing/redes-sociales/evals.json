@@ -66,7 +66,7 @@
     "Entrega exactamente las 9 tácticas prometidas, sin relleno, y avisa que las cifras y afirmaciones deben ser reales",
     "Menciona medir el rendimiento por guardados y finalización, no por «me gusta»"
   ] },
-  { "id": "anuncio-integracion-sin-señales-ia", "prompt": "Escribe una publicación de LinkedIn anunciando que nuestra herramienta de facturación ahora se sincroniza con el sistema contable. Que sea con mucho impacto para que tenga interacción.", "expectations": [
+  { "id": "anuncio-integracion-sin-senales-ia", "prompt": "Escribe una publicación de LinkedIn anunciando que nuestra herramienta de facturación ahora se sincroniza con el sistema contable. Que sea con mucho impacto para que tenga interacción.", "expectations": [
     "Abre con un gancho específico (un hecho, una cifra o una situación de cliente) y no un patrón genérico",
     "Sin contraste revelado ni lista de negaciones",
     "Sin rayas",

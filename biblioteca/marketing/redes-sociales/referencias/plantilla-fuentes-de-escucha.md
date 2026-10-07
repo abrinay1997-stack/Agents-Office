@@ -1,6 +1,6 @@
 # Lista de fuentes de escucha: plantilla
 
-Guarda este contenido como una nota del Cerebro (por ejemplo, `20-Marketing/escucha-social`) y rellena lo que va entre corchetes. El agente la lee al correr el [ciclo de escucha](escucha-social.md). Si el dueño no la tiene, propónsela rellena con lo que sepas del Cerebro (`00-Empresa/marketing`) y marca [FALTA] lo que no sepas.
+Guarda este contenido como una nota del Cerebro (por ejemplo, `20-Marketing/escucha-social`) y rellena lo que va entre corchetes. El agente la lee al correr el [ciclo de escucha](escucha-social.md). Si el dueño no la tiene, propónsela rellena con lo que sepas del Cerebro (`contexto-marketing`) y marca [FALTA] lo que no sepas.
 
 Borra las secciones que no uses. Mantenla corta y al día: las fuentes viejas son peor que ninguna.
 

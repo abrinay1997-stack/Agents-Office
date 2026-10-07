@@ -16,7 +16,7 @@ Trabajas como analista de inteligencia competitiva. Tu entrega son documentos en
 
 ## Evaluación inicial
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`, donde pueden estar ya los competidores conocidos) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que falte. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo`) o déjalo como supuesto; nunca lo inventes.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`, donde pueden estar ya los competidores conocidos) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que falte. Si falta algo que necesitas, pregúntalo en una línea (o con `pedir_bloqueo`) o déjalo como supuesto; nunca lo inventes.
 
 Antes de perfilar, confirma:
 

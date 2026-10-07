@@ -14,7 +14,7 @@ Sirve para planear lanzamientos que generan impulso, capturan atención y convie
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `00-Empresa/marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Precios de lanzamiento, descuentos y fechas salen de las cifras y del dueño.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/voz`, `00-Empresa/clientes`, `00-Empresa/faq` y, sobre todo, `contexto-marketing`) y las cifras de la empresa. Usa ese contexto y solo pregunta lo que no esté ahí o sea propio de este encargo. Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Precios de lanzamiento, descuentos y fechas salen de las cifras y del dueño.
 
 Mira también lo que ya existe: `ver_calendario_contenido` (qué está programado esas semanas), `ver_analiticas` (qué redes y formatos rinden) y, si la empresa tiene conectado su correo o su herramienta de boletín, el tamaño de la lista.
 
