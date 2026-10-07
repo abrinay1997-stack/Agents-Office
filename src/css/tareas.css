@@ -62,12 +62,12 @@ body.dark #tvOv { --tv-card: #1E1F24; --tv-soft: rgba(236,234,227,.05); --tv-lin
 #tvOv .tv-sech { display: flex; align-items: center; gap: 12px; min-height: 56px; }
 #tvOv .tv-ico { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; flex: none; }
 #tvOv .tv-ico svg { width: 18px; height: 18px; }
-#tvOv .tv-sec.t-ambar .tv-ico { color: var(--t-ambar); background: color-mix(in srgb, var(--t-ambar) 16%, transparent); }
-#tvOv .tv-sec.t-azul .tv-ico { color: var(--t-azul); background: color-mix(in srgb, var(--t-azul) 14%, transparent); }
-#tvOv .tv-sec.t-verde .tv-ico { color: var(--t-verde); background: color-mix(in srgb, var(--t-verde) 14%, transparent); }
-#tvOv .tv-sec.t-rojo .tv-ico { color: var(--t-rojo); background: color-mix(in srgb, var(--t-rojo) 14%, transparent); }
-#tvOv .tv-sec.t-violeta .tv-ico { color: var(--t-violeta); background: color-mix(in srgb, var(--t-violeta) 14%, transparent); }
-#tvOv .tv-sec.t-gris .tv-ico { color: var(--t-gris); background: color-mix(in srgb, var(--t-gris) 14%, transparent); }
+#tvOv :is(.tv-sec, .tv-mhd).t-ambar .tv-ico { color: var(--t-ambar); background: color-mix(in srgb, var(--t-ambar) 16%, transparent); }
+#tvOv :is(.tv-sec, .tv-mhd).t-azul .tv-ico { color: var(--t-azul); background: color-mix(in srgb, var(--t-azul) 14%, transparent); }
+#tvOv :is(.tv-sec, .tv-mhd).t-verde .tv-ico { color: var(--t-verde); background: color-mix(in srgb, var(--t-verde) 14%, transparent); }
+#tvOv :is(.tv-sec, .tv-mhd).t-rojo .tv-ico { color: var(--t-rojo); background: color-mix(in srgb, var(--t-rojo) 14%, transparent); }
+#tvOv :is(.tv-sec, .tv-mhd).t-violeta .tv-ico { color: var(--t-violeta); background: color-mix(in srgb, var(--t-violeta) 14%, transparent); }
+#tvOv :is(.tv-sec, .tv-mhd).t-gris .tv-ico { color: var(--t-gris); background: color-mix(in srgb, var(--t-gris) 14%, transparent); }
 #tvOv .tv-plegar { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 40px; justify-content: center; border: 0; background: none; cursor: pointer; text-align: left; }
 #tvOv .tv-plegar b { font-size: 15.5px; font-weight: 650; }
 #tvOv .tv-plegar small { font-size: 12.5px; color: var(--tv-mut); }
@@ -277,12 +277,79 @@ body.dark #tvOv .tv-seg button[data-prio="alta"][aria-pressed="true"] { color: #
 #tvOv .tv-toast :focus-visible { outline-color: #8FB0FF; }
 body.dark #tvOv .tv-toast { background: #ECEAE3; color: #151414; } body.dark #tvOv .tv-toast [data-deshacer] { color: #7A4B00; border-color: rgba(21,20,20,.35); } body.dark #tvOv .tv-toast .tv-icb { color: #151414; } body.dark #tvOv .tv-toast :focus-visible { outline-color: #2B6BEB; }
 
+/* MÍAS (plan D, 7 oct 2026): la lista personal del dueño, como TaskView — sus listas a la izquierda, la elegida a la derecha */
+#tvOv .tv-mias { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 20px; max-width: 1180px; margin: 0 auto; align-items: start; }
+#tvOv .tv-mrail { position: sticky; top: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 16px; background: var(--tv-soft); }
+#tvOv .tv-mli { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 10px; border: 0; border-radius: 10px; background: none; cursor: pointer; font-size: 14px; text-align: left; color: var(--ink); }
+#tvOv .tv-mli span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tvOv .tv-mli b { font-size: 12px; font-weight: 650; color: var(--tv-mut); font-variant-numeric: tabular-nums; }
+#tvOv .tv-mli b.rojo { color: var(--t-rojo); }
+#tvOv .tv-mli:hover { background: var(--tv-line); }
+#tvOv .tv-mli.on { background: var(--tv-card); box-shadow: inset 0 0 0 1px var(--tv-line); font-weight: 650; }
+#tvOv .tv-mrh { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--tv-mut); padding: 12px 10px 4px; font-weight: 600; }
+#tvOv .tv-mpd { width: 12px; height: 12px; border-radius: 4px; background: var(--tono, var(--t-gris)); flex: none; display: inline-block; }
+#tvOv .tv-mpd.grande { width: 18px; height: 18px; border-radius: 6px; }
+#tvOv .tv-mpd.c-azul { --tono: var(--t-azul); } #tvOv .tv-mpd.c-verde { --tono: var(--t-verde); } #tvOv .tv-mpd.c-ambar { --tono: var(--t-ambar); } #tvOv .tv-mpd.c-rojo { --tono: var(--t-rojo); }
+#tvOv .tv-mpd.c-violeta { --tono: var(--t-violeta); } #tvOv .tv-mpd.c-cian { --tono: var(--t-cian); } #tvOv .tv-mpd.c-rosa { --tono: var(--t-rosa); } #tvOv .tv-mpd.c-gris { --tono: var(--t-gris); }
+#tvOv .tv-mmain { min-width: 0; }
+#tvOv .tv-mhd { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 56px; margin-bottom: 10px; }
+#tvOv .tv-mtit { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#tvOv .tv-mtit h2 { font-family: var(--serif); font-weight: 400; font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; }
+#tvOv .tv-mtit small { color: var(--tv-mut); font-size: 13px; }
+#tvOv .tv-mlist .tv-gh:first-child { margin-top: 4px; }
+#tvOv .tv-gh.rojo { color: var(--t-rojo); }
+#tvOv .tv-madd { display: flex; align-items: center; gap: 8px; min-height: 46px; margin-top: 8px; padding: 0 12px; border: 1.5px dashed var(--tv-line); border-radius: 12px; color: var(--tv-mut); background: transparent; }
+#tvOv .tv-madd input { flex: 1; min-width: 0; min-height: 40px; border: 0; background: none; font-size: 14.5px; color: var(--ink); }
+#tvOv .tv-madd:focus-within { border-color: var(--ink); color: var(--ink); }
+/* la casilla redonda (TaskView): marca hecha; el borde dice la prioridad alta */
+#tvOv .tv-hck { appearance: none; -webkit-appearance: none; width: 24px; height: 24px; margin: 0; border-radius: 50%; border: 2px solid var(--tv-mut); background: var(--tv-card); cursor: pointer; flex: none; display: inline-grid; place-items: center; }
+#tvOv .tv-hck:hover { border-color: var(--t-verde); }
+#tvOv .tv-fila.alta .tv-hck { border-color: var(--t-rojo); }
+#tvOv .tv-hck:checked { background: var(--t-verde); border-color: var(--t-verde); }
+#tvOv .tv-hck:checked::after { content: ''; width: 6px; height: 11px; border: solid var(--tv-card); border-width: 0 2.5px 2.5px 0; transform: translateY(-1px) rotate(45deg); }
+#tvOv .tv-fila.mia.v-hecha .tv-tit { text-decoration: line-through; text-decoration-thickness: 1px; }
+#tvOv .tv-c-haciendo { color: var(--t-azul); background: color-mix(in srgb, var(--t-azul) 12%, transparent); font-weight: 600; }
+#tvOv :is(.tv-c-de, .tv-c-sug, .tv-c-tuya) { color: var(--t-violeta); background: color-mix(in srgb, var(--t-violeta) 11%, transparent); }
+#tvOv .tv-c-tuya { font-weight: 600; }
+#tvOv .tv-chips .tv-c.t-azul { color: var(--t-azul); } #tvOv .tv-chips .tv-c.t-verde { color: var(--t-verde); } #tvOv .tv-chips .tv-c.t-ambar { color: var(--t-ambar); } #tvOv .tv-chips .tv-c.t-rojo { color: var(--t-rojo); } #tvOv .tv-chips .tv-c.t-violeta { color: var(--t-violeta); } #tvOv .tv-chips .tv-c.t-gris { color: var(--t-gris); }
+#tvOv .tv-mtab { display: grid; grid-template-columns: repeat(var(--cols), minmax(220px, 1fr)); gap: 10px; align-items: start; }
+#tvOv .tv-mtab .tv-fila { align-items: flex-start; }
+#tvOv .tv-mtab .tv-madd { margin-top: 8px; }
+#tvOv .tv-mayuda { margin-top: 10px; }
+#tvOv .tv-n.mia { background: #C3A6FF; }
+#tvOv .tv-rapida.mia .tv-ridea { display: none; }
+#tvOv .tv-mpie { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+#tvOv .tv-mpie .tv-anadir { flex: 1 1 240px; width: auto; margin-top: 0; }
+/* el detalle de una tarea tuya: de dónde vino, y a quién se la pasas */
+#tvOv .tv-dorigen { margin: 10px 16px 0; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--t-violeta) 9%, var(--tv-card)); font-size: 13px; line-height: 1.45; }
+#tvOv .tv-delegar { margin: 8px 16px; }
+#tvOv .tv-delegar fieldset { border: 1px solid var(--tv-line); border-radius: 12px; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+#tvOv .tv-delegar legend { font-size: 13px; font-weight: 650; padding: 0 4px; }
+#tvOv .tv-dgq { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+#tvOv .tv-dgq label { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; font-size: 13.5px; cursor: pointer; }
+#tvOv .tv-dgq input { width: 18px; height: 18px; accent-color: var(--ink); }
+#tvOv .tv-delegar .tv-sel select { width: 100%; }
+#tvOv .tv-dgnota { font-size: 12.5px; color: var(--tv-mut); margin-bottom: -6px; }
+
 /* estrecho: la propia vista (con Dimitri al lado también), no la ventana */
 @container tvview (max-width: 1000px) {
   #tvOv .tv-det { position: absolute; inset: 0; width: auto; z-index: 4; border-left: 0; }
   #tvOv .tv-tablero:not(.carriles) { grid-template-columns: repeat(var(--cols), minmax(200px, 1fr)); }
 }
+@container tvview (max-width: 860px) { /* plan D: las listas de Mías pasan a una fila de pastillas */
+  #tvOv .tv-mias { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  #tvOv .tv-mrail { position: static; flex-direction: row; overflow-x: auto; padding: 2px 0 6px; gap: 6px; background: none; border-radius: 0; }
+  #tvOv .tv-mli { flex: none; min-height: 36px; border: 1px solid var(--tv-line); border-radius: 99px; background: var(--tv-card); padding: 0 12px; }
+  #tvOv .tv-mli span { overflow: visible; }
+  #tvOv .tv-mli.on { background: var(--ink); color: var(--cream); box-shadow: none; }
+  #tvOv .tv-mli.on b { color: inherit; }
+  #tvOv .tv-mrh { display: none; }
+}
 @container tvview (max-width: 700px) {
+  #tvOv .tv-mtab { display: block; }
+  #tvOv .tv-mtab .tv-col + .tv-col { margin-top: 10px; }
+  #tvOv .tv-mtit h2 { font-size: 21px; }
+  #tvOv .tv-mhd small { display: none; }
   #tvOv .tv-top { padding: 8px 12px; gap: 8px 10px; }
   #tvOv .tv-h1 { font-size: 20px; }
   #tvOv .tv-tabs { order: 3; width: 100%; flex-wrap: nowrap; overflow-x: auto; }

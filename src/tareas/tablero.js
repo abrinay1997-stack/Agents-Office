@@ -1,7 +1,8 @@
 // La vista Tareas — TABLERO: columnas = los estados de verdad (no se inventan: los agentes dependen de ellos); carriles por
 // departamento si se quiere. Arrastrar una tarjeta hace lo que significa ese paso, siempre con DESHACER y nunca con confirm():
 //   idea → en cola = pedirla · en cola → ideas = aparcarla · en cola/programada → hecha = cerrarla sin ejecutar ·
-//   espera tu OK → hecha = aprobar · hecha → en cola = repetirla · dentro de «en cola» = cambiar el orden · a otro carril = otro departamento.
+//   espera tu OK → hecha = aprobar · hecha → en cola = repetirla · dentro de «en cola» = cambiar el orden · a otro carril = otro departamento ·
+//   (plan D) a «Tuyas y de personas» = «Lo hago yo» · de ahí a «en cola» = devolvérsela a los agentes · de ahí a «hecha» = hecha.
 // En el teléfono, una columna a la vez (pestañas). movimiento() es puro y tiene test.
 import { visible } from '../../tareas/estados.mjs';
 import { ordenCola } from '../../tareas/cola.mjs';
@@ -9,7 +10,8 @@ import { esc, filaHTML } from './comun.js';
 
 export const COLUMNAS = [
   { k: 'idea', titulo: 'Ideas', vis: ['idea'] },
-  { k: 'cola', titulo: 'En cola', vis: ['en_cola', 'en_manos'] },
+  { k: 'cola', titulo: 'En cola', vis: ['en_cola'] },
+  { k: 'personas', titulo: 'Tuyas y de personas', vis: ['tuya', 'en_manos'] }, // plan D: lo que no hace un agente
   { k: 'programada', titulo: 'Programadas', vis: ['programada'] },
   { k: 'bloqueada', titulo: 'Bloqueadas', vis: ['bloqueada'] },
   { k: 'curso', titulo: 'En curso', vis: ['en_curso'] },
@@ -20,6 +22,9 @@ export const columnaDe = (t, porId) => { const v = visible(t, porId); return COL
 
 // ¿qué significa soltar `t` en la columna `a` (y el carril `dept`)? → { accion, texto } o null (no se puede)
 export function movimiento(t, de, a, { dept = null } = {}) {
+  if (a === 'personas' && de !== 'personas') return ['idea', 'cola', 'programada'].includes(de) && !t.team && !t.routine ? { accion: 'tomar', texto: 'hacerla tú' } : null; // plan D
+  if (de === 'personas' && a === 'cola') return t.person !== 'Tú' || t.deAgente || t.agent ? { accion: 'devolver', texto: 'devolvérsela a los agentes' } : null;
+  if (de === 'personas' && a === 'hecha') return { accion: 'hecha', texto: 'marcarla hecha' };
   if (dept && dept !== t.dept) return ['idea', 'cola', 'programada'].includes(de) && de === a ? { accion: 'departamento', texto: 'pasarla a otro departamento' } : null;
   if (de === a) return de === 'cola' ? { accion: 'orden', texto: 'cambiar su turno' } : null;
   const k = `${de}>${a}`;
@@ -41,9 +46,9 @@ export function tableroHTML(tareas, ctx, { carriles = false, colMovil = 'cola', 
   const tarjeta = t => filaHTML(t, ctx, { arrastrar: t.state !== 'doing', mostrarDept: !carriles });
   const tabs = `<div class="tv-coltabs" role="tablist" aria-label="Columna">${COLUMNAS.map(c => `<button type="button" role="tab" aria-selected="${c.k === colMovil}" data-colmovil="${c.k}">${esc(c.titulo)} <span>${por.get(c.k).length}</span></button>`).join('')}</div>`;
   if (!carriles) return `${tabs}<div class="tv-tablero" style="--cols:${COLUMNAS.length}">${COLUMNAS.map(c => `<section class="tv-col${c.k === colMovil ? ' movil' : ''}" data-col="${c.k}" aria-label="${esc(c.titulo)}"><h3>${esc(c.titulo)} <span>${por.get(c.k).length}</span></h3><div class="tv-drop" data-col="${c.k}"${por.get(c.k).length ? ' role="list"' : ''}>${por.get(c.k).map(tarjeta).join('') || '<p class="tv-nada">—</p>'}</div></section>`).join('')}</div>`;
-  const depts = ctx.deptKeys.filter(d => vivas.some(t => t.dept === d));
+  const depts = ctx.deptKeys.filter(d => vivas.some(t => t.dept === d)); if (vivas.some(t => !t.dept)) depts.push(''); // plan D: lo tuyo sin área, en su carril
   return `${tabs}<div class="tv-tablero carriles" style="--cols:${COLUMNAS.length}">
     <div class="tv-lh"></div>${COLUMNAS.map(c => `<div class="tv-lh${c.k === colMovil ? ' movil' : ''}" data-col="${c.k}">${esc(c.titulo)} <span>${por.get(c.k).length}</span></div>`).join('')}
-    ${depts.map(d => `<div class="tv-ld"><i style="background:${ctx.depto(d).chip}"></i>${esc(ctx.depto(d).short || ctx.depto(d).name)}</div>` + COLUMNAS.map(c => { const l = por.get(c.k).filter(t => t.dept === d); return `<div class="tv-drop tv-celda${c.k === colMovil ? ' movil' : ''}" data-col="${c.k}" data-dept="${d}" role="${l.length ? 'list' : 'group'}" aria-label="${esc(ctx.depto(d).name)} · ${esc(c.titulo)}">${l.map(tarjeta).join('')}</div>`; }).join('')).join('') || '<p class="tv-nada">No hay tareas vivas.</p>'}
+    ${depts.map(d => `<div class="tv-ld">${d ? `<i style="background:${ctx.depto(d).chip}"></i>${esc(ctx.depto(d).short || ctx.depto(d).name)}` : 'TUYAS'}</div>` + COLUMNAS.map(c => { const l = por.get(c.k).filter(t => (t.dept || '') === d); return `<div class="tv-drop tv-celda${c.k === colMovil ? ' movil' : ''}" data-col="${c.k}" data-dept="${d}" role="${l.length ? 'list' : 'group'}" aria-label="${esc(d ? ctx.depto(d).name : 'Tuyas sin área')} · ${esc(c.titulo)}">${l.map(tarjeta).join('')}</div>`; }).join('')).join('') || '<p class="tv-nada">No hay tareas vivas.</p>'}
   </div>`;
 }

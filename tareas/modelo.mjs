@@ -6,6 +6,8 @@
 //   prioridad 'alta' | 'media' | 'baja' (media) · etiquetas [id] · limite 'AAAA-MM-DD' o 'AAAA-MM-DDTHH:MM' (para cuándo; `dueAt`
 //   sigue siendo cuándo ARRANCA) · estimacion minutos · pasos [{ id, texto, hecho, por, at }] · bloqueadaPor [id] · proyecto id ·
 //   orden número (orden manual dentro de su estado, ver orden.mjs) · version (sube en cada cambio, almacen.mjs) · v 2 (el esquema).
+// Plan D (7 oct 2026): una tarea DEL DUEÑO (`person: 'Tú'`) puede no tener `dept` ni `agent`: es suya, ningún escritorio la tiene
+// (sus campos propios, en tareas/dueno.mjs).
 
 import { leerRepetir } from './ritmo.mjs';
 
@@ -62,7 +64,8 @@ export function crearTarea(campos = {}, { id = nidBase, ahora = Date.now() } = {
     addedAt: ahora, by: c.by || 'you',
   };
   for (const k of ['model', 'effort', 'needsOk', 'team', 'routine', 'when', 'due', 'late', 'missed', 'timeout', 'minutesSaved', 'routineModel', 'routineEffort', 'autonomous',
-    'trigger', 'guard', 'repeatOf', 'sub', 'refs', 'person', 'handoff', 'agenteOrigen', 'por']) if (c[k] !== undefined && c[k] !== null && c[k] !== '') t[k] = c[k];
+    'trigger', 'guard', 'repeatOf', 'sub', 'refs', 'person', 'handoff', 'agenteOrigen', 'por',
+    'deAgente', 'tomada', 'sugeridaPor', 'empezada', 'delegada', 'borradorAgente']) if (c[k] !== undefined && c[k] !== null && c[k] !== '') t[k] = c[k]; // plan D: las del dueño (tareas/dueno.mjs)
   if (c.dueAt) { t.dueAt = c.dueAt; t.state = 'scheduled'; }
   // T1: lo nuevo
   t.prioridad = PRIORIDADES.includes(c.prioridad) ? c.prioridad : 'media';

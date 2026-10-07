@@ -13,7 +13,7 @@ export const fechaDe = t => (t.limite ? String(t.limite).slice(0, 10) : t.dueAt 
 export function agenda(tareas, { ahora = Date.now(), dias = 7, recientesHoras = 48, agente = null, dept = null } = {}) {
   const porId = new Map(tareas.map(t => [t.id, t]));
   const hoy = dia(ahora), fin = dia(ahora + dias * 864e5);
-  const mias = tareas.filter(t => !t.archived && (!agente || t.agent === agente || (t.team?.pieces || []).some(p => p.agent === agente)) && (!dept || t.dept === dept));
+  const mias = tareas.filter(t => !t.archived && (!agente || (!t.person && (t.agent === agente || (t.team?.pieces || []).some(p => p.agent === agente)))) && (!dept || t.dept === dept)); // lo de una persona (o del dueño) no es del agente
   const out = { esperanOk: [], hoy: [], vencidas: [], enCurso: [], bloqueadas: [], proximas: [], recientes: [] };
   for (const t of mias) {
     const v = visible(t, porId), f = fechaDe(t), lim = limiteMs(t.limite);
@@ -36,7 +36,7 @@ export function agenda(tareas, { ahora = Date.now(), dias = 7, recientesHoras = 
 
 // la agenda en palabras (para un agente o Dimitri): corta, con ids para que no adivinen
 export function agendaTexto(a, { nombre = id => id, max = 8 } = {}) {
-  const linea = t => `- ${t.id} · «${t.title}» · ${nombre(t.agent)}${t.prioridad === 'alta' ? ' · prioridad ALTA' : ''}${t.limite ? ' · límite ' + t.limite.replace('T', ' ') : ''}${t.pasos?.length ? ` · pasos ${t.pasos.filter(p => p.hecho).length}/${t.pasos.length}` : ''}`;
+  const linea = t => `- ${t.id} · «${t.title}» · ${t.person === 'Tú' ? 'DEL DUEÑO (la hace él)' : t.person ? `${t.person} (persona)` : nombre(t.agent)}${t.prioridad === 'alta' ? ' · prioridad ALTA' : ''}${t.limite ? ' · límite ' + t.limite.replace('T', ' ') : ''}${t.pasos?.length ? ` · pasos ${t.pasos.filter(p => p.hecho).length}/${t.pasos.length}` : ''}`;
   const bloque = (titulo, l) => l.length ? `${titulo} (${l.length}):\n${l.slice(0, max).map(linea).join('\n')}${l.length > max ? `\n- … y ${l.length - max} más` : ''}` : `${titulo}: nada.`;
   return [bloque('VENCIDAS', a.vencidas), bloque('HOY', a.hoy), bloque('EN CURSO', a.enCurso), bloque('ESPERAN EL OK DEL DUEÑO', a.esperanOk), bloque('BLOQUEADAS', a.bloqueadas), bloque('PRÓXIMOS DÍAS', a.proximas)].join('\n\n');
 }

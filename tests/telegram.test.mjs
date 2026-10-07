@@ -70,3 +70,44 @@ test('end to end: an approval reaches the owner with buttons, ✅ approves in th
     tgSrv.closeAllConnections?.(); office.closeAllConnections?.(); tgSrv.close(); office.close(); fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('plan D: /yo te deja una tarea (con la fecha en palabras), /mias trae lo tuyo de hoy y ✅ la marca hecha', async () => {
+  const calls = { tg: [], office: [] };
+  let updates = [];
+  const tgSrv = http.createServer((req, res) => { let b = ''; req.on('data', d => b += d); req.on('end', () => {
+    const m = req.url.split('/').pop(), body = JSON.parse(b || '{}'); calls.tg.push({ m, body });
+    const result = m === 'getUpdates' ? updates.splice(0) : m === 'sendMessage' ? { message_id: 1 } : true;
+    if (m === 'getUpdates' && !result.length) return setTimeout(() => { res.end(JSON.stringify({ ok: true, result: [] })); }, 30);
+    res.end(JSON.stringify({ ok: true, result }));
+  }); });
+  const office = http.createServer((req, res) => { let b = ''; req.on('data', d => b += d); req.on('end', () => {
+    calls.office.push({ method: req.method, url: req.url, body: b, by: req.headers['x-office-by'] }); res.setHeader('content-type', 'application/json');
+    if (req.url === '/api/tareas/mias' && req.method === 'POST') { const j = JSON.parse(b); return res.end(JSON.stringify({ ok: true, tarea: { id: 'm2', title: j.title, limite: j.limite || null } })); }
+    if (req.url === '/api/tareas/mias') return res.end(JSON.stringify({ cuentas: { bandeja: 3 }, listas: { hoy: { pendientes: [{ id: 'm1', title: 'Llamar al banco', limite: '2026-10-07T10:30', prioridad: 'alta', empezada: 1 }] } } }));
+    res.end(JSON.stringify({ ok: true }));
+  }); });
+  await new Promise(r => tgSrv.listen(0, '127.0.0.1', r)); await new Promise(r => office.listen(0, '127.0.0.1', r));
+  const keep = { ...process.env };
+  Object.assign(process.env, { TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_OWNER_ID: '42', TELEGRAM_API_BASE: `http://127.0.0.1:${tgSrv.address().port}`, TELEGRAM_RETRY_MS: '50' });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-tg-'));
+  const bot = T.start({ port: office.address().port, cfg: { name: 'PanaClaw' }, dataDir: dir, onTask: () => {}, onNotice: () => {}, log: { warn() {} } });
+  const until = async (ok, ms = 5000) => { for (const end = Date.now() + ms; !ok() && Date.now() < end;) await new Promise(r => setTimeout(r, 20)); };
+  try {
+    assert.deepEqual(T.parseCommand('/yo llamar al banco'), { cmd: 'yo', arg: 'llamar al banco' }); assert.equal(T.parseCommand('/mias').cmd, 'mias'); assert.equal(T.parseCommand('/hoy').cmd, 'mias');
+    updates.push({ update_id: 1, message: { from: { id: 42 }, chat: { id: 42 }, text: '/yo urgente: firmar el contrato para mañana' } });
+    await until(() => calls.tg.some(c => c.m === 'sendMessage' && /Para ti/.test(c.body.text)));
+    const alta = calls.office.find(c => c.method === 'POST' && c.url === '/api/tareas/mias'); const j = JSON.parse(alta.body);
+    assert.equal(j.prioridad, 'alta'); assert.match(j.limite, /^\d{4}-\d{2}-\d{2}$/); assert.match(j.title, /^Firmar el contrato$/i); assert.equal(alta.by, undefined, 'el dueño, como en la página');
+    updates.push({ update_id: 2, message: { from: { id: 42 }, chat: { id: 42 }, text: '/mias' } });
+    await until(() => calls.tg.some(c => c.m === 'sendMessage' && /Llamar al banco/.test(c.body.text)));
+    const fila = calls.tg.find(c => c.m === 'sendMessage' && /Llamar al banco/.test(c.body.text));
+    assert.match(fila.body.text, /▶ <b>Llamar al banco<\/b> · 2026-10-07 10:30 · prioridad alta/); assert.equal(fila.body.reply_markup.inline_keyboard[0][0].callback_data, 'mh:m1');
+    assert.ok(calls.tg.some(c => c.m === 'sendMessage' && /Lo tuyo hoy<\/b> \(1\) · 3 en tu bandeja/.test(c.body.text)));
+    updates.push({ update_id: 3, callback_query: { id: 'q9', from: { id: 42 }, data: 'mh:m1', message: { message_id: 7, chat: { id: 42 } } } });
+    await until(() => calls.office.some(c => c.url === '/api/tareas/m1/estado'));
+    const est = calls.office.find(c => c.url === '/api/tareas/m1/estado'); assert.deepEqual(JSON.parse(est.body), { a: 'done' });
+  } finally {
+    bot.stop(); for (const k of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_OWNER_ID', 'TELEGRAM_API_BASE', 'TELEGRAM_RETRY_MS']) { if (keep[k] === undefined) delete process.env[k]; else process.env[k] = keep[k]; }
+    tgSrv.closeAllConnections?.(); office.closeAllConnections?.(); tgSrv.close(); office.close(); fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

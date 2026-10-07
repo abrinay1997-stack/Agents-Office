@@ -71,6 +71,8 @@ import { progresoProyecto } from './tareas/progreso.mjs';
 import { resumenTareas } from './tareas/resumen.mjs';
 import { siguiente as siguienteRepeticion, avisosLimite } from './tareas/ritmo.mjs';
 import { crearRutasTareas, despachadorDependencias } from './tareas/rutas.mjs';
+import { crearRutasDueno } from './tareas/rutas-dueno.mjs'; // plan D (7 oct 2026): las tareas del dueño — las suyas, tomar, delegar
+import { resumenDueno, DUENO } from './tareas/dueno.mjs';
 import { crearWebhooks } from './tareas/webhooks.mjs';
 import { revisar as revisarPermisos } from './tareas/permisos.mjs';
 import { limpiar as limpiarBloqueos, ciclo as cicloBloqueos, pendientes as bloqueosPendientes } from './tareas/dependencias.mjs';
@@ -588,6 +590,7 @@ function tareasText() { // plan T3 (6 oct 2026): the desk's own task, as tools (
   if (backend !== 'claude-cli') return '';
   return '\n- TAREAS (mcp__tareas__*): ver_mi_tarea al empezar (pasos con su id, fecha límite, comentarios del dueño); marcar_paso en cuanto termines cada paso (el dueño ve el avance); anotar_en_bitacora para lo que encontraste o decidiste; ' +
     'pedir_bloqueo si NO puedes seguir sin un dato, una decisión o que otra tarea termine (no lo inventes: tu tarea se para con lo que llevas y sigue sola después); crear_borrador_tarea para pedirle trabajo a otro departamento (nace idea); registrar_trabajo para algo hecho fuera de una tarea. ' +
+    'El DUEÑO también tiene su propia lista de tareas: las que ver_tareas marca «DEL DUEÑO» las hace él en persona — no las ejecutes, no las repitas ni las cambies; si tu trabajo depende de una, pide_bloqueo con su id. Si algo solo lo puede hacer o decidir él y no te bloquea (una llamada, una firma, un precio), sugerir_al_dueno se lo deja en su Bandeja. ' + // plan D (7 oct 2026)
     'Nada de esto aprueba ni envía.';
 }
 function contenidoText(a) { // V4.7: what an agent of these departments may do with the content calendar
@@ -890,7 +893,7 @@ function dimitriVoices() {
 }
 /** V4.11 (DIM-10): the rest of the office for «¿Cómo vamos?» — Contenido, Analíticas, routines, spend, KPIs, notices — computed, no model. */
 function agendaResumen(l) { // plan T4: what is overdue or blocked, in one line each (the full agenda is the ver_agenda tool)
-  const a = agendaTareas(l, { ahora: Date.now() }), it = x => `«${String(x.title).slice(0, 50)}» (${x.person ? x.person : agentName(x.agent)}${x.limite ? ', límite ' + x.limite : ''})`;
+  const a = agendaTareas(l, { ahora: Date.now() }), it = x => `«${String(x.title).slice(0, 50)}» (${x.person === DUENO ? 'del dueño' : x.person ? x.person : agentName(x.agent)}${x.limite ? ', límite ' + x.limite : ''})`;
   return [a.vencidas.length ? `Tareas vencidas (${a.vencidas.length}): ${a.vencidas.slice(0, 5).map(it).join('; ')}` : '', a.bloqueadas.length ? `Tareas bloqueadas (${a.bloqueadas.length}): ${a.bloqueadas.slice(0, 5).map(it).join('; ')}` : '', a.hoy.length ? `Para hoy (${a.hoy.length}): ${a.hoy.slice(0, 5).map(it).join('; ')}` : ''].filter(Boolean).join('\n');
 }
 function dimitriOffice(list) {
@@ -898,7 +901,7 @@ function dimitriOffice(list) {
   try { const d = new Date(); d.setDate(d.getDate() + 13); out.push(sub.contenidoText(contenido.listar({ desde: localDay(Date.now()), hasta: localDay(d.getTime()), sinFecha: true }), { now: new Date(), dias: 7 })); } catch (e) { out.push(`Contenido: no lo pude leer (${e.message}).`); }
   try { out.push(sub.analiticasText(analiticasResumen())); } catch {}
   try { out.push(sub.rutinasText(loadRoutines(), list, { agents: AGENTS })); } catch {}
-  try { const l = list || load(); out.push(sub.proyectosText(catalogoT.proyectos().map(p => ({ ...p, progreso: progresoProyecto(p, l) })), l, { name: agentName })); out.push(agendaResumen(l)); } catch {} // plan T4: projects, deadlines, blocks
+  try { const l = list || load(); out.push(sub.proyectosText(catalogoT.proyectos().map(p => ({ ...p, progreso: progresoProyecto(p, l) })), l, { name: agentName })); out.push(agendaResumen(l)); out.push(resumenDueno(l, { nombre: agentName })); } catch {} // plan T4: projects, deadlines, blocks · plan D: lo del dueño
   try {
     const kp = loadKpis(), unread = loadNotices().filter(n => !n.read);
     out.push(sub.oficinaText({ budget: costs.budgetState(costs.read(DATA, Date.now() - 32 * 864e5), COSTS()), kpis: kp.defs.map(d => ({ id: d.id, name: d.name, goal: d.goal ?? d.target, value: (kp.values[d.id] || []).at(-1)?.v ?? null })), unread: unread.length, notices: unread.slice(-4).reverse() }));
@@ -1135,7 +1138,7 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
     if (t.state !== 'proposed') continue;
     const e = byI.get(t.i) || {};
     if (e.include === false) { t.state = 'skipped'; continue; }
-    if (e.dept && DEPTS[e.dept] && e.dept !== 'brain') t.dept = e.dept;
+    if (e.dept && ((DEPTS[e.dept] && e.dept !== 'brain') || e.dept === 'dueno')) t.dept = e.dept; // plan D: «Tú» es una opción más
     if (typeof e.instruction === 'string' && e.instruction.trim()) t.instruction = e.instruction.trim().slice(0, 4000);
     if (typeof e.team === 'boolean') t.team = e.team;
     if (e.at === null) t.at = null; else if (typeof e.at === 'number' && e.at > Date.now()) t.at = e.at;
@@ -1153,13 +1156,14 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
     if (proyecto) m.plan.proyecto = { ...pp, id: proyecto.id, nombre: proyecto.nombre };
   }
   const ids = new Map(todo.map(t => [t.i, nid()]));
-  const made = await Promise.all(todo.map(t => newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) } })
+  const paraTi = t => altaTarea({ person: DUENO, title: t.title, text: t.instruction, why: t.why, by: 'sub', sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite || (t.at ? `${localDay(t.at)}T${new Date(t.at).toTimeString().slice(0, 5)}` : undefined), proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false }); // plan D: lo que hace el dueño en persona, a su lista
+  const made = await Promise.all(todo.map(t => (t.dept === 'dueno' ? Promise.resolve().then(() => paraTi(t)) : newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) } }))
     .then(task => { t.state = 'sent'; t.taskId = task.id; t.agent = task.agent; return task; })
     .catch(err => { t.state = 'failed'; t.error = err.message; return null; })));
   const st2 = sub.load(DATA); const i = st2.messages.findIndex(x => x.id === m.id); if (i >= 0) st2.messages[i] = m; // re-read: another message may have landed while routing
   const sent = made.filter(Boolean);
   const esperan = sent.filter(t => t.bloqueadaPor?.length).length;
-  st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => DEPTS[t.dept].name))].join(', ')}${proyecto ? `, en el proyecto «${proyecto.nombre}»` : ''}.${esperan ? ` ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} a que termine otra antes de empezar.` : ''} Te aviso aquí cómo van (y en Tareas, H).${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
+  st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => (t.person === DUENO ? 'tu lista (Tareas → Mías)' : DEPTS[t.dept]?.name || t.dept)))].join(', ')}${proyecto ? `, en el proyecto «${proyecto.nombre}»` : ''}.${esperan ? ` ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} a que termine otra antes de empezar.` : ''} Te aviso aquí cómo van (y en Tareas, H).${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
   sub.save(DATA, st2);
   return { ok: true, message: m, tasks: sent, messages: st2.messages.slice(-2) };
 }
@@ -1247,11 +1251,11 @@ function icsFeed() {
   }
   const dur = min => `DURATION:PT${Math.max(5, Math.min(24 * 60, Math.round(min || 30)))}M`; // plan T2: the task's estimate (30 min when it has none)
   for (const t of load()) {
-    const a = AGENTS.find(x => x.id === t.agent), quien = `${DEPTS[t.dept]?.name || t.dept} · ${a ? a.name : t.agent}${t.prioridad === 'alta' ? ' · prioridad alta' : ''}`;
+    const a = AGENTS.find(x => x.id === t.agent), mia = t.person === DUENO, quien = mia ? `Tuya${DEPTS[t.dept] ? ' · ' + DEPTS[t.dept].name : ''}${t.prioridad === 'alta' ? ' · prioridad alta' : ''}` : t.person ? `${t.person} (persona)${t.prioridad === 'alta' ? ' · prioridad alta' : ''}` : `${DEPTS[t.dept]?.name || t.dept} · ${a ? a.name : t.agent}${t.prioridad === 'alta' ? ' · prioridad alta' : ''}`; // plan D: lo tuyo dice «Tuya»
     if (t.state === 'scheduled' && t.dueAt) ev.push(['BEGIN:VEVENT', `UID:tarea-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(new Date(t.dueAt))}`, dur(t.estimacion), `SUMMARY:${txt('◷ ' + t.title)}`, `DESCRIPTION:${txt(`${t.text || t.title}\n${quien}`)}`, 'END:VEVENT']);
     if (t.limite && t.state !== 'done' && !t.archived) { // the deadline: an all-day event (or at its hour)
       const s = String(t.limite), d = s.slice(0, 10).replace(/-/g, '');
-      ev.push(['BEGIN:VEVENT', `UID:limite-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, ...(s.length > 10 ? [`DTSTART:${stamp(new Date(s))}`, 'DURATION:PT15M'] : [`DTSTART;VALUE=DATE:${d}`]), `SUMMARY:${txt('⚑ Vence: ' + t.title)}`, `DESCRIPTION:${txt(quien)}`, 'END:VEVENT']);
+      ev.push(['BEGIN:VEVENT', `UID:limite-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, ...(s.length > 10 ? [`DTSTART:${stamp(new Date(s))}`, mia ? dur(t.estimacion) : 'DURATION:PT15M'] : [`DTSTART;VALUE=DATE:${d}`]), `SUMMARY:${txt((mia ? '☐ ' : '⚑ Vence: ') + t.title)}`, `DESCRIPTION:${txt(mia && t.text ? `${t.text}\n${quien}` : quien)}`, 'END:VEVENT']); // plan D: una tarea tuya es un pendiente tuyo («☐»)
     }
   }
   return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Agents Office//Calendario//ES', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${txt(cfg.name + ' · oficina')}`, ...ev.flat(), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
@@ -1356,7 +1360,7 @@ async function runServerTask(id, { feedback, approve } = {}) {
     if (!approve && HANDOFF.test(out.result || '')) { // V4.4 (I6): the agent asks for a person — the task goes to one, with everything it did
       const who = PEOPLE().find(p => !p.depts?.length || p.depts.includes(task.dept))?.name || 'Tú';
       task.handoff = { at: Date.now(), from: task.agent, why: out.result.replace(HANDOFF, '').split('\n').slice(0, 3).join(' ').slice(0, 300) };
-      task.person = who; task.result = out.result.replace(HANDOFF, ''); task.state = 'next'; task.needsOk = false; task.addedAt = Date.now();
+      task.person = who; task.result = out.result.replace(HANDOFF, ''); task.state = 'next'; task.needsOk = false; task.addedAt = Date.now(); task.deAgente = task.agent; // plan D: «Devolver a …» en la lista de quien la recibe
       Object.assign(task, { read: out.read, tools: out.tools, used: out.used, modelUsed: out.modelUsed }); task.cost = Math.round(((task.cost || 0) + (out.usd || 0)) * 1e6) / 1e6;
       delete task.tomadaPor; guardarRun(task); basesRun.delete(task.id);
       notice('handoff', `${agentName(task.agent)} pasa «${task.title}» a ${who}: ${task.handoff.why}`, { task: task.id }); tellPerson(who, `👤 ${agentName(task.agent)} te pasa «${task.title}»: ${task.handoff.why}`);
@@ -1649,6 +1653,8 @@ const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, pro
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 const webhooksT = crearWebhooks({ config: () => cfg.tareas?.webhooks || [], dataDir: DATA, avisar: t => notice('webhook', t, { level: 'warn', key: 'webhook' }) }); webhooksT.escuchar(busTareas); // plan T6: Zapier, Make, n8n… (tareas/webhooks.mjs)
 const tareasRoutes = crearRutasTareas({ alm: tareasAlm, cat: catalogoT, json, body, webhooks: webhooksT, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id) });
+const duenoRoutes = crearRutasDueno({ alm: tareasAlm, cat: catalogoT, json, body, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), avisarPersona: (n, t) => tellPerson(n, t), personas: () => PEOPLE().map(p => p.name), // plan D
+  altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id), enrutar: (dept, text) => route(dept, text), adivinarOk: text => routines.guessNeedsOk(text), exigeOk: text => approvals.overLimit(text, APPR().amountLimit).length > 0 });
 despachadorDependencias({ bus: busTareas, alm: tareasAlm, pump: () => pump(), avisar: (k, t, o) => notice(k, t, o), nombre: id => agentName(id) });
 // plan T5 (6 oct 2026): a task that repeats — when it ends well, the next one is born (one open at a time; «al completar» counts from that day)
 busTareas.on('tarea.estado', ({ tarea, a }) => {
@@ -1664,7 +1670,7 @@ function tickLimites() {
     const l = load(), av = avisosLimite(l); if (!av.length) return;
     const porId = new Map(l.map(t => [t.id, t]));
     for (const x of av) { const t = porId.get(x.id); (t.avisos ||= {})[x.tipo] = Date.now();
-      const quien = t.person ? t.person : agentName(t.agent), txt = x.tipo === 'vencida' ? `Venció «${t.title}» (${quien}, límite ${String(t.limite).replace('T', ' ')}).` : x.tipo === 'vispera' ? `Mañana vence «${t.title}» y aún no empezó (${quien}).` : `Hoy vence «${t.title}».`;
+      const quien = t.person === DUENO ? 'tuya' : t.person ? t.person : agentName(t.agent), txt = x.tipo === 'vencida' ? `Venció «${t.title}» (${quien}, límite ${String(t.limite).replace('T', ' ')}).` : x.tipo === 'vispera' ? `Mañana vence «${t.title}» y aún no empezó (${quien}).` : `Hoy vence «${t.title}».`;
       notice('limite', txt, { level: x.tipo === 'vencida' ? 'warn' : 'info', task: t.id, key: `limite-${x.tipo}-${t.id}` });
       if (t.person && t.person !== 'Tú') tellPerson(t.person, `⚑ ${txt}`); }
     save(l, { por: 'oficina' });
@@ -2355,6 +2361,7 @@ const server = http.createServer(async (req, res) => {
           const name = String(b.person || '').trim();
           if (name && !personOf(name) && name !== 'Tú') return json(res, 400, { error: 'esa persona no está en Ajustes → Equipo' });
           if (t.state === 'doing' || t.state === 'waiting') return json(res, 409, { error: 'está en marcha o esperando tu visto bueno: espera a que termine' });
+          if (name === DUENO && t.agent) { t.deAgente = t.agent; t.tomada = { at: Date.now(), estado: t.state }; delete t.agent; } // plan D: «a ti» es «Lo hago yo» — deja su escritorio (tareas/rutas-dueno.mjs → tomar)
           if (name) { t.person = name; if (t.state === 'done') { t.state = 'next'; t.addedAt = Date.now(); } t.handoff = t.handoff || { at: Date.now(), from: 'la página', why: String(b.why || '').slice(0, 300) }; tellPerson(name, `👤 Te asignaron «${t.title}»${b.why ? ': ' + b.why : ''}.`); }
           else { delete t.person; }
           save(l); setImmediate(pump); return json(res, 200, { ok: true, person: t.person || null });
@@ -2412,6 +2419,7 @@ const server = http.createServer(async (req, res) => {
     if (m && m[2] === 'repeat' && req.method === 'POST') { // the same work again, as a new task (same agent, same words)
       const src = load().find(x => x.id === m[1]);
       if (!src) return json(res, 404, { error: 'esa tarea ya no existe' });
+      if (src.person === DUENO && !src.agent) { const t = altaTarea({ person: DUENO, dept: src.dept, deAgente: src.deAgente, title: src.title, text: src.text, by: 'you', repeatOf: src.id, prioridad: src.prioridad, etiquetas: src.etiquetas, proyecto: src.proyecto, estimacion: src.estimacion, pasos: (src.pasos || []).map(p => p.texto) }, { por: 'dueno', arrancar: false }); return json(res, 200, t); } // plan D: otra vez, para ti
       const t = altaTarea({ dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
         team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id, prioridad: src.prioridad, etiquetas: src.etiquetas, proyecto: src.proyecto, estimacion: src.estimacion }, { por: 'dueno', arrancar: false });
       console.log(`↻ ${t.id} repeats ${src.id}: ${t.title}`); setImmediate(pump);
@@ -2429,6 +2437,7 @@ const server = http.createServer(async (req, res) => {
         Object.assign(t, { state: 'done', doneAt: Date.now(), result: 'Marcada como hecha por ti, sin ejecutarla.', manual: true }); save(l);
         return json(res, 200, t);
       }
+      if (b.dept !== undefined && cur.person === DUENO && !cur.agent) { if (b.dept && (!DEPTS[b.dept] || b.dept === 'brain')) return json(res, 400, { error: 'departamento desconocido' }); patch.dept = b.dept || undefined; } // plan D: el área de una tarea tuya (opcional)
       if (b.agent !== undefined) {
         const a = AGENTS.find(x => x.id === b.agent); if (!a) return json(res, 400, { error: 'no existe ese agente' });
         if (cur.team && !a.lead) return json(res, 400, { error: 'una tarea en equipo va al líder del departamento' });
@@ -2444,7 +2453,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (typeof b.text === 'string') {
         const t = b.text.trim(); if (!t || t.length > 4000) return json(res, 400, { error: 'el texto debe tener entre 1 y 4000 caracteres' });
-        if (t !== cur.text) { patch.text = t; if (b.reroute !== false && b.agent === undefined) { const r = await route(patch.dept || cur.dept, t); Object.assign(patch, { title: r.title, plan: r.plan, needsOk: r.needsOk, why: r.why, ...(cur.team ? {} : { agent: r.agent }) }); } }
+        if (t !== cur.text) { patch.text = t; if (b.reroute !== false && b.agent === undefined && cur.agent && !cur.person) { const r = await route(patch.dept || cur.dept, t); Object.assign(patch, { title: r.title, plan: r.plan, needsOk: r.needsOk, why: r.why, ...(cur.team ? {} : { agent: r.agent }) }); } } // plan D: lo del dueño (o de una persona) no se enruta
       }
       if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 90);
       if (b.model !== undefined) patch.model = normModel(b.model) || undefined;
@@ -2467,6 +2476,7 @@ const server = http.createServer(async (req, res) => {
       if (!task) return json(res, 404, { error: 'esa tarea ya no existe' });
       if (task.state === 'doing' || running.has(task.id)) return json(res, 409, { error: 'ya está en curso' });
       if (task.state === 'scheduled') return json(res, 409, { error: 'está programada: corre sola a su hora' });
+      if (!AGENTS.some(a => a.id === task.agent) || task.person) return json(res, 409, { error: task.person === DUENO ? 'es tuya: delégala a un agente para que la haga' : 'la tiene una persona: devuélvela a los agentes primero' }); // plan D
       if (m[2] === 'run') { if (task.state !== 'next') { task.state = 'next'; task.addedAt = Date.now(); save(list); } setImmediate(pump); return json(res, 200, { ok: true, id: task.id, state: 'next' }); }
       const { feedback } = await body(req); const note = String(feedback || '').trim();
       if (!note) return json(res, 400, { error: 'di qué debe cambiar' });
@@ -2486,7 +2496,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, trashed, graph: trashed ? await rebuildGraph() : undefined });
     }
     /* ---------- V4.7: Contenido — the pieces, their review and approval ---------- */
-    if (url.pathname.startsWith('/api/tareas') && await tareasRoutes(req, res, url)) return; // plan T1–T4: organizar, bitácora, proyectos, etiquetas, agenda, lo de los agentes
+    if (url.pathname.startsWith('/api/tareas') && (await duenoRoutes(req, res, url) || await tareasRoutes(req, res, url))) return; // plan T1–T4: organizar, bitácora, proyectos, etiquetas, agenda, lo de los agentes · plan D: las del dueño (antes: «mias» no es un id)
     if (url.pathname.startsWith('/api/contenido/') && await analiticasRoutes(req, res, url)) return; // V4.7 (F2): Analíticas y la conexión con Meta
     if (url.pathname.startsWith('/api/contenido') && await contenidoRoutes(req, res, url)) return;
     /* ---------- the Estudio ---------- */

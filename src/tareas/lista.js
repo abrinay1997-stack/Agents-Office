@@ -6,8 +6,10 @@ import { limiteMs, PESO_PRIORIDAD } from '../../tareas/modelo.mjs';
 import { visible, VISIBLES, ORDEN_VISIBLE } from '../../tareas/estados.mjs';
 import { fechaDe } from '../../tareas/agenda.mjs';
 import { esc, svg, filaHTML, vacioHTML, fechaCorta } from './comun.js';
+import { esDelDueno } from '../../tareas/dueno.mjs';
 
-export const FILTROS = ['q', 'dept', 'agente', 'prio', 'etiqueta', 'proyecto', 'estado', 'hechas'];
+export const FILTROS = ['q', 'quien', 'dept', 'agente', 'prio', 'etiqueta', 'proyecto', 'estado', 'hechas'];
+export const QUIEN = { yo: 'Tuyas', agentes: 'De los agentes', personas: 'De personas del equipo' }; // plan D
 export const ORDENES = { cola: 'Como en la cola', limite: 'Fecha límite', prioridad: 'Prioridad', recientes: 'Recientes primero' };
 export const GRUPOS = { nada: 'Sin agrupar', estado: 'Por estado', dept: 'Por departamento', proyecto: 'Por proyecto', dia: 'Por día' };
 const fold = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -18,6 +20,9 @@ export function filtrar(tareas, f, ctx) {
     if (t.archived) return false;
     const v = visible(t, porId);
     if (!f.hechas && (v === 'hecha' || v === 'fallida') && f.estado !== 'hecha' && f.estado !== 'fallida') return false;
+    if (f.quien === 'yo' && !esDelDueno(t)) return false; // plan D
+    if (f.quien === 'agentes' && t.person) return false;
+    if (f.quien === 'personas' && (!t.person || esDelDueno(t))) return false;
     if (f.dept && t.dept !== f.dept) return false;
     if (f.agente && t.agent !== f.agente) return false;
     if (f.prio && (t.prioridad || 'media') !== f.prio) return false;
@@ -42,7 +47,7 @@ export function agrupar(l, como, ctx) {
   for (const t of l) {
     let k, titulo;
     if (como === 'estado') { k = visible(t, ctx.porId); titulo = VISIBLES[k]?.etiqueta || k; }
-    else if (como === 'dept') { k = t.dept; titulo = ctx.depto(k)?.name || k; }
+    else if (como === 'dept') { k = t.dept || '-'; titulo = ctx.depto(k)?.name || 'Sin departamento (tuyas)'; }
     else if (como === 'proyecto') { k = t.proyecto || '-'; titulo = t.proyecto ? ctx.proyecto(t.proyecto)?.nombre || 'Proyecto borrado' : 'Sin proyecto'; }
     else { k = fechaDe(t) || '~'; titulo = k === '~' ? 'Sin fecha' : fechaCorta(new Date(k + 'T12:00').getTime()); }
     if (!g.has(k)) g.set(k, { k, titulo, tareas: [] }); g.get(k).tareas.push(t);
@@ -57,7 +62,7 @@ export function agrupar(l, como, ctx) {
 // los filtros activos como chips que se quitan
 export function chipsFiltro(f, ctx) {
   const c = [];
-  const nombre = { dept: v => ctx.depto(v)?.name || v, agente: v => ctx.agente(v)?.name || v, prio: v => `Prioridad ${v}`, etiqueta: v => '#' + (ctx.etiqueta(v)?.nombre || v), proyecto: v => (v === '-' ? 'Sin proyecto' : ctx.proyecto(v)?.nombre || v), estado: v => VISIBLES[v]?.etiqueta || v, q: v => `«${v}»`, hechas: () => 'Con las hechas' };
+  const nombre = { quien: v => QUIEN[v] || v, dept: v => ctx.depto(v)?.name || v, agente: v => ctx.agente(v)?.name || v, prio: v => `Prioridad ${v}`, etiqueta: v => '#' + (ctx.etiqueta(v)?.nombre || v), proyecto: v => (v === '-' ? 'Sin proyecto' : ctx.proyecto(v)?.nombre || v), estado: v => VISIBLES[v]?.etiqueta || v, q: v => `«${v}»`, hechas: () => 'Con las hechas' };
   for (const k of FILTROS) if (f[k]) c.push(`<button type="button" class="tv-fchip" data-quitar="${k}" aria-label="Quitar el filtro ${esc(nombre[k](f[k]))}">${esc(nombre[k](f[k]))}${svg('x')}</button>`);
   if (c.length > 1) c.push('<button type="button" class="tv-fchip limpiar" data-quitar="*">Quitar todos</button>');
   return c.join('');
@@ -66,6 +71,7 @@ export function chipsFiltro(f, ctx) {
 export function barraFiltros(f, ctx, { orden, grupo }) {
   const opt = (v, t, sel) => `<option value="${esc(v)}"${sel === v ? ' selected' : ''}>${esc(t)}</option>`;
   return `<div class="tv-fbar" role="group" aria-label="Filtros">
+    <label class="tv-sel"><span>Quién</span><select data-f="quien">${opt('', 'Todos', f.quien)}${Object.entries(QUIEN).map(([k, t]) => opt(k, t, f.quien)).join('')}</select></label>
     <label class="tv-sel"><span>Departamento</span><select data-f="dept">${opt('', 'Todos', f.dept)}${ctx.deptKeys.map(k => opt(k, ctx.depto(k).name, f.dept)).join('')}</select></label>
     <label class="tv-sel"><span>Prioridad</span><select data-f="prio">${opt('', 'Todas', f.prio)}${opt('alta', 'Alta', f.prio)}${opt('media', 'Media', f.prio)}${opt('baja', 'Baja', f.prio)}</select></label>
     <label class="tv-sel"><span>Estado</span><select data-f="estado">${opt('', 'Abiertas', f.estado)}${ORDEN_VISIBLE.map(k => opt(k, VISIBLES[k].etiqueta, f.estado)).join('')}</select></label>

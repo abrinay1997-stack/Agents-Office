@@ -13,13 +13,14 @@ export const VISIBLES = {
   programada: { etiqueta: 'Programada', corta: 'PROGRAMADA', tono: 'azul', abierta: true },
   en_cola: { etiqueta: 'En cola', corta: 'EN COLA', tono: 'gris', abierta: true },
   bloqueada: { etiqueta: 'Bloqueada', corta: 'BLOQUEADA', tono: 'ambar', abierta: true },
+  tuya: { etiqueta: 'Tuya', corta: 'TUYA', tono: 'violeta', abierta: true }, // plan D (7 oct 2026): la hace el dueño (tareas/dueno.mjs)
   en_manos: { etiqueta: 'En manos de una persona', corta: 'PERSONA', tono: 'violeta', abierta: true },
   en_curso: { etiqueta: 'En curso', corta: 'EN CURSO', tono: 'azul', abierta: true },
   espera_ok: { etiqueta: 'Espera tu OK', corta: 'ESPERA OK', tono: 'ambar', abierta: true },
   hecha: { etiqueta: 'Hecha', corta: 'HECHA', tono: 'verde', abierta: false },
   fallida: { etiqueta: 'Falló', corta: 'FALLÓ', tono: 'rojo', abierta: false },
 };
-export const ORDEN_VISIBLE = ['espera_ok', 'en_curso', 'bloqueada', 'en_manos', 'en_cola', 'programada', 'idea', 'hecha', 'fallida'];
+export const ORDEN_VISIBLE = ['espera_ok', 'en_curso', 'bloqueada', 'tuya', 'en_manos', 'en_cola', 'programada', 'idea', 'hecha', 'fallida'];
 
 // ¿la bloquea algo que no ha terminado? `deps` = id → tarea (o una función id → tarea). Una dependencia borrada no bloquea.
 export function bloqueos(t, deps) {
@@ -35,7 +36,7 @@ export function visible(t, deps) {
   if (t.state === 'doing') return 'en_curso';
   if (t.state === 'idea') return 'idea';
   if (deps && bloqueos(t, deps).length) return 'bloqueada';
-  if (t.person) return 'en_manos';
+  if (t.person) return t.person === 'Tú' ? 'tuya' : 'en_manos';
   if (t.state === 'scheduled') return 'programada';
   return 'en_cola';
 }
@@ -55,6 +56,7 @@ const PASOS = {
   'doing>next': { quien: ['oficina'] }, // un reintento, o se la pasó a una persona
   'waiting>doing': { quien: ['oficina'] }, // el OK o un «devolver» la ponen a trabajar
   'waiting>done': { quien: ['oficina', 'dueno'], porque: 'solo el dueño (o quien él autorizó) aprueba' },
+  'waiting>next': { quien: ['dueno'], porque: 'solo el dueño se queda con un borrador para terminarlo él' }, // plan D: «Lo termino yo»
   'next>done': { quien: ['dueno', 'persona', 'oficina'], porque: 'la marca hecha el dueño o la persona que la tiene' },
   'scheduled>done': { quien: ['dueno', 'oficina'] },
   'done>next': { quien: ['dueno', 'persona', 'oficina'], porque: 'la reabre el dueño' },

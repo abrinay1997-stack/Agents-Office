@@ -1718,6 +1718,7 @@ function applyRoster(agents) {
   if (tasks && tasks.syncPills) tasks.syncPills(); // the pills were rebuilt — put the clock chips back
 }
 tasks = initTasks({ contenido: { between: (a, b) => contenido.between(a, b), openPiece: id => contenido.openPiece(id) }, // V4.7: the calendar's «Contenido» layer (contenido is defined further down; these run on a click)
+  mias: SERVED ? { between: (a, b) => fetch(`/api/tareas/mias?desde=${a}&hasta=${b}`).then(r => r.json()).then(j => j.tareas || []), open: id => tareasV.open({ tab: 'mias', tarea: id }) } : null, // plan D: the calendar's «Tuyas» layer (the owner's own tasks)
   
   hud, R, deptRT, RAIL_SIDE, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent, esc,
   brainWrite: (id, title) => brain.write(id, title), brain,

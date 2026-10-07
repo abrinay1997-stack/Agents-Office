@@ -2,6 +2,7 @@
 // iconos. Lo que hace que se vea ordenada es que todo se repite igual: una fila, un chip, un botón de campo.
 import { visible, VISIBLES } from '../../tareas/estados.mjs';
 import { limiteMs, NOMBRE_PRIORIDAD } from '../../tareas/modelo.mjs';
+import { esDelDueno, delegadaPorMi, agenteDeOrigen } from '../../tareas/dueno.mjs';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = n => String(n).padStart(2, '0');
@@ -48,17 +49,28 @@ export const ICONO = {
   filtro: '<path d="M3 5h18l-7 8v6l-4 2v-8Z"/>',
   buscar: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
   mapa: '<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.3 11 16.7 7M7.3 13l9.4 4"/>',
+  mias: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>', // plan D: las tareas del dueño
+  bandeja: '<path d="M3 13.5 5.5 5h13l2.5 8.5V19a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19Z"/><path d="M3 13.5h5l1.5 2.5h5l1.5-2.5h5"/>',
+  delegar: '<circle cx="8" cy="8" r="3.5"/><path d="M2.5 19.5a5.5 5.5 0 0 1 9.5-3.8"/><path d="M14 15h7.5M18.5 12l3 3-3 3"/>',
+  empezar: '<path d="M8 5.5v13l10.5-6.5Z"/>',
+  pausa: '<path d="M8.5 5.5v13M15.5 5.5v13"/>',
 };
 export const svg = (k, cls = '') => `<svg viewBox="0 0 24 24" aria-hidden="true"${cls ? ` class="${cls}"` : ''}>${ICONO[k] || ''}</svg>`;
 
 // la FILA: el título es el botón que la abre (un botón nunca dentro de otro); la casilla elige; los chips dicen lo justo
-export function filaHTML(t, ctx, { elegir = false, elegida = false, arrastrar = false, mostrarDept = true } = {}) {
+export function filaHTML(t, ctx, { elegir = false, elegida = false, arrastrar = false, mostrarDept = true, mia = false } = {}) {
   const v = visible(t, ctx.porId), V = VISIBLES[v] || {}, a = ctx.agente(t.agent);
+  const deMi = esDelDueno(t), origen = agenteDeOrigen(t), del = delegadaPorMi(t); // plan D: de dónde vino, a quién la pasé
   const lim = t.state === 'done' ? null : limiteTexto(t.limite);
   const ps = t.pasos?.length ? { h: t.pasos.filter(p => p.hecho).length, n: t.pasos.length } : null;
   const pr = t.proyecto && ctx.proyecto(t.proyecto);
   const ets = (t.etiquetas || []).map(id => ctx.etiqueta(id)).filter(Boolean);
-  const quien = t.person ? `<span class="tv-c tv-c-persona" title="La tiene ${esc(t.person)}">👤 ${esc(t.person)}</span>` : a ? `<span class="tv-c tv-c-agente">${esc(a.name)}</span>` : '';
+  const quien = deMi ? (mia ? '' : '<span class="tv-c tv-c-tuya" title="La haces tú">Tuya</span>') : t.person ? `<span class="tv-c tv-c-persona" title="La tiene ${esc(t.person)}">👤 ${esc(t.person)}</span>` : a ? `<span class="tv-c tv-c-agente">${del ? '→ ' : ''}${esc(a.name)}</span>` : '';
+  const mias = [ // plan D: lo que solo dice una tarea del dueño (o una que él delegó)
+    deMi && t.empezada && t.state !== 'done' ? '<span class="tv-c tv-c-haciendo">▶ Haciendo</span>' : '',
+    deMi && t.sugeridaPor ? `<span class="tv-c tv-c-sug">Sugerida por ${esc(ctx.agente(t.sugeridaPor)?.name || t.sugeridaPor)}</span>` : deMi && origen && ctx.agente(origen) ? `<span class="tv-c tv-c-de" title="Vino de ${esc(ctx.agente(origen).name)}">de ${esc(ctx.agente(origen).name)}</span>` : '',
+    del && mia ? `<span class="tv-c t-${V.tono || 'gris'}">${esc(V.etiqueta || '')}</span>` : '',
+  ];
   const chips = [
     t.prioridad === 'alta' ? '<span class="tv-c tv-c-alta">Alta</span>' : t.prioridad === 'baja' ? '<span class="tv-c tv-c-baja">Baja</span>' : '',
     lim ? `<span class="tv-c tv-c-lim ${lim.tono}">${esc(lim.texto)}</span>` : '',
@@ -67,15 +79,18 @@ export function filaHTML(t, ctx, { elegir = false, elegida = false, arrastrar = 
     pr ? `<span class="tv-c tv-pr c-${esc(pr.color)}">${esc(pr.nombre)}</span>` : '',
     ...ets.slice(0, 2).map(e => `<span class="tv-c tv-et c-${esc(e.color)}">#${esc(e.nombre)}</span>`),
     ets.length > 2 ? `<span class="tv-c" title="${esc(ets.slice(2).map(e => '#' + e.nombre).join(' '))}">+${ets.length - 2}</span>` : '',
+    ...mias,
     mostrarDept && ctx.depto(t.dept) ? `<span class="tv-c tv-c-dept"><i style="background:${ctx.depto(t.dept).chip}"></i>${esc(ctx.depto(t.dept).short || ctx.depto(t.dept).name)}</span>` : '',
     quien,
   ].filter(Boolean).join('');
-  return `<div class="tv-fila v-${v}${t.prioridad === 'alta' ? ' alta' : ''}${elegida ? ' sel' : ''}" data-t="${esc(t.id)}" role="listitem"${arrastrar ? ' draggable="true"' : ''}>
+  const hechaCk = mia && deMi && t.state !== 'idea'; // la casilla redonda de TaskView: hacerla (o reabrirla) con un clic
+  return `<div class="tv-fila v-${v}${t.prioridad === 'alta' ? ' alta' : ''}${elegida ? ' sel' : ''}${deMi ? ' mia' : ''}" data-t="${esc(t.id)}" role="listitem"${arrastrar ? ' draggable="true"' : ''}>
     ${elegir ? `<input type="checkbox" class="tv-ck" data-sel="${esc(t.id)}" aria-label="Elegir «${esc(t.title)}»"${elegida ? ' checked' : ''}>` : ''}
-    <span class="tv-pt t-${V.tono || 'gris'}" title="${esc(V.etiqueta || '')}" aria-hidden="true"></span>
+    ${hechaCk ? `<input type="checkbox" class="tv-hck" data-hecha="${esc(t.id)}" aria-label="${t.state === 'done' ? 'Reabrir' : 'Marcar hecha'} «${esc(t.title)}»"${t.state === 'done' ? ' checked' : ''}>` : `<span class="tv-pt t-${V.tono || 'gris'}" title="${esc(V.etiqueta || '')}" aria-hidden="true"></span>`}
     <div class="tv-fc"><button type="button" class="tv-tit" data-abrir="${esc(t.id)}">${esc(t.title)}<span class="tv-sr"> — ${esc(V.etiqueta || '')}</span></button>
     <div class="tv-chips">${chips}</div></div>
     ${t.state === 'waiting' ? `<button type="button" class="tv-mini pri" data-ok="${esc(t.id)}">Aprobar</button>` : ''}
+    ${deMi && t.state === 'idea' && t.sugeridaPor ? `<button type="button" class="tv-mini" data-aceptar="${esc(t.id)}" aria-label="Aceptar la sugerencia «${esc(t.title)}»">Aceptar</button>` : ''}
   </div>`;
 }
 
