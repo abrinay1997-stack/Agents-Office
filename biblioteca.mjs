@@ -19,7 +19,7 @@ import { parseSkill } from './skills.mjs';
 export const AREAS = { estrategia: 'Estrategia', 'contenido-y-texto': 'Contenido y textos', seo: 'SEO y búsqueda', conversion: 'Conversión', 'pagados-y-medicion': 'Pagados y medición', 'crecimiento-y-retencion': 'Crecimiento y retención', 'ventas-y-gtm': 'Ventas y salida al mercado', canales: 'Canales' };
 const CAMPOS = ['name', 'titulo', 'description', 'area', 'departments', 'agents', 'origen', 'palabras'];
 export const UMBRAL = 6; // el puntaje mínimo para adelantar una habilidad: una palabra clave rara del título o de sus «palabras», o varias de la descripción
-export const TOPES = { indice: 60, adelanto: 14000, leer: 30000, referencia: 30000 };
+export const TOPES = { indice: 60, adelanto: 24000, leer: 30000, referencia: 30000 };
 const LEGIBLE = /\.(md|txt|csv|json)$/i;
 
 const lista = v => v === undefined ? [] : Array.isArray(v) ? v : String(v).split(',').map(s => s.trim()).filter(Boolean);
@@ -93,7 +93,7 @@ export function cargarBiblioteca({ raiz, brainPath, agentes = [], deptos = [], s
     const propias = mias.filter(h => h.agents.includes(a.id)), resto = mias.filter(h => !h.agents.includes(a.id));
     const linea = h => `- ${h.id} — ${h.titulo}: ${h.description.replace(/^Úsala cuando\s*/i, 'cuando ').slice(0, 170)}`;
     const elegida = texto ? elegir(texto, a, 1)[0] : null;
-    const adelanto = elegida ? `\nHABILIDAD QUE APLICA A ESTA TAREA: ${elegida.titulo} (${elegida.id}). Síguela; sus referencias se piden con leer_habilidad.\n${recortar(elegida.cuerpo, TOPES.adelanto)}\n` : '';
+    const adelanto = elegida ? `\nHABILIDAD QUE APLICA A ESTA TAREA: ${elegida.titulo} (${elegida.id}). Síguela; sus referencias se piden con leer_habilidad.\n${elegida.cuerpo.length > TOPES.adelanto ? elegida.cuerpo.slice(0, TOPES.adelanto) + `\n[… sigue: lee el resto con leer_habilidad id="${elegida.id}"]` : elegida.cuerpo}\n` : '';
     return `${adelanto}\nBIBLIOTECA DE HABILIDADES (mcp__habilidades__*): métodos probados para este trabajo. Si la tarea encaja con una, léela ANTES de empezar con leer_habilidad (id) y síguela; sus referencias (plantillas, listas, ejemplos) se piden con leer_habilidad (id, referencia). Lo de la empresa no está ahí: está en las notas del Cerebro (00-Empresa) y en las cifras.\n` +
       `${propias.length ? `Las de tu puesto:\n${propias.slice(0, TOPES.indice).map(linea).join('\n')}\n` : ''}${resto.length ? `Las de tu departamento:\n${resto.slice(0, TOPES.indice - propias.length).map(linea).join('\n')}\n` : ''}`;
   }
