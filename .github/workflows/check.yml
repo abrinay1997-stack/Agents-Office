@@ -20,6 +20,15 @@ jobs:
       - name: Unit tests
         run: npm test
       - name: Browser for the smoke tests
-        run: npx playwright-core install --with-deps chromium
+        # 7 oct 2026: this step (~30 s) hung once on GitHub's runner until the job's 25 min ran out. Each try now gets
+        # 5 min (the whole process group is stopped, apt included), and a hung or failed install is tried once more.
+        timeout-minutes: 12
+        run: |
+          for intento in 1 2; do
+            if timeout -k 20 300 npx playwright-core install --with-deps chromium; then exit 0; fi
+            echo "::warning::Chromium no se instaló en el intento $intento (se colgó o falló); se reintenta."
+            sleep 10
+          done
+          exit 1
       - name: Full check (build, roster, skills, routines, Estudio, server, page)
         run: npm run check

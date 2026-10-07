@@ -450,7 +450,8 @@ else {
       await page.waitForTimeout(400);
       const n = await page.evaluate(() => window.CC.routines().length); if (n !== 1) throw new Error('routines: ' + n);
       const kept = await page.evaluate(() => document.querySelector('.tp-chip.on')?.dataset.f); if (kept === 'sched') throw new Error('the panel jumped to SCHEDULED on its own (audit 46)');
-      await page.click('.tp-hint .tp-lnk[data-f="sched"]'); await page.waitForTimeout(300); // «Ver en PROGRAMADAS» in the hint
+      await page.waitForTimeout(5500); // 7 oct 2026: the demo used to wipe this hint after 5 s; on a slow CI runner the click came too late (run #82). It must stay
+      await page.click('.tp-hint .tp-lnk[data-f="sched"]', { timeout: 5000 }); await page.waitForTimeout(300); // «Ver en PROGRAMADAS» in the hint
       const row = await page.evaluate(() => [...document.querySelectorAll('.tp-row.sched .tp-t')].some(e => /triage the inbox/i.test(e.textContent))); if (!row) throw new Error('no SCHEDULED row');
       const strip = await page.evaluate(() => { const e = document.querySelector('.tp-next'); return e.hidden ? '' : e.textContent; }); if (!/PRÓXIMA/.test(strip) || !/triage/i.test(strip)) throw new Error('next-up strip: ' + strip);
       await page.keyboard.press('b'); await page.waitForTimeout(600);

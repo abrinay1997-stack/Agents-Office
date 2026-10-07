@@ -585,7 +585,7 @@ export function initTasks(ctx) {
     const r = addRoutine(k, a.id, text, rt.when, rt.picker ? P_.okc.checked : guessOk(text));
     r.model = chosenModel() || undefined; r.effort = effortSend(); resetModel();
     P_.input.value = ''; say(`Rutina programada — <b>${a.name}</b> · ${esc(r.desc)} · próxima ${esc(untilText(r.nextAt))}${r.needsOk ? ' · en espera de tu visto bueno' : ' · solo lectura'} ${SEE_SCHED}`);
-    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${r.title} (${r.desc})`); render(true); flashChip('sched'); P_.input.blur(); setTimeout(updateHint, 5000);
+    spawnEmote(R[a.id], '⏱'); feedPush(R[a.id], '⏱', `Rutina nueva: ${r.title} (${r.desc})`); render(true); flashChip('sched'); P_.input.blur(); // 7 oct 2026: the hint (with «Ver en PROGRAMADAS») stays until you type again, as in the live office — wiping it after 5 s took the link away from a slow hand (and from CI)
   }
   function guessOk(text) { const t = text.toLowerCase(); return /\b(send|reply|chase|nudge|remind|post|publish|pay|book|draft|message|email)\b/.test(t) || !/\b(list|summari[sz]e|triage|tell me|what|report|match|reconcile|qualify|review|check|read|find|flag|count)\b/.test(t); }
   function addRoutine(k, agentId, text, when, needsOk) { // demo: session-only
