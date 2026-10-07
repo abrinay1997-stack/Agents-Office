@@ -13,9 +13,9 @@ Sirve para convertir la definición del cliente ideal en una **lista de prospect
 
 ## Antes de empezar
 
-Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `00-Empresa/marketing`: cliente ideal, posicionamiento, competidores) y las cifras de la empresa (precios, ticket promedio). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. Usa ese contexto y pregunta solo lo que no cubre o lo propio de esta tarea.
+Lee las notas de la empresa en el Cerebro (`00-Empresa/perfil`, `00-Empresa/oferta`, `00-Empresa/clientes` y, sobre todo, `00-Empresa/marketing`: cliente ideal, posicionamiento, competidores) y las cifras de la empresa (precios, ticket promedio). Si falta algo que necesitas, pregúntalo en una línea o déjalo marcado como supuesto; nunca lo inventes. 
 
-Lee también `cumplimiento-legal.md` **en cada encargo**, antes de buscar.
+Lee `cumplimiento-legal` **en cada encargo**, antes de buscar.
 
 ## Elige la modalidad
 
@@ -28,9 +28,7 @@ Las modalidades se separan desde el inicio. Elige **una** según a quién le ven
 | **Negocio local** | Pequeños negocios locales (tiendas, gimnasios, restaurantes, consultorios, salones, servicios) | Negocio activo + estado de su web + cercanía + acceso a quien decide | Google Maps, directorios locales, Facebook, Instagram, la web del negocio |
 | **Señales de demanda** | Etapa temprana: primeros clientes, socios de diseño o usuarios de prueba | Evidencia del dolor, la necesidad o el momento exacto, con una fuente pública citada, no solo encaje de perfil | Foros, comunidades, reseñas, issues de GitHub, ofertas de empleo, anuncios de lanzamiento |
 
-Si es mixto («pymes que además son SaaS»), elige la modalidad dominante y suma señales de la otra. Si la empresa empieza y necesita sus *primeros* clientes (evidencia de demanda antes que cobertura), usa **Señales de demanda**.
-
-Detalle por modalidad: `prospeccion-saas.md`, `prospeccion-b2b.md`, `prospeccion-negocios-locales.md`, `senales-de-demanda.md`.
+Si es mixto, elige la modalidad dominante y suma señales de la otra. Si la empresa necesita sus *primeros* clientes (evidencia de demanda antes que cobertura), usa **Señales de demanda**. Detalle por modalidad en las referencias.
 
 ## Marco común (todas las modalidades)
 
@@ -64,11 +62,11 @@ Puntúa cada candidato contra la lista del cliente ideal. Añade **evidencia** (
 - **Media**: una fuente creíble más resultados de búsqueda coherentes.
 - **Baja**: evidencia incompleta o ambigua; marca qué queda sin confirmar.
 
-Para correos de contacto (SaaS / B2B), **verifica siempre que el correo sea entregable antes de pasarlo a la lista final** (ver «Validar correos» en `fuentes-de-datos.md`). No entregues prospectos con correos inválidos o riesgosos sin marcarlos.
+Para correos de contacto (SaaS / B2B), **verifica siempre que el correo sea entregable antes de pasarlo a la lista final** (ver «Validar correos» en `fuentes-de-datos`). No entregues prospectos con correos inválidos o riesgosos sin marcarlos.
 
 ### Fase 4: puntuar y priorizar
 
-Esta escala vale para SaaS, B2B y negocio local. Señales de demanda puntúa distinto (0–100 de encaje con la demanda; ver `senales-de-demanda.md`).
+Esta escala vale para SaaS, B2B y negocio local. Señales de demanda puntúa distinto (0–100 de encaje con la demanda; ver `senales-de-demanda`).
 
 | Puntaje | Definición |
 |---|---|
@@ -81,7 +79,7 @@ Cada modalidad afina las señales (ver su referencia). Proporción orientativa: 
 
 ### Fase 5: entregar la hoja de prospectos
 
-(SaaS / B2B / negocio local. Señales de demanda entrega un informe de evidencia; ver `senales-de-demanda.md`.)
+(SaaS / B2B / negocio local. Señales de demanda entrega un informe de evidencia; ver `senales-de-demanda`.)
 
 Por defecto, una tabla en Markdown. Pasa a CSV (como bloque de texto en la entrega) cuando la lista tenga más de 25 filas o el dueño lo pida.
 
@@ -89,14 +87,14 @@ Toda hoja incluye: puntaje, nombre del negocio o la empresa, contacto (si aplica
 
 ## Reglas de cumplimiento (en todas las modalidades; léelas primero, siempre)
 
-1. **Nada de extracción masiva** de LinkedIn, Google Maps, sitios de pago o APIs con límite de uso. El navegador es una herramienta de investigación asistida, no un extractor.
-2. **Nada de saltarse CAPTCHAs, muros de inicio de sesión ni protecciones contra bots.** Si un sitio lo exige, trabaja con lo que se ve en público.
-3. **Solo canales públicos de contacto del negocio.** info@, hola@, contacto@ y correos de un puesto con nombre (fundador, dueño) cuando están publicados en la web del propio negocio. Los correos personales o privados necesitan una base legal (relación previa, consentimiento…).
-4. **Conoce las leyes**: el RGPD/GDPR europeo, CAN-SPAM (EE. UU.) y CASL (Canadá) como ejemplos, y siempre **la ley de protección de datos del país** de la empresa y del prospecto. Guarda la dirección de la fuente y la fecha de cada contacto que añadas: lo exige el contacto posterior.
-5. **No revender datos extraídos** de Google Maps, LinkedIn ni ninguna plataforma cuyas condiciones lo prohíban. Armar la lista para el contacto propio de la empresa está bien; vender la lista, no.
-6. **Ve despacio.** Incluso en fuentes públicas, espacia las consultas.
-7. **Nada de datos filtrados, robados o sin procedencia.** Ni bases filtradas, ni mercados de contactos extraídos, ni vendedores de listas sin origen. Los proveedores con licencia (Apollo, ZoomInfo, Clearbit, Clay) están bien si se usan dentro de sus condiciones y con base legal.
-8. **Nunca segmentes ni deduzcas rasgos sensibles.** No califiques, segmentes ni personalices por salud, apuros económicos, creencias políticas, sexualidad, religión u otros rasgos protegidos, aunque una publicación pública los revele.
+1. **Nada de extracción masiva** de LinkedIn, Google Maps, sitios de pago o APIs con límite de uso: el navegador es investigación asistida, no un extractor.
+2. **Nada de saltarse CAPTCHAs, muros de inicio de sesión ni protecciones contra bots**: trabaja con lo que se ve en público.
+3. **Solo canales públicos de contacto del negocio**: info@, hola@, contacto@ y correos de un puesto con nombre (fundador, dueño) publicados en la web del propio negocio. Los correos personales necesitan una base legal (relación previa, consentimiento…).
+4. **Conoce las leyes**: RGPD/GDPR (Europa), CAN-SPAM (EE. UU.) y CASL (Canadá) como ejemplos, y siempre **la ley de protección de datos del país** de la empresa y del prospecto. Guarda la dirección de la fuente y la fecha de cada contacto.
+5. **No revender datos extraídos** de plataformas cuyas condiciones lo prohíben: armar la lista para el contacto propio está bien; vender la lista, no.
+6. **Ve despacio**: espacia las consultas, incluso en fuentes públicas.
+7. **Nada de datos filtrados, robados o sin procedencia** (bases filtradas, mercados de contactos extraídos, listas sin origen). Los proveedores con licencia (Apollo, ZoomInfo, Clearbit, Clay) están bien dentro de sus condiciones y con base legal.
+8. **Nunca segmentes ni deduzcas rasgos sensibles** (salud, apuros económicos, creencias políticas, sexualidad, religión…), aunque una publicación pública los revele.
 
 **Nadie contacta a nadie desde aquí.** Esta habilidad entrega la lista; los mensajes, conexiones, seguimientos o registros en un CRM los aprueba el dueño.
 
@@ -104,7 +102,6 @@ Toda hoja incluye: puntaje, nombre del negocio o la empresa, contacto (si aplica
 
 Si faltan, pregunta una vez y luego usa valores razonables:
 - **Modalidad**: casi siempre se deduce; Señales de demanda para los primeros clientes.
-- **Cliente ideal**: de `00-Empresa/marketing` si está.
 - **Cantidad**: por defecto 25 en SaaS / B2B y 15 en negocio local.
 - **Zona** (esencial en negocio local; útil en B2B; menos en SaaS). Radio por defecto en negocio local: 20 km.
 - **Herramientas conectadas**: ¿Apollo, Clay, ZoomInfo, Hunter, un validador de correos? Si no hay ninguna, búsqueda web y navegador.
@@ -113,24 +110,7 @@ Si faltan, pregunta una vez y luego usa valores razonables:
 
 ## Herramientas en una mirada
 
-Detalle completo en `fuentes-de-datos.md`. Nada se da por conectado: di «si la empresa tiene conectado X».
-
-| Si la empresa tiene… | Úsalo para |
-|---|---|
-| **Apollo** | Perfil de empresas y contactos B2B / SaaS |
-| **Clay** | Enriquecer con varias fuentes en cascada y puntuar a medida |
-| **Clearbit** | De correo a empresa y enriquecimiento de empresa |
-| **ZoomInfo** | Contactos B2B de grandes empresas y datos de intención |
-| **Hunter o Snov** | Adivinar el patrón del correo y verificarlo |
-| **Un validador (Truelist, NeverBounce, ZeroBounce)** | Validar que el correo es entregable antes de la lista de contacto |
-| **LinkedIn Sales Navigator** | Ubicar a quien decide (a mano, sin extraer) |
-| **BuiltWith / Wappalyzer** | Calificar por tecnología (SaaS) |
-| **Crunchbase** | Señales de inversión (SaaS) |
-| **GitHub** | Quienes marcan o copian repositorios de la competencia (SaaS para desarrolladores) |
-| **Google Maps + navegador** | Encontrar negocios locales |
-| **Lectura de una web concreta** | Leer la web de un prospecto ya encontrado; nunca una plataforma |
-
-**Sin herramientas de enriquecimiento:** búsqueda web y fuentes públicas: la web de la empresa, su página «Nosotros», su página de empresa en LinkedIn, noticias. Más lento, pero funciona.
+Detalle completo en `fuentes-de-datos`. Nada se da por conectado: di «si la empresa tiene conectado X». Perfil de empresas y contactos: Apollo, ZoomInfo. Enriquecer en cascada: Clay, Clearbit. Patrón y verificación del correo: Hunter, Snov, y un validador (Truelist, NeverBounce, ZeroBounce). Quien decide: LinkedIn Sales Navigator (a mano, sin extraer). Tecnología: BuiltWith, Wappalyzer. Inversión: Crunchbase. Desarrolladores: GitHub. Negocios locales: Google Maps + navegador. Leer la web de un prospecto ya encontrado: nunca una plataforma. **Sin herramientas:** búsqueda web y fuentes públicas (la web de la empresa, su página «Nosotros», LinkedIn, noticias): más lento, pero funciona.
 
 ## Cómo entregarlo
 
@@ -181,15 +161,14 @@ Si la búsqueda de detonantes conviene repetirla (cada lunes, revisar aperturas 
 
 ## Errores comunes
 
-1. **Buscar sin cliente ideal definido**: calificas lo que no es.
-2. **Creerle a una fuente sin cruzarla**: Apollo y ZoomInfo se desactualizan a menudo; verifica antes de marcar «caliente».
-3. **Sumar contactos sin validar el correo**: la reputación del remitente se hunde con los rebotes.
-4. **Extraer en masa de LinkedIn o Google Maps**: riesgo real de suspensión y de violar condiciones.
-5. **Mezclar modalidades**: no apliques el estado de la web (local) a un SaaS, ni al revés.
-6. **«Caliente» sin señal de compra**: el encaje solo no basta; la señal marca el momento.
-7. **Sin fuentes**: todo debe poder rastrearse; el contacto posterior depende de eso.
-8. **Ignorar horarios y zonas horarias** al planear el contacto posterior (pásalo a correo-en-frio o sms-whatsapp).
-9. **No conservar el registro de origen y consentimiento**: lo exigen las leyes de datos ante una solicitud de acceso o borrado.
+1. Buscar sin cliente ideal definido: calificas lo que no es.
+2. Creerle a una fuente sin cruzarla (Apollo y ZoomInfo se desactualizan): verifica antes de marcar «caliente».
+3. Sumar contactos sin validar el correo: los rebotes hunden la reputación del remitente.
+4. Extraer en masa de LinkedIn o Google Maps: riesgo de suspensión y de violar condiciones.
+5. Mezclar modalidades (el estado de la web es de negocio local, no de un SaaS).
+6. «Caliente» sin señal de compra: el encaje solo no basta; la señal marca el momento.
+7. Sin fuentes ni registro de origen: el contacto posterior y las solicitudes de acceso o borrado lo exigen.
+8. Ignorar horarios y zonas horarias al planear el contacto posterior (`correo-en-frio`, `sms-whatsapp`).
 
 ## Reglas
 
@@ -202,12 +181,12 @@ Si la búsqueda de detonantes conviene repetirla (cada lunes, revisar aperturas 
 
 ## Referencias
 
-- `prospeccion-saas.md`: le vendes a empresas de software o digitales (tecnología, inversión, GitHub).
-- `prospeccion-b2b.md`: le vendes a empresas que no son SaaS (detonantes, directorios del sector).
-- `prospeccion-negocios-locales.md`: le vendes a negocios del barrio o la ciudad (estado de la web, cercanía).
-- `senales-de-demanda.md`: buscas los primeros clientes por el dolor que muestran en público.
-- `fuentes-de-datos.md`: qué herramienta sirve para qué y cómo validar correos.
-- `cumplimiento-legal.md`: leyes de datos y condiciones de las plataformas; léelo en cada encargo.
+- `prospeccion-saas`: le vendes a empresas de software o digitales (tecnología, inversión, GitHub).
+- `prospeccion-b2b`: le vendes a empresas que no son SaaS (detonantes, directorios del sector).
+- `prospeccion-negocios-locales`: le vendes a negocios del barrio o la ciudad (estado de la web, cercanía).
+- `senales-de-demanda`: buscas los primeros clientes por el dolor que muestran en público.
+- `fuentes-de-datos`: qué herramienta sirve para qué y cómo validar correos.
+- `cumplimiento-legal`: leyes de datos y condiciones de las plataformas; léelo en cada encargo.
 
 ## Habilidades relacionadas
 

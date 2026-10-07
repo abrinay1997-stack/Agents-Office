@@ -1,0 +1,224 @@
+{
+  "skill": "creatividad-anuncios",
+  "origen": "marketingskills/ad-creative/evals",
+  "evals": [
+    {
+      "id": "meta-clinica-dental",
+      "prompt": "Genera creatividades para nuestra campaña de Meta (Facebook e Instagram). Somos una clínica dental y queremos llenar la agenda de blanqueamientos. Propuesta de valor: sonrisa más clara en una sola visita de 60 minutos. Público: personas de 25 a 45 años que viven a 15 km de la clínica. Presupuesto: 600 dólares al mes.",
+      "expectations": [
+        "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta, y usa el precio de las cifras de la empresa sin inventarlo",
+        "Usa el enfoque por ángulos: identifica de 3 a 5 (por ejemplo, vergüenza al sonreír, rapidez de una sola visita, resultado antes y después, miedo al dentista, comparación con productos caseros)",
+        "Respeta los límites de Meta: texto principal de 125 caracteres visibles, titular de 40 y descripción de 30",
+        "Genera varias variaciones por ángulo",
+        "Sugiere la dirección de imagen o de video de cada anuncio, con un prompt para el Estudio (sin inventar resultados clínicos ni fotos de pacientes presentadas como reales)",
+        "Cada variación trae gancho, cuerpo y llamado a la acción",
+        "Recomienda qué ángulos probar primero",
+        "Marca lo que pide revisión de cumplimiento en un sector de salud (antes y después, promesas de resultado)",
+        "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+      ]
+    },
+    {
+      "id": "google-rsa-ferreteria",
+      "prompt": "Necesito textos de Google Ads para nuestra ferretería con tienda en línea. Queremos aparecer con la palabra clave «comprar herramientas eléctricas». Necesito anuncios de búsqueda responsivos.",
+      "expectations": [
+        "Respeta los límites de los RSA: titulares de máximo 30 caracteres y descripciones de máximo 90",
+        "Genera de 10 a 15 titulares distintos",
+        "Genera 4 o más descripciones",
+        "Incluye la palabra clave objetivo en los titulares",
+        "Aclara que conviene fijar titulares a una posición solo si es necesario, porque reduce la optimización",
+        "Incluye al menos un titular de palabra clave, uno de beneficio y 2 o 3 de llamado a la acción, y cada titular tiene sentido solo y combinado",
+        "Sugiere extensiones del anuncio (enlaces de sitio, textos destacados, fragmentos estructurados)",
+        "Usa variaciones por ángulo (precio, variedad, envío, garantía) con datos que salen de las notas y cifras de la empresa, sin inventarlos",
+        "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+      ]
+    },
+    {
+      "id": "iterar-con-datos",
+      "prompt": "Estos son los datos de rendimiento de nuestros anuncios de una tienda de ropa en línea: Anuncio A (ángulo de dolor, «no encuentras tu talla») CTR 2,1 %, costo por clic 3,20, conversión 4,5 %. Anuncio B (ángulo de prueba social) CTR 1,4 %, costo por clic 4,10, conversión 6,2 %. Anuncio C (ángulo de características de la tela) CTR 0,8 %, costo por clic 5,50, conversión 2,1 %. Ayúdame a iterar.",
+      "expectations": [
+        "Activa el modo de iteración con datos, no el de generar desde cero",
+        "Analiza CTR, costo por clic y conversión de cada anuncio: A tiene el mejor CTR, B la mejor conversión (el más eficiente pese al CTR menor) y C rinde mal en todo",
+        "Identifica los ángulos ganadores a partir de los datos",
+        "Recomienda pausar o reformular el de características",
+        "Genera variaciones nuevas que combinan lo ganador (gancho de dolor + prueba social)",
+        "Da iteraciones específicas sobre A y B",
+        "Deja un registro de la iteración (ronda, patrones, ángulos nuevos y retirados)",
+        "No inventa cifras de prueba social: pide las reales o las toma de las notas del Cerebro"
+      ]
+    },
+    {
+      "id": "linkedin-casual",
+      "prompt": "necesitamos anuncios en linkedin para nuestro servicio de contabilidad y auditoría para empresas medianas. el público son gerentes financieros y dueños de empresa",
+      "expectations": [
+        "Se activa con una redacción informal",
+        "Respeta los límites de LinkedIn: texto introductorio de 150 caracteres, titular de 70 y descripción de 100",
+        "Adapta el tono al público (gerentes financieros y dueños): más formal, orientado a cumplimiento y reducción de riesgo",
+        "Da varios ángulos relevantes (cumplimiento fiscal, ahorro de tiempo en el cierre, riesgo de multas, tranquilidad ante una auditoría)",
+        "Sugiere formatos de anuncio de LinkedIn (contenido patrocinado, mensajes, formularios de generación de contactos)",
+        "No inventa estadísticas ni casos de clientes",
+        "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+      ]
+    },
+    {
+      "id": "lote-multiplataforma",
+      "prompt": "Necesito un lote grande de variaciones de anuncios para una campaña en varias plataformas que sale la próxima semana. Somos un servicio de comida preparada a domicilio para profesionales con poco tiempo. Quiero anuncios para Google, Meta y TikTok.",
+      "expectations": [
+        "Activa el flujo de generación por lotes (por oleadas: ángulos centrales, ampliación de los 2 mejores y comodines) con filtro de calidad al final",
+        "Genera para las tres plataformas respetando los límites de cada una: Google RSA (30/90), Meta (125/40/30) y TikTok (80 recomendados, 100 máximo)",
+        "Identifica de 3 a 5 ángulos que funcionan en todas las plataformas (comodidad, salud, ahorro de tiempo, variedad, costo frente a comer fuera)",
+        "Genera varias variaciones por ángulo y por plataforma",
+        "Aclara que TikTok necesita conceptos de video, no solo texto, y los propone con guion de gancho",
+        "Organiza la salida por plataforma, con el conteo de caracteres de cada pieza",
+        "Antes de generar muchas imágenes o videos, consulta el estado del Estudio y dice cuántos caben en el tope y cuánto costarían",
+        "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+      ]
+    },
+    {
+      "id": "estrategia-no-es-creatividad",
+      "prompt": "Ayúdame a planear toda nuestra estrategia de publicidad pagada. Tenemos 20.000 dólares al mes de presupuesto y queremos saber qué plataformas usar y cómo repartir el gasto.",
+      "expectations": [
+        "Reconoce que es un pedido de estrategia de publicidad pagada, no de generación de creatividades",
+        "Remite a la skill campanas-pagadas, que maneja estrategia de campañas, elección de plataformas y reparto de presupuesto",
+        "No intenta resolver la estrategia completa con los patrones de generación de creatividades; a lo sumo menciona consideraciones creativas",
+        "No dice que envió, publicó o lanzó nada: cualquier plan queda para el OK del dueño"
+      ]
+    },
+    {
+      "id": "revelacion-imessage",
+      "prompt": "Quiero hacer uno de esos anuncios de video para Meta con una conversación de iMessage donde un amigo pregunta qué es eso y se revela el producto con un código de descuento. Vendemos un anillo que mide el sueño. Nuestro código es DESCANSO.",
+      "expectations": [
+        "Carga o aplica la referencia anuncios-revelacion-ios",
+        "Elige un ángulo de concepto del catálogo de seis ángulos antes de escribir las burbujas (probablemente resultado como captura, el puntaje de sueño)",
+        "Redacta un guion de 8 a 14 burbujas con voz auténtica de mensajes, donde la marca aparece solo después de que el amigo pregunta",
+        "El código DESCANSO se entrega con naturalidad dentro de una burbuja y se repite en la tarjeta final fija",
+        "Aplica las reglas de fundamento: cualquier afirmación de mejora del sueño se rastrea a un resultado real o a un dato del producto, y la conversación no se presenta como un testimonio real",
+        "Presenta opciones de ruta de producción en vez de asumir una, y menciona reglas de oficio (sonidos de enviar y recibir, indicador de escritura en silencio, 9:16 a 1080×1920)",
+        "Recuerda que se corre solo como publicidad pagada claramente marcada y que el video queda como borrador para el OK del dueño"
+      ]
+    },
+    {
+      "id": "revelacion-chatgpt-notas-salud",
+      "prompt": "Vendemos un suplemento para la menopausia. Vi esos anuncios donde alguien le pregunta a ChatGPT algo de salud y la respuesta recomienda el producto: haz uno para nosotros. También me interesa la versión de Notas de Apple.",
+      "expectations": [
+        "Carga anuncios-revelacion-ios y aplica la sección de otras superficies de iOS",
+        "Señala con claridad, ANTES de redactar, la restricción de cumplimiento: una respuesta de IA inventada con afirmaciones de salud es la versión más riesgosa del formato; toda afirmación necesita sustento y requiere revisión legal",
+        "No presenta el intercambio como una respuesta real y espontánea de ChatGPT que respalda el producto",
+        "Recomienda revisión legal o un reencuadre conforme para el consejo de salud dentro de la respuesta de IA (por ejemplo, educación sobre el mecanismo con datos documentados)",
+        "Para Notas: título como gancho, lista confesional en primera persona con el producto como la línea menos entusiasta, audio solo de teclas",
+        "Fundamenta afirmaciones y revelaciones en datos documentados o reseñas reales (insumos con fundamento)",
+        "Razona la elección de superficie (ChatGPT frente a Notas) en vez de tratar los formatos como intercambiables",
+        "No dice que publicó nada: deja borradores para el OK del dueño"
+      ]
+    },
+    {
+      "id": "plan-creativo-cuenta-estancada",
+      "prompt": "Nuestra cuenta de Meta está estancada: probamos 30 anuncios en dos meses y ninguno le gana al control. Tenemos las reseñas exportadas (de nuestro restaurante) y acceso a los datos de la cuenta. Hazme un plan creativo para el próximo mes.",
+      "expectations": [
+        "Aplica el modo 4 y la hoja de ruta creativa en vez de saltar a generar anuncios",
+        "Diagnostica un estado de exploración (nada funciona) y arma el plan en consecuencia: mayoría de conceptos nuevos en segmentos y ángulos distintos, pocas iteraciones",
+        "Redefine el éxito por métrica para una cuenta atascada (una mejora en retención del video o una baja del costo por clic ya cuenta como señal)",
+        "Sintetiza las tres señales (rendimiento de la cuenta, lenguaje de las reseñas, orgánico externo del nicho) o pide la que falta",
+        "Ordena los conceptos por nivel de evidencia y cita la fuente de cada uno, sin inventar lenguaje de clientes",
+        "Entrega una hoja mensual con capacidad comprobada y niveles de producción, favoreciendo pruebas de baja fidelidad",
+        "Señala las causas comunes del estado de exploración (creatividad aburrida, mensaje complicado, propuesta de valor poco clara, CPM castigados)",
+        "Cierra con el plan de retrospectiva al final del mes que alimenta la siguiente hoja",
+        "No dice que lanzó nada: el plan queda para el OK del dueño"
+      ]
+    },
+    {
+      "id": "tablero-de-revision",
+      "prompt": "Generamos cuatro conceptos de anuncios para un cliente (una marca de cosmética natural) y necesitamos mandarle algo que pueda ver y aprobar: con la vista previa de Instagram, los cuadros del carrusel y las distintas opciones de titular para comparar. ¿Lo armas?",
+      "expectations": [
+        "Reconoce un pedido de página o tablero de revisión creativa y aplica pagina-de-revision-creativa",
+        "Entrega el tablero en Markdown (la oficina no arma páginas web), con cada concepto: vista previa de feed, guion cuadro por cuadro, titulares para elegir, texto principal y destino",
+        "Etiqueta los cuadros del carrusel por el trabajo narrativo (Gancho, Problema, Prueba, Invitación) y no por lo que se ve en la imagen",
+        "Selecciona un número revisable de conceptos (2 a 4) en vez de volcar todo",
+        "Incluye la declaración de fundamento obligatoria por concepto: qué es real (fotografía de producto, afirmaciones o resultados) y rotula como ilustrativa la prueba que lo sea",
+        "No presenta estadísticas inventadas ni imágenes de banco como si fueran de la marca",
+        "Usa marcadores de lugar (descripción de la imagen) para los cuadros aún no generados y solo rutas reales del Estudio para los generados",
+        "Si el dueño quiere una página compartible, ofrece el bloque de datos en JSON válido y dice qué falta, sin afirmar que la página existe",
+        "No dice que envió nada al cliente: queda listo para el OK del dueño"
+      ]
+    },
+    {
+      "id": "airdrop",
+      "prompt": "Quiero hacer uno de esos anuncios de video estilo AirDrop, donde un teléfono recibe un AirDrop y se toca aceptar. Vendemos una edición limitada de zapatillas.",
+      "expectations": [
+        "Aplica la superficie de AirDrop de anuncios-revelacion-ios (la familia de revelaciones nativas de iOS), no la trata como un formato inventado desde cero",
+        "Construye el anuncio alrededor de la interacción: tarjeta de AirDrop entrante (hoja translúcida, nombre del dispositivo remitente, miniatura de vista previa, Rechazar gris y Aceptar azul) desde quien recibe, con el toque en Aceptar como momento de revelación y el anillo de progreso de la transferencia como movimiento característico",
+        "La miniatura debe ganarse el toque (la imagen estrella de las zapatillas o del lanzamiento)",
+        "Pone un nombre humano cercano como remitente, no la marca",
+        "Usa el sonido de AirDrop (no los tonos de iMessage) con el aviso sobre imagen comercial de Apple",
+        "Aplica las reglas de fundamento y divulgación de la familia: es una dramatización de un envío, no un respaldo real, y las afirmaciones se sustentan",
+        "Puede indicar que por defecto va desde quien recibe y que desde quien envía es una variante",
+        "No dice que publicó nada: deja el guion y los prompts como borrador para el OK del dueño"
+      ]
+    },
+    {
+      "id": "ugc-reaccion-zonas-seguras",
+      "prompt": "Somos una aplicación móvil de finanzas personales y queremos anuncios para TikTok y Reels. Dame un concepto de anuncio con reacción de creador y asegúrate de que la interfaz de la app no lo tape. Además, ¿le ponemos música?",
+      "expectations": [
+        "Carga video-vertical-y-formatos-creador y entrega el formato y la especificación",
+        "Formato: estructura de reacción + demostración con corte directo (reacción del creador de unos 3 segundos con un rótulo gancho escrito como monólogo interno, corte a la demostración de la app, rótulo de cierre opcional); puede mencionar como alternativas los tutoriales a pantalla dividida «sin charla» y la reacción en pantalla verde",
+        "Zona segura: todo rótulo y elemento clave dentro de la franja central de 720×1200 (220 px libres arriba, 500 abajo y 180 a cada lado) para que la interfaz no lo tape",
+        "Describe el estilo de rótulos estático de relleno blanco con contorno negro y tamaño automático, sin rótulos animados",
+        "Da la decisión de música orgánica contra incrustada en vez de un sí o no general: para orgánico, exportar sin música y poner el sonido en tendencia dentro de la app; incrustarla solo para pagado o donde no se pueda poner el sonido nativo",
+        "Si el video se genera en el Estudio, indica el formato 9:16 y pide dejar libres los bordes en el prompt",
+        "Deja el guion y la lista de tomas como borrador para el OK del dueño"
+      ]
+    },
+    {
+      "id": "estaticos-frio-varios-productos",
+      "prompt": "Somos una marca de productos de belleza con una cuenta de Meta estancada y necesitamos conceptos estáticos nuevos que realmente abran públicos fríos, no solo remarketing. ¿Con qué plantillas estáticas conviene empezar y cuáles evitar ahora? Además, tenemos varios productos.",
+      "expectations": [
+        "Carga las plantillas estáticas y razona desde el nivel y el papel en el embudo, sin tratar las plantillas como intercambiables",
+        "Para alcance frío prioriza las S y A: Mensaje del fundador, Historia de origen y, por tener varios productos, el Estático en cuadrícula",
+        "Recomienda específicamente el estático en cuadrícula por tener varios productos",
+        "Explica la lente escalador unicornio frente a actor de reparto: las plantillas B (nosotros contra ellos, antes y después, preguntas frecuentes, señalamiento) convierten a mitad del embudo y no se matan por no escalar en frío",
+        "Señala los formatos agotados que conviene evitar: mención en prensa (F), testimonios en estático (E) y lista numerada (E)",
+        "Mantiene las reglas de fundamento: los conceptos se rastrean a reseñas, anuncios ganadores o comentarios reales; ninguna prueba social inventada",
+        "Puede remitir al mapa completo de formatos para video y colaboraciones",
+        "Antes de generar imágenes, consulta el estado del Estudio y propone generar solo las elegidas"
+      ]
+    },
+    {
+      "id": "que-formato-hacer",
+      "prompt": "Somos una marca de suplementos y nuestro alcance en Meta lleva semanas plano. Podemos hacer prácticamente cualquier anuncio. ¿Qué formato creativo hacemos ahora y en qué NO deberíamos perder tiempo?",
+      "expectations": [
+        "Carga formatos-meta-por-nivel y responde como una decisión de qué formato hacer a continuación, no como un volcado de textos",
+        "Abre con la lente escalador unicornio frente a actor de reparto y el contexto de personas de Andromeda (los formatos con creador llegan de forma nativa a cada persona)",
+        "Relaciona el alcance plano con desplegar formatos con creador, sobre todo anuncios de colaboración (la prioridad número 1), para recuperar alcance nuevo",
+        "Recomienda los S (contenido del fundador, anuncios de colaboración, VSL para nichos que necesitan educar como los suplementos) y un A pertinente (autoridad, estáticos en cuadrícula)",
+        "Despriorizar explícitamente los F (prensa, podcast salvo que el fundador esté en un programa conocido, anuncios que imitan notas o interfaces que no convierten y confunden al algoritmo)",
+        "Plantea la respuesta como un portafolio (escaladores + reparto) y remite a las referencias de estáticos y de video para construir el formato elegido",
+        "Advierte sobre las afirmaciones de salud: sustento y revisión legal antes de cualquier pieza"
+      ]
+    },
+    {
+      "id": "video-creador-salud-fundador",
+      "prompt": "Somos una marca de suplementos de salud y queremos videos que escalen a públicos fríos, no solo remarketing. ¿Qué formatos con creador deberíamos priorizar y puede salir nuestro fundador en ellos?",
+      "expectations": [
+        "Carga video-vertical-y-formatos-creador y razona desde la lógica de nivel (escalar frente a reparto), no con una lista plana",
+        "Para escalar en frío en un nicho de salud donde hay que ganar confianza, prioriza VSL y Autoridad, y señala que en Autoridad las afirmaciones de salud deben ser reales, sustentadas y pasar por revisión legal",
+        "Puede indicar también charlatán, investigación amateur y David contra Goliat como opciones de escala en frío",
+        "Confirma que el fundador puede salir (su contenido suele ser el primer gran ganador de una marca), por ejemplo en charlatán o David contra Goliat, con estructuras de fundador y de vlog orgánico como el viaje del héroe",
+        "Menciona el sistema práctico de producción (tres tomas: cercana, media y abierta; el corte de 0,5 a 1 segundo) y plantea la mezcla como un portafolio entre niveles",
+        "Deja guiones y listas de tomas como borrador para el OK del dueño"
+      ]
+    },
+    {
+      "id": "sin-senales-de-ia",
+      "prompt": "Dame 10 variaciones de texto principal para Meta para nuestro creador de páginas web sin código. No necesita programador, no necesita configurar un alojamiento y no pide tarjeta de crédito para empezar.",
+      "expectations": [
+        "Redacta 10 variaciones que evitan las señales de IA aunque el pedido sea una lista de ausencias",
+        "Ninguna variación apila tres negaciones («Sin programador. Sin alojamiento. Sin tarjeta.»); puede decir una ausencia de forma simple",
+        "Sin revelaciones por contraste («no es X, es Y»), sin preguntas que se responde uno mismo y sin revelaciones con dos puntos",
+        "Sin rayas largas (—)",
+        "Las variaciones no repiten la misma forma de oración",
+        "Sin ganchos de relleno como «POV:» o «Deja de hacer scroll», ni frases de repertorio como «Di adiós a…» o «Descubre el poder de…»",
+        "Cada variación cabe en el texto principal visible de Meta o lo marca, con el conteo de caracteres",
+        "No dice que publicó nada: deja borradores para el OK del dueño"
+      ]
+    }
+  ]
+}

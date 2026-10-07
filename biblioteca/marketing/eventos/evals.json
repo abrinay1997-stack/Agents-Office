@@ -1,0 +1,98 @@
+{
+ "skill": "eventos",
+ "origen": "marketingskills/events/evals",
+ "evals": [
+  {
+   "id": "patrocinio-congreso-30k",
+   "prompt": "Tenemos la oportunidad de patrocinar por 30.000 dólares el congreso anual más grande de nuestro sector (5.000 asistentes). Marketing quiere hacerlo por reconocimiento de marca. ¿Lo hacemos? Somos una empresa de software para constructoras.",
+   "expectations": [
+    "No acepta el «reconocimiento de marca» como justificación suficiente; exige una meta de conversaciones calificadas o reuniones con un responsable",
+    "Calcula o pide los datos para el costo por reunión calificada y lo compara con otros canales",
+    "Pregunta por el solapamiento audiencia–cliente ideal en números absolutos, no por la asistencia total",
+    "Menciona la jugada de evento paralelo (cena o desayuno curado) como alternativa o complemento",
+    "Si se patrocina, recomienda negociar un espacio de charla o derechos de evento paralelo antes que un stand más grande",
+    "Deja la decisión de pagar al dueño"
+   ]
+  },
+  {
+   "id": "primer-seminario-web",
+   "prompt": "Planea nuestro primer seminario web. Vendemos una herramienta de gastos para directores financieros de empresas nuevas y queremos que genere solicitudes de demostración.",
+   "expectations": [
+    "Empieza por la elección del tema y la oferta (tema que parte del problema, una oferta decidida de antemano), no por la logística",
+    "Incluye un sistema de asistencia: añadir al calendario, recordatorios escalonados incluido el enlace 5 minutos antes y manejo de la brecha",
+    "Estructura el arco en vivo con la venta anunciada al inicio, una transición con guion y una sola oferta",
+    "Segmenta el seguimiento por comportamiento, con una secuencia de repetición para los ausentes",
+    "Presenta las cifras de referencia como rangos orientativos, no como metas",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "charla-congreso-25-min",
+   "prompt": "Me aceptaron para dar una charla de 25 minutos en el congreso de comercio electrónico de mi país el próximo trimestre. Soy dueña de una tienda de ropa en línea. Ayúdame a aprovecharla.",
+   "expectations": [
+    "Separa el esquema (audiencia, «lunes siguiente», bloques con prueba) del guion emocional (momentos con energía, sensación y golpe)",
+    "Trata la grabación como el activo duradero: confirmar derechos, decir cifras y posicionamiento en voz alta, frase citable en un momento pico",
+    "Conecta la transcripción con la acumulación en citas de la IA",
+    "Incluye acciones posteriores: publicar la grabación y una versión escrita, y dar seguimiento a quienes preguntaron en 24 a 48 horas",
+    "Recomienda conocer a otros ponentes y un único cierre claro",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "seminario-conjunto-aliado",
+   "prompt": "Un aliado quiere hacer un seminario web conjunto con nosotros: ellos ponen su lista y nosotros la nuestra. Somos una agencia de diseño. ¿Cómo estructuramos la alianza y de quién son los contactos?",
+   "expectations": [
+    "Deriva la estructura de la alianza y los términos de reparto de contactos a marketing-conjunto en vez de responderlos como logística de evento",
+    "Señala que hace falta el consentimiento explícito de los inscritos para compartir sus datos entre ambas partes",
+    "Conserva y ofrece la capa de ejecución del seminario (embudo, promoción por ambos ponentes, seguimiento)",
+    "No inventa términos legales ni contractuales"
+   ]
+  },
+  {
+   "id": "feria-412-escaneos",
+   "prompt": "Volvimos de una feria con 412 escaneos de credencial. Marketing lo llama un gran éxito y quiere cargarlos todos a nuestra secuencia de ventas mañana. Vendemos maquinaria agrícola. ¿Qué opinas?",
+   "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Rechaza el conteo de escaneos como métrica de éxito y distingue métricas de vanidad, reales y decisivas",
+    "Desaconseja cargar todos los escaneos a una secuencia de ventas, por riesgo para el dominio y la marca y por el contacto sin contexto",
+    "Ofrece el modelo de seguimiento por niveles (caliente, tibio, solo escaneo) con la ventana de 24 a 48 horas para los primeros",
+    "Recomienda medir la feria por costo por reunión calificada y oportunidades influidas con etiquetas de origen",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "anuncio-de-producto-evento",
+   "prompt": "Queremos anunciar nuestro producto nuevo en un evento propio para clientes de nuestra clínica veterinaria. Guíame por todo.",
+   "expectations": [
+    "Identifica que la estrategia de anuncio y lanzamiento se deriva a lanzamientos mientras la ejecución del evento se queda aquí",
+    "Da lo propio del evento: formato, mecánica de inscripción y asistencia, captura de la grabación, seguimiento",
+    "No duplica dentro del plan del evento la estrategia de canales del lanzamiento (prensa, redes de lanzamiento)",
+    "Menciona capturar la grabación para contenido posterior",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "eventos-ventas-grandes",
+   "prompt": "Vendemos software a grandes empresas con ventas de 80.000 dólares. ¿Deberíamos hacer eventos? Si sí, ¿cuáles? Viene un congreso gigante de 10.000 personas y todos dicen que tenemos que estar.",
+   "expectations": [
+    "Confirma que los eventos presenciales encajan con este cliente (grandes cuentas, valor alto, varios decisores)",
+    "Aplica el principio 80/20 de selección: concentrarse en pocos eventos de mayor rendimiento en vez de asistir a todo",
+    "Cuestiona la idea de «hay que ir al congreso de 10.000»: más grande se correlaciona con ruido y dilución, no con retorno; sugiere eventos de nicho o regionales o un evento paralelo curado",
+    "Fundamenta la decisión en la economía (unas 5 a 10 oportunidades sólidas para justificar un equipo, o costo por reunión calificada frente a otros canales)",
+    "No dice que envió, publicó o lanzó nada: deja borradores para el OK del dueño"
+   ]
+  },
+  {
+   "id": "evento-local-restaurante",
+   "prompt": "Tengo un restaurante y quiero hacer una cena de degustación para atraer clientes de empresas que reservan eventos. ¿Vale la pena y cómo lo planeo?",
+   "expectations": [
+    "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+    "Adapta el marco de eventos a un negocio local: formato, tema, lista objetivo y resultado principal",
+    "Define un resultado medible (reuniones o reservas de eventos corporativos) y un dueño del número",
+    "Incluye el antes (invitaciones personales), el durante (capturar contexto) y el después (seguimiento en 24 a 48 horas)",
+    "Usa precios y costos de las cifras del restaurante o los marca como pendientes, sin inventarlos",
+    "Deja las invitaciones como borradores para el OK del dueño"
+   ]
+  }
+ ]
+}

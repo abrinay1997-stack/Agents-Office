@@ -1,0 +1,110 @@
+{
+  "skill": "pruebas-ab",
+  "origen": "marketingskills/ab-testing/evals",
+  "evals": [
+    {
+      "id": "titular-inicio-hipotesis",
+      "prompt": "Quiero hacer una prueba A/B con el titular del inicio de la web de mi estudio de diseño de interiores. Hoy dice «Diseño de interiores para toda ocasión» y quiero probar algo centrado en el beneficio. Tenemos unas 15.000 visitas al mes y ahora el 3,2 % de las visitas termina pidiendo una cotización.",
+      "expectations": [
+        "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+        "Arma una hipótesis con el marco: como [observación], creemos que [cambio] provocará [resultado], lo sabremos cuando [métricas]",
+        "Identifica que es una prueba A/B de dos variantes",
+        "Calcula o consulta el tamaño de muestra según las 15.000 visitas al mes y la base de 3,2 %, y la duración que implica (señala si no es viable con ese tráfico y ofrece alternativas)",
+        "Define la métrica principal (cotizaciones pedidas por visita), secundarias y de resguardo",
+        "Advierte sobre el problema de espiar los resultados y recomienda una duración fija",
+        "Entrega el plan de prueba con la plantilla estructurada (variantes con su texto, métricas, muestra, duración, lista previa al lanzamiento)",
+        "No inventa tasas de conversión ni resultados, y deja claro que nada se lanza sin el OK del dueño"
+      ]
+    },
+    {
+      "id": "cuatro-colores-de-boton",
+      "prompt": "queremos probar como 4 colores distintos de botón en la página de reservas de nuestro hotel boutique. ¿es buena idea?",
+      "expectations": [
+        "Se activa con una redacción informal",
+        "Identifica que es una prueba A/B/n (varias variantes)",
+        "Advierte que 4 variantes exigen bastante más tráfico que un A/B simple y cita el multiplicador aproximado",
+        "Recuerda los requisitos de tamaño de muestra y la duración que implicarían",
+        "Cuestiona si el color del botón por sí solo produce una mejora relevante frente a probar el texto del botón, su lugar o el contexto que lo rodea",
+        "Recomienda reducir a 2 variantes o asegurar el tráfico suficiente",
+        "Si se sigue adelante, da el marco de hipótesis y el montaje de la prueba"
+      ]
+    },
+    {
+      "id": "espiar-resultados",
+      "prompt": "Nuestra prueba de dos asuntos de correo para la tienda de ropa lleva 3 días y la variante B va ganando con 95 % de confianza. ¿La damos por buena?",
+      "expectations": [
+        "Aborda de frente el problema de espiar los resultados",
+        "Explica por qué una significancia temprana engaña (regresión a la media, efectos del día de la semana, cambios en la mezcla de público)",
+        "Explica que mirar antes de tiempo infla la tasa de falsos positivos",
+        "Recomienda dejar correr la prueba toda la duración calculada de antemano, y pregunta si se había fijado una",
+        "Menciona las pruebas secuenciales como alternativa cuando de verdad se necesita parar antes",
+        "Recomienda comprometerse con la duración y el tamaño de muestra antes de empezar",
+        "Nada se aplica a toda la base de clientes sin el OK del dueño"
+      ]
+    },
+    {
+      "id": "multivariante-landing",
+      "prompt": "Ayúdame a montar una prueba multivariante en la página de un curso en línea de repostería. Quiero probar al mismo tiempo el titular, la imagen principal y el botón de inscripción.",
+      "expectations": [
+        "Identifica que es una prueba multivariante (MVT)",
+        "Explica que una prueba multivariante prueba combinaciones de elementos",
+        "Aborda que exige muchísimo más tráfico que un A/B",
+        "Calcula el número de combinaciones (por ejemplo, 2 titulares × 2 imágenes × 2 botones = 8)",
+        "Sugiere pruebas A/B secuenciales como alternativa si el tráfico no alcanza, y plantea qué elemento probar primero",
+        "Arma una hipótesis para cada elemento",
+        "Menciona los efectos de interacción que habría que vigilar",
+        "Entrega el plan de prueba con la plantilla estructurada"
+      ]
+    },
+    {
+      "id": "metricas-formulario-largo",
+      "prompt": "¿Qué métricas debería seguir en una prueba A/B de la página de solicitud de presupuesto de nuestra constructora? Probamos un formulario más largo (agrega tipo de obra, metros cuadrados y presupuesto aproximado) contra el corto actual.",
+      "expectations": [
+        "Aplica el marco de tres niveles de métricas: principal, secundarias y de resguardo",
+        "Identifica la tasa de formularios completados (o solicitudes recibidas) como métrica principal",
+        "Identifica la calidad de los contactos como secundaria (proporción que llega a cotización o a contrato)",
+        "Define métricas de resguardo para evitar un resultado dañino, como el volumen total de solicitudes",
+        "Explica el equilibrio entre cantidad y calidad de los contactos",
+        "Señala que hace falta una ventana de observación más larga para medir lo que pasa después (cotizaciones cerradas)"
+      ]
+    },
+    {
+      "id": "redactar-no-es-probar",
+      "prompt": "¿Me ayudas a escribir el texto de la nueva página de inicio de mi consultorio de fisioterapia? Queremos probarla contra la versión actual.",
+      "expectations": [
+        "Reconoce que es, sobre todo, un trabajo de redacción y no de montaje de una prueba",
+        "Remite a la skill redaccion-publicitaria para escribir el texto de la página",
+        "No intenta escribir la página completa con los patrones de montaje de pruebas",
+        "Puede ofrecer ayuda con la hipótesis y el montaje de la prueba una vez escrita la variante",
+        "Nada se publica en la web sin el OK del dueño"
+      ]
+    },
+    {
+      "id": "leer-resultados-precios",
+      "prompt": "Corrimos una prueba A/B en la página de precios de nuestro software de facturación durante 4 semanas. Control: 2,1 % de conversión. Variante: 2,4 %. 12.000 visitantes por variante. ¿Es estadísticamente significativo? ¿La implementamos?",
+      "expectations": [
+        "Evalúa los resultados con los criterios de significancia estadística (calcula el valor p o el intervalo de confianza con la fórmula de dos proporciones, y dice cómo llegó)",
+        "Aborda si la muestra alcanza para un efecto de 0,3 puntos sobre una base de 2,1 % (mejora relativa de unos 14 %)",
+        "Cita el umbral de 95 % de confianza",
+        "Distingue la significancia estadística de la significancia práctica",
+        "Da una recomendación clara sobre implementarla, seguir probando o iterar",
+        "Sugiere un análisis por segmento o una prueba de seguimiento si el resultado es dudoso",
+        "Usa la plantilla de resultados y propone la entrada del libro de jugadas, sin inventar datos que no se dieron"
+      ]
+    },
+    {
+      "id": "programa-de-experimentos",
+      "prompt": "Quiero dejar de hacer pruebas sueltas y tener un programa de experimentos para nuestra tienda en línea de artículos deportivos: una lista de ideas, cómo priorizarlas y una rutina para revisarlo.",
+      "expectations": [
+        "Plantea el ciclo del programa: generar hipótesis, priorizar con ICE, diseñar y correr, analizar, pasar ganadoras al libro de jugadas y sacar hipótesis nuevas",
+        "Indica de dónde salen las hipótesis (analítica, investigación de clientes, competencia, soporte y WhatsApp, mapas de calor, pruebas anteriores)",
+        "Priorización con ICE (impacto, confianza, facilidad; promedio de 1 a 10) con un ejemplo de tabla",
+        "Propone el ritmo y los indicadores del programa como orientación (experimentos al mes, porcentaje de ganadoras, duración, lista de espera) y lo adapta al tráfico real de una tienda pequeña",
+        "Propone el libro de jugadas como nota del Cerebro y su formato",
+        "Propone la cadencia (semanal, quincenal, mensual, trimestral) y qué partes pueden ser rutinas de la oficina que solo leen y reportan",
+        "No inventa datos de la tienda; pide el tráfico y las conversiones o los marca como supuestos",
+        "Nada se lanza ni se cambia en la tienda sin el OK del dueño"
+      ]
+    }
+  ]
+}

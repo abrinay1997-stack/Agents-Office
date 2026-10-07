@@ -1,0 +1,79 @@
+{ "skill": "relaciones-publicas", "origen": "marketingskills/public-relations/evals", "evals": [
+  { "id": "prensa-sin-noticias-david-goliat",
+    "prompt": "Somos una startup de solo 2 personas que compite contra Notion en documentos. No tenemos noticias de financiamiento ni un gran hito. ¿Cómo conseguimos cobertura de prensa?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Va a la referencia angulos-de-historia",
+      "Reconoce que no hay un gancho noticioso tradicional y encaja la situación en uno de los tres ángulos, lo más natural David contra Goliat (ser pequeño frente a un gigante), con el ejemplo de Superhuman frente a Gmail",
+      "Nombra los tres ángulos: historia de fundación, David contra Goliat y tener un enemigo",
+      "Aclara que el enemigo es un sistema roto, no un competidor con nombre (con el ejemplo de HEY frente a la tienda de aplicaciones de Apple en 2020)",
+      "Cita a Pieter Levels y sus «12 startups en 12 meses» como ejemplo de historia de fundación",
+      "Refuerza que la historia no es el producto",
+      "Dice que un hito solo no es historia: un hito con narrativa sí, y menciona el efecto acumulado frente al pico de visitas",
+      "No inventa noticias ni propone atacar a Notion por nombre",
+      "No dice que envió ningún pitch: deja borradores y «Pendiente de tu OK»"
+    ] },
+  { "id": "filtracion-de-datos",
+    "prompt": "Anoche alguien entró a la base de datos de nuestros clientes. Todavía no sabemos qué datos se llevó. La gente ya está preguntando en Twitter. Escríbenos un comunicado.",
+    "expectations": [
+      "Va a las referencias comunicacion-de-crisis y plantillas-comunicados",
+      "Clasifica el incidente como nivel 4 (grave) con los niveles de gravedad",
+      "Dice que el dueño consulte a su abogado antes de admitir culpa o publicar más que un comunicado de espera",
+      "Señala que las obligaciones de notificar una filtración varían según la jurisdicción, sin afirmar un plazo concreto como si fuera un hecho",
+      "Redacta un comunicado de espera con una hora concreta para la próxima actualización",
+      "El comunicado no afirma nada sobre la causa, el alcance ni qué datos se vieron afectados o no",
+      "No admite culpa antes de conocer los hechos",
+      "Atiende el orden de los canales: clientes afectados y equipo antes o junto con las publicaciones públicas",
+      "Nombra un solo vocero y la lista de los primeros 60 minutos",
+      "Deja todo como borrador y dice que nada se publica sin el OK del dueño"
+    ] },
+  { "id": "prensa-local-clinica",
+    "prompt": "Tengo una clínica dental en Medellín y quiero salir en medios locales. No tenemos nada de tecnología ni financiamiento; solo 15 años atendiendo a la misma comunidad y un programa de salud oral gratis en colegios. ¿Cómo armo esto?",
+    "expectations": [
+      "Lee el contexto de la empresa en el Cerebro (00-Empresa) o pregunta lo que falta",
+      "Reconoce que la prensa local, la radio, los programas matutinos y las revistas del gremio rinden más que la prensa de tecnología",
+      "Encuentra el ángulo en una historia real (la comunidad, el programa en colegios, datos propios con cifras verdaderas) y la encaja en uno de los tres ángulos",
+      "Insiste en que la historia no es el servicio sino la persona, el dato o la tendencia",
+      "Propone armar una lista de periodistas concretos y revisar sus últimos artículos antes de escribirles",
+      "Redacta un pitch de menos de 150 palabras con asunto específico y un pedido claro",
+      "Recomienda una página o carpeta de prensa con descripción, fotos y correo de prensa",
+      "No inventa cifras, nombres de periodistas ni cobertura previa",
+      "No dice que envió nada: deja los borradores y «Pendiente de tu OK»"
+    ] },
+  { "id": "aprovechar-noticia-tendencia",
+    "prompt": "Hoy salió la noticia de que una gran cadena de supermercados subió los precios de la canasta básica. Somos un negocio de abarrotes en línea. ¿Podemos subirnos a esa noticia?",
+    "expectations": [
+      "Va a la referencia aprovechar-noticias",
+      "Puntúa la oportunidad con la rúbrica y decide si vale la pena",
+      "Considera las ventanas de tiempo: la velocidad le gana al pulido",
+      "Propone 2 o 3 ángulos y elige el mejor, que aporte datos o un punto de vista propio y no solo oportunismo",
+      "Sugiere publicar primero una pieza propia con ese punto de vista y mencionarla en el pitch",
+      "Evita aprovechar tragedias, muertes o desastres y no ataca a un competidor con nombre",
+      "Redacta el pitch listo para copiar, de menos de 150 palabras",
+      "No inventa cifras de precios: las toma de las cifras de la empresa o las marca como supuesto",
+      "Deja el pitch como borrador y «Pendiente de tu OK»"
+    ] },
+  { "id": "preparar-podcast",
+    "prompt": "La semana que viene me entrevistan en un podcast de emprendimiento y no lo conozco. Prepárame.",
+    "expectations": [
+      "Va a la referencia preparar-podcast",
+      "Investiga el programa (su fuente de episodios, su sitio, su ficha en plataformas, la búsqueda web) o, si no puede, le pide al dueño el enlace y algunos episodios",
+      "Extrae los temas recurrentes y el perfil de los anfitriones",
+      "Mapea las historias de la persona invitada sobre esos temas",
+      "Entrega el resumen de preparación con puntos clave, historias y datos verificables",
+      "Explica que los episodios se transcriben y que los asistentes de IA los citan durante años",
+      "No inventa datos del programa ni citas de los anfitriones",
+      "No dice que contactó al programa: deja todo como preparación para el dueño"
+    ] },
+  { "id": "responder-pedido-de-fuente",
+    "prompt": "Me llegó un pedido de un periodista en una plataforma de pedidos de fuentes: busca a un experto en ciberseguridad para pymes que explique por qué fallan los respaldos. Somos una agencia de TI. Respóndelo.",
+    "expectations": [
+      "Va a la referencia plataformas-de-prensa y usa la plantilla de respuesta",
+      "La respuesta tiene menos de 200 palabras",
+      "Responde a lo que pidió el periodista, con datos y un ejemplo concreto sin inventar cifras ni clientes",
+      "Incluye credenciales verificables de las notas de la empresa",
+      "Lleva un asunto claro y un cierre con cómo contactar",
+      "Recuerda que la velocidad importa en este tipo de pedidos",
+      "No dice que envió la respuesta: la deja como borrador para el OK del dueño"
+    ] }
+] }
