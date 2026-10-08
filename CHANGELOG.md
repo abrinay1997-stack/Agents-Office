@@ -1,5 +1,42 @@
 # Changelog
 
+## Lo que faltaba de C2 y el C3 de Contenido — 8 oct 2026 (lo publicado con sus cifras, llenar la semana, plantillas y el teléfono)
+
+Pedido del dueño: «haz lo que falta de C2 y C3» (`docs/analisis-editor-contenido-2026-10-08.md`).
+- **Lo ya publicado en el calendario, con sus resultados.** Lo que Analíticas lee de Meta se junta con la pieza de la que salió (por su enlace, o por la red, la hora y el principio del texto): la tarjeta suma el alcance y las interacciones, y la vista previa al pasar las da red por red. Lo publicado a mano (o antes de la oficina) sale como tarjeta propia, de solo lectura y con enlace, con el filtro **«Publicado fuera»**.
+- **Las mejores horas de una red:** «Mejores horas de [tus redes ▾]» en la semana y en «cuándo sale» del editor (se recuerda).
+- **La zona horaria a la vista** (las horas son las del reloj de la oficina, con su desfase de UTC) y **la cuota de Instagram** con Meta directo («3 de 100 publicaciones por API en 24 h», o lo publicado desde aquí).
+- **Llenar la semana** («+ Crear» o Programación): los días sin nada en tus redes, cada uno con su mejor hora; en cada hueco, un borrador nuevo de Marketing (con imagen del Estudio) o **algo que ya funcionó y vuelve** (la mitad de arriba de lo publicado, sin repetirse en 8 semanas). Crea las copias que vuelven (en revisión) y una tarea para tu puesto de redes. Programación gana **«Borradores de la semana»** con «Aprobar los N que pueden salir».
+- **Plantillas de publicación** como notas del Cerebro (`Contenido/Plantillas/<nombre>.md`): «Guardar como plantilla» al pie de una pieza y «Desde una plantilla…» en «+ Crear». Los agentes las leen con `ver_plantillas_contenido`.
+- **Aprobar desde el teléfono:** `/contenido` en Telegram, y el borrador de un agente llega solo, cada pieza con su foto, su texto y sus botones.
+- **La página no crece:** las dos ventanas nuevas viajan con el editor (`dist/pieza-editor.js`).
+- **Pruebas:** `tests/contenido-c3.test.mjs` (8 casos) y la cuota en `tests/meta-publicar.test.mjs`; `node scripts/c3-contenido-recorrido.mjs` (1512 claro y oscuro, 1024 y 390).
+
+## C1 y C2 de Contenido — 8 oct 2026 (el editor que se escribe primero y las tarjetas que se leen de un vistazo)
+
+Pedido del dueño tras comparar con Metricool: «¿podemos tener un panel mucho mejor que ellos?» → «haz C1 y las tarjetas de C2».
+- **Formato por red:** cada red de la pieza lleva su ficha con su formato (Instagram Reel y Facebook Post con el mismo video; Short o Video en YouTube; Pin en Pinterest). Las reglas revisan cada red con el suyo, el arreglo de un formato toca solo esas redes, y cada formato distinto sale como su propia publicación (Meta, Metricool y el simulacro). Lo aprobado antes no cambia de huella: `formatos` solo se guarda si alguna red sale distinta.
+- **Un solo cuadro de escribir:** el texto, los archivos dentro (se ordenan arrastrando, o con ‹ ›) y una barra con emoji, hashtags (tus juegos y los que más usas), primer comentario, enlace, **textos guardados** (la firma, una llamada a la acción; una nota del Cerebro, `Contenido/Textos guardados.md`) y **✨ Mejorar con Marketing**: tu agente de contenido propone el texto con la voz de la marca, sus instrucciones, sus lecciones y tus cifras; tú lo usas, pides otra o lo descartas (DESHACER). Un contador por red.
+- **Editar por red:** pestañas sobre el mismo cuadro (el texto principal, Facebook, X…); la que lleva texto propio se marca.
+- **Lo demás, plegado:** «Configuración de Instagram» (la historia también), Pinterest, YouTube, TikTok y las notas; se abren solas si les falta algo. **«N problemas»** arriba se despliega con sus arreglos de un clic.
+- **El pie:** cuándo sale (con los días y las horas rápidas y la mejor hora, que se despliegan) y **Aprobar ▾**: pasar a revisión, volver a borrador y **Publicar ya** (aprobada para dentro de unos 5 minutos, con un segundo clic).
+- **Vista previa en teléfono o computadora.**
+- **Tarjetas del calendario:** el texto que sale bajo el título, «+N» sobre la miniatura cuando hay más archivos, el icono del formato de la red que sale distinto, y **la vista previa al pasar el ratón** (o al llegar con el teclado): la imagen, el texto entero, los hashtags y el estado; un clic la abre, Esc la cierra.
+- **La página pesa menos que antes:** el editor llega en su propio paquete (`dist/pieza-editor.js`, `build-pieza.mjs`, `src/pieza-carga.js`) que se trae al abrir Contenido. La página baja de 2,27 a 2,22 MB.
+- **Pruebas:** `tests/contenido-formatos.test.mjs`, `tests/contenido-editor.test.mjs`; `node scripts/editor-contenido-recorrido.mjs` y `node scripts/tarjetas-contenido-recorrido.mjs` (1512, 1024 y 390, claro y oscuro); el calendario de tareas, idéntico (`calendario-capturas`).
+
+## F3 de Contenido — 8 oct 2026 (publicar directo con Meta)
+
+Pedido del dueño: «quiero ir conectando Meta, para las métricas y estadísticas y publicar posts» → «construye la publicación directa con Meta». Guía: `docs/conectar-meta.md`; diseño: §17 de `docs/propuesta-contenido-y-meta.md`.
+- **Meta directo** en Ajustes → Contenido → «Quién publica en modo real». Usa el token de Analíticas con los permisos de publicar.
+- **Facebook** (foto, varias fotos, video, texto) queda programado en Meta y sale solo, con la computadora apagada.
+- **Instagram** (imagen, carrusel, reel, historia) no se puede programar por la API de Meta. Lo publica la oficina a su hora: prepara 15 minutos antes y publica a la hora. Hasta 30 min tarde todavía sale; después, FALLÓ con el motivo.
+- **Nunca dos veces:** se lee el contenedor antes de publicar, y lo que Meta no contesta no se repite a ciegas.
+- **El resto:** el primer comentario después de publicar; los enlaces en Programación al instante; «Comprobar conexión» con la página, el Instagram, los permisos y la cuota.
+- **Programación lo dice:** «PROGRAMADA» (en Meta), «SALE A SU HORA» (Instagram, desde esta computadora), «PUBLICADA» con enlaces.
+- **Para probar con el token real sin publicar nada:** `node scripts/check-meta-publicar.mjs` (`--video`, `--facebook`).
+- **Pruebas:** `tests/meta-publicar.test.mjs` (14 casos), `tests/contenido-cola.test.mjs` y `tests/contenido-programador.test.mjs`.
+
 ## Plan D, arreglos y lo tuyo fuera de Tareas — 8 oct 2026 (revisión de las tareas del dueño)
 
 Pedido del dueño tras la revisión: «haz los cuatro cambios» — tus tareas desde el calendario y desde el panel, las listas Hoy y Próximos más claras, y el estado de la oficina dentro de Ajustes.

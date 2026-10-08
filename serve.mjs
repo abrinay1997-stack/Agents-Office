@@ -82,6 +82,10 @@ import * as understand from './understand.mjs'; // V4.8: video and audio → tex
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
 import { crearRutas } from './contenido/rutas.mjs';
+import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
+import { agenteDeContenido, promptMejorar, leerPropuesta } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
+import { crearPlantillas as crearPlantillasContenido } from './contenido/plantillas.mjs'; // C3: plantillas de publicación
+import { LIMITES as LIMITES_RED, formatoDe as formatoDeRed } from './src/contenido-reglas.js'; // C1: el tope y el formato de la red que se mejora
 import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectura — su token vive en META_ACCESS_TOKEN y no toca el disco
 import { crearMetricas } from './contenido/metricas.mjs';
 import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
@@ -177,15 +181,17 @@ const INDICADORES_META = [
 const meta = crearMeta({ dir: ANALITICAS_DIR });
 // plan M1 (6 oct 2026): la COLA que lleva lo aprobado al conductor (simulacro por defecto; Metricool en modo real) — contenido/programador.mjs
 const metricool = crearMetricool();
+const aJpeg = async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
 const CONDUCTORES = {
   simulacro: crearSimulacro({ archivo: path.join(ANALITICAS_DIR, 'simulacro.json') }),
-  metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg: async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(), cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json') }),
-  meta: crearConductorMeta(),
+  metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg, cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json') }),
+  // F3 (8 oct 2026): directo en Meta. Facebook queda programado allí; Instagram lo publica esta oficina a su hora (pulso cada 30 s, más abajo)
+  meta: crearConductorMeta({ meta, rutaMedio: id => media.resolve(id), aJpeg, archivo: path.join(ANALITICAS_DIR, 'meta-agenda.json'), pagina: () => cfg.contenido?.metaPagina || '', alCambiar: () => { programador.refrescar('meta').catch(() => {}); }, avisar: (t, o) => notice('contenido', t, o) }),
 };
 const contenidoModo = () => (['apagado', 'simulacro', 'real'].includes(cfg.contenido?.modo) ? cfg.contenido.modo : 'simulacro');
 const conductorActual = () => (contenidoModo() === 'real' ? CONDUCTORES[cfg.contenido?.conductor] || CONDUCTORES.metricool : CONDUCTORES.simulacro);
 const programador = crearProgramador({
-  almacen: contenido, archivo: path.join(ANALITICAS_DIR, 'cola.json'), conductor: conductorActual, modo: contenidoModo,
+  almacen: contenido, archivo: path.join(ANALITICAS_DIR, 'cola.json'), conductor: conductorActual, porId: id => CONDUCTORES[id] || null, modo: contenidoModo,
   horasAntes: () => { const h = Number(cfg.contenido?.entregarHorasAntes); return Number.isFinite(h) && h >= 0 ? Math.min(h, 720) : 24; },
   avisar: (t, o) => notice('contenido', t, o),
   auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'contenido', ...a }) + '\n'); } catch {} },
@@ -1648,9 +1654,28 @@ async function informeRedes(mes, { guardar = false } = {}) {
   const archivo = path.join(dir, `${mes} redes.md`); fs.writeFileSync(archivo, `---\ntipo: informe\nmes: ${mes}\ncreado: ${new Date().toISOString()}\n---\n${r.texto}`);
   return { ...r, nota: path.relative(BRAIN, archivo).replace(/\\/g, '/') };
 }
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja, informe: informeRedes,
-  analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
+// C1 (8 oct 2026): «✨ Mejorar con Marketing» — tu agente de contenido propone el texto con la voz de la marca, sus instrucciones, skills y lecciones
+async function mejorarPieza({ pieza, red, pide }) {
+  const a = agenteDeContenido(AGENTS, CONTENIDO_DEPTS); if (!a) throw Object.assign(new Error('no hay ningún puesto de Marketing'), { status: 409 });
+  const index = vaultIndex(), lim = red ? LIMITES_RED[red]?.caracteres : 0;
+  const { system, user } = promptMejorar({ empresa: cfg.name, agente: a, instrucciones: agentBrief(a), voz: index.get('voice') || '', contexto: index.get('contexto-marketing') || '', cifras: cifrasText(), pieza, red, formato: red ? formatoDeRed(pieza, red) : '', limite: lim || 0, pide });
+  const raw = await ask(system, user, { maxTokens: 2500, timeout: 120000, kind: 'contenido', agent: a, model: a.model || cfg.model }); // sin herramientas (ask): solo escribe; el gasto, a su nombre
+  return { ...leerPropuesta(raw), agente: a.name, red };
+}
+/** C2 (8 oct 2026): la zona horaria de ESTA máquina (la de las horas de Contenido) y su desfase con UTC ahora mismo, para que se vea. */
+const zonaHoraria = () => { const m = -new Date().getTimezoneOffset(); return { nombre: Intl.DateTimeFormat().resolvedOptions().timeZone || '', utc: `UTC${m < 0 ? '−' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.abs(m) % 60).padStart(2, '0')}` }; };
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes, guardados: crearGuardados({ cerebro: BRAIN }), mejorar: mejorarPieza,
+  publicadas: () => ({ ...metricas.leer({ dias: 120 }), conectado: meta.configurado() }), // C2: lo ya publicado, en el calendario de Contenido
+  // C3 (8 oct 2026): «Llenar la semana» pide los borradores a tu puesto de redes de Marketing (solo deja borradores: nada que aprobar aquí)
+  encargar: async ({ texto, titulo }) => { const a = agenteDeContenido(AGENTS, CONTENIDO_DEPTS); const t = await newTask({ dept: a?.department || 'marketing', text: texto, agent: a?.id || null, title: titulo, needsOk: false }); return { id: t.id, titulo: t.title, agente: AGENTS.find(x => x.id === t.agent)?.name || t.agent }; },
+  quienLlena: () => agenteDeContenido(AGENTS, CONTENIDO_DEPTS)?.name || '',
+  plantillas: crearPlantillasContenido({ cerebro: BRAIN }), // C3: las plantillas de publicación (notas del Cerebro)
+  alBorrador: p => TG?.pieza?.(p, 'Un agente dejó un borrador'), // C3: aprobar desde el teléfono, con la vista previa
+  analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, zona: zonaHoraria(), redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
+// F3 (8 oct 2026): el pulso de Meta — programa en Facebook, prepara y publica en Instagram a su hora. Solo en modo real: en simulacro o apagado no sale nada
+const pulsoMeta = () => { if (contenidoModo() === 'real') CONDUCTORES.meta.pulso().catch(e => console.warn('contenido: meta —', e.message)); };
+setInterval(pulsoMeta, 30e3); setTimeout(pulsoMeta, 2e3); // al arrancar, uno enseguida: una de Instagram que se quedó a 29 min y medio de su hora todavía sale (el margen es de 30)
 const webhooksT = crearWebhooks({ config: () => cfg.tareas?.webhooks || [], dataDir: DATA, avisar: t => notice('webhook', t, { level: 'warn', key: 'webhook' }) }); webhooksT.escuchar(busTareas); // plan T6: Zapier, Make, n8n… (tareas/webhooks.mjs)
 const tareasRoutes = crearRutasTareas({ alm: tareasAlm, cat: catalogoT, json, body, webhooks: webhooksT, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id) });
 const duenoRoutes = crearRutasDueno({ alm: tareasAlm, cat: catalogoT, json, body, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), avisarPersona: (n, t) => tellPerson(n, t), personas: () => PEOPLE().map(p => p.name), // plan D
@@ -1936,6 +1961,11 @@ function page() {
 const TAREAS_VISTA = path.join(ROOT, 'dist', 'tareas-vista.js');
 let tvCache = { mtime: 0 };
 function tareasVistaAlDia(x) { const v = /^\/\*ao-tareas:([0-9a-f]{12})\*\//.exec(x.raw.subarray(0, 40).toString('utf8'))?.[1]; try { return !!v && page().raw.includes(v); } catch { return true; } } // dist/* does not travel by GitHub: after a pull the page may be newer than the view
+// C1 (8 oct 2026): the piece editor of Contenido, on demand too (build-pieza.mjs → dist/pieza-editor.js; src/pieza-carga.js asks for it)
+const PIEZA_EDITOR = path.join(ROOT, 'dist', 'pieza-editor.js');
+let peCache = { mtime: 0 };
+function piezaEditorAlDia(x) { const v = /^\/\*ao-pieza:([0-9a-f]{12})\*\//.exec(x.raw.subarray(0, 40).toString('utf8'))?.[1]; try { return !!v && page().raw.includes(v); } catch { return true; } }
+function piezaEditorFile() { const st = fs.statSync(PIEZA_EDITOR); if (st.mtimeMs !== peCache.mtime || st.size !== peCache.raw?.length) { const raw = fs.readFileSync(PIEZA_EDITOR); peCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"p${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return peCache; }
 function tareasVistaFile() { const st = fs.statSync(TAREAS_VISTA); if (st.mtimeMs !== tvCache.mtime || st.size !== tvCache.raw?.length) { const raw = fs.readFileSync(TAREAS_VISTA); tvCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"t${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return tvCache; }
 const EXTRA = path.join(ROOT, 'dist', 'estudio-extra.js');
 let extraCache = { mtime: 0 };
@@ -2012,7 +2042,7 @@ function officeStatus() {
   // plan M1 (6 oct 2026): la publicación — el modo, el conductor y lo que falló
   { const c = programador.estado(), fal = (c.cuenta.fallo || 0) + (c.cuenta.parcial || 0);
     if (c.modo === 'apagado') add('publicacion', 'Publicación (Contenido)', 'info', 'Apagada: nada de lo que apruebas sale de la oficina.', 'Ajustes → Contenido → «Qué pasa con lo que apruebas».');
-    else if (c.modo === 'simulacro') add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'info', `Simulacro: lo aprobado «sale» de mentira${c.cuenta.en_red ? ` (${c.cuenta.en_red} en espera de su hora)` : ''}.`, 'Para publicar de verdad: Ajustes → Contenido → Real, con la key de Metricool.');
+    else if (c.modo === 'simulacro') add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'info', `Simulacro: lo aprobado «sale» de mentira${c.cuenta.en_red ? ` (${c.cuenta.en_red} en espera de su hora)` : ''}.`, 'Para publicar de verdad: Ajustes → Contenido → Real, con Metricool o con Meta directo.');
     else if (!c.conductor.ok) add('publicacion', 'Publicación (Contenido)', 'bad', c.conductor.motivo, 'Pon la key y abre Contenido → Programación → «Comprobar de nuevo».');
     else add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'ok', fal ? `${fal} pieza(s) no salieron bien: míralas en Contenido → Programación.` : `Publica ${c.conductor.nombre}: ${c.cuenta.en_red || 0} programada(s), ${c.cuenta.espera || 0} en cola.`); }
   // backup
@@ -2121,6 +2151,13 @@ const server = http.createServer(async (req, res) => {
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(pc.etag)) { res.writeHead(304, { etag: pc.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', etag: pc.etag, vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/pieza-editor.js') { // C1: the piece editor, on demand (build-pieza.mjs)
+      let x; try { x = piezaEditorFile(); if (!piezaEditorAlDia(x)) throw new Error('otra construcción'); } catch { await rebuildOffice(); try { x = piezaEditorFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/pieza-editor.js no está: node build.mjs'); } }
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
+      const gz = /gzip/.test(req.headers['accept-encoding'] || '');
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+      return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/tareas-vista.js') { // plan T2: the Tareas view, on demand (build-tareas.mjs)
       let x; try { x = tareasVistaFile(); if (!tareasVistaAlDia(x)) throw new Error('otra construcción'); } catch { await rebuildOffice(); try { x = tareasVistaFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/tareas-vista.js no está: node build.mjs'); } }
@@ -2791,7 +2828,7 @@ const server = http.createServer(async (req, res) => {
 server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? `Port ${cfg.port} is already in use — is another office running? Close it, or set PORT.` : e.message); process.exit(1); });
 server.listen(cfg.port, HOST, () => {
   console.log(`Agents Office ${version} → http://localhost:${cfg.port}`);
-  { const tg = TG = telegram.start({ port: cfg.port, cfg: { ...cfg, deputy: { name: DEPUTY } }, dataDir: DATA, onTask: f => taskHooks.push(f), onNotice: f => noticeHooks.push(f) }); // V4.4: Dimitri on Telegram (tokens only in environment variables)
+  { const tg = TG = telegram.start({ port: cfg.port, cfg: { ...cfg, deputy: { name: DEPUTY } }, dataDir: DATA, onTask: f => taskHooks.push(f), onNotice: f => noticeHooks.push(f), mediaRuta: id => media.resolve(id), nombreAgente: id => AGENTS.find(a => a.id === id)?.name || id }); // V4.4: Dimitri on Telegram (tokens only in environment variables)
     console.log(tg ? `  telegram: on — ${tg.owners} owner id(s); approvals, failures and notices go to the phone` : process.env.TELEGRAM_BOT_TOKEN ? '  telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_OWNER_ID is missing or the token looks wrong — see docs/telegram.md' : '  telegram: off (docs/telegram.md: two environment variables turn it on)'); }
   if (!/^(127\.0\.0\.1|localhost|::1)$/.test(HOST)) console.warn(`  ⚠ ESCUCHANDO EN ${HOST}: la oficina NO tiene inicio de sesión todavía (issue #2). Cualquiera que llegue a esta dirección puede mandar a los agentes. Úsala solo en una red de confianza o detrás de un acceso con contraseña (docs/despliegue.md).`);
   console.log(`  business: ${cfg.name}   brain: ${BRAIN} (${graph.notes} notes, ${graph.links.length} links)   claude: ${backend} · ${modelName(cfg.model)}${cfg.effort ? ' · effort ' + cfg.effort : ''} by default (routing on Sonnet)`);

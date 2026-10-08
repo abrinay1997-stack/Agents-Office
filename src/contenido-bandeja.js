@@ -3,7 +3,7 @@
 // El borrador se guarda solo al escribir; ENVIAR pide un segundo clic (5 s) y respeta el modo de Contenido (en simulacro no sale).
 // Un agente deja borradores («Pedir borradores a Marketing» crea esa tarea), nunca envía. Un mensaje con órdenes escondidas lleva 🛡.
 //   initBandeja({ host, datos, esc, note, onCount }) → { load(), render(), pendientes() }
-import { RED } from './pieza.js';
+import { RED } from './pieza-base.js';
 
 const TIPO = { conversaciones: 'Mensaje', comentarios: 'Comentario', resenas: 'Reseña' };
 const EST = { nuevo: ['SIN RESPONDER', '#8A6414', '#E8B44A'], borrador: ['CON BORRADOR', '#2158CC', '#8FB0FF'], respondido: ['RESPONDIDO', '#13705A', '#4FD1A5'], descartado: ['DESCARTADO', '#5A5A5A', '#B9B6AE'], fallo: ['FALLÓ', '#B3261E', '#FF8A80'] };

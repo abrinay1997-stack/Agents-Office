@@ -47,6 +47,63 @@ export const REDES = Object.freeze({
 /** Las redes con historias (las demás no las tienen, ni por API). */
 export const CON_HISTORIAS = Object.freeze(["instagram", "facebook"]);
 
+/*
+ * C1 (8 oct 2026, de la oficina, no de Juancito Ads): el FORMATO DE CADA RED. Una pieza tiene su `formato` (el de Instagram, o el de su
+ * primera red) y, si otra red sale distinta, `formatos: { red: formato }` (el mismo video como reel en Instagram y como post en Facebook).
+ * Sin `formatos`, todo es como antes: un formato para todas. Lo que ofrece cada red, el de por defecto primero; las de una sola opción
+ * publican cualquier formato que no sea historia como su publicación (en X, un «carrusel» es un post con varias imágenes).
+ */
+export const FORMATOS_RED = Object.freeze({
+  instagram: ["post", "carrusel", "reel", "historia"], facebook: ["post", "reel", "historia"], youtube: ["post", "reel"],
+  tiktok: ["reel"], linkedin: ["post"], x: ["post"], threads: ["post"], bluesky: ["post"], pinterest: ["post"],
+});
+const FORMATO_NOMBRE = { post: "Post", carrusel: "Carrusel", reel: "Reel", historia: "Historia" };
+const NOMBRE_EN_RED = { youtube: { post: "Video", reel: "Short" }, tiktok: { reel: "Video" }, pinterest: { post: "Pin" }, linkedin: { post: "Publicación" } };
+/** El formato con que sale en esa red una pieza (`formato`, `formatos`) o un post de estas reglas (`format`, `formatos`). */
+export const formatoDe = (x, red) => x?.formatos?.[red] || x?.formato || x?.format || "post";
+/** Ese formato como lo entiende esa red: en Facebook un carrusel es un post con varias fotos; en YouTube lo que no es Short es un video. */
+export function formatoVisible(red, f) {
+  const ops = FORMATOS_RED[red];
+  if (!ops || ops.includes(f) || f === "historia") return f;
+  return red === "youtube" ? "post" : ops[0];
+}
+/** Cómo se llama ese formato en esa red: «Short» en YouTube, «Pin» en Pinterest, «Video» en TikTok. */
+export const nombreFormato = (red, f) => { const v = formatoVisible(red, f); return NOMBRE_EN_RED[red]?.[v] || FORMATO_NOMBRE[v] || v; };
+/** ¿Esa red tiene ese formato? (X no tiene historias; Instagram, todos.) */
+export const formatoValido = (red, f) => (FORMATOS_RED[red] || ["post"]).includes(formatoVisible(red, f));
+/** El formato con que entra una red nueva en la pieza: el de la pieza si esa red lo tiene; si no, el primero de los suyos. */
+export const formatoInicial = (red, formato) => (formatoValido(red, formato) ? formato : (FORMATOS_RED[red] || ["post"])[0]);
+
+/**
+ * De los formatos de cada red (`efectivos`: { red: formato }) a lo que se guarda: `formato` es el de Instagram (o el de la primera red) y
+ * `formatos`, solo las redes que salen distinto. Dos formatos que esa red publica igual (un carrusel en Facebook es un post) no son distintos.
+ */
+export function normalizarFormatos(redes, efectivos) {
+  const rs = (redes || []).filter((r) => efectivos?.[r]);
+  if (!rs.length) return { formato: "post", formatos: {} };
+  const formato = efectivos[rs.includes("instagram") ? "instagram" : rs[0]], formatos = {};
+  for (const r of rs) if (formatoVisible(r, efectivos[r]) !== formatoVisible(r, formato)) formatos[r] = efectivos[r];
+  return { formato, formatos };
+}
+const efectivosDe = (x, redes) => Object.fromEntries(redes.map((r) => [r, formatoDe(x, r)]));
+/** Cambiar el formato de una red: las demás se quedan como estaban. → { formato, formatos } */
+export function ponFormato(p, red, f, redes = p?.redes?.length ? p.redes : ["instagram"]) {
+  const ef = efectivosDe(p, redes); ef[red] = f;
+  return normalizarFormatos(redes, ef);
+}
+/** Las redes cambian (se añade o se quita una): cada una conserva su formato; la que entra toma el de la pieza si lo tiene. → { formato, formatos } */
+export function formatosConRedes(p, redes) {
+  const ef = {};
+  for (const r of redes) ef[r] = (p?.redes || []).includes(r) ? formatoDe(p, r) : formatoInicial(r, p?.formato || p?.format || "post");
+  return normalizarFormatos(redes, ef);
+}
+/** Las redes agrupadas por su formato, en el orden de las redes: [{ formato, redes }]. Una sola si todas salen igual. */
+export function gruposDeFormato(x, redes = x?.redes ?? ["instagram"]) {
+  const g = new Map();
+  for (const r of redes) { const f = formatoDe(x, r); if (!g.has(f)) g.set(f, []); g.get(f).push(r); }
+  return [...g].map(([formato, rs]) => ({ formato, redes: rs }));
+}
+
 /**
  * Cuánto mide un texto para una red, como lo cuenta ella: X cuenta cada enlace como 23 (t.co); Bluesky cuenta grafemas (un emoji
  * compuesto es uno); las demás, caracteres.
@@ -278,6 +335,27 @@ export function destinoInstagram(post) {
  * para cada red elegida. Sin errores, se puede programar.
  */
 export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], { navegador = false } = {}) {
+  // C1: con un formato por red, cada grupo de redes del mismo formato se revisa con el suyo, y la historia «también» una vez al final
+  const grupos = gruposDeFormato(post, redes);
+  if (grupos.length <= 1) return revisarGrupo({ ...post, format: grupos[0]?.formato ?? post?.format }, redes, null, navegador, true);
+  const errores = [], avisos = [], arreglos = {};
+  for (const g of grupos) {
+    const r = revisarGrupo({ ...post, format: g.formato }, redes, g.redes, navegador, false);
+    for (const t of r.errores) if (!errores.includes(t)) errores.push(t);
+    for (const t of r.avisos) if (!avisos.includes(t)) avisos.push(t);
+    for (const [t, a] of Object.entries(r.arreglos)) {
+      if (arreglos[t]) continue; // el arreglo de un formato toca solo las redes de ese formato
+      arreglos[t] = a.codigo.startsWith("formato:") ? { codigo: `${a.codigo}:${g.redes.join(",")}`, etiqueta: `${a.etiqueta} en ${g.redes.map((r) => REDES[r]?.nombre || r).join(" y ")}` } : a;
+    }
+  }
+  const con = (lista, texto, arreglo) => { if (!lista.includes(texto)) lista.push(texto); if (arreglo) arreglos[texto] = arreglo; };
+  revisarHistoriaTambien(post, redes, con, errores, avisos);
+  return { errores, avisos, arreglos };
+}
+
+/** Las reglas para las redes `solo` (o todas) con el formato de `post`; `redes` son todas las de la pieza (quitar una solo se ofrece si queda otra). */
+function revisarGrupo(post, redes, solo, navegador, conHistoriaTambien) {
+  const mira = (r) => redes.includes(r) && (!solo || solo.includes(r));
   const errores = [];
   const avisos = [];
   // El arreglo de cada problema que lo tiene, por su texto: el panel lo
@@ -292,7 +370,7 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     return { errores, avisos, arreglos };
   }
 
-  if (redes.includes("instagram")) {
+  if (mira("instagram")) {
     const L = LIMITES.instagram;
     const texto = textoPara(post, "instagram");
     const deIG = mediosParaRed(post, "instagram");
@@ -356,7 +434,7 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     }
   }
 
-  if (redes.includes("facebook")) {
+  if (mira("facebook")) {
     const texto = textoPara(post, "facebook");
     if (post?.format === "historia") {
       if (!medios.length) con(errores, "Una historia de Facebook necesita una imagen o un video.", quitarRed(redes, "facebook"));
@@ -367,13 +445,13 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     if (texto.length > LIMITES.facebook.caracteres) errores.push("El texto de Facebook es demasiado largo.");
   }
 
-  if (redes.includes("tiktok")) {
+  if (mira("tiktok")) {
     if (!videos.length) con(errores, "TikTok necesita un video.", quitarRed(redes, "tiktok"));
     const texto = textoPara(post, "tiktok");
     if (texto.length > LIMITES.tiktok.caracteres) errores.push(`El texto de TikTok tiene ${texto.length} caracteres; el máximo es ${LIMITES.tiktok.caracteres}.`);
   }
 
-  if (redes.includes("tiktok") && post?.format === "historia") con(errores, "TikTok no tiene historias.", quitarRed(redes, "tiktok"));
+  if (mira("tiktok") && post?.format === "historia") con(errores, "TikTok no tiene historias.", quitarRed(redes, "tiktok"));
 
   // M2 (6 oct 2026): LinkedIn, X, Threads, Bluesky, Pinterest y YouTube
   const imagenes = medios.filter((m) => m.tipo !== "video");
@@ -387,14 +465,14 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
   const videoLargo = (red, max) => { const v = videos.find((m) => m.duracion > max); if (v) errores.push(`Un video de ${nombre(red)} dura como mucho ${max % 60 === 0 ? `${max / 60} min` : `${max} s`} y este dura ${Math.round(v.duracion)} s.`); };
   const mezcla = (red) => { if (videos.length && medios.length > 1) con(errores, `${nombre(red)} no mezcla un video con otros archivos: deja solo el video o solo las imágenes.`, quitarRed(redes, red)); };
   for (const red of ["linkedin", "x", "threads", "bluesky"]) {
-    if (!redes.includes(red)) continue;
+    if (!mira(red)) continue;
     const L = LIMITES[red];
     sinHistorias(red); algo(red); largo(red, L.caracteres); videoLargo(red, L.videoMaxSeg);
     if (red !== "threads") mezcla(red);
     if (L.imagenesMax && imagenes.length > L.imagenesMax) errores.push(`${nombre(red)} admite hasta ${L.imagenesMax} imágenes por publicación y hay ${imagenes.length}.`);
     if (L.mediosMax && medios.length > L.mediosMax) con(errores, `${nombre(red)} admite hasta ${L.mediosMax} archivos por publicación y hay ${medios.length}.`, { codigo: "recortar-medios", etiqueta: `Quedarse con los ${L.carruselMax ?? 10} primeros` });
   }
-  if (redes.includes("pinterest")) {
+  if (mira("pinterest")) {
     const L = LIMITES.pinterest, pin = post?.pinterest || {};
     sinHistorias("pinterest");
     if (!medios.length) con(errores, "Pinterest necesita una imagen o un video.", quitarRed(redes, "pinterest"));
@@ -404,7 +482,7 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     if (pin.enlace && !/^https:\/\/\S+$/.test(pin.enlace)) errores.push("El enlace del pin tiene que empezar por https://.");
     largo("pinterest", L.caracteres);
   }
-  if (redes.includes("youtube")) {
+  if (mira("youtube")) {
     const L = LIMITES.youtube, yt = post?.youtube || {};
     sinHistorias("youtube");
     if (!videos.length) con(errores, "YouTube necesita un video.", quitarRed(redes, "youtube"));
@@ -418,8 +496,13 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     if (post?.format === "reel" && v?.ancho && v?.alto && v.ancho >= v.alto) avisos.push("Un Short es vertical: este video es horizontal y YouTube lo publicará como video normal.");
   }
 
-  // La historia que acompaña al post.
-  if (post?.historiaTambien && !["historia", "live"].includes(post?.format)) {
+  if (conHistoriaTambien) revisarHistoriaTambien(post, redes, con, errores, avisos);
+  return { errores, avisos, arreglos };
+}
+
+/** La historia que acompaña al post («también como historia»): solo si alguna red no sale ya como historia. */
+function revisarHistoriaTambien(post, redes, con, errores, avisos) {
+  if (post?.historiaTambien && redes.some((r) => !["historia", "live"].includes(formatoDe(post, r)))) {
     const hs = historiasDe(post);
     if (!hs.length) {
       con(errores, "Marcaste «también como historia», pero no hay ninguna imagen de historia: créala con IA o usa la del post.", { codigo: "sin-historia", etiqueta: "No publicar historia" });
@@ -428,8 +511,6 @@ export function revisarPublicacion(post, redes = post?.redes ?? ["instagram"], {
     else if (!redes.some((r) => CON_HISTORIAS.includes(r))) avisos.push(`${redes.map((r) => REDES[r]?.nombre || r).join(", ")} no ${redes.length === 1 ? "tiene" : "tienen"} historias: la historia no saldrá.`);
     else if (redes.some((r) => !CON_HISTORIAS.includes(r))) avisos.push("La historia sale sólo en Instagram y Facebook: las demás redes no tienen historias.");
   }
-
-  return { errores, avisos, arreglos };
 }
 
 /** «Quitar esta red», sólo si queda otra: quitar la única no arregla nada. */
@@ -445,7 +526,12 @@ export function aplicarArreglo(post, codigo) {
   const [accion, valor] = String(codigo).split(":");
   const redes = Array.isArray(post?.redes) && post.redes.length ? post.redes : ["instagram"];
   switch (accion) {
-    case "formato": return { ...post, format: valor };
+    case "formato": { // «formato:post» cambia el de todas; «formato:post:instagram,facebook» (C1), solo el de esas redes
+      const solo = String(codigo).split(":")[2];
+      if (!solo) return post?.formatos && Object.keys(post.formatos).length ? { ...post, format: valor, formatos: {} } : { ...post, format: valor };
+      const ef = efectivosDe(post, redes); for (const r of solo.split(",")) if (redes.includes(r)) ef[r] = valor;
+      const n = normalizarFormatos(redes, ef); return { ...post, format: n.formato, formatos: n.formatos };
+    }
     case "recortar-medios": return conMedios(post, mediosDe(post).slice(0, LIMITES.instagram.carruselMax));
     case "hashtags-al-comentario": return { ...post, hashtagsEnComentario: true };
     case "recortar-hashtags": {
@@ -476,7 +562,7 @@ export function postDePieza(p = {}) {
     medios: (p.medios ?? []).map(conMedida),
     descripcion: p.texto ?? "", hashtagsFinales: p.hashtags ?? "", hashtagsEnComentario: !!p.hashtagsEnComentario,
     primerComentario: p.comentario ?? "", textoFacebook: p.textoFacebook ?? "",
-    historias: (p.historias ?? []).map(conMedida), historiaTambien: !!p.historiaTambien,
+    historias: (p.historias ?? []).map(conMedida), historiaTambien: !!p.historiaTambien, formatos: p.formatos ?? {}, // C1: el formato de cada red que sale distinto
     colaboradores: p.colaboradores ?? [], ajusteIG: p.ajusteIG, adaptados: p.adaptados,
     textos: p.textos ?? {}, pinterest: p.pinterest ?? null, youtube: p.youtube ?? null, tiktok: p.tiktok ?? null, // M2
   };
@@ -507,12 +593,12 @@ export const PROGRAMAR = Object.freeze({ minMin: 10, maxDias: 75 });
  * ¿Se puede aprobar para ESE momento? Sin hora no (la hora la decide el dueño, no un «9:00» de relleno); una hora que ya pasó (o a menos de
  * 10 minutos), tampoco: nunca saldría. Más allá de 75 días, un aviso. Devuelve { errores, avisos, momento } (momento en ms, o null).
  */
-export function revisarMomento(fecha, hora, ahora = Date.now()) {
+export function revisarMomento(fecha, hora, ahora = Date.now(), { minMin = PROGRAMAR.minMin } = {}) { // C1: «Publicar ya» aprueba para dentro de 5 minutos (minMin: 4)
   const errores = [], avisos = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha ?? ""))) return { errores: ["Ponle un día para poder aprobarla."], avisos, momento: null };
   if (!/^\d{2}:\d{2}$/.test(String(hora ?? ""))) return { errores: ["Ponle una hora: sin hora no se sabe cuándo sale."], avisos, momento: null };
   const momento = new Date(`${fecha}T${hora}:00`).getTime();
-  if (momento < ahora + PROGRAMAR.minMin * 60_000) errores.push(momento < ahora ? "Esa hora ya pasó: elige un día y una hora que vengan." : `Sale en menos de ${PROGRAMAR.minMin} minutos: Meta pide al menos ${PROGRAMAR.minMin} de margen.`);
+  if (momento < ahora + minMin * 60_000) errores.push(momento < ahora ? "Esa hora ya pasó: elige un día y una hora que vengan." : `Sale en menos de ${minMin} minutos: Meta pide al menos ${minMin} de margen.`);
   else if (momento > ahora + PROGRAMAR.maxDias * 864e5) avisos.push(`Sale dentro de más de ${PROGRAMAR.maxDias} días: Meta no programa con tanta antelación; quedará esperando aquí hasta entonces.`);
   return { errores, avisos, momento };
 }

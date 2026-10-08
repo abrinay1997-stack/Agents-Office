@@ -57,8 +57,15 @@ export function textoSalida(p, ahora = Date.now()) {
     case 'espera': return { clave: 'espera', etiqueta: 'EN COLA', malo: !!s.error, enlaces, acciones: ['entregar', 'quitar'],
       texto: s.error ? `Esperando: ${s.error}` : s.entregarDesde > ahora ? `Se entrega${aQuien} ${cuandoTxt(s.entregarDesde, ahora)}; hasta entonces la cambias sin límites.` : `Se entrega${aQuien} en un momento.` };
     case 'entregando': return { clave: 'entregando', etiqueta: 'ENTREGANDO', malo: false, enlaces, acciones: [], texto: `Entregándola${aQuien}…` };
-    case 'en_red': return { clave: 'en_red', etiqueta: simul ? 'EN SIMULACRO' : 'PROGRAMADA', malo: false, enlaces, acciones: ['quitar'],
-      texto: simul ? 'En el simulacro: «sale» a su hora sin publicar de verdad.' : `Programada en ${quien}: sale sola a su hora, aunque esta computadora esté apagada.` };
+    case 'en_red': {
+      // F3 (8 oct 2026): con Meta directo, Instagram no se programa en Meta: lo publica esta oficina a su hora (`local`)
+      const locales = Object.entries(s.redes || {}).filter(([, x]) => x?.local && x.estado === 'en_red').map(([r]) => redTxt(r));
+      const enMeta = Object.entries(s.redes || {}).filter(([, x]) => !x?.local && x.estado === 'en_red').map(([r]) => redTxt(r));
+      const texto = simul ? 'En el simulacro: «sale» a su hora sin publicar de verdad.'
+        : locales.length ? `${enMeta.length ? `Programada en ${enMeta.join(' y ')} (sale sola). ` : ''}${locales.join(' y ')} sale a su hora desde esta computadora: déjala encendida con la oficina abierta.`
+        : `Programada en ${quien}: sale sola a su hora, aunque esta computadora esté apagada.`;
+      return { clave: 'en_red', etiqueta: simul ? 'EN SIMULACRO' : locales.length && !enMeta.length ? 'SALE A SU HORA' : 'PROGRAMADA', malo: false, enlaces, acciones: ['quitar'], texto };
+    }
     case 'publicada': return { clave: 'publicada', etiqueta: 'PUBLICADA', malo: false, enlaces, acciones: [], texto: simul ? 'Publicada en el simulacro (no salió de verdad).' : 'Publicada.' };
     case 'parcial': return { clave: 'parcial', etiqueta: 'EN PARTE', malo: true, enlaces, acciones: [], texto: `Salió, pero no en ${fallidas.join(', ')}.` };
     case 'fallo': return { clave: 'fallo', etiqueta: 'FALLÓ', malo: true, enlaces, acciones: fallidas.length ? ['quitar'] : ['reintentar', 'quitar'], texto: fallidas.length ? `No se pudo publicar en ${fallidas.join(', ')}.` : `No salió: ${s.error || 'error del conductor'}` };
@@ -130,3 +137,7 @@ export async function deshacerMover(datos, id, antes) {
   try { const a = await datos.approve(id); return { pieza: a.pieza, aviso: 'Deshecho: vuelve a su fecha y sigue aprobada.', mal: false }; }
   catch (e) { return { pieza: b.pieza, aviso: `Vuelta a su fecha, pero no se pudo volver a aprobar: ${e.message || e}`, mal: true }; }
 }
+
+/** C2 (8 oct 2026): la cuota de Instagram con Meta directo — la última que dio Meta (Meta deja unas 100 por API en 24 h), o lo que salió
+ *  desde aquí en ese tiempo si Meta no la ha dicho hoy. */
+export const cuotaTxt = q => !q ? '' : q.usadas != null && q.total ? `Instagram: ${q.usadas} de ${q.total} publicaciones por API en 24 h.` : `Instagram: ${q.nuestras || 0} ${q.nuestras === 1 ? 'publicada' : 'publicadas'} desde aquí en 24 h (Meta deja unas 100; «Comprobar conexión» lee la cifra exacta).`;

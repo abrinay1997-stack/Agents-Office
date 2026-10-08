@@ -26,6 +26,7 @@ Funciona desde tu propia PC. La oficina le pregunta a Telegram cada pocos segund
 - El token y los ids viven solo en variables de entorno de Windows, nunca en un archivo del repositorio. `npm run secrets` y el hook de pre-commit bloquean un token pegado por error.
 - Solo los ids de `TELEGRAM_OWNER_ID` pueden usar el bot. Cualquier otra persona recibe «este bot es privado» y la oficina lo anota.
 - Aprobar desde Telegram pasa por las mismas reglas que en la página: el guardián, los destinatarios del borrador y los topes.
+- **Contenido (8 oct 2026, C3):** cuando un agente deja un borrador en Contenido, te llega con su foto y sus botones (en vez del aviso de texto). Aprobar una pieza desde el teléfono hace lo mismo que en la página: solo si puede salir (las reglas de cada red, con día y hora que no pasaron). Las piezas son solo del dueño: un aprobador delegado no las ve.
 
 ## Qué puedes escribirle
 | Escribe | Pasa |
@@ -34,6 +35,7 @@ Funciona desde tu propia PC. La oficina le pregunta a Telegram cada pocos segund
 | `/estado` | el semáforo de la oficina |
 | `/pendientes` | lo que espera tu visto bueno, con botones |
 | `/tarea ventas: prepara la propuesta para Sol` | una tarea para ese departamento |
+| `/contenido` | lo de Contenido que espera tu visto bueno: cada pieza con su foto, su texto, cuándo sale y en qué redes, y **✅ Aprobar** (si puede salir), **↩ A borrador** y **👁 Ver completo**; arriba, «Aprobar las N que pueden salir» (8 oct 2026, C3) |
 | `/silencio 2` | 2 horas sin avisos, salvo lo urgente (`/silencio` solo, para volver) |
 
 ## Horario de no molestar y qué avisa

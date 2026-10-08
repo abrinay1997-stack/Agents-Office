@@ -20,5 +20,5 @@ export function fechasRepetidas(fecha, cada, veces) {
 }
 
 /** Lo que se copia de una pieza a sus repeticiones (lo que se publica; no su estado, su OK ni lo entregado). */
-export const COPIABLES = ['titulo', 'hora', 'formato', 'redes', 'medios', 'historiaTambien', 'historias', 'texto', 'comentario', 'hashtags', 'hashtagsEnComentario', 'textoFacebook', 'notas', 'textos', 'pinterest', 'youtube', 'tiktok'];
+export const COPIABLES = ['titulo', 'hora', 'formato', 'formatos', 'redes', 'medios', 'historiaTambien', 'historias', 'texto', 'comentario', 'hashtags', 'hashtagsEnComentario', 'textoFacebook', 'notas', 'textos', 'pinterest', 'youtube', 'tiktok'];
 export function copiaDe(p) { const c = {}; for (const k of COPIABLES) if (p[k] !== undefined && p[k] !== null) c[k] = JSON.parse(JSON.stringify(p[k])); return c; }

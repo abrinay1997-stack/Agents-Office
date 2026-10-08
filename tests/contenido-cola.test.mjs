@@ -110,6 +110,10 @@ test('M1: lo que pasó con una pieza aprobada, en palabras; lo entregado no est�
   assert.equal(par.malo, true); assert.match(par.texto, /no en LinkedIn \(token\)/);
   const fal = textoSalida(p({ estado: 'fallo', conductor: 'metricool', error: 'Metricool está fallando', redes: {} }), ahora); assert.deepEqual(fal.acciones, ['reintentar', 'quitar']);
   assert.equal(textoSalida(p({ estado: 'en_red', conductor: 'simulacro', redes: {} }), ahora).etiqueta, 'EN SIMULACRO');
+  // F3 (8 oct 2026): con Meta directo, Facebook queda programado en Meta e Instagram sale desde esta computadora a su hora
+  const meta = textoSalida(p({ estado: 'en_red', conductor: 'meta', redes: { facebook: { estado: 'en_red', local: false }, instagram: { estado: 'en_red', local: true } } }), ahora);
+  assert.equal(meta.etiqueta, 'PROGRAMADA'); assert.match(meta.texto, /^Programada en Facebook \(sale sola\)\. Instagram sale a su hora desde esta computadora: déjala encendida/);
+  assert.equal(textoSalida(p({ estado: 'en_red', conductor: 'meta', redes: { instagram: { estado: 'en_red', local: true } } }), ahora).etiqueta, 'SALE A SU HORA');
   const pasada = { estado: 'aprobada', fecha: '2026-10-05', hora: '09:00', redes: ['instagram'] };
   assert.equal(venc(pasada, ahora), true); assert.equal(venc({ ...pasada, salida: { estado: 'publicada' } }, ahora), false);
   const r = req([p({ estado: 'fallo', conductor: 'metricool', error: 'sin saldo', redes: {} })], ahora);

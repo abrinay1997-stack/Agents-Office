@@ -98,12 +98,12 @@ test('doble testigo: si se pierde la cola, lo entregado se adopta y no se entreg
   assert.ok(t.audit.some(a => a.que === 'adoptada'));
 });
 
-test('apagado no entrega; un conductor sin key espera y lo dice; Meta directo dice por qué no', async () => {
+test('apagado no entrega; un conductor sin key espera y lo dice; Meta directo sin token dice qué falta', async () => {
   const t = montar({ modo: 'apagado', horasAntes: 999 });
   const p = nuevaAprobada(t); await t.prog.tick(); assert.equal(t.prog.salidaDe(p.id), null);
   t.modo = 'real'; t.conductor = crearConductorMeta();
   await t.prog.tick(); t.avanzar(2 * 60e3); await t.prog.tick();
-  const s = t.prog.salidaDe(p.id); assert.equal(s.estado, 'espera'); assert.match(s.error, /Metricool/);
+  const s = t.prog.salidaDe(p.id); assert.equal(s.estado, 'espera'); assert.match(s.error, /META_ACCESS_TOKEN/); // 8 oct 2026: Meta ya publica; sin token, lo dice
   assert.equal(t.prog.estado().conductor.ok, false);
 });
 

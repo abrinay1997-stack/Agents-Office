@@ -47,8 +47,9 @@ try {
     step(todas === 9, `${tag}: «Más redes» enseña las nueve (${todas})`);
     for (const r of ['x', 'pinterest', 'youtube']) { await page.click(`.pz-nets [data-red="${r}"]`); await page.waitForTimeout(150); }
     await page.fill('.pz-ta[data-f="texto"]', LARGO); await page.waitForTimeout(400);
-    const cnt = await page.evaluate(() => document.querySelector('[data-cnt="texto"]').textContent);
-    step(/\/ 280 · X/.test(cnt), `${tag}: el contador se mide con X, la más estricta («${cnt}»)`);
+    const cx = await page.evaluate(() => { const x = document.querySelector('.pz-cc[data-cc="x"]'); return x ? { t: x.textContent, over: x.classList.contains('over') } : null; });
+    step(cx && /\/ 280/.test(cx.t) && cx.over, `${tag}: un contador por red, y el de X avisa que no cabe («${cx?.t}»)`);
+    await page.click('[data-a="avisos"]'); await page.waitForTimeout(200); // C1: «N problemas» se despliega
     const rv = await page.evaluate(() => document.querySelector('.pz-rv').textContent);
     step(/El texto de X tiene/.test(rv) && /tablero/.test(rv) && /YouTube necesita un video/.test(rv), `${tag}: la revisión pide texto para X, el tablero y el video`);
     await page.click('.pz-fix[data-fix="texto-red:x"]'); await page.waitForTimeout(500);

@@ -13,8 +13,10 @@
 //
 // Si una pieza entregada se cambia o se devuelve (pierde el OK), se RETIRA del conductor; cuando se vuelva a aprobar, se entrega la nueva.
 //   planear(piezas, entradas, opts) → [{ tipo, id, pieza? }]          (puro, con tests)
-//   crearProgramador({ almacen, archivo, conductor, modo, horasAntes, avisar, auditar, ahora })
-//     → { tick, estado, salidaDe, reintentar, cancelar, entregarYa, comprobar }
+//   crearProgramador({ almacen, archivo, conductor, porId, modo, horasAntes, avisar, auditar, ahora })
+//     → { tick, estado, salidaDe, reintentar, cancelar, entregarYa, refrescar }
+// (8 oct 2026, F3) `porId(id)` da el conductor que entregó una pieza (para mirarla aunque el elegido haya cambiado) y `refrescar(id)` mira
+// YA lo de ese conductor (Meta avisa al publicar: la pieza dice PUBLICADA en el acto, no a los 10 minutos).
 import fs from 'node:fs';
 import path from 'node:path';
 import { entregasDe, estadoGeneral } from './entrega.mjs';
@@ -58,8 +60,9 @@ const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8'
 const escribirJSON = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 1)); fs.renameSync(f + '.tmp', f); };
 const textoError = e => String(e?.message || e || 'error').slice(0, 400);
 
-export function crearProgramador({ almacen, archivo, conductor, modo = () => 'simulacro', horasAntes = () => 24, avisar = () => {}, auditar = () => {}, ahora = Date.now }) {
+export function crearProgramador({ almacen, archivo, conductor, porId = null, modo = () => 'simulacro', horasAntes = () => 24, avisar = () => {}, auditar = () => {}, ahora = Date.now }) {
   let enMarcha = null, ultimo = { at: 0, acciones: 0, error: '' };
+  const mirarYa = new Set(); // conductores que avisaron de un cambio: lo suyo en la red se mira en el próximo tick, sin esperar
   const leer = () => leerJSON(archivo, { entradas: {} });
   const guardar = d => escribirJSON(archivo, d);
   const titulo = p => p?.titulo || String(p?.texto || '').split('\n')[0].slice(0, 60) || 'sin título';
@@ -84,7 +87,10 @@ export function crearProgramador({ almacen, archivo, conductor, modo = () => 'si
       mover(e, 'en_red', { error: '', intentos: 0, entregadaAt: ahora() }); guardar(d);
       almacen.marcarEntregada(p.id, { conductor: c.id, huella: e.huella, remoto: e.remoto, cuando: new Date(ahora()).toJSON() });
       auditar({ que: 'entregada', pieza: p.id, conductor: c.id, redes: p.redes, momento: e.momento });
-      if (c.id !== 'simulacro') avisar(`«${titulo(p)}» quedó programada en ${c.nombre} para ${new Date(e.momento).toLocaleString('es')}.`, { key: 'entregada-' + p.id });
+      const locales = Object.entries(e.redes || {}).filter(([, x]) => x?.local && x.estado === 'en_red').map(([r]) => r.split('·')[0]); // F3: Instagram con Meta directo
+      if (c.id !== 'simulacro') avisar(locales.length
+        ? `«${titulo(p)}» está lista para el ${new Date(e.momento).toLocaleString('es')}: ${[...new Set(locales)].map(r => r[0].toUpperCase() + r.slice(1)).join(' y ')} sale desde esta computadora a esa hora (déjala encendida con la oficina abierta)${Object.values(e.redes).some(x => x?.estado === 'en_red' && !x.local) ? '; lo demás quedó programado en ' + c.nombre : ''}.`
+        : `«${titulo(p)}» quedó programada en ${c.nombre} para ${new Date(e.momento).toLocaleString('es')}.`, { key: 'entregada-' + p.id });
     } catch (err) {
       e.intentos = (e.intentos || 0) + 1;
       const pasajero = err?.transitorio !== false && (err?.transitorio || err?.estado === 0 || err?.estado === 429 || err?.estado >= 500);
@@ -97,7 +103,7 @@ export function crearProgramador({ almacen, archivo, conductor, modo = () => 'si
 
   async function retirar(d, id, motivo) {
     const e = d.entradas[id]; if (!e) return;
-    const c = conductor(), mismo = e.conductor === c.id ? c : null;
+    const c = conductor(), mismo = (porId && e.conductor && porId(e.conductor)) || (e.conductor === c.id ? c : null); // F3: se retira con el que la entregó, aunque hoy se publique con otro
     try {
       if (e.remoto && Object.keys(e.remoto).length) {
         if (!mismo) throw new Error(`se entregó con ${e.conductor} y ahora el conductor es ${c.id}: quítala allí a mano`);
@@ -113,7 +119,8 @@ export function crearProgramador({ almacen, archivo, conductor, modo = () => 'si
   }
 
   async function comprobar(d, id) {
-    const e = d.entradas[id], c = conductor(); if (!e) return;
+    const e = d.entradas[id]; if (!e) return;
+    const c = (porId && e.conductor && porId(e.conductor)) || conductor();
     e.comprobadoAt = ahora();
     if (e.conductor !== c.id) { guardar(d); return; }
     try {
@@ -144,6 +151,10 @@ export function crearProgramador({ almacen, archivo, conductor, modo = () => 'si
       const conocidas = new Map(piezas.map(p => [p.id, p]));
       for (const id of Object.keys(d.entradas)) if (!conocidas.has(id)) { const p = almacen.leer(id); if (p) conocidas.set(id, p); }
       const acciones = planear([...conocidas.values()], d.entradas, { ahora: ahora(), horasAntes: horasAntes() });
+      if (mirarYa.size) { // un conductor avisó: lo suyo que está en la red se mira ahora (aunque no haya llegado su hora ni pasado 10 min)
+        for (const [id, e] of Object.entries(d.entradas)) if (e.estado === 'en_red' && mirarYa.has(e.conductor) && !acciones.some(a => a.id === id && a.tipo === 'comprobar')) acciones.push({ tipo: 'comprobar', id });
+        mirarYa.clear();
+      }
       try {
         for (const a of acciones) {
           if (a.tipo === 'encolar') {
@@ -173,7 +184,7 @@ export function crearProgramador({ almacen, archivo, conductor, modo = () => 'si
     estado() {
       const d = leer(), c = conductor(), entradas = Object.values(d.entradas || {});
       const cuenta = Object.fromEntries(['espera', 'entregando', 'en_red', 'publicada', 'parcial', 'fallo', 'cancelada'].map(k => [k, entradas.filter(e => e.estado === k).length]));
-      return { modo: modo(), conductor: { id: c.id, nombre: c.nombre, ...c.listo() }, horasAntes: horasAntes(), cuenta, ultimo, entradas: Object.fromEntries(Object.entries(d.entradas || {}).map(([k, e]) => [k, publica(e)])) };
+      return { modo: modo(), conductor: { id: c.id, nombre: c.nombre, ...c.listo(), ...(c.cuota ? { cuota: c.cuota() } : {}) }, horasAntes: horasAntes(), cuenta, ultimo, entradas: Object.fromEntries(Object.entries(d.entradas || {}).map(([k, e]) => [k, publica(e)])) };
     },
     /** Volver a intentar lo que falló (desde el principio de su espera). */
     reintentar(id) {
@@ -186,6 +197,8 @@ export function crearProgramador({ almacen, archivo, conductor, modo = () => 'si
     },
     /** Entregar ya, sin esperar a `entregarHorasAntes` (desde ese momento, cambiarla depende de lo que deje el conductor). */
     entregarYa(id) { const d = leer(), e = d.entradas?.[id]; if (!e) return { error: 'esa pieza no está en la cola: apruébala primero' }; if (e.estado !== 'espera') return { error: 'ya no está esperando' }; e.entregarDesde = 0; guardar(d); return { ok: true }; },
+    /** Un conductor avisa de que algo salió o falló: se mira ya (en un tick, en fila con los demás: nunca dos a la vez). */
+    refrescar(conductorId) { mirarYa.add(conductorId); return (enMarcha || Promise.resolve()).then(() => tick()); },
     /** Quitar una pieza de la cola: se le quita el OK (vuelve a revisión) y el próximo tick la retira del conductor. */
     cancelar(id) { const r = almacen.devolver(id, 'revision'); return r.error ? r : { ok: true, pieza: r.pieza }; },
   };

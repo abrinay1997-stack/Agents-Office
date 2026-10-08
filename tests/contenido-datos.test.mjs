@@ -13,7 +13,8 @@ test('la demo trae piezas en cada estado y en los próximos días, con su revisi
   assert.ok(piezas.every(p => p.revision && Array.isArray(p.revision.errores)));
   assert.ok(piezas.some(p => !p.fecha), 'hay ideas sin día');
   assert.equal(resumen.total, piezas.length); assert.equal(resumen.revisar, piezas.filter(p => p.estado === 'revision').length);
-  const hoy = ymd(new Date()); assert.equal(piezas.filter(p => p.fecha && p.fecha < hoy).length, 1, 'una sola del pasado: la aprobada que venció, para ver cómo se avisa');
+  const hoy = ymd(new Date()); assert.equal(piezas.filter(p => p.fecha && p.fecha < hoy && !p.salida).length, 1, 'una sola del pasado sin salir: la aprobada que venció, para ver cómo se avisa');
+  assert.ok(piezas.filter(p => p.salida?.estado === 'publicada').every(p => p.fecha < hoy), 'C3: las que ya salieron (lo que puede volver) son del pasado');
 });
 
 test('listar por rango deja fuera lo de otros días y pide las ideas sin día aparte', async () => {

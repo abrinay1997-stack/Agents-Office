@@ -1,0 +1,55 @@
+/* C3 (8 oct 2026) — las ventanas «Llenar la semana» y «Desde una plantilla» de Contenido (src/contenido-herramientas.js). Viajan con el
+   editor en dist/pieza-editor.js (build-pieza.mjs → CSS_PIEZA), no en la página. Reutilizan la caja de .ct-pick (contenido.css). */
+.ct-tool .ct-pickbox { width: min(720px, 100%); }
+.ct-toolb { flex: 1; min-height: 120px; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; font-family: var(--ui); font-size: 13px; color: var(--ink); }
+.ct-toolb p { margin: 0; line-height: 1.45; }
+.ct-tool .pz-hn { font-size: 12px; line-height: 1.45; color: var(--grey); }
+body.dark .ct-tool .pz-hn { color: #C2C0B9; }
+.ct-tool .pz-state.bad { color: #B3261E; } body.dark .ct-tool .pz-state.bad { color: #FFB4AB; }
+
+/* Llenar la semana */
+.ll-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ll-opts label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--grey); }
+body.dark .ll-opts label { color: #C2C0B9; }
+.ll-redes { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.ll-intro { font-size: 13px; }
+.ll-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ll-h { display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); align-items: center; gap: 4px 10px; padding: 8px 10px; border: 1px solid var(--hairline); border-left: 3px solid #13705A; border-radius: 12px; background: var(--cv-card); }
+body.dark .ll-h { border-left-color: #4FD1A5; }
+.ll-h.off { border-left-color: var(--hairline); border-style: dashed; }
+.ll-dia { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ll-dia b { font-weight: 700; white-space: nowrap; }
+.ll-hora { width: auto; min-height: 32px; padding: 4px 8px; font-variant-numeric: tabular-nums; }
+.ll-que { width: 100%; min-height: 32px; }
+.ll-r { grid-column: 2; font-size: 11px; color: var(--grey); }
+body.dark .ll-r { color: #C2C0B9; }
+.ll-vu { border-top: 1px solid var(--hairline); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ll-vu h4 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: 17px; }
+.ll-vu h4 b { font-family: var(--ui); font-size: 12px; font-weight: 700; margin-left: 4px; }
+.ll-vu ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ll-vu li { display: flex; align-items: center; gap: 8px; }
+.ll-vt { display: inline-flex; gap: 2px; flex: none; }
+.ll-vm { display: flex; flex-direction: column; min-width: 0; }
+.ll-vm b { font-weight: 700; overflow-wrap: anywhere; }
+.ll-vm small { font-size: 11.5px; color: var(--grey); font-variant-numeric: tabular-nums; } body.dark .ll-vm small { color: #C2C0B9; }
+.ll-pide { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--grey); }
+body.dark .ll-pide { color: #C2C0B9; }
+.ll-hecho { display: flex; flex-direction: column; gap: 8px; outline: none; }
+.ll-hecho ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.ll-hecho li.bad { color: #B3261E; } body.dark .ll-hecho li.bad { color: #FFB4AB; }
+@media (max-width: 560px) {
+  .ll-h { grid-template-columns: minmax(0, 1fr); }
+  .ll-r { grid-column: 1; }
+}
+
+/* Desde una plantilla */
+.tp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tp-i { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--cv-card); }
+.tp-m { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.tp-m b { font-weight: 700; }
+.tp-f { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: var(--grey); } body.dark .tp-f { color: #C2C0B9; }
+.tp-f .pz-fi { width: 13px; height: 13px; }
+.tp-r { display: inline-flex; gap: 2px; }
+.tp-m p { flex-basis: 100%; font-size: 12.5px; color: var(--ink); overflow-wrap: anywhere; }
+.tp-a { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+@media (max-width: 480px) { .tp-i { flex-direction: column; } .tp-a { flex-direction: row; align-self: flex-end; } }

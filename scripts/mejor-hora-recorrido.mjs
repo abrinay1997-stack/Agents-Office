@@ -45,6 +45,7 @@ try {
     await page.screenshot({ path: path.join(OUT, `${tag}-${vista}.png`) });
     await page.click('#ctNew'); await page.waitForTimeout(250);
     const item = await page.$('.ct-newmenu:not([hidden]) button'); if (item) { await item.click(); }
+    await page.waitForSelector('.ct-panel:not([hidden]) [data-a="cuando"]', { timeout: 5000 }); await page.click('.ct-panel:not([hidden]) [data-a="cuando"]'); // C1 (8 oct 2026): cuándo sale va al pie, y se despliega
     await page.waitForSelector('.ct-panel:not([hidden]) .pz-best', { timeout: 5000 }); await page.waitForTimeout(800);
     // con día (Crear lo pone en el siguiente hueco): «Mejores ese día» si ese día tiene; si no, quitamos el día y sale «Siguiente buena hora»
     await page.selectOption('.pz-sel[data-f="fecha"]', ''); await page.waitForTimeout(900);

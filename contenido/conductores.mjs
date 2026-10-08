@@ -6,8 +6,8 @@
 //                 para probar todo el circuito sin arriesgar un perfil real (principio 7 de docs/propuesta-contenido-y-meta.md).
 //   · metricool — sube los archivos a Metricool (Instagram solo acepta JPEG: las PNG y WebP se convierten antes) y programa la publicación con
 //                 su fecha y su hora: Metricool la publica desde sus servidores, con esta computadora apagada.
-//   · meta      — programar directo en Meta todavía no está hecho (Instagram por API y el almacén de imágenes están por verificar, ver la
-//                 propuesta, 9.2 y 9.3): lo dice en palabras y no entrega nada. Meta sigue sirviendo para Analíticas.
+//   · meta      — (8 oct 2026, F3) directo en Instagram y Facebook, sin Metricool: Facebook queda programado en Meta; Instagram (que no
+//                 se programa por API) lo publica esta oficina a su hora. Vive en contenido/meta-publicar.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -75,9 +75,5 @@ export function crearConductorMetricool({ mc, rutaMedio, aJpeg, cache } = {}) {
   };
 }
 
-/** Meta directo: todavía no programa (lo dice; Analíticas sí usa Meta). */
-export function crearConductorMeta() {
-  const motivo = 'Programar directamente en Meta todavía no está hecho (Instagram por API y el almacén de imágenes están por verificar). Elige Metricool en Ajustes → Contenido, o deja el simulacro.';
-  const no = async () => { throw Object.assign(new Error(motivo), { transitorio: false }); };
-  return { id: 'meta', nombre: 'Meta', listo: () => ({ ok: false, motivo }), programar: no, retirar: no, estado: async () => null };
-}
+/** Meta directo (F3, 8 oct 2026): contenido/meta-publicar.mjs. */
+export { crearConductorMeta } from './meta-publicar.mjs';

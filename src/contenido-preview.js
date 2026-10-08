@@ -7,8 +7,10 @@
 // La parte pura (qué pestañas hay, la proporción, dónde corta el pie, el resumen para el lector de pantalla) se prueba en
 // tests/contenido-preview.test.mjs; `initPreview` es el controlador del panel (pestañas, carrusel, «más», zonas) y repinta los medios
 // solo cuando cambian: al teclear se cambia solo el texto (PRE-13).
-//   initPreview(box, { esc, cuenta: () => ({ instagram, facebook }), otras: () => piezas }) → { paint(pieza), text(pieza) }
-import { textoPara, primerComentario, postDePieza, PROPORCION_FEED, REDES, LIMITES, longitudPara } from './contenido-reglas.js';
+//   initPreview(box, { esc, cuenta: () => ({ instagram, facebook }), otras: () => piezas }) → { paint(pieza), text(pieza), reset(), escritorio(sí) }
+// C1 (8 oct 2026): «Teléfono · Computadora». En la computadora el feed es más ancho (unos 500 px): caben más letras por línea antes del «más»
+// y la tarjeta se ve a ese ancho; reels e historias siguen en vertical, como allí.
+import { textoPara, primerComentario, postDePieza, PROPORCION_FEED, REDES, LIMITES, longitudPara, formatoDe } from './contenido-reglas.js';
 
 export const ZONAS = Object.freeze({ reel: { arriba: 0.14, abajo: 0.35, lados: 0.06 }, historia: { arriba: 0.14, abajo: 0.20, lados: 0.06 } });
 const VISTAS = {
@@ -31,20 +33,21 @@ const VISTAS = {
 };
 export const NOMBRE_VISTA = id => { const v = VISTAS[id]; return v ? `${REDES[v.red]?.nombre || v.red} · ${v.label}` : ''; };
 
-/** Las pestañas que tiene sentido mirar para esta pieza, según sus redes y su formato (la primera es la principal). */
+/** Las pestañas que tiene sentido mirar para esta pieza, según sus redes y el formato de cada una (C1); la primera es la principal. */
 export function pestanasDe(p = {}) {
-  const redes = Array.isArray(p.redes) && p.redes.length ? p.redes : ['instagram'], f = p.formato || 'post', out = [];
+  const redes = Array.isArray(p.redes) && p.redes.length ? p.redes : ['instagram'], out = [];
+  let f = formatoDe(p, 'instagram');
   if (redes.includes('instagram')) {
     if (f === 'historia') out.push('ig-historia');
     else if (f === 'reel') out.push('ig-reel', 'ig-feed', 'ig-perfil');
     else out.push('ig-feed', 'ig-perfil');
     if (p.historiaTambien && f !== 'historia') out.push('ig-historia');
   }
+  f = formatoDe(p, 'facebook');
   if (redes.includes('facebook')) out.push(f === 'historia' ? 'fb-historia' : f === 'reel' ? 'fb-reel' : 'fb-feed');
-  if (f !== 'historia') { // las demás no tienen historias (las reglas lo dicen)
-    for (const [r, t] of [['linkedin', 'li-feed'], ['x', 'x-feed'], ['threads', 'th-feed'], ['bluesky', 'bs-feed'], ['tiktok', 'tt-video'], ['pinterest', 'pi-pin']]) if (redes.includes(r)) out.push(t);
-    if (redes.includes('youtube')) out.push(f === 'reel' ? 'yt-short' : 'yt-video');
-  }
+  // las demás no tienen historias (las reglas lo dicen)
+  for (const [r, t] of [['linkedin', 'li-feed'], ['x', 'x-feed'], ['threads', 'th-feed'], ['bluesky', 'bs-feed'], ['tiktok', 'tt-video'], ['pinterest', 'pi-pin']]) if (redes.includes(r) && formatoDe(p, r) !== 'historia') out.push(t);
+  if (redes.includes('youtube') && formatoDe(p, 'youtube') !== 'historia') out.push(formatoDe(p, 'youtube') === 'reel' ? 'yt-short' : 'yt-video');
   return out;
 }
 
@@ -134,7 +137,8 @@ export function cuentaPara(red, cuentas = {}) {
 }
 
 export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] }) {
-  let tab = '', slide = 0, zonas = true, abierto = false, comAbierto = false, cur = null, mediaKey = '';
+  let tab = '', slide = 0, zonas = true, abierto = false, comAbierto = false, cur = null, mediaKey = '', pc = false;
+  const cplDe = n => Math.round(n * (pc ? 1.55 : 1)); // en la computadora, más letras por línea
   const st = { corte: null };
 
   function datos(p) {
@@ -148,7 +152,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     if (!['instagram', 'facebook'].includes(d.v.red) && d.v.vista !== 'reel') return captionGen(p, d);
     const txt = textoPara(d.post, d.v.red);
     const reel = d.v.vista === 'reel', fb = d.v.red === 'facebook';
-    const c = cortePie(txt, { lineas: reel ? 1 : fb ? 3 : 2, cpl: reel ? 34 : fb ? 44 : 40, prefijo: fb ? 0 : d.ac.nombre.length + 1 });
+    const c = cortePie(txt, { lineas: reel ? 1 : fb ? 3 : 2, cpl: reel ? 34 : cplDe(fb ? 44 : 40), prefijo: fb ? 0 : d.ac.nombre.length + 1 });
     st.corte = c;
     if (!txt) return `<div class="pv-cap" data-pv="cap"><em class="pv-none">Sin texto todavía</em></div>`;
     const cuerpo = abierto || !c.cortado ? txt : c.visible;
@@ -160,7 +164,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     const red = d.v.red, txt = textoPara(d.post, red), max = LIMITES[red]?.caracteres, n = longitudPara(txt, red);
     if (!txt) { st.corte = null; return `<div class="pv-cap" data-pv="cap"><em class="pv-none">Sin texto todavía</em></div>`; }
     const pliega = red === 'linkedin' || red === 'pinterest' || red === 'youtube';
-    const c = pliega ? cortePie(txt, { lineas: red === 'linkedin' ? 3 : 2, cpl: 44 }) : { visible: txt, cortado: false, antes: txt.length };
+    const c = pliega ? cortePie(txt, { lineas: red === 'linkedin' ? 3 : 2, cpl: cplDe(44) }) : { visible: txt, cortado: false, antes: txt.length };
     st.corte = pliega ? c : null;
     const cuerpo = abierto || !c.cortado ? txt : c.visible;
     const sobra = max && n > max ? `<p class="pv-flag">Pasa de ${max} en ${n - max}: ${REDES[red].nombre} no lo publica así.</p>` : '';
@@ -262,10 +266,10 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
   const esVideoM = m => m?.tipo === 'video' || esVideo(m?.src);
 
   function perfil(p, d) {
-    const resto = (otras() || []).filter(x => x.id !== p.id && x.fecha && (x.redes || []).includes('instagram') && x.formato !== 'historia' && (x.medios || []).length && x.estado !== 'idea');
+    const resto = (otras() || []).filter(x => x.id !== p.id && x.fecha && (x.redes || []).includes('instagram') && formatoDe(x, 'instagram') !== 'historia' && (x.medios || []).length && x.estado !== 'idea');
     const yo = { ...p, _yo: true };
     const lista = [yo, ...resto].filter(x => x._yo || x.fecha).sort((a, b) => `${b.fecha || '9999'} ${b.hora || '99'}`.localeCompare(`${a.fecha || '9999'} ${a.hora || '99'}`)).slice(0, 12);
-    const tile = x => `<span class="pv-gt${x._yo ? ' yo' : ''}">${(x.medios || [])[0] ? medio(x.medios[0], esc) : '<span class="pv-m none"></span>'}${x.formato === 'carrusel' ? '<i class="pv-gi" aria-hidden="true">❐</i>' : x.formato === 'reel' ? '<i class="pv-gi" aria-hidden="true">▶</i>' : ''}<small>${x._yo ? 'ESTA' : esc(fechaCorta(x))}</small></span>`;
+    const tile = x => `<span class="pv-gt${x._yo ? ' yo' : ''}">${(x.medios || [])[0] ? medio(x.medios[0], esc) : '<span class="pv-m none"></span>'}${formatoDe(x, 'instagram') === 'carrusel' ? '<i class="pv-gi" aria-hidden="true">❐</i>' : formatoDe(x, 'instagram') === 'reel' ? '<i class="pv-gi" aria-hidden="true">▶</i>' : ''}<small>${x._yo ? 'ESTA' : esc(fechaCorta(x))}</small></span>`;
     return `<div class="pv-card pv-prof"><div class="pv-ph"><span class="pv-av lg">${esc(d.ac.iniciales)}</span><div><b>${esc(d.ac.nombre)}</b><small>Así queda tu perfil con lo programado (de lo más nuevo a lo más viejo).</small></div></div>
       <div class="pv-grid">${lista.map(tile).join('')}</div></div><p class="pv-hint">Desde 2025 Instagram muestra el perfil a 3:4: los bordes de un 4:5 o de un cuadrado se recortan.</p>`;
   }
@@ -290,7 +294,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
       ${conZonas ? `<label class="pv-zt"><input type="checkbox" data-pv-zonas${zonas ? ' checked' : ''}> Ver ${d.v.vista === 'feed' ? 'recortes' : 'zonas que tapa la interfaz'}</label>` : ''}${notas(p, d)}</div>`;
     mediaKey = key(p);
   }
-  const key = p => JSON.stringify([tab, slide, zonas, p.formato, p.redes, p.medios, p.medidas, p.historiaTambien, p.fecha, p.hora, p.youtube?.privacidad, p.pinterest?.enlace, cuenta()]);
+  const key = p => JSON.stringify([pc, tab, slide, zonas, p.formato, p.formatos, p.redes, p.medios, p.medidas, p.historiaTambien, p.fecha, p.hora, p.youtube?.privacidad, p.pinterest?.enlace, cuenta()]);
   /** Al teclear: si solo cambió el texto, se cambia solo el pie (los <img> y <video> se quedan). */
   function text(p) {
     if (!box.firstChild || key(p) !== mediaKey) return paint(p);
@@ -321,5 +325,5 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     if (t && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { e.preventDefault(); e.stopPropagation(); const all = [...box.querySelectorAll('[role="tab"]')], i = all.indexOf(t), nx = all[(i + (e.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length]; tab = nx.dataset.pvTab; slide = 0; paint(cur); box.querySelector(`[data-pv-tab="${tab}"]`)?.focus(); return; }
     if (e.target.closest('.pv-mock') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && box.querySelector('[data-pv-sl]')) { e.preventDefault(); e.stopPropagation(); box.querySelector(`[data-pv-sl="${e.key === 'ArrowRight' ? 1 : -1}"]:not([disabled])`)?.click(); }
   });
-  return { paint, text, reset() { tab = ''; slide = 0; abierto = false; comAbierto = false; } };
+  return { paint, text, reset() { tab = ''; slide = 0; abierto = false; comAbierto = false; }, escritorio(si) { pc = !!si; box.classList.toggle('pv-pc', pc); } };
 }
