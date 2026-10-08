@@ -22,7 +22,7 @@ export const nombreLista = (k, ctx) => (String(k).startsWith('p:') ? ctx.proyect
 
 export function railHTML(tareas, ctx, { lista, ahora = Date.now() }) {
   const n = cuentas(tareas, { ahora });
-  const item = (k, titulo, icono, cuenta, extra = '') => `<button type="button" class="tv-mli${k === lista ? ' on' : ''}" data-mlista="${esc(k)}" aria-current="${k === lista ? 'true' : 'false'}">${extra || svg(icono)}<span>${esc(titulo)}</span>${cuenta ? `<b${k === 'hoy' && n.vencidas ? ' class="rojo"' : ''}>${cuenta}</b>` : ''}</button>`;
+  const item = (k, titulo, icono, cuenta, extra = '') => `<button type="button" class="tv-mli${k === lista ? ' on' : ''}" data-mlista="${esc(k)}" aria-current="${k === lista ? 'true' : 'false'}">${extra || svg(icono)}<span>${esc(titulo)}</span>${cuenta ? `<b${(k === 'hoy' && n.vencidas) || (k === 'delegadas' && n.delegadasFallidas) ? ' class="rojo"' : ''}>${cuenta}</b>` : ''}</button>`;
   const proys = ctx.proyectos().filter(p => n.proyectos[p.id] || lista === 'p:' + p.id);
   return `<nav class="tv-mrail" aria-label="Tus listas">
     ${LISTAS.map(l => item(l.k, l.titulo, ICONO_LISTA[l.k], l.k === 'hechas' ? n.hechasHoy : n[l.k])).join('')}

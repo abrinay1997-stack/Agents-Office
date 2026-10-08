@@ -20,6 +20,9 @@ const pad = n => String(n).padStart(2, '0');
 export const dia = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const diaDe = t => (t.limite ? String(t.limite).slice(0, 10) : null);
 const abierta = t => t.state !== 'done';
+// lo que delegó y el agente NO pudo hacer (falló tras sus reintentos): no «volvió hecha», sigue siendo asunto suyo. Lo que el dueño
+// detuvo él mismo es una cancelación: ni pendiente ni hecha.
+const fallo = t => t.state === 'done' && !!t.error && !t.stopped;
 
 // de dónde vino: 'sugerida' (un agente la propuso) · 'tomada' (el dueño se la quitó a un agente) · 'pasada' (un agente se la pasó) · 'dimitri' · 'propia'
 export function origen(t) {
@@ -63,11 +66,11 @@ export function deLista(tareas, k, { ahora = Date.now() } = {}) {
   else if (k === 'hoy') { p = abiertas.filter(t => t.empezada || (diaDe(t) && diaDe(t) <= hoy)); h = hechaDesde(inicioHoy); }
   else if (k === 'proximos') { p = abiertas.filter(t => diaDe(t) && diaDe(t) > hoy && diaDe(t) <= fin); }
   else if (k === 'todas') { p = abiertas; h = hechaDesde(hace(7)); }
-  else if (k === 'delegadas') { const d = vivas.filter(delegadaPorMi); p = d.filter(abierta); h = d.filter(t => !abierta(t) && (t.doneAt || 0) >= hace(14)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)); }
+  else if (k === 'delegadas') { const d = vivas.filter(delegadaPorMi); p = d.filter(t => abierta(t) || fallo(t)); h = d.filter(t => t.state === 'done' && !t.error && (t.doneAt || 0) >= hace(14)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)); }
   else if (k === 'hechas') { h = hechaDesde(hace(30)); }
   else if (String(k).startsWith('p:')) { const id = String(k).slice(2); p = abiertas.filter(t => t.proyecto === id); h = hechas.filter(t => t.proyecto === id).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)); }
   if (k === 'proximos') p.sort((a, b) => (diaDe(a) || '').localeCompare(diaDe(b) || '') || ordenMio(a, b));
-  else if (k === 'delegadas') p.sort((a, b) => (b.delegada?.at || 0) - (a.delegada?.at || 0));
+  else if (k === 'delegadas') p.sort((a, b) => (fallo(b) - fallo(a)) || (b.delegada?.at || 0) - (a.delegada?.at || 0)); // lo que falló, arriba
   else p.sort(ordenMio);
   return { pendientes: p, hechas: h };
 }
@@ -76,6 +79,7 @@ export function deLista(tareas, k, { ahora = Date.now() } = {}) {
 export function cuentas(tareas, { ahora = Date.now() } = {}) {
   const out = {}; for (const l of LISTAS) { const r = deLista(tareas, l.k, { ahora }); out[l.k] = l.k === 'hechas' ? r.hechas.filter(t => dia(t.doneAt || 0) === dia(ahora)).length : r.pendientes.length; }
   const hoy = dia(ahora); out.vencidas = tareas.filter(t => esDelDueno(t) && !t.archived && abierta(t) && limiteMs(t.limite) != null && limiteMs(t.limite) < ahora).length;
+  out.delegadasFallidas = tareas.filter(t => delegadaPorMi(t) && !t.archived && fallo(t)).length;
   out.hechasHoy = tareas.filter(t => esDelDueno(t) && !t.archived && !abierta(t) && t.doneAt && dia(t.doneAt) === hoy).length;
   const pr = {}; for (const t of tareas) if (esDelDueno(t) && !t.archived && abierta(t) && t.proyecto) pr[t.proyecto] = (pr[t.proyecto] || 0) + 1;
   out.proyectos = pr;
@@ -156,6 +160,6 @@ export function resumenDueno(tareas, { ahora = Date.now(), nombre = id => id } =
   if (sug.length) out.push(`${sug.length} que te sugirieron los agentes: ${few(sug, x => `«${clip(x.title, 40)}» (de ${nombre(x.sugeridaPor)})`)}`);
   if (c.hechasHoy) out.push(`${c.hechasHoy} hechas hoy`);
   const linea1 = out.length ? `Las tareas del dueño (las hace él): ${out.join(' · ')}.` : 'Las tareas del dueño: no tiene nada abierto.';
-  const linea2 = del.length ? `\nDelegó y siguen abiertas: ${few(del, x => `«${clip(x.title, 45)}» a ${x.person ? x.person : nombre(x.agent)} (${{ idea: 'idea', scheduled: 'programada', next: 'en cola', doing: 'en curso', waiting: 'espera su OK' }[x.state] || x.state})`, 4)}.` : '';
+  const linea2 = del.length ? `\nDelegó y siguen abiertas: ${few(del, x => `«${clip(x.title, 45)}» a ${x.person ? x.person : nombre(x.agent)} (${fallo(x) ? 'FALLÓ: el agente no pudo' : { idea: 'idea', scheduled: 'programada', next: 'en cola', doing: 'en curso', waiting: 'espera su OK' }[x.state] || x.state})`, 4)}.` : '';
   return linea1 + linea2;
 }

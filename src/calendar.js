@@ -127,20 +127,25 @@ export function initCalendar(ctx) {
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
   }
-  function syncMias(from, to) { // plan D: the owner's tasks of the days on screen, fetched once per range
+  function syncMias(from, to) { // plan D: the owner's tasks of the days on screen, fetched once per range (and again on open and on the 30-second tick)
     if (!showMias || !mias) return;
     const key = ymd(new Date(from)) + '|' + ymd(new Date(to - 1)); if (key === mKey) return; mKey = key;
-    Promise.resolve(mias.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { mTasks = l || []; if (openNow) render(); }, () => { mTasks = []; });
+    Promise.resolve(mias.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { mTasks = l || []; repaintIfChanged(); }, () => { mTasks = []; });
   }
+  // 8 oct 2026: the «Tuyas» and «Contenido» layers live on the server, not in the page's task list — a task added or ticked in Tareas → Mías
+  // (or by Telegram, or a piece made in Contenido) never showed until the range changed. Opening the calendar and its 30-second tick fetch them
+  // again; a redraw only happens when what is shown changed, and never under an open popover or a drag (audit B42).
+  function refetchLayers() { mKey = ''; ctKey = ''; const { from, to } = range(); syncContent(from, to); syncMias(from, to); }
+  function repaintIfChanged() { if (openNow && E.pop.hidden && !(dnd && dnd.dragging) && sig() !== lastSig) render(); }
   function miaCard(ev, line) {
     const t = ev.t, hecha = t.state === 'done', vencida = !hecha && ev.at < Date.now(), hora = ev.conHora ? hm(ev.at) : 'todo el día', tip = `Tuya · ${ev.title} · ${hecha ? 'hecha' : vencida ? 'vencida' : 'vence ' + hora} · clic: abrirla en Tareas → Mías`;
     if (line) return `<div class="cv-ev line mia${hecha ? ' done' : ''}${vencida ? ' late' : ''}" data-ev="m:${attr(t.id)}" title="${attr(tip)}" role="button" tabindex="0"><span class="cv-ev-h">${esc(ev.conHora ? hm(ev.at) : '—')}</span><span class="cv-ev-t"><span class="cv-rt" aria-hidden="true">${hecha ? '☑' : '☐'}</span>${esc(ev.title)}</span></div>`;
     return `<div class="cv-ev mia${hecha ? ' done' : ''}${vencida ? ' late' : ''}" data-ev="m:${attr(t.id)}" title="${attr(tip)}" role="button" tabindex="0"><div class="cv-ev-t"><span class="cv-rt" aria-hidden="true">${hecha ? '☑' : '☐'}</span>${esc(ev.title)}</div><div class="cv-ev-m"><span>Tuya · ${esc(hecha ? 'hecha' : vencida ? 'vencida' : hora)}</span></div></div>`;
   }
-  function syncContent(from, to) { // the pieces of the days on screen, fetched once per range
+  function syncContent(from, to) { // the pieces of the days on screen, fetched once per range (and again on open and on the 30-second tick)
     if (!showContent || !contenido) return;
     const key = ymd(new Date(from)) + '|' + ymd(new Date(to - 1)); if (key === ctKey) return; ctKey = key;
-    Promise.resolve(contenido.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { ctPieces = l || []; if (openNow) render(); }, () => { ctPieces = []; });
+    Promise.resolve(contenido.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { ctPieces = l || []; repaintIfChanged(); }, () => { ctPieces = []; });
   }
   function contentCard(ev, line) {
     const p = ev.p, e = PIEZA_ESTADO[p.estado] || PIEZA_ESTADO.borrador, hora = p.hora || '—', tip = `Contenido · ${ev.title} · ${e.name.toLowerCase()} · ${p.hora || 'sin hora'} · ${p.redes.join(' y ')} · clic: abrirla en Contenido`;
@@ -558,7 +563,7 @@ export function initCalendar(ctx) {
   let fitT = 0; addEventListener('resize', () => { if (!openNow || view !== 'month') return; clearTimeout(fitT); fitT = setTimeout(() => { if (E.pop.hidden && !dnd.dragging) render(); }, 150); }); // the month re-counts what fits
   $('#cvKeys')?.addEventListener('click', () => dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))); // V4.2 (audit B38): the keys live in the «?» sheet, not in the band
   ov.inert = true; // closed: out of Tab's reach
-  function open() { if (openNow) return; views.opening('cal'); openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (!document.hidden && E.pop.hidden && !dnd.dragging && sig() !== lastSig) render(); }, 30000); /* INF-08: a hidden tab does not repaint */ }
+  function open() { if (openNow) return; views.opening('cal'); openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); mKey = ''; ctKey = ''; render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (!document.hidden && E.pop.hidden && !dnd.dragging) { refetchLayers(); if (sig() !== lastSig) render(); } }, 30000); /* INF-08: a hidden tab does not repaint */ }
   function close(o = {}) { if (!openNow) return; flushUndo(); openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (!o.quiet && calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from (not when another view takes over)
   views.add('cal', { isOpen: () => openNow, close });
   function toggle() { openNow ? close() : open(); }

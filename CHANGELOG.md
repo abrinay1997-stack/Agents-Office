@@ -1,5 +1,10 @@
 # Changelog
 
+## Plan D, arreglos — 8 oct 2026 (revisión de las tareas del dueño)
+
+- **Delegadas:** lo que delegaste y el agente **no pudo hacer** (falló tras sus reintentos) salía bajo «VOLVIERON HECHAS» y dejaba de contarse. Ahora sigue pendiente, arriba, con «Falló» y el número de la lista en rojo; Dimitri también lo ve («FALLÓ: el agente no pudo»). Lo que detuviste tú no se cuenta ni como pendiente ni como hecho. Test en `tests/tareas-dueno.test.mjs`.
+- **Calendario (P):** la capa TUYAS (y la de CONTENIDO) se leía una sola vez por rango de fechas: una tarea tuya creada o marcada en Mías, en Telegram o por Dimitri no aparecía al volver al calendario hasta cambiar de semana o apagar y encender la capa. Ahora se vuelve a leer al abrir el calendario y cada 30 s, y solo se redibuja si algo cambió (`calendario-capturas`: idéntico).
+
 ## Plan D — 7 oct 2026 (las tareas del dueño)
 
 Pedido del dueño: «la oficina está pensada para que trabajen los agentes, pero no contempla que yo tenga tareas para mí mismo; quiero tenerlas, delegarlas o trabajarlas yo, como en TaskView, y que los agentes entiendan que esto es del jefe». Diseño: `docs/analisis-tareas-del-dueno-2026-10-07.md`.

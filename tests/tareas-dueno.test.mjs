@@ -56,6 +56,22 @@ test('sus listas: Bandeja (sin fecha ni proyecto), Hoy (vence hoy, vencidas, hac
   assert.deepEqual(presetLista('hoy', AHORA), { limite: HOY }); assert.deepEqual(presetLista('proximos', AHORA), { limite: MANANA }); assert.deepEqual(presetLista('p:pr-a'), { proyecto: 'pr-a' }); assert.deepEqual(presetLista('bandeja'), {});
 });
 
+test('Delegadas: lo que el agente no pudo hacer sigue pendiente (arriba, con el número en rojo), no «volvió hecha»; lo que detuviste tú no cuenta', () => {
+  const del = (id, c) => ({ id, agent: 'piper', dept: 'sales', title: 'Delegada ' + id, delegada: { at: AHORA - 2 * H, a: 'agente:piper' }, ...c });
+  const l = [
+    del('ok', { state: 'done', doneAt: AHORA - H }),
+    del('mal', { state: 'done', error: true, errorKind: 'fatal', doneAt: AHORA - H, delegada: { at: AHORA - 5 * H, a: 'agente:piper' } }),
+    del('stop', { state: 'done', error: true, stopped: true, doneAt: AHORA - H }),
+    del('cola', { state: 'next', delegada: { at: AHORA - H, a: 'agente:piper' } }),
+  ];
+  const r = deLista(l, 'delegadas', { ahora: AHORA });
+  assert.deepEqual(r.pendientes.map(t => t.id), ['mal', 'cola'], 'la que falló sigue siendo asunto tuyo, y va primero aunque la delegaste antes');
+  assert.deepEqual(r.hechas.map(t => t.id), ['ok'], 'bajo VOLVIERON HECHAS solo lo que volvió hecha');
+  const n = cuentas(l, { ahora: AHORA }); assert.equal(n.delegadas, 2); assert.equal(n.delegadasFallidas, 1);
+  assert.match(resumenDueno(l, { ahora: AHORA }), /«Delegada mal» a piper \(FALLÓ/, 'Dimitri también lo sabe');
+  assert.match(railHTML(l, { proyectos: () => [] }, { lista: 'hoy', ahora: AHORA }), /<span>Delegadas<\/span><b class="rojo">2<\/b>/);
+});
+
 test('el estado «Tuya», la cola no la arranca, y los agentes la leen como DEL DUEÑO', () => {
   assert.equal(visible(yo('a')), 'tuya'); assert.equal(visible({ state: 'next', person: 'Ana' }), 'en_manos');
   assert.equal(visible(yo('a', { bloqueadaPor: ['x'] }), new Map([['x', { id: 'x', state: 'next' }]])), 'bloqueada', 'bloqueada gana');
