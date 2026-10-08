@@ -14,12 +14,12 @@ Base: el plan T0–T6 (`docs/analisis-taskview-2026-10-06.md`) ya trajo de TaskV
 - **La lista** tiene la cabecera con «hechas/total» y su barra, cada fila con **la casilla redonda** que la marca hecha (y DESHACER), el campo punteado **«+ Añadir tarea»** que ya trae la fecha o el proyecto de esa lista, y al final **COMPLETADAS · N** plegable. **Tablero** la enseña en tres columnas: **Por hacer · Haciendo · Hecha**, arrastrando.
 - **El campo de arriba** tiene «**Para mí**» en el selector (en Mías viene elegido): lo que escribes es tuyo, sin enrutador ni agente. Entiende lo de siempre: «urgente: firmar el contrato para el viernes #local».
 - **El detalle de una tarea tuya:** ✓ Hecha · ▶ Empezar (con tu cronómetro) o ⏸ Dejar para luego · **Delegar…** · «Devolver a PIPER» si vino de un agente. Campos: prioridad, fecha límite (con hora), **área** (el departamento, opcional), proyecto, etiquetas, estimación, repetir, tu tiempo, pasos (subtareas), notas, espera a / la esperan, comentarios, historial.
-- **Delegar** a un agente (el que elijas, el que la tenía, o «el que elija la oficina»: el enrutador, o el jefe si no responde) o a una persona del equipo, con una nota. «Que me pida el OK antes de enviar o publicar nada» viene marcado. La sigues en **Delegadas** hasta que vuelve hecha.
+- **Delegar** a un agente (el que elijas, el que la tenía, o «el que elija la oficina»: el enrutador, o el jefe si no responde) o a una persona del equipo, con una nota. «Que me pida el OK antes de enviar o publicar nada» viene marcado. La sigues en **Delegadas** hasta que vuelve hecha (8 oct 2026: si el agente no pudo hacerla, sigue ahí, arriba y con «Falló», en vez de pasar a «VOLVIERON HECHAS»).
 - **«Lo hago yo»** en el detalle de la tarea de un agente (en cola, programada, idea o fallida) y **«Lo termino yo»** en un borrador que espera tu OK: pasa a tu lista con lo que el agente dejó. En el Tablero de la oficina, arrastrarla a la columna **«Tuyas y de personas»** hace lo mismo. Todo con DESHACER.
 - **Inicio** abre con **«Lo tuyo hoy»**; «Hoy en la oficina» queda para los agentes. La **Lista** tiene el filtro **Quién** (Tuyas · De los agentes · De personas).
 - **Los agentes lo entienden:** en `ver_tareas` y `ver_agenda` lo tuyo sale como **«DEL DUEÑO (la hace él)»**; su instrucción dice que no lo ejecuten ni lo cambien y que, si su trabajo depende de algo tuyo, pidan un bloqueo con su id. Una herramienta nueva, **`sugerir_al_dueno`**, les deja una sugerencia en tu **Bandeja** (nace idea: la aceptas o la descartas; cinco sin responder como mucho). Un «Para ti: …» de `pedir_bloqueo` nace tuyo y para hoy. Lo que delegas les llega con «TE LA DELEGÓ EL DUEÑO» y tu nota.
 - **Dimitri** ve «Las tareas del dueño» en su `<estado>` (vencidas, hoy, haciendo, bandeja, sugerencias, lo que delegaste y sigue abierto). En un plan, una pieza puede ir a **«Tú (tu lista)»** (`"dept":"dueno"`): lo que solo puedes hacer en persona. Con Tareas abierta sugiere «¿Qué tengo yo hoy?», «¿Qué puedo delegar?», «¿Cómo va lo delegado?».
-- **El calendario (P)** tiene la capa **TUYAS** (encendida): tus tareas en el día que vencen («☐»); un clic la abre en Mías. El `.ics` las lleva como pendientes tuyos.
+- **El calendario (P)** tiene la capa **TUYAS** (encendida): tus tareas en el día que vencen («☐»); un clic la abre en Mías. El `.ics` las lleva como pendientes tuyos. (8 oct 2026: la capa se vuelve a leer al abrir el calendario y cada 30 s; antes, lo que añadías en Mías no aparecía hasta cambiar de semana.)
 - **Telegram:** `/mias` (o `/hoy`) trae lo tuyo de hoy con un ✅ para marcarlo hecho; `/yo llamar al banco el viernes a las 10` te deja una tarea.
 
 ---
@@ -67,9 +67,18 @@ Base: el plan T0–T6 (`docs/analisis-taskview-2026-10-06.md`) ya trajo de TaskV
 
 ---
 
+## 4b. Revisión del 8 oct 2026
+
+El dueño preguntó si las listas estaban bien, si podía apuntarse cosas en el calendario y en el panel de la oficina, y dónde debía ir «Estado de la oficina». Resultado (rama `claude/trusting-noether-akn71m`):
+- **Fallos arreglados:** Delegadas daba por «vuelta hecha» lo que el agente no pudo hacer; la capa TUYAS del calendario no se volvía a leer hasta cambiar de semana.
+- **El calendario:** «PARA MÍ» en la ventanita del día (`src/calendar.js → goMine_`). No hay un tipo aparte de «apunte»: una tarea tuya con hora es tu cita.
+- **El panel (T):** «PARA MÍ» para apuntar sin salir de la oficina y «Lo tuyo hoy · N». La lista del panel sigue siendo solo de los agentes (es su torre de control).
+- **Las listas:** Hoy con las vencidas aparte (`gruposHoy`) y Próximos por día (`porDia`), en `tareas/dueno.mjs`.
+- **Estado de la oficina:** no va en «Cómo va el negocio» (otra pregunta: el negocio, no la máquina); va en Ajustes, como su primera pestaña, con la luz en el engranaje.
+
 ## 5. Lo que queda (para cuando el dueño lo pida)
 
 - **Recordatorio a una hora** (TaskView avisa a la hora de la tarea): hoy avisa la víspera, el día y al vencer (plan T5).
 - **Vista previa de la recurrencia en Mías** como TaskView (ya está en el detalle: «Próximas: …»).
-- **Arrastrar en el calendario una tarea tuya a otro día** (hoy se cambia la fecha en su detalle).
+- **Arrastrar en el calendario una tarea tuya a otro día** (hoy se cambia la fecha en su detalle; desde el 8 oct 2026 sí se crea desde el calendario con «PARA MÍ»).
 - **Probar con agentes de verdad** que lean «DEL DUEÑO», sugieran con mesura y no repitan lo tuyo; ajustar la skill de cada departamento si hace falta.

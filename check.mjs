@@ -690,12 +690,12 @@ else {
       await page.evaluate(() => { try { localStorage.removeItem('ao.cal.ct'); } catch {} });
       return `${n} pieces on the month · saved · approved · un-approved by a change · Programación honest · ${layer} on the tasks calendar`;
     });
-    await step('smoke: V4.7 — on a phone the dock folds Analíticas, Salud, Negocio and Ajustes into «⋯», and a piece opens as a full sheet', async () => {
+    await step('smoke: V4.7 — on a phone the dock folds Analíticas, Negocio and Ajustes (with the office light) into «⋯», and a piece opens as a full sheet', async () => {
       const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
       try {
         await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
         const vis = id => ph.evaluate(i => { const e = document.getElementById(i); return !!e && e.getBoundingClientRect().width > 0; }, id);
-        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topBrain') || await vis('topHealth') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topBrain') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
         if (!await vis('topDimitri')) throw new Error('Dimitri is not in the dock on a phone (A11-04)');
         // El aviso «⚠ N» aparece según el momento de la demo (en CI, más tarde que aquí) y ensancha el dock: se fuerza para que el paso no dependa del reloj, y se mide a los anchos de teléfono de verdad.
         await ph.evaluate(() => { const a = document.getElementById('topAppr'); a.style.display = ''; a.querySelector('span').textContent = '12'; });

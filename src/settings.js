@@ -5,11 +5,13 @@
 // V4.5 (27 Sep 2026, the owner): two tabs that live in this browser, not on the server, so they work in the demo too —
 // «Apariencia» (the theme: Claro by default, Oscuro, Automático) and «Atajos de teclado» (the list that was the ? sheet;
 // ? still opens it, here). Both apply at once, with no Guardar. The Estudio's caps are a server group («Estudio»).
+// 8 oct 2026: «Estado» (the office's health, src/health.js) is the first tab — it was a dock button and a window of its own. The gear
+// carries its light; with something amber or red, the gear opens here. Key O opens it straight away.
 import { modal } from './modal.js';
 import { unaTeclaOn, setUnaTecla } from './teclas1.js'; // IMG-26 (6 Oct 2026)
 
 const DEPT = { emails: 'Correos', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', fin: 'Finanzas', delivery: 'Entregas' };
-export function initSettings({ served, esc, keys = [], runKey, theme }) {
+export function initSettings({ served, esc, keys = [], runKey, theme, health = null }) {
   const btn = document.getElementById('topSettings');
   const el = document.createElement('div'); el.id = 'setOv'; el.hidden = true;
   el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'setT');
@@ -19,8 +21,9 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
   document.body.appendChild(el);
   let data = null, tab = served ? 'general' : 'apariencia', opener = null, dirty = {}, cifras = null, voice = null;
   const EXTRA = [['cifras', 'Cifras de la empresa'], ['voz', 'Voz de marca'], ['empresa', 'Preparar desde mi web']];
-  const LOCAL = ['apariencia', 'atajos'], NO_SAVE = ['empresa', ...LOCAL];
-  const tabList = () => (served && data ? [data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ['atajos', 'Atajos de teclado']] : [['apariencia', 'Apariencia'], ['atajos', 'Atajos de teclado']]);
+  const LOCAL = ['estado', 'apariencia', 'atajos'], NO_SAVE = ['empresa', ...LOCAL];
+  const ESTADO = health ? [['estado', 'Estado']] : [];
+  const tabList = () => (served && data ? [...ESTADO, data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ['atajos', 'Atajos de teclado']] : [...ESTADO, ['apariencia', 'Apariencia'], ['atajos', 'Atajos de teclado']]);
   const THEME_NAME = { light: 'Claro', dark: 'Oscuro', auto: 'Automático' };
   function themeHTML() {
     const cur = theme ? theme.get() : 'light', sys = theme && theme.systemDark() ? 'oscuro' : 'claro';
@@ -57,6 +60,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
     tabs.innerHTML = all.map(([k, t]) => `<button type="button" role="tab" id="sgt-${k}" aria-selected="${tab === k}" aria-controls="sgp" data-tab="${k}" tabindex="${tab === k ? 0 : -1}">${esc(t)}</button>`).join('');
     pane.id = 'sgp'; pane.setAttribute('aria-labelledby', 'sgt-' + tab);
     el.querySelector('[data-a="save"]').hidden = NO_SAVE.includes(tab) || !served;
+    if (tab === 'estado') { pane.innerHTML = health.html(); return; }
     if (tab === 'apariencia') { pane.innerHTML = themeHTML(); return; }
     if (tab === 'atajos') { pane.innerHTML = keysHTML(); return; }
     if (!served) { pane.innerHTML = '<p class="sg-lead">Esta es la demo: el resto de los ajustes se cambia en la oficina real (<code>npm start</code>).</p>'; return; }
@@ -109,7 +113,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
     dirty = {}; await load();
   }
   function showTab(t) { if (t === tab) return; collect(); tab = t; render(); loadTab(); el.querySelector(`[data-tab="${tab}"]`)?.focus(); }
-  function open(at) { if (!el.hidden) { if (at) showTab(at); return; } opener = document.activeElement; if (at) tab = at; el.hidden = false; modal.open(el); btn?.setAttribute('aria-expanded', 'true'); msg(''); load().then(loadTab); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.sg-x').focus({ preventScroll: true }); }
+  function open(at) { if (!el.hidden) { if (at) showTab(at); return; } opener = document.activeElement; if (at) tab = at; el.hidden = false; modal.open(el); btn?.setAttribute('aria-expanded', 'true'); msg(''); render(); /* 8 oct 2026: at once, not after /api/settings — the tab it was on showed for a moment */ load().then(loadTab); if (tab === 'estado' && health) health.refresh(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.sg-x').focus({ preventScroll: true }); }
   function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); el.hidden = true; btn?.setAttribute('aria-expanded', 'false'); dirty = {}; if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   el.addEventListener('click', async e => {
     if (e.target === el || e.target.closest('.sg-x')) return close();
@@ -117,6 +121,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
     const kr = e.target.closest('.ks-row[data-key]'); if (kr) { close(); if (runKey) runKey(kr.dataset.key); return; } // a shortcut pressed from the list does what the key does
     const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
     if (a === 'save') return save();
+    if ((a === 'probe' || a === 'read') && health) { await health.act(a, e.target.closest('button')); return; } // Estado: it repaints itself (onData)
     if (a === 'add-person') { collect(); const p = data.fields.find(f => f.type === 'people').path; dirty[p] = [...readPeople(), { name: '', telegram: '', depts: [] }]; render(); const rows = el.querySelectorAll('.sg-person [data-k=name]'); rows[rows.length - 1]?.focus(); return; }
     if (a === 'del-person') { e.target.closest('.sg-person').remove(); return; }
     if (a === 'add-cifra') { cifras = [...readCifras(), { name: '', value: '', unit: '', note: '' }]; render(); const r = el.querySelectorAll('.sg-cif [data-c=name]'); r[r.length - 1]?.focus(); return; }
@@ -133,6 +138,11 @@ export function initSettings({ served, esc, keys = [], runKey, theme }) {
     if (e.target.name !== 'sgTheme' || !theme) return;
     theme.set(e.target.value); msg(`Tema: ${THEME_NAME[e.target.value] || e.target.value}. Se recuerda en este navegador.`);
   });
-  btn?.addEventListener('click', () => (el.hidden ? open() : close()));
+  if (health) health.onData(() => { // a fresh reading repaints the Estado tab if it is the one showing; the keyboard stays on its button
+    if (el.hidden || tab !== 'estado') return;
+    const pane = el.querySelector('.sg-pane'), was = pane.contains(document.activeElement) ? document.activeElement.dataset.a : null;
+    pane.innerHTML = health.html(); if (was) (pane.querySelector(`[data-a="${was}"]`) || pane).focus({ preventScroll: true });
+  });
+  btn?.addEventListener('click', () => (el.hidden ? open(health && health.needsAttention() ? 'estado' : undefined) : close())); // amber or red on the gear: it opens on what needs you
   return { open, close, toggle: () => (el.hidden ? open() : close()), isOpen: () => !el.hidden, tab: () => tab };
 }

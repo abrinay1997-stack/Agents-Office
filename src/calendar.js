@@ -21,6 +21,7 @@ import { ESTADO as PIEZA_ESTADO } from './pieza.js'; // V4.7: the «Contenido» 
 const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it sits in the «en marcha» row
 const isLive_ = ev => LIVE.includes(ev.kind);
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['days', 'Algunos días…'], ['hourly', 'Cada hora, 9–5, días hábiles']];
+const MINE_CADENCES = [['semana', 'Cada semana'], ['dia', 'Cada día'], ['2semanas', 'Cada 2 semanas'], ['mes', 'Cada mes']]; // 8 oct 2026: «Para mí» repeats as one of your tasks does (tareas/ritmo.mjs), not as an agent's routine
 const DAY_KEYS = [[1, 'L', 'lunes'], [2, 'M', 'martes'], [3, 'X', 'miércoles'], [4, 'J', 'jueves'], [5, 'V', 'viernes'], [6, 'S', 'sábado'], [0, 'D', 'domingo']];
 // V4.2 (audit B23): «lun, mié, vie» could not be edited — it showed as fixed text; now the days are seven toggles
 const daysHTML = on => `<div class="cv-days" role="group" aria-label="Qué días">${DAY_KEYS.map(([n, l, name]) => `<button type="button" class="cv-dk${on.includes(n) ? ' on' : ''}" data-day-n="${n}" aria-pressed="${on.includes(n)}" aria-label="${name}" title="${name}">${l}</button>`).join('')}</div>`;
@@ -49,6 +50,7 @@ export function initCalendar(ctx) {
   let showContent = (() => { try { return localStorage.getItem('ao.cal.ct') === '1'; } catch { return false; } })(), ctPieces = [], ctKey = '';
   // plan D (7 oct 2026): the «Tuyas» layer — the owner's own tasks on the day they are due (read only: a click opens it in Tareas → Mías). On unless turned off.
   let showMias = (() => { try { return localStorage.getItem('ao.cal.mias') !== '0'; } catch { return true; } })(), mTasks = [], mKey = '';
+  let lastMine = (() => { try { return localStorage.getItem('ao.cal.yo') === '1'; } catch { return false; } })(); // 8 oct 2026: the day's popover remembers «Para mí»
   // V4.2 (audit B2–B4): the week and the day are one time grid, 00:00–24:00 — the day view used to stop at 06–22 and put a 23:30 task in the 22:00 row
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it)
   const attr = v => esc(v).replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // inside title="…": a quote in a title must not end the attribute
@@ -127,20 +129,25 @@ export function initCalendar(ctx) {
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
   }
-  function syncMias(from, to) { // plan D: the owner's tasks of the days on screen, fetched once per range
+  function syncMias(from, to) { // plan D: the owner's tasks of the days on screen, fetched once per range (and again on open and on the 30-second tick)
     if (!showMias || !mias) return;
     const key = ymd(new Date(from)) + '|' + ymd(new Date(to - 1)); if (key === mKey) return; mKey = key;
-    Promise.resolve(mias.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { mTasks = l || []; if (openNow) render(); }, () => { mTasks = []; });
+    return Promise.resolve(mias.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { mTasks = l || []; repaintIfChanged(); }, () => { mTasks = []; });
   }
+  // 8 oct 2026: the «Tuyas» and «Contenido» layers live on the server, not in the page's task list — a task added or ticked in Tareas → Mías
+  // (or by Telegram, or a piece made in Contenido) never showed until the range changed. Opening the calendar and its 30-second tick fetch them
+  // again; a redraw only happens when what is shown changed, and never under an open popover or a drag (audit B42).
+  function refetchLayers() { mKey = ''; ctKey = ''; const { from, to } = range(); syncContent(from, to); syncMias(from, to); }
+  function repaintIfChanged() { if (openNow && E.pop.hidden && !(dnd && dnd.dragging) && sig() !== lastSig) render(); }
   function miaCard(ev, line) {
     const t = ev.t, hecha = t.state === 'done', vencida = !hecha && ev.at < Date.now(), hora = ev.conHora ? hm(ev.at) : 'todo el día', tip = `Tuya · ${ev.title} · ${hecha ? 'hecha' : vencida ? 'vencida' : 'vence ' + hora} · clic: abrirla en Tareas → Mías`;
     if (line) return `<div class="cv-ev line mia${hecha ? ' done' : ''}${vencida ? ' late' : ''}" data-ev="m:${attr(t.id)}" title="${attr(tip)}" role="button" tabindex="0"><span class="cv-ev-h">${esc(ev.conHora ? hm(ev.at) : '—')}</span><span class="cv-ev-t"><span class="cv-rt" aria-hidden="true">${hecha ? '☑' : '☐'}</span>${esc(ev.title)}</span></div>`;
     return `<div class="cv-ev mia${hecha ? ' done' : ''}${vencida ? ' late' : ''}" data-ev="m:${attr(t.id)}" title="${attr(tip)}" role="button" tabindex="0"><div class="cv-ev-t"><span class="cv-rt" aria-hidden="true">${hecha ? '☑' : '☐'}</span>${esc(ev.title)}</div><div class="cv-ev-m"><span>Tuya · ${esc(hecha ? 'hecha' : vencida ? 'vencida' : hora)}</span></div></div>`;
   }
-  function syncContent(from, to) { // the pieces of the days on screen, fetched once per range
+  function syncContent(from, to) { // the pieces of the days on screen, fetched once per range (and again on open and on the 30-second tick)
     if (!showContent || !contenido) return;
     const key = ymd(new Date(from)) + '|' + ymd(new Date(to - 1)); if (key === ctKey) return; ctKey = key;
-    Promise.resolve(contenido.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { ctPieces = l || []; if (openNow) render(); }, () => { ctPieces = []; });
+    Promise.resolve(contenido.between(ymd(new Date(from)), ymd(new Date(to - 1)))).then(l => { ctPieces = l || []; repaintIfChanged(); }, () => { ctPieces = []; });
   }
   function contentCard(ev, line) {
     const p = ev.p, e = PIEZA_ESTADO[p.estado] || PIEZA_ESTADO.borrador, hora = p.hora || '—', tip = `Contenido · ${ev.title} · ${e.name.toLowerCase()} · ${p.hora || 'sin hora'} · ${p.redes.join(' y ')} · clic: abrirla en Contenido`;
@@ -279,32 +286,48 @@ export function initCalendar(ctx) {
     const d = new Date(dayKey + 'T00:00:00'), past = d.getTime() < startOfDay(Date.now());
     E.pop.innerHTML = `<div class="cv-pop-h"><span class="lab">PROGRAMAR PARA</span><b>${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()]}</b><span class="sp"></span><button class="cv-x" data-act="close">✕</button></div>
       ${past ? '<div class="cv-note">Ese día ya pasó — elige hoy o un día posterior.</div>' : ''}
-      <div class="cv-row"><select class="cv-dept" aria-label="Departamento">${DEPT_KEYS.map(k => `<option value="${k}"${k === lastDept ? ' selected' : ''}>${DEPTS[k].name}</option>`).join('')}</select><select class="cv-time" aria-label="Hora">${timeOpts(slotH !== null ? pad(slotH) + ':00' : dayKey === ymd(new Date()) ? pad(Math.min(23, new Date().getHours() + 1)) + ':00' : '09:00')}</select><select class="cv-model" title="Qué modelo la ejecuta" aria-label="Modelo"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}">${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>
+      <div class="cv-row"><select class="cv-dept" aria-label="Para quién">${mias && mias.create ? `<option value="yo"${lastMine ? ' selected' : ''}>PARA MÍ</option>` : ''}${DEPT_KEYS.map(k => `<option value="${k}"${!(mias && mias.create && lastMine) && k === lastDept ? ' selected' : ''}>${DEPTS[k].name}</option>`).join('')}</select><select class="cv-time" aria-label="Hora">${timeOpts(slotH !== null ? pad(slotH) + ':00' : dayKey === ymd(new Date()) ? pad(Math.min(23, new Date().getHours() + 1)) + ':00' : '09:00')}</select><select class="cv-model" title="Qué modelo la ejecuta" aria-label="Modelo"><option value="">${esc(modelName(officeModel()).toUpperCase())}</option>${MODEL_KEYS.filter(k => k !== officeModel()).map(k => `<option value="${k}">${esc(modelName(k).toUpperCase())}</option>`).join('')}</select></div>
       <textarea class="cv-text" rows="3" placeholder="¿Qué debe pasar ese día?" aria-label="Qué debe pasar ese día">${esc(createDraft)}</textarea>${createDraft.trim() ? '<div class="cv-note">Recuperé lo que estabas escribiendo. <button type="button" class="cv-lnk" data-act="forget">Borrarlo</button></div>' : ''}
-      <div class="cv-row"><button class="cv-rep" data-act="rep">REPETIR</button><select class="cv-cad" hidden aria-label="Cada cuándo">${CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><span class="cv-dwrap" hidden>${daysHTML([d.getDay()])}</span><label class="cv-ok" hidden><input type="checkbox" class="cv-okc" checked> necesita mi visto bueno</label><span class="sp"></span><button class="cv-go" data-act="go"${past ? ' disabled' : ''}>AGREGAR</button></div>
+      <div class="cv-row"><button class="cv-rep" data-act="rep">REPETIR</button><select class="cv-cad" hidden aria-label="Cada cuándo">${CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><select class="cv-cad cv-cadm" hidden aria-label="Cada cuándo se repite">${MINE_CADENCES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><span class="cv-dwrap" hidden>${daysHTML([d.getDay()])}</span><label class="cv-ok" hidden><input type="checkbox" class="cv-okc" checked> necesita mi visto bueno</label><span class="sp"></span><button class="cv-go" data-act="go"${past ? ' disabled' : ''}>AGREGAR</button></div>
       <details class="cv-moreopt"><summary>Más opciones</summary><div class="cv-row"><select class="cv-effort" aria-label="Esfuerzo: cuánto piensa"><option value="">ESFUERZO AUTO</option>${(EFFORT_KEYS || []).map(k => `<option value="${k}">${esc(String(effortName ? effortName(k) : k).toUpperCase())}</option>`).join('')}</select>${teamsOn && teamsOn() ? '<label class="cv-ok"><input type="checkbox" class="cv-team"> en equipo (el jefe la reparte)</label>' : ''}</div></details>
       <div class="cv-hint">${past ? '' : 'Una tarea para este día — se ejecuta a esa hora y aparece en el panel. REPETIR la convierte en rutina desde esta fecha.'}</div>`;
     E.pop.hidden = false; place(E.pop, cell);
-    const P = { dwrap: E.pop.querySelector('.cv-dwrap'), dept: E.pop.querySelector('.cv-dept'), time: E.pop.querySelector('.cv-time'), model: E.pop.querySelector('.cv-model'), text: E.pop.querySelector('.cv-text'), rep: E.pop.querySelector('.cv-rep'), cad: E.pop.querySelector('.cv-cad'), ok: E.pop.querySelector('.cv-ok'), okc: E.pop.querySelector('.cv-okc'), go: E.pop.querySelector('.cv-go'), hint: E.pop.querySelector('.cv-hint') };
+    const P = { cadm: E.pop.querySelector('.cv-cadm'), more: E.pop.querySelector('.cv-moreopt'), dwrap: E.pop.querySelector('.cv-dwrap'), dept: E.pop.querySelector('.cv-dept'), time: E.pop.querySelector('.cv-time'), model: E.pop.querySelector('.cv-model'), text: E.pop.querySelector('.cv-text'), rep: E.pop.querySelector('.cv-rep'), cad: E.pop.querySelector('.cv-cad'), ok: E.pop.querySelector('.cv-ok'), okc: E.pop.querySelector('.cv-okc'), go: E.pop.querySelector('.cv-go'), hint: E.pop.querySelector('.cv-hint') };
     let repeat = false;
+    // 8 oct 2026: «PARA MÍ» — a task of yours on that day (Tareas → Mías), not an agent's run: no model, effort or team; its hour is when you have
+    // it (or the whole day), and REPETIR repeats it as your tasks do. The calendar shows it in the TUYAS layer.
+    const mine = () => P.dept.value === 'yo', fixedTime = P.time.value;
+    function applyMode() {
+      const m = mine(); P.model.hidden = m; if (P.more) P.more.hidden = m;
+      P.text.placeholder = m ? '¿Qué tienes que hacer ese día?' : '¿Qué debe pasar ese día?'; P.text.setAttribute('aria-label', P.text.placeholder.replace(/[¿?]/g, ''));
+      const allDay = P.time.querySelector('option[value=""]');
+      if (m && !allDay) { P.time.insertAdjacentHTML('afterbegin', '<option value="">TODO EL DÍA</option>'); if (slotH === null) P.time.value = ''; }
+      else if (!m && allDay) { const was = P.time.value; allDay.remove(); if (!was) P.time.value = fixedTime; }
+      P.cad.hidden = !repeat || m; P.cadm.hidden = !repeat || !m; P.ok.hidden = !repeat || m;
+    }
     const hint = () => {
       if (past) return;
-      const k = P.dept.value; lastDept = k;
-      if (P.dwrap) P.dwrap.hidden = !repeat || P.cad.value !== 'days';
+      const k = P.dept.value; lastMine = k === 'yo'; try { localStorage.setItem('ao.cal.yo', lastMine ? '1' : '0'); } catch {} if (!lastMine) lastDept = k;
+      applyMode();
+      if (P.dwrap) P.dwrap.hidden = !repeat || P.cad.value !== 'days' || lastMine;
+      const dia = `${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
+      if (lastMine) { P.hint.innerHTML = repeat ? `Tarea tuya · <b>${esc(P.cadm.selectedOptions[0]?.textContent.toLowerCase() || '')}</b> desde el ${esc(dia)}${P.time.value ? ' a las ' + esc(P.time.value) : ''} · al marcarla hecha, nace la siguiente` : `Tarea tuya para <b>${esc(dia)} · ${P.time.value ? esc(P.time.value) : 'todo el día'}</b> · también en Tareas → Mías; ningún agente la toca`; P.go.disabled = false; return; }
       if (repeat) { const w = pickWhen(P.cad.value, P.time.value, readDays(E.pop), dayKey); const first = occurrences(w, Date.now(), Date.now() + 400 * DAY, 1)[0]; P.hint.innerHTML = RT_DEPTS.includes(k) ? `Rutina · <b>${esc(describe(w))}</b> · primera ejecución ${esc(first ? fmtDay(first) + ' ' + hm(first) : '—')}${isLive() ? ' · Claude elige al agente' : ''}` : `<span class="amber">${esc(rtRefuse(k))}</span>`; P.go.disabled = !RT_DEPTS.includes(k); }
       else { P.hint.innerHTML = `Tarea para <b>${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)} · ${esc(P.time.value)}</b>${isLive() ? ' · Claude elige al agente ahora, la ejecuta después' : ''}`; P.go.disabled = false; }
     };
-    P.rep.addEventListener('click', () => { repeat = !repeat; P.rep.classList.toggle('on', repeat); P.cad.hidden = !repeat; P.ok.hidden = !repeat; if (repeat) P.cad.value = 'days'; hint(); });
+    P.rep.addEventListener('click', () => { repeat = !repeat; P.rep.classList.toggle('on', repeat); if (repeat) P.cad.value = 'days'; hint(); });
     E.pop.querySelectorAll('.cv-dk').forEach(dk => dk.addEventListener('click', () => { dk.classList.toggle('on'); dk.setAttribute('aria-pressed', dk.classList.contains('on')); hint(); }));
     E.pop.querySelectorAll('.cv-effort, .cv-team').forEach(x => x.addEventListener('keydown', e => e.stopPropagation()));
-    [P.dept, P.time, P.cad, P.model].forEach(el => { el.addEventListener('change', hint); el.addEventListener('keydown', e => e.stopPropagation()); });
+    [P.dept, P.time, P.cad, P.cadm, P.model].forEach(el => { el.addEventListener('change', hint); el.addEventListener('keydown', e => e.stopPropagation()); });
     P.text.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(); } else if (e.key === 'Escape') closePop(); });
     P.go.addEventListener('click', go);
     E.pop.querySelector('[data-act="forget"]')?.addEventListener('click', e => { createDraft = ''; P.text.value = ''; e.currentTarget.parentElement.remove(); P.text.focus(); });
     hint(); P.text.focus(); P.text.setSelectionRange(P.text.value.length, P.text.value.length);
+    const goMine = text => goMine_(text, { dayKey, time: P.time.value, cada: repeat ? P.cadm.value : null, P });
     async function go() {
       const text = P.text.value.trim().replace(/[.!]+$/, ''); if (!text) { P.text.focus(); return; }
       const k = P.dept.value, model = P.model.value || undefined;
+      if (mine()) return goMine(text);
       P.go.disabled = true; P.hint.innerHTML = isLive() ? 'Claude está eligiendo al agente…' : 'Agregando…';
       let r;
       const effort = E.pop.querySelector('.cv-effort')?.value || undefined, team = !!E.pop.querySelector('.cv-team')?.checked;
@@ -318,6 +341,16 @@ export function initCalendar(ctx) {
       const who = agentOf(repeat ? r.routine.agent : r.task.agent);
       if (who) note(`${repeat ? 'Rutina creada' : 'Programada'} · la tiene <b>${esc(who.name)}</b>${r.task && r.task.why && /enrutador/.test(r.task.why) ? ' (el jefe: el enrutador no respondió)' : ''}`);
     }
+  }
+  async function goMine_(text, { dayKey, time, cada, P }) { // 8 oct 2026: «PARA MÍ» → POST /api/tareas/mias (the same as Tareas → Mías); a long text keeps all of it in the notes
+    P.go.disabled = true; P.hint.textContent = 'Apuntando…';
+    const r = await mias.create({ title: text.length > 90 ? text.slice(0, 89) + '…' : text, ...(text.length > 90 ? { notas: text } : {}), limite: time ? `${dayKey}T${time}` : dayKey, ...(cada ? { repetir: { cada, modo: 'fijo' } } : {}) });
+    if (!r || !r.ok) { P.hint.innerHTML = `<span class="amber">${esc((r && r.error) || 'No se pudo apuntar.')}</span>`; P.go.disabled = false; return; }
+    P.text.value = ''; createDraft = ''; closePop();
+    if (!showMias) { showMias = true; try { localStorage.setItem('ao.cal.mias', '1'); } catch {} } // you just made one: the layer that shows it comes on
+    mKey = ''; const { from, to } = range(); await syncMias(from, to); render();
+    const el = E.grid.querySelector(`.cv-ev[data-ev="m:${r.task.id}"]`); if (el) { el.classList.add('new'); el.scrollIntoView({ block: 'nearest' }); }
+    note(`Apuntada para ti${cada ? ' · se repite' : ''} · está también en <b>Tareas → Mías</b> (H)`);
   }
   const say = (msg, bad) => { const h = E.pop.querySelector('.cv-hint'); if (h) h.innerHTML = bad ? `<span class="amber">${esc(msg)}</span>` : esc(msg); };
   function openEvent(id, el) {
@@ -558,7 +591,7 @@ export function initCalendar(ctx) {
   let fitT = 0; addEventListener('resize', () => { if (!openNow || view !== 'month') return; clearTimeout(fitT); fitT = setTimeout(() => { if (E.pop.hidden && !dnd.dragging) render(); }, 150); }); // the month re-counts what fits
   $('#cvKeys')?.addEventListener('click', () => dispatchEvent(new KeyboardEvent('keydown', { key: '?' }))); // V4.2 (audit B38): the keys live in the «?» sheet, not in the band
   ov.inert = true; // closed: out of Tab's reach
-  function open() { if (openNow) return; views.opening('cal'); openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (!document.hidden && E.pop.hidden && !dnd.dragging && sig() !== lastSig) render(); }, 30000); /* INF-08: a hidden tab does not repaint */ }
+  function open() { if (openNow) return; views.opening('cal'); openNow = true; if (narrow() && (view === 'month' || view === 'week')) view = 'agenda'; /* a phone opens on the agenda */ calOpener = document.activeElement; ov.inert = false; modal.open(ov); E.co.textContent = business ? business() : ''; ov.classList.add('on'); document.body.classList.add('calOpen'); mKey = ''; ctKey = ''; render(); ov.tabIndex = -1; ov.focus(); timer = setInterval(() => { if (!document.hidden && E.pop.hidden && !dnd.dragging) { refetchLayers(); if (sig() !== lastSig) render(); } }, 30000); /* INF-08: a hidden tab does not repaint */ }
   function close(o = {}) { if (!openNow) return; flushUndo(); openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('calOpen'); clearInterval(timer); timer = null; if (!o.quiet && calOpener && document.contains(calOpener) && calOpener.focus) calOpener.focus({ preventScroll: true }); } // focus goes back where it came from (not when another view takes over)
   views.add('cal', { isOpen: () => openNow, close });
   function toggle() { openNow ? close() : open(); }

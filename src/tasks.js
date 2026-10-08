@@ -28,6 +28,8 @@ import { initCalendar } from './calendar.js';
 import { initDetail } from './detail.js'; // the task detail drawer: every action on a task, from the list, the board and the calendar // V3.2.1 (16 Sep 2026): the calendar on P
 import { MODEL_KEYS, MODELS, DEFAULT_MODEL, modelName, normModel, FROM_TEXT , EFFORT_KEYS, EFFORT_NAME, normEffort, effortName, effortFor } from './models.js';
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
+import { cuentas as cuentasMias } from '../tareas/dueno.mjs'; // 8 oct 2026: «Lo tuyo hoy · N» in the panel (the owner's own tasks, plan D)
+import { leerRapida } from '../tareas/rapida.mjs'; // 8 oct 2026: «Para mí» reads «para el viernes», «!alta», «#etiqueta» like Tareas does
 
 const SEGMENTS = ['roofing', 'HVAC', 'dental', 'logistics', 'fitness', 'property', 'landscaping', 'legal'];
 
@@ -320,6 +322,21 @@ export function initTasks(ctx) {
     min.addEventListener('click', () => setMin(true)); tab.addEventListener('click', () => setMin(false));
     try { if (localStorage.getItem('ao.tpMin') === '1') { document.body.classList.add('tpMin'); panel.inert = true; } } catch {}
   }
+  { // 8 oct 2026: «Lo tuyo hoy · N» — the owner's own tasks for today (and the overdue ones) live in Tareas → Mías, not on a desk; one line here
+    // says how many and opens them. Hidden when there are none. Counted from the same list the poll already brings (tareas/dueno.mjs → cuentas).
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'tp-mias'; b.hidden = true;
+    panel.querySelector('.tp-head').after(b); P_.mias = b;
+    b.addEventListener('click', () => ctx.mias?.lista?.('hoy'));
+  }
+  function paintMine(list) {
+    if (!P_.mias || !MINE_ON) return;
+    const n = cuentasMias(list), hoy = n.hoy || 0, venc = n.vencidas || 0;
+    P_.mias.hidden = !hoy;
+    if (!hoy) return;
+    P_.mias.innerHTML = `<span class="tp-mias-ck" aria-hidden="true">☐</span><span>Lo tuyo hoy · <b>${hoy}</b>${venc ? ` · <span class="tp-mias-v">${venc} ${venc === 1 ? 'vencida' : 'vencidas'}</span>` : ''}</span><span class="tp-mias-go" aria-hidden="true">→</span>`;
+    P_.mias.setAttribute('aria-label', `Lo tuyo hoy: ${hoy} ${hoy === 1 ? 'tarea' : 'tareas'}${venc ? `, ${venc} ${venc === 1 ? 'vencida' : 'vencidas'}` : ''}. Abrir Tareas, Mías, Hoy`);
+    P_.mias.title = 'Tus tareas de hoy (las haces tú, no un agente) — se abren en Tareas → Mías (H)';
+  }
   { // the list's own tools: a search box and «Limpiar listas»
     const bar = document.createElement('div'); bar.className = 'tp-tools';
     bar.innerHTML = '<input class="tp-search" type="search" placeholder="Buscar tareas o agentes…" aria-label="Buscar en las tareas" autocomplete="off"><button type="button" class="tp-clear" hidden>Limpiar listas</button>';
@@ -397,19 +414,21 @@ export function initTasks(ctx) {
   const teamBit = t => t.team?.members?.length ? ` · <span class="tp-team-chip">TEAM ${t.team.members.length + 1}</span>` : t.piece ? ' · <span class="tp-team-chip">PIECE</span>' : '';
   const membersText = t => (t.team?.members || []).map(id => agentOf(id)?.name || id).join(', ');
   let dept = 'marketing', filter = 'all';
+  let mine = false; // 8 oct 2026: «Para mí» in the department menu — what is typed is the owner's own task (Tareas → Mías), no desk takes it
+  const MINE_ON = !!(ctx.mias && ctx.mias.create);
   // V4.1 (audit 92): the department menu is a real menu — aria-expanded, ↑ ↓ Home End to move, Enter to pick, Esc or Tab to leave
   P_.dd.type = 'button'; P_.dd.setAttribute('aria-haspopup', 'menu'); P_.dd.setAttribute('aria-expanded', 'false'); P_.dd.setAttribute('aria-controls', 'tpMenu');
   P_.menu.id = 'tpMenu'; P_.menu.setAttribute('role', 'menu'); P_.menu.setAttribute('aria-label', 'Departamento de la tarea');
-  P_.menu.innerHTML = DEPT_KEYS.map(k => `<button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-k="${k}"><span class="dot" style="background:${DEPTS[k].chip}"></span>${DEPTS[k].name}</button>`).join('');
+  P_.menu.innerHTML = (MINE_ON ? '<button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-k="yo" class="tp-yo-item"><span class="dot tp-yo-dot"></span>PARA MÍ</button>' : '') + DEPT_KEYS.map(k => `<button type="button" role="menuitemradio" aria-checked="false" tabindex="-1" data-k="${k}"><span class="dot" style="background:${DEPTS[k].chip}"></span>${DEPTS[k].name}</button>`).join('');
   const menuItems = () => [...P_.menu.querySelectorAll('button')];
   function menuOpen(on, focusWhich) {
     P_.menu.classList.toggle('on', on); P_.dd.setAttribute('aria-expanded', on);
     if (!on) return;
-    const items = menuItems(), cur = items.findIndex(b => b.dataset.k === dept);
-    items.forEach(b => b.setAttribute('aria-checked', b.dataset.k === dept));
+    const on_ = mine ? 'yo' : dept, items = menuItems(), cur = items.findIndex(b => b.dataset.k === on_);
+    items.forEach(b => b.setAttribute('aria-checked', b.dataset.k === on_));
     (items[focusWhich === 'last' ? items.length - 1 : cur >= 0 ? cur : 0]).focus();
   }
-  P_.menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { setDept(b.dataset.k); menuOpen(false); P_.input.focus(); }));
+  P_.menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { if (b.dataset.k === 'yo') setMine(); else setDept(b.dataset.k); menuOpen(false); P_.input.focus(); }));
   P_.dd.addEventListener('click', (e) => { e.stopPropagation(); menuOpen(!P_.menu.classList.contains('on')); });
   P_.dd.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); menuOpen(true, e.key === 'ArrowUp' ? 'last' : null); } });
   P_.menu.addEventListener('keydown', e => {
@@ -423,8 +442,17 @@ export function initTasks(ctx) {
     else if (e.key === 'Tab') menuOpen(false);
   });
   document.addEventListener('click', () => { if (P_.menu.classList.contains('on')) menuOpen(false); });
+  function setMine() { // 8 oct 2026: «Para mí» — no router, agent, model, effort, REPETIR or team: a task of yours, like Tareas → Mías
+    mine = true; panel.classList.add('tp-yo');
+    if (repeat) P_.rep.click(); if (teamOn) resetTeam();
+    P_.ddName.textContent = 'PARA MÍ'; P_.ddDot.style.background = '';
+    P_.dd.setAttribute('aria-label', 'Para quién: para mí. Cambiar'); P_.dd.title = 'Elige para quién es (↓ abre la lista)';
+    B_.dept.textContent = 'PARA MÍ'; B_.dot.style.background = '';
+    P_.input.placeholder = 'Algo tuyo… («para el viernes», «!alta»)'; P_.input.setAttribute('aria-label', 'Nueva tarea tuya: Enter la apunta en Tareas → Mías; «para el viernes» le pone fecha');
+    updateHint();
+  }
   function setDept(k) {
-    dept = k;
+    dept = k; mine = false; panel.classList.remove('tp-yo');
     P_.ddName.textContent = DEPTS[k].short;
     P_.ddDot.style.background = DEPTS[k].chip;
     P_.dd.setAttribute('aria-label', `Departamento: ${DEPTS[k].name}. Cambiar`); P_.dd.title = 'Elige el departamento de la tarea (↓ abre la lista)';
@@ -447,6 +475,13 @@ export function initTasks(ctx) {
     grow();
     const text = P_.input.value.trim();
     if (!text) { P_.hint.innerHTML = ''; P_.hint.classList.remove('on'); return; }
+    if (mine) { // 8 oct 2026: what it understood, and where it goes
+      const r = leerRapida(text), bits = [];
+      if (r.limite) bits.push('para el ' + fechaMia(r.limite)); else if (r.at) bits.push('para el ' + fechaMia(r.at));
+      if (r.prioridad) bits.push('prioridad ' + r.prioridad); if (r.etiquetas?.length) bits.push(r.etiquetas.map(e => '#' + e).join(' '));
+      P_.hint.innerHTML = `<span class="tp-av tp-yo-av">☐</span><span>Tuya${bits.length ? ' · ' + esc(bits.join(' · ')) : ''} · va a <b>Tareas → Mías</b>; ningún agente la toca</span>`;
+      P_.hint.className = 'tp-hint on'; return;
+    }
     const rt = routineIntent(text);
     if (rt) { // a routine in the making: say the schedule back before Add is pressed
       if (!RT_DEPTS.includes(dept)) { P_.hint.innerHTML = `<span class="tp-amber">${esc(rtRefuse(dept))}</span>`; P_.hint.className = 'tp-hint on'; return; }
@@ -488,12 +523,26 @@ export function initTasks(ctx) {
   big.addEventListener('click', (e) => { if (e.target === big) closeBig(); });
   const SEE_SCHED = '<button type="button" class="tp-lnk" data-f="sched">Ver en PROGRAMADAS</button>';
   function flashChip(f) { const c = P_.chips.querySelector(`.tp-chip[data-f="${f}"]`); if (c) { c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash'); } }
-  P_.hint.addEventListener('click', e => { const b = e.target.closest('.tp-lnk[data-f]'); if (b) { filter = b.dataset.f; limit = PAGE; render(true); } });
+  P_.hint.addEventListener('click', e => { const m = e.target.closest('.tp-lnk[data-mias]'); if (m) { ctx.mias?.lista?.(m.dataset.mias); return; } const b = e.target.closest('.tp-lnk[data-f]'); if (b) { filter = b.dataset.f; limit = PAGE; render(true); } });
   function say(html, cls) { P_.hint.innerHTML = html; P_.hint.className = 'tp-hint on' + (cls ? ' ' + cls : ''); grow(); if (big.classList.contains('on')) mirrorHint(); }
+  const fechaMia = v => { const d = typeof v === 'number' ? new Date(v) : new Date(String(v).length > 10 ? v : v + 'T12:00'); return d.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }) + (typeof v === 'number' || String(v).length > 10 ? ' a las ' + d.toTimeString().slice(0, 5) : ''); };
+  async function submitMine(raw) { // 8 oct 2026: «Para mí» → POST /api/tareas/mias (the same as the field of Tareas → Mías)
+    const r = leerRapida(raw); if (!r.texto) { say('Escribe qué tienes que hacer.', 'amber'); return; }
+    P_.input.value = ''; P_.input.disabled = true; P_.add.disabled = true; say('Apuntando…', 'busy');
+    const etiquetas = [];
+    for (const n of r.etiquetas || []) { try { const j = await (await fetch(API + '/tareas/etiquetas', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nombre: n }) })).json(); if (j.etiqueta) etiquetas.push(j.etiqueta.id); } catch {} }
+    const res = await ctx.mias.create({ title: r.texto.charAt(0).toUpperCase() + r.texto.slice(1), ...(r.prioridad ? { prioridad: r.prioridad } : {}), ...(r.limite ? { limite: r.limite } : {}), ...(r.at ? { at: r.at } : {}), ...(etiquetas.length ? { etiquetas } : {}) });
+    P_.input.disabled = false; P_.add.disabled = false;
+    if (!res.ok) { P_.input.value = raw; say(esc(res.error), 'amber'); return; }
+    const lim = res.task.limite;
+    say(`<span>Apuntada para ti: <b>${esc(res.task.title)}</b>${lim ? ' · para el ' + esc(fechaMia(lim)) : ''} · <button type="button" class="tp-lnk" data-mias="${lim ? 'todas' : 'bandeja'}">verla en Tareas → Mías</button></span>`); // one span: the hint is a flex row
+    P_.input.blur(); poll();
+  }
   async function submit() {
     let title = P_.input.value.trim().replace(/[.!]+$/, '');
     if (!title) return;
     big.classList.remove('on');
+    if (mine) { await submitMine(title); return; }
     title = title.charAt(0).toUpperCase() + title.slice(1);
     const rt = routineIntent(title);
     if (rt) { await submitRoutine(rt, title); return; }
@@ -661,6 +710,7 @@ export function initTasks(ctx) {
       const same = tt === lastTasksText && ++sameN % 5 !== 0; lastTasksText = tt; if (!same) sameN = 0; // still a full pass every 30 s
       const tl = same ? null : JSON.parse(tt);
       if (Array.isArray(tl)) {
+        paintMine(tl); // 8 oct 2026
         for (const st of tl) reconcile(st);
         const keep = new Set(tl.filter(x => !x.archived && agentOf(x.agent)).map(x => x.id)), arch = new Map(tl.filter(x => x.archived).map(x => [x.id, x]));
         for (let i = tasks.length - 1; i >= 0; i--) { const t = tasks[i]; if (t.live && t.sid && !t.piece && !keep.has(t.sid) && t.state !== 'doing') { tasks.splice(i, 1); dirty = true; if (detail.current() === t) detail.close(); if (arch.has(t.sid) && !archived.some(x => x.t.sid === t.sid)) archived.unshift({ t, at: arch.get(t.sid).archivedAt || Date.now() }); } }

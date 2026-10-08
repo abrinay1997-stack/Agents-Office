@@ -1,0 +1,21 @@
+/* 8 oct 2026: lo TUYO en el panel de tareas de la oficina (T). «PARA MÍ» en el menú de departamento (lo que escribes va a Tareas → Mías:
+   sin modelo, esfuerzo, REPETIR ni EQUIPO, que son de los agentes) y la línea «Lo tuyo hoy · N» bajo el título, que abre Mías → Hoy.
+   El violeta es el de «Tuya» en Tareas y en el calendario (calendario-mias.css); lo vencido, en rojo y con texto. */
+#tpanel .tp-yo-dot, #tpanel.tp-yo .tp-dd .dot { background: #6B3FB5; }
+#tpanel.tp-yo .tp-r2 :is(.tp-model, .tp-effort, .tp-rep, .tp-team) { display: none; }
+#tpanel.tp-yo .tp-rep-row { display: none; }
+#tpanel .tp-yo-av { border-color: #6B3FB5; background: color-mix(in srgb, #6B3FB5 14%, #fff); color: #6B3FB5; font-family: var(--ui); font-weight: 700; }
+#tpanel .tp-mias { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; margin: 8px 0 2px; padding: 5px 10px; border: 1px solid color-mix(in srgb, #6B3FB5 45%, transparent); border-left: 3px solid #6B3FB5; border-radius: 8px; background: color-mix(in srgb, #6B3FB5 7%, transparent); font: 600 12px var(--ui); color: var(--ink); text-align: left; cursor: pointer; }
+#tpanel .tp-mias[hidden] { display: none; }
+#tpanel .tp-mias:hover { background: color-mix(in srgb, #6B3FB5 13%, transparent); }
+#tpanel .tp-mias:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#tpanel .tp-mias > span:nth-child(2) { flex: 1; min-width: 0; }
+#tpanel .tp-mias b { font-weight: 700; }
+#tpanel .tp-mias-ck { color: #6B3FB5; font-weight: 700; }
+#tpanel .tp-mias-v { color: #B42318; }
+#tpanel .tp-mias-go { color: var(--grey); }
+body.dark #tpanel .tp-yo-dot, body.dark #tpanel.tp-yo .tp-dd .dot { background: #C3A6FF; }
+body.dark #tpanel .tp-yo-av { border-color: #C3A6FF; background: color-mix(in srgb, #C3A6FF 18%, #1b1a1a); color: #C3A6FF; }
+body.dark #tpanel .tp-mias { border-color: color-mix(in srgb, #C3A6FF 45%, transparent); border-left-color: #C3A6FF; background: color-mix(in srgb, #C3A6FF 9%, transparent); }
+body.dark #tpanel .tp-mias-ck { color: #C3A6FF; }
+body.dark #tpanel .tp-mias-v { color: #FF8A80; }

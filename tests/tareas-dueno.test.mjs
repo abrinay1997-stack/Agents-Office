@@ -18,7 +18,7 @@ import { crearTarea } from '../tareas/modelo.mjs';
 import { visible, puede } from '../tareas/estados.mjs';
 import { planear } from '../tareas/cola.mjs';
 import { agenda, agendaTexto } from '../tareas/agenda.mjs';
-import { deLista, cuentas, porFecha, columnaMia, movimientoMio, puedeTomar, puedeDelegar, origen, resumenDueno, dia } from '../tareas/dueno.mjs';
+import { deLista, cuentas, porFecha, porDia, gruposHoy, columnaMia, movimientoMio, puedeTomar, puedeDelegar, origen, resumenDueno, dia } from '../tareas/dueno.mjs';
 import { filaHTML } from '../src/tareas/comun.js';
 import { miasHTML, railHTML, presetLista } from '../src/tareas/mias.js';
 import { movimiento, columnaDe } from '../src/tareas/tablero.js';
@@ -54,6 +54,36 @@ test('sus listas: Bandeja (sin fecha ni proyecto), Hoy (vence hoy, vencidas, hac
   assert.equal(n.hoy, 3); assert.equal(n.vencidas, 1); assert.equal(n.bandeja, 2); assert.equal(n.delegadas, 2); assert.equal(n.hechasHoy, 1); assert.deepEqual(n.proyectos, { 'pr-a': 1 });
   assert.deepEqual(porFecha(deLista(l, 'todas', { ahora: AHORA }).pendientes, AHORA).map(g => g.k), ['vencidas', 'hoy', 'manana', 'semana', 'despues', 'sin']);
   assert.deepEqual(presetLista('hoy', AHORA), { limite: HOY }); assert.deepEqual(presetLista('proximos', AHORA), { limite: MANANA }); assert.deepEqual(presetLista('p:pr-a'), { proyecto: 'pr-a' }); assert.deepEqual(presetLista('bandeja'), {});
+});
+
+test('Hoy con lo vencido aparte y arriba; Próximos 7 días con un título por día (Mañana, viernes 9 oct…)', () => {
+  const l = [yo('h', { limite: HOY, prioridad: 'alta' }), yo('v', { limite: dia(AHORA - 2 * 864e5) }), yo('vh', { limite: HOY + 'T09:00' }), yo('e', { empezada: AHORA - H }),
+    yo('m', { limite: MANANA }), yo('j', { limite: dia(AHORA + 2 * 864e5) }), yo('j2', { limite: dia(AHORA + 2 * 864e5) + 'T10:00', prioridad: 'alta' }), yo('d', { limite: dia(AHORA + 7 * 864e5) })];
+  const hoy = gruposHoy(deLista(l, 'hoy', { ahora: AHORA }).pendientes, AHORA);
+  assert.deepEqual(hoy.map(g => [g.k, g.tareas.map(t => t.id)]), [['vencidas', ['v', 'vh']], ['hoy', ['e', 'h']]], 'la de hoy a las 9 ya venció a las 11; lo que estás haciendo encabeza «Hoy»');
+  assert.deepEqual(gruposHoy([yo('x', { limite: HOY })], AHORA).map(g => g.k), ['hoy'], 'sin vencidas, un solo grupo (sin títulos)');
+  const pr = porDia(deLista(l, 'proximos', { ahora: AHORA }).pendientes, AHORA);
+  assert.deepEqual(pr.map(g => [g.titulo, g.tareas.map(t => t.id)]), [['Mañana', ['m']], ['viernes 9 oct', ['j2', 'j']], ['miércoles 14 oct', ['d']]]);
+  const c = { proyectos: () => [], proyecto: () => null, agente: () => null, etiqueta: () => null, depto: () => null, porId: new Map() };
+  const h = miasHTML(l, c, { lista: 'hoy', ahora: AHORA }); assert.match(h, /<h3 class="tv-gh rojo">Vencidas <span>2<\/span><\/h3>[\s\S]*<h3 class="tv-gh">Hoy <span>2<\/span>/);
+  assert.match(miasHTML(l, c, { lista: 'proximos', ahora: AHORA }), /<h3 class="tv-gh">Mañana <span>1<\/span>[\s\S]*viernes 9 oct <span>2/);
+  assert.doesNotMatch(miasHTML([yo('x', { limite: HOY })], c, { lista: 'hoy', ahora: AHORA }), /tv-gh/, 'sin vencidas, Hoy no lleva títulos');
+});
+
+test('Delegadas: lo que el agente no pudo hacer sigue pendiente (arriba, con el número en rojo), no «volvió hecha»; lo que detuviste tú no cuenta', () => {
+  const del = (id, c) => ({ id, agent: 'piper', dept: 'sales', title: 'Delegada ' + id, delegada: { at: AHORA - 2 * H, a: 'agente:piper' }, ...c });
+  const l = [
+    del('ok', { state: 'done', doneAt: AHORA - H }),
+    del('mal', { state: 'done', error: true, errorKind: 'fatal', doneAt: AHORA - H, delegada: { at: AHORA - 5 * H, a: 'agente:piper' } }),
+    del('stop', { state: 'done', error: true, stopped: true, doneAt: AHORA - H }),
+    del('cola', { state: 'next', delegada: { at: AHORA - H, a: 'agente:piper' } }),
+  ];
+  const r = deLista(l, 'delegadas', { ahora: AHORA });
+  assert.deepEqual(r.pendientes.map(t => t.id), ['mal', 'cola'], 'la que falló sigue siendo asunto tuyo, y va primero aunque la delegaste antes');
+  assert.deepEqual(r.hechas.map(t => t.id), ['ok'], 'bajo VOLVIERON HECHAS solo lo que volvió hecha');
+  const n = cuentas(l, { ahora: AHORA }); assert.equal(n.delegadas, 2); assert.equal(n.delegadasFallidas, 1);
+  assert.match(resumenDueno(l, { ahora: AHORA }), /«Delegada mal» a piper \(FALLÓ/, 'Dimitri también lo sabe');
+  assert.match(railHTML(l, { proyectos: () => [] }, { lista: 'hoy', ahora: AHORA }), /<span>Delegadas<\/span><b class="rojo">2<\/b>/);
 });
 
 test('el estado «Tuya», la cola no la arranca, y los agentes la leen como DEL DUEÑO', () => {
