@@ -17,6 +17,11 @@
 //
 // NADA DE ESTO SE HA PROBADO CONTRA META desde la máquina donde se escribió (no había token ni salida a graph.facebook.com):
 // los tests usan un `fetch` de mentira que habla como Graph. Lo primero con un token de verdad es «Comprobar conexión».
+//
+// 8 oct 2026 (F3, publicar directo): `enviar()` (POST, también con un archivo), `borrar()` y `subirReanudable()` (los videos de Instagram
+// van a rupload.facebook.com sin necesitar una dirección pública). En ellas el token viaja en la cabecera `Authorization`, nunca en la
+// dirección. Los nombres de rutas y parámetros se comprobaron contra el SDK oficial de Meta (facebook_business 26.0.2, generado de la
+// especificación de la Graph API) y contra ig-publish (deegitech, MIT, notas de octubre de 2026). Ver contenido/meta-publicar.mjs.
 // ============================================================
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -28,7 +33,7 @@ export const HOST_GRAPH = 'https://graph.facebook.com';
 /** Lo que hace falta para LEER (F2). */
 export const PERMISOS_LECTURA = ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'read_insights', 'business_management', 'instagram_basic', 'instagram_manage_insights'];
 /** Lo que hará falta para PROGRAMAR (F3): se pide ya, para no volver a generar el token después. */
-export const PERMISOS_PUBLICAR = ['pages_manage_posts', 'instagram_content_publish', 'instagram_manage_comments'];
+export const PERMISOS_PUBLICAR = ['pages_manage_posts', 'pages_manage_engagement', 'instagram_content_publish', 'instagram_manage_comments']; // 8 oct 2026: + pages_manage_engagement (el primer comentario en Facebook)
 
 /** Los de `necesarios` que no están en lo concedido (vacío si no se sabe). */
 export const permisosQueFaltan = (concedidos, necesarios = PERMISOS_LECTURA) => (Array.isArray(concedidos) ? necesarios.filter(p => !concedidos.includes(p)) : []);
@@ -51,7 +56,11 @@ export class ErrorMeta extends Error {
 export function mensajeMeta(e) {
   if (!(e instanceof ErrorMeta)) return e?.message || 'No se pudo completar la operación con Meta.';
   if (e.codigo === 190) return 'El token de Meta caducó, se revocó o no es válido. Genera uno nuevo en Business Manager → Usuarios del sistema y ponlo en la variable META_ACCESS_TOKEN.';
-  if (e.subcodigo === 2207042 || e.codigo === 9) return 'Llegaste al límite de publicaciones por API de Instagram (50 cada 24 horas). Se reintentará más tarde.';
+  if (e.subcodigo === 2207042 || e.codigo === 9) return 'Instagram llegó a su límite de publicaciones por API en 24 horas (Meta lo dice en content_publishing_limit; suele ser 100). Se reintentará más tarde.';
+  if (e.subcodigo === 2207051) return 'Instagram bloqueó la acción porque le pareció spam o actividad restringida. Espera unas horas antes de volver a publicar por API.';
+  if (e.subcodigo === 2207026) return 'Instagram no acepta ese video: tiene que ser MP4 o MOV (H.264 y AAC), de 3 segundos a 15 minutos.';
+  if (e.subcodigo === 2207052 || e.codigo === 9004) return 'Instagram no pudo bajar el archivo. Si es una imagen, Meta no la dejó leer desde Facebook: cuéntaselo a Claude Code con este mensaje.';
+  if ([2207006, 2207020, 2207032, 2207053].includes(e.subcodigo)) return 'Instagram ya no puede usar lo que se le preparó (caducó o falló la subida). Se prepara de nuevo en el próximo intento.';
   if (e.codigo === 10 || (e.codigo >= 200 && e.codigo < 300)) {
     return `Meta no dio permiso: ${e.detalle || e.message}. Revisa que el usuario del sistema tenga asignada esta página y su Instagram, con los permisos que pide la oficina.`;
   }
@@ -97,6 +106,56 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     const datos = await res.json().catch(() => ({}));
     if (!res.ok || datos?.error) throw new ErrorMeta({ ...(datos?.error ?? {}), message: sinToken(datos?.error?.message) }, res.status);
     return datos;
+  }
+
+  // ---- F3 (8 oct 2026): escribir. El token va en la cabecera (Bearer para Graph, OAuth para rupload), nunca en la dirección ni en un error.
+  const hostVideo = () => String(env.META_GRAPH_HOST || '').trim().replace(/\/+$/, '') || 'https://graph-video.facebook.com'; // los videos de Facebook se suben aquí
+  const hostRupload = () => String(env.META_RUPLOAD_HOST || '').trim().replace(/\/+$/, '') || 'https://rupload.facebook.com';
+  const prueba = token => (secreto() ? crypto.createHmac('sha256', secreto()).update(token).digest('hex') : '');
+  async function respuestaDe(res) {
+    const datos = await res.json().catch(() => ({}));
+    if (!res.ok || datos?.error) throw new ErrorMeta({ ...(datos?.error ?? {}), message: sinToken(datos?.error?.message || `Meta respondió ${res.status}`) }, res.status);
+    return datos;
+  }
+  /**
+   * POST a la Graph API. `campos` va como formulario (un arreglo u objeto, en JSON, como lo lee Graph); con `archivo`
+   * ({ datos: Buffer, nombre, tipo }), como multipart con el archivo en `source`. `video: true` lo manda a graph-video.
+   */
+  async function enviar(token, ruta, { campos = {}, archivo = null, video = false } = {}) {
+    const u = new URL(`${video ? hostVideo() : host()}/${String(env.META_GRAPH_VERSION || '').trim() || VERSION_GRAPH}${ruta}`);
+    const pares = Object.entries(campos).filter(([, v]) => v !== undefined && v !== null && v !== '').map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)]);
+    if (prueba(token)) pares.push(['appsecret_proof', prueba(token)]);
+    let cuerpo;
+    if (archivo) { cuerpo = new FormData(); for (const [k, v] of pares) cuerpo.append(k, v); cuerpo.append('source', new Blob([archivo.datos], { type: archivo.tipo || 'application/octet-stream' }), archivo.nombre || 'archivo'); }
+    else cuerpo = new URLSearchParams(pares);
+    let res;
+    try { res = await fetchFn(u, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: cuerpo }); }
+    catch (e) { throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
+    return respuestaDe(res);
+  }
+  /** DELETE de un objeto (una publicación programada, una foto temporal). Un error NO se da por borrado: Meta dice lo mismo («does not
+   *  exist, cannot be loaded due to missing permissions») cuando falta un permiso, y una programada que sigue viva saldría igual. */
+  async function borrar(token, id) {
+    const u = new URL(`${base()}/${encodeURIComponent(id)}`); if (prueba(token)) u.searchParams.set('appsecret_proof', prueba(token));
+    let res;
+    try { res = await fetchFn(u, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } }); }
+    catch (e) { throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
+    await respuestaDe(res); return true;
+  }
+  /**
+   * La subida reanudable de Instagram (videos): los bytes van a rupload.facebook.com/ig-api-upload/<versión>/<contenedor> con
+   * `Authorization: OAuth <token>`, `offset: 0` y `file_size`. Solo vale un `{ "success": true }` (ig-publish lo observó: otra respuesta
+   * es que no se aceptó). Solo se sube a ese host; una dirección que Meta devuelva de otro sitio se rechaza.
+   */
+  async function subirReanudable(token, contenedor, datos, uri = '') {
+    const propia = `${hostRupload()}/ig-api-upload/${String(env.META_GRAPH_VERSION || '').trim() || VERSION_GRAPH}/${encodeURIComponent(contenedor)}`;
+    const destino = uri && String(uri).startsWith(`${hostRupload()}/ig-api-upload/`) ? String(uri) : propia;
+    let res;
+    try { res = await fetchFn(destino, { method: 'POST', headers: { authorization: `OAuth ${token}`, offset: '0', file_size: String(datos.length), 'content-type': 'application/octet-stream' }, body: datos }); }
+    catch (e) { throw new ErrorMeta({ message: sinToken(`No se pudo subir el video a Instagram (${e?.message || e})`), is_transient: true }, 0); }
+    const r = await res.json().catch(() => null);
+    if (!res.ok || r?.error || r?.success !== true) throw new ErrorMeta({ ...(r?.error ?? {}), message: sinToken(r?.error?.message || r?.debug_info?.message || 'Instagram no confirmó la subida del video'), is_transient: res.status >= 500 }, res.status);
+    return true;
   }
 
   /** Todas las páginas que el token ve, de resultado en resultado. Una dirección «siguiente» solo se sigue si es de Graph. */
@@ -177,5 +236,5 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     return tokenUsuario();
   }
 
-  return { configurado: () => Boolean(tokenUsuario()), graph, tokenDe, estado, sincronizar, sinToken };
+  return { configurado: () => Boolean(tokenUsuario()), graph, enviar, borrar, subirReanudable, tokenDe, estado, sincronizar, sinToken };
 }

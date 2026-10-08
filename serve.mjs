@@ -177,15 +177,17 @@ const INDICADORES_META = [
 const meta = crearMeta({ dir: ANALITICAS_DIR });
 // plan M1 (6 oct 2026): la COLA que lleva lo aprobado al conductor (simulacro por defecto; Metricool en modo real) — contenido/programador.mjs
 const metricool = crearMetricool();
+const aJpeg = async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
 const CONDUCTORES = {
   simulacro: crearSimulacro({ archivo: path.join(ANALITICAS_DIR, 'simulacro.json') }),
-  metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg: async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(), cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json') }),
-  meta: crearConductorMeta(),
+  metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg, cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json') }),
+  // F3 (8 oct 2026): directo en Meta. Facebook queda programado allí; Instagram lo publica esta oficina a su hora (pulso cada 30 s, más abajo)
+  meta: crearConductorMeta({ meta, rutaMedio: id => media.resolve(id), aJpeg, archivo: path.join(ANALITICAS_DIR, 'meta-agenda.json'), pagina: () => cfg.contenido?.metaPagina || '', alCambiar: () => { programador.refrescar('meta').catch(() => {}); }, avisar: (t, o) => notice('contenido', t, o) }),
 };
 const contenidoModo = () => (['apagado', 'simulacro', 'real'].includes(cfg.contenido?.modo) ? cfg.contenido.modo : 'simulacro');
 const conductorActual = () => (contenidoModo() === 'real' ? CONDUCTORES[cfg.contenido?.conductor] || CONDUCTORES.metricool : CONDUCTORES.simulacro);
 const programador = crearProgramador({
-  almacen: contenido, archivo: path.join(ANALITICAS_DIR, 'cola.json'), conductor: conductorActual, modo: contenidoModo,
+  almacen: contenido, archivo: path.join(ANALITICAS_DIR, 'cola.json'), conductor: conductorActual, porId: id => CONDUCTORES[id] || null, modo: contenidoModo,
   horasAntes: () => { const h = Number(cfg.contenido?.entregarHorasAntes); return Number.isFinite(h) && h >= 0 ? Math.min(h, 720) : 24; },
   avisar: (t, o) => notice('contenido', t, o),
   auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'contenido', ...a }) + '\n'); } catch {} },
@@ -1648,9 +1650,11 @@ async function informeRedes(mes, { guardar = false } = {}) {
   const archivo = path.join(dir, `${mes} redes.md`); fs.writeFileSync(archivo, `---\ntipo: informe\nmes: ${mes}\ncreado: ${new Date().toISOString()}\n---\n${r.texto}`);
   return { ...r, nota: path.relative(BRAIN, archivo).replace(/\\/g, '/') };
 }
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, mejorHora, bandeja, informe: informeRedes,
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes,
   analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
+// F3 (8 oct 2026): el pulso de Meta — programa en Facebook, prepara y publica en Instagram a su hora. Solo en modo real: en simulacro o apagado no sale nada
+setInterval(() => { if (contenidoModo() === 'real') CONDUCTORES.meta.pulso().catch(e => console.warn('contenido: meta —', e.message)); }, 30e3);
 const webhooksT = crearWebhooks({ config: () => cfg.tareas?.webhooks || [], dataDir: DATA, avisar: t => notice('webhook', t, { level: 'warn', key: 'webhook' }) }); webhooksT.escuchar(busTareas); // plan T6: Zapier, Make, n8n… (tareas/webhooks.mjs)
 const tareasRoutes = crearRutasTareas({ alm: tareasAlm, cat: catalogoT, json, body, webhooks: webhooksT, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id) });
 const duenoRoutes = crearRutasDueno({ alm: tareasAlm, cat: catalogoT, json, body, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), avisarPersona: (n, t) => tellPerson(n, t), personas: () => PEOPLE().map(p => p.name), // plan D
@@ -2012,7 +2016,7 @@ function officeStatus() {
   // plan M1 (6 oct 2026): la publicación — el modo, el conductor y lo que falló
   { const c = programador.estado(), fal = (c.cuenta.fallo || 0) + (c.cuenta.parcial || 0);
     if (c.modo === 'apagado') add('publicacion', 'Publicación (Contenido)', 'info', 'Apagada: nada de lo que apruebas sale de la oficina.', 'Ajustes → Contenido → «Qué pasa con lo que apruebas».');
-    else if (c.modo === 'simulacro') add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'info', `Simulacro: lo aprobado «sale» de mentira${c.cuenta.en_red ? ` (${c.cuenta.en_red} en espera de su hora)` : ''}.`, 'Para publicar de verdad: Ajustes → Contenido → Real, con la key de Metricool.');
+    else if (c.modo === 'simulacro') add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'info', `Simulacro: lo aprobado «sale» de mentira${c.cuenta.en_red ? ` (${c.cuenta.en_red} en espera de su hora)` : ''}.`, 'Para publicar de verdad: Ajustes → Contenido → Real, con Metricool o con Meta directo.');
     else if (!c.conductor.ok) add('publicacion', 'Publicación (Contenido)', 'bad', c.conductor.motivo, 'Pon la key y abre Contenido → Programación → «Comprobar de nuevo».');
     else add('publicacion', 'Publicación (Contenido)', fal ? 'warn' : 'ok', fal ? `${fal} pieza(s) no salieron bien: míralas en Contenido → Programación.` : `Publica ${c.conductor.nombre}: ${c.cuenta.en_red || 0} programada(s), ${c.cuenta.espera || 0} en cola.`); }
   // backup

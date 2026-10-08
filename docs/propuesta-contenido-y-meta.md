@@ -404,3 +404,40 @@ F0 y F1 no necesitan ninguna llave. F2 necesita el token de Meta. F3, además, e
 - **Las miniaturas** se copian a `data/contenido/miniaturas/` (las direcciones de Meta caducan en días): solo de `*.cdninstagram.com` y `*.fbcdn.net`, solo si los primeros bytes son JPEG, PNG o WebP (nunca SVG), con tope de 2 MB, y se sirven por un hash hexadecimal de 20 caracteres, nunca por una ruta armada con lo que llega de la red.
 - **Datos de ejemplo**, no una pantalla vacía: en la demo (y con «Ver con datos de ejemplo» cuando aún no hay token) la pantalla se ve igual que con datos reales, con el rótulo DEMO / DATOS DE EJEMPLO en una franja, y nunca se mezclan con lo real.
 - **Lo que hay que probar con el token real** (no se ha podido): que `/debug_token` y `/me/permissions` contesten lo que aquí se espera, que `/me/accounts` liste las páginas de un usuario del sistema (si no, hará falta `META_BUSINESS_ID` y `owned_pages`), los nombres de las métricas de Instagram y Facebook de hoy, y que las cifras coincidan con las de Meta Business Suite.
+
+## 17. F3: publicar directo con Meta (8 oct 2026)
+
+Pedido del dueño: «construye la publicación directa con Meta». Guía para el dueño: `docs/conectar-meta.md`.
+
+- **El conductor `meta`** (`contenido/meta-publicar.mjs`): la cola (`contenido/programador.mjs`) le entrega lo aprobado igual que a Metricool, y él publica directo en Instagram y Facebook.
+- **Lo que manda es lo que Meta deja**, comprobado contra el SDK oficial (`facebook_business` 26.0.2) y contra ig-publish (MIT, octubre de 2026). La documentación de Meta no se pudo abrir desde aquí.
+  - **Facebook programa:** `/{página}/photos`, `/feed` y `/videos` con `published=false` + `scheduled_publish_time`, de 10 minutos a 30 días. Sale solo, con la computadora apagada.
+  - **Instagram NO programa:** `/{ig}/media` no tiene `scheduled_publish_time`. La decisión del §9.3 («la oficina programa, Meta publica») se cumple en Facebook. En Instagram la cumple la oficina: **publica a su hora, desde esta computadora**, y lo dice en Ajustes, en el aviso de Programación y en cada pieza («SALE A SU HORA»).
+- **Instagram:**
+  - 15 minutos antes, el pulso prepara el contenedor. Las imágenes se suben a la página como foto temporal sin publicar y a Instagram se le da su dirección de Meta: **POR VERIFICAR**, `scripts/check-meta-publicar.mjs` lo prueba sin publicar. Los videos van por la subida reanudable (`rupload.facebook.com`, `Authorization: OAuth`, `offset`, `file_size`).
+  - A la hora: se lee el contenedor; con FINISHED, `/media_publish`; luego el enlace (`permalink`), el primer comentario y se borran las temporales.
+  - Hasta 30 minutos tarde todavía sale. Después falla con el motivo. Una hora antes, un aviso (también por Telegram): que no apaguen la computadora.
+- **Nunca dos veces:**
+  - Un contenedor PUBLISHED ya salió.
+  - Si `/media_publish` no contesta, queda «incierta» y se lee antes de nada.
+  - Si Facebook no contesta al crear (red caída, 5xx), no se repite: falla diciendo que se mire la página, como hace Metricool.
+  - Un límite de uso (4, 17, 32, 613…) sí se reintenta: la petición se rechazó, no se hizo.
+- **La agenda** es `data/contenido/meta-agenda.json`, de esta máquina y sin tokens.
+  - `programar()` no llama a Meta: valida (redes, archivos, Instagram vinculado, MP4/MOV) y apunta.
+  - El **pulso** (cada 30 s en `serve.mjs`, solo en modo real) hace el trabajo.
+  - Programar, retirar y el pulso van **en fila**: un pulso con la agenda vieja podía resucitar lo retirado.
+- **La cola se entera en el acto:** `programador.refrescar('meta')` (el `alCambiar` del conductor) y `porId` para mirar con el conductor que entregó. La pieza dice PUBLICADA con sus enlaces sin esperar 10 minutos.
+- **Permisos:** `PERMISOS_PUBLICAR` suma `pages_manage_engagement` (el primer comentario en Facebook). Sin `pages_manage_posts` o `instagram_content_publish`, «no listo». Sin los de comentarios, sale sin primer comentario, y la nota del aviso lo dice.
+- **El cliente** (`contenido/meta.mjs`) suma `enviar` (POST, también multipart con `source`), `borrar` y `subirReanudable`.
+  - El token va en la cabecera (`Bearer` / `OAuth`), nunca en la dirección de un POST.
+  - Un DELETE que falla no se da por hecho: Meta dice «does not exist» también cuando falta un permiso.
+- **Pruebas:**
+  - `tests/meta-publicar.test.mjs`: 14 casos contra un Graph de mentira con estado, incluido el ciclo completo con la cola.
+  - El script contra un Meta de mentira por HTTP de verdad: multipart, formulario, rupload y que el token no toca el disco.
+  - Una prueba de punta a punta con `serve.mjs`.
+- **Por verificar con la cuenta real:**
+  - la imagen desde la foto temporal;
+  - que `/me/accounts` liste las páginas de un usuario del sistema;
+  - que una foto programada se vea con `is_published=false`;
+  - el número de la cuota;
+  - publicar un reel de Facebook como reel (hoy va por `/videos`).

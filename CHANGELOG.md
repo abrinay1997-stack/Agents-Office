@@ -1,5 +1,17 @@
 # Changelog
 
+## F3 de Contenido — 8 oct 2026 (publicar directo con Meta)
+
+Pedido del dueño: «quiero ir conectando Meta, para las métricas y estadísticas y publicar posts» → «construye la publicación directa con Meta». Guía: `docs/conectar-meta.md`; diseño: §17 de `docs/propuesta-contenido-y-meta.md`.
+- **Meta directo** en Ajustes → Contenido → «Quién publica en modo real». Usa el token de Analíticas con los permisos de publicar.
+- **Facebook** (foto, varias fotos, video, texto) queda programado en Meta y sale solo, con la computadora apagada.
+- **Instagram** (imagen, carrusel, reel, historia) no se puede programar por la API de Meta. Lo publica la oficina a su hora: prepara 15 minutos antes y publica a la hora. Hasta 30 min tarde todavía sale; después, FALLÓ con el motivo.
+- **Nunca dos veces:** se lee el contenedor antes de publicar, y lo que Meta no contesta no se repite a ciegas.
+- **El resto:** el primer comentario después de publicar; los enlaces en Programación al instante; «Comprobar conexión» con la página, el Instagram, los permisos y la cuota.
+- **Programación lo dice:** «PROGRAMADA» (en Meta), «SALE A SU HORA» (Instagram, desde esta computadora), «PUBLICADA» con enlaces.
+- **Para probar con el token real sin publicar nada:** `node scripts/check-meta-publicar.mjs` (`--video`, `--facebook`).
+- **Pruebas:** `tests/meta-publicar.test.mjs` (14 casos), `tests/contenido-cola.test.mjs` y `tests/contenido-programador.test.mjs`.
+
 ## Plan D, arreglos y lo tuyo fuera de Tareas — 8 oct 2026 (revisión de las tareas del dueño)
 
 Pedido del dueño tras la revisión: «haz los cuatro cambios» — tus tareas desde el calendario y desde el panel, las listas Hoy y Próximos más claras, y el estado de la oficina dentro de Ajustes.

@@ -73,11 +73,11 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     const pub = (m.permisos?.publicar || []).map(p => `<code>${esc(p)}</code>`).join(' ');
     return `<section class="an-card an-connect" aria-labelledby="anConTitle">
       <h2 id="anConTitle">Conecta Meta para ver cómo rinden tus redes</h2>
-      <p class="an-cap">La oficina lee las cifras de Instagram y Facebook. <b>Solo lee:</b> no publica ni cambia nada allá. Se conecta con el token de un <i>usuario del sistema</i> de Meta, que no caduca. El token no se guarda en ningún archivo de la oficina.</p>
+      <p class="an-cap">La oficina lee las cifras de Instagram y Facebook. <b>Aquí solo lee.</b> Con el mismo token también puede publicar directo, pero solo si lo eliges en Ajustes → Contenido → «Meta directo». Se conecta con el token de un <i>usuario del sistema</i> de Meta, que no caduca. El token no se guarda en ningún archivo de la oficina. Paso a paso: <code>docs/conectar-meta.md</code>.</p>
       <ol class="an-steps">
         <li>En <b>Meta Business Suite → Configuración del negocio → Usuarios → Usuarios del sistema</b>, crea uno.</li>
         <li>Asígnale las <b>páginas de PanaClaw</b> y su cuenta de Instagram.</li>
-        <li>Genera un token para tu app con estos permisos: ${lect}. Pide también estos, que usará la programación cuando llegue: ${pub}.</li>
+        <li>Genera un token para tu app con estos permisos: ${lect}. Pide también estos, para publicar directo desde Contenido (Ajustes → Contenido → Meta directo): ${pub}.</li>
         <li>Ponlo en la variable de entorno <code>META_ACCESS_TOKEN</code> (en Windows: Configuración → Sistema → Acerca de → Configuración avanzada → Variables de entorno) y <b>reinicia la oficina</b>.</li>
         <li>Vuelve aquí y pulsa <b>Comprobar conexión</b>.</li>
       </ol>

@@ -9,7 +9,8 @@ import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repe
 //   GET    /api/contenido/cola                                                  → { modo, conductor, horasAntes, cuenta, ultimo, entradas }
 //   POST   /api/contenido/cola/tick                                             → una vuelta ya (no espera al minuto)
 //   POST   /api/contenido/piezas/<id>/reintentar | /entregar | /quitar         → reintentar lo que falló · entregar ya · quitar de la cola
-//   POST   /api/contenido/conductor/comprobar                                   → ¿la key de Metricool sirve? (marcas, sin publicar nada)
+//   POST   /api/contenido/conductor/comprobar                                   → ¿la key de Metricool sirve? (marcas, sin publicar nada) · con Meta directo
+//                                                                                  (8 oct 2026): la página, su Instagram, los permisos y la cuota
 // Cada pieza que sale de aquí lleva `salida` (lo que pasó al entregarla) cuando la cola la conoce.
 // Los agentes llegan por aquí con `por: 'agente'` (contenido-mcp.mjs): pueden dejar borradores y leer, NUNCA aprobar. Eso se comprueba
 // aquí y no solo en la herramienta, porque cualquier proceso de esta máquina puede llamar a la API.
@@ -18,7 +19,7 @@ import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null }) {
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null }) {
   const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? programador.salidaDe(p.id) : null }; };
   const resumen = () => {
     const todas = almacen.listar({ sinFecha: true });
@@ -91,6 +92,8 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
       if (p === '/api/contenido/cola' && req.method === 'GET') return json(res, 200, programador ? programador.estado() : { modo: 'apagado', entradas: {} }), true;
       if (p === '/api/contenido/cola/tick' && req.method === 'POST') { if (!programador) return json(res, 404, { error: 'sin cola' }), true; const u = await programador.tick(); return json(res, 200, { ok: true, ultimo: u, ...programador.estado() }), true; }
       if (p === '/api/contenido/conductor/comprobar' && req.method === 'POST') {
+        const cm = conductorMeta(); // F3: con Meta directo elegido, se comprueba Meta (sin publicar nada)
+        if (cm) { try { const r = await cm.comprobar(); programador?.tick().catch(() => {}); return json(res, 200, r), true; } catch (e) { return json(res, 200, { ok: false, error: e.message }), true; } }
         if (!metricool || !metricool.configurado()) return json(res, 200, { ok: false, error: 'Faltan METRICOOL_USER_TOKEN y METRICOOL_USER_ID: ponlas como variables de Windows (Metricool → Ajustes de la cuenta → API; es del plan Advanced) y reinicia la oficina.' }), true;
         try { const marcas = await metricool.marcas({ fresco: true }), marca = await metricool.marca(); return json(res, 200, { ok: true, marca, marcas }), true; }
         catch (e) { return json(res, 200, { ok: false, error: e.message }), true; }
