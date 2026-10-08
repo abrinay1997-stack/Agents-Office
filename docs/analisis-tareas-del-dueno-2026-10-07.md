@@ -67,9 +67,18 @@ Base: el plan T0–T6 (`docs/analisis-taskview-2026-10-06.md`) ya trajo de TaskV
 
 ---
 
+## 4b. Revisión del 8 oct 2026
+
+El dueño preguntó si las listas estaban bien, si podía apuntarse cosas en el calendario y en el panel de la oficina, y dónde debía ir «Estado de la oficina». Resultado (rama `claude/trusting-noether-akn71m`):
+- **Fallos arreglados:** Delegadas daba por «vuelta hecha» lo que el agente no pudo hacer; la capa TUYAS del calendario no se volvía a leer hasta cambiar de semana.
+- **El calendario:** «PARA MÍ» en la ventanita del día (`src/calendar.js → goMine_`). No hay un tipo aparte de «apunte»: una tarea tuya con hora es tu cita.
+- **El panel (T):** «PARA MÍ» para apuntar sin salir de la oficina y «Lo tuyo hoy · N». La lista del panel sigue siendo solo de los agentes (es su torre de control).
+- **Las listas:** Hoy con las vencidas aparte (`gruposHoy`) y Próximos por día (`porDia`), en `tareas/dueno.mjs`.
+- **Estado de la oficina:** no va en «Cómo va el negocio» (otra pregunta: el negocio, no la máquina); va en Ajustes, como su primera pestaña, con la luz en el engranaje.
+
 ## 5. Lo que queda (para cuando el dueño lo pida)
 
 - **Recordatorio a una hora** (TaskView avisa a la hora de la tarea): hoy avisa la víspera, el día y al vencer (plan T5).
 - **Vista previa de la recurrencia en Mías** como TaskView (ya está en el detalle: «Próximas: …»).
-- **Arrastrar en el calendario una tarea tuya a otro día** (hoy se cambia la fecha en su detalle).
+- **Arrastrar en el calendario una tarea tuya a otro día** (hoy se cambia la fecha en su detalle; desde el 8 oct 2026 sí se crea desde el calendario con «PARA MÍ»).
 - **Probar con agentes de verdad** que lean «DEL DUEÑO», sugieran con mesura y no repitan lo tuyo; ajustar la skill de cada departamento si hace falta.

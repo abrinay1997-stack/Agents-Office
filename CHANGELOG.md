@@ -1,7 +1,13 @@
 # Changelog
 
-## Plan D, arreglos — 8 oct 2026 (revisión de las tareas del dueño)
+## Plan D, arreglos y lo tuyo fuera de Tareas — 8 oct 2026 (revisión de las tareas del dueño)
 
+Pedido del dueño tras la revisión: «haz los cuatro cambios» — tus tareas desde el calendario y desde el panel, las listas Hoy y Próximos más claras, y el estado de la oficina dentro de Ajustes.
+- **Calendario (P):** «PARA MÍ» es la primera opción al hacer clic en un día. Lo que escribes es una tarea tuya (Tareas → Mías), sin agente, modelo, esfuerzo ni equipo: «todo el día» en el mes, la hora que tocaste en la semana, y REPETIR la repite cada día, semana, 2 semanas o mes como tus tareas. Aparece al instante en TUYAS. Se recuerda la elección.
+- **Panel de tareas (T):** «PARA MÍ» encabeza el menú de departamento (lee «para el viernes», «!alta», «#etiqueta»; sin modelo, REPETIR ni EQUIPO) y la línea **«Lo tuyo hoy · N»** (con las vencidas en rojo) abre Tareas → Mías → Hoy. Lo tuyo no entra en la lista de los agentes.
+- **Mías:** **Hoy** pone las vencidas aparte y arriba; **Próximos 7 días** lleva un título por día («Mañana», «viernes 9 oct»…).
+- **Ajustes → Estado:** «Estado de la oficina» deja de ser un botón del dock y pasa a ser la primera pestaña de Ajustes (la tecla O la sigue abriendo). El engranaje lleva su luz, solo en ámbar o rojo, y entonces abre en Estado. Ajustes ya no enseña por un momento la pestaña anterior al abrirse.
+- **Pruebas:** `tests/tareas-dueno.test.mjs` (Hoy y Próximos); `node scripts/lo-tuyo-recorrido.mjs` (calendario, panel y Estado a 1512 claro y oscuro y a 390); `scripts/mias-recorrido.mjs` y `calendario-capturas` sin cambios.
 - **Delegadas:** lo que delegaste y el agente **no pudo hacer** (falló tras sus reintentos) salía bajo «VOLVIERON HECHAS» y dejaba de contarse. Ahora sigue pendiente, arriba, con «Falló» y el número de la lista en rojo; Dimitri también lo ve («FALLÓ: el agente no pudo»). Lo que detuviste tú no se cuenta ni como pendiente ni como hecho. Test en `tests/tareas-dueno.test.mjs`.
 - **Calendario (P):** la capa TUYAS (y la de CONTENIDO) se leía una sola vez por rango de fechas: una tarea tuya creada o marcada en Mías, en Telegram o por Dimitri no aparecía al volver al calendario hasta cambiar de semana o apagar y encender la capa. Ahora se vuelve a leer al abrir el calendario y cada 30 s, y solo se redibuja si algo cambió (`calendario-capturas`: idéntico).
 

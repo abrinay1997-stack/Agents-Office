@@ -8,3 +8,6 @@
 body.dark #calOv .cv-ev.mia { --chip: #C3A6FF; background: color-mix(in srgb, #C3A6FF 10%, var(--cv-card)); border-color: color-mix(in srgb, #C3A6FF 45%, transparent); border-left-color: #C3A6FF; }
 body.dark #calOv .cv-ev.mia .cv-rt { color: #C3A6FF; }
 body.dark #calOv .cv-ev.mia.late { border-color: #FF8A80; } body.dark #calOv .cv-ev.mia.late .cv-ev-h, body.dark #calOv .cv-ev.mia.late .cv-ev-m span { color: #FF8A80; }
+/* 8 oct 2026: «PARA MÍ» en la ventanita del día — una tarea tuya no lleva modelo, esfuerzo ni equipo (se ocultan; un select con display propio
+   ignoraría el atributo hidden) */
+#cvPop .cv-model[hidden], #cvPop .cv-moreopt[hidden] { display: none; }

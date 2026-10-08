@@ -100,6 +100,21 @@ export function porFecha(lista, ahora = Date.now()) {
   return [...g].filter(([, l]) => l.length).map(([k, l]) => ({ k, titulo: GRUPOS_FECHA[k], tareas: l }));
 }
 
+// HOY con lo vencido aparte y arriba (8 oct 2026): antes se mezclaba y, como se ordena por prioridad, una vencida podía quedar debajo de lo
+// de hoy. Sin vencidas, un solo grupo (la lista no lleva títulos). Dentro de cada grupo, el orden de la lista (lo que estás haciendo primero).
+export function gruposHoy(lista, ahora = Date.now()) {
+  const vencida = t => { const l = limiteMs(t.limite); return l != null && l < ahora; };
+  const v = lista.filter(vencida), h = lista.filter(t => !vencida(t));
+  return v.length ? [{ k: 'vencidas', titulo: 'Vencidas', tareas: v }, ...(h.length ? [{ k: 'hoy', titulo: 'Hoy', tareas: h }] : [])] : [{ k: 'hoy', titulo: 'Hoy', tareas: h }];
+}
+// PRÓXIMOS 7 DÍAS con un título por día (8 oct 2026): «Mañana», «viernes 10 oct»… — tu agenda de la semana (antes: «Mañana» y «Esta semana»)
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'], MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+export const nombreDia = (d, ahora = Date.now()) => { if (d === dia(ahora)) return 'Hoy'; if (d === dia(ahora + 864e5)) return 'Mañana'; const x = new Date(d + 'T12:00'); return `${DIAS[x.getDay()]} ${x.getDate()} ${MESES[x.getMonth()]}`; };
+export function porDia(lista, ahora = Date.now()) {
+  const g = new Map(); for (const t of lista) { const d = diaDe(t) || ''; if (!g.has(d)) g.set(d, []); g.get(d).push(t); }
+  return [...g].sort(([a], [b]) => (a || '9').localeCompare(b || '9')).map(([d, l]) => ({ k: d || 'sin', dia: d || null, titulo: d ? nombreDia(d, ahora) : 'Sin fecha', tareas: l }));
+}
+
 /* ---- el TABLERO personal: Por hacer · Haciendo · Hecha (48 h) ---- */
 export const COLUMNAS_MIAS = [{ k: 'porhacer', titulo: 'Por hacer' }, { k: 'haciendo', titulo: 'Haciendo' }, { k: 'hecha', titulo: 'Hecha' }];
 export const columnaMia = t => (t.state === 'done' ? 'hecha' : t.empezada ? 'haciendo' : 'porhacer');

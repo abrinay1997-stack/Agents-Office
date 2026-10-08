@@ -9,7 +9,7 @@ import { initContenido } from './contenido.js'; // V4.7: Contenido — the calen
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import { initSub } from './sub.js'; // the Subgerente: one chat above the six departments
-import { initHealth } from './health.js'; // V4.4: the office's health (O)
+import { initHealth } from './health.js'; // V4.4: the office's health (O) · 8 oct 2026: the first tab of Ajustes, its light on the gear
 import { initCosts } from './costs.js'; // V4.4: costs and return (U)
 import { initSettings } from './settings.js'; // V4.4: the settings window (,)
 import { initBusiness } from './business.js'; // V4.4: how the business is doing (N)
@@ -589,7 +589,6 @@ addEventListener('keydown', (e) => {
   if (ignorarTecla(e)) return; // IMG-26: the owner turned single-key shortcuts off
   // Esc closes the window on top, one at a time, newest first; only with nothing open does it leave the department
   if (e.key === 'Escape') {
-    if (health.isOpen()) { health.close(); return; }
     if (costsWin.isOpen()) { costsWin.close(); return; }
     if (settingsWin.isOpen()) { settingsWin.close(); return; }
     if (bizWin.isOpen()) { bizWin.close(); return; }
@@ -607,7 +606,7 @@ addEventListener('keydown', (e) => {
     zoomOut(); return;
   }
   if (e.key === '?' || (e.key === '/' && e.shiftKey)) { showKeys(); return; } // V4.5: every key, in Ajustes → Atajos de teclado
-  if (health.isOpen() || costsWin.isOpen() || settingsWin.isOpen() || bizWin.isOpen()) return; // a window on top: its keys only (a letter used to open another window behind it)
+  if (costsWin.isOpen() || settingsWin.isOpen() || bizWin.isOpen()) return; // a window on top: its keys only (a letter used to open another window behind it)
   const key = e.key.toLowerCase();
   // with a drawer or a sheet open, the one-letter keys stay out — except that window's own key, which closes it
   const topWin = subger.isOpen() && (!views.current() || subger.isWindow()) ? 's' : (tasks && tasks.detail && tasks.detail.isOpen()) ? '·' : (agentSheet && agentSheet.isOpen && agentSheet.isOpen()) ? '·' : '';
@@ -617,7 +616,7 @@ addEventListener('keydown', (e) => {
   if (views.current()) {
     if (key === 'e') studio.toggle(); else if (key === 'p') { if (tasks && tasks.calendar) tasks.calendar.toggle(); } else if (key === 'k') contenido.toggle(); else if (key === 'r') analiticas.toggle(); else if (key === 'g') brain.toggle(); else if (key === 'h') tareasV.toggle();
     else if (key === 's') subger.toggle(); // V4.8: Dimitri beside the view (the view moves over, src/css/dimitri.css)
-    else if (key === 'o') health.toggle(); else if (key === 'n') bizWin.toggle(); else if (key === 'u') costsWin.toggle(); else if (key === ',') settingsWin.toggle();
+    else if (key === 'o') openEstado(); else if (key === 'n') bizWin.toggle(); else if (key === 'u') costsWin.toggle(); else if (key === ',') settingsWin.toggle();
     else if (key === 's') subger.toggle(); // A11-04: Dimitri sits beside a view — S (and his dock button) open him there too
     return;
   }
@@ -645,7 +644,7 @@ addEventListener('keydown', (e) => {
   else if (key === 's') subger.toggle(); // Dimitri's chat
   else if (key === 't') document.getElementById('topPanel').click(); // show / hide the task panel
   else if (key === 'e') studio.toggle(); // the Estudio
-  else if (key === 'o') health.toggle(); // V4.4: the office's health
+  else if (key === 'o') openEstado(); // V4.4: the office's health · 8 oct 2026: Ajustes → Estado
   else if (key === 'u') costsWin.toggle(); // V4.4: costs and return
   else if (e.key === ',') settingsWin.toggle(); // V4.4: settings
   else if (key === 'n') bizWin.toggle(); // V4.4: how the business is doing
@@ -658,7 +657,7 @@ addEventListener('keydown', (e) => {
 const KEYS = (() => {
   const DEPT_NAMES = ['marketing', 'emails', 'sales', 'ops', 'fin', 'delivery'].map((k, i) => `${i + 1} ${DEPTS[k].name}`).join(' · ');
   const G = [
-    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['H', 'Tareas: hoy, lista, tablero, proyectos y medidas', 'h'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['R', 'Analíticas: cómo rinden Instagram y Facebook', 'r'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina: conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'ctrl+k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
+    ['Ventanas', [['E', 'El Estudio: imágenes y video', 'e'], ['P', 'El calendario', 'p'], ['H', 'Tareas: hoy, lista, tablero, proyectos y medidas', 'h'], ['K', 'Contenido: lo que se publica en Instagram y Facebook', 'k'], ['R', 'Analíticas: cómo rinden Instagram y Facebook', 'r'], ['G', 'El Cerebro: tus notas', 'g'], ['O', 'Estado de la oficina (Ajustes → Estado): conexiones, fallos y avisos', 'o'], ['U', 'Costos, calidad y retorno: cuánto cuesta, cómo trabaja cada agente, cuánto ahorra', 'u'], ['N', 'Cómo va el negocio: tus indicadores', 'n'], [',', 'Ajustes de la oficina', ','], ['?', 'Esta lista de atajos'], ['Ctrl+K', 'Buscar en toda la oficina: tareas, notas, agentes, rutinas, imágenes', 'ctrl+k'], ['S', 'Dimitri, tu mano derecha', 's'], ['B', 'El tablero de toda la empresa', 'b'], ['T', 'Mostrar u ocultar el panel de tareas', 't'], ['Esc', 'Cerrar la ventana de arriba; sin ventanas, volver a la vista general']]],
     ['Tareas abierta', [['/', 'Ir al campo de arriba: añadir o buscar'], ['← →', 'Sobre las pestañas: Inicio, Lista, Tablero, Proyectos, Medidas'], ['Arrastrar una tarjeta', 'Cambiarla de estado, de turno o de departamento (con DESHACER)'], ['Esc', 'Cerrar el detalle; luego, Tareas']]],
     ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · H · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['S', 'Dimitri al lado: la vista se corre y sigue a mano; ve lo que tienes seleccionado', 's'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
@@ -675,12 +674,16 @@ const KEYS = (() => {
 // a line of the list pressed: the same path as the key itself, after the click that closed Ajustes has finished
 const runKey = k => setTimeout(() => dispatchEvent(new KeyboardEvent('keydown', keyEventInit(k))), 0); // A11-13: Ctrl only for the Ctrl+K line ('ctrl+k'), never for K (Contenido)
 function showKeys() { // «?»: Ajustes opens on its shortcuts; pressed again there, it closes
-  for (const w of [health, costsWin, bizWin]) if (w.isOpen()) w.close();
+  for (const w of [costsWin, bizWin]) if (w.isOpen()) w.close();
   if (settingsWin.isOpen() && settingsWin.tab() === 'atajos') settingsWin.close(); else settingsWin.open('atajos');
+}
+function openEstado() { // O: Ajustes opens on «Estado» (8 oct 2026: it was a window of its own); pressed again there, it closes
+  for (const w of [costsWin, bizWin]) if (w.isOpen()) w.close();
+  if (settingsWin.isOpen() && settingsWin.tab() === 'estado') settingsWin.close(); else settingsWin.open('estado');
 }
 const health = initHealth({ served: SERVED, esc }); // V4.4 (B6)
 const costsWin = initCosts({ served: SERVED, esc }); // V4.4 (C1–C10)
-const settingsWin = initSettings({ served: SERVED, esc, keys: KEYS, runKey, theme: { get: themePref, set: setTheme, systemDark: () => sysDark.matches } }); // V4.4 (J5, H1); V4.5: + Apariencia and the shortcuts
+const settingsWin = initSettings({ served: SERVED, esc, keys: KEYS, runKey, health, theme: { get: themePref, set: setTheme, systemDark: () => sysDark.matches } }); // V4.4 (J5, H1); V4.5: + Apariencia and the shortcuts
 const bizWin = initBusiness({ served: SERVED, esc }); // V4.4 (J1)
 initDock(); // V4.7: after the three buttons it folds exist
 
@@ -1718,7 +1721,8 @@ function applyRoster(agents) {
   if (tasks && tasks.syncPills) tasks.syncPills(); // the pills were rebuilt — put the clock chips back
 }
 tasks = initTasks({ contenido: { between: (a, b) => contenido.between(a, b), openPiece: id => contenido.openPiece(id) }, // V4.7: the calendar's «Contenido» layer (contenido is defined further down; these run on a click)
-  mias: SERVED ? { between: (a, b) => fetch(`/api/tareas/mias?desde=${a}&hasta=${b}`).then(r => r.json()).then(j => j.tareas || []), open: id => tareasV.open({ tab: 'mias', tarea: id }) } : null, // plan D: the calendar's «Tuyas» layer (the owner's own tasks)
+  mias: SERVED ? { between: (a, b) => fetch(`/api/tareas/mias?desde=${a}&hasta=${b}`).then(r => r.json()).then(j => j.tareas || []), open: id => tareasV.open({ tab: 'mias', tarea: id }), lista: k => tareasV.open({ tab: 'mias', lista: k || 'hoy' }), // plan D: the calendar's «Tuyas» layer (the owner's own tasks) · 8 oct 2026: the panel opens a list
+    create: b => fetch('/api/tareas/mias', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then(async r => { const j = await r.json().catch(() => ({})); return r.ok ? { ok: true, task: j.tarea } : { ok: false, error: j.error || 'No se pudo apuntar.' }; }, () => ({ ok: false, error: 'La oficina no responde.' })) } : null, // 8 oct 2026: «PARA MÍ» in the calendar and in the panel
   
   hud, R, deptRT, RAIL_SIDE, spawnEmote, chatPush, chatHist, feedPush, zoomToApproval, enterFocus, openAgent, esc,
   brainWrite: (id, title) => brain.write(id, title), brain,
