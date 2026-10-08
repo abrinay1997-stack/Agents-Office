@@ -7,8 +7,8 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 
 export const ENTRADA = 'src/pieza-editor.js';
-export const CSS_PIEZA = ['contenido-preview.css', 'editor-contenido.css'];
-export const SOLO_AQUI = ['src/pieza.js', 'src/contenido-preview.js', 'src/pieza-editor.js']; // lo que la página no debe llevar
+export const CSS_PIEZA = ['contenido-herramientas.css', 'contenido-preview.css', 'editor-contenido.css']; // C3: las ventanas de Llenar la semana y Plantillas
+export const SOLO_AQUI = ['src/pieza.js', 'src/contenido-preview.js', 'src/pieza-editor.js', 'src/contenido-herramientas.js']; // lo que la página no debe llevar
 const MARCA = '@@AO_PIEZA_VERSION@@';
 
 /** → { js, version, aparte } — `aparte`: los archivos que van SOLO en este paquete. */

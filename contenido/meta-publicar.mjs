@@ -322,6 +322,7 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
       try {
         const q = (await meta.graph(tk, `/${j.ig}/content_publishing_limit`, { params: { fields: 'config,quota_usage' } }))?.data?.[0];
         const total = q?.config?.quota_total, usadas = q?.quota_usage;
+        apuntarCuota(usadas, total);
         if (Number.isFinite(total) && Number.isFinite(usadas) && usadas >= total) throw propio(`Instagram ya usó sus ${total} publicaciones por API de las últimas 24 horas; lo intento de nuevo en unos minutos`, true);
       } catch (e) { if (!(e instanceof ErrorMeta)) throw e; /* si Meta no da la cuota, se intenta igual */ }
     }
@@ -389,15 +390,29 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
     return despues(j, r.id, 'permalink');
   }
 
+  /** C2 (8 oct 2026): la cuota de Instagram a la vista. La última que dio Meta (al preparar una o al comprobar) se apunta en la agenda;
+   *  lo publicado por la oficina en las últimas 24 h se cuenta siempre (Meta no la devuelve si no se le pregunta). */
+  function apuntarCuota(usadas, total) {
+    if (!Number.isFinite(usadas) || !Number.isFinite(total)) return;
+    const c = { usadas, total, cuando: ahora() };
+    if (agenda) agenda.cuota = c; else enFila(() => { const d = leer(); d.cuota = c; guardar(d); });
+  }
+  function cuota() {
+    const d = leer(), desde = ahora() - 24 * 3600e3;
+    const nuestras = Object.values(d.trabajos || {}).filter(j => j.red === 'instagram' && j.estado === 'publicada' && (j.publicadaAt || 0) > desde).length;
+    const c = d.cuota && ahora() - d.cuota.cuando < 24 * 3600e3 ? d.cuota : null;
+    return { nuestras, usadas: c ? c.usadas : null, total: c ? c.total : null, cuando: c ? c.cuando : null };
+  }
+
   /** «Comprobar conexión» con Meta como conductor: las cuentas, los permisos y la cuota de Instagram (sin publicar nada). */
   async function comprobar() {
     if (!meta || !meta.configurado()) return { ok: false, error: listo().motivo };
     await meta.sincronizar();
     const l = listo(); if (!l.ok) return { ok: false, error: l.motivo };
     const { fb, ig } = cuentas(); let cuota = '';
-    if (ig) { try { const q = (await meta.graph(await meta.tokenDe({ paginaId: fb.paginaId }), `/${ig.externoId}/content_publishing_limit`, { params: { fields: 'config,quota_usage' } }))?.data?.[0]; if (q) cuota = ` · Instagram: ${q.quota_usage ?? '?'} de ${q.config?.quota_total ?? '?'} publicaciones por API en 24 h`; } catch { /* sin cuota: no es grave */ } }
+    if (ig) { try { const q = (await meta.graph(await meta.tokenDe({ paginaId: fb.paginaId }), `/${ig.externoId}/content_publishing_limit`, { params: { fields: 'config,quota_usage' } }))?.data?.[0]; if (q) { cuota = ` · Instagram: ${q.quota_usage ?? '?'} de ${q.config?.quota_total ?? '?'} publicaciones por API en 24 h`; apuntarCuota(q.quota_usage, q.config?.quota_total); } } catch { /* sin cuota: no es grave */ } }
     return { ok: true, texto: `Meta responde: publica en la página «${fb.nombre}»${ig ? ` y en Instagram @${ig.usuario || ig.nombre}` : ' (sin Instagram vinculado)'}${cuota}.`, nota: l.nota };
   }
 
-  return { id: 'meta', nombre: 'Meta', listo, programar, retirar, estado, pulso, comprobar, agenda: () => leer() };
+  return { id: 'meta', nombre: 'Meta', listo, programar, retirar, estado, pulso, comprobar, cuota, agenda: () => leer() };
 }

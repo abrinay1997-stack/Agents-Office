@@ -42,3 +42,32 @@ body.dark .ct-hov { box-shadow: 0 18px 46px rgba(0,0,0,.6); }
 /* el panel mientras llega el editor (dist/pieza-editor.js, src/pieza-carga.js): casi nunca se ve, porque se trae al abrir Contenido */
 .pz-cargando { padding: 28px 18px; font-family: var(--ui); font-size: 13px; line-height: 1.5; color: var(--ink); }
 .pz-cargando p { margin: 0 0 12px; }
+
+/* ---------- C2 (8 oct 2026): lo ya publicado, con sus resultados ---------- */
+/* una publicación que no salió de una pieza: solo lectura, borde punteado en verde (se ve que no se arrastra ni se edita) */
+a.cv-ev.pz-pub { color: inherit; text-decoration: none; }
+.cv-ev.pz.pz-pub { background: var(--cv-card); border: 1px dashed color-mix(in srgb, #13705A 55%, var(--hairline)); border-left: 3px solid #13705A; cursor: pointer; }
+body.dark #ctOv .cv-ev.pz.pz-pub { background: var(--cv-card); border-color: color-mix(in srgb, #4FD1A5 45%, var(--hairline)); border-left-color: #4FD1A5; }
+.cv-ev.pz.pz-pub:hover { border-style: solid; }
+.cv-ev.pz.pz-pub:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.pz-pubst { color: #13705A; } body.dark .pz-pubst { color: #4FD1A5; }
+/* las cifras: alcance e interacciones (de Analíticas), bajo el estado */
+.pz-res { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 3px; font-family: var(--ui); font-size: 11px; color: var(--grey); font-variant-numeric: tabular-nums; }
+.pz-res b { color: var(--ink); font-weight: 700; }
+body.dark .pz-res { color: #C2C0B9; } body.dark .pz-res b { color: #ECEAE3; }
+/* en el mes, solo el alcance, con un ojo */
+.pz-rs { display: inline-flex; align-items: center; gap: 2px; margin-left: 2px; font-family: var(--ui); font-size: 10.5px; font-weight: 700; color: #13705A; font-variant-numeric: tabular-nums; white-space: nowrap; }
+body.dark .pz-rs { color: #4FD1A5; }
+.pz-ojo { flex: none; }
+/* la vista previa: los resultados, red por red */
+.ct-hov-r { display: flex; flex-direction: column; gap: 3px; padding-top: 6px; border-top: 1px solid var(--hairline); font-family: var(--ui); font-size: 11.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ct-hov-r p { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.ct-hov-ej { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #8A6414; } body.dark .ct-hov-ej { color: #E8B44A; }
+/* las mejores horas de UNA red, junto a su leyenda */
+.ct-hbred { display: inline-flex; align-items: center; gap: 5px; text-transform: none; letter-spacing: 0; }
+.ct-hbred .pz-sel { min-height: 28px; padding: 3px 10px; font-size: 12px; letter-spacing: 0; text-transform: none; }
+/* la zona horaria y la cuota de Instagram */
+.ct-tz { color: var(--grey); } body.dark .ct-tz { color: #C2C0B9; }
+.ct-cuota { display: inline; font-weight: 600; }
+.ct-cuota.alta { color: #8A3A10; } body.dark .ct-cuota.alta { color: #FFB27A; }
+.pz-zona { color: var(--grey); font-weight: 400; } body.dark .pz-zona { color: #C2C0B9; }

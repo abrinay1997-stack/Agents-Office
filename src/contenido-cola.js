@@ -137,3 +137,7 @@ export async function deshacerMover(datos, id, antes) {
   try { const a = await datos.approve(id); return { pieza: a.pieza, aviso: 'Deshecho: vuelve a su fecha y sigue aprobada.', mal: false }; }
   catch (e) { return { pieza: b.pieza, aviso: `Vuelta a su fecha, pero no se pudo volver a aprobar: ${e.message || e}`, mal: true }; }
 }
+
+/** C2 (8 oct 2026): la cuota de Instagram con Meta directo — la última que dio Meta (Meta deja unas 100 por API en 24 h), o lo que salió
+ *  desde aquí en ese tiempo si Meta no la ha dicho hoy. */
+export const cuotaTxt = q => !q ? '' : q.usadas != null && q.total ? `Instagram: ${q.usadas} de ${q.total} publicaciones por API en 24 h.` : `Instagram: ${q.nuestras || 0} ${q.nuestras === 1 ? 'publicada' : 'publicadas'} desde aquí en 24 h (Meta deja unas 100; «Comprobar conexión» lee la cifra exacta).`;

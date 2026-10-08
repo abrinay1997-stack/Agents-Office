@@ -25,17 +25,19 @@ El dueño mandó dos capturas de Metricool (la Planificación semanal y «Crear 
 
 Lo técnico está en CLAUDE.md, «El editor de una pieza (C1 y C2)».
 
-## Lo que queda
+## Lo que se hizo después (8 oct 2026): lo que faltaba de C2 y el C3
 
-**Del C2 (el calendario que se lee de un vistazo):**
-- lo ya publicado en el calendario, con sus resultados (alcance, interacciones), sacado de Analíticas;
-- las mejores horas eligiendo la red (hoy se mezclan las de la pieza);
-- la zona horaria a la vista y la cuota de Instagram (N de 100 en 24 h) cuando publica Meta directo.
+Pedido del dueño: «haz lo que falta de C2 y C3». Lo técnico está en CLAUDE.md, «Lo publicado, Llenar la semana, plantillas y el teléfono (C2 y C3)».
+
+**Del C2:**
+- ✅ lo ya publicado en el calendario, con sus resultados (alcance, interacciones), sacado de Analíticas; lo publicado fuera de las piezas, como tarjeta de solo lectura;
+- ✅ las mejores horas eligiendo la red (en la semana y en el editor);
+- ✅ la zona horaria a la vista y la cuota de Instagram (N de 100 en 24 h) cuando publica Meta directo.
 
 **C3 (lo que Metricool no puede hacer):**
-- «Llenar la semana»: Marketing propone borradores en los huecos de las mejores horas, con imágenes del Estudio, y tú apruebas uno por uno o todos;
-- contenido que vuelve: lo aprobado que funcionó se propone otra vez para tapar huecos, sin repetirse en N semanas;
-- plantillas de publicación como notas del Cerebro (los textos guardados ya lo son);
-- aprobar desde el teléfono con la vista previa (Telegram).
+- ✅ «Llenar la semana»: los huecos con su mejor hora; Marketing propone borradores con imágenes del Estudio, y tú apruebas uno por uno o todos («Borradores de la semana»);
+- ✅ contenido que vuelve: lo que funcionó (la mitad de arriba) se propone otra vez para tapar huecos, sin repetirse en 8 semanas;
+- ✅ plantillas de publicación como notas del Cerebro;
+- ✅ aprobar desde el teléfono con la vista previa (Telegram, `/contenido`).
 
-**Por probar con cosas de verdad:** «✨ Mejorar con Marketing» con Claude real (el puesto que escribe es el de redes de Marketing: su brief y sus skills mandan), y «Publicar ya» con Metricool (su API puede pedir más margen que 5 minutos: por verificar).
+**Por probar con cosas de verdad:** «Llenar la semana» con Claude real (que el puesto de redes deje un borrador por hueco con su imagen), el emparejamiento con lo que Meta devuelve de verdad (el enlace que guarda la cola contra el `permalink` de Analíticas), «✨ Mejorar con Marketing» con Claude real (el puesto que escribe es el de redes de Marketing: su brief y sus skills mandan), y «Publicar ya» con Metricool (su API puede pedir más margen que 5 minutos: por verificar).

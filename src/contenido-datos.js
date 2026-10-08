@@ -5,6 +5,7 @@
 // Cada pieza trae `revision: { errores, avisos, arreglos }` (las reglas de cada red, portadas de Juancito Ads en contenido-reglas.js).
 import { fechasRepetidas, copiaDe } from './contenido-repetir.js';
 import { revisarPublicacion, postDePieza, revisarMomento } from './contenido-reglas.js';
+import { huecos as huecosDe, queVuelven, repartir, origenVuelve, raizDe } from './contenido-llenar.js';
 
 /** Las medidas de los archivos de muestra de la demo (en la oficina de verdad salen del registro .json de cada archivo del Estudio). */
 export const DEMO_MEDIOS = Object.freeze({
@@ -35,6 +36,9 @@ function piezasDemo() {
     mk({ titulo: 'Gafas de sol de regalo', fecha: dia(5), formato: 'post', texto: 'Gafas de sol GRATIS por la compra de tus lentes.', medios: ['demo/d.jpg'], origen: 'agente:newt' }),
     ok(mk({ titulo: 'Promo de fin de mes', fecha: dia(-2), hora: '10:00', formato: 'post', texto: 'Último día de la promo de fin de mes.', medios: ['demo/b.jpg'] })),
     mk({ titulo: 'Historia: horario de la semana', fecha: dia(4), hora: '08:00', formato: 'historia', redes: ['instagram'], medios: ['demo/e.jpg'], estado: 'revision' }),
+    // C3 (8 oct 2026): dos que ya salieron hace meses (con sus cifras de ejemplo): lo que puede VOLVER en «Llenar la semana»
+    { ...ok(mk({ titulo: 'Antes y después de un examen visual', fecha: dia(-63), hora: '19:00', formato: 'carrusel', texto: 'Así cambia tu día cuando ves bien: antes y después de un examen visual en PanaClaw.', hashtags: '#optica #panama', medios: ['demo/a.jpg', 'demo/c.jpg'] })), salida: { estado: 'publicada', conductor: 'demo', redes: { instagram: { estado: 'publicada' }, facebook: { estado: 'publicada' } } } },
+    { ...ok(mk({ titulo: '3 señales de que necesitas lentes', fecha: dia(-78), hora: '13:00', formato: 'post', texto: 'Dolor de cabeza, ojos cansados, letras borrosas: tres señales de que te toca un examen visual.', medios: ['demo/b.jpg'] })), salida: { estado: 'publicada', conductor: 'demo', redes: { instagram: { estado: 'publicada' }, facebook: { estado: 'publicada' } } } },
     mk({ titulo: 'Idea: testimonios de clientes', estado: 'idea', texto: 'Tres clientes cuentan cómo cambió su día ver bien.', redes: ['instagram'] }),
     mk({ titulo: 'Idea: mitos de la vista', estado: 'idea', redes: ['instagram', 'facebook'] }),
   ];
@@ -80,6 +84,12 @@ export function crearDatos({ served, now = () => new Date() }) {
     guardar: async (nombre, texto) => http('POST', '/api/contenido/guardados', { nombre, texto }),
     borrarGuardado: async nombre => http('DELETE', '/api/contenido/guardados/' + encodeURIComponent(nombre)),
     mejorar: async (pieza, red, pide) => http('POST', '/api/contenido/mejorar', { pieza, red, pide }),
+    publicadas: async ({ desde, hasta }) => http('GET', `/api/contenido/publicadas?desde=${desde}&hasta=${hasta}`), // C2: lo ya publicado, con sus resultados
+    llenar: async ({ desde, dias = 7, redes = [] }) => http('GET', `/api/contenido/llenar?desde=${desde}&dias=${dias}&redes=${encodeURIComponent(redes.join(','))}`), // C3
+    llenarHacer: async b => http('POST', '/api/contenido/llenar', b),
+    plantillas: async () => (await http('GET', '/api/contenido/plantillas')).plantillas || [], // C3: notas del Cerebro (Contenido/Plantillas)
+    guardarPlantilla: async (nombre, pieza) => http('POST', '/api/contenido/plantillas', { nombre, pieza }),
+    borrarPlantilla: async nombre => http('DELETE', '/api/contenido/plantillas/' + encodeURIComponent(nombre)),
     pedirBorradores: async () => http('POST', '/api/tasks', { dept: 'marketing', text: 'Contesta la bandeja de Contenido: lee lo pendiente con ver_bandeja y deja, para cada mensaje, comentario o reseña que lo necesite, el borrador de la respuesta con crear_borrador_respuesta (la voz de la marca, corto, sin prometer nada que no esté en el cerebro). No envíes nada: yo los reviso y los envío.' }),
   };
 
@@ -128,8 +138,42 @@ export function crearDatos({ served, now = () => new Date() }) {
     guardar: async (nombre, texto) => { const n = String(nombre || '').trim(), t = String(texto || '').trim(); if (!n) throw falla('ponle un nombre (por ejemplo «Firma»)'); if (!t) throw falla('el texto está vacío'); const l = guardadosDemo(), i = l.findIndex(x => x.nombre.toLowerCase() === n.toLowerCase()), x = { nombre: n, texto: t, hashtags: /^(#[\p{L}\p{N}_]+\s*)+$/u.test(t) }; if (i < 0) l.push(x); else l[i] = x; return { ok: true, textos: l }; },
     borrarGuardado: async nombre => { const l = guardadosDemo(), i = l.findIndex(x => x.nombre.toLowerCase() === String(nombre).toLowerCase()); if (i < 0) throw falla('ese texto guardado ya no está'); l.splice(i, 1); return { ok: true, textos: l }; },
     mejorar: async () => { throw falla('En la demo no hay agentes: «Mejorar con Marketing» funciona en la oficina (abre el iniciador).'); },
+    publicadas: async ({ desde, hasta }) => publicadasDemo(mem(), { desde, hasta, hoy: ymd(now()) }), // C2: de ejemplo, rotulado
+    // C3: «Llenar la semana» con las mismas cuentas; los huecos de Marketing quedan como borradores vacíos (en la demo no hay agentes)
+    llenar: async ({ desde, dias = 7, redes = ['instagram', 'facebook'] }) => {
+      const todas = mem().map(conRevision), t = now().getTime(), res = publicadasDemo(todas, { hoy: ymd(now()), sueltas: false }).porPieza;
+      const vs = queVuelven({ piezas: todas, resultados: res, ahora: t });
+      return { desde, dias, redes, demo: true, hora: { fuente: 'ejemplo', motivo: '' }, huecos: repartir(huecosDe({ desde, dias, piezas: todas, redes, grid: GRID_EJEMPLO, ahora: t }), vs), vuelven: vs.map(x => ({ id: x.pieza.id, titulo: x.pieza.titulo, texto: x.pieza.texto.slice(0, 160), fecha: x.pieza.fecha, hora: x.pieza.hora, formato: x.pieza.formato, formatos: x.pieza.formatos || {}, redes: x.pieza.redes, medios: x.pieza.medios.slice(0, 1), nMedios: x.pieza.medios.length, resultado: x.resultado, ultima: x.ultima })), agente: '' };
+    },
+    // C3: las plantillas de la demo viven en la memoria de la página (en la oficina, notas del Cerebro)
+    plantillas: async () => plantillasDemo().map(x => JSON.parse(JSON.stringify(x))),
+    guardarPlantilla: async (nombre, pieza = {}) => {
+      const n = String(nombre || '').replace(/[\\/:*?"<>|#\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60); if (!n) throw falla('ponle un nombre a la plantilla (por ejemplo «Promo del mes»)');
+      if (!String(pieza.texto || pieza.comentario || pieza.hashtags || '').trim()) throw falla('la pieza no tiene texto: una plantilla guarda el texto, el primer comentario o los hashtags');
+      const t = { nombre: n, ...Object.fromEntries(CAMPOS_PLANTILLA.map(k => [k, JSON.parse(JSON.stringify(pieza[k] ?? DEF_PLANTILLA[k]))])) };
+      const l = plantillasDemo(), i = l.findIndex(x => x.nombre.toLowerCase() === n.toLowerCase()); if (i < 0) l.push(t); else l[i] = t;
+      return { ok: true, plantilla: t, reemplazada: i >= 0, plantillas: l };
+    },
+    borrarPlantilla: async nombre => { const l = plantillasDemo(), i = l.findIndex(x => x.nombre.toLowerCase() === String(nombre).toLowerCase()); if (i < 0) throw falla('esa plantilla ya no está'); l.splice(i, 1); return { ok: true, plantillas: l }; },
+    async llenarHacer({ huecos = [], redes = ['instagram', 'facebook'] } = {}) {
+      const creadas = [], errores = []; let pedidos = 0;
+      for (const h of huecos) {
+        if (h.que === 'vuelve') { const o = mem().find(x => x.id === h.vuelve); if (!o) { errores.push(`${h.fecha}: la pieza que iba a volver ya no está`); continue; } creadas.push(await this.create({ ...copiaDe(o), fecha: h.fecha, hora: h.hora, estado: 'revision', origen: origenVuelve(raizDe(o)) })); }
+        else if (h.que === 'marketing') { pedidos++; creadas.push(await this.create({ titulo: 'Hueco para Marketing', fecha: h.fecha, hora: h.hora, redes: [...redes], estado: 'borrador', origen: 'agente:demo', notas: 'En la oficina, aquí Marketing deja el borrador con su texto y su imagen. En la demo no hay agentes.' })); }
+      }
+      return { ok: true, creadas, tarea: null, pedidos, errores, demo: true };
+    },
   };
 }
+
+/** C3: las plantillas de la demo (en memoria). */
+const DEF_PLANTILLA = { formato: 'post', formatos: {}, redes: ['instagram'], historiaTambien: false, hashtagsEnComentario: false, texto: '', comentario: '', hashtags: '', textoFacebook: '', textos: {}, notas: '' };
+const CAMPOS_PLANTILLA = Object.keys(DEF_PLANTILLA);
+let PLANTILLAS_DEMO = null;
+const plantillasDemo = () => (PLANTILLAS_DEMO ||= [
+  { nombre: 'Promo del mes', formato: 'carrusel', formatos: {}, redes: ['instagram', 'facebook'], historiaTambien: false, hashtagsEnComentario: false, texto: 'Este mes en PanaClaw: [la promo]. Válido hasta el [día].\n\nAgenda tu cita en el enlace de la bio.', comentario: '', hashtags: '#optica #panama', textoFacebook: '', textos: {}, notas: 'Primera foto: el producto; la segunda, la tienda.' },
+  { nombre: 'Testimonio de un cliente', formato: 'reel', formatos: { facebook: 'post' }, redes: ['instagram', 'facebook'], historiaTambien: false, hashtagsEnComentario: true, texto: '«[lo que dijo el cliente]» — [nombre], cliente desde [año].\n\n¿Y tú, cuándo vienes?', comentario: '', hashtags: '#clientesfelices #optica', textoFacebook: '', textos: {}, notas: 'Pide permiso al cliente antes de publicar su nombre.' },
+]);
 
 /** C1: los textos guardados de la demo (en memoria) y los hashtags que más usan sus piezas. */
 let GUARDADOS_DEMO = null;
@@ -155,4 +199,22 @@ function bandejaDemo() {
     { id: 'comentarios:d5', tipo: 'comentarios', red: 'instagram', autor: 'luis_g', texto: '¡Me encantaron! Ya los compré.', publicacion: 'Lentes de sol polarizados, ya en tienda', cuando: hace(50), estado: 'respondido', borrador: null, respuesta: { texto: '¡Gracias, Luis! Que los disfrutes.', cuando: hace(48), simulada: true }, sospecha: '' },
   ];
   return BANDEJA_DEMO;
+}
+
+/** C2 (8 oct 2026): lo ya publicado de la demo — resultados para las piezas aprobadas que ya pasaron y unas publicaciones «hechas a mano»
+ *  en los días pasados del rango. Deterministas (mismo día → mismos números) y con `fuente: 'ejemplo'`: la página lo rotula. */
+const TEXTOS_PUB = ['Lentes de sol polarizados, ya en tienda.', 'Así limpiamos tus lentes en 30 segundos.', 'Tu examen visual, en 20 minutos y sin cita.', 'Las monturas nuevas de la semana.', 'El sábado abrimos de 9:00 a 14:00.', 'Lo que dicen nuestros clientes este mes.'];
+export function publicadasDemo(piezas = [], { desde = '', hasta = '', hoy = '', sueltas: conSueltas = true } = {}) {
+  const semilla = s => [...String(s)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const cifras = (k, mult = 1) => { const n = semilla(k); const inter = Math.round((40 + (n % 90)) * mult); return { alcance: inter * (14 + (n % 9)), interacciones: inter, meGusta: Math.round(inter * 0.78), comentarios: Math.round(inter * 0.08), vistas: inter * 21 }; };
+  const porPieza = {};
+  for (const p of piezas) if (p.salida?.estado === 'publicada' && p.fecha && p.hora && p.fecha < hoy && (!desde || p.fecha >= desde) && (!hasta || p.fecha <= hasta)) // solo lo que salió: la aprobada que venció sigue siendo el ejemplo de «vencida»
+    porPieza[p.id] = p.redes.map(red => ({ id: `ej|${p.id}|${red}`, red, tipo: p.formato, enlace: '', publicadaAt: new Date(`${p.fecha}T${p.hora}:00`).toISOString(), ...cifras(p.id + red, red === 'facebook' ? 0.4 : 1) }));
+  const sueltas = [];
+  if (conSueltas && desde && hasta) for (let d = new Date(`${desde}T12:00:00`); ymd(d) <= hasta && ymd(d) < hoy; d.setDate(d.getDate() + 1)) {
+    const k = ymd(d), n = semilla(k); if (n % 3 === 0) continue; // dos de cada tres días pasados
+    const red = n % 4 === 1 ? 'facebook' : 'instagram', hora = red === 'facebook' ? '13:05' : n % 2 ? '19:10' : '12:40';
+    sueltas.push({ id: `ej|${k}|${red}`, red, tipo: red === 'facebook' ? 'imagen' : ['reel', 'carrusel', 'imagen'][n % 3], enlace: '', texto: TEXTOS_PUB[n % TEXTOS_PUB.length], miniatura: '', publicadaAt: new Date(`${k}T${hora}:00`).toISOString(), fecha: k, hora, ...cifras(k + red, red === 'facebook' ? 0.4 : 1) });
+  }
+  return { fuente: 'ejemplo', ultimaFoto: null, porPieza, sueltas };
 }

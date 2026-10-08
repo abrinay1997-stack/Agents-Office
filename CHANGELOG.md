@@ -1,5 +1,17 @@
 # Changelog
 
+## Lo que faltaba de C2 y el C3 de Contenido — 8 oct 2026 (lo publicado con sus cifras, llenar la semana, plantillas y el teléfono)
+
+Pedido del dueño: «haz lo que falta de C2 y C3» (`docs/analisis-editor-contenido-2026-10-08.md`).
+- **Lo ya publicado en el calendario, con sus resultados.** Lo que Analíticas lee de Meta se junta con la pieza de la que salió (por su enlace, o por la red, la hora y el principio del texto): la tarjeta suma el alcance y las interacciones, y la vista previa al pasar las da red por red. Lo publicado a mano (o antes de la oficina) sale como tarjeta propia, de solo lectura y con enlace, con el filtro **«Publicado fuera»**.
+- **Las mejores horas de una red:** «Mejores horas de [tus redes ▾]» en la semana y en «cuándo sale» del editor (se recuerda).
+- **La zona horaria a la vista** (las horas son las del reloj de la oficina, con su desfase de UTC) y **la cuota de Instagram** con Meta directo («3 de 100 publicaciones por API en 24 h», o lo publicado desde aquí).
+- **Llenar la semana** («+ Crear» o Programación): los días sin nada en tus redes, cada uno con su mejor hora; en cada hueco, un borrador nuevo de Marketing (con imagen del Estudio) o **algo que ya funcionó y vuelve** (la mitad de arriba de lo publicado, sin repetirse en 8 semanas). Crea las copias que vuelven (en revisión) y una tarea para tu puesto de redes. Programación gana **«Borradores de la semana»** con «Aprobar los N que pueden salir».
+- **Plantillas de publicación** como notas del Cerebro (`Contenido/Plantillas/<nombre>.md`): «Guardar como plantilla» al pie de una pieza y «Desde una plantilla…» en «+ Crear». Los agentes las leen con `ver_plantillas_contenido`.
+- **Aprobar desde el teléfono:** `/contenido` en Telegram, y el borrador de un agente llega solo, cada pieza con su foto, su texto y sus botones.
+- **La página no crece:** las dos ventanas nuevas viajan con el editor (`dist/pieza-editor.js`).
+- **Pruebas:** `tests/contenido-c3.test.mjs` (8 casos) y la cuota en `tests/meta-publicar.test.mjs`; `node scripts/c3-contenido-recorrido.mjs` (1512 claro y oscuro, 1024 y 390).
+
 ## C1 y C2 de Contenido — 8 oct 2026 (el editor que se escribe primero y las tarjetas que se leen de un vistazo)
 
 Pedido del dueño tras comparar con Metricool: «¿podemos tener un panel mucho mejor que ellos?» → «haz C1 y las tarjetas de C2».

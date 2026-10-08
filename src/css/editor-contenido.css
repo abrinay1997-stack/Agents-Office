@@ -148,3 +148,8 @@ body.dark .pz-gdel { color: #FF8A73; }
   .pz-dev button span { display: none; }
   .pz-acts { row-gap: 8px; }
 }
+
+/* C2 (8 oct 2026): las mejores horas de UNA red, o de todas las de la pieza juntas */
+.pz-hred { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; font-size: 11.5px; color: var(--grey); }
+.pz-hred .pz-sel { min-height: 30px; padding: 4px 10px; font-size: 12px; }
+body.dark .pz-hred { color: #C2C0B9; }

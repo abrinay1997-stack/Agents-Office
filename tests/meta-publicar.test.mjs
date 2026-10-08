@@ -11,6 +11,7 @@ import { crearMeta, PERMISOS_LECTURA, PERMISOS_PUBLICAR } from '../contenido/met
 import { crearConductorMeta, planRed, vaNativa, PREPARAR_ANTES_MS, TARDE_MAX_MS, NATIVA_MIN_MS } from '../contenido/meta-publicar.mjs';
 import { crearAlmacen } from '../contenido/piezas.mjs';
 import { crearProgramador } from '../contenido/programador.mjs';
+import { cuotaTxt } from '../src/contenido-cola.js';
 
 const TOKEN = 'EAAG-TOKEN-DE-USUARIO-PUBLICAR-0123456789'; // secrets-ok: un token de mentira para el Graph de mentira
 const TOKEN_PAGINA = 'EAAG-TOKEN-DE-PAGINA-PUBLICAR-9876543210'; // secrets-ok: idem
@@ -171,6 +172,11 @@ test('Instagram (imagen): no se programa en Meta; 15 min antes prepara el conten
   const s = t.c.estado(r).redes.instagram; assert.equal(s.estado, 'publicada'); assert.equal(s.url, 'https://www.instagram.com/p/M3/');
   assert.equal(de(t.g, 'POST', '/M3/comments')[0].campos.message, 'Link en la bio');
   assert.deepEqual(t.g.st.borrados, ['F1'], 'la foto temporal se borra al terminar');
+  // C2 (8 oct 2026): la cuota a la vista — la que leyó al preparar (3 de 100) y lo publicado desde aquí en 24 h
+  assert.deepEqual(t.c.cuota(), { nuestras: 1, usadas: 3, total: 100, cuando: e.momento - PREPARAR_ANTES_MS });
+  assert.equal(cuotaTxt(t.c.cuota()), 'Instagram: 3 de 100 publicaciones por API en 24 h.');
+  t.avanzar(25 * 3600e3); assert.deepEqual(t.c.cuota(), { nuestras: 0, usadas: null, total: null, cuando: null }, 'pasadas 24 h ya no dice nada viejo');
+  assert.match(cuotaTxt(t.c.cuota()), /^Instagram: 0 publicadas desde aquí en 24 h/);
 });
 
 test('Instagram (reel): el video va por la subida reanudable (OAuth en la cabecera), se espera a que Meta lo procese y sale una vez', async () => {

@@ -47,5 +47,6 @@ export function panelBajoDemanda(opts) {
     refresh: p => real?.refresh(p),
     repaintPreview: () => real?.repaintPreview(),
     precargar: () => cargar().catch(() => {}), // al abrir Contenido: cuando hagas clic en una pieza, ya estará
+    herramientas: () => cargar().then(() => window.AO_PIEZA), // C3: «Llenar la semana» y «Desde una plantilla» van en el mismo paquete
   };
 }

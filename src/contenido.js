@@ -17,12 +17,13 @@ import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza-base.js';
 import { panelBajoDemanda } from './pieza-carga.js'; // C1 (8 oct 2026): el editor de la pieza llega en su propio paquete (dist/pieza-editor.js)
-import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida } from './contenido-cola.js';
+import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida, cuotaTxt } from './contenido-cola.js';
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS, formatoDe } from './contenido-reglas.js';
 import { nivel as nivelHora, FUENTE as FUENTE_HORA } from './contenido-hora.js';
 import { initBandeja } from './contenido-bandeja.js';
 import { casillas, intercambio, perfilHTML } from './contenido-perfil.js';
-import * as GF from './galeria-filtro.js'; // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
+import * as GF from './galeria-filtro.js';
+import { cifrasTxt, numeroCorto, sumaResultados } from './contenido-publicadas.js'; // C2 (8 oct 2026): lo ya publicado, con sus resultados // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.ct.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.ct.' + k, JSON.stringify(v)); } catch {} } };
@@ -31,6 +32,13 @@ const at = p => { if (!p.fecha) return 0; const [h, m] = (p.hora || '00:00').spl
 // C2 (8 oct 2026): una red que sale con OTRO formato (reel en Instagram, post en Facebook) lleva su icono al lado
 const netBadges = (p, cls = '') => p.redes.map(r => `<b class="pz-nb ${r}${cls}" aria-hidden="true">${RED[r]?.short || r}</b>${p.formatos?.[r] ? `<span class="pz-nf" aria-hidden="true">${FICON[p.formatos[r]] || ''}</span>` : ''}`).join('');
 const redesTxt = p => p.redes.map(r => `${RED[r]?.name || r}${p.formatos?.[r] ? ` (${(FORMATO[p.formatos[r]] || p.formatos[r]).toLowerCase()})` : ''}`).join(' y ');
+/** C2 (8 oct 2026): lo ya publicado — una publicación de Meta (Analíticas) que no salió de ninguna pieza, y los resultados de las que sí. */
+const TIPO_PUB = { imagen: 'post', carrusel: 'carrusel', reel: 'reel', video: 'reel', texto: 'post' };
+const OJO = '<svg class="pz-ojo" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M1 8s2.6-5 7-5 7 5 7 5-2.6 5-7 5-7-5-7-5Z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="2.1" fill="currentColor"/></svg>';
+const resHTML = r => `<div class="pz-res"><span><b>${numeroCorto(r.alcance)}</b> de alcance</span><span><b>${numeroCorto(r.interacciones)}</b> ${r.interacciones === 1 ? 'interacción' : 'interacciones'}</span></div>`;
+/** La zona horaria de las horas de Contenido (las del reloj de la máquina de la oficina; en la demo, las de este navegador). */
+const zonaLocal = () => { const m = -new Date().getTimezoneOffset(); return { nombre: Intl.DateTimeFormat().resolvedOptions().timeZone || '', utc: `UTC${m < 0 ? '−' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.abs(m) % 60).padStart(2, '0')}` }; };
+const ciudadDe = z => (String(z?.nombre || '').includes('/') ? String(z.nombre).split('/').pop().replace(/_/g, ' ') : ''); // «America/Panama» → «Panama»; «UTC» no es un lugar
 /** C2: el texto que sale, sin lo que ya dice la tarjeta en negrita (el título, o su primera línea). */
 const resto = (p, titulo) => { const t = String(p.texto || '').replace(/\s+/g, ' ').trim(); if (!t) return ''; return p.titulo ? t : t.slice(titulo.length).replace(/^[\s.,:;—-]+/, ''); };
 export function initContenido({ served, esc, agentName = id => id, openStudio = () => {}, business = () => '' }) {
@@ -41,7 +49,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     <div class="cv-band">
       <div class="cv-brand">CONTENIDO <small id="ctCo"></small></div>
       <div class="ct-create"><button type="button" class="ct-new" id="ctNew" aria-haspopup="true" aria-expanded="false" aria-label="Crear una pieza" title="Crear una pieza">+<span class="ct-newt"> Crear</span></button>
-        <div class="ct-newmenu" role="menu" aria-label="Qué crear" hidden>${Object.entries(FORMATO).map(([k, l]) => `<button type="button" role="menuitem" data-newf="${k}">${FICON[k]}${l}</button>`).join('')}<p class="ct-newhint">Se abre con el siguiente hueco libre y las dos redes.</p></div></div>
+        <div class="ct-newmenu" role="menu" aria-label="Qué crear" hidden>${Object.entries(FORMATO).map(([k, l]) => `<button type="button" role="menuitem" data-newf="${k}">${FICON[k]}${l}</button>`).join('')}<p class="ct-newhint">Se abre con el siguiente hueco libre y las dos redes.</p><button type="button" role="menuitem" data-tplnew>Desde una plantilla…</button><button type="button" role="menuitem" data-llenar>Llenar la semana…</button></div></div>
       <div class="cv-seg ct-mode" role="group" aria-label="Qué ver"><button type="button" data-m="cal" aria-pressed="true">CALENDARIO</button><button type="button" data-m="prog" aria-pressed="false"><span class="ct-ml">PROGRAMACIÓN</span><span class="ct-ms">COLA</span><b class="ct-n" hidden></b></button><button type="button" data-m="bandeja" aria-pressed="false">BANDEJA<b class="ct-n ct-nbj" hidden></b></button></div>
       <div class="cv-seg ct-views" role="group" aria-label="Vista del calendario"><button type="button" data-v="agenda">AGENDA</button><button type="button" data-v="day">DÍA</button><button type="button" data-v="week">SEMANA</button><button type="button" data-v="month" class="on">MES</button><button type="button" data-v="perfil" title="Así queda tu perfil de Instagram">PERFIL</button></div>
       <div class="cv-nav"><button id="ctPrev" type="button" aria-label="Anterior" title="anterior (←)">‹</button><div id="ctTitle"></div><button id="ctNext" type="button" aria-label="Siguiente" title="siguiente (→)">›</button><button id="ctToday" type="button" title="hoy (T)">HOY</button><select class="ct-vsel" aria-label="Vista del calendario"><option value="agenda">Agenda</option><option value="day">Día</option><option value="week">Semana</option><option value="month">Mes</option><option value="perfil">Perfil de Instagram</option></select></div>
@@ -69,6 +77,12 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const narrow = () => matchMedia('(max-width: 760px)').matches;
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it), as in the tasks calendar
   let colaInfo = null; // M1: el modo y el conductor (GET /api/contenido/cola)
+  // C2 (8 oct 2026): lo ya publicado del rango (Analíticas) — resultados por pieza y las publicaciones que no salieron de ninguna
+  let pubs = { porPieza: {}, sueltas: [], fuente: 'ninguna' }, pubsJSON = '', pubOn = store.get('pub', true), zona = null, lastStats = '';
+  let horaRedSel = store.get('horaRed', ''); // las mejores horas de UNA red ('' = las tuyas, juntas); el editor recuerda la misma
+  const pubsPorId = () => new Map(pubs.sueltas.map(m => [m.id, m]));
+  const resOf = p => { const l = pubs.porPieza[p.id]; return l?.length ? sumaResultados(l) : null; };
+  const setStats = h => { if (h !== lastStats) { E.stats.innerHTML = h; lastStats = h; } };
   let openNow = false, mode = 'cal', view = 'month', anchor = startOfDay(Date.now()), q = '', pieces = [], cola = [], resumen = null, loadedKey = '', errorMsg = '', timer = null, opener = null, dnd = null, lastGrid = '', lastProg = '';
   // plan M5 · U7: selección múltiple en Programación — aprobar, pasar a revisión, mover de día o a la papelera, varias de una vez
   const selP = new Set();
@@ -84,7 +98,15 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (c && Date.now() - c.t < 10 * 60e3) return c.v;
     const v = await datos.mejorHora(redes).catch(() => null); horas.set(k, { t: Date.now(), v }); return v;
   }
-  async function loadHora() { const v = await mejorHora(redesUsadas().filter(r => redOn.has(r))); if (JSON.stringify(v?.grid) !== JSON.stringify(horaInfo?.grid)) { horaInfo = v; if (view !== 'month' && view !== 'agenda' && mode !== 'prog') render(); } }
+  const redesHora = () => (horaRedSel && redesUsadas().includes(horaRedSel) ? [horaRedSel] : redesUsadas().filter(r => redOn.has(r)));
+  async function loadHora() { const v = await mejorHora(redesHora()); if (JSON.stringify(v?.grid) !== JSON.stringify(horaInfo?.grid) || v?.fuente !== horaInfo?.fuente) { horaInfo = v; if (view !== 'month' && view !== 'agenda' && mode !== 'prog') render(); } }
+  /** C2: lo publicado en los días pasados del rango; se repinta solo si cambió. */
+  async function loadPubs(w) {
+    if (!datos.publicadas) return;
+    const hoy = ymd(new Date()), hasta = w.hasta < hoy ? w.hasta : hoy;
+    if (w.desde > hasta) { if (pubsJSON) { pubsJSON = ''; pubs = { porPieza: {}, sueltas: [], fuente: pubs.fuente }; if (openNow) render(); } return; }
+    try { const r = await datos.publicadas({ desde: w.desde, hasta }); const j = JSON.stringify(r); if (j !== pubsJSON) { pubsJSON = j; pubs = { porPieza: r.porPieza || {}, sueltas: r.sueltas || [], fuente: r.fuente || 'ninguna' }; if (openNow && mode === 'cal') render(); } } catch {}
+  }
   const fuenteHora = v => (v?.fuente === 'ejemplo' ? 'de ejemplo' : FUENTE_HORA[v?.fuente] || 'según Metricool y lo ya publicado');
   const redesUsadas = () => { const u = new Set(redesNegocio); for (const p of todasConocidas()) for (const r of p.redes) u.add(r); return Object.keys(RED).filter(r => u.has(r)); };
   const gone = new Set(); let undoT = null, commitFn = null, undoFn = null, noteT = null;
@@ -126,7 +148,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   async function load(force = false) {
     const w = want(), key = `${w.desde}|${w.hasta}`;
     if (!force && key === loadedKey && pieces.length) { if (mode === 'prog') loadCola(); return; }
-    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; loadedKey = key; errorMsg = ''; loadHora(); if (!bjCargada || mode === 'bandeja') { bjCargada = true; bj.load(); } }
+    try { const r = await datos.list({ ...w, sinFecha: true }); pieces = conMedidas(r.piezas || []); resumen = r.resumen || resumen; if (r.ajustes?.redes?.length) redesNegocio = r.ajustes.redes; if (r.ajustes?.zona) zona = r.ajustes.zona; loadedKey = key; errorMsg = ''; loadHora(); loadPubs(w); if (!bjCargada || mode === 'bandeja') { bjCargada = true; bj.load(); } }
     catch (e) { errorMsg = e.message || 'No pude leer las piezas'; }
     if (mode === 'prog' || force) await loadCola();
     if (openNow) render(); paintDock();
@@ -144,23 +166,38 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   function eventsByDay() {
     const by = {};
     for (const p of pieces.filter(p => p.fecha && visible(p))) (by[p.fecha] ||= []).push({ kind: 'pz', at: at(p), p, title: titleOf(p) });
+    if (pubOn) for (const m of pubs.sueltas) if (m.fecha && redOn.has(m.red) && !gone.has('m:' + m.id) && (!q || String(m.texto || '').toLowerCase().includes(q))) (by[m.fecha] ||= []).push({ kind: 'pub', at: new Date(`${m.fecha}T${m.hora || '00:00'}:00`).getTime(), m, title: pubTitulo(m) }); // C2
     for (const k in by) by[k].sort((a, b) => a.at - b.at);
     return by;
   }
+  const pubTitulo = m => String(m.texto || '').split('\n')[0].trim().slice(0, 60) || 'Sin texto';
+  const pubAria = m => `Publicada${pubs.fuente === 'ejemplo' ? ' (de ejemplo)' : ''} en ${RED[m.red]?.name || m.red}, ${fmtDay(new Date(`${m.fecha}T12:00:00`).getTime())} a las ${m.hora}: «${pubTitulo(m)}». ${cifrasTxt(m)}${m.enlace ? '. Abre la publicación' : ''}`;
+  /** C2: una publicación que no salió de ninguna pieza (hecha a mano, o de antes de la oficina): solo lectura; con enlace, lleva a ella. */
+  function pubCard(m, line) {
+    const ej = pubs.fuente === 'ejemplo', f = TIPO_PUB[m.tipo] || 'post', tit = pubTitulo(m);
+    const mini = typeof m.miniatura === 'string' && m.miniatura.startsWith('/api/contenido/miniatura/') ? `<span class="pz-ct"><img src="${esc(m.miniatura)}" alt="" loading="lazy" decoding="async"></span>` : `<span class="pz-ct none" aria-hidden="true">${FICON[f] || ''}</span>`;
+    const tag = m.enlace ? ['a', `href="${esc(m.enlace)}" target="_blank" rel="noopener noreferrer" draggable="false"`] : ['div', 'role="button" tabindex="0"'];
+    const attrs = `class="cv-ev pz pz-pub${line ? ' line pz2' : ''}" data-ev="m:${esc(m.id)}" style="--chip:#13705A;--chipd:#4FD1A5" aria-label="${esc(pubAria(m))}" title="${esc(pubAria(m))}" ${tag[1]}`;
+    const st = `<b class="pz-tone pz-pubst" style="--c:#13705A;--cd:#4FD1A5"><i aria-hidden="true">●</i> PUBLICADA${ej ? ' · EJEMPLO' : ''}</b>`;
+    if (line) return `<${tag[0]} ${attrs}>${mini}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(m.hora)}</b>${netBadges({ redes: [m.red] })}<span class="pz-rs" aria-hidden="true">${OJO}${numeroCorto(m.alcance)}</span></span><span class="cv-ev-t">${esc(tit)}</span></span></${tag[0]}>`;
+    return `<${tag[0]} ${attrs}><div class="pz-cardrow">${mini}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(m.hora)}</b><span class="pz-f">${FICON[f] || ''}<span>${esc(FORMATO[f] || '')}</span></span>${netBadges({ redes: [m.red] })}</div><div class="cv-ev-t">${esc(tit)}</div><div class="pz-cardst">${st}</div>${resHTML(m)}</div></div></${tag[0]}>`;
+  }
   const errN = p => (p.revision?.errores || []).length;
+  const puedeSalir = p => !errN(p) && !!p.fecha && !!p.hora && !revisarMomento(p.fecha, p.hora).errores.length; // C3
   const falta = p => errN(p) && p.estado !== 'idea';
   /** Lo que un lector de pantalla oye de una tarjeta: todo lo que el ojo ve de un vistazo. */
-  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}${p.medios.length > 1 ? ` de ${p.medios.length} archivos` : ''}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) ? ', la hora ya pasó' : ''}`;
+  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}${p.medios.length > 1 ? ` de ${p.medios.length} archivos` : ''}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) && !resOf(p) ? ', la hora ya pasó' : ''}${resOf(p) ? `, publicada: ${cifrasTxt(resOf(p))}` : ''}`;
   function card(ev, line) {
-    const p = ev.p, e = ESTADO[p.estado] || ESTADO.borrador, sel = panel.current()?.id === p.id;
+    if (ev.kind === 'pub') return pubCard(ev.m, line);
+    const p = ev.p, e = ESTADO[p.estado] || ESTADO.borrador, sel = panel.current()?.id === p.id, res = resOf(p);
     const cls = `cv-ev pz pz-${p.estado}${falta(p) ? ' pz-falta' : ''}${vencida(p) ? ' pz-venc' : ''}${sel ? ' sel' : ''}`;
     const attrs = `data-ev="p:${esc(p.id)}" style="--chip:${e.color};--chipd:${e.dark}" title="${esc(ariaOf(p))} · arrástrala a otro día (o Mayús + flechas)" aria-label="${esc(ariaOf(p))}" draggable="true" role="button" tabindex="0"`;
     const st = `<span class="pz-st pz-tone" style="--c:${e.color};--cd:${e.dark}" aria-hidden="true">${e.glyph}</span>${falta(p) ? '<span class="pz-warn" aria-hidden="true">!</span>' : ''}`;
     const thumb = miniatura(p, 'pz-ct'), tit = titleOf(p), snip = line ? '' : resto(p, tit);
     if (line) // el MES: dos filas — miniatura | hora · formato · redes · estado / título
-      return `<div class="${cls} line pz2" ${attrs}>${thumb}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f" aria-hidden="true">${FICON[p.formato] || ''}<span class="pz-fw">${esc(FORMATO[p.formato] || '')}</span></span>${netBadges(p)}${st}</span><span class="cv-ev-t">${esc(titleOf(p))}</span></span></div>`;
+      return `<div class="${cls} line pz2" ${attrs}>${thumb}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f" aria-hidden="true">${FICON[p.formato] || ''}<span class="pz-fw">${esc(FORMATO[p.formato] || '')}</span></span>${netBadges(p)}${st}${res ? `<span class="pz-rs" aria-hidden="true">${OJO}${numeroCorto(res.alcance)}</span>` : ''}</span><span class="cv-ev-t">${esc(titleOf(p))}</span></span></div>`;
     return `<div class="${cls}" ${attrs}>
-      <div class="pz-cardrow">${thumb}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f">${FICON[p.formato] || ''}<span>${esc(FORMATO[p.formato])}</span></span>${netBadges(p)}</div><div class="cv-ev-t">${esc(tit)}</div>${snip ? `<div class="pz-snip">${esc(snip.slice(0, 220))}</div>` : ''}<div class="pz-cardst"><b class="pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}${p.cambiadaTrasAprobar ? ' · CAMBIÓ' : ''}</b>${falta(p) ? '<span class="pz-fail">le falta algo</span>' : ''}${vencida(p) ? '<span class="pz-fail">la hora ya pasó</span>' : ''}</div></div></div></div>`;
+      <div class="pz-cardrow">${thumb}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f">${FICON[p.formato] || ''}<span>${esc(FORMATO[p.formato])}</span></span>${netBadges(p)}</div><div class="cv-ev-t">${esc(tit)}</div>${snip ? `<div class="pz-snip">${esc(snip.slice(0, 220))}</div>` : ''}<div class="pz-cardst"><b class="pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}${p.cambiadaTrasAprobar ? ' · CAMBIÓ' : ''}</b>${falta(p) ? '<span class="pz-fail">le falta algo</span>' : ''}${vencida(p) && !res ? '<span class="pz-fail">la hora ya pasó</span>' : ''}</div>${res ? resHTML(res) : ''}</div></div></div>`;
   }
   /* ---------- C2 (8 oct 2026): la vista previa al pasar el ratón (o llegar con el teclado) por una tarjeta ----------
      Como el ojo de Metricool, pero con lo que importa aquí: la imagen a su proporción, el texto entero, los hashtags, las redes con su formato
@@ -175,11 +212,23 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     return `<div class="ct-hov-m" style="aspect-ratio:${ratio}">${m ? thumbHTML(m, esc, 'ct-hov-im') : '<span class="ct-hov-none">Sin imagen todavía</span>'}${p.medios.length > 1 ? `<b class="ct-hov-k">1/${p.medios.length}</b>` : ''}</div>
       <div class="ct-hov-b"><div class="ct-hov-h"><b>${p.fecha ? esc(fmtDay(at(p))) + (p.hora ? ' · ' + esc(p.hora) : ' · sin hora') : 'Sin día'}</b><span class="ct-hov-n">${netBadges(p)}</span></div>
         ${p.titulo ? `<p class="ct-hov-t">${esc(p.titulo)}</p>` : ''}<p class="ct-hov-x">${esc(String(p.texto || '').trim() || 'Sin texto todavía')}</p>${p.hashtags ? `<p class="ct-hov-g">${esc(p.hashtags)}</p>` : ''}
-        <p class="ct-hov-s pz-tone" style="--c:${e.color};--cd:${e.dark}">${e.glyph} ${e.name}${sal ? ' · ' + esc(sal.etiqueta) : ''}</p>${falta ? `<p class="ct-hov-f">Le falta: ${esc(falta)}</p>` : ''}</div>`;
+        <p class="ct-hov-s pz-tone" style="--c:${e.color};--cd:${e.dark}">${e.glyph} ${e.name}${sal ? ' · ' + esc(sal.etiqueta) : ''}</p>${falta ? `<p class="ct-hov-f">Le falta: ${esc(falta)}</p>` : ''}${resOf(p) ? resHovHTML(pubs.porPieza[p.id]) : ''}</div>`;
+  }
+  /** C2: los resultados de lo publicado, red por red. */
+  const resHovHTML = l => `<div class="ct-hov-r">${l.map(r => `<p>${netBadges({ redes: [r.red] })} <b>${numeroCorto(r.alcance)}</b> de alcance · <b>${numeroCorto(r.interacciones)}</b> ${r.interacciones === 1 ? 'interacción' : 'interacciones'}${r.comentarios ? ` · ${numeroCorto(r.comentarios)} ${r.comentarios === 1 ? 'comentario' : 'comentarios'}` : ''}</p>`).join('')}${pubs.fuente === 'ejemplo' ? '<p class="ct-hov-ej">Cifras de ejemplo</p>' : ''}</div>`;
+  function pubHovHTML(m) {
+    const f = TIPO_PUB[m.tipo] || 'post', img = typeof m.miniatura === 'string' && m.miniatura.startsWith('/api/contenido/miniatura/');
+    return `<div class="ct-hov-m" style="aspect-ratio:${f === 'reel' ? '9 / 16' : '4 / 5'}">${img ? `<span class="ct-hov-im"><img src="${esc(m.miniatura)}" alt=""></span>` : '<span class="ct-hov-none">Sin miniatura</span>'}</div>
+      <div class="ct-hov-b"><div class="ct-hov-h"><b>${esc(fmtDay(new Date(`${m.fecha}T12:00:00`).getTime()))} · ${esc(m.hora)}</b><span class="ct-hov-n">${netBadges({ redes: [m.red] })}</span></div>
+        <p class="ct-hov-x">${esc(String(m.texto || '').trim() || 'Sin texto')}</p>
+        <p class="ct-hov-s pz-tone" style="--c:#13705A;--cd:#4FD1A5">● PUBLICADA${pubs.fuente === 'ejemplo' ? ' · DE EJEMPLO' : ' · NO SALIÓ DE UNA PIEZA'}</p>${resHovHTML([m])}${m.enlace ? `<p class="ct-hov-g">Un clic la abre en ${esc(RED[m.red]?.name || m.red)}.</p>` : ''}</div>`;
   }
   function verHov(card) {
-    const id = (card.dataset.ev || '').slice(2), p = todasConocidas().find(x => x.id === id); if (!p || !card.isConnected) return;
-    hovId = id; E.hov.innerHTML = hovHTML(p); E.hov.hidden = false;
+    const ev = card.dataset.ev || '', id = ev.slice(2);
+    if (!card.isConnected) return;
+    if (ev.startsWith('m:')) { const m = pubsPorId().get(id); if (!m) return; hovId = ev; E.hov.innerHTML = pubHovHTML(m); } // C2: lo publicado
+    else { const p = todasConocidas().find(x => x.id === id); if (!p) return; hovId = ev; E.hov.innerHTML = hovHTML(p); }
+    E.hov.hidden = false;
     const o = (E.hov.offsetParent || ov).getBoundingClientRect(), r = card.getBoundingClientRect(), w = E.hov.offsetWidth, h = E.hov.offsetHeight; // se coloca dentro de su caja (bajo la barra de Contenido, que en una pantalla mediana ocupa dos filas)
     const der = panel.isOpen() && !E.panelHost.hidden ? E.panelHost.getBoundingClientRect().left - o.left : o.width; // con la pieza abierta, no se le pone encima
     let x = r.right - o.left + 10; if (x + w > der - 8) x = r.left - o.left - w - 10; if (x < 8) x = Math.max(8, Math.min(der - w - 8, r.left - o.left));
@@ -188,14 +237,18 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   function quitarHov() { clearTimeout(hovT); clearTimeout(hovFuera); hovT = hovFuera = null; hovId = ''; if (E.hov && !E.hov.hidden) E.hov.hidden = true; }
   const tarjeta = t => t?.closest?.('.cv-ev.pz, .pz-bk');
   for (const zona of [E.grid, E.rail]) {
-    zona.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse' || !puedeHov()) return; const c = tarjeta(e.target); if (!c) return; clearTimeout(hovFuera); if ((c.dataset.ev || '').slice(2) === hovId) return; clearTimeout(hovT); hovT = setTimeout(() => { if (!dnd?.dragging) verHov(c); }, 450); });
+    zona.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse' || !puedeHov()) return; const c = tarjeta(e.target); if (!c) return; clearTimeout(hovFuera); if ((c.dataset.ev || '') === hovId) return; clearTimeout(hovT); hovT = setTimeout(() => { if (!dnd?.dragging) verHov(c); }, 450); });
     zona.addEventListener('pointerout', e => { const c = tarjeta(e.target); if (!c || c.contains(e.relatedTarget)) return; clearTimeout(hovT); hovFuera = setTimeout(quitarHov, 180); });
     zona.addEventListener('focusin', e => { const c = tarjeta(e.target); if (!c || !puedeHov()) return; clearTimeout(hovT); hovT = setTimeout(() => verHov(c), 600); });
     zona.addEventListener('focusout', () => quitarHov());
   }
   E.hov.addEventListener('pointerenter', () => clearTimeout(hovFuera));
   E.hov.addEventListener('pointerleave', () => { hovFuera = setTimeout(quitarHov, 180); });
-  E.hov.addEventListener('click', () => { const id = hovId; quitarHov(); if (id) openPiece(id); });
+  E.hov.addEventListener('click', () => {
+    const id = hovId; quitarHov(); if (!id) return;
+    if (id.startsWith('m:')) { const m = pubsPorId().get(id.slice(2)); if (m?.enlace) window.open(m.enlace, '_blank', 'noopener'); return; } // C2: lo publicado se abre en su red
+    openPiece(id.slice(2));
+  });
   ov.addEventListener('pointerdown', e => { if (!E.hov.contains(e.target)) quitarHov(); }, true);
   ov.addEventListener('scroll', () => quitarHov(), true);
   ov.addEventListener('keydown', e => { if (e.key === 'Escape' && !E.hov.hidden) { quitarHov(); e.stopPropagation(); e.preventDefault(); } }, true);
@@ -221,7 +274,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (view === 'month') html = monthHTML({ ...grid, anchor });
     else if (view === 'perfil') { E.grid.className = 'cv-grid perfil'; E.title.innerHTML = '<b>Perfil de Instagram</b>'; html = perfilHTML(casillas(todasConocidas().filter(visible), { hoy: ymd(new Date()) }), { esc, mediaUrl: id => (typeof id === 'string' && !id.startsWith('demo/') ? '/media/' + id.split('/').map(encodeURIComponent).join('/') : null), color: e => (ESTADO[e] || ESTADO.borrador).color }); } // plan M5 · U2
     else if (view === 'agenda') { E.grid.className = 'cv-grid agenda'; html = agendaHTML({ ...grid, emptyDay: 'Nada programado. Un buen hueco para publicar.', emptyAll: 'Nada en estos 14 días.' }); }
-    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', r.days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, live: ev => !ev.p.hora, liveLabel: 'SIN HORA', slot: horaInfo?.grid ? (k, h) => ['', 'hb1', 'hb2'][nivelHora(horaInfo.grid, k, h)] : null })}</div>`; }
+    else { E.grid.className = 'cv-grid tg tg-' + view; E.grid.style.setProperty('--n', r.days); html = `<div class="cv-tg">${timeGridHTML({ ...grid, live: ev => ev.kind === 'pz' && !ev.p.hora, liveLabel: 'SIN HORA', slot: horaInfo?.grid ? (k, h) => ['', 'hb1', 'hb2'][nivelHora(horaInfo.grid, k, h)] : null })}</div>`; }
     const key = view + ':' + r.from; if (view !== 'month' && key === tgKey) tgScroll = E.grid.scrollTop;
     const out = errorMsg ? `<div class="cv-empty">${esc(errorMsg)}</div>` : html;
     // el sondeo cada 20 s repinta: si nada cambió no se toca la cuadrícula, y si cambió el foco vuelve a la misma tarjeta (CON-12)
@@ -233,22 +286,29 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     else if (view === 'agenda') { if (key !== tgKey) { tgKey = key; E.grid.scrollTop = 0; } else E.grid.scrollTop = tgScroll; }
     else if (key === tgKey) E.grid.scrollTop = tgScroll;
     else { // una semana o un día nuevos abren en la primera pieza (o a las 8:00), no a la hora de ahora: de noche se veía la madrugada vacía (CON-14)
-      tgKey = key; const prim = Object.values(by).flat().filter(ev => ev.p.hora).sort((a, b) => new Date(a.at).getHours() - new Date(b.at).getHours())[0];
+      tgKey = key; const prim = Object.values(by).flat().filter(ev => (ev.kind === 'pub' ? ev.m.hora : ev.p.hora)).sort((a, b) => new Date(a.at).getHours() - new Date(b.at).getHours())[0];
       const h = prim ? Math.max(0, new Date(prim.at).getHours() - 1) : 8;
       const row = E.grid.querySelector(`.cv-tg-h[data-h="${h}"]`), head = E.grid.querySelector('.cv-tg-d'), c0 = E.grid.querySelector('.cv-tg-c');
       E.grid.scrollTop = row && c0 ? row.offsetTop - (head ? head.offsetHeight : 0) - c0.offsetTop : 0;
     }
-    let n = 0; for (const k in by) n += by[k].length;
-    const cuenta = ORDEN.map(s => [s, pieces.filter(p => p.estado === s && p.fecha && p.fecha >= ymd(new Date(r.from)) && p.fecha < ymd(new Date(r.to)) && visible(p)).length]).filter(([, c]) => c);
-    E.stats.innerHTML = `<span><b>${n}</b> ${n === 1 ? 'pieza' : 'piezas'}</span>` + cuenta.map(([s, c]) => `<span class="pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}"><b>${c}</b> ${ESTADO[s].name.toLowerCase()}</span>`).join('');
-    // plan M3: la leyenda de las horas sombreadas va junto a las cifras (dentro de la cuadrícula se iba con el desplazamiento)
-    if (horaInfo?.grid && view !== 'month' && view !== 'agenda') E.stats.insertAdjacentHTML('afterbegin', `<span class="ct-hbleg"><i class="hb2" aria-hidden="true"></i>Mejores horas, ${esc(fuenteHora(horaInfo))} · <i class="hb1" aria-hidden="true"></i>buenas</span>`);
+    let n = 0, np = 0; for (const k in by) for (const ev of by[k]) ev.kind === 'pub' ? np++ : n++;
+    const dentro = p => p.fecha && p.fecha >= ymd(new Date(r.from)) && p.fecha < ymd(new Date(r.to));
+    const cuenta = ORDEN.map(s => [s, pieces.filter(p => p.estado === s && dentro(p) && visible(p)).length]).filter(([, c]) => c);
+    const conRes = pieces.filter(p => dentro(p) && visible(p) && resOf(p)).length + (view === 'perfil' ? 0 : np); // C2: lo que ya salió, con cifras
+    // plan M3: la leyenda de las horas sombreadas va junto a las cifras (dentro de la cuadrícula se iba con el desplazamiento); C2: de qué red
+    const leyenda = (horaInfo?.grid || horaRedSel) && view !== 'month' && view !== 'agenda' && view !== 'perfil'
+      ? `<span class="ct-hbleg">${horaInfo?.grid ? '<i class="hb2" aria-hidden="true"></i>' : ''}<label class="ct-hbred">Mejores horas de <select class="pz-sel" data-horared aria-label="Mejores horas de qué red"><option value="">tus redes</option>${redesUsadas().map(k => `<option value="${k}"${horaRedSel === k ? ' selected' : ''}>${esc(RED[k]?.name || k)}</option>`).join('')}</select></label>${horaInfo?.grid ? `, ${esc(fuenteHora(horaInfo))} · <i class="hb1" aria-hidden="true"></i>buenas` : ': sin datos para esa red todavía'}</span>` : '';
+    setStats(leyenda + `<span><b>${n}</b> ${n === 1 ? 'pieza' : 'piezas'}</span>` + cuenta.map(([s, c]) => `<span class="pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}"><b>${c}</b> ${ESTADO[s].name.toLowerCase()}</span>`).join('')
+      + (conRes ? `<span class="pz-tone" style="--c:#13705A;--cd:#4FD1A5"><b>${conRes}</b> ${conRes === 1 ? 'publicada' : 'publicadas'}${pubs.fuente === 'ejemplo' ? ' (ejemplo)' : ''}</span>` : '') + zonaHTML());
   }
+  /** C2: la zona horaria a la vista — las horas de Contenido son las del reloj de la máquina de la oficina. */
+  function zonaHTML() { const z = zona || zonaLocal(); return z.utc ? `<span class="ct-tz" title="Las horas de Contenido son las del reloj de esta computadora${z.nombre ? ' (' + esc(z.nombre) + ')' : ''}: así salen en las redes.">Horas de ${esc(ciudadDe(z) || 'esta computadora')} · ${esc(z.utc)}</span>` : ''; }
   function renderChips() {
-    const usadas = redesUsadas(), off = ORDEN.length - estadoOn.size + usadas.filter(r => !redOn.has(r)).length;
+    const usadas = redesUsadas(), off = ORDEN.length - estadoOn.size + usadas.filter(r => !redOn.has(r)).length + (pubs.fuente !== 'ninguna' && !pubOn ? 1 : 0);
     $('[data-filters]').textContent = off ? `Filtros (${off})` : 'Filtros';
     E.chips.innerHTML = ORDEN.map(s => `<button type="button" class="cv-chip${estadoOn.has(s) ? ' on' : ''}" data-e="${s}" aria-pressed="${estadoOn.has(s)}" title="${esc(ESTADO[s].help)}"><i class="pz-cg pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}" aria-hidden="true">${ESTADO[s].glyph}</i>${ESTADO[s].name}</button>`).join('')
-      + '<span class="cv-sep"></span>' + usadas.map(k => [k, RED[k]]).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${r.short}</b>${r.name}</button>`).join('');
+      + '<span class="cv-sep"></span>' + usadas.map(k => [k, RED[k]]).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${r.short}</b>${r.name}</button>`).join('')
+      + (pubs.fuente !== 'ninguna' ? `<span class="cv-sep"></span><button type="button" class="cv-chip${pubOn ? ' on' : ''}" data-pub aria-pressed="${pubOn}" title="Lo que salió en tus redes sin pasar por una pieza (hecho a mano o antes de la oficina), con sus cifras de Analíticas"><i class="pz-cg pz-tone" style="--c:#13705A;--cd:#4FD1A5" aria-hidden="true">●</i>Publicado fuera${pubs.fuente === 'ejemplo' ? ' (ejemplo)' : ''}</button>` : ''); // C2
   }
   function renderRail() {
     const sin = todasConocidas().filter(p => !p.fecha && visible(p));
@@ -273,10 +333,10 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (c.modo === 'apagado') return '<div class="ct-banner bad" role="note"><span><b>Publicación apagada:</b> nada sale de la oficina. Cámbialo en Ajustes → Contenido.</span></div>';
     if (c.modo === 'simulacro') return '<div class="ct-banner" role="note"><span><b>Modo simulacro:</b> lo que apruebas «sale» de mentira, para probar todo el circuito sin tocar tus redes. Para publicar de verdad: Ajustes → Contenido → Real.</span><button type="button" class="pz-btn" data-comprobar>Comprobar conexión</button></div>';
     if (!c.conductor?.ok) return `<div class="ct-banner bad" role="alert"><span><b>No se puede publicar:</b> ${esc(c.conductor?.motivo || 'el conductor no está listo')}</span><button type="button" class="pz-btn" data-comprobar>Comprobar de nuevo</button></div>`;
-    if (c.conductor.id === 'meta') return `<div class="ct-banner ok" role="note"><span><b>Publica Meta directo:</b> ${esc(c.conductor.nota || '')}${c.cuenta?.fallo ? ` <b>${c.cuenta.fallo} ${c.cuenta.fallo === 1 ? 'falló' : 'fallaron'}.</b>` : ''}</span><button type="button" class="pz-btn" data-comprobar>Comprobar conexión</button></div>`; // F3 (8 oct 2026): Instagram sale desde aquí
+    if (c.conductor.id === 'meta') return `<div class="ct-banner ok" role="note"><span><b>Publica Meta directo:</b> ${esc(c.conductor.nota || '')}${c.conductor.cuota ? ` <span class="ct-cuota${c.conductor.cuota.total && c.conductor.cuota.usadas >= c.conductor.cuota.total * 0.8 ? ' alta' : ''}">${esc(cuotaTxt(c.conductor.cuota))}</span>` : ''}${c.cuenta?.fallo ? ` <b>${c.cuenta.fallo} ${c.cuenta.fallo === 1 ? 'falló' : 'fallaron'}.</b>` : ''}</span><button type="button" class="pz-btn" data-comprobar>Comprobar conexión</button></div>`; // F3 (8 oct 2026): Instagram sale desde aquí
     return `<div class="ct-banner ok" role="note"><span><b>Publica ${esc(c.conductor.nombre)}</b>: lo que apruebas se le entrega ${c.horasAntes ? `${c.horasAntes} h antes de salir` : 'al aprobarlo'} y sale solo, con esta computadora apagada.${c.cuenta?.fallo ? ` <b>${c.cuenta.fallo} ${c.cuenta.fallo === 1 ? 'falló' : 'fallaron'}.</b>` : ''}</span><button type="button" class="pz-btn" data-comprobar>Comprobar conexión</button></div>`;
   };
-  const filaCola = (p, { accion = true, motivo = '' } = {}) => {
+  const filaCola = (p, { accion = true, motivo = '', borrador = false } = {}) => {
     const e = ESTADO[p.estado] || ESTADO.borrador, r = p.revision?.errores || [], m = p.fecha ? revisarMomento(p.fecha, p.hora) : null;
     const puede = !r.length && m && !m.errores.length;
     const cuando = p.fecha && p.hora ? `<span class="ct-cd${at(p) < Date.now() ? ' late' : ''}">${cuentaAtras(at(p))}</span>` : '';
@@ -290,14 +350,15 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
         ${motivo ? `<span class="ct-rf">${esc(motivo)}</span>` : r.length && p.estado !== 'idea' ? `<span class="ct-rf">Le falta: ${esc(r[0])}${r.length > 1 ? ` (+${r.length - 1})` : ''}</span>` : p.cambiadaTrasAprobar ? '<span class="ct-rf">Cambió después de aprobarla: vuelve a aprobarla.</span>' : ''}</span></button>
       ${sal ? `<span class="ct-st pz-tone ct-sst ${sal.clave}" style="--c:${SAL_COLOR[sal.clave][0]};--cd:${SAL_COLOR[sal.clave][1]}"><i aria-hidden="true">${SAL_GLYPH[sal.clave]}</i> ${sal.etiqueta}</span>` : `<span class="ct-st pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}</span>`}
       ${sal ? salidaBox(p, sal) : ''}
-      ${accion && p.estado === 'revision' ? `<button type="button" class="pz-go sm${puede ? '' : ' locked'}" data-ok="${esc(p.id)}"${puede ? '' : ' aria-disabled="true"'} title="${puede ? 'Aprobarla' : 'Todavía no puede salir'}">${puede ? 'Aprobar' : '<span aria-hidden="true">🔒</span> Aprobar'}</button>` : ''}</div>`;
+      ${accion && (p.estado === 'revision' || (borrador && p.estado === 'borrador')) ? `<button type="button" class="pz-go sm${puede ? '' : ' locked'}" data-ok="${esc(p.id)}"${puede ? '' : ' aria-disabled="true"'} title="${puede ? 'Aprobarla' : 'Todavía no puede salir'}">${puede ? 'Aprobar' : '<span aria-hidden="true">🔒</span> Aprobar'}</button>` : ''}</div>`;
   };
   function renderProg() {
     E.title.innerHTML = '';
     const todas = todasConocidas().filter(visible), hoy = startOfDay(Date.now()), hoyK = ymd(new Date(hoy));
     // lo que pide una acción del dueño, con el porqué; y la cola por día: los próximos 14 siempre (los vacíos, como huecos), después solo los días con algo
-    const accion = requiereAccion(todas).map(a => [a.pieza, a.motivo]);
-    const listasAprobar = requiereAccion(todas).filter(a => a.puede).length;
+    const pide = requiereAccion(todas).filter(a => !(vencida(a.pieza) && resOf(a.pieza))); // C2: si Analíticas la vio publicada, salió (aunque la cola no lo sepa)
+    const accion = pide.map(a => [a.pieza, a.motivo]);
+    const listasAprobar = pide.filter(a => a.puede).length;
     const futuras = todas.filter(p => p.fecha && p.fecha >= hoyK), dias = new Map(colaPorDia(todas));
     const rel = k => k === hoyK ? 'Hoy' : k === ymd(new Date(hoy + DAY + 3600e3)) ? 'Mañana' : '';
     const diaH = k => { const d = new Date(k + 'T00:00:00'); return `${rel(k) ? `<b>${rel(k)}</b> · ` : ''}${DOW_LONG[d.getDay()]} ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}`; };
@@ -307,12 +368,16 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     // la frecuencia de la semana que empieza hoy, por red
     const sem = futuras.filter(p => at(p) < hoy + 7 * DAY && p.estado !== 'idea'), porRed = redesUsadas().map(r => [r, sem.filter(p => p.redes.includes(r)).length]);
     const sinDia = todas.filter(p => !p.fecha);
+    // C3 (8 oct 2026): los borradores de los próximos 7 días (los de «Llenar la semana», los de los agentes): se aprueban uno a uno o todos
+    const borr = todas.filter(p => p.estado === 'borrador' && p.fecha && p.fecha >= hoyK && at(p) < hoy + 8 * DAY).sort((a, b) => at(a) - at(b)), borrListos = borr.filter(puedeSalir);
     const html = `${bannerHTML()}${selBarHTML()}
       <div class="ct-cols">
         <div class="ct-main">
           <section class="ct-sec ct-need" aria-labelledby="ctp-acc"><div class="ct-sh"><h3 id="ctp-acc">Requiere tu acción <b>${accion.length}</b></h3>${listasAprobar > 1 ? `<button type="button" class="pz-btn" data-okall>Aprobar las ${listasAprobar} que pueden salir</button>` : ''}</div>
             ${accion.length ? accion.map(([p, m]) => filaCola(p, { motivo: m })).join('') : '<p class="ct-empty">Nada pendiente. Todo lo programado está aprobado o en trabajo.</p>'}</section>
-          <section class="ct-sec" aria-labelledby="ctp-cola"><div class="ct-sh"><h3 id="ctp-cola">La cola · lo que sale</h3><span class="ct-freq">Próximos 7 días: ${porRed.map(([r, n]) => `${netBadges({ redes: [r] })} ${n} ${n === 1 ? 'pieza' : 'piezas'}`).join(' · ')}</span></div>${colaHTML}</section>
+          ${borr.length ? `<section class="ct-sec ct-borr" aria-labelledby="ctp-bor"><div class="ct-sh"><h3 id="ctp-bor">Borradores de la semana <b>${borr.length}</b></h3>${borrListos.length ? `<button type="button" class="pz-btn" data-okbor>Aprobar ${borrListos.length === 1 ? 'el que puede' : `los ${borrListos.length} que pueden`} salir</button>` : ''}</div>
+            ${borr.map(p => filaCola(p, { borrador: true })).join('')}</section>` : ''}
+          <section class="ct-sec" aria-labelledby="ctp-cola"><div class="ct-sh"><h3 id="ctp-cola">La cola · lo que sale</h3><button type="button" class="pz-btn" data-llenar title="Los días sin nada, con su mejor hora: borradores de Marketing o lo que ya funcionó">Llenar la semana</button><span class="ct-freq">Próximos 7 días: ${porRed.map(([r, n]) => `${netBadges({ redes: [r] })} ${n} ${n === 1 ? 'pieza' : 'piezas'}`).join(' · ')}</span></div>${colaHTML}</section>
         </div>
         <aside class="ct-aside" aria-label="Ideas sin día">
           <section class="ct-sec"><div class="ct-sh"><h3>Ideas sin día <b>${sinDia.length}</b></h3><button type="button" class="pz-btn" data-new="idea">+ Nueva idea</button></div>
@@ -321,7 +386,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       </div>`;
     const focused = E.prog.contains(document.activeElement) ? (document.activeElement.dataset.open || document.activeElement.dataset.ok || document.activeElement.dataset.gap) : null;
     if (html !== lastProg) { E.prog.innerHTML = html; lastProg = html; if (focused) E.prog.querySelector(`[data-open="${CSS.escape(focused)}"], [data-ok="${CSS.escape(focused)}"], [data-gap="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true }); }
-    E.stats.innerHTML = `<span><b>${accion.length}</b> requieren acción</span><span><b>${futuras.filter(p => p.estado === 'aprobada').length}</b> aprobadas</span><span><b>${[...dias.values()].slice(0, 14).filter(l => !l.length).length}</b> huecos en 14 días</span>`;
+    setStats(`<span><b>${accion.length}</b> requieren acción</span><span><b>${futuras.filter(p => p.estado === 'aprobada').length}</b> aprobadas</span><span><b>${[...dias.values()].slice(0, 14).filter(l => !l.length).length}</b> huecos en 14 días</span>${zonaHTML()}`);
   }
 
   /* ---------- el panel de una pieza ---------- */
@@ -336,7 +401,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { render(); loadResumen(); }
   }
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
-  const panel = panelBajoDemanda({ host: E.panelHost, modal, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
+  const panel = panelBajoDemanda({ host: E.panelHost, modal, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, zona: () => zona || zonaLocal(), otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
   // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
   let bjCargada = false;
@@ -449,6 +514,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const t = e.target;
     if (t.closest('#ctNew')) { const on = E.newMenu.hidden; E.newMenu.hidden = !on; E.newBtn.setAttribute('aria-expanded', on); if (on) E.newMenu.querySelector('button').focus(); return; }
     const nf = t.closest('[data-newf]'); if (nf) { crear(nf.dataset.newf); return; }
+    if (t.closest('[data-llenar]')) { await llenarSemana(); return; } // C3
+    if (t.closest('[data-tplnew]')) { await desdePlantilla(); return; }
+    if (t.closest('[data-okbor]')) { await aprobarBorradores(); return; }
     if (!E.newMenu.hidden && !t.closest('.ct-create')) closeMenu();
     const b = t.closest('.ct-mode button'); if (b) { mode = b.dataset.m; store.set('mode', mode); await panel.flush(); if (mode === 'prog') await loadCola(); if (mode === 'bandeja') bj.load(); render(); return; }
     const v = t.closest('.ct-views button'); if (v) { view = v.dataset.v; store.set('view', view); load(); render(); return; }
@@ -458,7 +526,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const chip = t.closest('.cv-chip'); if (chip) {
       if (chip.dataset.e) { estadoOn.has(chip.dataset.e) ? estadoOn.delete(chip.dataset.e) : estadoOn.add(chip.dataset.e); if (!estadoOn.size) estadoOn = new Set(ORDEN); store.set('estados', [...estadoOn]); }
       else if (chip.dataset.r) { redOn.has(chip.dataset.r) ? redOn.delete(chip.dataset.r) : redOn.add(chip.dataset.r); if (!redOn.size) redOn = new Set(Object.keys(RED)); store.set('redes', [...redOn]); loadHora(); }
-      render(); E.chips.querySelector(chip.dataset.e ? `[data-e="${chip.dataset.e}"]` : `[data-r="${chip.dataset.r}"]`)?.focus(); return;
+      else if (chip.hasAttribute('data-pub')) { pubOn = !pubOn; store.set('pub', pubOn); } // C2: lo publicado fuera de las piezas
+      render(); E.chips.querySelector(chip.dataset.e ? `[data-e="${chip.dataset.e}"]` : chip.dataset.r ? `[data-r="${chip.dataset.r}"]` : '[data-pub]')?.focus(); return;
     }
     const ok = t.closest('[data-ok]'); if (ok) { e.stopPropagation(); await aprobar(ok.dataset.ok, ok); return; }
     if (t.closest('[data-okall]')) { await aprobarTodas(); return; }
@@ -466,6 +535,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const gap = t.closest('[data-gap]'); if (gap) { openNew({ fecha: gap.dataset.gap, hora: '18:00' }); return; }
     const open_ = t.closest('[data-open]'); if (open_) { openPiece(open_.dataset.open); return; }
     const nw = t.closest('[data-new]'); if (nw) { openNew({}); return; }
+    const pc = t.closest('.pz-pub'); if (pc) { if (!pc.href) verHov(pc); return; } // C2: con enlace, el navegador la abre en su red; sin él, se enseña lo que se sabe
     const evc = t.closest('.cv-ev, .cv-bk'); if (evc) { openPiece(evc.dataset.ev.slice(2)); return; }
     const pfo = t.closest('[data-pfo]'); if (pfo) { openPiece(pfo.dataset.pfo); return; } // plan M5 · U2: la cuadrícula del perfil
     const pfm = t.closest('[data-pfm]'); if (pfm) { const [a, b] = pfm.dataset.pfm.split(':'); await cambiarDeSitio(a, b); E.grid.querySelector(`[data-pf="${CSS.escape(a)}"] .pf-open`)?.focus(); return; }
@@ -494,6 +564,10 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     }
     const card = e.target.closest && e.target.closest('.cv-ev, .cv-bk, [data-open]');
     // mover con el teclado (CON-18): Mayús + ←/→ un día, Mayús + ↑/↓ un cuarto de hora
+    if (card && card.classList.contains('pz-pub')) { // C2: lo publicado no se mueve ni se abre como pieza (con enlace, Intro lo abre en su red)
+      if (!card.href && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); verHov(card); return; }
+      if (e.key === 'Enter' || (e.shiftKey && /^Arrow/.test(e.key))) { if (e.key !== 'Enter') e.preventDefault(); return; }
+    }
     if (card && card.dataset.ev && e.shiftKey && /^Arrow/.test(e.key)) {
       e.preventDefault(); e.stopPropagation(); const p = todasConocidas().find(x => x.id === card.dataset.ev.slice(2)); if (!p || !p.fecha) return;
       const d = new Date(`${p.fecha}T${p.hora || '09:00'}:00`);
@@ -515,6 +589,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   ov.addEventListener('change', async e => {
     const ck = e.target.closest?.('[data-selp]'); if (ck) { ck.checked ? selP.add(ck.dataset.selp) : selP.delete(ck.dataset.selp); render(); ov.querySelector(`[data-selp="${CSS.escape(ck.dataset.selp)}"]`)?.focus(); return; }
     const mv = e.target.closest?.('[data-selmover]'); if (mv && mv.value) await accionVarias('mover', mv.value);
+    const hr = e.target.closest?.('[data-horared]'); if (hr) { horaRedSel = hr.value; store.set('horaRed', horaRedSel); await loadHora(); render(); ov.querySelector('[data-horared]')?.focus(); } // C2: las mejores horas de una red
   });
   $('.ct-vsel').addEventListener('change', e => { view = e.target.value; store.set('view', view); load(); render(); });
   E.search.addEventListener('input', () => { q = E.search.value.trim().toLowerCase(); render(); });
@@ -560,6 +635,28 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const lista = todasConocidas().filter(p => p.estado === 'revision' && !errN(p) && p.fecha && p.hora && !revisarMomento(p.fecha, p.hora).errores.length && visible(p)); let ok = 0, mal = 0;
     for (const p of lista) { try { const r = await datos.approve(p.id); put(r.pieza); ok++; } catch { mal++; } }
     render(); loadResumen(); note(`${ok} ${ok === 1 ? 'aprobada' : 'aprobadas'}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}` : ''}.`, !!mal);
+  }
+  /** C3: los borradores de la semana que ya pueden salir, aprobados de una vez (el dueño puede aprobar un borrador directamente). */
+  async function aprobarBorradores() {
+    const hoy = startOfDay(Date.now()), lista = todasConocidas().filter(p => p.estado === 'borrador' && p.fecha && at(p) >= hoy && at(p) < hoy + 8 * DAY && puedeSalir(p) && visible(p)); let ok = 0, mal = 0;
+    for (const p of lista) { try { const r = await datos.approve(p.id); put(r.pieza); ok++; } catch { mal++; } }
+    await loadCola(); render(); loadResumen(); note(`${ok} ${ok === 1 ? 'aprobado' : 'aprobados'}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}` : ''}.`, !!mal);
+  }
+  /** C3: «Llenar la semana» y «Desde una plantilla» llegan con el paquete del editor (src/contenido-herramientas.js). */
+  async function herramientas() { flushUndo(); closeMenu(); try { return await panel.herramientas(); } catch (e) { note(e.message, true); return null; } }
+  async function llenarSemana() {
+    const h = await herramientas(); if (!h?.llenar) return;
+    await panel.close({ quiet: true });
+    h.llenar({ host: ov, datos, esc, modal, redes: [...redesNegocio], onHecho: async () => { await load(true); render(); loadResumen(); }, onVer: async () => { mode = 'prog'; store.set('mode', mode); await loadCola(); render(); E.prog.querySelector('#ctp-bor, #ctp-acc')?.scrollIntoView({ block: 'start' }); } });
+  }
+  async function desdePlantilla() {
+    const h = await herramientas(); if (!h?.plantillas) return;
+    h.plantillas({ host: ov, datos, esc, modal, onUsar: t => {
+      const redes = (t.redes || []).length ? [...t.redes] : [...redesNegocio];
+      openNew({ formato: t.formato, redes, fecha: siguienteHueco(redes, todasConocidas().filter(p => p.estado !== 'idea')), hora: '18:00',
+        extra: { titulo: t.nombre, formatos: { ...(t.formatos || {}) }, texto: t.texto || '', comentario: t.comentario || '', hashtags: t.hashtags || '', hashtagsEnComentario: !!t.hashtagsEnComentario, textoFacebook: t.textoFacebook || '', textos: { ...(t.textos || {}) }, notas: t.notas || '', historiaTambien: !!t.historiaTambien } });
+      note(`Desde la plantilla «${t.nombre}»: cambia lo que toque y ponle la imagen.`);
+    } });
   }
   /** M1: entregar ya, reintentar o quitar de la cola. Quitar pide un segundo clic (le quita el OK y la retira del conductor). */
   async function accionSalida(b) {

@@ -184,7 +184,7 @@ export function crearProgramador({ almacen, archivo, conductor, porId = null, mo
     estado() {
       const d = leer(), c = conductor(), entradas = Object.values(d.entradas || {});
       const cuenta = Object.fromEntries(['espera', 'entregando', 'en_red', 'publicada', 'parcial', 'fallo', 'cancelada'].map(k => [k, entradas.filter(e => e.estado === k).length]));
-      return { modo: modo(), conductor: { id: c.id, nombre: c.nombre, ...c.listo() }, horasAntes: horasAntes(), cuenta, ultimo, entradas: Object.fromEntries(Object.entries(d.entradas || {}).map(([k, e]) => [k, publica(e)])) };
+      return { modo: modo(), conductor: { id: c.id, nombre: c.nombre, ...c.listo(), ...(c.cuota ? { cuota: c.cuota() } : {}) }, horasAntes: horasAntes(), cuenta, ultimo, entradas: Object.fromEntries(Object.entries(d.entradas || {}).map(([k, e]) => [k, publica(e)])) };
     },
     /** Volver a intentar lo que falló (desde el principio de su espera). */
     reintentar(id) {

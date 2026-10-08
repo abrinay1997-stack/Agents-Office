@@ -84,6 +84,7 @@ import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content piec
 import { crearRutas } from './contenido/rutas.mjs';
 import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
 import { agenteDeContenido, promptMejorar, leerPropuesta } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
+import { crearPlantillas as crearPlantillasContenido } from './contenido/plantillas.mjs'; // C3: plantillas de publicación
 import { LIMITES as LIMITES_RED, formatoDe as formatoDeRed } from './src/contenido-reglas.js'; // C1: el tope y el formato de la red que se mejora
 import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectura — su token vive en META_ACCESS_TOKEN y no toca el disco
 import { crearMetricas } from './contenido/metricas.mjs';
@@ -1661,8 +1662,16 @@ async function mejorarPieza({ pieza, red, pide }) {
   const raw = await ask(system, user, { maxTokens: 2500, timeout: 120000, kind: 'contenido', agent: a, model: a.model || cfg.model }); // sin herramientas (ask): solo escribe; el gasto, a su nombre
   return { ...leerPropuesta(raw), agente: a.name, red };
 }
+/** C2 (8 oct 2026): la zona horaria de ESTA máquina (la de las horas de Contenido) y su desfase con UTC ahora mismo, para que se vea. */
+const zonaHoraria = () => { const m = -new Date().getTimezoneOffset(); return { nombre: Intl.DateTimeFormat().resolvedOptions().timeZone || '', utc: `UTC${m < 0 ? '−' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.abs(m) % 60).padStart(2, '0')}` }; };
 const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes, guardados: crearGuardados({ cerebro: BRAIN }), mejorar: mejorarPieza,
-  analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
+  publicadas: () => ({ ...metricas.leer({ dias: 120 }), conectado: meta.configurado() }), // C2: lo ya publicado, en el calendario de Contenido
+  // C3 (8 oct 2026): «Llenar la semana» pide los borradores a tu puesto de redes de Marketing (solo deja borradores: nada que aprobar aquí)
+  encargar: async ({ texto, titulo }) => { const a = agenteDeContenido(AGENTS, CONTENIDO_DEPTS); const t = await newTask({ dept: a?.department || 'marketing', text: texto, agent: a?.id || null, title: titulo, needsOk: false }); return { id: t.id, titulo: t.title, agente: AGENTS.find(x => x.id === t.agent)?.name || t.agent }; },
+  quienLlena: () => agenteDeContenido(AGENTS, CONTENIDO_DEPTS)?.name || '',
+  plantillas: crearPlantillasContenido({ cerebro: BRAIN }), // C3: las plantillas de publicación (notas del Cerebro)
+  alBorrador: p => TG?.pieza?.(p, 'Un agente dejó un borrador'), // C3: aprobar desde el teléfono, con la vista previa
+  analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, zona: zonaHoraria(), redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 // F3 (8 oct 2026): el pulso de Meta — programa en Facebook, prepara y publica en Instagram a su hora. Solo en modo real: en simulacro o apagado no sale nada
 const pulsoMeta = () => { if (contenidoModo() === 'real') CONDUCTORES.meta.pulso().catch(e => console.warn('contenido: meta —', e.message)); };
@@ -2819,7 +2828,7 @@ const server = http.createServer(async (req, res) => {
 server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? `Port ${cfg.port} is already in use — is another office running? Close it, or set PORT.` : e.message); process.exit(1); });
 server.listen(cfg.port, HOST, () => {
   console.log(`Agents Office ${version} → http://localhost:${cfg.port}`);
-  { const tg = TG = telegram.start({ port: cfg.port, cfg: { ...cfg, deputy: { name: DEPUTY } }, dataDir: DATA, onTask: f => taskHooks.push(f), onNotice: f => noticeHooks.push(f) }); // V4.4: Dimitri on Telegram (tokens only in environment variables)
+  { const tg = TG = telegram.start({ port: cfg.port, cfg: { ...cfg, deputy: { name: DEPUTY } }, dataDir: DATA, onTask: f => taskHooks.push(f), onNotice: f => noticeHooks.push(f), mediaRuta: id => media.resolve(id), nombreAgente: id => AGENTS.find(a => a.id === id)?.name || id }); // V4.4: Dimitri on Telegram (tokens only in environment variables)
     console.log(tg ? `  telegram: on — ${tg.owners} owner id(s); approvals, failures and notices go to the phone` : process.env.TELEGRAM_BOT_TOKEN ? '  telegram: TELEGRAM_BOT_TOKEN is set but TELEGRAM_OWNER_ID is missing or the token looks wrong — see docs/telegram.md' : '  telegram: off (docs/telegram.md: two environment variables turn it on)'); }
   if (!/^(127\.0\.0\.1|localhost|::1)$/.test(HOST)) console.warn(`  ⚠ ESCUCHANDO EN ${HOST}: la oficina NO tiene inicio de sesión todavía (issue #2). Cualquiera que llegue a esta dirección puede mandar a los agentes. Úsala solo en una red de confianza o detrás de un acceso con contraseña (docs/despliegue.md).`);
   console.log(`  business: ${cfg.name}   brain: ${BRAIN} (${graph.notes} notes, ${graph.links.length} links)   claude: ${backend} · ${modelName(cfg.model)}${cfg.effort ? ' · effort ' + cfg.effort : ''} by default (routing on Sonnet)`);
