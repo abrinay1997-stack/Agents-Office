@@ -13,13 +13,14 @@ async function office(pathname, body, method) {
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `la oficina respondió ${r.status}`); return j;
 }
 const ESTADO = { idea: 'idea', borrador: 'borrador', revision: 'en revisión', aprobada: 'APROBADA' };
-const linea = p => `${p.id} · ${p.fecha || 'sin día'}${p.hora ? ' ' + p.hora : ''} · ${p.formato} · ${p.redes.join('+')} · ${ESTADO[p.estado] || p.estado} · «${p.titulo || p.texto.slice(0, 50) || 'sin título'}»${p.medios.length ? ` · ${p.medios.length} medio(s)` : ' · sin imagen'}${p.revision?.errores?.length ? ' · le falta: ' + p.revision.errores[0] : ''}`;
+const linea = p => `${p.id} · ${p.fecha || 'sin día'}${p.hora ? ' ' + p.hora : ''} · ${p.formato}${Object.keys(p.formatos || {}).length ? ` (${Object.entries(p.formatos).map(([r, f]) => `${r}: ${f}`).join(', ')})` : ''} · ${p.redes.join('+')} · ${ESTADO[p.estado] || p.estado} · «${p.titulo || p.texto.slice(0, 50) || 'sin título'}»${p.medios.length ? ` · ${p.medios.length} medio(s)` : ' · sin imagen'}${p.revision?.errores?.length ? ' · le falta: ' + p.revision.errores[0] : ''}`;
 
 const CAMPOS = {
   titulo: { type: 'string', description: 'Título corto para el calendario (no se publica).' },
   fecha: { type: 'string', description: 'El día que debe salir, AAAA-MM-DD. Sin él, queda en el banco de ideas.' },
   hora: { type: 'string', description: 'HH:MM, de 00:00 a 23:59. Si dudas, déjala vacía: el dueño decide.' },
   formato: { type: 'string', enum: ['post', 'reel', 'carrusel', 'historia'], description: 'post = una imagen; carrusel = 2 a 10; reel = un video; historia = 9:16.' },
+  formatos: { type: 'object', additionalProperties: { type: 'string', enum: ['post', 'reel', 'carrusel', 'historia'] }, description: 'Opcional: el formato de una red que sale DISTINTO al de la pieza, { "facebook": "post" } (el mismo video como reel en Instagram y como post en Facebook). Las demás redes toman «formato».' },
   redes: { type: 'array', items: { type: 'string', enum: ['instagram', 'facebook', 'linkedin', 'x', 'threads', 'bluesky', 'tiktok', 'pinterest', 'youtube'] }, description: 'Dónde sale. Por defecto, instagram. Usa solo las redes que el dueño usa (las que ves en el calendario).' },
   texto: { type: 'string', description: 'El texto de la publicación (el caption), listo para salir. Instagram: hasta 2.200 caracteres.' },
   comentario: { type: 'string', description: 'Opcional: el primer comentario que se publica después.' },

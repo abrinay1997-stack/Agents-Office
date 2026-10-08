@@ -17,7 +17,7 @@ import { views } from './views.js'; // V4.5: the Estudio, the calendar and the B
 // V4.7: the grids and the dates are the shared engine (calendar-core.js) and the drag is shared too (calendar-dnd.js): the content calendar uses both
 import { DOW, MONTHS, DOW_LONG, DAY, pad, ymd, hm, startOfDay, fmtDay, fmtLong, weekStart, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, timeOpts, dateOpts } from './calendar-core.js';
 import { attachDnd } from './calendar-dnd.js';
-import { ESTADO as PIEZA_ESTADO } from './pieza.js'; // V4.7: the «Contenido» layer paints the pieces with their own colours
+import { ESTADO as PIEZA_ESTADO } from './pieza-base.js'; // V4.7: the «Contenido» layer paints the pieces with their own colours
 const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it sits in the «en marcha» row
 const isLive_ = ev => LIVE.includes(ev.kind);
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['days', 'Algunos días…'], ['hourly', 'Cada hora, 9–5, días hábiles']];

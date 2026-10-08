@@ -15,7 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { revisarPublicacion, postDePieza, medidaDeItem, revisarMomento } from '../src/contenido-reglas.js';
+import { revisarPublicacion, postDePieza, medidaDeItem, revisarMomento, normalizarFormatos, formatoDe } from '../src/contenido-reglas.js';
 
 export const ESTADOS = ['idea', 'borrador', 'revision', 'aprobada']; // los que se deciden aquí; «en Meta», «publicada» y «falló» son de la cola (F3)
 export const FORMATOS = ['post', 'reel', 'carrusel', 'historia'];
@@ -33,7 +33,7 @@ const existe = f => { const [y, m, d] = f.split('-').map(Number), x = new Date(y
 // los campos que definen LO QUE SALE: si cambian tras aprobarla, el OK ya no vale (lo aprobado es este texto, esta hora, estos archivos)
 const PUBLICABLES = ['fecha', 'hora', 'formato', 'redes', 'medios', 'texto', 'hashtags', 'hashtagsEnComentario', 'comentario', 'textoFacebook', 'historias', 'historiaTambien'];
 // M2: también lo que sale en las redes nuevas. Va APARTE y solo si tiene algo: así la huella de lo aprobado antes de M2 no cambia
-const PUBLICABLES_M2 = ['textos', 'pinterest', 'youtube', 'tiktok'];
+const PUBLICABLES_M2 = ['textos', 'pinterest', 'youtube', 'tiktok', 'formatos']; // C1 (8 oct 2026): `formatos`, el formato de cada red que sale distinto
 
 /* ---------- la cabecera: un YAML mínimo (cadenas, números, booleanos, listas, un objeto en una línea) ---------- */
 const BARE = /^[\p{L}\p{N}][\p{L}\p{N} ._/()\-áéíóúñÁÉÍÓÚÑ]*$/u;
@@ -54,8 +54,11 @@ function splitList(s) { // «a, "b, c", d»: las comas dentro de comillas no sep
   for (let i = 0; i < s.length; i++) { const c = s[i]; if (c === '"' && s[i - 1] !== '\\') q = !q; if (c === ',' && !q) { out.push(cur); cur = ''; } else cur += c; }
   out.push(cur); return out.map(x => x.trim()).filter(x => x !== '');
 }
-const ORDEN = ['tipo', 'id', 'titulo', 'fecha', 'hora', 'formato', 'redes', 'estado', 'responsable', 'medios', 'historiaTambien', 'historias', 'hashtagsEnComentario', 'pinterest', 'youtube', 'tiktok', 'origen', 'tarea', 'creada', 'actualizada', 'aprobada', 'entregada'];
-const OBJETOS = ['aprobada', 'entregada', 'pinterest', 'youtube', 'tiktok']; // van en la cabecera como JSON en una línea
+const ORDEN = ['tipo', 'id', 'titulo', 'fecha', 'hora', 'formato', 'formatos', 'redes', 'estado', 'responsable', 'medios', 'historiaTambien', 'historias', 'hashtagsEnComentario', 'pinterest', 'youtube', 'tiktok', 'origen', 'tarea', 'creada', 'actualizada', 'aprobada', 'entregada'];
+const OBJETOS = ['aprobada', 'entregada', 'pinterest', 'youtube', 'tiktok', 'formatos']; // van en la cabecera como JSON en una línea
+
+/** C1: los formatos por red de la cabecera: solo redes y formatos que existen. */
+const formatosLimpios = v => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([r, f]) => REDES.includes(r) && FORMATOS.includes(f))) : {});
 
 /** Las opciones de una red (Pinterest, YouTube, TikTok), limpias: solo los campos que admite, cada uno a su largo; vacías → null. */
 function opciones(red, v) {
@@ -90,7 +93,7 @@ export function parsear(md, { file = '' } = {}) {
   const lista = v => Array.isArray(v) ? v.filter(x => typeof x === 'string' && x) : [];
   return {
     id: head.id || path.basename(file, '.md'), titulo: String(head.titulo ?? ''), fecha: FECHA_RE.test(head.fecha ?? '') ? head.fecha : '', hora: HORA_RE.test(head.hora ?? '') ? head.hora : '',
-    formato: FORMATOS.includes(head.formato) ? head.formato : 'post', redes: lista(head.redes).filter(r => REDES.includes(r)),
+    formato: FORMATOS.includes(head.formato) ? head.formato : 'post', formatos: formatosLimpios(head.formatos), redes: lista(head.redes).filter(r => REDES.includes(r)),
     estado: ESTADOS.includes(head.estado) ? head.estado : 'borrador', responsable: String(head.responsable ?? ''),
     medios: lista(head.medios), historiaTambien: head.historiaTambien === true, historias: lista(head.historias),
     texto: t('texto'), comentario: t('comentario'), hashtags: t('hashtags'), hashtagsEnComentario: head.hashtagsEnComentario === true, textoFacebook: t('textoFacebook'), notas: t('notas'),
@@ -106,6 +109,7 @@ export function parsear(md, { file = '' } = {}) {
 export function serializar(p) {
   const v = { tipo: 'pieza', ...p, aprobada: p.aprobada ? JSON.stringify({ cuando: p.aprobada.cuando, huella: p.aprobada.huella, por: p.aprobada.por ?? '' }) : null, entregada: p.entregada ? JSON.stringify(p.entregada) : null };
   for (const k of ['pinterest', 'youtube', 'tiktok']) v[k] = p[k] ? JSON.stringify(p[k]) : null;
+  v.formatos = p.formatos && Object.keys(p.formatos).length ? JSON.stringify(p.formatos) : null;
   const cab = ORDEN.map(k => {
     const x = v[k];
     if (Array.isArray(x)) return x.length ? `${k}:\n${x.map(i => `  - ${scalar(i)}`).join('\n')}` : `${k}: []`;
@@ -135,12 +139,17 @@ const lista = (v, max = 30) => (Array.isArray(v) ? v : String(v ?? '').split(/[\
  * un campo ausente conserva su valor. Devuelve { pieza } o { error } en palabras.
  */
 export function normalizar(d = {}, previa = null) {
-  const p = previa ? { ...previa } : { id: '', titulo: '', fecha: '', hora: '', formato: 'post', redes: ['instagram'], estado: 'borrador', responsable: '', medios: [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', creada: '', actualizada: '', aprobada: null, entregada: null };
+  const p = previa ? { ...previa } : { id: '', titulo: '', fecha: '', hora: '', formato: 'post', redes: ['instagram'], estado: 'borrador', responsable: '', medios: [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, formatos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', creada: '', actualizada: '', aprobada: null, entregada: null };
   const has = k => Object.prototype.hasOwnProperty.call(d, k) && d[k] !== undefined;
   if (has('titulo')) p.titulo = cadena(d.titulo, 140).replace(/\n/g, ' ').trim();
   if (has('fecha')) { const f = String(d.fecha ?? ''); if (f && !FECHA_RE.test(f)) return { error: 'la fecha va como AAAA-MM-DD' }; if (f && !existe(f)) return { error: 'esa fecha no existe' }; p.fecha = f; }
   if (has('hora')) { const h = String(d.hora ?? ''); if (h && !HORA_RE.test(h)) return { error: 'la hora va como HH:MM, de 00:00 a 23:59' }; p.hora = h; }
   if (has('formato')) { if (!FORMATOS.includes(d.formato)) return { error: `el formato es uno de: ${FORMATOS.join(', ')}` }; p.formato = d.formato; }
+  if (has('formatos')) { // C1: { red: formato } de las redes que salen distinto; null o {} = todas con el de la pieza
+    if (d.formatos !== null && (typeof d.formatos !== 'object' || Array.isArray(d.formatos))) return { error: 'los formatos por red van como { red: formato }' };
+    for (const [r, f] of Object.entries(d.formatos || {})) { if (!REDES.includes(r)) return { error: `«${r}» no es una red de esta oficina (son: ${REDES.join(', ')})` }; if (!FORMATOS.includes(f)) return { error: `el formato es uno de: ${FORMATOS.join(', ')}` }; }
+    p.formatos = { ...(d.formatos || {}) };
+  }
   if (has('redes')) { const r = lista(d.redes).map(x => x.toLowerCase()); const mala = r.find(x => !REDES.includes(x)); if (mala) return { error: `«${mala}» no es una red de esta oficina (son: ${REDES.join(', ')})` }; p.redes = [...new Set(r)]; }
   if (has('estado')) { if (!ESTADOS.includes(d.estado)) return { error: `el estado es uno de: ${ESTADOS.join(', ')}` }; p.estado = d.estado; }
   if (has('responsable')) p.responsable = cadena(d.responsable, 60).trim();
@@ -168,6 +177,8 @@ export function normalizar(d = {}, previa = null) {
   if (has('origen')) p.origen = cadena(d.origen, 40) || 'dueno';
   if (has('tarea')) p.tarea = cadena(d.tarea, 40);
   if (!p.redes.length) p.redes = ['instagram'];
+  // C1: los formatos por red, siempre limpios: solo las redes de la pieza y solo los que salen distinto (como en la pantalla)
+  if (p.formatos && Object.keys(p.formatos).length) { const n = normalizarFormatos(p.redes, Object.fromEntries(p.redes.map(r => [r, formatoDe(p, r)]))); p.formato = n.formato; p.formatos = n.formatos; } else p.formatos = {};
   return { pieza: p };
 }
 
@@ -179,6 +190,12 @@ export const medidaDelEstudio = mediaDir => id => {
   try { return medidaDeItem(JSON.parse(fs.readFileSync(path.join(mediaDir, rel.replace(/\.[^.]+$/, '.json')), 'utf8'))); } catch { return null; }
 };
 const mesDe = f => (FECHA_RE.test(f) ? f.slice(0, 7) : SIN_FECHA);
+/** C1: «Publicar ya» aprueba para el primer minuto entero que falte a `min` minutos o más (la cola: 1 de gracia y 3 de margen). */
+export const PRONTO_MIN = 5;
+const dos = n => String(n).padStart(2, '0');
+export function ahoraMas(t, min) { const d = new Date(t + min * 60e3); if (d.getSeconds() || d.getMilliseconds()) d.setMinutes(d.getMinutes() + 1, 0, 0); return { fecha: `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`, hora: `${dos(d.getHours())}:${dos(d.getMinutes())}` }; }
+/** El día con que está guardada la nota (por su carpeta): si «Publicar ya» la cambia de mes, se mueve. */
+const previaFecha = f => { const c = path.basename(path.dirname(f)); return c === SIN_FECHA ? '' : `${c}-01`; };
 const nuevoId = (fecha, ahora) => `p-${(FECHA_RE.test(fecha) ? fecha : new Date(ahora()).toISOString().slice(0, 10)).replace(/-/g, '')}-${crypto.randomBytes(2).toString('hex')}`;
 
 /**
@@ -239,14 +256,15 @@ export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Da
       escribir(p, previa.fecha); return { pieza: conEstado(p), soltada };
     },
     /** El OK del dueño: solo si puede salir (sin errores de las reglas de cada red), tiene día y hora, y ese momento todavía no pasó. */
-    aprobar(id, { por = 'dueno' } = {}) {
+    aprobar(id, { por = 'dueno', pronto = false } = {}) {
       const f = buscar(id), p = f && deArchivo(f); if (!p) return { error: 'esa pieza ya no existe', nada: true };
+      if (pronto) { const t = ahoraMas(ahora(), PRONTO_MIN); p.fecha = t.fecha; p.hora = t.hora; } // C1: «Publicar ya» — sale dentro de unos 5 minutos
       if (!p.fecha) return { error: 'ponle un día antes de aprobarla', errores: ['Sin día'] };
-      const cuando = revisarMomento(p.fecha, p.hora, ahora()); if (cuando.errores.length) return { error: cuando.errores[0].replace(/^./, c => c.toLowerCase()), errores: cuando.errores };
+      const cuando = revisarMomento(p.fecha, p.hora, ahora(), pronto ? { minMin: PRONTO_MIN - 1 } : undefined); if (cuando.errores.length) return { error: cuando.errores[0].replace(/^./, c => c.toLowerCase()), errores: cuando.errores };
       const { errores, avisos } = revisar(p); if (errores.length) return { error: 'todavía no puede salir: ' + errores[0], errores, avisos: [...avisos, ...cuando.avisos] };
       const mal = medios(p); if (mal) return { error: mal };
       p.estado = 'aprobada'; p.aprobada = { cuando: new Date(ahora()).toISOString(), huella: huella(p), por }; p.actualizada = p.aprobada.cuando;
-      escribir(p); return { pieza: conEstado(p), avisos: [...avisos, ...cuando.avisos] };
+      escribir(p, f && previaFecha(f)); return { pieza: conEstado(p), avisos: [...avisos, ...cuando.avisos] };
     },
     /** Devolver una pieza a revisión (o a borrador): quita el OK. */
     devolver(id, estado = 'revision') {

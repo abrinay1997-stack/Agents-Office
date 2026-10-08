@@ -15,7 +15,7 @@ export const DEMO_MEDIOS = Object.freeze({
 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const PUBLICABLES = ['fecha', 'hora', 'formato', 'redes', 'medios', 'texto', 'hashtags', 'hashtagsEnComentario', 'comentario', 'textoFacebook', 'historias', 'historiaTambien'];
-const huella = p => JSON.stringify(PUBLICABLES.map(k => p[k] ?? null));
+const huella = p => JSON.stringify([...PUBLICABLES.map(k => p[k] ?? null), ...(p.formatos && Object.keys(p.formatos).length ? [p.formatos] : [])]); // C1: el formato de cada red, solo si alguna sale distinta
 const medidasDe = p => { const out = { ...(p.medidas || {}) }; for (const m of [...(p.medios || []), ...(p.historias || [])]) if (DEMO_MEDIOS[m] && !out[m]) out[m] = DEMO_MEDIOS[m]; return out; };
 const revisar = p => { const r = revisarPublicacion(postDePieza({ ...p, medidas: medidasDe(p) }), p.redes); return { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }; };
 const conRevision = p => ({ ...p, medidas: medidasDe(p), cambiadaTrasAprobar: p.estado === 'aprobada' && !!p.aprobada && p.aprobada.huella !== huella(p), revision: revisar(p) });
@@ -60,7 +60,7 @@ export function crearDatos({ served, now = () => new Date() }) {
     list: async ({ desde = '', hasta = '', sinFecha = false } = {}) => { const q = new URLSearchParams(); if (desde) q.set('desde', desde); if (hasta) q.set('hasta', hasta); if (sinFecha) q.set('sin_fecha', '1'); return http('GET', '/api/contenido?' + q); },
     create: async d => (await http('POST', '/api/contenido/piezas', d)).pieza,
     patch: async (id, d) => http('PATCH', `/api/contenido/piezas/${encodeURIComponent(id)}`, d),
-    approve: async id => http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/aprobar`, {}),
+    approve: async (id, o = {}) => http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/aprobar`, o.pronto ? { pronto: true } : {}), // C1: { pronto } = «Publicar ya»
     back: async (id, estado) => (await http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/devolver`, { estado })).pieza,
     remove: async id => http('DELETE', `/api/contenido/piezas/${encodeURIComponent(id)}`),
     resumen: async () => http('GET', '/api/contenido/resumen'),
@@ -75,6 +75,11 @@ export function crearDatos({ served, now = () => new Date() }) {
     repetir: async (id, cada, veces) => http('POST', `/api/contenido/piezas/${encodeURIComponent(id)}/repetir`, { cada, veces }), // plan M5 · U7
     bandejaBorrador: async (id, borrador) => http('PATCH', `/api/contenido/bandeja/${encodeURIComponent(id)}`, { borrador }),
     bandejaAccion: async (id, que, texto) => http('POST', `/api/contenido/bandeja/${encodeURIComponent(id)}/${que}`, texto === undefined ? {} : { texto }),
+    // C1 (8 oct 2026): el editor nuevo — los textos guardados (nota del Cerebro) y la propuesta de tu agente de contenido
+    guardados: async () => http('GET', '/api/contenido/guardados'),
+    guardar: async (nombre, texto) => http('POST', '/api/contenido/guardados', { nombre, texto }),
+    borrarGuardado: async nombre => http('DELETE', '/api/contenido/guardados/' + encodeURIComponent(nombre)),
+    mejorar: async (pieza, red, pide) => http('POST', '/api/contenido/mejorar', { pieza, red, pide }),
     pedirBorradores: async () => http('POST', '/api/tasks', { dept: 'marketing', text: 'Contesta la bandeja de Contenido: lee lo pendiente con ver_bandeja y deja, para cada mensaje, comentario o reseña que lo necesite, el borrador de la respuesta con crear_borrador_respuesta (la voz de la marca, corto, sin prometer nada que no esté en el cerebro). No envíes nada: yo los reviso y los envío.' }),
   };
 
@@ -97,8 +102,9 @@ export function crearDatos({ served, now = () => new Date() }) {
       if (p.estado !== 'aprobada') p.aprobada = null;
       mem()[i] = p; return { ok: true, pieza: conRevision(p), soltada };
     },
-    approve: async id => {
+    approve: async (id, o = {}) => {
       const p = mem().find(x => x.id === id); if (!p) throw falla('esa pieza ya no existe', { status: 404 });
+      if (o.pronto) throw falla('En la demo no sale nada: «Publicar ya» funciona en la oficina (abre el iniciador).');
       if (!p.fecha) throw falla('ponle un día antes de aprobarla', { errores: ['Sin día'] });
       const cuando = revisarMomento(p.fecha, p.hora, now().getTime()); if (cuando.errores.length) throw falla(cuando.errores[0].replace(/^./, c => c.toLowerCase()), { errores: cuando.errores, status: 409 });
       const r = revisar(p); if (r.errores.length) throw falla('todavía no puede salir: ' + r.errores[0], { errores: r.errores, status: 409 });
@@ -117,8 +123,18 @@ export function crearDatos({ served, now = () => new Date() }) {
     bandejaBorrador: async (id, borrador) => { const m = bandejaDemo().find(x => x.id === id); if (!m) throw falla('ese mensaje ya no está'); m.borrador = borrador ? { texto: borrador, por: 'dueno', cuando: new Date().toISOString() } : null; m.estado = borrador ? 'borrador' : 'nuevo'; return { ok: true, item: m }; },
     bandejaAccion: async (id, que, texto) => { const m = bandejaDemo().find(x => x.id === id); if (!m) throw falla('ese mensaje ya no está'); if (que === 'enviar') { if (!String(texto ?? m.borrador?.texto ?? '').trim()) throw falla('escribe la respuesta antes de enviarla'); m.estado = 'respondido'; m.respuesta = { texto: texto ?? m.borrador.texto, cuando: new Date().toISOString(), simulada: true }; } else if (que === 'descartar') m.estado = 'descartado'; else m.estado = m.borrador ? 'borrador' : 'nuevo'; return { ok: true, item: m, simulada: true }; },
     pedirBorradores: async () => { throw falla('En la demo no hay agentes: abre la oficina con el iniciador.'); },
+    // C1: los textos guardados de la demo viven en la memoria de la página (en la oficina, una nota del Cerebro)
+    guardados: async () => ({ textos: guardadosDemo().map(x => ({ ...x })), usados: hashtagsDeLaDemo(mem()), nota: '' }),
+    guardar: async (nombre, texto) => { const n = String(nombre || '').trim(), t = String(texto || '').trim(); if (!n) throw falla('ponle un nombre (por ejemplo «Firma»)'); if (!t) throw falla('el texto está vacío'); const l = guardadosDemo(), i = l.findIndex(x => x.nombre.toLowerCase() === n.toLowerCase()), x = { nombre: n, texto: t, hashtags: /^(#[\p{L}\p{N}_]+\s*)+$/u.test(t) }; if (i < 0) l.push(x); else l[i] = x; return { ok: true, textos: l }; },
+    borrarGuardado: async nombre => { const l = guardadosDemo(), i = l.findIndex(x => x.nombre.toLowerCase() === String(nombre).toLowerCase()); if (i < 0) throw falla('ese texto guardado ya no está'); l.splice(i, 1); return { ok: true, textos: l }; },
+    mejorar: async () => { throw falla('En la demo no hay agentes: «Mejorar con Marketing» funciona en la oficina (abre el iniciador).'); },
   };
 }
+
+/** C1: los textos guardados de la demo (en memoria) y los hashtags que más usan sus piezas. */
+let GUARDADOS_DEMO = null;
+const guardadosDemo = () => (GUARDADOS_DEMO ||= [{ nombre: 'Firma', texto: 'PanaClaw · tu óptica en Panamá', hashtags: false }, { nombre: 'Agenda tu cita', texto: 'Agenda tu cita en el enlace de la bio o escríbenos por WhatsApp.', hashtags: false }, { nombre: 'Hashtags de lentes', texto: '#optica #lentes #panama', hashtags: true }]);
+function hashtagsDeLaDemo(piezas) { const c = new Map(); for (const p of piezas) for (const t of new Set(`${p.hashtags || ''} ${p.texto || ''}`.match(/#[\p{L}\p{N}_]+/gu)?.map(x => x.toLowerCase()) || [])) c.set(t, (c.get(t) || 0) + 1); return [...c].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 12).map(([t]) => t); }
 
 /** La mejor hora de la demo: picos típicos (mediodía y noche entre semana, media mañana el fin de semana). Nunca se mezcla con datos reales. */
 const GRID_EJEMPLO = Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => {

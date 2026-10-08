@@ -11,15 +11,20 @@ import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repe
 //   POST   /api/contenido/piezas/<id>/reintentar | /entregar | /quitar         → reintentar lo que falló · entregar ya · quitar de la cola
 //   POST   /api/contenido/conductor/comprobar                                   → ¿la key de Metricool sirve? (marcas, sin publicar nada) · con Meta directo
 //                                                                                  (8 oct 2026): la página, su Instagram, los permisos y la cuota
+// C1 (8 oct 2026), el editor nuevo:
+//   GET|POST /api/contenido/guardados · DELETE /api/contenido/guardados/<nombre>  → los textos guardados (nota del Cerebro) y tus hashtags más usados
+//   POST   /api/contenido/mejorar { pieza, red, pide }                          → la propuesta de tu agente de contenido (no guarda nada)
+//   POST   /api/contenido/piezas/<id>/aprobar { pronto: true }                  → «Publicar ya»: aprobada para dentro de unos 5 minutos
 // Cada pieza que sale de aquí lleva `salida` (lo que pasó al entregarla) cuando la cola la conoce.
 // Los agentes llegan por aquí con `por: 'agente'` (contenido-mcp.mjs): pueden dejar borradores y leer, NUNCA aprobar. Eso se comprueba
 // aquí y no solo en la herramienta, porque cualquier proceso de esta máquina puede llamar a la API.
 import { postDePieza, revisarPublicacion } from '../src/contenido-reglas.js';
+import { hashtagsUsados } from './guardados.mjs';
 
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null }) {
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null, guardados = null, mejorar = null }) {
   const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? programador.salidaDe(p.id) : null }; };
   const resumen = () => {
     const todas = almacen.listar({ sinFecha: true });
@@ -89,6 +94,27 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         const redes = (url.searchParams.get('redes') || (ajustes().redes || ['instagram', 'facebook']).join(',')).split(',').filter(Boolean).slice(0, 9);
         return json(res, 200, await analiticasTexto(dias, redes)), true;
       }
+      if (p === '/api/contenido/guardados' && req.method === 'GET') { // C1: los textos guardados y los hashtags que más usas
+        return json(res, 200, { textos: guardados ? guardados.listar() : [], usados: hashtagsUsados(almacen.listar({ sinFecha: true })), nota: guardados ? 'Contenido/Textos guardados.md' : '' }), true;
+      }
+      if (p === '/api/contenido/guardados' && req.method === 'POST') {
+        const b = await body(req); if (b.por === 'agente') return json(res, 403, { error: 'los textos guardados los decide el dueño' }), true;
+        if (!guardados) return json(res, 404, { error: 'sin textos guardados' }), true;
+        const r = guardados.guardar(b); return json(res, r.error ? 400 : 200, r.error ? { error: r.error } : { ok: true, textos: r.lista }), true;
+      }
+      const gd = /^\/api\/contenido\/guardados\/(.+)$/.exec(p);
+      if (gd && req.method === 'DELETE') {
+        if (!guardados) return json(res, 404, { error: 'sin textos guardados' }), true;
+        const r = guardados.borrar(decodeURIComponent(gd[1])); return json(res, r.error ? 404 : 200, r.error ? { error: r.error } : { ok: true, textos: r.lista }), true;
+      }
+      if (p === '/api/contenido/mejorar' && req.method === 'POST') { // C1: «✨ Mejorar con Marketing» — una propuesta, nada se guarda
+        const b = await body(req); if (b.por === 'agente') return json(res, 403, { error: 'esto es para el dueño: un agente mejora sus borradores con mejorar_borrador' }), true;
+        if (!mejorar) return json(res, 404, { error: 'aquí no hay agentes que propongan' }), true;
+        const pz = b.pieza && typeof b.pieza === 'object' ? b.pieza : {};
+        if (!String(pz.texto || '').trim() && !String(pz.titulo || '').trim() && !String(pz.notas || '').trim()) return json(res, 400, { error: 'escribe algo primero (un título, unas notas o el texto): el agente parte de ahí' }), true;
+        try { return json(res, 200, await mejorar({ pieza: pz, red: String(b.red || ''), pide: String(b.pide || '').slice(0, 300) })), true; }
+        catch (e) { return json(res, e.status || 502, { error: 'no pude traer la propuesta: ' + e.message }), true; }
+      }
       if (p === '/api/contenido/cola' && req.method === 'GET') return json(res, 200, programador ? programador.estado() : { modo: 'apagado', entradas: {} }), true;
       if (p === '/api/contenido/cola/tick' && req.method === 'POST') { if (!programador) return json(res, 404, { error: 'sin cola' }), true; const u = await programador.tick(); return json(res, 200, { ok: true, ultimo: u, ...programador.estado() }), true; }
       if (p === '/api/contenido/conductor/comprobar' && req.method === 'POST') {
@@ -135,7 +161,7 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (accion && req.method === 'POST') {
           const b = await body(req);
           if (b.por === 'agente') return json(res, 403, { error: 'los agentes no aprueban ni devuelven piezas: es del dueño' }), true;
-          const r = accion === 'aprobar' ? almacen.aprobar(id, { por: String(b.quien || 'dueno').slice(0, 40) }) : almacen.devolver(id, b.estado);
+          const r = accion === 'aprobar' ? almacen.aprobar(id, { por: String(b.quien || 'dueno').slice(0, 40), pronto: b.pronto === true }) : almacen.devolver(id, b.estado);
           return r.error ? (json(res, r.nada ? 404 : 409, { error: r.error, errores: r.errores }), true) : (json(res, 200, { ok: true, pieza: revisado(r.pieza), avisos: r.avisos || [] }), true);
         }
       }

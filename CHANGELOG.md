@@ -1,5 +1,18 @@
 # Changelog
 
+## C1 y C2 de Contenido — 8 oct 2026 (el editor que se escribe primero y las tarjetas que se leen de un vistazo)
+
+Pedido del dueño tras comparar con Metricool: «¿podemos tener un panel mucho mejor que ellos?» → «haz C1 y las tarjetas de C2».
+- **Formato por red:** cada red de la pieza lleva su ficha con su formato (Instagram Reel y Facebook Post con el mismo video; Short o Video en YouTube; Pin en Pinterest). Las reglas revisan cada red con el suyo, el arreglo de un formato toca solo esas redes, y cada formato distinto sale como su propia publicación (Meta, Metricool y el simulacro). Lo aprobado antes no cambia de huella: `formatos` solo se guarda si alguna red sale distinta.
+- **Un solo cuadro de escribir:** el texto, los archivos dentro (se ordenan arrastrando, o con ‹ ›) y una barra con emoji, hashtags (tus juegos y los que más usas), primer comentario, enlace, **textos guardados** (la firma, una llamada a la acción; una nota del Cerebro, `Contenido/Textos guardados.md`) y **✨ Mejorar con Marketing**: tu agente de contenido propone el texto con la voz de la marca, sus instrucciones, sus lecciones y tus cifras; tú lo usas, pides otra o lo descartas (DESHACER). Un contador por red.
+- **Editar por red:** pestañas sobre el mismo cuadro (el texto principal, Facebook, X…); la que lleva texto propio se marca.
+- **Lo demás, plegado:** «Configuración de Instagram» (la historia también), Pinterest, YouTube, TikTok y las notas; se abren solas si les falta algo. **«N problemas»** arriba se despliega con sus arreglos de un clic.
+- **El pie:** cuándo sale (con los días y las horas rápidas y la mejor hora, que se despliegan) y **Aprobar ▾**: pasar a revisión, volver a borrador y **Publicar ya** (aprobada para dentro de unos 5 minutos, con un segundo clic).
+- **Vista previa en teléfono o computadora.**
+- **Tarjetas del calendario:** el texto que sale bajo el título, «+N» sobre la miniatura cuando hay más archivos, el icono del formato de la red que sale distinto, y **la vista previa al pasar el ratón** (o al llegar con el teclado): la imagen, el texto entero, los hashtags y el estado; un clic la abre, Esc la cierra.
+- **La página pesa menos que antes:** el editor llega en su propio paquete (`dist/pieza-editor.js`, `build-pieza.mjs`, `src/pieza-carga.js`) que se trae al abrir Contenido. La página baja de 2,27 a 2,22 MB.
+- **Pruebas:** `tests/contenido-formatos.test.mjs`, `tests/contenido-editor.test.mjs`; `node scripts/editor-contenido-recorrido.mjs` y `node scripts/tarjetas-contenido-recorrido.mjs` (1512, 1024 y 390, claro y oscuro); el calendario de tareas, idéntico (`calendario-capturas`).
+
 ## F3 de Contenido — 8 oct 2026 (publicar directo con Meta)
 
 Pedido del dueño: «quiero ir conectando Meta, para las métricas y estadísticas y publicar posts» → «construye la publicación directa con Meta». Guía: `docs/conectar-meta.md`; diseño: §17 de `docs/propuesta-contenido-y-meta.md`.

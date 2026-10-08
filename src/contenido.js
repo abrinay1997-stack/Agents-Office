@@ -15,9 +15,10 @@ import { views } from './views.js';
 import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, DOW_LONG, dateOpts } from './calendar-core.js';
 import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
-import { initPieza, ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza.js';
+import { ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza-base.js';
+import { panelBajoDemanda } from './pieza-carga.js'; // C1 (8 oct 2026): el editor de la pieza llega en su propio paquete (dist/pieza-editor.js)
 import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida } from './contenido-cola.js';
-import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS } from './contenido-reglas.js';
+import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS, formatoDe } from './contenido-reglas.js';
 import { nivel as nivelHora, FUENTE as FUENTE_HORA } from './contenido-hora.js';
 import { initBandeja } from './contenido-bandeja.js';
 import { casillas, intercambio, perfilHTML } from './contenido-perfil.js';
@@ -27,8 +28,11 @@ const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.ct.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.ct.' + k, JSON.stringify(v)); } catch {} } };
 // sin hora, la pieza se pinta al principio del día y dice «sin hora» (no se inventa un 09:00 ni un 23:59): no puede aprobarse así
 const at = p => { if (!p.fecha) return 0; const [h, m] = (p.hora || '00:00').split(':').map(Number); return new Date(`${p.fecha}T00:00:00`).setHours(h, m, 0, 0); };
-const netBadges = (p, cls = '') => p.redes.map(r => `<b class="pz-nb ${r}${cls}" aria-hidden="true">${RED[r]?.short || r}</b>`).join('');
-const redesTxt = p => p.redes.map(r => RED[r]?.name || r).join(' y ');
+// C2 (8 oct 2026): una red que sale con OTRO formato (reel en Instagram, post en Facebook) lleva su icono al lado
+const netBadges = (p, cls = '') => p.redes.map(r => `<b class="pz-nb ${r}${cls}" aria-hidden="true">${RED[r]?.short || r}</b>${p.formatos?.[r] ? `<span class="pz-nf" aria-hidden="true">${FICON[p.formatos[r]] || ''}</span>` : ''}`).join('');
+const redesTxt = p => p.redes.map(r => `${RED[r]?.name || r}${p.formatos?.[r] ? ` (${(FORMATO[p.formatos[r]] || p.formatos[r]).toLowerCase()})` : ''}`).join(' y ');
+/** C2: el texto que sale, sin lo que ya dice la tarjeta en negrita (el título, o su primera línea). */
+const resto = (p, titulo) => { const t = String(p.texto || '').replace(/\s+/g, ' ').trim(); if (!t) return ''; return p.titulo ? t : t.slice(titulo.length).replace(/^[\s.,:;—-]+/, ''); };
 export function initContenido({ served, esc, agentName = id => id, openStudio = () => {}, business = () => '' }) {
   const datos = crearDatos({ served });
   const ov = document.createElement('div');
@@ -55,12 +59,13 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <div class="ct-prog" hidden></div>
       <div class="ct-bj" hidden></div>
       <aside class="ct-panel" hidden></aside>
+      <div class="ct-hov" aria-hidden="true" hidden></div>
     </div>
     <div class="cv-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <div id="ctPop" hidden></div>`;
   document.body.appendChild(ov);
   const $ = s => ov.querySelector(s);
-  const E = { bj: $('.ct-bj'), title: $('#ctTitle'), dow: $('#ctDow'), grid: $('#ctGrid'), chips: $('#ctChips'), stats: $('#ctStats'), search: $('#ctSearch'), rail: $('.ct-rail'), railBox: $('.cv-rail'), prog: $('.ct-prog'), wrap: $('.cv-wrap'), panelHost: $('.ct-panel'), pop: $('#ctPop'), toast: $('.cv-toast'), views: $('.ct-views'), mode: $('.ct-mode'), newBtn: $('#ctNew'), newMenu: $('.ct-newmenu') };
+  const E = { bj: $('.ct-bj'), title: $('#ctTitle'), dow: $('#ctDow'), grid: $('#ctGrid'), chips: $('#ctChips'), stats: $('#ctStats'), search: $('#ctSearch'), rail: $('.ct-rail'), railBox: $('.cv-rail'), prog: $('.ct-prog'), wrap: $('.cv-wrap'), panelHost: $('.ct-panel'), hov: $('.ct-hov'), pop: $('#ctPop'), toast: $('.cv-toast'), views: $('.ct-views'), mode: $('.ct-mode'), newBtn: $('#ctNew'), newMenu: $('.ct-newmenu') };
   const narrow = () => matchMedia('(max-width: 760px)').matches;
   let tgKey = '', tgScroll = 0; // which week or day the time grid shows, and where it was scrolled to (a re-render keeps it), as in the tasks calendar
   let colaInfo = null; // M1: el modo y el conductor (GET /api/contenido/cola)
@@ -134,6 +139,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const visible = p => !gone.has('p:' + p.id) && estadoOn.has(p.estado) && p.redes.some(r => redOn.has(r)) && (!q || `${p.titulo} ${p.texto} ${p.hashtags} ${p.notas}`.toLowerCase().includes(q));
   const chipOf = p => (ESTADO[p.estado] || ESTADO.borrador).color;
   const titleOf = p => p.titulo || (p.texto || '').split('\n')[0].slice(0, 60) || 'Sin título';
+  /** C2: la miniatura del primer archivo y, si hay más, «+N» encima (como en el feed: se ve que es un carrusel o un lote). */
+  const miniatura = (p, cls) => (p.medios[0] ? thumbHTML(p.medios[0], esc, cls).replace(/<\/span>$/, p.medios.length > 1 ? `<b class="pz-mas">+${p.medios.length - 1}</b></span>` : '</span>') : `<span class="${cls} none" aria-hidden="true">${FICON[p.formato] || ''}</span>`);
   function eventsByDay() {
     const by = {};
     for (const p of pieces.filter(p => p.fecha && visible(p))) (by[p.fecha] ||= []).push({ kind: 'pz', at: at(p), p, title: titleOf(p) });
@@ -143,22 +150,60 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const errN = p => (p.revision?.errores || []).length;
   const falta = p => errN(p) && p.estado !== 'idea';
   /** Lo que un lector de pantalla oye de una tarjeta: todo lo que el ojo ve de un vistazo. */
-  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) ? ', la hora ya pasó' : ''}`;
+  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}${p.medios.length > 1 ? ` de ${p.medios.length} archivos` : ''}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) ? ', la hora ya pasó' : ''}`;
   function card(ev, line) {
     const p = ev.p, e = ESTADO[p.estado] || ESTADO.borrador, sel = panel.current()?.id === p.id;
     const cls = `cv-ev pz pz-${p.estado}${falta(p) ? ' pz-falta' : ''}${vencida(p) ? ' pz-venc' : ''}${sel ? ' sel' : ''}`;
     const attrs = `data-ev="p:${esc(p.id)}" style="--chip:${e.color};--chipd:${e.dark}" title="${esc(ariaOf(p))} · arrástrala a otro día (o Mayús + flechas)" aria-label="${esc(ariaOf(p))}" draggable="true" role="button" tabindex="0"`;
     const st = `<span class="pz-st pz-tone" style="--c:${e.color};--cd:${e.dark}" aria-hidden="true">${e.glyph}</span>${falta(p) ? '<span class="pz-warn" aria-hidden="true">!</span>' : ''}`;
-    const thumb = p.medios[0] ? thumbHTML(p.medios[0], esc, 'pz-ct') : `<span class="pz-ct none" aria-hidden="true">${FICON[p.formato] || ''}</span>`;
+    const thumb = miniatura(p, 'pz-ct'), tit = titleOf(p), snip = line ? '' : resto(p, tit);
     if (line) // el MES: dos filas — miniatura | hora · formato · redes · estado / título
       return `<div class="${cls} line pz2" ${attrs}>${thumb}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f" aria-hidden="true">${FICON[p.formato] || ''}<span class="pz-fw">${esc(FORMATO[p.formato] || '')}</span></span>${netBadges(p)}${st}</span><span class="cv-ev-t">${esc(titleOf(p))}</span></span></div>`;
     return `<div class="${cls}" ${attrs}>
-      <div class="pz-cardrow">${thumb}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f">${FICON[p.formato] || ''}<span>${esc(FORMATO[p.formato])}</span></span>${netBadges(p)}</div><div class="cv-ev-t">${esc(titleOf(p))}</div><div class="pz-cardst"><b class="pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}${p.cambiadaTrasAprobar ? ' · CAMBIÓ' : ''}</b>${falta(p) ? '<span class="pz-fail">le falta algo</span>' : ''}${vencida(p) ? '<span class="pz-fail">la hora ya pasó</span>' : ''}</div></div></div></div>`;
+      <div class="pz-cardrow">${thumb}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f">${FICON[p.formato] || ''}<span>${esc(FORMATO[p.formato])}</span></span>${netBadges(p)}</div><div class="cv-ev-t">${esc(tit)}</div>${snip ? `<div class="pz-snip">${esc(snip.slice(0, 220))}</div>` : ''}<div class="pz-cardst"><b class="pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}${p.cambiadaTrasAprobar ? ' · CAMBIÓ' : ''}</b>${falta(p) ? '<span class="pz-fail">le falta algo</span>' : ''}${vencida(p) ? '<span class="pz-fail">la hora ya pasó</span>' : ''}</div></div></div></div>`;
   }
+  /* ---------- C2 (8 oct 2026): la vista previa al pasar el ratón (o llegar con el teclado) por una tarjeta ----------
+     Como el ojo de Metricool, pero con lo que importa aquí: la imagen a su proporción, el texto entero, los hashtags, las redes con su formato
+     y el estado (y lo que le falta). Es un vistazo: no se edita ahí; un clic sobre ella abre la pieza. Se queda abierta si el ratón pasa
+     encima, y Esc la cierra sin cerrar Contenido (WCAG 1.4.13). En pantallas táctiles no sale: tocar ya abre la pieza. */
+  let hovT = null, hovFuera = null, hovId = '';
+  const puedeHov = () => matchMedia('(hover: hover) and (pointer: fine)').matches;
+  function hovHTML(p) {
+    const m = p.medios[0], red = p.redes.includes('instagram') ? 'instagram' : p.redes[0], md = (p.medidas || {})[m] || medidas[m] || {};
+    const ratio = ['reel', 'historia'].includes(formatoDe(p, red)) ? '9 / 16' : md.ancho && md.alto ? String(Math.min(1.91, Math.max(0.8, md.ancho / md.alto))) : '4 / 5';
+    const e = ESTADO[p.estado] || ESTADO.borrador, sal = textoSalida(p), falta = (p.revision?.errores || []).length && p.estado !== 'idea' ? p.revision.errores[0] : '';
+    return `<div class="ct-hov-m" style="aspect-ratio:${ratio}">${m ? thumbHTML(m, esc, 'ct-hov-im') : '<span class="ct-hov-none">Sin imagen todavía</span>'}${p.medios.length > 1 ? `<b class="ct-hov-k">1/${p.medios.length}</b>` : ''}</div>
+      <div class="ct-hov-b"><div class="ct-hov-h"><b>${p.fecha ? esc(fmtDay(at(p))) + (p.hora ? ' · ' + esc(p.hora) : ' · sin hora') : 'Sin día'}</b><span class="ct-hov-n">${netBadges(p)}</span></div>
+        ${p.titulo ? `<p class="ct-hov-t">${esc(p.titulo)}</p>` : ''}<p class="ct-hov-x">${esc(String(p.texto || '').trim() || 'Sin texto todavía')}</p>${p.hashtags ? `<p class="ct-hov-g">${esc(p.hashtags)}</p>` : ''}
+        <p class="ct-hov-s pz-tone" style="--c:${e.color};--cd:${e.dark}">${e.glyph} ${e.name}${sal ? ' · ' + esc(sal.etiqueta) : ''}</p>${falta ? `<p class="ct-hov-f">Le falta: ${esc(falta)}</p>` : ''}</div>`;
+  }
+  function verHov(card) {
+    const id = (card.dataset.ev || '').slice(2), p = todasConocidas().find(x => x.id === id); if (!p || !card.isConnected) return;
+    hovId = id; E.hov.innerHTML = hovHTML(p); E.hov.hidden = false;
+    const o = (E.hov.offsetParent || ov).getBoundingClientRect(), r = card.getBoundingClientRect(), w = E.hov.offsetWidth, h = E.hov.offsetHeight; // se coloca dentro de su caja (bajo la barra de Contenido, que en una pantalla mediana ocupa dos filas)
+    const der = panel.isOpen() && !E.panelHost.hidden ? E.panelHost.getBoundingClientRect().left - o.left : o.width; // con la pieza abierta, no se le pone encima
+    let x = r.right - o.left + 10; if (x + w > der - 8) x = r.left - o.left - w - 10; if (x < 8) x = Math.max(8, Math.min(der - w - 8, r.left - o.left));
+    E.hov.style.left = x + 'px'; E.hov.style.top = Math.max(8, Math.min(o.height - h - 8, r.top - o.top)) + 'px';
+  }
+  function quitarHov() { clearTimeout(hovT); clearTimeout(hovFuera); hovT = hovFuera = null; hovId = ''; if (E.hov && !E.hov.hidden) E.hov.hidden = true; }
+  const tarjeta = t => t?.closest?.('.cv-ev.pz, .pz-bk');
+  for (const zona of [E.grid, E.rail]) {
+    zona.addEventListener('pointerover', e => { if (e.pointerType !== 'mouse' || !puedeHov()) return; const c = tarjeta(e.target); if (!c) return; clearTimeout(hovFuera); if ((c.dataset.ev || '').slice(2) === hovId) return; clearTimeout(hovT); hovT = setTimeout(() => { if (!dnd?.dragging) verHov(c); }, 450); });
+    zona.addEventListener('pointerout', e => { const c = tarjeta(e.target); if (!c || c.contains(e.relatedTarget)) return; clearTimeout(hovT); hovFuera = setTimeout(quitarHov, 180); });
+    zona.addEventListener('focusin', e => { const c = tarjeta(e.target); if (!c || !puedeHov()) return; clearTimeout(hovT); hovT = setTimeout(() => verHov(c), 600); });
+    zona.addEventListener('focusout', () => quitarHov());
+  }
+  E.hov.addEventListener('pointerenter', () => clearTimeout(hovFuera));
+  E.hov.addEventListener('pointerleave', () => { hovFuera = setTimeout(quitarHov, 180); });
+  E.hov.addEventListener('click', () => { const id = hovId; quitarHov(); if (id) openPiece(id); });
+  ov.addEventListener('pointerdown', e => { if (!E.hov.contains(e.target)) quitarHov(); }, true);
+  ov.addEventListener('scroll', () => quitarHov(), true);
+  ov.addEventListener('keydown', e => { if (e.key === 'Escape' && !E.hov.hidden) { quitarHov(); e.stopPropagation(); e.preventDefault(); } }, true);
   const addLabel = d => `Nueva pieza el ${d.getDate()} de ${MONTHS[d.getMonth()].toLowerCase()}`;
 
   function render() {
     if (dnd && dnd.dragging) return;
+    quitarHov(); // C2: la tarjeta de la vista previa se repinta: la ventanita se va con ella
     ov.classList.toggle('prog', mode === 'prog' || mode === 'bandeja'); ov.classList.toggle('bj', mode === 'bandeja'); ov.classList.toggle('perfilv', mode === 'cal' && view === 'perfil'); ov.classList.toggle('panelOpen', panel.isOpen()); if (!E.toast.hidden) placeToast();
     E.mode.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === mode));
     E.views.hidden = mode !== 'cal'; E.wrap.hidden = mode !== 'cal'; E.prog.hidden = mode !== 'prog'; E.bj.hidden = mode !== 'bandeja';
@@ -207,7 +252,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   }
   function renderRail() {
     const sin = todasConocidas().filter(p => !p.fecha && visible(p));
-    const bk = p => `<div class="cv-bk pz-bk" draggable="true" data-ev="p:${esc(p.id)}" style="--chip:${chipOf(p)}" role="button" tabindex="0" aria-label="${esc(ariaOf(p))}" title="Arrástrala a un día para ponerle fecha">${p.medios[0] ? thumbHTML(p.medios[0], esc, 'pz-bt') : `<span class="pz-bt none" aria-hidden="true">${FICON[p.formato] || ''}</span>`}<div class="pz-bkm"><div class="cv-r-t">${esc(titleOf(p))}</div><div class="cv-r-m"><span class="pz-f">${FICON[p.formato] || ''}${esc(FORMATO[p.formato])}</span> ${netBadges(p)} · ${esc(ESTADO[p.estado].name.toLowerCase())}</div></div></div>`;
+    const bk = p => `<div class="cv-bk pz-bk" draggable="true" data-ev="p:${esc(p.id)}" style="--chip:${chipOf(p)}" role="button" tabindex="0" aria-label="${esc(ariaOf(p))}" title="Arrástrala a un día para ponerle fecha">${miniatura(p, 'pz-bt')}<div class="pz-bkm"><div class="cv-r-t">${esc(titleOf(p))}</div><div class="cv-r-m"><span class="pz-f">${FICON[p.formato] || ''}${esc(FORMATO[p.formato])}</span> ${netBadges(p)} · ${esc(ESTADO[p.estado].name.toLowerCase())}</div></div></div>`;
     E.rail.innerHTML = `<div class="cv-rail-h">IDEAS SIN DÍA <b>${sin.length}</b>${sin.length ? '<span class="cv-rail-hint">arrástralas a un día</span>' : ''}</div>`
       + (sin.length ? sin.map(bk).join('') : '<div class="cv-empty">Ninguna idea suelta.<br>Las ideas que los agentes o tú dejen sin día esperan aquí.</div>')
       + `<button type="button" class="pz-newidea" data-new="idea">+ Nueva idea</button>`
@@ -240,7 +285,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <label class="ct-ck" title="Seleccionar para hacer algo con varias"><input type="checkbox" data-selp="${esc(p.id)}"${selP.has(p.id) ? ' checked' : ''} aria-label="Seleccionar: ${esc(titleOf(p))}"></label>
       <span class="ct-hour">${p.hora ? esc(p.hora) : p.fecha ? '<small>sin hora</small>' : '<small>sin día</small>'}</span>
       <button type="button" class="ct-open" data-open="${esc(p.id)}" aria-label="Abrir la pieza: ${esc(ariaOf(p))}">
-        ${p.medios[0] ? thumbHTML(p.medios[0], esc, 'pz-rt') : `<span class="pz-rt none" aria-hidden="true">${FICON[p.formato] || ''}</span>`}
+        ${miniatura(p, 'pz-rt')}
         <span class="ct-rm"><span class="ct-rt">${esc(titleOf(p))}</span><span class="ct-rs"><span class="pz-f">${FICON[p.formato] || ''}${esc(FORMATO[p.formato])}</span>${netBadges(p)}${cuando}${p.origen.startsWith('agente:') ? ` · <em>${esc(agentName(p.origen.slice(7)) || 'un agente')}</em>` : ''}</span>
         ${motivo ? `<span class="ct-rf">${esc(motivo)}</span>` : r.length && p.estado !== 'idea' ? `<span class="ct-rf">Le falta: ${esc(r[0])}${r.length > 1 ? ` (+${r.length - 1})` : ''}</span>` : p.cambiadaTrasAprobar ? '<span class="ct-rf">Cambió después de aprobarla: vuelve a aprobarla.</span>' : ''}</span></button>
       ${sal ? `<span class="ct-st pz-tone ct-sst ${sal.clave}" style="--c:${SAL_COLOR[sal.clave][0]};--cd:${SAL_COLOR[sal.clave][1]}"><i aria-hidden="true">${SAL_GLYPH[sal.clave]}</i> ${sal.etiqueta}</span>` : `<span class="ct-st pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}</span>`}
@@ -291,7 +336,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { render(); loadResumen(); }
   }
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
-  const panel = initPieza({ host: E.panelHost, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
+  const panel = panelBajoDemanda({ host: E.panelHost, modal, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
   // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
   let bjCargada = false;
@@ -313,9 +358,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     let p = todasConocidas().find(x => x.id === id);
     if (!p) { await load(true); p = todasConocidas().find(x => x.id === id); }
     if (!p) { note('Esa pieza ya no está.', true); return; }
-    await panel.flush(); panel.open(p); if (addIds?.length) panel.addMedios(addIds); render();
+    await panel.flush(); await panel.open(p); if (addIds?.length) panel.addMedios(addIds); render();
   }
-  async function openNew(extra) { flushUndo(); closeMenu(); await panel.flush(); panel.open(extra); render(); }
+  async function openNew(extra) { flushUndo(); closeMenu(); await panel.flush(); await panel.open(extra); render(); }
   /** «+ Crear» con un formato: el siguiente hueco libre, a las 18:00, en las dos redes (una historia, solo Instagram). */
   function crear(formato) {
     const conH = redesNegocio.filter(r => CON_HISTORIAS.includes(r)), redes = formato === 'historia' ? (conH.length ? conH : ['instagram']) : [...redesNegocio]; // M2: las redes que usas (una historia, solo las que tienen)
@@ -560,6 +605,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     ov.inert = false; modal.open(ov); cuentas.empresa = empresa(); $('#ctCo').textContent = cuentas.empresa; ov.classList.add('on'); document.body.classList.add('ctOpen');
     lastGrid = ''; lastProg = ''; render(); load(true); loadResumen(); loadCuentas(); ov.tabIndex = -1; ov.focus();
     timer = setInterval(() => { if (!document.hidden && !panel.isOpen()) load(true); }, 20000); // lo que dejan los agentes aparece solo
+    panel.precargar(); // C1: el editor de piezas se trae ya, mientras miras el calendario
   }
   async function close(o = {}) {
     if (!openNow) return; flushUndo(); closeMenu(); await panel.close({ quiet: true }); openNow = false; closePop(); modal.close(ov); ov.inert = true; ov.classList.remove('on'); document.body.classList.remove('ctOpen'); clearInterval(timer); timer = null;

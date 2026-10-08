@@ -1,0 +1,44 @@
+/* C2 (8 oct 2026) — las TARJETAS del calendario de Contenido, tras compararlas con Metricool (src/contenido.js → card, miniatura, hovHTML):
+   el texto que sale bajo el título, «+N» sobre la miniatura cuando hay más archivos, el icono del formato de una red que sale distinto,
+   y la vista previa al pasar el ratón. Va después de contenido.css (build.mjs junta por nombre). Letra de 10,5 px o más, colores a 4,5:1. */
+
+/* el texto que sale, bajo el título: dos líneas en la semana, el día y la agenda (en el mes no cabe) */
+.pz-snip { margin-top: 1px; font-size: 11px; line-height: 1.35; color: var(--grey); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+body.dark .pz-snip { color: #C2C0B9; }
+.cv-grid.agenda .pz-snip, .cv-grid.tg-day .pz-snip { -webkit-line-clamp: 3; }
+@container ctslot (max-width: 119px) { .cv-grid.tg-week .pz-snip { display: none; } }
+
+/* «+N»: hay más archivos que el primero (un carrusel, un lote) */
+.pz-ct .pz-mas, .pz-bt .pz-mas, .pz-rt .pz-mas { position: absolute; top: 2px; right: 2px; min-width: 14px; padding: 0 3px; border-radius: 4px; background: rgba(21,20,20,.78); color: #fff; font-family: var(--ui); font-size: 10.5px; font-weight: 800; line-height: 15px; text-align: center; }
+
+/* el formato de una red que sale distinto, junto a su insignia */
+.pz-nf { display: inline-flex; align-items: center; margin: 0 2px 0 -1px; color: var(--ink); }
+.pz-nf .pz-fi { width: 12px; height: 12px; }
+body.dark .pz-nf { color: #ECEAE3; }
+
+/* ---------- la vista previa al pasar ---------- */
+.ct-hov { position: absolute; z-index: 45; width: 268px; max-width: calc(100% - 16px); border-radius: 14px; overflow: hidden; background: var(--cv-card); border: 1px solid var(--hairline); box-shadow: 0 18px 46px rgba(21,20,20,.22); cursor: pointer; }
+body.dark .ct-hov { box-shadow: 0 18px 46px rgba(0,0,0,.6); }
+.ct-hov[hidden] { display: none; }
+.ct-hov-m { position: relative; width: 100%; max-height: 300px; overflow: hidden; background: var(--cv-soft); display: grid; place-items: center; }
+.ct-hov-im { position: absolute; inset: 0; display: block; }
+.ct-hov-im img, .ct-hov-im video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ct-hov-im.ph { background: linear-gradient(135deg, hsl(var(--h) 55% 78%), hsl(calc(var(--h) + 40) 50% 60%)); }
+.ct-hov-im i { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-style: normal; color: #fff; font-size: 20px; background: rgba(21,20,20,.5); width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; }
+.ct-hov-k { position: absolute; top: 8px; right: 8px; padding: 1px 7px; border-radius: 99px; background: rgba(21,20,20,.72); color: #fff; font-family: var(--ui); font-size: 11px; font-weight: 700; }
+.ct-hov-none { font-family: var(--ui); font-size: 12px; font-weight: 600; color: var(--grey); padding: 24px 0; }
+.ct-hov-b { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ct-hov-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: var(--ui); font-size: 11.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ct-hov-n { display: inline-flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+.ct-hov-b p { margin: 0; }
+.ct-hov-t { font-family: var(--ui); font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.ct-hov-x { font-size: 12.5px; line-height: 1.45; color: var(--ink); white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ct-hov-g { font-size: 11.5px; color: #00376B; overflow-wrap: anywhere; } body.dark .ct-hov-g { color: #9FCBFF; }
+.ct-hov-s { font-family: var(--ui); font-size: 10.5px; font-weight: 700; letter-spacing: .1em; }
+.ct-hov-f { font-size: 11.5px; color: #8A6414; } body.dark .ct-hov-f { color: #E8B44A; }
+@media (prefers-reduced-motion: no-preference) { .ct-hov:not([hidden]) { animation: ct-hov-in .14s var(--ease); } }
+@keyframes ct-hov-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* el panel mientras llega el editor (dist/pieza-editor.js, src/pieza-carga.js): casi nunca se ve, porque se trae al abrir Contenido */
+.pz-cargando { padding: 28px 18px; font-family: var(--ui); font-size: 13px; line-height: 1.5; color: var(--ink); }
+.pz-cargando p { margin: 0 0 12px; }

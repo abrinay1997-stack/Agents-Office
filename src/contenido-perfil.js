@@ -5,19 +5,20 @@
 //   casillas(piezas, { hoy }) → [{ id, src, formato, fecha, hora, estado, pasada, etiqueta }]   (puro, con test)
 //   intercambio(a, b) → [{ id, fecha, hora }, { id, fecha, hora }]                             (puro)
 //   perfilHTML(casillas, { esc, mediaUrl, estados }) → el HTML
+import { formatoDe } from './contenido-reglas.js'; // C1: lo que cuenta es cómo sale en Instagram
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const corta = f => { const [, m, d] = String(f).split('-').map(Number); return `${d} ${MESES[m - 1]}`; };
 
 export function casillas(piezas = [], { hoy = '' } = {}) {
   return piezas
-    .filter(p => p && (p.redes || []).includes('instagram') && p.formato !== 'historia' && (p.medios || []).length && p.fecha && p.estado !== 'idea')
+    .filter(p => p && (p.redes || []).includes('instagram') && formatoDe(p, 'instagram') !== 'historia' && (p.medios || []).length && p.fecha && p.estado !== 'idea')
     .sort((a, b) => `${b.fecha} ${b.hora || '99:99'}`.localeCompare(`${a.fecha} ${a.hora || '99:99'}`))
     .map(p => {
       const pasada = !!hoy && p.fecha < hoy;
       const sal = p.salida?.estado;
       const etiqueta = sal === 'publicada' ? 'PUBLICADA' : pasada ? 'PASADA' : p.estado === 'aprobada' ? `SALE ${corta(p.fecha).toUpperCase()}` : `${(p.estado === 'revision' ? 'A REVISAR' : 'BORRADOR')} · ${corta(p.fecha).toUpperCase()}`;
-      return { id: p.id, src: p.medios[0], formato: p.formato, fecha: p.fecha, hora: p.hora || '', estado: p.estado, pasada: pasada || sal === 'publicada', etiqueta, titulo: p.titulo || '' };
+      return { id: p.id, src: p.medios[0], formato: formatoDe(p, 'instagram'), fecha: p.fecha, hora: p.hora || '', estado: p.estado, pasada: pasada || sal === 'publicada', etiqueta, titulo: p.titulo || '' };
     });
 }
 

@@ -82,6 +82,9 @@ import * as understand from './understand.mjs'; // V4.8: video and audio → tex
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
 import { crearRutas } from './contenido/rutas.mjs';
+import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
+import { agenteDeContenido, promptMejorar, leerPropuesta } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
+import { LIMITES as LIMITES_RED, formatoDe as formatoDeRed } from './src/contenido-reglas.js'; // C1: el tope y el formato de la red que se mejora
 import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectura — su token vive en META_ACCESS_TOKEN y no toca el disco
 import { crearMetricas } from './contenido/metricas.mjs';
 import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
@@ -1650,7 +1653,15 @@ async function informeRedes(mes, { guardar = false } = {}) {
   const archivo = path.join(dir, `${mes} redes.md`); fs.writeFileSync(archivo, `---\ntipo: informe\nmes: ${mes}\ncreado: ${new Date().toISOString()}\n---\n${r.texto}`);
   return { ...r, nota: path.relative(BRAIN, archivo).replace(/\\/g, '/') };
 }
-const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes,
+// C1 (8 oct 2026): «✨ Mejorar con Marketing» — tu agente de contenido propone el texto con la voz de la marca, sus instrucciones, skills y lecciones
+async function mejorarPieza({ pieza, red, pide }) {
+  const a = agenteDeContenido(AGENTS, CONTENIDO_DEPTS); if (!a) throw Object.assign(new Error('no hay ningún puesto de Marketing'), { status: 409 });
+  const index = vaultIndex(), lim = red ? LIMITES_RED[red]?.caracteres : 0;
+  const { system, user } = promptMejorar({ empresa: cfg.name, agente: a, instrucciones: agentBrief(a), voz: index.get('voice') || '', contexto: index.get('contexto-marketing') || '', cifras: cifrasText(), pieza, red, formato: red ? formatoDeRed(pieza, red) : '', limite: lim || 0, pide });
+  const raw = await ask(system, user, { maxTokens: 2500, timeout: 120000, kind: 'contenido', agent: a, model: a.model || cfg.model }); // sin herramientas (ask): solo escribe; el gasto, a su nombre
+  return { ...leerPropuesta(raw), agente: a.name, red };
+}
+const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes, guardados: crearGuardados({ cerebro: BRAIN }), mejorar: mejorarPieza,
   analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 // F3 (8 oct 2026): el pulso de Meta — programa en Facebook, prepara y publica en Instagram a su hora. Solo en modo real: en simulacro o apagado no sale nada
@@ -1940,6 +1951,11 @@ function page() {
 const TAREAS_VISTA = path.join(ROOT, 'dist', 'tareas-vista.js');
 let tvCache = { mtime: 0 };
 function tareasVistaAlDia(x) { const v = /^\/\*ao-tareas:([0-9a-f]{12})\*\//.exec(x.raw.subarray(0, 40).toString('utf8'))?.[1]; try { return !!v && page().raw.includes(v); } catch { return true; } } // dist/* does not travel by GitHub: after a pull the page may be newer than the view
+// C1 (8 oct 2026): the piece editor of Contenido, on demand too (build-pieza.mjs → dist/pieza-editor.js; src/pieza-carga.js asks for it)
+const PIEZA_EDITOR = path.join(ROOT, 'dist', 'pieza-editor.js');
+let peCache = { mtime: 0 };
+function piezaEditorAlDia(x) { const v = /^\/\*ao-pieza:([0-9a-f]{12})\*\//.exec(x.raw.subarray(0, 40).toString('utf8'))?.[1]; try { return !!v && page().raw.includes(v); } catch { return true; } }
+function piezaEditorFile() { const st = fs.statSync(PIEZA_EDITOR); if (st.mtimeMs !== peCache.mtime || st.size !== peCache.raw?.length) { const raw = fs.readFileSync(PIEZA_EDITOR); peCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"p${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return peCache; }
 function tareasVistaFile() { const st = fs.statSync(TAREAS_VISTA); if (st.mtimeMs !== tvCache.mtime || st.size !== tvCache.raw?.length) { const raw = fs.readFileSync(TAREAS_VISTA); tvCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"t${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return tvCache; }
 const EXTRA = path.join(ROOT, 'dist', 'estudio-extra.js');
 let extraCache = { mtime: 0 };
@@ -2125,6 +2141,13 @@ const server = http.createServer(async (req, res) => {
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(pc.etag)) { res.writeHead(304, { etag: pc.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', etag: pc.etag, vary: 'accept-encoding', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(gz ? pc.gz : pc.raw);
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/pieza-editor.js') { // C1: the piece editor, on demand (build-pieza.mjs)
+      let x; try { x = piezaEditorFile(); if (!piezaEditorAlDia(x)) throw new Error('otra construcción'); } catch { await rebuildOffice(); try { x = piezaEditorFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/pieza-editor.js no está: node build.mjs'); } }
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
+      const gz = /gzip/.test(req.headers['accept-encoding'] || '');
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+      return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/tareas-vista.js') { // plan T2: the Tareas view, on demand (build-tareas.mjs)
       let x; try { x = tareasVistaFile(); if (!tareasVistaAlDia(x)) throw new Error('otra construcción'); } catch { await rebuildOffice(); try { x = tareasVistaFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/tareas-vista.js no está: node build.mjs'); } }
