@@ -245,8 +245,10 @@ test('budget: a video weighs 5, music 3, a voice-over 1 — and the day\'s count
     assert.equal((await media.wait(media.submit({ kind: 'audio', prompt: 'hola' }).id, 30000)).state, 'done');
     const b = media.budget();
     assert.equal(b.audios, 2); assert.equal(b.music, 1); assert.equal(b.used, 4); assert.equal(b.left, 5);
-    assert.equal(media.submit({ model: 'mmx-h3', prompt: 'un video' }).weight, 5, 'a video still fits: 4 + 5 = 9');
+    const video = media.submit({ model: 'mmx-h3', prompt: 'un video' });
+    assert.equal(video.weight, 5, 'a video still fits: 4 + 5 = 9');
     assert.throws(() => media.submit({ kind: 'audio', prompt: 'una más' }), /tope diario alcanzado/);
+    await media.cancel(video.id); // 8 oct 2026: sin cancelarlo, el video seguía preguntando a MiniMax y el archivo no terminaba nunca
   } finally { restore(); await new Promise(r => setTimeout(r, 300)); await st.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

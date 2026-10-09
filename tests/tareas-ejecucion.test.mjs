@@ -70,8 +70,10 @@ test('server: la cola espera a la bloqueada y arranca la de prioridad alta prime
   const a = (await o.call('/api/tasks', { dept: 'sales', text: 'Primero las fotos' })).j;
   const b = (await o.call('/api/tasks', { dept: 'sales', text: 'Luego el post', bloqueadaPor: [a.id] })).j;
   assert.deepEqual(b.bloqueadaPor, [a.id]);
-  const q = await o.hasta(async () => { const l = (await o.call('/api/tasks')).j; const x = l.find(y => y.id === b.id); return x?.queue?.why === 'bloqueada' ? x : x?.state === 'done' ? 'tarde' : null; });
-  assert.notEqual(q, 'tarde', 'la bloqueada no arrancó antes que la que espera');
+  // 8 oct 2026: con la máquina cargada, A y B podían terminar entre dos miradas (cada 150 ms) y el test fallaba aunque el orden era el
+  // bueno. Lo que importa —que B no arranque antes de que A termine— lo prueba `startedAt >= doneAt` abajo, que no depende de mirar a tiempo.
+  const q = await o.hasta(async () => { const l = (await o.call('/api/tasks')).j; const x = l.find(y => y.id === b.id); return x?.queue?.why === 'bloqueada' || x?.state === 'done' ? x : null; });
+  assert.ok(q.state === 'done' || q.queue.why === 'bloqueada', 'mientras A trabaja, B dice que está bloqueada');
   await o.hasta(async () => (await o.tarea(b.id))?.state === 'done', 30000);
   const ta = await o.tarea(a.id), tb = await o.tarea(b.id); assert.ok(tb.startedAt >= ta.doneAt, 'empezó después de que la otra terminara');
   const det = (await o.call(`/api/tareas/${b.id}`)).j; assert.ok(det.bitacora.some(x => x.tipo === 'desbloqueada'));

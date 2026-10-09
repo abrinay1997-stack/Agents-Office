@@ -53,7 +53,9 @@ En **Meta Business Suite → Configuración del negocio → Usuarios → Usuario
 2. **Asígnale estos activos:**
    - la **página de Facebook**, con control total o, como mínimo, contenido y estadísticas;
    - la **cuenta de Instagram**;
-   - la **app** del paso 2.
+   - la **app** del paso 2;
+   - *(para Anuncios)* la **cuenta publicitaria**, con permiso para administrar campañas, y el **píxel** si tienes uno;
+   - *(para anuncios que abren WhatsApp)* la **cuenta de WhatsApp Business**.
 
 ### 4. El token
 
@@ -64,6 +66,10 @@ En ese usuario del sistema, pulsa **Generar token**, elige la app y marca:
 - **Para publicar:**
   - `pages_manage_posts` e `instagram_content_publish` (sin estos dos no se publica);
   - `pages_manage_engagement` e `instagram_manage_comments` (sin estos dos, todo sale igual, pero sin el primer comentario).
+- **Para Anuncios** (desde el 8 oct 2026): `ads_management` y `ads_read`.
+- **Para los mensajes privados de la Bandeja:** `pages_messaging`, `pages_manage_metadata` e `instagram_manage_messages`. Para leer los mensajes de tus clientes, Meta exige además el **acceso avanzado**, que se pide en la Revisión de la app (`docs/plan-meta-anuncios-y-bandeja-2026-10-09.md`, §2.6).
+
+Márcalos **todos de una vez** aunque todavía no uses Anuncios ni los mensajes: así no tienes que generar el token otra vez. «Comprobar conexión» dice lo que falta **por función** (Analíticas, Publicar, Anuncios, Mensajes).
 
 **No compartas el token con nadie**, tampoco con Claude: no hace falta.
 
@@ -77,6 +83,7 @@ En ese usuario del sistema, pulsa **Generar token**, elige la app y marca:
 
 2. Si tu app pide la «prueba del secreto», haz lo mismo con `META_APP_SECRET`. Está en la app → Configuración → Básica → Clave secreta.
 3. **Cierra la ventana de la oficina y ábrela otra vez** con `Agents-Office-Abrinay.bat`. Las variables nuevas solo las ven los programas que se abren después.
+4. *(Para Anuncios)* En **Ajustes → Anuncios**, pon el id de tu cuenta publicitaria (`act_…`). No es un secreto: el token, sí, y ese nunca va en Ajustes.
 
 ### 6. Comprobar, sin publicar nada
 

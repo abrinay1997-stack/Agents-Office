@@ -1,5 +1,21 @@
 # Changelog
 
+## Anuncios de Meta, Fase 0: la base — 8 oct 2026
+
+Primera fase del plan `docs/plan-meta-anuncios-y-bandeja-2026-10-09.md`. Todavía no hay panel de Anuncios: esto es lo que necesitan todas las fases siguientes.
+- **Graph de Meta v23.0 → v26.0** (`contenido/meta.mjs`). Verificado en la documentación de Meta: la Marketing API v23 caducó el 9 jun 2026 (la Graph API v23 vivía hasta oct 2027). Una sola versión para publicar, Analíticas, Anuncios y la Bandeja, con su tabla de fechas (`VERSIONES`): `npm run check` avisa cuando le queden menos de 90 días.
+- **El alcance de Facebook** pasa a `page_total_media_view_unique`: Meta retiró `page_impressions_unique` en v25 y en v26 daba error. La vieja queda de respaldo.
+- **El freno por uso:** la oficina lee las cabeceras de uso de Meta en cada respuesta. Si Meta limita (códigos 4, 17, 32, 613, 80000–80014), deja de llamar durante el tiempo que pide Meta, o 5 minutos si no lo dice. Lo heredan publicar, Analíticas, Anuncios y la Bandeja. Antes reintentaba al minuto y alargaba el castigo.
+- **Un solo Meta de mentira** (`tests/meta-stand.mjs`) para todos los tests y para `npm run check`. Antes había tres, cada uno con su trozo. Responde también a la Marketing API (campañas, conjuntos, anuncios, creativos, `validate_only`, copias, cifras, el lote) y a la Bandeja (comentarios, ocultar, mensajes con la ventana de 24 h), con modos de fallo.
+- **Ajustes → Anuncios:** la cuenta publicitaria, la página, el Instagram, el píxel, el WhatsApp, los topes de gasto (US$20 al día, US$300 al mes y US$150 por campaña), el costo por resultado y el piloto automático (apagado). Ningún secreto: el token sigue solo en variables de Windows.
+- **Los permisos, por función:** «Comprobar conexión», en Analíticas y en Programación, dice lo que le falta al token para Analíticas, Publicar, Anuncios y los Mensajes, cada uno por separado.
+- **Ajustes → Estado (O)** tiene dos filas nuevas: «Anuncios (Meta)» y «Mensajes de Meta».
+- Tests: `tests/meta-freno.test.mjs` y `tests/meta-stand.test.mjs`. Ampliados: `tests/settings.test.mjs`, `tests/meta-publicar.test.mjs` y `tests/contenido-meta.test.mjs`.
+- **`npm run check` ya no se cuelga en Windows.** En GitHub (Linux) no se notaba:
+  - `tests/biblioteca.test.mjs` armaba la ruta con `.pathname` (en Windows daba `C:\C:\…`) y se quedaba esperando un MCP que nunca arrancó;
+  - `tests/minimax.test.mjs` dejaba un video en marcha;
+  - tres esperas fijas (5 ms, 30 ms y una ventana de 1,5 s) en los tests de la cola de tareas fallaban con la máquina cargada; ahora esperan a que pase lo que comprueban.
+
 ## El control de la oficina: Dimitri, los agentes y cualquier IA — 9 oct 2026
 
 Pedido del dueño: «necesito revisar que Dimitri y los agentes sepan y puedan controlar el calendario y tareas… aunque se use cualquier IA». Informe: `docs/auditoria-control-dimitri-agentes-2026-10-09.md`.

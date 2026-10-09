@@ -7,66 +7,24 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { crearMeta, PERMISOS_LECTURA, PERMISOS_PUBLICAR } from '../contenido/meta.mjs';
+import { crearMeta, PERMISOS_LECTURA, PERMISOS_PUBLICAR, ESPERA_LIMITE_MIN } from '../contenido/meta.mjs';
 import { crearConductorMeta, planRed, vaNativa, PREPARAR_ANTES_MS, TARDE_MAX_MS, NATIVA_MIN_MS } from '../contenido/meta-publicar.mjs';
 import { crearAlmacen } from '../contenido/piezas.mjs';
 import { crearProgramador } from '../contenido/programador.mjs';
 import { cuotaTxt } from '../src/contenido-cola.js';
+import { crearMetaStand, json } from './meta-stand.mjs';
 
 const TOKEN = 'EAAG-TOKEN-DE-USUARIO-PUBLICAR-0123456789'; // secrets-ok: un token de mentira para el Graph de mentira
 const TOKEN_PAGINA = 'EAAG-TOKEN-DE-PAGINA-PUBLICAR-9876543210'; // secrets-ok: idem
 const GRAPH = 'https://graph.test', RUP = 'https://rupload.test';
 const H = 3600e3, DIA = 24 * H, MIN = 60e3;
-const json = (cuerpo, estado = 200) => new Response(JSON.stringify(cuerpo), { status: estado, headers: { 'content-type': 'application/json' } });
 
-/** Un Graph de mentira con estado: fotos, publicaciones, contenedores y medios de Instagram. `torcer(llamada)` puede contestar otra cosa. */
+/** El Meta de mentira compartido (tests/meta-stand.mjs), con estado: fotos, publicaciones, contenedores y medios de Instagram. */
 function graphFalso({ torcer = () => null, permisos = [...PERMISOS_LECTURA, ...PERMISOS_PUBLICAR], conIG = true, procesar = 0 } = {}) {
-  const llamadas = [], st = { n: 0, fotos: {}, posts: {}, cont: {}, media: [], borrados: [] };
-  const nuevo = p => `${p}${++st.n}`;
-  const fetchFn = async (url, init = {}) => {
-    const u = new URL(String(url)), metodo = init.method || 'GET', ruta = u.pathname.replace(/^\/(ig-api-upload\/)?v[\d.]+/, '/$1').replace('//', '/');
-    const h = Object.fromEntries(Object.entries(init.headers || {}).map(([k, v]) => [k.toLowerCase(), v]));
-    let campos = {}, archivo = false;
-    if (init.body instanceof URLSearchParams) campos = Object.fromEntries(init.body);
-    else if (init.body instanceof FormData) for (const [k, v] of init.body.entries()) { if (k === 'source') archivo = v.size; else campos[k] = v; }
-    const ll = { metodo, host: u.origin, ruta, campos, archivo, h, q: Object.fromEntries(u.searchParams), cuerpo: Buffer.isBuffer(init.body) ? init.body.length : 0 };
-    llamadas.push(ll);
-    const t = torcer(ll, st); if (t) return t;
-    if (u.origin === RUP) {
-      const id = ruta.split('/').pop();
-      if (h.authorization !== `OAuth ${TOKEN_PAGINA}` || h.offset !== '0' || Number(h.file_size) !== ll.cuerpo) return json({ debug_info: { message: 'cabeceras mal' } }, 400);
-      st.cont[id].subido = true; st.cont[id].listoEn = procesar; return json({ success: true });
-    }
-    if (ruta === '/debug_token') return json({ data: { is_valid: true, type: 'SYSTEM_USER', expires_at: 0, scopes: permisos } });
-    if (ruta === '/me/accounts') return json({ data: [{ id: 'P1', name: 'PanaClaw', access_token: TOKEN_PAGINA, ...(conIG ? { instagram_business_account: { id: 'IG1', username: 'panaclaw' } } : {}) }] });
-    if (metodo === 'DELETE') { st.borrados.push(ruta.slice(1)); return json({ success: true }); }
-    if (metodo === 'POST' && ruta === '/P1/photos') {
-      const id = nuevo('F'), post = `P1_${id}`; st.fotos[id] = { ...campos, archivo };
-      if (campos.published !== 'false' || campos.scheduled_publish_time) st.posts[post] = { programada: Number(campos.scheduled_publish_time || 0), texto: campos.caption };
-      return json({ id, ...(campos.published === 'false' && !campos.scheduled_publish_time ? {} : { post_id: post }) });
-    }
-    if (metodo === 'POST' && ruta === '/P1/feed') { const id = `P1_${nuevo('feed')}`; st.posts[id] = { programada: Number(campos.scheduled_publish_time || 0), texto: campos.message }; return json({ id }); }
-    if (metodo === 'POST' && ruta === '/P1/videos') { const id = nuevo('V'); st.posts[id] = { programada: Number(campos.scheduled_publish_time || 0), video: true }; return json({ id }); }
-    if (metodo === 'POST' && ruta === '/P1/photo_stories') return json({ success: true, post_id: 'P1_historia' });
-    if (metodo === 'POST' && /\/comments$/.test(ruta)) return json({ id: nuevo('com') });
-    if (metodo === 'POST' && ruta === '/IG1/media') {
-      const id = nuevo('C'); st.cont[id] = { ...campos, estado: campos.upload_type === 'resumable' ? 'IN_PROGRESS' : 'FINISHED' };
-      return json(campos.upload_type === 'resumable' ? { id, uri: `${RUP}/ig-api-upload/v23.0/${id}` } : { id });
-    }
-    if (metodo === 'POST' && ruta === '/IG1/media_publish') {
-      const c = st.cont[campos.creation_id]; if (!c || c.estado !== 'FINISHED') return json({ error: { message: 'no está listo', code: 9007, error_subcode: 2207027 } }, 400);
-      c.estado = 'PUBLISHED'; const id = nuevo('M'); st.media.unshift({ id, caption: c.caption || '', permalink: `https://www.instagram.com/p/${id}/`, timestamp: new Date().toISOString() }); c.media = id; return json({ id });
-    }
-    if (ruta === '/IG1/content_publishing_limit') return json({ data: [{ quota_usage: 3, config: { quota_total: 100, quota_duration: 86400 } }] });
-    if (ruta === '/IG1/media') return json({ data: st.media });
-    const id = ruta.slice(1);
-    if (st.fotos[id] && u.searchParams.get('fields') === 'images') return json({ images: [{ width: 320, source: `https://scontent.fbcdn.test/${id}-p.jpg` }, { width: 1080, source: `https://scontent.fbcdn.test/${id}.jpg` }] });
-    if (st.cont[id]) { const c = st.cont[id]; if (c.estado === 'IN_PROGRESS' && c.subido && !(c.listoEn-- > 0)) c.estado = 'FINISHED'; return json({ status_code: c.estado, status: c.estado }); }
-    if (st.posts[id]) { const p = st.posts[id], pub = !p.programada || p.programada * 1000 <= st.reloj; return json(p.video ? { published: pub, permalink_url: `/PanaClaw/videos/${id}` } : { is_published: pub, permalink_url: `https://www.facebook.com/${id}` }); }
-    if (st.media.some(m => m.id === id)) return json({ permalink: `https://www.instagram.com/p/${id}/` });
-    return json({ error: { message: `ruta no simulada: ${metodo} ${ruta}`, code: 100 } }, 400);
-  };
-  return { fetchFn, llamadas, st };
+  return crearMetaStand({
+    token: TOKEN, tokenPagina: TOKEN_PAGINA, permisos, procesar, rupload: RUP, torcer,
+    paginas: [{ id: 'P1', name: 'PanaClaw', access_token: TOKEN_PAGINA, ...(conIG ? { instagram_business_account: { id: 'IG1', username: 'panaclaw' } } : {}) }],
+  });
 }
 
 const archivos = dir => {
@@ -240,7 +198,8 @@ test('Facebook: si Meta no contesta al programar NO se repite (podría duplicarl
   const u = await montar({ torcer: (l, st) => (l.ruta === '/P1/photos' && !st.limitada ? (st.limitada = true, json({ error: { message: 'Application request limit reached', code: 4 } }, 400)) : null) });
   const ru = await u.c.programar(entrega(u)); await u.c.pulso();
   assert.equal(u.c.estado(ru).redes.facebook.estado, 'en_red'); assert.match(u.c.estado(ru).redes.facebook.detalle, /^Se programa en Facebook en un momento \(último intento: Meta está saturado/);
-  u.avanzar(MIN); await u.c.pulso(); assert.equal(de(u.g, 'POST', '/P1/photos').length, 2); assert.equal(u.c.agenda().trabajos[Object.keys(u.c.agenda().trabajos)[0]].estado, 'nativa');
+  u.avanzar(MIN); await u.c.pulso(); assert.equal(de(u.g, 'POST', '/P1/photos').length, 1, 'con el freno puesto ni se intenta: Meta pidió dejar de llamar');
+  u.avanzar(ESPERA_LIMITE_MIN * MIN); await u.c.pulso(); assert.equal(de(u.g, 'POST', '/P1/photos').length, 2); assert.equal(u.c.agenda().trabajos[Object.keys(u.c.agenda().trabajos)[0]].estado, 'nativa');
 });
 
 test('retirar: lo programado en Facebook se borra allí; lo de Instagram que no salió se olvida; lo publicado no se quita desde aquí', async () => {

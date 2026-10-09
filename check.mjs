@@ -94,6 +94,16 @@ await step('costs: the price table is recent (models and prices change often)', 
   if (days > 90) throw new Error(`la tabla de precios de costs.mjs es del ${C.PRICES_AS_OF} (${days} días): revísala con las páginas oficiales de cada proveedor`);
   return `${C.PRICES.length} modelos · precios al ${C.PRICES_AS_OF} · ${[...new Set(C.PRICES.map(p => p.provider))].join(', ')}`;
 });
+await step('meta: la versión de Graph fijada sigue viva (publicar, Analíticas, Anuncios y la Bandeja)', async () => { // Fase 0, 8 oct 2026
+  const M = await import('./contenido/meta.mjs'), c = M.caducidad();
+  if (!c.conocida) throw new Error(`${M.VERSION_GRAPH} no está en la tabla VERSIONES de contenido/meta.mjs: añádela con sus fechas de las páginas de versiones de Meta`);
+  const corto = [['Graph API', c.graph], ['Marketing API', c.marketing]].filter(([, d]) => d !== null && d < 90);
+  if (corto.length) throw new Error(`${M.VERSION_GRAPH} ${corto.map(([q, d]) => d < 0 ? `ya caducó en la ${q}` : `caduca en ${d} días en la ${q}`).join(' y ')}: sube VERSION_GRAPH en contenido/meta.mjs (revisa el changelog de Meta)`);
+  const desde = Math.floor((Date.now() - Date.parse(M.VERSIONES_AL)) / 864e5);
+  if (desde > 180) throw new Error(`la tabla de versiones de contenido/meta.mjs es del ${M.VERSIONES_AL} (${desde} días): revísala con las páginas de versiones de Meta`);
+  const txt = d => (d === null ? 'sin fecha de fin' : `${d} días`);
+  return `${M.VERSION_GRAPH} · Graph ${txt(c.graph)} · Marketing ${txt(c.marketing)} · tabla al ${M.VERSIONES_AL}`;
+});
 await step('triggers: <brain>/Agents Office/triggers.json is valid', async () => {
   const T = await import('./triggers.mjs'); const { loadRoster } = await import('./roster.mjs');
   const r = T.load(cfg.brainPath, loadRoster().agents); if (r.problems.length) throw new Error(r.problems.join(' | '));
@@ -949,24 +959,18 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
     { id: 'wait2', dept: 'sales', agent: 'folo', title: 'Seguimiento a Luna', text: 'Seguimiento', state: 'waiting', needsOk: true, draft: 'Hola Luna', result: 'Hola Luna', addedAt: now, waitingAt: now },
     { id: 'done1', dept: 'fin', agent: 'invo', title: 'Lista de facturas', text: 'Lista', state: 'done', result: 'Tres facturas', addedAt: now, doneAt: now }])); }
   // V4.7 (F2): un Graph DE MENTIRA en esta máquina. El servidor de pruebas habla con él y con un token falso: nunca con Meta ni con el token del dueño.
-  const TOKEN_FALSO = 'check-token-' + 'y'.repeat(24), graphVistos = [];
-  const graphStub = http.createServer((rq, rs) => {
-    const u = new URL(rq.url, 'http://x'), ruta = u.pathname.replace(/^\/v[\d.]+/, ''), q = u.searchParams, out = (c, b) => { rs.writeHead(c, { 'content-type': 'application/json' }); rs.end(JSON.stringify(b)); };
-    graphVistos.push({ ruta, token: q.get('access_token') });
-    const dia = new Date(); dia.setDate(dia.getDate() - 3);
-    if (ruta === '/debug_token') return out(200, { data: { is_valid: true, type: 'SYSTEM_USER', expires_at: 0, scopes: ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'read_insights', 'business_management', 'instagram_basic', 'instagram_manage_insights'] } });
-    if (ruta === '/me/accounts') return out(200, { data: [{ id: 'P1', name: 'PanaClaw', access_token: 'check-token-de-pagina-' + 'z'.repeat(12), instagram_business_account: { id: 'IG1', username: 'panaclaw', name: 'PanaClaw IG' } }] });
-    if (ruta === '/P1') return out(200, { access_token: 'check-token-de-pagina-' + 'z'.repeat(12), followers_count: 800 });
-    if (ruta === '/IG1') return out(200, { followers_count: 1200, media_count: 40 });
-    if (ruta === '/IG1/insights') return out(200, q.get('breakdown') ? { data: [] } : { data: String(q.get('metric')).split(',').map((m, i) => ({ name: m, total_value: { value: 100 * (i + 1) } })) });
-    if (ruta === '/IG1/media') return out(200, { data: [{ id: 'M1', caption: 'Reel de prueba', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://instagram.com/reel/1', timestamp: dia.toISOString(), like_count: 30, comments_count: 4 }] });
-    if (ruta === '/M1/insights') return out(200, { data: [{ name: 'reach', values: [{ value: 900 }] }, { name: 'total_interactions', values: [{ value: 42 }] }] });
-    if (ruta === '/P1/insights') return out(200, { data: [{ name: q.get('metric'), values: [{ value: 77 }] }] });
-    if (ruta === '/P1/posts') return out(200, { data: [] });
-    out(400, { error: { message: 'ruta no simulada: ' + ruta, code: 100 } });
+  // Fase 0 de Anuncios (8 oct 2026): es el Meta de mentira compartido de los tests (tests/meta-stand.mjs), servido por HTTP.
+  const TOKEN_FALSO = 'check-token-' + 'y'.repeat(24), TOKEN_PAGINA_FALSO = 'check-token-de-pagina-' + 'z'.repeat(12);
+  const { crearMetaStand } = await import('./tests/meta-stand.mjs');
+  const { PERMISOS_LECTURA } = await import('./contenido/meta.mjs');
+  const hace3 = new Date(); hace3.setDate(hace3.getDate() - 3);
+  const metaFalso = crearMetaStand({
+    token: TOKEN_FALSO, tokenPagina: TOKEN_PAGINA_FALSO, permisos: PERMISOS_LECTURA,
+    media: [{ id: 'M1', caption: 'Reel de prueba', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://instagram.com/reel/1', timestamp: hace3.toISOString(), like_count: 30, comments_count: 4 }],
   });
-  await new Promise(r => graphStub.listen(0, '127.0.0.1', r));
-  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: TOKEN_FALSO, META_APP_SECRET: '', METRICOOL_USER_TOKEN: '', METRICOOL_USER_ID: '', METRICOOL_BLOG_ID: '', META_GRAPH_HOST: `http://127.0.0.1:${graphStub.address().port}`, AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
+  const graphStub = await metaFalso.escuchar();
+  const graphVistos = { get length() { return metaFalso.llamadas.length; }, some: f => metaFalso.llamadas.map(l => ({ ruta: l.ruta, token: l.q.access_token || String(l.h.authorization || '').replace(/^(Bearer|OAuth)\s+/i, '') })).some(f) };
+  const env = { ...process.env, PORT: String(port), AO_DATA: path.join(sandbox, 'data'), AO_BRAIN: brainCopy, AO_HOOK_TOKEN: HOOK, TELEGRAM_BOT_TOKEN: '', META_ACCESS_TOKEN: TOKEN_FALSO, META_APP_SECRET: '', METRICOOL_USER_TOKEN: '', METRICOOL_USER_ID: '', METRICOOL_BLOG_ID: '', META_GRAPH_HOST: graphStub.url, AO_LOCAL_CONFIG: path.join(sandbox, 'office.config.local.json') };
   const srv = spawn('node', ['serve.mjs'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = ''; srv.stdout.on('data', d => { log += d; }); srv.stderr.on('data', d => { log += d; });
   const base = `http://localhost:${port}`;
@@ -975,10 +979,11 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
   else {
     ok('server: starts', `${up.name} · ${up.backend} · brain ${up.notes} notes`);
     await step('server: serves the office', async () => { const r = await fetch(base + '/'); const t = await r.text(); if (!/AGENTS OFFICE/.test(t)) throw new Error('html missing'); });
-    await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, notes, Meta, copy)', async () => {
+    await step('server: /api/status is the office\'s traffic light (Claude, connectors, disk, routines, queue, approvals, failures, security, notes, Meta, ads, Meta messages, copy)', async () => {
       const st = await (await fetch(base + '/api/status')).json();
       const ids = st.checks.map(c => c.id).join(',');
-      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respuesta,notas,redes,publicacion,respaldo') throw new Error('checks: ' + ids);
+      if (ids !== 'claude,conectores,disco,rutinas,cola,aprobaciones,errores,seguridad,respuesta,notas,redes,anuncios,mensajes,publicacion,respaldo') throw new Error('checks: ' + ids); // Fase 0 de Anuncios: + anuncios, mensajes
+      const an = st.checks.find(c => c.id === 'anuncios'); if (an.state !== 'info' || !/cuenta publicitaria/.test(an.text || an.detail || JSON.stringify(an))) throw new Error('the ads row, with a token and no ad account: ' + JSON.stringify(an));
       if (!['ok', 'info', 'warn', 'bad'].includes(st.overall) || !Array.isArray(st.notices)) throw new Error('shape');
       const r = await fetch(base + '/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); if (!r.ok) throw new Error('notices/read ' + r.status);
       return `${st.checks.length} checks · overall ${st.overall}`;
@@ -1272,7 +1277,7 @@ await step('estudio: Higgsfield and fal.ai through their queues (a local stand-i
       });
     } else ok('live: skipped', 'set CHECK_LIVE=1 to route one task and one chat through Claude');
   }
-  srv.kill(); graphStub.close();
+  srv.kill(); graphStub.cerrar();
   setTimeout(() => { try { fs.rmSync(sandbox, { recursive: true, force: true }); } catch {} }, 500); // the throwaway copy goes when the server has let go of it
 }
 

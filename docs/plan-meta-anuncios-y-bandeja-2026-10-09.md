@@ -50,7 +50,7 @@ Copia esto tal cual en la primera conversación de la cuenta nueva, en la carpet
 | Ajustes | `settings.mjs → FIELDS` (un campo = una línea) | Los topes de gasto y la cuenta publicitaria van aquí. |
 | Vistas bajo la barra, carga bajo demanda | `src/views.js`; ejemplos `src/tareas-carga.js` + `build-tareas.mjs`, `src/pieza-carga.js` + `build-pieza.mjs` | El panel de Anuncios va en su **propio paquete**: la página tiene un tope duro (2,2 MB y 700 KB gzip, `check.mjs` línea 34) y está cerca. |
 
-**Hallazgo al escribir este plan:** `contenido/meta.mjs` fija `VERSION_GRAPH = 'v23.0'`, y v23.0 dejó de existir el 9 de junio de 2026. Es lo primero que se arregla (Fase 0).
+**Hallazgo al escribir este plan:** `contenido/meta.mjs` fija `VERSION_GRAPH = 'v23.0'`, y v23.0 dejó de existir el 9 de junio de 2026. Es lo primero que se arregla (Fase 0). *(8 oct 2026: verificado que esa fecha es de la Marketing API; en la Graph API, v23 duraba hasta oct 2027. Ver §13.1.)*
 
 ---
 
@@ -216,7 +216,9 @@ Cada fase:
 - actualiza la documentación;
 - se considera **hecha** cuando cumple su «Hecho cuando».
 
-### Fase 0 — La base (antes de todo)
+### Fase 0 — La base (antes de todo) ✅ (8 oct 2026, rama `mejora/meta-fase-0`)
+
+> Hecho: v26.0 con tabla de caducidad y aviso; el alcance de Facebook movido a `page_total_media_view_unique` (verificado, §13.1); `tests/meta-stand.mjs` sirve a todos los tests de Meta y a `npm run check`; el freno por uso en `contenido/meta.mjs`; Ajustes → Anuncios; `PERMISOS_ANUNCIOS` y `PERMISOS_MENSAJES` con lo que falta por función en los dos «Comprobar conexión»; Estado con «Anuncios (Meta)» y «Mensajes de Meta». **Queda del dueño:** correr `node scripts/check-meta-publicar.mjs` con el token real.
 
 1. **Versión de Graph a `v26.0`.**
    - Revisar en el changelog de v24, v25 y v26 lo que toca a publicar (`contenido/meta-publicar.mjs`), a las métricas orgánicas (`contenido/metricas.mjs`: Meta está retirando métricas viejas de alcance e impresiones; POR VERIFICAR cuáles y por cuáles se cambian) y a los anuncios.
@@ -602,6 +604,13 @@ Las cifras de dinero llevan la moneda de la cuenta siempre. En la demo `file://`
 La documentación de Meta no se pudo abrir desde donde se escribió este plan (la red la bloqueaba). Lo de abajo sale de búsquedas del 9 oct 2026 en páginas de Meta y de terceros, enlazadas al final. Al verificar cada punto, anota lo que encontraste y la fecha.
 
 1. Versión: v26.0 (29 jul 2026) es la última; v23.0 terminó el 9 jun 2026. ¿Qué cambios de v26 se aplican a todas las versiones el 27 oct 2026? ¿Afectan a publicar o a las métricas orgánicas?
+   - ✅ **Verificado el 8 oct 2026** (developers.facebook.com: changelog de versiones de Graph y de Marketing API, y el blog «Introducing Graph API v26 and Marketing API v26»):
+     - **Corrección al plan:** v23.0 caducó el 9 jun 2026 **en la Marketing API**; en la **Graph API** vive hasta el **8 oct 2027**. La v24.0 de Marketing caducó el 6 oct 2026. Se pasa a v26.0 igual: una sola versión para todo, y los anuncios la necesitan. Tabla de fechas en `contenido/meta.mjs → VERSIONES` y aviso en `npm run check`.
+     - **El 27 oct 2026, en todas las versiones:** `pretty` y `debug` se ignoran; `date_format` y `GET /?ids=…` dan error de parámetro; `If-None-Match` se ignora. La oficina no usa ninguno (comprobado con búsqueda en el código).
+     - **También el 27 oct, en toda la Marketing API:** las historias de Messenger salen de `messenger_positions` sin aviso; los anuncios de encuesta se rechazan; `applink_treatment: web_only` no vale con conversiones web y de app. Se tienen en cuenta en A3.
+     - **v26 en anuncios:** la ubicación «Explorar» de Instagram ya no existe (da error); en categorías especiales (vivienda, empleo, crédito), `targeting_automation.advantage_audience` tiene que ir explícito (1 o 0) al crear o copiar un conjunto (responde en parte al punto 3); `delivery_estimate` pierde `daily_outcomes_curve`, `budget_guardrail` y `estimate_dau`.
+     - **Métricas orgánicas:** `page_impressions_unique` está **retirada desde v25**. El alcance de Facebook pasa a `page_total_media_view_unique` (con la vieja de respaldo), en `contenido/metricas.mjs`. Las de Instagram (`reach`, `views`, `total_interactions`…) siguen.
+     - **Publicar:** nada de v24 a v26 toca las rutas de `contenido/meta-publicar.mjs` (los cambios de Páginas son campos del perfil: `current_location`, `genre`, `parking`…, que no se usan).
 2. `execution_options: ["validate_only"]` en la creación de campaña, conjunto y anuncio en v26.
 3. Advantage+: desde v25 no hay `smart_promotion_type`. Una campaña Advantage+ se obtiene con público, presupuesto y ubicaciones Advantage+ (`advantage_state_info`). ¿Cuáles son los campos exactos en v26? Y para las categorías especiales, ¿es obligatorio `targeting_automation.advantage_audience`?
 4. `instagram_user_id` frente a `instagram_actor_id` en `object_story_spec`. Las páginas de Meta usan los dos según el tipo de anuncio.

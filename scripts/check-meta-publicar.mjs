@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { crearMeta, mensajeMeta, permisosQueFaltan, PERMISOS_LECTURA, PERMISOS_PUBLICAR } from '../contenido/meta.mjs';
+import { crearMeta, mensajeMeta, permisosQueFaltan, PERMISOS_LECTURA, PERMISOS_PUBLICAR, VERSION_GRAPH, caducidad, faltanPorFuncion, NOMBRE_FUNCION } from '../contenido/meta.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data');
@@ -27,6 +27,7 @@ const meta = crearMeta({ dir: path.join(DATA, 'contenido') });
 if (!meta.configurado()) { console.error('Falta META_ACCESS_TOKEN en el entorno (Business Manager → Usuarios del sistema → Generar token). Ponlo con setx y abre otra terminal.'); process.exit(1); }
 fs.mkdirSync(OUT, { recursive: true });
 console.log(`Token detectado. Probando publicar con Meta, sin publicar nada… (salida: ${path.relative(ROOT, OUT)})\n`);
+{ const c = caducidad(); console.log(`  · Graph API ${VERSION_GRAPH}${c.graph === null ? '' : `, le quedan ${c.graph} días`} (Fase 0 de Anuncios: antes v23.0)\n`); }
 
 // 1) el token, sus permisos y las cuentas (lo mismo que «Comprobar conexión» en Analíticas)
 const est = await meta.sincronizar();
@@ -37,6 +38,8 @@ const faltanL = permisosQueFaltan(permisos, PERMISOS_LECTURA), faltanP = permiso
 ok(`Token: ${est.token?.tipo || 'tipo desconocido'}${est.token?.caduca ? `, caduca ${est.token.caduca}` : ', no caduca'}`);
 if (permisos === null) aviso('Meta no dijo qué permisos tiene el token: se sigue y se verá en cada paso.');
 else if (faltanP.length || faltanL.length) fail(`Faltan permisos: ${[...faltanP, ...faltanL].join(', ')}`); else ok('Tiene todos los permisos de leer y publicar.');
+// Fase 0 de Anuncios: lo que falta para las otras funciones no hace fallar ESTA prueba (es de publicar), pero se dice ya, para generar el token una sola vez.
+if (permisos) for (const [k, l] of Object.entries(faltanPorFuncion(permisos))) if (!['lectura', 'publicar'].includes(k) && l.length) aviso(`Para ${NOMBRE_FUNCION[k]} le faltan: ${l.join(', ')} (lista completa en docs/conectar-meta.md).`);
 const fb = est.cuentas.find(c => c.red === 'facebook' && (!process.env.META_PAGINA || c.paginaId === process.env.META_PAGINA)) || est.cuentas.find(c => c.red === 'facebook');
 const ig = fb ? est.cuentas.find(c => c.red === 'instagram' && c.paginaId === fb.paginaId) : null;
 if (!fb) { fail('El token no ve ninguna página'); process.exit(1); }

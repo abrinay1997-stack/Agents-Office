@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { cargarBiblioteca, raices, TOPES } from '../biblioteca.mjs';
 import { TOOLS } from '../habilidades-mcp.mjs';
 import { validarEvals } from '../scripts/evals-skill.mjs';
@@ -81,7 +82,7 @@ test('el servidor MCP solo lee: sus herramientas empiezan por ver/leer y el guar
 });
 
 test('la biblioteca que viaja con la oficina: formato, ids, relacionadas, puestos, evals y tamaños', () => {
-  const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'); // 8 oct 2026: `.pathname` daba «C:\C:\…» en Windows
   const roster = JSON.parse(fs.readFileSync(path.join(ROOT, 'office.agents.json'), 'utf8')).agents;
   const b = cargarBiblioteca({ raiz: ROOT, brainPath: null, agentes: roster, deptos: DEPTOS });
   if (!b.todas.length) return; // todavía sin colección
@@ -105,7 +106,7 @@ test('habilidades-mcp habla con la oficina: lista las del agente o busca, y lee 
   const srv = http.createServer((rq, rs) => { pedidas.push(rq.url); rs.writeHead(200, { 'content-type': 'application/json' });
     rs.end(JSON.stringify(rq.url.startsWith('/api/biblioteca?') ? { habilidades: [{ id: 'precios', titulo: 'Precios', areaNombre: 'Estrategia', description: 'Úsala cuando…' }] } : { texto: '# Precios\nPasos.' })); });
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
-  const p = spawn(process.execPath, [path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', 'habilidades-mcp.mjs')], { env: { ...process.env, AO_OFFICE: `http://127.0.0.1:${srv.address().port}`, AO_AGENT: 'mlead' } });
+  const p = spawn(process.execPath, [path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'habilidades-mcp.mjs')], { env: { ...process.env, AO_OFFICE: `http://127.0.0.1:${srv.address().port}`, AO_AGENT: 'mlead' } });
   const respuestas = new Map(); let buf = '';
   p.stdout.on('data', d => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1); respuestas.set(m.id, m); } });
   const pide = (id, method, params) => { p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n'); return new Promise(r => { const t = setInterval(() => { if (respuestas.has(id)) { clearInterval(t); r(respuestas.get(id)); } }, 10); }); };

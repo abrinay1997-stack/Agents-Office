@@ -98,6 +98,9 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
       const t = m.token || {}, caduca = t.caduca ? `caduca el ${fecha(t.caduca.slice(0, 10))}` : 'no caduca';
       partes.push(`<p class="an-line">Conectada · ${m.cuentas.length} ${m.cuentas.length === 1 ? 'cuenta' : 'cuentas'} · token ${t.tipo ? esc(t.tipo.toLowerCase().replace('_', ' ')) + ', ' : ''}${caduca} · ${d.ultimaFoto ? `última foto: ${fecha(d.ultimaFoto)}` : 'todavía sin foto: la primera se hace desde las 6:00'} ${btn('comprobar', 'Comprobar conexión', 'data-quiet')}</p>`);
     }
+    // Fase 0 de Anuncios (8 oct 2026): lo que falta para las OTRAS funciones, separado por función y sin alarma (Analíticas funciona igual).
+    const otras = Object.entries(m.token?.faltanPor || {}).filter(([k, l]) => k !== 'lectura' && l.length);
+    if (otras.length && !m.error) partes.push(`<p class="an-line">Para otras funciones de la oficina le faltan permisos al token: ${otras.map(([k, l]) => `<b>${esc({ publicar: 'Publicar', anuncios: 'Anuncios', mensajes: 'Mensajes de la Bandeja' }[k] || k)}</b>: ${l.map(p => `<code>${esc(p)}</code>`).join(' ')}`).join(' · ')}. La lista completa está en <code>docs/conectar-meta.md</code>.</p>`);
     if (d.pendientes && !d.actualizando && !m.error) partes.push(`<p class="an-line">Faltan ${d.pendientes} ${d.pendientes === 1 ? 'cuenta' : 'cuentas'} por fotografiar hoy: se hace sola desde las 6:00, o pulsa Actualizar.</p>`);
     return partes.join('');
   }

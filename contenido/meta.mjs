@@ -27,13 +27,73 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const VERSION_GRAPH = 'v23.0';
+// Fase 0 de Anuncios (8 oct 2026): de v23.0 a v26.0. La Graph API v23 vivía hasta el 8 oct 2027, pero la Marketing API v23 caducó el
+// 9 jun 2026 (y la v24 el 6 oct 2026), y la oficina usa UNA versión para publicar, Analíticas, Anuncios y la Bandeja.
+export const VERSION_GRAPH = 'v26.0';
 export const HOST_GRAPH = 'https://graph.facebook.com';
+
+/**
+ * Cuándo deja de existir cada versión, de las páginas oficiales de Meta (consultadas el 8 oct 2026):
+ * developers.facebook.com/docs/graph-api/changelog/versions y …/marketing-api/marketing-api-changelog/versions.
+ * null = Meta aún no la ha fijado. `npm run check` avisa cuando a la versión fijada le quedan menos de 90 días en cualquiera de
+ * las dos: al actualizar la tabla, se miran esas dos páginas.
+ */
+export const VERSIONES_AL = '2026-10-08';
+export const VERSIONES = {
+  'v22.0': { graph: '2027-05-20', marketing: '2026-02-19' },
+  'v23.0': { graph: '2027-10-08', marketing: '2026-06-09' },
+  'v24.0': { graph: '2028-02-18', marketing: '2026-10-06' },
+  'v25.0': { graph: '2028-07-29', marketing: null },
+  'v26.0': { graph: null, marketing: null },
+};
+
+/** Días que le quedan a una versión en cada API (null = sin fecha; negativo = ya caducó; undefined = versión desconocida). */
+export function caducidad(version = VERSION_GRAPH, ahora = Date.now()) {
+  const v = VERSIONES[version];
+  if (!v) return { version, conocida: false, graph: undefined, marketing: undefined };
+  const dias = f => (f ? Math.floor((Date.parse(f + 'T00:00:00Z') - ahora) / 864e5) : null);
+  return { version, conocida: true, graph: dias(v.graph), marketing: dias(v.marketing), fechas: v };
+}
 
 /** Lo que hace falta para LEER (F2). */
 export const PERMISOS_LECTURA = ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'read_insights', 'business_management', 'instagram_basic', 'instagram_manage_insights'];
 /** Lo que hará falta para PROGRAMAR (F3): se pide ya, para no volver a generar el token después. */
 export const PERMISOS_PUBLICAR = ['pages_manage_posts', 'pages_manage_engagement', 'instagram_content_publish', 'instagram_manage_comments']; // 8 oct 2026: + pages_manage_engagement (el primer comentario en Facebook)
+/** Fase 0 de Anuncios (8 oct 2026): lo que piden el panel de Anuncios (leer y cambiar campañas) y los mensajes privados de la Bandeja. */
+export const PERMISOS_ANUNCIOS = ['ads_management', 'ads_read'];
+export const PERMISOS_MENSAJES = ['pages_messaging', 'pages_manage_metadata', 'instagram_manage_messages'];
+/** Cada función de la oficina con lo que necesita: «Comprobar conexión» dice lo que falta por separado. */
+export const PERMISOS_POR_FUNCION = { lectura: PERMISOS_LECTURA, publicar: PERMISOS_PUBLICAR, anuncios: PERMISOS_ANUNCIOS, mensajes: PERMISOS_MENSAJES };
+export const NOMBRE_FUNCION = { lectura: 'Analíticas', publicar: 'Publicar', anuncios: 'Anuncios', mensajes: 'Mensajes de la Bandeja' };
+/** { lectura: [...], publicar: [...], … } con lo que falta en cada una ({} si Meta no dijo los permisos). */
+export const faltanPorFuncion = concedidos => (Array.isArray(concedidos) ? Object.fromEntries(Object.entries(PERMISOS_POR_FUNCION).map(([k, l]) => [k, l.filter(p => !concedidos.includes(p))])) : {});
+
+// ---- El freno por uso (Fase 0, 8 oct 2026; developers.facebook.com/docs/graph-api/overview/rate-limiting).
+// Meta dice cuánto de su cuota se lleva gastado en tres cabeceras (porcentajes) y, al pasarse, contesta con uno de estos códigos.
+// Su consejo: «si se alcanza el límite, deja de hacer llamadas a la API» — seguir llamando alarga la espera.
+export const CODIGOS_LIMITE = [4, 17, 32, 613, ...Array.from({ length: 15 }, (_, i) => 80000 + i)];
+export const UMBRAL_ESPACIAR = 75; // desde aquí, quien sondea espacia (ritmo 2); desde el 90 %, más (ritmo 4)
+export const ESPERA_LIMITE_MIN = 5; // si Meta limita y no dice cuánto esperar
+
+/**
+ * Lo que dicen las cabeceras de uso de una respuesta: el mayor porcentaje y cuántos minutos pide Meta esperar.
+ * `X-App-Usage` {call_count,total_time,total_cputime} · `X-Business-Use-Case-Usage` {<id>: [{…, estimated_time_to_regain_access (min)}]}
+ * · `X-Ad-Account-Usage` {acc_id_util_pct, reset_time_duration (s)}. Lo que no se puede leer no cuenta.
+ */
+export function leerUso(cabeceras) {
+  const get = k => (typeof cabeceras?.get === 'function' ? cabeceras.get(k) : cabeceras?.[k]);
+  const leer = k => { try { const v = get(k); return v ? JSON.parse(v) : null; } catch { return null; } };
+  const pcts = [], minutos = [];
+  const sumar = o => { for (const k of ['call_count', 'total_time', 'total_cputime', 'acc_id_util_pct']) if (Number.isFinite(Number(o?.[k]))) pcts.push(Number(o[k])); };
+  const app = leer('x-app-usage'); if (app) sumar(app);
+  const negocio = leer('x-business-use-case-usage');
+  if (negocio && typeof negocio === 'object') for (const lista of Object.values(negocio)) for (const o of Array.isArray(lista) ? lista : []) { sumar(o); if (Number(o?.estimated_time_to_regain_access) > 0) minutos.push(Number(o.estimated_time_to_regain_access)); }
+  const cuenta = leer('x-ad-account-usage'); if (cuenta) { sumar(cuenta); if (Number(cuenta.reset_time_duration) > 0 && Number(cuenta.acc_id_util_pct) >= 100) minutos.push(Number(cuenta.reset_time_duration) / 60); }
+  return { visto: Boolean(app || negocio || cuenta), pct: pcts.length ? Math.max(...pcts) : 0, recuperarMin: minutos.length ? Math.max(...minutos) : 0 };
+}
+
+/** Cuánto espaciar un sondeo según el uso: 1 normal, 2 desde el 75 %, 4 desde el 90 %. */
+export const ritmoDe = pct => (pct >= 90 ? 4 : pct >= UMBRAL_ESPACIAR ? 2 : 1);
 
 /** Los de `necesarios` que no están en lo concedido (vacío si no se sabe). */
 export const permisosQueFaltan = (concedidos, necesarios = PERMISOS_LECTURA) => (Array.isArray(concedidos) ? necesarios.filter(p => !concedidos.includes(p)) : []);
@@ -92,6 +152,32 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     return t;
   };
 
+  // El freno: compartido por publicar, Analíticas, Anuncios y la Bandeja, porque todos gastan la misma cuota.
+  const freno = { pct: 0, hasta: 0, vistoAt: null, motivo: '' };
+  /**
+   * Toda llamada a Meta pasa por aquí. Si Meta pidió esperar, ni se intenta: se contesta como un fallo pasajero (quien llama ya
+   * sabe reintentar), sin gastar cuota y sin alargar el castigo.
+   */
+  async function pedir(url, init) {
+    if (ahora() < freno.hasta) {
+      const min = Math.max(1, Math.ceil((freno.hasta - ahora()) / 60e3));
+      throw Object.assign(new ErrorMeta({ message: `Meta pidió esperar por el límite de uso: se vuelve a intentar en ${min} min.`, is_transient: true, code: 17 }, 429), { frenado: true });
+    }
+    const res = await fetchFn(url, init);
+    const uso = leerUso(res.headers);
+    if (uso.visto) { freno.pct = uso.pct; freno.vistoAt = ahora(); }
+    let codigo = 0;
+    if (!res.ok) { try { codigo = Number((await res.clone().json())?.error?.code ?? 0); } catch { /* sin cuerpo */ } }
+    if (CODIGOS_LIMITE.includes(codigo) || uso.pct >= 100) {
+      const min = uso.recuperarMin > 0 ? uso.recuperarMin : ESPERA_LIMITE_MIN;
+      freno.hasta = Math.max(freno.hasta, ahora() + min * 60e3);
+      freno.motivo = codigo ? `código ${codigo}` : `uso al ${Math.round(uso.pct)} %`;
+    }
+    return res;
+  }
+  /** Lo que se sabe del uso: para espaciar los sondeos (`ritmo`) y para Estado. */
+  const uso = () => ({ pct: freno.pct, ritmo: ritmoDe(freno.pct), frenadoHasta: freno.hasta > ahora() ? new Date(freno.hasta).toJSON() : null, motivo: freno.hasta > ahora() ? freno.motivo : '', vistoAt: freno.vistoAt ? new Date(freno.vistoAt).toJSON() : null });
+
   /** Una llamada a la Graph API. Los parámetros van en la dirección (GET); el token, como parámetro, nunca en un registro. */
   async function graph(token, ruta, { params = {}, host = null } = {}) {
     const u = new URL(`${host ?? base()}${ruta}`);
@@ -101,8 +187,8 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
       if (secreto()) u.searchParams.set('appsecret_proof', crypto.createHmac('sha256', secreto()).update(token).digest('hex'));
     }
     let res;
-    try { res = await fetchFn(u, { method: 'GET' }); }
-    catch (e) { throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
+    try { res = await pedir(u, { method: 'GET' }); }
+    catch (e) { if (e?.frenado) throw e; throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
     const datos = await res.json().catch(() => ({}));
     if (!res.ok || datos?.error) throw new ErrorMeta({ ...(datos?.error ?? {}), message: sinToken(datos?.error?.message) }, res.status);
     return datos;
@@ -129,8 +215,8 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     if (archivo) { cuerpo = new FormData(); for (const [k, v] of pares) cuerpo.append(k, v); cuerpo.append('source', new Blob([archivo.datos], { type: archivo.tipo || 'application/octet-stream' }), archivo.nombre || 'archivo'); }
     else cuerpo = new URLSearchParams(pares);
     let res;
-    try { res = await fetchFn(u, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: cuerpo }); }
-    catch (e) { throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
+    try { res = await pedir(u, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: cuerpo }); }
+    catch (e) { if (e?.frenado) throw e; throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
     return respuestaDe(res);
   }
   /** DELETE de un objeto (una publicación programada, una foto temporal). Un error NO se da por borrado: Meta dice lo mismo («does not
@@ -138,8 +224,8 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
   async function borrar(token, id) {
     const u = new URL(`${base()}/${encodeURIComponent(id)}`); if (prueba(token)) u.searchParams.set('appsecret_proof', prueba(token));
     let res;
-    try { res = await fetchFn(u, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } }); }
-    catch (e) { throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
+    try { res = await pedir(u, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } }); }
+    catch (e) { if (e?.frenado) throw e; throw new ErrorMeta({ message: sinToken(`No se pudo contactar con Meta (${e?.message || e})`), is_transient: true }, 0); }
     await respuestaDe(res); return true;
   }
   /**
@@ -151,8 +237,8 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     const propia = `${hostRupload()}/ig-api-upload/${String(env.META_GRAPH_VERSION || '').trim() || VERSION_GRAPH}/${encodeURIComponent(contenedor)}`;
     const destino = uri && String(uri).startsWith(`${hostRupload()}/ig-api-upload/`) ? String(uri) : propia;
     let res;
-    try { res = await fetchFn(destino, { method: 'POST', headers: { authorization: `OAuth ${token}`, offset: '0', file_size: String(datos.length), 'content-type': 'application/octet-stream' }, body: datos }); }
-    catch (e) { throw new ErrorMeta({ message: sinToken(`No se pudo subir el video a Instagram (${e?.message || e})`), is_transient: true }, 0); }
+    try { res = await pedir(destino, { method: 'POST', headers: { authorization: `OAuth ${token}`, offset: '0', file_size: String(datos.length), 'content-type': 'application/octet-stream' }, body: datos }); }
+    catch (e) { if (e?.frenado) throw e; throw new ErrorMeta({ message: sinToken(`No se pudo subir el video a Instagram (${e?.message || e})`), is_transient: true }, 0); }
     const r = await res.json().catch(() => null);
     if (!res.ok || r?.error || r?.success !== true) throw new ErrorMeta({ ...(r?.error ?? {}), message: sinToken(r?.error?.message || r?.debug_info?.message || 'Instagram no confirmó la subida del video'), is_transient: res.status >= 500 }, res.status);
     return true;
@@ -166,7 +252,7 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
       salida.push(...(datos?.data ?? []));
       const siguiente = datos?.paging?.next;
       if (!siguiente || !String(siguiente).startsWith(`${host()}/`)) break;
-      const res = await fetchFn(siguiente);
+      const res = await pedir(siguiente);
       datos = await res.json().catch(() => ({}));
       if (datos?.error) throw new ErrorMeta({ ...datos.error, message: sinToken(datos.error.message) }, res.status);
     }
@@ -206,7 +292,7 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
   /** El estado que se enseña: nunca lleva un token. */
   function estado() {
     const g = guardado();
-    return { configurado: Boolean(tokenUsuario()), secreto: Boolean(secreto()), permisos: { lectura: PERMISOS_LECTURA, publicar: PERMISOS_PUBLICAR }, version: String(env.META_GRAPH_VERSION || '').trim() || VERSION_GRAPH, cuentas: g.cuentas || [], token: g.token || null, sincronizadaAt: g.sincronizadaAt || null, error: g.error || null };
+    return { configurado: Boolean(tokenUsuario()), secreto: Boolean(secreto()), permisos: PERMISOS_POR_FUNCION, version: String(env.META_GRAPH_VERSION || '').trim() || VERSION_GRAPH, uso: uso(), cuentas: g.cuentas || [], token: g.token || null, sincronizadaAt: g.sincronizadaAt || null, error: g.error || null };
   }
 
   /** Verifica el token y lista las cuentas: lo que hace «Comprobar conexión». Guarda el resultado (sin tokens) o el motivo del fallo. */
@@ -216,9 +302,9 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     try {
       const token = await inspeccionar();
       const cuentas = aCuentas(await paginas());
-      const faltan = permisosQueFaltan(token.permisos);
+      const faltan = permisosQueFaltan(token.permisos), faltanPor = faltanPorFuncion(token.permisos);
       const sinCuentas = cuentas.length ? null : 'El token no ve ninguna página. En Business Manager, asígnale al usuario del sistema las páginas de PanaClaw (con acceso a su Instagram).';
-      escribirJSON(archivo, { cuentas, token: { ...token, faltan, verificadoAt: new Date(ahora()).toJSON() }, sincronizadaAt: new Date(ahora()).toJSON(), error: sinCuentas });
+      escribirJSON(archivo, { cuentas, token: { ...token, faltan, faltanPor, verificadoAt: new Date(ahora()).toJSON() }, sincronizadaAt: new Date(ahora()).toJSON(), error: sinCuentas });
     } catch (e) {
       // Un fallo no borra lo que ya se sabía: se apunta el motivo y las cuentas de antes siguen ahí.
       escribirJSON(archivo, { ...previo, error: mensajeMeta(e), sincronizadaAt: new Date(ahora()).toJSON() });
@@ -236,5 +322,5 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     return tokenUsuario();
   }
 
-  return { configurado: () => Boolean(tokenUsuario()), graph, enviar, borrar, subirReanudable, tokenDe, estado, sincronizar, sinToken };
+  return { configurado: () => Boolean(tokenUsuario()), graph, enviar, borrar, subirReanudable, tokenDe, estado, sincronizar, sinToken, uso };
 }
