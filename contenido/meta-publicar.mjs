@@ -25,6 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { mensajeMeta, permisosQueFaltan, ErrorMeta, NOMBRE_FUNCION } from './meta.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const REDES_META = ['instagram', 'facebook'];
 export const PREPARAR_ANTES_MS = 15 * 60e3;  // Instagram: el contenedor (y la subida del video) se prepara 15 min antes
@@ -70,7 +71,7 @@ export function planRed(red, formato, tipos = []) {
 export const vaNativa = (red, como, momento, ahora) => red === 'facebook' && ['imagen', 'fotos', 'video', 'texto'].includes(como) && momento - ahora >= NATIVA_MIN_MS;
 
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
-const escribirJSON = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 1)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 1)); renombrar(f + '.tmp', f); };
 const sinRespuesta = e => !e || e.estado === 0 || e.estado >= 500; // Meta no contestó: no se sabe si lo hizo
 const permalinkFB = u => (!u ? '' : /^https?:/.test(u) ? u : `https://www.facebook.com${u.startsWith('/') ? '' : '/'}${u}`);
 const propio = (mensaje, transitorio = false) => Object.assign(new Error(mensaje), { transitorio });

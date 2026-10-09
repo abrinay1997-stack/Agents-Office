@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { revisarPublicacion, postDePieza, medidaDeItem, revisarMomento, normalizarFormatos, formatoDe } from '../src/contenido-reglas.js';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const ESTADOS = ['idea', 'borrador', 'revision', 'aprobada']; // los que se deciden aquí; «en Meta», «publicada» y «falló» son de la cola (F3)
 export const FORMATOS = ['post', 'reel', 'carrusel', 'historia'];
@@ -208,7 +209,7 @@ export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Da
   const ruta = (id, fecha) => path.join(dir, mesDe(fecha), `${id}.md`);
   const escribir = (p, viejaFecha) => {
     const f = ruta(p.id, p.fecha); fs.mkdirSync(path.dirname(f), { recursive: true });
-    const tmp = f + '.tmp'; fs.writeFileSync(tmp, serializar(p)); fs.renameSync(tmp, f);
+    const tmp = f + '.tmp'; fs.writeFileSync(tmp, serializar(p)); renombrar(tmp, f);
     if (viejaFecha !== undefined && mesDe(viejaFecha) !== mesDe(p.fecha)) fs.rmSync(ruta(p.id, viejaFecha), { force: true }); // cambió de mes: se mueve, no se duplica
   };
   const carpetas = () => (fs.existsSync(dir) ? fs.readdirSync(dir).filter(x => /^\d{4}-\d{2}$/.test(x) || x === SIN_FECHA).sort() : []);
@@ -282,7 +283,7 @@ export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Da
     borrar(id) {
       const f = buscar(id); if (!f) return { error: 'esa pieza ya no existe', nada: true };
       const bin = path.join(dir, '.papelera'); fs.mkdirSync(bin, { recursive: true });
-      fs.renameSync(f, path.join(bin, `${ahora()}-${path.basename(f)}`)); return { ok: true };
+      renombrar(f, path.join(bin, `${ahora()}-${path.basename(f)}`)); return { ok: true };
     },
     /** Las piezas que usan un archivo del Estudio (para no dejar que la papelera se lo lleve). */
     usos(medio) { return todas().filter(p => p.medios.includes(medio) || p.historias.includes(medio)).map(p => ({ id: p.id, titulo: p.titulo, fecha: p.fecha })); },

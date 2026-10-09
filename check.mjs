@@ -460,7 +460,9 @@ else {
       return `${hint.trim().slice(0, 70)} · ${n.pieces} piece cards · chips ${[...new Set(n.chip)].join(' ')}`;
     });
     await step('smoke: a routine typed in the bar lands in SCHEDULED (demo)', async () => {
-      await page.click('.tp-dd'); await page.click('.tp-menu button[data-k="emails"]');
+      // 9 oct 2026: on a slow CI runner the bar's menu took longer than the 5 s of a bare click (PR #22): wait for it to be there, with room
+      await page.waitForSelector('.tp-dd', { state: 'visible', timeout: 20000 }); await page.click('.tp-dd', { timeout: 15000 });
+      await page.waitForSelector('.tp-menu button[data-k="emails"]', { state: 'visible', timeout: 15000 }); await page.click('.tp-menu button[data-k="emails"]', { timeout: 15000 });
       await page.fill('.tp-in', 'every weekday at 8am, triage the inbox and tell me what needs me');
       await page.evaluate(() => document.querySelector('.tp-in').dispatchEvent(new Event('input', { bubbles: true })));
       await page.waitForFunction(() => /Rutina/.test(document.querySelector('.tp-hint').textContent), null, { timeout: 5000 }).catch(() => {});

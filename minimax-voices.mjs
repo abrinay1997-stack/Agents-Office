@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as mmx from './minimax.mjs';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 let FILE = '';
 export function configureVoices(dataDir) { FILE = path.join(dataDir, 'minimax-voices.json'); systemCache = null; }
@@ -25,7 +26,7 @@ export const SYSTEM = [
 ].map(([voiceId, name]) => ({ voiceId, name, lang: voiceId.split('_')[0] === 'Spanish' ? 'es' : 'en' }));
 
 function read() { try { const j = JSON.parse(fs.readFileSync(FILE, 'utf8')); return Array.isArray(j.voices) ? j.voices.filter(v => v && typeof v.voiceId === 'string') : []; } catch { return []; } }
-function write(list) { fs.mkdirSync(path.dirname(FILE), { recursive: true }); const t = FILE + '.tmp'; fs.writeFileSync(t, JSON.stringify({ voices: list }, null, 1)); fs.renameSync(t, FILE); }
+function write(list) { fs.mkdirSync(path.dirname(FILE), { recursive: true }); const t = FILE + '.tmp'; fs.writeFileSync(t, JSON.stringify({ voices: list }, null, 1)); renombrar(t, FILE); }
 const pub = v => ({ voiceId: v.voiceId, name: v.name, kind: v.kind, at: v.at, pinned: !!v.pinned, ...(v.demoAudio ? { demoAudio: v.demoAudio } : {}), ...(v.prompt ? { prompt: v.prompt } : {}) });
 const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 

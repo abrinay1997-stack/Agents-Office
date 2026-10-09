@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, nextRun, valid } from './src/when.js';
 import { missedRuns } from './reliability.mjs';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const ALLOWED = ['emails', 'fin', 'sales', 'marketing', 'ops', 'delivery']; // 24 Sep 2026: every department (was emails/fin/sales) — the owner's content work runs on a timetable too
 export const NAMES = { emails: 'Emails', fin: 'Accounting', sales: 'Sales', marketing: 'Marketing', ops: 'Operations', delivery: 'Delivery' };
@@ -80,7 +81,7 @@ export function load(brainPath, agents) {
 }
 
 // write-then-rename: a crash mid-write never leaves the owner's file half written
-function writeAtomic(p, text) { const tmp = p + '.tmp'; fs.writeFileSync(tmp, text); fs.renameSync(tmp, p); }
+function writeAtomic(p, text) { const tmp = p + '.tmp'; fs.writeFileSync(tmp, text); renombrar(tmp, p); }
 
 export function save(brainPath, routines) {
   const p = file(brainPath);
@@ -105,7 +106,7 @@ export function patchFile(brainPath, id, patch) {
 
 /* ---------- run state: data/routines.json → { [id]: { nextAt, lastAt, runs, lastTaskId } } ---------- */
 export const loadState = dataDir => readJSON(stateFile(dataDir), {});
-export function saveState(dataDir, st) { fs.mkdirSync(dataDir, { recursive: true }); const f = stateFile(dataDir); fs.writeFileSync(f + '.tmp', JSON.stringify(st, null, 2)); fs.renameSync(f + '.tmp', f); } // V4.4 (B9): write, then rename — never half a file
+export function saveState(dataDir, st) { fs.mkdirSync(dataDir, { recursive: true }); const f = stateFile(dataDir); fs.writeFileSync(f + '.tmp', JSON.stringify(st, null, 2)); renombrar(f + '.tmp', f); } // V4.4 (B9): write, then rename — never half a file
 
 /** Give every routine a nextAt (new ones: the next due time from now). Returns the merged view the API serves. */
 export function withState(routines, st, now = Date.now()) {

@@ -1,5 +1,22 @@
 # Changelog
 
+## La Bandeja con Meta, Fase B1: los comentarios — 9 oct 2026
+
+- **Los comentarios de Instagram y Facebook llegan a la Bandeja directamente de Meta**, sin Metricool, y también **los de tus anuncios**, marcados «EN UN ANUNCIO» con un botón que lleva a esa campaña en Anuncios.
+- Cada comentario muestra la publicación de la que viene y, si es una respuesta, a qué comentario responde.
+- **Responder** sigue siendo solo tuyo, con un segundo clic y **una sola vez**, aunque la oficina se apague a mitad del envío.
+- **Ocultar o mostrar** un comentario (nunca borrarlo), con DESHACER. A un comentario oculto no se puede responder, y la Bandeja lo dice.
+- **El agente** deja el borrador de la respuesta y puede **sugerir** ocultar un comentario (insultos, spam). Solo lo sugiere.
+- **Ajustes → Contenido → «La Bandeja trae de»:** Meta, Metricool o las dos. Por defecto, Meta si hay token. Lo que llega por las dos fuentes se muestra una sola vez.
+- **Telegram** avisa de comentarios nuevos sin saturarte (como mucho uno cada 15 minutos, con «y N más»).
+- Lo que escribe un cliente sigue pasando por el filtro de órdenes escondidas (🛡).
+- `scripts/check-meta-bandeja.mjs`, para el token real: solo lee.
+- `check.mjs`: el paso de la rutina escrita en la barra espera a que el menú se vea; antes fallaba a veces en un servidor de CI lento.
+- **Arreglo en Windows: ya no se pierden guardados.** La oficina guarda escribiendo un archivo temporal y renombrándolo encima del bueno. En Windows, ese renombrado falla unos milisegundos si otro programa tiene el archivo abierto (la página, un antivirus), y el guardado se perdía en silencio: por ejemplo, el aviso «el piloto pausó tu anuncio», o un cambio en una tarea.
+  - Ahora `fs-seguro.mjs` reintenta y, si no puede, copia el contenido encima.
+  - Lo usan los 31 archivos del servidor que guardan.
+  - Así se explicaban también los tests que fallaban de vez en cuando con la máquina cargada.
+
 ## Anuncios de Meta, Fase A5: la IA que mejora las campañas — 9 oct 2026
 
 - **Sugerencias**, una pestaña nueva. Después de cada lectura de cifras, la oficina revisa tus campañas con las reglas del plan:

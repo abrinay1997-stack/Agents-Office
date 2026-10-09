@@ -392,7 +392,9 @@ Cada fase:
 
 **Hecho cuando:** con series de cifras de mentira (una campaña que aprende, una que se fatiga, una que gasta sin resultados, una que escala bien), el diagnóstico propone lo correcto y no propone nada a lo que aprende; las sugerencias se aplican y deshacen desde el panel y Telegram; y `ada` entrega su revisión semanal con Claude simulado.
 
-### Fase B1 — La Bandeja con Meta: comentarios
+### Fase B1 — La Bandeja con Meta: comentarios ✅ (9 oct 2026, rama `mejora/bandeja-b1`)
+
+> Hecho: `contenido/bandeja-meta.mjs` (IG y FB, orgánico y anuncios), la mezcla de fuentes con «La Bandeja trae de» (`auto` por defecto), responder una sola vez y nunca a un oculto, ocultar/mostrar con DESHACER, la sugerencia de ocultar del agente, el aviso de Telegram agrupado y `scripts/check-meta-bandeja.mjs`. **POR VERIFICAR con el token** (en el código): `is_hidden` y `from` en la lectura de comentarios de Facebook (si Meta rechaza `is_hidden`, se pide sin él; sin `from`, sale «Alguien en Facebook»); si en FB responder a una respuesta se cuelga del de arriba (la oficina siempre responde en el de arriba); `effective_instagram_media_id`; si leer comentarios de clientes pide el acceso avanzado. Límite: los 50 comentarios más recientes de cada publicación.
 
 - **`contenido/bandeja-meta.mjs`**, una fuente con la interfaz que ya usa `contenido/bandeja.mjs` con Metricool: `sincronizar`, `enviar` y `ocultar`.
 - **Ajustes → Contenido → «La Bandeja trae de»:** `metricool`, `meta` o `ambas`. Por defecto `meta` si hay token de Meta, y si no `metricool`.

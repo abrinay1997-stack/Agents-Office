@@ -23,11 +23,12 @@ import path from 'node:path';
 import { mezclarUmbrales, REGLAS, CAMBIOS, GASTA, UMBRALES_REQUERIDOS } from './diagnostico.mjs';
 import { quienDe, LIBRES, TIPOS } from './acciones.mjs';
 import { buscar } from './modelo.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const CADUCA_AGENTE_DIAS = 14, MAX_AGENTE_VIVAS = 10, MAX_HECHAS = 200;
 const ESTADOS = ['viva', 'pospuesta', 'descartada', 'aplicada'];
 const DIA = 864e5;
-const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos, null, 1)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos, null, 1)); renombrar(f + '.tmp', f); };
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
 const iso = ms => new Date(ms).toISOString();
 const clip = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);

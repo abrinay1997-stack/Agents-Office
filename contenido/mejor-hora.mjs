@@ -6,10 +6,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cuadricula, deLoPublicado } from '../src/contenido-hora.js';
 import { CON_MEJOR_HORA } from './metricool.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const CACHE_MS = 12 * 3600e3;
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
-const escribirJSON = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d)); renombrar(f + '.tmp', f); };
 const ymd = d => d.toISOString().slice(0, 10);
 
 export function crearMejorHora({ metricool = null, metricas = null, archivo, ahora = Date.now } = {}) {

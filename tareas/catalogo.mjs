@@ -5,13 +5,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { limiteValido } from './modelo.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const COLORES = ['azul', 'verde', 'ambar', 'rojo', 'violeta', 'cian', 'rosa', 'gris'];
 export const ESTADOS_PROYECTO = ['activo', 'pausa', 'terminado', 'archivado'];
 const slug = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30);
 
 function leer(f) { try { const j = JSON.parse(fs.readFileSync(f, 'utf8')); return Array.isArray(j) ? j : []; } catch { return []; } }
-function escribir(f, l) { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(l, null, 1)); fs.renameSync(f + '.tmp', f); }
+function escribir(f, l) { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(l, null, 1)); renombrar(f + '.tmp', f); }
 
 export function crearCatalogo({ dataDir, ahora = () => Date.now() } = {}) {
   const FP = path.join(dataDir, 'tareas', 'proyectos.json'), FE = path.join(dataDir, 'tareas', 'etiquetas.json');

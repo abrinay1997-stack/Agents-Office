@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { mensajeMeta } from './meta.mjs';
 import { sumarDias } from '../src/contenido-cifras.js';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const DIAS_PUBLICACIONES = 45; // hasta dónde atrás se leen las publicaciones de cada cuenta
 export const MAX_PUBLICACIONES = 18;
@@ -42,7 +43,7 @@ const DOMINIO_DE_META = /(^|\.)(cdninstagram\.com|fbcdn\.net)$/i;
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const num = v => (Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : null);
-const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos)); renombrar(f + '.tmp', f); };
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
 
 /** El día que se fotografía: AYER en el reloj de esta máquina, que es el último completo. */

@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const hash = s => crypto.createHash('sha1').update(String(s)).digest('hex').slice(0, 16);
 const safe = s => String(s).replace(/[^a-z0-9_-]+/gi, '_').slice(0, 60);
@@ -26,7 +27,7 @@ export function snapshot(dataDir, items, now = Date.now()) {
     idx[key] = { hash: h, at: now, agents: it.agents || [], first: first ? now : idx[key].first, changedAt: first ? idx[key]?.changedAt || null : now };
     if (!first) changed.push({ kind: it.kind, name: it.name, at: now, agents: it.agents || [] });
   }
-  if (changed.length || items.some(it => !readIndex(dataDir)[`${it.kind}:${it.name}`])) { fs.mkdirSync(path.dirname(indexFile(dataDir)), { recursive: true }); fs.writeFileSync(indexFile(dataDir) + '.tmp', JSON.stringify(idx)); fs.renameSync(indexFile(dataDir) + '.tmp', indexFile(dataDir)); }
+  if (changed.length || items.some(it => !readIndex(dataDir)[`${it.kind}:${it.name}`])) { fs.mkdirSync(path.dirname(indexFile(dataDir)), { recursive: true }); fs.writeFileSync(indexFile(dataDir) + '.tmp', JSON.stringify(idx)); renombrar(indexFile(dataDir) + '.tmp', indexFile(dataDir)); }
   return changed;
 }
 /** The versions of one skill or brief, newest first: [{ at, size, preview }]. */

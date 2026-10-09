@@ -16,6 +16,7 @@ import * as notas from './presets-notas.mjs';
 import * as media from './media.mjs';
 import { find as buscarEnGaleria } from './media/galeria.mjs'; // revisión F1: buscar sin copiar la galería (no es API de la fachada)
 import * as L from './imagen-local.mjs';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const ID_RE = /^[a-z0-9-]{2,40}$/;
 const arr = v => (Array.isArray(v) ? v : v == null ? [] : [v]);
@@ -235,7 +236,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
     fs.mkdirSync(carpeta(), { recursive: true });
     if (previa) { const h = path.join(dataDir, 'history', 'presets', p.id); fs.mkdirSync(h, { recursive: true }); fs.writeFileSync(path.join(h, `${Date.now()}.md`), previa); }
     const md = notas.presetANota(p, { byId, previa });
-    fs.writeFileSync(f + '.tmp', md); fs.renameSync(f + '.tmp', f);
+    fs.writeFileSync(f + '.tmp', md); renombrar(f + '.tmp', f);
     try { onNota(); } catch {}
     return { preset: p, archivo: `${notas.CARPETA}/${archivo}`, nota: archivo.replace(/\.md$/, '') };
   }
@@ -243,7 +244,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
   function borrar(id) {
     const p = propios().propios.find(x => x.id === id); if (!p) return false;
     const f = path.join(brainPath, ...p.archivo.split('/')), bin = path.join(carpeta(), '.papelera'); fs.mkdirSync(bin, { recursive: true });
-    fs.renameSync(f, path.join(bin, `${Date.now()} ${path.basename(f)}`)); try { onNota(); } catch {}
+    renombrar(f, path.join(bin, `${Date.now()} ${path.basename(f)}`)); try { onNota(); } catch {}
     return true;
   }
   /** GET /api/media/presets/<id>/versiones: las versiones de antes de un preset del dueño. */

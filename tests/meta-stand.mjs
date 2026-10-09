@@ -308,7 +308,8 @@ export function crearMetaStand(o = {}) {
     }
     if (metodo === 'GET' && (ruta === '/P1/posts' || ruta === '/P1/published_posts')) {
       const conReacciones = String(q.get('fields')).includes('reactions');
-      return json({ data: postsFB.map(p => { const x = { ...p }; if (!conReacciones) { delete x.reactions; delete x.comments; } return x; }) });
+      const conComentarios = String(q.get('fields')).includes('comments.summary'); // B1: la Bandeja pide solo el recuento de comentarios
+      return json({ data: postsFB.map(p => { const x = { ...p }; if (!conReacciones) delete x.reactions; if (!conReacciones && !conComentarios) delete x.comments; return x; }) });
     }
 
     // ---- publicar (F3)
@@ -364,10 +365,21 @@ export function crearMetaStand(o = {}) {
 
     // ---- la Bandeja: comentarios y mensajes
     const com = ruta.match(/^\/([\w]+)\/(comments|replies)$/);
-    if (com && metodo === 'GET') return json({ data: st.comentarios[com[1]] ?? [] });
+    // B1 (9 oct 2026): las respuestas van anidadas como las pide la oficina (`replies{…}` en Instagram, `comments{…}` en Facebook), lo
+    // propio lleva el `from` de la cuenta, y Instagram rechaza responder a un oculto o a una respuesta (§13.11 del plan: lo verificado).
+    const comentario = id => Object.values(st.comentarios).flat().find(c => c.id === id);
+    if (com && metodo === 'GET') {
+      if (st.fallar.comentarios > 0) { st.fallar.comentarios--; return errorGraph('(#100) Unsupported get request', 100); }
+      const f = String(q.get('fields') || ''), anidar = f.includes('replies{') ? 'replies' : f.includes('comments{') ? 'comments' : null;
+      if (st.fallar.isHidden && f.includes('is_hidden')) return errorGraph('(#100) Tried accessing nonexisting field (is_hidden)', 100);
+      return json({ data: (st.comentarios[com[1]] ?? []).map(c => (anidar ? { ...c, [anidar]: { data: st.comentarios[c.id] ?? [] } } : { ...c })) });
+    }
     if (com && metodo === 'POST') {
-      const id = nuevo('com');
-      (st.comentarios[com[1]] ??= []).push({ id, text: campos.message, message: campos.message, mio: true, timestamp: new Date(st.reloj).toISOString() });
+      const arriba = comentario(com[1]);
+      if (com[2] === 'replies' && arriba?.hidden) return errorGraph('(#100) Cannot reply to a hidden comment', 100);
+      if (com[2] === 'replies' && arriba && comentario(arriba.parent_id || '')) return errorGraph('(#100) Cannot reply to a reply', 100);
+      const id = nuevo('com'), propio = com[2] === 'replies' ? { from: { id: 'IG1', username: 'panaclaw' }, username: 'panaclaw', parent_id: com[1] } : { from: { id: 'P1', name: 'PanaClaw' }, parent: { id: com[1] } };
+      (st.comentarios[com[1]] ??= []).push({ id, text: campos.message, message: campos.message, mio: true, timestamp: new Date(st.reloj).toISOString(), created_time: new Date(st.reloj).toISOString(), ...propio });
       return json({ id });
     }
     if (metodo === 'GET' && ruta === '/P1/conversations') {
@@ -388,13 +400,16 @@ export function crearMetaStand(o = {}) {
     if (metodo === 'POST') {
       const e = editar(id, campos); if (e) return e;
       const coment = Object.values(st.comentarios).flat().find(c => c.id === id);
-      if (coment && (campos.hide !== undefined || campos.is_hidden !== undefined)) { const ocultar = String(campos.hide ?? campos.is_hidden) === 'true'; coment.hidden = ocultar; if (ocultar) st.ocultos.push(id); return json({ success: true }); }
+      if (coment && (campos.hide !== undefined || campos.is_hidden !== undefined)) { const ocultar = String(campos.hide ?? campos.is_hidden) === 'true'; if (campos.hide !== undefined) coment.hidden = ocultar; else coment.is_hidden = ocultar; if (ocultar) st.ocultos.push(id); else st.mostrados = [...(st.mostrados || []), id]; return json({ success: true }); }
     }
     if (metodo === 'GET') {
       if (st.campanas[id]) return json(vista(st.campanas[id]));
       if (st.conjuntos[id]) return json(vista(st.conjuntos[id]));
       if (st.anuncios[id]) return json(vista(st.anuncios[id]));
-      if (st.creativos[id]) return json(st.creativos[id]);
+      if (st.creativos[id]) { // B1: effective_instagram_media_id es POR VERIFICAR; con fallar.campoIG, Meta no lo conoce (error 100)
+        if (String(q.get('fields') || '').includes('effective_instagram_media_id') && st.fallar.campoIG) return errorGraph('(#100) Tried accessing nonexisting field (effective_instagram_media_id)', 100);
+        return json(st.creativos[id]);
+      }
       if (st.videos[id]) { const v = st.videos[id]; if (v.estado === 'processing' && !(v.listoEn-- > 0)) v.estado = 'ready'; return json({ id, status: { video_status: v.estado }, picture: `https://scontent.fbcdn.test/${id}-miniatura.jpg` }); }
       if (st.fotos[id] && q.get('fields') === 'images') return json({ images: [{ width: 320, source: `https://scontent.fbcdn.test/${id}-p.jpg` }, { width: 1080, source: `https://scontent.fbcdn.test/${id}.jpg` }] });
       if (st.cont[id]) { const c = st.cont[id]; if (c.estado === 'IN_PROGRESS' && c.subido && !(c.listoEn-- > 0)) c.estado = 'FINISHED'; return json({ status_code: c.estado, status: c.estado }); }

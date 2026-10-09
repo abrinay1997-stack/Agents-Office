@@ -7,6 +7,7 @@
 //   crearGuardados({ cerebro, ahora }) → { archivo, listar, guardar({ nombre, texto }), borrar(nombre) }
 import fs from 'node:fs';
 import path from 'node:path';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const NOTA_GUARDADOS = path.join('Contenido', 'Textos guardados.md');
 export const MAX_GUARDADOS = 40, MAX_NOMBRE = 60, MAX_TEXTO = 2200;
@@ -47,7 +48,7 @@ export function crearGuardados({ cerebro, ahora = Date.now } = {}) {
   const leer = () => { try { return parsearGuardados(fs.readFileSync(archivo, 'utf8')); } catch { return []; } };
   const escribir = lista => {
     fs.mkdirSync(path.dirname(archivo), { recursive: true });
-    fs.writeFileSync(archivo + '.tmp', serializarGuardados(lista, { hoy: new Date(ahora()).toISOString().slice(0, 10) })); fs.renameSync(archivo + '.tmp', archivo);
+    fs.writeFileSync(archivo + '.tmp', serializarGuardados(lista, { hoy: new Date(ahora()).toISOString().slice(0, 10) })); renombrar(archivo + '.tmp', archivo);
   };
   return {
     archivo,

@@ -451,7 +451,8 @@ function init(ov, ctx) {
     version: VERSION,
     open(o = {}) {
       S.abierta = true; if (o.tab && TABS.some(([k]) => k === o.tab)) S.tab = o.tab;
-      vigilar(); pintar(); cargar().then(() => { if (S.tab === 'historial' && S.hist == null) cargarHistorial(); });
+      if (o.objeto) S.tab = 'campanas'; /* B1: desde la Bandeja, «Ver la campaña en Anuncios» */
+      vigilar(); pintar(); cargar().then(() => { if (S.tab === 'historial' && S.hist == null) cargarHistorial(); if (o.objeto) { pintar(); abrirObjeto(o.objeto, null); } });
       if (S.tab === 'borradores' && o.borrador) { ctl.abrir(o.borrador, { paso: o.paso ?? 0, medios: o.medios || [] }); return; } // A3: de vuelta del Estudio «para el anuncio»
       if (S.tab === 'borradores') ctl.cargar();
       setTimeout(() => ov.querySelector(`[data-tab="${S.tab}"]`)?.focus(), 30);
