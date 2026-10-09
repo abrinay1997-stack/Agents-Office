@@ -15,10 +15,13 @@ import { campanasHTML, buscar, RANGOS, FILTROS, ORDENES } from './campanas.js';
 import { detalleHTML } from './detalle.js';
 import { historialHTML, QUIENES } from './historial.js';
 import { GASTO, LIBRES, TEXTO, pideDatos, menuHTML, formularioHTML, confirmarHTML, errorHTML, errorImporte, importe, presupuestoDe } from './acciones.js';
+import { crearAsistente } from './asistente.js';
+// Fase A3 (9 oct 2026): CREAR. La pestaña BORRADORES (antes de Historial) con la lista y el asistente de 5 pasos (src/anuncios/asistente.js);
+// «+ Nueva campaña» también en el Resumen. Lo creado nace EN PAUSA en Meta y se enlaza a su campaña; activarlo es la A2 (dos clics).
 
 /* global __AO_ANUNCIOS_VERSION__ */
 const VERSION = typeof __AO_ANUNCIOS_VERSION__ === 'string' ? __AO_ANUNCIOS_VERSION__ : '';
-const TABS = [['resumen', 'Resumen'], ['campanas', 'Campañas'], ['historial', 'Historial']];
+const TABS = [['resumen', 'Resumen'], ['campanas', 'Campañas'], ['borradores', 'Borradores'], ['historial', 'Historial']];
 const NIVEL = { campana: 'Campaña', conjunto: 'Conjunto', anuncio: 'Anuncio' };
 const guarda = { get: (k, d) => { try { const v = localStorage.getItem('ao.anu.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('ao.anu.' + k, JSON.stringify(v)); } catch {} } };
 const vale = (lista, v, d) => (lista.some(([k]) => k === v) ? v : d);
@@ -45,6 +48,10 @@ function init(ov, ctx) {
   const decir = t => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
   const enEjemplo = () => !ctx.servida || S.ejemplo || !!S.d?.ejemplo;
   const moneda = () => S.d?.cuenta?.moneda || 'USD';
+  const ctl = crearAsistente({ ov, datos, ctx, modal, decir, enEjemplo, moneda, aviso: t => mostrarAviso(t, null),
+    repintar: () => { if (S.tab === 'borradores' && S.abierta) pintar(); },
+    irACampana: async id => { await cargar(); if (S.d && buscar(S.d.campanas || [], id)) abrirDetalle(id, null); else { S.tab = 'campanas'; guarda.set('tab', S.tab); pintar(); decir('La campaña aparecerá en Campañas en la próxima lectura de Meta.'); } },
+    alCrear: () => { cargar(); cargarHistorial(); } });
 
   /* ---------- cargar ---------- */
   async function cargar() {
@@ -54,7 +61,7 @@ function init(ov, ctx) {
   }
   async function cargarHistorial() { try { S.hist = await datos.historial({ ejemplo: S.ejemplo }); } catch (e) { S.hist = []; decir('No se pudo traer el historial: ' + e.message); } if (S.tab === 'historial') pintar(); }
   let reloj = 0;
-  const vigilar = () => { clearInterval(reloj); reloj = setInterval(() => { const a = document.activeElement; if (document.hidden || !S.abierta || S.leyendo || S.dlg || !caja.hidden || (a && ov.contains(a) && a.tagName === 'SELECT')) return; cargar(); }, 60000); }; // lo que lee el servidor aparece solo
+  const vigilar = () => { clearInterval(reloj); reloj = setInterval(() => { const a = document.activeElement; if (document.hidden || !S.abierta || S.leyendo || S.dlg || !caja.hidden || S.tab === 'borradores' || (a && ov.contains(a) && a.tagName === 'SELECT')) return; cargar(); }, 60000); }; // lo que lee el servidor aparece solo
 
   /* ---------- pintar ---------- */
   function pintarCabecera() {
@@ -71,20 +78,23 @@ function init(ov, ctx) {
   function pintar() {
     pintarCabecera();
     const foco = clavFoco(), scroll = main.scrollTop, ahora = Date.now();
-    if (!S.d) main.innerHTML = S.error ? `<div class="anu-vacio" role="alert"><b>No se pudieron traer los anuncios</b><span>${esc(S.error)}</span><button type="button" class="anu-btn" data-a="reintentar">Reintentar</button></div>` : '<p class="anu-cargando">Cargando…</p>';
+    if (S.tab === 'borradores') main.innerHTML = ctl.html();
+    else if (!S.d) main.innerHTML = S.error ? `<div class="anu-vacio" role="alert"><b>No se pudieron traer los anuncios</b><span>${esc(S.error)}</span><button type="button" class="anu-btn" data-a="reintentar">Reintentar</button></div>` : '<p class="anu-cargando">Cargando…</p>';
     else if (S.tab === 'resumen') main.innerHTML = resumenHTML(S.d, { rango: S.rango, ahora });
     else if (S.tab === 'campanas') main.innerHTML = S.d.configurado ? campanasHTML(S.d, { rango: S.rango, filtro: S.filtro, orden: S.orden, abiertos: S.abiertos, sel: S.sel, ahora }) : resumenHTML(S.d);
     else main.innerHTML = historialHTML(S.hist, { quien: S.quien });
-    if (S.error && S.d) main.insertAdjacentHTML('afterbegin', `<p class="anu-aviso-error" role="alert">No se pudo actualizar: ${esc(S.error)}. Lo que ves es la lectura anterior.</p>`);
+    ov.classList.toggle('conAsis', S.tab === 'borradores' && !!ctl.abierto);
+    if (S.error && S.d && S.tab !== 'borradores') main.insertAdjacentHTML('afterbegin', `<p class="anu-aviso-error" role="alert">No se pudo actualizar: ${esc(S.error)}. Lo que ves es la lectura anterior.</p>`);
     main.scrollTop = scroll; volverFoco(foco);
-    if (S.sel) pintarDetalle(false);
+    if (S.sel && S.tab !== 'borradores') pintarDetalle(false);
   }
   function clavFoco() {
     const a = document.activeElement; if (!a || (!main.contains(a) && !det.contains(a)) || a === main) return null;
-    const d = [...a.attributes].filter(x => x.name.startsWith('data-')).map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
-    return d ? { sel: a.tagName.toLowerCase() + d, en: det.contains(a) ? 'det' : 'main' } : null;
+    const d = [...a.attributes].filter(x => x.name.startsWith('data-')).map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') + (a.type === 'radio' ? `[value="${CSS.escape(a.value)}"]` : '');
+    let pos = null; try { if (typeof a.selectionStart === 'number') pos = [a.selectionStart, a.selectionEnd]; } catch {}
+    return d ? { sel: a.tagName.toLowerCase() + d, en: det.contains(a) ? 'det' : 'main', pos } : null;
   }
-  function volverFoco(f) { if (!f) return; try { (f.en === 'det' ? det : main).querySelector(f.sel)?.focus({ preventScroll: true }); } catch {} }
+  function volverFoco(f) { if (!f) return; try { const n = (f.en === 'det' ? det : main).querySelector(f.sel); n?.focus({ preventScroll: true }); if (n && f.pos) try { n.setSelectionRange(f.pos[0], f.pos[1]); } catch {} } catch {} }
 
   /* ---------- el detalle, al lado ---------- */
   let origenDet = null;
@@ -282,12 +292,15 @@ function init(ov, ctx) {
       if (a === 'minimo') { abrirDlg({ fase: 'form', valor: b.dataset.minimo, err: '' }); return; }
       return;
     }
+    if (b.closest('.anu-fondo-gal')) return; // la galería del asistente escucha sola
+    if (b.dataset.a === 'nueva' && S.tab !== 'borradores') { S.tab = 'borradores'; guarda.set('tab', S.tab); cerrarDetalle(false); }
+    if ((S.tab === 'borradores' || b.dataset.vercamp) && main.contains(b) && ctl.click(b)) return;
     if (caja.contains(b) && b.dataset.acc) return pedir(b.dataset.acc, b.dataset.id, menuDe);
     if (b.dataset.menu) return caja.hidden || menuDe !== b ? abrirMenu(b) : cerrarMenu();
     if (b.dataset.acc) return pedir(b.dataset.acc, b.dataset.id, b);
     if (b.dataset.deshacer) return deshacer(b);
     if (b.hasAttribute('data-cerrartoast')) { clearInterval(relojToast); toast.hidden = true; toast.innerHTML = ''; main.focus({ preventScroll: true }); return; }
-    if (b.dataset.tab) { S.tab = b.dataset.tab; guarda.set('tab', S.tab); if (S.tab === 'historial' && S.hist == null) cargarHistorial(); pintar(); return; }
+    if (b.dataset.tab) { S.tab = b.dataset.tab; guarda.set('tab', S.tab); if (S.tab === 'historial' && S.hist == null) cargarHistorial(); if (S.tab === 'borradores') { cerrarDetalle(false); ctl.cargar(); } pintar(); return; }
     if (b.hasAttribute('data-cerrarvista')) return ctx.cerrar?.();
     if (b.hasAttribute('data-actualizar')) return actualizar();
     if (b.hasAttribute('data-cerrardet')) return cerrarDetalle();
@@ -298,8 +311,8 @@ function init(ov, ctx) {
     if (b.dataset.abrir) return abrirDetalle(b.dataset.abrir, b);
     if (b.dataset.abrircamp) return abrirDetalle(b.dataset.abrircamp, b);
     const a = b.dataset.a;
-    if (a === 'ejemplo') { S.ejemplo = true; S.hist = null; cargar().then(() => decir('Viendo datos de ejemplo.')); return; }
-    if (a === 'salir') { S.ejemplo = false; S.hist = null; cerrarDetalle(false); cargar().then(() => decir('De vuelta a tu cuenta.')); return; }
+    if (a === 'ejemplo') { S.ejemplo = true; S.hist = null; ctl.reiniciar(); if (S.tab === 'borradores') ctl.cargar(); cargar().then(() => decir('Viendo datos de ejemplo.')); return; }
+    if (a === 'salir') { S.ejemplo = false; S.hist = null; ctl.reiniciar(); if (S.tab === 'borradores') ctl.cargar(); cerrarDetalle(false); cargar().then(() => decir('De vuelta a tu cuenta.')); return; }
     if (a === 'ajustes') return ctx.abrirAjustes?.('anuncios');
     if (a === 'reintentar') return cargar();
   });
@@ -316,13 +329,15 @@ function init(ov, ctx) {
     if (LIBRES.has(g.tipo)) return hacer(S.dlg, true);
     return primerClic(S.dlg);
   });
-  ov.addEventListener('change', e => { if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
+  ov.addEventListener('input', e => { if (S.tab === 'borradores' && main.contains(e.target)) ctl.input(e); });
+  ov.addEventListener('change', e => { if (S.tab === 'borradores' && main.contains(e.target) && ctl.change(e)) return; if (e.target.matches('[data-orden]')) { S.orden = e.target.value; guarda.set('orden', S.orden); pintar(); } });
   ov.addEventListener('keydown', e => {
     const el = e.target;
+    if (S.tab === 'borradores' && main.contains(el) && ctl.keydown(e)) return;
     if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') && el.getAttribute?.('role') === 'tab') {
       e.preventDefault(); const i = TABS.findIndex(([k]) => k === el.dataset.tab);
       const n = TABS[e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length][0];
-      S.tab = n; guarda.set('tab', n); if (n === 'historial' && S.hist == null) cargarHistorial(); pintar(); ov.querySelector(`[data-tab="${n}"]`).focus();
+      S.tab = n; guarda.set('tab', n); if (n === 'historial' && S.hist == null) cargarHistorial(); if (n === 'borradores') { cerrarDetalle(false); ctl.cargar(); } pintar(); ov.querySelector(`[data-tab="${n}"]`).focus();
     }
     if (e.key === 'ArrowDown' && el.dataset?.menu) { e.preventDefault(); abrirMenu(el); }
   });
@@ -333,12 +348,15 @@ function init(ov, ctx) {
     open(o = {}) {
       S.abierta = true; if (o.tab && TABS.some(([k]) => k === o.tab)) S.tab = o.tab;
       vigilar(); pintar(); cargar().then(() => { if (S.tab === 'historial' && S.hist == null) cargarHistorial(); });
+      if (S.tab === 'borradores' && o.borrador) { ctl.abrir(o.borrador, { paso: o.paso ?? 0, medios: o.medios || [] }); return; } // A3: de vuelta del Estudio «para el anuncio»
+      if (S.tab === 'borradores') ctl.cargar();
       setTimeout(() => ov.querySelector(`[data-tab="${S.tab}"]`)?.focus(), 30);
     },
-    close() { S.abierta = false; clearInterval(reloj); cerrarMenu(false); cerrarDlg(false); cerrarDetalle(false); },
-    back() { return cerrarMenu() || cerrarDlg() || cerrarDetalle(); },
+    close() { S.abierta = false; clearInterval(reloj); ctl.cerrar(); cerrarMenu(false); cerrarDlg(false); cerrarDetalle(false); },
+    back() { return cerrarMenu() || cerrarDlg() || (S.tab === 'borradores' && ctl.back()) || cerrarDetalle(); },
     refresh: () => cargar(),
     selection() {
+      const sb = S.tab === 'borradores' && ctl.selection(); if (sb) return sb;
       const f = S.sel && S.d && buscar(S.d.campanas || [], S.sel);
       if (f) return { view: 'anuncios', label: `${NIVEL[f.nivel]} «${String(f.nodo.nombre || '').slice(0, 60)}»${enEjemplo() ? ' (ejemplo)' : ''}`, kind: f.nivel, id: f.id };
       return { view: 'anuncios', label: `Anuncios · ${TABS.find(([k]) => k === S.tab)?.[1] || ''}${enEjemplo() ? ' (ejemplo)' : ''}`, kind: 'resumen' };

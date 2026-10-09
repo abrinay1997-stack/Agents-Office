@@ -14,6 +14,7 @@
 //
 // Nunca habla con Meta ni conoce un token de verdad: los tokens son los que le pasa cada test.
 import http from 'node:http';
+import crypto from 'node:crypto';
 
 export const TOKEN_STAND = 'EAAG-TOKEN-DEL-STAND-0123456789'; // secrets-ok: un token de mentira para el Graph de mentira
 export const TOKEN_PAGINA_STAND = 'EAAG-TOKEN-DE-PAGINA-DEL-STAND-9876543210'; // secrets-ok: idem
@@ -45,7 +46,9 @@ const ESTADOS = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'DELETED'];
  * @param {Array}    [o.postsFB]      las publicaciones de P1 ya existentes (Graph solo da reacciones si se piden en `fields`)
  * @param {number}   [o.procesar]     cuántas lecturas tarda un video de Instagram en quedar listo tras subirlo
  * @param {object}   [o.cuenta]       campos de la cuenta publicitaria (account_status, currency…)
- * @param {object}   [o.fallar]       { limite: n, parametro: n, pagoPendiente, rechazar: [idAnuncio], conProblemas: [idAnuncio] }
+ * @param {object}   [o.fallar]       { limite: n, parametro: n, pagoPendiente, rechazar: [idAnuncio], conProblemas: [idAnuncio],
+ *                                     A3: trasConjunto (crea el conjunto y NO contesta nunca: la oficina «se cae» entre el conjunto y el anuncio),
+ *                                     crearAnuncio: n (los n próximos anuncios dan error 100), sinFiltro (la lista no admite `filtering`) }
  * @param {object}   [o.uso]          { app, negocio, cuenta, recuperarMin }: porcentajes que salen en las cabeceras de uso
  * @param {Function} [o.torcer]       (llamada, st) → Response | null
  * @param {string}   [o.rupload]      el origen que hace de rupload.facebook.com
@@ -131,7 +134,9 @@ export function crearMetaStand(o = {}) {
     if (diario && diario < PRESUPUESTO_MINIMO_CENTAVOS) return errorGraph('(#100) Invalid parameter', 100, { error_subcode: 1885272, error_user_title: 'El presupuesto es demasiado bajo' });
     if (esValidar(campos)) { st.validaciones++; return json({ success: true }); }
     const id = nuevo('ADS');
-    st.conjuntos[id] = { id, campaign_id: camp.id, name: campos.name, optimization_goal: campos.optimization_goal, billing_event: campos.billing_event, destination_type: campos.destination_type, targeting: segmentacion, status: campos.status, daily_budget: campos.daily_budget, lifetime_budget: campos.lifetime_budget, end_time: campos.end_time, promoted_object: objeto(campos.promoted_object), adlabels: lista(campos.adlabels), learning_stage_info: { status: 'LEARNING', attribution_windows: ['7d_click'], conversions: 0 } };
+    st.conjuntos[id] = { id, campaign_id: camp.id, name: campos.name, optimization_goal: campos.optimization_goal, billing_event: campos.billing_event, destination_type: campos.destination_type, targeting: segmentacion, status: campos.status, daily_budget: campos.daily_budget, lifetime_budget: campos.lifetime_budget, start_time: campos.start_time, end_time: campos.end_time, promoted_object: objeto(campos.promoted_object), adlabels: lista(campos.adlabels), learning_stage_info: { status: 'LEARNING', attribution_windows: ['7d_click'], conversions: 0 } };
+    // A3: «la oficina se cae entre el conjunto y el anuncio» — Meta lo creó, pero la respuesta no llega nunca (una vez)
+    if (st.fallar.trasConjunto) { st.fallar.trasConjunto = false; st.colgadas = (st.colgadas || 0) + 1; return new Promise(() => {}); }
     return json({ id });
   }
   function crearCreativo(campos) {
@@ -150,6 +155,7 @@ export function crearMetaStand(o = {}) {
     if (!cre?.creative_id || !st.creativos[cre.creative_id]) return errorGraph('(#100) Param creative must reference an existing creative', 100);
     if (!campos.name || !ESTADOS.includes(campos.status)) return errorGraph('(#100) The parameters name and status are required', 100);
     if (esValidar(campos)) { st.validaciones++; return json({ success: true }); }
+    if (st.fallar.crearAnuncio > 0) { st.fallar.crearAnuncio--; return errorGraph('(#100) Invalid parameter', 100, { error_user_title: 'El creativo no es válido para esta ubicación', error_user_msg: 'La imagen no cumple los requisitos de la ubicación.' }); }
     const id = nuevo('AD');
     st.anuncios[id] = { id, adset_id: conj.id, campaign_id: conj.campaign_id, name: campos.name, status: campos.status, creative: { id: cre.creative_id }, adlabels: lista(campos.adlabels), revision: 'PENDING_REVIEW' };
     return json({ id });
@@ -332,12 +338,22 @@ export function crearMetaStand(o = {}) {
       const sub = act[2] || '';
       if (!sub && metodo === 'GET') return json(st.cuenta);
       if (metodo === 'POST' && st.cuenta.account_status === 3 && ['/campaigns', '/adsets', '/ads'].includes(sub) && !esValidar(campos)) return errorGraph('(#2635) The ad account has an unsettled payment', 2635, { error_user_title: 'Pago pendiente' });
-      if (sub === '/campaigns') return metodo === 'POST' ? crearCampana(campos) : json({ data: Object.values(st.campanas).map(vista) });
-      if (sub === '/adsets') return metodo === 'POST' ? crearConjunto(campos) : json({ data: Object.values(st.conjuntos).map(vista) });
-      if (sub === '/ads') return metodo === 'POST' ? crearAnuncio(campos) : json({ data: Object.values(st.anuncios).map(vista) });
-      if (sub === '/adcreatives') return metodo === 'POST' ? crearCreativo(campos) : json({ data: Object.values(st.creativos) });
-      if (sub === '/adimages' && metodo === 'POST') { const hash = `hash${++st.n}`, nombre = campos.filename || 'imagen.jpg'; st.imagenes[hash] = { nombre, bytes: archivo || cuerpo || String(campos.bytes || '').length }; return json({ images: { [nombre]: { hash, url: `https://scontent.fbcdn.test/${hash}.jpg` } } }); }
-      if (sub === '/advideos' && metodo === 'POST') { const id = nuevo('VID'); st.videos[id] = { estado: st.procesar > 0 ? 'processing' : 'ready', listoEn: st.procesar }; return json({ id }); }
+      // A3: las listas admiten `filtering` por nombre (CONTAIN · EQUAL), como Graph; con `fallar.sinFiltro`, error 100 (la oficina lee la lista entera)
+      const filtrar = l => { const f = q.get('filtering'); if (!f) return l; if (st.fallar.sinFiltro) return null; const reglas = lista(f); return l.filter(x => reglas.every(r => r.field !== 'name' || (r.operator === 'EQUAL' ? x.name === r.value : String(x.name || '').includes(r.value)))); };
+      const listar = l => { const x = filtrar(l); return x === null ? errorGraph('(#100) Filtering field name is not supported', 100) : json({ data: x }); };
+      if (sub === '/campaigns') return metodo === 'POST' ? crearCampana(campos) : listar(Object.values(st.campanas).map(vista));
+      if (sub === '/adsets') return metodo === 'POST' ? crearConjunto(campos) : listar(Object.values(st.conjuntos).map(vista));
+      if (sub === '/ads') return metodo === 'POST' ? crearAnuncio(campos) : listar(Object.values(st.anuncios).map(vista));
+      if (sub === '/adcreatives') return metodo === 'POST' ? crearCreativo(campos) : listar(Object.values(st.creativos).map(c => ({ ...c, status: c.status || 'ACTIVE' })));
+      if (sub === '/adimages' && metodo === 'POST') {
+        // A3: los bytes llegan en `bytes` (base64) o como archivo (multipart `source`); el hash es del CONTENIDO, como en Meta (subirla otra vez da el mismo)
+        const datos = campos.bytes ? Buffer.from(String(campos.bytes), 'base64') : null, tam = datos?.length || archivo || cuerpo || 0;
+        if (!tam) return errorGraph('(#100) No image bytes', 100);
+        const hash = datos ? crypto.createHash('md5').update(datos).digest('hex') : `hash${++st.n}`, clave = campos.bytes ? 'bytes' : (campos.name || 'imagen.jpg');
+        st.imagenes[hash] = { nombre: campos.name || clave, bytes: tam, subidas: (st.imagenes[hash]?.subidas || 0) + 1 };
+        return json({ images: { [clave]: { hash, url: `https://scontent.fbcdn.test/${hash}.jpg` } } });
+      }
+      if (sub === '/advideos' && metodo === 'POST') { if (!archivo && !cuerpo && !campos.file_url) return errorGraph('(#100) No video file', 100); const id = nuevo('VID'); st.videos[id] = { estado: st.procesar > 0 ? 'processing' : 'ready', listoEn: st.procesar, nombre: campos.name, bytes: archivo || cuerpo }; return json({ id }); }
       if (sub === '/insights') return cifras(q);
       if (sub === '/generatepreviews') return json({ data: [{ body: `<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?format=${q.get('ad_format') || 'MOBILE_FEED_STANDARD'}"></iframe>` }] });
       if (sub === '/delivery_estimate') return json({ data: [{ estimate_mau_lower_bound: 120000, estimate_mau_upper_bound: 340000, estimate_ready: true }] });
@@ -379,7 +395,7 @@ export function crearMetaStand(o = {}) {
       if (st.conjuntos[id]) return json(vista(st.conjuntos[id]));
       if (st.anuncios[id]) return json(vista(st.anuncios[id]));
       if (st.creativos[id]) return json(st.creativos[id]);
-      if (st.videos[id]) { const v = st.videos[id]; if (v.estado === 'processing' && !(v.listoEn-- > 0)) v.estado = 'ready'; return json({ id, status: { video_status: v.estado } }); }
+      if (st.videos[id]) { const v = st.videos[id]; if (v.estado === 'processing' && !(v.listoEn-- > 0)) v.estado = 'ready'; return json({ id, status: { video_status: v.estado }, picture: `https://scontent.fbcdn.test/${id}-miniatura.jpg` }); }
       if (st.fotos[id] && q.get('fields') === 'images') return json({ images: [{ width: 320, source: `https://scontent.fbcdn.test/${id}-p.jpg` }, { width: 1080, source: `https://scontent.fbcdn.test/${id}.jpg` }] });
       if (st.cont[id]) { const c = st.cont[id]; if (c.estado === 'IN_PROGRESS' && c.subido && !(c.listoEn-- > 0)) c.estado = 'FINISHED'; return json({ status_code: c.estado, status: c.estado }); }
       if (st.posts[id]) { const p = st.posts[id], pub = !p.programada || p.programada * 1000 <= st.reloj; return json(p.video ? { published: pub, permalink_url: `/PanaClaw/videos/${id}` } : { is_published: pub, permalink_url: `https://www.facebook.com/${id}` }); }

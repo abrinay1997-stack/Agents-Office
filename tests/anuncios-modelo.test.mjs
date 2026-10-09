@@ -2,7 +2,8 @@
 // la etiqueta de la oficina, las cifras recalculadas (nunca promediadas) y la vista que contesta GET /api/anuncios.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resultadoDe, cifras, estadoTexto, aprendizaje, cuentaEstado, deMeta, aMeta, etiqueta, conEtiqueta, publicoTexto, rangos, fechaEn, armarVista, buscar, textoCampanas, textoCuenta, textoObjeto } from '../anuncios/modelo.mjs';
+import { resultadoDe, cifras, estadoTexto, aprendizaje, cuentaEstado, deMeta, aMeta, etiqueta, conEtiqueta, publicoTexto, rangos, fechaEn, armarVista, buscar, textoCampanas, textoCuenta, textoObjeto,
+  borradorPorDefecto, normalizarBorrador, validarBorrador, combinacion, COMBINACIONES, TODAS_LAS_COMBINACIONES, costoMaximo, ErrorBorrador, lineaBorrador } from '../anuncios/modelo.mjs';
 
 test('el resultado depende del objetivo y del destino', () => {
   assert.equal(resultadoDe('OUTCOME_ENGAGEMENT', { optimizacion: 'CONVERSATIONS', destino: 'WHATSAPP' }), 'mensajes');
@@ -107,4 +108,73 @@ test('la vista: estructura, estados, aprendizaje, rechazos con su motivo, cifras
   // la cuenta con un pago pendiente sale arriba
   const pago = armarVista({ guardado: { ...guardado, cuenta: { ...guardado.cuenta, account_status: 3 } }, filas: [], rango: 'hoy', hoy, hayCifras: true });
   assert.ok(pago.avisos.some(a => a.nivel === 'bad' && /pago pendiente/.test(a.texto)));
+});
+
+// ---------------------------------------------------------------- Fase A3 (9 oct 2026): el borrador de campaña
+
+const AHORA = Date.parse('2026-10-09T15:00:00Z');
+const OK_CUENTAS = { pagina: 'P1', instagram: 'IG1' }, IMAGEN = () => ({ kind: 'image' });
+const tres = [1, 2, 3].map(i => ({ id: `k${i}`, media: `m${i}`, formato: i === 3 ? '9:16' : '1:1', texto: `Escríbenos ${i}` }));
+
+test('A3: los valores por defecto del plan (§12) — «que me escriban» por WhatsApp si hay número, si no por Instagram; Advantage+ en Panamá, 18+', () => {
+  const b = borradorPorDefecto({ ajustes: { whatsapp: '50760001111' }, ahora: AHORA });
+  assert.equal(b.objetivo, 'mensajes'); assert.equal(b.destino, 'whatsapp'); assert.equal(b.estado, 'borrador'); assert.equal(b.de, 'dueno');
+  assert.deepEqual(b.publico, { modo: 'advantage', paises: ['PA'], radio: null, edadMin: 18, edadMax: null, intereses: [] });
+  assert.deepEqual(b.mejoras, { texto: false, retoques: true, recorte: true, plantilla: false }, 'solo las que no tocan el texto');
+  assert.equal(borradorPorDefecto({ ajustes: {} }).destino, 'instagram');
+  for (const k of ['id', 'nombre', 'de', 'creadoAt', 'actualizadoAt', 'estado', 'objetivo', 'destino', 'publico', 'categoriaEspecial', 'presupuesto', 'inicio', 'fin', 'enlace', 'creativos', 'mejoras', 'validacion', 'meta', 'error']) assert.ok(k in b, `el contrato lleva «${k}»`);
+});
+
+test('A3: normalizar — solo cambia lo que llega, nunca el estado ni lo de Meta; lo que no existe es un 400 en palabras', () => {
+  const b0 = normalizarBorrador({ nombre: 'Combo · AO:x1', presupuesto: { usd: 'US$7,50' }, creativos: tres }, null, { ahora: AHORA });
+  assert.equal(b0.nombre, 'Combo', 'la etiqueta la pone la oficina'); assert.equal(b0.presupuesto.usd, 7.5); assert.deepEqual(b0.creativos.map(c => c.id), ['k1', 'k2', 'k3']);
+  const b1 = normalizarBorrador({ objetivo: 'web', estado: 'creado', meta: { campana: 'X' }, validacion: { ok: true } }, { ...b0, validacion: { ok: true } }, { ahora: AHORA });
+  assert.equal(b1.estado, 'borrador'); assert.equal(b1.meta, null); assert.equal(b1.validacion, null, 'otro borrador: la validación de antes no vale'); assert.equal(b1.destino, null, 'web no tiene destino de mensajes');
+  for (const [e, re] of [[{ objetivo: 'likes' }, /objetivo es uno de/], [{ destino: 'telegram' }, /whatsapp, instagram o messenger/], [{ categoriaEspecial: 'CASINO' }, /categoría especial/], [{ presupuesto: { tipo: 'semanal' } }, /diario.*total/], [{ fin: 'mañana' }, /no se entiende/], [{ creativos: [{ formato: '16:9' }] }, /1:1, 4:5 o 9:16/], [{ creativos: Array(11).fill({}) }, /Como mucho 10/]]) {
+    assert.throws(() => normalizarBorrador(e, null, { ahora: AHORA }), err => err instanceof ErrorBorrador && err.status === 400 && re.test(err.message), JSON.stringify(e));
+  }
+  const fallo = normalizarBorrador({ nombre: 'Otra' }, { ...b0, estado: 'fallo', error: 'x' }, { ahora: AHORA });
+  assert.equal(fallo.estado, 'borrador', 'cambiarlo tras un fallo lo deja listo para crear'); assert.equal(fallo.error, null);
+});
+
+test('A3: la tabla de combinaciones — objetivo ↔ objective ↔ optimization_goal ↔ destination_type ↔ botón', () => {
+  assert.deepEqual(Object.keys(COMBINACIONES), ['mensajes', 'web', 'ventas', 'contactos', 'conocer']);
+  const w = combinacion('mensajes', 'whatsapp');
+  assert.equal(w.objective, 'OUTCOME_ENGAGEMENT'); assert.equal(w.optimization_goal, 'CONVERSATIONS'); assert.equal(w.destination_type, 'WHATSAPP'); assert.equal(w.app_destination, 'WHATSAPP'); assert.deepEqual(w.pide, ['whatsapp']);
+  assert.equal(combinacion('mensajes', 'instagram').destination_type, 'INSTAGRAM_DIRECT'); assert.equal(combinacion('mensajes', 'messenger').destination_type, 'MESSENGER');
+  assert.equal(combinacion('mensajes', null), null, 'mensajes sin destino no existe');
+  assert.equal(combinacion('web').objective, 'OUTCOME_TRAFFIC'); assert.equal(combinacion('ventas').objective, 'OUTCOME_SALES'); assert.equal(combinacion('contactos').objective, 'OUTCOME_LEADS'); assert.equal(combinacion('conocer').objective, 'OUTCOME_AWARENESS');
+  assert.deepEqual(combinacion('ventas').pide, ['pixel', 'enlace']); assert.deepEqual(combinacion('web').pide, ['enlace']);
+  assert.equal(TODAS_LAS_COMBINACIONES().length, 7);
+  for (const c of TODAS_LAS_COMBINACIONES()) { assert.ok(c.llamadas.length, c.objetivo); assert.equal(c.billing_event, 'IMPRESSIONS'); assert.notEqual(c.verificado, true, 'nada está verificado del todo todavía: lo dice la validación'); }
+});
+
+test('A3: validar — los problemas en palabras y por campo; lo que falta en Ajustes; los creativos de la galería', () => {
+  const v = (e, o = {}) => validarBorrador(normalizarBorrador(e, null, { ahora: AHORA, ajustes: o.ajustes || {} }), { ajustes: o.ajustes || {}, cuentas: o.cuentas || OK_CUENTAS, medio: o.medio || IMAGEN, ahora: AHORA });
+  const t = r => r.problemas.filter(p => p.nivel === 'error').map(p => p.texto).join(' | ');
+  assert.match(t(v({})), /Faltan creativos: Meta recomienda 3 a 6/);
+  assert.match(t(v({ destino: 'whatsapp', creativos: tres })), /número de WhatsApp Business en Ajustes/);
+  assert.match(t(v({ objetivo: 'ventas', creativos: tres })), /necesita el píxel/); assert.match(t(v({ objetivo: 'ventas', creativos: tres })), /dirección de tu web/);
+  assert.match(t(v({ objetivo: 'web', enlace: 'http://x.com', creativos: tres })), /https:\/\//);
+  assert.match(t(v({ presupuesto: { usd: 0.5 }, creativos: tres })), /El presupuesto diario mínimo es US\$1/);
+  assert.match(t(v({ inicio: '2026-10-20', fin: '2026-10-15', creativos: tres })), /La fecha de fin es anterior al inicio/);
+  assert.match(t(v({ presupuesto: { tipo: 'total', usd: 50 }, creativos: tres })), /presupuesto total necesita fecha de fin/);
+  assert.match(t(v({ creativos: tres }, { cuentas: {} })), /Falta la página de Facebook/);
+  assert.match(t(v({ creativos: tres }, { medio: id => (id === 'm2' ? null : id === 'm3' ? { kind: 'audio' } : { kind: 'image' }) })), /creativo 2 ya no está en la galería.*creativo 3 es un audio/);
+  assert.match(t(v({ objetivo: 'web', enlace: 'https://x.com', creativos: [{ ...tres[0], llamada: 'WHATSAPP_MESSAGE' }] })), /El botón «Enviar WhatsApp» no vale para «Visitas a mi web»/);
+  const bien = v({ destino: 'instagram', creativos: tres });
+  assert.equal(bien.ok, true, t(bien)); assert.ok(bien.problemas.every(p => p.campo && p.texto && ['error', 'aviso'].includes(p.nivel)));
+  assert.ok(v({ destino: 'instagram', creativos: tres.slice(0, 1) }).problemas.some(p => p.nivel === 'aviso' && /Con 1 creativo/.test(p.texto)));
+  assert.equal(v({ destino: 'instagram', creativos: tres.slice(0, 1) }).ok, true, 'uno o dos creativos se avisan, no frenan');
+});
+
+test('A3: el costo máximo — al día, en total y la campaña con su spend_cap como techo; sin fin, sin límite', () => {
+  const b = normalizarBorrador({ presupuesto: { usd: 10 }, inicio: '2026-10-10T00:00:00Z', fin: '2026-10-17T00:00:00Z' }, null, { ahora: AHORA });
+  assert.deepEqual(costoMaximo(b, { ajustes: { topeCampana: 150 }, ahora: AHORA }), { dia: 10, total: 70, campana: 70 });
+  assert.deepEqual(costoMaximo({ ...b, fin: null }, { ajustes: { topeCampana: 150 }, ahora: AHORA }), { dia: 10, total: Infinity, campana: 150 });
+  const v = validarBorrador({ ...b, fin: null, creativos: tres }, { ajustes: { topeCampana: 50, topeDiario: 5 }, cuentas: OK_CUENTAS, medio: IMAGEN, ahora: AHORA });
+  assert.equal(v.costoMax.total, null); assert.equal(v.costoMax.sinLimite, true);
+  assert.ok(v.problemas.some(p => /tope diario es US\$5: se crea en pausa, pero no se podrá activar así/.test(p.texto)));
+  assert.ok(v.problemas.some(p => /Sin fecha de fin gastaría sin límite/.test(p.texto)));
+  assert.match(lineaBorrador({ ...b, creativos: tres }), /^b\w+ · «Campaña nueva» \(Que me escriban por Instagram Direct\) · US\$10 al día · 3 creativo\(s\) · de dueno · borrador$/);
 });

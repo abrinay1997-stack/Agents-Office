@@ -8,6 +8,12 @@
 // de un creativo.
 // El token viene del entorno (setx META_ACCESS_TOKEN "…"; META_APP_SECRET si tu app lo pide) y nunca se imprime. Lo confirmado va a
 // data/salida-meta/anuncios-*.json (data/ no viaja por GitHub): con eso se quitan los «POR VERIFICAR» de anuncios/.
+//
+// Fase A3 (9 oct 2026): `--crear-pausada` además prueba CREAR, siempre EN PAUSA: valida con validate_only cada combinación de la tabla
+// (anuncios/modelo.mjs → COMBINACIONES) y escribe cuáles pasa Meta; luego crea una campaña de prueba en pausa («Prueba de la oficina ·
+// AO:check…»), con un conjunto y —con una imagen de prueba hecha con sharp— un creativo y un anuncio, todo PAUSED, y lo ARCHIVA enseguida
+// (nunca borra). No gasta nada: nada se activa. Lo que Meta aceptó va a data/salida-meta/anuncios-crear-pausada.json.
+//   node scripts/check-meta-anuncios.mjs --crear-pausada
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +21,10 @@ import { crearMeta, mensajeMeta, VERSION_GRAPH, caducidad, PERMISOS_ANUNCIOS } f
 import { crearMetaAds, idCuenta } from '../anuncios/meta-ads.mjs';
 import { cuentaEstado, estadoTexto, aprendizaje, fechaEn, rangos, RANGOS, cifras as cifrasDe, resultadoDe, deMeta } from '../anuncios/modelo.mjs';
 import { loadConfig } from '../config.mjs';
+import { normalizarBorrador, TODAS_LAS_COMBINACIONES } from '../anuncios/modelo.mjs';
+import { cuerpoCampana, cuerpoConjunto, cuerpoCreativo, cuerpoAnuncio } from '../anuncios/construir.mjs';
+import { resolverCuentas } from '../anuncios/crear.mjs';
+const CREAR = process.argv.includes('--crear-pausada');
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data');
@@ -87,6 +97,46 @@ if (e) {
   };
   if (e.campanas[0]) await probar('advantage_state_info de una campaña', `/${e.campanas[0].id}`, 'id,advantage_state_info', 'anuncios-advantage.json');
   if (e.creativos[0]) await probar('effective_instagram_media_id de un creativo', `/${e.creativos[0].id}`, 'id,effective_instagram_media_id,effective_object_story_id', 'anuncios-creativo.json');
+}
+// 5) --crear-pausada: crear EN PAUSA y archivar (nunca activa, nunca borra)
+if (CREAR && e) {
+  console.log('\n--crear-pausada: se valida cada combinación y se crea una campaña de prueba EN PAUSA, que se archiva enseguida.');
+  const aj = loadConfig().anuncios || {}, cu = resolverCuentas({ ajustes: aj, cuentas: est.cuentas || [], paginaContenido: loadConfig().contenido?.metaPagina || '' });
+  const salida = { at: new Date().toISOString(), version: VERSION_GRAPH, pagina: cu.pagina, instagram: cu.instagram, combinaciones: [], creado: [], archivado: [], errores: [] };
+  if (!cu.pagina) fail('Sin página de Facebook (Ajustes → Anuncios o la de Contenido): no se puede probar crear');
+  else {
+    const ctx = { ajustes: { ...aj, topeCampana: 0 }, moneda: e.cuenta.currency || 'USD', pagina: cu.pagina, instagram: cu.instagram, pixel: aj.pixel, ahora: Date.now() };
+    const inicio = new Date(Date.now() + 2 * 864e5).toISOString(), fin = new Date(Date.now() + 3 * 864e5).toISOString(), id = 'check' + Date.now().toString(36);
+    for (const c of TODAS_LAS_COMBINACIONES()) {
+      const dicho = c.objetivo + (c.destino ? '/' + c.destino : '');
+      const falta = c.pide.filter(p => (p === 'whatsapp' && !aj.whatsapp) || (p === 'pixel' && !aj.pixel) || (p === 'instagram' && !cu.instagram));
+      if (falta.length) { aviso(`Combinación ${dicho}: no se prueba (falta ${falta.join(', ')} en Ajustes → Anuncios)`); salida.combinaciones.push({ combinacion: dicho, probada: false, falta }); continue; }
+      const b = normalizarBorrador({ nombre: 'Prueba de la oficina', objetivo: c.objetivo, ...(c.destino ? { destino: c.destino } : {}), presupuesto: { usd: 1 }, inicio, fin, enlace: 'https://www.facebook.com/' + cu.pagina }, null, { ajustes: aj, id });
+      try { await ads.crearEn(cuenta, 'campana', cuerpoCampana(b, ctx), { validar: true }); ok(`validate_only acepta la campaña de ${dicho} (${c.objective})`); salida.combinaciones.push({ combinacion: dicho, campana: true }); }
+      catch (err) { aviso(`validate_only NO acepta la campaña de ${dicho}: ${mensajeMeta(err)}`); salida.combinaciones.push({ combinacion: dicho, campana: false, error: mensajeMeta(err) }); }
+    }
+    // la de prueba: «que me escriban» por Messenger (no pide WhatsApp ni píxel), US$1 al día, empieza en 2 días, EN PAUSA
+    const b = normalizarBorrador({ nombre: 'Prueba de la oficina', objetivo: 'mensajes', destino: 'messenger', presupuesto: { usd: 1 }, inicio, fin, creativos: [{ id: 'k1', media: 'prueba', texto: 'Prueba de la oficina: no se publica' }] }, null, { ajustes: aj, id });
+    const creados = [];
+    try {
+      await ads.crearEn(cuenta, 'campana', cuerpoCampana(b, ctx), { validar: true }); ok('validate_only acepta la campaña de prueba');
+      const camp = await ads.crearEn(cuenta, 'campana', cuerpoCampana(b, ctx)); creados.push(camp.id); ok(`Campaña de prueba creada EN PAUSA: ${camp.id}`);
+      const conj = await ads.crearEn(cuenta, 'conjunto', cuerpoConjunto(b, ctx, camp.id)); creados.push(conj.id); ok(`Conjunto creado EN PAUSA: ${conj.id} (CONVERSATIONS → MESSENGER, Advantage+)`);
+      salida.creado.push({ campana: camp.id, conjunto: conj.id });
+      try {
+        const img = await (await import('sharp')).default({ create: { width: 1080, height: 1080, channels: 3, background: { r: 230, g: 80, b: 40 } } }).jpeg().toBuffer();
+        const { hash } = await ads.subirImagen(cuenta, { datos: img, nombre: 'prueba-oficina.jpg' }); ok(`Imagen subida a adimages (hash ${hash.slice(0, 8)}…)`);
+        const cre = await ads.crearEn(cuenta, 'creativo', cuerpoCreativo(b, b.creativos[0], ctx, { hash })); ok(`Creativo creado: ${cre.id}`);
+        const ad = await ads.crearEn(cuenta, 'anuncio', cuerpoAnuncio(b, b.creativos[0], conj.id, cre.id)); creados.push(ad.id); ok(`Anuncio creado EN PAUSA: ${ad.id}`);
+        salida.creado.push({ creativo: cre.id, anuncio: ad.id });
+        const hall = await ads.buscarPorNombre(cuenta, 'campana', cuerpoCampana(b, ctx).name, 'AO:' + id);
+        if (hall.some(x => x.id === camp.id)) ok('La búsqueda por la etiqueta AO: encuentra la campaña (la reconciliación tras un corte funciona)'); else aviso('La búsqueda por nombre (filtering) no encontró la campaña: pásale la salida a Claude Code');
+      } catch (err) { aviso(`Creativo o anuncio de prueba: ${mensajeMeta(err)}`); salida.errores.push({ paso: 'creativo/anuncio', error: mensajeMeta(err) }); }
+    } catch (err) { fail('Crear la campaña de prueba en pausa', err); salida.errores.push({ paso: 'campana/conjunto', error: mensajeMeta(err) }); }
+    for (const x of creados.reverse()) { try { await ads.cambiar(x, { status: 'ARCHIVED' }); salida.archivado.push(x); } catch (err) { fail(`No pude ARCHIVAR ${x}: archívalo a mano en el Administrador de anuncios`, err); } }
+    if (salida.archivado.length) ok(`Archivado lo de prueba (${salida.archivado.length}): no gasta ni se entrega.`);
+  }
+  guardar('anuncios-crear-pausada.json', salida);
 }
 const u = meta.uso();
 console.log(`\n  · Uso de la cuota de Meta tras la prueba: ${u.vistoAt ? `${Math.round(u.pct)} %` : 'Meta no mandó cabeceras de uso'}${u.frenadoHasta ? ` (pidió esperar hasta ${u.frenadoHasta})` : ''}`);

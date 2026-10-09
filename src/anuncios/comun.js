@@ -91,6 +91,6 @@ export function presupuesto(p, moneda) {
 
 const P = {
   resumen: '<path d="M3 13h4v7H3zM10 8h4v12h-4zM17 4h4v16h-4z"/>', campanas: '<path d="M4 6h16M4 12h16M4 18h10"/>', historial: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
-  x: '<path d="M6 6l12 12M18 6 6 18"/>', recargar: '<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/>', mas: '<path d="m9 6 6 6-6 6"/>', menos: '<path d="m6 9 6 6 6-6"/>',
+  borradores: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', recargar: '<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/>', mas: '<path d="m9 6 6 6-6 6"/>', menos: '<path d="m6 9 6 6 6-6"/>',
 };
 export const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${P[k] || ''}</svg>`;

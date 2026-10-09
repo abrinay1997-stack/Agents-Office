@@ -146,5 +146,65 @@ export function crearMetaAds({ meta }) {
     return meta.enviar(await token(), `/${idValido(id)}/copies`, { campos: { ...campos, ...(validar ? { execution_options: ['validate_only'] } : {}) } });
   }
 
-  return { lote, estructura, cifrasDiarias, alcances, todas, leer, cambiar, copiar };
+  // ---------------------------------------------------------------- Fase A3 (9 oct 2026): CREAR, siempre en pausa (anuncios/crear.mjs decide)
+
+  const SUB_CREAR = { campana: 'campaigns', conjunto: 'adsets', creativo: 'adcreatives', anuncio: 'ads' };
+  /**
+   * POST /act_<id>/<campaigns|adsets|adcreatives|ads>. `validar: true` = `execution_options: ["validate_only"]` (verificado para campañas,
+   * plan §13.2; POR VERIFICAR en conjuntos, creativos y anuncios). Se niega a crear algo que no nazca en pausa: la regla del dinero (§3.3).
+   */
+  async function crearEn(cuenta, nivel, campos, { validar = false } = {}) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    if (!SUB_CREAR[nivel]) throw new Error(`nivel desconocido: ${nivel}`);
+    if (nivel !== 'creativo' && campos?.status !== 'PAUSED') throw new Error('la oficina solo crea en Meta EN PAUSA (status PAUSED)');
+    if (campos && 'execution_options' in campos) throw new Error('execution_options lo pone crearEn() con `validar`');
+    return meta.enviar(await token(), `/${act}/${SUB_CREAR[nivel]}`, { campos: { ...campos, ...(validar ? { execution_options: ['validate_only'] } : {}) } });
+  }
+  /**
+   * Lo que ya existe en Meta con ese texto en el nombre (para reconciliar tras un corte: la etiqueta `AO:<id>`). Pide la lista filtrada por
+   * nombre (`filtering` CONTAIN; POR VERIFICAR en v26 para adcreatives) y comprueba el nombre EXACTO aquí. Lo archivado o borrado no cuenta:
+   * es de un intento que falló.
+   */
+  async function buscarPorNombre(cuenta, nivel, nombre, contiene) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    const campos = nivel === 'creativo' ? 'id,name,status' : 'id,name,status,effective_status';
+    let l;
+    try { l = await todas(`/${act}/${SUB_CREAR[nivel]}`, { fields: campos, limit: LIMITE_LISTA, filtering: JSON.stringify([{ field: 'name', operator: 'CONTAIN', value: String(contiene) }]) }); }
+    catch (e) { if (!(e instanceof ErrorMeta) || e.codigo !== 100) throw e; l = await todas(`/${act}/${SUB_CREAR[nivel]}`, { fields: campos, limit: LIMITE_LISTA }); } // sin el filtro: la lista entera (hasta MAX_PAGINAS)
+    return l.filter(x => x?.name === nombre && !['ARCHIVED', 'DELETED'].includes(x.effective_status || x.status));
+  }
+  /**
+   * Una imagen a la biblioteca de la cuenta: POST /act_<id>/adimages con `bytes` (la imagen en base64, como lo documenta la referencia de
+   * AdImage; POR VERIFICAR frente al multipart). Meta devuelve `{ images: { <nombre>: { hash, url } } }`; el hash es del contenido, así que
+   * volver a subir la misma imagen da el mismo hash (no duplica nada ni gasta).
+   */
+  async function subirImagen(cuenta, { datos, nombre = 'imagen.jpg' }) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    const r = await meta.enviar(await token(), `/${act}/adimages`, { campos: { bytes: Buffer.from(datos).toString('base64'), name: nombre } });
+    const img = Object.values(r?.images || {})[0];
+    if (!img?.hash) throw new ErrorMeta({ message: 'Meta no devolvió el hash de la imagen' }, 0);
+    return { hash: img.hash, url: img.url || null };
+  }
+  /** Un video a la cuenta: POST /act_<id>/advideos (multipart en `source`, por graph-video). Hasta MAX_VIDEO de una vez (POR VERIFICAR la subida por partes). */
+  async function subirVideo(cuenta, { datos, nombre = 'video.mp4', tipo = 'video/mp4' }) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    if (datos.length > MAX_VIDEO) throw new Error(`el video pesa ${Math.round(datos.length / 1048576)} MB: la oficina sube hasta ${Math.round(MAX_VIDEO / 1048576)} MB de una vez (por partes, todavía no)`);
+    const r = await meta.enviar(await token(), `/${act}/advideos`, { campos: { name: nombre }, archivo: { datos, nombre, tipo }, video: true });
+    if (!r?.id) throw new ErrorMeta({ message: 'Meta no devolvió el id del video' }, 0);
+    return { id: String(r.id) };
+  }
+  /** El estado de un video subido (`status.video_status`: processing · ready · error) y su miniatura (POR VERIFICAR `picture`). */
+  async function leerVideo(id) {
+    const r = await meta.graph(await token(), `/${idValido(id)}`, { params: { fields: 'status,picture' } });
+    return { estado: r?.status?.video_status || null, miniatura: r?.picture || null };
+  }
+  /** La vista previa de Meta de un creativo SIN crearlo: GET /act_<id>/generatepreviews?creative=<spec>&ad_format=… → el HTML (un iframe). */
+  async function vistaPrevia(cuenta, creativo, formato = 'MOBILE_FEED_STANDARD') {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    const r = await meta.graph(await token(), `/${act}/generatepreviews`, { params: { creative: JSON.stringify(creativo), ad_format: formato } });
+    return String(r?.data?.[0]?.body || '');
+  }
+
+  return { lote, estructura, cifrasDiarias, alcances, todas, leer, cambiar, copiar, crearEn, buscarPorNombre, subirImagen, subirVideo, leerVideo, vistaPrevia };
 }
+export const MAX_VIDEO = 200 * 1048576;

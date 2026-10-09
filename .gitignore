@@ -20,3 +20,6 @@ server.err.log
 
 # las copias de trabajo de los agentes en paralelo (Claude Code, isolation: worktree)
 .claude/worktrees/
+
+# 9 oct 2026: configuración local de complementos de Claude Code (p. ej. odoo-timesheet): es de cada máquina y puede llevar credenciales
+.claude/odoo-timesheet/

@@ -263,3 +263,163 @@ test('A2 · la tarjeta de Dimitri: lo que baja el gasto con HACER; lo que gasta 
   assert.equal(gastoHecho(m.ops[1], false, { error: 'tope', motivo: 'no cabe' }).state, 'failed');
   assert.equal(gastoHecho(m.ops[1], false, { error: 'confirmacion', motivo: 'venció' }).confirmar.vence, 0, 'vencida: la tarjeta lo dice');
 });
+
+/* ---------------- Fase A3 ---------------- */
+import { PASOS, OBJETIVOS, llamadasDe, pasoDe, costoTexto, avisoSinFin, deQuien, iframeMeta, poner, formatoDeMedidas, ajustarLlamadas, MEJORAS_DEF, LLAMADA } from '../src/anuncios/borrador.js';
+import { crearDemoBorradores, validarBorrador, borradorPorDefecto, costoMaxDe, diasDe } from '../src/anuncios/demo-borradores.js';
+import { listaBorradoresHTML } from '../src/anuncios/borradores.js';
+import { asistenteHTML, problemasPorPaso, problemasPorCampo, pasoRevisionHTML, pasoCreativosHTML, cuentaTexto } from '../src/anuncios/asistente.js';
+import { previaHTML, cortar } from '../src/anuncios/vista-previa.js';
+
+test('A3 · los cinco pasos en su orden; cada objetivo con sus llamadas a la acción (la primera, la de por defecto)', () => {
+  assert.deepEqual(PASOS.map(p => p.k), ['objetivo', 'publico', 'presupuesto', 'creativos', 'revision']);
+  assert.deepEqual(OBJETIVOS.map(o => o.k), ['mensajes', 'web', 'ventas', 'contactos', 'conocer']);
+  assert.equal(llamadasDe('mensajes', 'whatsapp')[0], 'WHATSAPP_MESSAGE');
+  assert.equal(llamadasDe('mensajes', 'instagram')[0], 'INSTAGRAM_MESSAGE'); assert.ok(!llamadasDe('mensajes', 'instagram').includes('WHATSAPP_MESSAGE'), 'WhatsApp solo si te escriben por WhatsApp');
+  assert.equal(llamadasDe('mensajes', 'messenger')[0], 'MESSAGE_PAGE');
+  assert.equal(llamadasDe('ventas')[0], 'SHOP_NOW'); assert.equal(llamadasDe('web')[0], 'LEARN_MORE'); assert.equal(llamadasDe('contactos')[0], 'SIGN_UP');
+  assert.ok(llamadasDe('conocer').includes('NO_BUTTON')); assert.ok(!llamadasDe('web').includes('WHATSAPP_MESSAGE'));
+  for (const o of OBJETIVOS) for (const k of llamadasDe(o.k, 'whatsapp')) assert.ok(LLAMADA[k], `${k} tiene su nombre en español`);
+  const b = ajustarLlamadas({ objetivo: 'ventas', destino: null, creativos: [{ llamada: 'WHATSAPP_MESSAGE' }, { llamada: 'BUY_NOW' }] });
+  assert.deepEqual(b.creativos.map(c => c.llamada), ['SHOP_NOW', 'BUY_NOW'], 'al cambiar de objetivo, la llamada que ya no vale pasa a la primera');
+  assert.deepEqual(MEJORAS_DEF, { texto: false, retoques: true, recorte: true, plantilla: false }, '§12: solo las que no tocan el texto');
+  assert.equal(formatoDeMedidas(1080, 1080), '1:1'); assert.equal(formatoDeMedidas(1080, 1350), '4:5'); assert.equal(formatoDeMedidas(1080, 1920), '9:16'); assert.equal(formatoDeMedidas(1920, 1080), '');
+});
+
+test('A3 · cada problema lleva a su paso y a su campo (también los nombres de Meta); lo desconocido, a la Revisión', () => {
+  assert.deepEqual(pasoDe('objetivo'), { paso: 0, k: 'objetivo', campo: 'objetivo' });
+  assert.equal(pasoDe('enlace').paso, 0); assert.equal(pasoDe('destino').paso, 0); assert.equal(pasoDe('nombre').campo, 'nombre');
+  assert.deepEqual(pasoDe('publico.edadMin'), { paso: 1, k: 'publico', campo: 'publico.edadMin' }); assert.equal(pasoDe('categoriaEspecial').paso, 1);
+  assert.deepEqual(pasoDe('presupuesto'), { paso: 2, k: 'presupuesto', campo: 'presupuesto.usd' }); assert.equal(pasoDe('fin').paso, 2); assert.equal(pasoDe('inicio').campo, 'inicio');
+  assert.deepEqual(pasoDe('creativos[2].texto'), { paso: 3, k: 'creativos', campo: 'creativos.2.texto' }); assert.equal(pasoDe('creativos.0.llamada').paso, 3); assert.equal(pasoDe('mejoras.texto').paso, 3);
+  assert.equal(pasoDe('daily_budget').paso, 2); assert.equal(pasoDe('targeting').paso, 1); assert.equal(pasoDe('call_to_action').paso, 3); assert.equal(pasoDe('promoted_object').paso, 0);
+  assert.equal(pasoDe('daily_budget').campo, null, 'un campo de Meta lleva al paso, no a un campo de la página');
+  assert.deepEqual(pasoDe('algo_raro'), { paso: 4, k: 'revision', campo: null }); assert.equal(pasoDe('').paso, 4); assert.equal(pasoDe(null).paso, 4);
+});
+
+test('A3 · el costo máximo en palabras, con la moneda; sin fin y diario, el aviso de que no se podrá activar', () => {
+  assert.equal(plano(costoTexto({ dia: 5, total: 70, campana: 70 }, 'USD')), 'hasta 5,00 US$ al día · 70,00 US$ en total · tope de la campaña 70,00 US$');
+  assert.equal(plano(costoTexto({ dia: null, total: 120, campana: 120 })), 'hasta 120,00 US$ en total · tope de la campaña 120,00 US$');
+  assert.match(plano(costoTexto({ dia: 5, total: null, campana: 150 })), /^hasta 5,00 US\$ al día · sin fecha de fin, el total no tiene límite · tope de la campaña 150,00 US\$$/);
+  assert.equal(costoTexto(null), '');
+  assert.match(avisoSinFin({ presupuesto: { tipo: 'diario', usd: 5 }, fin: null }), /no cabe en tu tope por campaña: podrás crearla en pausa, pero no activarla/);
+  assert.equal(avisoSinFin({ presupuesto: { tipo: 'diario', usd: 5 }, fin: '2026-10-20' }), ''); assert.equal(avisoSinFin({ presupuesto: { tipo: 'total', usd: 5 }, fin: null }), '');
+  assert.equal(diasDe('2026-10-09', '2026-10-22'), 14); assert.equal(diasDe('2026-10-09', null), null);
+  assert.deepEqual(costoMaxDe({ presupuesto: { tipo: 'diario', usd: 5 }, inicio: '2026-10-09', fin: '2026-10-22' }, { campana: 150 }), { dia: 5, total: 70, campana: 70 });
+  assert.deepEqual(costoMaxDe({ presupuesto: { tipo: 'diario', usd: 5 }, inicio: '2026-10-09', fin: null }, { campana: 150 }), { dia: 5, total: null, campana: 150 }, 'sin fin: el spend_cap sale del tope');
+});
+
+test('A3 · de quién viene; cambiar un campo por su ruta no toca el original; la vista previa de Meta: solo su iframe de facebook.com', () => {
+  assert.equal(deQuien('dueno'), 'Tú'); assert.equal(deQuien('dimitri'), 'Dimitri'); assert.equal(deQuien('agente:ada', id => (id === 'ada' ? 'Anuncios' : id)), 'ANUNCIOS (agente)');
+  const b = { publico: { edadMin: 18 }, creativos: [{ texto: 'a' }] }, r = poner(b, 'creativos.0.texto', 'b');
+  assert.equal(r.b.creativos[0].texto, 'b'); assert.equal(b.creativos[0].texto, 'a'); assert.equal(r.raiz, 'creativos');
+  assert.equal(poner(b, 'publico.edadMax', 40).b.publico.edadMax, 40);
+  const ok = 'https://www.facebook.com/ads/api/preview_iframe.php?d=AQ&t=AQ';
+  assert.equal(iframeMeta(`<iframe src="${ok.replace(/&/g, '&amp;')}" width="335" height="450" scrolling="yes" style="border: none;"></iframe>`), ok);
+  assert.equal(iframeMeta('<iframe src="https://evil.example/ads/api/preview_iframe.php"></iframe>'), null, 'otro dominio, no');
+  assert.equal(iframeMeta('<iframe src="javascript:alert(1)"></iframe>'), null); assert.equal(iframeMeta('<iframe src="http://www.facebook.com/ads/api/preview_iframe.php"></iframe>'), null, 'sin https, no');
+  assert.equal(iframeMeta('<script>alert(1)</script>'), null); assert.equal(iframeMeta('<iframe src="https://www.facebook.com/otra/cosa"></iframe>'), null);
+});
+
+test('A3 · la demo valida con problemas reales, crea EN PAUSA (y aparece en Campañas) y mejora con una propuesta', () => {
+  let t = Date.parse('2026-10-09T10:00:00'); const ahora = () => t;
+  const demo = crearDemo({ ahora }), B = crearDemoBorradores({ demo, ahora, topes: demo.topes, tardaMs: 1000 });
+  const l = B.lista().items; assert.ok(l.some(b => b.de === 'dimitri') && l.some(b => b.de.startsWith('agente:')) && l.some(b => b.estado === 'creado' && b.meta?.campana === 'ej-c-4'), 'de Dimitri, de un agente y uno ya creado');
+  const nb = B.crear({}).borrador;
+  assert.equal(nb.objetivo, 'mensajes'); assert.equal(nb.destino, 'whatsapp'); assert.deepEqual(nb.publico.paises, ['PA']); assert.equal(nb.publico.modo, 'advantage'); assert.equal(nb.publico.edadMin, 18); assert.equal(nb.categoriaEspecial, null); assert.equal(nb.estado, 'borrador');
+  let v = B.validar(nb.id).borrador.validacion;
+  assert.equal(v.ok, false); assert.ok(v.problemas.some(p => p.campo === 'creativos'), 'sin creativos no se crea');
+  assert.ok(v.costoMax.dia === 5 && v.costoMax.total === 70, 'el costo máximo sale de la revisión');
+  assert.equal(B.crearEnMeta(nb.id).status, 422, 'con problemas: 422, no crea');
+  B.cambiar(nb.id, { presupuesto: { tipo: 'diario', usd: 50 }, creativos: [{ id: 'c1', media: 'demo/anu-combo.jpg', formato: '1:1', texto: '', titular: '', descripcion: '', llamada: 'SHOP_NOW' }], publico: { ...nb.publico, edadMin: 16 } });
+  v = B.validar(nb.id).borrador.validacion;
+  const campos = v.problemas.map(p => p.campo);
+  for (const c of ['presupuesto.usd', 'publico.edadMin', 'creativos.0.texto']) assert.ok(campos.includes(c), c);
+  assert.ok(v.problemas.some(p => /pasa tu tope diario de 30,00/.test(plano(p.texto))), 'el tope diario, con su cifra');
+  assert.ok(!campos.includes('creativos.0.llamada'), '«Comprar» vale para mensajes por WhatsApp');
+  B.cambiar(nb.id, { presupuesto: { tipo: 'diario', usd: 5 }, publico: { ...nb.publico }, creativos: [{ id: 'c1', media: 'demo/anu-combo.jpg', formato: '1:1', texto: 'Lentes listos en 1 día.', titular: '', descripcion: '', llamada: 'WHATSAPP_MESSAGE' }] });
+  const m = B.mejorar(nb.id, { creativo: 'c1', campo: 'texto' });
+  assert.equal(m.status, 200); assert.match(m.texto, /WhatsApp/); assert.ok(m.porque && m.agente);
+  assert.equal(B.lista().items.find(b => b.id === nb.id).creativos[0].texto, 'Lentes listos en 1 día.', 'mejorar no cambia nada solo');
+  v = B.validar(nb.id).borrador.validacion; assert.equal(v.ok, true, JSON.stringify(v.problemas));
+  assert.equal(B.crearEnMeta(nb.id).status, 202);
+  assert.equal(B.lista().items.find(b => b.id === nb.id).estado, 'creando');
+  assert.equal(B.cambiar(nb.id, { nombre: 'x' }).status, 409, 'mientras se crea no se cambia');
+  t += 1500;
+  const creado = B.lista().items.find(b => b.id === nb.id);
+  assert.equal(creado.estado, 'creado'); assert.ok(creado.meta.campana);
+  const c = demo.vista('7d').campanas.find(x => x.id === creado.meta.campana);
+  assert.ok(c, 'aparece en Campañas'); assert.equal(c.estado, 'PAUSED'); assert.equal(c.conjuntos[0].anuncios.length, 1); assert.equal(c.conjuntos[0].anuncios[0].estado, 'CAMPAIGN_PAUSED');
+  assert.ok(accionesDe({ nivel: 'campana', id: c.id, nodo: c, campana: c }).some(a => a.tipo === 'activar'), 'activarla es la A2 (dos clics)');
+  assert.ok(demo.historial().items[0].que === 'creó en pausa la campaña' && demo.historial().items[0].objeto.id === c.id);
+  assert.equal(B.cambiar(nb.id, { nombre: 'otro' }).status, 409, 'ya creado: los cambios, desde Campañas');
+  assert.equal(B.crearEnMeta(nb.id).status, 409, 'nunca dos veces');
+  assert.equal(B.vistaPrevia(nb.id).status, 409, 'la de Meta, solo con la oficina');
+  const f = crearDemoBorradores({ demo, ahora, topes: demo.topes, tardaMs: 10, fallarCrear: 1 }), x = f.crear({ creativos: [{ id: 'k', media: 'demo/anu-combo.jpg', texto: 'Hola', llamada: 'WHATSAPP_MESSAGE' }] }).borrador;
+  f.crearEnMeta(x.id); t += 50; const fx = f.lista().items.find(b => b.id === x.id);
+  assert.equal(fx.estado, 'fallo'); assert.match(fx.error, /en palabras|demasiado pequeña/); assert.equal(f.crearEnMeta(x.id).status, 202, 'tras un fallo, se reintenta');
+  assert.equal(B.borrar(nb.id).status, 200); assert.ok(!B.lista().items.some(b => b.id === nb.id));
+});
+
+test('A3 · la validación de la demo: enlace, categoría especial, total sin fin, una llamada que no vale', () => {
+  const t = Date.parse('2026-10-09T10:00:00'), cr = [{ id: 'c', media: 'demo/anu-combo.jpg', texto: 'x', llamada: 'WHATSAPP_MESSAGE' }];
+  const base = borradorPorDefecto(t, { creativos: cr }), val = o => validarBorrador({ ...base, ...o }, { topes: { diario: 30, campana: 400 }, ahora: t }).problemas.map(p => p.campo);
+  assert.deepEqual(val({}), []);
+  assert.ok(val({ objetivo: 'web', destino: null, creativos: [{ ...cr[0], llamada: 'LEARN_MORE' }] }).includes('enlace'));
+  assert.ok(val({ objetivo: 'web', destino: null, enlace: 'panaclaw.com', creativos: [{ ...cr[0], llamada: 'LEARN_MORE' }] }).includes('enlace'));
+  assert.ok(val({ objetivo: 'web', destino: null, enlace: 'https://panaclaw.com', creativos: cr }).includes('creativos.0.llamada'), 'WhatsApp no vale para visitas a la web');
+  assert.ok(val({ categoriaEspecial: 'HOUSING', publico: { ...base.publico, edadMin: 25 } }).includes('publico.edadMin'));
+  assert.ok(val({ presupuesto: { tipo: 'total', usd: 100 }, fin: null }).includes('fin'));
+  assert.ok(val({ inicio: '2026-10-01' }).includes('inicio'));
+  assert.ok(val({ objetivo: 'ventas', destino: null, enlace: 'https://x.com/a', creativos: [{ ...cr[0], llamada: 'SHOP_NOW' }] }).includes('objetivo'), 'ventas sin píxel lo dice');
+});
+
+test('A3 · el HTML: la lista dice de quién y su costo; el asistente marca el paso, los problemas por paso y nunca anida botones', () => {
+  let t = Date.parse('2026-10-09T10:00:00');
+  const demo = crearDemo({ ahora: () => t }), B = crearDemoBorradores({ demo, ahora: () => t, topes: demo.topes }), items = B.lista().items;
+  const h = plano(listaBorradoresHTML(items, { agentName: id => (id === 'ada' ? 'Anuncios' : id), ahora: t }));
+  assert.match(h, /data-a="nueva">\+ Nueva campaña/); assert.match(h, /De: Dimitri/); assert.match(h, /De: ANUNCIOS \(agente\)/); assert.match(h, /Creado en pausa/);
+  assert.match(h, /data-vercamp="ej-c-4"/); assert.match(h, /Costo máximo: hasta 10,00 US\$ al día/); assert.match(h, /Costo máximo: se calcula al revisarlo/);
+  assert.match(plano(listaBorradoresHTML(items, { confirmar: 'ej-b-1' })), /¿Borrar «Examen de la vista — octubre»\?.*data-bborrar-si="ej-b-1"/);
+  assert.match(listaBorradoresHTML([]), /Todavía no hay borradores/);
+  const nb = B.crear({}).borrador, v = B.validar(nb.id).borrador;
+  const a = asistenteHTML(v, 0, {});
+  assert.match(a, /data-paso="0" aria-current="step"/); assert.match(a, /Paso 1 de 5/); assert.match(a, /Siguiente: Público/); assert.match(a, /data-bnav="-1" aria-disabled="true"/);
+  assert.match(a, /value="mensajes" checked/); assert.match(a, /WhatsApp/);
+  assert.deepEqual(problemasPorPaso(v), [0, 0, 0, 1, 0]); assert.match(asistenteHTML(v, 0, {}), /1 por arreglar/);
+  for (const p of [0, 1, 2, 3, 4]) { const x = asistenteHTML(v, p, { moneda: 'USD' }); assert.doesNotMatch(x, /<button[^>]*>(?:(?!<\/button>).)*<button/s, `paso ${p}: un botón dentro de otro`); }
+  assert.match(asistenteHTML(v, 1, {}), /Advantage\+: Meta busca a quién mostrarlo/); assert.match(asistenteHTML(v, 1, {}), /value="" checked><span><b>Ninguna/);
+  assert.match(plano(asistenteHTML(v, 2, { moneda: 'USD' })), /Costo máximo: <b>hasta 5,00 US\$ al día · 70,00 US\$ en total/);
+  assert.match(asistenteHTML({ ...v, fin: null }, 2, {}), /no cabe en tu tope por campaña/);
+  const c4 = pasoCreativosHTML({ ...v, creativos: [{ id: 'c1', media: 'demo/anu-combo.jpg', formato: '1:1', texto: 'Hola', titular: '', llamada: 'WHATSAPP_MESSAGE' }] }, {}, { estudio: true, mejora: { cr: 'c1', campo: 'texto', estado: 'lista', texto: 'Propuesta <b>', porque: 'Porque sí', agente: 'ANUNCIOS' } });
+  assert.match(c4, /data-bestudio>Crear con el Estudio/); assert.match(c4, /Propuesta de <b>ANUNCIOS<\/b>/); assert.match(c4, /Propuesta &lt;b&gt;/, 'la propuesta va escapada'); assert.match(c4, /data-busar="0" data-campo="texto">Usar/);
+  assert.match(c4, /role="switch"[^>]*aria-checked="false" data-bmejora="texto"/); assert.match(c4, /Mejorar el texto<\/b> · Apagada/); assert.match(c4, /Retoques de imagen<\/b> · Encendida/);
+  assert.doesNotMatch(pasoCreativosHTML(v, {}, { estudio: false }), /data-bestudio/, 'sin Estudio a mano, no se ofrece');
+  const r5 = pasoRevisionHTML(v, {}); assert.match(r5, /data-bir="0"/); assert.match(r5, /Paso 4 · Creativos/); assert.match(r5, /data-bcrear aria-disabled="true"/);
+  assert.match(pasoRevisionHTML({ ...v, estado: 'creado', meta: { campana: 'ej-c-9' } }, {}), /Creado en pausa\.<\/b><span>Actívalo desde Campañas cuando quieras \(te pedirá los dos clics/);
+  assert.match(pasoRevisionHTML({ ...v, estado: 'creando' }, {}), /Creando en Meta…/);
+  assert.match(pasoRevisionHTML(v, { servida: true, metaPrev: { estado: 'lista', url: 'https://www.facebook.com/ads/api/preview_iframe.php?d=1' } }), /<iframe[^>]*sandbox="allow-scripts allow-same-origin allow-popups"/);
+  assert.match(cuentaTexto('x'.repeat(130), 125), /Meta enseña 125 y pone «… Ver más»/);
+  assert.deepEqual(problemasPorCampo({ validacion: { problemas: [{ campo: 'creativos[0].texto', texto: 'a' }, { campo: 'creativos.0.texto', texto: 'b' }] } }), { 'creativos.0.texto': 'a' });
+});
+
+test('A3 · la vista previa de la oficina: feed y historia, el texto cortado donde Meta pone «Ver más», todo escapado', () => {
+  const cr = { formato: '4:5', texto: 'Hola <script>x</script> ' + 'palabra '.repeat(30), titular: 'Titular & más', descripcion: 'Desde 59', llamada: 'WHATSAPP_MESSAGE' };
+  const f = previaHTML(cr, { src: '/media/a.jpg', pagina: 'PanaClaw', enlace: 'https://www.panaclaw.com/x' });
+  assert.match(f, /aspect-ratio:4 \/ 5/); assert.match(f, /… Ver más/); assert.match(f, /Enviar WhatsApp/); assert.match(f, /PANACLAW\.COM/); assert.match(f, /Titular &amp; más/);
+  assert.doesNotMatch(f, /<script>/); assert.ok(cortar(cr.texto).corto.length <= 125);
+  const h = previaHTML({ ...cr, formato: '1:1' }, { ubicacion: 'historia', src: null });
+  assert.match(h, /historias y reels/); assert.match(h, /Sin imagen todavía/); assert.match(h, /Este creativo es 1:1/);
+  assert.match(previaHTML({ formato: '9:16', texto: '' }, {}), /Meta lo enseña recortado a 4:5/);
+  assert.doesNotMatch(previaHTML({ llamada: 'NO_BUTTON', texto: 'a' }, {}), /anu-pv-cta/);
+});
+
+test('A3 · el paquete lleva el asistente y la página no; el Estudio sabe decir «para el anuncio»', async () => {
+  const p = await construirAnuncios();
+  for (const f of ['src/anuncios/asistente.js', 'src/anuncios/borradores.js', 'src/anuncios/borrador.js', 'src/anuncios/vista-previa.js', 'src/anuncios/demo-borradores.js']) assert.ok(p.aparte.includes(f), f);
+  const page = 'dist/command-centre-v2.html';
+  if (fs.existsSync(page)) { const html = fs.readFileSync(page, 'utf8'); assert.ok(!html.includes('anu-asis-pie') && !html.includes('Crear en Meta (en pausa)'), 'la página no lleva el asistente'); }
+  const st = fs.readFileSync('src/studio.js', 'utf8');
+  assert.match(st, /para === 'anuncio'/); assert.match(st, /Volver \$\{w\.a\}/);
+  const main = fs.readFileSync('src/main.js', 'utf8'); assert.match(main, /studio\.forTarget\(\{ \.\.\.t, para: 'anuncio' \}/);
+});

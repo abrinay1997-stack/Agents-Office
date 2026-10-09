@@ -96,6 +96,9 @@ import { crearSincronizador as crearSincAnuncios } from './anuncios/sincronizar.
 import { crearRutasAnuncios } from './anuncios/rutas.mjs';
 import { crearAcciones as crearAccionesAnuncios } from './anuncios/acciones.mjs'; // Fase A2 (9 oct 2026): pausar, presupuestos, relanzar — los dos clics del dinero, en el servidor
 import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from './anuncios/modelo.mjs';
+import { crearBorradores as crearBorradoresAnuncios } from './anuncios/borradores.mjs'; // Fase A3 (9 oct 2026): borradores de campaña y crear en Meta EN PAUSA
+import { crearCreador as crearCreadorAnuncios, resolverCuentas as resolverCuentasAnuncios } from './anuncios/crear.mjs';
+import { agenteDeAnuncios, promptMejorarAnuncio, leerPropuesta as leerPropuestaAnuncio } from './anuncios/mejorar.mjs';
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
 import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
@@ -199,6 +202,13 @@ const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, 
 const anunciosAcc = crearAccionesAnuncios({ sync: anuncios, ads: anunciosAds, undoSeconds: () => APPR().undoSeconds,
   refrescar: () => { anuncios.sincronizar({ cifras: false }).catch(() => {}); },
   auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'anuncios', ...a }) + '\n'); } catch {} } });
+// Fase A3 (9 oct 2026): los BORRADORES de campaña (data/anuncios/borradores.json) y «Crear en Meta (en pausa)», solo el dueño (anuncios/crear.mjs)
+const auditarAnuncios = a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'anuncios', ...a }) + '\n'); } catch {} };
+const anunciosBorr = crearBorradoresAnuncios({ dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {} });
+const cuentasAnuncios = () => resolverCuentasAnuncios({ ajustes: cfg.anuncios || {}, cuentas: meta.estado().cuentas || [], paginaContenido: cfg.contenido?.metaPagina || '' });
+const anunciosCrear = crearCreadorAnuncios({ dir: ANUNCIOS_DIR, ads: anunciosAds, sync: anuncios, borradores: anunciosBorr, galeria: { ruta: id => media.resolve(id), item: id => media.item(id) },
+  ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, cuentas: cuentasAnuncios, aJpeg: b => aJpeg(b), auditar: auditarAnuncios });
+setTimeout(() => { try { const ids = anunciosCrear.alArrancar(); if (ids.length) console.log(`  📣 Anuncios: retomo ${ids.length} creación(es) en Meta que quedaron a medias (se reconoce lo ya creado por su etiqueta AO:)`); } catch (e) { console.warn('anuncios (retomar):', e.message); } }, 8000);
 /** A2: lo que Dimitri ve de un id de anuncios, para validar sus ops (sub.parseOps). */
 const anuncioDe = id => { try { const r = buscarAnuncio(anunciosRoutes.completa('7d'), String(id)); return r ? { tipo: r.tipo, nombre: r.objeto.nombre, estado: r.objeto.estado, presupuesto: r.objeto.presupuesto } : null; } catch { return null; } };
 const ANUNCIOS_DEPTS = Array.isArray(cfg.anuncios?.departments) ? cfg.anuncios.departments : ['marketing']; // quién recibe anuncios-mcp.mjs (solo leer)
@@ -1293,6 +1303,11 @@ async function runOp(o, { por = 'dimitri' } = {}) {
     if (r.error) throw new Error(r.error); o.agent = r.a; o.agentName = agentName(r.a); o.undo = { deAgente: prev?.deAgente || null }; return;
   }
   if (o.type === 'mia_hecha') { const r = tareasRoutes.cambiarEstado(o.id, 'done', q); if (r.error) throw new Error(r.error); o.undo = { reabrir: true, at: Date.now() }; return; }
+  if (o.type === 'anuncio_borrador') { // Fase A3: un BORRADOR en la oficina, nada en Meta (crearlo allí, en pausa, es un clic del dueño en Anuncios)
+    const creativos = (o.media || []).length ? o.media.map(m => ({ media: m, texto: o.texto || '' })) : o.texto ? [{ texto: o.texto }] : [];
+    const b = anunciosBorr.crear({ nombre: o.nombre, objetivo: o.objetivo, ...(o.destino ? { destino: o.destino } : {}), ...(o.usd ? { presupuesto: { usd: o.usd } } : {}), creativos }, { de: por === 'asistente' ? 'asistente' : 'dimitri' });
+    o.borrador = b.id; o.desc = `Borrador «${b.nombre}» en Anuncios (J), id ${b.id}: nada en Meta todavía.`; o.undo = { borrador: b.id }; return;
+  }
   if (sub.ANUNCIO_TIPO[o.type]) { // Fase A2: anuncios/acciones.mjs decide (quién, topes, Meta). Lo de gasto NO se hace aquí: vuelve la confirmación
     const tipo = sub.ANUNCIO_TIPO[o.type], pedido = { tipo, id: o.id, ...(o.valor !== undefined ? { valor: o.valor } : {}), por };
     if (sub.OPS_GASTO.includes(o.type) && por !== 'dimitri') throw new Error('eso gasta dinero: lo hace el dueño, con dos clics, en Anuncios (J) o en Telegram');
@@ -1312,6 +1327,7 @@ async function undoOp(o, { por = 'dimitri' } = {}) {
     if (por === 'asistente') return { error: 'deshacerlo vuelve a gastar: lo hace el dueño en Anuncios (J)' };
     const r = await anunciosAcc.deshacer({ token: u.token, por: 'dueno' }); return r.status === 200 ? {} : { error: r.cuerpo?.motivo || r.cuerpo?.error || 'no se pudo deshacer' };
   }
+  if (o.type === 'anuncio_borrador') { const b = anunciosBorr.leer(u.borrador); if (b && (b.estado === 'creado' || b.estado === 'creando')) return { error: 'ya se creó en Meta (en pausa): archívalo desde Anuncios → Campañas' }; if (b) anunciosBorr.quitar(u.borrador, { por }); return {}; } // A3: a la papelera, no se pierde
   if (o.type === 'rutina_crear') removeRoutine(u.routine);
   else if (o.type === 'rutina_saltar') { const s = RSTATE[o.id]; if (s) { s.skip = (s.skip || []).filter(x => x !== u.unskip); routines.saveState(DATA, RSTATE); } }
   else if (o.type === 'rutina_pausar' || o.type === 'rutina_reanudar') { if (!editRoutine(o.id, { paused: u.paused })) return { error: 'esa rutina ya no está' }; }
@@ -1805,6 +1821,14 @@ async function mejorarPieza({ pieza, red, pide }) {
   const raw = await ask(system, user, { maxTokens: 2500, timeout: 120000, kind: 'contenido', agent: a, model: a.model || cfg.model }); // sin herramientas (ask): solo escribe; el gasto, a su nombre
   return { ...leerPropuesta(raw), agente: a.name, red };
 }
+// Fase A3 (9 oct 2026): «✨ Mejorar con el agente de anuncios» — ada propone el texto o el titular de un creativo (sin herramientas, sin guardar nada)
+async function mejorarAnuncio({ borrador, creativo, campo, pide }) {
+  const a = agenteDeAnuncios(AGENTS); if (!a) throw Object.assign(new Error('no hay ningún puesto de Marketing'), { status: 409 });
+  const index = vaultIndex(), metodos = ['campanas-pagadas', 'creatividad-anuncios'].map(id => biblio.leer(id)).filter(r => r && !r.error).map(r => r.texto.slice(0, 3000)).join('\n\n');
+  const { system, user } = promptMejorarAnuncio({ empresa: cfg.name, agente: a, instrucciones: agentBrief(a), voz: index.get('voice') || '', contexto: index.get('contexto-marketing') || '', cifras: cifrasText(), metodos, borrador, creativo, campo, pide });
+  const raw = await ask(system, user, { maxTokens: 1500, timeout: 120000, kind: 'anuncios', agent: a, model: a.model || cfg.model }); // el gasto del modelo, a su nombre (data/costs.jsonl, kind anuncios)
+  return { ...leerPropuestaAnuncio(raw), agente: a.name, campo };
+}
 /** C2 (8 oct 2026): la zona horaria de ESTA máquina (la de las horas de Contenido) y su desfase con UTC ahora mismo, para que se vea. */
 const zonaHoraria = () => { const m = -new Date().getTimezoneOffset(); return { nombre: Intl.DateTimeFormat().resolvedOptions().timeZone || '', utc: `UTC${m < 0 ? '−' : '+'}${String(Math.floor(Math.abs(m) / 60)).padStart(2, '0')}:${String(Math.abs(m) % 60).padStart(2, '0')}` }; };
 const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, programador, metricool, conductorMeta: () => (cfg.contenido?.conductor === 'meta' ? CONDUCTORES.meta : null), mejorHora, bandeja, informe: informeRedes, guardados: crearGuardados({ cerebro: BRAIN }), mejorar: mejorarPieza,
@@ -1853,7 +1877,7 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
-const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio }); // Fase A1: /api/anuncios; A2: /accion y /deshacer
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio }); // A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
 /** A2: el segundo clic del dueño sobre un gasto que propuso Dimitri (`sub: { msg, k }`, o solo la `confirmacion`: se busca la tarjeta que
  *  tiene ese token) deja su tarjeta hecha en data/subgerente.json, para que al recargar no vuelva a pedir confirmación. */
 function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {
@@ -1865,7 +1889,7 @@ function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {
   o.state = 'done'; o.doneAt = Date.now(); o.hecho = hecho?.texto || ''; o.desc = o.hecho; if (aviso) o.aviso = aviso; delete o.confirmar; o.undo = null;
   sub.save(DATA, st);
 }
-setInterval(() => { anuncios.tick(); }, 60e3); setTimeout(() => { anuncios.tick(); }, 20e3); // el sondeo, con calma (anuncios/sincronizar.mjs: 15/60 min, ×2 o ×4 con el freno de Meta)
+setInterval(() => { anuncios.tick(); try { if (anunciosBorr.lista().some(b => b.estado === 'creando' && !anunciosCrear.enMarcha().includes(b.id))) anunciosCrear.alArrancar(); } catch {} }, 60e3); setTimeout(() => { anuncios.tick(); }, 20e3); // el sondeo, con calma (anuncios/sincronizar.mjs: 15/60 min, ×2 o ×4 con el freno de Meta)
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),

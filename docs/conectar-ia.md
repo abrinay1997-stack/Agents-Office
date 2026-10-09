@@ -12,6 +12,7 @@ La oficina se puede manejar desde **tu propio asistente de IA** (Claude Desktop,
 | Crear trabajo: una tarea para un departamento (siempre espera tu OK antes de enviar nada) o una tarea para tu lista | Quitarle el OK a una rutina (eso lo haces tú en el calendario) |
 | Hacer cambios que se deshacen (`hacer`): crear, pausar, reanudar, editar, saltar o correr una rutina; mover o cancelar una tarea de un agente que no empezó; cambiar prioridad o fecha límite; delegar o marcar hecha una tarea tuya; crear o mover un borrador de Contenido; llenar la semana | Generar con el Estudio (gasta: se hace con GENERAR en el chat de Dimitri) |
 | Deshacer un cambio durante 10 minutos (`deshacer`, con la clave que te dio) | |
+| Anuncios de Meta (9 oct 2026): leerlos (`ver_anuncios`), **pausar** o **bajar un presupuesto** (`hacer` con `anuncio_pausar` o `anuncio_bajar_presupuesto`) y dejar un **borrador de campaña** (`anuncio_borrador`, que nace solo en la oficina) | **Gastar en anuncios**: activar, reanudar, subir un presupuesto, alargar, relanzar o crear la campaña en Meta. Responde 403: eso lo haces tú en Anuncios (J) o en Telegram (`/anuncios`), con tus dos clics y dentro de tus topes. Volver a encender lo que pausó tampoco: eso gasta |
 
 Cada cambio queda en el registro de la oficina (`data/audit/AAAA-MM-DD.jsonl`, `kind: "oficina"`, `por: "asistente"`), y en el detalle de una tarea sale como «Tu asistente (IA conectada)».
 

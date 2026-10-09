@@ -348,3 +348,246 @@ export function textoObjeto(v, id) {
   if (r.tipo === 'conjunto') for (const a of o.anuncios) out.push('- ANUNCIO ' + lineaObjeto('anuncio', a, m));
   return out.join('\n');
 }
+
+// ================================================================ Fase A3 (9 oct 2026): EL BORRADOR DE CAMPAÑA
+// Lo que el dueño (el asistente de 5 pasos del panel), `ada` (anuncios-mcp.mjs) o Dimitri (op `anuncio_borrador`) preparan EN LA OFICINA.
+// Nada de esto toca Meta: crearlo allí, EN PAUSA, es anuncios/crear.mjs, con el clic del dueño; activarlo es la acción de gasto de la A2.
+// La forma (el contrato con la página, plan §5 A3):
+//   { id, nombre, de: 'dueno'|'dimitri'|'asistente'|'agente:<id>', creadoAt, actualizadoAt, estado: 'borrador'|'creando'|'creado'|'fallo',
+//     objetivo: 'mensajes'|'web'|'ventas'|'contactos'|'conocer', destino: 'whatsapp'|'instagram'|'messenger'|null,
+//     publico: { modo: 'advantage'|'manual', paises: ['PA'], radio: { lat, lng, km }|null, edadMin: 18, edadMax: null|n, intereses: [] },
+//     categoriaEspecial: null|'HOUSING'|'EMPLOYMENT'|'FINANCIAL_PRODUCTS_SERVICES'|'ISSUES_ELECTIONS_POLITICS',
+//     presupuesto: { tipo: 'diario'|'total', usd }, inicio: ISO|null, fin: ISO|null, enlace: string|null,
+//     creativos: [{ id, media, formato: '1:1'|'4:5'|'9:16'|null, texto, titular, descripcion, llamada }],
+//     mejoras: { texto: false, retoques: true, recorte: true, plantilla: false },
+//     validacion: { ok, problemas: [{ campo (la ruta: 'publico.paises', 'presupuesto.usd', 'creativos.2.media', 'meta'…), texto, nivel: 'error'|'aviso' }], at, costoMax: { dia, total, campana, sinLimite }, meta: { ok, texto }|null } | null,
+//     meta: { campana, conjunto, creativos: [], anuncios: [] } | null, error: string|null, progreso: { paso, texto }|null }
+
+export const OBJETIVOS_BORRADOR = ['mensajes', 'web', 'ventas', 'contactos', 'conocer'];
+export const OBJETIVO_BORRADOR_TEXTO = { mensajes: 'Que me escriban', web: 'Visitas a mi web', ventas: 'Ventas en mi web', contactos: 'Contactos', conocer: 'Que me conozcan' };
+export const DESTINOS_BORRADOR = ['whatsapp', 'instagram', 'messenger'];
+export const DESTINO_TEXTO = { whatsapp: 'WhatsApp', instagram: 'Instagram Direct', messenger: 'Messenger' };
+export const CATEGORIAS_ESPECIALES = ['HOUSING', 'EMPLOYMENT', 'FINANCIAL_PRODUCTS_SERVICES', 'ISSUES_ELECTIONS_POLITICS'];
+export const ESTADOS_BORRADOR = ['borrador', 'creando', 'creado', 'fallo'];
+export const FORMATOS_CREATIVO = ['1:1', '4:5', '9:16'];
+export const MEJORAS_DEFECTO = { texto: false, retoques: true, recorte: true, plantilla: false }; // plan §12: solo lo que no toca el texto de la marca
+export const MAX_CREATIVOS = 10, CREATIVOS_RECOMENDADOS = [3, 6]; // buena práctica de Meta: 3 a 6 por conjunto
+export const PRESUPUESTO_MINIMO_USD = 1; // el mínimo habitual al día (POR VERIFICAR por optimización, plan §13.14)
+export const SPEND_CAP_MINIMO_USD = 100; // verificado el 9 oct 2026 (plan §13.2): Meta no acepta un spend_cap de campaña menor
+export const RADIO_MINIMO_ESPECIAL_KM = 25; // POR VERIFICAR: el radio mínimo en categorías especiales
+export const LINK_MENSAJES = 'https://fb.com/messenger_doc/'; // POR VERIFICAR: el `link` que Meta pide en link_data para Click to Messenger / Instagram Direct
+export const LINK_WHATSAPP = 'https://api.whatsapp.com/send'; // plan §13.13 (búsquedas del 9 oct 2026): el link de un anuncio que abre WhatsApp
+
+/**
+ * LA TABLA: objetivo de la oficina ↔ lo que Meta espera. `verificado` dice si la combinación está en el §13 del plan (lo demás, POR VERIFICAR
+ * con `node scripts/check-meta-anuncios.mjs --crear-pausada`, que la prueba con validate_only). `llamadas`: los botones que la oficina
+ * deja elegir (el primero es el de por defecto); `pide`: lo que hace falta en Ajustes o en el borrador.
+ */
+export const COMBINACIONES = {
+  mensajes: {
+    objective: 'OUTCOME_ENGAGEMENT', optimization_goal: 'CONVERSATIONS', billing_event: 'IMPRESSIONS', resultado: 'mensajes', pide: [],
+    porDestino: {
+      // verificado (plan §13.13): destination_type, optimization_goal CONVERSATIONS, promoted_object {page_id} y call_to_action.value.app_destination.
+      // POR VERIFICAR: los tipos de botón WHATSAPP_MESSAGE, INSTAGRAM_MESSAGE y MESSAGE_PAGE en v26 (el ejemplo oficial usa LEARN_MORE).
+      whatsapp: { destination_type: 'WHATSAPP', app_destination: 'WHATSAPP', link: LINK_WHATSAPP, llamadas: ['WHATSAPP_MESSAGE', 'LEARN_MORE'], pide: ['whatsapp'], verificado: 'en parte' },
+      instagram: { destination_type: 'INSTAGRAM_DIRECT', app_destination: 'INSTAGRAM_DIRECT', link: LINK_MENSAJES, llamadas: ['LEARN_MORE', 'INSTAGRAM_MESSAGE'], pide: ['instagram'], verificado: 'en parte' },
+      messenger: { destination_type: 'MESSENGER', app_destination: 'MESSENGER', link: LINK_MENSAJES, llamadas: ['LEARN_MORE', 'MESSAGE_PAGE'], pide: [], verificado: 'en parte' },
+    },
+  },
+  // POR VERIFICAR (las de abajo): optimization_goal, destination_type y promoted_object de tráfico, ventas, contactos y alcance en v26.
+  web: { objective: 'OUTCOME_TRAFFIC', optimization_goal: 'LINK_CLICKS', billing_event: 'IMPRESSIONS', destination_type: 'WEBSITE', resultado: 'clics', llamadas: ['LEARN_MORE', 'SHOP_NOW', 'SIGN_UP', 'CONTACT_US', 'ORDER_NOW', 'GET_OFFER', 'BOOK_NOW'], pide: ['enlace'], verificado: false },
+  ventas: { objective: 'OUTCOME_SALES', optimization_goal: 'OFFSITE_CONVERSIONS', billing_event: 'IMPRESSIONS', destination_type: 'WEBSITE', evento: 'PURCHASE', resultado: 'compras', llamadas: ['SHOP_NOW', 'ORDER_NOW', 'GET_OFFER', 'LEARN_MORE', 'BUY_NOW'], pide: ['pixel', 'enlace'], verificado: false },
+  // «Contactos» con el formulario instantáneo de Meta necesita un formulario (leadgen) que la oficina todavía no crea: aquí, los contactos
+  // que deja la web (el evento LEAD del píxel).
+  contactos: { objective: 'OUTCOME_LEADS', optimization_goal: 'OFFSITE_CONVERSIONS', billing_event: 'IMPRESSIONS', destination_type: 'WEBSITE', evento: 'LEAD', resultado: 'contactos', llamadas: ['SIGN_UP', 'CONTACT_US', 'LEARN_MORE', 'GET_QUOTE', 'SUBSCRIBE'], pide: ['pixel', 'enlace'], verificado: false },
+  conocer: { objective: 'OUTCOME_AWARENESS', optimization_goal: 'REACH', billing_event: 'IMPRESSIONS', destination_type: null, resultado: 'alcance', llamadas: ['LEARN_MORE', 'CONTACT_US', 'SHOP_NOW'], pide: [], verificado: false },
+};
+/** Lo que Meta espera para un objetivo (y su destino, si es de mensajes). null = esa combinación no existe en la oficina. */
+export function combinacion(objetivo, destino = null) {
+  const c = COMBINACIONES[objetivo]; if (!c) return null;
+  if (!c.porDestino) return { objetivo, ...c };
+  const d = c.porDestino[destino]; if (!d) return null;
+  const { porDestino, ...base } = c;
+  return { objetivo, destino, ...base, ...d, pide: [...base.pide, ...d.pide] };
+}
+/** Todas las combinaciones (para el check con validate_only y los tests). */
+export const TODAS_LAS_COMBINACIONES = () => OBJETIVOS_BORRADOR.flatMap(o => (COMBINACIONES[o].porDestino ? DESTINOS_BORRADOR.map(d => combinacion(o, d)) : [combinacion(o)]));
+export const LLAMADA_TEXTO = { WHATSAPP_MESSAGE: 'Enviar WhatsApp', INSTAGRAM_MESSAGE: 'Enviar mensaje', MESSAGE_PAGE: 'Enviar mensaje', LEARN_MORE: 'Más información', SHOP_NOW: 'Comprar', SIGN_UP: 'Registrarte', CONTACT_US: 'Contáctanos', ORDER_NOW: 'Pedir ahora', GET_OFFER: 'Obtener oferta', BOOK_NOW: 'Reservar', BUY_NOW: 'Comprar ya', GET_QUOTE: 'Pedir cotización', SUBSCRIBE: 'Suscribirte' };
+
+// ---------------------------------------------------------------- normalizar (lo que llega de la página, de un agente o de Dimitri)
+
+const texto = (v, n) => String(v ?? '').replace(/\r\n/g, '\n').trim().slice(0, n);
+const entero = (v, min, max) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null; };
+const usdDe = v => { const n = Number(String(v ?? '').replace(/[^\d.,-]/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null; };
+const isoDe = v => { if (v === null || v === undefined || v === '') return null; const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? `${v}T00:00:00` : String(v)); return Number.isFinite(t) ? new Date(t).toISOString() : undefined; };
+/** Un borrador que no se entiende (un objetivo que no existe…): 400, en palabras. */
+export class ErrorBorrador extends Error { constructor(msg, status = 400) { super(msg); this.status = status; } }
+const malo = msg => { throw new ErrorBorrador(msg); };
+const nuevoId = (p, ahora) => `${p}${Math.round(ahora).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+/** Un borrador nuevo con los valores por defecto del plan (§12): «que me escriban» por WhatsApp si hay número, si no por Instagram; Advantage+ en Panamá, 18+. */
+export function borradorPorDefecto({ ajustes = {}, ahora = Date.now(), id = null, de = 'dueno' } = {}) {
+  const at = new Date(ahora).toISOString();
+  return { id: id || nuevoId('b', ahora), nombre: 'Campaña nueva', de, creadoAt: at, actualizadoAt: at, estado: 'borrador', objetivo: 'mensajes', destino: String(ajustes.whatsapp || '').trim() ? 'whatsapp' : 'instagram',
+    publico: { modo: 'advantage', paises: ['PA'], radio: null, edadMin: 18, edadMax: null, intereses: [] }, categoriaEspecial: null,
+    presupuesto: { tipo: 'diario', usd: 5 }, inicio: null, fin: null, enlace: null, creativos: [], mejoras: { ...MEJORAS_DEFECTO }, validacion: null, meta: null, error: null, progreso: null };
+}
+
+function normCreativo(c, i, ahora, usados) {
+  if (!c || typeof c !== 'object') malo(`El creativo ${i + 1} no se entiende.`);
+  const formato = c.formato === null || c.formato === undefined || c.formato === '' ? null : FORMATOS_CREATIVO.includes(c.formato) ? c.formato : malo(`El formato del creativo ${i + 1} es 1:1, 4:5 o 9:16.`);
+  const llamada = c.llamada ? String(c.llamada).toUpperCase().replace(/[^A-Z_]/g, '').slice(0, 30) || null : null;
+  let id = /^[A-Za-z0-9_-]{1,20}$/.test(String(c.id || '')) && !usados.has(String(c.id)) ? String(c.id) : `k${i + 1}`;
+  for (let n = i + 1; usados.has(id); n++) id = `k${n + 1}`;
+  usados.add(id);
+  return { id, media: texto(c.media, 300) || null, formato, texto: texto(c.texto, 2200), titular: texto(c.titular, 255), descripcion: texto(c.descripcion, 255), llamada };
+}
+
+/**
+ * Lo que llega (la página, un agente, Dimitri) sobre lo que había → el borrador limpio. Solo cambia lo que viene; los campos que pone el
+ * servidor (id, de, creadoAt, estado, validacion, meta, error, progreso) no se tocan desde fuera. Un valor que no existe (otro objetivo,
+ * otra categoría…) da ErrorBorrador (400) en palabras: nunca se cambia por otro en silencio.
+ */
+export function normalizarBorrador(entrada = {}, previo = null, { ajustes = {}, ahora = Date.now(), de = 'dueno', id = null } = {}) {
+  const e = entrada && typeof entrada === 'object' ? entrada : {};
+  const b = previo ? structuredClone(previo) : borradorPorDefecto({ ajustes, ahora, de, id });
+  if ('nombre' in e) b.nombre = texto(e.nombre, 80).replace(/\s*·\s*AO:[A-Za-z0-9_-]*\s*$/, '').trim() || 'Campaña nueva';
+  if ('objetivo' in e) { if (!OBJETIVOS_BORRADOR.includes(e.objetivo)) malo(`El objetivo es uno de: ${OBJETIVOS_BORRADOR.join(', ')}.`); b.objetivo = e.objetivo; }
+  if ('destino' in e) { if (e.destino !== null && e.destino !== '' && !DESTINOS_BORRADOR.includes(e.destino)) malo('El destino de los mensajes es whatsapp, instagram o messenger.'); b.destino = e.destino || null; }
+  if (b.objetivo !== 'mensajes') b.destino = null;
+  else if (!b.destino) b.destino = String(ajustes.whatsapp || '').trim() ? 'whatsapp' : 'instagram';
+  if ('publico' in e && e.publico && typeof e.publico === 'object') {
+    const p = e.publico, q = b.publico;
+    if ('modo' in p) { if (!['advantage', 'manual'].includes(p.modo)) malo('El público es «advantage» (lo que Meta recomienda) o «manual».'); q.modo = p.modo; }
+    if ('paises' in p) q.paises = [...new Set((Array.isArray(p.paises) ? p.paises : [p.paises]).map(x => String(x || '').trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x)))].slice(0, 25);
+    if ('radio' in p) {
+      if (!p.radio) q.radio = null;
+      else { const lat = Number(p.radio.lat), lng = Number(p.radio.lng), km = Number(p.radio.km); if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && km > 0)) malo('El radio necesita latitud, longitud y kilómetros.'); q.radio = { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, km: Math.min(80, Math.max(1, Math.round(km))) }; }
+    }
+    if ('edadMin' in p) q.edadMin = entero(p.edadMin, 13, 65) ?? 18;
+    if ('edadMax' in p) q.edadMax = p.edadMax === null || p.edadMax === '' ? null : entero(p.edadMax, 13, 65);
+    if ('intereses' in p) q.intereses = (Array.isArray(p.intereses) ? p.intereses : []).map(x => texto(x, 80)).filter(Boolean).slice(0, 25);
+  }
+  if ('categoriaEspecial' in e) { const c = e.categoriaEspecial || null; if (c !== null && !CATEGORIAS_ESPECIALES.includes(c)) malo(`La categoría especial es una de: ${CATEGORIAS_ESPECIALES.join(', ')} (o ninguna).`); b.categoriaEspecial = c; }
+  if ('presupuesto' in e && e.presupuesto && typeof e.presupuesto === 'object') {
+    if ('tipo' in e.presupuesto) { if (!['diario', 'total'].includes(e.presupuesto.tipo)) malo('El presupuesto es «diario» o «total».'); b.presupuesto.tipo = e.presupuesto.tipo; }
+    if ('usd' in e.presupuesto) b.presupuesto.usd = usdDe(e.presupuesto.usd);
+  }
+  for (const k of ['inicio', 'fin']) if (k in e) { const v = isoDe(e[k]); if (v === undefined) malo(`La fecha de ${k} no se entiende (AAAA-MM-DD o con hora).`); b[k] = v; }
+  if ('enlace' in e) b.enlace = texto(e.enlace, 1000) || null;
+  if ('creativos' in e) {
+    if (!Array.isArray(e.creativos)) malo('Los creativos van en una lista.');
+    if (e.creativos.length > MAX_CREATIVOS) malo(`Como mucho ${MAX_CREATIVOS} creativos (Meta recomienda 3 a 6).`);
+    const usados = new Set(); b.creativos = e.creativos.map((c, i) => normCreativo(c, i, ahora, usados));
+  }
+  if ('mejoras' in e && e.mejoras && typeof e.mejoras === 'object') for (const k of Object.keys(MEJORAS_DEFECTO)) if (k in e.mejoras) b.mejoras[k] = Boolean(e.mejoras[k]);
+  b.actualizadoAt = new Date(ahora).toISOString();
+  if (previo && b.estado === 'fallo') { b.estado = 'borrador'; b.error = null; } // cambiarlo tras un fallo lo deja otra vez listo para crear
+  b.validacion = null; // otro borrador: la validación de antes ya no vale
+  return b;
+}
+
+// ---------------------------------------------------------------- validar (local; lo de Meta, validate_only, lo añade anuncios/crear.mjs)
+
+const DIA_MS = 864e5;
+/** Los días que dura (desde ahora o su inicio; el día de fin incluido). Sin fin: null. */
+export function diasDe(b, ahora = Date.now()) {
+  const i = Math.max(Date.parse(b.inicio || '') || ahora, ahora), f = Date.parse(b.fin || '');
+  return Number.isFinite(f) && f > i ? Math.max(1, Math.ceil((f - i) / DIA_MS)) : null;
+}
+/** El spend_cap de la campaña, del tope por campaña de Ajustes: en la moneda; null si es menor que el mínimo de Meta (US$100). */
+export function spendCapDe(ajustes = {}, defaults = {}) {
+  const t = Number(ajustes.topeCampana ?? defaults.topeCampana);
+  return Number.isFinite(t) && t >= SPEND_CAP_MINIMO_USD ? Math.round(t * 100) / 100 : null;
+}
+/** Lo máximo que podría gastar: al día, en total (con su fin) y la campaña (con el spend_cap como techo). Infinity = sin límite. */
+export function costoMaximo(b, { ajustes = {}, defaults = {}, ahora = Date.now() } = {}) {
+  const usd = b.presupuesto?.usd, dias = diasDe(b, ahora), cap = spendCapDe(ajustes, defaults);
+  if (!usd) return { dia: null, total: null, campana: null };
+  const dia = b.presupuesto.tipo === 'diario' ? usd : dias ? Math.ceil((usd / dias) * 100) / 100 : usd;
+  const total = b.presupuesto.tipo === 'total' ? usd : dias ? Math.round(usd * dias * 100) / 100 : Infinity;
+  return { dia, total, campana: cap !== null ? Math.min(cap, total) : total };
+}
+const esHttps = s => { try { const u = new URL(String(s)); return u.protocol === 'https:' && !!u.hostname; } catch { return false; } };
+/** Los intereses que se pueden mandar a Meta: los que llevan su id («6003139266461» o «6003139266461:Fitness»). */
+export const interesesConId = l => (l || []).map(x => /^(\d{6,20})(?::(.*))?$/.exec(String(x))).filter(Boolean).map(m => ({ id: m[1], ...(m[2] ? { name: m[2].trim() } : {}) }));
+
+/**
+ * Los problemas de un borrador, en palabras y por campo. `nivel: 'error'` impide crearlo; `'aviso'` se dice y no frena.
+ * @param {object} o
+ * @param {object} o.ajustes   cfg.anuncios (whatsapp, pixel, topes…)
+ * @param {object} o.defaults  los topes de settings.mjs → FIELDS
+ * @param {Function} o.medio   (id) → { kind: 'image'|'video'|… } | null (la galería del Estudio)
+ * @param {object} o.cuentas   { pagina, instagram } ya resueltos (la de Ajustes o la de Contenido)
+ */
+export function validarBorrador(b, { ajustes = {}, defaults = {}, medio = () => null, cuentas = {}, ahora = Date.now() } = {}) {
+  const problemas = [], err = (campo, t) => problemas.push({ campo, texto: t, nivel: 'error' }), aviso = (campo, t) => problemas.push({ campo, texto: t, nivel: 'aviso' });
+  const comb = combinacion(b.objetivo, b.destino);
+  if (!String(b.nombre || '').trim()) err('nombre', 'Ponle un nombre a la campaña.');
+  if (!comb) err('objetivo', b.objetivo === 'mensajes' ? 'Elige por dónde te escriben: WhatsApp, Instagram o Messenger.' : 'Elige el objetivo de la campaña.');
+  const pide = comb?.pide || [];
+  if (pide.includes('whatsapp') && !String(ajustes.whatsapp || '').trim()) err('destino', 'Para anuncios que abren WhatsApp, pon el número de WhatsApp Business en Ajustes → Anuncios (vinculado a la página).');
+  if (pide.includes('pixel') && !String(ajustes.pixel || '').trim()) err('objetivo', `«${OBJETIVO_BORRADOR_TEXTO[b.objetivo]}» necesita el píxel de tu web (Ajustes → Anuncios). Sin web, usa «Que me escriban».`);
+  if (pide.includes('enlace') && !b.enlace) err('enlace', 'Falta la dirección de tu web a la que lleva el anuncio.');
+  if (b.enlace && !esHttps(b.enlace)) err('enlace', 'La dirección de la web tiene que empezar por https://.');
+  if (!cuentas.pagina) err('pagina', 'Falta la página de Facebook: ponla en Ajustes → Anuncios o conecta la de Contenido.');
+  if (pide.includes('instagram') && !cuentas.instagram) err('destino', 'Para anuncios que abren Instagram Direct, la página necesita su cuenta de Instagram de empresa (Ajustes → Anuncios).');
+  else if (cuentas.pagina && !cuentas.instagram) aviso('instagram', 'La página no tiene Instagram unido: en Instagram el anuncio saldrá con el nombre de la página.');
+
+  const p = b.publico || {};
+  if (!p.radio && !(p.paises || []).length) err('publico.paises', 'Elige al menos un país o un radio alrededor de tu local.');
+  if (p.edadMin < 18) err('publico.edadMin', 'La edad mínima es 18 años.');
+  if (p.edadMax !== null && p.edadMax !== undefined && p.edadMax < p.edadMin) err('publico.edadMax', 'La edad máxima es menor que la mínima.');
+  if (b.categoriaEspecial && (p.edadMin !== 18 || (p.edadMax !== null && p.edadMax !== 65))) aviso('publico.edadMin', 'En vivienda, empleo, crédito o política Meta no deja elegir la edad: se manda 18–65.');
+  if (b.categoriaEspecial && p.radio && p.radio.km < RADIO_MINIMO_ESPECIAL_KM) aviso('publico.radio', `En vivienda, empleo, crédito o política Meta pide un radio de al menos ${RADIO_MINIMO_ESPECIAL_KM} km: se manda ${RADIO_MINIMO_ESPECIAL_KM}.`);
+  const sinId = (p.intereses || []).filter(x => !/^\d{6,20}(:.*)?$/.test(x));
+  if (sinId.length) aviso('publico.intereses', `Los intereses van con su id de Meta («6003…:Nombre»): ${sinId.slice(0, 3).join(', ')} no se mandan.`);
+  if (b.categoriaEspecial && (p.intereses || []).length) aviso('publico.intereses', 'En vivienda, empleo, crédito o política no se usan intereses: no se mandan.');
+  else if (p.modo === 'advantage' && interesesConId(p.intereses).length) aviso('publico.intereses', 'Con Advantage+ los intereses son solo una sugerencia: Meta busca el público.');
+
+  const usd = b.presupuesto?.usd;
+  if (!usd) err('presupuesto.usd', 'Falta el presupuesto en US$.');
+  else if (b.presupuesto.tipo === 'diario' && usd < PRESUPUESTO_MINIMO_USD) err('presupuesto.usd', `El presupuesto diario mínimo es US$${PRESUPUESTO_MINIMO_USD}.`);
+  const ini = Date.parse(b.inicio || ''), fin = Date.parse(b.fin || '');
+  if (b.fin && Number.isFinite(ini) && fin <= ini) err('fin', 'La fecha de fin es anterior al inicio.');
+  else if (b.fin && fin <= ahora) err('fin', 'La fecha de fin ya pasó.');
+  if (b.presupuesto?.tipo === 'total' && !b.fin) err('fin', 'Un presupuesto total necesita fecha de fin.');
+  const dias = diasDe(b, ahora);
+  if (usd && b.presupuesto.tipo === 'total' && dias && usd / dias < PRESUPUESTO_MINIMO_USD) err('presupuesto.usd', `Con ${dias} días, el total da menos de US$${PRESUPUESTO_MINIMO_USD} al día: súbelo o acorta las fechas.`);
+  if (b.inicio && Number.isFinite(ini) && ini < ahora - 5 * 60e3) aviso('inicio', 'La fecha de inicio ya pasó: empezará en cuanto la actives.');
+
+  const cm = costoMaximo(b, { ajustes, defaults, ahora });
+  const tope = k => { const v = Number(ajustes[k] ?? defaults[k]); return Number.isFinite(v) && (ajustes[k] ?? defaults[k]) !== undefined && (ajustes[k] ?? defaults[k]) !== null ? v : null; };
+  const cap = spendCapDe(ajustes, defaults), tc = tope('topeCampana');
+  if (tc !== null && cap === null) aviso('presupuesto.usd', `Tu tope por campaña es menor que el mínimo de Meta (US$${SPEND_CAP_MINIMO_USD}): solo la oficina lo vigila.`);
+  if (cm.dia !== null && tope('topeDiario') !== null && cm.dia > tope('topeDiario')) aviso('presupuesto.usd', `Gasta hasta US$${cm.dia} al día y tu tope diario es US$${tope('topeDiario')}: se crea en pausa, pero no se podrá activar así.`);
+  if (tc !== null && cm.total !== null && cm.total > tc && cap === null) aviso(cm.total === Infinity ? 'fin' : 'presupuesto.usd', cm.total === Infinity ? 'Sin fecha de fin gastaría sin límite y no hay tope en Meta: ponle fecha de fin, o no cabrá en tu tope por campaña al activarla.' : `En total gastaría hasta US$${cm.total}, más que tu tope por campaña (US$${tc}).`);
+
+  const cs = b.creativos || [];
+  if (!cs.length) err('creativos', `Faltan creativos: Meta recomienda ${CREATIVOS_RECOMENDADOS[0]} a ${CREATIVOS_RECOMENDADOS[1]}.`);
+  else if (cs.length < CREATIVOS_RECOMENDADOS[0]) aviso('creativos', `Con ${cs.length} creativo${cs.length === 1 ? '' : 's'} Meta tiene poco que probar: recomienda ${CREATIVOS_RECOMENDADOS[0]} a ${CREATIVOS_RECOMENDADOS[1]}.`);
+  else if (cs.length > CREATIVOS_RECOMENDADOS[1]) aviso('creativos', `Más de ${CREATIVOS_RECOMENDADOS[1]} creativos reparten el aprendizaje: Meta recomienda ${CREATIVOS_RECOMENDADOS[0]} a ${CREATIVOS_RECOMENDADOS[1]}.`);
+  const formatos = new Set();
+  cs.forEach((c, i) => {
+    const n = `creativos.${i}`, m = c.media ? medio(c.media) : null;
+    if (!c.media) err(n + '.media', `El creativo ${i + 1} no tiene imagen ni video del Estudio.`);
+    else if (!m) err(n + '.media', `La imagen o el video del creativo ${i + 1} ya no está en la galería del Estudio.`);
+    else if (m.kind !== 'image' && m.kind !== 'video') err(n + '.media', `El creativo ${i + 1} es ${m.kind === 'audio' ? 'un audio' : 'un archivo'}: un anuncio lleva una imagen o un video.`);
+    if (!c.texto) err(n + '.texto', `Falta el texto principal del creativo ${i + 1}.`);
+    else if (c.texto.length > 125) aviso(n + '.texto', `El texto del creativo ${i + 1} pasa de 125 caracteres: en el teléfono se corta con «Ver más».`);
+    if (c.titular && c.titular.length > 40) aviso(n + '.titular', `El titular del creativo ${i + 1} pasa de 40 caracteres: puede cortarse.`);
+    if (c.llamada && comb && !(comb.llamadas || []).includes(c.llamada)) err(n + '.llamada', `El botón «${LLAMADA_TEXTO[c.llamada] || c.llamada}» no vale para «${OBJETIVO_BORRADOR_TEXTO[b.objetivo]}»: usa ${(comb.llamadas || []).map(l => LLAMADA_TEXTO[l] || l).join(', ')}.`);
+    if (c.formato) formatos.add(c.formato);
+  });
+  if (cs.length && formatos.size === 1 && formatos.has('9:16')) aviso('creativos', 'Todo es 9:16: en el feed Meta lo recorta. Añade uno 1:1 o 4:5.');
+  else if (cs.length && formatos.size && !formatos.has('9:16')) aviso('creativos', 'Sin un 9:16, en historias y reels Meta recorta o rellena (Advantage+ lo hace solo).');
+  if (comb && comb.verificado !== true) aviso('objetivo', 'Esta combinación todavía no se probó contra Meta de verdad: la validación de Meta dirá si la acepta.');
+
+  return { ok: !problemas.some(x => x.nivel === 'error'), problemas, at: new Date(ahora).toISOString(), costoMax: { dia: cm.dia, total: cm.total === Infinity ? null : cm.total, campana: cm.campana === Infinity ? null : cm.campana, sinLimite: cm.total === Infinity && cap === null }, meta: null };
+}
+/** «Combo (mensajes por WhatsApp) · US$5 al día · 3 creativos · borrador», con su id: para Dimitri, los agentes y el asistente. */
+export function lineaBorrador(b) {
+  const q = b.presupuesto?.usd ? `US$${b.presupuesto.usd} ${b.presupuesto.tipo === 'diario' ? 'al día' : 'en total'}` : 'sin presupuesto';
+  const est = { borrador: 'borrador', creando: 'creándose en Meta', creado: `creado EN PAUSA en Meta${b.meta?.campana ? ` (campaña ${b.meta.campana})` : ''}`, fallo: `falló al crearse: ${b.error || ''}` }[b.estado] || b.estado;
+  return `${b.id} · «${b.nombre}» (${OBJETIVO_BORRADOR_TEXTO[b.objetivo] || b.objetivo}${b.destino ? ' por ' + DESTINO_TEXTO[b.destino] : ''}) · ${q} · ${(b.creativos || []).length} creativo(s) · de ${b.de} · ${est}${b.validacion ? ` · ${b.validacion.ok ? 'valida' : 'NO valida: ' + b.validacion.problemas.filter(x => x.nivel === 'error').map(x => x.texto).slice(0, 2).join(' ')}` : ''}`;
+}

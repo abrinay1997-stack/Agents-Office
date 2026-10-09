@@ -31,7 +31,7 @@ import { valid as validWhen, nextRun } from './src/when.js';
 import { ACCIONES_LOTE, accionLoteEs } from './estudio-lote.mjs';
 import { REDES as REDES_CONTENIDO } from './contenido/piezas.mjs';
 import { MAPA } from './oficina/mapa.mjs';
-import { textoCuenta as anunciosCuenta, textoCampanas as anunciosCampanas } from './anuncios/modelo.mjs'; // Fase A1 de Anuncios
+import { textoCuenta as anunciosCuenta, textoCampanas as anunciosCampanas, OBJETIVOS_BORRADOR, DESTINOS_BORRADOR } from './anuncios/modelo.mjs'; // Fase A1 de Anuncios (A3: el borrador)
 
 const MAX = 120;
 export const MODES = ['charla', 'estado', 'analisis', 'plan', 'pregunta', 'estudio'];
@@ -41,7 +41,9 @@ export const OPS = ['rutina_crear', 'rutina_saltar', 'pieza_crear', 'pieza_mover
   // Fase A2 de Anuncios (9 oct 2026): los anuncios de Meta. Pausar y bajar el presupuesto bajan el gasto (un clic del dueño en la tarjeta);
   // los de OPS_GASTO gastan dinero: la tarjeta dice la cifra y HACER pide un SEGUNDO clic del dueño (anuncios/acciones.mjs lo exige en el
   // servidor), y el asistente por MCP no los puede hacer (oficina/rutas.mjs → 403).
-  'anuncio_pausar', 'anuncio_bajar_presupuesto', 'anuncio_activar', 'anuncio_reanudar', 'anuncio_subir_presupuesto', 'anuncio_relanzar'];
+  'anuncio_pausar', 'anuncio_bajar_presupuesto', 'anuncio_activar', 'anuncio_reanudar', 'anuncio_subir_presupuesto', 'anuncio_relanzar',
+  // Fase A3 (9 oct 2026): un BORRADOR de campaña en la oficina (como pieza_crear): nada en Meta; crearlo allí, en pausa, es otro clic del dueño
+  'anuncio_borrador'];
 /** Plan §3.1: lo que GASTA dinero en Meta. Nunca se hace sin el segundo clic del dueño, ni por encima de sus topes. */
 export const OPS_GASTO = ['anuncio_activar', 'anuncio_reanudar', 'anuncio_subir_presupuesto', 'anuncio_relanzar'];
 /** Cada op de anuncios → el tipo de anuncios/acciones.mjs. */
@@ -159,8 +161,8 @@ OPS — el calendario, las tareas y Contenido (cada una es una tarjeta que esper
 - {"type":"mia_hecha","id":"<id de una tarea del dueño>"} — marcarla hecha cuando el dueño dice que ya la hizo.
 - {"type":"pieza_crear","titulo":"<…>","fecha":"YYYY-MM-DD o vacío","hora":"HH:MM o vacío","formato":"post|reel|carrusel|historia","redes":["instagram","facebook"],"texto":"<el texto de la publicación>"} — nace BORRADOR en Contenido. Redes posibles: ${REDES.join(', ')}.
 - {"type":"pieza_mover","id":"<id de una pieza de <estado>>","fecha":"YYYY-MM-DD","hora":"HH:MM"} — si estaba aprobada, pierde el OK (el dueño la vuelve a aprobar).
-- {"type":"contenido_llenar","dias":7,"redes":["instagram"],"pide":"<qué quiere el dueño, opcional>"} — «Llenar la semana»: los días sin publicación de los próximos N días (1–14) con su mejor hora; lo que funcionó y no sale hace 8 semanas vuelve (a revisar) y el resto se lo pide a Marketing como borradores.
-- ANUNCIOS (ids EXACTOS de «Anuncios de Meta» en <estado>; "valor" en US$). Bajan el gasto (un clic): {"type":"anuncio_pausar","id"} · {"type":"anuncio_bajar_presupuesto","id","valor":10}. GASTAN (la tarjeta dice la cifra; el dueño pulsa DOS veces; nunca sobre sus topes): {"type":"anuncio_activar","id"} · {"type":"anuncio_reanudar","id"} · {"type":"anuncio_subir_presupuesto","id","valor":18} · {"type":"anuncio_relanzar","id"} (si terminó: una copia en pausa). A un conjunto «Aprendiendo», como mucho +20 % cada 2–3 días.
+- {"type":"contenido_llenar","dias":7,"redes":["instagram"],"pide":"<qué quiere el dueño, opcional>"} — «Llenar la semana»: los días sin publicación de los próximos N días (1–14), a su mejor hora: vuelve lo que funcionó y Marketing escribe el resto (borradores).
+- ANUNCIOS (ids de «Anuncios de Meta»; "valor" en US$). Bajan el gasto: {"type":"anuncio_pausar","id"} · {"type":"anuncio_bajar_presupuesto","id","valor":10}. GASTAN (dos clics del dueño): {"type":"anuncio_activar","id"} · {"type":"anuncio_reanudar","id"} · {"type":"anuncio_subir_presupuesto","id","valor":18} · {"type":"anuncio_relanzar","id"} (terminada: copia en pausa). «Aprendiendo»: +20 % máx. cada 2–3 días. Borrador nuevo: {"type":"anuncio_borrador","nombre","objetivo":"${OBJETIVOS_BORRADOR.join('|')}","usd":5,"texto","media":[ids]}.
 - Nunca apruebas, envías, programas en Meta ni publicas: eso lo hace el dueño. Si pide eso, dile dónde (Contenido, K; aprobaciones ⚠; Telegram).
 
 MODO ESTUDIO (creativos)
@@ -580,6 +582,12 @@ export function parseOps(list, { depts = {}, agents = [], routineDepts = [], rou
       else if (t.person !== DUENO) why = 'no es del dueño';
       else if (t.state === 'done') why = 'ya estaba hecha';
       else v = { type: o.type, id: t.id, title: t.title };
+    } else if (o.type === 'anuncio_borrador') { // A3: un borrador en la oficina; lo de verdad (creativos de la galería, la página…) lo valida el panel
+      const nombre = clip(o.nombre || o.titulo || o.title, 80), texto = String(o.texto || o.text || '').trim().slice(0, 2200);
+      const usd = Math.round(Number(String(o.usd ?? o.valor ?? '').replace(/[^\d.,]/g, '').replace(',', '.')) * 100) / 100;
+      const media = [...new Set((Array.isArray(o.media) ? o.media : o.media ? [o.media] : []).map(x => String(x || '').trim()).filter(x => /^\d{4}-\d{2}\/[^/\\]{1,250}$/.test(x)))].slice(0, 6); // ids de la galería: «AAAA-MM/<archivo>»
+      if (!nombre && !texto) why = 'el borrador de campaña no tiene nombre ni texto';
+      else v = { type: o.type, nombre: nombre || 'Campaña de Dimitri', titulo: nombre || 'Campaña de Dimitri', objetivo: OBJETIVOS_BORRADOR.includes(o.objetivo) ? o.objetivo : 'mensajes', ...(DESTINOS_BORRADOR.includes(o.destino) ? { destino: o.destino } : {}), ...(usd > 0 ? { usd } : {}), texto, media };
     } else if (ANUNCIO_TIPO[o.type]) { // A2: el id tiene que estar en lo leído de Meta; lo demás (topes, estado de ahora) lo mira anuncios/acciones.mjs
       const a = anuncio(String(o.id || '')), presupuesto = o.type === 'anuncio_bajar_presupuesto' || o.type === 'anuncio_subir_presupuesto';
       const valor = Math.round(Number(String(o.valor ?? '').replace(/[^\d.,-]/g, '').replace(',', '.')) * 100) / 100, actual = a?.presupuesto?.usd ?? null;
@@ -601,7 +609,7 @@ export function parseOps(list, { depts = {}, agents = [], routineDepts = [], rou
 export function motivosText(motivos = []) {
   if (!motivos.length) return '';
   const NOMBRE = { rutina_crear: 'crear una rutina', rutina_saltar: 'saltar una ejecución', rutina_pausar: 'pausar una rutina', rutina_reanudar: 'reanudar una rutina', rutina_editar: 'cambiar una rutina', rutina_ahora: 'correr una rutina', pieza_crear: 'crear una pieza', pieza_mover: 'mover una pieza', contenido_llenar: 'llenar la semana', tarea_mover: 'mover una tarea', tarea_cancelar: 'cancelar una tarea', tarea_editar: 'cambiar una tarea', tarea_repetir: 'repetir una tarea', mia_delegar: 'delegar tu tarea', mia_hecha: 'marcar hecha tu tarea',
-    anuncio_pausar: 'pausar un anuncio', anuncio_bajar_presupuesto: 'bajar un presupuesto de anuncios', anuncio_activar: 'activar un anuncio', anuncio_reanudar: 'reanudar un anuncio', anuncio_subir_presupuesto: 'subir un presupuesto de anuncios', anuncio_relanzar: 'relanzar una campaña' };
+    anuncio_pausar: 'pausar un anuncio', anuncio_bajar_presupuesto: 'bajar un presupuesto de anuncios', anuncio_activar: 'activar un anuncio', anuncio_reanudar: 'reanudar un anuncio', anuncio_subir_presupuesto: 'subir un presupuesto de anuncios', anuncio_relanzar: 'relanzar una campaña', anuncio_borrador: 'un borrador de campaña' };
   return `_(No incluyo ${motivos.length === 1 ? 'un cambio' : motivos.length + ' cambios'} que pensé: ${motivos.slice(0, 4).map(m => `${NOMBRE[m.type] || m.type} — ${m.why}`).join('; ')}.)_`;
 }
 

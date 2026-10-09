@@ -35,6 +35,8 @@ export const ACCIONES = {
   anuncio_reanudar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
   anuncio_subir_presupuesto: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
   anuncio_relanzar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
+  // Fase A3 (9 oct 2026): un borrador de campaña EN LA OFICINA (nada en Meta; crearlo allí, en pausa, es un clic del dueño en Anuncios)
+  anuncio_borrador: 'nombre, objetivo? mensajes|web|ventas|contactos|conocer, destino? whatsapp|instagram|messenger, usd? (al día), texto?, media? [ids de la galería] — nace BORRADOR en Anuncios; nada va a Meta',
 };
 
 export function crearRutasOficina({ json, body, sub, opsContext, runOp, undoOp, estadoTexto, calendarioTexto, etiqueta = o => o.type, auditar = () => {}, ahora = () => Date.now() }) {

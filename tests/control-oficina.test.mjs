@@ -60,7 +60,7 @@ test('aprobar, enviar, publicar, pagar o borrar no existe en la lista: ni Dimitr
   const malos = ['aprobar_pieza', 'pieza_aprobar', 'publicar', 'enviar_correo', 'pagar', 'rutina_borrar', 'tarea_borrar', 'aprobar_tarea'];
   const r = sub.parseOps(malos.map(type => ({ type, id: 'p-1' })), ctx());
   assert.equal(r.ops.length, 0); assert.deepEqual(r.dropped, malos);
-  for (const t of sub.OPS) assert.doesNotMatch(t, /aprob|envi|public|pag[oa]|borr|elimin|delete|send|approve|publish|pay/i, `«${t}» no puede sonar a una acción de fuera`);
+  for (const t of sub.OPS) assert.doesNotMatch(t, /aprob|envi|public|pag[oa]|borr(?!ador)|elimin|delete|send|approve|publish|pay/i, `«${t}» no puede sonar a una acción de fuera`); // A3: «borrador» (un draft) sí; «borrar», no
 });
 
 test('cada cambio de la lista tiene su texto en la tarjeta, su línea en el prompt de Dimitri y sus campos para el asistente', () => {
@@ -156,4 +156,22 @@ test('A2: ningún tipo de OPS_GASTO se hace sin la confirmación del dueño — 
     assert.equal((await acc.accion({ ...b, confirmacion: 'inventado' })).status, 409, type + ': un token inventado no vale');
   }
   assert.ok(meta.length > 0 && meta.every(x => x.validar), 'a Meta solo le llegó validate_only: ' + JSON.stringify(meta.filter(x => !x.validar)));
+});
+
+// ---------------------------------------------------------------- Fase A3 de Anuncios (9 oct 2026): el borrador de campaña
+
+test('A3: anuncio_borrador — Dimitri y el asistente dejan un BORRADOR en la oficina (nada en Meta); no gasta y no sale de la lista cerrada', async () => {
+  assert.ok(sub.OPS.includes('anuncio_borrador')); assert.ok(!sub.OPS_GASTO.includes('anuncio_borrador'), 'un borrador no gasta'); assert.equal(sub.ANUNCIO_TIPO.anuncio_borrador, undefined, 'no pasa por anuncios/acciones.mjs');
+  const r = sub.parseOps([{ type: 'anuncio_borrador', nombre: 'Combo 2x1 por WhatsApp', objetivo: 'mensajes', destino: 'whatsapp', usd: 'US$8', texto: 'Escríbenos', media: ['2026-10/a b.jpg', '2026-10/a b.jpg', '../../etc', 'm1'] },
+    { type: 'anuncio_borrador', objetivo: 'likes', texto: 'Hola' }, { type: 'anuncio_borrador' }], ctx());
+  assert.deepEqual(r.ops.map(o => o.type), ['anuncio_borrador', 'anuncio_borrador']);
+  assert.deepEqual({ ...r.ops[0], k: undefined }, { k: undefined, type: 'anuncio_borrador', nombre: 'Combo 2x1 por WhatsApp', titulo: 'Combo 2x1 por WhatsApp', objetivo: 'mensajes', destino: 'whatsapp', usd: 8, texto: 'Escríbenos', media: ['2026-10/a b.jpg'], state: 'proposed' });
+  assert.equal(r.ops[1].objetivo, 'mensajes', 'un objetivo que no existe vuelve al de por defecto'); assert.equal(r.ops[1].nombre, 'Campaña de Dimitri');
+  assert.match(r.motivos[0].why, /no tiene nombre ni texto/); assert.match(sub.motivosText(r.motivos), /un borrador de campaña — /);
+  assert.match(ACCIONES.anuncio_borrador, /nace BORRADOR en Anuncios; nada va a Meta/);
+  // el asistente sí puede (no gasta): pasa por runOp
+  let corrida = null, salida = null;
+  const rutas = crearRutasOficina({ json: (rq, code, b) => { salida = { code, b }; }, body: async req => req.cuerpo, sub, opsContext: () => ctx(), runOp: async (o, { por }) => { corrida = { o, por }; o.borrador = 'b1'; o.undo = { borrador: 'b1' }; }, undoOp: async () => ({}), estadoTexto: () => '', calendarioTexto: () => '' });
+  await rutas({ method: 'POST', cuerpo: { op: { type: 'anuncio_borrador', nombre: 'Prueba', texto: 'Hola' } } }, {}, new URL('http://x/api/oficina/accion'));
+  assert.equal(salida.code, 200, JSON.stringify(salida.b)); assert.equal(corrida.por, 'asistente'); assert.ok(salida.b.deshacer, 'se puede deshacer (va a la papelera)');
 });
