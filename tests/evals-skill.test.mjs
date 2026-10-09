@@ -14,7 +14,9 @@ test('cada evals/<skill>/evals.json es válido y su skill existe', () => {
   for (const s of skills) {
     const e = JSON.parse(fs.readFileSync(path.join(dir, s, 'evals.json'), 'utf8'));
     assert.deepEqual(validarEvals(e), [], s); assert.equal(e.skill, s);
-    assert.ok(fs.existsSync(path.join(ROOT, 'skills', s, 'SKILL.md')), `skills/${s}/SKILL.md`);
+    // A5 (9 oct 2026): o una habilidad de la biblioteca con otro nombre («habilidad»: evals/anuncios-diagnostico → campanas-pagadas)
+    const conHabilidad = e.habilidad && fs.readdirSync(path.join(ROOT, 'biblioteca')).some(c => fs.existsSync(path.join(ROOT, 'biblioteca', c, e.habilidad, 'SKILL.md')));
+    assert.ok(conHabilidad || fs.existsSync(path.join(ROOT, 'skills', s, 'SKILL.md')), `skills/${s}/SKILL.md o la habilidad «${e.habilidad}»`);
   }
 });
 

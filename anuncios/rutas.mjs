@@ -49,13 +49,32 @@
 //          → { html, formato, creativo } (generatepreviews de Meta) · 409 { error, motivo } si Meta no está · un agente: 403
 //   POST   /api/anuncios/borradores/<id>/mejorar { creativo, campo: 'texto'|'titular', pide? } → { texto, porque, agente } (solo el dueño;
 //          lo escribe `ada`, sin herramientas, sin guardar nada; su costo va a data/costs.jsonl como kind 'anuncios')
+//
+// Fase A5 (9 oct 2026): LAS SUGERENCIAS (anuncios/diagnostico.mjs → anuncios/sugerencias.mjs). El contrato con la página:
+//   GET  /api/anuncios/sugerencias → { items: [sugerencia + { estado: 'viva'|'pospuesta'|'descartada'|'aplicada', creadaAt, aplicadaAt?,
+//          resultado? }], cpaObjetivo: número|null, sinObjetivo: string|null, notas: [{ regla, objeto?, texto }], at }
+//        sugerencia = { id, regla, objeto: { id, nivel, nombre }, dato, porque, cambio: { tipo, id, valor? }, efecto,
+//          riesgo: { reiniciaAprendizaje, gastaMas, texto }, prioridad: 1..3, gasto, origen: 'diagnostico'|'agente' }
+//        (lo aplicado lleva un id propio `<id>~<marca>`, `sugerencia` con el de origen, `aplicadaPor` y `hecho`).
+//   POST /api/anuncios/sugerencias/<id>/aplicar { por? } → un cambio de la A2, por anuncios/acciones.mjs con sus reglas:
+//          baja el gasto → 200 { ok, hecho, deshacer, sugerencia } · gasta → 200 { confirmar, sugerencia: <id> } y NADA cambia: el segundo clic
+//          es /api/anuncios/accion con `confirmacion` (y, si se quiere, `sugerencia: <id>`), y entonces queda aplicada ·
+//          borrador / creativos → 200 { ok, hecho: { tarea, borrador? }, sugerencia } (una tarea para el agente de anuncios) ·
+//          revisar → 200 { ok, hecho } (marcada hecha) · impulsar → 409 hasta la Fase A4 · 403 un agente; el asistente solo lo que baja el gasto.
+//   POST /api/anuncios/sugerencias/<id>/descartar         → 200 { ok, sugerencia } (no vuelve en 7 días) · dueño y Dimitri
+//   POST /api/anuncios/sugerencias/<id>/posponer { dias } → 200 { ok, sugerencia } (vuelve a los 3 días, o `dias`) · dueño y Dimitri
+//   POST /api/anuncios/creativos/<id anuncio>/variaciones { pide? } → 200 { ok, hecho: { texto, tarea }, tarea } (solo el dueño: una tarea
+//          para el agente de anuncios, que propone y NO genera imágenes; las genera el dueño en el Estudio con su costo a la vista)
+//   Las pospuestas llevan `hasta` (ISO); `umbrales` en el GET son los valores de umbrales.json con sus mismos nombres (fracciones como fracción).
+//   POST /api/anuncios/sugerencias { por: 'agente', agente, tarea?, id, regla, tipo, valor?, dato, porque, efecto } → { sugerencia }
+//          (sugerir_mejora_anuncio de anuncios-mcp.mjs: la deja; nunca la aplica)
 import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto, ErrorBorrador } from './modelo.mjs';
 import { quienDe } from './acciones.mjs';
 
 export const AGENTE_CADA_MIN = 10;
 export const MAX_AGENTE = 20; // borradores abiertos (en «borrador») por agente
 
-export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null }) {
+export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null }) {
   let agenteAt = 0;
   const rangoDe = url => (RANGOS.includes(url.searchParams.get('rango')) ? url.searchParams.get('rango') : '7d');
 
@@ -117,6 +136,20 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
     return no(404, 'esa acción de un borrador no existe (validar, crear, vista-previa, mejorar)');
   }
 
+  /** Fase A5: /api/anuncios/sugerencias[/<id>/aplicar|descartar|posponer]. */
+  async function rutaSugerencias(req, res, url, id, sub) {
+    if (!id) {
+      if (req.method === 'GET') return json(res, 200, { items: sugerencias.lista(), ...sugerencias.estado() });
+      if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' });
+      const b = await body(req).catch(() => ({}));
+      const r = aplicador.crear({ ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined }); return json(res, r.status, r.cuerpo);
+    }
+    if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' });
+    const b = await body(req).catch(() => ({})), pedido = { ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined };
+    const r = sub === 'aplicar' ? await aplicador.aplicar(id, pedido) : sub === 'descartar' ? aplicador.descartar(id, pedido) : aplicador.posponer(id, pedido);
+    return json(res, r.status, r.cuerpo);
+  }
+
   /** La vista con lo de la conexión: lo que contesta GET /api/anuncios. */
   function completa(rango = '7d') {
     const c = sync.conexion(), v = sync.vista(rango);
@@ -127,6 +160,14 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
     const p = url.pathname;
     if (p !== '/api/anuncios' && !p.startsWith('/api/anuncios/')) return false;
     try {
+      const mv = /^\/api\/anuncios\/creativos\/([A-Za-z0-9_]{1,40})\/variaciones$/.exec(p);
+      if (mv && aplicador) { // A5: pedir variaciones de un creativo sin sugerencia (solo el dueño: una tarea para el agente de anuncios)
+        if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' }), true;
+        const b = await body(req).catch(() => ({})), r = await aplicador.variaciones(mv[1], { ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined });
+        return json(res, r.status, r.cuerpo), true;
+      }
+      const ms = /^\/api\/anuncios\/sugerencias(?:\/([A-Za-z0-9_~-]{1,90})\/(aplicar|descartar|posponer))?$/.exec(p);
+      if (ms && sugerencias && aplicador) return await rutaSugerencias(req, res, url, ms[1] || null, ms[2] || null), true;
       const mb = /^\/api\/anuncios\/borradores(?:\/([A-Za-z0-9_-]{1,60})(?:\/(validar|crear|vista-previa|mejorar))?)?$/.exec(p);
       if (mb && borradores) return await rutaBorradores(req, res, url, mb[1] || null, mb[2] || null), true;
       if (req.method === 'GET') {
@@ -166,6 +207,8 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
         if (acciones && p === '/api/anuncios/accion') {
           const r = await acciones.accion({ ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined });
           if (r.status === 200 && r.cuerpo.ok && (b?.sub || b?.confirmacion)) { try { alHacer({ sub: b.sub, confirmacion: b.confirmacion, hecho: r.cuerpo.hecho, aviso: r.cuerpo.aviso }); } catch { /* la tarjeta se queda como estaba */ } }
+          // A5: la sugerencia de la que salió este gasto (por su token, o `sugerencia: <id>`) queda aplicada con el segundo clic
+          if (sugerencias && r.status === 200 && r.cuerpo.ok) { try { const sid = (b?.confirmacion && sugerencias.porToken(b.confirmacion)) || (typeof b?.sugerencia === 'string' ? b.sugerencia : null); if (sid) { const h = sugerencias.marcarAplicada(sid, { quien: 'dueno', hecho: r.cuerpo.hecho }); if (h) r.cuerpo.sugerencia = h; } } catch { /* el cambio ya se hizo */ } }
           return json(res, r.status, r.cuerpo), true;
         }
         if (acciones && p === '/api/anuncios/deshacer') { const r = await acciones.deshacer({ ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined }); return json(res, r.status, r.cuerpo), true; }

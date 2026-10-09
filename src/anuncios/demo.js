@@ -39,11 +39,13 @@ export function datosDeEjemplo(rango = '7d', ahora = Date.now()) {
   const c1 = { id: 'ej-c-1', nombre: 'Mensajes por WhatsApp — Combo lentes', objetivo: 'OUTCOME_ENGAGEMENT', objetivoTexto: 'Que me escriban por WhatsApp', estado: 'ACTIVE', estadoTexto: 'Activa', creadoFuera: false,
     presupuesto: { tipo: 'diario', usd: 8 }, spendCap: 240, inicio: ymd(ahora - 5 * dia), fin: ymd(ahora + 25 * dia), conjuntos: [j1] };
   c1.cifras = suma([j1], conv);
-  // 2 · tráfico: fuera del aprendizaje, con un anuncio con problemas
+  // 2 · tráfico: fuera del aprendizaje, con un anuncio con problemas, uno que se cansa (frecuencia 3,8: A5) y uno que gasta sin resultados
   const cl = 'clics al enlace';
-  const a2 = [an('ej-ad-21', 'Monturas otoño · carrusel', 'ACTIVE', 'Activo', { gasto: 41.2, imp: 15800, frec: 2.1, ctr: 1.4, res: 182 }, cl, { miniatura: img('#176638', '#0B6E80', 'OTOÑO'), titulo: 'Monturas nuevas de otoño', texto: 'Mira los modelos nuevos y aparta el tuyo en la web.', llamada: 'Más información' }),
+  const a2 = [an('ej-ad-21', 'Monturas otoño · carrusel', 'ACTIVE', 'Activo', { gasto: 41.2, imp: 15800, frec: 3.8, ctr: 1.4, res: 182 }, cl, { miniatura: img('#176638', '#0B6E80', 'OTOÑO'), titulo: 'Monturas nuevas de otoño', texto: 'Mira los modelos nuevos y aparta el tuyo en la web.', llamada: 'Más información' }),
     an('ej-ad-22', 'Monturas otoño · video 9:16', 'WITH_ISSUES', 'Con problemas', { gasto: 6.1, imp: 2100, frec: 1.3, ctr: 0.6, res: 11 }, cl, { miniatura: img('#A3266B', '#6B3FB5', 'VIDEO'), titulo: 'Monturas en 15 segundos', texto: 'Las monturas de otoño, una por una.', llamada: 'Más información' },
-      { problemas: ['El video no tiene la proporción 9:16 en todas sus partes: Meta lo recorta en historias y reels.'] })];
+      { problemas: ['El video no tiene la proporción 9:16 en todas sus partes: Meta lo recorta en historias y reels.'] }),
+    // A5: uno que gasta sin resultados (la sugerencia de «cortar» lo pausa)
+    an('ej-ad-23', 'Monturas otoño · solo texto', 'ACTIVE', 'Activo', { gasto: 9.8, imp: 3900, frec: 1.7, ctr: 0, res: 0 }, cl, { miniatura: img('#5A5A5A', '#1F5FD0', 'TEXTO'), titulo: 'Monturas desde US$59', texto: 'Tenemos monturas nuevas. Pasa a verlas.', llamada: 'Más información' })];
   const j2 = { id: 'ej-as-2', nombre: 'Ciudad de Panamá · 15 km · 22–60', optimizacion: 'Clics al enlace', destino: 'Sitio web', estado: 'ACTIVE', estadoTexto: 'Activo', aprendizaje: { estado: 'SUCCESS', texto: 'Fuera del aprendizaje' },
     presupuesto: { tipo: 'diario', usd: 7 }, publico: { lugares: ['Ciudad de Panamá + 15 km'], edad: { min: 22, max: 60 }, intereses: ['moda', 'gafas de sol'] }, anuncios: a2 };
   j2.cifras = suma(a2, cl);

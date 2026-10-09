@@ -1,0 +1,91 @@
+{
+  "skill": "anuncios-diagnostico",
+  "habilidad": "campanas-pagadas",
+  "nota": "Casos con cifras y la decisión correcta (Fase A5 de Anuncios, plan §7). Sirven dos veces: tests/anuncios-diagnostico.test.mjs corre el diagnóstico PURO (anuncios/diagnostico.mjs) sobre cada «caso» y exige su «decision»; y node scripts/evals-skill.mjs anuncios-diagnostico --correr se los da a Claude con la habilidad campanas-pagadas y sin ella, y un juez mira las «expectations». En «caso»: cpa = costo objetivo en US$; serie = un día por fila, del más viejo a AYER: [gasto US$, impresiones, clics, resultados]; frecuencia7 = la de los últimos 7 días; presupuesto = US$ al día del conjunto. «decision.objeto» null = no debe proponer NADA para ese conjunto ni sus anuncios.",
+  "evals": [
+    {
+      "id": "aprende-no-tocar",
+      "prompt": "Mi campaña de mensajes por WhatsApp arrancó hace 4 días con US$10 al día. El conjunto dice «Aprendiendo» (lleva 12 conversaciones). Cada conversación me está costando US$3 y yo quería pagar US$2. ¿Le bajo el presupuesto o le cambio el público?",
+      "expectations": [
+        "Recomienda no tocar el conjunto mientras está en aprendizaje (ni presupuesto, ni público, ni creativos)",
+        "Explica que cambiar algo durante el aprendizaje lo reinicia",
+        "Dice cuándo volver a mirarlo (cuando salga del aprendizaje o tras unos días más y más gasto)",
+        "No dice que pausó, cambió ni activó nada"
+      ],
+      "caso": { "cpa": 2, "conjunto": { "aprendizaje": "LEARNING", "conversiones": 12, "presupuesto": 10 }, "anuncios": [{ "id": "A1", "frecuencia7": 1.4, "serie": [[3, 900, 18, 1], [3, 950, 19, 1], [3, 1000, 20, 1], [3, 980, 19, 1]] }] },
+      "decision": { "objeto": null, "nota": "aprendizaje" }
+    },
+    {
+      "id": "fatigada-creativos",
+      "prompt": "Mi anuncio de Combo lleva dos semanas. Al principio tenía un CTR del 2 % y ahora está en 1 %; la frecuencia de esta semana es 3,8. Las conversaciones todavía salen a US$1,50 (mi objetivo es US$2). ¿Le subo el presupuesto, que está barato?",
+      "expectations": [
+        "Reconoce fatiga del creativo: frecuencia alta y el CTR cayendo contra sus primeros días",
+        "Recomienda creativos nuevos (variaciones: otro gancho, otra imagen u otro formato) en vez de subir el presupuesto",
+        "Desaconseja subir el presupuesto ahora, porque lo enseñaría más a la misma gente",
+        "Propone lanzar los nuevos junto al cansado y no editar el que corre (editar reinicia el aprendizaje)"
+      ],
+      "caso": { "cpa": 2, "conjunto": { "aprendizaje": "SUCCESS", "presupuesto": 10 }, "anuncios": [{ "id": "A1", "frecuencia7": 3.8, "serie": [[6, 1000, 20, 4], [6, 1000, 20, 4], [6, 1000, 20, 4], [6, 1000, 18, 4], [6, 1000, 17, 4], [6, 1000, 16, 4], [6, 1000, 15, 4], [6, 1000, 14, 4], [6, 1000, 13, 4], [6, 1000, 12, 4], [6, 1000, 11, 4], [6, 1000, 10, 4], [6, 1000, 10, 4], [6, 1000, 10, 4]] }] },
+      "decision": { "objeto": "A1", "regla": "fatiga", "tipo": "creativos", "sin": ["escalar"] }
+    },
+    {
+      "id": "gasta-sin-resultados-pausar",
+      "prompt": "Tengo dos anuncios en el mismo conjunto, que ya salió del aprendizaje. Uno gastó US$10 en 5 días y no trajo ni una conversación; el otro trae conversaciones a US$1,50. Mi objetivo es US$2 por conversación. ¿Qué hago con el primero?",
+      "expectations": [
+        "Recomienda pausar el anuncio que gastó sin resultados",
+        "Justifica con el gasto en múltiplos del costo objetivo (gastó 5 veces el objetivo sin resultados)",
+        "Deja corriendo el que funciona",
+        "Sugiere preparar un reemplazo (un creativo nuevo) para no quedarse sin variedad",
+        "No dice que ya lo pausó: lo propone para el OK del dueño"
+      ],
+      "caso": { "cpa": 2, "conjunto": { "aprendizaje": "SUCCESS", "presupuesto": 10 }, "anuncios": [{ "id": "A1", "frecuencia7": 1.5, "serie": [[2, 500, 6, 0], [2, 500, 6, 0], [2, 500, 5, 0], [2, 500, 6, 0], [2, 500, 5, 0]] }, { "id": "A2", "frecuencia7": 1.5, "serie": [[3, 800, 16, 2], [3, 800, 16, 2], [3, 800, 15, 2], [3, 800, 16, 2], [3, 800, 15, 2]] }] },
+      "decision": { "objeto": "A1", "regla": "cortar", "tipo": "pausar" }
+    },
+    {
+      "id": "escala-bien-mas-20",
+      "prompt": "Mi conjunto de mensajes salió del aprendizaje y lleva tres días con las conversaciones a US$1,20, US$1,00 y US$1,40, con US$10 al día. Mi objetivo era US$2. Quiero duplicarle el presupuesto ya.",
+      "expectations": [
+        "Recomienda escalar, pero de a un 20 % (de US$10 a US$12 al día), no duplicar de golpe",
+        "Explica que un salto grande (30 % o más) reinicia el aprendizaje; para crecer mucho, mejor duplicar el conjunto con más presupuesto",
+        "Dice que el cambio gasta más y pide la confirmación del dueño",
+        "Dice cuándo volver a subir (dentro de 2 a 3 días si el costo aguanta)"
+      ],
+      "caso": { "cpa": 2, "conjunto": { "aprendizaje": "SUCCESS", "presupuesto": 10 }, "anuncios": [{ "id": "A1", "frecuencia7": 1.6, "serie": [[9.6, 3000, 60, 8], [10, 3000, 60, 10], [9.8, 3000, 60, 7]] }] },
+      "decision": { "objeto": "S1", "regla": "escalar", "tipo": "subir_presupuesto", "valor": 12 }
+    },
+    {
+      "id": "limitado-revisar",
+      "prompt": "El conjunto dice «Aprendizaje limitado» desde hace una semana: solo 8 conversaciones en 7 días con US$5 al día. Mi objetivo es US$3 por conversación.",
+      "expectations": [
+        "Explica que no llega a los resultados por semana que Meta necesita para aprender (unos 50)",
+        "Propone juntar conjuntos, abrir el público, darle más presupuesto u optimizar a un evento más arriba del embudo",
+        "Calcula o menciona el presupuesto que haría falta (costo objetivo × 50 ÷ 7 al día)",
+        "No cambia nada por su cuenta"
+      ],
+      "caso": { "cpa": 3, "conjunto": { "aprendizaje": "FAIL", "conversiones": 8, "presupuesto": 5 }, "anuncios": [{ "id": "A1", "frecuencia7": 1.3, "serie": [[5, 1500, 22, 1], [5, 1500, 21, 1], [5, 1500, 22, 1], [5, 1500, 21, 1], [5, 1500, 20, 1], [5, 1500, 22, 2], [5, 1500, 21, 1]] }] },
+      "decision": { "objeto": "S1", "regla": "limitado", "tipo": "revisar" }
+    },
+    {
+      "id": "sin-objetivo-no-juzga",
+      "prompt": "Un anuncio gastó US$12 en 6 días y no trajo ninguna conversación. No tengo definido cuánto quiero pagar por conversación. ¿Lo pauso?",
+      "expectations": [
+        "Dice que sin un costo objetivo no puede juzgar el costo, y pide fijarlo (o el valor de una venta, el margen y la tasa de cierre)",
+        "No inventa un costo objetivo",
+        "Puede señalar que gastar sin ninguna conversación es una señal a revisar, sin dar un veredicto con un número inventado"
+      ],
+      "caso": { "cpa": 0, "conjunto": { "aprendizaje": "SUCCESS", "presupuesto": 10 }, "anuncios": [{ "id": "A1", "frecuencia7": 1.2, "serie": [[2, 600, 5, 0], [2, 600, 5, 0], [2, 600, 5, 0], [2, 600, 5, 0], [2, 600, 5, 0], [2, 600, 5, 0]] }] },
+      "decision": { "objeto": null, "sinObjetivo": true }
+    },
+    {
+      "id": "rechazado-borrador",
+      "prompt": "Meta me rechazó un anuncio por «Afirmaciones de salud»: el texto decía que nuestras gafas curan el dolor de cabeza. ¿Qué hago?",
+      "expectations": [
+        "Explica en palabras por qué lo rechazó Meta",
+        "Propone un texto corregido que no haga esa afirmación",
+        "Lo deja como borrador para que el dueño lo revise y lo cree en pausa",
+        "No dice que lo publicó ni que lo activó"
+      ],
+      "caso": { "cpa": 2, "conjunto": { "aprendizaje": "SUCCESS", "presupuesto": 10 }, "anuncios": [{ "id": "A1", "estado": "DISAPPROVED", "revision": { "global": { "Afirmaciones de salud": "El texto promete curar una dolencia" } }, "frecuencia7": null, "serie": [] }] },
+      "decision": { "objeto": "A1", "regla": "rechazado", "tipo": "borrador" }
+    }
+  ]
+}

@@ -16,12 +16,18 @@ import { detalleHTML } from './detalle.js';
 import { historialHTML, QUIENES } from './historial.js';
 import { GASTO, LIBRES, TEXTO, pideDatos, menuHTML, formularioHTML, confirmarHTML, errorHTML, errorImporte, importe, presupuestoDe } from './acciones.js';
 import { crearAsistente } from './asistente.js';
+import { sugerenciasHTML, FILTROS_SUG, reglaTexto } from './sugerencias.js';
+import { creativosHTML, grupoDeAnuncio, borradorDeCreativo } from './creativos.js';
 // Fase A3 (9 oct 2026): CREAR. La pestaña BORRADORES (antes de Historial) con la lista y el asistente de 5 pasos (src/anuncios/asistente.js);
 // «+ Nueva campaña» también en el Resumen. Lo creado nace EN PAUSA en Meta y se enlaza a su campaña; activarlo es la A2 (dos clics).
+// Fase A5 (9 oct 2026): SUGERENCIAS (tras Campañas: src/anuncios/sugerencias.js) y CREATIVOS (tras Borradores: src/anuncios/creativos.js),
+// y las 3 sugerencias más importantes en el Resumen. «Aplicar» de lo que baja el gasto es un clic con DESHACER; de lo que gasta, la MISMA
+// ventana del segundo clic de la A2 (con `sugerencia` en el «Sí»); «borrador» abre el borrador en Borradores; «creativos» se lo pide a tu
+// agente de anuncios. «Descartar» y «Recordármelo en 3 días» son de un clic. El foco, tras cada una, va a la siguiente tarjeta.
 
 /* global __AO_ANUNCIOS_VERSION__ */
 const VERSION = typeof __AO_ANUNCIOS_VERSION__ === 'string' ? __AO_ANUNCIOS_VERSION__ : '';
-const TABS = [['resumen', 'Resumen'], ['campanas', 'Campañas'], ['borradores', 'Borradores'], ['historial', 'Historial']];
+const TABS = [['resumen', 'Resumen'], ['campanas', 'Campañas'], ['sugerencias', 'Sugerencias'], ['borradores', 'Borradores'], ['creativos', 'Creativos'], ['historial', 'Historial']];
 const NIVEL = { campana: 'Campaña', conjunto: 'Conjunto', anuncio: 'Anuncio' };
 const guarda = { get: (k, d) => { try { const v = localStorage.getItem('ao.anu.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('ao.anu.' + k, JSON.stringify(v)); } catch {} } };
 const vale = (lista, v, d) => (lista.some(([k]) => k === v) ? v : d);
@@ -30,10 +36,10 @@ const sinModal = { open() {}, close() {} };
 function init(ov, ctx) {
   const datos = crearDatos({ servida: ctx.servida }), modal = ctx.modal || sinModal;
   const S = { tab: vale(TABS, guarda.get('tab', 'resumen'), 'resumen'), rango: vale(RANGOS, guarda.get('rango', '7d'), '7d'), filtro: vale(FILTROS, guarda.get('filtro', 'todas'), 'todas'), orden: vale(ORDENES, guarda.get('orden', 'gasto'), 'gasto'),
-    quien: vale(QUIENES, guarda.get('quien', 'todos'), 'todos'), abiertos: new Set(), sel: null, d: null, hist: null, error: '', ejemplo: false, abierta: false, leyendo: false, dlg: null };
+    quien: vale(QUIENES, guarda.get('quien', 'todos'), 'todos'), sfiltro: vale(FILTROS_SUG, guarda.get('sfiltro', 'viva'), 'viva'), sug: null, sugErr: '', ordenSug: [], abiertos: new Set(), sel: null, d: null, hist: null, error: '', ejemplo: false, abierta: false, leyendo: false, dlg: null };
   ov.innerHTML = `<div class="anu">
     <div class="anu-top"><h1 class="anu-h1">Anuncios</h1>
-      <div class="anu-tabs" role="tablist" aria-label="Qué ver de los anuncios">${TABS.map(([k, n]) => `<button type="button" role="tab" id="anuTab-${k}" data-tab="${k}" aria-controls="anuMain">${svg(k)}<span>${n}</span></button>`).join('')}</div>
+      <div class="anu-tabs" role="tablist" aria-label="Qué ver de los anuncios">${TABS.map(([k, n]) => `<button type="button" role="tab" id="anuTab-${k}" data-tab="${k}" aria-controls="anuMain">${svg(k)}<span>${n}</span>${k === 'sugerencias' ? '<b class="anu-tcuenta" data-tcuenta hidden></b>' : ''}</button>`).join('')}</div>
       <button type="button" class="anu-icb anu-x" data-cerrarvista aria-label="Cerrar Anuncios" title="Cerrar (Esc · J)">${svg('x')}</button></div>
     <p class="anu-ejemplo" role="status" hidden></p>
     <div class="anu-linea"><span class="anu-lectura" aria-live="polite"></span><button type="button" class="anu-btn" data-actualizar>${svg('recargar')}Actualizar</button></div>
@@ -55,9 +61,17 @@ function init(ov, ctx) {
 
   /* ---------- cargar ---------- */
   async function cargar() {
+    const ps = cargarSug(false);
     try { S.d = await datos.leer(S.rango, { ejemplo: S.ejemplo }); S.error = ''; }
     catch (e) { S.error = e.message; }
-    pintar();
+    await ps; pintar();
+  }
+  /** A5: las sugerencias (también para el Resumen, la cuenta de la pestaña y Creativos). */
+  async function cargarSug(repintar = true) {
+    const r = await datos.sugerencias({ ejemplo: S.ejemplo });
+    if (r.status === 200) { S.sug = { items: r.items || [], cpaObjetivo: r.cpaObjetivo ?? null, sinObjetivo: r.sinObjetivo || null, umbrales: r.umbrales || null }; S.sugErr = ''; }
+    else S.sugErr = r.status === 404 ? 'la oficina todavía no da sugerencias (falta la Fase A5 en el servidor)' : r.motivo || 'la oficina no contestó';
+    if (repintar) pintar();
   }
   async function cargarHistorial() { try { S.hist = await datos.historial({ ejemplo: S.ejemplo }); } catch (e) { S.hist = []; decir('No se pudo traer el historial: ' + e.message); } if (S.tab === 'historial') pintar(); }
   let reloj = 0;
@@ -67,6 +81,8 @@ function init(ov, ctx) {
   function pintarCabecera() {
     for (const [k] of TABS) { const b = ov.querySelector(`[data-tab="${k}"]`); b.setAttribute('aria-selected', String(k === S.tab)); b.tabIndex = k === S.tab ? 0 : -1; }
     main.setAttribute('aria-labelledby', 'anuTab-' + S.tab);
+    const tc = ov.querySelector('[data-tcuenta]'), nv = (S.sug?.items || []).filter(x => (x.estado || 'viva') === 'viva').length;
+    if (tc) { tc.hidden = !nv; tc.textContent = nv ? String(nv) : ''; tc.closest('button').setAttribute('aria-label', nv ? `Sugerencias, ${nv} ${nv === 1 ? 'viva' : 'vivas'}` : 'Sugerencias'); }
     const ej = enEjemplo();
     cinta.hidden = !ej;
     if (ej) cinta.innerHTML = !ctx.servida ? '<b>EJEMPLO</b><span>Esta es la demo: las campañas y las cifras son de ejemplo, y lo que pauses o actives aquí solo cambia en esta página. Con la oficina abierta (npm start) y Meta conectada ves las tuyas.</span>'
@@ -80,7 +96,9 @@ function init(ov, ctx) {
     const foco = clavFoco(), scroll = main.scrollTop, ahora = Date.now();
     if (S.tab === 'borradores') main.innerHTML = ctl.html();
     else if (!S.d) main.innerHTML = S.error ? `<div class="anu-vacio" role="alert"><b>No se pudieron traer los anuncios</b><span>${esc(S.error)}</span><button type="button" class="anu-btn" data-a="reintentar">Reintentar</button></div>` : '<p class="anu-cargando">Cargando…</p>';
-    else if (S.tab === 'resumen') main.innerHTML = resumenHTML(S.d, { rango: S.rango, ahora });
+    else if (S.tab === 'resumen') main.innerHTML = resumenHTML(S.d, { rango: S.rango, ahora, sug: S.sug });
+    else if (S.tab === 'sugerencias') main.innerHTML = S.d.configurado ? sugerenciasHTML(S.sug, { filtro: S.sfiltro, moneda: moneda(), buscarFila: id => buscar(S.d.campanas || [], id), error: S.sug ? '' : S.sugErr, ahora }) : resumenHTML(S.d);
+    else if (S.tab === 'creativos') main.innerHTML = S.d.configurado ? creativosHTML(S.d, S.sug, { rango: S.rango, rangos: RANGOS }) : resumenHTML(S.d);
     else if (S.tab === 'campanas') main.innerHTML = S.d.configurado ? campanasHTML(S.d, { rango: S.rango, filtro: S.filtro, orden: S.orden, abiertos: S.abiertos, sel: S.sel, ahora }) : resumenHTML(S.d);
     else main.innerHTML = historialHTML(S.hist, { quien: S.quien });
     ov.classList.toggle('conAsis', S.tab === 'borradores' && !!ctl.abierto);
@@ -170,7 +188,7 @@ function init(ov, ctx) {
     if (!S.dlg) return false;
     const g = S.dlg; S.dlg = null; clearInterval(relojDlg);
     modal.close(fondo); fondo.hidden = true; dlgIn.innerHTML = '';
-    if (devolver) setTimeout(() => volverAFila(g.id, g.desdeDet), 0);
+    if (devolver) setTimeout(() => (g.sug ? volverASug(g.sug, g.ordenSug) : volverAFila(g.id, g.desdeDet)), 0);
     return true;
   }
   function filaDe(g) { return (S.d && buscar(S.d.campanas || [], g.id)) || g.f; }
@@ -200,7 +218,7 @@ function init(ov, ctx) {
   fondo.addEventListener('pointerdown', e => { if (e.target === fondo) cerrarDlg(); });
 
   /* ---------- hacer: un clic (lo que baja el gasto) o dos (lo que gasta) ---------- */
-  const cuerpoDe = g => ({ tipo: g.tipo, id: g.id, valor: g.valor === '' || g.valor == null ? undefined : importe(g.valor), fin: g.fin || undefined, inicio: g.inicio || undefined });
+  const cuerpoDe = g => ({ tipo: g.tipo, id: g.id, valor: g.valor === '' || g.valor == null ? undefined : importe(g.valor), fin: g.fin || undefined, inicio: g.inicio || undefined, sugerencia: g.sug || undefined });
   async function pedir(tipo, id, desde) {
     const f = S.d && buscar(S.d.campanas || [], id); if (!f) return;
     cerrarMenu(false);
@@ -240,7 +258,7 @@ function init(ov, ctx) {
     if (S.dlg) cerrarDlg(false);
     mostrarAviso(r.hecho?.texto || 'Hecho.', r.deshacer, r.aviso);
     await refrescar();
-    volverAFila(g?.id, g?.desdeDet);
+    if (g?.sug) volverASug(g.sug, g.ordenSug); else volverAFila(g?.id, g?.desdeDet);
   }
   async function refrescar() { await cargar(); await cargarHistorial(); }
 
@@ -281,6 +299,83 @@ function init(ov, ctx) {
     } catch (e) { S.leyendo = false; pintarCabecera(); decir('No se pudo actualizar: ' + e.message); }
   }
 
+  /* ---------- A5: las sugerencias y los creativos ---------- */
+  function irTab(n) {
+    S.tab = n; guarda.set('tab', n);
+    if (n === 'historial' && S.hist == null) cargarHistorial();
+    if (n === 'borradores') { cerrarDetalle(false); ctl.cargar(); }
+    if ((n === 'sugerencias' || n === 'creativos') && !S.sug) cargarSug();
+    pintar();
+  }
+  const opc = () => ({ ejemplo: S.ejemplo });
+  const ordenVisible = () => [...main.querySelectorAll('[data-sug]')].map(n => n.dataset.sug);
+  /** Tras aplicar, descartar o posponer, el foco va a la tarjeta que ocupa su lugar (la siguiente; si no, la anterior; si no, el filtro). */
+  function volverASug(id, orden = S.ordenSug || []) {
+    const q = x => main.querySelector(`[data-sug="${CSS.escape(x)}"] button`);
+    let n = q(id);
+    if (!n) { const i = orden.indexOf(id); for (const x of [...orden.slice(i + 1), ...orden.slice(0, Math.max(0, i)).reverse()]) { n = q(x); if (n) break; } }
+    (n || main.querySelector('[data-sfiltro][aria-pressed="true"]') || main.querySelector('[data-ir]') || main).focus({ preventScroll: false });
+  }
+  /** «Aplicar». Lo que baja el gasto: un clic con DESHACER. Lo que gasta: la ventana del segundo clic de la A2 con la cifra. */
+  async function aplicarSug(id, btn) {
+    const s = (S.sug?.items || []).find(x => x.id === id); if (!s) return;
+    const c = s.cambio || {};
+    if (c.tipo === 'revisar') return abrirObjeto(c.id || s.objeto?.id, btn);
+    S.ordenSug = ordenVisible();
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true'); decir('Aplicando…');
+    const r = await datos.aplicarSugerencia(id, opc());
+    if (btn.isConnected) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+    const f = S.d && buscar(S.d.campanas || [], c.id);
+    if (r.confirmar) { // gasta: la misma ventana del segundo clic que la A2; el «Sí» va por /api/anuncios/accion con `sugerencia`
+      S.dlg = null;
+      abrirDlg({ tipo: c.tipo, id: c.id, f, desdeDet: false, valor: c.valor ?? '', fin: c.fin || '', inicio: c.inicio || '', sug: s.id, ordenSug: S.ordenSug, fase: 'confirm', confirmar: r.confirmar, aviso: r.aviso || '' });
+      decir(`${r.aviso ? 'Ojo: ' + r.aviso + ' ' : ''}${r.confirmar.texto}. ¿Sí?`); return;
+    }
+    if (r.ok && r.borrador) {
+      await cargarSug(false);
+      irTab('borradores');
+      mostrarAviso(r.hecho?.texto || 'Te dejé un borrador: revísalo. No se crea nada en Meta hasta que pulses «Crear en Meta (en pausa)».', null);
+      await ctl.abrir(r.borrador.id, { paso: 3 }); return;
+    }
+    if (r.ok) {
+      const ag = r.tarea ? (ctx.agentName?.(r.tarea.agent || 'ada') || 'tu agente de anuncios') : '';
+      mostrarAviso(r.hecho?.texto || (r.tarea ? `Le pedí a ${ag} variaciones: te llegará la tarjeta de costo del Estudio.` : 'Hecho.'), r.deshacer, r.aviso);
+      await refrescar(); volverASug(id); return;
+    }
+    S.dlg = null; abrirDlg({ tipo: c.tipo, id: c.id, f, desdeDet: false, sug: s.id, ordenSug: S.ordenSug, fase: 'error', r });
+    decir(r.motivo || 'No se pudo.');
+  }
+  /** «Descartar» (no vuelve en 7 días) y «Recordármelo en 3 días»: un clic. */
+  async function marcarSug(id, que, btn) {
+    const s = (S.sug?.items || []).find(x => x.id === id); if (!s) return;
+    S.ordenSug = ordenVisible(); btn.disabled = true;
+    const r = que === 'descartar' ? await datos.descartarSugerencia(id, opc()) : await datos.posponerSugerencia(id, 3, opc());
+    if (!r.ok) { if (btn.isConnected) btn.disabled = false; mostrarAviso(`No se pudo: ${r.motivo || 'la oficina no contestó'}`, null); return; }
+    await cargarSug();
+    mostrarAviso(que === 'descartar' ? `Descartada: «${reglaTexto(s.regla)}» sobre «${s.objeto?.nombre || ''}» no vuelve en 7 días.` : `Te la recuerdo en 3 días: «${reglaTexto(s.regla)}» sobre «${s.objeto?.nombre || ''}».`, null);
+    volverASug(id);
+  }
+  /** El nombre del objeto de una sugerencia o de un creativo: su detalle en Campañas (con su campaña y su conjunto desplegados). */
+  function abrirObjeto(id, desde) {
+    const f = S.d && buscar(S.d.campanas || [], id);
+    if (!f) { decir('Eso ya no está en la cuenta.'); return; }
+    S.abiertos.add(f.campana.id); if (f.conjunto) S.abiertos.add(f.conjunto.id);
+    abrirDetalle(id, null); origenDet = `[data-abrir="${CSS.escape(id)}"]`;
+    if (desde) decir(`${f.nodo.nombre}: su detalle, en Campañas.`);
+  }
+  /** Sin sugerencia de variaciones: una campaña nueva (borrador) con el texto de ese creativo, en el paso 4 para elegir la imagen. */
+  async function nuevaConCreativo(adId, btn) {
+    const g = S.d && grupoDeAnuncio(S.d.campanas || [], adId, { cpaObjetivo: S.sug?.cpaObjetivo ?? null, umbrales: S.sug?.umbrales || {}, moneda: moneda() });
+    if (!g) { decir('Ese creativo ya no está.'); return; }
+    btn.disabled = true;
+    const r = await datos.nuevoBorrador(borradorDeCreativo(g), opc());
+    if (btn.isConnected) btn.disabled = false;
+    if (r.status !== 200 || !r.borrador) { mostrarAviso(`No se pudo empezar la campaña: ${r.motivo || 'la oficina no contestó'}`, null); return; }
+    irTab('borradores');
+    mostrarAviso(`Empecé una campaña nueva con el texto de ese creativo${g.creativo?.media ? ' y su imagen' : ': elige su imagen aquí (la de Meta no está en tu galería)'}. Es un borrador: no se crea nada en Meta hasta que lo pidas.`, null);
+    await ctl.abrir(r.borrador.id, { paso: 3 });
+  }
+
   /* ---------- eventos ---------- */
   ov.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !ov.contains(b)) return;
@@ -288,7 +383,7 @@ function init(ov, ctx) {
       const a = b.dataset.dlg, g = S.dlg; if (!g) return;
       if (a === 'cancelar') { cerrarDlg(); decir('Cancelado: no cambió nada.'); return; }
       if (a === 'si') return confirmar();
-      if (a === 'otra') { const { tipo, id, f, desdeDet, valor, fin, inicio } = g; S.dlg = { tipo, id, f, desdeDet, valor, fin, inicio }; return primerClic(S.dlg); }
+      if (a === 'otra') { const { tipo, id, f, desdeDet, valor, fin, inicio, sug, ordenSug } = g; S.dlg = { tipo, id, f, desdeDet, valor, fin, inicio, sug, ordenSug }; return primerClic(S.dlg); }
       if (a === 'minimo') { abrirDlg({ fase: 'form', valor: b.dataset.minimo, err: '' }); return; }
       return;
     }
@@ -300,7 +395,15 @@ function init(ov, ctx) {
     if (b.dataset.acc) return pedir(b.dataset.acc, b.dataset.id, b);
     if (b.dataset.deshacer) return deshacer(b);
     if (b.hasAttribute('data-cerrartoast')) { clearInterval(relojToast); toast.hidden = true; toast.innerHTML = ''; main.focus({ preventScroll: true }); return; }
-    if (b.dataset.tab) { S.tab = b.dataset.tab; guarda.set('tab', S.tab); if (S.tab === 'historial' && S.hist == null) cargarHistorial(); if (S.tab === 'borradores') { cerrarDetalle(false); ctl.cargar(); } pintar(); return; }
+    if (b.dataset.tab) return irTab(b.dataset.tab);
+    if (b.dataset.ir) { irTab(b.dataset.ir); setTimeout(() => ov.querySelector(`[data-tab="${b.dataset.ir}"]`)?.focus(), 20); return; }
+    if (b.dataset.sapl) return aplicarSug(b.dataset.sapl, b);
+    if (b.dataset.crvar) return aplicarSug(b.dataset.crvar, b);
+    if (b.dataset.sdesc) return marcarSug(b.dataset.sdesc, 'descartar', b);
+    if (b.dataset.spos) return marcarSug(b.dataset.spos, 'posponer', b);
+    if (b.dataset.sobj) return abrirObjeto(b.dataset.sobj, b);
+    if (b.dataset.crnueva != null) return nuevaConCreativo(b.dataset.crnueva, b);
+    if (b.dataset.sfiltro) { S.sfiltro = b.dataset.sfiltro; guarda.set('sfiltro', S.sfiltro); pintar(); return; }
     if (b.hasAttribute('data-cerrarvista')) return ctx.cerrar?.();
     if (b.hasAttribute('data-actualizar')) return actualizar();
     if (b.hasAttribute('data-cerrardet')) return cerrarDetalle();
@@ -315,6 +418,7 @@ function init(ov, ctx) {
     if (a === 'salir') { S.ejemplo = false; S.hist = null; ctl.reiniciar(); if (S.tab === 'borradores') ctl.cargar(); cerrarDetalle(false); cargar().then(() => decir('De vuelta a tu cuenta.')); return; }
     if (a === 'ajustes') return ctx.abrirAjustes?.('anuncios');
     if (a === 'reintentar') return cargar();
+    if (a === 'recargar-s') return cargarSug();
   });
   ov.addEventListener('submit', e => {
     const form = e.target.closest('[data-form]'); if (!form || !S.dlg) return;
@@ -337,7 +441,7 @@ function init(ov, ctx) {
     if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'Home' || e.key === 'End') && el.getAttribute?.('role') === 'tab') {
       e.preventDefault(); const i = TABS.findIndex(([k]) => k === el.dataset.tab);
       const n = TABS[e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length][0];
-      S.tab = n; guarda.set('tab', n); if (n === 'historial' && S.hist == null) cargarHistorial(); if (n === 'borradores') { cerrarDetalle(false); ctl.cargar(); } pintar(); ov.querySelector(`[data-tab="${n}"]`).focus();
+      irTab(n); ov.querySelector(`[data-tab="${n}"]`).focus();
     }
     if (e.key === 'ArrowDown' && el.dataset?.menu) { e.preventDefault(); abrirMenu(el); }
   });

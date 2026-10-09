@@ -50,8 +50,11 @@ async function main() {
   if (!fs.existsSync(archivo)) { console.log(`✗ No hay ${path.relative(ROOT, archivo)}.`); process.exit(1); }
   const e = JSON.parse(fs.readFileSync(archivo, 'utf8')), mal = validarEvals(e);
   if (mal.length) { for (const m of mal) console.log('✗ ' + m); process.exit(1); }
-  const skillMd = [...(enBiblioteca ? [path.join(enBiblioteca, 'SKILL.md')] : []), path.join(ROOT, 'skills', skill, 'SKILL.md')].find(f => fs.existsSync(f));
+  // «habilidad»: los casos evalúan una habilidad de la biblioteca con otro nombre (Fase A5: evals/anuncios-diagnostico → campanas-pagadas)
+  const deHabilidad = /^[a-z0-9-]+$/.test(e.habilidad || '') ? fs.readdirSync(path.join(ROOT, 'biblioteca')).map(c => path.join(ROOT, 'biblioteca', c, e.habilidad, 'SKILL.md')) : [];
+  const skillMd = [...(enBiblioteca ? [path.join(enBiblioteca, 'SKILL.md')] : []), ...deHabilidad, path.join(ROOT, 'skills', skill, 'SKILL.md')].find(f => fs.existsSync(f));
   console.log(`✓ ${e.evals.length} pedidos, ${e.evals.reduce((n, x) => n + x.expectations.length, 0)} expectativas${skillMd ? '' : ' · ✗ no encuentro skills/' + skill + '/SKILL.md'}`);
+  if (!skillMd && correr) { console.log('✗ Sin la SKILL.md no se puede comparar con ella y sin ella.'); process.exit(1); }
   if (!correr) { console.log('Sin --correr no se gasta nada. Con --correr: 4 llamadas a Claude por pedido (con la skill, sin ella y el juez dos veces).'); return; }
   const texto = fs.readFileSync(skillMd, 'utf8').replace(/^---[\s\S]*?---\n/, '');
   const out = path.join(ROOT, 'data', 'evals', skill, new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')); fs.mkdirSync(out, { recursive: true });

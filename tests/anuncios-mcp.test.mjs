@@ -17,6 +17,7 @@ import { kindOf } from '../safety.mjs';
 import fs from 'node:fs';
 import os from 'node:os';
 import { crearBorradores } from '../anuncios/borradores.mjs';
+import { crearSugerencias, crearAplicador } from '../anuncios/sugerencias.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PROHIBIDAS = /activar|gastar|pagar|publicar|aprobar|borrar|crear_en_meta|pausar|presupuesto|reanudar|duplicar|relanzar|archivar|cambiar|editar|subir|bajar|crear|enviar|delete|create|update|pause|activate|budget|spend|publish|approve/i;
@@ -24,8 +25,10 @@ const PROHIBIDAS = /activar|gastar|pagar|publicar|aprobar|borrar|crear_en_meta|p
 // o mejora tiene que decir «borrador_», y aun así no puede sonar a nada de esto (ni «crear_en_meta», ni «crear_campana» a secas).
 const PROHIBIDAS_SIEMPRE = /activar|gastar|pagar|publicar|aprobar|borrar|crear_en_meta|en_meta|pausar|presupuesto|reanudar|duplicar|relanzar|archivar|subir|bajar|enviar|delete|activate|budget|spend|publish|approve/i;
 const BORRADOR = /^(crear|mejorar)_borrador_[a-z_]+$/;
+// Fase A5 (9 oct 2026): DEJAR una sugerencia sí («sugerir_…»: nunca la aplica); con las mismas palabras prohibidas.
+const SUGERIR = /^sugerir_[a-z_]+$/;
 /** ¿Puede un agente tener una herramienta con este nombre? Las que leen (ver_…) o las que dejan un borrador EN LA OFICINA. */
-export const nombrePermitido = n => (/^ver_/.test(n) && !PROHIBIDAS.test(n)) || (BORRADOR.test(n) && !PROHIBIDAS_SIEMPRE.test(n));
+export const nombrePermitido = n => (/^ver_/.test(n) && !PROHIBIDAS.test(n)) || ((BORRADOR.test(n) || SUGERIR.test(n)) && !PROHIBIDAS_SIEMPRE.test(n));
 
 const hoy = '2026-10-08';
 const GUARDADO = {
@@ -68,7 +71,7 @@ function mcp(base) {
 }
 
 test('las herramientas de anuncios de los agentes leen y dejan borradores en la oficina: ningún nombre que active, pause, gaste o cree en Meta', () => {
-  assert.deepEqual(TOOLS.map(t => t.name).sort(), ['crear_borrador_campana', 'mejorar_borrador_campana', 'ver_anuncio', 'ver_borradores_campana', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_resultados_anuncios']);
+  assert.deepEqual(TOOLS.map(t => t.name).sort(), ['crear_borrador_campana', 'mejorar_borrador_campana', 'sugerir_mejora_anuncio', 'ver_anuncio', 'ver_borradores_campana', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_resultados_anuncios', 'ver_sugerencias_anuncios']);
   for (const t of TOOLS) {
     assert.ok(nombrePermitido(t.name), `«${t.name}» suena a algo que un agente no debe poder hacer`);
     assert.equal(kindOf(`mcp__anuncios__${t.name}`), 'read', 'el guardián trata a Anuncios como interno (nada sale de la oficina)');
@@ -76,7 +79,7 @@ test('las herramientas de anuncios de los agentes leen y dejan borradores en la 
     assert.ok(!campos.some(k => (/^ver_/.test(t.name) ? /estado_nuevo|status|meta_id|campaign|adset/i : /estado|status|meta_id|campaign|adset/i).test(k)), `«${t.name}»: ningún campo deja elegir un estado ni tocar algo de Meta`);
     if (/^ver_/.test(t.name)) assert.ok(!campos.some(k => /presupuesto|budget/i.test(k)), 'una que lee no lleva presupuesto');
   }
-  for (const malo of ['crear_en_meta', 'crear_campana', 'crear_campana_en_meta', 'activar_borrador_campana', 'publicar_borrador', 'crear_borrador_en_meta', 'mejorar_presupuesto_borrador', 'borrar_borrador_campana', 'pausar_campana']) assert.equal(nombrePermitido(malo), false, malo);
+  for (const malo of ['sugerir_y_activar', 'sugerir_subir_presupuesto', 'sugerir_pausar', 'crear_en_meta', 'crear_campana', 'crear_campana_en_meta', 'activar_borrador_campana', 'publicar_borrador', 'crear_borrador_en_meta', 'mejorar_presupuesto_borrador', 'borrar_borrador_campana', 'pausar_campana']) assert.equal(nombrePermitido(malo), false, malo);
   assert.equal(nombrePermitido('crear_borrador_campana'), true);
 });
 
@@ -167,5 +170,38 @@ test('A3: crear_borrador_campana y mejorar_borrador_campana dejan borradores EN 
     // el dueño quita uno: a la papelera
     assert.equal((await api('DELETE', `/api/anuncios/borradores/${del.id}`)).status, 200); assert.equal(borradores.leer(del.id), null); assert.equal(borradores.papelera()[0].id, del.id);
     assert.equal((await api('POST', '/api/anuncios/borradores', { objetivo: 'likes' })).status, 400, 'lo que no existe es un 400');
+  } finally { m.cerrar(); srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('A5: sugerir_mejora_anuncio DEJA una sugerencia (de ada, con su tarea) y ver_sugerencias_anuncios la lee; aplicarla o descartarla, un agente no (403)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-a5-mcp-'));
+  const sync = sincDeMentira(), llamadas = [];
+  const acciones = { accion: async b => { llamadas.push(b); return { status: 200, cuerpo: { ok: true, hecho: { texto: 'En pausa.' } } }; } };
+  const sugerencias = crearSugerencias({ dir, umbrales: () => ({ fatigaFrecuencia: 3, fatigaCaidaCtr: 0.3 }) });
+  const aplicador = crearAplicador({ sug: sugerencias, acciones, vista: () => sync.vista('7d') });
+  const json = (res, code, b) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
+  const body = req => new Promise(ok => { let x = ''; req.on('data', d => { x += d; }); req.on('end', () => { try { ok(x ? JSON.parse(x) : {}); } catch { ok({}); } }); });
+  const handle = crearRutasAnuncios({ sync, meta: { uso: () => ({ pct: 0, ritmo: 1 }) }, json, body, acciones, sugerencias, aplicador });
+  const srv = http.createServer(async (req, res) => { if (!await handle(req, res, new URL(req.url, 'http://x'))) json(res, 404, {}); });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${srv.address().port}`, m = mcp(base);
+  const api = async (p, b) => { const r = await fetch(base + p, { method: b ? 'POST' : 'GET', headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, ...(await r.json().catch(() => ({}))) }; };
+  try {
+    const r = await m.llamar('sugerir_mejora_anuncio', { id: 'A9', regla: 'rechazado', tipo: 'pausar', dato: 'Meta lo rechazó: Texto engañoso', porque: 'no se entrega y confunde' });
+    assert.equal(r.isError, undefined, r.content[0].text); assert.match(r.content[0].text, /No se aplicó nada: el dueño decide/);
+    const x = sugerencias.leer('agente-rechazado-A9');
+    assert.equal(x.estado, 'viva'); assert.equal(x.agente, 'ada'); assert.equal(x.tarea, 't1', 'recuerda su tarea (para que la memoria aprenda de lo que pase)'); assert.equal(x.objeto.nivel, 'anuncio');
+    assert.equal(llamadas.length, 0, 'dejarla no aplica nada');
+    assert.match((await m.llamar('ver_sugerencias_anuncios', {})).content[0].text, /<sugerencias>[\s\S]*\[viva\] rechazado · anuncio A9[\s\S]*la dejó ada[\s\S]*Tú no aplicas nada/);
+    assert.equal((await m.llamar('sugerir_mejora_anuncio', { id: 'ZZ', regla: 'cortar', tipo: 'pausar', dato: 'x', porque: 'y' })).isError, true, 'un id que no está en lo leído de Meta');
+    assert.equal((await api('/api/anuncios/sugerencias/agente-rechazado-A9/aplicar', { por: 'agente' })).status, 403);
+    assert.equal((await api('/api/anuncios/sugerencias/agente-rechazado-A9/descartar', { por: 'agente' })).status, 403);
+    assert.equal((await api('/api/anuncios/sugerencias', { regla: 'cortar', tipo: 'pausar', id: 'A9', dato: 'x', porque: 'y' })).status, 403, 'una nueva por la API solo la deja un agente');
+    assert.equal(llamadas.length, 0);
+    const g = await api('/api/anuncios/sugerencias');
+    assert.equal(g.status, 200); assert.equal(g.items.length, 1); assert.equal(g.umbrales.fatigaFrecuencia, 3);
+    const ok = await api('/api/anuncios/sugerencias/agente-rechazado-A9/aplicar', {});
+    assert.equal(ok.status, 200); assert.deepEqual(llamadas, [{ tipo: 'pausar', id: 'A9', por: 'dueno' }]); assert.equal(ok.sugerencia.estado, 'aplicada');
+    assert.equal((await api('/api/anuncios/sugerencias/agente-rechazado-A9/aplicar', {})).status, 409, 'dos veces no');
   } finally { m.cerrar(); srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

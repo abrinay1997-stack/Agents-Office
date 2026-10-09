@@ -96,6 +96,14 @@ export const campanaTexto = c => `<b>${esc(c.nombre)}</b> · ${esc(c.estadoTexto
 export const campanaBotones = c => ({ inline_keyboard: [[c.estado === 'ACTIVE' ? { text: '⏸ Pausar', callback_data: 'xp:' + c.id } : { text: `✅ Activar${c.presupuesto?.tipo === 'diario' ? ` — gasta hasta ${usdTG(c.presupuesto.usd)}/día` : ''}`, callback_data: 'xa:' + c.id }]] });
 /** El aviso de un anuncio rechazado o con problemas (sincronizar.mjs: key «anuncios-rechazado:<id>»): trae ⏸ Pausar. */
 export const pausaDeAviso = n => { const m = /^anuncios-(?:rechazado|problemas):([A-Za-z0-9_]{1,40})$/.exec(String(n?.key || '')); return m ? { reply_markup: { inline_keyboard: [[{ text: '⏸ Pausar', callback_data: 'xp:' + m[1] }]] } } : {}; };
+/* ---------- Fase A5 (9 oct 2026): la sugerencia de escalar del día (dos toques: el servidor da la cifra y el token) y lo que pausó el piloto ---------- */
+/** «anuncios-escalar:<sugerencia>@<valor>» → «✅ Subir 20 % — hasta US$X/día» (el PRIMER toque: pide la cifra) y «Descartar». */
+export const escalarDeAviso = n => { const m = /^anuncios-escalar:([a-z]+-[A-Za-z0-9_-]{1,70})@(\d+(?:\.\d+)?)$/.exec(String(n?.key || '')); return m ? { reply_markup: { inline_keyboard: [[{ text: `✅ Subir 20 % — hasta ${usdTG(Number(m[2]))}/día`, callback_data: 'sx:' + m[1] }, { text: 'Descartar', callback_data: 'sq:' + m[1] }]] } } : {}; };
+/** «anuncios-piloto:<id>» (anuncios/piloto.mjs) → «↶ Deshacer»: reanudar vuelve a gastar, así que pide la cifra y el segundo toque. */
+export const pilotoDeAviso = n => { const m = /^anuncios-piloto:([A-Za-z0-9_]{1,40})$/.exec(String(n?.key || '')); return m ? { reply_markup: { inline_keyboard: [[{ text: '↶ Deshacer (vuelve a gastar)', callback_data: 'xr:' + m[1] }]] } } : {}; };
+/** Los botones del aviso de anuncios que toque (rechazado → ⏸, escalar → ✅/Descartar, piloto → ↶). */
+export const botonesAnuncio = n => { for (const f of [pausaDeAviso, escalarDeAviso, pilotoDeAviso]) { const x = f(n); if (x.reply_markup) return x; } return {}; };
+const SI = { activar: '✅ Sí, activar', reanudar: '✅ Sí, reanudar', subir_presupuesto: '✅ Sí, subir' };
 
 export const approvalButtons = id => ({ inline_keyboard: [[{ text: '✅ Aprobar y enviar', callback_data: 'ap:' + id }, { text: '↩ Devolver', callback_data: 'rj:' + id }], [{ text: '👁 Ver completo', callback_data: 'vw:' + id }]] });
 
@@ -160,7 +168,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
     else if (t.state === 'done' && t.error && !t.stopped && notify.failures) toOwners(`✗ <b>Falló</b> «${esc(t.title)}» (${esc(name)})\n${esc(String(t.result || '').slice(0, 600))}`, { reply_markup: { inline_keyboard: [[{ text: '↻ Reintentar', callback_data: 'rp:' + t.id }]] } }, { urgent: t.errorKind === 'login' });
     else if (t.state === 'done' && !t.error && notify.done) toOwners(`✓ <b>Lista</b> «${esc(t.title)}» (${esc(name)})\n${esc(String(t.result || '').slice(0, 700))}`);
   });
-  onNotice(n => { if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(`${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`, n.kind === 'anuncios' ? pausaDeAviso(n) : {}, { urgent: n.level === 'error' }); }); // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
+  onNotice(n => { if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(`${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`, n.kind === 'anuncios' ? botonesAnuncio(n) : {}, { urgent: n.level === 'error' }); }); // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
   // A2: el segundo toque de un gasto. El token es el de la confirmación del SERVIDOR (anuncios/acciones.mjs: 2 minutos, un solo uso,
   // atado a ese tipo + id + valor); aquí solo se recuerda de qué era, para mandarlo igual. Si la oficina se reinicia, se olvida (y vence).
   const gastos = new Map();
@@ -250,19 +258,21 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
       // A2: anuncios — ⏸ Pausar (libre) y su ↶ Deshacer; ✅ Activar pide la cifra al servidor y la manda con «Sí, activar» (el segundo toque)
       if (k === 'xp') { const r = await local('POST', '/api/anuncios/accion', { tipo: 'pausar', id, por: 'dueno' }, by); await strip(); await done('En pausa'); return send(chat, `⏸ ${esc(r.hecho?.texto || 'En pausa.')}`, r.deshacer ? { reply_markup: { inline_keyboard: [[{ text: '↶ Deshacer', callback_data: 'xu:' + r.deshacer.token }]] } } : {}); }
       if (k === 'xu') { const r = await local('POST', '/api/anuncios/deshacer', { token: id, por: 'dueno' }, by); await strip(); await done('Deshecho'); return send(chat, `↶ ${esc(r.hecho?.texto || 'Deshecho.')}`); }
-      if (k === 'xa') {
-        const r = await local('POST', '/api/anuncios/accion', { tipo: 'activar', id, por: 'dueno' }, by), c = r.confirmar; await done('');
-        if (!c) return send(chat, `✓ ${esc(r.hecho?.texto || 'Hecho.')}`);
-        recordarGasto(c.token, { tipo: c.tipo, id: c.id, ...(c.valor !== undefined ? { valor: c.valor } : {}), ...(c.fin ? { fin: c.fin } : {}), vence: Date.parse(c.vence) || Date.now() + 120e3 });
-        return send(chat, `💸 <b>${esc(c.texto)}</b>${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}\n¿Seguro? Tienes 2 minutos.`, { reply_markup: { inline_keyboard: [[{ text: '✅ Sí, activar', callback_data: 'xc:' + c.token }, { text: '✗ No', callback_data: 'xn:' + c.token }]] } });
+      // A5: «xr» deshace una pausa del piloto (reanudar: gasta, dos toques); «sx» aplica la sugerencia de escalar (subir: gasta, dos toques)
+      if (k === 'xa' || k === 'xr' || k === 'sx') {
+        const r = k === 'sx' ? await local('POST', `/api/anuncios/sugerencias/${id}/aplicar`, { por: 'dueno' }, by) : await local('POST', '/api/anuncios/accion', { tipo: k === 'xr' ? 'reanudar' : 'activar', id, por: 'dueno' }, by), c = r.confirmar; await done('');
+        if (!c) { await strip(); return send(chat, `✓ ${esc(r.hecho?.texto || 'Hecho.')}`); }
+        recordarGasto(c.token, { tipo: c.tipo, id: c.id, ...(c.valor !== undefined ? { valor: c.valor } : {}), ...(c.fin ? { fin: c.fin } : {}), ...(k === 'sx' ? { sugerencia: id } : {}), vence: Date.parse(c.vence) || Date.now() + 120e3 });
+        return send(chat, `💸 <b>${esc(c.texto)}</b>${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}\n¿Seguro? Tienes 2 minutos.`, { reply_markup: { inline_keyboard: [[{ text: SI[c.tipo] || '✅ Sí', callback_data: 'xc:' + c.token }, { text: '✗ No', callback_data: 'xn:' + c.token }]] } });
       }
+      if (k === 'sq') { await local('POST', `/api/anuncios/sugerencias/${id}/descartar`, { por: 'dueno' }, by); await strip(); await done('Descartada'); return send(chat, 'Vale: descartada. No vuelve en 7 días.'); }
       if (k === 'xc') {
         const g = gastos.get(id); gastos.delete(id);
         if (!g) { await strip(); await done('Venció'); return send(chat, 'Esa confirmación ya no sirve (venció o ya se usó). Pide /anuncios otra vez.'); }
         const { vence, ...pedido } = g, r = await local('POST', '/api/anuncios/accion', { ...pedido, confirmacion: id, por: 'dueno' }, by);
         await strip(); await done('Hecho'); return send(chat, `✅ ${esc(r.hecho?.texto || 'Hecho.')}${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}`);
       }
-      if (k === 'xn') { gastos.delete(id); await strip(); await done('No'); return send(chat, 'Vale: no se activa nada.'); }
+      if (k === 'xn') { gastos.delete(id); await strip(); await done('No'); return send(chat, 'Vale: no se cambia nada.'); }
       if (k === 'sd') { const r = await local('POST', '/api/sub/send', { msg: id }); await strip(); await done('Enviado'); return send(chat, `📤 Enviado a los jefes${r.tasks?.filter(Boolean).length ? ': ' + r.tasks.filter(Boolean).length + ' tarea(s)' : ''}.`); }
       await done('');
     } catch (e) { await done('No se pudo'); return send(chat, '✗ ' + esc(e.message)); }

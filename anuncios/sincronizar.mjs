@@ -41,8 +41,10 @@ const num = v => (v === null || v === undefined || v === '' || !Number.isFinite(
  * @param {Function} o.ajustes () → cfg.anuncios (se lee cada vez: Ajustes lo cambia en caliente)
  * @param {object} o.defaults  { topeDiario, topeMensual, topeCampana } de settings.mjs → FIELDS
  * @param {Function} o.avisar  (texto, { level, key }) → notice() de serve.mjs (y de ahí a Telegram)
+ * @param {Function} o.despuesDeCifras () → Fase A5 (9 oct 2026): tras cada lectura BUENA de cifras (el diagnóstico, las sugerencias y el
+ *                   piloto automático; serve.mjs). Corre cuando la lectura ya terminó (nunca dentro de ella) y un fallo suyo no la toca.
  */
-export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defaults = {}, ahora = () => Date.now(), avisar = () => {} }) {
+export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defaults = {}, ahora = () => Date.now(), avisar = () => {}, despuesDeCifras = () => {} }) {
   const F = { cuenta: path.join(dir, 'cuenta.json'), alcance: path.join(dir, 'alcance.json'), estado: path.join(dir, 'estado.json'), avisados: path.join(dir, 'avisados.json'), historial: path.join(dir, 'historial.jsonl'), cifras: path.join(dir, 'cifras') };
   let enMarcha = null, panelAt = 0;
 
@@ -133,7 +135,10 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
         return { ok: false, error: st.error };
       } finally { enMarcha = null; }
     })();
-    return enMarcha;
+    const p = enMarcha;
+    // A5: el diagnóstico corre DESPUÉS de la lectura (enMarcha ya es null: si el piloto pausa algo, su relectura no espera a esta)
+    if (cifras) p.then(r => { if (r?.ok) Promise.resolve().then(despuesDeCifras).catch(e => console.warn('anuncios (diagnóstico):', e.message)); }).catch(() => {});
+    return p;
   }
 
   /** Cada cuánto toca cada cosa ahora mismo (en minutos), con el freno de Meta ya aplicado. */
@@ -183,5 +188,11 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
 
   const historial = () => { try { return fs.readFileSync(F.historial, 'utf8').split('\n').filter(Boolean).map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean).slice(-500).reverse(); } catch { return []; } };
 
-  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, cuenta, estadoTexto };
+  // ------------------------------------------------------------ A5 (9 oct 2026): lo que necesita el diagnóstico (anuncios/diagnostico.mjs)
+  /** La vista de 7 días (la frecuencia sale del alcance de 7 días), las filas diarias guardadas (hasta DIAS_NOCHE) y hoy en la zona de la cuenta. */
+  function datosDiagnostico() { const h = hoy(); return { vista: vista('7d'), vistaHoy: vista('hoy'), filas: filasDesde(sumarDias(h, -DIAS_NOCHE + 1), h), hoy: h, zona: zona(), pixel: Boolean(String(aj().pixel || '').trim()) }; }
+  /** { id: ms } la última vez que se SUBIÓ el presupuesto de cada objeto desde la oficina (para «como mucho una vez cada 72 h»). */
+  function subidas() { const out = {}; for (const e of historial()) if (e?.que === 'subir_presupuesto' && e.objeto?.id && !(e.objeto.id in out)) out[e.objeto.id] = Date.parse(e.at) || 0; return out; }
+
+  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, cuenta, estadoTexto, datosDiagnostico, subidas, filas: filasDesde };
 }

@@ -12,6 +12,22 @@
       },
       "needsOk": false,
       "paused": false
+    },
+    {
+      "id": "revision-anuncios",
+      "dept": "marketing",
+      "agent": "ada",
+      "title": "Revisión de anuncios: qué cortar, qué mantener y qué escalar",
+      "text": "Revisión semanal de los anuncios de Meta con la habilidad campanas-pagadas (lee antes su referencia meta-sistema-de-decisiones). Mira la cuenta (ver_cuenta_anuncios), las campañas y sus cifras de 7 días (ver_campanas, ver_resultados_anuncios) y las sugerencias de la oficina (ver_sugerencias_anuncios). Entrega un análisis corto: cómo fue la semana, qué funciona y qué no, y como mucho 3 decisiones, cada una con el dato y su cifra, el cambio, el efecto esperado y el riesgo. Si propones algo que la oficina no sugirió, déjalo con sugerir_mejora_anuncio; no repitas lo que ya está. Un conjunto que aprende no se toca. Si un creativo se cansó, propone variaciones (texto, titular y un prompt para el Estudio) sin generar imágenes: las genera el dueño con su costo a la vista. No cambias nada en Meta. Si Anuncios no está conectado, dilo en una línea y termina. Solo lectura y propuestas.",
+      "when": {
+        "kind": "weekly",
+        "days": [
+          1
+        ],
+        "at": "08:30"
+      },
+      "needsOk": false,
+      "paused": false
     }
   ]
 }

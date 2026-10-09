@@ -270,7 +270,7 @@ export function publicacionText(e) {
  * los resultados de 7 días y su costo, lo activo y lo que tiene problemas, siempre con ids. `v` es lo que contesta GET /api/anuncios
  * (anuncios/rutas.mjs → completa('7d')). Desde A2 (9 oct 2026) Dimitri propone cambios con las ops anuncio_* (ver OPS y OPS_GASTO).
  */
-export function anunciosText(v) {
+export function anunciosText(v, sugerencias = []) { // A5: `sugerencias` = las 3 vivas más importantes (anuncios/sugerencias.mjs → top(3)), una línea corta
   if (!v) return '';
   if (!v.configurado && !v.cuenta) return `Anuncios de Meta: no conectados — ${clip(v.motivo, 200)} (dilo si te preguntan por la publicidad; no inventes cifras).`;
   if (!v.sincronizadaAt) return `Anuncios de Meta: la cuenta está puesta pero todavía no se ha leído${v.error ? ` (el último intento falló: ${clip(v.error, 200)})` : ''}.`;
@@ -281,6 +281,7 @@ export function anunciosText(v) {
   if (conProblemas) out.push('Con problemas:\n' + anunciosCampanas(v, { estado: 'problemas', nivel: 'anuncio' }).split('\n').filter(l => / PROBLEMA: |^- CAMPAÑA/.test(l)).join('\n'));
   const pausadas = (v.campanas || []).filter(c => c.estado !== 'ACTIVE');
   if (pausadas.length) out.push(`Pausadas o terminadas (${pausadas.length}): ${pausadas.slice(0, 8).map(c => `${c.id} «${clip(c.nombre, 40)}» (${c.estadoTexto})`).join('; ')}`);
+  if (sugerencias?.length) out.push(`Sugerencias de la oficina (Anuncios → Sugerencias; aplicarlas es del dueño): ${sugerencias.slice(0, 3).map(x => `${x.regla} ${x.cambio?.tipo}${x.cambio?.valor != null ? ' a US$' + x.cambio.valor : ''} en ${x.objeto?.id} «${clip(x.objeto?.nombre, 30)}» (${clip(x.dato, 70)})`).join('; ')}`);
   out.push(`Leído de Meta: ${v.sincronizadaAt}${v.cifrasAt ? '' : ' (las cifras todavía no)'}${v.error ? ` · el último intento falló: ${clip(v.error, 160)}` : ''}. Puedes proponer pausar o bajar un presupuesto (un clic del dueño) y activar, reanudar, subir un presupuesto o relanzar (gastan: dos clics del dueño, dentro de sus topes), con los ids de arriba.`);
   const t = out.join('\n');
   return t.length > 5000 ? t.slice(0, 4990) + '…' : t;
