@@ -213,3 +213,13 @@ test('la API y las herramientas: el agente lee advertido, deja borradores y sugi
     assert.equal((await api('GET', '/api/contenido/bandeja?fuente=metricool')).items.length, 0);
   } finally { p.kill(); srv.close(); }
 });
+
+test('B2: sin los permisos de mensajes (acceso avanzado), la fuente de mensajes lo dice, no se piden conversaciones y los comentarios siguen', async () => {
+  const m = await montar();
+  m.g.st.conversaciones = [{ id: 't1', platform: 'instagram', messages: { data: [{ id: 'x1', message: 'Hola', from: { id: 'IGSID1', username: 'ana' }, created_time: hace(1) }] } }];
+  const r = await m.bj.sincronizar(); assert.equal(r.ok, true, r.error);
+  assert.equal(m.bj.listar().items.length, 6, 'los mismos comentarios de siempre'); assert.equal(m.bj.leer('meta:conv:t1'), null);
+  assert.ok(!m.g.llamadas.some(l => l.ruta === '/P1/conversations'));
+  const dm = m.bj.listar().fuentes.meta.mensajes; assert.equal(dm.ok, false); assert.match(dm.motivo, /acceso avanzado para leer los mensajes de tus clientes/);
+  assert.equal(m.bj.estado().fuentes.meta.mensajes.ok, false, 'Estado (O) lo lee de aquí');
+});

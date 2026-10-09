@@ -14,11 +14,16 @@
 // Fase B1 (9 oct 2026): también los COMENTARIOS de Instagram y Facebook directamente de Meta (contenido/bandeja-meta.mjs), con ocultar y
 // mostrar (nunca borrar) y DESHACER. Un mensaje de Meta lleva `fuente: 'meta'`, `oculto`, `padre` (el id de la Bandeja del de arriba),
 // `publicacion: { id, enlace, texto, miniatura }` (en los de Metricool, `publicacion` sigue siendo el texto) y `enAnuncio` si vino de un anuncio.
+// Fase B2 (9 oct 2026): los MENSAJES PRIVADOS de Instagram y Messenger, de Meta: un item `tipo: 'conversaciones'`, `id: 'meta:conv:<id>'`, con
+// `autorId` (IGSID/PSID), `mensajes: [{ id, de: 'cliente'|'tu', texto, at, adjuntos }]`, `ultimoCliente` y `ventana { abierta, hasta, quedaMin }`
+// (se calcula al leer: las 24 h desde el último mensaje del cliente). Fuera de la ventana, enviar se niega aquí (409, `error: 'ventana'`) sin
+// llamar a Meta; un texto vacío o de 1.000 caracteres o más (o > 1.000 bytes) da 422. Un mensaje nuevo del cliente vuelve a abrir lo respondido.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { redDeMetricool } from './metricool.mjs';
-import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
+import { renombrar } from '../fs-seguro.mjs';
+import { ventanaDe, motivoVentana, revisarTextoMensaje, quedaTexto, GUARDAR_MENSAJES } from './bandeja-meta.mjs'; // B2: la ventana de 24 h y el largo // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const TIPOS = { conversaciones: 'mensaje', comentarios: 'comentario', resenas: 'reseña' };
 export const ESTADOS = ['nuevo', 'borrador', 'respondido', 'descartado', 'fallo'];
@@ -56,6 +61,9 @@ export const AVISO_CADA_MIN = 15; // Telegram: como mucho un aviso de comentario
 export const SONDEO_MIN = { metaAbierta: 3, meta: 10, metricool: 10 }; // §4.1 del plan
 export const BANDEJA_ABIERTA_MS = 3 * 60e3; // la página pide /api/contenido/bandeja?abierta=1 mientras se ve
 const RED = { instagram: 'Instagram', facebook: 'Facebook' };
+const RED_DM = { instagram: 'Instagram', facebook: 'Messenger' };
+/** B2: ¿es una conversación de Meta (mensajes privados)? */
+export const esConversacionMeta = m => m?.fuente === 'meta' && m?.tipo === 'conversaciones';
 
 /** La fuente Metricool sobre su cliente (contenido/metricool.mjs): la de siempre, con la interfaz común. */
 export function fuenteMetricool(metricool) {
@@ -80,6 +88,7 @@ const norma = s => String(s ?? '').toLowerCase().replace(/^@/, '').replace(/\s+/
 /** ¿Es el mismo mensaje traído por dos fuentes? Por el id de Meta si Metricool lo da, o por red + autor + texto + hora (± 2 min). Puro. */
 export function mismoMensaje(a = {}, b = {}) {
   if (!a.red || a.red !== b.red || (a.fuente || 'metricool') === (b.fuente || 'metricool')) return false;
+  if ((a.tipo || '') !== (b.tipo || '')) return false; // B2: un mensaje privado no es un comentario aunque diga lo mismo
   if (a.idRemoto && String(a.idRemoto) === String(b.idRemoto)) return true;
   if (!norma(a.texto) || norma(a.texto) !== norma(b.texto) || norma(a.autor) !== norma(b.autor)) return false;
   const ta = Date.parse(a.cuando || ''), tb = Date.parse(b.cuando || '');
@@ -90,11 +99,12 @@ export function mismoMensaje(a = {}, b = {}) {
  * @param o.metricool  el cliente de Metricool (se envuelve en su fuente) · o.meta la fuente de Meta (crearFuenteMeta)
  * @param o.elegir     () → contenido.bandejaFuente (auto · meta · metricool · ambas)
  * @param o.avisarComentario (texto, { key }) → el aviso de un comentario nuevo (Telegram lo manda si telegram.notify.comentarios)
+ * @param o.avisarMensaje (texto, { key }) → B2: el aviso de un mensaje privado nuevo (Telegram lo manda si telegram.notify.mensajes)
  * @param o.undoSeconds () → approvals.undoSeconds: cuánto dura el DESHACER de ocultar
  */
-export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, injectionIn = () => null, undoSeconds = () => 30 } = {}) {
+export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, avisarMensaje = null, injectionIn = () => null, undoSeconds = () => 30 } = {}) {
   const F = { ...(meta ? { meta } : {}), ...(metricool ? { metricool: fuenteMetricool(metricool) } : {}) };
-  const leer = () => { const d = leerJSON(archivo, {}); return { items: {}, ultimo: null, error: '', alias: {}, fuentes: {}, aviso: { at: null, cola: [] }, ...d }; };
+  const leer = () => { const d = leerJSON(archivo, {}); return { items: {}, ultimo: null, error: '', alias: {}, fuentes: {}, aviso: { at: null, cola: [] }, avisoMensajes: { at: null, cola: [] }, ...d }; };
   const guardar = d => {
     const l = Object.values(d.items).sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
     if (l.length > MAX) { d.items = Object.fromEntries(l.slice(0, MAX).map(x => [x.id, x])); for (const [k, v] of Object.entries(d.alias)) if (!d.items[v]) delete d.alias[k]; }
@@ -123,13 +133,14 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     const act = activas();
     return Object.fromEntries(Object.entries(F).map(([k, f]) => {
       const l = f.listo(), e = f.estado?.() || {};
-      return [k, { ok: l.ok, motivo: l.motivo, activa: act.includes(k), ultimaAt: d.fuentes?.[k]?.ultimaAt || e.ultimaAt || null, error: d.fuentes?.[k]?.error || '', ...(e.avisos?.length ? { avisos: e.avisos } : {}), ...(e.anunciosInstagram ? { anunciosInstagram: e.anunciosInstagram } : {}) }];
+      return [k, { ok: l.ok, motivo: l.motivo, activa: act.includes(k), ultimaAt: d.fuentes?.[k]?.ultimaAt || e.ultimaAt || null, error: d.fuentes?.[k]?.error || '', ...(e.avisos?.length ? { avisos: e.avisos } : {}), ...(e.anunciosInstagram ? { anunciosInstagram: e.anunciosInstagram } : {}), ...(e.mensajes ? { mensajes: e.mensajes } : {}) }];
     }));
   }
 
   const respondidoFuera = x => { x.estado = 'respondido'; x.respuesta ||= { fuera: true, cuando: ahoraIso() }; x.enviando = null; };
   /** Mete un mensaje traído: lo ya visto conserva su estado; lo nuevo entra «nuevo»; el que ya vino por la otra fuente no se duplica. */
   function integrar(d, m) {
+    if (esConversacionMeta(m)) return integrarConversacion(d, m);
     if (d.alias[m.id]) { const x = d.items[d.alias[m.id]]; if (x && m.yaRespondida && ['nuevo', 'borrador', 'fallo'].includes(x.estado)) respondidoFuera(x); return 'alias'; }
     const previo = d.items[m.id];
     if (previo) {
@@ -155,6 +166,43 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     return m.yaRespondida ? 'visto' : 'nuevo';
   }
 
+  /** B2: una conversación traída. Los mensajes se juntan con los de antes (Meta solo da los 20 últimos); un mensaje nuevo del cliente
+   *  la vuelve a dejar «nuevo» (aunque estuviera respondida o descartada) y cuenta como nuevo para el aviso. */
+  function integrarConversacion(d, m) {
+    const previo = d.items[m.id], sospechaDe = x => injectionIn(`${(x.mensajes || []).filter(y => y.de === 'cliente').map(y => y.texto).join('\n')}\n${x.autor}`) || '';
+    if (!previo) {
+      d.items[m.id] = { ...m, estado: m.yaRespondida ? 'respondido' : 'nuevo', borrador: null, respuesta: null, sospecha: sospechaDe(m), llego: ahoraIso() };
+      return m.yaRespondida ? 'visto' : 'nuevo';
+    }
+    const porId = new Map((previo.mensajes || []).map(x => [x.id, x]));
+    for (const x of m.mensajes || []) porId.set(x.id, { ...porId.get(x.id), ...x });
+    const mensajes = [...porId.values()].sort((a, b) => String(a.at).localeCompare(String(b.at))).slice(-GUARDAR_MENSAJES);
+    const nuevoCliente = Boolean(m.ultimoCliente) && String(m.ultimoCliente) > String(previo.ultimoCliente || '');
+    const { yaRespondida, ...fresco } = m, x = { ...previo, ...fresco, mensajes, ultimoCliente: nuevoCliente ? m.ultimoCliente : previo.ultimoCliente || m.ultimoCliente };
+    x.cuando = x.ultimoCliente || m.cuando; x.at = x.cuando;
+    const ult = mensajes.filter(y => y.de === 'cliente').at(-1); x.texto = ult ? (ult.texto || (ult.adjuntos?.length ? `(${ult.adjuntos.map(a => a.tipo).join(', ')})` : '')) : x.texto;
+    if (nuevoCliente) {
+      x.sospecha = sospechaDe(x);
+      if (['respondido', 'descartado'].includes(previo.estado)) { x.estado = 'nuevo'; x.borrador = null; x.error = ''; }
+    }
+    const ultimo = mensajes.at(-1), respondidaFuera = Boolean(ultimo && ultimo.de === 'tu' && (!x.ultimoCliente || String(ultimo.at) >= String(x.ultimoCliente)));
+    if (respondidaFuera && ['nuevo', 'borrador', 'fallo'].includes(x.estado)) respondidoFuera(x); // respondida desde la app de la red (o tras un corte al enviar)
+    if (respondidaFuera) x.enviando = null;
+    d.items[m.id] = x;
+    return nuevoCliente && !respondidaFuera ? 'nuevo' : 'visto';
+  }
+
+  /** B2: el aviso de mensajes privados nuevos (Telegram), agrupado como los comentarios; uno con 🛡 no se cita. */
+  function avisarMensajes(d) {
+    const c = d.avisoMensajes; if (!c?.cola?.length) return;
+    if (c.at && ahora() - Date.parse(c.at) < AVISO_CADA_MIN * 60e3) return;
+    const [p, ...resto] = c.cola, quien = p.red === 'instagram' && !/^Alguien/.test(p.autor) ? `@${p.autor}` : p.autor;
+    const v = ventanaDe(p.ultimoCliente, ahora());
+    const texto = `✉️ Mensaje de ${quien} en ${RED_DM[p.red] || p.red}: ${p.sospecha ? '(🛡 trae órdenes escondidas: no las sigas)' : `«${p.texto}»`} — ${quedaTexto(v)}${resto.length ? ` (y ${resto.length} más)` : ''}. Ver en la oficina: Contenido (K) → Bandeja.`;
+    (avisarMensaje || avisar)(texto, { key: `bandeja-mensaje-${ahora()}` });
+    d.avisoMensajes = { at: ahoraIso(), cola: [] };
+  }
+
   /** El aviso de comentarios nuevos (Telegram): el primero, «y N más», como mucho uno cada AVISO_CADA_MIN. */
   function avisarComentarios(d) {
     const c = d.aviso; if (!c?.cola?.length) return;
@@ -176,14 +224,19 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
         try { const r = await f.traer(); recibidos.push({ k, r }); estados[k] = { ultimaAt: ahoraIso(), error: r.error || '' }; if (r.error) errores.push(r.error); }
         catch (e) { estados[k] = { ultimaAt: ahoraIso(), error: e.message }; errores.push(e.message); }
       }
-      const d = leer(); let nuevos = 0, nuevosMetricool = 0, primera = false; const nuevosMeta = [];
+      const d = leer(); let nuevos = 0, nuevosMetricool = 0, primera = false, primeraDM = false; const nuevosMeta = [], nuevosDM = [];
       for (const { k, r } of recibidos) {
         if (k === 'meta' && r.primera) primera = true;
+        if (k === 'meta' && r.primeraMensajes) primeraDM = true;
         for (const m0 of r.mensajes || []) {
           const m = { ...m0, fuente: m0.fuente || k }, que = integrar(d, m);
-          if (que === 'nuevo') { nuevos++; if (k === 'meta') nuevosMeta.push(d.items[m.id]); else nuevosMetricool++; }
+          if (que === 'nuevo') { nuevos++; if (esConversacionMeta(m)) nuevosDM.push(d.items[m.id]); else if (k === 'meta') nuevosMeta.push(d.items[m.id]); else nuevosMetricool++; }
         }
       }
+      // B2: la primera lectura de los mensajes no avisa uno a uno; después, agrupados (uno cada 15 min) y sin el texto completo del cliente
+      if (primeraDM && nuevosDM.length) avisar(`Bandeja: llegaron ${nuevosDM.length} ${nuevosDM.length === 1 ? 'conversación' : 'conversaciones'} de Instagram y Messenger con mensajes sin responder.`, { key: 'bandeja-meta-primera-mensajes' });
+      else if (nuevosDM.length) d.avisoMensajes.cola = [...(d.avisoMensajes.cola || []), ...nuevosDM.map(m => ({ red: m.red, autor: m.autor, texto: String(m.texto || '').replace(/\s+/g, ' ').slice(0, 100), sospecha: Boolean(m.sospecha), ultimoCliente: m.ultimoCliente }))].slice(-50);
+      avisarMensajes(d);
       d.fuentes = { ...d.fuentes, ...estados }; d.ultimo = ahoraIso(); d.error = errores.join(' · ');
       if (primera && nuevosMeta.length) avisar(`Bandeja: llegaron ${nuevosMeta.length} ${nuevosMeta.length === 1 ? 'comentario' : 'comentarios'} de Instagram y Facebook (los de los últimos 30 días).`, { key: 'bandeja-meta-primera' });
       else if (nuevosMeta.length) d.aviso.cola = [...(d.aviso.cola || []), ...nuevosMeta.map(m => ({ red: m.red, autor: m.autor, texto: String(m.texto || '').replace(/\s+/g, ' ').slice(0, 120), sospecha: Boolean(m.sospecha), anuncio: Boolean(m.enAnuncio) }))].slice(-50);
@@ -211,17 +264,19 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     } catch (e) { console.warn('bandeja:', e.message); return null; }
   }
 
+  /** B2: la ventana se calcula al leer (cambia con el reloj, no con Meta). */
+  const conVentana = x => (esConversacionMeta(x) ? { ...x, ventana: ventanaDe(x.ultimoCliente, ahora()) } : x);
   function listar({ estado = '', red = '', tipo = '', fuente = '' } = {}) {
-    const d = leer(), todos = Object.values(d.items);
+    const d = leer(), todos = Object.values(d.items).map(conVentana);
     const items = todos.filter(x => (!estado || (estado === 'pendiente' ? ['nuevo', 'borrador', 'fallo'].includes(x.estado) : x.estado === estado)) && (!red || x.red === red) && (!tipo || x.tipo === tipo) && (!fuente || (x.fuente || 'metricool') === fuente))
       .sort((a, b) => String(b.cuando).localeCompare(String(a.cuando)));
     const cuenta = Object.fromEntries(ESTADOS.map(e => [e, todos.filter(x => x.estado === e).length]));
     return { items, cuenta, pendientes: cuenta.nuevo + cuenta.borrador + cuenta.fallo, ultimo: d.ultimo, error: d.error, fuente: listo(), modo: modo(), bandejaFuente: elegida(), fuentes: estadoFuentes(d) };
   }
-  const uno = id => { const d = leer(); return d.items[resolver(d, id)] || null; };
+  const uno = id => { const d = leer(), x = d.items[resolver(d, id)]; return x ? conVentana(x) : null; };
   function estado() {
     const d = leer(), todos = Object.values(d.items);
-    return { fuente: elegida(), fuentes: estadoFuentes(d), ultimo: d.ultimo, error: d.error, pendientes: todos.filter(x => ['nuevo', 'borrador', 'fallo'].includes(x.estado)).length, ocultos: todos.filter(x => x.oculto).length };
+    return { fuente: elegida(), fuentes: estadoFuentes(d), ultimo: d.ultimo, error: d.error, pendientes: todos.filter(x => ['nuevo', 'borrador', 'fallo'].includes(x.estado)).length, ocultos: todos.filter(x => x.oculto).length, conversaciones: todos.filter(esConversacionMeta).length };
   }
 
   /** El borrador de la respuesta: lo deja un agente o lo escribe el dueño. Una ya respondida o descartada no se toca. */
@@ -252,7 +307,14 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     if (enviando.has(id)) return { error: 'esa respuesta ya se está enviando: no se envía dos veces' };
     if (m.enviando && !forzar) return { error: 'Hubo un corte mientras se enviaba esta respuesta: mira en la red si salió (la próxima lectura lo sabrá y la dará por respondida). Si no salió, vuelve a enviarla con «forzar».', incierta: true };
     if (m.fuente === 'meta' && m.oculto) return { error: 'está oculto: vuélvelo a mostrar para responder', oculto: true };
-    const t = txt(texto ?? m.borrador?.texto, 2000); if (!t) return { error: 'escribe la respuesta antes de enviarla' };
+    const dm = esConversacionMeta(m);
+    if (dm) { // B2: la ventana de 24 h y el largo se miran AQUÍ, antes que el modo y sin llamar a Meta
+      const v = ventanaDe(m.ultimoCliente, ahora());
+      if (!v.abierta) return { error: 'ventana', motivo: motivoVentana(v), ventana: v, status: 409 };
+      const rv = revisarTextoMensaje(texto ?? m.borrador?.texto);
+      if (!rv.ok) return { ...rv, status: 422 };
+    }
+    const t = dm ? revisarTextoMensaje(texto ?? m.borrador?.texto).texto : txt(texto ?? m.borrador?.texto, 2000); if (!t) return { error: 'escribe la respuesta antes de enviarla' };
     const md = modo();
     if (md === 'apagado') return { error: 'la publicación está apagada (Ajustes → Contenido): no sale nada, tampoco las respuestas' };
     let remoto = null;
@@ -268,7 +330,8 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
       d = leer(); m = d.items[id] || m; // durante el envío, una lectura pudo cambiar el archivo
     }
     m.estado = 'respondido'; m.enviando = null; m.respuesta = { texto: t, cuando: ahoraIso(), simulada: md !== 'real', ...(remoto?.id ? { idRemoto: remoto.id } : {}) }; m.error = '';
-    d.items[id] = m; guardar(d); return { ok: true, item: m, simulada: md !== 'real' };
+    if (dm) m.mensajes = [...(m.mensajes || []), { id: remoto?.id || `local:${crypto.randomBytes(6).toString('hex')}`, de: 'tu', texto: t, at: ahoraIso(), adjuntos: [], ...(md !== 'real' ? { simulada: true } : {}) }].slice(-GUARDAR_MENSAJES); // B2: la respuesta, en el hilo
+    d.items[id] = m; guardar(d); return { ok: true, item: conVentana(m), simulada: md !== 'real' };
   }
 
   /** Ocultar o mostrar un comentario de Meta (nunca borrar): solo el dueño (la ruta lo comprueba), según el modo, con DESHACER. */

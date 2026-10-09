@@ -1870,7 +1870,7 @@ const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALI
 // hay token, si no Metricool). Responder y ocultar: solo el dueño, una vez, según el modo de Contenido; cada uno queda en data/audit/.
 const bandejaMeta = crearBandejaMeta({ meta, archivo: path.join(ANALITICAS_DIR, 'bandeja-meta.json'), anuncios: () => { try { return JSON.parse(fs.readFileSync(path.join(ANUNCIOS_DIR, 'cuenta.json'), 'utf8')); } catch { return null; } } });
 const bandeja = crearBandeja({ metricool, meta: bandejaMeta, elegir: () => cfg.contenido?.bandejaFuente || 'auto', archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o),
-  avisarComentario: (t, o) => notice('bandeja-comentario', t, o), injectionIn: safety.injectionIn, undoSeconds: () => APPR().undoSeconds });
+  avisarComentario: (t, o) => notice('bandeja-comentario', t, o), avisarMensaje: (t, o) => notice('bandeja-mensaje', t, o), injectionIn: safety.injectionIn, undoSeconds: () => APPR().undoSeconds });
 { // cada respuesta y cada ocultar/mostrar que sale de verdad (o de mentira, en simulacro) queda en el registro, como las entregas de Contenido
   const auditar = a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'contenido', ...a }) + '\n'); } catch {} };
   const { enviar, ocultar, deshacer } = bandeja;
@@ -2359,9 +2359,12 @@ function officeStatus() {
     // Fase B1 (9 oct 2026): la misma fila dice el último sondeo de los comentarios (Bandeja con Meta), sin cambiar el id ni el orden de las filas
     const bm = (() => { try { return bandeja.estado().fuentes?.meta || null; } catch { return null; } })();
     const com = !bm?.activa ? '' : bm.error ? ` Comentarios: la última lectura falló (${bm.error.slice(0, 160)}).` : bm.ultimaAt ? ` Comentarios: última lectura ${agoText(now - Date.parse(bm.ultimaAt))}.` : ' Comentarios: todavía sin leer (se leen solos cada 10 min).';
+    // Fase B2 (9 oct 2026): los mensajes privados — sin acceso avanzado (o sin sus permisos) la fuente lo dice, y los comentarios siguen
+    const dm = bm?.mensajes || null, dmTxt = !bm?.activa || !dm ? '' : dm.ok ? ` Mensajes privados: ${dm.ultimaAt ? `última lectura ${agoText(now - Date.parse(dm.ultimaAt))}` : 'todavía sin leer'}${dm.motivo ? ` (${dm.motivo})` : ''}.` : ` Mensajes privados apagados: ${dm.motivo}`;
     if (!m.configurado) add('mensajes', 'Mensajes de Meta', 'info', 'Meta no está conectada: la Bandeja sigue con Metricool (o vacía).', 'Mira docs/conectar-meta.md.');
+    else if (bm?.activa && dm && !dm.ok && !fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', bm.error ? 'warn' : 'info', `${dm.motivo}${com}`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
     else if (fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', bm?.activa && bm.error ? 'warn' : 'info', `Al token le faltan ${fp.mensajes.join(', ')}: los mensajes privados no llegan a la Bandeja.${com}`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
-    else add('mensajes', 'Mensajes de Meta', bm?.activa && bm.error ? 'warn' : 'ok', `Permisos de mensajes listos.${com}${frenado}`); }
+    else add('mensajes', 'Mensajes de Meta', bm?.activa && bm.error ? 'warn' : 'ok', `Permisos de mensajes listos.${com}${dmTxt}${frenado}`); }
   // plan M1 (6 oct 2026): la publicación — el modo, el conductor y lo que falló
   { const c = programador.estado(), fal = (c.cuenta.fallo || 0) + (c.cuenta.parcial || 0);
     if (c.modo === 'apagado') add('publicacion', 'Publicación (Contenido)', 'info', 'Apagada: nada de lo que apruebas sale de la oficina.', 'Ajustes → Contenido → «Qué pasa con lo que apruebas».');

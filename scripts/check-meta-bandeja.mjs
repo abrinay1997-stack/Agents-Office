@@ -7,13 +7,16 @@
 //     acceso avanzado de instagram_manage_comments / pages_read_user_content);
 //   · ¿Facebook acepta `is_hidden` como campo de LECTURA de un comentario?
 //   · ¿El creativo de un anuncio da `effective_instagram_media_id`? (solo si hay cuenta publicitaria en Ajustes → Anuncios o META_CUENTA)
+//   · (Fase B2, 9 oct 2026) Los MENSAJES PRIVADOS: ¿cuántas conversaciones de Instagram y de Messenger da /<página>/conversations? ¿Llegan los
+//     textos de los clientes (= el acceso avanzado está dado)? ¿Acepta Meta `attachments` como campo de un mensaje? ¿Cómo viene el `from` de lo
+//     que manda la cuenta? NO ENVÍA NADA. Va a data/salida-meta/bandeja-mensajes.json, sin textos ni nombres.
 // El token viene del entorno (META_ACCESS_TOKEN; META_APP_SECRET si tu app lo pide) y nunca se imprime. Lo confirmado va a
 // data/salida-meta/bandeja-*.json (data/ no viaja por GitHub) SIN los textos ni los nombres de tus clientes: solo qué campos llegaron.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { crearMeta, mensajeMeta, VERSION_GRAPH } from '../contenido/meta.mjs';
-import { CAMPOS_IG, camposFB, esPropio } from '../contenido/bandeja-meta.mjs';
+import { CAMPOS_IG, camposFB, esPropio, camposMensajes, conversacionDe, PERMISOS_DM, MOTIVO_SIN_ACCESO } from '../contenido/bandeja-meta.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DATA = process.env.AO_DATA ? path.resolve(process.env.AO_DATA) : path.join(ROOT, 'data');
@@ -26,7 +29,7 @@ const leerJSON = f => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } c
 const meta = crearMeta({ dir: path.join(DATA, 'contenido') });
 if (!meta.configurado()) { console.error('Falta META_ACCESS_TOKEN en el entorno (Business Manager → Usuarios del sistema → Generar token). Ponlo con setx y abre otra terminal.'); process.exit(1); }
 fs.mkdirSync(OUT, { recursive: true });
-console.log(`Token detectado. Leyendo comentarios con Graph ${VERSION_GRAPH}, sin responder ni ocultar nada… (salida: ${path.relative(ROOT, OUT)})\n`);
+console.log(`Token detectado. Leyendo comentarios y mensajes privados con Graph ${VERSION_GRAPH}, sin responder, ocultar ni enviar nada… (salida: ${path.relative(ROOT, OUT)})\n`);
 
 // 1) el token, sus permisos y las cuentas
 const est = await meta.sincronizar();
@@ -99,6 +102,42 @@ if (cuentaAds) {
   } catch (e) { fail(`Cuenta publicitaria ${cuentaAds}`, e); }
 } else aviso('Sin cuenta publicitaria (Ajustes → Anuncios o META_CUENTA=act_…): no se comprueban los comentarios de anuncios.');
 
+// 5) B2: los mensajes privados (solo leer: ni un envío)
+const dm = [];
+let adjuntosCampo = null;
+for (const cuenta of est.cuentas.filter(c => c.paginaId)) {
+  const plataforma = cuenta.red === 'instagram' ? 'instagram' : 'messenger', nombre = plataforma === 'instagram' ? 'Instagram' : 'Messenger';
+  const faltan = Array.isArray(permisos) ? PERMISOS_DM[plataforma].filter(p => !permisos.includes(p)) : null;
+  if (faltan?.length) { aviso(`${nombre}: al token le faltan ${faltan.join(', ')}; se prueba igual.`); }
+  const fila = { plataforma, faltan, conversaciones: null, leidas: 0, mensajes: 0, deClientes: 0, conTexto: 0, conAdjuntos: 0, fromDeLaCuenta: [], campos: [], error: null };
+  try {
+    const tk = await meta.tokenDe(cuenta);
+    let lista;
+    try { lista = (await meta.graph(tk, `/${cuenta.paginaId}/conversations`, { params: { platform: plataforma, fields: 'id,updated_time', limit: 10 } }))?.data || []; }
+    catch (e) { fila.error = { codigo: e?.codigo ?? null, subcodigo: e?.subcodigo ?? null }; fail(`${nombre}: Meta no dio las conversaciones (código ${e?.codigo ?? '?'}). Si es un permiso: ${MOTIVO_SIN_ACCESO}`, e); dm.push(fila); continue; }
+    fila.conversaciones = lista.length;
+    if (!lista.length) { aviso(`${nombre}: Meta no devolvió conversaciones (puede que no haya ninguna de los últimos 30 días, o que solo lleguen las de personas con rol: acceso estándar).`); dm.push(fila); continue; }
+    for (const c of lista.slice(0, 3)) {
+      let conv;
+      if (adjuntosCampo !== false) { try { conv = await meta.graph(tk, `/${c.id}`, { params: { fields: camposMensajes(true) } }); adjuntosCampo = true; } catch (e) { if (e?.codigo !== 100) throw e; adjuntosCampo = false; } }
+      conv ||= await meta.graph(tk, `/${c.id}`, { params: { fields: camposMensajes(false) } });
+      const crudos = conv?.messages?.data || [], it = conversacionDe({ ...conv, id: c.id }, { cuenta });
+      fila.leidas++; fila.mensajes += crudos.length;
+      fila.campos = [...new Set([...fila.campos, ...crudos.flatMap(m => Object.keys(m))])].sort();
+      fila.conAdjuntos += crudos.filter(m => m.attachments?.data?.length).length;
+      for (const m of crudos) if (m.from && (String(m.from.id) === String(cuenta.externoId) || String(m.from.id) === String(cuenta.paginaId))) fila.fromDeLaCuenta = [...new Set([...fila.fromDeLaCuenta, String(m.from.id) === String(cuenta.paginaId) ? 'id de la página' : 'id de la cuenta de Instagram'])];
+      const cli = (it?.mensajes || []).filter(m => m.de === 'cliente'); fila.deClientes += cli.length; fila.conTexto += cli.filter(m => m.texto).length;
+    }
+    if (!fila.deClientes) aviso(`${nombre}: ${fila.leidas} conversación(es) leída(s), sin mensajes de clientes (o no se reconoce al cliente: mira «fromDeLaCuenta»).`);
+    else if (fila.conTexto < fila.deClientes) fail(`${nombre}: de ${fila.deClientes} mensajes de clientes, solo ${fila.conTexto} con texto (los demás pueden ser adjuntos o falta el acceso avanzado)`);
+    else ok(`${nombre}: ${fila.leidas} conversación(es), ${fila.deClientes} mensaje(s) de clientes con texto: el acceso para leerlos está dado.`);
+  } catch (e) { fila.error = { codigo: e?.codigo ?? null, subcodigo: e?.subcodigo ?? null }; fail(`${nombre} «${cuenta.nombre}»`, e); }
+  dm.push(fila);
+}
+if (adjuntosCampo === true) ok('Meta acepta `attachments` como campo de un mensaje (se puede quitar su POR VERIFICAR en contenido/bandeja-meta.mjs).');
+else if (adjuntosCampo === false) aviso('Meta NO acepta `attachments` como campo de un mensaje: la oficina ya lo pide sin él (no se verán las imágenes que mandan los clientes).');
+guardar('bandeja-mensajes.json', { at: new Date().toJSON(), version: VERSION_GRAPH, plataformas: dm, attachmentsCampo: adjuntosCampo });
+
 guardar('bandeja-comentarios.json', { at: new Date().toJSON(), version: VERSION_GRAPH, ...salida, fbIsHiddenLectura: fbOculto, creativoEffectiveInstagramMediaId: campoIG });
-console.log(`\n${failed ? `✗ ${failed} problema(s)` : '✓ Todo lo que se pudo comprobar está bien'}. Pásale data/salida-meta/bandeja-comentarios.json a Claude Code para quitar los «POR VERIFICAR». No se respondió ni se ocultó nada.`);
+console.log(`\n${failed ? `✗ ${failed} problema(s)` : '✓ Todo lo que se pudo comprobar está bien'}. Pásale data/salida-meta/bandeja-comentarios.json (y bandeja-mensajes.json) a Claude Code para quitar los «POR VERIFICAR». No se respondió, ni se ocultó, ni se envió nada.`);
 process.exit(failed ? 1 : 0);
