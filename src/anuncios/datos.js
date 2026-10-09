@@ -80,6 +80,8 @@ export function crearDatos({ servida }) {
     validarBorrador: (id, { ejemplo = false } = {}) => (ej(ejemplo) ? demoB.validar(id) : llamar(idR(id) + '/validar', 'POST')),
     crearEnMeta: (id, { ejemplo = false } = {}) => (ej(ejemplo) ? demoB.crearEnMeta(id) : llamar(idR(id) + '/crear', 'POST')),
     vistaPreviaMeta: (id, formato, { ejemplo = false } = {}) => (ej(ejemplo) ? demoB.vistaPrevia(id, formato) : llamar(`${idR(id)}/vista-previa?formato=${encodeURIComponent(formato)}`)),
+    /** A4: impulsar una publicación → { status, borrador, ya? }. Al servidor solo van los ids (él busca lo demás); la demo usa lo que trae la página. */
+    impulsar: (det = {}, { ejemplo = false } = {}) => (ej(ejemplo) ? demoB.impulsar(det) : llamar('/api/anuncios/impulsar', 'POST', Object.fromEntries(['pieza', 'red', 'id'].filter(k => det[k]).map(k => [k, det[k]])))),
     mejorarBorrador: (id, cuerpo, { ejemplo = false } = {}) => (ej(ejemplo) ? demoB.mejorar(id, cuerpo) : llamar(idR(id) + '/mejorar', 'POST', cuerpo)),
     /** La galería del Estudio (imágenes y videos): → { items: [{ file, kind, w, h, prompt }], next, total } */
     galeria: ({ q = '', before = '' } = {}, { ejemplo = false } = {}) => (ej(ejemplo) ? demoB.galeria({ q }) : llamar(`/api/media?kind=image,video&n=60${q ? '&q=' + encodeURIComponent(q) : ''}${before ? '&before=' + encodeURIComponent(before) : ''}`)),

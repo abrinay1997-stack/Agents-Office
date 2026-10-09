@@ -7,7 +7,7 @@
 // Lo puro (el HTML de cada paso) se exporta para tests/anuncios-vista.test.mjs; crearAsistente() es el que escucha y llama.
 import { esc, svg } from './comun.js';
 import { PASOS, OBJETIVOS, DESTINOS, LLAMADA, FORMATOS, MEJORAS, CATEGORIAS, PAISES, LARGO, MAX_CREATIVOS, MIN_RECOMENDADO, UBICACIONES_META,
-  objetivoDe, llamadasDe, pasoDe, costoTexto, avisoSinFin, estadoB, editable, leer, poner, creativoNuevo, ajustarLlamadas, formatoDeMedidas, iframeMeta, deQuien } from './borrador.js';
+  objetivoDe, llamadasDe, pasoDe, costoTexto, avisoSinFin, estadoB, editable, leer, poner, creativoNuevo, ajustarLlamadas, formatoDeMedidas, iframeMeta, deQuien, RED_ORIGEN, origenTexto } from './borrador.js';
 import { listaBorradoresHTML, srcDe, esVideo, miniHTML } from './borradores.js';
 import { previaHTML } from './vista-previa.js';
 
@@ -76,7 +76,23 @@ export function costoLinea(b, { moneda = 'USD', validando = false } = {}) {
   if (t) return `Costo máximo: <b>${esc(t)}</b>.`;
   return validando ? 'Calculando el costo máximo…' : 'El costo máximo sale al revisar el presupuesto.';
 }
+/** Fase A4 (9 oct 2026): el paso 4 de un borrador que IMPULSA una publicación: la publicación (miniatura, texto, enlace a la original) en
+ *  lugar de la galería, y solo la llamada a la acción. Ni medios, ni texto, ni las mejoras de Meta: el anuncio es la publicación. */
+export function pasoOrigenHTML(b, P = {}) {
+  const o = b.origen, c = (b.creativos || [])[0] || {}, llam = llamadasDe(b.objetivo, b.destino), red = RED_ORIGEN[o.red] || o.red;
+  const t = Date.parse(o.publicadaAt || ''), f = Number.isFinite(t) ? new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const bc = 'creativos.0.llamada', sel = c.llamada || llam[0];
+  return `<div class="anu-bbloque anu-borig"><h3>La publicación que impulsas</h3>
+      <p class="anu-bayuda">El anuncio es esta publicación tal como salió en ${esc(red)}: su imagen o video y su texto, con lo que ya ganó (me gusta y comentarios). Aquí solo eliges el botón; por dónde te escriben, en el paso 1.</p>
+      ${err('origen', P)}
+      <div class="anu-borig-c">${o.miniatura ? `<span class="anu-borig-m"><img src="${esc(o.miniatura)}" alt="La publicación de ${esc(red)}" loading="lazy" decoding="async"></span>` : '<span class="anu-borig-m vacio" aria-hidden="true">Sin miniatura</span>'}
+        <div class="anu-borig-x"><p class="anu-borig-r"><b>${esc(red)}</b>${f ? ` · publicada el ${esc(f)}` : ''}</p>
+          <p class="anu-borig-t">${o.texto ? esc(o.texto) : '<i>Sin texto: sale la imagen o el video solos.</i>'}</p>
+          ${o.enlace ? `<a class="anu-btn" href="${esc(o.enlace)}" target="_blank" rel="noopener noreferrer">Ver la original<span class="anu-sr"> en ${esc(red)} (se abre en otra pestaña)</span></a>` : ''}</div></div>
+      <div class="anu-bcampo"><label for="${idDe(bc)}">Llamada a la acción (el botón)</label><select id="${idDe(bc)}" data-bc="${bc}"${aria(bc, P)}>${llam.map(k => `<option value="${k}"${sel === k ? ' selected' : ''}>${esc(LLAMADA[k])}</option>`).join('')}${c.llamada && !llam.includes(c.llamada) ? `<option value="${esc(c.llamada)}" selected>${esc(LLAMADA[c.llamada] || c.llamada)} (no vale para este objetivo)</option>` : ''}</select>${err(bc, P)}</div></div>`;
+}
 export function pasoCreativosHTML(b, P = {}, { estudio = false, mejora = null, puedeEditar = true } = {}) {
+  if (b.origen) return pasoOrigenHTML(b, P);
   const cr = b.creativos || [], llam = llamadasDe(b.objetivo, b.destino), n = cr.length;
   const mej = (i, campo) => {
     const m = mejora && mejora.cr === cr[i]?.id && mejora.campo === campo ? mejora : null;
@@ -111,15 +127,17 @@ export function pasoRevisionHTML(b, { moneda = 'USD', validando = false, ubic = 
   else if (!v) estado = '<p class="anu-costo">Todavía no se ha revisado: pulsa «Revisar».</p>';
   else if (!probs.length) estado = '<div class="anu-bok t-verde"><b>Todo en orden.</b><span>La oficina y Meta lo aceptan tal como está.</span></div>';
   else estado = `<div class="anu-bprobs" role="alert"><p><b>${probs.length} ${probs.length === 1 ? 'cosa por arreglar' : 'cosas por arreglar'}</b> antes de crearla. Pulsa una para ir a su campo:</p><ul>${probs.map((p, i) => { const d = pasoDe(p.campo); return `<li><button type="button" class="anu-bir" data-bir="${i}"><span class="anu-bir-p">Paso ${d.paso + 1} · ${esc(PASOS[d.paso].n)}</span><span>${esc(p.texto)}</span></button></li>`; }).join('')}</ul></div>`;
-  const cr = b.creativos || [];
-  const previas = cr.length ? `<div class="anu-pvs">${cr.map((c, i) => previaHTML(c, { ubicacion: ubic, src: srcDe(c.media), esVideo: esVideo(c.media), pagina, enlace: b.enlace, n: i + 1 })).join('')}</div>` : '<p class="anu-bayuda">Sin creativos todavía: no hay nada que enseñar.</p>';
-  const meta = !servida ? '<p class="anu-bayuda">La vista previa de Meta necesita la oficina abierta y tu cuenta conectada: en el ejemplo ves la de la oficina.</p>'
+  const cr = b.creativos || [], o = b.origen;
+  const previas = o ? `<div class="anu-pvs">${previaHTML(cr[0] || {}, { ubicacion: ubic, src: o.miniatura || null, pagina, enlace: b.enlace, n: 1 })}</div>` : cr.length ? `<div class="anu-pvs">${cr.map((c, i) => previaHTML(c, { ubicacion: ubic, src: srcDe(c.media), esVideo: esVideo(c.media), pagina, enlace: b.enlace, n: i + 1 })).join('')}</div>` : '<p class="anu-bayuda">Sin creativos todavía: no hay nada que enseñar.</p>';
+  const meta = o ? `<p class="anu-bayuda">La de Meta no hace falta: es tu publicación tal como salió${o.enlace ? ` (<a href="${esc(o.enlace)}" target="_blank" rel="noopener noreferrer">ábrela en ${esc(RED_ORIGEN[o.red] || o.red)}<span class="anu-sr"> (se abre en otra pestaña)</span></a>)` : ''}.</p>`
+    : !servida ? '<p class="anu-bayuda">La vista previa de Meta necesita la oficina abierta y tu cuenta conectada: en el ejemplo ves la de la oficina.</p>'
     : `<div class="anu-bmeta"><div class="anu-bcampo"><label for="anuBMetaU">La vista previa de Meta</label><select id="anuBMetaU" data-bmetau>${UBICACIONES_META.map(([k, n]) => `<option value="${k}"${metaPrev?.formato === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div><button type="button" class="anu-btn" data-bmetaver${metaPrev?.estado === 'pidiendo' ? ' aria-busy="true"' : ''}>${metaPrev?.estado === 'pidiendo' ? 'Pidiéndola…' : 'Ver la de Meta'}</button></div>
       ${metaPrev?.estado === 'lista' ? `<iframe class="anu-bmetaif" title="Vista previa de Meta del anuncio" src="${esc(metaPrev.url)}" sandbox="allow-scripts allow-same-origin allow-popups" referrerpolicy="no-referrer" loading="lazy"></iframe>` : metaPrev?.estado === 'error' ? `<p class="anu-derr">${esc(metaPrev.motivo)}</p>` : ''}`;
   const puede = editable(b);
   const boton = !puede ? '' : `<div class="anu-bcrear"><button type="button" class="anu-btn si" data-bcrear${!v || probs.length || validando ? ' aria-disabled="true"' : ''}>${b.estado === 'fallo' ? 'Reintentar: crear en Meta (en pausa)' : 'Crear en Meta (en pausa)'}</button><p class="anu-bayuda">${!v ? 'Primero se revisa.' : probs.length ? `Arregla ${probs.length === 1 ? 'lo de arriba' : `las ${probs.length} cosas de arriba`} para poder crearla.` : 'Un clic: se crea EN PAUSA y no gasta. Activarla es otro paso, con la cifra y los dos clics.'}</p></div>`;
   return `${e === 'fallo' && b.error ? `<p class="anu-aviso-error" role="alert">No se pudo crear: ${esc(b.error)}</p>` : ''}
     <div class="anu-bbloque"><div class="anu-bcab"><h3>La revisión</h3>${puede ? `<button type="button" class="anu-btn" data-bvalidar${validando ? ' aria-busy="true"' : ''}>${validando ? 'Revisando…' : 'Revisar otra vez'}</button>` : ''}</div>${estado}
+      ${o ? `<p class="anu-costo anu-borig-rev">${esc(origenTexto(b).replace(/^s/, 'S'))}: la misma imagen o video y el mismo texto.</p>` : ''}
       ${v?.costoMax ? `<p class="anu-costo">Costo máximo: <b>${esc(costoTexto(v.costoMax, moneda))}</b>.</p>` : ''}</div>
     ${boton}
     <div class="anu-bbloque"><div class="anu-bcab"><h3>Cómo se verá</h3><div class="anu-seg" role="group" aria-label="Dónde se ve"><button type="button" data-bubic="feed" aria-pressed="${ubic === 'feed'}">Feed · 1:1 y 4:5</button><button type="button" data-bubic="historia" aria-pressed="${ubic === 'historia'}">Historias y reels · 9:16</button></div></div>
@@ -360,6 +378,15 @@ export function crearAsistente(env) {
     pintarYEnfocar(n ? `[data-bcr="${A.b.creativos.length - n}"] textarea` : '#anuBPasoT');
     if (medios.length) decir(n ? `${n} ${n === 1 ? 'creativo añadido' : 'creativos añadidos'} desde el Estudio.` : 'No se añadió nada del Estudio.');
   }
+  /** A4: impulsar una publicación (de Contenido o de Analíticas): el servidor (o la demo) hace el borrador y se abre en el paso 4. */
+  async function impulsar(det = {}) {
+    const r = await datos.impulsar(det, opc());
+    if (r.status !== 200 || !r.borrador) { await cargar(); aviso?.(`No se pudo impulsar esa publicación: ${r.motivo || 'la oficina no contestó'}`); return false; }
+    A.items = [r.borrador, ...(A.items || []).filter(x => x.id !== r.borrador.id)];
+    await abrir(r.borrador.id, { paso: 3 });
+    aviso?.(`${r.ya ? 'Ya tenías un borrador con esa publicación: aquí está.' : `Borrador listo: ${origenTexto(r.borrador)}.`} No se crea nada en Meta hasta que pulses «Crear en Meta (en pausa)»; activarla te pedirá los dos clics con la cifra.`);
+    return true;
+  }
   async function nueva() {
     const r = await datos.nuevoBorrador({}, opc());
     if (r.status !== 200 || !r.borrador) { decir('No se pudo empezar la campaña: ' + (r.motivo || 'la oficina no contestó')); return; }
@@ -441,7 +468,7 @@ export function crearAsistente(env) {
     return false;
   }
   return {
-    html, click, input, change, keydown, cargar, abrir, nueva,
+    html, click, input, change, keydown, cargar, abrir, nueva, impulsar,
     get abierto() { return A.b; },
     /** Esc: la galería, la propuesta, luego volver a la lista. */
     back() { if (A.galeria) return cerrarGaleria(false); if (A.mejora) { A.mejora = null; repintar(); return true; } if (A.confirmar) { A.confirmar = null; repintar(); return true; } if (A.b) { volver(); return true; } return false; },

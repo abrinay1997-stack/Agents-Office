@@ -162,6 +162,7 @@ async function a3(page, tag, w, pasaAxe) {
   step(/Advantage\+: Meta busca a quién mostrarlo/.test(p2) && await page.$eval('#anuOv input[data-bc="categoriaEspecial"][value=""]', i => i.checked) && await page.$eval('#anuOv [data-bpais]', s => s.value) === 'PA' && await page.$eval('#anuOv [data-bc="publico.edadMin"]', i => i.value) === '18',
     `${tag}: A3 · paso 2: Advantage+ en Panamá, 18+, y la categoría especial siempre presente con «Ninguna» marcada`);
   await page.click('#anuOv [data-bmodo="manual"]'); await page.waitForSelector('#anuOv [data-bc="publico.intereses"]', { timeout: 3000 });
+  await page.waitForFunction(() => document.activeElement?.dataset?.bmodo === 'advantage', null, { timeout: 2000 }).catch(() => {}); // el foco llega a los 20 ms de pintar
   step(await page.evaluate(() => document.activeElement?.dataset?.bmodo) === 'advantage', `${tag}: A3 · «Prefiero un público manual» trae los intereses (y el foco sigue en el botón, que ahora vuelve a Advantage+)`);
   ok24(await medir(page), tag, 'A3 · paso 2');
   await page.screenshot({ path: path.join(OUT, `${tag}-a3-paso2.png`) });
@@ -332,6 +333,41 @@ async function a5(page, tag, w, pasaAxe) {
   if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(400); }
 }
 
+/** Fase A4 (9 oct 2026), en la demo: «Impulsar» en Analíticas («las que más movieron») abre Anuncios → Borradores con un borrador que
+ *  impulsa esa publicación: el paso 4 enseña la publicación (no la galería) y solo la llamada; la revisión dice qué se impulsa; se crea en
+ *  pausa. Lo mismo que hace el botón de una pieza publicada en Contenido (el evento ao:abrir-anuncios). */
+async function a4(page, tag, w, pasaAxe) {
+  const movil = w < 500;
+  await page.keyboard.press('Escape').catch(() => {}); await page.waitForTimeout(300); // cerrar Anuncios
+  if (movil) { await page.click('#topMore'); await page.click('#topMoreMenu [data-for="topAnaliticas"]'); } else await page.click('#topAnaliticas');
+  await page.waitForSelector('#anOv .an-imp', { timeout: 8000 });
+  const nImp = await page.$$eval('#anOv .an-imp', l => l.length);
+  step(nImp > 0, `${tag}: A4 · Analíticas: «Impulsar» en las que más movieron (${nImp})`);
+  ok24(await page.evaluate(() => { const b = [...document.querySelectorAll('#anOv .an-imp')].map(x => x.getBoundingClientRect()); const peq = b.filter(r => r.height < 23.5 || r.width < 23.5); return { npeq: peq.length, peq: peq.map(r => `${Math.round(r.width)}x${Math.round(r.height)}`), hs: document.documentElement.scrollWidth > innerWidth + 1, nletra: 0, letra: [] }; }), tag, 'A4 · el botón de Analíticas');
+  await page.click('#anOv .an-imp');
+  await page.waitForSelector('#anuOv .anu-borig', { timeout: 8000 });
+  step(await page.$eval('#anuTab-borradores', b => b.getAttribute('aria-selected')) === 'true' && /Paso 4/.test(await txt(page, '#anuOv .anu-asis-n')), `${tag}: A4 · abre Anuncios → Borradores con el borrador en el paso 4`);
+  const p4 = await txt(page, '#anuOv .anu-paso');
+  step(/La publicación que impulsas/.test(p4) && !await page.$('#anuOv [data-bgaleria]') && !!await page.$('#anuOv [data-bc="creativos.0.llamada"]') && !!await page.$('#anuOv .anu-borig-m img'), `${tag}: A4 · el paso 4 enseña la publicación (miniatura y texto) y solo la llamada, sin la galería`);
+  step(/pausa/.test(await txt(page, '#anuOv .anu-toast')), `${tag}: A4 · el aviso dice que nace borrador y no crea nada en Meta`);
+  ok24(await medir(page), tag, 'A4 · el paso 4 con la publicación');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a4-publicacion.png`) });
+  await pasaAxe('A4 · el paso 4 con la publicación');
+  await page.selectOption('#anuOv [data-bc="creativos.0.llamada"]', { index: 1 }); await page.waitForTimeout(700);
+  await page.click('#anuOv [data-paso="4"]'); await page.waitForFunction(() => /Se impulsa la publicación de (Instagram|Facebook)/.test(document.querySelector('#anuOv .anu-paso')?.textContent || ''), null, { timeout: 6000 });
+  step(!await page.$('#anuOv [data-bmetaver]'), `${tag}: A4 · la revisión dice qué publicación se impulsa (sin la vista previa de Meta)`);
+  await page.waitForFunction(() => /Todo en orden|cosa/.test(document.querySelector('#anuOv .anu-paso')?.textContent || ''), null, { timeout: 6000 }).catch(() => {});
+  await page.screenshot({ path: path.join(OUT, `${tag}-a4-revision.png`) });
+  await pasaAxe('A4 · la revisión');
+  if (await page.$('#anuOv [data-bcrear]:not([aria-disabled="true"])')) {
+    await page.click('#anuOv [data-bcrear]');
+    await page.waitForFunction(() => /Creado en pausa/.test(document.querySelector('#anuOv .anu-paso')?.textContent || ''), null, { timeout: 8000 }).then(() => step(true, `${tag}: A4 · se crea EN PAUSA (en la demo)`)).catch(() => step(false, `${tag}: A4 · no llegó a «Creado en pausa»`));
+  } else step(false, `${tag}: A4 · «Crear en Meta (en pausa)» no está disponible: ${(await txt(page, '#anuOv .anu-bprobs').catch(() => '')).slice(0, 160)}`);
+  await page.click('#anuOv [data-bvolver]'); await page.waitForSelector('#anuOv .anu-blista', { timeout: 5000 });
+  step(/se impulsa la publicación de/.test(await txt(page, '#anuOv .anu-blista')), `${tag}: A4 · en Borradores, la fila dice qué publicación impulsa`);
+  await page.click('#anuOv [data-tab="resumen"]'); await page.waitForTimeout(250);
+}
+
 let browser;
 try {
   try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ channel: 'chrome' }); }
@@ -416,6 +452,7 @@ try {
       await a2(page, tag, w, pasaAxe);
       await a3(page, tag, w, pasaAxe);
       await a5(page, tag, w, pasaAxe);
+      await a4(page, tag, w, pasaAxe);
       // la tecla J abre y cierra
       await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('j'); await page.waitForTimeout(400);
       step(!(await page.$eval('#anuOv', o => o.classList.contains('on'))), `${tag}: J cierra Anuncios`);

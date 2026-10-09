@@ -112,7 +112,7 @@ export function pasoDe(campo) {
   if (['objetivo', 'destino', 'enlace'].includes(raiz)) return r('objetivo');
   if (raiz === 'publico' || raiz === 'categoriaEspecial') return r('publico');
   if (['presupuesto', 'inicio', 'fin'].includes(raiz)) return r('presupuesto', raiz === 'presupuesto' && c === 'presupuesto' ? 'presupuesto.usd' : c);
-  if (raiz === 'creativos' || raiz === 'mejoras') return r('creativos');
+  if (raiz === 'creativos' || raiz === 'mejoras' || raiz === 'origen') return r('creativos'); // A4: la publicación que se impulsa va en el paso 4
   if (raiz === 'nombre') return r('objetivo', 'nombre');
   for (const [re, k] of META_PASO) if (re.test(c)) return r(k, null);
   return r('revision', null);
@@ -141,6 +141,14 @@ export function deQuien(de, agentName = id => id) {
   if (s === 'dimitri') return 'Dimitri';
   if (s.startsWith('agente:')) { const id = s.slice(7); return `${String(agentName(id) || id).toUpperCase()} (agente)`; }
   return s;
+}
+/* ---------- Fase A4 (9 oct 2026): impulsar una publicación (b.origen) ---------- */
+export const RED_ORIGEN = { instagram: 'Instagram', facebook: 'Facebook' };
+/** «se impulsa la publicación de Instagram del 5 oct» (sin fecha si no se sabe). */
+export function origenTexto(b) {
+  const o = b?.origen; if (!o) return '';
+  const t = Date.parse(o.publicadaAt || ''), f = Number.isFinite(t) ? new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short' }) : '';
+  return `se impulsa la publicación de ${RED_ORIGEN[o.red] || o.red}${f ? ` del ${f}` : ''}`;
 }
 export const ESTADO_B = { borrador: ['Borrador', 'gris'], creando: ['Creando en Meta…', 'ambar'], creado: ['Creado en pausa', 'verde'], fallo: ['No se pudo crear', 'rojo'] };
 export const estadoB = b => { const [t, tono] = ESTADO_B[b?.estado] || ESTADO_B.borrador; return { texto: t, tono }; };

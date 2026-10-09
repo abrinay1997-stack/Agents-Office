@@ -175,7 +175,7 @@ export function crearSugerencias({ dir, ahora = () => Date.now(), umbrales = () 
  * @param {Function} o.encargar  async ({ texto, titulo }) → { id, titulo, agent, agente } (una tarea para el agente de anuncios; serve.mjs)
  * @param {Function} o.vista     () → la vista de 7 días (para validar el objeto de una sugerencia de agente)
  */
-export function crearAplicador({ sug, acciones, borradores = null, encargar = null, vista = () => null }) {
+export function crearAplicador({ sug, acciones, borradores = null, encargar = null, vista = () => null, impulsar = null }) { // A4: `impulsar` = anuncios/impulsar.mjs → impulsar
   const R = (status, cuerpo) => ({ status, cuerpo });
   const no = (status, motivo, extra = {}) => R(status, { error: extra.error || motivo, motivo, ...extra });
 
@@ -196,7 +196,14 @@ export function crearAplicador({ sug, acciones, borradores = null, encargar = nu
     }
     if (quien === 'asistente') return no(403, 'Desde el asistente solo se baja el gasto.');
     if (c.tipo === 'revisar') { const h = sug.marcarAplicada(s.id, { quien, hecho: { texto: 'Marcada como hecha: el cambio lo haces tú en el Administrador de anuncios (o ya lo hiciste).' } }); return R(200, { ok: true, hecho: { tipo: 'revisar', texto: h.hecho }, sugerencia: h }); }
-    if (c.tipo === 'impulsar') return no(409, 'Impulsar una publicación llega con la Fase A4 (el borrador con esa publicación). Por ahora, impúlsala desde el Administrador de anuncios o crea un borrador en Anuncios → Borradores.', { error: 'impulsar' });
+    if (c.tipo === 'impulsar') { // Fase A4: un borrador con esa publicación (nace en la oficina; crearlo en Meta, en pausa, es otro clic del dueño)
+      if (!impulsar) return no(409, 'Impulsar no está disponible ahora mismo.', { error: 'impulsar' });
+      const r = await impulsar({ id: c.id, por: quien });
+      if (r.status !== 200 || !r.cuerpo?.borrador) return r;
+      const bo = r.cuerpo.borrador, txt = `${r.cuerpo.ya ? 'Ya tenías' : 'Te dejé'} el borrador «${clip(bo.nombre, 60)}» con esa publicación: revísalo. No se crea nada en Meta hasta que pulses «Crear en Meta (en pausa)», y activarlo te pedirá los dos clics con la cifra.`;
+      const h = sug.marcarAplicada(s.id, { quien, hecho: { texto: txt } });
+      return R(200, { ok: true, hecho: { tipo: 'impulsar', texto: h.hecho, borrador: bo.id }, sugerencia: h, borrador: bo });
+    }
     if (c.tipo === 'borrador' || c.tipo === 'creativos') {
       if (!encargar) return no(409, 'No hay quién lo prepare ahora (falta el agente de anuncios).');
       const v = vista(), r = v ? buscar(v, c.id) : null, o = r?.objeto;

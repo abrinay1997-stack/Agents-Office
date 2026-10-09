@@ -57,6 +57,13 @@ export function parchePorArreglo(p, codigo) {
 
 export { choqueDe, siguienteHueco };
 
+/** A4: las redes (Instagram y Facebook) donde esta pieza ya salió y se puede impulsar. */
+export function impulsables(p, sal = null) {
+  if (!p?.id || p.estado !== 'aprobada' || !sal || !['publicada', 'parcial'].includes(sal.clave)) return [];
+  const redes = p.salida?.redes || {};
+  return ['instagram', 'facebook'].filter(r => (p.redes || []).includes(r) && (!Object.keys(redes).length || redes[r]?.estado === 'publicada'));
+}
+
 /** C1: las redes que pueden llevar su propio texto en esta pieza (Instagram es el principal; Facebook, «Texto de Facebook»). */
 export const redesConTexto = p => (p.redes || []).filter(r => r === 'facebook' || CON_TEXTO_PROPIO.includes(r));
 /** El texto propio de una red ('' = el principal). */
@@ -350,8 +357,10 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
         ${p.estado === 'borrador' || p.estado === 'idea' ? '<button type="button" role="menuitem" data-a="review">Pasar a revisión</button>' : '<button type="button" role="menuitem" data-a="draft">Volver a borrador</button>'}
         <button type="button" role="menuitem" data-a="ya"${puedeYa ? '' : ` aria-disabled="true" title="${esc('Todavía no puede salir: ' + (reglas.errores[0] || ''))}"`}>${esc(yaTxt)}</button>
       </div>`;
+    const imp = impulsables(p, sal); // A4 (9 oct 2026): lo publicado en Instagram o Facebook se puede impulsar (un borrador de anuncio, en pausa)
+    const impHTML = imp.length ? `<div class="pz-imp" role="group" aria-label="Impulsar con un anuncio">${imp.map(r => `<button type="button" class="pz-btn" data-a="impulsar" data-red="${r}" aria-describedby="${I('imp')}">${imp.length > 1 ? `Impulsar en ${RED[r].name}` : 'Impulsar'}</button>`).join('')}<small class="pz-hn" id="${I('imp')}">Crea una campaña en pausa con esta publicación; activarla te pedirá los dos clics.</small></div>` : '';
     foot.innerHTML = `<div class="pz-cuando" ${cuando ? '' : 'hidden'}></div>
-      <div class="pz-vline">${veredicto}</div>
+      <div class="pz-vline">${veredicto}</div>${impHTML}
       <div class="pz-acts">
         <button type="button" class="pz-cbtn" data-a="cuando" aria-expanded="${cuando}" title="Cuándo sale">${SVG.cal}<span class="pz-cbt">${esc(cuandoTexto(p))}</span><span aria-hidden="true">${cuando ? '▴' : '▾'}</span></button>
         <span class="sp"></span>
@@ -493,6 +502,13 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
       if (b.getAttribute('aria-disabled') === 'true') { setState(b.title, true); abrirAvisos(false); return; }
       if (confirmaYa < Date.now()) { confirmaYa = Date.now() + 6000; b.textContent = `Pulsa otra vez: sale en unos 5 minutos en ${cur.redes.map(x => RED[x].name).join(', ')}`; setTimeout(() => { if (confirmaYa && confirmaYa <= Date.now() && b.isConnected) b.textContent = 'Publicar ya · sale en unos 5 minutos'; }, 6100); return; }
       confirmaYa = 0; cerrarMenu(false); await aprobar({ pronto: true }); return;
+    }
+    if (a === 'impulsar') { // A4: a Anuncios → Borradores con el borrador de esta publicación (lo hace la vista de Anuncios: servida o en su demo)
+      await flush();
+      const m = (cur.medios || []).find(x => !/\.(mp4|webm|mov)$/i.test(x));
+      const ev = new CustomEvent('ao:abrir-anuncios', { cancelable: true, detail: { impulsar: { pieza: cur.id, red: b.dataset.red, texto: textoPara(postDePieza(cur), b.dataset.red) || cur.texto || '', miniatura: m ? mediaUrl(m) || '' : '', enlace: (cur.salida?.redes?.[b.dataset.red]?.url) || '', publicadaAt: cur.fecha && cur.hora ? new Date(`${cur.fecha}T${cur.hora}:00`).toISOString() : null } } });
+      if (dispatchEvent(ev)) setState('Impulsar está en Anuncios (J): abre Anuncios → Borradores.', true);
+      return;
     }
     if (a === 'rep') { repAbierto = !repAbierto; paintFoot(); foot.querySelector(repAbierto ? '[data-rep="cada"], [data-a="rep"]' : '[data-a="rep"]')?.focus(); return; }
     if (a === 'tpl') { tplAbierto = !tplAbierto; paintFoot(); foot.querySelector(tplAbierto ? '[data-tpl="nombre"]' : '[data-a="tpl"]')?.focus(); return; }

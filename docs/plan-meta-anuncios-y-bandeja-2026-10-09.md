@@ -352,11 +352,14 @@ Cada fase:
 
 **Hecho cuando:** un borrador hecho en el panel, por `ada` o por Dimitri se valida, se previsualiza y se crea en pausa en el Meta de mentira, con reconciliación tras un corte probada en un test (la oficina se cae entre el conjunto y el anuncio), y `check-meta-anuncios.mjs --crear-pausada` lo prueba con el token real: crea una campaña de prueba en pausa y la archiva.
 
-### Fase A4 — Impulsar lo que ya salió en Contenido
+### Fase A4 — Impulsar lo que ya salió en Contenido ✅ (9 oct 2026, rama `mejora/anuncios-a4`)
+
+> Hecho: el borrador gana `origen` (la publicación: red, id de Meta, enlace, texto, miniatura, pieza) y, con él, un solo creativo que es la publicación (solo se elige la llamada); `anuncios/construir.mjs → cuerpoCreativoOrigen` hace el creativo como dice lo verificado (IG: `object_id` + `instagram_user_id` + `source_instagram_media_id` + `call_to_action`; FB: `object_story_id` + `instagram_user_id` solo si `is_instagram_eligible`), sin subir nada ni las mejoras de Meta; antes de crear se pregunta `boost_eligibility_info` (IG) o `is_instagram_eligible` (FB) (`meta-ads.impulsable`), y lo que Meta no deja impulsar queda como error en palabras y no se crea; `anuncios/impulsar.mjs` y `POST /api/anuncios/impulsar { pieza?, red?, id? }` (los ids, del emparejamiento de lo publicado o del id que la cola apunta ahora al publicar, `salida.redes[red].id`); aplicar la sugerencia `impulsar` hace el borrador; «Impulsar» en la pieza publicada (editor), en Analíticas («las que más movieron») y el paso 4 del asistente con la publicación. Decisiones: un post de Facebook que Meta no deja en Instagram se impulsa igual, solo en Facebook (un aviso); impulsar dos veces la misma publicación devuelve el borrador que ya había. **POR VERIFICAR con el token:** los nombres de dentro de `boost_eligibility_info` (`eligible_to_boost`, `boost_ineligible_reason`) y sus motivos; `call_to_action` con `object_story_id`; el id de un video de la página (no es `<página>_<post>`); y que Meta acepte la combinación de mensajes de la tabla con una publicación impulsada.
 
 - En una pieza **publicada**, en Contenido (y en Analíticas, en «las que más movieron»), el botón **«Impulsar»** abre un borrador de anuncio con esa publicación:
   - **Facebook:** `object_story_id = "<pagina>_<post>"`.
   - **Instagram:** `source_instagram_media_id` + `instagram_user_id` (POR VERIFICAR qué publicaciones admite Meta: con música con derechos, por ejemplo, no se puede).
+    - ✅ **Verificado el 9 oct 2026** (guía «Use posts as ads»): el creativo se crea en `act_<id>/adcreatives` con `object_id` (la página), `instagram_user_id` y `source_instagram_media_id`, y `call_to_action` opcional (para mensajes, `MESSAGE_PAGE` con `app_destination` `INSTAGRAM_DIRECT` o `MESSENGER`). **Antes, se pregunta `boost_eligibility_info`** del medio. Se pueden: publicaciones del feed con una foto, un video, un carrusel o un reel (también con etiquetas o productos etiquetados) e historias activas. **No se pueden:** con música con derechos o con elementos interactivos (filtros), ni Instagram TV. Facebook: comprobar `is_instagram_eligible` de la publicación y crear con `object_story_id: "<página>_<post>"` + `instagram_user_id`; con ubicaciones de FB e IG mezcladas puede hacer falta `asset_feed_spec.optimization_type: DOF_MESSAGING_DESTINATION`.
 - Los ids salen de la «salida» de la cola (`programador.salidaDe`) o, si se publicó fuera, del emparejamiento de lo publicado (`src/contenido-publicadas.js`).
 - El diagnóstico (§7) propone impulsar lo que mejor funcionó orgánicamente («esta publicación tuvo 3 veces las interacciones de tu media»).
 
@@ -462,7 +465,7 @@ Para esta fase hace falta que Meta haya dado el acceso avanzado (§2.6). Sin él
 | 4 | **A3** Crear | Lanzar campañas desde la oficina |
 | 5 | **A5** IA | Mejora lo que ya existe; necesita A1 a A3 |
 | 6 | **B1** Comentarios | No espera la revisión de Meta |
-| 7 | **A4** Impulsar | Pequeña una vez está A3 |
+| 7 | **A4** Impulsar ✅ | Pequeña una vez está A3 |
 | 8 | **B2** Mensajes | Espera el acceso avanzado de Meta: para entonces ya debería estar |
 | 9 | **A6** y **A7** | Medir mejor e informe |
 

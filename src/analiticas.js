@@ -47,6 +47,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   if (!['todas', 'instagram', 'facebook'].includes(red)) red = 'todas';
   if (!METRICAS.some(m => m[0] === metrica)) metrica = 'seguidores';
 
+  let topImp = []; // A4: «las que más movieron» a la vista (para «Impulsar»)
   let muestra = null; // los datos de ejemplo se calculan una vez por apertura, no en cada dibujo
   const dia = () => (ejemplo || !served ? (muestra ||= datosDeEjemplo()) : payload);
   const say = t => { E.live.textContent = ''; setTimeout(() => { E.live.textContent = t; }, 30); };
@@ -196,12 +197,12 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   function mejoresHTML(c) {
     const top = mejoresPublicaciones(c.pubs, 6);
     if (!top.length) return `<section class="an-card" aria-labelledby="anTop"><h2 id="anTop">Las que más movieron</h2><p class="an-empty">Todavía no hay publicaciones leídas de esta red.</p></section>`;
-    const reciente = new Set(c.e.recientes);
-    return `<section class="an-card" aria-labelledby="anTop"><h2 id="anTop">Las que más movieron</h2><ol class="an-top">${top.map(p => {
+    const reciente = new Set(c.e.recientes); topImp = top;
+    return `<section class="an-card" aria-labelledby="anTop"><h2 id="anTop">Las que más movieron</h2><ol class="an-top">${top.map((p, i) => {
       const f = p.publicadaAt ? enLocal(p.publicadaAt).fecha : '', enlace = typeof p.enlace === 'string' && p.enlace.startsWith('https://') ? `<a href="${esc(p.enlace)}" target="_blank" rel="noopener noreferrer">Abrir<span class="an-sr"> en ${esc(RED[p.red]?.nombre || 'la red')} (se abre en otra pestaña)</span></a>` : '';
       return `<li>${miniaturaHTML(p)}<div class="an-tm"><div class="an-tt">${esc(p.texto || '(sin texto)')}</div>
         <div class="an-ts"><b class="an-net">${RED[p.red]?.corto || p.red}</b> ${esc(FORMATO[p.tipo] || p.tipo)}${f ? ` · ${fecha(f)}` : ''}${reciente.has(p) ? ' · <i>aún subiendo</i>' : ''}</div>
-        <div class="an-ts"><b>${numeroCorto(p.interacciones ?? 0)}</b> interacciones · ${numeroCorto(p.alcance ?? 0)} de alcance${enlace ? ' · ' + enlace : ''}</div></div></li>`;
+        <div class="an-ts"><b>${numeroCorto(p.interacciones ?? 0)}</b> interacciones · ${numeroCorto(p.alcance ?? 0)} de alcance${enlace ? ' · ' + enlace : ''}</div>${p.red === 'instagram' || p.red === 'facebook' ? `<button type="button" class="an-btn an-imp" data-quiet data-imp="${i}" title="Crea una campaña en pausa con esta publicación (Anuncios, J); activarla te pedirá los dos clics">Impulsar</button>` : ''}</div></li>`;
     }).join('')}</ol></section>`;
   }
 
@@ -281,6 +282,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     if (b === $('#anClose')) { close(); return; }
     if (b === E.refresh) { await act('actualizar'); return; }
     if (b === E.inf) { verInforme = !verInforme; if (verInforme) { informe = null; render(); await cargarInforme(); } else render(); E.inf.focus(); return; }
+    if (b.dataset.imp != null) { const p = topImp[+b.dataset.imp]; if (p) dispatchEvent(new CustomEvent('ao:abrir-anuncios', { cancelable: true, detail: { impulsar: { id: p.id, red: p.red, texto: p.texto || '', miniatura: p.miniatura || '', enlace: p.enlace || '', publicadaAt: p.publicadaAt || null, ejemplo: ejemplo || !served } } })); return; } // A4: a Anuncios → Borradores
     const a = b.dataset.a; if (!a) return;
     if (a === 'inf-volver') { verInforme = false; render(); E.inf.focus(); return; }
     if (a === 'inf-guardar') { await cargarInforme(true); return; }

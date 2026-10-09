@@ -3,7 +3,7 @@
 // Borrar pide un segundo clic EN LA FILA (no hay DESHACER: el servidor lo manda a su papelera). Un botón nunca va dentro de otro: el
 // nombre es el botón que abre el asistente; lo demás va al lado.
 import { esc, chip, haceCuanto } from './comun.js';
-import { deQuien, estadoB, objetivoTexto, costoTexto } from './borrador.js';
+import { deQuien, estadoB, objetivoTexto, costoTexto, origenTexto } from './borrador.js';
 import { srcDemo } from './demo-borradores.js';
 
 export const srcDe = id => srcDemo(id) || (typeof id === 'string' && id && !id.startsWith('demo/') ? '/media/' + id.split('/').map(encodeURIComponent).join('/') : null);
@@ -22,10 +22,11 @@ export function filaBorradorHTML(b, { moneda = 'USD', confirmar = null, agentNam
   const acciones = confirmar === b.id
     ? `<span class="anu-bconf" role="group" aria-label="Confirmar el borrado"><span>¿Borrar «${esc(b.nombre)}»? Va a la papelera de la oficina; en Meta no cambia nada.</span><button type="button" class="anu-btn pri" data-bborrar-si="${esc(b.id)}">Sí, borrar</button><button type="button" class="anu-btn" data-bborrar-no="${esc(b.id)}">No</button></span>`
     : `${b.estado === 'creado' && b.meta?.campana ? `<button type="button" class="anu-btn" data-vercamp="${esc(b.meta.campana)}">Ver la campaña en pausa</button>` : ''}${b.estado !== 'creando' ? `<button type="button" class="anu-btn" data-bborrar="${esc(b.id)}" aria-label="Borrar el borrador «${esc(b.nombre)}»">Borrar</button>` : ''}`;
-  return `<li class="anu-bfila" data-bfila="${esc(b.id)}">${miniHTML(b.creativos?.[0]?.media)}
+  const mini = b.origen?.miniatura ? `<span class="anu-bmini" aria-hidden="true"><img src="${esc(b.origen.miniatura)}" alt="" loading="lazy" decoding="async"></span>` : miniHTML(b.creativos?.[0]?.media); // A4: la publicación que impulsa
+  return `<li class="anu-bfila" data-bfila="${esc(b.id)}">${mini}
     <div class="anu-bcuerpo"><h3><button type="button" class="anu-abrir" data-babrir="${esc(b.id)}">${esc(b.nombre || '(sin nombre)')}</button></h3>
       <p class="anu-tchips">${chip(e.texto, e.tono)}${chip('De: ' + deQuien(b.de, agentName), b.de === 'dueno' ? 'gris' : 'azul')}</p>
-      <p class="anu-tobj">${esc(objetivoTexto(b))} · ${n} ${n === 1 ? 'creativo' : 'creativos'}${cuando ? ` · cambiado ${esc(cuando)}` : ''}</p>
+      <p class="anu-tobj">${esc(objetivoTexto(b))} · ${b.origen ? esc(origenTexto(b)) : `${n} ${n === 1 ? 'creativo' : 'creativos'}`}${cuando ? ` · cambiado ${esc(cuando)}` : ''}</p>
       <p class="anu-bcosto">${costo ? `Costo máximo: ${esc(costo)}` : 'Costo máximo: se calcula al revisarlo.'}</p>
       ${b.estado === 'fallo' && b.error ? `<p class="anu-derr">${esc(b.error)}</p>` : ''}</div>
     <div class="anu-bacc">${acciones}</div></li>`;

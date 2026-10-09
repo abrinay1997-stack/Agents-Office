@@ -67,6 +67,11 @@ export function validarBorrador(b, { topes = {}, ahora = Date.now(), galeria = G
   const c = costoMaxDe(b, topes), enCamp = pr.tipo === 'total' ? usd : c.total;
   if (topes.campana > 0 && enCamp != null && enCamp > topes.campana) mal('presupuesto.usd', `La campaña podría gastar ${dinero(enCamp, moneda)} y tu tope por campaña es ${dinero(topes.campana, moneda)}: baja el presupuesto o acorta las fechas.`);
   const cr = b.creativos || [];
+  if (b.origen) { // A4: se impulsa una publicación: no hay creativos que elegir, solo la llamada (y Meta dice si la deja impulsar)
+    const l = llamadasDe(b.objetivo, b.destino), x = cr[0];
+    if (x?.llamada && !l.includes(x.llamada)) mal('creativos.0.llamada', `«${LLAMADA[x.llamada] || x.llamada}» no vale para «${objetivoTexto(b)}»: elige otra llamada a la acción.`);
+    return { ok: !P.length, problemas: P, at: new Date(ahora).toISOString(), costoMax: c };
+  }
   if (!cr.length) mal('creativos', 'Añade al menos un creativo (mejor de 3 a 6): una imagen o un video de la galería.');
   if (cr.length > MAX_CREATIVOS) mal('creativos', `Como mucho ${MAX_CREATIVOS} creativos por campaña.`);
   const llam = llamadasDe(b.objetivo, b.destino);
@@ -122,6 +127,7 @@ export function crearDemoBorradores({ demo, ahora = () => Date.now(), topes = {}
   };
   const todos = () => { lista.forEach(terminar); return lista; };
   const PERMITIDOS = ['nombre', 'objetivo', 'destino', 'publico', 'categoriaEspecial', 'presupuesto', 'inicio', 'fin', 'enlace', 'creativos', 'mejoras'];
+  const conOrigen = b => { if (b.origen) b.creativos = [{ id: 'pub', media: null, formato: null, texto: b.origen.texto || '', titular: '', descripcion: '', llamada: b.creativos?.[0]?.llamada || null }]; return b; };
 
   return {
     lista: () => ({ status: 200, items: todos().map(copia) }),
@@ -136,7 +142,7 @@ export function crearDemoBorradores({ demo, ahora = () => Date.now(), topes = {}
       if (b.estado === 'creado' || b.estado === 'creando') return { status: 409, error: 'creado', motivo: b.estado === 'creando' ? 'Se está creando en Meta: espera a que termine.' : 'Ya se creó en Meta: los cambios se hacen desde Campañas.' };
       for (const k of PERMITIDOS) if (k in cuerpo) b[k] = structuredClone(cuerpo[k]);
       if (b.estado === 'fallo') { b.estado = 'borrador'; b.error = null; }
-      b.validacion = null; b.actualizadoAt = new Date(ahora()).toISOString();
+      conOrigen(b); b.validacion = null; b.actualizadoAt = new Date(ahora()).toISOString();
       return { status: 200, borrador: copia(b) };
     },
     borrar(id) {
@@ -157,6 +163,20 @@ export function crearDemoBorradores({ demo, ahora = () => Date.now(), topes = {}
       if (!v.ok) return { status: 422, error: 'validacion', problemas: v.problemas };
       b.estado = 'creando'; b.error = null; b._listoAt = ahora() + tardaMs; b.actualizadoAt = new Date(ahora()).toISOString();
       return { status: 202, borrador: copia(b) };
+    },
+    /** A4: impulsar una publicación de ejemplo (de la demo de Contenido o de Analíticas): el borrador con `origen`, en memoria. */
+    impulsar(det = {}) {
+      const red = det.red === 'facebook' ? 'facebook' : det.red === 'instagram' ? 'instagram' : null;
+      if (!red) return { status: 400, error: 'red', motivo: 'Solo se impulsan publicaciones de Instagram o de Facebook.' };
+      const id = String(det.id || det.pieza || 'ej').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40) || 'ej';
+      const ya = lista.find(x => x.origen && x.origen.red === red && x.origen.id === id && (x.estado === 'borrador' || x.estado === 'fallo'));
+      if (ya) return { status: 200, borrador: copia(ya), ya: true };
+      const texto = String(det.texto || '').slice(0, 2200), linea = texto.split(/\r?\n/).map(x => x.trim()).find(Boolean) || `publicación de ${red === 'instagram' ? 'Instagram' : 'Facebook'}`;
+      const mini = /^(data:image\/|\/media\/|\/api\/contenido\/miniatura\/|https:\/\/)/.test(String(det.miniatura || '')) ? det.miniatura : srcDemo('demo/anu-combo.jpg');
+      const b = conOrigen(borradorPorDefecto(ahora(), { nombre: `Impulsar: ${linea.slice(0, 50)}`, destino: 'whatsapp', fin: ymd(ahora() + 7 * DIA),
+        origen: { tipo: 'publicacion', red, id, enlace: /^https:\/\//.test(String(det.enlace || '')) ? det.enlace : '', texto, miniatura: mini, publicadaAt: det.publicadaAt || null, ...(det.pieza ? { pieza: String(det.pieza) } : {}) } }));
+      b.validacion = validarBorrador(b, { topes, ahora: ahora() });
+      lista.unshift(b); return { status: 200, borrador: copia(b) };
     },
     vistaPrevia() { return { status: 409, error: 'demo', motivo: 'La vista previa de Meta necesita la oficina abierta y tu cuenta conectada: en el ejemplo ves la de la oficina.' }; },
     mejorar(id, { creativo, campo = 'texto' } = {}) {
