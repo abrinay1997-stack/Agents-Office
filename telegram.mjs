@@ -36,7 +36,8 @@ export function parseCommand(text) {
   const cmd = m[1].toLowerCase(), arg = m[2].trim();
   const alias = { start: 'ayuda', help: 'ayuda', ayuda: 'ayuda', estado: 'estado', status: 'estado', pendientes: 'pendientes', aprobaciones: 'pendientes', tarea: 'tarea', task: 'tarea', silencio: 'silencio', quiet: 'silencio', id: 'id',
     mias: 'mias', mías: 'mias', hoy: 'mias', yo: 'yo', mia: 'yo', mía: 'yo', // plan D (7 oct 2026): tus tareas
-    contenido: 'contenido', piezas: 'contenido', redes: 'contenido' }; // C3 (8 oct 2026): lo de Contenido que espera tu OK
+    contenido: 'contenido', piezas: 'contenido', redes: 'contenido', // C3 (8 oct 2026): lo de Contenido que espera tu OK
+    anuncios: 'anuncios', publicidad: 'anuncios', ads: 'anuncios' }; // Fase A2 (9 oct 2026): los anuncios de Meta, con ⏸ Pausar
   return { cmd: alias[cmd] || 'desconocido', arg };
 }
 const DEPT_WORDS = { emails: ['correos', 'emails', 'correo'], sales: ['ventas', 'sales'], marketing: ['marketing', 'mercadeo'], ops: ['operaciones', 'ops'], fin: ['finanzas', 'contabilidad', 'fin'], delivery: ['entregas', 'delivery'] };
@@ -81,6 +82,21 @@ export function piezaTexto(p, { nombreAgente = id => id, motivo = '' } = {}) {
 }
 export const piezaBotones = p => ({ inline_keyboard: [[...(piezaLista(p) ? [{ text: '✅ Aprobar', callback_data: 'pa:' + p.id }] : []), ...(p.estado === 'revision' ? [{ text: '↩ A borrador', callback_data: 'pb:' + p.id }] : [])], [{ text: '👁 Ver completo', callback_data: 'pv:' + p.id }]].filter(f => f.length) });
 
+/* ---------- Fase A2 de Anuncios (9 oct 2026): /anuncios, ⏸ Pausar con un toque, y lo que gasta con DOS toques del dueño ---------- */
+const usdTG = v => (v == null ? 'sin dato' : `US$${Number.isInteger(Math.round(v * 100) / 100) ? Math.round(v) : Number(v).toFixed(2)}`);
+const presTG = p => (p?.usd != null ? `${usdTG(p.usd)}${p.tipo === 'diario' ? '/día' : ' en total'}` : '');
+/** Lo activo y el gasto de hoy (la vista de GET /api/anuncios?rango=hoy), en HTML. */
+export function anunciosTexto(v) {
+  if (!v?.cuenta) return `📣 <b>Anuncios</b>: ${esc(v?.motivo || 'todavía no se leyó la cuenta publicitaria.')}`;
+  const activas = (v.campanas || []).filter(c => c.estado === 'ACTIVE'), t = v.topes || {};
+  return `📣 <b>Anuncios</b> · hoy ${esc(usdTG(v.gasto?.hoy))}${t.diario != null ? ` de un tope de ${esc(usdTG(t.diario))}` : ''} · este mes ${esc(usdTG(v.gasto?.mes))}${t.mensual != null ? ` de ${esc(usdTG(t.mensual))}` : ''}${(v.avisos || []).length ? '\n' + v.avisos.slice(0, 3).map(a => `⚠ ${esc(a.texto)}`).join('\n') : ''}\n${activas.length ? `${activas.length} ${activas.length === 1 ? 'campaña activa' : 'campañas activas'}:` : 'Ninguna campaña activa ahora mismo.'}`;
+}
+export const campanaTexto = c => `<b>${esc(c.nombre)}</b> · ${esc(c.estadoTexto)}${c.presupuesto?.usd != null ? ' · ' + esc(presTG(c.presupuesto)) : ''}${c.cifras?.gasto != null ? ` · hoy ${esc(usdTG(c.cifras.gasto))}` : ''}${c.cifras?.resultados != null ? ` · ${c.cifras.resultados} ${esc(c.cifras.resultadoTexto)}` : ''}`;
+/** ⏸ Pausar (libre, un toque) para lo activo; «✅ Activar — gasta hasta US$X/día» (el PRIMER toque: pide la cifra) para lo pausado. */
+export const campanaBotones = c => ({ inline_keyboard: [[c.estado === 'ACTIVE' ? { text: '⏸ Pausar', callback_data: 'xp:' + c.id } : { text: `✅ Activar${c.presupuesto?.tipo === 'diario' ? ` — gasta hasta ${usdTG(c.presupuesto.usd)}/día` : ''}`, callback_data: 'xa:' + c.id }]] });
+/** El aviso de un anuncio rechazado o con problemas (sincronizar.mjs: key «anuncios-rechazado:<id>»): trae ⏸ Pausar. */
+export const pausaDeAviso = n => { const m = /^anuncios-(?:rechazado|problemas):([A-Za-z0-9_]{1,40})$/.exec(String(n?.key || '')); return m ? { reply_markup: { inline_keyboard: [[{ text: '⏸ Pausar', callback_data: 'xp:' + m[1] }]] } } : {}; };
+
 export const approvalButtons = id => ({ inline_keyboard: [[{ text: '✅ Aprobar y enviar', callback_data: 'ap:' + id }, { text: '↩ Devolver', callback_data: 'rj:' + id }], [{ text: '👁 Ver completo', callback_data: 'vw:' + id }]] });
 
 export function start({ port, cfg, dataDir, onTask, onNotice, log = console, mediaRuta = () => null, nombreAgente = id => id }) {
@@ -93,7 +109,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
   const stateFile = path.join(dataDir, 'telegram.json');
   let st = { offset: 0, pendingReject: {}, held: [], snoozeUntil: 0 }; try { st = { ...st, ...JSON.parse(fs.readFileSync(stateFile, 'utf8')) }; } catch {}
   const saveSt = () => { try { fs.mkdirSync(dataDir, { recursive: true }); fs.writeFileSync(stateFile + '.tmp', JSON.stringify(st)); fs.renameSync(stateFile + '.tmp', stateFile); } catch {} };
-  const local = async (method, p, body, by) => { const r = await fetch(`http://127.0.0.1:${port}${p}`, { method, headers: { 'content-type': 'application/json', ...(by ? { 'x-office-by': by } : {}) }, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; };
+  const local = async (method, p, body, by) => { const r = await fetch(`http://127.0.0.1:${port}${p}`, { method, headers: { 'content-type': 'application/json', ...(by ? { 'x-office-by': by } : {}) }, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error((j.motivo && ['tope', 'meta', 'confirmacion', 'estado', 'conexion', 'deshacer'].includes(j.error) ? j.motivo : j.error) || 'HTTP ' + r.status); return j; }; // A2: Anuncios dice el porqué en `motivo`
   const call = async (m, body) => { const r = await fetch(`${process.env.TELEGRAM_API_BASE || API}/bot${token}/${m}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }); const j = await r.json().catch(() => ({})); if (!j.ok) throw new Error(j.description || 'Telegram ' + r.status); return j.result; };
   /** C3: una llamada con un archivo (sendPhoto): multipart, con el FormData y el Blob de Node. */
   const callForm = async (m, campos, archivo) => {
@@ -144,7 +160,11 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
     else if (t.state === 'done' && t.error && !t.stopped && notify.failures) toOwners(`✗ <b>Falló</b> «${esc(t.title)}» (${esc(name)})\n${esc(String(t.result || '').slice(0, 600))}`, { reply_markup: { inline_keyboard: [[{ text: '↻ Reintentar', callback_data: 'rp:' + t.id }]] } }, { urgent: t.errorKind === 'login' });
     else if (t.state === 'done' && !t.error && notify.done) toOwners(`✓ <b>Lista</b> «${esc(t.title)}» (${esc(name)})\n${esc(String(t.result || '').slice(0, 700))}`);
   });
-  onNotice(n => { if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(`${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`, {}, { urgent: n.level === 'error' }); });
+  onNotice(n => { if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(`${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`, n.kind === 'anuncios' ? pausaDeAviso(n) : {}, { urgent: n.level === 'error' }); }); // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
+  // A2: el segundo toque de un gasto. El token es el de la confirmación del SERVIDOR (anuncios/acciones.mjs: 2 minutos, un solo uso,
+  // atado a ese tipo + id + valor); aquí solo se recuerda de qué era, para mandarlo igual. Si la oficina se reinicia, se olvida (y vence).
+  const gastos = new Map();
+  const recordarGasto = (k, x) => { const t = Date.now(); for (const [a, b] of gastos) if (b.vence <= t) gastos.delete(a); gastos.set(k, x); };
 
   async function handleText(chat, text) {
     if (st.pendingReject[chat]) { // the note for a «↩ Devolver»
@@ -153,7 +173,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
       return;
     }
     const { cmd, arg } = parseCommand(text);
-    if (cmd === 'ayuda') return send(chat, `Hola, soy <b>${esc(cfg.deputy?.name || 'Dimitri')}</b>, desde tu oficina ${esc(cfg.name || '')}.\n\nEscríbeme lo que necesites, como en la oficina.\n/estado · cómo va la oficina\n/pendientes · lo que espera tu visto bueno\n/tarea ventas: … · una tarea para un departamento\n/mias · lo tuyo de hoy (con ✅ para marcarlo hecho)\n/contenido · lo de Contenido que espera tu OK, con su foto\n/yo llamar al banco el viernes · una tarea para ti\n/silencio 2 · no molestar durante 2 horas (sin número: vuelve a avisar)\n\nLas aprobaciones te llegan con botones.`);
+    if (cmd === 'ayuda') return send(chat, `Hola, soy <b>${esc(cfg.deputy?.name || 'Dimitri')}</b>, desde tu oficina ${esc(cfg.name || '')}.\n\nEscríbeme lo que necesites, como en la oficina.\n/estado · cómo va la oficina\n/pendientes · lo que espera tu visto bueno\n/tarea ventas: … · una tarea para un departamento\n/mias · lo tuyo de hoy (con ✅ para marcarlo hecho)\n/contenido · lo de Contenido que espera tu OK, con su foto\n/anuncios · lo activo y el gasto de hoy (⏸ Pausar con un toque; activar pide dos)\n/yo llamar al banco el viernes · una tarea para ti\n/silencio 2 · no molestar durante 2 horas (sin número: vuelve a avisar)\n\nLas aprobaciones te llegan con botones.`);
     if (cmd === 'id') return send(chat, `Tu id de Telegram: <code>${esc(chat)}</code>`);
     if (cmd === 'estado') { const s = await local('GET', '/api/status'); const mark = { ok: '🟢', info: '⚪', warn: '🟡', bad: '🔴' }; return send(chat, `<b>Estado de la oficina</b>\n` + s.checks.map(c => `${mark[c.state]} <b>${esc(c.label)}</b>: ${esc(c.detail)}${c.fix ? '\n   → ' + esc(c.fix) : ''}`).join('\n')); }
     if (cmd === 'pendientes') {
@@ -188,6 +208,14 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
       if (l.length > 8) await send(chat, `…y ${l.length - 8} más: ábrelas en Contenido (K).`);
       return;
     }
+    if (cmd === 'anuncios') { // A2: lo activo y el gasto de hoy, ⏸ Pausar por campaña; lo pausado, con «✅ Activar» (dos toques)
+      const v = await local('GET', '/api/anuncios?rango=hoy');
+      await send(chat, anunciosTexto(v));
+      const activas = (v.campanas || []).filter(c => c.estado === 'ACTIVE'), pausadas = (v.campanas || []).filter(c => c.estado === 'PAUSED');
+      for (const c of activas.slice(0, 10)) await send(chat, campanaTexto(c), { reply_markup: campanaBotones(c) });
+      if (pausadas.length) { await send(chat, `En pausa (${pausadas.length}):`); for (const c of pausadas.slice(0, 5)) await send(chat, campanaTexto(c), { reply_markup: campanaBotones(c) }); }
+      return;
+    }
     if (cmd === 'silencio') { const h = Math.max(0, Math.min(24, +arg || 0)); st.snoozeUntil = h ? Date.now() + h * 3600e3 : 0; saveSt(); if (!h) flushHeld(); return send(chat, h ? `🔕 Sin avisos durante ${h} h (salvo lo urgente).` : '🔔 Avisos activados.'); }
     if (cmd === 'desconocido') return send(chat, 'No conozco ese comando. /ayuda');
     // anything else: Dimitri (E3)
@@ -219,6 +247,22 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
       if (k === 'pb') { await local('POST', `/api/contenido/piezas/${id}/devolver`, { estado: 'borrador' }, by); await strip(); await done('A borrador'); return send(chat, '↩ Vuelve a borrador: la corriges en Contenido (K).'); }
       if (k === 'pv') { const { pieza: p } = await local('GET', `/api/contenido/piezas/${id}`); await done(''); return send(chat, `<b>${esc(p.titulo || 'Sin título')}</b>\n\n${esc(p.texto || '(sin texto)')}${p.comentario ? `\n\n<b>Primer comentario</b>\n${esc(p.comentario)}` : ''}${p.hashtags ? `\n\n${esc(p.hashtags)}` : ''}${(p.revision?.errores || []).length ? `\n\n⚠ <b>Le falta</b>\n${p.revision.errores.map(e => '· ' + esc(e)).join('\n')}` : ''}`); }
       if (k === 'pt') { let ok = 0, mal = 0; for (const p of (await piezasPendientes()).filter(x => piezaLista(x))) { try { await local('POST', `/api/contenido/piezas/${p.id}/aprobar`, { quien: by.slice(0, 40) }, by); ok++; } catch { mal++; } } await strip(); await done('Hecho'); return send(chat, `✅ ${ok} ${ok === 1 ? 'aprobada' : 'aprobadas'}${mal ? ` · ${mal} no ${mal === 1 ? 'pudo' : 'pudieron'}` : ''}.`); }
+      // A2: anuncios — ⏸ Pausar (libre) y su ↶ Deshacer; ✅ Activar pide la cifra al servidor y la manda con «Sí, activar» (el segundo toque)
+      if (k === 'xp') { const r = await local('POST', '/api/anuncios/accion', { tipo: 'pausar', id, por: 'dueno' }, by); await strip(); await done('En pausa'); return send(chat, `⏸ ${esc(r.hecho?.texto || 'En pausa.')}`, r.deshacer ? { reply_markup: { inline_keyboard: [[{ text: '↶ Deshacer', callback_data: 'xu:' + r.deshacer.token }]] } } : {}); }
+      if (k === 'xu') { const r = await local('POST', '/api/anuncios/deshacer', { token: id, por: 'dueno' }, by); await strip(); await done('Deshecho'); return send(chat, `↶ ${esc(r.hecho?.texto || 'Deshecho.')}`); }
+      if (k === 'xa') {
+        const r = await local('POST', '/api/anuncios/accion', { tipo: 'activar', id, por: 'dueno' }, by), c = r.confirmar; await done('');
+        if (!c) return send(chat, `✓ ${esc(r.hecho?.texto || 'Hecho.')}`);
+        recordarGasto(c.token, { tipo: c.tipo, id: c.id, ...(c.valor !== undefined ? { valor: c.valor } : {}), ...(c.fin ? { fin: c.fin } : {}), vence: Date.parse(c.vence) || Date.now() + 120e3 });
+        return send(chat, `💸 <b>${esc(c.texto)}</b>${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}\n¿Seguro? Tienes 2 minutos.`, { reply_markup: { inline_keyboard: [[{ text: '✅ Sí, activar', callback_data: 'xc:' + c.token }, { text: '✗ No', callback_data: 'xn:' + c.token }]] } });
+      }
+      if (k === 'xc') {
+        const g = gastos.get(id); gastos.delete(id);
+        if (!g) { await strip(); await done('Venció'); return send(chat, 'Esa confirmación ya no sirve (venció o ya se usó). Pide /anuncios otra vez.'); }
+        const { vence, ...pedido } = g, r = await local('POST', '/api/anuncios/accion', { ...pedido, confirmacion: id, por: 'dueno' }, by);
+        await strip(); await done('Hecho'); return send(chat, `✅ ${esc(r.hecho?.texto || 'Hecho.')}${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}`);
+      }
+      if (k === 'xn') { gastos.delete(id); await strip(); await done('No'); return send(chat, 'Vale: no se activa nada.'); }
       if (k === 'sd') { const r = await local('POST', '/api/sub/send', { msg: id }); await strip(); await done('Enviado'); return send(chat, `📤 Enviado a los jefes${r.tasks?.filter(Boolean).length ? ': ' + r.tasks.filter(Boolean).length + ' tarea(s)' : ''}.`); }
       await done('');
     } catch (e) { await done('No se pudo'); return send(chat, '✗ ' + esc(e.message)); }
@@ -248,7 +292,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
       } catch (e) { if (stopped) break; log.warn('telegram:', e.message); await new Promise(r => setTimeout(r, +process.env.TELEGRAM_RETRY_MS || 15000)); }
     }
   }
-  call('setMyCommands', { commands: [{ command: 'contenido', description: 'Lo de Contenido que espera tu OK' }, { command: 'estado', description: 'Cómo va la oficina' }, { command: 'pendientes', description: 'Lo que espera tu visto bueno' }, { command: 'tarea', description: 'ventas: … — una tarea' }, { command: 'mias', description: 'Lo tuyo de hoy' }, { command: 'yo', description: 'Una tarea para ti' }, { command: 'silencio', description: 'No molestar N horas' }, { command: 'ayuda', description: 'Qué puedo hacer' }] }).catch(() => {});
+  call('setMyCommands', { commands: [{ command: 'contenido', description: 'Lo de Contenido que espera tu OK' }, { command: 'anuncios', description: 'Lo activo y el gasto de hoy' }, { command: 'estado', description: 'Cómo va la oficina' }, { command: 'pendientes', description: 'Lo que espera tu visto bueno' }, { command: 'tarea', description: 'ventas: … — una tarea' }, { command: 'mias', description: 'Lo tuyo de hoy' }, { command: 'yo', description: 'Una tarea para ti' }, { command: 'silencio', description: 'No molestar N horas' }, { command: 'ayuda', description: 'Qué puedo hacer' }] }).catch(() => {});
   loop();
   return { owners: who.length, send: text => toOwners(text), pieza: (p, motivo) => { if (notify.approvals && p?.id) piezaAOwners(p, motivo); }, /* C3 */ sendTo: (id, text) => send(String(id), esc(text)), stop: () => { stopped = true; clearInterval(flushTimer); } };
 }

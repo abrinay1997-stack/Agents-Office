@@ -148,6 +148,11 @@ body.dark .sc-card.sent.run { border-color: rgba(143,176,255,.55); }
 .so-in:not(textarea):not([type="checkbox"]) { font: 12.5px var(--ui); min-height: 28px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: var(--ink); }
 .so-text { width: 100%; box-sizing: border-box; font: 13px/1.45 var(--ui); padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; color: var(--ink); resize: vertical; }
 .so-undo { align-self: flex-start; font: 600 12px var(--ui); min-height: 32px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--ink); background: none; color: var(--ink); cursor: pointer; }
+/* A2 (9 oct 2026): lo que GASTA de un anuncio — la tarjeta dice la cifra y pide el segundo clic (el botón la repite) */
+.so-card.gasto { border-left-color: #8A5A00; } body.dark .so-card.gasto { border-left-color: #F2B84B; }
+.so-gt { font-size: 13.5px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.so-gasto { font: 700 12.5px var(--ui); min-height: 36px; padding: 4px 16px; border-radius: 99px; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); cursor: pointer; text-align: left; }
+.so-gasto-no { font: 12px var(--ui); min-height: 32px; padding: 0 8px; background: none; border: 0; color: var(--grey); cursor: pointer; text-decoration: underline; }
 .sc-chk { cursor: pointer; min-height: 28px; } .sc-chk input { width: 18px; height: 18px; margin: 0; accent-color: var(--ink); }
 .sc-fw { flex: 1 1 200px; } .sc-fw select, .sc-fw input { flex: 1; min-width: 0; }
 .sc-num { width: 72px; } .sc-style { min-width: 0; }

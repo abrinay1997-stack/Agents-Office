@@ -25,6 +25,33 @@ const limiteText = l => (l == null || l === '' ? 'sin fecha límite' : String(l)
 /** Undoing a move gives the day and the hour back, not the OK the approved piece lost: the card says so (the owner approves again). */
 export const undoneNote = o => (o.type === 'pieza_mover' && o.soltada ? ' — sigue sin OK: vuelve a aprobarla en Contenido' : '');
 
+/* Fase A2 (9 oct 2026): Dimitri y los anuncios. Pausar y bajar un presupuesto van como cualquier op (HACER y DESHACER); lo que GASTA
+   (activar, reanudar, subir el presupuesto, relanzar) no lo hace HACER: el servidor contesta { confirmar } en el op y su tarjeta pide un
+   segundo clic que dice la cifra, que va a POST /api/anuncios/accion con el token (plan de Anuncios §3). */
+export const GASTO_OPS = new Set(['anuncio_activar', 'anuncio_reanudar', 'anuncio_subir_presupuesto', 'anuncio_relanzar']);
+const VERBO_GASTO = { anuncio_activar: 'activar', anuncio_reanudar: 'reanudar', anuncio_subir_presupuesto: 'subir', anuncio_relanzar: 'relanzar' };
+const usd = (v, m = 'USD') => { const n = Number(v); if (!Number.isFinite(n)) return ''; try { return new Intl.NumberFormat('es', { style: 'currency', currency: String(m || 'USD').toUpperCase(), minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); } catch { return `${n.toFixed(2)} ${m}`; } };
+const anu = o => `«${o.nombre || o.title || o.id}»`;
+/** The second click's text, with the figure: «Sí, activar — hasta 15,00 US$ al día». */
+export function gastoBoton(o) {
+  const c = o.confirmar?.cifras || {}, m = o.confirmar?.moneda || o.moneda || 'USD', verbo = VERBO_GASTO[o.type] || 'hacerlo';
+  const cifra = Number(c.dia) > 0 ? `hasta ${usd(c.dia, m)} al día` : Number(c.campana) > 0 ? `hasta ${usd(c.campana, m)} en la campaña` : Number(c.semana) > 0 ? `hasta ${usd(c.semana, m)} esta semana` : o.type === 'anuncio_relanzar' ? 'nace en pausa' : '';
+  return `Sí, ${verbo}${cifra ? ' — ' + cifra : ''}`;
+}
+/** The body of the second click: POST /api/anuncios/accion { tipo (without «anuncio_»), id, valor, fin, inicio, confirmacion }. */
+export function gastoBody(o, e = {}) {
+  const b = { tipo: String(o.type).replace(/^anuncio_/, ''), id: o.id, valor: e.valor ?? o.valor, fin: e.fin ?? o.fin, inicio: e.inicio ?? o.inicio, confirmacion: o.confirmar?.token };
+  if (b.valor != null && b.valor !== '') b.valor = Number(String(b.valor).replace(',', '.'));
+  return Object.fromEntries(Object.entries(b).filter(([, v]) => v != null && v !== ''));
+}
+/** What the answer does to the op: done (with the server's words), or the reason (a cap with its figure, Meta, expired). */
+export function gastoHecho(o, ok, j = {}) {
+  if (ok && j.ok) return { state: 'done', confirmar: null, desc: j.hecho?.texto || 'Hecho.', error: '' };
+  const motivo = j.motivo || j.error || 'La oficina no contestó.';
+  if (j.error === 'confirmacion') return { confirmar: { ...o.confirmar, vence: 0 }, error: motivo };
+  return { state: 'failed', confirmar: null, error: motivo };
+}
+
 /** One line that says what an op does, in the owner's words. */
 export function opLabel(o, { esc = s => s, deptName = k => k } = {}) {
   switch (o.type) {
@@ -43,12 +70,21 @@ export function opLabel(o, { esc = s => s, deptName = k => k } = {}) {
     case 'tarea_repetir': return `${o.fallo ? 'Reintentar' : 'Repetir'} la tarea «${esc(o.title || o.id)}»`;
     case 'mia_delegar': return `Pasar tu tarea «${esc(o.title || o.id)}» a ${esc(deptName(o.dept))}${o.agentName ? ` (${esc(o.agentName)})` : ''}`;
     case 'mia_hecha': return `Marcar hecha tu tarea «${esc(o.title || o.id)}»`;
+    case 'anuncio_pausar': return `Pausar en Meta ${esc(anu(o))}`;
+    case 'anuncio_bajar_presupuesto': return `Bajar el presupuesto de ${esc(anu(o))}${o.valor != null ? ' a ' + esc(usd(o.valor, o.moneda)) : ''}`;
+    case 'anuncio_activar': return `Activar en Meta ${esc(anu(o))} (gasta)`;
+    case 'anuncio_reanudar': return `Reanudar en Meta ${esc(anu(o))} (gasta)`;
+    case 'anuncio_subir_presupuesto': return `Subir el presupuesto de ${esc(anu(o))}${o.valor != null ? ' a ' + esc(usd(o.valor, o.moneda)) : ''} (gasta)`;
+    case 'anuncio_relanzar': return `Relanzar ${esc(anu(o))}: una copia EN PAUSA con fechas nuevas`;
     default: return '';
   }
 }
 const NOTE = { rutina_crear: 'Corre sola en su horario; puedes pausarla en el calendario (P).', pieza_crear: 'Nace como borrador: tú la apruebas en Contenido. Nada se publica.', pieza_mover: 'Si estaba aprobada, pierde el OK y la vuelves a aprobar.', tarea_cancelar: 'La tarea se borra. Tienes 30 s para deshacerlo.',
   rutina_pausar: 'Sigue en el calendario sin correr hasta que la reanudes.', rutina_reanudar: 'La próxima ejecución se cuenta desde ahora.', rutina_editar: 'La próxima ejecución se cuenta con el horario nuevo.', rutina_ahora: 'Empieza en seguida, fuera de su horario. Si el agente ya empezó, no se deshace.',
   tarea_repetir: 'Una tarea nueva con el mismo pedido y el mismo escritorio.', mia_delegar: 'Sale de tu lista y el agente la empieza en seguida: en cuanto empiece, ya no se deshace.', mia_hecha: 'Si se repite, nace la siguiente; deshacer la quita.',
+  anuncio_pausar: 'Deja de gastar en seguida. Tienes 30 s para deshacerlo.', anuncio_bajar_presupuesto: 'Gasta menos desde ya. Tienes 30 s para deshacerlo.',
+  anuncio_activar: 'Gasta: HACER no lo activa; te enseño la cifra y lo activas con un segundo clic. Nunca pasa de tus topes.', anuncio_reanudar: 'Gasta: HACER no lo reanuda; te enseño la cifra y lo reanudas con un segundo clic. Nunca pasa de tus topes.',
+  anuncio_subir_presupuesto: 'Gasta: HACER no lo sube; te enseño la cifra y lo subes con un segundo clic. Nunca pasa de tus topes.', anuncio_relanzar: 'La copia nace en pausa: no gasta hasta que la actives.',
   contenido_llenar: 'Lo que funcionó y no sale hace 8 semanas vuelve a revisar; el resto se lo pido a Marketing como borradores. Nada se aprueba ni se publica.' };
 
 /** The editable fields of a proposed op (days and hour of a routine, the day of a piece, the new time of a task…). */
@@ -72,6 +108,7 @@ function fields(m, o, e, esc) {
   if (o.type === 'mia_delegar') return `<label class="sc-lab" for="${id}">Nota para quien la hace</label><textarea id="${id}" class="so-in so-text" data-f="nota" rows="2">${esc(e.nota ?? o.nota ?? '')}</textarea>`;
   if (o.type === 'contenido_llenar') return `<div class="sc-row"><label class="sc-f"><span>Días</span><select class="so-in" data-f="dias">${[3, 7, 10, 14].map(d => `<option value="${d}"${d === +(e.dias ?? o.dias ?? 7) ? ' selected' : ''}>${d}</option>`).join('')}</select></label></div>
       <label class="sc-lab" for="${id}">Qué pedirle a Marketing (opcional)</label><textarea id="${id}" class="so-in so-text" data-f="pide" rows="2">${esc(e.pide ?? o.pide ?? '')}</textarea>`;
+  if (o.type === 'anuncio_bajar_presupuesto' || o.type === 'anuncio_subir_presupuesto') return `<div class="sc-row"><label class="sc-f"><span>Presupuesto nuevo (${esc(String(o.moneda || 'USD').toUpperCase())})</span><input type="number" min="0.01" step="0.01" class="so-in" data-f="valor" value="${esc(e.valor ?? o.valor ?? '')}"></label></div>`;
   if (o.type === 'tarea_mover') return `<div class="sc-row"><label class="sc-f"><span>Nueva hora</span><input type="datetime-local" class="so-in" data-f="at" value="${esc(local(e.at ?? o.at))}"></label></div>`;
   return '';
 }
@@ -82,10 +119,16 @@ export function opsHTML(m, v) {
   const { esc } = v, ed = v.edits || new Map(), now = v.now || Date.now(), busy = !!v.busy; // busy: HACER is running for this message — a redraw never offers it twice
   const cards = list.map(o => {
     const e = ed.get(o.k) || {}, on = e.include !== false, label = opLabel({ ...o, ...e, when: o.when }, v);
+    if (o.confirmar && o.state !== 'done' && o.state !== 'undone' && o.state !== 'failed') { // A2: what spends — the second click, with its figure
+      const vence = typeof o.confirmar.vence === 'number' ? o.confirmar.vence : Date.parse(o.confirmar.vence), fuera = !(vence > now);
+      return `<div class="so-card sent gasto"><div class="sc-body"><div class="sc-t">${label}</div><div class="so-gt">${esc(o.confirmar.texto || '')}</div>
+        ${o.aviso ? `<div class="sc-note"><b>Antes de decir que sí:</b> ${esc(o.aviso)}</div>` : ''}${o.error ? `<div class="sc-meta"><b>no se pudo</b> — ${esc(o.error)}</div>` : ''}
+        ${fuera ? '<div class="sc-meta"><b>Venció:</b> vuelve a pedírselo a Dimitri.</div>' : `<div class="sb-acts"><button type="button" class="so-gasto" data-msg="${esc(m.id)}" data-k="${o.k}"${busy ? ' disabled' : ''}>${esc(gastoBoton(o))}</button><button type="button" class="so-gasto-no" data-msg="${esc(m.id)}" data-k="${o.k}">Cancelar</button></div><div class="sc-note">Gasta de verdad: solo con este segundo clic. Vale 2 minutos.</div>`}</div></div>`;
+    }
     if (o.state && o.state !== 'proposed') {
       const undo = o.state === 'done' && o.doneAt && now - o.doneAt < UNDO_MS;
       const st = o.state === 'done' ? `hecho${o.type === 'pieza_mover' && o.soltada ? ' — perdió el OK: vuelve a aprobarla en Contenido' : ''}` : o.state === 'failed' ? 'no se pudo' : o.state === 'undone' ? `deshecho${undoneNote(o)}` : 'no se hizo';
-      return `<div class="so-card sent ${o.state}"><div class="sc-body"><div class="sc-t">${label}</div><div class="sc-meta"><b>${esc(st)}</b>${o.error ? ' — ' + esc(o.error) : ''}${o.type === 'rutina_crear' && o.desc && o.state === 'done' ? ' · ' + esc(o.desc) : ''}</div>
+      return `<div class="so-card sent ${o.state}"><div class="sc-body"><div class="sc-t">${label}</div><div class="sc-meta"><b>${esc(st)}</b>${o.error ? ' — ' + esc(o.error) : ''}${(o.type === 'rutina_crear' || /^anuncio_/.test(o.type)) && o.desc && o.state === 'done' ? ' · ' + esc(o.desc) : ''}</div>
         ${undo ? `<button type="button" class="so-undo" data-msg="${esc(m.id)}" data-k="${o.k}">Deshacer</button>` : ''}</div></div>`;
     }
     return `<div class="so-card${on ? '' : ' off'}" data-msg="${esc(m.id)}" data-k="${o.k}">
@@ -95,14 +138,14 @@ export function opsHTML(m, v) {
         ${fields(m, o, e, esc)}
         ${NOTE[o.type] ? `<div class="sc-note">${NOTE[o.type]}</div>` : ''}</div></div>`;
   }).join('');
-  const open = list.filter(o => o.state === 'proposed'), n = open.filter(o => (ed.get(o.k) || {}).include !== false).length;
+  const open = list.filter(o => o.state === 'proposed' && !o.confirmar), n = open.filter(o => (ed.get(o.k) || {}).include !== false).length;
   const foot = open.length ? `<div class="sc-foot"><div class="sb-acts"><button type="button" class="so-go" data-msg="${esc(m.id)}"${n && !busy ? '' : ' disabled'}>${busy ? 'Haciendo…' : `HACER (${n})`}</button><button type="button" class="so-skip" data-msg="${esc(m.id)}"${busy ? ' disabled' : ''}>Descartar</button></div>
     <div class="sc-note">Nada cambia hasta que pulses HACER. Nunca aprueba ni publica.</div></div>` : '';
   return `<div class="so-plan" role="group" aria-label="Cambios en el calendario y la oficina"><div class="sc-lab">En el calendario y la oficina</div>${cards}${foot}</div>`;
 }
 /** The body of POST /api/sub/ops: every op still proposed, with the owner's edits. */
 export function opsBody(msgId, ops = [], edits = new Map(), skipAll = false) {
-  return { msg: msgId, items: ops.filter(o => o.state === 'proposed').map(o => { const e = edits.get(o.k) || {}; const { include, ...rest } = e; return { k: o.k, include: skipAll ? false : include !== false, ...(skipAll ? {} : rest) }; }) };
+  return { msg: msgId, items: ops.filter(o => o.state === 'proposed' && !o.confirmar).map(o => { const e = edits.get(o.k) || {}; const { include, ...rest } = e; return { k: o.k, include: skipAll ? false : include !== false, ...(skipAll ? {} : rest) }; }) };
 }
 
 /* ---------- questions with options (DIM-06) ---------- */

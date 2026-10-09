@@ -125,7 +125,7 @@ test('oficina-mcp.mjs: cualquier cliente MCP lee y hace con las reglas de la ofi
   for (const n of tools) assert.doesNotMatch(n, PROHIBIDAS, `«${n}» suena a algo que el asistente no debe poder hacer`);
   for (const n of ['como_funciona', 'estado_oficina', 'ver_calendario', 'ver_tareas', 'ver_mis_tareas', 'ver_rutinas', 'ver_contenido', 'ver_resultados', 'ver_huecos', 'hablar_con_dimitri', 'crear_tarea', 'crear_mi_tarea', 'hacer', 'deshacer']) assert.ok(tools.includes(n), n);
   const hacerTipos = (await m.rpc('tools/list')).result.tools.find(x => x.name === 'hacer').inputSchema.properties.type.enum;
-  assert.deepEqual([...hacerTipos].sort(), [...sub.OPS].sort(), 'el esquema de «hacer» es la lista cerrada de Dimitri');
+  assert.deepEqual([...hacerTipos].sort(), sub.OPS.filter(x => !sub.OPS_GASTO.includes(x)).sort(), 'el esquema de «hacer» es la lista cerrada de Dimitri, sin lo que gasta dinero (A2)');
 
   assert.match((await m.llamar('como_funciona')).text, /MAPA DE LA OFICINA[\s\S]*NO SE PUEDE[\s\S]*rutina_pausar:/);
   const t1 = await m.llamar('crear_mi_tarea', { titulo: 'Revisar el precio del combo', limite: '2030-10-20' }); assert.match(t1.text, /En la lista del dueño: (\w+) «Revisar el precio del combo»/);

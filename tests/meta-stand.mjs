@@ -24,6 +24,13 @@ const errorGraph = (message, code, extra = {}, estado = 400) => json({ error: { 
 
 /** Lo que se paga en Meta: con esto Graph decide si una creación es válida. Centavos de la moneda de la cuenta (USD). */
 export const PRESUPUESTO_MINIMO_CENTAVOS = 100; // US$1 al día: el mínimo habitual para optimizar por clics o interacción
+/** El tope de gasto (`spend_cap`) más bajo que Meta acepta en una campaña: US$100 (verificado el 9 oct 2026, plan §13.2). */
+export const SPEND_CAP_MINIMO_CENTAVOS = 10000;
+/** Lo que Meta copia de una vez (síncrono): hasta 3 anuncios hijos (plan §13.7). */
+export const MAX_ANUNCIOS_COPIA_SINCRONA = 3;
+const presupuestoBajo = () => errorGraph('(#100) Invalid parameter', 100, { error_subcode: 1885272, error_user_title: 'El presupuesto es demasiado bajo', error_user_msg: `El presupuesto diario debe ser de al menos ${PRESUPUESTO_MINIMO_CENTAVOS} centavos.` });
+const topeBajo = v => (v !== undefined && v !== null && v !== '' && Number(v) > 0 && Number(v) < SPEND_CAP_MINIMO_CENTAVOS
+  ? errorGraph('(#100) Invalid parameter', 100, { error_user_title: 'El límite de gasto es demasiado bajo', error_user_msg: `El límite de gasto de una campaña debe ser de al menos ${SPEND_CAP_MINIMO_CENTAVOS} centavos.` }) : null);
 
 const OBJETIVOS = ['OUTCOME_AWARENESS', 'OUTCOME_TRAFFIC', 'OUTCOME_ENGAGEMENT', 'OUTCOME_LEADS', 'OUTCOME_APP_PROMOTION', 'OUTCOME_SALES'];
 const ESTADOS = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'DELETED'];
@@ -54,6 +61,7 @@ export function crearMetaStand(o = {}) {
     // Marketing API
     cuenta: { id: CUENTA_STAND, account_id: CUENTA_STAND.slice(4), name: 'PanaClaw Ads', account_status: o.fallar?.pagoPendiente ? 3 : 1, disable_reason: 0, currency: 'USD', timezone_name: 'America/Panama', amount_spent: '0', spend_cap: '0', balance: '0', ...(o.cuenta ?? {}) },
     campanas: {}, conjuntos: {}, anuncios: {}, creativos: {}, imagenes: {}, videos: {}, cifras: [], validaciones: 0,
+    validadas: [], cambios: [], copias: [], // A2: lo validado (validate_only) y lo cambiado o copiado de verdad, para que los tests miren dentro
     // la Bandeja
     comentarios: {}, ocultos: [], conversaciones: [], enviados: [],
     // fallos y uso
@@ -103,7 +111,8 @@ export function crearMetaStand(o = {}) {
     if (campos.special_ad_categories === undefined) return errorGraph('(#100) The parameter special_ad_categories is required', 100);
     if (!ESTADOS.includes(campos.status)) return errorGraph('(#100) Param status must be one of {ACTIVE, PAUSED, ARCHIVED, DELETED}', 100);
     const diario = Number(campos.daily_budget || 0);
-    if (diario && diario < PRESUPUESTO_MINIMO_CENTAVOS) return errorGraph('(#100) Invalid parameter', 100, { error_subcode: 1885272, error_user_title: 'El presupuesto es demasiado bajo', error_user_msg: `El presupuesto diario debe ser de al menos ${PRESUPUESTO_MINIMO_CENTAVOS} centavos.` });
+    if (diario && diario < PRESUPUESTO_MINIMO_CENTAVOS) return presupuestoBajo();
+    const tope = topeBajo(campos.spend_cap); if (tope) return tope;
     if (esValidar(campos)) { st.validaciones++; return json({ success: true }); }
     const id = nuevo('CMP');
     st.campanas[id] = { id, account_id: st.cuenta.account_id, name: campos.name, objective: campos.objective, status: campos.status, special_ad_categories: lista(campos.special_ad_categories), daily_budget: campos.daily_budget, lifetime_budget: campos.lifetime_budget, spend_cap: campos.spend_cap, bid_strategy: campos.bid_strategy, start_time: campos.start_time, stop_time: campos.stop_time, adlabels: lista(campos.adlabels), created_time: new Date(st.reloj).toISOString() };
@@ -150,26 +159,50 @@ export function crearMetaStand(o = {}) {
     const x = st.campanas[id] ?? st.conjuntos[id] ?? st.anuncios[id];
     if (!x) return null;
     if (campos.status && !ESTADOS.includes(campos.status)) return errorGraph('(#100) Param status must be one of {ACTIVE, PAUSED, ARCHIVED, DELETED}', 100);
-    for (const k of ['daily_budget', 'lifetime_budget']) if (campos[k] !== undefined && Number(campos[k]) < PRESUPUESTO_MINIMO_CENTAVOS) return errorGraph('(#100) Invalid parameter', 100, { error_subcode: 1885272, error_user_title: 'El presupuesto es demasiado bajo' });
-    if (esValidar(campos)) { st.validaciones++; return json({ success: true }); }
-    for (const k of ['status', 'name', 'daily_budget', 'lifetime_budget', 'spend_cap', 'end_time', 'stop_time', 'bid_strategy']) if (campos[k] !== undefined) x[k] = campos[k];
+    for (const k of ['daily_budget', 'lifetime_budget']) if (campos[k] !== undefined && Number(campos[k]) < PRESUPUESTO_MINIMO_CENTAVOS) return presupuestoBajo();
+    if (st.campanas[id]) { const tope = topeBajo(campos.spend_cap); if (tope) return tope; }
+    if (x.status === 'ARCHIVED' && campos.status && campos.status !== 'ARCHIVED' && campos.status !== 'DELETED') return errorGraph('(#100) An archived object can only be deleted', 100, { error_user_title: 'Está archivado' }); // POR VERIFICAR en v26
+    if (esValidar(campos)) { st.validaciones++; st.validadas.push({ id, campos: { ...campos } }); return json({ success: true }); }
+    for (const k of ['status', 'name', 'daily_budget', 'lifetime_budget', 'spend_cap', 'end_time', 'stop_time', 'start_time', 'bid_strategy']) if (campos[k] !== undefined) x[k] = campos[k];
+    st.cambios.push({ id, campos: { ...campos } });
     if (x.status === 'ACTIVE' && x.revision === 'PENDING_REVIEW') x.revision = (st.fallar.rechazar ?? []).includes(x.id) ? 'DISAPPROVED' : (st.fallar.conProblemas ?? []).includes(x.id) ? 'WITH_ISSUES' : null;
     return json({ success: true });
   }
-  /** POST /<campaña>/copies: una copia entera (deep_copy) con todo en el estado que se pida. */
+  /**
+   * POST /<id>/copies: una campaña (deep_copy: con sus conjuntos y anuncios), un conjunto (a la campaña `campaign_id`) o un anuncio (al
+   * conjunto `adset_id`). Como Meta (plan §13.7): síncrona, con hasta 3 anuncios hijos; con más, error (la oficina copia por partes).
+   * `validate_only` no copia nada. `start_time`/`end_time` van a los conjuntos copiados. El nombre: «<original> - Copia».
+   */
   function copiar(id, campos) {
-    const camp = st.campanas[id];
-    if (!camp) return errorGraph('(#100) Unsupported copy', 100);
-    const estado = campos.status_option === 'ACTIVE' ? 'ACTIVE' : 'PAUSED';
-    const nuevaId = nuevo('CMP'), ids = [];
-    st.campanas[nuevaId] = { ...structuredClone(camp), id: nuevaId, name: `${camp.name} - Copia`, status: estado, copia_de: camp.id };
-    if (String(campos.deep_copy) === 'true') {
-      for (const conj of Object.values(st.conjuntos).filter(c => c.campaign_id === camp.id)) {
-        const cid = nuevo('ADS'); st.conjuntos[cid] = { ...structuredClone(conj), id: cid, campaign_id: nuevaId, status: estado, learning_stage_info: { status: 'LEARNING', conversions: 0 } }; ids.push(cid);
-        for (const ad of Object.values(st.anuncios).filter(a => a.adset_id === conj.id)) { const aid = nuevo('AD'); st.anuncios[aid] = { ...structuredClone(ad), id: aid, adset_id: cid, campaign_id: nuevaId, status: estado, revision: 'PENDING_REVIEW' }; ids.push(aid); }
-      }
+    const estadoDe = x => (campos.status_option === 'ACTIVE' ? 'ACTIVE' : campos.status_option === 'INHERITED_FROM_SOURCE' ? x.status : 'PAUSED');
+    const hondo = String(campos.deep_copy) === 'true';
+    const fechas = c => ({ ...c, ...(campos.start_time ? { start_time: campos.start_time } : {}), ...(campos.end_time !== undefined ? { end_time: String(campos.end_time) === '0' ? undefined : campos.end_time } : {}) });
+    const anunciosDe = conjId => Object.values(st.anuncios).filter(a => a.adset_id === conjId);
+    const camp = st.campanas[id], conj = st.conjuntos[id], ad = st.anuncios[id];
+    if (!camp && !conj && !ad) return errorGraph('(#100) Unsupported copy', 100);
+    const hijos = !hondo ? 0 : camp ? Object.values(st.conjuntos).filter(c => c.campaign_id === camp.id).reduce((t, c) => t + anunciosDe(c.id).length, 0) : conj ? anunciosDe(conj.id).length : 0;
+    if (hijos > MAX_ANUNCIOS_COPIA_SINCRONA) return errorGraph(`(#100) Cannot copy more than ${MAX_ANUNCIOS_COPIA_SINCRONA} child ads synchronously: use an asynchronous batch request`, 100, { error_user_title: 'Demasiados anuncios para copiar de una vez', error_user_msg: `Una copia síncrona admite hasta ${MAX_ANUNCIOS_COPIA_SINCRONA} anuncios.` });
+    if (esValidar(campos)) { st.validaciones++; st.validadas.push({ id, copia: true, campos: { ...campos } }); return json({ success: true }); }
+    const copiarAnuncio = (a, conjId, campId) => { const aid = nuevo('AD'); st.anuncios[aid] = { ...structuredClone(a), id: aid, adset_id: conjId, campaign_id: campId, status: estadoDe(a), revision: 'PENDING_REVIEW' }; return aid; };
+    const copiarConjunto = (c, campId) => {
+      const cid = nuevo('ADS'); st.conjuntos[cid] = fechas({ ...structuredClone(c), id: cid, campaign_id: campId, name: `${c.name} - Copia`, status: estadoDe(c), learning_stage_info: { status: 'LEARNING', conversions: 0 } });
+      const ids = [cid]; if (hondo) for (const a of anunciosDe(c.id)) ids.push(copiarAnuncio(a, cid, campId)); return ids;
+    };
+    if (camp) {
+      const nuevaId = nuevo('CMP'), ids = [];
+      st.campanas[nuevaId] = { ...structuredClone(camp), id: nuevaId, name: `${camp.name} - Copia`, status: estadoDe(camp), copia_de: camp.id };
+      if (hondo) for (const c of Object.values(st.conjuntos).filter(x => x.campaign_id === camp.id)) ids.push(...copiarConjunto(c, nuevaId));
+      st.copias.push({ de: id, a: nuevaId, campos: { ...campos } });
+      return json({ copied_campaign_id: nuevaId, ad_object_ids: [{ ad_object_type: 'campaign', source_id: camp.id, copied_id: nuevaId }, ...ids.map(c => ({ copied_id: c }))] });
     }
-    return json({ copied_campaign_id: nuevaId, ad_object_ids: [{ ad_object_type: 'campaign', source_id: camp.id, copied_id: nuevaId }, ...ids.map(c => ({ copied_id: c }))] });
+    if (conj) {
+      const destino = st.campanas[campos.campaign_id] ? campos.campaign_id : conj.campaign_id, ids = copiarConjunto(conj, destino);
+      st.copias.push({ de: id, a: ids[0], campos: { ...campos } });
+      return json({ copied_adset_id: ids[0], ad_object_ids: ids.map(c => ({ copied_id: c })) });
+    }
+    const destino = st.conjuntos[campos.adset_id] ?? st.conjuntos[ad.adset_id], aid = copiarAnuncio(ad, destino.id, destino.campaign_id);
+    st.copias.push({ de: id, a: aid, campos: { ...campos } });
+    return json({ copied_ad_id: aid, ad_object_ids: [{ ad_object_type: 'ad', source_id: id, copied_id: aid }] });
   }
   /** GET /act_…/insights: una fila por objeto y día de `st.cifras` (cada test pone las suyas), filtrada por nivel y fechas. */
   function cifras(q) {

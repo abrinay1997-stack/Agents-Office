@@ -14,7 +14,7 @@
 import { mdToHtml } from './md.js';
 import { modal } from './modal.js';
 import { creativesHTML, stripHTML, studioBody, discardBody, applyDiscards, outgoing, MAX_ATTACH, DIMITRI_FOLDER, fitWithin, shrinkStep, b64Bytes, loteVivo, esHoja } from './sub-studio.js'; // F3: the lote's live card and a sheet attached
-import { opsHTML, opsBody, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
+import { opsHTML, opsBody, undoneNote, questionsHTML, pickBody, pastChoices, UNDO_MS, gastoBody, gastoHecho } from './sub-ops.js'; // V4.11: the calendar's ops, questions with options, a time that already went
 import { isQuickStatus } from './sub-stream.js'; // Auditoría 1 oct 2026: «¿Cómo vamos?» at once (DIM-10); the answer arrives while it is written, with «Detener» (DIM-14)
 
 const MODE = { estado: 'Estado de la oficina', analisis: 'Análisis', plan: 'Propuesta', pregunta: 'Me falta un dato', estudio: 'Plan de creativos' };
@@ -422,6 +422,13 @@ export function initSub(ctx) {
     } catch (e) { btn.disabled = false; btn.textContent = label; messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No se pudo: ${e.message}` }); }
     opsBusy.delete(msgId); render(true);
   }
+  async function gastoOp(msgId, k, btn) { // Fase A2: the second click of what spends on an ad — it says the figure and goes to /api/anuncios/accion with the token
+    const m = messages.find(x => x.id === msgId), o = m && m.ops && m.ops.find(x => x.k === k); if (!o || !o.confirmar) return;
+    btn.disabled = true; btn.textContent = 'Haciendo…'; let ok = false, j = {};
+    try { const r = await fetch('/api/anuncios/accion', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(gastoBody(o, (opEdits.get(msgId) || new Map()).get(k) || {})) }); ok = r.ok; j = await r.json().catch(() => ({})); }
+    catch { j = { motivo: 'No se pudo hablar con la oficina.' }; }
+    Object.assign(o, gastoHecho(o, ok, j)); say(o.state === 'done' ? o.desc : `No se pudo: ${o.error}`); render(true);
+  }
   async function undoOp(msgId, k, btn) {
     btn.disabled = true;
     try { const j = await postJSON('/api/sub/ops/undo', { msg: msgId, k }); const i = messages.findIndex(x => x.id === msgId); if (i >= 0 && j.message) messages[i] = j.message; const uo = j.message?.ops?.find(x => x.k === k); say('Deshecho' + (uo ? undoneNote(uo) : '') + '.'); if (afterSend) await afterSend(); }
@@ -475,6 +482,8 @@ export function initSub(ctx) {
     const ogo = e.target.closest('.so-go'); if (ogo) return doOps(ogo.dataset.msg, ogo);
     const oskip = e.target.closest('.so-skip'); if (oskip) return doOps(oskip.dataset.msg, oskip, true);
     const oundo = e.target.closest('.so-undo'); if (oundo) return undoOp(oundo.dataset.msg, +oundo.dataset.k, oundo);
+    const ogs = e.target.closest('.so-gasto'); if (ogs) return gastoOp(ogs.dataset.msg, +ogs.dataset.k, ogs);
+    const ogn = e.target.closest('.so-gasto-no'); if (ogn) { const m = messages.find(x => x.id === ogn.dataset.msg), o = m && m.ops && m.ops.find(x => x.k === +ogn.dataset.k); if (o) { Object.assign(o, { state: 'skipped', confirmar: null }); say('Cancelado: no gasté nada.'); render(true); } return; }
     const day = e.target.closest('.so-day'); if (day) { const c = day.closest('.so-card[data-msg]'), m = messages.find(x => x.id === c.dataset.msg), o = m && m.ops.find(x => x.k === +c.dataset.k); if (!o) return; const d = oedit(c.dataset.msg, o.k), w = { ...o.when, ...(d.when || {}) }; let days = w.kind === 'weekly' ? [...(w.days || [])] : w.kind === 'weekdays' ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6]; const n = +day.dataset.d; days = days.includes(n) ? days.filter(x => x !== n) : [...days, n].sort(); if (!days.length) { say('Una rutina necesita al menos un día.'); return; } d.when = days.length === 7 ? { kind: 'daily', at: w.at } : { kind: 'weekly', days, at: w.at }; render(); box.querySelector(`.so-card[data-msg="${CSS.escape(c.dataset.msg)}"][data-k="${o.k}"] .so-day[data-d="${n}"]`)?.focus(); return; }
     const pastT = e.target.closest('.sb-pastt, .sb-pastn'); if (pastT) { const it = pastT.closest('.sb-item[data-msg]'); edit(it.dataset.msg, +it.dataset.i).at = pastT.classList.contains('sb-pastt') ? +pastT.dataset.at : null; render(); box.querySelector(`.sb-item[data-msg="${CSS.escape(it.dataset.msg)}"][data-i="${it.dataset.i}"] .sb-atin`)?.focus(); return; }
     const q = e.target.closest('.sb-chips [data-q]'); if (q) { if (q.dataset.img && ctxSel && (ctxSel.kind === 'image' || ctxSel.kind === 'images')) addGallery(ctxSel.kind === 'image' ? [ctxSel.id] : ctxSel.ids || []); return send(q.dataset.q); }

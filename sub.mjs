@@ -37,7 +37,15 @@ const MAX = 120;
 export const MODES = ['charla', 'estado', 'analisis', 'plan', 'pregunta', 'estudio'];
 export const OPS = ['rutina_crear', 'rutina_saltar', 'pieza_crear', 'pieza_mover', 'tarea_mover', 'tarea_cancelar',
   // 9 oct 2026 (revisión de control): las rutinas enteras, la prioridad y la fecha límite, lo del dueño, otra vez lo que falló, llenar la semana
-  'rutina_pausar', 'rutina_reanudar', 'rutina_editar', 'rutina_ahora', 'tarea_editar', 'tarea_repetir', 'mia_delegar', 'mia_hecha', 'contenido_llenar'];
+  'rutina_pausar', 'rutina_reanudar', 'rutina_editar', 'rutina_ahora', 'tarea_editar', 'tarea_repetir', 'mia_delegar', 'mia_hecha', 'contenido_llenar',
+  // Fase A2 de Anuncios (9 oct 2026): los anuncios de Meta. Pausar y bajar el presupuesto bajan el gasto (un clic del dueño en la tarjeta);
+  // los de OPS_GASTO gastan dinero: la tarjeta dice la cifra y HACER pide un SEGUNDO clic del dueño (anuncios/acciones.mjs lo exige en el
+  // servidor), y el asistente por MCP no los puede hacer (oficina/rutas.mjs → 403).
+  'anuncio_pausar', 'anuncio_bajar_presupuesto', 'anuncio_activar', 'anuncio_reanudar', 'anuncio_subir_presupuesto', 'anuncio_relanzar'];
+/** Plan §3.1: lo que GASTA dinero en Meta. Nunca se hace sin el segundo clic del dueño, ni por encima de sus topes. */
+export const OPS_GASTO = ['anuncio_activar', 'anuncio_reanudar', 'anuncio_subir_presupuesto', 'anuncio_relanzar'];
+/** Cada op de anuncios → el tipo de anuncios/acciones.mjs. */
+export const ANUNCIO_TIPO = { anuncio_pausar: 'pausar', anuncio_bajar_presupuesto: 'bajar_presupuesto', anuncio_activar: 'activar', anuncio_reanudar: 'reanudar', anuncio_subir_presupuesto: 'subir_presupuesto', anuncio_relanzar: 'relanzar' };
 /** Banco de presets F3 (D16): las acciones cerradas sobre un lote del Estudio. Cada una es una tarjeta que espera el clic del dueño
  *  (POST /api/sub/studio, la única puerta); lote_reintentar gasta y su tarjeta dice cuánto; lote_aprobar no envía nada fuera. */
 export const ACTIONS = ACCIONES_LOTE;
@@ -152,6 +160,7 @@ OPS — el calendario, las tareas y Contenido (cada una es una tarjeta que esper
 - {"type":"pieza_crear","titulo":"<…>","fecha":"YYYY-MM-DD o vacío","hora":"HH:MM o vacío","formato":"post|reel|carrusel|historia","redes":["instagram","facebook"],"texto":"<el texto de la publicación>"} — nace BORRADOR en Contenido. Redes posibles: ${REDES.join(', ')}.
 - {"type":"pieza_mover","id":"<id de una pieza de <estado>>","fecha":"YYYY-MM-DD","hora":"HH:MM"} — si estaba aprobada, pierde el OK (el dueño la vuelve a aprobar).
 - {"type":"contenido_llenar","dias":7,"redes":["instagram"],"pide":"<qué quiere el dueño, opcional>"} — «Llenar la semana»: los días sin publicación de los próximos N días (1–14) con su mejor hora; lo que funcionó y no sale hace 8 semanas vuelve (a revisar) y el resto se lo pide a Marketing como borradores.
+- ANUNCIOS (ids EXACTOS de «Anuncios de Meta» en <estado>; "valor" en US$). Bajan el gasto (un clic): {"type":"anuncio_pausar","id"} · {"type":"anuncio_bajar_presupuesto","id","valor":10}. GASTAN (la tarjeta dice la cifra; el dueño pulsa DOS veces; nunca sobre sus topes): {"type":"anuncio_activar","id"} · {"type":"anuncio_reanudar","id"} · {"type":"anuncio_subir_presupuesto","id","valor":18} · {"type":"anuncio_relanzar","id"} (si terminó: una copia en pausa). A un conjunto «Aprendiendo», como mucho +20 % cada 2–3 días.
 - Nunca apruebas, envías, programas en Meta ni publicas: eso lo hace el dueño. Si pide eso, dile dónde (Contenido, K; aprobaciones ⚠; Telegram).
 
 MODO ESTUDIO (creativos)
@@ -257,7 +266,7 @@ export function publicacionText(e) {
 /**
  * Fase A1 de Anuncios (8 oct 2026): los anuncios de Meta para <estado> — la cuenta, el gasto de hoy, la semana y el mes contra los topes,
  * los resultados de 7 días y su costo, lo activo y lo que tiene problemas, siempre con ids. `v` es lo que contesta GET /api/anuncios
- * (anuncios/rutas.mjs → completa('7d')). Solo lectura: en esta fase Dimitri no propone cambios de anuncios (A2).
+ * (anuncios/rutas.mjs → completa('7d')). Desde A2 (9 oct 2026) Dimitri propone cambios con las ops anuncio_* (ver OPS y OPS_GASTO).
  */
 export function anunciosText(v) {
   if (!v) return '';
@@ -270,7 +279,7 @@ export function anunciosText(v) {
   if (conProblemas) out.push('Con problemas:\n' + anunciosCampanas(v, { estado: 'problemas', nivel: 'anuncio' }).split('\n').filter(l => / PROBLEMA: |^- CAMPAÑA/.test(l)).join('\n'));
   const pausadas = (v.campanas || []).filter(c => c.estado !== 'ACTIVE');
   if (pausadas.length) out.push(`Pausadas o terminadas (${pausadas.length}): ${pausadas.slice(0, 8).map(c => `${c.id} «${clip(c.nombre, 40)}» (${c.estadoTexto})`).join('; ')}`);
-  out.push(`Leído de Meta: ${v.sincronizadaAt}${v.cifrasAt ? '' : ' (las cifras todavía no)'}${v.error ? ` · el último intento falló: ${clip(v.error, 160)}` : ''}. En esta fase solo se lee: pausar, activar o cambiar presupuestos todavía no se hace desde la oficina.`);
+  out.push(`Leído de Meta: ${v.sincronizadaAt}${v.cifrasAt ? '' : ' (las cifras todavía no)'}${v.error ? ` · el último intento falló: ${clip(v.error, 160)}` : ''}. Puedes proponer pausar o bajar un presupuesto (un clic del dueño) y activar, reanudar, subir un presupuesto o relanzar (gastan: dos clics del dueño, dentro de sus topes), con los ids de arriba.`);
   const t = out.join('\n');
   return t.length > 5000 ? t.slice(0, 4990) + '…' : t;
 }
@@ -496,7 +505,7 @@ function cleanWhen(w0) {
  * The owner's own tasks (person 'Tú') are never moved or cancelled as an agent's: they move by their «limite» (tarea_editar), they are
  * delegated (mia_delegar) or marked done (mia_hecha) — and only with the owner's click, like everything here.
  */
-export function parseOps(list, { depts = {}, agents = [], routineDepts = [], routines = [], tasks = [], piezaHas = () => false, now = Date.now(), owner = false } = {}) {
+export function parseOps(list, { depts = {}, agents = [], routineDepts = [], routines = [], tasks = [], piezaHas = () => false, anuncio = () => null, now = Date.now(), owner = false } = {}) {
   const out = [], dropped = [], motivos = [];
   const deptOk = k => !!depts[k] && k !== 'brain';
   for (const o of (Array.isArray(list) ? list : []).slice(0, 12)) {
@@ -571,6 +580,17 @@ export function parseOps(list, { depts = {}, agents = [], routineDepts = [], rou
       else if (t.person !== DUENO) why = 'no es del dueño';
       else if (t.state === 'done') why = 'ya estaba hecha';
       else v = { type: o.type, id: t.id, title: t.title };
+    } else if (ANUNCIO_TIPO[o.type]) { // A2: el id tiene que estar en lo leído de Meta; lo demás (topes, estado de ahora) lo mira anuncios/acciones.mjs
+      const a = anuncio(String(o.id || '')), presupuesto = o.type === 'anuncio_bajar_presupuesto' || o.type === 'anuncio_subir_presupuesto';
+      const valor = Math.round(Number(String(o.valor ?? '').replace(/[^\d.,-]/g, '').replace(',', '.')) * 100) / 100, actual = a?.presupuesto?.usd ?? null;
+      if (!a) why = 'ese id no está en lo leído de Meta';
+      else if (presupuesto && a.tipo === 'anuncio') why = 'un anuncio no tiene presupuesto propio: es el de su conjunto o su campaña';
+      else if (presupuesto && actual === null) why = 'eso no tiene presupuesto propio';
+      else if (presupuesto && !(valor > 0)) why = 'falta el presupuesto nuevo en US$';
+      else if (o.type === 'anuncio_bajar_presupuesto' && valor >= actual) why = `bajar es a menos de US$${actual}`;
+      else if (o.type === 'anuncio_subir_presupuesto' && valor <= actual) why = `subir es a más de US$${actual}`;
+      else if (o.type === 'anuncio_pausar' && a.estado === 'PAUSED') why = 'ya está en pausa';
+      else v = { type: o.type, id: String(o.id), nivel: a.tipo, title: clip(a.nombre, 80), nombre: clip(a.nombre, 80), ...(presupuesto ? { valor, antes: { presupuesto: a.presupuesto } } : {}), ...(OPS_GASTO.includes(o.type) ? { gasto: true } : {}) };
     }
     if (v) out.push(v); else { dropped.push(o.type); motivos.push({ type: o.type, why: why || 'algo no cuadra con la oficina' }); }
     if (out.length >= 10) break;
@@ -580,7 +600,8 @@ export function parseOps(list, { depts = {}, agents = [], routineDepts = [], rou
 /** The ops that could not be read, in one line for the owner (never dropped in silence). */
 export function motivosText(motivos = []) {
   if (!motivos.length) return '';
-  const NOMBRE = { rutina_crear: 'crear una rutina', rutina_saltar: 'saltar una ejecución', rutina_pausar: 'pausar una rutina', rutina_reanudar: 'reanudar una rutina', rutina_editar: 'cambiar una rutina', rutina_ahora: 'correr una rutina', pieza_crear: 'crear una pieza', pieza_mover: 'mover una pieza', contenido_llenar: 'llenar la semana', tarea_mover: 'mover una tarea', tarea_cancelar: 'cancelar una tarea', tarea_editar: 'cambiar una tarea', tarea_repetir: 'repetir una tarea', mia_delegar: 'delegar tu tarea', mia_hecha: 'marcar hecha tu tarea' };
+  const NOMBRE = { rutina_crear: 'crear una rutina', rutina_saltar: 'saltar una ejecución', rutina_pausar: 'pausar una rutina', rutina_reanudar: 'reanudar una rutina', rutina_editar: 'cambiar una rutina', rutina_ahora: 'correr una rutina', pieza_crear: 'crear una pieza', pieza_mover: 'mover una pieza', contenido_llenar: 'llenar la semana', tarea_mover: 'mover una tarea', tarea_cancelar: 'cancelar una tarea', tarea_editar: 'cambiar una tarea', tarea_repetir: 'repetir una tarea', mia_delegar: 'delegar tu tarea', mia_hecha: 'marcar hecha tu tarea',
+    anuncio_pausar: 'pausar un anuncio', anuncio_bajar_presupuesto: 'bajar un presupuesto de anuncios', anuncio_activar: 'activar un anuncio', anuncio_reanudar: 'reanudar un anuncio', anuncio_subir_presupuesto: 'subir un presupuesto de anuncios', anuncio_relanzar: 'relanzar una campaña' };
   return `_(No incluyo ${motivos.length === 1 ? 'un cambio' : motivos.length + ' cambios'} que pensé: ${motivos.slice(0, 4).map(m => `${NOMBRE[m.type] || m.type} — ${m.why}`).join('; ')}.)_`;
 }
 

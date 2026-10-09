@@ -3,7 +3,7 @@
 // tienen que ser las de Meta. Cada regla que se le añada lleva su caso aquí.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { crearMetaStand, TOKEN_STAND, CUENTA_STAND, PRESUPUESTO_MINIMO_CENTAVOS } from './meta-stand.mjs';
+import { crearMetaStand, TOKEN_STAND, CUENTA_STAND, PRESUPUESTO_MINIMO_CENTAVOS, SPEND_CAP_MINIMO_CENTAVOS } from './meta-stand.mjs';
 
 const G = 'https://graph.test/v26.0';
 const pedir = async (g, metodo, ruta, campos) => {
@@ -140,4 +140,38 @@ test('insights: con time_increment, una fila por día; sin él, una por objeto d
   const ad1 = porAnuncio.data.find(f => f.ad_id === 'AD1'); assert.equal(ad1.spend, '6'); assert.equal(ad1.reach, '90', 'el alcance del rango no es 80 + 90');
   const cuenta = await pedir(g, 'GET', `/${CUENTA_STAND}/insights?level=account&time_range=${rango}`);
   assert.equal(cuenta.data.length, 1); assert.equal(cuenta.data[0].impressions, '300');
+});
+
+test('A2: spend_cap por debajo de US$100 lo rechaza Meta; validate_only al cambiar no cambia nada; lo archivado no se vuelve a encender', async () => {
+  const g = crearMetaStand();
+  assert.match((await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana({ spend_cap: SPEND_CAP_MINIMO_CENTAVOS - 1 }))).error.error_user_msg, /10000 centavos/);
+  const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana({ spend_cap: SPEND_CAP_MINIMO_CENTAVOS }));
+  assert.ok(c.id, 'US$100 justos, sí');
+  assert.equal((await pedir(g, 'POST', `/${c.id}`, { spend_cap: 5000 })).error.code, 100);
+  const v = await pedir(g, 'POST', `/${c.id}`, { status: 'ACTIVE', execution_options: ['validate_only'] });
+  assert.equal(v.success, true); assert.equal(g.st.campanas[c.id].status, 'PAUSED', 'validar no cambia'); assert.equal(g.st.validadas.length, 1); assert.equal(g.st.cambios.length, 0);
+  const bajo = await pedir(g, 'POST', `/${c.id}`, { daily_budget: 50, execution_options: ['validate_only'] });
+  assert.equal(bajo.error.error_subcode, 1885272); assert.match(bajo.error.error_user_msg, /100 centavos/);
+  await pedir(g, 'POST', `/${c.id}`, { status: 'ARCHIVED' }); assert.deepEqual(g.st.cambios.map(x => x.campos.status), ['ARCHIVED']);
+  assert.match((await pedir(g, 'POST', `/${c.id}`, { status: 'ACTIVE' })).error.message, /archived/);
+});
+
+test('A2: copies síncrono con más de 3 anuncios da error; por partes (campaña sola, conjunto, anuncio) sí; validate_only no copia', async () => {
+  const g = crearMetaStand();
+  const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana());
+  const s = await pedir(g, 'POST', `/${CUENTA_STAND}/adsets`, { campaign_id: c.id, name: 's', optimization_goal: 'LINK_CLICKS', billing_event: 'IMPRESSIONS', targeting: segmentacion, status: 'PAUSED' });
+  const cr = await pedir(g, 'POST', `/${CUENTA_STAND}/adcreatives`, { object_story_spec: { page_id: 'P1' } });
+  const ads = []; for (let i = 0; i < 4; i++) ads.push((await pedir(g, 'POST', `/${CUENTA_STAND}/ads`, { adset_id: s.id, name: `a${i}`, creative: { creative_id: cr.id }, status: 'PAUSED' })).id);
+  const n = Object.keys(g.st.campanas).length;
+  const mucho = await pedir(g, 'POST', `/${c.id}/copies`, { deep_copy: true, status_option: 'PAUSED' });
+  assert.equal(mucho.error.code, 100); assert.match(mucho.error.message, /more than 3/); assert.equal(Object.keys(g.st.campanas).length, n, 'no copió nada');
+  assert.equal((await pedir(g, 'POST', `/${c.id}/copies`, { deep_copy: false, status_option: 'PAUSED', execution_options: ['validate_only'] })).success, true);
+  assert.equal(Object.keys(g.st.campanas).length, n, 'validar no copia');
+  const sola = await pedir(g, 'POST', `/${c.id}/copies`, { deep_copy: false, status_option: 'PAUSED' });
+  assert.equal(Object.values(g.st.conjuntos).filter(x => x.campaign_id === sola.copied_campaign_id).length, 0, 'sin deep_copy, la campaña sola');
+  assert.equal((await pedir(g, 'POST', `/${s.id}/copies`, { campaign_id: sola.copied_campaign_id, deep_copy: true, status_option: 'PAUSED' })).error.code, 100, 'el conjunto con 4 anuncios tampoco va de una vez');
+  const cs = await pedir(g, 'POST', `/${s.id}/copies`, { campaign_id: sola.copied_campaign_id, deep_copy: false, status_option: 'PAUSED', end_time: '2026-11-01T00:00:00+0000' });
+  assert.equal(g.st.conjuntos[cs.copied_adset_id].campaign_id, sola.copied_campaign_id); assert.equal(g.st.conjuntos[cs.copied_adset_id].end_time, '2026-11-01T00:00:00+0000');
+  for (const a of ads) { const ca = await pedir(g, 'POST', `/${a}/copies`, { adset_id: cs.copied_adset_id, status_option: 'PAUSED' }); assert.equal(g.st.anuncios[ca.copied_ad_id].status, 'PAUSED'); }
+  assert.equal(Object.values(g.st.anuncios).filter(x => x.adset_id === cs.copied_adset_id).length, 4);
 });
