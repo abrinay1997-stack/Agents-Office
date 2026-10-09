@@ -7,6 +7,8 @@
 //   POST /api/oficina/accion { op: { type, … } }  → { ok, hecho, op, deshacer, hasta } | 409 { error, motivo }
 //   POST /api/oficina/deshacer { deshacer }       → { ok } | 409 { error }
 // NUNCA hay aquí aprobar, enviar, publicar, pagar ni borrar: esas acciones no están en sub.OPS y por eso no pasan el validador.
+// Ni GASTAR (Fase A2 de Anuncios, 9 oct 2026): los tipos de sub.OPS_GASTO (activar, reanudar, subir un presupuesto, relanzar) dan 403 aquí
+// —son del dueño, con dos clics—; el asistente puede pausar y bajar presupuestos, y no deshacerlo (deshacer vuelve a gastar).
 // Lo que propone Dimitri espera el OK en una rutina nueva y aquí también (el asistente no es el dueño pulsando la casilla).
 import crypto from 'node:crypto';
 import { MAPA, REGLAS_ASISTENTE } from './mapa.mjs';
@@ -26,6 +28,13 @@ export const ACCIONES = {
   pieza_crear: 'titulo, texto, fecha?, hora?, formato? post|reel|carrusel|historia, redes? — nace BORRADOR',
   pieza_mover: 'id, fecha, hora? — si estaba aprobada pierde el OK',
   contenido_llenar: 'dias? 1-14, redes?, pide? — los días sin publicación, como «Llenar la semana»',
+  // Fase A2 de Anuncios: bajar el gasto, sí; gastar, no (403 aquí: lo hace el dueño con dos clics)
+  anuncio_pausar: 'id (campaña, conjunto o anuncio de ver_anuncios) — deja de gastar; no se deshace desde aquí',
+  anuncio_bajar_presupuesto: 'id (campaña o conjunto con presupuesto), valor (US$, menos que el de ahora) — no se deshace desde aquí',
+  anuncio_activar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics, en Anuncios o Telegram)',
+  anuncio_reanudar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
+  anuncio_subir_presupuesto: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
+  anuncio_relanzar: 'NO desde aquí: gasta dinero (solo el dueño, con dos clics)',
 };
 
 export function crearRutasOficina({ json, body, sub, opsContext, runOp, undoOp, estadoTexto, calendarioTexto, etiqueta = o => o.type, auditar = () => {}, ahora = () => Date.now() }) {
@@ -35,6 +44,7 @@ export function crearRutasOficina({ json, body, sub, opsContext, runOp, undoOp, 
   async function accion(op) {
     if (!op || typeof op !== 'object') return { status: 400, error: 'falta la acción: { op: { type, … } }' };
     if (!sub.OPS.includes(op.type)) return { status: 403, error: `«${String(op.type || '?').slice(0, 40)}» no se puede hacer desde aquí. Aprobar, enviar, publicar, pagar o borrar lo hace el dueño en la oficina o en Telegram.` };
+    if ((sub.OPS_GASTO || []).includes(op.type)) { auditar({ accion: op.type, id: op.id || null, ok: false, error: 'gasta dinero' }); return { status: 403, error: `«${op.type}» gasta dinero en anuncios: solo lo hace el dueño, con dos clics y dentro de sus topes, en Anuncios (J) o en Telegram. Desde aquí puedes pausar (anuncio_pausar) o bajar un presupuesto (anuncio_bajar_presupuesto).` }; }
     const { ops: [v], motivos } = sub.parseOps([op], { ...opsContext(), owner: false });
     if (!v) return { status: 409, error: `no se puede: ${motivos[0]?.why || 'algo no cuadra con la oficina'}`, motivo: motivos[0]?.why || '' };
     try { await runOp(v, { por: 'asistente' }); }
@@ -47,11 +57,11 @@ export function crearRutasOficina({ json, body, sub, opsContext, runOp, undoOp, 
     return { ok: true, hecho: etiqueta(v), op: vista, ...(token ? { deshacer: token, hasta: new Date(ahora() + DESHACER_MS).toISOString() } : { aviso: 'esto no se puede deshacer desde aquí' }) };
   }
 
-  function deshacer(token) {
+  async function deshacer(token) {
     limpiar();
     const h = hechas.get(String(token || ''));
     if (!h) return { status: 409, error: 'esa clave ya no sirve: pasaron más de 10 minutos, ya se deshizo o la oficina se reinició. Cámbialo con otra acción.' };
-    const r = undoOp(h.o, { por: 'asistente' }); if (r.error) return { status: 409, error: r.error };
+    const r = await undoOp(h.o, { por: 'asistente' }); if (r.error) return { status: 409, error: r.error };
     hechas.delete(String(token)); auditar({ accion: 'deshacer:' + h.o.type, id: h.o.id || null, ok: true });
     return { ok: true, deshecho: etiqueta(h.o) };
   }
@@ -70,7 +80,7 @@ export function crearRutasOficina({ json, body, sub, opsContext, runOp, undoOp, 
         return json(res, 200, { desde, hasta, texto: calendarioTexto({ desde, hasta }) }), true;
       }
       if (p === '/api/oficina/accion' && req.method === 'POST') { const b = await body(req); const r = await accion(b.op || b); return json(res, r.status || 200, r.status ? { error: r.error, ...(r.motivo ? { motivo: r.motivo } : {}) } : r), true; }
-      if (p === '/api/oficina/deshacer' && req.method === 'POST') { const b = await body(req); const r = deshacer(b.deshacer || b.token); return json(res, r.status || 200, r.status ? { error: r.error } : r), true; }
+      if (p === '/api/oficina/deshacer' && req.method === 'POST') { const b = await body(req); const r = await deshacer(b.deshacer || b.token); return json(res, r.status || 200, r.status ? { error: r.error } : r), true; }
       return json(res, 404, { error: 'esa dirección de la oficina no existe' }), true;
     } catch (e) { return json(res, 500, { error: e.message }), true; }
   };

@@ -94,6 +94,7 @@ import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
 import { crearMetaAds } from './anuncios/meta-ads.mjs'; // Fase A1 de Anuncios (8 oct 2026): el panel de Anuncios, SOLO LECTURA (docs/plan-meta-anuncios-y-bandeja-2026-10-09.md)
 import { crearSincronizador as crearSincAnuncios } from './anuncios/sincronizar.mjs';
 import { crearRutasAnuncios } from './anuncios/rutas.mjs';
+import { crearAcciones as crearAccionesAnuncios } from './anuncios/acciones.mjs'; // Fase A2 (9 oct 2026): pausar, presupuestos, relanzar — los dos clics del dinero, en el servidor
 import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from './anuncios/modelo.mjs';
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
@@ -189,10 +190,17 @@ const INDICADORES_META = [
 ];
 const meta = crearMeta({ dir: ANALITICAS_DIR });
 // Fase A1 de Anuncios (8 oct 2026): leer la cuenta publicitaria (cfg.anuncios.cuenta) con el mismo cliente y el mismo freno que Analíticas.
-// Lo leído vive en data/anuncios/ (no viaja; nunca un token). Aquí NADA escribe en Meta: eso llega en A2 con sus candados (plan §3).
+// Lo leído vive en data/anuncios/ (no viaja; nunca un token). Lo único que escribe en Meta es anuncios/acciones.mjs (Fase A2, abajo), con
+// sus candados (plan §3): quién, los dos clics del dinero y los topes, decididos aquí en el servidor.
 const ANUNCIOS_DIR = path.join(DATA, 'anuncios');
 const DEF_ANUNCIOS = Object.fromEntries(['topeDiario', 'topeMensual', 'topeCampana'].map(k => [k, settings.FIELDS.find(f => f.path === 'anuncios.' + k)?.default ?? null]));
-const anuncios = crearSincAnuncios({ meta, ads: crearMetaAds({ meta }), dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o) });
+const anunciosAds = crearMetaAds({ meta });
+const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o) });
+const anunciosAcc = crearAccionesAnuncios({ sync: anuncios, ads: anunciosAds, undoSeconds: () => APPR().undoSeconds,
+  refrescar: () => { anuncios.sincronizar({ cifras: false }).catch(() => {}); },
+  auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'anuncios', ...a }) + '\n'); } catch {} } });
+/** A2: lo que Dimitri ve de un id de anuncios, para validar sus ops (sub.parseOps). */
+const anuncioDe = id => { try { const r = buscarAnuncio(anunciosRoutes.completa('7d'), String(id)); return r ? { tipo: r.tipo, nombre: r.objeto.nombre, estado: r.objeto.estado, presupuesto: r.objeto.presupuesto } : null; } catch { return null; } };
 const ANUNCIOS_DEPTS = Array.isArray(cfg.anuncios?.departments) ? cfg.anuncios.departments : ['marketing']; // quién recibe anuncios-mcp.mjs (solo leer)
 const ANUNCIOS_MCP = path.join(ROOT, 'anuncios-mcp.mjs');
 // plan M1 (6 oct 2026): la COLA que lleva lo aprobado al conductor (simulacro por defecto; Metricool en modo real) — contenido/programador.mjs
@@ -892,7 +900,7 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
     plan.mode = studio ? 'estudio' : 'pregunta';
     if (!plan.reply || /GENERAR|PROBAR/.test(plan.reply)) plan.reply = 'Para preparar el lote me falta un dato.';
   }
-  const parsedOps = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)) }) : { ops: [], motivos: [] };
+  const parsedOps = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe }) : { ops: [], motivos: [] };
   const ops = parsedOps.ops, opsFuera = sub.motivosText(parsedOps.motivos); // 9 oct 2026: what could not be read is said, never dropped in silence
   const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.lote ? 'Te propongo este lote. Nada se gasta hasta que pulses PROBAR o GENERAR.' : studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : studio.actions.length ? 'Esto puedo hacer con el lote; pulsa HACER si te parece.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
@@ -1228,7 +1236,7 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
    with the owner's click (POST /api/sub/ops), checked again against the office as it is now, and undoable for UNDO_MS (POST /api/sub/ops/undo).
    Never approve, schedule in Meta or publish: a piece is born a draft and a moved approved piece loses its OK (contenido.guardar). */
 const OPS_UNDO_MS = 30000;
-const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)) });
+const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe });
 /* 9 oct 2026 (revisión de control): the same executor for Dimitri's cards and for an assistant connected by MCP (POST /api/oficina/accion,
    oficina-mcp.mjs) — the rules of the routes themselves (tareas/rutas.mjs, tareas/rutas-dueno.mjs, contenido/rutas.mjs), never a copy.
    q.por says who: 'dimitri' (the owner pressed HACER on his card) or 'asistente' (the owner's own AI client). Nothing here approves,
@@ -1285,11 +1293,25 @@ async function runOp(o, { por = 'dimitri' } = {}) {
     if (r.error) throw new Error(r.error); o.agent = r.a; o.agentName = agentName(r.a); o.undo = { deAgente: prev?.deAgente || null }; return;
   }
   if (o.type === 'mia_hecha') { const r = tareasRoutes.cambiarEstado(o.id, 'done', q); if (r.error) throw new Error(r.error); o.undo = { reabrir: true, at: Date.now() }; return; }
+  if (sub.ANUNCIO_TIPO[o.type]) { // Fase A2: anuncios/acciones.mjs decide (quién, topes, Meta). Lo de gasto NO se hace aquí: vuelve la confirmación
+    const tipo = sub.ANUNCIO_TIPO[o.type], pedido = { tipo, id: o.id, ...(o.valor !== undefined ? { valor: o.valor } : {}), por };
+    if (sub.OPS_GASTO.includes(o.type) && por !== 'dimitri') throw new Error('eso gasta dinero: lo hace el dueño, con dos clics, en Anuncios (J) o en Telegram');
+    const r = await anunciosAcc.accion(pedido), c = r.cuerpo || {};
+    if (r.status !== 200) throw new Error(c.motivo || c.error || 'Meta no lo aceptó');
+    if (c.confirmar) { o.confirmar = c.confirmar; o.moneda = c.confirmar.moneda || 'USD'; o.desc = c.confirmar.texto; o.anuncio = { tipo, id: o.id, ...(c.confirmar.valor !== undefined ? { valor: c.confirmar.valor } : {}) }; o.pendiente = true; o.undo = null; if (c.aviso) o.aviso = c.aviso; return; } // el SEGUNDO clic es del dueño: /api/anuncios/accion con `confirmacion`
+    o.hecho = c.hecho?.texto || ''; o.desc = o.hecho; if (c.aviso) o.aviso = c.aviso;
+    o.undo = c.deshacer && por === 'dimitri' ? { token: c.deshacer.token } : null; // el asistente no deshace: deshacer vuelve a gastar
+    return;
+  }
   throw new Error('no sé hacer eso');
 }
-/** Puts back what runOp did (Dimitri's DESHACER, and the assistant's `deshacer`). → { error } or {} */
-function undoOp(o, { por = 'dimitri' } = {}) {
+/** Puts back what runOp did (Dimitri's DESHACER, and the assistant's `deshacer`). → { error } or {} (A2: async, for the ads) */
+async function undoOp(o, { por = 'dimitri' } = {}) {
   const u = o.undo, q = { rol: 'dueno', por }; if (!u) return { error: 'eso no se puede deshacer' };
+  if (sub.ANUNCIO_TIPO[o.type]) { // A2: volver a como estaba vuelve a gastar — solo el clic del dueño (DESHACER de la tarjeta de Dimitri), nunca el asistente
+    if (por === 'asistente') return { error: 'deshacerlo vuelve a gastar: lo hace el dueño en Anuncios (J)' };
+    const r = await anunciosAcc.deshacer({ token: u.token, por: 'dueno' }); return r.status === 200 ? {} : { error: r.cuerpo?.motivo || r.cuerpo?.error || 'no se pudo deshacer' };
+  }
   if (o.type === 'rutina_crear') removeRoutine(u.routine);
   else if (o.type === 'rutina_saltar') { const s = RSTATE[o.id]; if (s) { s.skip = (s.skip || []).filter(x => x !== u.unskip); routines.saveState(DATA, RSTATE); } }
   else if (o.type === 'rutina_pausar' || o.type === 'rutina_reanudar') { if (!editRoutine(o.id, { paused: u.paused })) return { error: 'esa rutina ya no está' }; }
@@ -1323,29 +1345,34 @@ async function subOpsRun(msgId, items) {
   const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId);
   if (!m || !m.ops) return { error: 'esa propuesta ya no existe' };
   const byK = new Map((Array.isArray(items) ? items : []).filter(e => e && Number.isInteger(e.k)).map(e => [e.k, e]));
-  let done = 0, failed = 0;
+  let done = 0, failed = 0, segundo = 0;
   for (const o of m.ops) {
     if (o.state !== 'proposed' || !byK.has(o.k)) continue;
     const e = byK.get(o.k);
     if (e.include === false) { o.state = 'skipped'; continue; }
     const pick = k => (e[k] !== undefined ? { [k]: e[k] } : {}); // the owner's edits on the card, checked again like the first time
     const base = { ...o }; if (o.type === 'rutina_crear' && !o.titled) delete base.title; // a title Dimitri did not give is the router's to write
-    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent'), ...pick('prioridad'), ...pick('limite'), ...pick('dept'), ...pick('nota'), ...pick('dias'), ...pick('pide') }], { ...opsContext(), owner: true }).ops; // owner: the card's «pide tu OK» is the owner's to untick
+    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent'), ...pick('prioridad'), ...pick('limite'), ...pick('dept'), ...pick('nota'), ...pick('dias'), ...pick('pide'), ...pick('valor') }], { ...opsContext(), owner: true }).ops; // owner: the card's «pide tu OK» is the owner's to untick
     if (!v) { o.state = 'failed'; o.error = 'ya no se puede: algo cambió en la oficina, la hora ya pasó o el horario no está completo'; failed++; continue; }
     Object.assign(o, v, { k: o.k });
-    try { await runOp(o, { por: 'dimitri' }); o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; } catch (err) { o.state = 'failed'; o.error = err.message; failed++; }
+    try {
+      await runOp(o, { por: 'dimitri' });
+      if (o.pendiente) { delete o.pendiente; o.state = 'confirmar'; delete o.error; segundo++; } // A2: gasta dinero — la tarjeta enseña o.confirmar.texto y espera el SEGUNDO clic del dueño
+      else { o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; }
+    } catch (err) { o.state = 'failed'; o.error = err.message; failed++; }
   }
   const st2 = sub.load(DATA); const i = st2.messages.findIndex(x => x.id === m.id); if (i >= 0) st2.messages[i] = m;
-  if (done || failed) st2.messages.push(sub.message('sub', `${done ? `Hecho: ${done} ${done === 1 ? 'cambio' : 'cambios'} en el calendario y la oficina. Puedes deshacerlo en la tarjeta durante ${OPS_UNDO_MS / 1000} s.` : 'No cambié nada.'}${failed ? ` ${failed} no se pudo: lo dice su tarjeta.` : ''}`));
+  if (done || failed || segundo) st2.messages.push(sub.message('sub', `${done ? `Hecho: ${done} ${done === 1 ? 'cambio' : 'cambios'} en el calendario y la oficina. Puedes deshacerlo en la tarjeta durante ${OPS_UNDO_MS / 1000} s.` : segundo ? '' : 'No cambié nada.'}${segundo ? ` ${segundo === 1 ? 'Un cambio gasta' : segundo + ' cambios gastan'} dinero en anuncios: su tarjeta dice cuánto y espera tu segundo clic (tienes 2 minutos).` : ''}${failed ? ` ${failed} no se pudo: lo dice su tarjeta.` : ''}`.trim()));
   sub.save(DATA, st2); if (done) setImmediate(pump);
-  console.log(`◆ ${DEPUTY.toLowerCase()} ops: ${done} done, ${failed} failed`);
-  return { ok: true, message: m, messages: st2.messages.slice(-1) };
+  console.log(`◆ ${DEPUTY.toLowerCase()} ops: ${done} done, ${segundo} waiting for the second click, ${failed} failed`);
+  const confirmar = m.ops.filter(o => o.state === 'confirmar' && o.confirmar).map(o => ({ k: o.k, ...o.anuncio, ...o.confirmar, sub: { msg: m.id, k: o.k } })); // A2: lo que la página pide para el segundo clic (/api/anuncios/accion con `confirmacion` y `sub`)
+  return { ok: true, message: m, messages: st2.messages.slice(-1), ...(confirmar.length ? { confirmar } : {}) };
 }
-function subOpUndo(msgId, k) {
+async function subOpUndo(msgId, k) {
   const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId), o = m?.ops?.find(x => x.k === k);
   if (!o || o.state !== 'done' || !o.undo) return { error: 'eso ya no se puede deshacer' };
   if (Date.now() - (o.doneAt || 0) > OPS_UNDO_MS) return { error: 'pasó el tiempo para deshacerlo: cámbialo en el calendario' };
-  const r = undoOp(o); if (r.error) return r;
+  const r = await undoOp(o); if (r.error) return r;
   o.state = 'undone'; delete o.undo;
   sub.save(DATA, st);
   return { ok: true, message: m };
@@ -1826,7 +1853,18 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
-const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body }); // Fase A1: /api/anuncios (solo lectura)
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio }); // Fase A1: /api/anuncios; A2: /accion y /deshacer
+/** A2: el segundo clic del dueño sobre un gasto que propuso Dimitri (`sub: { msg, k }`, o solo la `confirmacion`: se busca la tarjeta que
+ *  tiene ese token) deja su tarjeta hecha en data/subgerente.json, para que al recargar no vuelva a pedir confirmación. */
+function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {
+  const st = sub.load(DATA);
+  let o = null;
+  if (ref?.msg) o = st.messages.find(x => x.id === String(ref.msg))?.ops?.find(x => x.k === Number(ref.k)) || null;
+  if (!o && confirmacion) for (const m of st.messages) { o = (m.ops || []).find(x => x.confirmar?.token === String(confirmacion)) || null; if (o) break; }
+  if (!o || !sub.ANUNCIO_TIPO[o.type] || o.state !== 'confirmar') return;
+  o.state = 'done'; o.doneAt = Date.now(); o.hecho = hecho?.texto || ''; o.desc = o.hecho; if (aviso) o.aviso = aviso; delete o.confirmar; o.undo = null;
+  sub.save(DATA, st);
+}
 setInterval(() => { anuncios.tick(); }, 60e3); setTimeout(() => { anuncios.tick(); }, 20e3); // el sondeo, con calma (anuncios/sincronizar.mjs: 15/60 min, ×2 o ×4 con el freno de Meta)
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
@@ -2981,7 +3019,7 @@ const server = http.createServer(async (req, res) => {
       const r = await subOps(String(msg || ''), items);
       return json(res, r.busy ? 409 : r.error ? 404 : 200, r);
     }
-    if (url.pathname === '/api/sub/ops/undo' && req.method === 'POST') { const { msg, k } = await body(req); const r = subOpUndo(String(msg || ''), +k); return json(res, r.error ? 409 : 200, r); }
+    if (url.pathname === '/api/sub/ops/undo' && req.method === 'POST') { const { msg, k } = await body(req); const r = await subOpUndo(String(msg || ''), +k); return json(res, r.error ? 409 : 200, r); }
     if (url.pathname === '/api/sub/restore' && req.method === 'POST') { const { id } = await body(req); return sub.restore(DATA, String(id || '')) ? json(res, 200, sub.load(DATA)) : json(res, 404, { error: 'esa conversación ya no se puede recuperar' }); } // DIM-18: «Nueva conversación» → DESHACER
     if (url.pathname === '/api/sub/studio' && req.method === 'POST') { // V4.8: GENERAR — the only route that generates for Dimitri
       const { msg, items, actions, lote } = await body(req); // F3: lote { accion: probar|todas|seguir|descartar, canal?, modelo? } · actions [{ k, include }]

@@ -187,7 +187,8 @@ export function publicoTexto(t) {
 
 const presupuesto = (x, moneda) => {
   const d = deMeta(x?.daily_budget, moneda, { ceroEsNada: true }), l = deMeta(x?.lifetime_budget, moneda, { ceroEsNada: true });
-  return d !== null ? { tipo: 'diario', usd: d } : l !== null ? { tipo: 'total', usd: l } : { tipo: null, usd: null };
+  // A2 (9 oct 2026): de un presupuesto total, lo que le queda por gastar (`budget_remaining`), para los topes (anuncios/topes.mjs)
+  return d !== null ? { tipo: 'diario', usd: d } : l !== null ? { tipo: 'total', usd: l, restante: deMeta(x?.budget_remaining, moneda) } : { tipo: null, usd: null };
 };
 const motivosRevision = fb => { // ad_review_feedback: { global: { 'Título de la política': 'por qué' }, placement_specific: {…} }
   const out = []; for (const grupo of Object.values(fb || {})) if (grupo && typeof grupo === 'object') for (const [k, v] of Object.entries(grupo)) out.push(typeof v === 'string' && v ? `${k}: ${v}` : k);

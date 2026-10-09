@@ -11,7 +11,7 @@
 //   alcance.json             el alcance de hoy, 7 días, 30 días y el mes, por nivel
 //   estado.json              cuándo se leyó cada cosa, el último error
 //   avisados.json            qué avisos ya se dieron (un anuncio rechazado se avisa UNA vez, no cada sondeo)
-//   historial.jsonl          los cambios hechos desde la oficina (vacío en A1: aquí nada cambia nada)
+//   historial.jsonl          los cambios hechos desde la oficina (A2: los apunta anuncios/acciones.mjs con `anotar`)
 //
 // El ritmo (plan §4.1), multiplicado por `meta.uso().ritmo` (1, 2 desde el 75 % de la cuota, 4 desde el 90 %):
 //   estructura cada 15 min con el panel abierto, 60 si no · cada 10 min mientras algo esté «en revisión» · cifras de lo activo
@@ -168,7 +168,20 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
     return { configurado: l.ok, motivo: l.motivo, sincronizadaAt: g?.sincronizadaAt || null, cifrasAt: st.cifrasAt ? new Date(st.cifrasAt).toJSON() : null, sondeoAt: st.sondeoAt ? new Date(st.sondeoAt).toJSON() : null, error: st.error || null, sincronizando: Boolean(enMarcha) };
   }
 
+  // ------------------------------------------------------------ A2 (9 oct 2026): lo que cambia anuncios/acciones.mjs
+
+  const LISTA = { campana: 'campanas', conjunto: 'conjuntos', anuncio: 'anuncios' };
+  /** Pone en cuenta.json un objeto recién leído de Meta (tras un cambio), sin esperar a la próxima lectura. Nunca un token: es lo de Graph. */
+  function ponerObjeto(nivel, datos) {
+    const k = LISTA[nivel], g = guardado(); if (!k || !g || !datos?.id) return false;
+    const l = (g[k] ||= []), i = l.findIndex(x => x.id === datos.id);
+    if (i >= 0) l[i] = { ...l[i], ...datos }; else l.push(datos);
+    escribirJSON(F.cuenta, g); return true;
+  }
+  /** Una línea más en historial.jsonl: { at, quien, que, objeto: { id, nivel, nombre }, antes, despues, … }. */
+  function anotar(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(F.historial, JSON.stringify({ at: new Date(ahora()).toJSON(), ...e }) + '\n'); }
+
   const historial = () => { try { return fs.readFileSync(F.historial, 'utf8').split('\n').filter(Boolean).map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean).slice(-500).reverse(); } catch { return []; } };
 
-  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, cuenta, estadoTexto };
+  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, cuenta, estadoTexto };
 }

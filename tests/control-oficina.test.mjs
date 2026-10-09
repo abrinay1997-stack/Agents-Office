@@ -7,6 +7,9 @@ import * as sub from '../sub.mjs';
 import { opLabel, whenWords, opsHTML } from '../src/sub-ops.js';
 import { ACCIONES } from '../oficina/rutas.mjs';
 import { MAPA, REGLAS_ASISTENTE } from '../oficina/mapa.mjs';
+import { crearRutasOficina } from '../oficina/rutas.mjs';
+import { crearAcciones } from '../anuncios/acciones.mjs';
+import { armarVista } from '../anuncios/modelo.mjs';
 
 const NOW = new Date('2026-10-09T10:00:00');
 const DEPTS = { emails: { name: 'Emails' }, sales: { name: 'Ventas' }, marketing: { name: 'Marketing' }, ops: { name: 'Operaciones' }, fin: { name: 'Finanzas' }, delivery: { name: 'Entregas' }, brain: { name: 'Cerebro' } };
@@ -102,4 +105,55 @@ test('Dimitri ve cómo sale lo publicado y el calendario de tareas en palabras, 
   assert.match(c, /«Post» \(MIA, scheduled, id ag1\)/); assert.match(c, /«Cobros» \(COBRA, rutina cobros, SALTADA\)/); assert.match(c, /2026-10-10 16:00 «Llamar a Juan» \(id mio1\)/); assert.match(c, /Contenido: nada\./);
   const s = sub.statusText([...ctx().tasks, { id: 'w1', state: 'waiting', title: 'Correo a Sol', agent: 'mia' }], AGENTS, DEPTS);
   assert.match(s, /Correo a Sol \(MIA, id w1\)/, 'lo que espera el OK lleva su id'); assert.doesNotMatch(s, /Llamar a Juan/, 'lo del dueño va aparte (resumenDueno)'); assert.match(s, /Visitar \(Ana, persona, id per1\)/);
+});
+
+// ---------------------------------------------------------------- Fase A2 de Anuncios (9 oct 2026): la regla del dinero
+
+const ANUNCIOS = { C1: { tipo: 'campana', nombre: 'Combo', estado: 'PAUSED', presupuesto: { tipo: 'diario', usd: 15 } }, S1: { tipo: 'conjunto', nombre: 'Panamá', estado: 'ACTIVE', presupuesto: { tipo: null, usd: null } }, A1: { tipo: 'anuncio', nombre: 'Foto', estado: 'ACTIVE', presupuesto: { tipo: null, usd: null } } };
+
+test('A2: las ops de anuncios — el id tiene que estar en lo leído de Meta, el presupuesto en US$ y en el sentido correcto, y lo de gasto va marcado', () => {
+  for (const t of sub.OPS_GASTO) assert.ok(sub.OPS.includes(t), t);
+  for (const t of Object.keys(sub.ANUNCIO_TIPO)) assert.ok(sub.OPS.includes(t), t);
+  assert.deepEqual(sub.OPS_GASTO, ['anuncio_activar', 'anuncio_reanudar', 'anuncio_subir_presupuesto', 'anuncio_relanzar']);
+  const r = sub.parseOps([{ type: 'anuncio_activar', id: 'C1' }, { type: 'anuncio_activar', id: 'NADA' }, { type: 'anuncio_bajar_presupuesto', id: 'C1', valor: 20 }, { type: 'anuncio_bajar_presupuesto', id: 'C1', valor: 'US$10' },
+    { type: 'anuncio_subir_presupuesto', id: 'A1', valor: 30 }, { type: 'anuncio_subir_presupuesto', id: 'S1', valor: 30 }, { type: 'anuncio_pausar', id: 'C1' }, { type: 'anuncio_pausar', id: 'A1' }, { type: 'anuncio_relanzar', id: 'C1' }], ctx({ anuncio: id => ANUNCIOS[id] || null }));
+  assert.deepEqual(r.ops.map(o => o.type), ['anuncio_activar', 'anuncio_bajar_presupuesto', 'anuncio_pausar', 'anuncio_relanzar']);
+  assert.equal(r.ops[0].gasto, true); assert.equal(r.ops[0].nombre, 'Combo'); assert.equal(r.ops[1].valor, 10); assert.equal(r.ops[1].gasto, undefined);
+  assert.deepEqual(r.motivos.map(m => m.why), ['ese id no está en lo leído de Meta', 'bajar es a menos de US$15', 'un anuncio no tiene presupuesto propio: es el de su conjunto o su campaña', 'eso no tiene presupuesto propio', 'ya está en pausa']);
+});
+
+test('A2: ningún tipo de OPS_GASTO se hace sin la confirmación del dueño — el asistente recibe 403 y Dimitri solo la cifra', async () => {
+  // el asistente: oficina/rutas.mjs corta antes de validar y antes de runOp
+  let corridas = 0, salida = null; const res = {};
+  const rutas = crearRutasOficina({ json: (r, code, b) => { salida = { code, b }; }, body: async req => req.cuerpo, sub, opsContext: () => ctx({ anuncio: id => ANUNCIOS[id] || null }), runOp: async () => { corridas++; }, undoOp: async () => ({}), estadoTexto: () => '', calendarioTexto: () => '' });
+  for (const type of sub.OPS_GASTO) {
+    await rutas({ method: 'POST', cuerpo: { op: { type, id: 'C1', valor: 30 } } }, res, new URL('http://x/api/oficina/accion'));
+    assert.equal(salida.code, 403, type); assert.match(salida.b.error, /gasta dinero/);
+  }
+  assert.equal(corridas, 0, 'runOp nunca corrió');
+  await rutas({ method: 'POST', cuerpo: { op: { type: 'anuncio_pausar', id: 'A1' } } }, res, new URL('http://x/api/oficina/accion'));
+  assert.equal(salida.code, 200, JSON.stringify(salida.b)); assert.equal(corridas, 1, 'pausar sí');
+  assert.match(ACCIONES.anuncio_activar, /NO desde aquí/);
+
+  // Dimitri y el asistente contra anuncios/acciones.mjs: nada que gaste llega a Meta (solo validate_only) sin el token y el dueño
+  const hoy = new Date().toISOString().slice(0, 10), fin = new Date(Date.now() + 5 * 864e5).toISOString();
+  const guardado = { cuenta: { id: 'act_1', currency: 'USD', timezone_name: 'UTC', account_status: 1 },
+    campanas: [{ id: 'C1', name: 'Combo · AO:b1', objective: 'OUTCOME_ENGAGEMENT', status: 'PAUSED', effective_status: 'PAUSED', daily_budget: '1500', spend_cap: '15000', stop_time: fin },
+      { id: 'C2', name: 'Vieja · AO:b1', objective: 'OUTCOME_ENGAGEMENT', status: 'PAUSED', effective_status: 'PAUSED', daily_budget: '500', start_time: '2026-01-01T00:00:00+0000', stop_time: '2026-01-05T00:00:00+0000' }],
+    conjuntos: [{ id: 'S1', campaign_id: 'C1', name: 'PA', status: 'ACTIVE', effective_status: 'CAMPAIGN_PAUSED', learning_stage_info: { status: 'SUCCESS' } }, { id: 'S2', campaign_id: 'C2', name: 'PA', status: 'ACTIVE', effective_status: 'CAMPAIGN_PAUSED', end_time: '2026-01-05T00:00:00+0000' }],
+    anuncios: [{ id: 'A1', adset_id: 'S1', campaign_id: 'C1', name: 'Foto', status: 'ACTIVE', effective_status: 'CAMPAIGN_PAUSED' }], creativos: [] };
+  const sync = { listo: () => ({ ok: true }), vista: () => armarVista({ guardado, filas: [], rango: '7d', hoy, topes: {}, hayCifras: true }), topes: () => ({ diario: 100, mensual: 3000, campana: 1000 }), hoy: () => hoy, ponerObjeto() {}, anotar() {}, sincronizar: async () => ({ ok: true }) };
+  const meta = [];
+  const ads = { leer: async id => [...guardado.campanas, ...guardado.conjuntos, ...guardado.anuncios].find(x => x.id === id), cambiar: async (id, campos, o = {}) => { meta.push({ id, campos, validar: !!o.validar }); return { success: true }; }, copiar: async (id, campos, o = {}) => { meta.push({ id, copia: true, validar: !!o.validar }); return { success: true, copied_campaign_id: 'CX' }; } };
+  const acc = crearAcciones({ sync, ads });
+  const pedidos = { anuncio_activar: { id: 'C1' }, anuncio_reanudar: { id: 'C1' }, anuncio_subir_presupuesto: { id: 'C1', valor: 18 }, anuncio_relanzar: { id: 'C2' } };
+  for (const type of sub.OPS_GASTO) {
+    const b = { tipo: sub.ANUNCIO_TIPO[type], ...pedidos[type] };
+    assert.equal((await acc.accion({ ...b, por: 'asistente' })).status, 403, type + ' del asistente');
+    const d = await acc.accion({ ...b, por: 'dimitri' });
+    assert.equal(d.status, 200, type + ': ' + JSON.stringify(d.cuerpo)); assert.ok(d.cuerpo.confirmar?.token, type); assert.ok(!d.cuerpo.ok, type + ': Dimitri no lo hace');
+    assert.equal((await acc.accion({ ...b, por: 'dimitri', confirmacion: d.cuerpo.confirmar.token })).status, 403, type + ': Dimitri no confirma');
+    assert.equal((await acc.accion({ ...b, confirmacion: 'inventado' })).status, 409, type + ': un token inventado no vale');
+  }
+  assert.ok(meta.length > 0 && meta.every(x => x.validar), 'a Meta solo le llegó validate_only: ' + JSON.stringify(meta.filter(x => !x.validar)));
 });

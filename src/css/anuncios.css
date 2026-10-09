@@ -142,6 +142,62 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
 #anuOv .anu-hist p { margin: 2px 0 0; }
 #anuOv .anu-antes { color: var(--anu-mut); font-size: 12.5px; }
 
+/* A2 (9 oct 2026): el interruptor y el «⋯» de cada fila y tarjeta. El interruptor es un botón CON TEXTO (Pausar · Activar · Reanudar),
+   nunca solo un color; lo que gasta lleva su marca «gasta» en el menú y en el detalle. Nada de opacity para «pausado». */
+#anuOv .anu-ctl { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+#anuOv .anu-int { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 99px; border: 1.5px solid var(--anu-line); background: var(--anu-card); color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap; }
+#anuOv .anu-int:hover { border-color: var(--ink); }
+#anuOv .anu-int.gasta { border-color: color-mix(in srgb, var(--t-verde) 55%, transparent); color: var(--t-verde); }
+#anuOv .anu-int-i { font-size: 11px; line-height: 1; }
+#anuOv .anu-mas { display: inline-grid; place-items: center; min-width: 30px; height: 30px; padding: 0 4px; border-radius: 9px; border: 1px solid var(--anu-line); background: transparent; color: var(--ink); cursor: pointer; font-size: 18px; line-height: 1; }
+#anuOv .anu-mas[aria-expanded="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+#anuOv .anu-dep, #anuOv .anu-sinacc { font-size: 12px; color: var(--anu-mut); white-space: nowrap; }
+#anuOv .anu-tabla td.anu-cacc { white-space: nowrap; }
+#anuOv .anu-tctl { margin-top: 2px; }
+#anuOv .anu-gasta { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--t-ambar); border: 1px solid color-mix(in srgb, var(--t-ambar) 45%, transparent); border-radius: 5px; padding: 0 5px; margin-left: 4px; }
+#anuOv .anu-dacc { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* el menú «⋯» */
+#anuOv .anu-menu-caja { position: absolute; z-index: 20; }
+#anuOv .anu-menu { display: flex; flex-direction: column; min-width: 250px; max-width: 320px; padding: 6px; background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
+#anuOv .anu-menu [role="menuitem"] { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-size: 13.5px; }
+#anuOv .anu-menu [role="menuitem"]:hover, #anuOv .anu-menu [role="menuitem"]:focus-visible { background: var(--anu-soft); }
+#anuOv .anu-menu small { font-size: 12px; color: var(--anu-mut); line-height: 1.35; }
+
+/* la ventana de la acción: el formulario, la confirmación con la cifra y los errores */
+#anuOv .anu-fondo { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(21,20,20,.45); }
+#anuOv .anu-dlg { width: 100%; max-width: 520px; max-height: calc(100% - 16px); overflow: auto; background: var(--anu-card); color: var(--ink); border: 1px solid var(--anu-line); border-radius: 16px; padding: 20px 22px; box-shadow: 0 20px 48px rgba(0,0,0,.28); outline: none; }
+#anuOv .anu-dlg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#anuOv .anu-dlg h2 { font-family: var(--serif); font-weight: 400; font-size: 21px; margin: 0 0 4px; }
+#anuOv .anu-dobj { margin: 0 0 12px; font-size: 13px; color: var(--anu-mut); overflow-wrap: anywhere; }
+#anuOv .anu-dtexto { margin: 0 0 12px; font-size: 15px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+#anuOv .anu-dact { margin: 0 0 10px; font-size: 13.5px; }
+#anuOv .anu-ccif { margin: 0 0 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; padding: 10px 12px; border-radius: 10px; background: var(--anu-soft); border: 1px solid var(--anu-line); }
+#anuOv .anu-ccif dt { font-size: 11.5px; color: var(--anu-mut); }
+#anuOv .anu-ccif dd { margin: 2px 0 0; font-size: 14px; font-weight: 700; }
+#anuOv .anu-daviso { display: flex; flex-direction: column; gap: 2px; margin: 0 0 12px; padding: 9px 12px; border-left: 4px solid var(--t-ambar); border-radius: 8px; background: color-mix(in srgb, var(--t-ambar) 10%, var(--anu-card)); font-size: 13.5px; line-height: 1.4; }
+#anuOv .anu-daviso b { color: var(--t-ambar); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; }
+#anuOv .anu-derr { margin: 0 0 10px; color: var(--t-rojo); font-size: 13.5px; font-weight: 600; }
+#anuOv .anu-derr:empty { display: none; }
+#anuOv .anu-btn.si { background: var(--ink); color: var(--cream); border-color: var(--ink); font-weight: 700; }
+#anuOv .anu-dform { margin: 0; }
+#anuOv .anu-campo { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; font-size: 12.5px; color: var(--anu-mut); }
+#anuOv .anu-campo input { min-height: 38px; padding: 0 10px; border: 1px solid var(--anu-line); border-radius: 10px; background: var(--anu-card); color: var(--ink); font-size: 15px; min-width: 0; }
+#anuOv .anu-campo input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+#anuOv .anu-imp { display: flex; align-items: center; gap: 8px; }
+#anuOv .anu-imp input { flex: 1; }
+#anuOv .anu-imp b { color: var(--ink); font-size: 13.5px; }
+#anuOv .anu-fila2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+/* el aviso de lo hecho, con DESHACER (tinta, también en oscuro) */
+#anuOv .anu-toast { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(680px, calc(100% - 32px)); padding: 8px 8px 8px 14px; border-radius: 12px; background: #151414; color: #FDFFF8; box-shadow: 0 12px 32px rgba(0,0,0,.25); font-size: 13.5px; line-height: 1.4; }
+#anuOv .anu-toast .anu-tt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#anuOv .anu-toast em { font-style: normal; color: #F2B84B; }
+#anuOv .anu-toast .anu-btn.pri { background: #FDFFF8; color: #151414; border-color: #FDFFF8; white-space: nowrap; }
+#anuOv .anu-toast .anu-icb { color: #FDFFF8; border-color: rgba(253,255,248,.3); }
+#anuOv .anu-toast :focus-visible { outline-color: #8FB0FF; }
+#anuOv .anu-cuerpo { position: relative; }
+
 /* estrecho: la vista, no la ventana (Dimitri al lado la estrecha) */
 @container anuview (max-width: 1100px) {
 #anuOv .anu-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -168,6 +224,9 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
 #anuOv .anu-tabla td { font-size: 13px; }
 #anuOv .anu-tabla td::before { content: attr(data-l); display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--anu-mut); }
 #anuOv .anu-tabla .anu-n { text-align: left; }
+#anuOv .anu-tabla td.anu-cacc { grid-column: 1 / -1; }
+#anuOv .anu-tabla td.anu-cacc::before { display: none; }
+#anuOv .anu-toast { left: 12px; right: 12px; transform: none; width: auto; max-width: none; flex-wrap: wrap; }
 }
 @container anuview (max-width: 520px) {
 #anuOv .anu-kpis { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -179,4 +238,7 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
 #anuOv .anu-tcif { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #anuOv .anu-datos, #anuOv .anu-cifras { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 #anuOv .anu-avisos li { flex-direction: column; gap: 2px; }
+#anuOv .anu-dlg { padding: 16px; }
+#anuOv .anu-fila2, #anuOv .anu-ccif { grid-template-columns: minmax(0, 1fr); }
+#anuOv .anu-menu { min-width: 0; max-width: calc(100vw - 32px); }
 }

@@ -111,3 +111,70 @@ test('plan D: /yo te deja una tarea (con la fecha en palabras), /mias trae lo tu
     tgSrv.closeAllConnections?.(); office.closeAllConnections?.(); tgSrv.close(); office.close(); fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('Anuncios A2: /anuncios trae lo activo con ⏸ Pausar (un toque) y lo pausado con ✅ Activar, que pide la cifra y un SEGUNDO toque; un aprobador no toca nada', async () => {
+  const calls = { tg: [], office: [] };
+  let updates = [];
+  const tgSrv = http.createServer((req, res) => { let b = ''; req.on('data', d => b += d); req.on('end', () => {
+    const m = req.url.split('/').pop(), body = JSON.parse(b || '{}'); calls.tg.push({ m, body });
+    const result = m === 'getUpdates' ? updates.splice(0) : m === 'sendMessage' ? { message_id: 1 } : true;
+    if (m === 'getUpdates' && !result.length) return setTimeout(() => { res.end(JSON.stringify({ ok: true, result: [] })); }, 30);
+    res.end(JSON.stringify({ ok: true, result }));
+  }); });
+  const office = http.createServer((req, res) => { let b = ''; req.on('data', d => b += d); req.on('end', () => {
+    const j = b ? JSON.parse(b) : {}; calls.office.push({ method: req.method, url: req.url, body: j }); res.setHeader('content-type', 'application/json');
+    if (req.url === '/api/anuncios?rango=hoy') return res.end(JSON.stringify({ cuenta: { id: 'act_1' }, topes: { diario: 20, mensual: 300 }, gasto: { hoy: 4.8, mes: 40 }, avisos: [], campanas: [
+      { id: 'C1', nombre: 'Mensajes', estado: 'ACTIVE', estadoTexto: 'Activa', presupuesto: { tipo: 'diario', usd: 10 }, cifras: { gasto: 4.8, resultados: 3, resultadoTexto: 'conversaciones iniciadas' } },
+      { id: 'C2', nombre: 'Combo', estado: 'PAUSED', estadoTexto: 'En pausa', presupuesto: { tipo: 'diario', usd: 15 }, cifras: { gasto: 0 } }] }));
+    if (req.url === '/api/anuncios/accion' && j.tipo === 'pausar') return res.end(JSON.stringify({ ok: true, hecho: { texto: 'En pausa: «Mensajes» (campaña). Deja de gastar.' }, deshacer: { token: 'dz1', hasta: new Date(Date.now() + 30e3).toISOString() } }));
+    if (req.url === '/api/anuncios/accion' && j.tipo === 'activar' && !j.confirmacion) return res.end(JSON.stringify({ confirmar: { token: 'cf1', texto: 'Activar «Combo» — gasta hasta US$15 al día, US$105 esta semana', tipo: 'activar', id: 'C2', vence: new Date(Date.now() + 120e3).toISOString() } }));
+    if (req.url === '/api/anuncios/accion' && j.confirmacion) return res.end(JSON.stringify({ ok: true, hecho: { texto: 'Activado: «Combo» (campaña). Gasta hasta US$15 al día.' } }));
+    res.end(JSON.stringify({ ok: true }));
+  }); });
+  await new Promise(r => tgSrv.listen(0, '127.0.0.1', r)); await new Promise(r => office.listen(0, '127.0.0.1', r));
+  const keep = { ...process.env };
+  Object.assign(process.env, { TELEGRAM_BOT_TOKEN: TOKEN, TELEGRAM_OWNER_ID: '42', TELEGRAM_API_BASE: `http://127.0.0.1:${tgSrv.address().port}`, TELEGRAM_RETRY_MS: '50' });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-tg-'));
+  let onNotice = null;
+  const bot = T.start({ port: office.address().port, cfg: { name: 'PanaClaw', telegram: { approvers: { 7: ['marketing'] } } }, dataDir: dir, onTask: () => {}, onNotice: f => { onNotice = f; }, log: { warn() {} } });
+  const until = async (ok, ms = 5000) => { for (const end = Date.now() + ms; !ok() && Date.now() < end;) await new Promise(r => setTimeout(r, 20)); };
+  const sent = re => calls.tg.find(c => c.m === 'sendMessage' && re.test(c.body.text));
+  const acciones = () => calls.office.filter(c => c.url === '/api/anuncios/accion');
+  try {
+    assert.equal(T.parseCommand('/anuncios').cmd, 'anuncios'); assert.equal(T.parseCommand('/publicidad').cmd, 'anuncios');
+    updates.push({ update_id: 1, message: { from: { id: 42 }, chat: { id: 42 }, text: '/anuncios' } });
+    await until(() => sent(/Combo/));
+    assert.match(sent(/Anuncios<\/b>/).body.text, /hoy US\$4\.80 de un tope de US\$20/);
+    assert.deepEqual(sent(/Mensajes/).body.reply_markup.inline_keyboard[0][0], { text: '⏸ Pausar', callback_data: 'xp:C1' });
+    assert.deepEqual(sent(/Combo/).body.reply_markup.inline_keyboard[0][0], { text: '✅ Activar — gasta hasta US$15/día', callback_data: 'xa:C2' });
+    // un aprobador delegado no puede pausar ni activar
+    updates.push({ update_id: 2, callback_query: { id: 'q0', from: { id: 7 }, data: 'xp:C1', message: { message_id: 3, chat: { id: 7 } } } });
+    await until(() => calls.tg.some(c => c.m === 'answerCallbackQuery' && c.body.callback_query_id === 'q0'));
+    assert.equal(acciones().length, 0, 'el aprobador no llegó a la oficina');
+    // ⏸ Pausar: un toque, con ↶ Deshacer
+    updates.push({ update_id: 3, callback_query: { id: 'q1', from: { id: 42 }, data: 'xp:C1', message: { message_id: 4, chat: { id: 42 } } } });
+    await until(() => sent(/⏸ En pausa/));
+    assert.deepEqual(acciones()[0].body, { tipo: 'pausar', id: 'C1', por: 'dueno' });
+    assert.equal(sent(/⏸ En pausa/).body.reply_markup.inline_keyboard[0][0].callback_data, 'xu:dz1');
+    // ✅ Activar: el primer toque pide la cifra al servidor (no cambia nada) y manda «Sí, activar»; el segundo, con el token del servidor
+    updates.push({ update_id: 4, callback_query: { id: 'q2', from: { id: 42 }, data: 'xa:C2', message: { message_id: 5, chat: { id: 42 } } } });
+    await until(() => sent(/💸/));
+    assert.deepEqual(acciones()[1].body, { tipo: 'activar', id: 'C2', por: 'dueno' }, 'sin confirmación');
+    const card = sent(/💸/); assert.match(card.body.text, /Activar «Combo» — gasta hasta US\$15 al día, US\$105 esta semana/);
+    assert.deepEqual(card.body.reply_markup.inline_keyboard[0][0], { text: '✅ Sí, activar', callback_data: 'xc:cf1' });
+    updates.push({ update_id: 5, callback_query: { id: 'q3', from: { id: 42 }, data: 'xc:cf1', message: { message_id: 6, chat: { id: 42 } } } });
+    await until(() => sent(/✅ Activado/));
+    assert.deepEqual(acciones()[2].body, { tipo: 'activar', id: 'C2', confirmacion: 'cf1', por: 'dueno' });
+    updates.push({ update_id: 6, callback_query: { id: 'q4', from: { id: 42 }, data: 'xc:cf1', message: { message_id: 6, chat: { id: 42 } } } });
+    await until(() => sent(/ya no sirve/));
+    assert.equal(acciones().length, 3, 'el mismo toque dos veces no vuelve a pedir nada');
+    // el aviso de un anuncio rechazado trae ⏸ Pausar
+    onNotice({ kind: 'anuncios', level: 'warn', text: 'Meta rechazó el anuncio «Promesa» (id A9)', key: 'anuncios-rechazado:A9' });
+    await until(() => sent(/rechazó el anuncio/));
+    assert.equal(sent(/rechazó el anuncio/).body.reply_markup.inline_keyboard[0][0].callback_data, 'xp:A9');
+    assert.deepEqual(T.pausaDeAviso({ key: 'anuncios-tope:2026-10-09' }), {}, 'el aviso del tope no trae botón');
+  } finally {
+    bot.stop(); for (const k of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_OWNER_ID', 'TELEGRAM_API_BASE', 'TELEGRAM_RETRY_MS']) { if (keep[k] === undefined) delete process.env[k]; else process.env[k] = keep[k]; }
+    tgSrv.closeAllConnections?.(); office.closeAllConnections?.(); tgSrv.close(); office.close(); fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

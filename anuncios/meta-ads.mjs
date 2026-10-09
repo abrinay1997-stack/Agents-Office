@@ -4,8 +4,9 @@
 // Va encima de contenido/meta.mjs (crearMeta): el mismo token (META_ACCESS_TOKEN, nunca en un archivo), el mismo `appsecret_proof`
 // y el MISMO FRENO por uso, porque publicar, Analíticas, Anuncios y la Bandeja gastan la misma cuota. Aquí no hay `fetch` propio.
 //
-// SOLO LEE. Lo único que va por POST es el LOTE (`POST /` con `batch`), que Graph exige así; `lote()` se niega a mandar dentro
-// algo que no sea un GET. Crear, pausar o cambiar presupuestos es de las Fases A2 y A3, con sus candados (plan §3).
+// LEE, y desde la Fase A2 (9 oct 2026) también CAMBIA, pero solo por `cambiar()` y `copiar()` y siempre por `meta.enviar` (el freno).
+// Quién puede pedir un cambio, los dos clics del dinero y los topes viven en anuncios/acciones.mjs: este archivo no decide nada.
+// El LOTE (`POST /` con `batch`, que Graph exige así) sigue siendo solo de lectura: `lote()` se niega a mandar dentro algo que no sea un GET.
 //
 // Buenas prácticas (plan §4.1): `fields=` explícitos, `limit` y paginación por cursor; la estructura (cuenta, campañas, conjuntos,
 // anuncios, creativos) en UN lote; las cifras por cuenta (`/act_<id>/insights?level=ad&time_increment=1`), no objeto a objeto.
@@ -21,7 +22,7 @@ const LIMITE_LISTA = 200, LIMITE_CIFRAS = 500, MAX_PAGINAS = 20;
 export const CAMPOS = {
   cuenta: 'id,account_id,name,account_status,disable_reason,currency,timezone_name,amount_spent,spend_cap,balance',
   campanas: 'id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,bid_strategy,spend_cap,start_time,stop_time,special_ad_categories,created_time,updated_time',
-  conjuntos: 'id,name,campaign_id,status,configured_status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,bid_strategy,start_time,end_time,targeting,learning_stage_info,promoted_object,issues_info',
+  conjuntos: 'id,name,campaign_id,status,configured_status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time,targeting,learning_stage_info,promoted_object,issues_info',
   // POR VERIFICAR: `effective_instagram_media_id` en el creativo expandido (la Fase B1 lo usará para los comentarios de los anuncios).
   anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id}',
   creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id',
@@ -117,5 +118,33 @@ export function crearMetaAds({ meta }) {
     return out;
   }
 
-  return { lote, estructura, cifrasDiarias, alcances, todas };
+  // ---------------------------------------------------------------- Fase A2: leer UN objeto y cambiarlo
+
+  const NIVEL_CAMPOS = { campana: CAMPOS.campanas, conjunto: CAMPOS.conjuntos, anuncio: CAMPOS.anuncios };
+  const idValido = id => { const t = String(id || ''); if (!/^[A-Za-z0-9_]{1,40}$/.test(t)) throw new Error('id de Meta no válido'); return t; };
+
+  /** Una campaña, un conjunto o un anuncio tal como está AHORA en Meta (para el «antes» y para refrescar data/anuncios/cuenta.json). */
+  async function leer(id, nivel) {
+    if (!NIVEL_CAMPOS[nivel]) throw new Error(`nivel desconocido: ${nivel}`);
+    return meta.graph(await token(), `/${idValido(id)}`, { params: { fields: NIVEL_CAMPOS[nivel] } });
+  }
+  /**
+   * POST /<id> con los campos que cambian (status, daily_budget, lifetime_budget, end_time, stop_time, name). `validar: true` manda
+   * `execution_options: ["validate_only"]`: Meta lo revisa y contesta `{ success: true }` SIN cambiar nada (verificado el 9 oct 2026 en la
+   * referencia de Campaign, plan §13.2; POR VERIFICAR que conjuntos y anuncios lo acepten igual en v26).
+   */
+  async function cambiar(id, campos, { validar = false } = {}) {
+    if (campos && 'execution_options' in campos) throw new Error('execution_options lo pone cambiar() con `validar`');
+    return meta.enviar(await token(), `/${idValido(id)}`, { campos: { ...campos, ...(validar ? { execution_options: ['validate_only'] } : {}) } });
+  }
+  /**
+   * POST /<id>/copies (campaña, conjunto o anuncio). Verificado el 9 oct 2026 para campañas (plan §13.7): `deep_copy`, `status_option`
+   * (PAUSED por defecto), `start_time`/`end_time` de los conjuntos copiados, `rename_options`; síncrona solo con hasta 3 anuncios hijos.
+   * POR VERIFICAR: que las copias de conjuntos (`campaign_id`) y de anuncios (`adset_id`) y `validate_only` funcionen igual en v26.
+   */
+  async function copiar(id, campos, { validar = false } = {}) {
+    return meta.enviar(await token(), `/${idValido(id)}/copies`, { campos: { ...campos, ...(validar ? { execution_options: ['validate_only'] } : {}) } });
+  }
+
+  return { lote, estructura, cifrasDiarias, alcances, todas, leer, cambiar, copiar };
 }

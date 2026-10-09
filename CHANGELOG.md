@@ -1,5 +1,19 @@
 # Changelog
 
+## Anuncios de Meta, Fase A2: controlar desde la oficina — 9 oct 2026
+
+- **Lo que baja el gasto va con un clic:** pausar una campaña, un conjunto o un anuncio, bajar un presupuesto y archivar. Se deshace durante 30 segundos, salvo archivar, porque Meta no desarchiva.
+- **Lo que gasta, con dos clics, y el segundo dice la cifra:** activar, reanudar, subir un presupuesto, alargar la fecha de fin y relanzar. El texto es del tipo «Sí, activar — hasta US$15 al día, US$105 esta semana». Lo comprueba el **servidor**, no solo la página: el primer clic no cambia nada y el segundo trae un permiso de 2 minutos que vale para esa acción y esa cifra, una sola vez.
+- **Tus topes no se pasan:** al día, al mes y por campaña, sin atajo. Si no cabe, dice cuánto quedaría y contra qué tope. Una campaña de presupuesto diario sin fecha de fin no cabe en el tope por campaña; ponle fecha de fin.
+- **Meta lo valida antes:** si rechaza un presupuesto por bajo, sale su motivo y el mínimo.
+- **Aviso de aprendizaje:** subir más de un 20 % un conjunto que está aprendiendo avisa de que reinicia el aprendizaje. Avisa, no lo impide.
+- **Relanzar** algo terminado lo duplica **en pausa** con fechas nuevas; luego lo activas tú.
+- **Historial:** quién cambió qué (tú, Dimitri, tu asistente, el piloto), el antes y el después, con filtro.
+- **Dimitri** propone pausar o bajar con su clic de siempre. Si propone gastar, su tarjeta muestra la cifra y pide tu segundo clic.
+- **Telegram `/anuncios`:** pausar con un toque y activar con dos. Solo el dueño.
+- **Tu asistente** puede pausar y bajar presupuestos, nunca gastar (403). **Los agentes**, nada.
+- Tests: `anuncios-topes`, `anuncios-acciones` y `anuncios-control` (este, con el servidor real). También se ampliaron `control-oficina` (falla si algo de gasto llega a Meta sin tu confirmación), `telegram` y `anuncios-mcp`.
+
 ## Anuncios de Meta, Fase A1: el panel en solo lectura — 9 oct 2026
 
 - **Panel de Anuncios:** el megáfono de la barra (tecla **J**; en el teléfono, en «⋯»).

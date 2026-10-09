@@ -2,6 +2,10 @@
 // (file://, datos de ejemplo rotulados) a 1512 en claro y oscuro, a 1024 con Dimitri al lado y a 390; recorre Resumen, Campañas (rango,
 // filtros, desplegar, el detalle de un anuncio rechazado, Esc) e Historial; mide objetivos de 24 px, letra ≥ 10,5 px y que nada se salga
 // a lo ancho; y comprueba que el dock cabe a 390, 360 y 320 px con el aviso «⚠ N» encendido (Anuncios va en el «⋯»).
+// Fase A2 (9 oct 2026), también en la demo (en memoria, con las reglas del servidor): pausar → DESHACER; activar → la ventana con la
+// cifra → «Sí» → activa; subir el presupuesto de una que aprende → el aviso antes del «Sí»; pasar el tope → el motivo con la cifra y no
+// cambia nada; el menú «⋯» con el teclado; el historial con lo hecho y el filtro por quién. La tarjeta de gasto de Dimitri no se puede
+// simular en la demo (Dimitri necesita la oficina): la prueban tests/anuncios-vista.test.mjs y el servidor.
 // Si además hay una oficina que ya sirve /api/anuncios y /anuncios-vista.js (serve.mjs con la Fase A1), abre una temporal sin Meta:
 // la tarjeta de conexión y «Ver con datos de ejemplo». Si no, lo dice y sigue con la demo.
 //   node scripts/anuncios-recorrido.mjs   → capturas en data/capturas/anuncios/ y ✓/✗ por paso
@@ -38,6 +42,81 @@ async function abrir(page) {
   else await page.click('#topAnuncios');
   await page.waitForSelector('#anuOv .anu-kpis, #anuOv .anu-conectar', { timeout: 15000 });
   await page.waitForTimeout(300);
+}
+
+const txt = (page, s) => page.textContent(s).then(t => (t || '').replace(/\s/g, ' '));
+const visible = (page, s) => page.$eval(s, n => !n.hidden && !n.closest('[hidden]') && n.getClientRects().length > 0).catch(() => false);
+/** Fase A2 en la demo: cada acción hace lo que dice, y lo que gasta no pasa sin los dos clics ni por encima del tope. */
+async function a2(page, tag, w, pasaAxe) {
+  if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(800); }
+  await page.click('#anuOv [data-tab="campanas"]'); await page.waitForTimeout(250);
+  if (await page.$('#anuOv [data-cerrardet]')) { await page.click('#anuOv [data-cerrardet]'); await page.waitForTimeout(150); }
+  // 1 · pausar: un clic, con DESHACER
+  await page.click('#anuOv .anu-int[data-acc="pausar"][data-id="ej-c-2"]'); await page.waitForSelector('#anuOv .anu-toast:not([hidden]) [data-deshacer]', { timeout: 5000 });
+  const tt = await txt(page, '#anuOv .anu-toast');
+  step(/Pausaste/.test(tt) && /DESHACER \d+ s/.test(tt) && /En pausa/.test(await txt(page, '#anuOv [data-fila="ej-c-2"]')) && !!await page.$('#anuOv .anu-int[data-acc="reanudar"][data-id="ej-c-2"]'), `${tag}: A2 · «Pausar» es un clic: la fila dice «En pausa», el interruptor «Reanudar», y sale DESHACER con su cuenta atrás`);
+  step(!await page.$('#anuOv .anu-fondo:not([hidden])'), `${tag}: A2 · pausar no pide confirmación`);
+  ok24(await medir(page), tag, 'A2 · el aviso con DESHACER');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a2-deshacer.png`) });
+  await pasaAxe('A2 · el aviso con DESHACER');
+  await page.click('#anuOv [data-deshacer]'); await page.waitForTimeout(400);
+  step(/Activa/.test(await txt(page, '#anuOv [data-fila="ej-c-2"]')) && !!await page.$('#anuOv .anu-int[data-acc="pausar"][data-id="ej-c-2"]') && /Deshecho/.test(await txt(page, '#anuOv .anu-toast')), `${tag}: A2 · DESHACER la deja como estaba`);
+  // 2 · activar: el primer clic NO activa; la ventana dice la cifra; «Sí» activa
+  await page.click('#anuOv .anu-int[data-acc="activar"][data-id="ej-c-4"]'); await page.waitForSelector('#anuOv .anu-fondo:not([hidden]) [data-dlg="si"]', { timeout: 5000 });
+  const si = (await txt(page, '#anuOv [data-dlg="si"]')).trim(), dt = await txt(page, '#anuOv .anu-dlg');
+  step(/^Sí, activar — hasta 10,00 US\$ al día$/.test(si) && /70,00 US\$ esta semana/.test(dt) && /Esta semana/.test(dt) && /Hasta fin de mes/.test(dt), `${tag}: A2 · «Activar» abre la confirmación con la cifra («${si}»), y las cifras del día, la semana, el mes y la campaña`);
+  step(/En pausa/.test(await txt(page, '#anuOv [data-fila="ej-c-4"]')), `${tag}: A2 · el primer clic no activó nada`);
+  step(await page.$eval('#anuOv .anu-dlg', d => d.getAttribute('role') === 'dialog' && d.getAttribute('aria-modal') === 'true' && !!document.getElementById(d.getAttribute('aria-labelledby'))) && await page.evaluate(() => document.querySelector('#anuOv .anu-main').closest('[inert]') !== null || document.querySelector('#anuOv .anu').inert), `${tag}: A2 · la confirmación es una ventana (role="dialog") y lo de detrás queda inerte`);
+  ok24(await medir(page), tag, 'A2 · la confirmación');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a2-confirmar.png`) });
+  await pasaAxe('A2 · la confirmación');
+  await page.click('#anuOv [data-dlg="si"]'); await page.waitForTimeout(500);
+  step(!await visible(page, '#anuOv .anu-fondo') && /Activa/.test(await txt(page, '#anuOv [data-fila="ej-c-4"]')) && /Activaste/.test(await txt(page, '#anuOv .anu-toast')) && !!await page.$('#anuOv .anu-int[data-acc="pausar"][data-id="ej-c-4"]'), `${tag}: A2 · «Sí» la activa: la fila dice «Activa» y su interruptor ya es «Pausar»`);
+  // 3 · el menú «⋯» con el teclado; Esc lo cierra y el foco vuelve
+  await page.focus('#anuOv [data-menu="ej-c-1"]'); await page.keyboard.press('Enter'); await page.waitForSelector('#anuOv .anu-menu-caja:not([hidden]) [role="menuitem"]', { timeout: 3000 });
+  const f0 = await page.evaluate(() => document.activeElement?.getAttribute('role')); await page.keyboard.press('ArrowDown');
+  const f1 = await page.evaluate(() => document.activeElement?.dataset?.acc);
+  const notas = await txt(page, '#anuOv .anu-menu');
+  step(f0 === 'menuitem' && !!f1 && /no se borra: se archiva/.test(notas) && /gasta/.test(notas), `${tag}: A2 · el «⋯» abre un menú con el teclado (foco en el primero, ↓ al siguiente: ${f1}); dice «gasta» y «no se borra: se archiva»`);
+  ok24(await medir(page), tag, 'A2 · el menú');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a2-menu.png`) });
+  await pasaAxe('A2 · el menú');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(150);
+  step(!await visible(page, '#anuOv .anu-menu-caja') && await page.evaluate(() => document.activeElement?.dataset?.menu) === 'ej-c-1' && await page.$eval('#anuOv', o => o.classList.contains('on')), `${tag}: A2 · Esc cierra el menú, el foco vuelve al «⋯» y Anuncios sigue abierta`);
+  // 4 · subir el presupuesto de la que aprende: el aviso, ANTES del «Sí»
+  await page.click('#anuOv [data-menu="ej-c-1"]'); await page.click('#anuOv .anu-menu [data-acc="subir_presupuesto"]'); await page.waitForSelector('#anuOv .anu-dlg [data-campo="valor"]', { timeout: 3000 });
+  step(/8,00 US\$ al día/.test(await txt(page, '#anuOv .anu-dlg')) && /USD/.test(await txt(page, '#anuOv .anu-dlg')), `${tag}: A2 · el formulario dice el presupuesto de ahora y la moneda de la cuenta`);
+  await page.fill('#anuOv [data-campo="valor"]', '12'); await page.click('#anuOv .anu-dform [type="submit"]'); await page.waitForSelector('#anuOv [data-dlg="si"]', { timeout: 5000 });
+  const da = await txt(page, '#anuOv .anu-dlg'), iAviso = da.indexOf('reinicia el aprendizaje'), iSi = da.indexOf('Sí, subir');
+  step(iAviso > 0 && iSi > iAviso && /hasta 12,00 US\$ al día/.test(da), `${tag}: A2 · subir más de un 20 % lo que aprende: sale el aviso antes del «Sí, subir — hasta 12,00 US$ al día» (no lo bloquea)`);
+  await page.screenshot({ path: path.join(OUT, `${tag}-a2-aviso.png`) });
+  await pasaAxe('A2 · el aviso de aprendizaje');
+  await page.click('#anuOv [data-dlg="cancelar"]'); await page.waitForTimeout(250);
+  step(/8,00 US\$ al día/.test(await txt(page, '#anuOv [data-fila="ej-c-1"]')) && await page.evaluate(() => document.activeElement?.closest?.('[data-fila="ej-c-1"]') != null), `${tag}: A2 · «Cancelar» no cambia nada y el foco vuelve a su fila`);
+  // 5 · pasar el tope: el motivo con la cifra, y no cambia
+  await page.click('#anuOv [data-menu="ej-c-1"]'); await page.click('#anuOv .anu-menu [data-acc="subir_presupuesto"]'); await page.waitForSelector('#anuOv .anu-dlg [data-campo="valor"]');
+  await page.fill('#anuOv [data-campo="valor"]', '30'); await page.click('#anuOv .anu-dform [type="submit"]'); await page.waitForSelector('#anuOv .anu-dlg .anu-derr', { timeout: 5000 });
+  const dtope = await txt(page, '#anuOv .anu-dlg');
+  step(/No cabe en tus topes/.test(dtope) && /tope diario es 30,00 US\$/.test(dtope) && /Quedaría en/.test(dtope) && !await page.$('#anuOv [data-dlg="si"]'), `${tag}: A2 · pasar el tope: el motivo con su cifra, sin «Sí» ni atajo`);
+  ok24(await medir(page), tag, 'A2 · el tope');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a2-tope.png`) });
+  await pasaAxe('A2 · el tope');
+  await page.keyboard.press('Escape'); await page.waitForTimeout(250);
+  step(!await visible(page, '#anuOv .anu-fondo') && /8,00 US\$ al día/.test(await txt(page, '#anuOv [data-fila="ej-c-1"]')) && await page.$eval('#anuOv', o => o.classList.contains('on')), `${tag}: A2 · Esc cierra la ventana; el presupuesto sigue en 8,00 US$ y Anuncios abierta`);
+  // 6 · el historial lo cuenta
+  await page.click('#anuOv [data-tab="historial"]'); await page.waitForTimeout(300);
+  const hi = await txt(page, '#anuOv .anu-hist');
+  step(/Tú activó la campaña · Reseñas/.test(hi) && /pausó la campaña/.test(hi) && /deshizo/.test(hi) && /Antes: En pausa → Después: Activa/.test(hi), `${tag}: A2 · el Historial cuenta lo hecho: quién, qué, antes → después`);
+  await page.click('#anuOv [data-quien="dimitri"]'); await page.waitForTimeout(150);
+  step(!/activó/.test(await txt(page, '#anuOv .anu-hist')) && /Dimitri/.test(await txt(page, '#anuOv .anu-hist')), `${tag}: A2 · el filtro «Dimitri» deja solo lo suyo`);
+  ok24(await medir(page), tag, 'A2 · el Historial');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a2-historial.png`) });
+  await pasaAxe('A2 · el Historial');
+  await page.click('#anuOv [data-quien="todos"]');
+  // 7 · desde el detalle y desde el Resumen
+  await page.click('#anuOv [data-tab="resumen"]'); await page.waitForTimeout(250);
+  step(!!await page.$('#anuOv .anu-tarj [data-acc="pausar"][data-id="ej-c-4"]'), `${tag}: A2 · la tarjeta del Resumen de la recién activada trae su interruptor`);
+  if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(400); }
 }
 
 let browser;
@@ -91,7 +170,7 @@ try {
       step(gasto7 !== gasto30 && /US\$/.test(gasto30), `${tag}: el rango cambia las cifras (${gasto7.trim()} → ${gasto30.trim()})`);
       await page.click('#anuOv [data-filtro="pausa"]'); await page.waitForTimeout(200);
       const enPausa = await page.$$eval('#anuOv .anu-fila.n-campana', l => l.map(f => f.dataset.fila));
-      step(enPausa.length === 1 && enPausa[0] === 'ej-c-3' && /En pausa/.test(await page.textContent('#anuOv [data-fila="ej-c-3"]')) && /creado fuera/.test(await page.textContent('#anuOv [data-fila="ej-c-3"]')), `${tag}: «En pausa» deja la campaña en pausa, escrito y con «creado fuera»`);
+      step(enPausa.length === 2 && enPausa.includes('ej-c-3') && enPausa.includes('ej-c-4') && /En pausa/.test(await page.textContent('#anuOv [data-fila="ej-c-3"]')) && /creado fuera/.test(await page.textContent('#anuOv [data-fila="ej-c-3"]')), `${tag}: «En pausa» deja la campaña en pausa, escrito y con «creado fuera»`);
       await page.click('#anuOv [data-filtro="problemas"]'); await page.waitForTimeout(200);
       step((await page.$$eval('#anuOv .anu-fila.n-campana', l => l.length)) === 2, `${tag}: «Con problemas» deja las dos con un anuncio rechazado o con problemas`);
       await page.click('#anuOv [data-filtro="todas"]'); await page.click('#anuOv [data-rango="7d"]'); await page.waitForTimeout(300);
@@ -101,7 +180,7 @@ try {
       await pasaAxe('Campañas');
       // Historial
       await page.click('#anuOv [data-tab="historial"]'); await page.waitForTimeout(300);
-      step(/Todavía no hay cambios/.test(await page.textContent('#anuOv .anu-main')), `${tag}: el Historial vacío dice qué aparecerá`);
+      step(/Dimitri/.test(await page.textContent('#anuOv .anu-hist')) && !!await page.$('#anuOv [data-quien="dimitri"]'), `${tag}: el Historial dice quién hizo cada cambio (y filtra por quién)`);
       await page.screenshot({ path: path.join(OUT, `${tag}-historial.png`) });
       await pasaAxe('Historial');
       // las pestañas con las flechas
@@ -121,6 +200,7 @@ try {
         await page.screenshot({ path: path.join(OUT, `${tag}-dimitri.png`) });
         await page.click('#topDimitri'); await page.waitForTimeout(400);
       }
+      await a2(page, tag, w, pasaAxe);
       // la tecla J abre y cierra
       await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('j'); await page.waitForTimeout(400);
       step(!(await page.$eval('#anuOv', o => o.classList.contains('on'))), `${tag}: J cierra Anuncios`);

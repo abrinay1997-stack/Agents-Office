@@ -97,3 +97,22 @@ test('la API: un agente lee, pide leer de Meta como mucho cada 10 minutos, y cua
     assert.deepEqual((await o.api('GET', '/api/anuncios/historial')).items, []);
   } finally { o.cerrar(); }
 });
+
+test('A2: `accion` y `deshacer` le dan 403 a un agente antes de llegar a anuncios/acciones.mjs; y anuncios-mcp.mjs sigue sin escribir', async () => {
+  const llamadas = [];
+  const acciones = { accion: async b => { llamadas.push(['accion', b]); return { status: 200, cuerpo: { ok: true } }; }, deshacer: async b => { llamadas.push(['deshacer', b]); return { status: 200, cuerpo: { ok: true } }; } };
+  const json = (res, code, b) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
+  const body = req => new Promise(ok => { let s = ''; req.on('data', d => { s += d; }); req.on('end', () => { try { ok(s ? JSON.parse(s) : {}); } catch { ok({}); } }); });
+  const handle = crearRutasAnuncios({ sync: sincDeMentira(), meta: { uso: () => ({ pct: 0, ritmo: 1 }) }, json, body, acciones });
+  const srv = http.createServer(async (req, res) => { if (!await handle(req, res, new URL(req.url, 'http://x'))) json(res, 404, {}); });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const api = async (p, b) => (await fetch(`http://127.0.0.1:${srv.address().port}${p}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) })).status;
+  try {
+    for (const tipo of ['pausar', 'bajar_presupuesto', 'archivar', 'activar', 'reanudar', 'subir_presupuesto', 'alargar', 'relanzar']) assert.equal(await api('/api/anuncios/accion', { tipo, id: 'C1', por: 'agente' }), 403, tipo);
+    assert.equal(await api('/api/anuncios/accion?por=agente', { tipo: 'pausar', id: 'C1' }), 403);
+    assert.equal(await api('/api/anuncios/deshacer', { token: 'x', por: 'agente' }), 403);
+    assert.equal(llamadas.length, 0, 'ni siquiera llega a acciones.mjs');
+    assert.equal(await api('/api/anuncios/accion', { tipo: 'pausar', id: 'C1' }), 200, 'el dueño sí'); assert.equal(llamadas[0][1].por, undefined);
+  } finally { srv.close(); }
+  for (const t of TOOLS) assert.doesNotMatch(t.name, PROHIBIDAS, `«${t.name}»`);
+});

@@ -38,7 +38,7 @@ export function initAnunciosCarga(ctx) {
     try {
       const m = await cargar();
       if (!abierta) return;
-      if (!api) api = m.init(ov, { ...ctx, cerrar: () => close() });
+      if (!api) api = m.init(ov, { ...ctx, modal, cerrar: () => close() }); // A2: la misma pila de ventanas que la página (la confirmación de lo que gasta es una)
       api.open(o);
     } catch (e) {
       ov.innerHTML = `<div role="alert" style="padding:32px;max-width:560px;font-size:14px"><p style="margin-bottom:12px">${String(e.message).replace(/</g, '&lt;')}</p><button type="button" data-reintentar style="min-height:34px;padding:0 14px;border-radius:10px;border:1px solid currentColor;background:none;color:inherit;font:inherit;cursor:pointer">Reintentar</button></div>`;
