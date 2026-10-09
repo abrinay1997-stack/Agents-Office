@@ -13,6 +13,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import dns from 'node:dns/promises';
 import net from 'node:net';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const EVENTOS = ['tarea.creada', 'tarea.estado', 'tarea.borrada', 'tarea.cambio'];
 const ESPERAS = [1000, 5000, 30000], MAX_FALLOS = 10;
@@ -34,7 +35,7 @@ export const firmar = (secreto, cuerpo) => 'sha256=' + crypto.createHmac('sha256
 export function crearWebhooks({ config = () => [], dataDir, avisar = () => {}, env = process.env, fetchImpl = fetch, resolver = h => dns.lookup(h, { all: true }), permitirLocal = false, esperas = ESPERAS }) {
   const F = path.join(dataDir, 'tareas', 'webhooks.json');
   const leer = () => { try { return JSON.parse(fs.readFileSync(F, 'utf8')); } catch { return { fallos: {}, apagados: {}, historial: [] }; } };
-  const escribir = st => { fs.mkdirSync(path.dirname(F), { recursive: true }); fs.writeFileSync(F + '.tmp', JSON.stringify(st, null, 1)); fs.renameSync(F + '.tmp', F); };
+  const escribir = st => { fs.mkdirSync(path.dirname(F), { recursive: true }); fs.writeFileSync(F + '.tmp', JSON.stringify(st, null, 1)); renombrar(F + '.tmp', F); };
   const lista = () => (Array.isArray(config()) ? config() : []).filter(w => w && w.id && w.url);
 
   async function enviarUno(w, cuerpo) {

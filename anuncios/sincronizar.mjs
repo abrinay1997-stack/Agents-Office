@@ -23,13 +23,14 @@ import path from 'node:path';
 import { mensajeMeta } from '../contenido/meta.mjs';
 import { idCuenta } from './meta-ads.mjs';
 import { armarVista, fechaEn, horaEn, sumarDias, diasEntre, rangos, RANGOS, estadoTexto, cuentaEstado } from './modelo.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const DIAS_NOCHE = 37, DIAS_GUARDADOS = 60, HORA_NOCHE = 6;
 export const MIN = { estructuraAbierto: 15, estructura: 60, revision: 10, cifras: 60 };
 export const PANEL_ABIERTO_MS = 3 * 60e3; // la página pide /api/anuncios?abierto=1 cada pocos segundos con el panel a la vista
 const EN_REVISION = new Set(['PENDING_REVIEW', 'IN_PROCESS']);
 
-const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos)); renombrar(f + '.tmp', f); };
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
 const num = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
 

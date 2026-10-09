@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as GF from '../src/galeria-filtro.js'; // INF-03: qué ficha entra en una vista, igual en el servidor y en la página
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 let root = '';
 export const dir = () => root;
@@ -56,7 +57,7 @@ export function store(buf, ext, meta) {
    references keep working) and its record says which folder it is in. <media>/folders.json keeps their names. */
 const foldersFile = () => path.join(root, 'folders.json');
 function readFolders() { try { const j = JSON.parse(fs.readFileSync(foldersFile(), 'utf8')); return Array.isArray(j.folders) ? j.folders.filter(f => f && /^c[a-z0-9]{4,20}$/.test(f.id) && typeof f.name === 'string') : []; } catch { return []; } }
-function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ folders: l }, null, 1)); fs.renameSync(f + '.tmp', f); }
+function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ folders: l }, null, 1)); renombrar(f + '.tmp', f); }
 const cleanName = n => String(n ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
 /** The folders, with how many files each holds (the ones in the bin do not count). */
 export function folders(items = index().sorted, fl = readFolders()) { // INF-03: the index itself (read only), never a copy of 5,000 records per request
@@ -145,7 +146,7 @@ function saveSnapSoon() {
   if (!snapFile || snapT) return; const f = snapFile, r = root;
   snapT = setTimeout(() => {
     snapT = null; if (f !== snapFile || r !== root || IDX.root !== r || !fs.existsSync(r) || !fs.existsSync(path.dirname(f))) return;
-    try { const months = {}; for (const [k, m] of IDX.months) months[k] = { mtime: m.mtime, items: [...m.items.values()] }; fs.writeFileSync(f + '.tmp', JSON.stringify({ v: 1, root: r, at: Date.now(), months })); fs.renameSync(f + '.tmp', f); } catch (e) { console.warn('media index:', e.message); }
+    try { const months = {}; for (const [k, m] of IDX.months) months[k] = { mtime: m.mtime, items: [...m.items.values()] }; fs.writeFileSync(f + '.tmp', JSON.stringify({ v: 1, root: r, at: Date.now(), months })); renombrar(f + '.tmp', f); } catch (e) { console.warn('media index:', e.message); }
   }, 2000); snapT.unref?.();
 }
 /** A record was rewritten in place: move its folder's mtime, so a snapshot taken before it is not trusted for that month. */
@@ -223,7 +224,7 @@ export function trash(id) {
   const p = resolve(id); if (!p) return null;
   const bin = path.join(root, '.papelera'); fs.mkdirSync(bin, { recursive: true });
   const stamp = Date.now(), names = [];
-  for (const f of [p, p.replace(/\.[^.]+$/, '.json')]) if (fs.existsSync(f)) { const nm = `${stamp}-${path.basename(f)}`, to = path.join(bin, nm); fs.renameSync(f, to); try { fs.utimesSync(to, new Date(stamp), new Date(stamp)); } catch {} names.push(nm); } // dated the day it went in: the 30 days count from here
+  for (const f of [p, p.replace(/\.[^.]+$/, '.json')]) if (fs.existsSync(f)) { const nm = `${stamp}-${path.basename(f)}`, to = path.join(bin, nm); renombrar(f, to); try { fs.utimesSync(to, new Date(stamp), new Date(stamp)); } catch {} names.push(nm); } // dated the day it went in: the 30 days count from here
   idxDrop(String(id).replace(/\\/g, '/'));
   return { id: String(id).replace(/\\/g, '/'), bin: names };
 }
@@ -240,7 +241,7 @@ export function restore({ id, bin } = {}) {
     moves.push([from, to]);
   }
   fs.mkdirSync(folder, { recursive: true });
-  for (const [from, to] of moves) fs.renameSync(from, to);
+  for (const [from, to] of moves) renombrar(from, to);
   let back = null; try { back = JSON.parse(fs.readFileSync(path.join(folder, stem + '.json'), 'utf8')); } catch {}
   idxPut(path.dirname(rel), back && back.file === rel ? back : null);
   return true;

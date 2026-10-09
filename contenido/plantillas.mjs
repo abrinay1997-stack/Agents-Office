@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parsear, serializar, normalizar } from './piezas.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const DIR_PLANTILLAS = path.join('Contenido', 'Plantillas');
 export const MAX_PLANTILLAS = 60, MAX_NOMBRE = 60;
@@ -63,14 +64,14 @@ export function crearPlantillas({ cerebro, ahora = Date.now } = {}) {
       fs.mkdirSync(dir, { recursive: true });
       const archivo = /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(r.plantilla.nombre) ? `${r.plantilla.nombre} (plantilla)` : r.plantilla.nombre; // nombres que Windows no deja usar
       const f = path.join(dir, previa || `${archivo}.md`);
-      fs.writeFileSync(f + '.tmp', aNota(r.plantilla, { hoy: new Date(ahora()).toISOString().slice(0, 10) })); fs.renameSync(f + '.tmp', f);
+      fs.writeFileSync(f + '.tmp', aNota(r.plantilla, { hoy: new Date(ahora()).toISOString().slice(0, 10) })); renombrar(f + '.tmp', f);
       return { ok: true, plantilla: { ...r.plantilla, archivo: path.basename(f) }, reemplazada: !!previa };
     },
     /** A la papelera de las plantillas (nada se pierde sin querer). */
     borrar(nombre) {
       const f = buscar(nombre); if (!f) return { error: 'esa plantilla ya no está' };
       const bin = path.join(dir, '.papelera'); fs.mkdirSync(bin, { recursive: true });
-      fs.renameSync(path.join(dir, f), path.join(bin, `${ahora()}-${f}`)); return { ok: true };
+      renombrar(path.join(dir, f), path.join(bin, `${ahora()}-${f}`)); return { ok: true };
     },
   };
 }

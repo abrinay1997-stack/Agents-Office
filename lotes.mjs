@@ -23,6 +23,7 @@ import * as H from './lotes-hoja.mjs';
 import { injectionIn } from './safety.mjs';
 import { classify, nextStep, retryConfig } from './reliability.mjs';
 import { buscar } from './src/presets-buscar.js';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const ESTADOS = ['previsto', 'espera_ok', 'muestra', 'corriendo', 'pausado', 'hecho', 'cancelado'];
 export const ESTADOS_FILA = ['en_cola', 'editando', 'verificando', 'lista', 'revisar', 'aprobada', 'fallo', 'omitida'];
@@ -167,7 +168,7 @@ export function crearLotes(o = {}) {
   function cargar() { try { const l = JSON.parse(fs.readFileSync(file, 'utf8')); return Array.isArray(l?.lotes) ? l.lotes : []; } catch { return []; } }
   function guardar() {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ lotes: LOTES.slice(-200) }, null, 1)); fs.renameSync(tmp, file);
+    const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ lotes: LOTES.slice(-200) }, null, 1)); renombrar(tmp, file);
   }
   const get = id => LOTES.find(l => l.id === id) || null;
   const exigir = id => { const l = ID_RE.test(String(id)) ? get(id) : null; if (!l) throw e404('ese lote ya no existe'); return l; };
@@ -692,7 +693,7 @@ export function crearLotes(o = {}) {
       ...l.filas.map(f => `| ${f.n} | ${esc(f.sku || f.nombre)} | ${f.src ? `![](${src(f.src)})` : '—'} | ${f.out ? `![](${src(f.out)})` : '—'} | ${f.estado} | ${esc(f.error || '')} |`)];
     const body = [`# Lote: ${esc(l.nombre)}`, '', `${resumenEs(l)}. Receta: ${receta.map(r => `[[${r}]]`).join(' + ') || 'idea libre'}${l.receta.canal ? `, para ${l.receta.canal}` : ''}. Gastado ${usd(l.costo.gastado)}${l.costo.estimado ? ` de ${usd(l.costo.estimado)} estimados` : ''}.`, '',
       '## Antes y después', ...tabla, '', '## Bitácora', ...l.bitacora.slice(-40).map(b => `- ${new Date(b.at).toISOString().slice(11, 16)} ${esc(b.t)}`), ''];
-    const f = path.join(dir, nombre + '.md'); fs.writeFileSync(f + '.tmp', [...fm, '', ...body].join('\n')); fs.renameSync(f + '.tmp', f);
+    const f = path.join(dir, nombre + '.md'); fs.writeFileSync(f + '.tmp', [...fm, '', ...body].join('\n')); renombrar(f + '.tmp', f);
     return nombre;
   }
 

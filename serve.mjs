@@ -109,6 +109,7 @@ import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './c
 import { crearMejorHora } from './contenido/mejor-hora.mjs';
 import { resumenAnaliticas } from './contenido/resumen-analiticas.mjs';
 import { crearBandeja } from './contenido/bandeja.mjs';
+import { crearFuenteMeta as crearBandejaMeta } from './contenido/bandeja-meta.mjs'; // Fase B1 (9 oct 2026): los comentarios de Instagram y Facebook, de Meta
 import { informeDelMes } from './contenido/informe.mjs';
 import { crearProgramador } from './contenido/programador.mjs';
 import * as safety from './safety.mjs';
@@ -130,6 +131,7 @@ import * as business from './business.mjs';
 import { normModel, modelFor, modelArgs, modelId, modelName, MODEL_KEYS, DEFAULT_MODEL, normEffort, effortFor, effortName, EFFORT_KEYS } from './src/models.js';
 import { parseWhen, describe, valid as validWhen, untilText } from './src/when.js';
 import { extraAlDia } from './estudio-extra-version.mjs'; // 1 oct 2026: the page and its on-demand part, of the same build
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const cfg = loadConfig();
 const HTML = path.join(ROOT, 'dist', 'command-centre-v2.html'); // built by build.mjs; shipped so npm start works without a build
@@ -151,7 +153,8 @@ function notice(kind, text, { level = 'info', task = null, key = null } = {}) {
     const list = loadNotices(), now = Date.now();
     if (key && list.some(n => n.key === key && now - n.t < 6 * 3600e3)) return null; // the same problem is said once every six hours
     const n = { id: nid(), t: now, kind, level, text, task, key, read: false };
-    list.push(n); fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(list.slice(-200), null, 1)); fs.renameSync(NOTICES + '.tmp', NOTICES);
+    list.push(n); fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(list.slice(-200), null, 1));
+    renombrar(NOTICES + '.tmp', NOTICES); // 9 oct 2026: con reintento; en Windows el catch de abajo se tragaba el aviso entero (fs-seguro.mjs)
     for (const h of noticeHooks) try { h(n); } catch {}
     return n;
   } catch { return null; }
@@ -586,7 +589,7 @@ async function ensureVectors(index) { // passages without a vector get one, 64 a
   try {
     const todo = kIndex(index).docs.filter(d => !VEC.map[d.hash]).slice(0, 512);
     for (let i = 0; i < todo.length; i += 64) { const part = todo.slice(i, i + 64); const vs = await EMB.embed(part.map(d => (d.head ? d.head + '\n' : '') + d.text)); part.forEach((d, k) => { VEC.map[d.hash] = vs[k].map(x => Math.round(x * 1e4) / 1e4); }); }
-    if (todo.length) { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(VECFILE + '.tmp', JSON.stringify(VEC.map)); fs.renameSync(VECFILE + '.tmp', VECFILE); console.log(`  brain: ${todo.length} passage(s) indexed by meaning (${EMB.name})`); }
+    if (todo.length) { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(VECFILE + '.tmp', JSON.stringify(VEC.map)); renombrar(VECFILE + '.tmp', VECFILE); console.log(`  brain: ${todo.length} passage(s) indexed by meaning (${EMB.name})`); }
   } catch (e) { console.warn('embeddings:', e.message); } finally { VEC.busy = false; }
 }
 async function relevantNotesFor(index, dept, text, n = 4) { // with meaning when there is a key
@@ -603,7 +606,7 @@ function contextText(index, names, budget = 9000) { // V4.6: a budget (best firs
 // V4.6: the synapses that learn — data/memory.json (this machine's; like data/, it does not travel through GitHub)
 const MEMFILE = path.join(DATA, 'memory.json');
 let MEM = (() => { try { const m = JSON.parse(fs.readFileSync(MEMFILE, 'utf8')); return m && m.notes ? m : memory.emptyMemory(); } catch { return memory.emptyMemory(); } })();
-function saveMem() { try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(MEMFILE + '.tmp', JSON.stringify(MEM)); fs.renameSync(MEMFILE + '.tmp', MEMFILE); } catch (e) { console.warn('memory:', e.message); } }
+function saveMem() { try { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(MEMFILE + '.tmp', JSON.stringify(MEM)); renombrar(MEMFILE + '.tmp', MEMFILE); } catch (e) { console.warn('memory:', e.message); } }
 /** A finished task teaches the Brain: its «Fuentes:» among what it read, and how the owner judged it (approved, sent back, 👍/👎). */
 function learnFrom(t) {
   if (!t || !t.read?.length || t.piece || (t.error && !t.stopped)) return;
@@ -630,7 +633,7 @@ const ROUTING = path.join(DATA, 'routing.json');
 const loadRouting = () => { try { return JSON.parse(fs.readFileSync(ROUTING, 'utf8')); } catch { return []; } };
 function routeCorrection(task, to) {
   const l = loadRouting(); l.push({ t: Date.now(), dept: to.department, fromDept: task.dept, text: String(task.text || task.title).slice(0, 300), from: task.agent, to: to.id });
-  fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(ROUTING + '.tmp', JSON.stringify(l.slice(-300), null, 1)); fs.renameSync(ROUTING + '.tmp', ROUTING);
+  fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(ROUTING + '.tmp', JSON.stringify(l.slice(-300), null, 1)); renombrar(ROUTING + '.tmp', ROUTING);
 }
 async function route(dept, text) {
   const d = DEPTS[dept]; refreshSkills();
@@ -1856,8 +1859,20 @@ const body = (req, limit = MAX_BODY) => new Promise((resolve, reject) => { // li
 // plan M3 (6 oct 2026): la mejor hora (Metricool o lo ya publicado) y Analíticas en palabras para los agentes
 const mejorHora = crearMejorHora({ metricool, metricas, archivo: path.join(ANALITICAS_DIR, 'mejores-horas.json') });
 // plan M4 (6 oct 2026): la bandeja de todas las redes (Metricool); los agentes redactan, el dueño envía
-const bandeja = crearBandeja({ metricool, archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o), injectionIn: safety.injectionIn });
-if (metricool.configurado()) { setInterval(() => bandeja.sincronizar().catch(e => console.warn('contenido: bandeja —', e.message)), 10 * 60e3); setTimeout(() => bandeja.sincronizar().catch(() => {}), 30e3); }
+// Fase B1 (9 oct 2026): también los COMENTARIOS de Instagram y Facebook directamente de Meta (de lo orgánico y de los anuncios, que salen de
+// data/anuncios/cuenta.json), con ocultar/mostrar y DESHACER. Ajustes → Contenido → «La Bandeja trae de» (contenido.bandejaFuente; auto = Meta si
+// hay token, si no Metricool). Responder y ocultar: solo el dueño, una vez, según el modo de Contenido; cada uno queda en data/audit/.
+const bandejaMeta = crearBandejaMeta({ meta, archivo: path.join(ANALITICAS_DIR, 'bandeja-meta.json'), anuncios: () => { try { return JSON.parse(fs.readFileSync(path.join(ANUNCIOS_DIR, 'cuenta.json'), 'utf8')); } catch { return null; } } });
+const bandeja = crearBandeja({ metricool, meta: bandejaMeta, elegir: () => cfg.contenido?.bandejaFuente || 'auto', archivo: path.join(ANALITICAS_DIR, 'bandeja.json'), modo: contenidoModo, avisar: (t, o) => notice('contenido', t, o),
+  avisarComentario: (t, o) => notice('bandeja-comentario', t, o), injectionIn: safety.injectionIn, undoSeconds: () => APPR().undoSeconds });
+{ // cada respuesta y cada ocultar/mostrar que sale de verdad (o de mentira, en simulacro) queda en el registro, como las entregas de Contenido
+  const auditar = a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'contenido', ...a }) + '\n'); } catch {} };
+  const { enviar, ocultar, deshacer } = bandeja;
+  bandeja.enviar = async (id, texto, o) => { const r = await enviar(id, texto, o); if (r.ok) auditar({ que: 'bandeja-responder', id: r.item.id, red: r.item.red, fuente: r.item.fuente || 'metricool', simulada: r.simulada, chars: r.item.respuesta?.texto?.length || 0 }); return r; };
+  bandeja.ocultar = async (id, si, o) => { const r = await ocultar(id, si, o); if (r.ok) auditar({ que: si === false ? 'bandeja-mostrar' : 'bandeja-ocultar', id: r.item.id, red: r.item.red, simulada: r.simulada }); return r; };
+  bandeja.deshacer = async token => { const r = await deshacer(token); if (r.ok) auditar({ que: r.item.oculto ? 'bandeja-ocultar' : 'bandeja-mostrar', id: r.item.id, red: r.item.red, simulada: r.simulada, deshacer: true }); return r; };
+}
+setInterval(() => { bandeja.tick(); }, 60e3); setTimeout(() => { bandeja.tick(); }, 30e3); // Meta cada 3 min con la Bandeja abierta, 10 si no (× el freno); Metricool cada 10
 // plan M5 · U10: el informe del mes, con los datos de la oficina; guardado como nota en <cerebro>/Agents Office/informes/ (no viaja)
 async function informeRedes(mes, { guardar = false } = {}) {
   const [y, mm] = mes.split('-').map(Number), hasta = `${mes}-${String(new Date(y, mm, 0).getDate()).padStart(2, '0')}`;
@@ -2030,7 +2045,7 @@ const LOCAL_CFG = process.env.AO_LOCAL_CONFIG || path.join(ROOT, 'office.config.
 function saveSettings(changes) { // J5, I10: validated, written to office.config.local.json, applied now (a few need a restart)
   let local = {}; try { local = JSON.parse(fs.readFileSync(LOCAL_CFG, 'utf8')); } catch (e) { if (e.code !== 'ENOENT') return { errors: ['office.config.local.json no es JSON válido: arréglalo antes de guardar desde aquí'] }; }
   const r = settings.apply(local, changes);
-  if (Object.keys(changes || {}).length > r.errors.length) { fs.writeFileSync(LOCAL_CFG + '.tmp', JSON.stringify(r.local, null, 2) + '\n'); fs.renameSync(LOCAL_CFG + '.tmp', LOCAL_CFG); Object.assign(cfg, loadConfig()); media.setLimits(cfg.media || {}); mcp.configure(cfg); } // V4.5: the Estudio's caps apply at once · MCP-12: so do the connectors (deny, allow, departments)
+  if (Object.keys(changes || {}).length > r.errors.length) { fs.writeFileSync(LOCAL_CFG + '.tmp', JSON.stringify(r.local, null, 2) + '\n'); renombrar(LOCAL_CFG + '.tmp', LOCAL_CFG); Object.assign(cfg, loadConfig()); media.setLimits(cfg.media || {}); mcp.configure(cfg); } // V4.5: the Estudio's caps apply at once · MCP-12: so do the connectors (deny, allow, departments)
   return { ok: true, errors: r.errors, restart: r.restart };
 }
 // H4: the company's figures — one place for prices, commissions, goals, hours; every agent reads them before working
@@ -2038,7 +2053,7 @@ const CIFRAS = path.join(BRAIN, 'Agents Office', 'cifras.json');
 const loadCifras = () => { try { const j = JSON.parse(fs.readFileSync(CIFRAS, 'utf8')); return Array.isArray(j.items) ? j.items : []; } catch { return []; } };
 function saveCifras(items) {
   const clean = (Array.isArray(items) ? items : []).map(x => ({ name: String(x?.name || '').trim().slice(0, 80), value: String(x?.value ?? '').trim().slice(0, 80), unit: String(x?.unit || '').trim().slice(0, 16), note: String(x?.note || '').trim().slice(0, 200), updated: x?.updated || new Date().toISOString().slice(0, 10) })).filter(x => x.name && x.value).slice(0, 200);
-  fs.mkdirSync(path.dirname(CIFRAS), { recursive: true }); fs.writeFileSync(CIFRAS + '.tmp', JSON.stringify({ items: clean }, null, 2)); fs.renameSync(CIFRAS + '.tmp', CIFRAS); return clean;
+  fs.mkdirSync(path.dirname(CIFRAS), { recursive: true }); fs.writeFileSync(CIFRAS + '.tmp', JSON.stringify({ items: clean }, null, 2)); renombrar(CIFRAS + '.tmp', CIFRAS); return clean;
 }
 const cifrasText = () => { const l = loadCifras(); return l.length ? '\n\nTHE COMPANY\'S FIGURES (the owner keeps these up to date — use them exactly; never invent a price, a rate or a goal that is not here or in the notes; if one you need is missing, say so):\n' + l.map(x => `- ${x.name}: ${x.value}${x.unit ? ' ' + x.unit : ''}${x.note ? ' — ' + x.note : ''} (al ${x.updated})`).join('\n') : ''; };
 // H6: the brand voice, edited from the office (the brain's «voice» note, which every agent already reads)
@@ -2058,7 +2073,7 @@ function tellPerson(name, text) { const p = personOf(name); if (p?.telegram && T
 // J1: the owner's KPIs — data/kpis.json { defs, values: { id: [{ t, v, from }] } }
 const KPIS = path.join(DATA, 'kpis.json');
 const loadKpis = () => { try { const j = JSON.parse(fs.readFileSync(KPIS, 'utf8')); return { defs: j.defs || [], values: j.values || {} }; } catch { return { defs: [], values: {} }; } };
-const saveKpis = k => { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(KPIS + '.tmp', JSON.stringify(k)); fs.renameSync(KPIS + '.tmp', KPIS); };
+const saveKpis = k => { fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(KPIS + '.tmp', JSON.stringify(k)); renombrar(KPIS + '.tmp', KPIS); };
 function recordKpi(id, value, from) {
   const k = loadKpis(); if (!k.defs.some(d => d.id === id)) return { error: `no hay un indicador «${id}»: créalo primero en «Cómo va el negocio»` };
   const v = business.num(value);
@@ -2205,7 +2220,7 @@ async function hookIn(req, res, url, id) {
   const a = triggers.adapt(tr.source, data);
   if (a.skip) return json(res, 200, { ok: true, skipped: a.skip });
   let st = {}; try { st = JSON.parse(fs.readFileSync(TRIG_STATE, 'utf8')); } catch {}
-  const adm = triggers.admit(st, tr, a.eventId); fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(TRIG_STATE + '.tmp', JSON.stringify(st)); fs.renameSync(TRIG_STATE + '.tmp', TRIG_STATE);
+  const adm = triggers.admit(st, tr, a.eventId); fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(TRIG_STATE + '.tmp', JSON.stringify(st)); renombrar(TRIG_STATE + '.tmp', TRIG_STATE);
   if (!adm.ok) { if (!adm.dup) notice('trigger', `El disparador «${id}» se frenó: ${adm.why}.`, { level: 'warn', key: 'trig-' + id }); return json(res, adm.dup ? 200 : 429, { ok: adm.dup, skipped: adm.why }); }
   const text = triggers.taskText(tr, a), inj = triggers.suspicious(a);
   const fixed = tr.agent && AGENTS.find(x => x.id === tr.agent);
@@ -2335,9 +2350,12 @@ function officeStatus() {
       if (cx.error) add('anuncios', 'Anuncios (Meta)', 'warn', `Cuenta ${cuenta}: la última lectura falló: ${cx.error}${frenado}`, 'Abre Anuncios (J) → «Actualizar»; si sigue, revisa que la cuenta esté asignada al usuario del sistema del token.');
       else add('anuncios', 'Anuncios (Meta)', u.frenadoHasta ? 'warn' : 'ok', `Cuenta ${cuenta} con permisos para leer y gestionar campañas.${ultima}${frenado}`);
     }
+    // Fase B1 (9 oct 2026): la misma fila dice el último sondeo de los comentarios (Bandeja con Meta), sin cambiar el id ni el orden de las filas
+    const bm = (() => { try { return bandeja.estado().fuentes?.meta || null; } catch { return null; } })();
+    const com = !bm?.activa ? '' : bm.error ? ` Comentarios: la última lectura falló (${bm.error.slice(0, 160)}).` : bm.ultimaAt ? ` Comentarios: última lectura ${agoText(now - Date.parse(bm.ultimaAt))}.` : ' Comentarios: todavía sin leer (se leen solos cada 10 min).';
     if (!m.configurado) add('mensajes', 'Mensajes de Meta', 'info', 'Meta no está conectada: la Bandeja sigue con Metricool (o vacía).', 'Mira docs/conectar-meta.md.');
-    else if (fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', 'info', `Al token le faltan ${fp.mensajes.join(', ')}: los mensajes privados no llegan a la Bandeja.`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
-    else add('mensajes', 'Mensajes de Meta', 'ok', `Permisos de mensajes listos.${frenado}`); }
+    else if (fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', bm?.activa && bm.error ? 'warn' : 'info', `Al token le faltan ${fp.mensajes.join(', ')}: los mensajes privados no llegan a la Bandeja.${com}`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
+    else add('mensajes', 'Mensajes de Meta', bm?.activa && bm.error ? 'warn' : 'ok', `Permisos de mensajes listos.${com}${frenado}`); }
   // plan M1 (6 oct 2026): la publicación — el modo, el conductor y lo que falló
   { const c = programador.estado(), fal = (c.cuenta.fallo || 0) + (c.cuenta.parcial || 0);
     if (c.modo === 'apagado') add('publicacion', 'Publicación (Contenido)', 'info', 'Apagada: nada de lo que apruebas sale de la oficina.', 'Ajustes → Contenido → «Qué pasa con lo que apruebas».');
@@ -2374,7 +2392,7 @@ function trashNote(t) { // a task's deliverable note → the bin (only a note th
   const n = noteIndex().get(t.note); if (!n || !n.office || !insideBrain(n.path)) return null;
   if (!fs.readFileSync(n.path, 'utf8').includes(`\ntask: ${t.id}\n`)) return null;
   fs.mkdirSync(TRASH, { recursive: true });
-  const dest = path.join(TRASH, `${path.basename(n.path, '.md')}__${Date.now()}.md`); fs.renameSync(n.path, dest);
+  const dest = path.join(TRASH, `${path.basename(n.path, '.md')}__${Date.now()}.md`); renombrar(n.path, dest);
   console.log(`🗑 note to the bin with its task: ${t.note}`);
   return path.basename(dest);
 }
@@ -2421,7 +2439,7 @@ function moveOldArchive() {
   for (const t of list) { if (t.archived && (t.archivedAt || t.doneAt || 0) < cut) { const m = localDay(t.archivedAt || t.doneAt || Date.now()).slice(0, 7); (out[m] ||= []).push(t); } else keep.push(t); }
   const months = Object.keys(out); if (!months.length) return;
   const dir = path.join(DATA, 'archive'); fs.mkdirSync(dir, { recursive: true });
-  for (const m of months) { const f = path.join(dir, `tasks-${m}.json`); let prev = []; try { prev = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {} const ids = new Set(prev.map(t => t.id)); fs.writeFileSync(f + '.tmp', JSON.stringify([...prev, ...out[m].filter(t => !ids.has(t.id))], null, 1)); fs.renameSync(f + '.tmp', f); }
+  for (const m of months) { const f = path.join(dir, `tasks-${m}.json`); let prev = []; try { prev = JSON.parse(fs.readFileSync(f, 'utf8')); } catch {} const ids = new Set(prev.map(t => t.id)); fs.writeFileSync(f + '.tmp', JSON.stringify([...prev, ...out[m].filter(t => !ids.has(t.id))], null, 1)); renombrar(f + '.tmp', f); }
   save(keep); console.log(`  ${list.length - keep.length} archived task(s) older than 90 days moved to data/archive/`);
 }
 dailyBackup(); autoArchive(); emptyBins(); try { moveOldArchive(); } catch (e) { console.warn('archive:', e.message); }
@@ -2561,7 +2579,7 @@ const server = http.createServer(async (req, res) => {
       if (!/\ntask: /.test(fs.readFileSync(n.path, 'utf8'))) return json(res, 400, { error: 'esta nota no la escribió un agente: si quieres borrarla, hazlo tú desde la carpeta' });
       fs.mkdirSync(TRASH, { recursive: true });
       const dest = path.join(TRASH, `${path.basename(n.path, '.md')}__${Date.now()}.md`);
-      fs.renameSync(n.path, dest);
+      renombrar(n.path, dest);
       console.log(`🗑 note to the bin: ${id}`);
       return json(res, 200, { ok: true, trashed: path.basename(dest), graph: await rebuildGraph() });
     }
@@ -2576,13 +2594,13 @@ const server = http.createServer(async (req, res) => {
       if (!/__\d+\.md$/.test(f) || !fs.existsSync(src) || !insideBrain(src)) return json(res, 404, { error: 'no está en la papelera' });
       const name = f.replace(/__\d+\.md$/, ''); let dest = path.join(NOTES_DIR, name + '.md');
       for (let n = 2; fs.existsSync(dest); n++) dest = path.join(NOTES_DIR, `${name}-${n}.md`);
-      fs.renameSync(src, dest);
+      renombrar(src, dest);
       return json(res, 200, { ok: true, name: path.basename(dest, '.md'), graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
     if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = colaTareas.planear(l, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget }).puestos; for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, url.searchParams.get('light') === '1' ? lightTasks(l) : l, { etag: true }); } // INF-04: ?light=1 (the 6 s poll) leaves out the archived tasks' work; the ETag answers 304 when nothing changed // V4.4 (B5): where each waiting task sits
     if (url.pathname === '/api/status' && req.method === 'GET') return json(res, 200, officeStatus());
-    if (url.pathname === '/api/notices/read' && req.method === 'POST') { const l = loadNotices().map(n => ({ ...n, read: true })); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(l, null, 1)); fs.renameSync(NOTICES + '.tmp', NOTICES); return json(res, 200, { ok: true }); }
+    if (url.pathname === '/api/notices/read' && req.method === 'POST') { const l = loadNotices().map(n => ({ ...n, read: true })); fs.writeFileSync(NOTICES + '.tmp', JSON.stringify(l, null, 1)); renombrar(NOTICES + '.tmp', NOTICES); return json(res, 200, { ok: true }); }
     if (url.pathname === '/api/routines' && req.method === 'GET') return json(res, 200, routinesOut());
     if (url.pathname === '/api/calendar.ics' && req.method === 'GET') { // V4.2 (audit B46): the office's timetable, read-only, for the owner's own calendar app
       res.writeHead(200, { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"', 'cache-control': 'no-cache' });

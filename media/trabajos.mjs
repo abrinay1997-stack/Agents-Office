@@ -12,6 +12,7 @@ import { dir, slug, store, resolve, item, update, folderOf } from './galeria.mjs
 import { RUN } from './motores.mjs';
 import { explicar } from './errores.mjs';
 import { procesar, guardarCrudo, juntarAvisos } from './posproceso.mjs'; // banco de presets (F1): lo local y la QA, después del modelo
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 let usageFile = '', jobsFile = '', hooks = {};
 /** configure(): where the day's count and the jobs are kept, and the hooks (onDone…), replaced. */
@@ -91,7 +92,7 @@ function saveJobs() {
   const vivos = new Set(JOBS.filter(loteVivo)), otros = new Set(JOBS.filter(j => !vivos.has(j) && (j.state === 'queued' || j.state === 'running' || (j.doneAt || j.at) > cut)).slice(-400));
   JOBS = JOBS.filter(j => vivos.has(j) || otros.has(j));
   fs.mkdirSync(path.dirname(jobsFile), { recursive: true });
-  const tmp = jobsFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(JOBS, null, 1)); fs.renameSync(tmp, jobsFile);
+  const tmp = jobsFile + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(JOBS, null, 1)); renombrar(tmp, jobsFile);
 }
 const jid = () => 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const LOCAL = 'local'; // banco de presets (F1): un trabajo que se hace entero en esta máquina, sin IA y gratis

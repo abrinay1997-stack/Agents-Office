@@ -10,6 +10,7 @@ import path from 'node:path';
 import { ROOT, loadConfig } from './config.mjs';
 import { AGENTS, DEPTS } from './src/data.js';
 import { V1 } from './src/v1data.js';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const FILE = path.join(ROOT, 'office.agents.json');
 export const LOCAL = path.join(ROOT, 'office.agents.local.json');
@@ -88,7 +89,7 @@ export function saveAgent(brainPath, id, patch) {
   const check = validate({ agents: [e] }, base).problems;
   if (check.length) return { problems: check };
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  const tmp = target + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(d, null, 2) + '\n'); fs.renameSync(tmp, target);
+  const tmp = target + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(d, null, 2) + '\n'); renombrar(tmp, target);
   const r = loadRoster(brainPath);
   return { agent: r.agents.find(a => a.id === id), problems: [], file: target };
 }

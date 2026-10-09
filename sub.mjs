@@ -32,6 +32,7 @@ import { ACCIONES_LOTE, accionLoteEs } from './estudio-lote.mjs';
 import { REDES as REDES_CONTENIDO } from './contenido/piezas.mjs';
 import { MAPA } from './oficina/mapa.mjs';
 import { textoCuenta as anunciosCuenta, textoCampanas as anunciosCampanas, OBJETIVOS_BORRADOR, DESTINOS_BORRADOR } from './anuncios/modelo.mjs'; // Fase A1 de Anuncios (A3: el borrador)
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const MAX = 120;
 export const MODES = ['charla', 'estado', 'analisis', 'plan', 'pregunta', 'estudio'];
@@ -59,14 +60,14 @@ export function load(dataDir) { try { const j = JSON.parse(fs.readFileSync(file(
 export function save(dataDir, st) {
   fs.mkdirSync(dataDir, { recursive: true });
   st.messages = st.messages.slice(-MAX);
-  const tmp = file(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(st, null, 2)); fs.renameSync(tmp, file(dataDir));
+  const tmp = file(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(st, null, 2)); renombrar(tmp, file(dataDir));
 }
 /** «Nueva conversación» (V4.11): the conversation goes to data/subgerente-archivo.json (the last 10 kept), so it can come back (DESHACER). */
 export function archive(dataDir) {
   const st = load(dataDir); if (!st.messages.length) return null;
   let a = []; try { a = JSON.parse(fs.readFileSync(archiveFile(dataDir), 'utf8')).archived || []; } catch {}
   const id = 'c' + Date.now().toString(36); a.push({ id, at: Date.now(), messages: st.messages }); a = a.slice(-10);
-  fs.mkdirSync(dataDir, { recursive: true }); const tmp = archiveFile(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ archived: a })); fs.renameSync(tmp, archiveFile(dataDir));
+  fs.mkdirSync(dataDir, { recursive: true }); const tmp = archiveFile(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ archived: a })); renombrar(tmp, archiveFile(dataDir));
   save(dataDir, { messages: [] });
   return id;
 }
@@ -75,7 +76,7 @@ export function restore(dataDir, id) {
   let a = []; try { a = JSON.parse(fs.readFileSync(archiveFile(dataDir), 'utf8')).archived || []; } catch {}
   const k = a.findIndex(x => x.id === id); if (k < 0) return false;
   const st = load(dataDir); st.messages = [...a[k].messages, ...st.messages]; save(dataDir, st);
-  a.splice(k, 1); const tmp = archiveFile(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ archived: a })); fs.renameSync(tmp, archiveFile(dataDir));
+  a.splice(k, 1); const tmp = archiveFile(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ archived: a })); renombrar(tmp, archiveFile(dataDir));
   return true;
 }
 const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

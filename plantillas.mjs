@@ -8,6 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { leerCabecera } from './presets-notas.mjs';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const CARPETA = 'Estudio/Plantillas';
 const KINDS = ['image', 'video', 'audio', 'music'];
@@ -68,13 +69,13 @@ export function crearPlantillas({ brainPath, onNota = () => {} } = {}) {
       const p = limpiar(b); fs.mkdirSync(dir(), { recursive: true });
       const otra = leer().find(x => x.id === p.id), archivo = otra ? otra.archivo : archivoDe(p.nombre), ruta = path.join(dir(), archivo);
       let previa = ''; try { previa = fs.readFileSync(ruta, 'utf8'); } catch {}
-      const tmp = ruta + '.tmp'; fs.writeFileSync(tmp, aNota(p, { previa })); fs.renameSync(tmp, ruta);
+      const tmp = ruta + '.tmp'; fs.writeFileSync(tmp, aNota(p, { previa })); renombrar(tmp, ruta);
       onNota(); return { plantilla: { ...p, archivo }, archivo: `${CARPETA}/${archivo}`, reemplazo: !!otra };
     },
     borrar(id) {
       const p = leer().find(x => x.id === id); if (!p) return false;
       const bin = path.join(dir(), '.papelera'); fs.mkdirSync(bin, { recursive: true });
-      fs.renameSync(path.join(dir(), p.archivo), path.join(bin, `${Date.now()} ${p.archivo}`)); onNota(); return true;
+      renombrar(path.join(dir(), p.archivo), path.join(bin, `${Date.now()} ${p.archivo}`)); onNota(); return true;
     },
   };
 }

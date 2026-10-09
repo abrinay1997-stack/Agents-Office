@@ -22,9 +22,10 @@ import { mensajeMeta, ErrorMeta } from '../contenido/meta.mjs';
 import { validarBorrador } from './modelo.mjs';
 import { cuerpoCampana, cuerpoConjunto, cuerpoCreativo, cuerpoAnuncio, nombres } from './construir.mjs';
 import { motivoMeta } from './acciones.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
-const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos, null, 1)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos, null, 1)); renombrar(f + '.tmp', f); };
 export const VIDEO_CADA_MS = 4000, VIDEO_MAX_MS = 10 * 60e3;
 export const FORMATOS_VISTA = ['MOBILE_FEED_STANDARD', 'INSTAGRAM_STANDARD', 'INSTAGRAM_STORY'];
 const TIPO_IMAGEN = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png' };

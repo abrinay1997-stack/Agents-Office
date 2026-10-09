@@ -112,6 +112,26 @@ test('la Bandeja: comentar, ocultar, y la ventana de 24 h de los mensajes', asyn
   assert.equal(fuera.error.error_subcode, 2018278);
 });
 
+test('la Bandeja (B1): respuestas anidadas, lo propio con su from, no se responde a un oculto ni a una respuesta, Facebook con is_hidden', async () => {
+  const g = crearMetaStand();
+  g.st.comentarios.M1 = [{ id: 'c1', text: '¿Precio?', username: 'ana' }, { id: 'c2', text: 'spam', username: 'bot' }];
+  assert.ok((await pedir(g, 'POST', '/c1/replies', { message: 'US$ 20' })).id);
+  const l = await pedir(g, 'GET', '/M1/comments?fields=id,text,replies{id,text,from}');
+  assert.equal(l.data[0].replies.data[0].from.id, 'IG1', 'la respuesta propia lleva el from de la cuenta');
+  const respuesta = g.st.comentarios.c1[0].id;
+  g.st.comentarios.c1.push({ id: 'r9', text: 'gracias', username: 'ana', parent_id: 'c1' });
+  assert.equal((await pedir(g, 'POST', '/r9/replies', { message: 'x' })).error.code, 100, 'a una respuesta no se le responde en Instagram');
+  assert.equal((await pedir(g, 'POST', '/c2', { hide: true })).success, true);
+  assert.match((await pedir(g, 'POST', '/c2/replies', { message: 'x' })).error.message, /hidden/);
+  assert.ok(respuesta);
+  g.st.comentarios.P1_5 = [{ id: 'P1_5_1', message: 'Hola', from: { id: 'U1', name: 'Luis' } }];
+  assert.equal((await pedir(g, 'POST', '/P1_5_1', { is_hidden: true })).success, true);
+  assert.equal(g.st.comentarios.P1_5[0].is_hidden, true);
+  assert.equal((await pedir(g, 'POST', '/P1_5_1', { is_hidden: false })).success, true); assert.deepEqual(g.st.mostrados, ['P1_5_1']);
+  g.st.fallar.isHidden = true;
+  assert.equal((await pedir(g, 'GET', '/P1_5/comments?fields=id,message,is_hidden')).error.code, 100, 'is_hidden como campo de lectura: POR VERIFICAR');
+});
+
 test('las cabeceras de uso salen en cada respuesta cuando se piden; escuchar() lo sirve por HTTP', async () => {
   const g = crearMetaStand({ uso: { app: 50, negocio: 80, cuenta: 10 } });
   const r = await g.fetchFn(`${G}/me/accounts?access_token=${TOKEN_STAND}`);

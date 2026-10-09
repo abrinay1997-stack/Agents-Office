@@ -26,6 +26,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 // Fase 0 de Anuncios (8 oct 2026): de v23.0 a v26.0. La Graph API v23 vivía hasta el 8 oct 2027, pero la Marketing API v23 caducó el
 // 9 jun 2026 (y la v24 el 6 oct 2026), y la oficina usa UNA versión para publicar, Analíticas, Anuncios y la Bandeja.
@@ -130,7 +131,7 @@ export function mensajeMeta(e) {
 }
 
 const CAMPOS_PAGINA = 'id,name,access_token,picture{url},instagram_business_account{id,username,name,profile_picture_url}';
-const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos, null, 1)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, datos) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(datos, null, 1)); renombrar(f + '.tmp', f); };
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
 
 /**

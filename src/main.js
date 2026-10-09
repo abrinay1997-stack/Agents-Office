@@ -1787,6 +1787,7 @@ const tareasV = initTareasCarga({ servida: SERVED, AGENTS, DEPTS, DEPT_KEYS, alC
 document.getElementById('topTareas').addEventListener('click', () => tareasV.toggle());
 const analiticas = initAnaliticas({ served: SERVED, esc, business: () => document.title.replace(/ — Agents Office$/, '') }); // V4.7 (F2)
 document.getElementById('topAnaliticas').addEventListener('click', () => analiticas.toggle());
+addEventListener('ao:abrir-anuncios', e => { e.preventDefault(); anuncios.open({ objeto: e.detail?.anuncio || e.detail?.campana }); }); // B1 (9 oct 2026): un comentario «en un anuncio» de la Bandeja lleva a ese anuncio en Anuncios
 const anuncios = initAnunciosCarga({ servida: SERVED, abrirAjustes: tab => settingsWin.open(tab), agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', negocio: () => document.title.replace(/ — Agents Office$/, ''), estudio: (t, onPick) => studio.forTarget({ ...t, para: 'anuncio' }, onPick) }); // Fase A1 (9 oct 2026) · A3: el Estudio «para el anuncio»
 document.getElementById('topAnuncios').addEventListener('click', () => anuncios.toggle());
 document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)

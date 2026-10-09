@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normalizar } from './modelo.mjs';
 import { diferencias, mezclar, quienPorDefecto } from './cambios.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const mes = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 
@@ -36,7 +37,7 @@ export function crearAlmacenTareas({ file, dataDir = path.dirname(file), bus = n
       console.error(`tasks.json could not be read — a copy is at ${aside}`); throw new Error('no se pudo leer data/tasks.json (se guardó una copia al lado)');
     }
   }
-  function escribir(list) { fs.mkdirSync(path.dirname(file), { recursive: true }); const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(list, null, 2)); fs.renameSync(tmp, file); } // write-then-rename
+  function escribir(list) { fs.mkdirSync(path.dirname(file), { recursive: true }); const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(list, null, 2)); renombrar(tmp, file); } // write-then-rename
 
   function anotar(lineas) {
     if (!lineas.length) return;

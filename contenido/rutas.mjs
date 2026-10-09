@@ -118,17 +118,36 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
       }
       if (p === '/api/contenido/bandeja' && req.method === 'GET') {
         if (!bandeja) return json(res, 200, { items: [], cuenta: {}, pendientes: 0, fuente: { ok: false, motivo: 'sin bandeja' } }), true;
-        const q = url.searchParams; return json(res, 200, bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '' })), true;
+        const q = url.searchParams; if (q.get('abierta') === '1') bandeja.abierta?.(); // Fase B1: con la Bandeja a la vista, Meta se lee cada 3 min
+        const f = ['meta', 'metricool'].includes(q.get('fuente')) ? q.get('fuente') : '';
+        return json(res, 200, bandeja.listar({ estado: q.get('estado') || '', red: q.get('red') || '', tipo: q.get('tipo') || '', fuente: f })), true;
       }
       if (p === '/api/contenido/bandeja/sincronizar' && req.method === 'POST') { if (!bandeja) return json(res, 404, { error: 'sin bandeja' }), true; return json(res, 200, await bandeja.sincronizar()), true; }
-      const bj = /^\/api\/contenido\/bandeja\/([^/]+)(?:\/(enviar|descartar|reabrir))?$/.exec(p);
+      // Fase B1 (9 oct 2026): DESHACER lo último de ocultar/mostrar (solo el dueño, dentro de approvals.undoSeconds)
+      if (p === '/api/contenido/bandeja/deshacer' && req.method === 'POST' && bandeja) {
+        const b = await body(req);
+        if (b.por === 'agente') return json(res, 403, { error: 'los agentes no ocultan ni muestran comentarios: lo decide el dueño' }), true;
+        const r = await bandeja.deshacer(b.token); return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true;
+      }
+      const bj = /^\/api\/contenido\/bandeja\/([^/]+)(?:\/(enviar|descartar|reabrir|ocultar|sugerir-ocultar))?$/.exec(p);
       if (bj && bandeja) {
         const id = decodeURIComponent(bj[1]), b = req.method === 'GET' ? {} : await body(req);
         if (!bj[2] && req.method === 'GET') { const m = bandeja.leer(id); return m ? json(res, 200, { item: m }) : json(res, 404, { error: 'ese mensaje ya no está en la bandeja' }), true; }
-        if (!bj[2] && req.method === 'PATCH') { const r = bandeja.borrador(id, b.borrador, { por: b.por === 'agente' ? 'agente' : 'dueno', agente: b.agente }); return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true; }
+        if (!bj[2] && req.method === 'PATCH') {
+          const por = b.por === 'agente' ? 'agente' : 'dueno';
+          let r = null;
+          if (b.borrador !== undefined) r = bandeja.borrador(id, b.borrador, { por, agente: b.agente });
+          if (!r?.error && b.sugerirOcultar && por === 'agente') r = bandeja.sugerirOcultar(id, b.sugerirOcultar.motivo ?? b.sugerirOcultar, { agente: b.agente }); // B1: el agente solo SUGIERE
+          r ||= { error: 'no hay nada que cambiar' };
+          return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true;
+        }
+        if (bj[2] === 'sugerir-ocultar' && req.method === 'POST') { // B1: un agente (o Dimitri) sugiere ocultar; nunca oculta
+          const r = bandeja.sugerirOcultar(id, b.motivo, { agente: b.agente || (b.por === 'agente' ? '' : 'dueno') });
+          return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true;
+        }
         if (bj[2] && req.method === 'POST') {
-          if (b.por === 'agente') return json(res, 403, { error: 'los agentes no envían ni descartan respuestas: dejan el borrador y el dueño decide' }), true;
-          const r = bj[2] === 'enviar' ? await bandeja.enviar(id, b.texto) : bj[2] === 'descartar' ? bandeja.descartar(id) : bandeja.reabrir(id);
+          if (b.por === 'agente') return json(res, 403, { error: bj[2] === 'ocultar' ? 'los agentes no ocultan ni muestran comentarios: pueden sugerirlo (sugerir_ocultar_comentario) y lo decide el dueño' : 'los agentes no envían ni descartan respuestas: dejan el borrador y el dueño decide' }), true;
+          const r = bj[2] === 'enviar' ? await bandeja.enviar(id, b.texto, { forzar: b.forzar === true }) : bj[2] === 'ocultar' ? await bandeja.ocultar(id, b.ocultar !== false) : bj[2] === 'descartar' ? bandeja.descartar(id) : bandeja.reabrir(id);
           return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true;
         }
       }

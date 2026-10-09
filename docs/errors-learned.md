@@ -37,3 +37,12 @@ Una entrada por error que costó encontrar. Solo se añade al final.
 **Fix aplicado:** Volver a escribir el archivo con `-replace "`r`n", "`n"` y `WriteAllText`.
 **Prevención:** Para editar archivos del repositorio, usar Edit/Write o un heredoc en Bash, nunca `WriteAllLines` ni `Set-Content`. Después de editar desde la consola, mirar `git diff --stat`.
 **Archivos:** `README.md`
+
+## [2026-10-09] — En Windows, «escribir a un temporal y renombrar» pierde guardados (EPERM al pisar un archivo abierto)
+
+**Contexto:** Plan de Anuncios de Meta (fases A5 y B1). Tests que fallaban solo cuando corría toda la batería a la vez: «el aviso del piloto no llegó» y «la cola espera a la bloqueada».
+**Error:** `notices.json` sin el aviso del piloto, aunque el anuncio sí se había pausado. A veces, un cambio de una tarea que no quedaba guardado.
+**Causa raíz:** toda la oficina guarda con `fs.writeFileSync(tmp)` y luego `fs.renameSync(tmp, archivo)`. En Windows, renombrar encima de un archivo que otro proceso tiene abierto (la página, un antivirus, un test que lo lee) falla durante unos milisegundos con EPERM, EBUSY o EACCES. En `notice()` un `catch` se tragaba el error, y el aviso se perdía sin decir nada.
+**Fix aplicado:** `fs-seguro.mjs → renombrar()`: reintenta con esperas cortas y, si no puede, copia el contenido encima. Lo usan los 31 archivos del servidor que guardaban así. `tests/fs-seguro.test.mjs` falla si vuelve a aparecer un `fs.renameSync` a pelo en el servidor.
+**Prevención:** en código del servidor, nunca `fs.renameSync` directo: usar `renombrar` de `fs-seguro.mjs`. Un `catch` que se traga un error de disco al guardar algo del dueño es un fallo, no una protección. Un test que falla solo con carga en Windows suele ser esto o una espera fija.
+**Archivos:** `fs-seguro.mjs`, `serve.mjs` (`notice`), `tareas/almacen.mjs` y los demás que guardan (`git grep renombrar`).

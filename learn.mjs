@@ -6,6 +6,7 @@
 // edit a rule, delete a line to unlearn it, move a line up to "Standing rules" to promote it.
 import fs from 'node:fs';
 import path from 'node:path';
+import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const dir = brainPath => path.join(brainPath, 'Agents Office', 'feedback');
 const file = (brainPath, id) => path.join(dir(brainPath), id + '.md');
@@ -89,7 +90,7 @@ export function tidy(brainPath, id, dedupe) {
   if (!dropped.length) return { kept: keep.length, removed: [] };
   const lines = fs.readFileSync(p, 'utf8').split(/\r?\n/), gone = new Set(dropped);
   const out = lines.filter(l => { const m = l.match(/^\s*[-*]\s+(.+)$/); return !(m && gone.has(m[1].trim())); });
-  fs.writeFileSync(p + '.tmp', out.join('\n')); fs.renameSync(p + '.tmp', p);
+  fs.writeFileSync(p + '.tmp', out.join('\n')); renombrar(p + '.tmp', p);
   return { kept: keep.length, removed: dropped };
 }
 

@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { entregasDe, estadoGeneral } from './entrega.mjs';
+import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const GRACIA_MS = 60e3;            // tras aprobar, un minuto para deshacer antes de entregar
 export const MARGEN_MS = 3 * 60e3;        // a menos de 3 minutos de su hora, ya no se entrega (no daría tiempo)
@@ -57,7 +58,7 @@ export function planear(piezas = [], entradas = {}, { ahora = Date.now(), horasA
 }
 
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
-const escribirJSON = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 1)); fs.renameSync(f + '.tmp', f); };
+const escribirJSON = (f, d) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f + '.tmp', JSON.stringify(d, null, 1)); renombrar(f + '.tmp', f); };
 const textoError = e => String(e?.message || e || 'error').slice(0, 400);
 
 export function crearProgramador({ almacen, archivo, conductor, porId = null, modo = () => 'simulacro', horasAntes = () => 24, avisar = () => {}, auditar = () => {}, ahora = Date.now }) {
