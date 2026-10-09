@@ -11,6 +11,7 @@ import crypto from 'node:crypto';
 import { crearMeta, mensajeMeta, ErrorMeta, permisosQueFaltan, PERMISOS_LECTURA, VERSION_GRAPH } from '../contenido/meta.mjs';
 import { crearMetricas, fechaDeFoto, tipoDeImagen, INTENTOS_POR_DIA, REINTENTO_MIN } from '../contenido/metricas.mjs';
 import { serieDiaria, kpis } from '../src/contenido-cifras.js';
+import { crearMetaStand } from './meta-stand.mjs';
 
 const TOKEN = 'EAAG-TOKEN-DE-USUARIO-0123456789'; // secrets-ok: un token de mentira para el Graph de mentira
 const TOKEN_PAGINA = 'EAAG-TOKEN-DE-PAGINA-9876543210'; // secrets-ok: idem
@@ -18,38 +19,24 @@ const AHORA = new Date(2026, 8, 30, 10, 0).getTime(); // 30 sep 2026, 10:00 loca
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(40, 1)]);
 const respuesta = (cuerpo, estado = 200) => new Response(JSON.stringify(cuerpo), { status: estado, headers: { 'content-type': 'application/json' } });
 
-/** Un Graph de mentira: responde por ruta, anota cada llamada y deja a cada test torcer lo que quiera. */
+/**
+ * El Meta de mentira compartido (tests/meta-stand.mjs), con los datos de estos casos. `torcer(ruta, q, u)` sigue la forma de
+ * antes; `llamadas` es la lista de URL que se pidieron (las del stand llevan también `pathname` y `searchParams`).
+ */
 function graphFalso(torcer = () => null) {
-  const llamadas = [];
-  const fetchFn = async url => {
-    const u = new URL(String(url)); llamadas.push(u);
-    if (u.hostname === 'scontent.cdninstagram.com') return new Response(JPEG, { status: 200 });
-    if (u.hostname === 'evil.example') return new Response(JPEG, { status: 200 });
-    const ruta = u.pathname.replace(/^\/v[\d.]+/, ''), q = u.searchParams;
-    const torcida = torcer(ruta, q, u); if (torcida) return torcida;
-    if (q.get('access_token') === 'CADUCADO') return respuesta({ error: { message: 'Error validating access token', code: 190 } }, 400);
-    if (ruta === '/debug_token') return respuesta({ data: { is_valid: true, type: 'SYSTEM_USER', expires_at: 0, scopes: PERMISOS_LECTURA.filter(p => p !== 'read_insights') } });
-    if (ruta === '/me/accounts') return respuesta({ data: [{ id: 'P1', name: 'PanaClaw', access_token: TOKEN_PAGINA, picture: { data: { url: 'https://scontent.cdninstagram.com/p.jpg' } }, instagram_business_account: { id: 'IG1', username: 'panaclaw', name: 'PanaClaw IG' } }, { id: 'P2', name: 'Otra página', access_token: 'EAAG-OTRA-PAGINA-1111111111' }] });
-    if (ruta === '/P1') return respuesta({ access_token: TOKEN_PAGINA, followers_count: 800, fan_count: 790 });
-    if (ruta === '/IG1') return respuesta({ followers_count: 1200, media_count: 40 });
-    if (ruta === '/IG1/insights' && q.get('breakdown')) return respuesta({ data: [{ name: 'follower_demographics', total_value: { breakdowns: [{ results: [{ dimension_values: ['25-34'], value: 500 }, { dimension_values: ['18-24'], value: 300 }] }] } }] });
-    if (ruta === '/IG1/insights') return respuesta({ data: String(q.get('metric')).split(',').map((m, i) => ({ name: m, total_value: { value: 100 * (i + 1) } })) });
-    if (ruta === '/IG1/media') return respuesta({ data: [
+  const g = crearMetaStand({
+    token: TOKEN, tokenPagina: TOKEN_PAGINA, permisos: PERMISOS_LECTURA.filter(p => p !== 'read_insights'),
+    paginas: [{ id: 'P1', name: 'PanaClaw', access_token: TOKEN_PAGINA, picture: { data: { url: 'https://scontent.cdninstagram.com/p.jpg' } }, instagram_business_account: { id: 'IG1', username: 'panaclaw', name: 'PanaClaw IG' } }, { id: 'P2', name: 'Otra página', access_token: 'EAAG-OTRA-PAGINA-1111111111' }],
+    media: [
       { id: 'M1', caption: 'Reel de prueba', media_type: 'VIDEO', media_product_type: 'REELS', permalink: 'https://instagram.com/reel/1', timestamp: new Date(2026, 8, 25, 18, 30).toISOString(), like_count: 30, comments_count: 4, thumbnail_url: 'https://scontent.cdninstagram.com/m1.jpg' },
       { id: 'M2', caption: 'Foto', media_type: 'IMAGE', media_product_type: 'FEED', permalink: 'https://instagram.com/p/2', timestamp: new Date(2026, 8, 20, 9, 0).toISOString(), like_count: 10, comments_count: 1, media_url: 'https://evil.example/x.jpg' },
       { id: 'M3', caption: 'Muy vieja', media_type: 'IMAGE', timestamp: new Date(2026, 5, 1).toISOString(), like_count: 1, comments_count: 0 },
-    ] });
-    if (ruta === '/M1/insights' || ruta === '/M2/insights') return respuesta({ data: [{ name: 'reach', values: [{ value: 900 }] }, { name: 'saved', values: [{ value: 5 }] }, { name: 'shares', values: [{ value: 3 }] }, { name: 'views', values: [{ value: 1500 }] }, { name: 'total_interactions', values: [{ value: 42 }] }] });
-    if (ruta === '/P1/insights') return respuesta({ data: [{ name: q.get('metric'), values: [{ value: 77 }] }] });
-    if (ruta === '/P1/posts') {
-      // Graph solo devuelve lo que se le pide: sin `reactions` en `fields`, no hay reacciones.
-      const p = { id: 'P1_1', message: 'Post de Facebook', created_time: new Date(2026, 8, 27, 12).toISOString(), permalink_url: 'https://facebook.com/1', full_picture: 'https://scontent.cdninstagram.com/f1.jpg', shares: { count: 2 } };
-      if (String(q.get('fields')).includes('reactions')) Object.assign(p, { reactions: { summary: { total_count: 20 } }, comments: { summary: { total_count: 3 } } });
-      return respuesta({ data: [p] });
-    }
-    return respuesta({ error: { message: `ruta no simulada: ${ruta}`, code: 100 } }, 400);
-  };
-  return { fetchFn, llamadas };
+    ],
+    // Graph solo devuelve lo que se le pide: sin `reactions` en `fields`, no hay reacciones (el stand las quita).
+    postsFB: [{ id: 'P1_1', message: 'Post de Facebook', created_time: new Date(2026, 8, 27, 12).toISOString(), permalink_url: 'https://facebook.com/1', full_picture: 'https://scontent.cdninstagram.com/f1.jpg', shares: { count: 2 }, reactions: { summary: { total_count: 20 } }, comments: { summary: { total_count: 3 } } }],
+    torcer: ll => torcer(ll.ruta, ll.searchParams, ll.url),
+  });
+  return { fetchFn: g.fetchFn, llamadas: g.llamadas, st: g.st };
 }
 
 const carpeta = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ao-meta-'));

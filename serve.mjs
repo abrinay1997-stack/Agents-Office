@@ -2168,6 +2168,16 @@ function officeStatus() {
     else if (m.error || faltan.length) add('redes', 'Redes (Meta)', 'warn', m.error || `Al token le faltan permisos: ${faltan.join(', ')}.`, 'Genera el token de nuevo en Business Manager con esos permisos.');
     else if (viejaMs !== null && viejaMs > 3 * day) add('redes', 'Redes (Meta)', 'warn', `La última foto de métricas es de ${foto}.`, 'Abre Analíticas (R) → «Actualizar ahora»; si falla, el motivo sale ahí.');
     else add('redes', 'Redes (Meta)', 'ok', `${m.cuentas.length} cuenta(s) conectada(s)${foto ? `; última foto de ${foto}` : '; todavía sin foto (se hace desde las 6:00)'}.`); }
+  // Fase 0 de Anuncios (8 oct 2026): Anuncios y Mensajes de Meta — conectado o no, lo que falta, y el freno por uso si Meta lo puso
+  { const m = meta.estado(), fp = m.token?.faltanPor || {}, cuenta = String(cfg.anuncios?.cuenta || '').trim(), u = m.uso || {};
+    const frenado = u.frenadoHasta ? ` Meta pidió esperar por el límite de uso (${u.motivo}) hasta las ${new Date(u.frenadoHasta).toTimeString().slice(0, 5)}.` : u.pct >= 75 ? ` Cuota de Meta al ${Math.round(u.pct)} %: los sondeos van más espaciados.` : '';
+    if (!m.configurado) add('anuncios', 'Anuncios (Meta)', 'info', 'Meta no está conectada: el panel de Anuncios queda vacío.', 'Mira docs/conectar-meta.md: el token va en META_ACCESS_TOKEN y la cuenta publicitaria en Ajustes → Anuncios.');
+    else if (!cuenta) add('anuncios', 'Anuncios (Meta)', 'info', 'Sin cuenta publicitaria elegida.', 'Ajustes → Anuncios → «Cuenta publicitaria de Meta» (act_…).');
+    else if (fp.anuncios?.length) add('anuncios', 'Anuncios (Meta)', 'warn', `Cuenta ${cuenta}: al token le faltan ${fp.anuncios.join(', ')}.`, 'Genera el token de nuevo en Business Manager con esos permisos y la cuenta publicitaria asignada al usuario del sistema.');
+    else add('anuncios', 'Anuncios (Meta)', u.frenadoHasta ? 'warn' : 'ok', `Cuenta ${cuenta} con permisos para leer y gestionar campañas.${frenado}`);
+    if (!m.configurado) add('mensajes', 'Mensajes de Meta', 'info', 'Meta no está conectada: la Bandeja sigue con Metricool (o vacía).', 'Mira docs/conectar-meta.md.');
+    else if (fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', 'info', `Al token le faltan ${fp.mensajes.join(', ')}: los mensajes privados no llegan a la Bandeja.`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
+    else add('mensajes', 'Mensajes de Meta', 'ok', `Permisos de mensajes listos.${frenado}`); }
   // plan M1 (6 oct 2026): la publicación — el modo, el conductor y lo que falló
   { const c = programador.estado(), fal = (c.cuenta.fallo || 0) + (c.cuenta.parcial || 0);
     if (c.modo === 'apagado') add('publicacion', 'Publicación (Contenido)', 'info', 'Apagada: nada de lo que apruebas sale de la oficina.', 'Ajustes → Contenido → «Qué pasa con lo que apruebas».');

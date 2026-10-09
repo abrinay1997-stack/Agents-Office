@@ -29,3 +29,20 @@ test('V4.5: the Estudio caps are settings — 0 is allowed (no cap), a bad value
   assert.equal(bad.errors.length, 3);
   assert.ok(S.GROUPS.some(([k]) => k === 'estudio'));
 });
+
+test('Fase 0 de Anuncios: los ids de Meta son opcionales y con su formato; los topes y el piloto, con los valores del plan', () => {
+  assert.ok(S.GROUPS.some(([k]) => k === 'anuncios'));
+  const r = S.apply({}, { 'anuncios.cuenta': ' 1234567890 ', 'anuncios.pagina': '', 'anuncios.topeDiario': 25, 'anuncios.pilotoAutomatico': true });
+  assert.deepEqual(r.errors, []); assert.equal(r.restart, false);
+  assert.equal(r.local.anuncios.cuenta, 'act_1234567890', 'solo los números se completan con act_');
+  assert.equal(r.local.anuncios.pagina, '', 'vacío vale: usa la de Contenido');
+  const bad = S.apply({}, { 'anuncios.cuenta': 'mi cuenta', 'anuncios.pixel': 'px-12', 'anuncios.topeMensual': -5 });
+  assert.equal(bad.errors.length, 3); assert.ok(bad.errors.some(e => /act_/.test(e)));
+  const def = Object.fromEntries(S.FIELDS.filter(f => f.group === 'anuncios').map(f => [f.path, f.default]));
+  assert.equal(def['anuncios.topeDiario'], 20); assert.equal(def['anuncios.topeMensual'], 300); assert.equal(def['anuncios.topeCampana'], 150);
+  assert.equal(S.FIELDS.find(f => f.path === 'anuncios.pilotoAutomatico').default, undefined, 'el piloto nace apagado');
+  assert.ok(!S.FIELDS.some(f => f.group === 'anuncios' && /token|secret/i.test(f.path)), 'ningún secreto en Ajustes');
+});
+test('un campo de texto obligatorio sigue sin poder quedar vacío', () => {
+  assert.equal(S.apply({}, { name: '  ' }).errors.length, 1);
+});

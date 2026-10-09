@@ -125,10 +125,15 @@ export function crearMetricas({ meta, dir, fetchFn = (...a) => fetch(...a), ahor
   async function metricasDelDiaFB(token, pagina, fecha, errores) {
     const params = { period: 'day', since: inicioDelDia(fecha), until: inicioDelDia(sumarDias(fecha, 1)) };
     const salida = {};
-    for (const [m, clave] of [['page_impressions_unique', 'reach'], ['page_post_engagements', 'total_interactions'], ['page_views_total', 'profile_views'], ['page_media_view', 'views']]) {
-      const r = await intentar(() => graph(token, `/${pagina}/insights`, { params: { ...params, metric: m } }), errores);
-      const v = r?.data?.[0]?.values?.at(-1)?.value;
-      if (v !== undefined) salida[clave] = num(v);
+    // Fase 0 (8 oct 2026): `page_impressions_unique` está retirada desde Graph v25 (documentación de Page Insights); el alcance es
+    // ahora `page_total_media_view_unique` (personas que vieron contenido de la página). La vieja queda de respaldo por si una página
+    // aún no tiene la nueva. La primera que responda gana; los errores de las demás se apuntan igual.
+    for (const [metricas, clave] of [[['page_total_media_view_unique', 'page_impressions_unique'], 'reach'], [['page_post_engagements'], 'total_interactions'], [['page_views_total'], 'profile_views'], [['page_media_view'], 'views']]) {
+      for (const m of metricas) {
+        const r = await intentar(() => graph(token, `/${pagina}/insights`, { params: { ...params, metric: m } }), errores);
+        const v = r?.data?.[0]?.values?.at(-1)?.value;
+        if (v !== undefined) { salida[clave] = num(v); break; }
+      }
     }
     return salida;
   }

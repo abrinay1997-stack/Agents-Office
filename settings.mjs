@@ -2,7 +2,7 @@
 // it does; a change is validated here and written to office.config.local.json (this machine; it wins over the team's
 // file and is never uploaded). Proven in tests/settings.test.mjs.
 export const GROUPS = [
-  ['general', 'General'], ['seguridad', 'Seguridad'], ['aprobaciones', 'Aprobaciones'], ['costos', 'Costos'], ['estudio', 'Estudio'], ['contenido', 'Contenido'], ['avisos', 'Avisos y Telegram'], ['conectores', 'Conectores'], ['calidad', 'Calidad'], ['equipo', 'Equipo'],
+  ['general', 'General'], ['seguridad', 'Seguridad'], ['aprobaciones', 'Aprobaciones'], ['costos', 'Costos'], ['estudio', 'Estudio'], ['contenido', 'Contenido'], ['anuncios', 'Anuncios'], ['avisos', 'Avisos y Telegram'], ['conectores', 'Conectores'], ['calidad', 'Calidad'], ['equipo', 'Equipo'],
 ];
 const DEPTS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 // type: text · number · bool · select · list (strings) · depts (departments) · time (HH:MM or empty) · people
@@ -32,6 +32,19 @@ export const FIELDS = [
   { path: 'contenido.redes', group: 'contenido', type: 'checks', label: 'Redes que usas', options: [['instagram', 'Instagram'], ['facebook', 'Facebook'], ['linkedin', 'LinkedIn'], ['x', 'X'], ['threads', 'Threads'], ['bluesky', 'Bluesky'], ['tiktok', 'TikTok'], ['pinterest', 'Pinterest'], ['youtube', 'YouTube']], default: ['instagram', 'facebook'], help: 'Las que salen al crear una pieza y en los filtros de Contenido. Las demás siguen a mano en «Más redes». Para publicar en ellas, conéctalas en Metricool.' },
   { path: 'contenido.entregarHorasAntes', group: 'contenido', type: 'number', label: 'Entregar al conductor (horas antes de que salga)', min: 0, max: 720, default: 24, help: 'Hasta entonces la cambias o la cancelas sin límites; después, depende del conductor. 0 = al aprobarla.' },
   { path: 'contenido.departments', group: 'contenido', type: 'depts', label: 'Departamentos cuyos agentes pueden dejar borradores', restart: true, help: 'Leen el calendario de contenido y dejan borradores que tú revisas y apruebas en Contenido (K). Ninguno aprueba, programa ni publica. Vacío = ninguno.', default: ['marketing', 'delivery'] },
+  // Fase 0 de Anuncios (8 oct 2026, docs/plan-meta-anuncios-y-bandeja-2026-10-09.md §5): los ids de Meta (no son secretos: el token y el
+  // secreto van SOLO en variables de Windows) y los topes que la oficina comprueba antes de cualquier acción que gaste (§3.4). Los
+  // valores por defecto son los del §12 del plan; el dueño los confirma la primera vez que abre el panel de Anuncios.
+  { path: 'anuncios.cuenta', group: 'anuncios', type: 'text', optional: true, max: 30, placeholder: 'act_1234567890', normalize: s => (/^\d+$/.test(s) ? `act_${s}` : s), pattern: /^act_\d{5,20}$/, patternHelp: 'es «act_» y los números de tu cuenta publicitaria (Administrador de anuncios → la cuenta, arriba a la izquierda)', label: 'Cuenta publicitaria de Meta', help: 'El id de la cuenta publicitaria de PanaClaw. Vacío = Anuncios apagado. Moneda y zona horaria se leen de Meta (deben ser USD y America/Panama).' },
+  { path: 'anuncios.pagina', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'la de Contenido', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id de la página de Facebook)', label: 'Página de Facebook de los anuncios', help: 'Vacío = la misma página que usa Contenido.' },
+  { path: 'anuncios.instagram', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'el de la página', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id de la cuenta de Instagram de empresa)', label: 'Cuenta de Instagram de los anuncios', help: 'Vacío = la cuenta de Instagram unida a esa página.' },
+  { path: 'anuncios.pixel', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'sin píxel', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id del píxel o conjunto de datos)', label: 'Píxel o conjunto de datos', help: 'Solo si vendes en una web. Sin píxel, las campañas van a mensajes, WhatsApp o visitas al perfil.' },
+  { path: 'anuncios.whatsapp', group: 'anuncios', type: 'text', optional: true, max: 25, placeholder: 'sin WhatsApp', pattern: /^\d{5,25}$/, patternHelp: 'son solo números (el id del número de WhatsApp Business)', label: 'Número de WhatsApp Business', help: 'Para anuncios que abren WhatsApp. Tiene que estar vinculado a la página.' },
+  { path: 'anuncios.topeDiario', group: 'anuncios', type: 'number', label: 'Tope de gasto al día (US$)', min: 0, max: 100000, step: 1, default: 20, help: 'La suma de los presupuestos diarios activos más lo que se activa. Nada que lo pase se activa ni se sube. 0 = no se puede gastar.' },
+  { path: 'anuncios.topeMensual', group: 'anuncios', type: 'number', label: 'Tope de gasto al mes (US$)', min: 0, max: 1000000, step: 1, default: 300, help: 'Lo gastado este mes más lo comprometido hasta fin de mes.' },
+  { path: 'anuncios.topeCampana', group: 'anuncios', type: 'number', label: 'Tope por campaña (US$)', min: 0, max: 1000000, step: 1, default: 150, help: 'Cada campaña lo lleva también en Meta (spend_cap): aunque la oficina esté cerrada, Meta no gasta más.' },
+  { path: 'anuncios.cpaObjetivo', group: 'anuncios', type: 'number', label: 'Costo por resultado que te parece bueno (US$)', min: 0, max: 100000, step: 0.1, default: 0, help: 'Con esto se decide qué cortar y qué escalar. 0 = se calcula de las cifras de la empresa (margen y valor de un cliente); si no hay, se te pregunta.' },
+  { path: 'anuncios.pilotoAutomatico', group: 'anuncios', type: 'bool', label: 'Piloto automático (solo para gastar MENOS)', help: 'Pausa sin preguntarte un anuncio que gastó sin resultados, o todo si se pasa el tope del día; te avisa y se puede deshacer. Nunca activa ni sube presupuestos.' },
   { path: 'media.dailyLimit', group: 'estudio', type: 'number', label: 'Tope de generaciones al día', min: 0, max: 10000, default: 40, help: 'Cuenta imágenes; un video cuenta como 5. Lo del motor «Prueba» no cuenta. 0 = sin tope.' },
   { path: 'media.dailyBudget', group: 'estudio', type: 'number', label: 'Gasto máximo al día en el Estudio (US$)', min: 0, max: 100000, step: 0.5, default: 0, help: 'Con el precio aproximado de cada modelo; lo que está generándose ya cuenta. Un pedido que lo pasaría no se envía. 0 = sin límite.' },
   { path: 'media.monthlyBudget', group: 'estudio', type: 'number', label: 'Gasto máximo al mes en el Estudio (US$)', min: 0, max: 1000000, step: 1, default: 0, help: 'Igual, por mes calendario. Aparte del presupuesto de la oficina (Costos), que cuenta a los agentes. 0 = sin límite.' },
@@ -59,7 +72,13 @@ export function set(o, p, v) { const ks = p.split('.'); let x = o; for (const k 
 /** Clean one value for its field; → { value } or { error } in plain words. */
 export function clean(f, v) {
   switch (f.type) {
-    case 'text': { const s = String(v ?? '').trim(); if (!s) return { error: `${f.label}: no puede quedar vacío` }; return { value: s.slice(0, f.max || 200) }; }
+    case 'text': {
+      let s = String(v ?? '').trim();
+      if (!s) return f.optional ? { value: '' } : { error: `${f.label}: no puede quedar vacío` };
+      if (f.normalize) s = f.normalize(s);
+      if (f.pattern && !f.pattern.test(s)) return { error: `${f.label}: ${f.patternHelp || 'no tiene el formato esperado'}` };
+      return { value: s.slice(0, f.max || 200) };
+    }
     case 'number': { const n = Number(v); if (!Number.isFinite(n)) return { error: `${f.label}: tiene que ser un número` }; if (n < f.min || n > f.max) return { error: `${f.label}: entre ${f.min} y ${f.max}` }; return { value: n }; }
     case 'bool': return { value: v === true || v === 'true' || v === 1 };
     case 'select': return f.options.some(([k]) => k === v) ? { value: v } : { error: `${f.label}: opción desconocida` };

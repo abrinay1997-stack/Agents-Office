@@ -24,7 +24,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { mensajeMeta, permisosQueFaltan, ErrorMeta } from './meta.mjs';
+import { mensajeMeta, permisosQueFaltan, ErrorMeta, NOMBRE_FUNCION } from './meta.mjs';
 
 export const REDES_META = ['instagram', 'facebook'];
 export const PREPARAR_ANTES_MS = 15 * 60e3;  // Instagram: el contenedor (y la subida del video) se prepara 15 min antes
@@ -411,7 +411,10 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
     const l = listo(); if (!l.ok) return { ok: false, error: l.motivo };
     const { fb, ig } = cuentas(); let cuota = '';
     if (ig) { try { const q = (await meta.graph(await meta.tokenDe({ paginaId: fb.paginaId }), `/${ig.externoId}/content_publishing_limit`, { params: { fields: 'config,quota_usage' } }))?.data?.[0]; if (q) { cuota = ` · Instagram: ${q.quota_usage ?? '?'} de ${q.config?.quota_total ?? '?'} publicaciones por API en 24 h`; apuntarCuota(q.quota_usage, q.config?.quota_total); } } catch { /* sin cuota: no es grave */ } }
-    return { ok: true, texto: `Meta responde: publica en la página «${fb.nombre}»${ig ? ` y en Instagram @${ig.usuario || ig.nombre}` : ' (sin Instagram vinculado)'}${cuota}.`, nota: l.nota };
+    // Fase 0 de Anuncios (8 oct 2026): lo que le falta al token para las otras funciones, separado por función (publicar ya pasó).
+    const otras = Object.entries(meta.estado().token?.faltanPor || {}).filter(([k, x]) => k !== 'publicar' && x.length);
+    const faltanOtras = otras.length ? ` Para otras funciones le faltan permisos: ${otras.map(([k, x]) => `${NOMBRE_FUNCION[k] || k}: ${x.join(', ')}`).join(' · ')}.` : '';
+    return { ok: true, texto: `Meta responde: publica en la página «${fb.nombre}»${ig ? ` y en Instagram @${ig.usuario || ig.nombre}` : ' (sin Instagram vinculado)'}${cuota}.`, nota: l.nota + faltanOtras, faltanPor: meta.estado().token?.faltanPor || {} };
   }
 
   return { id: 'meta', nombre: 'Meta', listo, programar, retirar, estado, pulso, comprobar, cuota, agenda: () => leer() };

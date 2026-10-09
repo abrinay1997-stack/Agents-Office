@@ -53,7 +53,8 @@ test('el almacén: cada guardado deja su bitácora (quién, qué) y emite al bus
     const bit = o.alm.bitacora(t.id);
     assert.deepEqual(bit.map(x => `${x.tipo}${x.campo ? ':' + x.campo : ''}@${x.por}`), ['creada@dueno', 'estado@oficina', 'campo:prioridad@dueno', 'comentario@dueno', 'estado@agente:piper', 'resultado@agente:piper']);
     assert.equal(o.alm.load()[0].version, 4);
-    await espera(5); assert.deepEqual([...new Set(vistos)].sort(), ['tarea.cambio', 'tarea.creada', 'tarea.estado']);
+    for (let i = 0; i < 100 && new Set(vistos).size < 3; i++) await espera(10); // 8 oct 2026: al hecho, no 5 ms fijos (fallaba con la máquina cargada)
+    assert.deepEqual([...new Set(vistos)].sort(), ['tarea.cambio', 'tarea.creada', 'tarea.estado']);
     assert.equal(o.alm.guardarEjecucion(base, { ...mio, id: 'gone' }).borrada, true, 'borrada mientras trabajaba: no se resucita');
   } finally { o.cerrar(); }
 });
@@ -88,7 +89,8 @@ test('organizar por la API: proyectos y etiquetas, bloqueos sin círculos, permi
     const cat = await o.api('GET', '/api/tareas/catalogo'); assert.equal(cat.proyectos[0].progreso.total, 1); assert.equal(cat.proyectos[0].progreso.bloqueadas, 1);
     const p0 = o.pumps();
     o.alm.cambiar(a.id, t => { t.state = 'done'; t.doneAt = Date.now(); }, { por: 'agente:piper' });
-    await espera(30);
+    // 8 oct 2026: se espera al hecho, no 30 ms fijos (con la máquina cargada, el despachador tardaba más y el test fallaba sin motivo)
+    for (let i = 0; i < 100 && !(o.pumps() > p0 && o.avisos.some(x => x.k === 'desbloqueada')); i++) await espera(20);
     assert.ok(o.pumps() > p0, 'el despachador pone la cola a andar'); assert.ok(o.avisos.some(x => x.k === 'desbloqueada' && /«Post» ya no espera/.test(x.t)));
     assert.ok(o.alm.bitacora(b.id).some(x => x.tipo === 'desbloqueada'));
     const det = await o.api('GET', `/api/tareas/${b.id}`); assert.equal(det.visible, 'en_cola'); assert.ok(det.bitacora.length >= 2);
