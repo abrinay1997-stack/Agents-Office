@@ -361,7 +361,10 @@ export function textoObjeto(v, id) {
 //     creativos: [{ id, media, formato: '1:1'|'4:5'|'9:16'|null, texto, titular, descripcion, llamada }],
 //     mejoras: { texto: false, retoques: true, recorte: true, plantilla: false },
 //     validacion: { ok, problemas: [{ campo (la ruta: 'publico.paises', 'presupuesto.usd', 'creativos.2.media', 'meta'…), texto, nivel: 'error'|'aviso' }], at, costoMax: { dia, total, campana, sinLimite }, meta: { ok, texto }|null } | null,
-//     meta: { campana, conjunto, creativos: [], anuncios: [] } | null, error: string|null, progreso: { paso, texto }|null }
+//     meta: { campana, conjunto, creativos: [], anuncios: [] } | null, error: string|null, progreso: { paso, texto }|null,
+//     origen: null | { tipo: 'publicacion', red: 'instagram'|'facebook', id: <id de Meta>, ref?, enlace, texto, miniatura, publicadaAt, pieza? } }
+// Fase A4 (9 oct 2026): con `origen`, el borrador IMPULSA esa publicación: un solo creativo, que es la publicación misma (sin medios ni
+// texto propios: solo se elige la llamada a la acción y el destino). anuncios/construir.mjs → cuerpoCreativo hace el creativo de Meta.
 
 export const OBJETIVOS_BORRADOR = ['mensajes', 'web', 'ventas', 'contactos', 'conocer'];
 export const OBJETIVO_BORRADOR_TEXTO = { mensajes: 'Que me escriban', web: 'Visitas a mi web', ventas: 'Ventas en mi web', contactos: 'Contactos', conocer: 'Que me conozcan' };
@@ -377,6 +380,7 @@ export const SPEND_CAP_MINIMO_USD = 100; // verificado el 9 oct 2026 (plan §13.
 export const RADIO_MINIMO_ESPECIAL_KM = 25; // POR VERIFICAR: el radio mínimo en categorías especiales
 export const LINK_MENSAJES = 'https://fb.com/messenger_doc/'; // POR VERIFICAR: el `link` que Meta pide en link_data para Click to Messenger / Instagram Direct
 export const LINK_WHATSAPP = 'https://api.whatsapp.com/send'; // plan §13.13 (búsquedas del 9 oct 2026): el link de un anuncio que abre WhatsApp
+export const REDES_IMPULSAR = ['instagram', 'facebook']; // Fase A4: lo que se puede impulsar (plan §5 A4, verificado el 9 oct 2026)
 
 /**
  * LA TABLA: objetivo de la oficina ↔ lo que Meta espera. `verificado` dice si la combinación está en el §13 del plan (lo demás, POR VERIFICAR
@@ -430,8 +434,23 @@ export function borradorPorDefecto({ ajustes = {}, ahora = Date.now(), id = null
   const at = new Date(ahora).toISOString();
   return { id: id || nuevoId('b', ahora), nombre: 'Campaña nueva', de, creadoAt: at, actualizadoAt: at, estado: 'borrador', objetivo: 'mensajes', destino: String(ajustes.whatsapp || '').trim() ? 'whatsapp' : 'instagram',
     publico: { modo: 'advantage', paises: ['PA'], radio: null, edadMin: 18, edadMax: null, intereses: [] }, categoriaEspecial: null,
-    presupuesto: { tipo: 'diario', usd: 5 }, inicio: null, fin: null, enlace: null, creativos: [], mejoras: { ...MEJORAS_DEFECTO }, validacion: null, meta: null, error: null, progreso: null };
+    presupuesto: { tipo: 'diario', usd: 5 }, inicio: null, fin: null, enlace: null, creativos: [], mejoras: { ...MEJORAS_DEFECTO }, validacion: null, meta: null, error: null, progreso: null, origen: null };
 }
+
+/** Fase A4: la publicación que se impulsa, limpia. El id es el de Meta (IG: el del medio; FB: `<página>_<post>` o el del post). */
+export function normOrigen(o) {
+  if (!o || typeof o !== 'object') malo('La publicación que se impulsa no se entiende.');
+  const red = String(o.red || '').toLowerCase();
+  if (!REDES_IMPULSAR.includes(red)) malo('Solo se impulsan publicaciones de Instagram o de Facebook.');
+  const id = String(o.id || '').trim();
+  if (!/^[A-Za-z0-9]{1,30}(_[A-Za-z0-9]{1,30})?$/.test(id)) malo('Falta el id de Meta de la publicación (o no es un id de Meta).');
+  const enlace = texto(o.enlace, 500), mini = texto(o.miniatura, 500), t = Date.parse(o.publicadaAt || '');
+  return { tipo: 'publicacion', red, id, ...(o.ref ? { ref: texto(o.ref, 120) } : {}), enlace: /^https:\/\//.test(enlace) ? enlace : '', texto: texto(o.texto, 2200),
+    miniatura: /^(https:\/\/|\/api\/contenido\/miniatura\/|\/media\/|data:image\/)/.test(mini) ? mini : '', publicadaAt: Number.isFinite(t) ? new Date(t).toISOString() : null,
+    ...(/^[A-Za-z0-9_-]{1,60}$/.test(String(o.pieza || '')) ? { pieza: String(o.pieza) } : {}) };
+}
+/** Con origen, el único creativo: la publicación (su texto, para leerlo; Meta usa el de la publicación) y la llamada a la acción elegida. */
+const creativoDeOrigen = (origen, llamada) => ({ id: 'pub', media: null, formato: null, texto: origen.texto || '', titular: '', descripcion: '', llamada: llamada ? String(llamada).toUpperCase().replace(/[^A-Z_]/g, '').slice(0, 30) || null : null });
 
 function normCreativo(c, i, ahora, usados) {
   if (!c || typeof c !== 'object') malo(`El creativo ${i + 1} no se entiende.`);
@@ -481,6 +500,9 @@ export function normalizarBorrador(entrada = {}, previo = null, { ajustes = {}, 
     const usados = new Set(); b.creativos = e.creativos.map((c, i) => normCreativo(c, i, ahora, usados));
   }
   if ('mejoras' in e && e.mejoras && typeof e.mejoras === 'object') for (const k of Object.keys(MEJORAS_DEFECTO)) if (k in e.mejoras) b.mejoras[k] = Boolean(e.mejoras[k]);
+  if ('origen' in e) b.origen = e.origen ? normOrigen(e.origen) : null;
+  if (b.origen) b.creativos = [creativoDeOrigen(b.origen, b.creativos?.[0]?.llamada)]; // A4: la publicación es el creativo (se queda la llamada elegida)
+  else if (previo?.origen && 'origen' in e) b.creativos = []; // dejar de impulsar: los creativos se eligen de nuevo
   b.actualizadoAt = new Date(ahora).toISOString();
   if (previo && b.estado === 'fallo') { b.estado = 'borrador'; b.error = null; } // cambiarlo tras un fallo lo deja otra vez listo para crear
   b.validacion = null; // otro borrador: la validación de antes ya no vale
@@ -564,6 +586,7 @@ export function validarBorrador(b, { ajustes = {}, defaults = {}, medio = () => 
   if (tc !== null && cm.total !== null && cm.total > tc && cap === null) aviso(cm.total === Infinity ? 'fin' : 'presupuesto.usd', cm.total === Infinity ? 'Sin fecha de fin gastaría sin límite y no hay tope en Meta: ponle fecha de fin, o no cabrá en tu tope por campaña al activarla.' : `En total gastaría hasta US$${cm.total}, más que tu tope por campaña (US$${tc}).`);
 
   const cs = b.creativos || [];
+  if (b.origen) { validarOrigen(b, comb, cuentas, err, aviso); return cierre(); }
   if (!cs.length) err('creativos', `Faltan creativos: Meta recomienda ${CREATIVOS_RECOMENDADOS[0]} a ${CREATIVOS_RECOMENDADOS[1]}.`);
   else if (cs.length < CREATIVOS_RECOMENDADOS[0]) aviso('creativos', `Con ${cs.length} creativo${cs.length === 1 ? '' : 's'} Meta tiene poco que probar: recomienda ${CREATIVOS_RECOMENDADOS[0]} a ${CREATIVOS_RECOMENDADOS[1]}.`);
   else if (cs.length > CREATIVOS_RECOMENDADOS[1]) aviso('creativos', `Más de ${CREATIVOS_RECOMENDADOS[1]} creativos reparten el aprendizaje: Meta recomienda ${CREATIVOS_RECOMENDADOS[0]} a ${CREATIVOS_RECOMENDADOS[1]}.`);
@@ -581,13 +604,23 @@ export function validarBorrador(b, { ajustes = {}, defaults = {}, medio = () => 
   });
   if (cs.length && formatos.size === 1 && formatos.has('9:16')) aviso('creativos', 'Todo es 9:16: en el feed Meta lo recorta. Añade uno 1:1 o 4:5.');
   else if (cs.length && formatos.size && !formatos.has('9:16')) aviso('creativos', 'Sin un 9:16, en historias y reels Meta recorta o rellena (Advantage+ lo hace solo).');
-  if (comb && comb.verificado !== true) aviso('objetivo', 'Esta combinación todavía no se probó contra Meta de verdad: la validación de Meta dirá si la acepta.');
-
-  return { ok: !problemas.some(x => x.nivel === 'error'), problemas, at: new Date(ahora).toISOString(), costoMax: { dia: cm.dia, total: cm.total === Infinity ? null : cm.total, campana: cm.campana === Infinity ? null : cm.campana, sinLimite: cm.total === Infinity && cap === null }, meta: null };
+  return cierre();
+  function cierre() {
+    if (comb && comb.verificado !== true) aviso('objetivo', 'Esta combinación todavía no se probó contra Meta de verdad: la validación de Meta dirá si la acepta.');
+    return { ok: !problemas.some(x => x.nivel === 'error'), problemas, at: new Date(ahora).toISOString(), costoMax: { dia: cm.dia, total: cm.total === Infinity ? null : cm.total, campana: cm.campana === Infinity ? null : cm.campana, sinLimite: cm.total === Infinity && cap === null }, meta: null };
+  }
+}
+/** A4: lo que se mira de una publicación impulsada (lo de Meta —si deja impulsarla— lo añade anuncios/crear.mjs → validar). */
+function validarOrigen(b, comb, cuentas, err, aviso) {
+  const o = b.origen, c = (b.creativos || [])[0];
+  if (!REDES_IMPULSAR.includes(o.red) || !o.id) err('origen', 'Falta la publicación que se impulsa (su red y su id de Meta).');
+  if (o.red === 'instagram' && !cuentas.instagram) err('origen', 'Para impulsar una publicación de Instagram, la página necesita su cuenta de Instagram de empresa unida (Ajustes → Anuncios).');
+  if (c?.llamada && comb && !(comb.llamadas || []).includes(c.llamada)) err('creativos.0.llamada', `El botón «${LLAMADA_TEXTO[c.llamada] || c.llamada}» no vale para «${OBJETIVO_BORRADOR_TEXTO[b.objetivo]}»: usa ${(comb.llamadas || []).map(l => LLAMADA_TEXTO[l] || l).join(', ')}.`);
+  if (!o.texto) aviso('origen', 'La publicación no tiene texto: el anuncio sale con la imagen o el video solos.');
 }
 /** «Combo (mensajes por WhatsApp) · US$5 al día · 3 creativos · borrador», con su id: para Dimitri, los agentes y el asistente. */
 export function lineaBorrador(b) {
   const q = b.presupuesto?.usd ? `US$${b.presupuesto.usd} ${b.presupuesto.tipo === 'diario' ? 'al día' : 'en total'}` : 'sin presupuesto';
   const est = { borrador: 'borrador', creando: 'creándose en Meta', creado: `creado EN PAUSA en Meta${b.meta?.campana ? ` (campaña ${b.meta.campana})` : ''}`, fallo: `falló al crearse: ${b.error || ''}` }[b.estado] || b.estado;
-  return `${b.id} · «${b.nombre}» (${OBJETIVO_BORRADOR_TEXTO[b.objetivo] || b.objetivo}${b.destino ? ' por ' + DESTINO_TEXTO[b.destino] : ''}) · ${q} · ${(b.creativos || []).length} creativo(s) · de ${b.de} · ${est}${b.validacion ? ` · ${b.validacion.ok ? 'valida' : 'NO valida: ' + b.validacion.problemas.filter(x => x.nivel === 'error').map(x => x.texto).slice(0, 2).join(' ')}` : ''}`;
+  return `${b.id} · «${b.nombre}» (${OBJETIVO_BORRADOR_TEXTO[b.objetivo] || b.objetivo}${b.destino ? ' por ' + DESTINO_TEXTO[b.destino] : ''}) · ${q} · ${b.origen ? `impulsa la publicación de ${b.origen.red === 'instagram' ? 'Instagram' : 'Facebook'} ${b.origen.id}` : `${(b.creativos || []).length} creativo(s)`} · de ${b.de} · ${est}${b.validacion ? ` · ${b.validacion.ok ? 'valida' : 'NO valida: ' + b.validacion.problemas.filter(x => x.nivel === 'error').map(x => x.texto).slice(0, 2).join(' ')}` : ''}`;
 }

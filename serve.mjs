@@ -102,6 +102,7 @@ import { agenteDeAnuncios, promptMejorarAnuncio, leerPropuesta as leerPropuestaA
 import { diagnosticar as diagnosticarAnuncios, cpaObjetivo as cpaObjetivoDeAnuncios, medirResultado as medirResultadoAnuncio, tipoDe as tipoDeAnuncio } from './anuncios/diagnostico.mjs'; // Fase A5 (9 oct 2026): la IA que mejora las campañas
 import { crearSugerencias as crearSugerenciasAnuncios, crearAplicador as crearAplicadorAnuncios, cargarUmbrales as cargarUmbralesAnuncios } from './anuncios/sugerencias.mjs';
 import { crearPiloto as crearPilotoAnuncios } from './anuncios/piloto.mjs';
+import { crearImpulsor as crearImpulsorAnuncios } from './anuncios/impulsar.mjs'; // Fase A4 (9 oct 2026): impulsar lo que ya salió en Contenido
 import { fechaEn as fechaEnAnuncios } from './anuncios/modelo.mjs';
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
@@ -223,7 +224,12 @@ setTimeout(() => { try { const ids = anunciosCrear.alArrancar(); if (ids.length)
 const umbralesAnuncios = () => cargarUmbralesAnuncios({ raiz: ROOT, brainPath: BRAIN });
 const anunciosSug = crearSugerenciasAnuncios({ dir: ANUNCIOS_DIR, umbrales: () => umbralesAnuncios().valores });
 const anunciosPiloto = crearPilotoAnuncios({ acciones: anunciosAcc, ajustes: () => cfg.anuncios || {}, avisar: (texto, o) => notice('anuncios', texto, o) });
-const anunciosAplicador = crearAplicadorAnuncios({ sug: anunciosSug, acciones: anunciosAcc, borradores: anunciosBorr, vista: () => anuncios.vista('7d'),
+// Fase A4 (9 oct 2026): IMPULSAR una publicación (anuncios/impulsar.mjs): el borrador con ese `origen`, de la pieza (lo que Analíticas leyó
+// emparejado con ella, o el id que la cola apuntó al publicar) o de la publicación de Analíticas. Nace borrador; crear en Meta es del dueño.
+const anunciosImpulsor = crearImpulsorAnuncios({ borradores: anunciosBorr, creador: anunciosCrear, ajustes: () => cfg.anuncios || {},
+  fuentes: () => { let publicaciones = []; try { publicaciones = metricas.leer({ dias: 90 }).publicaciones || []; } catch { /* sin Analíticas: el id de la cola */ }
+    return { leerPieza: id => contenido.leer(id), salidaDe: id => programador.salidaDe(id), publicaciones, emparejar: emparejarPublicadas }; } });
+const anunciosAplicador = crearAplicadorAnuncios({ sug: anunciosSug, acciones: anunciosAcc, borradores: anunciosBorr, vista: () => anuncios.vista('7d'), impulsar: b => anunciosImpulsor.impulsar(b),
   encargar: async ({ texto, titulo }) => { // una tarea para el agente de anuncios: propone (texto, borradores, prompts); no genera imágenes ni toca Meta
     const a = agenteDeAnuncios(AGENTS); if (!a) throw new Error('no hay ningún puesto de Marketing');
     const t = await newTask({ dept: a.department, text: texto, agent: a.id, title: titulo, needsOk: false, por: 'anuncios' });
@@ -1946,7 +1952,7 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
-const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador }); // A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador, impulsor: anunciosImpulsor }); // A4: /impulsar · A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
 /** A2: el segundo clic del dueño sobre un gasto que propuso Dimitri (`sub: { msg, k }`, o solo la `confirmacion`: se busca la tarjeta que
  *  tiene ese token) deja su tarjeta hecha en data/subgerente.json, para que al recargar no vuelva a pedir confirmación. */
 function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {

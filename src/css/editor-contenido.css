@@ -153,3 +153,6 @@ body.dark .pz-gdel { color: #FF8A73; }
 .pz-hred { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; font-size: 11.5px; color: var(--grey); }
 .pz-hred .pz-sel { min-height: 30px; padding: 4px 10px; font-size: 12px; }
 body.dark .pz-hred { color: #C2C0B9; }
+/* A4 (9 oct 2026): «Impulsar» en una pieza publicada */
+.pz-imp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; }
+.pz-imp .pz-hn { flex: 1 1 220px; }

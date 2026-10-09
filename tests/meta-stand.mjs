@@ -48,7 +48,9 @@ const ESTADOS = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'DELETED'];
  * @param {object}   [o.cuenta]       campos de la cuenta publicitaria (account_status, currency…)
  * @param {object}   [o.fallar]       { limite: n, parametro: n, pagoPendiente, rechazar: [idAnuncio], conProblemas: [idAnuncio],
  *                                     A3: trasConjunto (crea el conjunto y NO contesta nunca: la oficina «se cae» entre el conjunto y el anuncio),
- *                                     crearAnuncio: n (los n próximos anuncios dan error 100), sinFiltro (la lista no admite `filtering`) }
+ *                                     crearAnuncio: n (los n próximos anuncios dan error 100), sinFiltro (la lista no admite `filtering`),
+ *                                     A4: noImpulsable: { <id del medio de IG>: 'motivo' } (boost_eligibility_info dice que no; crear su creativo da
+ *                                     error), noIG: [<id del post de FB>] (is_instagram_eligible: false; con instagram_user_id, su creativo da error) }
  * @param {object}   [o.uso]          { app, negocio, cuenta, recuperarMin }: porcentajes que salen en las cabeceras de uso
  * @param {Function} [o.torcer]       (llamada, st) → Response | null
  * @param {string}   [o.rupload]      el origen que hace de rupload.facebook.com
@@ -143,6 +145,12 @@ export function crearMetaStand(o = {}) {
     const historia = objeto(campos.object_story_spec);
     if (!historia && !campos.object_story_id && !campos.source_instagram_media_id) return errorGraph('(#100) Creative spec must include object_story_spec, object_story_id or source_instagram_media_id', 100);
     if (historia && !historia.page_id) return errorGraph('(#100) object_story_spec requires page_id', 100);
+    // A4 (verificado el 9 oct 2026, «Use posts as ads»): IG → object_id + instagram_user_id + source_instagram_media_id; FB → object_story_id
+    if (campos.source_instagram_media_id) {
+      if (!campos.object_id || !campos.instagram_user_id) return errorGraph('(#100) source_instagram_media_id requires object_id and instagram_user_id', 100);
+      if (st.fallar.noImpulsable?.[campos.source_instagram_media_id]) return errorGraph('(#100) This Instagram media is not eligible to be boosted', 100, { error_user_msg: st.fallar.noImpulsable[campos.source_instagram_media_id] });
+    }
+    if (campos.object_story_id && campos.instagram_user_id && (st.fallar.noIG ?? []).includes(campos.object_story_id)) return errorGraph('(#100) This post is not eligible for Instagram', 100);
     if (esValidar(campos)) { st.validaciones++; return json({ success: true }); }
     const id = nuevo('CRE');
     st.creativos[id] = { id, name: campos.name, object_story_spec: historia, object_story_id: campos.object_story_id, source_instagram_media_id: campos.source_instagram_media_id, degrees_of_freedom_spec: objeto(campos.degrees_of_freedom_spec), effective_object_story_id: campos.object_story_id || `P1_${nuevo('post')}`, thumbnail_url: 'https://scontent.fbcdn.test/creativo.jpg' };
@@ -403,6 +411,7 @@ export function crearMetaStand(o = {}) {
       if (coment && (campos.hide !== undefined || campos.is_hidden !== undefined)) { const ocultar = String(campos.hide ?? campos.is_hidden) === 'true'; if (campos.hide !== undefined) coment.hidden = ocultar; else coment.is_hidden = ocultar; if (ocultar) st.ocultos.push(id); else st.mostrados = [...(st.mostrados || []), id]; return json({ success: true }); }
     }
     if (metodo === 'GET') {
+      if (String(q.get('fields') || '').includes('is_instagram_eligible') && /^\w+_\w+$/.test(id)) return json({ id, is_instagram_eligible: !(st.fallar.noIG ?? []).includes(id) }); // A4: un post de la página
       if (st.campanas[id]) return json(vista(st.campanas[id]));
       if (st.conjuntos[id]) return json(vista(st.conjuntos[id]));
       if (st.anuncios[id]) return json(vista(st.anuncios[id]));
@@ -414,7 +423,10 @@ export function crearMetaStand(o = {}) {
       if (st.fotos[id] && q.get('fields') === 'images') return json({ images: [{ width: 320, source: `https://scontent.fbcdn.test/${id}-p.jpg` }, { width: 1080, source: `https://scontent.fbcdn.test/${id}.jpg` }] });
       if (st.cont[id]) { const c = st.cont[id]; if (c.estado === 'IN_PROGRESS' && c.subido && !(c.listoEn-- > 0)) c.estado = 'FINISHED'; return json({ status_code: c.estado, status: c.estado }); }
       if (st.posts[id]) { const p = st.posts[id], pub = !p.programada || p.programada * 1000 <= st.reloj; return json(p.video ? { published: pub, permalink_url: `/PanaClaw/videos/${id}` } : { is_published: pub, permalink_url: `https://www.facebook.com/${id}` }); }
-      if (st.media.some(m => m.id === id)) return json({ permalink: `https://www.instagram.com/p/${id}/` });
+      if (st.media.some(m => m.id === id) || (String(q.get('fields') || '').includes('boost_eligibility_info') && /^[A-Za-z0-9]+$/.test(id))) {
+        if (String(q.get('fields') || '').includes('boost_eligibility_info')) { const no = st.fallar.noImpulsable?.[id]; return json({ id, boost_eligibility_info: no ? { eligible_to_boost: false, boost_ineligible_reason: no } : { eligible_to_boost: true } }); } // A4
+        return json({ permalink: `https://www.instagram.com/p/${id}/` });
+      }
     }
     return errorGraph(`ruta no simulada: ${metodo} ${ruta}`, 100);
   }

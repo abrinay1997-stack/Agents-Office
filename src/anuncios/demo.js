@@ -260,7 +260,7 @@ export function crearDemo({ ahora = () => Date.now(), topes = TOPES_DEMO } = {})
     const id = `ej-c-n${creadas.length + 1}`, cero = { gasto: 0, impresiones: 0, alcance: 0, frecuencia: null, clics: 0, clicsEnlace: 0, ctr: null, cpc: null, cpm: null, resultados: 0, resultadoTexto: '', costoPorResultado: null };
     const pub = b.publico || {}, lugar = pub.radio ? `${pub.radio.km} km alrededor de tu local` : (pub.paises || []).map(paisNombre).join(', ') || 'Panamá';
     const anuncios = (b.creativos || []).map((c, i) => ({ id: `${id}-as1-ad${i + 1}`, nombre: `${b.nombre} · creativo ${i + 1}`, estado: 'CAMPAIGN_PAUSED', revision: [], problemas: [], cifras: { ...cero },
-      creativo: { miniatura: srcDemo(c.media), titulo: c.titular || '', texto: c.texto || '', llamada: LLAMADA[c.llamada] || '' } }));
+      creativo: { miniatura: srcDemo(c.media) || b.origen?.miniatura || null, titulo: c.titular || '', texto: c.texto || '', llamada: LLAMADA[c.llamada] || '' } }));
     const conjunto = { id: `${id}-as1`, nombre: `${lugar} · ${pub.edadMin || 18}${pub.edadMax ? '–' + pub.edadMax : '+'}${pub.modo === 'manual' ? '' : ' · Advantage+'}`, optimizacion: objetivoDe(b.objetivo)?.n || '', destino: b.destino || '', estado: 'CAMPAIGN_PAUSED',
       aprendizaje: { estado: null, texto: 'Todavía no empieza' }, presupuesto: null, publico: { lugares: [lugar], edad: { min: pub.edadMin || 18, max: pub.edadMax || null }, advantage: pub.modo !== 'manual' }, anuncios, cifras: { ...cero } };
     creadas.push({ id, nombre: b.nombre, objetivo: objetivoDe(b.objetivo)?.meta || '', objetivoTexto: objetivoTexto(b), estado: 'PAUSED', estadoTexto: 'En pausa', creadoFuera: false,

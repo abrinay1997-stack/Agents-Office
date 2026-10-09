@@ -149,7 +149,7 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
   function redesDe(trabajos, otras = {}) {
     const r = Object.fromEntries(Object.entries(otras || {}).map(([red, x]) => [red, { estado: 'fallo', url: '', detalle: x }]));
     for (const j of trabajos) {
-      r[j.red] = j.estado === 'publicada' ? { estado: 'publicada', url: j.url || '', detalle: j.detalle || '' }
+      r[j.red] = j.estado === 'publicada' ? { estado: 'publicada', url: j.url || '', detalle: j.detalle || '', ...(j.publicadoId ? { id: j.publicadoId } : {}) } // A4: el id de Meta (para impulsarla)
         : j.estado === 'fallo' ? { estado: 'fallo', url: '', detalle: j.error || 'falló' }
         : { estado: 'en_red', url: '', local: j.modo === 'local', detalle: j.modo === 'local' ? (j.error ? `Sale a su hora desde esta computadora (último intento: ${j.error})` : 'Sale a su hora desde esta computadora: déjala encendida con la oficina abierta.') : j.estado === 'nativa' ? 'Programada en Facebook: sale sola a su hora.' : `Se programa en Facebook en un momento${j.error ? ` (último intento: ${j.error})` : ''}.` };
     }
@@ -284,7 +284,7 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
 
   /** Ya salió: su enlace, el primer comentario (si lo hay y se puede) y la limpieza. Lo que falle aquí no la vuelve «no publicada». */
   async function despues(j, id, campos, ya = null) {
-    j.estado = 'publicada'; j.error = ''; j.publicadaAt = ahora();
+    j.estado = 'publicada'; j.error = ''; j.publicadaAt = ahora(); if (id && j.variante !== 'historia') j.publicadoId = String(id); // A4 (anuncios/impulsar.mjs)
     const tk = await token(j);
     try {
       const r = ya || (campos ? await meta.graph(tk, `/${id}`, { params: { fields: campos } }) : null);

@@ -75,10 +75,19 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
     const b = borradores.leer(id); if (!b) return R(404, { error: 'Ese borrador no existe.' });
     const v = local(b), l = sync.listo();
     if (!l.ok) v.meta = { ok: null, texto: `No se validó con Meta: ${l.motivo}` };
-    else if (v.ok) {
+    else if (v.ok && b.origen && ads.impulsable) { // A4: ¿deja Meta impulsar esa publicación? Antes que nada (si no, no se crea)
+      try {
+        const i = await ads.impulsable(b.origen.red, b.origen.id);
+        v.impulsable = i;
+        if (i.ok === false) { v.problemas.push({ campo: 'origen', texto: i.motivo, nivel: 'error' }); v.ok = false; }
+        else if (i.ok === null) v.problemas.push({ campo: 'origen', texto: 'Meta no dijo si deja impulsar esta publicación: lo dirá al crearla.', nivel: 'aviso' });
+        if (b.origen.red === 'facebook' && i.instagram === false) v.problemas.push({ campo: 'origen', texto: 'Meta no deja usar esta publicación en Instagram: el anuncio saldrá solo en Facebook.', nivel: 'aviso' });
+      } catch (e) { v.problemas.push({ campo: 'origen', texto: `No pude preguntarle a Meta por esa publicación: ${motivoMeta(e)}`, nivel: 'error' }); v.ok = false; }
+    }
+    if (l.ok && v.ok) {
       try { await ads.crearEn(sync.cuenta(), 'campana', cuerpoCampana(b, ctxDe()), { validar: true }); v.meta = { ok: true, texto: 'Meta revisó la campaña y la acepta (validate_only: no se creó nada).' }; }
       catch (e) { v.meta = { ok: false, texto: motivoMeta(e) }; v.problemas.push({ campo: 'meta', texto: motivoMeta(e), nivel: 'error' }); v.ok = false; }
-    } else v.meta = { ok: null, texto: 'Primero hay que arreglar lo de arriba; luego se valida con Meta.' };
+    } else if (l.ok) v.meta = { ok: null, texto: 'Primero hay que arreglar lo de arriba; luego se valida con Meta.' };
     return R(200, { borrador: borradores.poner(id, { validacion: v }) });
   }
 
@@ -114,7 +123,7 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
 
   async function ejecutar(id) {
     const b0 = borradores.leer(id); if (!b0 || b0.estado !== 'creando') return;
-    const b = b0, ctx = ctxDe(), act = sync.cuenta(), N = nombres(b);
+    const b = b0, ctx = { ...ctxDe(), sinInstagram: b0.validacion?.impulsable?.instagram === false }, act = sync.cuenta(), N = nombres(b); // A4: un post de FB que Meta no deja en Instagram
     let j = diario()[id];
     const guardar = () => apuntar(id, j);
     const progreso = paso => borradores.poner(id, { progreso: { paso, texto: PASO_TEXTO[paso] } });
@@ -139,7 +148,7 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
       // (b) los archivos del Estudio
       progreso('imagenes');
       const medios = {};
-      for (const c of b.creativos) {
+      for (const c of b.origen ? [] : b.creativos) { // A4: una publicación impulsada no sube nada (ya está en Meta)
         if (medios[c.media]) continue;
         const it = medio(c.media), archivo = galeria.ruta(c.media);
         if (!it || !archivo || !fs.existsSync(archivo)) throw new Error(`la imagen o el video «${c.media}» ya no está en la galería del Estudio`);
@@ -219,6 +228,7 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
   async function vistaPrevia(id, { formato = 'MOBILE_FEED_STANDARD', creativo = null } = {}) {
     if (!FORMATOS_VISTA.includes(formato)) return R(400, { error: `El formato es uno de: ${FORMATOS_VISTA.join(', ')}.` });
     const b = borradores.leer(id); if (!b) return R(404, { error: 'Ese borrador no existe.' });
+    if (b.origen) return R(409, { error: 'estado', motivo: `Se impulsa la publicación tal como está: ábrela en ${b.origen.red === 'instagram' ? 'Instagram' : 'Facebook'} para verla${b.origen.enlace ? ` (${b.origen.enlace})` : ''}.` });
     const l = sync.listo(); if (!l.ok) return R(409, { error: 'conexion', motivo: l.motivo });
     const ctx = ctxDe(); if (!ctx.pagina) return R(409, { error: 'conexion', motivo: 'Falta la página de Facebook (Ajustes → Anuncios).' });
     const c = creativo ? b.creativos.find(x => x.id === creativo) : b.creativos.find(x => medio(x.media)?.kind === 'image');

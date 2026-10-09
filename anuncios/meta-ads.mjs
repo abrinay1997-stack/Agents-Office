@@ -205,6 +205,36 @@ export function crearMetaAds({ meta }) {
     return String(r?.data?.[0]?.body || '');
   }
 
-  return { lote, estructura, cifrasDiarias, alcances, todas, leer, cambiar, copiar, crearEn, buscarPorNombre, subirImagen, subirVideo, leerVideo, vistaPrevia };
+  /**
+   * Fase A4 (9 oct 2026): ¿deja Meta impulsar esta publicación? Solo LEE. Verificado (guía «Use posts as ads»): de Instagram se pregunta
+   * `boost_eligibility_info` del medio; de Facebook, `is_instagram_eligible` del post (si es false, el anuncio sale solo en Facebook).
+   * POR VERIFICAR: los nombres de dentro de boost_eligibility_info (`eligible_to_boost`, `boost_ineligible_reason`) y si un post de
+   * Facebook que no se puede impulsar lo dice aquí o al crear el creativo.
+   * → { ok: true|false|null (null = Meta no lo dijo), instagram: true|false|null, motivo }
+   */
+  async function impulsable(red, id) {
+    const pid = idValido(id);
+    if (red === 'instagram') {
+      const r = await meta.graph(await token(), `/${pid}`, { params: { fields: 'boost_eligibility_info' } });
+      const i = r?.boost_eligibility_info;
+      if (!i || typeof i !== 'object' || typeof i.eligible_to_boost !== 'boolean') return { ok: null, instagram: true, motivo: '' };
+      return { ok: i.eligible_to_boost, instagram: true, motivo: i.eligible_to_boost ? '' : motivoNoImpulsable(i.boost_ineligible_reason) };
+    }
+    const r = await meta.graph(await token(), `/${pid}`, { params: { fields: 'is_instagram_eligible' } });
+    return { ok: true, instagram: typeof r?.is_instagram_eligible === 'boolean' ? r.is_instagram_eligible : null, motivo: '' };
+  }
+
+  return { lote, estructura, cifrasDiarias, alcances, todas, leer, cambiar, copiar, crearEn, buscarPorNombre, subirImagen, subirVideo, leerVideo, vistaPrevia, impulsable };
 }
 export const MAX_VIDEO = 200 * 1048576;
+
+/** A4: el motivo de Meta para no dejar impulsar algo, en palabras (los casos de la guía; lo demás, tal como lo dice Meta). */
+export function motivoNoImpulsable(m) {
+  const t = String(m || '').trim(), l = t.toLowerCase();
+  const pre = 'Meta no deja impulsar esta publicación: ';
+  if (/music|copyright|audio|licen/.test(l)) return pre + 'tiene música con derechos.';
+  if (/interactive|sticker|filter|effect|poll|quiz/.test(l)) return pre + 'tiene elementos interactivos (filtros, stickers o encuestas).';
+  if (/igtv/.test(l)) return pre + 'es de Instagram TV.';
+  if (/expired|story/.test(l)) return pre + 'es una historia que ya no está activa.';
+  return pre + (t ? `«${t.slice(0, 200)}».` : 'no dio el motivo.');
+}

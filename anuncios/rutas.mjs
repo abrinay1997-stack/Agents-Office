@@ -60,7 +60,8 @@
 //          baja el gasto → 200 { ok, hecho, deshacer, sugerencia } · gasta → 200 { confirmar, sugerencia: <id> } y NADA cambia: el segundo clic
 //          es /api/anuncios/accion con `confirmacion` (y, si se quiere, `sugerencia: <id>`), y entonces queda aplicada ·
 //          borrador / creativos → 200 { ok, hecho: { tarea, borrador? }, sugerencia } (una tarea para el agente de anuncios) ·
-//          revisar → 200 { ok, hecho } (marcada hecha) · impulsar → 409 hasta la Fase A4 · 403 un agente; el asistente solo lo que baja el gasto.
+//          revisar → 200 { ok, hecho } (marcada hecha) · impulsar → 200 { ok, hecho, borrador, sugerencia } (Fase A4: el borrador con esa
+//          publicación, revisado) · 403 un agente; el asistente solo lo que baja el gasto.
 //   POST /api/anuncios/sugerencias/<id>/descartar         → 200 { ok, sugerencia } (no vuelve en 7 días) · dueño y Dimitri
 //   POST /api/anuncios/sugerencias/<id>/posponer { dias } → 200 { ok, sugerencia } (vuelve a los 3 días, o `dias`) · dueño y Dimitri
 //   POST /api/anuncios/creativos/<id anuncio>/variaciones { pide? } → 200 { ok, hecho: { texto, tarea }, tarea } (solo el dueño: una tarea
@@ -68,13 +69,17 @@
 //   Las pospuestas llevan `hasta` (ISO); `umbrales` en el GET son los valores de umbrales.json con sus mismos nombres (fracciones como fracción).
 //   POST /api/anuncios/sugerencias { por: 'agente', agente, tarea?, id, regla, tipo, valor?, dato, porque, efecto } → { sugerencia }
 //          (sugerir_mejora_anuncio de anuncios-mcp.mjs: la deja; nunca la aplica)
+//
+// Fase A4 (9 oct 2026): IMPULSAR lo que ya salió (anuncios/impulsar.mjs; el contrato entero, allí):
+//   POST /api/anuncios/impulsar { pieza?, red?, id?, por?, agente? } → 200 { borrador (con `origen`), ya? } · 400 · 403 · 404 · 409 · 429.
+//          Nace BORRADOR (también de un agente: de 'agente:<id>'); crearlo en Meta, en pausa, es el clic del dueño; activarlo, sus dos clics.
 import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto, ErrorBorrador } from './modelo.mjs';
 import { quienDe } from './acciones.mjs';
 
 export const AGENTE_CADA_MIN = 10;
 export const MAX_AGENTE = 20; // borradores abiertos (en «borrador») por agente
 
-export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null }) {
+export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null, impulsor = null }) {
   let agenteAt = 0;
   const rangoDe = url => (RANGOS.includes(url.searchParams.get('rango')) ? url.searchParams.get('rango') : '7d');
 
@@ -168,6 +173,11 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
       }
       const ms = /^\/api\/anuncios\/sugerencias(?:\/([A-Za-z0-9_~-]{1,90})\/(aplicar|descartar|posponer))?$/.exec(p);
       if (ms && sugerencias && aplicador) return await rutaSugerencias(req, res, url, ms[1] || null, ms[2] || null), true;
+      if (p === '/api/anuncios/impulsar' && impulsor) { // A4: también un agente (nace borrador)
+        if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' }), true;
+        const b = await body(req).catch(() => ({})), r = await impulsor.impulsar({ ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined, agente: b?.agente ?? url.searchParams.get('agente') ?? undefined });
+        return json(res, r.status, r.cuerpo), true;
+      }
       const mb = /^\/api\/anuncios\/borradores(?:\/([A-Za-z0-9_-]{1,60})(?:\/(validar|crear|vista-previa|mejorar))?)?$/.exec(p);
       if (mb && borradores) return await rutaBorradores(req, res, url, mb[1] || null, mb[2] || null), true;
       if (req.method === 'GET') {

@@ -19,6 +19,10 @@
 //   · `adlabels` NO se manda: no está verificado en v26 (§13.8). La etiqueta va en el NOMBRE.
 //   · Las mejoras de Meta, una por una en `degrees_of_freedom_spec.creative_features_spec` (OPT_IN / OPT_OUT): el paquete «standard
 //     enhancements» ya no existe. POR VERIFICAR los nombres exactos de las claves en v26 (se usan los del plan).
+//   · Fase A4 (9 oct 2026): un borrador con `origen` IMPULSA una publicación ya hecha (verificado el 9 oct 2026, guía «Use posts as ads»):
+//       Instagram → `object_id` (la página) + `instagram_user_id` + `source_instagram_media_id` (+ `call_to_action`, opcional);
+//       Facebook  → `object_story_id: "<página>_<post>"` + `instagram_user_id` (solo si Meta dice `is_instagram_eligible`: ctx.sinInstagram).
+//     Sin medios que subir, sin texto propio y sin las mejoras de Meta (cambiarían una publicación que ya está a la vista).
 // ============================================================
 import { combinacion, conEtiqueta, aMeta, spendCapDe, interesesConId, RADIO_MINIMO_ESPECIAL_KM } from './modelo.mjs';
 
@@ -125,6 +129,7 @@ export function mejorasDe(b, medio) {
  * @param {object} medio { hash } para una imagen (adimages) · { video, miniatura } para un video (advideos; Meta pide la miniatura en video_data)
  */
 export function cuerpoCreativo(b, c, ctx = {}, medio = {}) {
+  if (b.origen) return cuerpoCreativoOrigen(b, c, ctx);
   const historia = { page_id: String(ctx.pagina) };
   if (ctx.instagram) historia.instagram_user_id = String(ctx.instagram);
   const llamada = llamadaDe(b, c, ctx);
@@ -142,6 +147,21 @@ export function cuerpoCreativo(b, c, ctx = {}, medio = {}) {
     };
   }
   return { name: nombres(b).creativo(c), object_story_spec: historia, degrees_of_freedom_spec: mejorasDe(b, medio.video ? 'video' : 'image') };
+}
+
+/** A4: el creativo de una publicación que se impulsa. El id de Facebook se completa con la página si llega sin ella. */
+export function cuerpoCreativoOrigen(b, c, ctx = {}) {
+  const o = b.origen, llamada = llamadaDe(b, c || {}, ctx), cuerpo = { name: nombres(b).creativo(c || { id: 'pub' }) };
+  if (o.red === 'instagram') {
+    Object.assign(cuerpo, { object_id: String(ctx.pagina), instagram_user_id: String(ctx.instagram || ''), source_instagram_media_id: String(o.id) });
+  } else {
+    cuerpo.object_story_id = String(o.id).includes('_') ? String(o.id) : `${ctx.pagina}_${o.id}`; // POR VERIFICAR: el id de un video de la página (no es «<página>_<post>»)
+    if (ctx.instagram && !ctx.sinInstagram) cuerpo.instagram_user_id = String(ctx.instagram);
+  }
+  // POR VERIFICAR: el `call_to_action` con object_story_id (la guía lo documenta para Instagram); para mensajes, Meta pone MESSAGE_PAGE con
+  // app_destination INSTAGRAM_DIRECT o MESSENGER: se manda el de la tabla COMBINACIONES (anuncios/modelo.mjs).
+  cuerpo.call_to_action = llamada;
+  return cuerpo;
 }
 
 export function cuerpoAnuncio(b, c, adsetId, creativeId) {

@@ -115,3 +115,12 @@ test('el editor de piezas va en su propio paquete: la página no lo lleva, y él
   assert.deepEqual(dentro.filter(f => SOLO_AQUI.includes(f)), [], 'la página no lleva el editor');
   assert.ok(dentro.includes('src/pieza-base.js') && dentro.includes('src/pieza-carga.js'));
 });
+
+test('A4: «Impulsar» solo en una pieza publicada, en las redes de Meta donde salió', async () => {
+  const { impulsables } = await import('../src/pieza.js');
+  const p = { id: 'p1', estado: 'aprobada', redes: ['instagram', 'facebook', 'linkedin'], salida: { estado: 'publicada', redes: { instagram: { estado: 'publicada' }, facebook: { estado: 'fallo' }, linkedin: { estado: 'publicada' } } } };
+  assert.deepEqual(impulsables(p, { clave: 'parcial' }), ['instagram']);
+  assert.deepEqual(impulsables(p, { clave: 'en_red' }), [], 'lo que no salió, no');
+  assert.deepEqual(impulsables({ ...p, estado: 'borrador' }, { clave: 'publicada' }), []);
+  assert.deepEqual(impulsables({ ...p, salida: { estado: 'publicada', redes: {} } }, { clave: 'publicada' }), ['instagram', 'facebook'], 'sin detalle por red (la demo): las de Meta que lleva');
+});

@@ -222,3 +222,19 @@ test('A3: buscar por nombre (filtering), imágenes por su contenido, y los fallo
   const ver = await (await g.fetchFn(`${G}/${vid.id}?access_token=${TOKEN_STAND}&fields=status,picture`)).json();
   assert.equal(ver.status.video_status, 'ready'); assert.match(ver.picture, /miniatura/);
 });
+
+test('A4: impulsar — boost_eligibility_info (IG), is_instagram_eligible (FB) y el creativo de una publicación ya hecha', async () => {
+  const g = crearMetaStand({ media: [{ id: 'M1', caption: 'Hola' }], fallar: { noImpulsable: { M9: 'MUSIC_COPYRIGHT' }, noIG: ['P1_9'] } });
+  const leer = async (id, fields) => (await g.fetchFn(`${G}/${id}?access_token=${TOKEN_STAND}&fields=${fields}`)).json();
+  assert.deepEqual((await leer('M1', 'boost_eligibility_info')).boost_eligibility_info, { eligible_to_boost: true });
+  assert.deepEqual((await leer('M9', 'boost_eligibility_info')).boost_eligibility_info, { eligible_to_boost: false, boost_ineligible_reason: 'MUSIC_COPYRIGHT' }, 'el modo «no elegible»');
+  assert.equal((await leer('P1_8', 'is_instagram_eligible')).is_instagram_eligible, true);
+  assert.equal((await leer('P1_9', 'is_instagram_eligible')).is_instagram_eligible, false);
+  assert.equal((await leer('M1', 'permalink')).permalink, 'https://www.instagram.com/p/M1/', 'sin ese campo, lo de siempre');
+  const cr = b => pedir(g, 'POST', `/${CUENTA_STAND}/adcreatives`, { name: 'Impulsar · AO:b1', ...b });
+  assert.ok((await cr({ object_id: 'P1', instagram_user_id: 'IG1', source_instagram_media_id: 'M1' })).id);
+  assert.equal((await cr({ source_instagram_media_id: 'M1' })).error.code, 100, 'sin object_id ni instagram_user_id, error');
+  assert.equal((await cr({ object_id: 'P1', instagram_user_id: 'IG1', source_instagram_media_id: 'M9' })).error.code, 100, 'lo no elegible no se crea');
+  assert.ok((await cr({ object_story_id: 'P1_9' })).id, 'un post de FB sin Instagram, sí');
+  assert.equal((await cr({ object_story_id: 'P1_9', instagram_user_id: 'IG1' })).error.code, 100, 'con instagram_user_id, no');
+});

@@ -1,5 +1,14 @@
 # Changelog
 
+## Anuncios de Meta, Fase A4: impulsar lo que ya salió — 9 oct 2026
+
+- **«Impulsar»** en una pieza ya publicada de Contenido (un botón por red si salió en las dos) y en «Las que más movieron» de Analíticas. Abre Anuncios con un borrador de campaña que usa **esa misma publicación**: no hay que subir nada ni reescribir el texto, solo elegir la llamada a la acción. Por defecto: «que me escriban», Advantage+, US$5 al día y 7 días.
+- **Antes de crear, Meta dice si se puede impulsar.** Por ejemplo, no deja con música con derechos. Si no se puede, se dice por qué y no se crea.
+- **Se crea en pausa**, como todo; activarla te pide los dos clics.
+- La sugerencia de la IA «impulsa esta publicación, que funcionó» ya se puede aplicar. Antes respondía «falta la A4».
+- Impulsar dos veces la misma publicación no crea dos borradores.
+- Tests: `anuncios-impulsar`. Recorrido: de «Impulsar» en Analíticas a la campaña creada en pausa, con axe sin fallos.
+
 ## La Bandeja con Meta, Fase B1: los comentarios — 9 oct 2026
 
 - **Los comentarios de Instagram y Facebook llegan a la Bandeja directamente de Meta**, sin Metricool, y también **los de tus anuncios**, marcados «EN UN ANUNCIO» con un botón que lleva a esa campaña en Anuncios.

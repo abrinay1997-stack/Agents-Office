@@ -547,3 +547,26 @@ test('A5 · el paquete lleva Sugerencias y Creativos; la página no', async () =
   const page = 'dist/command-centre-v2.html';
   if (fs.existsSync(page)) { const html = fs.readFileSync(page, 'utf8'); assert.ok(!html.includes('anu-sug-dl') && !html.includes('Recordármelo en 3 días'), 'la página no lleva las sugerencias'); }
 });
+
+test('A4: el paso 4 de un borrador que impulsa una publicación enseña la publicación y solo deja elegir la llamada; la demo lo hace en memoria', () => {
+  const t = Date.parse('2026-10-09T10:00:00'), ahora = () => t;
+  const demo = crearDemo({ ahora }), B = crearDemoBorradores({ demo, ahora, topes: demo.topes, tardaMs: 10 });
+  const r = B.impulsar({ pieza: 'p1', red: 'instagram', texto: 'Combo 2x1 <b>hoy</b>\nsegunda línea', enlace: 'https://www.instagram.com/p/M7/', publicadaAt: '2026-10-05T23:00:00.000Z' });
+  assert.equal(r.status, 200); const b = r.borrador;
+  assert.equal(b.origen.red, 'instagram'); assert.match(b.nombre, /^Impulsar: Combo 2x1/); assert.equal(b.creativos.length, 1); assert.equal(b.creativos[0].media, null);
+  assert.ok(b.origen.miniatura, 'sin miniatura de la pieza, la de ejemplo'); assert.equal(b.validacion.ok, true, JSON.stringify(b.validacion.problemas));
+  assert.equal(B.impulsar({ pieza: 'p1', red: 'instagram' }).ya, true, 'la misma publicación: el mismo borrador');
+  assert.equal(B.impulsar({ red: 'tiktok' }).status, 400);
+  const h = pasoCreativosHTML(b, { 'creativos.0.llamada': 'Ese botón no vale' }, { estudio: true });
+  assert.match(h, /La publicación que impulsas/); assert.match(h, /Combo 2x1 &lt;b&gt;hoy&lt;\/b&gt;/, 'el texto, escapado');
+  assert.match(h, /href="https:\/\/www\.instagram\.com\/p\/M7\/"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/, 'enlace a la original');
+  assert.match(h, /data-bc="creativos\.0\.llamada"/); assert.match(h, /aria-invalid="true"/);
+  assert.doesNotMatch(h, /data-bgaleria|data-bestudio|data-bmejorar|data-bmejora=|data-bquitar/, 'ni galería, ni Estudio, ni mejoras, ni quitar');
+  assert.doesNotMatch(h, /<button[^>]*>[^<]*<button/, 'un botón nunca dentro de otro');
+  const rev = pasoRevisionHTML(b, { servida: true });
+  assert.match(rev, /Se impulsa la publicación de Instagram del 5 oct/); assert.doesNotMatch(rev, /data-bmetaver/, 'sin la vista previa de Meta: es la publicación');
+  // un problema de la publicación lleva al paso 4
+  assert.equal(problemasPorPaso({ ...b, validacion: { problemas: [{ campo: 'origen', texto: 'Meta no deja impulsar esta publicación: tiene música con derechos.' }] } })[3], 1);
+  // se crea en pausa en la demo y la campaña aparece con la miniatura de la publicación
+  const c = B.crearEnMeta(b.id); assert.equal(c.status, 202);
+});
