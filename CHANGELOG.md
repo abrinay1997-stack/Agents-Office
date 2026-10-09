@@ -1,5 +1,25 @@
 # Changelog
 
+## Anuncios de Meta, Fase A5: la IA que mejora las campañas — 9 oct 2026
+
+- **Sugerencias**, una pestaña nueva. Después de cada lectura de cifras, la oficina revisa tus campañas con las reglas del plan:
+  - **no tocar** lo que está aprendiendo, y **esperar** antes de juzgar;
+  - **cortar** lo que gasta sin resultados;
+  - **creativos nuevos** cuando un anuncio se cansa, sin subir el presupuesto;
+  - **escalar** un 20 % lo que va bien;
+  - **juntar** conjuntos que no salen del aprendizaje;
+  - lo **rechazado**, con su texto corregido como borrador;
+  - **impulsar** lo que funcionó en orgánico.
+
+  Cada tarjeta dice **el dato con su cifra, el porqué, el cambio exacto, el efecto y el riesgo**, con Aplicar · Descartar · Recordármelo en 3 días. Lo que gasta sigue pidiendo tus dos clics.
+- **Los umbrales salen de la Biblioteca, no del código:** `biblioteca/marketing/campanas-pagadas/umbrales.json`, cada cifra con la frase de la que sale. Puedes cambiarlos en tu Cerebro.
+- **Creativos**, otra pestaña: cada creativo con sus cifras y su estado escrito (funciona, se está cansando, gasta sin resultados, todavía no destaca, sin datos) y «Pedir variaciones».
+- **El Resumen** muestra las 3 sugerencias más importantes.
+- **Piloto automático** (apagado por defecto, en Ajustes → Anuncios): **solo pausa** lo que cruza el umbral de cortar, o todo si pasas el tope del día. Avisa con DESHACER. Nunca activa ni sube.
+- **Telegram:** una sugerencia de escalar al día, con «✅ Subir 20 %» y dos toques.
+- **El agente de anuncios** tiene una rutina semanal, «Revisión de anuncios» (lunes 8:30, solo lee y propone), y puede dejar sugerencias. **Lo aplicado se mide 7 días después** y enseña a la memoria del Cerebro.
+- Evaluaciones: `evals/anuncios-diagnostico/evals.json`. Tests: `anuncios-diagnostico` (cada regla) y `anuncios-sugerencias` (con el servidor real: el piloto nunca activa).
+
 ## Anuncios de Meta, Fase A3: crear campañas desde la oficina, siempre en pausa — 9 oct 2026
 
 - **Pestaña Borradores** con el **asistente de 5 pasos**. Guarda solo mientras escribes.

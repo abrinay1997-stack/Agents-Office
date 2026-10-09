@@ -8,10 +8,16 @@
 // ejemplo, src/anuncios/demo-borradores.js con las mismas respuestas. Como las acciones: `status` dentro, sin lanzar.
 import { crearDemo } from './demo.js';
 import { crearDemoBorradores } from './demo-borradores.js';
+import { crearDemoSugerencias } from './demo-sugerencias.js';
+// Fase A5 (9 oct 2026): las SUGERENCIAS. Servida: GET /api/anuncios/sugerencias → { items, cpaObjetivo, sinObjetivo, umbrales? },
+// POST …/<id>/aplicar (→ { ok, hecho, deshacer } · { confirmar } si gasta · { ok, borrador } · { ok, tarea }), …/<id>/descartar y
+// …/<id>/posponer { dias }. El «Sí» de una que gasta va por /api/anuncios/accion con `sugerencia: <id>`. En el ejemplo,
+// src/anuncios/demo-sugerencias.js, que aplica con la demo de la A2 (las mismas reglas del dinero).
 
 export function crearDatos({ servida }) {
   const demo = crearDemo(); // vive mientras la página esté abierta: lo que haces en el ejemplo se queda hasta recargar
   const demoB = crearDemoBorradores({ demo, topes: demo.topes });
+  const demoS = crearDemoSugerencias({ demo, demoB });
   const llamar = async (ruta, metodo = 'GET', cuerpo) => {
     try {
       const r = await fetch(ruta, metodo === 'GET' ? undefined : { method: metodo, headers: { 'content-type': 'application/json' }, body: JSON.stringify(cuerpo || {}) });
@@ -52,11 +58,20 @@ export function crearDatos({ servida }) {
     /** Una acción (primer o segundo clic) → { status, ok?, hecho?, deshacer?, confirmar?, aviso?, error?, motivo?, … } */
     async accion(cuerpo, { ejemplo = false } = {}) {
       const b = Object.fromEntries(Object.entries(cuerpo).filter(([, v]) => v != null && v !== ''));
-      return ej(ejemplo) ? demo.accion(b) : enviar('/api/anuncios/accion', b);
+      if (!ej(ejemplo)) return enviar('/api/anuncios/accion', b);
+      const r = demo.accion(b); if (b.sugerencia) demoS.alConfirmar(b.sugerencia, r);
+      return r;
     },
     async deshacer(token, { ejemplo = false } = {}) {
-      return ej(ejemplo) ? demo.deshacer({ token }) : enviar('/api/anuncios/deshacer', { token });
+      if (!ej(ejemplo)) return enviar('/api/anuncios/deshacer', { token });
+      const r = demo.deshacer({ token }); if (r.ok) demoS.alDeshacer(token);
+      return r;
     },
+    /* ---- A5: las sugerencias ---- */
+    sugerencias: ({ ejemplo = false } = {}) => (ej(ejemplo) ? demoS.lista() : llamar('/api/anuncios/sugerencias')),
+    aplicarSugerencia: (id, { ejemplo = false } = {}) => (ej(ejemplo) ? demoS.aplicar(id) : llamar(`/api/anuncios/sugerencias/${encodeURIComponent(id)}/aplicar`, 'POST')),
+    descartarSugerencia: (id, { ejemplo = false } = {}) => (ej(ejemplo) ? demoS.descartar(id) : llamar(`/api/anuncios/sugerencias/${encodeURIComponent(id)}/descartar`, 'POST')),
+    posponerSugerencia: (id, dias = 3, { ejemplo = false } = {}) => (ej(ejemplo) ? demoS.posponer(id, dias) : llamar(`/api/anuncios/sugerencias/${encodeURIComponent(id)}/posponer`, 'POST', { dias })),
     /* ---- A3: los borradores ---- */
     borradores: ({ ejemplo = false } = {}) => (ej(ejemplo) ? demoB.lista() : llamar(B)),
     nuevoBorrador: (cuerpo, { ejemplo = false } = {}) => (ej(ejemplo) ? demoB.crear(cuerpo) : llamar(B, 'POST', cuerpo)),

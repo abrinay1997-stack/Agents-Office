@@ -1,0 +1,31 @@
+{
+  "nota": "Los umbrales con los que la oficina juzga los anuncios de Meta (anuncios/diagnostico.mjs, Fase A5). Cada uno dice de dónde sale: una frase de esta habilidad (referencias/… o SKILL.md), del plan (docs/plan-meta-anuncios-y-bandeja-2026-10-09.md, «plan §…») o un criterio propio de la oficina («oficina»). Para cambiar uno solo en tu empresa, copia este archivo a <cerebro>/Agents Office/biblioteca/campanas-pagadas/umbrales.json y cambia su «valor» (o escribe solo { \"umbrales\": { \"fatigaFrecuencia\": 3.5 } }): el tuyo gana.",
+  "umbrales": {
+    "aprendizajeResultados": { "valor": 50, "unidad": "resultados", "fuente": "referencias/meta-sistema-de-decisiones.md", "frase": "el listón para salir del aprendizaje; presupuesto necesario ≈ CPA objetivo × 50 ÷ 7 por día" },
+    "aprendizajeDias": { "valor": 7, "unidad": "días", "fuente": "referencias/meta-sistema-de-decisiones.md", "frase": "el listón para salir del aprendizaje; presupuesto necesario ≈ CPA objetivo × 50 ÷ 7 por día" },
+    "esperarDias": { "valor": 3, "unidad": "días", "fuente": "plan §7.2", "frase": "al menos 3 a 5 días o 1 a 2 veces el costo objetivo gastado, lo que llegue después" },
+    "esperarGastoCpa": { "valor": 1, "unidad": "veces el costo objetivo", "fuente": "plan §7.2", "frase": "al menos 3 a 5 días o 1 a 2 veces el costo objetivo gastado, lo que llegue después" },
+    "cortarSinResultadoCpa": { "valor": 2, "unidad": "veces el costo objetivo", "fuente": "plan §7.3", "frase": "un anuncio que gastó 2 veces el costo objetivo sin ningún resultado" },
+    "cortarGastoCpa": { "valor": 3, "unidad": "veces el costo objetivo", "fuente": "plan §7.3", "frase": "o 3 veces con un costo por resultado mayor que el doble del objetivo" },
+    "cortarCostoCpa": { "valor": 2, "unidad": "veces el costo objetivo", "fuente": "plan §7.3", "frase": "o 3 veces con un costo por resultado mayor que el doble del objetivo" },
+    "fatigaFrecuencia": { "valor": 3, "unidad": "impresiones por persona en 7 días", "fuente": "referencias/meta-sistema-de-decisiones.md", "frase": "alerta con frecuencia de 3,0–3,5 o costo +20 %" },
+    "fatigaFrecuenciaCritica": { "valor": 4, "unidad": "impresiones por persona en 7 días", "fuente": "referencias/meta-sistema-de-decisiones.md", "frase": "| Prospección en frío | 1,0–2,5 | 2,5–4,0 | >4,0 |" },
+    "fatigaCaidaCtr": { "valor": 0.3, "unidad": "fracción", "fuente": "referencias/meta-sistema-de-decisiones.md", "frase": "cuando el CTR caiga 30 %+ desde su pico" },
+    "fatigaDiasBase": { "valor": 3, "unidad": "días", "fuente": "oficina", "frase": "«sus primeros días» (plan §7.4) son sus 3 primeros días con impresiones" },
+    "fatigaDiasRecientes": { "valor": 3, "unidad": "días", "fuente": "oficina", "frase": "el CTR de ahora es el de los 3 últimos días completos con impresiones" },
+    "fatigaMinImpresiones": { "valor": 500, "unidad": "impresiones", "fuente": "oficina", "frase": "con menos impresiones en cada tramo, el CTR es ruido y no se compara" },
+    "escalarBajoObjetivo": { "valor": 0.2, "unidad": "fracción", "fuente": "plan §7.5", "frase": "con el costo por resultado 20 % o más por debajo del objetivo" },
+    "escalarDias": { "valor": 3, "unidad": "días", "fuente": "plan §7.5", "frase": "durante 3 días o más" },
+    "escalarSubida": { "valor": 0.2, "unidad": "fracción", "fuente": "SKILL.md", "frase": "Sube los presupuestos ~20 % cada vez: nunca 30 % o más de un golpe (reinicia el aprendizaje de la plataforma)" },
+    "escalarCadaHoras": { "valor": 72, "unidad": "horas", "fuente": "plan §7.5", "frase": "como mucho una vez cada 48 a 72 h" },
+    "saltoGrande": { "valor": 0.3, "unidad": "fracción", "fuente": "SKILL.md", "frase": "Sube los presupuestos ~20 % cada vez: nunca 30 % o más de un golpe (reinicia el aprendizaje de la plataforma)" },
+    "estructuraConjuntos": { "valor": 3, "unidad": "conjuntos", "fuente": "plan §7.6", "frase": "Con más de 3 conjuntos parecidos que no salen del aprendizaje, propone juntarlos" },
+    "topeCerca": { "valor": 0.9, "unidad": "fracción", "fuente": "plan §7.8", "frase": "un tope a punto de alcanzarse" },
+    "organicoVecesMedia": { "valor": 3, "unidad": "veces la media", "fuente": "plan §5 A4", "frase": "esta publicación tuvo 3 veces las interacciones de tu media" },
+    "organicoMinPublicaciones": { "valor": 5, "unidad": "publicaciones", "fuente": "oficina", "frase": "con menos publicaciones en esa red, «la media» no dice nada" },
+    "organicoDias": { "valor": 30, "unidad": "días", "fuente": "oficina", "frase": "solo se propone impulsar algo publicado en los últimos 30 días" },
+    "descartarDias": { "valor": 7, "unidad": "días", "fuente": "plan §5 A5", "frase": "lo descartado no vuelve en 7 días" },
+    "posponerDias": { "valor": 3, "unidad": "días", "fuente": "plan §5 A5", "frase": "«Recordármelo en 3 días»" },
+    "resultadoDias": { "valor": 7, "unidad": "días", "fuente": "oficina", "frase": "qué pasó después de aplicar una sugerencia: sus 7 días siguientes contra sus 7 anteriores" }
+  }
+}

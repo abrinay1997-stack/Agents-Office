@@ -99,6 +99,10 @@ import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from './anuncios
 import { crearBorradores as crearBorradoresAnuncios } from './anuncios/borradores.mjs'; // Fase A3 (9 oct 2026): borradores de campaña y crear en Meta EN PAUSA
 import { crearCreador as crearCreadorAnuncios, resolverCuentas as resolverCuentasAnuncios } from './anuncios/crear.mjs';
 import { agenteDeAnuncios, promptMejorarAnuncio, leerPropuesta as leerPropuestaAnuncio } from './anuncios/mejorar.mjs';
+import { diagnosticar as diagnosticarAnuncios, cpaObjetivo as cpaObjetivoDeAnuncios, medirResultado as medirResultadoAnuncio, tipoDe as tipoDeAnuncio } from './anuncios/diagnostico.mjs'; // Fase A5 (9 oct 2026): la IA que mejora las campañas
+import { crearSugerencias as crearSugerenciasAnuncios, crearAplicador as crearAplicadorAnuncios, cargarUmbrales as cargarUmbralesAnuncios } from './anuncios/sugerencias.mjs';
+import { crearPiloto as crearPilotoAnuncios } from './anuncios/piloto.mjs';
+import { fechaEn as fechaEnAnuncios } from './anuncios/modelo.mjs';
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
 import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
@@ -198,7 +202,7 @@ const meta = crearMeta({ dir: ANALITICAS_DIR });
 const ANUNCIOS_DIR = path.join(DATA, 'anuncios');
 const DEF_ANUNCIOS = Object.fromEntries(['topeDiario', 'topeMensual', 'topeCampana'].map(k => [k, settings.FIELDS.find(f => f.path === 'anuncios.' + k)?.default ?? null]));
 const anunciosAds = crearMetaAds({ meta });
-const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o) });
+const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o), despuesDeCifras: () => anunciosTrasSondeo() }); // A5: el diagnóstico tras cada lectura de cifras
 const anunciosAcc = crearAccionesAnuncios({ sync: anuncios, ads: anunciosAds, undoSeconds: () => APPR().undoSeconds,
   refrescar: () => { anuncios.sincronizar({ cifras: false }).catch(() => {}); },
   auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'anuncios', ...a }) + '\n'); } catch {} } });
@@ -209,6 +213,56 @@ const cuentasAnuncios = () => resolverCuentasAnuncios({ ajustes: cfg.anuncios ||
 const anunciosCrear = crearCreadorAnuncios({ dir: ANUNCIOS_DIR, ads: anunciosAds, sync: anuncios, borradores: anunciosBorr, galeria: { ruta: id => media.resolve(id), item: id => media.item(id) },
   ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, cuentas: cuentasAnuncios, aJpeg: b => aJpeg(b), auditar: auditarAnuncios });
 setTimeout(() => { try { const ids = anunciosCrear.alArrancar(); if (ids.length) console.log(`  📣 Anuncios: retomo ${ids.length} creación(es) en Meta que quedaron a medias (se reconoce lo ya creado por su etiqueta AO:)`); } catch (e) { console.warn('anuncios (retomar):', e.message); } }, 8000);
+// Fase A5 (9 oct 2026): LA IA QUE MEJORA LAS CAMPAÑAS. Tras cada lectura buena de cifras: el diagnóstico (anuncios/diagnostico.mjs, puro,
+// con los umbrales de la Biblioteca o los del dueño), el piloto automático si está encendido (anuncios/piloto.mjs: SOLO pausa), las
+// sugerencias (data/anuncios/sugerencias.json), lo que pasó después de aplicar una (y, si vino de una tarea de ada, la memoria aprende) y,
+// como mucho una vez al día, la de escalar por Telegram. Aplicar es del dueño (anuncios/sugerencias.mjs → anuncios/acciones.mjs).
+const umbralesAnuncios = () => cargarUmbralesAnuncios({ raiz: ROOT, brainPath: BRAIN });
+const anunciosSug = crearSugerenciasAnuncios({ dir: ANUNCIOS_DIR, umbrales: () => umbralesAnuncios().valores });
+const anunciosPiloto = crearPilotoAnuncios({ acciones: anunciosAcc, ajustes: () => cfg.anuncios || {}, avisar: (texto, o) => notice('anuncios', texto, o) });
+const anunciosAplicador = crearAplicadorAnuncios({ sug: anunciosSug, acciones: anunciosAcc, borradores: anunciosBorr, vista: () => anuncios.vista('7d'),
+  encargar: async ({ texto, titulo }) => { // una tarea para el agente de anuncios: propone (texto, borradores, prompts); no genera imágenes ni toca Meta
+    const a = agenteDeAnuncios(AGENTS); if (!a) throw new Error('no hay ningún puesto de Marketing');
+    const t = await newTask({ dept: a.department, text: texto, agent: a.id, title: titulo, needsOk: false, por: 'anuncios' });
+    return { id: t.id, titulo: t.title, agent: t.agent, agente: a.name };
+  } });
+const cpaObjetivoAnuncios = () => cpaObjetivoDeAnuncios({ ajuste: cfg.anuncios?.cpaObjetivo, cifras: loadCifras() });
+let anunciosDiagEnMarcha = null, anunciosUmbralesAvisados = '';
+/** El diagnóstico, el piloto, las sugerencias, los resultados y la de escalar del día. Uno a la vez; nunca lanza. */
+function anunciosTrasSondeo() {
+  if (anunciosDiagEnMarcha) return anunciosDiagEnMarcha;
+  anunciosDiagEnMarcha = (async () => {
+    try {
+      if (!anuncios.conexion().cifrasAt) return null;
+      const U = umbralesAnuncios();
+      if (U.problemas.length && U.problemas.join() !== anunciosUmbralesAvisados) { anunciosUmbralesAvisados = U.problemas.join(); for (const p of U.problemas) console.warn('anuncios (umbrales):', p); }
+      if (!U.valores.fatigaFrecuencia) return null;
+      const d = anuncios.datosDiagnostico(), topes = anuncios.topes();
+      let publicaciones = []; try { publicaciones = metricas.leer({ dias: 45 }).publicaciones || []; } catch { /* sin Analíticas, no hay «impulsar» */ }
+      const diag = diagnosticarAnuncios({ vista: d.vista, filas: d.filas, hoy: d.hoy, cpa: cpaObjetivoAnuncios(), umbrales: U.valores, ahora: Date.now(), subidas: anuncios.subidas(), topes, pixel: d.pixel, publicaciones });
+      const piloto = await anunciosPiloto.correr({ sugerencias: diag.sugerencias, vista: d.vistaHoy, topes });
+      anunciosSug.actualizar(diag);
+      for (const h of piloto.hechas) if (h.ok && h.sugerencia) anunciosSug.marcarAplicada(h.sugerencia, { quien: 'piloto', hecho: h.hecho });
+      const moneda = d.vista.cuenta?.moneda || 'USD';
+      anunciosSug.cerrarResultados({
+        medir: h => {
+          if (!['campana', 'conjunto', 'anuncio'].includes(h.objeto?.nivel)) return { mejoro: null, r: null, texto: 'Esto no se mide con las cifras de un anuncio.' };
+          return medirResultadoAnuncio({ filas: d.filas, nivel: h.objeto.nivel, id: h.objeto.id, tipo: tipoDeAnuncio(buscarAnuncio(d.vista, h.objeto.id)), aplicadaEl: fechaEnAnuncios(d.zona, Date.parse(h.aplicadaAt)), hoy: d.hoy, dias: U.valores.resultadoDias, cambio: h.cambio?.tipo, moneda });
+        },
+        aprender: (h, r) => { // como Contenido F4: las notas que citó la tarea de ada se acercan (o se alejan) según cómo le fue
+          const t = load().find(x => x.id === h.tarea); if (!t) return;
+          const cited = memory.cited(t.result, t.read || []); if (!cited.length) return;
+          memory.reinforce(MEM, { id: 'anuncios:' + h.id, r: r.r, cited, read: t.read || [] }); saveMem();
+        } });
+      const hora = new Date().getHours();
+      if (hora >= 9 && hora < 20) { const x = anunciosSug.escalarDelDia(d.hoy); if (x) notice('anuncios', `📈 «${x.objeto.nombre}» rinde bien: ${x.dato} Propuesta: subir su presupuesto un 20 %, hasta US$${x.cambio.valor}. Gasta más: son tus dos toques, dentro de tus topes. (Anuncios → Sugerencias, J)`, { level: 'info', key: `anuncios-escalar:${x.id}@${x.cambio.valor}` }); }
+      return diag;
+    } catch (e) { console.warn('anuncios (diagnóstico):', e.message); return null; }
+    finally { anunciosDiagEnMarcha = null; }
+  })();
+  return anunciosDiagEnMarcha;
+}
+setTimeout(() => { anunciosTrasSondeo(); }, 45e3); // al arrancar, con lo ya leído (si hay cifras): las sugerencias no esperan a la próxima lectura
 /** A2: lo que Dimitri ve de un id de anuncios, para validar sus ops (sub.parseOps). */
 const anuncioDe = id => { try { const r = buscarAnuncio(anunciosRoutes.completa('7d'), String(id)); return r ? { tipo: r.tipo, nombre: r.objeto.nombre, estado: r.objeto.estado, presupuesto: r.objeto.presupuesto } : null; } catch { return null; } };
 const ANUNCIOS_DEPTS = Array.isArray(cfg.anuncios?.departments) ? cfg.anuncios.departments : ['marketing']; // quién recibe anuncios-mcp.mjs (solo leer)
@@ -950,7 +1004,7 @@ function dimitriOffice(list) {
   try { out.push(sub.publicacionText(programador.estado())); } catch {} // 9 oct 2026: cómo sale lo aprobado (modo, conductor, cuota, fallos)
   try { out.push(contenidoSemana().split('\n').filter(l => !l.startsWith('Próximos 7 días')).join('\n')); } catch {} // F4: lo que salió y cómo le fue, y lo que puede volver
   try { out.push(sub.analiticasText(analiticasResumen())); } catch {}
-  try { out.push(sub.anunciosText(anunciosRoutes.completa('7d'))); } catch {} // Fase A1: lo activo, el gasto contra los topes, los resultados y lo que tiene problemas, con ids
+  try { out.push(sub.anunciosText(anunciosRoutes.completa('7d'), anunciosSug.top(3))); } catch {} // Fase A1: lo activo, el gasto contra los topes, los resultados y lo que tiene problemas, con ids
   try { out.push(sub.rutinasText(loadRoutines(), list, { agents: AGENTS })); } catch {}
   try { const l = list || load(); out.push(sub.proyectosText(catalogoT.proyectos().map(p => ({ ...p, progreso: progresoProyecto(p, l) })), l, { name: agentName })); out.push(agendaResumen(l)); out.push(resumenDueno(l, { nombre: agentName })); } catch {} // plan T4: projects, deadlines, blocks · plan D: lo del dueño
   try {
@@ -1877,7 +1931,7 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
-const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio }); // A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador }); // A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
 /** A2: el segundo clic del dueño sobre un gasto que propuso Dimitri (`sub: { msg, k }`, o solo la `confirmacion`: se busca la tarjeta que
  *  tiene ese token) deja su tarjeta hecha en data/subgerente.json, para que al recargar no vuelva a pedir confirmación. */
 function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {

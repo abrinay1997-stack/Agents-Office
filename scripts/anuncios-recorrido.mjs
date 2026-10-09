@@ -12,6 +12,9 @@
 // historia) → «Crear en Meta (en pausa)» → «Creado en pausa» → aparece EN PAUSA en Campañas. «Crear con el Estudio»: en la demo el
 // Estudio no tiene galería (necesita la oficina), así que se prueba que abre «para el anuncio» con su barra y que «Volver al anuncio»
 // devuelve al paso 4; elegir una imagen allí lo prueba la oficina servida.
+// Fase A5 (9 oct 2026), en la demo: las 3 sugerencias del Resumen → «Ver todas» → aplicar la que pausa (un clic, DESHACER) → aplicar la
+// de escalar (la ventana de la A2 con la cifra → «Sí») → descartar → posponer → Aplicadas con su resultado → el rechazado deja un borrador
+// → Creativos con su estado escrito → «Pedir variaciones» → «Nueva campaña con este creativo».
 // Si además hay una oficina que ya sirve /api/anuncios y /anuncios-vista.js (serve.mjs con la Fase A1), abre una temporal sin Meta:
 // la tarjeta de conexión y «Ver con datos de ejemplo». Si no, lo dice y sigue con la demo.
 //   node scripts/anuncios-recorrido.mjs   → capturas en data/capturas/anuncios/ y ✓/✗ por paso
@@ -251,6 +254,84 @@ async function a3(page, tag, w, pasaAxe) {
   if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(400); }
 }
 
+/** Fase A5 en la demo: las sugerencias (aplicar lo que baja el gasto con DESHACER, lo que gasta con la ventana de la cifra, descartar,
+ *  posponer, los filtros, el borrador del rechazado) y los creativos (su estado escrito, «Pedir variaciones», «Nueva campaña con este
+ *  creativo»). Los pasos que dependen del foco esperan al hecho (waitForFunction), no a un tiempo fijo. */
+async function a5(page, tag, w, pasaAxe) {
+  if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(800); }
+  if (await page.$('#anuOv [data-cerrardet]')) { await page.click('#anuOv [data-cerrardet]'); await page.waitForTimeout(150); }
+  const enCard = () => page.waitForFunction(() => !!document.activeElement?.closest?.('#anuOv [data-sug]') || !!document.activeElement?.dataset?.sfiltro, null, { timeout: 4000 }).then(() => true).catch(() => false);
+  // las 3 del Resumen
+  await page.click('#anuOv [data-tab="resumen"]'); await page.waitForSelector('#anuOv .anu-sec-sug', { timeout: 5000 });
+  const tres = await page.$$eval('#anuOv .anu-sec-sug .anu-sug', l => l.map(x => x.dataset.sug));
+  const rt = await txt(page, '#anuOv .anu-sec-sug');
+  step(tres.length === 3 && tres.includes('ej-s-2') && /Gasta sin resultados/.test(rt) && /El dato/.test(rt) && !!await page.$('#anuOv .anu-sec-sug [data-ir="sugerencias"]'), `${tag}: A5 · el Resumen trae las 3 sugerencias más importantes (${tres.join(', ')}) con «Ver todas»`);
+  ok24(await medir(page), tag, 'A5 · Resumen con sugerencias');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a5-resumen.png`) });
+  await pasaAxe('A5 · Resumen con sugerencias');
+  await page.click('#anuOv .anu-sec-sug [data-ir="sugerencias"]'); await page.waitForSelector('#anuOv .anu-sugs', { timeout: 5000 });
+  await page.waitForFunction(() => document.activeElement?.id === 'anuTab-sugerencias', null, { timeout: 2000 }).catch(() => {});
+  step(await page.$eval('#anuTab-sugerencias', b => b.getAttribute('aria-selected')) === 'true' && await page.evaluate(() => document.activeElement?.id) === 'anuTab-sugerencias', `${tag}: A5 · «Ver todas» lleva a la pestaña Sugerencias (el foco en su pestaña)`);
+  const cuenta = (await txt(page, '#anuTab-sugerencias')).trim(), tx = await txt(page, '#anuOv .anu-main');
+  step(/6$/.test(cuenta) && /Para saber/.test(tx) && !await page.$('#anuOv [data-sapl="ej-s-1"]') && /reinicia el aprendizaje|gasta más: pide tus dos clics/.test(tx) && /Aplicar — pide tus dos clics/.test(tx),
+    `${tag}: A5 · Sugerencias: 6 vivas en la pestaña («${cuenta}»), «aprendiendo» sin «Aplicar», y la que gasta lo dice («Aplicar — pide tus dos clics»)`);
+  step(['El dato', 'Por qué', 'El cambio', 'Qué se espera', 'El riesgo'].every(k => tx.includes(k)), `${tag}: A5 · cada tarjeta: el dato, el porqué, el cambio, lo que se espera y el riesgo`);
+  ok24(await medir(page), tag, 'A5 · Sugerencias');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a5-sugerencias.png`), fullPage: false });
+  await pasaAxe('A5 · Sugerencias');
+  // 1 · aplicar la que pausa: un clic, DESHACER
+  await page.click('#anuOv [data-sapl="ej-s-2"]'); await page.waitForSelector('#anuOv .anu-toast:not([hidden]) [data-deshacer]', { timeout: 5000 });
+  const foco1 = await enCard();
+  step(/Pausaste «Monturas otoño · solo texto»/.test(await txt(page, '#anuOv .anu-toast')) && !await page.$('#anuOv [data-sug="ej-s-2"]') && !await visible(page, '#anuOv .anu-fondo') && foco1,
+    `${tag}: A5 · «Aplicar» la que pausa: un clic, sin ventana, DESHACER; sale de Vivas y el foco va a la siguiente tarjeta`);
+  await page.screenshot({ path: path.join(OUT, `${tag}-a5-pausada.png`) });
+  await page.click('#anuOv [data-deshacer]'); await page.waitForSelector('#anuOv [data-sug="ej-s-2"]', { timeout: 5000 });
+  step(/Deshecho/.test(await txt(page, '#anuOv .anu-toast')) && !!await page.$('#anuOv [data-sapl="ej-s-2"]'), `${tag}: A5 · DESHACER: el anuncio vuelve a estar activo y la sugerencia, viva`);
+  // 2 · aplicar la de escalar: la ventana del segundo clic con la cifra; «Sí» la aplica
+  await page.click('#anuOv [data-sapl="ej-s-4"]'); await page.waitForSelector('#anuOv .anu-fondo:not([hidden]) [data-dlg="si"]', { timeout: 5000 });
+  const si = (await txt(page, '#anuOv [data-dlg="si"]')).trim(), dl = await txt(page, '#anuOv .anu-dlg');
+  step(/^Sí, subir — hasta 8,40 US\$ al día$/.test(si) && /de 7,00 US\$ al día a 8,40 US\$ al día/.test(dl) && !!await page.$('#anuOv [data-sug="ej-s-4"]'), `${tag}: A5 · «Aplicar» la de escalar abre la ventana de la A2 con la cifra («${si}») y todavía no cambió nada`);
+  ok24(await medir(page), tag, 'A5 · la cifra de escalar');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a5-escalar.png`) });
+  await pasaAxe('A5 · la cifra de escalar');
+  await page.click('#anuOv [data-dlg="si"]'); await page.waitForSelector('#anuOv .anu-fondo', { state: 'hidden', timeout: 5000 });
+  const foco2 = await enCard();
+  step(/Subiste el presupuesto/.test(await txt(page, '#anuOv .anu-toast')) && !await page.$('#anuOv [data-sug="ej-s-4"]') && foco2, `${tag}: A5 · «Sí» la aplica: el presupuesto sube, sale de Vivas y el foco vuelve a las tarjetas`);
+  // 3 · descartar y posponer
+  await page.click('#anuOv [data-sdesc="ej-s-6"]'); await page.waitForFunction(() => !document.querySelector('#anuOv [data-sug="ej-s-6"]'), null, { timeout: 4000 });
+  step(/Descartada/.test(await txt(page, '#anuOv .anu-toast')) && await enCard(), `${tag}: A5 · «Descartar»: un clic, no vuelve en 7 días, y el foco sigue en las tarjetas`);
+  await page.click('#anuOv [data-spos="ej-s-2"]'); await page.waitForSelector('#anuOv .anu-sug-luego', { timeout: 4000 });
+  step(/Te la recuerdo en 3 días/.test(await txt(page, '#anuOv .anu-toast')) && /Pospuesta hasta el/.test(await txt(page, '#anuOv [data-sug="ej-s-2"]')) && !await page.$('#anuOv [data-sapl="ej-s-2"]'), `${tag}: A5 · «Recordármelo en 3 días»: pasa a «Para más tarde», escrito, sin botones`);
+  // 4 · los filtros: Aplicadas con su resultado, Descartadas escrito
+  await page.click('#anuOv [data-sfiltro="aplicada"]'); await page.waitForTimeout(150);
+  const apl = await txt(page, '#anuOv .anu-main');
+  step(/Qué pasó después/.test(apl) && /11,90 US\$ menos/.test(apl) && /Todavía no se sabe/.test(apl) && !await page.$('#anuOv [data-sapl]'), `${tag}: A5 · «Aplicadas»: lo que pasó después (o que todavía no se sabe), sin «Aplicar»`);
+  ok24(await medir(page), tag, 'A5 · Aplicadas');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a5-aplicadas.png`) });
+  await pasaAxe('A5 · Aplicadas');
+  await page.click('#anuOv [data-sfiltro="descartada"]'); await page.waitForTimeout(150);
+  step(/Descartada: no vuelve en 7 días/.test(await txt(page, '#anuOv .anu-main')) && await page.$$eval('#anuOv .anu-sug', l => l.length) === 2, `${tag}: A5 · «Descartadas»: escrito, no atenuado`);
+  await page.click('#anuOv [data-sfiltro="viva"]'); await page.waitForTimeout(150);
+  // 5 · el rechazado: un borrador con el texto corregido, abierto en Borradores
+  await page.click('#anuOv [data-sapl="ej-s-5"]'); await page.waitForSelector('#anuOv .anu-asis [data-paso="3"][aria-current="step"]', { timeout: 6000 });
+  step(await page.$eval('#anuTab-borradores', b => b.getAttribute('aria-selected')) === 'true' && /apartamos/.test(await page.$eval('#anuOv [data-bc="creativos.0.texto"]', t => t.value)) && /borrador/.test(await txt(page, '#anuOv .anu-toast')),
+    `${tag}: A5 · «Aplicar — deja un borrador» (el rechazado): abre el borrador en Borradores con el texto corregido`);
+  // 6 · Creativos
+  await page.click('#anuOv [data-tab="creativos"]'); await page.waitForSelector('#anuOv .anu-crs', { timeout: 5000 });
+  const cr = await txt(page, '#anuOv .anu-crs'), ncr = await page.$$eval('#anuOv .anu-cr', l => l.length);
+  step(ncr >= 7 && /funciona/.test(cr) && /se está cansando/.test(cr) && /sin datos/.test(cr) && /US\$/.test(cr) && !!await page.$('#anuOv [data-crvar="ej-s-3"]') && !!await page.$('#anuOv .anu-cr img'),
+    `${tag}: A5 · Creativos: ${ncr} con su miniatura, sus cifras con moneda y su estado escrito; el cansado ofrece «Pedir variaciones»`);
+  ok24(await medir(page), tag, 'A5 · Creativos');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a5-creativos.png`) });
+  await pasaAxe('A5 · Creativos');
+  await page.click('#anuOv [data-crvar="ej-s-3"]'); await page.waitForFunction(() => /tarjeta de costo del Estudio/.test(document.querySelector('#anuOv .anu-toast')?.textContent || ''), null, { timeout: 4000 }).catch(() => {});
+  step(/Le pedí a ANUNCIOS variaciones/.test(await txt(page, '#anuOv .anu-toast')) && !await page.$('#anuOv [data-crvar="ej-s-3"]'), `${tag}: A5 · «Pedir variaciones» aplica la sugerencia: «Le pedí a ANUNCIOS variaciones: te llegará la tarjeta de costo del Estudio»`);
+  await page.click('#anuOv [data-crnueva="ej-ad-11"]'); await page.waitForSelector('#anuOv .anu-asis [data-paso="3"][aria-current="step"]', { timeout: 6000 });
+  step(/WhatsApp/.test(await page.$eval('#anuOv [data-bc="creativos.0.texto"]', t => t.value)) && /elige su imagen/.test(await txt(page, '#anuOv .anu-toast')), `${tag}: A5 · «Nueva campaña con este creativo»: un borrador con su texto, en el paso 4 para elegir la imagen`);
+  await page.click('#anuOv [data-tab="resumen"]'); await page.waitForTimeout(250);
+  if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(400); }
+}
+
 let browser;
 try {
   try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ channel: 'chrome' }); }
@@ -334,6 +415,7 @@ try {
       }
       await a2(page, tag, w, pasaAxe);
       await a3(page, tag, w, pasaAxe);
+      await a5(page, tag, w, pasaAxe);
       // la tecla J abre y cierra
       await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('j'); await page.waitForTimeout(400);
       step(!(await page.$eval('#anuOv', o => o.classList.contains('on'))), `${tag}: J cierra Anuncios`);

@@ -415,3 +415,55 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
 #anuOv .anu-bmetaif { height: 520px; }
 #anuOv .anu-grej { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* SUGERENCIAS (Fase A5, 9 oct 2026): cada tarjeta dice la regla, el objeto, el dato, el porqué, el cambio, lo que se espera y el riesgo.
+   Lo informativo («aprendiendo: no tocar») lleva borde azul y no tiene «Aplicar». Lo descartado o aplicado se ESCRIBE (su chip), no se atenúa. */
+#anuOv .anu-tcuenta { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px; background: #FDFFF8; color: #151414; font-size: 11.5px; font-weight: 700; }
+#anuOv .anu-tabs button[aria-selected="true"] .anu-tcuenta { background: #151414; color: #FDFFF8; }
+#anuOv .anu-sugs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; max-width: 980px; }
+#anuOv .anu-sugs.mini { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); max-width: none; margin-bottom: 22px; }
+#anuOv .anu-sug { background: var(--anu-card); border: 1px solid var(--anu-line); border-left: 4px solid var(--t-ambar); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+#anuOv .anu-sug.info { border-left-color: var(--t-azul); }
+#anuOv .anu-sug.e-aplicada { border-left-color: var(--t-verde); }
+#anuOv .anu-sug.e-descartada, #anuOv .anu-sug.e-pospuesta { border-left-color: var(--t-gris); }
+#anuOv .anu-sug-regla { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 14px; color: var(--ink); }
+#anuOv .anu-sug-prio { color: var(--c); font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+#anuOv .anu-sug-obj { margin: 0; font-size: 15px; font-weight: 400; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+#anuOv .anu-sug-dl { margin: 0; display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: 6px 14px; font-size: 13.5px; line-height: 1.45; }
+#anuOv .anu-sug-dl > div { display: contents; }
+#anuOv .anu-sug-dl dt { color: var(--anu-mut); font-size: 12.5px; font-weight: 600; padding-top: 1px; }
+#anuOv .anu-sug-dl dd { margin: 0; color: var(--ink); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; overflow-wrap: break-word; min-width: 0; }
+#anuOv .anu-sug-dl dd > span:not(.anu-tchips):not(.anu-chip) { flex-basis: 100%; }
+#anuOv .anu-sug .anu-acts { margin-top: 4px; }
+#anuOv .anu-sugs.mini .anu-sug-dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+#anuOv .anu-sugs.mini .anu-sug-dl dd { margin-bottom: 4px; }
+#anuOv .anu-sug-luego { font-family: var(--serif); font-weight: 400; font-size: 17px; margin: 22px 0 4px; display: flex; align-items: center; gap: 8px; }
+#anuOv .anu-btn.gasta { border: 1.5px solid var(--t-ambar); font-weight: 600; color: var(--ink); }
+#anuOv .anu-sinobj { max-width: 980px; }
+#anuOv .anu-sinobj .anu-btn { align-self: flex-start; margin-top: 4px; }
+#anuOv .anu-sec-sug { margin-bottom: 4px; }
+
+/* CREATIVOS (Fase A5): la miniatura, las cifras juntas y el estado escrito */
+#anuOv .anu-crs { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+#anuOv .anu-cr { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px 14px; align-items: start; background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+#anuOv .anu-crmini { display: grid; place-items: center; width: 96px; height: 96px; border-radius: 10px; overflow: hidden; border: 1px solid var(--anu-line); background: var(--anu-soft); font-size: 11.5px; color: var(--anu-mut); text-align: center; }
+#anuOv .anu-crmini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#anuOv .anu-crc { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#anuOv .anu-crc h3 { margin: 0; font-size: 15px; overflow-wrap: break-word; }
+#anuOv .anu-crtexto { margin: 0; font-size: 13px; line-height: 1.45; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#anuOv .anu-crpq { margin: 0; font-size: 12.5px; color: var(--anu-mut); line-height: 1.45; }
+#anuOv .anu-crusos { font-size: 13px; }
+#anuOv .anu-crusos summary { display: flex; align-items: center; min-height: 28px; cursor: pointer; color: var(--ink); font-weight: 600; width: max-content; }
+#anuOv .anu-crusos summary::before { content: "▸"; margin-right: 6px; }
+#anuOv .anu-crusos[open] summary::before { content: "▾"; }
+#anuOv .anu-crusos ul { margin: 4px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 2px; }
+#anuOv .anu-crusos li span { color: var(--anu-mut); }
+#anuOv .anu-cr .anu-acts { margin-top: 2px; }
+#anuOv .anu-cr .anu-ayuda { margin: 0; }
+@container anuview (max-width: 600px) {
+  #anuOv .anu-sug-dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  #anuOv .anu-sug-dl dd { margin-bottom: 6px; }
+  #anuOv .anu-crs, #anuOv .anu-sugs.mini { grid-template-columns: minmax(0, 1fr); }
+  #anuOv .anu-cr { grid-template-columns: 64px minmax(0, 1fr); }
+  #anuOv .anu-crmini { width: 64px; height: 64px; }
+}

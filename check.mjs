@@ -150,6 +150,14 @@ await step('skills: shipped skills load and bind', async () => {
   const sum = sk.summary();
   return `${sum.count} skills (${sum.shipped} shipped, ${sum.brain} in the brain) · ` + sum.skills.map(x => `${x.name}→${x.everyone ? 'everyone' : [...x.agents, ...x.departments].join('+')}`).join(' ');
 });
+await step('anuncios: los umbrales del diagnóstico (biblioteca/…/campanas-pagadas/umbrales.json y, si existe, el del dueño en su Cerebro) son válidos', async () => { // A5, 9 oct 2026
+  const { cargarUmbrales } = await import('./anuncios/sugerencias.mjs');
+  const r = cargarUmbrales({ raiz: ROOT, brainPath: cfg.brainPath });
+  const malos = (r.problemas || []).filter(p => !/^del dueño:/.test(p));
+  if (!r.archivo || malos.length) throw new Error(malos.join(' | ') || 'no se encontró umbrales.json');
+  const delDueno = (r.problemas || []).filter(p => /^del dueño:/.test(p));
+  return `${Object.keys(r.umbrales || {}).length} umbrales · ${r.delDueno?.length ? `${r.delDueno.length} del dueño` : 'todos de fábrica'}${delDueno.length ? ` · avisos: ${delDueno.join(' | ')}` : ''}`;
+});
 await step('biblioteca: las habilidades de la oficina y las del Cerebro cargan, cada una atada a puestos que existen', async () => {
   const { cargarBiblioteca, AREAS } = await import('./biblioteca.mjs'); const { loadRoster } = await import('./roster.mjs'); const { loadSkills } = await import('./skills.mjs');
   const r = loadRoster(), sk = loadSkills(cfg.brainPath, r.agents);

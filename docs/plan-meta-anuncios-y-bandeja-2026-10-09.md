@@ -362,7 +362,9 @@ Cada fase:
 
 **Hecho cuando:** desde una pieza publicada se llega a un borrador válido y se crea en pausa en el Meta de mentira, en las dos redes.
 
-### Fase A5 — La IA que mejora las campañas
+### Fase A5 — La IA que mejora las campañas ✅ (9 oct 2026, rama `mejora/anuncios-a5`)
+
+> Hecho: `umbrales.json` junto a la habilidad (cada cifra con su fuente), `anuncios/diagnostico.mjs` con las 11 reglas, `anuncios/sugerencias.mjs`, `anuncios/piloto.mjs` (solo pausa), las pestañas Sugerencias y Creativos, la sugerencia diaria de escalar en Telegram, la rutina `revision-anuncios` de `ada` y `evals/anuncios-diagnostico/`. **Pendiente para la A4:** aplicar una sugerencia `impulsar` hoy responde 409. **Ningún umbral está probado con cuentas reales:** salen de la Biblioteca y de este plan; ajústalos en tu Cerebro cuando haya datos.
 
 - **El diagnóstico** (`anuncios/diagnostico.mjs`, puro, con tests): toma las cifras y las reglas de §7 y devuelve **sugerencias**, cada una con:
   - el dato que la motiva;

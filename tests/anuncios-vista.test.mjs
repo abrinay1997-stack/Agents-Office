@@ -423,3 +423,127 @@ test('A3 · el paquete lleva el asistente y la página no; el Estudio sabe decir
   assert.match(st, /para === 'anuncio'/); assert.match(st, /Volver \$\{w\.a\}/);
   const main = fs.readFileSync('src/main.js', 'utf8'); assert.match(main, /studio\.forTarget\(\{ \.\.\.t, para: 'anuncio' \}/);
 });
+
+/* ---------------- Fase A5 ---------------- */
+import { REGLA, informativa, botonAplicar, ordenarSugerencias, deEstado, topResumen, cambioTexto, sugerenciasHTML, resumenSugerenciasHTML, tarjetaSugHTML } from '../src/anuncios/sugerencias.js';
+import { estadoCreativo, creativosConEstado, agruparCreativos, sumar, caidaCtr, sugerenciaDe, creativosHTML, borradorDeCreativo, cpaDe, UMBRALES_DEF, normalizarUmbrales } from '../src/anuncios/creativos.js';
+import { sugerenciasDeEjemplo, crearDemoSugerencias } from '../src/anuncios/demo-sugerencias.js';
+
+const sg = (id, x = {}) => ({ id, regla: 'cortar', objeto: { id: 'a', nivel: 'anuncio', nombre: 'A' }, dato: 'd', porque: 'p', cambio: { tipo: 'pausar', id: 'a' }, efecto: 'e', riesgo: {}, prioridad: 2, gasto: false, estado: 'viva', creadaAt: '2026-10-09T10:00:00Z', ...x });
+
+test('A5 · el botón de aplicar dice si gasta; lo informativo no tiene; «revisar» solo abre', () => {
+  assert.deepEqual(botonAplicar(sg('1')), { texto: 'Aplicar', gasta: false, abre: false });
+  assert.equal(botonAplicar(sg('2', { regla: 'escalar', gasto: true, cambio: { tipo: 'subir_presupuesto', id: 'x', valor: 9 } })).texto, 'Aplicar — pide tus dos clics');
+  assert.equal(botonAplicar(sg('3', { cambio: { tipo: 'activar', id: 'x' } })).gasta, true, 'aunque el servidor no lo marque, activar gasta');
+  assert.equal(botonAplicar(sg('4', { riesgo: { gastaMas: true } })).gasta, true);
+  assert.equal(botonAplicar(sg('5', { regla: 'aprendizaje', cambio: { tipo: 'revisar', id: 'x' } })), null, '«aprendiendo, no tocar» no tiene «Aplicar»');
+  assert.ok(informativa(sg('6', { regla: 'esperar' }))); assert.ok(informativa(sg('7', { cambio: null })));
+  assert.deepEqual(botonAplicar(sg('8', { regla: 'problemas', cambio: { tipo: 'revisar', id: 'x' } })), { texto: 'Ver qué pasa', gasta: false, abre: true });
+  assert.match(botonAplicar(sg('9', { cambio: { tipo: 'borrador', id: 'x' } })).texto, /deja un borrador/);
+  assert.match(botonAplicar(sg('10', { cambio: { tipo: 'creativos', id: 'x' } })).texto, /variaciones/);
+  assert.equal(botonAplicar(sg('11', { estado: 'aplicada' })), null, 'una ya aplicada no se vuelve a aplicar');
+  for (const r of ['aprendizaje', 'limitado', 'esperar', 'cortar', 'fatiga', 'escalar', 'estructura', 'rechazado', 'problemas', 'cuenta', 'impulsar']) assert.ok(REGLA[r], r);
+});
+
+test('A5 · el orden: prioridad, lo aplicable antes que lo informativo, lo nuevo antes; las 3 del Resumen', () => {
+  const l = [sg('c', { prioridad: 3 }), sg('i', { prioridad: 1, regla: 'aprendizaje', cambio: { tipo: 'revisar', id: 'x' } }), sg('a', { prioridad: 1 }), sg('b', { prioridad: 2, creadaAt: '2026-10-09T12:00:00Z' }), sg('b0', { prioridad: 2 }), sg('d', { estado: 'descartada', prioridad: 1 }), sg('p', { estado: 'pospuesta', prioridad: 1 })];
+  assert.deepEqual(ordenarSugerencias(l.filter(s => s.estado === 'viva')).map(s => s.id), ['a', 'i', 'b', 'b0', 'c']);
+  assert.deepEqual(deEstado(l, 'viva').map(s => s.id), ['a', 'i', 'b', 'b0', 'c'], 'las vivas no traen las pospuestas ni las descartadas');
+  assert.deepEqual(topResumen(l).map(s => s.id), ['a', 'b', 'b0'], 'en el Resumen, lo informativo solo si no llegan tres');
+  assert.deepEqual(topResumen([l[1], l[2]]).map(s => s.id), ['a', 'i']);
+  assert.deepEqual(topResumen([]), []);
+  const ej = sugerenciasDeEjemplo();
+  assert.ok(topResumen(ej).every(s => s.estado === 'viva' && !informativa(s)) && topResumen(ej).length === 3);
+});
+
+test('A5 · el cambio exacto en palabras, con la moneda y el porcentaje', () => {
+  const d = datosDeEjemplo('7d'), f = buscar(d.campanas, 'ej-as-2');
+  const t = plano(cambioTexto(sg('e', { regla: 'escalar', objeto: { id: 'ej-as-2', nivel: 'conjunto', nombre: 'Ciudad' }, cambio: { tipo: 'subir_presupuesto', id: 'ej-as-2', valor: 8.4 } }), { moneda: 'USD', f }));
+  assert.match(t, /Subir el presupuesto de «Ciudad» de 7,00 US\$ al día a 8,40 US\$ al día \(\+20 %\)/);
+  assert.match(cambioTexto(sg('p')), /Pausar «A»\. Baja el gasto/);
+  assert.match(cambioTexto(sg('b', { cambio: { tipo: 'borrador', id: 'a' } })), /No se crea nada en Meta/);
+});
+
+test('A5 · el HTML de las sugerencias: dato, porqué, cambio, efecto y riesgo; el objeto abre su detalle; nunca un botón dentro de otro', () => {
+  const d = datosDeEjemplo('7d'), r = { items: sugerenciasDeEjemplo(), cpaObjetivo: 2, sinObjetivo: null }, bf = id => buscar(d.campanas, id);
+  const h = sugerenciasHTML(r, { buscarFila: bf });
+  for (const k of ['El dato', 'Por qué', 'El cambio', 'Qué se espera', 'El riesgo']) assert.ok(h.includes(k), k);
+  assert.match(h, /data-sobj="ej-ad-23"/); assert.match(h, /gasta más: pide tus dos clics/); assert.match(h, />Aplicar — pide tus dos clics</);
+  assert.match(h, /Recordármelo en 3 días/); assert.match(h, /Para saber/); assert.doesNotMatch(h, /data-sapl="ej-s-1"/, 'la informativa no se aplica');
+  assert.doesNotMatch(h, /ej-s-7|ej-s-8/, 'en Vivas no salen la aplicada ni la descartada');
+  assert.match(plano(h), /Vivas <b class="anu-cuenta">6<\/b>/);
+  const ap = sugerenciasHTML(r, { filtro: 'aplicada', buscarFila: bf });
+  assert.match(ap, /Qué pasó después/); assert.match(plano(ap), /11,90 US\$ menos/); assert.match(ap, /Aplicada/); assert.doesNotMatch(ap, /data-sapl/);
+  assert.match(sugerenciasHTML(r, { filtro: 'descartada', buscarFila: bf }), /Descartada: no vuelve en 7 días/);
+  assert.match(sugerenciasHTML({ ...r, sinObjetivo: 'No me dijiste qué costo por resultado te parece bueno.' }), /Costo por resultado que te parece bueno[\s\S]*data-a="ajustes"/);
+  assert.match(sugerenciasHTML(null, { error: 'la oficina no contestó' }), /data-a="recargar-s"/);
+  for (const x of [h, ap, resumenSugerenciasHTML(r, { buscarFila: bf })]) assert.doesNotMatch(x, /<button[^>]*>(?:(?!<\/button>).)*<button/s, 'un botón nunca dentro de otro');
+  assert.doesNotMatch(tarjetaSugHTML(sg('x', { objeto: { id: 'nada', nombre: '<b>x</b>' } })), /<b>x<\/b>/, 'escapado');
+  const rs = resumenSugerenciasHTML(r, { buscarFila: bf });
+  assert.equal((rs.match(/data-sug=/g) || []).length, 3); assert.match(rs, /data-ir="sugerencias">Ver todas/);
+  assert.match(resumenHTML(d, { sug: r }), /anuSugR/); assert.doesNotMatch(resumenHTML(d), /anuSugR/, 'sin respuesta del servidor, no hay bloque');
+});
+
+test('A5 · el estado de cada creativo: funciona, se está cansando, sin datos (y gasta sin resultados)', () => {
+  const g = (c, serie) => ({ anuncios: [{ id: 'a', cifras: c, serie }] });
+  assert.equal(estadoCreativo(g({ gasto: 1, impresiones: 5000 }), { cpa: 2 }).codigo, 'sin-datos', 'poco gasto');
+  assert.equal(estadoCreativo(g({ gasto: 30, impresiones: 400 }), { cpa: 2 }).codigo, 'sin-datos', 'pocas impresiones');
+  assert.equal(estadoCreativo(g({ gasto: 30, impresiones: 9000, clics: 90, resultados: 20, frecuencia: 1.5 }), { cpa: 2 }).codigo, 'funciona');
+  assert.equal(estadoCreativo(g({ gasto: 30, impresiones: 9000, clics: 90, resultados: 20, frecuencia: 3.5 }), { cpa: 2 }).codigo, 'cansando', 'sin serie, solo la frecuencia');
+  const serie = (a, b) => [...Array(3).fill({ impresiones: 1000, clics: a }), ...Array(3).fill({ impresiones: 1000, clics: b })];
+  assert.equal(estadoCreativo(g({ gasto: 30, impresiones: 9000, clics: 90, resultados: 20, frecuencia: 3.5 }, serie(20, 19)), { cpa: 2 }).codigo, 'funciona', 'con serie y el CTR estable no se cansa');
+  assert.equal(estadoCreativo(g({ gasto: 30, impresiones: 9000, clics: 90, resultados: 20, frecuencia: 3.5 }, serie(20, 12)), { cpa: 2 }).codigo, 'cansando', 'frecuencia y CTR cayendo un 40 %');
+  assert.equal(caidaCtr([{ serie: serie(20, 12) }]), 40);
+  assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 0, resultados: 0, frecuencia: 1.2 }), { cpa: 2 }).codigo, 'sin-resultados');
+  assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 80, resultados: 1, frecuencia: 1.2 }), { cpa: null }).codigo, 'funciona', 'sin objetivo, un CTR alto');
+  assert.equal(estadoCreativo(g({ gasto: 9, impresiones: 4000, clics: 80, resultados: 1, frecuencia: 3.5 }), { umbrales: { frecuencia: 4 } }).codigo, 'funciona', 'los umbrales del servidor ganan');
+  const nu = normalizarUmbrales({ fatigaFrecuencia: { valor: 3.5 }, fatigaCaidaCtr: { valor: 0.3 }, fatigaMinImpresiones: 500, esperarGastoCpa: { valor: 2 } });
+  assert.equal(nu.frecuencia, 3.5); assert.equal(nu.caidaCtr, 30); assert.equal(nu.impresionesMin, 500); assert.equal(nu.gastoMinVeces, 2, 'los nombres de umbrales.json de la oficina también valen');
+  assert.equal(estadoCreativo(g({ gasto: 3, impresiones: 5000, clics: 90, resultados: 2 }), { cpa: 2, umbrales: { esperarGastoCpa: { valor: 2 } } }).codigo, 'sin-datos');
+  assert.equal(UMBRALES_DEF.frecuencia, 3); assert.equal(cpaDe({ OUTCOME_TRAFFIC: 0.5 }, { objetivo: 'OUTCOME_TRAFFIC' }), 0.5); assert.equal(cpaDe(null), null);
+  const s = sumar([{ cifras: { gasto: 10, impresiones: 1000, clics: 10, resultados: 2, frecuencia: 2 } }, { cifras: { gasto: 5, impresiones: 3000, clics: 60, resultados: 3, frecuencia: 1.2 } }]);
+  assert.equal(s.ctr, 1.75, 'el CTR se recalcula, no se promedia'); assert.equal(s.costoPorResultado, 3); assert.equal(s.frecuencia, 2);
+});
+
+test('A5 · Creativos con la demo: agrupados, cada uno con su estado, sus cifras con moneda; «Pedir variaciones» si hay sugerencia', () => {
+  const d = datosDeEjemplo('7d'), sug = { items: sugerenciasDeEjemplo(), cpaObjetivo: 2 };
+  const l = creativosConEstado(d.campanas, { cpaObjetivo: 2 }), por = id => l.find(g => g.anuncios.some(a => a.id === id)).estado.codigo;
+  assert.equal(agruparCreativos(d.campanas).length, 7);
+  assert.equal(por('ej-ad-21'), 'cansando'); assert.equal(por('ej-ad-11'), 'funciona'); assert.equal(por('ej-ad-41'), 'sin-datos'); assert.equal(por('ej-ad-23'), 'sin-resultados');
+  assert.equal(sugerenciaDe(l.find(g => g.anuncios[0].id === 'ej-ad-21'), sug.items).id, 'ej-s-3');
+  const h = plano(creativosHTML(d, sug, { rango: '7d' }));
+  assert.match(h, /se está cansando/); assert.match(h, /funciona/); assert.match(h, /sin datos/); assert.match(h, /data-crvar="ej-s-3"/); assert.match(h, /data-crnueva="ej-ad-11"/);
+  assert.match(h, /Costo por resultado<\/dt><dd>1,43 US\$/); assert.doesNotMatch(h, /<button[^>]*>(?:(?!<\/button>).)*<button/s);
+  assert.match(creativosHTML({ ...d, campanas: [] }, null), /Todavía no hay creativos con cifras/);
+  const b = borradorDeCreativo(l.find(g => g.anuncios[0].id === 'ej-ad-11'), { ahora: 1 });
+  assert.equal(b.objetivo, 'mensajes'); assert.equal(b.destino, 'whatsapp'); assert.equal(b.creativos[0].llamada, 'WHATSAPP_MESSAGE', '«Enviar mensaje» no vale para WhatsApp: la primera que vale');
+  assert.match(b.creativos[0].texto, /WhatsApp/); assert.equal(b.creativos[0].media, null);
+});
+
+test('A5 · la demo aplica con las reglas del dinero: pausar con DESHACER, escalar pide el segundo clic con su cifra, borrador, variaciones, descartar y posponer', () => {
+  let t = Date.parse('2026-10-09T15:00:00'); const ahora = () => t;
+  const demo = crearDemo({ ahora }), demoB = crearDemoBorradores({ demo, ahora, topes: TOPES_DEMO }), S = crearDemoSugerencias({ demo, demoB, ahora });
+  const viva = id => S.lista().items.find(s => s.id === id).estado;
+  const p = S.aplicar('ej-s-2'); assert.ok(p.ok && p.deshacer?.token); assert.equal(viva('ej-s-2'), 'aplicada');
+  assert.equal(buscar(demo.vista().campanas, 'ej-ad-23').nodo.estado, 'PAUSED');
+  assert.ok(demo.deshacer({ token: p.deshacer.token }).ok); S.alDeshacer(p.deshacer.token); assert.equal(viva('ej-s-2'), 'viva', 'DESHACER la devuelve a viva');
+  const e = S.aplicar('ej-s-4'); assert.ok(e.confirmar && !e.ok, 'lo que gasta NO se hace en el primer clic'); assert.equal(viva('ej-s-4'), 'viva');
+  assert.match(plano(botonSi('subir_presupuesto', e.confirmar, 'USD')), /^Sí, subir — hasta 8,40 US\$ al día$/);
+  assert.equal(buscar(demo.vista().campanas, 'ej-as-2').nodo.presupuesto.usd, 7);
+  const si = demo.accion({ tipo: 'subir_presupuesto', id: 'ej-as-2', valor: 8.4, confirmacion: e.confirmar.token, sugerencia: 'ej-s-4' }); S.alConfirmar('ej-s-4', si);
+  assert.ok(si.ok); assert.equal(buscar(demo.vista().campanas, 'ej-as-2').nodo.presupuesto.usd, 8.4); assert.equal(viva('ej-s-4'), 'aplicada');
+  const b = S.aplicar('ej-s-5'); assert.ok(b.ok && b.borrador?.id); assert.ok(demoB.lista().items.some(x => x.id === b.borrador.id), 'deja el borrador');
+  const v = S.aplicar('ej-s-3'); assert.ok(v.ok && v.tarea); assert.match(v.hecho.texto, /tarjeta de costo del Estudio/);
+  assert.equal(S.aplicar('ej-s-1').status, 400, 'la informativa no se aplica'); assert.equal(S.aplicar('ej-s-2').status, 200, 'tras DESHACER se puede volver a aplicar');
+  assert.equal(S.aplicar('ej-s-2').status, 409, 'dos veces no');
+  assert.ok(S.descartar('ej-s-6').ok); assert.equal(viva('ej-s-6'), 'descartada');
+  const S2 = crearDemoSugerencias({ demo, demoB, ahora }); assert.ok(S2.posponer('ej-s-6', 3).ok); assert.equal(S2.lista().items.find(s => s.id === 'ej-s-6').estado, 'pospuesta');
+  t += 3 * 864e5 + 1000; assert.equal(S2.lista().items.find(s => s.id === 'ej-s-6').estado, 'viva', 'a los 3 días vuelve');
+});
+
+test('A5 · el paquete lleva Sugerencias y Creativos; la página no', async () => {
+  const p = await construirAnuncios();
+  for (const f of ['src/anuncios/sugerencias.js', 'src/anuncios/creativos.js', 'src/anuncios/demo-sugerencias.js']) assert.ok(p.aparte.includes(f), f);
+  const page = 'dist/command-centre-v2.html';
+  if (fs.existsSync(page)) { const html = fs.readFileSync(page, 'utf8'); assert.ok(!html.includes('anu-sug-dl') && !html.includes('Recordármelo en 3 días'), 'la página no lleva las sugerencias'); }
+});
