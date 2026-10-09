@@ -73,13 +73,23 @@
 // Fase A4 (9 oct 2026): IMPULSAR lo que ya salió (anuncios/impulsar.mjs; el contrato entero, allí):
 //   POST /api/anuncios/impulsar { pieza?, red?, id?, por?, agente? } → 200 { borrador (con `origen`), ya? } · 400 · 403 · 404 · 409 · 429.
 //          Nace BORRADOR (también de un agente: de 'agente:<id>'); crearlo en Meta, en pausa, es el clic del dueño; activarlo, sus dos clics.
+//
+// Fase A6 (9 oct 2026): LOS INDICADORES del dueño en «Cómo va el negocio» (anuncios/indicadores.mjs):
+//   GET  /api/anuncios/indicadores            → { gasto, costo, roas, roasPosible: { puede, motivo } } (también en GET /api/anuncios → `indicadores`)
+//   POST /api/anuncios/indicadores            → 200 { ok, creados: [id], ya: [id], motivo? } · SOLO el dueño (403 los demás). El ROAS solo
+//          se crea con píxel y compras medidas; si no, `motivo` dice por qué. Cada lectura buena de cifras los pone al día (serve.mjs).
+// Fase A7 (9 oct 2026): EL INFORME DEL MES (anuncios/informe.mjs; sin modelo, «sin datos» cuando no se sabe):
+//   GET  /api/anuncios/informe?mes=AAAA-MM    → { titulo, texto (Markdown), cifras } (sin mes: el de hoy) · 400 un mes mal escrito o futuro.
+//          Un agente lo lee igual (ver_informe_anuncios).
+//   POST /api/anuncios/informe?mes=  (o { mes }) → lo mismo + { nota } — lo guarda en <cerebro>/Agents Office/informes/AAAA-MM anuncios.md
+//          (no viaja por GitHub). Un agente: 403.
 import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto, ErrorBorrador } from './modelo.mjs';
 import { quienDe } from './acciones.mjs';
 
 export const AGENTE_CADA_MIN = 10;
 export const MAX_AGENTE = 20; // borradores abiertos (en «borrador») por agente
 
-export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null, impulsor = null }) {
+export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null, impulsor = null, informe = null, indicadores = null }) {
   let agenteAt = 0;
   const rangoDe = url => (RANGOS.includes(url.searchParams.get('rango')) ? url.searchParams.get('rango') : '7d');
 
@@ -158,7 +168,8 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
   /** La vista con lo de la conexión: lo que contesta GET /api/anuncios. */
   function completa(rango = '7d') {
     const c = sync.conexion(), v = sync.vista(rango);
-    return { configurado: c.configurado, motivo: c.motivo, ejemplo: false, ...v, topes: sync.topes(), sincronizadaAt: c.sincronizadaAt, cifrasAt: c.cifrasAt, sondeoAt: c.sondeoAt, sincronizando: c.sincronizando, error: c.error, uso: meta.uso(), sondeo: sync.sondeo() };
+    let ind; if (indicadores) { try { ind = indicadores.estado(); } catch { /* data/kpis.json ilegible: la vista sigue */ } } // A6: qué indicadores tiene el dueño
+    return { configurado: c.configurado, motivo: c.motivo, ejemplo: false, ...v, topes: sync.topes(), sincronizadaAt: c.sincronizadaAt, cifrasAt: c.cifrasAt, sondeoAt: c.sondeoAt, sincronizando: c.sincronizando, error: c.error, uso: meta.uso(), sondeo: sync.sondeo(), ...(ind ? { indicadores: ind } : {}) };
   }
 
   async function handle(req, res, url) {
@@ -177,6 +188,21 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
         if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' }), true;
         const b = await body(req).catch(() => ({})), r = await impulsor.impulsar({ ...b, por: b?.por ?? url.searchParams.get('por') ?? undefined, agente: b?.agente ?? url.searchParams.get('agente') ?? undefined });
         return json(res, r.status, r.cuerpo), true;
+      }
+      if (p === '/api/anuncios/informe' && informe) { // A7: el informe del mes (GET lo arma; POST lo guarda en el Cerebro)
+        const mesHoy = () => String(sync.hoy?.() || new Date().toISOString()).slice(0, 7);
+        if (req.method === 'GET') return json(res, 200, informe.informe(url.searchParams.get('mes') || mesHoy())), true;
+        if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' }), true;
+        const b = await body(req).catch(() => ({})), quien = quienDe(b?.por ?? url.searchParams.get('por') ?? undefined);
+        if (quien === 'agente' || quien === 'otro') return json(res, 403, { error: 'guardar el informe en el Cerebro lo pide el dueño en Anuncios; tú puedes leerlo (ver_informe_anuncios)' }), true;
+        return json(res, 200, informe.guardar(String(b?.mes || url.searchParams.get('mes') || mesHoy()))), true;
+      }
+      if (p === '/api/anuncios/indicadores' && indicadores) { // A6: los indicadores de «Cómo va el negocio»
+        if (req.method === 'GET') return json(res, 200, indicadores.estado()), true;
+        if (req.method !== 'POST') return json(res, 405, { error: 'método no admitido' }), true;
+        const b = await body(req).catch(() => ({}));
+        if (quienDe(b?.por ?? url.searchParams.get('por') ?? undefined) !== 'dueno') return json(res, 403, { error: 'los indicadores de «Cómo va el negocio» los crea el dueño' }), true;
+        return json(res, 200, { ok: true, ...indicadores.crear() }), true;
       }
       const mb = /^\/api\/anuncios\/borradores(?:\/([A-Za-z0-9_-]{1,60})(?:\/(validar|crear|vista-previa|mejorar))?)?$/.exec(p);
       if (mb && borradores) return await rutaBorradores(req, res, url, mb[1] || null, mb[2] || null), true;

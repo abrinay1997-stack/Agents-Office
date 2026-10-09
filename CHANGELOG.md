@@ -1,5 +1,16 @@
 # Changelog
 
+## Anuncios de Meta, Fases A6 y A7: medir y el informe del mes — 9 oct 2026
+
+- **«Crear indicadores»** (Anuncios → Resumen → Medir) lleva a «Cómo va el negocio» el **gasto del mes** y el **costo por resultado de 30 días**, con su tendencia. Son las mismas cifras del panel y se ponen al día con cada lectura de Meta (un punto por día).
+- **El ROAS** (lo vendido por cada dólar de anuncios) solo se crea si hay píxel y compras medidas. Si no, el panel dice por qué: un ROAS de 0 sin píxel mentiría.
+- **El informe de anuncios del mes**, sin un modelo de por medio: lo gastado, cada campaña con sus resultados y su costo por resultado, los mejores creativos, las sugerencias que aplicaste y qué pasó después, y lo que se pausó o activó. Lo que no se sabe dice «sin datos». En el mes en curso dice «lo que va del mes».
+- Se abre en una ventana con el selector de mes y **«Guardar en el Cerebro»**: queda en `Agents Office/informes/AAAA-MM anuncios.md`, que no viaja por GitHub. El resumen del lunes cita el del mes anterior en una línea.
+- Los agentes lo leen con `ver_informe_anuncios`. Guardarlo y crear los indicadores es solo tuyo.
+- **La API de conversiones** (servidor a servidor) queda pendiente: se hace cuando confirmes que vendes en una web y qué eventos importan.
+- Tests: `anuncios-informe` y `anuncios-mcp`. Recorrido: el informe en la demo (abrir, cambiar de mes, «sin datos») y el botón de indicadores, con axe sin fallos. La página no creció: todo va en el paquete de Anuncios.
+- **`npm test` y el check corren 4 archivos de tests a la vez** (antes, uno por núcleo). Muchos levantan su propio servidor, y con 7 a la vez fallaban al azar por pura carga, cada vez uno distinto. Con 4 pasan siempre y tardan lo mismo (unos 2 minutos).
+
 ## La Bandeja con Meta, Fase B2: los mensajes privados — 9 oct 2026
 
 - **Los mensajes privados de Instagram y Messenger** llegan a la Bandeja como conversaciones. Ves el hilo con la hora de cada mensaje y las imágenes que te mandan (solo si vienen de Meta).

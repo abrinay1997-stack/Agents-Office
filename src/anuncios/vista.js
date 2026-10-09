@@ -18,12 +18,15 @@ import { GASTO, LIBRES, TEXTO, pideDatos, menuHTML, formularioHTML, confirmarHTM
 import { crearAsistente } from './asistente.js';
 import { sugerenciasHTML, FILTROS_SUG, reglaTexto } from './sugerencias.js';
 import { creativosHTML, grupoDeAnuncio, borradorDeCreativo } from './creativos.js';
+import { crearVentanaInforme } from './informe.js';
 // Fase A3 (9 oct 2026): CREAR. La pestaña BORRADORES (antes de Historial) con la lista y el asistente de 5 pasos (src/anuncios/asistente.js);
 // «+ Nueva campaña» también en el Resumen. Lo creado nace EN PAUSA en Meta y se enlaza a su campaña; activarlo es la A2 (dos clics).
 // Fase A5 (9 oct 2026): SUGERENCIAS (tras Campañas: src/anuncios/sugerencias.js) y CREATIVOS (tras Borradores: src/anuncios/creativos.js),
 // y las 3 sugerencias más importantes en el Resumen. «Aplicar» de lo que baja el gasto es un clic con DESHACER; de lo que gasta, la MISMA
 // ventana del segundo clic de la A2 (con `sugerencia` en el «Sí»); «borrador» abre el borrador en Borradores; «creativos» se lo pide a tu
 // agente de anuncios. «Descartar» y «Recordármelo en 3 días» son de un clic. El foco, tras cada una, va a la siguiente tarjeta.
+// Fases A6 y A7 (9 oct 2026): MEDIR, al final del Resumen. «Informe del mes» abre su ventana (src/anuncios/informe.js) y «Crear
+// indicadores» los lleva a «Cómo va el negocio» (el servidor dice si el ROAS se puede, y si no, por qué).
 
 /* global __AO_ANUNCIOS_VERSION__ */
 const VERSION = typeof __AO_ANUNCIOS_VERSION__ === 'string' ? __AO_ANUNCIOS_VERSION__ : '';
@@ -58,6 +61,7 @@ function init(ov, ctx) {
     repintar: () => { if (S.tab === 'borradores' && S.abierta) pintar(); },
     irACampana: async id => { await cargar(); if (S.d && buscar(S.d.campanas || [], id)) abrirDetalle(id, null); else { S.tab = 'campanas'; guarda.set('tab', S.tab); pintar(); decir('La campaña aparecerá en Campañas en la próxima lectura de Meta.'); } },
     alCrear: () => { cargar(); cargarHistorial(); } });
+  const inf = crearVentanaInforme({ ov, datos, modal, decir, enEjemplo });
 
   /* ---------- cargar ---------- */
   async function cargar() {
@@ -75,7 +79,7 @@ function init(ov, ctx) {
   }
   async function cargarHistorial() { try { S.hist = await datos.historial({ ejemplo: S.ejemplo }); } catch (e) { S.hist = []; decir('No se pudo traer el historial: ' + e.message); } if (S.tab === 'historial') pintar(); }
   let reloj = 0;
-  const vigilar = () => { clearInterval(reloj); reloj = setInterval(() => { const a = document.activeElement; if (document.hidden || !S.abierta || S.leyendo || S.dlg || !caja.hidden || S.tab === 'borradores' || (a && ov.contains(a) && a.tagName === 'SELECT')) return; cargar(); }, 60000); }; // lo que lee el servidor aparece solo
+  const vigilar = () => { clearInterval(reloj); reloj = setInterval(() => { const a = document.activeElement; if (document.hidden || !S.abierta || S.leyendo || S.dlg || inf.abierto() || !caja.hidden || S.tab === 'borradores' || (a && ov.contains(a) && a.tagName === 'SELECT')) return; cargar(); }, 60000); }; // lo que lee el servidor aparece solo
 
   /* ---------- pintar ---------- */
   function pintarCabecera() {
@@ -376,6 +380,17 @@ function init(ov, ctx) {
     await ctl.abrir(r.borrador.id, { paso: 3 });
   }
 
+  /* ---------- A6: los indicadores de «Cómo va el negocio» ---------- */
+  async function crearIndicadores(btn) {
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+    const r = await datos.crearIndicadores({ ejemplo: S.ejemplo });
+    if (btn.isConnected) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+    if (!r.ok) { mostrarAviso(`No se crearon: ${r.motivo || 'la oficina no contestó'}`, null); return; }
+    const n = (r.creados || []).length;
+    mostrarAviso(`${n ? `Listo: ${n === 1 ? 'un indicador nuevo' : n + ' indicadores nuevos'} en «Cómo va el negocio» (N).` : 'Ya estaban en «Cómo va el negocio» (N).'}${r.motivo ? ' ' + r.motivo : ''}${r.ejemplo ? ' (En el ejemplo, solo en esta página.)' : ''}`, null);
+    await cargar(); (main.querySelector('[data-a="indicadores"]') || main.querySelector('[data-a="informe"]') || main).focus({ preventScroll: true });
+  }
+
   /* ---------- eventos ---------- */
   ov.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !ov.contains(b)) return;
@@ -387,7 +402,7 @@ function init(ov, ctx) {
       if (a === 'minimo') { abrirDlg({ fase: 'form', valor: b.dataset.minimo, err: '' }); return; }
       return;
     }
-    if (b.closest('.anu-fondo-gal')) return; // la galería del asistente escucha sola
+    if (b.closest('.anu-fondo-gal') || b.closest('.anu-fondo-inf')) return; // la galería del asistente y la ventana del informe escuchan solas
     if (b.dataset.a === 'nueva' && S.tab !== 'borradores') { S.tab = 'borradores'; guarda.set('tab', S.tab); cerrarDetalle(false); }
     if ((S.tab === 'borradores' || b.dataset.vercamp) && main.contains(b) && ctl.click(b)) return;
     if (caja.contains(b) && b.dataset.acc) return pedir(b.dataset.acc, b.dataset.id, menuDe);
@@ -419,6 +434,8 @@ function init(ov, ctx) {
     if (a === 'ajustes') return ctx.abrirAjustes?.('anuncios');
     if (a === 'reintentar') return cargar();
     if (a === 'recargar-s') return cargarSug();
+    if (a === 'informe') return inf.abrir(b);
+    if (a === 'indicadores') return crearIndicadores(b);
   });
   ov.addEventListener('submit', e => {
     const form = e.target.closest('[data-form]'); if (!form || !S.dlg) return;
@@ -459,8 +476,8 @@ function init(ov, ctx) {
       if (S.tab === 'borradores') ctl.cargar();
       setTimeout(() => ov.querySelector(`[data-tab="${S.tab}"]`)?.focus(), 30);
     },
-    close() { S.abierta = false; clearInterval(reloj); ctl.cerrar(); cerrarMenu(false); cerrarDlg(false); cerrarDetalle(false); },
-    back() { return cerrarMenu() || cerrarDlg() || (S.tab === 'borradores' && ctl.back()) || cerrarDetalle(); },
+    close() { S.abierta = false; clearInterval(reloj); ctl.cerrar(); cerrarMenu(false); cerrarDlg(false); inf.cerrar(false); cerrarDetalle(false); },
+    back() { return cerrarMenu() || cerrarDlg() || inf.cerrar() || (S.tab === 'borradores' && ctl.back()) || cerrarDetalle(); },
     refresh: () => cargar(),
     selection() {
       const sb = S.tab === 'borradores' && ctl.selection(); if (sb) return sb;

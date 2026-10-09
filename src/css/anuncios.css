@@ -479,3 +479,27 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
   #anuOv .anu-borig-c { grid-template-columns: 72px minmax(0, 1fr); }
   #anuOv .anu-borig-m { width: 72px; }
 }
+/* Fases A6 y A7 (9 oct 2026): MEDIR al final del Resumen (el informe del mes y los indicadores) y la ventana del informe */
+#anuOv .anu-medir { margin-top: 22px; }
+#anuOv .anu-medir-caja { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+#anuOv .anu-medir-it { background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 14px; padding: 14px 16px; font-size: 13.5px; line-height: 1.5; min-width: 0; }
+#anuOv .anu-medir-it h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+#anuOv .anu-medir-it p { margin: 0 0 6px; }
+#anuOv .anu-medir-it .anu-acts { margin-top: 8px; }
+#anuOv .anu-dlg-inf { max-width: 780px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+#anuOv .anu-dlg-inf .anu-bcab { margin-bottom: 0; }
+#anuOv .anu-inf-barra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+#anuOv .anu-inf-sp { flex: 1; }
+#anuOv .anu-inf-estado { margin: 0; min-height: 1.2em; font-size: 13px; color: var(--anu-mut); overflow-wrap: anywhere; }
+#anuOv .anu-inf-t { overflow: auto; min-height: 120px; max-width: 100%; font-size: 14px; line-height: 1.55; border-top: 1px solid var(--anu-line); padding-top: 10px; overflow-wrap: anywhere; }
+#anuOv .anu-inf-t h2 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0 0 6px; }
+#anuOv .anu-inf-t h3 { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--anu-mut); margin: 18px 0 6px; }
+#anuOv .anu-inf-t ul { margin: 0; padding-left: 20px; }
+#anuOv .anu-inf-t li { margin: 3px 0; }
+#anuOv .anu-inf-t p { margin: 4px 0; }
+#anuOv .anu-inf-t a { color: inherit; }
+@container anuview (max-width: 520px) {
+  #anuOv .anu-inf-sp { display: none; }
+  #anuOv .anu-inf-barra .anu-sel { flex: 1 1 100%; }
+  #anuOv .anu-inf-barra .anu-sel select { width: 100%; }
+}

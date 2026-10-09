@@ -80,6 +80,8 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
     for (const d of diasEntre(desde, hasta)) out.push(...(leerJSON(path.join(F.cifras, `${d}.json`), null)?.filas ?? []));
     return out;
   }
+  /** Fase A7 (9 oct 2026): cuántos días de ese tramo se llegaron a leer de Meta (con o sin gasto: un día leído sin filas no gastó). */
+  const diasLeidos = (desde, hasta) => diasEntre(desde, hasta).filter(d => fs.existsSync(path.join(F.cifras, `${d}.json`))).length;
 
   /** La vista del panel para un rango (el contrato de /api/anuncios, sin lo de la conexión: lo pone rutas.mjs). */
   function vista(rango = '7d') {
@@ -195,5 +197,5 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
   /** { id: ms } la última vez que se SUBIÓ el presupuesto de cada objeto desde la oficina (para «como mucho una vez cada 72 h»). */
   function subidas() { const out = {}; for (const e of historial()) if (e?.que === 'subir_presupuesto' && e.objeto?.id && !(e.objeto.id in out)) out[e.objeto.id] = Date.parse(e.at) || 0; return out; }
 
-  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, cuenta, estadoTexto, datosDiagnostico, subidas, filas: filasDesde };
+  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, cuenta, estadoTexto, datosDiagnostico, subidas, filas: filasDesde, diasLeidos };
 }

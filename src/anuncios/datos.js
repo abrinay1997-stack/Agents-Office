@@ -9,6 +9,11 @@
 import { crearDemo } from './demo.js';
 import { crearDemoBorradores } from './demo-borradores.js';
 import { crearDemoSugerencias } from './demo-sugerencias.js';
+import { TOPES_DEMO } from './demo.js';
+import { informeAnuncios, resumenDeVista } from '../../anuncios/informe.mjs';
+// Fases A6 y A7 (9 oct 2026): MEDIR. Servida: POST /api/anuncios/indicadores (→ { ok, creados, ya, motivo? }; GET /api/anuncios ya trae
+// `indicadores`) y GET|POST /api/anuncios/informe?mes= (→ { titulo, texto, cifras, nota? }). En el ejemplo, el MISMO informe
+// (anuncios/informe.mjs, puro) con los datos de ejemplo: solo el mes en curso tiene cifras (los demás, «sin datos»), y no se guarda nada.
 // Fase A5 (9 oct 2026): las SUGERENCIAS. Servida: GET /api/anuncios/sugerencias → { items, cpaObjetivo, sinObjetivo, umbrales? },
 // POST …/<id>/aplicar (→ { ok, hecho, deshacer } · { confirmar } si gasta · { ok, borrador } · { ok, tarea }), …/<id>/descartar y
 // …/<id>/posponer { dias }. El «Sí» de una que gasta va por /api/anuncios/accion con `sugerencia: <id>`. En el ejemplo,
@@ -39,10 +44,12 @@ export function crearDatos({ servida }) {
     } catch { return { status: 0, error: 'red', motivo: 'No se pudo hablar con la oficina: revisa que siga abierta y vuelve a intentarlo.' }; }
   };
   const ej = ejemplo => !servida || ejemplo;
+  const demoInd = { gasto: false, costo: false, roas: false, roasPosible: { puede: false, motivo: 'El ROAS no se creó: el ejemplo no tiene píxel de Meta. Sin píxel, Meta no sabe qué se vendió por los anuncios (y un ROAS de 0 mentiría).' } };
+  const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return {
     demo: !servida,
     async leer(rango, { ejemplo = false } = {}) {
-      if (ej(ejemplo)) return demo.vista(rango);
+      if (ej(ejemplo)) return { ...demo.vista(rango), indicadores: { ...demoInd } };
       return (await pedir(`/api/anuncios?rango=${encodeURIComponent(rango)}&abierto=1`)).j;
     },
     /** → 'leyendo' (202) · 'ya' (409, ya estaba leyendo) · 'ejemplo' */
@@ -67,6 +74,22 @@ export function crearDatos({ servida }) {
       const r = demo.deshacer({ token }); if (r.ok) demoS.alDeshacer(token);
       return r;
     },
+    /* ---- A6: los indicadores de «Cómo va el negocio» (solo el dueño) ---- */
+    crearIndicadores({ ejemplo = false } = {}) {
+      if (!ej(ejemplo)) return llamar('/api/anuncios/indicadores', 'POST');
+      const creados = [['gasto', 'meta_gasto_anuncios'], ['costo', 'meta_costo_resultado']].filter(([k]) => !demoInd[k]).map(([k, id]) => { demoInd[k] = true; return id; });
+      return { status: 200, ok: true, creados, ya: creados.length ? [] : ['meta_gasto_anuncios', 'meta_costo_resultado'], motivo: demoInd.roasPosible.motivo, ejemplo: true };
+    },
+    /* ---- A7: el informe del mes ---- */
+    async informe(mes, { ejemplo = false } = {}) {
+      if (!ej(ejemplo)) return llamar(`/api/anuncios/informe?mes=${encodeURIComponent(mes)}`);
+      const hoy = ymd(new Date());
+      try {
+        const sug = demoS.lista();
+        return { status: 200, ...informeAnuncios({ mes, hoy, moneda: 'USD', resumen: mes === hoy.slice(0, 7) ? resumenDeVista(demo.vista('mes')) : null, historial: demo.historial().items, sugerencias: sug.items || [], topes: { mensual: TOPES_DEMO.mensual } }), ejemplo: true };
+      } catch (e) { return { status: e.status || 400, motivo: e.message }; }
+    },
+    guardarInforme: (mes, { ejemplo = false } = {}) => (ej(ejemplo) ? { status: 409, motivo: 'en el ejemplo no se guarda nada en el Cerebro. Con la oficina abierta y tu cuenta, «Guardar en el Cerebro» deja la nota en Agents Office/informes/.' } : llamar('/api/anuncios/informe', 'POST', { mes })),
     /* ---- A5: las sugerencias ---- */
     sugerencias: ({ ejemplo = false } = {}) => (ej(ejemplo) ? demoS.lista() : llamar('/api/anuncios/sugerencias')),
     aplicarSugerencia: (id, { ejemplo = false } = {}) => (ej(ejemplo) ? demoS.aplicar(id) : llamar(`/api/anuncios/sugerencias/${encodeURIComponent(id)}/aplicar`, 'POST')),
