@@ -434,6 +434,7 @@ body.dark .bj-sug { background: #3A2E10; color: #F5D78A; }
 .bj-anf[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
 :is(.bj-det, .bj-sug, .bj-undo, .bj-filtros) :is(button, a):focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .bj-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.bj-sinmsg .pz-lk { display: inline-block; color: inherit; } /* B2: la franja sin acceso a los mensajes */
 .bj-shield { margin: 0; padding: 8px 10px; border-radius: 10px; background: #FDECEA; color: #8C1D18; font-size: 12.5px; }
 body.dark .bj-shield { background: #3B1715; color: #FFB4AB; }
 body.dark .bj-it.sos { border-left-color: #FF8A80; }

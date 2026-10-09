@@ -112,6 +112,23 @@ test('la Bandeja: comentar, ocultar, y la ventana de 24 h de los mensajes', asyn
   assert.equal(fuera.error.error_subcode, 2018278);
 });
 
+test('la Bandeja (B2): la lista da id y updated_time, los mensajes van aparte (20 como mucho), lo enviado vuelve en el hilo, y el acceso avanzado', async () => {
+  const ahora = Date.UTC(2026, 9, 8, 15);
+  const g = crearMetaStand(); g.st.reloj = ahora;
+  const msgs = Array.from({ length: 25 }, (_, i) => ({ id: `m${i}`, message: `hola ${i}`, from: { id: 'IGSID1', username: 'ana' }, to: { data: [{ id: 'IG1' }] }, created_time: new Date(ahora - (30 - i) * 60e3).toISOString(), attachments: { data: [{ image_data: { url: 'https://lookaside.fbsbx.com/x.jpg' } }] } }));
+  g.st.conversaciones = [{ id: 't1', platform: 'instagram', messages: { data: msgs } }];
+  const l = await pedir(g, 'GET', '/P1/conversations?platform=instagram&fields=id,updated_time');
+  assert.deepEqual(Object.keys(l.data[0]).sort(), ['id', 'updated_time']); assert.equal(l.data[0].updated_time, msgs[24].created_time);
+  const c = await pedir(g, 'GET', '/t1?fields=messages.limit(20){id,created_time,from,to,message,attachments}');
+  assert.equal(c.messages.data.length, 20); assert.equal(c.messages.data[0].id, 'm24', 'los más recientes primero'); assert.ok(c.messages.data[0].attachments);
+  assert.equal((await pedir(g, 'GET', '/t1?fields=messages{id,message}')).messages.data[0].attachments, undefined);
+  assert.ok((await pedir(g, 'POST', '/P1/messages', { recipient: { id: 'IGSID1' }, messaging_type: 'RESPONSE', message: { text: 'Claro' } })).message_id, 'sin participants: el cliente sale de los mensajes');
+  assert.equal(g.st.conversaciones[0].messages.data.at(-1).from.id, 'IG1', 'lo enviado vuelve en el hilo con el from de la cuenta');
+  assert.equal((await pedir(g, 'POST', '/P1/messages', { recipient: { id: 'IGSID1' }, messaging_type: 'RESPONSE', message: { text: 'x'.repeat(1000) } })).error.code, 100, 'el texto, de menos de 1.000 caracteres');
+  g.st.fallar.adjuntos = true; assert.equal((await pedir(g, 'GET', '/t1?fields=messages{id,attachments}')).error.code, 100);
+  g.st.fallar.sinAccesoMensajes = true; assert.equal((await pedir(g, 'GET', '/P1/conversations?platform=instagram')).error.code, 10);
+});
+
 test('la Bandeja (B1): respuestas anidadas, lo propio con su from, no se responde a un oculto ni a una respuesta, Facebook con is_hidden', async () => {
   const g = crearMetaStand();
   g.st.comentarios.M1 = [{ id: 'c1', text: '¿Precio?', username: 'ana' }, { id: 'c2', text: 'spam', username: 'bot' }];

@@ -58,6 +58,7 @@ export const FIELDS = [
   { path: 'telegram.notify.failures', group: 'avisos', type: 'bool', label: 'Avisar de tareas que fallan' },
   { path: 'telegram.notify.done', group: 'avisos', type: 'bool', label: 'Avisar de cada tarea terminada' },
   { path: 'telegram.notify.comentarios', group: 'avisos', type: 'bool', label: 'Avisar de comentarios nuevos en mis redes', default: true, help: 'Uno cada 15 minutos como mucho («y N más»), respetando el no molestar. Solo los que trae Meta.' },
+  { path: 'telegram.notify.mensajes', group: 'avisos', type: 'bool', label: 'Avisar de mensajes privados nuevos (Instagram y Messenger)', default: true, help: 'Con cuánto queda para responder (Meta da 24 horas desde el último mensaje del cliente). Uno cada 15 minutos como mucho, respetando el no molestar. Necesita el acceso avanzado de Meta.' },
   { path: 'telegram.notify.notices', group: 'avisos', type: 'bool', label: 'Avisar de los avisos de la oficina' },
   { path: 'deputy.weekly', group: 'avisos', type: 'bool', label: 'Informe semanal de Dimitri el lunes', help: 'Cómo fue la semana, qué decidir; llega a los avisos y a Telegram.' },
   { path: 'tools.web', group: 'conectores', type: 'bool', label: 'Búsqueda web para los agentes', restart: true },

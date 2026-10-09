@@ -4,6 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { accionesDe, fuenteDe, fuentesDe, filtrarBandeja, publicacionDe, restante, OCULTO_NO_RESPONDE } from '../src/contenido-bandeja.js';
 import { crearDatos } from '../src/contenido-datos.js';
+import { ventanaDe, esConversacion, ultimoMensaje, VENTANA_CERRADA } from '../src/contenido-bandeja.js'; // B2
+import { medir, bytesUtf8, imagenDeMeta, adjuntoDe, htmlConversacion, ordenados, LIMITE } from '../src/contenido-conversacion.js'; // B2 (va en el paquete del editor)
 
 const com = o => ({ id: 'comentarios:1', tipo: 'comentarios', fuente: 'meta', red: 'instagram', autor: 'ana', texto: 'hola', estado: 'nuevo', oculto: false, enAnuncio: null, padre: null, sugerirOcultar: null, ...o });
 
@@ -86,4 +88,92 @@ test('la demo: hay de todo, ocultar deja DESHACER, un oculto no se responde (409
   assert.equal(m.oculto, false); assert.ok(m.sugerirOcultar, 'la sugerencia vuelve con el deshacer');
   await assert.rejects(d.bandejaDeshacer(o.deshacer.token), /ya pasó/);
   await assert.rejects(d.bandejaOcultar('resenas:d3', true), /solo se ocultan/);
+});
+
+/* ---------- Fase B2 (9 oct 2026): las conversaciones privadas ---------- */
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const AHORA = Date.parse('2026-10-09T12:00:00Z');
+const conv = o => ({ id: 'meta:conv:1', tipo: 'conversaciones', fuente: 'meta', red: 'instagram', autor: 'ana', estado: 'nuevo', borrador: null, sospecha: '',
+  mensajes: [{ id: 'b', de: 'tu', texto: 'Hola', at: '2026-10-09T10:00:00Z', adjuntos: [] }, { id: 'a', de: 'cliente', texto: '¿Precio?', at: '2026-10-09T09:00:00Z', adjuntos: [] }, { id: 'c', de: 'cliente', texto: 'Este', at: '2026-10-09T11:00:00Z', adjuntos: [{ tipo: 'image', url: 'https://scontent.cdninstagram.com/x.jpg' }] }],
+  ventana: { abierta: true, hasta: new Date(Date.now() + 5 * 3600e3 + 30e3).toISOString(), quedaMin: 300 }, ...o });
+
+test('B2 · la ventana de 24 h → texto: horas, minutos, cerrada, y quedaMin contado desde que llegó', () => {
+  const v = ventanaDe({ abierta: true, hasta: new Date(AHORA + 5 * 3600e3 + 30e3).toISOString() }, AHORA);
+  assert.equal(v.abierta, true); assert.equal(v.texto, 'Puedes responder durante 5 h más.'); assert.equal(v.corto, 'quedan 5 h');
+  assert.equal(ventanaDe({ abierta: true, hasta: new Date(AHORA + 80 * 60e3).toISOString() }, AHORA).texto, 'Puedes responder durante 1 h 20 min más.');
+  assert.equal(ventanaDe({ abierta: true, hasta: new Date(AHORA + 40 * 60e3).toISOString() }, AHORA).corto, 'quedan 40 min');
+  const c = ventanaDe({ abierta: false, hasta: null }, AHORA);
+  assert.deepEqual([c.abierta, c.texto, c.corto], [false, VENTANA_CERRADA, 'ventana cerrada']);
+  assert.equal(ventanaDe({ abierta: true, hasta: new Date(AHORA - 1).toISOString() }, AHORA).abierta, false, 'pasada la hora, se cerró aunque diga abierta');
+  assert.equal(ventanaDe({ abierta: true, quedaMin: 300 }, AHORA + 60 * 60e3, AHORA).corto, 'quedan 4 h', 'sin «hasta», quedaMin desde que llegó');
+  assert.equal(ventanaDe({ abierta: true, quedaMin: null, hasta: null }, AHORA).corto, 'ventana abierta');
+  assert.equal(ventanaDe(null).abierta, false);
+});
+
+test('B2 · el contador: menos de 1.000 caracteres y 1.000 bytes UTF-8 como mucho', () => {
+  assert.equal(LIMITE, 1000);
+  assert.equal(medir('a'.repeat(999)).ok, true); assert.equal(medir('a'.repeat(1000)).ok, false, '1.000 ya no: Meta pide MENOS de 1.000');
+  assert.match(medir('a'.repeat(1000)).motivo, /quita 1\./);
+  assert.equal(bytesUtf8('ñ'), 2); assert.equal(bytesUtf8('😀'), 4); assert.equal(medir('😀').chars, 1, 'un emoji es un carácter');
+  const x = medir('ñ'.repeat(501));
+  assert.deepEqual([x.chars, x.bytes, x.ok], [501, 1002, false]); assert.match(x.texto, /bytes/); assert.match(x.motivo, /bytes/);
+  assert.equal(medir('ñ'.repeat(500)).ok, true, '1.000 bytes justos sí');
+  assert.doesNotMatch(medir('hola').texto, /bytes/, 'los bytes solo se dicen si pasan');
+  assert.equal(medir('').ok, true); assert.equal(medir(null).chars, 0);
+});
+
+test('B2 · solo se ven las imágenes de Meta; las demás, «Envió una imagen» con su enlace', () => {
+  assert.equal(imagenDeMeta('https://scontent.cdninstagram.com/a.jpg'), true);
+  assert.equal(imagenDeMeta('https://scontent-mia3-1.xx.fbcdn.net/a.jpg'), true);
+  assert.equal(imagenDeMeta('https://fbcdn.net/a.jpg'), true);
+  assert.equal(imagenDeMeta('http://scontent.cdninstagram.com/a.jpg'), false, 'solo https');
+  assert.equal(imagenDeMeta('https://cdninstagram.com.malo.test/a.jpg'), false);
+  assert.equal(imagenDeMeta('https://malofbcdn.net/a.jpg'), false);
+  assert.equal(imagenDeMeta('javascript:alert(1)'), false); assert.equal(imagenDeMeta(''), false);
+  assert.deepEqual(adjuntoDe({ tipo: 'image', url: 'https://x.fbcdn.net/a.jpg' }), { forma: 'imagen', url: 'https://x.fbcdn.net/a.jpg' });
+  assert.deepEqual(adjuntoDe({ tipo: 'image', url: 'https://ejemplo.test/a.png' }), { forma: 'aviso', url: 'https://ejemplo.test/a.png', tipo: 'image' });
+  assert.equal(adjuntoDe({ tipo: 'image', url: 'javascript:alert(1)' }).url, '', 'un enlace raro no se ofrece');
+  assert.equal(adjuntoDe({ tipo: 'file', url: 'https://x.test/a.pdf' }).forma, 'archivo');
+});
+
+test('B2 · qué se ofrece: con la ventana abierta, Enviar; cerrada, no (y dice por qué)', () => {
+  assert.equal(esConversacion(conv()), true); assert.equal(esConversacion(conv({ fuente: 'metricool' })), false); assert.equal(esConversacion(com()), false);
+  const a = accionesDe(conv());
+  assert.equal(a.ventana.abierta, true); assert.equal(a.responder.puede, true); assert.equal(a.ocultar, null, 'una conversación no se oculta');
+  assert.deepEqual(accionesDe(conv({ ventana: { abierta: false, hasta: null, quedaMin: null } })).responder, { puede: false, motivo: VENTANA_CERRADA });
+  assert.equal(accionesDe(conv({ estado: 'respondido' })).responder.puede, false);
+  assert.equal(accionesDe(com()).ventana, null, 'un comentario no tiene ventana');
+  const h = htmlConversacion(conv(), { esc, id: 'x' });
+  assert.match(h, /data-bja="enviar"/); assert.match(h, /Puedes responder durante 5 h más/); assert.match(h, /de 1\.000 caracteres/);
+  const hc = htmlConversacion(conv({ ventana: { abierta: false } }), { esc, id: 'x' });
+  assert.doesNotMatch(hc, /data-bja="enviar"/, 'cerrada: Enviar no se ofrece'); assert.match(hc, /La ventana de 24 h se cerró/); assert.match(hc, /No se ofrece «Enviar»/);
+  assert.match(hc, /data-bja="descartar"/, 'descartar sí');
+  const hl = htmlConversacion(conv({ borrador: { texto: 'a'.repeat(1000) } }), { esc, id: 'x' });
+  assert.match(hl, /data-bja="enviar"[^>]*aria-disabled="true"/, 'pasado el límite, Enviar dice que no (y por qué, en el contador)');
+});
+
+test('B2 · el hilo: en orden, lo tuyo a un lado, la imagen de Meta, y el 🛡', () => {
+  const m = conv({ sospecha: 'pide datos' });
+  assert.deepEqual(ordenados(m).map(x => x.id), ['a', 'b', 'c']); assert.equal(ultimoMensaje(m).id, 'c');
+  const h = htmlConversacion(m, { esc, id: 'x' });
+  assert.ok(h.indexOf('¿Precio?') < h.indexOf('Hola') && h.indexOf('Hola') < h.indexOf('Este'));
+  assert.match(h, /class="bj-msg tu"/); assert.match(h, /class="bj-msg cli"/);
+  assert.match(h, /<img data-bjimg src="https:\/\/scontent\.cdninstagram\.com\/x\.jpg"/); assert.match(h, /🛡/);
+  const otra = htmlConversacion(conv({ mensajes: [{ id: 'z', de: 'cliente', texto: '', at: '2026-10-09T11:00:00Z', adjuntos: [{ tipo: 'image', url: 'https://ejemplo.test/a.png' }] }] }), { esc, id: 'x' });
+  assert.doesNotMatch(otra, /<img/); assert.match(otra, /Envió una imagen/); assert.match(otra, /href="https:\/\/ejemplo\.test\/a\.png"/);
+  assert.doesNotMatch(htmlConversacion(conv({ autor: '<b>x</b>' }), { esc, id: 'x' }), /<b>x<\/b>/, 'el nombre se escapa');
+});
+
+test('B2 · la demo: una de IG abierta con imagen, una de Messenger cerrada con 🛡; enviar con las mismas reglas', async () => {
+  const d = crearDatos({ served: false });
+  const cs = (await d.bandeja({ tipo: 'conversaciones' })).items;
+  const ig = cs.find(x => x.red === 'instagram'), fb = cs.find(x => x.red === 'facebook');
+  assert.ok(ig && fb && esConversacion(ig) && esConversacion(fb));
+  assert.equal(ventanaDe(ig.ventana).abierta, true); assert.ok(ig.mensajes.some(x => x.adjuntos.some(a => imagenDeMeta(a.url))));
+  assert.equal(ventanaDe(fb.ventana).abierta, false); assert.ok(fb.sospecha);
+  await assert.rejects(d.bandejaAccion(fb.id, 'enviar', 'hola'), e => e.status === 409 && e.message === 'ventana' && /24 h/.test(e.motivo));
+  await assert.rejects(d.bandejaAccion(ig.id, 'enviar', 'a'.repeat(1000)), e => e.status === 422 && /1\.000/.test(e.motivo));
+  await assert.rejects(d.bandejaAccion(ig.id, 'enviar', 'ñ'.repeat(501)), e => e.status === 422);
+  const n = ig.mensajes.length, x = await d.bandejaAccion(ig.id, 'enviar', 'Sí, lo tenemos.');
+  assert.equal(x.item.estado, 'respondido'); assert.equal(x.item.mensajes.length, n + 1); assert.equal(ultimoMensaje(x.item).de, 'tu');
 });

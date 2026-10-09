@@ -148,7 +148,8 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (bj[2] && req.method === 'POST') {
           if (b.por === 'agente') return json(res, 403, { error: bj[2] === 'ocultar' ? 'los agentes no ocultan ni muestran comentarios: pueden sugerirlo (sugerir_ocultar_comentario) y lo decide el dueño' : 'los agentes no envían ni descartan respuestas: dejan el borrador y el dueño decide' }), true;
           const r = bj[2] === 'enviar' ? await bandeja.enviar(id, b.texto, { forzar: b.forzar === true }) : bj[2] === 'ocultar' ? await bandeja.ocultar(id, b.ocultar !== false) : bj[2] === 'descartar' ? bandeja.descartar(id) : bandeja.reabrir(id);
-          return json(res, r.error ? (r.nada ? 404 : 409) : 200, r), true;
+          const { status, ...rr } = r; // B2: 409 «ventana» (fuera de las 24 h) y 422 (texto vacío o de 1.000 caracteres o más) traen su código
+          return json(res, rr.error ? (status || (rr.nada ? 404 : 409)) : 200, rr), true;
         }
       }
       if (p === '/api/contenido/mejor-hora' && req.method === 'GET') { // plan M3: la tabla 7 × 24 de las redes pedidas y de dónde sale

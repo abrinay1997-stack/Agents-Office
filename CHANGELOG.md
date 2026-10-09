@@ -1,5 +1,15 @@
 # Changelog
 
+## La Bandeja con Meta, Fase B2: los mensajes privados — 9 oct 2026
+
+- **Los mensajes privados de Instagram y Messenger** llegan a la Bandeja como conversaciones. Ves el hilo con la hora de cada mensaje y las imágenes que te mandan (solo si vienen de Meta).
+- **La ventana de 24 horas, siempre a la vista:** «puedes responder durante 5 h más». Si se cierra, la oficina **no deja responder** (lo frena el servidor, sin llamar a Meta) y dice por qué. Si el cliente vuelve a escribir, se abre otra vez.
+- **Responder** es tuyo, con el segundo clic y una sola vez. El texto tiene un límite de 1.000 caracteres, con contador. El agente deja el borrador.
+- **Sin el acceso avanzado de Meta**, que es obligatorio para leer los mensajes de tus clientes, una franja dice qué falta y cómo pedirlo. Los comentarios siguen llegando.
+- **Telegram** avisa de mensajes nuevos con lo que te queda para responder, sin saturarte.
+- `scripts/check-meta-bandeja.mjs` lee también las conversaciones con el token real, sin enviar nada.
+- La conversación viaja en el paquete del editor: la página principal solo crece 4,9 KB.
+
 ## Anuncios de Meta, Fase A4: impulsar lo que ya salió — 9 oct 2026
 
 - **«Impulsar»** en una pieza ya publicada de Contenido (un botón por red si salió en las dos) y en «Las que más movieron» de Analíticas. Abre Anuncios con un borrador de campaña que usa **esa misma publicación**: no hay que subir nada ni reescribir el texto, solo elegir la llamada a la acción. Por defecto: «que me escriban», Advantage+, US$5 al día y 7 días.

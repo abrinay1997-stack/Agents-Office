@@ -50,7 +50,9 @@ const ESTADOS = ['ACTIVE', 'PAUSED', 'ARCHIVED', 'DELETED'];
  *                                     A3: trasConjunto (crea el conjunto y NO contesta nunca: la oficina «se cae» entre el conjunto y el anuncio),
  *                                     crearAnuncio: n (los n próximos anuncios dan error 100), sinFiltro (la lista no admite `filtering`),
  *                                     A4: noImpulsable: { <id del medio de IG>: 'motivo' } (boost_eligibility_info dice que no; crear su creativo da
- *                                     error), noIG: [<id del post de FB>] (is_instagram_eligible: false; con instagram_user_id, su creativo da error) }
+ *                                     error), noIG: [<id del post de FB>] (is_instagram_eligible: false; con instagram_user_id, su creativo da error),
+ *                                     B2: sinAccesoMensajes (las conversaciones dan el error de permiso que daría Meta sin el acceso avanzado:
+ *                                     POR VERIFICAR el código exacto), adjuntos (un mensaje no admite `attachments`: error 100) }
  * @param {object}   [o.uso]          { app, negocio, cuenta, recuperarMin }: porcentajes que salen en las cabeceras de uso
  * @param {Function} [o.torcer]       (llamada, st) → Response | null
  * @param {string}   [o.rupload]      el origen que hace de rupload.facebook.com
@@ -390,16 +392,24 @@ export function crearMetaStand(o = {}) {
       (st.comentarios[com[1]] ??= []).push({ id, text: campos.message, message: campos.message, mio: true, timestamp: new Date(st.reloj).toISOString(), created_time: new Date(st.reloj).toISOString(), ...propio });
       return json({ id });
     }
+    // B2 (verificado el 9 oct 2026, §13.10): la lista da id y updated_time; los mensajes, en /<conversación>?fields=messages{…} (los 20 últimos)
     if (metodo === 'GET' && ruta === '/P1/conversations') {
+      if (st.fallar.sinAccesoMensajes) return errorGraph('(#10) Application does not have permission for this action', 10); // POR VERIFICAR: el código exacto
       const plataforma = q.get('platform') || 'messenger';
-      return json({ data: st.conversaciones.filter(c => (c.platform ?? 'messenger') === plataforma) });
+      const ultima = c => c.updated_time ?? new Date(Math.max(0, ...(c.messages?.data ?? []).map(m => Date.parse(m.created_time) || 0))).toISOString();
+      return json({ data: st.conversaciones.filter(c => (c.platform ?? 'messenger') === plataforma).map(c => ({ id: c.id, updated_time: ultima(c) })) });
     }
     if (metodo === 'POST' && ruta === '/P1/messages') {
-      const para = objeto(campos.recipient)?.id, conv = st.conversaciones.find(c => c.participants?.data?.some(p => p.id === para));
+      const participa = (c, id) => c.participants?.data?.some(p => p.id === id) || (c.messages?.data ?? []).some(m => m.from?.id === id || m.to?.data?.some(t => t.id === id));
+      const para = objeto(campos.recipient)?.id, conv = st.conversaciones.find(c => participa(c, para));
       if (!conv) return errorGraph('(#100) No matching user found', 100, { error_subcode: 2018001 });
+      const texto = objeto(campos.message)?.text;
+      if (typeof texto === 'string' && (texto.length >= 1000 || Buffer.byteLength(texto, 'utf8') > 1000)) return errorGraph('(#100) Length of param message[text] must be less than or equal to 1000', 100);
       const delCliente = (conv.messages?.data ?? []).filter(m => m.from?.id === para).map(m => Date.parse(m.created_time)).sort((a, b) => b - a)[0] ?? 0;
       if (st.reloj - delCliente > 24 * 3600e3 && objeto(campos.message) && campos.tag !== 'HUMAN_AGENT') return errorGraph('(#10) This message is sent outside of allowed window.', 10, { error_subcode: 2018278 });
-      const mid = nuevo('mid'); st.enviados.push({ mid, para, texto: objeto(campos.message)?.text, tipo: campos.messaging_type, tag: campos.tag });
+      const mid = nuevo('mid'); st.enviados.push({ mid, para, texto, tipo: campos.messaging_type, tag: campos.tag });
+      const cuando = new Date(st.reloj).toISOString(), propio = (conv.platform ?? 'messenger') === 'instagram' ? { id: 'IG1', username: 'panaclaw' } : { id: 'P1', name: 'PanaClaw' };
+      (conv.messages ??= { data: [] }).data.push({ id: mid, message: texto, from: propio, to: { data: [{ id: para }] }, created_time: cuando }); // vuelve en la siguiente lectura (y cambia el updated_time de la lista)
       return json({ recipient_id: para, message_id: mid });
     }
 
@@ -411,6 +421,13 @@ export function crearMetaStand(o = {}) {
       if (coment && (campos.hide !== undefined || campos.is_hidden !== undefined)) { const ocultar = String(campos.hide ?? campos.is_hidden) === 'true'; if (campos.hide !== undefined) coment.hidden = ocultar; else coment.is_hidden = ocultar; if (ocultar) st.ocultos.push(id); else st.mostrados = [...(st.mostrados || []), id]; return json({ success: true }); }
     }
     if (metodo === 'GET') {
+      const conv = st.conversaciones.find(c => c.id === id);
+      if (conv) { // B2: los mensajes de una conversación, los más recientes primero, como mucho 20
+        const f = String(q.get('fields') || '');
+        if (f.includes('attachments') && st.fallar.adjuntos) return errorGraph('(#100) Tried accessing nonexisting field (attachments)', 100);
+        const datos = [...(conv.messages?.data ?? [])].sort((a, b) => Date.parse(b.created_time) - Date.parse(a.created_time)).slice(0, 20).map(m => { const x = { ...m }; if (!f.includes('attachments')) delete x.attachments; return x; });
+        return json({ id, messages: { data: datos } });
+      }
       if (String(q.get('fields') || '').includes('is_instagram_eligible') && /^\w+_\w+$/.test(id)) return json({ id, is_instagram_eligible: !(st.fallar.noIG ?? []).includes(id) }); // A4: un post de la página
       if (st.campanas[id]) return json(vista(st.campanas[id]));
       if (st.conjuntos[id]) return json(vista(st.conjuntos[id]));

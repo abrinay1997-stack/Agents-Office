@@ -1,0 +1,24 @@
+/* Fase B2 (9 oct 2026): la conversación privada abierta en la Bandeja. Viaja con dist/pieza-editor.js (CSS_PIEZA de build-pieza.mjs). */
+.bj-vent { margin: 0; padding: 8px 10px; border-radius: 10px; background: #E7F4EF; color: #0E5A47; font-size: 12.5px; font-weight: 600; }
+.bj-vent.cerr { background: #FDECEA; color: #8C1D18; }
+body.dark .bj-vent { background: #12332A; color: #7FE0BE; }
+body.dark .bj-vent.cerr { background: #3B1715; color: #FFB4AB; }
+.bj-hilo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bj-msg { max-width: min(78%, 520px); padding: 8px 12px; border-radius: 14px; background: var(--cv-soft, rgba(21,20,20,.05)); border: 1px solid var(--hairline); color: var(--ink); font-size: 13.5px; line-height: 1.45; align-self: flex-start; border-bottom-left-radius: 4px; }
+.bj-msg.tu { align-self: flex-end; background: #E8EEFC; border-color: #B9C9F2; border-bottom-left-radius: 14px; border-bottom-right-radius: 4px; }
+body.dark .bj-msg.tu { background: #1C2A4A; border-color: #3A5288; }
+.bj-msg p { margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; }
+.bj-quien { display: block; font-size: 11.5px; color: var(--grey); }
+.bj-img { display: block; margin-top: 6px; border-radius: 10px; width: fit-content; }
+.bj-img img { display: block; max-width: min(240px, 100%); max-height: 240px; border-radius: 10px; object-fit: cover; }
+.bj-adj { display: block; margin-top: 4px; font-size: 12.5px; font-style: italic; }
+.bj-adj .pz-lk { display: inline-block; font-style: normal; }
+.bj-cc { margin: -2px 0 0; font-size: 12px; color: var(--grey); }
+.bj-cc.mal { color: #8C1D18; font-weight: 600; }
+body.dark .bj-cc.mal { color: #FFB4AB; }
+.bj-tag.vt { color: #0E5A47; }
+body.dark .bj-tag.vt { color: #7FE0BE; }
+.bj-tag.vt.oc { color: #8C1D18; }
+body.dark .bj-tag.vt.oc { color: #FFB4AB; }
+.bj-img:focus-visible, .bj-msg a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 600px) { .bj-msg { max-width: 88%; } }

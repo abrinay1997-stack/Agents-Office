@@ -405,7 +405,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
   // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
   let bjCargada = false;
-  const bj = initBandeja({ host: E.bj, datos, esc, note, onCount: n => { const b = E.mode.querySelector('.ct-nbj'); b.hidden = !n; b.textContent = n; b.setAttribute('aria-label', `${n} por responder`); } });
+  const bj = initBandeja({ host: E.bj, datos, esc, note, paquete: () => panel.herramientas(), onCount: n => { const b = E.mode.querySelector('.ct-nbj'); b.hidden = !n; b.textContent = n; b.setAttribute('aria-label', `${n} por responder`); } });
   /** plan M5 · U2: dos piezas de la cuadrícula del perfil se cambian el día y la hora; una aprobada vuelve a revisión, y DESHACER la reaprueba. */
   async function cambiarDeSitio(aId, bId) {
     const A = todasConocidas().find(p => p.id === aId), B = todasConocidas().find(p => p.id === bId); if (!A || !B || aId === bId) return;

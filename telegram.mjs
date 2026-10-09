@@ -6,7 +6,7 @@
 //   TELEGRAM_BOT_TOKEN   the bot's token from @BotFather            → setx TELEGRAM_BOT_TOKEN "123456789:AA…"
 //   TELEGRAM_OWNER_ID    who may use it: your numeric Telegram id    → setx TELEGRAM_OWNER_ID "123456789"  (several: "1,2")
 // Anyone else who writes to the bot is refused (and told their id, so the owner can add them on purpose).
-// office.config.json → "telegram": { "quiet": { "from": "21:00", "to": "07:00" }, "notify": { "approvals": true, "failures": true, "done": false, "notices": true, "comentarios": true } }
+// office.config.json → "telegram": { "quiet": { "from": "21:00", "to": "07:00" }, "notify": { "approvals": true, "failures": true, "done": false, "notices": true, "comentarios": true, "mensajes": true } }
 //
 // It polls Telegram (getUpdates): nothing is exposed, it works from the owner's own PC with no public address. Every action
 // goes through the office's own local API, so the same rules apply as in the page (the guard, the approvals, the logs).
@@ -111,7 +111,7 @@ export const approvalButtons = id => ({ inline_keyboard: [[{ text: '✅ Aprobar 
 export function start({ port, cfg, dataDir, onTask, onNotice, log = console, mediaRuta = () => null, nombreAgente = id => id }) {
   const token = String(process.env.TELEGRAM_BOT_TOKEN || '').trim(), who = owners();
   if (!configured()) return null;
-  const tg = { ...(cfg.telegram || {}) }, notify = { approvals: true, failures: true, done: false, notices: true, comentarios: true, ...(tg.notify || {}) }; // B1: comentarios = los comentarios nuevos de la Bandeja (Meta)
+  const tg = { ...(cfg.telegram || {}) }, notify = { approvals: true, failures: true, done: false, notices: true, comentarios: true, mensajes: true, ...(tg.notify || {}) }; // B1: comentarios = los comentarios nuevos de la Bandeja (Meta); B2: mensajes = los mensajes privados nuevos
   // V4.4 (G5): people who may approve for some departments only — office.config.local.json → telegram.approvers { "<id>": ["emails", "sales"] }
   const approvers = Object.fromEntries(Object.entries(tg.approvers || {}).filter(([id, d]) => /^-?\d+$/.test(id) && Array.isArray(d)).map(([id, d]) => [String(id), d.map(String)]));
   const isOwner = id => allowed(id, who), canApprove = (id, dept) => isOwner(id) || (approvers[String(id)] || []).includes(dept);
@@ -170,6 +170,7 @@ export function start({ port, cfg, dataDir, onTask, onNotice, log = console, med
     else if (t.state === 'done' && !t.error && notify.done) toOwners(`✓ <b>Lista</b> «${esc(t.title)}» (${esc(name)})\n${esc(String(t.result || '').slice(0, 700))}`);
   });
   onNotice(n => { if (n.kind === 'bandeja-comentario') { if (notify.comentarios) toOwners(esc(n.text)); return; } // B1: ya agrupados (uno cada 15 min, «y N más»); el no molestar los guarda
+    if (n.kind === 'bandeja-mensaje') { if (notify.mensajes) toOwners(esc(n.text)); return; } // B2: los mensajes privados, igual (sin el texto completo del cliente; un 🛡 no se cita)
     if (notify.notices && !['failed', 'contenido-borrador'].includes(n.kind)) toOwners(`${n.level === 'error' ? '🛑' : n.level === 'warn' ? '⚠' : 'ℹ'} ${esc(n.text)}`, n.kind === 'anuncios' ? botonesAnuncio(n) : {}, { urgent: n.level === 'error' }); }); // A2: un anuncio rechazado o con problemas trae ⏸ Pausar
   // A2: el segundo toque de un gasto. El token es el de la confirmación del SERVIDOR (anuncios/acciones.mjs: 2 minutos, un solo uso,
   // atado a ese tipo + id + valor); aquí solo se recuerda de qué era, para mandarlo igual. Si la oficina se reinicia, se olvida (y vence).
