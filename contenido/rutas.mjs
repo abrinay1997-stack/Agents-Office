@@ -65,7 +65,32 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
     return { desde, dias, redes, hora: { fuente: h?.fuente || 'ninguna', motivo: h?.motivo || '' }, huecos: repartir(hs, vs), vuelven: vs.map(x => ({ ...corta(x.pieza), resultado: x.resultado, ultima: x.ultima })), agente: quienLlena() || '' };
   }
 
-  return async function handle(req, res, url) {
+  handle.planLlenar = planLlenar; handle.llenar = llenar; handle.redesDe = redesDe;
+  return handle;
+  /** C3: crea lo elegido de «Llenar la semana» — las copias que vuelven (a revisión) y UNA tarea a Marketing con los demás huecos.
+   *  9 oct 2026: también la usan las ops de Dimitri y del asistente (serve.mjs → runOp), con el mismo plan que propone GET. */
+  async function llenar(b = {}) {
+    const redes = redesDe(b.redes), ahora = Date.now();
+    const hs = (Array.isArray(b.huecos) ? b.huecos : []).slice(0, 14).filter(h => h && /^\d{4}-\d{2}-\d{2}$/.test(h.fecha || '') && /^\d{2}:\d{2}$/.test(h.hora || '') && ['marketing', 'vuelve'].includes(h.que));
+    if (!hs.length) return { status: 400, error: 'elige al menos un hueco: un borrador nuevo de Marketing o algo que vuelve' };
+    const creadas = [], errores = [], paraMk = [];
+    for (const h of hs) {
+      if (new Date(`${h.fecha}T${h.hora}:00`).getTime() < ahora + 10 * 60e3) { errores.push(`${h.fecha} ${h.hora}: esa hora ya pasó o está demasiado cerca`); continue; }
+      if (h.que === 'marketing') { paraMk.push(h); continue; }
+      const o = almacen.leer(String(h.vuelve || '')); if (!o) { errores.push(`${h.fecha}: la pieza que iba a volver ya no está`); continue; }
+      const r = almacen.crear({ ...copiaDe(o), fecha: h.fecha, hora: h.hora, estado: 'revision', origen: origenVuelve(raizDe(o)) }, { por: 'dueno' }); // vuelve tal cual salió: lista para tu OK
+      if (r.error) errores.push(`${h.fecha}: ${r.error}`); else creadas.push(revisado(r.pieza));
+    }
+    let tarea = null;
+    if (paraMk.length) {
+      if (!encargar) errores.push('aquí no hay agentes: los huecos de Marketing quedan sin pedir');
+      else try { tarea = await encargar({ texto: encargo({ huecos: paraMk, redes, pide: b.pide, nombreRed: r => NOMBRE_RED[r] || r }), titulo: `Llenar la semana: ${paraMk.length} ${paraMk.length === 1 ? 'borrador' : 'borradores'} de Contenido` }); }
+      catch (e) { errores.push('no pude pedírselo a Marketing: ' + e.message); }
+    }
+    return { creadas, tarea, pedidos: paraMk.length, errores };
+  }
+
+  async function handle(req, res, url) {
     const p = url.pathname;
     if (p !== '/api/contenido' && !p.startsWith('/api/contenido/')) return false;
     try {
@@ -128,6 +153,7 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
       }
       const gd = /^\/api\/contenido\/guardados\/(.+)$/.exec(p);
       if (gd && req.method === 'DELETE') {
+        const b = await body(req).catch(() => ({})); if (b?.por === 'agente') return json(res, 403, { error: 'los textos guardados los decide el dueño' }), true;
         if (!guardados) return json(res, 404, { error: 'sin textos guardados' }), true;
         const r = guardados.borrar(decodeURIComponent(gd[1])); return json(res, r.error ? 404 : 200, r.error ? { error: r.error } : { ok: true, textos: r.lista }), true;
       }
@@ -169,24 +195,7 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
       }
       if (p === '/api/contenido/llenar' && req.method === 'POST') {
         const b = await body(req); if (b.por === 'agente') return json(res, 403, { error: 'llenar la semana es del dueño: un agente deja borradores con crear_borrador' }), true;
-        const redes = redesDe(b.redes), ahora = Date.now();
-        const hs = (Array.isArray(b.huecos) ? b.huecos : []).slice(0, 14).filter(h => h && /^\d{4}-\d{2}-\d{2}$/.test(h.fecha || '') && /^\d{2}:\d{2}$/.test(h.hora || '') && ['marketing', 'vuelve'].includes(h.que));
-        if (!hs.length) return json(res, 400, { error: 'elige al menos un hueco: un borrador nuevo de Marketing o algo que vuelve' }), true;
-        const creadas = [], errores = [], paraMk = [];
-        for (const h of hs) {
-          if (new Date(`${h.fecha}T${h.hora}:00`).getTime() < ahora + 10 * 60e3) { errores.push(`${h.fecha} ${h.hora}: esa hora ya pasó o está demasiado cerca`); continue; }
-          if (h.que === 'marketing') { paraMk.push(h); continue; }
-          const o = almacen.leer(String(h.vuelve || '')); if (!o) { errores.push(`${h.fecha}: la pieza que iba a volver ya no está`); continue; }
-          const r = almacen.crear({ ...copiaDe(o), fecha: h.fecha, hora: h.hora, estado: 'revision', origen: origenVuelve(raizDe(o)) }, { por: 'dueno' }); // vuelve tal cual salió: lista para tu OK
-          if (r.error) errores.push(`${h.fecha}: ${r.error}`); else creadas.push(revisado(r.pieza));
-        }
-        let tarea = null;
-        if (paraMk.length) {
-          if (!encargar) errores.push('aquí no hay agentes: los huecos de Marketing quedan sin pedir');
-          else try { tarea = await encargar({ texto: encargo({ huecos: paraMk, redes, pide: b.pide, nombreRed: r => NOMBRE_RED[r] || r }), titulo: `Llenar la semana: ${paraMk.length} ${paraMk.length === 1 ? 'borrador' : 'borradores'} de Contenido` }); }
-          catch (e) { errores.push('no pude pedírselo a Marketing: ' + e.message); }
-        }
-        return json(res, 200, { ok: true, creadas, tarea, pedidos: paraMk.length, errores }), true;
+        const r = await llenar(b); return json(res, r.status || 200, r.error ? { error: r.error } : { ok: true, ...r }), true;
       }
       if (p === '/api/contenido/cola' && req.method === 'GET') return json(res, 200, programador ? programador.estado() : { modo: 'apagado', entradas: {} }), true;
       if (p === '/api/contenido/cola/tick' && req.method === 'POST') { if (!programador) return json(res, 404, { error: 'sin cola' }), true; const u = await programador.tick(); return json(res, 200, { ok: true, ultimo: u, ...programador.estado() }), true; }
@@ -224,13 +233,14 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
           const b = await body(req);
           if (b.por === 'agente') { // un agente mejora sus borradores; lo que el dueño ya aprobó solo lo cambia el dueño
             const antes = almacen.leer(id); if (antes && antes.estado === 'aprobada') return json(res, 409, { error: 'esa pieza ya está aprobada: solo el dueño la cambia' }), true;
+            if (antes && !DE_AGENTE.has(antes.estado)) return json(res, 409, { error: 'esa pieza espera el OK del dueño: no se cambia mientras la revisa. Si hay que mejorarla, díselo en tu entrega (o que te la devuelva a borrador)' }), true; // 9 oct 2026: solo ideas y borradores
             delete b.estado; delete b.aprobada;
           }
           delete b.por; delete b.agente; delete b.id; delete b.creada;
           const r = almacen.guardar(id, b);
           return r.error ? (json(res, r.nada ? 404 : 400, { error: r.error }), true) : (json(res, 200, { ok: true, pieza: revisado(r.pieza), soltada: !!r.soltada }), true);
         }
-        if (!accion && req.method === 'DELETE') { const r = almacen.borrar(id); return r.error ? (json(res, 404, { error: r.error }), true) : (json(res, 200, { ok: true }), true); }
+        if (!accion && req.method === 'DELETE') { const b = await body(req).catch(() => ({})); if (b?.por === 'agente') return json(res, 403, { error: 'los agentes no borran piezas: es del dueño' }), true; const r = almacen.borrar(id); return r.error ? (json(res, 404, { error: r.error }), true) : (json(res, 200, { ok: true }), true); }
         if (accion && req.method === 'POST') {
           const b = await body(req);
           if (b.por === 'agente') return json(res, 403, { error: 'los agentes no aprueban ni devuelven piezas: es del dueño' }), true;

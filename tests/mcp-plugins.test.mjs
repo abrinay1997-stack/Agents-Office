@@ -154,3 +154,15 @@ test('revisión MCP: el reintento por un nombre largo solo corre si ninguna herr
   assert.equal(mcp.retryLong(e3, mcp.longToolNames().length), true);
   assert.equal(mcp.retryLong(new Error('Claude took longer than 300 s'), 0), false);
 });
+
+test('9 oct 2026: el MCP de la propia oficina (oficina-mcp.mjs, para el asistente del dueño) nunca llega a un agente, ni nombrándolo', () => {
+  const l = mcp.parseList('agents-office: node C:\\Users\\abri\\Agents-Office\\oficina-mcp.mjs - ✔ Connected\notro: node C:\\x\\oficina-mcp.mjs - ✔ Connected');
+  assert.ok(l.every(s => mcp.isOffice(s)), 'por su nombre y por su comando');
+  assert.equal(mcp.isOffice(mcp.parseList('gmail: https://gmail.example/mcp (HTTP) - ✔ Connected')[0]), false);
+  const file = path.join(TMP, 'cache-office.json');
+  fs.writeFileSync(file, JSON.stringify({ at: 1, servers: l.map(s => ({ raw: s.raw, name: s.name, target: s.target, status: s.status, detail: s.detail })) }));
+  mcp.configure({ tools: { browser: false }, mcp: { allow: ['agents-office'], departments: { 'agents-office': ['emails'], otro: ['emails'] } } }); mcp.useCache(file);
+  assert.ok(!mcp.allowedTools(emails).some(t => /agents-office|otro/.test(t)), mcp.allowedTools(emails).join());
+  assert.ok(mcp.summary().servers.filter(s => s.office).every(s => s.denied), 'en la barra se ve, bloqueado');
+  mcp.configure({ tools: { browser: false } }); mcp.useCache(first);
+});

@@ -93,12 +93,12 @@ test('ops: only the closed list, checked against the office; nothing that names 
     { type: 'rutina_crear', dept: 'emails', text: 'x', when: { kind: 'daily', at: '09:00' } }, // emails has no routines here
     { type: 'rutina_crear', dept: 'fin', text: 'x', when: { kind: 'minutes', every: 2 } },
     { type: 'rutina_saltar', id: 'facturas', at: '2026-10-05T09:00' }, { type: 'rutina_saltar', id: 'facturas', at: '2026-09-01T09:00' },
-    { type: 'pieza_crear', titulo: 'Combo', fecha: '2026-10-09', hora: '18:00', formato: 'reel', redes: ['Instagram', 'tiktok'], texto: 'Ven' },
+    { type: 'pieza_crear', titulo: 'Combo', fecha: '2026-10-09', hora: '18:00', formato: 'reel', redes: ['Instagram', 'tiktok', 'myspace'], texto: 'Ven' },
     { type: 'pieza_mover', id: 'p-1', fecha: '2026-10-10', hora: '25:00' }, { type: 'pieza_mover', id: 'p-9', fecha: '2026-10-10' },
     { type: 'tarea_mover', id: 't1', at: '2026-10-02T10:00' }, { type: 'tarea_cancelar', id: 't2' }, { type: 'aprobar_pieza', id: 'p-1' }, { type: 'publicar', id: 'p-1' }], ctx);
   assert.deepEqual(ops.map(o => o.type), ['rutina_crear', 'rutina_saltar', 'pieza_crear', 'pieza_mover', 'tarea_mover']);
   assert.equal(ops[0].agent, null, 'an agent from another department is not taken'); assert.deepEqual(ops[0].when.days, [1]); assert.equal(ops[0].needsOk, true);
-  assert.deepEqual(ops[2].redes, ['instagram']); assert.equal(ops[2].formato, 'reel');
+  assert.deepEqual(ops[2].redes, ['instagram', 'tiktok'], 'the nine networks of Contenido (9 oct 2026), never one it does not know'); assert.equal(ops[2].formato, 'reel');
   assert.equal(ops[3].hora, undefined, 'a wrong hour is dropped, the day kept');
   assert.ok(ops.every(o => o.state === 'proposed'));
   assert.ok(dropped.includes('aprobar_pieza') && dropped.includes('publicar') && dropped.includes('tarea_cancelar'), 'never approve or publish; a running task is not cancelled');

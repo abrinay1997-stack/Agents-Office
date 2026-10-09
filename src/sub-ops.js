@@ -12,7 +12,16 @@ const ymd = d => `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())
 const local = ms => { const d = new Date(ms); return `${ymd(d)}T${two(d.getHours())}:${two(d.getMinutes())}`; };
 const dayText = s => (s ? new Date(s + 'T12:00:00').toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }) : 'sin día');
 const whenText = ms => new Date(ms).toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-const whenWords = w => !w ? '' : w.kind === 'daily' ? `todos los días a las ${w.at}` : w.kind === 'weekdays' ? `de lunes a viernes a las ${w.at}` : `cada ${(w.days || []).map(d => DAYS.find(x => x[1] === d)?.[2]).filter(Boolean).join(', ')} a las ${w.at}`;
+const NTH = { 1: 'primer', 2: 'segundo', 3: 'tercer', 4: 'cuarto', 5: 'quinto', '-1': 'último' };
+const tail = w => `${w.end ? `, hasta el ${dayText(w.end)}` : ''}${w.count ? `, ${w.count} ${w.count === 1 ? 'vez' : 'veces'}` : ''}`;
+/** A routine's timetable in the owner's words — the monthly ones too (9 oct 2026: they read «cada  a las 09:00»). */
+export const whenWords = w => !w ? '' : (w.kind === 'daily' ? `todos los días a las ${w.at}` : w.kind === 'weekdays' ? `de lunes a viernes a las ${w.at}`
+  : w.kind === 'monthly' ? (w.nth ? `el ${NTH[w.nth] || w.nth + '.º'} ${DAYS.find(x => x[1] === w.weekday)?.[2] || ''} de cada mes a las ${w.at}` : w.day === -1 ? `el último día de cada mes a las ${w.at}` : `el día ${w.day} de cada mes a las ${w.at}`)
+  : `cada ${(w.days || []).map(d => DAYS.find(x => x[1] === d)?.[2]).filter(Boolean).join(', ')} a las ${w.at}`) + tail(w);
+const RED_CORTA = { instagram: 'IG', facebook: 'FB', linkedin: 'LinkedIn', x: 'X', threads: 'Threads', bluesky: 'Bluesky', tiktok: 'TikTok', pinterest: 'Pinterest', youtube: 'YouTube' };
+const PRIO = { alta: 'alta', media: 'media', baja: 'baja' };
+const RED_LARGA = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', x: 'X', threads: 'Threads', bluesky: 'Bluesky', tiktok: 'TikTok', pinterest: 'Pinterest', youtube: 'YouTube' };
+const limiteText = l => (l == null || l === '' ? 'sin fecha límite' : String(l).length > 10 ? `${dayText(String(l).slice(0, 10))} ${String(l).slice(11, 16)}` : dayText(l));
 /** Undoing a move gives the day and the hour back, not the OK the approved piece lost: the card says so (the owner approves again). */
 export const undoneNote = o => (o.type === 'pieza_mover' && o.soltada ? ' — sigue sin OK: vuelve a aprobarla en Contenido' : '');
 
@@ -21,21 +30,33 @@ export function opLabel(o, { esc = s => s, deptName = k => k } = {}) {
   switch (o.type) {
     case 'rutina_crear': return `Rutina nueva en ${esc(deptName(o.dept))}: «${esc(o.title || o.text)}»`;
     case 'rutina_saltar': return `Saltar la rutina «${esc(o.title || o.id)}» del ${esc(whenText(o.at))} (sin pausarla)`;
-    case 'pieza_crear': return `Borrador en Contenido: ${esc(dayText(o.fecha))}${o.hora ? ' · ' + esc(o.hora) : ''} · ${esc(o.formato)} ${esc((o.redes || []).map(r => (r === 'instagram' ? 'IG' : 'FB')).join('+'))} — «${esc(o.titulo)}»`;
+    case 'rutina_pausar': return `Pausar la rutina «${esc(o.title || o.id)}»`;
+    case 'rutina_reanudar': return `Reanudar la rutina «${esc(o.title || o.id)}»`;
+    case 'rutina_editar': return `Cambiar la rutina «${esc(o.title || o.id)}»${o.when ? ': ' + esc(whenWords(o.when)) : ''}${o.text ? ' · nuevo pedido' : ''}${o.needsOk === true ? ' · que espere tu OK' : o.needsOk === false ? ' · sin tu OK' : ''}`;
+    case 'rutina_ahora': return `Correr ahora la rutina «${esc(o.title || o.id)}»`;
+    case 'pieza_crear': return `Borrador en Contenido: ${esc(dayText(o.fecha))}${o.hora ? ' · ' + esc(o.hora) : ''} · ${esc(o.formato)} ${esc((o.redes || []).map(r => RED_CORTA[r] || r).join('+'))} — «${esc(o.titulo)}»`;
     case 'pieza_mover': return `Mover la pieza «${esc(o.titulo || o.id)}» al ${esc(dayText(o.fecha))}${o.hora ? ' · ' + esc(o.hora) : ''}`;
+    case 'contenido_llenar': return `Llenar la semana en Contenido: los días sin publicación de los próximos ${esc(o.dias || 7)} días${(o.redes || []).length ? ' en ' + esc(o.redes.map(r => RED_CORTA[r] || r).join('+')) : ''}`;
     case 'tarea_mover': return `Mover la tarea «${esc(o.title || o.id)}» al ${esc(whenText(o.at))}`;
     case 'tarea_cancelar': return `Cancelar la tarea «${esc(o.title || o.id)}»`;
+    case 'tarea_editar': return `${o.mia ? 'Tu tarea' : 'La tarea'} «${esc(o.title || o.id)}»: ${[o.prioridad ? `prioridad ${esc(PRIO[o.prioridad] || o.prioridad)}` : '', o.limite !== undefined ? `para el ${esc(limiteText(o.limite))}` : ''].filter(Boolean).join(' · ')}`;
+    case 'tarea_repetir': return `${o.fallo ? 'Reintentar' : 'Repetir'} la tarea «${esc(o.title || o.id)}»`;
+    case 'mia_delegar': return `Pasar tu tarea «${esc(o.title || o.id)}» a ${esc(deptName(o.dept))}${o.agentName ? ` (${esc(o.agentName)})` : ''}`;
+    case 'mia_hecha': return `Marcar hecha tu tarea «${esc(o.title || o.id)}»`;
     default: return '';
   }
 }
-const NOTE = { rutina_crear: 'Corre sola en su horario; puedes pausarla en el calendario (P).', pieza_crear: 'Nace como borrador: tú la apruebas en Contenido. Nada se publica.', pieza_mover: 'Si estaba aprobada, pierde el OK y la vuelves a aprobar.', tarea_cancelar: 'La tarea se borra. Tienes 30 s para deshacerlo.' };
+const NOTE = { rutina_crear: 'Corre sola en su horario; puedes pausarla en el calendario (P).', pieza_crear: 'Nace como borrador: tú la apruebas en Contenido. Nada se publica.', pieza_mover: 'Si estaba aprobada, pierde el OK y la vuelves a aprobar.', tarea_cancelar: 'La tarea se borra. Tienes 30 s para deshacerlo.',
+  rutina_pausar: 'Sigue en el calendario sin correr hasta que la reanudes.', rutina_reanudar: 'La próxima ejecución se cuenta desde ahora.', rutina_editar: 'La próxima ejecución se cuenta con el horario nuevo.', rutina_ahora: 'Empieza en seguida, fuera de su horario. Si el agente ya empezó, no se deshace.',
+  tarea_repetir: 'Una tarea nueva con el mismo pedido y el mismo escritorio.', mia_delegar: 'Sale de tu lista y el agente la empieza en seguida: en cuanto empiece, ya no se deshace.', mia_hecha: 'Si se repite, nace la siguiente; deshacer la quita.',
+  contenido_llenar: 'Lo que funcionó y no sale hace 8 semanas vuelve a revisar; el resto se lo pido a Marketing como borradores. Nada se aprueba ni se publica.' };
 
 /** The editable fields of a proposed op (days and hour of a routine, the day of a piece, the new time of a task…). */
 function fields(m, o, e, esc) {
   const id = `sop-${esc(m.id)}-${o.k}`;
   if (o.type === 'rutina_crear') {
     const w = { ...o.when, ...(e.when || {}) }, days = w.kind === 'weekly' ? w.days || [] : w.kind === 'weekdays' ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6];
-    return `<div class="so-days" role="group" aria-label="Días de la rutina">${DAYS.map(([l, d, name]) => `<button type="button" class="so-day" data-d="${d}" aria-pressed="${days.includes(d)}" aria-label="${name}">${l}</button>`).join('')}</div>
+    return `${w.kind === 'monthly' ? '' : `<div class="so-days" role="group" aria-label="Días de la rutina">${DAYS.map(([l, d, name]) => `<button type="button" class="so-day" data-d="${d}" aria-pressed="${days.includes(d)}" aria-label="${name}">${l}</button>`).join('')}</div>`}
       <div class="sc-row"><label class="sc-f"><span>Hora</span><input type="time" class="so-in" data-f="at" value="${esc(w.at || '09:00')}"></label>
       <label class="sc-f sc-chk"><input type="checkbox" class="so-in" data-f="needsOk"${(e.needsOk ?? o.needsOk) ? ' checked' : ''}> <span>Espera mi OK antes de enviar</span></label></div>
       <label class="sc-lab" for="${id}">Lo que se pide cada vez</label><textarea id="${id}" class="so-in so-text" data-f="text" rows="2">${esc(e.text ?? o.text)}</textarea>`;
@@ -43,9 +64,14 @@ function fields(m, o, e, esc) {
   if (o.type === 'pieza_crear') return `<div class="sc-row"><label class="sc-f"><span>Día</span><input type="date" class="so-in" data-f="fecha" value="${esc(e.fecha ?? o.fecha ?? '')}"></label>
       <label class="sc-f"><span>Hora</span><input type="time" class="so-in" data-f="hora" value="${esc(e.hora ?? o.hora ?? '')}"></label>
       <label class="sc-f"><span>Formato</span><select class="so-in" data-f="formato">${FORMATOS.map(f => `<option${f === (e.formato ?? o.formato) ? ' selected' : ''}>${f}</option>`).join('')}</select></label></div>
-      <div class="sc-row" role="group" aria-label="Redes">${['instagram', 'facebook'].map(r => `<label class="sc-f sc-chk"><input type="checkbox" class="so-red" value="${r}"${(e.redes ?? o.redes ?? []).includes(r) ? ' checked' : ''}> <span>${r === 'instagram' ? 'Instagram' : 'Facebook'}</span></label>`).join('')}</div>
+      <div class="sc-row" role="group" aria-label="Redes">${[...new Set(['instagram', 'facebook', ...(o.redes || [])])].map(r => `<label class="sc-f sc-chk"><input type="checkbox" class="so-red" value="${esc(r)}"${(e.redes ?? o.redes ?? []).includes(r) ? ' checked' : ''}> <span>${esc(RED_LARGA[r] || r)}</span></label>`).join('')}</div>
       <label class="sc-lab" for="${id}">Texto de la publicación</label><textarea id="${id}" class="so-in so-text" data-f="texto" rows="3">${esc(e.texto ?? o.texto ?? '')}</textarea>`;
   if (o.type === 'pieza_mover') return `<div class="sc-row"><label class="sc-f"><span>Día</span><input type="date" class="so-in" data-f="fecha" value="${esc(e.fecha ?? o.fecha)}"></label><label class="sc-f"><span>Hora</span><input type="time" class="so-in" data-f="hora" value="${esc(e.hora ?? o.hora ?? '')}"></label></div>`;
+  if (o.type === 'rutina_editar' && o.when) return `<div class="sc-row"><label class="sc-f"><span>Hora</span><input type="time" class="so-in" data-f="at" value="${esc(({ ...o.when, ...(e.when || {}) }).at || '09:00')}"></label></div>`;
+  if (o.type === 'tarea_editar') return `<div class="sc-row">${o.prioridad ? `<label class="sc-f"><span>Prioridad</span><select class="so-in" data-f="prioridad">${['alta', 'media', 'baja'].map(p => `<option${p === (e.prioridad ?? o.prioridad) ? ' selected' : ''}>${p}</option>`).join('')}</select></label>` : ''}${o.limite !== undefined ? `<label class="sc-f"><span>Fecha límite</span><input type="date" class="so-in" data-f="limite" value="${esc(String(e.limite ?? o.limite ?? '').slice(0, 10))}"></label>` : ''}</div>`;
+  if (o.type === 'mia_delegar') return `<label class="sc-lab" for="${id}">Nota para quien la hace</label><textarea id="${id}" class="so-in so-text" data-f="nota" rows="2">${esc(e.nota ?? o.nota ?? '')}</textarea>`;
+  if (o.type === 'contenido_llenar') return `<div class="sc-row"><label class="sc-f"><span>Días</span><select class="so-in" data-f="dias">${[3, 7, 10, 14].map(d => `<option value="${d}"${d === +(e.dias ?? o.dias ?? 7) ? ' selected' : ''}>${d}</option>`).join('')}</select></label></div>
+      <label class="sc-lab" for="${id}">Qué pedirle a Marketing (opcional)</label><textarea id="${id}" class="so-in so-text" data-f="pide" rows="2">${esc(e.pide ?? o.pide ?? '')}</textarea>`;
   if (o.type === 'tarea_mover') return `<div class="sc-row"><label class="sc-f"><span>Nueva hora</span><input type="datetime-local" class="so-in" data-f="at" value="${esc(local(e.at ?? o.at))}"></label></div>`;
   return '';
 }

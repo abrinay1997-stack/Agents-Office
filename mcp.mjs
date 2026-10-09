@@ -117,7 +117,10 @@ export function configure(cfg) {
 // a name the owner writes («Gmail»), the raw one («plugin:small-business:gmail»), the id or the key all name the same server
 export const matches = (s, x) => { const n = norm(x); return !!n && (norm(s.name) === n || norm(s.raw || '') === n || s.raw === x || s.id === x || s.key === n || toolId(x) === s.id); };
 const defaultDenied = s => DEFAULT_DENY.some(re => re.test(s.raw || '')) && !cfgMcp.allow.some(x => matches(s, x)) && !Object.keys(cfgMcp.departments).some(x => matches(s, x)); // the owner naming it (allow or departments) brings it back
-const denied = s => cfgMcp.deny.some(x => matches(s, x)) || defaultDenied(s);
+// 9 oct 2026: the office's OWN MCP (oficina-mcp.mjs, docs/conectar-ia.md) is the owner's assistant's line into the office — the owner's
+// controls (create work, pause routines, delegate…). A desk that had it would step out of its rules: never to an agent, not even named.
+export const isOffice = s => /oficina-mcp\.mjs/i.test(String(s?.target || '')) || norm(s?.raw || s?.name || '') === 'agentsoffice';
+const denied = s => isOffice(s) || cfgMcp.deny.some(x => matches(s, x)) || defaultDenied(s);
 const allowed = s => !denied(s) && (!cfgMcp.allow.length || cfgMcp.allow.some(x => matches(s, x)));
 
 function deptsFor(s) {
@@ -311,7 +314,7 @@ export function health() {
 export function summary() {
   const sk = cfgSafety.safeTools, tk = cfgSafety.toolKinds; // each tool's kind as the guard sees it: lee · envía · gasta
   return { discoveredAt, discovering: discovering(), web: cfgWeb, browser: { on: cfgBrowser, ...browserState() },
-    servers: servers.map(s => ({ ...s, target: publicTarget(s.target), detail: mask(s.detail), allowed: allowed(s), denied: denied(s), defaultDenied: defaultDenied(s) && !cfgMcp.deny.some(x => matches(s, x)),
+    servers: servers.map(s => ({ ...s, target: publicTarget(s.target), detail: mask(s.detail), allowed: allowed(s), denied: denied(s), defaultDenied: defaultDenied(s) && !cfgMcp.deny.some(x => matches(s, x)), ...(isOffice(s) ? { office: true } : {}),
       kinds: Object.fromEntries((s.tools || []).map(t => [t, kindOfTool(`mcp__${s.id}__${t}`, sk, tk)])) })) };
 }
 /* ---------- MCP-06: a desk's run starts only its own servers ----------

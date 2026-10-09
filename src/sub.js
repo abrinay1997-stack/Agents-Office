@@ -27,7 +27,7 @@ const BASE_CHIPS = [['¿Cómo vamos? Dame el estado de la oficina.', '¿Cómo va
 const STUDIO_CHIPS = [['Hazme 3 creativos con esta foto para Instagram: propón el modelo, el prompt y el formato de cada uno.', 'Hazme 3 creativos con esta foto', true], ['Propón 2 creativos para el post de esta semana, con el formato de cada red.', 'Creativos para esta semana'], ['Hazme una locución de 15 segundos para la promo de esta semana, con mi voz si la tengo.', 'Una locución'], ['Ordena esta carpeta: propón carpetas y qué mover a cada una.', 'Ordenar la galería']];
 // V4.11 (DIM-22): the suggestions follow the view the owner has open
 const VIEW_CHIPS = {
-  contenido: [['¿Qué se publica esta semana? Dime día, hora, formato y red de cada pieza, y qué falta.', '¿Qué se publica esta semana?'], ['Mira los días sin publicación de las próximas dos semanas y propón borradores para rellenarlos.', 'Rellena los huecos'], ['¿Qué piezas esperan mi OK y qué les falta para poder salir?', '¿Qué espera mi OK?']],
+  contenido: [['¿Qué se publica esta semana? Dime día, hora, formato y red de cada pieza, y qué falta.', '¿Qué se publica esta semana?'], ['Llena los días sin publicación de los próximos 7 días (Llenar la semana).', 'Llena la semana'], ['¿Qué piezas esperan mi OK y qué les falta para poder salir?', '¿Qué espera mi OK?']],
   analiticas: [['¿Qué funcionó mejor estos 30 días y por qué crees que fue?', '¿Qué funcionó?'], ['Con estas cifras, ¿qué debería publicar más y qué menos?', '¿Qué publico más?'], ['¿Cómo van los seguidores y el alcance contra el mes pasado?', '¿Cómo van las redes?']],
   tareas: [['¿Qué tengo yo hoy? Lo mío (lo que hago en persona), por orden, y qué puedo delegar.', '¿Qué tengo yo hoy?'], ['De mis tareas abiertas, ¿cuáles puede hacer un agente? Propón a quién delegarlas.', '¿Qué puedo delegar?'], ['¿Cómo va lo que delegué? Dime qué está en curso, qué espera mi OK y qué se atrasó.', '¿Cómo va lo delegado?']], // plan D: las tareas del dueño
   cal: [['¿Qué corre mañana? Tareas y rutinas, con su hora.', '¿Qué corre mañana?'], ['¿Qué rutinas fallaron la última vez y qué hago con eso?', '¿Qué rutina falló?'], ['Ayúdame a priorizar lo de esta semana: ¿qué es lo más importante y qué puede esperar?', 'Priorizar la semana']],
@@ -513,7 +513,8 @@ export function initSub(ctx) {
       if (t.classList.contains('so-on')) d.include = t.checked;
       else if (t.classList.contains('so-red')) d.redes = [...oc.querySelectorAll('.so-red')].filter(x => x.checked).map(x => x.value);
       else if (f === 'needsOk') d.needsOk = t.checked;
-      else if (f === 'at' && o.type === 'rutina_crear') d.when = { ...o.when, ...(d.when || {}), at: t.value || '09:00' };
+      else if (f === 'at' && (o.type === 'rutina_crear' || o.type === 'rutina_editar')) d.when = { ...o.when, ...(d.when || {}), at: t.value || '09:00' };
+      else if (f === 'limite') d.limite = t.value ? t.value + String(o.limite || '').slice(10) : null; // the hour it had stays
       else if (f === 'at') { const v = t.value ? new Date(t.value).getTime() : NaN; if (!(v > Date.now())) { t.setCustomValidity('Esa hora ya pasó: elige una que aún esté por venir.'); t.reportValidity(); return; } t.setCustomValidity(''); d.at = v; }
       else if (f) d[f] = t.value;
       else return;
