@@ -104,6 +104,8 @@ import { crearSugerencias as crearSugerenciasAnuncios, crearAplicador as crearAp
 import { crearPiloto as crearPilotoAnuncios } from './anuncios/piloto.mjs';
 import { crearImpulsor as crearImpulsorAnuncios } from './anuncios/impulsar.mjs'; // Fase A4 (9 oct 2026): impulsar lo que ya salió en Contenido
 import { fechaEn as fechaEnAnuncios } from './anuncios/modelo.mjs';
+import { crearIndicadoresAnuncios } from './anuncios/indicadores.mjs'; // Fase A6 (9 oct 2026): gasto, costo por resultado y ROAS en «Cómo va el negocio»
+import { crearInforme as crearInformeAnuncios } from './anuncios/informe.mjs'; // Fase A7 (9 oct 2026): el informe de anuncios del mes, sin modelo
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
 import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
@@ -206,7 +208,7 @@ const meta = crearMeta({ dir: ANALITICAS_DIR });
 const ANUNCIOS_DIR = path.join(DATA, 'anuncios');
 const DEF_ANUNCIOS = Object.fromEntries(['topeDiario', 'topeMensual', 'topeCampana'].map(k => [k, settings.FIELDS.find(f => f.path === 'anuncios.' + k)?.default ?? null]));
 const anunciosAds = crearMetaAds({ meta });
-const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o), despuesDeCifras: () => anunciosTrasSondeo() }); // A5: el diagnóstico tras cada lectura de cifras
+const anuncios = crearSincAnuncios({ meta, ads: anunciosAds, dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o), despuesDeCifras: () => { try { anunciosInd.llevar(); } catch (e) { console.warn('anuncios (indicadores):', e.message); } return anunciosTrasSondeo(); } }); // A5: el diagnóstico tras cada lectura de cifras · A6: los indicadores del dueño al día
 const anunciosAcc = crearAccionesAnuncios({ sync: anuncios, ads: anunciosAds, undoSeconds: () => APPR().undoSeconds,
   refrescar: () => { anuncios.sincronizar({ cifras: false }).catch(() => {}); },
   auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'anuncios', ...a }) + '\n'); } catch {} } });
@@ -229,6 +231,10 @@ const anunciosPiloto = crearPilotoAnuncios({ acciones: anunciosAcc, ajustes: () 
 const anunciosImpulsor = crearImpulsorAnuncios({ borradores: anunciosBorr, creador: anunciosCrear, ajustes: () => cfg.anuncios || {},
   fuentes: () => { let publicaciones = []; try { publicaciones = metricas.leer({ dias: 90 }).publicaciones || []; } catch { /* sin Analíticas: el id de la cola */ }
     return { leerPieza: id => contenido.leer(id), salidaDe: id => programador.salidaDe(id), publicaciones, emparejar: emparejarPublicadas }; } });
+// Fase A6 (9 oct 2026): los indicadores del dueño (data/kpis.json; los crea él con un botón en Anuncios) y Fase A7: el informe del mes
+// (<cerebro>/Agents Office/informes/AAAA-MM anuncios.md, que no viaja). loadKpis/saveKpis se declaran más abajo: se usan perezosos.
+const anunciosInd = crearIndicadoresAnuncios({ sync: anuncios, kpis: { leer: () => loadKpis(), guardar: k => saveKpis(k) }, ajustes: () => cfg.anuncios || {} });
+const anunciosInforme = crearInformeAnuncios({ sync: anuncios, sugerencias: anunciosSug, dir: path.join(BRAIN, 'Agents Office', 'informes'), fs, renombrar, unirRuta: path.join });
 const anunciosAplicador = crearAplicadorAnuncios({ sug: anunciosSug, acciones: anunciosAcc, borradores: anunciosBorr, vista: () => anuncios.vista('7d'), impulsar: b => anunciosImpulsor.impulsar(b),
   encargar: async ({ texto, titulo }) => { // una tarea para el agente de anuncios: propone (texto, borradores, prompts); no genera imágenes ni toca Meta
     const a = agenteDeAnuncios(AGENTS); if (!a) throw new Error('no hay ningún puesto de Marketing');
@@ -1952,7 +1958,7 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
-const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador, impulsor: anunciosImpulsor }); // A4: /impulsar · A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador, impulsor: anunciosImpulsor, informe: anunciosInforme, indicadores: anunciosInd }); // A4: /impulsar · A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
 /** A2: el segundo clic del dueño sobre un gasto que propuso Dimitri (`sub: { msg, k }`, o solo la `confirmacion`: se busca la tarjeta que
  *  tiene ese token) deja su tarjeta hecha en data/subgerente.json, para que al recargar no vuelva a pedir confirmación. */
 function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {
@@ -2198,7 +2204,7 @@ async function weeklyReport(force = false) {
   if (!force && (st.week === wk || now.getDay() !== 1 || now.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
   st.week = wk; fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(WEEKLY, JSON.stringify(st));
   const l = load(), c = costs.report(costs.read(DATA, Date.now() - 70 * 864e5), l, AGENTS, cfg.costs), q = quality.byAgent(l, AGENTS), k = loadKpis();
-  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l), contenidoSemana(), publicidadSemana().texto].filter(Boolean).join('\n'); // F4: las redes también · A1: la publicidad, aparte del costo de los modelos
+  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l), contenidoSemana(), publicidadSemana().texto, (() => { const x = anunciosInforme.lineaMesAnterior(); return x ? `Informe de anuncios del mes pasado (en el Cerebro): ${x}` : ''; })()].filter(Boolean).join('\n'); // F4: las redes también · A1: la publicidad, aparte del costo de los modelos
   const text = await ask(`Eres ${DEPUTY}, la mano derecha del dueño de ${cfg.name}. Escribes el informe del lunes: claro, concreto, en español, 180–260 palabras, sin relleno.`, `Datos de la semana:\n${facts}\n\nEscribe: 1) cómo fue la semana en tres líneas, 2) lo que salió bien, 3) lo que falló o se atasca, 4) tres decisiones que el dueño debería tomar esta semana, cada una con el porqué. Solo texto.`, { maxTokens: 1200, timeout: 180000, model: 'sonnet', kind: 'informe' });
   const ss = sub.load(DATA); ss.messages.push(sub.message('sub', '📋 Informe de la semana\n\n' + text, { mode: 'analisis' })); sub.save(DATA, ss);
   notice('weekly', `📋 Informe de la semana de ${DEPUTY}:\n${text}`);

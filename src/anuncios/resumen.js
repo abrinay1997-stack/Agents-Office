@@ -5,8 +5,10 @@ import { controlesHTML } from './acciones.js';
 import { esc, dinero, contraTope, tendenciaHTML, estadoDe, chip, resultados, presupuesto, tieneProblemas, esActiva, num, SIN } from './comun.js';
 import { nombreRango, buscar } from './campanas.js';
 import { resumenSugerenciasHTML } from './sugerencias.js';
+import { medirHTML } from './informe.js';
 // Fase A5 (9 oct 2026): debajo de las cuatro cifras, las 3 sugerencias vivas más importantes, con «Ver todas» (`sug`: lo de GET
 // /api/anuncios/sugerencias; sin él, no se pinta el bloque).
+// Fases A6 y A7 (9 oct 2026): al final, MEDIR — «Informe del mes» (la ventana, src/anuncios/informe.js) y «Crear indicadores».
 
 const TONO = { bad: 'rojo', warn: 'ambar', info: 'azul' }, ROT = { bad: 'Atención', warn: 'Aviso', info: 'Para saber' };
 export function avisosHTML(d) {
@@ -61,5 +63,5 @@ export function resumenHTML(d, { rango = '7d', ahora = Date.now(), sug = null } 
   const cuenta = d.cuenta ? `<p class="anu-cuenta-l">Cuenta <b>${esc(d.cuenta.nombre || d.cuenta.id)}</b> · ${chip(d.cuenta.estadoTexto || estadoDe(d.cuenta).texto, /activa|active/i.test(d.cuenta.estadoTexto || d.cuenta.estado || '') ? 'verde' : 'ambar')} · ${esc(m)}${d.cuenta.zona ? ' · ' + esc(d.cuenta.zona) : ''}${d.cuenta.saldo != null ? ` · saldo ${esc(dinero(d.cuenta.saldo, m))}` : ''}</p>` : '';
   return `${avisosHTML(d)}${cuenta}${cifrasResumenHTML(d)}${resumenSugerenciasHTML(sug, { moneda: m, buscarFila: id => buscar(d.campanas || [], id), ahora })}
     <section class="anu-sec" aria-labelledby="anuActT"><div class="anu-bcab"><h2 id="anuActT">Campañas activas <span class="anu-cuenta">${activas.length}</span></h2><button type="button" class="anu-btn pri" data-a="nueva">+ Nueva campaña</button></div>
-    ${activas.length ? `<ul class="anu-tarjs">${activas.map(c => tarjetaHTML(c, m, rango, ahora)).join('')}</ul>` : '<div class="anu-vacio"><b>No hay campañas activas</b><span>Las que estén en pausa o terminadas están en Campañas.</span></div>'}</section>`;
+    ${activas.length ? `<ul class="anu-tarjs">${activas.map(c => tarjetaHTML(c, m, rango, ahora)).join('')}</ul>` : '<div class="anu-vacio"><b>No hay campañas activas</b><span>Las que estén en pausa o terminadas están en Campañas.</span></div>'}</section>${medirHTML(d)}`;
 }

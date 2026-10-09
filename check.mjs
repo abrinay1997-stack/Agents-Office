@@ -81,7 +81,9 @@ await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own
 /* ---------- 1a. V4.4: the unit tests, the secrets check, the agents' safety rules ---------- */
 await step('tests: npm test (safety rules, the guard, the secrets check)', async () => {
   // 9 oct 2026: on a failure, say WHICH test (the bare tail of the output did not), so a test that fails only under load can be found
-  const out = await sh('node', ['--test']).catch(e => { const malos = [...String(e.out || e.message).matchAll(/^\s*not ok \d+ - (.+)$/gm)].map(m => m[1].trim()).slice(0, 6); /* the test and its file */ throw new Error('a test failed' + (malos.length ? ': ' + malos.join(' | ') : ' — run npm test to see which: ' + e.message.slice(-300))); });
+  // 9 oct 2026: 4 archivos a la vez, no uno por núcleo. Muchos tests levantan su propio serve.mjs y, con 7 a la vez en una máquina de 8
+  // núcleos, fallaban al azar por pura carga (cada vez uno distinto). Con 4 pasan siempre y tardan lo mismo (~2 min). Igual en package.json.
+  const out = await sh('node', ['--test', '--test-concurrency=4']).catch(e => { const malos = [...String(e.out || e.message).matchAll(/^\s*not ok \d+ - (.+)$/gm)].map(m => m[1].trim()).slice(0, 6); /* the test and its file */ throw new Error('a test failed' + (malos.length ? ': ' + malos.join(' | ') : ' — run npm test to see which: ' + e.message.slice(-300))); });
   const n = /# pass (\d+)/.exec(out)?.[1], f = /# fail (\d+)/.exec(out)?.[1];
   if (f && +f) throw new Error(`${f} test(s) failed — npm test`);
   return `${n} tests pass`;

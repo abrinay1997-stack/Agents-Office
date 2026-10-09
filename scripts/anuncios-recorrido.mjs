@@ -17,6 +17,8 @@
 // → Creativos con su estado escrito → «Pedir variaciones» → «Nueva campaña con este creativo».
 // Si además hay una oficina que ya sirve /api/anuncios y /anuncios-vista.js (serve.mjs con la Fase A1), abre una temporal sin Meta:
 // la tarjeta de conexión y «Ver con datos de ejemplo». Si no, lo dice y sigue con la demo.
+// Fases A6 y A7 (9 oct 2026), en la demo: «Crear indicadores» en el Resumen (el ROAS no, sin píxel, y por qué) y el informe del mes en
+// su ventana (abrir, cambiar de mes → «sin datos», «Guardar» que en el ejemplo no guarda, Esc y el foco de vuelta).
 //   node scripts/anuncios-recorrido.mjs   → capturas en data/capturas/anuncios/ y ✓/✗ por paso
 //   AO_AXE=<ruta a axe.min.js> además pasa axe en cada pestaña
 import { chromium } from 'playwright-core';
@@ -368,6 +370,45 @@ async function a4(page, tag, w, pasaAxe) {
   await page.click('#anuOv [data-tab="resumen"]'); await page.waitForTimeout(250);
 }
 
+/** Fases A6 y A7 (9 oct 2026), en la demo: «Crear indicadores» (gasto y costo; el ROAS no, sin píxel, y lo dice), y el informe del mes en
+ *  su ventana: el mes en curso con sus cifras, cambiar de mes → «sin datos», «Guardar» en el ejemplo no guarda (y lo dice), Esc cierra y
+ *  el foco vuelve al botón. */
+async function a6a7(page, tag, w, pasaAxe) {
+  await page.click('#anuOv [data-tab="resumen"]'); await page.waitForSelector('#anuOv .anu-medir', { timeout: 5000 });
+  step(!!await page.$('#anuOv .anu-medir [data-a="informe"]') && !!await page.$('#anuOv .anu-medir [data-a="indicadores"]') && /ROAS no se creó/.test(await txt(page, '#anuOv .anu-medir')), `${tag}: A6 · el Resumen trae «Medir»: «Informe del mes», «Crear indicadores» y por qué el ROAS no`);
+  ok24(await medir(page), tag, 'A6 · Medir');
+  await page.click('#anuOv [data-a="indicadores"]'); await page.waitForSelector('#anuOv .anu-toast:not([hidden])', { timeout: 5000 });
+  const ti = await txt(page, '#anuOv .anu-toast');
+  step(/2 indicadores nuevos en «Cómo va el negocio»/.test(ti) && /píxel/.test(ti), `${tag}: A6 · «Crear indicadores»: gasto y costo, y el aviso de por qué el ROAS no («${ti.trim().slice(0, 90)}…»)`);
+  await page.waitForFunction(() => document.activeElement?.dataset?.a === 'informe', null, { timeout: 3000 }).catch(() => {});
+  step(!await page.$('#anuOv [data-a="indicadores"]') && /Ya están el gasto del mes, el costo por resultado de 30 días/.test(await txt(page, '#anuOv .anu-medir')) && await page.evaluate(() => document.activeElement?.dataset?.a) === 'informe', `${tag}: A6 · el bloque dice que ya están (sin botón) y el foco pasa a «Informe del mes»`);
+  await page.screenshot({ path: path.join(OUT, `${tag}-a6-medir.png`) });
+  await pasaAxe('A6 · Medir');
+  // A7: el informe del mes en curso
+  await page.click('#anuOv [data-a="informe"]'); await page.waitForSelector('#anuOv .anu-fondo-inf:not([hidden]) .anu-inf-t h2', { timeout: 6000 });
+  await page.waitForFunction(() => document.activeElement?.matches?.('#anuOv [data-infmes]'), null, { timeout: 3000 }).catch(() => {});
+  const inf = await txt(page, '#anuOv .anu-inf-t');
+  step(await page.$eval('#anuOv .anu-dlg-inf', d => d.getAttribute('role') === 'dialog' && d.getAttribute('aria-modal') === 'true' && !!document.getElementById(d.getAttribute('aria-labelledby'))) && await page.evaluate(() => document.querySelector('#anuOv .anu').inert || document.querySelector('#anuOv .anu-main').closest('[inert]') !== null), `${tag}: A7 · «Informe del mes» abre una ventana (role="dialog") y lo de detrás queda inerte`);
+  step(/Informe de anuncios — .* \(en curso\)/.test(inf) && /Lo que va del mes/.test(inf) && /US\$/.test(inf) && /Mensajes por WhatsApp/.test(inf) && /Los mejores creativos/.test(inf) && /Lo que se aplicó de las sugerencias/.test(inf) && /Lo que se pausó o activó/.test(inf), `${tag}: A7 · el mes en curso: lo que va del mes con su moneda, por campaña, los mejores creativos, lo aplicado y lo pausado o activado`);
+  step(await page.evaluate(() => document.activeElement?.matches?.('#anuOv [data-infmes]')), `${tag}: A7 · el foco empieza en el selector de mes`);
+  ok24(await medir(page), tag, 'A7 · el informe');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a7-informe.png`) });
+  await pasaAxe('A7 · el informe');
+  // otro mes: sin datos, nunca un cero inventado
+  await page.selectOption('#anuOv [data-infmes]', { index: 2 });
+  await page.waitForFunction(() => /Sin datos: la oficina no tiene cifras/.test(document.querySelector('#anuOv .anu-inf-t')?.textContent || ''), null, { timeout: 5000 }).catch(() => {});
+  const viejo = await txt(page, '#anuOv .anu-inf-t');
+  step(/Sin datos: la oficina no tiene cifras/.test(viejo) && !/\(en curso\)/.test(viejo) && await page.evaluate(() => document.activeElement?.matches?.('#anuOv [data-infmes]')), `${tag}: A7 · otro mes: «Sin datos» (sin cifras inventadas) y el foco sigue en el selector`);
+  await page.screenshot({ path: path.join(OUT, `${tag}-a7-sin-datos.png`) });
+  await pasaAxe('A7 · un mes sin datos');
+  await page.click('#anuOv [data-infguardar]');
+  await page.waitForFunction(() => /No se guardó: en el ejemplo/.test(document.querySelector('#anuOv .anu-inf-estado')?.textContent || ''), null, { timeout: 3000 }).catch(() => {});
+  step(/No se guardó: en el ejemplo no se guarda nada en el Cerebro/.test(await txt(page, '#anuOv .anu-inf-estado')), `${tag}: A7 · «Guardar en el Cerebro» en el ejemplo no guarda, y lo dice`);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => document.querySelector('#anuOv .anu-fondo-inf')?.hidden && document.activeElement?.dataset?.a === 'informe', null, { timeout: 3000 }).catch(() => {});
+  step(await page.$eval('#anuOv .anu-fondo-inf', f => f.hidden) && await page.$eval('#anuOv', o => o.classList.contains('on')) && await page.evaluate(() => document.activeElement?.dataset?.a) === 'informe', `${tag}: A7 · Esc cierra el informe, Anuncios sigue abierta y el foco vuelve a «Informe del mes»`);
+}
+
 let browser;
 try {
   try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ channel: 'chrome' }); }
@@ -453,6 +494,7 @@ try {
       await a3(page, tag, w, pasaAxe);
       await a5(page, tag, w, pasaAxe);
       await a4(page, tag, w, pasaAxe);
+      await a6a7(page, tag, w, pasaAxe);
       // la tecla J abre y cierra
       await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('j'); await page.waitForTimeout(400);
       step(!(await page.$eval('#anuOv', o => o.classList.contains('on'))), `${tag}: J cierra Anuncios`);

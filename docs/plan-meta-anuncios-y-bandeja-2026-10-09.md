@@ -441,12 +441,16 @@ Para esta fase hace falta que Meta haya dado el acceso avanzado (§2.6). Sin él
 
 **Hecho cuando:** con el Meta de mentira, se leen y se responden mensajes de Instagram y Messenger dentro de la ventana, y fuera de ella el envío se niega con el motivo. Con acceso aprobado, `check-meta-bandeja.mjs` lista conversaciones reales.
 
-### Fase A6 — Medir mejor (opcional, si hay web)
+### Fase A6 — Medir mejor (opcional, si hay web) ✅ los indicadores (9 oct 2026, rama `mejora/anuncios-a6-a7`)
+
+> **Hecho:** los indicadores, con el botón «Crear indicadores» en Anuncios → Resumen (`anuncios/indicadores.mjs`, `POST /api/anuncios/indicadores`, solo el dueño); cada lectura de cifras los pone al día (un punto por día). El ROAS solo se crea con píxel y compras medidas; si no, se dice por qué. **La API de conversiones queda pendiente de que el dueño confirme que vende en una web y qué eventos importan.**
 
 - **API de conversiones** (servidor a servidor) además del píxel, con `event_id` para no contar dos veces, si el dueño vende en una web. Esta fase solo se hace si el dueño confirma que tiene web y qué eventos importan.
 - Los indicadores del dueño: `meta_gasto_anuncios`, `meta_costo_resultado` y `meta_roas` (cuando aplique), con el botón «Crear indicador», como hoy `meta_seguidores`.
 
-### Fase A7 — Informe de anuncios
+### Fase A7 — Informe de anuncios ✅ (9 oct 2026, rama `mejora/anuncios-a6-a7`)
+
+> **Hecho:** `anuncios/informe.mjs` (sin modelo; «sin datos» cuando no se sabe; el mes en curso, aparte), `GET|POST /api/anuncios/informe?mes=`, la ventana «Informe del mes» en el Resumen con el selector de mes y «Guardar en el Cerebro», `ver_informe_anuncios` para los agentes y una línea en el resumen del lunes con el informe guardado del mes anterior. Además de lo de abajo: lo que se pausó o activó (del historial).
 
 - «Informe de anuncios del mes» en el panel, sin modelo, como `contenido/informe.mjs`:
   - gasto;
@@ -469,7 +473,7 @@ Para esta fase hace falta que Meta haya dado el acceso avanzado (§2.6). Sin él
 | 6 | **B1** Comentarios | No espera la revisión de Meta |
 | 7 | **A4** Impulsar ✅ | Pequeña una vez está A3 |
 | 8 | **B2** Mensajes | Espera el acceso avanzado de Meta: para entonces ya debería estar |
-| 9 | **A6** y **A7** | Medir mejor e informe |
+| 9 | **A6** y **A7** ✅ | Medir mejor e informe (la API de conversiones de la A6, pendiente del dueño) |
 
 **Mientras tanto, el dueño** empieza ya la verificación del negocio (§2.1) y, cuando B2 esté lista para grabar, la revisión de la app (§2.6).
 

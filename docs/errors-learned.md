@@ -46,3 +46,12 @@ Una entrada por error que costó encontrar. Solo se añade al final.
 **Fix aplicado:** `fs-seguro.mjs → renombrar()`: reintenta con esperas cortas y, si no puede, copia el contenido encima. Lo usan los 31 archivos del servidor que guardaban así. `tests/fs-seguro.test.mjs` falla si vuelve a aparecer un `fs.renameSync` a pelo en el servidor.
 **Prevención:** en código del servidor, nunca `fs.renameSync` directo: usar `renombrar` de `fs-seguro.mjs`. Un `catch` que se traga un error de disco al guardar algo del dueño es un fallo, no una protección. Un test que falla solo con carga en Windows suele ser esto o una espera fija.
 **Archivos:** `fs-seguro.mjs`, `serve.mjs` (`notice`), `tareas/almacen.mjs` y los demás que guardan (`git grep renombrar`).
+
+## [2026-10-09] — Tests que fallan al azar, cada vez uno distinto: demasiados servidores reales a la vez
+
+**Contexto:** Plan de Anuncios de Meta (A5 a A7). `npm run check` fallaba una de cada dos o tres veces, siempre en un test que levanta su propio `serve.mjs` (`anuncios-control`, `tareas-ejecucion`, `anuncios-sugerencias`…), y cada uno pasaba solo.
+**Error:** esperas que vencían («no llegó a tiempo…») o «Meta está saturado» contra el Meta de mentira.
+**Causa raíz:** `node --test` corre a la vez un archivo por núcleo menos uno (7 en esta máquina de 8). Con varios `serve.mjs` reales, Chromium y servidores de mentira a la vez, la máquina se saturaba y los tiempos se iban.
+**Fix aplicado:** `--test-concurrency=4` en `package.json → test` y en el paso de tests de `check.mjs`. 1079 de 1079 en dos vueltas seguidas, y tarda lo mismo (~2 min).
+**Prevención:** si un test que levanta un servidor falla solo con toda la batería, probar primero con menos concurrencia antes de alargar sus esperas. Junto con «esperar al hecho» y «renombrar con reintento», son las tres causas que se vieron.
+**Archivos:** `package.json`, `check.mjs` (paso «tests»)
