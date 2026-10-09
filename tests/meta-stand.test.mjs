@@ -124,3 +124,20 @@ test('las cabeceras de uso salen en cada respuesta cuando se piden; escuchar() l
     assert.ok((await p.json()).id);
   } finally { await srv.cerrar(); }
 });
+
+test('insights: con time_increment, una fila por día; sin él, una por objeto del rango, con el alcance como personas únicas (no la suma)', async () => {
+  const g = crearMetaStand();
+  g.st.cifras = [
+    { ad_id: 'AD1', adset_id: 'S1', campaign_id: 'C1', date_start: '2026-10-01', spend: '2.50', impressions: '100', reach: '80', clicks: '5' },
+    { ad_id: 'AD1', adset_id: 'S1', campaign_id: 'C1', date_start: '2026-10-02', spend: '3.50', impressions: '150', reach: '90', clicks: '7' },
+    { ad_id: 'AD2', adset_id: 'S1', campaign_id: 'C1', date_start: '2026-10-02', spend: '1', impressions: '50', reach: '40', clicks: '1' },
+  ];
+  const rango = encodeURIComponent(JSON.stringify({ since: '2026-10-01', until: '2026-10-02' }));
+  const diario = await pedir(g, 'GET', `/${CUENTA_STAND}/insights?level=ad&time_increment=1&time_range=${rango}`);
+  assert.equal(diario.data.length, 3);
+  const porAnuncio = await pedir(g, 'GET', `/${CUENTA_STAND}/insights?level=ad&time_range=${rango}`);
+  assert.equal(porAnuncio.data.length, 2);
+  const ad1 = porAnuncio.data.find(f => f.ad_id === 'AD1'); assert.equal(ad1.spend, '6'); assert.equal(ad1.reach, '90', 'el alcance del rango no es 80 + 90');
+  const cuenta = await pedir(g, 'GET', `/${CUENTA_STAND}/insights?level=account&time_range=${rango}`);
+  assert.equal(cuenta.data.length, 1); assert.equal(cuenta.data[0].impressions, '300');
+});

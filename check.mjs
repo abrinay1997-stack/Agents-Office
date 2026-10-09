@@ -52,12 +52,13 @@ await step('build: the views\' own style (src/css/*.css) reaches the page once e
   const { CSS_APARTE } = await import('./build-extra.mjs'), extra = fs.readFileSync(path.join(ROOT, 'dist', 'estudio-extra.js'), 'utf8');
   const { CSS_TAREAS } = await import('./build-tareas.mjs'), tv = fs.readFileSync(path.join(ROOT, 'dist', 'tareas-vista.js'), 'utf8'); // plan T2 (6 oct 2026): the Tareas view's own bundle
   const { CSS_PIEZA } = await import('./build-pieza.mjs'), pe = fs.readFileSync(path.join(ROOT, 'dist', 'pieza-editor.js'), 'utf8'); // C1 (8 oct 2026): the piece editor's own bundle
+  const { CSS_ANUNCIOS } = await import('./build-anuncios.mjs'), av = fs.readFileSync(path.join(ROOT, 'dist', 'anuncios-vista.js'), 'utf8'); // A1 (8 oct 2026): the Anuncios view's own bundle
   for (const f of files) {
-    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, y = tv.split(mark).length - 1, z = pe.split(mark).length - 1, aparte = CSS_APARTE.includes(f) || CSS_TAREAS.includes(f) || CSS_PIEZA.includes(f);
-    if (n + x + y + z !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page, ${x} in dist/estudio-extra.js, ${y} in dist/tareas-vista.js and ${z} in dist/pieza-editor.js (it must be exactly 1 in all)`);
+    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, y = tv.split(mark).length - 1, z = pe.split(mark).length - 1, w = av.split(mark).length - 1, aparte = CSS_APARTE.includes(f) || CSS_TAREAS.includes(f) || CSS_PIEZA.includes(f) || CSS_ANUNCIOS.includes(f);
+    if (n + x + y + z + w !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page, ${x} in dist/estudio-extra.js, ${y} in dist/tareas-vista.js, ${z} in dist/pieza-editor.js and ${w} in dist/anuncios-vista.js (it must be exactly 1 in all)`);
     if (aparte && n) throw new Error(`src/css/${f} travels in a bundle of its own but reached the page`);
   }
-  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete del Estudio)' : CSS_TAREAS.includes(f) ? f + ' (con la vista Tareas)' : CSS_PIEZA.includes(f) ? f + ' (con el editor de piezas)' : f).join(', ')}`;
+  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete del Estudio)' : CSS_TAREAS.includes(f) ? f + ' (con la vista Tareas)' : CSS_PIEZA.includes(f) ? f + ' (con el editor de piezas)' : CSS_ANUNCIOS.includes(f) ? f + ' (con la vista Anuncios)' : f).join(', ')}`;
 });
 await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own file beside the page, of the same build, and the page does not carry it', async () => { // 1 oct 2026, INF-09
   const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8'), file = path.join(ROOT, 'dist', 'estudio-extra.js');
@@ -706,7 +707,7 @@ else {
       try {
         await ph.goto('file://' + path.join(ROOT, 'dist', 'command-centre-v2.html') + '?s=check', { timeout: 90000 }); await ph.waitForTimeout(3000);
         const vis = id => ph.evaluate(i => { const e = document.getElementById(i); return !!e && e.getBoundingClientRect().width > 0; }, id);
-        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topBrain') || await vis('topBiz') || await vis('topSettings')) throw new Error('the dock did not fold into «⋯» on a phone');
+        if (!await vis('topMore') || await vis('topAnaliticas') || await vis('topBrain') || await vis('topBiz') || await vis('topSettings') || await vis('topAnuncios')) throw new Error('the dock did not fold into «⋯» on a phone');
         if (!await vis('topDimitri')) throw new Error('Dimitri is not in the dock on a phone (A11-04)');
         // El aviso «⚠ N» aparece según el momento de la demo (en CI, más tarde que aquí) y ensancha el dock: se fuerza para que el paso no dependa del reloj, y se mide a los anchos de teléfono de verdad.
         await ph.evaluate(() => { const a = document.getElementById('topAppr'); a.style.display = ''; a.querySelector('span').textContent = '12'; });

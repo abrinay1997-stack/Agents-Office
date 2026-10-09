@@ -31,6 +31,7 @@ import { valid as validWhen, nextRun } from './src/when.js';
 import { ACCIONES_LOTE, accionLoteEs } from './estudio-lote.mjs';
 import { REDES as REDES_CONTENIDO } from './contenido/piezas.mjs';
 import { MAPA } from './oficina/mapa.mjs';
+import { textoCuenta as anunciosCuenta, textoCampanas as anunciosCampanas } from './anuncios/modelo.mjs'; // Fase A1 de Anuncios
 
 const MAX = 120;
 export const MODES = ['charla', 'estado', 'analisis', 'plan', 'pregunta', 'estudio'];
@@ -252,6 +253,26 @@ export function publicacionText(e) {
   const c = e.conductor || {}, n = e.cuenta || {}, q = c.cuota || null;
   const cuota = q && (q.usadas != null || q.nuestras) ? ` · Instagram en 24 h: ${q.usadas != null ? `${q.usadas}${q.total ? '/' + q.total : ''} según Meta` : `${q.nuestras} desde aquí`}` : '';
   return `Publicación: modo ${MODO[e.modo] || e.modo} · por ${c.nombre || c.id || '—'}${c.ok === false ? ` (NO está listo: ${clip(c.motivo, 140)})` : ''}${cuota} · en cola ${n.espera || 0}, entregando ${n.entregando || 0}, ya en la red ${n.en_red || 0}${n.fallo ? ` · FALLARON ${n.fallo} (Contenido → Programación)` : ''}${n.parcial ? ` · salieron en parte ${n.parcial}` : ''}.`;
+}
+/**
+ * Fase A1 de Anuncios (8 oct 2026): los anuncios de Meta para <estado> — la cuenta, el gasto de hoy, la semana y el mes contra los topes,
+ * los resultados de 7 días y su costo, lo activo y lo que tiene problemas, siempre con ids. `v` es lo que contesta GET /api/anuncios
+ * (anuncios/rutas.mjs → completa('7d')). Solo lectura: en esta fase Dimitri no propone cambios de anuncios (A2).
+ */
+export function anunciosText(v) {
+  if (!v) return '';
+  if (!v.configurado && !v.cuenta) return `Anuncios de Meta: no conectados — ${clip(v.motivo, 200)} (dilo si te preguntan por la publicidad; no inventes cifras).`;
+  if (!v.sincronizadaAt) return `Anuncios de Meta: la cuenta está puesta pero todavía no se ha leído${v.error ? ` (el último intento falló: ${clip(v.error, 200)})` : ''}.`;
+  const out = ['Anuncios de Meta (cifras de los últimos 7 días, en la zona de la cuenta):', anunciosCuenta(v, { topes: v.topes || {} })];
+  const activas = (v.campanas || []).filter(c => c.estado === 'ACTIVE');
+  out.push(activas.length ? anunciosCampanas(v, { estado: 'activas', nivel: 'conjunto' }) : 'Ninguna campaña activa ahora mismo.');
+  const conProblemas = (v.campanas || []).some(c => c.conjuntos.some(s => s.anuncios.some(a => a.estado === 'DISAPPROVED' || a.estado === 'WITH_ISSUES')));
+  if (conProblemas) out.push('Con problemas:\n' + anunciosCampanas(v, { estado: 'problemas', nivel: 'anuncio' }).split('\n').filter(l => / PROBLEMA: |^- CAMPAÑA/.test(l)).join('\n'));
+  const pausadas = (v.campanas || []).filter(c => c.estado !== 'ACTIVE');
+  if (pausadas.length) out.push(`Pausadas o terminadas (${pausadas.length}): ${pausadas.slice(0, 8).map(c => `${c.id} «${clip(c.nombre, 40)}» (${c.estadoTexto})`).join('; ')}`);
+  out.push(`Leído de Meta: ${v.sincronizadaAt}${v.cifrasAt ? '' : ' (las cifras todavía no)'}${v.error ? ` · el último intento falló: ${clip(v.error, 160)}` : ''}. En esta fase solo se lee: pausar, activar o cambiar presupuestos todavía no se hace desde la oficina.`);
+  const t = out.join('\n');
+  return t.length > 5000 ? t.slice(0, 4990) + '…' : t;
 }
 /** 9 oct 2026: the tasks calendar (P) — what the owner sees in that range: scheduled tasks, deadlines, routines' runs, their own tasks. */
 export function calendarioText({ desde, hasta, tareas = [], rutinas = [], mias = [], piezas = null, name = id => id } = {}) {

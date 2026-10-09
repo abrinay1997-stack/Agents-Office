@@ -254,7 +254,9 @@ Cada fase:
 - los ajustes y el estado se ven;
 - `check-meta-publicar.mjs` pasa con el token real (eso lo corre el dueño).
 
-### Fase A1 — Ver: el panel de Anuncios en solo lectura
+### Fase A1 — Ver: el panel de Anuncios en solo lectura ✅ (9 oct 2026, rama `mejora/anuncios-a1`)
+
+> Hecho: `anuncios/` (modelo, lectura por lotes solo GET, sincronizar con su ritmo y avisos, rutas), el panel (tecla J, Resumen · Campañas · Historial, paquete aparte), Dimitri (`sub.anunciosText`, «Viendo»), `anuncios-mcp.mjs` de solo lectura, el asistente (`ver_anuncios`), «Publicidad» aparte en el lunes y en Costos, y `scripts/check-meta-anuncios.mjs`. Diferencias con lo escrito arriba: la lectura de noche trae **37 días**, no 28 (cubre la vista de 30 días y la tendencia de 7 contra 7); si un nivel de la cuenta tiene más de 500 objetos, el lote de alcance solo trae la primera página y el resto sale con alcance «—». **Queda del dueño:** `node scripts/check-meta-anuncios.mjs` con el token real.
 
 - **Lo que trae `anuncios/sincronizar.mjs`:**
   - la cuenta: `account_status`, `disable_reason`, `currency`, `timezone_name`, `amount_spent`, `spend_cap`, `balance`;
@@ -612,10 +614,14 @@ La documentación de Meta no se pudo abrir desde donde se escribió este plan (l
      - **Métricas orgánicas:** `page_impressions_unique` está **retirada desde v25**. El alcance de Facebook pasa a `page_total_media_view_unique` (con la vieja de respaldo), en `contenido/metricas.mjs`. Las de Instagram (`reach`, `views`, `total_interactions`…) siguen.
      - **Publicar:** nada de v24 a v26 toca las rutas de `contenido/meta-publicar.mjs` (los cambios de Páginas son campos del perfil: `current_location`, `genre`, `parking`…, que no se usan).
 2. `execution_options: ["validate_only"]` en la creación de campaña, conjunto y anuncio en v26.
-3. Advantage+: desde v25 no hay `smart_promotion_type`. Una campaña Advantage+ se obtiene con público, presupuesto y ubicaciones Advantage+ (`advantage_state_info`). ¿Cuáles son los campos exactos en v26? Y para las categorías especiales, ¿es obligatorio `targeting_automation.advantage_audience`?
+3. *(9 oct 2026, A1: `advantage_state_info` todavía no se pide —un campo desconocido hace fallar la petición entera—; `scripts/check-meta-anuncios.mjs` lo prueba con el token real, solo leyendo. Lo mismo `effective_instagram_media_id`, para B1. Y está por verificar el `action_type` de «visitas al perfil» y qué monedas no llevan decimales: mientras tanto, ese resultado sale «—».)*
+   Advantage+: desde v25 no hay `smart_promotion_type`. Una campaña Advantage+ se obtiene con público, presupuesto y ubicaciones Advantage+ (`advantage_state_info`). ¿Cuáles son los campos exactos en v26? Y para las categorías especiales, ¿es obligatorio `targeting_automation.advantage_audience`?
 4. `instagram_user_id` frente a `instagram_actor_id` en `object_story_spec`. Las páginas de Meta usan los dos según el tipo de anuncio.
 5. `learning_stage_info` en el conjunto: nombre y valores.
+   - ✅ **Verificado el 8 oct 2026** (referencia AdCampaignLearningStageInfo): `status` es `LEARNING` (aprendiendo), `SUCCESS` (salió del aprendizaje) o `FAIL` (no logra resultados suficientes: lo que el plan llama «limitado»). Trae además `conversions` (desde el último cambio importante; 0 al salir con éxito), `last_sig_edit_ts` y `attribution_windows`. El `effective_status` de un conjunto es `ACTIVE`, `PAUSED`, `DELETED`, `CAMPAIGN_PAUSED`, `ARCHIVED`, `IN_PROCESS` o `WITH_ISSUES`; `configured_status` es `ACTIVE`, `PAUSED`, `DELETED` o `ARCHIVED`. Los presupuestos van «en la moneda de la cuenta» (en la práctica, centavos para USD; `bid_amount` lo dice explícitamente).
 6. Las métricas de cifras: qué reemplaza a impresiones y alcance en v26, si algo.
+   - ✅ **Verificado el 8 oct 2026** (changelog oficial de v25): en las **Ads Insights** no se retira ni se añade `reach`, `impressions` ni `frequency`. Lo que se retira son métricas **orgánicas** de página, publicación, video e historia (`page_impressions_unique` → `page_total_media_view_unique`; `post_impressions_unique` → `post_total_media_view_unique`), que pasan a dar error en todas las versiones con v26. Los anuncios siguen pidiendo `reach` e `impressions`.
+   - Del mismo changelog (para A3): desde el 19 may 2026 ya no se pueden crear, duplicar ni actualizar campañas «Advantage+ shopping» de la estructura vieja (`POST /act_…/campaigns` y `/copies`). Se usa la estructura nueva.
 7. `copies` para duplicar en v26 (`deep_copy`, `status_option`).
 8. `adlabels` todavía disponible para etiquetar.
 9. Niveles de acceso de la Marketing API: ¿basta el nivel por defecto para una sola cuenta propia? ¿Cuánta cuota tiene por hora?
