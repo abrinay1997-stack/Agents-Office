@@ -70,7 +70,9 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
     return { tarea: r.tarea, antes };
   }
 
-  return async function rutas(req, res, url) {
+  rutas.organizar = organizar; rutas.cambiarEstado = cambiarEstado; // 9 oct 2026: el mismo camino para las ops de Dimitri y del asistente (serve.mjs → runOp)
+  return rutas;
+  async function rutas(req, res, url) {
     const p = url.pathname; if (!p.startsWith('/api/tareas')) return false;
     const m = p.match(/^\/api\/tareas\/([a-z0-9]{4,24})(?:\/(bitacora|organizar|paso|nota|bloqueo|estado|cronometro))?$/i);
     try {

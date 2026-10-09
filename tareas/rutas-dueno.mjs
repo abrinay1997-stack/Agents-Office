@@ -141,7 +141,9 @@ export function crearRutasDueno({ alm, cat, json, body, pump = () => {}, agentes
     return { tarea: t };
   }
 
-  return async function rutasDueno(req, res, url) {
+  rutasDueno.tomar = tomar; rutasDueno.delegar = delegar; // 9 oct 2026: las ops de Dimitri y del asistente usan las mismas reglas (serve.mjs → runOp)
+  return rutasDueno;
+  async function rutasDueno(req, res, url) {
     const p = url.pathname; if (!p.startsWith('/api/tareas')) return false;
     try {
       if (p === '/api/tareas/mias' && req.method === 'GET') {

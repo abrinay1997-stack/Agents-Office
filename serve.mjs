@@ -77,6 +77,8 @@ import { crearWebhooks } from './tareas/webhooks.mjs';
 import { revisar as revisarPermisos } from './tareas/permisos.mjs';
 import { limpiar as limpiarBloqueos, ciclo as cicloBloqueos, pendientes as bloqueosPendientes } from './tareas/dependencias.mjs';
 import { agenda as agendaTareas, agendaTexto } from './tareas/agenda.mjs';
+import { crearRutasOficina } from './oficina/rutas.mjs'; // 9 oct 2026: la oficina para un asistente conectado por MCP (oficina-mcp.mjs)
+import { opLabel } from './src/sub-ops.js';
 import * as colaTareas from './tareas/cola.mjs';
 import * as understand from './understand.mjs'; // V4.8: video and audio → text with Meta Muse Spark
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
@@ -106,6 +108,9 @@ import * as approvals from './approvals.mjs';
 import * as quality from './quality.mjs';
 import * as history from './history.mjs';
 import * as knowledge from './knowledge.mjs';
+import * as aprenderContenido from './contenido/aprender.mjs'; // F4 (9 oct 2026): lo publicado enseña al Cerebro y entra en el informe del lunes
+import { emparejar as emparejarPublicadas } from './src/contenido-publicadas.js';
+import { huecos as huecosContenido, queVuelven as queVuelvenContenido } from './src/contenido-llenar.js';
 import * as memory from './memory.mjs'; // V4.6: mentions, summaries, a context budget, the neighbourhood, synapses that learn
 import * as settings from './settings.mjs';
 import * as documents from './documents.mjs';
@@ -198,7 +203,7 @@ const programador = crearProgramador({
 });
 const metricas = crearMetricas({
   meta, dir: ANALITICAS_DIR, avisar: (t, o) => notice('analiticas', t, o),
-  alFotografiar: ({ serie, publicaciones }) => llevarIndicadoresMeta(serie, publicaciones), // cada foto buena pone al día los indicadores del dueño (si los tiene)
+  alFotografiar: ({ serie, publicaciones }) => { llevarIndicadoresMeta(serie, publicaciones); contenidoAprende(); }, // cada foto buena pone al día los indicadores del dueño (si los tiene) y enseña al Cerebro (F4)
 });
 const DEPUTY = sub.nameOf(cfg); // the owner's right hand above the departments: «Dimitri» unless office.config.json → deputy.name says otherwise
 const TEAMS = teams.settings(cfg); // V3.2 (16 Sep): { enabled, max }
@@ -870,10 +875,11 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
     plan.mode = studio ? 'estudio' : 'pregunta';
     if (!plan.reply || /GENERAR|PROBAR/.test(plan.reply)) plan.reply = 'Para preparar el lote me falta un dato.';
   }
-  const ops = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)) }).ops : [];
+  const parsedOps = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)) }) : { ops: [], motivos: [] };
+  const ops = parsedOps.ops, opsFuera = sub.motivosText(parsedOps.motivos); // 9 oct 2026: what could not be read is said, never dropped in silence
   const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.lote ? 'Te propongo este lote. Nada se gasta hasta que pulses PROBAR o GENERAR.' : studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : studio.actions.length ? 'Esto puedo hacer con el lote; pulsa HACER si te parece.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
-  const reply = (plan.reply || fallback) + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
+  const reply = (plan.reply || fallback) + (opsFuera ? '\n\n' + opsFuera : '') + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
   const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   const st2 = sub.load(DATA); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
   if (picked) { const q = st2.messages.find(x => x.id === answers.msg); if (q?.plan) q.plan.answers = picked.answers; }
@@ -900,11 +906,14 @@ function dimitriVoices() {
 /** V4.11 (DIM-10): the rest of the office for «¿Cómo vamos?» — Contenido, Analíticas, routines, spend, KPIs, notices — computed, no model. */
 function agendaResumen(l) { // plan T4: what is overdue or blocked, in one line each (the full agenda is the ver_agenda tool)
   const a = agendaTareas(l, { ahora: Date.now() }), it = x => `«${String(x.title).slice(0, 50)}» (${x.person === DUENO ? 'del dueño' : x.person ? x.person : agentName(x.agent)}${x.limite ? ', límite ' + x.limite : ''})`;
-  return [a.vencidas.length ? `Tareas vencidas (${a.vencidas.length}): ${a.vencidas.slice(0, 5).map(it).join('; ')}` : '', a.bloqueadas.length ? `Tareas bloqueadas (${a.bloqueadas.length}): ${a.bloqueadas.slice(0, 5).map(it).join('; ')}` : '', a.hoy.length ? `Para hoy (${a.hoy.length}): ${a.hoy.slice(0, 5).map(it).join('; ')}` : ''].filter(Boolean).join('\n');
+  return [a.vencidas.length ? `Tareas vencidas (${a.vencidas.length}): ${a.vencidas.slice(0, 5).map(it).join('; ')}` : '', a.bloqueadas.length ? `Tareas bloqueadas (${a.bloqueadas.length}): ${a.bloqueadas.slice(0, 5).map(it).join('; ')}` : '', a.hoy.length ? `Para hoy (${a.hoy.length}): ${a.hoy.slice(0, 5).map(it).join('; ')}` : '',
+    (v => (v.length ? `Vencen en los próximos 7 días (${v.length}): ${v.slice(0, 6).map(x => `${it(x)} id ${x.id}`).join('; ')}` : ''))(a.proximas.filter(x => x.limite))].filter(Boolean).join('\n'); // 9 oct 2026: lo que se viene, con su id (tarea_editar)
 }
 function dimitriOffice(list) {
   const out = [];
   try { const d = new Date(); d.setDate(d.getDate() + 13); out.push(sub.contenidoText(contenido.listar({ desde: localDay(Date.now()), hasta: localDay(d.getTime()), sinFecha: true }), { now: new Date(), dias: 7 })); } catch (e) { out.push(`Contenido: no lo pude leer (${e.message}).`); }
+  try { out.push(sub.publicacionText(programador.estado())); } catch {} // 9 oct 2026: cómo sale lo aprobado (modo, conductor, cuota, fallos)
+  try { out.push(contenidoSemana().split('\n').filter(l => !l.startsWith('Próximos 7 días')).join('\n')); } catch {} // F4: lo que salió y cómo le fue, y lo que puede volver
   try { out.push(sub.analiticasText(analiticasResumen())); } catch {}
   try { out.push(sub.rutinasText(loadRoutines(), list, { agents: AGENTS })); } catch {}
   try { const l = list || load(); out.push(sub.proyectosText(catalogoT.proyectos().map(p => ({ ...p, progreso: progresoProyecto(p, l) })), l, { name: agentName })); out.push(agendaResumen(l)); out.push(resumenDueno(l, { nombre: agentName })); } catch {} // plan T4: projects, deadlines, blocks · plan D: lo del dueño
@@ -925,20 +934,40 @@ function analiticasResumen({ dias = 30, red = 'todas' } = {}) {
   const pubs = r.publicaciones.filter(x => x.publicadaAt && localDay(Date.parse(x.publicadaAt)) >= desde && (red === 'todas' || x.red === red)).sort((a, b) => (b.interacciones || 0) - (a.interacciones || 0));
   return { conectado: !!est.configurado, ultimaFoto: r.ultimaFoto, dias, k, mejores: pubs.slice(0, 3), peores: pubs.length > 3 ? pubs.slice(-3).reverse() : [] };
 }
+/** 9 oct 2026: the calendar between two days (both included), in words with ids — scheduled tasks, the routines' runs, the owner's
+ *  deadlines and, with piezas, Contenido's pieces. Dimitri's «Viendo» (the tasks calendar) and the assistant's ver_calendario. */
+function calendarioOficina(list, desde, hasta, { piezas = false } = {}) {
+  const t0 = new Date(desde + 'T00:00:00').getTime(), t1 = new Date(hasta + 'T00:00:00').getTime() + 864e5, now = Date.now();
+  const tareas = list.filter(t => !t.archived && t.dueAt >= t0 && t.dueAt < t1).sort((x, y) => x.dueAt - y.dueAt);
+  const rutinas = t1 <= now ? [] : loadRoutines().flatMap(r => sub.runsOf(r, now, { days: Math.max(1, Math.ceil((t1 - now) / 864e5)), max: 120 }).filter(x => x >= t0 && x < t1).map(at => ({ at, id: r.id, title: r.title, agent: r.agent, skip: (RSTATE[r.id]?.skip || []).includes(at) }))).sort((x, y) => x.at - y.at);
+  const mias = list.filter(t => t.person === DUENO && !t.archived && t.limite && String(t.limite).slice(0, 10) >= desde && String(t.limite).slice(0, 10) <= hasta).sort((x, y) => String(x.limite).localeCompare(String(y.limite)));
+  let pz = null; if (piezas) { try { pz = contenido.listar({ desde, hasta }); } catch { pz = []; } }
+  return sub.calendarioText({ desde, hasta, tareas, rutinas, mias, piezas: pz, name: agentName });
+}
 /** V4.11 (DIM-08): «👁 Viendo: …» with its data — the piece, the range's pieces, the routine and its last runs, the task, the metric. */
 function dimitriViewing(c, list) {
   if (!c || !c.view) return '';
   const data = {};
   try {
     if (c.view === 'contenido' && c.kind === 'pieza' && c.id) { const p = contenido.leer(String(c.id)); if (p) data.pieza = p; else data.none = 'Esa pieza ya no está en Contenido.'; }
-    else if ((c.view === 'contenido' || c.view === 'cal') && c.kind === 'range' && /^\d{4}-\d{2}-\d{2}$/.test(c.id || '')) {
+    else if (c.view === 'cal' && c.kind === 'range' && /^\d{4}-\d{2}-\d{2}$/.test(c.id || '')) { // 9 oct 2026: the tasks calendar shows tasks, routines and the owner's deadlines — not Contenido's pieces
+      const a = new Date(c.id + 'T00:00:00'), d0 = new Date(a), d1 = new Date(a); d0.setDate(d0.getDate() - 7); d1.setDate(d1.getDate() + 21);
+      data.calendario = calendarioOficina(list, localDay(d0.getTime()), localDay(d1.getTime()));
+    }
+    else if (c.view === 'contenido' && c.kind === 'range' && /^\d{4}-\d{2}-\d{2}$/.test(c.id || '')) {
       const a = new Date(c.id + 'T12:00:00'), d0 = new Date(a), d1 = new Date(a); d0.setDate(d0.getDate() - 7); d1.setDate(d1.getDate() + 21);
       data.desde = localDay(d0.getTime()); data.hasta = localDay(d1.getTime()); data.piezas = contenido.listar({ desde: data.desde, hasta: data.hasta });
     } else if (c.view === 'cal' && c.kind === 'routine' && c.id) {
       const r = loadRoutines().find(x => x.id === c.id);
       if (r) { data.routine = { ...r, agentName: AGENTS.find(a => a.id === r.agent)?.name }; data.runs = list.filter(t => t.routine === r.id).sort((x, y) => (y.addedAt || 0) - (x.addedAt || 0)).slice(0, 3); } else data.none = 'Esa rutina ya no está.';
-    } else if (c.view === 'cal' && c.kind === 'task' && c.id) {
+    } else if ((c.view === 'cal' || c.view === 'tareas') && c.kind === 'task' && c.id) {
       const t = list.find(x => x.id === c.id); if (t) data.task = { ...t, agentName: AGENTS.find(a => a.id === t.agent)?.name }; else data.none = 'Esa tarea ya no está.';
+    } else if (c.view === 'tareas' && c.kind === 'proyecto' && c.id) { // 9 oct 2026: the project open in Tareas
+      const p = catalogoT.proyectos().find(x => x.id === c.id);
+      if (!p) data.none = 'Ese proyecto ya no está.';
+      else { const suyas = list.filter(t => t.proyecto === p.id && !t.archived); data.proyecto = sub.proyectosText([{ ...p, estado: p.estado === 'activo' || p.estado === 'pausa' ? p.estado : 'activo', progreso: progresoProyecto(p, list) }], list, { name: agentName }) + `\nSus tareas (${suyas.length}):\n` + suyas.slice(0, 25).map(t => `- ${t.id} · «${String(t.title).slice(0, 60)}» · ${t.state}${t.person === DUENO ? ' · DEL DUEÑO' : t.person ? ' · ' + t.person : ' · ' + agentName(t.agent)}${t.limite ? ' · límite ' + String(t.limite).replace('T', ' ') : ''}`).join('\n'); }
+    } else if (c.view === 'tareas') { // 9 oct 2026: Tareas open on a list: the agenda (and the owner's own lists) with ids
+      data.texto = `${agendaTexto(agendaTareas(list, { ahora: Date.now() }), { nombre: agentName })}\n\n${resumenDueno(list, { nombre: agentName })}`;
     } else if (c.view === 'analiticas') {
       const [metrica, red, dias] = String(c.id || '').split(':');
       data.metric = `Métrica en pantalla: ${metrica || '—'}\n` + sub.analiticasText(analiticasResumen({ dias: Math.max(1, Math.min(365, +dias || 30)), red: ['instagram', 'facebook'].includes(red) ? red : 'todas' }));
@@ -1178,18 +1207,89 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
    Never approve, schedule in Meta or publish: a piece is born a draft and a moved approved piece loses its OK (contenido.guardar). */
 const OPS_UNDO_MS = 30000;
 const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)) });
-async function runOp(o) {
+/* 9 oct 2026 (revisión de control): the same executor for Dimitri's cards and for an assistant connected by MCP (POST /api/oficina/accion,
+   oficina-mcp.mjs) — the rules of the routes themselves (tareas/rutas.mjs, tareas/rutas-dueno.mjs, contenido/rutas.mjs), never a copy.
+   q.por says who: 'dimitri' (the owner pressed HACER on his card) or 'asistente' (the owner's own AI client). Nothing here approves,
+   sends, publishes or pays; each op leaves `undo` (what puts it back) unless it cannot be undone (said on its card). */
+/** The same work again, as a new task (same agent, same words) — the ↻ of a task, and Dimitri's or the assistant's «tarea_repetir». */
+function repetirTarea(src, por = 'dueno') {
+  if (src.person === DUENO && !src.agent) return altaTarea({ person: DUENO, dept: src.dept, deAgente: src.deAgente, title: src.title, text: src.text, by: 'you', repeatOf: src.id, prioridad: src.prioridad, etiquetas: src.etiquetas, proyecto: src.proyecto, estimacion: src.estimacion, pasos: (src.pasos || []).map(p => p.texto) }, { por, arrancar: false });
+  const t = altaTarea({ dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
+    team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id, prioridad: src.prioridad, etiquetas: src.etiquetas, proyecto: src.proyecto, estimacion: src.estimacion }, { por, arrancar: false });
+  console.log(`↻ ${t.id} repeats ${src.id}: ${t.title}`); setImmediate(pump);
+  return t;
+}
+const fueraDeCola = id => { const l = load(), t = l.find(x => x.id === id); if (!t || t.state !== 'next' || running.has(id)) return false; save(l.filter(x => x.id !== id)); return true; };
+async function runOp(o, { por = 'dimitri' } = {}) {
+  const q = { rol: 'dueno', por }; // the owner's click (or the owner's own assistant): the routes' owner rules apply
   if (o.type === 'rutina_crear') {
     const r = await makeRoutine({ dept: o.dept, text: o.text, when: o.when, agent: o.agent || undefined, needsOk: o.needsOk }); if (r.error) throw new Error(r.error);
     const rt = o.titled && o.title && o.title !== r.routine.title ? editRoutine(r.routine.id, { title: String(o.title).slice(0, 90) }) || r.routine : r.routine; // the title Dimitri and the owner saw on the card
     Object.assign(o, { routineId: rt.id, desc: rt.desc, agent: rt.agent, title: rt.title, undo: { routine: rt.id } }); return;
   }
   if (o.type === 'rutina_saltar') { const s = RSTATE[o.id] || (RSTATE[o.id] = {}); s.skip = (s.skip || []).filter(x => x !== o.at); s.skip.push(o.at); routines.saveState(DATA, RSTATE); o.undo = { unskip: o.at }; return; }
-  if (o.type === 'pieza_crear') { const r = contenido.crear({ titulo: o.titulo, fecha: o.fecha, hora: o.hora, formato: o.formato, redes: o.redes, texto: o.texto, estado: 'borrador', origen: 'dimitri' }, { por: 'dimitri' }); if (r.error) throw new Error(r.error); o.pieza = r.pieza.id; o.undo = { pieza: r.pieza.id }; return; }
+  if (o.type === 'rutina_pausar' || o.type === 'rutina_reanudar') {
+    const r = loadRoutines().find(x => x.id === o.id); if (!r) throw new Error('esa rutina ya no está');
+    const n = editRoutine(r.id, { paused: o.type === 'rutina_pausar' }); o.desc = n?.desc || r.desc; o.undo = { paused: !!r.paused }; return;
+  }
+  if (o.type === 'rutina_editar') {
+    const r = loadRoutines().find(x => x.id === o.id); if (!r) throw new Error('esa rutina ya no está');
+    if (o.when?.start && o.when.start < localDay(Date.now())) throw new Error('la fecha de inicio ya pasó');
+    const patch = { ...(o.when ? { when: o.when } : {}), ...(o.text ? { text: o.text } : {}), ...(typeof o.needsOk === 'boolean' ? { needsOk: o.needsOk } : {}) };
+    o.undo = { when: r.when, text: r.text, needsOk: r.needsOk };
+    const n = editRoutine(r.id, patch); if (patch.when && RSTATE[r.id]) { RSTATE[r.id].nextAt = 0; routines.saveState(DATA, RSTATE); } // the next run from the new timetable
+    o.desc = n?.desc || ''; return;
+  }
+  if (o.type === 'rutina_ahora') { const r = loadRoutines().find(x => x.id === o.id); if (!r) throw new Error('esa rutina ya no está'); const t = fire(r, { by: 'you' }); o.task = t?.id; o.undo = t ? { task: t.id } : null; return; }
+  if (o.type === 'pieza_crear') { const r = contenido.crear({ titulo: o.titulo, fecha: o.fecha, hora: o.hora, formato: o.formato, redes: o.redes, texto: o.texto, estado: 'borrador', origen: por }, { por }); if (r.error) throw new Error(r.error); o.pieza = r.pieza.id; o.undo = { pieza: r.pieza.id }; return; }
   if (o.type === 'pieza_mover') { const prev = contenido.leer(o.id); if (!prev) throw new Error('esa pieza ya no está'); const r = contenido.guardar(o.id, { fecha: o.fecha, ...(o.hora ? { hora: o.hora } : {}) }); if (r.error) throw new Error(r.error); o.soltada = !!r.soltada; o.titulo = o.titulo || prev.titulo; o.undo = { fecha: prev.fecha, hora: prev.hora }; return; }
-  if (o.type === 'tarea_mover') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next') || running.has(t.id)) throw new Error('esa tarea ya empezó o ya no está'); o.undo = { state: t.state, dueAt: t.dueAt ?? null }; t.dueAt = o.at; if (t.state === 'next') { t.state = 'scheduled'; if (t.needsOk === undefined) t.needsOk = routines.guessNeedsOk(t.text || t.title); } save(l); return; }
-  if (o.type === 'tarea_cancelar') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next') || running.has(t.id)) throw new Error('esa tarea ya empezó o ya no está'); save(l.filter(x => x.id !== o.id)); o.undo = { task: t }; return; }
+  if (o.type === 'contenido_llenar') { // the plan of «Llenar la semana» as it is NOW (GET), every hole taken as proposed
+    const plan = await contenidoRoutes.planLlenar({ desde: localDay(Date.now()), dias: o.dias || 7, redes: contenidoRoutes.redesDe(o.redes) });
+    if (!plan.huecos.length) throw new Error(`no hay días sin publicación en los próximos ${o.dias || 7} días`);
+    const r = await contenidoRoutes.llenar({ huecos: plan.huecos, redes: plan.redes, pide: o.pide }); if (r.error) throw new Error(r.error);
+    Object.assign(o, { huecos: plan.huecos.length, creadas: r.creadas.map(p => p.id), tarea: r.tarea?.id || null, avisos: r.errores.slice(0, 3), undo: { piezas: r.creadas.map(p => p.id), task: r.tarea?.id || null } });
+    if (!r.creadas.length && !r.tarea) throw new Error(r.errores[0] || 'no se pudo llenar'); return;
+  }
+  if (o.type === 'tarea_mover') { const l = load(), t = l.find(x => x.id === o.id); if (!t || t.person || (t.state !== 'scheduled' && t.state !== 'next') || running.has(t.id)) throw new Error('esa tarea ya empezó o ya no está'); o.undo = { state: t.state, dueAt: t.dueAt ?? null }; t.dueAt = o.at; if (t.state === 'next') { t.state = 'scheduled'; if (t.needsOk === undefined) t.needsOk = routines.guessNeedsOk(t.text || t.title); } save(l); return; }
+  if (o.type === 'tarea_cancelar') { const l = load(), t = l.find(x => x.id === o.id); if (!t || t.person || (t.state !== 'scheduled' && t.state !== 'next') || running.has(t.id)) throw new Error('esa tarea ya empezó o ya no está'); save(l.filter(x => x.id !== o.id)); o.undo = { task: t }; return; }
+  if (o.type === 'tarea_editar') {
+    const r = tareasRoutes.organizar(o.id, { ...(o.prioridad ? { prioridad: o.prioridad } : {}), ...(o.limite !== undefined ? { limite: o.limite } : {}) }, q);
+    if (r.error) throw new Error(r.error); o.undo = { prioridad: o.antes?.prioridad || 'media', limite: o.antes?.limite ?? null }; return;
+  }
+  if (o.type === 'tarea_repetir') { const src = load().find(x => x.id === o.id); if (!src) throw new Error('esa tarea ya no está'); const t = repetirTarea(src, por); o.task = t.id; o.undo = { task: t.id }; return; }
+  if (o.type === 'mia_delegar') {
+    const prev = load().find(x => x.id === o.id);
+    const r = await duenoRoutes.delegar(o.id, { a: 'agente', dept: o.dept, ...(o.agent ? { agente: o.agent } : {}), ...(o.nota ? { nota: o.nota } : {}) }, q);
+    if (r.error) throw new Error(r.error); o.agent = r.a; o.agentName = agentName(r.a); o.undo = { deAgente: prev?.deAgente || null }; return;
+  }
+  if (o.type === 'mia_hecha') { const r = tareasRoutes.cambiarEstado(o.id, 'done', q); if (r.error) throw new Error(r.error); o.undo = { reabrir: true, at: Date.now() }; return; }
   throw new Error('no sé hacer eso');
+}
+/** Puts back what runOp did (Dimitri's DESHACER, and the assistant's `deshacer`). → { error } or {} */
+function undoOp(o, { por = 'dimitri' } = {}) {
+  const u = o.undo, q = { rol: 'dueno', por }; if (!u) return { error: 'eso no se puede deshacer' };
+  if (o.type === 'rutina_crear') removeRoutine(u.routine);
+  else if (o.type === 'rutina_saltar') { const s = RSTATE[o.id]; if (s) { s.skip = (s.skip || []).filter(x => x !== u.unskip); routines.saveState(DATA, RSTATE); } }
+  else if (o.type === 'rutina_pausar' || o.type === 'rutina_reanudar') { if (!editRoutine(o.id, { paused: u.paused })) return { error: 'esa rutina ya no está' }; }
+  else if (o.type === 'rutina_editar') { if (!editRoutine(o.id, { when: u.when, text: u.text, needsOk: u.needsOk })) return { error: 'esa rutina ya no está' }; if (RSTATE[o.id]) { RSTATE[o.id].nextAt = 0; routines.saveState(DATA, RSTATE); } }
+  else if (o.type === 'rutina_ahora' || o.type === 'tarea_repetir') { if (!fueraDeCola(u.task)) return { error: 'el agente ya empezó: detenla en la tarea si hace falta' }; }
+  else if (o.type === 'pieza_crear') contenido.borrar(u.pieza);
+  else if (o.type === 'pieza_mover') { const r = contenido.guardar(o.id, { fecha: u.fecha || '', hora: u.hora || '' }); if (r.error) return { error: r.error }; }
+  else if (o.type === 'contenido_llenar') {
+    for (const id of u.piezas || []) { const p = contenido.leer(id); if (p && p.estado !== 'aprobada') contenido.borrar(id); }
+    if (u.task && !fueraDeCola(u.task)) return { error: 'quité las copias, pero Marketing ya empezó los borradores: detén su tarea si hace falta' };
+  }
+  else if (o.type === 'tarea_mover') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next')) return { error: 'esa tarea ya empezó' }; t.state = u.state; if (u.dueAt == null) delete t.dueAt; else t.dueAt = u.dueAt; save(l); }
+  else if (o.type === 'tarea_cancelar') { const l = load(); if (!l.some(x => x.id === u.task.id)) { l.push(u.task); save(l); setImmediate(pump); } }
+  else if (o.type === 'tarea_editar') { const r = tareasRoutes.organizar(o.id, { prioridad: u.prioridad, limite: u.limite }, q); if (r.error) return { error: r.error }; }
+  else if (o.type === 'mia_delegar') { const r = duenoRoutes.tomar(o.id, { deshacer: true, ...(u.deAgente ? { deAgente: u.deAgente } : {}) }, q); if (r.error) return { error: r.error === 'el agente está trabajando en ella: detenla primero, o espera a que entregue' ? 'el agente ya empezó: detenla primero' : r.error }; }
+  else if (o.type === 'mia_hecha') {
+    const r = tareasRoutes.cambiarEstado(o.id, 'next', q); if (r.error) return { error: r.error };
+    const l = load(), sig = l.filter(x => x.repeatOf === o.id && (x.addedAt || 0) >= u.at - 1000 && x.state !== 'doing' && x.state !== 'done'); // la siguiente repetición que nació al marcarla
+    if (sig.length) save(l.filter(x => !sig.includes(x)));
+  }
+  else return { error: 'eso no se puede deshacer' };
+  return {};
 }
 const opsBusy = new Set(); // messages whose HACER is running: a second click (or a second tab) while makeRoutine waits for Claude is refused, never run twice
 async function subOps(msgId, items) {
@@ -1208,10 +1308,10 @@ async function subOpsRun(msgId, items) {
     if (e.include === false) { o.state = 'skipped'; continue; }
     const pick = k => (e[k] !== undefined ? { [k]: e[k] } : {}); // the owner's edits on the card, checked again like the first time
     const base = { ...o }; if (o.type === 'rutina_crear' && !o.titled) delete base.title; // a title Dimitri did not give is the router's to write
-    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent') }], { ...opsContext(), owner: true }).ops; // owner: the card's «pide tu OK» is the owner's to untick
+    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent'), ...pick('prioridad'), ...pick('limite'), ...pick('dept'), ...pick('nota'), ...pick('dias'), ...pick('pide') }], { ...opsContext(), owner: true }).ops; // owner: the card's «pide tu OK» is the owner's to untick
     if (!v) { o.state = 'failed'; o.error = 'ya no se puede: algo cambió en la oficina, la hora ya pasó o el horario no está completo'; failed++; continue; }
     Object.assign(o, v, { k: o.k });
-    try { await runOp(o); o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; } catch (err) { o.state = 'failed'; o.error = err.message; failed++; }
+    try { await runOp(o, { por: 'dimitri' }); o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; } catch (err) { o.state = 'failed'; o.error = err.message; failed++; }
   }
   const st2 = sub.load(DATA); const i = st2.messages.findIndex(x => x.id === m.id); if (i >= 0) st2.messages[i] = m;
   if (done || failed) st2.messages.push(sub.message('sub', `${done ? `Hecho: ${done} ${done === 1 ? 'cambio' : 'cambios'} en el calendario y la oficina. Puedes deshacerlo en la tarjeta durante ${OPS_UNDO_MS / 1000} s.` : 'No cambié nada.'}${failed ? ` ${failed} no se pudo: lo dice su tarjeta.` : ''}`));
@@ -1223,13 +1323,7 @@ function subOpUndo(msgId, k) {
   const st = sub.load(DATA); const m = st.messages.find(x => x.id === msgId), o = m?.ops?.find(x => x.k === k);
   if (!o || o.state !== 'done' || !o.undo) return { error: 'eso ya no se puede deshacer' };
   if (Date.now() - (o.doneAt || 0) > OPS_UNDO_MS) return { error: 'pasó el tiempo para deshacerlo: cámbialo en el calendario' };
-  const u = o.undo;
-  if (o.type === 'rutina_crear') removeRoutine(u.routine);
-  else if (o.type === 'rutina_saltar') { const s = RSTATE[o.id]; if (s) { s.skip = (s.skip || []).filter(x => x !== u.unskip); routines.saveState(DATA, RSTATE); } }
-  else if (o.type === 'pieza_crear') contenido.borrar(u.pieza);
-  else if (o.type === 'pieza_mover') { const r = contenido.guardar(o.id, { fecha: u.fecha || '', hora: u.hora || '' }); if (r.error) return { error: r.error }; }
-  else if (o.type === 'tarea_mover') { const l = load(), t = l.find(x => x.id === o.id); if (!t || (t.state !== 'scheduled' && t.state !== 'next')) return { error: 'esa tarea ya empezó' }; t.state = u.state; if (u.dueAt == null) delete t.dueAt; else t.dueAt = u.dueAt; save(l); }
-  else if (o.type === 'tarea_cancelar') { const l = load(); if (!l.some(x => x.id === u.task.id)) { l.push(u.task); save(l); setImmediate(pump); } }
+  const r = undoOp(o); if (r.error) return r;
   o.state = 'undone'; delete o.undo;
   sub.save(DATA, st);
   return { ok: true, message: m };
@@ -1680,6 +1774,11 @@ const webhooksT = crearWebhooks({ config: () => cfg.tareas?.webhooks || [], data
 const tareasRoutes = crearRutasTareas({ alm: tareasAlm, cat: catalogoT, json, body, webhooks: webhooksT, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id) });
 const duenoRoutes = crearRutasDueno({ alm: tareasAlm, cat: catalogoT, json, body, pump: () => pump(), agentes: AGENTS, depts: DEPTS, leadOf, avisar: (k, t, o) => notice(k, t, o), avisarPersona: (n, t) => tellPerson(n, t), personas: () => PEOPLE().map(p => p.name), // plan D
   altaTarea: (c, o) => altaTarea(c, o), nombre: id => agentName(id), enrutar: (dept, text) => route(dept, text), adivinarOk: text => routines.guessNeedsOk(text), exigeOk: text => approvals.overLimit(text, APPR().amountLimit).length > 0 });
+const oficinaRoutes = crearRutasOficina({ json, body, sub, opsContext, runOp, undoOp, // 9 oct 2026: lo que ve Dimitri y lo que propone, para cualquier IA del dueño
+  estadoTexto: () => { const l = load(); return [sub.statusText(l, AGENTS, DEPTS), dimitriOffice(l)].filter(Boolean).join('\n'); },
+  calendarioTexto: ({ desde, hasta }) => calendarioOficina(load(), desde, hasta, { piezas: true }),
+  etiqueta: o => opLabel(o, { deptName: k => DEPTS[k]?.name || k }),
+  auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'oficina', por: 'asistente', ...a }) + '\n'); } catch {} } });
 despachadorDependencias({ bus: busTareas, alm: tareasAlm, pump: () => pump(), avisar: (k, t, o) => notice(k, t, o), nombre: id => agentName(id) });
 // plan T5 (6 oct 2026): a task that repeats — when it ends well, the next one is born (one open at a time; «al completar» counts from that day)
 busTareas.on('tarea.estado', ({ tarea, a }) => {
@@ -1881,6 +1980,36 @@ async function companyBootstrap(url, about) {
   refreshSkills(); await rebuildGraph();
   notice('onboard', `Listo: ${wrote.length} notas nuevas en el Cerebro (00-Empresa: ${wrote.join(', ')}), ${briefs} jefes con instrucciones y ${(j.cifras || []).length} cifras para confirmar. Revísalas: vienen de la web.`);
 }
+/* ---------- F4 de Contenido (9 oct 2026): aprender de lo publicado ---------- */
+/** Lo publicado junto a su pieza (las piezas con lo que la cola sabe de ellas y lo que Analíticas leyó de Meta). */
+function contenidoConCifras(dias = 180) {
+  const d = metricas.leer({ dias }), piezas = contenido.listar({}).map(p => ({ ...p, salida: programador.salidaDe(p.id) }));
+  const r = d.publicaciones?.length ? emparejarPublicadas(piezas, d.publicaciones) : { porPieza: {}, sueltas: [] };
+  return { piezas, porPieza: r.porPieza, sueltas: r.sueltas };
+}
+/** Las notas que usó el agente que escribió una pieza se acercan a cómo le fue en las redes (contenido/aprender.mjs → memory.reinforce;
+ *  idempotente por pieza). Corre tras cada foto de Analíticas y al arrancar. */
+function contenidoAprende() {
+  try {
+    const { piezas, porPieza } = contenidoConCifras();
+    if (!Object.keys(porPieza).length) return 0;
+    const ls = aprenderContenido.lecciones({ piezas, porPieza, tareas: load(), citadas: t => ({ cited: memory.cited(t.result, t.read || []), read: t.read || [] }) });
+    for (const l of ls) memory.reinforce(MEM, l);
+    if (ls.length) saveMem();
+    return ls.length;
+  } catch (e) { console.warn('contenido (aprender):', e.message); return 0; }
+}
+setTimeout(contenidoAprende, 90e3);
+/** El párrafo de redes del informe del lunes (y de Dimitri): lo que salió y cómo le fue, lo que viene, los huecos y lo que puede volver. */
+function contenidoSemana() {
+  try {
+    const { piezas, porPieza, sueltas } = contenidoConCifras(), hace7 = Date.now() - 7 * 864e5;
+    const redes = Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'];
+    const hoy = new Date(), hoyK = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    return aprenderContenido.semanaContenido({ piezas, porPieza, sueltas: sueltas.filter(m => Date.parse(m.publicadaAt) >= hace7), huecos: huecosContenido({ desde: hoyK, dias: 7, piezas, redes }), vuelven: queVuelvenContenido({ piezas, resultados: porPieza }), conectado: meta.configurado() });
+  } catch (e) { return `Redes: no las pude resumir (${e.message}).`; }
+}
+
 // J8: Dimitri's weekly report, Monday morning — how the week went and what to decide
 const WEEKLY = path.join(DATA, 'weekly.json');
 function tareasSemana(l) { // plan T5: the week in tasks — from the log (cycle time, waiting for the OK, late), and the projects that are late
@@ -1897,7 +2026,7 @@ async function weeklyReport(force = false) {
   if (!force && (st.week === wk || now.getDay() !== 1 || now.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
   st.week = wk; fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(WEEKLY, JSON.stringify(st));
   const l = load(), c = costs.report(costs.read(DATA, Date.now() - 70 * 864e5), l, AGENTS, cfg.costs), q = quality.byAgent(l, AGENTS), k = loadKpis();
-  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l)].join('\n');
+  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l), contenidoSemana()].join('\n'); // F4: las redes también
   const text = await ask(`Eres ${DEPUTY}, la mano derecha del dueño de ${cfg.name}. Escribes el informe del lunes: claro, concreto, en español, 180–260 palabras, sin relleno.`, `Datos de la semana:\n${facts}\n\nEscribe: 1) cómo fue la semana en tres líneas, 2) lo que salió bien, 3) lo que falló o se atasca, 4) tres decisiones que el dueño debería tomar esta semana, cada una con el porqué. Solo texto.`, { maxTokens: 1200, timeout: 180000, model: 'sonnet', kind: 'informe' });
   const ss = sub.load(DATA); ss.messages.push(sub.message('sub', '📋 Informe de la semana\n\n' + text, { mode: 'analisis' })); sub.save(DATA, ss);
   notice('weekly', `📋 Informe de la semana de ${DEPUTY}:\n${text}`);
@@ -2456,10 +2585,7 @@ const server = http.createServer(async (req, res) => {
     if (m && m[2] === 'repeat' && req.method === 'POST') { // the same work again, as a new task (same agent, same words)
       const src = load().find(x => x.id === m[1]);
       if (!src) return json(res, 404, { error: 'esa tarea ya no existe' });
-      if (src.person === DUENO && !src.agent) { const t = altaTarea({ person: DUENO, dept: src.dept, deAgente: src.deAgente, title: src.title, text: src.text, by: 'you', repeatOf: src.id, prioridad: src.prioridad, etiquetas: src.etiquetas, proyecto: src.proyecto, estimacion: src.estimacion, pasos: (src.pasos || []).map(p => p.texto) }, { por: 'dueno', arrancar: false }); return json(res, 200, t); } // plan D: otra vez, para ti
-      const t = altaTarea({ dept: src.dept, agent: src.team ? leadOf(src.dept).id : src.agent, title: src.title, text: src.text, plan: src.plan || [], eta: src.eta || 30, why: 'otra vez', by: 'you', model: src.model, effort: src.effort, needsOk: src.needsOk,
-        team: src.team ? { lead: leadOf(src.dept).id, asked: 'repeat' } : undefined, repeatOf: src.id, prioridad: src.prioridad, etiquetas: src.etiquetas, proyecto: src.proyecto, estimacion: src.estimacion }, { por: 'dueno', arrancar: false });
-      console.log(`↻ ${t.id} repeats ${src.id}: ${t.title}`); setImmediate(pump);
+      const t = repetirTarea(src, 'dueno');
       return json(res, 200, t);
     }
     if (m && !m[2] && req.method === 'PATCH') { // edit a task that has not started: rewrite, reassign, move to a date or back, model, effort — or mark it done by hand
@@ -2536,6 +2662,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/tareas') && (await duenoRoutes(req, res, url) || await tareasRoutes(req, res, url))) return; // plan T1–T4: organizar, bitácora, proyectos, etiquetas, agenda, lo de los agentes · plan D: las del dueño (antes: «mias» no es un id)
     if (url.pathname.startsWith('/api/contenido/') && await analiticasRoutes(req, res, url)) return; // V4.7 (F2): Analíticas y la conexión con Meta
     if (url.pathname.startsWith('/api/contenido') && await contenidoRoutes(req, res, url)) return;
+    if (url.pathname.startsWith('/api/oficina/') && await oficinaRoutes(req, res, url)) return; // 9 oct 2026: oficina-mcp.mjs
     /* ---------- the Estudio ---------- */
     if (url.pathname.startsWith('/media/') && req.method === 'GET') { // a generated file (only inside <brain>/Agents Office/media); ranges, so a video can seek
       const f = media.resolve(decodeURIComponent(url.pathname.slice(7)));

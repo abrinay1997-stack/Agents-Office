@@ -1,5 +1,49 @@
 # Changelog
 
+## El control de la oficina: Dimitri, los agentes y cualquier IA — 9 oct 2026
+
+Pedido del dueño: «necesito revisar que Dimitri y los agentes sepan y puedan controlar el calendario y tareas… aunque se use cualquier IA». Informe: `docs/auditoria-control-dimitri-agentes-2026-10-09.md`.
+- **Dimitri controla más, siempre con tu clic y con DESHACER:**
+  - pausar, reanudar, cambiar o correr ahora una rutina;
+  - la prioridad y la fecha límite de una tarea;
+  - delegar o marcar hecha una tarea tuya;
+  - repetir o reintentar una tarea;
+  - llenar la semana en Contenido.
+
+  Sus piezas pueden ir a las nueve redes.
+- **Ve más:**
+  - al lado del calendario de tareas, sus tareas, rutinas y tus fechas límite (antes veía las piezas de Contenido);
+  - en Tareas, la tarea o el proyecto abierto;
+  - cómo sale lo aprobado (modo, conductor, cuota de Instagram, fallos);
+  - la semana de redes;
+  - ids en todo lo que puede tocar.
+
+  Y el mapa de la oficina va en su prompt.
+- **Dice lo que no pudo hacer** («No incluyo 2 cambios que pensé: …»). Antes se perdía en silencio.
+- **Cualquier modelo:** su respuesta se lee aunque el modelo escriba antes del JSON, ponga un ejemplo o use un bloque de código.
+- **Fallos arreglados:**
+  - tus tareas ya no se mueven ni se cancelan como las de un agente;
+  - un agente ya no reescribe una pieza que espera tu OK, ni borra piezas o textos guardados;
+  - la tarjeta de una rutina mensual se lee bien y no se vuelve semanal;
+  - el atajo «Rellena los huecos» contaba 7 días diciendo dos semanas.
+- **Los agentes leen** las rutinas (`ver_rutinas`), lo publicado con sus cifras (`ver_resultados`) y los huecos de la semana (`ver_huecos`). La agenda acepta `dias` y `dept`.
+- **Tu IA en esta computadora** (Claude Desktop, Claude Code, Cursor…) se conecta con `oficina-mcp.mjs` (`docs/conectar-ia.md`):
+  - lee todo;
+  - habla con Dimitri;
+  - crea trabajo, que siempre espera tu OK antes de enviar;
+  - hace los mismos cambios que Dimitri, con una clave para deshacer durante 10 minutos.
+
+  Nunca aprueba, envía, publica, paga ni borra. Ningún agente recibe ese MCP.
+
+## F4 de Contenido: aprender de lo publicado — 9 oct 2026
+
+- **Lo publicado enseña al Cerebro.** Cinco días después de salir, cada pieza se ordena entre las demás por sus interacciones. Si la escribió un agente, las notas que citó se acercan o se alejan según cómo le fue (`contenido/aprender.mjs`).
+- **El informe del lunes habla de las redes:**
+  - lo que salió y cómo le fue;
+  - la que más y la que menos movió;
+  - los días sin nada;
+  - lo que puede volver.
+
 ## Lo que faltaba de C2 y el C3 de Contenido — 8 oct 2026 (lo publicado con sus cifras, llenar la semana, plantillas y el teléfono)
 
 Pedido del dueño: «haz lo que falta de C2 y C3» (`docs/analisis-editor-contenido-2026-10-08.md`).

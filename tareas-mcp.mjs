@@ -3,11 +3,12 @@
 // Estudio y Contenido. Un agente puede: ver su tarea y las de su departamento, ver la agenda, MARCAR los pasos de la tarea que tiene,
 // anotar en su bitácora, PEDIR un bloqueo cuando le falta algo, PROPONER trabajo a otro departamento (nace idea: lo pide el dueño o
 // el jefe), SUGERIRLE algo al dueño para su lista personal (plan D, 7 oct 2026: nace idea en su Bandeja) y REGISTRAR algo que hizo
-// fuera de una tarea. Las tareas del dueño las ve rotuladas «DEL DUEÑO»: son suyas, no se tocan. Nunca aprueba, nunca cambia la prioridad, la fecha límite ni el estado de
+// fuera de una tarea; VER las rutinas (9 oct 2026, solo leer). Las tareas del dueño las ve rotuladas «DEL DUEÑO»: son suyas, no se tocan. Nunca aprueba, nunca cambia la prioridad, la fecha límite ni el estado de
 // una tarea, y solo toca la que tiene en curso: esas herramientas no existen aquí y la API (tareas/rutas.mjs) se lo niega a quien
 // llega como agente. tests/tareas-mcp.test.mjs lo comprueba.
 // Variables que pone serve.mjs: AO_OFFICE (la dirección de la oficina), AO_AGENT y AO_TASK (quién pide y en qué tarea).
 import readline from 'node:readline';
+import { agendaTexto, rutinasTexto } from './oficina/lecturas.mjs';
 
 const OFFICE = process.env.AO_OFFICE || 'http://127.0.0.1:4520';
 const AGENTE = process.env.AO_AGENT || null, TAREA = process.env.AO_TASK || '';
@@ -25,8 +26,10 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} } },
   { name: 'ver_tareas', description: 'Las tareas de la oficina, resumidas, con su id. Para saber qué hay, no repetir trabajo o encontrar el id de la tarea que te bloquea. Nunca adivines un id: sácalo de aquí. Las marcadas «DEL DUEÑO» las hace el dueño en persona: no las ejecutes ni las cambies; si tu trabajo depende de una, pide_bloqueo con su id.',
     inputSchema: { type: 'object', properties: { dept: { type: 'string', enum: ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'], description: 'Solo las de ese departamento.' }, buscar: { type: 'string', description: 'Palabras del título o del pedido.' }, abiertas: { type: 'boolean', description: 'Solo las que no están hechas (por defecto, sí).' }, del_dueno: { type: 'boolean', description: 'Solo las que tiene el dueño en su lista (lo que está haciendo él).' } } } },
-  { name: 'ver_agenda', description: 'La agenda de la oficina en palabras: lo vencido, lo de hoy, lo que está en curso, lo que espera el OK del dueño, lo bloqueado y los próximos días. Con `mia`, solo lo tuyo.',
-    inputSchema: { type: 'object', properties: { mia: { type: 'boolean', description: 'Solo tus tareas.' } } } },
+  { name: 'ver_agenda', description: 'La agenda de la oficina en palabras: lo vencido, lo de hoy, lo que está en curso, lo que espera el OK del dueño, lo bloqueado y los próximos días. Con `mia`, solo lo tuyo; con `dept`, solo ese departamento; con `dias`, hasta dónde mirar.',
+    inputSchema: { type: 'object', properties: { mia: { type: 'boolean', description: 'Solo tus tareas.' }, dept: { type: 'string', enum: ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'], description: 'Solo ese departamento.' }, dias: { type: 'number', description: 'Cuántos días hacia delante (1 a 30; por defecto 7).' } } } },
+  { name: 'ver_rutinas', description: 'Las rutinas de la oficina (el trabajo que se repite solo): qué pide cada una, cuándo corre, quién la tiene, si espera el OK del dueño, si está pausada y cuándo es la próxima. Úsalo para no duplicar con una tarea lo que ya hace una rutina, o para citar el horario. Solo lectura: cambiarlas es del dueño.',
+    inputSchema: { type: 'object', properties: { dept: { type: 'string', enum: ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'] }, mias: { type: 'boolean', description: 'Solo las que tienes tú.' } } } },
   { name: 'marcar_paso', description: 'Marca como HECHO un paso de tu tarea en curso, en cuanto lo terminas (el dueño ve el avance en vivo). Usa el id del paso que da ver_mi_tarea. Con hecho:false lo desmarca. La nota opcional queda en la bitácora.',
     inputSchema: { type: 'object', properties: { paso: { type: 'string', description: 'El id del paso (como p3k9a1).' }, hecho: { type: 'boolean' }, nota: { type: 'string', description: 'Opcional: qué encontraste o decidiste en ese paso.' } }, required: ['paso'] } },
   { name: 'anotar_en_bitacora', description: 'Deja una línea en la bitácora de tu tarea: «encontré X», «usé la receta Y», «no pude Z porque…». El dueño la ve en el detalle de la tarea. Corta y concreta.',
@@ -60,7 +63,8 @@ async function call(name, a = {}) {
     const sel = l.filter(t => !t.archived && (!a.dept || t.dept === a.dept) && (!a.del_dueno || t.person === 'Tú') && (a.abiertas === false || t.state !== 'done') && (!q || `${t.title} ${t.text || ''}`.toLowerCase().includes(q))).slice(-40);
     return sel.length ? `${sel.length} tarea(s):\n${sel.map(linea).join('\n')}` : 'No hay tareas con eso.';
   }
-  if (name === 'ver_agenda') { const r = await office('/api/tareas/agenda' + (a.mia ? '?agente=' + encodeURIComponent(AGENTE || '') : '')); return `<agenda>\n${r.texto}\n</agenda>`; }
+  if (name === 'ver_agenda') return agendaTexto(office, { agente: a.mia ? AGENTE || '' : null, dept: a.dept, dias: a.dias });
+  if (name === 'ver_rutinas') return rutinasTexto(office, { dept: a.dept, agente: a.mias ? AGENTE : null }); // 9 oct 2026: solo leer
   if (name === 'marcar_paso') { const r = await office(`/api/tareas/${encodeURIComponent(mia())}/paso`, { paso: String(a.paso || ''), hecho: a.hecho !== false, nota: a.nota, ...quien }); const h = r.pasos.filter(p => p.hecho).length; return `Hecho. Pasos ${h}/${r.pasos.length}.${h === r.pasos.length ? ' Todos los pasos están marcados.' : ''}`; }
   if (name === 'anotar_en_bitacora') { await office(`/api/tareas/${encodeURIComponent(mia())}/nota`, { texto: String(a.texto || ''), ...quien }); return 'Anotado en la bitácora de la tarea.'; }
   if (name === 'pedir_bloqueo') { const r = await office(`/api/tareas/${encodeURIComponent(mia())}/bloqueo`, { porque: String(a.porque || ''), tarea: a.tarea || undefined, ...quien }); return `Tu tarea queda bloqueada (espera a ${r.para}). Termina tu respuesta con lo que llevas y qué falta: la oficina la retoma sola cuando se resuelva.`; }
