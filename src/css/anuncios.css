@@ -1,0 +1,182 @@
+/* La vista ANUNCIOS (Fase A1, 9 oct 2026). Viaja con dist/anuncios-vista.js (build-anuncios.mjs), no con la página. Todo lleva #anuOv delante.
+   Los tonos son los de la vista Tareas: cada uno pasa 4,5:1 como texto sobre la tarjeta, en claro y en oscuro. Objetivos de 24 px o más;
+   nada por debajo de 11 px. Lo que está en pausa se ESCRIBE («En pausa»), nunca se atenúa. Lo estrecho va por @container (la vista se
+   corre con Dimitri abierto): la tabla se vuelve tarjetas y el detalle cubre la lista. */
+body.anuOpen #topAnuncios { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+body.anuOpen #cornerBL, body.anuOpen #sahniMark, body.anuOpen #licence { display: none; }
+
+#anuOv { container: anuview / inline-size; --anu-card: #fff; --anu-soft: rgba(21,20,20,.04); --anu-line: rgba(21,20,20,.12); --anu-mut: #5A5A5A;
+  --t-azul: #1F5FD0; --t-verde: #176638; --t-ambar: #8A5A00; --t-rojo: #B42318; --t-gris: #5A5A5A; }
+body.dark #anuOv { --anu-card: #1E1F24; --anu-soft: rgba(236,234,227,.05); --anu-line: rgba(236,234,227,.14); --anu-mut: #B5B2AA;
+  --t-azul: #8FB0FF; --t-verde: #6FD39A; --t-ambar: #F2B84B; --t-rojo: #FF8A80; --t-gris: #B5B2AA; }
+#anuOv :where(button, input, select) { font-family: var(--ui); color: inherit; }
+#anuOv :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#anuOv select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+#anuOv [hidden] { display: none !important; }
+#anuOv .anu-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#anuOv .anu-cargando, #anuOv .anu-cargando-fuera { padding: 32px; color: var(--anu-mut); font-size: 14px; }
+#anuOv .anu { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+#anuOv svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+#anuOv code { font-size: .92em; background: var(--anu-soft); padding: 0 4px; border-radius: 4px; overflow-wrap: anywhere; }
+
+/* la banda de arriba (tinta, también en oscuro, como Tareas y el calendario) */
+#anuOv .anu-top { display: flex; align-items: center; gap: 16px; min-height: 60px; padding: 8px 18px; background: #151414; color: #FDFFF8; flex: none; flex-wrap: wrap; }
+#anuOv .anu-h1 { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: .03em; margin: 0; }
+#anuOv .anu-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+#anuOv .anu-tabs button { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid rgba(253,255,248,.22); background: transparent; color: #FDFFF8; font-size: 13.5px; cursor: pointer; }
+#anuOv .anu-tabs button:hover { background: rgba(253,255,248,.1); }
+#anuOv .anu-tabs button[aria-selected="true"] { background: #FDFFF8; color: #151414; border-color: #FDFFF8; font-weight: 600; }
+#anuOv .anu-top :focus-visible { outline-color: #8FB0FF; }
+#anuOv .anu-x { margin-left: auto; color: #FDFFF8; border-color: rgba(253,255,248,.3); }
+
+/* la franja de ejemplo y la línea de la última lectura */
+#anuOv .anu-ejemplo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; padding: 9px 18px; background: color-mix(in srgb, var(--t-ambar) 16%, var(--cream)); color: var(--ink); font-size: 13px; border-bottom: 1px solid var(--anu-line); flex: none; }
+body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
+#anuOv .anu-ejemplo b { letter-spacing: .14em; font-size: 12px; border: 1.5px solid currentColor; border-radius: 6px; padding: 1px 7px; }
+#anuOv .anu-linea { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 18px; border-bottom: 1px solid var(--anu-line); font-size: 13px; color: var(--anu-mut); flex: none; }
+#anuOv .anu-linea .anu-btn { margin-left: auto; }
+
+/* botones y controles: una sola medida */
+#anuOv .anu-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--anu-line); background: var(--anu-card); color: var(--ink); cursor: pointer; font-size: 13.5px; }
+#anuOv .anu-btn:hover { border-color: var(--ink); }
+#anuOv .anu-btn.pri { background: var(--ink); color: var(--cream); border-color: var(--ink); font-weight: 600; }
+#anuOv .anu-btn:disabled { color: var(--anu-mut); cursor: default; border-color: var(--anu-line); }
+#anuOv .anu-icb { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--anu-line); background: transparent; cursor: pointer; flex: none; }
+#anuOv .anu-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+#anuOv .anu-ayuda { color: var(--anu-mut); font-size: 12.5px; margin: 6px 0 12px; line-height: 1.45; }
+#anuOv .anu-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--c); background: color-mix(in srgb, var(--c) 11%, var(--anu-card)); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); }
+#anuOv .t-azul { --c: var(--t-azul); } #anuOv .t-verde { --c: var(--t-verde); } #anuOv .t-ambar { --c: var(--t-ambar); } #anuOv .t-rojo { --c: var(--t-rojo); } #anuOv .t-gris { --c: var(--t-gris); }
+#anuOv .anu-tend { color: var(--c); font-size: 12.5px; font-weight: 600; }
+#anuOv .anu-cuenta { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px; background: var(--anu-soft); border: 1px solid var(--anu-line); font-size: 11.5px; font-weight: 700; font-family: var(--ui); }
+
+/* el cuerpo y el detalle al lado */
+#anuOv .anu-cuerpo { display: flex; flex: 1; min-height: 0; position: relative; }
+#anuOv .anu-main { flex: 1; min-width: 0; overflow: auto; padding: 16px 18px 60px; outline: none; }
+#anuOv .anu-det { width: min(440px, 42%); flex: none; overflow: auto; border-left: 1px solid var(--anu-line); background: var(--anu-card); padding: 0 18px 40px; }
+#anuOv .anu-vacio { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 22px; border: 1px dashed var(--anu-line); border-radius: 14px; color: var(--anu-mut); font-size: 13.5px; max-width: 640px; }
+#anuOv .anu-vacio b { color: var(--ink); font-size: 15px; }
+#anuOv .anu-aviso-error { margin: 0 0 12px; padding: 9px 12px; border-radius: 10px; background: color-mix(in srgb, var(--t-rojo) 10%, var(--anu-card)); color: var(--t-rojo); font-size: 13px; }
+
+/* RESUMEN */
+#anuOv .anu-avisos { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#anuOv .anu-avisos li { display: flex; gap: 10px; align-items: baseline; padding: 9px 12px; border-radius: 10px; border-left: 4px solid var(--c); background: color-mix(in srgb, var(--c) 9%, var(--anu-card)); color: var(--ink); font-size: 13.5px; line-height: 1.4; }
+#anuOv .anu-avisos b { color: var(--c); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; flex: none; }
+#anuOv .anu-cuenta-l { margin: 0 0 12px; font-size: 13px; color: var(--anu-mut); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#anuOv .anu-cuenta-l b { color: var(--ink); }
+#anuOv .anu-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+#anuOv .anu-kpi { background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#anuOv .anu-kt { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--anu-mut); font-weight: 600; }
+#anuOv .anu-kv { margin: 0; font-family: var(--serif); font-size: 28px; line-height: 1.1; color: var(--ink); overflow-wrap: anywhere; }
+#anuOv .anu-kp { margin: 0; font-size: 12.5px; color: var(--anu-mut); }
+#anuOv .anu-kp.t-ambar, #anuOv .anu-kp.t-rojo { color: var(--c); font-weight: 600; }
+#anuOv .anu-barra-tope { height: 8px; border-radius: 99px; background: var(--anu-soft); border: 1px solid var(--anu-line); overflow: hidden; }
+#anuOv .anu-barra-tope i { display: block; height: 100%; background: var(--c); }
+#anuOv .anu-sec h2, #anuOv .anu-card h2 { font-family: var(--serif); font-weight: 400; font-size: 20px; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+#anuOv .anu-tarjs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+#anuOv .anu-tarj { background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+#anuOv .anu-tarj h3 { margin: 0; font-size: 15px; }
+#anuOv .anu-tchips { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+#anuOv .anu-tobj { margin: 0; font-size: 12.5px; color: var(--anu-mut); }
+#anuOv .anu-tcif { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+#anuOv .anu-tcif dt { font-size: 11.5px; color: var(--anu-mut); }
+#anuOv .anu-tcif dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; color: var(--ink); overflow-wrap: break-word; }
+#anuOv .anu-card { background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 16px; padding: 20px 22px; max-width: 760px; font-size: 14px; line-height: 1.5; }
+#anuOv .anu-card ol { padding-left: 20px; margin: 10px 0; display: flex; flex-direction: column; gap: 6px; }
+#anuOv .anu-card p { margin: 0 0 8px; }
+
+/* el nombre que abre: parece texto con subrayado, mide 24 px */
+#anuOv .anu-abrir { border: 0; overflow-wrap: break-word; background: none; padding: 2px 0; min-height: 24px; text-align: left; cursor: pointer; font-size: inherit; font-weight: 600; color: var(--ink); text-decoration: underline; text-decoration-color: var(--anu-line); text-underline-offset: 3px; }
+#anuOv .anu-abrir:hover { text-decoration-color: currentColor; }
+#anuOv .anu-abrir[aria-current="true"] { text-decoration-color: var(--focus); text-decoration-thickness: 2px; }
+
+/* CAMPAÑAS */
+#anuOv .anu-barra { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-bottom: 6px; }
+#anuOv .anu-seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--anu-line); border-radius: 99px; padding: 2px; background: var(--anu-card); }
+#anuOv .anu-seg button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 12px; border: 0; border-radius: 99px; background: transparent; cursor: pointer; font-size: 13px; color: var(--ink); }
+#anuOv .anu-seg button[aria-pressed="true"] { background: var(--ink); color: var(--cream); font-weight: 600; }
+#anuOv .anu-seg button[aria-pressed="true"] .anu-cuenta { background: transparent; border-color: currentColor; }
+#anuOv .anu-sel { display: inline-flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--anu-mut); }
+#anuOv .anu-sel select { min-height: 34px; padding: 0 10px; border: 1px solid var(--anu-line); border-radius: 10px; background: var(--anu-card); color: var(--ink); font-size: 13.5px; }
+#anuOv .anu-tabla-caja { overflow-x: auto; border: 1px solid var(--anu-line); border-radius: 14px; background: var(--anu-card); }
+#anuOv .anu-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+#anuOv .anu-tabla th, #anuOv .anu-tabla td { padding: 8px 10px; border-bottom: 1px solid var(--anu-line); text-align: left; vertical-align: middle; }
+#anuOv .anu-tabla thead th { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--anu-mut); font-weight: 600; white-space: nowrap; background: var(--anu-soft); }
+#anuOv .anu-tabla tbody tr:last-child > * { border-bottom: 0; }
+#anuOv .anu-tabla .anu-n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+#anuOv .anu-tabla th[scope="row"] { font-weight: 400; min-width: 230px; }
+#anuOv .anu-fila.sel > * { background: color-mix(in srgb, var(--focus) 8%, var(--anu-card)); }
+#anuOv .anu-fila.n-conjunto .anu-nom { padding-left: 22px; }
+#anuOv .anu-fila.n-anuncio .anu-nom { padding-left: 44px; }
+#anuOv .anu-fila.n-campana > * { background-clip: padding-box; }
+#anuOv .anu-nom { display: flex; align-items: flex-start; gap: 8px; }
+#anuOv .anu-nomt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+#anuOv .anu-marcas { display: flex; flex-wrap: wrap; gap: 4px; }
+#anuOv .anu-nivel { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--anu-mut); }
+#anuOv .anu-fila.n-campana .anu-nivel { display: none; }
+#anuOv .anu-tog { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--anu-line); background: transparent; cursor: pointer; flex: none; }
+#anuOv .anu-tog-hueco { display: inline-block; width: 26px; flex: none; }
+
+/* el detalle */
+#anuOv .anu-dh { position: sticky; top: 0; z-index: 1; display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 16px 0 12px; background: var(--anu-card); border-bottom: 1px solid var(--anu-line); margin-bottom: 12px; }
+#anuOv .anu-dh h2 { font-family: var(--serif); font-weight: 400; font-size: 20px; margin: 2px 0 0; overflow-wrap: anywhere; }
+#anuOv .anu-dnivel { margin: 0; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--anu-mut); }
+#anuOv .anu-dnivel span { text-transform: none; letter-spacing: 0; }
+#anuOv .anu-datos, #anuOv .anu-cifras { margin: 0 0 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+#anuOv .anu-dato dt { font-size: 11.5px; color: var(--anu-mut); margin-bottom: 2px; }
+#anuOv .anu-dato dd { margin: 0; font-size: 13.5px; color: var(--ink); overflow-wrap: anywhere; }
+#anuOv .anu-dsec { margin: 0 0 14px; }
+#anuOv .anu-dsec h3 { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--anu-mut); margin: 0 0 8px; }
+#anuOv .anu-dsec p { margin: 0 0 6px; font-size: 13.5px; }
+#anuOv .anu-crea { margin: 0; display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: start; }
+#anuOv .anu-crea img, #anuOv .anu-sinimg { width: 96px; height: 96px; object-fit: cover; border-radius: 10px; border: 1px solid var(--anu-line); background: var(--anu-soft); }
+#anuOv .anu-sinimg { display: grid; place-items: center; font-size: 11.5px; color: var(--anu-mut); text-align: center; }
+#anuOv .anu-crea figcaption { font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#anuOv .anu-cta { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 3px 9px; border: 1px solid var(--anu-line); border-radius: 6px; }
+#anuOv .anu-mal-t { font-weight: 600; color: var(--t-rojo); }
+#anuOv .anu-mal { margin: 0 0 8px; padding-left: 18px; font-size: 13.5px; color: var(--ink); }
+
+/* HISTORIAL */
+#anuOv .anu-hist { list-style: none; margin: 0; padding: 0; max-width: 760px; display: flex; flex-direction: column; gap: 8px; }
+#anuOv .anu-hist li { background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 12px; padding: 10px 14px; font-size: 13.5px; }
+#anuOv .anu-hist time { font-size: 12px; color: var(--anu-mut); }
+#anuOv .anu-hist p { margin: 2px 0 0; }
+#anuOv .anu-antes { color: var(--anu-mut); font-size: 12.5px; }
+
+/* estrecho: la vista, no la ventana (Dimitri al lado la estrecha) */
+@container anuview (max-width: 1100px) {
+#anuOv .anu-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container anuview (max-width: 860px) {
+#anuOv .anu-top { gap: 10px; padding: 8px 12px; }
+#anuOv .anu-h1 { font-size: 20px; }
+#anuOv .anu-tabs button { padding: 0 11px; }
+#anuOv .anu-main { padding: 12px 12px 60px; }
+#anuOv .anu-linea, #anuOv .anu-ejemplo { padding-left: 12px; padding-right: 12px; }
+  /* el detalle cubre la lista */
+#anuOv .anu-det { position: absolute; inset: 0; width: auto !important; border-left: 0; z-index: 3; padding: 0 14px 40px; }
+  /* la tabla se lee como tarjetas */
+#anuOv .anu-tabla-caja { border: 0; background: none; overflow: visible; }
+#anuOv .anu-tabla, #anuOv .anu-tabla tbody, #anuOv .anu-tabla tr, #anuOv .anu-tabla th, #anuOv .anu-tabla td { display: block; }
+#anuOv .anu-tabla thead { display: none; }
+#anuOv .anu-tabla tbody { display: flex; flex-direction: column; gap: 8px; }
+#anuOv .anu-tabla tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 12px; padding: 10px 12px; }
+#anuOv .anu-fila.n-conjunto { margin-left: 14px; } #anuOv .anu-fila.n-anuncio { margin-left: 28px; }
+#anuOv .anu-fila.n-conjunto .anu-nom, #anuOv .anu-fila.n-anuncio .anu-nom { padding-left: 0; }
+#anuOv .anu-fila .anu-nivel { display: inline !important; }
+#anuOv .anu-tabla th, #anuOv .anu-tabla td { padding: 0; border: 0 !important; }
+#anuOv .anu-tabla th[scope="row"] { grid-column: 1 / -1; min-width: 0; }
+#anuOv .anu-tabla td { font-size: 13px; }
+#anuOv .anu-tabla td::before { content: attr(data-l); display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--anu-mut); }
+#anuOv .anu-tabla .anu-n { text-align: left; }
+}
+@container anuview (max-width: 520px) {
+#anuOv .anu-kpis { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+#anuOv .anu-kv { font-size: 24px; }
+#anuOv .anu-tarjs { grid-template-columns: minmax(0, 1fr); }
+#anuOv .anu-tabs span { font-size: 13px; }
+#anuOv .anu-tabs button { gap: 5px; padding: 0 10px; min-height: 34px; }
+#anuOv .anu-x { width: 32px; height: 32px; }
+#anuOv .anu-tcif { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#anuOv .anu-datos, #anuOv .anu-cifras { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+#anuOv .anu-avisos li { flex-direction: column; gap: 2px; }
+}

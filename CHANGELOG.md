@@ -1,5 +1,19 @@
 # Changelog
 
+## Anuncios de Meta, Fase A1: el panel en solo lectura — 9 oct 2026
+
+- **Panel de Anuncios:** el megáfono de la barra (tecla **J**; en el teléfono, en «⋯»).
+  - **Resumen:** arriba, los avisos (pago pendiente, anuncios rechazados, tope cerca). Debajo, cuatro cifras con su tendencia: gasto de hoy contra el tope del día, gasto del mes contra el del mes, resultados de 7 días y su costo. Y las campañas activas.
+  - **Campañas:** una tabla que se despliega campaña → conjunto → anuncio, con el estado en palabras, el aprendizaje, el presupuesto, el gasto, los resultados y su costo, el CTR, la frecuencia y la fecha de fin. Filtros (activas, en pausa, con problemas) y rango (hoy, 7 días, 30 días, este mes). Al abrir una, su detalle: el creativo, el público y lo que dijo la revisión de Meta.
+  - **Historial:** vacío hasta la Fase A2.
+  - Sin Meta conectada, dice qué falta y deja ver datos de ejemplo.
+- **Solo lee:** la oficina habla con Meta solo con GET y por lotes de hasta 50, al ritmo del plan y con el freno de la Fase 0. Avisa (también por Telegram) de un anuncio rechazado o con problemas, de la cuenta con pago pendiente y del gasto de hoy por encima del 90 % del tope.
+- **El «resultado» de cada campaña depende de su objetivo:** conversaciones iniciadas, clics al enlace, compras, contactos o alcance. El panel dice, por ejemplo, «12 conversaciones a US$1,40».
+- **Dimitri** sabe cómo van los anuncios y ve lo que tienes abierto en el panel. **Los agentes de Marketing** los leen con `anuncios-mcp.mjs`, que no tiene ninguna herramienta para cambiar nada. **Tu asistente** los lee con `ver_anuncios`.
+- **El dinero de los anuncios va aparte** del de los modelos: «Publicidad» en el resumen del lunes y en Costos y retorno.
+- `scripts/check-meta-anuncios.mjs`, para el token real: solo lee.
+- Tests: `anuncios-modelo`, `anuncios-servidor` (comprueba que solo hay GET), `anuncios-mcp` y `anuncios-vista`. Recorrido: `node scripts/anuncios-recorrido.mjs`.
+
 ## Anuncios de Meta, Fase 0: la base — 8 oct 2026
 
 Primera fase del plan `docs/plan-meta-anuncios-y-bandeja-2026-10-09.md`. Todavía no hay panel de Anuncios: esto es lo que necesitan todas las fases siguientes.

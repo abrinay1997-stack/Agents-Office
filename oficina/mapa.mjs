@@ -9,12 +9,13 @@ export const MAPA = `MAPA DE LA OFICINA — qué hay y quién decide
 - RUTINAS (calendario, tecla P): trabajo que se repite solo (cada día, entre semana, ciertos días, cada mes). Se pausan, se reanudan, se salta UNA ejecución o se corren ahora. Cada rutina tiene un escritorio y dice si espera el OK.
 - PROYECTOS: varias tareas de varios departamentos hacia una meta con fecha; una tarea puede ESPERAR a otra (no arranca hasta que esa termine).
 - CONTENIDO (tecla K): las publicaciones de redes. Una pieza va idea → borrador → a revisar → aprobada (SOLO el dueño aprueba) → sale sola a su hora por la cola (modo simulacro, Metricool o Meta directo). «Llenar la semana» propone los días vacíos con su mejor hora y lo que funcionó y puede volver. Plantillas y textos guardados viven en el Cerebro.
+- ANUNCIOS (tecla J): las campañas de Meta de la cuenta publicitaria del dueño — estado en palabras, aprendizaje, lo que Meta rechazó, gasto de hoy, la semana y el mes contra los topes, resultados (conversaciones, clics, compras…) y su costo. Por ahora SOLO SE LEEN: pausar, activar o cambiar presupuestos lo hará el dueño, y nada que gaste ocurre sin sus dos clics.
 - ANALÍTICAS (R): lo publicado en Meta y sus cifras (si Meta está conectada). ESTUDIO (E): imágenes, video, voz y música, con topes de gasto. CEREBRO (G): las notas de la empresa (voz, oferta, cifras, clientes). NEGOCIO (N): los indicadores del dueño. AJUSTES (,): lo configurable, con Estado de la oficina (O). Telegram: aprobar y hablar desde el teléfono.
 - APROBACIONES: todo lo que sale de la máquina (enviar, publicar, pagar, borrar o cambiar algo fuera) espera el OK del dueño en la oficina o en Telegram. Ni Dimitri, ni los agentes, ni un asistente conectado lo saltan: solo preparan, proponen y dejan borradores.`;
 
 /** Lo que una IA conectada puede y no puede hacer, en palabras (oficina-mcp.mjs → como_funciona, docs/conectar-ia.md). */
 export const REGLAS_ASISTENTE = `LO QUE PUEDES HACER DESDE AQUÍ
-- Leer todo: el estado de la oficina, las tareas y la agenda, las tareas del dueño, las rutinas, el calendario, Contenido, lo publicado y sus cifras, los huecos de la semana, y hablar con Dimitri.
+- Leer todo: el estado de la oficina, las tareas y la agenda, las tareas del dueño, las rutinas, el calendario, Contenido, lo publicado y sus cifras, los huecos de la semana, los anuncios de Meta y sus cifras, y hablar con Dimitri.
 - Cambios que se deshacen (los mismos que Dimitri propone): crear, pausar, reanudar, editar, saltar o correr una rutina; mover o cancelar una tarea que no empezó; cambiar la prioridad o la fecha límite; delegar o marcar hecha una tarea del dueño; crear o mover un borrador de Contenido; llenar la semana con borradores. Cada uno devuelve una clave para DESHACER durante 10 minutos.
 - Crear trabajo: una tarea para un departamento (como escribirla en la barra) o una tarea para la lista del dueño.
 LO QUE NO SE PUEDE (no hay herramienta para eso, a propósito)

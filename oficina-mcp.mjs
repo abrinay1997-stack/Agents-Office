@@ -7,7 +7,7 @@
 // (/api/oficina/accion → sub.parseOps) tampoco las conoce. tests/oficina-mcp.test.mjs falla si aparece una.
 // Variables: AO_OFFICE (la dirección de la oficina; por defecto http://127.0.0.1:4520). La oficina tiene que estar abierta.
 import readline from 'node:readline';
-import { tareasTexto, agendaTexto, rutinasTexto, publicadasTexto, huecosTexto, contenidoTexto, lineaTarea, ESTADO_TAREA } from './oficina/lecturas.mjs';
+import { tareasTexto, agendaTexto, rutinasTexto, publicadasTexto, huecosTexto, contenidoTexto, lineaTarea, ESTADO_TAREA, anunciosTexto } from './oficina/lecturas.mjs';
 
 const OFFICE = (process.env.AO_OFFICE || 'http://127.0.0.1:4520').replace(/\/+$/, '');
 const DEPTS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
@@ -45,6 +45,8 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { dias: { type: 'number' }, redes: { type: 'array', items: { type: 'string' } } } } },
   { name: 'ver_analiticas', description: 'Cómo van las redes, resumido: seguidores, alcance, interacciones y su cambio, formatos y mejores horas.',
     inputSchema: { type: 'object', properties: { dias: { type: 'number', description: '7 a 90 (por defecto 30).' } } } },
+  { name: 'ver_anuncios', description: 'Los anuncios de Meta (solo leer): la cuenta publicitaria, el gasto de hoy, la semana y el mes contra los topes, las campañas con sus conjuntos y anuncios, sus resultados y su costo, y lo que Meta rechazó. Con `id`, una campaña, un conjunto o un anuncio entero. Pausar, activar o cambiar presupuestos lo hace el dueño en Anuncios (J).',
+    inputSchema: { type: 'object', properties: { que: { type: 'string', enum: ['cuenta', 'campanas', 'resultados'], description: 'cuenta (por defecto): el resumen · campanas: con sus conjuntos · resultados: por anuncio.' }, rango: { type: 'string', enum: ['hoy', '7d', '30d', 'mes'] }, estado: { type: 'string', enum: ['todas', 'activas', 'pausadas', 'problemas'] }, id: { type: 'string' } } } },
   { name: 'hablar_con_dimitri', description: 'Habla con Dimitri, el subgerente de la oficina (cuesta una consulta a su modelo). Contesta, analiza o propone un plan: tareas para los jefes y cambios del calendario. Lo que propone NO se hace solo: los cambios los haces con `hacer` (te los da listos) y las tareas con `crear_tarea`.',
     inputSchema: { type: 'object', properties: { texto: { type: 'string' } }, required: ['texto'] } },
   { name: 'crear_tarea', description: 'Trabajo para un departamento, como si el dueño lo escribiera en la barra. El jefe elige el escritorio y el agente empieza; si su trabajo envía, publica o paga algo, ESPERA el OK del dueño (siempre, desde aquí). Con `at`, arranca a esa hora.',
@@ -76,6 +78,7 @@ async function call(name, a = {}) {
   if (name === 'ver_resultados') return publicadasTexto(office, a);
   if (name === 'ver_huecos') return huecosTexto(office, a);
   if (name === 'ver_analiticas') { const { texto } = await office(`/api/contenido/analiticas/resumen?dias=${Math.min(90, Math.max(7, Number(a.dias) || 30))}`); return `<analiticas>\n${texto}\n</analiticas>`; }
+  if (name === 'ver_anuncios') return anunciosTexto(office, a); // Fase A1 de Anuncios: solo leer
   if (name === 'hablar_con_dimitri') {
     const r = await office('/api/sub/chat', { text: String(a.texto || '').slice(0, 8000) });
     const m = (r.messages || []).at(-1) || {};

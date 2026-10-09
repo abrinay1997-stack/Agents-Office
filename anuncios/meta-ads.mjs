@@ -1,0 +1,121 @@
+// ============================================================
+// Agents Office — Anuncios de Meta, Fase A1 (8 oct 2026): el cliente de LECTURA de la Marketing API.
+//
+// Va encima de contenido/meta.mjs (crearMeta): el mismo token (META_ACCESS_TOKEN, nunca en un archivo), el mismo `appsecret_proof`
+// y el MISMO FRENO por uso, porque publicar, Analíticas, Anuncios y la Bandeja gastan la misma cuota. Aquí no hay `fetch` propio.
+//
+// SOLO LEE. Lo único que va por POST es el LOTE (`POST /` con `batch`), que Graph exige así; `lote()` se niega a mandar dentro
+// algo que no sea un GET. Crear, pausar o cambiar presupuestos es de las Fases A2 y A3, con sus candados (plan §3).
+//
+// Buenas prácticas (plan §4.1): `fields=` explícitos, `limit` y paginación por cursor; la estructura (cuenta, campañas, conjuntos,
+// anuncios, creativos) en UN lote; las cifras por cuenta (`/act_<id>/insights?level=ad&time_increment=1`), no objeto a objeto.
+// ============================================================
+import { ErrorMeta } from '../contenido/meta.mjs';
+
+export const MAX_LOTE = 50; // lo que Graph admite en un lote
+const LIMITE_LISTA = 200, LIMITE_CIFRAS = 500, MAX_PAGINAS = 20;
+
+// Los campos de cada objeto. Pedir un campo que la versión no conoce hace fallar la petición ENTERA: aquí solo van los de la
+// referencia de v26 que la oficina usa. POR VERIFICAR contra la referencia de v26 antes de añadir `advantage_state_info` a las
+// campañas (plan §13.3): por eso todavía no se pide.
+export const CAMPOS = {
+  cuenta: 'id,account_id,name,account_status,disable_reason,currency,timezone_name,amount_spent,spend_cap,balance',
+  campanas: 'id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,bid_strategy,spend_cap,start_time,stop_time,special_ad_categories,created_time,updated_time',
+  conjuntos: 'id,name,campaign_id,status,configured_status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,bid_strategy,start_time,end_time,targeting,learning_stage_info,promoted_object,issues_info',
+  // POR VERIFICAR: `effective_instagram_media_id` en el creativo expandido (la Fase B1 lo usará para los comentarios de los anuncios).
+  anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id}',
+  creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id',
+  // las cifras diarias por anuncio (plan §5 A1). `purchase_roas` solo tiene sentido con píxel: se añade si hay uno en Ajustes.
+  cifras: 'ad_id,adset_id,campaign_id,date_start,date_stop,spend,impressions,reach,frequency,clicks,inline_link_clicks,ctr,cpc,cpm,actions,cost_per_action_type',
+  alcance: 'campaign_id,adset_id,ad_id,reach,impressions,frequency',
+};
+export const NIVELES_ALCANCE = ['account', 'campaign', 'adset', 'ad'];
+
+/** «act_123» con o sin el prefijo → «act_123»; cualquier otra cosa → ''. */
+export const idCuenta = s => { const t = String(s || '').trim(); return /^act_\d+$/.test(t) ? t : /^\d+$/.test(t) ? `act_${t}` : ''; };
+
+const urlRelativa = (ruta, params = {}) => {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') q.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+  const s = String(q); return `${String(ruta).replace(/^\//, '')}${s ? '?' + s : ''}`;
+};
+
+/**
+ * @param {object} o
+ * @param {object} o.meta  el cliente de contenido/meta.mjs (graph, enviar, tokenDe, uso)
+ */
+export function crearMetaAds({ meta }) {
+  const token = () => meta.tokenDe({}); // sin página: el token de usuario del sistema (el que tiene la cuenta publicitaria asignada)
+
+  /** Un lote de GET (hasta 50) en una sola llamada. Cada respuesta llega con su código; una que falla no tumba a las demás. */
+  async function lote(peticiones) {
+    if (!Array.isArray(peticiones) || !peticiones.length) return [];
+    if (peticiones.length > MAX_LOTE) throw new Error(`un lote de Meta admite ${MAX_LOTE} peticiones (llegaron ${peticiones.length})`);
+    for (const p of peticiones) if ((p.method || 'GET').toUpperCase() !== 'GET') throw new Error('Anuncios (A1) solo lee: un lote no puede llevar más que GET');
+    const r = await meta.enviar(await token(), '/', { campos: { batch: peticiones.map(p => ({ method: 'GET', relative_url: urlRelativa(p.ruta, p.params) })), include_headers: false } });
+    if (!Array.isArray(r)) throw new ErrorMeta({ message: 'Meta no devolvió el lote como se esperaba' }, 0);
+    return r.map(x => {
+      let cuerpo = null; try { cuerpo = typeof x?.body === 'string' ? JSON.parse(x.body) : x?.body ?? null; } catch { /* cuerpo ilegible */ }
+      if (!x || x.code !== 200 || cuerpo?.error) return { ok: false, error: new ErrorMeta({ ...(cuerpo?.error ?? {}), message: cuerpo?.error?.message || `Meta respondió ${x?.code ?? '?'} en el lote` }, x?.code ?? 0) };
+      return { ok: true, datos: cuerpo };
+    });
+  }
+
+  /** Sigue los cursores de una lista (`paging.next` → `after`), hasta MAX_PAGINAS. `datos` = la primera página si ya se tiene. */
+  async function resto(ruta, params, datos) {
+    const salida = [...(datos?.data ?? [])];
+    let d = datos;
+    for (let vuelta = 0; vuelta < MAX_PAGINAS && d?.paging?.next && d?.paging?.cursors?.after; vuelta++) {
+      d = await meta.graph(await token(), ruta, { params: { ...params, after: d.paging.cursors.after } });
+      salida.push(...(d?.data ?? []));
+    }
+    return salida;
+  }
+  async function todas(ruta, params) { return resto(ruta, params, await meta.graph(await token(), ruta, { params })); }
+
+  /** La cuenta y todo lo que cuelga de ella, en UN lote (más las páginas que falten de una lista larga). */
+  async function estructura(cuenta) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    const listas = { campanas: 'campaigns', conjuntos: 'adsets', anuncios: 'ads', creativos: 'adcreatives' };
+    const pet = [{ ruta: `/${act}`, params: { fields: CAMPOS.cuenta } }, ...Object.entries(listas).map(([k, sub]) => ({ ruta: `/${act}/${sub}`, params: { fields: CAMPOS[k], limit: LIMITE_LISTA } }))];
+    const [rc, ...rl] = await lote(pet);
+    if (!rc.ok) throw rc.error;
+    const out = { cuenta: rc.datos, avisos: [] };
+    const claves = Object.keys(listas);
+    for (let i = 0; i < claves.length; i++) {
+      const k = claves[i], r = rl[i];
+      if (!r.ok) { if (k === 'creativos') { out.creativos = []; out.avisos.push(`no se pudieron leer los creativos: ${r.error.message}`); continue; } throw r.error; }
+      out[k] = await resto(pet[i + 1].ruta, pet[i + 1].params, r.datos);
+    }
+    return out;
+  }
+
+  /** Las cifras diarias por anuncio entre dos días (en la zona de la cuenta). */
+  async function cifrasDiarias(cuenta, desde, hasta, { pixel = false } = {}) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    return todas(`/${act}/insights`, { level: 'ad', time_increment: 1, fields: CAMPOS.cifras + (pixel ? ',purchase_roas' : ''), time_range: { since: desde, until: hasta }, limit: LIMITE_CIFRAS });
+  }
+
+  /**
+   * El ALCANCE de cada rango y nivel: personas únicas, que no se pueden sumar día a día. Un lote con una petición por rango y nivel
+   * (4 × 4 = 16). rangos: { hoy: ['AAAA-MM-DD', 'AAAA-MM-DD'], … } → { hoy: { desde, hasta, account, campaign: {id: n}, adset, ad } }.
+   * Una lista de más de LIMITE_CIFRAS objetos se queda en su primera página (esos objetos salen sin alcance: null, no inventado).
+   */
+  async function alcances(cuenta, rangos) {
+    const act = idCuenta(cuenta); if (!act) throw new Error('falta la cuenta publicitaria (act_…)');
+    const pares = Object.entries(rangos).flatMap(([nombre, [desde, hasta]]) => NIVELES_ALCANCE.map(nivel => ({ nombre, desde, hasta, nivel })));
+    const r = await lote(pares.map(p => ({ ruta: `/${act}/insights`, params: { level: p.nivel, fields: CAMPOS.alcance, time_range: { since: p.desde, until: p.hasta }, limit: LIMITE_CIFRAS } })));
+    const out = {};
+    pares.forEach((p, i) => {
+      const x = (out[p.nombre] ||= { desde: p.desde, hasta: p.hasta, account: null, campaign: {}, adset: {}, ad: {} });
+      if (!r[i]?.ok) return;
+      for (const f of r[i].datos?.data ?? []) {
+        const v = Number(f.reach); if (!Number.isFinite(v)) continue;
+        if (p.nivel === 'account') x.account = v; else if (f[`${p.nivel}_id`]) x[p.nivel][f[`${p.nivel}_id`]] = v;
+      }
+    });
+    return out;
+  }
+
+  return { lote, estructura, cifrasDiarias, alcances, todas };
+}

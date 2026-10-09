@@ -175,7 +175,19 @@ export function crearMetaStand(o = {}) {
   function cifras(q) {
     const nivel = q.get('level') || 'account', rango = objeto(q.get('time_range'));
     const filas = st.cifras.filter(f => (!rango || (f.date_start >= rango.since && f.date_start <= rango.until)) && (nivel === 'account' || f[`${nivel}_id`]));
-    return json({ data: filas, paging: { cursors: { before: 'a', after: 'b' } } });
+    if (q.get('time_increment')) return json({ data: filas, paging: { cursors: { before: 'a', after: 'b' } } });
+    // Fase A1: sin `time_increment`, Meta da UNA fila por objeto del nivel para todo el rango. El alcance son personas únicas: no es la
+    // suma de los días. Aquí, el mayor de los días (o `reach_rango` si el test lo puso en alguna fila), para que se note si alguien suma.
+    const grupos = new Map();
+    for (const f of filas) {
+      const k = nivel === 'account' ? 'cuenta' : f[`${nivel}_id`];
+      const g = grupos.get(k) ?? { ...(nivel === 'account' ? {} : { campaign_id: f.campaign_id, ...(nivel !== 'campaign' ? { adset_id: f.adset_id } : {}), ...(nivel === 'ad' ? { ad_id: f.ad_id } : {}) }), date_start: rango?.since ?? f.date_start, date_stop: rango?.until ?? f.date_start, spend: 0, impressions: 0, clicks: 0, inline_link_clicks: 0, reach: 0 };
+      for (const c of ['spend', 'impressions', 'clicks', 'inline_link_clicks']) g[c] = Math.round((g[c] + Number(f[c] || 0)) * 100) / 100;
+      g.reach = Math.max(g.reach, Number(f.reach_rango ?? f.reach ?? 0));
+      grupos.set(k, g);
+    }
+    const data = [...grupos.values()].map(g => ({ ...g, spend: String(g.spend), impressions: String(g.impressions), reach: String(g.reach), frequency: g.reach ? String(g.impressions / g.reach) : '0' }));
+    return json({ data, paging: { cursors: { before: 'a', after: 'b' } } });
   }
 
   // ---------------------------------------------------------------- el lote

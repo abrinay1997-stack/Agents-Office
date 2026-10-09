@@ -3,8 +3,8 @@
 // Arriba de 440 px no cambia nada. La luz de Salud se copia al «⋯» para que un fallo no se esconda dentro del menú.
 // Auditoría 1 oct 2026 (A11-04): Dimitri entra al dock (fuera del «⋯»: es lo más importante en el teléfono) y el Cerebro, que en el
 // teléfono se usa menos, pasa al «⋯» para que el dock siga cabiendo a 320 px con el aviso «⚠ N».
-const FOLDED = ['topAnaliticas', 'topTareas', 'topBrain', 'topBiz', 'topSettings']; // 8 oct 2026: «Estado» is now Ajustes → Estado (no button of its own) // plan T2 (6 oct 2026): Tareas también (en el teléfono queda el panel T)
-const KEY_OF = { topTareas: 'H', topAnaliticas: 'R', topBrain: 'G', topBiz: 'N', topSettings: ',' };
+const FOLDED = ['topAnaliticas', 'topAnuncios', 'topTareas', 'topBrain', 'topBiz', 'topSettings']; // 8 oct 2026: «Estado» is now Ajustes → Estado (no button of its own) // plan T2 (6 oct 2026): Tareas también (en el teléfono queda el panel T) · Fase A1 (9 oct 2026): Anuncios también
+const KEY_OF = { topTareas: 'H', topAnaliticas: 'R', topAnuncios: 'J', topBrain: 'G', topBiz: 'N', topSettings: ',' };
 
 export function initDock() {
   const dock = document.getElementById('topdock'), anchor = document.getElementById('topPanel');
@@ -12,8 +12,8 @@ export function initDock() {
   if (!dock || !anchor || !real.length) return null;
   const btn = document.createElement('button');
   btn.id = 'topMore'; btn.className = 'tb-ic'; btn.type = 'button';
-  btn.setAttribute('aria-label', 'Más herramientas: analíticas, tareas, Cerebro, negocio y ajustes (con el estado de la oficina)'); btn.setAttribute('aria-haspopup', 'menu'); btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', 'topMoreMenu');
-  btn.title = 'Más — analíticas, tareas, el Cerebro, negocio y ajustes (con el estado de la oficina)'; btn.dataset.tip = 'Más';
+  btn.setAttribute('aria-label', 'Más herramientas: analíticas, anuncios, tareas, Cerebro, negocio y ajustes (con el estado de la oficina)'); btn.setAttribute('aria-haspopup', 'menu'); btn.setAttribute('aria-expanded', 'false'); btn.setAttribute('aria-controls', 'topMoreMenu');
+  btn.title = 'Más — analíticas, anuncios, tareas, el Cerebro, negocio y ajustes (con el estado de la oficina)'; btn.dataset.tip = 'Más';
   btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg><i class="hl-badge" aria-hidden="true"></i>';
   dock.insertBefore(btn, anchor);
   const menu = document.createElement('div');

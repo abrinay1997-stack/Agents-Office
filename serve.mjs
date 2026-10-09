@@ -91,6 +91,10 @@ import { LIMITES as LIMITES_RED, formatoDe as formatoDeRed } from './src/conteni
 import { crearMeta } from './contenido/meta.mjs'; // V4.7 (F2): Meta, solo lectura — su token vive en META_ACCESS_TOKEN y no toca el disco
 import { crearMetricas } from './contenido/metricas.mjs';
 import { crearRutasAnaliticas } from './contenido/rutas-analiticas.mjs';
+import { crearMetaAds } from './anuncios/meta-ads.mjs'; // Fase A1 de Anuncios (8 oct 2026): el panel de Anuncios, SOLO LECTURA (docs/plan-meta-anuncios-y-bandeja-2026-10-09.md)
+import { crearSincronizador as crearSincAnuncios } from './anuncios/sincronizar.mjs';
+import { crearRutasAnuncios } from './anuncios/rutas.mjs';
+import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from './anuncios/modelo.mjs';
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
 import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
@@ -184,6 +188,13 @@ const INDICADORES_META = [
   { id: 'meta_alcance', name: 'Alcance de los últimos 30 días', unit: '', better: 'up' },
 ];
 const meta = crearMeta({ dir: ANALITICAS_DIR });
+// Fase A1 de Anuncios (8 oct 2026): leer la cuenta publicitaria (cfg.anuncios.cuenta) con el mismo cliente y el mismo freno que Analíticas.
+// Lo leído vive en data/anuncios/ (no viaja; nunca un token). Aquí NADA escribe en Meta: eso llega en A2 con sus candados (plan §3).
+const ANUNCIOS_DIR = path.join(DATA, 'anuncios');
+const DEF_ANUNCIOS = Object.fromEntries(['topeDiario', 'topeMensual', 'topeCampana'].map(k => [k, settings.FIELDS.find(f => f.path === 'anuncios.' + k)?.default ?? null]));
+const anuncios = crearSincAnuncios({ meta, ads: crearMetaAds({ meta }), dir: ANUNCIOS_DIR, ajustes: () => cfg.anuncios || {}, defaults: DEF_ANUNCIOS, avisar: (texto, o) => notice('anuncios', texto, o) });
+const ANUNCIOS_DEPTS = Array.isArray(cfg.anuncios?.departments) ? cfg.anuncios.departments : ['marketing']; // quién recibe anuncios-mcp.mjs (solo leer)
+const ANUNCIOS_MCP = path.join(ROOT, 'anuncios-mcp.mjs');
 // plan M1 (6 oct 2026): la COLA que lleva lo aprobado al conductor (simulacro por defecto; Metricool en modo real) — contenido/programador.mjs
 const metricool = crearMetricool();
 const aJpeg = async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
@@ -282,6 +293,10 @@ function dailyBackup() { // one copy a day of the tasks and the routines file, t
       const dest = path.join(dir, `analiticas-${day}`); if (!fs.existsSync(dest)) fs.cpSync(ANALITICAS_DIR, dest, { recursive: true, filter: f => !f.includes(`${path.sep}miniaturas`) });
       for (const d of fs.readdirSync(dir).filter(f => /^analiticas-\d{4}-\d{2}-\d{2}$/.test(f)).sort().slice(0, -14)) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
     }
+    if (fs.existsSync(ANUNCIOS_DIR)) { // Fase A1 de Anuncios: la estructura y las cifras leídas de Meta (presupuestos, resultados), como Contenido: 14 días
+      const dest = path.join(dir, `anuncios-${day}`); if (!fs.existsSync(dest)) fs.cpSync(ANUNCIOS_DIR, dest, { recursive: true });
+      for (const d of fs.readdirSync(dir).filter(f => /^anuncios-\d{4}-\d{2}-\d{2}$/.test(f)).sort().slice(0, -14)) fs.rmSync(path.join(dir, d), { recursive: true, force: true });
+    }
     const all = fs.readdirSync(dir).filter(f => /^(tasks|routines)-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
     for (const kind of ['tasks', 'routines']) { const mine = all.filter(f => f.startsWith(kind + '-')); for (const f of mine.slice(0, -14)) fs.rmSync(path.join(dir, f), { force: true }); }
   } catch (e) { console.warn('backup:', e.message); }
@@ -375,6 +390,8 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   if (conTareas) allowed.push('mcp__tareas');
   const conHabilidades = tools && !!agent && biblio.de(agent).length > 0; // 7 oct 2026: la biblioteca (habilidades-mcp.mjs) — solo lee
   if (conHabilidades) allowed.push('mcp__habilidades');
+  const conAnuncios = tools && !!agent && ANUNCIOS_DEPTS.includes(agent.department) && anuncios.listo().ok; // Fase A1: los anuncios de Meta (anuncios-mcp.mjs) — solo lee
+  if (conAnuncios) allowed.push('mcp__anuncios');
   // the system prompt goes in a file and the request on stdin: skills + notes + a revise can pass Windows' 32,767-character command line
   const sysFile = path.join(CLI_CWD, `system-${nid()}.txt`); fs.writeFileSync(sysFile, system);
   // V4.4: the guard — a hook around every tool call. A run that may not send also loses the send tools outright where it can never need them (a draft, a teammate's piece, «nunca»)
@@ -382,7 +399,7 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   const runId = nid(), guardFile = path.join(CLI_CWD, `guard-${runId}.json`), taintFile = path.join(CLI_CWD, `taint-${runId}.json`), settingsFile = path.join(CLI_CWD, `settings-${runId}.json`);
   const hardOff = tools && !writes && (runMode === 'draft' || runMode === 'piece' || pol === 'nunca') ? mcp.writeTools(agent, SAFETY().safeTools, SAFETY().toolKinds) : [];
   // auditoría MCP (1 oct 2026): the guard knows which servers this desk was given (MCP-07) and the run starts only those when it can (MCP-06)
-  const ownServers = [...(studio ? ['estudio'] : []), ...(conContenido ? ['contenido'] : []), ...(conTareas ? ['tareas'] : []), ...(conHabilidades ? ['habilidades'] : [])]; // (the browser is in serverIdsFor when this desk may use it)
+  const ownServers = [...(studio ? ['estudio'] : []), ...(conContenido ? ['contenido'] : []), ...(conTareas ? ['tareas'] : []), ...(conHabilidades ? ['habilidades'] : []), ...(conAnuncios ? ['anuncios'] : [])]; // (the browser is in serverIdsFor when this desk may use it)
   const iso = tools && agent ? mcp.runConfig(agent) : null, mcpFile = path.join(CLI_CWD, `mcp-${runId}.json`);
   if (tools && agent) {
     fs.writeFileSync(guardFile, JSON.stringify({ run: runId, task: taskId, agent: agent.id, dept: agent.department, writes, runMode, policy: pol, amountLimit: APPR().amountLimit, known: runMode === 'approve' ? known : null, safety: cfg.safety || {}, auditDir: AUDIT, taintFile, servers: mcp.serverIdsFor(agent, ownServers) }));
@@ -400,9 +417,9 @@ async function askX(system, user, { maxTokens = 4000, tools = true, timeout = RU
   // machine's Claude Code knows (plugins, claude.ai connectors…: `claude mcp list` took 53 s here). It could not call them anyway.
   if (!tools || iso) args.push('--strict-mcp-config'); // MCP-06: with `iso`, only this desk's servers (rebuilt exactly, same tool ids) + the office's own
   if (onText && partial) args.push('--include-partial-messages'); // DIM-14: the text as it is written (stream_event deltas)
-  if (studio || conContenido || conTareas || conHabilidades || iso) { // one --mcp-config, in a file (a server's env can carry a key: never on the command line): the Estudio and Contenido share who is asking
+  if (studio || conContenido || conTareas || conHabilidades || conAnuncios || iso) { // one --mcp-config, in a file (a server's env can carry a key: never on the command line): the Estudio and Contenido share who is asking
     const who = { AO_OFFICE: `http://127.0.0.1:${cfg.port}`, AO_AGENT: agent.id, AO_TASK: taskId || '' };
-    fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: { ...(iso || {}), ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}), ...(conTareas ? { tareas: { command: process.execPath, args: [TAREAS_MCP], env: who } } : {}), ...(conHabilidades ? { habilidades: { command: process.execPath, args: [HABILIDADES_MCP], env: who } } : {}) } }));
+    fs.writeFileSync(mcpFile, JSON.stringify({ mcpServers: { ...(iso || {}), ...(studio ? { estudio: { command: process.execPath, args: [STUDIO_MCP], env: who } } : {}), ...(conContenido ? { contenido: { command: process.execPath, args: [CONTENIDO_MCP], env: who } } : {}), ...(conTareas ? { tareas: { command: process.execPath, args: [TAREAS_MCP], env: who } } : {}), ...(conHabilidades ? { habilidades: { command: process.execPath, args: [HABILIDADES_MCP], env: who } } : {}), ...(conAnuncios ? { anuncios: { command: process.execPath, args: [ANUNCIOS_MCP], env: who } } : {}) } }));
     try { fs.chmodSync(mcpFile, 0o600); } catch {} args.push('--mcp-config', mcpFile); // its env can carry a key: only this user reads it, and a crash leaves none behind (swept at start)
   }
   const env = { ...process.env, MCP_TOOL_TIMEOUT: '900000', MAX_MCP_OUTPUT_TOKENS: process.env.MAX_MCP_OUTPUT_TOKENS || '60000', AO_GUARD: tools && agent ? guardFile : '' }; delete env.CLAUDECODE; // the CLI refuses to nest inside another Claude Code session · a video takes minutes · MCP-13: a long answer stays inline (the agents have no Read to open the file Claude Code would park it in)
@@ -915,6 +932,7 @@ function dimitriOffice(list) {
   try { out.push(sub.publicacionText(programador.estado())); } catch {} // 9 oct 2026: cómo sale lo aprobado (modo, conductor, cuota, fallos)
   try { out.push(contenidoSemana().split('\n').filter(l => !l.startsWith('Próximos 7 días')).join('\n')); } catch {} // F4: lo que salió y cómo le fue, y lo que puede volver
   try { out.push(sub.analiticasText(analiticasResumen())); } catch {}
+  try { out.push(sub.anunciosText(anunciosRoutes.completa('7d'))); } catch {} // Fase A1: lo activo, el gasto contra los topes, los resultados y lo que tiene problemas, con ids
   try { out.push(sub.rutinasText(loadRoutines(), list, { agents: AGENTS })); } catch {}
   try { const l = list || load(); out.push(sub.proyectosText(catalogoT.proyectos().map(p => ({ ...p, progreso: progresoProyecto(p, l) })), l, { name: agentName })); out.push(agendaResumen(l)); out.push(resumenDueno(l, { nombre: agentName })); } catch {} // plan T4: projects, deadlines, blocks · plan D: lo del dueño
   try {
@@ -968,6 +986,10 @@ function dimitriViewing(c, list) {
       else { const suyas = list.filter(t => t.proyecto === p.id && !t.archived); data.proyecto = sub.proyectosText([{ ...p, estado: p.estado === 'activo' || p.estado === 'pausa' ? p.estado : 'activo', progreso: progresoProyecto(p, list) }], list, { name: agentName }) + `\nSus tareas (${suyas.length}):\n` + suyas.slice(0, 25).map(t => `- ${t.id} · «${String(t.title).slice(0, 60)}» · ${t.state}${t.person === DUENO ? ' · DEL DUEÑO' : t.person ? ' · ' + t.person : ' · ' + agentName(t.agent)}${t.limite ? ' · límite ' + String(t.limite).replace('T', ' ') : ''}`).join('\n'); }
     } else if (c.view === 'tareas') { // 9 oct 2026: Tareas open on a list: the agenda (and the owner's own lists) with ids
       data.texto = `${agendaTexto(agendaTareas(list, { ahora: Date.now() }), { nombre: agentName })}\n\n${resumenDueno(list, { nombre: agentName })}`;
+    } else if (c.view === 'anuncios') { // Fase A1: el panel de Anuncios — el resumen, o la campaña, el conjunto o el anuncio abierto
+      const v = anunciosRoutes.completa(['hoy', '7d', '30d', 'mes'].includes(c.rango) ? c.rango : '7d');
+      if (c.id && ['campana', 'conjunto', 'anuncio'].includes(c.kind)) data.texto = buscarAnuncio(v, String(c.id)) ? textoAnuncio(v, String(c.id)) : 'Eso ya no está en lo leído de Meta.';
+      else data.texto = sub.anunciosText(v);
     } else if (c.view === 'analiticas') {
       const [metrica, red, dias] = String(c.id || '').split(':');
       data.metric = `Métrica en pantalla: ${metrica || '—'}\n` + sub.analiticasText(analiticasResumen({ dias: Math.max(1, Math.min(365, +dias || 30)), red: ['instagram', 'facebook'].includes(red) ? red : 'todas' }));
@@ -1804,6 +1826,8 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body }); // Fase A1: /api/anuncios (solo lectura)
+setInterval(() => { anuncios.tick(); }, 60e3); setTimeout(() => { anuncios.tick(); }, 20e3); // el sondeo, con calma (anuncios/sincronizar.mjs: 15/60 min, ×2 o ×4 con el freno de Meta)
 const analiticasRoutes = crearRutasAnaliticas({ meta, metricas, json, indicadores: { estado: () => indicadoresMeta.estado(), crear: () => indicadoresMeta.crear() }, notice, fs }); // perezoso: indicadoresMeta se declara más abajo
 // The office listens on this machine only (cfg.host, default 127.0.0.1) and answers only its own page:
 // a website open in another tab cannot POST to localhost to start agents that hold your Gmail and Chrome (CSRF),
@@ -2010,6 +2034,17 @@ function contenidoSemana() {
   } catch (e) { return `Redes: no las pude resumir (${e.message}).`; }
 }
 
+/** Fase A1 de Anuncios: el gasto de la semana y del mes en Meta y su costo por resultado — la sección «Publicidad» del informe del lunes y
+ *  de Costos y retorno. Es dinero REAL pagado a Meta: va aparte del costo de los modelos y nunca entra en data/costs.jsonl. */
+function publicidadSemana() {
+  try {
+    const v = anunciosRoutes.completa('7d'), m = v.cuenta?.moneda || 'USD', u = x => (x == null ? 'sin dato' : `${m === 'USD' ? 'US$' : m + ' '}${Number(x).toFixed(2)}`);
+    if (!v.configurado && !v.cuenta) return { configurado: false, motivo: v.motivo, texto: '' };
+    const r = v.resumen || {};
+    const texto = `Publicidad (Meta, últimos 7 días; dinero pagado a Meta, aparte del costo de los modelos): gastado ${u(v.gasto?.semana)} (este mes ${u(v.gasto?.mes)}${v.topes?.mensual != null ? ` de un tope de ${u(v.topes.mensual)}` : ''}) · ${r.resultados7d == null ? `${r.resultadoTexto || 'resultados'}: sin dato` : `${r.resultados7d} ${r.resultadoTexto}${r.costoPorResultado7d != null ? ` a ${u(r.costoPorResultado7d)}` : ''}`}${(v.avisos || []).length ? ` · avisos: ${v.avisos.map(a => a.texto).join(' ')}` : ''}`;
+    return { configurado: v.configurado, moneda: m, semana: { gasto: v.gasto?.semana ?? null, resultados: r.resultados7d ?? null, costoPorResultado: r.costoPorResultado7d ?? null, resultadoTexto: r.resultadoTexto || 'resultados' }, mes: { gasto: v.gasto?.mes ?? null }, topes: v.topes, sincronizadaAt: v.sincronizadaAt, texto };
+  } catch (e) { return { configurado: false, motivo: e.message, texto: `Publicidad: no la pude resumir (${e.message}).` }; }
+}
 // J8: Dimitri's weekly report, Monday morning — how the week went and what to decide
 const WEEKLY = path.join(DATA, 'weekly.json');
 function tareasSemana(l) { // plan T5: the week in tasks — from the log (cycle time, waiting for the OK, late), and the projects that are late
@@ -2026,7 +2061,7 @@ async function weeklyReport(force = false) {
   if (!force && (st.week === wk || now.getDay() !== 1 || now.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
   st.week = wk; fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(WEEKLY, JSON.stringify(st));
   const l = load(), c = costs.report(costs.read(DATA, Date.now() - 70 * 864e5), l, AGENTS, cfg.costs), q = quality.byAgent(l, AGENTS), k = loadKpis();
-  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l), contenidoSemana()].join('\n'); // F4: las redes también
+  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l), contenidoSemana(), publicidadSemana().texto].filter(Boolean).join('\n'); // F4: las redes también · A1: la publicidad, aparte del costo de los modelos
   const text = await ask(`Eres ${DEPUTY}, la mano derecha del dueño de ${cfg.name}. Escribes el informe del lunes: claro, concreto, en español, 180–260 palabras, sin relleno.`, `Datos de la semana:\n${facts}\n\nEscribe: 1) cómo fue la semana en tres líneas, 2) lo que salió bien, 3) lo que falló o se atasca, 4) tres decisiones que el dueño debería tomar esta semana, cada una con el porqué. Solo texto.`, { maxTokens: 1200, timeout: 180000, model: 'sonnet', kind: 'informe' });
   const ss = sub.load(DATA); ss.messages.push(sub.message('sub', '📋 Informe de la semana\n\n' + text, { mode: 'analisis' })); sub.save(DATA, ss);
   notice('weekly', `📋 Informe de la semana de ${DEPUTY}:\n${text}`);
@@ -2096,6 +2131,11 @@ let peCache = { mtime: 0 };
 function piezaEditorAlDia(x) { const v = /^\/\*ao-pieza:([0-9a-f]{12})\*\//.exec(x.raw.subarray(0, 40).toString('utf8'))?.[1]; try { return !!v && page().raw.includes(v); } catch { return true; } }
 function piezaEditorFile() { const st = fs.statSync(PIEZA_EDITOR); if (st.mtimeMs !== peCache.mtime || st.size !== peCache.raw?.length) { const raw = fs.readFileSync(PIEZA_EDITOR); peCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"p${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return peCache; }
 function tareasVistaFile() { const st = fs.statSync(TAREAS_VISTA); if (st.mtimeMs !== tvCache.mtime || st.size !== tvCache.raw?.length) { const raw = fs.readFileSync(TAREAS_VISTA); tvCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"t${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return tvCache; }
+// Fase A1 de Anuncios: the panel, on demand too (build-anuncios.mjs → dist/anuncios-vista.js; its first line /*ao-anuncios:<versión>*/ says its build)
+const ANUNCIOS_VISTA = path.join(ROOT, 'dist', 'anuncios-vista.js');
+let avCache = { mtime: 0 };
+function anunciosVistaAlDia(x) { const v = /^\/\*ao-anuncios:([0-9a-f]{12})\*\//.exec(x.raw.subarray(0, 40).toString('utf8'))?.[1]; try { return !!v && page().raw.includes(v); } catch { return true; } }
+function anunciosVistaFile() { const st = fs.statSync(ANUNCIOS_VISTA); if (st.mtimeMs !== avCache.mtime || st.size !== avCache.raw?.length) { const raw = fs.readFileSync(ANUNCIOS_VISTA); avCache = { mtime: st.mtimeMs, raw, gz: zlib.gzipSync(raw, { level: 9 }), etag: `"a${Math.round(st.mtimeMs).toString(36)}-${raw.length.toString(36)}"` }; } return avCache; }
 const EXTRA = path.join(ROOT, 'dist', 'estudio-extra.js');
 let extraCache = { mtime: 0 };
 function extraFile() {
@@ -2174,7 +2214,11 @@ function officeStatus() {
     if (!m.configurado) add('anuncios', 'Anuncios (Meta)', 'info', 'Meta no está conectada: el panel de Anuncios queda vacío.', 'Mira docs/conectar-meta.md: el token va en META_ACCESS_TOKEN y la cuenta publicitaria en Ajustes → Anuncios.');
     else if (!cuenta) add('anuncios', 'Anuncios (Meta)', 'info', 'Sin cuenta publicitaria elegida.', 'Ajustes → Anuncios → «Cuenta publicitaria de Meta» (act_…).');
     else if (fp.anuncios?.length) add('anuncios', 'Anuncios (Meta)', 'warn', `Cuenta ${cuenta}: al token le faltan ${fp.anuncios.join(', ')}.`, 'Genera el token de nuevo en Business Manager con esos permisos y la cuenta publicitaria asignada al usuario del sistema.');
-    else add('anuncios', 'Anuncios (Meta)', u.frenadoHasta ? 'warn' : 'ok', `Cuenta ${cuenta} con permisos para leer y gestionar campañas.${frenado}`);
+    else { // Fase A1: con la última lectura del panel de Anuncios y su error, si lo hubo
+      const cx = anuncios.conexion(), ultima = cx.sondeoAt ? ` Última lectura ${agoText(now - Date.parse(cx.sondeoAt))}.` : ' Todavía sin leer (se lee sola en unos minutos, o con «Actualizar» en Anuncios, J).';
+      if (cx.error) add('anuncios', 'Anuncios (Meta)', 'warn', `Cuenta ${cuenta}: la última lectura falló: ${cx.error}${frenado}`, 'Abre Anuncios (J) → «Actualizar»; si sigue, revisa que la cuenta esté asignada al usuario del sistema del token.');
+      else add('anuncios', 'Anuncios (Meta)', u.frenadoHasta ? 'warn' : 'ok', `Cuenta ${cuenta} con permisos para leer y gestionar campañas.${ultima}${frenado}`);
+    }
     if (!m.configurado) add('mensajes', 'Mensajes de Meta', 'info', 'Meta no está conectada: la Bandeja sigue con Metricool (o vacía).', 'Mira docs/conectar-meta.md.');
     else if (fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', 'info', `Al token le faltan ${fp.mensajes.join(', ')}: los mensajes privados no llegan a la Bandeja.`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
     else add('mensajes', 'Mensajes de Meta', 'ok', `Permisos de mensajes listos.${frenado}`); }
@@ -2300,6 +2344,13 @@ const server = http.createServer(async (req, res) => {
     }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/tareas-vista.js') { // plan T2: the Tareas view, on demand (build-tareas.mjs)
       let x; try { x = tareasVistaFile(); if (!tareasVistaAlDia(x)) throw new Error('otra construcción'); } catch { await rebuildOffice(); try { x = tareasVistaFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/tareas-vista.js no está: node build.mjs'); } }
+      if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
+      const gz = /gzip/.test(req.headers['accept-encoding'] || '');
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+      return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
+    }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/anuncios-vista.js') { // Fase A1: el panel de Anuncios, on demand (build-anuncios.mjs → dist/anuncios-vista.js)
+      let x; try { x = anunciosVistaFile(); if (!anunciosVistaAlDia(x)) throw new Error('otra construcción'); } catch { if (fs.existsSync(path.join(ROOT, 'build-anuncios.mjs'))) await rebuildOffice(); try { x = anunciosVistaFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/anuncios-vista.js no está: node build.mjs'); } }
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
       const gz = /gzip/.test(req.headers['accept-encoding'] || '');
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
@@ -2506,7 +2557,7 @@ const server = http.createServer(async (req, res) => {
       const l = load(), ch = history.changesByAgent(DATA);
       return json(res, 200, { agents: quality.byAgent(l, AGENTS), drops: quality.drops(l, AGENTS, ch), routing: quality.rerouteRate(l, loadRouting()), reviews: l.filter(t => t.review && Date.now() - t.review.at < 28 * 864e5).length });
     }
-    if (url.pathname === '/api/costs' && req.method === 'GET') { const since = Date.now() - 70 * 864e5; return json(res, 200, { ...costs.report(costs.read(DATA, since), load(), AGENTS, cfg.costs, Date.now()), subscription: backend === 'claude-cli' && PROVIDER.id === 'anthropic' && !process.env.ANTHROPIC_API_KEY, provider: PROVIDER.name, config: COSTS(), prices: costs.PRICES.map(({ match, ...p }) => p), priceSources: costs.PRICE_SOURCES }); } // V4.4 (C1–C9)
+    if (url.pathname === '/api/costs' && req.method === 'GET') { const since = Date.now() - 70 * 864e5; return json(res, 200, { ...costs.report(costs.read(DATA, since), load(), AGENTS, cfg.costs, Date.now()), publicidad: publicidadSemana(), /* Fase A1: el dinero de los anuncios, APARTE del costo de los modelos (nunca en data/costs.jsonl) */ subscription: backend === 'claude-cli' && PROVIDER.id === 'anthropic' && !process.env.ANTHROPIC_API_KEY, provider: PROVIDER.name, config: COSTS(), prices: costs.PRICES.map(({ match, ...p }) => p), priceSources: costs.PRICE_SOURCES }); } // V4.4 (C1–C9)
     if (url.pathname === '/api/costs.csv' && req.method === 'GET') { // V4.4 (C10): the month for the accountant
       const month = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : new Date().toISOString().slice(0, 7);
       res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="costos-${cfg.name.replace(/[^\w-]+/g, '-')}-${month}.csv"` });
@@ -2670,6 +2721,7 @@ const server = http.createServer(async (req, res) => {
     }
     /* ---------- V4.7: Contenido — the pieces, their review and approval ---------- */
     if (url.pathname.startsWith('/api/tareas') && (await duenoRoutes(req, res, url) || await tareasRoutes(req, res, url))) return; // plan T1–T4: organizar, bitácora, proyectos, etiquetas, agenda, lo de los agentes · plan D: las del dueño (antes: «mias» no es un id)
+    if ((url.pathname === '/api/anuncios' || url.pathname.startsWith('/api/anuncios/')) && await anunciosRoutes(req, res, url)) return; // Fase A1: el panel de Anuncios (solo lectura)
     if (url.pathname.startsWith('/api/contenido/') && await analiticasRoutes(req, res, url)) return; // V4.7 (F2): Analíticas y la conexión con Meta
     if (url.pathname.startsWith('/api/contenido') && await contenidoRoutes(req, res, url)) return;
     if (url.pathname.startsWith('/api/oficina/') && await oficinaRoutes(req, res, url)) return; // 9 oct 2026: oficina-mcp.mjs
