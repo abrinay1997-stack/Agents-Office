@@ -106,6 +106,9 @@ import * as approvals from './approvals.mjs';
 import * as quality from './quality.mjs';
 import * as history from './history.mjs';
 import * as knowledge from './knowledge.mjs';
+import * as aprenderContenido from './contenido/aprender.mjs'; // F4 (9 oct 2026): lo publicado enseña al Cerebro y entra en el informe del lunes
+import { emparejar as emparejarPublicadas } from './src/contenido-publicadas.js';
+import { huecos as huecosContenido, queVuelven as queVuelvenContenido } from './src/contenido-llenar.js';
 import * as memory from './memory.mjs'; // V4.6: mentions, summaries, a context budget, the neighbourhood, synapses that learn
 import * as settings from './settings.mjs';
 import * as documents from './documents.mjs';
@@ -198,7 +201,7 @@ const programador = crearProgramador({
 });
 const metricas = crearMetricas({
   meta, dir: ANALITICAS_DIR, avisar: (t, o) => notice('analiticas', t, o),
-  alFotografiar: ({ serie, publicaciones }) => llevarIndicadoresMeta(serie, publicaciones), // cada foto buena pone al día los indicadores del dueño (si los tiene)
+  alFotografiar: ({ serie, publicaciones }) => { llevarIndicadoresMeta(serie, publicaciones); contenidoAprende(); }, // cada foto buena pone al día los indicadores del dueño (si los tiene) y enseña al Cerebro (F4)
 });
 const DEPUTY = sub.nameOf(cfg); // the owner's right hand above the departments: «Dimitri» unless office.config.json → deputy.name says otherwise
 const TEAMS = teams.settings(cfg); // V3.2 (16 Sep): { enabled, max }
@@ -1881,6 +1884,36 @@ async function companyBootstrap(url, about) {
   refreshSkills(); await rebuildGraph();
   notice('onboard', `Listo: ${wrote.length} notas nuevas en el Cerebro (00-Empresa: ${wrote.join(', ')}), ${briefs} jefes con instrucciones y ${(j.cifras || []).length} cifras para confirmar. Revísalas: vienen de la web.`);
 }
+/* ---------- F4 de Contenido (9 oct 2026): aprender de lo publicado ---------- */
+/** Lo publicado junto a su pieza (las piezas con lo que la cola sabe de ellas y lo que Analíticas leyó de Meta). */
+function contenidoConCifras(dias = 180) {
+  const d = metricas.leer({ dias }), piezas = contenido.listar({}).map(p => ({ ...p, salida: programador.salidaDe(p.id) }));
+  const r = d.publicaciones?.length ? emparejarPublicadas(piezas, d.publicaciones) : { porPieza: {}, sueltas: [] };
+  return { piezas, porPieza: r.porPieza, sueltas: r.sueltas };
+}
+/** Las notas que usó el agente que escribió una pieza se acercan a cómo le fue en las redes (contenido/aprender.mjs → memory.reinforce;
+ *  idempotente por pieza). Corre tras cada foto de Analíticas y al arrancar. */
+function contenidoAprende() {
+  try {
+    const { piezas, porPieza } = contenidoConCifras();
+    if (!Object.keys(porPieza).length) return 0;
+    const ls = aprenderContenido.lecciones({ piezas, porPieza, tareas: load(), citadas: t => ({ cited: memory.cited(t.result, t.read || []), read: t.read || [] }) });
+    for (const l of ls) memory.reinforce(MEM, l);
+    if (ls.length) saveMem();
+    return ls.length;
+  } catch (e) { console.warn('contenido (aprender):', e.message); return 0; }
+}
+setTimeout(contenidoAprende, 90e3);
+/** El párrafo de redes del informe del lunes (y de Dimitri): lo que salió y cómo le fue, lo que viene, los huecos y lo que puede volver. */
+function contenidoSemana() {
+  try {
+    const { piezas, porPieza, sueltas } = contenidoConCifras(), hace7 = Date.now() - 7 * 864e5;
+    const redes = Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'];
+    const hoy = new Date(), hoyK = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    return aprenderContenido.semanaContenido({ piezas, porPieza, sueltas: sueltas.filter(m => Date.parse(m.publicadaAt) >= hace7), huecos: huecosContenido({ desde: hoyK, dias: 7, piezas, redes }), vuelven: queVuelvenContenido({ piezas, resultados: porPieza }), conectado: meta.configurado() });
+  } catch (e) { return `Redes: no las pude resumir (${e.message}).`; }
+}
+
 // J8: Dimitri's weekly report, Monday morning — how the week went and what to decide
 const WEEKLY = path.join(DATA, 'weekly.json');
 function tareasSemana(l) { // plan T5: the week in tasks — from the log (cycle time, waiting for the OK, late), and the projects that are late
@@ -1897,7 +1930,7 @@ async function weeklyReport(force = false) {
   if (!force && (st.week === wk || now.getDay() !== 1 || now.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
   st.week = wk; fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(WEEKLY, JSON.stringify(st));
   const l = load(), c = costs.report(costs.read(DATA, Date.now() - 70 * 864e5), l, AGENTS, cfg.costs), q = quality.byAgent(l, AGENTS), k = loadKpis();
-  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l)].join('\n');
+  const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l), contenidoSemana()].join('\n'); // F4: las redes también
   const text = await ask(`Eres ${DEPUTY}, la mano derecha del dueño de ${cfg.name}. Escribes el informe del lunes: claro, concreto, en español, 180–260 palabras, sin relleno.`, `Datos de la semana:\n${facts}\n\nEscribe: 1) cómo fue la semana en tres líneas, 2) lo que salió bien, 3) lo que falló o se atasca, 4) tres decisiones que el dueño debería tomar esta semana, cada una con el porqué. Solo texto.`, { maxTokens: 1200, timeout: 180000, model: 'sonnet', kind: 'informe' });
   const ss = sub.load(DATA); ss.messages.push(sub.message('sub', '📋 Informe de la semana\n\n' + text, { mode: 'analisis' })); sub.save(DATA, ss);
   notice('weekly', `📋 Informe de la semana de ${DEPUTY}:\n${text}`);
