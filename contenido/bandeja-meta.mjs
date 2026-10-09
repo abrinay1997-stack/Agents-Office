@@ -17,7 +17,7 @@
 //     sin `from` sale como «Alguien en Facebook».
 //   · POR VERIFICAR: si responder a una respuesta en Facebook la cuelga del de arriba: la oficina siempre responde en el de arriba.
 // Lo de los ANUNCIOS: el id de la publicación sale de la estructura que ya leyó Anuncios (data/anuncios/cuenta.json): el creativo trae
-//   `effective_object_story_id` (Facebook). Para Instagram, `effective_instagram_media_id` del creativo es POR VERIFICAR: se pide una vez
+//   `effective_object_story_id` (Facebook). Para Instagram, `effective_instagram_media_id` del creativo (verificado el 9 oct 2026): se pide una vez
 //   por creativo (`GET /<creativo>?fields=effective_instagram_media_id`); si Meta no conoce el campo, se deja de pedir 7 días y se dice.
 //
 // Todo pasa por el cliente de contenido/meta.mjs (su freno por uso, su `appsecret_proof`, `sinToken`): nunca un fetch directo.
@@ -95,7 +95,7 @@ export function aplanar(lista = [], ctx = {}) {
 //     1.000 caracteres y 1.000 bytes UTF-8 como mucho. Sin etiquetas (HUMAN_AGENT POR VERIFICAR): fuera de las 24 h no se envía.
 //   · Permisos: Messenger pages_manage_metadata, pages_read_engagement, pages_messaging; Instagram instagram_basic,
 //     instagram_manage_messages, pages_manage_metadata. Y el ACCESO AVANZADO para hablar con clientes (app de un negocio verificado).
-// POR VERIFICAR: `participants` (no se pide: el cliente sale de from/to de los mensajes), `attachments` como campo de un mensaje (si Meta
+// POR VERIFICAR: `participants` (no se pide: el cliente sale de from/to de los mensajes), `attachments` como campo de un mensaje (VERIFICADO el 9 oct 2026: Meta lo acepta; si un día
 //   lo rechaza con error 100, se pide sin él y se recuerda), su forma (image_data/video_data/file_url), el `from` de lo que manda la cuenta
 //   de Instagram (su id o su usuario), el orden en que llegan los mensajes (se ordenan aquí) y qué error da Meta sin el acceso avanzado
 //   (se toma como «sin acceso» un 10, un 3, un 230 o un 200–299).
@@ -273,7 +273,7 @@ export function crearFuenteMeta({ meta, archivo, anuncios = () => null, ahora = 
           const pedir = conAdj => meta.graph(token, `/${c.id}`, { params: { fields: camposMensajes(conAdj) } });
           if (s.adjuntos !== false) {
             try { conv = await pedir(true); }
-            catch (e) { if (e?.codigo !== 100) throw e; s.adjuntos = false; } // POR VERIFICAR: `attachments` como campo de un mensaje
+            catch (e) { if (e?.codigo !== 100) throw e; s.adjuntos = false; } // `attachments` verificado el 9 oct 2026; esto queda por si Meta lo retira
           }
           conv ||= await pedir(false);
           const it = conversacionDe({ ...conv, id: c.id, updated_time: c.updated_time }, { cuenta, ahora: ahora() });

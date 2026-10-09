@@ -658,6 +658,23 @@ La documentación de Meta no se pudo abrir desde donde se escribió este plan (l
 
 ---
 
+### 13.bis Lo comprobado con el token real (9 oct 2026)
+
+Primera vez con la cuenta del dueño: la app «Agents Office» en vivo, el usuario del sistema, la cuenta publicitaria `act_444111531498423`, cuatro páginas y cuatro cuentas de Instagram. Lo que respondió Meta:
+- **Publicar** (`check-meta-publicar.mjs`): todo bien.
+  - **VERIFICADO:** Instagram acepta una imagen desde la dirección de una foto temporal sin publicar de la página (contenedor FINISHED).
+  - Cuota de Instagram: 100 publicaciones por API en 24 h.
+- **Anuncios** (`check-meta-anuncios.mjs`): la cuenta está en USD y America/Panama, con los permisos `ads_read` y `ads_management`, y sin límite de gasto en Meta (conviene ponerle uno, §2.2).
+  - **Se encontró un fallo** que el Meta de mentira no veía: `graph()` mandaba `time_range` como «[object Object]», y Meta respondía «param time_range must be non-empty». Arreglado: un parámetro objeto va como JSON, y el Meta de mentira ahora lo rechaza igual que Meta.
+  - **VERIFICADO:** `effective_instagram_media_id` existe en el creativo.
+- **Comentarios** (`check-meta-bandeja.mjs`): **llegan con el usuario y el texto de personas sin rol**, con la app en vivo y sin acceso avanzado.
+  - De las publicaciones con comentarios, una tenía uno sin texto: probablemente un sticker o un GIF.
+  - Los creativos dan `effective_object_story_id` y `effective_instagram_media_id`.
+- **Mensajes** (`check-meta-bandeja.mjs`): las conversaciones de Instagram llegan, pero **sin el texto** de los clientes, porque falta el acceso avanzado (§2.6).
+  - Una cuenta de Instagram respondió 200 / 2534041: «el propietario de la cuenta desactivó el acceso a los mensajes directos de Instagram». Hay que activar «Permitir el acceso a los mensajes» en la app de Instagram.
+  - Messenger no devolvió conversaciones.
+  - **VERIFICADO:** Meta acepta `attachments` como campo de un mensaje.
+
 ## 14. Fuentes consultadas (9 oct 2026)
 
 - Meta, versiones de Graph y Marketing API: https://developers.facebook.com/docs/graph-api/changelog/versions/

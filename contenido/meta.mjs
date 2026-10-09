@@ -182,7 +182,9 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
   /** Una llamada a la Graph API. Los parámetros van en la dirección (GET); el token, como parámetro, nunca en un registro. */
   async function graph(token, ruta, { params = {}, host = null } = {}) {
     const u = new URL(`${host ?? base()}${ruta}`);
-    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, String(v));
+    // 9 oct 2026 (primera prueba con el token real): un objeto va como JSON, como lo lee Graph. Con String(v), `time_range: {since, until}`
+    // salía «[object Object]» y Meta respondía «param time_range must be non-empty»; el Meta de mentira lo dejaba pasar.
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
     if (token) {
       u.searchParams.set('access_token', token);
       if (secreto()) u.searchParams.set('appsecret_proof', crypto.createHmac('sha256', secreto()).update(token).digest('hex'));

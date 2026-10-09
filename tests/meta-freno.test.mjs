@@ -88,6 +88,17 @@ test('los permisos se dicen por función: lo que falta para Analíticas, publica
   assert.deepEqual(faltanPorFuncion(null), {}, 'si Meta no dijo los permisos, no se inventa que faltan');
 });
 
+test('graph(): un parámetro objeto viaja como JSON (time_range), no como «[object Object]» — lo encontró la primera prueba con el token real', async () => {
+  const t = montar();
+  t.g.st.cifras = [{ ad_id: 'AD9', date_start: '2026-10-01', date_stop: '2026-10-01', spend: '1.00' }];
+  const r = await t.meta.graph(TOKEN_STAND, '/act_1001/insights', { params: { level: 'ad', time_increment: 1, time_range: { since: '2026-10-01', until: '2026-10-07' } } });
+  assert.equal(r.data.length, 1);
+  const pedida = t.g.llamadas.at(-1).searchParams.get('time_range');
+  assert.deepEqual(JSON.parse(pedida), { since: '2026-10-01', until: '2026-10-07' });
+  const mal = await t.g.fetchFn(`https://graph.test/v26.0/act_1001/insights?access_token=${TOKEN_STAND}&time_range=%5Bobject%20Object%5D`);
+  assert.equal((await mal.json()).error.code, 100, 'el Meta de mentira lo rechaza como Meta');
+});
+
 test('un error que no es de límite no frena', async () => {
   const t = montar({ torcer: (l, st) => (l.ruta === '/me/accounts' && !st.una ? (st.una = true, json({ error: { message: 'mal', code: 100 } }, 400)) : null) });
   await assert.rejects(t.meta.graph(TOKEN_STAND, '/me/accounts'), e => e.codigo === 100);

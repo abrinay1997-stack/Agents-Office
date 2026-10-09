@@ -10,8 +10,8 @@
 //     15 minutos antes prepara el contenedor (y sube el video), y a la hora lo publica (/media_publish). Si la oficina está apagada a esa
 //     hora, sale al encenderla hasta 30 minutos tarde; después ya no, y lo dice.
 //   · Instagram baja las IMÁGENES de una dirección pública (image_url): esta oficina no tiene una. La imagen se sube a la página de
-//     Facebook como foto temporal sin publicar y se le da a Instagram su dirección de Meta (`images[0].source`). POR VERIFICAR con la
-//     cuenta real (scripts/check-meta-publicar.mjs lo prueba sin publicar nada). Los VIDEOS van por la subida reanudable
+//     Facebook como foto temporal sin publicar y se le da a Instagram su dirección de Meta (`images[0].source`). VERIFICADO el 9 oct 2026 con la
+//     cuenta real (scripts/check-meta-publicar.mjs: Instagram dejó el contenedor FINISHED). Los VIDEOS van por la subida reanudable
 //     (rupload.facebook.com), que no necesita dirección pública.
 //   · Un contenedor de Instagram se publica una sola vez: si /media_publish no contesta, se lee el contenedor antes de nada
 //     (PUBLISHED = ya salió). Nunca se publica dos veces (ig-publish: «an error does not mean not published»).
@@ -306,7 +306,7 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
   }
 
   // ---------- Instagram ----------
-  /** La dirección de una imagen para Instagram: foto temporal sin publicar en la página, y su dirección de Meta. POR VERIFICAR. */
+  /** La dirección de una imagen para Instagram: foto temporal sin publicar en la página, y su dirección de Meta. Verificado el 9 oct 2026 con la cuenta real. */
   async function urlDeImagen(j, medio) {
     const tk = await token(j);
     const f = await meta.enviar(tk, `/${j.pagina}/photos`, { campos: { published: false, temporary: true }, archivo: await bytes(medio.id, true) });
