@@ -76,10 +76,11 @@ export function opLabel(o, { esc = s => s, deptName = k => k } = {}) {
     case 'anuncio_reanudar': return `Reanudar en Meta ${esc(anu(o))} (gasta)`;
     case 'anuncio_subir_presupuesto': return `Subir el presupuesto de ${esc(anu(o))}${o.valor != null ? ' a ' + esc(usd(o.valor, o.moneda)) : ''} (gasta)`;
     case 'anuncio_relanzar': return `Relanzar ${esc(anu(o))}: una copia EN PAUSA con fechas nuevas`;
+    case 'anuncio_borrador': return `Borrador de campaña en Anuncios: «${esc(o.nombre || o.titulo || 'sin nombre')}»${o.usd ? ' · ' + esc(usd(o.usd)) + ' al día' : ''} (nada en Meta)`;
     default: return '';
   }
 }
-const NOTE = { rutina_crear: 'Corre sola en su horario; puedes pausarla en el calendario (P).', pieza_crear: 'Nace como borrador: tú la apruebas en Contenido. Nada se publica.', pieza_mover: 'Si estaba aprobada, pierde el OK y la vuelves a aprobar.', tarea_cancelar: 'La tarea se borra. Tienes 30 s para deshacerlo.',
+const NOTE = { rutina_crear: 'Corre sola en su horario; puedes pausarla en el calendario (P).', pieza_crear: 'Nace como borrador: tú la apruebas en Contenido. Nada se publica.', anuncio_borrador: 'Nace como borrador: crearla en Meta (en pausa) es tu clic en Anuncios (J). Nada gasta.', pieza_mover: 'Si estaba aprobada, pierde el OK y la vuelves a aprobar.', tarea_cancelar: 'La tarea se borra. Tienes 30 s para deshacerlo.',
   rutina_pausar: 'Sigue en el calendario sin correr hasta que la reanudes.', rutina_reanudar: 'La próxima ejecución se cuenta desde ahora.', rutina_editar: 'La próxima ejecución se cuenta con el horario nuevo.', rutina_ahora: 'Empieza en seguida, fuera de su horario. Si el agente ya empezó, no se deshace.',
   tarea_repetir: 'Una tarea nueva con el mismo pedido y el mismo escritorio.', mia_delegar: 'Sale de tu lista y el agente la empieza en seguida: en cuanto empiece, ya no se deshace.', mia_hecha: 'Si se repite, nace la siguiente; deshacer la quita.',
   anuncio_pausar: 'Deja de gastar en seguida. Tienes 30 s para deshacerlo.', anuncio_bajar_presupuesto: 'Gasta menos desde ya. Tienes 30 s para deshacerlo.',

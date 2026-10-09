@@ -242,3 +242,176 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
 #anuOv .anu-fila2, #anuOv .anu-ccif { grid-template-columns: minmax(0, 1fr); }
 #anuOv .anu-menu { min-width: 0; max-width: calc(100vw - 32px); }
 }
+
+/* A3 (9 oct 2026): BORRADORES y el asistente de 5 pasos. Lo que no se puede (crear con problemas, «Atrás» en el paso 1) se ESCRIBE y
+   lleva aria-disabled, nunca se atenúa. Cada objetivo de 24 px o más; las opciones son tarjetas enteras clicables. */
+#anuOv .anu-bcab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 8px; }
+#anuOv .anu-bcab h2, #anuOv .anu-bcab h3 { margin: 0; }
+#anuOv .anu-blista { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-width: 980px; }
+#anuOv .anu-bfila { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px 14px; align-items: start; background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 14px; padding: 12px 14px; }
+#anuOv .anu-bfila h3 { margin: 0 0 4px; font-size: 15px; }
+#anuOv .anu-bcuerpo { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+#anuOv .anu-bcuerpo p { margin: 0; }
+#anuOv .anu-bcosto { font-size: 13px; color: var(--ink); }
+#anuOv .anu-bacc { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+#anuOv .anu-bconf { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; max-width: 360px; font-size: 13px; }
+#anuOv .anu-bconf > span { flex-basis: 100%; text-align: right; }
+#anuOv :is(.anu-bmini, .anu-bcrm, .anu-gpkm) { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 10px; overflow: hidden; border: 1px solid var(--anu-line); background: var(--anu-soft); flex: none; font-size: 11.5px; color: var(--anu-mut); text-align: center; }
+#anuOv :is(.anu-bmini, .anu-bcrm, .anu-gpkm) :is(img, video) { width: 100%; height: 100%; object-fit: cover; display: block; }
+#anuOv .anu-btn[aria-disabled="true"] { color: var(--anu-mut); border-color: var(--anu-line); background: var(--anu-card); cursor: default; }
+#anuOv .anu-btn[aria-busy="true"] { cursor: progress; }
+
+/* el asistente */
+#anuOv .anu-asis { display: flex; flex-direction: column; gap: 14px; max-width: 980px; min-height: 100%; }
+#anuOv .anu-asis-cab { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 14px; align-items: end; }
+#anuOv .anu-asis-cab > .anu-btn { align-self: end; }
+#anuOv .anu-bnombre { margin: 0; }
+#anuOv .anu-bnombre input { font-family: var(--serif); font-size: 20px; }
+#anuOv .anu-asis-st { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--anu-mut); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+#anuOv .anu-pasos-nav { overflow-x: auto; }
+#anuOv .anu-pasos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; min-width: 560px; }
+#anuOv .anu-pasos button { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 44px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--anu-line); background: var(--anu-card); color: var(--ink); cursor: pointer; font-size: 13px; text-align: left; }
+#anuOv .anu-pasos button[aria-current="step"] { border: 2px solid var(--ink); font-weight: 700; }
+#anuOv .anu-pn { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 99px; background: var(--anu-soft); border: 1px solid var(--anu-line); font-size: 12px; font-weight: 700; flex: none; }
+#anuOv .anu-pasos button[aria-current="step"] .anu-pn { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+#anuOv .anu-pmal { flex-basis: 100%; font-size: 11.5px; font-weight: 700; color: var(--t-rojo); }
+#anuOv .anu-paso h2 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0 0 10px; outline: none; }
+#anuOv .anu-paso h2:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#anuOv .anu-bfs { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+#anuOv .anu-bbloque { background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+#anuOv .anu-bbloque h3 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; }
+#anuOv .anu-bbloque > .anu-btn { align-self: flex-start; }
+#anuOv .anu-bbloque .anu-acts { margin-top: 2px; }
+#anuOv .anu-bopc { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+#anuOv .anu-bopc legend { font-size: 15px; font-weight: 600; margin-bottom: 8px; padding: 0; color: var(--ink); }
+#anuOv .anu-bopc > .anu-bayuda, #anuOv .anu-bopc > .anu-berr { grid-column: 1 / -1; }
+#anuOv .anu-bop { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 10px 12px; border-radius: 12px; border: 1.5px solid var(--anu-line); background: var(--anu-card); cursor: pointer; font-size: 13.5px; color: var(--ink); box-sizing: border-box; }
+#anuOv .anu-bop.on { border-color: var(--ink); background: color-mix(in srgb, var(--focus) 6%, var(--anu-card)); }
+#anuOv .anu-bop input { margin: 2px 0 0; width: 18px; height: 18px; flex: none; accent-color: var(--ink); }
+#anuOv .anu-bop > span { display: flex; flex-direction: column; gap: 3px; }
+#anuOv .anu-bop small { font-size: 12.5px; color: var(--anu-mut); line-height: 1.4; }
+#anuOv .anu-bop:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+#anuOv .anu-bfs:disabled .anu-bop { cursor: default; }
+#anuOv .anu-bcampo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#anuOv .anu-bcampo > label, #anuOv .anu-bcampo > span { font-size: 13px; font-weight: 600; color: var(--ink); }
+#anuOv .anu-bcampo small { font-weight: 400; color: var(--anu-mut); font-size: 12px; }
+#anuOv .anu-bcampo :is(input, select, textarea) { min-height: 38px; padding: 6px 10px; border: 1px solid var(--anu-line); border-radius: 10px; background: var(--anu-card); color: var(--ink); font-size: 14.5px; min-width: 0; width: 100%; box-sizing: border-box; }
+#anuOv .anu-bcampo textarea { resize: vertical; line-height: 1.45; font-family: var(--ui); }
+#anuOv .anu-bcampo :is(input, select, textarea):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+#anuOv .anu-bcampo [aria-invalid="true"] { border: 2px solid var(--t-rojo); }
+#anuOv .anu-bcampo .anu-imp input { width: auto; flex: 1; }
+#anuOv .anu-bayuda { margin: 0; font-size: 12.5px; color: var(--anu-mut); line-height: 1.45; }
+#anuOv .anu-berr { margin: 2px 0 0; font-size: 13px; font-weight: 600; color: var(--t-rojo); }
+#anuOv .anu-fila3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+#anuOv .anu-asis .anu-fila2 { align-items: start; }
+#anuOv .anu-asis .anu-fila2 > div { display: flex; flex-direction: column; gap: 6px; }
+#anuOv .anu-asis .anu-fila2 > div > .anu-btn { align-self: flex-start; }
+#anuOv .anu-costo { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--anu-soft); border: 1px solid var(--anu-line); font-size: 14px; color: var(--ink); }
+#anuOv .anu-bcrs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+#anuOv .anu-bcr { background: var(--anu-card); border: 1px solid var(--anu-line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+#anuOv .anu-bcr-cab { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+#anuOv .anu-bcr-cab h3 { margin: 0 0 6px; font-size: 15px; }
+#anuOv .anu-bmej { align-self: flex-start; }
+#anuOv .anu-bprop { border-left: 4px solid var(--t-azul); border-radius: 8px; background: color-mix(in srgb, var(--t-azul) 8%, var(--anu-card)); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+#anuOv .anu-bprop p { margin: 0; }
+#anuOv .anu-bprop-t { font-size: 12.5px; color: var(--anu-mut); }
+#anuOv .anu-bprop-x { font-size: 14px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+#anuOv .anu-bmejoras { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+#anuOv .anu-bmejora { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--anu-line); background: var(--anu-card); }
+#anuOv .anu-sw { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; font-size: 13.5px; text-align: left; }
+#anuOv .anu-sw-i { position: relative; width: 36px; height: 20px; border-radius: 99px; border: 1.5px solid var(--anu-mut); background: var(--anu-card); flex: none; box-sizing: border-box; }
+#anuOv .anu-sw-i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 99px; background: var(--anu-mut); transition: left .15s; }
+#anuOv .anu-sw[aria-checked="true"] .anu-sw-i { background: var(--t-verde); border-color: var(--t-verde); }
+#anuOv .anu-sw[aria-checked="true"] .anu-sw-i::after { left: 18px; background: var(--anu-card); }
+@media (prefers-reduced-motion: reduce) { #anuOv .anu-sw-i::after { transition: none; } }
+#anuOv .anu-bok { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-left: 4px solid var(--c); border-radius: 8px; background: color-mix(in srgb, var(--c) 9%, var(--anu-card)); font-size: 13.5px; color: var(--ink); line-height: 1.45; }
+#anuOv .anu-bok b { color: var(--c); }
+#anuOv .anu-bok .anu-btn { align-self: flex-start; margin-top: 4px; }
+#anuOv .anu-bprog { display: block; height: 6px; border-radius: 99px; background: var(--anu-soft); overflow: hidden; border: 1px solid var(--anu-line); }
+#anuOv .anu-bprog i { display: block; height: 100%; width: 35%; background: var(--t-ambar); animation: anuProg 1.4s ease-in-out infinite; }
+@keyframes anuProg { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { #anuOv .anu-bprog i { animation: none; width: 100%; } }
+#anuOv .anu-bprobs { border-left: 4px solid var(--t-rojo); border-radius: 8px; background: color-mix(in srgb, var(--t-rojo) 7%, var(--anu-card)); padding: 10px 12px; font-size: 13.5px; }
+#anuOv .anu-bprobs p { margin: 0 0 8px; color: var(--ink); }
+#anuOv .anu-bprobs ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#anuOv .anu-bir { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 36px; padding: 7px 10px; border-radius: 9px; border: 1px solid var(--anu-line); background: var(--anu-card); color: var(--ink); cursor: pointer; text-align: left; font-size: 13.5px; }
+#anuOv .anu-bir:hover { border-color: var(--ink); }
+#anuOv .anu-bir-p { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--t-rojo); }
+#anuOv .anu-bcrear { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+#anuOv .anu-bcrear .anu-btn.si { min-height: 44px; padding: 0 20px; font-size: 15px; }
+#anuOv .anu-bcrear .anu-btn.si[aria-disabled="true"] { background: var(--anu-card); color: var(--anu-mut); border-color: var(--anu-line); }
+#anuOv .anu-bmeta { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: end; margin-top: 6px; }
+#anuOv .anu-bmetaif { width: 100%; max-width: 540px; height: 640px; border: 1px solid var(--anu-line); border-radius: 12px; background: #fff; }
+#anuOv .anu-asis-pie { position: sticky; bottom: -60px; margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 12px; background: var(--cream); border-top: 1px solid var(--anu-line); z-index: 2; }
+#anuOv .anu-asis-n { font-size: 13px; color: var(--anu-mut); }
+
+/* la vista previa de la oficina (colores fijos: es un dibujo del teléfono, igual en claro y en oscuro) */
+#anuOv .anu-pvs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 300px)); gap: 14px; align-items: start; }
+#anuOv .anu-pv { margin: 0; background: #fff; color: #151414; border: 1px solid rgba(21,20,20,.14); border-radius: 12px; overflow: hidden; font-size: 13px; }
+#anuOv .anu-pv-cab { display: flex; gap: 8px; align-items: center; padding: 10px 12px; }
+#anuOv .anu-pv-cab > span { display: flex; flex-direction: column; }
+#anuOv .anu-pv-cab small { font-size: 11.5px; color: #5A5A5A; }
+#anuOv .anu-pv-av { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 99px; background: #1F5FD0; color: #fff; font-weight: 700; font-size: 13px; flex: none; }
+#anuOv .anu-pv-t { margin: 0; padding: 0 12px 10px; line-height: 1.4; overflow-wrap: anywhere; }
+#anuOv .anu-pv-t i, #anuOv .anu-pv-vm { color: #5A5A5A; }
+#anuOv .anu-pv-m { background: #ECEAE3; display: grid; place-items: center; overflow: hidden; }
+#anuOv .anu-pv-m :is(img, video) { width: 100%; height: 100%; object-fit: cover; display: block; }
+#anuOv .anu-pv-sin { font-size: 12.5px; color: #5A5A5A; }
+#anuOv .anu-pv-pie { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 10px 12px; background: #F2F1EC; }
+#anuOv .anu-pv-pt { display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow-wrap: anywhere; }
+#anuOv .anu-pv-pt small { font-size: 11.5px; color: #5A5A5A; }
+#anuOv .anu-pv-cta { flex: none; padding: 6px 10px; border-radius: 6px; background: #E4E2DA; font-weight: 700; font-size: 12.5px; color: #151414; }
+#anuOv .anu-pv-nota { padding: 8px 12px; font-size: 12px; color: #4A4A4A; background: #fff; border-top: 1px solid rgba(21,20,20,.1); }
+#anuOv .anu-pv-h { background: #151414; border-color: #151414; max-width: 260px; }
+#anuOv .anu-pv-hm { position: relative; aspect-ratio: 9 / 16; display: grid; place-items: center; overflow: hidden; color: #FDFFF8; }
+#anuOv .anu-pv-hm > :is(img, video) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#anuOv .anu-pv-hm .anu-pv-sin { color: #FDFFF8; }
+#anuOv .anu-pv-hcab { position: absolute; top: 0; left: 0; right: 0; display: flex; gap: 6px; align-items: center; padding: 12px 10px 24px; background: linear-gradient(rgba(0,0,0,.72), rgba(0,0,0,.35)); font-size: 12.5px; }
+#anuOv .anu-pv-hcab span:last-child { font-size: 11.5px; color: #FDFFF8; }
+#anuOv .anu-pv-hpie { position: absolute; bottom: 0; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 12px 14px; background: rgba(0,0,0,.72); text-align: center; }
+#anuOv .anu-pv-hpie p { margin: 0; font-size: 13px; line-height: 1.35; }
+#anuOv .anu-pv-hcta { padding: 6px 12px; border-radius: 99px; background: #FDFFF8; color: #151414; font-weight: 700; font-size: 12.5px; }
+#anuOv .anu-pv-h .anu-pv-nota { background: #151414; color: #E4E2DA; border-top-color: rgba(253,255,248,.2); }
+
+/* la galería para elegir */
+#anuOv .anu-dlg-gal { max-width: 760px; display: flex; flex-direction: column; }
+#anuOv .anu-dlg-gal .anu-dlg-in { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+#anuOv .anu-grej { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 52vh; overflow: auto; padding: 2px; }
+#anuOv .anu-gpk { display: flex; flex-direction: column; gap: 4px; align-items: stretch; padding: 6px; border-radius: 12px; border: 2px solid var(--anu-line); background: var(--anu-card); color: var(--ink); cursor: pointer; text-align: left; font-size: 12.5px; }
+#anuOv .anu-gpk .anu-gpkm { width: 100%; height: auto; aspect-ratio: 1; }
+#anuOv .anu-gpk small { font-size: 11.5px; color: var(--anu-mut); }
+#anuOv .anu-gpk[aria-pressed="true"] { border-color: var(--ink); background: color-mix(in srgb, var(--focus) 8%, var(--anu-card)); }
+#anuOv .anu-gpk[aria-pressed="true"]:not([aria-disabled="true"])::before { content: "✓ Elegida"; font-size: 12px; font-weight: 700; color: var(--t-verde); }
+#anuOv .anu-gpk[aria-disabled="true"] { cursor: default; }
+#anuOv .anu-gpie { align-items: center; justify-content: flex-end; margin-top: 0; }
+#anuOv .anu-gpie .anu-bayuda { margin-right: auto; }
+
+@container anuview (max-width: 860px) {
+  /* en el teléfono (y con Dimitri al lado) el asistente ocupa la vista entera: sin la línea de lectura */
+#anuOv.conAsis .anu-linea { display: none; }
+#anuOv .anu-bfila { grid-template-columns: 56px minmax(0, 1fr); }
+#anuOv .anu-bfila .anu-bmini { width: 56px; height: 56px; }
+#anuOv .anu-bacc { grid-column: 1 / -1; justify-content: flex-start; }
+#anuOv .anu-bconf { max-width: none; justify-content: flex-start; }
+#anuOv .anu-bconf > span { text-align: left; }
+}
+@container anuview (max-width: 600px) {
+#anuOv.conAsis .anu-ejemplo span { display: none; }
+#anuOv .anu-asis-cab { grid-template-columns: minmax(0, 1fr); }
+#anuOv .anu-asis-cab > .anu-btn { justify-self: start; }
+#anuOv .anu-pasos { min-width: 0; gap: 4px; }
+#anuOv .anu-pasos button { flex-direction: column; flex-wrap: nowrap; justify-content: center; align-items: center; text-align: center; padding: 4px; min-height: 48px; font-size: 11.5px; gap: 2px; }
+#anuOv .anu-pasos button > span:nth-child(2) { display: none; }
+#anuOv .anu-pasos button[aria-current="step"] > span:nth-child(2) { display: block; }
+#anuOv .anu-pmal { flex-basis: auto; font-size: 11px; }
+#anuOv .anu-fila3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+#anuOv .anu-bcr-cab { grid-template-columns: 56px minmax(0, 1fr); }
+#anuOv .anu-bcr-cab .anu-bcrm { width: 56px; height: 56px; }
+#anuOv .anu-bcr-cab > .anu-btn { grid-column: 1 / -1; justify-self: start; }
+#anuOv .anu-bcr { padding: 12px; }
+#anuOv .anu-bbloque { padding: 12px; }
+#anuOv .anu-pvs { grid-template-columns: minmax(0, 1fr); }
+#anuOv .anu-pv-h { max-width: 240px; }
+#anuOv .anu-bmetaif { height: 520px; }
+#anuOv .anu-grej { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

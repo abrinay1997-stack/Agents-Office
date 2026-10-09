@@ -175,3 +175,30 @@ test('A2: copies síncrono con más de 3 anuncios da error; por partes (campaña
   for (const a of ads) { const ca = await pedir(g, 'POST', `/${a}/copies`, { adset_id: cs.copied_adset_id, status_option: 'PAUSED' }); assert.equal(g.st.anuncios[ca.copied_ad_id].status, 'PAUSED'); }
   assert.equal(Object.values(g.st.anuncios).filter(x => x.adset_id === cs.copied_adset_id).length, 4);
 });
+
+test('A3: buscar por nombre (filtering), imágenes por su contenido, y los fallos «se cae tras el conjunto» y «el anuncio falla»', async () => {
+  const g = crearMetaStand({ fallar: { trasConjunto: true, crearAnuncio: 1 } });
+  const c = await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana({ name: 'Combo · AO:b7' }));
+  await pedir(g, 'POST', `/${CUENTA_STAND}/campaigns`, campana({ name: 'Otra · AO:b8' }));
+  const lista = async filtro => (await (await g.fetchFn(`${G}/${CUENTA_STAND}/campaigns?access_token=${TOKEN_STAND}&fields=id,name&filtering=${encodeURIComponent(JSON.stringify(filtro))}`)).json()).data;
+  assert.deepEqual((await lista([{ field: 'name', operator: 'CONTAIN', value: 'AO:b7' }])).map(x => x.id), [c.id]);
+  assert.equal((await lista([{ field: 'name', operator: 'EQUAL', value: 'Otra · AO:b8' }])).length, 1);
+  // imágenes: el hash es del contenido (subir dos veces la misma da el mismo); en `bytes` (base64) la clave de la respuesta es «bytes»
+  const subir = async datos => (await pedir(g, 'POST', `/${CUENTA_STAND}/adimages`, { bytes: Buffer.from(datos).toString('base64') })).images.bytes.hash;
+  const h1 = await subir('foto-1'), h2 = await subir('foto-1'), h3 = await subir('foto-2');
+  assert.equal(h1, h2); assert.notEqual(h1, h3); assert.equal(g.st.imagenes[h1].subidas, 2);
+  assert.equal((await pedir(g, 'POST', `/${CUENTA_STAND}/adimages`, {})).error.code, 100, 'sin bytes, error');
+  // el conjunto se crea y la respuesta no llega nunca (una vez)
+  const colgada = g.fetchFn(`${G}/${CUENTA_STAND}/adsets`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN_STAND}` }, body: new URLSearchParams({ campaign_id: c.id, name: 'PA · AO:b7', optimization_goal: 'CONVERSATIONS', billing_event: 'IMPRESSIONS', status: 'PAUSED', targeting: JSON.stringify(segmentacion) }) });
+  const gano = await Promise.race([colgada.then(() => 'contestó'), new Promise(r => setTimeout(() => r('colgada'), 100))]);
+  assert.equal(gano, 'colgada'); assert.equal(g.st.colgadas, 1); assert.equal(Object.keys(g.st.conjuntos).length, 1, 'Meta lo creó igual');
+  const s2 = await pedir(g, 'POST', `/${CUENTA_STAND}/adsets`, { campaign_id: c.id, name: 'Otro', optimization_goal: 'CONVERSATIONS', billing_event: 'IMPRESSIONS', status: 'PAUSED', targeting: segmentacion });
+  assert.ok(s2.id, 'solo una vez');
+  const cr = await pedir(g, 'POST', `/${CUENTA_STAND}/adcreatives`, { name: 'k · AO:b7', object_story_spec: { page_id: 'P1' } });
+  const a1 = await pedir(g, 'POST', `/${CUENTA_STAND}/ads`, { adset_id: s2.id, name: 'a', creative: { creative_id: cr.id }, status: 'PAUSED' });
+  assert.equal(a1.error.code, 100); assert.match(a1.error.error_user_title, /no es válido/);
+  assert.ok((await pedir(g, 'POST', `/${CUENTA_STAND}/ads`, { adset_id: s2.id, name: 'a', creative: { creative_id: cr.id }, status: 'PAUSED' })).id, 'el siguiente, sí');
+  const vid = await g.fetchFn(`${G}/${CUENTA_STAND}/advideos`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN_STAND}` }, body: (() => { const f = new FormData(); f.append('name', 'v'); f.append('source', new Blob([Buffer.alloc(10)]), 'v.mp4'); return f; })() }).then(r => r.json());
+  const ver = await (await g.fetchFn(`${G}/${vid.id}?access_token=${TOKEN_STAND}&fields=status,picture`)).json();
+  assert.equal(ver.status.video_status, 'ready'); assert.match(ver.picture, /miniatura/);
+});

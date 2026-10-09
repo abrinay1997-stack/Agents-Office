@@ -32,13 +32,90 @@
 //   CIFRAS = { gasto, impresiones, alcance, frecuencia, clics, clicsEnlace, ctr, cpc, cpm, resultados, resultadoTexto, costoPorResultado,
 //              costoPor: 'resultado'|'mil' } — en la moneda de la cuenta y números; null cuando no se sabe, nunca inventado.
 // Ninguna respuesta lleva un token: lo de Meta pasa por mensajeMeta (que ya los quita) y `uso` es solo porcentajes y horas.
-import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto } from './modelo.mjs';
+//
+// Fase A3 (9 oct 2026): LOS BORRADORES DE CAMPAÑA (anuncios/borradores.mjs, anuncios/crear.mjs). El contrato con la página:
+//   GET    /api/anuncios/borradores                       → { items: [borrador] } (lo más nuevo primero; la forma, en anuncios/modelo.mjs)
+//   GET    /api/anuncios/borradores/<id>                  → { borrador }
+//   POST   /api/anuncios/borradores { …campos, por?, agente? } → { borrador } con los valores por defecto puestos.
+//          El dueño (de: 'dueno'), Dimitri (por: 'dimitri'), el asistente (por: 'asistente') y un agente (por: 'agente', agente: '<id>'
+//          → de: 'agente:<id>'; sin su id, 403; como mucho MAX_AGENTE borradores abiertos por agente → 429).
+//   PATCH  /api/anuncios/borradores/<id> { …campos }      → { borrador } · un agente solo los suyos y en «borrador» (403/409) · nadie uno
+//          «creado» o «creando» (409) · el asistente no (403: solo crea, con la op anuncio_borrador)
+//   DELETE /api/anuncios/borradores/<id>                  → { ok } (solo el dueño; va a data/anuncios/papelera.json)
+//   POST   /api/anuncios/borradores/<id>/validar          → { borrador } con `validacion` (no crea nada; dueño y Dimitri)
+//   POST   /api/anuncios/borradores/<id>/crear            → 202 { ok } y el borrador pasa a «creando» (la página sondea la lista).
+//          SOLO el dueño (agente, asistente, Dimitri → 403) · 422 { error: 'validacion', problemas } · 409 { error: 'estado'|'conexion', motivo }
+//   GET    /api/anuncios/borradores/<id>/vista-previa?formato=MOBILE_FEED_STANDARD|INSTAGRAM_STANDARD|INSTAGRAM_STORY&creativo=
+//          → { html, formato, creativo } (generatepreviews de Meta) · 409 { error, motivo } si Meta no está · un agente: 403
+//   POST   /api/anuncios/borradores/<id>/mejorar { creativo, campo: 'texto'|'titular', pide? } → { texto, porque, agente } (solo el dueño;
+//          lo escribe `ada`, sin herramientas, sin guardar nada; su costo va a data/costs.jsonl como kind 'anuncios')
+import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto, ErrorBorrador } from './modelo.mjs';
+import { quienDe } from './acciones.mjs';
 
 export const AGENTE_CADA_MIN = 10;
+export const MAX_AGENTE = 20; // borradores abiertos (en «borrador») por agente
 
-export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now() }) {
+export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null }) {
   let agenteAt = 0;
   const rangoDe = url => (RANGOS.includes(url.searchParams.get('rango')) ? url.searchParams.get('rango') : '7d');
+
+  /** Fase A3: /api/anuncios/borradores[/<id>[/validar|crear|vista-previa|mejorar]]. */
+  async function rutaBorradores(req, res, url, id, sub) {
+    const M = req.method;
+    const b = M === 'GET' ? {} : await body(req).catch(() => ({}));
+    const quien = quienDe(b?.por ?? url.searchParams.get('por') ?? undefined), agente = String(b?.agente ?? url.searchParams.get('agente') ?? '').trim();
+    const deAgente = quien === 'agente';
+    const no = (code, error, extra = {}) => json(res, code, { error, motivo: error, ...extra }); // siempre con «motivo» en palabras (la página lo enseña)
+    if (quien === 'otro') return no(403, 'quién pide no se reconoce');
+    if (!id) {
+      if (M === 'GET') return json(res, 200, { items: borradores.lista() });
+      if (M !== 'POST') return no(405, 'método no admitido');
+      if (deAgente && !/^[A-Za-z0-9_-]{1,30}$/.test(agente)) return no(403, 'un agente deja borradores con su id (agente)');
+      if (deAgente && borradores.lista().filter(x => x.de === `agente:${agente}` && x.estado === 'borrador').length >= MAX_AGENTE) return no(429, `ya tienes ${MAX_AGENTE} borradores sin crear: mejora uno de los tuyos en vez de hacer otro`);
+      const { por: _p, agente: _a, ...campos } = b || {};
+      const de = deAgente ? `agente:${agente}` : quien;
+      return json(res, 200, { borrador: borradores.crear(campos, { de }) });
+    }
+    const actual = borradores.leer(id);
+    if (!actual) return no(404, 'ese borrador no existe (¿se quitó?)');
+    if (!sub) {
+      if (M === 'GET') return json(res, 200, { borrador: actual });
+      if (M === 'PATCH') {
+        if (quien === 'asistente') return no(403, 'el asistente deja borradores nuevos; cambiarlos es del dueño (o de Dimitri con su clic)');
+        const { por: _p, agente: _a, ...campos } = b || {};
+        return json(res, 200, { borrador: borradores.cambiar(id, campos, { quien, agente }) });
+      }
+      if (M === 'DELETE') {
+        if (quien !== 'dueno') return no(403, 'quitar un borrador lo hace el dueño');
+        borradores.quitar(id, { por: 'dueno' }); return json(res, 200, { ok: true });
+      }
+      return no(405, 'método no admitido');
+    }
+    if (sub === 'vista-previa') {
+      if (M !== 'GET') return no(405, 'método no admitido');
+      if (deAgente) return no(403, 'la vista previa de Meta la pide el dueño en Anuncios');
+      if (!creador) return no(409, 'la vista previa de Meta no está disponible', { motivo: 'sin creador' });
+      const r = await creador.vistaPrevia(id, { formato: url.searchParams.get('formato') || 'MOBILE_FEED_STANDARD', creativo: url.searchParams.get('creativo') || null });
+      return json(res, r.status, r.cuerpo);
+    }
+    if (M !== 'POST') return no(405, 'método no admitido');
+    if (sub === 'validar') {
+      if (quien !== 'dueno' && quien !== 'dimitri') return no(403, 'validar con Meta lo pide el dueño en Anuncios');
+      const r = await creador.validar(id); return json(res, r.status, r.cuerpo);
+    }
+    if (sub === 'crear') { const r = await creador.crear(id, { quien }); return json(res, r.status, r.cuerpo); }
+    if (sub === 'mejorar') {
+      if (quien !== 'dueno') return no(403, '«Mejorar con el agente de anuncios» lo pide el dueño (gasta en el modelo)');
+      if (!mejorar) return no(409, 'no hay quién lo mejore ahora');
+      const c = (actual.creativos || []).find(x => x.id === String(b?.creativo || ''));
+      if (!c) return no(404, 'ese creativo no está en el borrador');
+      const campo = b?.campo === 'titular' ? 'titular' : b?.campo === 'texto' || !b?.campo ? 'texto' : null;
+      if (!campo) return no(400, 'el campo es «texto» o «titular»');
+      try { return json(res, 200, await mejorar({ borrador: actual, creativo: c, campo, pide: String(b?.pide || '').slice(0, 300) })); }
+      catch (e) { return no(e.status || 502, 'no pude mejorarlo ahora: ' + e.message); }
+    }
+    return no(404, 'esa acción de un borrador no existe (validar, crear, vista-previa, mejorar)');
+  }
 
   /** La vista con lo de la conexión: lo que contesta GET /api/anuncios. */
   function completa(rango = '7d') {
@@ -50,6 +127,8 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
     const p = url.pathname;
     if (p !== '/api/anuncios' && !p.startsWith('/api/anuncios/')) return false;
     try {
+      const mb = /^\/api\/anuncios\/borradores(?:\/([A-Za-z0-9_-]{1,60})(?:\/(validar|crear|vista-previa|mejorar))?)?$/.exec(p);
+      if (mb && borradores) return await rutaBorradores(req, res, url, mb[1] || null, mb[2] || null), true;
       if (req.method === 'GET') {
         if (p === '/api/anuncios') {
           if (url.searchParams.get('abierto') === '1' && url.searchParams.get('por') !== 'agente') sync.abierto();
@@ -93,7 +172,7 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
         return json(res, 404, { error: 'esa acción de Anuncios no existe (las que hay: accion, deshacer, sincronizar)' }), true;
       }
       return json(res, 405, { error: 'método no admitido' }), true;
-    } catch (e) { return json(res, e.status || 500, { error: e.message }), true; }
+    } catch (e) { return json(res, e instanceof ErrorBorrador ? e.status : e.status || 500, { error: e.message, motivo: e.message }), true; }
   }
   handle.completa = completa;
   return handle;

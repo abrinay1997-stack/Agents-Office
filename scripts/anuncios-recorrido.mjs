@@ -6,6 +6,12 @@
 // cifra → «Sí» → activa; subir el presupuesto de una que aprende → el aviso antes del «Sí»; pasar el tope → el motivo con la cifra y no
 // cambia nada; el menú «⋯» con el teclado; el historial con lo hecho y el filtro por quién. La tarjeta de gasto de Dimitri no se puede
 // simular en la demo (Dimitri necesita la oficina): la prueban tests/anuncios-vista.test.mjs y el servidor.
+// Fase A3 (9 oct 2026), en la demo: Borradores (de quién viene cada uno) → «+ Nueva campaña» → los 5 pasos (objetivo con su enlace,
+// Advantage+ y el público manual, el costo máximo en palabras y el aviso sin fecha de fin, elegir de la galería, «✨ Mejorar» → Usar, las
+// mejoras de Meta) → la revisión con problemas → un clic en uno lleva a su paso y a su campo → arreglado → la vista previa (feed e
+// historia) → «Crear en Meta (en pausa)» → «Creado en pausa» → aparece EN PAUSA en Campañas. «Crear con el Estudio»: en la demo el
+// Estudio no tiene galería (necesita la oficina), así que se prueba que abre «para el anuncio» con su barra y que «Volver al anuncio»
+// devuelve al paso 4; elegir una imagen allí lo prueba la oficina servida.
 // Si además hay una oficina que ya sirve /api/anuncios y /anuncios-vista.js (serve.mjs con la Fase A1), abre una temporal sin Meta:
 // la tarjeta de conexión y «Ver con datos de ejemplo». Si no, lo dice y sigue con la demo.
 //   node scripts/anuncios-recorrido.mjs   → capturas en data/capturas/anuncios/ y ✓/✗ por paso
@@ -29,7 +35,7 @@ if (!fs.existsSync(path.join(ROOT, 'dist', 'anuncios-vista.js'))) { console.log(
 const medir = page => page.evaluate(() => {
   const ov = document.getElementById('anuOv');
   const vis = b => b.offsetParent && b.getClientRects().length;
-  const peq = [...ov.querySelectorAll('button, select, input:not([type=hidden]), [role=tab]')].filter(vis).map(b => [b, b.getBoundingClientRect()]).filter(([, r]) => r.height < 23.5 || r.width < 23.5).map(([b, r]) => `${b.className || b.tagName}:${Math.round(r.width)}x${Math.round(r.height)}`);
+  const peq = [...ov.querySelectorAll('button, select, input:not([type=hidden]), [role=tab]')].filter(vis).map(b => [b, ((b.type === 'radio' || b.type === 'checkbox') && b.closest('label') || b).getBoundingClientRect()]).filter(([, r]) => r.height < 23.5 || r.width < 23.5).map(([b, r]) => `${b.className || b.tagName}:${Math.round(r.width)}x${Math.round(r.height)}`);
   const hs = document.documentElement.scrollWidth > innerWidth + 1;
   const letra = [...ov.querySelectorAll('*')].filter(n => n.offsetParent && [...n.childNodes].some(c => c.nodeType === 3 && c.textContent.trim())).filter(n => parseFloat(getComputedStyle(n).fontSize) < 10.5).map(n => n.className || n.tagName);
   return { peq: peq.slice(0, 5), npeq: peq.length, hs, letra: letra.slice(0, 5), nletra: letra.length };
@@ -119,6 +125,132 @@ async function a2(page, tag, w, pasaAxe) {
   if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(400); }
 }
 
+/** Fase A3 en la demo: un borrador de punta a punta, hasta crearlo EN PAUSA. */
+async function a3(page, tag, w, pasaAxe) {
+  const movil = w < 500;
+  if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(800); }
+  if (await page.$('#anuOv [data-cerrardet]')) { await page.click('#anuOv [data-cerrardet]'); await page.waitForTimeout(150); }
+  await page.click('#anuOv [data-tab="borradores"]'); await page.waitForSelector('#anuOv .anu-blista', { timeout: 5000 });
+  const lista = await txt(page, '#anuOv .anu-blista');
+  step(/De: Dimitri/.test(lista) && /\(agente\)/.test(lista) && /Creado en pausa/.test(lista) && /Costo máximo/.test(lista) && !!await page.$('#anuOv [data-vercamp="ej-c-4"]'), `${tag}: A3 · Borradores: de quién viene cada uno, su estado, su costo máximo y el creado enlaza a su campaña`);
+  ok24(await medir(page), tag, 'A3 · Borradores');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-borradores.png`) });
+  await pasaAxe('A3 · Borradores');
+  // borrar pide el segundo clic en la fila
+  await page.click('#anuOv [data-bborrar="ej-b-2"]'); await page.waitForSelector('#anuOv [data-bborrar-si="ej-b-2"]', { timeout: 3000 });
+  await page.waitForFunction(() => document.activeElement?.dataset?.bborrarSi === 'ej-b-2', null, { timeout: 2000 }).catch(() => {}); // el foco llega a los 20 ms de pintar: se espera al hecho
+  step(await page.evaluate(() => document.activeElement?.dataset?.bborrarSi) === 'ej-b-2' && /¿Borrar/.test(await txt(page, '#anuOv [data-bfila="ej-b-2"]')), `${tag}: A3 · «Borrar» pide el segundo clic en la misma fila (el foco va al «Sí, borrar»)`);
+  await page.click('#anuOv [data-bborrar-no="ej-b-2"]'); await page.waitForTimeout(150);
+  // 1 · objetivo
+  await page.click('#anuOv .anu-bcab [data-a="nueva"]'); await page.waitForSelector('#anuOv .anu-asis', { timeout: 5000 });
+  step(await page.$eval('#anuOv [data-paso="0"]', b => b.getAttribute('aria-current')) === 'step' && await page.$eval('#anuOv input[data-bc="objetivo"][value="mensajes"]', i => i.checked) && await page.$eval('#anuOv input[data-bc="destino"][value="whatsapp"]', i => i.checked) && await page.evaluate(() => document.activeElement?.id) === 'anuBPasoT',
+    `${tag}: A3 · «+ Nueva campaña» abre el paso 1 con «Que me escriban» por WhatsApp marcado (el foco en el título del paso)`);
+  if (movil) step(await page.$eval('#anuOv .anu-linea', n => getComputedStyle(n).display === 'none'), `${tag}: A3 · en el teléfono el asistente ocupa la vista`);
+  await page.click('#anuOv label:has(input[data-bc="objetivo"][value="web"])'); await page.waitForSelector('#anuOv [data-bc="enlace"]', { timeout: 3000 });
+  await page.fill('#anuOv [data-bc="enlace"]', 'https://panaclaw.example/otono');
+  step(!await page.$('#anuOv [data-bc="destino"]'), `${tag}: A3 · «Visitas a mi web» pide la dirección y quita el destino`);
+  ok24(await medir(page), tag, 'A3 · paso 1');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-paso1.png`) });
+  await pasaAxe('A3 · paso 1');
+  await page.click('#anuOv label:has(input[data-bc="objetivo"][value="mensajes"])'); await page.waitForTimeout(200);
+  // 2 · público
+  await page.click('#anuOv [data-bnav="1"]'); await page.waitForSelector('#anuOv [data-bmodo]', { timeout: 3000 });
+  const p2 = await txt(page, '#anuOv .anu-paso');
+  step(/Advantage\+: Meta busca a quién mostrarlo/.test(p2) && await page.$eval('#anuOv input[data-bc="categoriaEspecial"][value=""]', i => i.checked) && await page.$eval('#anuOv [data-bpais]', s => s.value) === 'PA' && await page.$eval('#anuOv [data-bc="publico.edadMin"]', i => i.value) === '18',
+    `${tag}: A3 · paso 2: Advantage+ en Panamá, 18+, y la categoría especial siempre presente con «Ninguna» marcada`);
+  await page.click('#anuOv [data-bmodo="manual"]'); await page.waitForSelector('#anuOv [data-bc="publico.intereses"]', { timeout: 3000 });
+  step(await page.evaluate(() => document.activeElement?.dataset?.bmodo) === 'advantage', `${tag}: A3 · «Prefiero un público manual» trae los intereses (y el foco sigue en el botón, que ahora vuelve a Advantage+)`);
+  ok24(await medir(page), tag, 'A3 · paso 2');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-paso2.png`) });
+  await pasaAxe('A3 · paso 2');
+  await page.click('#anuOv [data-bmodo="advantage"]'); await page.waitForTimeout(150);
+  // 3 · presupuesto y fechas
+  await page.click('#anuOv [data-bnav="1"]'); await page.waitForFunction(() => /hasta 5,00\sUS\$ al día/.test(document.querySelector('#anuOv [data-costo]')?.textContent || ''), null, { timeout: 5000 });
+  step(/70,00\sUS\$ en total/.test(await page.textContent('#anuOv [data-costo]')), `${tag}: A3 · paso 3: el costo máximo en palabras («${(await txt(page, '#anuOv [data-costo]')).trim()}»)`);
+  await page.click('#anuOv [data-bsinfin]'); await page.waitForSelector('#anuOv [data-avisofin]', { timeout: 3000 });
+  step(/no cabe en tu tope por campaña/.test(await txt(page, '#anuOv [data-avisofin]')), `${tag}: A3 · sin fecha de fin y presupuesto diario: el aviso de que así no se podrá activar`);
+  const fin = await page.evaluate(() => { const d = new Date(Date.now() + 13 * 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+  await page.fill('#anuOv [data-bc="fin"]', fin); await page.dispatchEvent('#anuOv [data-bc="fin"]', 'change');
+  await page.fill('#anuOv [data-bc="presupuesto.usd"]', '50');
+  await page.waitForFunction(() => /hasta 50,00\sUS\$ al día/.test(document.querySelector('#anuOv [data-costo]')?.textContent || ''), null, { timeout: 6000 }).catch(() => {});
+  step(/hasta 50,00\sUS\$ al día/.test(await page.textContent('#anuOv [data-costo]')) && !await page.$('#anuOv [data-avisofin]'), `${tag}: A3 · cambiar el presupuesto se guarda solo y el costo máximo se vuelve a calcular`);
+  ok24(await medir(page), tag, 'A3 · paso 3');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-paso3.png`) });
+  await pasaAxe('A3 · paso 3');
+  // 4 · creativos: de la galería, mejorar, las mejoras de Meta
+  await page.click('#anuOv [data-bnav="1"]'); await page.waitForSelector('#anuOv [data-bgaleria]', { timeout: 3000 });
+  await page.click('#anuOv [data-bgaleria]'); await page.waitForSelector('#anuOv .anu-fondo-gal:not([hidden]) [data-gfile]', { timeout: 5000 });
+  step(await page.$eval('#anuOv .anu-dlg-gal', d => d.getAttribute('role') === 'dialog' && d.getAttribute('aria-modal') === 'true'), `${tag}: A3 · «Elegir de la galería» es una ventana`);
+  await page.click('#anuOv [data-gfile="demo/anu-combo.jpg"]'); await page.click('#anuOv [data-gfile="demo/anu-cliente.jpg"]');
+  ok24(await medir(page), tag, 'A3 · la galería');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-galeria.png`) });
+  await pasaAxe('A3 · la galería');
+  await page.click('#anuOv [data-gusar]'); await page.waitForSelector('#anuOv [data-bcr="1"]', { timeout: 3000 });
+  step((await page.$$eval('#anuOv [data-bcr]', l => l.length)) === 2 && await page.$eval('#anuOv [data-bc="creativos.1.formato"]', s => s.value) === '9:16' && await page.$eval('#anuOv [data-bc="creativos.0.llamada"]', s => s.value) === 'WHATSAPP_MESSAGE',
+    `${tag}: A3 · dos creativos de la galería, cada uno con su formato (9:16 para el alto) y la llamada del objetivo`);
+  await page.fill('#anuOv [data-bc="creativos.0.texto"]', 'Lentes listos en 1 día, con examen incluido');
+  await page.click('#anuOv [data-bmejorar="0"][data-campo="texto"]'); await page.waitForSelector('#anuOv [data-busar="0"]', { timeout: 5000 });
+  const prop = await txt(page, '#anuOv .anu-bprop');
+  step(/Propuesta de ANUNCIOS/.test(prop) && /Por qué/.test(prop) && await page.$eval('#anuOv [data-bc="creativos.0.texto"]', t => t.value) === 'Lentes listos en 1 día, con examen incluido', `${tag}: A3 · «✨ Mejorar» trae la propuesta con su porqué, sin tocar tu texto`);
+  ok24(await medir(page), tag, 'A3 · paso 4');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-paso4.png`) });
+  await pasaAxe('A3 · paso 4');
+  await page.click('#anuOv [data-busar="0"]'); await page.waitForTimeout(200);
+  step(/WhatsApp/.test(await page.$eval('#anuOv [data-bc="creativos.0.texto"]', t => t.value)) && await page.evaluate(() => document.activeElement?.dataset?.bc) === 'creativos.0.texto', `${tag}: A3 · «Usar» pone la propuesta y el foco vuelve al texto`);
+  await page.click('#anuOv [data-bmejora="texto"]'); await page.waitForTimeout(150);
+  step(await page.$eval('#anuOv [data-bmejora="texto"]', b => b.getAttribute('aria-checked') === 'true' && /Encendida/.test(b.textContent)), `${tag}: A3 · las mejoras de Meta, una por una, con su estado escrito`);
+  await page.click('#anuOv [data-bmejora="texto"]'); await page.waitForTimeout(150);
+  // el Estudio «para el anuncio»
+  if (await page.$('#anuOv [data-bestudio]')) {
+    await page.click('#anuOv [data-bestudio]'); await page.waitForSelector('.st-forpiece:not([hidden])', { timeout: 6000 });
+    const barra = await txt(page, '.st-forpiece');
+    step(/Para el anuncio «Campaña nueva/.test(barra) && /Volver al anuncio/.test(barra), `${tag}: A3 · «Crear con el Estudio» abre el Estudio «para el anuncio» con su barra («${barra.trim().slice(0, 70)}…»)`);
+    await page.screenshot({ path: path.join(OUT, `${tag}-a3-estudio.png`) });
+    await page.click('.st-forpiece [data-f="back"]'); await page.waitForSelector('#anuOv.on [data-paso="3"][aria-current="step"]', { timeout: 6000 });
+    step((await page.$$eval('#anuOv [data-bcr]', l => l.length)) === 2, `${tag}: A3 · «Volver al anuncio» devuelve a Anuncios en el paso 4, con lo que ya tenía`);
+  } else step(false, `${tag}: A3 · falta «Crear con el Estudio»`);
+  // 5 · revisión: los problemas llevan a su campo
+  await page.click('#anuOv [data-paso="4"]'); await page.waitForSelector('#anuOv [data-bir]', { timeout: 6000 });
+  const probs = await page.$$eval('#anuOv [data-bir]', l => l.map(b => b.textContent));
+  step(probs.some(t => /tope diario/.test(t)) && probs.some(t => /creativo 2/.test(t)) && await page.$eval('#anuOv [data-bcrear]', b => b.getAttribute('aria-disabled')) === 'true' && /Arregla/.test(await txt(page, '#anuOv .anu-bcrear')), `${tag}: A3 · la revisión dice qué falta (${probs.length}) y «Crear» lo dice en vez de crear`);
+  ok24(await medir(page), tag, 'A3 · revisión con problemas');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-problemas.png`) });
+  await pasaAxe('A3 · revisión con problemas');
+  const iTope = probs.findIndex(t => /tope diario/.test(t));
+  await page.click(`#anuOv [data-bir="${iTope}"]`); await page.waitForTimeout(300);
+  step(await page.$eval('#anuOv [data-paso="2"]', b => b.getAttribute('aria-current')) === 'step' && await page.evaluate(() => document.activeElement?.dataset?.bc) === 'presupuesto.usd', `${tag}: A3 · un clic en el problema lleva al paso 3 con el foco en el presupuesto`);
+  await page.fill('#anuOv [data-bc="presupuesto.usd"]', '5'); await page.waitForTimeout(700);
+  await page.click('#anuOv [data-paso="4"]'); await page.waitForSelector('#anuOv [data-bir]', { timeout: 6000 });
+  const i2 = (await page.$$eval('#anuOv [data-bir]', l => l.map(b => b.textContent))).findIndex(t => /creativo 2/.test(t));
+  await page.click(`#anuOv [data-bir="${i2}"]`); await page.waitForTimeout(300);
+  step(await page.evaluate(() => document.activeElement?.dataset?.bc) === 'creativos.1.texto', `${tag}: A3 · …y el del creativo 2 lleva a su texto`);
+  await page.fill('#anuOv [data-bc="creativos.1.texto"]', 'Pruébate las monturas nuevas. Escríbenos y te las apartamos.'); await page.waitForTimeout(700);
+  await page.click('#anuOv [data-paso="4"]'); await page.waitForFunction(() => /Todo en orden/.test(document.querySelector('#anuOv .anu-paso')?.textContent || ''), null, { timeout: 6000 });
+  step((await page.$$eval('#anuOv .anu-pv-f', l => l.length)) === 2 && /5,00\sUS\$ al día/.test(await page.textContent('#anuOv .anu-paso')) && await page.$eval('#anuOv [data-bcrear]', b => !b.hasAttribute('aria-disabled')), `${tag}: A3 · todo en orden: la vista previa del feed de los dos creativos, el costo máximo y «Crear» disponible`);
+  await page.click('#anuOv [data-bubic="historia"]'); await page.waitForTimeout(200);
+  step((await page.$$eval('#anuOv .anu-pv-h', l => l.length)) === 2, `${tag}: A3 · la vista previa de historias y reels (9:16)`);
+  ok24(await medir(page), tag, 'A3 · revisión');
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-revision.png`) });
+  await pasaAxe('A3 · revisión');
+  // crear en pausa
+  await page.click('#anuOv [data-bcrear]'); await page.waitForSelector('#anuOv .anu-bok.t-ambar', { timeout: 4000 });
+  step(/Creando en Meta…/.test(await txt(page, '#anuOv .anu-paso')), `${tag}: A3 · «Crear en Meta (en pausa)»: un clic y «Creando en Meta…»`);
+  await page.waitForSelector('#anuOv .anu-bok.t-verde [data-vercamp]', { timeout: 8000 });
+  step(/Creado en pausa\. ?Actívalo desde Campañas cuando quieras \(te pedirá los dos clics/.test(await txt(page, '#anuOv .anu-bok.t-verde')), `${tag}: A3 · «Creado en pausa. Actívalo desde Campañas cuando quieras (te pedirá los dos clics)»`);
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-creado.png`) });
+  await pasaAxe('A3 · creado');
+  const camp = await page.$eval('#anuOv .anu-bok.t-verde [data-vercamp]', b => b.dataset.vercamp);
+  await page.click('#anuOv .anu-bok.t-verde [data-vercamp]'); await page.waitForSelector('#anuOv .anu-det:not([hidden]) .anu-dh', { timeout: 6000 });
+  step(await page.$eval('#anuTab-campanas', b => b.getAttribute('aria-selected')) === 'true' && /En pausa/.test(await txt(page, `#anuOv [data-fila="${camp}"]`)) && !!await page.$(`#anuOv .anu-int[data-acc="activar"][data-id="${camp}"]`),
+    `${tag}: A3 · «Ver en Campañas»: la campaña nueva está EN PAUSA y su interruptor dice «Activar» (los dos clics de la A2)`);
+  await page.screenshot({ path: path.join(OUT, `${tag}-a3-campanas.png`) });
+  await page.click('#anuOv [data-cerrardet]'); await page.waitForTimeout(150);
+  await page.click('#anuOv [data-tab="borradores"]'); await page.waitForTimeout(300);
+  step(/Creado en pausa/.test(await txt(page, '#anuOv .anu-blista li:last-child')) || (await page.$$eval('#anuOv .anu-blista li', l => l.filter(x => /Creado en pausa/.test(x.textContent)).length)) === 2, `${tag}: A3 · en Borradores, el nuevo ya dice «Creado en pausa»`);
+  await page.click('#anuOv [data-tab="resumen"]'); await page.waitForTimeout(200);
+  if (w === 1024) { await page.click('#topDimitri'); await page.waitForTimeout(400); }
+}
+
 let browser;
 try {
   try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ channel: 'chrome' }); }
@@ -201,6 +333,7 @@ try {
         await page.click('#topDimitri'); await page.waitForTimeout(400);
       }
       await a2(page, tag, w, pasaAxe);
+      await a3(page, tag, w, pasaAxe);
       // la tecla J abre y cierra
       await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('j'); await page.waitForTimeout(400);
       step(!(await page.$eval('#anuOv', o => o.classList.contains('on'))), `${tag}: J cierra Anuncios`);

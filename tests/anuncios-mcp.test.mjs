@@ -14,9 +14,18 @@ import { crearRutasAnuncios } from '../anuncios/rutas.mjs';
 import { armarVista } from '../anuncios/modelo.mjs';
 import { TOOLS } from '../anuncios-mcp.mjs';
 import { kindOf } from '../safety.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import { crearBorradores } from '../anuncios/borradores.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PROHIBIDAS = /activar|gastar|pagar|publicar|aprobar|borrar|crear_en_meta|pausar|presupuesto|reanudar|duplicar|relanzar|archivar|cambiar|editar|subir|bajar|crear|enviar|delete|create|update|pause|activate|budget|spend|publish|approve/i;
+// Fase A3 (9 oct 2026): dejar BORRADORES en la oficina sí (el nombre lo dice: «borrador»); crear en Meta, nunca. Una herramienta que crea
+// o mejora tiene que decir «borrador_», y aun así no puede sonar a nada de esto (ni «crear_en_meta», ni «crear_campana» a secas).
+const PROHIBIDAS_SIEMPRE = /activar|gastar|pagar|publicar|aprobar|borrar|crear_en_meta|en_meta|pausar|presupuesto|reanudar|duplicar|relanzar|archivar|subir|bajar|enviar|delete|activate|budget|spend|publish|approve/i;
+const BORRADOR = /^(crear|mejorar)_borrador_[a-z_]+$/;
+/** ¿Puede un agente tener una herramienta con este nombre? Las que leen (ver_…) o las que dejan un borrador EN LA OFICINA. */
+export const nombrePermitido = n => (/^ver_/.test(n) && !PROHIBIDAS.test(n)) || (BORRADOR.test(n) && !PROHIBIDAS_SIEMPRE.test(n));
 
 const hoy = '2026-10-08';
 const GUARDADO = {
@@ -58,14 +67,17 @@ function mcp(base) {
   return { rpc, llamar: async (name, args) => (await rpc('tools/call', { name, arguments: args })).result, cerrar: () => p.kill() };
 }
 
-test('las herramientas de anuncios de los agentes solo leen: ningún nombre que active, pause, gaste, cambie presupuestos o cree en Meta', () => {
-  assert.deepEqual(TOOLS.map(t => t.name).sort(), ['ver_anuncio', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_resultados_anuncios']);
+test('las herramientas de anuncios de los agentes leen y dejan borradores en la oficina: ningún nombre que active, pause, gaste o cree en Meta', () => {
+  assert.deepEqual(TOOLS.map(t => t.name).sort(), ['crear_borrador_campana', 'mejorar_borrador_campana', 'ver_anuncio', 'ver_borradores_campana', 'ver_campanas', 'ver_cuenta_anuncios', 'ver_resultados_anuncios']);
   for (const t of TOOLS) {
-    assert.match(t.name, /^ver_/, `«${t.name}» no empieza por ver_`);
-    assert.doesNotMatch(t.name, PROHIBIDAS, `«${t.name}» suena a algo que un agente no debe poder hacer`);
-    assert.equal(kindOf(`mcp__anuncios__${t.name}`), 'read', 'el guardián trata a Anuncios como interno y de lectura');
-    assert.ok(!Object.keys(t.inputSchema.properties || {}).some(k => /estado_nuevo|status|presupuesto|budget/i.test(k)), 'ningún campo deja elegir un estado o un presupuesto');
+    assert.ok(nombrePermitido(t.name), `«${t.name}» suena a algo que un agente no debe poder hacer`);
+    assert.equal(kindOf(`mcp__anuncios__${t.name}`), 'read', 'el guardián trata a Anuncios como interno (nada sale de la oficina)');
+    const campos = Object.keys(t.inputSchema.properties || {});
+    assert.ok(!campos.some(k => (/^ver_/.test(t.name) ? /estado_nuevo|status|meta_id|campaign|adset/i : /estado|status|meta_id|campaign|adset/i).test(k)), `«${t.name}»: ningún campo deja elegir un estado ni tocar algo de Meta`);
+    if (/^ver_/.test(t.name)) assert.ok(!campos.some(k => /presupuesto|budget/i.test(k)), 'una que lee no lleva presupuesto');
   }
+  for (const malo of ['crear_en_meta', 'crear_campana', 'crear_campana_en_meta', 'activar_borrador_campana', 'publicar_borrador', 'crear_borrador_en_meta', 'mejorar_presupuesto_borrador', 'borrar_borrador_campana', 'pausar_campana']) assert.equal(nombrePermitido(malo), false, malo);
+  assert.equal(nombrePermitido('crear_borrador_campana'), true);
 });
 
 test('anuncios-mcp.mjs habla con la oficina: la cuenta, las campañas, las cifras por anuncio y un objeto por su id, con ids y como datos', async () => {
@@ -114,5 +126,46 @@ test('A2: `accion` y `deshacer` le dan 403 a un agente antes de llegar a anuncio
     assert.equal(llamadas.length, 0, 'ni siquiera llega a acciones.mjs');
     assert.equal(await api('/api/anuncios/accion', { tipo: 'pausar', id: 'C1' }), 200, 'el dueño sí'); assert.equal(llamadas[0][1].por, undefined);
   } finally { srv.close(); }
-  for (const t of TOOLS) assert.doesNotMatch(t.name, PROHIBIDAS, `«${t.name}»`);
+  for (const t of TOOLS) assert.ok(nombrePermitido(t.name), `«${t.name}»`);
+});
+
+test('A3: crear_borrador_campana y mejorar_borrador_campana dejan borradores EN LA OFICINA (de: agente:ada); los de otro, no; crear en Meta, 403', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-a3-mcp-'));
+  const borradores = crearBorradores({ dir, ajustes: () => ({ whatsapp: '507' }) });
+  const creados = []; const creador = { crear: async (id, { quien }) => { creados.push(quien); return { status: quien === 'dueno' ? 202 : 403, cuerpo: quien === 'dueno' ? { ok: true } : { error: 'no' } }; }, validar: async () => ({ status: 200, cuerpo: {} }), vistaPrevia: async () => ({ status: 200, cuerpo: { html: '' } }) };
+  const json = (res, code, b) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
+  const body = req => new Promise(ok => { let x = ''; req.on('data', d => { x += d; }); req.on('end', () => { try { ok(x ? JSON.parse(x) : {}); } catch { ok({}); } }); });
+  const handle = crearRutasAnuncios({ sync: sincDeMentira(), meta: { uso: () => ({ pct: 0, ritmo: 1 }) }, json, body, borradores, creador });
+  const srv = http.createServer(async (req, res) => { if (!await handle(req, res, new URL(req.url, 'http://x'))) json(res, 404, {}); });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${srv.address().port}`, m = mcp(base);
+  const api = async (metodo, p, b) => { const r = await fetch(base + p, { method: metodo, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, ...(await r.json().catch(() => ({}))) }; };
+  try {
+    const del = borradores.crear({ nombre: 'Del dueño' });
+    const r = await m.llamar('crear_borrador_campana', { nombre: 'Combo por WhatsApp', presupuesto_usd: 8, creativos: [{ media: 'm1', texto: 'Escríbenos', formato: '1:1' }] });
+    assert.equal(r.isError, undefined, r.content[0].text); assert.match(r.content[0].text, /NO en Meta[\s\S]*«Combo por WhatsApp» \(Que me escriban por WhatsApp\) · US\$8 al día · 1 creativo\(s\) · de agente:ada · borrador/);
+    const mio = borradores.lista().find(b => b.de === 'agente:ada');
+    assert.ok(mio); assert.equal(mio.estado, 'borrador'); assert.equal(mio.creativos[0].media, 'm1');
+    const ver = (await m.llamar('ver_borradores_campana', {})).content[0].text;
+    assert.match(ver, new RegExp(`- ${mio.id} .*\\(TUYO\\)`)); assert.ok(ver.indexOf(mio.id) < ver.indexOf(del.id), 'los suyos primero');
+    const mej = await m.llamar('mejorar_borrador_campana', { id: mio.id, presupuesto_usd: 12, nombre: 'Combo 2x1' });
+    assert.equal(mej.isError, undefined, mej.content[0].text); assert.equal(borradores.leer(mio.id).presupuesto.usd, 12);
+    const ajeno = await m.llamar('mejorar_borrador_campana', { id: del.id, nombre: 'Mío' });
+    assert.equal(ajeno.isError, true); assert.match(ajeno.content[0].text, /solo cambia sus propios borradores/); assert.equal(borradores.leer(del.id).nombre, 'Del dueño');
+    // por la API: un agente sin su id no deja nada; no crea en Meta, no valida, no quita, no pide la vista previa ni el «mejorar» con el modelo
+    assert.equal((await api('POST', '/api/anuncios/borradores', { por: 'agente', nombre: 'x' })).status, 403);
+    assert.equal((await api('POST', `/api/anuncios/borradores/${mio.id}/crear`, { por: 'agente', agente: 'ada' })).status, 403); assert.deepEqual(creados, ['agente']);
+    assert.equal((await api('POST', `/api/anuncios/borradores/${mio.id}/validar`, { por: 'agente', agente: 'ada' })).status, 403);
+    assert.equal((await api('DELETE', `/api/anuncios/borradores/${mio.id}`, { por: 'agente', agente: 'ada' })).status, 403);
+    assert.equal((await api('GET', `/api/anuncios/borradores/${mio.id}/vista-previa?por=agente`)).status, 403);
+    assert.equal((await api('POST', `/api/anuncios/borradores/${mio.id}/mejorar`, { por: 'agente', agente: 'ada', creativo: 'k1' })).status, 403);
+    assert.equal((await api('PATCH', `/api/anuncios/borradores/${mio.id}`, { por: 'asistente', nombre: 'x' })).status, 403, 'el asistente solo deja nuevos');
+    // uno creado: nadie lo cambia
+    borradores.poner(mio.id, { estado: 'creado' });
+    assert.equal((await api('PATCH', `/api/anuncios/borradores/${mio.id}`, { nombre: 'Otra' })).status, 409);
+    assert.equal((await m.llamar('mejorar_borrador_campana', { id: mio.id, nombre: 'Otra' })).isError, true);
+    // el dueño quita uno: a la papelera
+    assert.equal((await api('DELETE', `/api/anuncios/borradores/${del.id}`)).status, 200); assert.equal(borradores.leer(del.id), null); assert.equal(borradores.papelera()[0].id, del.id);
+    assert.equal((await api('POST', '/api/anuncios/borradores', { objetivo: 'likes' })).status, 400, 'lo que no existe es un 400');
+  } finally { m.cerrar(); srv.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });

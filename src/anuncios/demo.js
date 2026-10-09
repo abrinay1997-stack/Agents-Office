@@ -7,6 +7,8 @@
 import { buscar } from './campanas.js';
 import { accionesDe, presupuestoDe, reiniciaAprendizaje, AVISO_APRENDIZAJE, GASTO, LIBRES, TEXTO, importe } from './acciones.js';
 import { dinero, estadoDe, fechaCorta } from './comun.js';
+import { srcDemo } from './demo-borradores.js';
+import { objetivoDe, objetivoTexto, LLAMADA, paisNombre } from './borrador.js';
 
 const img = (a, b, t) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><text x="60" y="68" font-family="sans-serif" font-size="16" font-weight="700" fill="#fff" text-anchor="middle">${t}</text></svg>`);
 const FACTOR = { hoy: 1 / 7, '7d': 1, '30d': 4.2, mes: 1.3 };
@@ -106,7 +108,7 @@ export function historialDeEjemplo(ahora = Date.now()) {
  * 409 { error: 'tope', motivo, tope, quedaria } · 422 { error: 'meta', motivo, minimo } · 409 { error: 'confirmacion', motivo }.
  */
 export function crearDemo({ ahora = () => Date.now(), topes = TOPES_DEMO } = {}) {
-  const cambios = new Map(), copias = [], confirmaciones = new Map(), deshaceres = new Map();
+  const cambios = new Map(), copias = [], creadas = [], confirmaciones = new Map(), deshaceres = new Map();
   const hist = historialDeEjemplo(ahora()).items; let n = 0;
   const token = p => `${p}-${(++n).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -133,6 +135,7 @@ export function crearDemo({ ahora = () => Date.now(), topes = TOPES_DEMO } = {})
       });
       d.campanas.push(x);
     }
+    for (const c of creadas) d.campanas.push(JSON.parse(JSON.stringify(c))); // A3: lo creado en pausa desde un borrador
     for (const c of d.campanas) aplicar(c, null);
     return d;
   }
@@ -250,5 +253,18 @@ export function crearDemo({ ahora = () => Date.now(), topes = TOPES_DEMO } = {})
     hist.unshift({ at: new Date(t).toISOString(), quien: 'dueno', que: `deshizo: ${QUE[u.tipo]} ${NIVEL_TXT[u.f.nivel]}`, objeto: { id: u.f.id, nivel: u.f.nivel, nombre: u.f.nodo.nombre }, antes: u.despuesTxt, despues: u.antesTxt });
     return { status: 200, ok: true, hecho: { texto: `Deshecho: «${u.f.nodo.nombre}» vuelve a estar como antes (${u.antesTxt}).` } };
   }
-  return { vista, historial: () => ({ items: hist.slice() }), accion, deshacer, topes };
+  /** A3: un borrador creado EN PAUSA (demo-borradores.js) → su campaña, su conjunto y un anuncio por creativo; → el id de la campaña. */
+  function agregarCreada(b) {
+    const id = `ej-c-n${creadas.length + 1}`, cero = { gasto: 0, impresiones: 0, alcance: 0, frecuencia: null, clics: 0, clicsEnlace: 0, ctr: null, cpc: null, cpm: null, resultados: 0, resultadoTexto: '', costoPorResultado: null };
+    const pub = b.publico || {}, lugar = pub.radio ? `${pub.radio.km} km alrededor de tu local` : (pub.paises || []).map(paisNombre).join(', ') || 'Panamá';
+    const anuncios = (b.creativos || []).map((c, i) => ({ id: `${id}-as1-ad${i + 1}`, nombre: `${b.nombre} · creativo ${i + 1}`, estado: 'CAMPAIGN_PAUSED', revision: [], problemas: [], cifras: { ...cero },
+      creativo: { miniatura: srcDemo(c.media), titulo: c.titular || '', texto: c.texto || '', llamada: LLAMADA[c.llamada] || '' } }));
+    const conjunto = { id: `${id}-as1`, nombre: `${lugar} · ${pub.edadMin || 18}${pub.edadMax ? '–' + pub.edadMax : '+'}${pub.modo === 'manual' ? '' : ' · Advantage+'}`, optimizacion: objetivoDe(b.objetivo)?.n || '', destino: b.destino || '', estado: 'CAMPAIGN_PAUSED',
+      aprendizaje: { estado: null, texto: 'Todavía no empieza' }, presupuesto: null, publico: { lugares: [lugar], edad: { min: pub.edadMin || 18, max: pub.edadMax || null }, advantage: pub.modo !== 'manual' }, anuncios, cifras: { ...cero } };
+    creadas.push({ id, nombre: b.nombre, objetivo: objetivoDe(b.objetivo)?.meta || '', objetivoTexto: objetivoTexto(b), estado: 'PAUSED', estadoTexto: 'En pausa', creadoFuera: false,
+      presupuesto: { ...b.presupuesto }, spendCap: b.validacion?.costoMax?.campana ?? null, inicio: b.inicio, fin: b.fin || null, conjuntos: [conjunto], cifras: { ...cero }, deBorrador: b.id });
+    hist.unshift({ at: new Date(ahora()).toISOString(), quien: 'dueno', que: 'creó en pausa la campaña', objeto: { id, nivel: 'campana', nombre: b.nombre }, antes: null, despues: 'En pausa' });
+    return id;
+  }
+  return { vista, historial: () => ({ items: hist.slice() }), accion, deshacer, topes, agregarCreada };
 }

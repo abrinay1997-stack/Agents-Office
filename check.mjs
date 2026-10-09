@@ -17,7 +17,7 @@ const step = async (name, fn) => { try { const d = await fn(); ok(name, d || '')
 const sh = (cmd, args, opts = {}) => new Promise((resolve, reject) => {
   const p = spawn(cmd, args, { cwd: ROOT, ...opts }); let out = '', err = '';
   p.stdout?.on('data', d => { out += d; }); p.stderr?.on('data', d => { err += d; });
-  p.on('close', c => c === 0 ? resolve(out) : reject(new Error((err || out).trim().split('\n').slice(-3).join(' | '))));
+  p.on('close', c => c === 0 ? resolve(out) : reject(Object.assign(new Error((err || out).trim().split('\n').slice(-3).join(' | ')), { out: out + '\n' + err })));
   p.on('error', reject);
 });
 const cfg = loadConfig();
@@ -80,7 +80,8 @@ await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own
 
 /* ---------- 1a. V4.4: the unit tests, the secrets check, the agents' safety rules ---------- */
 await step('tests: npm test (safety rules, the guard, the secrets check)', async () => {
-  const out = await sh('node', ['--test']).catch(e => { throw new Error('a test failed — run npm test to see which: ' + e.message); });
+  // 9 oct 2026: on a failure, say WHICH test (the bare tail of the output did not), so a test that fails only under load can be found
+  const out = await sh('node', ['--test']).catch(e => { const malos = [...String(e.out || e.message).matchAll(/^\s*not ok \d+ - (.+)$/gm)].map(m => m[1].trim()).slice(0, 6); /* the test and its file */ throw new Error('a test failed' + (malos.length ? ': ' + malos.join(' | ') : ' — run npm test to see which: ' + e.message.slice(-300))); });
   const n = /# pass (\d+)/.exec(out)?.[1], f = /# fail (\d+)/.exec(out)?.[1];
   if (f && +f) throw new Error(`${f} test(s) failed — npm test`);
   return `${n} tests pass`;

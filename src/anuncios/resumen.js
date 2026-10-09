@@ -57,6 +57,6 @@ export function resumenHTML(d, { rango = '7d', ahora = Date.now() } = {}) {
   const m = d.cuenta?.moneda || 'USD', activas = (d.campanas || []).filter(c => esActiva(c) || tieneProblemas(c));
   const cuenta = d.cuenta ? `<p class="anu-cuenta-l">Cuenta <b>${esc(d.cuenta.nombre || d.cuenta.id)}</b> · ${chip(d.cuenta.estadoTexto || estadoDe(d.cuenta).texto, /activa|active/i.test(d.cuenta.estadoTexto || d.cuenta.estado || '') ? 'verde' : 'ambar')} · ${esc(m)}${d.cuenta.zona ? ' · ' + esc(d.cuenta.zona) : ''}${d.cuenta.saldo != null ? ` · saldo ${esc(dinero(d.cuenta.saldo, m))}` : ''}</p>` : '';
   return `${avisosHTML(d)}${cuenta}${cifrasResumenHTML(d)}
-    <section class="anu-sec" aria-labelledby="anuActT"><h2 id="anuActT">Campañas activas <span class="anu-cuenta">${activas.length}</span></h2>
+    <section class="anu-sec" aria-labelledby="anuActT"><div class="anu-bcab"><h2 id="anuActT">Campañas activas <span class="anu-cuenta">${activas.length}</span></h2><button type="button" class="anu-btn pri" data-a="nueva">+ Nueva campaña</button></div>
     ${activas.length ? `<ul class="anu-tarjs">${activas.map(c => tarjetaHTML(c, m, rango, ahora)).join('')}</ul>` : '<div class="anu-vacio"><b>No hay campañas activas</b><span>Las que estén en pausa o terminadas están en Campañas.</span></div>'}</section>`;
 }

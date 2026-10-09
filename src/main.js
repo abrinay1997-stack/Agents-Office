@@ -1787,7 +1787,7 @@ const tareasV = initTareasCarga({ servida: SERVED, AGENTS, DEPTS, DEPT_KEYS, alC
 document.getElementById('topTareas').addEventListener('click', () => tareasV.toggle());
 const analiticas = initAnaliticas({ served: SERVED, esc, business: () => document.title.replace(/ — Agents Office$/, '') }); // V4.7 (F2)
 document.getElementById('topAnaliticas').addEventListener('click', () => analiticas.toggle());
-const anuncios = initAnunciosCarga({ servida: SERVED, abrirAjustes: tab => settingsWin.open(tab) }); // Fase A1 (9 oct 2026): solo lectura
+const anuncios = initAnunciosCarga({ servida: SERVED, abrirAjustes: tab => settingsWin.open(tab), agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', negocio: () => document.title.replace(/ — Agents Office$/, ''), estudio: (t, onPick) => studio.forTarget({ ...t, para: 'anuncio' }, onPick) }); // Fase A1 (9 oct 2026) · A3: el Estudio «para el anuncio»
 document.getElementById('topAnuncios').addEventListener('click', () => anuncios.toggle());
 document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)
 // V4.5 (27 Sep 2026): the top bar is the way around — one view at a time under it (src/views.js); the brand is the way home

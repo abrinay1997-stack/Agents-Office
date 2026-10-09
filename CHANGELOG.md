@@ -1,5 +1,20 @@
 # Changelog
 
+## Anuncios de Meta, Fase A3: crear campañas desde la oficina, siempre en pausa — 9 oct 2026
+
+- **Pestaña Borradores** con el **asistente de 5 pasos**. Guarda solo mientras escribes.
+  1. **Objetivo**, en tus palabras: que te escriban por WhatsApp, Instagram o Messenger, visitas a tu web, ventas, contactos o que te conozcan.
+  2. **Público:** Advantage+ en Panamá, 18+, por defecto. El manual va detrás de un botón, y la pregunta de categoría especial está siempre.
+  3. **Presupuesto y fechas**, con el costo máximo en palabras.
+  4. **Creativos** (3 a 6): de la galería o «Crear con el Estudio» para el anuncio, el formato, los textos, «✨ Mejorar con el agente de anuncios» y las mejoras automáticas de Meta una por una.
+  5. **Revisión:** los problemas, cada uno lleva a su campo; la vista previa; y **«Crear en Meta (en pausa)»**, de un clic porque no gasta.
+- **Se crea en orden y nunca dos veces:** imágenes y videos, creativos, campaña, conjunto, anuncios, todo **en pausa**. Si la oficina se apaga a mitad, al volver busca lo creado por su etiqueta y sigue desde ahí. Si algo falla, archiva lo de ese intento y dice por qué.
+- **El tope por campaña viaja a Meta** (`spend_cap`) si es de US$100 o más, que es el mínimo de Meta. Así, aunque la oficina esté apagada, Meta no gasta más.
+- **La vista previa de Meta** solo se muestra como un `<iframe>` aislado de facebook.com. La oficina nunca pinta el HTML que manda Meta.
+- **Dimitri, tu asistente y el agente de anuncios** pueden dejar borradores en la oficina. Crearlos en Meta es solo tu clic.
+- `scripts/check-meta-anuncios.mjs --crear-pausada`, para el token real: crea una campaña de prueba en pausa, prueba las combinaciones con `validate_only` y la archiva.
+- Tests: `anuncios-construir`, `anuncios-crear` (con la oficina cayéndose entre el conjunto y el anuncio) y `anuncios-borradores-servidor`. Recorrido: 397 pasos y axe sin fallos.
+
 ## Anuncios de Meta, Fase A2: controlar desde la oficina — 9 oct 2026
 
 - **Lo que baja el gasto va con un clic:** pausar una campaña, un conjunto o un anuncio, bajar un presupuesto y archivar. Se deshace durante 30 segundos, salvo archivar, porque Meta no desarchiva.

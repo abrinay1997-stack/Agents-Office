@@ -64,7 +64,8 @@ export function initStudio(ctx) {
   const { isLive, esc, agentName } = ctx;
   // V4.7: the Estudio and Contenido work together. A picture or a video can be sent to the content calendar (ctx.toCalendar), and the calendar can open
   // the Estudio «for a piece» (forTarget): the cards then offer «Usar en la pieza» and «Volver a la pieza» hands back what was chosen.
-  let pickFor = null; // { target: { id, titulo }, onPick(ids), ids: [] }
+  let pickFor = null; // { target: { id, titulo, para? }, onPick(ids), ids: [] } — para: 'anuncio' (Anuncios, A3) cambia las palabras
+  const forW = () => (pickFor?.target?.para === 'anuncio' ? { en: 'en el anuncio', En: 'En el anuncio', a: 'al anuncio', para: 'Para el anuncio' } : { en: 'en la pieza', En: 'En la pieza', a: 'a la pieza', para: 'Para la pieza' });
   const el = document.createElement('div'); el.id = 'studioOv'; el.setAttribute('role', 'dialog'); el.setAttribute('data-view', ''); el.setAttribute('aria-labelledby', 'stTitle'); el.tabIndex = -1; el.hidden = true;
   el.innerHTML = `
     <div class="st-head">
@@ -514,7 +515,7 @@ export function initStudio(ctx) {
       ${aud ? `<audio class="st-cplay" src="${src(it)}" controls preload="metadata" aria-label="Escuchar: ${esc(label)}"></audio>` : ''}
       ${sub ? '' : `<figcaption>${aud ? `<span class="st-slab">${cap.label}${cap.voice ? ` · voz <b>${esc(cap.voice)}</b>` : cap.instrumental ? ' · instrumental' : ''}</span>` : ''}<span class="st-p">${esc(it.prompt)}</span>${it.task && it.by === 'agent' ? `<button type="button" class="st-tchip" data-a="task" title="Abrir la tarea">para: ${esc((ctx.taskTitle && ctx.taskTitle(it.task)) || 'su tarea')}</button>` : ''}<span class="st-meta">${it.fav ? '<span class="st-fav" title="Favorita">★ favorita</span> · ' : ''}${it.upload ? 'subida por ti' : esc(who(it))}${it.versionOf ? ' · versión' : ''}${it.qa ? ' · ' + banco.qaHTML(it) : ''}${it.modelName || (it.model && !it.upload) ? ' · ' + esc(it.modelName || it.model) : ''} · ${esc(when(it.at))}${folderF === 'all' && inFolder(it) ? ` · <span class="st-infd">${svg('folder')}${esc(folderName(it.folder))}</span>` : ''}</span></figcaption>`}
       <div class="st-ov" role="group" aria-label="Acciones">
-        ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla en la pieza «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? '✓ En la pieza' : 'Usar en la pieza'}</button>` : ''}
+        ${pickFor ? `<button type="button" data-a="usar" class="st-use${pickFor.ids.includes(it.file) ? ' on' : ''}" aria-pressed="${pickFor.ids.includes(it.file)}" title="Usarla ${forW().en} «${esc(pickFor.target.titulo)}»">${pickFor.ids.includes(it.file) ? `✓ ${forW().En}` : `Usar ${forW().en}`}</button>` : ''}
         ${row}
         <button type="button" data-a="menu" class="st-oi st-more" data-tip="Más acciones" aria-haspopup="menu" aria-expanded="false" aria-label="Más acciones: ${esc(label)}" title="Más: ${esc(ac.grupos.flatMap(g => g.items).map(x => x.corto.toLowerCase()).join(', '))} y la papelera">${svg('dots')}</button>
       </div>
@@ -2061,12 +2062,12 @@ export function initStudio(ctx) {
     if (!pickFor) { forBar.hidden = true; forBar.innerHTML = ''; el.classList.remove('st-for'); if (typeof renderGrid === 'function') renderGrid(); return; }
     const n = pickFor.ids.length;
     forBar.hidden = false; el.classList.add('st-for');
-    forBar.innerHTML = `<span>Para la pieza <b>«${esc(pickFor.target.titulo)}»</b> · ${n ? `${n} ${n === 1 ? 'elegida' : 'elegidas'}` : 'crea algo o elige de la galería y pulsa «Usar en la pieza»'}</span><span class="sp"></span><button type="button" data-f="back" class="pri">Volver a la pieza${n ? ` (${n})` : ''}</button><button type="button" data-f="no">Cancelar</button>`;
+    const w = forW(); forBar.innerHTML = `<span>${w.para} <b>«${esc(pickFor.target.titulo)}»</b> · ${n ? `${n} ${n === 1 ? 'elegida' : 'elegidas'}` : `crea algo o elige de la galería y pulsa «Usar ${w.en}»`}</span><span class="sp"></span><button type="button" data-f="back" class="pri">Volver ${w.a}${n ? ` (${n})` : ''}</button><button type="button" data-f="no">Cancelar</button>`;
     renderGrid();
   }
   forBar.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !pickFor) return; const p = pickFor; pickFor = null; paintFor();
-    if (b.dataset.f === 'back') p.onPick(p.ids); else say('Sin cambios en la pieza.');
+    if (b.dataset.f === 'back') p.onPick(p.ids); else say(p.target?.para === 'anuncio' ? 'Sin cambios en el anuncio.' : 'Sin cambios en la pieza.');
   });
   let timer = null;
   el.classList.toggle('st-folded', !!store.get('fold', false));

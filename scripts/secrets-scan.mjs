@@ -53,7 +53,8 @@ function git(args) { return execFileSync('git', args, { cwd: ROOT, encoding: 'ut
 export function scanFiles(mode, files = []) {
   let list = files, read = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
   if (mode === 'staged') { list = git(['diff', '--cached', '--name-only', '--diff-filter=ACM']).split('\n').filter(Boolean); read = f => git(['show', ':' + f]); }
-  if (mode === 'all') list = git(['ls-files']).split('\n').filter(Boolean);
+  // 9 oct 2026: también los archivos nuevos que git aún no sigue (sin los ignorados): antes, un archivo nuevo con algo raro pasaba el check y solo lo frenaba el hook al hacer commit
+  if (mode === 'all') list = [...new Set([...git(['ls-files']).split('\n'), ...git(['ls-files', '--others', '--exclude-standard']).split('\n')])].filter(Boolean);
   const found = [];
   for (const f of list) {
     if (ignored(f)) continue;
