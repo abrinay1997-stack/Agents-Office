@@ -23,7 +23,7 @@ export const CAMPOS = {
   cuenta: 'id,account_id,name,account_status,disable_reason,currency,timezone_name,amount_spent,spend_cap,balance',
   campanas: 'id,name,objective,status,configured_status,effective_status,daily_budget,lifetime_budget,budget_remaining,bid_strategy,spend_cap,start_time,stop_time,special_ad_categories,created_time,updated_time',
   conjuntos: 'id,name,campaign_id,status,configured_status,effective_status,optimization_goal,billing_event,destination_type,daily_budget,lifetime_budget,budget_remaining,bid_strategy,start_time,end_time,targeting,learning_stage_info,promoted_object,issues_info',
-  // POR VERIFICAR: `effective_instagram_media_id` en el creativo expandido (la Fase B1 lo usará para los comentarios de los anuncios).
+  // VERIFICADO el 9 oct 2026 con la cuenta real: `effective_instagram_media_id` existe en el creativo (la Fase B1 lo usará para los comentarios de los anuncios).
   anuncios: 'id,name,adset_id,campaign_id,status,configured_status,effective_status,issues_info,ad_review_feedback,created_time,creative{id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id}',
   creativos: 'id,name,thumbnail_url,image_url,body,title,call_to_action_type,object_story_spec,effective_object_story_id',
   // las cifras diarias por anuncio (plan §5 A1). `purchase_roas` solo tiene sentido con píxel: se añade si hay uno en Ajustes.

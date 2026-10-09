@@ -1,5 +1,12 @@
 # Changelog
 
+## Primera prueba con el token real de Meta — 9 oct 2026
+
+- **Funcionan con tu cuenta:** publicar, Anuncios (la cuenta Bukoflow, en USD y hora de Panamá) y los comentarios de Instagram y Facebook, con el nombre y el texto de tus clientes.
+- **Arreglado un fallo que solo salía con Meta de verdad:** las cifras diarias de los anuncios se pedían con el rango de fechas mal escrito (`[object Object]`), y Meta las rechazaba. El Meta de mentira ahora lo rechaza igual que Meta, y hay un test.
+- **Verificado:** Instagram acepta las imágenes que la oficina le pasa desde Facebook; también `effective_instagram_media_id` y los adjuntos de los mensajes (`attachments`).
+- **Pendiente en Meta:** los mensajes privados llegan sin texto hasta tener el acceso avanzado, y una cuenta de Instagram tiene desactivado «Permitir el acceso a los mensajes».
+
 ## Anuncios de Meta, Fases A6 y A7: medir y el informe del mes — 9 oct 2026
 
 - **«Crear indicadores»** (Anuncios → Resumen → Medir) lleva a «Cómo va el negocio» el **gasto del mes** y el **costo por resultado de 30 días**, con su tendencia. Son las mismas cifras del panel y se ponen al día con cada lectura de Meta (un punto por día).

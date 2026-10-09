@@ -55,3 +55,12 @@ Una entrada por error que costó encontrar. Solo se añade al final.
 **Fix aplicado:** `--test-concurrency=4` en `package.json → test` y en el paso de tests de `check.mjs`. 1079 de 1079 en dos vueltas seguidas, y tarda lo mismo (~2 min).
 **Prevención:** si un test que levanta un servidor falla solo con toda la batería, probar primero con menos concurrencia antes de alargar sus esperas. Junto con «esperar al hecho» y «renombrar con reintento», son las tres causas que se vieron.
 **Archivos:** `package.json`, `check.mjs` (paso «tests»)
+
+## [2026-10-09] — Un parámetro objeto viajaba a Meta como «[object Object]» (y el Meta de mentira lo dejaba pasar)
+
+**Contexto:** Primera prueba con el token real del dueño (`node scripts/check-meta-anuncios.mjs`).
+**Error:** `(#100) For field 'insights': param time_range must be non-empty.`
+**Causa raíz:** `graph()` de `contenido/meta.mjs` ponía cada parámetro en la dirección con `String(v)`, así que `time_range: { since, until }` salía como `[object Object]`. En los lotes no pasaba (allí se usaba `JSON.stringify`). El Meta de mentira leía `time_range` con un `JSON.parse` que fallaba en silencio y devolvía todo, así que ningún test lo vio.
+**Fix aplicado:** un parámetro objeto va como JSON en `graph()`; el Meta de mentira responde el mismo error 100 que Meta si `time_range` no es un JSON con `since` y `until`; test en `tests/meta-freno.test.mjs`.
+**Prevención:** un doble de una API externa debe RECHAZAR lo que la API real rechaza, no tolerarlo. Al añadir un parámetro objeto a una llamada a Meta, mirar cómo se serializa en ese camino (dirección, formulario o lote).
+**Archivos:** `contenido/meta.mjs` (graph), `tests/meta-stand.mjs` (cifras)

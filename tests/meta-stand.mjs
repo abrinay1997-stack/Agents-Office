@@ -223,6 +223,8 @@ export function crearMetaStand(o = {}) {
   /** GET /act_…/insights: una fila por objeto y día de `st.cifras` (cada test pone las suyas), filtrada por nivel y fechas. */
   function cifras(q) {
     const nivel = q.get('level') || 'account', rango = objeto(q.get('time_range'));
+    // Como Meta (9 oct 2026, primera prueba con el token real): un time_range que no es JSON con since y until se rechaza; antes se ignoraba
+    if (q.has('time_range') && !(rango?.since && rango?.until)) return errorGraph("(#100) For field 'insights': param time_range must be non-empty.", 100);
     const filas = st.cifras.filter(f => (!rango || (f.date_start >= rango.since && f.date_start <= rango.until)) && (nivel === 'account' || f[`${nivel}_id`]));
     if (q.get('time_increment')) return json({ data: filas, paging: { cursors: { before: 'a', after: 'b' } } });
     // Fase A1: sin `time_increment`, Meta da UNA fila por objeto del nivel para todo el rango. El alcance son personas únicas: no es la

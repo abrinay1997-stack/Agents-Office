@@ -104,6 +104,15 @@ Cada uno escribe ✓ (bien), ! (aviso) o ✗ (falló), y guarda lo confirmado en
 
 ## 5. Lo que quedó por verificar contra Meta
 
+**Actualización del 9 oct 2026, con tu token:**
+- **Funcionan con tu cuenta:** publicar, Anuncios y los comentarios.
+- **Se arregló un fallo** en las cifras de Anuncios que solo salía con Meta de verdad.
+- **Quedan verificados:** la imagen de Instagram desde Facebook, `effective_instagram_media_id` y `attachments`.
+- **Los mensajes privados llegan sin texto** hasta que Meta te dé el acceso avanzado.
+- **Una cuenta de Instagram tiene desactivado** «Permitir el acceso a los mensajes».
+
+El detalle está en el §13.bis del plan. Esto es lo que sigue pendiente:
+
 Está marcado `// POR VERIFICAR` en el código y anotado en el §13 del plan. Lo principal:
 - **Anuncios:**
   - los botones de mensajes (`WHATSAPP_MESSAGE`, `INSTAGRAM_MESSAGE`, `MESSAGE_PAGE`);
