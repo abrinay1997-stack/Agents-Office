@@ -7,6 +7,8 @@
 //   { "triggers": [ { "id": "formulario-web", "dept": "sales", "agent": "sol", "source": "form",
 //       "text": "Nuevo contacto desde la web: {{name}} ({{email}}). Escríbele la primera respuesta con nuestra oferta.",
 //       "needsOk": true, "team": false, "perHour": 20, "paused": false } ] }
+// "conversion": false (10 oct 2026) keeps a stripe/form trigger out of Meta's Conversions API; "Purchase" or "Lead" sends another source as one
+//   (anuncios/conversiones.mjs, only when Ajustes → Anuncios → «API de conversiones» is on).
 // source: form (any JSON / form fields) · stripe (payments) · whatsapp (Meta's WhatsApp Cloud API) · email (Zapier/Make/n8n) · generic
 // The secret is the environment variable AO_HOOK_TOKEN (setx AO_HOOK_TOKEN "a-long-random-text") — never a file.
 // What arrives is someone else's text: it goes to the agent as DATA in its own block, is checked for hidden orders, and by
@@ -33,7 +35,7 @@ export function validate(list, agents) {
     if (!String(t.text || '').trim()) { problems.push(`${id}: falta «text», lo que debe hacer el agente`); continue; }
     const source = SOURCES.includes(t.source) ? t.source : 'generic';
     ids.add(id);
-    out.push({ id, dept: t.dept, agent: t.agent || null, source, text: String(t.text).trim(), title: String(t.title || '').trim().slice(0, 90), needsOk: t.needsOk !== false, team: t.team === true, perHour: Math.max(1, Math.min(500, +t.perHour || 30)), paused: t.paused === true });
+    out.push({ id, dept: t.dept, agent: t.agent || null, source, text: String(t.text).trim(), title: String(t.title || '').trim().slice(0, 90), needsOk: t.needsOk !== false, team: t.team === true, perHour: Math.max(1, Math.min(500, +t.perHour || 30)), paused: t.paused === true, ...(t.conversion === false || ['Purchase', 'Lead'].includes(t.conversion) ? { conversion: t.conversion } : {}) });
   }
   return { triggers: out, problems };
 }

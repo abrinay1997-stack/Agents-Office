@@ -83,13 +83,24 @@
 //          Un agente lo lee igual (ver_informe_anuncios).
 //   POST /api/anuncios/informe?mes=  (o { mes }) → lo mismo + { nota } — lo guarda en <cerebro>/Agents Office/informes/AAAA-MM anuncios.md
 //          (no viaja por GitHub). Un agente: 403.
+// Fase A6 (10 oct 2026): LA API DE CONVERSIONES (anuncios/conversiones.mjs; apagada por defecto, Ajustes → Anuncios):
+//   GET  /api/anuncios/conversiones[?item=<id de la Bandeja>] → { encendida, listo, motivo, dataset, eventos, prueba, hoy: { enviados, compras,
+//          contactos }, pendientes, fallos, ultimoError, ultimoEnvioAt, ultimos: [resumen], delItem? } — NUNCA un correo, un teléfono ni un hash.
+//          También en GET /api/anuncios → `conversiones` (lo corto). Un agente lo lee igual.
+//   POST /api/anuncios/conversiones { tipo: 'venta'|'contacto', bandeja?: <id de una conversación>, valor?, moneda?, email?, telefono?, url? }
+//          → 200 { ok, ya?, resumen } (se manda en el acto; si Meta falla de paso, se reintenta solo) · 409 apagada o ese tipo no se manda ·
+//          422 faltan datos (el motivo) · 404 la conversación no está. SOLO el dueño: un agente 403 (nunca manda eventos), Dimitri y el asistente 403.
+//   POST /api/anuncios/conversiones/probar { codigo? } → 200 { ok, texto } un evento de prueba con test_event_code (solo el dueño) · 409 sin código
+//   POST /api/anuncios/conversiones/webhook (X-Office-Token = AO_HOOK_TOKEN) { evento: 'Purchase'|'Lead', valor, moneda, email, telefono,
+//          url, event_id, at, id } → 200 { ok, ya?, resumen } · 401 sin token. Para tu tienda, Zapier o n8n; `event_id` = el `eventID` de tu píxel.
 import { RANGOS, buscar, textoCuenta, textoCampanas, textoObjeto, ErrorBorrador } from './modelo.mjs';
 import { quienDe } from './acciones.mjs';
+import { deConversacion as deConversacionE } from './conversiones.mjs';
 
 export const AGENTE_CADA_MIN = 10;
 export const MAX_AGENTE = 20; // borradores abiertos (en «borrador») por agente
 
-export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null, impulsor = null, informe = null, indicadores = null }) {
+export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, alHacer = () => {}, ahora = () => Date.now(), borradores = null, creador = null, mejorar = null, sugerencias = null, aplicador = null, impulsor = null, informe = null, indicadores = null, conversiones = null, bandeja = null, hookOk = () => false }) {
   let agenteAt = 0;
   const rangoDe = url => (RANGOS.includes(url.searchParams.get('rango')) ? url.searchParams.get('rango') : '7d');
 
@@ -165,11 +176,53 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
     return json(res, r.status, r.cuerpo);
   }
 
+  /** Fase A6 (10 oct 2026): /api/anuncios/conversiones[/probar|/webhook] — la API de conversiones (anuncios/conversiones.mjs). */
+  async function rutaConversiones(req, res, url, sub) {
+    const no = (code, motivo) => json(res, code, { error: motivo, motivo });
+    if (!sub && req.method === 'GET') { // el estado y los últimos eventos, SIN datos personales (también un agente: no hay nada que esconder)
+      const item = url.searchParams.get('item');
+      return json(res, 200, { ...conversiones.estado(), ...(item ? { delItem: conversiones.deItem(item) } : {}) });
+    }
+    if (req.method !== 'POST') return no(405, 'método no admitido');
+    const b = await body(req).catch(() => ({}));
+    try {
+      if (sub === 'webhook') { // otro sistema (Zapier, tu tienda, n8n) con AO_HOOK_TOKEN: un evento de la web o del sistema
+        if (!hookOk(req, url)) return no(401, process.env.AO_HOOK_TOKEN ? 'token incorrecto' : 'esta oficina no acepta webhooks: falta la variable AO_HOOK_TOKEN');
+        const nombre = ({ purchase: 'Purchase', compra: 'Purchase', venta: 'Purchase', lead: 'Lead', contacto: 'Lead' })[String(b?.evento || b?.event_name || '').toLowerCase()];
+        if (!nombre) return no(400, 'el evento es «Purchase» (una compra) o «Lead» (un contacto)');
+        const canal = String(b?.canal || b?.messaging_channel || '');
+        const entrada = { nombre, via: canal === 'whatsapp' ? 'mensajes' : (b?.url || b?.event_source_url) ? 'web' : 'sistema', canal, valor: b?.valor ?? b?.value, moneda: b?.moneda ?? b?.currency, email: b?.email, telefono: b?.telefono ?? b?.phone, externoId: b?.cliente ?? b?.external_id, url: b?.url ?? b?.event_source_url, wabaId: b?.whatsapp_business_account_id, ctwaClid: b?.ctwa_clid, eventId: b?.event_id, at: b?.at ? (Number.isFinite(Number(b.at)) ? Number(b.at) * (Number(b.at) < 1e12 ? 1000 : 1) : Date.parse(b.at)) : undefined, origen: 'webhook', ref: String(b?.id ?? b?.pedido ?? '') };
+        const r = conversiones.registrar(entrada, { quien: 'webhook' }); conversiones.tick().catch(() => {});
+        return json(res, 200, r);
+      }
+      const quien = quienDe(b?.por ?? url.searchParams.get('por') ?? undefined);
+      if (quien !== 'dueno') return no(403, quien === 'agente' ? 'un agente nunca le manda eventos a Meta: eso lo marca el dueño (en la Bandeja o en Anuncios)' : 'mandar eventos de conversión a Meta lo hace el dueño');
+      if (sub === 'probar') return json(res, 200, await conversiones.probar({ codigo: b?.codigo }));
+      let entrada;
+      if (b?.bandeja) { // «Registrar venta» / «Registrar contacto calificado» en una conversación de la Bandeja
+        const item = bandeja?.leer(String(b.bandeja));
+        if (!item) return no(404, 'esa conversación ya no está en la Bandeja');
+        const tipo = b?.tipo === 'venta' ? 'venta' : b?.tipo === 'contacto' ? 'contacto' : null;
+        if (!tipo) return no(400, 'el tipo es «venta» o «contacto»');
+        entrada = deConversacionE(item, { tipo, valor: b?.valor, moneda: b?.moneda, ahora: ahora() });
+      } else {
+        const nombre = b?.tipo === 'venta' || b?.evento === 'Purchase' ? 'Purchase' : b?.tipo === 'contacto' || b?.evento === 'Lead' ? 'Lead' : null;
+        if (!nombre) return no(400, 'el tipo es «venta» o «contacto»');
+        entrada = { nombre, via: b?.url ? 'web' : 'sistema', valor: b?.valor, moneda: b?.moneda, email: b?.email, telefono: b?.telefono, externoId: b?.cliente, url: b?.url, eventId: b?.event_id, origen: 'dueno', ref: String(b?.ref || `${ahora()}`) };
+      }
+      const r = conversiones.registrar(entrada, { quien: 'dueno' });
+      await conversiones.tick().catch(() => {}); // ahora mismo: el dueño ve si salió
+      const fin = (conversiones.estado({ ultimos: 50 }).ultimos || []).find(x => x.id === r.resumen.id) || r.resumen;
+      return json(res, 200, { ...r, resumen: fin });
+    } catch (e) { return no(e.status || 500, e.message); }
+  }
+
   /** La vista con lo de la conexión: lo que contesta GET /api/anuncios. */
   function completa(rango = '7d') {
     const c = sync.conexion(), v = sync.vista(rango);
     let ind; if (indicadores) { try { ind = indicadores.estado(); } catch { /* data/kpis.json ilegible: la vista sigue */ } } // A6: qué indicadores tiene el dueño
-    return { configurado: c.configurado, motivo: c.motivo, ejemplo: false, ...v, topes: sync.topes(), sincronizadaAt: c.sincronizadaAt, cifrasAt: c.cifrasAt, sondeoAt: c.sondeoAt, sincronizando: c.sincronizando, error: c.error, uso: meta.uso(), sondeo: sync.sondeo(), ...(ind ? { indicadores: ind } : {}) };
+    let conv; if (conversiones) { try { const e = conversiones.estado({ ultimos: 5 }); conv = { encendida: e.encendida, listo: e.listo, motivo: e.motivo, prueba: e.prueba, eventos: e.eventos, hoy: e.hoy, pendientes: e.pendientes, fallos: e.fallos, ultimoError: e.ultimoError, ultimoErrorAt: e.ultimoErrorAt, ultimoEnvioAt: e.ultimoEnvioAt }; } catch { /* la vista sigue */ } } // A6: la API de conversiones, sin datos personales
+    return { configurado: c.configurado, motivo: c.motivo, ejemplo: false, ...v, topes: sync.topes(), sincronizadaAt: c.sincronizadaAt, cifrasAt: c.cifrasAt, sondeoAt: c.sondeoAt, sincronizando: c.sincronizando, error: c.error, uso: meta.uso(), sondeo: sync.sondeo(), ...(ind ? { indicadores: ind } : {}), ...(conv ? { conversiones: conv } : {}) };
   }
 
   async function handle(req, res, url) {
@@ -204,6 +257,8 @@ export function crearRutasAnuncios({ sync, meta, json, body, acciones = null, al
         if (quienDe(b?.por ?? url.searchParams.get('por') ?? undefined) !== 'dueno') return json(res, 403, { error: 'los indicadores de «Cómo va el negocio» los crea el dueño' }), true;
         return json(res, 200, { ok: true, ...indicadores.crear() }), true;
       }
+      const mc = /^\/api\/anuncios\/conversiones(?:\/(probar|webhook))?$/.exec(p);
+      if (mc && conversiones) return await rutaConversiones(req, res, url, mc[1] || null), true;
       const mb = /^\/api\/anuncios\/borradores(?:\/([A-Za-z0-9_-]{1,60})(?:\/(validar|crear|vista-previa|mejorar))?)?$/.exec(p);
       if (mb && borradores) return await rutaBorradores(req, res, url, mb[1] || null, mb[2] || null), true;
       if (req.method === 'GET') {
