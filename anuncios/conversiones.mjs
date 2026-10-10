@@ -10,7 +10,7 @@
 //      (un pago de Stripe, un formulario sin dirección). Llegan por los disparadores (triggers.mjs: `stripe` → Purchase con su importe,
 //      `form` → Lead) y por su propio webhook (POST /api/anuncios/conversiones/webhook, con AO_HOOK_TOKEN).
 //   2. MENSAJES — `action_source: business_messaging` + `messaging_channel` (messenger · instagram · whatsapp). El dueño marca en una
-//      conversación de la Bandeja «Registrar venta» (con el importe) o «Registrar contacto calificado»: Purchase / LeadSubmitted con
+//      conversación de la Bandeja «Registrar venta» (con el importe) o «Registrar contacto calificado»: Purchase / QualifiedLead con
 //      la página y el id del cliente en esa página (PSID en Messenger, IGSID en Instagram). WhatsApp necesita el `ctwa_clid` del clic
 //      en el anuncio: solo por el webhook.
 //
@@ -52,7 +52,7 @@ export const ACTION_SOURCES = ['email', 'website', 'app', 'phone_call', 'chat', 
 export const CANALES = ['messenger', 'instagram', 'whatsapp'];
 /** Lo que el dueño elige en Ajustes (casillas) → los nombres de Meta por vía. */
 export const TIPOS = { compra: { web: 'Purchase', mensajes: 'Purchase' }, contacto: { web: 'Lead', mensajes: 'LeadSubmitted' } };
-export const TIPO_DE_EVENTO = { Purchase: 'compra', Lead: 'contacto', LeadSubmitted: 'contacto' };
+export const TIPO_DE_EVENTO = { Purchase: 'compra', Lead: 'contacto', LeadSubmitted: 'contacto', QualifiedLead: 'contacto' };
 export const DIAS_MAX = 7; // Meta: event_time hasta 7 días atrás
 export const FUTURO_MAX_MS = 5 * 60e3;
 export const PAIS_POR_DEFECTO = '507'; // Panamá: un teléfono de 7 u 8 dígitos sin código de país se toma como de aquí
@@ -81,15 +81,16 @@ const limpioId = (s, max = 64) => (/^[A-Za-z0-9._:-]{1,200}$/.test(String(s ?? '
 
 /**
  * Arma UN evento de Meta (puro). Nunca guarda un dato personal en claro: lo que vuelve ya va cifrado.
- * @param {object} e  { nombre: 'Purchase'|'Lead'|'LeadSubmitted', via: 'web'|'sistema'|'mensajes', at (ms), valor, moneda, email, telefono,
+ * @param {object} e  { nombre: 'Purchase'|'Lead'|'LeadSubmitted'|'QualifiedLead', via: 'web'|'sistema'|'mensajes', at (ms), valor, moneda, email, telefono,
  *                      externoId, url, canal, paginaId, usuarioId (PSID/IGSID), igCuentaId, wabaId, ctwaClid, eventId, origen, ref }
  * @returns {{ evento, errores: string[] }}  `evento` = el objeto que va en `data` (null si hay errores)
  */
 export function armarEvento(e = {}, { ahora = Date.now(), pais = PAIS_POR_DEFECTO, monedaPorDefecto = 'USD' } = {}) {
   const errores = [];
   const nombre = String(e.nombre || '');
-  if (!['Purchase', 'Lead', 'LeadSubmitted'].includes(nombre)) errores.push(`el evento «${nombre || '(vacío)'}» no es uno de los que manda la oficina (Purchase, Lead, LeadSubmitted)`);
+  if (!['Purchase', 'Lead', 'LeadSubmitted', 'QualifiedLead'].includes(nombre)) errores.push(`el evento «${nombre || '(vacío)'}» no es uno de los que manda la oficina (Purchase, Lead, LeadSubmitted, QualifiedLead)`);
   const via = ['web', 'sistema', 'mensajes'].includes(e.via) ? e.via : 'sistema';
+  if (nombre === 'QualifiedLead' && via !== 'mensajes') errores.push('QualifiedLead (contacto calificado) solo se manda desde una conversación de mensajes');
   const at = num(e.at) ?? ahora;
   if (at > ahora + FUTURO_MAX_MS) errores.push('la hora del evento está en el futuro');
   if (at < ahora - DIAS_MAX * 864e5) errores.push(`el evento pasó hace más de ${DIAS_MAX} días: Meta ya no lo acepta`);
@@ -159,7 +160,7 @@ export function deConversacion(item, { tipo, valor, moneda, ahora = Date.now() }
   if (!item || item.tipo !== 'conversaciones' || item.fuente !== 'meta') throw new ErrorConversion('eso no es una conversación privada de Meta en la Bandeja', 400);
   const ig = item.red === 'instagram';
   return {
-    nombre: tipo === 'venta' ? 'Purchase' : 'LeadSubmitted', via: 'mensajes', canal: ig ? 'instagram' : 'messenger', valor, moneda,
+    nombre: tipo === 'venta' ? 'Purchase' : 'QualifiedLead', via: 'mensajes', canal: ig ? 'instagram' : 'messenger', valor, moneda,
     paginaId: item.paginaId, usuarioId: item.autorId, igCuentaId: ig ? String(item.cuentaId || '').replace(/^instagram:/, '') : '',
     // una venta puede repetirse (otro pedido) pero el mismo importe en el mismo minuto es un doble clic; un contacto calificado, una vez por conversación
     origen: 'bandeja', ref: tipo === 'venta' ? `${item.id}|venta|${Number(valor) || 0}|${Math.floor(ahora / 60e3)}` : `${item.id}|contacto`,

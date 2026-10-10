@@ -56,6 +56,10 @@ test('armarEvento: web, sistema y mensajes; nada personal en claro; las reglas d
   const msn = armarEvento({ nombre: 'Lead', via: 'mensajes', canal: 'messenger', paginaId: 'P1', usuarioId: '998877' }, { ahora: AHORA }).evento;
   assert.equal(msn.event_name, 'LeadSubmitted'); assert.equal(msn.action_source, 'business_messaging'); assert.equal(msn.messaging_channel, 'messenger');
   assert.deepEqual(msn.user_data, { page_id: 'P1', page_scoped_user_id: '998877' }, 'page_id y PSID no se cifran');
+  // decisión del dueño (10 oct 2026): «Registrar contacto calificado» manda QualifiedLead, y solo desde mensajes
+  assert.equal(deConversacion({ id: 'meta:conv:1', tipo: 'conversaciones', fuente: 'meta', red: 'facebook', paginaId: 'P1', autorId: '998877' }, { tipo: 'contacto', ahora: AHORA }).nombre, 'QualifiedLead');
+  assert.equal(armarEvento({ nombre: 'QualifiedLead', via: 'mensajes', canal: 'messenger', paginaId: 'P1', usuarioId: '998877' }, { ahora: AHORA }).evento.event_name, 'QualifiedLead');
+  assert.match(armarEvento({ nombre: 'QualifiedLead', via: 'sistema', email: 'a@b.co' }, { ahora: AHORA }).errores.join(), /solo se manda desde una conversación/);
   const ig = armarEvento({ nombre: 'Purchase', via: 'mensajes', canal: 'instagram', igCuentaId: '178', usuarioId: '555', valor: 12 }, { ahora: AHORA }).evento;
   assert.deepEqual(ig.user_data, { instagram_business_account_id: '178', ig_sid: '555' });
   assert.match(armarEvento({ nombre: 'Purchase', via: 'mensajes', canal: 'whatsapp', wabaId: '1', valor: 5 }, { ahora: AHORA }).errores.join(), /ctwa_clid/);
