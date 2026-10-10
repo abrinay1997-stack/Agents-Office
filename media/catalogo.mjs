@@ -247,7 +247,7 @@ const MMX = [
   mmxVoice('mmx-voz-2.6-hd', 'speech-2.6-hd', 'MiniMax Voz 2.6 HD (directo)', 100, 'La generación anterior, HD. Precio aproximado.'),
   mmxVoice('mmx-voz-2.6-turbo', 'speech-2.6-turbo', 'MiniMax Voz 2.6 Turbo (directo)', 60, 'La generación anterior, Turbo. Precio aproximado.'),
   { id: 'mmx-musica-3', engine: 'minimax', kind: 'music', gid: 'music-3.0', name: 'MiniMax Música 3.0 (directo)', cost: 0.15, maxPrompt: 3500, note: 'Canciones con tu letra ([Verse] [Chorus]…) o piezas instrumentales, hasta 5 min. Solo cuentas de pago anteriores al 20 ago 2026. Precio aproximado.', roles: {}, settings: MMX_MUSIC_SET() },
-  { id: 'mmx-musica-3-gratis', engine: 'minimax', kind: 'music', gid: 'music-3.0-free', name: 'MiniMax Música 3.0 gratis (directo)', cost: 0, maxPrompt: 3500, note: 'La misma música, para cualquier cuenta y sin costo, pero lenta: 3 pedidos por minuto.', roles: {}, settings: MMX_MUSIC_SET() },
+  { id: 'mmx-musica-3-gratis', engine: 'minimax', kind: 'music', gid: 'music-3.0-free', name: 'MiniMax Música 3.0 gratis (directo)', cost: 0, maxPrompt: 3500, note: 'La misma música, sin costo y lenta (3 pedidos por minuto), solo para cuentas que ya pagaban antes del 20 ago 2026: desde el 10 oct 2026 MiniMax la niega también a las cuentas nuevas (410, código 2153).', roles: {}, settings: MMX_MUSIC_SET() },
 ];
 
 export const CATALOG = [

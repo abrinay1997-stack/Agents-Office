@@ -310,3 +310,15 @@ test('estudio-mcp: generar_voz and generar_musica are listed only when a voice o
     assert.equal(o.posted[0].by, 'agent');
   } finally { o.srv.close(); }
 });
+
+test('music: MiniMax closed it to new accounts, free models too (410 · 2153, seen with the real key on 10 Oct 2026) — said in words, never retried', async () => {
+  const msg = 'This Music API is no longer available to new users. Existing paying customers can continue to use the service.';
+  const st = await standIn({ fail: { '/v1/music_generation': [2153, msg, 410] } }); const restore = on(st.base);
+  try {
+    const e = await mmx.music({ model: 'music-3.0-free', instrumental: true, prompt: 'lo-fi' }).then(() => null, x => x);
+    assert.ok(e, 'it must fail');
+    assert.match(e.message, /cerró su API de música a las cuentas nuevas, también los modelos gratis/);
+    assert.doesNotMatch(e.message, /usa el modelo «gratis»/, 'the free model is not a way out any more');
+    assert.equal(e.final, true, 'asking again will not help');
+  } finally { restore(); await st.close(); }
+});

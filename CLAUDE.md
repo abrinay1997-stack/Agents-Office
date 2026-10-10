@@ -114,7 +114,7 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 0. **Probar Meta directo con el token real del dueño (8 oct 2026):** `node scripts/check-meta-publicar.mjs` (y `--video`, `--facebook`); anotar en el §17 de `docs/propuesta-contenido-y-meta.md` lo que respondió y quitar los «POR VERIFICAR» de `contenido/meta-publicar.mjs`.
 0. **Contenido mejor que Metricool (8 oct 2026):** `docs/analisis-editor-contenido-2026-10-08.md`. Hechos C1, C2 y C3. Falta probarlo con cosas de verdad: «Llenar la semana» y «✨ Mejorar con Marketing» con Claude real (ajustar el brief o la skill del puesto de redes si hace falta), el emparejamiento de lo publicado con lo que Meta devuelve de verdad (el enlace de la cola contra el `permalink` de Analíticas) y `/contenido` con un bot de Telegram real (la foto por `sendPhoto`).
 0. **Probar el control con otra IA (9 oct 2026):** Dimitri con Meta Muse Spark de verdad (opción 2 del iniciador): que use «plan» con cambios cuando el dueño dice «pausa los cobros» y no invente ids; y `oficina-mcp.mjs` con Claude Desktop en Windows (`docs/conectar-ia.md`). El MCP remoto (ChatGPT, Meta AI web) espera al issue #2.
-0. **Probar MiniMax con la key real del dueño:** `node scripts/check-minimax.mjs` (con `--video` y `--music`) y luego una clonación grabando desde el panel «Voces». Ajustar los precios marcados «aproximado» con su primera factura.
+0. **MiniMax con la key real del dueño (10 oct 2026):** imagen, voz y las 332 voces del sistema funcionan; la música no (MiniMax la cerró a cuentas nuevas, también la gratis: 410 · 2153). Falta: `--video` (~US$0,32), una clonación grabando desde el panel «Voces», y ajustar los precios «aproximado» con su primera factura.
 1. Las 13 recomendaciones 💡 de `docs/auditoria-visual-2026-09-24.md`. Casi todas son decisiones de diseño del dueño. Las que más cambian el día a día:
    - el tamaño de los nombres de los agentes en la vista general (8);
    - una agenda en lugar de la cuadrícula del calendario en el teléfono (38);
@@ -525,7 +525,7 @@ Real image and video generation, for the owner (the clapperboard in the dock, ke
   - Probar sin gastar: `node scripts/voz-clonar-recorrido.mjs` (micrófono simulado, MiniMax simulado).
 - **Agentes:** `generar_voz` y `generar_musica` en `estudio-mcp.mjs`, solo con modelos encendidos. Dimitri acepta creativos `audio` y `music` (`estudio-plan.mjs`).
 - **Tests:** contra `tests/minimax-stand.mjs` (MiniMax simulado), nunca la key real. Con la key real: `node scripts/check-minimax.mjs`.
-- **Música de pago (`music-3.0`):** solo para cuentas que ya pagaban antes del 20 ago 2026. `mmx-musica-3-gratis` (`music-3.0-free`) sirve para cualquiera.
+- **Música (`music-3.0` y `music-3.0-free`):** solo para cuentas que ya pagaban antes del 20 ago 2026. Comprobado con la key real el 10 oct 2026: a una cuenta nueva MiniMax le contesta 410 · código 2153 **también con los modelos gratis**; la oficina lo dice en palabras y no reintenta. Imagen, voz y la lista de voces sí funcionan con la key del dueño.
 
 ## Banco de presets del Estudio (F1, 1 oct 2026)
 

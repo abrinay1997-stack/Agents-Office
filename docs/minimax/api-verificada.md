@@ -59,7 +59,8 @@ https://platform.minimax.io/docs/api-reference/music-generation.md
 
 - `POST /v1/music_generation` `{ model, prompt (1–2000), lyrics (1–3500), is_instrumental, lyrics_optimizer, output_format: "hex"|"url", stream, audio_setting: { sample_rate, bitrate, format: mp3|wav|pcm } }`. Instrumental: `prompt` obligatorio; cantada: `lyrics` obligatorio.
 - Modelos: `music-3.0`, `music-2.6`, `music-cover` (de pago) y **`music-3.0-free`, `music-2.6-free`, `music-cover-free` (todos los usuarios, 3 peticiones por minuto)**.
-- Aviso de la doc: «desde el 20 de agosto de 2026 las API de pago ya no están disponibles para usuarios nuevos; los que ya pagan siguen». ⚠ Por eso la oficina añade `mmx-musica-3-gratis` (`music-3.0-free`), que cualquier cuenta puede usar.
+- Aviso de la doc: «desde el 20 de agosto de 2026 las API de pago ya no están disponibles para usuarios nuevos; los que ya pagan siguen». ⚠ Por eso la oficina añade `mmx-musica-3-gratis` (`music-3.0-free`).
+- ⚠ **Comprobado con la key real el 10 oct 2026:** una cuenta nueva recibe HTTP 410, `base_resp.status_code: 2153` («This Music API is no longer available to new users. Existing paying customers can continue to use the service…») también con `music-3.0-free` y `music-2.6-free`. La doc ya no es cierta en que los «-free» sean para todos. La oficina traduce el 2153 y no lo reintenta.
 - Respuesta: `data.audio` (hex), `extra_info.music_duration`…, `base_resp`.
 - Precio: US$0,15 por pieza de hasta 5 min según buscadores que citan la página de precios; **no se pudo leer en la página oficial**: aproximado.
 
@@ -100,6 +101,5 @@ https://platform.minimax.io/docs/api-reference/voice-management-get.md · https:
 
 - Si una cuenta necesita `GroupId` en la URL.
 - El precio de H3-Max a 768P, el de speech-2.6 y el de la música (se muestran como aproximados).
-- Si `music-3.0-free` tiene otros límites además de 3 peticiones por minuto.
 - Cuánto tarda un video H3 de verdad (la oficina consulta cada 6 s y espera hasta 30 min).
 - Todo lo anterior, contra la API real: la oficina se probó solo con un MiniMax simulado (`tests/minimax.test.mjs`, `tests/minimax-voces.test.mjs`).

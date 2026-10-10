@@ -1,5 +1,11 @@
 # Changelog
 
+## MiniMax con tu key: la música está cerrada — 10 oct 2026
+
+- **Probado con tu key de MiniMax:** la imagen, la voz en español y la lista de voces (332, 47 en español) funcionan.
+- **La música no:** MiniMax ya no la da a cuentas nuevas, **tampoco con los modelos gratis** (su documentación decía lo contrario). Antes la oficina te decía «usa el modelo gratis», que tampoco funciona. Ahora dice lo que pasa y no lo reintenta.
+- Test nuevo en `minimax` con la respuesta real de MiniMax.
+
 ## Contenido: a qué cuenta sale cada pieza — 9 oct 2026
 
 Pedido del dueño: «poder programar por cuenta o usuario: cuando voy a programar no sé a qué cuenta se programará de todas las que puedo ver».
