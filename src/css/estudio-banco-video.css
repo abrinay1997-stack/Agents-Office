@@ -1,0 +1,47 @@
+/* El banco de presets en VIDEO (F5) y las fichas rápidas de Voz y Música (F6), 10 oct 2026. Viaja con dist/estudio-extra.js
+   (CSS_APARTE de build-extra.mjs): la página no crece. Las reglas de la casa: objetivos de 24 px (44 en el teléfono), ningún texto
+   bajo 10,5 px, foco con var(--focus), 4,5:1 en claro y en oscuro (body.dark) y nada se atenúa con opacity para decir «no sirve»:
+   lo dice el texto. El paso mide su ancho (@container bkp, de estudio-banco.css). */
+
+/* cuatro puertas en video: dos por fila cuando no caben */
+.bk .bk-doors.bk-doors4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container bkp (max-width: 460px) { .bk .bk-doors.bk-doors4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* el material del paso 4, en una línea */
+.bk .bk-mat { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink); }
+
+/* «Movimiento del sujeto»: un interruptor con su explicación */
+.bk .bk-movs { display: flex; }
+.bk .bk-mov { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; min-height: 44px; text-align: left; border-radius: 12px; }
+.bk .bk-mov b { font-size: 12.5px; }
+.bk .bk-mov small { font-size: 11.5px; font-weight: 500; color: var(--grey); }
+.bk .bk-mov[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.bk .bk-mov[aria-pressed="true"] b::before { content: '✓ '; }
+
+/* las reglas del clip: lo que el compilador avisa, y en rojo con su palabra lo que no se puede */
+.bk .bk-reglas { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; }
+.bk .bk-reglas .bk-lbl { margin: 0; }
+.bk .bk-reglas ul { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.45; }
+.bk .bk-reglas li + li { margin-top: 3px; }
+.bk .bk-reglas .bk-grave { color: #A1261B; } body.dark .bk .bk-reglas .bk-grave { color: #FF9A8C; }
+.bk .bk-reglas > button { align-self: flex-start; border-color: var(--ink); }
+body.dark .bk .bk-reglas { background: #1E1F24; }
+
+/* las fichas de Voz y Música */
+.bk .bk-fichas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 6px; }
+.bk .bk-ficha { width: 100%; min-height: 44px; display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--hairline); background: #fff; color: var(--ink); text-align: left; cursor: pointer; }
+.bk .bk-ficha:hover { border-color: var(--grey); }
+.bk .bk-ficha[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.bk .bk-ficha[aria-disabled="true"] { cursor: default; border-style: dashed; }
+.bk .bk-ficha .bk-ci { position: relative; flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(127,127,127,.12); }
+.bk .bk-ficha[aria-pressed="true"] .bk-ci::after { content: '✓'; position: absolute; right: -4px; bottom: -4px; width: 16px; height: 16px; border-radius: 99px; background: var(--ink); color: var(--cream); font: 700 11px/16px var(--ui); text-align: center; }
+.bk .bk-ficha .bk-cn { min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; }
+.bk .bk-ficha .bk-cn small { font-size: 11.5px; color: var(--grey); }
+.bk .bk-ficha .bk-cn .bk-fq { color: var(--ink); font-weight: 500; }
+.bk .bk-ficha .bk-cn .bk-fz { color: #8A3B00; font-weight: 600; } body.dark .bk .bk-ficha .bk-cn .bk-fz { color: #FFB27A; }
+body.dark .bk .bk-ficha { background: #1E1F24; }
+.bk > .bk-main > .bk-pista { margin: 0; font-size: 12.5px; line-height: 1.45; }
+
+@media (max-width: 760px) {
+  .bk .bk-doors.bk-doors4 button, .bk .bk-reglas > button { min-height: 44px; }
+}

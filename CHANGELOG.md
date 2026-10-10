@@ -18,6 +18,20 @@ La oficina ya le puede decir a Meta **qué se vendió y quién escribió en seri
 - **El ROAS:** si el píxel no lo da pero registraste ventas por aquí, sale de esas ventas (lo vendido en 30 días entre lo gastado en anuncios) y lo dice: son todas tus ventas registradas, no solo las que Meta atribuye a los anuncios.
 - Con el token real: `node scripts/check-meta-conversiones.mjs` (no manda nada) y `--probar` (UN evento con el código de prueba). Tests: `anuncios-conversiones` y el Meta de mentira aprende `/<conjunto>/events` con las reglas de Meta.
 
+## Estudio: los presets también en video, y fichas rápidas en Voz y Música — 10 oct 2026
+
+Fases F5 y F6 del banco de presets (`docs/propuesta-banco-presets.md`). Los 53 presets de video ya existían; faltaba dónde usarlos.
+- **Video tiene Básico y Avanzado**, como la imagen. En Avanzado sale el paso **«Presets de video»**: cuatro puertas (Desde texto · Animar mi foto · Con referencias · Editar un video), que son atajos y nunca borran nada, y el banco de video con la tecla **B** (o «/» al principio de la idea): buscador, sus siete grupos (movimiento de cámara, distancia, producto, look, editar, formato y sonido), la pila con Suave · Normal · Fuerte, «Mi receta» y «Guardar como preset».
+- **El material es el del paso 4** (primer y último fotograma, referencias, un video), el de siempre: lo que admite el modelo elegido se ve donde siempre y nada se pide dos veces. El banco dice qué hay («primer fotograma · el video de guía»).
+- **Las reglas del clip, a la vista antes de gastar:** un movimiento de cámara por clip, el aviso del giro 360 (y si el producto es tela o vidrio), el bucle, «de una foto a otra», el sonido. Lo que no se puede sale como «No se puede: …», el motivo va junto a GENERAR y **no se genera**. Si el modelo no puede, un botón «Usar …» con uno encendido que sí (decides tú).
+- **Movimiento del sujeto:** un botón que copia el movimiento de un video de guía (baile, gesto, recorrido); pide el video y lo manda como guía.
+- **El modelo y el formato siguen siendo los tuyos.** Si un preset de formato pide otro («Reel» es 9:16 y tienes 16:9), se dice y «Poner 9:16» lo cambia con un clic.
+- **El escenario 3D en video** dice dónde empieza la cámara, y el preset hacia dónde va («al empezar · la cámara se acerca»).
+- **Voz y Música:** fichas rápidas que rellenan los ajustes (jingle con letra, fondo para reel, corporativo, lo-fi, tropical; voz para anuncio, tutorial, oferta), con DESHACER. No generan nada: lo que ponen se ve y se cambia en «Formato y ajustes».
+- GENERAR pasa por `/api/media/presets/compile` (no gasta) y `/apply` (gasta, con tu clic y por los topes), que ahora aceptan video. Una receta de video se guarda como preset de video.
+- Todo viaja en el paquete aparte del Estudio: la página principal creció 1 KB.
+- Tests: `presets-banco-video`. Recorrido: `node scripts/presets-video-recorrido.mjs` (390, 1024 con Dimitri y 1512, claro y oscuro; axe sin fallos).
+
 ## Contenido: a qué cuenta sale cada pieza — 9 oct 2026
 
 Pedido del dueño: «poder programar por cuenta o usuario: cuando voy a programar no sé a qué cuenta se programará de todas las que puedo ver».

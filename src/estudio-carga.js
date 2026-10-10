@@ -164,6 +164,7 @@ export function bancoDiferido(ctx) {
     refrescar: () => { if (real) return real.refrescar(); refrescado = true; },
     setModels(l) { if (real) real.setModels(l); else models = l; },
     replan: () => (real ? real.replan() : Promise.resolve(null)),
+    sync: k => real?.sync?.(k), // F5/F6: el tipo, el paso 4 y los ajustes; el de verdad lee ctx.kind() al llegar
     estado: () => (real ? real.estado() : { puerta: 'cero', foto: null, refs: [], pila: [], canal: null, escena: null, modelo: null, idea: '', n: 1, plan: null }),
     costo: () => (real ? real.costo() : 'calculando…'),
     error: () => (real ? real.error() : ''),

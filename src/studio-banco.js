@@ -30,22 +30,33 @@ export * from './studio-banco-core.js';
 const arr = v => (Array.isArray(v) ? v : v == null ? [] : [v]);
 const LS = { get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 const FAV = 'ao.studio.presets.fav', REC = 'ao.studio.presets.rec', EST = 'ao.studio.banco';
-const TYPING = t => /^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName || '') || !!t?.isContentEditable;
+const KINDS = ['image', 'video', 'audio', 'music'];
+const TYPING = t =>/^(INPUT|TEXTAREA|SELECT)$/.test(t?.tagName || '') || !!t?.isContentEditable;
 let uid = 0;
 
 export function initBanco(ctx) {
   const { esc, api, src, live, say, pick, subir, idea, n: cantidad, onState, mostrarGaleria } = ctx;
   const U = 'bk' + (++uid);
   let fab = ctx.fabrica || { presets: [], grupos: [], canales: [], iconos: {}, sinonimos: { frases: {} } };
-  let presets = fab.presets.filter(p => arr(p.medios).includes('image')), info = new Map(), sharp = true, models = [];
-  let byId = new Map(presets.map(p => [p.id, p]));
-  const guardado = LS.get(EST, {});
-  const st = { puerta: K.PUERTAS.some(p => p.id === guardado.puerta) ? guardado.puerta : 'cero', foto: null, refs: [], pila: Array.isArray(guardado.pila) ? guardado.pila.filter(x => x && typeof x.id === 'string') : [], /* se limpia al llegar los presets */ canal: null, proporcion: null, escena: guardado.escena ? E3.normalizar(guardado.escena) : null, modelo: null, idea: '', n: 1 };
+  // F5/F6 (10 oct 2026): el banco sirve a la imagen y al video (en Avanzado, cada uno con su receta guardada) y deja fichas
+  // rápidas en Voz y Música. `kind` es el del compositor (ctx.kind, y sync(kind) cuando cambia); `kv()` el medio de los presets.
+  let kind = KINDS.includes(ctx.kind?.()) ? ctx.kind() : 'image';
+  const kv = () => (kind === 'video' ? 'video' : 'image'), sonido = () => kind === 'audio' || kind === 'music';
+  let todosP = fab.presets, presets = [], info = new Map(), sharp = true, models = [], byId = new Map();
+  const filtrar = () => { presets = todosP.filter(p => arr(p.medios).includes(kv())); byId = new Map(presets.map(p => [p.id, p])); };
+  filtrar();
+  const ESTK = k => (k === 'video' ? EST + '.video' : EST);
+  function estadoNuevo(k) {
+    const g = LS.get(ESTK(k), {}) || {};
+    return { puerta: K.puertasDe(k).some(p => p.id === g.puerta) ? g.puerta : 'cero', foto: null, refs: [], pila: Array.isArray(g.pila) ? g.pila.filter(x => x && typeof x.id === 'string') : [], /* se limpia al llegar los presets */ canal: null, proporcion: null, escena: g.escena ? E3.normalizar(g.escena) : null, modelo: null, idea: '', n: 1, mat: {} };
+  }
+  const ests = {}; let st = (ests[kv()] = estadoNuevo(kv()));
   let intentado = false; // IMG-40: lo que falta pasa de pista (gris) a error (rojo) solo cuando ya intentaste generar
   let plan = null, planSig = '', planT = null, planBusy = 0, deshacer = null, toastT = 0, q = '', grupoAbierto = null, editor = null, guardarPara = null;
-  let chipAbierto = null, tab = 'elegir', rov = '', estrecho = false, favVista = [], recVista = []; // las secciones se arman con lo de al abrir: la lista no salta mientras eliges
+  let chipAbierto = null, tab = 'elegir', rov = '', estrecho = false, favVista = [], recVista = [], firma = '', refrescado = false;
+  const pedidos = new Set(); // los medios ya pedidos a la oficina (/api/media/presets?medio=…) // las secciones se arman con lo de al abrir: la lista no salta mientras eliges
   const fav = new Set(LS.get(FAV, [])), rec = LS.get(REC, []);
-  const keep = () => LS.set(EST, { puerta: st.puerta, pila: st.pila, escena: st.escena });
+  const keep = () => LS.set(ESTK(kv()), { puerta: st.puerta, pila: st.pila, escena: st.escena });
   const ico = (p, tam = 20) => iconoSVG(p.icono, { tam, iconos: fab.iconos });
 
   /* el paso del compositor: lo que se redibuja (main), el aviso con DESHACER (fijo: es una región viva) y el input de archivos */
@@ -69,7 +80,7 @@ export function initBanco(ctx) {
   }
   const foco = (box, f) => box?.querySelector(`[data-f="${CSS.escape(f)}"]`)?.focus({ preventScroll: true });
 
-  const activo = () => st.pila.length > 0 || !!st.escena;
+  const activo = () => !sonido() && (st.pila.length > 0 || !!st.escena);
   const hojaBanco = () => !sheet.hidden && sheet.dataset.modo === 'banco';
 
   /* ---------- el aviso con DESHACER: abajo, en la hoja si está abierta (en el teléfono tapa el compositor) ---------- */
@@ -121,7 +132,46 @@ export function initBanco(ctx) {
         return `<div class="bk-eje"><button type="button" role="switch" aria-checked="${r.ejes[k] > 0}" data-eje="${k}" data-ri="${i}" data-f="ej-${i}-${k}" title="${esc(inf.ayuda)}">${esc(inf.es)} <small>${nota}</small></button>
         <span class="bk-seg" role="group" aria-label="Fuerza de ${esc(inf.es)}">${[1, 2, 3].map(v => `<button type="button" data-fz="${v}" data-eje="${k}" data-ri="${i}" data-f="fz-${i}-${k}-${v}" aria-pressed="${r.ejes[k] === v}"${r.ejes[k] > 0 ? '' : ' disabled'}>${K.INTENSIDADES[v - 1][1]}</button>`).join('')}</span></div>`; }).join('')}</details></div></div>`; }).join('');
   }
+  /* ---------- F5: el paso en el compositor de VIDEO. El material es el del paso 4 del compositor (ctx.material) ---------- */
+  function materialHTML() {
+    const m = st.mat || {}, guia = K.pideGuia(st.pila, byId), n = r => arr(m[r]).length;
+    const hay = [n('start') && 'primer fotograma', n('end') && 'último fotograma', n('reference') && `${n('reference')} ${n('reference') === 1 ? 'referencia' : 'referencias'}`, n('video') && (guia ? 'el video de guía' : 'tu video')].filter(Boolean);
+    return `<p class="bk-mat"><span class="bk-lbl">Tu material <small>el del paso 4</small></span>${hay.length ? esc(hay.join(' · ')) : 'Nada todavía: el clip sale solo de tu idea y los presets.'}</p>`;
+  }
+  function escenaHTML() { // en video, la frase del plan: dónde empieza la cámara «al empezar» y el movimiento del preset
+    const delPlan = st.escena && plan ? String(arr(plan.pasos_es).find(p => /^Escenario 3D: /.test(p)) || '').replace(/^Escenario 3D: /, '') : '';
+    return `<div class="bk-esc"><span class="bk-lbl">Escenario 3D <small>dónde empieza la cámara; el preset dice hacia dónde va</small></span>${st.escena ? `<p class="bk-escl">${esc(delPlan || E3.describirEscena(st.escena, plan?.familia || 'conversacional').resumen || '')}</p>` : ''}
+        <span class="bk-addrow"><button type="button" class="bk-add" data-escena="abrir" data-f="esc-abrir" aria-expanded="${!sheet.hidden && sheet.dataset.modo === 'escena'}">${st.escena ? 'Cambiar la escena' : 'Usar un escenario 3D'}</button>${st.escena ? '<button type="button" class="bk-add" data-escena="quitar" data-f="esc-quitar">Quitar la escena</button>' : ''}</span></div>`;
+  }
+  const bancoBtn = () => `<div class="bk-pilah"><span class="bk-lbl">Lo que se hará</span><button type="button" class="bk-open" data-f="open" aria-expanded="${hojaBanco()}" title="Abrir el banco de presets (B)">${iconoSVG('M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z', { tam: 16 })}<span>Banco · B</span></button></div>`;
+  function pintarVideo() {
+    const ep = K.estadoPuertaK(st, { intentado, kind: 'video', byId }), propio = st.pila.length || st.escena;
+    const mov = st.pila.some(x => x.id === K.MOVIMIENTO_SUJETO), reglas = activo() && plan ? K.reglasVideo(plan, st.pila, byId, { proporcion: ctx.proporcion?.() || null }) : [], sug = activo() ? K.sugerirModelo(plan) : null, fmt = reglas.find(r => r.formato)?.formato;
+    rehacer(main, `<div class="st-h" id="${U}T"><b>${iconoSVG('M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z', { tam: 14 })}</b> Presets de video <span class="st-hn">opcional · combínalos</span></div>
+      <div class="bk-doors bk-doors4" role="group" aria-label="¿De dónde partes? (atajos: nada se borra al cambiar)">${K.PUERTAS_VIDEO.map(p => `<button type="button" data-puerta="${p.id}" data-f="door-${p.id}" aria-pressed="${st.puerta === p.id}" title="${esc(p.ayuda)}">${esc(p.es)}</button>`).join('')}</div>
+      <p class="bk-modo" aria-live="polite">Ahora: <b>${esc(ep.etiqueta)}</b>${st.escena ? ' · con escenario 3D' : ''}${ep.falta ? ` · <span class="${ep.grave ? 'bk-falta' : 'bk-pista'}">${esc(ep.falta)}</span>` : ''}</p>
+      ${materialHTML()}${bancoBtn()}
+      ${chipsHTML('c') || '<p class="bk-vacio">Ningún preset todavía: ábrelo con «Banco» o escribe <kbd>/</kbd> al principio de la idea.</p>'}
+      <div class="bk-movs"><button type="button" class="bk-add bk-mov" data-movsuj data-f="movsuj" aria-pressed="${mov}"><b>Movimiento del sujeto</b><small>${mov ? 'Copia el movimiento del video de guía (paso 4)' : 'Copia el de un video de guía: baile, gesto, recorrido'}</small></button></div>
+      ${reglas.length ? `<div class="bk-reglas" role="group" aria-labelledby="${U}-rg"><span class="bk-lbl" id="${U}-rg">Reglas del clip</span><ul>${reglas.map(r => `<li${r.grave ? ' class="bk-grave"' : ''}>${r.grave ? '<b>No se puede:</b> ' : ''}${esc(r.texto)}</li>`).join('')}</ul>${sug || fmt ? `<span class="bk-addrow">${sug ? `<button type="button" class="bk-add" data-usarm="${esc(sug.id)}" data-f="usarm">Usar ${esc(sug.nombre)}</button>` : ''}${fmt ? `<button type="button" class="bk-add" data-arfmt="${esc(fmt)}" data-f="arfmt">Poner ${esc(fmt)}</button>` : ''}</span>` : ''}</div>` : ''}
+      ${escenaHTML()}
+      ${guardarPara ? guardarHTML() : propio ? '<button type="button" class="bk-link" data-guardar="receta" data-f="g-receta">Guardar esta receta como preset…</button>' : ''}`);
+    pintarLado();
+  }
+  /* ---------- F6: fichas rápidas en Voz y Música (solo rellenan los ajustes del modelo elegido; nada se genera aquí) ---------- */
+  function pintarFichas() {
+    const fs = K.fichasDe(todosP, kind), aj = ctx.ajustes?.() || null, que = kind === 'music' ? 'música' : 'voz';
+    const lis = aj ? fs.map(p => {
+      const r = K.ajustesDeFicha(p, aj.settings), on = K.fichaActiva(p, aj.settings, aj.valores), nada = !Object.keys(r.valores).length, d = `${U}-fi-${p.id}`;
+      return `<li><button type="button" class="bk-ficha" data-ficha="${esc(p.id)}" data-f="fi-${esc(p.id)}" aria-pressed="${on}"${nada ? ' aria-disabled="true"' : ''} aria-describedby="${d}"><span class="bk-ci">${ico(p, 18)}</span><span class="bk-cn"><b>${esc(p.nombre)}</b>${p.frase ? `<small>${esc(p.frase)}</small>` : ''}<small class="bk-fq${nada ? ' bk-fz' : ''}" id="${d}">${esc(nada ? `No sirve con ${aj.name}: ${r.fuera[0]?.motivo || 'sin ajustes que poner'}` : (on ? 'Puesta: ' : 'Pone: ') + K.fichaEs(r.valores))}</small></span></button></li>`;
+    }).join('') : '';
+    rehacer(main, `<div class="st-h" id="${U}T"><b>${iconoSVG('M9 18V5l11-2v13M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0M14 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', { tam: 14 })}</b> Fichas rápidas <span class="st-hn">opcional · rellenan los ajustes</span></div>
+      ${!fs.length ? `<p class="bk-vacio">Todavía no hay fichas de ${que}.</p>` : !aj ? `<p class="bk-vacio">Elige un modelo de ${que} (paso 2) para usar las fichas.</p>` : `<ul class="bk-fichas" aria-label="Fichas de ${que}">${lis}</ul>`}
+      <p class="bk-pista">Lo que pone se ve y se cambia en «Formato y ajustes». ${kind === 'music' ? 'La letra (o la idea) va en el paso 3.' : 'El texto que se dirá va en el paso 3; la voz es la que elijas.'}</p>`);
+  }
   function pintar() {
+    if (sonido()) { pintarFichas(); onState?.(); return; }
+    if (kv() === 'video') { pintarVideo(); onState?.(); return; }
     const propio = st.pila.length || st.escena, ep = K.estadoPuerta(st, { intentado });
     const chips = chipsHTML('c');
     rehacer(main, `<div class="st-h" id="${U}T"><b>${iconoSVG('M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z', { tam: 14 })}</b> Presets <span class="st-hn">opcional · combínalos</span></div>
@@ -152,18 +202,19 @@ export function initBanco(ctx) {
     clearTimeout(planT);
     if (!activo()) { plan = null; planSig = ''; return Promise.resolve(null); }
     st.idea = idea?.() || ''; st.n = cantidad?.() || 1; sincronizar();
-    const ped = K.pedidoDe(st), sig = JSON.stringify(ped);
+    const ped = K.pedidoDeK(st, kv(), byId), sig = JSON.stringify(ped);
     if (sig === planSig && plan) return Promise.resolve(plan);
     return new Promise(listo => { planT = setTimeout(async () => {
       const mine = ++planBusy;
       try {
         let c;
         if (live()) c = (await api('POST', '/api/media/presets/compile', ped)).plan;
-        else c = core.compilar({ ...ped, byId: presets, models, familias: fab.familias, tipos: fab.tipos, canales: fab.canales, cifras: {}, capacidades: { local: true }, escena3d: E3, kind: 'image' });
+        else c = core.compilar({ ...ped, byId: presets, models, familias: fab.familias, tipos: fab.tipos, canales: fab.canales, cifras: {}, capacidades: { local: true }, escena3d: E3, kind: kv() });
         if (mine !== planBusy) return;
         plan = c; planSig = sig;
       } catch (e) { if (mine === planBusy) { plan = { errores: [e.message], avisos: [], pasos_es: [], costo: { texto: '—' } }; planSig = sig; } }
       if (editor && plan?.familia) editor.setFamilia(plan.familia);
+      if (kv() === 'video') pintarVideo(); // las reglas del clip y «Usar …» salen del plan
       plano(); listo(plan);
     }, now ? 0 : 220); });
   }
@@ -171,6 +222,7 @@ export function initBanco(ctx) {
    *  escenario 3D sigue al formato (si el escenario lo tiene), así «Lo que ve la cámara» es lo que saldrá. */
   function sincronizar() {
     st.modelo = ctx.modelo?.() || null;
+    if (kv() === 'video') st.mat = ctx.material?.() || {};
     const pr = ctx.proporcion?.() || null; st.proporcion = pr;
     if (st.escena && pr && E3.PROPORCIONES.includes(pr) && st.escena.cuadro?.proporcion !== pr) {
       st.escena = E3.normalizar({ ...st.escena, cuadro: { ...st.escena.cuadro, proporcion: pr } }); keep();
@@ -195,25 +247,25 @@ export function initBanco(ctx) {
   const visible = c => !c.closest('details:not([open])');
   function pintarHoja() {
     if (sheet.hidden || sheet.dataset.modo !== 'banco') return;
-    const modo = K.modoDeEstado(st), n = $$('.bk-n');
+    const modo = K.modoDeEstadoK(st, kv(), byId), modoTxt = K.modoEs(modo, kv()), n = $$('.bk-n');
     let cuerpo;
     if (q.trim()) {
       const hits = core.buscar(q, presets, { favoritos: favVista, recientes: recVista, max: 40 }).filter(h => byId.has(h.id));
       cuerpo = hits.length ? `<h3 class="bk-sr">Resultados</h3>${cards(hits.map(h => h.id), 'r')}` : `<p class="bk-nada">Nada con «${esc(q)}». ${ctx.pedirDimitri ? '<button type="button" data-dimitri data-f="dimitri">Pedírselo a Dimitri</button>' : 'Prueba con otras palabras: «fondo blanco», «más luz», «como este anuncio».'}</p>`;
       if (n) n.textContent = K.cuantos(hits.length);
     } else {
-      const secs = K.portada(presets, { fav: favVista, rec: recVista, puerta: st.puerta, foto: st.foto });
-      const grupos = (fab.grupos || []).filter(g => g.medio === 'image' || g.id === 'mios');
-      const pu = K.PUERTAS.find(d => d.id === st.puerta);
+      const secs = K.portadaK(presets, { fav: favVista, rec: recVista, puerta: st.puerta, foto: st.foto, kind: kv() });
+      const grupos = (fab.grupos || []).filter(g => g.medio === kv() || g.id === 'mios');
+      const pu = K.puertasDe(kv()).find(d => d.id === st.puerta);
       cuerpo = secs.map(s => `<section class="bk-sec"><h3>${esc(s.titulo === 'Para empezar' ? `Para empezar · ${pu?.es || ''}` : s.titulo)}</h3>${cards(s.ids, s.titulo)}</section>`).join('') +
         `<section class="bk-sec"><h3>Todos los grupos</h3>${grupos.map(g => { const ids = presets.filter(p => (p.categoria || '') === g.id).map(p => p.id); if (!ids.length) return ''; const open = grupoAbierto === g.id;
           return `<details class="bk-g" data-g="${esc(g.id)}"${open ? ' open' : ''}><summary data-f="g-${esc(g.id)}">${iconoSVG(g.icono, { tam: 18, iconos: fab.iconos })}<span><b>${esc(g.nombre || g.es || g.id)}</b>${g.frase ? `<small>${esc(g.frase)}</small>` : ''}</span><i>${ids.length}</i></summary>${open ? cards(ids, 'g:' + g.id) : ''}</details>`; }).join('')}</section>`;
-      if (n) n.textContent = `${presets.length} presets · ${K.MODO_ES[modo] || modo}`;
+      if (n) n.textContent = `${presets.length} presets${kv() === 'video' ? ' de video' : ''} · ${modoTxt}`;
     }
     const a = document.activeElement, pid = a?.classList?.contains('bk-card') && sheet.contains(a) ? a.dataset.pid : null;
     rehacer($$('.bk-body'), cuerpo);
     if (pid && !sheet.contains(document.activeElement)) { const c = sheet.querySelector(`.bk-card[data-pid="${CSS.escape(pid)}"]`); if (c) { rov = c.dataset.k; c.focus({ preventScroll: true }); } } // la tarjeta cambió de sección: el foco la sigue
-    const m = $$('.bk-shm'); if (m) m.textContent = K.MODO_ES[modo] || modo;
+    const m = $$('.bk-shm'); if (m) m.textContent = modoTxt;
     rovingListo();
   }
   /** La columna (o la pestaña) «Mi receta» de la hoja: la misma pila del compositor, para cuando no se ve. */
@@ -243,16 +295,16 @@ export function initBanco(ctx) {
   ro?.observe(sheet);
 
   function abrir(modo = 'banco') {
-    if (!sheet.parentNode) return;
+    if (!sheet.parentNode || sonido()) return; // Voz y Música no tienen hoja: sus fichas están en el paso
     sheet.dataset.modo = modo; sheet.hidden = false; mostrarGaleria?.();
     if (modo === 'banco') {
       if (editor) { editor.destroy(); editor = null; }
       favVista = [...fav]; recVista = [...rec];
-      sheet.innerHTML = `<div class="bk-sh"><b id="${U}-sh">Banco de presets</b><small class="bk-beta" title="Los presets se están afinando: revisa cada resultado">en beta</small><span class="bk-shm"></span><span class="sp"></span><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el banco" title="Cerrar (Esc)">✕</button></div>
+      sheet.innerHTML = `<div class="bk-sh"><b id="${U}-sh">${kv() === 'video' ? 'Presets de video' : 'Banco de presets'}</b><small class="bk-beta" title="Los presets se están afinando: revisa cada resultado">en beta</small><span class="bk-shm"></span><span class="sp"></span><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el banco" title="Cerrar (Esc)">✕</button></div>
         <div class="bk-tabs" aria-label="Partes del banco">${K.PESTANAS.map(([k, t]) => `<button type="button" id="${U}-t-${k}" data-tab="${k}" aria-controls="${U}-p-${k}" aria-selected="${tab === k}"${tab === k ? '' : ' tabindex="-1"'}>${t}<span class="bk-tn" data-tn="${k}" aria-hidden="true"></span><span class="bk-sr" data-tns="${k}"></span></button>`).join('')}</div>
         <div class="bk-cols">
           <section class="bk-pane bk-pe" id="${U}-p-elegir" data-pane="elegir" aria-labelledby="${U}-t-elegir">
-            <div class="bk-qw"><label class="bk-q"><span class="e3d-vh">Buscar un preset</span><input type="search" class="bk-qi" data-f="q" placeholder="Qué quieres: «se ve oscura», «fondo blanco», «como este anuncio»…" value="${esc(q)}" autocomplete="off" spellcheck="false" aria-describedby="${U}-qn"></label>
+            <div class="bk-qw"><label class="bk-q"><span class="e3d-vh">Buscar un preset</span><input type="search" class="bk-qi" data-f="q" placeholder="${kv() === 'video' ? 'Qué quieres: «la cámara se acerca», «giro 360», «reel», «bucle»…' : 'Qué quieres: «se ve oscura», «fondo blanco», «como este anuncio»…'}" value="${esc(q)}" autocomplete="off" spellcheck="false" aria-describedby="${U}-qn"></label>
             <p class="bk-n" id="${U}-qn" aria-live="polite"></p></div><div class="bk-body"></div></section>
           <div class="bk-side">
             <section class="bk-pane bk-pr" id="${U}-p-receta" data-pane="receta" aria-labelledby="${U}-h-receta"><h3 class="bk-pt" id="${U}-h-receta">Mi receta</h3><div class="bk-pl"></div></section>
@@ -264,7 +316,7 @@ export function initBanco(ctx) {
       setTimeout(() => { if (tab === 'elegir' || !estrecho) $$('.bk-qi')?.focus(); else $$(`.bk-tabs [data-tab="${tab}"]`)?.focus(); }, 30);
     } else {
       sheet.innerHTML = `<div class="bk-sh"><b>Escenario 3D</b><span class="sp"></span><button type="button" class="bk-pri" data-cerrar>Listo</button><button type="button" class="bk-x" data-cerrar aria-label="Cerrar el escenario" title="Cerrar (Esc)">✕</button></div>
-        <p class="bk-ayuda">El producto se achica por la distancia de la cámara; el fondo no cambia y nada se recorta. La imagen gris de «Lo que ve la cámara» va al modelo como guía de composición.</p><div class="bk-e3d"></div>`;
+        <p class="bk-ayuda">${kv() === 'video' ? 'Es dónde EMPIEZA la cámara: su distancia, su altura y su lente. El preset de cámara dice hacia dónde se mueve. En video la escena va en palabras (sin imagen guía).' : 'El producto se achica por la distancia de la cámara; el fondo no cambia y nada se recorta. La imagen gris de «Lo que ve la cámara» va al modelo como guía de composición.'}</p><div class="bk-e3d"></div>`;
       if (!st.escena) { toco('escena'); st.escena = E3.normalizar({ ...E3.ESCENA_DEFECTO, cuadro: { proporcion: [ctx.proporcion?.()].find(p => p && E3.PROPORCIONES.includes(p)) || E3.ESCENA_DEFECTO.cuadro.proporcion } }); cambio(); }
       editor = initEscena3d($$('.bk-e3d'), { value: st.escena, familia: plan?.familia || 'conversacional', onChange: e => { toco('escena'); if (e.cuadro?.proporcion && e.cuadro.proporcion !== st.proporcion) ctx.setProporcion?.(e.cuadro.proporcion); st.escena = e; keep(); const l = $('.bk-escl'); if (l) l.textContent = E3.describirEscena(e, plan?.familia || 'conversacional').resumen || ''; else pintar(); replan(); } });
       setTimeout(() => sheet.querySelector('.e3d-canvas, button')?.focus(), 30);
@@ -318,6 +370,28 @@ export function initBanco(ctx) {
     if (ok.length) { if (st.puerta === 'cero') { st.puerta = 'ref'; keep(); } toco('refs'); cambio(); } // como la foto (arriba): la puerta sigue a lo que pusiste (IMG-40)
     return ok;
   }
+  /** F6: una ficha de Voz o Música pone sus ajustes en el modelo elegido (con DESHACER). No genera nada. */
+  function ponerFicha(id) {
+    const p = todosP.find(x => x.id === id), aj = ctx.ajustes?.(); if (!p || !aj) return;
+    const r = K.ajustesDeFicha(p, aj.settings);
+    if (!Object.keys(r.valores).length) return say?.(`«${p.nombre}» no sirve con ${aj.name}: ${r.fuera[0]?.motivo || 'sin ajustes que poner'}.`, true);
+    const antes = Object.fromEntries(Object.keys(r.valores).map(k => [k, aj.valores[k]]));
+    ctx.ponerAjustes?.(r.valores);
+    avisar(`«${p.nombre}»: ${K.fichaEs(r.valores)}${r.fuera.length ? ` (no se puso: ${r.fuera.map(f => f.k).join(', ')})` : ''}`, { campos: [], v: {}, aj: antes });
+    firma = ''; sync(kind); foco(main, `fi-${id}`);
+  }
+  /** El compositor avisa de lo que cambió (el tipo, el material del paso 4, el modelo y sus ajustes): el banco se pone al día. */
+  function sync(k) {
+    if (KINDS.includes(k) && k !== kind) {
+      const antes = kv(); kind = k;
+      if (kv() !== antes) { cerrar(false); st = ests[kv()] ||= estadoNuevo(kv()); filtrar(); plan = null; planSig = ''; intentado = false; chipAbierto = null; guardarPara = null; q = ''; grupoAbierto = null; } // la receta guardada se limpia cuando llegan sus presets (refrescar), no antes
+      firma = ''; deshacer = null; pintarToast('');
+      if (live() && refrescado && !pedidos.has(sonido() ? kind : kv())) refrescar(false); // los presets de este medio, la primera vez
+    }
+    if (sonido()) { const a = ctx.ajustes?.(); const f = JSON.stringify([kind, a?.id, a?.valores]); if (f !== firma) { firma = f; pintar(); } return; }
+    if (kv() === 'video') { const m = ctx.material?.() || {}, f = JSON.stringify([kind, m, ctx.modelo?.(), ctx.proporcion?.()]); if (f !== firma) { firma = f; st.mat = m; pintar(); replan(); } return; }
+    if (firma !== 'image') { firma = 'image'; pintar(); replan(); }
+  }
   /** GENERAR con presets: el único gasto, por /api/media/presets/apply (pasa por los topes del Estudio). */
   async function generar() {
     if (!live()) return say?.('En la demo solo se ve el plan: abre la oficina con el iniciador para generar.', true);
@@ -326,7 +400,7 @@ export function initBanco(ctx) {
     const c = plan?.costo?.usd || 0;
     if (ctx.confirmar ? !ctx.confirmar(c) : c >= 0.5 && !confirm(`Esto cuesta aprox. ${K.usd(c)}. ¿Generar?`)) return; // IMG-11: the Estudio's second click
     try {
-      const r = await api('POST', '/api/media/presets/apply', K.pedidoDe({ ...st, idea: idea?.() || '', n: cantidad?.() || 1 }));
+      const r = await api('POST', '/api/media/presets/apply', K.pedidoDeK({ ...st, idea: idea?.() || '', n: cantidad?.() || 1 }, kv(), byId));
       say?.(r.plan?.soloLocal ? 'Haciéndose en tu máquina: gratis, en unos segundos. Sale en la galería.' : `En marcha con ${models.find(m => m.id === r.plan?.model)?.name || r.plan?.model}: sale en la galería, con su comprobación.`);
       ctx.trabajos?.(r.jobs || [], r.budget);
     } catch (e) { say?.(e.message, true); }
@@ -336,7 +410,7 @@ export function initBanco(ctx) {
     if (!nombreP) { msg.textContent = 'Ponle un nombre.'; form.querySelector('input[name=nombre]').focus(); return; }
     if (!live()) { msg.textContent = 'En la demo no se guarda: abre la oficina.'; return; }
     try {
-      const body = { nombre: nombreP, marca: String(fd.get('marca') || '').trim() || undefined, ...(guardarPara.desde ? { desde: guardarPara.desde } : { receta: { pila: st.pila, ejes: st.refs[0]?.ejes || null, escena: st.escena, modelo: st.modelo } }) };
+      const body = { nombre: nombreP, marca: String(fd.get('marca') || '').trim() || undefined, ...(guardarPara.desde ? { desde: guardarPara.desde } : { receta: { kind: kv(), pila: st.pila, ejes: kv() === 'image' ? st.refs[0]?.ejes || null : null, escena: st.escena, modelo: st.modelo } }) };
       const r = await api('POST', '/api/media/presets', body);
       guardarPara = null; say?.(`Guardado: «${r.preset.nombre}» (v${r.preset.v}) en el Cerebro, ${r.archivo}. Ya sale en el banco, en «De PanaClaw».`);
       await refrescar(); pintar();
@@ -347,6 +421,7 @@ export function initBanco(ctx) {
   function accionComun(t, box) {
     if (t.hasAttribute('data-deshacer')) {
       if (!deshacer) return true;
+      if (deshacer.antes.aj) ctx.ponerAjustes?.(deshacer.antes.aj); // una ficha de voz o música: vuelven los ajustes de antes
       K.restaurar(st, deshacer.antes); deshacer = null; clearTimeout(toastT); pintarToast('');
       cambio(); pintarHoja(); say?.('Deshecho.');
       (box === sheet ? ($$('.bk-card[tabindex="0"]') || $$('.bk-qi')) : $('.bk-open'))?.focus({ preventScroll: true });
@@ -377,6 +452,21 @@ export function initBanco(ctx) {
   main.addEventListener('click', e => {
     const t = e.target.closest('button'); if (!t) return;
     if (accionComun(t, el)) return;
+    if (t.dataset.ficha) { ponerFicha(t.dataset.ficha); return; }
+    if (t.dataset.usarm) { ctx.usarModelo?.(t.dataset.usarm); return; } // el dueño decide el modelo: el botón solo lo pone en el paso 2
+    if (t.dataset.arfmt) { ctx.setProporcion?.(t.dataset.arfmt); firma = ''; sync(kind); return; } // y el formato: lo pone en el paso 5
+    if (t.hasAttribute('data-movsuj')) { // «Movimiento del sujeto»: el preset de copiar movimiento y, si falta, el video de guía
+      const p = byId.get(K.MOVIMIENTO_SUJETO); if (!p) return;
+      const quitando = st.pila.some(x => x.id === p.id); usar(p);
+      if (!quitando && !arr(st.mat?.video).length) ctx.elegir?.('video');
+      return;
+    }
+    if (t.dataset.puerta && kv() === 'video') { // en video, la puerta pide su material en el paso 4 del compositor
+      const pu = t.dataset.puerta; st.puerta = pu; keep(); pintar();
+      const rol = { foto: 'start', ref: 'reference', video: 'video' }[pu];
+      if (rol && !arr(st.mat?.[rol]).length) ctx.elegir?.(rol); else if (pu === 'cero') abrir('banco'); else pintarHoja();
+      return;
+    }
     if (t.dataset.puerta) {
       const pu = t.dataset.puerta; st.puerta = pu; keep(); pintar();
       if (pu === 'foto' && !st.foto) pick('Elige tu foto', f => tomar('foto', f)); else if (pu === 'ref' && !st.refs.length) pick('Elige la referencia', f => tomar('ref', f)); else if (pu === 'cero') abrir('banco'); else pintarHoja();
@@ -434,42 +524,48 @@ export function initBanco(ctx) {
   });
   sheet.addEventListener('keyup', e => { if (e.target.classList?.contains('bk-card') && (e.key === ' ' || e.key === 'Spacebar')) e.preventDefault(); }); // Espacio no «pulsa» la tarjeta
 
-  async function refrescar() {
+  async function refrescar(otraVez = true) {
+    if (otraVez) { refrescado = true; pedidos.clear(); } // el Estudio lo pide cuando cambian los motores: lo de los otros medios también caducó
     if (!live()) { // la demo: la fábrica que build.mjs deja junto a la página
       const f = await cargarFabricaDemo().catch(() => null);
-      if (f && f.presets) { fab = f; presets = f.presets.filter(p => arr(p.medios).includes('image')); byId = new Map(presets.map(p => [p.id, p])); st.pila = st.pila.filter(x => byId.has(x.id)); pintar(); pintarHoja(); replan(); }
+      if (f && f.presets) { fab = f; todosP = f.presets; filtrar(); st.pila = st.pila.filter(x => byId.has(x.id)); pintar(); pintarHoja(); replan(); }
       return;
     }
     try {
-      const r = await api('GET', '/api/media/presets?medio=image');
-      presets = r.presets || presets; byId = new Map(presets.map(p => [p.id, p])); sharp = r.sharp !== false;
+      // solo el medio de ahora (imagen, video, o las fichas de Voz y Música): pedirlos todos a la vez tardaba el triple en llegar
+      const medio = sonido() ? kind : kv(); pedidos.add(medio);
+      const r = await api('GET', '/api/media/presets?medio=' + medio);
+      if (Array.isArray(r.presets)) todosP = [...todosP.filter(p => !arr(p.medios).includes(medio)), ...r.presets];
+      filtrar(); sharp = r.sharp !== false;
       if (r.fabrica) fab = { ...fab, ...r.fabrica };
-      st.pila = st.pila.filter(x => byId.has(x.id));
-      info = new Map(presets.map(p => [p.id, { on: p.on, modelos: p.modelos, motivo: p.motivo }]));
-      pintar(); pintarHoja();
+      if (medio === (sonido() ? kind : kv())) st.pila = st.pila.filter(x => byId.has(x.id)); // llegó tarde, con el compositor ya en otro medio: esa receta no se toca
+      for (const p of r.presets || []) info.set(p.id, { on: p.on, modelos: p.modelos, motivo: p.motivo });
+      firma = ''; pintar(); pintarHoja(); replan();
     } catch {}
   }
   pintar(); replan();
   if (typeof location !== 'undefined' && location.protocol === 'file:') refrescar(); // la demo: la fábrica junto a la página
+  const deImagen = () => kv() === 'image' && !sonido(); // tu foto y las referencias propias del banco solo existen en imagen
   return {
-    el, sheet, activo, generar, toggle, abrir, cerrar, abierto: () => !sheet.hidden, refrescar,
+    el, sheet, activo, generar, toggle, abrir, cerrar, abierto: () => !sheet.hidden, refrescar, sync,
     setModels(l) { models = Array.isArray(l) ? l : []; if (!live()) replan(); },
     replan: () => replan(),
-    estado: () => ({ ...st, plan }),
+    /** El estado de la receta de IMAGEN (los lotes la toman de aquí), aunque el compositor esté en video. */
+    estado: () => (kv() === 'image' ? { ...st, plan } : { ...(ests.image || estadoNuevo('image')), plan: null }),
     /** El texto del botón y de la línea de costo cuando manda el banco. */
     costo: () => (plan ? plan.costo?.texto || '—' : 'calculando…'),
     /** El primer problema del plan (o ''), para decirlo junto a GENERAR. */
     error: () => (plan?.errores?.[0] || ''),
-    anadirRefs, enfocarFalta,
+    anadirRefs: files => (deImagen() ? anadirRefs(files) : []), enfocarFalta, // en video el material es el del paso 4: nada pasa al banco
     /** IMG-39 (Fase 6): tu foto y las referencias, para que GENERAR sin presets las use y Básico las recupere. */
-    material: () => [st.foto, ...st.refs.map(r => r.id)].filter(Boolean),
-    vaciarMaterial() { const out = [st.foto, ...st.refs.map(r => r.id)].filter(Boolean); if (out.length) { toco('foto', 'refs'); st.foto = null; st.refs = []; cambio(); } return out; },
+    material: () => (deImagen() ? [st.foto, ...st.refs.map(r => r.id)].filter(Boolean) : []),
+    vaciarMaterial() { if (!deImagen()) return []; const out = [st.foto, ...st.refs.map(r => r.id)].filter(Boolean); if (out.length) { toco('foto', 'refs'); st.foto = null; st.refs = []; cambio(); } return out; },
     /** IMG-41: el texto de GENERAR cuando el plan no se puede hacer (o ''). */
     bloqueado: () => K.botonBloqueado(plan?.errores?.[0]),
     /** Para la tarjeta de la galería: el resumen de la QA de un archivo que salió de un preset. */
     qaHTML(it) { const r = K.qaResumen(it?.qa); return r ? `<span class="bk-q bk-q-${r.estado}">${esc(r.texto)}</span>` : ''; },
     guardarDesde(it) { guardarPara = { desde: it.file, nombre: '' }; pintar(); setTimeout(() => $('.bk-guardar input')?.focus(), 0); },
     /** «/» al principio de la idea abre el banco (§7.1). */
-    barra(texto) { if (/^\/\S*$/.test(texto)) { q = texto.slice(1); tab = 'elegir'; abrir('banco'); return true; } return false; },
+    barra(texto) { if (!sonido() && /^\/\S*$/.test(texto)) { q = texto.slice(1); tab = 'elegir'; abrir('banco'); return true; } return false; },
   };
 }
