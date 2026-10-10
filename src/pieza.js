@@ -19,9 +19,11 @@ import { ESTADO, FORMATO, RED, FICON, HORAS_RAPIDAS, mediaUrl, thumbHTML } from 
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento, longitudPara, FORMATOS_RED, formatoDe, formatoValido, nombreFormato, ponFormato, formatosConRedes } from './contenido-reglas.js';
 import { initPreview } from './contenido-preview.js';
+import { iconoRed } from './redes-iconos.js';
 import { choqueDe, siguienteHueco, diasRapidos, textoSalida } from './contenido-cola.js';
 import { mejoresDelDia, siguienteBuena } from './contenido-hora.js';
 import { CADA, MAX_VECES } from './contenido-repetir.js';
+import { cuentaDe, nombreCorto, cuentasLimpias } from './contenido-cuentas.js'; // 9 oct 2026: «Publicar en» (qué página, qué Instagram)
 export { ESTADO, FORMATO, RED, FICON, HORAS_RAPIDAS, mediaUrl, thumbHTML };
 
 // M2 (6 oct 2026): las redes que llevan su propio texto si hace falta (Instagram usa el principal; Facebook, «Texto de Facebook»)
@@ -82,7 +84,7 @@ export function conHashtag(hashtags, tag, poner = true) {
   return lista.filter(x => x.toLowerCase() !== t.toLowerCase()).join(' ');
 }
 
-export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange = () => {}, note = () => {}, otras = () => [], cuenta = () => ({}), medidaDe = () => null, redesUsadas = () => ['instagram', 'facebook'], mejorHora = async () => null, fuenteHora = () => '', zona = () => null, modal = { open() {}, close() {} } }) { // `modal`: el de la página (este archivo va en otro paquete: una sola pila de ventanas)
+export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange = () => {}, note = () => {}, otras = () => [], cuenta = () => ({}), cuentasMeta = () => null, medidaDe = () => null, redesUsadas = () => ['instagram', 'facebook'], mejorHora = async () => null, fuenteHora = () => '', zona = () => null, modal = { open() {}, close() {} } }) { // `modal`: el de la página (este archivo va en otro paquete: una sola pila de ventanas)
   const id0 = ++uid, I = k => `pz${id0}-${k}`;
   let escritorio = false; try { escritorio = localStorage.getItem('ao.ct.pv') === 'pc'; } catch {}
   host.innerHTML = `<div class="pz-head"></div>
@@ -90,13 +92,16 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     <div class="pz-body"><div class="pz-scroll" tabindex="-1"></div><aside class="pz-side" aria-label="Vista previa"><div class="pz-side-h"><span>Así se verá</span><span class="pz-dev" role="group" aria-label="Ver en"><button type="button" data-dev="tel" aria-pressed="${!escritorio}" title="En el teléfono">${SVG.tel}<span>Teléfono</span></button><button type="button" data-dev="pc" aria-pressed="${escritorio}" title="En la computadora">${SVG.pc}<span>Computadora</span></button></span></div><div class="pz-preview"></div><p class="pz-help pz-pvnota">Una aproximación: cada red decide al final cómo corta y encuadra.</p></aside></div>
     <div class="pz-foot"></div>`;
   const head = host.querySelector('.pz-head'), scroll = host.querySelector('.pz-scroll'), foot = host.querySelector('.pz-foot');
-  const preview = initPreview(host.querySelector('.pz-preview'), { esc, cuenta, otras: () => otras().map(o => (cur && o.id === cur.id ? cur : o)) });
+  // 9 oct 2026: la vista previa dice la cuenta ELEGIDA de cada red (su nombre y su foto), no la de Ajustes
+  const cuentaVista = () => { const base = { ...cuenta() }; if (cur) for (const r of ['instagram', 'facebook']) { const c = cuentaDe(cur, r, cuentasMeta()); if (c && cuentasMeta()?.cuentas?.length) base[r] = { nombre: c.nombre, usuario: c.usuario || '', foto: c.foto || '' }; } return base; };
+  const preview = initPreview(host.querySelector('.pz-preview'), { esc, cuenta: cuentaVista, otras: () => otras().map(o => (cur && o.id === cur.id ? cur : o)) });
   preview.escritorio?.(escritorio); host.classList.toggle('pz-pc', escritorio);
   let horaK = '', horaSug = null; // plan M3: la mejor hora de las redes de esta pieza
   let horaRed = ''; try { horaRed = JSON.parse(localStorage.getItem('ao.ct.horaRed') || '""') || ''; } catch {} // C2 (8 oct 2026): las mejores horas de UNA red (vacío = las de la pieza, juntas)
   let masRedes = false, repAbierto = false, tplAbierto = false; // C3 (8 oct 2026): «Guardar como plantilla» abierto en el pie // plan M5 · U7: «Repetir…» abierto en el pie // «Más redes»: las que el negocio no usa, a la vista solo si se piden
   let cur = null, dirty = {}, timer = null, saving = Promise.resolve(), opener = null, isModal = false, gone = false, stateText = '', stateBad = false;
   // C1: lo que el editor recuerda mientras la pieza está abierta
+  let ctaAbierta = ''; // 9 oct 2026: la lista de cuentas de esa red, desplegada
   let porRed = false, tab = '', pop = '', verCom = false, verHash = false, verTextoHist = false, avisos = false, cuando = false, menu = false, confirmaYa = 0;
   let abiertos = new Set(), lastSel = null, dragI = null, guard = null, mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '' }, gConfirma = '';
   // la revisión se calcula aquí, con las mismas reglas que el servidor: se ve al instante, sin esperar al guardado. El servidor la vuelve a comprobar al aprobar.
@@ -186,7 +191,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   function redesHTML() {
     const p = cur;
     const ficha = k => {
-      const on = p.redes.includes(k), b = `<button type="button" class="pz-net" data-red="${k}" aria-pressed="${on}" title="${on ? 'Quitar' : 'Añadir'} ${RED[k].name}"><b class="pz-nb ${k}">${RED[k].short}</b> ${RED[k].name}</button>`;
+      const on = p.redes.includes(k), b = `<button type="button" class="pz-net" data-red="${k}" aria-pressed="${on}" title="${on ? 'Quitar' : 'Añadir'} ${RED[k].name}"><b class="pz-nb ${k}" aria-hidden="true">${RED[k].short}</b> ${RED[k].name}</button>`;
       if (!on) return b;
       const f = formatoDe(p, k), ops = FORMATOS_RED[k] || ['post'], valida = formatoValido(k, f);
       const fmt = ops.length > 1 || !valida
@@ -197,6 +202,25 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const resto = Object.keys(RED).length - redesVisibles().length;
     return `<div class="pz-nets" role="group" aria-labelledby="${I('rd')}">${redesVisibles().map(ficha).join('')}${resto > 0 || masRedes ? `<button type="button" class="pz-net more" data-a="mas-redes" aria-expanded="${masRedes}">${masRedes ? 'Menos redes' : `+ Más redes (${resto})`}</button>` : ''}</div>`;
   }
+
+  /** 9 oct 2026: «Publicar en» — la cuenta de Instagram y la página de Facebook en que sale, siempre a la vista, y las demás para elegir. */
+  function ctasHTML() {
+    const redes = ['instagram', 'facebook'].filter(r => cur.redes.includes(r)); if (!redes.length) return '';
+    const info = cuentasMeta();
+    if (!info?.cuentas?.length) return `<p class="pz-help pz-ctnone">Sin Meta conectada: saldrá por la cuenta de Ajustes.</p>`;
+    const av = c => `<span class="pz-cav" aria-hidden="true">${c?.foto ? `<img src="${esc(c.foto)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : esc((nombreCorto(c) || '·').replace('@', '').slice(0, 1).toUpperCase())}</span>`;
+    const quien = c => `<b>${esc(nombreCorto(c))}</b>${c.usuario && c.nombre ? ` <small>${esc(c.nombre)}</small>` : ''}`;
+    const fila = red => {
+      const c = cuentaDe(cur, red, info), todas = info.cuentas.filter(x => x.red === red), elegida = !!cuentasLimpias(cur.cuentas)[red], abierta = ctaAbierta === red && todas.length > 1;
+      const linea = c ? `${av(c)}<span class="pz-ctt">Sale en ${quien(c)}${elegida ? '' : ' <small>(la de siempre)</small>'}${c.puedePublicar === false ? ` <em class="pz-ctmal">· ${esc(c.motivo || 'no puede publicar')}</em>` : ''}</span>` : `<span class="pz-ctt">Sin cuenta de ${RED[red].name}: el token de Meta no ve ninguna</span>`;
+      const head = todas.length > 1 ? `<button type="button" class="pz-ctbtn" data-ctred="${red}" aria-expanded="${abierta}" aria-controls="${I('ctl-' + red)}" aria-label="${esc(`${RED[red].name}: sale en ${nombreCorto(c) || '—'}. Cambiar la cuenta`)}"><b class="pz-nb ${red}" aria-hidden="true">${RED[red].short}</b>${linea}<span class="pz-ctc" aria-hidden="true">Cambiar ${abierta ? '▴' : '▾'}</span></button>`
+        : `<div class="pz-ctbtn solo"><b class="pz-nb ${red}" aria-hidden="true">${RED[red].short}</b>${linea}</div>`;
+      const lista = abierta ? `<div class="pz-ctl" id="${I('ctl-' + red)}" role="radiogroup" aria-label="Cuenta de ${RED[red].name}">${todas.map((x, i) => `<label class="pz-cto${x.puedePublicar ? '' : ' no'}"><input type="radio" name="${I('ctr-' + red)}" value="${esc(x.id)}" data-cta="${red}"${c && x.id === c.id ? ' checked' : ''}${x.puedePublicar ? '' : ` disabled aria-describedby="${I(`ctm-${red}-${i}`)}"`}>${av(x)}<span>${quien(x)}${x.id === info.porDefecto?.[red] ? ' <small>· la de siempre</small>' : ''}${x.puedePublicar ? '' : `<small class="pz-ctmal" id="${I(`ctm-${red}-${i}`)}">${esc(x.motivo || '')}</small>`}</span></label>`).join('')}</div>` : '';
+      return `<div class="pz-ct1">${head}${lista}</div>`;
+    };
+    return `<span class="pz-lab">Publicar en</span>${redes.map(fila).join('')}`;
+  }
+  function paintCtas() { const b = scroll.querySelector('.pz-ctas'); if (b && cur) b.innerHTML = ctasHTML(); }
 
   /** El cuadro de escribir: pestañas por red (si se pidieron), el texto, los archivos y la barra con sus ventanitas. */
   function compHTML() {
@@ -313,6 +337,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     scroll.innerHTML = `
       <div class="pz-redesh"><span class="pz-lab" id="${I('rd')}">Redes y formato</span><span class="pz-avbox"></span></div>
       ${redesHTML()}
+      <div class="pz-ctas">${ctasHTML()}</div>
       <section class="pz-review" aria-label="¿Puede salir?" ${avisos ? '' : 'hidden'}><div class="pz-rv" aria-live="polite"></div></section>
       ${compHTML()}
       <div class="pz-cfgs">${cfgHTML()}</div>`;
@@ -408,6 +433,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   /** Una opción de red (Pinterest, YouTube, TikTok): se guarda el objeto entero de esa red. */
   function opcion(ruta, v) { const [red, k] = ruta.split('.'); set({ [red]: { ...(cur[red] || {}), [k]: v } }); preview.text(cur); }
   host.addEventListener('change', e => {
+    if (e.target.dataset?.cta) { const red = e.target.dataset.cta, v = e.target.value; set({ cuentas: { ...cuentasLimpias(cur.cuentas), [red]: v } }); keep(paintCtas, `[data-cta="${red}"][value="${CSS.escape(v)}"]`); /* la lista sigue abierta: con las flechas se recorre */ paintPreview(); setState(`Sale en ${nombreCorto(cuentaDe(cur, red, cuentasMeta()))}.`); return; } // 9 oct 2026: la cuenta de esa red
     if (e.target.dataset?.op && (e.target.tagName === 'SELECT' || e.target.type === 'checkbox')) { opcion(e.target.dataset.op, e.target.type === 'checkbox' ? e.target.checked : e.target.value); return; }
     if (e.target.dataset?.hred !== undefined) { horaRed = e.target.value; try { localStorage.setItem('ao.ct.horaRed', JSON.stringify(horaRed)); } catch {} const b = foot.querySelector('.pz-best'); if (b) b.innerHTML = bestHTML(); b?.querySelector('[data-hred]')?.focus(); return; } // C2: la red de las mejores horas
     if (e.target.dataset?.fmtRed) { const red = e.target.dataset.fmtRed; set(ponFormato(cur, red, e.target.value)); keep(() => paintBody(), `[data-fmt-red="${red}"]`); return; } // C1: el formato de esa red
@@ -447,6 +473,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (b.dataset.qd) { set({ fecha: b.dataset.qd }); keep(paintCuando, `[data-qd="${b.dataset.qd}"]`); paintCuandoBtn(); paintPreview(); return; }
     if (b.dataset.buena) { const [f, h] = b.dataset.buena.split('|'); set({ fecha: f, hora: h }); keep(paintCuando, `[data-qh="${h}"]`); paintCuandoBtn(); paintPreview(); setState(`Sale el ${fmtDay(new Date(f + 'T00:00:00').getTime())} a las ${h}: una buena hora.`); return; }
     if (b.dataset.qh) { set({ hora: b.dataset.qh }); keep(paintCuando, `[data-qh="${b.dataset.qh}"]`); paintCuandoBtn(); paintPreview(); return; }
+    if (b.dataset.ctred) { const red = b.dataset.ctred; ctaAbierta = ctaAbierta === red ? '' : red; keep(paintCtas, `[data-ctred="${red}"]`); return; } /* un desplegable: el foco se queda en su botón */
     if (b.dataset.red) { const red = b.dataset.red, on = cur.redes.includes(red); const next = on ? cur.redes.filter(r => r !== red) : [...cur.redes, red]; if (!next.length) { setState('Elige al menos una red.', true); return; } set({ redes: next, ...formatosConRedes(cur, next) }); keep(() => paintBody(), `[data-red="${red}"]`); return; }
     if (b.dataset.ttab !== undefined) { tab = b.dataset.ttab; mej = { ...mej, propuesta: null, error: '', anterior: null }; keep(() => paintBody(), `[data-ttab="${tab}"]`); return; }
     if (b.dataset.pop) { abrirPop(b.dataset.pop); return; }
@@ -537,7 +564,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (a === 'review' || a === 'draft') { cerrarMenu(false); await flush(); if (!cur.id) return; try { const p = await datos.back(cur.id, a === 'review' ? 'revision' : 'borrador'); adopt(p); onChange(p, {}); setState(a === 'review' ? 'Pasó a revisión' : 'Vuelve a ser borrador'); } catch (err) { setState(err.message, true); } return; }
     if (a === 'back') { await flush(); try { const p = await datos.back(cur.id, 'revision'); adopt(p); paintBody(); onChange(p, {}); setState('Ya no está aprobada'); } catch (err) { setState(err.message, true); } return; }
     if (a === 'dup') {
-      await flush(); const src = cur; const copia = {}; for (const k of ['titulo', 'fecha', 'hora', 'formato', 'formatos', 'redes', 'medios', 'historiaTambien', 'historias', 'texto', 'comentario', 'hashtags', 'hashtagsEnComentario', 'textoFacebook', 'notas', 'textos', 'pinterest', 'youtube', 'tiktok']) copia[k] = JSON.parse(JSON.stringify(src[k] ?? (['textos', 'formatos', 'pinterest', 'youtube', 'tiktok'].includes(k) ? null : '')));
+      await flush(); const src = cur; const copia = {}; for (const k of ['titulo', 'fecha', 'hora', 'formato', 'formatos', 'redes', 'medios', 'historiaTambien', 'historias', 'texto', 'comentario', 'hashtags', 'hashtagsEnComentario', 'textoFacebook', 'notas', 'textos', 'pinterest', 'youtube', 'tiktok', 'cuentas']) copia[k] = JSON.parse(JSON.stringify(src[k] ?? (['textos', 'formatos', 'pinterest', 'youtube', 'tiktok', 'cuentas'].includes(k) ? null : '')));
       if (!copia.textos) delete copia.textos; if (!copia.formatos) delete copia.formatos;
       copia.titulo = (src.titulo || 'Pieza') + ' (copia)'; copia.fecha = ''; copia.hora = ''; copia.estado = 'borrador';
       try { const nueva = await datos.create(copia); nueva.medidas = { ...(src.medidas || {}), ...(nueva.medidas || {}) }; onChange(nueva, { creada: true }); open(nueva); setState('Duplicada sin día: elige cuándo sale.'); } catch (err) { setState(err.message, true); }
@@ -571,7 +598,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   function open(p) {
     gone = false; if (!isOpen()) opener = document.activeElement;
     cur = p.id ? JSON.parse(JSON.stringify(p)) : { id: '', titulo: '', fecha: p.fecha || '', hora: p.hora || '', formato: p.formato || 'post', formatos: {}, redes: p.redes || [...redesUsadas()], estado: 'borrador', responsable: '', medios: p.medios || [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', aprobada: null, medidas: {}, ...(p.extra || {}) };
-    cur.medidas ||= {}; cur.textos ||= {}; cur.formatos ||= {}; masRedes = false; repAbierto = false; tplAbierto = false; horaK = ''; horaSug = null;
+    cur.medidas ||= {}; cur.textos ||= {}; cur.formatos ||= {}; masRedes = false; repAbierto = false; tplAbierto = false; ctaAbierta = ''; horaK = ''; horaSug = null;
     if (!p.id) Object.assign(cur, p.extra?.formatos ? formatosConRedes(cur, cur.redes) : formatosConRedes({ ...cur, redes: [] }, cur.redes)); // C1: una red sin ese formato (X en una historia) entra con el suyo; C3: la de una plantilla trae el suyo
     porRed = false; tab = ''; pop = ''; verCom = false; verHash = false; verTextoHist = false; avisos = false; cuando = false; menu = false; confirmaYa = 0; abiertos = new Set(); lastSel = null; guard = null; gConfirma = ''; mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '' };
     dirty = {}; stateText = ''; stateBad = false; if (!cur.id && (cur.medios.length || cur.fecha)) dirty = { medios: cur.medios, ...(cur.fecha ? { fecha: cur.fecha, hora: cur.hora, formato: cur.formato, formatos: cur.formatos } : {}) };
@@ -595,6 +622,6 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     open, close, isOpen, flush, current: () => cur,
     addMedios(ids) { if (!cur) return; swapMedios([...cur.medios, ...ids.filter(x => !cur.medios.includes(x))]); },
     refresh(p) { if (cur && p && p.id === cur.id) { adopt(p); if (p.fecha !== cur.fecha || p.hora !== cur.hora) { cur.fecha = p.fecha; cur.hora = p.hora; paintCuando(); paintCuandoBtn(); paintPreview(); } } },
-    repaintPreview: paintPreview,
+    repaintPreview: () => { paintPreview(); paintCtas(); }, // y «Publicar en» (llegan las cuentas)
   };
 }

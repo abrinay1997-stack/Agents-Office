@@ -1,5 +1,24 @@
 # Changelog
 
+## Contenido: a qué cuenta sale cada pieza — 9 oct 2026
+
+Pedido del dueño: «poder programar por cuenta o usuario: cuando voy a programar no sé a qué cuenta se programará de todas las que puedo ver».
+- **«Publicar en»** en el editor de la pieza: por Instagram y por Facebook, la cuenta en que sale, siempre a la vista («Sale en @pana.claw · PanaClaw»), y «Cambiar» con las demás (foto, nombre, @usuario). Una que no puede publicar (un Instagram sin página de Facebook vinculada, o con Metricool una que no es de su marca) dice por qué y no se puede elegir. Sin Meta: «Sin Meta conectada: saldrá por la cuenta de Ajustes». La vista previa sale con la cuenta elegida y su foto.
+- **La pieza la guarda** (`cuentas` en la cabecera de la nota, como `formatos`). Nace con la de Ajustes (`contenido.metaPagina` y su Instagram): para quien no elige, nada cambia. Cambiar la cuenta de una aprobada le quita el OK; lo aprobado antes no se suelta.
+- **Publicar:** con Meta directo sale en esa página y ese Instagram, con el token de esa página (cambiar la cuenta lo reprograma); una cuenta que el token ya no ve o sin página falla con su motivo. Metricool no publica en otra cuenta que la de su marca: falla y lo dice. El simulacro apunta la cuenta.
+- **El calendario:** cada tarjeta y la vista previa al pasar dicen la cuenta («@pana.claw»), Programación también, y un **filtro por cuenta** junto a las redes (se recuerda, `ao.ct.cuenta`).
+- **Agentes:** `crear_borrador` y `mejorar_borrador` aceptan `cuentas`; `ver_calendario_contenido` y `ver_pieza` dicen dónde sale cada red y, con varias cuentas, la lista de ids.
+- `GET /api/contenido/cuentas` (ligera: lo que ya se sabe de Meta). Tests: `contenido-cuentas` (y el Meta de mentira publica en cualquier página e Instagram). Recorridos: `editor-contenido-recorrido` y `tarjetas-contenido-recorrido`, con la demo (axe sin fallos).
+
+## Analíticas: cada cuenta por separado — 9 oct 2026
+
+- **Elige una cuenta** (arriba, con su foto o su inicial, agrupadas por red; en el teléfono, un desplegable): las cifras, la evolución, los formatos, las horas y las que más movieron pasan a ser **solo de esa cuenta**, y arriba dice cuál ves («Viendo @pana.claw · Instagram»). Con varias, la suma, y dice cuántas suma. Se recuerda.
+- **Comparar cuentas:** una tabla con una fila por cuenta (seguidores y lo ganado, alcance, interacciones, publicaciones del periodo), que se ordena por cualquier columna; un clic en una fila la elige. En el teléfono, tarjetas.
+- Cada cuenta dice su última foto o que falló. Elegir una red deja solo sus cuentas.
+- **El informe del mes** se puede pedir de una cuenta sola (se guarda como `AAAA-MM redes <cuenta>.md`); el de todas trae una línea por cuenta. **`ver_analiticas`** de los agentes acepta `cuenta` (@usuario, nombre o id) y, sin ella, da una línea por cuenta además del total.
+- A 1024 con Dimitri al lado, la banda de Analíticas ya no deja fuera INSTAGRAM y FACEBOOK.
+- Tests: `analiticas-cuentas` y el filtro en `contenido-cifras`. Recorrido: `node scripts/analiticas-cuentas-recorrido.mjs` (1512 claro y oscuro, 1024 con Dimitri, 390; axe sin fallos).
+
 ## Primera prueba con el token real de Meta — 9 oct 2026
 
 - **Funcionan con tu cuenta:** publicar, Anuncios (la cuenta Bukoflow, en USD y hora de Panamá) y los comentarios de Instagram y Facebook, con el nombre y el texto de tus clientes.

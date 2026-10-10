@@ -25,7 +25,7 @@ export function crearSimulacro({ archivo, ahora = Date.now, fallan = () => [] } 
     listo: () => ({ ok: true, motivo: '' }),
     async programar(e) {
       const d = leer(), id = 'sim-' + crypto.randomBytes(4).toString('hex');
-      d.posts[id] = { momento: e.momento, redes: e.redes, texto: String(e.texto || '').slice(0, 200), medios: e.medios, creada: ahora() };
+      d.posts[id] = { momento: e.momento, redes: e.redes, texto: String(e.texto || '').slice(0, 200), medios: e.medios, ...(e.cuentas ? { cuentas: e.cuentas } : {}), creada: ahora() }; // 9 oct 2026: y en qué cuenta habría salido
       escribirJSON(archivo, d);
       return { id, uuid: '', zona: '', redes: Object.fromEntries(e.redes.map(r => [r, { estado: 'en_red', url: '', detalle: '' }])) };
     },
@@ -46,7 +46,9 @@ const TIPO = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'i
  * Metricool. `rutaMedio(id)` da la ruta de un archivo del Estudio; `aJpeg(buffer)` lo convierte (sharp); `cache` es el archivo donde se
  * recuerda lo ya subido (por id y fecha de cambio), para no subir dos veces la misma imagen.
  */
-export function crearConductorMetricool({ mc, rutaMedio, aJpeg, cache } = {}) {
+export function crearConductorMetricool({ mc, rutaMedio, aJpeg, cache, cuentaValida = () => '' } = {}) {
+  // 9 oct 2026: Metricool publica en las cuentas de SU marca; si la pieza pide otra (`cuentaValida(red, id)` da el motivo), no sale en ninguna
+  const noEsDeLaMarca = e => { for (const [red, id] of Object.entries(e.cuentas || {})) { if (!(e.redes || []).includes(red)) continue; const m = cuentaValida(red, id); if (m) return m; } return ''; };
   const subidas = () => leerJSON(cache, {});
   async function subir(id, jpeg) {
     const ruta = rutaMedio(id); if (!ruta || !fs.existsSync(ruta)) throw Object.assign(new Error(`el Estudio ya no tiene «${id}»: quizá se fue a la papelera`), { transitorio: false });
@@ -61,6 +63,7 @@ export function crearConductorMetricool({ mc, rutaMedio, aJpeg, cache } = {}) {
     id: 'metricool', nombre: 'Metricool',
     listo: () => (mc.configurado() ? { ok: true, motivo: '' } : { ok: false, motivo: 'Faltan METRICOOL_USER_TOKEN y METRICOOL_USER_ID (variables de Windows; Metricool → Ajustes de la cuenta → API, plan Advanced).' }),
     async programar(e) {
+      const otra = noEsDeLaMarca(e); if (otra) throw Object.assign(new Error(otra), { transitorio: false });
       const jpeg = e.redes.includes('instagram'), medios = [];
       for (const id of e.medios) medios.push(await subir(id, jpeg));
       const m = await mc.marca(), zona = m?.zona || MC.zonaDeEstaMaquina();

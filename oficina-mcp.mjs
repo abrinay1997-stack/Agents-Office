@@ -44,8 +44,8 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { desde: { type: 'string' }, hasta: { type: 'string' } } } },
   { name: 'ver_huecos', description: 'Los días sin publicación de los próximos días, con su mejor hora, y lo que funcionó y puede volver.',
     inputSchema: { type: 'object', properties: { dias: { type: 'number' }, redes: { type: 'array', items: { type: 'string' } } } } },
-  { name: 'ver_analiticas', description: 'Cómo van las redes, resumido: seguidores, alcance, interacciones y su cambio, formatos y mejores horas.',
-    inputSchema: { type: 'object', properties: { dias: { type: 'number', description: '7 a 90 (por defecto 30).' } } } },
+  { name: 'ver_analiticas', description: 'Cómo van las redes, resumido: seguidores, alcance, interacciones y su cambio, formatos y mejores horas. Sin «cuenta», el total y una línea por cuenta.',
+    inputSchema: { type: 'object', properties: { dias: { type: 'number', description: '7 a 90 (por defecto 30).' }, cuenta: { type: 'string', description: 'Opcional: una cuenta sola (@usuario, nombre o id).' } } } },
   { name: 'ver_anuncios', description: 'Los anuncios de Meta (solo leer): la cuenta publicitaria, el gasto de hoy, la semana y el mes contra los topes, las campañas con sus conjuntos y anuncios, sus resultados y su costo, y lo que Meta rechazó. Con `id`, una campaña, un conjunto o un anuncio entero. Pausar, activar o cambiar presupuestos lo hace el dueño en Anuncios (J).',
     inputSchema: { type: 'object', properties: { que: { type: 'string', enum: ['cuenta', 'campanas', 'resultados'], description: 'cuenta (por defecto): el resumen · campanas: con sus conjuntos · resultados: por anuncio.' }, rango: { type: 'string', enum: ['hoy', '7d', '30d', 'mes'] }, estado: { type: 'string', enum: ['todas', 'activas', 'pausadas', 'problemas'] }, id: { type: 'string' } } } },
   { name: 'hablar_con_dimitri', description: 'Habla con Dimitri, el subgerente de la oficina (cuesta una consulta a su modelo). Contesta, analiza o propone un plan: tareas para los jefes y cambios del calendario. Lo que propone NO se hace solo: los cambios los haces con `hacer` (te los da listos) y las tareas con `crear_tarea`.',
@@ -78,7 +78,7 @@ async function call(name, a = {}) {
   if (name === 'ver_contenido') return contenidoTexto(office, a);
   if (name === 'ver_resultados') return publicadasTexto(office, a);
   if (name === 'ver_huecos') return huecosTexto(office, a);
-  if (name === 'ver_analiticas') { const { texto } = await office(`/api/contenido/analiticas/resumen?dias=${Math.min(90, Math.max(7, Number(a.dias) || 30))}`); return `<analiticas>\n${texto}\n</analiticas>`; }
+  if (name === 'ver_analiticas') { const { texto } = await office(`/api/contenido/analiticas/resumen?dias=${Math.min(90, Math.max(7, Number(a.dias) || 30))}${a.cuenta ? '&cuenta=' + encodeURIComponent(String(a.cuenta).slice(0, 120)) : ''}`); return `<analiticas>\n${texto}\n</analiticas>`; }
   if (name === 'ver_anuncios') return anunciosTexto(office, a); // Fase A1 de Anuncios: solo leer
   if (name === 'hablar_con_dimitri') {
     const r = await office('/api/sub/chat', { text: String(a.texto || '').slice(0, 8000) });

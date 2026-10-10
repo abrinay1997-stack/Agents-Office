@@ -39,12 +39,8 @@ body.ctOpen #sahniMark, body.ctOpen #licence { display: none; }
 .pz-cardst { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 2px; font-size: 10.5px; letter-spacing: .06em; }
 .pz-cardst b { font-weight: 700; } .pz-cardst i { font-style: normal; }
 .cv-ev.pz .cv-ev-m { justify-content: flex-start; }
-.pz-nb { display: inline-grid; place-items: center; min-width: 19px; height: 16px; padding: 0 3px; box-sizing: border-box; border-radius: 4px; font-family: var(--ui); font-size: 10.5px; font-weight: 800; letter-spacing: .02em; line-height: 1; color: #fff; background: #4A4A4A; flex: none; }
-.pz-nb.instagram { background: #B1306C; } .pz-nb.facebook { background: #0F5BD8; } /* blanco encima: 5,8:1 y 5,9:1 */
-/* M2 (6 oct 2026): las redes nuevas; blanco encima, todas ≥ 5,2:1 */
-.pz-nb.linkedin, .pv-net.linkedin { background: #0A66C2; } .pz-nb.x, .pv-net.x { background: #14171A; } .pz-nb.threads, .pv-net.threads { background: #3D3D3D; }
-.pz-nb.bluesky, .pv-net.bluesky { background: #0B5FCC; } .pz-nb.tiktok, .pv-net.tiktok { background: #00787A; } .pz-nb.pinterest, .pv-net.pinterest { background: #BD081C; } .pz-nb.youtube, .pv-net.youtube { background: #CC0000; }
-:is(.pz-nb, .pv-net):is(.x, .threads) { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); } /* en oscuro, que no se pierdan en el fondo */
+/* 9 oct 2026: cada red es su logo real (src/redes-iconos.js), con su color de marca; sin pastilla de color. Las negras (X, Threads, TikTok) van con el color del texto. */
+.pz-nb, .pv-net { display: inline-grid; place-items: center; width: 16px; height: 16px; line-height: 0; color: inherit; flex: none; } .pz-nb .ao-red, .pv-net .ao-red { width: 100%; height: 100%; }
 .pz-fi { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vertical-align: -2px; flex: none; }
 .pz-fi .fill { fill: currentColor; stroke: none; }
 .pz-f { display: inline-flex; align-items: center; gap: 3px; color: var(--grey); } body.dark .pz-f { color: #C2C0B9; }
@@ -262,7 +258,7 @@ body.dark .pz-cnt.over { color: #FF8A73; }
 body.dark .pz-h { color: #ECEAE3; }
 .cv-ev.pz.pz-venc { border-left-color: #B4391E; } body.dark .cv-ev.pz.pz-venc { border-left-color: #FF8A73; }
 @container ctday (max-width: 118px) { #ctOv .cv-ev.line.pz2 .pz-ct { display: none; } #ctOv .cv-ev.line.pz2 { padding-left: 6px; } }
-@container ctday (max-width: 150px) { #ctOv .cv-ev.line.pz2 .pz-nb { min-width: 0; width: 7px; height: 7px; padding: 0; border-radius: 50%; font-size: 0; } }
+@container ctday (max-width: 150px) { #ctOv .cv-ev.line.pz2 .pz-nb { width: 14px; height: 14px; } }
 body.dark #ctOv .cv-ev.pz { border-left-color: var(--chipd, var(--chip)); }
 
 /* ---------- «+ Crear» (CON-16) ---------- */

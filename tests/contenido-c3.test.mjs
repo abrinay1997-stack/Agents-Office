@@ -115,7 +115,7 @@ test('las rutas: lo publicado, llenar la semana (lo que vuelve a revisión y una
   const json = (res, code, b) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(b)); };
   const body = req => new Promise(ok => { let s = ''; req.on('data', d => { s += d; }); req.on('end', () => ok(s ? JSON.parse(s) : {})); });
   const handle = crearRutas({ almacen, json, body, ajustes: () => ({ redes: ['instagram'] }), publicadas: () => ({ publicaciones: pubs, ultimaFoto: '2026-10-07', conectado: true }),
-    encargar: async x => { encargos.push(x); return { id: 't1', titulo: x.titulo, agente: 'INSTAGRAM ORGANIC' }; }, quienLlena: () => 'INSTAGRAM ORGANIC', plantillas: crearPlantillas({ cerebro }) });
+    encargar: async x => { encargos.push(x); return { id: 't1', titulo: x.titulo, agente: 'INSTAGRAM ORGANIC' }; }, quienLlena: () => 'INSTAGRAM ORGANIC', plantillas: crearPlantillas({ cerebro }), ahora: () => T });
   const srv = http.createServer(async (req, res) => { if (!await handle(req, res, new URL(req.url, 'http://x'))) json(res, 404, {}); });
   await new Promise(r => srv.listen(0, '127.0.0.1', r));
   const api = async (m, p, b) => { const r = await fetch(`http://127.0.0.1:${srv.address().port}${p}`, { method: m, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, ...(await r.json()) }; };

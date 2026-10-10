@@ -70,7 +70,7 @@ body.dark .pz-avchip.bad { color: #FF8A73; } body.dark .pz-avchip.warn { color: 
 .pz-cnts { margin-left: auto; display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
 .pz-cc { display: inline-flex; align-items: center; gap: 4px; min-height: 22px; padding: 1px 7px 1px 3px; border: 1px solid var(--hairline); border-radius: 99px; font-family: var(--ui); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); }
 .pz-cc[data-cc="hashtags"] { padding-left: 7px; }
-.pz-cc .pz-nb { min-width: 17px; height: 15px; }
+.pz-cc .pz-nb { width: 15px; height: 15px; }
 .pz-cc.dim { color: var(--grey); border-style: dashed; } body.dark .pz-cc.dim { color: #C2C0B9; }
 .pz-cc.over { color: #B4391E; border-color: #B4391E; font-weight: 800; } body.dark .pz-cc.over { color: #FF8A73; border-color: #FF8A73; }
 
@@ -156,3 +156,28 @@ body.dark .pz-hred { color: #C2C0B9; }
 /* A4 (9 oct 2026): «Impulsar» en una pieza publicada */
 .pz-imp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; }
 .pz-imp .pz-hn { flex: 1 1 220px; }
+
+/* ---------- 9 oct 2026: «Publicar en» — la cuenta de cada red, siempre a la vista ---------- */
+.pz-ctas { display: grid; gap: 6px; margin: 0 0 12px; }
+.pz-ctas:empty { display: none; }
+.pz-ctas .pz-lab { margin: 0; }
+.pz-ctbtn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; box-sizing: border-box; padding: 5px 10px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--cv-card); color: var(--ink); font-family: var(--ui); font-size: 12.5px; text-align: left; cursor: pointer; }
+.pz-ctbtn.solo { cursor: default; }
+button.pz-ctbtn:hover { border-color: var(--ink); }
+.pz-ctbtn:focus-visible, .pz-cto input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.pz-ctt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pz-ctt small, .pz-cto small { font-size: 11px; color: var(--grey); }
+.pz-ctc { flex: none; font-size: 11px; font-weight: 700; color: var(--grey); }
+.pz-ctmal { display: block; font-style: normal; font-size: 11px; color: #8A3A10; }
+.pz-ctt .pz-ctmal { display: inline; }
+body.dark .pz-ctmal { color: #FFB27A; }
+body.dark :is(.pz-ctt small, .pz-cto small, .pz-ctc) { color: #C2C0B9; }
+.pz-cav { display: inline-grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; overflow: hidden; background: #4A4A4A; color: #fff; font-size: 11px; font-weight: 800; }
+.pz-cav img { width: 100%; height: 100%; object-fit: cover; }
+.pz-ctl { display: grid; gap: 2px; margin: 4px 0 2px; padding: 4px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--cv-card); }
+.pz-cto { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 8px; border-radius: 9px; font-size: 12.5px; cursor: pointer; }
+.pz-cto input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--ink); }
+.pz-cto:hover { background: rgba(0, 0, 0, .04); } body.dark .pz-cto:hover { background: rgba(255, 255, 255, .06); }
+.pz-cto.no { cursor: not-allowed; }
+.pz-cto.no b { text-decoration: line-through; text-decoration-thickness: 1px; }
+.pz-ctnone { margin: 0 0 12px; }

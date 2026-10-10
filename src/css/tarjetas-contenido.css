@@ -71,3 +71,7 @@ body.dark .pz-rs { color: #4FD1A5; }
 .ct-cuota { display: inline; font-weight: 600; }
 .ct-cuota.alta { color: #8A3A10; } body.dark .ct-cuota.alta { color: #FFB27A; }
 .pz-zona { color: var(--grey); font-weight: 400; } body.dark .pz-zona { color: #C2C0B9; }
+/* 9 oct 2026: la cuenta en que sale (corta) y el filtro por cuenta */
+.pz-cta { min-width: 0; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 700; color: var(--grey); }
+.ct-fcta { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; color: var(--grey); }
+body.dark :is(.pz-cta, .ct-fcta) { color: #C2C0B9; }

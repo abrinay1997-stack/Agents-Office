@@ -64,3 +64,12 @@ Una entrada por error que costó encontrar. Solo se añade al final.
 **Fix aplicado:** un parámetro objeto va como JSON en `graph()`; el Meta de mentira responde el mismo error 100 que Meta si `time_range` no es un JSON con `since` y `until`; test en `tests/meta-freno.test.mjs`.
 **Prevención:** un doble de una API externa debe RECHAZAR lo que la API real rechaza, no tolerarlo. Al añadir un parámetro objeto a una llamada a Meta, mirar cómo se serializa en ese camino (dirección, formulario o lote).
 **Archivos:** `contenido/meta.mjs` (graph), `tests/meta-stand.mjs` (cifras)
+
+## [2026-10-10] — Un test de «Llenar la semana» se rompió solo al pasar el día
+
+**Contexto:** Retomar la rama `mejora/contenido-cuentas` tras un corte; `npm run check` en rojo.
+**Error:** `contenido-c3.test.mjs` esperaba 3 huecos desde el 2026-10-09 y recibió 2.
+**Causa raíz:** `crearRutas` (contenido/rutas.mjs) usaba `Date.now()` en `planLlenar` y `llenar`, mientras el test fijaba la hora solo en el almacén. Con el reloj real ya en el 10 de octubre, el día 9 había pasado.
+**Fix aplicado:** `crearRutas({ …, ahora = Date.now })`, que se pasa a `huecosDe` y al control de «ya pasó»; el test pasa `ahora: () => T`.
+**Prevención:** Todo módulo que decide con la hora recibe `ahora` inyectable, y el test le pasa el mismo reloj que a los demás. Una fecha escrita a mano en un test caduca.
+**Archivos:** `contenido/rutas.mjs:L37`, `tests/contenido-c3.test.mjs:L118`

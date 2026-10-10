@@ -326,23 +326,25 @@ export function crearMetaStand(o = {}) {
 
     // ---- publicar (F3)
     if (metodo === 'DELETE') { st.borrados.push(ruta.slice(1)); return json({ success: true }); }
-    if (metodo === 'POST' && ruta === '/P1/photos') {
-      const id = nuevo('F'), post = `P1_${id}`; st.fotos[id] = { ...campos, archivo };
+    // 9 oct 2026: cualquier página (P1, P2…) y cualquier Instagram (IG1, IG2…): la pieza elige en qué cuenta sale
+    const pgPub = metodo === 'POST' ? ruta.match(/^\/(P\d+)\/(photos|feed|videos|photo_stories)$/) : null, igPub = ruta.match(/^\/(IG\d+)\/(media|media_publish|content_publishing_limit)$/);
+    if (pgPub?.[2] === 'photos') {
+      const id = nuevo('F'), post = `${pgPub[1]}_${id}`; st.fotos[id] = { ...campos, archivo, pagina: pgPub[1] };
       if (campos.published !== 'false' || campos.scheduled_publish_time) st.posts[post] = { programada: Number(campos.scheduled_publish_time || 0), texto: campos.caption };
       return json({ id, ...(campos.published === 'false' && !campos.scheduled_publish_time ? {} : { post_id: post }) });
     }
-    if (metodo === 'POST' && ruta === '/P1/feed') { const id = `P1_${nuevo('feed')}`; st.posts[id] = { programada: Number(campos.scheduled_publish_time || 0), texto: campos.message }; return json({ id }); }
-    if (metodo === 'POST' && ruta === '/P1/videos') { const id = nuevo('V'); st.posts[id] = { programada: Number(campos.scheduled_publish_time || 0), video: true }; return json({ id }); }
-    if (metodo === 'POST' && ruta === '/P1/photo_stories') return json({ success: true, post_id: 'P1_historia' });
-    if (metodo === 'POST' && ruta === '/IG1/media') {
+    if (pgPub?.[2] === 'feed') { const id = `${pgPub[1]}_${nuevo('feed')}`; st.posts[id] = { programada: Number(campos.scheduled_publish_time || 0), texto: campos.message }; return json({ id }); }
+    if (pgPub?.[2] === 'videos') { const id = nuevo('V'); st.posts[id] = { programada: Number(campos.scheduled_publish_time || 0), video: true }; return json({ id }); }
+    if (pgPub?.[2] === 'photo_stories') return json({ success: true, post_id: `${pgPub[1]}_historia` });
+    if (metodo === 'POST' && igPub?.[2] === 'media') {
       const id = nuevo('C'); st.cont[id] = { ...campos, estado: campos.upload_type === 'resumable' ? 'IN_PROGRESS' : 'FINISHED' };
       return json(campos.upload_type === 'resumable' ? { id, uri: `${RUP}/ig-api-upload/v26.0/${id}` } : { id });
     }
-    if (metodo === 'POST' && ruta === '/IG1/media_publish') {
+    if (metodo === 'POST' && igPub?.[2] === 'media_publish') {
       const c = st.cont[campos.creation_id]; if (!c || c.estado !== 'FINISHED') return errorGraph('no está listo', 9007, { error_subcode: 2207027 });
       c.estado = 'PUBLISHED'; const id = nuevo('M'); st.media.unshift({ id, caption: c.caption || '', permalink: `https://www.instagram.com/p/${id}/`, timestamp: new Date(st.reloj).toISOString() }); c.media = id; return json({ id });
     }
-    if (ruta === '/IG1/content_publishing_limit') return json({ data: [{ quota_usage: 3, config: { quota_total: 100, quota_duration: 86400 } }] });
+    if (igPub?.[2] === 'content_publishing_limit') return json({ data: [{ quota_usage: 3, config: { quota_total: 100, quota_duration: 86400 } }] });
 
     // ---- la Marketing API
     const act = ruta.match(/^\/(act_\d+)(\/[a-z_]+)?$/);
