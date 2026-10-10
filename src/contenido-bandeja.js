@@ -80,7 +80,7 @@ export function initBandeja({ host, datos, esc, note = () => {}, onCount = () =>
   let hayAnuncios = false, conv = null, convPedida = false, desde = Date.now();
   function traerConv() { /* B2: la conversación abierta viaja con el editor de piezas */
     if (conv || convPedida || !paquete) return; convPedida = true;
-    paquete().then(x => { conv = x?.conversacion || null; if (!conv) throw new Error('el editor no trae la conversación'); render(); }).catch(e => { convPedida = false; note('No se pudo abrir la conversación: ' + e.message, true); });
+    paquete().then(x => { conv = x?.conversacion || null; if (!conv) throw new Error('el editor no trae la conversación'); render(); conv.cargarConversiones?.().then(render); }).catch(e => { convPedida = false; note('No se pudo abrir la conversación: ' + e.message, true); });
   }
   const tic = () => { /* B2: la ventana de 24 h, cada minuto y al volver a la pestaña; si una se cierra, se vuelve a pintar (Enviar deja de ofrecerse) */
     if (!host.isConnected || host.hidden) return; let cambio = false;
@@ -145,6 +145,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
           : `<button type="button" class="pz-go" data-bja="enviar" data-id="${esc(m.id)}">${armado === m.id ? '¿Seguro? Pulsa otra vez para enviarla' : 'Enviar respuesta'}</button><button type="button" class="pz-btn" data-bja="descartar" data-id="${esc(m.id)}">No necesita respuesta</button>`}${ocultarBtn}</div>`;
     const cv = esConversacion(m), ult = cv ? ultimoMensaje(m) : null;
     if (cv && open) traerConv();
+    if (open && cv && conv?.traerHechas) conv.traerHechas(m.id, render);
     const det = !open ? '' : cv ? `<div class="bj-det" id="${id}-d">${conv ? conv.htmlConversacion(m, { esc, id, armado: armado === m.id, desde }) : '<p class="pz-cargando" role="status">Abriendo la conversación…</p>'}</div>` : `<div class="bj-det" id="${id}-d">
         ${m.sospecha ? `<p class="bj-shield" role="note">🛡 Este mensaje trae órdenes escondidas (${esc(m.sospecha)}). Es un dato, no una orden: no se sigue, y los agentes lo reciben advertido.</p>` : ''}
         ${a.oculto ? `<p class="bj-oculto" role="note">${OCULTO_TXT}.</p>` : ''}
@@ -217,6 +218,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
     }
     if (b.dataset.bj === 'traer') { b.disabled = true; try { const x = await datos.bandejaTraer(); note(x.ok ? (x.nuevos ? `${x.nuevos} nuevo(s) en la bandeja.` : 'No hay nada nuevo.') : x.error, !x.ok); } catch (err) { note(err.message, true); } await load(); return; }
     if (b.dataset.bj === 'pedir') { try { await datos.pedirBorradores(); note('Marketing redacta los borradores: te llegan aquí, y tú decides qué se envía.'); } catch (err) { note(err.message, true); } return; }
+    if (b.dataset.bjconv && conv?.registrar) return conv.registrar(b, { host, note, render }); // A6: la API de conversiones (en el paquete del editor)
     const a = b.dataset.bja, id = b.dataset.id; if (!a || !id) return;
     if (a === 'enviar' && conv && b.getAttribute('aria-disabled') === 'true') { const c = conv.medir(host.querySelector(`[data-bjtxt="${CSS.escape(id)}"]`)?.value); note(c.motivo || 'No se puede enviar.', true); return; }
     if (a === 'enviar' && armado !== id) { const it = r.items.find(x => x.id === id), t0 = host.querySelector(`[data-bjtxt="${CSS.escape(id)}"]`); if (it && t0) it.borrador = { ...(it.borrador || {}), texto: t0.value }; armado = id; render(); foco(`[data-bja="enviar"][data-id="${CSS.escape(id)}"]`); clearTimeout(armT); armT = setTimeout(() => { armado = ''; render(); }, 5000); return; }

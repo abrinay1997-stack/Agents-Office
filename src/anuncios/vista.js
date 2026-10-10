@@ -391,6 +391,15 @@ function init(ov, ctx) {
     await cargar(); (main.querySelector('[data-a="indicadores"]') || main.querySelector('[data-a="informe"]') || main).focus({ preventScroll: true });
   }
 
+  /* ---------- A6 (10 oct 2026): la API de conversiones — «Mandar un evento de prueba» ---------- */
+  async function probarConversiones(btn) {
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+    const r = await datos.probarConversiones({ ejemplo: S.ejemplo });
+    if (btn.isConnected) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+    mostrarAviso(r.ok ? r.texto : `No salió: ${r.motivo || 'la oficina no contestó'}`, null);
+    await cargar(); (main.querySelector('[data-a="conv-probar"]') || main.querySelector('[data-conv]') || main).focus?.({ preventScroll: true });
+  }
+
   /* ---------- eventos ---------- */
   ov.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !ov.contains(b)) return;
@@ -436,6 +445,7 @@ function init(ov, ctx) {
     if (a === 'recargar-s') return cargarSug();
     if (a === 'informe') return inf.abrir(b);
     if (a === 'indicadores') return crearIndicadores(b);
+    if (a === 'conv-probar') return probarConversiones(b);
   });
   ov.addEventListener('submit', e => {
     const form = e.target.closest('[data-form]'); if (!form || !S.dlg) return;

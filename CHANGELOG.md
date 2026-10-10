@@ -1,5 +1,37 @@
 # Changelog
 
+## MiniMax con tu key: la música está cerrada — 10 oct 2026
+
+- **Probado con tu key de MiniMax:** la imagen, la voz en español y la lista de voces (332, 47 en español) funcionan.
+- **La música no:** MiniMax ya no la da a cuentas nuevas, **tampoco con los modelos gratis** (su documentación decía lo contrario). Antes la oficina te decía «usa el modelo gratis», que tampoco funciona. Ahora dice lo que pasa y no lo reintenta.
+- Test nuevo en `minimax` con la respuesta real de MiniMax.
+
+## Anuncios: la API de conversiones (lo que faltaba de la Fase A6) — 10 oct 2026
+
+La oficina ya le puede decir a Meta **qué se vendió y quién escribió en serio**, desde la oficina y no desde el navegador del cliente (el píxel se pierde con bloqueadores y con iOS). Así Meta aprende qué anuncios traen clientes de verdad. **Viene apagada**: el dueño todavía no dijo si vende en una web o por mensajes, así que están las dos vías y se enciende la que use.
+- **Ajustes → Anuncios:** «API de conversiones» (apagada), «Eventos que se mandan» (compras y contactos) y «Código de prueba de eventos». Usa el mismo «Píxel o conjunto de datos» de antes y el token de siempre (`META_ACCESS_TOKEN`); nada secreto en archivos.
+- **Si vendes en una web:** un pago que llega por un disparador de Stripe va como **compra** con su importe; un formulario, como **contacto** (con la dirección de la página, si la trae). Un disparador con `"conversion": false` no manda nada. Tu tienda, Zapier o n8n también pueden avisar directo (`POST /api/anuncios/conversiones/webhook`, con `AO_HOOK_TOKEN`); si mandan el mismo `event_id` que tu píxel, Meta lo cuenta una vez.
+- **Si vendes por mensajes:** en una conversación privada de la Bandeja, **«Registrar venta»** (con el importe) o **«Registrar contacto calificado»** (a Meta le llega como «contacto calificado», QualifiedLead: así aprende a buscar gente de más calidad). Va la página y el id del cliente en ella; ningún nombre ni texto de la conversación.
+- **Nada personal en claro:** el correo y el teléfono se cifran (SHA-256) antes de guardarse; lo que se ve en la oficina y lo que queda en el registro (`data/audit/`, «conversiones») no lleva ni correo, ni teléfono, ni el cifrado. Solo el dueño registra: un agente, Dimitri o el asistente reciben un «no».
+- **Si Meta falla de paso, se reintenta solo** (1, 5, 15 min, 1 h, 6 h); lo que pasa de 7 días esperando se descarta (Meta ya no lo toma). Todo va por el mismo cliente de Meta (su freno por uso y su versión).
+- **Anuncios → Resumen → Medir** dice si está apagada o encendida, lo enviado hoy y el último error, explica cuándo conviene cada vía y tiene «Mandar un evento de prueba». **Ajustes → Estado** tiene la línea «Conversiones» cuando está encendida.
+- **El ROAS:** si el píxel no lo da pero registraste ventas por aquí, sale de esas ventas (lo vendido en 30 días entre lo gastado en anuncios) y lo dice: son todas tus ventas registradas, no solo las que Meta atribuye a los anuncios.
+- Con el token real: `node scripts/check-meta-conversiones.mjs` (no manda nada) y `--probar` (UN evento con el código de prueba). Tests: `anuncios-conversiones` y el Meta de mentira aprende `/<conjunto>/events` con las reglas de Meta.
+
+## Estudio: los presets también en video, y fichas rápidas en Voz y Música — 10 oct 2026
+
+Fases F5 y F6 del banco de presets (`docs/propuesta-banco-presets.md`). Los 53 presets de video ya existían; faltaba dónde usarlos.
+- **Video tiene Básico y Avanzado**, como la imagen. En Avanzado sale el paso **«Presets de video»**: cuatro puertas (Desde texto · Animar mi foto · Con referencias · Editar un video), que son atajos y nunca borran nada, y el banco de video con la tecla **B** (o «/» al principio de la idea): buscador, sus siete grupos (movimiento de cámara, distancia, producto, look, editar, formato y sonido), la pila con Suave · Normal · Fuerte, «Mi receta» y «Guardar como preset».
+- **El material es el del paso 4** (primer y último fotograma, referencias, un video), el de siempre: lo que admite el modelo elegido se ve donde siempre y nada se pide dos veces. El banco dice qué hay («primer fotograma · el video de guía»).
+- **Las reglas del clip, a la vista antes de gastar:** un movimiento de cámara por clip, el aviso del giro 360 (y si el producto es tela o vidrio), el bucle, «de una foto a otra», el sonido. Lo que no se puede sale como «No se puede: …», el motivo va junto a GENERAR y **no se genera**. Si el modelo no puede, un botón «Usar …» con uno encendido que sí (decides tú).
+- **Movimiento del sujeto:** un botón que copia el movimiento de un video de guía (baile, gesto, recorrido); pide el video y lo manda como guía.
+- **El modelo y el formato siguen siendo los tuyos.** Si un preset de formato pide otro («Reel» es 9:16 y tienes 16:9), se dice y «Poner 9:16» lo cambia con un clic.
+- **El escenario 3D en video** dice dónde empieza la cámara, y el preset hacia dónde va («al empezar · la cámara se acerca»).
+- **Voz y Música:** fichas rápidas que rellenan los ajustes (jingle con letra, fondo para reel, corporativo, lo-fi, tropical; voz para anuncio, tutorial, oferta), con DESHACER. No generan nada: lo que ponen se ve y se cambia en «Formato y ajustes».
+- GENERAR pasa por `/api/media/presets/compile` (no gasta) y `/apply` (gasta, con tu clic y por los topes), que ahora aceptan video. Una receta de video se guarda como preset de video.
+- Todo viaja en el paquete aparte del Estudio: la página principal creció 1 KB.
+- Tests: `presets-banco-video`. Recorrido: `node scripts/presets-video-recorrido.mjs` (390, 1024 con Dimitri y 1512, claro y oscuro; axe sin fallos).
+
 ## Contenido: a qué cuenta sale cada pieza — 9 oct 2026
 
 Pedido del dueño: «poder programar por cuenta o usuario: cuando voy a programar no sé a qué cuenta se programará de todas las que puedo ver».

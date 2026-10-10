@@ -486,6 +486,9 @@ body.dark #anuOv .anu-ejemplo { background: #3A2F14; }
 #anuOv .anu-medir-it h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
 #anuOv .anu-medir-it p { margin: 0 0 6px; }
 #anuOv .anu-medir-it .anu-acts { margin-top: 8px; }
+/* A6 (10 oct 2026): la API de conversiones en «Medir» — el error con texto y borde (nunca solo el color) */
+#anuOv .anu-medir-it .anu-conv-err { color: var(--t-rojo); border-left: 3px solid var(--t-rojo); padding-left: 8px; }
+#anuOv .anu-medir-it .anu-acts .anu-ayuda { margin: 0; align-self: center; }
 #anuOv .anu-dlg-inf { max-width: 780px; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
 #anuOv .anu-dlg-inf .anu-bcab { margin-bottom: 0; }
 #anuOv .anu-inf-barra { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }

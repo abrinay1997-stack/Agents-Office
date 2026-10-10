@@ -106,7 +106,8 @@ import { crearPiloto as crearPilotoAnuncios } from './anuncios/piloto.mjs';
 import { crearImpulsor as crearImpulsorAnuncios } from './anuncios/impulsar.mjs'; // Fase A4 (9 oct 2026): impulsar lo que ya salió en Contenido
 import { fechaEn as fechaEnAnuncios } from './anuncios/modelo.mjs';
 import { crearIndicadoresAnuncios } from './anuncios/indicadores.mjs'; // Fase A6 (9 oct 2026): gasto, costo por resultado y ROAS en «Cómo va el negocio»
-import { crearInforme as crearInformeAnuncios } from './anuncios/informe.mjs'; // Fase A7 (9 oct 2026): el informe de anuncios del mes, sin modelo
+import { crearInforme as crearInformeAnuncios } from './anuncios/informe.mjs';
+import { crearConversiones, deDisparador as conversionDeDisparador } from './anuncios/conversiones.mjs'; // Fase A6 (10 oct 2026): la API de conversiones, apagada por defecto // Fase A7 (9 oct 2026): el informe de anuncios del mes, sin modelo
 import { kpis as cifrasKpis } from './src/contenido-cifras.js';
 import { crearMetricool } from './contenido/metricool.mjs'; // plan M1 (6 oct 2026): Metricool publica lo aprobado; su key vive en METRICOOL_USER_TOKEN y no toca el disco
 import { crearSimulacro, crearConductorMetricool, crearConductorMeta } from './contenido/conductores.mjs';
@@ -238,7 +239,16 @@ const anunciosImpulsor = crearImpulsorAnuncios({ borradores: anunciosBorr, cread
     return { leerPieza: id => contenido.leer(id), salidaDe: id => programador.salidaDe(id), publicaciones, emparejar: emparejarPublicadas }; } });
 // Fase A6 (9 oct 2026): los indicadores del dueño (data/kpis.json; los crea él con un botón en Anuncios) y Fase A7: el informe del mes
 // (<cerebro>/Agents Office/informes/AAAA-MM anuncios.md, que no viaja). loadKpis/saveKpis se declaran más abajo: se usan perezosos.
-const anunciosInd = crearIndicadoresAnuncios({ sync: anuncios, kpis: { leer: () => loadKpis(), guardar: k => saveKpis(k) }, ajustes: () => cfg.anuncios || {} });
+// Fase A6 (10 oct 2026): LA API DE CONVERSIONES (anuncios/conversiones.mjs; Ajustes → Anuncios, apagada por defecto). La cola vive en
+// data/anuncios/conversiones.json (correo y teléfono ya cifrados; no viaja); cada envío va por el cliente de Meta (su freno, su versión) y
+// queda en data/audit/ como kind «conversiones», sin datos personales. Llegan de los disparadores (stripe, form), de su webhook y de la Bandeja.
+const anunciosConv = crearConversiones({ meta, archivo: path.join(ANUNCIOS_DIR, 'conversiones.json'), ajustes: () => cfg.anuncios || {},
+  moneda: () => { try { return JSON.parse(fs.readFileSync(path.join(ANUNCIOS_DIR, 'cuenta.json'), 'utf8'))?.cuenta?.currency || 'USD'; } catch { return 'USD'; } },
+  auditar: a => { try { fs.mkdirSync(AUDIT, { recursive: true }); fs.appendFileSync(path.join(AUDIT, localDay(Date.now()) + '.jsonl'), JSON.stringify({ t: Date.now(), kind: 'conversiones', ...a }) + '\n'); } catch {} },
+  avisar: (texto, o) => notice('anuncios', texto, o) });
+setInterval(() => { anunciosConv.tick().catch(e => console.warn('conversiones:', e.message)); }, 60e3);
+const anunciosInd = crearIndicadoresAnuncios({ sync: anuncios, kpis: { leer: () => loadKpis(), guardar: k => saveKpis(k) }, ajustes: () => cfg.anuncios || {},
+  registradas: () => (anunciosConv.encendida() ? anunciosConv.ventas(Date.now() - 30 * 864e5) : null) }); // el ROAS con las ventas registradas, si el píxel no lo da
 const anunciosInforme = crearInformeAnuncios({ sync: anuncios, sugerencias: anunciosSug, dir: path.join(BRAIN, 'Agents Office', 'informes'), fs, renombrar, unirRuta: path.join });
 const anunciosAplicador = crearAplicadorAnuncios({ sug: anunciosSug, acciones: anunciosAcc, borradores: anunciosBorr, vista: () => anuncios.vista('7d'), impulsar: b => anunciosImpulsor.impulsar(b),
   encargar: async ({ texto, titulo }) => { // una tarea para el agente de anuncios: propone (texto, borradores, prompts); no genera imágenes ni toca Meta
@@ -1966,7 +1976,7 @@ function tickLimites() {
   } catch (e) { console.warn('límites:', e.message); }
 }
 setInterval(tickLimites, 10 * 60e3); setTimeout(tickLimites, 40e3);
-const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador, impulsor: anunciosImpulsor, informe: anunciosInforme, indicadores: anunciosInd }); // A4: /impulsar · A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
+const anunciosRoutes = crearRutasAnuncios({ sync: anuncios, meta, json, body, acciones: anunciosAcc, alHacer: marcarOpAnuncio, borradores: anunciosBorr, creador: anunciosCrear, mejorar: mejorarAnuncio, sugerencias: anunciosSug, aplicador: anunciosAplicador, impulsor: anunciosImpulsor, informe: anunciosInforme, indicadores: anunciosInd, conversiones: anunciosConv, bandeja, hookOk: (req, url) => triggers.authorized(req.headers['x-office-token'] || url.searchParams.get('token') || String(req.headers.authorization || '').replace(/^Bearer\s+/i, '')) }); // A4: /impulsar · A3: /borradores (crear en Meta en pausa, solo el dueño) // Fase A1: /api/anuncios; A2: /accion y /deshacer
 /** A2: el segundo clic del dueño sobre un gasto que propuso Dimitri (`sub: { msg, k }`, o solo la `confirmacion`: se busca la tarjeta que
  *  tiene ese token) deja su tarjeta hecha en data/subgerente.json, para que al recargar no vuelva a pedir confirmación. */
 function marcarOpAnuncio({ sub: ref, confirmacion, hecho, aviso }) {
@@ -2242,6 +2252,10 @@ async function hookIn(req, res, url, id) {
   let st = {}; try { st = JSON.parse(fs.readFileSync(TRIG_STATE, 'utf8')); } catch {}
   const adm = triggers.admit(st, tr, a.eventId); fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(TRIG_STATE + '.tmp', JSON.stringify(st)); renombrar(TRIG_STATE + '.tmp', TRIG_STATE);
   if (!adm.ok) { if (!adm.dup) notice('trigger', `El disparador «${id}» se frenó: ${adm.why}.`, { level: 'warn', key: 'trig-' + id }); return json(res, adm.dup ? 200 : 429, { ok: adm.dup, skipped: adm.why }); }
+  try { // Fase A6 (10 oct 2026): un pago (stripe) o un formulario (form) también va a Meta como conversión, si la API está encendida
+    const ce = anunciosConv.encendida() ? conversionDeDisparador(tr, a, data) : null;
+    if (ce) { anunciosConv.registrar(ce, { quien: 'disparador' }); anunciosConv.tick().catch(() => {}); }
+  } catch (e) { console.warn(`conversiones (disparador ${id}):`, e.message); }
   const text = triggers.taskText(tr, a), inj = triggers.suspicious(a);
   const fixed = tr.agent && AGENTS.find(x => x.id === tr.agent);
   const r = fixed ? { agent: fixed.id, title: (tr.title || a.summary || tr.text).slice(0, 90), plan: [], eta: 15, why: 'disparador ' + id } : await route(tr.dept, text);
@@ -2379,6 +2393,15 @@ function officeStatus() {
     else if (bm?.activa && dm && !dm.ok && !fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', bm.error ? 'warn' : 'info', `${dm.motivo}${com}`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
     else if (fp.mensajes?.length) add('mensajes', 'Mensajes de Meta', bm?.activa && bm.error ? 'warn' : 'info', `Al token le faltan ${fp.mensajes.join(', ')}: los mensajes privados no llegan a la Bandeja.${com}`, 'Meta exige el «acceso avanzado» para leer los mensajes de tus clientes: se pide en la Revisión de la app (docs/conectar-meta.md).');
     else add('mensajes', 'Mensajes de Meta', bm?.activa && bm.error ? 'warn' : 'ok', `Permisos de mensajes listos.${com}${dmTxt}${frenado}`); }
+  try { // Fase A6 (10 oct 2026): la API de conversiones, solo cuando está encendida
+    const cv = anunciosConv.estado({ ultimos: 0 });
+    if (cv.encendida) {
+      const hoyTxt = `Hoy: ${cv.hoy.enviados} evento(s) enviados${cv.pendientes ? `, ${cv.pendientes} esperando` : ''}.`;
+      if (!cv.listo) add('conversiones', 'Conversiones', 'warn', `Encendida, pero no puede mandar: ${cv.motivo}`, 'Ajustes → Anuncios.');
+      else if (cv.fallos || (cv.ultimoErrorAt && (!cv.ultimoEnvioAt || cv.ultimoErrorAt > cv.ultimoEnvioAt))) add('conversiones', 'Conversiones', 'warn', `${hoyTxt} Último error: ${cv.ultimoError || 'sin detalle'}`, 'Anuncios (J) → Resumen → Medir; «Mandar un evento de prueba» comprueba la conexión.');
+      else add('conversiones', 'Conversiones', 'ok', `Encendida, al conjunto de datos ${cv.dataset}. ${hoyTxt}`);
+    }
+  } catch { /* sin estado de conversiones: la línea no sale */ }
   // plan M1 (6 oct 2026): la publicación — el modo, el conductor y lo que falló
   { const c = programador.estado(), fal = (c.cuenta.fallo || 0) + (c.cuenta.parcial || 0);
     if (c.modo === 'apagado') add('publicacion', 'Publicación (Contenido)', 'info', 'Apagada: nada de lo que apruebas sale de la oficina.', 'Ajustes → Contenido → «Qué pasa con lo que apruebas».');

@@ -9,7 +9,10 @@
 //                         crea y se dice por qué: un ROAS de 0 sin píxel mentiría.
 // Los crea el dueño con un botón (POST /api/anuncios/indicadores, solo él) y cada lectura buena de cifras los pone al día: UN punto por
 // día (la lectura de cada hora corrige el del día, no suma otro). Solo en los indicadores que el dueño TIENE: si los borra, no vuelven.
-// La API de conversiones (servidor a servidor) NO va aquí: espera a que el dueño confirme que vende en una web y qué eventos importan.
+// 10 oct 2026 (la API de conversiones, anuncios/conversiones.mjs): si el píxel no da el ROAS (no midió compras o su valor) pero el dueño
+// registró ventas por la oficina (la Bandeja, Stripe, el webhook), el ROAS sale de ESAS ventas: lo vendido registrado en 30 días entre lo
+// gastado en anuncios en 30 días. No es lo que Meta atribuye a los anuncios (son todas las ventas registradas), y `roasFuente` y el
+// motivo lo dicen: 'meta' (lo que Meta atribuyó) o 'oficina' (las ventas que registraste aquí).
 // Puro salvo `crearIndicadoresAnuncios`, que recibe cómo leer y guardar data/kpis.json (serve.mjs: loadKpis / saveKpis).
 // ============================================================
 import { cifras } from './modelo.mjs';
@@ -46,7 +49,10 @@ export function roasDe(filas = []) {
 }
 
 /** ¿Se puede crear el ROAS? → { puede, motivo } (el motivo, en palabras y con qué hacer). */
-export function roasPosible({ pixel = false, filas30 = [] } = {}) {
+export function roasPosible({ pixel = false, filas30 = [], registradas = null } = {}) {
+  const r0 = pixel ? roasDe(filas30) : null;
+  if (r0 && r0.compras && r0.roas !== null) return { puede: true, motivo: '', fuente: 'meta' };
+  if (registradas?.compras > 0 && roasDe(filas30).gasto > 0) return { puede: true, fuente: 'oficina', motivo: `El ROAS sale de las ${registradas.compras} venta(s) que registraste en la oficina (Bandeja, Stripe o el webhook) en 30 días, entre lo gastado en anuncios: son todas tus ventas registradas, no solo las que Meta atribuye a los anuncios.` };
   if (!pixel) return { puede: false, motivo: 'El ROAS no se creó: no hay píxel de Meta en Ajustes → Anuncios. Sin píxel, Meta no sabe qué se vendió por los anuncios (y un ROAS de 0 mentiría).' };
   const r = roasDe(filas30);
   if (!r.compras) return { puede: false, motivo: 'El ROAS no se creó: el píxel no midió ninguna compra de los anuncios en los últimos 30 días. Cuando las haya, vuelve a pulsar «Crear indicadores».' };
@@ -59,7 +65,7 @@ export function roasPosible({ pixel = false, filas30 = [] } = {}) {
  * armarVista); `filas30`, las filas diarias de esos 30 días. null = no se sabe (nunca un 0 inventado).
  * → { meta_gasto_anuncios, meta_costo_resultado, meta_roas, resultadoTexto, moneda }
  */
-export function valores({ vistaMes = null, vista30 = null, filas30 = [], pixel = false } = {}) {
+export function valores({ vistaMes = null, vista30 = null, filas30 = [], pixel = false, registradas = null } = {}) {
   const moneda = vista30?.cuenta?.moneda || vistaMes?.cuenta?.moneda || 'USD';
   const gasto = num(vistaMes?.gasto?.mes);
   // el tipo de resultado con más gasto en 30 días (sus campañas), y su costo: gasto / resultados (el alcance no se suma entre campañas)
@@ -69,8 +75,9 @@ export function valores({ vistaMes = null, vista30 = null, filas30 = [], pixel =
   let costo = null;
   if (t && clave === 'alcance') costo = t.campanas.length === 1 ? num(t.campanas[0].cifras.costoPorResultado) : null;
   else if (t && t.resultados > 0) costo = r2(t.gasto / t.resultados);
-  const rp = roasPosible({ pixel, filas30 }), roas = rp.puede ? roasDe(filas30).roas : null;
-  return { [IDS.gasto]: gasto, [IDS.costo]: costo, [IDS.roas]: roas, resultadoTexto: t?.campanas[0]?.cifras?.resultadoTexto || null, moneda, roasPosible: rp };
+  const rp = roasPosible({ pixel, filas30, registradas });
+  const g30 = roasDe(filas30).gasto, roas = !rp.puede ? null : rp.fuente === 'oficina' ? (g30 > 0 ? r2(registradas.vendido / g30) : null) : roasDe(filas30).roas;
+  return { [IDS.gasto]: gasto, [IDS.costo]: costo, [IDS.roas]: roas, resultadoTexto: t?.campanas[0]?.cifras?.resultadoTexto || null, moneda, roasPosible: rp, roasFuente: rp.puede ? rp.fuente : null };
 }
 
 const mismoDia = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
@@ -81,15 +88,16 @@ const mismoDia = (a, b) => new Date(a).toDateString() === new Date(b).toDateStri
  * @param {object} o.kpis      { leer: () => { defs, values }, guardar: k => void } — data/kpis.json (serve.mjs)
  * @param {Function} o.ajustes () → cfg.anuncios (el píxel)
  */
-export function crearIndicadoresAnuncios({ sync, kpis, ajustes = () => ({}), ahora = () => Date.now() }) {
+export function crearIndicadoresAnuncios({ sync, kpis, ajustes = () => ({}), ahora = () => Date.now(), registradas = () => null }) {
   const pixel = () => Boolean(String(ajustes()?.pixel || '').trim());
   /** Las filas diarias de los últimos 30 días (hoy incluido, en la zona de la cuenta). */
   const filas30 = () => { const h = sync.hoy(), d = new Date(`${h}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 29); return sync.filas(d.toISOString().slice(0, 10), h); };
-  const datos = () => valores({ vistaMes: sync.vista('mes'), vista30: sync.vista('30d'), filas30: filas30(), pixel: pixel() });
+  const reg = () => { try { return registradas() || null; } catch { return null; } }; // 10 oct 2026: las ventas registradas con la API de conversiones (30 días)
+  const datos = () => valores({ vistaMes: sync.vista('mes'), vista30: sync.vista('30d'), filas30: filas30(), pixel: pixel(), registradas: reg() });
   /** Para la página: cuáles tiene el dueño, y si el ROAS se puede crear (y si no, por qué). */
   function estado() {
     const k = kpis.leer(), tiene = id => k.defs.some(x => x.id === id);
-    let rp = { puede: false, motivo: '' }; try { rp = roasPosible({ pixel: pixel(), filas30: filas30() }); } catch { /* sin datos todavía */ }
+    let rp = { puede: false, motivo: '' }; try { rp = roasPosible({ pixel: pixel(), filas30: filas30(), registradas: reg() }); } catch { /* sin datos todavía */ }
     return { gasto: tiene(IDS.gasto), costo: tiene(IDS.costo), roas: tiene(IDS.roas), roasPosible: rp };
   }
   /** Pone el valor de hoy en los indicadores que el dueño tiene: un punto por día (el de hoy se corrige). → los ids actualizados */
@@ -101,6 +109,7 @@ export function crearIndicadoresAnuncios({ sync, kpis, ajustes = () => ({}), aho
       const l = (k.values[id] ||= []), last = l.at(-1);
       if (last && last.from === 'Meta anuncios' && mismoDia(last.t, t)) { if (last.v === val) continue; last.v = val; last.t = t; }
       else l.push({ t, v: val, from: 'Meta anuncios' });
+      if (id === IDS.roas && v.roasFuente) l.at(-1).fuente = v.roasFuente; // 10 oct 2026: de dónde salió el ROAS de ese día
       k.values[id] = l.slice(-400); hechos.push(id);
     }
     if (hechos.length) kpis.guardar(k);

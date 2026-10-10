@@ -10,7 +10,7 @@
 //          GET  /v2/query/video_generation/{id} queued · running · succeeded · failed · cancelled → task.content.url (expires)
 //          DELETE /v2/video_generation/{id}    cancels a task still queued (nothing is charged)
 //   voice  POST /v1/t2a_v2                     speech-2.8/2.6/02 hd|turbo → data.audio in HEX
-//   music  POST /v1/music_generation           music-3.0 (paid; closed to new users since 20 Aug 2026) · music-3.0-free → data.audio in HEX
+//   music  POST /v1/music_generation           music-3.0 (paid; closed to new users since 20 Aug 2026) · music-3.0-free → data.audio in HEX (10 Oct 2026: the free models answer 410 / 2153 to new accounts too)
 //   files  POST /v1/files/upload               multipart purpose + file → file.file_id (an int64: read from the raw text, never a JS number)
 //   clone  POST /v1/voice_clone                file_id + voice_id (+ text/model → demo_audio URL) · 2038 = the account may not clone
 //   design POST /v1/voice_design               prompt + preview_text → voice_id + trial_audio (HEX)
@@ -48,16 +48,17 @@ export function explain(code, msg = '') {
     case 2042: return 'tu cuenta no tiene acceso a esa voz (voiceId)';
     case 20132: return 'esa voz (voiceId) no existe en MiniMax, o la muestra no sirve';
     case 2048: return 'el audio de muestra es demasiado largo';
+    case 2153: return 'MiniMax cerró su API de música a las cuentas nuevas, también los modelos gratis (comprobado el 10 oct 2026); solo la usan quienes ya pagaban antes del 20 ago 2026';
     case 2013: return `MiniMax no aceptó los datos${m ? ': ' + m : ''}`;
     default: return '';
   }
 }
-const FINAL_CODES = new Set([1004, 2049, 1008, 1026, 1027, 1042, 2013, 2037, 2038, 2039, 2042, 20132, 2048, 1039, 2056]); // asking again will not help
+const FINAL_CODES = new Set([1004, 2049, 1008, 1026, 1027, 1042, 2013, 2037, 2038, 2039, 2042, 20132, 2048, 1039, 2056, 2153]); // asking again will not help
 function fail(what, httpStatus, code, msg) {
   const known = explain(code, msg);
   const words = known || (httpStatus === 401 ? 'la key de MiniMax no es válida: revisa MINIMAX_API_KEY y reinicia la oficina'
     : httpStatus === 429 ? 'MiniMax pide esperar un poco (demasiadas peticiones); reintenta en un minuto'
-    : /closed|no longer available|new users/i.test(msg) ? 'esa API de MiniMax ya no acepta cuentas nuevas (desde el 20 ago 2026): usa el modelo «gratis»'
+    : /closed|no longer available|new users/i.test(msg) ? 'esa API de MiniMax ya no acepta cuentas nuevas (desde el 20 ago 2026)'
     : `${code || httpStatus} ${String(msg || '').slice(0, 200)}`.trim());
   // status stays 0 when the words are already ours: media.friendly() would wrap a 401 in its own sentence a second time
   return new MinimaxError(`${what}: ${words}`, { status: known || httpStatus === 401 || httpStatus === 429 ? 0 : httpStatus, code, final: FINAL_CODES.has(+code) || httpStatus === 401 || httpStatus === 400 || httpStatus === 404 });
