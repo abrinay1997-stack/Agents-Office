@@ -19,6 +19,7 @@ import * as L from './imagen-local.mjs';
 import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 const ID_RE = /^[a-z0-9-]{2,40}$/;
+const KINDS = ['image', 'video', 'music', 'audio']; // F5 y F6: el banco también compila video, música y voz
 const arr = v => (Array.isArray(v) ? v : v == null ? [] : [v]);
 const limpio = (s, n = 400) => String(s ?? '').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, n);
 const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -40,9 +41,12 @@ export function pedidoLimpio(b = {}) {
   const referencias = arr(E.referencias).slice(0, 6).map(r => (typeof r === 'string' ? { id: r } : r)).filter(r => r && typeof r.id === 'string')
     .map(r => ({ id: r.id, ...(r.ejes && typeof r.ejes === 'object' ? { ejes: Object.fromEntries(core.EJES_REF.filter(k => r.ejes[k] != null).map(k => [k, Math.max(0, Math.min(3, Math.round(+r.ejes[k] || 0)))])) } : {}) }));
   const entradas = { foto: ids(E.foto ?? E.sujeto).slice(0, 1), referencias, ...(ids(E.lut).length ? { lut: ids(E.lut) } : {}) };
+  // F5 (10 oct 2026): el video — sus fotogramas (inicial, final), su video (origen) o el de guía (copiar movimiento); uno de cada
+  const kind = KINDS.includes(b.kind) ? b.kind : 'image';
+  if (kind === 'video') for (const k of ['inicial', 'final', 'origen', 'guia']) { const v = ids(E[k]).slice(0, 1); if (v.length) entradas[k] = v; }
   const escena = b.escena && typeof b.escena === 'object' ? e3.normalizar(b.escena) : null;
   const params = b.params && typeof b.params === 'object' && !Array.isArray(b.params) ? b.params : {};
-  return { pila, params, entradas, escena, idea: limpio(b.idea, 2000), producto: limpio(b.producto, 120), model: typeof b.model === 'string' && ID_RE.test(b.model) ? b.model : undefined,
+  return { kind, pila, params, entradas, escena, idea: limpio(b.idea, 2000), producto: limpio(b.producto, 120), model: typeof b.model === 'string' && ID_RE.test(b.model) ? b.model : undefined,
     proporcion: typeof b.proporcion === 'string' && /^\d{1,2}(\.\d{1,2})?:\d{1,2}$/.test(b.proporcion) ? b.proporcion : undefined,
     n: Math.max(1, Math.min(4, +b.n || 1)), orden: b.orden === 'barato' ? 'barato' : undefined, folder: typeof b.folder === 'string' ? b.folder : undefined };
 }
@@ -130,8 +134,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
         if (p.propio.ejes && refs.length) refs = refs.map(r => ({ ...r, ejes: { ...p.propio.ejes, ...(r.ejes || {}) } }));
       } else pila.push(it);
     }
-    const c = core.compilar({ ...contexto(), byId: presets, pila, params, entradas: { ...P.entradas, referencias: refs }, idea: P.idea, producto: P.producto, model: P.model, proporcion: P.proporcion, escena, n: P.n, orden: P.orden, kind: 'image' });
-    for (const it of pila) { const falta = faltaLocal(byId.get(it.id)); if (falta) c.errores = [...arr(c.errores), `«${byId.get(it.id).nombre || it.id}» aún no se puede: ${falta}`]; }
+    const c = core.compilar({ ...contexto(), byId: presets, pila, params, entradas: { ...P.entradas, referencias: refs }, idea: P.idea, producto: P.producto, model: P.model, proporcion: P.proporcion, escena, n: P.n, orden: P.orden, kind: P.kind });    for (const it of pila) { const falta = faltaLocal(byId.get(it.id)); if (falta) c.errores = [...arr(c.errores), `«${byId.get(it.id).nombre || it.id}» aún no se puede: ${falta}`]; }
     return { plan: c, pedido: { ...P, pila, params, escena, entradas: { ...P.entradas, referencias: refs } } };
   }
 
@@ -164,7 +167,7 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
     const { plan: c0, pedido: P } = compilar(b);
     if (c0.errores.length) { const e = new Error(c0.errores.join(' · ')); e.status = 400; e.plan = c0; throw e; }
     const foto = P.entradas.foto[0];
-    const receta = { pila: P.pila, params: P.params, ejes: P.entradas.referencias[0]?.ejes || null, escena: P.escena, canal: c0.request?.preset?.find(x => x.params?.canal)?.params.canal || P.params.canal || null, modelo: c0.model || null };
+    const receta = { kind: P.kind, pila: P.pila, params: P.params, ejes: P.entradas.referencias[0]?.ejes || null, escena: P.escena, canal: c0.request?.preset?.find(x => x.params?.canal)?.params.canal || P.params.canal || null, modelo: c0.model || null };
     const canal = receta.canal || undefined;
     const esEscena = !!(P.escena && P.escena.fondo?.tipo !== 'color') || P.pila.some(it => /^esc-/.test(it.id));
     if (c0.soloLocal) {
@@ -223,8 +226,10 @@ export function crearPresets({ brainPath, dataDir, cifras = () => [], onNota = (
     const antes = previa ? notas.notaAPreset(previa, { byId }).preset : null;
     const hoy = new Date().toISOString().slice(0, 10);
     const base = pila[0] && byId.get(pila[0].id);
+    // F5: el medio sale de la receta (o, si no lo dice, del primer preset): una receta de video se guarda como preset de video
+    const medio = KINDS.includes(r.kind) ? r.kind : KINDS.includes(b.kind) ? b.kind : arr(base?.medios)[0] || 'image';
     const p = {
-      tipo: 'propio', id: antes?.id || notas.idDesdeNombre(nombre), nombre, v: (antes?.v || 0) + 1, medio: 'image', icono: base?.icono?.id || 'marca',
+      tipo: 'propio', id: antes?.id || notas.idDesdeNombre(nombre), nombre, v: (antes?.v || 0) + 1, medio, icono: base?.icono?.id || 'marca',
       frase: limpio(b.frase, 140) || antes?.frase || `Mi receta: ${pila.map(x => byId.get(x.id)?.nombre || x.id).join(' + ')}`.slice(0, 140),
       basadoEn: base ? `${base.id}@${base.v || 1}` : null,
       receta: { pila, ejes: r.ejes && typeof r.ejes === 'object' ? r.ejes : null, escena: r.escena ? e3.normalizar(r.escena) : null, canal: typeof r.canal === 'string' ? r.canal : null, modelo: typeof r.modelo === 'string' ? r.modelo : null, fijas: arr(r.fijas).filter(x => typeof x === 'string').slice(0, 6) },

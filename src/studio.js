@@ -216,7 +216,10 @@ export function initStudio(ctx) {
     trabajos: (js, b) => { jobs.unshift(...js); if (b) budget = b; renderHead(); renderGrid(); watch(); }, recargar: () => load({ full: false }),
     pedirDimitri: ctx.askDimitri ? () => ctx.askDimitri([]) : null,
     // the model and the format are always the composer's (2 Oct 2026): the bank reads them and never picks them
-    modelo: () => (kind === 'image' ? modelOf.image || '' : ''), proporcion: () => ratioNow(),
+    modelo: () => modelOf[kind] || '', proporcion: () => ratioNow(), kind: () => kind,
+    material: () => JSON.parse(JSON.stringify(media)), usarModelo: id => { modelOf[kind] = id; store.set('model.' + kind, id); renderModels(); }, // F5: video uses step 4
+    elegir: r => { const m = cur(); if (!(m && m.roles[r] > 0)) return say(`${m ? m.name : 'Ese modelo'} no toma «${roleName(r)}»: elige otro en el paso 2.`, true); picking = r; renderSel(); showPane('gal'); },
+    ajustes: () => { const m = cur(); return m && { id: m.id, name: m.name, settings: m.settings, valores: settingsOf(m) }; }, ponerAjustes: o => { for (const k in o) setSetting(k, o[k]); renderModel(); }, // F6: Voz and Música quick cards
     setProporcion: v => { const m = cur(), vals = m?.settings.aspectRatio?.values || []; if (vals.includes(v)) { setSetting('aspectRatio', v); renderModel(); } else { say(m ? `${m.name} no hace ${v}: el cuadro se queda en el de «Formato y ajustes».` : 'Elige antes un modelo.', true); banco.replan(); } } });
   $('.st-mwrap').closest('.st-step').after(banco.el); $('.st-gal').appendChild(banco.sheet);
   // IMG-42 (6 Oct 2026): with room, the bank's sheet is a panel beside the gallery, not over it — the class says when it is open
@@ -242,21 +245,22 @@ export function initStudio(ctx) {
   /** The chosen format, when it is a ratio (the bank and the 3D stage follow it). */
   function ratioNow() { const m = cur(), v = m && m.settings.aspectRatio ? String(settingsOf(m).aspectRatio || '') : ''; return /^\d+(\.\d+)?:\d+$/.test(v) ? v : null; }
   /** Avanzado shows the bank's step; with presets in it, GENERAR is the bank's (its plan and its cost), with the model and the format still yours. */
-  const avanzado = () => kind === 'image' && nivel === 'avanzado';
+  const VB = () => kind === 'image' || kind === 'video'; // F5: the bank serves images and video (Avanzado); Voz and Música get its quick cards
+  const avanzado = () => VB() && nivel === 'avanzado';
   const bancoManda = () => !!banco && avanzado() && banco.activo();
   function bancoState() {
     if (!banco) return;
     const av = avanzado(), on = av && banco.activo();
-    const nv = $('.st-nivel'); nv.hidden = kind !== 'image'; nv.querySelectorAll('[data-nivel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.nivel === nivel)));
-    banco.el.hidden = !av; if (!av) banco.cerrar(false);
-    else if (document.body.classList.contains('studioOpen')) banco.preparar(); // Avanzado shows the bank's step: it comes now (once); Básico never loads it
-    el.classList.toggle('st-banco-on', on); el.classList.toggle('st-avz', av);
+    const nv = $('.st-nivel'); nv.hidden = !VB(); nv.querySelectorAll('[data-nivel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.nivel === nivel)));
+    banco.el.hidden = !av && !sound(); if (!av) banco.cerrar(false);
+    if ((av || sound()) && document.body.classList.contains('studioOpen')) banco.preparar(); // Avanzado shows the bank's step: it comes now (once); Básico never loads it
+    const im = kind === 'image'; el.classList.toggle('st-banco-on', on && im); el.classList.toggle('st-avz', av && im); // in video the bank uses the composer's own material (step 4)
     if (av && media.reference.length) { const ok = banco.anadirRefs(media.reference.slice()); if (ok.length) { media.reference = media.reference.filter(f => !ok.includes(f)); renderModel(); } } // IMG-39 (Fase 6): in Avanzado, the references live in «Tu foto · Referencias»; what does not fit stays in sight
     el.classList.toggle('st-basico', basico()); if (basico() && mode !== 'one') setMode('one'); // IMG-32: Básico is the plain composer — one idea, the format and the quantity as selects
-    const refs = on ? media.reference.length : 0, W = $('.st-refwarn'); // IMG-39: with presets, the composer's references are not used — said, with the way to pass them over
+    const refs = on && im ? media.reference.length : 0, W = $('.st-refwarn'); // IMG-39: with presets, the composer's references are not used — said, with the way to pass them over
     W.hidden = !refs; if (refs) W.querySelector('span').textContent = `${refs === 1 ? 'Tu referencia del paso «Imágenes de referencia» no se usa' : `Tus ${refs} referencias del paso «Imágenes de referencia» no se usan`} con presets.`;
     if (!on) { $('.st-n5').textContent = $('.st-matstep').hidden ? '4' : '5'; return; }
-    $('.st-n5').textContent = '4'; // the step «Imágenes de referencia» is hidden with presets: the numbers go on without a gap
+    if (im) $('.st-n5').textContent = '4'; // the step «Imágenes de referencia» is hidden with presets: the numbers go on without a gap
     const err = banco.error ? banco.error() : '', bl = banco.bloqueado ? banco.bloqueado() : '';
     $('.st-n').textContent = qty; $('.st-p3t').textContent = 'Opcional: algo más para la IA';
     $('.st-est').textContent = err || `Con presets · ${banco.costo()}`; $('.st-est').classList.toggle('over', !!err);
@@ -412,6 +416,7 @@ export function initStudio(ctx) {
   }
   const lines = () => $('.st-prompt').value.split('\n').map(x => x.trim()).filter(Boolean);
   function estimate() {
+    if (banco) banco.sync(kind); // F5/F6: the bank follows the kind, step 4 and the settings
     $('.st-n').textContent = qty;
     if (bancoManda()) { banco.replan(); bancoState(); return 0; } // the bank's plan has the cost
     const m = cur(); const n = (mode === 'batch' ? Math.max(1, lines().length) : 1) * qty;
@@ -1296,7 +1301,7 @@ export function initStudio(ctx) {
   function animate(it) { return cargar(() => animateRaw(it)); }
   function useAsRef(it) { if (avanzado() && banco && banco.anadirRefs([it.file]).length) { learn(it.file, 'ref'); showPane('gen'); return say('Puesta en «Referencias» (Avanzado).'); } return cargar(() => useAsRefRaw(it)); } // IMG-39
   function moverA(it) { sel.clear(); sel.add(it.file); selecting = true; showPane('gal'); renderGrid(); $('.st-mv').focus(); say('Elige la carpeta en «Mover a…», arriba (o arrastra la imagen a una carpeta).'); }
-  function presetDe(it) { if (kind !== 'image') setKind('image'); setNivel('avanzado'); showPane('gen'); banco.guardarDesde(it); }
+  function presetDe(it) { const k = isVid(it.file) ? 'video' : 'image'; if (kind !== k) setKind(k); setNivel('avanzado'); showPane('gen'); banco.guardarDesde(it); }
   /** The one gate before spending (GENERAR, Variar, the presets): from US$0.50 the first click arms and the second spends (IMG-11). */
   let armado = null, armadoT = 0;
   function okCosto(c, clave = 'go') {
@@ -1936,7 +1941,7 @@ export function initStudio(ctx) {
     const k = e.target.dataset?.set; if (k && cur()) { setSetting(k, e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'range' ? +e.target.value : e.target.value); if (k === 'instrumental') paintStep3(); if (k === 'aspectRatio') renderModel(); else estimate(); }
   });
   el.addEventListener('input', e => {
-    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (kind === 'image' && e.target.value === '/') { e.target.value = ''; setNivel('avanzado'); banco.abrir('banco'); return; } if (bancoManda()) banco.replan(); if (aplicarAuto()) { renderPick(); renderModel(); } } // «/» at the start opens the bank (§7.1); the idea goes into its plan
+    if (e.target.classList.contains('st-prompt')) { clearFieldErr(); if (prevPrompt == null) $('.st-es').hidden = true; if (VB() && e.target.value === '/') { e.target.value = ''; setNivel('avanzado'); banco.abrir('banco'); return; } if (bancoManda()) banco.replan(); if (aplicarAuto()) { renderPick(); renderModel(); } } // «/» at the start opens the bank (§7.1); the idea goes into its plan
     if (e.target.closest('.st-mq')) { const v = e.target.value; renderList(v); const i = $('.st-mq input'); i.focus(); i.setSelectionRange(v.length, v.length); return; }
     if (e.target.type === 'range' && e.target.dataset.set && cur()) { const o = e.target.parentElement.querySelector('output'); if (o) o.textContent = e.target.value + (e.target.dataset.set === 'duration' ? ' s' : ''); setSetting(e.target.dataset.set, +e.target.value); }
     if (e.target.classList.contains('st-q')) { q = e.target.value; requery(250); return; } // INF-03: the server searches the whole gallery
@@ -1976,7 +1981,7 @@ export function initStudio(ctx) {
       if (e.key === 'v' || e.key === 'V') { setKind('video'); return; }
       if ((e.key === 'l' || e.key === 'L') && !el.classList.contains('st-pickmode')) { showPane(el.dataset.pane === 'lotes' ? 'gen' : 'lotes'); return; } // banco de presets F2: the Lotes tab (and back)
       if (el.dataset.pane === 'lotes' && /^[ivb/]$/i.test(e.key)) return; // the composer's keys stay in the composer
-      if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (kind !== 'image') setKind('image'); const era = nivel; setNivel('avanzado'); showPane('gen'); banco.toggle(); if (era !== 'avanzado') toast('Pasaste a Avanzado: aquí vive el banco de presets.', () => setNivel('basico'), 'VOLVER A BÁSICO'); return; } // IMG-47 // banco de presets (§7.1): it lives in Avanzado
+      if ((e.key === 'b' || e.key === 'B') && !el.classList.contains('st-pickmode')) { if (!VB()) setKind('image'); const era = nivel; setNivel('avanzado'); showPane('gen'); banco.toggle(); if (era !== 'avanzado') toast('Pasaste a Avanzado: aquí vive el banco de presets.', () => setNivel('basico'), 'VOLVER A BÁSICO'); return; } // IMG-47 // banco de presets (§7.1): it lives in Avanzado
     }
     if (!$('.st-hist').hidden) { if (e.key === 'Escape') closeHist(); return; }
     if (!$('.st-binov').hidden) { if (e.key === 'Escape') closeBin(); return; }

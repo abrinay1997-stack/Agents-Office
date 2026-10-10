@@ -11,7 +11,7 @@ await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/brai
 
 // Banco de presets (F1): la fábrica de imagen, para la demo file:// (busca y compila sin servidor), va JUNTO a la página, en
 // dist/presets-fabrica.js, y no dentro: pesa ~250 KB y la página tiene su presupuesto (check.mjs). src/presets-fabrica.js la carga.
-const FAB = (() => { const f = cargarFabrica(); return { version: f.version, grupos: f.grupos, tipos: f.tipos, canales: f.canales, familias: f.familias, iconos: f.iconos, sinonimos: f.sinonimos, presets: f.presets.filter(p => (p.medios || []).includes('image')) }; })();
+const FAB = (() => { const f = cargarFabrica(); return { version: f.version, grupos: f.grupos, tipos: f.tipos, canales: f.canales, familias: f.familias, iconos: f.iconos, sinonimos: f.sinonimos, presets: f.presets.filter(p => (p.medios || []).some(m => ['image', 'video', 'music', 'audio'].includes(m))) }; })(); // F5/F6 (10 oct 2026): también video, música y voz
 
 // CARGA BAJO DEMANDA (1 oct 2026, INF-09): lo que solo usa el Estudio (el banco de presets con su compilador y su buscador, el
 // escenario 3D y los lotes) va en un paquete aparte, dist/estudio-extra.js, junto a la página; src/estudio-carga.js lo trae la

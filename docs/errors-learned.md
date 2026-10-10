@@ -73,3 +73,12 @@ Una entrada por error que costó encontrar. Solo se añade al final.
 **Fix aplicado:** `crearRutas({ …, ahora = Date.now })`, que se pasa a `huecosDe` y al control de «ya pasó»; el test pasa `ahora: () => T`.
 **Prevención:** Todo módulo que decide con la hora recibe `ahora` inyectable, y el test le pasa el mismo reloj que a los demás. Una fecha escrita a mano en un test caduca.
 **Archivos:** `contenido/rutas.mjs:L37`, `tests/contenido-c3.test.mjs:L118`
+
+## [2026-10-10] — El banco de presets dejó de encontrar nada al abrirlo servido
+
+**Contexto:** F5/F6 del banco: el banco pasó a pedir todos los presets (imagen, video, música y voz) de una vez.
+**Error:** `scripts/carga-recorrido.mjs`: «servido 1512: el banco busca — 0 tarjetas» (en file:// y en los demás recorridos, bien).
+**Causa raíz:** `/api/media/presets` sin `medio` calcula, preset a preset, qué modelo encendido lo sirve: 188 presets y ~370 KB tardaban el triple que los 127 de imagen, y el banco se abría y buscaba antes de que llegaran.
+**Fix aplicado:** el banco pide solo el medio de ahora (`?medio=<image|video|music|audio>`) y el de otro tipo al cambiar a él; la receta guardada de un medio solo se limpia cuando llegan SUS presets (si no, se borraba la receta de video al entrar en Video antes de que llegaran).
+**Prevención:** Lo que la página pide al abrir una vista se mide con el recorrido servido, no solo en la demo. Una lista que se calcula por elemento en el servidor se pide por partes.
+**Archivos:** `src/studio-banco.js` (refrescar, sync)

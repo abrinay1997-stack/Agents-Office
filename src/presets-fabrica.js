@@ -1,6 +1,6 @@
 // La fábrica de presets para la DEMO file:// (sin servidor). No va dentro de la página: pesa ~250 KB y la página tiene su
 // presupuesto (check.mjs, INF-09). build.mjs la escribe junto a la página, en dist/presets-fabrica.js
-// (window.AO_PRESETS_FABRICA = { presets de imagen, grupos, tipos, canales, familias, iconos, sinónimos }), y la demo la carga la
+// (window.AO_PRESETS_FABRICA = { presets de imagen, video, música y voz (F5/F6), grupos, tipos, canales, familias, iconos, sinónimos }), y la demo la carga la
 // primera vez que hace falta. En la oficina el banco la pide al servidor (/api/media/presets) y esto no se usa.
 let pedida = null;
 /** → Promise<fábrica | null>. null fuera de la demo, o si el archivo no está junto a la página. */

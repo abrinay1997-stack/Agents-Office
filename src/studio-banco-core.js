@@ -52,6 +52,7 @@ export function marca(p, { sharp = true, sirve = null } = {}) {
   if (p.ejecutor === 'local') return sharp ? 'gratis · en tu equipo' : 'no disponible en esta máquina'; // IMG-43 (6 oct 2026): tres niveles en palabras claras
   if (sirve && sirve.on === false) return 'sin motor: actívalo';
   if (p.honestidad) return String(p.honestidad);
+  if (arr(p.medios).includes('video')) return p.ejecutor === 'ajustes' ? 'un ajuste del modelo' : 'con IA, en el mismo clip'; // F5: un video no «rehace la imagen»
   const soloFoto = arr(p.modos).length && arr(p.modos).every(m => m === 'foto' || m === 'foto+ref');
   if (p.ejecutor === 'local+ia') return soloFoto ? 'necesita tu foto · con IA · se comprueba el resultado' : 'con IA · se comprueba el resultado';
   return soloFoto ? 'necesita tu foto · con IA (rehace la imagen)' : 'con IA (rehace la imagen)';
@@ -243,3 +244,122 @@ export const cuantos = n => (n ? `${n} ${n === 1 ? 'resultado' : 'resultados'}` 
 /** El resumen de la QA de un archivo para su tarjeta: { estado, texto } o null. Vive en src/studio-qa.js (la galería lo usa sin el banco). */
 export { qaResumen } from './studio-qa.js';
 export const usd = n => (n ? 'US$' + (+n).toFixed(2).replace('.', ',') : 'gratis');
+
+/* ============================================================
+ * VIDEO (F5, 10 oct 2026) y MÚSICA/VOZ (F6). El banco también sirve al compositor de video (en Avanzado) y deja fichas rápidas
+ * en los de Voz y Música. En video el MATERIAL es el del compositor (paso 4: primer fotograma, último fotograma, referencias,
+ * un video), no unas casillas propias: así lo que admite el modelo elegido (sus roles) se ve donde siempre y nada se pide dos
+ * veces. Las puertas siguen siendo atajos: dicen qué falta y filtran la portada.
+ * ============================================================ */
+export const PUERTAS_VIDEO = [
+  { id: 'cero', es: 'Desde texto', ayuda: 'Solo tu idea y los presets' },
+  { id: 'foto', es: 'Animar mi foto', ayuda: 'Tu foto es el primer fotograma: se conserva el producto' },
+  { id: 'ref', es: 'Con referencias', ayuda: 'Tu producto, una persona o un look como referencia' },
+  { id: 'video', es: 'Editar un video', ayuda: 'Cambia un video tuyo o copia su movimiento' },
+];
+export const MODO_ES_VIDEO = { texto: 'Desde texto', anima: 'Anima tu foto', ab: 'De una foto a otra', refs: 'Con referencias', video: 'Sobre un video' };
+/** «Movimiento del sujeto» (§7.4): copia el movimiento de un video de guía. Pide un video y un modelo que lo tome (Kling Motion). */
+export const MOVIMIENTO_SUJETO = 'ved-copiar-movimiento';
+export const puertasDe = kind => (kind === 'video' ? PUERTAS_VIDEO : PUERTAS);
+export const modoEs = (modo, kind) => (kind === 'video' ? MODO_ES_VIDEO : MODO_ES)[modo] || modo;
+/** ¿Algún preset de la pila pide el video de GUÍA (copiar movimiento)? Entonces el video del paso 4 es la guía, no el que se edita. */
+export const pideGuia = (pila, byId) => { const by = byId instanceof Map ? byId : core.indexar(byId); return pila.some(x => arr(by.get(x.id)?.entradas).some(en => en.rol === 'guia')); };
+/** El material del compositor de video ({ start, end, reference, video }) → las entradas del compilador. */
+export function entradasVideo(mat = {}, pila = [], byId = new Map()) {
+  const e = { inicial: arr(mat.start).slice(0, 1), final: arr(mat.end).slice(0, 1), referencias: arr(mat.reference).map(id => ({ id })) };
+  const v = arr(mat.video).slice(0, 1);
+  if (v.length) e[pideGuia(pila, byId) ? 'guia' : 'origen'] = v;
+  return e;
+}
+export const modoDePuertaV = puerta => ({ cero: 'texto', foto: 'anima', ref: 'refs', video: 'video' })[puerta] || 'texto';
+/** Lo que falta para lo que promete la puerta de video, dicho donde se pone (el paso 4 del compositor). */
+function faltaVideo(st) {
+  const m = st.mat || {};
+  if (st.puerta === 'foto' && !arr(m.start).length) return 'Pon tu foto en «Primer fotograma» (paso 4): el clip empieza en ella.';
+  if (st.puerta === 'ref' && !arr(m.reference).length) return 'Pon tu producto o el look en «Referencias» (paso 4).';
+  if (st.puerta === 'video' && !arr(m.video).length) return 'Pon el video en el paso 4: el tuyo, o el de guía para copiar su movimiento.';
+  return '';
+}
+
+/* ---------- las versiones con `kind` de lo de arriba (imagen sigue igual sin él) ---------- */
+/** El pedido del compilador, de imagen o de video (en video, `st.mat` es el material del compositor y va `kind: 'video'`). */
+export function pedidoDeK(st, kind = 'image', byId = new Map()) {
+  const p = pedidoDe(st);
+  if (kind !== 'video') return p;
+  return { ...p, kind: 'video', params: {}, entradas: entradasVideo(st.mat, st.pila, byId) };
+}
+export const modoDeEstadoK = (st, kind = 'image', byId = new Map()) => (kind === 'video' ? core.modoDe(entradasVideo(st.mat, st.pila, byId), 'video') : modoDeEstado(st));
+/** La portada por medio: en video, la puerta filtra por su modo (texto · anima · refs · video). */
+export function portadaK(presets, o = {}) {
+  if (o.kind !== 'video') return portada(presets, o);
+  const modo = modoDePuertaV(o.puerta), ok = p => arr(p.modos).some(m => (core.MODOS_COMPATIBLES[modo] || [modo]).includes(m));
+  return portada(presets.map(p => ({ ...p, modos: ok(p) ? ['cero'] : ['x'] })), { ...o, puerta: 'cero' });
+}
+/** La línea «Ahora: …» en video: la puerta si lo suyo está, o el modo que sale del material; lo que falta, pista hasta intentar. */
+export function estadoPuertaK(st, { intentado = false, kind = 'image', byId = new Map() } = {}) {
+  if (kind !== 'video') return estadoPuerta(st, { intentado });
+  const falta = faltaVideo(st), door = PUERTAS_VIDEO.find(p => p.id === st.puerta)?.es || '', modo = modoDeEstadoK(st, 'video', byId);
+  const etiqueta = falta || (door && modo === modoDePuertaV(st.puerta)) ? door : modoEs(modo, 'video');
+  return { etiqueta, falta, grave: !!falta && intentado };
+}
+/** Las reglas del clip que el dueño ve antes de gastar → [{ texto, grave }]: el movimiento de cámara (uno por clip), lo que el
+ *  compilador avisa (giro 360 y rígidos, bucle, antes→después, fotogramas, sonido, formato, el modelo) y lo que no se puede. */
+export function reglasVideo(plan, pila = [], byId = new Map(), { proporcion = null } = {}) {
+  const by = byId instanceof Map ? byId : core.indexar(byId), out = [], visto = new Set();
+  const pon = (texto, grave = false, extra = {}) => { if (texto && !visto.has(texto)) { visto.add(texto); out.push({ texto, grave, ...extra }); } };
+  const exp = core.expandir(pila, by, { kind: 'video' });
+  const cam = exp.lista.filter(it => arr(it.preset.ejes).includes('camara') && it.preset.capa === 'ajuste').at(-1);
+  const receta = exp.lista.find(it => it.preset.capa === 'receta');
+  pon(!cam ? (exp.lista.length ? 'Sin movimiento de cámara elegido: la cámara se queda quieta' : '')
+    : cam.id === 'cam-fija' ? `La cámara se queda quieta${receta ? `: lo que se mueve es el producto («${nombreDe(receta.preset)}»)` : ''}. Un movimiento por clip`
+    : `Un movimiento de cámara por clip: «${nombreDe(cam.preset)}»`);
+  // el formato del compositor manda (V5.1); si un preset de formato pide otro, se dice y se ofrece ponerlo con un clic
+  for (const it of exp.lista) { const ar = it.preset.ajustesModelo?.aspectRatio; if (ar && proporcion && ar !== proporcion) pon(`«${nombreDe(it.preset)}» es ${ar}; tu formato (paso 5) es ${proporcion} y manda el tuyo`, false, { formato: ar }); }
+  for (const it of exp.lista) if (it.preset.bucle) pon('Bucle: la misma foto al principio y al final (se pone sola)');
+  for (const it of exp.lista) if (arr(it.preset.entradas).some(en => en.rol === 'final' && en.min)) pon(`«${nombreDe(it.preset)}» va de una foto a otra: primer y último fotograma`);
+  for (const e of arr(plan?.errores)) pon(e, true);
+  for (const a of arr(plan?.avisos)) pon(a.texto);
+  return out;
+}
+/** Cuando el modelo elegido no puede y hay otro encendido que sí: { id, nombre } para un botón «Usar …» (el dueño decide). */
+export function sugerirModelo(plan) {
+  if (!arr(plan?.errores).some(e => /no puede con esto|no sirve para/.test(e))) return null;
+  const a = arr(plan?.alternativas).find(x => x.on !== false && x.id);
+  return a ? { id: a.id, nombre: a.nombre || a.id } : null;
+}
+
+/* ---------- MÚSICA y VOZ (F6): fichas que solo rellenan ajustes ---------- */
+/** Las fichas de un medio (music · audio), en el orden de la fábrica. */
+export const fichasDe = (presets, kind) => presets.filter(p => arr(p.medios).includes(kind) && p.ejecutor === 'ajustes');
+const valorParam = (p, id) => arr(p.parametros).find(q => q.id === id)?.def ?? '';
+/**
+ * Lo que una ficha pone en los ajustes del modelo elegido → { valores: { ajuste: valor }, fuera: [{ k, motivo }] }.
+ * Solo los ajustes que el modelo tiene y con un valor que acepta («{p.estilo}» con su valor por defecto; una emoción que ese
+ * modelo no hace se dice, no se manda).
+ */
+export function ajustesDeFicha(p, settings = {}) {
+  const valores = {}, fuera = [];
+  for (const [k, v0] of Object.entries(p?.ajustesModelo || {})) {
+    const f = settings[k];
+    if (!f) { fuera.push({ k, motivo: 'este modelo no tiene ese ajuste' }); continue; }
+    let v = typeof v0 === 'string' ? v0.replace(/\{p\.(\w+)\}/g, (m, id) => String(valorParam(p, id))).replace(/\s+/g, ' ').replace(/,\s*$/, '').trim() : v0;
+    if (f.type === 'enum') {
+      let x = arr(f.values).find(o => String(o) === String(v));
+      if (x === undefined && k === 'emotion' && v === 'neutral' && arr(f.values).includes('')) x = ''; // «neutra» = la emoción propia de la voz (MiniMax no tiene «neutral»)
+      if (x === undefined) { fuera.push({ k, motivo: `este modelo no hace «${v}»` }); continue; } v = x; }
+    else if (f.type === 'range') { const n = Number(v); if (!Number.isFinite(n)) { fuera.push({ k, motivo: 'no es un número' }); continue; } v = Math.min(f.max, Math.max(f.min, n)); }
+    else if (f.type === 'boolean') v = v === true || v === 'true';
+    else if (f.type === 'text') v = String(v).slice(0, +f.max || 2000);
+    valores[k] = v;
+  }
+  return { valores, fuera };
+}
+/** ¿Los ajustes de ahora son los de esta ficha? (su botón queda pulsado). */
+export function fichaActiva(p, settings = {}, actuales = {}) {
+  const { valores } = ajustesDeFicha(p, settings), ks = Object.keys(valores);
+  return ks.length > 0 && ks.every(k => String(actuales[k]) === String(valores[k]));
+}
+const EMO_ES = { happy: 'alegre', neutral: 'neutra', surprised: 'sorpresa', calm: 'calma', sad: 'triste', angry: 'enfado' };
+const AJ_ES = { instrumental: v => (v ? 'instrumental' : 'con letra'), style: v => `estilo «${v}»`, emotion: v => (v ? `emoción ${EMO_ES[v] || v}` : 'la emoción propia de la voz'), speed: v => `velocidad ${String(v).replace('.', ',')}` };
+/** Lo que pone una ficha, en palabras («instrumental · estilo “…”»). */
+export const fichaEs = valores => Object.entries(valores).map(([k, v]) => (AJ_ES[k] ? AJ_ES[k](v) : `${k}: ${v}`)).join(' · ');
