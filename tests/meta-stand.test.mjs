@@ -255,3 +255,20 @@ test('A4: impulsar — boost_eligibility_info (IG), is_instagram_eligible (FB) y
   assert.ok((await cr({ object_story_id: 'P1_9' })).id, 'un post de FB sin Instagram, sí');
   assert.equal((await cr({ object_story_id: 'P1_9', instagram_user_id: 'IG1' })).error.code, 100, 'con instagram_user_id, no');
 });
+
+test('A6: la API de conversiones — /<conjunto>/events con las reglas de Meta (lote entero rechazado, 7 días, cifrado, action_source)', async () => {
+  const g = crearMetaStand(), ahora = Math.floor(g.st.reloj / 1000), h = 'a'.repeat(64);
+  const bueno = { event_name: 'Purchase', event_time: ahora, event_id: 'ao_1', action_source: 'system_generated', user_data: { em: [h] }, custom_data: { value: 40, currency: 'USD' } };
+  const ok = await pedir(g, 'POST', '/123456789/events', { data: [bueno], test_event_code: 'TEST1' });
+  assert.equal(ok.events_received, 1); assert.equal(g.st.eventos[0].prueba, 'TEST1'); assert.equal(g.st.eventos[0].conjunto, '123456789');
+  // un correo en claro, uno viejo, uno futuro, una fuente que no existe, una web sin dirección, mensajes sin canal, una compra sin importe, milisegundos
+  for (const malo of [{ user_data: { em: ['ana@x.com'] } }, { event_time: ahora - 8 * 86400 }, { event_time: ahora + 3600 }, { action_source: 'tienda' }, { action_source: 'website' }, { action_source: 'business_messaging' }, { custom_data: {} }, { event_time: ahora * 1000 }]) {
+    const r = await pedir(g, 'POST', '/123456789/events', { data: [bueno, { ...bueno, event_id: 'ao_2', ...malo }] });
+    assert.equal(r.status, 400, JSON.stringify(malo)); assert.equal(r.error.code, 100);
+  }
+  assert.equal(g.st.eventos.length, 1, 'un lote con uno malo no deja entrar ninguno');
+  const msj = await pedir(g, 'POST', '/123456789/events', { data: [{ event_name: 'LeadSubmitted', event_time: ahora, action_source: 'business_messaging', messaging_channel: 'messenger', user_data: { page_id: 'P1', page_scoped_user_id: '998877' } }] });
+  assert.equal(msj.events_received, 1);
+  g.st.fallar.conversiones = 1;
+  const caido = await pedir(g, 'POST', '/123456789/events', { data: [bueno] }); assert.equal(caido.status, 500); assert.equal(caido.error.is_transient, true);
+});

@@ -16,7 +16,23 @@ export function medirHTML(d) {
     : `<div class="anu-medir-it"><h3>En «Cómo va el negocio»</h3><p>Ya están ${esc(tiene.join(', '))}: se ponen al día con cada lectura de Meta (tecla N).</p>${roasNota}</div>`;
   return `<section class="anu-sec anu-medir" aria-labelledby="anuMedT"><h2 id="anuMedT">Medir</h2><div class="anu-medir-caja">
     <div class="anu-medir-it"><h3>Informe del mes</h3><p>Lo gastado, cada campaña con su costo por resultado, los mejores creativos, lo que se aplicó de las sugerencias y qué pasó, y lo que se pausó o activó. Lo arma la oficina con sus datos, sin un modelo: lo que no sabe dice «sin datos».</p>
-      <div class="anu-acts"><button type="button" class="anu-btn pri" data-a="informe">Informe del mes</button></div></div>${indic}</div></section>`;
+      <div class="anu-acts"><button type="button" class="anu-btn pri" data-a="informe">Informe del mes</button></div></div>${indic}${conversionesHTML(d?.conversiones)}</div></section>`;
+}
+
+const hora = iso => { const t = Date.parse(iso || ''); return Number.isFinite(t) ? new Date(t).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''; };
+/**
+ * Fase A6 (10 oct 2026): la API DE CONVERSIONES en «Medir». Apagada o encendida (en palabras, nunca solo un color), lo enviado hoy, el
+ * último error, y cuándo conviene cada vía. `c` es GET /api/anuncios → `conversiones` (sin datos personales); sin él (otra oficina), nada.
+ */
+export function conversionesHTML(c) {
+  if (!c) return '';
+  const cuando = `<p class="anu-ayuda"><b>¿Cuándo conviene?</b> Si vendes en una <b>web</b>, que tu tienda (o Stripe, o un formulario) avise a la oficina: Meta recibe la compra aunque el píxel del navegador se pierda. Si vendes por <b>mensajes</b> (Instagram, Messenger), marca en la conversación de la Bandeja «Registrar venta» o «Registrar contacto calificado»: así Meta aprende qué anuncios traen clientes de verdad, no solo conversaciones.</p>`;
+  if (!c.encendida) return `<div class="anu-medir-it" data-conv="apagada"><h3>API de conversiones: apagada</h3><p>Le dice a Meta qué se vendió y quién escribió en serio, desde la oficina (servidor a servidor). El correo y el teléfono van cifrados; nada sale en claro.</p>${cuando}<div class="anu-acts"><button type="button" class="anu-btn" data-a="ajustes">Encenderla en Ajustes</button></div></div>`;
+  const h = c.hoy || {}, estado = !c.listo ? `Encendida, pero no puede mandar: ${esc(c.motivo || '')}` : `Encendida. Hoy: ${h.enviados || 0} evento(s) enviados (${h.compras || 0} compra(s), ${h.contactos || 0} contacto(s))${c.pendientes ? `; ${c.pendientes} esperando para reintentar` : ''}.`;
+  const err = c.ultimoError && (!c.ultimoEnvioAt || c.ultimoErrorAt > c.ultimoEnvioAt || c.fallos) ? `<p class="anu-ayuda anu-conv-err" role="note"><b>Último error${c.ultimoErrorAt ? ` (${esc(hora(c.ultimoErrorAt))})` : ''}:</b> ${esc(c.ultimoError)}</p>` : '';
+  const ult = c.ultimoEnvioAt ? `<p class="anu-ayuda">Último envío: ${esc(hora(c.ultimoEnvioAt))}.</p>` : '';
+  return `<div class="anu-medir-it" data-conv="encendida"><h3>API de conversiones</h3><p>${estado}</p>${ult}${err}${cuando}
+    <div class="anu-acts">${c.prueba ? '<button type="button" class="anu-btn" data-a="conv-probar">Mandar un evento de prueba</button>' : '<span class="anu-ayuda">Para probarla, pon el código de «Probar eventos» en Ajustes → Anuncios.</span>'}<button type="button" class="anu-btn" data-a="ajustes">Ajustes</button></div></div>`;
 }
 
 /** La ventana del informe. → { abrir(desde), cerrar(devolver), abierto() } */

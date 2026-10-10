@@ -228,7 +228,7 @@ test('A6: con píxel y compras, el ROAS se crea (lo vendido entre lo gastado) y 
   await new Promise(r => srv.listen(0, '127.0.0.1', r)); t.after(() => srv.close());
   const api = async (metodo, p, b) => { const r = await fetch(`http://127.0.0.1:${srv.address().port}${p}`, { method: metodo, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return { status: r.status, ...(await r.json().catch(() => ({}))) }; };
   const antes = await api('GET', '/api/anuncios?rango=7d');
-  assert.deepEqual(antes.indicadores, { gasto: false, costo: false, roas: false, roasPosible: { puede: true, motivo: '' } }, 'la vista dice cuáles tiene el dueño');
+  assert.deepEqual(antes.indicadores, { gasto: false, costo: false, roas: false, roasPosible: { puede: true, motivo: '', fuente: 'meta' } }, 'la vista dice cuáles tiene el dueño');
   for (const por of ['agente', 'dimitri', 'asistente']) assert.equal((await api('POST', '/api/anuncios/indicadores', { por })).status, 403, por);
   assert.equal(m.kp().defs.length, 0, 'nadie más los crea');
   const r = await api('POST', '/api/anuncios/indicadores', {});

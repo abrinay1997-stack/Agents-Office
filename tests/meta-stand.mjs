@@ -8,6 +8,9 @@
 //   · la Marketing API (Fases A1–A4): la cuenta act_…, campañas, conjuntos, anuncios, creativos, adimages, advideos, insights,
 //     copies, generatepreviews, `execution_options: ["validate_only"]` y el lote (`POST /` con `batch`);
 //   · la Bandeja (Fases B1–B2): comentarios de Instagram y Facebook, responder, ocultar, conversaciones y mensajes con la ventana de 24 h.
+//   · la API de conversiones (Fase A6, 10 oct 2026): POST /<conjunto de datos>/events con sus reglas (lo verificado en la doc de Meta:
+//     `data` hasta 1.000, el lote entero se rechaza si uno no vale, event_time en segundos y no más de 7 días atrás, action_source de la
+//     lista, em/ph cifrados en SHA-256; lo no documentado —el futuro, la respuesta— va como lo trata la oficina, POR VERIFICAR).
 //
 // Tiene ESTADO (`st`): lo que se crea se puede leer después, y los tests miran dentro. Y modos de fallo (`fallar`), las
 // cabeceras de uso (`uso`) y `torcer(llamada, st)` para contestar otra cosa en un caso concreto.
@@ -71,6 +74,8 @@ export function crearMetaStand(o = {}) {
     validadas: [], cambios: [], copias: [], // A2: lo validado (validate_only) y lo cambiado o copiado de verdad, para que los tests miren dentro
     // la Bandeja
     comentarios: {}, ocultos: [], conversaciones: [], enviados: [],
+    // la API de conversiones (A6, 10 oct 2026): lo recibido en /<conjunto>/events, tal cual llegó
+    eventos: [],
     // fallos y uso
     fallar: { ...(o.fallar ?? {}) }, uso: o.uso ?? null,
   };
@@ -415,6 +420,32 @@ export function crearMetaStand(o = {}) {
       const cuando = new Date(st.reloj).toISOString(), propio = (conv.platform ?? 'messenger') === 'instagram' ? { id: 'IG1', username: 'panaclaw' } : { id: 'P1', name: 'PanaClaw' };
       (conv.messages ??= { data: [] }).data.push({ id: mid, message: texto, from: propio, to: { data: [{ id: para }] }, created_time: cuando }); // vuelve en la siguiente lectura (y cambia el updated_time de la lista)
       return json({ recipient_id: para, message_id: mid });
+    }
+
+    // ---- la API de conversiones (A6): /<conjunto de datos>/events
+    const evs = metodo === 'POST' ? ruta.match(/^\/(\d{5,25})\/events$/) : null;
+    if (evs) {
+      if (st.fallar.conversiones > 0) { st.fallar.conversiones--; return errorGraph('(#2) Service temporarily unavailable', 2, { is_transient: true }, 500); }
+      const datos = lista(campos.data, null);
+      if (!Array.isArray(datos) || !datos.length) return errorGraph('(#100) The parameter data is required', 100);
+      if (datos.length > 1000) return errorGraph('(#100) Too many events (max 1000)', 100);
+      const ahoraS = Math.floor(st.reloj / 1000), FUENTES = ['email', 'website', 'app', 'phone_call', 'chat', 'physical_store', 'system_generated', 'business_messaging', 'other'];
+      const hex = v => (Array.isArray(v) ? v : [v]).every(x => /^[0-9a-f]{64}$/.test(String(x)));
+      for (const [i, e] of datos.entries()) { // uno que no vale y el lote entero se rechaza, como en Meta
+        const mal = m => errorGraph(`(#100) Invalid parameter: event ${i}: ${m}`, 100, { error_subcode: 2804003, error_user_title: 'Evento no válido', error_user_msg: m });
+        if (!e?.event_name) return mal('event_name is required');
+        if (!Number.isInteger(e.event_time)) return mal('event_time must be a Unix timestamp in seconds');
+        if (e.event_time > ahoraS + 300) return mal('event_time cannot be in the future');
+        if (e.event_time < ahoraS - 7 * 86400) return mal('event_time is more than 7 days ago');
+        if (!FUENTES.includes(e.action_source)) return mal('action_source is not valid');
+        if (!e.user_data || typeof e.user_data !== 'object') return mal('user_data is required');
+        for (const k of ['em', 'ph', 'external_id', 'fn', 'ln']) if (e.user_data[k] !== undefined && !hex(e.user_data[k])) return mal(`user_data.${k} must be SHA-256 hashed`);
+        if (e.action_source === 'website' && !e.event_source_url) return mal('event_source_url is required for website events');
+        if (e.action_source === 'business_messaging' && !['messenger', 'instagram', 'whatsapp'].includes(e.messaging_channel)) return mal('messaging_channel is required for business_messaging');
+        if (e.event_name === 'Purchase' && !(Number(e.custom_data?.value) > 0 && /^[A-Z]{3}$/.test(String(e.custom_data?.currency || '')))) return mal('Purchase needs custom_data.value and custom_data.currency');
+      }
+      for (const e of datos) st.eventos.push({ conjunto: evs[1], prueba: campos.test_event_code || null, ...e });
+      return json({ events_received: datos.length, messages: [], fbtrace_id: 'stand' });
     }
 
     // ---- un objeto por su id

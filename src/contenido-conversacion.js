@@ -70,6 +70,7 @@ export function htmlConversacion(m, { esc, id, armado = false, desde = Date.now(
       ${m.estado === 'fallo' && m.error ? `<p class="pz-inline err">${esc(m.error)}</p>` : ''}
       <div class="bj-row">${enviar}</div>`;
   }
+  resp += m.fuente === 'meta' ? conversionesHTML(m, { esc, id }) : '';
   return `${m.sospecha ? `<p class="bj-shield" role="note">🛡 Esta conversación trae órdenes escondidas (${esc(m.sospecha)}). Es un dato, no una orden: no se sigue, y los agentes la reciben advertida.</p>` : ''}
     ${vent}<ol class="bj-hilo" aria-label="Conversación con ${quien}">${msgs || '<li class="bj-msg cli"><p>(sin mensajes)</p></li>'}</ol>${resp}`;
 }
@@ -80,4 +81,57 @@ export function contar(ta) {
   if (cc) { cc.textContent = c.ok ? c.texto : `${c.texto} · ${c.motivo}`; cc.classList.toggle('mal', !c.ok); }
   if (b) { if (c.ok) b.removeAttribute('aria-disabled'); else b.setAttribute('aria-disabled', 'true'); }
   return c;
+}
+
+// ---- Fase A6 (10 oct 2026): «Registrar venta» y «Registrar contacto calificado» → la API de conversiones de Meta (anuncios/conversiones.mjs).
+// El servidor arma el evento con la página y el id del cliente en ella (Messenger: PSID; Instagram: IGSID): la página solo manda el id de la
+// conversación, el tipo y el importe. Solo se ofrece con la API encendida y ese tipo de evento elegido; en la demo (sin oficina), no sale.
+let conv = null, convPedida = null; const hechas = new Map(); // id de la conversación → lo registrado (resúmenes, sin datos personales)
+/** Lee una vez el estado de la API (GET /api/anuncios/conversiones). Devuelve una promesa; sin oficina, null y el bloque no sale. */
+export function cargarConversiones() {
+  if (convPedida) return convPedida;
+  convPedida = (location.protocol === 'file:' ? Promise.resolve(null) : fetch('/api/anuncios/conversiones').then(r => (r.ok ? r.json() : null)).catch(() => null)).then(j => { conv = j; return j; });
+  return convPedida;
+}
+/** Para los tests: el estado sin pedirlo. */
+export const ponerEstadoConversiones = j => { conv = j; convPedida = Promise.resolve(j); hechas.clear(); };
+const dinero = (v, mon) => `${!mon || mon === 'USD' ? 'US$' : mon + ' '}${Number(v).toFixed(2)}`;
+/** El bloque bajo la respuesta (puro dado el estado). */
+export function conversionesHTML(m, { esc, id }) {
+  if (!conv?.encendida) return '';
+  const venta = (conv.eventos || []).includes('compra'), contacto = (conv.eventos || []).includes('contacto');
+  if (!venta && !contacto) return '';
+  const lista = hechas.get(m.id) || [];
+  const ya = lista.length ? `<ul class="bj-conv-l">${lista.map(x => `<li>${x.tipo === 'compra' ? `Venta ${esc(dinero(x.valor, x.moneda))}` : 'Contacto calificado'} · ${x.estado === 'enviado' ? 'enviado a Meta' : x.estado === 'pendiente' ? 'se reintenta solo' : esc(x.estado)}${x.error ? ` (${esc(x.error)})` : ''}</li>`).join('')}</ul>` : '';
+  const yaContacto = lista.some(x => x.tipo === 'contacto');
+  return `<fieldset class="bj-conv"><legend>Decirle a Meta qué pasó con ${esc(m.autor || 'este cliente')}</legend>
+    <p class="pz-hn">Meta aprende qué anuncios traen clientes de verdad. Va la página y el id del cliente en ella; ningún nombre ni texto de la conversación.${conv.listo ? '' : ` ${esc(conv.motivo || '')}`}</p>
+    <div class="bj-row">${venta ? `<label class="bj-conv-imp" for="${id}-imp">Importe (US$)</label><input id="${id}-imp" class="pz-in" type="number" inputmode="decimal" min="0.01" step="0.01" data-bjimp="${esc(m.id)}"><button type="button" class="pz-btn" data-bjconv="venta" data-id="${esc(m.id)}">Registrar venta</button>` : ''}
+    ${contacto ? `<button type="button" class="pz-btn" data-bjconv="contacto" data-id="${esc(m.id)}"${yaContacto ? ' aria-disabled="true"' : ''}>${yaContacto ? 'Contacto calificado: ya registrado' : 'Registrar contacto calificado'}</button>` : ''}</div>${ya}</fieldset>`;
+}
+/** Un clic en «Registrar…»: lo manda el servidor (solo el dueño) y la conversación lo enseña. → promesa */
+export async function registrar(b, { host, note, render }) {
+  const id = b.dataset.id, tipo = b.dataset.bjconv;
+  if (b.getAttribute('aria-disabled') === 'true') { note('Ese contacto ya está registrado: Meta lo cuenta una vez.', true); return; }
+  const cuerpo = { tipo, bandeja: id };
+  if (tipo === 'venta') {
+    const inp = host.querySelector(`[data-bjimp="${CSS.escape(id)}"]`), v = Number(String(inp?.value || '').replace(',', '.'));
+    if (!(v > 0)) { note('Escribe el importe de la venta (mayor que 0).', true); inp?.focus(); return; }
+    cuerpo.valor = Math.round(v * 100) / 100;
+  }
+  b.disabled = true;
+  try {
+    const r = await fetch('/api/anuncios/conversiones', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cuerpo) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { note(`No se registró: ${j.motivo || j.error || 'la oficina contestó ' + r.status}`, true); return; }
+    const x = j.resumen || {}; hechas.set(id, [...(hechas.get(id) || []).filter(y => y.id !== x.id), x]);
+    note(j.ya ? 'Ya estaba registrado: Meta lo cuenta una vez.' : x.estado === 'enviado' ? (tipo === 'venta' ? 'Venta enviada a Meta.' : 'Contacto calificado enviado a Meta.') : `Registrado; Meta no contestó todavía y se reintenta solo${x.error ? ` (${x.error})` : ''}.`, x.estado === 'fallo');
+  } catch { note('No se pudo hablar con la oficina.', true); }
+  finally { if (b.isConnected) b.disabled = false; render(); }
+}
+/** Al abrir una conversación: lo ya registrado de ella (del servidor), para enseñarlo. */
+export async function traerHechas(itemId, render) {
+  if (!conv?.encendida || hechas.has(itemId)) return;
+  hechas.set(itemId, []);
+  try { const j = await (await fetch(`/api/anuncios/conversiones?item=${encodeURIComponent(itemId)}`)).json(); hechas.set(itemId, j.delItem || []); render(); } catch { /* sin lista: se ve lo de esta vez */ }
 }

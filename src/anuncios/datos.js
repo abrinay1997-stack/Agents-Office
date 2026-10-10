@@ -49,7 +49,7 @@ export function crearDatos({ servida }) {
   return {
     demo: !servida,
     async leer(rango, { ejemplo = false } = {}) {
-      if (ej(ejemplo)) return { ...demo.vista(rango), indicadores: { ...demoInd } };
+      if (ej(ejemplo)) return { ...demo.vista(rango), indicadores: { ...demoInd }, conversiones: { encendida: false, listo: false, motivo: '', prueba: false, eventos: ['compra', 'contacto'], hoy: { enviados: 0, compras: 0, contactos: 0 }, pendientes: 0, fallos: 0, ultimoError: null } };
       return (await pedir(`/api/anuncios?rango=${encodeURIComponent(rango)}&abierto=1`)).j;
     },
     /** → 'leyendo' (202) · 'ya' (409, ya estaba leyendo) · 'ejemplo' */
@@ -80,6 +80,8 @@ export function crearDatos({ servida }) {
       const creados = [['gasto', 'meta_gasto_anuncios'], ['costo', 'meta_costo_resultado']].filter(([k]) => !demoInd[k]).map(([k, id]) => { demoInd[k] = true; return id; });
       return { status: 200, ok: true, creados, ya: creados.length ? [] : ['meta_gasto_anuncios', 'meta_costo_resultado'], motivo: demoInd.roasPosible.motivo, ejemplo: true };
     },
+    /* ---- A6 (10 oct 2026): la API de conversiones — un evento de prueba (solo el dueño; en el ejemplo, nada sale) ---- */
+    probarConversiones: ({ ejemplo = false } = {}) => (ej(ejemplo) ? { status: 409, motivo: 'en el ejemplo no se manda nada a Meta. Con tu cuenta y la API encendida, esto manda UN evento con el código de prueba.' } : llamar('/api/anuncios/conversiones/probar', 'POST', {})),
     /* ---- A7: el informe del mes ---- */
     async informe(mes, { ejemplo = false } = {}) {
       if (!ej(ejemplo)) return llamar(`/api/anuncios/informe?mes=${encodeURIComponent(mes)}`);

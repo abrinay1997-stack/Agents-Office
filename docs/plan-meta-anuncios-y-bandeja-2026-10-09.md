@@ -441,9 +441,11 @@ Para esta fase hace falta que Meta haya dado el acceso avanzado (§2.6). Sin él
 
 **Hecho cuando:** con el Meta de mentira, se leen y se responden mensajes de Instagram y Messenger dentro de la ventana, y fuera de ella el envío se niega con el motivo. Con acceso aprobado, `check-meta-bandeja.mjs` lista conversaciones reales.
 
-### Fase A6 — Medir mejor (opcional, si hay web) ✅ los indicadores (9 oct 2026, rama `mejora/anuncios-a6-a7`)
+### Fase A6 — Medir mejor ✅ completa: los indicadores (9 oct 2026, rama `mejora/anuncios-a6-a7`) y la API de conversiones (10 oct 2026, rama `mejora/anuncios-conversiones`)
 
-> **Hecho:** los indicadores, con el botón «Crear indicadores» en Anuncios → Resumen (`anuncios/indicadores.mjs`, `POST /api/anuncios/indicadores`, solo el dueño); cada lectura de cifras los pone al día (un punto por día). El ROAS solo se crea con píxel y compras medidas; si no, se dice por qué. **La API de conversiones queda pendiente de que el dueño confirme que vende en una web y qué eventos importan.**
+> **Hecho:** los indicadores, con el botón «Crear indicadores» en Anuncios → Resumen (`anuncios/indicadores.mjs`, `POST /api/anuncios/indicadores`, solo el dueño); cada lectura de cifras los pone al día (un punto por día). El ROAS solo se crea con píxel y compras medidas; si no, se dice por qué. ~~La API de conversiones queda pendiente de que el dueño confirme que vende en una web y qué eventos importan.~~
+>
+> **Hecho el 10 oct 2026 (`anuncios/conversiones.mjs`):** la API de conversiones, **apagada por defecto y con las dos vías**, porque el dueño aún no confirmó cómo vende: web/sistema (disparadores `stripe` → Purchase y `form` → Lead, y su webhook `POST /api/anuncios/conversiones/webhook`) y mensajes (`business_messaging` con `messaging_channel`, desde «Registrar venta» / «Registrar contacto calificado» de una conversación de la Bandeja). Correo y teléfono en SHA-256, `event_id` que sale igual (deduplica con el píxel), `event_time` en segundos, cola con reintentos en `data/anuncios/conversiones.json`, registro sin datos personales, solo el dueño manda. Lo verificado en la documentación de Meta y lo que queda POR VERIFICAR, en la cabecera del módulo; con el token real, `node scripts/check-meta-conversiones.mjs --probar`.
 
 - **API de conversiones** (servidor a servidor) además del píxel, con `event_id` para no contar dos veces, si el dueño vende en una web. Esta fase solo se hace si el dueño confirma que tiene web y qué eventos importan.
 - Los indicadores del dueño: `meta_gasto_anuncios`, `meta_costo_resultado` y `meta_roas` (cuando aplique), con el botón «Crear indicador», como hoy `meta_seguidores`.
@@ -473,7 +475,7 @@ Para esta fase hace falta que Meta haya dado el acceso avanzado (§2.6). Sin él
 | 6 | **B1** Comentarios | No espera la revisión de Meta |
 | 7 | **A4** Impulsar ✅ | Pequeña una vez está A3 |
 | 8 | **B2** Mensajes | Espera el acceso avanzado de Meta: para entonces ya debería estar |
-| 9 | **A6** y **A7** ✅ | Medir mejor e informe (la API de conversiones de la A6, pendiente del dueño) |
+| 9 | **A6** y **A7** ✅ | Medir mejor e informe (la API de conversiones, hecha el 10 oct 2026: apagada hasta que el dueño la encienda) |
 
 **Mientras tanto, el dueño** empieza ya la verificación del negocio (§2.1) y, cuando B2 esté lista para grabar, la revisión de la app (§2.6).
 

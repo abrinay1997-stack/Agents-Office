@@ -6,6 +6,18 @@
 - **La música no:** MiniMax ya no la da a cuentas nuevas, **tampoco con los modelos gratis** (su documentación decía lo contrario). Antes la oficina te decía «usa el modelo gratis», que tampoco funciona. Ahora dice lo que pasa y no lo reintenta.
 - Test nuevo en `minimax` con la respuesta real de MiniMax.
 
+## Anuncios: la API de conversiones (lo que faltaba de la Fase A6) — 10 oct 2026
+
+La oficina ya le puede decir a Meta **qué se vendió y quién escribió en serio**, desde la oficina y no desde el navegador del cliente (el píxel se pierde con bloqueadores y con iOS). Así Meta aprende qué anuncios traen clientes de verdad. **Viene apagada**: el dueño todavía no dijo si vende en una web o por mensajes, así que están las dos vías y se enciende la que use.
+- **Ajustes → Anuncios:** «API de conversiones» (apagada), «Eventos que se mandan» (compras y contactos) y «Código de prueba de eventos». Usa el mismo «Píxel o conjunto de datos» de antes y el token de siempre (`META_ACCESS_TOKEN`); nada secreto en archivos.
+- **Si vendes en una web:** un pago que llega por un disparador de Stripe va como **compra** con su importe; un formulario, como **contacto** (con la dirección de la página, si la trae). Un disparador con `"conversion": false` no manda nada. Tu tienda, Zapier o n8n también pueden avisar directo (`POST /api/anuncios/conversiones/webhook`, con `AO_HOOK_TOKEN`); si mandan el mismo `event_id` que tu píxel, Meta lo cuenta una vez.
+- **Si vendes por mensajes:** en una conversación privada de la Bandeja, **«Registrar venta»** (con el importe) o **«Registrar contacto calificado»**. Va la página y el id del cliente en ella; ningún nombre ni texto de la conversación.
+- **Nada personal en claro:** el correo y el teléfono se cifran (SHA-256) antes de guardarse; lo que se ve en la oficina y lo que queda en el registro (`data/audit/`, «conversiones») no lleva ni correo, ni teléfono, ni el cifrado. Solo el dueño registra: un agente, Dimitri o el asistente reciben un «no».
+- **Si Meta falla de paso, se reintenta solo** (1, 5, 15 min, 1 h, 6 h); lo que pasa de 7 días esperando se descarta (Meta ya no lo toma). Todo va por el mismo cliente de Meta (su freno por uso y su versión).
+- **Anuncios → Resumen → Medir** dice si está apagada o encendida, lo enviado hoy y el último error, explica cuándo conviene cada vía y tiene «Mandar un evento de prueba». **Ajustes → Estado** tiene la línea «Conversiones» cuando está encendida.
+- **El ROAS:** si el píxel no lo da pero registraste ventas por aquí, sale de esas ventas (lo vendido en 30 días entre lo gastado en anuncios) y lo dice: son todas tus ventas registradas, no solo las que Meta atribuye a los anuncios.
+- Con el token real: `node scripts/check-meta-conversiones.mjs` (no manda nada) y `--probar` (UN evento con el código de prueba). Tests: `anuncios-conversiones` y el Meta de mentira aprende `/<conjunto>/events` con las reglas de Meta.
+
 ## Contenido: a qué cuenta sale cada pieza — 9 oct 2026
 
 Pedido del dueño: «poder programar por cuenta o usuario: cuando voy a programar no sé a qué cuenta se programará de todas las que puedo ver».

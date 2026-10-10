@@ -22,3 +22,12 @@ body.dark .bj-tag.vt { color: #7FE0BE; }
 body.dark .bj-tag.vt.oc { color: #FFB4AB; }
 .bj-img:focus-visible, .bj-msg a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (max-width: 600px) { .bj-msg { max-width: 88%; } }
+/* A6 (10 oct 2026): «Registrar venta» y «Registrar contacto calificado» (la API de conversiones) bajo la respuesta */
+.bj-conv { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 12px; min-width: 0; }
+.bj-conv legend { padding: 0 4px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.bj-conv .pz-hn { display: block; margin: 0 0 8px; font-size: 12.5px; color: var(--grey); }
+.bj-conv-imp { font-size: 12.5px; color: var(--ink); }
+.bj-conv .pz-in { width: 9em; display: inline-block; min-height: 36px; }
+.bj-conv .pz-btn { min-height: 36px; }
+.bj-conv-l { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--ink); }
+.bj-conv [aria-disabled="true"] { cursor: default; }
