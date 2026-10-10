@@ -7,13 +7,18 @@
 //     texto (Facebook con «Texto de Facebook», o cualquiera con `textos[red]`, M2) va en otra;
 //   · (C1, 8 oct 2026) y una red con OTRO FORMATO también va en otra (el mismo video: reel en Instagram, post en Facebook). La historia
 //     «también» no sale en una red que ya publica la pieza como historia.
-//   entregasDe(pieza) → [{ clave, variante, redes, texto, comentario, medios (ids del Estudio), momento (ms), formato, extras }]
+//   entregasDe(pieza) → [{ clave, variante, redes, texto, comentario, medios (ids del Estudio), momento (ms), formato, extras, cuentas? }]
+//   (9 oct 2026) `cuentas` { red: 'red:<id>' }: en qué página y en qué Instagram sale, si se eligió (solo las redes de esa entrega).
 //   estadoGeneral(redes) → 'en_red' | 'publicada' | 'parcial' | 'fallo'
+import { cuentasLimpias } from '../src/contenido-cuentas.js';
 import { postDePieza, publicacionDeVariante, momentoDeVariante, textoPara, primerComentario, mediosDe, historiasDe, colaboradoresDe, formatoDe } from '../src/contenido-reglas.js';
 
 /** Las redes que tienen historias (y en las que el primer comentario existe). */
 const CON_HISTORIA = ['instagram', 'facebook'];
 const CON_COMENTARIO = ['instagram', 'facebook', 'linkedin', 'youtube', 'tiktok'];
+
+/** Las cuentas elegidas de esas redes, o null si ninguna (así una entrega sin elegir es idéntica a la de antes). */
+const cuentasDe = (pieza, redes) => { const c = cuentasLimpias(pieza.cuentas), o = Object.fromEntries(redes.filter(r => c[r]).map(r => [r, c[r]])); return Object.keys(o).length ? o : null; };
 
 export function entregasDe(pieza = {}) {
   const post = postDePieza(pieza), out = [];
@@ -39,6 +44,7 @@ export function entregasDe(pieza = {}) {
       out.push({
         clave: `${variante}:${i++}`, variante, redes: g.redes, texto: g.texto, comentario: g.comentario,
         medios: mediosDe(base).map(m => m.src), momento, formato: g.formato,
+        ...(cuentasDe(pieza, g.redes) ? { cuentas: cuentasDe(pieza, g.redes) } : {}), // 9 oct 2026: la página y el Instagram elegidos (sin elegir, no va: lo de siempre)
         extras: { colaboradores: variante === 'post' ? colaboradoresDe(post) : [], youtube: pieza.youtube || null, pinterest: pieza.pinterest || null, tiktok: pieza.tiktok || null },
       });
     }

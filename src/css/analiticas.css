@@ -161,3 +161,45 @@ body.dark #anOv .an-hint { border-left-color: #5CD1AE; }
 #anOv .an-inf-t ul { margin: 0; padding-left: 20px; } #anOv .an-inf-t li { margin: 3px 0; }
 #anOv .an-inf-t p { margin: 4px 0; } #anOv .an-inf-t a { color: inherit; }
 #anOv .an-imp { margin-top: 6px; letter-spacing: .08em; } /* A4: «Impulsar» en las que más movieron */
+/* 9 oct 2026: cada cuenta por separado — elegir una (con su foto o inicial), «Viendo …» y «Comparar cuentas» */
+#anOv select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#anOv .an-viendo { margin: 0 0 8px; font-size: 13px; }
+#anOv .an-ctas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#anOv .an-cta { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--cv-line); background: var(--cv-card); color: var(--ink); border-radius: 99px; padding: 4px 14px 4px 4px; min-height: 38px; font: inherit; text-align: left; cursor: pointer; }
+#anOv .an-cta-all { padding-left: 14px; }
+#anOv .an-cta:hover { border-color: var(--ink); }
+#anOv .an-cta[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+#anOv .an-ctn { display: grid; line-height: 1.25; }
+#anOv .an-ctn b { font-size: 12.5px; font-weight: 600; }
+#anOv .an-ctn small, #anOv .an-crow small { font-size: 11px; color: var(--grey); }
+#anOv .an-cta[aria-pressed="true"] small { color: inherit; }
+#anOv .an-cta-err small { color: #B3261E; } body.dark #anOv .an-cta-err small { color: #F19A93; }
+#anOv .an-gl { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--grey); }
+#anOv .an-ava { position: relative; flex: none; width: 30px; height: 30px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: color-mix(in srgb, #2B6BEB 16%, var(--cv-card)); color: var(--ink); font: 400 15px var(--serif); }
+#anOv .an-ava i { font-style: normal; }
+#anOv .an-ava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+#anOv .an-csel-l { display: none; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; }
+#anOv .an-csel-l select { flex: 1; min-width: 0; min-height: 38px; border-radius: 8px; border: 1px solid var(--hairline); background: var(--cream); color: var(--ink); font: 500 13px var(--ui); padding: 0 8px; }
+#anOv .an-comp { width: 100%; }
+#anOv .an-comp th, #anOv .an-comp td { padding: 4px 8px; border-bottom: 1px solid var(--cv-line); text-align: right; font-variant-numeric: tabular-nums; }
+#anOv .an-comp th:first-child { text-align: left; }
+#anOv .an-comp thead th { font-weight: 400; }
+#anOv .an-ord { background: none; border: 0; color: var(--grey); font: 700 10.5px var(--ui); letter-spacing: .1em; text-transform: uppercase; min-height: 28px; padding: 2px 4px; cursor: pointer; }
+#anOv .an-ord:hover, #anOv th[aria-sort="ascending"] .an-ord, #anOv th[aria-sort="descending"] .an-ord { color: var(--ink); }
+#anOv .an-crow { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; color: var(--ink); font: inherit; text-align: left; min-height: 38px; padding: 2px 6px 2px 2px; border-radius: 8px; cursor: pointer; }
+#anOv .an-crow > span:last-child { display: grid; line-height: 1.25; }
+#anOv .an-crow:hover b { text-decoration: underline; }
+#anOv .an-comp tr.on { background: var(--cv-soft); }
+#anOv .an-crow[aria-pressed="true"] > span:last-child > b::after { content: " · viendo"; font-weight: 400; color: var(--grey); }
+#anOv { container: anview / inline-size; } /* con Dimitri al lado la vista es más estrecha que la ventana: se mira la vista */
+#anOv .cv-band { flex-wrap: wrap; height: auto; min-height: 64px; row-gap: 8px; padding-block: 8px; } /* a 1024 con Dimitri, INSTAGRAM y FACEBOOK quedaban fuera */
+@container anview (max-width: 720px) {
+  #anOv .an-ctas { display: none; }
+  #anOv .an-csel-l { display: flex; }
+  #anOv .an-comp, #anOv .an-comp tbody { display: block; }
+  #anOv .an-comp thead { display: none; }
+  #anOv .an-comp tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px; border: 1px solid var(--cv-line); border-radius: 10px; padding: 6px 10px 8px; margin-bottom: 8px; }
+  #anOv .an-comp tr > th { grid-column: 1 / -1; border: 0; padding: 0; }
+  #anOv .an-comp td { border: 0; padding: 0; text-align: left; }
+  #anOv .an-comp td::before { content: attr(data-l); display: block; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--grey); }
+}

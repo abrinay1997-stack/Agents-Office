@@ -84,6 +84,7 @@ import * as understand from './understand.mjs'; // V4.8: video and audio → tex
 import * as voces from './minimax-voices.mjs'; // V4.10: the owner's MiniMax voices (cloned and designed), data/minimax-voices.json
 import { crearAlmacen } from './contenido/piezas.mjs'; // V4.7: the content pieces (notes in the brain) and their routes
 import { crearRutas } from './contenido/rutas.mjs';
+import { porDefecto as porDefectoCuentasContenido, motivoNoPublica, listaCuentas, MOTIVO_METRICOOL } from './src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada pieza
 import { crearGuardados } from './contenido/guardados.mjs'; // C1 (8 oct 2026): los textos guardados de Contenido, una nota del Cerebro
 import { agenteDeContenido, promptMejorar, leerPropuesta } from './contenido/mejorar.mjs'; // C1: «✨ Mejorar con Marketing»
 import { crearPlantillas as crearPlantillasContenido } from './contenido/plantillas.mjs'; // C3: plantillas de publicación
@@ -193,7 +194,11 @@ const CONTENIDO_MCP = path.join(ROOT, 'contenido-mcp.mjs');
 const TAREAS_MCP = path.join(ROOT, 'tareas-mcp.mjs');
 const HABILIDADES_MCP = path.join(ROOT, 'habilidades-mcp.mjs'); // la biblioteca: ver_habilidades, leer_habilidad (solo lee) // plan T3: every desk's own tasks (steps, notes, blocks, proposals)
 const CONTENIDO_DIR = path.join(cfg.brainPath, 'Agents Office', 'contenido');
-const contenido = crearAlmacen({ dir: CONTENIDO_DIR, medioExiste: id => !!media.resolve(id) });
+// 9 oct 2026: la cuenta de cada pieza (qué página, qué Instagram). Nace con la de Ajustes; una elegida tiene que verla el token y poder publicar
+const cuentasMeta = () => { try { return meta.estado().cuentas || []; } catch { return []; } };
+const contenido = crearAlmacen({ dir: CONTENIDO_DIR, medioExiste: id => !!media.resolve(id),
+  cuentasPorDefecto: () => porDefectoCuentasContenido(cuentasMeta(), cfg.contenido?.metaPagina || ''),
+  validarCuenta: id => { const l = cuentasMeta(); if (!l.length) return ''; const c = l.find(x => x.id === id); return motivoNoPublica(c); } });
 // V4.7 (F2): ANALÍTICAS — Meta en solo lectura. El token es META_ACCESS_TOKEN (variable de Windows, nunca un archivo); lo leído vive en data/contenido/
 // (cuentas, una foto diaria de cada una y las miniaturas), que no viaja por GitHub. Ver contenido/meta.mjs y contenido/metricas.mjs.
 const ANALITICAS_DIR = path.join(DATA, 'contenido');
@@ -287,7 +292,8 @@ const metricool = crearMetricool();
 const aJpeg = async b => (await import('sharp')).default(b).rotate().jpeg({ quality: 90 }).toBuffer(); // Instagram solo acepta JPEG
 const CONDUCTORES = {
   simulacro: crearSimulacro({ archivo: path.join(ANALITICAS_DIR, 'simulacro.json') }),
-  metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg, cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json') }),
+  metricool: crearConductorMetricool({ mc: metricool, rutaMedio: id => media.resolve(id), aJpeg, cache: path.join(ANALITICAS_DIR, 'subidas-metricool.json'),
+    cuentaValida: (red, id) => { const d = porDefectoCuentasContenido(cuentasMeta(), cfg.contenido?.metaPagina || ''); return d[red] && id !== d[red] ? MOTIVO_METRICOOL : ''; } }), // 9 oct 2026: solo las de su marca
   // F3 (8 oct 2026): directo en Meta. Facebook queda programado allí; Instagram lo publica esta oficina a su hora (pulso cada 30 s, más abajo)
   meta: crearConductorMeta({ meta, rutaMedio: id => media.resolve(id), aJpeg, archivo: path.join(ANALITICAS_DIR, 'meta-agenda.json'), pagina: () => cfg.contenido?.metaPagina || '', alCambiar: () => { programador.refrescar('meta').catch(() => {}); }, avisar: (t, o) => notice('contenido', t, o) }),
 };
@@ -1886,12 +1892,13 @@ const bandeja = crearBandeja({ metricool, meta: bandejaMeta, elegir: () => cfg.c
 }
 setInterval(() => { bandeja.tick(); }, 60e3); setTimeout(() => { bandeja.tick(); }, 30e3); // Meta cada 3 min con la Bandeja abierta, 10 si no (× el freno); Metricool cada 10
 // plan M5 · U10: el informe del mes, con los datos de la oficina; guardado como nota en <cerebro>/Agents Office/informes/ (no viaja)
-async function informeRedes(mes, { guardar = false } = {}) {
-  const [y, mm] = mes.split('-').map(Number), hasta = `${mes}-${String(new Date(y, mm, 0).getDate()).padStart(2, '0')}`;
-  const r = informeDelMes({ mes, piezas: contenido.listar({ desde: `${mes}-01`, hasta }), salidaDe: id => programador.salidaDe(id), analiticas: metricas.leer({ dias: 180 }), bandeja: bandeja.listar().items, hora: await mejorHora.horas(Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook']) });
+async function informeRedes(mes, { guardar = false, cuenta = '' } = {}) { // 9 oct 2026: `cuenta` (un id de Analíticas) → el informe de esa cuenta sola
+  const [y, mm] = mes.split('-').map(Number), hasta = `${mes}-${String(new Date(y, mm, 0).getDate()).padStart(2, '0')}`, cuentas = meta.estado().cuentas || [];
+  const r = informeDelMes({ mes, cuentas, cuenta, piezas: contenido.listar({ desde: `${mes}-01`, hasta }), salidaDe: id => programador.salidaDe(id), analiticas: metricas.leer({ dias: 180 }), bandeja: cuenta ? [] : bandeja.listar().items, hora: await mejorHora.horas(Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook']) });
   if (!guardar) return r;
   const dir = path.join(BRAIN, 'Agents Office', 'informes'); fs.mkdirSync(dir, { recursive: true });
-  const archivo = path.join(dir, `${mes} redes.md`); fs.writeFileSync(archivo, `---\ntipo: informe\nmes: ${mes}\ncreado: ${new Date().toISOString()}\n---\n${r.texto}`);
+  const una = cuentas.find(c => c.id === r.cuenta), sufijo = una ? ' ' + String(una.usuario || una.nombre || una.externoId).replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 40) : '';
+  const archivo = path.join(dir, `${mes} redes${sufijo}.md`); fs.writeFileSync(archivo + '.tmp', `---\ntipo: informe\nmes: ${mes}\n${una ? `cuenta: ${una.id}\n` : ''}creado: ${new Date().toISOString()}\n---\n${r.texto}`); renombrar(archivo + '.tmp', archivo);
   return { ...r, nota: path.relative(BRAIN, archivo).replace(/\\/g, '/') };
 }
 // C1 (8 oct 2026): «✨ Mejorar con Marketing» — tu agente de contenido propone el texto con la voz de la marca, sus instrucciones, skills y lecciones
@@ -1918,8 +1925,9 @@ const contenidoRoutes = crearRutas({ almacen: contenido, json, body, notice, pro
   encargar: async ({ texto, titulo }) => { const a = agenteDeContenido(AGENTS, CONTENIDO_DEPTS); const t = await newTask({ dept: a?.department || 'marketing', text: texto, agent: a?.id || null, title: titulo, needsOk: false }); return { id: t.id, titulo: t.title, agente: AGENTS.find(x => x.id === t.agent)?.name || t.agent }; },
   quienLlena: () => agenteDeContenido(AGENTS, CONTENIDO_DEPTS)?.name || '',
   plantillas: crearPlantillasContenido({ cerebro: BRAIN }), // C3: las plantillas de publicación (notas del Cerebro)
+  cuentas: () => listaCuentas({ cuentas: cuentasMeta(), metaPagina: cfg.contenido?.metaPagina || '', conductor: conductorActual().id }), // 9 oct 2026: a qué cuenta sale
   alBorrador: p => TG?.pieza?.(p, 'Un agente dejó un borrador'), // C3: aprobar desde el teléfono, con la vista previa
-  analiticasTexto: async (dias, redes) => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, zona: zonaHoraria(), redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
+  analiticasTexto: async (dias, redes, cuenta = '') => resumenAnaliticas(metricas.leer({ dias: Math.max(90, dias * 2) }), { dias, cuenta, cuentas: meta.estado().cuentas || [], hora: await mejorHora.horas(redes) }), ajustes: () => ({ departamentos: CONTENIDO_DEPTS, modo: contenidoModo(), conductor: conductorActual().id, zona: zonaHoraria(), redes: Array.isArray(cfg.contenido?.redes) && cfg.contenido.redes.length ? cfg.contenido.redes : ['instagram', 'facebook'] }) });
 setInterval(() => programador.tick().catch(e => console.warn('contenido: cola —', e.message)), 60e3); setTimeout(() => programador.tick().catch(() => {}), 20e3); // plan M1: lo aprobado sale solo
 // F3 (8 oct 2026): el pulso de Meta — programa en Facebook, prepara y publica en Instagram a su hora. Solo en modo real: en simulacro o apagado no sale nada
 const pulsoMeta = () => { if (contenidoModo() === 'real') CONDUCTORES.meta.pulso().catch(e => console.warn('contenido: meta —', e.message)); };

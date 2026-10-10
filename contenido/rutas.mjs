@@ -17,6 +17,7 @@ import { fechasRepetidas, copiaDe, CADA, MAX_VECES } from '../src/contenido-repe
 //   POST   /api/contenido/piezas/<id>/aprobar { pronto: true }                  → «Publicar ya»: aprobada para dentro de unos 5 minutos
 // C2 (8 oct 2026), lo ya publicado:
 //   GET    /api/contenido/publicadas?desde=&hasta=                             → { fuente, ultimaFoto, porPieza: { id: [resultado] }, sueltas }
+//   GET    /api/contenido/cuentas                                              → (9 oct 2026) { cuentas: [{ id, red, nombre, usuario, foto, paginaId, puedePublicar, motivo? }], porDefecto }
 // C3 (8 oct 2026), llenar la semana y lo que vuelve:
 //   GET    /api/contenido/llenar?desde=&dias=&redes=                           → { huecos (con lo que va en cada uno), vuelven, hora, agente }
 //   POST   /api/contenido/llenar { huecos: [{ fecha, hora, que, vuelve? }], redes, pide } → copias «que vuelven» (a revisión) + una tarea a Marketing
@@ -33,7 +34,7 @@ import { NOMBRE_RED, REDES } from './piezas.mjs';
 const ID = '[a-z0-9-]+';
 const DE_AGENTE = new Set(['idea', 'borrador']); // lo que un agente puede dejar: nunca «en revisión» ni «aprobada»
 
-export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {} }) {
+export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = () => ({}), programador = null, metricool = null, conductorMeta = () => null, mejorHora = null, analiticasTexto = null, bandeja = null, informe = null, guardados = null, mejorar = null, publicadas = null, encargar = null, quienLlena = () => '', plantillas = null, alBorrador = () => {}, cuentas = null, ahora = Date.now }) {
   const revisado = p => { const r = revisarPublicacion(postDePieza(p), p.redes); return { ...p, revision: { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }, salida: programador ? programador.salidaDe(p.id) : null }; };
   const resumen = () => {
     const todas = almacen.listar({ sinFecha: true });
@@ -59,7 +60,7 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
   async function planLlenar({ desde, dias, redes }) {
     const h = mejorHora ? await mejorHora.horas(redes).catch(() => null) : null;
     const todas = almacen.listar({});
-    const hs = huecosDe({ desde, dias, piezas: todas, redes, grid: h?.grid || null });
+    const hs = huecosDe({ desde, dias, piezas: todas, redes, grid: h?.grid || null, ahora: ahora() });
     const vs = queVuelven({ piezas: todas, resultados: resultadosDe(todas) });
     const corta = p => ({ id: p.id, titulo: p.titulo, texto: String(p.texto || '').slice(0, 160), fecha: p.fecha, hora: p.hora, formato: p.formato, formatos: p.formatos || {}, redes: p.redes, medios: (p.medios || []).slice(0, 1), nMedios: (p.medios || []).length });
     return { desde, dias, redes, hora: { fuente: h?.fuente || 'ninguna', motivo: h?.motivo || '' }, huecos: repartir(hs, vs), vuelven: vs.map(x => ({ ...corta(x.pieza), resultado: x.resultado, ultima: x.ultima })), agente: quienLlena() || '' };
@@ -70,12 +71,12 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
   /** C3: crea lo elegido de «Llenar la semana» — las copias que vuelven (a revisión) y UNA tarea a Marketing con los demás huecos.
    *  9 oct 2026: también la usan las ops de Dimitri y del asistente (serve.mjs → runOp), con el mismo plan que propone GET. */
   async function llenar(b = {}) {
-    const redes = redesDe(b.redes), ahora = Date.now();
+    const redes = redesDe(b.redes), t = ahora();
     const hs = (Array.isArray(b.huecos) ? b.huecos : []).slice(0, 14).filter(h => h && /^\d{4}-\d{2}-\d{2}$/.test(h.fecha || '') && /^\d{2}:\d{2}$/.test(h.hora || '') && ['marketing', 'vuelve'].includes(h.que));
     if (!hs.length) return { status: 400, error: 'elige al menos un hueco: un borrador nuevo de Marketing o algo que vuelve' };
     const creadas = [], errores = [], paraMk = [];
     for (const h of hs) {
-      if (new Date(`${h.fecha}T${h.hora}:00`).getTime() < ahora + 10 * 60e3) { errores.push(`${h.fecha} ${h.hora}: esa hora ya pasó o está demasiado cerca`); continue; }
+      if (new Date(`${h.fecha}T${h.hora}:00`).getTime() < t + 10 * 60e3) { errores.push(`${h.fecha} ${h.hora}: esa hora ya pasó o está demasiado cerca`); continue; }
       if (h.que === 'marketing') { paraMk.push(h); continue; }
       const o = almacen.leer(String(h.vuelve || '')); if (!o) { errores.push(`${h.fecha}: la pieza que iba a volver ya no está`); continue; }
       const r = almacen.crear({ ...copiaDe(o), fecha: h.fecha, hora: h.hora, estado: 'revision', origen: origenVuelve(raizDe(o)) }, { por: 'dueno' }); // vuelve tal cual salió: lista para tu OK
@@ -99,6 +100,8 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         return json(res, 200, { piezas: almacen.listar(f).map(revisado), resumen: resumen(), ajustes: ajustes() }), true;
       }
       if (p === '/api/contenido/resumen' && req.method === 'GET') return json(res, 200, resumen()), true;
+      // 9 oct 2026: las cuentas en que puede salir una pieza (lo que ya se sabe de Meta, sin llamarla) y las de por defecto
+      if (p === '/api/contenido/cuentas' && req.method === 'GET') return json(res, 200, cuentas ? cuentas() : { cuentas: [], porDefecto: { facebook: '', instagram: '' }, conectada: false }), true;
       if (p === '/api/contenido/piezas' && req.method === 'POST') {
         const b = await body(req); const deAgente = b.por === 'agente';
         const datos = { ...b }; delete datos.por; delete datos.agente;
@@ -114,7 +117,9 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (!informe) return json(res, 404, { error: 'sin informe' }), true;
         const b = req.method === 'POST' ? await body(req) : {}, mes = String(b.mes || url.searchParams.get('mes') || new Date().toISOString().slice(0, 7));
         if (!/^\d{4}-\d{2}$/.test(mes)) return json(res, 400, { error: 'el mes va como AAAA-MM' }), true;
-        const r = await informe(mes, { guardar: req.method === 'POST' }); return json(res, 200, r), true;
+        const cuenta = String(b.cuenta || url.searchParams.get('cuenta') || ''); // 9 oct 2026: el informe de una cuenta sola (su id de Analíticas)
+        if (cuenta && !/^(instagram|facebook):[\w.-]{1,80}$/.test(cuenta)) return json(res, 400, { error: 'la cuenta va como instagram:<id> o facebook:<id>' }), true;
+        const r = await informe(mes, { guardar: req.method === 'POST', cuenta }); return json(res, 200, r), true;
       }
       if (p === '/api/contenido/bandeja' && req.method === 'GET') {
         if (!bandeja) return json(res, 200, { items: [], cuenta: {}, pendientes: 0, fuente: { ok: false, motivo: 'sin bandeja' } }), true;
@@ -161,7 +166,7 @@ export function crearRutas({ almacen, json, body, notice = () => {}, ajustes = (
         if (!analiticasTexto) return json(res, 200, { texto: 'Analíticas no está disponible aquí.' }), true;
         const dias = Math.min(90, Math.max(7, parseInt(url.searchParams.get('dias') || '30', 10) || 30));
         const redes = (url.searchParams.get('redes') || (ajustes().redes || ['instagram', 'facebook']).join(',')).split(',').filter(Boolean).slice(0, 9);
-        return json(res, 200, await analiticasTexto(dias, redes)), true;
+        return json(res, 200, await analiticasTexto(dias, redes, String(url.searchParams.get('cuenta') || '').slice(0, 120))), true; // 9 oct 2026: `cuenta` (id, @usuario o nombre) → solo esa
       }
       if (p === '/api/contenido/guardados' && req.method === 'GET') { // C1: los textos guardados y los hashtags que más usas
         return json(res, 200, { textos: guardados ? guardados.listar() : [], usados: hashtagsUsados(almacen.listar({ sinFecha: true })), nota: guardados ? 'Contenido/Textos guardados.md' : '' }), true;

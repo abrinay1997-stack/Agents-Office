@@ -10,7 +10,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -45,13 +45,13 @@ let fails = 0; const step = (ok, what) => { if (!ok) fails++; console.log(`${ok 
 const medir = page => page.evaluate(() => {
   const panel = document.querySelector('.ct-panel:not([hidden])'); if (!panel) return { small: -1 };
   const vis = e => e.offsetParent && e.getBoundingClientRect().width > 0;
-  const small = [...panel.querySelectorAll('button, summary, select, input:not([type="checkbox"]), [role="tab"]')].filter(vis).map(b => ({ b, r: b.getBoundingClientRect() })).filter(({ r }) => r.height < 24 || r.width < 24).map(({ b }) => b.className + ':' + (b.textContent || b.getAttribute('aria-label') || '').trim().slice(0, 20));
+  const small = [...panel.querySelectorAll('button, summary, select, input:not([type="checkbox"]):not([type="radio"]), [role="tab"]')] /* una casilla o un radio: su objetivo es la etiqueta entera */.filter(vis).map(b => ({ b, r: b.getBoundingClientRect() })).filter(({ r }) => r.height < 24 || r.width < 24).map(({ b }) => b.className + ':' + (b.textContent || b.getAttribute('aria-label') || '').trim().slice(0, 20));
   const tiny = [...panel.querySelectorAll('*')].filter(e => vis(e) && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) < 10.5).map(e => e.className);
   return { small, tiny, hscroll: document.documentElement.scrollWidth > innerWidth + 1 };
 });
 let browser;
 try {
-  try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }); }
+  try { browser = await chromium.launch(); } catch { try { browser = await chromium.launch({ channel: 'chrome' }); } catch { browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }); } }
   for (const [w, h] of [[1512, 900], [1024, 768], [390, 844]]) for (const tema of ['light', 'dark']) {
     const tag = `${w}-${tema}`, full = tag === '1512-light';
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: tema, reducedMotion: 'reduce' }); const page = await ctx.newPage();
@@ -64,6 +64,8 @@ try {
     const menu0 = await page.$('.ct-newmenu:not([hidden]) button'); if (menu0) { await menu0.click(); await page.waitForTimeout(300); }
     await page.waitForSelector('.ct-panel:not([hidden]) .pz-comp', { timeout: 5000 });
     const P = '.ct-panel:not([hidden]) ';
+    // 0. (9 oct 2026) sin Meta conectada, «Publicar en» lo dice y nada más
+    step(/Sin Meta conectada: saldrá por la cuenta de Ajustes/.test(await page.textContent(P + '.pz-ctas')) && !(await page.$(P + '.pz-ctbtn')), `${tag}: sin Meta, «Sin Meta conectada: saldrá por la cuenta de Ajustes»`);
     // 1. las redes con su formato
     const fichas = await page.evaluate(() => [...document.querySelectorAll('.pz-rc')].map(c => c.querySelector('[data-red]').dataset.red + ':' + (c.querySelector('select')?.value || c.querySelector('.pz-fstat')?.textContent)).join(','));
     step(/instagram:post/.test(fichas) && /facebook:post/.test(fichas), `${tag}: cada red con su formato (${fichas})`);
@@ -160,6 +162,45 @@ try {
       step(!v.length, `${tag}: axe sin fallos en el panel${v.length ? ': ' + v.join(', ') : ''}`);
     }
     await page.keyboard.press('Escape'); await page.waitForTimeout(800);
+    step(!errs.length, `${tag}: sin errores de la página${errs.length ? ': ' + errs[0] : ''}`);
+    await ctx.close();
+  }
+  // (9 oct 2026) «Publicar en»: la cuenta de cada red, en la demo (file://), que trae dos marcas y un Instagram sin página
+  for (const [w, h, tema] of [[1512, 900, 'light'], [1512, 900, 'dark'], [390, 844, 'light']]) {
+    const tag = `demo-${w}-${tema}`;
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: tema, reducedMotion: 'reduce' }); const page = await ctx.newPage();
+    const errs = []; page.on('pageerror', e => errs.push(e.message));
+    await page.addInitScript(t => { try { localStorage.setItem('ao.theme', t); localStorage.setItem('ao.onboarded', '1'); } catch {} }, tema);
+    await page.goto(pathToFileURL(path.join(ROOT, 'dist', 'command-centre-v2.html')).href); await page.waitForTimeout(1500);
+    await page.keyboard.press('Escape'); await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press('k'); await page.waitForSelector('#ctOv .ct-mode', { state: 'visible' }); await page.waitForTimeout(500);
+    await page.click('#ctNew'); await page.waitForTimeout(300);
+    const m0 = await page.$('.ct-newmenu:not([hidden]) button'); if (m0) { await m0.click(); await page.waitForTimeout(300); }
+    const P = '.ct-panel:not([hidden]) ';
+    await page.waitForSelector(P + '.pz-ctbtn', { timeout: 8000 });
+    const linea = async red => (await page.textContent(`${P}[data-ctred="${red}"]`)).replace(/\s+/g, ' ').trim();
+    step(/Sale en @pana\.claw/.test(await linea('instagram')) && /Sale en PanaClaw/.test(await linea('facebook')), `${tag}: a la vista, dónde sale cada red («${await linea('instagram')}» · «${await linea('facebook')}»)`);
+    await page.click(P + '[data-ctred="instagram"]');
+    await page.waitForFunction(() => document.querySelectorAll('.ct-panel:not([hidden]) [data-cta="instagram"]').length === 3, null, { timeout: 4000 });
+    step(await page.evaluate(() => document.activeElement?.dataset?.ctred === 'instagram'), `${tag}: al desplegar, el foco se queda en su botón`);
+    const ops = await page.evaluate(() => [...document.querySelectorAll('.ct-panel:not([hidden]) [data-cta="instagram"]')].map(i => ({ v: i.value, dis: i.disabled, ok: i.checked, mot: i.getAttribute('aria-describedby') ? document.getElementById(i.getAttribute('aria-describedby'))?.textContent : '' })));
+    step(ops.find(o => o.v === 'instagram:demo_ig1')?.ok && ops.find(o => o.v === 'instagram:demo_ig3')?.dis && /no tiene página de Facebook vinculada/.test(ops.find(o => o.v === 'instagram:demo_ig3')?.mot), `${tag}: las tres cuentas; @livesyncpro no se puede elegir y dice por qué`);
+    await page.focus(P + '[data-cta="instagram"]:checked'); await page.keyboard.press('ArrowDown');
+    await page.waitForFunction(() => /@bukoflow/.test(document.querySelector('.ct-panel:not([hidden]) [data-ctred="instagram"]')?.textContent || ''), null, { timeout: 4000 });
+    step(await page.evaluate(() => document.activeElement?.value === 'instagram:demo_ig2' && !!document.querySelector('.ct-panel:not([hidden]) .pz-ctl')), `${tag}: con la flecha se elige @bukoflow y la lista sigue abierta (el foco en su radio)`);
+    await page.waitForFunction(() => /bukoflow/.test(document.querySelector('.ct-panel:not([hidden]) .pz-preview')?.textContent || ''), null, { timeout: 4000 }).then(() => step(true, `${tag}: la vista previa sale con @bukoflow`), () => step(false, `${tag}: la vista previa sale con @bukoflow`));
+    await page.screenshot({ path: path.join(OUT, `${tag}-publicar-en.png`) });
+    const r = await medir(page);
+    step(r.small?.length === 0, `${tag}: los controles miden 24 px o más${r.small?.length ? ': ' + r.small.slice(0, 4).join(' | ') : ''}`);
+    step(r.tiny?.length === 0, `${tag}: ningún texto baja de 10,5 px${r.tiny?.length ? ': ' + r.tiny.slice(0, 4).join(' | ') : ''}`);
+    step(!r.hscroll, `${tag}: la página no se desplaza a lo ancho`);
+    if (process.env.AO_AXE) {
+      await page.addScriptTag({ path: process.env.AO_AXE });
+      const v = await page.evaluate(async () => (await window.axe.run(document.querySelector('.ct-panel'), { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map(x => `${x.id} (${x.nodes.length}: ${x.nodes[0]?.target})`));
+      step(!v.length, `${tag}: axe sin fallos en el panel con la lista abierta${v.length ? ': ' + v.join(', ') : ''}`);
+    }
+    await page.click(P + '[data-ctred="instagram"]'); await page.waitForFunction(() => !document.querySelector('.ct-panel:not([hidden]) .pz-ctl'), null, { timeout: 4000 });
+    step(true, `${tag}: el mismo botón la pliega`);
     step(!errs.length, `${tag}: sin errores de la página${errs.length ? ': ' + errs[0] : ''}`);
     await ctx.close();
   }

@@ -25,6 +25,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { mensajeMeta, permisosQueFaltan, ErrorMeta, NOMBRE_FUNCION } from './meta.mjs';
+import { porDefectoCuentas, motivoNoPublica } from '../src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada pieza
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const REDES_META = ['instagram', 'facebook'];
@@ -104,11 +105,17 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
   }
 
   /** La página y su Instagram: la elegida en la configuración, o la primera que el token ve. */
-  function cuentas() {
-    const c = meta.estado().cuentas || [], quiero = String(pagina() || '').trim();
-    const fb = c.find(x => x.red === 'facebook' && quiero && (x.paginaId === quiero || x.externoId === quiero)) || c.find(x => x.red === 'facebook' && c.some(y => y.red === 'instagram' && y.paginaId === x.paginaId)) || c.find(x => x.red === 'facebook');
-    const ig = fb ? c.find(x => x.red === 'instagram' && x.paginaId === fb.paginaId) : null;
-    return { fb, ig };
+  function cuentas() { return porDefectoCuentas(meta.estado().cuentas || [], pagina()); }
+  /**
+   * (9 oct 2026) Dónde sale UNA red de una entrega: la cuenta que eligió la pieza (`e.cuentas[red]`) o, sin elegir, la de siempre.
+   * Instagram sale con la página a la que está vinculado (su página decide el token). → { fb, ig } o { error } en palabras.
+   */
+  function dondeSale(e, red, def) {
+    const id = e.cuentas?.[red]; if (!id) return def;
+    const c = meta.estado().cuentas || [], x = c.find(y => y.id === id);
+    const motivo = motivoNoPublica(x); if (motivo) return { error: x ? motivo : `la cuenta elegida (${String(id).split(':')[1]}) ya no la ve el token de Meta: elige otra en la pieza o pulsa «Comprobar conexión»` };
+    if (red === 'facebook') return { fb: x, ig: null };
+    return { fb: c.find(y => y.red === 'facebook' && y.paginaId === x.paginaId) || { paginaId: x.paginaId, nombre: '' }, ig: x };
   }
   const token = j => meta.tokenDe({ paginaId: j.pagina });
   const bytes = async (id, jpeg) => {
@@ -123,17 +130,19 @@ export function crearConductorMeta({ meta = null, rutaMedio = () => null, aJpeg 
   const programar = e => enFila(() => programarYa(e));
   async function programarYa(e) {
     const l = listo(); if (!l.ok) throw propio(l.motivo);
-    const grupo = 'mt-' + crypto.createHash('sha256').update(JSON.stringify([e.clave, e.momento, e.redes, e.texto, e.medios])).digest('hex').slice(0, 12);
+    const grupo = 'mt-' + crypto.createHash('sha256').update(JSON.stringify([e.clave, e.momento, e.redes, e.texto, e.medios, ...(e.cuentas && Object.keys(e.cuentas).length ? [e.cuentas] : [])])).digest('hex').slice(0, 12); // otra cuenta = otro grupo
     const d = leer(), ya = Object.values(d.trabajos).filter(j => j.grupo === grupo);
     if (ya.length) return { id: grupo, uuid: '', zona: '', redes: redesDe(ya, d.otras?.[grupo]) };
     const medios = (e.medios || []).map(id => { const ruta = rutaMedio(id); if (!ruta || !fs.existsSync(ruta)) throw propio(`el Estudio ya no tiene «${id}»: quizá se fue a la papelera`); return { id, tipo: tipoDe(ruta) }; });
-    const { fb, ig } = cuentas(), t = ahora(), otras = {}, nuevos = [];
+    const def = cuentas(), t = ahora(), otras = {}, nuevos = [];
     for (const red of e.redes || []) {
       const plan = planRed(red, e.formato, medios.map(m => m.tipo));
       if (plan.error) { otras[red] = plan.error; continue; }
+      const donde = dondeSale(e, red, def), { fb, ig } = donde;
+      if (donde.error) { otras[red] = donde.error; continue; }
       if (red === 'instagram' && !ig) { otras[red] = `la página «${fb?.nombre || '—'}» no tiene un Instagram de empresa vinculado (o el token no lo ve)`; continue; }
       const id = `${grupo}-${red}`;
-      nuevos.push({ id, grupo, red, pagina: fb.paginaId, ig: red === 'instagram' ? ig.externoId : '', como: plan.como, variante: e.variante || 'post', momento: e.momento,
+      nuevos.push({ id, grupo, red, pagina: fb.paginaId, ig: red === 'instagram' ? ig.externoId : '', cuenta: red === 'instagram' ? ig.id : fb.id || '', como: plan.como, variante: e.variante || 'post', momento: e.momento,
         texto: red === 'instagram' && plan.como === 'historia' ? '' : String(e.texto || ''), comentario: plan.como === 'historia' ? '' : String(e.comentario || ''),
         colaboradores: red === 'instagram' && plan.como !== 'historia' ? (e.extras?.colaboradores || []).slice(0, 3) : [], medios,
         modo: vaNativa(red, plan.como, e.momento, t) ? 'nativa' : 'local', estado: 'programada', remoto: null, contenedores: {}, padre: '', temporales: [], url: '', error: '', detalle: '', intentos: 0, proximo: 0, creada: t });

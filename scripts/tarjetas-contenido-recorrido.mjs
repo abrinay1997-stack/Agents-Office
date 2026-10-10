@@ -9,7 +9,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import sharp from 'sharp';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -40,7 +40,7 @@ await api('POST', '/api/contenido/piezas', { titulo: 'Kit de limpieza', fecha: d
 let fails = 0; const step = (ok, what) => { if (!ok) fails++; console.log(`${ok ? '✓' : '✗'} ${what}`); };
 let browser;
 try {
-  try { browser = await chromium.launch(); } catch { browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }); }
+  try { browser = await chromium.launch(); } catch { try { browser = await chromium.launch({ channel: 'chrome' }); } catch { browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' }); } }
   for (const [w, h] of [[1512, 900], [1024, 768], [390, 844]]) for (const tema of ['light', 'dark']) {
     const tag = `${w}-${tema}`;
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: tema, reducedMotion: 'reduce', hasTouch: w < 500, isMobile: w < 500 }); const page = await ctx.newPage();
@@ -58,6 +58,13 @@ try {
         const tiny = [...document.querySelectorAll('#ctGrid .cv-ev.pz *')].filter(e => e.offsetParent && [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(e).fontSize) > 0 && parseFloat(getComputedStyle(e).fontSize) < 10.5).length; // 0 = la insignia hecha punto en un mes estrecho: no se lee, a propósito
         return { n: cards.length, mas: !!document.querySelector('#ctGrid .pz-mas'), snip: [...document.querySelectorAll('#ctGrid .pz-snip')].filter(x => x.offsetParent).map(x => x.textContent.slice(0, 30)), nf: !!document.querySelector('#ctGrid .pz-nf'), aria: cards.map(c => c.getAttribute('aria-label')).join(' | '), tiny, hscroll: document.documentElement.scrollWidth > innerWidth + 1 };
       });
+      // 9 oct 2026: las piezas son de mañana, pasado y el siguiente; de viernes a domingo, la tercera cae en la semana que viene y el paso
+      // fallaba sin motivo (dependía del día en que se corría). En la semana se suman también las de la siguiente.
+      if (v === 'week' && r.n < 3 && await page.$('#ctNext')) {
+        await page.click('#ctNext'); await page.waitForTimeout(400);
+        r.n += await page.evaluate(() => document.querySelectorAll('#ctGrid .cv-ev.pz').length);
+        await page.click('#ctPrev'); await page.waitForTimeout(400);
+      }
       step(r.n >= 3, `${tag} ${v}: las tres piezas en el calendario (${r.n})`);
       step(r.mas, `${tag} ${v}: «+2» sobre la miniatura del carrusel`);
       step(r.nf && /Facebook \(post\)/.test(r.aria), `${tag} ${v}: Facebook sale como post y la tarjeta lo dice (icono y lector de pantalla)`);
@@ -90,6 +97,49 @@ try {
       step(await page.evaluate(() => document.querySelector('.ct-hov').hidden && !document.querySelector('.ct-panel').hidden), `${tag}: en el teléfono no hay vista previa: tocar abre la pieza`);
       await page.keyboard.press('Escape'); await page.waitForTimeout(400);
     }
+    step(!errs.length, `${tag}: sin errores de la página${errs.length ? ': ' + errs[0] : ''}`);
+    await ctx.close();
+  }
+  // (9 oct 2026) a qué cuenta sale cada pieza, en la demo (file://): dos marcas y un Instagram sin página; la tarjeta lo dice y se filtra por cuenta
+  for (const [w, h, tema] of [[1512, 900, 'light'], [1512, 900, 'dark'], [390, 844, 'light']]) {
+    const tag = `demo-${w}-${tema}`;
+    const ctx = await browser.newContext({ viewport: { width: w, height: h }, colorScheme: tema, reducedMotion: 'reduce', hasTouch: w < 500, isMobile: w < 500 }); const page = await ctx.newPage();
+    const errs = []; page.on('pageerror', e => errs.push(e.message));
+    await page.addInitScript(t => { try { localStorage.setItem('ao.theme', t); localStorage.setItem('ao.onboarded', '1'); localStorage.removeItem('ao.ct.cuenta'); localStorage.setItem('ao.ct.view', '"agenda"'); } catch {} }, tema);
+    await page.goto(pathToFileURL(path.join(ROOT, 'dist', 'command-centre-v2.html')).href); await page.waitForTimeout(1500);
+    await page.keyboard.press('Escape'); await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press('k'); await page.waitForSelector('#ctOv .ct-mode', { state: 'visible' });
+    await page.waitForFunction(() => document.querySelector('#ctOv [data-fcta]'), null, { timeout: 6000 }).catch(() => {});
+    const b = await page.$('#ctOv .ct-views [data-v="agenda"]'); if (b && await b.isVisible()) await b.click(); else await page.selectOption('#ctOv .ct-vsel', 'agenda').catch(() => {});
+    if (w < 500) { const f = await page.$('#ctOv [data-filters]'); if (f && await f.isVisible() && (await f.getAttribute('aria-expanded')) !== 'true') await f.click(); }
+    await page.waitForFunction(() => [...document.querySelectorAll('#ctGrid .cv-ev.pz .pz-cta')].some(x => x.textContent === '@bukoflow'), null, { timeout: 6000 }).catch(() => {});
+    const c = await page.evaluate(() => ({ ctas: [...document.querySelectorAll('#ctGrid .cv-ev.pz .pz-cta')].map(x => x.textContent), aria: [...document.querySelectorAll('#ctGrid .cv-ev.pz')].map(x => x.getAttribute('aria-label')).join(' | '), opts: [...document.querySelectorAll('#ctOv [data-fcta] option')].map(o => o.textContent) }));
+    step(c.ctas.includes('@pana.claw') && c.ctas.includes('@bukoflow'), `${tag}: cada tarjeta dice su cuenta (${[...new Set(c.ctas)].join(', ')})`);
+    step(/en @bukoflow/.test(c.aria), `${tag}: el lector de pantalla también la oye`);
+    step(c.opts.length === 6 && c.opts.some(o => /@bukoflow · Instagram/.test(o)), `${tag}: el filtro por cuenta lista las cinco y «todas» (${c.opts.length})`);
+    await page.screenshot({ path: path.join(OUT, `${tag}-cuentas.png`) });
+    if (w >= 1024) {
+      const card = page.locator('#ctGrid .cv-ev.pz', { hasText: 'Historia: horario' }).first();
+      await card.hover(); await page.waitForFunction(() => !document.querySelector('.ct-hov').hidden, null, { timeout: 3000 }).catch(() => {});
+      step(/@bukoflow/.test(await page.textContent('.ct-hov')), `${tag}: la vista previa al pasar dice la cuenta`);
+      await page.mouse.move(2, 2); await page.keyboard.press('Escape');
+    }
+    await page.selectOption('#ctOv [data-fcta]', 'instagram:demo_ig2');
+    await page.waitForFunction(() => document.querySelectorAll('#ctGrid .cv-ev.pz').length === 1, null, { timeout: 4000 }).catch(() => {});
+    const f = await page.evaluate(() => ({ n: document.querySelectorAll('#ctGrid .cv-ev.pz').length, t: document.querySelector('#ctGrid .cv-ev.pz')?.getAttribute('aria-label') || '', guardado: localStorage.getItem('ao.ct.cuenta'), foco: document.activeElement?.matches?.('[data-fcta]'), boton: document.querySelector('#ctOv [data-filters]')?.textContent }));
+    step(f.n === 1 && /Historia: horario/.test(f.t), `${tag}: con @bukoflow solo queda su pieza (${f.n})`);
+    step(f.guardado === '"instagram:demo_ig2"' && f.foco && /Filtros \(1\)/.test(f.boton), `${tag}: se recuerda (ao.ct.cuenta), el foco sigue en el filtro y «Filtros (1)»`);
+    if (process.env.AO_AXE) {
+      await page.addScriptTag({ path: process.env.AO_AXE });
+      const v = await page.evaluate(async () => (await window.axe.run(document.querySelector('#ctOv'), { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map(x => `${x.id} (${x.nodes.length}: ${x.nodes[0]?.target})`));
+      step(!v.length, `${tag}: axe sin fallos en Contenido${v.length ? ': ' + v.join(', ') : ''}`);
+    }
+    await page.selectOption('#ctOv [data-fcta]', '');
+    await page.waitForFunction(() => document.querySelectorAll('#ctGrid .cv-ev.pz').length > 1, null, { timeout: 4000 }).catch(() => {});
+    step(await page.evaluate(() => document.querySelectorAll('#ctGrid .cv-ev.pz').length > 1), `${tag}: «todas» las devuelve`);
+    await page.click('#ctOv .ct-mode [data-m="prog"]'); await page.waitForFunction(() => document.querySelector('#ctOv .ct-prog .ct-row .pz-cta'), null, { timeout: 4000 }).catch(() => {});
+    step(await page.evaluate(() => [...document.querySelectorAll('#ctOv .ct-prog .ct-row .pz-cta')].some(x => x.textContent === '@bukoflow')), `${tag}: Programación dice a qué cuenta va cada pieza`);
+    await page.screenshot({ path: path.join(OUT, `${tag}-programacion.png`) });
     step(!errs.length, `${tag}: sin errores de la página${errs.length ? ': ' + errs[0] : ''}`);
     await ctx.close();
   }

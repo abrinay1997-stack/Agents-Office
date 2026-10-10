@@ -124,3 +124,47 @@ test('kpis: las publicaciones leídas solo desde una fecha no se comparan con un
   assert.equal(k.interacciones.valor, 50);
   assert.equal(kpis({ serie, publicaciones }, { ...con, publicacionesDesde: '2026-09-01' }).interacciones.anterior, 40, 'si se leyó desde antes, sí se compara');
 });
+
+// 9 oct 2026: «filtrar dentro de todas las cuentas y verlas individualmente». El filtro acepta 'todas', una red o una cuenta (su id).
+import { deFiltro, cuentasDe, buscarCuenta, nombreCuenta, compararCuentas } from '../src/contenido-cifras.js';
+const fila = (cuentaId, fecha, seguidores, alcance) => ({ cuentaId, red: cuentaId.split(':')[0], fecha, seguidores, alcance, vistas: 0, interacciones: 0, visitas: 0 });
+const pubDe = (cuentaId, publicadaAt, interacciones, tipo = 'imagen') => ({ id: `${cuentaId}|${interacciones}`, cuentaId, red: cuentaId.split(':')[0], publicadaAt, interacciones, tipo, alcance: interacciones * 10 });
+const CUENTAS = [{ id: 'instagram:1', red: 'instagram', nombre: 'PanaClaw', usuario: 'pana.claw' }, { id: 'instagram:2', red: 'instagram', nombre: 'BukoFlow', usuario: 'bukoflow' }, { id: 'facebook:9', red: 'facebook', nombre: 'PanaClaw' }];
+const SERIE = [fila('instagram:1', '2026-10-01', 1000, 300), fila('instagram:2', '2026-10-01', 200, 50), fila('facebook:9', '2026-10-01', 400, 70),
+  fila('instagram:1', '2026-10-05', 1010, 310), fila('instagram:2', '2026-10-05', 230, 60), fila('facebook:9', '2026-10-05', 401, 80)];
+
+test('filtro de cuenta: una cuenta sola no suma los seguidores de otra; la red suma las suyas; todas, todas', () => {
+  assert.equal(serieDiaria(SERIE, 'instagram:2').at(-1).seguidores, 230);
+  assert.equal(serieDiaria(SERIE, 'instagram').at(-1).seguidores, 1240);
+  assert.equal(serieDiaria(SERIE, 'todas').at(-1).seguidores, 1641);
+  assert.equal(serieDiaria(SERIE, 'facebook:9').at(-1).alcance, 80);
+  const k = kpis({ serie: SERIE, publicaciones: [] }, { desde: '2026-10-01', hasta: '2026-10-05', red: 'instagram:2' });
+  assert.equal(k.seguidores.valor, 230); assert.equal(k.seguidores.ganados, 30); assert.equal(k.alcance.valor, 110);
+  assert.equal(kpis({ serie: SERIE, publicaciones: [] }, { desde: '2026-10-01', hasta: '2026-10-05', filtro: 'instagram:1' }).seguidores.valor, 1010, '`filtro` es otro nombre de `red`');
+  assert.equal(deFiltro('instagram:1')({ cuentaId: 'instagram:1', red: 'instagram' }), true);
+  assert.equal(deFiltro('instagram:1')({ cuentaId: 'instagram:2', red: 'instagram' }), false);
+  assert.equal(deFiltro('')({ cuentaId: 'x', red: 'facebook' }), true);
+});
+
+test('filtro de cuenta: las mejores publicaciones y los formatos de una cuenta son solo suyos', () => {
+  const pubs = [pubDe('instagram:1', iso(2026, 10, 2), 90, 'reel'), pubDe('instagram:2', iso(2026, 10, 3), 50), pubDe('instagram:2', iso(2026, 10, 4), 20, 'carrusel'), pubDe('facebook:9', iso(2026, 10, 3), 70)];
+  const dos = pubs.filter(deFiltro('instagram:2'));
+  assert.deepEqual(mejoresPublicaciones(dos).map(p => p.interacciones), [50, 20]);
+  assert.deepEqual(porFormato(dos).map(f => f.tipo), ['imagen', 'carrusel']);
+  assert.equal(kpis({ serie: SERIE, publicaciones: pubs }, { desde: '2026-10-01', hasta: '2026-10-05', red: 'instagram:2' }).interacciones.valor, 70);
+  assert.equal(kpis({ serie: SERIE, publicaciones: pubs }, { desde: '2026-10-01', hasta: '2026-10-05', red: 'instagram' }).interacciones.valor, 160);
+});
+
+test('las cuentas de un filtro, buscar una y compararlas', () => {
+  assert.deepEqual(cuentasDe(CUENTAS, 'instagram').map(c => c.id), ['instagram:1', 'instagram:2']);
+  assert.deepEqual(cuentasDe(CUENTAS, 'facebook:9').map(c => c.id), ['facebook:9']);
+  assert.equal(cuentasDe(CUENTAS).length, 3);
+  assert.equal(buscarCuenta(CUENTAS, '@BukoFlow').id, 'instagram:2');
+  assert.equal(buscarCuenta(CUENTAS, 'instagram:1').id, 'instagram:1');
+  assert.equal(buscarCuenta(CUENTAS, 'PanaClaw').id, 'instagram:1', 'por el nombre, la primera que lo lleva');
+  assert.equal(buscarCuenta(CUENTAS, ''), null);
+  assert.equal(nombreCuenta(CUENTAS[0]), '@pana.claw'); assert.equal(nombreCuenta(CUENTAS[2]), 'PanaClaw');
+  const comp = compararCuentas({ serie: SERIE, publicaciones: [] }, CUENTAS, { desde: '2026-10-01', hasta: '2026-10-05' });
+  assert.deepEqual(comp.map(x => [x.cuenta.id, x.k.seguidores.valor, x.k.seguidores.ganados]), [['instagram:1', 1010, 10], ['instagram:2', 230, 30], ['facebook:9', 401, 1]]);
+  assert.equal(compararCuentas({ serie: SERIE, publicaciones: [] }, CUENTAS, { f: 'facebook', desde: '2026-10-01', hasta: '2026-10-05' }).length, 1);
+});

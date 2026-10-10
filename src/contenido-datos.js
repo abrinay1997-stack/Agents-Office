@@ -6,6 +6,9 @@
 import { fechasRepetidas, copiaDe } from './contenido-repetir.js';
 import { revisarPublicacion, postDePieza, revisarMomento } from './contenido-reglas.js';
 import { huecos as huecosDe, queVuelven, repartir, origenVuelve, raizDe } from './contenido-llenar.js';
+import { listaCuentas, cuentasDeRedes } from './contenido-cuentas.js';
+/** 9 oct 2026: las cuentas de la demo — dos marcas con su página y su Instagram, y un Instagram sin página (no puede publicar). */
+const CUENTAS_DEMO = [['facebook', 'demo_p1', 'PanaClaw', ''], ['instagram', 'demo_ig1', 'PanaClaw', 'pana.claw', 'demo_p1'], ['facebook', 'demo_p2', 'BukoFlow', ''], ['instagram', 'demo_ig2', 'BukoFlow', 'bukoflow', 'demo_p2'], ['instagram', 'demo_ig3', 'LiveSync Pro', 'livesyncpro', '']].map(([red, id, nombre, usuario, pg]) => ({ id: `${red}:${id}`, red, nombre, usuario, foto: '', paginaId: red === 'facebook' ? id : pg }));
 
 /** Las medidas de los archivos de muestra de la demo (en la oficina de verdad salen del registro .json de cada archivo del Estudio). */
 export const DEMO_MEDIOS = Object.freeze({
@@ -16,7 +19,7 @@ export const DEMO_MEDIOS = Object.freeze({
 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const PUBLICABLES = ['fecha', 'hora', 'formato', 'redes', 'medios', 'texto', 'hashtags', 'hashtagsEnComentario', 'comentario', 'textoFacebook', 'historias', 'historiaTambien'];
-const huella = p => JSON.stringify([...PUBLICABLES.map(k => p[k] ?? null), ...(p.formatos && Object.keys(p.formatos).length ? [p.formatos] : [])]); // C1: el formato de cada red, solo si alguna sale distinta
+const huella = p => JSON.stringify([...PUBLICABLES.map(k => p[k] ?? null), ...(p.formatos && Object.keys(p.formatos).length ? [p.formatos] : []), ...(Object.keys(cuentasDeRedes(p)).length ? [cuentasDeRedes(p)] : [])]); // y la cuenta elegida (9 oct 2026) // C1: el formato de cada red, solo si alguna sale distinta
 const medidasDe = p => { const out = { ...(p.medidas || {}) }; for (const m of [...(p.medios || []), ...(p.historias || [])]) if (DEMO_MEDIOS[m] && !out[m]) out[m] = DEMO_MEDIOS[m]; return out; };
 const revisar = p => { const r = revisarPublicacion(postDePieza({ ...p, medidas: medidasDe(p) }), p.redes); return { errores: r.errores, avisos: r.avisos, arreglos: r.arreglos }; };
 const conRevision = p => ({ ...p, medidas: medidasDe(p), cambiadaTrasAprobar: p.estado === 'aprobada' && !!p.aprobada && p.aprobada.huella !== huella(p), revision: revisar(p) });
@@ -35,7 +38,7 @@ function piezasDemo() {
     mk({ titulo: 'Reel: un día en la óptica', fecha: dia(6), hora: '19:30', formato: 'reel', estado: 'revision', medios: ['demo/v.mp4'], texto: 'Un día cualquiera en PanaClaw, de la primera cita al último par de lentes. ¿Ya agendaste el tuyo?\n\n#optica #panama', comentario: 'Agenda en el enlace de la bio.' }),
     mk({ titulo: 'Gafas de sol de regalo', fecha: dia(5), formato: 'post', texto: 'Gafas de sol GRATIS por la compra de tus lentes.', medios: ['demo/d.jpg'], origen: 'agente:newt' }),
     ok(mk({ titulo: 'Promo de fin de mes', fecha: dia(-2), hora: '10:00', formato: 'post', texto: 'Último día de la promo de fin de mes.', medios: ['demo/b.jpg'] })),
-    mk({ titulo: 'Historia: horario de la semana', fecha: dia(4), hora: '08:00', formato: 'historia', redes: ['instagram'], medios: ['demo/e.jpg'], estado: 'revision' }),
+    mk({ titulo: 'Historia: horario de la semana', fecha: dia(4), hora: '08:00', formato: 'historia', redes: ['instagram'], medios: ['demo/e.jpg'], estado: 'revision', cuentas: { instagram: 'instagram:demo_ig2' } }),
     // C3 (8 oct 2026): dos que ya salieron hace meses (con sus cifras de ejemplo): lo que puede VOLVER en «Llenar la semana»
     { ...ok(mk({ titulo: 'Antes y después de un examen visual', fecha: dia(-63), hora: '19:00', formato: 'carrusel', texto: 'Así cambia tu día cuando ves bien: antes y después de un examen visual en PanaClaw.', hashtags: '#optica #panama', medios: ['demo/a.jpg', 'demo/c.jpg'] })), salida: { estado: 'publicada', conductor: 'demo', redes: { instagram: { estado: 'publicada' }, facebook: { estado: 'publicada' } } } },
     { ...ok(mk({ titulo: '3 señales de que necesitas lentes', fecha: dia(-78), hora: '13:00', formato: 'post', texto: 'Dolor de cabeza, ojos cansados, letras borrosas: tres señales de que te toca un examen visual.', medios: ['demo/b.jpg'] })), salida: { estado: 'publicada', conductor: 'demo', redes: { instagram: { estado: 'publicada' }, facebook: { estado: 'publicada' } } } },
@@ -86,7 +89,8 @@ export function crearDatos({ served, now = () => new Date() }) {
     guardar: async (nombre, texto) => http('POST', '/api/contenido/guardados', { nombre, texto }),
     borrarGuardado: async nombre => http('DELETE', '/api/contenido/guardados/' + encodeURIComponent(nombre)),
     mejorar: async (pieza, red, pide) => http('POST', '/api/contenido/mejorar', { pieza, red, pide }),
-    publicadas: async ({ desde, hasta }) => http('GET', `/api/contenido/publicadas?desde=${desde}&hasta=${hasta}`), // C2: lo ya publicado, con sus resultados
+    publicadas: async ({ desde, hasta }) => http('GET', `/api/contenido/publicadas?desde=${desde}&hasta=${hasta}`),
+    cuentas: async () => http('GET', '/api/contenido/cuentas'), // 9 oct 2026: a qué cuenta sale cada pieza // C2: lo ya publicado, con sus resultados
     llenar: async ({ desde, dias = 7, redes = [] }) => http('GET', `/api/contenido/llenar?desde=${desde}&dias=${dias}&redes=${encodeURIComponent(redes.join(','))}`), // C3
     llenarHacer: async b => http('POST', '/api/contenido/llenar', b),
     plantillas: async () => (await http('GET', '/api/contenido/plantillas')).plantillas || [], // C3: notas del Cerebro (Contenido/Plantillas)
@@ -125,6 +129,7 @@ export function crearDatos({ served, now = () => new Date() }) {
     back: async (id, estado = 'revision') => { const p = mem().find(x => x.id === id); if (!p) throw falla('esa pieza ya no existe', { status: 404 }); p.estado = ['idea', 'borrador', 'revision'].includes(estado) ? estado : 'revision'; p.aprobada = null; return conRevision(p); },
     remove: async id => { demo = mem().filter(p => p.id !== id); return { ok: true }; },
     resumen: async () => resumenDe(mem().map(conRevision)),
+    cuentas: async () => listaCuentas({ cuentas: CUENTAS_DEMO }),
     cola: async () => ({ modo: 'demo', conductor: { id: 'demo', nombre: 'Demo', ok: false, motivo: '' }, horasAntes: 24, cuenta: {}, entradas: {} }),
     salida: async () => { throw falla('En la demo no sale nada: abre la oficina con el iniciador.'); },
     comprobar: async () => ({ ok: false, error: 'En la demo no hay conexión: abre la oficina con el iniciador.' }),

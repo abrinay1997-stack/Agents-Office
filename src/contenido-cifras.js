@@ -45,7 +45,25 @@ export function enLocal(iso) {
   return { dia: d.getDay(), hora: d.getHours(), fecha: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` };
 }
 
-const deRed = red => x => !red || red === 'todas' || x.red === red;
+/**
+ * El filtro de Analíticas (9 oct 2026, «verlas individualmente»): 'todas', una red ('instagram' · 'facebook') o UNA cuenta por su id
+ * ('instagram:<id>' · 'facebook:<id>', el `cuentaId` de cada fila). Con varias cuentas se suman; con una, son sus propios números.
+ */
+export const deFiltro = f => x => !f || f === 'todas' || (String(f).includes(':') ? x.cuentaId === f : x.red === f);
+const deRed = deFiltro;
+
+/** Las cuentas que entran en un filtro (para decir «suma N cuentas»). */
+export const cuentasDe = (cuentas = [], f = 'todas') => cuentas.filter(c => deFiltro(f)({ cuentaId: c.id, red: c.red }));
+
+/** Busca una cuenta por su id, su @usuario o su nombre (lo que escribe un agente); null si no está. */
+export function buscarCuenta(cuentas = [], q = '') {
+  const t = String(q || '').trim().toLowerCase().replace(/^@/, '');
+  if (!t) return null;
+  return cuentas.find(c => c.id.toLowerCase() === t) || cuentas.find(c => (c.usuario || '').toLowerCase() === t) || cuentas.find(c => (c.nombre || '').toLowerCase() === t) || null;
+}
+
+/** Cómo se nombra una cuenta: «@usuario» si lo tiene, si no su nombre. */
+export const nombreCuenta = c => (c ? (c.usuario ? '@' + c.usuario : c.nombre || c.id) : '');
 
 /**
  * Una fila por día con las cuentas sumadas: seguidores (el último valor de cada cuenta ese día), alcance, vistas,
@@ -80,7 +98,7 @@ function seguidoresEn(dias, fecha) {
  * Las cifras del periodo [desde, hasta] y las del periodo anterior de la misma duración, para enseñar la flecha de
  * subida o bajada.
  */
-export function kpis({ serie = [], publicaciones = [] }, { desde, hasta, red = 'todas', cobertura = 0, publicacionesDesde = null }) {
+export function kpis({ serie = [], publicaciones = [] }, { desde, hasta, filtro, red = filtro ?? 'todas', cobertura = 0, publicacionesDesde = null }) {
   const dias = serieDiaria(serie, red);
   const largo = Math.max(1, Math.round((Date.parse(hasta) - Date.parse(desde)) / 86400_000));
   const desdeAntes = sumarDias(desde, -largo);
@@ -111,6 +129,14 @@ export function kpis({ serie = [], publicaciones = [] }, { desde, hasta, red = '
     publicaciones: cifra(pAhora.length, pAntes.length && pubsCubren ? pAntes.length : null),
     tasaInteraccion: cifra(tasa(pAhora), pAntes.length && pubsCubren ? tasa(pAntes) : null),
   };
+}
+
+/**
+ * Comparar cuentas: una fila por cuenta con sus propias cifras del periodo (seguidores y lo ganado, alcance, interacciones,
+ * publicaciones). `cuentas` son las de `meta.cuentas`; `f` limita a una red. Lo demás, como `kpis`.
+ */
+export function compararCuentas(datos, cuentas = [], { f = 'todas', ...o } = {}) {
+  return cuentasDe(cuentas, f).map(c => ({ cuenta: c, k: kpis(datos, { ...o, red: c.id }) }));
 }
 
 export const NOMBRE_FORMATO = { imagen: 'Imagen', carrusel: 'Carrusel', reel: 'Reel', video: 'Video', texto: 'Texto', historia: 'Historia' };

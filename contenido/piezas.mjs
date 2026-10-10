@@ -17,6 +17,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { revisarPublicacion, postDePieza, medidaDeItem, revisarMomento, normalizarFormatos, formatoDe } from '../src/contenido-reglas.js';
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
+import { limpiarCuentas, cuentasLimpias, cuentasDeRedes } from '../src/contenido-cuentas.js'; // 9 oct 2026: la cuenta de cada red (qué página, qué Instagram)
 
 export const ESTADOS = ['idea', 'borrador', 'revision', 'aprobada']; // los que se deciden aquí; «en Meta», «publicada» y «falló» son de la cola (F3)
 export const FORMATOS = ['post', 'reel', 'carrusel', 'historia'];
@@ -55,8 +56,8 @@ function splitList(s) { // «a, "b, c", d»: las comas dentro de comillas no sep
   for (let i = 0; i < s.length; i++) { const c = s[i]; if (c === '"' && s[i - 1] !== '\\') q = !q; if (c === ',' && !q) { out.push(cur); cur = ''; } else cur += c; }
   out.push(cur); return out.map(x => x.trim()).filter(x => x !== '');
 }
-const ORDEN = ['tipo', 'id', 'titulo', 'fecha', 'hora', 'formato', 'formatos', 'redes', 'estado', 'responsable', 'medios', 'historiaTambien', 'historias', 'hashtagsEnComentario', 'pinterest', 'youtube', 'tiktok', 'origen', 'tarea', 'creada', 'actualizada', 'aprobada', 'entregada'];
-const OBJETOS = ['aprobada', 'entregada', 'pinterest', 'youtube', 'tiktok', 'formatos']; // van en la cabecera como JSON en una línea
+const ORDEN = ['tipo', 'id', 'titulo', 'fecha', 'hora', 'formato', 'formatos', 'redes', 'cuentas', 'estado', 'responsable', 'medios', 'historiaTambien', 'historias', 'hashtagsEnComentario', 'pinterest', 'youtube', 'tiktok', 'origen', 'tarea', 'creada', 'actualizada', 'aprobada', 'entregada'];
+const OBJETOS = ['aprobada', 'entregada', 'pinterest', 'youtube', 'tiktok', 'formatos', 'cuentas']; // van en la cabecera como JSON en una línea
 
 /** C1: los formatos por red de la cabecera: solo redes y formatos que existen. */
 const formatosLimpios = v => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).filter(([r, f]) => REDES.includes(r) && FORMATOS.includes(f))) : {});
@@ -94,7 +95,7 @@ export function parsear(md, { file = '' } = {}) {
   const lista = v => Array.isArray(v) ? v.filter(x => typeof x === 'string' && x) : [];
   return {
     id: head.id || path.basename(file, '.md'), titulo: String(head.titulo ?? ''), fecha: FECHA_RE.test(head.fecha ?? '') ? head.fecha : '', hora: HORA_RE.test(head.hora ?? '') ? head.hora : '',
-    formato: FORMATOS.includes(head.formato) ? head.formato : 'post', formatos: formatosLimpios(head.formatos), redes: lista(head.redes).filter(r => REDES.includes(r)),
+    formato: FORMATOS.includes(head.formato) ? head.formato : 'post', formatos: formatosLimpios(head.formatos), redes: lista(head.redes).filter(r => REDES.includes(r)), cuentas: cuentasLimpias(head.cuentas),
     estado: ESTADOS.includes(head.estado) ? head.estado : 'borrador', responsable: String(head.responsable ?? ''),
     medios: lista(head.medios), historiaTambien: head.historiaTambien === true, historias: lista(head.historias),
     texto: t('texto'), comentario: t('comentario'), hashtags: t('hashtags'), hashtagsEnComentario: head.hashtagsEnComentario === true, textoFacebook: t('textoFacebook'), notas: t('notas'),
@@ -111,6 +112,7 @@ export function serializar(p) {
   const v = { tipo: 'pieza', ...p, aprobada: p.aprobada ? JSON.stringify({ cuando: p.aprobada.cuando, huella: p.aprobada.huella, por: p.aprobada.por ?? '' }) : null, entregada: p.entregada ? JSON.stringify(p.entregada) : null };
   for (const k of ['pinterest', 'youtube', 'tiktok']) v[k] = p[k] ? JSON.stringify(p[k]) : null;
   v.formatos = p.formatos && Object.keys(p.formatos).length ? JSON.stringify(p.formatos) : null;
+  v.cuentas = p.cuentas && Object.keys(p.cuentas).length ? JSON.stringify(p.cuentas) : null; // 9 oct 2026: { red: 'red:<id>' }, en una línea
   const cab = ORDEN.map(k => {
     const x = v[k];
     if (Array.isArray(x)) return x.length ? `${k}:\n${x.map(i => `  - ${scalar(i)}`).join('\n')}` : `${k}: []`;
@@ -126,6 +128,7 @@ export function serializar(p) {
 export function huella(p) {
   const base = PUBLICABLES.map(k => p[k] ?? null);
   const m2 = PUBLICABLES_M2.filter(k => p[k] && Object.keys(p[k]).length).map(k => [k, p[k]]);
+  const ctas = cuentasDeRedes(p); if (Object.keys(ctas).length) m2.push(['cuentas', ctas]); // 9 oct 2026: dónde sale es «lo que sale»; solo si tiene algo (lo aprobado antes sigue aprobado)
   return crypto.createHash('sha1').update(JSON.stringify(m2.length ? [...base, m2] : base)).digest('hex').slice(0, 16);
 }
 
@@ -140,7 +143,7 @@ const lista = (v, max = 30) => (Array.isArray(v) ? v : String(v ?? '').split(/[\
  * un campo ausente conserva su valor. Devuelve { pieza } o { error } en palabras.
  */
 export function normalizar(d = {}, previa = null) {
-  const p = previa ? { ...previa } : { id: '', titulo: '', fecha: '', hora: '', formato: 'post', redes: ['instagram'], estado: 'borrador', responsable: '', medios: [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, formatos: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', creada: '', actualizada: '', aprobada: null, entregada: null };
+  const p = previa ? { ...previa } : { id: '', titulo: '', fecha: '', hora: '', formato: 'post', redes: ['instagram'], estado: 'borrador', responsable: '', medios: [], historiaTambien: false, historias: [], texto: '', comentario: '', hashtags: '', hashtagsEnComentario: false, textoFacebook: '', notas: '', textos: {}, formatos: {}, cuentas: {}, pinterest: null, youtube: null, tiktok: null, origen: 'dueno', tarea: '', creada: '', actualizada: '', aprobada: null, entregada: null };
   const has = k => Object.prototype.hasOwnProperty.call(d, k) && d[k] !== undefined;
   if (has('titulo')) p.titulo = cadena(d.titulo, 140).replace(/\n/g, ' ').trim();
   if (has('fecha')) { const f = String(d.fecha ?? ''); if (f && !FECHA_RE.test(f)) return { error: 'la fecha va como AAAA-MM-DD' }; if (f && !existe(f)) return { error: 'esa fecha no existe' }; p.fecha = f; }
@@ -151,6 +154,7 @@ export function normalizar(d = {}, previa = null) {
     for (const [r, f] of Object.entries(d.formatos || {})) { if (!REDES.includes(r)) return { error: `«${r}» no es una red de esta oficina (son: ${REDES.join(', ')})` }; if (!FORMATOS.includes(f)) return { error: `el formato es uno de: ${FORMATOS.join(', ')}` }; }
     p.formatos = { ...(d.formatos || {}) };
   }
+  if (has('cuentas')) { const c = limpiarCuentas(d.cuentas); if (c.error) return { error: c.error }; p.cuentas = d.cuentas === null ? {} : { ...cuentasLimpias(p.cuentas), ...Object.fromEntries(Object.keys(d.cuentas).map(r => [r, c.cuentas[r]])) }; for (const r of Object.keys(p.cuentas)) if (!p.cuentas[r]) delete p.cuentas[r]; } // 9 oct 2026: solo cambia la red que viene; '' la devuelve a la de Ajustes
   if (has('redes')) { const r = lista(d.redes).map(x => x.toLowerCase()); const mala = r.find(x => !REDES.includes(x)); if (mala) return { error: `«${mala}» no es una red de esta oficina (son: ${REDES.join(', ')})` }; p.redes = [...new Set(r)]; }
   if (has('estado')) { if (!ESTADOS.includes(d.estado)) return { error: `el estado es uno de: ${ESTADOS.join(', ')}` }; p.estado = d.estado; }
   if (has('responsable')) p.responsable = cadena(d.responsable, 60).trim();
@@ -203,7 +207,10 @@ const nuevoId = (fecha, ahora) => `p-${(FECHA_RE.test(fecha) ? fecha : new Date(
  * `dir` es la carpeta de las piezas; `medioExiste(id)` dice si un archivo es del Estudio (así una pieza no apunta a algo que no está);
  * `ahora()` el momento actual (para probar). Todo lo que se escribe va a un temporal y se renombra: nunca una nota a medias.
  */
-export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Date.now } = {}) {
+export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Date.now, cuentasPorDefecto = () => ({}), validarCuenta = () => '' } = {}) {
+  // 9 oct 2026: `cuentasPorDefecto()` → { facebook, instagram } (la página de Ajustes y su Instagram): una pieza nueva nace con la suya, así se ve
+  // dónde sale aunque nadie elija. `validarCuenta(id)` → '' o por qué no vale (el token no la ve, un Instagram sin página): solo lo que llega.
+  const cuentaMala = d => { for (const id of Object.values(cuentasLimpias(d?.cuentas))) { const m = validarCuenta(id); if (m) return m; } return ''; };
   const medidaDe = medida || medidaDelEstudio(path.join(dir || '.', '..', 'media'));
   const medidas = p => { const out = {}; for (const m of [...p.medios, ...p.historias]) { const x = medidaDe(m); if (x) out[m] = x; } return out; };
   const ruta = (id, fecha) => path.join(dir, mesDe(fecha), `${id}.md`);
@@ -241,6 +248,8 @@ export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Da
       const r = normalizar(datos); if (r.error) return { error: r.error };
       const p = r.pieza; const mal = medios(p); if (mal) return { error: mal };
       if (p.estado === 'aprobada') return { error: 'una pieza no nace aprobada: apruébala después, con «Aprobar»' };
+      const cm = cuentaMala(datos); if (cm) return { error: cm };
+      if (!Object.prototype.hasOwnProperty.call(datos, 'cuentas')) { const d0 = cuentasLimpias(cuentasPorDefecto() || {}); p.cuentas = Object.fromEntries(Object.entries(d0).filter(([r]) => p.redes.includes(r))); }
       p.id = nuevoId(p.fecha, ahora); p.creada = p.actualizada = new Date(ahora()).toISOString(); if (!datos.origen) p.origen = por;
       escribir(p); return { pieza: conEstado(p) };
     },
@@ -250,6 +259,7 @@ export function crearAlmacen({ dir, medioExiste = () => true, medida, ahora = Da
       if ('estado' in datos && datos.estado === 'aprobada' && previa.estado !== 'aprobada') return { error: 'para aprobar una pieza usa «Aprobar»: revisa antes que pueda salir' };
       const r = normalizar(datos, previa); if (r.error) return { error: r.error };
       const p = r.pieza; const mal = medios(p); if (mal) return { error: mal };
+      const cm = cuentaMala(datos); if (cm) return { error: cm };
       p.id = previa.id; p.creada = previa.creada; p.actualizada = new Date(ahora()).toISOString();
       let soltada = false;
       if (previa.estado === 'aprobada' && p.estado === 'aprobada' && huella(p) !== (previa.aprobada?.huella ?? '')) { p.estado = 'revision'; p.aprobada = null; soltada = true; }

@@ -4,13 +4,15 @@
 //   · Avisos honestos: lo que aún no maduró, lo que Meta no dio, lo que le falta al token. Una cifra que no se sabe se rotula, no se inventa.
 // Las cuentas son las de src/contenido-cifras.js (portadas de Juancito Ads); la foto diaria la hace contenido/metricas.mjs.
 // Sin conexión o en la demo, «datos de ejemplo»: se ven IGUAL, con el rótulo en grande, y nunca se mezclan con lo real.
+// (9 oct 2026) Cada cuenta por separado: el selector de cuenta (con su foto o inicial; en el teléfono, un desplegable), «Viendo …» y la
+// tabla «Comparar cuentas» (ordenable; un clic elige la cuenta). Con una cuenta, todo lo de abajo es solo de ella (`ao.an.cuenta`).
 //   initAnaliticas({ served, esc, business }) → { open, close, toggle, isOpen }
 import { modal } from './modal.js';
 import { views } from './views.js';
 import { fmtDay } from './calendar-core.js';
 import { crearDatosAnaliticas, datosDeEjemplo } from './analiticas-datos.js';
 import { informeHTML, mesesAtras, nombreMes } from './analiticas-informe.js';
-import { kpis, serieDiaria, porFormato, mejoresMomentos, horaSugerida, mejoresPublicaciones, enfoque, enLocal, numeroCorto, sumarDias, DIAS_SEMANA, BLOQUES_HORA, DIAS_DE_MADURACION } from './contenido-cifras.js';
+import { kpis, serieDiaria, deFiltro, cuentasDe, nombreCuenta, compararCuentas, porFormato, mejoresMomentos, horaSugerida, mejoresPublicaciones, enfoque, enLocal, numeroCorto, sumarDias, DIAS_SEMANA, BLOQUES_HORA, DIAS_DE_MADURACION } from './contenido-cifras.js';
 
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.an.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.an.' + k, JSON.stringify(v)); } catch {} } };
 const RED = { instagram: { nombre: 'Instagram', corto: 'IG' }, facebook: { nombre: 'Facebook', corto: 'FB' } };
@@ -46,6 +48,10 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   if (![7, 30, 90].includes(dias)) dias = 30;
   if (!['todas', 'instagram', 'facebook'].includes(red)) red = 'todas';
   if (!METRICAS.some(m => m[0] === metrica)) metrica = 'seguidores';
+  let cuenta = String(store.get('cuenta', '') || ''), orden = 'alcance', asc = false; // la cuenta elegida ('' = todas) y el orden de «Comparar»
+  const unaDe = d => d?.meta?.cuentas?.find(a => a.id === cuenta) || null; // una cuenta que ya no está vuelve a «todas»
+  const filtro = d => (unaDe(d) ? cuenta : red);
+  const elegir = id => { cuenta = id; store.set('cuenta', id); const a = unaDe(dia()); if (a && red !== 'todas' && a.red !== red) { red = a.red; store.set('red', red); } render(); say(a ? `Viendo ${nombreCuenta(a)} · ${RED[a.red]?.nombre || a.red}` : 'Viendo todas las cuentas'); };
 
   let topImp = []; // A4: «las que más movieron» a la vista (para «Impulsar»)
   let muestra = null; // los datos de ejemplo se calculan una vez por apertura, no en cada dibujo
@@ -58,11 +64,13 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     const serie = d.serie.filter(f => f.fecha >= sumarDias(desde, -dias)); // el periodo y el anterior, para la flecha
     // Lo apuntado empieza el día de la primera foto (las publicaciones, 45 días antes): comparar contra un periodo que ya no se leyó sería inventar la flecha.
     const primera = d.serie.filter(f => !f.error).reduce((m, f) => (!m || f.fecha < m ? f.fecha : m), null);
-    const k = kpis({ serie, publicaciones: d.publicaciones }, { desde, hasta, red, cobertura: 0.7, publicacionesDesde: primera ? sumarDias(primera, -45) : null });
-    const dd = serieDiaria(serie, red).filter(x => x.fecha >= desde && x.fecha <= hasta);
-    const pubs = d.publicaciones.filter(p => red === 'todas' || p.red === red);
+    const f = filtro(d), o = { desde, hasta, cobertura: 0.7, publicacionesDesde: primera ? sumarDias(primera, -45) : null };
+    const k = kpis({ serie, publicaciones: d.publicaciones }, { ...o, red: f });
+    const dd = serieDiaria(serie, f).filter(x => x.fecha >= desde && x.fecha <= hasta);
+    const pubs = d.publicaciones.filter(deFiltro(f));
     const e = enfoque(pubs, hoy);
-    return { hoy, desde, hasta, k, dd, pubs, e, primera };
+    const comp = compararCuentas({ serie, publicaciones: d.publicaciones }, d.meta.cuentas, { ...o, f: red });
+    return { hoy, desde, hasta, k, dd, pubs, e, primera, f, comp };
   }
 
   /* ---------- pedazos de HTML ---------- */
@@ -106,12 +114,35 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     return partes.join('');
   }
 
-  function cuentasHTML(d) {
-    const ult = new Map(); for (const f of d.serie) if (!f.error) ult.set(f.cuentaId, f);
-    return `<ul class="an-accts" aria-label="Cuentas que se leen">${d.meta.cuentas.map(a => {
-      const f = ult.get(a.id);
-      return `<li><b class="an-net">${RED[a.red]?.corto || a.red}</b><span class="an-an">${esc(a.usuario ? '@' + a.usuario : a.nombre)}</span><span class="an-av">${f?.seguidores != null ? numeroCorto(f.seguidores) + ' seguidores' : 'sin foto todavía'}</span></li>`;
-    }).join('')}</ul>`;
+  /* ---------- las cuentas: elegir una, y compararlas ---------- */
+  const inicial = a => esc((a.usuario || a.nombre || '?').replace(/^@/, '').charAt(0).toUpperCase());
+  const avatar = a => `<span class="an-ava" aria-hidden="true"><i>${inicial(a)}</i>${/^https:\/\//.test(a.foto || '') ? `<img src="${esc(a.foto)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`;
+  const selectCuentas = (d, cls) => `<select class="${cls}">${[`<option value="">Todas las cuentas${red !== 'todas' ? ' de ' + RED[red].nombre : ''}</option>`, ...Object.keys(RED).filter(r => red === 'todas' || r === red).map(r => { const l = d.meta.cuentas.filter(a => a.red === r); return l.length ? `<optgroup label="${RED[r].nombre}">${l.map(a => `<option value="${esc(a.id)}"${a.id === cuenta ? ' selected' : ''}>${esc(nombreCuenta(a))}${a.usuario && a.nombre ? ' — ' + esc(a.nombre) : ''}</option>`).join('')}</optgroup>` : ''; })].join('')}</select>`;
+  function cuentasHTML(d, c) {
+    const ult = new Map(); for (const f of d.serie) ult.set(f.cuentaId, f);
+    const una = unaDe(d), suma = cuentasDe(d.meta.cuentas, c.f).length;
+    const viendo = una ? `Viendo <b>${esc(nombreCuenta(una))}</b> · ${RED[una.red]?.nombre || una.red}${una.usuario && una.nombre ? ` · ${esc(una.nombre)}` : ''}` : `Viendo <b>${red === 'todas' ? 'todas las cuentas' : RED[red].nombre}</b>${suma > 1 ? ` · suma ${suma} cuentas` : ''}`;
+    const chip = a => { const f = ult.get(a.id), est = !f ? 'sin foto todavía' : f.error ? `falló el ${fecha(f.fecha)}` : `${f.seguidores != null ? numeroCorto(f.seguidores) + ' seguidores · ' : ''}foto del ${fecha(f.fecha)}`;
+      return `<button type="button" class="an-cta${f?.error ? ' an-cta-err' : ''}" data-cta="${esc(a.id)}" aria-pressed="${a.id === cuenta}"${f?.error ? ` title="${esc(f.error)}"` : ''}>${avatar(a)}<span class="an-ctn"><b>${esc(a.nombre || nombreCuenta(a))}</b><small>${a.usuario ? esc('@' + a.usuario) + ' · ' : ''}${esc(est)}</small></span></button>`; };
+    const grupos = Object.keys(RED).filter(r => red === 'todas' || r === red).map(r => { const l = d.meta.cuentas.filter(a => a.red === r); return l.length ? `<span class="an-gl"><b class="an-net">${RED[r].corto}</b> ${RED[r].nombre}</span>${l.map(chip).join('')}` : ''; }).join('');
+    return `<section class="an-cuentas" aria-label="Cuentas">
+      <p class="an-viendo">${viendo}</p>
+      <div class="an-ctas" role="group" aria-label="Cuenta"><button type="button" class="an-cta an-cta-all" data-cta="" aria-pressed="${!una}"><span class="an-ctn"><b>Todas las cuentas</b><small>${red === 'todas' ? 'Instagram y Facebook' : 'de ' + RED[red].nombre}</small></span></button>${grupos}</div>
+      <label class="an-csel-l"><span>Cuenta</span>${selectCuentas(d, 'an-csel')}</label>
+    </section>`;
+  }
+
+  const ORDEN = [['seguidores', 'Seguidores'], ['ganados', 'Ganados'], ['alcance', 'Alcance'], ['interacciones', 'Interacciones'], ['publicaciones', 'Publicaciones']];
+  const valorDe = (k, o) => (o === 'ganados' ? k.seguidores.ganados : k[o].valor);
+  function compararHTML(c) {
+    if (c.comp.length < 2) return '';
+    const filas = c.comp.slice().sort((x, y) => { const a = valorDe(x.k, orden) ?? -Infinity, b = valorDe(y.k, orden) ?? -Infinity; return asc ? a - b : b - a; });
+    const n = v => (v == null ? '—' : numeroCorto(v));
+    const celdas = k => ORDEN.map(([o, t]) => { const v = valorDe(k, o); return `<td data-l="${t}">${o === 'ganados' && v != null ? `<span class="${v > 0 ? 'an-up' : v < 0 ? 'an-down' : 'an-flat'}">${v > 0 ? '+' : v < 0 ? '−' : ''}${numeroCorto(Math.abs(v))}</span>` : n(v)}</td>`; }).join('');
+    return `<section class="an-card" aria-labelledby="anComp"><div class="an-hd"><h2 id="anComp">Comparar cuentas</h2><span class="an-cap">${c.comp.length} cuentas · los últimos ${dias} días · un clic en una la elige</span></div>
+      <div class="an-tablewrap"><table class="an-comp"><thead><tr><th scope="col">Cuenta</th>${ORDEN.map(([o, t]) => `<th scope="col" aria-sort="${o === orden ? (asc ? 'ascending' : 'descending') : 'none'}"><button type="button" class="an-ord" data-ord="${o}">${t}<span aria-hidden="true">${o === orden ? (asc ? ' ▲' : ' ▼') : ''}</span></button></th>`).join('')}</tr></thead>
+      <tbody>${filas.map(({ cuenta: a, k }) => `<tr${a.id === cuenta ? ' class="on"' : ''}><th scope="row"><button type="button" class="an-crow" data-cta="${esc(a.id)}" aria-pressed="${a.id === cuenta}">${avatar(a)}<span><b>${esc(nombreCuenta(a))}</b><small><b class="an-net">${RED[a.red]?.corto || a.red}</b> ${esc(a.usuario ? a.nombre || '' : RED[a.red]?.nombre || '')}</small></span></button></th>${celdas(k)}</tr>`).join('')}</tbody></table></div>
+      <p class="an-cap">Seguidores al final del periodo y los ganados en él; alcance de cada día sumado; interacciones y publicaciones de lo que salió en el periodo.</p></section>`;
   }
 
   function cambioHTML(x, mejorSube = true) {
@@ -206,11 +237,11 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     }).join('')}</ol></section>`;
   }
 
-  function avisosHTML(d, c) {
+  function avisosHTML(d, c) { // solo de las cuentas que se ven
     const av = [];
     const m = d.meta;
     if (c.e.recientes.length) av.push(`${c.e.recientes.length} ${c.e.recientes.length === 1 ? 'publicación' : 'publicaciones'} de los últimos ${DIAS_DE_MADURACION} días siguen subiendo: no cuentan en «Qué funciona» hasta que maduren (aparecen marcadas «aún subiendo»).`);
-    const porCuenta = new Map(m.cuentas.map(a => [a.id, a]));
+    const porCuenta = new Map(cuentasDe(m.cuentas, c.f).map(a => [a.id, a]));
     const ultimas = new Map(); for (const f of d.serie) ultimas.set(f.cuentaId, f);
     for (const [id, f] of ultimas) {
       const a = porCuenta.get(id); if (!a) continue;
@@ -218,7 +249,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
       const pa = f.datos?.avisos?.publicaciones;
       if (pa?.length) av.push(`Facebook no entregó todo de «${esc(a.nombre)}»${f.datos.avisos.parcial ? ' (las reacciones salen en 0: falta el permiso <code>pages_read_user_content</code>)' : ''}: ${esc(pa[0])}`);
     }
-    for (const a of m.cuentas) if (!ultimas.has(a.id)) av.push(`«${esc(a.nombre)}» todavía no tiene ninguna foto.`);
+    for (const a of porCuenta.values()) if (!ultimas.has(a.id)) av.push(`«${esc(a.nombre)}» todavía no tiene ninguna foto.`);
     if (d.ultimaFoto && d.ultimaFoto < sumarDias(d.hoy, -2) && !d.ejemplo) av.push(`La última foto de métricas es del ${fecha(d.ultimaFoto)}: Meta solo guarda unos días de historia, y lo que no se apunta se pierde.`);
     if (!av.length) return '';
     return `<section class="an-card" aria-labelledby="anAv"><h2 id="anAv">Lo que conviene saber</h2><ul class="an-notes">${av.map(t => `<li>${t}</li>`).join('')}</ul></section>`;
@@ -237,7 +268,8 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   async function cargarInforme(guardar = false) {
     if (!served) { informe = { error: 'En la demo no hay informe: se arma con los datos de la oficina. Abre la oficina con el iniciador.' }; render(); return; }
     try {
-      const r = guardar ? await fetch('/api/contenido/informe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mes: mesInf }) }) : await fetch('/api/contenido/informe?mes=' + encodeURIComponent(mesInf));
+      const cta = unaDe(dia()) ? cuenta : '';
+      const r = guardar ? await fetch('/api/contenido/informe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mes: mesInf, cuenta: cta }) }) : await fetch(`/api/contenido/informe?mes=${encodeURIComponent(mesInf)}&cuenta=${encodeURIComponent(cta)}`);
       const j = await r.json(); if (!r.ok) throw new Error(j.error || `la oficina respondió ${r.status}`);
       informe = j; if (guardar && j.nota) say(`Guardado en el Cerebro: ${j.nota}`);
     }
@@ -246,6 +278,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   }
   const informeVista = () => `<section class="an-card an-inf" aria-labelledby="anInfT"><div class="an-inf-h"><h2 id="anInfT" class="an-vh">Informe del mes</h2>
       <label>Mes <select class="an-inf-mes">${mesesAtras().map(m => `<option value="${m}"${m === mesInf ? ' selected' : ''}>${nombreMes(m)}</option>`).join('')}</select></label>
+      ${dia()?.meta?.cuentas?.length > 1 ? `<label>Cuenta ${selectCuentas(dia(), 'an-inf-cta')}</label>` : ''}
       <span class="an-sp"></span>${btn('inf-guardar', 'GUARDAR EN EL CEREBRO')}${btn('inf-copiar', 'COPIAR')}${btn('inf-volver', 'VOLVER A LAS CIFRAS')}</div>
       ${!informe ? '<p class="an-empty">Armando el informe…</p>' : informe.error ? banner('warn', 'NO SE PUDO', esc(informe.error)) : `<article class="an-inf-t">${informeHTML(informe.texto, esc)}</article>${informe.nota ? `<p class="an-cap">Guardado en el Cerebro: <b>${esc(informe.nota)}</b></p>` : ''}`}</section>`;
   function render() {
@@ -260,7 +293,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     E.refresh.textContent = d.actualizando ? 'LEYENDO…' : 'ACTUALIZAR';
     if (served && !ejemplo && !d.meta.configurado) { E.wrap.innerHTML = estadoHTML(d) + conexionHTML(d.meta); E.body.scrollTop = sc; return; }
     const c = calcular(d);
-    E.wrap.innerHTML = [estadoHTML(d), cuentasHTML(d), tarjetasHTML(c), tendenciaHTML(c), funcionaHTML(c), mejoresHTML(c), avisosHTML(d, c), llevarHTML(d)].join('');
+    E.wrap.innerHTML = [estadoHTML(d), cuentasHTML(d, c), compararHTML(c), tarjetasHTML(c), tendenciaHTML(c), funcionaHTML(c), mejoresHTML(c), avisosHTML(d, c), llevarHTML(d)].join('');
     E.body.scrollTop = sc;
   }
 
@@ -274,11 +307,16 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     if (openNow && payload?.actualizando) pollT = setTimeout(() => load({ quiet: true }), 3000); // mientras Meta responde, se mira cada 3 s
   }
 
-  ov.addEventListener('change', async e => { if (e.target.matches('.an-inf-mes')) { mesInf = e.target.value; informe = null; render(); await cargarInforme(); ov.querySelector('.an-inf-mes')?.focus(); } });
+  ov.addEventListener('change', async e => {
+    if (e.target.matches('.an-csel')) { elegir(e.target.value); ov.querySelector('.an-csel')?.focus(); return; }
+    if (e.target.matches('.an-inf-cta')) { cuenta = e.target.value; store.set('cuenta', cuenta); informe = null; render(); await cargarInforme(); ov.querySelector('.an-inf-cta')?.focus(); return; }
+    if (e.target.matches('.an-inf-mes')) { mesInf = e.target.value; informe = null; render(); await cargarInforme(); ov.querySelector('.an-inf-mes')?.focus(); } });
   ov.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.d) { dias = Number(b.dataset.d); store.set('dias', dias); render(); return; }
-    if (b.dataset.r) { red = b.dataset.r; store.set('red', red); render(); return; }
+    if (b.dataset.r) { red = b.dataset.r; store.set('red', red); const a = unaDe(dia()); if (a && red !== 'todas' && a.red !== red) { cuenta = ''; store.set('cuenta', ''); } render(); return; }
+    if (b.dataset.cta != null) { const id = b.dataset.cta, fila = b.classList.contains('an-crow'); elegir(id); ov.querySelector(`${fila ? '.an-crow' : '.an-ctas .an-cta'}[data-cta="${CSS.escape(id)}"]`)?.focus(); return; }
+    if (b.dataset.ord) { if (orden === b.dataset.ord) asc = !asc; else { orden = b.dataset.ord; asc = false; } render(); ov.querySelector(`[data-ord="${orden}"]`)?.focus(); return; }
     if (b === $('#anClose')) { close(); return; }
     if (b === E.refresh) { await act('actualizar'); return; }
     if (b === E.inf) { verInforme = !verInforme; if (verInforme) { informe = null; render(); await cargarInforme(); } else render(); E.inf.focus(); return; }
@@ -322,6 +360,6 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
   }
   let resizeT = 0; addEventListener('resize', () => { if (!openNow) return; clearTimeout(resizeT); resizeT = setTimeout(() => { if (openNow && dia()) render(); }, 150); });
   views.add('analiticas', { isOpen: isOn, close });
-  const selection = () => (openNow ? { view: 'analiticas', label: `Analíticas · ${(METRICAS.find(m => m[0] === metrica) || [, metrica])[1]} · ${red === 'todas' ? 'Instagram y Facebook' : red === 'instagram' ? 'Instagram' : 'Facebook'} · ${dias} días`, kind: 'metric', id: `${metrica}:${red}:${dias}` } : null); // V4.8: what Dimitri sees beside it
+  const selection = () => { if (!openNow) return null; const a = unaDe(dia()); return { view: 'analiticas', label: `Analíticas · ${(METRICAS.find(m => m[0] === metrica) || [, metrica])[1]} · ${a ? `${nombreCuenta(a)} (${RED[a.red]?.nombre || a.red})` : red === 'todas' ? 'Instagram y Facebook' : RED[red].nombre} · ${dias} días`, kind: 'metric', id: `${metrica}:${a ? a.id : red}:${dias}` }; }; // V4.8: what Dimitri sees beside it
   return { open, close, toggle: () => (openNow ? close() : open()), isOpen: isOn, selection };
 }

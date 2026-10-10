@@ -130,10 +130,12 @@ const ic = k => `<span class="pv-ic" aria-hidden="true">${SVG[k]}</span>`;
 const fechaCorta = p => { if (!p.fecha) return 'sin día'; const d = new Date(`${p.fecha}T00:00:00`); return `${d.getDate()} ${['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'][d.getMonth()]}`; };
 
 /** La cuenta con la que sale en cada red: la de Meta si está conectada; si no, la empresa (nunca «tu_cuenta»). */
+/** El círculo de la cuenta: su foto si Meta la dio; si no, sus iniciales. */
+const avatar = (ac, esc) => (ac.foto ? `<img src="${esc(ac.foto)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : esc(ac.iniciales));
 export function cuentaPara(red, cuentas = {}) {
   const c = cuentas[red] || {}, base = cuentas.empresa || 'Tu empresa';
   const nombre = red === 'instagram' ? (c.usuario || c.nombre || base.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9._]+/g, '')) : (c.nombre || base);
-  return { nombre: nombre || 'cuenta', iniciales: iniciales(c.nombre || base), conectada: !!(c.usuario || c.nombre) };
+  return { nombre: nombre || 'cuenta', iniciales: iniciales(c.nombre || base), conectada: !!(c.usuario || c.nombre), foto: /^https:\/\//.test(c.foto || '') ? c.foto : '' }; // 9 oct 2026: la foto de la cuenta elegida
 }
 
 export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] }) {
@@ -186,7 +188,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     else if (n > 1) m = `<div class="pv-mosaic n${Math.min(n, 4)}">${ms.slice(0, 4).map((x, i) => `<span class="pv-tile">${medio(x.src, esc)}${i === 3 && n > 4 ? `<b class="pv-more">+${n - 4}</b>` : ''}</span>`).join('')}</div>`;
     const arroba = d.v.red === 'linkedin' ? '' : ` <small>@${esc(d.ac.nombre.toLowerCase().replace(/\s+/g, ''))}</small>`;
     const propio = String(p.textos?.[d.v.red] ?? '').trim();
-    return `<div class="pv-card pv-gen ${d.v.red}"><div class="pv-h"><span class="pv-av${d.v.red === 'linkedin' ? ' sq' : ''}">${esc(d.ac.iniciales)}</span><span class="pv-fbn"><b>${esc(d.ac.nombre)}${arroba}</b><small>${p.fecha ? 'Programada · ' + esc(fechaCorta(p)) : 'Sin día'}</small></span><span class="pv-sp"></span>${ic('dots')}</div>
+    return `<div class="pv-card pv-gen ${d.v.red}"><div class="pv-h"><span class="pv-av${d.v.red === 'linkedin' ? ' sq' : ''}">${avatar(d.ac, esc)}</span><span class="pv-fbn"><b>${esc(d.ac.nombre)}${arroba}</b><small>${p.fecha ? 'Programada · ' + esc(fechaCorta(p)) : 'Sin día'}</small></span><span class="pv-sp"></span>${ic('dots')}</div>
       ${caption(p, d)}${m}<div class="pv-fbbar" aria-hidden="true"><span>${ic(d.v.red === 'linkedin' ? 'like' : 'heart')}</span><span>${ic('comment')}</span><span>${ic('share')}</span></div></div>
       ${propio ? `<p class="pv-hint">${esc(REDES[d.v.red].nombre)} lleva su propio texto.</p>` : ''}`;
   }
@@ -194,13 +196,13 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
   function pin(p, d) {
     const m0 = d.medios[0], ar = proporcionFeed(m0).medida ? Math.max(0.5, Math.min(1.5, proporcionFeed(m0).real)) : 2 / 3;
     return `<div class="pv-card pv-pin"><div class="pv-media" style="aspect-ratio:${ar}">${m0 ? medio(m0.src, esc) : '<span class="pv-empty">Sin imagen todavía</span>'}</div>${titulo(p, d)}${caption(p, d)}
-      <div class="pv-h"><span class="pv-av sm">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b>${p.pinterest?.enlace ? `<span class="pv-sp"></span><small class="pv-link">${esc(p.pinterest.enlace.replace(/^https:\/\//, '').slice(0, 30))}</small>` : ''}</div></div>`;
+      <div class="pv-h"><span class="pv-av sm">${avatar(d.ac, esc)}</span><b>${esc(d.ac.nombre)}</b>${p.pinterest?.enlace ? `<span class="pv-sp"></span><small class="pv-link">${esc(p.pinterest.enlace.replace(/^https:\/\//, '').slice(0, 30))}</small>` : ''}</div></div>`;
   }
   /** YouTube: el video a 16:9, el título y la descripción plegada. */
   function videoYT(p, d) {
     const v = d.medios.find(esVideoM);
     return `<div class="pv-card pv-yt"><div class="pv-media" style="aspect-ratio:16/9">${v ? medio(v.src, esc, 'contain') : '<span class="pv-empty">YouTube necesita un video</span>'}</div>${titulo(p, d)}
-      <div class="pv-h"><span class="pv-av sm">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-sp"></span><small>${{ public: 'Público', unlisted: 'Oculto', private: 'Privado' }[p.youtube?.privacidad || 'public']}</small></div>${caption(p, d)}</div>`;
+      <div class="pv-h"><span class="pv-av sm">${avatar(d.ac, esc)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-sp"></span><small>${{ public: 'Público', unlisted: 'Oculto', private: 'Privado' }[p.youtube?.privacidad || 'public']}</small></div>${caption(p, d)}</div>`;
   }
   function comentario(p, d) {
     if (d.v.red !== 'instagram' || d.v.vista !== 'feed') return '';
@@ -230,7 +232,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
       m = `<div class="pv-media pv-cut" style="${ancho}aspect-ratio:${ar}">${medio(cur_.src, esc, 'cover')}<i class="pv-shade ${vertical ? 'tb' : 'lr'}" style="--c:${cut.toFixed(1)}%" aria-hidden="true"></i>${nav(n)}</div><p class="pv-flag">${recorta ? 'Instagram recorta lo sombreado: el carrusel toma la proporción de la primera.' : pr0.fuera === 'alta' ? 'Fuera del feed: más alta que 4:5, Instagram no la acepta así. Lo sombreado es lo que sobra.' : 'Fuera del feed: más ancha que 1.91:1, Instagram no la acepta así. Lo sombreado es lo que sobra.'}</p>`;
     } else m = `<div class="pv-media" style="aspect-ratio:${pr0.ratio}">${medio(cur_.src, esc, 'cover')}${nav(n)}</div>`;
     const dots = n > 1 ? `<div class="pv-dots" aria-hidden="true">${ms.map((_, i) => `<i class="${i === slide ? 'on' : ''}"></i>`).join('')}</div>` : '';
-    return `<div class="pv-card pv-igfeed"><div class="pv-h"><span class="pv-av">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-sp"></span>${ic('dots')}</div>${m}
+    return `<div class="pv-card pv-igfeed"><div class="pv-h"><span class="pv-av">${avatar(d.ac, esc)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-sp"></span>${ic('dots')}</div>${m}
       <div class="pv-bar">${ic('heart')}${ic('comment')}${ic('send')}${dots}<span class="pv-sp"></span>${ic('save')}</div>
       <div class="pv-likes">Les gusta a <b>…</b></div>${caption(p, d)}${comentario(p, d)}<div class="pv-time">${p.fecha ? 'PROGRAMADA · ' + esc(fechaCorta(p)).toUpperCase() : 'SIN DÍA'}</div></div>`;
   }
@@ -244,9 +246,9 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     let ui;
     if (reel) ui = `<div class="pv-ui" aria-hidden="true"><div class="pv-top"><b>${d.v.red === 'tiktok' ? 'Para ti' : d.v.red === 'youtube' ? 'Shorts' : 'Reels'}</b>${d.v.red === 'youtube' ? titulo(p, d) : ''}<span class="pv-sp"></span>${ic('cam')}</div>
         <div class="pv-side">${ic(fb ? 'like' : 'heart')}${ic('comment')}${ic(fb ? 'share' : 'send')}${ic('dots')}</div></div>
-        <div class="pv-low"><div class="pv-who"><span class="pv-av sm">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-follow" aria-hidden="true">Seguir</span></div>${caption(p, d)}<div class="pv-audio" aria-hidden="true">${ic('music')} Audio original · ${esc(d.ac.nombre)}</div></div>`;
+        <div class="pv-low"><div class="pv-who"><span class="pv-av sm">${avatar(d.ac, esc)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-follow" aria-hidden="true">Seguir</span></div>${caption(p, d)}<div class="pv-audio" aria-hidden="true">${ic('music')} Audio original · ${esc(d.ac.nombre)}</div></div>`;
     else ui = `<div class="pv-ui" aria-hidden="true"><div class="pv-prog">${(n ? ms : [0]).map((_, i) => `<i class="${i < slide ? 'done' : i === slide ? 'on' : ''}"></i>`).join('')}</div>
-        <div class="pv-top st"><span class="pv-av sm">${esc(d.ac.iniciales)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-ago">${p.hora ? esc(p.hora) : ''}</span><span class="pv-sp"></span>${ic('dots')}</div></div>
+        <div class="pv-top st"><span class="pv-av sm">${avatar(d.ac, esc)}</span><b>${esc(d.ac.nombre)}</b><span class="pv-ago">${p.hora ? esc(p.hora) : ''}</span><span class="pv-sp"></span>${ic('dots')}</div></div>
         <div class="pv-low st" aria-hidden="true"><span class="pv-msg">${fb ? 'Responder…' : 'Enviar mensaje'}</span>${ic(fb ? 'like' : 'heart')}${ic('send')}</div>`;
     const extra = reel && d.v.red === 'instagram' && n ? `<div class="pv-mini"><figure><span class="pv-mini-b" style="aspect-ratio:3/4">${medio(ms[0].src, esc)}</span><figcaption>En tu perfil (3:4)</figcaption></figure><figure><span class="pv-mini-b" style="aspect-ratio:4/5">${medio(ms[0].src, esc)}</span><figcaption>En el feed (4:5)</figcaption></figure></div>` : '';
     return `<div class="pv-phone${no916 ? ' bands' : ''}"><div class="pv-screen">${capa}${zon}${ui}${nav(n, true)}</div></div>${extra}`;
@@ -259,7 +261,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     else if (n === 1) m = `<div class="pv-media" style="aspect-ratio:${proporcionFeed(ms[0]).ratio}">${medio(ms[0].src, esc)}</div>`;
     else if (n > 1) m = `<div class="pv-mosaic n${Math.min(n, 4)}">${ms.slice(0, 4).map((x, i) => `<span class="pv-tile">${medio(x.src, esc)}${i === 3 && n > 4 ? `<b class="pv-more">+${n - 4}</b>` : ''}</span>`).join('')}</div>`;
     const propio = (p.textoFacebook || '').trim();
-    return `<div class="pv-card pv-fb"><div class="pv-h"><span class="pv-av sq">${esc(d.ac.iniciales)}</span><span class="pv-fbn"><b>${esc(d.ac.nombre)}</b><small>${p.fecha ? 'Programada · ' + esc(fechaCorta(p)) : 'Sin día'} · ${ic('globe')}</small></span><span class="pv-sp"></span>${ic('dots')}</div>
+    return `<div class="pv-card pv-fb"><div class="pv-h"><span class="pv-av sq">${avatar(d.ac, esc)}</span><span class="pv-fbn"><b>${esc(d.ac.nombre)}</b><small>${p.fecha ? 'Programada · ' + esc(fechaCorta(p)) : 'Sin día'} · ${ic('globe')}</small></span><span class="pv-sp"></span>${ic('dots')}</div>
       ${caption(p, d)}${m}<div class="pv-fbbar" aria-hidden="true"><span>${ic('like')} Me gusta</span><span>${ic('comment')} Comentar</span><span>${ic('share')} Compartir</span></div></div>
       ${propio ? '<p class="pv-hint">Facebook lleva su propio texto (el de «Otro texto para Facebook»).</p>' : ''}`;
   }
@@ -270,7 +272,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
     const yo = { ...p, _yo: true };
     const lista = [yo, ...resto].filter(x => x._yo || x.fecha).sort((a, b) => `${b.fecha || '9999'} ${b.hora || '99'}`.localeCompare(`${a.fecha || '9999'} ${a.hora || '99'}`)).slice(0, 12);
     const tile = x => `<span class="pv-gt${x._yo ? ' yo' : ''}">${(x.medios || [])[0] ? medio(x.medios[0], esc) : '<span class="pv-m none"></span>'}${formatoDe(x, 'instagram') === 'carrusel' ? '<i class="pv-gi" aria-hidden="true">❐</i>' : formatoDe(x, 'instagram') === 'reel' ? '<i class="pv-gi" aria-hidden="true">▶</i>' : ''}<small>${x._yo ? 'ESTA' : esc(fechaCorta(x))}</small></span>`;
-    return `<div class="pv-card pv-prof"><div class="pv-ph"><span class="pv-av lg">${esc(d.ac.iniciales)}</span><div><b>${esc(d.ac.nombre)}</b><small>Así queda tu perfil con lo programado (de lo más nuevo a lo más viejo).</small></div></div>
+    return `<div class="pv-card pv-prof"><div class="pv-ph"><span class="pv-av lg">${avatar(d.ac, esc)}</span><div><b>${esc(d.ac.nombre)}</b><small>Así queda tu perfil con lo programado (de lo más nuevo a lo más viejo).</small></div></div>
       <div class="pv-grid">${lista.map(tile).join('')}</div></div><p class="pv-hint">Desde 2025 Instagram muestra el perfil a 3:4: los bordes de un 4:5 o de un cuadrado se recortan.</p>`;
   }
 

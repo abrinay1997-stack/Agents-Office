@@ -16,6 +16,7 @@ import { DOW, MONTHS, DAY, ymd, startOfDay, fmtDay, rangeOf, stepAnchor, titleHT
 import { attachDnd } from './calendar-dnd.js';
 import { crearDatos, DEMO_MEDIOS } from './contenido-datos.js';
 import { ESTADO, FORMATO, RED, FICON, thumbHTML } from './pieza-base.js';
+import { iconoRed } from './redes-iconos.js';
 import { panelBajoDemanda } from './pieza-carga.js'; // C1 (8 oct 2026): el editor de la pieza llega en su propio paquete (dist/pieza-editor.js)
 import { cuentaAtras, siguienteHueco, vencida, requiereAccion, colaPorDia, motivoPasado, deshacerMover, textoSalida, cuotaTxt } from './contenido-cola.js';
 import { revisarPublicacion, postDePieza, revisarMomento, medidaDeItem, CON_HISTORIAS, formatoDe } from './contenido-reglas.js';
@@ -23,6 +24,7 @@ import { nivel as nivelHora, FUENTE as FUENTE_HORA } from './contenido-hora.js';
 import { initBandeja } from './contenido-bandeja.js';
 import { casillas, intercambio, perfilHTML } from './contenido-perfil.js';
 import * as GF from './galeria-filtro.js';
+import { cuentaCorta, saleEn, nombreCorto } from './contenido-cuentas.js'; // 9 oct 2026: a qué cuenta sale cada pieza
 import { cifrasTxt, numeroCorto, sumaResultados } from './contenido-publicadas.js'; // C2 (8 oct 2026): lo ya publicado, con sus resultados // INF-03: el selector busca y pagina sobre TODA la galería del Estudio
 
 const ORDEN = ['idea', 'borrador', 'revision', 'aprobada'];
@@ -30,7 +32,7 @@ const store = { get(k, d) { try { const v = localStorage.getItem('ao.ct.' + k); 
 // sin hora, la pieza se pinta al principio del día y dice «sin hora» (no se inventa un 09:00 ni un 23:59): no puede aprobarse así
 const at = p => { if (!p.fecha) return 0; const [h, m] = (p.hora || '00:00').split(':').map(Number); return new Date(`${p.fecha}T00:00:00`).setHours(h, m, 0, 0); };
 // C2 (8 oct 2026): una red que sale con OTRO formato (reel en Instagram, post en Facebook) lleva su icono al lado
-const netBadges = (p, cls = '') => p.redes.map(r => `<b class="pz-nb ${r}${cls}" aria-hidden="true">${RED[r]?.short || r}</b>${p.formatos?.[r] ? `<span class="pz-nf" aria-hidden="true">${FICON[p.formatos[r]] || ''}</span>` : ''}`).join('');
+const netBadges = (p, cls = '') => p.redes.map(r => `<b class="pz-nb ${r}${cls}" aria-hidden="true">${iconoRed(r)}</b>${p.formatos?.[r] ? `<span class="pz-nf" aria-hidden="true">${FICON[p.formatos[r]] || ''}</span>` : ''}`).join('');
 const redesTxt = p => p.redes.map(r => `${RED[r]?.name || r}${p.formatos?.[r] ? ` (${(FORMATO[p.formatos[r]] || p.formatos[r]).toLowerCase()})` : ''}`).join(' y ');
 /** C2 (8 oct 2026): lo ya publicado — una publicación de Meta (Analíticas) que no salió de ninguna pieza, y los resultados de las que sí. */
 const TIPO_PUB = { imagen: 'post', carrusel: 'carrusel', reel: 'reel', video: 'reel', texto: 'post' };
@@ -112,6 +114,8 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const gone = new Set(); let undoT = null, commitFn = null, undoFn = null, noteT = null;
   const medidas = { ...DEMO_MEDIOS }; // lo que se sabe de cada archivo del Estudio (de /api/media al elegir): la vista previa y las reglas lo usan
   let cuentas = { empresa: '' };
+  let ctas = null, ctaSel = store.get('cuenta', ''); // 9 oct 2026: GET /api/contenido/cuentas y el filtro por cuenta (ao.ct.cuenta)
+  const ctaTxt = p => cuentaCorta(p, ctas), ctaHTML = p => (ctaTxt(p) ? `<span class="pz-cta">${esc(ctaTxt(p))}</span>` : '');
 
   /* ---------- avisos y deshacer (el mismo gesto que el calendario de tareas: se va al momento, con 8 segundos para volver) ---------- */
   /** Con el panel de una pieza abierto, el aviso va sobre el PANEL y por encima de su pie: centrado en la vista tapaba «Aprobar»,
@@ -158,7 +162,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const todasConocidas = () => { const m = new Map(); for (const p of [...cola, ...pieces]) m.set(p.id, p); return [...m.values()]; };
 
   /* ---------- qué se ve ---------- */
-  const visible = p => !gone.has('p:' + p.id) && estadoOn.has(p.estado) && p.redes.some(r => redOn.has(r)) && (!q || `${p.titulo} ${p.texto} ${p.hashtags} ${p.notas}`.toLowerCase().includes(q));
+  const visible = p => !gone.has('p:' + p.id) && estadoOn.has(p.estado) && p.redes.some(r => redOn.has(r)) && (!ctaSel || !ctas?.cuentas?.some(c => c.id === ctaSel) || saleEn(p, ctaSel, ctas)) && (!q || `${p.titulo} ${p.texto} ${p.hashtags} ${p.notas}`.toLowerCase().includes(q));
   const chipOf = p => (ESTADO[p.estado] || ESTADO.borrador).color;
   const titleOf = p => p.titulo || (p.texto || '').split('\n')[0].slice(0, 60) || 'Sin título';
   /** C2: la miniatura del primer archivo y, si hay más, «+N» encima (como en el feed: se ve que es un carrusel o un lote). */
@@ -186,7 +190,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   const puedeSalir = p => !errN(p) && !!p.fecha && !!p.hora && !revisarMomento(p.fecha, p.hora).errores.length; // C3
   const falta = p => errN(p) && p.estado !== 'idea';
   /** Lo que un lector de pantalla oye de una tarjeta: todo lo que el ojo ve de un vistazo. */
-  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}${p.medios.length > 1 ? ` de ${p.medios.length} archivos` : ''}, ${redesTxt(p)}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) && !resOf(p) ? ', la hora ya pasó' : ''}${resOf(p) ? `, publicada: ${cifrasTxt(resOf(p))}` : ''}`;
+  const ariaOf = p => `${titleOf(p)}, ${p.fecha ? fmtDay(at(p)) : 'sin día'}${p.hora ? ' ' + p.hora : ', sin hora'}, ${FORMATO[p.formato]}${p.medios.length > 1 ? ` de ${p.medios.length} archivos` : ''}, ${redesTxt(p)}${ctaTxt(p) ? ' en ' + ctaTxt(p) : ''}, ${(ESTADO[p.estado] || ESTADO.borrador).name.toLowerCase()}${textoSalida(p) ? ', ' + textoSalida(p).etiqueta.toLowerCase() : ''}${falta(p) ? ', le falta algo: ' + p.revision.errores[0] : ''}${p.cambiadaTrasAprobar ? ', cambió después de aprobarla' : ''}${vencida(p) && !resOf(p) ? ', la hora ya pasó' : ''}${resOf(p) ? `, publicada: ${cifrasTxt(resOf(p))}` : ''}`;
   function card(ev, line) {
     if (ev.kind === 'pub') return pubCard(ev.m, line);
     const p = ev.p, e = ESTADO[p.estado] || ESTADO.borrador, sel = panel.current()?.id === p.id, res = resOf(p);
@@ -195,9 +199,9 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const st = `<span class="pz-st pz-tone" style="--c:${e.color};--cd:${e.dark}" aria-hidden="true">${e.glyph}</span>${falta(p) ? '<span class="pz-warn" aria-hidden="true">!</span>' : ''}`;
     const thumb = miniatura(p, 'pz-ct'), tit = titleOf(p), snip = line ? '' : resto(p, tit);
     if (line) // el MES: dos filas — miniatura | hora · formato · redes · estado / título
-      return `<div class="${cls} line pz2" ${attrs}>${thumb}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f" aria-hidden="true">${FICON[p.formato] || ''}<span class="pz-fw">${esc(FORMATO[p.formato] || '')}</span></span>${netBadges(p)}${st}${res ? `<span class="pz-rs" aria-hidden="true">${OJO}${numeroCorto(res.alcance)}</span>` : ''}</span><span class="cv-ev-t">${esc(titleOf(p))}</span></span></div>`;
+      return `<div class="${cls} line pz2" ${attrs}>${thumb}<span class="pz-l2"><span class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f" aria-hidden="true">${FICON[p.formato] || ''}<span class="pz-fw">${esc(FORMATO[p.formato] || '')}</span></span>${netBadges(p)}${ctaHTML(p)}${st}${res ? `<span class="pz-rs" aria-hidden="true">${OJO}${numeroCorto(res.alcance)}</span>` : ''}</span><span class="cv-ev-t">${esc(titleOf(p))}</span></span></div>`;
     return `<div class="${cls}" ${attrs}>
-      <div class="pz-cardrow">${thumb}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f">${FICON[p.formato] || ''}<span>${esc(FORMATO[p.formato])}</span></span>${netBadges(p)}</div><div class="cv-ev-t">${esc(tit)}</div>${snip ? `<div class="pz-snip">${esc(snip.slice(0, 220))}</div>` : ''}<div class="pz-cardst"><b class="pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}${p.cambiadaTrasAprobar ? ' · CAMBIÓ' : ''}</b>${falta(p) ? '<span class="pz-fail">le falta algo</span>' : ''}${vencida(p) && !res ? '<span class="pz-fail">la hora ya pasó</span>' : ''}</div>${res ? resHTML(res) : ''}</div></div></div>`;
+      <div class="pz-cardrow">${thumb}<div class="pz-cardmain"><div class="pz-l1"><b class="pz-h">${esc(p.hora || 'sin hora')}</b><span class="pz-f">${FICON[p.formato] || ''}<span>${esc(FORMATO[p.formato])}</span></span>${netBadges(p)}${ctaHTML(p)}</div><div class="cv-ev-t">${esc(tit)}</div>${snip ? `<div class="pz-snip">${esc(snip.slice(0, 220))}</div>` : ''}<div class="pz-cardst"><b class="pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}${p.cambiadaTrasAprobar ? ' · CAMBIÓ' : ''}</b>${falta(p) ? '<span class="pz-fail">le falta algo</span>' : ''}${vencida(p) && !res ? '<span class="pz-fail">la hora ya pasó</span>' : ''}</div>${res ? resHTML(res) : ''}</div></div></div>`;
   }
   /* ---------- C2 (8 oct 2026): la vista previa al pasar el ratón (o llegar con el teclado) por una tarjeta ----------
      Como el ojo de Metricool, pero con lo que importa aquí: la imagen a su proporción, el texto entero, los hashtags, las redes con su formato
@@ -210,7 +214,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     const ratio = ['reel', 'historia'].includes(formatoDe(p, red)) ? '9 / 16' : md.ancho && md.alto ? String(Math.min(1.91, Math.max(0.8, md.ancho / md.alto))) : '4 / 5';
     const e = ESTADO[p.estado] || ESTADO.borrador, sal = textoSalida(p), falta = (p.revision?.errores || []).length && p.estado !== 'idea' ? p.revision.errores[0] : '';
     return `<div class="ct-hov-m" style="aspect-ratio:${ratio}">${m ? thumbHTML(m, esc, 'ct-hov-im') : '<span class="ct-hov-none">Sin imagen todavía</span>'}${p.medios.length > 1 ? `<b class="ct-hov-k">1/${p.medios.length}</b>` : ''}</div>
-      <div class="ct-hov-b"><div class="ct-hov-h"><b>${p.fecha ? esc(fmtDay(at(p))) + (p.hora ? ' · ' + esc(p.hora) : ' · sin hora') : 'Sin día'}</b><span class="ct-hov-n">${netBadges(p)}</span></div>
+      <div class="ct-hov-b"><div class="ct-hov-h"><b>${p.fecha ? esc(fmtDay(at(p))) + (p.hora ? ' · ' + esc(p.hora) : ' · sin hora') : 'Sin día'}</b><span class="ct-hov-n">${netBadges(p)}${ctaHTML(p)}</span></div>
         ${p.titulo ? `<p class="ct-hov-t">${esc(p.titulo)}</p>` : ''}<p class="ct-hov-x">${esc(String(p.texto || '').trim() || 'Sin texto todavía')}</p>${p.hashtags ? `<p class="ct-hov-g">${esc(p.hashtags)}</p>` : ''}
         <p class="ct-hov-s pz-tone" style="--c:${e.color};--cd:${e.dark}">${e.glyph} ${e.name}${sal ? ' · ' + esc(sal.etiqueta) : ''}</p>${falta ? `<p class="ct-hov-f">Le falta: ${esc(falta)}</p>` : ''}${resOf(p) ? resHovHTML(pubs.porPieza[p.id]) : ''}</div>`;
   }
@@ -304,10 +308,11 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   /** C2: la zona horaria a la vista — las horas de Contenido son las del reloj de la máquina de la oficina. */
   function zonaHTML() { const z = zona || zonaLocal(); return z.utc ? `<span class="ct-tz" title="Las horas de Contenido son las del reloj de esta computadora${z.nombre ? ' (' + esc(z.nombre) + ')' : ''}: así salen en las redes.">Horas de ${esc(ciudadDe(z) || 'esta computadora')} · ${esc(z.utc)}</span>` : ''; }
   function renderChips() {
-    const usadas = redesUsadas(), off = ORDEN.length - estadoOn.size + usadas.filter(r => !redOn.has(r)).length + (pubs.fuente !== 'ninguna' && !pubOn ? 1 : 0);
+    const usadas = redesUsadas(), lc = ctas?.cuentas || [], off = ORDEN.length - estadoOn.size + usadas.filter(r => !redOn.has(r)).length + (pubs.fuente !== 'ninguna' && !pubOn ? 1 : 0) + (ctaSel && lc.some(c => c.id === ctaSel) ? 1 : 0);
     $('[data-filters]').textContent = off ? `Filtros (${off})` : 'Filtros';
     E.chips.innerHTML = ORDEN.map(s => `<button type="button" class="cv-chip${estadoOn.has(s) ? ' on' : ''}" data-e="${s}" aria-pressed="${estadoOn.has(s)}" title="${esc(ESTADO[s].help)}"><i class="pz-cg pz-tone" style="--c:${ESTADO[s].color};--cd:${ESTADO[s].dark}" aria-hidden="true">${ESTADO[s].glyph}</i>${ESTADO[s].name}</button>`).join('')
-      + '<span class="cv-sep"></span>' + usadas.map(k => [k, RED[k]]).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${r.short}</b>${r.name}</button>`).join('')
+      + (lc.length > 2 ? `<span class="cv-sep"></span><label class="ct-fcta">Cuenta <select class="pz-sel" data-fcta aria-label="Ver solo las piezas de una cuenta"><option value="">todas</option>${lc.map(c => `<option value="${esc(c.id)}"${c.id === ctaSel ? ' selected' : ''}>${esc(nombreCorto(c))} · ${esc(RED[c.red]?.name || c.red)}</option>`).join('')}</select></label>` : '') // 9 oct 2026: el filtro por cuenta
+      + '<span class="cv-sep"></span>' + usadas.map(k => [k, RED[k]]).map(([k, r]) => `<button type="button" class="cv-chip${redOn.has(k) ? ' on' : ''}" data-r="${k}" aria-pressed="${redOn.has(k)}"><b class="pz-nb ${k}" aria-hidden="true">${iconoRed(k)}</b>${r.name}</button>`).join('')
       + (pubs.fuente !== 'ninguna' ? `<span class="cv-sep"></span><button type="button" class="cv-chip${pubOn ? ' on' : ''}" data-pub aria-pressed="${pubOn}" title="Lo que salió en tus redes sin pasar por una pieza (hecho a mano o antes de la oficina), con sus cifras de Analíticas"><i class="pz-cg pz-tone" style="--c:#13705A;--cd:#4FD1A5" aria-hidden="true">●</i>Publicado fuera${pubs.fuente === 'ejemplo' ? ' (ejemplo)' : ''}</button>` : ''); // C2
   }
   function renderRail() {
@@ -346,7 +351,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <span class="ct-hour">${p.hora ? esc(p.hora) : p.fecha ? '<small>sin hora</small>' : '<small>sin día</small>'}</span>
       <button type="button" class="ct-open" data-open="${esc(p.id)}" aria-label="Abrir la pieza: ${esc(ariaOf(p))}">
         ${miniatura(p, 'pz-rt')}
-        <span class="ct-rm"><span class="ct-rt">${esc(titleOf(p))}</span><span class="ct-rs"><span class="pz-f">${FICON[p.formato] || ''}${esc(FORMATO[p.formato])}</span>${netBadges(p)}${cuando}${p.origen.startsWith('agente:') ? ` · <em>${esc(agentName(p.origen.slice(7)) || 'un agente')}</em>` : ''}</span>
+        <span class="ct-rm"><span class="ct-rt">${esc(titleOf(p))}</span><span class="ct-rs"><span class="pz-f">${FICON[p.formato] || ''}${esc(FORMATO[p.formato])}</span>${netBadges(p)}${ctaHTML(p)}${cuando}${p.origen.startsWith('agente:') ? ` · <em>${esc(agentName(p.origen.slice(7)) || 'un agente')}</em>` : ''}</span>
         ${motivo ? `<span class="ct-rf">${esc(motivo)}</span>` : r.length && p.estado !== 'idea' ? `<span class="ct-rf">Le falta: ${esc(r[0])}${r.length > 1 ? ` (+${r.length - 1})` : ''}</span>` : p.cambiadaTrasAprobar ? '<span class="ct-rf">Cambió después de aprobarla: vuelve a aprobarla.</span>' : ''}</span></button>
       ${sal ? `<span class="ct-st pz-tone ct-sst ${sal.clave}" style="--c:${SAL_COLOR[sal.clave][0]};--cd:${SAL_COLOR[sal.clave][1]}"><i aria-hidden="true">${SAL_GLYPH[sal.clave]}</i> ${sal.etiqueta}</span>` : `<span class="ct-st pz-tone" style="--c:${e.color};--cd:${e.dark}"><i aria-hidden="true">${e.glyph}</i> ${e.name}</span>`}
       ${sal ? salidaBox(p, sal) : ''}
@@ -401,7 +406,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { render(); loadResumen(); }
   }
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
-  const panel = panelBajoDemanda({ host: E.panelHost, modal, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, zona: () => zona || zonaLocal(), otras: () => todasConocidas(), cuenta: () => cuentas, medidaDe: id => medidas[id] || null,
+  const panel = panelBajoDemanda({ host: E.panelHost, modal, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, zona: () => zona || zonaLocal(), otras: () => todasConocidas(), cuenta: () => cuentas, cuentasMeta: () => ctas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
   // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
   let bjCargada = false;
@@ -589,6 +594,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   ov.addEventListener('change', async e => {
     const ck = e.target.closest?.('[data-selp]'); if (ck) { ck.checked ? selP.add(ck.dataset.selp) : selP.delete(ck.dataset.selp); render(); ov.querySelector(`[data-selp="${CSS.escape(ck.dataset.selp)}"]`)?.focus(); return; }
     const mv = e.target.closest?.('[data-selmover]'); if (mv && mv.value) await accionVarias('mover', mv.value);
+    if (e.target.matches?.('[data-fcta]')) { ctaSel = e.target.value; store.set('cuenta', ctaSel); render(); ov.querySelector('[data-fcta]')?.focus(); return; } // 9 oct 2026: solo una cuenta
     const hr = e.target.closest?.('[data-horared]'); if (hr) { horaRedSel = hr.value; store.set('horaRed', horaRedSel); await loadHora(); render(); ov.querySelector('[data-horared]')?.focus(); } // C2: las mejores horas de una red
   });
   $('.ct-vsel').addEventListener('change', e => { view = e.target.value; store.set('view', view); load(); render(); });
@@ -687,11 +693,11 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
   /** Con qué cuenta sale: la de Meta si Analíticas ya la conoce; si no, el nombre de la empresa (CON-19, PRE-08). */
   async function loadCuentas() {
     cuentas = { ...cuentas, empresa: empresa() };
-    if (!served) return;
-    try { const j = await (await fetch('/api/contenido/analiticas?dias=7')).json(); for (const c of j.meta?.cuentas || []) if (!cuentas[c.red]) cuentas[c.red] = { nombre: c.nombre, usuario: c.usuario || '' }; } catch {}
+    try { ctas = await datos.cuentas(); for (const c of ctas.cuentas || []) if (c.id === ctas.porDefecto?.[c.red]) cuentas[c.red] = { nombre: c.nombre, usuario: c.usuario || '', foto: c.foto || '' }; } catch {} // 9 oct 2026: GET /api/contenido/cuentas (ligera, sin llamar a Meta)
     const ig = cuentas.instagram?.usuario ? '@' + cuentas.instagram.usuario : '', fb = cuentas.facebook?.nombre || '';
     $('#ctCo').textContent = [ig, fb].filter(Boolean).join(' · ') || cuentas.empresa;
     if (panel.isOpen()) panel.repaintPreview();
+    if (openNow) { lastGrid = ''; lastProg = ''; render(); }
   }
 
   /* ---------- abrir y cerrar ---------- */
