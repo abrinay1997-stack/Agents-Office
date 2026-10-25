@@ -49,7 +49,6 @@ export async function manejar(ctx) {
   const comoAgente = pareceDeAgente(b?.por) || pareceDeAgente(url.searchParams.get('por'));
   if (b && typeof b === 'object') { delete b.por; if (comoAgente) b.por = 'agente'; }
   const u2 = new URL(url); u2.searchParams.delete('por'); if (comoAgente) u2.searchParams.set('por', 'agente');
-  const fetchFn = typeof env.FETCH_META === 'function' ? env.FETCH_META : undefined; // solo pruebas: un Meta de mentira
   const cand = candados(db);
   const quienLock = 'anuncios-' + uuid().slice(0, 8);
 
@@ -59,7 +58,7 @@ export async function manejar(ctx) {
       const t = Date.now(), previo = Number((await leerDoc(db, 'anuncios.agente-sync', { at: 0 })).valor.at) || 0;
       if (t - previo < SINC_AGENTE_MIN * 60e3) return json({ error: `un agente puede pedir leer de Meta una vez cada ${SINC_AGENTE_MIN} minutos (la cuota es del negocio entero): usa lo ya leído` }, 429);
     }
-    return conAnuncios({ db, env, fetchFn }, async (a) => {
+    return conAnuncios({ db, env }, async (a) => {
       const l = a.sync.listo(); if (!l.ok) return json({ error: l.motivo }, 409);
       if (comoAgente) await guardarDoc(db, 'anuncios.agente-sync', { at: Date.now() });
       await asegurarCuentas(a.meta);
@@ -77,7 +76,7 @@ export async function manejar(ctx) {
   const cambiaMeta = metodo === 'POST' && (ruta === '/api/anuncios/accion' || ruta === '/api/anuncios/deshacer' || /^\/api\/anuncios\/sugerencias\/[^/]+\/aplicar$/.test(ruta));
   if (cambiaMeta && !(await cand.tomar('anuncios:accion', 2 * 60e3, quienLock))) return json({ error: 'estado', motivo: 'Otra acción sobre los anuncios está en marcha: espera unos segundos y vuelve a intentarlo.' }, 409);
   try {
-    return await conAnuncios({ db, env, fetchFn, preload }, async (a, { esp }) => {
+    return await conAnuncios({ db, env, preload }, async (a, { esp }) => {
       const handle = a.rutas(a.sync, (res, code, cuerpo) => { res.status = code; res.cuerpo = cuerpo; }, async () => b);
       // lo que Meta necesita saber de los medios del Estudio (R2): que existan para validar o crear; los bytes, para la vista previa
       const mb = /^\/api\/anuncios\/borradores\/([A-Za-z0-9_-]{1,60})\/(validar|crear|vista-previa)$/.exec(ruta);
@@ -111,9 +110,8 @@ async function informeAlCerebro(db, esp, r) {
 export async function cadaMinuto(env) {
   const db = env.DB, cand = candados(db), yo = 'cron-' + uuid().slice(0, 8);
   if (!(await cand.tomar('anuncios:cron', 14 * 60e3, yo))) return;
-  const fetchFn = typeof env.FETCH_META === 'function' ? env.FETCH_META : undefined;
   try {
-    await conAnuncios({ db, env, fetchFn, preload: await leerPreload(db) }, async (a) => {
+    await conAnuncios({ db, env, preload: await leerPreload(db) }, async (a) => {
       if (!a.meta.configurado()) return;
       try { await asegurarCuentas(a.meta); } catch (e) { console.warn('[anuncios] cuentas:', e?.message ?? e); }
       try { await a.conv.tick(); } catch (e) { console.warn('[anuncios] conversiones:', e?.message ?? e); }
@@ -146,9 +144,8 @@ export async function cadaMinuto(env) {
 export async function webhookConversiones(req, env) {
   const url = new URL(req.url);
   if (req.method !== 'POST' || url.pathname !== '/api/anuncios/conversiones/webhook') return null;
-  const fetchFn = typeof env.FETCH_META === 'function' ? env.FETCH_META : undefined;
   const b = await req.json().catch(() => ({}));
-  return conAnuncios({ db: env.DB, env, fetchFn }, async (a) => {
+  return conAnuncios({ db: env.DB, env }, async (a) => {
     const handle = a.rutas(a.sync, (res, code, cuerpo) => { res.status = code; res.cuerpo = cuerpo; }, async () => b);
     const res = await correr(handle, req, url, b);
     return new Response(JSON.stringify(res?.cuerpo ?? { error: 'no existe' }), { status: res?.status ?? 404, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });

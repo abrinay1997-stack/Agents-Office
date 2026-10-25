@@ -32,14 +32,13 @@ export async function manejar(ctx) {
   const b = metodo === 'GET' || metodo === 'HEAD' ? {} : (await ctx.cuerpo(req)) || {};
   // la sesión de una persona solo puede declararse «agente» (menos permisos); nunca otra identidad
   if (b && typeof b === 'object') { const ag = pareceDeAgente(b.por); delete b.por; if (ag) b.por = 'agente'; }
-  const fetchFn = typeof env.FETCH_META === 'function' ? env.FETCH_META : undefined;
   const cand = candados(db), yo = 'bandeja-' + uuid().slice(0, 8);
   // una respuesta u ocultar por mensaje, de una en una (el candado va ANTES de tocar nada: el que llega segundo no cambia el estado de nadie)
   const escribe = metodo === 'POST' && (r.accion === 'enviar' || r.accion === 'ocultar') && r.id;
   const clave = escribe ? `bandeja:${r.accion}:${r.id}` : null;
   if (clave && !(await cand.tomar(clave, 5 * 60e3, yo))) return json({ error: 'ya se está procesando ese mensaje: no se envía ni se cambia dos veces' }, 409);
   try {
-    return await conBandeja({ db, env, fetchFn }, async ({ bandeja, meta }) => {
+    return await conBandeja({ db, env }, async ({ bandeja, meta }) => {
       const res = await resolverBandeja({ bandeja, metodo, ruta, url, b, asegurar: () => asegurarCuentas(meta) });
       if (!res) return json({ error: 'esa ruta de la Bandeja no existe' }, 404);
       return json(res.cuerpo, res.status);
@@ -51,9 +50,8 @@ export async function manejar(ctx) {
 export async function cadaMinuto(env) {
   const db = env.DB, cand = candados(db), yo = 'cron-' + uuid().slice(0, 8);
   if (!(await cand.tomar('bandeja:cron', 8 * 60e3, yo))) return;
-  const fetchFn = typeof env.FETCH_META === 'function' ? env.FETCH_META : undefined;
   try {
-    await conBandeja({ db, env, fetchFn }, async ({ bandeja, meta }) => {
+    await conBandeja({ db, env }, async ({ bandeja, meta }) => {
       if (!meta.configurado()) return;
       try { await asegurarCuentas(meta); } catch (e) { console.warn('[bandeja] cuentas:', e?.message ?? e); }
       await bandeja.tick();

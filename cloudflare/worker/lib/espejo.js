@@ -22,7 +22,7 @@ import { uuid } from './ids.js';
 
 export const PREFIJO = 'fs:';
 export const MAX_ARCHIVO = 1_900_000;
-const CACHE_MAX = 40_000_000; // caracteres en caché por base de datos
+const CACHE_MAX = 12_000_000; // caracteres en caché por base de datos (un isolate tiene ~128 MB: 12 M de caracteres son unos 24 MB)
 const cachePorBase = new WeakMap();
 const cacheDe = (db) => { let c = cachePorBase.get(db); if (!c) { c = { mapa: new Map(), tam: 0 }; cachePorBase.set(db, c); } return c; };
 const ponerCache = (db, clave, version, texto) => {
@@ -121,9 +121,9 @@ export async function abrirEspejo(db, { prefijos = [], exactos = [], semillas = 
     const { results } = await db.prepare("select clave, version from docs where clave like ? escape '\\'").bind(escapeLike(claveDe(p)) + '%').all();
     for (const r of results) hay.set(r.clave, r.version);
   }
-  for (const e of exactos) {
-    const r = await db.prepare('select clave, version from docs where clave = ?').bind(claveDe(e)).first();
-    if (r) hay.set(r.clave, r.version);
+  if (exactos.length) { // todos los sueltos de una vez
+    const { results } = await db.prepare(`select clave, version from docs where clave in (${exactos.map(() => '?').join(',')})`).bind(...exactos.map(claveDe)).all();
+    for (const r of results) hay.set(r.clave, r.version);
   }
   const cache = cacheDe(db);
   const faltan = [];

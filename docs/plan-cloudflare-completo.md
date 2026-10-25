@@ -26,7 +26,7 @@ Decisión del dueño (25 oct 2026): llevar **toda** la oficina a Cloudflare con 
 | 4 | **Agentes completos**: bucle de herramientas en el Worker con cliente MCP propio y el guardián (`safety.mjs`), aprobaciones, calidad, costos | Aquí vuelven los candados por llamada |
 | 5 | **Contenido y publicación en Meta** desde el cron; Analíticas | Patrón de `publicador.js` de Juancito |
 | 6 | **Dimitri**, Negocio, Ajustes, Telegram (webhook nativo), disparadores | Los webhooks encajan de serie en Workers |
-| 7 | **Anuncios de Meta y la Bandeja** | Con el freno por uso y la regla del dinero |
+| 7 ✅ | **Anuncios de Meta y la Bandeja** (hecha el 25 oct, ver «Anuncios de Meta y la Bandeja en la nube» en `docs/cloudflare.md`) | Con el freno por uso y la regla del dinero |
 | 8 | **Estudio** (imagen, video, voz, lotes): R2 + colas | Lo más pesado, al final |
 | 9 | **Apagar lo local**: migración final y la oficina de la computadora pasa a ser opcional | |
 

@@ -43,7 +43,7 @@ import { igualSeguro } from './ids.js';
 
 // ------------------------------------------------------------ dónde viven las cosas dentro del espejo
 export const DIR_ANUNCIOS = 'data/anuncios';
-export const DIR_ANALITICAS = 'data/contenido/analiticas'; // cuentas.json (lo que Meta dice del token), bandeja.json, bandeja-meta.json
+export const DIR_ANALITICAS = 'data/contenido'; // como en la oficina local: cuentas.json (lo que Meta dice del token), bandeja.json, bandeja-meta.json
 export const DIR_INFORMES = 'brain/Agents Office/informes';
 const UMBRALES_DUENO = 'brain/Agents Office/biblioteca/campanas-pagadas/umbrales.json';
 const UMBRALES_FABRICA = 'biblioteca/marketing/campanas-pagadas/umbrales.json';
@@ -70,10 +70,41 @@ const unir = (a, b) => {
   return o;
 };
 /** office.config.json (doc `config`) con office.config.local.json (doc `config-local`) encima, como en la oficina local. */
-export async function leerConfig(db) {
-  const base = (await leerDoc(db, 'config', {})).valor, local = (await leerDoc(db, 'config-local', {})).valor;
-  const propios = (await leerDoc(db, 'anuncios.ajustes', {})).valor; // lo que subió la migración de esta fase (solo anuncios.* y contenido.*)
-  return unir(unir({ anuncios: propios.anuncios, contenido: propios.contenido, approvals: propios.approvals }, base), local);
+export async function leerConfig(db, docs = null) {
+  const d = docs || await leerDocs(db, ['config', 'config-local', 'anuncios.ajustes']);
+  const base = d.config ?? {}, local = d['config-local'] ?? {};
+  const propios = d['anuncios.ajustes'] ?? {}; // lo que subió la migración de esta fase (solo anuncios.* y contenido.*)
+  return unir(unir({ anuncios: propios.anuncios, contenido: propios.contenido, approvals: propios.approvals, name: propios.name }, base), local);
+}
+
+/** Varios documentos de una vez (una sola consulta): { clave: valor | undefined }. */
+export async function leerDocs(db, claves) {
+  const { results } = await db.prepare(`select clave, json from docs where clave in (${claves.map(() => '?').join(',')})`).bind(...claves).all();
+  const o = {}; for (const r of results) { try { o[r.clave] = JSON.parse(r.json); } catch { /* un documento roto es un documento que no está */ } }
+  return o;
+}
+
+// ------------------------------------------------------------ la migración desde la computadora del dueño (scripts/migrar/anuncios.mjs)
+/** Las únicas rutas que la migración puede escribir (la lista blanca: lo que sube el exportador, nada más). */
+export const RUTAS_MIGRABLES = new Set(['data/anuncios/borradores.json', 'data/anuncios/papelera.json', 'data/anuncios/sugerencias.json', 'data/anuncios/creaciones.json', 'data/anuncios/conversiones.json', 'data/anuncios/avisados.json', 'data/anuncios/historial.jsonl', 'data/contenido/bandeja.json', 'data/contenido/bandeja-meta.json']);
+/**
+ * El exportador sube cada archivo como un documento `anuncios.migracion.<nombre>` (/api/migrar/docs solo admite claves simples). La primera vez que se
+ * abre Anuncios o la Bandeja, esos documentos pasan a su sitio (`fs:<ruta>`, lo que lee el espejo) y se borran. Un archivo que ya existe en la nube
+ * NO se pisa: lo de la nube es más nuevo que lo que se exportó. Devuelve las rutas que pasó.
+ */
+export async function aplicarMigracion(db) {
+  const { results } = await db.prepare("select clave from docs where clave like 'anuncios.migracion.%'").all();
+  const hechas = [];
+  for (const { clave } of results) {
+    const { valor } = await leerDoc(db, clave, null);
+    const ruta = String(valor?.ruta || ''), texto = typeof valor?.texto === 'string' ? valor.texto : null;
+    let bien = RUTAS_MIGRABLES.has(ruta) && texto !== null && texto.length <= 1_900_000;
+    if (bien) { try { if (ruta.endsWith('.jsonl')) texto.split('\n').filter(Boolean).forEach((l) => JSON.parse(l)); else JSON.parse(texto); } catch { bien = false; } }
+    if (bien) { try { await guardarDoc(db, 'fs:' + ruta, { t: texto }, { espera: 0 }); hechas.push(ruta); } catch (e) { if (!e.conflicto) throw e; /* ya hay uno en la nube: manda ese */ } }
+    else console.warn(`[anuncios] la migración «${clave}» no vale (ruta o texto): se descarta`);
+    await db.prepare('delete from docs where clave = ?').bind(clave).run();
+  }
+  return hechas;
 }
 
 // ------------------------------------------------------------ avisos (notice) y auditoría: se juntan y se guardan al final
@@ -131,18 +162,22 @@ export function galeriaNube({ env, esp }) {
 
 // ------------------------------------------------------------ el cableado
 const ESCRIBEN = new Set(['cambiar', 'copiar', 'crearEn', 'subirImagen', 'subirVideo']);
+/** Solo pruebas: un Meta de mentira (tests/meta-stand.mjs) en lugar de `fetch`. En producción nadie lo llama. */
+let fetchDePrueba = null;
+export const usarFetchDePrueba = (f) => { fetchDePrueba = typeof f === 'function' ? f : null; };
+const elFetch = (f) => f || fetchDePrueba || ((...a) => fetch(...a));
 export const pareceDeAgente = (v) => String(v ?? '').trim().toLowerCase() === 'agente';
 
 /**
  * Todo lo de Anuncios construido sobre un espejo ya abierto.
  * @param {object} o  { db, env, esp, cfg, fetchFn, ahora, avisos, freno, panelAt, bandejaAbiertaAt, kpis, piezas, usuario }
  */
-export async function construirAnuncios({ db, env, esp, cfg, fetchFn = (...a) => fetch(...a), ahora = () => Date.now(), avisos, freno = null, panelAt = 0, bandejaAbiertaAt = 0, kpis = null, preload = {} }) {
+export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined, ahora = () => Date.now(), avisos, freno = null, panelAt = 0, bandejaAbiertaAt = 0, kpis = null, preload = {} }) {
   const dirAn = esp.ruta(DIR_ANUNCIOS), dirMeta = esp.ruta(DIR_ANALITICAS);
   const aj = () => cfg.anuncios || {};
   const avisar = (texto, o) => avisos.avisar('anuncios', texto, o);
   const auditar = (quien) => (a) => avisos.auditar(quien, a);
-  const meta = crearMeta({ env, fetchFn, dir: dirMeta, ahora });
+  const meta = crearMeta({ env, fetchFn: elFetch(fetchFn), dir: dirMeta, ahora });
   meta.frenoRestaurar(freno);
   const adsBase = crearMetaAds({ meta });
   // antes de cada llamada que ESCRIBE en Meta, se vuelca a D1 lo apuntado (el diario de la creación, el testigo del envío)
@@ -177,7 +212,7 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = (...a) =>
     const a = agenteDeAnuncios(agentes()); if (!a) throw Object.assign(new Error('no hay ningún puesto de Marketing'), { status: 409 });
     const nota = async (n) => (await db.prepare('select texto from notas where nombre = ?').bind(n).first())?.texto || '';
     const { system, user } = promptMejorarAnuncio({ empresa: cfg.name || 'PanaClaw', agente: a, instrucciones: a.brief ? [].concat(a.brief).join('\n') : '', voz: await nota('voice'), contexto: await nota('contexto-marketing'), cifras: '', metodos: '', borrador, creativo, campo, pide });
-    const r = await textoIA(env, { sistema: system, usuario: user, maxTokens: 1500, fetchFn });
+    const r = await textoIA(env, { sistema: system, usuario: user, maxTokens: 1500, fetchFn: elFetch(fetchFn) });
     return { ...leerPropuesta(r.texto), agente: a.name, campo };
   };
   const bandejaLect = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: bandejaAbiertaAt, tokens });
@@ -192,8 +227,8 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = (...a) =>
   async function cerrar() {
     if (pendiente.refrescar) { try { await sync.sincronizar({ cifras: false }); } catch { /* la próxima lectura lo trae */ } }
     await guardarFreno(db, meta, freno);
-    if (sync.panelAtAhora() !== panelAt) await guardarDoc(db, DOC_PANEL, { at: sync.panelAtAhora() });
-    if (bandejaLect.abiertaAtAhora() !== bandejaAbiertaAt) await guardarDoc(db, DOC_BANDEJA_ABIERTA, { at: bandejaLect.abiertaAtAhora() });
+    if (sync.panelAtAhora() - panelAt > 60e3) await guardarDoc(db, DOC_PANEL, { at: sync.panelAtAhora() }); // basta con un minuto: el sondeo mira «hace 3 min»
+    if (bandejaLect.abiertaAtAhora() - bandejaAbiertaAt > 60e3) await guardarDoc(db, DOC_BANDEJA_ABIERTA, { at: bandejaLect.abiertaAtAhora() });
     if (estadoKpis.sucio) await guardarDoc(db, 'kpis', estadoKpis.v);
     for (const t of tareasNuevas.splice(0)) await guardarFila(db, 'tareas', t.id, t, ahora());
   }
@@ -220,15 +255,21 @@ async function guardarFreno(db, meta, antes) {
   const ahoraF = meta.frenoEstado(), previo = antes && typeof antes === 'object' ? { ...FRENO_LIBRE, ...antes } : FRENO_LIBRE;
   if (JSON.stringify(ahoraF) !== JSON.stringify({ pct: Number(previo.pct) || 0, hasta: Number(previo.hasta) || 0, vistoAt: previo.vistoAt || null, motivo: String(previo.motivo || '') })) await guardarDoc(db, DOC_FRENO, ahoraF);
 }
-export async function estadoGuardado(db) {
-  const [freno, panel, bandeja, kpis] = await Promise.all([leerDoc(db, DOC_FRENO, null), leerDoc(db, DOC_PANEL, { at: 0 }), leerDoc(db, DOC_BANDEJA_ABIERTA, { at: 0 }), leerDoc(db, 'kpis', null)]);
-  const k = kpis.valor && typeof kpis.valor === 'object' ? { defs: kpis.valor.defs || [], values: kpis.valor.values || {} } : null;
-  return { freno: freno.valor, panelAt: Number(panel.valor?.at) || 0, bandejaAbiertaAt: Number(bandeja.valor?.at) || 0, kpis: k };
+export async function estadoGuardado(db, docs = null) {
+  const d = docs || await leerDocs(db, [DOC_FRENO, DOC_PANEL, DOC_BANDEJA_ABIERTA, 'kpis']);
+  const k = d.kpis && typeof d.kpis === 'object' ? { defs: d.kpis.defs || [], values: d.kpis.values || {} } : null;
+  return { freno: d[DOC_FRENO] ?? null, panelAt: Number(d[DOC_PANEL]?.at) || 0, bandejaAbiertaAt: Number(d[DOC_BANDEJA_ABIERTA]?.at) || 0, kpis: k };
+}
+/** Lo que una petición necesita saber antes de empezar: la configuración del dueño y lo que D1 recuerda entre peticiones. UNA consulta. */
+async function leerInicio(db) {
+  const d = await leerDocs(db, ['config', 'config-local', 'anuncios.ajustes', DOC_FRENO, DOC_PANEL, DOC_BANDEJA_ABIERTA, 'kpis']);
+  return { cfg: await leerConfig(db, d), guardado: await estadoGuardado(db, d) };
 }
 
 /** Abre el espejo de Anuncios, lo construye todo y corre `fn(a)`; al terminar cierra (relecturas pedidas, freno, avisos) y vuelca. */
 export async function conAnuncios({ db, env, fetchFn, ahora = () => Date.now(), preload = {}, espejo = ESPEJO_ANUNCIOS }, fn) {
-  const cfg = await leerConfig(db), guardado = await estadoGuardado(db), avisos = crearAvisos(db, { ahora });
+  await aplicarMigracion(db);
+  const { cfg, guardado } = await leerInicio(db), avisos = crearAvisos(db, { ahora });
   return conEspejo(db, espejo, async (esp) => {
     const a = await construirAnuncios({ db, env, esp, cfg, fetchFn, ahora, avisos, preload, ...guardado });
     let r, fallo = null;
@@ -241,16 +282,17 @@ export async function conAnuncios({ db, env, fetchFn, ahora = () => Date.now(), 
 
 /** Abre el espejo de la Bandeja y corre `fn(b)` con { bandeja, meta, esp, cfg }; al terminar guarda el freno, cuándo se miró y los avisos. */
 export async function conBandeja({ db, env, fetchFn, ahora = () => Date.now() }, fn) {
-  const cfg = await leerConfig(db), guardado = await estadoGuardado(db), avisos = crearAvisos(db, { ahora });
+  await aplicarMigracion(db);
+  const { cfg, guardado } = await leerInicio(db), avisos = crearAvisos(db, { ahora });
   return conEspejo(db, ESPEJO_BANDEJA, async (esp) => {
-    const meta = crearMeta({ env, fetchFn: fetchFn || ((...a) => fetch(...a)), dir: esp.ruta(DIR_ANALITICAS), ahora });
+    const meta = crearMeta({ env, fetchFn: elFetch(fetchFn), dir: esp.ruta(DIR_ANALITICAS), ahora });
     meta.frenoRestaurar(guardado.freno);
     const bandeja = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: guardado.bandejaAbiertaAt, tokens: tokensD1(db, { ahora }) });
     let r, fallo = null;
     try { r = await fn({ bandeja, meta, esp, cfg, avisos }); } catch (e) { fallo = e; }
     try {
       await guardarFreno(db, meta, guardado.freno);
-      if (bandeja.abiertaAtAhora() !== guardado.bandejaAbiertaAt) await guardarDoc(db, DOC_BANDEJA_ABIERTA, { at: bandeja.abiertaAtAhora() });
+      if (bandeja.abiertaAtAhora() - guardado.bandejaAbiertaAt > 60e3) await guardarDoc(db, DOC_BANDEJA_ABIERTA, { at: bandeja.abiertaAtAhora() });
       await esp.flush(); await avisos.volcar();
     } catch (e) { if (!fallo) fallo = e; else console.error('[bandeja] no pude cerrar tras un fallo:', e?.message ?? e); }
     if (fallo) throw fallo;

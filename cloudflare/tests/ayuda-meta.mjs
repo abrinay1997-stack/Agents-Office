@@ -6,6 +6,7 @@ import { guardarDoc } from '../worker/lib/almacen.js';
 import { crearMetaStand, TOKEN_STAND, CUENTA_STAND } from '../../tests/meta-stand.mjs';
 import { PERMISOS_LECTURA, PERMISOS_ANUNCIOS } from '../../contenido/meta.mjs';
 import { crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
+import { usarFetchDePrueba } from '../worker/lib/anuncios-nube.js';
 
 export const SEG = { geo_locations: { countries: ['PA'] }, age_min: 18, targeting_automation: { advantage_audience: 1 } };
 export const JPEG = (n) => Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(64, n)]);
@@ -42,7 +43,8 @@ export async function nube({ permisos = [...PERMISOS_LECTURA, ...PERMISOS_ANUNCI
   const admin = await sembrar(d1), editor = await sembrar(d1, { email: 'editor@panaclaw.test', rol: 'editor' }), lectura = await sembrar(d1, { email: 'lectura@panaclaw.test', rol: 'lectura' });
   await guardarDoc(d1, 'config-local', config || { anuncios: { cuenta: CUENTA_STAND, whatsapp: '50760001111', topeDiario: 30, topeMensual: 300, topeCampana: 150 }, contenido: { modo: 'simulacro' } });
   const media = { '2026-10/uno.jpg': JPEG(1), '2026-10/dos.jpg': JPEG(2) };
-  const env = envDePrueba(d1, { META_ACCESS_TOKEN: TOKEN_STAND, META_GRAPH_HOST: 'https://graph.test', FETCH_META: g.fetchFn, MEDIA: r2(media), AO_HOOK_TOKEN: 'hook-de-prueba-123', ...extraEnv }); // secrets-ok: de mentira
+  const env = envDePrueba(d1, { META_ACCESS_TOKEN: TOKEN_STAND, META_GRAPH_HOST: 'https://graph.test', MEDIA: r2(media), AO_HOOK_TOKEN: 'hook-de-prueba-123', ...extraEnv }); // secrets-ok: de mentira
+  usarFetchDePrueba(g.fetchFn); // el Worker habla con el Meta de mentira (solo en pruebas)
   const ck = { admin: await entrar(env, admin), editor: await entrar(env, editor), lectura: await entrar(env, lectura) };
   const api = async (quien, metodo, ruta, cuerpo) => { const r = await pedir(manejar, env, ruta, { metodo, cuerpo, cookie: ck[quien] }); let j = {}; try { j = await r.json(); } catch { /* sin cuerpo */ } return { status: r.status, j }; };
   return { d1, g, ids, env, api, ck, inicio };

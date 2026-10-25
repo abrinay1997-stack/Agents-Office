@@ -83,6 +83,18 @@ Al entrar en `https://agents-office.<tu>.workers.dev` ya se ve **la oficina de s
 
 **Límite conocido:** el mapa 3D se calcula en tu computadora (el cálculo de fuerzas gasta más CPU de la que da un Worker del plan gratuito). Las notas nuevas que escriban los agentes en la nube aparecerán en la búsqueda y el lector, pero entran al mapa al volver a correr el paso 2, hasta que se mueva ese cálculo a un plan con más CPU (Workers de pago, ~US$5 al mes) o a una cola.
 
+## Anuncios de Meta y la Bandeja en la nube (fase 7, 25 oct 2026)
+
+Módulos `cloudflare/worker/modulos/anuncios.js` y `bandeja.js`. **Nada se ha probado contra Meta de verdad**: todo contra `tests/meta-stand.mjs` (el Meta de mentira), en tests y en un `wrangler dev` real con Chromium.
+
+- **Cómo:** el código de la oficina local (`anuncios/`, `contenido/bandeja*.mjs`) corre igual en el Worker sobre un *espejo*: por petición se trae de D1 (tabla `docs`, clave `fs:<ruta>`) lo que necesita a la carpeta virtual `/tmp` de workerd y los cambios se vuelven a guardar en D1 (`worker/lib/espejo.js`, con fusión de tres vías si dos peticiones tocan lo mismo). Antes de cada escritura en Meta se guarda el paso en D1.
+- **La regla del dinero, en D1:** el token de los dos clics (2 min, un solo uso, atado a tipo + id + valor) vive en `anuncios_tokens` y se consume de forma atómica (dos peticiones con el mismo token: una 200, otra 409). Las acciones llevan candado (`anuncios_candados`). Topes siempre hacia no gastar. Todo se crea en pausa. Ni los agentes ni el asistente confirman un gasto (403).
+- **Crear en Meta no cabe en una petición:** la petición deja el borrador «creando» (202) y lo hace el cron de cada minuto, un candado por borrador, buscando antes cada objeto por su etiqueta `· AO:<id>` (nunca crea dos veces, también tras un corte).
+- **Bandeja:** responder y ocultar solo el dueño y una vez (candado + testigo «enviando» en D1 antes de llamar a Meta); la ventana de 24 h y los 1.000 caracteres se comprueban antes de llamar.
+- **El token** es `META_ACCESS_TOKEN` (+ `META_APP_SECRET`), secreto del Worker; nunca en D1, respuestas ni registros.
+- **Migrar lo de tu computadora:** `node scripts/migrar/anuncios.mjs` (borradores, sugerencias, historial, bandeja; sin tokens; no pisa lo que ya está en la nube).
+- **Límites:** crear una campaña hace ~30 llamadas a Meta: necesita **Workers de pago** (el plan gratuito da 50 por petición). Falta una ruta pública en `rutas.js` para el webhook de conversiones (`webhookConversiones`) y la ruta `/media/…` de la fase 8.
+
 ## Fase 3 (siguiente)
 
 Contenido y publicación: portar a D1 las piezas y la cola (`contenido/piezas.mjs`, `programador.mjs`, `entrega.mjs`) y el publicador de Meta (`contenido/meta-publicar.mjs`) al cron de cada minuto, como hace `worker/lib/publicador.js` en CALENDARIOS-MARKETING-APP (Facebook programado en Meta; Instagram lo publica el cron a su hora). Después: Bandeja, tareas y rutinas; y limitar el intento de acceso por IP.

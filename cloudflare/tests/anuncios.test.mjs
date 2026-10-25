@@ -224,3 +224,30 @@ test('conversiones: apagadas por defecto; solo el dueño las manda; el webhook p
   const mal = await webhookConversiones(new Request('https://oficina.test/api/anuncios/conversiones/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-office-token': 'otro' }, body: '{"evento":"Lead"}' }), o.env);
   assert.equal(mal.status, 401);
 });
+
+test('las sugerencias salen del diagnóstico tras leer; pedir variaciones deja UNA tarea para el puesto de anuncios en la lista de tareas de la nube (solo el dueño)', { skip: SALTAR }, async () => {
+  const o = await nube(); const x = await leida(o);
+  const s = await o.api('admin', 'GET', '/api/anuncios/sugerencias');
+  assert.equal(s.status, 200); for (const k of ['items', 'cpaObjetivo', 'sinObjetivo', 'notas', 'at', 'umbrales']) assert.ok(k in s.j, `falta «${k}»`);
+  assert.ok(Object.keys(s.j.umbrales).length >= 20, 'los umbrales de la Biblioteca viajan con el Worker');
+  const anuncio = x.campanas[0].conjuntos[0].anuncios[0].id;
+  assert.equal((await o.api('editor', 'POST', `/api/anuncios/creativos/${anuncio}/variaciones`, {})).status, 403);
+  assert.equal((await o.api('admin', 'POST', `/api/anuncios/creativos/${anuncio}/variaciones`, { por: 'agente' })).status, 403);
+  const v = await o.api('admin', 'POST', `/api/anuncios/creativos/${anuncio}/variaciones`, { pide: 'más cercano' });
+  assert.equal(v.status, 200, JSON.stringify(v.j)); assert.ok(v.j.tarea?.id);
+  const fila = await o.d1.prepare("select json from filas where coleccion = 'tareas' and id = ?").bind(v.j.tarea.id).first();
+  assert.ok(fila, 'la tarea está en la colección `tareas` de la nube'); const t = JSON.parse(fila.json);
+  assert.equal(t.agent, 'ada'); assert.equal(t.needsOk, false); assert.match(t.text, /variaciones/);
+});
+
+test('un borrador que no pasa lo local no se crea; y el reloj no inventa nada: solo toca lo que está «creando»', { skip: SALTAR }, async () => {
+  const o = await nube(); await leida(o);
+  const nb = await o.api('admin', 'POST', '/api/anuncios/borradores', { nombre: 'Sin nada', presupuesto: { usd: 10 }, estado: 'ACTIVE', status: 'ACTIVE' });
+  const id = nb.j.borrador.id;
+  const c = await o.api('admin', 'POST', `/api/anuncios/borradores/${id}/crear`, {});
+  assert.equal(c.status, 422, JSON.stringify(c.j)); assert.equal(c.j.error, 'validacion');
+  assert.equal((await o.api('admin', 'GET', `/api/anuncios/borradores/${id}`)).j.borrador.estado, 'borrador', 'sigue siendo un borrador: no se creó nada');
+  const n = Object.keys(o.g.st.campanas).length;
+  await cadaMinuto(o.env);
+  assert.equal(Object.keys(o.g.st.campanas).length, n);
+});
