@@ -4,14 +4,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
-import { MAX, ARCHIVO_MAX, tituloConversacion } from './sub-core.mjs';
+import { MAX, ARCHIVO_MAX, tituloConversacion, plegarHilo } from './sub-core.mjs';
 export * from './sub-core.mjs';
 
 export const file = dataDir => path.join(dataDir, 'subgerente.json');
 export const archiveFile = dataDir => path.join(dataDir, 'subgerente-archivo.json');
-export function load(dataDir) { try { const j = JSON.parse(fs.readFileSync(file(dataDir), 'utf8')); return { messages: Array.isArray(j.messages) ? j.messages : [] }; } catch { return { messages: [] }; } }
-export function save(dataDir, st) {
+export function load(dataDir) { try { const j = JSON.parse(fs.readFileSync(file(dataDir), 'utf8')); return { messages: Array.isArray(j.messages) ? j.messages : [], ...(j.hilo && typeof j.hilo === 'object' ? { hilo: j.hilo } : {}) }; } catch { return { messages: [] }; } }
+/** Saves the conversation. What falls off the end (more than MAX messages) is not lost: plegarHilo() folds it into `st.hilo`, the rolling summary Dimitri reads as <hilo>. */
+export function save(dataDir, st, { depts = {} } = {}) {
   fs.mkdirSync(dataDir, { recursive: true });
+  if (st.messages.length > MAX) st.hilo = plegarHilo(st.hilo, st.messages.slice(0, st.messages.length - MAX), { depts });
   st.messages = st.messages.slice(-MAX);
   const tmp = file(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(st, null, 2)); renombrar(tmp, file(dataDir));
 }
@@ -19,7 +21,7 @@ export function save(dataDir, st) {
 export function archive(dataDir) {
   const st = load(dataDir); if (!st.messages.length) return null;
   let a = []; try { a = JSON.parse(fs.readFileSync(archiveFile(dataDir), 'utf8')).archived || []; } catch {}
-  const id = 'c' + Date.now().toString(36); a.push({ id, at: Date.now(), titulo: tituloConversacion(st.messages), messages: st.messages }); a = a.slice(-ARCHIVO_MAX);
+  const id = 'c' + Date.now().toString(36); a.push({ id, at: Date.now(), titulo: tituloConversacion(st.messages), messages: st.messages, ...(st.hilo ? { hilo: st.hilo } : {}) }); a = a.slice(-ARCHIVO_MAX);
   fs.mkdirSync(dataDir, { recursive: true }); const tmp = archiveFile(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ archived: a })); renombrar(tmp, archiveFile(dataDir));
   save(dataDir, { messages: [] });
   return id;
@@ -28,7 +30,7 @@ export function archive(dataDir) {
 export function restore(dataDir, id) {
   let a = []; try { a = JSON.parse(fs.readFileSync(archiveFile(dataDir), 'utf8')).archived || []; } catch {}
   const k = a.findIndex(x => x.id === id); if (k < 0) return false;
-  const st = load(dataDir); st.messages = [...a[k].messages, ...st.messages]; save(dataDir, st);
+  const st = load(dataDir); st.messages = [...a[k].messages, ...st.messages]; st.hilo = a[k].hilo || st.hilo; save(dataDir, st);
   a.splice(k, 1); const tmp = archiveFile(dataDir) + '.tmp'; fs.writeFileSync(tmp, JSON.stringify({ archived: a })); renombrar(tmp, archiveFile(dataDir));
   return true;
 }
@@ -46,7 +48,7 @@ export function abrir(dataDir, id) {
   const a = leerArchivo(dataDir), k = a.findIndex(x => x.id === id); if (k < 0) return null;
   const elegida = a[k]; a.splice(k, 1); guardarArchivo(dataDir, a);
   const archived = archive(dataDir); // la de ahora al archivo (si había algo)
-  save(dataDir, { messages: elegida.messages || [] });
+  save(dataDir, { messages: elegida.messages || [], ...(elegida.hilo ? { hilo: elegida.hilo } : {}) });
   return { messages: load(dataDir).messages, archived };
 }
 /** Borra una archivada para siempre. */
