@@ -1685,6 +1685,7 @@
   .bv-reset { font-family: var(--ui); font-size: 11px; padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(255,138,61,.5); background: none; color: #FFB27A; cursor: pointer; }
   .bv-none { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--serif); font-size: 20px; color: #B9B7AF; text-align: center; }
   .bv-none[hidden] { display: none; }
+  .bv-side:not(.folded) ~ .bv-none { left: calc(50% + 152px); } @media (max-width: 1280px) { body.subOpen .bv-side:not(.folded) ~ .bv-brand small { display: none; } }
   .bv-none button { display: block; margin: 12px auto 0; font-family: var(--ui); font-size: 12px; padding: 8px 16px; border-radius: 99px; border: 1px solid rgba(253,255,248,.35); background: none; color: #E8E6DF; cursor: pointer; }
   .bv-pane { scrollbar-width: thin; }
   @media (max-width: 768px) { .bv-pane { left: 12px; right: 12px; width: auto; top: auto; height: 48vh; } .bv-top { left: 12px; right: 12px; max-width: none; } #bvSearch { width: 100%; } }

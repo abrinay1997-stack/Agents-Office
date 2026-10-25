@@ -200,6 +200,7 @@ export function initBrain({ esc }) {
       `<details class="bv-sec bv-list"${listOpen ? ' open' : ''}><summary>Lista de notas <b>${shown}</b></summary><div class="bv-lst">${listOpen ? listHTML() : ''}</div></details>`;
     cnt.textContent = `${shown} de ${nodes.length}`;
     emptyEl.hidden = !(openNow && shown === 0);
+    if (!emptyEl.hidden) { const sin = !nodes.length; emptyEl.firstChild.textContent = sin ? 'Aún no hay notas. Sube un documento o deja que los agentes escriban. ' : 'Nada con estos filtros. '; emptyEl.querySelector('button').style.display = sin ? 'none' : ''; }
   }
   // the notes as a list: the same brain for the keyboard and for screen readers (the 3D canvas is a picture to them)
   function listHTML() { const l = nodes.filter(visible).sort((a, b) => a.id.localeCompare(b.id, 'es')); return l.slice(0, 400).map(n => `<button type="button" class="bv-li${n === sel ? ' on' : ''}" data-i="${n.i}"><i style="background:${colOf(n.g)}"></i>${escHTML(n.id)}</button>`).join('') + (l.length > 400 ? `<p class="bv-hmore">+${l.length - 400} más: busca o filtra</p>` : ''); }

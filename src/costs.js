@@ -3,6 +3,7 @@
 // saved and what they are worth; the budget; suggestions (a cheaper model, a routine nobody reads) with one click to apply;
 // and the month as CSV for the accountant. The server builds the figures (costs.mjs → /api/costs).
 import { modal } from './modal.js';
+const ajuste = k => (globalThis.AO_NUBE ? 'Ajustes → Costos' : `<code>costs.${k}</code>`); // en la nube se cambia en Ajustes, no en un archivo
 
 export function initCosts({ served, esc }) {
   const el = document.createElement('div'); el.id = 'costsOv'; el.hidden = true;
@@ -42,10 +43,10 @@ export function initCosts({ served, esc }) {
     body.innerHTML = `
       ${d.subscription ? '<p class="cs-note">Tu Claude es un plan de tarifa fija: estas cifras son <b>lo que costaría en la API</b>. Sirven para comparar agentes y decidir qué automatizar.</p>' : ''}
       <div class="cs-tiles">
-        <div class="cs-tile"><span>Este mes</span><b>${usd(d.usd)}</b><small>${d.runs} ejecuciones${d.overhead ? ` · ${usd(d.overhead)} de la oficina` : ''}</small>${b.budget ? `<div class="cs-meter ${b.level}" role="meter" aria-valuemin="0" aria-valuemax="${b.budget}" aria-valuenow="${b.spent.toFixed(2)}" aria-label="Presupuesto del mes"><i style="width:${Math.min(100, b.ratio * 100)}%"></i></div><small>${Math.round(b.ratio * 100)} % de ${usd(b.budget)}${b.level === 'over' ? ' · <b>superado</b>' : ''}</small>` : '<small>Sin presupuesto: ponlo en <code>costs.monthlyBudget</code></small>'}</div>
+        <div class="cs-tile"><span>Este mes</span><b>${usd(d.usd)}</b><small>${d.runs} ejecuciones${d.overhead ? ` · ${usd(d.overhead)} de la oficina` : ''}</small>${b.budget ? `<div class="cs-meter ${b.level}" role="meter" aria-valuemin="0" aria-valuemax="${b.budget}" aria-valuenow="${b.spent.toFixed(2)}" aria-label="Presupuesto del mes"><i style="width:${Math.min(100, b.ratio * 100)}%"></i></div><small>${Math.round(b.ratio * 100)} % de ${usd(b.budget)}${b.level === 'over' ? ' · <b>superado</b>' : ''}</small>` : `<small>Sin presupuesto: ponlo en ${ajuste('monthlyBudget')}</small>`}</div>
         <div class="cs-tile"><span>Por tarea terminada</span><b>${usd(d.perTask)}</b><small>${d.tasksDone} tareas este mes</small></div>
-        <div class="cs-tile"><span>Horas ahorradas</span><b>${d.hours.toFixed(1)} h</b><small>estimadas por departamento (<code>costs.minutesPerTask</code>)</small></div>
-        <div class="cs-tile"><span>Lo que valen</span><b>${d.hourlyRate ? usd(d.value) : '—'}</b><small>${d.hourlyRate ? `a ${usd(d.hourlyRate)}/h de una persona · ${d.value > d.usd ? 'rinde ' + (d.usd ? Math.round(d.value / d.usd) + '×' : 'mucho') : 'aún no compensa'}` : 'pon lo que cuesta una hora de tu equipo en <code>costs.hourlyRate</code>'}</small></div>
+        <div class="cs-tile"><span>Horas ahorradas</span><b>${d.hours.toFixed(1)} h</b><small>estimadas por departamento (${ajuste('minutesPerTask')})</small></div>
+        <div class="cs-tile"><span>Lo que valen</span><b>${d.hourlyRate ? usd(d.value) : '—'}</b><small>${d.hourlyRate ? `a ${usd(d.hourlyRate)}/h de una persona · ${d.value > d.usd ? 'rinde ' + (d.usd ? Math.round(d.value / d.usd) + '×' : 'mucho') : 'aún no compensa'}` : `pon lo que cuesta una hora de tu equipo en ${ajuste('hourlyRate')}`}</small></div>
       </div>
       ${d.suggestions.length ? `<h3>Sugerencias</h3><ul class="cs-sug">${d.suggestions.map((s, i) => `<li><span>${esc(s.text)}</span>${s.action ? `<button type="button" class="cs-btn" data-apply="${i}">${s.kind === 'routine-unread' ? 'Pausarla' : 'Cambiar el modelo'}</button>` : ''}</li>`).join('')}</ul>` : ''}
       <h3>Últimas 8 semanas</h3>${chart(d.weeks)}
