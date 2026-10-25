@@ -1,0 +1,34 @@
+# Comprobación VIVA del sitio ya publicado en Cloudflare. Se lanza a mano (o desde el despliegue). Solo lee: salud, cabeceras, CSP, que /api pida sesión,
+# que el acceso y la invitación se sirvan, y que el socket en vivo exija sesión. No usa contraseñas ni escribe nada.
+name: Cloudflare · verificar lo publicado
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Dirección publicada (si se deja vacía se usa el secreto SITIO_URL, o la de por defecto)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Prueba viva
+        env:
+          ENTRADA: ${{ inputs.url }}
+          SECRETO: ${{ secrets.SITIO_URL }}
+        run: |
+          URL="${ENTRADA:-$SECRETO}"
+          URL="${URL:-https://agents-office.abrinay1997.workers.dev}"
+          echo "Comprobando $URL"
+          SITIO_URL="$URL" node scripts/prueba-viva.mjs
