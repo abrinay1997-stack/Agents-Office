@@ -1,0 +1,138 @@
+// (parte pura, sin fs ni path) // Agents Office V3.5 — routines: tasks the office does on its own clock.
+//
+// A routine is a line in <brain>/Agents Office/routines.json (yours: written by the task bar,
+// by a department lead in chat, or by Claude Code). Run state — when each one is next due, when
+// it last ran — lives in data/routines.json so the brain file stays clean config.
+//
+// Every department can have routines (24 Sep 2026; the first release had Emails, Accounting and Sales only).
+//
+//   { "id": "inbox-triage", "dept": "emails", "agent": "elead",
+//     "title": "Triage the overnight inbox", "text": "Triage the overnight inbox: what needs me, …",
+//     "when": { "kind": "weekdays", "at": "08:00" },      ← src/when.js
+//     "needsOk": false, "paused": false, "model": "opus", "effort": "high" }   ← optional: model sonnet · opus · fable; effort low · medium · high · xhigh · max (default: the office's, then the model's own)
+//
+// needsOk (default true): the result waits in WAITING ON APPROVAL for the owner's tick before the
+// agent does anything outbound. Switch it off for read-only routines.
+import { describe, nextRun, valid } from './src/when.js';
+import { missedRuns } from './reliability.mjs';
+
+export const ALLOWED = ['emails', 'fin', 'sales', 'marketing', 'ops', 'delivery']; // 24 Sep 2026: every department (was emails/fin/sales) — the owner's content work runs on a timetable too
+export const NAMES = { emails: 'Emails', fin: 'Accounting', sales: 'Sales', marketing: 'Marketing', ops: 'Operations', delivery: 'Delivery' };
+export const LATE_AFTER = 90 * 1000; // a run more than 90 s past its minute was missed (asleep, or the office was off) → runs once, marked LATE
+
+const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+
+/** "Routines come to Marketing in a later release. This release: Emails, Accounting, Sales." */
+export function refusal(dept) {
+  return `${NAMES[dept] || dept} todavía no tiene rutinas en esta oficina.`; // every department has them since 24 Sep 2026
+}
+
+/** Normalise + check one routine against the roster. Returns { routine, problems }. Fixed fields are kept as given; bad ones are named. */
+export function validate(r, agents, existing = []) {
+  const problems = [];
+  const out = {};
+  const a = agents.find(x => x.id === r.agent);
+  out.dept = r.dept || (a && a.department);
+  if (!ALLOWED.includes(out.dept)) problems.push(`${r.id || r.title || 'routine'}: ${refusal(out.dept)}`);
+  if (!a) problems.push(`${r.id || r.title || 'routine'}: no agent called "${r.agent}"`);
+  else if (a.department !== out.dept) problems.push(`${r.id || r.title || 'routine'}: ${a.name} is in ${NAMES[a.department] || a.department}, not ${NAMES[out.dept] || out.dept}`);
+  out.agent = r.agent;
+  out.text = String(r.text || '').trim();
+  if (!out.text) problems.push(`${r.id || 'routine'}: no task text`);
+  out.title = String(r.title || out.text).trim().slice(0, 90);
+  out.id = String(r.id || slug(out.title) || 'routine');
+  if (existing.some(x => x.id === out.id)) problems.push(`${out.id}: two routines share this id`);
+  out.when = r.when;
+  if (!valid(out.when)) problems.push(`${out.id}: the schedule is not complete (${JSON.stringify(r.when || null)}) — see src/when.js`);
+  out.needsOk = r.needsOk !== false;
+  out.paused = r.paused === true;
+  if (r.autonomous === true) out.autonomous = true; // V4.4 (G2): earned after N clean approvals — it sends without asking (amounts over the limit still wait)
+  if (Number.isFinite(+r.minutesSaved) && +r.minutesSaved > 0) out.minutesSaved = +r.minutesSaved; // V4.4 (C2)
+  if (r.catchUp === false) out.catchUp = false; // V4.4 (B2): a missed run (the computer slept) is skipped, not done late — for things that only make sense on time
+  if (Number.isFinite(+r.timeout) && +r.timeout > 0) out.timeout = Math.max(60, Math.min(3600, +r.timeout)); // V4.4 (B4): seconds for this routine's run
+  if (Array.isArray(r.plan)) out.plan = r.plan.slice(0, 4).map(String);
+  if (r.team === true) { // V3.2 (16 Sep): a team routine — the department lead splits it across the desks, so the lead owns it
+    out.team = true; const lead = agents.find(x => x.department === out.dept && x.lead);
+    if (lead && a && !a.lead) out.agent = lead.id; // moved to the lead quietly: a problem would drop the routine
+  }
+  if (r.model !== undefined && r.model !== '' && r.model !== null) { const m = String(r.model).toLowerCase().trim(); if (['sonnet', 'opus', 'fable'].includes(m)) out.model = m; else problems.push(`${out.id}: model must be sonnet, opus or fable (got "${r.model}")`); }
+  if (r.effort !== undefined && r.effort !== '' && r.effort !== null) { const e = String(r.effort).toLowerCase().trim(); if (['low', 'medium', 'high', 'xhigh', 'max'].includes(e)) out.effort = e; else problems.push(`${out.id}: effort must be low, medium, high, xhigh or max (got "${r.effort}")`); }
+  return { routine: out, problems };
+}
+
+/** Give every routine a nextAt (new ones: the next due time from now). Returns the merged view the API serves. */
+export function withState(routines, st, now = Date.now()) {
+  let changed = false;
+  const out = routines.map(r => {
+    const s = st[r.id] || (st[r.id] = {});
+    const agotada = r.when?.count && (s.runs || 0) >= r.when.count; // plan T5: «6 veces» — after the sixth it stays still
+    if (agotada) { if (s.nextAt !== null) { s.nextAt = null; changed = true; } }
+    else if (!s.nextAt || s.when !== JSON.stringify(r.when)) { s.nextAt = nextRun(r.when, now); s.when = JSON.stringify(r.when); changed = true; }
+    if (Array.isArray(s.skip)) { const keep = s.skip.filter(x => x > now - 864e5); if (keep.length !== s.skip.length) { s.skip = keep; changed = true; } }
+    return { ...r, desc: describe(r.when), skips: s.skip || [], terminada: !!(r.when?.count && (s.runs || 0) >= r.when.count) || (!!r.when?.end && !s.nextAt), nextAt: r.paused ? null : s.nextAt, lastAt: s.lastAt || null, runs: s.runs || 0, lastTaskId: s.lastTaskId || null, lastLate: !!s.lastLate };
+  });
+  for (const id of Object.keys(st)) if (!routines.some(r => r.id === id)) { delete st[id]; changed = true; } // deleted routines drop their state
+  return { list: out, changed };
+}
+
+/** What is due now: [{ routine, due, late }]. Paused routines never fire. A due time more than LATE_AFTER ago is a catch-up (E1): once, marked late. */
+export function due(routines, st, now = Date.now()) {
+  const hits = [];
+  for (const r of routines) {
+    if (r.paused) continue;
+    const s = st[r.id]; if (!s || !s.nextAt) continue;
+    if (s.nextAt > now) continue;
+    if (Array.isArray(s.skip) && s.skip.includes(s.nextAt)) { // the owner skipped this one run: the clock moves on without firing
+      s.skip = s.skip.filter(x => x !== s.nextAt); s.skippedAt = s.nextAt; s.nextAt = nextRun(r.when, Math.max(now, s.nextAt)); hits.push({ routine: r, skipped: true }); continue;
+    }
+    const late = now - s.nextAt > LATE_AFTER;
+    const missed = late ? missedRuns(s.nextAt, now, t => nextRun(r.when, t)) : 0; // V4.4 (B2): how many runs the sleep swallowed
+    if (late && r.catchUp === false) { s.missedAt = s.nextAt; s.missed = (s.missed || 0) + missed; s.nextAt = nextRun(r.when, now); hits.push({ routine: r, skipped: true, missed }); continue; }
+    hits.push({ routine: r, due: s.nextAt, late, missed });
+  }
+  return hits;
+}
+
+/** After a firing: move the clock on. Never more than one catch-up: the next due time is computed from NOW, not from the missed minute. */
+export function advance(st, r, now = Date.now(), taskId = null, late = false) {
+  const s = st[r.id] || (st[r.id] = {});
+  s.lastAt = now; s.runs = (s.runs || 0) + 1; s.lastTaskId = taskId; s.lastLate = late;
+  s.nextAt = r.when?.count && s.runs >= r.when.count ? null : nextRun(r.when, now); // plan T5: a routine with a count stops after its last run
+  return s;
+}
+
+/** Guess whether a task text is outbound (needs the owner's OK) when Claude has not said. */
+export function guessNeedsOk(text) {
+  const t = String(text).toLowerCase();
+  const outbound = /\b(send|sends|email them|reply to|replies|respond|chase|nudge|remind|reminder|post|publish|pay|invoice them|book|schedule a|cancel|update the crm|delete|forward|message)\b/.test(t);
+  const readOnly = /\b(list|summari[sz]e|triage|tell me|what|report|match|reconcile|qualify|review|check|read|find|flag|count|draft)\b/.test(t);
+  if (/\bdraft\b/.test(t) && !/\bsend\b/.test(t)) return true; // a draft exists to be sent — the send waits for the tick
+  return outbound || !readOnly;
+}
+
+/** The one-line question the agent asks when a routine's draft is waiting. */
+export function askLine(task) {
+  return `«${task.title}» está lista y espera tu visto bueno: aprueba para enviarla, o rechaza y dime qué cambiar.`;
+}
+
+/** The "routines" list a lead reads back in chat. */
+export function listText(list, dept, agents) {
+  const mine = list.filter(r => r.dept === dept);
+  const DNAMES = { emails: 'Correos', fin: 'Contabilidad', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', delivery: 'Entregas' };
+  if (!mine.length) return `Todavía no hay nada en el horario de ${DNAMES[dept] || dept}. Dame una con hora — «cada día hábil a las 8, …» — y la anoto.`;
+  const name = id => agents.find(a => a.id === id)?.name || id;
+  return `Rutinas de ${DNAMES[dept] || dept}:\n` + mine.map(r => `• ${r.title} — ${r.desc} · ${name(r.agent)}${r.paused ? ' · PAUSADA' : ''}${r.needsOk ? ' · espera tu visto bueno' : ' · solo lectura'}`).join('\n') +
+    `\n\nDi «pausa …», «reanuda …», «ejecuta …» o «elimina …» con algunas palabras del nombre.`;
+}
+
+/** Match "pause the monday one" / "run inbox triage now" to a routine in the department by word overlap. */
+export function matchRoutine(list, dept, words) {
+  const w = String(words).toLowerCase().split(/[^a-z0-9]+/).filter(x => x.length > 2 && !['the', 'one', 'now', 'routine', 'and', 'please'].includes(x));
+  let best = null, bestN = 0;
+  for (const r of list.filter(r => r.dept === dept)) {
+    const hay = (r.title + ' ' + r.text + ' ' + r.desc + ' ' + (r.when.at || '')).toLowerCase();
+    const n = w.filter(x => hay.includes(x)).length;
+    if (n > bestN) { bestN = n; best = r; }
+  }
+  return bestN ? best : null;
+}
