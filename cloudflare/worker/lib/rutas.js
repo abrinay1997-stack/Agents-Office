@@ -17,6 +17,7 @@ import * as equipo from '../modulos/equipo.js';
 import { tasa, tasaVer, ipDe, relojDe } from './equipo.js';
 import { cerrarDe } from './vivo.js';
 import { podar, tocaPodar } from './mantenimiento.js';
+import { registrarSecretos } from './secretos.js';
 
 export const VERSION = '0.1.0';
 /** Lo único que se contesta sin sesión además de /api/health y /api/acceso: webhooks de otros sistemas, cada uno con su propio secreto (ver `publica` en los módulos). */
@@ -30,7 +31,8 @@ function origenValido(req) {
 }
 
 /** El reloj de cada minuto (lo que en serve.mjs eran setInterval). La zona de la oficina se instala aquí, UNA vez, igual que en `manejar`: los módulos no la tocan. */
-export async function correrReloj(env, ahoraMs = Date.now()) { // `ahoraMs`: solo las pruebas lo cambian
+export async function correrReloj(env, ahoraMs = Date.now()) {
+  registrarSecretos(env); // `ahoraMs`: solo las pruebas lo cambian
   instalarZona(env.ZONA_HORARIA);
   await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
   if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
@@ -39,6 +41,7 @@ export async function correrReloj(env, ahoraMs = Date.now()) { // `ahoraMs`: sol
 }
 
 export async function manejar(req, env, exec = null) {
+  registrarSecretos(env);
   instalarZona(env.ZONA_HORARIA); // la hora «local» de las reglas de la oficina es la de su zona (lib/zona.js), no la UTC del Worker
   const url = new URL(req.url);
   const ruta = url.pathname;

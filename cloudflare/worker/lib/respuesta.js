@@ -1,4 +1,5 @@
 // Respuestas del Worker. Las cabeceras de _headers NO se aplican a lo que genera el Worker: las de /api/* viven aquí.
+import { limpiarSecretos } from './secretos.js';
 export const CABECERAS_API = Object.freeze({
   'Content-Type': 'application/json; charset=utf-8',
   'X-Content-Type-Options': 'nosniff',
@@ -7,7 +8,7 @@ export const CABECERAS_API = Object.freeze({
   'Cache-Control': 'no-store, max-age=0',
 });
 export const json = (datos, estado = 200, extra = {}) =>
-  new Response(JSON.stringify(datos), { status: estado, headers: { ...CABECERAS_API, ...extra } });
+  new Response(estado >= 400 ? limpiarSecretos(JSON.stringify(datos)) : JSON.stringify(datos), { status: estado, headers: { ...CABECERAS_API, ...extra } }); // un error nunca lleva un secreto, ni aunque lo repita el proveedor
 /** El detalle técnico va al registro, no al cuerpo. */
 export function error(mensaje, estado = 400, causa = null) {
   if (causa) console.error(`[${estado}] ${mensaje}:`, causa?.message ?? causa);

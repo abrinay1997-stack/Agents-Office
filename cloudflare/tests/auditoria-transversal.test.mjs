@@ -18,6 +18,7 @@ import { archivarViejas, DIAS_HECHAS_VIVAS, LOTE_ARCHIVO, cadaMinuto as relojTar
 import { crearTarea } from '../../tareas/modelo.mjs';
 import { instalarZona } from '../worker/lib/zona.js';
 import { crearAlmacenD1 } from '../worker/lib/contenido/piezas.js';
+import { limpiarSecretos, registrarSecretos } from '../worker/lib/secretos.js';
 import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -301,4 +302,35 @@ test('ENVÍOS: el panel de la fase 1 ya no ofrece herramientas de envío (la lla
   const r = await o.admin('POST', '/api/agentes/olead/ejecutar', { texto: 'Responde al correo de Ana', aprobada: true });
   assert.equal(r.status, 409); assert.match(r.j.error, /tarea/);
   assert.equal((await o.editor('POST', '/api/agentes/olead/ejecutar', { texto: 'x', aprobada: true })).status, 403, 'un editor sigue sin poder aprobar');
+});
+
+test('SECRETOS: aunque un proveedor repita la cabecera o la llave en su error, no sale en la respuesta ni queda en D1', { skip: SALTAR }, async () => {
+  const S = { ANTHROPIC_API_KEY: 'SENT_ANTH_0123456789abcdef', MINIMAX_API_KEY: 'SENT_MINIMAX_0123456789abcdef', MCP_X_TOKEN: 'SENT_MCP_0123456789abcdef', META_APP_SECRET: 'SENT_APP_0123456789abcdef' };
+  const o = await oficina(S);
+  const real = globalThis.fetch;
+  globalThis.fetch = async (u, init) => new Response(JSON.stringify({ error: { message: `rechazado ${u?.url ?? u} ${JSON.stringify(init?.headers ?? {})} Bearer abcdefghijklmnop1234 sk-ant-api03-ABCDEFGHIJKLMNOP` }, base_resp: { status_code: 1004, status_msg: `${JSON.stringify(init?.headers ?? {})}` } }), { status: 400 }); // secrets-ok
+  try {
+    const respuestas = [
+      await o.admin('POST', '/api/agentes/olead/ejecutar', { texto: 'hola' }),
+      await o.admin('POST', '/api/voces/design', { prompt: 'una voz grave', text: 'hola' }),
+      await o.admin('POST', '/api/tasks', { dept: 'ops', text: 'hola' }),
+    ].map((r) => JSON.stringify(r.j));
+    const base = o.d1._db; let volcado = '';
+    for (const { name } of base.prepare("select name from sqlite_master where type = 'table'").all()) volcado += JSON.stringify(base.prepare(`select * from "${name}"`).all());
+    for (const texto of [...respuestas, volcado]) {
+      for (const v of Object.values(S)) assert.ok(!texto.includes(v), 'un secreto salió en un texto');
+      assert.ok(!/Bearer abcdefghijklmnop1234|sk-ant-api03-ABCDEFGHIJKLMNOP/.test(texto), 'una llave con forma de llave salió'); // secrets-ok
+    }
+    assert.ok(respuestas.some((t) => /rechazado/.test(t)), 'el error sí se dice (sin la llave)');
+  } finally { globalThis.fetch = real; }
+});
+
+test('SECRETOS: limpiarSecretos tapa los valores conocidos y lo que tiene forma de llave, y deja el resto', () => {
+  registrarSecretos({ MI_TOKEN: 'valor-secreto-largo-1234', CORTO_KEY: 'corto', OTRA_COSA: 'no-es-secreto-1234567' });
+  assert.equal(limpiarSecretos('x valor-secreto-largo-1234 y'), 'x «…» y');
+  assert.equal(limpiarSecretos('a no-es-secreto-1234567 b'), 'a no-es-secreto-1234567 b');
+  assert.equal(limpiarSecretos('usa corto'), 'usa corto', 'un valor de menos de 12 caracteres no se registra (taparía palabras)');
+  assert.equal(limpiarSecretos('Authorization: Bearer abcdefghijklmnopqrstu'), 'Authorization: Bearer «…»');
+  assert.equal(limpiarSecretos('mira EAAB0123456789012345678901 ok'), 'mira «…» ok');
+  assert.equal(limpiarSecretos(12), 12);
 });

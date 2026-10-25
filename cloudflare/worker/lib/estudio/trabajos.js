@@ -10,6 +10,7 @@
 // Lo puro (validación, topes, rastro) es media/trabajos-core.mjs; los motores, media/motores-core.mjs: los mismos de la oficina local.
 import { S } from '../../../../media/estado.mjs';
 import { model, engines as engines_ } from '../../../../media/catalogo.mjs';
+import { limpiarSecretos } from '../secretos.js';
 import * as mmx from '../../../../minimax.mjs';
 import { explicar } from '../../../../media/errores.mjs';
 import { sniffExt, MEDIA_MIME } from '../../../../media/galeria-core.mjs';
@@ -179,7 +180,7 @@ async function paso(env, db, id, ahora) {
     delete j.enviando;
     if (!j.remote?.length) {
       const motivo = 'se interrumpió mientras se enviaba al servicio: puede que ya lo haya cobrado. Revisa su panel y, si no llegó nada, reintenta.';
-      if (j.items.length) { j.state = 'done'; j.warning = `llegaron ${j.items.length} de ${j.n}: ${motivo}`; } else { j.state = 'failed'; j.error = motivo; j.errorClass = 'tiempo'; }
+      if (j.items.length) { j.state = 'done'; j.warning = `llegaron ${j.items.length} de ${j.n}: ${motivo}`; } else { j.state = 'failed'; j.error = limpiarSecretos(motivo); j.errorClass = 'tiempo'; }
       return cerrar(env, db, j, m, ahora);
     }
   }
@@ -212,7 +213,7 @@ async function paso(env, db, id, ahora) {
     if (e?.pendiente) { delete j.enviando; j.state = 'running'; await guardarFila(db, j); return { job: pub(j), hizo: true }; }
     const ex = j.cancel ? { texto: 'Cancelado por ti.', clase: 'cancelado' } : explicar(e.message, e.status);
     ex.texto = String(ex.texto).replace(/[A-Za-z0-9_-]{24,}/g, '…'); // nunca un cuerpo crudo ni nada que parezca una llave: ni errorRaw, que en la nube no se guarda
-    if (j.items.length) { j.state = 'done'; j.warning = ex.texto; } else { j.state = 'failed'; j.error = ex.texto; j.errorClass = ex.clase; }
+    if (j.items.length) { j.state = 'done'; j.warning = ex.texto; } else { j.state = 'failed'; j.error = limpiarSecretos(ex.texto); j.errorClass = ex.clase; }
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${String(e.message).replace(/[A-Za-z0-9_-]{24,}/g, '…')}`);
   }
   delete j.enviando;
