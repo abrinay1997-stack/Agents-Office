@@ -43,11 +43,44 @@ export async function guardarGrafo(db, grafo) {
   return true;
 }
 
-/** Lo que contesta GET /api/brain. Sin mapa todavía, uno vacío (la página conserva el de muestra). */
+/**
+ * El mapa con las notas que llegaron DESPUÉS de calcularlo. El cálculo de fuerzas del mapa (graph-core.mjs) gasta más CPU de la que da un Worker, así que lo hace la
+ * computadora del dueño al migrar; pero una nota nueva en la nube (un documento subido, la entrega de un agente, una nota de Contenido) no puede quedarse fuera del mapa
+ * hasta la siguiente migración. Aquí entra como una neurona SIN enlaces, en el anillo exterior (donde graph-core.mjs pone las notas sueltas), sin tocar los enlaces,
+ * el suelo ni los índices de las demás: los nodos con enlaces van primero y los sueltos al final, así que reordenar los sueltos no mueve ningún índice.
+ * Una nota ya con enlaces que se borra se queda como está (quitarla movería los índices); una suelta que se borra, se va. Puro. → el mismo `g` si no hay nada que cambiar.
+ * filas: [{ nombre, grupo, actualizado, cab }] (cab: el principio del texto, para la cabecera).
+ */
+export function conNotasNuevas(g, filas) {
+  const base = g && Array.isArray(g.nodes) ? g : null;
+  if (!base && !filas.length) return g;
+  const nodos = base ? base.nodes : [], tiene = new Set(nodos.map((n) => n.id)), hay = new Set(filas.map((f) => f.nombre));
+  const faltan = filas.filter((f) => !tiene.has(f.nombre)), sobran = nodos.some((n) => !(n.d > 0) && !hay.has(n.id));
+  if (!faltan.length && !sobran) return g;
+  const enlazados = nodos.filter((n) => n.d > 0), sueltos = nodos.filter((n) => !(n.d > 0) && hay.has(n.id));
+  const hechos = (f) => {
+    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(f.cab || ''), o = {};
+    if (fm) for (const l of fm[1].split(/\r?\n/)) { const m = /^(agent|department|done):\s*(.+)$/.exec(l); if (m) o[m[1]] = m[2].trim(); }
+    let t = o.done ? Date.parse(o.done) : NaN; if (!Number.isFinite(t)) t = Number(f.actualizado) || 0;
+    return { t: Math.round(t / 1000), ...(o.agent ? { a: o.agent } : {}), ...(o.department ? { dep: o.department } : {}) };
+  };
+  const porNombre = new Map(filas.map((f) => [f.nombre, f]));
+  const todos = [...sueltos.map((n) => ({ id: n.id, g: n.g, t: n.t, ...(n.a ? { a: n.a } : {}), ...(n.dep ? { dep: n.dep } : {}) })),
+    ...faltan.map((f) => ({ id: f.nombre, g: f.grupo || '00-Meta', ...hechos(f) }))]
+    .sort((a, b) => String(a.g).localeCompare(String(b.g)) || a.id.localeCompare(b.id));
+  const N = enlazados.length;
+  const anillo = todos.map((n, i) => { const ang = (i / Math.max(1, todos.length)) * Math.PI * 2 + 0.3, r = N ? 1.14 + (i % 3) * 0.035 : 0.6; return { ...n, d: 0, x: +(Math.cos(ang) * r).toFixed(3), y: +(Math.sin(ang) * r).toFixed(3) }; });
+  const nodes = [...enlazados, ...anillo];
+  return { ...(base || { links: [], extra: [], floor: null }), notes: nodes.length, nodes };
+}
+
+/** Lo que contesta GET /api/brain. Sin mapa todavía ni notas, uno vacío (la página conserva el de muestra); con notas nuevas, también ellas (conNotasNuevas). */
 export async function leerGrafo(db) {
   const f = await db.prepare('select json from grafo where id = 1').first();
-  const g = f ? JSON.parse(f.json) : { notes: 0, nodes: [], links: [], extra: [], floor: null };
-  return { ...g, learned: { w: {}, links: [] } }; // lo que aprende la memoria llega con los agentes (fase 4)
+  const g = f ? JSON.parse(f.json) : null;
+  const { results } = await db.prepare('select nombre, grupo, actualizado, substr(texto, 1, 600) cab from notas').all();
+  const lleno = conNotasNuevas(g, results) ?? { notes: 0, nodes: [], links: [], extra: [], floor: null };
+  return { ...lleno, learned: { w: {}, links: [] } }; // lo que aprende la memoria llega con los agentes (fase 4)
 }
 
 export async function buscar(db, q) {

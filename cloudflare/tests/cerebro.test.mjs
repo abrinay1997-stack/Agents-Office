@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { manejar } from '../worker/lib/rutas.js';
-import { validarNotas } from '../worker/lib/cerebro.js';
+import { validarNotas, conNotasNuevas } from '../worker/lib/cerebro.js';
 import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
 
 test('validarNotas rechaza nombres peligrosos y lotes enormes', () => {
@@ -74,4 +74,17 @@ test('importación genérica de filas y documentos: solo admin, validada, idempo
     assert.equal((await pedir(manejar, env, '/api/migrar/filas', { metodo: 'POST', cuerpo: malo, cookie: ck })).status, 422);
   assert.deepEqual(await (await pedir(manejar, env, '/api/migrar/docs', { metodo: 'POST', cuerpo: { clave: 'kpis', valor: { a: 1 } }, cookie: ck })).json(), { clave: 'kpis', version: 1 });
   assert.equal((await pedir(manejar, env, '/api/migrar/docs', { metodo: 'POST', cuerpo: { clave: 'Mal', valor: {} }, cookie: ck })).status, 422);
+});
+
+test('conNotasNuevas: una nota que llegó después del mapa entra como neurona suelta sin mover los índices de los enlaces; la suelta que se borra se va', () => {
+  const g = { notes: 3, nodes: [{ id: 'a', g: 'G', d: 1, x: 0.1, y: 0.2, t: 1 }, { id: 'b', g: 'G', d: 1, x: -0.1, y: 0.2, t: 1 }, { id: 'sola', g: 'G', d: 0, x: 1.1, y: 0, t: 1 }], links: [[0, 1]], extra: [], floor: [[0, 0], [1, 1]] };
+  const fila = (nombre, extra = {}) => ({ nombre, grupo: 'Agents Office', actualizado: 1790000000000, cab: '', ...extra });
+  assert.equal(conNotasNuevas(g, [fila('a'), fila('b'), fila('sola')]), g, 'sin novedades devuelve el mismo mapa');
+  const n = conNotasNuevas(g, [fila('a'), fila('b'), fila('sola'), fila('entrega', { cab: '---\nagent: elead\ndepartment: emails\ndone: 2026-10-25T10:00:00Z\n---\n' })]);
+  assert.deepEqual(n.nodes.slice(0, 2), g.nodes.slice(0, 2), 'los nodos con enlaces siguen en su sitio');
+  assert.deepEqual(n.links, g.links); assert.deepEqual(n.floor, g.floor); assert.equal(n.notes, 4);
+  const e = n.nodes.find((x) => x.id === 'entrega'); assert.deepEqual([e.d, e.a, e.dep, e.t], [0, 'elead', 'emails', Math.round(Date.parse('2026-10-25T10:00:00Z') / 1000)]); assert.ok(Number.isFinite(e.x) && Number.isFinite(e.y));
+  assert.ok(Math.hypot(e.x, e.y) > 1, 'en el anillo exterior');
+  const m = conNotasNuevas(g, [fila('a'), fila('b')]); assert.deepEqual(m.nodes.map((x) => x.id), ['a', 'b'], 'la suelta borrada se va');
+  assert.equal(conNotasNuevas(null, []), null); const solo = conNotasNuevas(null, [fila('x')]); assert.deepEqual([solo.nodes.length, solo.links], [1, []]);
 });

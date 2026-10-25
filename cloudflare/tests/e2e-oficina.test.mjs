@@ -208,3 +208,24 @@ test('(6d) sesión larga: 65 turnos con el modelo de mentira; el prompt no crece
   assert.ok(tam[64] < tam[30] * 1.2, `el prompt se queda plano: ${tam[30]} → ${tam[64]}`);
   assert.match(JSON.stringify(O.mundo.reg.anthropic.at(-1).system), /nunca menciones precios en redes/, 'lo del turno 3 sigue en el turno 65');
 });
+
+// ------------------------------------------------------------------------------------------------ (7) Cerebro
+test('(7) Cerebro: una nota nueva se busca y se lee, entra al mapa; la entrega del agente de (4) también; las notas de un agente no se confunden con las de la empresa', { skip: SALTAR }, async () => {
+  const b64 = (t) => Buffer.from(t).toString('base64');
+  assert.equal((await O.bruno('POST', '/api/brain/upload', { name: 'x.md', data: b64('x') })).status, 403, 'el editor tampoco sube documentos');
+  const sube = await O.ana('POST', '/api/brain/upload', { name: 'politica-garantia.md', data: b64('# Garantía\nTodos los lentes llevan garantía de 18 meses contra defectos de fábrica.') });
+  assert.equal(sube.status, 200, sube.texto); const nombre = sube.j.note;
+  assert.equal((await O.carla('POST', '/api/brain/upload', { name: 'x.md', data: b64('x') })).status, 403, 'lectura no sube');
+  assert.equal((await O.anon('GET', '/api/brain/search?q=garantia')).status, 401);
+  const q = await O.carla('GET', '/api/brain/search?q=garantía de los lentes'); assert.equal(q.status, 200);
+  assert.ok(JSON.stringify(q.j).includes(nombre), 'la búsqueda encuentra la nota nueva (con tilde y sin ella): ' + q.texto.slice(0, 300));
+  const q2 = await O.carla('GET', '/api/brain/search?q=garantia lentes'); assert.ok(JSON.stringify(q2.j).includes(nombre), 'sin tilde también');
+  const n = await O.carla('GET', `/api/note?id=${encodeURIComponent(nombre)}`); assert.equal(n.status, 200, n.texto); assert.match(JSON.stringify(n.j), /18 meses/);
+  // la entrega del agente de (4) quedó como nota «de la oficina» y se ve
+  const entregas = O.filas("select nombre, grupo, oficina, tarea from notas where tarea = ?", T.id); assert.equal(entregas.length >= 1, true, 'la entrega del agente es una nota'); assert.equal(entregas[0].oficina, 1);
+  // el mapa: ¿las notas nuevas están en el grafo?
+  const g = await O.carla('GET', '/api/brain'); assert.equal(g.status, 200);
+  const ids = (g.j.nodes || []).map((x) => x.id);
+  assert.ok(ids.includes(nombre), 'la nota subida aparece como neurona del mapa: nodos=' + ids.length);
+  assert.ok(ids.includes(entregas[0].nombre), 'la entrega del agente aparece en el mapa');
+});
