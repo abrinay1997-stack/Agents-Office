@@ -45,9 +45,9 @@ const num = v => (v === null || v === undefined || v === '' || !Number.isFinite(
  * @param {Function} o.despuesDeCifras () → Fase A5 (9 oct 2026): tras cada lectura BUENA de cifras (el diagnóstico, las sugerencias y el
  *                   piloto automático; serve.mjs). Corre cuando la lectura ya terminó (nunca dentro de ella) y un fallo suyo no la toca.
  */
-export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defaults = {}, ahora = () => Date.now(), avisar = () => {}, despuesDeCifras = () => {} }) {
+export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defaults = {}, ahora = () => Date.now(), avisar = () => {}, despuesDeCifras = () => {}, panelAtInicial = 0 }) {
   const F = { cuenta: path.join(dir, 'cuenta.json'), alcance: path.join(dir, 'alcance.json'), estado: path.join(dir, 'estado.json'), avisados: path.join(dir, 'avisados.json'), historial: path.join(dir, 'historial.jsonl'), cifras: path.join(dir, 'cifras') };
-  let enMarcha = null, panelAt = 0;
+  let enMarcha = null, panelAt = panelAtInicial; // Cloudflare (fase 7): el Worker no recuerda cuándo se miró el panel; lo trae de D1 (`panelAtInicial`) y lo devuelve (`panelAtAhora`)
 
   const aj = () => ajustes() || {};
   const cuenta = () => idCuenta(aj().cuenta);
@@ -197,5 +197,5 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
   /** { id: ms } la última vez que se SUBIÓ el presupuesto de cada objeto desde la oficina (para «como mucho una vez cada 72 h»). */
   function subidas() { const out = {}; for (const e of historial()) if (e?.que === 'subir_presupuesto' && e.objeto?.id && !(e.objeto.id in out)) out[e.objeto.id] = Date.parse(e.at) || 0; return out; }
 
-  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, cuenta, estadoTexto, datosDiagnostico, subidas, filas: filasDesde, diasLeidos };
+  return { listo, sincronizar, tick, vista, sondeo, conexion, topes, historial, ponerObjeto, anotar, hoy, enMarcha: () => Boolean(enMarcha), abierto: () => { panelAt = ahora(); }, panelAtAhora: () => panelAt, cuenta, estadoTexto, datosDiagnostico, subidas, filas: filasDesde, diasLeidos };
 }

@@ -100,11 +100,11 @@ import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from './anuncios
 import { crearBorradores as crearBorradoresAnuncios } from './anuncios/borradores.mjs'; // Fase A3 (9 oct 2026): borradores de campaña y crear en Meta EN PAUSA
 import { crearCreador as crearCreadorAnuncios, resolverCuentas as resolverCuentasAnuncios } from './anuncios/crear.mjs';
 import { agenteDeAnuncios, promptMejorarAnuncio, leerPropuesta as leerPropuestaAnuncio } from './anuncios/mejorar.mjs';
-import { diagnosticar as diagnosticarAnuncios, cpaObjetivo as cpaObjetivoDeAnuncios, medirResultado as medirResultadoAnuncio, tipoDe as tipoDeAnuncio } from './anuncios/diagnostico.mjs'; // Fase A5 (9 oct 2026): la IA que mejora las campañas
+import { cpaObjetivo as cpaObjetivoDeAnuncios } from './anuncios/diagnostico.mjs'; // Fase A5 (9 oct 2026): la IA que mejora las campañas
 import { crearSugerencias as crearSugerenciasAnuncios, crearAplicador as crearAplicadorAnuncios, cargarUmbrales as cargarUmbralesAnuncios } from './anuncios/sugerencias.mjs';
 import { crearPiloto as crearPilotoAnuncios } from './anuncios/piloto.mjs';
+import { trasSondeo as trasSondeoAnuncios } from './anuncios/tras-sondeo.mjs';
 import { crearImpulsor as crearImpulsorAnuncios } from './anuncios/impulsar.mjs'; // Fase A4 (9 oct 2026): impulsar lo que ya salió en Contenido
-import { fechaEn as fechaEnAnuncios } from './anuncios/modelo.mjs';
 import { crearIndicadoresAnuncios } from './anuncios/indicadores.mjs'; // Fase A6 (9 oct 2026): gasto, costo por resultado y ROAS en «Cómo va el negocio»
 import { crearInforme as crearInformeAnuncios } from './anuncios/informe.mjs';
 import { crearConversiones, deDisparador as conversionDeDisparador } from './anuncios/conversiones.mjs'; // Fase A6 (10 oct 2026): la API de conversiones, apagada por defecto // Fase A7 (9 oct 2026): el informe de anuncios del mes, sin modelo
@@ -264,30 +264,15 @@ function anunciosTrasSondeo() {
   if (anunciosDiagEnMarcha) return anunciosDiagEnMarcha;
   anunciosDiagEnMarcha = (async () => {
     try {
-      if (!anuncios.conexion().cifrasAt) return null;
-      const U = umbralesAnuncios();
-      if (U.problemas.length && U.problemas.join() !== anunciosUmbralesAvisados) { anunciosUmbralesAvisados = U.problemas.join(); for (const p of U.problemas) console.warn('anuncios (umbrales):', p); }
-      if (!U.valores.fatigaFrecuencia) return null;
-      const d = anuncios.datosDiagnostico(), topes = anuncios.topes();
-      let publicaciones = []; try { publicaciones = metricas.leer({ dias: 45 }).publicaciones || []; } catch { /* sin Analíticas, no hay «impulsar» */ }
-      const diag = diagnosticarAnuncios({ vista: d.vista, filas: d.filas, hoy: d.hoy, cpa: cpaObjetivoAnuncios(), umbrales: U.valores, ahora: Date.now(), subidas: anuncios.subidas(), topes, pixel: d.pixel, publicaciones });
-      const piloto = await anunciosPiloto.correr({ sugerencias: diag.sugerencias, vista: d.vistaHoy, topes });
-      anunciosSug.actualizar(diag);
-      for (const h of piloto.hechas) if (h.ok && h.sugerencia) anunciosSug.marcarAplicada(h.sugerencia, { quien: 'piloto', hecho: h.hecho });
-      const moneda = d.vista.cuenta?.moneda || 'USD';
-      anunciosSug.cerrarResultados({
-        medir: h => {
-          if (!['campana', 'conjunto', 'anuncio'].includes(h.objeto?.nivel)) return { mejoro: null, r: null, texto: 'Esto no se mide con las cifras de un anuncio.' };
-          return medirResultadoAnuncio({ filas: d.filas, nivel: h.objeto.nivel, id: h.objeto.id, tipo: tipoDeAnuncio(buscarAnuncio(d.vista, h.objeto.id)), aplicadaEl: fechaEnAnuncios(d.zona, Date.parse(h.aplicadaAt)), hoy: d.hoy, dias: U.valores.resultadoDias, cambio: h.cambio?.tipo, moneda });
-        },
+      return await trasSondeoAnuncios({ sync: anuncios, sug: anunciosSug, piloto: anunciosPiloto, umbrales: umbralesAnuncios, cpa: cpaObjetivoAnuncios,
+        avisarUmbrales: U => { if (U.problemas.length && U.problemas.join() !== anunciosUmbralesAvisados) { anunciosUmbralesAvisados = U.problemas.join(); for (const p of U.problemas) console.warn('anuncios (umbrales):', p); } },
+        publicaciones: () => metricas.leer({ dias: 45 }).publicaciones || [], // sin Analíticas, no hay «impulsar»
         aprender: (h, r) => { // como Contenido F4: las notas que citó la tarea de ada se acercan (o se alejan) según cómo le fue
           const t = load().find(x => x.id === h.tarea); if (!t) return;
           const cited = memory.cited(t.result, t.read || []); if (!cited.length) return;
           memory.reinforce(MEM, { id: 'anuncios:' + h.id, r: r.r, cited, read: t.read || [] }); saveMem();
-        } });
-      const hora = new Date().getHours();
-      if (hora >= 9 && hora < 20) { const x = anunciosSug.escalarDelDia(d.hoy); if (x) notice('anuncios', `📈 «${x.objeto.nombre}» rinde bien: ${x.dato} Propuesta: subir su presupuesto un 20 %, hasta US$${x.cambio.valor}. Gasta más: son tus dos toques, dentro de tus topes. (Anuncios → Sugerencias, J)`, { level: 'info', key: `anuncios-escalar:${x.id}@${x.cambio.valor}` }); }
-      return diag;
+        },
+        avisar: (texto, o) => notice('anuncios', texto, o) }); // fase 7 de Cloudflare: la lógica vive en anuncios/tras-sondeo.mjs, la misma que corre el Worker
     } catch (e) { console.warn('anuncios (diagnóstico):', e.message); return null; }
     finally { anunciosDiagEnMarcha = null; }
   })();

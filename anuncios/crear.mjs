@@ -57,8 +57,10 @@ export function resolverCuentas({ ajustes = {}, cuentas = [], paginaContenido = 
  * @param {Function} o.cuentas     () → { pagina, instagram } (resolverCuentas con lo de Meta y Contenido)
  * @param {Function} o.aJpeg       (Buffer) → Buffer JPEG (sharp), para una imagen que no es JPEG ni PNG
  * @param {Function} o.auditar     (entrada) → data/audit/ (serve.mjs)
+ * @param {boolean}  o.diferir     Cloudflare (fase 7): un Worker no sigue trabajando tras contestar. Con `diferir`, `crear` solo valida, apunta el diario
+ *                                 y deja el borrador «creando»; lo crea en Meta el cron, con `alArrancar` (que ya sabe retomar lo apuntado).
  */
-export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = () => ({}), defaults = {}, cuentas = () => ({}), aJpeg = null, auditar = () => {}, ahora = () => Date.now(), dormir = ms => new Promise(r => setTimeout(r, ms)), videoCadaMs = VIDEO_CADA_MS, videoMaxMs = VIDEO_MAX_MS }) {
+export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = () => ({}), defaults = {}, cuentas = () => ({}), aJpeg = null, auditar = () => {}, ahora = () => Date.now(), dormir = ms => new Promise(r => setTimeout(r, ms)), videoCadaMs = VIDEO_CADA_MS, videoMaxMs = VIDEO_MAX_MS, diferir = false }) {
   const F = path.join(dir, 'creaciones.json');
   const diario = () => leerJSON(F, {});
   const apuntar = (bid, j) => { const d = diario(); d[bid] = j; escribirJSON(F, d); };
@@ -103,7 +105,7 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
     // un intento nuevo (tras un fallo, los de antes están archivados: la búsqueda por nombre no los toma)
     apuntar(id, { intento: (diario()[id]?.intento || 0) + 1, empezado: new Date(ahora()).toISOString(), pasos: { imagenes: {}, videos: {}, creativos: {}, campana: null, conjunto: null, anuncios: {} }, enCurso: null, creados: [] });
     borradores.poner(id, { estado: 'creando', error: null, progreso: { paso: 'imagenes', texto: PASO_TEXTO.imagenes } });
-    lanzar(id);
+    if (!diferir) lanzar(id);
     return R(202, { ok: true });
   }
 
@@ -114,9 +116,9 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
   }
 
   /** Al arrancar la oficina (y cuando Meta vuelve): sigue lo que quedó «creando». Lo hecho se reconoce en Meta por su nombre. */
-  function alArrancar() {
+  function alArrancar(soloIds = null) { // `soloIds` (Cloudflare): solo esos borradores (el cron toma un candado por cada uno)
     if (!sync.listo().ok) return [];
-    const ids = borradores.lista().filter(b => b.estado === 'creando').map(b => b.id);
+    const ids = borradores.lista().filter(b => b.estado === 'creando' && (!soloIds || soloIds.includes(b.id))).map(b => b.id);
     for (const id of ids) { if (!diario()[id]) apuntar(id, { intento: 1, empezado: new Date(ahora()).toISOString(), pasos: { imagenes: {}, videos: {}, creativos: {}, campana: null, conjunto: null, anuncios: {} }, enCurso: null, creados: [] }); lanzar(id); }
     return ids;
   }

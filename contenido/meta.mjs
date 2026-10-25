@@ -325,5 +325,10 @@ export function crearMeta({ env = process.env, fetchFn = (...a) => fetch(...a), 
     return tokenUsuario();
   }
 
-  return { configurado: () => Boolean(tokenUsuario()), graph, enviar, borrar, subirReanudable, tokenDe, estado, sincronizar, sinToken, uso };
+  // 25 oct 2026 (Cloudflare, fase 7): el Worker no recuerda nada entre peticiones, así que el freno se guarda y se devuelve (en D1, sin tokens:
+  // solo porcentaje, hasta cuándo y el motivo). En la oficina local no se usa.
+  const frenoEstado = () => ({ pct: freno.pct, hasta: freno.hasta, vistoAt: freno.vistoAt, motivo: freno.motivo });
+  const frenoRestaurar = o => { if (!o || typeof o !== 'object') return; freno.pct = Number(o.pct) || 0; freno.hasta = Number(o.hasta) || 0; freno.vistoAt = o.vistoAt || null; freno.motivo = String(o.motivo || '').slice(0, 120); };
+
+  return { configurado: () => Boolean(tokenUsuario()), graph, enviar, borrar, subirReanudable, tokenDe, estado, sincronizar, sinToken, uso, frenoEstado, frenoRestaurar };
 }
