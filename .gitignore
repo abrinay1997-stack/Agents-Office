@@ -33,3 +33,4 @@ cloudflare/public/oficina/
 
 # Copias de seguridad de la oficina (datos privados: jamás al repositorio)
 respaldo-oficina-*/
+cloudflare/.dev.vars

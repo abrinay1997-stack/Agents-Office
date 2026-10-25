@@ -7,29 +7,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import * as mmx from './minimax.mjs';
-import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
+import { renombrar } from './fs-seguro.mjs';
+import { PRICE, SYSTEM, pub, clean } from './minimax-voces-core.mjs'; // 25 oct 2026: lo puro, compartido con la nube
+export { PRICE, SYSTEM }; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 let FILE = '';
 export function configureVoices(dataDir) { FILE = path.join(dataDir, 'minimax-voices.json'); systemCache = null; }
 
-// What each one costs (MiniMax pay-as-you-go, 30 Sep 2026): a designed voice US$3 (+ its preview at US$30 a million characters),
-// a cloned voice US$1.5. MiniMax charges a voice the first time a real synthesis uses it.
-export const PRICE = { design: 3, clone: 1.5, previewPerChar: 30 / 1e6 };
-// A short, curated list of system voices (MiniMax's documentation, 30 Sep 2026) — the selector's fallback when get_voice does not answer.
-export const SYSTEM = [
-  ['Spanish_Narrator', 'Narrador'], ['Spanish_SereneWoman', 'Mujer serena'], ['Spanish_CaptivatingStoryteller', 'Cuentacuentos'],
-  ['Spanish_ConfidentWoman', 'Mujer segura'], ['Spanish_ThoughtfulMan', 'Hombre reflexivo'], ['Spanish_WiseScholar', 'Erudito'],
-  ['Spanish_SophisticatedLady', 'Dama sofisticada'], ['Spanish_RationalMan', 'Hombre racional'], ['Spanish_Deep-tonedMan', 'Voz grave'],
-  ['Spanish_ReliableMan', 'Hombre confiable'], ['Spanish_ChattyGirl', 'Chica conversadora'], ['Spanish_EnergeticBoy', 'Chico enérgico'],
-  ['Spanish_Comedian', 'Comediante'], ['Spanish_SensibleManager', 'Gerente sensato'], ['Spanish_FrankLady', 'Mujer franca'],
-  ['English_expressive_narrator', 'Narrador (inglés)'], ['English_radiant_girl', 'Chica radiante (inglés)'], ['English_magnetic_voiced_man', 'Voz magnética (inglés)'],
-].map(([voiceId, name]) => ({ voiceId, name, lang: voiceId.split('_')[0] === 'Spanish' ? 'es' : 'en' }));
-
 function read() { try { const j = JSON.parse(fs.readFileSync(FILE, 'utf8')); return Array.isArray(j.voices) ? j.voices.filter(v => v && typeof v.voiceId === 'string') : []; } catch { return []; } }
 function write(list) { fs.mkdirSync(path.dirname(FILE), { recursive: true }); const t = FILE + '.tmp'; fs.writeFileSync(t, JSON.stringify({ voices: list }, null, 1)); renombrar(t, FILE); }
-const pub = v => ({ voiceId: v.voiceId, name: v.name, kind: v.kind, at: v.at, pinned: !!v.pinned, ...(v.demoAudio ? { demoAudio: v.demoAudio } : {}), ...(v.prompt ? { prompt: v.prompt } : {}) });
-const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
-
 /** The owner's voices, newest first. */
 export function list() { return read().slice().reverse().map(pub); }
 export const has = voiceId => read().some(v => v.voiceId === voiceId);

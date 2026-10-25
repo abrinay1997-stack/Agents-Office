@@ -3,7 +3,7 @@
 // OpenAI, Meta, fal, MiniMax, la prueba gratis), lo que edita (EDIT_MODELS), el orden de preferencia (PREFER), la ficha de
 // cada modelo (INFO), los ajustes y el precio (settingsFor, unitCost, estimate) y capsOf: lo que un modelo puede hacer,
 // derivado de todo lo anterior, para el compilador de presets. Sin red ni archivos, salvo higgsfield-schemas.json al cargar.
-import fs from 'node:fs';
+import HFS_JSON from '../higgsfield-schemas.json' with { type: 'json' }; // 25 oct 2026: importado (no leído con fs) para que el Worker de Cloudflare también lo tenga
 import * as mmx from '../minimax.mjs';
 import { S } from './estado.mjs';
 
@@ -19,11 +19,16 @@ export const ENGINES = {
 };
 export const NAMES = Object.fromEntries(Object.entries(ENGINES).map(([k, v]) => [k, v.name]));
 export const DEFAULT_MODELS = { gemini: 'gemini-2.5-flash-image', grok: 'grok-2-image', openai: 'gpt-image-1', meta: 'muse-image-1.0' };
+/** Dónde se leen las keys: process.env (la oficina local) o, en el Worker de Cloudflare, los secretos de ESE Worker (setEnv(env)). */
+let ENTORNO = null;
+export const setEnv = o => { ENTORNO = o && typeof o === 'object' ? o : null; };
+const entorno = () => ENTORNO || process.env;
 export const secret = e => {
+  const V = entorno();
   if (e === 'prueba') return 'local';
-  if (e === 'higgsfield') return process.env.HF_KEY || (process.env.HF_API_KEY && process.env.HF_API_SECRET ? `${process.env.HF_API_KEY}:${process.env.HF_API_SECRET}` : '');
-  if (e === 'meta') return process.env.META_API_KEY || process.env.MODEL_API_KEY || ''; // Meta's docs call it MODEL_API_KEY; the office names the engine
-  return process.env[ENGINES[e]?.env] || '';
+  if (e === 'higgsfield') return V.HF_KEY || (V.HF_API_KEY && V.HF_API_SECRET ? `${V.HF_API_KEY}:${V.HF_API_SECRET}` : '');
+  if (e === 'meta') return V.META_API_KEY || V.MODEL_API_KEY || ''; // Meta's docs call it MODEL_API_KEY; the office names the engine
+  return V[ENGINES[e]?.env] || '';
 };
 export const engineOn = e => !!secret(e);
 /* ---------- the catalog ---------- */
@@ -75,7 +80,7 @@ const falImg = (id, name, cost, text, edit, maxRefs, note, extra = s => ({})) =>
    accepts (anything else is left out, so the route's own default applies). tests/higgsfield.test.mjs sends every
    combination through the schema. Before this, bodies came from open-higgsfield's mappers: 37 kinds of request carried a
    field or a value Higgsfield refuses (Hailuo at 5 s, LTX at 1:1, Seedance 2.5 with output_format…). */
-const HFS = (() => { try { return JSON.parse(fs.readFileSync(new URL('../higgsfield-schemas.json', import.meta.url), 'utf8')).endpoints || {}; } catch { return {}; } })();
+const HFS = HFS_JSON.endpoints || {};
 export const hfSchemas = () => HFS;
 const HF_SET = { seed: 'seed', aspect_ratio: 'aspectRatio', resolution: 'resolution', duration: 'duration', mode: 'mode', quality: 'quality', rendering_speed: 'renderingSpeed', batch_size: 'batchSize',
   generate_audio: 'generateAudio', sound: 'sound', enhance_prompt: 'enhancePrompt', prompt_optimizer: 'promptOptimizer', prompt_extend: 'promptExtend', cfg_scale: 'cfgScale', keep_original_sound: 'keepOriginalSound',

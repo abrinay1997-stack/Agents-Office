@@ -27,7 +27,7 @@ Decisión del dueño (25 oct 2026): llevar **toda** la oficina a Cloudflare con 
 | 5 | **Contenido y publicación en Meta** desde el cron; Analíticas | Patrón de `publicador.js` de Juancito |
 | 6 | **Dimitri**, Negocio, Ajustes, Telegram (webhook nativo), disparadores | Los webhooks encajan de serie en Workers |
 | 7 | **Anuncios de Meta y la Bandeja** | Con el freno por uso y la regla del dinero |
-| 8 | **Estudio** (imagen, video, voz, lotes): R2 + colas | Lo más pesado, al final |
+| 8 | **Estudio** (imagen, video, voz, lotes): R2 + colas | Lo más pesado, al final. **8a ✅ (25 oct): el núcleo** (galería en R2, trabajos por pasos, motores, topes, voces). Falta: presets, lotes, escenario 3D, entender video y lo que usa `sharp` |
 | 9 | **Apagar lo local**: migración final y la oficina de la computadora pasa a ser opcional | |
 
 ## Pendientes de decisión del dueño

@@ -1,0 +1,18 @@
+diff --git a/cloudflare/worker/lib/rutas.js b/cloudflare/worker/lib/rutas.js
+index 5714c10..670cd6a 100644
+--- a/cloudflare/worker/lib/rutas.js
++++ b/cloudflare/worker/lib/rutas.js
+@@ -23,7 +23,12 @@ export async function manejar(req, env) {
+   const url = new URL(req.url);
+   const ruta = url.pathname;
+   const db = env.DB;
+-  if (!ruta.startsWith('/api/')) return servirPagina(req, env, await usuarioDeLaPeticion(db, req));
++  if (!ruta.startsWith('/api/')) {
++    const u = await usuarioDeLaPeticion(db, req);
++    // /media/<archivo> (el Estudio: lo que la página pide para ver cada imagen) lo sirve el módulo que lo posee, solo con sesión
++    if (u && ruta.startsWith('/media/')) { const m = { req, env, db, usuario: u, url, ruta, json, error, prohibido, cuerpo, uuid, ahora }; for (const mod of MODULOS) { const r = await mod.manejar(m); if (r) return r; } }
++    return servirPagina(req, env, u);
++  }
+   if (!origenValido(req)) return error('Origen no permitido', 403);
+ 
+   if (ruta === '/api/health' && req.method === 'GET')
