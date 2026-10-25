@@ -18,6 +18,7 @@ import { preguntar } from './modelo.js';
 import { DOC_PROYECTOS } from './datos.js';
 
 export const DOC_SEMANA = 'dimitri.semanal';
+export const ESPERA_FALLO_MS = 15 * 60 * 1000; // tras un fallo de la IA, el reloj (que pasa cada minuto) espera un cuarto de hora antes de reintentar
 /** El número de la semana como lo cuenta serve.mjs (para no mandar dos informes en la misma). */
 export const claveSemana = (now = new Date()) => `${now.getFullYear()}-${Math.ceil(((now - new Date(now.getFullYear(), 0, 1)) / 864e5 + new Date(now.getFullYear(), 0, 1).getDay() + 1) / 7)}`;
 
@@ -39,9 +40,16 @@ export async function informeSemanal({ env, db, force = false, ahora = new Date(
   const cfg = await leerCfg(db), wk = claveSemana(ahora);
   if (!force && (ahora.getDay() !== 1 || ahora.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
   // se reclama la semana ANTES de pensar, con la versión del documento como condición: dos relojes (o dos instancias) a la vez no mandan dos informes
-  let mio = false;
-  await mutarDoc(db, DOC_SEMANA, {}, (ya) => { if (!force && ya.week === wk) { mio = false; return ya; } mio = true; return { ...ya, week: wk, at: ahora.getTime() }; });
+  let mio = false, antes = {};
+  await mutarDoc(db, DOC_SEMANA, {}, (ya) => { if (!force && (ya.week === wk || ahora.getTime() - (ya.fallo || 0) < ESPERA_FALLO_MS)) { mio = false; return ya; } mio = true; antes = ya; return { ...ya, week: wk, at: ahora.getTime() }; });
   if (!mio) return null;
+  try { return await redactar({ env, db, cfg, ahora, fetchFn }); }
+  catch (e) { // la IA falló (sin saldo, saturada, sin red): se SUELTA la semana, o el informe del lunes se perdería hasta el siguiente (el reloj lo reintenta cada minuto)
+    await mutarDoc(db, DOC_SEMANA, {}, (ya) => (ya.week === wk && ya.at === ahora.getTime() ? { ...ya, week: antes.week, at: antes.at, fallo: ahora.getTime() } : ya)).catch(() => {});
+    throw e;
+  }
+}
+async function redactar({ env, db, cfg, ahora, fetchFn }) {
   const [C, l, k] = [await leerContexto(db), await cargarTareas(db), await leerKpis(db)];
   const c = costsCore.report(await costos.leer(db, Date.now() - 70 * 864e5), l, C.agents, cfg.costs), q = quality.byAgent(l, C.agents);
   const facts = [`Estado: ${sub.statusText(l, C.agents, C.depts)}`, `Últimos trabajos: ${sub.recentText(l, C.agents, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`,

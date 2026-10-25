@@ -18,6 +18,7 @@ import * as galeria from '../estudio/galeria.js';
 import * as chat from './chat.js';
 import { preguntar } from './modelo.js';
 import { contextoDeOps, oficinaDelDueno } from './ops.js';
+import { conLecturaUnica } from './lectura-unica.js';
 import { notasDelChat, oficinaTexto, viendoTexto, resumenRapido } from './datos.js';
 import { DEPTS_ESTUDIO } from '../agentes/herramientas.js';
 
@@ -42,8 +43,9 @@ export function leerPeticion(b) {
 const estudioDeptos = (cfg, C) => (Array.isArray(cfg.media?.departments) && cfg.media.departments.length ? cfg.media.departments : DEPTS_ESTUDIO).map((k) => C.depts[k]?.name).filter(Boolean).join(', ');
 
 /** Un mensaje del dueño → la respuesta de Dimitri, guardada en el chat. → { messages: [u, m], answered? } */
-export async function conversar({ env, db, usuario, modulos, req: p, signal = null, fetchFn = null }) {
-  const st = await chat.cargar(db), C2 = await leerContexto(db), cfg2 = await leerCfg(db), lista2 = await cargarTareas(db);
+export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, signal = null, fetchFn = null }) {
+  const db = conLecturaUnica(db0), env = { ...env0, DB: db }; // una consulta idéntica se hace una vez por turno (el límite de 50 de una invocación del plan gratuito)
+  const st = await chat.cargar(db), hilo0 = await chat.hiloActual(db), ultimoId = st.messages.at(-1)?.id || null, C2 = await leerContexto(db), cfg2 = await leerCfg(db), lista2 = await cargarTareas(db);
   const ctxFn = { env, db, cfg: cfg2, fetchFn, signal };
   const office = oficinaDelDueno({ env, db, usuario, modulos });
   let { texto: text } = p; const { attach, imagenes, context, answers } = p;
@@ -57,16 +59,19 @@ export async function conversar({ env, db, usuario, modulos, req: p, signal = nu
   const recent = sub.recentText(lista2, C2.agents), viewing = await viendoTexto({ c: context, db, office, C: C2, lista: lista2 });
   const rutDepts = (await import('../../../../routines-core.mjs')).ALLOWED.map((k) => `${C2.depts[k].name} (${k})`);
   const nombre = sub.nameOf(cfg2);
+  const win = sub.historyWindow(st.messages, { name: nombre, depts: C2.depts }, 12); // las últimas vueltas, con tope; lo que no cabe entra resumido en <hilo>
   const system = sub.systemPrompt({ name: nombre, business: cfg2.name || 'PanaClaw', depts: C2.depts, agents: C2.agents, skillsOf: () => [], routineDepts: rutDepts,
-    status: sub.statusText(lista2, C2.agents, C2.depts), office: await oficinaTexto({ db, office, C: C2, lista: lista2, cfg: cfg2 }), recent, notes, studio: estudioDeptos(cfg2, C2), studioBlock, viewing, older: sub.olderText(st.messages, 12) });
-  const convo = sub.historyText(st.messages, { name: nombre, depts: C2.depts }, 12);
+    status: sub.statusText(lista2, C2.agents, C2.depts), office: await oficinaTexto({ db, office, C: C2, lista: lista2, cfg: cfg2 }), recent, notes, studio: estudioDeptos(cfg2, C2), studioBlock, viewing, hilo: sub.hiloText(st.messages, hilo0, { depts: C2.depts, shown: win.shown }) });
+  const convo = win.text;
   const userMsg = (convo ? convo + '\n' : '') + `Dueño: ${text}${imagenes.length ? ` [adjuntó ${imagenes.length} ${imagenes.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${nombre} (solo JSON):`;
   const opts = { maxTokens: 6000, tipo: 'dimitri', imagenes: imagenes.length ? imagenes : null };
   let out = (await preguntar(ctxFn, system, userMsg, opts)).text;
+  db.olvidar(); // pasaron segundos: lo que se valide abajo (tareas, rutinas, piezas) se lee como está AHORA, no como estaba al empezar
   if (signal?.aborted) return detenido({ db, text, attach, context });
   let plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents });
   if (plan.bad) { // la respuesta llegó rota sin arreglo: una vez más, pidiendo menos (nunca el JSON crudo en el chat)
     out = await preguntar(ctxFn, system, userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)', opts).then((r) => r.text, () => '');
+    db.olvidar();
     if (signal?.aborted) return detenido({ db, text, attach, context });
     plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents });
   }
@@ -86,6 +91,8 @@ export async function conversar({ env, db, usuario, modulos, req: p, signal = nu
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : studio.actions.length ? 'Esto puedo hacer; pulsa HACER si te parece.' : plan.loteNoEsta ? 'Los lotes de fotos todavía no están en la nube: siguen en la oficina de tu computadora.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
   const reply = (plan.reply || fallback) + (opsFuera ? '\n\n' + opsFuera : '') + (plan.loteNoEsta ? '\n\n_(Los lotes de fotos todavía no están en la nube: siguen en la oficina de tu computadora.)_' : '') + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
   const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
+  // si mientras pensaba el dueño abrió otra conversación o empezó una nueva, esta respuesta es de otra charla: no se mete en la que está viendo
+  if (ultimoId && !(await chat.mensaje(db, ultimoId))) throw new Error('Cambiaste de conversación mientras yo pensaba, así que no guardé esa respuesta. Vuelve a enviar tu mensaje donde quieras seguir.');
   if (picked) { const q = await chat.mensaje(db, answers.msg); if (q?.plan) { q.plan.answers = picked.answers; await chat.reemplazar(db, q); } }
   await chat.anexar(db, u, m);
   return { messages: [u, m], ...(picked ? { answered: { msg: answers.msg, answers: picked.answers } } : {}) };
