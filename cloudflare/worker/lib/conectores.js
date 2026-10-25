@@ -11,6 +11,11 @@ import { kindOf } from '../../../safety.mjs';
 /** Secretos que jamás pueden usarse como token de un conector: mandarlos a la URL de un tercero los regalaría. */
 const SECRETOS_PROPIOS = /^(ADMIN_|CLOUDFLARE_|ANTHROPIC_API_KEY$|META_API_KEY$|MODEL_API_KEY$|META_APP_SECRET$|AO_)/;
 const NOMBRE_SECRETO = /^[A-Z][A-Z0-9_]{2,63}$/;
+/** LISTA BLANCA: el token de un conector es siempre un secreto que se llama MCP_<ALGO>. Una lista negra de «lo que no» (ANTHROPIC_API_KEY, ADMIN_…) deja pasar el secreto de mañana
+ *  (un `GITHUB_TOKEN`, un `STRIPE_KEY`…): quien registra un conector podría mandarlo a SU servidor. Solo `MCP_*` puede salir hacia un conector. */
+export const SECRETO_CONECTOR = /^MCP_[A-Z0-9_]{2,60}$/;
+export const secretoPermitido = (nombre) => typeof nombre === 'string' && SECRETO_CONECTOR.test(nombre);
+export const AVISO_SECRETO = (n) => `El secreto «${n}» no sirve para un conector: debe llamarse MCP_ seguido de MAYÚSCULAS y guiones bajos (por ejemplo MCP_GMAIL_TOKEN). Renómbralo en el conector y guarda el token con ese nombre en GitHub.`;
 const NOMBRE_CONECTOR = /^[a-z][a-z0-9-]{1,39}$/;
 const DEPARTAMENTOS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 
@@ -39,6 +44,7 @@ export function validarConector(entrada) {
   if (motivoUrl) errores.push(`La dirección ${motivoUrl}.`);
   const secreto = e.secreto == null || e.secreto === '' ? null : String(e.secreto).trim();
   if (secreto && !NOMBRE_SECRETO.test(secreto)) errores.push('El secreto es el NOMBRE de una variable (MAYÚSCULAS_Y_GUIONES_BAJOS), nunca el token.');
+  if (secreto && NOMBRE_SECRETO.test(secreto) && !SECRETO_CONECTOR.test(secreto) && !SECRETOS_PROPIOS.test(secreto)) errores.push(AVISO_SECRETO(secreto));
   if (secreto && SECRETOS_PROPIOS.test(secreto)) errores.push(`«${secreto}» es un secreto de la oficina: no puede usarse como token de un conector.`);
   const departamentos = lista(e.departamentos);
   for (const d of departamentos) if (!DEPARTAMENTOS.includes(d)) errores.push(`Departamento desconocido: ${d}.`);
@@ -58,7 +64,8 @@ export function validarConector(entrada) {
 export function publico(fila, env) {
   return {
     id: fila.id, nombre: fila.nombre, url: fila.url, secreto: fila.secreto,
-    tokenPuesto: !fila.secreto || typeof env?.[fila.secreto] === 'string' && env[fila.secreto].length > 0,
+    tokenPuesto: !fila.secreto || (secretoPermitido(fila.secreto) && typeof env?.[fila.secreto] === 'string' && env[fila.secreto].length > 0),
+    ...(fila.secreto && !secretoPermitido(fila.secreto) ? { secretoInvalido: AVISO_SECRETO(fila.secreto) } : {}),
     departamentos: JSON.parse(fila.departamentos || '[]'),
     herramientas_lectura: JSON.parse(fila.herramientas_lectura || '[]'),
     herramientas_envio: JSON.parse(fila.herramientas_envio || '[]'),
@@ -76,7 +83,7 @@ export function paraAnthropic(fila, env, { aprobada = false } = {}) {
   const envio = aprobada ? JSON.parse(fila.herramientas_envio || '[]') : [];
   const permitidas = [...new Set([...lectura, ...envio])];
   if (!fila.activo || !permitidas.length) return null;
-  if (fila.secreto && !env?.[fila.secreto]) return null; // sin token no se llama: el agente lo sabrá por la nota de la ejecución
+  if (fila.secreto && (!secretoPermitido(fila.secreto) || !env?.[fila.secreto])) return null; // sin token no se llama: el agente lo sabrá por la nota de la ejecución
   const servidor = { type: 'url', url: fila.url, name: fila.nombre };
   if (fila.secreto) servidor.authorization_token = env[fila.secreto];
   const toolset = {
