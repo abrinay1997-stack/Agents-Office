@@ -70,7 +70,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <div class="ct-bj" hidden></div>
       <div class="ct-hov" aria-hidden="true" hidden></div>
     </div>
-    <aside class="ct-panel" hidden></aside><div class="ct-scrim" data-modal-keep></div>
+    <div class="ct-panel" hidden></div><div class="ct-scrim" data-modal-keep></div>
     <div class="cv-toast" data-modal-keep hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <div id="ctPop" hidden></div>`;
   document.body.appendChild(ov);

@@ -571,6 +571,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     }
     if (a === 'delete') { const p = cur; gone = true; close({ discard: true }); onChange(p, { eliminar: true }); return; }
   });
+  host.addEventListener('ao:guardar', () => { flush(); }); // Ctrl+Enter (src/ventana-pasos.js): guardar ya; guardar no aprueba
   host.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.matches?.('[data-tpl="nombre"]')) { e.preventDefault(); foot.querySelector('[data-a="tpl-ok"]')?.click(); return; } // C3
     if (e.key === 'Escape') {

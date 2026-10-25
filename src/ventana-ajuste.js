@@ -4,10 +4,10 @@
 const MIN = 0.4;
 function ajustar(host) {
   const side = host.querySelector('.pz-side'), pv = host.querySelector('.pz-preview'); if (!side || !pv) return;
-  if (host.hidden || getComputedStyle(side).display === 'none' || host.clientWidth < 820) { pv.style.zoom = ''; return; }
+  if (host.hidden || getComputedStyle(side).display === 'none' || host.clientWidth < 780) { pv.style.zoom = ''; return; }
   const cs = getComputedStyle(side), padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
   const otros = [...side.children].filter(c => c !== pv).reduce((a, c) => a + c.getBoundingClientRect().height + (parseFloat(getComputedStyle(c).marginTop) || 0) + (parseFloat(getComputedStyle(c).marginBottom) || 0), 0);
-  const libre = side.clientHeight - padY - otros - 4, z = parseFloat(pv.style.zoom) || 1, alto = pv.getBoundingClientRect().height / z; // el alto natural, sin el zoom de ahora
+  const libre = side.clientHeight - padY - otros - 24, z = parseFloat(pv.style.zoom) || 1, alto = pv.getBoundingClientRect().height / z; // el alto natural, sin el zoom de ahora
   const nuevo = alto > 0 && libre > 0 && alto > libre ? String(Math.max(MIN, +(libre / alto).toFixed(3))) : '';
   if (nuevo !== pv.style.zoom) pv.style.zoom = nuevo;
 }

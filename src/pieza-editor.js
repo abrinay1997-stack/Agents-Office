@@ -4,6 +4,7 @@
 import { initPieza } from './pieza.js';
 import { abrirLlenar, abrirPlantillas } from './contenido-herramientas.js'; // C3 (8 oct 2026): «Llenar la semana» y «Desde una plantilla»
 import './ventana-ajuste.js'; // 25 oct 2026: la vista previa de la ventana se escala para verse entera
+import './ventana-pasos.js'; // 25 oct 2026: ① Dónde · ② Qué · ③ Medios · ④ Cuándo
 import * as conversacion from './contenido-conversacion.js'; // B2 (9 oct 2026): la conversación privada abierta en la Bandeja
 
 /* global __AO_PIEZA_VERSION__ */

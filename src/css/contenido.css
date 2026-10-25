@@ -86,18 +86,18 @@ body.dark .ct-panel { box-shadow: 0 30px 80px rgba(0,0,0,.6); }
 .pz-swap button { flex: 1; font-family: var(--ui); font-size: 11.5px; letter-spacing: .1em; font-weight: 700; text-transform: uppercase; min-height: 34px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
 .pz-swap button[aria-selected="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }
 .pz-swap button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-@container pzpanel (min-width: 820px) {
+@container pzpanel (min-width: 780px) {
   .pz-swap { display: none; }
   .pz-side { display: block; width: 42%; min-width: 340px; padding: 18px 20px 24px; }
   .pz-scroll { padding: 8px 24px 20px; }
 }
-@container pzpanel (max-width: 819.98px) {
+@container pzpanel (max-width: 779.98px) {
   .pz-body .pz-side { width: auto; }
 }
 .ct-panel[data-swap="ver"] .pz-body .pz-scroll { display: none; }
 .ct-panel[data-swap="ver"] .pz-body .pz-side { display: block; flex: 1; border-left: 0; }
 /* hoja a pantalla completa: cabecera con ✕ de 44 px, pie fijo, «Editar | Vista previa» (el segundo cuadro del cajón de antes) */
-@container ctov (max-width: 819.98px) { .ct-panel { inset: 0; margin: 0; width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; padding-bottom: env(safe-area-inset-bottom); } .ct-scrim { display: none; } .pz-x { width: 44px; height: 44px; } .pz-head { padding-top: calc(10px + env(safe-area-inset-top)); } }
+@container cvview (max-width: 819.98px) { .ct-panel { inset: 0; margin: 0; width: 100%; height: 100%; border: 0; border-radius: 0; box-shadow: none; padding-bottom: env(safe-area-inset-bottom); } .ct-scrim { display: none; } .pz-x { width: 44px; height: 44px; } .pz-head { padding-top: calc(10px + env(safe-area-inset-top)); } }
 .pz-quick { gap: 6px; margin-top: -2px; }
 .pz-qh { font-family: var(--ui); font-size: 11.5px; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); background: none; border: 1px solid var(--hairline); border-radius: 99px; padding: 4px 10px; min-height: 28px; cursor: pointer; }
 .pz-qh[aria-pressed="true"] { background: var(--ink); color: var(--cream); border-color: var(--ink); }

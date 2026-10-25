@@ -58,7 +58,7 @@ try {
     if (dimitri) { await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('s'); await page.waitForTimeout(800); }
     await page.click('#ctNew'); await page.waitForTimeout(300);
     const m0 = await page.$('.ct-newmenu:not([hidden]) button'); if (m0) { await m0.click(); await page.waitForTimeout(300); }
-    await page.waitForSelector('.ct-panel:not([hidden]) .pz-comp', { timeout: 5000 }).catch(async e => { await page.screenshot({ path: path.join(OUT, 'fallo.png') }); console.log(errs.join('|'), (await page.evaluate(() => document.querySelector('.ct-panel')?.outerHTML.slice(0, 300)))); throw e; }); await page.waitForTimeout(1200);
+    await page.waitForSelector('.ct-panel:not([hidden]) .pz-nets', { timeout: 5000 }).catch(async e => { await page.screenshot({ path: path.join(OUT, 'fallo.png') }); console.log(errs.join('|'), (await page.evaluate(() => document.querySelector('.ct-panel')?.outerHTML.slice(0, 300)))); throw e; }); await page.waitForTimeout(1200);
     const geo = await page.evaluate(() => {
       const p = document.querySelector('.ct-panel:not([hidden])'), r = p.getBoundingClientRect(), body = document.querySelector('#ctOv').getBoundingClientRect();
       const side = p.querySelector('.pz-side'), pv = p.querySelector('.pz-preview'), sr = side.getBoundingClientRect(), vr = pv.getBoundingClientRect();
@@ -67,6 +67,7 @@ try {
         sideShown: sr.width > 0, dbg: [pv.style.zoom, side.clientHeight, Math.round(vr.height), [...side.children].map(c => Math.round(c.getBoundingClientRect().height)).join('/')].join(' '), pvFit: sr.width > 0 ? vr.bottom <= sr.bottom + 1 && vr.top >= sr.top - 1 : null, sideScroll: side.scrollHeight - side.clientHeight, over, hscroll: document.documentElement.scrollWidth > innerWidth + 1,
         role: p.getAttribute('role'), modal: p.getAttribute('aria-modal'), scrim: getComputedStyle(document.querySelector('.ct-scrim')).display, radius: getComputedStyle(p).borderRadius };
     });
+    if (process.env.AO_DBG) console.log('GEO', JSON.stringify({ r: geo.r, body: geo.body, vw: geo.vw, radius: geo.radius }));
     const full = geo.r.w < 820 && geo.r.w >= geo.body.w - 2;
     step(geo.role === 'dialog' && geo.modal === 'true', `${tag}: role=dialog aria-modal`);
     if (full) step(Math.abs(geo.r.w - geo.body.w) < 2 && Math.abs(geo.r.h - geo.body.h) < 2 && geo.radius === '0px', `${tag}: hoja a pantalla completa (${Math.round(geo.r.w)}×${Math.round(geo.r.h)})`);
@@ -74,10 +75,38 @@ try {
       step(Math.abs(geo.r.cx - geo.body.cx) <= 2 && Math.abs(geo.r.cy - geo.body.cy) <= 2, `${tag}: centrada en la vista (Δx ${Math.round(geo.r.cx - geo.body.cx)}, Δy ${Math.round(geo.r.cy - geo.body.cy)})`);
       step(geo.r.w <= Math.min(1120, geo.vw) + 1 && geo.r.h <= geo.vh && geo.r.t >= 0 && geo.r.l >= 0, `${tag}: cabe en la ventana (${Math.round(geo.r.w)}×${Math.round(geo.r.h)})`);
       step(geo.scrim !== 'none', `${tag}: fondo atenuado`);
-      if (geo.r.w >= 820) step(geo.sideShown && geo.pvFit && geo.sideScroll <= 0, `${tag}: vista previa entera sin scroll (sobra ${geo.sideScroll}px; ${geo.dbg})`);
+      if (geo.r.w >= 780) step(geo.sideShown && geo.pvFit && geo.sideScroll <= 0, `${tag}: vista previa entera sin scroll (sobra ${geo.sideScroll}px; ${geo.dbg})`);
     }
     step(!geo.hscroll && geo.over.length === 0, `${tag}: nada desborda a lo ancho ${geo.over.join(',')}`);
     if (axeSrc) { await page.addScriptTag({ content: axeSrc }); const ax = await page.evaluate(async () => (await axe.run('.ct-panel:not([hidden])', { resultTypes: ['violations'] })).violations.map(v => `${v.id}(${v.nodes.length})`)); step(ax.length === 0, `${tag}: axe sin fallos ${ax.join(' ')}`); }
+    // los pasos y el teclado (solo en claro, para no repetir)
+    if (tema === 'light' && !dimitri) {
+      const P = '.ct-panel:not([hidden]) ';
+      step((await page.$$(P + '.pz-steps [data-paso]')).length === 4 && (await page.getAttribute(P + '.pz-steps [data-paso="1"]', 'aria-current')) === 'step', `${tag}: cuatro pasos, el 1 activo`);
+      await page.focus(P + '.pz-title'); await page.keyboard.press('Alt+ArrowRight'); await page.waitForTimeout(250);
+      step((await page.getAttribute(P + '.pz-steps [data-paso="2"]', 'aria-current')) === 'step', `${tag}: Alt+→ pasa al paso 2`);
+      await page.keyboard.press('Alt+ArrowLeft'); await page.waitForTimeout(250);
+      step((await page.getAttribute(P + '.pz-steps [data-paso="1"]', 'aria-current')) === 'step', `${tag}: Alt+← vuelve al 1`);
+      if (!full) {
+      await page.fill(P + '.pz-ta[data-f="texto"]', 'Probando guardar con Ctrl+Enter'); await page.keyboard.press('Control+Enter');
+      await page.waitForFunction(() => /Guardado/.test(document.querySelector('.pz-guardado')?.textContent || ''), null, { timeout: 5000 }).then(() => step(true, `${tag}: Ctrl+Enter guarda y arriba dice «Guardado ✓»`), () => step(false, `${tag}: Ctrl+Enter guarda y arriba dice «Guardado ✓»`));
+      step(await page.evaluate(() => !/aprobada/i.test(document.querySelector('.pz-chip')?.textContent || '')), `${tag}: guardar no aprueba`);
+      }
+      if (full) {
+        const vis = async sel => page.evaluate(s => { const e = document.querySelector('.ct-panel:not([hidden]) ' + s); return !!e && e.getClientRects().length > 0; }, sel);
+        step(await vis('.pz-nets') && !(await vis('.pz-comp')), `${tag}: paso 1 solo enseña las redes`);
+        await page.click(P + '[data-ir="1"]'); await page.waitForTimeout(250);
+        step(await vis('.pz-comp') && !(await vis('.pz-nets')), `${tag}: «Siguiente» enseña solo el texto`);
+        await page.click(P + '[data-ir="1"]'); await page.waitForTimeout(250);
+        step(await vis('.pz-medios') && !(await vis('.pz-ta')), `${tag}: paso 3 enseña los medios`);
+        await page.click(P + '[data-ir="1"]'); await page.waitForTimeout(400);
+        step(await vis('.pz-side') && await vis('.pz-cuando') , `${tag}: paso 4 enseña la vista previa y «Cuándo sale»`);
+        const bt = await page.evaluate(() => [...document.querySelectorAll('.pz-stepnav button')].map(b => Math.round(b.getBoundingClientRect().height)));
+        step(bt.every(h => h >= 44), `${tag}: botones grandes (${bt.join(',')} px)`);
+        step(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), `${tag}: sin scroll horizontal`);
+        if (w === 390) await page.screenshot({ path: path.join(OUT, `${tag}-paso4.png`) });
+      }
+    }
     // foco atrapado: 40 Tab y el foco sigue dentro
     let dentro = true; for (let i = 0; i < 40; i++) { await page.keyboard.press('Tab'); if (!(await page.evaluate(() => !!document.activeElement?.closest('.ct-panel')))) { dentro = false; break; } }
     step(dentro, `${tag}: el foco se queda dentro tras 40 Tab`);
@@ -85,7 +114,7 @@ try {
     // clic fuera (no hay scrim visible en hoja: se cierra con Escape)
     if (!full) { await page.mouse.click(geo.vw - 6, geo.vh - 6); await page.waitForTimeout(500); step(await page.evaluate(() => document.querySelector('.ct-panel').hidden), `${tag}: clic fuera la cierra`); step(await page.evaluate(() => document.querySelector('#ctOv').classList.contains('on')), `${tag}: Contenido sigue abierto`); }
     else { await page.keyboard.press('Escape'); await page.waitForTimeout(400); step(await page.evaluate(() => document.querySelector('.ct-panel').hidden), `${tag}: Escape la cierra`); }
-    if (!full) { await page.click('#ctNew'); await page.waitForTimeout(300); const m1 = await page.$('.ct-newmenu:not([hidden]) button'); if (m1) await m1.click(); await page.waitForSelector('.ct-panel:not([hidden]) .pz-comp'); await page.waitForTimeout(300); await page.keyboard.press('Escape'); await page.waitForTimeout(400);
+    if (!full) { await page.click('#ctNew'); await page.waitForTimeout(300); const m1 = await page.$('.ct-newmenu:not([hidden]) button'); if (m1) await m1.click(); await page.waitForSelector('.ct-panel:not([hidden]) .pz-nets'); await page.waitForTimeout(300); await page.keyboard.press('Escape'); await page.waitForTimeout(400);
       step(await page.evaluate(() => document.querySelector('.ct-panel').hidden && document.querySelector('#ctOv').classList.contains('on')), `${tag}: Escape cierra solo la ventana, no Contenido`); }
     step(errs.length === 0, `${tag}: sin errores de página ${errs.join('|')}`);
     await ctx.close();
