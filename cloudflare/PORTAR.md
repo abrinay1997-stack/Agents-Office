@@ -9,7 +9,7 @@ La oficina local (`serve.mjs` y sus módulos) sigue funcionando igual. En la nub
 | En la oficina local | En el Worker |
 |---|---|
 | `fs` / archivos de `data/` | `worker/lib/almacen.js` (`docs`, `filas`) o tablas propias en D1; archivos grandes en R2 (`env.MEDIA`) |
-| `spawn('claude')` | `worker/lib/ia.js` (`texto()`) para redactar; los agentes con herramientas son la fase 4 (`worker/lib/agentes.js`) |
+| `spawn('claude')` | `worker/lib/ia.js` (`texto()`) para redactar una vez; **los agentes con herramientas ya corren en la nube (fase 4, `worker/lib/agentes/`)**: una tarea es una corrida por pasos, ver «Si tu módulo quiere que los agentes lo usen» |
 | `setInterval` / relojes de `serve.mjs` | `export async function cadaMinuto(env)` del módulo (cron cada minuto; mira la hora dentro) |
 | `fetch` a Meta con freno y estado en memoria | lo mismo, pero el estado en D1 (el Worker no recuerda nada entre peticiones) |
 | `process.env.X` | `env.X` (secretos del Worker; si es nuevo, declararlo en `cloudflare/secretos.json`) |
@@ -25,6 +25,9 @@ CPU: el plan gratuito da ~10 ms de CPU por petición; el de pago, 30 s. **No hag
 4. Migraciones D1: solo en tu rango, con `if not exists`: **tareas/rutinas/calendario 0010–0019 · contenido y publicación 0020–0029 · anuncios y Bandeja 0030–0039 · Estudio 0040–0049 · Dimitri/Negocio/Ajustes/Telegram 0050–0059 · agentes completos 0060–0069**. Para guardar JSON simple usa `almacen.js` (sin migración).
 5. **Datos del dueño**: crea `scripts/migrar/<modulo>.mjs` con `exportar({ raiz, vault })` → `{ filas: { coleccion: [{ id, valor, orden? }] }, docs: { clave: valor } }` que lee lo local (ver `scripts/migrar/README.md`) y NUNCA incluye llaves, contraseñas ni tokens. Los endpoints `/api/migrar/filas|docs` ya existen. Prueba el exportador con una carpeta temporal.
 6. Añade tus grupos al inventario: se calcula solo desde `grupos` (dos módulos no pueden poseer el mismo grupo; unas rutas dentro de un grupo ajeno van como `rutasExtra`, ver `tests/modulos.test.mjs`) (`node cloudflare/scripts/inventario.mjs`).
+
+## Si tu módulo quiere que los agentes lo usen (fase 4)
+Los agentes de la nube llaman a las herramientas internas **por función**, sin HTTP a sí mismos: `lib/agentes/herramientas.js` arma un `Request` sintético y lo pasa por el `manejar(ctx)` de tu módulo (con el rol `editor`, nunca `admin`: un agente no aprueba). Por eso las reglas de tu módulo («solo un administrador aprueba/publica/gasta», `por: 'agente'` → borrador) valen también para ellos. Para exponer herramientas: (1) pon las definiciones y el texto en un `<modulo>-tools.mjs` puro de la raíz con `TOOLS` y `crearLlamador({ office, agente, tarea })` (mira `tareas-tools.mjs`), el MCP local solo le pone el transporte; (2) enchúfalo en `herramientasInternas`; (3) **ninguna herramienta puede aprobar, programar, publicar, pagar ni borrar** (los tests de `tests/*-mcp.test.mjs` lo vigilan) y un servidor nuevo va en `INTERNAL` de `safety.mjs` solo si de verdad no envía. Lo que un módulo necesita del reloj de los agentes: `tomarSiguiente(db, { max })` y `guardarEjecucion(db, base, mio)` (fase 3) y, para sus avisos, `s.avisar(...)` de la sesión de tareas.
 
 ## Reglas de seguridad (no negociables)
 - **Nada que gaste, envíe, publique, pague o borre fuera de la oficina sin el clic/OK del dueño** (rol `admin`, nunca un agente ni una llamada con `por: 'agente'`). Reutiliza las reglas existentes (`safety.mjs`, topes, `huella` de aprobaciones, el «un solo OK, una sola vez») tal como están documentadas en `CLAUDE.md`.

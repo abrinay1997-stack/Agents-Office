@@ -6,6 +6,7 @@
 // edit a rule, delete a line to unlearn it, move a line up to "Standing rules" to promote it.
 import fs from 'node:fs';
 import path from 'node:path';
+import { clasificarCorreccion } from './agente-core.mjs';
 import { renombrar } from './fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const dir = brainPath => path.join(brainPath, 'Agents Office', 'feedback');
@@ -52,18 +53,8 @@ export function record(brainPath, agent, task, feedback, verdict) {
   return { standing, line, path: p };
 }
 
-/** Ask Claude whether a correction is a one-off or a standing rule. `ask(system, user)` → text. */
-export async function classify(ask, agent, task, feedback) {
-  const system = 'Clasificas la retroalimentación del dueño sobre el trabajo de un agente de IA. Devuelve SOLO un objeto JSON, sin texto adicional, sin bloques de código.';
-  const user = `Agente: ${agent.name} — ${agent.role}. ${agent.does}\nTarea: ${task?.title || ''}\nRetroalimentación del dueño: "${feedback}"\n\n` +
-    '¿Es un CASO PUNTUAL (sobre esta tarea, este cliente, este borrador solamente) o una REGLA PERMANENTE (una preferencia que el dueño querrá aplicar a cada trabajo futuro de este tipo)?\n' +
-    'Señales de una regla permanente: "siempre", "nunca", "de ahora en adelante", "nosotros no", una preferencia de formato o tono, un límite claro. Señales de un caso puntual: un dato sobre este cliente, un cambio solo para este borrador, "esta vez", "aquí".\n' +
-    'Devuelve: {"standing": true|false, "rule": "<si es permanente: la preferencia como UNA frase corta en imperativo, general, sin nombres de clientes ni proyectos; si no, cadena vacía>"}';
-  try {
-    const j = JSON.parse((await ask(system, user, { maxTokens: 200, timeout: 60000 })).replace(/```json|```/g, '').trim());
-    return { standing: !!j.standing && !!j.rule, rule: String(j.rule || '').trim() };
-  } catch { return null; }
-}
+// classify vive en agente-core.mjs (puro; también lo usa el Worker de Cloudflare)
+export const classify = clasificarCorreccion;
 
 /** The block for an agent's system prompt: its standing rules, newest last. */
 export function promptText(brainPath, agent) {

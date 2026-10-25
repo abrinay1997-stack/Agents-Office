@@ -123,6 +123,7 @@ import * as rel from './reliability.mjs';
 import * as telegram from './telegram.mjs';
 import * as triggers from './triggers.mjs';
 import * as costs from './costs.mjs';
+import { HANDOFF, modeLineFor, pasosLine as pasosLineCore, reanudaLine, needsReview as needsReviewCore, reviewPrompt as reviewPromptCore, TAREAS_TEXT, CONTENIDO_TEXT } from './agente-core.mjs'; // lo puro de hablarle a un agente (también lo usa el Worker de Cloudflare)
 import * as approvals from './approvals.mjs';
 import * as quality from './quality.mjs';
 import * as history from './history.mjs';
@@ -706,18 +707,12 @@ function contextoMarketingText(a, index) {
 }
 function tareasText() { // plan T3 (6 oct 2026): the desk's own task, as tools (tareas-mcp.mjs)
   if (backend !== 'claude-cli') return '';
-  return '\n- TAREAS (mcp__tareas__*): ver_mi_tarea al empezar (pasos con su id, fecha límite, comentarios del dueño); marcar_paso en cuanto termines cada paso (el dueño ve el avance); anotar_en_bitacora para lo que encontraste o decidiste; ' +
-    'pedir_bloqueo si NO puedes seguir sin un dato, una decisión o que otra tarea termine (no lo inventes: tu tarea se para con lo que llevas y sigue sola después); crear_borrador_tarea para pedirle trabajo a otro departamento (nace idea); registrar_trabajo para algo hecho fuera de una tarea. ' +
-    'El DUEÑO también tiene su propia lista de tareas: las que ver_tareas marca «DEL DUEÑO» las hace él en persona — no las ejecutes, no las repitas ni las cambies; si tu trabajo depende de una, pide_bloqueo con su id. Si algo solo lo puede hacer o decidir él y no te bloquea (una llamada, una firma, un precio), sugerir_al_dueno se lo deja en su Bandeja. ' + // plan D (7 oct 2026)
-    'Nada de esto aprueba ni envía.';
+  return TAREAS_TEXT;
 }
 function contenidoText(a) { // V4.7: what an agent of these departments may do with the content calendar
   if (!CONTENIDO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
-  return '\n- CONTENIDO (mcp__contenido__*): el calendario de lo que se va a publicar en Instagram y Facebook. ver_calendario_contenido y ver_pieza LEEN lo que hay (míralo antes de proponer, para no repetir ni pisar); crear_borrador deja una pieza como BORRADOR con su día, hora, formato, redes, texto y las imágenes del Estudio (pasa sus ids en `medios`); mejorar_borrador corrige un borrador tuyo. ' +
-    'Tú NO apruebas, NO programas y NO publicas: el dueño revisa cada borrador y lo aprueba en Contenido, y solo lo aprobado sale. Escribe el texto completo y listo para salir, con la voz de la marca (sus notas del cerebro). Para una imagen, genérala primero con el Estudio y usa su id. Termina tu entregable diciendo qué borradores dejaste y para qué días.';
+  return CONTENIDO_TEXT;
 }
-const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. Name every recipient with the exact email address or phone number, and every amount: after the OK the office only lets a send reach the addresses written in this draft. End with one line saying exactly what will go out when approved (or that nothing needs to).'
-  : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
 const timeoutFor = task => Math.min(3600, (task.timeout || RUN_TIMEOUT / 1000) * (task.timeoutMul || 1)) * 1000; // V4.4 (B4): a routine's own clock; a retry after a timeout gets twice as long
 const runModeOf = (mode, task) => mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : task?.autonomous ? 'autonomous' : 'task';
 const APPR = () => approvals.config(cfg.approvals); // V4.4 (G): undo window, reminders, expiry, amount limit, autonomy // V4.4: safety.writesAllowed decides from this and the policy
@@ -753,19 +748,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
 }
 
 // T1/T3 (6 oct 2026): the steps the agent marks as it goes (tareas-mcp → marcar_paso), its deadline and priority, and — after a block — what it had
-function pasosLine(task) {
-  const p = task.pasos || [], bits = [];
-  if (p.length) bits.push(`\nSteps (mark each one with the tool marcar_paso as soon as it is done; if one cannot be done, say why in anotar_en_bitacora):\n${p.map((x, i) => `${i + 1}. ${x.hecho ? '[done] ' : ''}${x.texto} (id ${x.id})`).join('\n')}`);
-  else if (task.plan?.length) bits.push(`\nAgreed plan: ${task.plan.join(' → ')}`);
-  if (task.limite) bits.push(`\nDeadline: ${task.limite.replace('T', ' ')}.`);
-  if (task.prioridad === 'alta') bits.push('\nThe owner marked this HIGH priority.');
-  if (task.proyecto) { const pr = catalogoT.proyecto(task.proyecto); if (pr) bits.push(`\nPart of the project «${pr.nombre}»${pr.objetivo ? ' — goal: ' + pr.objetivo : ''}.`); }
-  return bits.join('');
-}
-function reanudaLine(task) {
-  const b = task.pidioBloqueo; if (!b || !task.partial) return '';
-  return `\n\nYou paused this task earlier because: ${b.porque}. That is resolved now. What you had so far:\n${String(task.partial).slice(0, 6000)}\nContinue from there.`;
-}
+const pasosLine = task => pasosLineCore(task, id => catalogoT.proyecto(id));
 /* ---------- V3.2 (16 Sep) Agent Teams: the lead plans, the desks work at once, the lead writes the final ---------- */
 const nameOf = id => id === 'lead' ? 'the lead' : (AGENTS.find(a => a.id === id)?.name || id);
 const routineLineFor = task => task.routine ? `\nThis is a routine (${task.when}): it runs on the office's own clock and the owner is not at the keyboard. It is now ${new Date().toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}. Do the work for now.`
@@ -1513,16 +1496,10 @@ function fire(r, { due = Date.now(), late = false, by = 'routine', missed = 0 } 
 // V4.4 (D5): a second opinion on sensitive work — the department lead reads the draft before it reaches the owner, and the
 // desk fixes what the lead flags (one pass). office.config.json → quality.review { enabled, departments, words }
 const REVIEW = () => ({ enabled: true, departments: ['fin'], words: ['contrato', 'propuesta', 'cotización', 'cotizacion', 'factura', 'presupuesto', 'legal', 'contract', 'proposal', 'invoice'], ...(cfg.quality?.review || {}) });
-function needsReview(task, result) {
-  const r = REVIEW(); if (!r.enabled || task.piece || task.team) return false;
-  const a = AGENTS.find(x => x.id === task.agent); if (!a || a.lead) return false;
-  const hay = `${task.title} ${task.text}`.toLowerCase();
-  return r.departments.includes(task.dept) || r.words.some(w => hay.includes(String(w).toLowerCase())) || approvals.overLimit(result, APPR().amountLimit).length > 0;
-}
+function needsReview(task, result) { return needsReviewCore(task, result, { agent: AGENTS.find(x => x.id === task.agent), cfgReview: cfg.quality?.review, amountLimit: APPR().amountLimit }); }
 async function reviewDraft(task, result) {
   const lead = leadOf(task.dept), a = AGENTS.find(x => x.id === task.agent);
-  const system = `Eres ${lead.name}, jefe de ${DEPTS[task.dept].name} en ${cfg.name}. Revisas el trabajo de ${a.name} antes de que llegue al dueño. Devuelve SOLO JSON, sin texto alrededor.`;
-  const user = `Pedido del dueño: ${task.text}\n\nBorrador de ${a.name}:\n${result.slice(0, 12000)}\n\nRevisa: datos o cifras sin fuente, importes o cálculos que no cuadran, destinatarios o nombres dudosos, partes del pedido que faltan, promesas que la empresa no puede cumplir, tono.\nDevuelve {"ok": true} si puede ir al dueño tal cual, o {"ok": false, "fixes": ["<corrección concreta>", …]} (máximo 5).`;
+  const { system, user } = reviewPromptCore({ task, lead, agent: a, deptName: DEPTS[task.dept].name, negocio: cfg.name, result });
   try { const j = parseJSON(await ask(system, user, { maxTokens: 700, timeout: 120000, model: 'sonnet', taskId: task.id, kind: 'revision' })); return { ok: !!j.ok, fixes: Array.isArray(j.fixes) ? j.fixes.slice(0, 5).map(String) : [], by: lead.id, at: Date.now() }; }
   catch (e) { console.warn('review:', e.message); return null; }
 }
@@ -2189,7 +2166,6 @@ async function weeklyReport(force = false) {
   return text;
 }
 setInterval(() => weeklyReport().catch(e => console.warn('weekly:', e.message)), 15 * 60e3);
-const HANDOFF = /^\s*(?:\*\*)?PASAR A UNA PERSONA\s*:?\s*(?:\*\*)?\s*/i;
 const HOST = cfg.host || '127.0.0.1';
 /* ---------- V4.4 (E1, E2): triggers — a webhook turns an event (a form, a payment, a WhatsApp, a new email) into a task ---------- */
 const TRIG_STATE = path.join(DATA, 'triggers.json');

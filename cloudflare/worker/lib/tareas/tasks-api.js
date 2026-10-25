@@ -1,5 +1,5 @@
 // /api/tasks/* — las rutas de siempre de serve.mjs (crear, listar, editar, archivar, repetir, comentar, pasar a una persona…), con las mismas respuestas.
-// Lo que necesita a un agente trabajando (aprobar, devolver, detener, ejecutar con correcciones, editar el borrador, ejemplos) es la fase 4: contesta 501 con su motivo.
+// Fase 4: aprobar, devolver, detener, ejecutar con correcciones, editar el borrador, deshacer y los ejemplos (lib/agentes/aprobaciones.js). SOLO un administrador decide sobre un borrador.
 import { json } from '../respuesta.js';
 import { planear } from '../../../../tareas/cola.mjs';
 import { lightTasks } from '../../../../tareas/ligera.mjs';
@@ -10,14 +10,17 @@ import { normModel, normEffort } from '../../../../src/models.js';
 import * as approvals from '../../../../approvals.mjs';
 import { intent as intencionDeEquipo } from '../../../../teams.mjs';
 import { mutarDoc } from '../almacen.js';
+import { draftFacts as draftFactsAp, decidirBorrador, deshacerAprobacion, editarBorrador } from '../agentes/aprobaciones.js';
+import { registrarLeccion } from '../agentes/lecciones.js';
 import { sha256 } from '../ids.js';
 
 const dePaso = (st, obj, extra = {}) => json(obj, st, extra);
 // «Sin pedir mi OK» (needsOk:false) deja que el agente envíe, pague o cambie cosas sin que el dueño lo vea: solo un administrador lo decide.
 const SOLO_ADMIN_OK = 'Solo un administrador puede dejar una tarea sin pedir su visto bueno (needsOk:false).';
-const fase4 = que => json({ error: `${que} lo hacen los agentes, y los agentes completos todavía no están en la nube (fase 4): sigue en la oficina de tu computadora.`, pendiente: true }, 501);
+const SOLO_ADMIN_DECIDE = 'Solo un administrador aprueba, devuelve o deshace un borrador: lo que sale de la oficina lo decide el dueño.';
+const esAdmin = u => u?.rol === 'admin';
 
-function draftFacts(t, apr) { const d = t.draft || t.result || ''; t.risk = approvals.risk(d, apr); t.preview = approvals.preview(d); }
+const draftFacts = draftFactsAp;
 
 /** Quién escribe un comentario o pasa una tarea: el dueño es «Tú»; otra persona del equipo, su nombre de usuario. */
 const quienEs = usuario => (usuario?.rol === 'admin' ? 'Tú' : String(usuario?.email || 'alguien').split('@')[0].slice(0, 80));
@@ -49,12 +52,24 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
     return dePaso(200, task);
   }
 
-  if (ruta === '/api/tasks/approve-batch') return fase4('Aprobar y devolver borradores');
+  if (ruta === '/api/tasks/approve-batch' && metodo === 'POST') { // G6
+    if (!esAdmin(usuario)) return dePaso(403, { error: SOLO_ADMIN_DECIDE });
+    const out = [];
+    for (const id of (Array.isArray(b.ids) ? b.ids.slice(0, 50) : [])) out.push({ id: String(id), ...(await decidirBorrador({ s, db, id: String(id), verbo: 'approve', por: quienEs(usuario), apr: C.aprobaciones })) });
+    return dePaso(200, { ok: true, results: out, approved: out.filter(x => x.ok).length });
+  }
 
   let m = ruta.match(/^\/api\/tasks\/([^/]+)\/(example|comment|person)$/);
   if (m && metodo === 'POST') {
     const id = m[1], t0 = alm.load().find(x => x.id === id); if (!t0) return dePaso(404, { error: 'esa tarea ya no existe' });
-    if (m[2] === 'example') return fase4('Guardar un trabajo como ejemplo');
+    if (m[2] === 'example') { // H5: un trabajo que gustó, de ejemplo para su agente
+      if (usuario?.rol !== 'admin') return dePaso(403, { error: 'Solo un administrador guarda un trabajo como ejemplo.' });
+      if (t0.error || !t0.result || !t0.agent) return dePaso(400, { error: 'solo un trabajo terminado sirve de ejemplo' });
+      const texto = String(t0.draft && t0.approved ? t0.draft : t0.result).slice(0, 12000);
+      await mutarDoc(db, 'ejemplos.' + t0.agent, { items: [] }, d => ({ items: [...(d.items || []).filter(x => x.tarea !== id), { tarea: id, title: String(t0.title).replace(/\n/g, ' ').slice(0, 120), text: texto, at: ahora() }].slice(-8) }));
+      alm.cambiar(id, t => { t.example = true; }, { por: 'dueno' });
+      return dePaso(200, { ok: true, text: `Guardado como ejemplo de ${C.nombreAgente(t0.agent)}: lo tendrá en cuenta en sus próximos trabajos.` });
+    }
     if (m[2] === 'comment') { // I4
       const text = String(b.text || '').trim().slice(0, 2000); if (!text) return dePaso(400, { error: 'el comentario está vacío' });
       const by = quienEs(usuario); let comentarios;
@@ -82,11 +97,16 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
 
   m = ruta.match(/^\/api\/tasks\/([^/]+)\/(undo|draft|vote)$/);
   if (m && metodo === 'POST') {
-    if (m[2] === 'undo') return fase4('Deshacer una aprobación');
-    if (m[2] === 'draft') return fase4('Editar el borrador a mano');
+    if (m[2] === 'undo' || m[2] === 'draft') {
+      if (!esAdmin(usuario)) return dePaso(403, { error: SOLO_ADMIN_DECIDE });
+      const r = m[2] === 'undo' ? await deshacerAprobacion({ s, db, id: m[1], por: quienEs(usuario) }) : await editarBorrador({ s, db, id: m[1], draft: b.draft, por: quienEs(usuario), apr: C.aprobaciones });
+      if (m[2] === 'draft' && r.task) return dePaso(200, { ok: true, task: r.task });
+      return dePaso(r.status || 200, r);
+    }
     const t = alm.load().find(x => x.id === m[1]); if (!t) return dePaso(404, { error: 'esa tarea ya no existe' });
     const v = b.vote === 'up' || b.vote === 'down' ? b.vote : null; // D2: 👍 / 👎 con su motivo (las lecciones del agente las escribe la fase 4 a partir de esto)
     alm.cambiar(m[1], x => { x.vote = v; x.voteReason = v === 'down' ? String(b.reason || '').slice(0, 300) : ''; }, { por: 'dueno' });
+    if (v === 'down' && t.agent && String(b.reason || '').trim()) { const a = C.agents.find(x => x.id === t.agent); if (a) await registrarLeccion(db, a, t, String(b.reason).slice(0, 300), null); } // el motivo de un 👎 entra en sus lecciones
     return dePaso(200, { ok: true, vote: v });
   }
 
@@ -97,8 +117,19 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
   if (!m) return null;
   const id = m[1], accion = m[2] || '';
 
-  if (accion === 'stop' && metodo === 'POST') return fase4('Detener a un agente');
-  if ((accion === 'approve' || accion === 'reject') && metodo === 'POST') return fase4('Aprobar o rechazar un borrador');
+  if (accion === 'stop' && metodo === 'POST') { // el dueño detiene a un agente: su corrida se borra (el paso en vuelo pierde el candado y no escribe nada) y la tarea se cierra
+    if (usuario?.rol === 'lectura') return dePaso(403, { error: 'Tu usuario solo puede mirar.' });
+    const t = alm.load().find(x => x.id === id); if (!t) return dePaso(404, { error: 'esa tarea ya no existe' });
+    if (t.state !== 'doing') return dePaso(409, { error: 'no está en curso' });
+    await db.prepare('delete from corridas where tarea = ?').bind(id).run();
+    alm.cambiar(id, x => { Object.assign(x, { state: 'done', doneAt: ahora(), result: 'Detenida por ti antes de terminar.', error: true, stopped: true }); delete x.tomadaPor; delete x.corrida; }, { por: 'dueno' });
+    return dePaso(200, { ok: true, killed: 1 });
+  }
+  if ((accion === 'approve' || accion === 'reject') && metodo === 'POST') { // D1: el visto bueno del dueño sobre el borrador
+    if (!esAdmin(usuario)) return dePaso(403, { error: SOLO_ADMIN_DECIDE });
+    const r = await decidirBorrador({ s, db, id, verbo: accion, nota: String(b.feedback || '').trim(), por: quienEs(usuario), apr: C.aprobaciones });
+    return dePaso(r.status || 200, r);
+  }
 
   if (accion === 'archive' && metodo === 'POST') { // fuera de las listas (se queda guardada)
     const t = alm.load().find(x => x.id === id); if (!t) return dePaso(404, { error: 'esa tarea ya no existe' });
@@ -126,7 +157,15 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
     if (t.state !== 'next') alm.cambiar(id, x => { x.state = 'next'; x.addedAt = ahora(); }, { por: 'dueno' });
     return dePaso(200, { ok: true, id, state: 'next' });
   }
-  if (accion === 'revise' && metodo === 'POST') return fase4('Corregir el trabajo de un agente');
+  if (accion === 'revise' && metodo === 'POST') { // «revise: …» — el agente rehace su trabajo con lo que pediste y aprende de la corrección
+    const t = alm.load().find(x => x.id === id); if (!t) return dePaso(404, { error: 'esa tarea ya no existe' });
+    if (t.state === 'doing') return dePaso(409, { error: 'ya está en curso' });
+    if (t.state === 'scheduled') return dePaso(409, { error: 'está programada: corre sola a su hora' });
+    if (!C.agents.some(a => a.id === t.agent) || t.person) return dePaso(409, { error: t.person === DUENO ? 'es tuya: delégala a un agente para que la haga' : 'la tiene una persona: devuélvela a los agentes primero' });
+    const nota = String(b.feedback || '').trim(); if (!nota) return dePaso(400, { error: 'di qué debe cambiar' });
+    alm.cambiar(id, x => { Object.assign(x, { state: 'doing', startedAt: ahora(), tomadaPor: 'agente:' + x.agent, corrida: { modo: x.needsOk ? 'draft' : 'task', feedback: nota, origen: 'revise' } }); }, { por: 'dueno' });
+    return dePaso(200, { ok: true, id, state: 'doing' });
+  }
 
   if (!accion && metodo === 'DELETE') {
     const t = alm.load().find(x => x.id === id); if (!t) return dePaso(404, { error: 'esa tarea ya no existe' });

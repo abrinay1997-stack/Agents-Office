@@ -22,6 +22,8 @@ import { dia, DUENO } from '../../../tareas/dueno.mjs';
 import { normModel, normEffort } from '../../../src/models.js';
 import { valid as validWhen } from '../../../src/when.js';
 import { mutarDoc } from '../lib/almacen.js';
+import { skillsDe, leccionesDe } from '../lib/agentes/contexto.js';
+import { olvidarLeccion } from '../lib/agentes/lecciones.js';
 
 export const nombre = 'tareas';
 export const grupos = ['tasks', 'tareas', 'routines', 'team', 'agents', 'calendar.ics'];
@@ -95,12 +97,22 @@ async function manejarTareas({ req, env, db, ruta, url, usuario, b, g }) {
 /* ---------- agentes (el roster) ---------- */
 async function manejarAgentes({ req, db, ruta, usuario, b }) {
   const C = await leerContexto(db);
-  if (ruta === '/api/agents' && req.method === 'GET') return json({ agents: C.salida(), problems: C.roster.problems, files: C.roster.files });
+  if (ruta === '/api/agents' && req.method === 'GET') {
+    const { listarFilas } = await import('../lib/almacen.js');
+    const sk = await listarFilas(db, 'skills', { limite: 200 });
+    const { results: fb } = await db.prepare("select clave, json from docs where clave like 'feedback.%'").all();
+    const reglas = new Map(fb.map(f => { try { return [f.clave.slice(9), (JSON.parse(f.json).rules || []).length]; } catch { return [f.clave.slice(9), 0]; } }));
+    const agents = C.salida().map(a => ({ ...a, skills: sk.filter(s => s && s.text && (s.everyone || (s.agents || []).includes(a.id) || (s.departments || []).includes(a.department))).map(s => s.name), lessons: reglas.get(a.id) || 0 }));
+    return json({ agents, problems: C.roster.problems, files: C.roster.files });
+  }
   const m = ruta.match(/^\/api\/agents\/([a-z0-9_-]+)(?:\/(forget))?$/i);
   if (!m) return null;
   const a = C.agents.find(x => x.id === m[1]);
   if (!a) return json({ error: 'no such agent' }, 404);
-  if (m[2] === 'forget' && req.method === 'POST') return json({ error: 'Las lecciones de un agente las guardan los agentes completos, que todavía no están en la nube (fase 4).', pendiente: true }, 501);
+  if (m[2] === 'forget' && req.method === 'POST') { // ✕ de la ficha: el agente olvida una lección
+    if (usuario.rol !== 'admin') return prohibido('Solo un administrador cambia lo que aprende un agente.');
+    return (await olvidarLeccion(db, a.id, b.line)) ? json({ ok: true }) : json({ error: 'esa lección ya no está' }, 404);
+  }
   if (req.method === 'PATCH') {
     if (usuario.rol !== 'admin') return prohibido('Solo un administrador cambia a los agentes.');
     const patch = {};
@@ -116,7 +128,7 @@ async function manejarAgentes({ req, db, ruta, usuario, b }) {
   const hechas = tareas.filter(t => t.state === 'done'), bien = hechas.filter(t => !t.error);
   const dur = bien.filter(t => t.startedAt && t.doneAt).map(t => t.doneAt - t.startedAt);
   return json({
-    agent: C.salida().find(x => x.id === a.id), skills: [], biblioteca: [], lessons: { rules: [], oneOffs: [] }, // las skills y las lecciones llegan con la fase 4
+    agent: C.salida().find(x => x.id === a.id), skills: (await skillsDe(db, a)).map(s => ({ name: s.name, description: s.description || '', agents: s.agents || [], departments: s.departments || [], everyone: !!s.everyone, files: (s.files || []).map(f => f.name), source: 'brain', path: '' })), biblioteca: [], lessons: await leccionesDe(db, a.id),
     stats: { done: bien.length, failed: hechas.length - bien.length, running: tareas.filter(t => t.state === 'doing').length, waiting: tareas.filter(t => t.state === 'waiting').length, pending: tareas.filter(t => t.state === 'next' || t.state === 'scheduled').length, avgMinutes: dur.length ? Math.round(dur.reduce((x, y) => x + y, 0) / dur.length / 60000) : null },
     recent: tareas.filter(t => !t.archived).sort((x, y) => (y.doneAt || y.addedAt || 0) - (x.doneAt || x.addedAt || 0)).slice(0, 10).map(t => ({ id: t.id, title: t.title, state: t.state, error: !!t.error, at: t.doneAt || t.addedAt })),
     connectors: [], studio: false, contenido: false,

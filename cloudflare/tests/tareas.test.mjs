@@ -112,7 +112,8 @@ test('crear, listar y editar tareas: lo que la IA enruta, lo que no, y lo que el
   assert.equal((await o.api('DELETE', `/api/tasks/${p.id}`)).status, 200);
   assert.equal((await o.api('GET', '/api/tasks')).j.length, 1);
   // lo que necesita a un agente contesta 501 con su motivo, no un error mudo
-  for (const [m, r] of [['POST', `/api/tasks/${a.id}/approve`], ['POST', `/api/tasks/${a.id}/stop`], ['POST', '/api/tasks/approve-batch'], ['POST', `/api/tasks/${a.id}/revise`]]) { const x = await o.api(m, r, { feedback: 'x' }); assert.equal(x.status, 501, r); assert.match(x.j.error, /fase 4/); }
+  // fase 4: aprobar/devolver/detener/corregir existen y contestan como la local (el detalle está en agentes-*.test.mjs): la tarea ya empezó: aprobar da 400, corregir 409 y detener la cierra
+  for (const [m, r, st] of [['POST', `/api/tasks/${a.id}/approve`, 400], ['POST', `/api/tasks/${a.id}/revise`, 409], ['POST', `/api/tasks/${a.id}/stop`, 200]]) { const x = await o.api(m, r, { feedback: '' }); assert.equal(x.status, st, r); assert.notEqual(x.status, 501); }
 });
 
 test('GET /api/tasks: ?light=1, ETag y 304, y la cola dice por qué espera cada una', { skip: SALTAR }, async () => {
@@ -311,7 +312,7 @@ test('/api/agents: los 35 puestos como la local, y lo que el dueño edita se gua
   assert.deepEqual([ok.status, ok.j.agent.name, ok.j.agent.model, ok.j.agent.setUp], [200, 'JEFE DE CORREOS', 'opus', true]);
   assert.equal((await o.api('GET', '/api/agents')).j.agents.find(a => a.id === 'elead').brief, 'Responde corto.');
   const ficha = (await o.api('GET', '/api/agents/elead')).j; assert.deepEqual(Object.keys(ficha).sort(), ['agent', 'biblioteca', 'connectors', 'contenido', 'lessons', 'recent', 'skills', 'stats', 'studio']);
-  assert.equal((await o.api('POST', '/api/agents/elead/forget', { line: 'x' })).status, 501);
+  assert.equal((await o.api('POST', '/api/agents/elead/forget', { line: 'x' })).status, 404); // fase 4: olvidar una lección que no existe
   // la tarea del agente se ve en su ficha
   await o.api('POST', '/api/tasks', { dept: 'emails', text: 'Contesta a Ana', agent: 'elead' });
   assert.equal((await o.api('GET', '/api/agents/elead')).j.stats.pending, 1);
