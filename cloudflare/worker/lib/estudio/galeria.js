@@ -38,15 +38,18 @@ export async function store(env, db, buf, ext, meta, { ahora = Date.now(), zona 
   for (;;) {
     const rel = `${sub}/${name}.${ext}`;
     const at = ahora + (n - 2); // dos archivos en el mismo milisegundo conservan el orden en que se hicieron
-    const item = { id: rel, file: rel, kind, ext, at, ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
-    const r = await db.prepare('insert or ignore into estudio_archivos (file, at, kind, json, papelera_at) values (?,?,?,?,null)').bind(rel, at, kind, JSON.stringify(item)).run();
-    if (r.meta?.changes) {
-      try { await env.MEDIA.put(rel, buf, { httpMetadata: { contentType: MEDIA_MIME[ext] || 'application/octet-stream' } }); }
-      catch (e) { await db.prepare('delete from estudio_archivos where file = ?').bind(rel).run(); throw e; }
+    // primero el archivo en R2, y solo si la clave está libre (así nunca pisa a otro); la ficha va después: sin archivo no hay ficha
+    const puesto = await env.MEDIA.put(rel, buf, { httpMetadata: { contentType: MEDIA_MIME[ext] || 'application/octet-stream' }, onlyIf: { etagDoesNotMatch: '*' } });
+    if (puesto) {
+      const item = { id: rel, file: rel, kind, ext, at, ...(wh ? { w: wh[0], h: wh[1] } : {}), ...meta };
+      try {
+        await db.prepare(`insert into estudio_archivos (file, at, kind, json, papelera_at) values (?,?,?,?,null)
+          on conflict (file) do update set at=excluded.at, kind=excluded.kind, json=excluded.json, papelera_at=null`).bind(rel, at, kind, JSON.stringify(item)).run();
+      } catch (e) { await env.MEDIA.delete(rel).catch(() => {}); throw e; }
       await subirRev(db);
       return item;
     }
-    name = `${base}-${n++}`; // tomado (ya hay uno con ese nombre, aunque sea en la papelera)
+    name = `${base}-${n++}`; // tomado (ya hay un archivo con ese nombre, aunque su ficha esté en la papelera)
     if (n > 60) throw new Error('no pude encontrar un nombre libre para el archivo');
   }
 }
@@ -117,11 +120,12 @@ export async function removeFolder(db, id) {
 }
 export async function moveTo(db, files, folder) {
   if (folder != null && !(await folderOf(db, folder))) throw new Error('esa carpeta ya no existe');
+  const rels = [...new Set((Array.isArray(files) ? files : []).slice(0, 2000).filter((x) => typeof x === 'string').map(validoId).filter(Boolean))];
   let n = 0;
-  for (const id of (Array.isArray(files) ? files : []).slice(0, 2000)) if (typeof id === 'string') {
-    const rel = validoId(id); if (!rel) continue;
-    const r = await db.prepare(`update estudio_archivos set json = json_set(json, '$.folder', ?) where file = ? and papelera_at is null`).bind(folder || null, rel).run();
-    if (r.meta?.changes) n++;
+  for (let i = 0; i < rels.length; i += 50) {
+    const lote = rels.slice(i, i + 50);
+    const r = await db.prepare(`update estudio_archivos set json = json_set(json, '$.folder', ?) where papelera_at is null and file in (${lote.map(() => '?').join(',')})`).bind(folder || null, ...lote).run();
+    n += r.meta?.changes ?? 0;
   }
   if (n) await subirRev(db);
   return n;
@@ -185,19 +189,26 @@ export async function trashFile(db, name) {
   const { results } = await db.prepare('select file from estudio_archivos where papelera_at = ?').bind(+m[1]).all();
   return results.find((r) => r.file.split('/').pop() === m[2])?.file || null;
 }
-/** Se van para siempre: estos de la papelera (su archivo y su ficha), o todo con { all: true }. → cuántos archivos se fueron (el archivo y su ficha cuentan cada uno, como en la oficina local) */
+/** Se van para siempre: estos de la papelera (su archivo y su ficha), o todo con { all: true }. → cuántos archivos se fueron (el archivo y su ficha cuentan cada uno, como en la oficina local).
+ *  Como mucho PURGA_MAX por pasada (lo pendiente se va en la siguiente): un Worker no hace cientos de llamadas a la vez. */
+export const PURGA_MAX = 100;
 export async function purge(env, db, { bin, all, vencidos } = {}) {
-  const { results } = await db.prepare('select file, papelera_at from estudio_archivos where papelera_at is not null').all();
+  const { results } = await db.prepare('select file, papelera_at from estudio_archivos where papelera_at is not null order by papelera_at').all();
   const nombres = new Set((all || vencidos ? [] : Array.isArray(bin) ? bin : []).map(String));
-  let n = 0;
+  const van = [];
   for (const r of results) {
     const [nm, rec] = binNames({ file: r.file }, r.papelera_at);
-    const va = all || (vencidos && r.papelera_at < Date.now() - BIN_DAYS * 864e5) || nombres.has(nm) || nombres.has(rec);
-    if (!va) continue;
-    await env.MEDIA.delete(r.file); await db.prepare('delete from estudio_archivos where file = ? and papelera_at = ?').bind(r.file, r.papelera_at).run();
-    n += 2;
+    if (all || (vencidos && r.papelera_at < Date.now() - BIN_DAYS * 864e5) || nombres.has(nm) || nombres.has(rec)) van.push(r);
+    if (van.length >= PURGA_MAX) break;
   }
-  return n;
+  if (van.length) {
+    await env.MEDIA.delete(van.map((r) => r.file));
+    for (let i = 0; i < van.length; i += 50) {
+      const lote = van.slice(i, i + 50);
+      await db.batch(lote.map((r) => db.prepare('delete from estudio_archivos where file = ? and papelera_at = ?').bind(r.file, r.papelera_at)));
+    }
+  }
+  return van.length * 2;
 }
 
 /* ---------- subidas del dueño ---------- */
@@ -228,14 +239,17 @@ export async function importar(env, db, clave, buf, ficha) {
   return f;
 }
 
-/** Varios archivos en un .zip (guardados sin comprimir). */
+/** Varios archivos en un .zip (guardados sin comprimir). Un Worker tiene 128 MB y armar el zip duplica lo que lee: pasados TOPE_ZIP, `demasiado: true` y no se arma nada. */
+export const TOPE_ZIP = 40 * 1024 * 1024;
 export async function zip(env, db, ids) {
   const files = [], seen = new Set(); let total = 0;
+  const ok = await cuales(db, (Array.isArray(ids) ? ids : []).slice(0, 200));
   for (const id of (Array.isArray(ids) ? ids : []).slice(0, 200)) {
-    if (!(await existe(db, id))) continue;
-    const data = await bytesDe(env, validoId(id)); if (!data) continue;
-    if (total + data.length > 100 * 1024 * 1024) break; total += data.length; // 100 MB: la memoria de un Worker es de 128 MB
-    let name = validoId(id).split('/').pop(); const base = name; for (let n = 2; seen.has(name); n++) name = base.replace(/(\.[^.]+)$/, `-${n}$1`); seen.add(name);
+    const rel = validoId(id); if (!rel || !ok.has(rel)) continue;
+    const h = await env.MEDIA.head(rel); if (!h) continue;
+    total += h.size; if (total > TOPE_ZIP) return { buf: null, count: 0, demasiado: true };
+    const data = await bytesDe(env, rel); if (!data) continue;
+    let name = rel.split('/').pop(); const base = name; for (let n = 2; seen.has(name); n++) name = base.replace(/(\.[^.]+)$/, `-${n}$1`); seen.add(name);
     files.push({ name, data });
   }
   return zipFiles(files, new Date());

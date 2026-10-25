@@ -53,7 +53,23 @@ async function http(url, opts, what) {
   }
   return j;
 }
-const fromUrl = async url => { const r = await fx(url, { signal: AbortSignal.timeout(300000) }); if (!r.ok) throw new Error('no pude descargar el resultado: ' + r.status); return { buf: Buffer.from(await r.arrayBuffer()), mime: r.headers.get('content-type') || '' }; };
+const TOPE_DESCARGA = 100 * 1024 * 1024; // un Worker tiene 128 MB de memoria
+let ACTUAL = null; // el trabajo que corre (cada motor lo fija al empezar): para saber si ya hay algo pagado y guardado que no se puede perder
+const fromUrl = async url => {
+  try {
+    const r = await fx(url, { signal: AbortSignal.timeout(300000) });
+    if (!r.ok) { const e = new Error('no pude descargar el resultado: ' + r.status); e.status = r.status; throw e; }
+    if (+r.headers.get('content-length') > TOPE_DESCARGA) throw final(new Error('el resultado pesa más de 100 MB: no lo puedo descargar aquí'));
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > TOPE_DESCARGA) throw final(new Error('el resultado pesa más de 100 MB: no lo puedo descargar aquí'));
+    return { buf, mime: r.headers.get('content-type') || '' };
+  } catch (e) {
+    // en la nube, con el trabajo ya pagado en el servicio (tiene su id remoto), un corte al descargar NO lo da por perdido: se reintenta en el próximo paso
+    const pasajero = !e.final && (!e.status || e.status >= 500 || e.status === 429 || e.status === 408);
+    if (io.paso && pasajero && ACTUAL?.remote?.length && (ACTUAL.descargas = (ACTUAL.descargas || 0) + 1) <= 6) throw new Pendiente(30000);
+    throw e;
+  }
+};
 const extOf = (mime, url, fallback = 'png') => { const s = (mime || '') + ' ' + (url || '').split('?')[0].slice(-6); return /jpe?g/.test(s) ? 'jpg' : /webp/.test(s) ? 'webp' : /webm/.test(s) ? 'webm' : /mp4|quicktime|\.mov/.test(s) ? 'mp4' : /png/.test(s) ? 'png' : fallback; };
 /** Una dirección que devuelve el servicio solo se sigue si es de SU origen (esas peticiones llevan la key en la cabecera); si no, se arma la de la documentación. */
 const propia = (u, base) => { try { return u && new URL(u).origin === new URL(base).origin ? u : null; } catch { return null; } };
@@ -112,7 +128,7 @@ async function veo(m, job, ctx) {
       const u = v.uri; if (u && rq.got.includes(u)) continue;
       let buf;
       if (v.videoBytes || v.bytesBase64Encoded) buf = Buffer.from(v.videoBytes || v.bytesBase64Encoded, 'base64');
-      else { const r = await fx(u, { headers: { 'x-goog-api-key': key }, redirect: 'follow', signal: AbortSignal.timeout(300000) }); if (!r.ok) throw new Error(`no pude descargar el video de Google: ${r.status}`); buf = Buffer.from(await r.arrayBuffer()); }
+      else { if (!propia(u, base)) throw final(new Error('Google devolvió una dirección de descarga que no es suya: no la sigo con tu llave')); const r = await fx(u, { headers: { 'x-goog-api-key': key }, redirect: 'follow', signal: AbortSignal.timeout(300000) }); if (!r.ok) throw new Error(`no pude descargar el video de Google: ${r.status}`); buf = Buffer.from(await r.arrayBuffer()); }
       await ctx.add(buf, 'mp4'); if (u) rq.got.push(u); await ctx.save();
     }
     rq.done = true; await ctx.save();
@@ -287,5 +303,6 @@ const RUN = {
     }
   },
 };
+  for (const k of Object.keys(RUN)) { const f = RUN[k]; RUN[k] = (m, job, ctx) => { ACTUAL = job; return f(m, job, ctx); }; }
   return { RUN };
 }

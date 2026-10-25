@@ -39,7 +39,7 @@ export async function budget(env, db) { return budgetOf(await usoDelDia(env, db)
 export async function checkBudget(env, db, est) { return checkBudgetOf(est, await budget(env, db)); }
 async function gastar(env, db, kind, n, cost) {
   const dia = galeria.diaLocal(Date.now(), galeria.ZONA(env));
-  await mutarDoc(db, USO, null, (v) => spendOn(usageOf(v, dia), kind, n, cost));
+  await mutarDoc(db, USO, null, (v) => spendOn(usageOf(v, dia), kind, n, cost), { intentos: 30 }); // varios trabajos pueden terminar a la vez: se reintenta hasta que entre
 }
 /** Dinero que el Estudio gasta fuera de un trabajo (una voz de MiniMax diseñada o clonada): cuenta en el día y el mes. */
 export async function charge(env, db, usd) { const c = +(+usd || 0).toFixed(3); if (c > 0) await gastar(env, db, 'images', 0, c); return budget(env, db); }
@@ -62,6 +62,7 @@ export function limpiarPedido(b, { por = 'you' } = {}) {
   const m = b?.media && typeof b.media === 'object' ? Object.fromEntries(['start', 'end', 'reference', 'video', 'audio'].map((k) => [k, ids(b.media[k])]).filter(([, v]) => v.length)) : {};
   return { prompt: b?.prompt, n: b?.n, kind: b?.kind, model: typeof b?.model === 'string' ? b.model : undefined, provider: typeof b?.provider === 'string' ? b.provider : undefined, ratio: b?.ratio, seconds: b?.seconds,
     settings: b?.settings && typeof b.settings === 'object' && !Array.isArray(b.settings) ? b.settings : {}, media: m, by: por, folder: typeof b?.folder === 'string' ? b.folder : undefined,
+    retryOf: typeof b?.retryOf === 'string' && /^j[a-z0-9]{4,30}$/.test(b.retryOf) ? b.retryOf : undefined,
     agent: null, task: typeof b?.task === 'string' && /^[a-z0-9]{4,20}$/i.test(b.task) ? b.task : null };
 }
 /** Cambia lo que dice la validación local de la key faltante («guárdala en Windows…») por lo que vale en la nube. */
@@ -81,13 +82,23 @@ export async function pedir(env, db, req, { usuario } = {}) {
   if (req.versionOf != null) pedido.versionOf = req.versionOf;
   if (typeof req.purpose === 'string') pedido.purpose = req.purpose;
   const ids = [...Object.values(pedido.media).flat(), ...(pedido.versionOf != null ? [String(pedido.versionOf).replace(/\\/g, '/')] : [])];
-  const existen = await galeria.cuales(db, ids), carp = await galeria.resumenCarpetas(db), b = await budget(env, db);
+  const existen = await galeria.cuales(db, ids), carpeta = pedido.folder ? await galeria.folderOf(db, pedido.folder) : null, b = await budget(env, db);
   let j;
-  try { j = armarTrabajo(pedido, { cfg: S.cfg, resolve: (id) => existen.has(String(id).replace(/\\/g, '/')), folderOf: (id) => carp.find((f) => f.id === id) || null, budget: () => b }); }
+  try { j = armarTrabajo(pedido, { cfg: S.cfg, resolve: (id) => existen.has(String(id).replace(/\\/g, '/')), folderOf: (id) => (carpeta && carpeta.id === id ? carpeta : null), budget: () => b }); }
   catch (e) { throw new ErrorPedido(enNube(e.message), 400); }
   if (j.engine !== 'prueba' && usuario?.rol !== 'admin') throw new ErrorPedido('Solo un administrador pide trabajos de pago del Estudio (las tarjetas de «Prueba» son gratis para todos).', 403);
   await db.prepare('insert into estudio_trabajos (id, json, estado, at, lease, paso, cancelar) values (?,?,?,?,0,0,0)').bind(j.id, JSON.stringify(j), j.state, j.at).run();
-  if (j.engine !== 'prueba') await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'estudio', usuario?.email || '?', JSON.stringify({ trabajo: j.id, modelo: j.model, n: j.n, costo: +(j.unit * j.n).toFixed(3) })).run();
+  // el tope se comprueba DESPUÉS de insertar y contando solo lo que llegó antes (por su orden de entrada): dos pedidos a la vez no pueden pasarse del tope los dos
+  if (j.engine !== 'prueba') {
+    try {
+      const mio = (await db.prepare('select rowid r from estudio_trabajos where id = ?').bind(j.id).first()).r;
+      const { results } = await db.prepare(`select json from estudio_trabajos where estado in ('queued','running') and rowid < ?`).bind(mio).all();
+      const b2 = budgetOf(await usoDelDia(env, db), filas(results), S.cfg);
+      if (b2.left != null && j.weight > b2.left) throw new Error(`tope diario alcanzado: quedan ${b2.left} de ${b2.limit} (cámbialo en Ajustes → Estudio)`);
+      checkBudgetOf(j.unit * j.n, b2);
+    } catch (e) { await db.prepare('delete from estudio_trabajos where id = ?').bind(j.id).run(); throw new ErrorPedido(e.message, 400); }
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'estudio', usuario?.email || '?', JSON.stringify({ trabajo: j.id, modelo: j.model, n: j.n, costo: +(j.unit * j.n).toFixed(3) })).run();
+  }
   return pub(j);
 }
 /** Editar una imagen: una versión nueva al lado (el original no se toca). */
@@ -122,6 +133,7 @@ async function propiaCancelacion(env, engine, url) {
 }
 export async function retry(env, db, id, { usuario } = {}) {
   const j = await cargar(db, id); if (!j) return null;
+  if (j.state !== 'failed' && j.state !== 'done') throw new ErrorPedido('ese trabajo sigue en marcha: espera a que termine para reintentarlo', 409);
   return pedir(env, db, { model: j.model, kind: j.kind, prompt: j.prompt, n: j.n - j.items.length || j.n, settings: j.s, media: j.media, task: j.task, folder: j.folder, versionOf: j.versionOf, purpose: j.purpose, retryOf: j.id }, { usuario });
 }
 export async function forget(db, id) { const r = await db.prepare(`delete from estudio_trabajos where id = ? and estado in ('done','failed')`).bind(id).run(); return !!r.meta?.changes; }
@@ -197,8 +209,9 @@ async function paso(env, db, id, ahora) {
     j.state = 'done';
   } catch (e) {
     if (e?.pendiente) { delete j.enviando; j.state = 'running'; await guardarFila(db, j); return { job: pub(j), hizo: true }; }
-    const ex = j.cancel ? { texto: 'Cancelado por ti.', clase: 'cancelado', detalle: '' } : explicar(e.message, e.status);
-    if (j.items.length) { j.state = 'done'; j.warning = ex.texto; } else { j.state = 'failed'; j.error = ex.texto; j.errorClass = ex.clase; if (ex.detalle) j.errorRaw = String(ex.detalle).slice(0, 400); }
+    const ex = j.cancel ? { texto: 'Cancelado por ti.', clase: 'cancelado' } : explicar(e.message, e.status);
+    ex.texto = String(ex.texto).replace(/[A-Za-z0-9_-]{24,}/g, '…'); // nunca un cuerpo crudo ni nada que parezca una llave: ni errorRaw, que en la nube no se guarda
+    if (j.items.length) { j.state = 'done'; j.warning = ex.texto; } else { j.state = 'failed'; j.error = ex.texto; j.errorClass = ex.clase; }
     if (!j.cancel) console.warn(`estudio: ${j.id} ${j.model}: ${String(e.message).replace(/[A-Za-z0-9_-]{24,}/g, '…')}`);
   }
   delete j.enviando;

@@ -36,12 +36,12 @@ const minimaxOn = () => catalogo.engines().some((e) => e.id === 'minimax' && e.o
 const porDefecto = () => Object.fromEntries(catalogo.KINDS.map((k) => [k, catalogo.defaultModel(k)]));
 const NOMBRE_AGENTE = (id) => agentes().find((a) => a.id === id)?.name || '';
 
-/** Dónde están las piezas de Contenido que usan un archivo (la papelera no se lleva lo que una pieza usa). Tolerante: Contenido es otra fase. */
+/** Dónde están las piezas de Contenido que usan un archivo (la papelera no se lleva lo que una pieza usa).
+ *  TODO(fase 5): cuando Contenido esté en la nube, aquí se conecta su colección REAL (hoy se busca en `filas('piezas')`, un nombre supuesto).
+ *  Falla CERRADO: si no se puede comprobar, la función lanza y el archivo NO se borra (nunca devuelve [] por un error). */
 async function usosEnContenido(db, file) {
-  try {
-    const { results } = await db.prepare(`select id, json from filas where coleccion = 'piezas' and json like ? limit 10`).bind(`%${file.replace(/[%_\\]/g, '')}%`).all();
-    return results.map((r) => { let v = {}; try { v = JSON.parse(r.json); } catch { /* ignorar */ } return { id: r.id, titulo: v.titulo || v.title || '' }; });
-  } catch { return []; }
+  const { results } = await db.prepare(`select id, json from filas where coleccion = 'piezas' and json like ? limit 10`).bind(`%${file.replace(/[%_\\]/g, '')}%`).all();
+  return results.map((r) => { let v = {}; try { v = JSON.parse(r.json); } catch { /* una pieza ilegible cuenta igual */ } return { id: r.id, titulo: v.titulo || v.title || '' }; });
 }
 
 /* ---------- servir un archivo (el módulo de rutas lo llama para /media/…; ver docs/cloudflare.md) ---------- */
@@ -59,10 +59,10 @@ async function entregar(env, req, clave) {
   if (rg && size && (rg[1] !== '' || rg[2] !== '')) {
     const start = rg[1] === '' ? Math.max(0, size - (+rg[2] || 0)) : +rg[1], end = rg[1] !== '' && rg[2] !== '' ? Math.min(+rg[2], size - 1) : size - 1;
     if (start > end || start >= size) return new Response(null, { status: 416, headers: { 'content-range': `bytes */${size}` } });
-    const o = await env.MEDIA.get(clave, { range: { offset: start, length: end - start + 1 } });
+    const o = await env.MEDIA.get(clave, { range: { offset: start, length: end - start + 1 } }); if (!o) return error('no such file', 404);
     return new Response(req.method === 'HEAD' ? null : o.body, { status: 206, headers: { ...h, 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': String(end - start + 1) } });
   }
-  const o = await env.MEDIA.get(clave);
+  const o = await env.MEDIA.get(clave); if (!o) return error('no such file', 404);
   return new Response(req.method === 'HEAD' ? null : o.body, { status: 200, headers: { ...h, 'content-length': String(size) } });
 }
 
@@ -147,13 +147,18 @@ export async function manejar(ctx) {
       const k = await galeria.trashFile(db, sp.get('n')); if (!k) return error('no está en la papelera', 404);
       const r = await entregar(env, req, k); const h = new Headers(r.headers); h.set('cache-control', 'no-store'); return new Response(r.body, { status: r.status, headers: h });
     }
-    if (ruta === '/api/media/trash/purge' && metodo === 'POST') return json({ ok: true, removed: await galeria.purge(env, db, (await cuerpo(req)) || {}) });
+    if (ruta === '/api/media/trash/purge' && metodo === 'POST') {
+      const b = (await cuerpo(req)) || {};
+      if (b.all && usuario.rol !== 'admin') return prohibido('Solo un administrador vacía toda la papelera.');
+      return json({ ok: true, removed: await galeria.purge(env, db, { bin: b.bin, all: !!b.all }) });
+    }
     if (ruta === '/api/media/restore' && metodo === 'POST') {
       const b = (await cuerpo(req)) || {};
       return (await galeria.restore(db, b)) ? json({ ok: true }) : error('no se pudo recuperar (ya existe uno con ese nombre o se vació la papelera)', 409);
     }
     if (ruta === '/api/media/zip' && metodo === 'POST') {
       const b = (await cuerpo(req)) || {}, z = await galeria.zip(env, db, b.ids);
+      if (z.demasiado) return error('Son demasiados archivos juntos para un solo .zip (más de 40 MB): descarga menos a la vez.', 413);
       if (!z.count) return error('nada que descargar', 404);
       return new Response(z.buf, { status: 200, headers: { 'content-type': 'application/zip', 'content-disposition': `attachment; filename="estudio-${galeria.diaLocal(Date.now(), galeria.ZONA(env))}.zip"`, 'content-length': String(z.buf.length), 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' } });
     }
@@ -170,7 +175,7 @@ export async function manejar(ctx) {
         return json(it);
       }
       if (metodo === 'DELETE') {
-        const usos = await usosEnContenido(db, galeria.validoId(id) || id);
+        let usos; try { usos = await usosEnContenido(db, galeria.validoId(id) || id); } catch { return error('No pude comprobar si una pieza de Contenido usa este archivo: no lo borro. Inténtalo de nuevo en un momento.', 503); }
         if (usos.length) return json({ error: `Este archivo está en ${usos.length === 1 ? 'una pieza' : usos.length + ' piezas'} de Contenido (${usos.slice(0, 3).map((u) => '«' + (u.titulo || u.id) + '»').join(', ')}): quítalo de ahí primero`, piezas: usos }, 409);
         const t = await galeria.trash(db, id); return t ? json({ ok: true, undo: t }) : error('no such file', 404);
       }
