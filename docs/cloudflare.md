@@ -244,6 +244,14 @@ Una auditoría que cruza los módulos que las fases revisaron por separado (`clo
 - **Medido, sin cambio:** el reloj de cada minuto hace ~65 consultas a D1 con la oficina vacía y ~90 con 1.500 tareas (el plan de pago permite 1.000 por invocación; en el gratuito, 50, así que **toda la nube necesita Workers de pago**, no solo Anuncios); el Worker pesa 1,9 MiB (531 KiB comprimido; `minify` lo dejaría en 1,3 MiB).
 - **No cubierto aquí:** cualquier prueba contra Cloudflare real o contra Meta, Google, Telegram, Anthropic y MiniMax reales.
 
+## La versión móvil en la nube (25 oct 2026)
+
+La nube sirve la misma página que la oficina local; en un teléfono la página pide `movil.js`, un paquete aparte (`src/movil/`; guía en CLAUDE.md → «La versión móvil»). Lo que cambia en la nube:
+- **`/movil.js` exige sesión** como los demás paquetes (`worker/lib/paginas.js → PAQUETES`: sin cookie, 401) y `scripts/copiar-oficina.mjs` lo copia a `public/oficina/` en cada despliegue (`dist/movil.js` sale de `node build.mjs`). Tests: `cloudflare/tests/paginas.test.mjs`.
+- **No hay rutas nuevas ni tablas nuevas:** la versión móvil habla con las mismas `/api/tasks`, `/api/tareas/*`, `/api/routines`, `/api/status`, `/api/sub/*` y `/api/agents` que la de escritorio, con la misma sesión y los mismos roles (`vetoNoAdmin`, aprobar solo un administrador…). Un 401 recarga la página (vuelve el acceso).
+- **Mi cuenta:** la barra de presencia de `nube.js` vive en la barra de escritorio (escondida en el teléfono); «Más → Mi cuenta» abre Mi perfil y Equipo (las pestañas de Ajustes que añade `nube.js`) y trae **Salir** (`POST /api/salir`).
+- La presencia en vivo y el aviso `#nubeAviso` siguen funcionando; el aviso se sube sobre la barra de pestañas.
+
 ## Siguiente
 
 Falta 8b y 9 (ver `docs/plan-cloudflare-completo.md`). El límite de intentos de acceso por IP ya existe (fase 10).
