@@ -4,6 +4,11 @@ import * as contenido from './contenido.js';
 import * as bandeja from './bandeja.js';
 import * as anuncios from './anuncios.js';
 import * as agentes from './agentes.js';
+import * as dimitri from './dimitri.js';
+import * as negocio from './negocio.js';
+import * as ajustes from './ajustes.js';
+import * as telegram from './telegram.js';
+import * as disparadores from './disparadores.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -11,4 +16,9 @@ export const MODULOS = [
   contenido,
   estudio,
   agentes,
+  dimitri, // Fase 6: la mano derecha del dueño (/api/sub/*)
+  negocio, // indicadores, cifras, voz, documentos, «Preparar desde mi web»
+  ajustes, // /api/settings y los avisos del Estado
+  telegram, // el webhook público y los avisos al teléfono
+  disparadores, // POST /api/hook/<id> (público) y /api/triggers
 ];
