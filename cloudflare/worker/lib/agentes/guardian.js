@@ -6,6 +6,19 @@ import { decide, kindOfCall, injectionIn, targetsOf, normalize } from '../../../
 
 const diaLocal = (t = Date.now()) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
+/** Campos donde el destinatario viaja DENTRO de un texto codificado (un correo en base64/RFC 822, un blob): el guardián no puede leer a quién va, así que un envío con ellos no se permite. */
+const CLAVE_OPACA = /^(raw|rfc822|rfc2822|mime|eml|message_raw|raw_message|encoded|blob|base64|[a-z_]*base64|payload_b64|b64)$/i;
+const PARECE_BASE64 = /^[A-Za-z0-9+/_-]{200,}={0,2}$/; // una cadena larga sin espacios: un cuerpo de verdad tiene espacios
+export function camposOpacos(entrada, prof = 0) {
+  const out = [];
+  if (!entrada || typeof entrada !== 'object' || prof > 4) return out;
+  for (const [k, v] of Object.entries(entrada)) {
+    if (typeof v === 'string' && v && (CLAVE_OPACA.test(k) || PARECE_BASE64.test(v))) out.push(k);
+    else if (v && typeof v === 'object') out.push(...camposOpacos(v, prof + 1).map(x => `${k}.${x}`));
+  }
+  return out;
+}
+
 /**
  * ctx: { run, tarea, agente, dept, writes, runMode, policy, known, safety, amountLimit, servers }
  * estado: el objeto de datos de la corrida, SE MODIFICA: estado.taint = { why, tool, t } cuando algo leído trae órdenes, estado.bloqueos = [{ tool, why, kind, code }].
@@ -36,7 +49,11 @@ export function crearGuardian({ db, ctx, estado, ahora = () => Date.now() }) {
         const counts = kind === 'write' ? await contar() : { agentToday: 0, byTarget: {} };
         d = decide(tool, entrada, { writes: !!ctx.writes, known: ctx.known ?? null, safety: seguridad, tainted: estado.taint?.why || null, counts, runMode: ctx.runMode, amountLimit: +ctx.amountLimit || 0, policy: ctx.policy, servers: Array.isArray(ctx.servers) ? ctx.servers : undefined });
       } catch (e) { d = { allow: false, kind: 'write', code: 'guardian', why: 'Bloqueado: el guardián de la oficina falló, así que no se envía nada.' }; } // falla cerrado
-      const t = d.kind === 'write' ? targetsOf(entrada) : null;
+      if (d.allow && d.kind === 'write') { // M5: un envío cuyo destinatario no se puede leer (viaja codificado) no pasa, aunque el resto del texto parezca bien
+        let op = []; try { op = camposOpacos(entrada); } catch { op = ['?']; }
+        if (op.length) d = { allow: false, kind: 'write', code: 'opaco', why: `Bloqueado: el envío trae «${op.slice(0, 3).join('», «')}» codificado y el guardián no puede comprobar a quién va. Pásalo con los destinatarios y el texto en campos normales.` };
+      }
+      let t = null; try { t = d.kind === 'write' ? targetsOf(entrada) : null; } catch { t = null; } // una entrada que no se puede leer ya quedó bloqueada arriba: no tumba el registro
       try { await registrar({ tool, fase: 'pre', kind: d.kind, decision: d.allow ? 'allow' : 'block', code: d.code, why: d.why, targets: t ? [...t.emails, ...t.phones] : undefined }); }
       catch { if (d.allow) d = { allow: false, kind: d.kind, code: 'auditoria', why: 'Bloqueado: no se pudo apuntar esta llamada en el registro de auditoría, y lo que no queda registrado no se ejecuta.' }; } // falla cerrado
       if (!d.allow) estado.bloqueos.push({ tool, why: d.why, kind: d.kind, code: d.code });

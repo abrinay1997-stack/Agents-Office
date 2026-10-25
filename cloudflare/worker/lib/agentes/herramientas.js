@@ -94,7 +94,7 @@ function herramientasEstudio({ office, tarea, gasto }) {
  * → { defs: [{ nombre: 'mcp__servidor__herramienta', servidor, descripcion, esquema }], omitidas: [motivo], llamar(nombre, args) → texto }
  */
 export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = false, quien = null, deptsEstudio = DEPTS_ESTUDIO, deptsContenido = DEPTS_CONTENIDO }) {
-  const usuario = { id: 'agente:' + agente.id, email: `agente:${agente.id}`, rol: gasto ? 'admin' : 'editor' };
+  const usuario = { id: 'agente:' + agente.id, email: `agente:${agente.id}`, rol: gasto ? 'admin' : 'editor', agente: agente.id }; // `agente`: el Estudio anota que lo pidió este agente (by: 'agent')
   // Con rol «admin» solo para el Estudio y solo en una ejecución aprobada: los demás módulos reciben siempre un editor (un agente nunca aprueba en Contenido).
   const office = crearOffice({ env, db, usuario: { ...usuario, rol: 'editor' }, modulos });
   const officeGasto = crearOffice({ env, db, usuario: { ...usuario, email: `agente:${agente.id} (OK de ${quien || 'el dueño'})`, rol: 'admin' }, modulos });
