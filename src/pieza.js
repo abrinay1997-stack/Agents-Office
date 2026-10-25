@@ -15,7 +15,7 @@
 //     → { open, close, isOpen, current, addMedios, flush, refresh, repaintPreview }
 // `datos` es lo de contenido-datos.js; `pickMedia()` abre el selector de la galería del Estudio y devuelve los ids elegidos; `otras()` las
 // demás piezas (choques, huecos, la cuadrícula del perfil); `cuenta()` con qué cuenta sale; `medidaDe(id)` las medidas de un archivo.
-import { ESTADO, FORMATO, RED, FICON, HORAS_RAPIDAS, mediaUrl, thumbHTML } from './pieza-base.js';
+import { ESTADO, FORMATO, RED, FICON, nbRed, HORAS_RAPIDAS, mediaUrl, thumbHTML } from './pieza-base.js';
 import { dateOpts, timeOpts, fmtLong, fmtDay } from './calendar-core.js';
 import { LIMITES, postDePieza, aplicarArreglo, textoPara, contarHashtags, revisarPublicacion, revisarMomento, longitudPara, FORMATOS_RED, formatoDe, formatoValido, nombreFormato, ponFormato, formatosConRedes } from './contenido-reglas.js';
 import { initPreview } from './contenido-preview.js';
@@ -191,7 +191,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   function redesHTML() {
     const p = cur;
     const ficha = k => {
-      const on = p.redes.includes(k), b = `<button type="button" class="pz-net" data-red="${k}" aria-pressed="${on}" title="${on ? 'Quitar' : 'Añadir'} ${RED[k].name}"><b class="pz-nb ${k}" aria-hidden="true">${RED[k].short}</b> ${RED[k].name}</button>`;
+      const on = p.redes.includes(k), b = `<button type="button" class="pz-net" data-red="${k}" aria-pressed="${on}" title="${on ? 'Quitar' : 'Añadir'} ${RED[k].name}">${nbRed(k)} ${RED[k].name}</button>`;
       if (!on) return b;
       const f = formatoDe(p, k), ops = FORMATOS_RED[k] || ['post'], valida = formatoValido(k, f);
       const fmt = ops.length > 1 || !valida
@@ -213,8 +213,8 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const fila = red => {
       const c = cuentaDe(cur, red, info), todas = info.cuentas.filter(x => x.red === red), elegida = !!cuentasLimpias(cur.cuentas)[red], abierta = ctaAbierta === red && todas.length > 1;
       const linea = c ? `${av(c)}<span class="pz-ctt">Sale en ${quien(c)}${elegida ? '' : ' <small>(la de siempre)</small>'}${c.puedePublicar === false ? ` <em class="pz-ctmal">· ${esc(c.motivo || 'no puede publicar')}</em>` : ''}</span>` : `<span class="pz-ctt">Sin cuenta de ${RED[red].name}: el token de Meta no ve ninguna</span>`;
-      const head = todas.length > 1 ? `<button type="button" class="pz-ctbtn" data-ctred="${red}" aria-expanded="${abierta}" aria-controls="${I('ctl-' + red)}" aria-label="${esc(`${RED[red].name}: sale en ${nombreCorto(c) || '—'}. Cambiar la cuenta`)}"><b class="pz-nb ${red}" aria-hidden="true">${RED[red].short}</b>${linea}<span class="pz-ctc" aria-hidden="true">Cambiar ${abierta ? '▴' : '▾'}</span></button>`
-        : `<div class="pz-ctbtn solo"><b class="pz-nb ${red}" aria-hidden="true">${RED[red].short}</b>${linea}</div>`;
+      const head = todas.length > 1 ? `<button type="button" class="pz-ctbtn" data-ctred="${red}" aria-expanded="${abierta}" aria-controls="${I('ctl-' + red)}" aria-label="${esc(`${RED[red].name}: sale en ${nombreCorto(c) || '—'}. Cambiar la cuenta`)}">${nbRed(red)}${linea}<span class="pz-ctc" aria-hidden="true">Cambiar ${abierta ? '▴' : '▾'}</span></button>`
+        : `<div class="pz-ctbtn solo">${nbRed(red)}${linea}</div>`;
       const lista = abierta ? `<div class="pz-ctl" id="${I('ctl-' + red)}" role="radiogroup" aria-label="Cuenta de ${RED[red].name}">${todas.map((x, i) => `<label class="pz-cto${x.puedePublicar ? '' : ' no'}"><input type="radio" name="${I('ctr-' + red)}" value="${esc(x.id)}" data-cta="${red}"${c && x.id === c.id ? ' checked' : ''}${x.puedePublicar ? '' : ` disabled aria-describedby="${I(`ctm-${red}-${i}`)}"`}>${av(x)}<span>${quien(x)}${x.id === info.porDefecto?.[red] ? ' <small>· la de siempre</small>' : ''}${x.puedePublicar ? '' : `<small class="pz-ctmal" id="${I(`ctm-${red}-${i}`)}">${esc(x.motivo || '')}</small>`}</span></label>`).join('')}</div>` : '';
       return `<div class="pz-ct1">${head}${lista}</div>`;
     };
@@ -228,7 +228,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     if (!porRed && conTexto.some(r => textoPropio(p, r).trim())) porRed = true; // si alguna ya lleva su texto, se ve
     if (tab && !conTexto.includes(tab)) tab = '';
     const pv = porRed && conTexto.length;
-    const tabs = pv ? `<div class="pz-ttabs" role="tablist" aria-label="Texto de cada red">${['', ...conTexto].map(r => { const propio = r && textoPropio(p, r).trim(); return `<button type="button" role="tab" id="${I('tt-' + (r || 'p'))}" data-ttab="${r}" aria-selected="${tab === r}" tabindex="${tab === r ? 0 : -1}" aria-controls="${I('tpanel')}"${r ? ` aria-label="${RED[r].name}${propio ? ' (texto propio)' : ' (usa el principal)'}"` : ''}>${r ? `<b class="pz-nb ${r}" aria-hidden="true">${RED[r].short}</b> ${RED[r].name}${propio ? '<i class="pz-dot" aria-hidden="true"></i>' : ''}` : 'Principal'}</button>`; }).join('')}</div>` : '';
+    const tabs = pv ? `<div class="pz-ttabs" role="tablist" aria-label="Texto de cada red">${['', ...conTexto].map(r => { const propio = r && textoPropio(p, r).trim(); return `<button type="button" role="tab" id="${I('tt-' + (r || 'p'))}" data-ttab="${r}" aria-selected="${tab === r}" tabindex="${tab === r ? 0 : -1}" aria-controls="${I('tpanel')}"${r ? ` aria-label="${RED[r].name}${propio ? ' (texto propio)' : ' (usa el principal)'}"` : ''}>${r ? `${nbRed(r)} ${RED[r].name}${propio ? '<i class="pz-dot" aria-hidden="true"></i>' : ''}` : 'Principal'}</button>`; }).join('')}</div>` : '';
     const campo = !tab ? `data-f="texto"` : tab === 'facebook' ? `data-f="textoFacebook"` : `data-tx="${tab}"`;
     const vacioRed = tab && !textoPropio(p, tab).trim();
     const ph = !tab ? 'Escribe aquí lo que se publica, listo para salir. La primera línea es el gancho: es lo que se lee antes de «más».'
@@ -264,7 +264,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
   const toolBtn = (k, label, svg) => `<button type="button" class="pz-tb${pop === k ? ' on' : ''}" data-pop="${k}" aria-expanded="${pop === k}" aria-controls="${I('pop')}" title="${label}" aria-label="${label}">${svg}</button>`;
   function cntsHTML() {
     const activo = r => (tab ? r === tab : r === 'instagram' || !textoPropio(cur, r).trim()); // en la pestaña de una red, su contador; en la principal, los de las redes que la usan
-    const c = contadoresDe(cur).map(x => `<span class="pz-cc${x.over ? ' over' : ''}${activo(x.red) ? '' : ' dim'}" data-cc="${x.red}" title="${RED[x.red].name}: ${x.n.toLocaleString('es')} de ${x.max.toLocaleString('es')} caracteres"><b class="pz-nb ${x.red}" aria-hidden="true">${RED[x.red].short}</b>${cnt(x.n, x.max)}</span>`);
+    const c = contadoresDe(cur).map(x => `<span class="pz-cc${x.over ? ' over' : ''}${activo(x.red) ? '' : ' dim'}" data-cc="${x.red}" title="${RED[x.red].name}: ${x.n.toLocaleString('es')} de ${x.max.toLocaleString('es')} caracteres">${nbRed(x.red, { solo: true })}${cnt(x.n, x.max)}</span>`);
     if (cur.redes.includes('instagram') && formatoDe(cur, 'instagram') !== 'historia') { const post = postDePieza(cur), n = contarHashtags(textoPara(post, 'instagram')) + (cur.hashtagsEnComentario ? contarHashtags(cur.hashtags) : 0); /* como las reglas */ c.push(`<span class="pz-cc${n > LIMITES.instagram.hashtags ? ' over' : ''}" data-cc="hashtags" title="Hashtags en Instagram: ${n} de ${LIMITES.instagram.hashtags}">#${n}/${LIMITES.instagram.hashtags}</span>`); }
     return c.join('');
   }

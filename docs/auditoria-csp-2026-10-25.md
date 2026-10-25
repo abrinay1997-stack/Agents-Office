@@ -49,3 +49,18 @@ Las únicas peticiones a un tercero que la página hace con esta CSP son la vist
 
 (El «después» usa fotos de ejemplo de 1 px que el Meta de mentira entrega; en producción son las de las cuentas.)
 
+## Anexo: el logo de cada red en lugar de dos siglas
+
+Pedido del dueño: donde se muestra una red se ve **su logo** (`iconoRed`, `src/redes-iconos.js`), no «IG»/«FB». Antes lo pintaban con siglas: las fichas «Instagram [Post ▾]» de «Redes y formato», la fila «Publicar en», las pestañas de la vista previa (IG Feed · IG Perfil · FB Feed… las nueve redes), los chips de «Editar por red», los contadores por red, la cabecera de cada elemento de la Bandeja, las ventanas «Llenar la semana» / «Desde una plantilla», los grupos y la tabla **Comparar cuentas** de Analíticas (píldoras negras «IG»/«FB») y la ficha de una publicación, y la tarjeta de Dimitri («reel IG»).
+
+- `RED` (`src/pieza-base.js`) ya no tiene `short`; `nbRed(red, { solo })` pinta el logo en su cajita de 16 px (`.pz-nb`/`.pv-net`, 15–18 px según el sitio): decorativo (`aria-hidden`) cuando el nombre está escrito al lado, y con `role="img"` + nombre (`<title>`/`aria-label`) cuando es la única información (contadores, chips de la ventana de «Llenar la semana», píldoras de Analíticas con usuario). Las pestañas de la vista previa llevan `aria-label="Instagram · Feed"`.
+- Los trazados de las nueve redes ya estaban en `redes-iconos.js` (Simple Icons, CC0): no se inventó ninguno. Monocromo (`currentColor`) para X, Threads y TikTok: en oscuro salen claros.
+- La página no crece (2 301 010 bytes de los 2 306 867 del tope; antes de este cambio, 2 301 106).
+- Axe (`AO_AXE=…/axe.min.js`, wcag2a/2aa/21aa) sobre el editor con las nueve redes (fichas, «Publicar en», pestañas de vista previa, pestañas «Editar por red», contadores) y sobre Analíticas: **0 violaciones**.
+- Prueba: `cloudflare/tests/contenido-siglas.test.mjs`, que falla si un elemento visible del editor con las nueve redes, de la Bandeja o de Analíticas tiene por texto una sigla de red, o si un logo que es la única información no lleva su nombre.
+
+| Antes (siglas) | Después (logos) |
+|---|---|
+| ![editor con siglas](auditoria-csp/5-siglas-antes-editor.jpg) | ![editor con logos](auditoria-csp/2-despues-editor-fotos-de-cuenta.jpg) |
+| ![Analíticas con siglas](auditoria-csp/6-siglas-antes-analiticas.jpg) | ![Analíticas con logos](auditoria-csp/4-despues-analiticas-fotos.jpg) |
+| ![Bandeja con siglas](auditoria-csp/7-siglas-antes-bandeja.jpg) | (la Bandeja usa `nbRed`, como el editor) |
