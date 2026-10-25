@@ -24,10 +24,10 @@ async function oficina() {
   const llamar = (ruta, { metodo = 'GET', cuerpo, bytes, cookie, cab = {} } = {}) =>
     manejar(new Request(`https://oficina.test${ruta}`, { method: metodo, headers: { ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}), ...(cookie ? { cookie } : {}), ...cab }, body: bytes ?? (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined) }), env);
   /** invita y acepta: devuelve { id, cookie } de la persona nueva */
-  async function alta(rol, email, nombre = 'Nueva Persona') {
+  async function alta(rol, email, nombre = 'Persona ' + email.split('@')[0]) {
     const inv = await (await llamar('/api/equipo/invitaciones', { metodo: 'POST', cookie: await galleta(ana), cuerpo: { email, rol } })).json();
     const testigo = inv.enlace.split('/').pop();
-    const r = await llamar(`/api/invitacion/${testigo}/aceptar`, { metodo: 'POST', cuerpo: { nombre, contrasena: 'clave-muy-larga-123' } });
+    const r = await llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: testigo, nombre, contrasena: 'clave-muy-larga-123' } });
     assert.equal(r.status, 200, await r.clone().text());
     const cookie = r.headers.get('set-cookie').split(';')[0];
     return { cookie, id: d1._db.prepare('select id from users where email = ?').get(email).id, testigo };
@@ -47,10 +47,10 @@ test('una invitación: el admin crea el enlace (solo se guarda su huella), la pe
   assert.equal(fila.token_hash, await sha256(testigo)); assert.ok(!JSON.stringify(fila).includes(testigo), 'el testigo no está en la base');
   assert.equal(fila.email, 'bruno@panaclaw.test');
   // ver la invitación (sin sesión)
-  const ver = await (await o.llamar(`/api/invitacion/${testigo}`)).json();
+  const ver = await (await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: { testigo: testigo } })).json();
   assert.deepEqual([ver.invitacion.email, ver.invitacion.rol], ['bruno@panaclaw.test', 'editor']);
   // aceptar: el cuerpo intenta colar otro rol y otro correo; el servidor los ignora
-  const ac = await o.llamar(`/api/invitacion/${testigo}/aceptar`, { metodo: 'POST', cuerpo: { nombre: 'Bruno', contrasena: 'clave-muy-larga-123', rol: 'admin', email: 'otro@x.test' } });
+  const ac = await o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: testigo, nombre: 'Bruno', contrasena: 'clave-muy-larga-123', rol: 'admin', email: 'otro@x.test' } });
   assert.equal(ac.status, 200);
   assert.match(ac.headers.get('set-cookie'), /^__Host-sesion=.*HttpOnly/);
   const u = o.d1._db.prepare('select email, rol from users where email = ?').get('bruno@panaclaw.test');
@@ -62,7 +62,7 @@ test('una invitación: el admin crea el enlace (solo se guarda su huella), la pe
 
 test('una invitación sirve UNA vez: la segunda, aunque sea inmediata, se rechaza', { skip: SALTAR }, async () => {
   const o = await oficina(); const { testigo } = await o.alta('editor', 'bruno@panaclaw.test');
-  const otra = await o.llamar(`/api/invitacion/${testigo}/aceptar`, { metodo: 'POST', cuerpo: { nombre: 'X', contrasena: 'clave-muy-larga-123' } });
+  const otra = await o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: testigo, nombre: 'X', contrasena: 'clave-muy-larga-123' } });
   assert.equal(otra.status, 404);
   assert.equal(o.d1._db.prepare('select count(*) n from users').get().n, 2);
 });
@@ -71,7 +71,7 @@ test('dos aceptaciones A LA VEZ: solo una cuenta nace', { skip: SALTAR }, async 
   const o = await oficina();
   const inv = await (await o.llamar('/api/equipo/invitaciones', { metodo: 'POST', cookie: await o.galleta(o.ana), cuerpo: { email: 'bruno@panaclaw.test', rol: 'editor' } })).json();
   const t = inv.enlace.split('/').pop();
-  const rs = await Promise.all([1, 2, 3].map(() => o.llamar(`/api/invitacion/${t}/aceptar`, { metodo: 'POST', cuerpo: { nombre: 'B', contrasena: 'clave-muy-larga-123' } })));
+  const rs = await Promise.all([1, 2, 3].map(() => o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: t, nombre: 'B', contrasena: 'clave-muy-larga-123' } })));
   assert.equal(rs.filter((r) => r.status === 200).length, 1);
   assert.equal(o.d1._db.prepare("select count(*) n from users where email = 'bruno@panaclaw.test'").get().n, 1);
 });
@@ -82,10 +82,10 @@ test('caducada, revocada o inventada: la MISMA respuesta (no se puede sondear)',
   const a = await crear('a@x.test'); o.d1._db.prepare("update invitaciones set expires_at = '2020-01-01T00:00:00.000Z' where id = ?").run(a.id);
   const b = await crear('b@x.test'); assert.equal((await o.llamar(`/api/equipo/invitaciones/${b.id}`, { metodo: 'DELETE', cookie })).status, 200);
   const respuestas = [];
-  for (const t of [a.t, b.t, 'f'.repeat(48), '0'.repeat(48), 'abc']) { const r = await o.llamar(`/api/invitacion/${t}`); respuestas.push([r.status, await r.text()]); }
+  for (const t of [a.t, b.t, 'f'.repeat(48), '0'.repeat(48), 'abc']) { const r = await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: { testigo: t } }); respuestas.push([r.status, await r.text()]); }
   assert.ok(respuestas.every(([s]) => s === 404));
   assert.equal(new Set(respuestas.map(([, t]) => t)).size, 1, 'el mismo texto: no revela si existió, caducó o se revocó');
-  for (const t of [a.t, b.t]) assert.equal((await o.llamar(`/api/invitacion/${t}/aceptar`, { metodo: 'POST', cuerpo: { nombre: 'X', contrasena: 'clave-muy-larga-123' } })).status, 404);
+  for (const t of [a.t, b.t]) assert.equal((await o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: t, nombre: 'X', contrasena: 'clave-muy-larga-123' } })).status, 404);
   assert.equal(await invitacionVigente(o.d1, a.t), null);
 });
 
@@ -119,36 +119,64 @@ test('validaciones de la invitación: correo, rol, cuenta ya existente, contrase
   assert.equal((await crear({ email: 'a@x.test', rol: 'dios' })).status, 422);
   assert.equal((await crear({ email: 'ana@panaclaw.test', rol: 'editor' })).status, 409);
   const i = await (await crear({ email: 'b@x.test', rol: 'editor' })).json(), t = i.enlace.split('/').pop();
-  for (const clave of ['corta', '', 'b@x.test', 'x'.repeat(201)]) assert.equal((await o.llamar(`/api/invitacion/${t}/aceptar`, { metodo: 'POST', cuerpo: { nombre: 'B', contrasena: clave } })).status, 422, clave);
+  for (const clave of ['corta', '', 'b@x.test', 'x'.repeat(201)]) assert.equal((await o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: t, nombre: 'B', contrasena: clave } })).status, 422, clave);
   assert.equal(o.d1._db.prepare('select aceptada_at from invitaciones').get().aceptada_at, null, 'una contraseña mala no gasta la invitación');
   // una invitación nueva al mismo correo sustituye a la anterior
   const j = await (await crear({ email: 'b@x.test', rol: 'lectura' })).json();
-  assert.equal((await o.llamar(`/api/invitacion/${t}`)).status, 404);
-  assert.equal((await o.llamar(`/api/invitacion/${j.enlace.split('/').pop()}`)).status, 200);
+  assert.equal((await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: { testigo: t } })).status, 404);
+  assert.equal((await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: { testigo: j.enlace.split('/').pop() } })).status, 200);
 });
 
 test('si la cuenta ya existe al aceptar, no se revela: respuesta genérica y el enlace sigue vivo', { skip: SALTAR }, async () => {
   const o = await oficina();
   const i = await (await o.llamar('/api/equipo/invitaciones', { metodo: 'POST', cookie: await o.galleta(o.ana), cuerpo: { email: 'b@x.test', rol: 'editor' } })).json(), t = i.enlace.split('/').pop();
   o.d1._db.prepare("insert into users (id,email,rol,password_hash,salt) values ('u-b','b@x.test','lectura','h','s')").run(); // alguien creó esa cuenta por otro lado
-  const r = await o.llamar(`/api/invitacion/${t}/aceptar`, { metodo: 'POST', cuerpo: { nombre: 'B', contrasena: 'clave-muy-larga-123' } });
+  const r = await o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: t, nombre: 'Beto', contrasena: 'clave-muy-larga-123' } });
   assert.equal(r.status, 409); assert.doesNotMatch(await r.text(), /existe|ya hay|correo/i);
   assert.equal(o.d1._db.prepare("select count(*) n from users where email = 'b@x.test'").get().n, 1);
   assert.equal(o.d1._db.prepare('select aceptada_at from invitaciones').get().aceptada_at, null);
 });
 
-test('límite de intentos: invitaciones por IP y acceso por IP y por correo (429)', { skip: SALTAR }, async () => {
-  const o = await oficina();
-  let ultimo = 0;
-  for (let i = 0; i < 35; i++) ultimo = (await o.llamar(`/api/invitacion/${'a'.repeat(48)}`, { cab: { 'CF-Connecting-IP': '9.9.9.9' } })).status;
-  assert.equal(ultimo, 429);
-  assert.equal((await o.llamar(`/api/invitacion/${'a'.repeat(48)}`, { cab: { 'CF-Connecting-IP': '8.8.8.8' } })).status, 404, 'otra IP no paga por ella');
-  const intentos = [];
-  for (let i = 0; i < 10; i++) intentos.push((await o.llamar('/api/acceso', { metodo: 'POST', cuerpo: { email: 'victima@x.test', contrasena: 'mala' + i }, cab: { 'CF-Connecting-IP': '1.1.1.' + i } })).status);
-  assert.deepEqual([...new Set(intentos.slice(0, 8))], [401]);
-  assert.equal(intentos[9], 429, 'el mismo correo desde muchas IP también se frena');
-  assert.deepEqual(await tasa(o.d1, 'k', 1, 0), { ok: true, n: 1 }); assert.equal((await tasa(o.d1, 'k', 1, 0)).ok, false);
-  assert.equal((await tasa(o.d1, 'k', 1, 120e3)).ok, true, 'el minuto siguiente cuenta de nuevo');
+/** Congela el reloj de los topes (`env.RELOJ_MS`): la ventana de un minuto no puede cambiar a mitad de la prueba. */
+async function conRelojFijo(fn, t = 1_800_000_000_000) {
+  const o = await oficina(); o.env.RELOJ_MS = () => t;
+  return fn(o, (x) => { t = x; });
+}
+const entra = (o, email, contrasena, ip) => o.llamar('/api/acceso', { metodo: 'POST', cuerpo: { email, contrasena }, cab: { 'CF-Connecting-IP': ip } });
+
+test('límite de intentos de una invitación: por IP y minuto (429); otra IP no paga por ella', { skip: SALTAR }, async () => {
+  await conRelojFijo(async (o) => {
+    let ultimo = 0;
+    for (let i = 0; i < 35; i++) ultimo = (await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: { testigo: 'a'.repeat(48) }, cab: { 'CF-Connecting-IP': '9.9.9.9' } })).status;
+    assert.equal(ultimo, 429);
+    assert.equal((await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: { testigo: 'a'.repeat(48) }, cab: { 'CF-Connecting-IP': '8.8.8.8' } })).status, 404);
+  });
+});
+
+test('límite del acceso: cuenta solo los FALLOS por (correo + IP): un atacante no puede bloquear a su víctima', { skip: SALTAR }, async () => {
+  await conRelojFijo(async (o) => { // ana@panaclaw.test / una-clave-larga-123
+    const mala = [];
+    for (let i = 0; i < 10; i++) mala.push((await entra(o, o.c.email, 'incorrecta-' + i, '6.6.6.6')).status);
+    assert.deepEqual(mala.slice(0, 8), Array(8).fill(401));
+    assert.deepEqual(mala.slice(8), [429, 429], 'el atacante, desde SU IP, se frena a los 8 fallos');
+    assert.equal((await entra(o, o.c.email, o.c.clave, '7.7.7.7')).status, 200, 'la víctima con su clave desde otra IP entra');
+    assert.equal((await entra(o, o.c.email, o.c.clave, '6.6.6.6')).status, 429, 'esa misma IP sigue frenada, aunque acierte');
+    // 10 IP distintas fallando una vez cada una NO bloquean nada
+    for (let i = 0; i < 10; i++) assert.equal((await entra(o, o.c.email, 'mala-' + i, '5.5.5.' + i)).status, 401);
+    assert.equal((await entra(o, o.c.email, o.c.clave, '4.4.4.4')).status, 200);
+  });
+});
+
+test('límite del acceso: tope global por IP (todo intento cuenta) y la ventana avanza con el reloj', { skip: SALTAR }, async () => {
+  await conRelojFijo(async (o, poner) => {
+    const st = [];
+    for (let i = 0; i < 22; i++) st.push((await entra(o, `nadie${i}@x.test`, 'mala-mala-mala', '3.3.3.3')).status);
+    assert.equal(st[19], 401); assert.equal(st[20], 429);
+    assert.deepEqual(await tasa(o.d1, 'k', 1, 0), { ok: true, n: 1 }); assert.equal((await tasa(o.d1, 'k', 1, 0)).ok, false);
+    assert.equal((await tasa(o.d1, 'k', 1, 120e3)).ok, true, 'el minuto siguiente cuenta de nuevo');
+    poner(1_800_000_000_000 + 120e3);
+    assert.equal((await entra(o, 'nadie@x.test', 'mala-mala-mala', '3.3.3.3')).status, 401, 'pasado el minuto, otra vez se puede');
+  });
 });
 
 // ---------------------------------------------------------------- roles
@@ -364,4 +392,91 @@ test('migración 0070: se puede aplicar dos veces (todo create lleva if not exis
   const sql = readFileSync(new URL('../migraciones/0070_equipo.sql', import.meta.url), 'utf8');
   d1._db.exec(sql); d1._db.exec(sql);
   assert.doesNotMatch(sql.replace(/^--.*$/gm, ''), /alter table/i);
+});
+
+// ---------------------------------------------------------------- revisión adversarial de la fase 10
+
+test('lista blanca de áreas: solo lo conocido se difunde, con su nombre legible; lo de administradores va marcado; un grupo interno no sale', async () => {
+  const { areaInfo, avisarCambio, pestanaValida, AREAS } = await import('../worker/lib/vivo.js');
+  assert.equal(areaInfo('/api/settings')?.soloAdmin, true); assert.equal(areaInfo('/api/settings').nombre, 'los ajustes');
+  for (const g of ['conectores', 'sub', 'kpi', 'telegram']) assert.equal(AREAS[g].soloAdmin, true, g);
+  assert.equal(areaInfo('/api/tasks/x').nombre, 'Tareas'); assert.equal(areaInfo('/api/equipo').nombre, '');
+  for (const r of ['/api/interno-raro', '/api/constructor', '/api/__proto__', '/api/acceso', '/api/health']) assert.equal(areaInfo(r), null, r);
+  const enviados = []; const env = { HUB: { idFromName: () => 'h', get: () => ({ fetch: async (r) => { enviados.push(await r.json()); return new Response(null, { status: 204 }); } }) } };
+  const u = { id: 'u1', nombre: 'Ana' };
+  avisarCambio(env, { ruta: '/api/interno-raro', metodo: 'POST', estado: 200, usuario: u }); assert.equal(enviados.length, 0, 'un grupo fuera de la lista no se difunde');
+  avisarCambio(env, { ruta: '/api/settings', metodo: 'POST', estado: 200, usuario: u }); await new Promise((f) => setTimeout(f, 5));
+  assert.deepEqual([enviados[0].area, enviados[0].nombre, enviados[0].soloAdmin], ['ajustes', 'los ajustes', true]);
+  // X-Pestana: solo [A-Za-z0-9-]{1,40}
+  assert.equal(pestanaValida('abc-123'), 'abc-123'); for (const mala of ['<script>', 'a'.repeat(41), '', 'con espacio', null, 'a/b']) assert.equal(pestanaValida(mala), null, String(mala));
+  avisarCambio(env, { ruta: '/api/tasks', metodo: 'POST', estado: 200, usuario: u, req: new Request('https://x', { headers: { 'X-Pestana': '<img onerror=1>' } }) }); await new Promise((f) => setTimeout(f, 5));
+  assert.equal(enviados.at(-1).por.tab, null);
+});
+
+test('/api/salir cierra también los sockets de esa persona', { skip: SALTAR }, async () => {
+  const o = await oficina(); const e = await o.alta('editor', 'e@x.test');
+  assert.equal((await o.llamar('/api/salir', { metodo: 'POST', cookie: e.cookie })).status, 200);
+  assert.ok(o.llamadasHub.some((l) => l.url === '/cerrar' && l.cuerpo.userId === e.id));
+  assert.equal((await o.llamar('/api/yo', { cookie: e.cookie })).status, 401);
+});
+
+test('cambiar la contraseña: no puede ser tu correo ni la actual (una sola regla: validarClave)', { skip: SALTAR }, async () => {
+  const o = await oficina(); const e = await o.alta('editor', 'e@x.test'); const c = (cuerpo) => o.llamar('/api/yo/contrasena', { metodo: 'POST', cookie: e.cookie, cuerpo });
+  assert.equal((await c({ actual: 'clave-muy-larga-123', nueva: 'clave-muy-larga-123' })).status, 422);
+  assert.equal((await c({ actual: 'clave-muy-larga-123', nueva: 'E@X.test' })).status, 422);
+  const { validarClave } = await import('../worker/lib/equipo.js'); const s = await import('../worker/lib/sesion.js');
+  assert.equal(validarClave, s.validarClave, 'la misma función en el alta y en el cambio');
+});
+
+test('nombres: sin marcas bidi ni de ancho cero, espacios colapsados; no se admite el de otra persona (sin mayúsculas ni acentos)', { skip: SALTAR }, async () => {
+  const { limpiarNombre, claveNombre } = await import('../worker/lib/equipo.js');
+  assert.equal(limpiarNombre('A‮na‏  ⁦Pérez⁩​'), 'Ana Pérez'); assert.equal(limpiarNombre('  a\t\n b '), 'a b');
+  assert.equal(claveNombre('  ÁNA   pérez'), claveNombre('ana Perez'));
+  const o = await oficina(); const cookie = await o.galleta(o.ana);
+  await o.llamar('/api/yo', { metodo: 'PATCH', cookie, cuerpo: { nombre: 'Ana Pérez' } });
+  const e = await o.alta('editor', 'e@x.test', 'Otra');
+  for (const n of ['Ana Pérez', 'ANA PEREZ', 'ána‮  pérez']) { const r = await o.llamar('/api/yo', { metodo: 'PATCH', cookie: e.cookie, cuerpo: { nombre: n } }); assert.equal(r.status, 422, n); }
+  assert.equal((await o.llamar('/api/yo', { metodo: 'PATCH', cookie: e.cookie, cuerpo: { nombre: 'Ana Pérez Díaz' } })).status, 200);
+  assert.equal((await o.llamar('/api/yo', { metodo: 'PATCH', cookie, cuerpo: { nombre: 'Ana Pérez' } })).status, 200, 'quedarse con el propio nombre no es un choque');
+  // y al aceptar una invitación
+  const inv = await (await o.llamar('/api/equipo/invitaciones', { metodo: 'POST', cookie, cuerpo: { email: 'z@x.test', rol: 'lectura' } })).json();
+  const r = await o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: inv.enlace.split('/').pop(), nombre: 'ANA pérez', contrasena: 'clave-muy-larga-123' } });
+  assert.equal(r.status, 422); assert.equal(o.d1._db.prepare("select aceptada_at from invitaciones where email='z@x.test'").get().aceptada_at, null, 'no gasta el enlace');
+});
+
+test('restablecer la contraseña: el admin crea un enlace de un solo uso; al usarlo cambia la clave y cierra TODAS las sesiones', { skip: SALTAR }, async () => {
+  const o = await oficina(); const cookie = await o.galleta(o.ana); const e = await o.alta('editor', 'e@x.test');
+  assert.equal((await o.llamar(`/api/equipo/${e.id}/reinicio`, { metodo: 'POST', cookie: e.cookie })).status, 403, 'un editor no');
+  assert.equal((await o.llamar(`/api/equipo/${o.ana}/reinicio`, { metodo: 'POST', cookie })).status, 409, 'ni a sí mismo ni al fundador');
+  const r = await o.llamar(`/api/equipo/${e.id}/reinicio`, { metodo: 'POST', cookie }); assert.equal(r.status, 201);
+  const t = (await r.json()).enlace.split('/').pop();
+  assert.ok(!JSON.stringify(o.d1._db.prepare('select * from reinicios').get()).includes(t), 'solo su huella');
+  const ver = await (await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: { testigo: t } })).json(); assert.equal(ver.invitacion.tipo, 'reinicio');
+  const aplicar = (clave) => o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { testigo: t, contrasena: clave } });
+  assert.equal((await aplicar('corta')).status, 422);
+  assert.equal((await aplicar('nueva-clave-muy-larga-9')).status, 200);
+  assert.equal((await o.llamar('/api/yo', { cookie: e.cookie })).status, 401, 'sus sesiones murieron');
+  assert.equal((await o.llamar('/api/acceso', { metodo: 'POST', cuerpo: { email: 'e@x.test', contrasena: 'nueva-clave-muy-larga-9' } })).status, 200);
+  assert.equal((await aplicar('otra-clave-muy-larga-9')).status, 404, 'un solo uso');
+  assert.ok(o.llamadasHub.some((l) => l.url === '/cerrar' && l.cuerpo.userId === e.id));
+});
+
+test('la invitación no viaja en la ruta de la API: GET no existe, el testigo va en el cuerpo y un cuerpo sin testigo no sirve', { skip: SALTAR }, async () => {
+  const o = await oficina(); const t = 'a'.repeat(48);
+  for (const r of [`/api/invitacion/${t}`, `/api/invitacion/${t}/aceptar`, '/api/invitacion/ver']) assert.notEqual((await o.llamar(r)).status, 200, r);
+  assert.equal((await o.llamar('/api/invitacion/ver', { metodo: 'POST', cuerpo: {} })).status, 404);
+  assert.equal((await o.llamar('/api/invitacion/aceptar', { metodo: 'POST', cuerpo: { nombre: 'x', contrasena: 'clave-muy-larga-123' } })).status, 404);
+  for (const ruta of ['/invitacion', '/invitacion/', `/invitacion/${t}`]) assert.equal((await (await o.llamar(ruta)).text()), 'ASSET:/invitacion.html', ruta);
+});
+
+test('las páginas de acceso: el formulario nunca manda la contraseña en la URL (method=post) y no lleva name', async () => {
+  const { readFileSync } = await import('node:fs');
+  for (const f of ['login.html', 'invitacion.html']) {
+    const t = readFileSync(new URL(`../public/${f}`, import.meta.url), 'utf8');
+    assert.match(t, /<form[^>]*method="post"[^>]*action="\/[a-z.]+"/, f); assert.doesNotMatch(t, /<input[^>]*\sname=/, f);
+  }
+  const js = readFileSync(new URL('../public/login.js', import.meta.url), 'utf8') + readFileSync(new URL('../public/invitacion.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(js, /setAttribute\('aria-label'/, 'el botón de ver la contraseña no cambia su etiqueta además de aria-pressed');
+  const w = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+  assert.match(w, /"invocation_logs": false/);
 });

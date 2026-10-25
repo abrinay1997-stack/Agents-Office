@@ -3,15 +3,31 @@
 // el dato está en D1, la respuesta fue 200 y la otra persona sigue viendo lo de antes).
 // Perder el aviso nunca cuesta la escritura: no se espera y los errores se ignoran. El sondeo de la página es la red de seguridad.
 
-/** Grupo de /api → área de la oficina (lo que la página sabe refrescar). */
-const AREAS = { tasks: 'tareas', tareas: 'tareas', routines: 'tareas', team: 'tareas', calendar: 'tareas', contenido: 'contenido', anuncios: 'anuncios', media: 'estudio', brain: 'cerebro', note: 'cerebro', agentes: 'agentes', ejecuciones: 'agentes', conectores: 'conectores', equipo: 'equipo', yo: 'equipo' };
-const IGNORAR = new Set(['acceso', 'salir', 'live', 'health', 'migrar']);
+/**
+ * LISTA BLANCA de lo que se difunde: grupo de /api → { área, nombre legible, soloAdmin }. Un grupo que no está aquí NO se difunde (nunca sale al toast
+ * un nombre interno como «settings»). `nombre` vacío = se refresca en silencio, sin aviso. Lo `soloAdmin` solo lo reciben los administradores: un editor
+ * o una lectura no se entera de que se tocaron los ajustes, los conectores o a Dimitri.
+ */
+export const AREAS = Object.freeze({
+  tasks: { area: 'tareas', nombre: 'Tareas' }, tareas: { area: 'tareas', nombre: 'Tareas' }, routines: { area: 'tareas', nombre: 'Tareas' },
+  team: { area: 'tareas', nombre: 'Tareas' }, calendar: { area: 'tareas', nombre: 'Tareas' },
+  contenido: { area: 'contenido', nombre: 'Contenido' }, anuncios: { area: 'anuncios', nombre: 'Anuncios' },
+  media: { area: 'estudio', nombre: 'el Estudio' }, brain: { area: 'cerebro', nombre: 'el Cerebro' }, note: { area: 'cerebro', nombre: 'el Cerebro' },
+  agentes: { area: 'agentes', nombre: 'los agentes' }, ejecuciones: { area: 'agentes', nombre: 'los agentes' },
+  equipo: { area: 'equipo', nombre: '' }, yo: { area: 'equipo', nombre: '' }, // la lista del equipo y los avatares se refrescan sin avisar
+  conectores: { area: 'conectores', nombre: 'los conectores', soloAdmin: true }, settings: { area: 'ajustes', nombre: 'los ajustes', soloAdmin: true },
+  sub: { area: 'dimitri', nombre: 'Dimitri', soloAdmin: true }, kpi: { area: 'negocio', nombre: 'el negocio', soloAdmin: true },
+  negocio: { area: 'negocio', nombre: 'el negocio', soloAdmin: true }, telegram: { area: 'telegram', nombre: 'Telegram', soloAdmin: true },
+});
 
-export function areaDe(ruta) {
+/** → la entrada de la lista blanca para esa ruta, o null (no se difunde). */
+export function areaInfo(ruta) {
   const g = /^\/api\/([a-z0-9-]+)/.exec(ruta)?.[1];
-  if (!g || IGNORAR.has(g)) return null;
-  return AREAS[g] ?? g;
+  return g && Object.hasOwn(AREAS, g) ? AREAS[g] : null;
 }
+export const areaDe = (ruta) => areaInfo(ruta)?.area ?? null;
+/** El id de pestaña solo vale si tiene la forma esperada; si no, se ignora (no se difunde basura que un cliente cuele en la cabecera). */
+export const pestanaValida = (t) => (typeof t === 'string' && /^[A-Za-z0-9-]{1,40}$/.test(t) ? t : null);
 
 const hub = (env) => (env?.HUB ? env.HUB.get(env.HUB.idFromName('oficina')) : null);
 const llamar = (env, camino, cuerpo) => hub(env)?.fetch(new Request('https://hub' + camino, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cuerpo) })).catch(() => {});
@@ -19,12 +35,12 @@ const llamar = (env, camino, cuerpo) => hub(env)?.fetch(new Request('https://hub
 /** Difunde un evento. Sin el binding HUB (pruebas, `wrangler dev` mal configurado) no hace nada. */
 export function difundir(env, evento) { try { return llamar(env, '/difundir', evento); } catch { return null; } }
 
-/** Tras una escritura correcta: `cambio` con el área, quién y la PESTAÑA (para que ella no se aplique su propio eco). */
+/** Tras una escritura correcta: `cambio` con el área, su nombre legible, quién y la PESTAÑA (para que ella no se aplique su propio eco). */
 export function avisarCambio(env, { ruta, metodo, estado, usuario, req }) {
   if (!env?.HUB || metodo === 'GET' || metodo === 'HEAD' || estado >= 300) return null;
-  const area = areaDe(ruta);
-  if (!area) return null;
-  return difundir(env, { tipo: 'cambio', area, por: { id: usuario?.id ?? null, nombre: usuario?.nombre ?? '', tab: req?.headers?.get('X-Pestana') ?? null }, at: Date.now() });
+  const info = areaInfo(ruta);
+  if (!info) return null;
+  return difundir(env, { tipo: 'cambio', area: info.area, nombre: info.nombre, ...(info.soloAdmin ? { soloAdmin: true } : {}), por: { id: usuario?.id ?? null, nombre: usuario?.nombre ?? '', tab: pestanaValida(req?.headers?.get('X-Pestana')) }, at: Date.now() });
 }
 
 /** Cierra los sockets de una persona (quitada del equipo, cambió la contraseña…). */

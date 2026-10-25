@@ -24,7 +24,8 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   const LOCAL = ['estado', 'apariencia', 'atajos'], NO_SAVE = ['empresa', ...LOCAL];
   const ESTADO = health ? [['estado', 'Estado']] : [];
   const ajeno = () => (Array.isArray(window.AO_AJUSTES_EXTRA) ? window.AO_AJUSTES_EXTRA : []); // pestañas que añade quien aloja la oficina (en la nube: Mi perfil y Equipo, cloudflare/public/nube.js); local: ninguna
-  const tabList = () => (served && data ? [...ESTADO, data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ...ajeno().map(t => [t.key, t.label]), ['atajos', 'Atajos de teclado']] : [...ESTADO, ['apariencia', 'Apariencia'], ...ajeno().map(t => [t.key, t.label]), ['atajos', 'Atajos de teclado']]);
+  const propias = primera => ajeno().filter(t => !!t.primera === primera).map(t => [t.key, t.label]); // «Mi perfil» va la primera
+  const tabList = () => (served && data ? [...propias(true), ...ESTADO, data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ...propias(false), ['atajos', 'Atajos de teclado']] : [...propias(true), ...ESTADO, ['apariencia', 'Apariencia'], ...propias(false), ['atajos', 'Atajos de teclado']]);
   const THEME_NAME = { light: 'Claro', dark: 'Oscuro', auto: 'Automático' };
   function themeHTML() {
     const cur = theme ? theme.get() : 'light', sys = theme && theme.systemDark() ? 'oscuro' : 'claro';

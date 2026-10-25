@@ -30,5 +30,6 @@
 
   "triggers": { "crons": ["* * * * *"] },
   "workers_dev": true,
-  "observability": { "enabled": true }
+  // Los registros de invocación (con la URL de cada petición) se apagan: un enlace de invitación es una URL con un testigo dentro. Los console.error del código siguen.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } }
 }

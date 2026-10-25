@@ -47,7 +47,7 @@ test('todo secreto que lee el Worker (env.X) está declarado en secretos.json', 
   const cfg = JSON.parse(leer('secretos.json'));
   const declarados = new Set([...cfg.obligatorios, ...cfg.opcionales]);
   const vars = new Set(Object.keys(wrangler.vars));
-  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB']);
+  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'RELOJ_MS']); // RELOJ_MS: solo lo pone una prueba (el reloj de los topes de acceso)
   for (const f of archivos(join(RAIZ, 'worker')).filter((x) => x.endsWith('.js'))) {
     for (const m of leer(f.slice(RAIZ.length + 1)).matchAll(/\benv\.([A-Z][A-Z0-9_]+)/g))
       assert.ok(declarados.has(m[1]) || vars.has(m[1]) || propios.has(m[1]), `${f}: env.${m[1]} no está en secretos.json`);

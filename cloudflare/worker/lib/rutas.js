@@ -13,7 +13,8 @@ import { instalarZona } from './zona.js';
 import { saludPublica, saludRica, checksDeModulos, completarEstado, marcarAvisosLeidos } from './salud.js';
 import { avisarCambio } from './vivo.js';
 import * as equipo from '../modulos/equipo.js';
-import { tasa, ipDe } from './equipo.js';
+import { tasa, tasaVer, ipDe, relojDe } from './equipo.js';
+import { cerrarDe } from './vivo.js';
 
 export const VERSION = '0.1.0';
 /** Lo único que se contesta sin sesión además de /api/health y /api/acceso: webhooks de otros sistemas, cada uno con su propio secreto (ver `publica` en los módulos). */
@@ -73,18 +74,20 @@ export async function manejar(req, env, exec = null) {
 
   if (ruta === '/api/acceso' && req.method === 'POST') {
     const b = await cuerpo(req);
-    // Tope de intentos (fase 10): por IP y por correo, por minuto. Un ataque lento o repartido choca con el segundo.
-    const huella = String(b?.email ?? '').trim().toLowerCase().slice(0, 120);
-    if (!(await tasa(db, 'acc:ip:' + ipDe(req), 20)).ok || !(await tasa(db, 'acc:mail:' + huella, 8)).ok) return error('Demasiados intentos. Espera un minuto e inténtalo otra vez.', 429);
+    // Tope de intentos (fase 10): por IP (todo intento) y por correo+IP (solo los FALLOS). Contar los intentos por correo a secas dejaba a cualquiera
+    // bloquear a su víctima; con la IP en la clave, quien se equivoca desde otra IP no cierra la puerta a quien entra bien desde la suya.
+    const huella = String(b?.email ?? '').trim().toLowerCase().slice(0, 120), ip = ipDe(req), claveFallos = `acc:fallo:${ip}:${huella}`;
+    const ms = relojDe(env);
+    if (!(await tasa(db, 'acc:ip:' + ip, 20, ms)).ok || (await tasaVer(db, claveFallos, ms)) >= 8) return error('Demasiados intentos. Espera un minuto e inténtalo otra vez.', 429);
     const s = await iniciarSesion(db, b?.email, b?.contrasena, req.headers.get('User-Agent') ?? '');
-    if (!s) return error('Usuario o contraseña incorrectos.', 401);
+    if (!s) { await tasa(db, claveFallos, 8, ms); return error('Usuario o contraseña incorrectos.', 401); }
     return json({ usuario: s.usuario }, 200, { 'Set-Cookie': cookieSesion(s.testigo) });
   }
 
   const usuario = await usuarioDeLaPeticion(db, req);
   if (!usuario) return noAutenticado();
 
-  if (ruta === '/api/salir' && req.method === 'POST') { await cerrarSesion(db, req); return json({ ok: true }, 200, { 'Set-Cookie': cookieBorrada() }); }
+  if (ruta === '/api/salir' && req.method === 'POST') { await cerrarSesion(db, req); await cerrarDe(env, usuario.id, 'sesión cerrada'); return json({ ok: true }, 200, { 'Set-Cookie': cookieBorrada() }); }
   if (ruta === '/api/yo' && req.method === 'GET') return json({ usuario });
   if (ruta === '/api/agentes' && req.method === 'GET') return json({ agentes: agentes() });
 

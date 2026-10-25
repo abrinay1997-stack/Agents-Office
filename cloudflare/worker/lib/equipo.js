@@ -6,11 +6,11 @@
 //  · nunca se queda la oficina sin administrador y el fundador (la cuenta más antigua) no se quita ni se rebaja;
 //  · quitar a alguien conserva su cuenta (las ejecuciones antiguas apuntan a ella): sin sesiones, sin contraseña, sin correo, fuera del equipo.
 import { uuid, ahora, enHoras, sha256, testigo, igualSeguro } from './ids.js';
-import { hashearContrasena, colorDeNombre, nombrePorCorreo } from './sesion.js';
+import { hashearContrasena, colorDeNombre, nombrePorCorreo, validarClave, MIN_CLAVE } from './sesion.js';
+export { validarClave, MIN_CLAVE };
 
 export const ROLES = ['admin', 'editor', 'lectura'];
 export const HORAS_INVITACION = 24 * 7;
-export const MIN_CLAVE = 12;
 const MENSAJE_INVITACION = 'Esta invitación no sirve: puede que ya se usara, que caducara o que la revocaran. Pide una nueva a quien administra la oficina.';
 const reCorreo = /^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$/;
 
@@ -21,6 +21,13 @@ export async function tasa(db, clave, max, ms = Date.now()) {
   const f = await db.prepare('insert into acceso_intentos (clave, ventana, n) values (?,?,1) on conflict (clave, ventana) do update set n = n + 1 returning n').bind(clave, ventana).first();
   return { ok: Number(f?.n ?? 1) <= max, n: Number(f?.n ?? 1) };
 }
+/** Cuántos intentos lleva esta clave en el minuto, SIN contar este. */
+export async function tasaVer(db, clave, ms = Date.now()) {
+  const f = await db.prepare('select n from acceso_intentos where clave = ? and ventana = ?').bind(clave, Math.floor(ms / 60e3)).first();
+  return Number(f?.n ?? 0);
+}
+/** El reloj de los topes: `env.RELOJ_MS` solo lo pone una prueba (para que el minuto no cambie a mitad); en producción es Date.now(). */
+export const relojDe = (env) => (typeof env?.RELOJ_MS === 'function' ? env.RELOJ_MS() : Date.now());
 export const ipDe = (req) => (req.headers.get('CF-Connecting-IP') || req.headers.get('X-Forwarded-For') || 'local').split(',')[0].trim().slice(0, 64);
 
 /** El tipo de una imagen por sus primeros bytes (nunca por lo que diga el cliente). Un SVG, un HTML o cualquier otra cosa: null. */
@@ -34,9 +41,18 @@ export function tipoDeImagen(b) {
 export const MIME = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 export const MAX_FOTO = 1024 * 1024;
 
-export const limpiarNombre = (n) => String(n ?? '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
-
 const ACTIVO = 'p.baja_at is null';
+// Sin caracteres de control, sin las marcas bidi (U+202A–202E, U+2066–2069, U+200E/F, U+061C) ni de ancho cero que disfrazan un nombre, y con los espacios colapsados.
+export const limpiarNombre = (n) => String(n ?? '').normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f<>\u200b-\u200f\u202a-\u202e\u2060-\u2069\u061c\ufeff]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+/** Para comparar nombres: sin mayúsculas, acentos ni espacios de más. */
+export const claveNombre = (n) => limpiarNombre(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/** ¿Hay otra persona activa que se vea con ese nombre? (nadie puede hacerse pasar por el fundador con un nombre idéntico). */
+export async function nombreOcupado(db, nombre, exceptoId = null) {
+  const k = claveNombre(nombre);
+  const { results } = await db.prepare(`select u.id, u.email, p.nombre from users u left join perfiles p on p.user_id = u.id where ${ACTIVO}`).all();
+  return results.some((f) => f.id !== exceptoId && claveNombre((f.nombre || '').trim() || nombrePorCorreo(f.email)) === k);
+}
+
 /** La cuenta más antigua: fundó la oficina. */
 export async function fundador(db) { return (await db.prepare('select id from users order by created_at, rowid limit 1').first())?.id ?? null; }
 
@@ -93,20 +109,14 @@ export async function verInvitacion(db, bruto) {
   return f ? { email: f.email, nombre: f.nombre, rol: f.rol, invita: f.por || 'quien administra la oficina', expira: f.expires_at } : null;
 }
 
-export function validarClave(clave, email = '') {
-  const c = String(clave ?? '');
-  if (c.length < MIN_CLAVE) return `La contraseña debe tener ${MIN_CLAVE} caracteres como mínimo.`;
-  if (c.length > 200) return 'La contraseña es demasiado larga.';
-  if (c.toLowerCase() === String(email).toLowerCase()) return 'La contraseña no puede ser tu correo.';
-  return null;
-}
-
 /** Acepta: crea la persona con el correo y el rol DE LA INVITACIÓN, gasta el enlace (una sola vez, aunque lleguen dos a la vez) y deja la sesión abierta. */
 export async function aceptarInvitacion(db, bruto, { nombre, contrasena }) {
   const inv = await invitacionVigente(db, bruto);
   if (!inv) return { estado: 404, error: MENSAJE_INVITACION };
   const mala = validarClave(contrasena, inv.email);
   if (mala) return { estado: 422, error: mala };
+  const visible0 = limpiarNombre(nombre) || inv.nombre || nombrePorCorreo(inv.email);
+  if (await nombreOcupado(db, visible0)) return { estado: 422, error: 'Ya hay alguien con ese nombre en la oficina: añade tu apellido o una inicial.' };
   // se gasta primero: solo una petición cambia la fila; la segunda ve 0 cambios
   const t = ahora();
   const gasto = await db.prepare('update invitaciones set aceptada_at = ? where id = ? and aceptada_at is null and revocada_at is null and expires_at > ?').bind(t, inv.id, t).run();
@@ -159,6 +169,7 @@ export async function quitarMiembro(db, id, { yo = null } = {}) {
 export async function guardarNombre(db, id, nombre) {
   const n = limpiarNombre(nombre);
   if (!n) return { estado: 422, error: 'Escribe tu nombre.' };
+  if (await nombreOcupado(db, n, id)) return { estado: 422, error: 'Ya hay alguien con ese nombre en la oficina: añade tu apellido o una inicial.' };
   const t = ahora();
   await db.prepare(`insert into perfiles (user_id, nombre, color, updated_at) values (?,?,?,?) on conflict (user_id) do update set nombre = excluded.nombre, color = excluded.color, updated_at = excluded.updated_at`).bind(id, n, colorDeNombre(n), t).run();
   return { ok: true, nombre: n };
@@ -173,4 +184,41 @@ export async function quitarFoto(db, id) {
 }
 export async function fotoDe(db, id) {
   return (await db.prepare('select p.foto_clave, p.foto_tipo, p.foto_at from perfiles p where p.user_id = ? and p.baja_at is null').bind(String(id)).first()) ?? null;
+}
+
+// ---- Restablecer la contraseña de alguien (admin): un enlace de un solo uso, como una invitación pero para una cuenta que ya existe ----
+export async function crearReinicio(db, admin, userId) {
+  const u = await db.prepare(`select u.id, u.email, p.nombre from users u left join perfiles p on p.user_id = u.id where u.id = ? and ${ACTIVO}`).bind(String(userId)).first();
+  if (!u) return { estado: 404, error: 'Esa persona no está en el equipo.' };
+  if (u.id === admin.id) return { estado: 409, error: 'Para tu propia contraseña usa «Mi perfil».' };
+  if (u.id === await fundador(db)) return { estado: 409, error: 'La contraseña de quien fundó la oficina solo la cambia esa persona.' };
+  const bruto = testigo(24), t = ahora();
+  await db.prepare('update reinicios set usado_at = ? where user_id = ? and usado_at is null').bind(t, u.id).run();
+  await db.prepare('insert into reinicios (id, token_hash, user_id, creado_por, created_at, expires_at) values (?,?,?,?,?,?)').bind(uuid(), await sha256(bruto), u.id, admin.id, t, enHoras(24)).run();
+  return { testigo: bruto, para: (u.nombre || '').trim() || nombrePorCorreo(u.email) };
+}
+async function reinicioVigente(db, bruto) {
+  if (!formatoTestigo(bruto)) return null;
+  const huella = await sha256(bruto);
+  const f = await db.prepare(`select r.id, r.token_hash, r.user_id, r.expires_at, r.usado_at, u.email, p.nombre, pc.nombre as por from reinicios r join users u on u.id = r.user_id left join perfiles p on p.user_id = u.id left join perfiles pc on pc.user_id = r.creado_por where r.token_hash = ? and ${ACTIVO}`).bind(huella).first();
+  if (!f || !igualSeguro(f.token_hash, huella) || f.usado_at || f.expires_at <= ahora()) return null;
+  return f;
+}
+export async function verReinicio(db, bruto) {
+  const f = await reinicioVigente(db, bruto);
+  return f ? { tipo: 'reinicio', email: f.email, nombre: (f.nombre || '').trim() || nombrePorCorreo(f.email), invita: f.por || 'quien administra la oficina', expira: f.expires_at } : null;
+}
+/** Pone la contraseña nueva, cierra TODAS las sesiones de esa persona y gasta el enlace (una sola vez). */
+export async function aplicarReinicio(db, bruto, contrasena) {
+  const r = await reinicioVigente(db, bruto);
+  if (!r) return { estado: 404, error: MENSAJE_INVITACION };
+  const mala = validarClave(contrasena, r.email);
+  if (mala) return { estado: 422, error: mala };
+  const t = ahora();
+  const gasto = await db.prepare('update reinicios set usado_at = ? where id = ? and usado_at is null and expires_at > ?').bind(t, r.id, t).run();
+  if (!gasto.meta?.changes) return { estado: 404, error: MENSAJE_INVITACION };
+  const { salt, password_hash } = await hashearContrasena(String(contrasena));
+  await db.prepare('update users set salt = ?, password_hash = ? where id = ?').bind(salt, password_hash, r.user_id).run();
+  await db.prepare('delete from sessions where user_id = ?').bind(r.user_id).run();
+  return { id: r.user_id, email: r.email };
 }
