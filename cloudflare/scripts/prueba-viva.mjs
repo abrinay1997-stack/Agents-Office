@@ -27,7 +27,9 @@ ok(lg.status === 200 && !/unsafe-inline/.test(lg.headers.get('content-security-p
 for (const r of ['/nube.js', '/nube.css', '/dictado.js']) ok((await fetch(base + r)).status === 401, `${r} sin sesión da 401`);
 const inv = await fetch(`${base}/invitacion/${'0'.repeat(48)}`);
 ok(inv.status === 200 && /invitacion\.js/.test(await inv.text()), 'la página de invitación se sirve sin sesión');
-ok((await fetch(`${base}/api/invitacion/${'0'.repeat(48)}`)).status === 404, 'una invitación inventada contesta 404');
+const falsa = await fetch(`${base}/api/invitacion/ver`, { method: 'POST', headers: { 'content-type': 'application/json', origin: base }, body: JSON.stringify({ testigo: '0'.repeat(48) }) });
+ok(falsa.status === 404, `una invitación inventada contesta 404 (contestó ${falsa.status})`);
+ok((await fetch(`${base}/api/invitacion/${'0'.repeat(48)}`)).status !== 200, 'la invitación ya no se consulta con el testigo en la dirección');
 // fetch() no deja poner la cabecera Upgrade (undici la rechaza): se pide con node:https, que sí
 const estadoSocket = await new Promise((resolve) => {
   const u = new URL(`${base}/api/live`);
