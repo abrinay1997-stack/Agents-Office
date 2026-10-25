@@ -8,7 +8,8 @@ import { calcularGuardado } from './guardado.mjs';
 
 const clonar = x => JSON.parse(JSON.stringify(x));
 
-export function crearAlmacenMemoria({ tareas = [], bitacora = [], ahora = () => Date.now() } = {}) {
+export function crearAlmacenMemoria({ tareas = [], bitacora: lineasPrevias = [], ahora = () => Date.now() } = {}) {
+  let bitacora = lineasPrevias;
   const originales = new Map(); // id → JSON de cómo estaba al leer (lo que hay en la base)
   let actual = [];
   for (const t of tareas) { const n = normalizar(clonar(t)); originales.set(n.id, JSON.stringify(n)); actual.push(n); }
@@ -50,5 +51,10 @@ export function crearAlmacenMemoria({ tareas = [], bitacora = [], ahora = () => 
     const borrar = [...originales].filter(([id]) => !vistos.has(id)).map(([id, j]) => ({ id, versionAntes: JSON.parse(j).version ?? 1 }));
     return { subir, borrar, lineas: nuevas.slice(), eventos: eventos.slice() };
   }
-  return { load, save, guardarEjecucion, cambiar, bitacora: bit, bitacoraDesde, anotar, cambios, dir: null };
+  /** Ya se volcó a la base: lo de ahora es lo nuevo de partida (para seguir con lo que reaccione a los eventos, p. ej. desbloquear o repetir). */
+  function confirmar() {
+    originales.clear(); for (const t of actual) originales.set(t.id, JSON.stringify(t));
+    bitacora = [...bitacora, ...nuevas]; nuevas.length = 0; eventos.length = 0;
+  }
+  return { load, save, guardarEjecucion, cambiar, bitacora: bit, bitacoraDesde, anotar, cambios, confirmar, dir: null };
 }
