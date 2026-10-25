@@ -89,7 +89,8 @@ await step('tests: npm test (safety rules, the guard, the secrets check)', async
   const todos = ['tests', 'cloudflare/tests'].filter(existsSync).flatMap(d => readdirSync(d).filter(f => f.endsWith('.test.mjs') || f.endsWith('.test.js')).map(f => d + '/' + f));
   const navegador = todos.filter(f => /navegador|-ui\.test/.test(f)), resto = todos.filter(f => !navegador.includes(f));
   const mal = e => { const malos = [...String(e.out || e.message).matchAll(/^\s*not ok \d+ - (.+)$/gm)].map(m => m[1].trim()).slice(0, 6); throw new Error('a test failed' + (malos.length ? ': ' + malos.join(' | ') : ' — run npm test to see which: ' + e.message.slice(-300))); };
-  const r1 = await sh('node', ['--test', '--test-concurrency=4', ...resto]).catch(mal);
+  // en el CI el paso «Unit tests» ya corrió todo lo demás (AO_TESTS_YA=1): aquí solo las de navegador
+  const r1 = process.env.AO_TESTS_YA ? '' : await sh('node', ['--test', '--test-concurrency=4', ...resto]).catch(mal);
   const r2 = await sh('node', ['--test', '--test-concurrency=1', ...navegador]).catch(mal), out = r1 + r2;
   const n = [...out.matchAll(/# pass (\d+)/g)].reduce((a, m) => a + +m[1], 0), f = /# fail (\d+)/.exec(out)?.[1];
   if (f && +f) throw new Error(`${f} test(s) failed — npm test`);
