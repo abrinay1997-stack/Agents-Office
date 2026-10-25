@@ -123,7 +123,7 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
   }
 
   return {
-    config, almacen, programador, vuelta, analit, mejorHora, guardados, plantillas, controlador, conductores: cond, indicadoresEstado: () => indicadoresEstado(db), despuesDeFoto,
+    config, ahora, almacen, programador, vuelta, analit, mejorHora, guardados, plantillas, controlador, conductores: cond, indicadoresEstado: () => indicadoresEstado(db), despuesDeFoto,
     cambioMeta: () => cambioMeta, llamadas: () => llamadas, puedeSeguir,
     /** Termina bien lo que quedó pendiente: lo que Meta anotó (freno, cuentas), los avisos y la auditoría. */
     async vaciar() { await cond.vaciar(); await Promise.all(pendientes.splice(0)); },

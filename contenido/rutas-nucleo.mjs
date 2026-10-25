@@ -106,7 +106,7 @@ export function crearControlador({ almacen, notice = () => {}, ajustes = () => (
       if (p === '/api/contenido/informe' && (metodo === 'GET' || metodo === 'POST')) { // plan M5 · U10: el informe del mes; POST lo guarda en el Cerebro
         if (!informe) return R(404, { error: 'sin informe' });
         const b = metodo === 'POST' ? await body() : {}, mes = String(b.mes || query.get('mes') || new Date().toISOString().slice(0, 7));
-        if (!/^\d{4}-\d{2}$/.test(mes)) return R(400, { error: 'el mes va como AAAA-MM' });
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return R(400, { error: 'el mes va como AAAA-MM' }); // (un mes 13 era un 500: ahora se dice)
         const cuenta = String(b.cuenta || query.get('cuenta') || ''); // 9 oct 2026: el informe de una cuenta sola (su id de Analíticas)
         if (cuenta && !/^(instagram|facebook):[\w.-]{1,80}$/.test(cuenta)) return R(400, { error: 'la cuenta va como instagram:<id> o facebook:<id>' });
         return R(200, await informe(mes, { guardar: metodo === 'POST', cuenta }));

@@ -13,6 +13,7 @@ import { crearServicio } from '../lib/contenido/servicio.js';
 import { leerConfig, validarCambio, guardarConfig, MODOS } from '../lib/contenido/config.js';
 import { candadoVigente, tomarCandado, soltarCandado } from '../lib/contenido/cola.js';
 import { crearIndicadores } from '../lib/contenido/aprender.js';
+import { hayQueAdoptar, adoptar } from '../lib/contenido/migracion.js';
 import { describirZona } from '../lib/zona.js';
 
 export const nombre = 'contenido';
@@ -28,7 +29,10 @@ const soloAdmin = (metodo, ruta) => metodo !== 'GET' && SOLO_ADMIN.some(r => r.t
 
 /** Todo lo de una petición/vuelta pasa por aquí: el reloj de la oficina como `Date`, el servicio armado, y al final lo pendiente escrito. */
 export async function conServicio(env, fn, opciones = {}) {
-  const db = env.DB, config = await leerConfig(db);
+  const db = env.DB;
+  // lo que subió la herramienta de migración (scripts/migrar/contenido.mjs) pasa a las tablas de Contenido, por tandas, sin pisar lo que la nube ya tenga
+  try { if (await hayQueAdoptar(db)) await adoptar(db); } catch (e) { console.error('[contenido] migración:', e?.message ?? e); }
+  const config = await leerConfig(db);
   return conZona(config.zona, async () => {
     // AO_FETCH y AO_AHORA son SOLO para pruebas: un secreto de Cloudflare es siempre un texto, así que en producción nunca son funciones y no se usan.
     const semilla = { fetchFn: typeof env['AO_FETCH'] === 'function' ? env['AO_FETCH'] : undefined, ahora: typeof env['AO_AHORA'] === 'function' ? env['AO_AHORA'] : undefined };
@@ -52,6 +56,7 @@ export async function manejar(ctx) {
   if (metodo !== 'GET' && usuario.rol === 'lectura') return prohibido('Con acceso de lectura no se cambia nada en Contenido.');
   if (soloAdmin(metodo, ruta) && usuario.rol !== 'admin') return prohibido('Solo un administrador decide esto en Contenido (aprobar, entregar, tocar Meta o escribir en el Cerebro).');
   let cuerpo; try { cuerpo = await leerCuerpo(req); } catch (e) { return error(e.message, e.status || 400); }
+  const crudo = cuerpo; // (un arreglo o un texto no es un cuerpo válido para las rutas; los ajustes lo dicen en palabras)
   if (cuerpo === null || typeof cuerpo !== 'object' || Array.isArray(cuerpo)) cuerpo = {};
   // Quién aprueba lo pone el servidor (la sesión), no lo que diga el cuerpo.
   if (/\/aprobar$/.test(ruta)) cuerpo = { ...cuerpo, quien: usuario.email };
@@ -60,7 +65,7 @@ export async function manejar(ctx) {
     // ---- cloud only: los ajustes de Contenido (en la oficina local son Ajustes → Contenido) ----
     if (ruta === '/api/contenido/config' && metodo === 'GET') return json({ config, modos: MODOS, zona: describirZona(config.zona) });
     if (ruta === '/api/contenido/config' && metodo === 'PUT') {
-      const v = validarCambio(cuerpo, config); if (!v.ok) return error(v.error, 422);
+      const v = validarCambio(crudo, config); if (!v.ok) return error(v.error, 422);
       await guardarConfig(env.DB, v.valor);
       await env.DB.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'contenido-config', usuario.email, JSON.stringify({ cambia: Object.keys(cuerpo), modo: v.valor.modo, conductor: v.valor.conductor })).run();
       return json({ ok: true, config: v.valor });
@@ -119,8 +124,8 @@ async function tickAnaliticas(svc, env) {
   try {
     const meta = svc.conductores.meta;
     if (!meta.configurado() || (await candadoVigente(env.DB, 'analiticas'))) return;
-    if (new Date().getHours() < svc.analit.horaDeLaFoto) return;
-    const e = meta.estado(), viejo = !e.sincronizadaAt || Date.now() - Date.parse(e.sincronizadaAt) > (e.cuentas.length ? 24 : 6) * 3600e3;
+    if (new Date(svc.ahora()).getHours() < svc.analit.horaDeLaFoto) return; // las 6:00 de la oficina (el reloj de Panamá)
+    const e = meta.estado(), viejo = !e.sincronizadaAt || svc.ahora() - Date.parse(e.sincronizadaAt) > (e.cuentas.length ? 24 : 6) * 3600e3;
     if (viejo) { const n = await meta.sincronizar(); if (n.error && !n.cuentas.length) return; }
     if ((await svc.analit.pendientes(meta.estado().cuentas)).length) await fotografiar(svc, env);
   } catch (err) { console.warn('[contenido] analíticas:', err?.message ?? err); }
