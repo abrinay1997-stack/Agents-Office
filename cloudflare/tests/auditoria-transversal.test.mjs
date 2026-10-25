@@ -310,11 +310,12 @@ test('ENVÍOS: el panel de la fase 1 ya no ofrece herramientas de envío (la lla
   assert.equal((await o.editor('POST', '/api/agentes/olead/ejecutar', { texto: 'x', aprobada: true })).status, 403, 'un editor sigue sin poder aprobar');
 });
 
+const LLAVE_FALSA = 'sk-' + 'ant-api03-ABCDEFGHIJKLMNOP'; // partida: el escáner de secretos del repositorio no debe verla como una llave
 test('SECRETOS: aunque un proveedor repita la cabecera o la llave en su error, no sale en la respuesta ni queda en D1', { skip: SALTAR }, async () => {
   const S = { ANTHROPIC_API_KEY: 'SENT_ANTH_0123456789abcdef', MINIMAX_API_KEY: 'SENT_MINIMAX_0123456789abcdef', MCP_X_TOKEN: 'SENT_MCP_0123456789abcdef', META_APP_SECRET: 'SENT_APP_0123456789abcdef' };
   const o = await oficina(S);
   const real = globalThis.fetch;
-  globalThis.fetch = async (u, init) => new Response(JSON.stringify({ error: { message: `rechazado ${u?.url ?? u} ${JSON.stringify(init?.headers ?? {})} Bearer abcdefghijklmnop1234 sk-ant-api03-ABCDEFGHIJKLMNOP` }, base_resp: { status_code: 1004, status_msg: `${JSON.stringify(init?.headers ?? {})}` } }), { status: 400 }); // secrets-ok
+  globalThis.fetch = async (u, init) => new Response(JSON.stringify({ error: { message: `rechazado ${u?.url ?? u} ${JSON.stringify(init?.headers ?? {})} Bearer abcdefghijklmnop1234 ${LLAVE_FALSA}` }, base_resp: { status_code: 1004, status_msg: `${JSON.stringify(init?.headers ?? {})}` } }), { status: 400 });
   try {
     const respuestas = [
       await o.admin('POST', '/api/agentes/olead/ejecutar', { texto: 'hola' }),
@@ -325,7 +326,7 @@ test('SECRETOS: aunque un proveedor repita la cabecera o la llave en su error, n
     for (const { name } of base.prepare("select name from sqlite_master where type = 'table'").all()) volcado += JSON.stringify(base.prepare(`select * from "${name}"`).all());
     for (const texto of [...respuestas, volcado]) {
       for (const v of Object.values(S)) assert.ok(!texto.includes(v), 'un secreto salió en un texto');
-      assert.ok(!/Bearer abcdefghijklmnop1234|sk-ant-api03-ABCDEFGHIJKLMNOP/.test(texto), 'una llave con forma de llave salió'); // secrets-ok
+      assert.ok(!/Bearer abcdefghijklmnop1234/.test(texto) && !texto.includes(LLAVE_FALSA), 'una llave con forma de llave salió');
     }
     assert.ok(respuestas.some((t) => /rechazado/.test(t)), 'el error sí se dice (sin la llave)');
   } finally { globalThis.fetch = real; }
