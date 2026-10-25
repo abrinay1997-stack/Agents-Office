@@ -191,7 +191,9 @@ export async function nuevaTarea(serv, { dept, text, team = false, at = null, by
   const lead = C.lider(dept);
   return serv.altaTarea({ dept, agent: comoEquipo ? lead.id : r.agent, title: extra.title || r.title, text, plan: r.plan, eta: r.eta, why: comoEquipo ? `team — ${lead.name} splits it across the desks` : r.why, by,
     model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: comoEquipo ? { lead: lead.id, asked: team === true ? (by === 'you' ? 'you' : by) : 'text' } : undefined,
-    ...(at ? { dueAt: at, needsOk: r.needsOk } : {}), ...extra }, { por, id });
+    // En la nube la herramienta de envío NO se ofrece fuera de una ejecución aprobada (agentes/herramientas.js), así que un agente no puede «intentar» enviar y que el guardián lo
+    // detenga, como en local: sin esto, «Responde a Ana…» terminaría como «hecha» con solo un texto y nada pediría el OK. Si el enrutador (o el propio dueño) dice que lleva OK, nace pidiéndolo.
+    ...(at ? { dueAt: at, needsOk: typeof okFijo === 'boolean' ? okFijo : r.needsOk } : typeof okFijo === 'boolean' ? { needsOk: okFijo } : r.needsOk === true ? { needsOk: true } : {}), ...extra }, { por, id });
 }
 
 async function editarTarea({ s, serv, C, id, b, db, usuario }) {
