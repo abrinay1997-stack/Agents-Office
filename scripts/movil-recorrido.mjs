@@ -163,7 +163,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     await page.locator('.mv-toast-b').first().tap(); await espera(500);
     // detalle en hoja
     await tocar('[data-vista="tareas"] .mv-fila:not(.hecha) [data-abrir]'); await page.waitForSelector('.mv-hoja .mv-det'); await espera(500); await foto('03-tarea-detalle'); await medir('Detalle de tarea');
-    paso(await page.locator('.mv-hoja textarea').evaluate(e => parseFloat(getComputedStyle(e).fontSize) >= 16), 'Detalle: el campo es de 16 px o más (iOS no hace zoom)');
+    paso(await page.locator('.mv-hoja textarea').first().evaluate(e => parseFloat(getComputedStyle(e).fontSize) >= 16), 'Detalle: el campo es de 16 px o más (iOS no hace zoom)');
     await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' }); paso(true, 'Detalle: «atrás» cierra la hoja y no sale de la app');
     // chips
     for (const [k] of [['proximos'], ['todas'], ['delegadas'], ['hechas'], ['agentes']]) { await tocar(`[data-lista="${k}"]`); await page.waitForTimeout(200); paso(await page.locator(`[data-lista="${k}"]`).getAttribute('aria-pressed') === 'true', `Tareas: la lista «${k}» abre`); }
@@ -215,7 +215,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     paso(toques === 1 && /Hoy/.test(await texto('.mv-dia.hoy h3')), 'Calendario: la agenda de hoy está a 1 toque');
     paso(await page.locator('.mv-ev').count() >= 1, 'Calendario: la agenda lista lo programado (tarea del agente y fechas límite)');
     await tocar('[data-modo="mes"]'); await page.waitForSelector('.mv-celda'); await foto('04b-calendario-mes'); await medir('Calendario (mes)');
-    await tocar('.mv-fab'); await page.waitForSelector('.mv-hoja #mvNt'); await foto('04c-calendario-crear'); await medir('Nueva tarea (calendario)'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
+    await tocar('.mv-fab'); await tocar('.mv-hoja [data-k="tarea"]'); await page.waitForSelector('.mv-hoja #mvNt'); await foto('04c-calendario-crear'); await medir('Nueva tarea (calendario)'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
     await tocar('[data-modo="tres"]'); await page.waitForTimeout(150); paso(await page.locator('.mv-dia').count() === 3, 'Calendario: la vista de 3 días enseña tres días'); await foto('04d-calendario-3dias');
     await tocar('[data-modo="agenda"]');
 

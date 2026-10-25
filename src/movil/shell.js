@@ -36,6 +36,7 @@ export function crearShell() {
   const registro = new Map(), pila = crearPila();
   let franjaNo = false, tab = RAIZ, pantalla = null, enlinea = true, raiz = null, hojas = null, store = null, api = null, activo = false;
   const cab = new Map(); // id de vista → { titulo, acciones } que puso la vista
+  const prov = new Map(); let previa = null; // id de vista → () => { view, label, kind, id } (lo que está mirando, para el chip «Viendo» de Dimitri) · la última vista que se vio antes de Dimitri
   const refs = {};
 
   const $ = s => raiz.querySelector(s);
@@ -94,6 +95,8 @@ export function crearShell() {
       hoja: o => hojas.abrir(o), confirmar: o => hojas.confirmar(o), toast, navegar, volver, escritorio: abrirEscritorio,
       cabecera: o => { cab.set(id, { ...(cab.get(id) || {}), ...o }); if ((pantalla || tab) === id) pintarCabecera(); },
       tirar: tirarParaRefrescar,
+      contexto: fn => { prov.set(id, fn); },   // la vista dice qué está mirando: { view, label, kind?, id? } (los nombres de view son los de la oficina: tareas, cal, contenido…)
+      viendo: () => viendo(),                   // lo que se miraba antes de abrir esta vista (Dimitri lo usa): o null
       el: () => registro.get(id)?.el,
     };
     return ctx;
@@ -109,11 +112,19 @@ export function crearShell() {
     return r;
   }
 
+  const DE_ESCRITORIO = { calendario: 'cal', cerebro: 'brain', estudio: 'studio' };
+  function viendo() {
+    const id = previa; if (!id || id === 'inicio' || id === 'aprobaciones' || id === 'mas') return null;
+    const f = prov.get(id); if (f) { try { const c = f(); if (c && c.view) return c; } catch { /* sin contexto */ } }
+    const nombre = id.startsWith('esc:') ? id.slice(4) : id, t = id.startsWith('esc:') ? ESCRITORIO.find(x => x.id === nombre)?.titulo : (() => { const r = registro.get(id); return typeof r?.def.titulo === 'function' ? r.def.titulo() : r?.def.titulo; })();
+    return t ? { view: DE_ESCRITORIO[nombre] || nombre, label: t, kind: null } : null;
+  }
   let ultima = null;
   function pintar() {
     if (!raiz) return;
     const id = pantalla || tab, enEsc = pila.cima()?.tipo === 'escritorio';
     document.body.classList.toggle('mv-esc', enEsc);
+    if (enEsc) previa = 'esc:' + pila.cima().item.id; else if (id !== 'dimitri') previa = id;
     document.body.classList.toggle('mv-ventana', enEsc && !!pila.cima().item.ventana);
     if (!enEsc) {
       const r = montar(id);
@@ -258,6 +269,6 @@ export function crearShell() {
     registrarVista, iniciar, apagar, navegar, volver, abrirEscritorio, toast, entradasEscritorio, GRUPOS,
     get activo() { return activo; }, get raiz() { return raiz; }, get ctx() { return { api, store, hoja: o => hojas.abrir(o) }; },
     vistas: () => [...registro.values()].map(r => r.def), actual: () => pantalla || tab, pila,
-    refrescarCabecera: pintarCabecera,
+    refrescarCabecera: pintarCabecera, viendo,
   };
 }

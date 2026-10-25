@@ -217,6 +217,7 @@ export function registrar(shell) {
       el._abrirTarea = abrir;
       el._vista = k => { if (VISTAS.some(c => c[0] === k)) irVista(k); };
       el._apagar = () => clearInterval(tic);
+      ctx.contexto(() => ({ view: 'tareas', label: 'Tus tareas · ' + (vista === 'lista' ? CHIPS.find(c => c[0] === lista)?.[1] : VISTAS.find(c => c[0] === vista)?.[1]), kind: null })); // lo que Dimitri ve en «Viendo»
       pintar(); if (vista === 'proyectos') proyectos.pintar(); else if (vista === 'medidas') medidas.pintar();
     },
     alMostrar(el, ctx, p) {

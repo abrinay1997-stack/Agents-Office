@@ -1,116 +1,231 @@
 // Versión móvil (25 oct 2026) — DIMITRI: el chat a pantalla completa, con la entrada fija abajo (sube con el teclado). Reutiliza /api/sub/*:
-// la charla, «¿Cómo vamos?» al instante, el historial de conversaciones (🕘), una nueva conversación, y las tarjetas de lo que propone:
-// un PLAN (piezas para los jefes, con ENVIAR), CAMBIOS en el calendario o las tareas (HACER / Descartar) y preguntas con opciones.
-// Lo que GASTA (generar en el Estudio, activar un anuncio) NO se confirma aquí: la tarjeta dice cuánto y lo manda a la vista de escritorio,
-// donde están los dos clics y los topes. Todo lo que dice Dimitri se pinta con md.js (escapa antes de añadir marcas).
+// la charla en vivo (su respuesta crece mientras la escribe, con «Detener»), «¿Cómo vamos?» al instante, el historial de conversaciones,
+// «Nueva conversación» con DESHACER, lo que está «Viendo» (la pantalla de la que vienes), sugerencias según esa pantalla, y las tarjetas
+// de lo que propone: un PLAN (cada pieza se revisa antes de ENVIAR A LOS JEFES), CAMBIOS en el calendario o las tareas (Hacerlo ·
+// Descartar · Deshacer 30 s) y preguntas con opciones. Lo que GASTA (generar en el Estudio, activar un anuncio) NO se confirma aquí: la
+// tarjeta lo manda a la vista de escritorio, donde están los dos clics y los topes. Todo lo que dice Dimitri se pinta con md.js.
 import { mdToHtml } from '../../md.js';
+import { pastChoices } from '../../sub-ops.js';
 import { esc, svg, vacio, hace } from '../ui.js';
+import { hacer, hacerYa, interruptor, alternar } from './tareas-comun.js';
+import { planHTML, opsHTML, preguntasHTML, estudioHTML, itemsEnvio, itemsOps, respuesta, NOMBRE_DEPT, aInput, manana, sinResolver } from './dimitri-tarjetas.js';
+import { abrirDetalle } from './tareas-detalle.js';
 
-const SUGERENCIAS = [['¿Cómo vamos?', 'estado'], ['¿Qué tengo pendiente esta semana?', 'chat'], ['Arma el plan de contenido de la semana', 'chat']];
+const MODO = { charla: 'Charla', estado: 'Estado', analisis: 'Análisis', plan: 'Plan', pregunta: 'Pregunta', estudio: 'Estudio' };
+const SUG = {
+  tareas: [['¿Qué debería hacer primero hoy?'], ['Resúmeme lo vencido y lo bloqueado'], ['Reparte mi lista entre los agentes']],
+  cal: [['¿Qué tengo esta semana?'], ['Revisa si hay choques en mi calendario'], ['Crea una rutina semanal de …', true]],
+  default: [['¿Cómo vamos?', false, 'estado'], ['¿Qué tengo pendiente esta semana?'], ['Arma el plan de contenido de la semana']],
+};
 
 export function registrar(shell) {
   shell.registrarVista({
     id: 'dimitri', titulo: 'Dimitri', icono: 'dimitri', grupo: 'tab',
     montar(el, ctx) {
-      let mensajes = [], cargado = false, ocupado = false, nombre = 'Dimitri', picks = new Map(), error = '';
+      let mensajes = [], cargado = false, ocupado = false, nombre = 'Dimitri', error = '', fallo = null, vivo = '', vivoModo = '', corrida = '', deteniendo = false, sinCtx = false, ctxUlt = '', tic = 0;
+      const edits = new Map(), opEdits = new Map(), picks = new Map(), opsOcupadas = new Set();
       el.innerHTML = `<div class="mv-scroll mv-chat" id="mvChatSc" tabindex="-1"><div class="mv-hilo" role="log" aria-live="polite" aria-label="Conversación con Dimitri"></div></div>
-        <form class="mv-compone" autocomplete="off"><label class="mv-sr" for="mvDim">Escríbele a Dimitri</label><textarea id="mvDim" rows="1" enterkeyhint="send" placeholder="Escríbele a Dimitri…"></textarea><button type="submit" class="mv-enviar" aria-label="Enviar" disabled>${svg('enviar')}</button></form>`;
-      const hilo = el.querySelector('.mv-hilo'), sc = el.querySelector('.mv-scroll'), caja = el.querySelector('#mvDim'), forma = el.querySelector('.mv-compone'), env = forma.querySelector('.mv-enviar');
+        <form class="mv-compone" autocomplete="off"><div class="mv-viendo" hidden></div><div class="mv-compone-fila"><label class="mv-sr" for="mvDim">Escríbele a Dimitri</label><textarea id="mvDim" rows="1" enterkeyhint="send" placeholder="Escríbele a Dimitri…"></textarea><button type="submit" class="mv-enviar" aria-label="Enviar" disabled>${svg('enviar')}</button></div></form>`;
+      const hilo = el.querySelector('.mv-hilo'), sc = el.querySelector('.mv-scroll'), caja = el.querySelector('#mvDim'), forma = el.querySelector('.mv-compone'), env = forma.querySelector('.mv-enviar'), chipV = forma.querySelector('.mv-viendo');
+      const abajo = (suave = false) => requestAnimationFrame(() => sc.scrollTo({ top: sc.scrollHeight, behavior: suave && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' }));
+      const porId = id => ctx.store.st.tareas.find(t => t.id === id) || null;
+      const viendo = () => (sinCtx ? null : ctx.viendo());
 
-      const abajo = (suave = false) => requestAnimationFrame(() => sc.scrollTo({ top: sc.scrollHeight, behavior: suave ? 'smooth' : 'auto' }));
       async function cargar() {
         try { const j = await ctx.api('/api/sub'); mensajes = j.messages || []; if (j.name) nombre = j.name; cargado = true; error = ''; } catch (e) { error = e.message; }
-        pintar(true);
+        ctx.cabecera({ titulo: nombre }); pintar(true);
       }
-      function planHTML(m) {
-        const p = m.plan; if (!p || !(p.tasks || []).length) return '';
-        const abiertas = p.tasks.filter(t => t.state === 'proposed'), vencida = abiertas.some(t => t.at && t.at <= Date.now() + 30000);
-        return `<section class="mv-tarjeta" aria-label="Plan de Dimitri"><h4>Plan · ${p.tasks.length} ${p.tasks.length === 1 ? 'pieza' : 'piezas'}</h4><ul>${p.tasks.map(t => `<li class="${t.state}"><b>${esc(t.title)}</b><small>${esc(t.dept || '')}${t.agent ? ' · ' + esc(t.agent) : ''}${t.limite ? ' · para ' + esc(t.limite) : ''}${t.state !== 'proposed' ? ' · ' + (t.state === 'sent' || t.state === 'done' ? 'enviada' : esc(t.state)) : ''}</small></li>`).join('')}</ul>
-          ${abiertas.length ? (vencida ? '<p class="mv-meta">Una hora del plan ya pasó. Dile a Dimitri qué hora prefieres.</p>' : `<button type="button" class="mv-btn primario" data-enviar="${esc(m.id)}">Enviar a los jefes (${abiertas.length})</button>`) : ''}</section>`;
-      }
-      function opsHTML(m) {
-        const ops = m.ops; if (!ops || !ops.length) return '';
-        const abiertas = ops.filter(o => o.state === 'proposed' && !o.confirmar), gasta = ops.filter(o => o.state === 'proposed' && o.confirmar);
-        return `<section class="mv-tarjeta" aria-label="Cambios propuestos"><h4>Cambios que propone</h4><ul>${ops.map(o => `<li class="${o.state}"><b>${esc(o.desc || o.type)}</b><small>${o.state === 'done' ? 'hecho' : o.state === 'skipped' ? 'descartado' : o.state === 'failed' ? 'no se pudo' + (o.error ? ': ' + esc(o.error) : '') : o.confirmar ? 'gasta dinero' : 'pendiente'}</small></li>`).join('')}</ul>
-          ${gasta.length ? `<p class="mv-meta">Lo que gasta se confirma con la cifra en la versión de escritorio.</p><button type="button" class="mv-btn" data-gasto>Ver en escritorio</button>` : ''}
-          ${abiertas.length ? `<div class="mv-fila-btn"><button type="button" class="mv-btn" data-ops-no="${esc(m.id)}">Descartar</button><button type="button" class="mv-btn primario" data-ops-si="${esc(m.id)}">Hacerlo (${abiertas.length})</button></div>` : ''}</section>`;
-      }
-      function estudioHTML(m) {
-        const s = m.studio; if (!s || !(s.creatives || []).length) return '';
-        return `<section class="mv-tarjeta" aria-label="Creativos"><h4>Propone ${s.creatives.length} ${s.creatives.length === 1 ? 'creativo' : 'creativos'}</h4><p class="mv-meta">${s.cost ? 'Costo estimado: US$' + esc(String(s.cost.total ?? s.cost)) + '. ' : ''}Generar gasta: se confirma en el Estudio.</p><button type="button" class="mv-btn" data-gasto>Verlo en el Estudio</button></section>`;
-      }
-      function preguntasHTML(m) {
-        const qs = (m.plan && m.plan.questions) || []; if (!qs.length || m.plan.answers) return '';
-        return qs.filter(q => typeof q === 'object' && (q.options || []).length).map(q => `<section class="mv-tarjeta" aria-label="Pregunta"><h4>${esc(q.q)}</h4><div class="mv-opciones">${q.options.map(o => `<button type="button" class="mv-chip" data-opcion="${esc(o.label)}" data-msg="${esc(m.id)}" data-q="${esc(q.id)}">${esc(o.label)}</button>`).join('')}</div></section>`).join('');
-      }
-      function burbuja(m) {
+
+      // ---- cada mensaje y sus tarjetas ----
+      function burbuja(m, ultimo) {
         const mio = m.who === 'user';
-        return `<div class="mv-msg ${mio ? 'mio' : 'suyo'}"><div class="mv-burbuja">${mio ? `<p>${esc(m.text)}</p>` : `<div class="md">${mdToHtml(m.text || '')}</div>`}</div>${mio ? '' : planHTML(m) + opsHTML(m) + estudioHTML(m) + preguntasHTML(m)}${m.at ? `<time>${hace(m.at)}</time>` : ''}</div>`;
+        if (mio) return `<div class="mv-msg mio"><div class="mv-burbuja">${m.context?.label ? `<small class="mv-uctx">Viendo: ${esc(m.context.label)}</small>` : ''}<p>${esc(m.text)}</p></div>${m.at ? `<time>${hace(m.at)}</time>` : ''}</div>`;
+        const modo = m.stopped ? 'Detenido por ti' : MODO[m.mode] || '';
+        const cuerpo = `${m.shield ? `<p class="mv-escudo" role="note"><b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</p>` : ''}<div class="md">${mdToHtml(m.stopped ? String(m.text || '').replace(/\s*_Detenido por ti\._\s*$/, '') : m.text || '')}</div>`;
+        const pie = m.quick ? `<p class="mv-meta">Calculado al instante con los datos de la oficina, sin el modelo.</p>${ultimo && !ocupado ? `<button type="button" class="mv-btn" data-analizar>Analizar con ${esc(nombre)}</button>` : ''}` : m.retry && ultimo && !ocupado ? `<button type="button" class="mv-btn" data-mas-corto="${esc(m.id)}">Respóndeme más corto</button>` : '';
+        return `<div class="mv-msg suyo" data-id="${esc(m.id)}"><div class="mv-burbuja">${modo ? `<small class="mv-modo ${esc(m.mode || '')}">${esc(modo)}</small>` : ''}${cuerpo}${pie}</div>${planHTML(m, edits.get(m.id), { tareaDe: porId, ocupado: opsOcupadas.has(m.id) })}${opsHTML(m, opEdits.get(m.id), { ocupado: opsOcupadas.has(m.id) })}${estudioHTML(m)}${preguntasHTML(m, picks.get(m.id), { ocupado })}${m.at ? `<time>${hace(m.at)}</time>` : ''}</div>`;
+      }
+      function sugerencias() {
+        const v = viendo(), l = SUG[v?.view] || SUG.default;
+        return `<div class="mv-sugs-fila" role="group" aria-label="Cosas que puedes pedirle">${l.map(([t, llena, k]) => `<button type="button" class="mv-chip" data-sug="${esc(t)}"${llena ? ' data-llena' : ''}${k ? ` data-k="${k}"` : ''}>${esc(t)}</button>`).join('')}</div>`;
       }
       function pintar(fondo) {
-        if (!cargado) { hilo.innerHTML = error ? `<div class="mv-vacio" role="alert"><h3>No se pudo abrir el chat</h3><p>${esc(error)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>` : '<div class="mv-esq" aria-hidden="true"><i></i><i></i></div>'; return; }
-        const nuevo = !mensajes.length;
-        hilo.innerHTML = nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p><div class="mv-sugs">${SUGERENCIAS.map(([t, k]) => `<button type="button" class="mv-chip" data-sug="${esc(t)}" data-k="${k}">${esc(t)}</button>`).join('')}</div></div>`
-          : mensajes.map(burbuja).join('') + (ocupado ? `<div class="mv-msg suyo"><div class="mv-burbuja pensando" role="status"><i></i><i></i><i></i><span class="mv-sr">${esc(nombre)} está pensando</span></div></div>` : '');
-        env.disabled = ocupado || !caja.value.trim(); if (fondo !== false) abajo();
+        if (!cargado) { hilo.innerHTML = error ? `<div class="mv-vacio" role="alert"><h3>No se pudo abrir el chat</h3><p>${esc(error)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>` : '<div class="mv-esq" aria-hidden="true"><i></i><i></i></div><span class="mv-sr" role="status">Abriendo el chat…</span>'; return; }
+        const nuevo = !mensajes.length && !ocupado;
+        const ult = mensajes.length ? mensajes[mensajes.length - 1] : null;
+        hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p></div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
+          + (ocupado ? vivoHTML() : '') + (fallo ? falloHTML() : '') + (!ocupado && !fallo ? sugerencias() : '');
+        env.disabled = ocupado || !caja.value.trim(); chipViendo();
+        if (fondo !== false) abajo();
+        arrancaCuenta();
+      }
+      const vivoHTML = () => `${vivo ? `<div class="mv-msg suyo"><div class="mv-burbuja">${MODO[vivoModo] ? `<small class="mv-modo ${esc(vivoModo)}">${MODO[vivoModo]}</small>` : ''}<div class="md mv-vivo">${mdToHtml(vivo)}</div></div></div>` : ''}
+        <div class="mv-escribiendo" role="status"><span class="mv-puntos" aria-hidden="true"><i></i><i></i><i></i></span><span>${esc(nombre)} está ${deteniendo ? 'deteniéndose…' : vivo ? 'escribiendo…' : 'pensando…'}</span>${corrida && !deteniendo ? '<button type="button" class="mv-btn" data-detener>Detener</button>' : ''}</div>`;
+      const falloHTML = () => `<div class="mv-falla" role="alert"><p><b>No pude responder ahora.</b> ${esc(fallo.motivo)} Tu mensaje no se perdió.</p><button type="button" class="mv-btn primario" data-reenviar>Reintentar</button></div>`;
+      function chipViendo() {
+        const v = viendo(), k = v ? v.label : '';
+        if (!v) { chipV.hidden = true; chipV.innerHTML = ''; ctxUlt = ''; return; }
+        if (k === ctxUlt && !chipV.hidden) return; ctxUlt = k; chipV.hidden = false;
+        chipV.innerHTML = `<span><b>Viendo:</b> ${esc(k)}</span><button type="button" class="mv-ic" data-sin-ctx aria-label="No usar lo que estoy viendo como contexto">${svg('cerrar')}</button>`;
       }
 
-      async function enviar(texto, via = 'chat') {
-        texto = texto.trim(); if (!texto || ocupado) return; ocupado = true; caja.value = ''; ajustaAlto();
-        mensajes.push({ id: 'tmp', who: 'user', text: texto, at: Date.now() }); pintar(); const desde = Date.now() - 5000;
+      // ---- hablar con Dimitri (su respuesta crece mientras la escribe) ----
+      async function pedirChat(cuerpo) {
+        const r = await fetch('/api/sub/chat', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...cuerpo, stream: true }) }).catch(e => { throw new Error(e instanceof TypeError ? 'Sin conexión con la oficina. Revisa tu internet.' : e.message); });
+        if (r.status === 401) { setTimeout(() => location.reload(), 50); throw new Error('Tu sesión terminó: vuelve a entrar.'); }
+        if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `la oficina respondió ${r.status}`); }
+        let final = null, errorSrv = '';
+        const linea = l => { if (!l.trim()) return; let o; try { o = JSON.parse(l); } catch { return; }
+          if (o.type === 'start') { corrida = o.run; pintarVivo(); } else if (o.type === 'reply') { vivo = o.text || ''; vivoModo = o.mode || ''; pintarVivo(); } else if (o.type === 'done') final = o; else if (o.type === 'error') errorSrv = o.error || 'no pude responder'; };
+        if (r.body?.getReader) { const rd = r.body.getReader(), dec = new TextDecoder(); let buf = ''; for (;;) { const { done, value } = await rd.read(); if (done) break; buf += dec.decode(value, { stream: true }); const ls = buf.split('\n'); buf = ls.pop(); ls.forEach(linea); } buf += dec.decode(); linea(buf); }
+        else (await r.text()).split('\n').forEach(linea);
+        if (errorSrv) throw new Error(errorSrv);
+        if (!final) throw new Error('la conexión se cortó antes de terminar');
+        return final;
+      }
+      function pintarVivo() { // solo la burbuja que crece: no se redibuja todo (el botón Detener conserva el foco)
+        const md = hilo.querySelector('.mv-vivo');
+        if (md && vivo) { const abajoYa = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80; md.innerHTML = mdToHtml(vivo); const e = hilo.querySelector('.mv-escribiendo span:last-of-type'); if (e && !deteniendo) e.textContent = `${nombre} está escribiendo…`; if (abajoYa) abajo(); }
+        else { const f = document.activeElement?.hasAttribute?.('data-detener'); pintar(); if (f) hilo.querySelector('[data-detener]')?.focus(); }
+      }
+      async function enviar(texto, { via = 'chat', answers = null, sinEco = false } = {}) {
+        texto = String(texto).trim(); if (!texto || ocupado) return; mensajes = mensajes.filter(m => m.id !== 'tmp-fallo'); ocupado = true; fallo = null; vivo = ''; vivoModo = ''; corrida = ''; deteniendo = false; caja.value = ''; ajustaAlto();
+        const v = viendo(), contexto = v ? { view: v.view, label: v.label, kind: v.kind || null, id: v.id || null } : null;
+        mensajes.push({ id: 'tmp', who: 'user', text: texto, at: Date.now(), ...(v ? { context: { label: v.label } } : {}) }); pintar(); const desde = Date.now() - 5000;
         try {
-          const j = await ctx.api(via === 'estado' ? '/api/sub/estado' : '/api/sub/chat', { method: 'POST', body: via === 'estado' ? { text: texto } : { text: texto } });
-          mensajes = mensajes.filter(m => m.id !== 'tmp').concat(j.messages || []);
+          if (via === 'estado') { const j = await ctx.api('/api/sub/estado', { method: 'POST', body: { text: texto } }); mensajes = mensajes.filter(m => m.id !== 'tmp').concat(j.messages || []); }
+          else { const j = await pedirChat({ text: texto, ...(contexto ? { context: contexto } : {}), ...(answers ? { answers } : {}) }); mensajes = mensajes.filter(m => m.id !== 'tmp').concat(j.messages || []); if (j.answered) { const q = mensajes.find(x => x.id === j.answered.msg); if (q?.plan) q.plan.answers = j.answered.answers; } }
         } catch (e) {
-          mensajes = mensajes.filter(m => m.id !== 'tmp'); // si el teléfono se durmió, la respuesta pudo llegar: se mira antes de decir que falló
-          try { const j = await ctx.api('/api/sub'); mensajes = j.messages || mensajes; if (!mensajes.some(m => m.who === 'sub' && m.at >= desde)) throw e; }
-          catch { mensajes.push({ id: 'err' + Date.now(), who: 'sub', text: `No pude responder ahora (${e.message}). Tu mensaje no se perdió: pulsa enviar otra vez.`, at: Date.now() }); caja.value = texto; ajustaAlto(); }
+          mensajes = mensajes.filter(m => m.id !== 'tmp');
+          const mio = { id: 'tmp-fallo', who: 'user', text: texto, at: Date.now(), ...(v ? { context: { label: v.label } } : {}) };
+          try { const j = await ctx.api('/api/sub'); const l = j.messages || []; if (l.some(m => m.who === 'sub' && m.at >= desde)) { mensajes = l; throw null; } } catch (x) { if (x === null) { ocupado = false; pintar(); ctx.store.refrescar(); return; } }
+          mensajes.push(mio); fallo = { texto, motivo: e.message, answers, via }; // su mensaje se queda a la vista, con el motivo y «Reintentar» debajo
         }
-        ocupado = false; pintar(); ctx.store.refrescar();
+        ocupado = false; vivo = ''; corrida = ''; pintar(); ctx.store.refrescar();
       }
-      async function post(ruta, cuerpo) { return ctx.api(ruta, { method: 'POST', body: cuerpo }); }
-      async function accion(id, ruta, cuerpo, ok) {
-        try { const j = await post(ruta, cuerpo); const k = mensajes.findIndex(x => x.id === id); if (k >= 0 && j.message) mensajes[k] = j.message; for (const x of j.messages || []) if (!mensajes.some(y => y.id === x.id)) mensajes.push(x); ctx.toast(ok); }
-        catch (e) { ctx.toast('No se pudo: ' + e.message); }
-        pintar(); ctx.store.refrescar();
+      forma.addEventListener('submit', e => { e.preventDefault(); enviar(caja.value); });
+      function ajustaAlto() { caja.style.height = 'auto'; caja.style.height = Math.min(140, caja.scrollHeight) + 'px'; }
+      caja.addEventListener('input', () => { ajustaAlto(); env.disabled = ocupado || !caja.value.trim(); });
+      caja.addEventListener('focus', () => setTimeout(() => abajo(true), 250));
+
+      // ---- cada acción sobre una tarjeta: con su estado y su motivo si falla ----
+      const poner = (id, j) => { const k = mensajes.findIndex(x => x.id === id); if (k >= 0 && j.message) mensajes[k] = j.message; for (const x of j.messages || []) if (!mensajes.some(y => y.id === x.id)) mensajes.push(x); };
+      async function enviarPlan(id, btn, descartar) {
+        const m = mensajes.find(x => x.id === id); if (!m || opsOcupadas.has(id)) return; opsOcupadas.add(id);
+        const r = await hacer(ctx, btn, () => ctx.api('/api/sub/send', { method: 'POST', body: { msg: id, items: itemsEnvio(m, edits.get(id), { descartar }) } }), { ocupado: descartar ? 'Descartando…' : 'Enviando a los jefes…', hecho: descartar ? 'Descartado' : 'Enviado', ms: 600, aviso: descartar ? 'Plan descartado: no se envió nada.' : 'Enviado a los jefes.', despues: v => { if (v) { poner(id, v); edits.delete(id); } } });
+        opsOcupadas.delete(id); pintar(false); ctx.store.refrescar();
+        if (r.ok) return;
+      }
+      async function hacerOps(id, btn, descartar) {
+        const m = mensajes.find(x => x.id === id); if (!m || opsOcupadas.has(id)) return; opsOcupadas.add(id);
+        const r = await hacer(ctx, btn, () => ctx.api('/api/sub/ops', { method: 'POST', body: { msg: id, items: itemsOps(m, opEdits.get(id), { descartar }) } }), { ocupado: descartar ? 'Descartando…' : 'Haciendo…', hecho: descartar ? 'Descartado' : 'Hecho', ms: 600, aviso: descartar ? 'Descartado: no cambié nada.' : 'Hecho. Puedes deshacerlo 30 segundos.', despues: v => { if (v) { poner(id, v); opEdits.delete(id); } } });
+        opsOcupadas.delete(id); pintar(false); ctx.store.refrescar();
+        if (!r.ok) pintar(false);
+      }
+      async function deshacerOp(id, k, btn) {
+        const r = await hacer(ctx, btn, () => ctx.api('/api/sub/ops/undo', { method: 'POST', body: { msg: id, k } }), { ocupado: 'Deshaciendo…', hecho: 'Deshecho', ms: 500, aviso: 'Deshecho.', despues: v => { if (v) poner(id, v); } });
+        pintar(false); ctx.store.refrescar(); return r;
+      }
+      function responder(id, btn) {
+        const m = mensajes.find(x => x.id === id); if (!m) return;
+        const { text, answers } = respuesta(m, picks.get(id)); if (!text) return;
+        btn.disabled = true; picks.delete(id); enviar(text, { answers });
+      }
+      const pick = (id, q) => { if (!picks.has(id)) picks.set(id, new Map()); const p = picks.get(id); if (!p.has(q)) p.set(q, { values: [], other: '', otherOn: false }); return p.get(q); };
+
+      // la hoja para revisar una pieza del plan
+      function revisarPieza(id, i) {
+        const m = mensajes.find(x => x.id === id), t = m?.plan?.tasks.find(x => x.i === i); if (!t || t.state !== 'proposed') return;
+        if (!edits.has(id)) edits.set(id, new Map()); const ed = edits.get(id); const e = ed.get(i) || {}; const b = { ...e };
+        const dept = () => b.dept || t.dept, inst = b.instruction ?? t.instruction, team = b.team ?? t.team, at = b.at !== undefined ? b.at : t.at, gone = sinResolver(t, b);
+        const pc = t.at && sinResolver(t, {}) ? pastChoices(t.at) : null;
+        const cuerpo = () => `<p class="mv-meta">${esc(t.why || '')}</p>
+          ${gone ? `<div class="mv-pasada" role="note"><p>Esa hora ya pasó. ¿Cuándo la hago?</p><div class="mv-fila-btn">${pc ? `<button type="button" class="mv-btn" data-man="${manana(t.at)}">${esc(pc.label)}</button>` : ''}<button type="button" class="mv-btn" data-ahora>Ahora</button></div></div>` : ''}
+          <label class="mv-lab" for="mvPd">Quién la hace</label><select id="mvPd" class="mv-campo">${[...Object.keys(NOMBRE_DEPT).filter(k => k !== 'dueno'), 'dueno'].map(k => `<option value="${k}"${k === dept() ? ' selected' : ''}>${esc(NOMBRE_DEPT[k])}</option>`).join('')}</select>
+          ${dept() === 'dueno' ? '' : interruptor('mvPt', 'Que trabaje todo el equipo', team)}
+          <label class="mv-lab" for="mvPa">Cuándo se hace (vacío: en cuanto la envíes)</label><input id="mvPa" type="datetime-local" class="mv-campo" value="${at && !gone ? aInput(at) : ''}" min="${aInput(Date.now())}">
+          <label class="mv-lab" for="mvPi">${dept() === 'dueno' ? 'Notas para ti' : 'Instrucciones para el jefe'}</label><textarea id="mvPi" class="mv-campo" rows="5">${esc(inst || '')}</textarea>`;
+        const h = ctx.hoja({ titulo: t.title, lleno: true, cuerpo: `<div class="mv-pz-f">${cuerpo()}</div>`, acciones: [{ texto: 'No incluir', alTocar: x => { b.include = false; ed.set(i, b); x.cerrar(); pintar(false); } }, { texto: 'Listo', tipo: 'primario', alTocar: x => { const c = x.cuerpo; const nueva = { ...b, include: true, dept: c.querySelector('#mvPd').value, instruction: c.querySelector('#mvPi').value }; const a = c.querySelector('#mvPa').value; if (a) nueva.at = new Date(a).getTime(); else if (b.at === undefined && !t.at) delete nueva.at; else if (!a) nueva.at = null; if (nueva.dept === 'dueno') delete nueva.team; ed.set(i, nueva); x.cerrar(); pintar(false); } }] });
+        const repinta = f => { const sc0 = h.cuerpo.scrollTop; h.cuerpo.firstElementChild.innerHTML = cuerpo(); h.cuerpo.scrollTop = sc0; if (f) h.cuerpo.querySelector(f)?.focus({ preventScroll: true }); };
+        h.cuerpo.addEventListener('change', e => { if (e.target.id === 'mvPd') { b.dept = e.target.value; b.instruction = h.cuerpo.querySelector('#mvPi').value; repinta('#mvPd'); } else if (e.target.id === 'mvPa') { b.at = e.target.value ? new Date(e.target.value).getTime() : null; } });
+        h.cuerpo.addEventListener('input', e => { if (e.target.id === 'mvPi') b.instruction = e.target.value; });
+        h.cuerpo.addEventListener('click', e => {
+          const sw = e.target.closest('[role="switch"]'); if (sw) { b.team = alternar(sw); return; }
+          const man = e.target.closest('[data-man]'); if (man) { b.at = +man.dataset.man; b.instruction = h.cuerpo.querySelector('#mvPi').value; return repinta(); }
+          if (e.target.closest('[data-ahora]')) { b.at = null; b.instruction = h.cuerpo.querySelector('#mvPi').value; repinta(); }
+        });
       }
 
-      forma.addEventListener('submit', e => { e.preventDefault(); enviar(caja.value); });
-      caja.addEventListener('input', () => { ajustaAlto(); env.disabled = ocupado || !caja.value.trim(); });
-      function ajustaAlto() { caja.style.height = 'auto'; caja.style.height = Math.min(140, caja.scrollHeight) + 'px'; }
-      caja.addEventListener('focus', () => setTimeout(() => abajo(true), 250));
       hilo.addEventListener('click', async e => {
         const b = e.target.closest('button'); if (!b) return;
-        if (b.dataset.sug) return enviar(b.dataset.sug, b.dataset.k);
-        if (b.dataset.opcion) return enviar(b.dataset.opcion);
-        if (b.dataset.enviar) { const m = mensajes.find(x => x.id === b.dataset.enviar); if (!m) return; b.disabled = true; return accion(m.id, '/api/sub/send', { msg: m.id, items: m.plan.tasks.filter(t => t.state === 'proposed').map(t => ({ i: t.i })) }, 'Enviado a los jefes.'); }
-        if (b.dataset.opsSi || b.dataset.opsNo) { const id = b.dataset.opsSi || b.dataset.opsNo, m = mensajes.find(x => x.id === id); if (!m) return; const no = !!b.dataset.opsNo; b.disabled = true; return accion(id, '/api/sub/ops', { msg: id, items: m.ops.filter(o => o.state === 'proposed' && !o.confirmar).map(o => ({ k: o.k, include: !no })) }, no ? 'Descartado: no cambié nada.' : 'Hecho.'); }
-        if (b.hasAttribute('data-gasto')) return ctx.escritorio('dimitri-completo');
+        if (b.dataset.sug) { if (b.hasAttribute('data-llena')) { caja.value = b.dataset.sug.replace(/ …$/, ' '); ajustaAlto(); env.disabled = false; caja.focus(); return; } return enviar(b.dataset.sug, { via: b.dataset.k === 'estado' ? 'estado' : 'chat' }); }
         if (b.hasAttribute('data-reintentar')) return cargar();
+        if (b.hasAttribute('data-reenviar')) { const f = fallo; fallo = null; return enviar(f.texto, { via: f.via, answers: f.answers }); }
+        if (b.hasAttribute('data-detener')) { if (!corrida) return; deteniendo = true; pintarVivo(); try { await ctx.api('/api/sub/stop', { method: 'POST', body: { run: corrida } }); } catch (er) { deteniendo = false; ctx.toast('No pude detenerlo: ' + er.message); } return; }
+        if (b.hasAttribute('data-analizar')) return enviar('Analiza este estado de la oficina: qué te preocupa, qué haría yo hoy y qué puede esperar.');
+        if (b.dataset.masCorto) { const k = mensajes.findIndex(x => x.id === b.dataset.masCorto), u = k > 0 ? mensajes.slice(0, k).reverse().find(x => x.who === 'user') : null; if (u) enviar(`${u.text}\n(Respóndeme más corto.)`); return; }
+        if (b.hasAttribute('data-gasto')) return ctx.escritorio('dimitri-completo');
+        // plan
+        const pz = b.closest('.mv-pieza'); if (pz && b.hasAttribute('data-pz-inc')) { const id = pz.dataset.msg, i = +pz.dataset.i; if (!edits.has(id)) edits.set(id, new Map()); const ed = edits.get(id), cur = ed.get(i) || {}; ed.set(i, { ...cur, include: cur.include === false }); return pintar(false); }
+        if (pz && b.hasAttribute('data-pz-ed')) return revisarPieza(pz.dataset.msg, +pz.dataset.i);
+        if (b.dataset.pzAbrir) return abrirDetalle(ctx, b.dataset.pzAbrir, { alCambiar: () => ctx.store.refrescar() });
+        if (b.dataset.plSi) return enviarPlan(b.dataset.plSi, b, false);
+        if (b.dataset.plNo) { if (!(await ctx.confirmar({ titulo: '¿Descartar el plan?', texto: 'No se envía nada a los jefes.', ok: 'Descartar', peligro: true }))) return; return enviarPlan(b.dataset.plNo, b, true); }
+        // cambios
+        if (b.dataset.opInc !== undefined) { const id = b.dataset.msg, k = +b.dataset.opInc; if (!opEdits.has(id)) opEdits.set(id, new Map()); const ed = opEdits.get(id), cur = ed.get(k) || {}; ed.set(k, { ...cur, include: cur.include === false }); return pintar(false); }
+        if (b.dataset.opsSi) return hacerOps(b.dataset.opsSi, b, false);
+        if (b.dataset.opsNo) return hacerOps(b.dataset.opsNo, b, true);
+        if (b.dataset.opUndo !== undefined) return deshacerOp(b.dataset.msg, +b.dataset.opUndo, b);
+        // preguntas
+        if (b.dataset.qOpt !== undefined || b.hasAttribute('data-q-otra')) {
+          if (b.getAttribute('aria-disabled') === 'true') return;
+          const m = mensajes.find(x => x.id === b.dataset.msg), q = (m?.plan?.questions || []).find(x => x.id === b.dataset.q); if (!q) return; const p = pick(b.dataset.msg, q.id);
+          if (b.hasAttribute('data-q-otra')) { p.otherOn = !p.otherOn; if (!q.multi && p.otherOn) p.values = []; }
+          else { const v = b.dataset.qOpt; if (q.multi) p.values = p.values.includes(v) ? p.values.filter(x => x !== v) : [...p.values, v]; else { p.values = [v]; p.otherOn = false; } }
+          const pos = sc.scrollTop; pintar(false); sc.scrollTop = pos; if (p.otherOn) hilo.querySelector(`[data-q-txt="${CSS.escape(q.id)}"]`)?.focus();
+          // una sola pregunta con una sola opción sin «Otra…»: se responde con un toque
+          const unica = (m.plan.questions || []).filter(x => typeof x === 'object' && x.options?.length);
+          if (unica.length === 1 && !q.multi && !p.otherOn && p.values.length) responder(m.id, b);
+          return;
+        }
+        if (b.dataset.qOk) return responder(b.dataset.qOk, b);
       });
+      hilo.addEventListener('input', e => { const t = e.target; if (t.dataset.qTxt !== undefined) { pick(t.dataset.msg, t.dataset.qTxt).other = t.value; const ok = hilo.querySelector(`[data-q-ok="${CSS.escape(t.dataset.msg)}"]`); if (ok) { const m = mensajes.find(x => x.id === t.dataset.msg), cond = (m?.plan?.questions || []).filter(x => typeof x === 'object' && x.options?.length).every(q => { const p = picks.get(t.dataset.msg)?.get(q.id); return p && (p.values.length || (p.otherOn && p.other.trim())); }); ok.disabled = !cond || ocupado; } } });
+      chipV.addEventListener('click', e => { if (e.target.closest('[data-sin-ctx]')) { sinCtx = true; ctxUlt = ''; chipViendo(); ctx.toast('Dimitri no usará lo que estás viendo.'); } });
+
+      // la cuenta atrás de «Deshacer» (30 s): solo se mueve el número; al llegar a 0 la tarjeta se redibuja sin el botón
+      function arrancaCuenta() {
+        clearInterval(tic); if (!hilo.querySelector('[data-hasta]')) return;
+        tic = setInterval(() => { const bs = hilo.querySelectorAll('[data-hasta]'); if (!bs.length || el.hidden) { clearInterval(tic); return; } let vence = false; for (const b of bs) { const s = Math.ceil((+b.dataset.hasta - Date.now()) / 1000); if (s <= 0) vence = true; else if (b.getAttribute('aria-busy') !== 'true') { const n = b.querySelector('span'); if (n) n.textContent = s; } } if (vence) { clearInterval(tic); pintar(false); } }, 1000);
+      }
 
       // ---- historial y nueva conversación ----
       async function historial() {
-        const h = ctx.hoja({ titulo: 'Conversaciones', cuerpo: '<p class="mv-meta">Cargando…</p>', lleno: true, acciones: [{ texto: 'Conversación nueva', tipo: 'primario', alTocar: x => { x.cerrar(); setTimeout(nueva, 260); } }] });
-        try {
-          const j = await ctx.api('/api/sub/conversaciones'), lista = j.lista || [];
-          const fila = c => `<li class="mv-conv" data-id="${esc(c.id)}"><button type="button" class="mv-conv-b" data-abrir><b>${esc(c.titulo)}</b><small>${new Date(c.at).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${c.n} mensajes</small></button><button type="button" class="mv-ic" data-borrar aria-label="Borrar la conversación «${esc(c.titulo)}»">${svg('borrar')}</button></li>`;
-          h.cuerpo.innerHTML = (j.actual ? `<p class="mv-meta">Ahora: ${esc(j.actual.titulo)} · ${j.actual.n} mensajes</p>` : '') + (lista.length ? `<ul class="mv-convs">${lista.map(fila).join('')}</ul>` : vacio('Sin conversaciones guardadas', 'Cuando empieces una nueva, la de ahora se guarda aquí.', { icono: 'historial' }));
-          h.cuerpo.addEventListener('click', async e => {
-            const li = e.target.closest('.mv-conv'); if (!li) return; const id = li.dataset.id;
-            if (e.target.closest('[data-abrir]')) { if (ocupado) { ctx.toast('Espera a que termine de contestar.'); return; } try { const r = await post('/api/sub/abrir', { id }); mensajes = r.messages || []; h.cerrar(); pintar(); } catch (er) { ctx.toast('No se pudo abrir: ' + er.message); } }
-            else if (e.target.closest('[data-borrar]')) { if (!(await ctx.confirmar({ titulo: '¿Borrar esta conversación?', texto: 'Se borra para siempre.', ok: 'Borrar', peligro: true }))) return; try { await post('/api/sub/borrar', { id }); li.remove(); } catch (er) { ctx.toast('No se pudo: ' + er.message); } }
-          });
-        } catch (e) { h.cuerpo.innerHTML = `<p class="mv-meta" role="alert">No pude traer el historial: ${esc(e.message)}</p>`; }
+        const h = ctx.hoja({ titulo: 'Conversaciones', cuerpo: '<div class="mv-esq" aria-hidden="true"><i></i><i></i></div><span class="mv-sr" role="status">Cargando…</span>', lleno: true, acciones: [{ texto: 'Conversación nueva', tipo: 'primario', alTocar: x => { x.cerrar(); setTimeout(nueva, 260); } }] });
+        const pinta = async () => {
+          try {
+            const j = await ctx.api('/api/sub/conversaciones'), lista = j.lista || [];
+            const fila = c => `<li class="mv-conv" data-id="${esc(c.id)}"><button type="button" class="mv-conv-b" data-abrir><b>${esc(c.titulo)}</b><small>${new Date(c.at).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${c.n} mensajes</small></button><button type="button" class="mv-ic" data-borrar aria-label="Borrar la conversación «${esc(c.titulo)}»">${svg('borrar')}</button></li>`;
+            h.cuerpo.innerHTML = (j.actual ? `<p class="mv-meta">Ahora: ${esc(j.actual.titulo)} · ${j.actual.n} mensajes</p>` : '') + (lista.length ? `<ul class="mv-convs">${lista.map(fila).join('')}</ul>` : vacio('Sin conversaciones guardadas', 'Cuando empieces una nueva, la de ahora se guarda aquí.', { icono: 'historial' }));
+          } catch (e) { h.cuerpo.innerHTML = `<div class="mv-vacio" role="alert"><h3>No pude traer el historial</h3><p>${esc(e.message)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>`; }
+        };
+        h.cuerpo.addEventListener('click', async e => {
+          if (e.target.closest('[data-reintentar]')) return pinta();
+          const li = e.target.closest('.mv-conv'); if (!li) return; const id = li.dataset.id;
+          if (e.target.closest('[data-abrir]')) { if (ocupado) { ctx.toast('Espera a que termine de contestar.'); return; } try { const r = await ctx.api('/api/sub/abrir', { method: 'POST', body: { id } }); mensajes = r.messages || []; h.cerrar(); pintar(); } catch (er) { ctx.toast('No se pudo abrir: ' + er.message); } }
+          else if (e.target.closest('[data-borrar]')) { if (!(await ctx.confirmar({ titulo: '¿Borrar esta conversación?', texto: 'Se borra para siempre.', ok: 'Borrar', peligro: true }))) return; try { await ctx.api('/api/sub/borrar', { method: 'POST', body: { id } }); li.remove(); } catch (er) { ctx.toast('No se pudo: ' + er.message); } }
+        });
+        pinta();
       }
       async function nueva() {
         if (ocupado) { ctx.toast('Espera a que termine de contestar.'); return; }
-        if (!(await ctx.confirmar({ titulo: '¿Empezar una conversación nueva?', texto: 'La de ahora se guarda en el historial; la puedes abrir después.', ok: 'Empezar' }))) return;
-        try { await post('/api/sub/clear', {}); mensajes = []; pintar(false); ctx.toast('Conversación nueva. La anterior está en el historial.'); } catch (e) { ctx.toast('No se pudo: ' + e.message); }
+        const antes = mensajes;
+        const r = await hacerYa(ctx, () => ctx.api('/api/sub/clear', { method: 'POST', body: {} }), { aviso: 'Conversación nueva. La anterior está en el historial.', reintentar: true, deshacer: v => ctx.api('/api/sub/restore', { method: 'POST', body: { id: v.archived } }).then(j => { mensajes = j.messages || antes; }), despues: v => { if (v && v.archived !== undefined && mensajes === antes) { mensajes = []; edits.clear(); opEdits.clear(); picks.clear(); fallo = null; pintar(false); } else pintar(false); } });
+        if (!r.ok) pintar(false);
       }
-      ctx.cabecera({ titulo: nombre, acciones: [{ icono: 'historial', etiqueta: 'Conversaciones guardadas', alTocar: historial }] });
-      el._tick = () => { clearInterval(el._timer); el._timer = setInterval(() => { if (!el.hidden && !ocupado && document.visibilityState === 'visible') ctx.api('/api/sub').then(j => { const l = j.messages || []; if (l.length !== mensajes.length || (l.at(-1)?.id !== mensajes.at(-1)?.id)) { mensajes = l; pintar(); } }).catch(() => {}); }, 9000); };
-      el._cargar = cargar; pintar();
+      ctx.cabecera({ titulo: nombre, acciones: [{ icono: 'historial', etiqueta: 'Conversaciones guardadas', alTocar: historial }, { icono: 'mas1', etiqueta: 'Conversación nueva', alTocar: nueva }] });
+      el._tick = () => { clearInterval(el._timer); el._timer = setInterval(() => { if (!el.hidden && !ocupado && !fallo && document.visibilityState === 'visible') ctx.api('/api/sub').then(j => { const l = j.messages || []; if (!ocupado && (l.length !== mensajes.length || (l.at(-1)?.id !== mensajes.at(-1)?.id))) { mensajes = l; pintar(); } }).catch(() => {}); }, 9000); };
+      el._cargar = () => { sinCtx = false; ctxUlt = ''; return cargar(); }; pintar();
     },
     alMostrar(el) { el._cargar?.(); el._tick?.(); },
     alOcultar(el) { clearInterval(el._timer); },

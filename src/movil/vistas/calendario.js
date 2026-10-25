@@ -199,6 +199,7 @@ export function registrar(shell) {
       ctx.tirar(sc, () => ctx.store.refrescar());
       ctx.store.alCambiar(() => { if (!el.hidden) pintar(); });
       el._apagar = () => clearInterval(tic);
+      ctx.contexto(() => ({ view: 'cal', label: 'El calendario · ' + etiquetaRango(), kind: 'range', id: diaSel })); // lo que Dimitri ve en «Viendo»
       el._abrirRutina = () => elegirCrear();
       pintar();
     },
