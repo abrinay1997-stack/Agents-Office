@@ -26,9 +26,13 @@ async function ejemplosDe(db, id) {
   return it.length ? '\n\nEXAMPLES THE OWNER LIKED (from your own past work — copy their shape, length and tone, not their content):\n' + it.map(x => '--- ' + x.title + ' ---\n' + String(x.text).slice(0, 1500)).join('\n\n') : '';
 }
 
+/** Los entregables de los agentes (notas `oficina = 1`, una por tarea) de más de tantos días siguen en el Cerebro pero ya no entran al índice de búsqueda de una ejecución.
+ *  Medido (revisión transversal del 25 oct): armar el índice de 3.000 notas de 3 KB cuesta ~0,8 s de CPU y ~60 MB; con 8.000, ~2,3 s y ~140 MB (un Worker tiene 128 MB); a 30 tareas al día se llega en meses.
+ *  Las notas escritas a mano (`oficina = 0`) entran siempre. */
+export const DIAS_ENTREGABLES_EN_EL_INDICE = 180;
 /** El índice nombre → texto de las notas, y cuáles están viejas. */
-export async function indiceDeNotas(db) {
-  const { results } = await db.prepare('select nombre, texto, actualizado, grupo from notas').all();
+export async function indiceDeNotas(db, ahora = Date.now()) {
+  const { results } = await db.prepare('select nombre, texto, actualizado, grupo from notas where oficina = 0 or actualizado >= ?').bind(ahora - DIAS_ENTREGABLES_EN_EL_INDICE * 864e5).all();
   const index = new Map(), stale = new Map();
   for (const n of results) {
     index.set(n.nombre, n.texto);

@@ -19,6 +19,7 @@ import { crearTarea } from '../../tareas/modelo.mjs';
 import { instalarZona } from '../worker/lib/zona.js';
 import { crearAlmacenD1 } from '../worker/lib/contenido/piezas.js';
 import { limpiarSecretos, registrarSecretos } from '../worker/lib/secretos.js';
+import { indiceDeNotas, DIAS_ENTREGABLES_EN_EL_INDICE } from '../worker/lib/agentes/contexto.js';
 import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -333,4 +334,15 @@ test('SECRETOS: limpiarSecretos tapa los valores conocidos y lo que tiene forma 
   assert.equal(limpiarSecretos('Authorization: Bearer abcdefghijklmnopqrstu'), 'Authorization: Bearer «…»');
   assert.equal(limpiarSecretos('mira EAAB0123456789012345678901 ok'), 'mira «…» ok');
   assert.equal(limpiarSecretos(12), 12);
+});
+
+test('ESCALA: el índice de notas de una ejecución deja fuera los entregables viejos (siguen en el Cerebro) y nunca las notas escritas a mano', { skip: SALTAR }, async () => {
+  const d1 = crearD1(), db = d1._db, ahora = Date.parse('2026-10-25T12:00:00Z'), hace = (d) => ahora - d * 864e5;
+  const ins = db.prepare('insert into notas (nombre, grupo, oficina, texto, bytes, actualizado, tarea) values (?,?,?,?,?,?,null)');
+  ins.run('2025-01-01 entrega vieja', 'Agents Office', 1, 'x', 1, hace(DIAS_ENTREGABLES_EN_EL_INDICE + 10));
+  ins.run('2026-10-20 entrega reciente', 'Agents Office', 1, 'x', 1, hace(5));
+  ins.run('guia-de-precios', '10-Business', 0, 'x', 1, hace(900)); // a mano, aunque sea antigua
+  const { index } = await indiceDeNotas(d1, ahora);
+  assert.deepEqual([...index.keys()].sort(), ['2026-10-20 entrega reciente', 'guia-de-precios']);
+  assert.equal(db.prepare('select count(*) n from notas').get().n, 3, 'nada se borra');
 });
