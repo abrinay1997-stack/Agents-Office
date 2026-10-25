@@ -45,7 +45,10 @@ const estudioDeptos = (cfg, C) => (Array.isArray(cfg.media?.departments) && cfg.
 /** Un mensaje del dueño → la respuesta de Dimitri, guardada en el chat. → { messages: [u, m], answered? } */
 export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, signal = null, fetchFn = null }) {
   const db = conLecturaUnica(db0), env = { ...env0, DB: db }; // una consulta idéntica se hace una vez por turno (el límite de 50 de una invocación del plan gratuito)
-  const st = await chat.cargar(db), hilo0 = await chat.hiloActual(db), ultimoId = st.messages.at(-1)?.id || null, C2 = await leerContexto(db), cfg2 = await leerCfg(db), lista2 = await cargarTareas(db);
+  // Se leen MAX + HOLGURA: hasta HOLGURA mensajes más viejos que el chat siguen guardados SIN plegar en el resumen (chat.recortar espera a que sobren más de HOLGURA), y si no se
+  // leyeran, lo que el dueño pidió recordar en ellos faltaría del prompt unos turnos (y volvería al plegarse). Se pliegan aquí, al vuelo, sin escribir nada.
+  const todo = await chat.cargar(db, { limite: sub.MAX + chat.HOLGURA }), st = { messages: todo.messages.slice(-sub.MAX) }, fuera = todo.messages.slice(0, Math.max(0, todo.messages.length - sub.MAX));
+  const hiloGuardado = await chat.hiloActual(db), hilo0 = fuera.length ? sub.plegarHilo(hiloGuardado, fuera) : hiloGuardado, ultimoId = st.messages.at(-1)?.id || null, C2 = await leerContexto(db), cfg2 = await leerCfg(db), lista2 = await cargarTareas(db);
   const ctxFn = { env, db, cfg: cfg2, fetchFn, signal };
   const office = oficinaDelDueno({ env, db, usuario, modulos });
   let { texto: text } = p; const { attach, imagenes, context, answers } = p;

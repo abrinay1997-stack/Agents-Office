@@ -35,6 +35,9 @@ Los agentes de la nube llaman a las herramientas internas **por función**, sin 
 - Toda entrada de la página se valida (tipos, largos, nombres de colección/clave con lista blanca); nada de SQL armado con texto del usuario: **siempre `bind()`**.
 - Lo que lee un agente de fuera (correos, comentarios, hojas) pasa por `injectionIn` como en local.
 - Un fallo se contesta en español, sin el cuerpo crudo del proveedor ni stack traces.
+- **Si reutilizas rutas de la oficina local, recuerda que allí quien llega por la página es EL DUEÑO** y en la nube puede ser un editor: decide qué es del administrador (aprobar, `needsOk: false`, mover lo que espera el OK, gastar, tocar Meta) y ponlo en el módulo (ejemplo: `modulos/tareas.js → vetoNoAdmin`). Una ruta de escritura nueva se añade a `ESCRIBEN` en `tests/auditoria-transversal.test.mjs` (la matriz de roles la prueba sola).
+- **Todo lo que solo crece tiene un tope.** Una tabla nueva de D1 se declara en `TABLAS` del mismo test (y, si hay que podarla, en `lib/mantenimiento.js`); una petición que carga «todas» las filas de algo que crece (tareas, notas, piezas) se acota por fecha o por índice. Una fila de D1 no pasa de 2 MB.
+- **Los mensajes de error no llevan secretos**: `lib/secretos.js` tapa los valores de los secretos del Worker y lo que tiene forma de llave en toda respuesta de error; un texto de error que se guarda en D1 pasa por `limpiarSecretos`.
 
 ## Cómo se prueba (definición de «terminado»)
 1. `node --test "cloudflare/tests/*.test.mjs"` y los tests de raíz que toques, en verde, **también sin `node_modules` en la raíz** y en Node 20 (los tests con D1 usan `node:sqlite` y se saltan solos en Node 20; mira `tests/d1-memoria.mjs`).

@@ -59,12 +59,16 @@ export async function guardarFila(db, coleccion, id, valor, orden = 0) {
 }
 
 /** Guarda muchas filas de una colección: [{ id, valor, orden? }]. */
-export async function guardarFilas(db, coleccion, filas) {
+/** Guarda filas (las que ya están se reemplazan). Con `soloNuevas`, las que ya están se dejan como están. → cuántas se escribieron */
+export async function guardarFilas(db, coleccion, filas, { soloNuevas = false } = {}) {
   const sql = `insert into filas (coleccion, id, json, orden, actualizado) values (?,?,?,?,?)
-    on conflict (coleccion, id) do update set json=excluded.json, orden=excluded.orden, actualizado=excluded.actualizado`;
-  for (let i = 0; i < filas.length; i += LOTE)
-    await db.batch(filas.slice(i, i + LOTE).map((f) => db.prepare(sql).bind(coleccion, String(f.id), JSON.stringify(f.valor), f.orden ?? 0, ahora())));
-  return filas.length;
+    on conflict (coleccion, id) do ${soloNuevas ? 'nothing' : 'update set json=excluded.json, orden=excluded.orden, actualizado=excluded.actualizado'}`;
+  let escritas = 0;
+  for (let i = 0; i < filas.length; i += LOTE) {
+    const r = await db.batch(filas.slice(i, i + LOTE).map((f) => db.prepare(sql).bind(coleccion, String(f.id), JSON.stringify(f.valor), f.orden ?? 0, ahora())));
+    escritas += soloNuevas ? r.reduce((a, x) => a + (x?.meta?.changes ?? 0), 0) : r.length;
+  }
+  return escritas;
 }
 
 export async function borrarFila(db, coleccion, id) {

@@ -155,7 +155,7 @@ export async function publicaInvitacion(req, env) {
   const aceptar = r[1] === 'aceptar';
   const t = await eq.tasa(db, `inv:${aceptar ? 'a' : 'v'}:${eq.ipDe(req)}`, aceptar ? 10 : 30, eq.relojDe(env));
   if (!t.ok) return error('Demasiados intentos. Espera un minuto.', 429);
-  const b = await cuerpo(req);
+  const b = await cuerpo(req, 16_000); // sin sesión: un testigo, un nombre y una contraseña
   const testigo = typeof b?.testigo === 'string' ? b.testigo : '';
   const MALA = 'Esta invitación no sirve: puede que ya se usara, que caducara o que la revocaran. Pide una nueva a quien administra la oficina.';
   if (!aceptar) {

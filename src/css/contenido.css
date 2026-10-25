@@ -307,7 +307,7 @@ body.dark .ct-need .ct-row { background: var(--cv-soft); }
 @media (max-width: 760px) {
   #ctOv .cv-band { gap: 6px 8px; padding: 8px 12px; }
   #ctOv .cv-brand { display: none; } #ctOv .ct-mode { order: 1; flex: 1; min-width: 0; } #ctOv .ct-create { order: 2; margin-left: 0; } #ctOv .cv-band > .cv-sp { display: none; } #ctOv #ctKeys { display: none; } #ctOv #ctClose { order: 3; }
-  #ctOv .ct-views { display: none; } #ctOv .cv-nav { order: 4; width: 100%; flex: 1 1 100%; justify-content: space-between; } #ctOv .ct-vsel { display: inline-block; }
+  #ctOv .ct-views { display: none; } #ctOv .cv-nav { order: 4; width: 100%; flex: 1 1 100%; justify-content: space-between; } #ctOv .ct-vsel { display: inline-block; } #ctOv .cv-nav { flex-wrap: wrap; } #ctOv .cv-nav #ctTitle { min-width: 0; flex: 1 0 100%; order: -1; overflow: hidden; text-overflow: ellipsis; }
   #ctOv .ct-newt { display: none; } #ctOv .ct-new { padding: 6px 13px; font-size: 16px; }
   #ctOv .ct-mode button { flex: 1; }
   #ctOv .ct-mode button, #ctOv .ct-views button { padding: 6px 8px; font-size: 10.5px; }

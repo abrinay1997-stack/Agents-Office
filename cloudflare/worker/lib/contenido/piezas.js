@@ -43,10 +43,11 @@ export function crearAlmacenD1({ db, medioExiste = async () => true, medida = as
     revisar,
     /** Las piezas de un rango de días (o todas), más las que no tienen día si se piden. Ordenadas por día y hora. */
     async listar({ desde = '', hasta = '', sinFecha = false, estado, formato, red, q = '' } = {}) {
-      const rango = FECHA_RE.test(desde) && FECHA_RE.test(hasta);
+      // Con UNA cota (el reloj de cada minuto pide `desde` y nada más) también va por el índice de fecha: antes solo lo hacía con las dos y la vuelta de cada minuto leía y desarmaba TODAS las piezas.
+      const cotas = [FECHA_RE.test(desde) ? ['fecha >= ?', desde] : null, FECHA_RE.test(hasta) ? ['fecha <= ?', hasta] : null].filter(Boolean);
       let filas;
-      if (rango) {
-        filas = (await db.prepare(`select id, json from contenido_piezas where borrada = 0 and ((fecha <> '' and fecha >= ? and fecha <= ?)${sinFecha ? " or fecha = ''" : ''})`).bind(desde, hasta).all()).results;
+      if (cotas.length) {
+        filas = (await db.prepare(`select id, json from contenido_piezas where borrada = 0 and ((fecha <> '' and ${cotas.map(c => c[0]).join(' and ')})${sinFecha ? " or fecha = ''" : ''})`).bind(...cotas.map(c => c[1])).all()).results;
       } else filas = (await db.prepare('select id, json from contenido_piezas where borrada = 0').all()).results;
       const needle = String(q).toLowerCase().trim();
       const todas = filas.map(deFila).filter(Boolean);

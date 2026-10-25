@@ -1,6 +1,7 @@
 // Rutas de la API. Viven aparte de index.js porque un Worker solo puede exportar handlers desde su módulo de entrada
 // (workerd rechaza una constante exportada: «Incorrect type for map entry»).
 import { json, error, noAutenticado, prohibido, cuerpo } from './respuesta.js';
+const TOPE_PUBLICO = 16_000; // bytes de un cuerpo SIN sesión (acceso)
 import { usuarioDeLaPeticion, iniciarSesion, cerrarSesion, cookieSesion, cookieBorrada } from './sesion.js';
 import { validarConector, publico } from './conectores.js';
 import { agentes, ejecutar } from './agentes.js';
@@ -15,8 +16,14 @@ import { avisarCambio } from './vivo.js';
 import * as equipo from '../modulos/equipo.js';
 import { tasa, tasaVer, ipDe, relojDe } from './equipo.js';
 import { cerrarDe } from './vivo.js';
+import { podar, tocaPodar } from './mantenimiento.js';
+import { registrarSecretos } from './secretos.js';
 
 export const VERSION = '0.1.0';
+/** Colecciones de /api/migrar/filas que son estado vivo de la nube (ver arriba): una migración repetida solo agrega las que faltan. */
+const FILAS_VIVAS = new Set(['tareas', 'subgerente', 'rutinas']);
+/** Un documento «vacío»: {} o [], o solo con claves cuyo valor está vacío (listas, objetos, textos o null). */
+const docVacio = (v) => v == null || v === '' || (Array.isArray(v) ? v.length === 0 : typeof v === 'object' ? Object.values(v).every(docVacio) : false);
 /** Lo único que se contesta sin sesión además de /api/health y /api/acceso: webhooks de otros sistemas, cada uno con su propio secreto (ver `publica` en los módulos). */
 export const RUTAS_PUBLICAS = ['/api/hook/', '/api/telegram/', '/api/kpi/'];
 
@@ -28,14 +35,20 @@ function origenValido(req) {
 }
 
 /** El reloj de cada minuto (lo que en serve.mjs eran setInterval). La zona de la oficina se instala aquí, UNA vez, igual que en `manejar`: los módulos no la tocan. */
-export async function correrReloj(env) {
+/** Lo lento va al final del reloj: una vuelta de agentes espera al modelo (minutos) y, delante, retrasaba lo que es cosa de segundos (los avisos de Telegram, los disparadores, la limpieza del equipo).
+ *  El orden de MODULOS sigue siendo el de las rutas (Bandeja antes que Contenido); solo el del reloj cambia. `tareas` va antes: crea las tareas que `agentes` toma en esa misma vuelta. */
+export const ordenDelReloj = (modulos) => [...modulos].sort((a, b) => (a.nombre === 'agentes') - (b.nombre === 'agentes'));
+export async function correrReloj(env, ahoraMs = Date.now()) {
+  registrarSecretos(env); // `ahoraMs`: solo las pruebas lo cambian
   instalarZona(env.ZONA_HORARIA);
   await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
+  if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
   // Un módulo que falle no tumba a los demás.
-  for (const mod of MODULOS) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
+  for (const mod of ordenDelReloj(MODULOS)) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
 }
 
 export async function manejar(req, env, exec = null) {
+  registrarSecretos(env);
   instalarZona(env.ZONA_HORARIA); // la hora «local» de las reglas de la oficina es la de su zona (lib/zona.js), no la UTC del Worker
   const url = new URL(req.url);
   const ruta = url.pathname;
@@ -73,7 +86,7 @@ export async function manejar(req, env, exec = null) {
   if (ruta.startsWith('/api/invitacion/')) { const r = await equipo.publicaInvitacion(req, env); if (r) return r; }
 
   if (ruta === '/api/acceso' && req.method === 'POST') {
-    const b = await cuerpo(req);
+    const b = await cuerpo(req, TOPE_PUBLICO); // sin sesión: el cuerpo de un acceso son dos textos cortos
     // Tope de intentos (fase 10): por IP (todo intento) y por correo+IP (solo los FALLOS). Contar los intentos por correo a secas dejaba a cualquiera
     // bloquear a su víctima; con la IP en la clave, quien se equivoca desde otra IP no cierra la puerta a quien entra bien desde la suya.
     const huella = String(b?.email ?? '').trim().toLowerCase().slice(0, 120), ip = ipDe(req), claveFallos = `acc:fallo:${ip}:${huella}`;
@@ -103,7 +116,7 @@ export async function manejar(req, env, exec = null) {
     const b = await cuerpo(req);
     const v = b?.notas === undefined && b?.grafo ? { ok: true, notas: [] } : cerebro.validarNotas(b?.notas);
     if (!v.ok) return error(v.error, 422);
-    const subidas = v.notas.length ? await cerebro.guardarNotas(db, v.notas) : 0;
+    const subidas = v.notas.length ? await cerebro.guardarNotas(db, v.notas, { siMasNueva: b?.forzar !== true }) : 0;
     const grafo = b?.grafo ? await cerebro.guardarGrafo(db, b.grafo) : false;
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ notas: subidas, grafo })).run();
     return json({ subidas, grafo, ...(await cerebro.contar(db)) });
@@ -115,16 +128,24 @@ export async function manejar(req, env, exec = null) {
     if (!/^[a-z][a-z0-9_-]{1,40}$/.test(String(b?.coleccion ?? ''))) return error('Colección no válida.', 422);
     const filas = Array.isArray(b?.filas) ? b.filas : [];
     if (!filas.length || filas.length > 200 || filas.some((f) => !f || typeof f.id !== 'string' || !f.id || f.id.length > 200 || typeof f.valor !== 'object' || f.valor === null)) return error('Filas no válidas (1 a 200, cada una con id y valor).', 422);
-    const n = await almacen.guardarFilas(db, b.coleccion, filas);
+    // Las tareas, la conversación con Dimitri y las rutinas son estado VIVO: una migración repetida no las vuelve a como estaban en la computadora (una tarea ya aprobada en la
+    // nube volvería a esperar su OK y podría enviarse dos veces; una rutina pausada aquí volvería a dispararse). Solo entran las que la nube no tiene; forzar: true las reemplaza.
+    const soloNuevas = b.forzar !== true && FILAS_VIVAS.has(b.coleccion);
+    const n = await almacen.guardarFilas(db, b.coleccion, filas, { soloNuevas });
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ coleccion: b.coleccion, filas: n })).run();
-    return json({ subidas: n, coleccion: b.coleccion, total: await almacen.contarFilas(db, b.coleccion) });
+    return json({ subidas: n, ...(soloNuevas && n < filas.length ? { omitidas: filas.length - n } : {}), coleccion: b.coleccion, total: await almacen.contarFilas(db, b.coleccion) });
   }
   if (ruta === '/api/migrar/docs' && req.method === 'POST') {
     if (usuario.rol !== 'admin') return prohibido('Solo un administrador sube datos.');
     const b = await cuerpo(req);
     if (!/^[a-z][a-z0-9_.-]{1,60}$/.test(String(b?.clave ?? '')) || typeof b?.valor !== 'object' || b.valor === null) return error('Documento no válido.', 422);
-    // Los ajustes que ya se tocaron en la nube (quién aprueba por Telegram, topes…) no se pisan con una migración repetida: la nube es la copia de trabajo.
-    if ((b.clave === 'ajustes' || b.clave === 'config-local') && b.forzar !== true && (await almacen.leerDoc(db, b.clave, null)).valor) return error(`Ya hay «${b.clave}» en la nube y la migración lo pisaría (se perderían los cambios hechos aquí, y un aprobador revocado volvería). Si de verdad quieres reemplazarlo, manda forzar: true.`, 409);
+    // Lo que ya existe en la nube NO se pisa con una migración repetida: después de la primera, la nube es la copia de trabajo (un aprobador revocado volvería, los indicadores
+    // y las cifras perderían lo que se anotó aquí, un agente recuperaría su brief de antes…). Los ajustes, siempre; el resto, mientras tenga algo dentro (una
+    // vacía —{} o listas vacías, como las que la propia nube crea al abrirse— se llena). Para reemplazarlo adrede: forzar: true (migrar-a-nube.mjs --forzar).
+    if (b.forzar !== true) {
+      const actual = (await almacen.leerDoc(db, b.clave, null)).valor;
+      if (actual && (b.clave === 'ajustes' || b.clave === 'config-local' || !docVacio(actual))) return error(`Ya hay «${b.clave}» en la nube y la migración lo pisaría (se perderían los cambios hechos aquí, y un aprobador revocado volvería). Si de verdad quieres reemplazarlo, manda forzar: true.`, 409);
+    }
     const version = await almacen.guardarDoc(db, b.clave, b.valor);
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ doc: b.clave })).run();
     return json({ clave: b.clave, version });
