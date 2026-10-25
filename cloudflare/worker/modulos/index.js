@@ -3,6 +3,8 @@
 //   export async function manejar(ctx) { … }              // devuelve una Response, o null si la ruta no es suya
 //   export async function cadaMinuto(env) { … }            // opcional: lo que en serve.mjs era un reloj (cron del Worker)
 // y se añade con UNA línea a la lista de abajo (así las fases no se pisan entre sí). Ver cloudflare/PORTAR.md.
+import * as contenido from './contenido.js';
 export const MODULOS = [
   // import * as tareas from './tareas.js';  → luego añadir `tareas,` aquí
+  contenido,
 ];
