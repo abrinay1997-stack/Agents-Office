@@ -43,10 +43,10 @@ export async function guardarGrafo(db, grafo) {
   return true;
 }
 
-/** Lo que contesta GET /api/brain. Sin mapa todavía, uno vacío (la página conserva el de muestra). */
+/** Lo que contesta GET /api/brain. Sin mapa todavía, uno vacío y marcado `vacio` (la página lo pinta tal cual: el de muestra del paquete no es de esta oficina). */
 export async function leerGrafo(db) {
   const f = await db.prepare('select json from grafo where id = 1').first();
-  const g = f ? JSON.parse(f.json) : { notes: 0, nodes: [], links: [], extra: [], floor: null };
+  const g = f ? JSON.parse(f.json) : { notes: 0, nodes: [], links: [], extra: [], floor: null, vacio: true }; // `vacio`: la página pinta un Cerebro sin notas, no el de muestra
   return { ...g, learned: { w: {}, links: [] } }; // lo que aprende la memoria llega con los agentes (fase 4)
 }
 

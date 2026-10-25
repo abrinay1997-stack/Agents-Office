@@ -28,7 +28,7 @@ test('el Cerebro en la nube: subir, mapa, búsqueda y lectura con la forma de la
   assert.equal((await pedir(manejar, env, '/api/brain')).status, 401);
 
   const vacio = await (await pedir(manejar, env, '/api/brain', { cookie: ck })).json();
-  assert.deepEqual([vacio.nodes, vacio.learned], [[], { w: {}, links: [] }]); // sin mapa: la página conserva el de muestra
+  assert.deepEqual([vacio.nodes, vacio.learned, vacio.vacio], [[], { w: {}, links: [] }, true]); // sin mapa: vacío y marcado, para que la página no enseñe el de muestra
 
   const sub = await pedir(manejar, env, '/api/migrar/notas', { metodo: 'POST', cuerpo: { notas: NOTAS, grafo: GRAFO }, cookie: ck });
   assert.equal(sub.status, 200);

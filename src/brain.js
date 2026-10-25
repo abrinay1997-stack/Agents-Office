@@ -90,7 +90,7 @@ export function initBrain({ esc }) {
   }
   // LIVE: replace the graph with the server's (the user's real vault), keeping today's state
   function setGraph(g) {
-    if (!g || !g.nodes || !g.nodes.length) return;
+    if (!g || !g.nodes || (!g.nodes.length && !g.vacio)) return; // vacio: la nube sin notas todavía — el Cerebro dice 0, no enseña el de muestra
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const today = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`; // LOCAL day: the server names notes by the local date (was UTC: after 19:00 in Panamá nothing was «today»)
     nodes = g.nodes.map((n, i) => ({ ...n, i, fresh: n.g === 'Agents Office' && (n.id.startsWith(today) || (n.t || 0) * 1000 >= d0.getTime()) })); // notes the office wrote today glow green
     links = g.links.map(([a, b]) => [a, b]);
