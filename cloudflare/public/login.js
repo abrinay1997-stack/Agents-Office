@@ -5,7 +5,6 @@ $('ojo').addEventListener('click', (e) => {
   const ver = pass.type === 'password';
   pass.type = ver ? 'text' : 'password';
   e.currentTarget.setAttribute('aria-pressed', String(ver));
-  e.currentTarget.setAttribute('aria-label', ver ? 'Ocultar contraseña' : 'Mostrar contraseña');
 });
 f.addEventListener('submit', async (e) => {
   e.preventDefault();

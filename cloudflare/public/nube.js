@@ -14,9 +14,14 @@
   const fetch0 = window.fetch.bind(window);
   window.fetch = (u, o = {}) => {
     try {
-      const url = new URL(typeof u === 'string' ? u : u.url, location.href);
-      const metodo = (o.method || (typeof u !== 'string' && u.method) || 'GET').toUpperCase();
-      if (url.origin === location.origin && url.pathname.startsWith('/api/') && metodo !== 'GET') o = { ...o, headers: { ...(o.headers instanceof Headers ? Object.fromEntries(o.headers) : o.headers), 'X-Pestana': PESTANA } };
+      const esReq = typeof Request !== 'undefined' && u instanceof Request;
+      const url = new URL(esReq ? u.url : String(u), location.href);
+      const metodo = String(o.method || (esReq ? u.method : 'GET')).toUpperCase();
+      if (url.origin === location.origin && url.pathname.startsWith('/api/') && metodo !== 'GET') {
+        // las cabeceras que ya traía (las de un Request pasado como primer argumento, o las de `init`) se conservan: solo se SUMA la de la pestaña
+        const h = new Headers(o.headers ?? (esReq ? u.headers : undefined)); h.set('X-Pestana', PESTANA);
+        o = { ...o, headers: h };
+      }
     } catch { /* una URL rara: se deja pasar tal cual */ }
     return fetch0(u, o);
   };
@@ -98,6 +103,18 @@
     document.dispatchEvent(new CustomEvent('ao:presencia', { detail: { presentes: presentes.map(persona), conexion } }));
   }
 
+  /** A ≤ 440 px la barra de avatares se esconde: Mi perfil y Salir viven también en el menú «⋯» del dock (y siguen en Ajustes). */
+  function enMenuMas() {
+    const m = document.getElementById('topMoreMenu'); if (!m) return false;
+    if (m.querySelector('[data-nube]')) return true;
+    for (const [a, t] of [['perfil', 'Mi perfil'], ['salir', 'Salir']]) {
+      const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.tabIndex = -1; b.dataset.nube = a; b.textContent = t;
+      b.addEventListener('click', () => { m.hidden = true; document.getElementById('topMore')?.setAttribute('aria-expanded', 'false'); if (a === 'salir') salir(); else abrirAjustes('nube-perfil'); });
+      m.appendChild(b);
+    }
+    return true;
+  }
+
   // ---------- el socket ----------
   let ws = null, intentos = 0, latido = 0, pongT = 0, ultimaVista = '';
   const mandar = (o) => { if (ws?.readyState === 1) ws.send(typeof o === 'string' ? o : JSON.stringify(o)); };
@@ -115,7 +132,8 @@
     s.onopen = () => { clearInterval(latido); latido = setInterval(() => { mandar('ping'); clearTimeout(pongT); pongT = setTimeout(() => { try { s.close(); } catch { /* ya cerrado */ } }, 10000); }, 25000); };
     s.onclose = async (e) => {
       clearInterval(latido); clearTimeout(pongT); if (ws !== s) return; ws = null; presentes = presentes.filter((p) => p.userId === yo?.id); conexion = 'desconectado'; pintarBarra();
-      if (e.code === 4401 || e.code === 1008 || e.code === 1006 && intentos >= 1) { // ¿sigo teniendo sesión? Si no, vuelvo al acceso en vez de reintentar para siempre
+      if (e.code === 1008 || e.code === 4408) return; // demasiados mensajes o demasiadas pestañas: reconectar solo repetiría el problema (se vuelve al recargar)
+      if (e.code === 4401 || (e.code === 1006 && intentos >= 1)) { // ¿sigo teniendo sesión? Si no, vuelvo al acceso en vez de reintentar para siempre
         try { const r = await fetch0('/api/yo'); if (r.status === 401) return location.reload(); } catch { /* sin red: reintento normal */ }
       }
       programar();
@@ -154,7 +172,6 @@
   }
 
   // ---------- lo que cambió otra persona ----------
-  const NOMBRE_AREA = { tareas: 'Tareas', contenido: 'Contenido', anuncios: 'Anuncios', estudio: 'el Estudio', cerebro: 'el Cerebro', agentes: 'los agentes', equipo: 'el equipo', conectores: 'los conectores' };
   const avisadas = new Map();
   function alCambio(m) {
     if (m.por?.tab && m.por.tab === PESTANA) return; // el eco de lo mío: la página ya lo sabe
@@ -163,7 +180,7 @@
     if (m.area === 'estudio') window.dispatchEvent(new CustomEvent('ao:media-changed'));
     if (m.area === 'equipo') cargarEquipo();
     const t = Date.now();
-    if (m.por?.id && m.por.id !== yo?.id && t - (avisadas.get(m.area) ?? 0) > 8000) { avisadas.set(m.area, t); avisoBreve(`${m.por.nombre || 'Alguien'} cambió ${NOMBRE_AREA[m.area] || m.area}.`); }
+    if (m.nombre && m.por?.id && m.por.id !== yo?.id && t - (avisadas.get(m.area) ?? 0) > 8000) { avisadas.set(m.area, t); avisoBreve(`${m.por.nombre || 'Alguien'} cambió ${m.nombre}.`); } // el nombre legible lo manda el servidor (lista blanca): nunca sale un nombre interno
   }
   let toastT = 0;
   function avisoBreve(t) {
@@ -237,7 +254,7 @@
       const p = presentes.find((x) => x.userId === m.id);
       return `<li class="nb-fila" data-id="${esc(m.id)}">${avatar({ ...m, userId: m.id, etiqueta: p ? p.etiqueta : undefined })}
         <div class="nb-quien"><span class="nb-nom"><b>${esc(m.nombre)}</b>${m.yo ? ' <small>(tú)</small>' : ''}${m.fundador ? ' <small>· fundó la oficina</small>' : ''}</span><small>${m.email ? esc(m.email) + ' · ' : ''}${p ? 'conectado · ' + esc(p.etiqueta || 'La oficina') : 'desconectado'}</small></div>
-        ${admin ? `<select aria-label="Rol de ${esc(m.nombre)}" data-rol${m.fundador ? ' disabled' : ''}>${['admin', 'editor', 'lectura'].map((r) => `<option value="${r}"${m.rol === r ? ' selected' : ''}>${esc(rolTxt(r))}</option>`).join('')}</select>${m.yo || m.fundador ? '' : '<button type="button" class="sg-btn" data-a="quitar">Quitar</button>'}` : `<span class="nb-rol">${esc(rolTxt(m.rol))}</span>`}</li>`;
+        ${admin ? `<select aria-label="Rol de ${esc(m.nombre)}" data-rol${m.fundador ? ' disabled' : ''}>${['admin', 'editor', 'lectura'].map((r) => `<option value="${r}"${m.rol === r ? ' selected' : ''}>${esc(rolTxt(r))}</option>`).join('')}</select>${m.yo || m.fundador ? '' : '<button type="button" class="sg-btn" data-a="reinicio">Restablecer contraseña</button><button type="button" class="sg-btn" data-a="quitar">Quitar</button>'}` : `<span class="nb-rol">${esc(rolTxt(m.rol))}</span>`}</li>`;
     };
     if (!equipo.miembros.length) cargarEquipo(true); // se pinta sola al llegar
     pane.innerHTML = `<p class="sg-lead">${admin ? 'Invita a tu equipo, cambia sus roles y mira quién está conectado. Administrador: aprueba, gasta y gestiona el equipo · Editor: trabaja con los agentes · Solo lectura: mira.' : 'Las personas de esta oficina y en qué trabajan ahora.'}</p>
@@ -265,6 +282,11 @@
           await cargarEquipo(true); pintarEquipo(pane);
           const caja = pane.querySelector('#nbEnlace'); caja.hidden = false; pane.querySelector('#nbEnlaceTxt').value = r.enlace; pane.querySelector('#nbEnlaceTxt').select(); msgDe(pane)('Invitación creada. Copia el enlace.');
         }
+        else if (a === 'reinicio') {
+          const r = await api(`/api/equipo/${b.closest('[data-id]').dataset.id}/reinicio`, { metodo: 'POST' });
+          const caja = pane.querySelector('#nbEnlace'); caja.hidden = false; caja.querySelector('label').textContent = `Enlace para que ${r.para} ponga una contraseña nueva (sirve una vez, caduca en ${r.expira}; sus sesiones se cierran al usarlo).`;
+          pane.querySelector('#nbEnlaceTxt').value = r.enlace; pane.querySelector('#nbEnlaceTxt').select(); msg('Enlace creado. Cópialo y mándaselo.');
+        }
         else if (a === 'revocar') { await api(`/api/equipo/invitaciones/${b.closest('[data-inv]').dataset.inv}`, { metodo: 'DELETE' }); await cargarEquipo(true); pintarEquipo(pane); msgDe(pane)('Invitación revocada.'); }
         else if (a === 'quitar') {
           if (b.dataset.seguro !== '1') { b.dataset.seguro = '1'; b.textContent = '¿Seguro? Quitar'; setTimeout(() => { b.dataset.seguro = ''; b.textContent = 'Quitar'; }, 4000); return; }
@@ -283,14 +305,15 @@
 
   // Las dos pestañas de Ajustes (src/settings.js lee window.AO_AJUSTES_EXTRA al pintar).
   window.AO_AJUSTES_EXTRA = [
-    { key: 'nube-perfil', label: 'Mi perfil', render: (pane) => { if (yo) pintarPerfil(pane); } },
-    { key: 'nube-equipo', label: 'Equipo', render: (pane) => { if (yo) pintarEquipo(pane); } },
+    { key: 'nube-perfil', label: 'Mi perfil', primera: true, render: (pane) => { if (yo) pintarPerfil(pane); } },
+    { key: 'nube-equipo', label: 'Cuentas y roles', render: (pane) => { if (yo) pintarEquipo(pane); } },
   ];
 
   // ---------- arranque ----------
   async function iniciar() {
     try { yo = (await api('/api/yo')).usuario; } catch { return; }
     pintarBarra(); vigilarVista(); conectar(); cargarEquipo();
+    for (let i = 0; i < 20 && !enMenuMas(); i++) await new Promise((r) => setTimeout(r, 250)); // el menú «⋯» lo crea la página al arrancar
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
   window.AO_NUBE = { pestana: PESTANA, presentes: () => presentes.map(persona), conexion: () => conexion };

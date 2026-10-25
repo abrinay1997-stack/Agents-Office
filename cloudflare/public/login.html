@@ -11,11 +11,11 @@
   <div class="marca">AGENTS OFFICE<span class="co">PanaClaw</span></div>
   <h1>Entra a tu oficina</h1>
   <p class="sub">Tu equipo de agentes te espera.</p>
-  <form id="f" novalidate>
+  <form id="f" method="post" action="/login.html" novalidate>
     <div class="campo"><label for="email">Correo</label>
-      <input id="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required autofocus></div>
+      <input id="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required autofocus></div>
     <div class="campo"><label for="pass">Contraseña</label>
-      <div class="con-ojo"><input id="pass" name="password" type="password" autocomplete="current-password" required>
+      <div class="con-ojo"><input id="pass" type="password" autocomplete="current-password" required>
       <button type="button" class="ojo" id="ojo" aria-pressed="false" aria-label="Mostrar contraseña" aria-controls="pass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="tachado" d="M4 4l16 16"/></svg></button></div></div>
     <button class="principal" id="entrar" type="submit">Entrar</button>
     <p class="aviso" id="msg" role="alert"></p>
