@@ -97,3 +97,35 @@
 
 /* ---- delegar ---- */
 .mv-sw-fila { margin-top: 8px; }
+
+/* ---- calendario: barra, día con horas, capas ---- */
+.mv-seg-cal { margin: 8px 12px 0; } .mv-seg-cal button { padding: 0 2px; font-size: 14px; }
+.mv-tb { display: flex; align-items: center; gap: 0; padding: 4px 4px 0; position: sticky; top: 0; z-index: 3; background: var(--mv-bg); }
+.mv-tb .mv-ic { flex: none; }
+.mv-tb-t { flex: 1; min-width: 0; min-height: 44px; padding: 0 4px; border: 0; background: none; font-size: 16px; font-weight: 800; text-align: center; text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-tb-hoy { flex: none; min-width: 52px; min-height: 44px; padding: 0 10px; border: 1.5px solid var(--mv-line); border-radius: 22px; background: var(--mv-surf); font-weight: 700; font-size: 14px; }
+.mv-linea-dia { position: relative; margin: 6px 0 0; }
+.mv-hr { position: absolute; left: 0; right: 0; height: 56px; border-top: 1px solid var(--mv-line); }
+.mv-hr span { position: absolute; left: 0; top: -9px; width: 46px; background: var(--mv-bg); font-size: 12px; font-weight: 700; color: var(--mv-grey); font-variant-numeric: tabular-nums; padding-right: 4px; }
+.mv-evcol { position: absolute; left: 50px; right: 0; top: 0; bottom: 0; pointer-events: none; } .mv-evcol > .mv-evb { pointer-events: auto; }
+.mv-evb { position: absolute; display: block; overflow: hidden; text-align: left; padding: 4px 8px; border: 1px solid var(--mv-line); border-left-width: 5px; border-radius: 10px; background: var(--mv-surf); font-size: 14px; line-height: 1.25; }
+.mv-evb b { font-variant-numeric: tabular-nums; } .mv-evb small { display: block; font-size: 12px; color: var(--mv-grey); }
+.mv-evb.t-rutina, .mv-ev.t-rutina { border-left-color: #7449A9; } .mv-evb.t-tarea { border-left-color: #2E86AB; } .mv-evb.t-limite { border-left-color: var(--mv-rojo); } .mv-evb.t-mia { border-left-color: var(--mv-acc); } .mv-evb.t-contenido, .mv-ev.t-contenido { border-left-color: #B3366D; } .mv-evb.pausada { border-style: dashed; border-left-style: solid; }
+.mv-ahora { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--mv-rojo); pointer-events: none; z-index: 2; margin-left: 42px; } .mv-ahora i { position: absolute; left: -6px; top: -7px; width: 12px; height: 12px; border-radius: 50%; background: var(--mv-rojo); }
+.mv-todoeldia { margin-top: 6px; } .mv-nada-dia { text-align: center; }
+.mv-capas { border-top: 1px solid var(--mv-line); } .mv-capas .mv-sw { border-bottom: 1px solid var(--mv-line); }
+.mv-a { display: flex; align-items: center; justify-content: center; text-decoration: none; color: var(--mv-ink); text-align: center; }
+.mv-bres { margin-top: 10px; }
+.mv-hoja-cuerpo .mv-det-acc small { font-weight: 500; opacity: .85; }
+
+/* ---- el formulario de una rutina ---- */
+.mv-rform { padding-bottom: 24px; }
+.mv-dias { display: grid; grid-template-columns: repeat(7, 1fr); margin: 4px calc(-1 * max(18px, env(safe-area-inset-left))) 6px; }
+.mv-dia-b { min-height: 52px; border: 0; background: none; display: grid; place-items: center; padding: 0; }
+.mv-dia-b span { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--mv-line); display: grid; place-items: center; font-weight: 800; font-size: 16px; background: var(--mv-surf); }
+.mv-dia-b[aria-pressed="true"] span { background: var(--mv-ink); color: var(--mv-bg); border-color: var(--mv-ink); }
+.mv-resumen { margin: 14px 0 4px; padding: 10px 12px; border-radius: 12px; background: var(--mv-acc-bg); color: var(--mv-ink); font-size: 15px; } .mv-resumen b { color: var(--mv-acc); }
+.mv-mas-opc { margin-top: 10px; } .mv-mas-opc summary { min-height: 44px; display: flex; align-items: center; font-weight: 700; color: var(--mv-azul); cursor: pointer; }
+.mv-pregunta { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--mv-surf2); } .mv-pregunta .mv-meta { margin: 0; line-height: 1.5; }
+#mvRoot [aria-invalid="true"] { border-color: var(--mv-rojo); }
+.mv-cuando .mv-pastillas { margin-bottom: 4px; }
