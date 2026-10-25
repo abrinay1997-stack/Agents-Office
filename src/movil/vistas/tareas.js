@@ -32,7 +32,7 @@ export function registrar(shell) {
     id: 'tareas', titulo: 'Tareas', icono: 'tareas', grupo: 'tab',
     montar(el, ctx) {
       let lista = 'hoy', vista = 'lista', cargando = true, cat = null, filtro = FILTRO0(), guardados = guardado('ao.mv.filtros', []), tic = 0;
-      el.innerHTML = `<div class="mv-scroll" id="mvTareasSc"><div class="mv-crono" role="status" hidden></div><div class="mv-seg mv-seg-vistas" role="group" aria-label="Cómo ver las tareas">${VISTAS.map(([k, t]) => `<button type="button" data-vista="${k}" aria-pressed="${k === 'lista'}">${t}</button>`).join('')}</div>
+      el.innerHTML = `<div class="mv-scroll" id="mvTareasSc"><div class="mv-crono" role="status" hidden></div><div class="mv-seg mv-seg-vistas" role="group" aria-label="Cómo ver las tareas">${VISTAS.map(([k, t]) => `<button type="button" data-tv="${k}" aria-pressed="${k === 'lista'}">${t}</button>`).join('')}</div>
         <div class="mv-sec-lista"><nav class="mv-chips" aria-label="Listas de tareas"></nav><div class="mv-filtros"></div></div>
         <div class="mv-cuerpo mv-cuerpo-l" aria-live="polite"></div><div class="mv-cuerpo mv-cuerpo-t" hidden></div><div class="mv-cuerpo mv-cuerpo-p" hidden></div><div class="mv-cuerpo mv-cuerpo-m" hidden></div></div>
         <form class="mv-anadir" autocomplete="off"><div class="mv-entiende" aria-live="polite"></div><div class="mv-anadir-fila"><label class="mv-sr" for="mvNueva">Añadir una tarea</label>
@@ -98,7 +98,7 @@ export function registrar(shell) {
       }
       function pintar() {
         pintarCrono();
-        for (const b of segV.querySelectorAll('[data-vista]')) b.setAttribute('aria-pressed', String(b.dataset.vista === vista));
+        for (const b of segV.querySelectorAll('[data-tv]')) b.setAttribute('aria-pressed', String(b.dataset.tv === vista));
         secLista.hidden = cuerpo.hidden = vista !== 'lista'; cT.hidden = vista !== 'tablero'; cP.hidden = vista !== 'proyectos'; cM.hidden = vista !== 'medidas';
         const sinForma = vista !== 'lista' || ['delegadas', 'hechas', 'agentes'].includes(lista); forma.hidden = sinForma; el.classList.toggle('sin-anadir', sinForma);
         if (vista === 'lista') pintarLista(); else if (vista === 'tablero' && st.cargado) tablero.pintar();
@@ -195,7 +195,7 @@ export function registrar(shell) {
 
       // ---- toques ----
       const irVista = k => { vista = k; try { sessionStorage.setItem('ao.mv.tvista', vista); } catch { /* no se recuerda */ } pintar(); sc.scrollTo({ top: 0 }); if (k === 'proyectos') proyectos.pintar(); else if (k === 'medidas') medidas.pintar(true); };
-      segV.addEventListener('click', e => { const b = e.target.closest('[data-vista]'); if (b) irVista(b.dataset.vista); });
+      segV.addEventListener('click', e => { const b = e.target.closest('[data-tv]'); if (b) irVista(b.dataset.tv); });
       chips.addEventListener('click', e => { const b = e.target.closest('[data-lista]'); if (!b) return; lista = b.dataset.lista; try { sessionStorage.setItem('ao.mv.lista', lista); } catch { /* no se recuerda */ } pintar(); sc.scrollTo({ top: 0 }); b.scrollIntoView({ inline: 'center', block: 'nearest' }); });
       barraFiltros.addEventListener('click', e => {
         if (e.target.closest('[data-filtrar]')) return abrirFiltros();

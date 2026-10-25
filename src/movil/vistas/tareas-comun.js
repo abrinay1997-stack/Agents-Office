@@ -2,7 +2,8 @@
 // etiquetas), las personas del equipo, y `hacer`: UN botón que dispara una petición con su estado visible (Un momento… → ✓ → o el
 // motivo y «Reintentar») y, si se puede deshacer, el aviso con DESHACER. Nada de esto toca el escritorio.
 import { conEstado } from '../../accion.js';
-import { esc } from '../ui.js';
+import { esc, svg as _svg, limiteTexto as _lim } from '../ui.js';
+import { visible as _visible } from '../../../tareas/estados.mjs';
 
 export const ESTADO_AG = { espera_ok: 'Esperan tu OK', en_curso: 'En curso', en_cola: 'En cola', programada: 'Programadas', bloqueada: 'Bloqueadas', idea: 'Ideas', en_manos: 'En manos de una persona', fallida: 'Fallaron', tuya: 'Tuyas', hecha: 'Hechas' };
 export const ESTADO_UNO = { espera_ok: 'Espera tu OK', en_curso: 'En curso', en_cola: 'En cola', programada: 'Programada', bloqueada: 'Bloqueada', idea: 'Idea', en_manos: 'En manos de una persona', fallida: 'Falló', tuya: 'Tuya', hecha: 'Hecha' };
@@ -51,8 +52,6 @@ export const interruptor = (id, txt, on, ayuda = '') => `<button type="button" c
 export function alternar(btn) { const on = btn.getAttribute('aria-checked') !== 'true'; btn.setAttribute('aria-checked', String(on)); return on; }
 
 /** Una tarea en una fila de lista que se toca para abrirla: título y debajo «estado · agente · vence…». */
-import { visible as _visible } from '../../../tareas/estados.mjs';
-import { svg as _svg, limiteTexto as _lim } from '../ui.js';
 export function filaMini(t, { porId, ags = [] } = {}) {
   const v = _visible(t, porId), a = ags.find(x => x.id === t.agent), lim = t.limite ? _lim(t.limite) : '';
   const meta = [t.person === 'Tú' ? 'Tuya' : ESTADO_UNO[v] || v, a && a.name, t.person && t.person !== 'Tú' && '👤 ' + t.person, lim].filter(Boolean).join(' · ');

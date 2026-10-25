@@ -16,6 +16,9 @@
 .mv-sec-lista:not([hidden]) { display: contents; }
 #mvRoot .mv-chips { scroll-padding: 0 16px; }
 
+#mvRoot .mv-hoja-cab .mv-ic { flex: none; min-width: 44px; }
+#mvRoot .mv-hoja-cab h2 { min-width: 0; flex: 1; }
+
 /* ---- el aviso de guardado, siempre a la vista ---- */
 .mv-guarda { position: sticky; top: -4px; z-index: 3; margin: 0 -18px 6px; padding: 6px 18px; min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; color: var(--mv-grey); background: var(--mv-bg); border-bottom: 1px solid var(--mv-line); }
 .mv-guarda.ok { color: var(--mv-acc); } .mv-guarda.mal { color: var(--mv-rojo); background: var(--mv-rojo-bg); }

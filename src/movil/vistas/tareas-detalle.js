@@ -31,7 +31,10 @@ export function abrirDetalle(ctx, id, { alCambiar = () => {}, alCerrar = () => {
       t = r.tarea; ahora = Date.now(); h.titulo(esDelDueno(t) ? 'Tu tarea' : 'Tarea'); pintar();
     } catch (e) { raiz.innerHTML = falla(e.status === 404 ? 'Esa tarea ya no existe.' : e.message); }
   }
-  const marcar = (txt, mal = false) => { const el = raiz.querySelector('.mv-guarda'); if (!el) return; el.className = 'mv-guarda' + (mal ? ' mal' : txt.startsWith('Guardado') ? ' ok' : ''); el.innerHTML = `<span>${esc(txt)}</span>${mal ? '<button type="button" class="mv-link" data-reintentar-guardar>Reintentar</button>' : ''}`; };
+  let g = { txt: '', mal: false }, gt = 0; // la franja de guardado: se queda «Guardado ✓» unos segundos y vuelve a «Todo se guarda solo»
+  const franja = () => { const mal = g.mal || !!ultimoError, txt = g.txt || (ultimoError ? 'No se guardó: ' + ultimoError : 'Todo se guarda solo'); return `<span>${esc(txt)}</span>${mal ? '<button type="button" class="mv-link" data-reintentar-guardar>Reintentar</button>' : ''}`; };
+  const claseG = () => 'mv-guarda' + (g.mal || ultimoError ? ' mal' : g.txt.startsWith('Guardado') ? ' ok' : '');
+  const marcar = (txt, mal = false) => { g = { txt, mal }; clearTimeout(gt); if (txt.startsWith('Guardado')) gt = setTimeout(() => { g = { txt: '', mal: false }; const el = raiz.querySelector('.mv-guarda'); if (el) { el.className = claseG(); el.innerHTML = franja(); } }, 4500); const el = raiz.querySelector('.mv-guarda'); if (!el) return; el.className = claseG(); el.innerHTML = franja(); };
 
   // ---- guardar solo ----
   function programar(campos, ya = false) { Object.assign(pend, campos); marcar('Guardando…'); clearTimeout(tm); tm = setTimeout(volcar, ya ? 0 : 500); }
@@ -107,7 +110,7 @@ export function abrirDetalle(ctx, id, { alCambiar = () => {}, alCerrar = () => {
     ].join('');
     const hist = (r.bitacora || []).slice().reverse();
     const comentarios = (t.comments || []);
-    raiz.innerHTML = `<p class="mv-guarda" role="status" aria-live="polite"><span>${ultimoError ? 'No se guardó: ' + esc(ultimoError) : 'Todo se guarda solo'}</span></p>
+    raiz.innerHTML = `<p class="${claseG()}" role="status" aria-live="polite">${franja()}</p>
       <label class="mv-sr" for="mvDT">Título</label><textarea id="mvDT" class="mv-campo mv-titin" rows="2" maxlength="90" data-k="titulo" ${editable ? '' : 'readonly'}>${esc(t.title)}</textarea>
       <p class="mv-meta mv-estado"><b class="mv-pill">${esc(mia ? 'Tuya' : ESTADO_UNO[v] || v)}</b>${a && !mia ? ` · ${esc(a.name)}` : ''}${t.dept && !mia ? ` · ${esc(DEPTS[t.dept] || t.dept)}` : ''}${t.person && !mia ? ` · 👤 ${esc(t.person)}` : ''}${t.changedAt ? ` · ${esc(hace(t.changedAt, ahora))}` : ''}</p>
       ${aviso ? `<p class="mv-aviso">${aviso}</p>` : ''}
@@ -132,7 +135,6 @@ export function abrirDetalle(ctx, id, { alCambiar = () => {}, alCerrar = () => {
       ${t.state !== 'doing' ? '<div class="mv-det-pie"><button type="button" class="mv-btn peligro" data-acc="borrar">Eliminar la tarea</button></div>' : ''}
       <p class="mv-meta mv-id">#${esc(t.id)}</p>`;
     h.cuerpo.scrollTop = sc;
-    if (ultimoError) marcar('No se guardó: ' + ultimoError, true);
     if (foco) raiz.querySelector(`[data-k="${CSS.escape(foco)}"]`)?.focus({ preventScroll: true });
     else if (!suave) h.el.focus({ preventScroll: true });
   }

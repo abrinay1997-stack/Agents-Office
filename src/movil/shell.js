@@ -23,6 +23,7 @@
 //     ctx.escritorio(id)                                               abre una vista de escritorio en el contenedor con «Volver»
 //     ctx.cabecera({ titulo, acciones: [{ icono, etiqueta, alTocar }] })   cambia el título y los botones de la derecha de TU vista
 //     ctx.tirar(scroller, fn)                                          tirar hacia abajo para refrescar (fn → Promise)
+//     ctx.contexto(fn) · ctx.viendo()                                  una vista dice qué está mirando ({view, kind, id, label}); Dimitri lo lee para su chip «Viendo»
 //     ctx.esc · ctx.svg · ctx.vacio · ctx.esqueleto · ctx.falla         (ui.js)
 // Reglas: objetivos ≥ 44 px, campos ≥ 16 px, nada de :hover, solo clases `mv-*`, colores de las variables `--mv-*` (claro y oscuro).
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

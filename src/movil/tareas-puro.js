@@ -35,10 +35,11 @@ export function filtroTexto(f, cat = {}) {
 }
 
 /** Filtros guardados: [{ id, nombre, filtro }] (máximo 8, en este teléfono). */
+let _n = 0;
 export function guardarFiltro(lista, nombre, filtro) {
   const n = String(nombre || '').trim().slice(0, 30); if (!n || filtroVacio(filtro)) return lista;
   const sin = (lista || []).filter(x => x.nombre.toLowerCase() !== n.toLowerCase());
-  return [...sin, { id: 'f' + Date.now().toString(36), nombre: n, filtro: { prio: [...(filtro.prio || [])], etiquetas: [...(filtro.etiquetas || [])], proyecto: filtro.proyecto || '', texto: filtro.texto || '' } }].slice(-8);
+  return [...sin, { id: 'f' + Date.now().toString(36) + (++_n).toString(36), nombre: n, filtro: { prio: [...(filtro.prio || [])], etiquetas: [...(filtro.etiquetas || [])], proyecto: filtro.proyecto || '', texto: filtro.texto || '' } }].slice(-8);
 }
 export const quitarFiltro = (lista, id) => (lista || []).filter(x => x.id !== id);
 

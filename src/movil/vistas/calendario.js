@@ -87,7 +87,7 @@ export function registrar(shell) {
         const m0 = mesGrid(iniDia(diaSel)), evs = eventosDe(m0.desde, m0.hasta);
         const m = mesGrid(iniDia(diaSel), evs), delDia = evs.filter(e => ymd(new Date(e.at)) === diaSel);
         cuerpo.innerHTML = `<div class="mv-mes" role="grid" aria-label="${esc(m.titulo)}"><div class="mv-mes-sem" role="row">${cabeceraSemana.map(c => `<span role="columnheader">${c}</span>`).join('')}</div>
-          ${m.semanas.map(w => `<div class="mv-mes-fila" role="row">${w.map(c => `<button type="button" role="gridcell" class="mv-celda${c.delMes ? '' : ' fuera'}${c.dia === diaSel ? ' sel' : ''}${c.dia === hoyS() ? ' hoy' : ''}" data-dia="${c.dia}" aria-label="${esc(etiquetaDia(c.dia))}${c.n ? ', ' + c.n + (c.n === 1 ? ' cosa' : ' cosas') : ''}" aria-pressed="${c.dia === diaSel}"><b>${c.num}</b><i>${c.n ? '<u></u>'.repeat(Math.min(3, c.n)) : ''}</i></button>`).join('')}</div>`).join('')}</div>
+          ${m.semanas.map(w => `<div class="mv-mes-fila" role="row">${w.map(c => `<button type="button" role="gridcell" class="mv-celda${c.delMes ? '' : ' fuera'}${c.dia === diaSel ? ' sel' : ''}${c.dia === hoyS() ? ' hoy' : ''}" data-dia="${c.dia}" aria-label="${esc(etiquetaDia(c.dia))}${c.n ? ', ' + c.n + (c.n === 1 ? ' cosa' : ' cosas') : ''}" aria-selected="${c.dia === diaSel}"><b>${c.num}</b><i>${c.n ? '<u></u>'.repeat(Math.min(3, c.n)) : ''}</i></button>`).join('')}</div>`).join('')}</div>
           <h3 class="mv-gh">${esc(etiquetaDia(diaSel))} <span>${delDia.length}</span></h3>${delDia.length ? `<ul class="mv-evs">${delDia.map(item).join('')}</ul>` : '<p class="mv-nada">Nada este día.</p>'}`;
       }
       function pintar() {
