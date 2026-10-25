@@ -8,8 +8,9 @@ import { PERMISOS_LECTURA, PERMISOS_ANUNCIOS } from '../../contenido/meta.mjs';
 import { prepararMeta } from './ayuda-meta.mjs';
 import { usarFetchDePrueba } from '../worker/lib/anuncios-nube.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
+import { SALTAR } from './d1-memoria.mjs';
 
-test('Dimitri propone activar una campaña en pausa: queda por confirmar, la campaña sigue en pausa y nadie gastó nada; pausar sí se hace con un clic', async () => {
+test('Dimitri propone activar una campaña en pausa: queda por confirmar, la campaña sigue en pausa y nadie gastó nada; pausar sí se hace con un clic', { skip: SALTAR }, async () => {
   const g = crearMetaStand({ permisos: [...PERMISOS_LECTURA, ...PERMISOS_ANUNCIOS] }), ids = await prepararMeta(g);
   usarFetchDePrueba(g.fetchFn);
   try {

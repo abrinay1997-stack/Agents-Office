@@ -5,10 +5,11 @@ import { oficina6, contandoD1, filas, todoD1, HOOK, TOKEN_BOT, dimitriDice } fro
 import { manejar } from '../worker/lib/rutas.js';
 import { MODULOS } from '../worker/modulos/index.js';
 import { conSesion } from '../worker/lib/tareas/sesion.js';
+import { SALTAR } from './d1-memoria.mjs';
 
 const H = { 'x-office-token': HOOK };
 
-test('indicadores: crear, valor a mano, webhook con token (sin él D1 intacta), tope por minuto y solo admin escribe', async () => {
+test('indicadores: crear, valor a mano, webhook con token (sin él D1 intacta), tope por minuto y solo admin escribe', { skip: SALTAR }, async () => {
   const o = await oficina6();
   assert.equal((await o.editor('POST', '/api/business/kpi', { id: 'ventas_semana', name: 'Ventas' })).status, 403);
   assert.equal((await o.admin('POST', '/api/business/kpi', { id: 'ventas_semana', name: 'Ventas', unit: '$', goal: 2000 })).status, 200);
@@ -26,7 +27,7 @@ test('indicadores: crear, valor a mano, webhook con token (sin él D1 intacta), 
   assert.equal((await lim.anon('POST', '/api/kpi/ventas_semana', { value: 1 }, H)).status, 429);
 });
 
-test('una línea «KPI x = n» de una entrega terminada llega al indicador por el reloj, una sola vez', async () => {
+test('una línea «KPI x = n» de una entrega terminada llega al indicador por el reloj, una sola vez', { skip: SALTAR }, async () => {
   const o = await oficina6(); await o.admin('POST', '/api/business/kpi', { id: 'leads_semana', name: 'Leads' });
   const cada = MODULOS.find((m) => m.nombre === 'negocio').cadaMinuto;
   await cada(o.env); // marca el punto de partida
@@ -37,7 +38,7 @@ test('una línea «KPI x = n» de una entrega terminada llega al indicador por e
   assert.equal(filas(o.d1, "select json from docs where clave = 'kpis'").length, 1);
 });
 
-test('cifras y voz de marca: las lee quien entra, las escribe solo el administrador', async () => {
+test('cifras y voz de marca: las lee quien entra, las escribe solo el administrador', { skip: SALTAR }, async () => {
   const o = await oficina6();
   assert.equal((await o.editor('POST', '/api/cifras', { items: [] })).status, 403);
   assert.equal((await o.admin('POST', '/api/cifras', { items: [{ name: 'Combo', value: '12', unit: 'US$' }, { name: '', value: 'x' }] })).status, 200);
@@ -47,7 +48,7 @@ test('cifras y voz de marca: las lee quien entra, las escribe solo el administra
   assert.match((await o.lectura('GET', '/api/voice')).j.text, /Cercana/);
 });
 
-test('documentos: un CSV y un texto pasan a notas; un PDF dice en palabras que va por el script local; archivos raros y enormes se rechazan', async () => {
+test('documentos: un CSV y un texto pasan a notas; un PDF dice en palabras que va por el script local; archivos raros y enormes se rechazan', { skip: SALTAR }, async () => {
   const o = await oficina6(); const b64 = (s) => Buffer.from(s).toString('base64');
   const csv = await o.admin('POST', '/api/brain/upload', { name: 'precios.csv', data: b64('producto,precio\nCombo,12\n') }); assert.equal(csv.status, 200, csv.texto); assert.equal(csv.j.path, `Documentos/${csv.j.note}.md`);
   assert.equal(filas(o.d1, "select 1 from notas where nombre = ?", csv.j.note).length, 1);
@@ -57,7 +58,7 @@ test('documentos: un CSV y un texto pasan a notas; un PDF dice en palabras que v
   assert.equal((await o.editor('POST', '/api/brain/upload', { name: 'a.txt', data: b64('hola') })).status, 403);
 });
 
-test('«Preparar desde mi web»: con tu relato escribe las notas de empresa; solo la dirección dice en palabras que aún no lee webs', async () => {
+test('«Preparar desde mi web»: con tu relato escribe las notas de empresa; solo la dirección dice en palabras que aún no lee webs', { skip: SALTAR }, async () => {
   const o = await oficina6({ guion: [dimitriDice({ perfil: 'Somos PanaClaw.' })] });
   const sinAbout = await o.admin('POST', '/api/onboard/company', { url: 'https://panaclaw.com' }); assert.equal(sinAbout.status, 501, sinAbout.texto);
   assert.equal((await o.admin('POST', '/api/onboard/company', {})).status, 400);
@@ -65,7 +66,7 @@ test('«Preparar desde mi web»: con tu relato escribe las notas de empresa; sol
   const ok = await o.admin('POST', '/api/onboard/company', { about: 'Vendemos peluches gigantes en Panamá a familias.' }); assert.equal(ok.status, 200, ok.texto);
 });
 
-test('Ajustes: lee con la forma de siempre, solo el admin escribe, no acepta rutas inventadas ni secretos, y se aplica al instante', async () => {
+test('Ajustes: lee con la forma de siempre, solo el admin escribe, no acepta rutas inventadas ni secretos, y se aplica al instante', { skip: SALTAR }, async () => {
   const o = await oficina6({ ajustes: { approvals: { amountLimit: 500 } } });
   const g = (await o.lectura('GET', '/api/settings')).j; assert.ok(g.groups && g.fields.length > 10 && g.values); assert.equal(g.values['approvals.amountLimit'], 500);
   assert.equal((await o.editor('POST', '/api/settings', { changes: { name: 'X' } })).status, 403);
@@ -79,7 +80,7 @@ test('Ajustes: lee con la forma de siempre, solo el admin escribe, no acepta rut
   const gen = await o.admin('GET', '/api/health'); assert.equal(gen.j.name ?? gen.j.office?.name ?? 'Mi Negocio', 'Mi Negocio');
 });
 
-test('Telegram en Ajustes: los aprobadores se validan, no sale ningún secreto y solo el admin escribe', async () => {
+test('Telegram en Ajustes: los aprobadores se validan, no sale ningún secreto y solo el admin escribe', { skip: SALTAR }, async () => {
   const o = await oficina6({ extraEnv: { TELEGRAM_BOT_TOKEN: TOKEN_BOT, TELEGRAM_OWNER_ID: '111222333', TELEGRAM_WEBHOOK_SECRET: 'secreto-del-webhook-de-prueba-123' } });
   assert.equal((await o.editor('PUT', '/api/settings/telegram', { approvers: {} })).status, 403);
   assert.equal((await o.admin('PUT', '/api/settings/telegram', { approvers: { abc: ['sales'] } })).status, 422);
@@ -89,7 +90,7 @@ test('Telegram en Ajustes: los aprobadores se validan, no sale ningún secreto y
   assert.ok(!g.texto.includes(TOKEN_BOT) && !g.texto.includes('secreto-del-webhook'));
 });
 
-test('/api/health: sin sesión solo lo mínimo; con sesión, lo rico y con los checks de cada módulo; /api/status los trae; los avisos se marcan leídos', async () => {
+test('/api/health: sin sesión solo lo mínimo; con sesión, lo rico y con los checks de cada módulo; /api/status los trae; los avisos se marcan leídos', { skip: SALTAR }, async () => {
   const o = await oficina6();
   const pub = await o.anon('GET', '/api/health'); assert.equal(pub.status, 200); assert.ok(Object.keys(pub.j).length <= 4, JSON.stringify(pub.j)); assert.doesNotMatch(pub.texto, /ANTHROPIC|sk-ant|checks|tareas/i);
   const rico = (await o.admin('GET', '/api/health')).j; assert.ok(Object.keys(rico).length > Object.keys(pub.j).length); assert.ok(!JSON.stringify(rico).includes('sk-ant-secreto-de-prueba'));

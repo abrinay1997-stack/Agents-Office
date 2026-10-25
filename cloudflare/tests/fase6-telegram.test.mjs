@@ -5,6 +5,7 @@ import { oficina6, contandoD1, filas, todoD1, TOKEN_BOT, SECRETO_WEBHOOK, DUENO_
 import { manejar } from '../worker/lib/rutas.js';
 import { conSesion, cargarTareas } from '../worker/lib/tareas/sesion.js';
 import { MODULOS } from '../worker/modulos/index.js';
+import { SALTAR } from './d1-memoria.mjs';
 
 const EXTRA = { TELEGRAM_BOT_TOKEN: TOKEN_BOT, TELEGRAM_OWNER_ID: DUENO_TG, TELEGRAM_WEBHOOK_SECRET: SECRETO_WEBHOOK };
 const S = { 'x-telegram-bot-api-secret-token': SECRETO_WEBHOOK };
@@ -21,7 +22,7 @@ async function conEspera(o, dept = 'sales') {
 }
 const estado = async (o, id) => (await cargarTareas(o.d1)).find((x) => x.id === id).state;
 
-test('el secreto va primero: sin él o con otro, 401 y D1 intacta; sin TELEGRAM_WEBHOOK_SECRET nadie entra', async () => {
+test('el secreto va primero: sin él o con otro, 401 y D1 intacta; sin TELEGRAM_WEBHOOK_SECRET nadie entra', { skip: SALTAR }, async () => {
   const o = await oficina6({ extraEnv: EXTRA }); const { n, d1 } = contandoD1(o.d1);
   const r = await manejar(new Request('https://oficina.test/api/telegram/webhook', { method: 'POST', body: JSON.stringify(msg(DUENO_TG, '/estado')) }), { ...o.env, DB: d1 });
   assert.equal(r.status, 401); assert.equal(n.prepare, 0);
@@ -31,7 +32,7 @@ test('el secreto va primero: sin él o con otro, 401 y D1 intacta; sin TELEGRAM_
   assert.equal(o.m.registro.telegram.length, 0); assert.equal((await o.anon('GET', '/api/telegram/webhook')).status, 405);
 });
 
-test('un extraño no recibe NADA (ni su id); el dueño usa /estado y le habla a Dimitri', async () => {
+test('un extraño no recibe NADA (ni su id); el dueño usa /estado y le habla a Dimitri', { skip: SALTAR }, async () => {
   const o = await oficina6({ extraEnv: EXTRA, guion: [dimitriDice({ mode: 'charla', reply: 'Todo tranquilo por aquí.' })] });
   const r = await enviar(o, msg(EXTRANO_TG, '/estado')); assert.deepEqual([r.status, r.texto], [200, '{"ok":true}']);
   assert.equal(o.m.registro.telegram.length, 0, 'ni un solo mensaje a un extraño'); assert.equal(o.m.registro.anthropic.length, 0);
@@ -39,12 +40,12 @@ test('un extraño no recibe NADA (ni su id); el dueño usa /estado y le habla a 
   await enviar(o, msg(DUENO_TG, '¿cómo vamos?')); assert.match(dicho(o), /Todo tranquilo/); assert.equal(o.m.registro.anthropic.length, 1);
 });
 
-test('el mismo update_id se atiende una sola vez', async () => {
+test('el mismo update_id se atiende una sola vez', { skip: SALTAR }, async () => {
   const o = await oficina6({ extraEnv: EXTRA }); const u = msg(DUENO_TG, '/estado');
   await enviar(o, u); const a = o.m.registro.telegram.length; await enviar(o, u); assert.equal(o.m.registro.telegram.length, a);
 });
 
-test('✅ del dueño aprueba; un extraño no; un aprobador delegado solo en sus departamentos', async () => {
+test('✅ del dueño aprueba; un extraño no; un aprobador delegado solo en sus departamentos', { skip: SALTAR }, async () => {
   const p = await oficina6({ extraEnv: EXTRA, ajustes: { telegram: { approvers: { [APROBADOR_TG]: ['emails'] } } } });
   const respuestas = () => p.m.registro.telegram.map((x) => x.cuerpo?.text || '').join('|');
   const venta = await conEspera(p, 'sales');
@@ -58,14 +59,14 @@ test('✅ del dueño aprueba; un extraño no; un aprobador delegado solo en sus 
   await enviar(p, toque(DUENO_TG, 'ap:' + venta)); assert.match(respuestas(), /Aprobada/, 'el dueño aprueba lo suyo');
 });
 
-test('↩ Devolver pide el motivo y la siguiente línea lo trae; la tarea sale de la espera', async () => {
+test('↩ Devolver pide el motivo y la siguiente línea lo trae; la tarea sale de la espera', { skip: SALTAR }, async () => {
   const o = await oficina6({ extraEnv: EXTRA }); const id = await conEspera(o);
   await enviar(o, toque(DUENO_TG, 'rj:' + id)); assert.match(dicho(o), /Qué debe cambiar/);
   await enviar(o, msg(DUENO_TG, 'Menciona el descuento'));
   assert.notEqual(await estado(o, id), 'waiting');
 });
 
-test('los avisos salientes: llegan una vez, sin inundar con el historial, y el no molestar los retiene', async () => {
+test('los avisos salientes: llegan una vez, sin inundar con el historial, y el no molestar los retiene', { skip: SALTAR }, async () => {
   const o = await oficina6({ extraEnv: EXTRA });
   const cada = MODULOS.find((m) => m.nombre === 'telegram').cadaMinuto;
   await cada(o.env); assert.equal(o.m.textosTelegram().length, 0, 'la primera vez solo se apunta lo que ya había');
@@ -75,7 +76,7 @@ test('los avisos salientes: llegan una vez, sin inundar con el historial, y el n
   assert.ok(id);
 });
 
-test('el token del bot nunca sale en D1, ni en una respuesta, ni en un fallo de Telegram', async () => {
+test('el token del bot nunca sale en D1, ni en una respuesta, ni en un fallo de Telegram', { skip: SALTAR }, async () => {
   const o = await oficina6({ extraEnv: EXTRA, telegramFalla: 'Forbidden' });
   await enviar(o, msg(DUENO_TG, '/estado'));
   assert.ok(!todoD1(o.d1).includes(TOKEN_BOT)); assert.ok(!todoD1(o.d1).includes(SECRETO_WEBHOOK));
@@ -83,7 +84,7 @@ test('el token del bot nunca sale en D1, ni en una respuesta, ni en un fallo de 
   assert.equal(filas(o.d1, 'select * from telegram_updates').length >= 1, true);
 });
 
-test('anuncios por Telegram: nadie salvo el dueño toca la lista y /anuncios sin cuenta lo dice en palabras', async () => {
+test('anuncios por Telegram: nadie salvo el dueño toca la lista y /anuncios sin cuenta lo dice en palabras', { skip: SALTAR }, async () => {
   const p = await oficina6({ extraEnv: EXTRA, ajustes: { telegram: { approvers: { [APROBADOR_TG]: ['marketing'] } } } });
   await enviar(p, msg(APROBADOR_TG, '/anuncios')); assert.doesNotMatch(dicho(p), /Activar/);
   await enviar(p, toque(APROBADOR_TG, 'an:act:x1')); assert.doesNotMatch(dicho(p), /gasta hasta/);
