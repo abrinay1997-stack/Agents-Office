@@ -1,0 +1,29 @@
+{
+  // Agents Office en Cloudflare. Un Worker sirve la página (Static Assets) y la API en el MISMO origen,
+  // igual que CALENDARIOS-MARKETING-APP. Los secretos NO van aquí: el workflow los sube con `wrangler secret bulk`.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "agents-office",
+  "main": "./worker/index.js",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": "./public/",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // El database_id lo rellena el workflow «Cloudflare · preparar» (crea la base en la cuenta nueva). No es un secreto.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "agents-office-db", "database_id": "REEMPLAZAR_CON_EL_ID_DE_D1", "migrations_dir": "migraciones" }
+  ],
+
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "agents-office-contenido" }],
+
+  "vars": { "AI_MODELO": "claude-sonnet-5-5" },
+
+  "triggers": { "crons": ["* * * * *"] },
+  "workers_dev": true,
+  "observability": { "enabled": true }
+}

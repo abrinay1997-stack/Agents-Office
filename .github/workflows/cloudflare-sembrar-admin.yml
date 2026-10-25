@@ -1,0 +1,41 @@
+# Alta (o recuperación) del administrador de Agents Office en Cloudflare. Se lanza a mano.
+# Idempotente: si el usuario existe, le pone la contraseña actual. Después, BORRA ADMIN_PASSWORD de los secretos.
+name: Cloudflare · sembrar administrador
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-sembrar-admin
+
+permissions:
+  contents: read
+
+jobs:
+  sembrar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Comprobar que hay credenciales
+        run: |
+          falta=""
+          for v in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID ADMIN_EMAIL ADMIN_PASSWORD; do [ -z "${!v}" ] && falta="$falta $v"; done
+          if [ -n "$falta" ]; then echo "Faltan secretos del repositorio:$falta"; exit 1; fi
+      - run: npm install --no-audit --no-fund
+      - run: node scripts/preparar-cuenta.mjs
+      - run: npx wrangler d1 migrations apply agents-office-db --remote
+      - run: node scripts/sembrar-admin.mjs
+      - name: Recordatorio
+        run: |
+          echo "### Administrador listo" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Borra ahora \`ADMIN_PASSWORD\` de los secretos del repositorio.** La base solo guarda su hash." >> "$GITHUB_STEP_SUMMARY"

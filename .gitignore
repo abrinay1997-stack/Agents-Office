@@ -23,3 +23,7 @@ server.err.log
 
 # 9 oct 2026: configuración local de complementos de Claude Code (p. ej. odoo-timesheet): es de cada máquina y puede llevar credenciales
 .claude/odoo-timesheet/
+
+# Cloudflare: estado local de wrangler y dependencias del subproyecto
+cloudflare/.wrangler/
+cloudflare/node_modules/
