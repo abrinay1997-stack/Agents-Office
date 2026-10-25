@@ -17,6 +17,7 @@ import { conSesion, cargarTareas } from '../worker/lib/tareas/sesion.js';
 import { archivarViejas, DIAS_HECHAS_VIVAS, LOTE_ARCHIVO, cadaMinuto as relojTareas } from '../worker/modulos/tareas.js';
 import { crearTarea } from '../../tareas/modelo.mjs';
 import { instalarZona } from '../worker/lib/zona.js';
+import { crearR2 } from './r2-memoria.mjs';
 import { crearAlmacenD1 } from '../worker/lib/contenido/piezas.js';
 import { limpiarSecretos, registrarSecretos } from '../worker/lib/secretos.js';
 import { indiceDeNotas, DIAS_ENTREGABLES_EN_EL_INDICE } from '../worker/lib/agentes/contexto.js';
@@ -386,4 +387,13 @@ test('RUTINAS: «ejecutar ya» una rutina que corre sola o sin pedir el OK es de
   assert.equal((await o.editor('POST', `/api/routines/${conOk}/run`, {})).status, 200, 'la que pide el OK sí');
   assert.equal((await o.admin('POST', `/api/routines/${sinOk}/run`, {})).status, 200, 'el administrador, todas');
   assert.equal((await o.admin('POST', `/api/routines/${sola}/run`, {})).status, 200);
+});
+
+test('LÍMITES: el tope general del cuerpo (12 MB) no corta las subidas de archivos, que llevan el suyo (24 MB de JSON)', { skip: SALTAR }, async () => {
+  const o = await oficina({ MEDIA: crearR2() });
+  const mp4 = Buffer.alloc(11_000_000, 7); mp4.write('ftypisom', 4, 'latin1'); // ~14,7 MB en base64: más que el tope general, menos que el de las subidas
+  const r = await o.admin('POST', '/api/media/upload', { name: 'clip.mp4', data: 'data:video/mp4;base64,' + mp4.toString('base64') });
+  assert.equal(r.status, 200, JSON.stringify(r.j).slice(0, 200)); assert.ok(r.j.item, 'el archivo entró');
+  const grande = await o.admin('POST', '/api/migrar/filas', { coleccion: 'avisos', filas: [{ id: 'x', valor: { t: 'x'.repeat(13_000_000) } }] });
+  assert.equal(grande.status, 422, 'el resto de las rutas sí cortan a 12 MB (cuerpo ilegible → colección o filas no válidas)');
 });
