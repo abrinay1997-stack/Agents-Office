@@ -412,3 +412,14 @@ test('RENDIMIENTO: la oficina (2 MB) vuelve a llevar ETag aunque el Worker le in
   const sinSesion = await manejar(new Request('https://oficina.test/', { headers: { 'if-none-match': etag } }), env);
   assert.equal(sinSesion.status, 200, 'sin sesión nunca se contesta 304 de la oficina: se ve el acceso'); assert.ok(!/OFICINA/.test(await sinSesion.text()));
 });
+
+test('SESIÓN: una sesión caducada no entra (ni la página ni la API), y el reloj las borra', { skip: SALTAR }, async () => {
+  const o = await oficina(); const db = o.d1._db;
+  assert.equal((await o.editor('GET', '/api/yo')).status, 200);
+  db.prepare("update sessions set expires_at = ? where user_id = (select id from users where email = 'ed@panaclaw.test')").run(new Date(Date.now() - 1000).toISOString());
+  assert.equal((await o.editor('GET', '/api/yo')).status, 401, 'caducada');
+  assert.equal((await o.editor('POST', '/api/tasks', { dept: 'ops', text: 'x' })).status, 401);
+  assert.equal((await o.admin('GET', '/api/yo')).status, 200, 'las demás siguen');
+  await correrReloj(o.env);
+  assert.equal(db.prepare("select count(*) n from sessions s join users u on u.id = s.user_id where u.email = 'ed@panaclaw.test'").get().n, 0, 'el reloj de cada minuto las borra');
+});
