@@ -34,3 +34,6 @@ cloudflare/public/oficina/
 # Copias de seguridad de la oficina (datos privados: jamás al repositorio)
 respaldo-oficina-*/
 cloudflare/.dev.vars
+
+# La semilla «PanaClaw por defecto» se genera en cada despliegue (cloudflare/scripts/semilla.mjs)
+cloudflare/public/semilla/

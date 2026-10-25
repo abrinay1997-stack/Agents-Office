@@ -15,7 +15,7 @@ name: Cloudflare · desplegar
 on:
   push:
     branches: [main]
-    paths: ['cloudflare/**', 'office.agents.json', 'safety.mjs', '.github/workflows/cloudflare-desplegar.yml']
+    paths: ['cloudflare/**', 'office.agents.json', 'safety.mjs', 'brain-panaclaw/**', 'biblioteca/**', 'biblioteca*.mjs', 'skills/**', 'skills.mjs', 'graph-*.mjs', 'habilidades-tools.mjs', 'arranque-*.mjs', 'restablecer-*.mjs', '.github/workflows/cloudflare-desplegar.yml']
   pull_request:
     paths: ['cloudflare/**', 'office.agents.json', 'safety.mjs', '.github/workflows/cloudflare-*.yml']
   workflow_dispatch:
@@ -38,6 +38,9 @@ jobs:
         run: node --test cloudflare/tests/*.test.mjs
       - name: Tests de lo que el Worker comparte con la oficina (búsqueda, memoria, migración)
         run: node --test tests/cerebro-busqueda.test.mjs tests/migracion-nube.test.mjs
+      # La semilla «PanaClaw por defecto» (59 notas, mapa, equipo y Biblioteca): rompe aquí, no en el despliegue, si algo no cabe o falta.
+      - name: Generar la semilla (sin publicar)
+        run: node cloudflare/scripts/semilla.mjs /tmp/ao-semilla
       # Simulacro de empaquetado: rompe aquí, no en el despliegue, si el Worker importa algo que no cabe en Workers.
       - name: Empaquetar el Worker (sin publicar)
         working-directory: cloudflare
@@ -71,6 +74,10 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           node build.mjs
           node cloudflare/scripts/copiar-oficina.mjs
+      # La semilla «PanaClaw por defecto»: sale del repositorio de ESTE commit (notas, mapa, equipo y Biblioteca) y el Worker la sirve por dentro, detrás de la sesión, a quien pulse «Restablecer oficina».
+      - name: Generar la semilla «PanaClaw por defecto»
+        working-directory: .
+        run: node cloudflare/scripts/semilla.mjs
       - name: Preparar la cuenta (D1 y R2, si no existen)
         run: node scripts/preparar-cuenta.mjs
       - name: Aplicar migraciones de D1 (antes que el código)

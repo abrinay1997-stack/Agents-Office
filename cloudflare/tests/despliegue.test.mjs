@@ -74,6 +74,8 @@ test('el workflow de despliegue verifica antes de publicar y nunca imprime secre
   assert.ok(w.indexOf('node --test') < w.indexOf('npx wrangler deploy\n'), 'los tests van antes del despliegue');
   assert.ok(w.indexOf('copiar-oficina.mjs') < w.indexOf('npx wrangler deploy\n'), 'la interfaz se copia antes de desplegar');
   assert.ok(w.indexOf('migrations apply') < w.indexOf('npx wrangler deploy\n'), 'las migraciones van antes del código');
+  assert.ok(w.lastIndexOf('scripts/semilla.mjs') < w.indexOf('npx wrangler deploy\n') && w.indexOf('scripts/semilla.mjs') < w.indexOf('npx wrangler deploy --dry-run'), 'la semilla «PanaClaw por defecto» se genera antes de desplegar (y se prueba en el simulacro)');
+  assert.ok(/paths:[^\n]*brain-panaclaw\/\*\*[^\n]*biblioteca\/\*\*/.test(w), 'cambiar las notas de fábrica o la Biblioteca vuelve a desplegar');
   assert.ok(w.includes('subir-secretos.mjs'), 'los secretos se suben');
   assert.ok(!/echo.*secrets\./.test(w));
 });

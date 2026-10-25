@@ -3,6 +3,7 @@
 //   · skills (las de la oficina y las de tu Cerebro; gana la del Cerebro) → colección `skills`
 //   · lecciones (feedback/<agente>.md) → doc `feedback.<id>` { rules, oneOffs }
 //   · ejemplos que guardaste («⭐ Guardar como ejemplo») → doc `ejemplos.<id>`
+//   · tus habilidades de la Biblioteca (<cerebro>/Agents Office/biblioteca/) → colección `biblioteca` (las de fábrica no se suben: viajan con el despliegue)
 //   · las cifras de la empresa → doc `cifras`
 //   · las sinapsis que aprenden (data/memory.json) → doc `memoria`
 //   · las correcciones que le hiciste al enrutador (data/routing.json) → doc `enrutador.correcciones`
@@ -13,9 +14,14 @@ import path from 'node:path';
 import { loadSkills } from '../../skills.mjs';
 import { loadRoster } from '../../roster.mjs';
 import * as learn from '../../learn.mjs';
+import { cargarBiblioteca } from '../../biblioteca.mjs';
+import { DEPT_KEYS } from '../../src/data.js';
 
 const leerJSON = (f, def) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')) ?? def; } catch { return def; } };
 const lista = d => { try { return fs.readdirSync(d); } catch { return []; } };
+
+/** Una skill leída del disco → la fila de la colección `skills` de la nube (la usa también la semilla del despliegue). */
+export const skillAFila = (s, i) => ({ id: s.name, orden: i, valor: { name: s.name, description: s.description, agents: s.agents, departments: s.departments, everyone: s.everyone, text: s.text, files: s.files.map(f => ({ name: f.name, text: f.text })), source: s.source } });
 
 export async function exportar({ raiz, vault }) {
   const data = process.env.AO_DATA || path.join(raiz, 'data');
@@ -23,8 +29,15 @@ export async function exportar({ raiz, vault }) {
   const filas = {}, docs = {};
   let agentes = []; try { agentes = loadRoster().agents; } catch { /* sin roster: solo se exporta lo que no depende de él */ }
 
-  const sk = loadSkills(vault, agentes).skills.map((s, i) => ({ id: s.name, orden: i, valor: { name: s.name, description: s.description, agents: s.agents, departments: s.departments, everyone: s.everyone, text: s.text, files: s.files.map(f => ({ name: f.name, text: f.text })), source: s.source } }));
+  const sk = loadSkills(vault, agentes).skills.map(skillAFila);
   if (sk.length) filas.skills = sk;
+
+  // las habilidades de la Biblioteca que son TUYAS (<cerebro>/Agents Office/biblioteca/<id>/): las de fábrica llegan con cada despliegue (semilla del Worker), no se suben
+  try {
+    const propias = cargarBiblioteca({ raiz, brainPath: vault, agentes, deptos: DEPT_KEYS, skillsDelDueno: [] }).todas.filter(h => h.fuente === 'cerebro');
+    if (propias.length) filas.biblioteca = propias.map((h, i) => ({ id: h.id, orden: i, valor: { id: h.id, titulo: h.titulo, description: h.description, area: h.area, departments: h.departments, agents: h.agents, origen: h.origen, palabras: h.palabras, referencias: h.referencias,
+      cuerpo: h.cuerpo, refs: Object.fromEntries(h.referencias.map(r => [r.archivo, fs.readFileSync(path.join(h.dir, 'referencias', r.archivo), 'utf8')])) } }));
+  } catch { /* sin biblioteca propia */ }
 
   for (const a of agentes) {
     const l = learn.read(vault, a.id);
