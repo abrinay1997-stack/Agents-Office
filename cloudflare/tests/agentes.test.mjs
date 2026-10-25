@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { armarPeticion, agentes, agentePorId, leerRespuesta, errorDeApi, ejecutar, BETA_MCP } from '../worker/lib/agentes.js';
-import { crearD1, sembrar } from './d1-memoria.mjs';
+import { SALTAR, crearD1, sembrar } from './d1-memoria.mjs';
 
 const con = (o = {}) => ({ id: '1', nombre: 'gmail', url: 'https://gmail.mcp.example.com/mcp', secreto: 'MCP_GMAIL_TOKEN', activo: 1, departamentos: '["emails"]', herramientas_lectura: '["search_threads"]', herramientas_envio: '["send_email"]', ...o });
 
@@ -39,7 +39,7 @@ test('errorDeApi no repite la clave ni el cuerpo crudo', () => {
   assert.match(errorDeApi(400, { error: { message: 'Your credit balance is too low' } }), /saldo/);
 });
 
-test('ejecutar: guarda la ejecución, audita las herramientas y marca órdenes escondidas', async () => {
+test('ejecutar: guarda la ejecución, audita las herramientas y marca órdenes escondidas', { skip: SALTAR }, async () => {
   const d1 = crearD1(); await sembrar(d1);
   const usuario = d1._db.prepare('select id,email,rol from users').get();
   d1._db.prepare("insert into conectores (id,nombre,url,secreto,departamentos,herramientas_lectura,herramientas_envio,activo,created_at) values ('1','gmail','https://gmail.mcp.example.com/mcp','MCP_GMAIL_TOKEN','[\"emails\"]','[\"search_threads\"]','[]',1,'x')").run();
@@ -56,7 +56,7 @@ test('ejecutar: guarda la ejecución, audita las herramientas y marca órdenes e
   assert.ok(!JSON.stringify(d1._db.prepare('select * from ejecuciones').all()).includes('"k"'));
 });
 
-test('ejecutar: sin llave da 503; aprobar exige admin; un fallo del proveedor queda como fallo sin cuerpo crudo', async () => {
+test('ejecutar: sin llave da 503; aprobar exige admin; un fallo del proveedor queda como fallo sin cuerpo crudo', { skip: SALTAR }, async () => {
   const d1 = crearD1(); await sembrar(d1); await sembrar(d1, { email: 'ed@x.test', rol: 'editor' });
   const ed = d1._db.prepare("select id,email,rol from users where rol='editor'").get();
   assert.equal((await ejecutar({ env: {}, db: d1, usuario: ed, agenteId: 'elead', texto: 'x' })).estado, 503);

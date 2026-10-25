@@ -1,5 +1,10 @@
 // Una D1 de mentira sobre node:sqlite con las migraciones REALES. Para lo que un doble a mano no ve: que las consultas existen en el esquema.
-import { DatabaseSync } from 'node:sqlite';
+// node:sqlite llega con Node 22.5+. El CI de la oficina local corre Node 20: ahí estos tests se saltan (con su motivo) y
+// los corre el workflow «Cloudflare · desplegar», que usa Node 22.
+let DatabaseSync = null;
+try { ({ DatabaseSync } = await import('node:sqlite')); } catch { /* Node < 22.5 */ }
+export const hayD1 = DatabaseSync !== null;
+export const SALTAR = hayD1 ? false : 'necesita node:sqlite (Node 22.5+); lo corre el workflow de Cloudflare';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

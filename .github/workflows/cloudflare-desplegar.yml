@@ -16,6 +16,8 @@ on:
   push:
     branches: [main]
     paths: ['cloudflare/**', 'office.agents.json', 'safety.mjs', '.github/workflows/cloudflare-desplegar.yml']
+  pull_request:
+    paths: ['cloudflare/**', 'office.agents.json', 'safety.mjs', '.github/workflows/cloudflare-*.yml']
   workflow_dispatch:
 
 concurrency:
@@ -33,10 +35,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - name: Tests de Cloudflare
-        run: node --test "cloudflare/tests/*.test.mjs"
+        run: node --test cloudflare/tests/*.test.mjs
 
   desplegar:
     needs: probar
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     defaults:
       run:
