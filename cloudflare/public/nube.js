@@ -187,6 +187,14 @@
     let e = $('#nubeAviso'); if (!e) { e = document.createElement('div'); e.id = 'nubeAviso'; e.setAttribute('role', 'status'); e.setAttribute('aria-live', 'polite'); document.body.appendChild(e); }
     e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), ms);
   }
+  // Los dos párrafos fijos de «Motores y keys» del Estudio hablan de Windows y de un iniciador; en la nube una key es un secreto del repositorio en GitHub. (Los demás textos de keys los cambia la propia página con AO_NUBE.)
+  const TEXTOS_KEYS = ['Cada motor se enciende con su key, guardada como secreto del repositorio en GitHub. Lo que ya está listo sale con ●.', 'La key se guarda una sola vez como secreto del repositorio en GitHub (Settings → Secrets → Actions) y se vuelve a desplegar. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.'];
+  function parchearEstudio() {
+    const ps = document.querySelectorAll('.st-engov .st-hsub'); if (ps.length < 2) return false;
+    ps.forEach((e, i) => { if (TEXTOS_KEYS[i] && !e.dataset.nube) { e.dataset.nube = '1'; e.textContent = TEXTOS_KEYS[i]; } });
+    return true;
+  }
+  if (!parchearEstudio()) { const ob = new MutationObserver(() => { if (parchearEstudio()) ob.disconnect(); }); ob.observe(document.body, { childList: true, subtree: true }); setTimeout(() => ob.disconnect(), 20000); }
   // «Suscribirme (.ics)» del calendario: la app de calendario de otra empresa (Google, Outlook…) no puede entrar con tu sesión, así que su dirección no le sirve. Aquí se BAJA el archivo con tus rutinas y tareas de hoy.
   document.addEventListener('click', (ev) => {
     if (!ev.target.closest?.('[data-ics]')) return;

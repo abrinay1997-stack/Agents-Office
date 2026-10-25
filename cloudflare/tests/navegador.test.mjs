@@ -117,3 +117,19 @@ test('nube.js: «Suscribirme (.ics)» baja el archivo en lugar de copiar una dir
   assert.match(await p.textContent('#nubeAviso'), /Se bajó tu calendario/);
   await ctx.close();
 });
+
+test('nube.js: los párrafos de «Motores y keys» que hablan de Windows dicen lo de la nube (secreto de GitHub), también si el Estudio se pinta después', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const yo = { id: 'u1', email: 'a@x.test', rol: 'admin', nombre: 'Ana', color: '#123456', foto: null };
+  const { p, ctx } = await pagina((ruta) => {
+    if (ruta === '/') return { headers: cuerpoHTML, body: '<!doctype html><body><div id="topbar"><div id="topdock"></div></div><button id="topSettings">x</button><div id="setOv" hidden><div class="sg-tabs"></div><div class="sg-pane"></div></div><script src="/nube.js"></script><script>setTimeout(() => { const d = document.createElement("div"); d.className = "st-engov"; d.innerHTML = \'<p class="st-hsub">Cada motor se enciende con su key, guardada en Windows una sola vez.</p><p class="st-hsub">La key se guarda en Windows una sola vez.</p>\'; document.body.appendChild(d); }, 300);</script></body>' };
+    if (ruta === '/nube.js') return { headers: js, body: leer('nube.js') };
+    if (ruta === '/api/yo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usuario: yo }) };
+    if (ruta === '/api/equipo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ yo: 'u1', roles: ['admin'], miembros: [{ ...yo, yo: true, fundador: true }], invitaciones: [] }) };
+    return null;
+  });
+  await p.goto('https://oficina.test/'); await p.waitForFunction(() => document.querySelector('.st-engov .st-hsub')?.dataset.nube === '1');
+  const t = await p.$$eval('.st-engov .st-hsub', (xs) => xs.map((x) => x.textContent).join(' | '));
+  assert.doesNotMatch(t, /Windows|iniciador/); assert.match(t, /secreto del repositorio en GitHub/);
+  await ctx.close();
+});

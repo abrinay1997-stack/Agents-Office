@@ -10,6 +10,7 @@
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
 import { views } from './views.js'; // V4.5: the Estudio, the calendar and the Brain take turns under the top bar
 import * as Z from './viewer-zoom.js'; // V4.9: the viewer's zoom, as tested arithmetic
+const NB = () => !!globalThis.AO_NUBE, minus = t => String(t || '').replace(/^G/, 'g'); // en la nube una key es un secreto del repositorio en GitHub (el servidor trae la frase en `how`), no un comando de Windows
 import * as SV from './studio-voz.js'; // V5.0: voice and music (MiniMax) — the words, limits, voices and sound cards, as tested functions
 import * as GF from './galeria-filtro.js';
 import * as BR from './studio-borrador.js'; // 6 Oct 2026 (audit IMG-01/02): the composer's draft with DESHACER, and Variar as a request of its own
@@ -294,7 +295,7 @@ export function initStudio(ctx) {
   }
   function offPick(o) {
     const e = engines.find(x => x.id === o.engine) || {};
-    return `<span class="st-mp-top"><span class="st-mp-name">${esc(o.name)}</span><span class="st-mp-eng">${esc(o.engineName || e.name || '')} · sin activar</span><span class="sp"></span><span class="st-mp-cost">${price(o)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span><span class="st-mp-note">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b>, ` : ''}pega <code>${esc(e.how || '')}</code> en una ventana de comandos y reinicia la oficina.</span>`;
+    return `<span class="st-mp-top"><span class="st-mp-name">${esc(o.name)}</span><span class="st-mp-eng">${esc(o.engineName || e.name || '')} · sin activar</span><span class="sp"></span><span class="st-mp-cost">${price(o)}</span><span class="st-mp-caret" aria-hidden="true">▾</span></span><span class="st-mp-note">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b>, ` : ''}${NB() ? esc(minus(e.how)) : `pega <code>${esc(e.how || '')}</code> en una ventana de comandos y reinicia la oficina.`}</span>`;
   }
   // V4.4 (27 Sep 2026): the model list sorts (recommended, best quality, cheapest, most expensive, fastest, by maker) and
   // filters by maker; each model says its maker, its quality (1–4), its speed and what it is good for. The ones without a
@@ -313,7 +314,7 @@ export function initStudio(ctx) {
     const row = x => `<button type="button" role="option" class="st-mo${x.id === modelOf[kind] ? ' on' : ''}" data-id="${x.id}" aria-selected="${x.id === modelOf[kind]}"${x.on ? '' : ' aria-disabled="true" disabled'} tabindex="-1"><span class="st-mo-top"><b>${esc(x.name)}</b><span class="sp"></span><span class="st-mp-cost">${price(x)}</span></span>
       <span class="st-mo-meta">${dots(x.tier)}<span>${esc(x.maker)}</span><span>· ${esc(x.speed)}</span>${x.legacy ? '<span class="st-old">· antiguo</span>' : ''}</span>
       ${x.note ? `<span class="st-mo-note">${esc(x.note)}</span>` : ''}${(x.uses || []).length ? `<span class="st-mo-uses"><b>Para:</b> ${x.uses.map(esc).join(' · ')}</span>` : ''}${tags(x).length ? `<span class="st-tags">${tags(x).map(t => `<i>${t}</i>`).join('')}</span>` : ''}</button>`;
-    const how = e => `<div class="st-mg-how">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b> y ` : ''}pega <code>${esc(e.how || '')}</code> en una ventana de comandos; luego reinicia la oficina.</div>`;
+    const how = e => `<div class="st-mg-how">Para activarlo: ${e.site ? `crea la key en <b>${esc(e.site)}</b> y ` : ''}${NB() ? esc(minus(e.how)) : `pega <code>${esc(e.how || '')}</code> en una ventana de comandos; luego reinicia la oficina.`}</div>`;
     let body = '';
     if (sort === 'rec') { // as before: by engine, the ones that are on first
       const engs = engines.filter(e => mine.some(x => x.engine === e.id)).sort((a, b) => (b.on - a.on) || (a.id === 'prueba') - (b.id === 'prueba'));
@@ -749,8 +750,8 @@ export function initStudio(ctx) {
     const test = models.find(x => x.kind === kind && x.engine === 'prueba' && x.on);
     K.innerHTML = `<b>${esc(m.name)} necesita su key de ${esc(eng.name || m.engineName || 'su servicio')}.</b>
       <ol><li>Crea la key en ${eng.site ? `<code>${esc(eng.site)}</code>` : 'la web del servicio'} y ponle un límite de gasto.</li>
-      <li>Guárdala en Windows: abre una ventana de comandos y pega ${eng.how ? `<code>${esc(eng.how)}</code>` : 'el comando de «Motores y keys»'}.</li>
-      <li>Cierra la oficina y ábrela con el iniciador.</li></ol>
+      ${NB() ? `<li>${esc(eng.how || 'Guárdala como secreto del repositorio en GitHub y vuelve a desplegar.')}</li></ol>` : `<li>Guárdala en Windows: abre una ventana de comandos y pega ${eng.how ? `<code>${esc(eng.how)}</code>` : 'el comando de «Motores y keys»'}.</li>
+      <li>Cierra la oficina y ábrela con el iniciador.</li></ol>`}
       <div class="st-kh-row">${test ? `<button type="button" data-kh="test" class="pri">Usar ${esc(test.name)} mientras tanto</button>` : ''}<button type="button" data-kh="engs">Ver los motores</button><button type="button" data-kh="x">Cerrar</button></div>`;
     K.hidden = false; K.dataset.test = test ? test.id : ''; say('');
     K.querySelector('button')?.focus({ preventScroll: true });
@@ -847,7 +848,7 @@ export function initStudio(ctx) {
   const TRY_TEXT = 'Hola, esta es mi voz clonada. ¿Suena como yo?';
   function vocOffHTML(off) {
     return `<div class="st-voff" role="note"><p><b>${esc(off.why || 'Las voces usan MiniMax, que aún no está activado en esta oficina.')}</b></p>
-      <ol><li>Crea la key en <code>platform.minimax.io</code> (API Keys) y ponle un límite de gasto.</li><li>Abre una ventana de comandos y pega <code>${esc(off.how || 'setx MINIMAX_API_KEY "tu-key"')}</code>.</li><li>Cierra la oficina y ábrela con el iniciador.</li></ol>
+      <ol><li>Crea la key en <code>platform.minimax.io</code> (API Keys) y ponle un límite de gasto.</li>${NB() ? `<li>${esc(off.how || 'Guarda MINIMAX_API_KEY como secreto del repositorio en GitHub y vuelve a desplegar.')}</li>` : `<li>Abre una ventana de comandos y pega <code>${esc(off.how || 'setx MINIMAX_API_KEY "tu-key"')}</code>.</li><li>Cierra la oficina y ábrela con el iniciador.</li>`}</ol>
       <p>Con la key puesta, aquí clonas tu voz grabándola o subiendo un audio, diseñas una voz con palabras y eliges la voz de cada audio.</p></div>`;
   }
   function vocRowHTML(v) {
@@ -1633,7 +1634,7 @@ export function initStudio(ctx) {
       return `<section class="st-lpanel" aria-labelledby="stEdT"><h3 id="stEdT">${svg('pen')} Editar: una versión nueva</h3>
         <label class="st-plab" for="stEdQ">¿Qué cambio?</label><textarea id="stEdQ" class="st-edq" rows="3" maxlength="2000" placeholder="Ej.: quita el fondo · pon el logo abajo · cámbiale la ropa a roja"></textarea>
         <div class="st-edex" role="group" aria-label="Ejemplos">${EDIT_EX.map(x => `<button type="button" data-ex="${esc(x)}">${esc(x)}</button>`).join('')}</div>
-        ${off ? `<div class="st-edoff" role="alert" tabindex="-1"><b>Ningún motor que edite imágenes está activado.</b> Activa uno una sola vez (pega su comando en una ventana de comandos) y reinicia la oficina:${engs.length ? `<ul>${engs.map(e => `<li><b>${esc(e.name)}</b>${e.how ? `: <code>${esc(e.how)}</code>` : ''}</li>`).join('')}</ul>` : ''}</div>`
+        ${off ? `<div class="st-edoff" role="alert" tabindex="-1"><b>Ningún motor que edite imágenes está activado.</b> Activa uno una sola vez ${NB() ? '(guarda su key como secreto del repositorio en GitHub) y vuelve a desplegar' : '(pega su comando en una ventana de comandos) y reinicia la oficina'}:${engs.length ? `<ul>${engs.map(e => `<li><b>${esc(e.name)}</b>${e.how ? (NB() ? `: ${esc(e.how)}` : `: <code>${esc(e.how)}</code>`) : ''}</li>`).join('')}</ul>` : ''}</div>`
           : `<label class="st-plab">Modelo<select class="st-edm">${ms.map(m => `<option value="${esc(m.id)}"${m.id === want ? ' selected' : ''}>${esc(m.name)} · ${price(m)}</option>`).join('')}</select></label>`}
         <p class="st-edn">La original no se toca: sale una imagen nueva${fd ? ` en «${esc(fd)}»` : ' en la galería'}, unida a esta como versión.</p>
         <div class="st-edrow"><button type="button" class="st-edgo pri"${off ? ' disabled aria-disabled="true"' : ''} title="Ctrl + Enter desde el campo">Crear versión</button><button type="button" data-lp="x">Cancelar</button></div>

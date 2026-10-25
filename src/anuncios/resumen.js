@@ -49,9 +49,9 @@ export function tarjetaHTML(c, moneda, rango, ahora = Date.now()) {
 export function conexionHTML(d) {
   return `<section class="anu-card anu-conectar" aria-labelledby="anuConT"><h2 id="anuConT">Conecta tu cuenta publicitaria de Meta</h2>
     <p>${esc(d?.motivo || 'La oficina todavía no puede leer tus anuncios.')}</p>
-    <ol><li>El token de Meta va en la variable de Windows <code>META_ACCESS_TOKEN</code> (el mismo de Analíticas y Contenido), con los permisos de anuncios (<code>ads_read</code>, y para la siguiente fase <code>ads_management</code>).</li>
+    <ol><li>El token de Meta va ${globalThis.AO_NUBE ? 'en el secreto del repositorio en GitHub' : 'en la variable de Windows'} <code>META_ACCESS_TOKEN</code> (el mismo de Analíticas y Contenido), con los permisos de anuncios (<code>ads_read</code>, y para la siguiente fase <code>ads_management</code>).</li>
       <li>En <b>Ajustes → Anuncios</b>, escribe la cuenta publicitaria (<code>act_…</code>) y tus topes de gasto.</li>
-      <li>Reinicia la oficina y vuelve aquí. Paso a paso: <code>docs/conectar-meta.md</code>.</li></ol>
+      <li>${globalThis.AO_NUBE ? 'Vuelve a desplegar' : 'Reinicia la oficina'} y vuelve aquí. Paso a paso: <code>docs/conectar-meta.md</code>.</li></ol>
     <p class="anu-ayuda">Cuando esté conectada: pausar es de un clic; lo que gasta te pide un segundo clic que dice la cifra y nunca pasa de tus topes.</p>
     <div class="anu-acts"><button type="button" class="anu-btn pri" data-a="ajustes">Abrir Ajustes → Anuncios</button><button type="button" class="anu-btn" data-a="ejemplo">Ver con datos de ejemplo</button></div></section>`;
 }
