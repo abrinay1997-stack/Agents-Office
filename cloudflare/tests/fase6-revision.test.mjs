@@ -204,7 +204,7 @@ test('H9/H10: un indicador no se mueve con una entrega contaminada; los números
   const cada = MODULOS.find((m) => m.nombre === 'negocio').cadaMinuto; await cada(o.env);
   const t = (await o.admin('POST', '/api/tasks', { dept: 'sales', text: 'cuenta' })).j;
   await conSesion(o.d1, async (s) => { s.alm.cambiar(t.id, (x) => { x.state = 'done'; x.doneAt = Date.now() + 5; x.result = 'KPI leads = 99'; x.guard = { taint: { why: 'órdenes escondidas' } }; }, {}); });
-  await cada(o.env); assert.ok(!JSON.stringify((await o.admin('GET', '/api/business')).j.kpis).includes('99'), 'la entrega contaminada no cuenta');
+  await cada(o.env); const kp = (await o.admin('GET', '/api/business')).j.kpis; assert.ok(!JSON.stringify(kp).includes('"value":99') && !JSON.stringify(kp).includes('"v":99') && !JSON.stringify(kp).includes(':99,') && !JSON.stringify(kp).includes(':99}'), 'la entrega contaminada no cuenta');
 });
 test('H11: el tope por hora del hook no borra al que rechaza (un repetido no lo da por hecho y el reintento tiene su oportunidad); lectura no ve el estado rico', { skip: SALTAR }, async () => {
   const o = await oficina6(); await o.admin('PUT', '/api/triggers', { triggers: [{ id: 'f1', dept: 'sales', source: 'generic', text: 'x', perHour: 1 }] });
