@@ -236,9 +236,9 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
 }
 
 /* ---------- el reloj (serve.mjs → tickRoutines, tickScheduled, tickLimites) ---------- */
-export async function cadaMinuto(env) {
+export async function cadaMinuto(env, ahoraMs = Date.now()) { // `ahoraMs`: solo las pruebas lo cambian
   const db = env.DB; // la zona de la oficina ya está instalada (lib/rutas.js)
-  const ahora = Date.now();
+  const ahora = ahoraMs;
   const C = await leerContexto(db);
   // MEDIO-2: primero se crean las tareas (cada una con su id estable) y DESPUÉS se adelanta el reloj. Si algo se cae entre los dos pasos, el reloj no avanzó: el minuto
   // siguiente planea lo mismo, las tareas ya existen (el mismo id no nace dos veces) y solo se confirma el reloj. Nunca queda una rutina «hecha» sin su tarea.
@@ -297,6 +297,22 @@ export function avisarLimites(s, C, ahora) {
 async function limpiar(db, ahora) {
   await db.prepare('delete from tarea_bitacora where t < ?').bind(ahora - 400 * 864e5).run();
   await db.prepare("delete from filas where coleccion = 'avisos' and orden < ?").bind(ahora - 60 * 864e5).run();
+  for (let i = 0; i < TANDAS_ARCHIVO && (await archivarViejas(db, ahora)) >= LOTE_ARCHIVO; i++);
+}
+
+/** Las tareas HECHAS hace más de `DIAS_HECHAS_VIVAS` días salen del conjunto vivo (`filas.coleccion = 'tareas'`) y pasan, sin tocarlas, a 'tareas-archivo'.
+ *  Por qué: cada petición de tareas carga TODAS las vivas; medido (revisión transversal del 25 oct): con 10.000 tareas hechas una petición tarda ~2 s y una alta sube ~450 MB de montón,
+ *  más que los 128 MB de un Worker; a 30 tareas al día eso son menos de 12 meses. El resumen mira como mucho 180 días (`/api/tareas/resumen`). Nada se borra: la fila viaja entera.
+ *  Una dependencia (`bloqueadaPor`) a una tarea archivada no bloquea (ya estaba hecha). → cuántas pasó. */
+export const DIAS_HECHAS_VIVAS = 180, LOTE_ARCHIVO = 400, TANDAS_ARCHIVO = 5;
+export async function archivarViejas(db, ahora = Date.now()) {
+  const corte = ahora - DIAS_HECHAS_VIVAS * 864e5;
+  const donde = "coleccion = 'tareas' and json_extract(json,'$.state') = 'done' and coalesce(json_extract(json,'$.doneAt'), json_extract(json,'$.startedAt'), json_extract(json,'$.addedAt'), 0) < ?";
+  const [ins] = await db.batch([
+    db.prepare(`insert or replace into filas (coleccion, id, json, orden, actualizado) select 'tareas-archivo', id, json, orden, actualizado from filas where ${donde} order by orden limit ?`).bind(corte, LOTE_ARCHIVO),
+    db.prepare("delete from filas where coleccion = 'tareas' and id in (select id from filas where coleccion = 'tareas-archivo')"),
+  ]);
+  return ins?.meta?.changes ?? 0;
 }
 
 /* ---------- lo que usará la fase 4 (agentes) y las demás fases ---------- */

@@ -11,7 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { manejar, correrReloj } from '../worker/lib/rutas.js';
 import { cuerpo, TOPE_JSON } from '../worker/lib/respuesta.js';
 import { podar, tocaPodar, RETENCION_DIAS, LOTE } from '../worker/lib/mantenimiento.js';
-import { conSesion } from '../worker/lib/tareas/sesion.js';
+import { conSesion, cargarTareas } from '../worker/lib/tareas/sesion.js';
+import { archivarViejas, DIAS_HECHAS_VIVAS, LOTE_ARCHIVO, cadaMinuto as relojTareas } from '../worker/modulos/tareas.js';
 import { crearTarea } from '../../tareas/modelo.mjs';
 import { instalarZona } from '../worker/lib/zona.js';
 import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
@@ -224,4 +225,36 @@ test('PODA: el reloj de cada minuto la corre a las 03:17 (y a otra hora no toca 
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'vieja'").get().n, 1, 'a las 04:17 no poda');
   await correrReloj(o.env, Date.parse('2026-10-25T08:17:00Z')); // 03:17 en Panamá
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'vieja'").get().n, 0, 'a las 03:17 poda');
+});
+
+test('ESCALA: las tareas hechas hace más de 180 días salen del conjunto vivo (a tareas-archivo, enteras); lo abierto y lo reciente se queda', { skip: SALTAR }, async () => {
+  const o = await oficina(); const db = o.d1._db;
+  const ahora = Date.parse('2026-10-25T12:00:00Z'), hace = (d) => ahora - d * 864e5;
+  const caso = { 'vieja-a': ['done', hace(DIAS_HECHAS_VIVAS + 5)], 'vieja-b': ['done', hace(400)], 'reciente': ['done', hace(10)], 'espera': ['waiting', hace(400)], 'cola': ['next', hace(400)] };
+  await con(o, async (s) => {
+    const l = s.alm.load();
+    for (const [id, [estado, cuando]] of Object.entries(caso)) { const t = crearTarea({ dept: 'ops', agent: 'olead', title: id, text: 'x' }, { id: () => id }); t.state = estado; t.doneAt = cuando; t.addedAt = cuando; t.result = 'R'.repeat(50); l.push(t); }
+    s.alm.save(l);
+  });
+  assert.equal(await archivarViejas(o.d1, ahora), 2);
+  const vivas = (await cargarTareas(o.d1)).map((t) => t.id).sort();
+  assert.deepEqual(vivas, ['cola', 'espera', 'reciente']);
+  const guardadas = db.prepare("select id, json from filas where coleccion = 'tareas-archivo' order by id").all();
+  assert.deepEqual(guardadas.map((f) => f.id), ['vieja-a', 'vieja-b']);
+  assert.equal(JSON.parse(guardadas[0].json).result, 'R'.repeat(50), 'la fila viaja entera');
+  assert.equal(await archivarViejas(o.d1, ahora), 0, 'repetirlo no hace nada');
+  assert.equal(db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 3);
+});
+
+test('ESCALA: el archivo diario va por tandas y el reloj de las 03:10 lo corre', { skip: SALTAR }, async () => {
+  const o = await oficina(); const db = o.d1._db;
+  const ahora = new Date(); ahora.setHours(3, 10, 0, 0); const t0 = ahora.getTime();
+  const ins = db.prepare("insert into filas (coleccion, id, json, orden, actualizado) values ('tareas', ?, ?, ?, ?)");
+  db.exec('begin');
+  for (let i = 0; i < LOTE_ARCHIVO + 30; i++) { const t = crearTarea({ dept: 'ops', agent: 'olead', title: 'v' + i, text: 'x' }, { id: () => 'v' + i }); t.state = 'done'; t.doneAt = t0 - 300 * 864e5; ins.run(t.id, JSON.stringify(t), i, 'x'); }
+  db.exec('commit');
+  assert.equal(await archivarViejas(o.d1, t0), LOTE_ARCHIVO, 'una tanda');
+  assert.equal(db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 30);
+  await relojTareas(o.env, t0);
+  assert.equal(db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 0, 'el reloj de las 03:10 termina lo que quedaba');
 });
