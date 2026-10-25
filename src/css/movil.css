@@ -35,6 +35,10 @@ body.movil.subOpen #subOv, body.movil.subOpen #subOv * { visibility: visible; }
 .mv-ic:active { background: var(--mv-surf2); }
 .mv-pend { min-height: 44px; min-width: 56px; padding: 0 12px 0 8px; display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 22px; background: var(--mv-ambar-bg); color: var(--mv-ambar); font-weight: 800; font-size: 15px; }
 .mv-pend .mv-i { width: 20px; height: 20px; }
+.mv-franja { position: absolute; z-index: 4; left: 0; right: 0; bottom: calc(var(--mv-tab) + env(safe-area-inset-bottom)); height: 48px; display: flex; align-items: center; background: var(--mv-ambar-bg); color: var(--mv-ambar); border-top: 1px solid var(--mv-ambar); pointer-events: auto; padding-left: env(safe-area-inset-left); }
+.mv-franja[hidden] { display: none; } .mv-franja-b { flex: 1; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border: 0; background: none; text-align: left; font-size: 15px; } .mv-franja-b .mv-i { width: 22px; height: 22px; }
+#mvRoot.con-franja .mv-main { bottom: calc(var(--mv-tab) + env(safe-area-inset-bottom) + 48px); } #mvRoot.con-franja .mv-toasts { bottom: calc(var(--mv-tab) + env(safe-area-inset-bottom) + 58px); }
+body.mv-teclado .mv-franja { display: none; } body.mv-teclado #mvRoot.con-franja .mv-main { bottom: 0; }
 .mv-conex { font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 99px; background: var(--mv-rojo-bg); color: var(--mv-rojo); margin-right: 4px; }
 
 /* ---- el cuerpo y las vistas ---- */
@@ -54,6 +58,8 @@ body.mv-esc .mv-main { display: none; }
 .mv-tabs { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; height: calc(var(--mv-tab) + env(safe-area-inset-bottom)); padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display: grid; grid-template-columns: repeat(5, 1fr); background: var(--mv-bg); border-top: 1px solid var(--mv-line); pointer-events: auto; }
 .mv-tab { position: relative; min-height: 44px; border: 0; background: none; padding: 6px 2px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 12px; font-weight: 600; color: var(--mv-grey); }
 .mv-tab.on { color: var(--mv-ink); font-weight: 800; }
+.mv-tab[data-tab="dimitri"] .mv-i { background: var(--mv-ink); color: var(--mv-bg); border-radius: 14px; padding: 4px; width: 38px; height: 30px; }
+.mv-tab[data-tab="dimitri"].on .mv-i { box-shadow: 0 0 0 2px var(--mv-bg), 0 0 0 4px var(--mv-ink); }
 .mv-tab.on::before { content: ''; position: absolute; top: 0; left: 24%; right: 24%; height: 3px; border-radius: 0 0 3px 3px; background: var(--mv-ink); }
 .mv-tab .mv-i { width: 26px; height: 26px; }
 .mv-punto { position: absolute; top: 8px; left: calc(50% + 8px); width: 10px; height: 10px; border-radius: 50%; background: var(--mv-rojo); border: 2px solid var(--mv-bg); }
@@ -174,6 +180,14 @@ body.mv-esc .mv-main { display: none; }
 .mv-mas-link { min-height: 44px; border: 0; background: none; color: var(--mv-azul); font-weight: 700; padding: 0; }
 .mv-atajos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; } .mv-atajos button { min-height: 76px; border: 1.5px solid var(--mv-line); border-radius: var(--mv-radio); background: var(--mv-surf); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 700; font-size: 15px; padding: 8px; }
 
+/* ---- conectores ---- */
+.mv-cxs { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 0 10px; align-items: center; }
+.mv-cx { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: var(--mv-surf2); flex: none; }
+.mv-cx img { width: 36px; height: 36px; border-radius: 9px; display: block; } .mv-cx b { font-size: 18px; } .mv-cx i { position: absolute; right: -3px; bottom: -3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--mv-surf); background: var(--mv-acc); }
+.mv-cx.warn i { background: #D18A00; } .mv-cx.bad i { background: var(--mv-rojo); }
+.mv-cx-mas { font-size: 14px; font-weight: 800; color: var(--mv-grey); padding: 0 6px; }
+.mv-cxl { list-style: none; margin: 0 0 10px; padding: 0; } .mv-cxf { display: flex; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--mv-line); } .mv-cxf-t { display: flex; flex-direction: column; min-width: 0; } .mv-cxf-t small { font-size: 13px; color: var(--mv-grey); } .mv-cxf-t small.ok { color: var(--mv-acc); font-weight: 700; } .mv-cxf-t small.warn { color: var(--mv-ambar); font-weight: 700; } .mv-cxf-t small.bad { color: var(--mv-rojo); font-weight: 700; }
+.mv-mini li.nuevo { font-weight: 700; }
 /* ---- Más ---- */
 .mv-lista { list-style: none; margin: 0; padding: 0; border: 1.5px solid var(--mv-line); border-radius: var(--mv-radio); overflow: hidden; background: var(--mv-surf); } .mv-lista li + li { border-top: 1px solid var(--mv-line); }
 .mv-lista-b { width: 100%; min-height: 60px; display: flex; align-items: center; gap: 14px; padding: 8px 6px 8px 14px; border: 0; background: none; text-align: left; } .mv-lista-b span { flex: 1; display: flex; flex-direction: column; min-width: 0; } .mv-lista-b small { font-size: 13px; color: var(--mv-grey); } .mv-lista-i { width: 26px; height: 26px; }

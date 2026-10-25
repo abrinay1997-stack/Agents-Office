@@ -14,10 +14,10 @@ export function registrar(shell) {
     id: 'calendario', titulo: 'Calendario', icono: 'calendario', grupo: 'tab',
     montar(el, ctx) {
       let modo = 'agenda', ancla = Date.now(), diaSel = ymd(new Date()), cargando = true; const st = ctx.store.st;
-      el.innerHTML = `<div class="mv-scroll"><div class="mv-seg" role="group" aria-label="Cómo verlo"><button type="button" data-modo="agenda" aria-pressed="true">Agenda</button><button type="button" data-modo="mes" aria-pressed="false">Mes</button></div><div class="mv-cuerpo" aria-live="polite"></div></div>
+      el.innerHTML = `<div class="mv-scroll"><div class="mv-seg" role="group" aria-label="Cómo verlo"><button type="button" data-modo="agenda" aria-pressed="true">Agenda</button><button type="button" data-modo="tres" aria-pressed="false">3 días</button><button type="button" data-modo="mes" aria-pressed="false">Mes</button></div><div class="mv-cuerpo" aria-live="polite"></div></div>
         <button type="button" class="mv-fab" aria-label="Crear una tarea">${svg('mas1')}</button>`;
       const cuerpo = el.querySelector('.mv-cuerpo'), sc = el.querySelector('.mv-scroll'), seg = el.querySelector('.mv-seg');
-      const rangoAgenda = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return [d.getTime(), d.getTime() + 30 * DIA]; };
+      const rangoAgenda = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return [d.getTime(), d.getTime() + (modo === 'tres' ? 3 : 30) * DIA]; };
 
       function item(e) {
         const clase = e.pausada || e.saltada ? ' pausada' : '', extra = e.saltada ? ' · saltada' : e.pausada ? ' · en pausa' : '';
@@ -25,8 +25,8 @@ export function registrar(shell) {
       }
       function pintarAgenda() {
         const [d, h] = rangoAgenda(), evs = eventos({ tareas: st.tareas, rutinas: st.rutinas, desde: d, hasta: h });
-        const g = agrupar(evs, { desde: d, hasta: h });
-        cuerpo.innerHTML = g.map(x => `<section class="mv-dia${x.esHoy ? ' hoy' : ''}" data-dia="${x.dia}"><h3>${esc(x.titulo)}<small>${esc(new Date(x.dia + 'T12:00').toLocaleDateString('es', { day: 'numeric', month: 'short' }))}</small></h3>${x.items.length ? `<ul class="mv-evs">${x.items.map(item).join('')}</ul>` : '<p class="mv-nada">Nada programado.</p>'}</section>`).join('') + (evs.length ? '' : vacio('Nada en 30 días', 'Toca + para poner algo en tu calendario.', { icono: 'calendario' }));
+        const g = agrupar(evs, { desde: d, hasta: h, rellenar: modo === 'tres' });
+        cuerpo.innerHTML = g.map(x => `<section class="mv-dia${x.esHoy ? ' hoy' : ''}" data-dia="${x.dia}"><h3>${esc(x.titulo)}<small>${esc(new Date(x.dia + 'T12:00').toLocaleDateString('es', { day: 'numeric', month: 'short' }))}</small></h3>${x.items.length ? `<ul class="mv-evs">${x.items.map(item).join('')}</ul>` : '<p class="mv-nada">Nada programado.</p>'}</section>`).join('') + (evs.length ? '' : vacio(modo === 'tres' ? 'Nada en 3 días' : 'Nada en 30 días', 'Toca + para poner algo en tu calendario.', { icono: 'calendario' }));
       }
       function pintarMes() {
         const m0 = mesGrid(ancla), evs = eventos({ tareas: st.tareas, rutinas: st.rutinas, desde: m0.desde, hasta: m0.hasta });
@@ -39,7 +39,7 @@ export function registrar(shell) {
       function pintar() {
         seg.querySelectorAll('[data-modo]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.modo === modo)));
         if (!st.cargado) { cuerpo.innerHTML = st.error ? falla(st.error) : esqueleto(5); return; }
-        if (modo === 'agenda') pintarAgenda(); else pintarMes();
+        if (modo === 'mes') pintarMes(); else pintarAgenda();
       }
 
       // ---- lo que se puede hacer con algo ----
@@ -88,7 +88,7 @@ export function registrar(shell) {
         const ev = e.target.closest('.mv-ev'); if (ev) return abrir(ev);
         if (e.target.closest('[data-reintentar]')) ctx.store.refrescar();
       });
-      ctx.cabecera({ acciones: [{ icono: 'calendario', etiqueta: 'Ir a hoy', alTocar: () => { ancla = Date.now(); diaSel = ymd(new Date()); modo === 'agenda' && sc.scrollTo({ top: 0, behavior: 'smooth' }); pintar(); } }] });
+      ctx.cabecera({ acciones: [{ icono: 'calendario', etiqueta: 'Ir a hoy', alTocar: () => { ancla = Date.now(); diaSel = ymd(new Date()); modo !== 'mes' && sc.scrollTo({ top: 0, behavior: 'smooth' }); pintar(); } }] });
       ctx.tirar(sc, () => ctx.store.refrescar());
       ctx.store.alCambiar(() => { if (!el.hidden) pintar(); });
       pintar();

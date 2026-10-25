@@ -22,7 +22,7 @@ export const esperanOk = tareas => tareas.filter(t => t && !t.archived && !t.pie
 
 export function crearStore(api, { cada = 20000 } = {}) {
   const st = { tareas: [], rutinas: [], status: null, cargado: false, error: null };
-  const subs = new Set(); let pidiendo = null, timer = null, ag = null;
+  const subs = new Set(); let pidiendo = null, timer = null, ag = null, mc = null, mcAt = 0;
   const emitir = () => { for (const f of subs) { try { f(st); } catch (e) { console.error(e); } } };
   async function refrescar() {
     if (pidiendo) return pidiendo;
@@ -47,6 +47,8 @@ export function crearStore(api, { cada = 20000 } = {}) {
     st, refrescar, iniciar, detener,
     alCambiar(f) { subs.add(f); return () => subs.delete(f); },
     get aprobaciones() { return esperanOk(st.tareas); },
+    /** Los conectores (/api/mcp: en la nube, los MCP remotos de la oficina). Se guarda un minuto. */
+    async conectores(fresco = false) { if (!fresco && mc && Date.now() - mcAt < 60e3) return mc; mc = await api('/api/mcp'); mcAt = Date.now(); return mc; },
     /** El plantel (id, name, dept, lead): una sola vez; sirve para decir «Ana · Ventas» en vez de un id. */
     agentes() { return (ag ||= api('/api/agents').then(j => j.agents || []).catch(() => { ag = null; return []; })); },
   };

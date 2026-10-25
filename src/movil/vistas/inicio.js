@@ -4,6 +4,8 @@
 import { deLista, esDelDueno } from '../../../tareas/dueno.mjs';
 import { eventos, horaDe, etiquetaDia } from '../agenda.js';
 import { esc, svg, esqueleto, falla, hace, limiteTexto } from '../ui.js';
+import { tarjetaHTML, abrirConectores } from '../conectores.js';
+import { abrirAvisos } from '../avisos.js';
 import { ymd } from '../ui.js';
 
 const saludo = () => { const h = new Date().getHours(); return h < 6 ? 'Buenas noches' : h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'; };
@@ -15,6 +17,7 @@ export function registrar(shell) {
     id: 'inicio', titulo: () => empresa() || 'Inicio', icono: 'inicio', grupo: 'tab',
     montar(el, ctx) {
       el.innerHTML = '<div class="mv-scroll"><div class="mv-cuerpo" aria-live="polite"></div></div>';
+      let mcp = null; const cargaMcp = () => ctx.store.conectores().then(j => { mcp = j; pintar(); }).catch(() => {});
       const cuerpo = el.querySelector('.mv-cuerpo'), sc = el.querySelector('.mv-scroll'), st = ctx.store.st;
       function pintar() {
         if (!st.cargado) { cuerpo.innerHTML = st.error ? falla(st.error) : `<h2 class="mv-saludo-t">${saludo()}</h2>${esqueleto(4)}`; return; }
@@ -29,7 +32,8 @@ export function registrar(shell) {
             ${hoy.length ? `<ul class="mv-filas">${hoy.slice(0, 4).map(t => `<li class="mv-fila" data-id="${esc(t.id)}"><button type="button" class="mv-check" data-hecha aria-label="Marcar como hecha: ${esc(t.title)}"><i>${svg('check')}</i></button><button type="button" class="mv-fila-cuerpo" data-abrir><span class="mv-fila-t">${esc(t.title)}</span>${t.limite ? `<span class="mv-fila-m"><span class="${limiteTexto(t.limite).startsWith('vencida') ? 'rojo' : ''}">${esc(limiteTexto(t.limite))}</span></span>` : ''}</button></li>`).join('')}</ul>${hoy.length > 4 ? `<button type="button" class="mv-mas-link" data-tareas>Ver las ${hoy.length}</button>` : ''}` : '<p class="mv-nada">Nada para hoy. Buen momento para adelantar algo.</p>'}</section>
           <section class="mv-card" aria-label="Lo que viene"><button type="button" class="mv-card-cab" data-agenda><span class="mv-card-t">${svg('calendario')} Lo que viene</span>${svg('der', 'mv-der')}</button>
             ${evs.length ? `<ul class="mv-mini ev">${evs.map(e => `<li><time>${esc(etiquetaDia(ymd(new Date(e.at))))} · ${esc(horaDe(e))}</time> ${esc(e.titulo)}</li>`).join('')}</ul>` : '<p class="mv-nada">Nada programado para hoy ni mañana.</p>'}</section>
-          ${avisos.length ? `<section class="mv-card" aria-label="Avisos"><div class="mv-card-cab static"><span class="mv-card-t">${svg('nube')} Avisos</span><button type="button" class="mv-link" data-leidos>Marcar leídos</button></div><ul class="mv-mini">${avisos.map(n => `<li class="${esc(n.level || '')}">${esc(String(n.text).replace(/`/g, '').slice(0, 160))} <time>${n.t ? hace(n.t) : ''}</time></li>`).join('')}</ul></section>` : ''}
+          ${mcp ? tarjetaHTML(mcp) : ''}
+          ${avisos.length ? `<section class="mv-card" aria-label="Avisos"><div class="mv-card-cab static"><span class="mv-card-t">${svg('nube')} Avisos</span><button type="button" class="mv-link" data-avisos>Ver todos</button><button type="button" class="mv-link" data-leidos>Marcar leídos</button></div><ul class="mv-mini">${avisos.map(n => `<li class="${esc(n.level || '')}">${esc(String(n.text).replace(/`/g, '').slice(0, 160))} <time>${n.t ? hace(n.t) : ''}</time></li>`).join('')}</ul></section>` : ''}
           <div class="mv-atajos" role="group" aria-label="Atajos"><button type="button" data-nueva>${svg('mas1')}<span>Añadir tarea</span></button><button type="button" data-dim>${svg('dimitri')}<span>Hablar con Dimitri</span></button><button type="button" data-agenda>${svg('calendario')}<span>Ver la agenda</span></button><button type="button" data-mas>${svg('mas')}<span>Más</span></button></div>`;
       }
       cuerpo.addEventListener('click', async e => {
@@ -41,6 +45,8 @@ export function registrar(shell) {
         if ('nueva' in b.dataset) return ctx.navegar('tareas', { nueva: 1 });
         if ('dim' in b.dataset) return ctx.navegar('dimitri');
         if ('mas' in b.dataset) return document.querySelector('[data-tab="mas"]')?.click();
+        if ('conectores' in b.dataset) { try { abrirConectores(ctx, await ctx.store.conectores(true)); } catch (er) { ctx.toast('No se pudieron leer los conectores: ' + er.message); } return; }
+        if ('avisos' in b.dataset) return abrirAvisos(ctx);
         if ('leidos' in b.dataset) { try { await ctx.api('/api/notices/read', { method: 'POST', body: {} }); } catch {} return ctx.store.refrescar(); }
         if (b.hasAttribute('data-reintentar')) return ctx.store.refrescar();
         const li = b.closest('.mv-fila'); if (!li) return;
@@ -54,8 +60,8 @@ export function registrar(shell) {
       });
       ctx.tirar(sc, () => ctx.store.refrescar());
       ctx.store.alCambiar(() => { if (!el.hidden) pintar(); });
-      pintar();
+      el._mcp = cargaMcp; pintar(); cargaMcp();
     },
-    alMostrar(el, ctx) { ctx.store.refrescar(); },
+    alMostrar(el, ctx) { ctx.store.refrescar(); el._mcp?.(); },
   });
 }

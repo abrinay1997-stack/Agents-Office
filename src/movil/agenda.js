@@ -44,10 +44,11 @@ export function eventos({ tareas = [], rutinas = [], desde, hasta, hechas = fals
 }
 
 /** Agrupa por día. Siempre incluye el día de `ahora` si cae en el rango (aunque esté vacío: «Hoy · nada»). */
-export function agrupar(evs, { ahora = Date.now(), desde, hasta, conHoyVacio = true } = {}) {
+export function agrupar(evs, { ahora = Date.now(), desde, hasta, conHoyVacio = true, rellenar = false } = {}) {
   const por = new Map();
   for (const e of evs) { const k = ymd(new Date(e.at)); if (!por.has(k)) por.set(k, []); por.get(k).push(e); }
   const hoy = ymd(new Date(ahora));
+  if (rellenar) for (let t = startOfDay(desde); t < hasta; t += DIA) { const k = ymd(new Date(t + DIA / 2)); if (!por.has(k)) por.set(k, []); } // la vista de 3 días enseña los tres, aunque estén vacíos
   if (conHoyVacio && ahora >= desde && ahora < hasta && !por.has(hoy)) por.set(hoy, []);
   return [...por].sort(([a], [b]) => a.localeCompare(b)).map(([dia, items]) => ({ dia, titulo: etiquetaDia(dia, ahora), esHoy: dia === hoy, items }));
 }

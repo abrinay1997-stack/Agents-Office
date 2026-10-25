@@ -117,14 +117,29 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
       return r;
     };
     await medir('Inicio');
+    // ---- axe (si hay AO_AXE): sin críticos ni serios, claro y oscuro ----
+    const AXE = process.env.AO_AXE && fs.existsSync(process.env.AO_AXE) ? process.env.AO_AXE : null;
+    const axe = async nombre => {
+      if (!AXE) return; if (!(await page.evaluate(() => !!window.axe))) await page.addScriptTag({ path: AXE });
+      const v = await page.evaluate(async () => { const r = await window.axe.run(document.getElementById('mvRoot'), { resultTypes: ['violations'] }); return r.violations.filter(x => x.impact === 'critical' || x.impact === 'serious').map(x => `${x.id} (${x.impact}, ${x.nodes.length}): ${x.nodes[0].target.join(' ')}`); });
+      paso(!v.length, `axe · ${nombre}: sin críticos ni serios${v.length ? ' → ' + v.join(' | ') : ''}`);
+    };
+    // ---- Inicio: conectores, franja de aprobación, Buscar ----
+    await page.waitForSelector('[data-vista="inicio"] [aria-label="Conectores"]', { timeout: 8000 }).catch(() => {});
+    paso(await page.locator('[data-vista="inicio"] [aria-label="Conectores"]').count() === 1, 'Inicio: los conectores se ven en una tarjeta (antes se escondían en el teléfono)');
+    toques = 0; await tocar('[data-vista="inicio"] [data-conectores]'); await page.waitForSelector('.mv-hoja .mv-cxl, .mv-hoja .mv-meta'); await foto('01b-conectores'); await medir('Conectores (hoja)'); paso(toques <= 2, `Conectores: verlos está a ${toques} toques (≤ 2)`);
+    await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
+    paso(await page.locator('.mv-franja:not([hidden]) [data-ver]').count() === 1 && /1 borrador espera/.test(await texto('.mv-franja')), 'Aprobaciones: la franja sobre la barra dice «1 borrador espera tu OK · Ver»'); await medir('Inicio con la franja');
+    toques = 0; await tocar('.mv-buscar'); await page.waitForSelector('#findOv:not([hidden])', { timeout: 6000 }); paso(toques === 1, 'Buscar: un botón en la cabecera abre la búsqueda (1 toque)'); await foto('01c-buscar'); await page.goBack(); await page.waitForSelector('#findOv', { state: 'hidden' });
+    await axe('Inicio');
 
     // ---- cada destino abre ----
-    const destinos = [['tareas', '[data-vista="tareas"]'], ['calendario', '[data-vista="calendario"]'], ['dimitri', '[data-vista="dimitri"]'], ['inicio', '[data-vista="inicio"]']];
-    for (const [t, sel] of destinos) { await tocar(`.mv-tab[data-tab="${t}"]`); await page.waitForSelector(sel + ':not([hidden])'); paso(await page.locator(`.mv-tab[data-tab="${t}"]`).getAttribute('aria-current') === 'page', `móvil: «${t}» abre y queda marcado (aria-current)`); if (t === 'tareas') { await page.waitForSelector('[data-vista="tareas"] .mv-fila'); await foto('02-tareas'); await medir('Tareas'); } if (t === 'calendario') { await page.waitForSelector('.mv-dia'); await foto('04-calendario-agenda'); await medir('Calendario'); } if (t === 'dimitri') { await page.waitForSelector('.mv-saludo, .mv-msg'); await foto('05-dimitri'); await medir('Dimitri'); } }
+    const destinos = [['tareas', '[data-vista="tareas"]'], ['dimitri', '[data-vista="dimitri"]'], ['calendario', '[data-vista="calendario"]'], ['inicio', '[data-vista="inicio"]']];
+    for (const [t, sel] of destinos) { await tocar(`.mv-tab[data-tab="${t}"]`); await page.waitForSelector(sel + ':not([hidden])'); paso(await page.locator(`.mv-tab[data-tab="${t}"]`).getAttribute('aria-current') === 'page', `móvil: «${t}» abre y queda marcado (aria-current)`); await axe(t); if (t === 'tareas') { await page.waitForSelector('[data-vista="tareas"] .mv-fila'); await foto('02-tareas'); await medir('Tareas'); } if (t === 'calendario') { await page.waitForSelector('.mv-dia'); await foto('04-calendario-agenda'); await medir('Calendario'); } if (t === 'dimitri') { await page.waitForSelector('.mv-saludo, .mv-msg'); await foto('05-dimitri'); await medir('Dimitri'); } }
     await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await foto('08-mas'); await medir('Más');
     const entradas = await page.locator('.mv-hoja.mv-mas .mv-lista-b').allInnerTexts();
     paso(['Cerebro', 'Estudio', 'Contenido', 'Analíticas', 'Anuncios', 'Negocio', 'Costos', 'Conectores', 'Ajustes', 'Estado', 'Buscar'].every(n => entradas.some(t => t.startsWith(n))), 'Más: lista Cerebro, Estudio, Contenido, Analíticas, Anuncios, Negocio, Costos, Conectores, Ajustes, Estado y Buscar');
-    await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
+    await axe('Más'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
     paso(true, 'Más: «atrás» del teléfono cierra la hoja');
 
     // ---- tareas ----
@@ -163,6 +178,25 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     }
     paso((await desborda('Tareas')).ancho, 'Tareas: sin desplazamiento horizontal');
 
+    // ---- gestos: arrastrar la hoja para cerrarla, deslizar desde el borde para volver, tirar para refrescar ----
+    {
+      const cdp = await ctx.newCDPSession(page);
+      const toque = async (puntos, paso = 14) => { const [a, ...r] = puntos; await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [a] }); for (const p of r) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [p] }); await espera(paso); } await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await espera(500); };
+      await tocar('.mv-tab[data-tab="tareas"]'); await page.waitForSelector('[data-vista="tareas"] .mv-fila:not(.hecha) [data-abrir]'); await tocar('[data-vista="tareas"] .mv-fila:not(.hecha) [data-abrir]'); await page.waitForSelector('.mv-hoja .mv-det'); await espera(450);
+      const asa = await page.locator('.mv-hoja .mv-asa').boundingBox();
+      await toque(Array.from({ length: 12 }, (_, i) => ({ x: asa.x + asa.width / 2, y: asa.y + 8 + i * 28 })));
+      await page.waitForSelector('.mv-hoja', { state: 'detached', timeout: 3000 }).catch(() => {}); paso(await page.locator('.mv-hoja').count() === 0, 'Gestos: arrastrar la hoja hacia abajo la cierra');
+      await page.waitForSelector('.mv-pend:not([hidden])'); await tocar('.mv-pend'); await page.waitForSelector('[data-vista="aprobaciones"] .mv-aprob');
+      await toque(Array.from({ length: 10 }, (_, i) => ({ x: 6 + i * 18, y: 400 })));
+      paso(await page.locator('[data-vista="aprobaciones"]:not([hidden])').count() === 0 && await page.locator('.mv-atras:not([hidden])').count() === 0, 'Gestos: deslizar desde el borde izquierdo vuelve de una pantalla');
+      await tocar('.mv-tab[data-tab="tareas"]'); await page.waitForSelector('[data-vista="tareas"] .mv-filas'); await espera(300); let pedidos = 0; const cuenta = r => { if (/\/api\/tasks\?light=1/.test(r.url())) pedidos++; }; page.on('request', cuenta);
+      const sc = await page.locator('#mvTareasSc').boundingBox();
+      await page.evaluate(() => { document.getElementById('mvTareasSc').scrollTop = 0; });
+      await toque(Array.from({ length: 10 }, (_, i) => ({ x: sc.x + 200, y: sc.y + 60 + i * 16 })));
+      await espera(600); page.off('request', cuenta);
+      paso(pedidos >= 1, `Gestos: tirar hacia abajo desde arriba refresca la lista (${pedidos} lectura)`);
+    }
+
     // ---- aprobaciones ----
     await tocar('.mv-tab[data-tab="inicio"]'); await page.waitForSelector('.mv-pend:not([hidden])');
     paso((await page.locator('.mv-pend').getAttribute('aria-label')).startsWith('1 espera'), 'Aprobaciones: el ⚠ de la cabecera dice cuántas esperan (1)');
@@ -182,6 +216,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     paso(await page.locator('.mv-ev').count() >= 1, 'Calendario: la agenda lista lo programado (tarea del agente y fechas límite)');
     await tocar('[data-modo="mes"]'); await page.waitForSelector('.mv-celda'); await foto('04b-calendario-mes'); await medir('Calendario (mes)');
     await tocar('.mv-fab'); await page.waitForSelector('.mv-hoja #mvNt'); await foto('04c-calendario-crear'); await medir('Nueva tarea (calendario)'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
+    await tocar('[data-modo="tres"]'); await page.waitForTimeout(150); paso(await page.locator('.mv-dia').count() === 3, 'Calendario: la vista de 3 días enseña tres días'); await foto('04d-calendario-3dias');
     await tocar('[data-modo="agenda"]');
 
     // ---- Dimitri ----
@@ -208,7 +243,8 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
 
     // ---- tema oscuro ----
     await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('[data-tema="dark"]'); await espera(300); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
-    paso(await page.evaluate(() => document.body.classList.contains('dark')), 'Tema: Oscuro desde Más'); await tocar('.mv-tab[data-tab="inicio"]'); await espera(300); await foto('11-inicio-oscuro');
+    paso(await page.evaluate(() => document.body.classList.contains('dark')), 'Tema: Oscuro desde Más');
+    for (const t of ['inicio', 'tareas', 'dimitri', 'calendario']) { await page.locator(`.mv-tab[data-tab="${t}"]`).tap(); await espera(400); await axe(t + ' (oscuro)'); } await tocar('.mv-tab[data-tab="inicio"]'); await espera(300); await foto('11-inicio-oscuro');
     const cont = await page.evaluate(() => { const l = c => { const m = c.match(/\d+/g).map(Number); const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }; return .2126 * f(m[0]) + .7152 * f(m[1]) + .0722 * f(m[2]); }; const par = (a, b) => { const x = l(a), y = l(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); }; const raiz = document.getElementById('mvRoot'), cs = getComputedStyle(raiz); const fondo = cs.getPropertyValue('--mv-bg'); const tinta = getComputedStyle(document.querySelector('.mv-titulo')).color; const grey = getComputedStyle(document.querySelector('.mv-fecha')).color; return { tinta: par(tinta, getComputedStyle(document.querySelector('.mv-main')).backgroundColor), gris: par(grey, getComputedStyle(document.querySelector('.mv-main')).backgroundColor) }; });
     paso(cont.tinta >= 7 && cont.gris >= 4.5, `Tema oscuro: contraste AA (texto ${cont.tinta.toFixed(1)}:1, gris ${cont.gris.toFixed(1)}:1)`);
     await page.evaluate(() => window.CC?.setDark(false)); await page.evaluate(() => localStorage.setItem('ao.theme', 'light'));

@@ -4,6 +4,7 @@
 // registra con `registrarVista({ id, grupo: 'mas', … })`, aquí cambia sola. También: el tema y «usar la versión de escritorio».
 import { GRUPOS } from '../escritorio.js';
 import { esc, svg } from '../ui.js';
+import { abrirAvisos, contar } from '../avisos.js';
 
 const TEMAS = [['light', 'Claro'], ['dark', 'Oscuro'], ['auto', 'Automático']];
 const tema = () => { try { const v = localStorage.getItem('ao.theme'); return v === 'dark' || v === 'auto' ? v : 'light'; } catch { return 'light'; } };
@@ -25,12 +26,13 @@ export function registrar(shell) {
         if (g === 'cuenta' && nube) l.push(entrada('salir', 'salir', 'Salir', 'Cerrar la sesión en este teléfono', 'salir'));
         return l.length ? `<h3 class="mv-gh">${esc(nombre)}</h3><ul class="mv-lista">${l.join('')}</ul>` : '';
       }).join('');
-      const t = tema();
-      const h = ctx.hoja({ titulo: 'Más', lleno: true, clase: 'mv-mas', cuerpo: `${bloques}
+      const nAv = contar(ctx.store.st), t = tema();
+      const h = ctx.hoja({ titulo: 'Más', lleno: true, clase: 'mv-mas', cuerpo: `${`<ul class="mv-lista"><li><button type="button" class="mv-lista-b" data-avisos>${svg('nube', 'mv-lista-i')}<span><b>Avisos</b><small>${nAv ? nAv + ' sin atender' : 'Todo en orden'}</small></span>${svg('der', 'mv-der')}</button></li></ul>`}${bloques}
         <h3 class="mv-gh">Tema</h3><div class="mv-seg" role="group" aria-label="Tema">${TEMAS.map(([k, n]) => `<button type="button" data-tema="${k}" aria-pressed="${t === k}">${n}</button>`).join('')}</div>
-        <h3 class="mv-gh">Versión</h3><ul class="mv-lista"><li><button type="button" class="mv-lista-b" data-escritorio>${svg('escritorio', 'mv-lista-i')}<span><b>Usar la versión de escritorio</b><small>La oficina en 3D. Vuelve desde Ajustes → Apariencia.</small></span></button></li></ul>` });
+        <h3 class="mv-gh">Versión</h3><ul class="mv-lista"><li><button type="button" class="mv-lista-b" data-escritorio>${svg('escritorio', 'mv-lista-i')}<span><b>Oficina 3D (versión de escritorio)</b><small>Pasa a la oficina completa. Vuelve desde Ajustes → Apariencia.</small></span></button></li></ul>` });
       h.cuerpo.addEventListener('click', e => {
         const b = e.target.closest('button'); if (!b) return;
+        if (b.hasAttribute('data-avisos')) { h.cerrar(); setTimeout(() => abrirAvisos(ctx), 260); return; }
         if (b.dataset.tema) { ponerTema(b.dataset.tema); h.cuerpo.querySelectorAll('[data-tema]').forEach(x => x.setAttribute('aria-pressed', String(x === b))); return; }
         if (b.dataset.vista) { h.cerrar(); setTimeout(() => ctx.navegar(b.dataset.vista), 120); return; }
         if (b.dataset.salir) { h.cerrar(); setTimeout(async () => { if (!(await ctx.confirmar({ titulo: '¿Salir de la oficina?', texto: 'Tendrás que volver a entrar con tu correo y contraseña.', ok: 'Salir' }))) return; try { await fetch('/api/salir', { method: 'POST', headers: { 'X-Pestana': window.AO_NUBE?.pestana || '' } }); } catch {} location.replace('/'); }, 240); return; }

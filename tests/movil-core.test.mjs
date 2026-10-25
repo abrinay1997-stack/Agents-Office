@@ -5,7 +5,7 @@ import { TABS, leerHash, aHash, pestanaDe, crearPila, esGestoVolver, cierraHoja,
 import { eventos, agrupar, mesGrid, etiquetaDia, horaDe } from '../src/movil/agenda.js';
 
 test('la barra inferior tiene cinco destinos y Más es el último', () => {
-  assert.equal(TABS.length, 5); assert.deepEqual(TABS.map(t => t.id), ['inicio', 'tareas', 'calendario', 'dimitri', 'mas']);
+  assert.equal(TABS.length, 5); assert.deepEqual(TABS.map(t => t.id), ['inicio', 'tareas', 'dimitri', 'calendario', 'mas']);
 });
 test('la dirección va y vuelve; una vista desconocida cae en Inicio', () => {
   assert.deepEqual(leerHash('#m=tareas&l=hoy'), { vista: 'tareas', params: { l: 'hoy' } });
@@ -37,6 +37,7 @@ test('la agenda agrupa por día, pone Hoy aunque esté vacío y ordena por hora'
   assert.deepEqual(ev.map(e => e.titulo), ['Post', 'Llamar']); // 09:00 antes que el final del día
   const g = agrupar(ev, { ahora: AHORA, desde, hasta });
   assert.deepEqual(g.map(x => x.titulo), ['Hoy', 'Mañana']); assert.equal(g[0].items.length, 0); assert.equal(g[1].items.length, 2);
+  const tres = agrupar(ev, { ahora: AHORA, desde, hasta: desde + 3 * 864e5, rellenar: true }); assert.deepEqual(tres.map(x => x.dia), ['2026-10-26', '2026-10-27', '2026-10-28'], 'la vista de 3 días enseña los tres, vacíos incluidos');
   assert.equal(horaDe(ev[0]), '09:00'); assert.equal(horaDe(ev[1]), 'todo el día');
   assert.equal(eventos({ tareas, desde, hasta, hechas: true }).filter(e => e.hecha).length, 1, 'las hechas entran solo si se piden');
 });

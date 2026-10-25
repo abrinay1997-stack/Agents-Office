@@ -34,7 +34,7 @@ import { esc, svg, vacio, esqueleto, falla, html } from './ui.js';
 
 export function crearShell() {
   const registro = new Map(), pila = crearPila();
-  let tab = RAIZ, pantalla = null, enlinea = true, raiz = null, hojas = null, store = null, api = null, activo = false;
+  let franjaNo = false, tab = RAIZ, pantalla = null, enlinea = true, raiz = null, hojas = null, store = null, api = null, activo = false;
   const cab = new Map(); // id de vista → { titulo, acciones } que puso la vista
   const refs = {};
 
@@ -49,16 +49,20 @@ export function crearShell() {
         <div class="mv-bar-der">
           <span class="mv-conex" role="status" hidden>Sin conexión</span>
           <span class="mv-acc" id="mvAcc"></span>
+          <button type="button" class="mv-ic mv-buscar" aria-label="Buscar en la oficina">${svg('buscar')}</button>
           <button type="button" class="mv-pend" id="mvAprob" hidden></button>
         </div>
       </header>
       <main class="mv-main" id="mvMain" tabindex="-1"></main>
+      <div class="mv-franja" hidden><button type="button" class="mv-franja-b" data-ver></button><button type="button" class="mv-ic" data-no aria-label="Ocultar este aviso">${svg('cerrar')}</button></div>
       <nav class="mv-tabs" aria-label="Secciones">${TABS.map(t => `<button type="button" class="mv-tab" data-tab="${t.id}" aria-current="false">${svg(t.id)}<span>${esc(t.titulo)}</span><i class="mv-punto" hidden></i></button>`).join('')}</nav>
       <div class="mv-toasts" aria-live="polite" role="status"></div>`;
     document.body.append(raiz);
     refs.main = $('#mvMain'); refs.titulo = $('#mvTitulo'); refs.atras = $('.mv-atras'); refs.aprob = $('#mvAprob'); refs.acc = $('#mvAcc'); refs.conex = $('.mv-conex'); refs.toasts = $('.mv-toasts');
     refs.atras.addEventListener('click', volver);
+    $('.mv-franja').addEventListener('click', e => { if (e.target.closest('[data-no]')) { franjaNo = true; pintarCabecera(); } else if (e.target.closest('[data-ver]')) navegar('aprobaciones'); });
     refs.aprob.addEventListener('click', () => navegar('aprobaciones'));
+    $('.mv-buscar').addEventListener('click', () => abrirEscritorio('buscar'));
     $('.mv-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) irPestana(b.dataset.tab, b); });
     refs.acc.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const c = cab.get(pantalla || tab); c?.acciones?.[+b.dataset.i]?.alTocar?.(b); });
   }
@@ -135,7 +139,10 @@ export function crearShell() {
     refs.atras.hidden = !(enEsc || pantalla); refs.atras.setAttribute('aria-label', enEsc ? 'Volver a Más' : 'Volver');
     refs.acc.innerHTML = enEsc || hojaAbierta && false ? '' : (c.acciones || []).map((a, i) => `<button type="button" class="mv-ic" data-i="${i}" aria-label="${esc(a.etiqueta)}">${svg(a.icono)}</button>`).join('');
     const n = store ? store.aprobaciones.length : 0;
-    refs.aprob.hidden = !n || enEsc; refs.aprob.innerHTML = `${svg('alerta')}<b>${n}</b>`; refs.aprob.setAttribute('aria-label', `${n} ${n === 1 ? 'espera' : 'esperan'} tu visto bueno. Abrir`);
+    refs.aprob.hidden = !n || (enEsc && pila.cima().item.ventana); refs.aprob.innerHTML = `${svg('alerta')}<b>${n}</b>`; refs.aprob.setAttribute('aria-label', `${n} ${n === 1 ? 'espera' : 'esperan'} tu visto bueno. Abrir`);
+    const fr = raiz.querySelector('.mv-franja'), hay = n > 0 && !franjaNo && id !== 'aprobaciones' && !enEsc;
+    fr.hidden = !hay; raiz.classList.toggle('con-franja', hay);
+    if (hay) fr.querySelector('[data-ver]').innerHTML = `${svg('alerta')}<span><b>${n === 1 ? '1 borrador espera' : n + ' borradores esperan'} tu OK</b> · Ver</span>`;
     const punto = raiz.querySelector('[data-tab="inicio"] .mv-punto'); if (punto) punto.hidden = !n;
   }
 
@@ -234,6 +241,7 @@ export function crearShell() {
     construir();
     hojas = crearHojas({ raiz, empujar, soltar, inertes: () => [$('.mv-bar'), refs.main, $('.mv-tabs')] });
     document.body.classList.add('movil');
+    const mv = document.querySelector('meta[name=viewport]'); if (mv && !/viewport-fit/.test(mv.content)) { mv.dataset.antes = mv.content; mv.content += ', viewport-fit=cover'; } // el contenido llega al borde y env(safe-area-inset-*) deja sitio a la muesca
     addEventListener('popstate', alPopState);
     try { history.replaceState({ mv: 0 }, '', location.href); } catch {}
     const h = leerHash(location.hash); tab = TABS.some(t => t.id === h.vista) ? h.vista : RAIZ; params = h.params;
@@ -243,6 +251,7 @@ export function crearShell() {
   function apagar() {
     if (!activo) return; activo = false; cerrarTodas(); store?.detener(); removeEventListener('popstate', alPopState);
     for (const r of registro.values()) { if (r.montada) { r.def.desmontar?.(r.el, r.ctx); r.el.remove(); r.montada = false; r.el = null; } }
+    const mv = document.querySelector('meta[name=viewport][data-antes]'); if (mv) { mv.content = mv.dataset.antes; delete mv.dataset.antes; }
     raiz?.remove(); raiz = null; hojas = null; document.body.classList.remove('movil', 'mv-esc', 'mv-ventana', 'mv-teclado'); pantalla = null; tab = RAIZ; ultima = null;
   }
   return {

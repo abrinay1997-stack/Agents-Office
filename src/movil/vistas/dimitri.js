@@ -91,7 +91,7 @@ export function registrar(shell) {
 
       // ---- historial y nueva conversación ----
       async function historial() {
-        const h = ctx.hoja({ titulo: 'Conversaciones', cuerpo: '<p class="mv-meta">Cargando…</p>', lleno: true });
+        const h = ctx.hoja({ titulo: 'Conversaciones', cuerpo: '<p class="mv-meta">Cargando…</p>', lleno: true, acciones: [{ texto: 'Conversación nueva', tipo: 'primario', alTocar: x => { x.cerrar(); setTimeout(nueva, 260); } }] });
         try {
           const j = await ctx.api('/api/sub/conversaciones'), lista = j.lista || [];
           const fila = c => `<li class="mv-conv" data-id="${esc(c.id)}"><button type="button" class="mv-conv-b" data-abrir><b>${esc(c.titulo)}</b><small>${new Date(c.at).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${c.n} mensajes</small></button><button type="button" class="mv-ic" data-borrar aria-label="Borrar la conversación «${esc(c.titulo)}»">${svg('borrar')}</button></li>`;
@@ -108,7 +108,7 @@ export function registrar(shell) {
         if (!(await ctx.confirmar({ titulo: '¿Empezar una conversación nueva?', texto: 'La de ahora se guarda en el historial; la puedes abrir después.', ok: 'Empezar' }))) return;
         try { await post('/api/sub/clear', {}); mensajes = []; pintar(false); ctx.toast('Conversación nueva. La anterior está en el historial.'); } catch (e) { ctx.toast('No se pudo: ' + e.message); }
       }
-      ctx.cabecera({ titulo: nombre, acciones: [{ icono: 'historial', etiqueta: 'Conversaciones guardadas', alTocar: historial }, { icono: 'mas1', etiqueta: 'Conversación nueva', alTocar: nueva }] });
+      ctx.cabecera({ titulo: nombre, acciones: [{ icono: 'historial', etiqueta: 'Conversaciones guardadas', alTocar: historial }] });
       el._tick = () => { clearInterval(el._timer); el._timer = setInterval(() => { if (!el.hidden && !ocupado && document.visibilityState === 'visible') ctx.api('/api/sub').then(j => { const l = j.messages || []; if (l.length !== mensajes.length || (l.at(-1)?.id !== mensajes.at(-1)?.id)) { mensajes = l; pintar(); } }).catch(() => {}); }, 9000); };
       el._cargar = cargar; pintar();
     },

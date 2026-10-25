@@ -5,8 +5,8 @@
 export const TABS = [
   { id: 'inicio', titulo: 'Inicio' },
   { id: 'tareas', titulo: 'Tareas' },
+  { id: 'dimitri', titulo: 'Dimitri' }, // al centro: es la acción más importante (auditoría móvil, §4.2)
   { id: 'calendario', titulo: 'Calendario' },
-  { id: 'dimitri', titulo: 'Dimitri' },
   { id: 'mas', titulo: 'Más' },
 ];
 export const RAIZ = 'inicio';

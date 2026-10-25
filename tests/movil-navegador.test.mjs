@@ -4,10 +4,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { chromium } from 'playwright-core';
+import { execFileSync } from 'node:child_process';
 
 let hay = true; try { const b = await chromium.launch(); await b.close(); } catch { hay = false; }
 
 test('la versión móvil: destinos, 44 px, sin desbordes, escritorio intacto y tareas comunes en 3 toques', { skip: !hay && 'no hay Chromium', timeout: 240000 }, async () => {
+  const ROOT = new URL('..', import.meta.url).pathname;
+  if (!/AO_MOVIL/.test(fs.readFileSync(ROOT + 'dist/command-centre-v2.html', 'utf8')) || !fs.existsSync(ROOT + 'dist/movil.js')) execFileSync(process.execPath, ['build.mjs'], { cwd: ROOT, stdio: 'ignore' }); // dist/ viaja de otra construcción: se reconstruye
   const { correr } = await import('../scripts/movil-recorrido.mjs');
   const { fallos, res } = await correr();
   assert.ok(res.length > 60, 'el recorrido hizo sus comprobaciones');

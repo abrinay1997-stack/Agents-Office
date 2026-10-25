@@ -4,7 +4,7 @@ export function initMovil() {
   const go = () => {
     if (window.AO_MOVIL) return AO_MOVIL.sync();
     let p; try { p = localStorage.getItem('ao.movil'); } catch {}
-    if (window.__mv || !(p === 'movil' || (p !== 'escritorio' && mq.matches))) return; window.__mv = 1;
+    if (location.protocol == 'file:' || window.__mv || !(p === 'movil' || (p !== 'escritorio' && mq.matches))) return; window.__mv = 1;
     de.classList.add('mv-pre'); const s = document.createElement('script'); s.src = 'movil.js';
     s.onerror = () => { window.__mv = 0; de.classList.remove('mv-pre'); }; document.head.appendChild(s);
   };
