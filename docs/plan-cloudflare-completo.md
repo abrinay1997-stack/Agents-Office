@@ -21,7 +21,7 @@ Decisión del dueño (25 oct 2026): llevar **toda** la oficina a Cloudflare con 
 
 | Fase | Qué | Notas |
 |---|---|---|
-| 2 | **Cimientos + Cerebro**: servir la interfaz real con el portero de sesión; el Cerebro (notas, búsqueda, memoria, grafo) en D1/R2; herramienta de **migración** desde la computadora (`data/`, notas) | Primera mudanza real. Antes: copia de seguridad de lo local |
+| 2 ✅ | **Cimientos + Cerebro** (hecha el 25 oct: interfaz servida con portero, Cerebro en D1, respaldo y migración): servir la interfaz real con el portero de sesión; el Cerebro (notas, búsqueda, memoria, grafo) en D1/R2; herramienta de **migración** desde la computadora (`data/`, notas) | Primera mudanza real. Antes: copia de seguridad de lo local |
 | 3 | **Tareas, rutinas y calendario**: `tareas/almacen` a D1, rutinas con el cron, calendario | Ya hay modelo puro y tests |
 | 4 | **Agentes completos**: bucle de herramientas en el Worker con cliente MCP propio y el guardián (`safety.mjs`), aprobaciones, calidad, costos | Aquí vuelven los candados por llamada |
 | 5 | **Contenido y publicación en Meta** desde el cron; Analíticas | Patrón de `publicador.js` de Juancito |

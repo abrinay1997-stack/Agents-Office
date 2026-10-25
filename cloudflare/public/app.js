@@ -24,14 +24,13 @@ async function conectores() {
 async function entrar() {
   try {
     const { usuario } = await api('/api/yo');
-    $('login').hidden = true; $('app').hidden = false; $('quien').textContent = `${usuario.email} (${usuario.rol})`;
+    $('app').hidden = false; $('quien').textContent = `${usuario.email} (${usuario.rol})`;
     const { agentes } = await api('/api/agentes');
     $('agente').replaceChildren(...agentes.map((a) => Object.assign(document.createElement('option'), { value: a.id, textContent: `${a.name} — ${a.role}` })));
     await conectores();
-  } catch { $('login').hidden = false; $('app').hidden = true; }
+  } catch { location.href = '/'; }
 }
-$('login').onsubmit = async (e) => { e.preventDefault(); try { await api('/api/acceso', { method: 'POST', body: { email: $('email').value, contrasena: $('pass').value } }); msg(''); entrar(); } catch (x) { msg(x.message); } };
-$('salir').onclick = async () => { await api('/api/salir', { method: 'POST' }); entrar(); };
+$('salir').onclick = async () => { await api('/api/salir', { method: 'POST' }); location.href = '/'; };
 $('ir').onclick = async () => {
   msg('Trabajando…'); $('resultado').hidden = true;
   try {

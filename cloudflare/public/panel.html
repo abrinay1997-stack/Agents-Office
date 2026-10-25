@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agents Office · PanaClaw</title>
+<title>Panel · Agents Office · PanaClaw</title>
 <style>
 :root{--bg:#fff;--fg:#14171a;--mut:#4b5560;--line:#d0d7de;--acc:#0b57d0}
 @media (prefers-color-scheme:dark){:root{--bg:#111418;--fg:#e8eaed;--mut:#aab2bd;--line:#2d343c;--acc:#8ab4f8}}
@@ -15,12 +15,9 @@ button.sec{background:transparent;color:var(--fg);border-color:var(--line)}
 :focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 </style></head>
 <body><main>
-<h1>Agents Office · PanaClaw</h1>
+<h1>Agents Office · PanaClaw · Panel</h1>
+<p><a href="/">← Volver a la oficina</a></p>
 <p id="msg" class="mut" role="status"></p>
-<form id="login" hidden><div class="fila">
-<label>Correo <input id="email" type="email" autocomplete="username" required></label>
-<label>Contraseña <input id="pass" type="password" autocomplete="current-password" required></label>
-<button>Entrar</button></div></form>
 <section id="app" hidden>
 <div class="fila"><span id="quien" class="mut"></span><button class="sec" id="salir">Salir</button></div>
 <h2>Pedir algo a un agente</h2>

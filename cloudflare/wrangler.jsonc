@@ -9,9 +9,9 @@
 
   "assets": {
     "directory": "./public/",
-    "not_found_handling": "single-page-application",
+    "html_handling": "none",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/*"]
   },
 
   // El database_id lo rellena el workflow «Cloudflare · preparar» (crea la base en la cuenta nueva). No es un secreto.

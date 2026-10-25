@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrar · Agents Office · PanaClaw</title>
+<style>
+:root{--bg:#fff;--fg:#14171a;--mut:#4b5560;--line:#d0d7de;--acc:#0b57d0}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--fg:#e8eaed;--mut:#aab2bd;--line:#2d343c;--acc:#8ab4f8}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh}
+main{width:min(92vw,380px)}h1{font-size:1.3rem}
+label{display:block;margin:12px 0 4px}
+input,button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:44px;width:100%;box-sizing:border-box}
+button{cursor:pointer;background:var(--acc);color:#fff;border-color:var(--acc);margin-top:16px}
+#msg{color:#b3261e;min-height:1.5em}:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style></head>
+<body><main>
+<h1>Agents Office · PanaClaw</h1>
+<form id="f">
+<label for="email">Correo</label><input id="email" type="email" autocomplete="username" required>
+<label for="pass">Contraseña</label><input id="pass" type="password" autocomplete="current-password" required>
+<button>Entrar</button>
+</form>
+<p id="msg" role="alert"></p>
+</main>
+<script src="/login.js"></script>
+</body></html>

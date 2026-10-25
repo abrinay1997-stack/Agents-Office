@@ -1,0 +1,64 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { manejar } from '../worker/lib/rutas.js';
+import { validarNotas } from '../worker/lib/cerebro.js';
+import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
+
+test('validarNotas rechaza nombres peligrosos y lotes enormes', () => {
+  assert.equal(validarNotas([]).ok, false);
+  for (const nombre of ['', '../x', 'a/b', '.oculta', 'a\\b']) assert.equal(validarNotas([{ nombre, texto: 'x' }]).ok, false, nombre);
+  assert.equal(validarNotas(Array.from({ length: 201 }, (_, i) => ({ nombre: 'n' + i, texto: 'x' }))).ok, false);
+  const v = validarNotas([{ nombre: 'oferta', grupo: '00-Empresa', texto: 'hola', actualizado: '1700000000000', oficina: 1 }]);
+  assert.equal(v.ok, true); assert.equal(v.notas[0].oficina, 1); assert.equal(v.notas[0].actualizado, 1700000000000);
+});
+
+async function entrar(env, c) {
+  const r = await pedir(manejar, env, '/api/acceso', { metodo: 'POST', cuerpo: { email: c.email, contrasena: c.clave } });
+  return r.headers.get('set-cookie').split(';')[0];
+}
+const NOTAS = [
+  { nombre: 'oferta', grupo: '00-Empresa', texto: '---\nactualizado: 2026-10-01\n---\n# Oferta\nEl combo de lentes cuesta poco. Garantía de un año.', actualizado: 1790000000000 },
+  { nombre: 'voz', grupo: '00-Empresa', texto: 'Hablamos de tú, con calidez.' },
+  { nombre: '2026-10-25 entrega', grupo: 'Agents Office', oficina: 1, texto: '---\ntask: t1\nagent: elead\n---\nBorrador del correo.' },
+];
+const GRAFO = { notes: 3, nodes: [{ id: 'oferta', g: '00-Empresa', d: 1, x: 0.1, y: 0.2, t: 1 }], links: [], extra: [], floor: { r: 1 } };
+
+test('el Cerebro en la nube: subir, mapa, búsqueda y lectura con la forma de la oficina local', { skip: SALTAR }, async () => {
+  const d1 = crearD1(); const admin = await sembrar(d1); const env = envDePrueba(d1); const ck = await entrar(env, admin);
+  assert.equal((await pedir(manejar, env, '/api/brain')).status, 401);
+
+  const vacio = await (await pedir(manejar, env, '/api/brain', { cookie: ck })).json();
+  assert.deepEqual([vacio.nodes, vacio.learned], [[], { w: {}, links: [] }]); // sin mapa: la página conserva el de muestra
+
+  const sub = await pedir(manejar, env, '/api/migrar/notas', { metodo: 'POST', cuerpo: { notas: NOTAS, grafo: GRAFO }, cookie: ck });
+  assert.equal(sub.status, 200);
+  assert.deepEqual(await sub.json(), { subidas: 3, grafo: true, notas: 3, deAgentes: 1 });
+  // volver a subir no duplica
+  const otra = await (await pedir(manejar, env, '/api/migrar/notas', { metodo: 'POST', cuerpo: { notas: NOTAS }, cookie: ck })).json();
+  assert.equal(otra.notas, 3);
+
+  const g = await (await pedir(manejar, env, '/api/brain', { cookie: ck })).json();
+  assert.equal(g.nodes[0].id, 'oferta'); assert.deepEqual(g.learned, { w: {}, links: [] });
+
+  const b = await (await pedir(manejar, env, '/api/brain/search?q=garantia', { cookie: ck })).json();
+  assert.equal(b.total, 1); assert.equal(b.hits[0].name, 'oferta'); assert.match(b.hits[0].snippet, /Garantía/);
+  assert.deepEqual(await (await pedir(manejar, env, '/api/brain/search?q=a', { cookie: ck })).json(), { q: 'a', hits: [] });
+
+  const n = await (await pedir(manejar, env, '/api/note?id=oferta', { cookie: ck })).json();
+  assert.deepEqual(Object.keys(n).sort(), ['cut', 'deletable', 'group', 'modified', 'name', 'size', 'text']);
+  assert.equal(n.group, '00-Empresa'); assert.equal(n.modified, 1790000000000); assert.equal(n.deletable, false);
+  const entrega = await (await pedir(manejar, env, '/api/note?id=' + encodeURIComponent('2026-10-25 entrega'), { cookie: ck })).json();
+  assert.equal(entrega.deletable, true);
+  const p = await (await pedir(manejar, env, '/api/note?peek=1&id=oferta', { cookie: ck })).json();
+  assert.deepEqual(Object.keys(p).sort(), ['group', 'name', 'peek']); assert.ok(p.peek.length > 5);
+  assert.equal((await pedir(manejar, env, '/api/note?id=nada', { cookie: ck })).status, 404);
+});
+
+test('solo un administrador sube el Cerebro; lo que aún no está portado dice 501 en español', { skip: SALTAR }, async () => {
+  const d1 = crearD1(); await sembrar(d1); const ed = await sembrar(d1, { email: 'ed@x.test', rol: 'editor' }); const env = envDePrueba(d1);
+  const ck = await entrar(env, ed);
+  assert.equal((await pedir(manejar, env, '/api/migrar/notas', { metodo: 'POST', cuerpo: { notas: NOTAS }, cookie: ck })).status, 403);
+  const r = await pedir(manejar, env, '/api/tasks', { cookie: ck });
+  assert.equal(r.status, 501); const cuerpo = await r.json();
+  assert.match(cuerpo.error, /todavía no está en la nube/); assert.equal(cuerpo.pendiente, true);
+});

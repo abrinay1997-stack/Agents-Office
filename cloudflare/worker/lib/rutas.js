@@ -1,10 +1,12 @@
 // Rutas de la API. Viven aparte de index.js porque un Worker solo puede exportar handlers desde su módulo de entrada
 // (workerd rechaza una constante exportada: «Incorrect type for map entry»).
-import { json, error, noAutenticado, prohibido, noEncontrado, cuerpo } from './respuesta.js';
+import { json, error, noAutenticado, prohibido, cuerpo } from './respuesta.js';
 import { usuarioDeLaPeticion, iniciarSesion, cerrarSesion, cookieSesion, cookieBorrada } from './sesion.js';
 import { validarConector, publico } from './conectores.js';
 import { agentes, ejecutar } from './agentes.js';
 import { uuid, ahora } from './ids.js';
+import * as cerebro from './cerebro.js';
+import { servirPagina } from './paginas.js';
 
 export const VERSION = '0.1.0';
 
@@ -19,7 +21,7 @@ export async function manejar(req, env) {
   const url = new URL(req.url);
   const ruta = url.pathname;
   const db = env.DB;
-  if (!ruta.startsWith('/api/')) return env.ASSETS.fetch(req);
+  if (!ruta.startsWith('/api/')) return servirPagina(req, env, await usuarioDeLaPeticion(db, req));
   if (!origenValido(req)) return error('Origen no permitido', 403);
 
   if (ruta === '/api/health' && req.method === 'GET')
@@ -38,6 +40,25 @@ export async function manejar(req, env) {
   if (ruta === '/api/salir' && req.method === 'POST') { await cerrarSesion(db, req); return json({ ok: true }, 200, { 'Set-Cookie': cookieBorrada() }); }
   if (ruta === '/api/yo' && req.method === 'GET') return json({ usuario });
   if (ruta === '/api/agentes' && req.method === 'GET') return json({ agentes: agentes() });
+
+  // ---- El Cerebro (fase 2): las mismas rutas y la misma forma que la oficina local ----
+  if (ruta === '/api/brain' && req.method === 'GET') return json(await cerebro.leerGrafo(db));
+  if (ruta === '/api/brain/search' && req.method === 'GET') return json(await cerebro.buscar(db, url.searchParams.get('q')));
+  if (ruta === '/api/note' && req.method === 'GET') {
+    const n = await cerebro.leerNota(db, url.searchParams.get('id') || '', { peek: url.searchParams.get('peek') === '1' });
+    return n ? json(n) : error('esa nota no existe', 404);
+  }
+  if (ruta === '/api/migrar/notas' && req.method === 'POST') { // la herramienta de migración de la computadora del dueño
+    if (usuario.rol !== 'admin') return prohibido('Solo un administrador sube el Cerebro.');
+    const b = await cuerpo(req);
+    const v = b?.notas === undefined && b?.grafo ? { ok: true, notas: [] } : cerebro.validarNotas(b?.notas);
+    if (!v.ok) return error(v.error, 422);
+    const subidas = v.notas.length ? await cerebro.guardarNotas(db, v.notas) : 0;
+    const grafo = b?.grafo ? await cerebro.guardarGrafo(db, b.grafo) : false;
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ notas: subidas, grafo })).run();
+    return json({ subidas, grafo, ...(await cerebro.contar(db)) });
+  }
+  if (ruta === '/api/migrar/estado' && req.method === 'GET') return json(await cerebro.contar(db));
 
   let m;
   if ((m = ruta.match(/^\/api\/agentes\/([a-z0-9-]{2,30})\/ejecutar$/)) && req.method === 'POST') {
@@ -76,6 +97,7 @@ export async function manejar(req, env) {
     await db.prepare('delete from conectores where nombre = ?').bind(m[1]).run();
     return json({ ok: true });
   }
-  return noEncontrado('Ruta');
+  // Lo que la oficina local hace y la nube todavía no: un aviso claro en español, nunca un error mudo (docs/plan-cloudflare-completo.md).
+  return json({ error: 'Esto todavía no está en la nube: sigue en la oficina de tu computadora.', pendiente: true }, 501);
 }
 

@@ -27,3 +27,9 @@ server.err.log
 # Cloudflare: estado local de wrangler y dependencias del subproyecto
 cloudflare/.wrangler/
 cloudflare/node_modules/
+
+# La interfaz de la oficina se copia aquí en cada despliegue (cloudflare/scripts/copiar-oficina.mjs)
+cloudflare/public/oficina/
+
+# Copias de seguridad de la oficina (datos privados: jamás al repositorio)
+respaldo-oficina-*/

@@ -20,7 +20,7 @@ export function crearD1() {
     all: async () => ({ results: db.prepare(sql).all(...args) }),
     run: async () => { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: r.changes } }; },
   });
-  return { prepare: (sql) => sentencia(sql), _db: db };
+  return { prepare: (sql) => sentencia(sql), batch: async (lista) => { const r = []; for (const x of lista) r.push(await x.run()); return r; }, _db: db };
 }
 export async function sembrar(d1, { email = 'dueno@panaclaw.test', clave = 'una-clave-larga-123' /* secrets-ok */, rol = 'admin' } = {}) {
   const { hashearContrasena } = await import('../worker/lib/sesion.js');
@@ -28,6 +28,6 @@ export async function sembrar(d1, { email = 'dueno@panaclaw.test', clave = 'una-
   d1._db.prepare('insert into users (id,email,rol,password_hash,salt) values (?,?,?,?,?)').run(crypto.randomUUID(), email, rol, password_hash, salt);
   return { email, clave };
 }
-export const envDePrueba = (d1, extra = {}) => ({ DB: d1, ASSETS: { fetch: async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }) }, ...extra });
+export const envDePrueba = (d1, extra = {}) => ({ DB: d1, ASSETS: { fetch: async (req) => new Response('ASSET:' + new URL(req.url).pathname, { headers: { 'content-type': 'text/html' } }) }, ...extra });
 export const pedir = (manejar, env, ruta, { metodo = 'GET', cuerpo, cookie } = {}) =>
   manejar(new Request(`https://oficina.test${ruta}`, { method: metodo, headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }), env);

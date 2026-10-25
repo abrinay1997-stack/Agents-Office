@@ -130,6 +130,7 @@ import * as aprenderContenido from './contenido/aprender.mjs'; // F4 (9 oct 2026
 import { emparejar as emparejarPublicadas } from './src/contenido-publicadas.js';
 import { huecos as huecosContenido, queVuelven as queVuelvenContenido } from './src/contenido-llenar.js';
 import * as memory from './memory.mjs'; // V4.6: mentions, summaries, a context budget, the neighbourhood, synapses that learn
+import { buscarEnCerebro } from './cerebro-busqueda.mjs'; // the Brain's search (the same code answers in the Cloudflare Worker)
 import * as settings from './settings.mjs';
 import * as documents from './documents.mjs';
 import * as business from './business.mjs';
@@ -2592,21 +2593,7 @@ const server = http.createServer(async (req, res) => {
       const learned = memory.learnedLinks(MEM, now).filter(([a, b]) => at.has(a) && at.has(b)).map(([a, b, x]) => [at.get(a), at.get(b), x]);
       return json(res, 200, { ...graph, learned: { w, links: learned } });
     }
-    if (url.pathname === '/api/brain/search' && req.method === 'GET') { // the Brain's search: names AND text, accents ignored, a snippet around the hit
-      const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-      const q = fold(url.searchParams.get('q') || '').trim().slice(0, 120); if (q.length < 2) return json(res, 200, { q, hits: [] });
-      const words = q.split(/\s+/).filter(Boolean), hits = [];
-      for (const [name, raw] of vaultIndex()) {
-        const body = String(raw).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, ''), fn = fold(name), fb = fold(body);
-        if (!words.every(w => fn.includes(w) || fb.includes(w))) continue;
-        let score = 0; for (const w of words) { if (fn.includes(w)) score += 10; let i = -1, c = 0; while ((i = fb.indexOf(w, i + 1)) >= 0 && c < 20) c++; score += c; }
-        const at = Math.max(0, fb.indexOf(words.find(w => fb.includes(w)) || words[0]));
-        const snippet = at >= 0 && fb.includes(words[0]) || words.some(w => fb.includes(w)) ? (at > 50 ? '…' : '') + body.slice(Math.max(0, at - 50), at + 110).replace(/\s+/g, ' ').trim() + '…' : '';
-        hits.push({ name, score, snippet, inName: words.every(w => fn.includes(w)) });
-      }
-      hits.sort((a, b) => b.score - a.score);
-      return json(res, 200, { q, total: hits.length, hits: hits.slice(0, 40) });
-    }
+    if (url.pathname === '/api/brain/search' && req.method === 'GET') return json(res, 200, buscarEnCerebro(vaultIndex(), url.searchParams.get('q'))); // the Brain's search: names AND text, accents ignored, a snippet around the hit (cerebro-busqueda.mjs, shared with the Cloudflare Worker)
     if (url.pathname === '/api/note' && req.method === 'GET') { // read one note of the brain, by name (the Brain's reader)
       const id = url.searchParams.get('id') || ''; const n = noteIndex().get(id);
       if (!n || !insideBrain(n.path)) return json(res, 404, { error: 'esa nota no existe' });
