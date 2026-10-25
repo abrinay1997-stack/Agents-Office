@@ -138,8 +138,7 @@ body.dark .pz-gdel { color: #FF8A73; }
 .pz-dev button[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
 .pz-pvnota { margin-top: 12px; }
 .pv-pc .pv-card { max-width: 500px; }
-.ct-panel.pz-pc { width: min(1040px, 100%); }
-@container pzpanel (min-width: 700px) { .ct-panel.pz-pc .pz-side { width: 50%; max-width: 560px; } }
+@container pzpanel (min-width: 820px) { .ct-panel.pz-pc .pz-side { width: 50%; } }
 
 /* ---------- estrecho (el panel mide lo que su contenedor, no la ventana) ---------- */
 @container pzpanel (max-width: 520px) {
@@ -181,3 +180,16 @@ body.dark :is(.pz-ctt small, .pz-cto small, .pz-ctc) { color: #C2C0B9; }
 .pz-cto.no { cursor: not-allowed; }
 .pz-cto.no b { text-decoration: line-through; text-decoration-thickness: 1px; }
 .pz-ctnone { margin: 0 0 12px; }
+
+/* ---------- la ventana centrada (25 oct 2026): la vista previa se escala sola (src/ventana-ajuste.js) para verse ENTERA ---------- */
+@container pzpanel (min-width: 820px) { .pz-side { display: flex; flex-direction: column; } .pz-side > * { flex: none; } .pz-side .pz-preview { transform-origin: top center; } }
+/* el pie de la ventana, a una sola fila de acciones: cuándo sale · enlaces · Aprobar (más sitio para el cuerpo y la vista previa) */
+@container pzpanel (min-width: 820px) {
+  .pz-foot { display: grid; grid-template-columns: auto 1fr auto; grid-auto-flow: row dense; align-items: center; column-gap: 14px; row-gap: 6px; padding: 10px 24px 12px; }
+  .pz-foot > * { grid-column: 1 / -1; }
+  .pz-foot .pz-acts { display: contents; }
+  .pz-foot .pz-acts .sp { display: none; }
+  .pz-foot .pz-acts > :first-child { grid-column: 1; }
+  .pz-foot .pz-acts > :not(.sp):not(:first-child) { grid-column: 3; }
+  .pz-foot .pz-links { grid-column: 2; margin: 0; justify-content: flex-end; flex-wrap: wrap; }
+}

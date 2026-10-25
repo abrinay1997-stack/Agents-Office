@@ -68,10 +68,10 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
       <div class="cv-wrap"><div class="cv-dow" id="ctDow"></div><div class="cv-grid month" id="ctGrid"></div></div>
       <div class="ct-prog" hidden></div>
       <div class="ct-bj" hidden></div>
-      <aside class="ct-panel" hidden></aside>
       <div class="ct-hov" aria-hidden="true" hidden></div>
     </div>
-    <div class="cv-toast" hidden role="status"><span></span><button type="button">DESHACER</button></div>
+    <aside class="ct-panel" hidden></aside><div class="ct-scrim" data-modal-keep></div>
+    <div class="cv-toast" data-modal-keep hidden role="status"><span></span><button type="button">DESHACER</button></div>
     <div id="ctPop" hidden></div>`;
   document.body.appendChild(ov);
   const $ = s => ov.querySelector(s);
@@ -406,6 +406,7 @@ export function initContenido({ served, esc, agentName = id => id, openStudio = 
     if (openNow) { render(); loadResumen(); }
   }
   const empresa = () => { const b = String(business() || '').trim(); return /agents office/i.test(b) ? '' : b; };
+  $('.ct-scrim').addEventListener('click', () => { panel.close(); }); // clic fuera de la ventana: se cierra (lo escrito ya se guardó solo)
   const panel = panelBajoDemanda({ host: E.panelHost, modal, datos, esc, note, onChange: onPanel, redesUsadas: () => redesNegocio, mejorHora, fuenteHora, zona: () => zona || zonaLocal(), otras: () => todasConocidas(), cuenta: () => cuentas, cuentasMeta: () => ctas, medidaDe: id => medidas[id] || null,
     openEstudio: p => { const t = { id: p.id, titulo: titleOf(p) }; openStudio(t, ids => { open(); openPiece(p.id, ids); }); }, pickMedia: cur => pickMedia(cur) });
   // plan M4: la bandeja (mensajes, comentarios y reseñas); su número va en el botón BANDEJA
