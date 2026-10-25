@@ -17,6 +17,10 @@ import { tasa, tasaVer, ipDe, relojDe } from './equipo.js';
 import { cerrarDe } from './vivo.js';
 
 export const VERSION = '0.1.0';
+/** Colecciones de /api/migrar/filas que son estado vivo de la nube (ver arriba): una migración repetida solo agrega las que faltan. */
+const FILAS_VIVAS = new Set(['tareas', 'subgerente', 'rutinas']);
+/** Un documento «vacío»: {} o [], o solo con claves cuyo valor está vacío (listas, objetos, textos o null). */
+const docVacio = (v) => v == null || v === '' || (Array.isArray(v) ? v.length === 0 : typeof v === 'object' ? Object.values(v).every(docVacio) : false);
 /** Lo único que se contesta sin sesión además de /api/health y /api/acceso: webhooks de otros sistemas, cada uno con su propio secreto (ver `publica` en los módulos). */
 export const RUTAS_PUBLICAS = ['/api/hook/', '/api/telegram/', '/api/kpi/'];
 
@@ -103,7 +107,7 @@ export async function manejar(req, env, exec = null) {
     const b = await cuerpo(req);
     const v = b?.notas === undefined && b?.grafo ? { ok: true, notas: [] } : cerebro.validarNotas(b?.notas);
     if (!v.ok) return error(v.error, 422);
-    const subidas = v.notas.length ? await cerebro.guardarNotas(db, v.notas) : 0;
+    const subidas = v.notas.length ? await cerebro.guardarNotas(db, v.notas, { siMasNueva: b?.forzar !== true }) : 0;
     const grafo = b?.grafo ? await cerebro.guardarGrafo(db, b.grafo) : false;
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ notas: subidas, grafo })).run();
     return json({ subidas, grafo, ...(await cerebro.contar(db)) });
@@ -115,16 +119,24 @@ export async function manejar(req, env, exec = null) {
     if (!/^[a-z][a-z0-9_-]{1,40}$/.test(String(b?.coleccion ?? ''))) return error('Colección no válida.', 422);
     const filas = Array.isArray(b?.filas) ? b.filas : [];
     if (!filas.length || filas.length > 200 || filas.some((f) => !f || typeof f.id !== 'string' || !f.id || f.id.length > 200 || typeof f.valor !== 'object' || f.valor === null)) return error('Filas no válidas (1 a 200, cada una con id y valor).', 422);
-    const n = await almacen.guardarFilas(db, b.coleccion, filas);
+    // Las tareas, la conversación con Dimitri y las rutinas son estado VIVO: una migración repetida no las vuelve a como estaban en la computadora (una tarea ya aprobada en la
+    // nube volvería a esperar su OK y podría enviarse dos veces; una rutina pausada aquí volvería a dispararse). Solo entran las que la nube no tiene; forzar: true las reemplaza.
+    const soloNuevas = b.forzar !== true && FILAS_VIVAS.has(b.coleccion);
+    const n = await almacen.guardarFilas(db, b.coleccion, filas, { soloNuevas });
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ coleccion: b.coleccion, filas: n })).run();
-    return json({ subidas: n, coleccion: b.coleccion, total: await almacen.contarFilas(db, b.coleccion) });
+    return json({ subidas: n, ...(soloNuevas && n < filas.length ? { omitidas: filas.length - n } : {}), coleccion: b.coleccion, total: await almacen.contarFilas(db, b.coleccion) });
   }
   if (ruta === '/api/migrar/docs' && req.method === 'POST') {
     if (usuario.rol !== 'admin') return prohibido('Solo un administrador sube datos.');
     const b = await cuerpo(req);
     if (!/^[a-z][a-z0-9_.-]{1,60}$/.test(String(b?.clave ?? '')) || typeof b?.valor !== 'object' || b.valor === null) return error('Documento no válido.', 422);
-    // Los ajustes que ya se tocaron en la nube (quién aprueba por Telegram, topes…) no se pisan con una migración repetida: la nube es la copia de trabajo.
-    if ((b.clave === 'ajustes' || b.clave === 'config-local') && b.forzar !== true && (await almacen.leerDoc(db, b.clave, null)).valor) return error(`Ya hay «${b.clave}» en la nube y la migración lo pisaría (se perderían los cambios hechos aquí, y un aprobador revocado volvería). Si de verdad quieres reemplazarlo, manda forzar: true.`, 409);
+    // Lo que ya existe en la nube NO se pisa con una migración repetida: después de la primera, la nube es la copia de trabajo (un aprobador revocado volvería, los indicadores
+    // y las cifras perderían lo que se anotó aquí, un agente recuperaría su brief de antes…). Los ajustes, siempre; el resto, mientras tenga algo dentro (una
+    // vacía —{} o listas vacías, como las que la propia nube crea al abrirse— se llena). Para reemplazarlo adrede: forzar: true (migrar-a-nube.mjs --forzar).
+    if (b.forzar !== true) {
+      const actual = (await almacen.leerDoc(db, b.clave, null)).valor;
+      if (actual && (b.clave === 'ajustes' || b.clave === 'config-local' || !docVacio(actual))) return error(`Ya hay «${b.clave}» en la nube y la migración lo pisaría (se perderían los cambios hechos aquí, y un aprobador revocado volvería). Si de verdad quieres reemplazarlo, manda forzar: true.`, 409);
+    }
     const version = await almacen.guardarDoc(db, b.clave, b.valor);
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ doc: b.clave })).run();
     return json({ clave: b.clave, version });

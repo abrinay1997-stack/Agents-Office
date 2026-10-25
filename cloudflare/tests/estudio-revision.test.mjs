@@ -94,7 +94,7 @@ test('lo que cuenta un motor al fallar no lleva el cuerpo crudo ni nada que pare
 test('borrar un archivo falla CERRADO si no se puede comprobar si una pieza de Contenido lo usa', { skip: SALTAR }, async () => {
   const { api, env, d1 } = await montar();
   const it = await galeria.store(env, d1, png, 'png', { prompt: 'usado' });
-  const prep = d1.prepare; d1.prepare = (sql) => { if (/from filas where coleccion = 'piezas'/.test(sql)) throw new Error('no existe la tabla'); return prep(sql); };
+  const prep = d1.prepare; d1.prepare = (sql) => { if (/from contenido_piezas/.test(sql)) throw new Error('no existe la tabla'); return prep(sql); };
   const r = await api('/api/media/item/' + encodeURIComponent(it.file), { metodo: 'DELETE' });
   assert.equal(r.status, 503); assert.match(r.j.error, /no lo borro/); d1.prepare = prep;
   assert.equal((await api('/api/media?n=5')).j.total, 1, 'sigue en la galería');

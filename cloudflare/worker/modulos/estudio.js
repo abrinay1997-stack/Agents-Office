@@ -36,12 +36,18 @@ const minimaxOn = () => catalogo.engines().some((e) => e.id === 'minimax' && e.o
 const porDefecto = () => Object.fromEntries(catalogo.KINDS.map((k) => [k, catalogo.defaultModel(k)]));
 const NOMBRE_AGENTE = (id) => agentes().find((a) => a.id === id)?.name || '';
 
-/** Dónde están las piezas de Contenido que usan un archivo (la papelera no se lleva lo que una pieza usa).
- *  TODO(fase 5): cuando Contenido esté en la nube, aquí se conecta su colección REAL (hoy se busca en `filas('piezas')`, un nombre supuesto).
+/** Dónde están las piezas de Contenido que usan un archivo (la papelera no se lleva lo que una pieza usa): `contenido_piezas`, las que no están en su papelera.
+ *  Antes miraba una colección `piezas` que no existe y nada estaba nunca «en uso»: una imagen programada se iba a la papelera y a los 30 días de R2.
  *  Falla CERRADO: si no se puede comprobar, la función lanza y el archivo NO se borra (nunca devuelve [] por un error). */
 async function usosEnContenido(db, file) {
-  const { results } = await db.prepare(`select id, json from filas where coleccion = 'piezas' and json like ? limit 10`).bind(`%${file.replace(/[%_\\]/g, '')}%`).all();
-  return results.map((r) => { let v = {}; try { v = JSON.parse(r.json); } catch { /* una pieza ilegible cuenta igual */ } return { id: r.id, titulo: v.titulo || v.title || '' }; });
+  const patron = '%' + String(file).replace(/[\\%_]/g, (c) => '\\' + c) + '%'; // el nombre tal cual: un «_» o un «%» del archivo no son comodines
+  const { results } = await db.prepare(`select id, json from contenido_piezas where borrada = 0 and json like ? escape '\\' limit 50`).bind(patron).all();
+  const usos = [];
+  for (const r of results) {
+    let v = null; try { v = JSON.parse(r.json); } catch { usos.push({ id: r.id, titulo: '' }); continue; } // una pieza ilegible cuenta igual
+    if ((v.medios || []).includes(file) || (v.historias || []).includes(file)) usos.push({ id: r.id, titulo: v.titulo || '' });
+  }
+  return usos.slice(0, 10);
 }
 
 /* ---------- servir un archivo (el módulo de rutas lo llama para /media/…; ver docs/cloudflare.md) ---------- */
