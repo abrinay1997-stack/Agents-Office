@@ -10,26 +10,27 @@
 //   initPreview(box, { esc, cuenta: () => ({ instagram, facebook }), otras: () => piezas }) → { paint(pieza), text(pieza), reset(), escritorio(sí) }
 // C1 (8 oct 2026): «Teléfono · Computadora». En la computadora el feed es más ancho (unos 500 px): caben más letras por línea antes del «más»
 // y la tarjeta se ve a ese ancho; reels e historias siguen en vertical, como allí.
+import { nbRed, RED } from './pieza-base.js';
 import { textoPara, primerComentario, postDePieza, PROPORCION_FEED, REDES, LIMITES, longitudPara, formatoDe } from './contenido-reglas.js';
 
 export const ZONAS = Object.freeze({ reel: { arriba: 0.14, abajo: 0.35, lados: 0.06 }, historia: { arriba: 0.14, abajo: 0.20, lados: 0.06 } });
 const VISTAS = {
-  'ig-feed': { red: 'instagram', vista: 'feed', label: 'Feed', red_: 'IG' },
-  'ig-perfil': { red: 'instagram', vista: 'perfil', label: 'Perfil', red_: 'IG' },
-  'ig-reel': { red: 'instagram', vista: 'reel', label: 'Reel', red_: 'IG' },
-  'ig-historia': { red: 'instagram', vista: 'historia', label: 'Historia', red_: 'IG' },
-  'fb-feed': { red: 'facebook', vista: 'feed', label: 'Feed', red_: 'FB' },
-  'fb-reel': { red: 'facebook', vista: 'reel', label: 'Reel', red_: 'FB' },
-  'fb-historia': { red: 'facebook', vista: 'historia', label: 'Historia', red_: 'FB' },
+  'ig-feed': { red: 'instagram', vista: 'feed', label: 'Feed' },
+  'ig-perfil': { red: 'instagram', vista: 'perfil', label: 'Perfil' },
+  'ig-reel': { red: 'instagram', vista: 'reel', label: 'Reel' },
+  'ig-historia': { red: 'instagram', vista: 'historia', label: 'Historia' },
+  'fb-feed': { red: 'facebook', vista: 'feed', label: 'Feed' },
+  'fb-reel': { red: 'facebook', vista: 'reel', label: 'Reel' },
+  'fb-historia': { red: 'facebook', vista: 'historia', label: 'Historia' },
   // M2 (6 oct 2026): una vista por red nueva; TikTok y el Short de YouTube, en vertical como el reel
-  'li-feed': { red: 'linkedin', vista: 'texto', label: 'Feed', red_: 'IN' },
-  'x-feed': { red: 'x', vista: 'texto', label: 'Post', red_: 'X' },
-  'th-feed': { red: 'threads', vista: 'texto', label: 'Post', red_: 'TH' },
-  'bs-feed': { red: 'bluesky', vista: 'texto', label: 'Post', red_: 'BS' },
-  'tt-video': { red: 'tiktok', vista: 'reel', label: 'Video', red_: 'TT' },
-  'pi-pin': { red: 'pinterest', vista: 'pin', label: 'Pin', red_: 'PI' },
-  'yt-video': { red: 'youtube', vista: 'video', label: 'Video', red_: 'YT' },
-  'yt-short': { red: 'youtube', vista: 'reel', label: 'Short', red_: 'YT' },
+  'li-feed': { red: 'linkedin', vista: 'texto', label: 'Feed' },
+  'x-feed': { red: 'x', vista: 'texto', label: 'Post' },
+  'th-feed': { red: 'threads', vista: 'texto', label: 'Post' },
+  'bs-feed': { red: 'bluesky', vista: 'texto', label: 'Post' },
+  'tt-video': { red: 'tiktok', vista: 'reel', label: 'Video' },
+  'pi-pin': { red: 'pinterest', vista: 'pin', label: 'Pin' },
+  'yt-video': { red: 'youtube', vista: 'video', label: 'Video' },
+  'yt-short': { red: 'youtube', vista: 'reel', label: 'Short' },
 };
 export const NOMBRE_VISTA = id => { const v = VISTAS[id]; return v ? `${REDES[v.red]?.nombre || v.red} · ${v.label}` : ''; };
 
@@ -288,7 +289,7 @@ export function initPreview(box, { esc, cuenta = () => ({}), otras = () => [] })
 
   function paint(p) {
     cur = p; const d = datos(p);
-    const tabs = `<div class="pv-tabs" role="tablist" aria-label="Ver cómo queda en">${d.tabs.map(t => `<button type="button" role="tab" id="pv-t-${t}" aria-selected="${t === tab}" tabindex="${t === tab ? 0 : -1}" data-pv-tab="${t}"><b class="pv-net ${VISTAS[t].red}">${VISTAS[t].red_}</b>${VISTAS[t].label}</button>`).join('')}</div>`;
+    const tabs = `<div class="pv-tabs" role="tablist" aria-label="Ver cómo queda en">${d.tabs.map(t => `<button type="button" role="tab" id="pv-t-${t}" aria-selected="${t === tab}" tabindex="${t === tab ? 0 : -1}" data-pv-tab="${t}" aria-label="${RED[VISTAS[t].red].name} · ${VISTAS[t].label}">${nbRed(VISTAS[t].red, { clase: 'pv-net' })}${VISTAS[t].label}</button>`).join('')}</div>`;
     const body = d.v.vista === 'perfil' ? perfil(p, d) : d.v.vista === 'feed' ? (d.v.red === 'instagram' ? feedIG(p, d) : feedFB(p, d)) : d.v.vista === 'texto' ? feedTexto(p, d) : d.v.vista === 'pin' ? pin(p, d) : d.v.vista === 'video' ? videoYT(p, d) : vertical(p, d);
     const conZonas = d.v.vista === 'reel' || d.v.vista === 'historia' || (d.v.vista === 'feed' && d.v.red === 'instagram' && d.medios.length > 0);
     box.innerHTML = `${tabs}<div class="pv-stage" role="tabpanel" aria-labelledby="pv-t-${tab}">

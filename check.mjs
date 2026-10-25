@@ -770,8 +770,8 @@ else {
       const v30 = await page.evaluate(() => document.querySelector('#anOv .an-kv').textContent);
       await page.click('#anOv .an-dias [data-d="7"]'); await until(() => document.querySelector('#anOv .an-dias [data-d="7"]').getAttribute('aria-pressed') === 'true', 'the 7-day button did not press');
       await page.click('#anOv .an-redes [data-r="facebook"]'); await page.waitForTimeout(150);
-      const fb = await page.evaluate(() => [...document.querySelectorAll('#anOv .an-top .an-net')].map(e => e.textContent));
-      if (!fb.length || fb.some(x => x !== 'FB')) throw new Error('with Facebook chosen, other networks still show: ' + fb.join(','));
+      const fb = await page.evaluate(() => [...document.querySelectorAll('#anOv .an-top .an-net')].map(e => e.querySelector('svg')?.getAttribute('aria-label') || e.textContent)); // el logo de la red lleva su nombre (ya no hay siglas)
+      if (!fb.length || fb.some(x => x !== 'Facebook')) throw new Error('with Facebook chosen, other networks still show: ' + fb.join(','));
       await page.click('#anOv .an-redes [data-r="todas"]'); await page.click('#anOv .an-dias [data-d="30"]');
       await page.click('#anOv .an-chip[data-k="alcance"]'); await page.waitForTimeout(100);
       if (!await page.evaluate(() => /Alcance por día/.test(document.querySelector('#anOv .an-fig figcaption').textContent))) throw new Error('the chart did not switch to Alcance');

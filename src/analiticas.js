@@ -8,6 +8,7 @@
 // tabla «Comparar cuentas» (ordenable; un clic elige la cuenta). Con una cuenta, todo lo de abajo es solo de ella (`ao.an.cuenta`).
 //   initAnaliticas({ served, esc, business }) → { open, close, toggle, isOpen }
 import { modal } from './modal.js';
+import { iconoRed } from './redes-iconos.js';
 import { views } from './views.js';
 import { fmtDay } from './calendar-core.js';
 import { crearDatosAnaliticas, datosDeEjemplo } from './analiticas-datos.js';
@@ -15,7 +16,8 @@ import { informeHTML, mesesAtras, nombreMes } from './analiticas-informe.js';
 import { kpis, serieDiaria, deFiltro, cuentasDe, nombreCuenta, compararCuentas, porFormato, mejoresMomentos, horaSugerida, mejoresPublicaciones, enfoque, enLocal, numeroCorto, sumarDias, DIAS_SEMANA, BLOQUES_HORA, DIAS_DE_MADURACION } from './contenido-cifras.js';
 
 const store = { get(k, d) { try { const v = localStorage.getItem('ao.an.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('ao.an.' + k, JSON.stringify(v)); } catch {} } };
-const RED = { instagram: { nombre: 'Instagram', corto: 'IG' }, facebook: { nombre: 'Facebook', corto: 'FB' } };
+const RED = { instagram: { nombre: 'Instagram' }, facebook: { nombre: 'Facebook' } };
+const logo = (red, solo) => `<b class="an-net">${iconoRed(red, solo ? { titulo: RED[red]?.nombre || red } : {})}</b>`; // el LOGO de la red, no sus siglas; con `solo` (sin su nombre al lado) lleva el nombre para el lector de pantalla
 const FORMATO = { imagen: 'Imagen', carrusel: 'Carrusel', reel: 'Reel', video: 'Video', texto: 'Texto', historia: 'Historia' };
 const METRICAS = [['seguidores', 'Seguidores'], ['alcance', 'Alcance'], ['vistas', 'Visualizaciones'], ['interacciones', 'Interacciones']];
 const TARJETAS = [['seguidores', 'Seguidores'], ['alcance', 'Alcance'], ['vistas', 'Visualizaciones'], ['interacciones', 'Interacciones'], ['visitas', 'Visitas al perfil'], ['tasaInteraccion', 'Interacción por seguidor']];
@@ -124,7 +126,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     const viendo = una ? `Viendo <b>${esc(nombreCuenta(una))}</b> · ${RED[una.red]?.nombre || una.red}${una.usuario && una.nombre ? ` · ${esc(una.nombre)}` : ''}` : `Viendo <b>${red === 'todas' ? 'todas las cuentas' : RED[red].nombre}</b>${suma > 1 ? ` · suma ${suma} cuentas` : ''}`;
     const chip = a => { const f = ult.get(a.id), est = !f ? 'sin foto todavía' : f.error ? `falló el ${fecha(f.fecha)}` : `${f.seguidores != null ? numeroCorto(f.seguidores) + ' seguidores · ' : ''}foto del ${fecha(f.fecha)}`;
       return `<button type="button" class="an-cta${f?.error ? ' an-cta-err' : ''}" data-cta="${esc(a.id)}" aria-pressed="${a.id === cuenta}"${f?.error ? ` title="${esc(f.error)}"` : ''}>${avatar(a)}<span class="an-ctn"><b>${esc(a.nombre || nombreCuenta(a))}</b><small>${a.usuario ? esc('@' + a.usuario) + ' · ' : ''}${esc(est)}</small></span></button>`; };
-    const grupos = Object.keys(RED).filter(r => red === 'todas' || r === red).map(r => { const l = d.meta.cuentas.filter(a => a.red === r); return l.length ? `<span class="an-gl"><b class="an-net">${RED[r].corto}</b> ${RED[r].nombre}</span>${l.map(chip).join('')}` : ''; }).join('');
+    const grupos = Object.keys(RED).filter(r => red === 'todas' || r === red).map(r => { const l = d.meta.cuentas.filter(a => a.red === r); return l.length ? `<span class="an-gl">${logo(r)} ${RED[r].nombre}</span>${l.map(chip).join('')}` : ''; }).join('');
     return `<section class="an-cuentas" aria-label="Cuentas">
       <p class="an-viendo">${viendo}</p>
       <div class="an-ctas" role="group" aria-label="Cuenta"><button type="button" class="an-cta an-cta-all" data-cta="" aria-pressed="${!una}"><span class="an-ctn"><b>Todas las cuentas</b><small>${red === 'todas' ? 'Instagram y Facebook' : 'de ' + RED[red].nombre}</small></span></button>${grupos}</div>
@@ -141,7 +143,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     const celdas = k => ORDEN.map(([o, t]) => { const v = valorDe(k, o); return `<td data-l="${t}">${o === 'ganados' && v != null ? `<span class="${v > 0 ? 'an-up' : v < 0 ? 'an-down' : 'an-flat'}">${v > 0 ? '+' : v < 0 ? '−' : ''}${numeroCorto(Math.abs(v))}</span>` : n(v)}</td>`; }).join('');
     return `<section class="an-card" aria-labelledby="anComp"><div class="an-hd"><h2 id="anComp">Comparar cuentas</h2><span class="an-cap">${c.comp.length} cuentas · los últimos ${dias} días · un clic en una la elige</span></div>
       <div class="an-tablewrap"><table class="an-comp"><thead><tr><th scope="col">Cuenta</th>${ORDEN.map(([o, t]) => `<th scope="col" aria-sort="${o === orden ? (asc ? 'ascending' : 'descending') : 'none'}"><button type="button" class="an-ord" data-ord="${o}">${t}<span aria-hidden="true">${o === orden ? (asc ? ' ▲' : ' ▼') : ''}</span></button></th>`).join('')}</tr></thead>
-      <tbody>${filas.map(({ cuenta: a, k }) => `<tr${a.id === cuenta ? ' class="on"' : ''}><th scope="row"><button type="button" class="an-crow" data-cta="${esc(a.id)}" aria-pressed="${a.id === cuenta}">${avatar(a)}<span><b>${esc(nombreCuenta(a))}</b><small><b class="an-net">${RED[a.red]?.corto || a.red}</b> ${esc(a.usuario ? a.nombre || '' : RED[a.red]?.nombre || '')}</small></span></button></th>${celdas(k)}</tr>`).join('')}</tbody></table></div>
+      <tbody>${filas.map(({ cuenta: a, k }) => `<tr${a.id === cuenta ? ' class="on"' : ''}><th scope="row"><button type="button" class="an-crow" data-cta="${esc(a.id)}" aria-pressed="${a.id === cuenta}">${avatar(a)}<span><b>${esc(nombreCuenta(a))}</b><small>${logo(a.red, !!a.usuario)} ${esc(a.usuario ? a.nombre || '' : RED[a.red]?.nombre || '')}</small></span></button></th>${celdas(k)}</tr>`).join('')}</tbody></table></div>
       <p class="an-cap">Seguidores al final del periodo y los ganados en él; alcance de cada día sumado; interacciones y publicaciones de lo que salió en el periodo.</p></section>`;
   }
 
@@ -232,7 +234,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
     return `<section class="an-card" aria-labelledby="anTop"><h2 id="anTop">Las que más movieron</h2><ol class="an-top">${top.map((p, i) => {
       const f = p.publicadaAt ? enLocal(p.publicadaAt).fecha : '', enlace = typeof p.enlace === 'string' && p.enlace.startsWith('https://') ? `<a href="${esc(p.enlace)}" target="_blank" rel="noopener noreferrer">Abrir<span class="an-sr"> en ${esc(RED[p.red]?.nombre || 'la red')} (se abre en otra pestaña)</span></a>` : '';
       return `<li>${miniaturaHTML(p)}<div class="an-tm"><div class="an-tt">${esc(p.texto || '(sin texto)')}</div>
-        <div class="an-ts"><b class="an-net">${RED[p.red]?.corto || p.red}</b> ${esc(FORMATO[p.tipo] || p.tipo)}${f ? ` · ${fecha(f)}` : ''}${reciente.has(p) ? ' · <i>aún subiendo</i>' : ''}</div>
+        <div class="an-ts">${logo(p.red, true)} ${esc(FORMATO[p.tipo] || p.tipo)}${f ? ` · ${fecha(f)}` : ''}${reciente.has(p) ? ' · <i>aún subiendo</i>' : ''}</div>
         <div class="an-ts"><b>${numeroCorto(p.interacciones ?? 0)}</b> interacciones · ${numeroCorto(p.alcance ?? 0)} de alcance${enlace ? ' · ' + enlace : ''}</div>${p.red === 'instagram' || p.red === 'facebook' ? `<button type="button" class="an-btn an-imp" data-quiet data-imp="${i}" title="Crea una campaña en pausa con esta publicación (Anuncios, J); activarla te pedirá los dos clics">Impulsar</button>` : ''}</div></li>`;
     }).join('')}</ol></section>`;
   }

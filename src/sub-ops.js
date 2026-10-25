@@ -18,7 +18,7 @@ const tail = w => `${w.end ? `, hasta el ${dayText(w.end)}` : ''}${w.count ? `, 
 export const whenWords = w => !w ? '' : (w.kind === 'daily' ? `todos los días a las ${w.at}` : w.kind === 'weekdays' ? `de lunes a viernes a las ${w.at}`
   : w.kind === 'monthly' ? (w.nth ? `el ${NTH[w.nth] || w.nth + '.º'} ${DAYS.find(x => x[1] === w.weekday)?.[2] || ''} de cada mes a las ${w.at}` : w.day === -1 ? `el último día de cada mes a las ${w.at}` : `el día ${w.day} de cada mes a las ${w.at}`)
   : `cada ${(w.days || []).map(d => DAYS.find(x => x[1] === d)?.[2]).filter(Boolean).join(', ')} a las ${w.at}`) + tail(w);
-const RED_CORTA = { instagram: 'IG', facebook: 'FB', linkedin: 'LinkedIn', x: 'X', threads: 'Threads', bluesky: 'Bluesky', tiktok: 'TikTok', pinterest: 'Pinterest', youtube: 'YouTube' };
+const RED_CORTA = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', x: 'X', threads: 'Threads', bluesky: 'Bluesky', tiktok: 'TikTok', pinterest: 'Pinterest', youtube: 'YouTube' };
 const PRIO = { alta: 'alta', media: 'media', baja: 'baja' };
 const RED_LARGA = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', x: 'X', threads: 'Threads', bluesky: 'Bluesky', tiktok: 'TikTok', pinterest: 'Pinterest', youtube: 'YouTube' };
 const limiteText = l => (l == null || l === '' ? 'sin fecha límite' : String(l).length > 10 ? `${dayText(String(l).slice(0, 10))} ${String(l).slice(11, 16)}` : dayText(l));

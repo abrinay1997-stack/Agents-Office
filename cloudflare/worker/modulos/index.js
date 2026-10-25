@@ -12,6 +12,7 @@ import * as disparadores from './disparadores.js';
 import * as equipo from './equipo.js';
 import * as modelos from './modelos.js';
 import * as conectores from './conectores.js';
+import * as imagenMeta from './imagen-meta.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -26,5 +27,6 @@ export const MODULOS = [
   disparadores, // POST /api/hook/<id> (público) y /api/triggers
   conectores, // Ajustes → Conectores: añadir, probar, token cifrado, plantillas
   modelos, // Ajustes → Modelos: catálogo, asignación por función, probar y comparar
+  imagenMeta, // /api/imagen-meta: las fotos de Meta por el mismo origen (CSP)
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];
