@@ -6,7 +6,7 @@ import { cargarFabrica } from './presets/fabrica.mjs';
 import { construirExtra, CSS_APARTE } from './build-extra.mjs';
 import { construirTareas, CSS_TAREAS } from './build-tareas.mjs'; // plan T2 (6 oct 2026): la vista Tareas, también aparte
 import { construirAnuncios, CSS_ANUNCIOS } from './build-anuncios.mjs'; // Fase A1 (9 oct 2026): la vista Anuncios, también aparte
-import { construirMovil, construirMovilD, CSS_MOVIL } from './build-movil.mjs'; // 25 oct 2026: la versión móvil, también aparte
+import { construirMovil, construirMovilD, CSS_MOVIL, CSS_MOVIL_D } from './build-movil.mjs'; // 25 oct 2026: la versión móvil, también aparte
 import { construirPieza, CSS_PIEZA, SOLO_AQUI as SOLO_PIEZA } from './build-pieza.mjs'; // C1 (8 oct 2026): el editor de una pieza de Contenido, también aparte
 await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/braingraph.js
 
@@ -54,7 +54,7 @@ const js = res.outputFiles[0].text;
 // Banco de presets F2 (1 oct 2026): sin sus comentarios ni espacios de más (~36 KB), para que la página quepa en su presupuesto (check.mjs,
 // INF-09) con la pestaña Lotes. Solo comentarios y blancos: los espacios que separan selectores (`.lt :is(…)`) y los de los valores quedan.
 // (cssCorto, arriba). Los de CSS_APARTE no: viajan con dist/estudio-extra.js.
-const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css') && !CSS_APARTE.includes(f) && !CSS_TAREAS.includes(f) && !CSS_ANUNCIOS.includes(f) && !CSS_PIEZA.includes(f) && !CSS_MOVIL.includes(f)).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
+const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css') && !CSS_APARTE.includes(f) && !CSS_TAREAS.includes(f) && !CSS_ANUNCIOS.includes(f) && !CSS_PIEZA.includes(f) && !CSS_MOVIL.includes(f) && !CSS_MOVIL_D.includes(f)).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
 // Banco de presets F5 (1 oct 2026): el <style> de shell.html también llega sin sus comentarios (~16 KB; los blancos y lo demás,
 // tal cual) para que el compilador de video quepa en el presupuesto sin subir el tope. El marcador se queda para el reemplazo.
 // 25 oct 2026: y sin la sangría ni los saltos de línea (cssCorto, ~22 KB): la página tenía 5 KB de margen y cada mejora de la interfaz se los comía. Antes del marcador, que se queda.
