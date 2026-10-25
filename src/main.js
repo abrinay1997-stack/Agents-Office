@@ -5,6 +5,7 @@ import { MODEL_KEYS as SHEET_MODELS, modelName as sheetModelName, EFFORT_KEYS as
 import { initStudio } from './studio.js'; // the Estudio: images and video, by hand and by the agents
 import { initAnaliticas } from './analiticas.js'; // V4.7 (F2): Analíticas — how Instagram and Facebook are doing, read only (R)
 import { initAnunciosCarga } from './anuncios-carga.js'; // Fase A1 (9 oct 2026): la vista Anuncios (J) — Resumen, Campañas, Historial; solo lectura, se descarga al abrirla
+import { initMovil } from './movil-carga.js'; // 25 oct 2026: la versión móvil (dist/movil.js), solo en un teléfono
 import { initTareasCarga } from './tareas-carga.js'; // plan T2 (6 oct 2026): la vista Tareas (H) — Inicio, Lista, Tablero, Proyectos, Medidas; se descarga al abrirla
 import { initContenido } from './contenido.js'; // V4.7: Contenido — the calendar of what is published, its schedule, the piece panel (K)
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
@@ -1790,7 +1791,7 @@ document.getElementById('topTareas').addEventListener('click', () => tareasV.tog
 const analiticas = initAnaliticas({ served: SERVED, esc, business: () => document.title.replace(/ — Agents Office$/, '') }); // V4.7 (F2)
 document.getElementById('topAnaliticas').addEventListener('click', () => analiticas.toggle());
 addEventListener('ao:abrir-anuncios', e => { e.preventDefault(); const d = e.detail || {}; anuncios.open(d.impulsar ? { tab: 'borradores', impulsar: d.impulsar } : { objeto: d.anuncio || d.campana }); }); // A4 (9 oct 2026): «Impulsar» desde Contenido o Analíticas abre el borrador · B1 (9 oct 2026): un comentario «en un anuncio» de la Bandeja lleva a ese anuncio en Anuncios
-cargarDictado(); // el micrófono junto a los campos de texto
+initMovil(); cargarDictado(); // el micrófono junto a los campos de texto
 const anuncios = initAnunciosCarga({ servida: SERVED, abrirAjustes: tab => settingsWin.open(tab), agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', negocio: () => document.title.replace(/ — Agents Office$/, ''), estudio: (t, onPick) => studio.forTarget({ ...t, para: 'anuncio' }, onPick) }); // Fase A1 (9 oct 2026) · A3: el Estudio «para el anuncio»
 document.getElementById('topAnuncios').addEventListener('click', () => anuncios.toggle());
 document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)
@@ -1839,7 +1840,7 @@ window.CC = { hero, flyTo, zoomToDept, zoomOut, zoomToApproval, requestApproval,
 
 let last = performance.now(), lastFrame = 0, frameN = 0, lastInput = performance.now();
 for (const ev of ['pointermove', 'pointerdown', 'wheel', 'keydown']) addEventListener(ev, () => { lastInput = performance.now(); }, { passive: true });
-const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen') || document.body.classList.contains('ctOpen') || document.body.classList.contains('anOpen') || document.body.classList.contains('tvOpen') || document.body.classList.contains('anuOpen'); // a full-screen view hides the office (Tareas too, 6 Oct 2026: it drew the 3D office behind it at full rate)
+const covered = () => (brain && brain.isOpen()) || (tasks && tasks.calendar && tasks.calendar.isOpen()) || document.body.classList.contains('studioOpen') || document.body.classList.contains('ctOpen') || document.body.classList.contains('anOpen') || document.body.classList.contains('tvOpen') || document.body.classList.contains('anuOpen') || document.body.classList.contains('movil'); // a full-screen view hides the office (Tareas too, 6 Oct 2026: it drew the 3D office behind it at full rate)
 // Frame budget: full rate while the camera flies or the owner is moving the pointer; 30 fps when the office just lives;
 // 5 fps of simulation and NO drawing while the Brain or the calendar covers it. The tab hidden → the browser stops rAF.
 function loop(now) {

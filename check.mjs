@@ -53,12 +53,13 @@ await step('build: the views\' own style (src/css/*.css) reaches the page once e
   const { CSS_TAREAS } = await import('./build-tareas.mjs'), tv = fs.readFileSync(path.join(ROOT, 'dist', 'tareas-vista.js'), 'utf8'); // plan T2 (6 oct 2026): the Tareas view's own bundle
   const { CSS_PIEZA } = await import('./build-pieza.mjs'), pe = fs.readFileSync(path.join(ROOT, 'dist', 'pieza-editor.js'), 'utf8'); // C1 (8 oct 2026): the piece editor's own bundle
   const { CSS_ANUNCIOS } = await import('./build-anuncios.mjs'), av = fs.readFileSync(path.join(ROOT, 'dist', 'anuncios-vista.js'), 'utf8'); // A1 (8 oct 2026): the Anuncios view's own bundle
+  const { CSS_MOVIL, CSS_MOVIL_D } = await import('./build-movil.mjs'), mv = fs.readFileSync(path.join(ROOT, 'dist', 'movil.js'), 'utf8'), mvd = fs.readFileSync(path.join(ROOT, 'dist', 'movil-d.js'), 'utf8'); // 25 oct 2026: la versión móvil, también aparte
   for (const f of files) {
-    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, y = tv.split(mark).length - 1, z = pe.split(mark).length - 1, w = av.split(mark).length - 1, aparte = CSS_APARTE.includes(f) || CSS_TAREAS.includes(f) || CSS_PIEZA.includes(f) || CSS_ANUNCIOS.includes(f);
-    if (n + x + y + z + w !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page, ${x} in dist/estudio-extra.js, ${y} in dist/tareas-vista.js, ${z} in dist/pieza-editor.js and ${w} in dist/anuncios-vista.js (it must be exactly 1 in all)`);
+    const mark = `/* ---- src/css/${f} ---- */`, n = html.split(mark).length - 1, x = extra.split(mark).length - 1, y = tv.split(mark).length - 1, z = pe.split(mark).length - 1, w = av.split(mark).length - 1, v = mv.split(mark).length - 1 + mvd.split(mark).length - 1, aparte = CSS_APARTE.includes(f) || CSS_TAREAS.includes(f) || CSS_PIEZA.includes(f) || CSS_ANUNCIOS.includes(f) || CSS_MOVIL.includes(f) || CSS_MOVIL_D.includes(f);
+    if (n + x + y + z + w + v !== 1) throw new Error(`src/css/${f} appears ${n} times in the built page, ${x} in dist/estudio-extra.js, ${y} in dist/tareas-vista.js, ${z} in dist/pieza-editor.js, ${w} in dist/anuncios-vista.js and ${v} in dist/movil.js (it must be exactly 1 in all)`);
     if (aparte && n) throw new Error(`src/css/${f} travels in a bundle of its own but reached the page`);
   }
-  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete del Estudio)' : CSS_TAREAS.includes(f) ? f + ' (con la vista Tareas)' : CSS_PIEZA.includes(f) ? f + ' (con el editor de piezas)' : CSS_ANUNCIOS.includes(f) ? f + ' (con la vista Anuncios)' : f).join(', ')}`;
+  return `${files.length} stylesheet(s): ${files.map(f => CSS_APARTE.includes(f) ? f + ' (con el paquete del Estudio)' : CSS_TAREAS.includes(f) ? f + ' (con la vista Tareas)' : CSS_PIEZA.includes(f) ? f + ' (con el editor de piezas)' : CSS_ANUNCIOS.includes(f) ? f + ' (con la vista Anuncios)' : CSS_MOVIL.includes(f) || CSS_MOVIL_D.includes(f) ? f + ' (con la versión móvil)' : f).join(', ')}`;
 });
 await step('build: the Estudio’s heavy part (bank, 3D stage, Lotes) is its own file beside the page, of the same build, and the page does not carry it', async () => { // 1 oct 2026, INF-09
   const html = fs.readFileSync(path.join(ROOT, 'dist', 'command-centre-v2.html'), 'utf8'), file = path.join(ROOT, 'dist', 'estudio-extra.js');
@@ -769,8 +770,8 @@ else {
       const v30 = await page.evaluate(() => document.querySelector('#anOv .an-kv').textContent);
       await page.click('#anOv .an-dias [data-d="7"]'); await until(() => document.querySelector('#anOv .an-dias [data-d="7"]').getAttribute('aria-pressed') === 'true', 'the 7-day button did not press');
       await page.click('#anOv .an-redes [data-r="facebook"]'); await page.waitForTimeout(150);
-      const fb = await page.evaluate(() => [...document.querySelectorAll('#anOv .an-top .an-net')].map(e => e.textContent));
-      if (!fb.length || fb.some(x => x !== 'FB')) throw new Error('with Facebook chosen, other networks still show: ' + fb.join(','));
+      const fb = await page.evaluate(() => [...document.querySelectorAll('#anOv .an-top .an-net')].map(e => e.querySelector('svg')?.getAttribute('aria-label') || e.textContent)); // el logo de la red lleva su nombre (ya no hay siglas)
+      if (!fb.length || fb.some(x => x !== 'Facebook')) throw new Error('with Facebook chosen, other networks still show: ' + fb.join(','));
       await page.click('#anOv .an-redes [data-r="todas"]'); await page.click('#anOv .an-dias [data-d="30"]');
       await page.click('#anOv .an-chip[data-k="alcance"]'); await page.waitForTimeout(100);
       if (!await page.evaluate(() => /Alcance por día/.test(document.querySelector('#anOv .an-fig figcaption').textContent))) throw new Error('the chart did not switch to Alcance');

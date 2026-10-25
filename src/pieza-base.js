@@ -1,6 +1,7 @@
 // Agents Office (8 oct 2026, C1) — lo PEQUEÑO de una pieza de Contenido que necesita la página entera: sus estados, formatos, redes, los
 // iconos de formato y la miniatura. El editor (src/pieza.js, con su vista previa) va en un paquete aparte, dist/pieza-editor.js, que se trae la
 // primera vez que se abre una pieza (src/pieza-carga.js): la página tiene su presupuesto (check.mjs) y el editor pesa lo suyo.
+import { iconoRed } from './redes-iconos.js';
 export const ESTADO = {
   idea: { name: 'IDEA', glyph: '◌', color: '#5A5A5A', dark: '#B9B6AE', help: 'Una idea suelta: todavía no es una publicación.' },
   borrador: { name: 'BORRADOR', glyph: '✎', color: '#8A6414', dark: '#E8B44A', help: 'Se está escribiendo.' },
@@ -10,7 +11,9 @@ export const ESTADO = {
 
 export const FORMATO = { post: 'Post', carrusel: 'Carrusel', reel: 'Reel', historia: 'Historia' };
 
-export const RED = { instagram: { name: 'Instagram', short: 'IG' }, facebook: { name: 'Facebook', short: 'FB' }, linkedin: { name: 'LinkedIn', short: 'IN' }, x: { name: 'X', short: 'X' }, threads: { name: 'Threads', short: 'TH' }, bluesky: { name: 'Bluesky', short: 'BS' }, tiktok: { name: 'TikTok', short: 'TT' }, pinterest: { name: 'Pinterest', short: 'PI' }, youtube: { name: 'YouTube', short: 'YT' } };
+export const RED = { instagram: { name: 'Instagram' }, facebook: { name: 'Facebook' }, linkedin: { name: 'LinkedIn' }, x: { name: 'X' }, threads: { name: 'Threads' }, bluesky: { name: 'Bluesky' }, tiktok: { name: 'TikTok' }, pinterest: { name: 'Pinterest' }, youtube: { name: 'YouTube' } };
+/** El LOGO de una red (nunca sus siglas) en su cajita de 16 px. Con `solo` (no hay su nombre escrito al lado) el logo lleva el nombre para el lector de pantalla; si no, es decorativo. */
+export const nbRed = (red, { solo = false, clase = 'pz-nb' } = {}) => `<b class="${clase} ${red}"${solo ? '' : ' aria-hidden="true"'}>${iconoRed(red, solo ? { titulo: RED[red]?.name || String(red) } : {})}</b>`;
 
 /** El icono de cada formato (trazos, el color del texto): en las tarjetas del calendario, la programación y el panel. */
 export const FICON = {

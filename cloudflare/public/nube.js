@@ -10,6 +10,56 @@
   const iniciales = (n) => (String(n).trim().split(/\s+/).slice(0, 2).map((p) => p[0] || '').join('') || '?').toUpperCase();
   const $ = (s, r = document) => r.querySelector(s);
 
+  // ---------- las imágenes de Meta, por el mismo origen ----------
+  // La CSP de la oficina dice `img-src 'self' data: blob:` (ningún host de terceros). Meta entrega fotos de perfil, miniaturas y adjuntos como https://…fbcdn.net|cdninstagram.com|fbsbx.com/…:
+  // el navegador las bloquearía. Toda <img> (y `poster`, `srcset`, `url()` de un estilo) con uno de esos hosts se reescribe a /api/imagen-meta?u=… (el Worker la baja una vez, la guarda en R2 y la sirve de aquí).
+  // Se reescribe ANTES de que el navegador pida la original (innerHTML, insertAdjacentHTML, .src, setAttribute) para no provocar una violación de CSP; el observador y el aviso de error son la red de seguridad.
+  const META = /^(?:[a-z0-9-]+\.)*(?:fbcdn\.net|cdninstagram\.com|fbsbx\.com)$/i;
+  const aProxy = (v) => {
+    try {
+      const u = new URL(String(v).replace(/&amp;/g, '&'), location.href);
+      if (u.protocol !== 'https:' || u.username || u.password || (u.port && u.port !== '443') || !META.test(u.hostname)) return null;
+      return '/api/imagen-meta?u=' + encodeURIComponent(u.href);
+    } catch { return null; }
+  };
+  const valorMeta = (v) => String(v).replace(/https:\/\/[^\s"'<>(),]+/gi, (m) => aProxy(m) || m); // srcset y url(): cada https de Meta dentro del valor
+  const reescribirHTML = (h) => {
+    if (typeof h !== 'string' || !/(fbcdn\.net|cdninstagram\.com|fbsbx\.com)/i.test(h)) return h;
+    return h.replace(/<(img|source|video|image)\b[^>]*>/gi, (tag) => tag.replace(/\b(src|srcset|poster)(\s*=\s*)(["'])([^"']*)\3/gi, (m, a, e, q, v) => (/(fbcdn\.net|cdninstagram\.com|fbsbx\.com)/i.test(v) ? `${a}${e}${q}${a === 'srcset' ? valorMeta(v) : (aProxy(v) || v)}${q}` : m)))
+      .replace(/url\(\s*(["']?)(https:[^)"']+)\1\s*\)/gi, (m, q, v) => { const r = aProxy(v); return r ? `url(${q}${r}${q})` : m; });
+  };
+  const reescribirNodo = (el) => {
+    if (!el || el.nodeType !== 1) return;
+    const lista = el.matches?.('img,source,video,image') ? [el, ...el.querySelectorAll('img,source,video,image')] : (el.querySelectorAll ? [...el.querySelectorAll('img,source,video,image')] : []);
+    for (const n of lista) {
+      for (const a of ['src', 'poster']) { const v = n.getAttribute(a); if (v && /^https:/i.test(v)) { const r = aProxy(v); if (r) n.setAttribute(a, r); } }
+      const ss = n.getAttribute('srcset'); if (ss && /https:/i.test(ss)) n.setAttribute('srcset', valorMeta(ss));
+    }
+    const estilos = el.matches?.('[style*="url("]') ? [el, ...el.querySelectorAll('[style*="url("]')] : (el.querySelectorAll ? [...el.querySelectorAll('[style*="url("]')] : []);
+    for (const n of estilos) { const c = n.getAttribute('style'); if (/https:/i.test(c)) { const r = c.replace(/url\(\s*(["']?)(https:[^)"']+)\1\s*\)/gi, (m, q, v) => { const x = aProxy(v); return x ? `url(${q}${x}${q})` : m; }); if (r !== c) n.setAttribute('style', r); } }
+  };
+  try {
+    const d = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    if (d?.set) Object.defineProperty(Element.prototype, 'innerHTML', { ...d, set(h) { d.set.call(this, reescribirHTML(h)); } });
+    const iah = Element.prototype.insertAdjacentHTML;
+    Element.prototype.insertAdjacentHTML = function (pos, h) { return iah.call(this, pos, reescribirHTML(h)); };
+    const sa = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (n, v) {
+      if (typeof v === 'string' && /^(src|poster|srcset)$/i.test(n) && /^(IMG|SOURCE|VIDEO|image)$/i.test(this.tagName)) v = String(n).toLowerCase() === 'srcset' ? valorMeta(v) : (aProxy(v) || v);
+      return sa.call(this, n, v);
+    };
+    for (const [C, prop] of [[HTMLImageElement, 'src'], [HTMLImageElement, 'srcset'], [HTMLVideoElement, 'poster'], [HTMLSourceElement, 'src']]) {
+      const pd = Object.getOwnPropertyDescriptor(C.prototype, prop);
+      if (pd?.set) Object.defineProperty(C.prototype, prop, { ...pd, set(v) { pd.set.call(this, prop === 'srcset' ? valorMeta(v) : (aProxy(v) || v)); } });
+    }
+  } catch { /* un navegador raro: quedan el observador y el aviso de error */ }
+  try {
+    new MutationObserver((ms) => { for (const m of ms) { if (m.type === 'attributes') reescribirNodo(m.target); else m.addedNodes.forEach(reescribirNodo); } })
+      .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'srcset', 'poster', 'style'] });
+    document.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG') reescribirNodo(t); }, true);
+    reescribirNodo(document.documentElement);
+  } catch { /* sin observador: lo que ya estaba escrito se reescribió arriba */ }
+
   // Toda escritura a /api/ lleva el id de la pestaña (el Worker lo devuelve en el evento `cambio`).
   const fetch0 = window.fetch.bind(window);
   window.fetch = (u, o = {}) => {
@@ -103,13 +153,13 @@
     document.dispatchEvent(new CustomEvent('ao:presencia', { detail: { presentes: presentes.map(persona), conexion } }));
   }
 
-  /** A ≤ 440 px la barra de avatares se esconde: Mi perfil y Salir viven también en el menú «⋯» del dock (y siguen en Ajustes). */
+  /** A ≤ 440 px la barra de avatares se esconde: Mi perfil y Salir viven también en el menú «⋯» del dock (y siguen en Ajustes); a ≤ 760 px, donde la barra de conectores se oculta, también Conectores y Modelos. */
   function enMenuMas() {
     const m = document.getElementById('topMoreMenu'); if (!m) return false;
     if (m.querySelector('[data-nube]')) return true;
-    for (const [a, t] of [['perfil', 'Mi perfil'], ['salir', 'Salir']]) {
+    for (const [a, t] of [['perfil', 'Mi perfil'], ['conectores', 'Conectores'], ...(yo?.rol === 'admin' ? [['modelos', 'Modelos']] : []), ['salir', 'Salir']]) { // a ≤ 760 px la barra de conectores no cabe: aquí están Conectores y Modelos
       const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.tabIndex = -1; b.dataset.nube = a; b.textContent = t;
-      b.addEventListener('click', () => { m.hidden = true; document.getElementById('topMore')?.setAttribute('aria-expanded', 'false'); if (a === 'salir') salir(); else abrirAjustes('nube-perfil'); });
+      b.addEventListener('click', () => { m.hidden = true; document.getElementById('topMore')?.setAttribute('aria-expanded', 'false'); if (a === 'salir') salir(); else abrirAjustes(a === 'perfil' ? 'nube-perfil' : a === 'conectores' ? 'nube-conectores' : 'nube-modelos'); });
       m.appendChild(b);
     }
     return true;
@@ -319,10 +369,10 @@
   }
 
   // Las dos pestañas de Ajustes (src/settings.js lee window.AO_AJUSTES_EXTRA al pintar).
-  window.AO_AJUSTES_EXTRA = [...(Array.isArray(window.AO_AJUSTES_EXTRA) ? window.AO_AJUSTES_EXTRA : []), // lo que ya registró ajustes-extra.js (Restablecer oficina, Revisar lo que leí) se conserva
+  window.AO_AJUSTES_EXTRA = (window.AO_AJUSTES_EXTRA || []).concat([
     { key: 'nube-perfil', label: 'Mi perfil', primera: true, render: (pane) => { if (yo) pintarPerfil(pane); } },
     { key: 'nube-equipo', label: 'Cuentas y roles', render: (pane) => { if (yo) pintarEquipo(pane); } },
-  ];
+  ]);
 
   // ---------- arranque ----------
   async function iniciar() {
@@ -331,5 +381,5 @@
     for (let i = 0; i < 20 && !enMenuMas(); i++) await new Promise((r) => setTimeout(r, 250)); // el menú «⋯» lo crea la página al arrancar
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
-  window.AO_NUBE = { pestana: PESTANA, presentes: () => presentes.map(persona), conexion: () => conexion };
+  window.AO_NUBE = { api, esc, aviso: avisoBreve, yo: () => yo, abrirAjustes, pestana: PESTANA, presentes: () => presentes.map(persona), conexion: () => conexion };
 })();

@@ -12,6 +12,7 @@ import { ALLOWED as DEPTS_RUTINAS } from '../../../routines-core.mjs';
 import { nameOf } from '../../../sub-core.mjs';
 import pkg from '../../../package.json' with { type: 'json' };
 import { leerCfg } from './ajustes.js';
+import { leerModelos } from './modelos.js';
 import { cargarRoster, agentesSalida } from './tareas/roster.js';
 import { leerDoc, listarFilas, mutarDoc } from './almacen.js';
 import { json } from './respuesta.js';
@@ -23,8 +24,8 @@ const hayModelo = (env) => !!env.ANTHROPIC_API_KEY || !!(env.META_API_KEY || env
 export const saludPublica = (env, version) => ({ ok: true, version, ia: hayModelo(env) });
 
 /** El proveedor del modelo de los agentes: el del `AI_MODELO` de la nube (Muse = Meta; si no, Anthropic). */
-export function proveedorDe(env) {
-  const meta = /^muse-/i.test(String(env.AI_MODELO || ''));
+export function proveedorDe(env, modelos = null) {
+  const meta = /^muse-/i.test(String(modelos?.oficina || env.AI_MODELO || '')); // el modelo de la oficina de Ajustes → Modelos manda sobre el secreto AI_MODELO
   return meta ? { id: 'meta', name: 'Meta Muse Spark', host: 'api.meta.ai', backend: 'meta-api' } : { id: 'anthropic', name: 'Claude', host: 'api.anthropic.com', backend: 'anthropic-api' };
 }
 
@@ -39,7 +40,7 @@ export async function saludRica(ctx, modulos = []) {
     listarFilas(db, 'skills', { limite: 300 }).catch(() => []),
   ]);
   const model = normModel(cfg.model) || DEFAULT_MODEL, effort = normEffort(cfg.effort) || '';
-  const prov = proveedorDe(env);
+  const prov = proveedorDe(env, await leerModelos(db));
   const agents = agentesSalida(roster.agents).map((a) => ({ ...a, skills: skills.filter((s) => s && s.text && (s.everyone || (s.agents || []).includes(a.id) || (s.departments || []).includes(a.department))).map((s) => s.name) }));
   const setup = Object.fromEntries(DEPT_KEYS.map((k) => [k, agents.some((a) => a.department === k && a.brief)]));
   const n = safety.normalize(cfg.safety);

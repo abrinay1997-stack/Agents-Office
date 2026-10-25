@@ -12,6 +12,7 @@
 //        openAgent(id) · openNote(name) → bool · openCalendar(ts) · modelName · MODEL_KEYS · officeModel()
 import { mdToHtml } from './md.js';
 import { modal } from './modal.js'; // V4.1: the page outside an open window is inert
+import { conEstado, anunciar } from './accion.js'; // 25 oct 2026: el botón que pulsaste dice «Aprobando…» y no solo se apagan todos
 
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -106,7 +107,7 @@ export function initDetail(ctx) {
   const ACTION = { approve: 'Aprobado', reject: 'Devuelto', undo: 'Aprobación deshecha', edit: 'Borrador editado', expire: 'Caducó' };
   const approvalsHTML = t => t.approvals?.length ? `<details class="td-hist"><summary>Historial de aprobaciones (${t.approvals.length})</summary><ul>${t.approvals.map(e => `<li><time>${new Date(e.at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</time> ${ACTION[e.action] || esc(e.action)} · ${esc(e.by)}${e.note ? ` — «${esc(e.note)}»` : ''}</li>`).join('')}</ul></details>` : ''; // G8
   const voteHTML = t => `<div class="td-vote" role="group" aria-label="¿Te sirvió?"><span>¿Te sirvió?</span><button type="button" class="td-btn${t.vote === 'up' ? ' on' : ''}" data-a="vote-up" aria-pressed="${t.vote === 'up'}">👍 Sí</button><button type="button" class="td-btn${t.vote === 'down' ? ' on' : ''}" data-a="vote-down" aria-pressed="${t.vote === 'down'}">👎 No</button>${voting ? `<input id="tdWhy" class="td-text td-why" placeholder="¿Qué faltó o sobró? (el agente lo tendrá en cuenta)" aria-label="Qué faltó o sobró"><button type="button" class="td-btn pri" data-a="vote-send">Enviar</button>` : ''}</div>`; // D2
-  let editingDraft = false, voting = false;
+  let editingDraft = false, voting = false, lastBtn = null;
   async function post(p, b) { try { const r = await fetch('/api' + p, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b || {}) }); const j = await r.json().catch(() => ({})); return r.ok ? j : { error: j.error || 'No se pudo.' }; } catch { return { error: 'sin conexión con la oficina' }; } }
   function actions(t, editable, live) {
     const b = (a, txt, cls = '') => `<button type="button" class="td-btn ${cls}" data-a="${a}">${txt}</button>`;
@@ -127,19 +128,20 @@ export function initDetail(ctx) {
     return out.join('');
   }
   const msg = (text, bad) => { const m = el.querySelector('.td-msg'); if (m) { m.textContent = text; m.className = 'td-msg' + (bad ? ' bad' : ''); } };
-  async function run(name, payload, okText) {
+  const OCUPADO = { approve: 'Aprobando…', reject: 'Devolviendo…', save: 'Guardando…', done: 'Marcando…', stop: 'Deteniendo…', delete: 'Eliminando…', archive: 'Archivando…', repeat: 'Repitiendo…', unschedule: 'Pasando…' };
+  async function run(name, payload, okText, btn = lastBtn) {
     if (busy) return; busy = true;
-    el.querySelectorAll('.td-btn').forEach(x => { x.disabled = true; });
-    msg('Un momento…');
-    const r = await act(cur, name, payload);
+    el.querySelectorAll('.td-btn').forEach(x => { if (x !== btn) x.disabled = true; });
+    msg('');
+    const c = await conEstado(btn, async () => { const r = await act(cur, name, payload); if (!r || !r.ok) throw new Error((r && r.error) || 'No se pudo.'); return r; }, { ocupado: OCUPADO[name] || 'Un momento…', ms: 300 });
     busy = false;
-    if (!r || !r.ok) { el.querySelectorAll('.td-btn').forEach(x => { x.disabled = false; }); msg((r && r.error) || 'No se pudo.', true); return false; }
-    if (r.gone) { close(); return true; }
-    render(); msg(okText || 'Hecho.'); return true;
+    if (!c.ok) { el.querySelectorAll('.td-btn').forEach(x => { x.disabled = false; }); return false; }
+    if (c.valor.gone) { close(); return true; }
+    render(); msg(okText || 'Hecho.'); anunciar(okText || 'Hecho.'); return true;
   }
   el.addEventListener('click', async e => {
     const btn = e.target.closest('[data-a]'); if (!btn || !cur) return;
-    const t = cur, a = btn.dataset.a;
+    const t = cur, a = btn.dataset.a; lastBtn = btn;
     if (a === 'close') return close();
     if (a === 'chat') { close(); openAgent(t.agent); return; }
     if (a === 'note') { if (openNote(t.note)) close(); else msg('Esa nota ya no está en el Cerebro.', true); return; } // the drawer goes: it covered the Brain's reader

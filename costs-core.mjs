@@ -65,6 +65,15 @@ export function budgetState(lines, c, now = Date.now()) {
   const b = +c.monthlyBudget || 0;
   return { month: m, spent, budget: b, ratio: b ? spent / b : 0, level: !b ? 'none' : spent >= b ? 'over' : spent >= b * (c.alertAt || 0.8) ? 'alert' : 'ok' };
 }
+/** El medidor de la esquina en la NUBE (no hay plan con ventana de 5 h: se paga por token): gasto de hoy y del mes, tokens y ejecuciones de hoy y, con tope, el porcentaje del mes.
+ *  «Hoy» y «mes» son los de la zona de la oficina (la `Date` del Worker ya la lleva). Todo es una estimación: tokens × la tabla de precios. */
+export function usage(lines, cfgCosts = {}, now = Date.now()) {
+  const c = config(cfgCosts), key = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }, hoy = key(now), mes = monthOf(now);
+  const delDia = lines.filter(l => key(l.t) === hoy), delMes = lines.filter(l => monthOf(l.t) === mes);
+  const usd = ls => Math.round(ls.reduce((n, l) => n + (l.usd || 0), 0) * 1e6) / 1e6, b = +c.monthlyBudget || 0, gastoMes = usd(delMes);
+  return { today: { usd: usd(delDia), tokens: delDia.reduce((n, l) => n + (l.in || 0) + (l.out || 0) + (l.cacheRead || 0) + (l.cacheWrite || 0), 0), runs: delDia.filter(l => l.task).length },
+    month: { usd: gastoMes, budget: b || null, percent: b ? Math.round(gastoMes / b * 100) : null }, pricesAsOf: PRICES_AS_OF };
+}
 /** Minutes a finished task saved: the routine's own, else its department's. */
 export const minutesSaved = (task, c) => +task.minutesSaved || +c.minutesPerTask[task.dept] || 20;
 

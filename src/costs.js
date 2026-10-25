@@ -3,6 +3,7 @@
 // saved and what they are worth; the budget; suggestions (a cheaper model, a routine nobody reads) with one click to apply;
 // and the month as CSV for the accountant. The server builds the figures (costs.mjs → /api/costs).
 import { modal } from './modal.js';
+import { conEstado, enviar, pedir, fallaHTML } from './accion.js';
 const ajuste = k => (globalThis.AO_NUBE ? 'Ajustes → Costos' : `<code>costs.${k}</code>`); // en la nube se cambia en Ajustes, no en un archivo
 
 export function initCosts({ served, esc }) {
@@ -12,7 +13,7 @@ export function initCosts({ served, esc }) {
     <a class="cs-btn" data-a="csv" href="/api/costs.csv" download>Descargar CSV del mes</a>
     <button type="button" class="cs-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div><div class="cs-body" aria-live="polite"></div></div>`;
   document.body.appendChild(el);
-  let data = null, opener = null;
+  let data = null, opener = null, err = '';
   const usd = n => n >= 100 ? 'US$' + Math.round(n).toLocaleString('es-PA') : n >= 1 ? 'US$' + n.toFixed(2) : n > 0 ? 'US$' + n.toFixed(3) : 'US$0';
   const DEPT = { emails: 'Correos', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', fin: 'Finanzas', delivery: 'Entregas', oficina: 'La oficina (enrutar, Dimitri)' };
   const monthName = m => { const [y, mo] = m.split('-'); return new Date(+y, +mo - 1, 1).toLocaleDateString('es-PA', { month: 'long', year: 'numeric' }); };
@@ -36,7 +37,7 @@ export function initCosts({ served, esc }) {
   function render() {
     const body = el.querySelector('.cs-body');
     if (!served) { body.innerHTML = '<p class="cs-lead">Esta es la demo: los costos reales aparecen cuando la oficina corre con <code>npm start</code>.</p>'; return; }
-    if (!data) { body.innerHTML = '<p class="cs-lead">Sumando…</p>'; return; }
+    if (!data) { body.innerHTML = err ? fallaHTML(err, 'No pude traer los costos.') : '<p class="cs-lead">Sumando…</p>'; return; }
     const d = data, b = d.budget;
     el.querySelector('#costsT').textContent = 'Costos, calidad y retorno · ' + monthName(d.month);
     el.querySelector('[data-a="csv"]').href = '/api/costs.csv?month=' + d.month;
@@ -59,14 +60,15 @@ export function initCosts({ served, esc }) {
       <h3>Por modelo</h3>${d.byModel.length ? table(['Modelo', 'Ejecuciones', 'Costo'], d.byModel.map(x => [esc(x.key || '—'), x.runs, usd(x.usd)])) : '<p class="cs-empty">Aún nada este mes.</p>'}
       <details class="cs-more"><summary>Precios que usa la oficina (al ${esc(d.pricesAsOf)})</summary>${table(['Modelo', 'Proveedor', 'Entrada /1M', 'Salida /1M', 'Caché /1M'], d.prices.map(p => [esc(p.name), esc(p.provider), '$' + p.in, '$' + p.out, '$' + p.cacheRead]))}<p class="cs-src">${d.priceSources.map(esc).join('<br>')}<br>Con Claude Code, el costo de cada ejecución lo informa el propio Claude; la tabla se usa para otros proveedores. Precios propios: <code>costs.prices</code>.</p></details>`;
   }
-  async function load() { if (!served) return; try { const [r, q] = await Promise.all([fetch('/api/costs'), fetch('/api/quality')]); if (r.ok) { data = await r.json(); data.quality = q.ok ? await q.json() : null; if (!el.hidden) render(); } } catch {} }
+  async function load() { if (!served) return; try { const [d, q] = await Promise.all([pedir('/api/costs'), pedir('/api/quality').catch(() => null)]); err = ''; data = d; data.quality = q; if (!el.hidden) render(); } catch (e) { if (!data) { err = e.message; if (!el.hidden) render(); } } }
   function open() { if (!el.hidden) return; opener = document.activeElement; el.hidden = false; modal.open(el); render(); load(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.cs-x').focus({ preventScroll: true }); }
   function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); el.hidden = true; if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   el.addEventListener('click', async e => {
     if (e.target === el || e.target.closest('.cs-x')) return close();
+    if (e.target.closest('[data-ac-re]')) { err = ''; render(); return load(); }
     const b = e.target.closest('[data-apply]'); if (!b || !data) return;
-    const s = data.suggestions[+b.dataset.apply]; b.disabled = true;
-    try { const r = await fetch('/api/costs/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: s.action }) }); const j = await r.json(); b.textContent = r.ok ? 'Hecho ✓' : 'No se pudo'; b.title = j.text || j.error || ''; } catch { b.textContent = 'No se pudo'; }
+    const s = data.suggestions[+b.dataset.apply];
+    const r = await conEstado(b, () => enviar('/api/costs/apply', { action: s.action }), { ocupado: 'Aplicando…', hecho: 'Hecho', ms: 3000 }); if (r.ok) b.title = r.valor.text || '';
     setTimeout(load, 800);
   });
   el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
