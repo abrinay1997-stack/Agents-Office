@@ -470,7 +470,7 @@ export function initSub(ctx) {
     if (!isLive()) return say('El historial necesita la oficina real.');
     hist.hidden = false; box.hidden = true; histBtn.setAttribute('aria-expanded', 'true'); hist.innerHTML = '<div class="sb-empty">Cargando…</div>';
     try {
-      const j = await (await fetch('/api/sub/conversaciones')).json(), lista = j.lista || [];
+      const r = await fetch('/api/sub/conversaciones'); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText); const j = await r.json(), lista = j.lista || [];
       hist.innerHTML = `<div class="sbh-top"><b>Conversaciones</b><button type="button" class="sbh-back">Volver al chat</button></div>`
         + (j.actual ? `<div class="sbh-row sbh-now"><div class="sbh-t"><span class="sbh-name">${esc(j.actual.titulo)}</span><span class="sbh-meta">Esta conversación · ${j.actual.n} mensajes</span></div></div>` : '')
         + (lista.length ? lista.map(c => `<div class="sbh-row" data-id="${esc(c.id)}"><div class="sbh-t"><span class="sbh-name">${esc(c.titulo)}</span><span class="sbh-meta">${esc(fechaH(c.at))} · ${c.n} mensajes</span></div><button type="button" class="sbh-open">Abrir</button><button type="button" class="sbh-del" aria-label="Borrar «${esc(c.titulo)}»">Borrar</button></div>`).join('') : '<div class="sb-empty">Aún no hay conversaciones guardadas. Al pulsar ＋ la de ahora se guarda aquí.</div>');
@@ -484,12 +484,17 @@ export function initSub(ctx) {
     const id = row.dataset.id;
     if (e.target.closest('.sbh-open')) {
       if (busy) return say('Espera a que termine de contestar.');
-      try { const j = await postJSON('/api/sub/abrir', { id }); messages = j.messages || []; drafts.clear(); studioEdits.clear(); actionEdits.clear(); opEdits.clear(); qPicks.clear(); histClose(); render(true); refreshContext(); say('Conversación abierta. La anterior quedó guardada en el historial.'); }
-      catch (err) { hist.insertAdjacentHTML('afterbegin', `<div class="sb-empty" role="alert">No se pudo abrir: ${esc(err.message)}</div>`); }
+      const ob = e.target.closest('.sbh-open'); if (ob.disabled) return; ob.disabled = true; // un segundo clic abriría una conversación que ya se movió
+      try { const j = await postJSON('/api/sub/abrir', { id }); messages = j.messages || []; el.querySelector('.sb-undo')?.remove(); /* su DESHACER era de la conversación de antes */ drafts.clear(); studioEdits.clear(); actionEdits.clear(); opEdits.clear(); qPicks.clear(); histClose(); render(true); refreshContext(); say('Conversación abierta. La anterior quedó guardada en el historial.'); }
+      catch (err) { ob.disabled = false; hist.insertAdjacentHTML('afterbegin', `<div class="sb-empty" role="alert">No se pudo abrir: ${esc(err.message)}</div>`); }
       return;
     }
     const del = e.target.closest('.sbh-del'); if (!del) return;
-    if (!del.dataset.sure) { del.dataset.sure = '1'; del.textContent = '¿Seguro? Borrar'; del.classList.add('sure'); clearTimeout(delT); delT = setTimeout(() => { del.dataset.sure = ''; del.textContent = 'Borrar'; del.classList.remove('sure'); }, 4000); return; }
+    if (!del.dataset.sure) {
+      const calm = b => { b.dataset.sure = ''; b.textContent = 'Borrar'; b.classList.remove('sure'); b.setAttribute('aria-label', b.getAttribute('aria-label').replace('¿Seguro? ', '')); };
+      hist.querySelectorAll('.sbh-del.sure').forEach(calm); // el timer es uno solo: otra fila armada se quedaría «¿Seguro?» para siempre
+      del.dataset.sure = '1'; del.textContent = '¿Seguro? Borrar'; del.setAttribute('aria-label', '¿Seguro? ' + del.getAttribute('aria-label')); del.classList.add('sure'); clearTimeout(delT); delT = setTimeout(() => calm(del), 4000); return;
+    }
     try { await postJSON('/api/sub/borrar', { id }); row.remove(); say('Conversación borrada.'); } catch (err) { del.textContent = 'No se pudo'; }
   });
   let undoT = 0;
