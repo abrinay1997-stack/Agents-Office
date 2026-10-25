@@ -5,7 +5,9 @@
 //  · todo secreto que leen los módulos compartidos está declarado.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { crearSincronizador, HISTORIAL_MAX_BYTES, HISTORIAL_GUARDAR_BYTES, HISTORIAL_MINIMO } from '../../anuncios/sincronizar.mjs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { manejar, correrReloj } from '../worker/lib/rutas.js';
@@ -257,4 +259,19 @@ test('ESCALA: el archivo diario va por tandas y el reloj de las 03:10 lo corre',
   assert.equal(db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 30);
   await relojTareas(o.env, t0);
   assert.equal(db.prepare("select count(*) n from filas where coleccion = 'tareas'").get().n, 0, 'el reloj de las 03:10 termina lo que quedaba');
+});
+
+test('ESCALA: el historial de Anuncios (una fila de D1 de ~1,9 MB en la nube) se recorta solo y conserva lo último', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ao-hist-'));
+  try {
+    const sync = crearSincronizador({ meta: { configurado: () => false, uso: () => ({ ritmo: 1 }) }, ads: {}, dir, ajustes: () => ({}) });
+    for (let i = 0; i < 3500; i++) sync.anotar({ tipo: 'pausar', id: 'c' + i, por: 'dueno', texto: 'x'.repeat(450) });
+    const f = join(dir, 'historial.jsonl'), t = statSync(f).size;
+    assert.ok(t <= HISTORIAL_MAX_BYTES + 1000, `el archivo pesa ${t} bytes`);
+    const lineas = readFileSync(f, 'utf8').split('\n').filter(Boolean);
+    assert.ok(lineas.length >= HISTORIAL_MINIMO && t > 0 && lineas.length < 3500, 'recortado pero con las últimas');
+    assert.ok(statSync(f).size >= HISTORIAL_GUARDAR_BYTES / 2 || lineas.length >= HISTORIAL_MINIMO);
+    assert.equal(JSON.parse(lineas.at(-1)).id, 'c3499', 'la última acción se conserva');
+    assert.equal(sync.historial()[0].id, 'c3499', 'y es la primera que lee la página (las más nuevas primero)');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

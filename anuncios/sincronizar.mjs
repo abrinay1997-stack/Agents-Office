@@ -26,6 +26,7 @@ import { armarVista, fechaEn, horaEn, sumarDias, diasEntre, rangos, RANGOS, esta
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
 export const DIAS_NOCHE = 37, DIAS_GUARDADOS = 60, HORA_NOCHE = 6;
+export const HISTORIAL_MAX_BYTES = 800_000, HISTORIAL_GUARDAR_BYTES = 500_000, HISTORIAL_MINIMO = 500;
 export const MIN = { estructuraAbierto: 15, estructura: 60, revision: 10, cifras: 60 };
 export const PANEL_ABIERTO_MS = 3 * 60e3; // la página pide /api/anuncios?abierto=1 cada pocos segundos con el panel a la vista
 const EN_REVISION = new Set(['PENDING_REVIEW', 'IN_PROCESS']);
@@ -187,7 +188,11 @@ export function crearSincronizador({ meta, ads, dir, ajustes = () => ({}), defau
     escribirJSON(F.cuenta, g); return true;
   }
   /** Una línea más en historial.jsonl: { at, quien, que, objeto: { id, nivel, nombre }, antes, despues, … }. */
-  function anotar(e) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(F.historial, JSON.stringify({ at: new Date(ahora()).toJSON(), ...e }) + '\n'); }
+  // El historial solo crece: en la nube vive en UNA fila de D1 (tope ~1,9 MB) y, llena, hacía fallar toda acción de Anuncios DESPUÉS de haber cambiado Meta. Pasado HISTORIAL_MAX_BYTES se queda con las últimas líneas que caben en HISTORIAL_GUARDAR_BYTES (siempre al menos las 500 que leen la página y el informe).
+  function anotar(e) {
+    fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(F.historial, JSON.stringify({ at: new Date(ahora()).toJSON(), ...e }) + '\n');
+    try { if (fs.statSync(F.historial).size > HISTORIAL_MAX_BYTES) { const l = fs.readFileSync(F.historial, 'utf8').split('\n').filter(Boolean); let n = 0, k = l.length; while (k > 0 && (n < HISTORIAL_MINIMO || Buffer.byteLength(l.slice(k - 1).join('\n')) < HISTORIAL_GUARDAR_BYTES)) { k--; n++; } fs.writeFileSync(F.historial, l.slice(k).join('\n') + '\n'); } } catch { /* sin recorte: el siguiente intento lo hace */ }
+  }
 
   const historial = () => { try { return fs.readFileSync(F.historial, 'utf8').split('\n').filter(Boolean).map(x => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean).slice(-500).reverse(); } catch { return []; } };
 
