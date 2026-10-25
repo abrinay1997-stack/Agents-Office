@@ -81,7 +81,7 @@ export async function leerGrafo(db) {
   const f = await db.prepare('select json from grafo where id = 1').first();
   const g = f ? JSON.parse(f.json) : null;
   const { results } = await db.prepare('select nombre, grupo, actualizado, substr(texto, 1, 600) cab from notas').all();
-  const lleno = conNotasNuevas(g, results) ?? { notes: 0, nodes: [], links: [], extra: [], floor: null };
+  const lleno = conNotasNuevas(g, results) ?? { notes: 0, nodes: [], links: [], extra: [], floor: null, vacio: true }; // `vacio`: la página pinta un Cerebro sin notas, no el de muestra
   return { ...lleno, learned: { w: {}, links: [] } }; // lo que aprende la memoria llega con los agentes (fase 4)
 }
 

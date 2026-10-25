@@ -87,7 +87,7 @@ export function initAnaliticas({ served, esc, business = () => '' }) {
         <li>En <b>Meta Business Suite → Configuración del negocio → Usuarios → Usuarios del sistema</b>, crea uno.</li>
         <li>Asígnale las <b>páginas de PanaClaw</b> y su cuenta de Instagram.</li>
         <li>Genera un token para tu app con estos permisos: ${lect}. Pide también estos, para publicar directo desde Contenido (Ajustes → Contenido → Meta directo): ${pub}.</li>
-        <li>Ponlo en la variable de entorno <code>META_ACCESS_TOKEN</code> (en Windows: Configuración → Sistema → Acerca de → Configuración avanzada → Variables de entorno) y <b>reinicia la oficina</b>.</li>
+        <li>${globalThis.AO_NUBE ? 'Guárdalo como el secreto <code>META_ACCESS_TOKEN</code> del repositorio en GitHub (Settings → Secrets → Actions) y <b>vuelve a desplegar</b>.' : 'Ponlo en la variable de entorno <code>META_ACCESS_TOKEN</code> (en Windows: Configuración → Sistema → Acerca de → Configuración avanzada → Variables de entorno) y <b>reinicia la oficina</b>.'}</li>
         <li>Vuelve aquí y pulsa <b>Comprobar conexión</b>.</li>
       </ol>
       <p class="an-cap">Los nombres de los menús de Meta cambian: si no los encuentras, la idea es esta —un usuario del sistema con las páginas asignadas y un token con esos permisos—.</p>

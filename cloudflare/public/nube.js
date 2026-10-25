@@ -26,7 +26,7 @@
     return fetch0(u, o);
   };
   async function api(ruta, { metodo = 'GET', cuerpo, bytes } = {}) {
-    const r = await fetch0(ruta, { method: metodo, headers: { ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}), 'X-Pestana': PESTANA }, body: bytes ?? (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined) });
+    const r = await fetch0(ruta, { method: metodo, headers: { ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}), 'X-Pestana': PESTANA }, body: bytes ?? (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined) }).catch(() => { throw new Error('Sin conexión con la oficina. Revisa tu internet e inténtalo otra vez.'); });
     if (r.status === 401) { location.reload(); throw new Error('Tu sesión terminó.'); }
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'No se pudo completar.');
@@ -183,10 +183,25 @@
     if (m.nombre && m.por?.id && m.por.id !== yo?.id && t - (avisadas.get(m.area) ?? 0) > 8000) { avisadas.set(m.area, t); avisoBreve(`${m.por.nombre || 'Alguien'} cambió ${m.nombre}.`); } // el nombre legible lo manda el servidor (lista blanca): nunca sale un nombre interno
   }
   let toastT = 0;
-  function avisoBreve(t) {
+  function avisoBreve(t, ms = 3500) {
     let e = $('#nubeAviso'); if (!e) { e = document.createElement('div'); e.id = 'nubeAviso'; e.setAttribute('role', 'status'); e.setAttribute('aria-live', 'polite'); document.body.appendChild(e); }
-    e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), 3500);
+    e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), ms);
   }
+  // Los dos párrafos fijos de «Motores y keys» del Estudio hablan de Windows y de un iniciador; en la nube una key es un secreto del repositorio en GitHub. (Los demás textos de keys los cambia la propia página con AO_NUBE.)
+  const TEXTOS_KEYS = ['Cada motor se enciende con su key, guardada como secreto del repositorio en GitHub. Lo que ya está listo sale con ●.', 'La key se guarda una sola vez como secreto del repositorio en GitHub (Settings → Secrets → Actions) y se vuelve a desplegar. Nunca va en un archivo. Pon también un límite de gasto en la web de cada servicio.'];
+  function parchearEstudio() {
+    const ps = document.querySelectorAll('.st-engov .st-hsub'); if (ps.length < 2) return false;
+    ps.forEach((e, i) => { if (TEXTOS_KEYS[i] && !e.dataset.nube) { e.dataset.nube = '1'; e.textContent = TEXTOS_KEYS[i]; } });
+    return true;
+  }
+  if (!parchearEstudio()) { const ob = new MutationObserver(() => { if (parchearEstudio()) ob.disconnect(); }); ob.observe(document.body, { childList: true, subtree: true }); setTimeout(() => ob.disconnect(), 20000); }
+  // «Suscribirme (.ics)» del calendario: la app de calendario de otra empresa (Google, Outlook…) no puede entrar con tu sesión, así que su dirección no le sirve. Aquí se BAJA el archivo con tus rutinas y tareas de hoy.
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest?.('[data-ics]')) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    const a = document.createElement('a'); a.href = '/api/calendar.ics'; a.download = 'oficina.ics'; document.body.appendChild(a); a.click(); a.remove();
+    avisoBreve('Se bajó tu calendario (.ics). Una app de calendario no puede entrar por su dirección a la oficina en la nube: impórtalo, y vuelve a bajarlo cuando quieras ponerlo al día.', 9000);
+  }, true);
 
   // ---------- Ajustes → Mi perfil / Equipo ----------
   function abrirAjustes(tab) {
@@ -201,7 +216,7 @@
   /** Reduce la foto a un cuadrado de 256 px (JPEG) en el navegador: pesa unos 20 KB y nunca pasa del tope del servidor (1 MB). */
   async function reducirFoto(archivo) {
     if (!/^image\/(jpeg|png|webp)$/.test(archivo.type)) throw new Error('Elige una imagen JPEG, PNG o WebP.');
-    const bmp = await createImageBitmap(archivo), lado = Math.min(bmp.width, bmp.height), c = document.createElement('canvas'); c.width = c.height = 256;
+    const bmp = await createImageBitmap(archivo).catch(() => { throw new Error('No se pudo leer esa imagen. Prueba con otra foto (JPEG, PNG o WebP).'); }), lado = Math.min(bmp.width, bmp.height), c = document.createElement('canvas'); c.width = c.height = 256;
     c.getContext('2d').drawImage(bmp, (bmp.width - lado) / 2, (bmp.height - lado) / 2, lado, lado, 0, 0, 256, 256);
     const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.86));
     if (!blob) throw new Error('No se pudo preparar la foto.');

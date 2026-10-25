@@ -28,7 +28,7 @@ test('el Cerebro en la nube: subir, mapa, búsqueda y lectura con la forma de la
   assert.equal((await pedir(manejar, env, '/api/brain')).status, 401);
 
   const vacio = await (await pedir(manejar, env, '/api/brain', { cookie: ck })).json();
-  assert.deepEqual([vacio.nodes, vacio.learned], [[], { w: {}, links: [] }]); // sin mapa: la página conserva el de muestra
+  assert.deepEqual([vacio.nodes, vacio.learned, vacio.vacio], [[], { w: {}, links: [] }, true]); // sin mapa: vacío y marcado, para que la página no enseñe el de muestra
 
   const sub = await pedir(manejar, env, '/api/migrar/notas', { metodo: 'POST', cuerpo: { notas: NOTAS, grafo: GRAFO }, cookie: ck });
   assert.equal(sub.status, 200);
@@ -58,7 +58,7 @@ test('solo un administrador sube el Cerebro; lo que aún no está portado dice 5
   const d1 = crearD1(); await sembrar(d1); const ed = await sembrar(d1, { email: 'ed@x.test', rol: 'editor' }); const env = envDePrueba(d1);
   const ck = await entrar(env, ed);
   assert.equal((await pedir(manejar, env, '/api/migrar/notas', { metodo: 'POST', cuerpo: { notas: NOTAS }, cookie: ck })).status, 403);
-  const r = await pedir(manejar, env, '/api/mcp', { cookie: ck }); // (una ruta que aún no está portada: el panel de conectores de la oficina local)
+  const r = await pedir(manejar, env, '/api/salvapantallas', { cookie: ck }); // (una ruta que ninguna fase ha portado)
   assert.equal(r.status, 501); const cuerpo = await r.json();
   assert.match(cuerpo.error, /todavía no está en la nube/); assert.equal(cuerpo.pendiente, true);
 });

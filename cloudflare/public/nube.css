@@ -40,3 +40,9 @@
 .nb-nom small { display: inline; }
 #setOv .nb-enlace label, #setOv .nb-clave label, #setOv .nb-perfil label { font-size: 13px; font-weight: 600; }
 .nb-clave input, .nb-perfil input[type=text] { width: 100%; }
+/* El rol de cada persona: un campo como los demás de Ajustes (el nativo medía 19 px de alto y no seguía el tema). */
+.nb-fila select { font: 13.5px var(--ui); color: var(--ink); background: var(--cream); border: 1px solid var(--hairline); border-radius: 9px; padding: 5px 9px; min-height: 34px; max-width: 100%; box-sizing: border-box; }
+body.dark .nb-fila select { background: #1B1C21; }
+.nb-fila select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.nb-fila select:disabled { color: var(--grey); }
+[data-nube="nube-perfil"] [data-a="nombre"] { margin: 2px 0 14px; }

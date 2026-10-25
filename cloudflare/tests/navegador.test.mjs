@@ -74,3 +74,62 @@ test('invitacion.js: lo que dice el servidor va como texto; el testigo sale de l
   assert.equal(JSON.parse(vistos.filter((v) => v.ruta === '/api/invitacion/ver').at(-1).cuerpo).testigo, t);
   await ctx.close();
 });
+
+test('nube.js: una foto que no se puede leer y un corte de red se dicen en español (nunca «The source image could not be decoded» ni «Failed to fetch»)', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const yo = { id: 'u1', email: 'a@x.test', rol: 'admin', nombre: 'Ana', color: '#123456', foto: null };
+  let cortar = false;
+  const { p, ctx } = await pagina((ruta) => {
+    if (ruta === '/') return { headers: cuerpoHTML, body: '<!doctype html><body><div id="topbar"><div id="topdock"></div></div><button id="topSettings">x</button><div id="setOv" hidden><div class="sg-tabs"></div><div class="sg-pane"></div></div><script src="/nube.js"></script></body>' };
+    if (ruta === '/nube.js') return { headers: js, body: leer('nube.js') };
+    if (ruta === '/api/yo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usuario: yo }) };
+    if (ruta === '/api/equipo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ yo: 'u1', roles: ['admin'], miembros: [{ ...yo, yo: true, fundador: true }], invitaciones: [] }) };
+    return null;
+  });
+  await p.route('https://oficina.test/api/yo', (r) => (cortar && r.request().method() === 'PATCH' ? r.abort('connectionreset') : r.fallback()));
+  await p.goto('https://oficina.test/'); await p.waitForSelector('#nubeYo');
+  await p.evaluate(() => { const pn = document.querySelector('.sg-pane'); pn.innerHTML = ''; window.AO_AJUSTES_EXTRA.find((t) => t.key === 'nube-perfil').render(pn); });
+  await p.setInputFiles('#nbArchivo', { name: 'rota.png', mimeType: 'image/png', buffer: Buffer.from('esto no es una imagen') });
+  await p.waitForFunction(() => document.querySelector('.nb-msg')?.textContent && document.querySelector('.nb-msg').textContent !== 'Subiendo…');
+  const foto = await p.textContent('.nb-msg');
+  assert.match(foto, /No se pudo leer esa imagen/); assert.doesNotMatch(foto, /source image|decode/i);
+  cortar = true;
+  await p.evaluate(() => document.querySelector('[data-a="nombre"]').click()); await p.waitForFunction(() => /conexión/i.test(document.querySelector('.nb-msg')?.textContent || ''));
+  const red = await p.textContent('.nb-msg'); assert.match(red, /Sin conexión con la oficina/); assert.doesNotMatch(red, /fetch|network/i);
+  await ctx.close();
+});
+
+test('nube.js: «Suscribirme (.ics)» baja el archivo en lugar de copiar una dirección que una app de calendario no puede abrir (pide sesión)', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const yo = { id: 'u1', email: 'a@x.test', rol: 'admin', nombre: 'Ana', color: '#123456', foto: null };
+  const { p, ctx } = await pagina((ruta) => {
+    if (ruta === '/') return { headers: cuerpoHTML, body: '<!doctype html><body><div id="topbar"><div id="topdock"></div></div><button id="topSettings">x</button><div id="setOv" hidden><div class="sg-tabs"></div><div class="sg-pane"></div></div><button data-ics id="ics">Suscribirme</button><script>document.body.addEventListener("click", (e) => { if (e.target.closest("[data-ics]")) window.__copio = 1; });</script><script src="/nube.js"></script></body>' };
+    if (ruta === '/nube.js') return { headers: js, body: leer('nube.js') };
+    if (ruta === '/api/yo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usuario: yo }) };
+    if (ruta === '/api/equipo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ yo: 'u1', roles: ['admin'], miembros: [{ ...yo, yo: true, fundador: true }], invitaciones: [] }) };
+    if (ruta === '/api/calendar.ics') return { headers: { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"' }, body: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n' };
+    return null;
+  });
+  await p.goto('https://oficina.test/'); await p.waitForSelector('#nubeYo');
+  const [bajada] = await Promise.all([p.waitForEvent('download'), p.click('#ics')]);
+  assert.equal(bajada.suggestedFilename(), 'oficina.ics');
+  assert.equal(await p.evaluate(() => window.__copio ?? null), null, 'el manejador de la página (copiar la dirección) no corre');
+  assert.match(await p.textContent('#nubeAviso'), /Se bajó tu calendario/);
+  await ctx.close();
+});
+
+test('nube.js: los párrafos de «Motores y keys» que hablan de Windows dicen lo de la nube (secreto de GitHub), también si el Estudio se pinta después', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const yo = { id: 'u1', email: 'a@x.test', rol: 'admin', nombre: 'Ana', color: '#123456', foto: null };
+  const { p, ctx } = await pagina((ruta) => {
+    if (ruta === '/') return { headers: cuerpoHTML, body: '<!doctype html><body><div id="topbar"><div id="topdock"></div></div><button id="topSettings">x</button><div id="setOv" hidden><div class="sg-tabs"></div><div class="sg-pane"></div></div><script src="/nube.js"></script><script>setTimeout(() => { const d = document.createElement("div"); d.className = "st-engov"; d.innerHTML = \'<p class="st-hsub">Cada motor se enciende con su key, guardada en Windows una sola vez.</p><p class="st-hsub">La key se guarda en Windows una sola vez.</p>\'; document.body.appendChild(d); }, 300);</script></body>' };
+    if (ruta === '/nube.js') return { headers: js, body: leer('nube.js') };
+    if (ruta === '/api/yo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usuario: yo }) };
+    if (ruta === '/api/equipo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ yo: 'u1', roles: ['admin'], miembros: [{ ...yo, yo: true, fundador: true }], invitaciones: [] }) };
+    return null;
+  });
+  await p.goto('https://oficina.test/'); await p.waitForFunction(() => document.querySelector('.st-engov .st-hsub')?.dataset.nube === '1');
+  const t = await p.$$eval('.st-engov .st-hsub', (xs) => xs.map((x) => x.textContent).join(' | '));
+  assert.doesNotMatch(t, /Windows|iniciador/); assert.match(t, /secreto del repositorio en GitHub/);
+  await ctx.close();
+});

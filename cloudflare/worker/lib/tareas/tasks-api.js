@@ -189,7 +189,7 @@ export async function nuevaTarea(serv, { dept, text, team = false, at = null, by
   const r = fijo ? { agent: fijo.id, title: String(tituloFijo || text).slice(0, 90), plan: [], eta: 15, why: 'una ejecución de rutina, movida', needsOk: typeof okFijo === 'boolean' ? okFijo : guessNeedsOk(text) } : await serv.enrutar(dept, String(text).trim());
   const comoEquipo = C.equipos.enabled && (team === true || intencionDeEquipo(text));
   const lead = C.lider(dept);
-  return serv.altaTarea({ dept, agent: comoEquipo ? lead.id : r.agent, title: extra.title || r.title, text, plan: r.plan, eta: r.eta, why: comoEquipo ? `team — ${lead.name} splits it across the desks` : r.why, by,
+  return serv.altaTarea({ dept, agent: comoEquipo ? lead.id : r.agent, title: extra.title || r.title, text, plan: r.plan, eta: r.eta, why: comoEquipo ? `En la nube un equipo todavía trabaja como su jefe: ${lead.name} lo hace solo (repartirlo entre los escritorios sigue en la oficina de tu computadora)` : r.why, by,
     model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: comoEquipo ? { lead: lead.id, asked: team === true ? (by === 'you' ? 'you' : by) : 'text' } : undefined,
     // En la nube la herramienta de envío NO se ofrece fuera de una ejecución aprobada (agentes/herramientas.js), así que un agente no puede «intentar» enviar y que el guardián lo
     // detenga, como en local: sin esto, «Responde a Ana…» terminaría como «hecha» con solo un texto y nada pediría el OK. Si el enrutador (o el propio dueño) dice que lleva OK, nace pidiéndolo.
