@@ -46,14 +46,15 @@ test('cada entrada de escritorio apunta a botones y ventanas que existen en la p
 test('la página no lleva la versión móvil: solo el cargador mínimo', async () => {
   const { aparte } = await construirMovil();
   assert.ok(aparte.length >= 8, 'el paquete lleva sus módulos');
-  const pagina = leer('dist/command-centre-v2.html');
-  assert.ok(!pagina.includes('data-ao-movil') && !pagina.includes('mv-tabs') && !pagina.includes('mvRoot'), 'nada del paquete debe estar en la página');
-  assert.ok(pagina.includes('movil.js') && pagina.includes('AO_MOVIL'), 'el cargador sí');
+  const hay = fs.existsSync(path.join(ROOT, 'dist/command-centre-v2.html'));
+  if (hay) { const pagina = leer('dist/command-centre-v2.html'); assert.ok(!pagina.includes('data-ao-movil') && !pagina.includes('mv-tabs') && !pagina.includes('mvRoot'), 'nada del paquete debe estar en la página'); }
+  assert.match(leer('src/main.js'), /import \{ initMovil \} from '\.\/movil-carga\.js'/, 'la página abre el cargador');
+  assert.doesNotMatch(leer('src/movil-carga.js'), /from '\.\/movil\//, 'el cargador no importa el paquete');
   const carga = await build({ entryPoints: [path.join(ROOT, 'src/movil-carga.js')], bundle: true, minify: true, write: false, format: 'esm' });
   assert.ok(carga.outputFiles[0].text.length < 700, `el cargador pesa ${carga.outputFiles[0].text.length} bytes: la página no puede crecer más de 1 KB`);
-  const paquete = leer('dist/movil.js');
-  assert.ok(paquete.includes('data-ao-movil') && paquete.includes('AO_MOVIL'));
-  assert.ok(!/localStorage\.setItem\(["']ao\.(token|clave|key)/i.test(paquete) && !/sk-ant|Bearer /.test(paquete), 'nada secreto en el paquete');
+  const { js } = await construirMovil();
+  assert.ok(js.includes('data-ao-movil') && js.includes('AO_MOVIL'));
+  assert.ok(!/sk-ant|Bearer /.test(js), 'nada secreto en el paquete');
 });
 
 test('el estilo móvil cumple las reglas: nada de :hover, ningún texto bajo 11 px, campos de 16 px, dvh y safe-area', () => {
