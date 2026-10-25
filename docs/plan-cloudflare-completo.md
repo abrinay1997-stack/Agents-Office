@@ -25,7 +25,7 @@ Decisión del dueño (25 oct 2026): llevar **toda** la oficina a Cloudflare con 
 | 3 ✅ | **Tareas, rutinas y calendario** (hecha el 25 oct: ver docs/cloudflare.md → Fase 3): `tareas/almacen` a D1, rutinas con el cron, calendario | Ya hay modelo puro y tests |
 | 4 ✅ | **Agentes completos** (hecha el 25 oct; ver `docs/cloudflare.md` → «Fase 4»): bucle de herramientas en el Worker con cliente MCP propio y el guardián (`safety.mjs`), aprobaciones, calidad, costos | Aquí vuelven los candados por llamada. Faltan: Teams, Anuncios/Biblioteca/Bandeja como herramientas, Telegram y KPI (fase 6) |
 | 5 ✅ | **Contenido y publicación en Meta** desde el cron; Analíticas (hecha el 25 oct, sin la Bandeja; ver `docs/cloudflare.md` → «Fase 5») | Núcleos puros compartidos con la oficina local; nada probado contra Meta real |
-| 6 | **Dimitri**, Negocio, Ajustes, Telegram (webhook nativo), disparadores | Los webhooks encajan de serie en Workers |
+| 6 ✅ | **Dimitri**, Negocio, Ajustes, Telegram (webhook nativo), disparadores (hecha el 25 oct; ver `docs/cloudflare.md` → «Fase 6») | Los webhooks encajan de serie en Workers. Faltan: lotes de fotos por Dimitri, leer webs, PDF/Word/Excel en la nube (script local) |
 | 7 ✅ | **Anuncios de Meta y la Bandeja** (hecha el 25 oct, ver «Anuncios de Meta y la Bandeja en la nube» en `docs/cloudflare.md`) | Con el freno por uso y la regla del dinero; necesita Workers de pago |
 | 8 | **Estudio** (imagen, video, voz, lotes): R2 + colas | Lo más pesado, al final. **8a ✅ (25 oct): el núcleo** (galería en R2, trabajos por pasos, motores, topes, voces). Falta: presets, lotes, escenario 3D, entender video y lo que usa `sharp` |
 | 9 | **Apagar lo local**: migración final y la oficina de la computadora pasa a ser opcional | |

@@ -10,8 +10,11 @@ import * as almacen from './almacen.js';
 import { servirPagina } from './paginas.js';
 import { MODULOS } from '../modulos/index.js';
 import { instalarZona } from './zona.js';
+import { saludPublica, saludRica, checksDeModulos, completarEstado, marcarAvisosLeidos } from './salud.js';
 
 export const VERSION = '0.1.0';
+/** Lo único que se contesta sin sesión además de /api/health y /api/acceso: webhooks de otros sistemas, cada uno con su propio secreto (ver `publica` en los módulos). */
+export const RUTAS_PUBLICAS = ['/api/hook/', '/api/telegram/', '/api/kpi/'];
 
 /** Una escritura solo vale si viene de esta misma página (defensa extra sobre SameSite=Lax). */
 function origenValido(req) {
@@ -39,6 +42,13 @@ export async function manejar(req, env, exec = null) {
     if (u && ruta.startsWith('/media/')) { const m = { req, env, db, usuario: u, url, ruta, json, error, prohibido, cuerpo, uuid, ahora }; for (const mod of MODULOS) { const r = await mod.manejar(m); if (r) return r; } }
     return servirPagina(req, env, u);
   }
+  // Los webhooks de otros sistemas (Telegram, los disparadores, los indicadores): SIN sesión (y sin mirar el Origin: un formulario de otra web los llama), cada uno con SU secreto, que el módulo comprueba ANTES de abrir nada (D1, el cuerpo…).
+  // Solo estos prefijos llegan a `publica`; cualquier otra ruta sin sesión es 401.
+  if (RUTAS_PUBLICAS.some(p => ruta.startsWith(p))) {
+    for (const mod of MODULOS) { if (typeof mod.publica !== 'function') continue; const r = await mod.publica({ req, env, db, url, ruta, exec, json, error, uuid, ahora }); if (r) return r; }
+    return error('Ruta no encontrada', 404);
+  }
+
   if (!origenValido(req)) return error('Origen no permitido', 403);
 
   // El único endpoint público además de /api/health y /api/acceso: el webhook de conversiones (Zapier, tu tienda, n8n). SIN sesión, con su propio token
@@ -48,8 +58,12 @@ export async function manejar(req, env, exec = null) {
     if (mod) return mod.webhookConversiones(req, env, exec);
   }
 
-  if (ruta === '/api/health' && req.method === 'GET')
-    return json({ ok: true, version: VERSION, ia: !!env.ANTHROPIC_API_KEY || !!(env.META_API_KEY || env.MODEL_API_KEY) });
+  // /api/health: sin sesión, lo mínimo; con sesión, lo que la página necesita para dibujarse con los datos de ESTA oficina (el nombre de la empresa, Dimitri, el roster…).
+  if (ruta === '/api/health' && req.method === 'GET') {
+    const u = await usuarioDeLaPeticion(db, req); // sin cookie no toca D1
+    if (!u || u.rol === 'lectura') return json(saludPublica(env, VERSION));
+    return json(await saludRica({ req, env, db, usuario: u, url, ruta }, MODULOS));
+  }
 
   if (ruta === '/api/acceso' && req.method === 'POST') {
     const b = await cuerpo(req);
@@ -143,7 +157,14 @@ export async function manejar(req, env, exec = null) {
   // ---- Los módulos de cada fase del puerto (worker/modulos/): el primero que reconoce la ruta la contesta ----
   const waitUntil = p => { try { exec?.waitUntil?.(Promise.resolve(p).catch(() => {})); } catch { /* sin ctx (pruebas): el módulo espera él mismo */ } return !!exec?.waitUntil; }; // devuelve si se pudo dejar en segundo plano
   const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora, waitUntil };
-  for (const mod of MODULOS) { const r = await mod.manejar(ctx); if (r) return r; }
+  for (const mod of MODULOS) {
+    const r = await mod.manejar(ctx);
+    if (!r) continue;
+    // El semáforo y los avisos juntan lo de todos los módulos (cada uno aporta sus `checks` en `salud(ctx)`; los avisos de Contenido y Anuncios viven en otro sitio).
+    if (ruta === '/api/status' && req.method === 'GET' && r.ok) return completarEstado(r, await checksDeModulos(ctx, MODULOS), db);
+    if (ruta === '/api/notices/read' && req.method === 'POST' && r.ok) await marcarAvisosLeidos(db);
+    return r;
+  }
 
   // Lo que la oficina local hace y la nube todavía no: un aviso claro en español, nunca un error mudo (docs/plan-cloudflare-completo.md).
   return json({ error: 'Esto todavía no está en la nube: sigue en la oficina de tu computadora.', pendiente: true }, 501);

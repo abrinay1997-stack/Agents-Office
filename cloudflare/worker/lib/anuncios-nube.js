@@ -227,7 +227,8 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined
   };
   const bandejaLect = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: bandejaAbiertaAt, tokens });
   const hookOk = (req) => { const t = String(env.AO_HOOK_TOKEN || ''); if (!t) return false; const dado = req.headers['x-office-token'] || String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''); return igualSeguro(String(dado), t); }; // solo cabecera: una dirección con el token queda en los registros
-  const rutas = (syncRuta, json, body) => crearRutasAnuncios({ sync: syncRuta, meta, json, body, acciones: acc, alHacer: () => {}, ahora, borradores: borr, creador, mejorar, sugerencias: sug, aplicador, impulsor, informe, indicadores: ind, conversiones: conv, bandeja: bandejaLect, hookOk });
+  const marcasDimitri = []; // el segundo clic del dueño sobre un gasto que propuso Dimitri: su tarjeta queda hecha al cerrar la petición (fase 6)
+  const rutas = (syncRuta, json, body) => crearRutasAnuncios({ sync: syncRuta, meta, json, body, acciones: acc, alHacer: (x) => { marcasDimitri.push(x); }, ahora, borradores: borr, creador, mejorar, sugerencias: sug, aplicador, impulsor, informe, indicadores: ind, conversiones: conv, bandeja: bandejaLect, hookOk });
 
   const tras = () => trasSondeo({ sync, sug, piloto, umbrales, cpa: () => cpaObjetivo({ ajuste: aj().cpaObjetivo, cifras: preload.cifras || [] }), publicaciones: () => preload.publicaciones || [],
     avisarUmbrales: (U) => { for (const p of U.problemas) console.warn('anuncios (umbrales):', p); },
@@ -241,6 +242,7 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined
     if (bandejaLect.abiertaAtAhora() - bandejaAbiertaAt > 60e3) await guardarDoc(db, DOC_BANDEJA_ABIERTA, { at: bandejaLect.abiertaAtAhora() });
     if (estadoKpis.sucio) await guardarDoc(db, 'kpis', estadoKpis.v);
     for (const t of tareasNuevas.splice(0)) await guardarFila(db, 'tareas', t.id, t, ahora());
+    if (marcasDimitri.length) { const { marcarOpAnuncio } = await import('./dimitri/ops.js'); for (const x of marcasDimitri.splice(0)) await marcarOpAnuncio(db, x).catch(() => {}); }
   }
   return { meta, ads, sync, acc, borr, creador, sug, piloto, impulsor, conv, ind, informe, aplicador, bandeja: bandejaLect, galeria, rutas, tras, cerrar, umbrales, pendiente, tokens, estadoKpis };
 }

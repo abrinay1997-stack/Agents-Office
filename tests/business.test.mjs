@@ -26,5 +26,5 @@ test('the office\'s own figures', () => {
 test('num reads the ways people write a figure', () => {
   const { num } = B;
   assert.equal(num('1.200'), 1200); assert.equal(num('1,200'), 1200); assert.equal(num('1.250,50'), 1250.5); assert.equal(num('1,250.50'), 1250.5);
-  assert.equal(num('US$ 3.400.000'), 3400000); assert.equal(num('0,5'), 0.5); assert.equal(num('12.5'), 12.5); assert.equal(num(42), 42); assert.equal(num('abc'), null); assert.equal(num(''), null);
+  assert.equal(num('US$ 3.400.000'), 3400000); assert.equal(num('0,5'), 0.5); assert.equal(num('12.5'), 12.5); assert.equal(num(42), 42); assert.equal(num('abc'), null); for (const malo of ['1e999', '12abc', '5-3', '--5']) assert.equal(num(malo), null, malo); assert.equal(num(''), null);
 });
