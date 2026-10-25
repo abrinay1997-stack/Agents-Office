@@ -115,3 +115,18 @@ test('destinatarios: una dirección se compara COMPLETA (no por subcadena) y los
   assert.deepEqual(S.unknownTargets(S.targetsOf({ to: 'info@café.com' }), 'Para: info@café.com'), []);
   assert.deepEqual(S.unknownTargets(S.targetsOf({ to: 'evil@café.com' }), 'Para: info@café.com'), ['evil@café.com'], 'un dominio con tilde ya no se escapa del control');
 });
+
+test('destinatarios: un número local escrito solo con dígitos, en un campo de teléfono, también se cuenta (antes pasaba la lista del borrador)', () => {
+  const aprobado = 'Borrador para Ana, +507 6123-4567. Hola Ana, tu pedido sale hoy.';
+  for (const campo of ['to', 'phone', 'telefono', 'number', 'msisdn', 'wa_id', 'recipient', 'celular']) {
+    assert.deepEqual(S.targetsOf({ [campo]: '69990000', text: 'hola' }).phones, ['69990000'], campo);
+    assert.deepEqual(S.unknownTargets(S.targetsOf({ [campo]: '69990000', text: 'hola' }), aprobado), ['69990000'], campo + ': bloqueado');
+    assert.deepEqual(S.unknownTargets(S.targetsOf({ [campo]: '61234567', text: 'hola' }), aprobado), [], campo + ': el aprobado, en dígitos, pasa');
+  }
+  assert.deepEqual(S.targetsOf({ to: ['69990000', 61234567], body: { recipients: [{ phone: '50769990000' }] } }).phones.sort(), ['50769990000', '61234567', '69990000']);
+  assert.deepEqual(S.targetsOf({ to: 'ana@x.com' }).phones, [], 'un correo no es un teléfono');
+  assert.deepEqual(S.targetsOf({ order_id: '12345', amount: 1234567, text: 'x' }).phones, [], 'un id o un importe corto en otro campo no cuenta');
+  const d = S.decide('mcp__whatsapp__send_message', { to: '69990000', text: 'hola' }, { writes: true, known: aprobado, safety: {}, runMode: 'approve' });
+  assert.equal(d.allow, false); assert.equal(d.code, 'recipient');
+  assert.equal(S.decide('mcp__whatsapp__send_message', { to: '61234567', text: 'hola' }, { writes: true, known: aprobado, safety: {}, runMode: 'approve' }).allow, true, 'el control: el número aprobado sí');
+});

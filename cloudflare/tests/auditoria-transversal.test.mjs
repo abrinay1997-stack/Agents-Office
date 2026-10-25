@@ -315,7 +315,7 @@ test('SECRETOS: aunque un proveedor repita la cabecera o la llave en su error, n
   const S = { ANTHROPIC_API_KEY: 'SENT_ANTH_0123456789abcdef', MINIMAX_API_KEY: 'SENT_MINIMAX_0123456789abcdef', MCP_X_TOKEN: 'SENT_MCP_0123456789abcdef', META_APP_SECRET: 'SENT_APP_0123456789abcdef' };
   const o = await oficina(S);
   const real = globalThis.fetch;
-  globalThis.fetch = async (u, init) => new Response(JSON.stringify({ error: { message: `rechazado ${u?.url ?? u} ${JSON.stringify(init?.headers ?? {})} Bearer abcdefghijklmnop1234 ${LLAVE_FALSA}` }, base_resp: { status_code: 1004, status_msg: `${JSON.stringify(init?.headers ?? {})}` } }), { status: 400 });
+  globalThis.fetch = async (u, init) => new Response(JSON.stringify({ error: { message: `rechazado ${u?.url ?? u} ${JSON.stringify(init?.headers ?? {})} Bearer abcdefghijklmnop1234 ${LLAVE_FALSA}` } }), { status: 400 });
   try {
     const respuestas = [
       await o.admin('POST', '/api/agentes/olead/ejecutar', { texto: 'hola' }),
