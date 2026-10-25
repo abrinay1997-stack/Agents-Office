@@ -21,7 +21,7 @@
 
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "agents-office-contenido" }],
 
-  "vars": { "AI_MODELO": "claude-sonnet-5-5" },
+  "vars": { "AI_MODELO": "claude-sonnet-5-5", "CONTENIDO_MAX_LLAMADAS": "40", "CONTENIDO_MAX_CONSULTAS": "40", "CONTENIDO_MAX_ACCIONES": "6" },
 
   "triggers": { "crons": ["* * * * *"] },
   "workers_dev": true,

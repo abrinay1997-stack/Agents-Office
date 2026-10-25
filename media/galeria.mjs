@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import * as GF from '../src/galeria-filtro.js'; // INF-03: qué ficha entra en una vista, igual en el servidor y en la página
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
+import { slug, dims, AUDIO_EXT, MONTH_RE, FILE_RE, cleanName, BIN_RE, BIN_DAYS, UPLOAD, MAGIC, zipFiles } from './galeria-core.mjs'; // 25 oct 2026: lo puro, compartido con la nube
 
 let root = '';
 export const dir = () => root;
@@ -18,23 +19,13 @@ export function startIndex(dataDir, warmIt = true) {
 }
 
 /* ---------- storage ---------- */
-export const slug = t => String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'imagen';
-function dims(b, ext) { // width × height from the file header (png, jpg, webp, our svg) — the gallery lays out at the true ratio
-  try {
-    if (ext === 'png' && b.readUInt32BE(12) === 0x49484452) return [b.readUInt32BE(16), b.readUInt32BE(20)];
-    if (ext === 'jpg') { let i = 2; while (i + 9 < b.length) { if (b[i] !== 0xFF) return null; const mk = b[i + 1]; if (mk >= 0xC0 && mk <= 0xCF && ![0xC4, 0xC8, 0xCC].includes(mk)) return [b.readUInt16BE(i + 7), b.readUInt16BE(i + 5)]; i += 2 + b.readUInt16BE(i + 2); } }
-    if (ext === 'webp' && b.toString('ascii', 8, 12) === 'WEBP') { const t = b.toString('ascii', 12, 16); if (t === 'VP8X') return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)]; if (t === 'VP8 ') return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff]; if (t === 'VP8L') { const n = b.readUInt32LE(21); return [1 + (n & 0x3fff), 1 + ((n >> 14) & 0x3fff)]; } }
-    if (ext === 'svg') { const m = /width="(\d+)" height="(\d+)"/.exec(b.toString('utf8', 0, 400)); if (m) return [+m[1], +m[2]]; }
-  } catch {}
-  return null;
-}
+export { slug, MAGIC, AUDIO_EXT, BIN_DAYS };
 /** A name is taken while its file, its record, or its copy in the bin exists — a restore never collides with a new picture. */
 function taken(folder, name, ext) {
   if (fs.existsSync(path.join(folder, name + '.' + ext)) || fs.existsSync(path.join(folder, name + '.json'))) return true;
   const bin = path.join(root, '.papelera'); if (!fs.existsSync(bin)) return false;
   const tail = '-' + name + '.'; return fs.readdirSync(bin).some(f => f.includes(tail));
 }
-export const AUDIO_EXT = ['mp3', 'wav', 'flac', 'm4a', 'ogg']; // V4.10: MiniMax answers flac too; a voice to clone may come as m4a
 let lastAt = 0;
 export function store(buf, ext, meta) {
   const d = new Date(), sub = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -58,7 +49,6 @@ export function store(buf, ext, meta) {
 const foldersFile = () => path.join(root, 'folders.json');
 function readFolders() { try { const j = JSON.parse(fs.readFileSync(foldersFile(), 'utf8')); return Array.isArray(j.folders) ? j.folders.filter(f => f && /^c[a-z0-9]{4,20}$/.test(f.id) && typeof f.name === 'string') : []; } catch { return []; } }
 function writeFolders(l) { fs.mkdirSync(root, { recursive: true }); const f = foldersFile(); fs.writeFileSync(f + '.tmp', JSON.stringify({ folders: l }, null, 1)); renombrar(f + '.tmp', f); }
-const cleanName = n => String(n ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
 /** The folders, with how many files each holds (the ones in the bin do not count). */
 export function folders(items = index().sorted, fl = readFolders()) { // INF-03: the index itself (read only), never a copy of 5,000 records per request
   const count = new Map(); for (const it of items) if (it.folder) count.set(it.folder, (count.get(it.folder) || 0) + 1);
@@ -95,7 +85,6 @@ export function moveTo(files, folder) {
    month folder is read once and kept with its folder's mtime; a month is read again only when that mtime moves (a file
    added, removed or renamed from outside, e.g. in the Explorer), and the office's own writes patch the index in place.
    The API is the same: list() hands back copies, never the index's own objects. */
-const MONTH_RE = /^\d{4}-\d{2}$/;
 let IDX = { root: '', months: new Map(), sorted: null, rev: 0, counts: null };
 const mtimeOf = d => { try { return fs.statSync(d).mtimeMs; } catch { return -1; } };
 /** INF-03: is the record's file there? From the folder's own listing (one readdir), not one existsSync per file: 5,000 of them took seconds. */
@@ -210,7 +199,6 @@ export function query({ q = '', filter = 'all', folder = 'all', kind = null, bef
   if (!X.counts || X.countsSig !== sig) { X.counts = GF.counts(X.sorted, ids); X.countsSig = sig; }
   return { items: page.map(it => ({ ...it })), total, next: more && page.length ? GF.cursorOf(page[page.length - 1]) : null, counts: { ...X.counts }, folders: folders(X.sorted, fl), rev: X.rev, ...(far ? { hit: { ...far }, hitAt: farAt } : {}) };
 }
-const FILE_RE = /^\d{4}-\d{2}\/[^/\\]+\.(png|jpe?g|webp|svg|mp4|webm|mp3|wav|flac|m4a|ogg)$/i; // V4.8: audio too, for Muse Spark to transcribe; V4.10: flac, m4a, ogg
 /** A path inside the studio, or null (never outside it: the id comes from the request). */
 export function resolve(id) {
   const rel = String(id || '').replace(/\\/g, '/');
@@ -247,8 +235,6 @@ export function restore({ id, bin } = {}) {
   return true;
 }
 /* V4.4 (25 Sep 2026): the bin, seen from the page — what is in it, its picture, how many days it has left, back or gone for good */
-const BIN_RE = /^(\d{12,})-([^/\\]+)$/;
-export const BIN_DAYS = 30;
 const binDir = () => path.join(root, '.papelera');
 /** Everything in the bin, newest first: one entry per thrown-away file (its record beside it). */
 export function trashList() {
@@ -274,8 +260,6 @@ export function purge({ bin, all } = {}) {
   return n;
 }
 /* uploads: the owner's own photos and videos, to use as a reference or a first frame (never svg: it could carry script) */
-const UPLOAD = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/webm': 'webm', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/flac': 'flac', 'audio/x-flac': 'flac', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/m4a': 'm4a' }; // V4.8: mp3/wav, for transcribing; V4.10: flac, m4a (a voice to clone)
-export const MAGIC = { png: b => b.length > 8 && b.readUInt32BE(0) === 0x89504E47, jpg: b => b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF, webp: b => b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP', mp4: b => b.toString('ascii', 4, 8) === 'ftyp', webm: b => b.length > 4 && b.readUInt32BE(0) === 0x1A45DFA3 , mp3: b => b.length > 3 && (b.toString('ascii', 0, 3) === 'ID3' || (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0)), wav: b => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WAVE', flac: b => b.length > 4 && b.toString('ascii', 0, 4) === 'fLaC', m4a: b => b.length > 8 && b.toString('ascii', 4, 8) === 'ftyp' };
 export function upload({ name, data, folder } = {}) {
   const m = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(String(data || ''));
   if (!m) throw new Error('el archivo no llegó bien');
@@ -288,8 +272,6 @@ export function upload({ name, data, folder } = {}) {
   return store(buf, ext, { prompt: title, provider: 'subida', model: '', by: 'you', upload: true, agent: null, task: null, ...(folder && folderOf(folder) ? { folder } : {}) }); // V4.6: into the folder the owner is looking at
 }
 /** Several files in one .zip (stored, not compressed: images and video are already compressed). */
-const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
-const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
 export function zip(ids) {
   const files = [], seen = new Set(); let total = 0;
   for (const id of (Array.isArray(ids) ? ids : []).slice(0, 200)) {
@@ -298,18 +280,7 @@ export function zip(ids) {
     let name = path.basename(p); for (let n = 2; seen.has(name); n++) name = path.basename(p).replace(/(\.[^.]+)$/, `-${n}$1`); seen.add(name);
     files.push({ name, data });
   }
-  const d = new Date(), dt = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dd = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
-  const parts = [], central = []; let off = 0;
-  for (const f of files) {
-    const nm = Buffer.from(f.name, 'utf8'), crc = crc32(f.data), sz = f.data.length;
-    const h = Buffer.alloc(30); h.writeUInt32LE(0x04034b50, 0); h.writeUInt16LE(20, 4); h.writeUInt16LE(0x0800, 6); h.writeUInt16LE(0, 8); h.writeUInt16LE(dt, 10); h.writeUInt16LE(dd, 12); h.writeUInt32LE(crc, 14); h.writeUInt32LE(sz, 18); h.writeUInt32LE(sz, 22); h.writeUInt16LE(nm.length, 26); h.writeUInt16LE(0, 28);
-    parts.push(h, nm, f.data);
-    const c = Buffer.alloc(46); c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(20, 6); c.writeUInt16LE(0x0800, 8); c.writeUInt16LE(0, 10); c.writeUInt16LE(dt, 12); c.writeUInt16LE(dd, 14); c.writeUInt32LE(crc, 16); c.writeUInt32LE(sz, 20); c.writeUInt32LE(sz, 24); c.writeUInt16LE(nm.length, 28); c.writeUInt32LE(off, 42);
-    central.push(c, nm); off += 30 + nm.length + sz;
-  }
-  const cd = Buffer.concat(central), e = Buffer.alloc(22);
-  e.writeUInt32LE(0x06054b50, 0); e.writeUInt16LE(files.length, 8); e.writeUInt16LE(files.length, 10); e.writeUInt32LE(cd.length, 12); e.writeUInt32LE(off, 16);
-  return { buf: Buffer.concat([...parts, cd, e]), count: files.length };
+  return zipFiles(files);
 }
 /** A file the owner used (as a reference, in a piece, on the calendar): its record says how. */
 const USES = ['ref', 'pieza', 'calendario'];

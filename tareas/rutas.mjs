@@ -10,7 +10,7 @@ import { ciclo, limpiar, desbloqueadas, pendientes, siguientes } from './depende
 import { colocar } from './orden.mjs';
 import { agenda, agendaTexto } from './agenda.mjs';
 import { progresoProyecto } from './progreso.mjs';
-import { COLORES, ESTADOS_PROYECTO } from './catalogo.mjs';
+import { COLORES, ESTADOS_PROYECTO } from './catalogo-core.mjs'; // (la parte sin fs: el Worker de Cloudflare importa estas rutas)
 import { resumenTareas } from './resumen.mjs';
 import { iniciar as iniciarCrono, parar as pararCrono, activo as activoCrono } from './cronometro.mjs';
 import { DUENO, esDelDueno, dia } from './dueno.mjs';

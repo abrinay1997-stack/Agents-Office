@@ -9,6 +9,7 @@ import * as cerebro from './cerebro.js';
 import * as almacen from './almacen.js';
 import { servirPagina } from './paginas.js';
 import { MODULOS } from '../modulos/index.js';
+import { instalarZona } from './zona.js';
 
 export const VERSION = '0.1.0';
 
@@ -19,11 +20,25 @@ function origenValido(req) {
   return !o || o === new URL(req.url).origin;
 }
 
-export async function manejar(req, env) {
+/** El reloj de cada minuto (lo que en serve.mjs eran setInterval). La zona de la oficina se instala aquí, UNA vez, igual que en `manejar`: los módulos no la tocan. */
+export async function correrReloj(env) {
+  instalarZona(env.ZONA_HORARIA);
+  await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
+  // Un módulo que falle no tumba a los demás.
+  for (const mod of MODULOS) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
+}
+
+export async function manejar(req, env, exec = null) {
+  instalarZona(env.ZONA_HORARIA); // la hora «local» de las reglas de la oficina es la de su zona (lib/zona.js), no la UTC del Worker
   const url = new URL(req.url);
   const ruta = url.pathname;
   const db = env.DB;
-  if (!ruta.startsWith('/api/')) return servirPagina(req, env, await usuarioDeLaPeticion(db, req));
+  if (!ruta.startsWith('/api/')) {
+    const u = await usuarioDeLaPeticion(db, req);
+    // /media/<archivo> (el Estudio: lo que la página pide para ver cada imagen) lo sirve el módulo que lo posee, solo con sesión
+    if (u && ruta.startsWith('/media/')) { const m = { req, env, db, usuario: u, url, ruta, json, error, prohibido, cuerpo, uuid, ahora }; for (const mod of MODULOS) { const r = await mod.manejar(m); if (r) return r; } }
+    return servirPagina(req, env, u);
+  }
   if (!origenValido(req)) return error('Origen no permitido', 403);
 
   if (ruta === '/api/health' && req.method === 'GET')
@@ -119,7 +134,8 @@ export async function manejar(req, env) {
     return json({ ok: true });
   }
   // ---- Los módulos de cada fase del puerto (worker/modulos/): el primero que reconoce la ruta la contesta ----
-  const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora };
+  const waitUntil = p => { try { exec?.waitUntil?.(Promise.resolve(p).catch(() => {})); } catch { /* sin ctx (pruebas): el módulo espera él mismo */ } return !!exec?.waitUntil; }; // devuelve si se pudo dejar en segundo plano
+  const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora, waitUntil };
   for (const mod of MODULOS) { const r = await mod.manejar(ctx); if (r) return r; }
 
   // Lo que la oficina local hace y la nube todavía no: un aviso claro en español, nunca un error mudo (docs/plan-cloudflare-completo.md).

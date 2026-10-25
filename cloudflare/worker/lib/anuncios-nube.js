@@ -178,7 +178,7 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined
   const avisar = (texto, o) => avisos.avisar('anuncios', texto, o);
   const auditar = (quien) => (a) => avisos.auditar(quien, a);
   const meta = crearMeta({ env, fetchFn: elFetch(fetchFn), dir: dirMeta, ahora });
-  meta.frenoRestaurar(freno);
+  meta.ponerFreno(freno);
   const adsBase = crearMetaAds({ meta });
   // antes de cada llamada que ESCRIBE en Meta, se vuelca a D1 lo apuntado (el diario de la creación, el testigo del envío)
   const ads = Object.fromEntries(Object.entries(adsBase).map(([k, f]) => [k, ESCRIBEN.has(k) ? async (...a) => { await esp.flush(); return f(...a); } : f]));
@@ -252,7 +252,7 @@ export function construirBandeja({ esp, cfg, meta, ahora = () => Date.now(), avi
 const FRENO_LIBRE = { pct: 0, hasta: 0, vistoAt: null, motivo: '' };
 /** El freno por uso de Meta cruza peticiones: se guarda solo si cambió (un panel abierto pide datos cada pocos segundos). */
 async function guardarFreno(db, meta, antes) {
-  const ahoraF = meta.frenoEstado(), previo = antes && typeof antes === 'object' ? { ...FRENO_LIBRE, ...antes } : FRENO_LIBRE;
+  const ahoraF = meta.freno(), previo = antes && typeof antes === 'object' ? { ...FRENO_LIBRE, ...antes } : FRENO_LIBRE;
   if (JSON.stringify(ahoraF) !== JSON.stringify({ pct: Number(previo.pct) || 0, hasta: Number(previo.hasta) || 0, vistoAt: previo.vistoAt || null, motivo: String(previo.motivo || '') })) await guardarDoc(db, DOC_FRENO, ahoraF);
 }
 export async function estadoGuardado(db, docs = null) {
@@ -286,7 +286,7 @@ export async function conBandeja({ db, env, fetchFn, ahora = () => Date.now() },
   const { cfg, guardado } = await leerInicio(db), avisos = crearAvisos(db, { ahora });
   return conEspejo(db, ESPEJO_BANDEJA, async (esp) => {
     const meta = crearMeta({ env, fetchFn: elFetch(fetchFn), dir: esp.ruta(DIR_ANALITICAS), ahora });
-    meta.frenoRestaurar(guardado.freno);
+    meta.ponerFreno(guardado.freno);
     const bandeja = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: guardado.bandejaAbiertaAt, tokens: tokensD1(db, { ahora }) });
     let r, fallo = null;
     try { r = await fn({ bandeja, meta, esp, cfg, avisos }); } catch (e) { fallo = e; }
