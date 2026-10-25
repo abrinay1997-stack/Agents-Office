@@ -397,3 +397,18 @@ test('LÍMITES: el tope general del cuerpo (12 MB) no corta las subidas de archi
   const grande = await o.admin('POST', '/api/migrar/filas', { coleccion: 'avisos', filas: [{ id: 'x', valor: { t: 'x'.repeat(13_000_000) } }] });
   assert.equal(grande.status, 422, 'el resto de las rutas sí cortan a 12 MB (cuerpo ilegible → colección o filas no válidas)');
 });
+
+test('RENDIMIENTO: la oficina (2 MB) vuelve a llevar ETag aunque el Worker le inyecte lo de la nube: la recarga sin cambios es un 304', { skip: SALTAR }, async () => {
+  const d1 = crearD1(); const c = await sembrar(d1);
+  let version = '"v1"';
+  const env = { ...envDePrueba(d1), ASSETS: { fetch: async (req) => new Response(new URL(req.url).pathname === '/login.html' ? '<html><body>ACCESO</body></html>' : '<html><body>OFICINA</body></html>', { headers: { 'content-type': 'text/html', etag: version, 'cache-control': 'private, no-cache' } }) } };
+  const cookie = (await pedir(manejar, env, '/api/acceso', { metodo: 'POST', cuerpo: { email: c.email, contrasena: c.clave } })).headers.get('set-cookie').split(';')[0];
+  const ver = (h = {}) => manejar(new Request('https://oficina.test/', { headers: { cookie, ...h } }), env);
+  const a = await ver(); const etag = a.headers.get('etag');
+  assert.equal(a.status, 200); assert.match(await a.text(), /nube\.js/); assert.match(etag, /^W\/"v1-nube1"$/);
+  const b = await ver({ 'if-none-match': etag }); assert.equal(b.status, 304); assert.equal(await b.text(), ''); assert.equal(b.headers.get('etag'), etag);
+  version = '"v2"'; // un despliegue nuevo cambia el ETag de Cloudflare y con él el nuestro
+  const c2 = await ver({ 'if-none-match': etag }); assert.equal(c2.status, 200); assert.match(c2.headers.get('etag'), /v2-nube1/);
+  const sinSesion = await manejar(new Request('https://oficina.test/', { headers: { 'if-none-match': etag } }), env);
+  assert.equal(sinSesion.status, 200, 'sin sesión nunca se contesta 304 de la oficina: se ve el acceso'); assert.ok(!/OFICINA/.test(await sinSesion.text()));
+});

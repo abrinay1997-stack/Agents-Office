@@ -7,10 +7,17 @@ const NUBE = new Set(['/nube.js', '/nube.css']); // lo que solo existe en la nub
 const INYECCION = '<link rel="stylesheet" href="/nube.css"><script src="/nube.js" defer></script>';
 
 /** La oficina real con las dos líneas de la nube añadidas al final del <body>. La página local NO las lleva: sin Worker no hay presencia ni equipo. */
-async function conNube(resp) {
+async function conNube(resp, req) {
   if (!resp.ok || !/html/.test(resp.headers.get('content-type') || '')) return resp;
   const h = new Headers(resp.headers); h.delete('content-length'); h.delete('etag');
-  if (typeof HTMLRewriter !== 'undefined') return new HTMLRewriter().on('body', { element(e) { e.append(INYECCION, { html: true }); } }).transform(new Response(resp.body, { status: resp.status, headers: h })); // en streaming: la página pesa ~2 MB
+  // La página pesa ~2 MB: sin ETag, cada recarga la bajaba entera. Se vuelve a poner uno DERIVADO del de Cloudflare (cambia en cada despliegue) más la marca de lo inyectado; el mismo para todas las personas (la inyección es fija).
+  const base = resp.headers.get('etag');
+  if (base) {
+    const etag = `W/"${base.replace(/^W\//, '').replace(/"/g, '')}-nube1"`;
+    if ((req?.headers.get('if-none-match') || '').split(',').map((x) => x.trim()).includes(etag)) { try { await resp.body?.cancel(); } catch { /* ya está */ } return new Response(null, { status: 304, headers: { etag, 'cache-control': h.get('cache-control') || 'private, no-cache' } }); }
+    h.set('etag', etag);
+  }
+  if (typeof HTMLRewriter !== 'undefined') return new HTMLRewriter().on('body', { element(e) { e.append(INYECCION, { html: true }); } }).transform(new Response(resp.body, { status: resp.status, headers: h }));
   return new Response((await resp.text()).replace('</body>', INYECCION + '</body>'), { status: resp.status, headers: h }); // pruebas en Node
 }
 const PANEL = new Set(['/panel', '/panel.html', '/app.js']);
@@ -24,7 +31,7 @@ export async function servirPagina(req, env, usuario) {
 
   if (PUBLICAS.has(p)) return archivo(p);
   if (RE_INVITACION.test(p)) return archivo('/invitacion.html');
-  if (p === '/' || p === '/index.html') return usuario ? conNube(await archivo('/oficina/index.html')) : archivo('/login.html');
+  if (p === '/' || p === '/index.html') return usuario ? conNube(await archivo('/oficina/index.html'), req) : archivo('/login.html');
   if (NUBE.has(p)) return usuario ? archivo(p) : texto('Entra primero.', 401);
   if (PAQUETES.has(p)) return usuario ? archivo('/oficina' + p) : texto('Entra primero.', 401);
   if (PANEL.has(p)) {
