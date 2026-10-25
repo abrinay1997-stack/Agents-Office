@@ -52,7 +52,8 @@ const js = res.outputFiles[0].text;
 const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css') && !CSS_APARTE.includes(f) && !CSS_TAREAS.includes(f) && !CSS_ANUNCIOS.includes(f) && !CSS_PIEZA.includes(f)).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
 // Banco de presets F5 (1 oct 2026): el <style> de shell.html también llega sin sus comentarios (~16 KB; los blancos y lo demás,
 // tal cual) para que el compilador de video quepa en el presupuesto sin subir el tope. El marcador se queda para el reemplazo.
-const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => `<style>${css.replace(/\/\*(?! <css-vistas> \*\/)[\s\S]*?\*\//g, '')}</style>`);
+// 25 oct 2026: y sin la sangría ni los saltos de línea (cssCorto, ~22 KB): la página tenía 5 KB de margen y cada mejora de la interfaz se los comía. Antes del marcador, que se queda.
+const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => `<style>${css.split('/* <css-vistas> */').map(cssCorto).join('/* <css-vistas> */')}</style>`);
 const shell = sinComentarios(readFileSync('src/shell.html', 'utf8')).replace('/* <css-vistas> */', () => vistasCss);
 const html = shell.replace('<!--APP-->', () => `<script>${js}</script>`);
 mkdirSync('dist', { recursive: true });
