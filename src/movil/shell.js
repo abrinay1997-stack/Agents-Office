@@ -156,11 +156,12 @@ export function crearShell() {
   }
   function navegar(id, p = {}) {
     const r = registro.get(id) || (id === 'aprobaciones' ? null : null); if (!r) { toast('Esa pantalla aún no está en la versión móvil.'); return; }
-    params = p || {};
+    const paramsAntes = params; params = p || {};
     if (TABS.some(t => t.id === id) && id !== 'mas') { if (pila.largo) cerrarTodas(); pantalla = null; tab = id; ultima = null; sinHash(); pintar(); return; }
     if (pantalla === id) { ultima = null; pintar(); return; }
+    const antes = pantalla, antesParams = paramsAntes; // 25 oct 2026: «atrás» de una pantalla que se abrió desde otra vuelve a ESA (Ajustes → una sección → atrás → Ajustes), no a la pestaña
     pantalla = id; ultima = null;
-    empujar({ tipo: 'pantalla', id, destruir() { if (pantalla === id) pantalla = null; ultima = null; } });
+    empujar({ tipo: 'pantalla', id, destruir() { if (pantalla === id) { pantalla = antes; params = antesParams || {}; } ultima = null; } });
   }
   function sinHash() { try { history.replaceState(history.state, '', aHash(pantalla || tab, tab === 'tareas' ? {} : {})); } catch {} }
   function volver() {
@@ -170,6 +171,7 @@ export function crearShell() {
 
   // ---- el contenedor de escritorio ----
   function abrirEscritorio(id) {
+    if (registro.has(id)) return navegar(id); // 25 oct 2026: una vista móvil con el MISMO id reemplaza a la de escritorio también cuando otro la pide por su id (Inicio → Estado, Buscar…)
     const item = ESCRITORIO.find(x => x.id === id); if (!item) { toast('No encuentro esa vista.'); return; }
     if (pila.cima()?.tipo === 'escritorio') return;
     let visto = false, quedo = null;
