@@ -9,7 +9,7 @@
 // y «quedan N h» o «ventana cerrada»), la ventana de 24 h (que se recalcula cada minuto) y la franja si Meta no da los mensajes. La
 // conversación abierta (el hilo, las imágenes, el contador de 1.000) viaja con el editor de piezas: src/contenido-conversacion.js.
 //   initBandeja({ host, datos, esc, note, onCount, paquete }) → { load(), render(), pendientes() } · paquete() → window.AO_PIEZA
-import { RED } from './pieza-base.js';
+import { RED, nbRed } from './pieza-base.js';
 
 const TIPO = { conversaciones: 'Mensaje', comentarios: 'Comentario', resenas: 'Reseña' };
 const EST = { nuevo: ['SIN RESPONDER', '#8A6414', '#E8B44A'], borrador: ['CON BORRADOR', '#2158CC', '#8FB0FF'], respondido: ['RESPONDIDO', '#13705A', '#4FD1A5'], descartado: ['DESCARTADO', '#5A5A5A', '#B9B6AE'], fallo: ['FALLÓ', '#B3261E', '#FF8A80'] };
@@ -131,7 +131,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
 
   function item(m, todos) {
     const a = accionesDe(m, { noSugerir });
-    const [en, c, cd] = EST[m.estado] || EST.nuevo, open = abierto === m.id, red = RED[m.red] || { short: '?', name: m.red || 'red' };
+    const [en, c, cd] = EST[m.estado] || EST.nuevo, open = abierto === m.id, red = RED[m.red] || { name: m.red || 'red' };
     const id = 'bj-' + m.id.replace(/[^\w-]/g, '_'), pub = a.publicacion;
     const padre = a.padre && todos.find(x => x.id === a.padre);
     const cuelga = !a.padre ? '' : `<p class="bj-padre">↳ Respuesta a ${padre ? `<b>${esc(padre.autor)}</b>: «${esc((padre.texto || '').replace(/\s+/g, ' ').slice(0, 90))}»` : 'otro comentario de la publicación'}</p>`;
@@ -158,7 +158,7 @@ ${r.fuentes?.meta?.mensajes?.ok === false ? `<div class="ct-banner bad bj-sinmsg
     const sug = !a.sugerencia ? '' : `<div class="bj-sug" role="note"><span><b>${esc(a.sugerencia.quien)}</b> sugiere ocultarlo${a.sugerencia.motivo ? `: ${esc(a.sugerencia.motivo)}` : '.'}</span><span class="bj-row"><button type="button" class="pz-btn" data-bjh="ocultar" data-id="${esc(m.id)}">Ocultar</button><button type="button" class="pz-btn" data-bjnosug="${esc(m.id)}">No</button></span></div>`;
     const tags = `${a.ventana ? `<span class="bj-tag vt${a.ventana.abierta ? '' : ' oc'}" data-bjv="${esc(m.id)}" data-ab="${a.ventana.abierta ? 1 : 0}">${esc(a.ventana.corto)}</span>` : ''}${a.anuncio ? `<span class="bj-tag">EN UN ANUNCIO: ${esc(a.anuncio.nombre)}</span>` : ''}${a.oculto ? '<span class="bj-tag oc">OCULTO</span>' : ''}${a.padre ? '<span class="bj-tag">RESPUESTA</span>' : ''}`;
     return `<article class="bj-it${open ? ' on' : ''}${m.sospecha ? ' sos' : ''}${a.oculto ? ' oc' : ''}" data-it="${esc(m.id)}"><button type="button" class="bj-h" data-bjo="${esc(m.id)}" aria-expanded="${open}" aria-controls="${id}-d">
-        <b class="pz-nb ${esc(m.red)}" aria-hidden="true">${esc(red.short)}</b><span class="bj-who"><b>${esc(m.autor)}</b> <small>${TIPO[m.tipo] || ''}${m.puntuacion != null ? ` · ${m.puntuacion}★` : ''} · ${cv && m.red === 'facebook' ? 'Messenger' : esc(red.name)}${vistas.size > 1 ? ` · ${FUENTE[fuenteDe(m)]}` : ''} · ${esc(hace(m.cuando))}</small>${tags ? `<span class="bj-tags">${tags}</span>` : ''}<span class="bj-ex">${m.sospecha ? '🛡 ' : ''}${ult?.de === 'tu' ? 'Tú: ' : ''}${esc(((ult ? ult.texto || (ult.adjuntos?.length ? 'Envió una imagen' : '') : m.texto) || '').replace(/\s+/g, ' ').slice(0, 140))}</span></span>
+        ${nbRed(String(m.red || ''))}<span class="bj-who"><b>${esc(m.autor)}</b> <small>${TIPO[m.tipo] || ''}${m.puntuacion != null ? ` · ${m.puntuacion}★` : ''} · ${cv && m.red === 'facebook' ? 'Messenger' : esc(red.name)}${vistas.size > 1 ? ` · ${FUENTE[fuenteDe(m)]}` : ''} · ${esc(hace(m.cuando))}</small>${tags ? `<span class="bj-tags">${tags}</span>` : ''}<span class="bj-ex">${m.sospecha ? '🛡 ' : ''}${ult?.de === 'tu' ? 'Tú: ' : ''}${esc(((ult ? ult.texto || (ult.adjuntos?.length ? 'Envió una imagen' : '') : m.texto) || '').replace(/\s+/g, ' ').slice(0, 140))}</span></span>
         <span class="bj-est pz-tone" style="--c:${c};--cd:${cd}">${en}</span></button>${sug}${det}</article>`;
   }
 

@@ -131,7 +131,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     toques = 0; await tocar('[data-vista="inicio"] [data-conectores]'); await page.waitForSelector('[data-vista="conectores"]:not([hidden]) .mv-intro, [data-vista="conectores"]:not([hidden]) .mv-vacio'); await foto('01b-conectores'); await medir('Conectores (pantalla)'); paso(toques <= 2, `Conectores: verlos está a ${toques} toques (≤ 2)`);
     await page.goBack(); await page.waitForSelector('[data-vista="inicio"]:not([hidden])');
     paso(await page.locator('.mv-franja:not([hidden]) [data-ver]').count() === 1 && /1 borrador espera/.test(await texto('.mv-franja')), 'Aprobaciones: la franja sobre la barra dice «1 borrador espera tu OK · Ver»'); await medir('Inicio con la franja');
-    toques = 0; await tocar('.mv-buscar'); await page.waitForSelector('#findOv:not([hidden])', { timeout: 6000 }); paso(toques === 1, 'Buscar: un botón en la cabecera abre la búsqueda (1 toque)'); await foto('01c-buscar'); await page.goBack(); await page.waitForSelector('#findOv', { state: 'hidden' });
+    toques = 0; await tocar('.mv-buscar'); await page.waitForSelector('[data-vista="buscar"]:not([hidden]) #mvQ', { timeout: 6000 }); paso(toques === 1, 'Buscar: un botón en la cabecera abre la búsqueda móvil (1 toque)'); await foto('01c-buscar'); await page.goBack(); await page.waitForSelector('[data-vista="buscar"]', { state: 'hidden' });
     await axe('Inicio');
 
     // ---- cada destino abre ----
@@ -229,14 +229,14 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     toques = 0; await tocar('[aria-label="Conversaciones guardadas"]'); await page.waitForSelector('.mv-hoja'); await foto('05c-dimitri-historial'); paso(toques <= 2, `Dimitri: el historial está a ${toques} toques`); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
     paso((await desborda('Dimitri')).ancho, 'Dimitri: sin desplazamiento horizontal');
 
-    // ---- Más → vista de escritorio dentro del contenedor ----
-    toques = 0; await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('[data-esc="cerebro"]'); await page.waitForFunction(() => document.body.classList.contains('mv-esc') && document.getElementById('brainOv')?.classList.contains('on'), null, { timeout: 8000 }); await espera(700);
-    paso(toques <= 3, `3 toques o menos: abrir el Cerebro desde Más (${toques})`);
-    paso(await page.locator('.mv-atras:not([hidden])').count() === 1 && (await texto('.mv-titulo')) === 'Cerebro', 'Más → Cerebro: la cabecera dice «Cerebro» y tiene su botón Volver');
-    const caja = await page.evaluate(() => { const r = document.getElementById('brainOv').getBoundingClientRect(); const b = document.querySelector('.mv-bar').getBoundingClientRect(), t = document.querySelector('.mv-tabs').getBoundingClientRect(); return { dentro: r.top >= b.bottom - 1 && r.bottom <= t.top + 1, ancho: r.width <= innerWidth + 1 }; });
-    paso(caja.dentro && caja.ancho, 'Más → Cerebro: la vista de escritorio cabe entre la cabecera y la barra de pestañas'); await foto('09-cerebro-escritorio');
-    await tocar('.mv-atras'); await page.waitForFunction(() => !document.body.classList.contains('mv-esc') && !document.getElementById('brainOv').classList.contains('on'), null, { timeout: 5000 });
-    paso(true, 'Más → Cerebro: «Volver» cierra la vista y regresa a la pantalla de antes');
+    // ---- Más → una vista que aún no tiene versión móvil se abre en el contenedor de escritorio (hoy: Anuncios) ----
+    toques = 0; await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('[data-esc="anuncios"]'); await page.waitForFunction(() => document.body.classList.contains('mv-esc') && document.body.classList.contains('anuOpen'), null, { timeout: 8000 }); await espera(700);
+    paso(toques <= 3, `3 toques o menos: abrir Anuncios desde Más (${toques})`);
+    paso(await page.locator('.mv-atras:not([hidden])').count() === 1 && (await texto('.mv-titulo')) === 'Anuncios', 'Más → Anuncios: la cabecera dice «Anuncios» y tiene su botón Volver');
+    const caja = await page.evaluate(() => { const r = document.getElementById('anuOv').getBoundingClientRect(); const b = document.querySelector('.mv-bar').getBoundingClientRect(), t = document.querySelector('.mv-tabs').getBoundingClientRect(); return { dentro: r.top >= b.bottom - 1 && r.bottom <= t.top + 1, ancho: r.width <= innerWidth + 1 }; });
+    paso(caja.dentro && caja.ancho, 'Más → Anuncios: la vista de escritorio cabe entre la cabecera y la barra de pestañas'); await foto('09-anuncios-escritorio');
+    await tocar('.mv-atras'); await page.waitForFunction(() => !document.body.classList.contains('mv-esc') && !document.body.classList.contains('anuOpen'), null, { timeout: 5000 });
+    paso(true, 'Más → Anuncios: «Volver» cierra la vista y regresa a la pantalla de antes');
     // ajustes (ahora una pantalla móvil propia, equipo C): sale y vuelve
     await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('.mv-hoja.mv-mas [data-vista="ajustes"]'); await page.waitForSelector('[data-vista="ajustes"]:not([hidden]) .mv-lista', { timeout: 8000 }); await espera(300); await foto('10-ajustes');
     const aj = await page.evaluate(() => { const b = document.querySelector('[data-vista="ajustes"]').getBoundingClientRect(); return b.width <= innerWidth + 1 && b.left >= -1 && !document.body.classList.contains('mv-esc'); });

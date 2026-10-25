@@ -58,7 +58,7 @@ test('la página no lleva la versión móvil: solo el cargador mínimo', async (
 });
 
 test('el estilo móvil cumple las reglas: nada de :hover, ningún texto bajo 11 px, campos de 16 px, dvh y safe-area', () => {
-  assert.ok(CSS_MOVIL.includes('movil.css'));
+  assert.ok(CSS_MOVIL[0] === 'movil.css' && CSS_MOVIL.every(f => /^movil(-[a-z])?\.css$/.test(f)), 'los estilos móviles: el del armazón primero y los de cada equipo después');
   const css = CSS_MOVIL.map(f => leer('src/css/' + f)).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.ok(!/:hover/.test(css), 'en un teléfono no hay hover');
   const chicos = [...css.matchAll(/font-size:\s*([\d.]+)px/g)].map(m => +m[1]).filter(n => n < 11);

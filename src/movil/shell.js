@@ -62,7 +62,7 @@ export function crearShell() {
     refs.atras.addEventListener('click', volver);
     $('.mv-franja').addEventListener('click', e => { if (e.target.closest('[data-no]')) { franjaNo = true; pintarCabecera(); } else if (e.target.closest('[data-ver]')) navegar('aprobaciones'); });
     refs.aprob.addEventListener('click', () => navegar('aprobaciones'));
-    $('.mv-buscar').addEventListener('click', () => abrirEscritorio('buscar'));
+    $('.mv-buscar').addEventListener('click', () => (registro.has('buscar') ? navegar('buscar') : abrirEscritorio('buscar')));
     $('.mv-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) irPestana(b.dataset.tab, b); });
     refs.acc.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const c = cab.get(pantalla || tab); c?.acciones?.[+b.dataset.i]?.alTocar?.(b); });
   }
@@ -159,9 +159,8 @@ export function crearShell() {
     const paramsAntes = params; params = p || {};
     if (TABS.some(t => t.id === id) && id !== 'mas') { if (pila.largo) cerrarTodas(); pantalla = null; tab = id; ultima = null; sinHash(); pintar(); return; }
     if (pantalla === id) { ultima = null; pintar(); return; }
-    const antes = pantalla, antesParams = paramsAntes; // 25 oct 2026: «atrás» de una pantalla que se abrió desde otra vuelve a ESA (Ajustes → una sección → atrás → Ajustes), no a la pestaña
-    pantalla = id; ultima = null;
-    empujar({ tipo: 'pantalla', id, destruir() { if (pantalla === id) { pantalla = antes; params = antesParams || {}; } ultima = null; } });
+    const previa = pantalla; pantalla = id; ultima = null;
+    empujar({ tipo: 'pantalla', id, destruir() { if (pantalla === id) pantalla = previa; ultima = null; } });
   }
   function sinHash() { try { history.replaceState(history.state, '', aHash(pantalla || tab, tab === 'tareas' ? {} : {})); } catch {} }
   function volver() {

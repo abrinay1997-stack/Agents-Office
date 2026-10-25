@@ -277,7 +277,7 @@ export function registrar(shell) {
       el._pintar = pintar; el._guardarBorrador = guardarBorrador; el._sec = () => sec;
     },
     desmontar(el) { el._off?.(); },
-    alMostrar(el, ctx, p) { el._pintar(p?.s || 'general', true); },
+    alMostrar(el, ctx, p) { el._pintar(p?.s || el._sec?.() || 'general', true); }, // al volver de una pantalla hija (la ficha de un agente) los params son los de ella: la sección es la que ya estaba
     alOcultar(el, ctx) {
       const antes = el._sec?.(); el._guardarBorrador?.();
       if (antes && E.pend.has(antes)) ctx.toast(`Quedaron cambios sin guardar en «${(META[antes] || [antes])[0]}».`, { accion: 'Revisar', alAccion: () => ctx.navegar('ajustes-seccion', { s: antes }) });

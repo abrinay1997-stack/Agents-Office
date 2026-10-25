@@ -50,6 +50,7 @@ const con = (o, fn) => conSesion(o.d1, fn);
 // Rutas que ESCRIBEN (cualquier método distinto de GET). Cada una se prueba como anónimo, lectura y editor; las `soloAdmin` también contra el editor.
 // Si se añade una ruta de escritura a un módulo, tiene que aparecer aquí (el último test de este bloque lo exige).
 const ESCRIBEN = [
+  '/api/modelos', '/api/modelos/probar', '/api/modelos/comparar', '/api/conectores/probar', '/api/conectores/gmail/token',
   '/api/conectores', '/api/conectores/gmail', '/api/migrar/notas', '/api/migrar/filas', '/api/migrar/docs', '/api/agentes/olead/ejecutar',
   '/api/tasks', '/api/tasks/abc123', '/api/tasks/abc123/approve', '/api/tasks/abc123/reject', '/api/tasks/approve-batch', '/api/tasks/abc123/revise', '/api/tasks/abc123/undo', '/api/tasks/abc123/draft',
   '/api/tasks/abc123/run', '/api/tasks/abc123/stop', '/api/tasks/abc123/archive', '/api/tasks/abc123/repeat', '/api/tasks/abc123/example',
@@ -65,6 +66,7 @@ const ESCRIBEN = [
 ];
 // Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
 const SOLO_ADMIN = [
+  ['PUT', '/api/modelos'], ['POST', '/api/modelos/probar'], ['POST', '/api/modelos/comparar'], ['POST', '/api/conectores/probar'], ['PUT', '/api/conectores/gmail/token'], ['DELETE', '/api/conectores/gmail/token'],
   ['POST', '/api/conectores'], ['POST', '/api/migrar/notas'], ['POST', '/api/migrar/filas'], ['POST', '/api/migrar/docs'],
   ['POST', '/api/tasks/abc123/approve'], ['POST', '/api/tasks/abc123/reject'], ['POST', '/api/tasks/approve-batch'], ['POST', '/api/tasks/abc123/revise'], ['POST', '/api/tasks/abc123/undo'], ['POST', '/api/tasks/abc123/draft'],
   ['POST', '/api/routines'], ['PATCH', '/api/agents/olead'], ['POST', '/api/agents/olead/forget'],
@@ -218,7 +220,7 @@ test('SECRETOS: todo env.X que leen los módulos COMPARTIDOS que importa el Work
   const decl = JSON.parse(readFileSync(join(RAIZ, 'secretos.json'), 'utf8')); const declarados = new Set([...decl.obligatorios, ...decl.opcionales]);
   const wr = readFileSync(join(RAIZ, 'wrangler.jsonc'), 'utf8').replace(/^\s*\/\/.*$/gm, ''); const vars = new Set(Object.keys(JSON.parse(wr).vars));
   // Bindings de Cloudflare, ganchos de pruebas (siempre funciones: un secreto es un texto), y desvíos de servidor que NO se pueden poner desde los secretos (solo con una variable en wrangler.jsonc, o sea con acceso al despliegue).
-  const permitidos = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'IMAGES', 'RELOJ_MS', 'AO_FETCH', 'AO_AHORA', 'META_GRAPH_HOST', 'META_GRAPH_VERSION', 'META_RUPLOAD_HOST', 'METRICOOL_API_BASE', 'AO_FAL_QUEUE', 'HF_API_BASE_URL', 'HF_API_KEY', 'HF_API_SECRET', 'VOYAGE_API_KEY']);
+  const permitidos = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'IMAGES', 'RELOJ_MS', 'FETCH_IMAGEN_META', 'AO_FETCH', 'AO_AHORA', 'META_GRAPH_HOST', 'META_GRAPH_VERSION', 'META_RUPLOAD_HOST', 'METRICOOL_API_BASE', 'AO_FAL_QUEUE', 'HF_API_BASE_URL', 'HF_API_KEY', 'HF_API_SECRET', 'VOYAGE_API_KEY']);
   const vistos = new Set(), cola = [resolve(RAIZ, 'worker/index.js')], faltan = {};
   while (cola.length) {
     const f = cola.pop(); if (vistos.has(f)) continue; vistos.add(f); let s; try { s = readFileSync(f, 'utf8'); } catch { continue; }
@@ -359,7 +361,7 @@ test('ESCALA: el índice de notas de una ejecución deja fuera los entregables v
 /* ---------- toda tabla que solo crece declara cómo se poda ---------- */
 const TABLAS = {
   // tablas del equipo y la configuración: crecen con las personas y las decisiones del dueño, no con el uso
-  users: 'acotada', perfiles: 'acotada', conectores: 'acotada', grafo: 'acotada', docs: 'acotada (config; el espejo de Anuncios se recorta solo)',
+  users: 'acotada', perfiles: 'acotada', conectores: 'acotada', conectores_extra: 'acotada (una fila por conector, tope de 40 en modulos/conectores.js)', grafo: 'acotada', docs: 'acotada (config; el espejo de Anuncios se recorta solo)',
   // se podan en su uso o por el reloj
   sessions: 'caduca (el reloj las borra cada minuto)', acceso_intentos: 'efímera (ventana de un minuto)', publica_tasa: 'efímera (ventana de un minuto)', anuncios_tasa: 'efímera', anuncios_candados: 'efímera',
   anuncios_tokens: 'caduca en 2 minutos', contenido_candado: 'efímera', telegram_updates: 'poda a los 3 días (lib/telegram.js)', hook_eventos: 'poda cada hora (lib/disparadores.js)',
@@ -411,10 +413,10 @@ test('RENDIMIENTO: la oficina (2 MB) vuelve a llevar ETag aunque el Worker le in
   const cookie = (await pedir(manejar, env, '/api/acceso', { metodo: 'POST', cuerpo: { email: c.email, contrasena: c.clave } })).headers.get('set-cookie').split(';')[0];
   const ver = (h = {}) => manejar(new Request('https://oficina.test/', { headers: { cookie, ...h } }), env);
   const a = await ver(); const etag = a.headers.get('etag');
-  assert.equal(a.status, 200); assert.match(await a.text(), /nube\.js/); assert.match(etag, /^W\/"v1-nube1"$/);
+  assert.equal(a.status, 200); assert.match(await a.text(), /nube\.js/); assert.match(etag, /^W\/"v1-nube2"$/);
   const b = await ver({ 'if-none-match': etag }); assert.equal(b.status, 304); assert.equal(await b.text(), ''); assert.equal(b.headers.get('etag'), etag);
   version = '"v2"'; // un despliegue nuevo cambia el ETag de Cloudflare y con él el nuestro
-  const c2 = await ver({ 'if-none-match': etag }); assert.equal(c2.status, 200); assert.match(c2.headers.get('etag'), /v2-nube1/);
+  const c2 = await ver({ 'if-none-match': etag }); assert.equal(c2.status, 200); assert.match(c2.headers.get('etag'), /v2-nube2/);
   const sinSesion = await manejar(new Request('https://oficina.test/', { headers: { 'if-none-match': etag } }), env);
   assert.equal(sinSesion.status, 200, 'sin sesión nunca se contesta 304 de la oficina: se ve el acceso'); assert.ok(!/OFICINA/.test(await sinSesion.text()));
 });

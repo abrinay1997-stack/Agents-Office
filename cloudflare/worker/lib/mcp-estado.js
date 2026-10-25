@@ -1,7 +1,8 @@
 // GET /api/mcp en la nube: lo que la barra de conectores y su panel esperan (la misma forma que mcp.summary() de la oficina local), pero
 // leído de la tabla `conectores` del Worker; no hay `claude mcp list` que correr. Nunca sale un token ni el nombre de un secreto (el
 // panel solo necesita saber si el token está puesto), y el servidor que se ve es solo el host de la URL.
-import { secretoPermitido } from './conectores.js';
+import { tieneAcceso } from './conectores.js';
+import { iconoUri } from './iconos-conectores.js';
 const DEPT_KEYS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 const norm = (s) => String(s || '').toLowerCase().replace(/^plugin:[^:]+:/, '').replace(/^claude\.ai\s+/, '').replace(/\s+mcp$/, '').replace(/[^a-z0-9]/g, '');
 const nombreBonito = (n) => String(n).replace(/[-_]+/g, ' ').trim().replace(/\b[a-z]/g, (c) => c.toUpperCase());
@@ -22,11 +23,11 @@ export function resumenMcp({ filas = [], env = {}, cfg = {}, ahora = Date.now() 
     const permitido = !denied && (!allow.length || allow.some((x) => coincide(c, x)));
     const propio = Object.entries(porDept).find(([k]) => coincide(c, k));
     const depts = (propio ? (Array.isArray(propio[1]) ? propio[1] : []) : lista(f.departamentos)).filter((d) => DEPT_KEYS.includes(d));
-    const conToken = !f.secreto || (secretoPermitido(f.secreto) && typeof env?.[f.secreto] === 'string' && env[f.secreto].length > 0);
+    const conToken = tieneAcceso(f, env);
     const lectura = lista(f.herramientas_lectura), envio = lista(f.herramientas_envio);
     const status = !f.activo ? 'disabled' : conToken ? 'connected' : 'needs-auth';
-    return { id: c.nombre, raw: c.nombre, name: nombreBonito(c.nombre), key: norm(c.nombre), plugin: '', status,
-      detail: status === 'needs-auth' ? 'Falta guardar su token como secreto del Worker y volver a desplegar.' : '', target: host(f.url), source: 'nube',
+    return { id: c.nombre, raw: c.nombre, name: f.etiqueta || nombreBonito(c.nombre), key: norm(c.nombre), plugin: '', status,
+      detail: status === 'needs-auth' ? (f.secreto ? 'Falta guardar su token como secreto del Worker y volver a desplegar.' : 'Falta su token: ponlo en Ajustes → Conectores MCP.') : '', target: host(f.url), source: 'nube', iconUri: iconoUri({ plantilla: f.plantilla, nombre: f.etiqueta || f.nombre }), auth: f.auth_tipo || (f.secreto ? 'bearer' : 'ninguna'),
       tools: [...lectura, ...envio], depts: denied ? [] : depts, allowed: permitido, denied, defaultDenied: false, ...(oficina ? { office: true } : {}),
       kinds: Object.fromEntries([...lectura.map((t) => [t, 'read']), ...envio.map((t) => [t, 'write'])]) };
   });
