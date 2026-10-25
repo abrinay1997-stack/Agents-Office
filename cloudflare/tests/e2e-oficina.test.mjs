@@ -403,7 +403,7 @@ describe('workerd real', { skip: VIVO }, () => {
   const nombres = (m) => (m.presentes ?? []).map((p) => p.nombre).sort();
 
   before(async () => {
-    W = await levantar({ usuarios: [ANA_VIVA] });
+    W = await levantar({ usuarios: [ANA_VIVA], args: ['--test-scheduled'] });
     cAna = await acceso(ANA_VIVA.email, 'clave-de-prueba-larga-1'); // secrets-ok
   }, { timeout: 240000 });
   after(async () => { sAna?.cerrar(); sBruno?.cerrar(); sCarla?.cerrar(); await W?.cerrar(); });
@@ -445,5 +445,66 @@ describe('workerd real', { skip: VIVO }, () => {
     assert.equal(textos.length, 12, 'los 12 comentarios están: ' + textos.join(','));
     // lectura: ve la tarea, no la toca
     assert.equal((await jj(cCarla, `/api/tasks/${id}/comment`, { metodo: 'POST', cuerpo: { text: 'x' } })).status, 403);
+  });
+
+  test('(4/5) el reloj de verdad: el handler `scheduled` corre en workerd (tres veces seguidas) sin que ningún módulo falle ni se dispare una rutina antes de su hora', async () => {
+    const nuevo = await jj(cAna, '/api/routines', { metodo: 'POST', cuerpo: { dept: 'sales', agent: 'slead', text: 'Revisa los leads nuevos y resume', when: { kind: 'daily', at: '09:00' } } });
+    assert.equal(nuevo.status < 300, true, nuevo.texto); const rid = nuevo.j.routine?.id || nuevo.j.id; assert.ok(rid);
+    const corre = async () => { const r = await fetch(W.base + '/cdn-cgi/handler/scheduled'); assert.equal(r.status, 200, await r.text()); };
+    await corre(); await corre(); await corre();
+    assert.ok(!/\[cron\]/.test(W.log()), 'ningún módulo falló en el reloj: ' + (W.log().match(/\[cron\][^\n]*/g) || []).join(' | '));
+    const tareas = () => jj(cAna, '/api/tasks').then((r) => (Array.isArray(r.j) ? r.j : r.j.tasks).filter((t) => t.routine === rid));
+    assert.equal((await tareas()).length, 0, 'todavía no es su hora');
+  });
+
+  test('(14) migración: scripts/migrar-a-nube.mjs contra el Worker local con los datos de la oficina local; lo migrado se ve en la interfaz; repetirla no duplica ni pisa los ajustes cambiados en la nube', { timeout: 240000 }, async () => {
+    // una COPIA de la oficina local (código + brain-panaclaw) con datos de ejemplo en SU data/: nunca se toca el data/ del repositorio ni el de quien corre la prueba
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-migrar-'));
+    try {
+      const SALTA = new Set(['node_modules', '.git', 'cloudflare', 'docs', 'dist', 'assets', 'data', 'evals', 'tests']);
+      fs.cpSync(REPO, raiz, { recursive: true, filter: (src) => !SALTA.has(path.relative(REPO, src).split(path.sep)[0]) });
+      fs.symlinkSync(path.join(REPO, 'node_modules'), path.join(raiz, 'node_modules'), 'dir');
+      const w = (f, o) => { fs.mkdirSync(path.dirname(path.join(raiz, f)), { recursive: true }); fs.writeFileSync(path.join(raiz, f), typeof o === 'string' ? o : JSON.stringify(o)); };
+      const ahora = Date.now();
+      w('data/tasks.json', [
+        { id: 'tkhecha1', dept: 'sales', agent: 'slead', title: 'Llamar a Acme', text: 'Llama a Acme.', state: 'done', result: 'Se llamó y quedaron en pagar el viernes.', addedAt: ahora - 9e5, doneAt: ahora - 6e5, by: 'you', needsOk: false },
+        { id: 'tkencur2', dept: 'emails', agent: 'elead', title: 'Contestar a Beto', text: 'Contesta a Beto.', state: 'doing', startedAt: ahora - 1e5, addedAt: ahora - 2e5, by: 'you' },
+        { id: 'tkespera3', dept: 'fin', agent: 'flead', title: 'Recordatorio de cobro', text: 'Cobra la factura 12.', state: 'waiting', draft: 'Para: cliente@ej.com. Hola, la factura 12 vence hoy.', needsOk: true, addedAt: ahora - 3e5, waitingAt: ahora - 2e5, by: 'you' }]);
+      w('data/subgerente.json', { messages: [{ id: 'mdue1', who: 'user', text: 'Hola Dimitri, ¿cómo vamos?', at: ahora - 5e5 }, { id: 'mdue2', who: 'sub', mode: 'charla', text: 'Vamos bien.', at: ahora - 4e5 }] });
+      w('office.agents.local.json', { agents: [{ id: 'elead', name: 'CORREOS-E2E', does: 'Contesta correos de clientes con tono cercano.' }] });
+      w('office.config.local.json', { telegram: { approvers: { 444555666: ['emails'] } } });
+      w('brain-panaclaw/Agents Office/cifras.json', { items: [{ name: 'Combo 2x1', value: 12, unit: 'US$' }] });
+      const script = path.join(raiz, 'scripts', 'migrar-a-nube.mjs');
+      const correr = (...extra) => spawnSync(process.execPath, [script, W.base.replace('127.0.0.1', 'localhost'), ...extra], { cwd: raiz, encoding: 'utf8', timeout: 180000, env: { ...process.env, AO_NUBE_EMAIL: ANA_VIVA.email, AO_NUBE_CLAVE: 'clave-de-prueba-larga-1', AO_BRAIN: '', AO_LOCAL_CONFIG: path.join(raiz, 'office.config.local.json') } }); // secrets-ok
+      const a = correr(); assert.equal(a.status, 0, 'la migración termina bien: ' + a.stdout.slice(-600) + a.stderr.slice(-600));
+      assert.ok(!(a.stdout + a.stderr).includes('clave-de-prueba-larga-1'), 'la contraseña no se imprime'); // secrets-ok
+      // ---- lo migrado se ve en la interfaz ----
+      const mapa = (await jj(cCarla, '/api/brain')).j; assert.ok(mapa.nodes.length >= 20, 'el mapa del Cerebro trae las notas con enlaces: ' + mapa.nodes.length);
+      const hay = (await jj(cCarla, '/api/migrar/estado')); void hay; // (solo admin)
+      assert.ok((await jj(cAna, '/api/migrar/estado')).j.notas >= 30, 'las notas del Cerebro están: ' + a.stdout.slice(0, 700));
+      const busca = (await jj(cCarla, '/api/brain/search?q=cancelación')).j; assert.ok(JSON.stringify(busca).includes('cancelacion'), 'la búsqueda encuentra una nota migrada');
+      const lista = (await jj(cAna, '/api/tasks')).j; const tareas = Array.isArray(lista) ? lista : lista.tasks;
+      assert.equal(tareas.find((t) => t.id === 'tkhecha1').state, 'done'); assert.equal(tareas.find((t) => t.id === 'tkespera3').state, 'waiting'); assert.match(tareas.find((t) => t.id === 'tkespera3').draft, /factura 12/);
+      assert.equal(tareas.find((t) => t.id === 'tkencur2').state, 'next', 'lo que un agente ejecutaba al mudarse vuelve a la cola');
+      const rut = (await jj(cAna, '/api/routines')).j.routines.map((r) => r.id); assert.ok(rut.includes('triage-matutino') && rut.includes('revision-anuncios'), 'las rutinas de brain-panaclaw: ' + rut.join(','));
+      const ags = (await jj(cAna, '/api/agents')).j; const agList = Array.isArray(ags) ? ags : ags.agents; assert.equal(agList.find((x) => x.id === 'elead').name, 'CORREOS-E2E', 'el asiento renombrado en la computadora se ve');
+      const sub = (await jj(cAna, '/api/sub')).j; assert.ok(sub.messages.some((m) => m.id === 'mdue2'), 'la conversación con Dimitri');
+      const tgs = (await jj(cAna, '/api/settings/telegram')).j; assert.ok(JSON.stringify(tgs).includes('444555666'), 'los aprobadores de Telegram viajaron');
+      const ag1 = await jj(cAna, '/api/agents/elead'); assert.equal(ag1.status, 200); assert.ok(JSON.stringify(ag1.j).includes('triage-correo') || JSON.stringify(ag1.j).toLowerCase().includes('skill'), 'las skills del Cerebro están en la ficha del agente: ' + ag1.texto.slice(0, 200));
+      assert.ok(JSON.stringify((await jj(cAna, '/api/cifras')).j).includes('Combo 2x1'), 'las cifras');
+      // ---- la nube ya tiene su propia vida: un aprobador revocado y un comentario nuevo ----
+      assert.equal((await jj(cAna, '/api/settings/telegram', { metodo: 'PUT', cuerpo: { approvers: { 444555666: [] } } })).status, 200);
+      const antes = (await jj(cAna, '/api/settings/telegram')).j;
+      assert.equal((await jj(cAna, '/api/tasks/tkhecha1/comment', { metodo: 'POST', cuerpo: { text: 'nota hecha en la nube' } })).status, 200);
+      const edit = await jj(cAna, '/api/brain/upload', { metodo: 'POST', cuerpo: { name: 'cancelacion.md', replace: true, data: Buffer.from('# Cancelación\nTEXTO-ESCRITO-EN-LA-NUBE').toString('base64') } }); assert.equal(edit.status, 200, edit.texto); assert.equal(edit.j.note, 'cancelacion');
+      // ---- repetirla: termina bien, no duplica y NO pisa lo cambiado en la nube ----
+      const b = correr(); assert.equal(b.status, 0, 'repetir la migración no se cae: ' + b.stdout.slice(-800) + b.stderr.slice(-800));
+      assert.equal((await jj(cAna, '/api/migrar/estado')).j.notas, 59, 'ninguna nota duplicada ni perdida'); assert.match(b.stdout, /NO se pisaron/, 'el script dice lo que no pisó');
+      assert.match((await jj(cCarla, '/api/note?id=cancelacion')).j.text, /TEXTO-ESCRITO-EN-LA-NUBE/, 'una nota editada en la nube después de la copia no se pisa');
+      const despues = (await jj(cAna, '/api/settings/telegram')).j; assert.deepEqual(despues, antes, 'el aprobador revocado en la nube no vuelve');
+      const lista2 = (await jj(cAna, '/api/tasks')).j; const tareas2 = Array.isArray(lista2) ? lista2 : lista2.tasks;
+      assert.equal(tareas2.filter((t) => t.id === 'tkhecha1').length, 1, 'sin duplicar');
+      assert.ok((tareas2.find((t) => t.id === 'tkhecha1').comments || []).some((c) => c.text === 'nota hecha en la nube'), 'el comentario hecho en la nube no se pierde al repetir la migración');
+    } finally { fs.rmSync(raiz, { recursive: true, force: true }); }
   });
 });

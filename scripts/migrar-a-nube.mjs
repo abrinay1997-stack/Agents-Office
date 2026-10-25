@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Sube el Cerebro de esta computadora a la oficina en Cloudflare (notas + mapa 3D ya calculado).
-//   AO_NUBE_EMAIL=… AO_NUBE_CLAVE=… node scripts/migrar-a-nube.mjs https://agents-office.<tu>.workers.dev [--simulacro]
+//   AO_NUBE_EMAIL=… AO_NUBE_CLAVE=… node scripts/migrar-a-nube.mjs https://agents-office.<tu>.workers.dev [--simulacro] [--solo=<módulo>] [--forzar]
 // La contraseña va SOLO en variables de entorno (nunca en un archivo ni en la línea de comandos).
-// Es idempotente: volver a correrla actualiza las notas, no las duplica. No borra nada de la nube.
+// Es idempotente: volver a correrla actualiza las notas, no las duplica. No borra nada de la nube. Lo que la nube ya trabaja (tareas, conversación con Dimitri, rutinas,
+// ajustes y los demás documentos con algo dentro) NO se pisa: se dice «ya estaban en la nube» y sigue; --forzar los reemplaza.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -57,7 +58,7 @@ export function lotes(notas) {
 async function api(base, ruta, { cookie, cuerpo } = {}) {
   const r = await fetch(base + ruta, { method: cuerpo ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`${ruta}: ${d.error || r.status}`);
+  if (!r.ok) throw Object.assign(new Error(`${ruta}: ${d.error || r.status}`), { estado: r.status });
   return { d, cookie: (r.headers.get('set-cookie') || '').split(';')[0] };
 }
 
@@ -76,16 +77,22 @@ if (process.argv[1] && process.argv[1].endsWith('migrar-a-nube.mjs')) {
   if (!email || !clave) { console.error('Faltan AO_NUBE_EMAIL y AO_NUBE_CLAVE (variables de entorno).'); process.exit(1); }
   const { cookie } = await api(base, '/api/acceso', { cuerpo: { email, contrasena: clave } });
   let i = 0;
-  for (const p of partes) { i++; const { d } = await api(base, '/api/migrar/notas', { cookie, cuerpo: { notas: p } }); console.log(`  subida ${i}/${partes.length}: ${p.length} notas (en la nube: ${d.notas})`); }
+  for (const p of partes) { i++; const { d } = await api(base, '/api/migrar/notas', { cookie, cuerpo: { notas: p, ...(process.argv.includes('--forzar') ? { forzar: true } : {}) } }); console.log(`  subida ${i}/${partes.length}: ${p.length} notas (en la nube: ${d.notas})`); }
   const { d } = await api(base, '/api/migrar/notas', { cookie, cuerpo: { grafo } });
   console.log(`Mapa subido: ${d.grafo ? 'sí' : 'no'}. En la nube: ${d.notas} notas.`);
-  const solo = (process.argv.find((a) => a.startsWith('--solo=')) || '').slice(7);
+  const solo = (process.argv.find((a) => a.startsWith('--solo=')) || '').slice(7), forzar = process.argv.includes('--forzar');
   for (const mod of await exportadores()) {
     if (solo && mod.modulo !== solo) continue;
     const { filas = {}, docs = {} } = await mod.exportar({ raiz: ROOT, vault });
-    for (const [coleccion, lista] of Object.entries(filas)) for (const parte of partirFilas(lista)) await api(base, '/api/migrar/filas', { cookie, cuerpo: { coleccion, filas: parte } });
-    for (const [clave, valor] of Object.entries(docs)) await api(base, '/api/migrar/docs', { cookie, cuerpo: { clave, valor } });
+    const omitidas = [];
+    for (const [coleccion, lista] of Object.entries(filas)) for (const parte of partirFilas(lista)) { const { d } = await api(base, '/api/migrar/filas', { cookie, cuerpo: { coleccion, filas: parte, ...(forzar ? { forzar: true } : {}) } }); if (d.omitidas) omitidas.push(`${d.omitidas} de ${coleccion}`); }
+    // Un documento que la nube ya tiene (y tiene algo dentro) NO se pisa: desde la primera migración la nube es la copia de trabajo. Se dice y se sigue con el resto.
+    for (const [clave, valor] of Object.entries(docs)) {
+      try { await api(base, '/api/migrar/docs', { cookie, cuerpo: { clave, valor, ...(forzar ? { forzar: true } : {}) } }); }
+      catch (e) { if (e.estado === 409) omitidas.push(`doc ${clave}`); else throw e; }
+    }
     console.log(`  ${mod.modulo}: ${Object.entries(filas).map(([c, l]) => `${l.length} en ${c}`).concat(Object.keys(docs).map((d) => `doc ${d}`)).join(', ') || 'nada que subir'}`);
+    if (omitidas.length) console.log(`    · ya estaban en la nube y NO se pisaron: ${omitidas.join(', ')} (con --forzar se reemplazan)`);
   }
   await api(base, '/api/salir', { cookie, cuerpo: {} }).catch(() => {});
 }

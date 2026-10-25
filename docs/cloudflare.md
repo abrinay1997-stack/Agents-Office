@@ -79,9 +79,9 @@ Al entrar en `https://agents-office.<tu>.workers.dev` ya se ve **la oficina de s
    $env:AO_NUBE_EMAIL="tu-correo"; $env:AO_NUBE_CLAVE="tu-contraseña"
    node scripts\migrar-a-nube.mjs https://agents-office.abrinay1997.workers.dev
    ```
-   Con `--simulacro` cuenta lo que subiría sin enviar nada. Se puede repetir: actualiza, no duplica, y no borra nada de la nube.
+   Con `--simulacro` cuenta lo que subiría sin enviar nada. Se puede repetir: actualiza, no duplica, y no borra nada de la nube. **Desde la primera migración la nube es la copia de trabajo** (auditoría e2e, 25 oct 2026): al repetirla NO se pisan las tareas, la conversación con Dimitri ni las rutinas que la nube ya tiene (solo entran las que faltan), ni los documentos que ya tienen algo dentro (ajustes, cifras, indicadores, briefs de agentes…), ni una nota que la nube editó después de la copia de tu computadora; el script lo dice («ya estaban en la nube y NO se pisaron») y sigue. `--forzar` lo reemplaza todo a propósito (`--solo=<módulo>` limita a uno).
 
-**Límite conocido:** el mapa 3D se calcula en tu computadora (el cálculo de fuerzas gasta más CPU de la que da un Worker del plan gratuito). Las notas nuevas que escriban los agentes en la nube aparecerán en la búsqueda y el lector, pero entran al mapa al volver a correr el paso 2, hasta que se mueva ese cálculo a un plan con más CPU (Workers de pago, ~US$5 al mes) o a una cola.
+**Límite conocido:** el mapa 3D se calcula en tu computadora (el cálculo de fuerzas gasta más CPU de la que da un Worker del plan gratuito). Las notas nuevas que lleguen a la nube (un documento subido, la entrega de un agente) aparecen en la búsqueda, el lector **y el mapa** (como neuronas sueltas en el anillo exterior, `conNotasNuevas` en `worker/lib/cerebro.js`); sus enlaces entran al volver a correr el paso 2, hasta que se mueva ese cálculo a un plan con más CPU (Workers de pago, ~US$5 al mes) o a una cola.
 
 ## Anuncios de Meta y la Bandeja en la nube (fase 7, 25 oct 2026)
 

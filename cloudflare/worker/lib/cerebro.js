@@ -26,9 +26,11 @@ export function validarNotas(entrada) {
   return { ok: true, notas };
 }
 
-export async function guardarNotas(db, notas) {
+/** Guarda notas (las que ya están se reemplazan). Con `siMasNueva` (la migración desde la computadora), una nota que la nube editó DESPUÉS de la fecha de la copia de la computadora se queda como está:
+ *  repetir la migración no pisa lo escrito aquí (un documento subido con ese nombre, la voz de marca…). → cuántas se enviaron */
+export async function guardarNotas(db, notas, { siMasNueva = false } = {}) {
   const sql = `insert into notas (nombre, grupo, oficina, texto, bytes, actualizado, tarea) values (?,?,?,?,?,?,?)
-    on conflict (nombre) do update set grupo=excluded.grupo, oficina=excluded.oficina, texto=excluded.texto, bytes=excluded.bytes, actualizado=excluded.actualizado, tarea=excluded.tarea`;
+    on conflict (nombre) do update set grupo=excluded.grupo, oficina=excluded.oficina, texto=excluded.texto, bytes=excluded.bytes, actualizado=excluded.actualizado, tarea=excluded.tarea${siMasNueva ? ' where excluded.actualizado >= notas.actualizado' : ''}`;
   for (let i = 0; i < notas.length; i += LOTE_SQL)
     await db.batch(notas.slice(i, i + LOTE_SQL).map((n) =>
       db.prepare(sql).bind(n.nombre, n.grupo, n.oficina, n.texto, new TextEncoder().encode(n.texto).length, n.actualizado, n.tarea)));

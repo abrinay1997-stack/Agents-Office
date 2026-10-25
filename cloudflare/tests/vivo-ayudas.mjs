@@ -20,7 +20,7 @@ export function hayWrangler() {
 const puertoLibre = () => new Promise((res, rej) => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); s.on('error', rej); });
 const sql = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
-export async function levantar({ usuarios }) {
+export async function levantar({ usuarios, args: extra = [] }) {
   const persist = mkdtempSync(join(tmpdir(), 'ao-vivo-'));
   const w = (args) => { const { cmd, args: a, opts } = wrangler(args); return execFileSync(cmd, a, { ...opts, stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000, env: { ...process.env, CI: '1', WRANGLER_SEND_METRICS: 'false' } }); };
   w(['d1', 'migrations', 'apply', 'agents-office-db', '--local', '--persist-to', persist]);
@@ -32,7 +32,7 @@ export async function levantar({ usuarios }) {
   }
   w(['d1', 'execute', 'agents-office-db', '--local', '--persist-to', persist, '--command', filas.join(' ')]);
   const puerto = await puertoLibre();
-  const { cmd, args, opts } = wrangler(['dev', '--local', '--persist-to', persist, '--port', String(puerto), '--ip', '127.0.0.1', '--inspector-port', '0']);
+  const { cmd, args, opts } = wrangler(['dev', '--local', '--persist-to', persist, '--port', String(puerto), '--ip', '127.0.0.1', '--inspector-port', '0', ...extra]);
   const hijo = spawn(cmd, args, { ...opts, detached: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' } });
   let log = '';
   await new Promise((res, rej) => {
