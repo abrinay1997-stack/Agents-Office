@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os';
 import { crearSincronizador, HISTORIAL_MAX_BYTES, HISTORIAL_GUARDAR_BYTES, HISTORIAL_MINIMO } from '../../anuncios/sincronizar.mjs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { manejar, correrReloj } from '../worker/lib/rutas.js';
+import { manejar, correrReloj, ordenDelReloj } from '../worker/lib/rutas.js';
+import { MODULOS } from '../worker/modulos/index.js';
 import { cuerpo, TOPE_JSON } from '../worker/lib/respuesta.js';
 import { podar, tocaPodar, RETENCION_DIAS, LOTE } from '../worker/lib/mantenimiento.js';
 import { conSesion, cargarTareas } from '../worker/lib/tareas/sesion.js';
@@ -429,4 +430,11 @@ test('SECRETOS: la comparación de tokens en tiempo constante no acepta prefijos
   assert.equal(igualSeguro('secreto-largo-1234', 'secreto-largo-1234'), true);
   for (const [a, b] of [['secreto', 'secreto-largo-1234'], ['secreto-largo-1234', 'secreto'], ['', 'x'], ['x', ''], ['abc', 'abd']]) assert.equal(igualSeguro(a, b), false, `${a} vs ${b}`);
   for (const [a, b] of [[null, 'x'], ['x', undefined], [123, 123], [['a'], ['a']]]) assert.equal(igualSeguro(a, b), false);
+});
+
+test('RELOJ: la vuelta de los agentes (espera al modelo) va la última; el orden de las rutas no cambia', () => {
+  const nombres = ordenDelReloj(MODULOS).filter((m) => m.cadaMinuto).map((m) => m.nombre);
+  assert.equal(nombres.at(-1), 'agentes'); assert.ok(nombres.indexOf('tareas') < nombres.indexOf('agentes'), 'tareas crea lo que agentes toma en la misma vuelta');
+  for (const rapido of ['telegram', 'disparadores', 'contenido', 'anuncios']) assert.ok(nombres.indexOf(rapido) < nombres.indexOf('agentes'), rapido);
+  const rutas = MODULOS.map((m) => m.nombre); assert.ok(rutas.indexOf('bandeja') < rutas.indexOf('contenido'), 'la Bandeja contesta antes que Contenido');
 });

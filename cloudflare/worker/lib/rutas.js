@@ -31,13 +31,16 @@ function origenValido(req) {
 }
 
 /** El reloj de cada minuto (lo que en serve.mjs eran setInterval). La zona de la oficina se instala aquí, UNA vez, igual que en `manejar`: los módulos no la tocan. */
+/** Lo lento va al final del reloj: una vuelta de agentes espera al modelo (minutos) y, delante, retrasaba lo que es cosa de segundos (los avisos de Telegram, los disparadores, la limpieza del equipo).
+ *  El orden de MODULOS sigue siendo el de las rutas (Bandeja antes que Contenido); solo el del reloj cambia. `tareas` va antes: crea las tareas que `agentes` toma en esa misma vuelta. */
+export const ordenDelReloj = (modulos) => [...modulos].sort((a, b) => (a.nombre === 'agentes') - (b.nombre === 'agentes'));
 export async function correrReloj(env, ahoraMs = Date.now()) {
   registrarSecretos(env); // `ahoraMs`: solo las pruebas lo cambian
   instalarZona(env.ZONA_HORARIA);
   await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
   if (tocaPodar(ahoraMs)) { try { await podar(env.DB, ahoraMs); } catch (e) { console.error('[cron] poda:', e?.message ?? e); } } // lo que solo crece (auditoría, ejecuciones, invitaciones vencidas)
   // Un módulo que falle no tumba a los demás.
-  for (const mod of MODULOS) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
+  for (const mod of ordenDelReloj(MODULOS)) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
 }
 
 export async function manejar(req, env, exec = null) {
