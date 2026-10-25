@@ -19,7 +19,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     <div class="sg-wrap"><div class="sg-tabs" role="tablist" aria-label="Secciones"></div><div class="sg-pane" role="tabpanel" tabindex="-1"></div></div>
     <div class="sg-foot"><span class="sg-msg" role="status" aria-live="polite"></span><span class="sp"></span><button type="button" class="sg-btn pri" data-a="save">Guardar</button></div></div>`;
   document.body.appendChild(el);
-  let data = null, tab = served ? 'general' : 'apariencia', opener = null, dirty = {}, cifras = null, voice = null;
+  let data = null, sinAjustes = false, tab = served ? 'general' : 'apariencia', opener = null, dirty = {}, cifras = null, voice = null;
   const EXTRA = [['cifras', 'Cifras de la empresa'], ['voz', 'Voz de marca'], ['empresa', 'Preparar desde mi web']];
   const LOCAL = ['estado', 'apariencia', 'atajos'], NO_SAVE = ['empresa', ...LOCAL];
   const ESTADO = health ? [['estado', 'Estado']] : [];
@@ -57,7 +57,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   function render() {
     const tabs = el.querySelector('.sg-tabs'), pane = el.querySelector('.sg-pane');
     const all = tabList();
-    if ((!served || data) && !all.some(([k]) => k === tab)) tab = all[0][0];
+    if ((!served || data || sinAjustes) && !all.some(([k]) => k === tab)) tab = all[0][0]; // sinAjustes: el servidor no tiene /api/settings (la nube hasta la fase 6): no se queda esperando para siempre
     tabs.innerHTML = all.map(([k, t]) => `<button type="button" role="tab" id="sgt-${k}" aria-selected="${tab === k}" aria-controls="sgp" data-tab="${k}" tabindex="${tab === k ? 0 : -1}">${esc(t)}</button>`).join('');
     pane.id = 'sgp'; pane.setAttribute('aria-labelledby', 'sgt-' + tab); delete pane.dataset.nube;
     el.querySelector('[data-a="save"]').hidden = NO_SAVE.includes(tab) || !served || ajeno().some(t => t.key === tab);
@@ -79,7 +79,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   }
   async function load() {
     if (!served) return render();
-    try { const r = await fetch('/api/settings'); data = await r.json(); } catch { msg('Sin conexión con la oficina.', true); }
+    try { const r = await fetch('/api/settings'), j = await r.json(); if (r.ok && Array.isArray(j.groups)) data = j; else { sinAjustes = true; msg('Los demás ajustes todavía no están en esta oficina de la nube: se cambian en la de tu computadora.', true); } } catch { msg('Sin conexión con la oficina.', true); }
     render();
   }
   async function loadTab() {

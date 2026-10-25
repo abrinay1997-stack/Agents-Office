@@ -49,5 +49,4 @@ input:focus-visible { outline-offset: 1px; border-color: var(--focus); }
 .ficha b { font-weight: 600; }
 .oculto { display: none !important; }
 @media (max-width: 440px) { h1 { font-size: 30px; } .marca { margin-bottom: 22px; } }
-@media (prefers-reduced-motion: no-preference) { main { animation: entra .25s cubic-bezier(.2,.8,.2,1); } @keyframes entra { from { opacity: 0; transform: translateY(6px); } } }
 @media (forced-colors: active) { button.principal, input { border: 1px solid CanvasText; } }

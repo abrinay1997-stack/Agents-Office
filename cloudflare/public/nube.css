@@ -37,3 +37,6 @@
 .nb-h { font-size: 14px; margin: 18px 0 4px; }
 .nb-enlace { margin: 10px 0; } .nb-copia { display: flex; gap: 6px; } .nb-copia input { flex: 1; min-width: 0; }
 .nb-msg { min-height: 1.4em; font-size: 13px; color: var(--grey); } .nb-msg.mal { color: #B3261E; } body.dark .nb-msg.mal { color: #FF9A8F; }
+.nb-nom small { display: inline; }
+#setOv .nb-enlace label, #setOv .nb-clave label, #setOv .nb-perfil label { font-size: 13px; font-weight: 600; }
+.nb-clave input, .nb-perfil input[type=text] { width: 100%; }

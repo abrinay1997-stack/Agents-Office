@@ -21,6 +21,15 @@ const raiz = await fetch(base);
 ok(raiz.status === 200 && /text\/html/.test(raiz.headers.get('content-type') || ''), 'la página se sirve');
 ok(/default-src 'self'/.test(raiz.headers.get('content-security-policy') || ''), 'la página lleva CSP');
 
+// Fase 10: el acceso y la invitación son nativos y con CSP estricta; lo de la nube (nube.js, dictado) pide sesión; el Hub no se alcanza desde fuera
+const lg = await fetch(`${base}/login.html`);
+ok(lg.status === 200 && !/unsafe-inline/.test(lg.headers.get('content-security-policy') || ''), 'el acceso lleva CSP sin unsafe-inline');
+for (const r of ['/nube.js', '/nube.css', '/dictado.js']) ok((await fetch(base + r)).status === 401, `${r} sin sesión da 401`);
+const inv = await fetch(`${base}/invitacion/${'0'.repeat(48)}`);
+ok(inv.status === 200 && /invitacion\.js/.test(await inv.text()), 'la página de invitación se sirve sin sesión');
+ok((await fetch(`${base}/api/invitacion/${'0'.repeat(48)}`)).status === 404, 'una invitación inventada contesta 404');
+ok((await fetch(`${base}/api/live`, { headers: { Upgrade: 'websocket', Origin: base } })).status === 401, 'el socket en vivo exige sesión');
+
 if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
   const a = await fetch(`${base}/api/acceso`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: process.env.ADMIN_EMAIL, contrasena: process.env.ADMIN_PASSWORD }) });
   const cookie = (a.headers.get('set-cookie') || '').split(';')[0];

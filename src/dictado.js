@@ -252,6 +252,7 @@ export function iniciarDictado({ SR, doc = document, win = window } = {}) {
   win.addEventListener('resize', reponer); win.addEventListener('scroll', reponer, true);
   const reloj = win.setInterval(reponer, 600); // el campo se mueve con animaciones (paneles que se deslizan)
   win.addEventListener('pagehide', () => dic.cortar());
+  if (esCampoDictable(doc.activeElement)) mostrar(doc.activeElement); // el paquete llega tarde: el campo ya puede tener el foco
 
   return { destruir() { win.clearInterval(reloj); dic.cortar(); doc.removeEventListener('focusin', alEnfocar, true); doc.removeEventListener('focusout', alSalir, true); btn.remove(); est.remove(); estilo.remove(); soltarPad(); }, dictado: dic };
 }

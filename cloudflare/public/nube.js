@@ -210,7 +210,7 @@
     const msg = msgDe(pane);
     pane.querySelector('#nbArchivo').addEventListener('change', async (e) => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-      try { msg('Subiendo…'); const b = await reducirFoto(f); const r = await api('/api/yo/foto', { metodo: 'PUT', bytes: b }); yo.foto = r.foto; msg('Foto actualizada.'); refrescarYo(); if (panelVivo(pane, 'nube-perfil')) pintarPerfil(pane); } catch (x) { msg(x.message, true); }
+      try { msg('Subiendo…'); const b = await reducirFoto(f); const r = await api('/api/yo/foto', { metodo: 'PUT', bytes: b }); yo.foto = r.foto; refrescarYo(); if (panelVivo(pane, 'nube-perfil')) pintarPerfil(pane); msgDe(pane)('Foto actualizada.'); } catch (x) { msg(x.message, true); }
     });
     if (pane._nubePerfil) return; pane._nubePerfil = true; // el panel de Ajustes es UNO y se reutiliza: los escuchadores se ponen una sola vez
     pane.addEventListener('click', async (e) => {
@@ -236,7 +236,7 @@
     const fila = (m) => {
       const p = presentes.find((x) => x.userId === m.id);
       return `<li class="nb-fila" data-id="${esc(m.id)}">${avatar({ ...m, userId: m.id, etiqueta: p ? p.etiqueta : undefined })}
-        <div class="nb-quien"><b>${esc(m.nombre)}</b>${m.yo ? ' <small>(tú)</small>' : ''}${m.fundador ? ' <small>· fundó la oficina</small>' : ''}<small>${m.email ? esc(m.email) + ' · ' : ''}${p ? 'conectado · ' + esc(p.etiqueta || 'La oficina') : 'desconectado'}</small></div>
+        <div class="nb-quien"><span class="nb-nom"><b>${esc(m.nombre)}</b>${m.yo ? ' <small>(tú)</small>' : ''}${m.fundador ? ' <small>· fundó la oficina</small>' : ''}</span><small>${m.email ? esc(m.email) + ' · ' : ''}${p ? 'conectado · ' + esc(p.etiqueta || 'La oficina') : 'desconectado'}</small></div>
         ${admin ? `<select aria-label="Rol de ${esc(m.nombre)}" data-rol${m.fundador ? ' disabled' : ''}>${['admin', 'editor', 'lectura'].map((r) => `<option value="${r}"${m.rol === r ? ' selected' : ''}>${esc(rolTxt(r))}</option>`).join('')}</select>${m.yo || m.fundador ? '' : '<button type="button" class="sg-btn" data-a="quitar">Quitar</button>'}` : `<span class="nb-rol">${esc(rolTxt(m.rol))}</span>`}</li>`;
     };
     if (!equipo.miembros.length) cargarEquipo(true); // se pinta sola al llegar

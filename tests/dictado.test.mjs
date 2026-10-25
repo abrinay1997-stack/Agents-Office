@@ -149,4 +149,7 @@ test('cargarDictado: sin SpeechRecognition (Firefox) no baja nada; con él, pide
   assert.deepEqual(pedidos, []);
   assert.equal(cargarDictado(doc, { webkitSpeechRecognition: function () {}, setTimeout: (f) => f() }), true);
   assert.deepEqual(pedidos, ['dictado.js']);
+  let plazo = null; // con requestIdleCallback pide un plazo: una página que anima sin parar nunca está «en reposo»
+  cargarDictado(doc, { SpeechRecognition: function () {}, requestIdleCallback: (f, o) => { plazo = o; f(); } });
+  assert.ok(plazo?.timeout > 0);
 });
