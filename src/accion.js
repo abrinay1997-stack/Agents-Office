@@ -2,7 +2,7 @@
 // Un solo anuncio para lectores de pantalla (#acLive). Sin librerías; el estilo está en src/css/accion.css.
 let live = null;
 export function anunciar(t) { // región aria-live única; se vacía y se escribe de nuevo para que repetir un texto también se lea
-  if (!live || !live.isConnected) { live = document.createElement('div'); live.id = 'acLive'; live.className = 'ac-live'; live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite'); document.body.appendChild(live); }
+  if (!live || !live.isConnected) { live = document.createElement('div'); live.id = 'acLive'; live.className = 'ac-live'; live.setAttribute('data-modal-keep', ''); live.setAttribute('role', 'status'); live.setAttribute('aria-live', 'polite'); document.body.appendChild(live); }
   live.textContent = ''; setTimeout(() => { live.textContent = t || ''; }, 30);
 }
 export async function pedir(url, init = {}, ms = 20000) { // fetch + JSON; un fallo es un Error con el motivo en español

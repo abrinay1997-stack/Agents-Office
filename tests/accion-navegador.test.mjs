@@ -44,17 +44,16 @@ for (const ancho of [1280, 390]) {
     // la página real tiene 3D y cualquier clic de Playwright puede tardar: el tiempo se mide DENTRO de la página (clic → primer cambio visible)
     await p.evaluate(() => { const b = document.querySelector('#setOv [data-a="save"]'); window.__t = { st: [] }; new MutationObserver(() => window.__t.st.push(document.querySelector('#setOv .sg-st').textContent)).observe(document.querySelector('#setOv .sg-st'), { childList: true, characterData: true, subtree: true }); document.addEventListener('click', e => { if (e.target.closest('[data-a="save"]')) window.__t.clic ??= performance.now(); }, true);
       new MutationObserver(() => { if (b.classList.contains('ac-ok')) window.__t.ok ??= b.textContent; if (b.getAttribute('aria-busy') === 'true') { window.__t.busy ??= performance.now(); window.__t.txt ??= b.textContent; } }).observe(b, { attributes: true }); });
-    await p.click('#setOv [data-a="save"]');
+    await p.evaluate(() => { const b = document.querySelector('#setOv [data-a="save"]'); b.click(); b.click(); b.click(); }); // un clic y dos más encima: solo sale una petición
     await p.waitForFunction(() => window.__t.busy);
     const ms = await p.evaluate(() => window.__t.busy - window.__t.clic);
     console.log(`  primer cambio visible a ${ancho}px: ${ms.toFixed(1)} ms desde el clic`); assert.ok(ms < 100, `tardó ${ms} ms`);
     assert.match(await p.evaluate(() => window.__t.txt), /Guardando…/);
-    await p.evaluate(() => { const b = document.querySelector('#setOv [data-a="save"]'); b.click(); b.click(); }); // doble clic: no manda otra petición
     const altoMin = await p.$eval('#setOv [data-a="save"]', b => b.getBoundingClientRect().height); if (ancho < 600) assert.ok(altoMin >= 44, `alto ${altoMin}`);
     await p.waitForFunction(() => window.__t.ok, null, { timeout: 20000 });
     assert.match(await p.evaluate(() => window.__t.ok), /✓\s*Guardado/);
     assert.equal(posts, 1);
-    await p.waitForFunction(() => /Guardado/.test(document.getElementById('acLive')?.textContent || ''));
+    await p.waitForFunction(() => /Guardado/.test(document.getElementById('acLive')?.textContent || ''), null, { timeout: 15000 }).catch(async (e) => { throw new Error(e.message + ' · acLive=' + await p.evaluate(() => document.getElementById('acLive')?.outerHTML)); });
     const hist = await p.evaluate(() => window.__t.st); assert.ok(hist.includes('Guardando…') && hist.includes('Guardado ✓'), hist.join(' | ')); // «Sin guardar» → «Guardando…» → «Guardado ✓»
     await p.waitForFunction(() => document.querySelector('#setOv [data-a="save"]').textContent.trim() === 'Guardar', null, { timeout: 4000 });
     if (process.env.AO_AXE) { await p.addScriptTag({ path: process.env.AO_AXE }); const v = await p.evaluate(async () => (await axe.run('#setOv')).violations.map(x => x.id)); assert.deepEqual(v.filter(x => !['color-contrast'].includes(x)), []); }
@@ -78,11 +77,14 @@ test('cerrar Ajustes con cambios pendientes pregunta; «Seguir editando» los co
   await p.click('#setOv [data-a="save"]'); await p.waitForSelector('#setOv [data-a="save"].ac-ok'); await p.keyboard.press('Escape'); await p.waitForFunction(() => document.getElementById('setOv').hidden);
   await ctx.close();
 });
-test('movimiento reducido: el indicador no gira', { skip: SALTAR }, async (t) => {
-  if (!nav) return t.skip('sin Chromium'); const { p, ctx } = await conectores(1280, { reducido: true });
-  await p.route('**/api/settings', async (r) => { if (r.request().method() === 'POST') await new Promise(x => setTimeout(x, 800)); r.continue(); });
-  await p.click('#sgp [data-p="tools.web"]'); await p.click('#setOv [data-a="save"]'); await p.waitForSelector('#setOv .ac-sp');
-  assert.equal(await p.$eval('#setOv .ac-sp', e => getComputedStyle(e).animationName), 'none'); await ctx.close();
+test('movimiento reducido: el indicador no gira (y con movimiento normal sí)', { skip: SALTAR }, async (t) => {
+  if (!nav) return t.skip('sin Chromium');
+  for (const reducido of [true, false]) {
+    const { p, ctx } = await conectores(1280, { reducido });
+    const r = await p.evaluate(() => { document.querySelector('#sgp [data-p="tools.web"]').click(); document.querySelector('#setOv [data-a="save"]').click(); // el estado ocupado se pone en el acto: se mide en la misma pasada
+      const e = document.querySelector('#setOv .ac-sp'); return e ? getComputedStyle(e).animationName : null; });
+    assert.equal(r, reducido ? 'none' : 'ac-giro'); await ctx.close();
+  }
 });
 test('un botón de los de antes (se apaga y dice «Enviando…») recibe aria-busy solo, y lo pierde al reactivarse', { skip: SALTAR }, async (t) => {
   if (!nav) return t.skip('sin Chromium'); const { p, ctx } = await conectores(1280);

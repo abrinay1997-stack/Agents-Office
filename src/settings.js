@@ -123,6 +123,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     return { hecho: j.restart ? 'Guardado. Algunos cambios (↻) se aplican al reiniciar la oficina.' : 'Guardado y aplicado.' };
   }
   async function save(b = el.querySelector('[data-a="save"]')) {
+    if (b.getAttribute('aria-busy') === 'true') return false; // un segundo clic mientras guarda no hace nada
     msg(''); estado('Guardando…');
     const r = await conEstado(b, guardar, { ocupado: 'Guardando…', hecho: 'Guardado' });
     if (r.ok) { msg(r.valor.hecho); estado(r.valor.hecho.startsWith('No hay') ? '' : 'Guardado ✓', 'ok'); setTimeout(() => { if (el.querySelector('.sg-st.ok')) estado(''); }, 4000); } else { msg(r.error, true); estado('Sin guardar', 'sin'); }
