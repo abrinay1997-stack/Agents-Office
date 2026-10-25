@@ -5,7 +5,7 @@ import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
 
 export const ENTRADA = 'src/movil/index.js';
-export const CSS_MOVIL = ['movil.css', 'movil-b.css', 'movil-c.css'];
+export const CSS_MOVIL = ['movil.css', 'movil-b.css', 'movil-c.css', 'movil-e.css'];
 
 /** → { js, aparte } — `aparte`: los archivos que van SOLO en este paquete (la página no debe llevarlos). */
 export async function construirMovil({ cssCorto = s => s } = {}) {

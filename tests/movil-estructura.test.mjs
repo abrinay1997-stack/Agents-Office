@@ -75,7 +75,7 @@ test('ninguna pantalla pinta texto sin escapar: toda interpolación de datos pas
     const src = leer('src/movil/vistas/' + f);
     for (const m of src.matchAll(/\$\{([^}]*?\b(?:t|x|e|m|o|r|n|c|q)\.(?:title|titulo|text|desc|error|label|q|subject|channel|name)\b[^}]*)\}/g)) {
       const linea = src.slice(src.lastIndexOf('\n', m.index) + 1, src.indexOf('\n', m.index));
-      const aTexto = /ctx\.toast\(|texto: `|toast\(/.test(linea) || /^t\.error \?/.test(m[1]); // un aviso y el texto de una hoja de confirmación se escapan al pintarse (shell.toast, hoja.confirmar)
+      const aTexto = /ctx\.toast\(|texto: `|toast\(|aviso: |aviso\(|const (?:nombre = \(\) =>|n =) `«/.test(linea) || /^t\.error \?/.test(m[1]); // un aviso y el texto de una hoja de confirmación se escapan al pintarse (shell.toast, hoja.confirmar)
       if (!aTexto && !/esc\(|mdToHtml\(|esc2\(/.test(m[1])) sospechosos.push(`${f}: \${${m[1].slice(0, 60)}}`);
     }
   }

@@ -48,7 +48,7 @@ export async function oficina({ semilla = true } = {}) {
   const base = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 160; i++) { try { if ((await fetch(base + '/api/health')).ok) break; } catch {} await espera(250); }
   const api = async (ruta, m = 'GET', b) => (await fetch(base + ruta, { method: m, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined })).json();
-  return { base, api, cerrar: () => { srv.kill(); claude.close(); fs.rmSync(dir, { recursive: true, force: true }); } };
+  return { base, api, dir, brain, data, cerrar: () => { srv.kill(); claude.close(); fs.rmSync(dir, { recursive: true, force: true }); } };
 }
 
 /** La estructura clave del escritorio: lo que no debe cambiar al añadir la versión móvil. */
@@ -164,7 +164,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     await page.locator('.mv-toast-b').first().tap(); await espera(500);
     // detalle en hoja
     await tocar('[data-vista="tareas"] .mv-fila:not(.hecha) [data-abrir]'); await page.waitForSelector('.mv-hoja .mv-det'); await espera(500); await foto('03-tarea-detalle'); await medir('Detalle de tarea');
-    paso(await page.locator('.mv-hoja textarea').evaluate(e => parseFloat(getComputedStyle(e).fontSize) >= 16), 'Detalle: el campo es de 16 px o más (iOS no hace zoom)');
+    paso(await page.locator('.mv-hoja textarea').first().evaluate(e => parseFloat(getComputedStyle(e).fontSize) >= 16), 'Detalle: el campo es de 16 px o más (iOS no hace zoom)');
     await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' }); paso(true, 'Detalle: «atrás» cierra la hoja y no sale de la app');
     // chips
     for (const [k] of [['proximos'], ['todas'], ['delegadas'], ['hechas'], ['agentes']]) { await tocar(`[data-lista="${k}"]`); await page.waitForTimeout(200); paso(await page.locator(`[data-lista="${k}"]`).getAttribute('aria-pressed') === 'true', `Tareas: la lista «${k}» abre`); }
@@ -216,7 +216,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     paso(toques === 1 && /Hoy/.test(await texto('.mv-dia.hoy h3')), 'Calendario: la agenda de hoy está a 1 toque');
     paso(await page.locator('.mv-ev').count() >= 1, 'Calendario: la agenda lista lo programado (tarea del agente y fechas límite)');
     await tocar('[data-modo="mes"]'); await page.waitForSelector('.mv-celda'); await foto('04b-calendario-mes'); await medir('Calendario (mes)');
-    await tocar('.mv-fab'); await page.waitForSelector('.mv-hoja #mvNt'); await foto('04c-calendario-crear'); await medir('Nueva tarea (calendario)'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
+    await tocar('.mv-fab'); await tocar('.mv-hoja [data-k="tarea"]'); await page.waitForSelector('.mv-hoja #mvNt'); await foto('04c-calendario-crear'); await medir('Nueva tarea (calendario)'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
     await tocar('[data-modo="tres"]'); await page.waitForTimeout(150); paso(await page.locator('.mv-dia').count() === 3, 'Calendario: la vista de 3 días enseña tres días'); await foto('04d-calendario-3dias');
     await tocar('[data-modo="agenda"]');
 
@@ -229,14 +229,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     toques = 0; await tocar('[aria-label="Conversaciones guardadas"]'); await page.waitForSelector('.mv-hoja'); await foto('05c-dimitri-historial'); paso(toques <= 2, `Dimitri: el historial está a ${toques} toques`); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
     paso((await desborda('Dimitri')).ancho, 'Dimitri: sin desplazamiento horizontal');
 
-    // ---- Más → una vista que aún no tiene versión móvil se abre en el contenedor de escritorio (hoy: Anuncios) ----
-    toques = 0; await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('[data-esc="anuncios"]'); await page.waitForFunction(() => document.body.classList.contains('mv-esc') && document.body.classList.contains('anuOpen'), null, { timeout: 8000 }); await espera(700);
-    paso(toques <= 3, `3 toques o menos: abrir Anuncios desde Más (${toques})`);
-    paso(await page.locator('.mv-atras:not([hidden])').count() === 1 && (await texto('.mv-titulo')) === 'Anuncios', 'Más → Anuncios: la cabecera dice «Anuncios» y tiene su botón Volver');
-    const caja = await page.evaluate(() => { const r = document.getElementById('anuOv').getBoundingClientRect(); const b = document.querySelector('.mv-bar').getBoundingClientRect(), t = document.querySelector('.mv-tabs').getBoundingClientRect(); return { dentro: r.top >= b.bottom - 1 && r.bottom <= t.top + 1, ancho: r.width <= innerWidth + 1 }; });
-    paso(caja.dentro && caja.ancho, 'Más → Anuncios: la vista de escritorio cabe entre la cabecera y la barra de pestañas'); await foto('09-anuncios-escritorio');
-    await tocar('.mv-atras'); await page.waitForFunction(() => !document.body.classList.contains('mv-esc') && !document.body.classList.contains('anuOpen'), null, { timeout: 5000 });
-    paso(true, 'Más → Anuncios: «Volver» cierra la vista y regresa a la pantalla de antes');
+    // (25 oct 2026) Todas las vistas de «Más» ya tienen versión móvil propia: el contenedor de escritorio (`mv-esc`) solo queda para «Dimitri (escritorio)», que abre la tarjeta de GENERAR; su prueba vive en tests/movil-e-navegador.test.mjs.
     // ajustes (ahora una pantalla móvil propia, equipo C): sale y vuelve
     await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('.mv-hoja.mv-mas [data-vista="ajustes"]'); await page.waitForSelector('[data-vista="ajustes"]:not([hidden]) .mv-lista', { timeout: 8000 }); await espera(300); await foto('10-ajustes');
     const aj = await page.evaluate(() => { const b = document.querySelector('[data-vista="ajustes"]').getBoundingClientRect(); return b.width <= innerWidth + 1 && b.left >= -1 && !document.body.classList.contains('mv-esc'); });
