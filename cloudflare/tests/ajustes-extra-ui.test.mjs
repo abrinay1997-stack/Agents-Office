@@ -71,7 +71,8 @@ for (const [ancho, alto, tema] of [[1280, 800, 'light'], [390, 844, 'dark']]) {
     await p.waitForFunction(() => document.querySelectorAll('[data-restaurar]').length === 2, null, { timeout: 90000 }).catch(async (e) => { throw new Error(`${e.message} · msg=${await p.textContent('#setOv .sg-msg')} · n=${await p.locator('[data-restaurar]').count()}`); });
     assert.equal(o.d1._db.prepare('select count(*) n from notas').get().n, 0);
     await axe(p, 'nube · hecho'); assert.equal(await desborda(p), false);
-    await p.evaluate(() => { const b = document.querySelector('[data-restaurar]'); b.click(); b.click(); }); // dos pulsaciones seguidas: la ventana de seguridad es de 5 s y Chromium cargado tarda más entre dos clics await p.waitForFunction(() => /Restaurado/.test(document.querySelector('#setOv .sg-msg').textContent), null, { timeout: 90000 });
+    await p.evaluate(() => { const b = document.querySelector('[data-restaurar]'); b.click(); b.click(); });
+    await p.waitForFunction(() => /Restaurado/.test(document.querySelector('#setOv .sg-msg').textContent), null, { timeout: 90000 });
     assert.equal(o.d1._db.prepare('select count(*) n from notas').get().n, 59);
     assert.deepEqual(errores, []); await ctx.close();
   });
