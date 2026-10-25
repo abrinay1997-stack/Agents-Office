@@ -5,6 +5,8 @@
 //   /api/team · /api/agents · /api/calendar.ics
 // y, cada minuto, el reloj de serve.mjs: las rutinas que tocan se vuelven tareas, las programadas para ahora pasan a la cola y los avisos de fecha límite.
 // Los agentes NO se ejecutan aquí (fase 4): la cola queda lista y la fase 4 la lee con tomarSiguiente(db) y devuelve lo que hizo con guardarEjecucion(db, …).
+import { cargarBibliotecaNube } from '../lib/biblioteca.js';
+import { resumenDe } from '../../../biblioteca-core.mjs';
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { conSesion, cargarTareas } from '../lib/tareas/sesion.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
@@ -127,7 +129,7 @@ async function manejarTareas({ req, env, db, ruta, url, usuario, b, g }) {
 }
 
 /* ---------- agentes (el roster) ---------- */
-async function manejarAgentes({ req, db, ruta, usuario, b }) {
+async function manejarAgentes({ req, env, db, ruta, usuario, b }) {
   const C = await leerContexto(db);
   if (ruta === '/api/agents' && req.method === 'GET') {
     const { listarFilas } = await import('../lib/almacen.js');
@@ -163,6 +165,7 @@ async function manejarAgentes({ req, db, ruta, usuario, b }) {
     agent: C.salida().find(x => x.id === a.id), skills: (await skillsDe(db, a)).map(s => ({ name: s.name, description: s.description || '', agents: s.agents || [], departments: s.departments || [], everyone: !!s.everyone, files: (s.files || []).map(f => f.name), source: 'brain', path: '' })), biblioteca: [], lessons: await leccionesDe(db, a.id),
     stats: { done: bien.length, failed: hechas.length - bien.length, running: tareas.filter(t => t.state === 'doing').length, waiting: tareas.filter(t => t.state === 'waiting').length, pending: tareas.filter(t => t.state === 'next' || t.state === 'scheduled').length, avgMinutes: dur.length ? Math.round(dur.reduce((x, y) => x + y, 0) / dur.length / 60000) : null },
     recent: tareas.filter(t => !t.archived).sort((x, y) => (y.doneAt || y.addedAt || 0) - (x.doneAt || x.addedAt || 0)).slice(0, 10).map(t => ({ id: t.id, title: t.title, state: t.state, error: !!t.error, at: t.doneAt || t.addedAt })),
+    biblioteca: (await cargarBibliotecaNube({ env, db, agentes: C.agents })).b.de(a).map(h => ({ ...resumenDe(h), suya: h.agents.includes(a.id) })), // las habilidades que puede leer (como la ficha local)
     connectors: [], studio: false, contenido: false,
   });
 }

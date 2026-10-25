@@ -47,7 +47,8 @@ import { DEPTS, DEPT_KEYS } from './src/data.js';
 import * as mcp from './mcp.mjs';
 import { loadRoster, saveAgent } from './roster.mjs';
 import { loadSkills } from './skills.mjs';
-import { cargarBiblioteca, raices } from './biblioteca.mjs'; // 7 oct 2026: métodos que se leen cuando hacen falta (biblioteca/, habilidades-mcp.mjs)
+import { cargarBiblioteca, raices } from './biblioteca.mjs';
+import { listarHabilidades, contextoMarketingTexto } from './biblioteca-core.mjs'; // 7 oct 2026: métodos que se leen cuando hacen falta (biblioteca/, habilidades-mcp.mjs)
 import * as learn from './learn.mjs';
 import * as onboard from './onboard.mjs';
 import * as routines from './routines.mjs';
@@ -701,9 +702,7 @@ function bibliotecaText(a, pedido = '') { // 7 oct 2026: el índice de sus habil
 // la nota contexto-marketing (posicionamiento, cliente ideal, objeciones, palabras del cliente…): la base de todas las habilidades de marketing
 function contextoMarketingText(a, index) {
   if (!biblio.de(a).length) return '';
-  const t = index.get('contexto-marketing');
-  return t ? `\n\nCONTEXTO DE MARKETING (nota contexto-marketing del Cerebro: úsalo tal cual; si algo choca con la tarea, dilo)\n${t.slice(0, 5000)}`
-    : '\n\nCONTEXTO DE MARKETING: la empresa todavía no tiene la nota «contexto-marketing» en el Cerebro. Si tu trabajo depende del posicionamiento, el cliente ideal o las objeciones, sácalo de las demás notas, marca lo supuesto (assumed) y sugiere al final, en una línea, crearla con la habilidad contexto-marketing (o con Ajustes → Preparar desde mi web).';
+  return contextoMarketingTexto(index.get('contexto-marketing')); // el mismo texto que la nube (biblioteca-core.mjs)
 }
 function tareasText() { // plan T3 (6 oct 2026): the desk's own task, as tools (tareas-mcp.mjs)
   if (backend !== 'claude-cli') return '';
@@ -2520,8 +2519,7 @@ const server = http.createServer(async (req, res) => {
     // la biblioteca de habilidades (biblioteca.mjs): la lista (por agente o buscando) y una habilidad o su referencia; solo lee
     if (url.pathname === '/api/biblioteca' && req.method === 'GET') {
       refreshSkills(); const a = AGENTS.find(x => x.id === url.searchParams.get('agente')), q = url.searchParams.get('buscar') || '';
-      let l = a ? biblio.de(a) : biblio.todas;
-      if (q) { const conA = a ? biblio.elegir(q, a, 8) : []; const qs = new Set(raices(q)); const pesa = h => raices(`${h.id.replace(/-/g, ' ')} ${h.titulo} ${h.description}`).filter(w => qs.has(w)).length; l = conA.length ? conA : l.map(h => [h, pesa(h)]).filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]).slice(0, 8).map(x => x[0]); }
+      const l = listarHabilidades(biblio, a, q); // el mismo código que la nube (biblioteca-core.mjs)
       return json(res, 200, { habilidades: l.map(biblio.resumen), total: biblio.todas.length, problemas: biblio.problemas });
     }
     { const m = url.pathname.match(/^\/api\/biblioteca\/([a-z0-9-]+)$/); if (m && req.method === 'GET') { refreshSkills(); const r = biblio.leer(m[1], url.searchParams.get('referencia')); return r.error ? json(res, 404, { error: r.error }) : json(res, 200, { ...biblio.resumen(r.habilidad), referencia: r.referencia || null, texto: r.texto }); } }
