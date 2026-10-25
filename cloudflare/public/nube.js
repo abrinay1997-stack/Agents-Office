@@ -319,7 +319,7 @@
   }
 
   // Las dos pestañas de Ajustes (src/settings.js lee window.AO_AJUSTES_EXTRA al pintar).
-  window.AO_AJUSTES_EXTRA = [
+  window.AO_AJUSTES_EXTRA = [...(Array.isArray(window.AO_AJUSTES_EXTRA) ? window.AO_AJUSTES_EXTRA : []), // lo que ya registró ajustes-extra.js (Restablecer oficina, Revisar lo que leí) se conserva
     { key: 'nube-perfil', label: 'Mi perfil', primera: true, render: (pane) => { if (yo) pintarPerfil(pane); } },
     { key: 'nube-equipo', label: 'Cuentas y roles', render: (pane) => { if (yo) pintarEquipo(pane); } },
   ];

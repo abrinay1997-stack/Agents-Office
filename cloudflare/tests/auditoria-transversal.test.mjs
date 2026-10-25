@@ -59,7 +59,7 @@ const ESCRIBEN = [
   '/api/contenido/llenar', '/api/contenido/mejorar', '/api/contenido/guardados', '/api/contenido/plantillas', '/api/contenido/bandeja/sincronizar', '/api/contenido/bandeja/abc123/enviar',
   '/api/anuncios/accion', '/api/anuncios/borradores', '/api/anuncios/borradores/abc123/crear', '/api/anuncios/sincronizar', '/api/anuncios/deshacer', '/api/anuncios/conversiones',
   '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
-  '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company',
+  '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar', '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
   '/api/equipo/invitaciones', '/api/notices/read', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
   '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
 ];
@@ -70,6 +70,7 @@ const SOLO_ADMIN = [
   ['POST', '/api/routines'], ['PATCH', '/api/agents/olead'], ['POST', '/api/agents/olead/forget'],
   ['POST', '/api/contenido/piezas/abc123/aprobar'], ['POST', '/api/contenido/piezas/abc123/entregar'], ['PUT', '/api/contenido/config'], ['POST', '/api/contenido/cola/tick'], ['POST', '/api/contenido/llenar'], ['POST', '/api/contenido/mejorar'],
   ['POST', '/api/anuncios/accion'], ['POST', '/api/anuncios/borradores/abc123/crear'], ['POST', '/api/anuncios/sincronizar'], ['POST', '/api/anuncios/deshacer'], ['POST', '/api/anuncios/conversiones'],
+  ['POST', '/api/restablecer'], ['POST', '/api/restablecer/confirmar'], ['POST', '/api/restablecer/deshacer'], ['POST', '/api/onboard/aplicar'], ['POST', '/api/onboard/deshacer'], ['POST', '/api/onboard/descartar'],
   ['POST', '/api/sub/chat'], ['POST', '/api/sub/ops'], ['PUT', '/api/settings/telegram'], ['POST', '/api/settings'], ['POST', '/api/costs/apply'], ['POST', '/api/contenido/meta/sincronizar'], ['POST', '/api/contenido/analiticas/actualizar'], ['POST', '/api/contenido/analiticas/indicadores'], ['POST', '/api/business/value'], ['POST', '/api/brain/upload'], ['POST', '/api/cifras'], ['PUT', '/api/triggers'], ['POST', '/api/equipo/invitaciones'], ['POST', '/api/voces/design'],
 ];
 
@@ -411,10 +412,10 @@ test('RENDIMIENTO: la oficina (2 MB) vuelve a llevar ETag aunque el Worker le in
   const cookie = (await pedir(manejar, env, '/api/acceso', { metodo: 'POST', cuerpo: { email: c.email, contrasena: c.clave } })).headers.get('set-cookie').split(';')[0];
   const ver = (h = {}) => manejar(new Request('https://oficina.test/', { headers: { cookie, ...h } }), env);
   const a = await ver(); const etag = a.headers.get('etag');
-  assert.equal(a.status, 200); assert.match(await a.text(), /nube\.js/); assert.match(etag, /^W\/"v1-nube1"$/);
+  assert.equal(a.status, 200); assert.match(await a.text(), /nube\.js/); assert.match(etag, /^W\/"v1-nube2"$/);
   const b = await ver({ 'if-none-match': etag }); assert.equal(b.status, 304); assert.equal(await b.text(), ''); assert.equal(b.headers.get('etag'), etag);
   version = '"v2"'; // un despliegue nuevo cambia el ETag de Cloudflare y con él el nuestro
-  const c2 = await ver({ 'if-none-match': etag }); assert.equal(c2.status, 200); assert.match(c2.headers.get('etag'), /v2-nube1/);
+  const c2 = await ver({ 'if-none-match': etag }); assert.equal(c2.status, 200); assert.match(c2.headers.get('etag'), /v2-nube2/);
   const sinSesion = await manejar(new Request('https://oficina.test/', { headers: { 'if-none-match': etag } }), env);
   assert.equal(sinSesion.status, 200, 'sin sesión nunca se contesta 304 de la oficina: se ve el acceso'); assert.ok(!/OFICINA/.test(await sinSesion.text()));
 });

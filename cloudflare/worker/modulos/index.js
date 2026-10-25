@@ -11,6 +11,7 @@ import * as telegram from './telegram.js';
 import * as disparadores from './disparadores.js';
 import * as equipo from './equipo.js';
 import * as biblioteca from './biblioteca.js';
+import * as restablecer from './restablecer.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -23,6 +24,7 @@ export const MODULOS = [
   ajustes, // /api/settings y los avisos del Estado
   telegram, // el webhook público y los avisos al teléfono
   disparadores, // POST /api/hook/<id> (público) y /api/triggers
+  restablecer, // Ajustes → Restablecer oficina (solo administradores)
   biblioteca, // la Biblioteca de habilidades (solo lee): /api/biblioteca
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];

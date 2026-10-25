@@ -2,9 +2,9 @@
 // Con `run_worker_first: ["/*"]` TODO pasa por aquí: ningún archivo de la oficina sale sin sesión.
 const PUBLICAS = new Set(['/login.html', '/login.js', '/acceso.css', '/acceso-tema.js', '/invitacion.html', '/invitacion.js']);
 const RE_INVITACION = /^\/invitacion(\/([0-9a-f]{1,64})?)?$/; // el enlace de una invitación: sin sesión, la página nativa que la acepta
-const PAQUETES = new Set(['/estudio-extra.js', '/tareas-vista.js', '/anuncios-vista.js', '/pieza-editor.js', '/dictado.js']); // los pide la página bajo demanda
+const PAQUETES = new Set(['/estudio-extra.js', '/tareas-vista.js', '/anuncios-vista.js', '/pieza-editor.js', '/dictado.js', '/ajustes-extra.js']); // los pide la página bajo demanda
 const NUBE = new Set(['/nube.js', '/nube.css']); // lo que solo existe en la nube (presencia, equipo, perfil): se inyecta en la oficina al servirla, solo con sesión
-const INYECCION = '<link rel="stylesheet" href="/nube.css"><script src="/nube.js" defer></script>';
+const INYECCION = '<link rel="stylesheet" href="/nube.css"><script src="/nube.js" defer></script><script src="/ajustes-extra.js" defer></script>'; // + Ajustes: «Restablecer oficina» y «Revisar lo que leí» (src/ajustes-extra.js)
 
 /** La oficina real con las dos líneas de la nube añadidas al final del <body>. La página local NO las lleva: sin Worker no hay presencia ni equipo. */
 async function conNube(resp, req) {
@@ -13,7 +13,7 @@ async function conNube(resp, req) {
   // La página pesa ~2 MB: sin ETag, cada recarga la bajaba entera. Se vuelve a poner uno DERIVADO del de Cloudflare (cambia en cada despliegue) más la marca de lo inyectado; el mismo para todas las personas (la inyección es fija).
   const base = resp.headers.get('etag');
   if (base) {
-    const etag = `W/"${base.replace(/^W\//, '').replace(/"/g, '')}-nube1"`;
+    const etag = `W/"${base.replace(/^W\//, '').replace(/"/g, '')}-nube2"`;
     if ((req?.headers.get('if-none-match') || '').split(',').map((x) => x.trim()).includes(etag)) { try { await resp.body?.cancel(); } catch { /* ya está */ } return new Response(null, { status: 304, headers: { etag, 'cache-control': h.get('cache-control') || 'private, no-cache' } }); }
     h.set('etag', etag);
   }
