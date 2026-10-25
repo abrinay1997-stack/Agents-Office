@@ -138,6 +138,7 @@ export function initCalendar(ctx) {
   // (or by Telegram, or a piece made in Contenido) never showed until the range changed. Opening the calendar and its 30-second tick fetch them
   // again; a redraw only happens when what is shown changed, and never under an open popover or a drag (audit B42).
   function refetchLayers() { mKey = ''; ctKey = ''; const { from, to } = range(); syncContent(from, to); syncMias(from, to); }
+  addEventListener('ao:cambio', e => { if (openNow && !document.hidden && (e.detail?.area === 'tareas' || e.detail?.area === 'contenido')) refetchLayers(); }); // en la nube: otra persona cambió algo (nube.js)
   function repaintIfChanged() { if (openNow && E.pop.hidden && !(dnd && dnd.dragging) && sig() !== lastSig) render(); }
   function miaCard(ev, line) {
     const t = ev.t, hecha = t.state === 'done', vencida = !hecha && ev.at < Date.now(), hora = ev.conHora ? hm(ev.at) : 'todo el día', tip = `Tuya · ${ev.title} · ${hecha ? 'hecha' : vencida ? 'vencida' : 'vence ' + hora} · clic: abrirla en Tareas → Mías`;

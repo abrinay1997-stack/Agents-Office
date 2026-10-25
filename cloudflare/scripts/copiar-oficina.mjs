@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DESTINO = join(RAIZ, 'cloudflare', 'public', 'oficina');
 /** archivo de dist/ → nombre con el que lo pide la página (serve.mjs los sirve en la raíz) */
-export const ARCHIVOS = { 'command-centre-v2.html': 'index.html', 'estudio-extra.js': 'estudio-extra.js', 'tareas-vista.js': 'tareas-vista.js', 'anuncios-vista.js': 'anuncios-vista.js', 'pieza-editor.js': 'pieza-editor.js' };
+export const ARCHIVOS = { 'command-centre-v2.html': 'index.html', 'estudio-extra.js': 'estudio-extra.js', 'tareas-vista.js': 'tareas-vista.js', 'anuncios-vista.js': 'anuncios-vista.js', 'pieza-editor.js': 'pieza-editor.js', 'dictado.js': 'dictado.js' };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   mkdirSync(DESTINO, { recursive: true });

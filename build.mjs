@@ -67,6 +67,8 @@ escribirEntero('dist/tareas-vista.js', tareasV.js); // la vista Tareas, antes qu
 escribirEntero('dist/anuncios-vista.js', anunciosV.js); // la vista Anuncios, igual
 escribirEntero('dist/pieza-editor.js', piezaE.js); // el editor de piezas de Contenido, igual
 escribirEntero('dist/command-centre-v2.html', html);
+// dictado por voz (fase 10): un script suelto junto a la página (src/dictado-carga.js lo pide solo si el navegador sabe dictar); sin versión: no comparte nada con la página
+escribirEntero('dist/dictado.js', (await build({ entryPoints: ['src/dictado-app.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text);
 
 // dev variant with external script for faster iteration
 mkdirSync('dist', { recursive: true });

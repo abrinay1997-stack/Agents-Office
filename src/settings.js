@@ -23,7 +23,8 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   const EXTRA = [['cifras', 'Cifras de la empresa'], ['voz', 'Voz de marca'], ['empresa', 'Preparar desde mi web']];
   const LOCAL = ['estado', 'apariencia', 'atajos'], NO_SAVE = ['empresa', ...LOCAL];
   const ESTADO = health ? [['estado', 'Estado']] : [];
-  const tabList = () => (served && data ? [...ESTADO, data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ['atajos', 'Atajos de teclado']] : [...ESTADO, ['apariencia', 'Apariencia'], ['atajos', 'Atajos de teclado']]);
+  const ajeno = () => (Array.isArray(window.AO_AJUSTES_EXTRA) ? window.AO_AJUSTES_EXTRA : []); // pestañas que añade quien aloja la oficina (en la nube: Mi perfil y Equipo, cloudflare/public/nube.js); local: ninguna
+  const tabList = () => (served && data ? [...ESTADO, data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ...ajeno().map(t => [t.key, t.label]), ['atajos', 'Atajos de teclado']] : [...ESTADO, ['apariencia', 'Apariencia'], ...ajeno().map(t => [t.key, t.label]), ['atajos', 'Atajos de teclado']]);
   const THEME_NAME = { light: 'Claro', dark: 'Oscuro', auto: 'Automático' };
   function themeHTML() {
     const cur = theme ? theme.get() : 'light', sys = theme && theme.systemDark() ? 'oscuro' : 'claro';
@@ -58,8 +59,9 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     const all = tabList();
     if ((!served || data) && !all.some(([k]) => k === tab)) tab = all[0][0];
     tabs.innerHTML = all.map(([k, t]) => `<button type="button" role="tab" id="sgt-${k}" aria-selected="${tab === k}" aria-controls="sgp" data-tab="${k}" tabindex="${tab === k ? 0 : -1}">${esc(t)}</button>`).join('');
-    pane.id = 'sgp'; pane.setAttribute('aria-labelledby', 'sgt-' + tab);
-    el.querySelector('[data-a="save"]').hidden = NO_SAVE.includes(tab) || !served;
+    pane.id = 'sgp'; pane.setAttribute('aria-labelledby', 'sgt-' + tab); delete pane.dataset.nube;
+    el.querySelector('[data-a="save"]').hidden = NO_SAVE.includes(tab) || !served || ajeno().some(t => t.key === tab);
+    const otra = ajeno().find(t => t.key === tab); if (otra) { pane.innerHTML = ''; otra.render(pane); return; }
     if (tab === 'estado') { pane.innerHTML = health.html(); return; }
     if (tab === 'apariencia') { pane.innerHTML = themeHTML(); return; }
     if (tab === 'atajos') { pane.innerHTML = keysHTML(); return; }

@@ -28,6 +28,7 @@ Decisión del dueño (25 oct 2026): llevar **toda** la oficina a Cloudflare con 
 | 6 | **Dimitri**, Negocio, Ajustes, Telegram (webhook nativo), disparadores | Los webhooks encajan de serie en Workers |
 | 7 ✅ | **Anuncios de Meta y la Bandeja** (hecha el 25 oct, ver «Anuncios de Meta y la Bandeja en la nube» en `docs/cloudflare.md`) | Con el freno por uso y la regla del dinero; necesita Workers de pago |
 | 8 | **Estudio** (imagen, video, voz, lotes): R2 + colas | Lo más pesado, al final. **8a ✅ (25 oct): el núcleo** (galería en R2, trabajos por pasos, motores, topes, voces). Falta: presets, lotes, escenario 3D, entender video y lo que usa `sharp` |
+| 10 ✅ | **Equipo, invitaciones, presencia, perfil, acceso nativo y dictado** (hecha el 25 oct; ver `docs/cloudflare.md` → «Fase 10») | Durable Object `Hub` + WebSocket, invitaciones de un solo uso, foto de perfil en R2, dictado por voz también en la oficina local |
 | 9 | **Apagar lo local**: migración final y la oficina de la computadora pasa a ser opcional | |
 
 ## Pendientes de decisión del dueño

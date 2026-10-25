@@ -1,0 +1,39 @@
+/* Presencia, mi cuenta y las pestañas Mi perfil / Equipo (solo en la nube). Usa los colores de la oficina (--ink, --cream, --hairline, --focus). */
+#nubeBarra { display: flex; align-items: center; gap: 6px; flex: none; margin-right: 6px; }
+.nb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.nb-grupo, .nb-yo { display: inline-flex; align-items: center; background: none; border: 0; padding: 2px; border-radius: 999px; cursor: pointer; color: inherit; min-height: 32px; min-width: 32px; }
+.nb-grupo[hidden] { display: none; }
+.nb-grupo .nb-av + .nb-av, .nb-grupo .nb-av + .nb-mas { margin-left: -8px; }
+.nb-mas { font-size: 11px; color: var(--grey); margin-left: 4px; }
+.nb-av { position: relative; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--c, #555); color: #fff; font: 700 11px/1 var(--ui); letter-spacing: .02em; border: 2px solid var(--cream); flex: none; }
+.nb-av img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.nb-on { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border-radius: 50%; background: #1B9E4B; border: 2px solid var(--cream); }
+.nb-yo .nb-av.nb-vivo { box-shadow: 0 0 0 2px #1B9E4B; }
+.nb-yo .nb-av.nb-sin { box-shadow: 0 0 0 2px var(--grey); filter: grayscale(.4); }
+.nb-grupo:focus-visible, .nb-yo:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 440px) { #nubeBarra { display: none; } } /* el dock ya va justo: en el teléfono, Ajustes → Mi perfil y Equipo */
+#nubeMenu { position: fixed; z-index: 120; min-width: 230px; background: var(--cream); color: var(--ink); border: 1px solid var(--hairline); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.18); padding: 6px; }
+#nubeMenu[hidden] { display: none; }
+.nb-m-cab { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid var(--hairline); margin-bottom: 4px; }
+.nb-m-cab div { display: flex; flex-direction: column; min-width: 0; } .nb-m-cab small { color: var(--grey); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+#nubeMenu [role=menuitem] { display: block; width: 100%; text-align: left; background: none; border: 0; color: inherit; font: inherit; padding: 0 10px; min-height: 36px; border-radius: 8px; cursor: pointer; }
+#nubeMenu [role=menuitem]:hover, #nubeMenu [role=menuitem]:focus-visible { background: var(--hairline); outline: none; box-shadow: inset 0 0 0 2px var(--focus); }
+#nubeAviso { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; z-index: 130; background: var(--ink); color: var(--cream); padding: 8px 14px; border-radius: 999px; font-size: 13px; transition: opacity .2s, transform .2s; max-width: 90vw; }
+#nubeAviso.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { #nubeAviso { transition: none; } }
+.nb-perfil { display: flex; gap: 16px; align-items: center; margin: 8px 0 14px; flex-wrap: wrap; }
+.nb-grande .nb-av { width: 72px; height: 72px; font-size: 24px; border-width: 3px; } .nb-grande .nb-on { display: none; }
+.nb-bot { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; } .nb-bot small, .nb-clave small { color: var(--grey); font-size: 12px; }
+.nb-subir { cursor: pointer; display: inline-flex; align-items: center; }
+.nb-sr-file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.nb-sr-file:focus-visible + * { outline: 2px solid var(--focus); }
+.nb-subir:has(+ .nb-sr-file:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.nb-clave { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--hairline); border-radius: 10px; padding: 10px 12px; margin: 14px 0; }
+.nb-clave legend { font-size: 13px; font-weight: 600; padding: 0 4px; }
+.nb-lista { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.nb-fila { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; flex-wrap: wrap; }
+.nb-quien { flex: 1; min-width: 160px; display: flex; flex-direction: column; } .nb-quien small { color: var(--grey); font-size: 12px; }
+.nb-rol { font-size: 13px; color: var(--grey); }
+.nb-h { font-size: 14px; margin: 18px 0 4px; }
+.nb-enlace { margin: 10px 0; } .nb-copia { display: flex; gap: 6px; } .nb-copia input { flex: 1; min-width: 0; }
+.nb-msg { min-height: 1.4em; font-size: 13px; color: var(--grey); } .nb-msg.mal { color: #B3261E; } body.dark .nb-msg.mal { color: #FF9A8F; }

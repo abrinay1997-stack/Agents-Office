@@ -19,6 +19,11 @@
     { "binding": "DB", "database_name": "agents-office-db", "database_id": "REEMPLAZAR_CON_EL_ID_DE_D1", "migrations_dir": "migraciones" }
   ],
 
+  // Fase 10: presencia y cambios en vivo. Un Durable Object (clase Hub, reexportada desde el módulo main) con almacenamiento SQLite
+  // (`new_sqlite_classes`: entra en el plan gratuito; con `new_classes` el despliegue pide plan de pago).
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }] },
+  "migrations": [{ "tag": "v1-hub", "new_sqlite_classes": ["Hub"] }],
+
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "agents-office-contenido" }],
 
   "vars": { "AI_MODELO": "claude-sonnet-5-5", "CONTENIDO_MAX_LLAMADAS": "40", "CONTENIDO_MAX_CONSULTAS": "40", "CONTENIDO_MAX_ACCIONES": "6", "AGENTES_MAX_LLAMADAS": "60", "AGENTES_MAX_CONSULTAS": "300" },

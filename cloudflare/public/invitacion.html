@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es" data-tema="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="referrer" content="no-referrer">
+<title>Invitación · Agents Office</title>
+<script src="/acceso-tema.js"></script>
+<link rel="stylesheet" href="/acceso.css">
+</head>
+<body>
+<main>
+  <div class="marca">AGENTS OFFICE<span class="co">PanaClaw</span></div>
+  <div id="cargando" role="status">Comprobando tu invitación…</div>
+  <div id="mala" class="oculto"><h1>Esta invitación no sirve</h1><p class="sub" id="malaTxt"></p><p class="nota"><a href="/">Ir a la pantalla de acceso</a></p></div>
+  <form id="f" class="oculto" novalidate>
+    <h1>Te damos la bienvenida</h1>
+    <p class="sub" id="quien"></p>
+    <div class="campo"><label for="email">Correo</label><input id="email" type="email" readonly autocomplete="username"></div>
+    <div class="campo"><label for="nombre">Tu nombre</label><input id="nombre" type="text" autocomplete="name" maxlength="60" required></div>
+    <div class="campo"><label for="pass">Crea tu contraseña</label>
+      <div class="con-ojo"><input id="pass" type="password" autocomplete="new-password" aria-describedby="reglas" required>
+      <button type="button" class="ojo" id="ojo" aria-pressed="false" aria-label="Mostrar contraseña" aria-controls="pass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="tachado" d="M4 4l16 16"/></svg></button></div></div>
+    <ul class="reglas" id="reglas" aria-live="polite"><li data-r="largo">12 caracteres o más</li><li data-r="igual">Las dos contraseñas coinciden</li></ul>
+    <div class="campo"><label for="pass2">Repítela</label><input id="pass2" type="password" autocomplete="new-password" required></div>
+    <button class="principal" id="entrar" type="submit">Crear mi cuenta y entrar</button>
+    <p class="aviso" id="msg" role="alert"></p>
+  </form>
+  <noscript><p class="aviso">Esta página necesita JavaScript.</p></noscript>
+</main>
+<script src="/invitacion.js"></script>
+</body></html>

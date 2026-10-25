@@ -859,7 +859,7 @@ export function initTasks(ctx) {
       archived.sort((a, b) => b.at - a.at);
       dirty = true;
       if (onLive) onLive(h);
-      await poll(); setInterval(() => { if (!document.hidden) poll(); }, 6000); addEventListener('visibilitychange', () => { if (!document.hidden) poll(); }); // a hidden tab stops asking; back in view it catches up at once // V3.5: routines fire on the server's clock — the page keeps up
+      await poll(); setInterval(() => { if (!document.hidden) poll(); }, 6000); addEventListener('visibilitychange', () => { if (!document.hidden) poll(); }); addEventListener('ao:cambio', e => { if (!document.hidden && e.detail?.area === 'tareas') poll(); }); // en la nube otra persona cambió tareas o rutinas: el aviso adelanta el sondeo (nube.js); local, nunca llega // a hidden tab stops asking; back in view it catches up at once // V3.5: routines fire on the server's clock — the page keeps up
     } catch (e) { console.warn('office server not reachable — running offline:', e.message); }
   }
   connect();

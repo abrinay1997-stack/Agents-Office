@@ -47,7 +47,7 @@ test('todo secreto que lee el Worker (env.X) está declarado en secretos.json', 
   const cfg = JSON.parse(leer('secretos.json'));
   const declarados = new Set([...cfg.obligatorios, ...cfg.opcionales]);
   const vars = new Set(Object.keys(wrangler.vars));
-  const propios = new Set(['DB', 'ASSETS', 'MEDIA']);
+  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB']);
   for (const f of archivos(join(RAIZ, 'worker')).filter((x) => x.endsWith('.js'))) {
     for (const m of leer(f.slice(RAIZ.length + 1)).matchAll(/\benv\.([A-Z][A-Z0-9_]+)/g))
       assert.ok(declarados.has(m[1]) || vars.has(m[1]) || propios.has(m[1]), `${f}: env.${m[1]} no está en secretos.json`);
@@ -78,10 +78,22 @@ test('el workflow de despliegue verifica antes de publicar y nunca imprime secre
   assert.ok(!/echo.*secrets\./.test(w));
 });
 
-test('worker/index.js solo exporta el handler por defecto (workerd rechaza otras constantes exportadas)', () => {
-  const t = leer('worker/index.js');
+test('worker/index.js exporta el handler por defecto y SOLO la clase del Durable Object (workerd rechaza cualquier otra constante exportada)', () => {
+  const t = quitaComentarios(leer('worker/index.js'));
   assert.ok(!/^export\s+(const|let|var|function|class)\b/m.test(t));
-  assert.equal((t.match(/^export\s/gm) || []).length, 1);
+  const salidas = t.match(/^export\s.*$/gm) || [];
+  assert.equal(salidas.length, 2);
+  assert.ok(salidas.some((l) => /^export default\b/.test(l)));
+  assert.ok(salidas.some((l) => /^export\s*\{\s*Hub\s*\}\s*from\s*'\.\/hub\.js'/.test(l)), 'la clase Hub se reexporta desde el módulo main');
+});
+
+test('el Durable Object Hub: binding HUB y migración con new_sqlite_classes (new_classes pediría plan de pago)', () => {
+  assert.deepEqual(wrangler.durable_objects.bindings, [{ name: 'HUB', class_name: 'Hub' }]);
+  const mig = wrangler.migrations;
+  assert.ok(mig.length && mig.every((x) => !x.new_classes), 'ninguna migración usa new_classes');
+  assert.ok(mig.some((x) => (x.new_sqlite_classes || []).includes('Hub')));
+  assert.match(leer('worker/hub.js'), /acceptWebSocket/); // hibernación
+  assert.doesNotMatch(leer('worker/hub.js').replace(/\/\/.*$/gm, ''), /\.accept\(\)/);
 });
 
 test('inventario: lista los grupos que usa la interfaz y marca los portados', async () => {

@@ -10,6 +10,9 @@ import * as almacen from './almacen.js';
 import { servirPagina } from './paginas.js';
 import { MODULOS } from '../modulos/index.js';
 import { instalarZona } from './zona.js';
+import { avisarCambio } from './vivo.js';
+import * as equipo from '../modulos/equipo.js';
+import { tasa, ipDe } from './equipo.js';
 
 export const VERSION = '0.1.0';
 
@@ -51,8 +54,14 @@ export async function manejar(req, env, exec = null) {
   if (ruta === '/api/health' && req.method === 'GET')
     return json({ ok: true, version: VERSION, ia: !!env.ANTHROPIC_API_KEY || !!(env.META_API_KEY || env.MODEL_API_KEY) });
 
+  // Invitaciones (fase 10): ver y aceptar un enlace, SIN sesión y con tope de intentos por IP (modulos/equipo.js → publica).
+  if (ruta.startsWith('/api/invitacion/')) { const r = await equipo.publica(req, env); if (r) return r; }
+
   if (ruta === '/api/acceso' && req.method === 'POST') {
     const b = await cuerpo(req);
+    // Tope de intentos (fase 10): por IP y por correo, por minuto. Un ataque lento o repartido choca con el segundo.
+    const huella = String(b?.email ?? '').trim().toLowerCase().slice(0, 120);
+    if (!(await tasa(db, 'acc:ip:' + ipDe(req), 20)).ok || !(await tasa(db, 'acc:mail:' + huella, 8)).ok) return error('Demasiados intentos. Espera un minuto e inténtalo otra vez.', 429);
     const s = await iniciarSesion(db, b?.email, b?.contrasena, req.headers.get('User-Agent') ?? '');
     if (!s) return error('Usuario o contraseña incorrectos.', 401);
     return json({ usuario: s.usuario }, 200, { 'Set-Cookie': cookieSesion(s.testigo) });
@@ -143,7 +152,10 @@ export async function manejar(req, env, exec = null) {
   // ---- Los módulos de cada fase del puerto (worker/modulos/): el primero que reconoce la ruta la contesta ----
   const waitUntil = p => { try { exec?.waitUntil?.(Promise.resolve(p).catch(() => {})); } catch { /* sin ctx (pruebas): el módulo espera él mismo */ } return !!exec?.waitUntil; }; // devuelve si se pudo dejar en segundo plano
   const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora, waitUntil };
-  for (const mod of MODULOS) { const r = await mod.manejar(ctx); if (r) return r; }
+  for (const mod of MODULOS) {
+    const r = await mod.manejar(ctx);
+    if (r) { waitUntil(avisarCambio(env, { ruta, metodo: req.method, estado: r.status, usuario, req })); return r; } // fase 10: las personas conectadas se enteran (lib/vivo.js)
+  }
 
   // Lo que la oficina local hace y la nube todavía no: un aviso claro en español, nunca un error mudo (docs/plan-cloudflare-completo.md).
   return json({ error: 'Esto todavía no está en la nube: sigue en la oficina de tu computadora.', pendiente: true }, 501);
