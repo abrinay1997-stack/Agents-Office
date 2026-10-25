@@ -83,6 +83,20 @@ Al entrar en `https://agents-office.<tu>.workers.dev` ya se ve **la oficina de s
 
 **Límite conocido:** el mapa 3D se calcula en tu computadora (el cálculo de fuerzas gasta más CPU de la que da un Worker del plan gratuito). Las notas nuevas que escriban los agentes en la nube aparecerán en la búsqueda y el lector, pero entran al mapa al volver a correr el paso 2, hasta que se mueva ese cálculo a un plan con más CPU (Workers de pago, ~US$5 al mes) o a una cola.
 
-## Fase 3 (siguiente)
+## Lo que sigue en la nube (Contenido y publicación)
 
 Contenido y publicación: portar a D1 las piezas y la cola (`contenido/piezas.mjs`, `programador.mjs`, `entrega.mjs`) y el publicador de Meta (`contenido/meta-publicar.mjs`) al cron de cada minuto, como hace `worker/lib/publicador.js` en CALENDARIOS-MARKETING-APP (Facebook programado en Meta; Instagram lo publica el cron a su hora). Después: Bandeja, tareas y rutinas; y limitar el intento de acceso por IP.
+
+## Fase 3: tareas, rutinas y calendario (25 oct 2026)
+
+La página ya trabaja con **tus tareas de verdad en la nube**: la barra de tareas, la vista Tareas (Mías, Inicio, Lista, Tablero, Proyectos, Medidas), el calendario con sus rutinas, el roster de los 35 puestos y el .ics. Mismas rutas y mismas formas de respuesta que la oficina local (`tests/nube-paridad-tareas.test.mjs` lanza la oficina local de verdad y el Worker y compara).
+
+**Cómo está hecho.** Las rutas de `tareas/` son las del repositorio, sin copiar: corren contra una copia en memoria de las tareas y, al terminar, el Worker vuelca a D1 solo lo que cambió, **tarea por tarea y con su versión**. Si otra petición cambió esa tarea en medio, no se pisa: se repite la petición con la copia nueva (y la bitácora de la que perdió no se escribe). Datos: tareas y rutinas son filas (`filas`: `tareas`, `rutinas`, `avisos`), el estado de las rutinas, los proyectos, las etiquetas y el roster del Cerebro/propio son documentos (`docs`), y la bitácora tiene su tabla (`tarea_bitacora`, migración 0010).
+
+**El reloj** (cada minuto, `cadaMinuto`): una rutina que toca se vuelve una tarea (con un id que sale de la rutina y la hora, así que aunque corran dos relojes a la vez nace una sola; una atrasada sale marcada «tarde», y con `catchUp: false` se salta y avisa), lo programado para ahora pasa a la cola, y cada 10 minutos los avisos de fecha límite y de proyectos atrasados (se guardan en `filas`/`avisos`; los manda Telegram en la fase 6). **Zona horaria:** un Worker corre en UTC, y «lunes a las 9» es la hora de tu oficina; la variable `ZONA_HORARIA` (por defecto `America/Panama`) debe ser la de tu navegador, porque las ejecuciones que dibuja el calendario las calcula tu navegador.
+
+**Los agentes (fase 4) se enchufan aquí:** `tomarSiguiente(db, { max })` decide con la cola de siempre (prioridad, fecha límite, orden, un agente a la vez, nada de lo tuyo ni de lo bloqueado) y **reserva** las tareas (`next` → `doing`, con candado de versión); `guardarEjecucion(db, base, mio)` guarda lo que hizo un agente mezclado con lo que tú cambiaste mientras. Aprobar, devolver, detener y corregir contestan 501 con su motivo hasta entonces.
+
+**Subir tus datos (una vez):** `node scripts/migrar-a-nube.mjs <url>` sube con `scripts/migrar/tareas.mjs` tus tareas (lo que un agente estaba ejecutando vuelve a la cola), rutinas y su estado, proyectos, etiquetas, los agentes del Cerebro y los tuyos, y de la configuración solo los límites de aprobación y las personas del equipo (nunca una llave). Subir tareas **reemplaza** las del mismo id: después de mudarte, la nube es la copia de trabajo.
+
+**Límites.** La bitácora anterior a la mudanza no sube (empieza ese día). Cada petición carga todas las tareas: 1.500 tareas de 4 KB cuestan ~160 ms de CPU (el sondeo ligero no saca de D1 el trabajo de lo archivado); necesita el plan de pago de Workers (el gratuito da ~10 ms) cuando el historial crece, y conviene archivar lo viejo. Las notas del Cerebro de «guardar como ejemplo» y de «archivar con su nota», los webhooks salientes (T6) y los avisos a una persona por Telegram quedan para las fases 4 y 6.
