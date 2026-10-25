@@ -162,3 +162,10 @@
 .mv-q-pie { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .mv-q-pie .mv-btn { width: auto; }
 .mv-preg.hecha { opacity: 1; }
 .mv-pz-f .mv-sw { margin-top: 8px; }
+
+/* 25 oct 2026 — a 320 px la fila de escribir (clip + campo + enviar) y el chip «Viendo» se salían: el campo no cedía por su ancho mínimo propio */
+.mv-compone, .mv-compone-fila { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.mv-compone-fila > * { min-width: 0; }
+.mv-compone-fila textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.mv-viendo { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+.mv-viendo > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
