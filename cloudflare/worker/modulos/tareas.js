@@ -200,6 +200,9 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
     await RT.borrarRutina(db, C.agents, r.id); return salida({ ok: true });
   }
   if (req.method !== 'POST' && req.method !== 'PATCH') return json({ error: 'POST, PATCH or DELETE' }, 405);
+  if (m[2] === 'run' && usuario.rol !== 'admin' && (r.autonomous === true || r.needsOk === false)) { // una rutina que envía sola (autonomía ganada) o que no pide el OK la dispara el dueño: un editor la repetiría a su antojo
+    return prohibido('Esa rutina no espera tu visto bueno (corre sola o sin OK): solo un administrador la ejecuta ahora. Tú puedes ejecutar las que piden el OK del dueño.');
+  }
   if (m[2] === 'run') { // «ejecutar ya»: la rutina se vuelve tarea ahora (pide el OK como toda rutina con needsOk)
     const tarea = await conSesion(db, async s => {
       const serv = armarServicios(s, { env, contexto: C, fetchFn: env.__pruebas?.fetchIA }, {});

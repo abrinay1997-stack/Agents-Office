@@ -374,3 +374,16 @@ test('ESCALA: toda tabla de D1 declara cómo se acota (poda, caducidad o libro);
   for (const t of Object.keys(RETENCION_DIAS)) assert.equal(TABLAS[t], 'mantenimiento', t + ' se poda en mantenimiento.js y la lista debe decirlo');
   for (const [t, p] of Object.entries(TABLAS)) if (p === 'mantenimiento') assert.ok(t in RETENCION_DIAS, t + ' dice «mantenimiento» y mantenimiento.js no la poda');
 });
+
+test('RUTINAS: «ejecutar ya» una rutina que corre sola o sin pedir el OK es del administrador (un editor la repetiría a su antojo); las que piden el OK sí', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  const crea = async (texto, needsOk) => (await o.admin('POST', '/api/routines', { dept: 'ops', text: texto, needsOk })).j.routine.id;
+  const conOk = await crea('cada día a las 8, revisa los pagos', true), sinOk = await crea('cada día a las 9, lista las facturas vencidas', false), sola = await crea('cada día a las 10, manda los recordatorios', true);
+  o.d1._db.prepare("update filas set json = json_set(json, '$.autonomous', json('true')) where coleccion = 'rutinas' and id = ?").run(sola);
+  assert.equal((await o.editor('POST', `/api/routines/${sinOk}/run`, {})).status, 403, 'sin OK');
+  assert.equal((await o.editor('POST', `/api/routines/${sola}/run`, {})).status, 403, 'autónoma');
+  assert.equal((await o.lectura('POST', `/api/routines/${conOk}/run`, {})).status, 403, 'lectura');
+  assert.equal((await o.editor('POST', `/api/routines/${conOk}/run`, {})).status, 200, 'la que pide el OK sí');
+  assert.equal((await o.admin('POST', `/api/routines/${sinOk}/run`, {})).status, 200, 'el administrador, todas');
+  assert.equal((await o.admin('POST', `/api/routines/${sola}/run`, {})).status, 200);
+});

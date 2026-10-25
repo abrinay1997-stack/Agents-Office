@@ -23,4 +23,3 @@ export function limpiarSecretos(texto) {
   for (const f of FORMAS) t = t.replace(f, (m) => (/^Bearer/.test(m) ? 'Bearer «…»' : '«…»'));
   return t;
 }
-export const _olvidarTodo = () => VALORES.clear(); // solo las pruebas
