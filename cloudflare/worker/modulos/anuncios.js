@@ -9,11 +9,11 @@
 //  · un agente, Dimitri o el asistente jamás confirman un gasto: la sesión de una persona solo puede declararse «agente» (menos permisos),
 //    nunca más; las otras identidades las usa el código del Worker (fase de Dimitri) llamando a las funciones, no por HTTP;
 //  · una creación larga NO corre en la petición: queda «creando» y la sigue el cron, paso a paso (cada paso apuntado en D1 antes de llamar a Meta).
-import { conAnuncios, asegurarCuentas, leerPreload, pareceDeAgente, DIR_INFORMES } from '../lib/anuncios-nube.js';
-import { candados } from '../lib/tokens.js';
+import { conAnuncios, asegurarCuentas, leerPreload, pareceDeAgente, DIR_INFORMES, ESPEJO_WEBHOOK } from '../lib/anuncios-nube.js';
+import { candados, tasaPorMinuto } from '../lib/tokens.js';
 import { guardarNotas } from '../lib/cerebro.js';
 import { leerDoc, guardarDoc } from '../lib/almacen.js';
-import { uuid } from '../lib/ids.js';
+import { uuid, igualSeguro } from '../lib/ids.js';
 import fs from 'node:fs';
 
 export const nombre = 'anuncios';
@@ -58,6 +58,13 @@ export async function manejar(ctx) {
       const t = Date.now(), previo = Number((await leerDoc(db, 'anuncios.agente-sync', { at: 0 })).valor.at) || 0;
       if (t - previo < SINC_AGENTE_MIN * 60e3) return json({ error: `un agente puede pedir leer de Meta una vez cada ${SINC_AGENTE_MIN} minutos (la cuota es del negocio entero): usa lo ya leído` }, 429);
     }
+    // dos lecturas a la vez gastan la cuota de Meta el doble y se pisan al guardar: la segunda se dice en palabras
+    if (!(await cand.tomar('anuncios:sync', 2 * 60e3, quienLock))) return json({ error: 'estado', motivo: 'Ya se está leyendo de Meta: espera a que termine.' }, 409);
+    try { return await sincronizarAhora(); } finally { await cand.soltar('anuncios:sync', quienLock); }
+  }
+  return resto();
+
+  async function sincronizarAhora() {
     return conAnuncios({ db, env }, async (a) => {
       const l = a.sync.listo(); if (!l.ok) return json({ error: l.motivo }, 409);
       if (comoAgente) await guardarDoc(db, 'anuncios.agente-sync', { at: Date.now() });
@@ -71,6 +78,7 @@ export async function manejar(ctx) {
     });
   }
 
+  async function resto() {
   const preload = ruta === '/api/anuncios/impulsar' ? await leerPreload(db, { pieza: String(b?.pieza || '') }) : {};
   // lo que cambia dinero (acciones, deshacer, aplicar una sugerencia que gasta) va de una en una: un candado de la cuenta
   const cambiaMeta = metodo === 'POST' && (ruta === '/api/anuncios/accion' || ruta === '/api/anuncios/deshacer' || /^\/api\/anuncios\/sugerencias\/[^/]+\/aplicar$/.test(ruta));
@@ -83,7 +91,7 @@ export async function manejar(ctx) {
       if (mb) {
         await asegurarCuentas(a.meta);
         const bor = a.borr.leer(mb[1]);
-        if (bor) await a.galeria.cargar(creativosDe(bor), { bytes: mb[2] === 'vista-previa' });
+        if (bor) { const { rechazados } = await a.galeria.cargar(creativosDe(bor), { bytes: mb[2] === 'vista-previa' }); if (rechazados.length) return json({ error: 'medio', motivo: rechazados[0].motivo, rechazados: rechazados.map((r) => ({ id: r.id, motivo: r.motivo })) }, 422); }
       } else if (ruta === '/api/anuncios/impulsar' || /^\/api\/anuncios\/sugerencias\/[^/]+\/aplicar$/.test(ruta)) await asegurarCuentas(a.meta);
       const res = await correr(handle, req, u2, b);
       if (!res) return json({ error: 'no existe' }, 404);
@@ -92,6 +100,7 @@ export async function manejar(ctx) {
       return json(res.cuerpo, res.status);
     });
   } finally { if (cambiaMeta) await cand.soltar('anuncios:accion', quienLock); }
+  }
 }
 
 /** El informe del mes escrito por informe.guardar (un archivo del espejo) pasa a ser una nota del Cerebro y el archivo se quita. */
@@ -107,47 +116,88 @@ async function informeAlCerebro(db, esp, r) {
  * y el piloto tras cada lectura de cifras, los eventos de conversión que esperan, y seguir las creaciones que quedaron «creando».
  * Un candado impide que dos relojes (un minuto lento y el siguiente) corran a la vez.
  */
-export async function cadaMinuto(env) {
-  const db = env.DB, cand = candados(db), yo = 'cron-' + uuid().slice(0, 8);
-  if (!(await cand.tomar('anuncios:cron', 14 * 60e3, yo))) return;
+export const TTL_RELOJ_MS = 4 * 60e3; // el candado del reloj es CORTO y se renueva con el latido: si el Worker muere, el siguiente minuto sigue sin esperar 14 min
+export async function cadaMinuto(env, { ahora = () => Date.now() } = {}) {
+  const db = env.DB, cand = candados(db, { ahora }), yo = 'cron-' + uuid().slice(0, 8);
+  if (!(await cand.tomar('anuncios:cron', TTL_RELOJ_MS, yo))) return;
+  let claveCrear = null;
+  const latido = async () => { await cand.renovar('anuncios:cron', TTL_RELOJ_MS, yo); if (claveCrear) await cand.renovar(claveCrear, TTL_RELOJ_MS, yo); };
   try {
-    await conAnuncios({ db, env, preload: await leerPreload(db) }, async (a) => {
+    await conAnuncios({ db, env, ahora, latido, preload: await leerPreload(db) }, async (a) => {
       if (!a.meta.configurado()) return;
       try { await asegurarCuentas(a.meta); } catch (e) { console.warn('[anuncios] cuentas:', e?.message ?? e); }
+      await latido();
       try { await a.conv.tick(); } catch (e) { console.warn('[anuncios] conversiones:', e?.message ?? e); }
+      await latido();
       const antes = a.sync.conexion().cifrasAt;
       const r = await a.sync.tick();
       if (r?.ok && a.sync.conexion().cifrasAt !== antes) {
         if (await cand.tomar('anuncios:accion', 2 * 60e3, yo)) { try { await a.tras(); } catch (e) { console.warn('[anuncios] diagnóstico:', e?.message ?? e); } finally { await cand.soltar('anuncios:accion', yo); } }
         try { a.ind.llevar(); } catch { /* idem */ }
       }
-      // las creaciones que el dueño pidió: una por una, con su candado (la que ya corre en otro reloj no se repite)
+      await latido();
+      // las creaciones que el dueño pidió: MÁXIMO UNA por invocación (una creación son ~30 llamadas a Meta; el límite de subrequests es por invocación),
+      // con su candado por borrador (la que ya corre en otro reloj no se repite). Las demás esperan al minuto siguiente.
       for (const bor of a.borr.lista().filter((x) => x.estado === 'creando')) {
         const clave = `anuncios:crear:${bor.id}`;
-        if (!(await cand.tomar(clave, 12 * 60e3, yo))) continue;
+        if (!(await cand.tomar(clave, TTL_RELOJ_MS, yo))) continue;
+        claveCrear = clave;
         try {
-          await a.galeria.cargar(creativosDe(bor), { bytes: true });
+          const { rechazados } = await a.galeria.cargar(creativosDe(bor), { bytes: true });
+          if (rechazados.length) { a.borr.poner(bor.id, { estado: 'fallo', error: 'No se pudo crear en Meta: ' + rechazados[0].motivo, progreso: null }); continue; } // un medio demasiado grande no se arregla reintentando
           a.creador.alArrancar([bor.id]);
           await a.creador.esperar(bor.id);
         } catch (e) { console.warn('[anuncios] crear', bor.id, e?.message ?? e); }
-        finally { await cand.soltar(clave, yo); }
+        finally { claveCrear = null; await cand.soltar(clave, yo); }
+        break;
       }
     });
   } finally { await cand.soltar('anuncios:cron', yo); }
 }
 
+export const MAX_WEBHOOK_BYTES = 16 * 1024;
+export const MAX_WEBHOOK_POR_MINUTO = 60;
+const jsonResp = (cuerpo, estado) => new Response(JSON.stringify(cuerpo), { status: estado, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+/** Lee el cuerpo SIN pasarse del tope (un cuerpo enorme sin Content-Length no se carga entero). → texto, o null si pasa el tope. */
+async function leerConTope(req, max) {
+  const decl = Number(req.headers.get('content-length') || 0);
+  if (decl > max) return null;
+  if (!req.body) return '';
+  const lector = req.body.getReader(), trozos = []; let n = 0;
+  for (;;) { const { done, value } = await lector.read(); if (done) break; n += value.length; if (n > max) { try { await lector.cancel(); } catch { /* ya está */ } return null; } trozos.push(value); }
+  const todo = new Uint8Array(n); let o = 0; for (const t of trozos) { todo.set(t, o); o += t.length; }
+  return new TextDecoder().decode(todo);
+}
+const hexSha256 = async (txt) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt)))].map((b) => b.toString(16).padStart(2, '0')).join('');
+
 /**
- * El webhook de conversiones SIN sesión (Zapier, tu tienda, n8n con AO_HOOK_TOKEN): lo que `rutas.js` debe llamar antes de pedir sesión para
- * esta ruta exacta. Hoy `rutas.js` pide sesión a todo /api/ salvo /api/health y /api/acceso, así que desde fuera aún no llega (ver el informe de
- * la fase 7: cambio necesario en lib/rutas.js). Con una sesión de administrador sí funciona por `manejar`.
+ * El webhook de conversiones SIN sesión (Zapier, tu tienda, n8n): lo llama lib/rutas.js ANTES de pedir sesión, solo para esta ruta exacta.
+ *  1. el token (AO_HOOK_TOKEN) se comprueba PRIMERO, antes de leer nada ni abrir el espejo, con comparación de tiempo constante; solo por cabecera
+ *     (`X-Office-Token` o `Authorization: Bearer`; nunca en la dirección, que queda en los registros); el mismo 401 si falta la variable o si el token no vale;
+ *  2. cuerpo de hasta 16 KB (413); 60 por minuto (429, contado en D1);
+ *  3. un evento sin `event_id` toma el hash de su cuerpo: reenviar lo mismo cuenta una sola vez;
+ *  4. espejo MÍNIMO (solo conversiones.json y la cuenta), se REGISTRA y no se espera a Meta: lo envía el reloj del minuto siguiente.
+ * Nunca habla con Meta ni gasta; solo apunta el evento.
  */
 export async function webhookConversiones(req, env) {
   const url = new URL(req.url);
   if (req.method !== 'POST' || url.pathname !== '/api/anuncios/conversiones/webhook') return null;
-  const b = await req.json().catch(() => ({}));
-  return conAnuncios({ db: env.DB, env }, async (a) => {
-    const handle = a.rutas(a.sync, (res, code, cuerpo) => { res.status = code; res.cuerpo = cuerpo; }, async () => b);
-    const res = await correr(handle, req, url, b);
-    return new Response(JSON.stringify(res?.cuerpo ?? { error: 'no existe' }), { status: res?.status ?? 404, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+  const esperado = String(env.AO_HOOK_TOKEN || '');
+  const dado = req.headers.get('x-office-token') || String(req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!esperado || !igualSeguro(String(dado), esperado)) return jsonResp({ error: 'token incorrecto', motivo: 'token incorrecto' }, 401);
+  const txt = await leerConTope(req, MAX_WEBHOOK_BYTES);
+  if (txt === null) return jsonResp({ error: 'el cuerpo pasa de 16 KB', motivo: 'el cuerpo pasa de 16 KB' }, 413);
+  let b; try { b = JSON.parse(txt || '{}'); } catch { return jsonResp({ error: 'el cuerpo no es JSON', motivo: 'el cuerpo no es JSON' }, 400); }
+  if (!b || typeof b !== 'object' || Array.isArray(b)) return jsonResp({ error: 'el cuerpo es un objeto JSON', motivo: 'el cuerpo es un objeto JSON' }, 400);
+  const db = env.DB;
+  if (!(await tasaPorMinuto(db, 'webhook-conversiones', MAX_WEBHOOK_POR_MINUTO)).ok) return jsonResp({ error: 'demasiados eventos por minuto (60)', motivo: 'demasiados eventos por minuto (60)' }, 429);
+  if (!String(b.event_id || '').trim()) b.event_id = 'wh_' + (await hexSha256(txt)).slice(0, 40);
+  const nombre = ({ purchase: 'Purchase', compra: 'Purchase', venta: 'Purchase', lead: 'Lead', contacto: 'Lead' })[String(b.evento || b.event_name || '').toLowerCase()];
+  if (!nombre) return jsonResp({ error: 'el evento es «Purchase» (una compra) o «Lead» (un contacto)', motivo: 'el evento es «Purchase» (una compra) o «Lead» (un contacto)' }, 400);
+  return conAnuncios({ db, env, espejo: ESPEJO_WEBHOOK }, async (a) => {
+    const canal = String(b.canal || b.messaging_channel || '');
+    const entrada = { nombre, via: canal === 'whatsapp' ? 'mensajes' : (b.url || b.event_source_url) ? 'web' : 'sistema', canal, valor: b.valor ?? b.value, moneda: b.moneda ?? b.currency, email: b.email, telefono: b.telefono ?? b.phone, externoId: b.cliente ?? b.external_id, url: b.url ?? b.event_source_url, wabaId: b.whatsapp_business_account_id, ctwaClid: b.ctwa_clid, eventId: b.event_id, at: b.at ? (Number.isFinite(Number(b.at)) ? Number(b.at) * (Number(b.at) < 1e12 ? 1000 : 1) : Date.parse(b.at)) : undefined, origen: 'webhook', ref: String(b.id ?? b.pedido ?? '') };
+    try { return jsonResp(a.conv.registrar(entrada, { quien: 'webhook' }), 200); }
+    catch (e) { const m = String(e?.message || 'no se pudo registrar'); return jsonResp({ error: m, motivo: m }, Number(e?.status) || 500); }
   });
 }

@@ -27,7 +27,7 @@ export async function prepararMeta(g) {
 
 /** Un R2 de mentira con la clave de la galería (la ruta relativa 2026-10/<archivo>). */
 export function r2(archivos) {
-  return { head: async (k) => (archivos[k] ? { key: k } : null), get: async (k) => (archivos[k] ? { arrayBuffer: async () => archivos[k].buffer.slice(archivos[k].byteOffset, archivos[k].byteOffset + archivos[k].byteLength) } : null) };
+  return { head: async (k) => (archivos[k] ? { key: k, size: archivos[k].size ?? archivos[k].byteLength } : null), get: async (k) => (archivos[k] ? { arrayBuffer: async () => archivos[k].buffer.slice(archivos[k].byteOffset, archivos[k].byteOffset + archivos[k].byteLength) } : null) };
 }
 
 export async function entrar(env, c) {

@@ -54,7 +54,21 @@ export function candados(db, { ahora = () => Date.now() } = {}) {
       const v = await db.prepare('update anuncios_candados set hasta = ?, quien = ? where clave = ? and hasta <= ?').bind(t + ms, quien, clave, t).run();
       return Boolean(v.meta?.changes);
     },
+    /** El latido: el dueño del candado lo alarga mientras sigue trabajando (así el candado puede ser corto y morir pronto si el Worker muere). */
+    async renovar(clave, ms, quien = '') { const r = await db.prepare('update anuncios_candados set hasta = ? where clave = ? and quien = ?').bind(ahora() + ms, clave, quien).run(); return Boolean(r.meta?.changes); },
     async soltar(clave, quien = '') { await db.prepare('delete from anuncios_candados where clave = ? and quien = ?').bind(clave, quien).run(); },
     async quien(clave) { const f = await db.prepare('select quien, hasta from anuncios_candados where clave = ?').bind(clave).first(); return f && f.hasta > ahora() ? f.quien : null; },
   };
+}
+
+/**
+ * Un tope de peticiones por minuto, en D1 (el Worker no recuerda entre peticiones). Cuenta ESTA petición y dice si cabe.
+ * @returns {Promise<{ ok: boolean, n: number }>}
+ */
+export async function tasaPorMinuto(db, clave, max, { ahora = () => Date.now() } = {}) {
+  const ventana = Math.floor(ahora() / 60e3);
+  await db.prepare('delete from anuncios_tasa where ventana < ?').bind(ventana - 5).run();
+  // una ventana por (clave, minuto): la clave cabe en el entero porque solo hay un tope hoy; si hubiera más, se separan por prefijo
+  const f = await db.prepare('insert into anuncios_tasa (ventana, n) values (?, 1) on conflict (ventana) do update set n = n + 1 returning n').bind(ventana).first();
+  return { ok: Number(f?.n ?? 1) <= max, n: Number(f?.n ?? 1), clave };
 }

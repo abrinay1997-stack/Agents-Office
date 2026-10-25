@@ -21,7 +21,12 @@ import { leerDoc, guardarDoc } from './almacen.js';
 import { uuid } from './ids.js';
 
 export const PREFIJO = 'fs:';
-export const MAX_ARCHIVO = 1_900_000;
+export const MAX_ARCHIVO = 1_900_000; // BYTES de la fila (`{"t":"…"}` en UTF-8): D1 corta la fila a 2.000.000
+const BYTES = new TextEncoder();
+/** Lo que pesa en D1 un archivo de texto: la fila entera, escapes de JSON y UTF-8 incluidos (un «ñ» son 2 bytes, un «\n» son 2). */
+export const bytesDeFila = (texto) => BYTES.encode(JSON.stringify({ t: texto })).length;
+/** Un token de Meta nunca se queda en un archivo (ni por un error que lo repita): se tapa antes de guardar. */
+export const sinTokens = (texto) => String(texto).replace(/EAA[A-Za-z0-9]{20,}/g, '…');
 const CACHE_MAX = 12_000_000; // caracteres en caché por base de datos (un isolate tiene ~128 MB: 12 M de caracteres son unos 24 MB)
 const cachePorBase = new WeakMap();
 const cacheDe = (db) => { let c = cachePorBase.get(db); if (!c) { c = { mapa: new Map(), tam: 0 }; cachePorBase.set(db, c); } return c; };
@@ -146,7 +151,10 @@ export async function abrirEspejo(db, { prefijos = [], exactos = [], semillas = 
   const tocados = new Set();
 
   async function volcarUno(rel, texto) {
-    if (texto.length > MAX_ARCHIVO) throw new Error(`«${rel}» pasó de ${Math.round(MAX_ARCHIVO / 1e6 * 10) / 10} MB y no cabe en una fila de D1: hay que partirlo.`);
+    const limpio = sinTokens(texto);
+    if (limpio !== texto) { texto = limpio; poner(rel, texto); }
+    const peso = bytesDeFila(texto);
+    if (peso > MAX_ARCHIVO) throw new Error(`«${rel}» pesa ${(peso / 1e6).toFixed(2).replace('.', ',')} MB y no cabe en una fila de D1 (el tope es ${(MAX_ARCHIVO / 1e6).toFixed(1).replace('.', ',')} MB): hay que partirlo.`);
     const clave = claveDe(rel);
     let anterior = snap.get(rel), mio = texto;
     for (let intento = 0; intento < 4; intento++) {
@@ -178,7 +186,9 @@ export async function abrirEspejo(db, { prefijos = [], exactos = [], semillas = 
     }
     for (const rel of [...snap.keys()]) {
       if (ahoraEnDisco.has(rel)) continue;
-      await db.prepare('delete from docs where clave = ?').bind(claveDe(rel)).run();
+      // solo se borra la versión que yo traje: si otra petición la cambió mientras tanto, esa gana y el archivo sigue
+      const prev = snap.get(rel);
+      await db.prepare('delete from docs where clave = ? and version = ?').bind(claveDe(rel), prev.version).run();
       snap.delete(rel); quitarCache(db, claveDe(rel)); tocados.add(rel);
     }
   }

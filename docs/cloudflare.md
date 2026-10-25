@@ -93,9 +93,11 @@ Módulos `cloudflare/worker/modulos/anuncios.js` y `bandeja.js`. **Nada se ha pr
 - **Bandeja:** responder y ocultar solo el dueño y una vez (candado + testigo «enviando» en D1 antes de llamar a Meta); la ventana de 24 h y los 1.000 caracteres se comprueban antes de llamar.
 - **El token** es `META_ACCESS_TOKEN` (+ `META_APP_SECRET`), secreto del Worker; nunca en D1, respuestas ni registros.
 - **Migrar lo de tu computadora:** `node scripts/migrar/anuncios.mjs` (borradores, sugerencias, historial, bandeja; sin tokens; no pisa lo que ya está en la nube).
-- **Límites:** crear una campaña hace ~30 llamadas a Meta: necesita **Workers de pago** (el plan gratuito da 50 por petición). Falta una ruta pública en `rutas.js` para el webhook de conversiones (`webhookConversiones`) y la ruta `/media/…` de la fase 8.
-
-## Fase 3 (siguiente)
+- **Necesita el plan de pago de Workers (Workers Paid, ~US$5 al mes).** Crear una campaña hace unas 30 llamadas a Meta (imágenes, creativos, campaña, conjunto, anuncios, y la búsqueda por etiqueta antes de cada una) en UNA ejecución del reloj; el plan gratuito corta en **50 subrequests y 10 ms de CPU por ejecución** (el panel además lee archivos de cifras grandes). Sin el plan de pago, mirar el panel y pausar funciona, pero crear campañas puede cortarse a medias. Si se corta por infraestructura, el borrador **no falla**: queda «creando», no se archiva nada y el reloj lo retoma por la etiqueta `· AO:` (hasta 5 cortes seguidos). `cloudflare/scripts/preparar-cuenta.mjs` lo avisa al preparar la cuenta.
+- **Medios grandes:** la nube solo sube a Meta imágenes y videos de hasta **25 MB** (el Worker los baja enteros a memoria); uno más grande se rechaza al validar, en español, con su peso.
+- **Un reloj, una creación:** el candado del reloj dura 4 min y se renueva con un latido tras cada paso; el reloj hace como mucho UNA creación por minuto.
+- **Webhook de conversiones:** `POST /api/anuncios/conversiones/webhook` es público (sin sesión) y se protege con `AO_HOOK_TOKEN` (cabecera `X-Office-Token` o `Authorization: Bearer`, nunca en la dirección), cuerpo de hasta 16 KB, 60 por minuto y exige `event_id` (o usa el hash del cuerpo). Ver `lib/rutas.js`.
+- **Pendiente:** el webhook de conversiones solo registra el evento y lo envía el reloj del minuto siguiente (hasta un minuto de retraso); un evento que Meta rechace queda «fallo» en el panel. Una prueba con un Meta real sigue pendiente.
 
 ## Lo que sigue en la nube (Contenido y publicación)
 

@@ -28,8 +28,10 @@ export async function exportar({ raiz, vault: _vault } = {}) {
     const f = path.join(datos, ruta.slice('data/'.length));
     let texto; try { texto = fs.readFileSync(f, 'utf8'); } catch { continue; }
     if (!texto.trim()) continue;
-    if (texto.length > MAX) { avisos.push(`${ruta} pasa de ${Math.round(MAX / 1e6 * 10) / 10} MB y no se sube (se vuelve a leer de Meta o se parte a mano)`); continue; }
-    docs[`anuncios.migracion.${nombre}`] = { ruta, texto: sinTokens(texto) };
+    const doc = { ruta, texto: sinTokens(texto) };
+    const peso = new TextEncoder().encode(JSON.stringify(doc)).length; // BYTES de la fila (escapes y UTF-8 incluidos), no caracteres
+    if (peso > MAX) { avisos.push(`${ruta} pesa ${(peso / 1e6).toFixed(2)} MB y no cabe en una fila de D1 (tope ${(MAX / 1e6).toFixed(1)} MB): no se sube (se vuelve a leer de Meta o se parte a mano)`); continue; }
+    docs[`anuncios.migracion.${nombre}`] = doc;
   }
   const c = loadConfig();
   const ajustes = { anuncios: { ...(c.anuncios || {}) }, contenido: { modo: c.contenido?.modo, bandejaFuente: c.contenido?.bandejaFuente, metaPagina: c.contenido?.metaPagina, redes: c.contenido?.redes }, approvals: { undoSeconds: c.approvals?.undoSeconds }, name: c.name };

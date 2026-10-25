@@ -41,6 +41,13 @@ export async function manejar(req, env, exec = null) {
   }
   if (!origenValido(req)) return error('Origen no permitido', 403);
 
+  // El único endpoint público además de /api/health y /api/acceso: el webhook de conversiones (Zapier, tu tienda, n8n). SIN sesión, con su propio token
+  // (AO_HOOK_TOKEN) que el módulo comprueba antes de leer nada. Va antes de la sesión y después de origenValido.
+  if (ruta === '/api/anuncios/conversiones/webhook' && req.method === 'POST') {
+    const mod = MODULOS.find((x) => x.webhookConversiones);
+    if (mod) return mod.webhookConversiones(req, env, exec);
+  }
+
   if (ruta === '/api/health' && req.method === 'GET')
     return json({ ok: true, version: VERSION, ia: !!env.ANTHROPIC_API_KEY || !!(env.META_API_KEY || env.MODEL_API_KEY) });
 

@@ -217,12 +217,14 @@ test('conversiones: apagadas por defecto; solo el dueño las manda; el webhook p
   assert.ok(!ev.includes('ana@example.com'), 'el correo sale cifrado'); assert.ok(!JSON.stringify(r.j).includes('ana@example.com'), 'y no vuelve en la respuesta');
   assert.equal((await o.api('editor', 'POST', '/api/anuncios/conversiones', { tipo: 'venta', valor: 5 })).status, 403);
   assert.equal((await o.api('admin', 'POST', '/api/anuncios/conversiones', { tipo: 'venta', valor: 5, por: 'agente' })).status, 403);
-  assert.equal((await o.api('admin', 'POST', '/api/anuncios/conversiones/webhook', { evento: 'Lead' })).status, 401, 'el webhook sin su token');
-  const w = await webhookConversiones(new Request('https://oficina.test/api/anuncios/conversiones/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-office-token': 'hook-de-prueba-123' }, body: JSON.stringify({ evento: 'Lead', email: 'luis@example.com', url: 'https://tienda.test/f', id: 'f1' }) }), o.env); // secrets-ok: de mentira
+  assert.equal((await o.api('admin', 'POST', '/api/anuncios/conversiones/webhook', { evento: 'Lead' })).status, 401, 'el webhook sin su token (aunque haya sesión: es una ruta pública con su propio token)');
+  const hook = (cab, cuerpo) => manejar(new Request('https://oficina.test/api/anuncios/conversiones/webhook', { method: 'POST', headers: { 'content-type': 'application/json', ...cab }, body: JSON.stringify(cuerpo) }), o.env);
+  const w = await hook({ 'x-office-token': 'hook-de-prueba-123' }, { evento: 'Lead', email: 'luis@example.com', url: 'https://tienda.test/f', id: 'f1' }); // secrets-ok: de mentira
   assert.equal(w.status, 200); assert.ok(!JSON.stringify(await w.json()).includes('luis@example.com'));
-  assert.equal(o.g.st.eventos.length, 2);
-  const mal = await webhookConversiones(new Request('https://oficina.test/api/anuncios/conversiones/webhook', { method: 'POST', headers: { 'content-type': 'application/json', 'x-office-token': 'otro' }, body: '{"evento":"Lead"}' }), o.env);
-  assert.equal(mal.status, 401);
+  assert.equal(o.g.st.eventos.length, 1, 'el webhook solo APUNTA el evento: no espera a Meta');
+  await cadaMinuto(o.env);
+  assert.equal(o.g.st.eventos.length, 2, 'el reloj del minuto lo manda');
+  assert.equal((await hook({ 'x-office-token': 'otro' }, { evento: 'Lead' })).status, 401);
 });
 
 test('las sugerencias salen del diagnóstico tras leer; pedir variaciones deja UNA tarea para el puesto de anuncios en la lista de tareas de la nube (solo el dueño)', { skip: SALTAR }, async () => {

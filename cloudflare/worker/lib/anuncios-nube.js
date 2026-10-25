@@ -38,7 +38,7 @@ import { agentes } from './agentes.js';
 import { texto as textoIA } from './ia.js';
 import { leerDoc, guardarDoc, mutarDoc, listarFilas, leerFila, guardarFila } from './almacen.js';
 import { tokensD1 } from './tokens.js';
-import { conEspejo } from './espejo.js';
+import { conEspejo, bytesDeFila, MAX_ARCHIVO } from './espejo.js';
 import { igualSeguro } from './ids.js';
 
 // ------------------------------------------------------------ dónde viven las cosas dentro del espejo
@@ -57,6 +57,8 @@ export const ESPEJO_BANDEJA = {
   exactos: [`${DIR_ANALITICAS}/cuentas.json`, `${DIR_ANALITICAS}/bandeja.json`, `${DIR_ANALITICAS}/bandeja-meta.json`, `${DIR_ANUNCIOS}/cuenta.json`],
   semillas: {},
 };
+/** El espejo mínimo del webhook público: solo lo que hace falta para APUNTAR un evento (su cola y la moneda de la cuenta). */
+export const ESPEJO_WEBHOOK = { prefijos: [], exactos: [`${DIR_ANUNCIOS}/conversiones.json`, `${DIR_ANUNCIOS}/cuenta.json`], semillas: {} };
 export const DOC_FRENO = 'meta.freno';
 const DOC_PANEL = 'anuncios.panel';
 const DOC_BANDEJA_ABIERTA = 'bandeja.abierta';
@@ -98,7 +100,7 @@ export async function aplicarMigracion(db) {
   for (const { clave } of results) {
     const { valor } = await leerDoc(db, clave, null);
     const ruta = String(valor?.ruta || ''), texto = typeof valor?.texto === 'string' ? valor.texto : null;
-    let bien = RUTAS_MIGRABLES.has(ruta) && texto !== null && texto.length <= 1_900_000;
+    let bien = RUTAS_MIGRABLES.has(ruta) && texto !== null && bytesDeFila(texto) <= MAX_ARCHIVO;
     if (bien) { try { if (ruta.endsWith('.jsonl')) texto.split('\n').filter(Boolean).forEach((l) => JSON.parse(l)); else JSON.parse(texto); } catch { bien = false; } }
     if (bien) { try { await guardarDoc(db, 'fs:' + ruta, { t: texto }, { espera: 0 }); hechas.push(ruta); } catch (e) { if (!e.conflicto) throw e; /* ya hay uno en la nube: manda ese */ } }
     else console.warn(`[anuncios] la migración «${clave}» no vale (ruta o texto): se descarta`);
@@ -139,21 +141,27 @@ export function crearAvisos(db, { ahora = () => Date.now() } = {}) {
 const EXT_VIDEO = /\.(mp4|mov|webm|m4v)$/i, EXT_IMAGEN = /\.(jpe?g|png|webp|gif)$/i, EXT_AUDIO = /\.(mp3|wav)$/i;
 const ID_MEDIO = /^\d{4}-\d{2}\/[^/\\\0]{1,200}$/;
 /** La galería que ve anuncios/crear.mjs: { ruta(id) → archivo en el espejo, item(id) → { kind } }. `cargar` baja de R2 (head, o los bytes). */
+export const MAX_MEDIO_BYTES = 25 * 1024 * 1024; // un Worker tiene ~128 MB de memoria y el medio se baja entero para subirlo a Meta: más de ~25 MB no cabe con holgura
+export const textoMedioGrande = (id, bytes) => `«${id}» pesa ${(bytes / 1048576).toFixed(1).replace('.', ',')} MB y la nube solo puede subir a Meta archivos de hasta 25 MB. Comprímelo (o usa un video más corto) y vuelve a elegirlo.`;
 export function galeriaNube({ env, esp }) {
   const conocidos = new Map();
+  const rechazados = [];
   const kindDe = (id) => (EXT_VIDEO.test(id) ? 'video' : EXT_IMAGEN.test(id) ? 'image' : EXT_AUDIO.test(id) ? 'audio' : 'file');
   return {
     async cargar(ids, { bytes = false } = {}) {
       for (const id of [...new Set(ids.filter(Boolean))]) {
         if (!ID_MEDIO.test(id) || id.includes('..') || !env.MEDIA) continue;
         try {
+          const cab = await env.MEDIA.head(id); if (!cab) continue;
+          if (Number(cab.size) > MAX_MEDIO_BYTES) { rechazados.push({ id, bytes: Number(cab.size), motivo: textoMedioGrande(id, Number(cab.size)) }); continue; }
           if (bytes) {
             const o = await env.MEDIA.get(id); if (!o) continue;
             const p = esp.ruta('media/' + id); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, Buffer.from(await o.arrayBuffer()));
             conocidos.set(id, { kind: kindDe(id) });
-          } else if (await env.MEDIA.head(id)) conocidos.set(id, { kind: kindDe(id) });
+          } else conocidos.set(id, { kind: kindDe(id) });
         } catch (e) { console.warn('[anuncios] medio', id, e?.message ?? e); }
       }
+      return { rechazados: rechazados.slice() };
     },
     ruta: (id) => (conocidos.has(id) && fs.existsSync(esp.ruta('media/' + id)) ? esp.ruta('media/' + id) : null),
     item: (id) => conocidos.get(id) || null,
@@ -172,7 +180,7 @@ export const pareceDeAgente = (v) => String(v ?? '').trim().toLowerCase() === 'a
  * Todo lo de Anuncios construido sobre un espejo ya abierto.
  * @param {object} o  { db, env, esp, cfg, fetchFn, ahora, avisos, freno, panelAt, bandejaAbiertaAt, kpis, piezas, usuario }
  */
-export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined, ahora = () => Date.now(), avisos, freno = null, panelAt = 0, bandejaAbiertaAt = 0, kpis = null, preload = {} }) {
+export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined, ahora = () => Date.now(), avisos, freno = null, panelAt = 0, bandejaAbiertaAt = 0, kpis = null, preload = {}, latido = null }) {
   const dirAn = esp.ruta(DIR_ANUNCIOS), dirMeta = esp.ruta(DIR_ANALITICAS);
   const aj = () => cfg.anuncios || {};
   const avisar = (texto, o) => avisos.avisar('anuncios', texto, o);
@@ -181,7 +189,9 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined
   meta.ponerFreno(freno);
   const adsBase = crearMetaAds({ meta });
   // antes de cada llamada que ESCRIBE en Meta, se vuelca a D1 lo apuntado (el diario de la creación, el testigo del envío)
-  const ads = Object.fromEntries(Object.entries(adsBase).map(([k, f]) => [k, ESCRIBEN.has(k) ? async (...a) => { await esp.flush(); return f(...a); } : f]));
+  // y DESPUÉS de cada escritura que salió bien se vuelca otra vez junto con la auditoría y el historial: si el Worker muere (o se pasa de
+  // subrequests) en el paso siguiente, lo que ya se hizo en Meta queda apuntado y no se pierde.
+  const ads = Object.fromEntries(Object.entries(adsBase).map(([k, f]) => [k, ESCRIBEN.has(k) ? async (...a) => { await esp.flush(); await avisos.volcar(); const r = await f(...a); await esp.flush(); await avisos.volcar(); if (latido) { try { await latido(); } catch { /* el latido no tumba una escritura que ya salió */ } } return r; } : f]));
   const pendiente = { refrescar: false };
   const sync = crearSincronizador({ meta, ads, dir: dirAn, ajustes: aj, defaults: defaultsAnuncios, ahora, avisar, despuesDeCifras: () => {}, panelAtInicial: panelAt });
   const tokens = tokensD1(db, { ahora });
@@ -216,7 +226,7 @@ export async function construirAnuncios({ db, env, esp, cfg, fetchFn = undefined
     return { ...leerPropuesta(r.texto), agente: a.name, campo };
   };
   const bandejaLect = construirBandeja({ esp, cfg, meta, ahora, avisos, abiertaAt: bandejaAbiertaAt, tokens });
-  const hookOk = (req, url) => { const t = String(env.AO_HOOK_TOKEN || ''); if (!t) return false; const dado = req.headers['x-office-token'] || url.searchParams.get('token') || String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''); return igualSeguro(String(dado), t); };
+  const hookOk = (req) => { const t = String(env.AO_HOOK_TOKEN || ''); if (!t) return false; const dado = req.headers['x-office-token'] || String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''); return igualSeguro(String(dado), t); }; // solo cabecera: una dirección con el token queda en los registros
   const rutas = (syncRuta, json, body) => crearRutasAnuncios({ sync: syncRuta, meta, json, body, acciones: acc, alHacer: () => {}, ahora, borradores: borr, creador, mejorar, sugerencias: sug, aplicador, impulsor, informe, indicadores: ind, conversiones: conv, bandeja: bandejaLect, hookOk });
 
   const tras = () => trasSondeo({ sync, sug, piloto, umbrales, cpa: () => cpaObjetivo({ ajuste: aj().cpaObjetivo, cifras: preload.cifras || [] }), publicaciones: () => preload.publicaciones || [],
@@ -267,11 +277,11 @@ async function leerInicio(db) {
 }
 
 /** Abre el espejo de Anuncios, lo construye todo y corre `fn(a)`; al terminar cierra (relecturas pedidas, freno, avisos) y vuelca. */
-export async function conAnuncios({ db, env, fetchFn, ahora = () => Date.now(), preload = {}, espejo = ESPEJO_ANUNCIOS }, fn) {
+export async function conAnuncios({ db, env, fetchFn, ahora = () => Date.now(), preload = {}, espejo = ESPEJO_ANUNCIOS, latido = null }, fn) {
   await aplicarMigracion(db);
   const { cfg, guardado } = await leerInicio(db), avisos = crearAvisos(db, { ahora });
   return conEspejo(db, espejo, async (esp) => {
-    const a = await construirAnuncios({ db, env, esp, cfg, fetchFn, ahora, avisos, preload, ...guardado });
+    const a = await construirAnuncios({ db, env, esp, cfg, fetchFn, ahora, avisos, preload, latido, ...guardado });
     let r, fallo = null;
     try { r = await fn(a, { esp, cfg, avisos }); } catch (e) { fallo = e; }
     try { await a.cerrar(); await esp.flush(); await avisos.volcar(); } catch (e) { if (!fallo) fallo = e; else console.error('[anuncios] no pude cerrar tras un fallo:', e?.message ?? e); }
