@@ -6,7 +6,6 @@
 // y, cada minuto, el reloj de serve.mjs: las rutinas que tocan se vuelven tareas, las programadas para ahora pasan a la cola y los avisos de fecha límite.
 // Los agentes NO se ejecutan aquí (fase 4): la cola queda lista y la fase 4 la lee con tomarSiguiente(db) y devuelve lo que hizo con guardarEjecucion(db, …).
 import { json, error, prohibido } from '../lib/respuesta.js';
-import { instalarZona } from '../lib/tareas/zona.js';
 import { conSesion, cargarTareas } from '../lib/tareas/sesion.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
 import { armarServicios, correrRuta } from '../lib/tareas/servicios.js';
@@ -38,10 +37,17 @@ async function leerCuerpo(req) {
 }
 
 export async function manejar(ctx) {
+  try { return await manejarGrupo(ctx); }
+  catch (e) { // otra petición cambió lo mismo y tres intentos no bastaron: se pide repetir, no es un fallo del servidor
+    if (e?.conflicto) return json({ error: 'Otra persona cambió esto al mismo tiempo: vuelve a intentarlo.', conflicto: true }, 409);
+    throw e;
+  }
+}
+
+async function manejarGrupo(ctx) {
   const { req, env, db, ruta, url, usuario } = ctx;
   const g = ruta.match(/^\/api\/([a-zA-Z0-9_.-]+)/)?.[1];
   if (!grupos.includes(g)) return null;
-  instalarZona(env.ZONA_HORARIA);
   const escribe = req.method !== 'GET' && req.method !== 'HEAD';
   if (escribe && usuario.rol === 'lectura') return prohibido('Tu usuario solo puede mirar.');
   const b = escribe ? await leerCuerpo(req) : {};
@@ -118,6 +124,14 @@ async function manejarAgentes({ req, db, ruta, usuario, b }) {
 }
 
 /* ---------- rutinas ---------- */
+const MAX_TEXTO_RUTINA = 4000;
+const CLAVES_WHEN = ['kind', 'at', 'days', 'day', 'nth', 'weekday', 'every', 'from', 'to', 'weekdaysOnly', 'start', 'end', 'count'];
+/** El horario de una rutina, solo con las claves que existen (lo demás no se guarda) y ya validado. → el horario limpio, o null si no vale. */
+function limpiarWhen(w) {
+  if (!w || typeof w !== 'object' || Array.isArray(w)) return null;
+  const l = {}; for (const k of CLAVES_WHEN) if (w[k] !== undefined) l[k] = w[k];
+  return validWhen(l) ? l : null;
+}
 async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
   const C = await leerContexto(db);
   const salida = async extra => json({ ...extra, routines: (await RT.rutinasConEstado(db, C.agents)).list });
@@ -126,8 +140,10 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
     if (usuario.rol !== 'admin') return prohibido('Solo un administrador crea rutinas.');
     if (!DEPTS[b.dept] || b.dept === 'brain') return json({ error: 'departamento desconocido' }, 400);
     if (!R.ALLOWED.includes(b.dept)) return json({ error: R.refusal(b.dept), refused: true }, 400);
+    if (typeof b.text !== 'string' || b.text.trim().length > MAX_TEXTO_RUTINA) return json({ error: 'el texto de la rutina debe tener entre 1 y 4000 caracteres' }, 400);
+    let when = b.when; if (when !== undefined && when !== null) { when = limpiarWhen(when); if (!when) return json({ error: 'ese horario no está completo' }, 400); }
     const enrutar = crearEnrutador({ env, agents: C.agents, depts: C.depts, nombre: C.nombre, fetchFn: env.__pruebas?.fetchIA });
-    const r = await RT.crearRutina(db, { agents: C.agents, enrutar }, { dept: b.dept, text: b.text, when: b.when, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort });
+    const r = await RT.crearRutina(db, { agents: C.agents, enrutar }, { dept: b.dept, text: b.text, when: when ?? undefined, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort });
     return json(r, r.error ? 400 : 200);
   }
   const m = ruta.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume|skip|unskip))?$/);
@@ -156,14 +172,17 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
     await RT.saltarEjecucion(db, r.id, t, m[2] === 'skip');
     return salida({ ok: true });
   }
+  // Pausar o reanudar lo puede cualquiera que trabaje; cambiar lo que la rutina HACE (texto, horario, agente, modelo, si pide OK) es de un administrador.
+  if (usuario.rol !== 'admin' && !(Object.keys(b).length > 0 && Object.keys(b).every(k => k === 'paused'))) return prohibido('Solo un administrador cambia lo que hace una rutina; tú puedes pausarla o reanudarla.');
   const patch = {};
   if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk; if (typeof b.paused === 'boolean') patch.paused = b.paused;
   if (typeof b.text === 'string') { const t = b.text.trim(); if (!t || t.length > 4000) return json({ error: 'el texto de la rutina debe tener entre 1 y 4000 caracteres' }, 400); patch.text = t; }
   if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 90);
   if (b.when !== undefined) {
-    if (!validWhen(b.when)) return json({ error: 'ese horario no está completo' }, 400);
-    if (b.when.start && b.when.start < dia(Date.now())) return json({ error: 'la fecha de inicio ya pasó' }, 400);
-    patch.when = b.when;
+    const w = limpiarWhen(b.when);
+    if (!w) return json({ error: 'ese horario no está completo' }, 400);
+    if (w.start && w.start < dia(Date.now())) return json({ error: 'la fecha de inicio ya pasó' }, 400);
+    patch.when = w;
   }
   if (b.agent !== undefined) { const a = C.agents.find(x => x.id === b.agent && x.department === r.dept); if (!a) return json({ error: 'ese agente no está en el departamento de la rutina' }, 400); patch.agent = a.id; }
   if (b.model !== undefined) patch.model = normModel(b.model) || '';
@@ -174,24 +193,25 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
 
 /* ---------- el reloj (serve.mjs → tickRoutines, tickScheduled, tickLimites) ---------- */
 export async function cadaMinuto(env) {
-  const db = env.DB; instalarZona(env.ZONA_HORARIA);
+  const db = env.DB; // la zona de la oficina ya está instalada (lib/rutas.js)
   const ahora = Date.now();
   const C = await leerContexto(db);
-  const { disparos, avisos } = await RT.adelantarReloj(db, C.agents, ahora);
+  // MEDIO-2: primero se crean las tareas (cada una con su id estable) y DESPUÉS se adelanta el reloj. Si algo se cae entre los dos pasos, el reloj no avanzó: el minuto
+  // siguiente planea lo mismo, las tareas ya existen (el mismo id no nace dos veces) y solo se confirma el reloj. Nunca queda una rutina «hecha» sin su tarea.
+  const plan = await RT.planearReloj(db, C.agents, ahora);
+  const { disparos, avisos } = plan;
   const hayProgramadas = !!(await db.prepare("select 1 x from filas where coleccion = 'tareas' and json_extract(json,'$.state') = 'scheduled' and json_extract(json,'$.dueAt') <= ? limit 1").bind(ahora).first());
   const toca10 = new Date(ahora).getMinutes() % 10 === 0;
   if (disparos.length || avisos.length || hayProgramadas || toca10) {
-    try { await conSesion(db, async s => {
+    await conSesion(db, async s => {
       const serv = armarServicios(s, { env, contexto: C, fetchFn: env.__pruebas?.fetchIA }, {});
-      for (const a of avisos) s.avisar(a.kind, a.text);
+      for (const a of avisos) s.avisar(a.kind, a.text, { key: a.key });
       for (const d of disparos) RT.dispararRutina(serv.altaTarea, s.avisar, d.rutina, { id: d.id, due: d.due, late: d.late, missed: d.missed, equipos: C.equipos });
       if (hayProgramadas) pasarProgramadas(s, ahora);
       if (toca10) avisarLimites(s, C, ahora);
-    }); } catch (e) { // el reloj de las rutinas ya avanzó: se devuelve atrás para que el minuto siguiente las vuelva a intentar (el id de cada ejecución es estable: no nace dos veces)
-      if (disparos.length) await RT.devolverReloj(db, disparos).catch(() => {});
-      throw e;
-    }
+    });
   }
+  await RT.confirmarReloj(db, plan); // si otro reloj lo cambió a la vez, no se pisa: el minuto siguiente lo reintenta (las tareas ya están)
   if (toca10 && new Date(ahora).getHours() === 3 && new Date(ahora).getMinutes() === 10) await limpiar(db, ahora);
 }
 
@@ -256,7 +276,6 @@ export async function guardarEjecucion(db, base, mio, { por = null } = {}) {
 
 /** Crea una tarea desde otro módulo (Contenido «llenar la semana», un disparador…) con las mismas reglas que la barra. → la tarea */
 export async function altaTareaDb(env, campos, opciones = {}) {
-  instalarZona(env.ZONA_HORARIA);
   const C = await leerContexto(env.DB);
   return conSesion(env.DB, async s => armarServicios(s, { env, contexto: C, fetchFn: env.__pruebas?.fetchIA }, {}).altaTarea(campos, opciones));
 }

@@ -13,6 +13,8 @@ import { mutarDoc } from '../almacen.js';
 import { sha256 } from '../ids.js';
 
 const dePaso = (st, obj, extra = {}) => json(obj, st, extra);
+// «Sin pedir mi OK» (needsOk:false) deja que el agente envíe, pague o cambie cosas sin que el dueño lo vea: solo un administrador lo decide.
+const SOLO_ADMIN_OK = 'Solo un administrador puede dejar una tarea sin pedir su visto bueno (needsOk:false).';
 const fase4 = que => json({ error: `${que} lo hacen los agentes, y los agentes completos todavía no están en la nube (fase 4): sigue en la oficina de tu computadora.`, pendiente: true }, 501);
 
 function draftFacts(t, apr) { const d = t.draft || t.result || ''; t.risk = approvals.risk(d, apr); t.preview = approvals.preview(d); }
@@ -36,6 +38,7 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
 
   if (ruta === '/api/tasks' && metodo === 'POST') {
     const { dept, text, model, effort, team, at } = b;
+    if (b.needsOk === false && usuario?.rol !== 'admin') return dePaso(403, { error: SOLO_ADMIN_OK });
     if (!C.depts[dept] || dept === 'brain') return dePaso(400, { error: 'departamento desconocido' });
     if (!text || !String(text).trim()) return dePaso(400, { error: 'la tarea está vacía' });
     const dueAt = at ? (typeof at === 'number' ? at : Date.parse(at)) : null; // V3.2.1: una tarea para una fecha
@@ -110,7 +113,10 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
     return dePaso(200, serv.repetirTarea(src, 'dueno'));
   }
 
-  if (!accion && metodo === 'PATCH') return editarTarea({ s, serv, C, id, b, db });
+  if (!accion && metodo === 'PATCH') {
+    if (b.needsOk === false && usuario?.rol !== 'admin') return dePaso(403, { error: SOLO_ADMIN_OK });
+    return editarTarea({ s, serv, C, id, b, db });
+  }
 
   if (accion === 'run' && metodo === 'POST') { // "ejecútala ya": pasa a la cola y el reloj de la nube la arranca
     const t = alm.load().find(x => x.id === id); if (!t) return dePaso(404, { error: 'esa tarea ya no existe' });

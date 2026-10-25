@@ -14,6 +14,7 @@ import { Conflicto, leerDoc, guardarDoc } from '../almacen.js';
 export const TAREAS = 'tareas';
 export const DOC_PROYECTOS = 'tareas.proyectos';
 export const DOC_ETIQUETAS = 'tareas.etiquetas';
+const LOTE_IDS = 90; // D1: como mucho 100 parámetros por sentencia (1 es la colección)
 
 /** Todas las tareas. Con `ligera` (el sondeo de cada 6 s), lo archivado llega solo con lo que la página lee de ello (tareas/ligera.mjs): su trabajo entregado, que es lo más
  *  pesado, ni sale de D1. Una sesión con la lista ligera es solo para LEER (lo archivado quedaría recortado si se guardara). */
@@ -68,39 +69,46 @@ export async function abrirSesion(db, { ahora = () => Date.now(), bitacora = nul
   sesion.commit = async function commit() {
     const c = alm.cambios();
     if (c.subir.length || c.borrar.length) {
-      // 1) mirar antes, para no empezar a escribir si ya se sabe que hay un choque
-      const ids = [...c.subir.filter(x => x.versionAntes !== null).map(x => x.tarea.id), ...c.borrar.map(x => x.id)];
-      const nuevas = c.subir.filter(x => x.versionAntes === null).map(x => x.tarea.id);
-      const consulta = [...ids, ...nuevas];
-      if (consulta.length) {
-        const marcas = consulta.map(() => '?').join(',');
-        const { results } = await db.prepare(`select id, coalesce(json_extract(json,'$.version'),1) v from filas where coleccion = ? and id in (${marcas})`).bind(TAREAS, ...consulta).all();
-        const hay = new Map(results.map(r => [r.id, r.v]));
-        for (const x of c.subir) { const v = hay.get(x.tarea.id); if (x.versionAntes === null ? v !== undefined : v !== x.versionAntes) throw new Conflicto(x.tarea.id); }
-        for (const x of c.borrar) if (hay.get(x.id) !== x.versionAntes) throw new Conflicto(x.id);
+      // 1) mirar antes, para no empezar a escribir si ya se sabe que hay un choque. D1 admite 100 parámetros por sentencia: de a LOTE_IDS ids por consulta.
+      const consulta = [...c.subir.map(x => x.tarea.id), ...c.borrar.map(x => x.id)];
+      const hay = new Map();
+      for (let i = 0; i < consulta.length; i += LOTE_IDS) {
+        const trozo = consulta.slice(i, i + LOTE_IDS);
+        const { results } = await db.prepare(`select id, coalesce(json_extract(json,'$.version'),1) v from filas where coleccion = ? and id in (${trozo.map(() => '?').join(',')})`).bind(TAREAS, ...trozo).all();
+        for (const r of results) hay.set(r.id, r.v);
       }
-      // 2) escribir, cada una solo si sigue en la versión que se leyó
-      const t0 = ahora(), sentencias = [];
-      for (const x of c.subir) {
-        const json = JSON.stringify(x.tarea);
-        sentencias.push(x.versionAntes === null
-          ? db.prepare('insert into filas (coleccion, id, json, orden, actualizado) values (?,?,?,?,?) on conflict (coleccion, id) do nothing').bind(TAREAS, x.tarea.id, json, t0, new Date(t0).toISOString())
-          : db.prepare("update filas set json = ?, actualizado = ? where coleccion = ? and id = ? and coalesce(json_extract(json,'$.version'),1) = ?").bind(json, new Date(t0).toISOString(), TAREAS, x.tarea.id, x.versionAntes));
-      }
-      for (const x of c.borrar) sentencias.push(db.prepare("delete from filas where coleccion = ? and id = ? and coalesce(json_extract(json,'$.version'),1) = ?").bind(TAREAS, x.id, x.versionAntes));
-      const res = await db.batch(sentencias);
-      const malo = res.findIndex(r => (r?.meta?.changes ?? 0) !== 1);
-      if (malo >= 0) throw new Conflicto((c.subir[malo] || c.borrar[malo - c.subir.length])?.tarea?.id || (c.borrar[malo - c.subir.length])?.id || 'tareas');
+      for (const x of c.subir) { const v = hay.get(x.tarea.id); if (x.versionAntes === null ? v !== undefined : v !== x.versionAntes) throw new Conflicto(x.tarea.id); }
+      for (const x of c.borrar) if (hay.get(x.id) !== x.versionAntes) throw new Conflicto(x.id);
     }
-    if (c.lineas.length) {
-      for (let i = 0; i < c.lineas.length; i += 25) await db.batch(c.lineas.slice(i, i + 25).map(l => db.prepare('insert into tarea_bitacora (t, tarea, json) values (?,?,?)').bind(+l.t || ahora(), String(l.tarea), JSON.stringify(l))));
+    // 2) escribir, cada tarea solo si sigue en la versión que se leyó. La bitácora va en el MISMO lote: o entra todo o no entra nada (antes un corte las separaba).
+    const t0 = ahora(), sentencias = [];
+    for (const x of c.subir) {
+      const json = JSON.stringify(x.tarea);
+      sentencias.push(x.versionAntes === null
+        ? db.prepare('insert into filas (coleccion, id, json, orden, actualizado) values (?,?,?,?,?) on conflict (coleccion, id) do nothing').bind(TAREAS, x.tarea.id, json, t0, new Date(t0).toISOString())
+        : db.prepare("update filas set json = ?, actualizado = ? where coleccion = ? and id = ? and coalesce(json_extract(json,'$.version'),1) = ?").bind(json, new Date(t0).toISOString(), TAREAS, x.tarea.id, x.versionAntes));
+    }
+    for (const x of c.borrar) sentencias.push(db.prepare("delete from filas where coleccion = ? and id = ? and coalesce(json_extract(json,'$.version'),1) = ?").bind(TAREAS, x.id, x.versionAntes));
+    const hayTareas = sentencias.length;
+    for (const l of c.lineas) sentencias.push(db.prepare('insert into tarea_bitacora (t, tarea, json) values (?,?,?)').bind(+l.t || ahora(), String(l.tarea), JSON.stringify(l)));
+    if (sentencias.length) { // UN solo lote: D1 lo corre como una transacción (tareas y bitácora entran juntas o ninguna)
+      const res = await db.batch(sentencias);
+      for (let k = 0; k < hayTareas; k++) {
+        if ((res[k]?.meta?.changes ?? 0) !== 1) { const x = k < c.subir.length ? c.subir[k].tarea : c.borrar[k - c.subir.length]; throw new Conflicto(x?.id || 'tareas'); }
+      }
     }
     if (sucioP) { await guardarDoc(db, DOC_PROYECTOS, { lista: P }, { espera: vP }); vP += 1; sucioP = false; }
     if (sucioE) { await guardarDoc(db, DOC_ETIQUETAS, { lista: E }, { espera: vE }); vE += 1; sucioE = false; }
     if (avisos.length) {
       const t0 = ahora(), nuevos = [];
-      for (const a of avisos.splice(0)) { // lo mismo dicho dos veces en 6 horas se dice una (serve.mjs → notice con key)
-        if (a.key && (nuevos.some(x => x.key === a.key) || await db.prepare("select 1 x from filas where coleccion = 'avisos' and orden > ? and json_extract(json,'$.key') = ? limit 1").bind(t0 - 6 * 3600e3, a.key).first())) continue;
+      const lista = avisos.splice(0), claves = [...new Set(lista.map(a => a.key).filter(Boolean))], recientes = new Set();
+      for (let i = 0; i < claves.length; i += LOTE_IDS) { // MEDIO-6: una consulta por tanda de claves, no una por aviso
+        const trozo = claves.slice(i, i + LOTE_IDS);
+        const { results } = await db.prepare(`select distinct json_extract(json,'$.key') k from filas where coleccion = 'avisos' and orden > ? and json_extract(json,'$.key') in (${trozo.map(() => '?').join(',')})`).bind(t0 - 6 * 3600e3, ...trozo).all();
+        for (const r of results) recientes.add(r.k);
+      }
+      for (const a of lista) { // lo mismo dicho dos veces en 6 horas se dice una (serve.mjs → notice con key)
+        if (a.key && (recientes.has(a.key) || nuevos.some(x => x.key === a.key))) continue;
         nuevos.push(a);
       }
       if (nuevos.length) await db.batch(nuevos.map((a, i) => { const id = `${t0.toString(36)}${i}${Math.random().toString(36).slice(2, 5)}`; return db.prepare('insert into filas (coleccion, id, json, orden, actualizado) values (?,?,?,?,?) on conflict (coleccion, id) do nothing').bind('avisos', id, JSON.stringify({ id, t: t0, read: false, ...a }), t0, new Date(t0).toISOString()); }));

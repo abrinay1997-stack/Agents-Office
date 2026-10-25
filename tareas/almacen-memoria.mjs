@@ -46,7 +46,13 @@ export function crearAlmacenMemoria({ tareas = [], bitacora: lineasPrevias = [],
     for (const t of actual) {
       vistos.add(t.id); const antes = originales.get(t.id);
       if (antes === undefined) subir.push({ tarea: t, versionAntes: null });
-      else if (antes !== JSON.stringify(t)) subir.push({ tarea: t, versionAntes: JSON.parse(antes).version ?? 1 });
+      else if (antes !== JSON.stringify(t)) {
+        // Toda tarea cuyo JSON cambió sube de versión, aunque la bitácora no vea nada que contar (orden, seenAt, avisos, cronómetro, handoff…): la versión es el candado de la base,
+        // y sin subirla dos cambios a la vez pasarían los dos y el segundo borraría el primero.
+        const va = JSON.parse(antes).version ?? 1;
+        if ((t.version || 1) <= va) t.version = va + 1;
+        subir.push({ tarea: t, versionAntes: va });
+      }
     }
     const borrar = [...originales].filter(([id]) => !vistos.has(id)).map(([id, j]) => ({ id, versionAntes: JSON.parse(j).version ?? 1 }));
     return { subir, borrar, lineas: nuevas.slice(), eventos: eventos.slice() };

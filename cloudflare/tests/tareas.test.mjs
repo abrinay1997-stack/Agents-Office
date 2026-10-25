@@ -9,7 +9,7 @@ import { manejar } from '../worker/lib/rutas.js';
 import { MODULOS } from '../worker/modulos/index.js';
 import * as TAREAS from '../worker/modulos/tareas.js';
 import { abrirSesion, conSesion, cargarTareas } from '../worker/lib/tareas/sesion.js';
-import { instalarZona, desfase, DateReal } from '../worker/lib/tareas/zona.js';
+import { instalarZona, desfase, DateReal } from '../worker/lib/zona.js'; // la zona vive en lib/zona.js (una sola, también para Contenido)
 import { guardarDoc } from '../worker/lib/almacen.js';
 import { idDeEjecucion, parcharRutina, DOC_ESTADO } from '../worker/lib/tareas/rutinas.js';
 import { crearTarea } from '../../tareas/modelo.mjs';

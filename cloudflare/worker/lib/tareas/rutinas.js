@@ -109,11 +109,13 @@ function huella(s) {
 }
 export const idDeEjecucion = (rutina, due) => 'rt' + huella(`${rutina}:${due}`).toString(36);
 
-/** Lo que toca ahora: adelanta el reloj de cada rutina (guardando su estado con versión: si otra petición lo cambió, no se dispara nada y el siguiente minuto lo reintenta)
- *  y devuelve las tareas por crear. Así una rutina se dispara como mucho una vez. → { disparos: [{ rutina, id, due, late, missed }], avisos: [{ kind, text }] } */
-export async function adelantarReloj(db, agents, now = Date.now()) {
+/** Lo que toca ahora, SIN tocar el reloj: calcula qué rutinas disparan y cómo quedaría su estado. El orden seguro (MEDIO-2) es: planear → crear las tareas (con su id estable)
+ *  → confirmarReloj. Si algo se cae entre los dos pasos, el reloj NO avanzó: el minuto siguiente vuelve a planear lo mismo, las tareas ya existen (mismo id) y solo se confirma.
+ *  → { disparos: [{ rutina, id, due, late, missed }], avisos: [{ kind, text, key }], hayCambio, st, version, valor } */
+export async function planearReloj(db, agents, now = Date.now()) {
+  const vacio = { disparos: [], avisos: [], hayCambio: false };
   const { routines } = await cargarRutinas(db, agents);
-  if (!routines.length) return { disparos: [], avisos: [] };
+  if (!routines.length) return vacio;
   const { valor, version } = await leerDoc(db, DOC_ESTADO, {});
   const st = clonar(valor || {});
   const { list } = R.withState(routines, st, now);
@@ -121,28 +123,35 @@ export async function adelantarReloj(db, agents, now = Date.now()) {
   const disparos = [], avisos = [];
   for (const h of hits) {
     if (h.skipped) {
-      if (h.missed) avisos.push({ kind: 'missed', text: `«${h.routine.title}» no corrió ${h.missed === 1 ? 'una vez' : h.missed + ' veces'} con la oficina parada; esta rutina no se recupera tarde.` });
+      if (h.missed) avisos.push({ kind: 'missed', key: `missed-${h.routine.id}-${h.due}`, text: `«${h.routine.title}» no corrió ${h.missed === 1 ? 'una vez' : h.missed + ' veces'} con la oficina parada; esta rutina no se recupera tarde.` });
       continue;
     }
     const id = idDeEjecucion(h.routine.id, h.due);
     R.advance(st, h.routine, now, id, h.late);
     disparos.push({ rutina: h.routine, id, due: h.due, late: h.late, missed: h.missed });
   }
-  if (!hits.length && JSON.stringify(st) === JSON.stringify(valor || {})) return { disparos: [], avisos: [] };
-  try { await guardarDoc(db, DOC_ESTADO, st, { espera: version }); } catch (e) { if (e.conflicto) return { disparos: [], avisos: [], conflicto: true }; throw e; }
-  return { disparos, avisos };
+  if (!hits.length && JSON.stringify(st) === JSON.stringify(valor || {})) return vacio;
+  return { disparos, avisos, hayCambio: true, st, version, valor };
 }
 
-/** Si las tareas de esas ejecuciones no se pudieron crear, el reloj vuelve a «tocaba esa hora» (y una ejecución menos). */
-export async function devolverReloj(db, disparos) {
-  await mutarDoc(db, DOC_ESTADO, {}, st => { for (const d of disparos) { const s = st[d.rutina.id]; if (s) { s.nextAt = d.due; s.runs = Math.max(0, (s.runs || 1) - 1); } } return st; });
+/** Guarda el reloj adelantado que planeó planearReloj (con la versión que leyó: si otra petición lo cambió, no se pisa → false y el siguiente minuto lo reintenta). */
+export async function confirmarReloj(db, plan) {
+  if (!plan?.hayCambio) return true;
+  try { await guardarDoc(db, DOC_ESTADO, plan.st, { espera: plan.version }); return true; } catch (e) { if (e.conflicto) return false; throw e; }
+}
+
+/** planear + confirmar de una vez (SIN haber creado las tareas): solo para quien no crea tareas con el reloj. El cron usa planearReloj → tareas → confirmarReloj. */
+export async function adelantarReloj(db, agents, now = Date.now()) {
+  const plan = await planearReloj(db, agents, now);
+  if (!await confirmarReloj(db, plan)) return { disparos: [], avisos: [], conflicto: true };
+  return plan;
 }
 
 /** La rutina se vuelve tarea (serve.mjs → fire). `altaTarea` es la de servicios.js. */
 export function dispararRutina(altaTarea, avisar, r, { id, due = Date.now(), late = false, by = 'routine', missed = 0, equipos = { enabled: true }, zonaTexto = d => new Date(d).toLocaleString('es-PA', { weekday: 'long', hour: '2-digit', minute: '2-digit' }) } = {}) {
   const task = altaTarea({ dept: r.dept, agent: r.agent, title: r.title, text: r.text, plan: r.plan || [], eta: 15, why: '', by, routine: r.id, when: r.desc || describe(r.when), needsOk: r.needsOk, autonomous: r.autonomous || undefined, due, late, missed: missed > 1 ? missed : undefined, timeout: r.timeout, minutesSaved: r.minutesSaved, routineModel: r.model || undefined, routineEffort: r.effort || undefined, team: r.team && equipos.enabled ? { lead: r.agent, asked: 'routine' } : undefined,
     prioridad: r.prioridad, etiquetas: r.etiquetas, proyecto: r.proyecto, estimacion: r.estimacion }, { por: by === 'routine' ? 'rutina' : 'dueno', arrancar: false, id });
-  if (late) avisar('late', `«${r.title}» se hizo tarde${missed > 1 ? ` (se perdieron ${missed} ejecuciones con la oficina parada; se hace una)` : ''}: tocaba el ${zonaTexto(due)}`);
+  if (late) avisar('late', `«${r.title}» se hizo tarde${missed > 1 ? ` (se perdieron ${missed} ejecuciones con la oficina parada; se hace una)` : ''}: tocaba el ${zonaTexto(due)}`, { key: id ? `late-${id}` : null });
   return task;
 }
 
