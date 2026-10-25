@@ -1,5 +1,5 @@
 // Lo que pidió la revisión independiente del Estudio en la nube: el tope no se pasa con pedidos a la vez, reintentar solo lo terminado,
-// el zip y la papelera con topes, nada crudo del proveedor hacia la página, y /media/<archivo> a través de las rutas (con el parche).
+// el zip y la papelera con topes, nada crudo del proveedor hacia la página, y /media/<archivo> a través de las rutas.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -120,23 +120,11 @@ test('un archivo se guarda primero en R2 y no pisa a otro con el mismo nombre', 
   assert.notEqual(b.file, a.file); assert.deepEqual(R2._m.get(a.file).buf, png, 'el primero no se pisó');
 });
 
-test('/media/<clave> a través de las rutas, con el parche aplicado: con sesión sirve el archivo, sin sesión no', { skip: SALTAR }, async () => {
-  // las rutas del Worker no se tocan: se aplica el parche (cloudflare/parches/estudio-media-rutas.patch) a una COPIA temporal junto a ellas
-  const lib = path.join(AQUI, '..', 'worker', 'lib'), original = fs.readFileSync(path.join(lib, 'rutas.js'), 'utf8');
-  const parche = fs.readFileSync(path.join(AQUI, '..', 'parches', 'estudio-media-rutas.patch'), 'utf8').split('\n');
-  const quita = parche.filter((l) => l.startsWith('-') && !l.startsWith('---')).map((l) => l.slice(1)), pone = parche.filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1));
-  assert.ok(original.includes(quita.join('\n')), 'el parche encaja con las rutas de ahora');
-  const tmp = path.join(lib, `rutas-con-parche-${process.pid}.mjs`);
-  fs.writeFileSync(tmp, original.replace(quita.join('\n'), pone.join('\n')));
-  try {
-    const { manejar: conParche } = await import(pathToFileURL(tmp).href);
-    const { env, d1, cookie } = await montar();
-    const it = await galeria.store(env, d1, png, 'png', { prompt: 'servida' });
-    const url = 'https://oficina.test/media/' + encodeURI(it.file);
-    const sin = await conParche(new Request(url), env); assert.notEqual(sin.status, 200, 'sin sesión no sale'); assert.equal(sin.headers.get('content-type')?.startsWith('image/'), false);
-    const con = await conParche(new Request(url, { headers: { cookie } }), env); assert.equal(con.status, 200); assert.equal(con.headers.get('content-type'), 'image/png'); assert.deepEqual(Buffer.from(await con.arrayBuffer()), png);
-    assert.equal((await conParche(new Request('https://oficina.test/media/2026-10/no-existe.png', { headers: { cookie } }), env)).status, 404);
-    // y sin el parche (las rutas de hoy) no se sirve: por eso el parche es obligatorio
-    assert.notEqual((await manejar(new Request(url, { headers: { cookie } }), env)).status, 200);
-  } finally { fs.rmSync(tmp, { force: true }); }
+test('/media/<clave> a través de las rutas: con sesión sirve el archivo, sin sesión no', { skip: SALTAR }, async () => {
+  const { env, d1, cookie } = await montar();
+  const it = await galeria.store(env, d1, png, 'png', { prompt: 'servida' });
+  const url = 'https://oficina.test/media/' + encodeURI(it.file);
+  const sin = await manejar(new Request(url), env); assert.notEqual(sin.status, 200, 'sin sesión no sale'); assert.equal(sin.headers.get('content-type')?.startsWith('image/'), false);
+  const con = await manejar(new Request(url, { headers: { cookie } }), env); assert.equal(con.status, 200); assert.equal(con.headers.get('content-type'), 'image/png'); assert.deepEqual(Buffer.from(await con.arrayBuffer()), png);
+  assert.equal((await manejar(new Request('https://oficina.test/media/2026-10/no-existe.png', { headers: { cookie } }), env)).status, 404);
 });
