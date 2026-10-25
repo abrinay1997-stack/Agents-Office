@@ -159,8 +159,8 @@ export function crearShell() {
     params = p || {};
     if (TABS.some(t => t.id === id) && id !== 'mas') { if (pila.largo) cerrarTodas(); pantalla = null; tab = id; ultima = null; sinHash(); pintar(); return; }
     if (pantalla === id) { ultima = null; pintar(); return; }
-    pantalla = id; ultima = null;
-    empujar({ tipo: 'pantalla', id, destruir() { if (pantalla === id) pantalla = null; ultima = null; } });
+    const previa = pantalla; pantalla = id; ultima = null; // una pantalla abierta desde otra (Contenido → Crear publicación) vuelve a ella con «atrás», no a la pestaña
+    empujar({ tipo: 'pantalla', id, destruir() { if (pantalla === id) pantalla = previa; ultima = null; } });
   }
   function sinHash() { try { history.replaceState(history.state, '', aHash(pantalla || tab, tab === 'tareas' ? {} : {})); } catch {} }
   function volver() {

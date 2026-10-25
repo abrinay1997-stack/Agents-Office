@@ -6,7 +6,7 @@ import { cargarFabrica } from './presets/fabrica.mjs';
 import { construirExtra, CSS_APARTE } from './build-extra.mjs';
 import { construirTareas, CSS_TAREAS } from './build-tareas.mjs'; // plan T2 (6 oct 2026): la vista Tareas, también aparte
 import { construirAnuncios, CSS_ANUNCIOS } from './build-anuncios.mjs'; // Fase A1 (9 oct 2026): la vista Anuncios, también aparte
-import { construirMovil, CSS_MOVIL } from './build-movil.mjs'; // 25 oct 2026: la versión móvil, también aparte
+import { construirMovil, construirMovilD, CSS_MOVIL } from './build-movil.mjs'; // 25 oct 2026: la versión móvil, también aparte
 import { construirPieza, CSS_PIEZA, SOLO_AQUI as SOLO_PIEZA } from './build-pieza.mjs'; // C1 (8 oct 2026): el editor de una pieza de Contenido, también aparte
 await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/braingraph.js
 
@@ -23,6 +23,7 @@ const extra = await construirExtra({ cssCorto });
 const tareasV = await construirTareas({ cssCorto }); // dist/tareas-vista.js: la página la trae al abrir Tareas (src/tareas-carga.js)
 const anunciosV = await construirAnuncios({ cssCorto }); // dist/anuncios-vista.js: la página la trae al abrir Anuncios (src/anuncios-carga.js)
 const piezaE = await construirPieza({ cssCorto });
+const movilD = await construirMovilD({ cssCorto }); // dist/movil-d.js: Contenido, Analíticas y Anuncios de la versión móvil, que se traen al abrirlos (src/movil/vistas/diferidas.js)
 const movilV = await construirMovil({ cssCorto }); // dist/movil.js: la página lo trae solo en un teléfono (src/movil-carga.js) // dist/pieza-editor.js: la página lo trae al abrir Contenido (src/pieza-carga.js)
 const res = await build({
   entryPoints: ['src/main.js'],
@@ -43,7 +44,7 @@ const js = res.outputFiles[0].text;
   if (coladoT.length) throw new Error(`la página volvió a llevar la vista Tareas (${coladoT.join(', ')}): impórtala solo desde src/tareas/vista.js y ábrela con src/tareas-carga.js`);
   const coladoA = dentro.filter(f => anunciosV.aparte.includes(f) || f.startsWith('src/anuncios/'));
   if (coladoA.length) throw new Error(`la página volvió a llevar la vista Anuncios (${coladoA.join(', ')}): impórtala solo desde src/anuncios/vista.js y ábrela con src/anuncios-carga.js`);
-  const coladoM = dentro.filter(f => movilV.aparte.includes(f) || f.startsWith('src/movil/'));
+  const coladoM = dentro.filter(f => movilV.aparte.includes(f) || movilD.aparte.includes(f) || f.startsWith('src/movil/'));
   if (coladoM.length) throw new Error(`la página volvió a llevar la versión móvil (${coladoM.join(', ')}): impórtala solo desde src/movil/index.js y ábrela con src/movil-carga.js`);
   const coladoP = dentro.filter(f => SOLO_PIEZA.includes(f));
   if (coladoP.length) throw new Error(`la página volvió a llevar el editor de piezas (${coladoP.join(', ')}): lo pequeño va en src/pieza-base.js; el editor, solo por src/pieza-carga.js`);
@@ -72,6 +73,7 @@ escribirEntero('dist/tareas-vista.js', tareasV.js); // la vista Tareas, antes qu
 escribirEntero('dist/anuncios-vista.js', anunciosV.js); // la vista Anuncios, igual
 escribirEntero('dist/pieza-editor.js', piezaE.js); // el editor de piezas de Contenido, igual
 escribirEntero('dist/movil.js', movilV.js); // la versión móvil, igual
+escribirEntero('dist/movil-d.js', movilD.js); // y su paquete de Contenido, Analíticas y Anuncios
 escribirEntero('dist/command-centre-v2.html', html);
 // dictado por voz (fase 10): un script suelto junto a la página (src/dictado-carga.js lo pide solo si el navegador sabe dictar); sin versión: no comparte nada con la página
 escribirEntero('dist/dictado.js', (await build({ entryPoints: ['src/dictado-app.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text);
