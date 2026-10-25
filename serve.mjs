@@ -1767,7 +1767,7 @@ function removeRoutine(id) {
   loadRoutines(); return true;
 }
 // a sentence (or the REPEAT picker) → a routine in the brain file. Claude names the agent, the title and whether it needs the OK.
-async function makeRoutine({ dept, text, when, agent, needsOk, model, effort }) {
+async function makeRoutine({ dept, text, when, agent, needsOk, model, effort, team }) {
   let taskText = String(text || '').trim(), w = when, parsed = null;
   if (!w) {
     parsed = parseWhen(taskText);
@@ -1781,7 +1781,7 @@ async function makeRoutine({ dept, text, when, agent, needsOk, model, effort }) 
   loadRoutines();
   const r = await route(dept, taskText);
   const a = agent && AGENTS.find(x => x.id === agent && x.department === dept) ? agent : r.agent;
-  const v = routines.validate({ id: uniqueId(slug(r.title).slice(0, 40), rlist.routines), dept, agent: a, title: r.title, text: taskText, when: w, needsOk: typeof needsOk === 'boolean' ? needsOk : r.needsOk, plan: r.plan, model: normModel(model) || undefined, effort: normEffort(effort) || undefined }, AGENTS, rlist.routines);
+  const v = routines.validate({ id: uniqueId(slug(r.title).slice(0, 40), rlist.routines), dept, agent: a, title: r.title, text: taskText, when: w, needsOk: typeof needsOk === 'boolean' ? needsOk : r.needsOk, plan: r.plan, model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: team === true ? true : undefined }, AGENTS, rlist.routines);
   if (v.problems.length) return { error: v.problems.join('; ') };
   rlist.routines.push(v.routine); routines.save(BRAIN, rlist.routines);
   const out = loadRoutines().find(x => x.id === v.routine.id);
@@ -2589,7 +2589,7 @@ const server = http.createServer(async (req, res) => {
       const b = await body(req);
       if (!DEPTS[b.dept] || b.dept === 'brain') return json(res, 400, { error: 'departamento desconocido' });
       if (!routines.ALLOWED.includes(b.dept)) return json(res, 400, { error: routines.refusal(b.dept), refused: true });
-      const r = await makeRoutine({ dept: b.dept, text: b.text, when: b.when, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort });
+      const r = await makeRoutine({ dept: b.dept, text: b.text, when: b.when, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort, team: b.team === true }); // team: la versión móvil lo ofrece al crear
       return json(res, r.error ? 400 : 200, r);
     }
     const rm = url.pathname.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume|skip|unskip))?$/);
@@ -2619,6 +2619,7 @@ const server = http.createServer(async (req, res) => {
       if (b.agent !== undefined) { const a = AGENTS.find(x => x.id === b.agent && x.department === r.dept); if (!a) return json(res, 400, { error: 'ese agente no está en el departamento de la rutina' }); patch.agent = a.id; }
       if (b.model !== undefined) patch.model = normModel(b.model) || '';
       if (b.effort !== undefined) patch.effort = normEffort(b.effort) || '';
+      if (typeof b.team === 'boolean') { patch.team = b.team ? true : undefined; if (b.team) { const lead = AGENTS.find(x => x.department === r.dept && x.lead); if (lead) patch.agent = lead.id; } } // todo el equipo: el jefe la lleva
       const out = editRoutine(r.id, patch); return json(res, 200, { ok: true, routine: out, routines: loadRoutines() });
     }
     if (url.pathname === '/api/tasks' && req.method === 'POST') {

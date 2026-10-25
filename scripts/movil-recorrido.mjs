@@ -48,7 +48,7 @@ export async function oficina({ semilla = true } = {}) {
   const base = `http://127.0.0.1:${port}`;
   for (let i = 0; i < 160; i++) { try { if ((await fetch(base + '/api/health')).ok) break; } catch {} await espera(250); }
   const api = async (ruta, m = 'GET', b) => (await fetch(base + ruta, { method: m, headers: { 'content-type': 'application/json' }, body: b ? JSON.stringify(b) : undefined })).json();
-  return { base, api, cerrar: () => { srv.kill(); claude.close(); fs.rmSync(dir, { recursive: true, force: true }); } };
+  return { base, api, dir, brain, data, cerrar: () => { srv.kill(); claude.close(); fs.rmSync(dir, { recursive: true, force: true }); } };
 }
 
 /** La estructura clave del escritorio: lo que no debe cambiar al añadir la versión móvil. */
