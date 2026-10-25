@@ -3,7 +3,6 @@
 import { json, error, noAutenticado, prohibido, cuerpo } from './respuesta.js';
 const TOPE_PUBLICO = 16_000; // bytes de un cuerpo SIN sesión (acceso)
 import { usuarioDeLaPeticion, iniciarSesion, cerrarSesion, cookieSesion, cookieBorrada } from './sesion.js';
-import { validarConector, publico } from './conectores.js';
 import { agentes, ejecutar } from './agentes.js';
 import { uuid, ahora } from './ids.js';
 import * as cerebro from './cerebro.js';
@@ -165,30 +164,6 @@ export async function manejar(req, env, exec = null) {
     return json({ ejecuciones: results });
   }
 
-  if (ruta === '/api/conectores' && req.method === 'GET') {
-    const { results } = await db.prepare('select * from conectores order by nombre').all();
-    return json({ conectores: results.map((c) => publico(c, env)) });
-  }
-  if (ruta === '/api/conectores' && req.method === 'POST') {
-    if (usuario.rol !== 'admin') return prohibido('Solo un administrador cambia los conectores.');
-    const v = validarConector(await cuerpo(req));
-    if (!v.ok) return json({ error: v.errores.join(' '), errores: v.errores }, 422);
-    const c = v.valor;
-    await db.prepare(
-      `insert into conectores (id, nombre, url, secreto, departamentos, herramientas_lectura, herramientas_envio, activo, created_at)
-       values (?,?,?,?,?,?,?,1,?)
-       on conflict (nombre) do update set url=excluded.url, secreto=excluded.secreto, departamentos=excluded.departamentos,
-         herramientas_lectura=excluded.herramientas_lectura, herramientas_envio=excluded.herramientas_envio`)
-      .bind(uuid(), c.nombre, c.url, c.secreto, JSON.stringify(c.departamentos), JSON.stringify(c.herramientas_lectura), JSON.stringify(c.herramientas_envio), ahora()).run();
-    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'conector', usuario.email, JSON.stringify({ nombre: c.nombre })).run();
-    const fila = await db.prepare('select * from conectores where nombre = ?').bind(c.nombre).first();
-    return json({ conector: publico(fila, env) }, 201);
-  }
-  if ((m = ruta.match(/^\/api\/conectores\/([a-z][a-z0-9-]{1,39})$/)) && req.method === 'DELETE') {
-    if (usuario.rol !== 'admin') return prohibido();
-    await db.prepare('delete from conectores where nombre = ?').bind(m[1]).run();
-    return json({ ok: true });
-  }
   // ---- Los módulos de cada fase del puerto (worker/modulos/): el primero que reconoce la ruta la contesta ----
   const waitUntil = p => { try { exec?.waitUntil?.(Promise.resolve(p).catch(() => {})); } catch { /* sin ctx (pruebas): el módulo espera él mismo */ } return !!exec?.waitUntil; }; // devuelve si se pudo dejar en segundo plano
   const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora, waitUntil };

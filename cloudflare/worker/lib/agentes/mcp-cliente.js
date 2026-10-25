@@ -46,17 +46,19 @@ function mensajeDeSSE(texto, id) {
 /** `presupuesto.externa()` se llama una vez por petición HTTP. `fetchFn(url, init)` se inyecta en las pruebas. */
 export function crearClienteMcp({ conector, env, fetchFn = (...a) => fetch(...a), presupuesto = null, tiempoMs = TIEMPO_MS, maxRespuesta = MAX_RESPUESTA }) {
   const secretoValido = !conector.secreto || secretoPermitido(conector.secreto); // solo un secreto MCP_* puede salir hacia un conector
-  const token = conector.secreto && secretoValido ? env?.[conector.secreto] : null;
+  const token = conector.secreto ? (secretoValido ? env?.[conector.secreto] : null) : (conector._token ?? null); // un secreto del Worker (MCP_…) o el token guardado desde la página (ya descifrado en memoria: lib/conectores-acceso.js)
+  const pideToken = !!conector.secreto || (!!conector.auth_tipo && conector.auth_tipo !== 'ninguna');
+  const nombreCabecera = conector.auth_tipo === 'cabecera' && conector.cabecera ? String(conector.cabecera).toLowerCase() : 'authorization';
   let sesion = null, iniciado = false, n = 0;
   const motivoUrl = urlPermitida(conector.url);
 
   async function enviar(mensaje, esperar = true) {
     if (motivoUrl) throw new Error(`el conector «${conector.nombre}» tiene una dirección no permitida (${motivoUrl})`);
     if (!secretoValido) throw new Error(AVISO_SECRETO(conector.secreto));
-    if (conector.secreto && !token) throw new Error(`falta el secreto ${conector.secreto} del conector «${conector.nombre}»`);
+    if (pideToken && !token) throw new Error(conector.secreto ? `falta el secreto ${conector.secreto} del conector «${conector.nombre}»` : `falta el token del conector «${conector.nombre}» (Ajustes → Conectores MCP)`);
     presupuesto?.externa();
     const cab = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': VERSION_PROTOCOLO };
-    if (token) cab.authorization = `Bearer ${token}`;
+    if (token) cab[nombreCabecera] = nombreCabecera === 'authorization' ? `Bearer ${token}` : token;
     if (sesion) cab['mcp-session-id'] = sesion;
     const ac = new AbortController(), reloj = setTimeout(() => ac.abort(), tiempoMs);
     let r, texto = '';

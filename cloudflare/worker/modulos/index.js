@@ -10,6 +10,8 @@ import * as ajustes from './ajustes.js';
 import * as telegram from './telegram.js';
 import * as disparadores from './disparadores.js';
 import * as equipo from './equipo.js';
+import * as modelos from './modelos.js';
+import * as conectores from './conectores.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -22,5 +24,7 @@ export const MODULOS = [
   ajustes, // /api/settings y los avisos del Estado
   telegram, // el webhook público y los avisos al teléfono
   disparadores, // POST /api/hook/<id> (público) y /api/triggers
+  conectores, // Ajustes → Conectores: añadir, probar, token cifrado, plantillas
+  modelos, // Ajustes → Modelos: catálogo, asignación por función, probar y comparar
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];
