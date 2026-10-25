@@ -38,7 +38,7 @@ test('filas: guardar, listar en orden, actualizar una sin tocar las demás, borr
 test('ia.texto: usa la llave del Worker, devuelve solo el texto, y los errores salen en español sin la llave', async () => {
   let visto;
   const ok = await texto({ ANTHROPIC_API_KEY: 'k' }, { sistema: 'Sé breve', usuario: 'hola', fetchFn: async (u, i) => { visto = JSON.parse(i.body); return new Response(JSON.stringify({ content: [{ type: 'text', text: 'ok' }, { type: 'raro' }], usage: { input_tokens: 3, output_tokens: 1 } }), { status: 200 }); } });
-  assert.deepEqual(ok, { texto: 'ok', tokens: { entrada: 3, salida: 1 } });
+  assert.deepEqual(ok, { texto: 'ok', tokens: { entrada: 3, salida: 1 }, modelo: 'claude-sonnet-5' });
   assert.equal(visto.system, 'Sé breve'); assert.ok(!visto.mcp_servers);
   await assert.rejects(() => texto({}, { usuario: 'x' }), /Falta el secreto ANTHROPIC_API_KEY/);
   await assert.rejects(() => texto({ ANTHROPIC_API_KEY: 'sk-ant-secreta' }, { usuario: 'x', fetchFn: async () => new Response('{}', { status: 401 }) }), (e) => /rechazó la clave/.test(e.message) && !/secreta/.test(e.message));

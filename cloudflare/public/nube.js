@@ -103,13 +103,13 @@
     document.dispatchEvent(new CustomEvent('ao:presencia', { detail: { presentes: presentes.map(persona), conexion } }));
   }
 
-  /** A ≤ 440 px la barra de avatares se esconde: Mi perfil y Salir viven también en el menú «⋯» del dock (y siguen en Ajustes). */
+  /** A ≤ 440 px la barra de avatares se esconde: Mi perfil y Salir viven también en el menú «⋯» del dock (y siguen en Ajustes); a ≤ 760 px, donde la barra de conectores se oculta, también Conectores y Modelos. */
   function enMenuMas() {
     const m = document.getElementById('topMoreMenu'); if (!m) return false;
     if (m.querySelector('[data-nube]')) return true;
-    for (const [a, t] of [['perfil', 'Mi perfil'], ['salir', 'Salir']]) {
+    for (const [a, t] of [['perfil', 'Mi perfil'], ['conectores', 'Conectores'], ...(yo?.rol === 'admin' ? [['modelos', 'Modelos']] : []), ['salir', 'Salir']]) { // a ≤ 760 px la barra de conectores no cabe: aquí están Conectores y Modelos
       const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); b.tabIndex = -1; b.dataset.nube = a; b.textContent = t;
-      b.addEventListener('click', () => { m.hidden = true; document.getElementById('topMore')?.setAttribute('aria-expanded', 'false'); if (a === 'salir') salir(); else abrirAjustes('nube-perfil'); });
+      b.addEventListener('click', () => { m.hidden = true; document.getElementById('topMore')?.setAttribute('aria-expanded', 'false'); if (a === 'salir') salir(); else abrirAjustes(a === 'perfil' ? 'nube-perfil' : a === 'conectores' ? 'nube-conectores' : 'nube-modelos'); });
       m.appendChild(b);
     }
     return true;
@@ -319,10 +319,10 @@
   }
 
   // Las dos pestañas de Ajustes (src/settings.js lee window.AO_AJUSTES_EXTRA al pintar).
-  window.AO_AJUSTES_EXTRA = [
+  window.AO_AJUSTES_EXTRA = (window.AO_AJUSTES_EXTRA || []).concat([
     { key: 'nube-perfil', label: 'Mi perfil', primera: true, render: (pane) => { if (yo) pintarPerfil(pane); } },
     { key: 'nube-equipo', label: 'Cuentas y roles', render: (pane) => { if (yo) pintarEquipo(pane); } },
-  ];
+  ]);
 
   // ---------- arranque ----------
   async function iniciar() {
@@ -331,5 +331,5 @@
     for (let i = 0; i < 20 && !enMenuMas(); i++) await new Promise((r) => setTimeout(r, 250)); // el menú «⋯» lo crea la página al arrancar
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
-  window.AO_NUBE = { pestana: PESTANA, presentes: () => presentes.map(persona), conexion: () => conexion };
+  window.AO_NUBE = { api, esc, aviso: avisoBreve, yo: () => yo, abrirAjustes, pestana: PESTANA, presentes: () => presentes.map(persona), conexion: () => conexion };
 })();
