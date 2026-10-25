@@ -220,3 +220,28 @@ test('Ajustes: cambiar un valor de un grupo con la configuración migrada sembra
   const v = (await o.admin('GET', '/api/settings')).j.values; assert.deepEqual([v['approvals.undoSeconds'], v['approvals.amountLimit'], v['approvals.remindAfterHours']], [60, 500, 12]);
   const guardado = JSON.parse(filas(o.d1, "select json from docs where clave = 'ajustes'")[0].json); assert.equal(guardado.approvals.amountLimit, 500, 'el documento de Ajustes llevó consigo el resto del grupo');
 });
+
+/* ---------- segunda revisión ---------- */
+test('R2-1: guardar otro ajuste de Telegram no resucita a un aprobador revocado', { skip: SALTAR }, async () => {
+  const o = await oficina6({ extraEnv: EXTRA }); sembrarBase(o, 'config', { telegram: { approvers: { [APROBADOR_TG]: ['sales'] } } });
+  assert.equal((await o.admin('GET', '/api/settings/telegram')).j.approvers[APROBADOR_TG] !== undefined, true, 'lo migrado se ve');
+  assert.equal((await o.admin('PUT', '/api/settings/telegram', { approvers: {} })).status, 200);
+  assert.deepEqual((await o.admin('GET', '/api/settings/telegram')).j.approvers, {});
+  await o.admin('POST', '/api/settings', { changes: { 'telegram.quiet.from': '21:00' } });
+  assert.deepEqual((await o.admin('GET', '/api/settings/telegram')).j.approvers, {}, 'sigue revocado');
+});
+test('R2-2: la migración no pisa los ajustes que ya están en la nube (sin forzar)', { skip: SALTAR }, async () => {
+  const o = await oficina6({ extraEnv: EXTRA }); sembrarBase(o, 'ajustes', { telegram: { approvers: {} } });
+  const r = await o.admin('POST', '/api/migrar/docs', { clave: 'ajustes', valor: { telegram: { approvers: { [APROBADOR_TG]: ['sales'] } } } });
+  assert.equal(r.status, 409);
+  assert.equal((await o.admin('POST', '/api/migrar/docs', { clave: 'ajustes', valor: { telegram: { approvers: {} } }, forzar: true })).status, 200);
+});
+test('R2-3: una firma con secreto corto o ausente no vale (nunca la clave «undefined»)', async () => {
+  const { firmaStripeValida, firmaHubValida } = await import('../worker/lib/publica.js');
+  const cuerpo = '{"a":1}', t = Math.floor(Date.now() / 1000);
+  for (const sec of [undefined, '', 'corto']) {
+    const v1 = hmac(String(sec), `${t}.${cuerpo}`);
+    assert.equal(await firmaStripeValida(cuerpo, `t=${t},v1=${v1}`, sec), false, `stripe con ${JSON.stringify(sec)}`);
+    assert.equal(await firmaHubValida(cuerpo, 'sha256=' + hmac(String(sec), cuerpo), sec), false, `hub con ${JSON.stringify(sec)}`);
+  }
+});

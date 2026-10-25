@@ -184,12 +184,19 @@ async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }) {
   const mias = new Set();
   const m = await chat.reclamar(db, msgId, (x) => {
     if (!Array.isArray(x.ops)) return false;
-    for (const o of x.ops) if (byK.has(o.k) && (o.state === 'proposed' || (o.state === 'running' && Date.now() - (o.runningAt || 0) > 120e3))) { o.state = 'running'; o.runningAt = Date.now(); mias.add(o.k); }
-    return mias.size > 0;
+    let cambio = false;
+    for (const o of x.ops) {
+      if (!byK.has(o.k)) continue;
+      if (o.state === 'proposed') { o.state = 'running'; o.runningAt = Date.now(); mias.add(o.k); cambio = true; }
+      else if (o.state === 'running' && Date.now() - (o.runningAt || 0) > 120e3) { o.state = 'failed'; o.error = 'se interrumpió a medias: mira el calendario antes de repetirlo (puede que ya se haya hecho)'; delete o.runningAt; cambio = true; } // nunca se rehace sola: duplicaría el efecto
+    }
+    return cambio;
   });
   if (!m) return { error: 'ya lo está haciendo otra petición, o ya está hecho: espera un momento y recarga', busy: true };
+  if (!mias.size) return { ok: true, message: m, messages: [] }; // solo se marcaron como interrumpidas las que se habían caído
   const ej = crearEjecutor({ env, db, usuario, modulos });
   let done = 0, failed = 0, segundo = 0;
+  try {
   for (const o of m.ops) {
     if (!mias.has(o.k) || o.state !== 'running') continue;
     const e = byK.get(o.k);
@@ -206,9 +213,12 @@ async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }) {
       if (o.pendiente) { delete o.pendiente; o.state = 'confirmar'; delete o.error; segundo++; } // gasta dinero: la tarjeta enseña la cifra y espera el SEGUNDO clic del dueño
       else { o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; }
     } catch (err) { o.state = 'failed'; o.error = String(err.message || err).slice(0, 300); failed++; }
+    await chat.reemplazar(db, m); // cada cambio queda apuntado al terminar: si el Worker muere ahora, lo ya hecho no se rehace
   }
-  for (const o of m.ops) if (mias.has(o.k)) delete o.runningAt;
-  await chat.reemplazar(db, m);
+  } finally {
+    for (const o of m.ops) if (mias.has(o.k)) { if (o.state === 'running') { o.state = 'failed'; o.error = 'se interrumpió a medias: mira el calendario antes de repetirlo'; } delete o.runningAt; }
+    await chat.reemplazar(db, m);
+  }
   const cuenta = sub.message('sub', `${done ? `Hecho: ${done} ${done === 1 ? 'cambio' : 'cambios'} en el calendario y la oficina. Puedes deshacerlo en la tarjeta durante ${OPS_UNDO_MS / 1000} s.` : segundo ? '' : 'No cambié nada.'}${segundo ? ` ${segundo === 1 ? 'Un cambio gasta' : segundo + ' cambios gastan'} dinero en anuncios: su tarjeta dice cuánto y espera tu segundo clic (tienes 2 minutos).` : ''}${failed ? ` ${failed} no se pudo: lo dice su tarjeta.` : ''}`.trim());
   if (done || failed || segundo) await chat.anexar(db, cuenta);
   const confirmar = m.ops.filter((o) => o.state === 'confirmar' && o.confirmar).map((o) => ({ k: o.k, ...o.anuncio, ...o.confirmar, sub: { msg: m.id, k: o.k } })); // lo que la página pide para el segundo clic (/api/anuncios/accion con `confirmacion` y `sub`)

@@ -111,6 +111,8 @@ export async function manejar(req, env, exec = null) {
     if (usuario.rol !== 'admin') return prohibido('Solo un administrador sube datos.');
     const b = await cuerpo(req);
     if (!/^[a-z][a-z0-9_.-]{1,60}$/.test(String(b?.clave ?? '')) || typeof b?.valor !== 'object' || b.valor === null) return error('Documento no válido.', 422);
+    // Los ajustes que ya se tocaron en la nube (quién aprueba por Telegram, topes…) no se pisan con una migración repetida: la nube es la copia de trabajo.
+    if ((b.clave === 'ajustes' || b.clave === 'config-local') && b.forzar !== true && (await almacen.leerDoc(db, b.clave, null)).valor) return error(`Ya hay «${b.clave}» en la nube y la migración lo pisaría (se perderían los cambios hechos aquí, y un aprobador revocado volvería). Si de verdad quieres reemplazarlo, manda forzar: true.`, 409);
     const version = await almacen.guardarDoc(db, b.clave, b.valor);
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ doc: b.clave })).run();
     return json({ clave: b.clave, version });

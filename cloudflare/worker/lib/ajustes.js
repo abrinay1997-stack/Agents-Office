@@ -71,7 +71,12 @@ const MEDIA_CLAVE = { 'media.dailyLimit': 'dailyLimit', 'media.dailyBudget': 'da
 /** Pone `ruta` = valor en `local`, guardando antes lo que la base ya tenía en ese grupo (ver la regla de arriba). */
 function ponerConBase(local, base, ruta, valor) {
   const k = ruta.split('.')[0];
-  if (ruta.includes('.') && objeto(base?.[k])) local[k] = unir(base[k], objeto(local[k]) ? local[k] : {});
+  if (ruta.includes('.') && objeto(base?.[k])) {
+    const antes = objeto(local[k]) ? local[k] : {}, unido = unir(base[k], antes);
+    // Quién aprueba o administra por Telegram se REEMPLAZA, no se mezcla: lo revocado no resucita al guardar otro ajuste (la base solo lo trae la primera vez).
+    for (const q of ['approvers', 'admins']) if (Object.prototype.hasOwnProperty.call(antes, q)) unido[q] = antes[q];
+    local[k] = unido;
+  }
   set(local, ruta, valor);
 }
 
