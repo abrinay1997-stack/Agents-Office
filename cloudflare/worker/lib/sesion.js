@@ -94,10 +94,21 @@ export async function abrirSesion(db, userId, userAgent = '') {
   return t;
 }
 
+export const MIN_CLAVE = 12;
+/** Las reglas de una contraseña NUEVA (una sola vez: el alta, el restablecimiento y el cambio). → el motivo, o null. */
+export function validarClave(clave, email = '', actual = null) {
+  const c = String(clave ?? '');
+  if (c.length < MIN_CLAVE) return `La contraseña debe tener ${MIN_CLAVE} caracteres como mínimo.`;
+  if (c.length > 200) return 'La contraseña es demasiado larga.';
+  if (email && c.toLowerCase() === String(email).toLowerCase()) return 'La contraseña no puede ser tu correo.';
+  if (actual !== null && c === String(actual)) return 'La contraseña nueva no puede ser igual a la actual.';
+  return null;
+}
+
 /** Cambia la contraseña: pide la actual y cierra todas las demás sesiones de esa persona (la que cambia sigue dentro). → null si todo bien, o { estado, error }. */
 export async function cambiarContrasena(db, req, usuario, actual, nueva) {
-  if (String(nueva ?? '').length < 12) return { estado: 422, error: 'La contraseña nueva debe tener 12 caracteres como mínimo.' };
-  if (String(nueva).length > 200) return { estado: 422, error: 'La contraseña es demasiado larga.' };
+  const mala = validarClave(nueva, usuario.email, actual);
+  if (mala) return { estado: 422, error: mala };
   const u = await db.prepare('select salt, password_hash from users where id = ?').bind(usuario.id).first();
   const calculado = await derivar(String(actual ?? ''), u?.salt ?? '00000000000000000000000000000000');
   if (!u || calculado !== u.password_hash) return { estado: 403, error: 'La contraseña actual no es correcta.' };

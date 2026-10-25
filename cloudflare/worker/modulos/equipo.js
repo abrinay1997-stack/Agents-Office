@@ -52,7 +52,7 @@ export async function manejar(ctx) {
     // Un navegador manda siempre Origin en un WebSocket: sin él, o de otro sitio, no entra (defensa extra sobre SameSite=Lax).
     if (req.headers.get('Origin') !== url.origin) return prohibido('Origen no permitido.');
     if (!env.HUB) return error('La presencia en vivo no está disponible.', 503);
-    const q = new URLSearchParams({ userId: usuario.id, nombre: usuario.nombre, color: usuario.color, foto: usuario.foto ?? '' });
+    const q = new URLSearchParams({ userId: usuario.id, nombre: usuario.nombre, color: usuario.color, foto: usuario.foto ?? '', rol: usuario.rol });
     return env.HUB.get(env.HUB.idFromName('oficina')).fetch(new Request(`https://hub/conectar?${q}`, { headers: { Upgrade: 'websocket' } }));
   }
 
@@ -111,6 +111,13 @@ export async function manejar(ctx) {
     if (!admin(usuario)) return soloAdmin();
     return (await eq.revocarInvitacion(db, r[1])) ? json({ ok: true }) : noEncontrado('Invitación');
   }
+  if ((r = ruta.match(/^\/api\/equipo\/([0-9a-f-]{36})\/reinicio$/)) && m === 'POST') {
+    if (!admin(usuario)) return soloAdmin();
+    const c = await eq.crearReinicio(db, usuario, r[1]);
+    if (c.error) return error(c.error, c.estado);
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ctx.ahora(), 'reinicio', usuario.email, JSON.stringify({ id: r[1] })).run();
+    return json({ para: c.para, enlace: `${url.origin}/invitacion/${c.testigo}`, expira: '24 horas' }, 201);
+  }
   if ((r = ruta.match(/^\/api\/equipo\/([0-9a-f-]{36})\/foto$/)) && m === 'GET') return servirFoto(env, db, r[1]);
   if ((r = ruta.match(/^\/api\/equipo\/([0-9a-f-]{36})$/))) {
     if (m === 'PATCH') {
@@ -135,24 +142,37 @@ export async function manejar(ctx) {
   return null;
 }
 
-/** Lo público (sin sesión): ver y aceptar una invitación. Con límite de intentos por IP; nunca dice si un correo existe. → Response | null */
+/**
+ * Lo público (sin sesión): ver y aceptar una invitación (o un restablecimiento de contraseña). El testigo viaja en el CUERPO de un POST, nunca en la
+ * ruta de la API: así no queda en los registros de peticiones ni en el historial. (Lo que queda es la página /invitacion/<testigo>, que la propia
+ * página borra de la barra de direcciones al leerlo.) Con tope de intentos por IP; nunca dice si un correo existe. → Response | null
+ */
 export async function publicaInvitacion(req, env) {
   const url = new URL(req.url), db = env.DB;
-  const r = url.pathname.match(/^\/api\/invitacion\/([0-9a-f]{1,64})(\/aceptar)?$/);
+  const r = url.pathname.match(/^\/api\/invitacion\/(ver|aceptar)$/);
   if (!r) return null;
-  const aceptar = Boolean(r[2]);
-  if ((aceptar && req.method !== 'POST') || (!aceptar && req.method !== 'GET')) return error('Método no permitido', 405);
-  const t = await eq.tasa(db, `inv:${aceptar ? 'a' : 'v'}:${eq.ipDe(req)}`, aceptar ? 10 : 30);
+  if (req.method !== 'POST') return error('Método no permitido', 405);
+  const aceptar = r[1] === 'aceptar';
+  const t = await eq.tasa(db, `inv:${aceptar ? 'a' : 'v'}:${eq.ipDe(req)}`, aceptar ? 10 : 30, eq.relojDe(env));
   if (!t.ok) return error('Demasiados intentos. Espera un minuto.', 429);
-  if (!aceptar) {
-    const v = await eq.verInvitacion(db, r[1]);
-    return v ? json({ invitacion: v }) : error('Esta invitación no sirve: puede que ya se usara, que caducara o que la revocaran. Pide una nueva a quien administra la oficina.', 404);
-  }
   const b = await cuerpo(req);
-  const a = await eq.aceptarInvitacion(db, r[1], { nombre: b?.nombre, contrasena: b?.contrasena });
-  if (a.error) return error(a.error, a.estado);
-  const testigo = await abrirSesion(db, a.id, req.headers.get('User-Agent') ?? '');
-  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'alta', a.email, JSON.stringify({ rol: a.rol })).run();
-  difundir(env, { tipo: 'cambio', area: 'equipo', por: { id: a.id, nombre: a.nombre, tab: null }, at: Date.now() });
-  return json({ ok: true }, 200, { 'Set-Cookie': cookieSesion(testigo) });
+  const testigo = typeof b?.testigo === 'string' ? b.testigo : '';
+  const MALA = 'Esta invitación no sirve: puede que ya se usara, que caducara o que la revocaran. Pide una nueva a quien administra la oficina.';
+  if (!aceptar) {
+    const v = (await eq.verInvitacion(db, testigo)) ?? (await eq.verReinicio(db, testigo));
+    return v ? json({ invitacion: { tipo: 'invitacion', ...v } }) : error(MALA, 404);
+  }
+  if (await eq.invitacionVigente(db, testigo)) {
+    const a = await eq.aceptarInvitacion(db, testigo, { nombre: b?.nombre, contrasena: b?.contrasena });
+    if (a.error) return error(a.error, a.estado);
+    const cookie = await abrirSesion(db, a.id, req.headers.get('User-Agent') ?? '');
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'alta', a.email, JSON.stringify({ rol: a.rol })).run();
+    difundir(env, { tipo: 'cambio', area: 'equipo', nombre: '', por: { id: a.id, nombre: a.nombre, tab: null }, at: Date.now() });
+    return json({ ok: true }, 200, { 'Set-Cookie': cookieSesion(cookie) });
+  }
+  const x = await eq.aplicarReinicio(db, testigo, b?.contrasena);
+  if (x.error) return error(x.error, x.estado);
+  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'reinicio-aplicado', x.email, '{}').run();
+  await cerrarDe(env, x.id, 'contraseña restablecida');
+  return json({ ok: true, reinicio: true }); // sin sesión: entra con la contraseña nueva
 }

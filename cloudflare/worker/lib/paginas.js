@@ -1,7 +1,7 @@
 // Las páginas: lo público (el acceso) y lo que exige sesión (la oficina real, sus paquetes y el panel de conectores).
 // Con `run_worker_first: ["/*"]` TODO pasa por aquí: ningún archivo de la oficina sale sin sesión.
 const PUBLICAS = new Set(['/login.html', '/login.js', '/acceso.css', '/acceso-tema.js', '/invitacion.html', '/invitacion.js']);
-const RE_INVITACION = /^\/invitacion\/[0-9a-f]{1,64}$/; // el enlace de una invitación: sin sesión, la página nativa que la acepta
+const RE_INVITACION = /^\/invitacion(\/([0-9a-f]{1,64})?)?$/; // el enlace de una invitación: sin sesión, la página nativa que la acepta
 const PAQUETES = new Set(['/estudio-extra.js', '/tareas-vista.js', '/anuncios-vista.js', '/pieza-editor.js', '/dictado.js']); // los pide la página bajo demanda
 const NUBE = new Set(['/nube.js', '/nube.css']); // lo que solo existe en la nube (presencia, equipo, perfil): se inyecta en la oficina al servirla, solo con sesión
 const INYECCION = '<link rel="stylesheet" href="/nube.css"><script src="/nube.js" defer></script>';
