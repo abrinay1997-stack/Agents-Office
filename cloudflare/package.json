@@ -1,0 +1,15 @@
+{
+  "name": "agents-office-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "node --test \"tests/*.test.mjs\"",
+    "preparar": "node scripts/preparar-cuenta.mjs",
+    "secretos": "node scripts/subir-secretos.mjs",
+    "sembrar": "node scripts/sembrar-admin.mjs",
+    "deploy": "wrangler deploy",
+    "humo": "node scripts/prueba-viva.mjs"
+  },
+  "devDependencies": { "wrangler": "^4.45.0" }
+}

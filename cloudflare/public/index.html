@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agents Office · PanaClaw</title>
+<style>
+:root{--bg:#fff;--fg:#14171a;--mut:#4b5560;--line:#d0d7de;--acc:#0b57d0}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--fg:#e8eaed;--mut:#aab2bd;--line:#2d343c;--acc:#8ab4f8}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:1.3rem}h2{font-size:1.05rem;margin-top:1.6rem}
+input,select,textarea,button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px}
+textarea{width:100%;box-sizing:border-box}button{cursor:pointer;background:var(--acc);color:#fff;border-color:var(--acc)}
+button.sec{background:transparent;color:var(--fg);border-color:var(--line)}
+.fila{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.card{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0}
+.mut{color:var(--mut);font-size:.9rem}pre{white-space:pre-wrap}[hidden]{display:none}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style></head>
+<body><main>
+<h1>Agents Office · PanaClaw</h1>
+<p id="msg" class="mut" role="status"></p>
+<form id="login" hidden><div class="fila">
+<label>Correo <input id="email" type="email" autocomplete="username" required></label>
+<label>Contraseña <input id="pass" type="password" autocomplete="current-password" required></label>
+<button>Entrar</button></div></form>
+<section id="app" hidden>
+<div class="fila"><span id="quien" class="mut"></span><button class="sec" id="salir">Salir</button></div>
+<h2>Pedir algo a un agente</h2>
+<div class="fila"><select id="agente" aria-label="Agente"></select></div>
+<textarea id="texto" rows="4" aria-label="Qué debe hacer"></textarea>
+<div class="fila"><button id="ir">Preparar borrador</button><label><input type="checkbox" id="aprob"> Ejecución aprobada (puede usar herramientas de envío)</label></div>
+<div id="resultado" class="card" hidden><pre id="salida"></pre></div>
+<h2>Conectores MCP</h2>
+<p class="mut">El token nunca se escribe aquí: se guarda como secreto en Cloudflare y aquí solo va su nombre.</p>
+<div id="conectores"></div>
+<details><summary>Añadir un conector</summary><form id="nuevo" class="card">
+<div class="fila"><input id="c-nombre" placeholder="nombre (gmail)" required><input id="c-url" placeholder="https://…/mcp" required size="36"></div>
+<div class="fila"><input id="c-secreto" placeholder="NOMBRE_DEL_SECRETO (ej. MCP_GMAIL_TOKEN)"><input id="c-deps" placeholder="departamentos: emails,sales"></div>
+<div class="fila"><input id="c-lect" placeholder="herramientas de lectura (coma)" size="40"><input id="c-env" placeholder="herramientas de envío (coma)" size="40"></div>
+<button>Guardar conector</button></form></details>
+</section>
+<script src="/app.js"></script>
+</main></body></html>

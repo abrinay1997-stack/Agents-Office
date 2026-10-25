@@ -1,0 +1,77 @@
+# Agents Office en Cloudflare — probar, preparar la cuenta, subir secretos, migrar, desplegar y comprobar lo publicado.
+#
+# Va por GitHub Actions y no por la integración Git de Cloudflare: así NADA se publica sin pasar por los tests.
+# Cuenta de destino: la que corresponda a CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN (no la de esta sesión de Claude).
+#
+# Secretos del repositorio (Settings → Secrets and variables → Actions). Ver docs/cloudflare.md.
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID        desplegar
+#   ANTHROPIC_API_KEY                                   obligatoria: los agentes
+#   META_API_KEY / MODEL_API_KEY, META_ACCESS_TOKEN…    opcionales (ver cloudflare/secretos.json)
+#   MCP_<NOMBRE>_TOKEN                                  un token por conector MCP (se suben solos)
+#   ADMIN_EMAIL, ADMIN_PASSWORD                         solo para «Cloudflare · sembrar administrador»
+#   SITIO_URL                                           opcional: la dirección publicada, para la comprobación viva
+name: Cloudflare · desplegar
+
+on:
+  push:
+    branches: [main]
+    paths: ['cloudflare/**', 'office.agents.json', 'safety.mjs', '.github/workflows/cloudflare-desplegar.yml']
+  pull_request:
+    paths: ['cloudflare/**', 'office.agents.json', 'safety.mjs', '.github/workflows/cloudflare-*.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare-desplegar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Tests de Cloudflare
+        run: node --test cloudflare/tests/*.test.mjs
+
+  desplegar:
+    needs: probar
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloudflare
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Comprobar que hay credenciales
+        run: |
+          falta=""
+          [ -z "$CLOUDFLARE_API_TOKEN" ]  && falta="$falta CLOUDFLARE_API_TOKEN"
+          [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && falta="$falta CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$falta" ]; then echo "Faltan secretos del repositorio:$falta"; exit 1; fi
+      - run: npm install --no-audit --no-fund
+      - name: Preparar la cuenta (D1 y R2, si no existen)
+        run: node scripts/preparar-cuenta.mjs
+      - name: Aplicar migraciones de D1 (antes que el código)
+        run: npx wrangler d1 migrations apply agents-office-db --remote
+      - name: Desplegar el Worker
+        run: npx wrangler deploy
+      # Los secretos se suben DESPUÉS del primer despliegue (el Worker tiene que existir) y sobreviven a los siguientes.
+      - name: Subir los secretos al Worker
+        env:
+          SECRETS_JSON: ${{ toJSON(secrets) }}
+        run: node scripts/subir-secretos.mjs
+      - name: Comprobar lo publicado
+        env:
+          SITIO_URL: ${{ secrets.SITIO_URL }}
+        run: |
+          if [ -z "$SITIO_URL" ]; then echo "SITIO_URL no está puesto: se omite la comprobación viva."; exit 0; fi
+          node scripts/prueba-viva.mjs

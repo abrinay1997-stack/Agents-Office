@@ -47,6 +47,10 @@ Por eso quien clona ve la misma oficina y el mismo cerebro, pero con el historia
 4. Doble clic en `Agents-Office-Abrinay.bat`: instala las librerías la primera vez y abre la oficina ya como PanaClaw.
 5. Para el Estudio usa sus propias keys (en variables de entorno de Windows) o el motor gratis «Prueba».
 
+## Agents Office en Cloudflare (fase 1, 25 oct 2026)
+
+Subproyecto `cloudflare/` (Worker + D1 + R2 + cron; guía en `docs/cloudflare.md`), pedido del dueño: desplegar en **otra** cuenta de Cloudflare, con las llaves como secretos y no expuestas. No toca la oficina local. Fase 1: acceso propio, **conectores MCP remotos** (el token es un secreto del Worker; en D1 solo va su nombre) y agentes por API (Anthropic o Meta). Despliegue por GitHub Actions (`cloudflare-desplegar.yml`, `cloudflare-sembrar-admin.yml`); nunca se imprime un secreto. Reglas: el módulo de entrada del Worker solo exporta el handler (la lógica va en `cloudflare/worker/lib/`); un secreto nuevo se declara en `cloudflare/secretos.json`; una herramienta de envío solo corre en una ejecución aprobada por un admin. Tests: `node --test "cloudflare/tests/*.test.mjs"`. Falta (fase 2): Contenido y publicación en Meta desde el cron.
+
 ## Plan y pendientes (al 24 sep 2026)
 
 **Hecho:**
