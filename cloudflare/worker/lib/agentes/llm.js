@@ -1,19 +1,32 @@
 // UNA llamada al modelo con herramientas (Messages API de Anthropic, o la de Meta Muse sin herramientas). El bucle (llamar, ejecutar las herramientas
 // que pide, volver a llamar) lo gobierna ejecutor.js, paso a paso, para poder cortar entre una vuelta y otra y seguir en la siguiente invocación.
 import { errorDeApi } from '../agentes.js';
-import { modelFor, modelId, normModel } from '../../../../src/models.js';
+import { modelFor, modelId, normModel, FROM_TEXT } from '../../../../src/models.js';
+import { delAjuste, buscar as buscarModelo } from '../../../../modelos-core.mjs';
 
 const API_ANTHROPIC = 'https://api.anthropic.com/v1/messages';
 const API_META = 'https://api.meta.ai/v1/messages';
 
-/** Qué modelo corre una tarea: la precedencia de siempre (tarea > rutina > agente > oficina) y, si la nube tiene AI_MODELO, ese como «el de la oficina». */
-export function elegirModelo({ task = {}, agent = {}, env = {}, cfgModelo = '' } = {}) {
+/** Qué modelo corre una cosa. Precedencia: tarea > rutina > agente (campo `model` del roster) > Ajustes → Modelos (agente > departamento > función > oficina) > AI_MODELO > Ajustes «model» > Sonnet.
+ *  `modelos`: el documento de Ajustes → Modelos (modelos-core.mjs); `funcion`: dimitri, redactar, resumen, enrutador, revision (sin ella y con agente, es «agentes»).
+ *  → { id, meta, proveedor, caps, pick, de }: `de` dice de dónde salió, para decírselo al dueño. */
+export function elegirModelo({ task = {}, agent = {}, env = {}, cfgModelo = '', modelos = null, funcion = '', depto = '' } = {}) {
   const pick = modelFor({ task: task.model, routine: task.routineModel, agent: agent.model, office: cfgModelo });
+  const caps = id => { const m = buscarModelo(id, modelos); return m ? { herramientas: !!m.herramientas, vision: !!m.vision, razonamiento: !!m.razonamiento } : { herramientas: !/^muse-/i.test(id), vision: !/^muse-/i.test(id), razonamiento: false }; };
+  const salida = (id, de, p = pick) => { const meta = /^muse-/i.test(id); return { id, meta, proveedor: meta ? 'meta' : 'anthropic', caps: caps(id), pick: p, de }; };
+  if (pick.from !== 'office') return salida(modelId(pick.model), `${FROM_TEXT[pick.from]} (${pick.model})`);
+  const aj = delAjuste(modelos, { funcion: funcion || (agent.id || depto || agent.department ? 'agentes' : ''), agente: agent.id || '', depto: depto || agent.department || '' });
+  if (aj) return salida(aj.id, aj.de, { model: normModel(aj.id), from: 'ajuste' });
   const delaOficina = String(env.AI_MODELO || '').trim();
-  const esMeta = /^muse-/i.test(delaOficina);
-  if (esMeta) return { id: delaOficina, meta: true, pick };
-  const id = pick.from === 'office' && /^claude-/i.test(delaOficina) ? delaOficina : modelId(normModel(pick.model));
-  return { id, meta: false, pick };
+  if (/^muse-/i.test(delaOficina)) return salida(delaOficina, 'AI_MODELO (secreto del Worker)');
+  const id = /^claude-/i.test(delaOficina) ? delaOficina : modelId(normModel(pick.model));
+  return salida(id, /^claude-/i.test(delaOficina) ? 'AI_MODELO (secreto del Worker)' : 'el valor por defecto de la oficina');
+}
+
+/** Un modelo del catálogo por su id (para caer a uno capaz). */
+export function modeloPorId(id, modelos = null, de = '') {
+  const m = buscarModelo(id, modelos), meta = /^muse-/i.test(id);
+  return { id, meta, proveedor: meta ? 'meta' : 'anthropic', caps: m ? { herramientas: !!m.herramientas, vision: !!m.vision, razonamiento: !!m.razonamiento } : { herramientas: !meta, vision: !meta, razonamiento: false }, pick: { model: normModel(id), from: 'ajuste' }, de };
 }
 
 /** El nombre que ve la API (a-z, 0-9, _ y -, hasta 64): `mcp__gmail__search.threads` → `mcp__gmail__search_threads`. Devuelve { alias, original }. */

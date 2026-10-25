@@ -62,8 +62,8 @@ body.anOpen #cornerBL, body.anOpen #sahniMark, body.anOpen #licence { display: n
 /* ---------- las cuentas ---------- */
 #anOv .an-accts { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; }
 #anOv .an-accts li { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--cv-line); background: var(--cv-card); border-radius: 99px; padding: 5px 12px 5px 6px; font-size: 12px; min-height: 28px; }
-#anOv .an-net { font-size: 10.5px; letter-spacing: .08em; font-weight: 700; color: var(--cream); background: var(--ink); border-radius: 99px; padding: 2px 7px; }
-body.dark #anOv .an-net { color: #151414; background: #ECEAE3; }
+#anOv .an-net { display: inline-grid; place-items: center; width: 18px; height: 18px; line-height: 0; vertical-align: -4px; color: var(--ink); flex: none; } #anOv .an-net .ao-red { width: 100%; height: 100%; }
+body.dark #anOv .an-net { color: #ECEAE3; }
 #anOv .an-an { font-weight: 600; }
 #anOv .an-av { color: var(--grey); }
 
@@ -128,7 +128,7 @@ body.dark #anOv .an-hint { border-left-color: #5CD1AE; }
 #anOv .an-tt { font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #anOv .an-ts { font-size: 12px; color: var(--grey); }
 #anOv .an-ts b { color: var(--ink); }
-#anOv .an-ts .an-net { color: var(--cream); } body.dark #anOv .an-ts .an-net { color: #151414; }
+
 #anOv .an-ts a { color: var(--ink); text-underline-offset: 2px; }
 #anOv .an-notes { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }
 

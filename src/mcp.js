@@ -198,9 +198,10 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       topconn.appendChild(more);
     }
     if (LIVE && !uniqKeys.length && !connectors.hidden) { // honest empty state — nothing is wired until the user connects something
-      const none = document.createElement('span');
+      const nb = connectors.nube || globalThis.AO_NUBE, none = document.createElement(nb ? 'button' : 'span'); // en la nube (el servidor lo dice con `nube`): un botón a Ajustes → Conectores MCP
       none.className = 'tc-none';
-      none.textContent = 'nada aún — conecta en claude.ai o ejecuta: claude mcp add';
+      none.textContent = nb ? 'sin conectores · + añadir uno' : 'nada aún — conecta en claude.ai o ejecuta: claude mcp add';
+      if (nb) { none.type = 'button'; none.onclick = () => globalThis.AO_NUBE?.abrirConectores?.(); }
       topconn.appendChild(none);
     }
   }
@@ -220,6 +221,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     if (s.browser) return 'Ejecuta <code>claude --chrome</code> una vez en esta computadora para vincular la extensión Claude in Chrome y reinicia la oficina.';
     if (s.source === 'claude.ai') return 'Se conecta en <a href="https://claude.ai/settings/connectors" target="_blank" rel="noopener">claude.ai → Ajustes → Conectores</a>.';
     if (s.source === 'plugin') return `Abre Claude Code en esta computadora, escribe <code>/mcp</code>, elige «${escH(s.raw || s.name)}» y entra. Después, «Volver a comprobar».`;
+    if (s.source === 'nube') return s.status === 'needs-auth' ? 'Ajustes → Conectores MCP: pon su token y pulsa «Probar».' : '';
     if (s.source === 'local') return `Revisa su configuración con <code>claude mcp get ${escH(s.raw || s.name)}</code>.`;
     return '';
   }
@@ -245,7 +247,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     let n = 0;
     const card = s => {
       const st = stOf(s), i = 'cpd' + (n++), logo = LOGOS[s.key] || LOGOS[s.id];
-      const img = logo ? logo.img : tile(s.name);
+      const img = s.iconUri || (logo ? logo.img : tile(s.name));
       const sub = s.plugin ? `plugin ${s.plugin}` : s.source === 'claude.ai' ? 'claude.ai' : s.browser ? 'tu navegador' : s.source === 'local' ? 'en esta computadora' : '';
       return `<div class="cp-item" data-sid="${escH(s.id)}"><button type="button" class="cp-c${st === 'connected' ? '' : ' off'}" aria-expanded="false" aria-controls="${i}"><img src="${img}" alt=""><span class="cp-n">${escH(pretty(s.name))}</span>` +
         `<span class="cp-d">${escH(STATE_TXT[st] || st)}${sub ? ' · ' + escH(sub) : ''}</span></button><div class="cp-det" id="${i}" hidden>${detailHTML(s)}</div></div>`;
@@ -259,7 +261,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       `<div class="cp-body">${sec('Listos para los agentes', ready)}${sec('No conectan', bad)}${sec('Piden entrar, conectando o desactivados', auth, auth.length > 6)}${sec('Bloqueados para los agentes', denied)}` +
       (live.length ? '' : '<p class="cp-foot">Aún no hay conectores.</p>') +
       (empty.length ? `<p class="cp-foot">${empty.length} huecos de plugins sin configurar (no cuentan ni fallan).</p>` : '') +
-      `<p class="cp-foot">Para añadir uno: conéctalo en claude.ai o ejecuta <code>claude mcp add …</code>, y «Volver a comprobar». Qué departamento usa cuál: <code>office.config.json → mcp.departments</code>; cuáles nunca: Ajustes → Conectores.</p></div>`;
+      (connectors.nube || globalThis.AO_NUBE ? '<p class="cp-foot"><button type="button" class="cp-add">+ Añadir conector</button> o cambia los que ya tienes en Ajustes → Conectores MCP.</p></div>' : `<p class="cp-foot">Para añadir uno: conéctalo en claude.ai o ejecuta <code>claude mcp add …</code>, y «Volver a comprobar». Qué departamento usa cuál: <code>office.config.json → mcp.departments</code>; cuáles nunca: Ajustes → Conectores.</p></div>`);
   }
   function render(keepFocus) {
     if (!panel) return;
@@ -292,6 +294,7 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
     const r = lab.getBoundingClientRect(); panel.style.left = Math.max(12, Math.min(r.left, innerWidth - panel.offsetWidth - 12)) + 'px';
     panel.addEventListener('click', e => {
       if (e.target.closest('.cp-x')) { closePanel(true); return; }
+      if (e.target.closest('.cp-add')) { closePanel(); return globalThis.AO_NUBE?.abrirConectores?.(); }
       if (e.target.closest('.cp-re')) return recheck();
       const f = e.target.closest('.cp-fire'); if (f) return fireConnector(f.dataset.k);
       const c = e.target.closest('.cp-c'); if (!c) return;
@@ -459,6 +462,11 @@ export function initMcp({ scene, hud, LAYOUT, DEPTS, FR, R, connectors = null })
       usageEl.className = 'tm-usage';
       usageEl.innerHTML = bar('SESIÓN', u.session) + (u.session && u.week ? '<span class="sep">·</span>' : '') + bar('SEMANA', u.week);
       usageEl.title = `Tu plan de Claude, como lo muestra Claude Code. La sesión se reinicia ${when(u.session && u.session.resetsAt)} · la semana se reinicia ${when(u.week && u.week.resetsAt)}.`;
+    } else if (u && u.ok && u.source === 'nube') { // nube: se paga por token con llaves, no hay ventana de 5 h: gasto de hoy y del mes
+      const d = u.today || {}, m = u.month || {}, us = x => 'US$' + (x < 10 ? x.toFixed(2) : x < 100 ? x.toFixed(1) : Math.round(x)).replace('.', ','), p = m.percent;
+      usageEl.className = 'tm-usage';
+      usageEl.innerHTML = `<span>HOY</span><b>${us(d.usd || 0)}</b><span class="sep">·</span><span>MES</span><b>${us(m.usd || 0)}</b>` + (m.budget ? `<span>de ${m.budget}</span><span class="ub"><i class="${p >= 90 ? 'c' : p >= 75 ? 'w' : ''}" style="width:${Math.min(100, p)}%"></i></span><b>${p} %</b>` : '');
+      usageEl.title = `Gasto estimado de la oficina en la nube: lo que dice el libro de costos (tokens × precios de la tabla del ${u.pricesAsOf}). No hay ventana de uso ni plan que se reinicie: se paga por token con tus llaves. Hoy: ${d.runs || 0} ejecuciones y ${d.tokens || 0} tokens.${m.budget ? ` Tope del mes: US$${m.budget} (Ajustes → Costos).` : ' Pon un tope del mes en Ajustes → Costos para ver el porcentaje.'} Es una estimación: la factura real es la de tu proveedor.`;
     } else if (u && u.ok && u.source === 'office') {
       const w = u.window || {}; const n = w.tokens || 0; const tok = n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : String(n);
       usageEl.className = 'tm-usage off';

@@ -13,7 +13,7 @@ export const MODELS = {
 };
 export const MODEL_KEYS = ['sonnet', 'opus', 'fable'];
 export const DEFAULT_MODEL = 'sonnet';
-export const FROM_TEXT = { task: 'esta tarea', routine: 'esta rutina', agent: 'este agente', office: 'valor de la oficina', model: 'el propio del modelo' };
+export const FROM_TEXT = { task: 'esta tarea', routine: 'esta rutina', agent: 'este agente', office: 'valor de la oficina', model: 'el propio del modelo', ajuste: 'Ajustes → Modelos' };
 export const EFFORT_KEYS = ['low', 'medium', 'high', 'xhigh', 'max'];
 export const EFFORT_NAME = { low: 'Bajo', medium: 'Medio', high: 'Alto', xhigh: 'Extra alto', max: 'Máximo' };
 

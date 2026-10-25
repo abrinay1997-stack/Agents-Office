@@ -20,6 +20,7 @@ import { tickAprobaciones } from '../lib/agentes/aprobaciones.js';
 import { crearCorrida, crearCorridasPendientes, corridasVivas, avanzar, modoInicial } from '../lib/agentes/ejecutor.js';
 import { tomarSiguiente } from './tareas.js';
 import { secretoPermitido } from '../lib/conectores.js';
+import { conectoresListados } from '../lib/conectores-acceso.js';
 import { resumenMcp } from '../lib/mcp-estado.js';
 import { adjuntarTerminados } from '../lib/agentes/estudio-adjuntos.js';
 import * as contenido from './contenido.js';
@@ -43,13 +44,11 @@ export async function manejar(ctx) {
   const metodo = req.method;
 
   if (ruta === '/api/mcp' && metodo === 'GET') { // la barra de conectores y su panel: los conectores MCP remotos de D1, sin `claude mcp list`
-    const { results } = await db.prepare('select nombre, url, secreto, departamentos, herramientas_lectura, herramientas_envio, activo from conectores order by nombre').all();
-    return json(resumenMcp({ filas: results, env, cfg: (await leerContexto(db)).ajustes?.mcp || {} }));
+    return json(resumenMcp({ filas: await conectoresListados(db), env, cfg: (await leerContexto(db)).ajustes?.mcp || {} }));
   }
-  if (ruta === '/api/usage' && metodo === 'GET') { // el medidor de la esquina: en la nube no hay plan de Claude Code que medir, así que va el conteo propio de las últimas 5 horas (como la local sin plan)
-    const ventana = 5 * 36e5, lineas = await costos.leer(db, Date.now() - ventana), t0 = lineas.length ? Math.min(...lineas.map((l) => l.t)) : null;
-    const tokens = lineas.reduce((n, l) => n + (l.in || 0) + (l.out || 0) + (l.cacheRead || 0) + (l.cacheWrite || 0), 0);
-    return json({ ok: true, source: 'office', window: { tokens, runs: lineas.length, startedAt: t0, resetsAt: t0 ? t0 + ventana : null } });
+  if (ruta === '/api/usage' && metodo === 'GET') { // el medidor de la esquina: en la nube no hay plan de Claude con ventana de 5 h, se paga por token. Va el gasto de hoy y del mes (libro de costos, zona de la oficina)
+    const ahora = Date.now(), C = await leerContexto(db), lineas = await costos.leer(db, Math.min(ahora - 2 * 864e5, new Date(new Date(ahora).getFullYear(), new Date(ahora).getMonth(), 1).getTime() - 864e5));
+    return json({ ok: true, source: 'nube', ...costsCore.usage(lineas, C.ajustes?.costs, ahora) });
   }
   if (ruta === '/api/costs' && metodo === 'GET') {
     const C = await leerContexto(db), ahora = Date.now();

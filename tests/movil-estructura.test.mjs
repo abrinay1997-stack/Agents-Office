@@ -58,8 +58,8 @@ test('la página no lleva la versión móvil: solo el cargador mínimo', async (
 });
 
 test('el estilo móvil cumple las reglas: nada de :hover, ningún texto bajo 11 px, campos de 16 px, dvh y safe-area', () => {
-  assert.deepEqual(CSS_MOVIL, ['movil.css']);
-  const css = leer('src/css/movil.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(CSS_MOVIL[0] === 'movil.css' && CSS_MOVIL.every(f => /^movil(-[a-z])?\.css$/.test(f)), 'los estilos móviles: el del armazón primero y los de cada equipo después');
+  const css = CSS_MOVIL.map(f => leer('src/css/' + f)).join('\n').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.ok(!/:hover/.test(css), 'en un teléfono no hay hover');
   const chicos = [...css.matchAll(/font-size:\s*([\d.]+)px/g)].map(m => +m[1]).filter(n => n < 11);
   assert.deepEqual(chicos, [], 'ningún texto de menos de 11 px');
@@ -75,7 +75,7 @@ test('ninguna pantalla pinta texto sin escapar: toda interpolación de datos pas
     const src = leer('src/movil/vistas/' + f);
     for (const m of src.matchAll(/\$\{([^}]*?\b(?:t|x|e|m|o|r|n|c|q)\.(?:title|titulo|text|desc|error|label|q|subject|channel|name)\b[^}]*)\}/g)) {
       const linea = src.slice(src.lastIndexOf('\n', m.index) + 1, src.indexOf('\n', m.index));
-      const aTexto = /ctx\.toast\(|texto: `|toast\(/.test(linea) || /^t\.error \?/.test(m[1]); // un aviso y el texto de una hoja de confirmación se escapan al pintarse (shell.toast, hoja.confirmar)
+      const aTexto = /ctx\.toast\(|texto: `|toast\(|aviso: |aviso\(|const (?:nombre = \(\) =>|n =) `«/.test(linea) || /^t\.error \?/.test(m[1]); // un aviso y el texto de una hoja de confirmación se escapan al pintarse (shell.toast, hoja.confirmar)
       if (!aTexto && !/esc\(|mdToHtml\(|esc2\(/.test(m[1])) sospechosos.push(`${f}: \${${m[1].slice(0, 60)}}`);
     }
   }

@@ -43,7 +43,7 @@ export function fromSummary(m, agents) {
   for (const [key, s] of Object.entries(win)) {
     const st = stateOf(s);
     if (!IN_BAR.has(st)) { hidden++; continue; }
-    logos[key] = MCP_LOGOS[key] || { name: s.name, img: tile(s.name) };
+    logos[key] = s.iconUri ? { name: s.name, img: s.iconUri } : MCP_LOGOS[key] || { name: s.name, img: tile(s.name) }; // en la nube cada conector trae su icono (plantilla o monograma)
     names[key] = s.name;
     status[key] = st;
     // only a usable server is wired to pods; the rest sit in the strip, grey, unwired — nothing flows
@@ -55,7 +55,7 @@ export function fromSummary(m, agents) {
   const agentTools = agents ? Object.fromEntries(agents.map(a => [a.id, (a.tools || []).map(t => {
     const n = norm(t); const hit = (m.servers || []).find(s => s.key === n || norm(s.name) === n || s.id === t); return hit ? (hit.key || hit.id) : n;
   })])) : null;
-  return { live: true, byDept, logos, status, shared, names, off, hidden, agentTools, servers: m.servers || [], discovering: !!m.discovering, tools: !!m.tools, web: !!m.web };
+  return { live: true, nube: !!m.nube, byDept, logos, status, shared, names, off, hidden, agentTools, servers: m.servers || [], discovering: !!m.discovering, tools: !!m.tools, web: !!m.web };
 }
 
 // MCP-09: /api/mcp answers at once; while the first `claude mcp list` of a machine runs (1–2 min) the bar says so and asks

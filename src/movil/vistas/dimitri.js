@@ -8,7 +8,8 @@ import { mdToHtml } from '../../md.js';
 import { pastChoices } from '../../sub-ops.js';
 import { esc, svg, vacio, hace } from '../ui.js';
 import { hacer, hacerYa, interruptor, alternar } from './tareas-comun.js';
-import { planHTML, opsHTML, preguntasHTML, estudioHTML, itemsEnvio, itemsOps, respuesta, NOMBRE_DEPT, aInput, manana, sinResolver } from './dimitri-tarjetas.js';
+import { estudioHTML, adjuntosBurbuja, crearAdjuntos } from './dimitri-extra.js'; // fotos adjuntas y tarjetas de creativos (equipo B)
+import { planHTML, opsHTML, preguntasHTML, itemsEnvio, itemsOps, respuesta, NOMBRE_DEPT, aInput, manana, sinResolver } from './dimitri-tarjetas.js';
 import { abrirDetalle } from './tareas-detalle.js';
 
 const MODO = { charla: 'Charla', estado: 'Estado', analisis: 'Análisis', plan: 'Plan', pregunta: 'Pregunta', estudio: 'Estudio' };
@@ -27,6 +28,8 @@ export function registrar(shell) {
       el.innerHTML = `<div class="mv-scroll mv-chat" id="mvChatSc" tabindex="-1"><div class="mv-hilo" role="log" aria-live="polite" aria-label="Conversación con Dimitri"></div></div>
         <form class="mv-compone" autocomplete="off"><div class="mv-viendo" hidden></div><div class="mv-compone-fila"><label class="mv-sr" for="mvDim">Escríbele a Dimitri</label><textarea id="mvDim" rows="1" enterkeyhint="send" placeholder="Escríbele a Dimitri…"></textarea><button type="submit" class="mv-enviar" aria-label="Enviar" disabled>${svg('enviar')}</button></div></form>`;
       const hilo = el.querySelector('.mv-hilo'), sc = el.querySelector('.mv-scroll'), caja = el.querySelector('#mvDim'), forma = el.querySelector('.mv-compone'), env = forma.querySelector('.mv-enviar'), chipV = forma.querySelector('.mv-viendo');
+      const puede = () => !ocupado && !X.subiendo() && !!(caja.value.trim() || X.hay());
+      const X = crearAdjuntos(ctx, forma, { alCambiar: () => { env.disabled = !puede(); } }); // el clip, la tira de miniaturas y la subida (equipo B)
       const abajo = (suave = false) => requestAnimationFrame(() => sc.scrollTo({ top: sc.scrollHeight, behavior: suave && !matchMedia('(prefers-reduced-motion: reduce)').matches ? 'smooth' : 'auto' }));
       const porId = id => ctx.store.st.tareas.find(t => t.id === id) || null;
       const viendo = () => (sinCtx ? null : ctx.viendo());
@@ -39,7 +42,7 @@ export function registrar(shell) {
       // ---- cada mensaje y sus tarjetas ----
       function burbuja(m, ultimo) {
         const mio = m.who === 'user';
-        if (mio) return `<div class="mv-msg mio"><div class="mv-burbuja">${m.context?.label ? `<small class="mv-uctx">Viendo: ${esc(m.context.label)}</small>` : ''}<p>${esc(m.text)}</p></div>${m.at ? `<time>${hace(m.at)}</time>` : ''}</div>`;
+        if (mio) return `<div class="mv-msg mio"><div class="mv-burbuja">${m.context?.label ? `<small class="mv-uctx">Viendo: ${esc(m.context.label)}</small>` : ''}${adjuntosBurbuja(m)}${m.text ? `<p>${esc(m.text)}</p>` : ''}</div>${m.at ? `<time>${hace(m.at)}</time>` : ''}</div>`;
         const modo = m.stopped ? 'Detenido por ti' : MODO[m.mode] || '';
         const cuerpo = `${m.shield ? `<p class="mv-escudo" role="note"><b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</p>` : ''}<div class="md">${mdToHtml(m.stopped ? String(m.text || '').replace(/\s*_Detenido por ti\._\s*$/, '') : m.text || '')}</div>`;
         const pie = m.quick ? `<p class="mv-meta">Calculado al instante con los datos de la oficina, sin el modelo.</p>${ultimo && !ocupado ? `<button type="button" class="mv-btn" data-analizar>Analizar con ${esc(nombre)}</button>` : ''}` : m.retry && ultimo && !ocupado ? `<button type="button" class="mv-btn" data-mas-corto="${esc(m.id)}">Respóndeme más corto</button>` : '';
@@ -55,7 +58,7 @@ export function registrar(shell) {
         const ult = mensajes.length ? mensajes[mensajes.length - 1] : null;
         hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p></div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
           + (ocupado ? vivoHTML() : '') + (fallo ? falloHTML() : '') + (!ocupado && !fallo ? sugerencias() : '');
-        env.disabled = ocupado || !caja.value.trim(); chipViendo();
+        env.disabled = !puede(); chipViendo();
         if (fondo !== false) abajo();
         arrancaCuenta();
       }
@@ -89,23 +92,27 @@ export function registrar(shell) {
         else { const f = document.activeElement?.hasAttribute?.('data-detener'); pintar(); if (f) hilo.querySelector('[data-detener]')?.focus(); }
       }
       async function enviar(texto, { via = 'chat', answers = null, sinEco = false } = {}) {
-        texto = String(texto).trim(); if (!texto || ocupado) return; mensajes = mensajes.filter(m => m.id !== 'tmp-fallo'); ocupado = true; fallo = null; vivo = ''; vivoModo = ''; corrida = ''; deteniendo = false; caja.value = ''; ajustaAlto();
+        texto = String(texto).trim(); if ((!texto && !(via === 'chat' && X.hay())) || ocupado) return;
+        if (via === 'chat' && X.subiendo()) await X.esperar(); // una foto que aún sube: se espera, no se manda sin ella
+        const guardadas = X.lista(), salida = via === 'chat' ? X.tomar(texto) : null; if (via === 'chat' && !salida && !texto) return;
+        if (salida) { texto = salida.text; X.devolver([]); }
+        mensajes = mensajes.filter(m => m.id !== 'tmp-fallo'); ocupado = true; fallo = null; vivo = ''; vivoModo = ''; corrida = ''; deteniendo = false; caja.value = ''; ajustaAlto();
         const v = viendo(), contexto = v ? { view: v.view, label: v.label, kind: v.kind || null, id: v.id || null } : null;
-        mensajes.push({ id: 'tmp', who: 'user', text: texto, at: Date.now(), ...(v ? { context: { label: v.label } } : {}) }); pintar(); const desde = Date.now() - 5000;
+        mensajes.push({ id: 'tmp', who: 'user', text: texto, attach: salida ? salida.attach : undefined, at: Date.now(), ...(v ? { context: { label: v.label } } : {}) }); pintar(); const desde = Date.now() - 5000;
         try {
           if (via === 'estado') { const j = await ctx.api('/api/sub/estado', { method: 'POST', body: { text: texto } }); mensajes = mensajes.filter(m => m.id !== 'tmp').concat(j.messages || []); }
-          else { const j = await pedirChat({ text: texto, ...(contexto ? { context: contexto } : {}), ...(answers ? { answers } : {}) }); mensajes = mensajes.filter(m => m.id !== 'tmp').concat(j.messages || []); if (j.answered) { const q = mensajes.find(x => x.id === j.answered.msg); if (q?.plan) q.plan.answers = j.answered.answers; } }
+          else { const j = await pedirChat({ text: texto, ...(salida && salida.attach.length ? { attach: salida.attach } : {}), ...(salida && salida.vision ? { vision: salida.vision } : {}), ...(contexto ? { context: contexto } : {}), ...(answers ? { answers } : {}) }); mensajes = mensajes.filter(m => m.id !== 'tmp').concat(j.messages || []); if (j.answered) { const q = mensajes.find(x => x.id === j.answered.msg); if (q?.plan) q.plan.answers = j.answered.answers; } }
         } catch (e) {
           mensajes = mensajes.filter(m => m.id !== 'tmp');
           const mio = { id: 'tmp-fallo', who: 'user', text: texto, at: Date.now(), ...(v ? { context: { label: v.label } } : {}) };
           try { const j = await ctx.api('/api/sub'); const l = j.messages || []; if (l.some(m => m.who === 'sub' && m.at >= desde)) { mensajes = l; throw null; } } catch (x) { if (x === null) { ocupado = false; pintar(); ctx.store.refrescar(); return; } }
-          mensajes.push(mio); fallo = { texto, motivo: e.message, answers, via }; // su mensaje se queda a la vista, con el motivo y «Reintentar» debajo
+          mensajes.push(mio); fallo = { texto, motivo: e.message, answers, via, adj: salida ? guardadas : null }; if (salida) X.devolver(guardadas); // su mensaje se queda a la vista, con el motivo y «Reintentar» debajo
         }
         ocupado = false; vivo = ''; corrida = ''; pintar(); ctx.store.refrescar();
       }
       forma.addEventListener('submit', e => { e.preventDefault(); enviar(caja.value); });
       function ajustaAlto() { caja.style.height = 'auto'; caja.style.height = Math.min(140, caja.scrollHeight) + 'px'; }
-      caja.addEventListener('input', () => { ajustaAlto(); env.disabled = ocupado || !caja.value.trim(); });
+      caja.addEventListener('input', () => { ajustaAlto(); env.disabled = !puede(); });
       caja.addEventListener('focus', () => setTimeout(() => abajo(true), 250));
 
       // ---- cada acción sobre una tarjeta: con su estado y su motivo si falla ----
@@ -160,10 +167,11 @@ export function registrar(shell) {
         const b = e.target.closest('button'); if (!b) return;
         if (b.dataset.sug) { if (b.hasAttribute('data-llena')) { caja.value = b.dataset.sug.replace(/ …$/, ' '); ajustaAlto(); env.disabled = false; caja.focus(); return; } return enviar(b.dataset.sug, { via: b.dataset.k === 'estado' ? 'estado' : 'chat' }); }
         if (b.hasAttribute('data-reintentar')) return cargar();
-        if (b.hasAttribute('data-reenviar')) { const f = fallo; fallo = null; return enviar(f.texto, { via: f.via, answers: f.answers }); }
+        if (b.hasAttribute('data-reenviar')) { const f = fallo; fallo = null; if (f.adj) X.devolver(f.adj); return enviar(f.texto, { via: f.via, answers: f.answers }); }
         if (b.hasAttribute('data-detener')) { if (!corrida) return; deteniendo = true; pintarVivo(); try { await ctx.api('/api/sub/stop', { method: 'POST', body: { run: corrida } }); } catch (er) { deteniendo = false; ctx.toast('No pude detenerlo: ' + er.message); } return; }
         if (b.hasAttribute('data-analizar')) return enviar('Analiza este estado de la oficina: qué te preocupa, qué haría yo hoy y qué puede esperar.');
         if (b.dataset.masCorto) { const k = mensajes.findIndex(x => x.id === b.dataset.masCorto), u = k > 0 ? mensajes.slice(0, k).reverse().find(x => x.who === 'user') : null; if (u) enviar(`${u.text}\n(Respóndeme más corto.)`); return; }
+        if (b.dataset.media) return ctx.navegar('estudio', { file: b.dataset.media });
         if (b.hasAttribute('data-gasto')) return ctx.escritorio('dimitri-completo');
         // plan
         const pz = b.closest('.mv-pieza'); if (pz && b.hasAttribute('data-pz-inc')) { const id = pz.dataset.msg, i = +pz.dataset.i; if (!edits.has(id)) edits.set(id, new Map()); const ed = edits.get(id), cur = ed.get(i) || {}; ed.set(i, { ...cur, include: cur.include === false }); return pintar(false); }
@@ -225,9 +233,9 @@ export function registrar(shell) {
       }
       ctx.cabecera({ titulo: nombre, acciones: [{ icono: 'historial', etiqueta: 'Conversaciones guardadas', alTocar: historial }, { icono: 'mas1', etiqueta: 'Conversación nueva', alTocar: nueva }] });
       el._tick = () => { clearInterval(el._timer); el._timer = setInterval(() => { if (!el.hidden && !ocupado && !fallo && document.visibilityState === 'visible') ctx.api('/api/sub').then(j => { const l = j.messages || []; if (!ocupado && (l.length !== mensajes.length || (l.at(-1)?.id !== mensajes.at(-1)?.id))) { mensajes = l; pintar(); } }).catch(() => {}); }, 9000); };
-      el._cargar = () => { sinCtx = false; ctxUlt = ''; return cargar(); }; pintar();
+      el._cargar = () => { sinCtx = false; ctxUlt = ''; return cargar(); }; el._adjuntar = id => X.agregarGaleria([id]); pintar();
     },
-    alMostrar(el) { el._cargar?.(); el._tick?.(); },
+    alMostrar(el, ctx, p) { el._cargar?.(); el._tick?.(); if (p && p.adjuntar) setTimeout(() => el._adjuntar?.(p.adjuntar), 80); },
     alOcultar(el) { clearInterval(el._timer); },
   });
 }
