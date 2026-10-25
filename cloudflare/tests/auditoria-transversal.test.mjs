@@ -20,6 +20,7 @@ import { instalarZona } from '../worker/lib/zona.js';
 import { crearR2 } from './r2-memoria.mjs';
 import { crearAlmacenD1 } from '../worker/lib/contenido/piezas.js';
 import { limpiarSecretos, registrarSecretos } from '../worker/lib/secretos.js';
+import { igualSeguro } from '../worker/lib/ids.js';
 import { indiceDeNotas, DIAS_ENTREGABLES_EN_EL_INDICE } from '../worker/lib/agentes/contexto.js';
 import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
 
@@ -422,4 +423,10 @@ test('SESIÓN: una sesión caducada no entra (ni la página ni la API), y el rel
   assert.equal((await o.admin('GET', '/api/yo')).status, 200, 'las demás siguen');
   await correrReloj(o.env);
   assert.equal(db.prepare("select count(*) n from sessions s join users u on u.id = s.user_id where u.email = 'ed@panaclaw.test'").get().n, 0, 'el reloj de cada minuto las borra');
+});
+
+test('SECRETOS: la comparación de tokens en tiempo constante no acepta prefijos, vacíos ni tipos raros', () => {
+  assert.equal(igualSeguro('secreto-largo-1234', 'secreto-largo-1234'), true);
+  for (const [a, b] of [['secreto', 'secreto-largo-1234'], ['secreto-largo-1234', 'secreto'], ['', 'x'], ['x', ''], ['abc', 'abd']]) assert.equal(igualSeguro(a, b), false, `${a} vs ${b}`);
+  for (const [a, b] of [[null, 'x'], ['x', undefined], [123, 123], [['a'], ['a']]]) assert.equal(igualSeguro(a, b), false);
 });
