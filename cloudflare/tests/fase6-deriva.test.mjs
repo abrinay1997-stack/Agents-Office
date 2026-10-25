@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { sistemaArranque, pedidoArranque } from '../worker/lib/arranque.js';
+import { sistemaArranque, pedidoArranque } from '../../arranque-core.mjs';
 import * as sub from '../../sub.mjs';
 import * as subCore from '../../sub-core.mjs';
 import * as tg from '../../telegram.mjs';
@@ -12,14 +12,11 @@ import * as trigCore from '../../triggers-core.mjs';
 import * as docs from '../../documents.mjs';
 import * as docsCore from '../../documents-core.mjs';
 
-const plantilla = (src, nombre) => { const m = new RegExp('const ' + nombre + ' = `((?:[^`\\\\]|\\\\.)*)`').exec(src); assert.ok(m, 'no encontré ' + nombre + ' en serve.mjs'); return m[1]; };
-
-test('el prompt de «Preparar desde mi web» de la nube es el de serve.mjs, palabra por palabra', () => {
-  const todo = fs.readFileSync(new URL('../../serve.mjs', import.meta.url), 'utf8'), src = todo.slice(todo.indexOf('Preparas la oficina de agentes') - 40);
-  const sis = new Function('cfg', 'return `' + plantilla(src, 'system') + '`')({ name: 'ACME' });
-  const usr = new Function('url', 'about', 'return `' + plantilla(src, 'user') + '`')('https://a.com', 'Vendemos.');
-  assert.equal(sistemaArranque('ACME'), sis);
-  assert.equal(pedidoArranque('https://a.com', 'Vendemos.'), usr);
+test('«Preparar desde mi web»: la oficina local y la nube le piden lo mismo al modelo — un solo texto (arranque-core.mjs), ninguna copia en serve.mjs', () => {
+  const leer = (f) => fs.readFileSync(new URL('../../' + f, import.meta.url), 'utf8');
+  assert.ok(!leer('serve.mjs').includes('Preparas la oficina de agentes'), 'serve.mjs ya no lleva su propia copia del prompt');
+  for (const f of ['arranque-local.mjs', 'cloudflare/worker/lib/arranque.js']) assert.match(leer(f), /import \{[^}]*sistemaArranque[^}]*pedidoArranque[^}]*\} from '(\.\.\/)*(\.\.\/\.\.\/\.\.\/)?arranque-core\.mjs'|import \{ sistemaArranque, pedidoArranque, [^}]*\} from '(\.\/|(\.\.\/){3})arranque-core\.mjs'/, f + ' usa el texto compartido');
+  assert.match(sistemaArranque('ACME'), /ACME/); assert.match(pedidoArranque('https://a.com', 'Vendemos.', '<web>x</web>'), /Vendemos\./);
 });
 
 test('la oficina local y la nube usan los mismos núcleos (todo lo puro está re-exportado, nada de más)', () => {
