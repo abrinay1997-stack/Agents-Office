@@ -121,10 +121,20 @@ export function kindOfCall(name, input, safeTools = DEFAULTS.safeTools, toolKind
 const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/giu; // dominios internacionales incluidos (IDN)
 const PHONE = /\+?\d[\d\s().-]{7,}\d/g;
 const digits = s => String(s).replace(/\D/g, '');
+// Un número local escrito SOLO con dígitos («69990000», como lo piden muchos conectores de WhatsApp o SMS) no tiene +, espacios ni guiones y PHONE no lo ve:
+// un envío a un número que el dueño no aprobó pasaba la lista de destinatarios (revisión transversal del 25 oct 2026). Si está en un CAMPO que por su nombre es un teléfono o un destinatario, se cuenta igual.
+const CAMPO_TELEFONO = /(^|[_.-])(to|phone|tel|telefono|teléfono|mobile|movil|móvil|celular|cell|number|numero|número|msisdn|wa_?id|whatsapp|recipients?|destinatarios?)$/i;
+function numerosPorCampo(valor, clave = '', prof = 0, out = []) {
+  if (prof > 6 || valor === null || valor === undefined) return out;
+  if (Array.isArray(valor)) { for (const x of valor.slice(0, 50)) numerosPorCampo(x, clave, prof + 1, out); return out; }
+  if (typeof valor === 'object') { for (const [k, v] of Object.entries(valor)) numerosPorCampo(v, k, prof + 1, out); return out; }
+  if ((typeof valor === 'string' || typeof valor === 'number') && CAMPO_TELEFONO.test(clave)) { const d = digits(valor); if (d.length >= 8 && d.length <= 15 && !/@/.test(String(valor))) out.push(d); }
+  return out;
+}
 export function targetsOf(input) {
   const s = typeof input === 'string' ? input : JSON.stringify(input || {});
   const emails = [...new Set((s.match(EMAIL) || []).map(e => e.toLowerCase()))];
-  const phones = [...new Set((s.match(PHONE) || []).map(digits).filter(d => d.length >= 8 && d.length <= 15))];
+  const phones = [...new Set([...(s.match(PHONE) || []).map(digits).filter(d => d.length >= 8 && d.length <= 15), ...(input && typeof input === 'object' ? numerosPorCampo(input) : [])])];
   return { emails, phones };
 }
 /** The addresses and numbers of a send that the approved text does not name. */
