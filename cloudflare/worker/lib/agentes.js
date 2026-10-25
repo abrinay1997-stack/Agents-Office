@@ -66,6 +66,9 @@ export async function ejecutar({ env, db, usuario, agenteId, texto, aprobada = f
   if (!agente) return { estado: 404, error: 'Ese agente no existe.' };
   if (!texto || !String(texto).trim()) return { estado: 400, error: 'Falta el texto de la tarea.' };
   if (aprobada && usuario.rol !== 'admin') return { estado: 403, error: 'Solo un administrador puede aprobar una ejecución.' };
+  // Esta ruta (la del panel de la fase 1) deja que ANTHROPIC llame al conector: la llamada no pasa por el Worker y el guardián (destinatarios del borrador, anti-inyección, topes) no la ve.
+  // Una ejecución que puede ENVIAR va por una tarea: su borrador espera el OK del administrador y se ejecuta con cada herramienta bajo el guardián.
+  if (aprobada) return { estado: 409, error: 'Desde este panel un agente solo prepara borradores. Para que envíe algo, crea una tarea: espera tu OK y se ejecuta con el guardián (solo a los destinatarios del borrador aprobado, y sin obedecer órdenes escondidas en lo que lea).' };
   const { results: conectores } = await db.prepare('select * from conectores where activo = 1').all();
   const p = armarPeticion({ agente, texto, conectores, env, aprobada });
   if (!p.tieneClave) return { estado: 503, error: `Falta el secreto ${p.esMeta ? 'META_API_KEY' : 'ANTHROPIC_API_KEY'} en Cloudflare.` };

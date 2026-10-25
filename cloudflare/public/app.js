@@ -34,7 +34,7 @@ $('salir').onclick = async () => { await api('/api/salir', { method: 'POST' }); 
 $('ir').onclick = async () => {
   msg('Trabajando…'); $('resultado').hidden = true;
   try {
-    const r = await api(`/api/agentes/${$('agente').value}/ejecutar`, { method: 'POST', body: { texto: $('texto').value, aprobada: $('aprob').checked } });
+    const r = await api(`/api/agentes/${$('agente').value}/ejecutar`, { method: 'POST', body: { texto: $('texto').value, aprobada: false } });
     $('salida').textContent = (r.aviso ? r.aviso + '\n\n' : '') + r.texto; $('resultado').hidden = false; msg('');
   } catch (x) { msg(x.message); }
 };

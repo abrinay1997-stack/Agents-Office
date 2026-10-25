@@ -294,3 +294,11 @@ test('ESCALA: la vuelta de cada minuto de Contenido pide las piezas por el índi
   assert.equal((await almacen.listar({ hasta: '2026-01-31' })).every((p) => p.fecha <= '2026-01-31'), true, 'la cota de arriba sola también');
   assert.equal((await almacen.listar({})).length, 400, 'sin cotas, todas');
 });
+
+test('ENVÍOS: el panel de la fase 1 ya no ofrece herramientas de envío (la llamada la hace Anthropic y el guardián no la ve): enviar va por una tarea', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  await o.admin('POST', '/api/conectores', { nombre: 'correo', url: 'https://mcp.example.com/x', departamentos: ['ops'], herramientas_lectura: ['search_threads'], herramientas_envio: ['send_email'] });
+  const r = await o.admin('POST', '/api/agentes/olead/ejecutar', { texto: 'Responde al correo de Ana', aprobada: true });
+  assert.equal(r.status, 409); assert.match(r.j.error, /tarea/);
+  assert.equal((await o.editor('POST', '/api/agentes/olead/ejecutar', { texto: 'x', aprobada: true })).status, 403, 'un editor sigue sin poder aprobar');
+});
