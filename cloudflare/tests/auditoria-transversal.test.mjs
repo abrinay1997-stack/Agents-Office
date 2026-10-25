@@ -1,0 +1,227 @@
+// Auditoría TRANSVERSAL (25 oct 2026): lo que las revisiones por fase no miraron porque cruza módulos.
+//  · la matriz ruta × método × rol, ejecutada contra una D1 de verdad (lectura nunca escribe; sin sesión todo es 401; el editor no decide lo del dueño);
+//  · los atajos entre módulos: /api/tareas/* trata a quien llega por la página como EL DUEÑO, y en la nube un editor no lo es;
+//  · límites: tope del cuerpo JSON (también sin sesión) y poda de lo que solo crece;
+//  · todo secreto que leen los módulos compartidos está declarado.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { manejar, correrReloj } from '../worker/lib/rutas.js';
+import { cuerpo, TOPE_JSON } from '../worker/lib/respuesta.js';
+import { podar, tocaPodar, RETENCION_DIAS, LOTE } from '../worker/lib/mantenimiento.js';
+import { conSesion } from '../worker/lib/tareas/sesion.js';
+import { crearTarea } from '../../tareas/modelo.mjs';
+import { instalarZona } from '../worker/lib/zona.js';
+import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
+
+const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
+const nada = async () => new Response('{"error":"sin red en las pruebas"}', { status: 500 });
+
+async function oficina(extra = {}) {
+  instalarZona('America/Panama');
+  const d1 = crearD1();
+  const admin = await sembrar(d1), editor = await sembrar(d1, { email: 'ed@panaclaw.test', rol: 'editor' }), lectura = await sembrar(d1, { email: 'le@panaclaw.test', rol: 'lectura' });
+  const env = envDePrueba(d1, { ANTHROPIC_API_KEY: 'k', META_ACCESS_TOKEN: 'tok', AO_HOOK_TOKEN: 'h'.repeat(20), __pruebas: { fetchIA: nada, fetch: nada }, ...extra });
+  const entrar = async (u) => (await pedir(manejar, env, '/api/acceso', { metodo: 'POST', cuerpo: { email: u.email, contrasena: u.clave } })).headers.get('set-cookie').split(';')[0];
+  const cookies = { admin: await entrar(admin), editor: await entrar(editor), lectura: await entrar(lectura), anon: null };
+  const como = (q) => async (metodo, ruta, c) => {
+    const r = await manejar(new Request(`https://oficina.test${ruta}`, { method: metodo, headers: { 'content-type': 'application/json', ...(cookies[q] ? { cookie: cookies[q] } : {}) }, body: c === undefined ? undefined : JSON.stringify(c) }), env, { waitUntil() {} });
+    const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t; } return { status: r.status, j };
+  };
+  return { d1, env, admin: como('admin'), editor: como('editor'), lectura: como('lectura'), anon: como('anon') };
+}
+const con = (o, fn) => conSesion(o.d1, fn);
+
+/* ---------- 1) la matriz de roles ---------- */
+// Rutas que ESCRIBEN (cualquier método distinto de GET). Cada una se prueba como anónimo, lectura y editor; las `soloAdmin` también contra el editor.
+// Si se añade una ruta de escritura a un módulo, tiene que aparecer aquí (el último test de este bloque lo exige).
+const ESCRIBEN = [
+  '/api/conectores', '/api/conectores/gmail', '/api/migrar/notas', '/api/migrar/filas', '/api/migrar/docs', '/api/agentes/olead/ejecutar',
+  '/api/tasks', '/api/tasks/abc123', '/api/tasks/abc123/approve', '/api/tasks/abc123/reject', '/api/tasks/approve-batch', '/api/tasks/abc123/revise', '/api/tasks/abc123/undo', '/api/tasks/abc123/draft',
+  '/api/tasks/abc123/run', '/api/tasks/abc123/stop', '/api/tasks/abc123/archive', '/api/tasks/abc123/repeat', '/api/tasks/abc123/example',
+  '/api/tareas/mias', '/api/tareas/abc123/estado', '/api/tareas/abc123/delegar', '/api/tareas/abc123/tomar', '/api/tareas/lote',
+  '/api/routines', '/api/routines/abc123', '/api/routines/abc123/run', '/api/agents/olead', '/api/agents/olead/forget',
+  '/api/contenido/piezas', '/api/contenido/piezas/abc123', '/api/contenido/piezas/abc123/aprobar', '/api/contenido/piezas/abc123/entregar', '/api/contenido/config', '/api/contenido/cola/tick',
+  '/api/contenido/llenar', '/api/contenido/mejorar', '/api/contenido/guardados', '/api/contenido/plantillas', '/api/contenido/bandeja/sincronizar', '/api/contenido/bandeja/abc123/enviar',
+  '/api/anuncios/accion', '/api/anuncios/borradores', '/api/anuncios/borradores/abc123/crear', '/api/anuncios/sincronizar', '/api/anuncios/deshacer', '/api/anuncios/conversiones',
+  '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
+  '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company',
+  '/api/equipo/invitaciones', '/api/notices/read', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
+  '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
+];
+// Lo que el editor NO puede hacer aunque pueda escribir en otras partes de la misma oficina (todo lo que decide el dueño, gasta o toca fuera de la oficina).
+const SOLO_ADMIN = [
+  ['POST', '/api/conectores'], ['POST', '/api/migrar/notas'], ['POST', '/api/migrar/filas'], ['POST', '/api/migrar/docs'],
+  ['POST', '/api/tasks/abc123/approve'], ['POST', '/api/tasks/abc123/reject'], ['POST', '/api/tasks/approve-batch'], ['POST', '/api/tasks/abc123/revise'], ['POST', '/api/tasks/abc123/undo'], ['POST', '/api/tasks/abc123/draft'],
+  ['POST', '/api/routines'], ['PATCH', '/api/agents/olead'], ['POST', '/api/agents/olead/forget'],
+  ['POST', '/api/contenido/piezas/abc123/aprobar'], ['POST', '/api/contenido/piezas/abc123/entregar'], ['PUT', '/api/contenido/config'], ['POST', '/api/contenido/cola/tick'], ['POST', '/api/contenido/llenar'], ['POST', '/api/contenido/mejorar'],
+  ['POST', '/api/anuncios/accion'], ['POST', '/api/anuncios/borradores/abc123/crear'], ['POST', '/api/anuncios/sincronizar'], ['POST', '/api/anuncios/deshacer'], ['POST', '/api/anuncios/conversiones'],
+  ['POST', '/api/sub/chat'], ['POST', '/api/sub/ops'], ['PUT', '/api/settings/telegram'], ['POST', '/api/settings'], ['POST', '/api/costs/apply'], ['POST', '/api/contenido/meta/sincronizar'], ['POST', '/api/contenido/analiticas/actualizar'], ['POST', '/api/contenido/analiticas/indicadores'], ['POST', '/api/business/value'], ['POST', '/api/brain/upload'], ['POST', '/api/cifras'], ['PUT', '/api/triggers'], ['POST', '/api/equipo/invitaciones'], ['POST', '/api/voces/design'],
+];
+
+test('MATRIZ: sin sesión, toda ruta de escritura es 401 y nada se escribe', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  const antes = o.d1._db.prepare('select total_changes() c').get().c;
+  for (const r of ESCRIBEN) for (const m of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const x = await o.anon(m, r, {});
+    assert.equal(x.status, 401, `${m} ${r} sin sesión dio ${x.status}`);
+  }
+  assert.equal(o.d1._db.prepare('select total_changes() c').get().c, antes, 'sin sesión no se escribe ni una fila');
+});
+
+test('MATRIZ: un usuario de solo lectura no puede escribir en NINGUNA ruta (salvo su propia sesión y su perfil)', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  const suyas = new Set(['/api/yo', '/api/yo/foto', '/api/yo/contrasena', '/api/salir']);
+  for (const r of ESCRIBEN) for (const m of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    if (suyas.has(r)) continue;
+    const x = await o.lectura(m, r, {});
+    assert.ok([403, 404, 405].includes(x.status) || (x.status === 501), `${m} ${r}: lectura recibió ${x.status} ${JSON.stringify(x.j).slice(0, 80)}`);
+    assert.notEqual(x.status, 200, `${m} ${r}: lectura escribió`);
+  }
+});
+
+test('MATRIZ: el editor no puede lo que decide el dueño (aprobar, tocar Meta, conectores, ajustes, Dimitri…)', { skip: SALTAR }, async () => {
+  const o = await oficina({ MINIMAX_API_KEY: 'k-de-prueba' }); // con la llave puesta, el rechazo es por rol y no por «falta la llave»
+  for (const [m, r] of SOLO_ADMIN) {
+    const x = await o.editor(m, r, {});
+    assert.equal(x.status, 403, `${m} ${r}: el editor recibió ${x.status} ${JSON.stringify(x.j).slice(0, 100)}`);
+  }
+});
+
+test('MATRIZ: toda ruta de escritura escrita en un módulo aparece en la lista de arriba', () => {
+  // Saca los literales '/api/…' del código de los módulos y de lib/rutas.js (sin comentarios); los de lectura pura no cuentan. Una ruta nueva que escribe tiene que entrar en ESCRIBEN y se prueba sola.
+  const fuentes = [join(RAIZ, 'worker/lib/rutas.js'), ...readdirSync(join(RAIZ, 'worker/modulos')).filter((f) => f.endsWith('.js')).map((f) => join(RAIZ, 'worker/modulos', f))];
+  const LECTURA = new Set(['/api/acceso', '/api/salir']); // el acceso es público a propósito (tope de intentos) y salir es la sesión de cada quien
+  const normal = (r) => r.replace(/\/$/, '');
+  const lista = new Set(ESCRIBEN.map(normal));
+  const cubierta = (r) => [...lista].some((l) => l === r || r.startsWith(l + '/') || l.startsWith(r + '/'));
+  const huerfanas = [];
+  for (const f of fuentes) {
+    const codigo = readFileSync(f, 'utf8').split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).map((l) => l.replace(/\s\/\/ .*$/, '')).join('\n');
+    // solo las rutas que se comparan junto a un método que escribe: `ruta === '/api/x' && req.method === 'POST'` (o metodo)
+    for (const m of codigo.matchAll(/ruta === '(\/api\/[a-z0-9\-/.]+)'\s*&&\s*\(?(?:req\.method|metodo)\s*(?:===|!==)\s*'(POST|PUT|PATCH|DELETE)'/g)) {
+      if (!cubierta(normal(m[1])) && !LECTURA.has(m[1])) huerfanas.push(`${f.slice(RAIZ.length + 1)}: ${m[2]} ${m[1]}`);
+    }
+  }
+  assert.deepEqual(huerfanas, [], 'rutas que escriben y no están en la matriz de roles (añádelas a ESCRIBEN)');
+});
+
+/* ---------- 2) atajos entre módulos: /api/tareas/* ---------- */
+test('TAREAS: un editor no puede saltarse «necesita el visto bueno» delegando (delegar con needsOk:false es del administrador)', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  const id = (await o.admin('POST', '/api/tareas/mias', { title: 'Cosa mía', notas: 'detalle' })).j.tarea.id;
+  const e = await o.editor('POST', `/api/tareas/${id}/delegar`, { a: 'agente', dept: 'ops', needsOk: false });
+  assert.equal(e.status, 403); assert.match(e.j.error, /administrador/);
+  assert.equal((await con(o, async (s) => s.alm.load().find((t) => t.id === id))).agent, undefined, 'la tarea no se delegó');
+  // con el visto bueno pedido, o sin decir nada, sí puede delegar
+  assert.equal((await o.editor('POST', `/api/tareas/${id}/delegar`, { a: 'agente', dept: 'ops', needsOk: true })).status, 200);
+  const id2 = (await o.admin('POST', '/api/tareas/mias', { title: 'Otra', notas: 'x' })).j.tarea.id;
+  const a = await o.admin('POST', `/api/tareas/${id2}/delegar`, { a: 'agente', dept: 'ops', needsOk: false });
+  assert.equal(a.status, 200); assert.equal(a.j.tarea.needsOk, false, 'el administrador sí puede');
+});
+
+async function conBorradorEnEspera(o) {
+  await con(o, async (s) => {
+    const l = s.alm.load();
+    for (const id of ['espera01', 'espera02', 'espera03']) { const t = crearTarea({ dept: 'ops', agent: 'olead', title: 'Borrador ' + id, text: 'manda el correo', needsOk: true }, { id: () => id }); t.state = 'waiting'; t.draft = 'Borrador para a@b.com'; t.waitingAt = Date.now(); l.push(t); }
+    s.alm.save(l);
+  });
+}
+
+test('TAREAS: lo que espera el OK del dueño no lo mueve, toma, delega, archiva, borra ni reanuda un editor', { skip: SALTAR }, async () => {
+  const o = await oficina(); await conBorradorEnEspera(o);
+  const intentos = [
+    ['POST', '/api/tareas/espera01/estado', { a: 'done' }], ['POST', '/api/tareas/espera01/estado', { a: 'next' }], ['POST', '/api/tareas/espera01/tomar', {}],
+    ['POST', '/api/tareas/espera01/delegar', { a: 'agente', dept: 'ops' }], ['POST', '/api/tasks/espera01/archive', {}], ['POST', '/api/tasks/espera01/person', { person: 'Tú' }],
+    ['POST', '/api/tasks/espera01/run', {}], ['DELETE', '/api/tasks/espera01', undefined],
+  ];
+  for (const [m, r, c] of intentos) { const x = await o.editor(m, r, c); assert.equal(x.status, 403, `${m} ${r} ${JSON.stringify(c)} → ${x.status} ${JSON.stringify(x.j).slice(0, 80)}`); }
+  assert.equal((await con(o, async (s) => s.alm.load().find((t) => t.id === 'espera01'))).state, 'waiting', 'sigue esperando el OK');
+  // organizar (prioridad, etiquetas…) y comentar SÍ lo puede un editor: no es decidir
+  assert.equal((await o.editor('POST', '/api/tareas/espera01/organizar', { prioridad: 'alta' })).status, 200);
+  assert.equal((await o.editor('POST', '/api/tasks/espera01/comment', { text: 'ojo con el precio' })).status, 200);
+  // el administrador sí decide
+  assert.equal((await o.admin('POST', '/api/tareas/espera02/estado', { a: 'done' })).status, 200);
+  assert.equal((await o.admin('POST', '/api/tasks/espera03/archive', {})).status, 200);
+});
+
+/* ---------- 3) límites ---------- */
+test('LÍMITES: el cuerpo JSON tiene tope (por content-length y por lectura), y sin sesión es de 16 KB', async () => {
+  const pide = (texto, cabeceras = {}) => new Request('https://oficina.test/x', { method: 'POST', headers: { 'content-type': 'application/json', ...cabeceras }, body: texto });
+  assert.deepEqual(await cuerpo(pide('{"a":1}')), { a: 1 });
+  assert.equal(await cuerpo(pide('no es json')), null);
+  assert.equal(await cuerpo(pide('{"a":"' + 'x'.repeat(2000) + '"}'), 1000), null, 'pasa del tope dado');
+  assert.equal(await cuerpo(pide('{}', { 'content-length': String(TOPE_JSON + 1) })), null, 'un content-length enorme se corta sin leer');
+  assert.ok(TOPE_JSON >= 8_000_000 && TOPE_JSON <= 16_000_000, 'el tope general deja pasar el chat con imágenes (8 MB) y no llega al límite de memoria del Worker');
+});
+
+test('LÍMITES: el acceso sin sesión deja de leer el cuerpo al pasar de 16 KB (no lo recibe entero)', { skip: SALTAR }, async () => {
+  const o = await oficina();
+  let leidos = 0, i = 0;
+  const flujo = new ReadableStream({ pull(c) { if (i++ >= 500) return c.close(); leidos += 1000; c.enqueue(new TextEncoder().encode('x'.repeat(1000))); } });
+  const r = await manejar(new Request('https://oficina.test/api/acceso', { method: 'POST', headers: { 'content-type': 'application/json' }, body: flujo, duplex: 'half' }), o.env);
+  assert.equal(r.status, 401);
+  assert.ok(leidos <= 40_000, `leyó ${leidos} bytes de un cuerpo de 500 KB sin sesión`);
+  assert.equal(o.d1._db.prepare('select count(*) n from sessions').get().n, 3, 'no se abrió ninguna sesión nueva (solo las 3 de la preparación)');
+});
+
+test('PODA: auditoría, ejecuciones, invitaciones y reinicios viejos se borran por tandas; lo reciente se queda', { skip: SALTAR }, async () => {
+  const o = await oficina(); const db = o._db || o.d1._db;
+  const ahora = Date.parse('2026-10-25T12:00:00Z'), dias = (n) => new Date(ahora - n * 864e5).toISOString();
+  const uid = db.prepare('select id from users limit 1').get().id;
+  for (const [d, tipo] of [[RETENCION_DIAS.auditoria + 5, 'vieja'], [10, 'nueva']]) db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').run(dias(d), tipo, 'x', '{}');
+  for (const [d, tarea] of [[RETENCION_DIAS.auditoria_agentes + 5, 'vieja'], [3, 'nueva']]) db.prepare("insert into auditoria_agentes (t, dia, run, tarea, agente, dept, herramienta, fase, decision) values (?,?,?,?,?,?,?,?,?)").run(ahora - d * 864e5, dias(d).slice(0, 10), 'r', tarea, 'olead', 'ops', 'tool', 'pre', 'allow');
+  for (const [d, id] of [[RETENCION_DIAS.ejecuciones + 5, 'e-vieja'], [5, 'e-nueva']]) db.prepare("insert into ejecuciones (id, agente, usuario_id, texto, created_at) values (?,?,?,?,?)").run(id, 'olead', uid, 't', dias(d));
+  for (const [d, id] of [[RETENCION_DIAS.invitaciones + 5, 'i-vieja'], [1, 'i-nueva']]) db.prepare("insert into invitaciones (id, token_hash, email, rol, creada_por, created_at, expires_at) values (?,?,?,?,?,?,?)").run(id, 'h' + id, id + '@x.test', 'editor', uid, dias(d + 7), dias(d));
+  for (const [d, id] of [[RETENCION_DIAS.reinicios + 5, 'r-viejo'], [1, 'r-nuevo']]) db.prepare("insert into reinicios (id, token_hash, user_id, created_at, expires_at) values (?,?,?,?,?)").run(id, 'h' + id, uid, dias(d + 1), dias(d));
+  const n = await podar(o.d1, ahora);
+  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1 });
+  assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'nueva'").get().n, 1);
+  assert.equal(db.prepare("select count(*) n from auditoria_agentes where tarea = 'nueva'").get().n, 1);
+  assert.equal(db.prepare("select count(*) n from ejecuciones where id = 'e-nueva'").get().n, 1);
+  assert.equal(db.prepare("select count(*) n from invitaciones where id = 'i-nueva'").get().n, 1);
+  assert.equal(db.prepare("select count(*) n from reinicios where id = 'r-nuevo'").get().n, 1);
+});
+
+test('PODA: una tabla atrasada se pone al día por tandas (no borra más de TANDAS×LOTE por día) y toca a las 03:17 de la hora de la oficina', { skip: SALTAR }, async () => {
+  const o = await oficina(); const db = o.d1._db;
+  const ahora = Date.parse('2026-10-25T12:00:00Z'), vieja = new Date(ahora - 500 * 864e5).toISOString();
+  db.exec('begin'); const ins = db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)'); for (let i = 0; i < LOTE * 6 + 7; i++) ins.run(vieja, 'x', 'q', '{}'); db.exec('commit');
+  const n = await podar(o.d1, ahora);
+  assert.equal(n.auditoria, LOTE * 5, 'una tanda tras otra, con tope por día');
+  assert.equal(db.prepare('select count(*) n from auditoria').get().n, LOTE + 7);
+  assert.equal((await podar(o.d1, ahora)).auditoria, LOTE + 7, 'al día siguiente termina');
+  instalarZona('America/Panama');
+  assert.equal(tocaPodar(Date.parse('2026-10-25T08:17:00Z')), true, '03:17 en Panamá (UTC−5)');
+  assert.equal(tocaPodar(Date.parse('2026-10-25T08:18:00Z')), false);
+  assert.equal(tocaPodar(Date.parse('2026-10-25T09:17:00Z')), false);
+});
+
+/* ---------- 4) secretos de lo que el Worker importa ---------- */
+test('SECRETOS: todo env.X que leen los módulos COMPARTIDOS que importa el Worker está declarado, es un binding o una variable', () => {
+  const decl = JSON.parse(readFileSync(join(RAIZ, 'secretos.json'), 'utf8')); const declarados = new Set([...decl.obligatorios, ...decl.opcionales]);
+  const wr = readFileSync(join(RAIZ, 'wrangler.jsonc'), 'utf8').replace(/^\s*\/\/.*$/gm, ''); const vars = new Set(Object.keys(JSON.parse(wr).vars));
+  // Bindings de Cloudflare, ganchos de pruebas (siempre funciones: un secreto es un texto), y desvíos de servidor que NO se pueden poner desde los secretos (solo con una variable en wrangler.jsonc, o sea con acceso al despliegue).
+  const permitidos = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'IMAGES', 'RELOJ_MS', 'AO_FETCH', 'AO_AHORA', 'META_GRAPH_HOST', 'META_GRAPH_VERSION', 'META_RUPLOAD_HOST', 'METRICOOL_API_BASE', 'AO_FAL_QUEUE', 'HF_API_BASE_URL', 'HF_API_KEY', 'HF_API_SECRET', 'VOYAGE_API_KEY']);
+  const vistos = new Set(), cola = [resolve(RAIZ, 'worker/index.js')], faltan = {};
+  while (cola.length) {
+    const f = cola.pop(); if (vistos.has(f)) continue; vistos.add(f); let s; try { s = readFileSync(f, 'utf8'); } catch { continue; }
+    for (const m of s.matchAll(/(?:from|import\()\s*['"](\.[^'"]+)['"]/g)) cola.push(resolve(dirname(f), m[1]));
+    const codigo = s.split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
+    for (const m of codigo.matchAll(/(?<![.\w])env\??\.([A-Z][A-Z0-9_]{2,})|\benv\[\s*['"]([A-Z][A-Z0-9_]+)['"]\s*\]/g)) { const n = m[1] || m[2]; if (!declarados.has(n) && !vars.has(n) && !permitidos.has(n)) (faltan[n] ||= []).push(f.slice(RAIZ.length + 1)); }
+  }
+  assert.deepEqual(faltan, {}, 'un secreto que el código lee y nadie sube al Worker: la función queda apagada sin avisar');
+  assert.ok(vistos.size > 100, 'se recorrió el árbol de imports');
+});
+
+test('PODA: el reloj de cada minuto la corre a las 03:17 (y a otra hora no toca nada)', { skip: SALTAR }, async () => {
+  const o = await oficina(); const db = o.d1._db;
+  const vieja = new Date(Date.parse('2026-10-25T08:17:00Z') - 500 * 864e5).toISOString();
+  db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').run(vieja, 'vieja', 'q', '{}');
+  await correrReloj(o.env, Date.parse('2026-10-25T09:17:00Z')); // 04:17 en Panamá
+  assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'vieja'").get().n, 1, 'a las 04:17 no poda');
+  await correrReloj(o.env, Date.parse('2026-10-25T08:17:00Z')); // 03:17 en Panamá
+  assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'vieja'").get().n, 0, 'a las 03:17 poda');
+});

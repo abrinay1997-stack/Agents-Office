@@ -55,6 +55,7 @@ async function manejarGrupo(ctx) {
   const b = escribe ? await leerCuerpo(req) : {};
   if (b === 'grande') return json({ error: 'request too large' }, 413);
   if (b === null) return json({ error: 'the body is not valid JSON' }, 400);
+  if (escribe && usuario.rol !== 'admin' && (g === 'tareas' || g === 'tasks')) { const v = await vetoNoAdmin({ db, ruta, b, metodo: req.method }); if (v) return prohibido(v); }
 
   if (g === 'team' && req.method === 'GET') {
     const C = await leerContexto(db);
@@ -69,6 +70,22 @@ async function manejarGrupo(ctx) {
     return new Response(texto, { status: 200, headers: { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' } });
   }
   if (g === 'tasks' || g === 'tareas') return manejarTareas({ req, env, db, ruta, url, usuario, b, g });
+  return null;
+}
+
+/* ---------- lo que en la página es «del dueño» y aquí solo lo hace un administrador ---------- */
+/** Las rutas de /api/tareas/* (las MISMAS de la oficina local) tratan a quien llega por la página como EL DUEÑO: en la nube hay editores, y lo que decide el dueño no es de ellos.
+ *  Dos cosas que el resto del módulo ya negaba por /api/tasks y que /api/tareas dejaba pasar (revisión transversal del 25 oct):
+ *   · `needsOk: false` en cualquier cuerpo (delegar una tarea sin pedir el visto bueno);
+ *   · mover, tomar, delegar, archivar, borrar o pasar a una persona una tarea que ESPERA EL OK del dueño (un editor la descartaba o la sacaba de Aprobaciones sin decidir). */
+const SOBRE_TAREA = /^\/api\/(?:tareas|tasks)\/([A-Za-z0-9_-]{3,40})\/(estado|tomar|delegar|archive|person|run)$/;
+const BORRAR_TAREA = /^\/api\/tasks\/([A-Za-z0-9_-]{3,40})$/;
+export async function vetoNoAdmin({ db, ruta, b, metodo = 'POST' }) {
+  if (b && typeof b === 'object' && b.needsOk === false) return 'Solo un administrador decide que una tarea no pida su visto bueno.';
+  const m = SOBRE_TAREA.exec(ruta) || (metodo === 'DELETE' ? BORRAR_TAREA.exec(ruta) : null);
+  if (!m) return null;
+  const f = await db.prepare("select json_extract(json,'$.state') as st from filas where coleccion = 'tareas' and id = ?").bind(m[1]).first();
+  if (f?.st === 'waiting') return 'Esa tarea espera el visto bueno del dueño: solo un administrador la mueve, la toma, la delega o la archiva.';
   return null;
 }
 
