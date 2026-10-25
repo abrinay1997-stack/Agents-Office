@@ -37,7 +37,8 @@ export function crearGuardian({ db, ctx, estado, ahora = () => Date.now() }) {
         d = decide(tool, entrada, { writes: !!ctx.writes, known: ctx.known ?? null, safety: seguridad, tainted: estado.taint?.why || null, counts, runMode: ctx.runMode, amountLimit: +ctx.amountLimit || 0, policy: ctx.policy, servers: Array.isArray(ctx.servers) ? ctx.servers : undefined });
       } catch (e) { d = { allow: false, kind: 'write', code: 'guardian', why: 'Bloqueado: el guardián de la oficina falló, así que no se envía nada.' }; } // falla cerrado
       const t = d.kind === 'write' ? targetsOf(entrada) : null;
-      await registrar({ tool, fase: 'pre', kind: d.kind, decision: d.allow ? 'allow' : 'block', code: d.code, why: d.why, targets: t ? [...t.emails, ...t.phones] : undefined });
+      try { await registrar({ tool, fase: 'pre', kind: d.kind, decision: d.allow ? 'allow' : 'block', code: d.code, why: d.why, targets: t ? [...t.emails, ...t.phones] : undefined }); }
+      catch { if (d.allow) d = { allow: false, kind: d.kind, code: 'auditoria', why: 'Bloqueado: no se pudo apuntar esta llamada en el registro de auditoría, y lo que no queda registrado no se ejecuta.' }; } // falla cerrado
       if (!d.allow) estado.bloqueos.push({ tool, why: d.why, kind: d.kind, code: d.code });
       return d;
     },

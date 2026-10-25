@@ -164,5 +164,15 @@ test('DESHACER: con la ventana de «deshacer», la tarea no sale hasta que pasa;
 test('editar el borrador a mano: solo un administrador, deja el rastro, y recalcula el riesgo', { skip: SALTAR }, async () => {
   const { d1, web, t } = await conBorradorAprobable();
   const x = await web.admin('POST', `/api/tasks/${t.id}/draft`, { draft: 'Para: ana@x.com. Total: $950.' }); assert.equal(x.status, 200); assert.equal(x.j.task.editedDraft, true);
-  const d = await tareaEnDisco(d1, t.id); assert.equal(d.risk.level ?? d.risk, d.risk.level ?? d.risk); assert.match(d.draft, /\$950/); assert.ok(d.approvals.some(a => a.action === 'edit'));
+  const d = await tareaEnDisco(d1, t.id); assert.ok(d.risk); assert.match(d.draft, /\$950/); assert.ok(d.approvals.some(a => a.action === 'edit'));
+});
+
+test('dos «aprobar» a la vez (dos pestañas, o un doble clic): una sola aprobación y el envío sale una vez', { skip: SALTAR }, async () => {
+  const { d1, env, web, t, mcp } = await conBorradorAprobable();
+  const r = await Promise.all([web.admin('POST', `/api/tasks/${t.id}/approve`, {}), web.admin('POST', `/api/tasks/${t.id}/approve`, {}), web.admin('POST', `/api/tasks/${t.id}/approve`, {})]);
+  assert.equal(r.filter(x => x.status === 200).length, 1, JSON.stringify(r.map(x => x.status))); assert.ok(r.filter(x => x.status !== 200).every(x => x.status === 409 || x.status === 400));
+  const f = crearFetch({ herramientasMcp: mcp, guion: [usar(['mcp__gmail__send_email', { to: 'ana@x.com' }]), texto('Enviado.\nFuentes: —')] });
+  await Promise.all([minutos(env, f.fetchFn), minutos(env, f.fetchFn)]);
+  assert.equal(mcp.send_email.llamadas, 1);
+  assert.equal(filas(d1, "select count(*) n from auditoria_agentes where tarea = ? and herramienta = 'approval' and decision = 'approve'", t.id)[0].n, 1);
 });

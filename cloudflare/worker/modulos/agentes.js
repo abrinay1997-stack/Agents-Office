@@ -19,6 +19,7 @@ import * as costos from '../lib/agentes/costos.js';
 import { tickAprobaciones } from '../lib/agentes/aprobaciones.js';
 import { crearCorrida, crearCorridasPendientes, corridasVivas, avanzar, modoInicial } from '../lib/agentes/ejecutor.js';
 import { tomarSiguiente } from './tareas.js';
+import { adjuntarTerminados } from '../lib/agentes/estudio-adjuntos.js';
 import * as contenido from './contenido.js';
 import * as estudio from './estudio.js';
 import * as tareas from './tareas.js';
@@ -139,6 +140,8 @@ export async function cadaMinuto(env, opciones = {}) {
     if (!pres.puedeSeguir({ llamadas: 3, consultas: 14 })) break;
     resumen.avanzadas.push(await avanzar(deps, c.tarea));
   }
+  // 5) lo que el Estudio terminó mientras tanto se pega en la tarea que lo pidió (en lugar de su línea ⏳)
+  if (pres.puedeSeguir({ llamadas: 1, consultas: 10 })) resumen.adjuntos = await adjuntarTerminados(db);
   resumen.consultas = pres.consultas; resumen.llamadas = pres.llamadas;
   return resumen;
 }

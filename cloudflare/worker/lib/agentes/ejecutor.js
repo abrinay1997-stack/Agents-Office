@@ -263,7 +263,7 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
         const aviso = `Revisión de ${C.nombreAgente(datos.review.by)} (tu jefe) antes de mostrarlo al dueño:\n- ${datos.review.fixes.join('\n- ')}`;
         const e = await armarEjecucion({ db, C, agente, tarea: { ...task, result: texto }, modo, feedback: aviso, tareas: [], tieneContenido: datos.herramientas.some(d => d.servidor === 'contenido'), tieneEstudio: datos.herramientas.some(d => d.servidor === 'estudio'), ahora: reloj() });
         Object.assign(datos, { sistema: e.sistema, usuario: e.usuario, mensajes: [{ role: 'user', content: e.usuario }], texto: '', turno: undefined, vueltas: 0 });
-        await guardarAvance(db, task.id, token, datos, reloj());
+        await guardarAvance(db, task.id, token, datos, reloj(), { soltar: true });
         return { estado: 'pausada', motivo: 'el jefe pidió correcciones' };
       }
     }
