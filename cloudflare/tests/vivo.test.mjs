@@ -50,9 +50,10 @@ test('el área en la que trabaja cada una llega a la otra, y un cambio de vista 
   sBruno.enviar({ tipo: 'vista', area: 'depto:marketing', etiqueta: 'Departamento Marketing' });
   const m2 = await sAna.esperar((x) => x.tipo === 'presencia' && x.presentes.find((p) => p.nombre === 'Bruno')?.area === 'depto:marketing');
   assert.equal(m2.presentes.find((p) => p.nombre === 'Bruno').etiqueta, 'Departamento Marketing');
-  // un área con forma rara no entra (y no tumba la conexión)
+  // un área con forma rara no entra (y no tumba la conexión); `desde` evita que una presencia vieja con area null haga pasar la aserción sin que el mensaje rare se haya procesado
+  const n = sAna.recibidos.length;
   sBruno.enviar({ tipo: 'vista', area: '<img onerror=x>', etiqueta: 'x' }); sBruno.enviar('esto no es json'); sBruno.enviar({ tipo: 'otra-cosa', userId: ANA.id });
-  const m3 = await sAna.esperar((x) => x.tipo === 'presencia' && x.presentes.find((p) => p.nombre === 'Bruno')?.area === null);
+  const m3 = await sAna.esperar((x) => x.tipo === 'presencia' && x.presentes.find((p) => p.nombre === 'Bruno')?.area === null, { desde: n });
   assert.equal(m3.presentes.find((p) => p.nombre === 'Bruno').etiqueta, '');
   assert.equal(sBruno.ws.readyState, 1, 'la conexión sigue viva');
 });
@@ -98,10 +99,11 @@ test('perfil en vivo: cambiar el nombre y subir la foto avisa al equipo (cambio:
 test('invitar de punta a punta: enlace → página pública → cuenta → entra → aparece en la presencia', { skip: SALTAR }, async () => {
   const inv = await (await api(cAna, '/api/equipo/invitaciones', { metodo: 'POST', cuerpo: { email: 'carla@panaclaw.test', nombre: 'Carla', rol: 'lectura' } })).json();
   const path = new URL(inv.enlace).pathname;
+  const testigoC = path.split('/').pop();
   const pagina = await fetch(o.base + path); // la página nativa, SIN sesión
   assert.equal(pagina.status, 200); assert.match(await pagina.text(), /Invitación · Agents Office/);
   assert.match(pagina.headers.get('content-security-policy') || '', /script-src 'self'; style-src 'self'; /, 'CSP estricta, sin unsafe-inline');
-  const ac = await fetch(o.base + path.replace('/invitacion/', '/api/invitacion/') + '/aceptar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nombre: 'Carla', contrasena: CLAVE }) });
+  const ac = await fetch(o.base + '/api/invitacion/aceptar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ testigo: testigoC, nombre: 'Carla', contrasena: CLAVE }) });
   assert.equal(ac.status, 200);
   const cCarla = ac.headers.get('set-cookie').split(';')[0];
   const sCarla = conectarSocket(o.base, { cookie: cCarla }); assert.equal(await sCarla.abierto, true);
@@ -121,6 +123,42 @@ test('al irse una persona, la otra deja de verla (cierre limpio)', { skip: SALTA
   sBruno.cerrar();
   const m = await sAna.esperar((x) => x.tipo === 'presencia' && !quien(x).includes('Bruno'), { desde: n });
   assert.deepEqual(quien(m), ['Ana']);
+});
+
+test('un mensaje «vista» con la identidad falsificada no cambia quién es (workerd real)', { skip: SALTAR }, async () => {
+  const s = conectarSocket(o.base, { cookie: cBruno }); await s.abierto; await s.esperar((m) => m.tipo === 'hola');
+  const n = sAna.recibidos.length;
+  s.enviar({ tipo: 'vista', area: 'cerebro', etiqueta: 'El Cerebro', userId: ANA.id, nombre: 'Ana la fundadora', rol: 'admin', color: '#f00' });
+  const m = await sAna.esperar((x) => x.tipo === 'presencia' && x.presentes.some((p) => p.area === 'cerebro'), { desde: n });
+  const cerebro = m.presentes.filter((p) => p.area === 'cerebro');
+  assert.deepEqual(cerebro.map((p) => [p.userId, p.nombre]), [[BRUNO.id, 'Bruno Díaz']]);
+  assert.equal(m.presentes.find((p) => p.userId === ANA.id).area, null, 'Ana no se movió');
+  s.cerrar();
+});
+
+test('tope por persona: la pestaña 9 de Bruno cierra la más vieja (4408) y los demás siguen viéndose', { skip: SALTAR }, async () => {
+  const abiertos = [];
+  for (let i = 0; i < 8; i++) { const s = conectarSocket(o.base, { cookie: cBruno }); await s.abierto; await s.esperar((m) => m.tipo === 'hola'); abiertos.push(s); }
+  const primero = new Promise((ok) => abiertos[0].ws.addEventListener('close', (e) => ok(e.code)));
+  const novena = conectarSocket(o.base, { cookie: cBruno }); await novena.abierto; await novena.esperar((m) => m.tipo === 'hola');
+  assert.equal(await primero, 4408);
+  assert.ok(abiertos.slice(1).every((s) => s.ws.readyState === 1), 'las demás siguen');
+  assert.equal(sAna.ws.readyState, 1, 'Ana no se entera ni pierde su conexión');
+  for (const s of [...abiertos, novena]) s.cerrar();
+});
+
+test('token bucket: inundar un socket lo cierra con 1008 y los demás siguen', { skip: SALTAR }, async () => {
+  const s = conectarSocket(o.base, { cookie: cBruno }); await s.abierto; await s.esperar((m) => m.tipo === 'hola');
+  const cerrado = new Promise((ok) => s.ws.addEventListener('close', (e) => ok(e.code)));
+  for (let i = 0; i < 60; i++) s.enviar({ tipo: 'vista', area: 'estudio', etiqueta: 'x' + i });
+  assert.equal(await cerrado, 1008); assert.equal(sAna.ws.readyState, 1);
+});
+
+test('salir cierra los sockets de la sesión y quita la presencia', { skip: SALTAR }, async () => {
+  const c = await entrar(o.base, BRUNO.email); const s = conectarSocket(o.base, { cookie: c }); await s.abierto; await s.esperar((m) => m.tipo === 'hola');
+  const cerrado = new Promise((ok) => s.ws.addEventListener('close', (e) => ok(e.code)));
+  assert.equal((await api(c, '/api/salir', { metodo: 'POST' })).status, 200);
+  assert.equal(await cerrado, 4401);
 });
 
 test('cambiar la contraseña corta los sockets de esa persona; la sesión que cambió reconecta', { skip: SALTAR }, async () => {
