@@ -75,7 +75,8 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
       else {
         const antes = JSON.parse(fs.readFileSync(FIX, 'utf8'));
         if (JSON.stringify(h.cuerpo) !== JSON.stringify(antes.cuerpo) || JSON.stringify(h.dock) !== JSON.stringify(antes.dock) || !h.tieneCanvas || !h.topbarVisible || h.movil) console.log('  huella distinta →', JSON.stringify({ extra: h.cuerpo.filter(x => !antes.cuerpo.includes(x)), falta: antes.cuerpo.filter(x => !h.cuerpo.includes(x)), dockExtra: h.dock.filter(x => !antes.dock.includes(x)), tieneCanvas: h.tieneCanvas, topbarVisible: h.topbarVisible, movil: h.movil }));
-        paso(JSON.stringify(h.cuerpo) === JSON.stringify(antes.cuerpo) && JSON.stringify(h.dock) === JSON.stringify(antes.dock) && h.tieneCanvas && h.topbarVisible && !h.movil, 'escritorio 1280: la estructura clave es la de antes (canvas, barra, dock) y no hay versión móvil');
+        const dif = JSON.stringify({ extra: h.cuerpo.filter(x => !antes.cuerpo.includes(x)), falta: antes.cuerpo.filter(x => !h.cuerpo.includes(x)), dockExtra: h.dock.filter(x => !antes.dock.includes(x)), dockFalta: antes.dock.filter(x => !h.dock.includes(x)), tieneCanvas: h.tieneCanvas, topbarVisible: h.topbarVisible, movil: h.movil });
+        paso(JSON.stringify(h.cuerpo) === JSON.stringify(antes.cuerpo) && JSON.stringify(h.dock) === JSON.stringify(antes.dock) && h.tieneCanvas && h.topbarVisible && !h.movil, 'escritorio 1280: la estructura clave es la de antes (canvas, barra, dock) y no hay versión móvil · ' + dif);
       }
       paso(!pedidos.includes('/movil.js'), 'escritorio 1280: no se descarga movil.js');
       await ctx.close();
