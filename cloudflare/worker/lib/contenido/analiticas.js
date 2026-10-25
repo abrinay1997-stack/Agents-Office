@@ -9,6 +9,7 @@ import { crearRecolector, claveDia, filaDeFallo, pendientesDe, mesesDeLectura, a
 
 const EXTENSIONES = ['jpg', 'png', 'webp'];
 export const RAIZ_MINIATURAS = 'contenido/miniaturas/';
+export const RESERVA_CUENTA = { llamadas: 30, consultas: 12 };
 
 export function crearAnaliticasD1({ db, bucket, meta, fetchFn = (...a) => fetch(...a), ahora = Date.now, puedeSeguir = () => true }) {
   const recolector = crearRecolector({ graph: meta.graph, tokenDe: meta.tokenDe, ahora });
@@ -58,11 +59,13 @@ export function crearAnaliticasD1({ db, bucket, meta, fetchFn = (...a) => fetch(
   const pendientes = async (cuentas, fecha = fechaDeFoto(new Date(ahora()))) => pendientesDe(cuentas, fecha, await filasDelMes(fecha.slice(0, 7)), ahora);
 
   /** Fotografía las cuentas que faltan (o todas con `todas`) mientras `puedeSeguir()` lo permita: lo que falla se apunta y no frena a las demás. */
-  async function actualizar({ todas = false } = {}) {
+  async function actualizar({ todas = false, max = Infinity } = {}) {
     const fecha = fechaDeFoto(new Date(ahora())), cuentas = todas ? meta.estado().cuentas : await pendientes(meta.estado().cuentas, fecha);
     const lote = { hechas: 0, fallidas: [], total: cuentas.length, fecha };
+    let hechasAhora = 0;
     for (const c of cuentas) {
-      if (!puedeSeguir()) break;
+      if (hechasAhora >= max || !puedeSeguir(RESERVA_CUENTA)) break; // M3: una cuenta son ~30 llamadas a Meta y ~12 sentencias; no se empieza si no cabe entera
+      hechasAhora++;
       try { await fotografiarCuenta(c, fecha); lote.hechas++; }
       catch (e) { lote.fallidas.push({ cuenta: c.nombre, motivo: mensajeMeta(e) }); await apuntarFallo(c, fecha, e); }
     }

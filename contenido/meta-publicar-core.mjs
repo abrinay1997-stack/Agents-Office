@@ -211,6 +211,8 @@ export function crearConductorMeta({ meta = null, medios: mediosIO = null, agend
 
   async function paso(j) {
     const t = ahora(); if (t < (j.proximo || 0)) return;
+    // A1: un POST de Facebook que salió pero cuya respuesta no se apuntó NO se repite (saldría dos veces): «intentando» se apunta ANTES de mandar y solo se limpia con un fallo seguro.
+    if (j.intentando && !j.remoto && j.estado === 'programada' && j.red === 'facebook') return falla(j, 'Se mandó a Facebook pero no quedó apuntado si Meta la recibió: mira las publicaciones (y las programadas) de tu página antes de volver a aprobarla.');
     try {
       if (j.estado === 'programada' && j.modo === 'nativa') {
         if (j.momento - t < NATIVA_MIN_MS) { j.modo = 'local'; j.detalle = 'No dio tiempo a programarla en Facebook: sale a su hora desde esta computadora.'; }
@@ -231,6 +233,7 @@ export function crearConductorMeta({ meta = null, medios: mediosIO = null, agend
       if (j.estado === 'preparada' || j.estado === 'incierta') { if (t >= j.momento) await publicarIG(j); return; } // «incierta» se lee siempre, aunque sea tarde: quizá ya salió
       if (j.estado === 'nativa' && t >= j.momento) return await mirarNativa(j);
     } catch (e) {
+      if (j.estado === 'publicada') { j.detalle = `Salió, pero no se pudo terminar de apuntar (${e?.message || 'error'}).`; return; } // lo que falle después de salir nunca la vuelve «fallo»
       // un fallo que Meta dice pasajero (saturación, límites) se reintenta; lo demás (permisos, formato, un archivo que falta) no
       if (e?.transitorio && t <= j.momento + TARDE_MAX_MS) reintentarLuego(j, e instanceof ErrorMeta ? textoDe(e) : e.message);
       else { falla(j, e instanceof ErrorMeta ? textoDe(e) : e?.message || 'error'); await limpiarTemporales(j); }
@@ -258,10 +261,19 @@ export function crearConductorMeta({ meta = null, medios: mediosIO = null, agend
     throw propio(`Facebook: no sé publicar «${j.como}»`);
   }
 
+  /** Apunta (y ESPERA) que se va a mandar a Facebook; si no se puede apuntar, no se manda. */
+  async function apuntarIntento(j) { j.intentando = ahora(); await guardar(agenda); }
+  /** Tras un POST bueno: apuntar lo que Meta contestó, con dos reintentos (si no queda apuntado, `intentando` frena otro POST). */
+  async function apuntarRespuesta(j) {
+    for (let i = 0; i < 3; i++) { try { await guardar(agenda); return; } catch { /* otro intento */ } }
+  }
+
   async function programarNativa(j) {
-    try { j.remoto = await crearEnFacebook(j, true); j.estado = 'nativa'; j.error = ''; j.intentos = 0; j.proximo = 0; }
+    await apuntarIntento(j);
+    try { j.remoto = await crearEnFacebook(j, true); j.estado = 'nativa'; j.error = ''; j.intentos = 0; j.proximo = 0; delete j.intentando; await apuntarRespuesta(j); }
     catch (e) {
       if (sinRespuesta(e)) return falla(j, 'Meta no contestó al programarla en Facebook y no sé si la recibió: mira las publicaciones programadas de tu página; si no está, vuelve a aprobarla.');
+      delete j.intentando; // un fallo que Meta dijo con todas sus letras: no salió nada
       if (e?.transitorio) return reintentarLuego(j, textoDe(e));
       throw e;
     }
@@ -269,12 +281,15 @@ export function crearConductorMeta({ meta = null, medios: mediosIO = null, agend
 
   async function publicarFB(j) {
     let r;
+    await apuntarIntento(j);
     try { r = await crearEnFacebook(j, false); }
     catch (e) {
       if (sinRespuesta(e)) return falla(j, 'Meta no contestó al publicarla en Facebook y no sé si salió: mira tu página antes de volver a aprobarla.');
+      delete j.intentando;
       throw e;
     }
-    j.remoto = r; await despues(j, r.id, r.tipo === 'video' ? 'published,permalink_url' : 'permalink_url');
+    j.remoto = r; j.estado = 'publicada'; delete j.intentando; await apuntarRespuesta(j); // «publicada» apuntada ya: lo que falle después (enlace, comentario) no la repite
+    await despues(j, r.id, r.tipo === 'video' ? 'published,permalink_url' : 'permalink_url');
   }
 
   async function mirarNativa(j) {

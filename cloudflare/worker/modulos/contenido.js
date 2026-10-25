@@ -15,6 +15,7 @@ import { candadoVigente, tomarCandado, soltarCandado } from '../lib/contenido/co
 import { crearIndicadores } from '../lib/contenido/aprender.js';
 import { hayQueAdoptar, adoptar } from '../lib/contenido/migracion.js';
 import { describirZona } from '../lib/zona.js';
+import { crearPresupuesto, contarD1, contarR2 } from '../lib/contenido/presupuesto.js';
 
 export const nombre = 'contenido';
 export const grupos = ['contenido'];
@@ -29,14 +30,18 @@ const soloAdmin = (metodo, ruta) => metodo !== 'GET' && SOLO_ADMIN.some(r => r.t
 
 /** Todo lo de una petición/vuelta pasa por aquí: el reloj de la oficina como `Date`, el servicio armado, y al final lo pendiente escrito. */
 export async function conServicio(env, fn, opciones = {}) {
-  const db = env.DB;
+  // El presupuesto de la invocación: cada sentencia de D1 y cada operación de R2 se cuenta (y cada llamada a Meta, en el servicio) para cortar la vuelta antes de pasarse del tope.
+  const pres = crearPresupuesto(env), db = contarD1(env.DB, pres.interna);
+  env = { ...env, DB: db, MEDIA: contarR2(env.MEDIA, pres.interna) };
   // lo que subió la herramienta de migración (scripts/migrar/contenido.mjs) pasa a las tablas de Contenido, por tandas, sin pisar lo que la nube ya tenga
-  try { if (await hayQueAdoptar(db)) await adoptar(db); } catch (e) { console.error('[contenido] migración:', e?.message ?? e); }
+  let adoptando = false;
+  try { if (await hayQueAdoptar(db)) { const r = await adoptar(db); adoptando = r.quedan > 0; } } catch (e) { console.error('[contenido] migración:', e?.message ?? e); adoptando = true; } // si no se pudo, nada corre hasta que termine
   const config = await leerConfig(db);
   return conZona(config.zona, async () => {
     // AO_FETCH y AO_AHORA son SOLO para pruebas: un secreto de Cloudflare es siempre un texto, así que en producción nunca son funciones y no se usan.
     const semilla = { fetchFn: typeof env['AO_FETCH'] === 'function' ? env['AO_FETCH'] : undefined, ahora: typeof env['AO_AHORA'] === 'function' ? env['AO_AHORA'] : undefined };
-    const svc = await crearServicio({ env, db, config, ...semilla, ...opciones });
+    const svc = await crearServicio({ env, db, config, presupuesto: pres, ...semilla, ...opciones });
+    svc.adoptando = adoptando;
     try { return await fn(svc, config); }
     finally { await svc.vaciar().catch(e => console.error('[contenido] al terminar:', e?.message ?? e)); }
   });
@@ -62,6 +67,7 @@ export async function manejar(ctx) {
   if (/\/aprobar$/.test(ruta)) cuerpo = { ...cuerpo, quien: usuario.email };
 
   return conServicio(env, async (svc, config) => {
+    if (svc.adoptando && metodo !== 'GET' && ruta !== '/api/contenido/config') return error('Se está mudando Contenido a la nube y todavía no terminó (por tandas, cada minuto): espera un momento y vuelve a intentarlo.', 409);
     // ---- cloud only: los ajustes de Contenido (en la oficina local son Ajustes → Contenido) ----
     if (ruta === '/api/contenido/config' && metodo === 'GET') return json({ config, modos: MODOS, zona: describirZona(config.zona) });
     if (ruta === '/api/contenido/config' && metodo === 'PUT') {
@@ -79,8 +85,9 @@ export async function manejar(ctx) {
     if (ruta === '/api/contenido/analiticas/actualizar' && metodo === 'POST') {
       if (!svc.conductores.meta.configurado()) return error('Falta el secreto META_ACCESS_TOKEN en Cloudflare: sin él no hay de dónde leer.', 400);
       if (!svc.conductores.meta.estado().cuentas.length) return error('Todavía no se sabe qué cuentas hay: pulsa «Comprobar conexión» primero.', 409);
-      const r = await fotografiar(svc, env, { todas: url.searchParams.get('todas') === '1' });
-      return json({ ok: true, actualizando: false, ...r }, 202);
+      const trabajo = fotografiar(svc, env, { todas: url.searchParams.get('todas') === '1' });
+      if (ctx.waitUntil(trabajo.then(() => svc.vaciar()))) return json({ ok: true, actualizando: true }, 202); // M4: responde ya; la foto sigue detrás y al terminar vacía lo pendiente
+      return json({ ok: true, actualizando: false, ...(await trabajo) }, 202); // sin ctx.waitUntil (pruebas): se espera
     }
     if (ruta === '/api/contenido/meta/sincronizar' && metodo === 'POST') { const e = await svc.conductores.meta.sincronizar(); return json({ ok: !e.error, meta: e }); }
     if (ruta === '/api/contenido/analiticas/indicadores' && metodo === 'POST') return json({ ok: true, ...(await crearIndicadores(env.DB)) });
@@ -91,16 +98,21 @@ export async function manejar(ctx) {
     }
     // ---- todo lo demás: el controlador de la oficina local ----
     const r = await svc.controlador.responder({ metodo, p: ruta, query: url.searchParams, cuerpo: async () => cuerpo });
+    // B4: Instagram solo acepta JPEG y aquí convertir un PNG/WebP necesita el binding IMAGES: si falta, se dice AL APROBAR y no a la hora de salir.
+    if (/\/aprobar$/.test(ruta) && r.status === 200 && r.datos?.pieza && config.modo === 'real' && !env['IMAGES']) {
+      const pz = r.datos.pieza;
+      if ((pz.redes || []).includes('instagram') && (pz.medios || []).some(m => /\.(png|webp)$/i.test(String(m)))) r.datos.avisos = [...(r.datos.avisos || []), 'Esta pieza lleva una imagen PNG o WebP y va a Instagram, que solo acepta JPEG: esta nube todavía no puede convertirla (falta el binding IMAGES de Cloudflare) y a su hora fallaría. Sube la imagen en JPEG o pídele al administrador que active IMAGES.'];
+    }
     return json(r.datos, r.status);
-  });
+  }, { waitUntil: ctx.waitUntil });
 }
 
 /** La foto de las cuentas que faltan (o de todas) mientras queden llamadas; con el candado «analiticas» (una a la vez). Después, los indicadores del dueño y aprender. */
-export async function fotografiar(svc, env, { todas = false } = {}) {
+export async function fotografiar(svc, env, { todas = false, max = Infinity } = {}) {
   const dueno = 'foto:' + crypto.randomUUID();
   if (!(await tomarCandado(env.DB, 'analiticas', dueno, 5 * 60e3))) return { hechas: 0, fallidas: [], total: 0, ocupada: true };
   try {
-    const r = await svc.analit.actualizar({ todas });
+    const r = await svc.analit.actualizar({ todas, max });
     if (r.hechas) { try { await svc.despuesDeFoto(); } catch (e) { console.warn('[contenido] después de la foto:', e?.message ?? e); } }
     if (r.fallidas.length) await env.DB.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'contenido', 'sistema', JSON.stringify({ que: 'analiticas-fallo', cuentas: r.fallidas.map(f => f.cuenta), motivo: r.fallidas[0].motivo })).run().catch(() => {});
     return r;
@@ -111,6 +123,7 @@ let ultimaLimpieza = 0;
 /** Cada minuto: la cola y el pulso de Meta; si no hubo nada que hacer, la foto de Analíticas (una cuenta por vuelta) desde las 6:00 de la oficina. */
 export async function cadaMinuto(env) {
   return conServicio(env, async (svc, config) => {
+    if (svc.adoptando) return { ocupada: false, adoptando: true, cambios: 0 }; // ni cola ni Meta ni Analíticas hasta que lo mudado esté entero (una cola sin su pieza se soltaría)
     const v = await svc.vuelta();
     const huboTrabajo = v.ocupada || (v.tick?.acciones || 0) > 0 || (v.cambios || 0) > 0;
     if (!huboTrabajo) await tickAnaliticas(svc, env);
@@ -120,13 +133,13 @@ export async function cadaMinuto(env) {
   });
 }
 
-async function tickAnaliticas(svc, env) {
+async function tickAnaliticas(svc, env) { // M3: UNA cuenta por vuelta del cron (la foto de una cuenta son ~30 llamadas a Meta)
   try {
     const meta = svc.conductores.meta;
     if (!meta.configurado() || (await candadoVigente(env.DB, 'analiticas'))) return;
     if (new Date(svc.ahora()).getHours() < svc.analit.horaDeLaFoto) return; // las 6:00 de la oficina (el reloj de Panamá)
     const e = meta.estado(), viejo = !e.sincronizadaAt || svc.ahora() - Date.parse(e.sincronizadaAt) > (e.cuentas.length ? 24 : 6) * 3600e3;
     if (viejo) { const n = await meta.sincronizar(); if (n.error && !n.cuentas.length) return; }
-    if ((await svc.analit.pendientes(meta.estado().cuentas)).length) await fotografiar(svc, env);
+    if ((await svc.analit.pendientes(meta.estado().cuentas)).length) await fotografiar(svc, env, { max: 1 });
   } catch (err) { console.warn('[contenido] analíticas:', err?.message ?? err); }
 }

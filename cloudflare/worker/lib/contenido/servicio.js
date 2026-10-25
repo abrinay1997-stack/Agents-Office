@@ -21,8 +21,7 @@ import { crearMejorar } from './redaccion.js';
 import { aprenderDeLoPublicado, llevarIndicadoresMeta, indicadoresEstado } from './aprender.js';
 import { describirZona } from '../zona.js';
 import { leerDoc, mutarDoc } from '../almacen.js';
-
-const MAX_LLAMADAS_POR_DEFECTO = 40;
+import { crearPresupuesto } from './presupuesto.js';
 
 /** Un aviso para el dueño (la lista `notices`, la misma forma que data/notices.json: lo último 200; el mismo problema se dice una vez cada 6 horas). */
 export function avisarD1(db, ahora = Date.now) {
@@ -39,12 +38,11 @@ export function avisarD1(db, ahora = Date.now) {
 /** Una línea de la auditoría (lo que se entregó, adoptó o falló): sin tokens, sin textos de piezas. */
 export const auditarD1 = (db, ahora = Date.now) => a => db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date(ahora()).toISOString(), 'contenido', 'sistema', JSON.stringify(a)).run().catch(() => {});
 
-export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a) => fetch(...a), inyectados = {}, config: configDada = null } = {}) {
+export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a) => fetch(...a), inyectados = {}, config: configDada = null, presupuesto = null, waitUntil = null } = {}) {
   const config = configDada || await leerConfig(db), cfg = () => config;
-  const tope = Number(env['CONTENIDO_MAX_LLAMADAS']) > 0 ? Number(env['CONTENIDO_MAX_LLAMADAS']) : MAX_LLAMADAS_POR_DEFECTO; // una variable (vars de wrangler.jsonc), no un secreto
-  let llamadas = 0;
-  const contado = (...a) => { llamadas++; return fetchFn(...a); };
-  const puedeSeguir = () => llamadas < tope;
+  const pres = presupuesto || crearPresupuesto(env); // llamadas externas, sentencias de D1 y operaciones de R2 de esta invocación (ver presupuesto.js)
+  const contado = (...a) => { pres.externa(); return fetchFn(...a); };
+  const puedeSeguir = pres.puedeSeguir;
   const pendientes = [];
   const avisar = avisarD1(db, ahora), auditarFila = auditarD1(db, ahora);
   const aviso = (t, o) => { pendientes.push(avisar('contenido', t, o)); };
@@ -59,7 +57,7 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
     cuentasPorDefecto: () => porDefectoCuentas(cuentasMeta(), config.metaPagina || ''),
     validarCuenta: id => { const l = cuentasMeta(); if (!l.length) return ''; return motivoNoPublica(l.find(x => x.id === id)); },
   });
-  const programadorInterno = crearProgramadorD1({ db, almacen, conductor: cond.actual, porId: cond.porId, modo: () => config.modo, horasAntes: () => config.entregarHorasAntes, avisar: aviso, auditar, ahora, puedeSeguir });
+  const programadorInterno = crearProgramadorD1({ db, almacen, conductor: cond.actual, porId: cond.porId, modo: () => config.modo, horasAntes: () => config.entregarHorasAntes, avisar: aviso, auditar, ahora, puedeSeguir, maxAcciones: pres.topeAcciones });
   const analit = crearAnaliticasD1({ db, bucket: env.MEDIA, meta: cond.meta, fetchFn: contado, ahora, puedeSeguir });
   const mejorHora = crearMejorHoraNucleo({ metricool: cond.metricool, metricas: analit, cache: { leer: async () => (await leerDoc(db, CLAVES.mejoresHoras, null)).valor, guardar: d => mutarDoc(db, CLAVES.mejoresHoras, {}, () => d) }, ahora });
   const mejorar = crearMejorar({ env, db, config: cfg, fetchFn });
@@ -109,7 +107,8 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
     mejorHora, informe, guardados, mejorar: mejorar.mejorar, publicadas, plantillas, analiticasTexto, quienLlena: mejorar.quien, ahora,
     cuentas: () => listaCuentas({ cuentas: cuentasMeta(), metaPagina: config.metaPagina || '', conductor: cond.actual().id }),
     ajustes: () => ({ departamentos: config.departamentos, modo: config.modo, conductor: cond.actual().id, zona: describirZona(config.zona, ahora()), redes: config.redes }),
-    segundoPlano: p => { pendientes.push(Promise.resolve(p).catch(() => {})); }, // sin ctx.waitUntil (los módulos no lo reciben): se espera antes de contestar, en `vaciar()`
+    // Con ctx.waitUntil la respuesta sale ya y lo demás sigue detrás (y al terminar vacía lo pendiente); sin él (pruebas), se espera antes de contestar, en `vaciar()`.
+    segundoPlano: p => { const q = Promise.resolve(p).catch(() => {}); if (!(waitUntil && waitUntil(q.then(() => vaciar())))) pendientes.push(q); },
     ...(inyectados.controlador || {}),
   });
 
@@ -122,10 +121,12 @@ export async function crearServicio({ env, db, ahora = Date.now, fetchFn = (...a
     return aprenderDeLoPublicado({ db, piezas: ps, porPieza: r.porPieza, ahora });
   }
 
+  async function vaciar() { await cond.vaciar(); await Promise.all(pendientes.splice(0)); }
+
   return {
     config, ahora, almacen, programador, vuelta, analit, mejorHora, guardados, plantillas, controlador, conductores: cond, indicadoresEstado: () => indicadoresEstado(db), despuesDeFoto,
-    cambioMeta: () => cambioMeta, llamadas: () => llamadas, puedeSeguir,
+    cambioMeta: () => cambioMeta, llamadas: () => pres.llamadas, consultas: () => pres.consultas, presupuesto: pres, puedeSeguir,
     /** Termina bien lo que quedó pendiente: lo que Meta anotó (freno, cuentas), los avisos y la auditoría. */
-    async vaciar() { await cond.vaciar(); await Promise.all(pendientes.splice(0)); },
+    vaciar,
   };
 }

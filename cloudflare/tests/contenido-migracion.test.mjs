@@ -77,3 +77,22 @@ test('adoptar por tandas: con muchas filas lo termina la próxima vuelta; una fi
   let r = a; while (r.quedan) r = await adoptar(t.d1, { max: 12 });
   assert.equal(t.d1._db.prepare('select count(*) n from contenido_piezas').get().n, 30, 'las dos filas raras no entraron');
 });
+
+test('A2 · con más de 120 filas: primero las piezas y luego la cola; mientras quede algo por adoptar la vuelta NO corre (la cola de una pieza que aún no llegó no se suelta)', { skip: SALTAR }, async () => {
+  const c = await computadoraDelDueno(); const t = await montar({ meta: false }); await t.r2.put('2026-10/foto.jpg', new Uint8Array([0xff, 0xd8, 0xff, 1]));
+  process.env.AO_DATA = path.join(c.raiz, 'data'); const exp = await exportar({ raiz: c.raiz, vault: c.vault }); delete process.env.AO_DATA;
+  const relleno = Array.from({ length: 130 }, (_, i) => ({ id: `p-20261101-${(0xa000 + i).toString(16)}`, orden: -1, valor: { titulo: 'r' + i, texto: 'x', fecha: '2026-11-01', hora: '10:00', redes: ['facebook'] } }));
+  await t.api('/api/migrar/filas', { metodo: 'POST', cuerpo: { coleccion: 'contenido-piezas', filas: relleno.slice(0, 65) } });
+  await t.api('/api/migrar/filas', { metodo: 'POST', cuerpo: { coleccion: 'contenido-piezas', filas: relleno.slice(65) } });
+  await subir(t, exp); // la aprobada y su cola van DESPUÉS de las 130 (más de 120 filas en total)
+  const { cadaMinuto } = await import('../worker/modulos/contenido.js');
+  const { adoptar } = await import('../worker/lib/contenido/migracion.js');
+  const primera = await adoptar(t.d1, { max: 120 });
+  assert.equal(primera.quedan > 0, true);
+  assert.equal(t.d1._db.prepare('select count(*) n from contenido_cola').get().n, 0, 'la cola NO se adopta antes que las piezas');
+  for (let i = 0; i < 6 && t.d1._db.prepare("select count(*) n from filas where coleccion like 'contenido-%'").get().n; i++) await cadaMinuto(t.env);
+  assert.equal(t.d1._db.prepare("select count(*) n from filas where coleccion like 'contenido-%'").get().n, 0, 'todo adoptado');
+  const e = JSON.parse(t.d1._db.prepare('select json from contenido_cola where pieza = ?').get(c.aprobada.id).json);
+  assert.equal(e.estado, 'en_red', 'la cola de la pieza aprobada sigue como venía'); assert.equal(e.remoto['post:0'].id, 4242);
+  assert.equal(t.d1._db.prepare('select count(*) n from contenido_piezas').get().n, 132); assert.equal(t.stand.llamadas.length, 0);
+});

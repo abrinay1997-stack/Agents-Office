@@ -60,7 +60,12 @@ export function crearConductorMetricoolNucleo({ mc, medios, aJpeg, cache, cuenta
       const jpeg = e.redes.includes('instagram'), urls = [];
       for (const id of e.medios) urls.push(await subir(id, jpeg));
       const m = await mc.marca(), zona = m?.zona || MC.zonaDeEstaMaquina();
-      const r = await mc.programar(MC.cuerpoPost({ ...e, medios: urls, zona }));
+      let r;
+      try { r = await mc.programar(MC.cuerpoPost({ ...e, medios: urls, zona })); }
+      catch (err) { // A1: si Metricool no contestó (red, 5xx) no se sabe si recibió la publicación: se marca para que la cola NO la repita sola
+        if (err && (err.estado === undefined || err.estado === 0 || [500, 502, 504].includes(err.estado))) err.incierto = true; // 429 y 503 dicen «no la procesé»: esos sí se reintentan
+        throw err;
+      }
       if (!r.id) throw Object.assign(new Error('Metricool no devolvió el número de la publicación: compruébalo en su planificador antes de reintentar.'), { transitorio: false });
       return { id: r.id, uuid: r.uuid, zona, redes: Object.fromEntries(e.redes.map(x => [x, { estado: 'en_red', url: '', detalle: '' }])) };
     },

@@ -44,9 +44,9 @@ export async function candadoVigente(db, nombre, ahora = Date.now) { const f = a
  * tick · salidaDe · estado · reintentar · entregarYa · cancelar · refrescar. `ultimo` (lo de la última vuelta) viene del núcleo.
  * Los que CAMBIAN la cola desde la página (reintentar, entregarYa) toman el candado: si una vuelta está trabajando, dicen que esperes un momento.
  */
-export function crearProgramadorD1({ db, almacen, conductor, porId = null, modo = () => 'simulacro', horasAntes = () => 24, avisar = () => {}, auditar = () => {}, ahora = Date.now, puedeSeguir = () => true, dueno = 'worker' }) {
+export function crearProgramadorD1({ db, almacen, conductor, porId = null, modo = () => 'simulacro', horasAntes = () => 24, avisar = () => {}, auditar = () => {}, ahora = Date.now, puedeSeguir = () => true, maxAcciones = Infinity, dueno = 'worker' }) {
   const cola = crearColaD1(db);
-  const nucleo = crearNucleoProgramador({ almacen, cola, conductor, porId, modo, horasAntes, avisar, auditar, ahora, puedeSeguir });
+  const nucleo = crearNucleoProgramador({ almacen, cola, conductor, porId, modo, horasAntes, avisar, auditar, ahora, puedeSeguir, maxAcciones });
   const conCandado = async fn => {
     const id = dueno + ':' + crypto.randomUUID();
     if (!(await tomarCandado(db, 'vuelta', id, 30_000, ahora))) return { error: 'la cola está trabajando en este momento: inténtalo de nuevo en unos segundos' };

@@ -19,7 +19,7 @@ function origenValido(req) {
   return !o || o === new URL(req.url).origin;
 }
 
-export async function manejar(req, env) {
+export async function manejar(req, env, exec = null) {
   const url = new URL(req.url);
   const ruta = url.pathname;
   const db = env.DB;
@@ -119,7 +119,8 @@ export async function manejar(req, env) {
     return json({ ok: true });
   }
   // ---- Los módulos de cada fase del puerto (worker/modulos/): el primero que reconoce la ruta la contesta ----
-  const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora };
+  const waitUntil = p => { try { exec?.waitUntil?.(Promise.resolve(p).catch(() => {})); } catch { /* sin ctx (pruebas): el módulo espera él mismo */ } return !!exec?.waitUntil; }; // devuelve si se pudo dejar en segundo plano
+  const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora, waitUntil };
   for (const mod of MODULOS) { const r = await mod.manejar(ctx); if (r) return r; }
 
   // Lo que la oficina local hace y la nube todavía no: un aviso claro en español, nunca un error mudo (docs/plan-cloudflare-completo.md).

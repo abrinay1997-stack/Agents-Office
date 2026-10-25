@@ -3,6 +3,8 @@
 //  · NUNCA pisa lo que la nube ya tiene (insert or ignore): después de mudar, la nube manda, y repetir la migración no deshace lo hecho allá (una pieza que ya se editó aquí no vuelve a
 //    como estaba, y una cola/agenda más nueva no se reemplaza por una vieja: eso volvería a publicar lo que ya salió).
 //  · Lo que llega se vuelve a limpiar con las mismas reglas que una pieza nueva (normalizar), y los ajustes siempre quedan en «simulacro».
+//  · ORDEN: primero las piezas, después la cola y lo demás. Una entrada de la cola sin su pieza se tomaría por «sin OK» y la vuelta del cron la soltaría; por eso, además, mientras quede algo
+//    por adoptar la vuelta del cron NO corre (modulos/contenido.js: `svc.adoptando`).
 //  · Va por tandas (`max` filas por vuelta): un Worker tiene un tope de consultas por invocación; lo que quede lo termina la próxima vuelta del cron.
 import { normalizar, ID_RE } from '../../../../contenido/piezas-core.mjs';
 import { completar } from './config.js';
@@ -15,7 +17,7 @@ export async function hayQueAdoptar(db) { return !!(await db.prepare("select 1 x
 
 /** → { adoptadas, descartadas, quedan }. `max` filas por llamada. */
 export async function adoptar(db, { max = 120, ahora = Date.now } = {}) {
-  const { results } = await db.prepare(`select coleccion, id, json from filas where coleccion in (${COLECCIONES.map(() => '?').join(',')}) order by coleccion, orden, id limit ?`).bind(...COLECCIONES, max).all();
+  const { results } = await db.prepare(`select coleccion, id, json from filas where coleccion in (${COLECCIONES.map(() => '?').join(',')}) order by case coleccion when 'contenido-piezas' then 0 when 'contenido-cola' then 1 when 'contenido-docs' then 2 when 'contenido-dias' then 3 else 4 end, orden, id limit ?`).bind(...COLECCIONES, max).all();
   const t = new Date(ahora()).toISOString(), sentencias = [], quitar = [];
   let adoptadas = 0, descartadas = 0;
   for (const f of results) {

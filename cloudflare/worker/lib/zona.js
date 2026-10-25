@@ -27,18 +27,21 @@ function partesEn(zona, ms) {
 }
 /** Minutos que la zona va por delante de UTC en ese instante (Panamá: −300). */
 export function desfaseMin(zona, ms) {
+  if (!Number.isFinite(ms)) return NaN; // B1: un instante inválido no tiene desfase (Intl lanzaría «Invalid time value»)
   const p = partesEn(zona, Math.floor(ms / 1000) * 1000);
   const comoUtc = DateOriginal.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
   return Math.round((comoUtc - Math.floor(ms / 1000) * 1000) / 60000);
 }
 /** Los componentes de ese instante en la zona. */
 export function componentes(zona, ms) {
+  if (!Number.isFinite(ms)) return { y: NaN, mo: NaN, d: NaN, h: NaN, mi: NaN, s: NaN, ms: NaN, dow: NaN };
   const p = partesEn(zona, ms), dow = new DateOriginal(DateOriginal.UTC(p.year, p.month - 1, p.day)).getUTCDay();
   return { y: p.year, mo: p.month - 1, d: p.day, h: p.hour, mi: p.minute, s: p.second, ms: ((ms % 1000) + 1000) % 1000, dow };
 }
 /** El instante en que la zona marca esos componentes (los meses y días fuera de rango ruedan, como en Date). */
 export function instanteDe(zona, y, mo, d = 1, h = 0, mi = 0, s = 0, ms = 0) {
   const comoUtc = DateOriginal.UTC(y, mo, d, h, mi, s, ms);
+  if (!Number.isFinite(comoUtc)) return NaN; // B1: componentes que no son números → Invalid Date, como el Date de verdad
   let t = comoUtc - desfaseMin(zona, comoUtc) * 60000;
   const off2 = desfaseMin(zona, t); if (off2 !== desfaseMin(zona, comoUtc)) t = comoUtc - off2 * 60000; // cerca de un cambio de hora
   return t;
@@ -49,7 +52,7 @@ export const instanteDeTexto = (zona, t) => { const m = SIN_ZONA.exec(String(t))
 
 /** Crea la clase `Date` de la oficina para esa zona. */
 export function crearDateDeZona(zona = ZONA_POR_DEFECTO) {
-  const NaN_ = DateOriginal.NaN;
+  const NaN_ = NaN; // B1: `Date.NaN` no existe (era undefined): una fecha inválida devolvía undefined en vez de NaN
   class DateOficina extends DateOriginal {
     constructor(...a) {
       if (a.length === 1 && typeof a[0] === 'string') { const t = instanteDeTexto(zona, a[0]); super(t ?? a[0]); }
@@ -67,8 +70,8 @@ export function crearDateDeZona(zona = ZONA_POR_DEFECTO) {
     getMinutes() { return Number.isNaN(this.getTime()) ? NaN_ : this._c.mi; }
     getSeconds() { return Number.isNaN(this.getTime()) ? NaN_ : this._c.s; }
     getMilliseconds() { return Number.isNaN(this.getTime()) ? NaN_ : this._c.ms; }
-    getTimezoneOffset() { return -desfaseMin(zona, this.getTime()); }
-    _poner(cambios) { const c = this._c, n = { ...c, ...cambios }; const t = instanteDe(zona, n.y, n.mo, n.d, n.h, n.mi, n.s, n.ms); this.setTime(t); return t; }
+    getTimezoneOffset() { return Number.isNaN(this.getTime()) ? NaN_ : -desfaseMin(zona, this.getTime()); }
+    _poner(cambios) { if (Number.isNaN(this.getTime())) return NaN_; const c = this._c, n = { ...c, ...cambios }; const t = instanteDe(zona, n.y, n.mo, n.d, n.h, n.mi, n.s, n.ms); this.setTime(t); return t; }
     setFullYear(y, mo, d) { return this._poner({ y, ...(mo !== undefined ? { mo } : {}), ...(d !== undefined ? { d } : {}) }); }
     setMonth(mo, d) { return this._poner({ mo, ...(d !== undefined ? { d } : {}) }); }
     setDate(d) { return this._poner({ d }); }

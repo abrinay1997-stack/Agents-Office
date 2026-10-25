@@ -9,6 +9,8 @@ export const COMPROBAR_CADA_MS = 10 * 60e3;
 export const COMPROBAR_HASTA_MS = 3 * 864e5; // después de 3 días sin noticias, se deja de preguntar
 const ESPERAS = [60e3, 5 * 60e3, 15 * 60e3]; // reintentos de un fallo pasajero
 const VIVAS = ['espera', 'entregando', 'en_red'];
+export const ENTREGANDO_MAX_MS = 10 * 60e3; // M1: una entrega no tarda tanto; si pasa, no se sabe si el conductor la recibió
+export const INCIERTO = 'No se sabe si el conductor llegó a recibirla (la respuesta no quedó apuntada): míralo allí y, si no está, cámbiale la hora y vuelve a aprobarla. No la repito sola porque podría salir dos veces.';
 
 const momentoDe = p => { const e = entregasDe(p); return e.length ? Math.min(...e.map(x => x.momento)) : NaN; };
 const aprobadaVigente = p => p && p.estado === 'aprobada' && p.aprobada && !p.cambiadaTrasAprobar && p.fecha && p.hora;
@@ -32,6 +34,7 @@ export function planear(piezas = [], entradas = {}, { ahora = Date.now(), horasA
     }
   }
   for (const [id, e] of Object.entries(entradas)) {
+    if (e.estado === 'entregando' && ahora - (e.historial?.at(-1)?.at || 0) > ENTREGANDO_MAX_MS) { acciones.push({ tipo: 'atascada', id }); continue; } // M1: nunca se reintenta sola
     if (!vistas.has(id) && VIVAS.includes(e.estado)) { acciones.push({ tipo: e.remoto && Object.keys(e.remoto).length ? 'retirar' : 'soltar', id, motivo: 'sin-ok' }); continue; }
     if (e.estado === 'en_red' && ahora >= e.momento && ahora - (e.comprobadoAt || 0) >= COMPROBAR_CADA_MS && ahora < e.momento + COMPROBAR_HASTA_MS) acciones.push({ tipo: 'comprobar', id });
   }
@@ -49,6 +52,7 @@ export const publica = e => e && ({ estado: e.estado, conductor: e.conductor || 
 export function reintentarEntrada(e, ahora) {
   if (!e) return { error: 'esa pieza no está en la cola' };
   if (e.estado !== 'fallo') return { error: 'no falló: no hay nada que reintentar' };
+  if (e.incierto) return { error: 'no se sabe si el conductor la recibió: míralo allí; si no está, cámbiale la hora y vuelve a aprobarla (repetirla sola podría publicarla dos veces)' };
   if (Object.values(e.redes || {}).some(x => x.estado === 'publicada')) return { error: 'ya salió en alguna red: para repetirla solo donde falló, duplícala con esas redes' };
   if (e.momento - ahora < MARGEN_MS) return { error: 'su hora ya pasó: cámbiale el día y vuelve a aprobarla' };
   if (Object.values(e.redes || {}).some(x => x.estado === 'fallo')) return { error: 'el conductor la recibió y falló al publicar: cámbiale el día (o lo que falló) y vuelve a aprobarla' };
@@ -63,7 +67,7 @@ export function estadoDeCola({ d, c, modo, horasAntes, ultimo }) {
   return { modo, conductor: { id: c.id, nombre: c.nombre, ...c.listo(), ...(c.cuota ? { cuota: c.cuota() } : {}) }, horasAntes, cuenta, ultimo, entradas: Object.fromEntries(Object.entries(d.entradas || {}).map(([k, e]) => [k, publica(e)])) };
 }
 
-export function crearNucleoProgramador({ almacen, cola, conductor, porId = null, modo = () => 'simulacro', horasAntes = () => 24, avisar = () => {}, auditar = () => {}, ahora = Date.now, puedeSeguir = () => true }) {
+export function crearNucleoProgramador({ almacen, cola, conductor, porId = null, modo = () => 'simulacro', horasAntes = () => 24, avisar = () => {}, auditar = () => {}, ahora = Date.now, puedeSeguir = () => true, maxAcciones = Infinity }) {
   let enMarcha = null, ultimo = { at: 0, acciones: 0, error: '' };
   const mirarYa = new Set(); // conductores que avisaron de un cambio: lo suyo en la red se mira en el próximo tick, sin esperar
   const leer = () => cola.leer();
@@ -78,14 +82,20 @@ export function crearNucleoProgramador({ almacen, cola, conductor, porId = null,
     if (p.entregada && p.entregada.huella === e.huella && p.entregada.conductor === c.id && p.entregada.remoto) {
       mover(e, 'en_red', { conductor: c.id, remoto: p.entregada.remoto, error: '' }); auditar({ que: 'adoptada', pieza: p.id, conductor: c.id }); return;
     }
-    mover(e, 'entregando', { conductor: c.id }); await guardar(d);
+    mover(e, 'entregando', { conductor: c.id, incierto: false }); await guardar(d);
     try {
       for (const en of entregasDe(p)) {
         if (e.remoto?.[en.clave]) continue; // ya entregada en un intento anterior: no se repite
+        // A1: apuntar (y ESPERAR) que se va a mandar, ANTES de mandar. Si el intento quedó apuntado y no su respuesta, esa entrega NO se repite.
+        if (e.intentando?.[en.clave]) throw Object.assign(new Error(INCIERTO), { incierto: true });
+        e.intentando = { ...(e.intentando || {}), [en.clave]: ahora() };
+        try { await guardar(d); } catch (g) { delete e.intentando[en.clave]; throw Object.assign(g instanceof Error ? g : new Error(String(g)), { transitorio: true }); } // no se mandó nada: se puede reintentar
         const r = await c.programar(en);
         e.remoto = { ...(e.remoto || {}), [en.clave]: { id: r.id, uuid: r.uuid || '', zona: r.zona || '', momento: en.momento, redes: en.redes, variante: en.variante } };
+        delete e.intentando[en.clave];
         for (const [red, s] of Object.entries(r.redes || {})) e.redes[en.variante === 'historia' ? `${red}·historia` : red] = s;
-        await guardar(d); // cada entrega se apunta en cuanto existe: un fallo después no la pierde
+        let apuntado = false; for (let i = 0; i < 3 && !apuntado; i++) { try { await guardar(d); apuntado = true; } catch { /* otro intento */ } } // cada entrega se apunta en cuanto existe
+        if (!apuntado) { e.intentando[en.clave] = ahora(); throw Object.assign(new Error('La recibió el conductor pero no pude apuntarlo.'), { incierto: true }); }
       }
       mover(e, 'en_red', { error: '', intentos: 0, entregadaAt: ahora() }); await guardar(d);
       await almacen.marcarEntregada(p.id, { conductor: c.id, huella: e.huella, remoto: e.remoto, cuando: new Date(ahora()).toJSON() });
@@ -96,6 +106,14 @@ export function crearNucleoProgramador({ almacen, cola, conductor, porId = null,
         : `«${titulo(p)}» quedó programada en ${c.nombre} para ${new Date(e.momento).toLocaleString('es')}.`, { key: 'entregada-' + p.id });
     } catch (err) {
       e.intentos = (e.intentos || 0) + 1;
+      if (err?.incierto) { // no se sabe si el conductor la recibió: nunca se repite sola
+        mover(e, 'fallo', { error: INCIERTO, incierto: true });
+        avisar(`«${titulo(p)}»: no se sabe si ${c.nombre} la recibió. Míralo allí antes de volver a aprobarla.`, { key: 'fallo-' + p.id, level: 'error' });
+        auditar({ que: 'fallo-entrega', pieza: p.id, conductor: c.id, error: 'incierto' });
+        try { await guardar(d); } catch { /* el testigo ya quedó apuntado antes */ }
+        return;
+      }
+      e.intentando = {}; // fallo seguro (se dijo con todas sus letras): no quedó nada mandado
       const pasajero = err?.transitorio !== false && (err?.transitorio || err?.estado === 0 || err?.estado === 429 || err?.estado >= 500);
       if (pasajero && e.intentos <= ESPERAS.length) mover(e, 'espera', { error: textoError(err), siguienteIntento: ahora() + ESPERAS[e.intentos - 1] });
       else { mover(e, 'fallo', { error: textoError(err) }); avisar(`No se pudo programar «${titulo(p)}» en ${c.nombre}: ${textoError(err)}`, { key: 'fallo-' + p.id, level: 'error' }); }
@@ -159,14 +177,17 @@ export function crearNucleoProgramador({ almacen, cola, conductor, porId = null,
         mirarYa.clear();
       }
       try {
+        let hechas = 0;
         for (const a of acciones) {
-          if (!puedeSeguir()) break; // el Worker corta la vuelta antes de pasarse de sus llamadas; lo que falta sigue en la próxima
+          if (!puedeSeguir() || hechas >= maxAcciones) break; // M2: tope de acciones por vuelta; lo que falta sigue en la próxima
+          hechas++; // el Worker corta la vuelta antes de pasarse de sus llamadas; lo que falta sigue en la próxima
           if (a.tipo === 'encolar') {
             const p = a.pieza, momento = momentoDe(p), previa = d.entradas[p.id];
             d.entradas[p.id] = mover({ pieza: p.id, huella: p.aprobada.huella, momento, entregarDesde: momento - horasAntes() * 3600e3, redes: {}, remoto: {}, intentos: 0, error: '', historial: previa?.historial || [] }, 'espera');
             await guardar(d);
           } else if (a.tipo === 'entregar') await entregar(d, a.pieza);
           else if (a.tipo === 'vencer') { const e = d.entradas[a.id]; mover(e, 'fallo', { error: 'No se entregó a tiempo: su hora pasó (o falta muy poco) y la oficina no pudo dejarla programada. Cámbiale el día y vuelve a aprobarla.' }); await guardar(d); avisar(`«${titulo(await almacen.leer(a.id))}» no se entregó a tiempo: cámbiale el día.`, { key: 'vencida-' + a.id, level: 'warn' }); }
+          else if (a.tipo === 'atascada') { const e = d.entradas[a.id]; mover(e, 'fallo', { error: INCIERTO, incierto: true }); await guardar(d); avisar(`«${titulo(await almacen.leer(a.id))}» se quedó entregándose y no se sabe si el conductor la recibió: míralo allí.`, { key: 'atascada-' + a.id, level: 'error' }); auditar({ que: 'atascada', pieza: a.id }); }
           else if (a.tipo === 'retirar') await retirar(d, a.id, a.motivo);
           else if (a.tipo === 'soltar') { delete d.entradas[a.id]; await guardar(d); }
           else if (a.tipo === 'comprobar') await comprobar(d, a.id);
