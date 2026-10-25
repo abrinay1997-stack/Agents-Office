@@ -51,7 +51,7 @@
     background: #040406; border: 1px solid #2a2a33; overflow: hidden; box-shadow: 0 10px 26px rgba(21,20,20,.18); transition: border-color .3s var(--ease), transform .3s var(--ease); }
   #sahniMark::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .35; background: repeating-linear-gradient(to bottom, rgba(255,255,255,.08) 0 1px, transparent 1px 3px); }
   #sahniMark:hover { border-color: #2B6BEB; transform: translateY(-1px); }
-  #sahniMark .by { font-family: var(--ui); font-size: 10px; letter-spacing: .2em; font-weight: 700; color: #8a8a94; }
+  #sahniMark .by { font-family: var(--ui); font-size: 10.5px; letter-spacing: .2em; font-weight: 700; color: #8a8a94; }
   #sahniMark .wm { font-size: 14px; }
   body.railLeft #sahniMark { left: calc(min(400px, 92vw) + 18px); bottom: auto; top: 64px; } /* a department in focus docks its chat rail on the left and the licence line sits centred: the mark moves to the top-left of the scene, under the bar (OVERVIEW has moved right) */
   body.calOpen #sahniMark, body.brainOpen #sahniMark { display: none; } /* the overlays carry their own headers; the licence line still rides over them */
@@ -213,7 +213,7 @@
     display: flex; justify-content: space-between; align-items: baseline; gap: 14px;
     padding: 1.5px 0;
   }
-  .badge .m-lab { font-size: 10px; letter-spacing: .14em; color: var(--grey); }
+  .badge .m-lab { font-size: 10.5px; letter-spacing: .14em; color: var(--grey); }
   .badge .m-val { font-family: var(--serif); font-size: 16px; transition: color .4s var(--ease); }
   .badge .m-val.flash { animation: flashGreen 1.2s var(--ease); }
   @keyframes flashGreen { 0%, 30% { color: #13705A; } 100% { color: var(--ink); } }
@@ -1653,7 +1653,7 @@
   .sb-av.sm { width: 22px; height: 22px; font-size: 12px; display: inline-grid; margin-right: 8px; }
   .sb-hd { min-width: 0; }
   .sb-clear { width: 32px; height: 32px; font-size: 18px !important; padding: 0 !important; color: var(--ink) !important; }
-  .sb-mode { display: inline-block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--grey); border: 1px solid var(--hairline); border-radius: 99px; padding: 2px 9px; margin-bottom: 7px; }
+  .sb-mode { display: inline-block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--grey); border: 1px solid var(--hairline); border-radius: 99px; padding: 2px 9px; margin-bottom: 7px; }
   .sb-mode.plan { color: #C43E00; border-color: rgba(255,81,0,.4); } .sb-mode.analisis { color: #5B3FA8; border-color: rgba(124,92,196,.45); } .sb-mode.estado { color: #13705A; border-color: rgba(30,144,112,.45); } .sb-mode.pregunta { color: #8A6414; border-color: rgba(242,184,75,.7); }
   .sb-read { font-size: 11px; color: var(--grey); margin-top: 8px; }
   .sb-busy { display: flex !important; align-items: center; font-style: normal !important; }
