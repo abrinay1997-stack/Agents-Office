@@ -58,7 +58,7 @@ test('solo un administrador sube el Cerebro; lo que aún no está portado dice 5
   const d1 = crearD1(); await sembrar(d1); const ed = await sembrar(d1, { email: 'ed@x.test', rol: 'editor' }); const env = envDePrueba(d1);
   const ck = await entrar(env, ed);
   assert.equal((await pedir(manejar, env, '/api/migrar/notas', { metodo: 'POST', cuerpo: { notas: NOTAS }, cookie: ck })).status, 403);
-  const r = await pedir(manejar, env, '/api/tasks', { cookie: ck });
+  const r = await pedir(manejar, env, '/api/anuncios', { cookie: ck }); // (una ruta que aún no está portada: Anuncios, fase 7)
   assert.equal(r.status, 501); const cuerpo = await r.json();
   assert.match(cuerpo.error, /todavía no está en la nube/); assert.equal(cuerpo.pendiente, true);
 });

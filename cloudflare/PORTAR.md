@@ -43,3 +43,9 @@ CPU: el plan gratuito da ~10 ms de CPU por petición; el de pago, 30 s. **No hag
 
 ## Qué entregas al terminar
 Un informe corto: qué rutas portaste (y cuáles NO, con el motivo), qué decidiste y por qué, qué límites tiene (CPU, tamaño, lo que sigue local), los tests que añadiste, lo que viste en la prueba real, y todo lo que no pudiste verificar. **No inventes que algo funciona: si no lo probaste, dilo.**
+
+## La hora de la oficina (zona) — UNA sola implementación
+
+`cloudflare/worker/lib/zona.js` es la única. Un Worker corre en UTC y las reglas compartidas con la oficina local usan la hora «local» (`new Date('2026-10-30T09:00')`, `getHours()`, `setDate()`…). **No instales la zona en tu módulo:** `lib/rutas.js` la instala UNA vez (`instalarZona(env.ZONA_HORARIA)`) al entrar cualquier petición y al correr el cron (`correrReloj`, que llama a cada `cadaMinuto`); `worker/index.js` sigue exportando solo el handler. Dos APIs, la misma clase por debajo:
+- **Reloj explícito** (no toca nada global): `desfaseMin(zona, ms)` · `componentes(zona, ms)` · `instanteDe(zona, y, mo, d, h, mi, s, ms)` · `instanteDeTexto(zona, 'AAAA-MM-DD[T ]HH:MM')` · `describirZona(zona)` · `zonaValida(z)` · `crearDateDeZona(zona)` · `ZONA_POR_DEFECTO`.
+- **Parche global** (`Date` es un Proxy de la clase: `Date()` sin `new`, `instanceof` y `Date.parse` siguen funcionando; `Date.parse('2026-10-26 09:00')` y el texto sin zona se leen en la zona de la oficina): `instalarZona(zona)` · `conZona(zona, fn)` (acotado; respeta un parche ya instalado) · `quitarZona()` (pruebas) · `zonaActual()` · `desfase(ms)` · `DateReal`.

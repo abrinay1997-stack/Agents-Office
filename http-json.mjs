@@ -30,8 +30,4 @@ export function sendJson(res, code, body, opts = {}) {
   res.end(out.body ?? undefined);
 }
 
-const LIGHT_KEEP = ['id', 'archived', 'archivedAt', 'agent', 'dept', 'state', 'title', 'addedAt', 'doneAt'];
-/** The poll's list: an archived task keeps only what the page reads from it (its id and when it was archived). */
-export function lightTasks(list) {
-  return (Array.isArray(list) ? list : []).map(t => t && t.archived ? Object.fromEntries(LIGHT_KEEP.filter(k => k in t).map(k => [k, t[k]])) : t);
-}
+export { lightTasks } from './tareas/ligera.mjs'; // vive aparte (puro) para que el Worker de Cloudflare la use sin zlib

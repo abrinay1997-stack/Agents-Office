@@ -9,6 +9,7 @@ import * as cerebro from './cerebro.js';
 import * as almacen from './almacen.js';
 import { servirPagina } from './paginas.js';
 import { MODULOS } from '../modulos/index.js';
+import { instalarZona } from './zona.js';
 
 export const VERSION = '0.1.0';
 
@@ -19,7 +20,16 @@ function origenValido(req) {
   return !o || o === new URL(req.url).origin;
 }
 
+/** El reloj de cada minuto (lo que en serve.mjs eran setInterval). La zona de la oficina se instala aquí, UNA vez, igual que en `manejar`: los módulos no la tocan. */
+export async function correrReloj(env) {
+  instalarZona(env.ZONA_HORARIA);
+  await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
+  // Un módulo que falle no tumba a los demás.
+  for (const mod of MODULOS) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
+}
+
 export async function manejar(req, env) {
+  instalarZona(env.ZONA_HORARIA); // la hora «local» de las reglas de la oficina es la de su zona (lib/zona.js), no la UTC del Worker
   const url = new URL(req.url);
   const ruta = url.pathname;
   const db = env.DB;
