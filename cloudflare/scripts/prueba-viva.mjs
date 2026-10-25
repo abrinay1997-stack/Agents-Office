@@ -28,7 +28,16 @@ for (const r of ['/nube.js', '/nube.css', '/dictado.js']) ok((await fetch(base +
 const inv = await fetch(`${base}/invitacion/${'0'.repeat(48)}`);
 ok(inv.status === 200 && /invitacion\.js/.test(await inv.text()), 'la página de invitación se sirve sin sesión');
 ok((await fetch(`${base}/api/invitacion/${'0'.repeat(48)}`)).status === 404, 'una invitación inventada contesta 404');
-ok((await fetch(`${base}/api/live`, { headers: { Upgrade: 'websocket', Origin: base } })).status === 401, 'el socket en vivo exige sesión');
+// fetch() no deja poner la cabecera Upgrade (undici la rechaza): se pide con node:https, que sí
+const estadoSocket = await new Promise((resolve) => {
+  const u = new URL(`${base}/api/live`);
+  const lib = u.protocol === 'http:' ? 'node:http' : 'node:https';
+  import(lib).then(({ request }) => {
+    const r = request(u, { headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==', Origin: base } }, (res) => { res.resume(); resolve(res.statusCode); });
+    r.on('upgrade', () => resolve(101)); r.on('error', () => resolve(0)); r.setTimeout(15000, () => { r.destroy(); resolve(0); }); r.end();
+  });
+});
+ok(estadoSocket === 401, `el socket en vivo exige sesión (contestó ${estadoSocket})`);
 
 if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
   const a = await fetch(`${base}/api/acceso`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: process.env.ADMIN_EMAIL, contrasena: process.env.ADMIN_PASSWORD }) });
