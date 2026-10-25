@@ -7,46 +7,10 @@
 //   plantillaDe(pieza, nombre) · aNota(plantilla, { hoy }) · deNota(md, archivo) · nombreLimpio(n)   → puros, con tests
 import fs from 'node:fs';
 import path from 'node:path';
-import { parsear, serializar, normalizar } from './piezas.mjs';
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
-
-export const DIR_PLANTILLAS = path.join('Contenido', 'Plantillas');
-export const MAX_PLANTILLAS = 60, MAX_NOMBRE = 60;
-const CAMPOS = ['formato', 'formatos', 'redes', 'historiaTambien', 'hashtagsEnComentario', 'texto', 'comentario', 'hashtags', 'textoFacebook', 'textos', 'notas', 'pinterest', 'youtube', 'tiktok'];
-const CABECERA = new Set(['tipo', 'titulo', 'formato', 'formatos', 'redes', 'historiaTambien', 'hashtagsEnComentario', 'pinterest', 'youtube', 'tiktok']);
-
-/** Un nombre que sirve de nombre de archivo en Windows: sin \ / : * ? " < > | ni # ni saltos, sin puntos al principio. */
-export const nombreLimpio = n => String(n ?? '').replace(/[\\/:*?"<>|#\r\n\t]+/g, ' ').replace(/\s+/g, ' ').replace(/^[.\s]+/, '').trim().slice(0, MAX_NOMBRE).replace(/[.\s]+$/, '');
-
-/** Lo que una pieza guarda como plantilla (sin día, hora, archivos ni estado). → { plantilla } o { error } */
-export function plantillaDe(pieza = {}, nombre = '') {
-  const n = nombreLimpio(nombre); if (!n) return { error: 'ponle un nombre a la plantilla (por ejemplo «Promo del mes»)' };
-  const datos = {}; for (const k of CAMPOS) if (pieza[k] !== undefined && pieza[k] !== null) datos[k] = pieza[k];
-  const r = normalizar(datos); if (r.error) return { error: r.error };
-  const p = r.pieza;
-  if (!String(p.texto || '').trim() && !String(p.comentario || '').trim() && !String(p.hashtags || '').trim() && !Object.keys(p.textos || {}).length && !String(p.textoFacebook || '').trim()) return { error: 'la pieza no tiene texto: una plantilla guarda el texto, el primer comentario o los hashtags' };
-  const plantilla = { nombre: n }; for (const k of CAMPOS) plantilla[k] = p[k];
-  return { plantilla };
-}
-
-/** La plantilla → la nota (la cabecera solo con lo que importa a una plantilla). */
-export function aNota(t, { hoy = new Date().toISOString().slice(0, 10) } = {}) {
-  const r = normalizar(Object.fromEntries(CAMPOS.filter(k => t[k] !== undefined).map(k => [k, t[k]])));
-  const md = serializar({ ...r.pieza, tipo: 'plantilla de contenido', titulo: t.nombre, medios: [], historias: [], fecha: '', hora: '', aprobada: null, entregada: null });
-  const m = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(md);
-  const entradas = []; for (const l of m[1].split('\n')) { if (/^\s+-\s/.test(l) && entradas.length) entradas[entradas.length - 1].push(l); else entradas.push([l]); }
-  const cab = entradas.filter(e => CABECERA.has((/^([A-Za-z]\w*):/.exec(e[0]) || [])[1])).map(e => e.join('\n'));
-  return `---\n${cab.join('\n')}\nactualizado: ${hoy}\n---\n${m[2]}`;
-}
-
-/** La nota → la plantilla (su nombre es el título, o el del archivo). */
-export function deNota(md, archivo = '') {
-  const p = parsear(md, { file: archivo });
-  const nombre = nombreLimpio(p.titulo || path.basename(archivo, '.md'));
-  const t = { nombre, archivo: path.basename(archivo) }; for (const k of CAMPOS) t[k] = p[k];
-  if (!t.redes.length) t.redes = ['instagram'];
-  return t;
-}
+import { DIR_PLANTILLAS as DIR_REL, MAX_PLANTILLAS, MAX_NOMBRE, nombreLimpio, plantillaDe, aNota, deNota } from './plantillas-core.mjs';
+export { MAX_PLANTILLAS, MAX_NOMBRE, nombreLimpio, plantillaDe, aNota, deNota }; // el núcleo puro salió a plantillas-core.mjs (lo usa también el Worker)
+export const DIR_PLANTILLAS = path.join(...DIR_REL.split('/'));
 
 export function crearPlantillas({ cerebro, ahora = Date.now } = {}) {
   const dir = path.join(cerebro, DIR_PLANTILLAS);
