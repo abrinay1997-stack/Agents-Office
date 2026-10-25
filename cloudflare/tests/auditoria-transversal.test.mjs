@@ -17,6 +17,7 @@ import { conSesion, cargarTareas } from '../worker/lib/tareas/sesion.js';
 import { archivarViejas, DIAS_HECHAS_VIVAS, LOTE_ARCHIVO, cadaMinuto as relojTareas } from '../worker/modulos/tareas.js';
 import { crearTarea } from '../../tareas/modelo.mjs';
 import { instalarZona } from '../worker/lib/zona.js';
+import { crearAlmacenD1 } from '../worker/lib/contenido/piezas.js';
 import { SALTAR, crearD1, sembrar, envDePrueba, pedir } from './d1-memoria.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -274,4 +275,22 @@ test('ESCALA: el historial de Anuncios (una fila de D1 de ~1,9 MB en la nube) se
     assert.equal(JSON.parse(lineas.at(-1)).id, 'c3499', 'la última acción se conserva');
     assert.equal(sync.historial()[0].id, 'c3499', 'y es la primera que lee la página (las más nuevas primero)');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('ESCALA: la vuelta de cada minuto de Contenido pide las piezas por el índice de fecha, con una sola cota (no lee todas)', { skip: SALTAR }, async () => {
+  const d1 = crearD1(), db = d1._db;
+  const ins = db.prepare("insert into contenido_piezas (id, fecha, hora, estado, json, borrada, creada, actualizada) values (?,?,?,?,?,0,'x','x')");
+  db.exec('begin');
+  for (let i = 0; i < 400; i++) { const fecha = i < 395 ? `2026-0${1 + (i % 6)}-1${i % 9}` : `2026-10-2${i - 395}`; const id = 'p-2026' + String(i).padStart(4, '0') + '-a' + String(i).padStart(3, '0'); ins.run(id, fecha, '10:00', 'borrador', JSON.stringify({ id, titulo: 'T' + i, fecha, hora: '10:00', estado: 'borrador', formato: 'post', redes: ['instagram'], medios: [], historias: [], texto: 'x', creada: 'x', actualizada: 'x' }));
+  }
+  db.exec('commit');
+  const sqls = []; const prep = d1.prepare; d1.prepare = (sql) => { sqls.push(sql); return prep(sql); };
+  const almacen = crearAlmacenD1({ db: d1 });
+  const r = await almacen.listar({ desde: '2026-10-20' });
+  assert.deepEqual(r.map((p) => p.titulo).sort(), ['T395', 'T396', 'T397', 'T398', 'T399']);
+  assert.ok(sqls.every((q) => /fecha >= \?/.test(q)), 'la consulta lleva la cota: ' + sqls.join(' | ').slice(0, 200));
+  const plan = db.prepare('explain query plan ' + sqls[0].replace(/\?/g, "'2026-10-20'")).all().map((x) => x.detail).join(' ');
+  assert.match(plan, /USING INDEX contenido_piezas_fecha|SEARCH contenido_piezas/, 'usa el índice de fecha: ' + plan);
+  assert.equal((await almacen.listar({ hasta: '2026-01-31' })).every((p) => p.fecha <= '2026-01-31'), true, 'la cota de arriba sola también');
+  assert.equal((await almacen.listar({})).length, 400, 'sin cotas, todas');
 });
