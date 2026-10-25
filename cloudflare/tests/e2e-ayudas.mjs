@@ -68,6 +68,7 @@ export async function montarOficina({ extraEnv = {}, ajustes = null } = {}) {
   });
   env.__pruebas = { fetch: mundo.fetchFn, fetchIA: mundo.fetchFn };
   env.AO_FETCH = mundo.fetchFn;
+  const rel = { t: Date.now() }; env.AO_AHORA = () => rel.t; // el reloj de Contenido (solo pruebas): se mueve con `adelantar`
   usarFetchDePrueba(mundo.fetchFn);
   const cookies = {};
   const llamar = (quien) => async (metodo, ruta, cuerpo, cabeceras = {}) => {
@@ -82,5 +83,6 @@ export async function montarOficina({ extraEnv = {}, ajustes = null } = {}) {
   await entrar('ana', admin.email, admin.clave);
   const reloj = async (n = 1) => { for (let i = 0; i < n; i++) await correrReloj(env); };
   const filas = (sql, ...a) => d1._db.prepare(sql).all(...a);
-  return { d1, env, mundo, meta, ids, r2, cookies, llamar, entrar, reloj, filas, ana: llamar('ana'), anon: llamar(null) };
+  const adelantar = (ms) => { rel.t += ms; };
+  return { d1, env, mundo, meta, ids, r2, cookies, llamar, entrar, reloj, filas, adelantar, rel, ana: llamar('ana'), anon: llamar(null) };
 }

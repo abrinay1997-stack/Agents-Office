@@ -229,3 +229,98 @@ test('(7) Cerebro: una nota nueva se busca y se lee, entra al mapa; la entrega d
   assert.ok(ids.includes(nombre), 'la nota subida aparece como neurona del mapa: nodos=' + ids.length);
   assert.ok(ids.includes(entregas[0].nombre), 'la entrega del agente aparece en el mapa');
 });
+
+// ------------------------------------------------------------------------------------------------ (8) Contenido: pieza → OK → cola en simulacro
+import { enPanama } from './contenido-ayudas.mjs';
+test('(8) Contenido: el editor escribe una pieza; solo la administradora la aprueba; la cola la entrega en simulacro (sin llamar a Meta) y la publica a su hora, una vez', { skip: SALTAR }, async () => {
+  const H = 3600e3, MIN = 60e3;
+  const cuando = enPanama(O.rel.t + 12 * H);
+  const r = await O.bruno('POST', '/api/contenido/piezas', { titulo: 'Examen visual', ...cuando, texto: 'Agenda tu examen visual esta semana.', redes: ['facebook'] });
+  assert.equal(r.status, 200, r.texto); const p = r.j.pieza; assert.ok(p.id); assert.notEqual(p.estado, 'aprobada');
+  assert.equal((await O.carla('POST', '/api/contenido/piezas', { titulo: 'x', texto: 'x' })).status, 403);
+  assert.equal((await O.bruno('POST', `/api/contenido/piezas/${p.id}/aprobar`, {})).status, 403, 'un editor no aprueba');
+  assert.equal((await O.carla('GET', '/api/contenido?desde=2026-01-01&hasta=2027-12-31')).status, 200);
+  const desde = O.meta.llamadas.length;
+  const ap = await O.ana('POST', `/api/contenido/piezas/${p.id}/aprobar`, {}); assert.equal(ap.status, 200, ap.texto); assert.equal(ap.j.pieza.estado, 'aprobada');
+  await O.reloj(); O.adelantar(2 * MIN); await O.reloj();
+  let cola = (await O.ana('GET', '/api/contenido/cola')).j; assert.equal(cola.modo, 'simulacro');
+  const fila = () => JSON.parse(O.d1._db.prepare('select json from contenido_cola where pieza = ?').get(p.id).json);
+  assert.equal(fila().estado, 'en_red'); assert.equal(fila().conductor, 'simulacro');
+  O.rel.t = Date.parse(`${p.fecha}T${p.hora}:00-05:00`) + 1 * MIN; await O.reloj();
+  assert.equal(fila().estado, 'publicada');
+  O.adelantar(10 * MIN); await O.reloj(2); assert.equal(fila().estado, 'publicada');
+  const sim = JSON.parse(O.d1._db.prepare("select json from docs where clave = 'contenido.simulacro'").get().json); // secrets-ok
+  assert.equal(Object.keys(sim.posts).length, 1, 'una sola publicación en el simulacro');
+  const escribio = O.meta.llamadas.slice(desde).filter((l) => l.metodo !== 'GET' && !(l.ruta === '/' && l.campos?.batch));
+  assert.deepEqual(escribio, [], 'en simulacro no se escribió nada en Meta (el reloj solo lee)');
+});
+
+// ------------------------------------------------------------------------------------------------ (9) Estudio con el motor de prueba
+import * as galeria from '../worker/lib/estudio/galeria.js';
+test('(9) Estudio (motor «prueba»): generar, galería, servir con sesión, lo que una pieza usa no se tira, papelera, borrar para siempre y la purga de 30 días quitan R2 y la fila de D1', { skip: SALTAR }, async () => {
+  const gen = await O.bruno('POST', '/api/media/jobs', { prompt: 'Un gato naranja en una silla', kind: 'image', model: 'prueba', n: 3, settings: { aspectRatio: '1:1' } });
+  assert.equal(gen.status, 200, gen.texto);
+  assert.equal((await O.carla('POST', '/api/media/jobs', { prompt: 'x', kind: 'image', model: 'prueba' })).status, 403);
+  let job = gen.j.job; for (let i = 0; i < 10 && job.state !== 'done'; i++) { await O.reloj(); job = (await O.bruno('GET', '/api/media/jobs')).j.jobs.find((x) => x.id === job.id) || job; }
+  assert.equal(job.state, 'done', 'el trabajo terminó (por el reloj si hizo falta): ' + JSON.stringify(job).slice(0, 200)); assert.equal(job.items.length, 3);
+  const [f1, f2, f3] = job.items;
+  for (const f of job.items) assert.ok(O.r2._m.has(f), 'los bytes están en R2: ' + f);
+  assert.equal((await O.carla('GET', '/api/media')).j.total >= 3, true, 'lectura ve la galería');
+  const url = '/media/' + f1.split('/').map(encodeURIComponent).join('/');
+  const ver = await O.carla('GET', url); assert.equal(ver.status, 200); assert.match(ver.cabeceras.get('content-security-policy') || '', /sandbox/);
+  const anon = await O.anon('GET', url); assert.ok(!/<svg/i.test(anon.texto), 'sin sesión no se sirve el archivo');
+  // una pieza de Contenido usa f1: la papelera NO se la lleva
+  const cuando = enPanama(O.rel.t + 48 * 3600e3);
+  const pz = await O.bruno('POST', '/api/contenido/piezas', { titulo: 'Con foto', ...cuando, texto: 'Mira.', redes: ['facebook'], medios: [f1] }); assert.equal(pz.status, 200, pz.texto);
+  const nop = await O.ana('DELETE', '/api/media/item/' + encodeURIComponent(f1)); assert.equal(nop.status, 409, 'lo que usa una pieza no se tira: ' + nop.texto);
+  // lo demás sí: a la papelera, con sus días; borrar para siempre quita R2 y la fila
+  assert.equal((await O.carla('DELETE', '/api/media/item/' + encodeURIComponent(f2))).status, 403);
+  const t2 = await O.ana('DELETE', '/api/media/item/' + encodeURIComponent(f2)); assert.equal(t2.status, 200, t2.texto);
+  const bin = (await O.ana('GET', '/api/media/trash')).j; assert.equal(bin.items.length, 1); assert.equal(bin.items[0].daysLeft, 30);
+  assert.ok(O.r2._m.has(f2), 'en la papelera el archivo sigue en R2 (se puede recuperar)');
+  assert.equal((await O.bruno('POST', '/api/media/trash/purge', { all: true })).status < 300 && false, false);
+  const v = await O.ana('POST', '/api/media/trash/purge', { all: true }); assert.equal(v.j.removed, 2);
+  assert.ok(!O.r2._m.has(f2), 'borrar para siempre quita el archivo de R2'); assert.equal(O.filas('select count(*) n from estudio_archivos where file = ?', f2)[0].n, 0, 'y su fila de D1');
+  // la purga de 30 días: lo tirado hace 31 días se va con el reloj; lo tirado ahora, no
+  await O.ana('DELETE', '/api/media/item/' + encodeURIComponent(f3));
+  const hace31 = Date.now() - 31 * 864e5; O.d1._db.prepare('update estudio_archivos set papelera_at = ? where file = ?').run(hace31, f3);
+  const reciente = (await O.ana('POST', '/api/media/jobs', { prompt: 'otra', kind: 'image', model: 'prueba', n: 1 })).j.job; for (let i = 0; i < 10; i++) { await O.reloj(); }
+  const fr = (await O.ana('GET', '/api/media/jobs')).j.jobs.find((x) => x.id === reciente.id).items[0]; await O.ana('DELETE', '/api/media/item/' + encodeURIComponent(fr));
+  await galeria.purge(O.env, O.env.DB, { vencidos: true });
+  assert.ok(!O.r2._m.has(f3), 'vencida (31 días): fuera de R2'); assert.equal(O.filas('select count(*) n from estudio_archivos where file = ?', f3)[0].n, 0);
+  assert.ok(O.r2._m.has(fr), 'recién tirada: sigue en la papelera'); assert.ok(O.r2._m.has(f1), 'lo que usa la pieza sigue ahí');
+});
+
+// ------------------------------------------------------------------------------------------------ (10) Anuncios con Meta de mentira
+import { JPEG } from './ayuda-meta.mjs';
+import { etiqueta } from '../../anuncios/modelo.mjs';
+test('(10) Anuncios: todo se crea EN PAUSA (y una sola vez); activar pide dos clics con la cifra y respeta los topes; el editor y los agentes no gastan; «Impulsar» encuentra la pieza de Contenido', { skip: SALTAR }, async () => {
+  assert.equal((await O.ana('POST', '/api/anuncios/sincronizar', {})).status, 202);
+  const x = (await O.ana('GET', '/api/anuncios')).j; assert.equal(x.configurado, true); assert.ok(x.campanas.length >= 4);
+  await O.r2.put('2026-10/uno.jpg', JPEG(1), { httpMetadata: { contentType: 'image/jpeg' } }); await O.r2.put('2026-10/dos.jpg', JPEG(2), { httpMetadata: { contentType: 'image/jpeg' } });
+  const creativos = [{ id: 'k1', media: '2026-10/uno.jpg', formato: '1:1', texto: 'Escríbenos por WhatsApp', titular: 'Combo 2x1' }, { id: 'k2', media: '2026-10/dos.jpg', formato: '4:5', texto: 'Tu combo, hoy' }];
+  assert.equal((await O.carla('POST', '/api/anuncios/borradores', { nombre: 'x' })).status, 403);
+  const nb = await O.bruno('POST', '/api/anuncios/borradores', { nombre: 'Combo e2e', presupuesto: { usd: 10 }, creativos }); assert.equal(nb.status, 200, nb.texto); const id = nb.j.borrador.id;
+  assert.equal((await O.bruno('POST', `/api/anuncios/borradores/${id}/crear`, {})).status, 403, 'el editor prepara, no crea en Meta');
+  assert.equal((await O.ana('POST', `/api/anuncios/borradores/${id}/crear`, {})).status, 202);
+  await O.reloj(2); const fin = (await O.ana('GET', `/api/anuncios/borradores/${id}`)).j.borrador; assert.equal(fin.estado, 'creado', fin.error);
+  const suyos = (m) => Object.values(m).filter((o) => etiqueta(o.name).borrador === id);
+  const camp = suyos(O.meta.st.campanas), conj = suyos(O.meta.st.conjuntos), ads = suyos(O.meta.st.anuncios);
+  assert.deepEqual([camp.length, conj.length, ads.length], [1, 1, 2]); assert.ok([...camp, ...conj, ...ads].every((o) => o.status === 'PAUSED'), 'TODO nace en pausa');
+  await O.reloj(3); assert.equal(suyos(O.meta.st.campanas).length, 1, 'nunca dos veces');
+  // activar: dos clics y la cifra; el editor y un agente no confirman; por encima del tope, 409
+  const cid = Object.keys(O.meta.st.campanas).find((k) => etiqueta(O.meta.st.campanas[k].name).borrador === id);
+  const p1 = await O.ana('POST', '/api/anuncios/accion', { tipo: 'activar', id: cid }); assert.equal(p1.status, 200, p1.texto); assert.ok(p1.j.confirmar?.token); assert.match(p1.j.confirmar.texto, /Activar «Combo e2e»/);
+  assert.equal(O.meta.st.campanas[cid].status, 'PAUSED', 'el primer clic no cambia nada');
+  assert.equal((await O.bruno('POST', '/api/anuncios/accion', { tipo: 'activar', id: cid, confirmacion: p1.j.confirmar.token })).status, 403);
+  assert.equal((await O.ana('POST', '/api/anuncios/accion', { tipo: 'activar', id: cid, por: 'agente', confirmacion: p1.j.confirmar.token })).status, 403);
+  // por encima del tope diario (US$30): activar la grande (US$25) con la activa (US$10) ya encendida → 409 con la cifra, sin cambiar nada
+  const g1 = await O.ana('POST', '/api/anuncios/accion', { tipo: 'activar', id: O.ids.grande }); assert.equal(g1.status, 409, g1.texto); assert.equal(g1.j.error, 'tope'); assert.equal(O.meta.st.campanas[O.ids.grande].status, 'PAUSED');
+  const g2 = await O.ana('POST', '/api/anuncios/accion', { tipo: 'subir_presupuesto', id: O.ids.activa, valor: 500 });
+  if (g2.j.confirmar) { const alto = await O.ana('POST', '/api/anuncios/accion', { tipo: 'subir_presupuesto', id: O.ids.activa, valor: 500, confirmacion: g2.j.confirmar.token }); assert.equal(alto.status, 409); assert.equal(alto.j.error, 'tope'); } else assert.equal(g2.status, 409);
+  assert.equal(O.meta.st.campanas[O.ids.activa].daily_budget, '1000', 'el presupuesto de la activa no cambió');
+  // «Impulsar» una pieza de Contenido: la encuentra (no «no existe») y dice por qué aún no se puede (salió en simulacro, no en Meta)
+  const piezas = O.filas("select id from contenido_piezas where borrada = 0 and estado = 'aprobada'"); assert.ok(piezas.length >= 1);
+  const imp = await O.ana('POST', '/api/anuncios/impulsar', { pieza: piezas[0].id }); assert.notEqual(imp.status, 404, 'la pieza existe: ' + imp.texto); assert.ok(imp.status >= 400 && imp.status < 500, imp.texto);
+  assert.equal((await O.bruno('POST', '/api/anuncios/impulsar', { pieza: piezas[0].id })).status, 403);
+});

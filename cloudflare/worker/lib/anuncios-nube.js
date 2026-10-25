@@ -38,6 +38,9 @@ import { agentes } from './agentes.js';
 import { texto as textoIA } from './ia.js';
 import { leerDoc, guardarDoc, mutarDoc, listarFilas, leerFila, guardarFila } from './almacen.js';
 import { tokensD1 } from './tokens.js';
+import { crearColaD1 } from './contenido/cola.js';
+import { publica } from '../../../contenido/programador-core.mjs';
+import { armarLectura } from '../../../contenido/metricas-core.mjs';
 import { conEspejo, bytesDeFila, MAX_ARCHIVO } from './espejo.js';
 import { igualSeguro } from './ids.js';
 
@@ -321,14 +324,21 @@ export async function asegurarCuentas(meta, { ahora = () => Date.now() } = {}) {
   return meta.sincronizar();
 }
 
-/** Lo de otras fases que Anuncios lee, si ya está en D1 (filas `piezas`, doc `analiticas.publicaciones`, doc `cifras`): si no, vacío. */
+/**
+ * Lo de otras fases que Anuncios lee, de donde de verdad vive en D1: la pieza (`contenido_piezas`), lo que la cola apuntó al publicarla (`contenido_cola`), las publicaciones
+ * que leyó Analíticas (`contenido_pubs`) y las cifras de la empresa (doc `cifras`). Antes leía una colección `piezas` y dos documentos que nadie escribe (nombres supuestos
+ * en la fase 7): «Impulsar» una pieza publicada no la encontraba y la regla «impulsar lo orgánico» nunca veía publicaciones. Lo que falte, vacío (nada tumba a Anuncios).
+ */
 export async function leerPreload(db, { pieza = null } = {}) {
   const out = { piezas: {}, salidas: {}, publicaciones: [], cifras: [] };
   try {
-    if (pieza && /^[\w-]{1,60}$/.test(pieza)) { const p = await leerFila(db, 'piezas', pieza); if (p) out.piezas[pieza] = p; }
-    const pub = (await leerDoc(db, 'analiticas.publicaciones', null)).valor; if (Array.isArray(pub?.publicaciones)) out.publicaciones = pub.publicaciones; else if (Array.isArray(pub)) out.publicaciones = pub;
+    if (pieza && /^[\w-]{1,60}$/.test(pieza)) {
+      const f = await db.prepare('select json from contenido_piezas where id = ? and borrada = 0').bind(pieza).first();
+      if (f) { out.piezas[pieza] = JSON.parse(f.json); const sal = publica((await crearColaD1(db).leer()).entradas?.[pieza]); if (sal) out.salidas[pieza] = sal; }
+    }
+    const { results } = await db.prepare('select json from contenido_pubs').all();
+    out.publicaciones = armarLectura({ filasPorMes: [], pubs: Object.fromEntries(results.map((r) => { const p = JSON.parse(r.json); return [p.id, p]; })) }).publicaciones;
     const c = (await leerDoc(db, 'cifras', null)).valor; if (Array.isArray(c?.items)) out.cifras = c.items;
-    const cola = (await leerDoc(db, 'contenido.cola', null)).valor; if (cola?.entradas && pieza && cola.entradas[pieza]) out.salidas[pieza] = cola.entradas[pieza];
   } catch (e) { console.warn('[anuncios] preload:', e?.message ?? e); }
   return out;
 }
