@@ -102,3 +102,109 @@ test('(4b) solo la administradora aprueba (editor y lectura, 403); el envío sal
   const todo = O.d1._db.prepare("select name from sqlite_master where type = 'table'").all().map((x) => JSON.stringify(O.d1._db.prepare(`select * from "${x.name}"`).all())).join('\n');
   for (const s of ['tok-mcp', 'sk-ant-secreto-de-prueba', TOKEN_BOT, SECRETO_TG]) assert.ok(!todo.includes(s), 'secreto fuera de D1: ' + s.slice(0, 6));
 });
+
+// ------------------------------------------------------------------------------------------------ (5) una rutina que se dispara sola, UNA vez
+test('(5) rutina diaria: nace con su próxima hora, el reloj la dispara una sola vez aunque corra varias veces ese minuto, y la tarea nace con id estable', { skip: SALTAR }, async () => {
+  O.mundo.guion.push(dimitriDice({ agent: 'slead', title: 'Revisar los leads nuevos', plan: ['Leer', 'Resumir'], eta_minutes: 5, why: 'ventas', needs_ok: false }));
+  const r = await O.ana('POST', '/api/routines', { dept: 'sales', text: 'Revisa los leads nuevos y resume', when: { kind: 'daily', at: '09:00' } });
+  assert.equal(r.status < 300, true, r.texto); const id = r.j.routine?.id || r.j.id; assert.ok(id, r.texto);
+  assert.equal((await O.carla('POST', '/api/routines', { dept: 'sales', text: 'x', when: { kind: 'daily', at: '09:00' } })).status, 403);
+  const lista = (await O.carla('GET', '/api/routines')).j.routines; assert.ok(lista.some((x) => x.id === id), 'lectura sí ve la rutina');
+  // el reloj aún no la dispara (la hora es mañana o más tarde hoy)
+  const antes = (await cargarTareas(O.d1)).filter((t) => t.routine === id).length;
+  // se adelanta su próxima ejecución al pasado (lo que pasaría al llegar la hora) y el reloj corre tres veces
+  const st = JSON.parse(O.d1._db.prepare("select json from docs where clave = 'rutinas.estado'").get().json); assert.ok(st[id], 'la rutina tiene estado'); // secrets-ok
+  st[id].nextAt = Date.now() - 5000; O.d1._db.prepare("update docs set json = ? where clave = 'rutinas.estado'").run(JSON.stringify(st)); // secrets-ok
+  await O.reloj(3);
+  const tareas = (await cargarTareas(O.d1)).filter((t) => t.routine === id);
+  assert.equal(tareas.length - antes, 1, 'una sola tarea por esa ejecución');
+  const st2 = JSON.parse(O.d1._db.prepare("select json from docs where clave = 'rutinas.estado'").get().json); // secrets-ok
+  assert.ok(st2[id].nextAt > Date.now(), 'la siguiente es futura'); assert.ok(st2[id].lastAt || st2[id].last, 'quedó apuntada la última');
+  await O.reloj(2); assert.equal((await cargarTareas(O.d1)).filter((t) => t.routine === id).length, tareas.length, 'no vuelve a dispararse');
+  T.rutina = id;
+});
+
+// ------------------------------------------------------------------------------------------------ (6) Dimitri
+const chat = (texto, extra = {}) => O.ana('POST', '/api/sub/chat', { text: texto, ...extra });
+const ultimoSub = (r) => r.j.messages.filter((m) => m.who === 'sub').at(-1);
+
+test('(6a) Dimitri: solo la administradora habla con él; charla y plan; nada sale hasta ENVIAR A LOS JEFES y entonces las tareas llegan a sus agentes por el reloj', { skip: SALTAR }, async () => {
+  for (const q of ['bruno', 'carla']) assert.equal((await O[q]('POST', '/api/sub/chat', { text: 'hola' })).status, 403);
+  assert.equal((await O.anon('POST', '/api/sub/chat', { text: 'hola' })).status, 401);
+  O.mundo.guion.push(dimitriDice({ mode: 'charla', reply: 'Abrir los domingos **depende** de tus ventas.' }));
+  const c = await chat('¿Qué opinas de abrir los domingos?'); assert.equal(c.status, 200, c.texto); assert.match(ultimoSub(c).text, /domingos/);
+  O.mundo.guion.push(dimitriDice({ mode: 'plan', reply: 'Así lo repartiría.', tasks: [
+    { dept: 'marketing', title: 'Fotos del combo', instruction: 'Prepara las fotos del combo 2x1.', why: 'es imagen' },
+    { dept: 'sales', title: 'Llamar a los clientes de septiembre', instruction: 'Llama a los clientes de septiembre y ofrece el combo.', why: 'venta', espera: [0] }] }));
+  const p = await chat('Prepara el combo 2x1 y que Ventas llame a los clientes de septiembre'); const m = ultimoSub(p);
+  assert.equal(m.mode, 'plan'); assert.equal(m.plan.tasks.length, 2);
+  const antes = (await cargarTareas(O.d1)).length;
+  const e = await O.ana('POST', '/api/sub/send', { msg: m.id, items: [{ i: 0, include: true }, { i: 1, include: true }] });
+  assert.equal(e.status, 200, e.texto); assert.equal((await cargarTareas(O.d1)).length - antes, 2);
+  assert.equal((await O.bruno('POST', '/api/sub/send', { msg: m.id, items: [{ i: 0, include: true }] })).status, 403);
+  const ts = await cargarTareas(O.d1); const foto = ts.find((t) => /Fotos del combo/.test(t.title)), llamar = ts.find((t) => /Llamar a los clientes/.test(t.title));
+  assert.deepEqual(llamar.bloqueadaPor, [foto.id], 'Ventas espera a las fotos');
+  // el reloj: las fotos las toma Marketing; Ventas no arranca hasta que las fotos terminen
+  await O.reloj(6);
+  const est = async (id) => (await cargarTareas(O.d1)).find((t) => t.id === id).state;
+  // las fotos piden el OK de quien las manda (el enrutador lo decide): hasta que la administradora lo da, Ventas NO arranca (espera a las fotos)
+  if ((await est(foto.id)) === 'waiting') {
+    assert.notEqual(await est(llamar.id), 'doing'); assert.notEqual(await est(llamar.id), 'done');
+    assert.equal((await O.ana('POST', `/api/tasks/${foto.id}/approve`, {})).status, 200);
+    await O.reloj(6);
+  }
+  assert.equal(await est(foto.id), 'done');
+  await O.reloj(6);
+  assert.ok(['done', 'waiting'].includes(await est(llamar.id)), 'terminadas las fotos, Ventas la trabajó (hecha o esperando el OK de lo que envía): ' + await est(llamar.id));
+});
+
+test('(6b) ops con HACER y DESHACER (pausar la rutina), y lo que Dimitri nunca hace (aprobar/enviar/publicar/borrar) se descarta', { skip: SALTAR }, async () => {
+  O.mundo.guion.push(dimitriDice({ mode: 'plan', reply: 'La pauso.', ops: [{ type: 'rutina_pausar', id: T.rutina }, { type: 'tarea_aprobar', id: T.id }, { type: 'publicar', id: 'x' }, { type: 'borrar', id: T.id }] }));
+  const r = await chat('Pausa la revisión de leads'); const m = ultimoSub(r);
+  assert.equal(m.ops.length, 1, 'solo la op permitida sobrevive: ' + JSON.stringify(m.ops.map((o) => o.type)));
+  const h = await O.ana('POST', '/api/sub/ops', { msg: m.id, items: [{ k: 0, include: true }] }); assert.equal(h.status, 200, h.texto);
+  assert.equal(h.j.message.ops[0].state, 'done');
+  const rutina = (await O.ana('GET', '/api/routines')).j.routines.find((x) => x.id === T.rutina); assert.equal(rutina.paused, true);
+  assert.equal((await O.bruno('POST', '/api/sub/ops', { msg: m.id, items: [{ k: 0 }] })).status, 403);
+  const u = await O.ana('POST', '/api/sub/ops/undo', { msg: m.id, k: 0 }); assert.equal(u.status, 200, u.texto);
+  assert.ok(!(await O.ana('GET', '/api/routines')).j.routines.find((x) => x.id === T.rutina).paused, 'deshacer la reanuda');
+  assert.equal((await O.ana('POST', '/api/sub/ops/undo', { msg: m.id, k: 0 })).status, 409, 'no se deshace dos veces');
+  assert.equal((await estadoDe(T.id)).state, 'done', 'la tarea aprobada de antes no se tocó');
+});
+
+test('(6c) historial: nueva conversación archiva la actual; se lista, se abre una vieja, se borra', { skip: SALTAR }, async () => {
+  const antes = (await O.ana('GET', '/api/sub/conversaciones')).j;
+  assert.ok(antes.actual.titulo, 'la de ahora tiene título');
+  assert.equal((await O.ana('POST', '/api/sub/clear', {})).status, 200);
+  O.mundo.guion.push(dimitriDice({ mode: 'charla', reply: 'Primera de la nueva.' })); await chat('Tema nuevo: precios de septiembre');
+  const l = (await O.ana('GET', '/api/sub/conversaciones')).j; assert.equal(l.lista.length, antes.lista.length + 1);
+  const vieja = l.lista[0]; assert.match(vieja.titulo, /domingos/);
+  assert.equal((await O.bruno('GET', '/api/sub/conversaciones')).status, 403);
+  const v = (await O.ana('GET', `/api/sub/conversaciones/${vieja.id}`)); assert.equal(v.status, 200); assert.ok(v.j.messages.length >= 2);
+  const ab = await O.ana('POST', '/api/sub/abrir', { id: vieja.id }); assert.equal(ab.status, 200); assert.match(JSON.stringify((await O.ana('GET', '/api/sub')).j.messages), /domingos/);
+  assert.equal((await O.ana('GET', '/api/sub/conversaciones')).j.lista.some((x) => /precios de septiembre/.test(x.titulo)), true, 'la que estaba abierta quedó guardada');
+  const ya = (await O.ana('GET', '/api/sub/conversaciones')).j.lista.find((x) => /precios de septiembre/.test(x.titulo));
+  assert.equal((await O.ana('POST', '/api/sub/borrar', { id: ya.id })).status, 200);
+  assert.equal((await O.ana('GET', `/api/sub/conversaciones/${ya.id}`)).status, 404);
+  assert.equal((await O.ana('POST', '/api/sub/borrar', { id: ya.id })).status, 404);
+});
+
+test('(6d) sesión larga: 65 turnos con el modelo de mentira; el prompt no crece, lo dicho al principio sigue y cada turno cabe en las consultas de D1 del plan gratuito', { skip: SALTAR, timeout: 180000 }, async () => {
+  await O.ana('POST', '/api/sub/clear', {});
+  const tam = []; let max = 0;
+  // las consultas que de verdad llegan a D1 (un batch cuenta como una), igual que tests/dimitri-sesion-larga.test.mjs
+  const d1 = O.d1, p0 = d1.prepare, b0 = d1.batch; let n = 0, dentro = false;
+  const env = (st) => { const w = {}; for (const k of ['first', 'all', 'run']) w[k] = (...a) => { if (!dentro) n++; return st[k](...a); }; w.bind = (...a) => env(st.bind(...a)); return w; };
+  d1.prepare = (sql) => env(p0(sql)); d1.batch = async (l) => { n++; dentro = true; try { return await b0(l); } finally { dentro = false; } };
+  try {
+    for (let i = 0; i < 65; i++) {
+      O.mundo.guion.push(dimitriDice({ mode: 'charla', reply: 'Respuesta larga '.repeat(25) + i }));
+      const antes = n, r = await chat(i === 3 ? 'Siempre usa tono cercano y nunca menciones precios en redes. Mi presupuesto es US$500' : `Pedido ${i} sobre el tema ${i % 7}`);
+      assert.equal(r.status, 200, `turno ${i}: ${r.texto.slice(0, 200)}`); max = Math.max(max, n - antes);
+      const reg = O.mundo.reg.anthropic.at(-1); tam.push(JSON.stringify(reg.system).length + JSON.stringify(reg.messages).length);
+    }
+  } finally { d1.prepare = p0; d1.batch = b0; }
+  assert.ok(max <= 50, 'consultas a D1 por turno (tope del plan gratuito 50): ' + max);
+  assert.ok(tam[64] < tam[30] * 1.2, `el prompt se queda plano: ${tam[30]} → ${tam[64]}`);
+  assert.match(JSON.stringify(O.mundo.reg.anthropic.at(-1).system), /nunca menciones precios en redes/, 'lo del turno 3 sigue en el turno 65');
+});
