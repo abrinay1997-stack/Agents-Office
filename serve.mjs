@@ -2465,6 +2465,11 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/dictado.js') { // dictado por voz (src/dictado.js → dist/dictado.js): un script suelto; la página solo lo pide si el navegador sabe dictar
+      let t; try { t = fs.readFileSync(path.join(ROOT, 'dist', 'dictado.js')); } catch { await rebuildOffice(); try { t = fs.readFileSync(path.join(ROOT, 'dist', 'dictado.js')); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/dictado.js no está: node build.mjs'); } }
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+      return res.end(req.method === 'HEAD' ? undefined : t);
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/anuncios-vista.js') { // Fase A1: el panel de Anuncios, on demand (build-anuncios.mjs → dist/anuncios-vista.js)
       let x; try { x = anunciosVistaFile(); if (!anunciosVistaAlDia(x)) throw new Error('otra construcción'); } catch { if (fs.existsSync(path.join(ROOT, 'build-anuncios.mjs'))) await rebuildOffice(); try { x = anunciosVistaFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/anuncios-vista.js no está: node build.mjs'); } }
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }

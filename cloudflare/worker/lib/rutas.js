@@ -11,6 +11,9 @@ import { servirPagina } from './paginas.js';
 import { MODULOS } from '../modulos/index.js';
 import { instalarZona } from './zona.js';
 import { saludPublica, saludRica, checksDeModulos, completarEstado, marcarAvisosLeidos } from './salud.js';
+import { avisarCambio } from './vivo.js';
+import * as equipo from '../modulos/equipo.js';
+import { tasa, ipDe } from './equipo.js';
 
 export const VERSION = '0.1.0';
 /** Lo único que se contesta sin sesión además de /api/health y /api/acceso: webhooks de otros sistemas, cada uno con su propio secreto (ver `publica` en los módulos). */
@@ -65,8 +68,14 @@ export async function manejar(req, env, exec = null) {
     return json(await saludRica({ req, env, db, usuario: u, url, ruta }, MODULOS));
   }
 
+  // Invitaciones (fase 10): ver y aceptar un enlace, SIN sesión y con tope de intentos por IP (modulos/equipo.js → publica).
+  if (ruta.startsWith('/api/invitacion/')) { const r = await equipo.publicaInvitacion(req, env); if (r) return r; }
+
   if (ruta === '/api/acceso' && req.method === 'POST') {
     const b = await cuerpo(req);
+    // Tope de intentos (fase 10): por IP y por correo, por minuto. Un ataque lento o repartido choca con el segundo.
+    const huella = String(b?.email ?? '').trim().toLowerCase().slice(0, 120);
+    if (!(await tasa(db, 'acc:ip:' + ipDe(req), 20)).ok || !(await tasa(db, 'acc:mail:' + huella, 8)).ok) return error('Demasiados intentos. Espera un minuto e inténtalo otra vez.', 429);
     const s = await iniciarSesion(db, b?.email, b?.contrasena, req.headers.get('User-Agent') ?? '');
     if (!s) return error('Usuario o contraseña incorrectos.', 401);
     return json({ usuario: s.usuario }, 200, { 'Set-Cookie': cookieSesion(s.testigo) });
@@ -165,6 +174,7 @@ export async function manejar(req, env, exec = null) {
     // El semáforo y los avisos juntan lo de todos los módulos (cada uno aporta sus `checks` en `salud(ctx)`; los avisos de Contenido y Anuncios viven en otro sitio).
     if (ruta === '/api/status' && req.method === 'GET' && r.ok) return completarEstado(r, await checksDeModulos(ctx, MODULOS), db);
     if (ruta === '/api/notices/read' && req.method === 'POST' && r.ok) await marcarAvisosLeidos(db);
+    waitUntil(avisarCambio(env, { ruta, metodo: req.method, estado: r.status, usuario, req })); // fase 10: las personas conectadas se enteran (lib/vivo.js)
     return r;
   }
 

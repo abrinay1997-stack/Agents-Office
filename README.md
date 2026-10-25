@@ -462,6 +462,7 @@ every note they read, so your graph grows as the office works.
 | `V` | Full screen view with dimmed lighting |
 | `,` | Settings — including **Apariencia** (Claro, Oscuro, Automático; remembered on this browser; http://localhost:4520/dark opens dark once) and the Estudio's caps |
 | `?` | Every key, in Settings → Atajos de teclado; each line does it |
+| `Alt` `Shift` `M` | **Dictate** into the text box you are typing in (Dimitri, a department chief, «Para mí», notes…); press again to stop. Chrome, Edge and Safari (the browser's own speech service; the office only receives the text). Firefox has none: no microphone appears |
 | `E` `P` `G` | With the Estudio, the calendar or the Brain open: switch between them (the top bar stays) |
 | `Esc` | Back |
 

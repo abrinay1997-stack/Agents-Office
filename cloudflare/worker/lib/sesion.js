@@ -41,28 +41,69 @@ export const cookieSesion = (valor, segundos = HORAS_SESION * 3600) =>
   `${COOKIE}=${valor}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=${segundos}`;
 export const cookieBorrada = () => cookieSesion('', 0);
 
-/** El usuario de la sesión, o null. La caducidad se comprueba en SQL. */
+// Un color estable por nombre: la misma persona tiene siempre el mismo punto de color en la presencia.
+export function colorDeNombre(nombre) {
+  const paleta = ['#1E6FD9', '#B45309', '#15803D', '#7E3AF2', '#C81E1E', '#0F766E', '#BE185D', '#A16207'];
+  let suma = 0;
+  for (const c of String(nombre)) suma = (suma + c.codePointAt(0)) % 4096;
+  return paleta[suma % paleta.length];
+}
+export function nombrePorCorreo(email) {
+  const local = String(email ?? '').split('@')[0].replace(/[._+-]+/g, ' ').trim();
+  return local ? local.charAt(0).toUpperCase() + local.slice(1) : 'Persona';
+}
+/** Lo que la interfaz y los módulos ven de una persona (sin la sal ni el hash). `foto` es la versión (para ?v=) o null. */
+export function comoUsuario(f) {
+  const nombre = (f.nombre || '').trim() || nombrePorCorreo(f.email);
+  return { id: f.id, email: f.email, rol: f.rol, nombre, color: f.color || colorDeNombre(nombre), foto: f.foto_at && f.foto_clave ? f.foto_at : null };
+}
+const COLUMNAS_USUARIO = 'u.id, u.email, u.rol, p.nombre, p.color, p.foto_clave, p.foto_at';
+
+/** El usuario de la sesión, o null. La caducidad se comprueba en SQL; quien fue quitado del equipo (baja) no pasa aunque conserve una cookie. */
 export async function usuarioDeLaPeticion(db, req) {
   const bruto = leerCookie(req);
   if (!bruto) return null;
-  return (await db.prepare(
-    `select u.id, u.email, u.rol from sessions s join users u on u.id = s.user_id
-      where s.token_hash = ? and s.expires_at > ?`).bind(await sha256(bruto), ahora()).first()) ?? null;
+  const f = await db.prepare(
+    `select ${COLUMNAS_USUARIO} from sessions s join users u on u.id = s.user_id left join perfiles p on p.user_id = u.id
+      where s.token_hash = ? and s.expires_at > ? and p.baja_at is null`).bind(await sha256(bruto), ahora()).first();
+  return f ? comoUsuario(f) : null;
 }
 
 /** Devuelve { testigo, usuario } o null. Deriva igual aunque el usuario no exista (mismo tiempo de respuesta). */
 export async function iniciarSesion(db, email, contrasena, userAgent = '') {
-  const u = await db.prepare('select id, email, rol, password_hash, salt from users where email = ?')
+  const u = await db.prepare(`select ${COLUMNAS_USUARIO}, u.password_hash, u.salt from users u left join perfiles p on p.user_id = u.id where u.email = ? and p.baja_at is null`)
     .bind(String(email ?? '').trim().toLowerCase()).first();
   const calculado = await derivar(String(contrasena ?? ''), u?.salt ?? '00000000000000000000000000000000');
   if (!u || calculado !== u.password_hash) return null;
   const t = testigo();
   await db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, user_agent) values (?,?,?,?,?)')
     .bind(await sha256(t), u.id, ahora(), enHoras(HORAS_SESION), String(userAgent).slice(0, 200)).run();
-  return { testigo: t, usuario: { id: u.id, email: u.email, rol: u.rol } };
+  return { testigo: t, usuario: comoUsuario(u) };
 }
 
 export async function cerrarSesion(db, req) {
   const bruto = leerCookie(req);
   if (bruto) await db.prepare('delete from sessions where token_hash = ?').bind(await sha256(bruto)).run();
+}
+
+/** Abre una sesión para alguien que acaba de crearse (al aceptar una invitación). */
+export async function abrirSesion(db, userId, userAgent = '') {
+  const t = testigo();
+  await db.prepare('insert into sessions (token_hash, user_id, created_at, expires_at, user_agent) values (?,?,?,?,?)')
+    .bind(await sha256(t), userId, ahora(), enHoras(HORAS_SESION), String(userAgent).slice(0, 200)).run();
+  return t;
+}
+
+/** Cambia la contraseña: pide la actual y cierra todas las demás sesiones de esa persona (la que cambia sigue dentro). → null si todo bien, o { estado, error }. */
+export async function cambiarContrasena(db, req, usuario, actual, nueva) {
+  if (String(nueva ?? '').length < 12) return { estado: 422, error: 'La contraseña nueva debe tener 12 caracteres como mínimo.' };
+  if (String(nueva).length > 200) return { estado: 422, error: 'La contraseña es demasiado larga.' };
+  const u = await db.prepare('select salt, password_hash from users where id = ?').bind(usuario.id).first();
+  const calculado = await derivar(String(actual ?? ''), u?.salt ?? '00000000000000000000000000000000');
+  if (!u || calculado !== u.password_hash) return { estado: 403, error: 'La contraseña actual no es correcta.' };
+  const { salt, password_hash } = await hashearContrasena(String(nueva));
+  const propia = await sha256(leerCookie(req) ?? '');
+  await db.prepare('update users set salt = ?, password_hash = ? where id = ?').bind(salt, password_hash, usuario.id).run();
+  await db.prepare('delete from sessions where user_id = ? and token_hash != ?').bind(usuario.id, propia).run();
+  return null;
 }

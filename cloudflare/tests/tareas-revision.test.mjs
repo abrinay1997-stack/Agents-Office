@@ -122,7 +122,7 @@ test('MEDIO-1: la zona se instala desde la entrada (fetch y cron); Date() sigue 
   assert.equal(Date.parse('2026-10-26T09:00:00Z'), DateReal.UTC(2026, 9, 26, 9)); assert.equal(Date.parse('2026-10-26'), DateReal.UTC(2026, 9, 26)); assert.ok(Number.isNaN(Date.parse('no es fecha')));
   // el cron también la instala (el índice solo exporta el handler)
   quitarZona(); const { default: worker } = await import('../worker/index.js');
-  assert.deepEqual(Object.keys(await import('../worker/index.js')), ['default']);
+  assert.deepEqual(Object.keys(await import('../worker/index.js')).sort(), ['Hub', 'default']); // fase 10: además del handler, SOLO la clase del Durable Object (workerd la exige en el módulo main)
   await worker.scheduled({}, env); assert.notEqual(globalThis.Date, DateReal);
   // la API explícita (sin parche global) y el parche acotado
   assert.equal(instanteDeTexto('America/Panama', '2026-10-26 09:00'), DateReal.UTC(2026, 9, 26, 14)); assert.equal(instanteDeTexto('America/Panama', '2026-10-26'), null);

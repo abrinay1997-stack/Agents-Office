@@ -1,0 +1,52 @@
+/* La pantalla de acceso y la de invitación, con los mismos colores y letras que la oficina (src/shell.html): crema, tinta, serif de marca, azul de foco.
+   Sin estilos en línea: la CSP de estas páginas no admite 'unsafe-inline'. */
+:root {
+  color-scheme: light;
+  --cream: #FDFFF8; --ink: #151414; --grey: #5A5A5A; --focus: #2B6BEB; --hairline: rgba(21,20,20,.18);
+  --field: #FFFFFF; --bad: #B3261E; --ok: #1B6E3A;
+  --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --ui: Inter, -apple-system, "Helvetica Neue", "Segoe UI", sans-serif;
+  --fondo: radial-gradient(120% 90% at 50% 30%, #FDFFF8 55%, #F2F3EA 100%);
+}
+:root[data-tema="dark"] {
+  color-scheme: dark;
+  --cream: #15161A; --ink: #ECEAE3; --grey: #A3A098; --focus: #8FB0FF; --hairline: rgba(236,234,227,.22);
+  --field: #1E1F24; --bad: #FF9A8F; --ok: #7FD39B;
+  --fondo: radial-gradient(120% 90% at 50% 30%, #1B1C20 45%, #0F1013 100%);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { min-height: 100%; }
+body { background: var(--fondo) fixed; color: var(--ink); font: 16px/1.5 var(--ui); display: grid; place-items: center; min-height: 100vh; min-height: 100dvh; padding: 24px 16px; -webkit-font-smoothing: antialiased; }
+main { width: min(100%, 400px); }
+.marca { font-family: var(--serif); font-size: 21px; letter-spacing: .04em; white-space: nowrap; margin-bottom: 28px; }
+.marca .co { font-size: 15px; letter-spacing: .02em; color: var(--grey); margin-left: 12px; }
+.marca .co::before { content: '·'; margin-right: 12px; }
+h1 { font-family: var(--serif); font-weight: 400; font-size: 34px; line-height: 1.1; margin-bottom: 6px; }
+.sub { color: var(--grey); font-size: 15px; margin-bottom: 22px; }
+.campo { margin-bottom: 14px; }
+label, .lbl { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
+input { font: inherit; color: var(--ink); background: var(--field); border: 1px solid var(--hairline); border-radius: 10px; padding: 0 12px; min-height: 46px; width: 100%; }
+input[readonly] { color: var(--grey); background: transparent; }
+input::placeholder { color: var(--grey); opacity: 1; }
+.con-ojo { position: relative; }
+.con-ojo input { padding-right: 52px; }
+.ojo { position: absolute; right: 4px; top: 3px; width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: transparent; color: var(--grey); border-radius: 8px; cursor: pointer; }
+.ojo:hover { color: var(--ink); }
+.ojo svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ojo .tachado { display: none; } .ojo[aria-pressed="true"] .tachado { display: inline; }
+button.principal { font: inherit; font-weight: 600; width: 100%; min-height: 48px; margin-top: 8px; border-radius: 10px; border: 1px solid var(--ink); background: var(--ink); color: var(--cream); cursor: pointer; }
+button.principal:hover { opacity: .9; }
+button.principal[disabled] { cursor: progress; opacity: .7; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+input:focus-visible { outline-offset: 1px; border-color: var(--focus); }
+.aviso { min-height: 1.5em; margin-top: 12px; font-size: 14px; color: var(--bad); }
+.aviso:empty { margin-top: 0; }
+.nota { margin-top: 22px; font-size: 13px; color: var(--grey); }
+.reglas { list-style: none; font-size: 13px; color: var(--grey); margin: -4px 0 14px; }
+.reglas li::before { content: '○'; display: inline-block; width: 18px; }
+.reglas li.ok { color: var(--ok); } .reglas li.ok::before { content: '✓'; }
+.ficha { border: 1px solid var(--hairline); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; font-size: 14px; }
+.ficha b { font-weight: 600; }
+.oculto { display: none !important; }
+@media (max-width: 440px) { h1 { font-size: 30px; } .marca { margin-bottom: 22px; } }
+@media (forced-colors: active) { button.principal, input { border: 1px solid CanvasText; } }
