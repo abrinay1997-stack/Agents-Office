@@ -1,8 +1,8 @@
 // La conversación de Dimitri en D1 (en la oficina local es data/subgerente.json). Cada mensaje es UNA fila de `filas('subgerente')`: un plan, unas tarjetas de ops o unos
 // creativos pueden pesar decenas de KB y D1 corta la fila a 2 MB; con una fila por mensaje cambiar uno (marcar una pieza como enviada) no reescribe ni pisa los demás.
-// «Nueva conversación» NO borra: mueve las filas a `subgerente-arch:<id>` (se guardan las últimas 10) y DESHACER las devuelve.
+// «Nueva conversación» NO borra: mueve las filas a `subgerente-arch:<id>` (se guardan las últimas 50) y DESHACER las devuelve.
 import { leerDoc, mutarDoc } from '../almacen.js';
-import { MAX } from '../../../../sub-core.mjs';
+import { MAX, ARCHIVO_MAX, tituloConversacion } from '../../../../sub-core.mjs';
 
 export const COL = 'subgerente';
 export const DOC_ARCHIVO = 'subgerente.archivo';
@@ -40,14 +40,14 @@ export async function recortar(db) {
   if (sobran > 0) await db.prepare('delete from filas where coleccion = ? and id in (select id from filas where coleccion = ? order by orden asc limit ?)').bind(COL, COL, sobran).run();
 }
 
-/** «Nueva conversación»: archiva (las últimas 10) y deja el chat vacío. → el id del archivo, o null si no había nada. */
+/** «Nueva conversación»: archiva (las últimas 50) y deja el chat vacío. → el id del archivo, o null si no había nada. */
 export async function archivar(db) {
   const f = await db.prepare('select count(*) n from filas where coleccion = ?').bind(COL).first();
   if (!f?.n) return null;
-  const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
+  const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), titulo = tituloConversacion((await cargar(db)).messages);
   await db.prepare('update filas set coleccion = ? where coleccion = ?').bind('subgerente-arch:' + id, COL).run();
   let fuera = [];
-  await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => { const l = [...(d.lista || []), { id, at: Date.now(), n: f.n }]; fuera = l.slice(0, Math.max(0, l.length - 10)); return { lista: l.slice(-10) }; });
+  await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => { const l = [...(d.lista || []), { id, at: Date.now(), n: f.n, titulo }]; fuera = l.slice(0, Math.max(0, l.length - ARCHIVO_MAX)); return { lista: l.slice(-ARCHIVO_MAX) }; });
   for (const x of fuera) await db.prepare('delete from filas where coleccion = ?').bind('subgerente-arch:' + x.id).run();
   return id;
 }
@@ -73,4 +73,36 @@ export async function reclamar(db, id, cambiar) {
   if (cambiar(m) === false) return null;
   const r = await db.prepare('update filas set json = ?, actualizado = ? where coleccion = ? and id = ? and json = ?').bind(JSON.stringify(m), iso(Date.now()), COL, String(id), f.json).run();
   return r.meta?.changes ? m : null;
+}
+
+const ID = /^c[a-z0-9]{3,24}$/;
+const mensajesDe = async (db, id) => { const { results } = await db.prepare('select json from filas where coleccion = ? order by orden asc').bind('subgerente-arch:' + id).all(); const out = []; for (const r of results) { try { out.push(JSON.parse(r.json)); } catch { /* un mensaje roto no tumba el historial */ } } return out; };
+/** El historial: la conversación de ahora y las archivadas (la más nueva primero), solo con lo que hace falta para elegir. */
+export async function listar(db) {
+  const { messages } = await cargar(db), lista = (await leerDoc(db, DOC_ARCHIVO, { lista: [] })).valor.lista || [];
+  return { actual: messages.length ? { n: messages.length, titulo: tituloConversacion(messages), at: messages[messages.length - 1].at || 0 } : null, lista: lista.map((x) => ({ id: x.id, at: x.at, n: x.n, titulo: x.titulo || 'Sin título' })).reverse() };
+}
+/** Una archivada para leerla (sin abrirla). */
+export async function ver(db, id) {
+  if (!ID.test(String(id || ''))) return null;
+  const x = ((await leerDoc(db, DOC_ARCHIVO, { lista: [] })).valor.lista || []).find((y) => y.id === id);
+  return x ? { id, at: x.at, titulo: x.titulo || 'Sin título', messages: await mensajesDe(db, id) } : null;
+}
+/** Abre una archivada como la conversación de ahora; la de ahora (si había algo) pasa al archivo. → { messages, archived } o null. */
+export async function abrir(db, id) {
+  if (!ID.test(String(id || ''))) return null;
+  const lista = (await leerDoc(db, DOC_ARCHIVO, { lista: [] })).valor.lista || [];
+  if (!lista.some((x) => x.id === id)) return null;
+  await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => ({ lista: (d.lista || []).filter((x) => x.id !== id) })); // primero se saca del archivo: así archivar la de ahora no la recorta ni la pisa
+  const archived = await archivar(db);
+  await db.prepare('update filas set coleccion = ? where coleccion = ?').bind(COL, 'subgerente-arch:' + id).run();
+  return { ...(await cargar(db)), archived };
+}
+/** Borra una archivada para siempre. */
+export async function borrar(db, id) {
+  if (!ID.test(String(id || ''))) return false;
+  let estaba = false;
+  await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => { estaba = (d.lista || []).some((x) => x.id === id); return { lista: (d.lista || []).filter((x) => x.id !== id) }; });
+  if (estaba) await db.prepare('delete from filas where coleccion = ?').bind('subgerente-arch:' + id).run();
+  return estaba;
 }

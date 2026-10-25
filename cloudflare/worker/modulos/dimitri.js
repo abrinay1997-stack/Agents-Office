@@ -47,6 +47,8 @@ export async function manejar(ctx) {
   const deps = { env, db, usuario, modulos: MODULOS_DIMITRI };
 
   if (ruta === '/api/sub' && metodo === 'GET') return json({ ...(await chat.cargar(db)), name: nameOf(await leerCfg(db)) });
+  if (ruta === '/api/sub/conversaciones' && metodo === 'GET') return json(await chat.listar(db));
+  { const mc = ruta.match(/^\/api\/sub\/conversaciones\/([a-z0-9]{3,24})$/); if (mc && metodo === 'GET') { const c = await chat.ver(db, mc[1]); return c ? json(c) : error('esa conversación ya no está', 404); } }
   if (metodo !== 'POST') return null;
   const b = await leerCuerpo(req, ruta === '/api/sub/chat' ? MAX_CUERPO : 1 << 20);
   if (b.grande) return error(ruta === '/api/sub/chat' ? 'las imágenes pesan demasiado (máx. 8 MB en total)' : 'el cuerpo es demasiado grande', 413);
@@ -85,6 +87,8 @@ export async function manejar(ctx) {
   }
   if (ruta === '/api/sub/ops/undo') { const r = await deshacerOp({ ...deps, msgId: String(b.msg || ''), k: +b.k }); return json(r, r.error ? 409 : 200); }
   if (ruta === '/api/sub/restore') return (await chat.restaurar(db, String(b.id || ''))) ? json(await chat.cargar(db)) : error('esa conversación ya no se puede recuperar', 404);
+  if (ruta === '/api/sub/abrir') { const r = await chat.abrir(db, String(b.id || '')); return r ? json(r) : error('esa conversación ya no está', 404); }
+  if (ruta === '/api/sub/borrar') return (await chat.borrar(db, String(b.id || ''))) ? json({ ok: true }) : error('esa conversación ya no está', 404);
   if (ruta === '/api/sub/clear') return json({ ok: true, archived: await chat.archivar(db) }); // se archiva, no se borra
   if (ruta === '/api/sub/send') {
     const C = await leerContexto(db);

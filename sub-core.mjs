@@ -33,6 +33,9 @@ import { MAPA } from './oficina/mapa.mjs';
 import { textoCuenta as anunciosCuenta, textoCampanas as anunciosCampanas, OBJETIVOS_BORRADOR, DESTINOS_BORRADOR } from './anuncios/modelo.mjs'; // Fase A1 de Anuncios (A3: el borrador)
 
 export const MAX = 120; // mensajes que se guardan
+export const ARCHIVO_MAX = 50; // conversaciones archivadas que se conservan (el dueño las ve, las abre y las borra desde el historial)
+/** El título de una conversación: lo primero que pidió el dueño (≤ 70 caracteres), o «Sin título». */
+export function tituloConversacion(messages) { const u = (messages || []).find((m) => m && m.who === 'user' && String(m.text || '').trim()); const t = u ? String(u.text).replace(/\s+/g, ' ').trim() : ''; return t ? (t.length > 70 ? t.slice(0, 69) + '…' : t) : 'Sin título'; }
 export const MODES = ['charla', 'estado', 'analisis', 'plan', 'pregunta', 'estudio'];
 export const OPS = ['rutina_crear', 'rutina_saltar', 'pieza_crear', 'pieza_mover', 'tarea_mover', 'tarea_cancelar',
   // 9 oct 2026 (revisión de control): las rutinas enteras, la prioridad y la fecha límite, lo del dueño, otra vez lo que falló, llenar la semana

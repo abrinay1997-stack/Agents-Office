@@ -3095,6 +3095,10 @@ const server = http.createServer(async (req, res) => {
       const r = await subSend(String(msg || ''), items);
       return json(res, r.error ? 404 : 200, r);
     }
+    if (url.pathname === '/api/sub/conversaciones' && req.method === 'GET') return json(res, 200, sub.listar(DATA)); // historial: las conversaciones de Dimitri
+    { const mc = url.pathname.match(/^\/api\/sub\/conversaciones\/([a-z0-9]{3,24})$/); if (mc && req.method === 'GET') { const c = sub.ver(DATA, mc[1]); return c ? json(res, 200, c) : json(res, 404, { error: 'esa conversación ya no está' }); } }
+    if (url.pathname === '/api/sub/abrir' && req.method === 'POST') { const { id } = await body(req); const r = sub.abrir(DATA, String(id || '')); return r ? json(res, 200, r) : json(res, 404, { error: 'esa conversación ya no está' }); }
+    if (url.pathname === '/api/sub/borrar' && req.method === 'POST') { const { id } = await body(req); return sub.borrar(DATA, String(id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'esa conversación ya no está' }); }
     if (url.pathname === '/api/sub/clear' && req.method === 'POST') { const id = sub.archive(DATA); return json(res, 200, { ok: true, archived: id }); } // V4.11: archived (data/subgerente-archivo.json), not deleted
     if (url.pathname === '/api/chat' && req.method === 'POST') {
       const { agent, text, history } = await body(req);

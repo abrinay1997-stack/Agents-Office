@@ -39,8 +39,8 @@ export function initSub(ctx) {
   const el = document.createElement('div'); el.id = 'subOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-labelledby', 'sbName'); el.hidden = true; // a <div>: role=dialog is not allowed on <aside>
   el.setAttribute('data-shell', ''); // V4.8: beside a view it is part of the page, like the top bar — modal.js leaves it out of the inert set
   el.innerHTML = `<div class="sb-head"><span class="sb-av" aria-hidden="true">D</span><div class="sb-hd"><div class="sb-name" id="sbName">DIMITRI</div><div class="sb-sub">Tu mano derecha. Pregúntame, pensemos juntos una decisión, dime qué hay que hacer y lo reparto entre los jefes, o pídeme creativos para el Estudio. Nada sale sin tu OK.</div></div>
-      <span class="sp"></span><button type="button" class="sb-clear" title="Empezar una conversación nueva (las tareas enviadas siguen en la oficina)" aria-label="Nueva conversación">＋</button><button type="button" class="sb-x" aria-label="Cerrar" title="Cerrar (Esc o S)">✕</button></div>
-    <div class="sb-msgs" role="log" aria-live="off"></div><div class="sb-live vh" role="status" aria-live="polite"></div>
+      <span class="sp"></span><button type="button" class="sb-histb" title="Historial: tus conversaciones con él (abrir o borrar)" aria-label="Historial de conversaciones" aria-expanded="false">🕘</button><button type="button" class="sb-clear" title="Empezar una conversación nueva (las tareas enviadas siguen en la oficina)" aria-label="Nueva conversación">＋</button><button type="button" class="sb-x" aria-label="Cerrar" title="Cerrar (Esc o S)">✕</button></div>
+    <div class="sb-hist" hidden role="region" aria-label="Historial de conversaciones"></div><div class="sb-msgs" role="log" aria-live="off"></div><div class="sb-live vh" role="status" aria-live="polite"></div>
     <div class="sb-chips"></div>
     <div class="sb-ctx" hidden></div>
     <div class="sb-atts" hidden role="list" aria-label="Imágenes adjuntas"></div>
@@ -461,6 +461,37 @@ export function initSub(ctx) {
     } catch (err) { messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No pude empezar una nueva: ${err.message}` }); render(true); }
     btn.disabled = false;
   }
+
+  /* ---------- Historial: las conversaciones guardadas — verlas, abrir una o borrarla ---------- */
+  const hist = $('.sb-hist'), histBtn = $('.sb-histb');
+  const fechaH = at => { try { return new Date(at).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+  function histClose() { hist.hidden = true; box.hidden = false; histBtn.setAttribute('aria-expanded', 'false'); }
+  async function histOpen() {
+    if (!isLive()) return say('El historial necesita la oficina real.');
+    hist.hidden = false; box.hidden = true; histBtn.setAttribute('aria-expanded', 'true'); hist.innerHTML = '<div class="sb-empty">Cargando…</div>';
+    try {
+      const j = await (await fetch('/api/sub/conversaciones')).json(), lista = j.lista || [];
+      hist.innerHTML = `<div class="sbh-top"><b>Conversaciones</b><button type="button" class="sbh-back">Volver al chat</button></div>`
+        + (j.actual ? `<div class="sbh-row sbh-now"><div class="sbh-t"><span class="sbh-name">${esc(j.actual.titulo)}</span><span class="sbh-meta">Esta conversación · ${j.actual.n} mensajes</span></div></div>` : '')
+        + (lista.length ? lista.map(c => `<div class="sbh-row" data-id="${esc(c.id)}"><div class="sbh-t"><span class="sbh-name">${esc(c.titulo)}</span><span class="sbh-meta">${esc(fechaH(c.at))} · ${c.n} mensajes</span></div><button type="button" class="sbh-open">Abrir</button><button type="button" class="sbh-del" aria-label="Borrar «${esc(c.titulo)}»">Borrar</button></div>`).join('') : '<div class="sb-empty">Aún no hay conversaciones guardadas. Al pulsar ＋ la de ahora se guarda aquí.</div>');
+      const f = hist.querySelector('.sbh-open') || hist.querySelector('.sbh-back'); if (f) f.focus();
+    } catch (e) { hist.innerHTML = `<div class="sb-empty">No pude traer el historial: ${esc(e.message)}</div>`; }
+  }
+  let delT = 0;
+  hist.addEventListener('click', async e => {
+    if (e.target.closest('.sbh-back')) { histClose(); input.focus(); return; }
+    const row = e.target.closest('.sbh-row[data-id]'); if (!row) return;
+    const id = row.dataset.id;
+    if (e.target.closest('.sbh-open')) {
+      if (busy) return say('Espera a que termine de contestar.');
+      try { const j = await postJSON('/api/sub/abrir', { id }); messages = j.messages || []; drafts.clear(); studioEdits.clear(); actionEdits.clear(); opEdits.clear(); qPicks.clear(); histClose(); render(true); refreshContext(); say('Conversación abierta. La anterior quedó guardada en el historial.'); }
+      catch (err) { hist.insertAdjacentHTML('afterbegin', `<div class="sb-empty" role="alert">No se pudo abrir: ${esc(err.message)}</div>`); }
+      return;
+    }
+    const del = e.target.closest('.sbh-del'); if (!del) return;
+    if (!del.dataset.sure) { del.dataset.sure = '1'; del.textContent = '¿Seguro? Borrar'; del.classList.add('sure'); clearTimeout(delT); delT = setTimeout(() => { del.dataset.sure = ''; del.textContent = 'Borrar'; del.classList.remove('sure'); }, 4000); return; }
+    try { await postJSON('/api/sub/borrar', { id }); row.remove(); say('Conversación borrada.'); } catch (err) { del.textContent = 'No se pudo'; }
+  });
   let undoT = 0;
   function undoBar(id) { // DIM-18: no confirm(): the conversation is archived and comes back with DESHACER for 8 s
     const old = el.querySelector('.sb-undo'); if (old) old.remove(); clearTimeout(undoT);
@@ -475,6 +506,7 @@ export function initSub(ctx) {
     if (e.target.closest('.sb-x')) return close();
     if (e.target.closest('.sb-stop')) { stop(); return; } // DIM-14
     if (e.target.closest('.sb-analyze')) return send(`Analiza este estado de la oficina: qué te preocupa, qué haría yo hoy y qué puede esperar.`, { full: true }); // DIM-10: his reading, only when asked
+    if (e.target.closest('.sb-histb')) { if (hist.hidden) histOpen(); else histClose(); return; }
     const clr = e.target.closest('.sb-clear'); if (clr) { if (messages.length) newConversation(clr); return; }
     const opt = e.target.closest('.sb-opt'); if (opt) return choose(opt);
     const qgo = e.target.closest('.sb-qgo'); if (qgo) return answer(qgo.dataset.msg);
@@ -571,7 +603,7 @@ export function initSub(ctx) {
       const nx = all[e.key === 'Home' ? 0 : e.key === 'End' ? all.length - 1 : (k + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length];
       if (g.getAttribute('role') === 'radiogroup' && !nx.dataset.other) { choose(nx, true); } else { all.forEach(b => b.setAttribute('tabindex', b === nx ? '0' : g.getAttribute('role') === 'radiogroup' ? '-1' : '0')); nx.focus(); }
     }
-    else if (e.key === 'Escape') { e.preventDefault(); if (busy && streaming && !stopping) stop(); else if (!stopping) close(); } // DIM-14: while he writes, Esc stops him (a second Esc, after, closes)
+    else if (e.key === 'Escape') { e.preventDefault(); if (!hist.hidden) { histClose(); input.focus(); } else if (busy && streaming && !stopping) stop(); else if (!stopping) close(); } // DIM-14: while he writes, Esc stops him (a second Esc, after, closes)
     else if ((e.key === 'Enter' || e.key === ' ') && e.target.closest('.sb-item[data-sid]')) { e.preventDefault(); e.target.click(); }
   });
   // images in: paste (Ctrl+V), drop files from the computer, or drop cards from the Estudio's gallery

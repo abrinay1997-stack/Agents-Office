@@ -208,3 +208,17 @@ body.dark .sb-mode.stopped { color: #FFB4AB; border-color: rgba(255,180,171,.5);
 #subOv .sb-org span { padding: 1px 8px; border-radius: 99px; background: rgba(21,20,20,.06); min-height: 22px; display: inline-flex; align-items: center; }
 #subOv .sb-org .sb-alta { color: #B42318; background: rgba(180,35,24,.1); font-weight: 600; }
 body.dark #subOv .sb-proy { background: rgba(143,176,255,.12); } body.dark #subOv .sb-org span { background: rgba(236,234,227,.08); } body.dark #subOv .sb-org .sb-alta { color: #FF8A80; background: rgba(255,138,128,.12); }
+
+/* historial de conversaciones */
+.sb-hist { flex: 1; min-height: 0; overflow: auto; padding: 8px 18px 14px; }
+.sb-hist[hidden] { display: none; }
+.sbh-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 10px; }
+.sbh-back, .sbh-open, .sbh-del { font: 700 11.5px var(--ui); letter-spacing: .06em; text-transform: uppercase; min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+.sbh-del.sure { border-color: var(--focus); color: var(--ink); font-weight: 800; }
+.sbh-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
+.sbh-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sbh-name { font-size: 13.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbh-meta { font-size: 12px; color: var(--grey); }
+.sbh-now .sbh-name { font-weight: 700; }
+.sb-histb { min-width: 32px; min-height: 32px; }
+.sb-msgs[hidden] { display: none; }
