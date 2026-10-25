@@ -19,6 +19,9 @@ import { archivarViejas, DIAS_HECHAS_VIVAS, LOTE_ARCHIVO, cadaMinuto as relojTar
 import { crearTarea } from '../../tareas/modelo.mjs';
 import { instalarZona } from '../worker/lib/zona.js';
 import { crearR2 } from './r2-memoria.mjs';
+import * as AY from './agentes-ayudas.mjs';
+import { herramientasInternas } from '../worker/lib/agentes/herramientas.js';
+import { urlPermitida } from '../worker/lib/conectores.js';
 import { crearAlmacenD1 } from '../worker/lib/contenido/piezas.js';
 import { limpiarSecretos, registrarSecretos } from '../worker/lib/secretos.js';
 import { igualSeguro } from '../worker/lib/ids.js';
@@ -438,4 +441,40 @@ test('RELOJ: la vuelta de los agentes (espera al modelo) va la última; el orden
   assert.equal(nombres.at(-1), 'agentes'); assert.ok(nombres.indexOf('tareas') < nombres.indexOf('agentes'), 'tareas crea lo que agentes toma en la misma vuelta');
   for (const rapido of ['telegram', 'disparadores', 'contenido', 'anuncios']) assert.ok(nombres.indexOf(rapido) < nombres.indexOf('agentes'), rapido);
   const rutas = MODULOS.map((m) => m.nombre); assert.ok(rutas.indexOf('bandeja') < rutas.indexOf('contenido'), 'la Bandeja contesta antes que Contenido');
+});
+
+/* ---------- envíos: lo que las pruebas por fase no cubrían ---------- */
+const GRANDE = { AGENTES_MAX_CONSULTAS: '5000', AGENTES_MAX_LLAMADAS: '500' };
+const MCP = () => ({ search_threads: { salida: 'Hilo con Ana: pide el precio.' }, create_draft: { salida: 'borrador creado' }, send_email: { salida: 'enviado' } });
+test('ENVÍO: con la política «pedido» (el texto de la tarea lo pide), una ejecución SIN el OK de un administrador ni recibe la herramienta de envío ni envía', { skip: SALTAR }, async () => {
+  const { d1, env } = await AY.oficina({ env: GRANDE, ajustes: { safety: { writes: 'pedido' } } });
+  const t = await AY.tarea(env, { text: 'Envía el correo a ana@x.com diciéndole que el precio es 100.', needsOk: false });
+  const mcp = MCP();
+  const f = AY.crearFetch({ herramientasMcp: mcp, guion: [AY.usar(['mcp__gmail__send_email', { to: 'ana@x.com', body: 'Hola Ana, el precio es 100.' }]), AY.texto('No pude enviarlo.\nFuentes: —')] });
+  await AY.minutos(env, f.fetchFn);
+  assert.equal(f.registro.anthropic[0].cuerpo.tools.some((h) => h.name === 'mcp__gmail__send_email'), false, 'la herramienta de envío no se ofrece sin el OK');
+  assert.equal(mcp.send_email.llamadas, undefined, 'y aunque el modelo la nombre, no corre');
+  assert.equal((await AY.tareaEnDisco(d1, t.id)).state, 'done');
+});
+
+test('ENVÍO: las herramientas internas de un agente entran por la oficina como EDITOR (solo el Estudio de una ejecución aprobada, como administrador)', { skip: SALTAR }, async () => {
+  const vistos = [];
+  const modulos = [{ nombre: 'espia', grupos: [], manejar: async (ctx) => { vistos.push(`${ctx.usuario.rol} ${ctx.req.method} ${ctx.ruta}`); return new Response('{"tareas":[],"piezas":[],"models":[],"items":[]}', { status: 200, headers: { 'content-type': 'application/json' } }); } }];
+  const agente = { id: 'mlead', department: 'marketing' };
+  for (const gasto of [false, true]) {
+    vistos.length = 0;
+    const h = herramientasInternas({ env: {}, db: null, agente, tarea: 't1', modulos, gasto });
+    for (const nombre of ['mcp__tareas__ver_tareas', 'mcp__contenido__ver_calendario_contenido', 'mcp__estudio__estado_estudio']) { try { await h.llamar(nombre, {}); } catch { /* la respuesta falsa puede no cuadrar: interesa con qué rol se llamó */ } }
+    assert.ok(vistos.length >= 3, 'las tres entraron: ' + vistos.join(' | '));
+    for (const v of vistos) {
+      const esEstudio = /\/api\/media/.test(v);
+      assert.equal(v.startsWith('admin'), esEstudio && gasto, `${gasto ? 'ejecución aprobada' : 'sin OK'}: «${v}»`);
+    }
+  }
+});
+
+test('CONECTORES: una dirección IPv6 o de red privada no se acepta como conector', () => {
+  for (const u of ['https://[::1]/mcp', 'https://[fe80::1]/mcp', 'https://127.0.0.1/mcp', 'https://10.0.0.5/mcp', 'https://169.254.169.254/latest', 'https://localhost/mcp', 'http://ejemplo.com/mcp', 'https://usuario:clave@ejemplo.com/mcp', 'https://intranet/mcp'])
+    assert.ok(urlPermitida(u), u + ' debería rechazarse');
+  assert.equal(urlPermitida('https://mcp.ejemplo.com/mcp'), null);
 });
