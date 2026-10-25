@@ -27,7 +27,7 @@ export async function adjuntarTerminados(db, { max = 10 } = {}) {
     const hecho = await conSesion(db, {}, async s => {
       const t = s.alm.load().find(x => x.id === j.task);
       if (!t) return 'sin-tarea';
-      if (t.state === 'doing' || t.state === 'next') return 'espera'; // la ejecución sigue: lo pega ella al terminar (ejecutor.js)
+      if (t.state === 'doing' || t.state === 'next' || t.approving) return 'espera'; // la ejecución sigue: lo pega ella al terminar (ejecutor.js)
       s.alm.cambiar(t.id, x => { aplicarTrabajo(x, j, x.state === 'waiting' ? ['result', 'draft'] : ['result']); }, { por: 'oficina' });
       return 'pegado';
     });

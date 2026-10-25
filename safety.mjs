@@ -118,7 +118,7 @@ export function kindOfCall(name, input, safeTools = DEFAULTS.safeTools, toolKind
 }
 
 /* ---------- who a send reaches ---------- */
-const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/giu; // dominios internacionales incluidos (IDN)
 const PHONE = /\+?\d[\d\s().-]{7,}\d/g;
 const digits = s => String(s).replace(/\D/g, '');
 export function targetsOf(input) {
@@ -129,8 +129,8 @@ export function targetsOf(input) {
 }
 /** The addresses and numbers of a send that the approved text does not name. */
 export function unknownTargets(targets, knownText) {
-  const k = String(knownText || '').toLowerCase(), kd = digits(knownText || '');
-  return [...targets.emails.filter(e => !k.includes(e)), ...targets.phones.filter(p => !kd.includes(p) && !kd.includes(p.slice(-8)))]; // +507 6123-4567 and 61234567 are the same number
+  const kd = digits(knownText || ''), conocidas = new Set(targetsOf(String(knownText || '')).emails); // la dirección COMPLETA: «rez@gmail.com» no cabe en «juan.perez@gmail.com»
+  return [...targets.emails.filter(e => !conocidas.has(e)), ...targets.phones.filter(p => !kd.includes(p) && !kd.includes(p.slice(-8)))]; // +507 6123-4567 and 61234567 are the same number
 }
 
 /* ---------- amounts of money (V4.4, G9): a send over the owner's limit needs the OK ---------- */

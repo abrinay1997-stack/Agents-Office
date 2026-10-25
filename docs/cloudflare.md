@@ -177,6 +177,14 @@ Prueba: `cloudflare/tests/agentes-adversarial.test.mjs` (cada candado con su con
 - **B1** `revise` y el 👎 con motivo: solo administrador. **B2** el apunte de auditoría de una aprobación entra en el mismo lote de D1 que el cambio de la tarea (`sesion.extra`). **B6** los trabajos del Estudio de un agente llevan `by: 'agent'` y `agent`. **B8** con `stopAtBudget` y el tope cruzado no arranca nada nuevo (cola, aprobadas ni corridas con `paso = 0`).
 - **Pendiente / límites conocidos:** (1) el lote de D1 de `sesion.commit` es una transacción, pero el aviso de choque de versión de una tarea se detecta tras el lote en una carrera de milisegundos; el apunte de auditoría podría duplicarse en ese caso raro. (2) Un envío con adjuntos en base64 se bloquea (falla cerrado): hay que pasar los destinatarios en campos normales. (3) La guarda 409 se aplica en las rutas HTTP; otros caminos (fase 6, Dimitri/Telegram) deben pasar por esas rutas o por `decidirBorrador`, y en cualquier caso la huella descarta un OK viciado. (4) La verificación de candado antes de una herramienta es redundante con el guardado previo de A2 (ambos fallan si se detuvo); se dejan los dos.
 
+### Segunda revisión de la fase 4 (arreglos)
+
+- **M1 robusto:** al crear una tarea un administrador guarda `textoAdmin` = sha256 de su texto (marca interna, nunca sale en una respuesta). El ejecutor usa el texto para ampliar destinatarios solo si su hash sigue coincidiendo; editar el texto sin ser administrador borra la marca.
+- **Candado:** `avanzar` relee la corrida con el candado ya tomado y usa ESA fila (antes usaba datos viejos y podía rehacer y reenviar). Si el apunte previo de un envío falla por D1, se deshace `hechos`/`envios` y se relanza: la herramienta no corre y no se cierra «SE ENVIÓ».
+- `adjuntarTerminados` no toca una tarea con `approving`. `targetsOf` lee dominios internacionales y `unknownTargets` compara la dirección COMPLETA (safety.mjs, compartido con la local: solo se endurece). Campos codificados: se detectan bajo cualquier clave, multilínea (MIME) y hasta profundidad 10, y se decodifican los cortos para buscar destinatarios.
+- «SE ENVIÓ» cuenta solo envíos (write), no un gasto del Estudio; un envío incierto consta en todos los cierres (fallo, persona, bloqueo). `POST /api/tasks/<id>/approve` acepta `huella` (sha256 del borrador visto): si cambió, 409. Con el tope del mes cruzado, lo aprobado o devuelto vuelve a «espera tu visto bueno» con aviso.
+- **Esperado al desplegar:** los OK en vuelo que se dieron antes de esta versión no llevan huella y se anulan una vez (la tarea vuelve a pedir el visto bueno). La página local no manda `huella` todavía (comportamiento igual al de antes). Pendiente: que la página la mande.
+
 ## Siguiente
 
 Dimitri, Negocio, Ajustes y Telegram (fase 6); Anuncios y la Bandeja (fase 7); y limitar el intento de acceso por IP.

@@ -27,13 +27,14 @@ export async function registrar(db, s, id, accion, por, extra = {}) {
 export const huellaDe = t => sha256(String(t?.draft || t?.result || ''));
 
 /** Aprobar o devolver un borrador. verbo: 'approve' | 'reject'. → { status?, ok?, error?, id, state, sendAt?, undoSeconds? } (la misma respuesta que la local) */
-export async function decidirBorrador({ s, db, id, verbo, nota = '', por = 'Tú', apr, ahora = () => Date.now() }) {
+export async function decidirBorrador({ s, db, id, verbo, nota = '', por = 'Tú', apr, huella: vista = null, ahora = () => Date.now() }) {
   const t0 = s.alm.load().find(x => x.id === id);
   if (!t0) return { status: 404, error: 'esa tarea ya no existe' };
   if (t0.state !== 'waiting') return { status: 400, error: 'esta tarea no está esperando tu visto bueno' };
   if (t0.approving) return { status: 409, error: 'ya está aprobada: se envía en unos segundos (puedes deshacerlo)' };
   const wait = verbo === 'reject' ? 0 : apr.undoSeconds;
   const huella = await huellaDe(t0);
+  if (vista && vista !== huella) return { status: 409, error: 'el borrador cambió desde que lo viste: vuelve a abrirlo antes de aprobarlo' }; // la página puede mandar la huella de lo que vio
   let res = null;
   s.alm.cambiar(id, t => {
     if (t.state !== 'waiting' || t.approving) { res = { status: 409, error: 'otra persona decidió esto al mismo tiempo' }; return false; }

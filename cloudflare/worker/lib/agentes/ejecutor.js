@@ -25,6 +25,7 @@ import { armarEjecucion, leerMemoria, guardarMemoria } from './contexto.js';
 import { anotar as anotarCosto, estadoDelMes } from './costos.js';
 import { draftFacts, huellaDe, registrar as registrarAprobacion } from './aprobaciones.js';
 import { registrarLeccion } from './lecciones.js';
+import { sha256 } from '../ids.js';
 
 export const TTL_CANDADO = 5 * 60_000;       // un paso que muere a medias libera su candado a los 5 minutos
 export const VUELTAS_POR_PASO = 8;           // vueltas del modelo en una invocación
@@ -157,7 +158,10 @@ export async function avanzar(deps, tareaId) {
   if (!fila) return { tarea: tareaId, estado: 'sin-corrida' };
   const token = await tomarCandado(db, tareaId, t0);
   if (!token) return { tarea: tareaId, estado: 'ocupada' };
-  let task = null, datos = JSON.parse(fila.datos || '{}');
+  const viva = await db.prepare('select * from corridas where tarea = ? and candado = ?').bind(tareaId, token).first(); // releer YA con el candado: la lectura de antes pudo quedar vieja (otro paso terminó en medio)
+  if (!viva) return { tarea: tareaId, estado: 'perdida' };
+  Object.assign(fila, viva);
+  let task = null, datos = JSON.parse(viva.datos || '{}');
   try {
     const lista = await cargarTareas(db);
     task = lista.find(t => t.id === tareaId) || null;
@@ -188,6 +192,7 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
       const h = await huellaDe(task);
       if (!datos.huella || datos.huella !== h || task.approving) return anularAprobacion(deps, { task, datos, fila });
       datos.aprobado = String(task.draft || task.result || '');
+      datos.textoDeAdmin = task.textoAdmin && task.textoAdmin === await sha256(String(task.text || '')) ? String(task.text) : ''; // el texto amplía los destinatarios solo si sigue siendo EXACTAMENTE el que escribió un administrador
     }
     const modelo = elegirModelo({ task, agent: agente, env, cfgModelo: aj.model });
     const deptsContenido = Array.isArray(aj.contenido?.departments) && aj.contenido.departments.length ? aj.contenido.departments : undefined;
@@ -207,7 +212,7 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
   const { results: conectores } = await db.prepare('select * from conectores where activo = 1').all();
   const conectoresPorNombre = new Map(conectores.map(c => [c.nombre, c])), clientes = new Map();
   const servers = [...new Set(datos.herramientas.map(d => d.servidor))];
-  const guardian = crearGuardian({ db, estado: datos, ahora: reloj, ctx: { run: fila.run, tarea: task.id, agente: agente.id, dept: agente.department, writes: !!ctxEj.writes, runMode: modo, policy: pol, known: modo === 'approve' ? `${task.creadaPorAdmin ? (task.text || '') : ''}\n${datos.aprobado ?? ''}` : null, safety: aj.safety || {}, amountLimit: apr.amountLimit, servers } });
+  const guardian = crearGuardian({ db, estado: datos, ahora: reloj, ctx: { run: fila.run, tarea: task.id, agente: agente.id, dept: agente.department, writes: !!ctxEj.writes, runMode: modo, policy: pol, known: modo === 'approve' ? `${datos.textoDeAdmin ?? ''}\n${datos.aprobado ?? ''}` : null, safety: aj.safety || {}, amountLimit: apr.amountLimit, servers } });
   const usados = new Set(), porAlias = new Map();
   const herramientasApi = datos.herramientas.map(d => { const alias = aliasDeHerramienta(d.nombre, usados); porAlias.set(alias, d); return { alias, descripcion: d.descripcion, esquema: d.esquema }; });
   const modelo = datos.modelo;
@@ -232,11 +237,13 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
         let costosa = false;
         const antes = async kind => {
           await verificarCandado(db, task.id, token); // A1: si detuvieron la tarea mientras el turno corría, ninguna herramienta que envía o gasta arranca
-          if (kind === 'write' || kind === 'cost') { // A2: se apunta ANTES de ejecutar (y se renueva el candado): si el paso muere en medio, al retomar se sabe que esta llamada pudo salir
+          if (kind === 'write' || (kind === 'cost' && ctxEj.gasto)) { // A2: se apunta ANTES de ejecutar (y se renueva el candado): si el paso muere en medio, al retomar se sabe que esta llamada pudo salir
             costosa = true;
+            const antesEnv = [...(datos.envios || [])];
             datos.turno.hechos[uso.id] = { pendiente: true, tool: def.nombre };
-            if (!(datos.envios ||= []).includes(def.nombre)) datos.envios.push(def.nombre);
-            await guardarAvance(db, task.id, token, datos, reloj());
+            if (kind === 'write' && !(datos.envios ||= []).includes(def.nombre)) datos.envios.push(def.nombre); // «SE ENVIÓ» solo cuenta envíos de verdad, no un gasto en el Estudio
+            try { await guardarAvance(db, task.id, token, datos, reloj()); }
+            catch (e) { delete datos.turno.hechos[uso.id]; datos.envios = antesEnv; throw e; } // si no se pudo apuntar, la herramienta NO corre y no se dice que salió
           }
         };
         const r = def ? await ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre, antes }) : { texto: `La herramienta «${uso.name}» no existe en esta ejecución.`, esError: true };
@@ -305,23 +312,25 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
     const m = clonar(mio);
     const costo = () => { m.cost = Math.round(((m.cost || 0) + (out.usd || 0)) * 1e6) / 1e6; };
     const comunes = () => Object.assign(m, { read: out.read, tools: out.tools, used: out.used, modelUsed: out.modelUsed });
-    if (!aprobar && enDisco?.pidioBloqueo?.at >= m.startedAt && bloqueosPendientes(s.alm.load(), enDisco).length) { // T3: el agente pidió un bloqueo: se para con lo que lleva y sigue sola
-      Object.assign(m, { state: 'next', result: out.result, partial: out.result, bloqueadaPor: enDisco.bloqueadaPor, pidioBloqueo: enDisco.pidioBloqueo, addedAt: ahora }); costo(); comunes(); delete m.tomadaPor; delete m.corrida; delete m.approving;
-      s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent }); resultado = { estado: 'bloqueada' }; return;
-    }
-    if (aprobar) { m.result = (m.draft || m.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; m.approved = true; m.approvedAt = ahora; } else m.result = out.result;
-    if (datos.inciertos?.length) { // A2: una llamada que enviaba o gastaba pudo salir sin que se sepa: queda dicho en la entrega, en un aviso y en la tarea para que una persona lo mire
+    const marcarIncierto = () => { // A2: una llamada que enviaba pudo salir sin que se sepa: queda dicho en la entrega, en un aviso y en la tarea, salga la tarea por donde salga
+      if (!datos.inciertos?.length) return;
       const lista = [...new Set(datos.inciertos.map(x => x.tool))].join(', ');
       m.result += `\n\n---\n⚠ REVISA A MANO: no se sabe si salió ${lista} (el paso se cortó justo después de pedirla y la oficina no la repite para no duplicarla).`;
       m.revisarEnvio = { tools: [...new Set(datos.inciertos.map(x => x.tool))], at: ahora };
       s.avisar('envio-incierto', `«${m.title}»: no se sabe si salió ${lista}. Revísalo a mano antes de repetir nada.`, { level: 'error', task: m.id });
+    };
+    if (!aprobar && enDisco?.pidioBloqueo?.at >= m.startedAt && bloqueosPendientes(s.alm.load(), enDisco).length) { // T3: el agente pidió un bloqueo: se para con lo que lleva y sigue sola
+      Object.assign(m, { state: 'next', result: out.result, partial: out.result, bloqueadaPor: enDisco.bloqueadaPor, pidioBloqueo: enDisco.pidioBloqueo, addedAt: ahora }); costo(); comunes(); delete m.tomadaPor; delete m.corrida; delete m.approving;
+      marcarIncierto(); s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent }); resultado = { estado: 'bloqueada' }; return;
     }
+    if (aprobar) { m.result = (m.draft || m.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; m.approved = true; m.approvedAt = ahora; } else m.result = out.result;
+    marcarIncierto();
     delete m.retryAt; delete m.lastError; delete m.partial;
     if (!aprobar && HANDOFF.test(out.result || '')) { // I6: el agente pide a una persona
       const persona = (C.personas.find(p => !p.depts?.length || p.depts.includes(m.dept)) || {}).name || 'Tú';
       m.handoff = { at: ahora, from: m.agent, why: out.result.replace(HANDOFF, '').split('\n').slice(0, 3).join(' ').slice(0, 300) };
       Object.assign(m, { person: persona, result: out.result.replace(HANDOFF, ''), state: 'next', needsOk: false, addedAt: ahora, deAgente: m.agent }); comunes(); costo(); delete m.tomadaPor; delete m.corrida; delete m.approving;
-      s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent });
+      marcarIncierto(); s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent });
       s.avisar('handoff', `${C.nombreAgente(m.agent)} pasa «${m.title}» a ${persona}: ${m.handoff.why}`, { task: m.id }); resultado = { estado: 'persona' }; return;
     }
     costo(); if (feedback) m.revisions = (m.revisions || 0) + 1;
@@ -386,7 +395,8 @@ async function fallar(deps, { fila, token, datos, task, error }) {
     if (envios.length) { // A3: ya salió algo (un envío, un gasto) con el OK del dueño: nada se reintenta ni vuelve a pedir otro OK; se cierra diciendo qué salió y qué falló después
       const lista = [...new Set(envios.map(n => n.split('__').pop() || n))].join(', ');
       const aprobada = fila.modo === 'approve';
-      m.result = `${aprobada ? (m.draft || m.result || '') : ''}${aprobada ? '\n\n---\nAFTER YOUR OK\n' : ''}${parcial ? parcial + '\n\n' : ''}SE ENVIÓ: ${lista}; falló después: ${msg}`.trim();
+      const duda = datos.inciertos?.length ? `\n⚠ REVISA A MANO: no se sabe si salió ${[...new Set(datos.inciertos.map(x => x.tool))].join(', ')}.` : '';
+      m.result = `${aprobada ? (m.draft || m.result || '') : ''}${aprobada ? '\n\n---\nAFTER YOUR OK\n' : ''}${parcial ? parcial + '\n\n' : ''}SE ENVIÓ: ${lista}; falló después: ${msg}${duda}`.trim();
       Object.assign(m, { state: 'done', doneAt: ahora, failedAfterSend: { tools: envios, error: msg, at: ahora }, ...(aprobada ? { approved: true, approvedAt: ahora } : {}) });
       delete m.retryAt; delete m.lastError; delete m.partial;
       s.avisar('failed', `«${m.title}»: ya se hizo ${lista}, pero falló después: ${msg.slice(0, 160)}. No se reintenta (se duplicaría).`, { level: 'error', task: m.id });
@@ -416,8 +426,18 @@ async function fallar(deps, { fila, token, datos, task, error }) {
 /** Las tareas `doing` con una orden de correr (`corrida`: aprobada, devuelta con correcciones) o que se quedaron sin corrida → su corrida. */
 export async function crearCorridasPendientes(db, ahora = Date.now(), { sinPresupuesto = false } = {}) {
   const nuevas = [];
-  if (sinPresupuesto) return nuevas; // B8: con «detener al llegar al presupuesto» y el tope cruzado, nada nuevo arranca (tampoco lo aprobado o devuelto: espera al mes siguiente o a que subas el tope)
   const lista = await cargarTareas(db);
+  if (sinPresupuesto) { // B8/BAJO-11: con «detener al llegar al presupuesto» y el tope cruzado, nada nuevo arranca; lo aprobado o devuelto vuelve a esperar (no se queda semanas «en curso») y el dueño decide cuando haya presupuesto
+    const vivasP = new Set((await corridasVivas(db)).map(c => c.tarea));
+    const quedan = lista.filter(t => t.state === 'doing' && t.corrida && t.draft && !vivasP.has(t.id) && ['approve', 'draft', 'routine'].includes(t.corrida.modo));
+    if (quedan.length) await conSesion(db, {}, async s => {
+      for (const t of quedan) {
+        s.alm.cambiar(t.id, x => { if (x.state !== 'doing' || !x.corrida) return false; delete x.corrida; delete x.tomadaPor; delete x.approving; Object.assign(x, { state: 'waiting', waitingAt: x.waitingAt || ahora }); }, { por: 'oficina' });
+        s.avisar('budget-hold', `«${t.title}» vuelve a esperar tu visto bueno: se llegó al presupuesto del mes y no empieza nada nuevo. Cuando subas el tope o empiece el mes, apruébala otra vez.`, { level: 'warn', task: t.id, key: 'budget-hold-' + t.id });
+      }
+    });
+    return nuevas;
+  }
   const vivas = new Set((await corridasVivas(db)).map(c => c.tarea));
   for (const t of lista) {
     if (t.state !== 'doing' || vivas.has(t.id) || !t.agent || t.person) continue;

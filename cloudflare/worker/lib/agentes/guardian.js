@@ -8,13 +8,23 @@ const diaLocal = (t = Date.now()) => { const d = new Date(t); return `${d.getFul
 
 /** Campos donde el destinatario viaja DENTRO de un texto codificado (un correo en base64/RFC 822, un blob): el guardián no puede leer a quién va, así que un envío con ellos no se permite. */
 const CLAVE_OPACA = /^(raw|rfc822|rfc2822|mime|eml|message_raw|raw_message|encoded|blob|base64|[a-z_]*base64|payload_b64|b64)$/i;
-const PARECE_BASE64 = /^[A-Za-z0-9+/_-]{200,}={0,2}$/; // una cadena larga sin espacios: un cuerpo de verdad tiene espacios
+const BASE64 = /^[A-Za-z0-9+/_-]+={0,2}$/;
+function textoDecodificado(v) { // un candidato a base64 (también multilínea, tipo MIME): se decodifica y se mira si dentro viaja un destinatario
+  const c = String(v).replace(/\s+/g, '');
+  if (c.length < 12 || !BASE64.test(c)) return null;
+  try { return atob(c.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(c.length / 4) * 4, '=')); } catch { return null; }
+}
+const DESTINO = /@|\d{8}/;
+const imprimible = t => t.length > 0 && [...t].filter(ch => (ch >= ' ' && ch <= '~') || ch === '\n' || ch === '\r').length / t.length >= 0.9; // lo que sale de decodificar un id o un teléfono es basura, no texto
 export function camposOpacos(entrada, prof = 0) {
   const out = [];
-  if (!entrada || typeof entrada !== 'object' || prof > 4) return out;
+  if (!entrada || typeof entrada !== 'object' || prof > 10) return out;
   for (const [k, v] of Object.entries(entrada)) {
-    if (typeof v === 'string' && v && (CLAVE_OPACA.test(k) || PARECE_BASE64.test(v))) out.push(k);
-    else if (v && typeof v === 'object') out.push(...camposOpacos(v, prof + 1).map(x => `${k}.${x}`));
+    if (typeof v === 'string' && v) {
+      const sinEspacios = !/[ \t]/.test(v.trim()); // un cuerpo de verdad tiene espacios; MIME parte líneas pero no deja espacios
+      if (CLAVE_OPACA.test(k) || (sinEspacios && v.length >= 200)) out.push(k);
+      else if (sinEspacios) { const t = textoDecodificado(v); if (t && imprimible(t) && DESTINO.test(t)) out.push(k); }
+    } else if (v && typeof v === 'object') out.push(...camposOpacos(v, prof + 1).map(x => `${k}.${x}`));
   }
   return out;
 }

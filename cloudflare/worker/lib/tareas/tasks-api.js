@@ -15,7 +15,7 @@ import { registrarLeccion } from '../agentes/lecciones.js';
 import { sha256 } from '../ids.js';
 
 // `creadaPorAdmin` es una marca interna (quién creó la tarea): nunca sale en una respuesta, para que las formas sean las de la oficina local.
-export const sinMarca = o => (Array.isArray(o) ? o.map(sinMarca) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'creadaPorAdmin').map(([k, v]) => [k, sinMarca(v)])) : o);
+export const sinMarca = o => (Array.isArray(o) ? o.map(sinMarca) : o && typeof o === 'object' ? Object.fromEntries(Object.entries(o).filter(([k]) => k !== 'textoAdmin').map(([k, v]) => [k, sinMarca(v)])) : o);
 const dePaso = (st, obj, extra = {}) => json(sinMarca(obj), st, extra);
 // «Sin pedir mi OK» (needsOk:false) deja que el agente envíe, pague o cambie cosas sin que el dueño lo vea: solo un administrador lo decide.
 const SOLO_ADMIN_OK = 'Solo un administrador puede dejar una tarea sin pedir su visto bueno (needsOk:false).';
@@ -35,7 +35,7 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
     const l = alm.load();
     const q = planear(l, { enVuelo: 0, max: Math.max(1, Math.min(8, +C.ajustes.concurrency || 3)), ahora: ahora() }).puestos; // V4.4 (B5): dónde está cada una en la cola
     for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t, C.aprobaciones); }
-    const texto = JSON.stringify((url.searchParams.get('light') === '1' ? lightTasks(l) : l).map(({ creadaPorAdmin: _a, ...t }) => t)); // INF-04: el sondeo de 6 s no trae el trabajo de lo archivado
+    const texto = JSON.stringify((url.searchParams.get('light') === '1' ? lightTasks(l) : l).map(({ textoAdmin: _a, ...t }) => t)); // INF-04: el sondeo de 6 s no trae el trabajo de lo archivado
     const tag = '"' + (await sha256(texto)).slice(0, 20) + '"';
     if (String(req.headers.get('if-none-match') || '').split(/\s*,\s*/).includes(tag)) return new Response(null, { status: 304, headers: { etag: tag, 'cache-control': 'no-cache' } });
     return new Response(texto, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'x-content-type-options': 'nosniff', etag: tag, 'cache-control': 'no-cache' } });
@@ -51,8 +51,8 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
     if (dueAt && dueAt < ahora() - 60000) return dePaso(400, { error: 'esa hora ya pasó — elige una que aún esté por venir' });
     const extra = serv.camposT1(b); if (extra.error) return dePaso(400, extra);
     const task = await nuevaTarea(serv, { dept, text, model, effort, team, at: dueAt, agent: b.agent, title: b.title, needsOk: b.needsOk, extra: b.idea ? { ...extra, state: 'idea' } : extra, por: 'dueno' });
-    if (esAdmin(usuario)) { alm.cambiar(task.id, t => { t.creadaPorAdmin = true; }, { por: 'dueno' }); } // solo el texto de una tarea de un administrador amplía a quién puede enviar el agente tras el OK
-    const { creadaPorAdmin: _a, ...salida } = task; // la marca es interna: la respuesta tiene la misma forma que la local
+    if (esAdmin(usuario)) { const h = await sha256(String(task.text || '')); alm.cambiar(task.id, t => { t.textoAdmin = h; }, { por: 'dueno' }); } // la huella del texto que escribió el administrador: si alguien lo cambia, deja de ampliar destinatarios // solo el texto de una tarea de un administrador amplía a quién puede enviar el agente tras el OK
+    const { textoAdmin: _a, ...salida } = task; // la marca es interna: la respuesta tiene la misma forma que la local
     return dePaso(200, salida);
   }
 
@@ -132,7 +132,7 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
   }
   if ((accion === 'approve' || accion === 'reject') && metodo === 'POST') { // D1: el visto bueno del dueño sobre el borrador
     if (!esAdmin(usuario)) return dePaso(403, { error: SOLO_ADMIN_DECIDE });
-    const r = await decidirBorrador({ s, db, id, verbo: accion, nota: String(b.feedback || '').trim(), por: quienEs(usuario), apr: C.aprobaciones });
+    const r = await decidirBorrador({ s, db, id, verbo: accion, nota: String(b.feedback || '').trim(), por: quienEs(usuario), apr: C.aprobaciones, huella: typeof b.huella === 'string' ? b.huella : null });
     return dePaso(r.status || 200, r);
   }
 
@@ -151,7 +151,7 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
 
   if (!accion && metodo === 'PATCH') {
     if (b.needsOk === false && usuario?.rol !== 'admin') return dePaso(403, { error: SOLO_ADMIN_OK });
-    return editarTarea({ s, serv, C, id, b, db });
+    return editarTarea({ s, serv, C, id, b, db, usuario });
   }
 
   if (accion === 'run' && metodo === 'POST') { // "ejecútala ya": pasa a la cola y el reloj de la nube la arranca
@@ -194,7 +194,7 @@ export async function nuevaTarea(serv, { dept, text, team = false, at = null, by
     ...(at ? { dueAt: at, needsOk: r.needsOk } : {}), ...extra }, { por, id });
 }
 
-async function editarTarea({ s, serv, C, id, b, db }) {
+async function editarTarea({ s, serv, C, id, b, db, usuario }) {
   const { alm } = s; const ahora = () => Date.now();
   const cur = alm.load().find(t => t.id === id);
   if (!cur) return dePaso(404, { error: 'esa tarea ya no existe' });
@@ -231,9 +231,11 @@ async function editarTarea({ s, serv, C, id, b, db }) {
   if (b.effort !== undefined) patch.effort = normEffort(b.effort) || undefined;
   if (typeof b.needsOk === 'boolean') patch.needsOk = b.needsOk;
   { const t1 = serv.camposT1(b, { tareaId: id }); if (t1.error) return dePaso(400, t1); if (t1.pasos) t1.pasos = normalizarPasos(t1.pasos, cur.pasos); Object.assign(patch, t1); for (const k of ['prioridad', 'etiquetas', 'limite', 'proyecto', 'estimacion', 'bloqueadaPor', 'pasos', 'repetir']) if (b[k] === null || (Array.isArray(b[k]) && !b[k].length)) patch[k] = undefined; }
+  const hashAdmin = patch.text !== undefined && usuario?.rol === 'admin' ? await sha256(patch.text) : null;
   const r = alm.cambiar(id, task => {
     if (task.state !== cur.state) return { error: 'la tarea ya empezó mientras la editabas', status: 409 };
     Object.assign(task, patch); for (const k of Object.keys(patch)) if (patch[k] === undefined) delete task[k];
+    if (patch.text !== undefined) { if (hashAdmin) task.textoAdmin = hashAdmin; else delete task.textoAdmin; } // un texto que no escribió un administrador no amplía a quién se envía
   }, { por: 'dueno' });
   if (r.error) return dePaso(r.status || 400, { error: r.error });
   return dePaso(200, r.tarea);
