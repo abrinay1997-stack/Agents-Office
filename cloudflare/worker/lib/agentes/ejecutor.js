@@ -18,11 +18,12 @@ import { conSesion, cargarTareas } from '../tareas/sesion.js';
 import { leerContexto } from '../tareas/contexto.js';
 import { crearGuardian, informe as informeGuardian } from './guardian.js';
 import { crearClienteMcp } from './mcp-cliente.js';
+import { secretoPermitido, AVISO_SECRETO } from '../conectores.js';
 import { elegirModelo, llamarModelo, aliasDeHerramienta, textoDe, usosDe } from './llm.js';
 import { herramientasInternas } from './herramientas.js';
 import { armarEjecucion, leerMemoria, guardarMemoria } from './contexto.js';
 import { anotar as anotarCosto, estadoDelMes } from './costos.js';
-import { draftFacts } from './aprobaciones.js';
+import { draftFacts, huellaDe, registrar as registrarAprobacion } from './aprobaciones.js';
 import { registrarLeccion } from './lecciones.js';
 
 export const TTL_CANDADO = 5 * 60_000;       // un paso que muere a medias libera su candado a los 5 minutos
@@ -42,10 +43,10 @@ class FalloFatal extends Error { constructor(m) { super(m); this.fatal = true; }
 export const modoInicial = t => (t.needsOk ? 'draft' : t.autonomous ? 'autonomous' : 'task');
 
 /** Crea la corrida de una tarea (una sola: si ya hay una, no hace nada). → true si nació. */
-export async function crearCorrida(db, tarea, { modo, feedback = null, origen = null }, ahora = Date.now()) {
+export async function crearCorrida(db, tarea, { modo, feedback = null, origen = null, huella = null }, ahora = Date.now()) {
   const run = Math.random().toString(36).slice(2, 10) + ahora.toString(36);
   const r = await db.prepare('insert or ignore into corridas (tarea, run, modo, feedback, estado, candado, candado_hasta, paso, datos, creada, actualizada) values (?,?,?,?,?,?,?,?,?,?,?)')
-    .bind(tarea.id, run, modo, feedback, 'cola', null, 0, 0, JSON.stringify({ origen }), ahora, ahora).run();
+    .bind(tarea.id, run, modo, feedback, 'cola', null, 0, 0, JSON.stringify({ origen, ...(huella ? { huella } : {}) }), ahora, ahora).run();
   return (r.meta?.changes ?? 0) === 1;
 }
 export async function corridasVivas(db) { return (await db.prepare('select tarea, run, modo, estado, candado_hasta, paso, actualizada from corridas order by creada').all()).results; }
@@ -110,22 +111,26 @@ async function armarHerramientas({ db, env, agente, tarea, modo, writes, gasto, 
   const { results: conectores } = await db.prepare('select * from conectores where activo = 1').all();
   for (const c of conectores) {
     if (!JSON.parse(c.departamentos || '[]').includes(agente.department)) continue;
+    if (c.secreto && !secretoPermitido(c.secreto)) { remotas.push({ servidor: c.nombre, motivo: AVISO_SECRETO(c.secreto) }); continue; }
     if (c.secreto && !env[c.secreto]) { remotas.push({ servidor: c.nombre, motivo: `falta el secreto ${c.secreto}` }); continue; }
     const permitidas = new Set([...JSON.parse(c.herramientas_lectura || '[]'), ...(writes ? JSON.parse(c.herramientas_envio || '[]') : [])]);
     if (!permitidas.size) continue;
     try {
       const cli = crearClienteMcp({ conector: c, env, fetchFn, presupuesto });
-      for (const t of await cli.listar()) if (permitidas.has(t.name)) defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema, remota: true });
+      const lista = await cli.listar();
+      for (const x of lista.excluidas || []) remotas.push({ servidor: c.nombre, motivo: `«${x.name}» se dejó fuera: ${x.motivo}` });
+      for (const t of lista) if (permitidas.has(t.name)) defs.push({ nombre: `mcp__${c.nombre}__${t.name}`, servidor: c.nombre, original: t.name, descripcion: t.description, esquema: t.inputSchema, remota: true });
     } catch (e) { remotas.push({ servidor: c.nombre, motivo: String(e.message).slice(0, 200) }); }
   }
   return { internas, defs, fallos: remotas };
 }
 
 /** Ejecuta una llamada a una herramienta, con el guardián delante y detrás. → { texto, esError } */
-async function ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre }) {
+async function ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre, antes = null }) {
   const entrada = uso.input && typeof uso.input === 'object' ? uso.input : {};
   const d = await guardian.antes(def.nombre, entrada);
   if (!d.allow) return { texto: d.why, esError: true, bloqueada: true };
+  if (antes) await antes(d.kind, def.nombre); // «detener» y el apunte previo de lo que cuesta o envía: si se perdió el candado, esto lanza y la herramienta NO corre
   let texto, esError = false;
   try {
     if (def.remota) {
@@ -136,7 +141,7 @@ async function ejecutarHerramienta({ uso, def, guardian, internas, clientes, db,
   } catch (e) { texto = 'No se pudo: ' + String(e?.message || 'falló').slice(0, 300); esError = true; }
   const aviso = await guardian.despues(def.nombre, entrada, texto);
   texto = String(texto).slice(0, MAX_RESULTADO) + (aviso ? '\n\n' + aviso : '');
-  return { texto, esError };
+  return { texto, esError, kind: d.kind };
 }
 
 /* ---------- el paso ---------- */
@@ -179,6 +184,11 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
 
   // --- paso 0: el sistema, el pedido, las herramientas ---
   if (!datos.sistema) {
+    if (modo === 'approve') { // el OK vale para el borrador que el dueño vio: si ya no es ese, no se envía nada y la tarea vuelve a esperar su visto bueno
+      const h = await huellaDe(task);
+      if (!datos.huella || datos.huella !== h || task.approving) return anularAprobacion(deps, { task, datos, fila });
+      datos.aprobado = String(task.draft || task.result || '');
+    }
     const modelo = elegirModelo({ task, agent: agente, env, cfgModelo: aj.model });
     const deptsContenido = Array.isArray(aj.contenido?.departments) && aj.contenido.departments.length ? aj.contenido.departments : undefined;
     const deptsEstudio = Array.isArray(aj.media?.departments) && aj.media.departments.length ? aj.media.departments : undefined;
@@ -197,7 +207,7 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
   const { results: conectores } = await db.prepare('select * from conectores where activo = 1').all();
   const conectoresPorNombre = new Map(conectores.map(c => [c.nombre, c])), clientes = new Map();
   const servers = [...new Set(datos.herramientas.map(d => d.servidor))];
-  const guardian = crearGuardian({ db, estado: datos, ahora: reloj, ctx: { run: fila.run, tarea: task.id, agente: agente.id, dept: agente.department, writes: !!ctxEj.writes, runMode: modo, policy: pol, known: modo === 'approve' ? `${task.text || ''}\n${task.draft || task.result || ''}` : null, safety: aj.safety || {}, amountLimit: apr.amountLimit, servers } });
+  const guardian = crearGuardian({ db, estado: datos, ahora: reloj, ctx: { run: fila.run, tarea: task.id, agente: agente.id, dept: agente.department, writes: !!ctxEj.writes, runMode: modo, policy: pol, known: modo === 'approve' ? `${task.creadaPorAdmin ? (task.text || '') : ''}\n${datos.aprobado ?? ''}` : null, safety: aj.safety || {}, amountLimit: apr.amountLimit, servers } });
   const usados = new Set(), porAlias = new Map();
   const herramientasApi = datos.herramientas.map(d => { const alias = aliasDeHerramienta(d.nombre, usados); porAlias.set(alias, d); return { alias, descripcion: d.descripcion, esquema: d.esquema }; });
   const modelo = datos.modelo;
@@ -210,12 +220,29 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
     // 1) las herramientas que el modelo pidió y todavía no corrieron (un paso anterior se cortó a la mitad del turno)
     if (datos.turno) {
       for (const uso of datos.turno.usos) {
-        if (datos.turno.hechos[uso.id]) continue;
+        const previa = datos.turno.hechos[uso.id];
+        if (previa && !previa.pendiente) continue;
+        if (previa?.pendiente) { // A2: se anotó que iba a salir y el paso se cortó antes de saber cómo acabó: NUNCA se repite (podría ser un correo duplicado). Falla cerrado.
+          datos.turno.hechos[uso.id] = { texto: `No se sabe si «${previa.tool || uso.name}» llegó a salir (el paso se cortó justo después de pedirla). NO la repitas: revisa en el servicio de destino (p. ej. los enviados) y dilo en tu entrega.`, esError: true, incierta: true };
+          (datos.inciertos ||= []).push({ tool: previa.tool || uso.name, at: reloj() });
+          continue;
+        }
         if (!presupuesto.puedeSeguir({ llamadas: 2, consultas: 6 })) { await guardarAvance(db, task.id, token, datos, reloj(), { soltar: true }); return { estado: 'pausada', motivo: 'presupuesto de la invocación' }; }
         const def = porAlias.get(uso.name);
-        const r = def ? await ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre }) : { texto: `La herramienta «${uso.name}» no existe en esta ejecución.`, esError: true };
+        let costosa = false;
+        const antes = async kind => {
+          await verificarCandado(db, task.id, token); // A1: si detuvieron la tarea mientras el turno corría, ninguna herramienta que envía o gasta arranca
+          if (kind === 'write' || kind === 'cost') { // A2: se apunta ANTES de ejecutar (y se renueva el candado): si el paso muere en medio, al retomar se sabe que esta llamada pudo salir
+            costosa = true;
+            datos.turno.hechos[uso.id] = { pendiente: true, tool: def.nombre };
+            if (!(datos.envios ||= []).includes(def.nombre)) datos.envios.push(def.nombre);
+            await guardarAvance(db, task.id, token, datos, reloj());
+          }
+        };
+        const r = def ? await ejecutarHerramienta({ uso, def, guardian, internas, clientes, db, env, fetchFn, presupuesto, conectoresPorNombre, antes }) : { texto: `La herramienta «${uso.name}» no existe en esta ejecución.`, esError: true };
         if (def && !datos.usadas.includes(def.nombre)) datos.usadas.push(def.nombre);
         datos.turno.hechos[uso.id] = { texto: r.texto, esError: r.esError };
+        if (costosa) await guardarAvance(db, task.id, token, datos, reloj()); // ya se sabe cómo acabó: se apunta enseguida
       }
       datos.mensajes.push({ role: 'user', content: datos.turno.usos.map(u => ({ type: 'tool_result', tool_use_id: u.id, content: datos.turno.hechos[u.id].texto, ...(datos.turno.hechos[u.id].esError ? { is_error: true } : {}) })) });
       delete datos.turno;
@@ -226,6 +253,7 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
     if (datos.vueltas >= VUELTAS_MAX) { datos.texto = datos.texto || 'Se llegó al máximo de vueltas sin una entrega final.'; break; }
     const t1 = reloj();
     const resp = await llamarModelo({ env, modelo, sistema: datos.sistema, mensajes: datos.mensajes, herramientas: herramientasApi, fetchFn, presupuesto });
+    await verificarCandado(db, task.id, token); // A1: si la detuvieron mientras el modelo pensaba, no se sigue
     datos.vueltas++; vueltas++;
     datos.usd += await anotarCosto(db, { tarea: task.id, agente: agente.id, dept: agente.department, tipo: modo, modelo: resp.model, proveedor: modelo.meta ? 'meta' : 'anthropic', usage: resp.usage, cfgPrices: aj.costs?.prices, ms: reloj() - t1 });
     datos.mensajes.push({ role: 'assistant', content: resp.content });
@@ -278,15 +306,21 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
     const costo = () => { m.cost = Math.round(((m.cost || 0) + (out.usd || 0)) * 1e6) / 1e6; };
     const comunes = () => Object.assign(m, { read: out.read, tools: out.tools, used: out.used, modelUsed: out.modelUsed });
     if (!aprobar && enDisco?.pidioBloqueo?.at >= m.startedAt && bloqueosPendientes(s.alm.load(), enDisco).length) { // T3: el agente pidió un bloqueo: se para con lo que lleva y sigue sola
-      Object.assign(m, { state: 'next', result: out.result, partial: out.result, bloqueadaPor: enDisco.bloqueadaPor, pidioBloqueo: enDisco.pidioBloqueo, addedAt: ahora }); costo(); comunes(); delete m.tomadaPor; delete m.corrida;
+      Object.assign(m, { state: 'next', result: out.result, partial: out.result, bloqueadaPor: enDisco.bloqueadaPor, pidioBloqueo: enDisco.pidioBloqueo, addedAt: ahora }); costo(); comunes(); delete m.tomadaPor; delete m.corrida; delete m.approving;
       s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent }); resultado = { estado: 'bloqueada' }; return;
     }
     if (aprobar) { m.result = (m.draft || m.result) + '\n\n---\nAFTER YOUR OK\n' + out.result; m.approved = true; m.approvedAt = ahora; } else m.result = out.result;
+    if (datos.inciertos?.length) { // A2: una llamada que enviaba o gastaba pudo salir sin que se sepa: queda dicho en la entrega, en un aviso y en la tarea para que una persona lo mire
+      const lista = [...new Set(datos.inciertos.map(x => x.tool))].join(', ');
+      m.result += `\n\n---\n⚠ REVISA A MANO: no se sabe si salió ${lista} (el paso se cortó justo después de pedirla y la oficina no la repite para no duplicarla).`;
+      m.revisarEnvio = { tools: [...new Set(datos.inciertos.map(x => x.tool))], at: ahora };
+      s.avisar('envio-incierto', `«${m.title}»: no se sabe si salió ${lista}. Revísalo a mano antes de repetir nada.`, { level: 'error', task: m.id });
+    }
     delete m.retryAt; delete m.lastError; delete m.partial;
     if (!aprobar && HANDOFF.test(out.result || '')) { // I6: el agente pide a una persona
       const persona = (C.personas.find(p => !p.depts?.length || p.depts.includes(m.dept)) || {}).name || 'Tú';
       m.handoff = { at: ahora, from: m.agent, why: out.result.replace(HANDOFF, '').split('\n').slice(0, 3).join(' ').slice(0, 300) };
-      Object.assign(m, { person: persona, result: out.result.replace(HANDOFF, ''), state: 'next', needsOk: false, addedAt: ahora, deAgente: m.agent }); comunes(); costo(); delete m.tomadaPor; delete m.corrida;
+      Object.assign(m, { person: persona, result: out.result.replace(HANDOFF, ''), state: 'next', needsOk: false, addedAt: ahora, deAgente: m.agent }); comunes(); costo(); delete m.tomadaPor; delete m.corrida; delete m.approving;
       s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent });
       s.avisar('handoff', `${C.nombreAgente(m.agent)} pasa «${m.title}» a ${persona}: ${m.handoff.why}`, { task: m.id }); resultado = { estado: 'persona' }; return;
     }
@@ -297,7 +331,7 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
     if (!aprobar && !m.needsOk && quiso && !datos.taint && pol !== 'nunca') { m.needsOk = true; m.heldForOk = true; }
     comunes(); m.tools = [...new Set([...(task.tools || []), ...out.tools])]; m.used = [...new Set([...(task.used || []), ...out.used])]; m.error = false; m.modelFrom = out.modelFrom; m.modelId = out.modelId;
     if (datos.review) m.review = datos.review;
-    delete m.tomadaPor; delete m.corrida;
+    delete m.tomadaPor; delete m.corrida; delete m.approving;
     if (m.needsOk && !aprobar) { Object.assign(m, { state: 'waiting', draft: m.result, waitingAt: ahora, ask: askLine(m) }); delete m.editedDraft; delete m.remindedAt; draftFacts(m, apr); resultado = { estado: 'espera-ok' }; }
     else { Object.assign(m, { state: 'done', doneAt: ahora }); resultado = { estado: 'hecha', terminada: true }; }
     s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent });
@@ -324,6 +358,18 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
   return { estado: resultado.estado, resultado: resultado.estado };
 }
 
+/** El OK ya no vale (el borrador cambió): no corre nada, la tarea vuelve a esperar el visto bueno del dueño con el borrador nuevo. */
+async function anularAprobacion(deps, { task, datos, fila }) {
+  const { db } = deps;
+  await conSesion(db, {}, async s => {
+    s.alm.cambiar(task.id, x => { if (x.state !== 'doing') return false; delete x.corrida; delete x.tomadaPor; delete x.approving; Object.assign(x, { state: 'waiting', waitingAt: x.waitingAt || Date.now() }); }, { por: 'oficina' });
+    await registrarAprobacion(db, s, task.id, 'void', 'la oficina', { note: 'El borrador cambió después de tu visto bueno: se descartó el OK y no se envió nada.' });
+    s.avisar('approval-void', `«${task.title}» cambió después de tu visto bueno: no se envió nada. Revisa el borrador y vuelve a aprobarlo.`, { level: 'warn', task: task.id });
+  });
+  await borrarCorrida(db, task.id);
+  return { estado: 'anulada', motivo: 'el borrador cambió después del OK' };
+}
+
 /* ---------- cuando algo falla: reintento o fallo definitivo (runServerTask → catch) ---------- */
 async function fallar(deps, { fila, token, datos, task, error }) {
   const { db, ahora: reloj = () => Date.now() } = deps;
@@ -333,9 +379,21 @@ async function fallar(deps, { fila, token, datos, task, error }) {
   const parcial = (datos.texto || '').trim();
   const paso = error?.fatal ? { retry: false, kind: 'fatal' } : reliability.nextStep({ ...task }, msg, aj.retries, ahora);
   const base = datos.base || task, m = clonar(task);
+  const envios = Array.isArray(datos.envios) ? datos.envios : [];
   let estado;
   await conSesion(db, {}, async s => {
-    delete m.tomadaPor; delete m.corrida;
+    delete m.tomadaPor; delete m.corrida; delete m.approving;
+    if (envios.length) { // A3: ya salió algo (un envío, un gasto) con el OK del dueño: nada se reintenta ni vuelve a pedir otro OK; se cierra diciendo qué salió y qué falló después
+      const lista = [...new Set(envios.map(n => n.split('__').pop() || n))].join(', ');
+      const aprobada = fila.modo === 'approve';
+      m.result = `${aprobada ? (m.draft || m.result || '') : ''}${aprobada ? '\n\n---\nAFTER YOUR OK\n' : ''}${parcial ? parcial + '\n\n' : ''}SE ENVIÓ: ${lista}; falló después: ${msg}`.trim();
+      Object.assign(m, { state: 'done', doneAt: ahora, failedAfterSend: { tools: envios, error: msg, at: ahora }, ...(aprobada ? { approved: true, approvedAt: ahora } : {}) });
+      delete m.retryAt; delete m.lastError; delete m.partial;
+      s.avisar('failed', `«${m.title}»: ya se hizo ${lista}, pero falló después: ${msg.slice(0, 160)}. No se reintenta (se duplicaría).`, { level: 'error', task: m.id });
+      estado = 'fallo-tras-envio';
+      s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent });
+      return;
+    }
     if (paso.retry) {
       Object.assign(m, { state: 'next', attempts: paso.attempt, retryAt: paso.at, lastError: msg, lastErrorKind: paso.kind, timeoutMul: paso.timeoutMul, partial: parcial || m.partial });
       if (paso.kind === 'limit') s.avisar('limit', `El proveedor de IA llegó a su límite de uso. «${m.title}» se reintenta sola a las ${new Date(paso.at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' })}.`, { level: 'warn', task: m.id, key: 'limit' });
@@ -356,15 +414,16 @@ async function fallar(deps, { fila, token, datos, task, error }) {
 /* ---------- el reloj de los agentes ---------- */
 
 /** Las tareas `doing` con una orden de correr (`corrida`: aprobada, devuelta con correcciones) o que se quedaron sin corrida → su corrida. */
-export async function crearCorridasPendientes(db, ahora = Date.now()) {
+export async function crearCorridasPendientes(db, ahora = Date.now(), { sinPresupuesto = false } = {}) {
   const nuevas = [];
+  if (sinPresupuesto) return nuevas; // B8: con «detener al llegar al presupuesto» y el tope cruzado, nada nuevo arranca (tampoco lo aprobado o devuelto: espera al mes siguiente o a que subas el tope)
   const lista = await cargarTareas(db);
   const vivas = new Set((await corridasVivas(db)).map(c => c.tarea));
   for (const t of lista) {
     if (t.state !== 'doing' || vivas.has(t.id) || !t.agent || t.person) continue;
     const orden = t.corrida;
     if (!orden && !(String(t.tomadaPor || '').startsWith('agente:') && ahora - (t.startedAt || 0) > 3 * 60_000)) continue; // una recién tomada la crea quien la tomó
-    if (await crearCorrida(db, t, orden ? { modo: orden.modo, feedback: orden.feedback || null, origen: orden.origen || null } : { modo: modoInicial(t) }, ahora)) {
+    if (await crearCorrida(db, t, orden ? { modo: orden.modo, feedback: orden.feedback || null, origen: orden.origen || null, huella: orden.huella || null } : { modo: modoInicial(t) }, ahora)) {
       nuevas.push(t.id);
       if (orden) await conSesion(db, {}, async s => { s.alm.cambiar(t.id, x => { if (!x.corrida) return false; delete x.corrida; }, { por: 'oficina' }); }); // la orden ya es una corrida
     }

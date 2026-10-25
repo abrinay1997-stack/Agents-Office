@@ -28,7 +28,7 @@ export function crearFetch({ guion = [], herramientasMcp = {}, tokenMcp = 'tok-m
       if (cuerpo.method === 'initialize') return rpc({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'gmail', version: '1' } });
       if (cuerpo.method === 'notifications/initialized') return new Response(null, { status: 202 });
       if (cuerpo.method === 'tools/list') return rpc({ tools: Object.entries(herramientasMcp).map(([name, h]) => ({ name, description: h.descripcion || name, inputSchema: { type: 'object', properties: {} } })) });
-      if (cuerpo.method === 'tools/call') { const h = herramientasMcp[cuerpo.params.name]; if (!h) return rpc({ content: [{ type: 'text', text: 'no existe' }], isError: true }); h.llamadas = (h.llamadas || 0) + 1; h.ultimo = cuerpo.params.arguments; return rpc({ content: [{ type: 'text', text: h.salida ?? 'ok' }] }); }
+      if (cuerpo.method === 'tools/call') { const h = herramientasMcp[cuerpo.params.name]; if (!h) return rpc({ content: [{ type: 'text', text: 'no existe' }], isError: true }); h.llamadas = (h.llamadas || 0) + 1; h.ultimo = cuerpo.params.arguments; if (h.alLlamar) await h.alLlamar(cuerpo.params.arguments); return rpc({ content: [{ type: 'text', text: h.salida ?? 'ok' }] }); }
     }
     registro.otros.push(u);
     return new Response('{}', { status: 404 });
@@ -78,4 +78,12 @@ export async function pagina({ d1, env }) {
 export function todoD1(d1) {
   const tablas = d1._db.prepare("select name from sqlite_master where type = 'table'").all().map(t => t.name);
   return tablas.map(t => JSON.stringify(d1._db.prepare(`select * from "${t}"`).all())).join('\n');
+}
+
+/** Cambia una tarea EN D1 por detrás de la API (lo que haría otra petición, otra fase o alguien con acceso a la base) sin tocar su versión. */
+export function mutarTarea(d1, id, fn) {
+  const fila = d1._db.prepare("select json from filas where coleccion = 'tareas' and id = ?").get(id);
+  const t = JSON.parse(fila.json); fn(t);
+  d1._db.prepare("update filas set json = ? where coleccion = 'tareas' and id = ?").run(JSON.stringify(t), id);
+  return t;
 }

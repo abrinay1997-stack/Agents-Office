@@ -19,6 +19,7 @@ import * as costos from '../lib/agentes/costos.js';
 import { tickAprobaciones } from '../lib/agentes/aprobaciones.js';
 import { crearCorrida, crearCorridasPendientes, corridasVivas, avanzar, modoInicial } from '../lib/agentes/ejecutor.js';
 import { tomarSiguiente } from './tareas.js';
+import { secretoPermitido } from '../lib/conectores.js';
 import { adjuntarTerminados } from '../lib/agentes/estudio-adjuntos.js';
 import * as contenido from './contenido.js';
 import * as estudio from './estudio.js';
@@ -90,7 +91,7 @@ export async function estado(env, db) {
   if (!hayLlave(env)) add('claude', 'Proveedor de IA', 'bad', 'Falta el secreto de la llave (ANTHROPIC_API_KEY o META_API_KEY): ninguna tarea puede correr.', 'Guárdala como secreto del repositorio en GitHub y vuelve a desplegar.');
   else add('claude', 'Proveedor de IA', 'ok', ultima ? `Última tarea terminada ${ago(now - ultima.doneAt)}.` : 'Todavía no terminó ninguna tarea.');
   const { results: cons } = await db.prepare('select nombre, secreto, activo from conectores').all();
-  const sinToken = cons.filter(c => c.activo && c.secreto && !env[c.secreto]);
+  const sinToken = cons.filter(c => c.activo && c.secreto && (!secretoPermitido(c.secreto) || !env[c.secreto]));
   add('conectores', 'Conectores', sinToken.length ? 'warn' : 'info', cons.length ? `${cons.length} registrados${sinToken.length ? `; sin su secreto: ${sinToken.map(c => c.nombre).join(', ')}` : ''}.` : 'No hay conectores MCP registrados.', sinToken.length ? 'Guarda el token de cada uno como secreto en GitHub (MCP_<NOMBRE>_TOKEN) y vuelve a desplegar.' : '');
   const rs = (await RT.rutinasConEstado(db, C.agents)).list, falladas = rs.filter(r => { const t = lista.find(x => x.id === r.lastTaskId); return t && t.error; });
   add('rutinas', 'Rutinas', falladas.length ? 'warn' : 'ok', rs.length ? (falladas.length ? `La última ejecución falló en: ${falladas.map(r => '«' + r.title + '»').join(', ')}.` : `${rs.length} en el horario; ninguna falló la última vez.`) : 'No hay rutinas.');
@@ -125,17 +126,18 @@ export async function cadaMinuto(env, opciones = {}) {
   resumen.aprobaciones = await conSesion(db, {}, async s => tickAprobaciones({ s, db, apr, ahora: ahoraFn() }));
   // 2) las órdenes de correr (aprobada, devuelta) y las que se quedaron sin corrida → corridas
   resumen.antes = pres.consultas;
-  resumen.pendientes = await crearCorridasPendientes(db, ahoraFn());
+  const sinPresupuesto = await costos.sinPresupuesto(db, aj.costs, ahoraFn()); // B8: con el tope del mes cruzado y «detener al llegar», NADA nuevo arranca (ni la cola, ni lo aprobado, ni una corrida que aún no empezó)
+  resumen.sinPresupuesto = sinPresupuesto;
+  resumen.pendientes = await crearCorridasPendientes(db, ahoraFn(), { sinPresupuesto });
   // 3) la cola: lo que toca arrancar ahora (si hay con qué pensar y el presupuesto del mes lo permite)
   if (hayLlave(env)) {
-    const sinPresupuesto = await costos.sinPresupuesto(db, aj.costs, ahoraFn());
     const max = Math.max(1, Math.min(8, +aj.concurrency || 3));
     const tomadas = await tomarSiguiente(db, { max, ahora: ahoraFn(), sinPresupuesto });
     for (const t of tomadas) { await crearCorrida(db, t, { modo: modoInicial(t) }, ahoraFn()); resumen.tomadas.push(t.id); }
   }
   // 4) las corridas avanzan un paso (las que nadie tiene en este momento), hasta que se acabe el presupuesto de la invocación
   const deps = { env, db, presupuesto: pres, modulos: MODULOS_HERRAMIENTAS, fetchFn, ahora: ahoraFn };
-  const vivas = (await corridasVivas(db)).filter(c => c.candado_hasta < ahoraFn());
+  const vivas = (await corridasVivas(db)).filter(c => c.candado_hasta < ahoraFn() && !(sinPresupuesto && c.paso === 0)); // las que ya empezaron terminan; las nuevas esperan
   for (const c of vivas.slice(0, TOPE_CORRIDAS_POR_MINUTO)) {
     if (!pres.puedeSeguir({ llamadas: 3, consultas: 14 })) break;
     resumen.avanzadas.push(await avanzar(deps, c.tarea));

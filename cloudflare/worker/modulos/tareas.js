@@ -9,7 +9,7 @@ import { json, error, prohibido } from '../lib/respuesta.js';
 import { conSesion, cargarTareas } from '../lib/tareas/sesion.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
 import { armarServicios, correrRuta } from '../lib/tareas/servicios.js';
-import { manejarTasks } from '../lib/tareas/tasks-api.js';
+import { manejarTasks, sinMarca } from '../lib/tareas/tasks-api.js';
 import { crearEnrutador } from '../lib/tareas/enrutar.js';
 import { guardarAgente, cargarRoster, agentesSalida, DEPTS } from '../lib/tareas/roster.js';
 import * as RT from '../lib/tareas/rutinas.js';
@@ -28,7 +28,7 @@ import { olvidarLeccion } from '../lib/agentes/lecciones.js';
 export const nombre = 'tareas';
 export const grupos = ['tasks', 'tareas', 'routines', 'team', 'agents', 'calendar.ics'];
 
-const respuestaDe = res => json(res.objeto, res.estado);
+const respuestaDe = res => json(sinMarca(res.objeto), res.estado);
 
 const MAX_CUERPO = 1 << 20; // 1 MB, como la oficina local: una tarea, una rutina o un comentario son unos KB
 async function leerCuerpo(req) {
@@ -80,11 +80,26 @@ function bitacoraNecesaria(ruta, url) {
   return null;
 }
 
+/** Las rutas que SÍ valen sobre una tarea con el OK dado (todo lo demás la movería o la cambiaría): deshacer, decidir (que contesta por su cuenta), comentar y mirar. */
+const CON_OK_PERMITIDAS = new Set(['undo', 'approve', 'reject', 'draft', 'comment', 'seen', 'example', 'vote', 'nota', 'comentario', 'bitacora']);
+/** → la tarea con `approving` a la que toca esta petición, o null. Se mira el id de la ruta y los ids del cuerpo (lotes). */
+function tareaConAprobacion(s, ruta, b) {
+  const m = ruta.match(/^\/api\/(?:tasks|tareas)\/([A-Za-z0-9_-]+)(?:\/([a-z-]+))?/);
+  if (m && (m[1] === 'approve-batch' || CON_OK_PERMITIDAS.has(m[2] || ''))) return null; // el lote de aprobar contesta 409 por cada tarea que ya está aprobada
+  const ids = new Set(); if (m) ids.add(m[1]);
+  for (const k of ['ids', 'tareas']) if (Array.isArray(b?.[k])) for (const x of b[k]) ids.add(String(x));
+  if (b?.id) ids.add(String(b.id));
+  if (!ids.size) return null;
+  return s.alm.load().find(t => t.approving && ids.has(t.id)) || null;
+}
+
 async function manejarTareas({ req, env, db, ruta, url, usuario, b, g }) {
   const C = await leerContexto(db);
   const ligera = g === 'tasks' && ruta === '/api/tasks' && req.method === 'GET' && url.searchParams.get('light') === '1';
   const respuesta = await conSesion(db, { bitacora: bitacoraNecesaria(ruta, url), ligera }, async s => {
     const serv = armarServicios(s, { env, contexto: C, fetchFn: env.__pruebas?.fetchIA }, b);
+    const choque = req.method === 'GET' ? null : tareaConAprobacion(s, ruta, b); // el OK ya dado vale para ese borrador: mientras corre la ventana de «deshacer», nada lo mueve
+    if (choque) return json({ error: `«${choque.title}» ya tiene tu visto bueno y se envía en unos segundos: deshaz la aprobación primero si quieres cambiarla.` }, 409);
     if (g === 'tasks') return await manejarTasks({ req, url, ruta, usuario, db, s, serv, b });
     const consulta = url.searchParams.toString();
     const datos = { metodo: req.method, ruta, query: consulta, headers: {} }; // sin x-office-by: quien llega por la página es el dueño; Telegram entra por su propio camino (fase 6)

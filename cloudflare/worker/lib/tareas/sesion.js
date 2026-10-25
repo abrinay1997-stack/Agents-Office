@@ -63,7 +63,8 @@ export async function abrirSesion(db, { ahora = () => Date.now(), bitacora = nul
   }, { ahora });
   const bus = crearBus({ registrar: (tipo, e) => console.warn(`eventos: ${tipo}:`, e?.message ?? e) });
   const avisos = []; // lo que la oficina quiere decir (avisar): se guarda al volcar
-  const sesion = { db, alm, cat, bus, avisos, avisar: (kind, text, { level = 'info', task = null, key = null, ...resto } = {}) => { avisos.push({ kind, level, text, task, key, ...resto }); }, ahora };
+  const extra = []; // sentencias de D1 que deben entrar en el MISMO lote que el cambio de las tareas (p. ej. la auditoría de una aprobación): si el cambio se repite por un choque, no se duplican
+  const sesion = { db, alm, cat, bus, avisos, extra, avisar: (kind, text, { level = 'info', task = null, key = null, ...resto } = {}) => { avisos.push({ kind, level, text, task, key, ...resto }); }, ahora };
 
   /** Vuelca a D1 lo que cambió. Lanza Conflicto si otra petición cambió una de esas tareas (o un catálogo) mientras tanto; entonces no se pisa nada. */
   sesion.commit = async function commit() {
@@ -91,6 +92,7 @@ export async function abrirSesion(db, { ahora = () => Date.now(), bitacora = nul
     for (const x of c.borrar) sentencias.push(db.prepare("delete from filas where coleccion = ? and id = ? and coalesce(json_extract(json,'$.version'),1) = ?").bind(TAREAS, x.id, x.versionAntes));
     const hayTareas = sentencias.length;
     for (const l of c.lineas) sentencias.push(db.prepare('insert into tarea_bitacora (t, tarea, json) values (?,?,?)').bind(+l.t || ahora(), String(l.tarea), JSON.stringify(l)));
+    for (const e of extra.splice(0)) sentencias.push(e);
     if (sentencias.length) { // UN solo lote: D1 lo corre como una transacción (tareas y bitácora entran juntas o ninguna)
       const res = await db.batch(sentencias);
       for (let k = 0; k < hayTareas; k++) {

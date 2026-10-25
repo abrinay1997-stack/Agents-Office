@@ -78,7 +78,8 @@ export { ErrorPedido };
 /** Pone en cola una generación. `usuario`: quien la pide (los motores de pago son del administrador). → el trabajo */
 export async function pedir(env, db, req, { usuario } = {}) {
   if (req.local === true || req.preset || req.post || req.qa) throw new ErrorPedido('Los retoques en el equipo del dueño (presets locales, QA) todavía no están en la nube.', 501);
-  const pedido = limpiarPedido(req, { por: 'you' });
+  const pedido = limpiarPedido(req, { por: usuario?.agente ? 'agent' : 'you' });
+  if (usuario?.agente) pedido.agent = String(usuario.agente); // lo pidió un agente: la galería, la tarjeta y el rastro lo dicen (by/agent)
   if (req.versionOf != null) pedido.versionOf = req.versionOf;
   if (typeof req.purpose === 'string') pedido.purpose = req.purpose;
   const ids = [...Object.values(pedido.media).flat(), ...(pedido.versionOf != null ? [String(pedido.versionOf).replace(/\\/g, '/')] : [])];
