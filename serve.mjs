@@ -2466,6 +2466,11 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/movil.js') { // la versión móvil (src/movil/ → dist/movil.js, build-movil.mjs): un paquete aparte que la página pide solo en un teléfono
+      let t; try { t = fs.readFileSync(path.join(ROOT, 'dist', 'movil.js')); } catch { await rebuildOffice(); try { t = fs.readFileSync(path.join(ROOT, 'dist', 'movil.js')); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/movil.js no está: node build.mjs'); } }
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+      return res.end(req.method === 'HEAD' ? undefined : t);
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/dictado.js') { // dictado por voz (src/dictado.js → dist/dictado.js): un script suelto; la página solo lo pide si el navegador sabe dictar
       let t; try { t = fs.readFileSync(path.join(ROOT, 'dist', 'dictado.js')); } catch { await rebuildOffice(); try { t = fs.readFileSync(path.join(ROOT, 'dist', 'dictado.js')); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/dictado.js no está: node build.mjs'); } }
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });

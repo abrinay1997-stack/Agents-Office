@@ -32,6 +32,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     const opt = (v, note) => `<label class="sg-th"><input type="radio" name="sgTheme" value="${v}"${cur === v ? ' checked' : ''}><span class="sg-sw ${v}" aria-hidden="true"><i class="l"></i><i class="d"></i></span><b>${THEME_NAME[v]}</b><small>${note}</small><span class="sg-ok" aria-hidden="true">✓</span></label>`;
     return `<p class="sg-lead">Cómo se ve la oficina en este navegador. Se aplica al instante y se recuerda aquí: cada computadora elige el suyo.</p>
       <fieldset class="sg-theme"><legend>Tema</legend>${opt('light', 'El de siempre. Es el predeterminado.')}${opt('dark', 'Para la noche o una sala a oscuras.')}${opt('auto', `Sigue a tu sistema y cambia con él (ahora: ${sys}).`)}</fieldset>
+      <fieldset class="sg-theme"><legend>Versión</legend>${[['auto', 'Automática (móvil en teléfonos)'], ['movil', 'Móvil'], ['escritorio', 'Escritorio']].map(([v, t]) => `<label class="sg-th"><input type="radio" name="sgMv" value="${v}"${(localStorage.getItem('ao.movil') || 'auto') === v ? ' checked' : ''}><b>${t}</b></label>`).join('')}</fieldset>
       <p class="sg-lead">¿Grabas la pantalla? El modo cámara (tecla V) pone un fondo neutro que no se quema en video.</p>`;
   }
   const keysHTML = () => `<div class="sg-keys"><label class="sg-k1"><input type="checkbox" class="sg-k1c"${unaTeclaOn() ? ' checked' : ''}> <span><b>Atajos de una tecla</b> (una letra sola, sin Ctrl). Apágalos si usas control por voz o si a veces pulsas teclas sin querer: Ctrl + K, Esc y las flechas siguen.</span></label><p class="sg-lead">Funcionan cuando no estás escribiendo. Pulsa una línea para hacerlo ahora. <kbd>?</kbd> abre esta lista desde cualquier sitio.</p>
@@ -138,6 +139,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   });
   el.addEventListener('change', e => { if (e.target.classList?.contains('sg-k1c')) { setUnaTecla(e.target.checked); msg(e.target.checked ? 'Atajos de una tecla encendidos.' : 'Atajos de una tecla apagados: solo Ctrl + K, Esc y las flechas.'); return; } }); // IMG-26
   el.addEventListener('change', e => { // Apariencia: the theme applies at once, remembered in this browser
+    if (e.target.name === 'sgMv') { localStorage.setItem('ao.movil', e.target.value); dispatchEvent(new Event('ao:movil')); return; }
     if (e.target.name !== 'sgTheme' || !theme) return;
     theme.set(e.target.value); msg(`Tema: ${THEME_NAME[e.target.value] || e.target.value}. Se recuerda en este navegador.`);
   });
