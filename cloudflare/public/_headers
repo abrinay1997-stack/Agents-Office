@@ -21,6 +21,8 @@
 
 # La oficina real es una sola página con sus scripts dentro (2 MB): necesita 'unsafe-inline'. Sigue sin poder hablar con terceros
 # (connect-src 'self') ni cargar scripts de fuera. Solo se sirve con sesión.
+# Las imágenes de Meta (fotos de perfil, miniaturas, adjuntos) NO se abren a sus hosts: nube.js las pide a /api/imagen-meta, que las baja una vez y las sirve del mismo origen (img-src sigue en 'self').
+# frame-src: UN solo marco, la vista previa de anuncios de Meta (Anuncios → Borradores → «Ver la de Meta»), con ese origen y esa ruta exactos; todo lo demás, sin marcos.
 /oficina/*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-src https://www.facebook.com/ads/api/preview_iframe.php; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
   Cache-Control: private, no-cache

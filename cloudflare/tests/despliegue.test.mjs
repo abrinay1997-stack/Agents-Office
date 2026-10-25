@@ -40,6 +40,10 @@ test('la CSP: el acceso y el panel son estrictos; solo la oficina real admite sc
   }
   for (const ruta of ['/login.html', '/panel.html']) assert.ok(!/script-src[^;]*unsafe-inline/.test(bloques[ruta]), `${ruta} sin scripts en línea`);
   assert.ok(!/default-src[^;]*\*|script-src[^;]*https?:/.test(h), 'ningún origen de fuera');
+  // las imágenes de Meta van por /api/imagen-meta: img-src nunca suma un host de terceros; y el único marco permitido es la vista previa de anuncios de Meta, con su ruta exacta
+  const ofi = bloques['/oficina/*'], dir = (n) => (new RegExp(`${n} ([^;]*)`).exec(ofi) || [])[1];
+  assert.equal(dir('img-src'), "'self' data: blob:"); assert.equal(dir('frame-src'), 'https://www.facebook.com/ads/api/preview_iframe.php');
+  for (const d of ['connect-src', 'script-src', 'style-src', 'font-src', 'media-src']) assert.ok(!/https?:/.test(dir(d) || ''), `${d} sin hosts de fuera`);
   for (const f of ['login.html', 'panel.html']) assert.ok(!/<script>[^<]/.test(leer('public/' + f)), `${f} sin scripts en línea`);
 });
 
@@ -47,7 +51,7 @@ test('todo secreto que lee el Worker (env.X) está declarado en secretos.json', 
   const cfg = JSON.parse(leer('secretos.json'));
   const declarados = new Set([...cfg.obligatorios, ...cfg.opcionales]);
   const vars = new Set(Object.keys(wrangler.vars));
-  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'RELOJ_MS']); // RELOJ_MS: solo lo pone una prueba (el reloj de los topes de acceso)
+  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'RELOJ_MS', 'FETCH_IMAGEN_META']); // RELOJ_MS y FETCH_IMAGEN_META: solo los pone una prueba (el reloj de los topes de acceso; el `fetch` del proxy de imágenes de Meta)
   for (const f of archivos(join(RAIZ, 'worker')).filter((x) => x.endsWith('.js'))) {
     for (const m of leer(f.slice(RAIZ.length + 1)).matchAll(/\benv\.([A-Z][A-Z0-9_]+)/g))
       assert.ok(declarados.has(m[1]) || vars.has(m[1]) || propios.has(m[1]), `${f}: env.${m[1]} no está en secretos.json`);
