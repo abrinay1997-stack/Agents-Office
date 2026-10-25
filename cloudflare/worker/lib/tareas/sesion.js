@@ -133,11 +133,15 @@ export async function abrirSesion(db, { ahora = () => Date.now(), bitacora = nul
   return sesion;
 }
 
-/** Corre `fn(sesion)` y vuelca; si otra petición cambió lo mismo en medio, lo repite desde cero (hasta 3 veces). `fn` debe poder repetirse. */
+/** Corre `fn(sesion)` y vuelca; si otra petición cambió lo mismo en medio, lo repite desde cero (hasta INTENTOS veces, con una espera al azar que crece: sin ella, varias
+ *  personas —o una persona y el reloj— que escriben la MISMA tarea a la vez chocan otra vez, todas al mismo tiempo, y las últimas se quedaban sin nada tras 3 intentos).
+ *  `fn` debe poder repetirse. */
+export const INTENTOS = 6;
 export async function conSesion(db, opciones, fn) {
   if (typeof opciones === 'function') { fn = opciones; opciones = {}; }
   let ultimo;
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < INTENTOS; i++) {
+    if (i) await new Promise((r) => setTimeout(r, Math.floor(Math.random() * 12 * (2 ** i)))); // 0–24, 0–48, 0–96, 0–192… ms
     const s = await abrirSesion(db, opciones);
     try { const r = await fn(s); await s.terminar(); return r; }
     catch (e) { if (!e?.conflicto) throw e; ultimo = e; }
