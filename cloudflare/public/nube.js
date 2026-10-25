@@ -183,10 +183,17 @@
     if (m.nombre && m.por?.id && m.por.id !== yo?.id && t - (avisadas.get(m.area) ?? 0) > 8000) { avisadas.set(m.area, t); avisoBreve(`${m.por.nombre || 'Alguien'} cambió ${m.nombre}.`); } // el nombre legible lo manda el servidor (lista blanca): nunca sale un nombre interno
   }
   let toastT = 0;
-  function avisoBreve(t) {
+  function avisoBreve(t, ms = 3500) {
     let e = $('#nubeAviso'); if (!e) { e = document.createElement('div'); e.id = 'nubeAviso'; e.setAttribute('role', 'status'); e.setAttribute('aria-live', 'polite'); document.body.appendChild(e); }
-    e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), 3500);
+    e.textContent = t; e.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), ms);
   }
+  // «Suscribirme (.ics)» del calendario: la app de calendario de otra empresa (Google, Outlook…) no puede entrar con tu sesión, así que su dirección no le sirve. Aquí se BAJA el archivo con tus rutinas y tareas de hoy.
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest?.('[data-ics]')) return;
+    ev.preventDefault(); ev.stopImmediatePropagation();
+    const a = document.createElement('a'); a.href = '/api/calendar.ics'; a.download = 'oficina.ics'; document.body.appendChild(a); a.click(); a.remove();
+    avisoBreve('Se bajó tu calendario (.ics). Una app de calendario no puede entrar por su dirección a la oficina en la nube: impórtalo, y vuelve a bajarlo cuando quieras ponerlo al día.', 9000);
+  }, true);
 
   // ---------- Ajustes → Mi perfil / Equipo ----------
   function abrirAjustes(tab) {

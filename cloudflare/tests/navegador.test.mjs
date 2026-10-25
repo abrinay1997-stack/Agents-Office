@@ -98,3 +98,22 @@ test('nube.js: una foto que no se puede leer y un corte de red se dicen en espa�
   const red = await p.textContent('.nb-msg'); assert.match(red, /Sin conexión con la oficina/); assert.doesNotMatch(red, /fetch|network/i);
   await ctx.close();
 });
+
+test('nube.js: «Suscribirme (.ics)» baja el archivo en lugar de copiar una dirección que una app de calendario no puede abrir (pide sesión)', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const yo = { id: 'u1', email: 'a@x.test', rol: 'admin', nombre: 'Ana', color: '#123456', foto: null };
+  const { p, ctx } = await pagina((ruta) => {
+    if (ruta === '/') return { headers: cuerpoHTML, body: '<!doctype html><body><div id="topbar"><div id="topdock"></div></div><button id="topSettings">x</button><div id="setOv" hidden><div class="sg-tabs"></div><div class="sg-pane"></div></div><button data-ics id="ics">Suscribirme</button><script>document.body.addEventListener("click", (e) => { if (e.target.closest("[data-ics]")) window.__copio = 1; });</script><script src="/nube.js"></script></body>' };
+    if (ruta === '/nube.js') return { headers: js, body: leer('nube.js') };
+    if (ruta === '/api/yo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usuario: yo }) };
+    if (ruta === '/api/equipo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ yo: 'u1', roles: ['admin'], miembros: [{ ...yo, yo: true, fundador: true }], invitaciones: [] }) };
+    if (ruta === '/api/calendar.ics') return { headers: { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"' }, body: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n' };
+    return null;
+  });
+  await p.goto('https://oficina.test/'); await p.waitForSelector('#nubeYo');
+  const [bajada] = await Promise.all([p.waitForEvent('download'), p.click('#ics')]);
+  assert.equal(bajada.suggestedFilename(), 'oficina.ics');
+  assert.equal(await p.evaluate(() => window.__copio ?? null), null, 'el manejador de la página (copiar la dirección) no corre');
+  assert.match(await p.textContent('#nubeAviso'), /Se bajó tu calendario/);
+  await ctx.close();
+});
