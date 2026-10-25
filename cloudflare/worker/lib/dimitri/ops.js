@@ -177,13 +177,21 @@ export async function hacerOps({ env, db, usuario, modulos, C, msgId, items }) {
   try { return await hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }); } finally { enCurso.delete(claveDe(msgId)); }
 }
 async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }) {
-  const m = await chat.mensaje(db, msgId);
-  if (!m || !m.ops) return { error: 'esa propuesta ya no existe' };
-  const ej = crearEjecutor({ env, db, usuario, modulos });
+  const previo = await chat.mensaje(db, msgId);
+  if (!previo || !previo.ops) return { error: 'esa propuesta ya no existe' };
   const byK = new Map((Array.isArray(items) ? items : []).filter((e) => e && Number.isInteger(e.k)).map((e) => [e.k, e]));
+  // se RECLAMAN las ops (proposed → running) con compare-and-swap en la fila ANTES de hacerlas: dos peticiones a la vez (o dos instancias del Worker) no pueden hacer la misma. Una «running» de hace más de 2 min se cayó a medias: se puede reclamar otra vez.
+  const mias = new Set();
+  const m = await chat.reclamar(db, msgId, (x) => {
+    if (!Array.isArray(x.ops)) return false;
+    for (const o of x.ops) if (byK.has(o.k) && (o.state === 'proposed' || (o.state === 'running' && Date.now() - (o.runningAt || 0) > 120e3))) { o.state = 'running'; o.runningAt = Date.now(); mias.add(o.k); }
+    return mias.size > 0;
+  });
+  if (!m) return { error: 'ya lo está haciendo otra petición, o ya está hecho: espera un momento y recarga', busy: true };
+  const ej = crearEjecutor({ env, db, usuario, modulos });
   let done = 0, failed = 0, segundo = 0;
   for (const o of m.ops) {
-    if (o.state !== 'proposed' || !byK.has(o.k)) continue;
+    if (!mias.has(o.k) || o.state !== 'running') continue;
     const e = byK.get(o.k);
     if (e.include === false) { o.state = 'skipped'; continue; }
     const pick = (k) => (e[k] !== undefined ? { [k]: e[k] } : {}); // lo que el dueño editó en la tarjeta, comprobado otra vez como la primera
@@ -192,13 +200,14 @@ async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }) {
     const ctxP = await contextoDeOps({ office: ej.office, C, db, ops: pedido });
     const [v] = sub.parseOps(pedido, { ...ctxP, owner: true }).ops; // owner: «pide tu OK» de la tarjeta es del dueño
     if (!v) { o.state = 'failed'; o.error = 'ya no se puede: algo cambió en la oficina, la hora ya pasó o el horario no está completo'; failed++; continue; }
-    Object.assign(o, v, { k: o.k });
+    Object.assign(o, v, { k: o.k, state: 'running', runningAt: o.runningAt });
     try {
       await ej.runOp(o, { por: 'dimitri' });
       if (o.pendiente) { delete o.pendiente; o.state = 'confirmar'; delete o.error; segundo++; } // gasta dinero: la tarjeta enseña la cifra y espera el SEGUNDO clic del dueño
       else { o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; }
     } catch (err) { o.state = 'failed'; o.error = String(err.message || err).slice(0, 300); failed++; }
   }
+  for (const o of m.ops) if (mias.has(o.k)) delete o.runningAt;
   await chat.reemplazar(db, m);
   const cuenta = sub.message('sub', `${done ? `Hecho: ${done} ${done === 1 ? 'cambio' : 'cambios'} en el calendario y la oficina. Puedes deshacerlo en la tarjeta durante ${OPS_UNDO_MS / 1000} s.` : segundo ? '' : 'No cambié nada.'}${segundo ? ` ${segundo === 1 ? 'Un cambio gasta' : segundo + ' cambios gastan'} dinero en anuncios: su tarjeta dice cuánto y espera tu segundo clic (tienes 2 minutos).` : ''}${failed ? ` ${failed} no se pudo: lo dice su tarjeta.` : ''}`.trim());
   if (done || failed || segundo) await chat.anexar(db, cuenta);

@@ -34,3 +34,28 @@ export async function leerConTope(req, tope = TOPE_CUERPO) {
   const todo = new Uint8Array(n); let o = 0; for (const p of partes) { todo.set(p, o); o += p.length; }
   return new TextDecoder().decode(todo);
 }
+
+/* ---------- firmas de quien llama (Stripe, WhatsApp): el secreto propio de cada sistema, nunca el token de la oficina ---------- */
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+async function hmacHex(secreto, texto) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(secreto)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return hex(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(texto)));
+}
+export const TOLERANCIA_STRIPE_S = 300;
+/** `Stripe-Signature: t=<segundos>,v1=<hex>[,v1=…]` — firma de `${t}.${cuerpo}` con el secreto del endpoint. Un timestamp fuera de 5 min se rechaza (un reenvío viejo). */
+export async function firmaStripeValida(cuerpo, cabecera, secreto, ahora = Date.now()) {
+  if (String(secreto || '').length < 16 || !cabecera) return false;
+  const partes = String(cabecera).split(',').map((p) => p.trim().split('='));
+  const t = Number((partes.find(([k]) => k === 't') || [])[1]);
+  if (!Number.isFinite(t) || Math.abs(ahora / 1000 - t) > TOLERANCIA_STRIPE_S) return false;
+  const esperada = await hmacHex(secreto, `${t}.${cuerpo}`);
+  return partes.some(([k, v]) => k === 'v1' && typeof v === 'string' && igualSeguro(v, esperada));
+}
+/** `X-Hub-Signature-256: sha256=<hex>` — HMAC del cuerpo crudo con el secreto de la app de Meta. */
+export async function firmaHubValida(cuerpo, cabecera, secreto) {
+  if (String(secreto || '').length < 16 || !cabecera) return false;
+  const m = /^sha256=([0-9a-f]{64})$/i.exec(String(cabecera).trim()); if (!m) return false;
+  return igualSeguro(m[1].toLowerCase(), await hmacHex(secreto, cuerpo));
+}
+/** El token SOLO por cabecera (X-Office-Token o Bearer): una dirección con el token queda en los registros de quien envía. */
+export const tokenDeCabecera = (req) => req.headers.get('x-office-token') || String(req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || '';

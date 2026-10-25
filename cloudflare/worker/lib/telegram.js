@@ -5,12 +5,24 @@
 //     reglas que en la página (solo el dueño aprueba; el gasto de anuncios pide dos toques y la cifra; un aprobador delegado solo toca los departamentos que se le dieron — lo comprueba `crearBot`);
 //   · el estado (lo que el bot recuerda entre mensajes: el «¿qué debe cambiar?» de un Devolver, lo retenido por el no molestar, el token del segundo toque de un gasto) vive en D1, doc `telegram.estado`.
 import { crearBot, crearAvisador, esc, chunks, configured, owners, avisosPorDefecto, aprobadoresDe, piezaTexto, piezaBotones, approvalText, approvalButtons, COMANDOS } from '../../../telegram-core.mjs';
-import { leerDoc, guardarDoc } from './almacen.js';
+import { leerDoc, mutarDoc } from './almacen.js';
 import { avisosTodos } from './salud.js';
 import { cargarTareas } from './tareas/sesion.js';
 import { leerContexto } from './tareas/contexto.js';
 import { leerCfg } from './ajustes.js';
 import { crearOffice } from './agentes/herramientas.js';
+
+/** Los ids que mandan, AHORA: TELEGRAM_OWNER_ID (secreto) y los administradores que se registraron en Ajustes (`telegram.admins`) CUYO USUARIO SIGUE SIENDO ADMIN. Se mira en cada mensaje: degradar a alguien le quita el bot al instante. */
+export async function idsAdmins(env, db, cfg) {
+  const reg = cfg?.telegram?.admins && typeof cfg.telegram.admins === 'object' ? Object.entries(cfg.telegram.admins).filter(([id, c]) => /^\d{4,15}$/.test(id) && typeof c === 'string') : [];
+  const vivos = [];
+  if (reg.length) {
+    const { results } = await db.prepare(`select email from users where rol = 'admin' and email in (${reg.map(() => '?').join(',')})`).bind(...reg.map(([, c]) => c.toLowerCase())).all();
+    const admins = new Set(results.map((r) => r.email));
+    for (const [id, c] of reg) if (admins.has(c.toLowerCase())) vivos.push(id);
+  }
+  return [...new Set([...owners(env), ...vivos])];
+}
 
 export const DOC_ESTADO = 'telegram.estado';
 const API = 'https://api.telegram.org';
@@ -22,18 +34,44 @@ export async function leerEstado(db) {
   return { st: { ...ESTADO_VACIO(), ...(valor || {}) }, version };
 }
 
+const MAPAS = ['pendingReject', 'gastos', 'refused', 'tareas']; // objetos id → valor: se fusionan clave por clave
+const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+/** Los desconocidos avisados: solo las últimas 200 entradas y de las últimas 24 h (un extraño por mensaje no llena D1). */
+export function podarRefused(refused, ahora) {
+  const v = Object.entries(refused || {}).filter(([, t]) => ahora - Number(t) < 864e5).sort((a, b) => b[1] - a[1]).slice(0, 200);
+  return Object.fromEntries(v);
+}
+/** Guarda el estado SIN pisar a nadie: la webhook y el reloj corren a la vez. Con la versión como condición (mutarDoc reintenta) y campo por campo: de los mapas se aplica solo lo que cambió aquí. */
+export async function guardarEstado(db, st, foto, ahora = Date.now()) {
+  st.refused = podarRefused(st.refused, ahora);
+  return mutarDoc(db, DOC_ESTADO, ESTADO_VACIO(), (actual) => {
+    const o = { ...ESTADO_VACIO(), ...(actual || {}) };
+    for (const k of Object.keys(st)) {
+      if (MAPAS.includes(k)) {
+        const m = { ...(o[k] || {}) };
+        for (const [id, v] of Object.entries(st[k] || {})) if (!igual(v, foto[k]?.[id])) m[id] = v;
+        for (const id of Object.keys(foto[k] || {})) if (!(id in (st[k] || {}))) delete m[id];
+        o[k] = m;
+      } else if (k === 'avisosIds') { if (!igual(st[k], foto[k])) o[k] = [...new Set([...(o[k] || []), ...(st[k] || [])])].slice(-300); }
+      else if (!igual(st[k], foto[k])) o[k] = k === 'ultimoUpdate' || k === 'avisosHasta' ? Math.max(Number(o[k]) || 0, Number(st[k]) || 0) : st[k];
+    }
+    if (o.refused) o.refused = podarRefused(o.refused, ahora);
+    return o;
+  });
+}
+
 /**
  * El bot de ESTA invocación: { bot, av, st, guardar, send, call }. `modulos`: los módulos por los que entra cada ruta.
  * `fetchFn` (pruebas): un Telegram de mentira.
  */
 export async function armar({ env, db, modulos, fetchFn = null, ahoraFn = () => Date.now() }) {
   if (!configured(env)) return null;
-  const token = String(env.TELEGRAM_BOT_TOKEN || '').trim(), who = owners(env);
-  const cfg = await leerCfg(db), C = await leerContexto(db);
+  const token = String(env.TELEGRAM_BOT_TOKEN || '').trim();
+  const cfg = await leerCfg(db), C = await leerContexto(db), who = await idsAdmins(env, db, cfg);
   const tg = { ...(cfg.telegram || {}) }, notify = avisosPorDefecto(tg), approvers = aprobadoresDe(tg);
-  const { st } = await leerEstado(db);
+  const { st } = await leerEstado(db), foto = structuredClone(st); // `foto` = lo que había al leer: al guardar solo se aplica lo que ESTA invocación cambió
   const f = fetchFn || env.__pruebas?.fetch || ((...a) => fetch(...a));
-  const guardar = () => guardarDoc(db, DOC_ESTADO, st);
+  const guardar = () => guardarEstado(db, st, foto, ahoraFn());
 
   // Telegram: el token solo va en la URL; un error dice lo que Telegram contestó, nunca la URL
   const call = async (m, body) => {
@@ -76,7 +114,7 @@ export async function armar({ env, db, modulos, fetchFn = null, ahoraFn = () => 
   const gastos = { recordar(k, x) { const t = ahoraFn(); for (const [a, b] of Object.entries(st.gastos)) if (b.vence <= t) delete st.gastos[a]; st.gastos[k] = x; }, get: (k) => st.gastos[k], delete: (k) => { delete st.gastos[k]; } };
   const refused = { get: (k) => st.refused[k], set: (k, v) => { st.refused[k] = v; } };
   // `saveSt` del bot: el estado vive en el objeto `st` y se guarda al terminar la invocación
-  const bot = crearBot({ cfg: { ...cfg, deputy: { name: cfg.deputy?.name || 'Dimitri' } }, who, approvers, st, saveSt: () => {}, local, call, send, sendPieza, flushHeld: av.flushHeld, gastos, refused, log });
+  const bot = crearBot({ cfg: { ...cfg, deputy: { name: cfg.deputy?.name || 'Dimitri' } }, who, approvers, st, saveSt: () => {}, local, call, send, sendPieza, flushHeld: av.flushHeld, gastos, refused, silencioExtranos: true, log });
   return { db, bot, av, st, guardar, send, call, who, notify, approvers, C, cfg, local, ahoraFn };
 }
 

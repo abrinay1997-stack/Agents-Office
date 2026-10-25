@@ -5,7 +5,7 @@
 //   3. el disparador existe y no está pausado;   4. el cuerpo, con tope de 1 MB;   5. el mismo evento una sola vez y el tope `perHour`;   6. lo recibido va al agente como DATOS, no como órdenes.
 import { json, error, prohibido } from '../lib/respuesta.js';
 import * as T from '../../../triggers-core.mjs';
-import { tokenValido, tokenDe, tasaPublica, leerConTope, TOPE_CUERPO } from '../lib/publica.js';
+import { tokenValido, tokenDe, tokenDeCabecera, tasaPublica, leerConTope, TOPE_CUERPO, firmaStripeValida, firmaHubValida } from '../lib/publica.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
 import { leerDisparadores, guardarDisparadores, admitir, olvidarEvento, limpiarEventos, crearTareaDeEvento, avisar } from '../lib/disparadores.js';
 import { conAnuncios, ESPEJO_WEBHOOK } from '../lib/anuncios-nube.js';
@@ -13,7 +13,7 @@ import { deDisparador } from '../../../anuncios/conversiones.mjs';
 
 export const nombre = 'disparadores';
 export const grupos = ['triggers', 'hook'];
-const MAX_POR_MINUTO = 120;
+const MAX_POR_MINUTO = 120, FIRMADAS = ['stripe', 'whatsapp']; // fuentes que traen firma propia
 
 export async function publica({ req, env, db, url, ruta }) {
   const m = /^\/api\/hook\/([a-z0-9-]+)$/.exec(ruta);
@@ -24,17 +24,30 @@ export async function publica({ req, env, db, url, ruta }) {
     return json({ error: 'refused' }, 403);
   }
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
-  // 1) el secreto, antes que nada
-  if (!tokenValido(tokenDe(req, url), env.AO_HOOK_TOKEN)) return json({ error: String(env.AO_HOOK_TOKEN || '').length >= 16 ? 'token incorrecto' : 'esta oficina no acepta webhooks: falta el secreto AO_HOOK_TOKEN' }, 401);
-  // 2) un tope por minuto para todos los disparadores juntos
-  if (!(await tasaPublica(db, 'hook', MAX_POR_MINUTO)).ok) return json({ error: `demasiados eventos por minuto (${MAX_POR_MINUTO})` }, 429);
-  // 3) el disparador
-  const C = await leerContexto(db), { triggers: lista, problems } = await leerDisparadores(db, C.agents), tr = lista.find((t) => t.id === id);
-  if (!tr) { const p = problems.find((x) => x.startsWith(id + ':') || x.includes(`«${id}»`)); return json({ error: p || `no hay un disparador «${id}»` }, 404); }
-  if (tr.paused) return json({ ok: true, skipped: 'pausado' }, 202);
-  // 4) el cuerpo, con tope
+  // 1) quién llama, antes que nada. Un sistema con firma propia (Stripe, WhatsApp) se identifica con ELLA (su secreto, no el de la oficina); el resto, con AO_HOOK_TOKEN.
+  const tokenOk = tokenValido(tokenDe(req, url), env.AO_HOOK_TOKEN), tokenCab = tokenValido(tokenDeCabecera(req), env.AO_HOOK_TOKEN);
+  const cabStripe = req.headers.get('stripe-signature'), cabHub = req.headers.get('x-hub-signature-256');
+  if (!tokenOk && !cabStripe && !cabHub) return json({ error: String(env.AO_HOOK_TOKEN || '').length >= 16 ? 'token incorrecto' : 'esta oficina no acepta webhooks: falta el secreto AO_HOOK_TOKEN' }, 401);
+  // 2) el cuerpo, con tope (la firma se calcula sobre los bytes tal como llegaron)
   const raw = await leerConTope(req, TOPE_CUERPO);
   if (raw === null) return json({ error: 'demasiado grande' }, 413);
+  let firmada = null; // 'stripe' | 'whatsapp' cuando la firma de quien llama es buena
+  if (cabStripe && await firmaStripeValida(raw, cabStripe, env.STRIPE_WEBHOOK_SECRET)) firmada = 'stripe';
+  else if (cabHub && await firmaHubValida(raw, cabHub, env.WHATSAPP_APP_SECRET)) firmada = 'whatsapp';
+  if (!tokenOk && !firmada) return json({ error: 'firma incorrecta (o falta el secreto de ese sistema en la oficina)' }, 401);
+  // 3) un tope por minuto para todos los disparadores juntos
+  if (!(await tasaPublica(db, 'hook', MAX_POR_MINUTO)).ok) return json({ error: `demasiados eventos por minuto (${MAX_POR_MINUTO})` }, 429);
+  // 4) el disparador
+  const C = await leerContexto(db), { triggers: lista, problems } = await leerDisparadores(db, C.agents), tr = lista.find((t) => t.id === id);
+  if (!tr) { const p = problems.find((x) => x.startsWith(id + ':') || x.includes(`«${id}»`)); return json({ error: p || `no hay un disparador «${id}»` }, 404); }
+  // Stripe y WhatsApp solo entran con SU firma. Sin firma, solo si el disparador lo permite a propósito (`"sinFirma": true`) y con el token por CABECERA (nunca por la dirección); y se avisa.
+  if (FIRMADAS.includes(tr.source)) {
+    if (firmada !== tr.source) {
+      if (!(tr.sinFirma === true && tokenCab)) return json({ error: tr.source === 'stripe' ? 'Stripe se acepta con su firma (Stripe-Signature) y el secreto STRIPE_WEBHOOK_SECRET en la oficina' : 'WhatsApp se acepta con su firma (X-Hub-Signature-256) y el secreto WHATSAPP_APP_SECRET en la oficina' }, 401);
+      await avisar(db, { kind: 'trigger', level: 'warn', text: `El disparador «${id}» (${tr.source}) está aceptando eventos SIN firma (sinFirma: true): cualquiera con el token puede inventar uno. Configura el secreto de ${tr.source === 'stripe' ? 'Stripe' : 'WhatsApp'}.`, key: 'sinfirma-' + id });
+    }
+  } else if (!tokenOk) return json({ error: 'token incorrecto' }, 401); // una firma de otro sistema no abre un disparador común
+  if (tr.paused) return json({ ok: true, skipped: 'pausado' }, 202);
   let data = {};
   try { data = /json/.test(req.headers.get('content-type') || '') || /^\s*[{[]/.test(raw) ? JSON.parse(raw || '{}') : Object.fromEntries(new URLSearchParams(raw)); } catch { return json({ error: 'el cuerpo no es JSON ni un formulario' }, 400); }
   const a = T.adapt(tr.source, data);

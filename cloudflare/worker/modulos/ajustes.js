@@ -5,7 +5,7 @@
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { GROUPS, FIELDS } from '../../../settings.mjs';
 import { configured, owners } from '../../../telegram-core.mjs';
-import { leerCfg, valoresDe, guardarCambios, guardarAprobadores } from '../lib/ajustes.js';
+import { leerCfg, valoresDe, guardarCambios, guardarAprobadores, guardarAdmins } from '../lib/ajustes.js';
 import { leerDoc } from '../lib/almacen.js';
 
 export const nombre = 'ajustes';
@@ -16,12 +16,20 @@ const MAX_CUERPO = 64 * 1024;
 
 export async function manejar(ctx) {
   const { req, env, db, ruta, usuario } = ctx;
-  if (ruta === '/api/settings/telegram') { // quién aprueba por Telegram qué departamentos (no es un campo del formulario); nunca devuelve un secreto
-    if (req.method === 'GET') { const cfg = await leerCfg(db); return json({ on: configured(env), owners: owners(env).length, webhookSecreto: String(env.TELEGRAM_WEBHOOK_SECRET || '').length >= 16, webhook: '/api/telegram/webhook', approvers: cfg.telegram?.approvers || {} }); }
+  if (ruta === '/api/settings/telegram') { // quién usa el bot (más allá de TELEGRAM_OWNER_ID) y quién aprueba qué departamentos; nunca devuelve un secreto. Quien solo mira (lectura) no ve ids.
+    if (req.method === 'GET') {
+      if (usuario.rol === 'lectura') return prohibido('Los ids de Telegram los ven solo quienes editan.');
+      const cfg = await leerCfg(db);
+      return json({ on: configured(env), owners: owners(env).length, registrados: cfg.telegram?.admins && typeof cfg.telegram.admins === 'object' ? cfg.telegram.admins : {}, webhookSecreto: String(env.TELEGRAM_WEBHOOK_SECRET || '').length >= 16, webhook: '/api/telegram/webhook', approvers: cfg.telegram?.approvers || {}, ayuda: 'El id de Telegram de una persona se lo pides a @userinfobot (le escribes y te lo dice).' });
+    }
     if (req.method === 'PUT') {
-      if (usuario.rol !== 'admin') return prohibido('Solo un administrador cambia quién aprueba por Telegram.');
-      const b = (await ctx.cuerpo(req)) || {}, r = await guardarAprobadores(db, b.approvers, { quien: usuario.email });
-      return r.error ? error(r.error, 422) : json(r);
+      if (usuario.rol !== 'admin') return prohibido('Solo un administrador registra o quita ids de Telegram.');
+      const b = (await ctx.cuerpo(req)) || {};
+      if (b.approvers === undefined && b.admins === undefined) return error('manda { approvers: {...} } y/o { admins: { "<id>": "<correo>" } }', 422);
+      let r = { ok: true };
+      if (b.approvers !== undefined) { r = await guardarAprobadores(db, b.approvers, { quien: usuario.email }); if (r.error) return error(r.error, 422); }
+      if (b.admins !== undefined) { const o = await guardarAdmins(db, b.admins, { quien: usuario.email }); if (o.error) return error(o.error, 422); r = { ...r, ...o }; }
+      return json(r);
     }
     return null;
   }

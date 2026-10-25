@@ -5,7 +5,7 @@
 import { pickJSON } from '../../../sub-core.mjs';
 import { guardarNotas } from './cerebro.js';
 import { guardarAgente } from './tareas/roster.js';
-import { mutarDoc } from './almacen.js';
+import { mutarDoc, leerDoc } from './almacen.js';
 import { limpiarCifras } from './negocio.js';
 import { avisar } from './avisos.js';
 import { preguntar } from './dimitri/modelo.js';
@@ -35,7 +35,8 @@ export async function prepararEmpresa({ env, db, cfg, C, about, fetchFn }) {
   for (const [d, t] of Object.entries(j.briefs || {})) { const L = C.lider(d); if (L && t && !L.brief) { const r = await guardarAgente(db, L.id, { brief: String(t).slice(0, 2000) }); if (!r.problems?.length) briefs++; } }
   const cifras = Array.isArray(j.cifras) ? limpiarCifras(j.cifras.map((c) => ({ ...c, note: 'desde la web: confírmalo' }))) : [];
   let nuevas = 0;
-  if (cifras.length) await mutarDoc(db, 'cifras', { items: [] }, (d) => { const cur = Array.isArray(d.items) ? d.items : []; for (const c of cifras) if (!cur.some((x) => x.name.toLowerCase() === c.name.toLowerCase())) { cur.push(c); nuevas++; } return { items: cur }; });
-  await avisar(db, { kind: 'onboard', text: `Listo: ${escritas.length} notas nuevas en el Cerebro (00-Empresa: ${escritas.join(', ')}), ${briefs} jefes con instrucciones y ${nuevas} cifras para confirmar. Revísalas: vienen de lo que me contaste.` });
+  // las cifras que sugiere la web NO entran a `cifras` (lo que los agentes toman como verdad): esperan en `cifras.porconfirmar` hasta que el dueño las confirme (POST /api/cifras/confirmar)
+  if (cifras.length) { const hechas = new Set((await leerDoc(db, 'cifras', { items: [] })).valor?.items?.map((x) => x.name.toLowerCase()) || []); await mutarDoc(db, 'cifras.porconfirmar', { items: [] }, (d) => { const cur = Array.isArray(d.items) ? d.items : []; for (const c of cifras) if (!hechas.has(c.name.toLowerCase()) && !cur.some((x) => x.name.toLowerCase() === c.name.toLowerCase())) { cur.push(c); nuevas++; } return { items: cur }; }); }
+  await avisar(db, { kind: 'onboard', text: `Listo: ${escritas.length} notas nuevas en el Cerebro (00-Empresa: ${escritas.join(', ')}), ${briefs} jefes con instrucciones y ${nuevas} cifras por confirmar (no cuentan hasta que las confirmes en Ajustes → Cifras). Revísalas: vienen de lo que me contaste.` });
   return { notas: escritas, briefs, cifras: nuevas };
 }

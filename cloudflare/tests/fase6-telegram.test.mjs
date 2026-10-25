@@ -9,8 +9,8 @@ import { MODULOS } from '../worker/modulos/index.js';
 const EXTRA = { TELEGRAM_BOT_TOKEN: TOKEN_BOT, TELEGRAM_OWNER_ID: DUENO_TG, TELEGRAM_WEBHOOK_SECRET: SECRETO_WEBHOOK };
 const S = { 'x-telegram-bot-api-secret-token': SECRETO_WEBHOOK };
 let uid = 1000;
-const msg = (de, texto) => ({ update_id: ++uid, message: { message_id: uid, from: { id: +de }, chat: { id: +de }, text: texto } });
-const toque = (de, data) => ({ update_id: ++uid, callback_query: { id: 'cb' + uid, from: { id: +de }, data, message: { message_id: 5, chat: { id: +de } } } });
+const msg = (de, texto) => ({ update_id: ++uid, message: { message_id: uid, from: { id: +de }, chat: { id: +de, type: 'private' }, text: texto } });
+const toque = (de, data) => ({ update_id: ++uid, callback_query: { id: 'cb' + uid, from: { id: +de }, data, message: { message_id: 5, chat: { id: +de, type: 'private' } } } });
 const enviar = (o, u, h = S) => o.anon('POST', '/api/telegram/webhook', u, h);
 const dicho = (o) => o.m.textosTelegram().join('\n');
 
@@ -31,12 +31,10 @@ test('el secreto va primero: sin él o con otro, 401 y D1 intacta; sin TELEGRAM_
   assert.equal(o.m.registro.telegram.length, 0); assert.equal((await o.anon('GET', '/api/telegram/webhook')).status, 405);
 });
 
-test('un extraño solo recibe su id; el dueño usa /estado y le habla a Dimitri', async () => {
+test('un extraño no recibe NADA (ni su id); el dueño usa /estado y le habla a Dimitri', async () => {
   const o = await oficina6({ extraEnv: EXTRA, guion: [dimitriDice({ mode: 'charla', reply: 'Todo tranquilo por aquí.' })] });
-  assert.equal((await enviar(o, msg(EXTRANO_TG, '/estado'))).status, 200);
-  const x = dicho(o); assert.match(x, new RegExp(EXTRANO_TG)); assert.doesNotMatch(x, /Todo tranquilo|PanaClaw/);
-  assert.equal(o.m.registro.anthropic.length, 0, 'un extraño nunca llega a Dimitri');
-  o.m.registro.telegram.length = 0;
+  const r = await enviar(o, msg(EXTRANO_TG, '/estado')); assert.deepEqual([r.status, r.texto], [200, '{"ok":true}']);
+  assert.equal(o.m.registro.telegram.length, 0, 'ni un solo mensaje a un extraño'); assert.equal(o.m.registro.anthropic.length, 0);
   await enviar(o, msg(DUENO_TG, '/estado')); assert.ok(o.m.registro.telegram.length >= 1);
   await enviar(o, msg(DUENO_TG, '¿cómo vamos?')); assert.match(dicho(o), /Todo tranquilo/); assert.equal(o.m.registro.anthropic.length, 1);
 });
@@ -50,7 +48,7 @@ test('✅ del dueño aprueba; un extraño no; un aprobador delegado solo en sus 
   const p = await oficina6({ extraEnv: EXTRA, ajustes: { telegram: { approvers: { [APROBADOR_TG]: ['emails'] } } } });
   const respuestas = () => p.m.registro.telegram.map((x) => x.cuerpo?.text || '').join('|');
   const venta = await conEspera(p, 'sales');
-  await enviar(p, toque(EXTRANO_TG, 'ap:' + venta)); assert.match(respuestas(), /privado/); assert.doesNotMatch(respuestas(), /Aprobada/, 'un extraño no aprueba');
+  await enviar(p, toque(EXTRANO_TG, 'ap:' + venta)); assert.equal(respuestas(), '', 'un extraño: silencio, y no aprueba');
   p.m.registro.telegram.length = 0;
   await enviar(p, toque(APROBADOR_TG, 'ap:' + venta)); assert.match(respuestas(), /No tienes permiso/); assert.doesNotMatch(respuestas(), /Aprobada/, 'sales no es de su departamento');
   p.m.registro.telegram.length = 0;

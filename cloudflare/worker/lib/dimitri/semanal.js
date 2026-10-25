@@ -12,7 +12,7 @@ import { leerCfg } from '../ajustes.js';
 import { leerKpis } from '../negocio.js';
 import * as costos from '../agentes/costos.js';
 import { avisar } from '../avisos.js';
-import { leerDoc, guardarDoc } from '../almacen.js';
+import { mutarDoc, leerDoc } from '../almacen.js';
 import * as chat from './chat.js';
 import { preguntar } from './modelo.js';
 import { DOC_PROYECTOS } from './datos.js';
@@ -37,9 +37,11 @@ async function tareasSemana(db, l, C) {
 /** Escribe el informe (si es lunes, desde las 8, no se mandó esta semana y `deputy.weekly` no está apagado; con `force`, siempre). → el texto, o null si no tocaba. */
 export async function informeSemanal({ env, db, force = false, ahora = new Date(), fetchFn = null }) {
   const cfg = await leerCfg(db), wk = claveSemana(ahora);
-  const ya = (await leerDoc(db, DOC_SEMANA, {})).valor || {};
-  if (!force && (ya.week === wk || ahora.getDay() !== 1 || ahora.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
-  await guardarDoc(db, DOC_SEMANA, { ...ya, week: wk, at: ahora.getTime() }); // se apunta ANTES de pensar: dos relojes a la vez no mandan dos informes
+  if (!force && (ahora.getDay() !== 1 || ahora.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
+  // se reclama la semana ANTES de pensar, con la versión del documento como condición: dos relojes (o dos instancias) a la vez no mandan dos informes
+  let mio = false;
+  await mutarDoc(db, DOC_SEMANA, {}, (ya) => { if (!force && ya.week === wk) { mio = false; return ya; } mio = true; return { ...ya, week: wk, at: ahora.getTime() }; });
+  if (!mio) return null;
   const [C, l, k] = [await leerContexto(db), await cargarTareas(db), await leerKpis(db)];
   const c = costsCore.report(await costos.leer(db, Date.now() - 70 * 864e5), l, C.agents, cfg.costs), q = quality.byAgent(l, C.agents);
   const facts = [`Estado: ${sub.statusText(l, C.agents, C.depts)}`, `Últimos trabajos: ${sub.recentText(l, C.agents, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`,

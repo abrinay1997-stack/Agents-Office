@@ -61,7 +61,7 @@ export async function manejar(req, env, exec = null) {
   // /api/health: sin sesión, lo mínimo; con sesión, lo que la página necesita para dibujarse con los datos de ESTA oficina (el nombre de la empresa, Dimitri, el roster…).
   if (ruta === '/api/health' && req.method === 'GET') {
     const u = await usuarioDeLaPeticion(db, req); // sin cookie no toca D1
-    if (!u) return json(saludPublica(env, VERSION));
+    if (!u || u.rol === 'lectura') return json(saludPublica(env, VERSION));
     return json(await saludRica({ req, env, db, usuario: u, url, ruta }, MODULOS));
   }
 

@@ -46,6 +46,8 @@ export async function leerBase(db) {
 export async function leerCfg(db) {
   const d = await leerVarios(db, [...DOCS_BASE, DOC_AJUSTES, DOC_LOCAL]);
   let cfg = unir(unir(unir(d['tareas.config'] ?? {}, d['anuncios.ajustes'] ?? {}), d.config ?? {}), unir(d[DOC_LOCAL] ?? {}, d[DOC_AJUSTES] ?? {}));
+  // `telegram.approvers` es de REEMPLAZO, no de mezcla: quitar a un aprobador tiene que funcionar aunque la base migrada todavía lo traiga
+  for (const [clave, vale] of [['approvers', objeto], ['admins', objeto]]) for (const doc of [d[DOC_AJUSTES], d[DOC_LOCAL]]) { const a = doc?.telegram?.[clave]; if (vale(a)) { cfg.telegram = { ...(cfg.telegram || {}), [clave]: Array.isArray(a) ? [...a] : { ...a } }; break; } } // de REEMPLAZO
   const c = await cont.leerConfig(db), e = await estudio.leerConfig(db);
   cfg = unir(cfg, {
     contenido: { modo: c.modo, conductor: c.conductor, entregarHorasAntes: c.entregarHorasAntes, redes: c.redes, bandejaFuente: c.bandejaFuente, departments: c.departamentos },
@@ -127,6 +129,23 @@ export async function guardarAprobadores(db, aprobadores, { quien = 'alguien' } 
   await mutarDoc(db, DOC_AJUSTES, {}, aplicar); await mutarDoc(db, DOC_LOCAL, {}, aplicar);
   await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'ajustes', String(quien).slice(0, 120), JSON.stringify({ cambia: ['telegram.approvers'], aprobadores: Object.keys(limpio).length })).run();
   return { ok: true, approvers: limpio };
+}
+
+/** Los administradores que usan el bot además de TELEGRAM_OWNER_ID: { "<id de Telegram>": "<correo del administrador>" }. SOLO un administrador los registra o quita (la lista entera reemplaza a la anterior); el id lo da @userinfobot.
+ *  Cada correo tiene que ser hoy un administrador; y se vuelve a comprobar en CADA mensaje (`lib/telegram.js` → idsAdmins): quien pierde el rol admin deja de poder usar el bot. */
+export async function guardarAdmins(db, admins, { quien = 'alguien' } = {}) {
+  if (!objeto(admins) || Object.keys(admins).length > 10) return { error: 'manda { admins: { "<id de Telegram>": "<correo del administrador>" } } (hasta 10)' };
+  const limpio = {};
+  for (const [id, correo] of Object.entries(admins)) {
+    if (!/^\d{4,15}$/.test(id)) return { error: `«${id.slice(0, 20)}» no es un id de Telegram (un número; pídeselo a @userinfobot)` };
+    const u = await db.prepare('select rol from users where email = ?').bind(String(correo || '').toLowerCase().trim()).first();
+    if (u?.rol !== 'admin') return { error: `«${String(correo || '').slice(0, 60)}» no es un administrador de esta oficina` };
+    limpio[id] = String(correo).toLowerCase().trim();
+  }
+  const aplicar = (doc) => { const local = objeto(doc) ? JSON.parse(JSON.stringify(doc)) : {}; local.telegram = { ...(objeto(local.telegram) ? local.telegram : {}), admins: limpio }; return local; };
+  await mutarDoc(db, DOC_AJUSTES, {}, aplicar); await mutarDoc(db, DOC_LOCAL, {}, aplicar);
+  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(new Date().toISOString(), 'ajustes', String(quien).slice(0, 120), JSON.stringify({ cambia: ['telegram.admins'], n: Object.keys(limpio).length })).run();
+  return { ok: true, admins: limpio };
 }
 
 export { GROUPS, FIELDS };

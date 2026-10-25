@@ -140,7 +140,7 @@ export function crearAvisador({ tg, notify, who, approvers, st, saveSt, send, se
 
 /** Lo que ENTRA: los mensajes y los botones del teléfono. `local(método, ruta, cuerpo, por)` es la API de la oficina (con las mismas reglas que la página); `call` habla con Telegram;
  *  `gastos` recuerda el token del segundo toque de un gasto ({ recordar, get, delete }); `refused` es un Map-like de desconocidos (id → cuándo se le avisó). */
-export function crearBot({ cfg, who, approvers, st, saveSt, local, call, send, sendPieza, flushHeld, gastos, refused, log = console }) {
+export function crearBot({ cfg, who, approvers, st, saveSt, local, call, send, sendPieza, flushHeld, gastos, refused, silencioExtranos = false, log = console }) {
   const isOwner = id => allowed(id, who), canApprove = (id, dept) => isOwner(id) || (approvers[String(id)] || []).includes(dept);
   /** Lo que espera tu OK en Contenido: lo que está en revisión y los borradores de la semana que ya pueden salir. */
   async function piezasPendientes() {
@@ -260,7 +260,8 @@ export function crearBot({ cfg, who, approvers, st, saveSt, local, call, send, s
             else if (u.message?.text) { const { cmd } = parseCommand(u.message.text); if (cmd === 'pendientes') { const list = (await local('GET', '/api/tasks')).filter(t => t.state === 'waiting' && !t.archived && canApprove(from, t.dept)); if (!list.length) await send(chat, 'Nada de tus departamentos espera visto bueno. ✓'); for (const t of list.slice(0, 10)) await send(chat, approvalText(t, t.agent, t.dept), { reply_markup: approvalButtons(t.id) }); } else await send(chat, 'Puedes aprobar o devolver lo de tus departamentos con los botones, y ver lo pendiente con /pendientes.'); }
             return;
           }
-          if (!allowed(from, who)) { // a stranger: refused, told their id once a day, and the owner hears about it
+          if (!allowed(from, who)) { // a stranger: refused, told their id once a day, and the owner hears about it (la nube: silencio total, `silencioExtranos`)
+            if (silencioExtranos) return;
             if (Date.now() - (refused.get(from) || 0) > 864e5) { refused.set(from, Date.now()); send(chat, `Este bot es privado. Tu id es <code>${esc(from)}</code>; si el dueño quiere darte acceso, lo añade a TELEGRAM_OWNER_ID.`); log.warn(`telegram: refused user ${from}`); }
             return;
           }

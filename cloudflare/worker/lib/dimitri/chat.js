@@ -61,3 +61,16 @@ export async function restaurar(db, id) {
   await recortar(db);
   return true;
 }
+
+/**
+ * Cambia un mensaje SOLO si nadie más lo cambió entre leerlo y escribirlo (compare-and-swap sobre el texto de la fila). `cambiar(m)` lo modifica y devuelve false para no tocar nada.
+ * → el mensaje ya cambiado, o null si no existe, `cambiar` dijo que no, o perdió contra otra petición (que ya lo hizo).
+ */
+export async function reclamar(db, id, cambiar) {
+  const f = await db.prepare('select json from filas where coleccion = ? and id = ?').bind(COL, String(id)).first();
+  if (!f) return null;
+  let m; try { m = JSON.parse(f.json); } catch { return null; }
+  if (cambiar(m) === false) return null;
+  const r = await db.prepare('update filas set json = ?, actualizado = ? where coleccion = ? and id = ? and json = ?').bind(JSON.stringify(m), iso(Date.now()), COL, String(id), f.json).run();
+  return r.meta?.changes ? m : null;
+}

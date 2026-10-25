@@ -10,7 +10,8 @@ const DEF = [
   { id: 'pagos', dept: 'fin', source: 'stripe', text: 'Registra el pago.' },
 ];
 const H = { 'x-office-token': HOOK };
-async function con() { const o = await oficina6(); assert.equal((await o.admin('PUT', '/api/triggers', { triggers: DEF })).status, 200); return o; }
+async function con() { const o = await oficina6({ extraEnv: { STRIPE_WEBHOOK_SECRET: 'whsec_secreto_de_prueba_1234567890' } }); // secrets-ok: de mentira
+  assert.equal((await o.admin('PUT', '/api/triggers', { triggers: DEF })).status, 200); return o; }
 
 test('sin token o con otro: 401 y D1 no se toca; sin AO_HOOK_TOKEN en el Worker, nadie entra', async () => {
   const o = await con(); const { n, d1 } = contandoD1(o.d1);
@@ -48,8 +49,10 @@ test('órdenes escondidas: la tarea espera tu OK; cuerpo grande 413; mal JSON 40
 
 test('Stripe: un evento que no es de pago se ignora; formulario como application/x-www-form-urlencoded', async () => {
   const o = await con();
-  assert.equal((await o.anon('POST', '/api/hook/pagos', { type: 'customer.updated', id: 'e' }, H)).j.skipped !== undefined, true);
-  const ok = await o.anon('POST', '/api/hook/pagos', { id: 'evt_9', type: 'payment_intent.succeeded', data: { object: { amount_received: 5000, currency: 'usd', receipt_email: 'c@x.com' } } }, H); assert.equal(ok.status, 200, ok.texto);
+  { const c = JSON.stringify({ type: 'customer.updated', id: 'e' }), t = Math.floor(Date.now() / 1000); const f = 't=' + t + ',v1=' + (await import('node:crypto')).createHmac('sha256', 'whsec_secreto_de_prueba_1234567890').update(t + '.' + c).digest('hex'); assert.equal((await o.anon('POST', '/api/hook/pagos', c, { 'stripe-signature': f })).j.skipped !== undefined, true); } // secrets-ok: de mentira
+  const cuerpo = JSON.stringify({ id: 'evt_9', type: 'payment_intent.succeeded', data: { object: { amount_received: 5000, currency: 'usd', receipt_email: 'c@x.com' } } }), t = Math.floor(Date.now() / 1000);
+  const firma = 't=' + t + ',v1=' + (await import('node:crypto')).createHmac('sha256', 'whsec_secreto_de_prueba_1234567890').update(t + '.' + cuerpo).digest('hex'); // secrets-ok: de mentira
+  const ok = await o.anon('POST', '/api/hook/pagos', cuerpo, { 'stripe-signature': firma, 'content-type': 'application/json' }); assert.equal(ok.status, 200, ok.texto);
   const f = await o.anon('POST', '/api/hook/formulario-web', 'name=Luis&message=Hola', { ...H, 'content-type': 'application/x-www-form-urlencoded' }); assert.equal(f.status, 200, f.texto);
 });
 

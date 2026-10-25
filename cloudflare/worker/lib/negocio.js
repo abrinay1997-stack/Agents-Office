@@ -70,3 +70,14 @@ export async function guardarVoz(db, texto, ahora = Date.now()) {
   const actual = await leerVoz(db);
   await guardarNotas(db, [{ nombre: 'voice', grupo: actual?.grupo || '20-Brand', oficina: 0, texto: texto.slice(0, 20000) + '\n', actualizado: ahora, tarea: null }]);
 }
+
+/* ---------- cifras por confirmar (las que sugiere «Preparar desde mi web»): los agentes no las leen hasta que el dueño las confirma ---------- */
+export async function leerPorConfirmar(db) { const v = (await leerDoc(db, 'cifras.porconfirmar', { items: [] })).valor; return Array.isArray(v?.items) ? v.items : []; }
+/** Confirma (pasa a `cifras`) o descarta, por nombre. → { confirmadas, descartadas } */
+export async function resolverPorConfirmar(db, nombres, confirmar) {
+  const quiero = new Set((Array.isArray(nombres) ? nombres : []).map((n) => String(n).toLowerCase()));
+  let tomadas = [];
+  await mutarDoc(db, 'cifras.porconfirmar', { items: [] }, (d) => { const cur = Array.isArray(d.items) ? d.items : []; tomadas = cur.filter((c) => quiero.has(c.name.toLowerCase())); return { items: cur.filter((c) => !quiero.has(c.name.toLowerCase())) }; });
+  if (confirmar && tomadas.length) await mutarDoc(db, 'cifras', { items: [] }, (d) => { const cur = Array.isArray(d.items) ? d.items : []; for (const c of tomadas) { const sin = { ...c, note: '' }; const i = cur.findIndex((x) => x.name.toLowerCase() === c.name.toLowerCase()); if (i >= 0) cur[i] = sin; else cur.push(sin); } return { items: cur }; });
+  return confirmar ? { confirmadas: tomadas.length } : { descartadas: tomadas.length };
+}

@@ -21,9 +21,9 @@ export function validateDef(d) {
   return { def: { id, name, unit: String(d?.unit || '').trim().slice(0, 8), goal, better: d?.better === 'down' ? 'down' : 'up' } };
 }
 /** «1.250,50» · «1,250.50» · «1.200» · «1200» · «0,5» → a number (a dot or a comma followed by exactly three digits is a thousands mark). */
-export const num = s => { if (typeof s === 'number') return Number.isFinite(s) ? s : null; let t = String(s ?? '').trim().replace(/[^\d.,-]/g, ''); if (!t) return null;
+export const num = s => { if (typeof s === 'number') return Number.isFinite(s) ? s : null; const crudo = String(s ?? '').trim(); if (/\d\s*[eE][-+]?\d/.test(crudo)) return null; /* «1e999» no es 1999 */ let t = crudo.replace(/US\$|USD|B\/\.|[$€%\s]/gi, ''); if (!/^-?[\d.,]*\d[\d.,]*$/.test(t)) return null; /* basura (letras, dos signos…) se rechaza en vez de «limpiarse» */
   if (/,\d{1,2}$/.test(t)) t = t.replace(/\./g, '').replace(',', '.'); else if (/^-?\d{1,3}([.,]\d{3})+$/.test(t)) t = t.replace(/[.,]/g, ''); else t = t.replace(/,/g, '');
-  const n = parseFloat(t); return Number.isFinite(n) ? n : null; };
+  const n = parseFloat(t); return Number.isFinite(n) && Math.abs(n) < 1e15 ? n : null; };
 /** «KPI ventas_semana = 1.250,50» lines in a deliverable → [{ id, value }] (only ids the owner defined). */
 export function fromText(text, ids) {
   const out = []; const set = new Set(ids);

@@ -8,8 +8,9 @@
 // Todo lo que el bot hace entra por las MISMAS rutas que la página, con la sesión del dueño: solo el dueño aprueba, el gasto de anuncios pide dos toques y la cifra.
 import { json } from '../lib/respuesta.js';
 import { tokenValido, tasaPublica, leerConTope } from '../lib/publica.js';
-import { armar, atenderUpdate, salientes } from '../lib/telegram.js';
-import { configured } from '../../../telegram-core.mjs';
+import { armar, atenderUpdate, salientes, idsAdmins } from '../lib/telegram.js';
+import { configured, aprobadoresDe } from '../../../telegram-core.mjs';
+import { leerCfg } from '../lib/ajustes.js';
 import * as tareas from './tareas.js';
 import * as agentes from './agentes.js';
 import * as contenido from './contenido.js';
@@ -22,29 +23,39 @@ export const grupos = ['telegram'];
 
 /** Por dónde entran los comandos del bot (cada ruta, por el módulo que la posee). */
 export const MODULOS_BOT = [tareas, agentes, contenido, anuncios, estudio, dimitri];
-const MAX_UPDATE = 256 * 1024, MAX_POR_MINUTO = 120;
+const MAX_UPDATE = 256 * 1024, MAX_POR_MINUTO = 120, MAX_EXTRANOS_POR_MINUTO = 20; // el dueño y sus aprobadores tienen su tope; los extraños, uno propio y bajo: no pueden agotar el de nadie
+
+const reenviado = (m) => !!(m && (m.forward_origin || m.forward_from || m.forward_from_chat || m.forward_sender_name || m.forward_date));
 
 export async function publica({ req, env, db, url, ruta, exec }) {
   if (ruta !== '/api/telegram/webhook') return null;
   if (req.method !== 'POST') return json({ error: 'POST' }, 405);
   // 1) el secreto, antes que nada (sin secreto configurado, la oficina no acepta a Telegram)
   if (!tokenValido(req.headers.get('x-telegram-bot-api-secret-token') || '', env.TELEGRAM_WEBHOOK_SECRET)) return json({ error: 'no autorizado' }, 401);
-  if (!configured(env)) return json({ error: 'Telegram no está configurado en esta oficina (faltan TELEGRAM_BOT_TOKEN y TELEGRAM_OWNER_ID).' }, 503);
-  // 2) tope por minuto
-  if (!(await tasaPublica(db, 'telegram', MAX_POR_MINUTO)).ok) return json({ error: 'demasiadas peticiones' }, 429);
-  // 3) el cuerpo
+  if (!configured(env)) return json({ ok: true }, 200); // sin bot configurado tampoco se dice nada
+  // 2) el cuerpo, con tope (el tope por minuto va después, por clase de quien escribe)
   const txt = await leerConTope(req, MAX_UPDATE);
-  if (txt === null) return json({ error: 'demasiado grande' }, 413);
-  let update; try { update = JSON.parse(txt); } catch { return json({ error: 'el cuerpo no es JSON' }, 400); }
-  if (!update || typeof update !== 'object' || !Number.isInteger(update.update_id)) return json({ ok: true, ignorado: true }, 200);
+  if (txt === null) return json({ ok: true }, 200);
+  let update; try { update = JSON.parse(txt); } catch { return json({ ok: true }, 200); }
+  if (!update || typeof update !== 'object' || !Number.isInteger(update.update_id)) return json({ ok: true }, 200);
+  // 3) quién escribe. SILENCIO TOTAL para cualquiera que no sea el dueño (TELEGRAM_OWNER_ID o un administrador registrado en Ajustes que SIGA siendo administrador) o un aprobador delegado: ni su id, ni «bot privado», ni un error.
+  //    Y SIN ORÁCULO: todo lo que se descarta contesta exactamente lo mismo que lo atendido (200 {"ok":true}), así nadie distingue desde fuera quién tiene acceso.
+  //    Solo en chat PRIVADO; un reenviado nunca es una orden. El tope por minuto es por clase (dueño y aprobadores, uno; los demás ni se cuentan en el de ellos).
+  const OK = () => json({ ok: true }, 200);
+  const m = update.message || update.callback_query?.message, de = String(update.message?.from?.id ?? update.callback_query?.from?.id ?? '');
+  const cfg = await leerCfg(db), aprobadores = aprobadoresDe(cfg.telegram);
+  if (!(await idsAdmins(env, db, cfg)).includes(de) && !aprobadores[de]) { await tasaPublica(db, 'telegram-extranos', MAX_EXTRANOS_POR_MINUTO); return OK(); }
+  if (!(await tasaPublica(db, 'telegram', MAX_POR_MINUTO)).ok) return OK();
+  if (m?.chat?.type !== 'private') return OK();
+  if (update.message && reenviado(update.message)) return OK();
   // 4–5) el update se atiende detrás (Telegram quiere un 200 rápido; una charla con Dimitri tarda), o aquí mismo si no hay ctx.waitUntil (pruebas)
   const trabajo = (async () => {
     const t = await armar({ env, db, modulos: MODULOS_BOT });
     return t ? atenderUpdate(t, update) : null;
   })().catch((e) => console.warn('[telegram]', String(e?.message || e).slice(0, 200)));
-  if (exec?.waitUntil) { exec.waitUntil(trabajo); return json({ ok: true }, 200); }
+  if (exec?.waitUntil) { exec.waitUntil(trabajo); return OK(); }
   await trabajo;
-  return json({ ok: true }, 200);
+  return OK();
 }
 
 /** No hay rutas con sesión aquí: la configuración vive en Ajustes (/api/settings/telegram). */

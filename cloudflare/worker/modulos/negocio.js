@@ -13,7 +13,7 @@ import * as business from '../../../business.mjs';
 import * as documents from '../../../documents-core.mjs';
 import * as knowledge from '../../../knowledge.mjs';
 import { leerCfg } from '../lib/ajustes.js';
-import { leerKpis, registrarKpi, cambiarKpi, panelNegocio, leerCifras, guardarCifras, leerVoz, guardarVoz } from '../lib/negocio.js';
+import { leerKpis, registrarKpi, cambiarKpi, panelNegocio, leerCifras, guardarCifras, leerPorConfirmar, resolverPorConfirmar, leerVoz, guardarVoz } from '../lib/negocio.js';
 import { tokenValido, tokenDe, tasaPublica, leerConTope } from '../lib/publica.js';
 import { guardarNotas } from '../lib/cerebro.js';
 import { leerDoc, guardarDoc } from '../lib/almacen.js';
@@ -40,7 +40,8 @@ export async function publica({ req, env, db, url, ruta }) {
   const txt = await leerConTope(req, MAX_KPI_BYTES);
   if (txt === null) return json({ error: 'el cuerpo pasa de 16 KB' }, 413);
   let b = {}; if (txt.trim()) { try { b = JSON.parse(txt); } catch { b = {}; } }
-  const r = await registrarKpi(db, m[1], b?.value ?? url.searchParams.get('value'), 'webhook');
+  const dado = typeof b?.value === 'number' || typeof b?.value === 'string' ? b.value : url.searchParams.get('value'); // solo un número (o su texto): nunca una lista ni un objeto
+  const r = await registrarKpi(db, m[1], dado, 'webhook');
   return json(r, r.error ? 400 : 200);
 }
 
@@ -63,8 +64,9 @@ export async function manejar(ctx) {
     const r = await registrarKpi(db, String(b.id || ''), b.value, 'a mano');
     return json(r, r.error ? 400 : 200);
   }
+  if (ruta === '/api/cifras/confirmar' && metodo === 'POST') { const b = (await ctx.cuerpo(req)) || {}; return json({ ok: true, ...(await resolverPorConfirmar(db, b.names, b.descartar !== true)) }); }
   if (ruta === '/api/cifras') {
-    if (metodo === 'GET') return json({ items: await leerCifras(db), path: 'cifras (en la nube)' });
+    if (metodo === 'GET') return json({ items: await leerCifras(db), porConfirmar: await leerPorConfirmar(db), path: 'cifras (en la nube)' });
     if (metodo === 'POST') { const b = (await ctx.cuerpo(req)) || {}; return json({ ok: true, items: await guardarCifras(db, b.items) }); }
   }
   if (ruta === '/api/voice') {
@@ -148,7 +150,7 @@ export async function cadaMinuto(env) {
       for (const r of results) {
         let tk; try { tk = JSON.parse(r.json); } catch { continue; }
         hasta = Math.max(hasta, tk.doneAt || 0);
-        if (tk.error || !tk.result) continue;
+        if (tk.error || !tk.result || tk.guard?.taint) continue; // lo que leyó con órdenes escondidas no mueve indicadores
         for (const x of business.fromText(tk.result, ids)) await registrarKpi(db, x.id, x.value, `${tk.agent || 'un agente'} · «${String(tk.title).slice(0, 40)}»`);
       }
       if (hasta !== w.hasta) await guardarDoc(db, 'kpi.lineas', { hasta });

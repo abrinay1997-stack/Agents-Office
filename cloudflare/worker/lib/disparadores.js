@@ -25,15 +25,19 @@ export async function guardarDisparadores(db, lista, agents) {
 }
 
 /** Quita lo viejo (más de 3 días) para que la tabla no crezca. */
-export async function limpiarEventos(db, ahora = Date.now()) { await db.prepare('delete from hook_eventos where t < ?').bind(ahora - 3 * 864e5).run(); }
+export async function limpiarEventos(db, ahora = Date.now()) { await db.prepare('delete from hook_eventos where abs(t) < ?').bind(ahora - 3 * 864e5).run(); }
 
 /** Apunta el evento. → { ok } | { ok:false, dup:true } | { ok:false, why } (el tope por hora). Nada de esto pasa antes de que el token se haya comprobado. */
 export async function admitir(db, tr, eventId, ahora = Date.now()) {
   const evento = eventId ? String(eventId).slice(0, 200) : 'h:' + uuid();
   const r = await db.prepare('insert or ignore into hook_eventos (disparador, evento, t) values (?,?,?)').bind(tr.id, evento, ahora).run();
-  if (!r.meta?.changes) return { ok: false, dup: true, why: 'repetido (el mismo evento ya llegó)' };
+  if (!r.meta?.changes) {
+    // ya estaba: si fue RECHAZADO por el tope (t negativo) el reintento de quien llama es una oportunidad nueva, no un repetido; si no, es el mismo evento otra vez
+    const tomado = await db.prepare('update hook_eventos set t = ? where disparador = ? and evento = ? and t < 0').bind(ahora, tr.id, evento).run();
+    if (!tomado.meta?.changes) return { ok: false, dup: true, why: 'repetido (el mismo evento ya llegó)' };
+  }
   const f = await db.prepare('select count(*) n from hook_eventos where disparador = ? and t > ?').bind(tr.id, ahora - 3600e3).first();
-  if ((f?.n ?? 0) > tr.perHour) { await db.prepare('delete from hook_eventos where disparador = ? and evento = ?').bind(tr.id, evento).run(); return { ok: false, why: `más de ${tr.perHour} en una hora: frenado para no inundar a los agentes` }; }
+  if ((f?.n ?? 0) > tr.perHour) { await db.prepare('update hook_eventos set t = ? where disparador = ? and evento = ?').bind(-ahora, tr.id, evento).run(); return { ok: false, why: `más de ${tr.perHour} en una hora: frenado para no inundar a los agentes` }; } // se marca (no se borra): no cuenta en el tope y un repetido simultáneo no lo da por hecho
   return { ok: true, evento };
 }
 export const olvidarEvento = (db, tr, evento) => db.prepare('delete from hook_eventos where disparador = ? and evento = ?').bind(tr.id, evento).run();
