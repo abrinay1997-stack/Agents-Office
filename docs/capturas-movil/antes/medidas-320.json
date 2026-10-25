@@ -1,0 +1,419 @@
+{
+ "320": {
+  "01-oficina": {
+   "tactiles": 31,
+   "peq": 31,
+   "peqEj": [
+    ".badge «CORREOS: abrir el departamento» 119x32",
+    ".badge «VENTAS: abrir el departamento» 109x32",
+    ".badge «MARKETING: abrir el departamen» 135x32",
+    ".badge.sweepglow «OPERACIONES: abrir el departam» 150x32",
+    ".badge «FINANZAS: abrir el departament» 123x32",
+    ".badge «ENTREGAS: abrir el departament» 126x32"
+   ],
+   "campos": 4,
+   "camposChicos": 4,
+   "camposEj": [
+    ".tp-in 13px",
+    ".tp-model 10.5px",
+    ".tp-effort 10.5px",
+    ".tp-search 12.5px"
+   ],
+   "scrollH": 0,
+   "fueraN": 8,
+   "fueraEj": [
+    "circle r=2",
+    "circle r=3",
+    "circle r=2",
+    "circle r=3",
+    "circle r=2",
+    "circle r=3",
+    "circle r=2",
+    "circle r=3"
+   ],
+   "textoMenor12": 24,
+   "textoEj": [
+    ".b-name 10.5px «CORREOS»",
+    ".b-name 10.5px «VENTAS»",
+    ".b-name 10.5px «MARKETING»",
+    ".b-name 10.5px «OPERACIONES»"
+   ],
+   "scrollsAnidados": 0
+  },
+  "02-panel-tareas": {
+   "tactiles": 20,
+   "peq": 20,
+   "peqEj": [
+    ".badge.sweepglow «CORREOS: abrir el departamento» 119x32",
+    ".badge «VENTAS: abrir el departamento» 109x32",
+    ".badge «MARKETING: abrir el departamen» 135x32",
+    ".badge «OPERACIONES: abrir el departam» 150x32",
+    ".badge «FINANZAS: abrir el departament» 123x32",
+    ".badge «ENTREGAS: abrir el departament» 126x32"
+   ],
+   "campos": 0,
+   "camposChicos": 0,
+   "camposEj": [],
+   "scrollH": 0,
+   "fueraN": 8,
+   "fueraEj": [
+    "circle r=2",
+    "circle r=3",
+    "circle r=2",
+    "circle r=3",
+    "circle r=2",
+    "circle r=3",
+    "circle r=2",
+    "circle r=3"
+   ],
+   "textoMenor12": 17,
+   "textoEj": [
+    ".b-name 10.5px «CORREOS»",
+    ".b-name 10.5px «VENTAS»",
+    ".b-name 10.5px «MARKETING»",
+    ".b-name 10.5px «OPERACIONES»"
+   ],
+   "scrollsAnidados": 0,
+   "toques": 1
+  },
+  "03-tareas-vista": {
+   "tactiles": 25,
+   "peq": 25,
+   "peqEj": [
+    ".brand «Volver a la oficina · Agents O» 82x26",
+    "#topStudio.tb-ic «Estudio: imágenes y video» 30x30",
+    "#topCal.tb-ic «Calendario» 30x30",
+    "#topContenido.tb-ic «Contenido: lo que se publica e» 30x30",
+    "#topDimitri.tb-ic «Dimitri, tu mano derecha» 30x30",
+    "#topMore.tb-ic «Más herramientas: analíticas, » 30x30"
+   ],
+   "campos": 2,
+   "camposChicos": 2,
+   "camposEj": [
+    "select 13.5px",
+    ".tv-rin 15px"
+   ],
+   "scrollH": 0,
+   "fueraN": 2,
+   "fueraEj": [
+    "#tvTab-proyectos r=374",
+    "span r=362"
+   ],
+   "textoMenor12": 1,
+   "textoEj": [
+    ".tv-sr 11.5px «Quién la hace»"
+   ],
+   "scrollsAnidados": 1,
+   "toques": 2
+  },
+  "04-calendario": {
+   "tactiles": 28,
+   "peq": 26,
+   "peqEj": [
+    ".brand «Volver a la oficina · Agents O» 82x26",
+    "#topStudio.tb-ic «Estudio: imágenes y video» 30x30",
+    "#topCal.tb-ic «Calendario» 30x30",
+    "#topContenido.tb-ic «Contenido: lo que se publica e» 30x30",
+    "#topDimitri.tb-ic «Dimitri, tu mano derecha» 30x30",
+    "#topMore.tb-ic «Más herramientas: analíticas, » 30x30"
+   ],
+   "campos": 1,
+   "camposChicos": 1,
+   "camposEj": [
+    "#cvSearch 12.5px"
+   ],
+   "scrollH": 0,
+   "fueraN": 1,
+   "fueraEj": [
+    ".cv-chip r=392"
+   ],
+   "textoMenor12": 16,
+   "textoEj": [
+    ".on 10.5px «AGENDA»",
+    "button 10.5px «DÍA»",
+    "button 10.5px «SEMANA»",
+    "button 10.5px «MES»"
+   ],
+   "scrollsAnidados": 1,
+   "toques": 1
+  },
+  "05-contenido": {
+   "tactiles": 20,
+   "peq": 20,
+   "peqEj": [
+    ".brand «Volver a la oficina · Agents O» 82x26",
+    "#topStudio.tb-ic «Estudio: imágenes y video» 30x30",
+    "#topCal.tb-ic «Calendario» 30x30",
+    "#topContenido.tb-ic «Contenido: lo que se publica e» 30x30",
+    "#topDimitri.tb-ic «Dimitri, tu mano derecha» 30x30",
+    "#topMore.tb-ic «Más herramientas: analíticas, » 30x30"
+   ],
+   "campos": 2,
+   "camposChicos": 2,
+   "camposEj": [
+    ".ct-vsel 12px",
+    "#ctSearch 12.5px"
+   ],
+   "scrollH": 0,
+   "fueraN": 0,
+   "fueraEj": [],
+   "textoMenor12": 7,
+   "textoEj": [
+    "button 10.5px «CALENDARIO»",
+    ".ct-ms 10.5px «COLA»",
+    "button 10.5px «BANDEJA0»",
+    "#ctToday 10.5px «HOY»"
+   ],
+   "scrollsAnidados": 0,
+   "toques": 1
+  },
+  "06-analiticas": {
+   "tactiles": 16,
+   "peq": 16,
+   "peqEj": [
+    ".brand «Volver a la oficina · Agents O» 82x26",
+    "#topStudio.tb-ic «Estudio: imágenes y video» 30x30",
+    "#topCal.tb-ic «Calendario» 30x30",
+    "#topContenido.tb-ic «Contenido: lo que se publica e» 30x30",
+    "#topDimitri.tb-ic «Dimitri, tu mano derecha» 30x30",
+    "#topMore.tb-ic «Más herramientas: analíticas, » 30x30"
+   ],
+   "campos": 0,
+   "camposChicos": 0,
+   "camposEj": [],
+   "scrollH": 0,
+   "fueraN": 0,
+   "fueraEj": [],
+   "textoMenor12": 9,
+   "textoEj": [
+    "button 10.5px «7 DÍAS»",
+    ".on 10.5px «30 DÍAS»",
+    "button 10.5px «90 DÍAS»",
+    ".on 10.5px «TODAS»"
+   ],
+   "scrollsAnidados": 1,
+   "toques": 2
+  },
+  "07-anuncios": {
+   "tactiles": 15,
+   "peq": 15,
+   "peqEj": [
+    ".brand «Volver a la oficina · Agents O» 82x26",
+    "#topStudio.tb-ic «Estudio: imágenes y video» 30x30",
+    "#topCal.tb-ic «Calendario» 30x30",
+    "#topContenido.tb-ic «Contenido: lo que se publica e» 30x30",
+    "#topDimitri.tb-ic «Dimitri, tu mano derecha» 30x30",
+    "#topMore.tb-ic «Más herramientas: analíticas, » 30x30"
+   ],
+   "campos": 0,
+   "camposChicos": 0,
+   "camposEj": [],
+   "scrollH": 0,
+   "fueraN": 0,
+   "fueraEj": [],
+   "textoMenor12": 0,
+   "textoEj": [],
+   "scrollsAnidados": 1,
+   "toques": 2
+  },
+  "08-cerebro": {
+   "tactiles": 16,
+   "peq": 16,
+   "peqEj": [
+    ".brand «Volver a la oficina · Agents O» 82x26",
+    "#topStudio.tb-ic «Estudio: imágenes y video» 30x30",
+    "#topCal.tb-ic «Calendario» 30x30",
+    "#topContenido.tb-ic «Contenido: lo que se publica e» 30x30",
+    "#topDimitri.tb-ic «Dimitri, tu mano derecha» 30x30",
+    "#topMore.tb-ic «Más herramientas: analíticas, » 30x30"
+   ],
+   "campos": 0,
+   "camposChicos": 0,
+   "camposEj": [],
+   "scrollH": 0,
+   "fueraN": 0,
+   "fueraEj": [],
+   "textoMenor12": 3,
+   "textoEj": [
+    ".bv3-lab 11.5px «index»",
+    ".bv3-lab 11.5px «numbers-ledger»",
+    ".bv3-lab 11.5px «offer-ladder»"
+   ],
+   "scrollsAnidados": 0,
+   "toques": 2
+  },
+  "09-estudio": {
+   "tactiles": 28,
+   "peq": 18,
+   "peqEj": [
+    ".brand «Volver a la oficina · Agents O» 82x26",
+    "#topStudio.tb-ic «Estudio: imágenes y video» 30x30",
+    "#topCal.tb-ic «Calendario» 30x30",
+    "#topContenido.tb-ic «Contenido: lo que se publica e» 30x30",
+    "#topDimitri.tb-ic «Dimitri, tu mano derecha» 30x30",
+    "#topMore.tb-ic «Más herramientas: analíticas, » 30x30"
+   ],
+   "campos": 1,
+   "camposChicos": 1,
+   "camposEj": [
+    ".st-prompt 14px"
+   ],
+   "scrollH": 0,
+   "fueraN": 0,
+   "fueraEj": [],
+   "textoMenor12": 3,
+   "textoEj": [
+    ".st-mp-cost 11.5px «gratis»",
+    ".st-mp-why 11.5px «Elegido porque la pr»",
+    ".st-lab 11.5px «Formato»"
+   ],
+   "scrollsAnidados": 1,
+   "toques": 1
+  },
+  "10-negocio": {
+   "tactiles": 1,
+   "peq": 1,
+   "peqEj": [
+    ".bz-x «Cerrar» 33x36"
+   ],
+   "campos": 0,
+   "camposChicos": 0,
+   "camposEj": [],
+   "scrollH": 0,
+   "fueraN": 0,
+   "fueraEj": [],
+   "textoMenor12": 0,
+   "textoEj": [],
+   "scrollsAnidados": 0,
+   "toques": 2
+  },
+  "11-ajustes": {
+   "tactiles": 5,
+   "peq": 5,
+   "peqEj": [
+    ".sg-x «Cerrar» 36x36",
+    "#sgt-estado «Estado» 63x34",
+    "#sgt-apariencia «Apariencia» 88x34",
+    "#sgt-atajos «Atajos de teclado» 129x34",
+    ".sg-btn.pri «Guardar» 75x32"
+   ],
+   "campos": 0,
+   "camposChicos": 0,
+   "camposEj": [],
+   "scrollH": 0,
+   "fueraN": 0,
+   "fueraEj": [],
+   "textoMenor12": 0,
+   "textoEj": [],
+   "scrollsAnidados": 0,
+   "toques": 2
+  },
+  "12-dimitri": {
+   "tactiles": 10,
+   "peq": 8,
+   "peqEj": [
+    ".sb-histb «Historial de conversaciones» 32x32",
+    ".sb-clear «Nueva conversación» 32x32",
+    ".sb-x «Cerrar» 32x32",
+    "button «¿Cómo vamos?» 109x32",
+    "button «¿Qué espera mi OK?» 137x32",
+    "button «¿Qué falló?» 85x32"
+   ],
+   "campos": 1,
+   "camposChicos": 1,
+   "camposEj": [
+    "textarea 13.5px"
+   ],
+   "scrollH": 0,
+   "fueraN": 5,
+   "fueraEj": [
+    "#subOv.on r=308",
+    ".sb-head r=308",
+    ".sb-msgs r=308",
+    ".sb-chips r=308",
+    ".sb-in r=308"
+   ],
+   "textoMenor12": 1,
+   "textoEj": [
+    ".sb-send 11px «ENVIAR»"
+   ],
+   "scrollsAnidados": 0,
+   "toques": 1
+  },
+  "dockVisible": [
+   [
+    "topStudio",
+    "30x30 @115,11"
+   ],
+   [
+    "topCal",
+    "30x30 @148,11"
+   ],
+   [
+    "topTareas",
+    "oculto"
+   ],
+   [
+    "topContenido",
+    "30x30 @181,11"
+   ],
+   [
+    "topAnaliticas",
+    "oculto"
+   ],
+   [
+    "topAnuncios",
+    "oculto"
+   ],
+   [
+    "topBrain",
+    "oculto"
+   ],
+   [
+    "topBiz",
+    "oculto"
+   ],
+   [
+    "topSettings",
+    "oculto"
+   ],
+   [
+    "topDimitri",
+    "30x30 @214,11"
+   ],
+   [
+    "topPanel",
+    "30x30 @280,11"
+   ],
+   [
+    "topMore",
+    "30x30 @247,11"
+   ],
+   [
+    "topAppr",
+    "oculto"
+   ],
+   [
+    "topconn",
+    "oculto"
+   ],
+   [
+    "topmodels",
+    "oculto"
+   ],
+   [
+    "usageDock",
+    "oculto"
+   ],
+   [
+    "topSearch",
+    "no existe"
+   ]
+  ],
+  "meta": {
+   "viewport": "width=device-width, initial-scale=1",
+   "bodyOverflow": "hidden",
+   "fontBase": "16px"
+  }
+ }
+}
