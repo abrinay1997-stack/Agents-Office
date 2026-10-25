@@ -4,6 +4,7 @@ import roster from '../../../office.agents.json' with { type: 'json' };
 import { injectionIn } from '../../../safety.mjs';
 import { paraAnthropic } from './conectores.js';
 import { uuid, ahora } from './ids.js';
+import { limpiarSecretos } from './secretos.js';
 
 export const BETA_MCP = 'mcp-client-2025-11-20';
 const API_ANTHROPIC = 'https://api.anthropic.com/v1/messages';
@@ -54,7 +55,7 @@ export function leerRespuesta(r) {
 
 /** Un mensaje de error en español para el fallo de la API (nunca el cuerpo crudo ni la clave). */
 export function errorDeApi(estado, cuerpo) {
-  const m = cuerpo?.error?.message ? String(cuerpo.error.message).slice(0, 200) : '';
+  const m = cuerpo?.error?.message ? limpiarSecretos(String(cuerpo.error.message).slice(0, 200)) : '';
   if (estado === 401 || estado === 403) return 'El proveedor de IA rechazó la clave. Revisa el secreto en Cloudflare.';
   if (estado === 402 || /credit balance/i.test(m)) return 'La cuenta del proveedor de IA se quedó sin saldo.';
   if (estado === 429 || estado === 529) return 'El proveedor de IA está saturado; reintenta en unos minutos.';
@@ -66,6 +67,9 @@ export async function ejecutar({ env, db, usuario, agenteId, texto, aprobada = f
   if (!agente) return { estado: 404, error: 'Ese agente no existe.' };
   if (!texto || !String(texto).trim()) return { estado: 400, error: 'Falta el texto de la tarea.' };
   if (aprobada && usuario.rol !== 'admin') return { estado: 403, error: 'Solo un administrador puede aprobar una ejecución.' };
+  // Esta ruta (la del panel de la fase 1) deja que ANTHROPIC llame al conector: la llamada no pasa por el Worker y el guardián (destinatarios del borrador, anti-inyección, topes) no la ve.
+  // Una ejecución que puede ENVIAR va por una tarea: su borrador espera el OK del administrador y se ejecuta con cada herramienta bajo el guardián.
+  if (aprobada) return { estado: 409, error: 'Desde este panel un agente solo prepara borradores. Para que envíe algo, crea una tarea: espera tu OK y se ejecuta con el guardián (solo a los destinatarios del borrador aprobado, y sin obedecer órdenes escondidas en lo que lea).' };
   const { results: conectores } = await db.prepare('select * from conectores where activo = 1').all();
   const p = armarPeticion({ agente, texto, conectores, env, aprobada });
   if (!p.tieneClave) return { estado: 503, error: `Falta el secreto ${p.esMeta ? 'META_API_KEY' : 'ANTHROPIC_API_KEY'} en Cloudflare.` };

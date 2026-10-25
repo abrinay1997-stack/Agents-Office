@@ -23,7 +23,7 @@ button.sec{background:transparent;color:var(--fg);border-color:var(--line)}
 <h2>Pedir algo a un agente</h2>
 <div class="fila"><select id="agente" aria-label="Agente"></select></div>
 <textarea id="texto" rows="4" aria-label="Qué debe hacer"></textarea>
-<div class="fila"><button id="ir">Preparar borrador</button><label><input type="checkbox" id="aprob"> Ejecución aprobada (puede usar herramientas de envío)</label></div>
+<div class="fila"><button id="ir">Preparar borrador</button><label><input type="checkbox" id="aprob" disabled> Ejecución aprobada: ahora va por una tarea (espera tu OK y corre con el guardián)</label></div>
 <div id="resultado" class="card" hidden><pre id="salida"></pre></div>
 <h2>Conectores MCP</h2>
 <p class="mut">El token nunca se escribe aquí: se guarda como secreto en Cloudflare y aquí solo va su nombre.</p>

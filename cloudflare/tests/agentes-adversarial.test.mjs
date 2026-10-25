@@ -42,13 +42,14 @@ test('C1: mientras corre la ventana de «deshacer», NADA mueve la tarea (revisa
   const { d1, web, t } = await conBorradorAprobable({ ajustes: VENTANA });
   assert.equal((await web.admin('POST', `/api/tasks/${t.id}/approve`, {})).status, 200);
   const antes = await tareaEnDisco(d1, t.id); assert.ok(antes.approving.huella, 'el OK lleva la huella de lo aprobado');
+  const rechazo = (quien) => (quien === 'editor' ? [403, 409] : [409]); // un editor ni siquiera llega a la ventana: lo que espera el OK del dueño es del administrador (403); el administrador topa con la ventana (409)
   for (const quien of ['editor', 'admin']) {
     assert.ok([403, 409].includes((await web[quien]('POST', `/api/tasks/${t.id}/revise`, { feedback: 'añade a evil@robo.test' })).status), 'revise ' + quien);
-    assert.equal((await web[quien]('POST', `/api/tasks/${t.id}/run`, {})).status, 409, 'run ' + quien);
-    assert.equal((await web[quien]('POST', `/api/tasks/${t.id}/archive`, {})).status, 409, 'archive ' + quien);
-    assert.equal((await web[quien]('DELETE', `/api/tasks/${t.id}`)).status, 409, 'delete ' + quien);
+    assert.ok(rechazo(quien).includes((await web[quien]('POST', `/api/tasks/${t.id}/run`, {})).status), 'run ' + quien);
+    assert.ok(rechazo(quien).includes((await web[quien]('POST', `/api/tasks/${t.id}/archive`, {})).status), 'archive ' + quien);
+    assert.ok(rechazo(quien).includes((await web[quien]('DELETE', `/api/tasks/${t.id}`)).status), 'delete ' + quien);
     assert.equal((await web[quien]('PATCH', `/api/tasks/${t.id}`, { text: 'otra cosa' })).status, 409, 'patch ' + quien);
-    assert.equal((await web[quien]('POST', `/api/tareas/${t.id}/estado`, { estado: 'next' })).status, 409, 'estado ' + quien);
+    assert.ok(rechazo(quien).includes((await web[quien]('POST', `/api/tareas/${t.id}/estado`, { estado: 'next' })).status), 'estado ' + quien);
   }
   const igual = await tareaEnDisco(d1, t.id); assert.equal(igual.state, 'waiting'); assert.deepEqual(igual.approving, antes.approving); assert.equal(igual.draft, antes.draft);
   // el control: deshacer se puede, y SIN el OK dado las mismas rutas funcionan

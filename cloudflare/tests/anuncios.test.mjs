@@ -111,6 +111,20 @@ test('pausar y deshacer; los dos clics del dinero con token de un solo uso en D1
   assert.ok(aud.filter((x) => x.ok).length >= 5); assert.ok(aud.some((x) => x.ok === false && x.que === 'activar'), 'el intento por encima del tope también');
 });
 
+test('la identidad que escribe el cliente en el cuerpo no cambia lo que puede quien llega: un administrador con por:"dimitri" (o piloto, asistente) sigue siendo el dueño, y con "agente" pierde permisos', { skip: SALTAR }, async () => {
+  const o = await nube(); await leida(o); const { g, ids } = o;
+  // si el servidor dejara pasar `por`, 'dimitri' solo pide la cifra y 'piloto' y 'asistente' no gastan nunca: el segundo clic del dueño fallaría
+  for (const por of ['dimitri', 'piloto', 'asistente', 'otra-cosa']) {
+    const antes = g.st.campanas[ids.combo].status;
+    if (antes === 'ACTIVE') await o.api('admin', 'POST', '/api/anuncios/accion', { tipo: 'pausar', id: ids.combo });
+    const pide = await o.api('admin', 'POST', '/api/anuncios/accion', { tipo: 'activar', id: ids.combo, por });
+    assert.equal(pide.status, 200, `${por}: ${JSON.stringify(pide.j)}`); assert.ok(pide.j.confirmar?.token, `${por}: pide la cifra`);
+    const hace = await o.api('admin', 'POST', '/api/anuncios/accion', { tipo: 'activar', id: ids.combo, por, confirmacion: pide.j.confirmar.token });
+    assert.equal(hace.status, 200, `${por}: el administrador confirma su gasto: ${JSON.stringify(hace.j)}`);
+    assert.equal(g.st.campanas[ids.combo].status, 'ACTIVE');
+  }
+});
+
 test('dos clics seguidos con el MISMO token (dos pestañas a la vez): Meta cambia una sola vez', { skip: SALTAR }, async () => {
   const o = await nube(); await leida(o); const { g, ids } = o;
   const r = await o.api('admin', 'POST', '/api/anuncios/accion', { tipo: 'activar', id: ids.combo });

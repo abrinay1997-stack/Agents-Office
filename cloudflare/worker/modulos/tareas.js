@@ -55,6 +55,7 @@ async function manejarGrupo(ctx) {
   const b = escribe ? await leerCuerpo(req) : {};
   if (b === 'grande') return json({ error: 'request too large' }, 413);
   if (b === null) return json({ error: 'the body is not valid JSON' }, 400);
+  if (escribe && usuario.rol !== 'admin' && (g === 'tareas' || g === 'tasks')) { const v = await vetoNoAdmin({ db, ruta, b, metodo: req.method }); if (v) return prohibido(v); }
 
   if (g === 'team' && req.method === 'GET') {
     const C = await leerContexto(db);
@@ -69,6 +70,22 @@ async function manejarGrupo(ctx) {
     return new Response(texto, { status: 200, headers: { 'content-type': 'text/calendar; charset=utf-8', 'content-disposition': 'inline; filename="oficina.ics"', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' } });
   }
   if (g === 'tasks' || g === 'tareas') return manejarTareas({ req, env, db, ruta, url, usuario, b, g });
+  return null;
+}
+
+/* ---------- lo que en la página es «del dueño» y aquí solo lo hace un administrador ---------- */
+/** Las rutas de /api/tareas/* (las MISMAS de la oficina local) tratan a quien llega por la página como EL DUEÑO: en la nube hay editores, y lo que decide el dueño no es de ellos.
+ *  Dos cosas que el resto del módulo ya negaba por /api/tasks y que /api/tareas dejaba pasar (revisión transversal del 25 oct):
+ *   · `needsOk: false` en cualquier cuerpo (delegar una tarea sin pedir el visto bueno);
+ *   · mover, tomar, delegar, archivar, borrar o pasar a una persona una tarea que ESPERA EL OK del dueño (un editor la descartaba o la sacaba de Aprobaciones sin decidir). */
+const SOBRE_TAREA = /^\/api\/(?:tareas|tasks)\/([A-Za-z0-9_-]{3,40})\/(estado|tomar|delegar|archive|person|run)$/;
+const BORRAR_TAREA = /^\/api\/tasks\/([A-Za-z0-9_-]{3,40})$/;
+export async function vetoNoAdmin({ db, ruta, b, metodo = 'POST' }) {
+  if (b && typeof b === 'object' && b.needsOk === false) return 'Solo un administrador decide que una tarea no pida su visto bueno.';
+  const m = SOBRE_TAREA.exec(ruta) || (metodo === 'DELETE' ? BORRAR_TAREA.exec(ruta) : null);
+  if (!m) return null;
+  const f = await db.prepare("select json_extract(json,'$.state') as st from filas where coleccion = 'tareas' and id = ?").bind(m[1]).first();
+  if (f?.st === 'waiting') return 'Esa tarea espera el visto bueno del dueño: solo un administrador la mueve, la toma, la delega o la archiva.';
   return null;
 }
 
@@ -183,6 +200,9 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
     await RT.borrarRutina(db, C.agents, r.id); return salida({ ok: true });
   }
   if (req.method !== 'POST' && req.method !== 'PATCH') return json({ error: 'POST, PATCH or DELETE' }, 405);
+  if (m[2] === 'run' && usuario.rol !== 'admin' && (r.autonomous === true || r.needsOk === false)) { // una rutina que envía sola (autonomía ganada) o que no pide el OK la dispara el dueño: un editor la repetiría a su antojo
+    return prohibido('Esa rutina no espera tu visto bueno (corre sola o sin OK): solo un administrador la ejecuta ahora. Tú puedes ejecutar las que piden el OK del dueño.');
+  }
   if (m[2] === 'run') { // «ejecutar ya»: la rutina se vuelve tarea ahora (pide el OK como toda rutina con needsOk)
     const tarea = await conSesion(db, async s => {
       const serv = armarServicios(s, { env, contexto: C, fetchFn: env.__pruebas?.fetchIA }, {});
@@ -219,9 +239,9 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
 }
 
 /* ---------- el reloj (serve.mjs → tickRoutines, tickScheduled, tickLimites) ---------- */
-export async function cadaMinuto(env) {
+export async function cadaMinuto(env, ahoraMs = Date.now()) { // `ahoraMs`: solo las pruebas lo cambian
   const db = env.DB; // la zona de la oficina ya está instalada (lib/rutas.js)
-  const ahora = Date.now();
+  const ahora = ahoraMs;
   const C = await leerContexto(db);
   // MEDIO-2: primero se crean las tareas (cada una con su id estable) y DESPUÉS se adelanta el reloj. Si algo se cae entre los dos pasos, el reloj no avanzó: el minuto
   // siguiente planea lo mismo, las tareas ya existen (el mismo id no nace dos veces) y solo se confirma el reloj. Nunca queda una rutina «hecha» sin su tarea.
@@ -280,6 +300,22 @@ export function avisarLimites(s, C, ahora) {
 async function limpiar(db, ahora) {
   await db.prepare('delete from tarea_bitacora where t < ?').bind(ahora - 400 * 864e5).run();
   await db.prepare("delete from filas where coleccion = 'avisos' and orden < ?").bind(ahora - 60 * 864e5).run();
+  for (let i = 0; i < TANDAS_ARCHIVO && (await archivarViejas(db, ahora)) >= LOTE_ARCHIVO; i++);
+}
+
+/** Las tareas HECHAS hace más de `DIAS_HECHAS_VIVAS` días salen del conjunto vivo (`filas.coleccion = 'tareas'`) y pasan, sin tocarlas, a 'tareas-archivo'.
+ *  Por qué: cada petición de tareas carga TODAS las vivas; medido (revisión transversal del 25 oct): con 10.000 tareas hechas una petición tarda ~2 s y una alta sube ~450 MB de montón,
+ *  más que los 128 MB de un Worker; a 30 tareas al día eso son menos de 12 meses. El resumen mira como mucho 180 días (`/api/tareas/resumen`). Nada se borra: la fila viaja entera.
+ *  Una dependencia (`bloqueadaPor`) a una tarea archivada no bloquea (ya estaba hecha). → cuántas pasó. */
+export const DIAS_HECHAS_VIVAS = 180, LOTE_ARCHIVO = 400, TANDAS_ARCHIVO = 5;
+export async function archivarViejas(db, ahora = Date.now()) {
+  const corte = ahora - DIAS_HECHAS_VIVAS * 864e5;
+  const donde = "coleccion = 'tareas' and json_extract(json,'$.state') = 'done' and coalesce(json_extract(json,'$.doneAt'), json_extract(json,'$.startedAt'), json_extract(json,'$.addedAt'), 0) < ?";
+  const [ins] = await db.batch([
+    db.prepare(`insert or replace into filas (coleccion, id, json, orden, actualizado) select 'tareas-archivo', id, json, orden, actualizado from filas where ${donde} order by orden limit ?`).bind(corte, LOTE_ARCHIVO),
+    db.prepare("delete from filas where coleccion = 'tareas' and id in (select id from filas where coleccion = 'tareas-archivo')"),
+  ]);
+  return ins?.meta?.changes ?? 0;
 }
 
 /* ---------- lo que usará la fase 4 (agentes) y las demás fases ---------- */

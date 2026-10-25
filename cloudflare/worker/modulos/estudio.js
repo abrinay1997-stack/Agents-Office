@@ -134,7 +134,7 @@ export async function manejar(ctx) {
     /* ---- subir ---- */
     if (ruta === '/api/media/upload' && metodo === 'POST') {
       if (+req.headers.get('content-length') > MAX_JSON_SUBIDA) return error('el archivo es demasiado grande para subirlo así (máx. unos 17 MB de archivo)', 413);
-      const b = (await cuerpo(req)) || {};
+      const b = (await cuerpo(req, MAX_JSON_SUBIDA)) || {};
       try { return json({ item: await galeria.upload(env, db, b) }); } catch (e) { return error(e.message, 400); }
     }
     // la migración desde la computadora del dueño: los bytes de un archivo con su clave de siempre, solo administrador (scripts/migrar/estudio.mjs)
@@ -258,7 +258,7 @@ export async function manejar(ctx) {
       }
       if (ruta === '/api/voces/clone' && metodo === 'POST') {
         if (+req.headers.get('content-length') > MAX_JSON_SUBIDA) return error('la grabación es demasiado grande para subirla así', 413);
-        const b = (await cuerpo(req)) || {};
+        const b = (await cuerpo(req, MAX_JSON_SUBIDA)) || {};
         try { await trabajos.checkBudget(env, db, voces.PRICE.clone); } catch (e) { return error(e.message, 409); }
         let audio, filename;
         if (typeof b.audio === 'string' && b.audio) {
