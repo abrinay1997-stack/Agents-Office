@@ -27,7 +27,7 @@ before(async () => {
 after(async () => { await nav?.close(); srv?.kill(); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 
 async function conectores(ancho, opts = {}) {
-  const ctx = await nav.newContext({ viewport: { width: ancho, height: ancho > 600 ? 800 : 844 }, reducedMotion: opts.reducido ? 'reduce' : 'no-preference' }), p = await ctx.newPage(); p.setDefaultTimeout(120000); // la página trae 3D: en una máquina cargada todo tarda
+  const ctx = await nav.newContext({ viewport: { width: ancho, height: ancho > 600 ? 800 : 844 }, reducedMotion: opts.reducido ? 'reduce' : 'no-preference' }), p = await ctx.newPage(); p.setDefaultTimeout(120000); await p.addInitScript(() => { try { localStorage.setItem('ao.movil', 'escritorio'); } catch {} }); // a 390 px la oficina entraría en la versión móvil (sin #topbar): esta prueba mide los estados de Ajustes de ESCRITORIO en un ancho de teléfono // la página trae 3D: en una máquina cargada todo tarda
   await p.goto(base + '/'); await p.waitForSelector('#topbar'); await p.waitForTimeout(500); await p.keyboard.press(','); await p.waitForSelector('#setOv.on'); // la tecla «,»: a 390 px el engranaje está en el «⋯»
   await p.click('[data-tab="conectores"]'); await p.waitForSelector('#sgp [data-p="tools.web"]');
   return { p, ctx };
