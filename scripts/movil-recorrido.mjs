@@ -74,6 +74,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
       if (escribirHuella) { fs.mkdirSync(path.dirname(FIX), { recursive: true }); fs.writeFileSync(FIX, JSON.stringify(h, null, 1) + '\n'); console.log('huella escrita en', FIX); }
       else {
         const antes = JSON.parse(fs.readFileSync(FIX, 'utf8'));
+        if (JSON.stringify(h.cuerpo) !== JSON.stringify(antes.cuerpo) || JSON.stringify(h.dock) !== JSON.stringify(antes.dock) || !h.tieneCanvas || !h.topbarVisible || h.movil) console.log('  huella distinta →', JSON.stringify({ extra: h.cuerpo.filter(x => !antes.cuerpo.includes(x)), falta: antes.cuerpo.filter(x => !h.cuerpo.includes(x)), dockExtra: h.dock.filter(x => !antes.dock.includes(x)), tieneCanvas: h.tieneCanvas, topbarVisible: h.topbarVisible, movil: h.movil }));
         paso(JSON.stringify(h.cuerpo) === JSON.stringify(antes.cuerpo) && JSON.stringify(h.dock) === JSON.stringify(antes.dock) && h.tieneCanvas && h.topbarVisible && !h.movil, 'escritorio 1280: la estructura clave es la de antes (canvas, barra, dock) y no hay versión móvil');
       }
       paso(!pedidos.includes('/movil.js'), 'escritorio 1280: no se descarga movil.js');
@@ -127,8 +128,8 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     // ---- Inicio: conectores, franja de aprobación, Buscar ----
     await page.waitForSelector('[data-vista="inicio"] [aria-label="Conectores"]', { timeout: 8000 }).catch(() => {});
     paso(await page.locator('[data-vista="inicio"] [aria-label="Conectores"]').count() === 1, 'Inicio: los conectores se ven en una tarjeta (antes se escondían en el teléfono)');
-    toques = 0; await tocar('[data-vista="inicio"] [data-conectores]'); await page.waitForSelector('.mv-hoja .mv-cxl, .mv-hoja .mv-meta'); await foto('01b-conectores'); await medir('Conectores (hoja)'); paso(toques <= 2, `Conectores: verlos está a ${toques} toques (≤ 2)`);
-    await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
+    toques = 0; await tocar('[data-vista="inicio"] [data-conectores]'); await page.waitForSelector('[data-vista="conectores"]:not([hidden]) .mv-intro, [data-vista="conectores"]:not([hidden]) .mv-vacio'); await foto('01b-conectores'); await medir('Conectores (pantalla)'); paso(toques <= 2, `Conectores: verlos está a ${toques} toques (≤ 2)`);
+    await page.goBack(); await page.waitForSelector('[data-vista="inicio"]:not([hidden])');
     paso(await page.locator('.mv-franja:not([hidden]) [data-ver]').count() === 1 && /1 borrador espera/.test(await texto('.mv-franja')), 'Aprobaciones: la franja sobre la barra dice «1 borrador espera tu OK · Ver»'); await medir('Inicio con la franja');
     toques = 0; await tocar('.mv-buscar'); await page.waitForSelector('#findOv:not([hidden])', { timeout: 6000 }); paso(toques === 1, 'Buscar: un botón en la cabecera abre la búsqueda (1 toque)'); await foto('01c-buscar'); await page.goBack(); await page.waitForSelector('#findOv', { state: 'hidden' });
     await axe('Inicio');
@@ -138,7 +139,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     for (const [t, sel] of destinos) { await tocar(`.mv-tab[data-tab="${t}"]`); await page.waitForSelector(sel + ':not([hidden])'); paso(await page.locator(`.mv-tab[data-tab="${t}"]`).getAttribute('aria-current') === 'page', `móvil: «${t}» abre y queda marcado (aria-current)`); await axe(t); if (t === 'tareas') { await page.waitForSelector('[data-vista="tareas"] .mv-fila'); await foto('02-tareas'); await medir('Tareas'); } if (t === 'calendario') { await page.waitForSelector('.mv-dia'); await foto('04-calendario-agenda'); await medir('Calendario'); } if (t === 'dimitri') { await page.waitForSelector('.mv-saludo, .mv-msg'); await foto('05-dimitri'); await medir('Dimitri'); } }
     await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await foto('08-mas'); await medir('Más');
     const entradas = await page.locator('.mv-hoja.mv-mas .mv-lista-b').allInnerTexts();
-    paso(['Cerebro', 'Estudio', 'Contenido', 'Analíticas', 'Anuncios', 'Negocio', 'Costos', 'Conectores', 'Ajustes', 'Estado', 'Buscar'].every(n => entradas.some(t => t.startsWith(n))), 'Más: lista Cerebro, Estudio, Contenido, Analíticas, Anuncios, Negocio, Costos, Conectores, Ajustes, Estado y Buscar');
+    paso([['Cerebro'], ['Estudio'], ['Contenido'], ['Analíticas'], ['Anuncios'], ['Negocio', 'Cómo va el negocio'], ['Costos'], ['Conectores'], ['Ajustes'], ['Estado'], ['Buscar']].every(ns => ns.some(n => entradas.some(t => t.startsWith(n)))), 'Más: lista Cerebro, Estudio, Contenido, Analíticas, Anuncios, Negocio, Costos, Conectores, Ajustes, Estado y Buscar');
     await axe('Más'); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
     paso(true, 'Más: «atrás» del teléfono cierra la hoja');
 
@@ -236,10 +237,10 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     paso(caja.dentro && caja.ancho, 'Más → Cerebro: la vista de escritorio cabe entre la cabecera y la barra de pestañas'); await foto('09-cerebro-escritorio');
     await tocar('.mv-atras'); await page.waitForFunction(() => !document.body.classList.contains('mv-esc') && !document.getElementById('brainOv').classList.contains('on'), null, { timeout: 5000 });
     paso(true, 'Más → Cerebro: «Volver» cierra la vista y regresa a la pantalla de antes');
-    // ajustes (una ventana): sale y vuelve
-    await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('[data-esc="ajustes"]'); await page.waitForSelector('#setOv:not([hidden])', { timeout: 8000 }); await espera(500); await foto('10-ajustes-escritorio');
-    const aj = await page.evaluate(() => { const b = document.querySelector('#setOv .sg-box').getBoundingClientRect(); return b.width <= innerWidth + 1 && b.left >= -1; });
-    paso(aj, 'Más → Ajustes: la ventana cabe en el ancho del teléfono'); await page.goBack(); await page.waitForSelector('#setOv', { state: 'hidden' }); paso(true, 'Más → Ajustes: «atrás» la cierra');
+    // ajustes (ahora una pantalla móvil propia, equipo C): sale y vuelve
+    await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('.mv-hoja.mv-mas [data-vista="ajustes"]'); await page.waitForSelector('[data-vista="ajustes"]:not([hidden]) .mv-lista', { timeout: 8000 }); await espera(300); await foto('10-ajustes');
+    const aj = await page.evaluate(() => { const b = document.querySelector('[data-vista="ajustes"]').getBoundingClientRect(); return b.width <= innerWidth + 1 && b.left >= -1 && !document.body.classList.contains('mv-esc'); });
+    paso(aj, 'Más → Ajustes: es una pantalla móvil (lista de secciones) que cabe en el ancho del teléfono'); await page.goBack(); await page.waitForSelector('[data-vista="ajustes"]', { state: 'hidden' }); paso(true, 'Más → Ajustes: «atrás» la cierra');
 
     // ---- tema oscuro ----
     await tocar('.mv-tab[data-tab="mas"]'); await page.waitForSelector('.mv-hoja.mv-mas'); await tocar('[data-tema="dark"]'); await espera(300); await page.goBack(); await page.waitForSelector('.mv-hoja', { state: 'detached' });
