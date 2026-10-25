@@ -109,7 +109,6 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     const r = revisarPublicacion(postDePieza(cur), cur.redes), m = revisarMomento(cur.fecha, cur.hora);
     return { errores: [...m.errores, ...r.errores], avisos: [...m.avisos, ...r.avisos], arreglos: r.arreglos, momento: m };
   };
-  const narrow = () => matchMedia('(max-width: 900px)').matches;
   /** Las redes que se ven en el panel: las del negocio y las de esta pieza; con «Más redes», todas. */
   const redesVisibles = () => { if (masRedes) return Object.keys(RED); const u = new Set([...redesUsadas(), ...(cur?.redes || [])]); return Object.keys(RED).filter(r => u.has(r)); };
   const isOpen = () => !host.hidden;
@@ -572,6 +571,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     }
     if (a === 'delete') { const p = cur; gone = true; close({ discard: true }); onChange(p, { eliminar: true }); return; }
   });
+  host.addEventListener('ao:guardar', () => { flush(); }); // Ctrl+Enter (src/ventana-pasos.js): guardar ya; guardar no aprueba
   host.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.matches?.('[data-tpl="nombre"]')) { e.preventDefault(); foot.querySelector('[data-a="tpl-ok"]')?.click(); return; } // C3
     if (e.key === 'Escape') {
@@ -603,7 +603,7 @@ export function initPieza({ host, datos, esc, pickMedia, openEstudio, onChange =
     porRed = false; tab = ''; pop = ''; verCom = false; verHash = false; verTextoHist = false; avisos = false; cuando = false; menu = false; confirmaYa = 0; abiertos = new Set(); lastSel = null; guard = null; gConfirma = ''; mej = { cargando: false, pide: '', propuesta: null, error: '', anterior: null, red: '' };
     dirty = {}; stateText = ''; stateBad = false; if (!cur.id && (cur.medios.length || cur.fecha)) dirty = { medios: cur.medios, ...(cur.fecha ? { fecha: cur.fecha, hora: cur.hora, formato: cur.formato, formatos: cur.formatos } : {}) };
     if (!cur.id && p.extra) dirty = { ...dirty, ...p.extra, formato: cur.formato, formatos: cur.formatos, redes: cur.redes }; // C3: lo que trae una plantilla se guarda solo
-    host.hidden = false; host.classList.add('on'); isModal = narrow(); host.setAttribute('role', isModal ? 'dialog' : 'complementary'); if (isModal) host.setAttribute('aria-modal', 'true'); else host.removeAttribute('aria-modal');
+    host.hidden = false; host.classList.add('on'); isModal = true; host.setAttribute('role', 'dialog'); host.setAttribute('aria-modal', 'true'); // ventana centrada (25 oct 2026)
     host.setAttribute('aria-label', 'Pieza de contenido'); if (isModal) modal.open(host);
     preview.reset(); swap('edit');
     paintHead(); paintBody(); paintFoot(); if (!cur.id && (cur.medios.length || p.extra)) schedule();
