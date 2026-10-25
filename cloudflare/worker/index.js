@@ -4,6 +4,7 @@
 import { error } from './lib/respuesta.js';
 import { manejar } from './lib/rutas.js';
 import { ahora } from './lib/ids.js';
+import { MODULOS } from './modulos/index.js';
 
 export default {
   async fetch(req, env, ctx) {
@@ -13,5 +14,7 @@ export default {
   // Cada minuto. Fase 1: solo limpia sesiones caducadas. Fase 2: la cola de publicación de Contenido.
   async scheduled(_evento, env) {
     await env.DB.prepare('delete from sessions where expires_at < ?').bind(ahora()).run();
+    // Los relojes de cada módulo (lo que en serve.mjs eran setInterval). Uno que falle no tumba a los demás.
+    for (const mod of MODULOS) if (mod.cadaMinuto) { try { await mod.cadaMinuto(env); } catch (e) { console.error(`[cron] ${mod.nombre || 'módulo'}:`, e?.message ?? e); } }
   },
 };

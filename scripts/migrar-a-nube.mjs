@@ -4,7 +4,9 @@
 // La contraseña va SOLO en variables de entorno (nunca en un archivo ni en la línea de comandos).
 // Es idempotente: volver a correrla actualiza las notas, no las duplica. No borra nada de la nube.
 import fs from 'node:fs';
-import { loadConfig } from '../config.mjs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { loadConfig, ROOT } from '../config.mjs';
 import { readVault, readOfficeNotes } from '../graph-build.mjs';
 import { layoutGraphFromNotes } from '../graph-core.mjs';
 
@@ -24,6 +26,21 @@ export function notasDelCerebro(vault) {
   }
   return { notas: salida, notes, raw };
 }
+
+/**
+ * Los datos de cada módulo (tareas, rutinas, piezas…): cada archivo de scripts/migrar/<módulo>.mjs exporta
+ *   export async function exportar({ raiz, vault }) → { filas: { coleccion: [{ id, valor, orden? }] }, docs: { clave: valor } }
+ * Solo LEE de esta computadora; nunca incluye llaves ni contraseñas.
+ */
+export async function exportadores(dir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrar')) {
+  if (!fs.existsSync(dir)) return [];
+  const out = [];
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.mjs')).sort()) out.push({ modulo: f.slice(0, -4), ...(await import(pathToFileURL(path.join(dir, f)).href)) });
+  return out.filter((m) => typeof m.exportar === 'function');
+}
+
+/** Parte las filas de una colección en subidas de como mucho 200 (el máximo del Worker). */
+export function partirFilas(filas, max = 200) { const o = []; for (let i = 0; i < filas.length; i += max) o.push(filas.slice(i, i + max)); return o; }
 
 /** Parte las notas en subidas que no pasen de MAX_NOTAS ni de MAX_BYTES. */
 export function lotes(notas) {
@@ -54,7 +71,7 @@ if (process.argv[1] && process.argv[1].endsWith('migrar-a-nube.mjs')) {
   const grafo = await layoutGraphFromNotes(notes, raw);
   console.log(`Mapa 3D calculado: ${grafo.nodes.length} notas con enlaces, ${grafo.links.length} enlaces.`);
   const partes = lotes(notas);
-  if (simulacro) { console.log(`Simulacro: se harían ${partes.length} subida(s). No se envió nada.`); process.exit(0); }
+  if (simulacro) { for (const mod of await exportadores()) { const { filas = {}, docs = {} } = await mod.exportar({ raiz: ROOT, vault }); console.log(`  ${mod.modulo}: ${Object.entries(filas).map(([c, l]) => `${l.length} en ${c}`).concat(Object.keys(docs).map((d) => `doc ${d}`)).join(', ') || 'nada'}`); } console.log(`Simulacro: se harían ${partes.length} subida(s). No se envió nada.`); process.exit(0); }
   const email = process.env.AO_NUBE_EMAIL, clave = process.env.AO_NUBE_CLAVE;
   if (!email || !clave) { console.error('Faltan AO_NUBE_EMAIL y AO_NUBE_CLAVE (variables de entorno).'); process.exit(1); }
   const { cookie } = await api(base, '/api/acceso', { cuerpo: { email, contrasena: clave } });
@@ -62,5 +79,13 @@ if (process.argv[1] && process.argv[1].endsWith('migrar-a-nube.mjs')) {
   for (const p of partes) { i++; const { d } = await api(base, '/api/migrar/notas', { cookie, cuerpo: { notas: p } }); console.log(`  subida ${i}/${partes.length}: ${p.length} notas (en la nube: ${d.notas})`); }
   const { d } = await api(base, '/api/migrar/notas', { cookie, cuerpo: { grafo } });
   console.log(`Mapa subido: ${d.grafo ? 'sí' : 'no'}. En la nube: ${d.notas} notas.`);
+  const solo = (process.argv.find((a) => a.startsWith('--solo=')) || '').slice(7);
+  for (const mod of await exportadores()) {
+    if (solo && mod.modulo !== solo) continue;
+    const { filas = {}, docs = {} } = await mod.exportar({ raiz: ROOT, vault });
+    for (const [coleccion, lista] of Object.entries(filas)) for (const parte of partirFilas(lista)) await api(base, '/api/migrar/filas', { cookie, cuerpo: { coleccion, filas: parte } });
+    for (const [clave, valor] of Object.entries(docs)) await api(base, '/api/migrar/docs', { cookie, cuerpo: { clave, valor } });
+    console.log(`  ${mod.modulo}: ${Object.entries(filas).map(([c, l]) => `${l.length} en ${c}`).concat(Object.keys(docs).map((d) => `doc ${d}`)).join(', ') || 'nada que subir'}`);
+  }
   await api(base, '/api/salir', { cookie, cuerpo: {} }).catch(() => {});
 }

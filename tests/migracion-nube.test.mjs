@@ -49,3 +49,14 @@ test('el respaldo copia data/ y las entregas, y deja un manifiesto; las capturas
   assert.equal(m.partes.find((p) => p.nombre === 'data').archivos, 1);
   assert.ok(fs.existsSync(path.join(destino, 'MANIFIESTO.json')));
 });
+
+test('los exportadores de módulos se descubren por carpeta y las filas se parten en subidas de 200', async () => {
+  const { exportadores, partirFilas } = await import('../scripts/migrar-a-nube.mjs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-exp-'));
+  fs.writeFileSync(path.join(dir, 'tareas.mjs'), "export async function exportar() { return { filas: { tareas: [{ id: 'a', valor: {} }] }, docs: {} }; }");
+  fs.writeFileSync(path.join(dir, 'raro.mjs'), 'export const nada = 1;');
+  const e = await exportadores(dir);
+  assert.deepEqual(e.map((x) => x.modulo), ['tareas']);
+  assert.deepEqual(partirFilas(Array.from({ length: 450 }, (_, i) => ({ id: String(i) }))).map((l) => l.length), [200, 200, 50]);
+  assert.deepEqual(await exportadores(path.join(dir, 'no-existe')), []);
+});

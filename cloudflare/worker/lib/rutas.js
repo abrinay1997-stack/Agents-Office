@@ -6,7 +6,9 @@ import { validarConector, publico } from './conectores.js';
 import { agentes, ejecutar } from './agentes.js';
 import { uuid, ahora } from './ids.js';
 import * as cerebro from './cerebro.js';
+import * as almacen from './almacen.js';
 import { servirPagina } from './paginas.js';
+import { MODULOS } from '../modulos/index.js';
 
 export const VERSION = '0.1.0';
 
@@ -58,6 +60,25 @@ export async function manejar(req, env) {
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ notas: subidas, grafo })).run();
     return json({ subidas, grafo, ...(await cerebro.contar(db)) });
   }
+  // Importación genérica para los datos de cada módulo (tareas, rutinas, piezas…): los exporta scripts/migrar/<módulo>.mjs desde la computadora del dueño.
+  if (ruta === '/api/migrar/filas' && req.method === 'POST') {
+    if (usuario.rol !== 'admin') return prohibido('Solo un administrador sube datos.');
+    const b = await cuerpo(req);
+    if (!/^[a-z][a-z0-9_-]{1,40}$/.test(String(b?.coleccion ?? ''))) return error('Colección no válida.', 422);
+    const filas = Array.isArray(b?.filas) ? b.filas : [];
+    if (!filas.length || filas.length > 200 || filas.some((f) => !f || typeof f.id !== 'string' || !f.id || f.id.length > 200 || typeof f.valor !== 'object' || f.valor === null)) return error('Filas no válidas (1 a 200, cada una con id y valor).', 422);
+    const n = await almacen.guardarFilas(db, b.coleccion, filas);
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ coleccion: b.coleccion, filas: n })).run();
+    return json({ subidas: n, coleccion: b.coleccion, total: await almacen.contarFilas(db, b.coleccion) });
+  }
+  if (ruta === '/api/migrar/docs' && req.method === 'POST') {
+    if (usuario.rol !== 'admin') return prohibido('Solo un administrador sube datos.');
+    const b = await cuerpo(req);
+    if (!/^[a-z][a-z0-9_.-]{1,60}$/.test(String(b?.clave ?? '')) || typeof b?.valor !== 'object' || b.valor === null) return error('Documento no válido.', 422);
+    const version = await almacen.guardarDoc(db, b.clave, b.valor);
+    await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ doc: b.clave })).run();
+    return json({ clave: b.clave, version });
+  }
   if (ruta === '/api/migrar/estado' && req.method === 'GET') return json(await cerebro.contar(db));
 
   let m;
@@ -97,6 +118,10 @@ export async function manejar(req, env) {
     await db.prepare('delete from conectores where nombre = ?').bind(m[1]).run();
     return json({ ok: true });
   }
+  // ---- Los módulos de cada fase del puerto (worker/modulos/): el primero que reconoce la ruta la contesta ----
+  const ctx = { req, env, db, usuario, url, ruta, json, error, prohibido, cuerpo, uuid, ahora };
+  for (const mod of MODULOS) { const r = await mod.manejar(ctx); if (r) return r; }
+
   // Lo que la oficina local hace y la nube todavía no: un aviso claro en español, nunca un error mudo (docs/plan-cloudflare-completo.md).
   return json({ error: 'Esto todavía no está en la nube: sigue en la oficina de tu computadora.', pendiente: true }, 501);
 }

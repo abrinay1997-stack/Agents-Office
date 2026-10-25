@@ -62,3 +62,16 @@ test('solo un administrador sube el Cerebro; lo que aún no está portado dice 5
   assert.equal(r.status, 501); const cuerpo = await r.json();
   assert.match(cuerpo.error, /todavía no está en la nube/); assert.equal(cuerpo.pendiente, true);
 });
+
+test('importación genérica de filas y documentos: solo admin, validada, idempotente', { skip: SALTAR }, async () => {
+  const d1 = crearD1(); const admin = await sembrar(d1); const ed = await sembrar(d1, { email: 'ed2@x.test', rol: 'editor' }); const env = envDePrueba(d1);
+  const ck = await entrar(env, admin), ce = await entrar(env, ed);
+  const filas = { coleccion: 'tareas', filas: [{ id: 't1', valor: { titulo: 'A' }, orden: 1 }, { id: 't2', valor: { titulo: 'B' } }] };
+  assert.equal((await pedir(manejar, env, '/api/migrar/filas', { metodo: 'POST', cuerpo: filas, cookie: ce })).status, 403);
+  assert.deepEqual(await (await pedir(manejar, env, '/api/migrar/filas', { metodo: 'POST', cuerpo: filas, cookie: ck })).json(), { subidas: 2, coleccion: 'tareas', total: 2 });
+  assert.equal((await (await pedir(manejar, env, '/api/migrar/filas', { metodo: 'POST', cuerpo: filas, cookie: ck })).json()).total, 2); // repetir no duplica
+  for (const malo of [{ coleccion: 'Mal Nombre', filas: filas.filas }, { coleccion: 'x', filas: [] }, { coleccion: 'tareas', filas: [{ id: '', valor: {} }] }, { coleccion: 'tareas', filas: [{ id: 'a', valor: 'texto' }] }])
+    assert.equal((await pedir(manejar, env, '/api/migrar/filas', { metodo: 'POST', cuerpo: malo, cookie: ck })).status, 422);
+  assert.deepEqual(await (await pedir(manejar, env, '/api/migrar/docs', { metodo: 'POST', cuerpo: { clave: 'kpis', valor: { a: 1 } }, cookie: ck })).json(), { clave: 'kpis', version: 1 });
+  assert.equal((await pedir(manejar, env, '/api/migrar/docs', { metodo: 'POST', cuerpo: { clave: 'Mal', valor: {} }, cookie: ck })).status, 422);
+});
