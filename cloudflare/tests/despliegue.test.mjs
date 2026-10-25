@@ -77,3 +77,11 @@ test('worker/index.js solo exporta el handler por defecto (workerd rechaza otras
   assert.ok(!/^export\s+(const|let|var|function|class)\b/m.test(t));
   assert.equal((t.match(/^export\s/gm) || []).length, 1);
 });
+
+test('inventario: lista los grupos que usa la interfaz y marca los portados', async () => {
+  const { gruposUsados } = await import('../scripts/inventario.mjs');
+  const g = gruposUsados("fetch('/api/brain'); fetch(`/api/note/x`); fetch('/api/brain/graph')");
+  assert.deepEqual([...g], [['brain', 2], ['note', 1]]);
+  const { PORTADAS } = await import('../worker/lib/portadas.js');
+  assert.ok(PORTADAS.includes('health'));
+});
