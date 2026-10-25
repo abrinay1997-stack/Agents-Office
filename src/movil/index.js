@@ -11,13 +11,14 @@ import { registrar as mas } from './vistas/mas.js';
 import { registrar as cerebro } from './vistas/cerebro.js';
 import { registrar as estudio } from './vistas/estudio.js';
 import { registrar as buscar } from './vistas/buscar.js';
+import { registrar as diferidas } from './vistas/diferidas.js'; // Contenido, Analíticas y Anuncios: su código viaja aparte (dist/movil-d.js)
 
 export const MAX_ANCHO = 820;
 const preferencia = () => { try { const v = localStorage.getItem('ao.movil'); return v === 'movil' || v === 'escritorio' ? v : 'auto'; } catch { return 'auto'; } };
 export const quiere = (ancho = innerWidth) => { const p = preferencia(); return p === 'movil' || (p === 'auto' && ancho <= MAX_ANCHO); };
 
 const shell = crearShell();
-for (const r of [inicio, tareas, calendario, dimitri, aprobaciones, mas, cerebro, estudio, buscar]) r(shell);
+for (const r of [inicio, tareas, calendario, dimitri, aprobaciones, mas, cerebro, estudio, buscar, diferidas]) r(shell);
 
 function sync() {
   document.documentElement.classList.remove('mv-pre');
