@@ -62,7 +62,7 @@ export function crearShell() {
     refs.atras.addEventListener('click', volver);
     $('.mv-franja').addEventListener('click', e => { if (e.target.closest('[data-no]')) { franjaNo = true; pintarCabecera(); } else if (e.target.closest('[data-ver]')) navegar('aprobaciones'); });
     refs.aprob.addEventListener('click', () => navegar('aprobaciones'));
-    $('.mv-buscar').addEventListener('click', () => abrirEscritorio('buscar'));
+    $('.mv-buscar').addEventListener('click', () => (registro.has('buscar') ? navegar('buscar') : abrirEscritorio('buscar')));
     $('.mv-tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) irPestana(b.dataset.tab, b); });
     refs.acc.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (!b) return; const c = cab.get(pantalla || tab); c?.acciones?.[+b.dataset.i]?.alTocar?.(b); });
   }
