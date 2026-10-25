@@ -350,7 +350,7 @@ test('A3 · la demo valida con problemas reales, crea EN PAUSA (y aparece en Cam
   assert.equal(creado.estado, 'creado'); assert.ok(creado.meta.campana);
   const c = demo.vista('7d').campanas.find(x => x.id === creado.meta.campana);
   assert.ok(c, 'aparece en Campañas'); assert.equal(c.estado, 'PAUSED'); assert.equal(c.conjuntos[0].anuncios.length, 1); assert.equal(c.conjuntos[0].anuncios[0].estado, 'CAMPAIGN_PAUSED');
-  assert.ok(accionesDe({ nivel: 'campana', id: c.id, nodo: c, campana: c }).some(a => a.tipo === 'activar'), 'activarla es la A2 (dos clics)');
+  assert.ok(accionesDe({ nivel: 'campana', id: c.id, nodo: c, campana: c }, t).some(a => a.tipo === 'activar'), 'activarla es la A2 (dos clics)');
   assert.ok(demo.historial().items[0].que === 'creó en pausa la campaña' && demo.historial().items[0].objeto.id === c.id);
   assert.equal(B.cambiar(nb.id, { nombre: 'otro' }).status, 409, 'ya creado: los cambios, desde Campañas');
   assert.equal(B.crearEnMeta(nb.id).status, 409, 'nunca dos veces');
