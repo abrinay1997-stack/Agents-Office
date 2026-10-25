@@ -182,8 +182,10 @@ test('PODA: auditoría, ejecuciones, invitaciones y reinicios viejos se borran p
   for (const [d, id] of [[RETENCION_DIAS.ejecuciones + 5, 'e-vieja'], [5, 'e-nueva']]) db.prepare("insert into ejecuciones (id, agente, usuario_id, texto, created_at) values (?,?,?,?,?)").run(id, 'olead', uid, 't', dias(d));
   for (const [d, id] of [[RETENCION_DIAS.invitaciones + 5, 'i-vieja'], [1, 'i-nueva']]) db.prepare("insert into invitaciones (id, token_hash, email, rol, creada_por, created_at, expires_at) values (?,?,?,?,?,?,?)").run(id, 'h' + id, id + '@x.test', 'editor', uid, dias(d + 7), dias(d));
   for (const [d, id] of [[RETENCION_DIAS.reinicios + 5, 'r-viejo'], [1, 'r-nuevo']]) db.prepare("insert into reinicios (id, token_hash, user_id, created_at, expires_at) values (?,?,?,?,?)").run(id, 'h' + id, uid, dias(d + 1), dias(d));
+  for (const [d, nombre] of [[RETENCION_DIAS.contenido_papelera + 5, 'p-vieja'], [2, 'p-nueva']]) db.prepare("insert into contenido_papelera (tipo, nombre, texto, borrada) values ('plantilla', ?, 'x', ?)").run(nombre, ahora - d * 864e5);
   const n = await podar(o.d1, ahora);
-  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1 });
+  assert.deepEqual(n, { auditoria: 1, auditoria_agentes: 1, ejecuciones: 1, invitaciones: 1, reinicios: 1, contenido_papelera: 1 });
+  assert.equal(db.prepare("select count(*) n from contenido_papelera where nombre = 'p-nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria where tipo = 'nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from auditoria_agentes where tarea = 'nueva'").get().n, 1);
   assert.equal(db.prepare("select count(*) n from ejecuciones where id = 'e-nueva'").get().n, 1);
@@ -345,4 +347,30 @@ test('ESCALA: el índice de notas de una ejecución deja fuera los entregables v
   const { index } = await indiceDeNotas(d1, ahora);
   assert.deepEqual([...index.keys()].sort(), ['2026-10-20 entrega reciente', 'guia-de-precios']);
   assert.equal(db.prepare('select count(*) n from notas').get().n, 3, 'nada se borra');
+});
+
+/* ---------- toda tabla que solo crece declara cómo se poda ---------- */
+const TABLAS = {
+  // tablas del equipo y la configuración: crecen con las personas y las decisiones del dueño, no con el uso
+  users: 'acotada', perfiles: 'acotada', conectores: 'acotada', grafo: 'acotada', docs: 'acotada (config; el espejo de Anuncios se recorta solo)',
+  // se podan en su uso o por el reloj
+  sessions: 'caduca (el reloj las borra cada minuto)', acceso_intentos: 'efímera (ventana de un minuto)', publica_tasa: 'efímera (ventana de un minuto)', anuncios_tasa: 'efímera', anuncios_candados: 'efímera',
+  anuncios_tokens: 'caduca en 2 minutos', contenido_candado: 'efímera', telegram_updates: 'poda a los 3 días (lib/telegram.js)', hook_eventos: 'poda cada hora (lib/disparadores.js)',
+  corridas: 'una por tarea en curso; se borra al terminar', estudio_trabajos: 'poda al guardar (lib/estudio/trabajos.js)', estudio_archivos: 'la galería; su papelera se vacía a los 30 días',
+  contenido_pubs: 'poda (lib/contenido/analiticas.js)', contenido_cola: 'una fila por pieza entregada; se limpia con la pieza', contenido_piezas: 'su papelera se vacía a los 30 días; el reloj lee por fecha (índice)',
+  contenido_dias: 'una fila por cuenta y día de Analíticas (pequeña)', notas: 'el índice de una ejecución deja fuera los entregables de más de 180 días',
+  filas: 'por colección: tareas hechas >180 días a tareas-archivo, avisos >60 días (modulos/tareas.js); el resto es configuración',
+  tarea_bitacora: 'poda a los 400 días (modulos/tareas.js)',
+  // las que poda lib/mantenimiento.js (retención en RETENCION_DIAS)
+  auditoria: 'mantenimiento', auditoria_agentes: 'mantenimiento', ejecuciones: 'mantenimiento', invitaciones: 'mantenimiento', reinicios: 'mantenimiento', contenido_papelera: 'mantenimiento',
+  // el libro contable: se conserva (una fila de ~150 bytes por llamada a un modelo), se lee por rango con índice
+  costos: 'libro contable (se conserva)',
+};
+test('ESCALA: toda tabla de D1 declara cómo se acota (poda, caducidad o libro); una tabla nueva obliga a decidirlo', () => {
+  const creadas = new Set();
+  for (const f of readdirSync(join(RAIZ, 'migraciones')).filter((x) => x.endsWith('.sql'))) for (const m of readFileSync(join(RAIZ, 'migraciones', f), 'utf8').matchAll(/create table if not exists (\w+)/g)) creadas.add(m[1]);
+  assert.deepEqual([...creadas].filter((t) => !(t in TABLAS)).sort(), [], 'tablas sin política de crecimiento: añádelas a TABLAS (y a lib/mantenimiento.js si hace falta podarlas)');
+  assert.deepEqual(Object.keys(TABLAS).filter((t) => !creadas.has(t)), [], 'una tabla declarada que ya no existe');
+  for (const t of Object.keys(RETENCION_DIAS)) assert.equal(TABLAS[t], 'mantenimiento', t + ' se poda en mantenimiento.js y la lista debe decirlo');
+  for (const [t, p] of Object.entries(TABLAS)) if (p === 'mantenimiento') assert.ok(t in RETENCION_DIAS, t + ' dice «mantenimiento» y mantenimiento.js no la poda');
 });

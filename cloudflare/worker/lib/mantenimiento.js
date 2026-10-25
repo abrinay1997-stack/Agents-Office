@@ -4,9 +4,10 @@
 //   · auditoria, auditoria_agentes: 400 días (más de un año completo para comparar y para una revisión contable)
 //   · ejecuciones (el resultado completo de cada ejecución manual de un agente): 180 días
 //   · invitaciones y reinicios de contraseña ya vencidos: 30 días después de vencer (el enlace ya no sirve; solo quedaba la fila)
+//   · las plantillas de Contenido borradas (`contenido_papelera`): 30 días, como la papelera de las piezas
 // Cada tabla se poda por tandas (`LOTE`) y como mucho `TANDAS` por tabla y por día: una poda atrasada se pone al día en los días siguientes, sin gastar de golpe la CPU del reloj.
 export const LOTE = 2000, TANDAS = 5;
-export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30 });
+export const RETENCION_DIAS = Object.freeze({ auditoria: 400, auditoria_agentes: 400, ejecuciones: 180, invitaciones: 30, reinicios: 30, contenido_papelera: 30 });
 
 const iso = (ms) => new Date(ms).toISOString();
 const dia = (ms) => iso(ms).slice(0, 10);
@@ -21,6 +22,7 @@ export async function podar(db, ahoraMs = Date.now()) {
     ['ejecuciones', 'delete from ejecuciones where id in (select id from ejecuciones where created_at < ? limit ?)', iso(ahoraMs - R.ejecuciones * DIA_MS)],
     ['invitaciones', 'delete from invitaciones where id in (select id from invitaciones where expires_at < ? limit ?)', iso(ahoraMs - R.invitaciones * DIA_MS)],
     ['reinicios', 'delete from reinicios where id in (select id from reinicios where expires_at < ? limit ?)', iso(ahoraMs - R.reinicios * DIA_MS)],
+    ['contenido_papelera', 'delete from contenido_papelera where id in (select id from contenido_papelera where borrada < ? limit ?)', ahoraMs - R.contenido_papelera * DIA_MS],
   ];
   const borradas = {};
   for (const [tabla, sql, corte] of trabajos) {
