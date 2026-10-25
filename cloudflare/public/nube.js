@@ -26,7 +26,7 @@
     return fetch0(u, o);
   };
   async function api(ruta, { metodo = 'GET', cuerpo, bytes } = {}) {
-    const r = await fetch0(ruta, { method: metodo, headers: { ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}), 'X-Pestana': PESTANA }, body: bytes ?? (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined) });
+    const r = await fetch0(ruta, { method: metodo, headers: { ...(cuerpo !== undefined ? { 'content-type': 'application/json' } : {}), 'X-Pestana': PESTANA }, body: bytes ?? (cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined) }).catch(() => { throw new Error('Sin conexión con la oficina. Revisa tu internet e inténtalo otra vez.'); });
     if (r.status === 401) { location.reload(); throw new Error('Tu sesión terminó.'); }
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || 'No se pudo completar.');
@@ -201,7 +201,7 @@
   /** Reduce la foto a un cuadrado de 256 px (JPEG) en el navegador: pesa unos 20 KB y nunca pasa del tope del servidor (1 MB). */
   async function reducirFoto(archivo) {
     if (!/^image\/(jpeg|png|webp)$/.test(archivo.type)) throw new Error('Elige una imagen JPEG, PNG o WebP.');
-    const bmp = await createImageBitmap(archivo), lado = Math.min(bmp.width, bmp.height), c = document.createElement('canvas'); c.width = c.height = 256;
+    const bmp = await createImageBitmap(archivo).catch(() => { throw new Error('No se pudo leer esa imagen. Prueba con otra foto (JPEG, PNG o WebP).'); }), lado = Math.min(bmp.width, bmp.height), c = document.createElement('canvas'); c.width = c.height = 256;
     c.getContext('2d').drawImage(bmp, (bmp.width - lado) / 2, (bmp.height - lado) / 2, lado, lado, 0, 0, 256, 256);
     const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.86));
     if (!blob) throw new Error('No se pudo preparar la foto.');

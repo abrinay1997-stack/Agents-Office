@@ -74,3 +74,27 @@ test('invitacion.js: lo que dice el servidor va como texto; el testigo sale de l
   assert.equal(JSON.parse(vistos.filter((v) => v.ruta === '/api/invitacion/ver').at(-1).cuerpo).testigo, t);
   await ctx.close();
 });
+
+test('nube.js: una foto que no se puede leer y un corte de red se dicen en español (nunca «The source image could not be decoded» ni «Failed to fetch»)', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const yo = { id: 'u1', email: 'a@x.test', rol: 'admin', nombre: 'Ana', color: '#123456', foto: null };
+  let cortar = false;
+  const { p, ctx } = await pagina((ruta) => {
+    if (ruta === '/') return { headers: cuerpoHTML, body: '<!doctype html><body><div id="topbar"><div id="topdock"></div></div><button id="topSettings">x</button><div id="setOv" hidden><div class="sg-tabs"></div><div class="sg-pane"></div></div><script src="/nube.js"></script></body>' };
+    if (ruta === '/nube.js') return { headers: js, body: leer('nube.js') };
+    if (ruta === '/api/yo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ usuario: yo }) };
+    if (ruta === '/api/equipo') return { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ yo: 'u1', roles: ['admin'], miembros: [{ ...yo, yo: true, fundador: true }], invitaciones: [] }) };
+    return null;
+  });
+  await p.route('https://oficina.test/api/yo', (r) => (cortar && r.request().method() === 'PATCH' ? r.abort('connectionreset') : r.fallback()));
+  await p.goto('https://oficina.test/'); await p.waitForSelector('#nubeYo');
+  await p.evaluate(() => { const pn = document.querySelector('.sg-pane'); pn.innerHTML = ''; window.AO_AJUSTES_EXTRA.find((t) => t.key === 'nube-perfil').render(pn); });
+  await p.setInputFiles('#nbArchivo', { name: 'rota.png', mimeType: 'image/png', buffer: Buffer.from('esto no es una imagen') });
+  await p.waitForFunction(() => document.querySelector('.nb-msg')?.textContent && document.querySelector('.nb-msg').textContent !== 'Subiendo…');
+  const foto = await p.textContent('.nb-msg');
+  assert.match(foto, /No se pudo leer esa imagen/); assert.doesNotMatch(foto, /source image|decode/i);
+  cortar = true;
+  await p.evaluate(() => document.querySelector('[data-a="nombre"]').click()); await p.waitForFunction(() => /conexión/i.test(document.querySelector('.nb-msg')?.textContent || ''));
+  const red = await p.textContent('.nb-msg'); assert.match(red, /Sin conexión con la oficina/); assert.doesNotMatch(red, /fetch|network/i);
+  await ctx.close();
+});
