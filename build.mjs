@@ -77,6 +77,8 @@ escribirEntero('dist/movil-d.js', movilD.js); // y su paquete de Contenido, Anal
 escribirEntero('dist/command-centre-v2.html', html);
 // dictado por voz (fase 10): un script suelto junto a la página (src/dictado-carga.js lo pide solo si el navegador sabe dictar); sin versión: no comparte nada con la página
 escribirEntero('dist/dictado.js', (await build({ entryPoints: ['src/dictado-app.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text);
+// Ajustes: «Restablecer oficina» y «Revisar lo que leí» (25 oct 2026): otro script suelto; el servidor lo añade al final de la página (serve.mjs en local, el Worker en la nube), así la página no crece
+escribirEntero('dist/ajustes-extra.js', (await build({ entryPoints: ['src/ajustes-extra.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text);
 
 // dev variant with external script for faster iteration
 mkdirSync('dist', { recursive: true });

@@ -10,6 +10,8 @@ import * as ajustes from './ajustes.js';
 import * as telegram from './telegram.js';
 import * as disparadores from './disparadores.js';
 import * as equipo from './equipo.js';
+import * as biblioteca from './biblioteca.js';
+import * as restablecer from './restablecer.js';
 import * as modelos from './modelos.js';
 import * as conectores from './conectores.js';
 import * as imagenMeta from './imagen-meta.js';
@@ -25,6 +27,8 @@ export const MODULOS = [
   ajustes, // /api/settings y los avisos del Estado
   telegram, // el webhook público y los avisos al teléfono
   disparadores, // POST /api/hook/<id> (público) y /api/triggers
+  restablecer, // Ajustes → Restablecer oficina (solo administradores)
+  biblioteca, // la Biblioteca de habilidades (solo lee): /api/biblioteca
   conectores, // Ajustes → Conectores: añadir, probar, token cifrado, plantillas
   modelos, // Ajustes → Modelos: catálogo, asignación por función, probar y comparar
   imagenMeta, // /api/imagen-meta: las fotos de Meta por el mismo origen (CSP)

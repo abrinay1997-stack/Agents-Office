@@ -58,12 +58,18 @@ test('documentos: un CSV y un texto pasan a notas; un PDF dice en palabras que v
   assert.equal((await o.editor('POST', '/api/brain/upload', { name: 'a.txt', data: b64('hola') })).status, 403);
 });
 
-test('«Preparar desde mi web»: con tu relato escribe las notas de empresa; solo la dirección dice en palabras que aún no lee webs', { skip: SALTAR }, async () => {
+test('«Preparar desde mi web»: con tu relato deja una PROPUESTA (no escribe las notas); una dirección que no se puede leer se dice en palabras', { skip: SALTAR }, async () => {
   const o = await oficina6({ guion: [dimitriDice({ perfil: 'Somos PanaClaw.' })] });
-  const sinAbout = await o.admin('POST', '/api/onboard/company', { url: 'https://panaclaw.com' }); assert.equal(sinAbout.status, 501, sinAbout.texto);
+  const sinAbout = await o.admin('POST', '/api/onboard/company', { url: 'https://panaclaw.com' }); assert.equal(sinAbout.status, 200, sinAbout.texto); // la lectura corre aparte: lo que falla se dice en un aviso, no en un 501
+  assert.equal((await o.admin('GET', '/api/onboard/propuesta')).j.propuesta, null, 'sin poder leer la web (y sin relato) no hay propuesta ni se inventa nada');
+  assert.equal((await o.admin('POST', '/api/onboard/company', { url: 'https://127.0.0.1/' })).status, 400);
   assert.equal((await o.admin('POST', '/api/onboard/company', {})).status, 400);
   assert.equal((await o.editor('POST', '/api/onboard/company', { about: 'x' })).status, 403);
   const ok = await o.admin('POST', '/api/onboard/company', { about: 'Vendemos peluches gigantes en Panamá a familias.' }); assert.equal(ok.status, 200, ok.texto);
+  const g = (await o.admin('GET', '/api/onboard/propuesta')).j; assert.equal(g.propuesta.notas[0].nombre, 'perfil');
+  assert.equal(filas(o.d1, "select count(*) n from notas where nombre = 'perfil'")[0].n, 0, 'hasta que el dueño la aplique, el Cerebro no cambia');
+  assert.equal((await o.admin('POST', '/api/onboard/aplicar', { id: g.propuesta.id, decisiones: {} })).status, 200);
+  assert.equal(filas(o.d1, "select count(*) n from notas where nombre = 'perfil'")[0].n, 1);
 });
 
 test('Ajustes: lee con la forma de siempre, solo el admin escribe, no acepta rutas inventadas ni secretos, y se aplica al instante', { skip: SALTAR }, async () => {

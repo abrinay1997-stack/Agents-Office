@@ -1,7 +1,7 @@
 // Fase 6 — Negocio en la nube: «Cómo va el negocio» (los indicadores del dueño), las cifras de la empresa, la voz de marca, subir un documento al Cerebro, las notas por
 // revisar y «Preparar desde mi web». Las MISMAS rutas y formas que serve.mjs:
 //   GET /api/business · POST /api/business/kpi · POST /api/business/value · POST /api/kpi/<id> (público, con AO_HOOK_TOKEN)
-//   GET|POST /api/cifras · GET|POST /api/voice · POST /api/brain/upload · GET /api/brain/stale · POST /api/onboard/company
+//   GET|POST /api/cifras · GET|POST /api/voice · POST /api/brain/upload · GET /api/brain/stale · POST /api/onboard/company (+ propuesta · aplicar · descartar · deshacer)
 // El cron de cada minuto hace dos cosas: lee las líneas «KPI ventas_semana = 1.250» de lo que los agentes terminaron (y las apunta) y, cada hora, mira qué notas están viejas.
 //
 // REGLAS (los tests las muerden):
@@ -18,7 +18,7 @@ import { tokenValido, tokenDe, tasaPublica, leerConTope } from '../lib/publica.j
 import { guardarNotas } from '../lib/cerebro.js';
 import { leerDoc, guardarDoc } from '../lib/almacen.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
-import { prepararEmpresa } from '../lib/arranque.js';
+import { prepararEmpresa, pedirTurno, estadoLectura, leerPropuesta, aplicarPropuesta, descartarPropuesta, deshacerAplicacion, urlSegura } from '../lib/arranque.js';
 
 export const nombre = 'negocio';
 export const grupos = ['business', 'kpi', 'cifras', 'voice', 'onboard'];
@@ -79,7 +79,7 @@ export async function manejar(ctx) {
   }
   if (ruta === '/api/brain/stale' && metodo === 'GET') return json({ notes: await notasPorRevisar(db) });
   if (ruta === '/api/brain/upload' && metodo === 'POST') return subirDocumento(ctx);
-  if (ruta === '/api/onboard/company' && metodo === 'POST') return arranque(ctx);
+  if (ruta.startsWith('/api/onboard/')) return arranque(ctx);
   return null;
 }
 
@@ -123,16 +123,30 @@ async function recalcularRevisar(db) {
 }
 
 /* ---------- «Preparar desde mi web» ---------- */
+// POST /api/onboard/company {url?, about?}   empieza a leer (202-like: { ok, started }); NO escribe en el Cerebro, deja una PROPUESTA
+// GET  /api/onboard/propuesta                 la propuesta lista (o null) y si todavía se está leyendo
+// POST /api/onboard/aplicar {id, decisiones}  escribe SOLO lo que el dueño decidió (respaldando lo que reemplaza)
+// POST /api/onboard/descartar {id} · POST /api/onboard/deshacer {id}
 async function arranque(ctx) {
-  const { req, env, db } = ctx;
+  const { req, env, db, ruta, usuario } = ctx;
+  if (ruta === '/api/onboard/propuesta' && req.method === 'GET') return json({ propuesta: await leerPropuesta(db), ...(await estadoLectura(db)) });
+  if (req.method !== 'POST') return null;
   const b = (await ctx.cuerpo(req)) || {};
+  if (ruta === '/api/onboard/aplicar') {
+    const r = await aplicarPropuesta(db, { id: String(b.id || ''), decisiones: b.decisiones && typeof b.decisiones === 'object' ? b.decisiones : {}, quien: usuario.email, C: await leerContexto(db) });
+    return r.error ? json({ error: r.error }, r.status || 400) : json(r);
+  }
+  if (ruta === '/api/onboard/descartar') { const r = await descartarPropuesta(db, { id: String(b.id || '') }); return r.error ? json({ error: r.error }, r.status || 400) : json(r); }
+  if (ruta === '/api/onboard/deshacer') { const r = await deshacerAplicacion(db, { id: String(b.id || ''), quien: usuario.email }); return r.error ? json({ error: r.error }, r.status || 400) : json(r); }
+  if (ruta !== '/api/onboard/company') return null;
   const u = String(b.url || '').trim(), about = String(b.about || '').trim().slice(0, 4000);
-  if (u && !/^https?:\/\/[^\s]+\.[a-z]{2,}/i.test(u)) return json({ error: 'escribe la dirección completa de tu web (https://…)' }, 400);
   if (!u && !about) return json({ error: 'pon tu web o cuéntame de tu empresa' }, 400);
-  if (u && !about) return json({ error: 'Leer una página web necesita la búsqueda web del modelo, que todavía no está en la nube. Cuéntame de tu empresa en el cuadro de texto (qué haces, para quién, tus precios) y la preparo con eso; o corre «Preparar desde mi web» en la oficina de tu computadora y sube el resultado con la migración.', pendiente: true }, 501);
+  if (u) { const v = urlSegura(u); if (!v.ok) return json({ error: v.motivo }, 400); }
+  const turno = await pedirTurno(db);
+  if (!turno.ok) return json({ error: turno.motivo }, 429);
   const C = await leerContexto(db), cfg = await leerCfg(db), fetchFn = env.__pruebas?.fetch || null;
-  const trabajo = prepararEmpresa({ env, db, cfg, C, about, fetchFn }).catch(async (e) => { const { avisar } = await import('../lib/avisos.js'); await avisar(db, { kind: 'onboard', level: 'error', text: 'No pude preparar la oficina: ' + String(e?.message || e).slice(0, 200) }); });
-  if (ctx.waitUntil?.(trabajo)) return json({ ok: true, started: true, ...(u ? { aviso: 'No leí la página (la lectura de webs todavía no está en la nube): usé lo que me contaste.' } : {}) });
+  const trabajo = prepararEmpresa({ env, db, cfg, C, url: u ? urlSegura(u).url : '', about, fetchFn });
+  if (ctx.waitUntil?.(trabajo)) return json({ ok: true, started: true });
   await trabajo; // sin ctx.waitUntil (pruebas): se espera
   return json({ ok: true, started: true });
 }
