@@ -105,3 +105,13 @@ test('plan M1: programar o publicar en redes con el conector de Metricool se blo
   assert.equal(S.decide('mcp__Metricool__get_Best_Time_To_Post', {}, { writes: false }).allow, true, 'leer la mejor hora sí');
   assert.equal(S.decide('mcp__gmail__send_email', { to: 'a@b.com' }, { writes: true }).allow, true, 'el resto no cambia');
 });
+
+test('destinatarios: una dirección se compara COMPLETA (no por subcadena) y los dominios internacionales se leen', () => {
+  const aprobado = 'Para: juan.perez@gmail.com. Hola.';
+  assert.deepEqual(S.unknownTargets(S.targetsOf({ to: 'juan.perez@gmail.com' }), aprobado), [], 'control: la aprobada pasa');
+  assert.deepEqual(S.unknownTargets(S.targetsOf({ to: 'rez@gmail.com' }), aprobado), ['rez@gmail.com'], 'una subcadena NO es la misma dirección');
+  assert.deepEqual(S.unknownTargets(S.targetsOf({ to: 'perez@gmail.com' }), aprobado), ['perez@gmail.com']);
+  assert.deepEqual(S.targetsOf({ to: 'info@café.com' }).emails, ['info@café.com'], 'IDN');
+  assert.deepEqual(S.unknownTargets(S.targetsOf({ to: 'info@café.com' }), 'Para: info@café.com'), []);
+  assert.deepEqual(S.unknownTargets(S.targetsOf({ to: 'evil@café.com' }), 'Para: info@café.com'), ['evil@café.com'], 'un dominio con tilde ya no se escapa del control');
+});

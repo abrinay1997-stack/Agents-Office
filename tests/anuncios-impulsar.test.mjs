@@ -44,13 +44,14 @@ const PUBS = [ // lo que Analíticas guardó de Meta (contenido/metricas.mjs): i
   { id: 'IG1|M8', cuentaId: 'IG1', red: 'instagram', externoId: 'M8', tipo: 'reel', enlace: 'https://www.instagram.com/p/M8/', texto: 'El reel con la canción del verano.', miniatura: '', publicadaAt: `${HOY}T23:59:00.000Z`, interacciones: 120, alcance: 2000 },
 ];
 
+const AHORA = Date.parse(`${HOY}T10:00:00`) + 864e5; // el reloj de la prueba: sin esto, «hoy» real deja fuera de plazo las fechas fijas de octubre
 function montar(g, { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ao-a4-')), listo = true } = {}) {
   const meta = crearMeta({ env: { META_ACCESS_TOKEN: TOKEN_STAND, META_GRAPH_HOST: 'https://graph.test' }, fetchFn: g.fetchFn, dir: path.join(dir, 'contenido') });
   const ads = crearMetaAds({ meta });
   const sync = { listo: () => (listo ? { ok: true, motivo: '' } : { ok: false, motivo: 'Meta no está conectada' }), cuenta: () => CUENTA_STAND, anotar: () => {}, sincronizar: async () => ({ ok: true }) };
-  const borradores = crearBorradores({ dir: path.join(dir, 'anuncios'), ajustes: () => AJ });
+  const borradores = crearBorradores({ dir: path.join(dir, 'anuncios'), ajustes: () => AJ, ahora: () => AHORA });
   const galeria = { ruta: () => null, item: () => null }; // una publicación impulsada no usa la galería
-  const creador = crearCreador({ dir: path.join(dir, 'anuncios'), ads, sync, borradores, galeria, ajustes: () => AJ, cuentas: () => ({ pagina: 'P1', instagram: 'IG1' }), auditar: () => {}, dormir: () => new Promise(r => setTimeout(r, 5)) });
+  const creador = crearCreador({ dir: path.join(dir, 'anuncios'), ads, sync, borradores, galeria, ahora: () => AHORA, ajustes: () => AJ, cuentas: () => ({ pagina: 'P1', instagram: 'IG1' }), auditar: () => {}, dormir: () => new Promise(r => setTimeout(r, 5)) });
   const fuentes = () => ({ leerPieza: id => PIEZAS[id] || null, salidaDe: id => SALIDAS[id] || null, publicaciones: PUBS, emparejar });
   const impulsor = crearImpulsor({ borradores, creador, fuentes, ajustes: () => AJ, ahora: () => Date.parse(`${HOY}T10:00:00`) + 864e5 });
   return { dir, ads, sync, borradores, creador, impulsor };

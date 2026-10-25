@@ -19,11 +19,13 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     <div class="sg-wrap"><div class="sg-tabs" role="tablist" aria-label="Secciones"></div><div class="sg-pane" role="tabpanel" tabindex="-1"></div></div>
     <div class="sg-foot"><span class="sg-msg" role="status" aria-live="polite"></span><span class="sp"></span><button type="button" class="sg-btn pri" data-a="save">Guardar</button></div></div>`;
   document.body.appendChild(el);
-  let data = null, tab = served ? 'general' : 'apariencia', opener = null, dirty = {}, cifras = null, voice = null;
+  let data = null, sinAjustes = false, tab = served ? 'general' : 'apariencia', opener = null, dirty = {}, cifras = null, voice = null;
   const EXTRA = [['cifras', 'Cifras de la empresa'], ['voz', 'Voz de marca'], ['empresa', 'Preparar desde mi web']];
   const LOCAL = ['estado', 'apariencia', 'atajos'], NO_SAVE = ['empresa', ...LOCAL];
   const ESTADO = health ? [['estado', 'Estado']] : [];
-  const tabList = () => (served && data ? [...ESTADO, data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ['atajos', 'Atajos de teclado']] : [...ESTADO, ['apariencia', 'Apariencia'], ['atajos', 'Atajos de teclado']]);
+  const ajeno = () => (Array.isArray(window.AO_AJUSTES_EXTRA) ? window.AO_AJUSTES_EXTRA : []); // pestañas que añade quien aloja la oficina (en la nube: Mi perfil y Equipo, cloudflare/public/nube.js); local: ninguna
+  const propias = primera => ajeno().filter(t => !!t.primera === primera).map(t => [t.key, t.label]); // «Mi perfil» va la primera
+  const tabList = () => (served && data ? [...propias(true), ...ESTADO, data.groups[0], ['apariencia', 'Apariencia'], ...data.groups.slice(1), ...EXTRA, ...propias(false), ['atajos', 'Atajos de teclado']] : [...propias(true), ...ESTADO, ['apariencia', 'Apariencia'], ...propias(false), ['atajos', 'Atajos de teclado']]);
   const THEME_NAME = { light: 'Claro', dark: 'Oscuro', auto: 'Automático' };
   function themeHTML() {
     const cur = theme ? theme.get() : 'light', sys = theme && theme.systemDark() ? 'oscuro' : 'claro';
@@ -56,10 +58,11 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   function render() {
     const tabs = el.querySelector('.sg-tabs'), pane = el.querySelector('.sg-pane');
     const all = tabList();
-    if ((!served || data) && !all.some(([k]) => k === tab)) tab = all[0][0];
+    if ((!served || data || sinAjustes) && !all.some(([k]) => k === tab)) tab = all[0][0]; // sinAjustes: el servidor no tiene /api/settings (la nube hasta la fase 6): no se queda esperando para siempre
     tabs.innerHTML = all.map(([k, t]) => `<button type="button" role="tab" id="sgt-${k}" aria-selected="${tab === k}" aria-controls="sgp" data-tab="${k}" tabindex="${tab === k ? 0 : -1}">${esc(t)}</button>`).join('');
-    pane.id = 'sgp'; pane.setAttribute('aria-labelledby', 'sgt-' + tab);
-    el.querySelector('[data-a="save"]').hidden = NO_SAVE.includes(tab) || !served;
+    pane.id = 'sgp'; pane.setAttribute('aria-labelledby', 'sgt-' + tab); delete pane.dataset.nube;
+    el.querySelector('[data-a="save"]').hidden = NO_SAVE.includes(tab) || !served || ajeno().some(t => t.key === tab);
+    const otra = ajeno().find(t => t.key === tab); if (otra) { pane.innerHTML = ''; otra.render(pane); return; }
     if (tab === 'estado') { pane.innerHTML = health.html(); return; }
     if (tab === 'apariencia') { pane.innerHTML = themeHTML(); return; }
     if (tab === 'atajos') { pane.innerHTML = keysHTML(); return; }
@@ -77,7 +80,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   }
   async function load() {
     if (!served) return render();
-    try { const r = await fetch('/api/settings'); data = await r.json(); } catch { msg('Sin conexión con la oficina.', true); }
+    try { const r = await fetch('/api/settings'), j = await r.json(); if (r.ok && Array.isArray(j.groups)) data = j; else { sinAjustes = true; msg('Los demás ajustes todavía no están en esta oficina de la nube: se cambian en la de tu computadora.', true); } } catch { msg('Sin conexión con la oficina.', true); }
     render();
   }
   async function loadTab() {

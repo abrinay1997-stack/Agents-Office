@@ -35,6 +35,7 @@ import { keyEventInit } from './keys-run.js';
 import { spread } from './labels.js';
 import { initBrain } from './brain.js';
 import { initHero, HERO } from './hero.js';
+import { cargarDictado } from './dictado-carga.js'; // fase 10 (25 oct 2026): dictar con el micrófono; el paquete suelto dist/dictado.js solo se pide si el navegador sabe dictar
 import { ignorar as ignorarTecla } from './teclas1.js'; // IMG-26 (6 Oct 2026): single-key shortcuts can be turned off (Ajustes → Atajos de teclado)
 if (HERO) document.body.classList.add('hero'); // the website hero: no Sahni.ai mark or licence line on top of the page that already carries them // sahni.ai/custom hero mode (16 Sep 2026): opt-in via window.HERO, no-op otherwise
 let tasks = null; // V3 task boards — initialised after the rail constants exist
@@ -665,6 +666,7 @@ const KEYS = (() => {
     ['Estudio, calendario, Contenido o Cerebro abiertos', [['E · P · H · K · G', 'Pasar de uno a otro (la barra de arriba sigue a mano)'], ['S', 'Dimitri al lado: la vista se corre y sigue a mano; ve lo que tienes seleccionado', 's'], ['O · N · U · ,', 'Abrir esa ventana encima'], ['Clic en el nombre de tu empresa', 'Volver a la oficina']]],
     ['La oficina', [['1–6', 'Ir a un departamento: ' + DEPT_NAMES], ['C', 'Dentro de un departamento: el chat de su jefe'], ['+  −', 'Acercar y alejar (también la rueda sobre la oficina)'], ['0', 'Vista general', '0']]],
     ['Escribir tareas', [['Enter', 'Agregar la tarea'], ['Mayús + Enter', 'Nueva línea'], ['Ctrl + Mayús + E', 'El editor grande']]],
+    ['Dictar', [['Alt + Mayús + M', 'Dictar con el micrófono en el campo donde escribes (Dimitri, los jefes, las tareas…); otra vez para parar. Chrome, Edge o Safari; Firefox no lo tiene']]],
     ['Contenido abierto', [['← →', 'Mes, semana o día anterior y siguiente'], ['T', 'Hoy'], ['W · M · A · D', 'Semana, mes, agenda o día'], ['Arrastrar una tarjeta', 'Mover la pieza a otro día (si estaba aprobada, vuelve a revisión)'], ['Esc', 'Cerrar la pieza, la lista del día o Contenido']]],
     ['Estudio abierto', [['Ctrl + Enter', 'Generar, desde la idea'], ['/', 'Buscar en la galería (al principio de la idea: abre el banco de presets)'], ['B', 'El banco de presets: buscar, apilar y combinar (imagen o video, pasa a Avanzado)'], ['L', 'Lotes: muchas fotos con la misma receta, con el costo antes de gastar (y volver a Crear)'], ['↑ ↓ · Espacio', 'En el banco: moverse entre presets y marcar ★ favorito (Enter lo añade)'], ['I · V', 'Imagen o video'], ['← →', 'Anterior y siguiente en la vista ampliada'], ['+  −  0', 'Acercar, alejar y ajustar la imagen en la vista ampliada'], ['F', 'Pantalla completa en la vista ampliada'], ['Esc', 'Cerrar la vista ampliada, la selección o el Estudio']]],
     ['Cerebro abierto', [['← → ↑ ↓', 'Girarlo (con Mayús, más rápido)'], ['+  −', 'Acercar y alejar'], ['0', 'Centrarlo'], ['Espacio', 'Que gire solo, o pararlo'], ['Esc', 'Cerrar la lista de la búsqueda, la ficha y luego el Cerebro']]],
@@ -1788,6 +1790,7 @@ document.getElementById('topTareas').addEventListener('click', () => tareasV.tog
 const analiticas = initAnaliticas({ served: SERVED, esc, business: () => document.title.replace(/ — Agents Office$/, '') }); // V4.7 (F2)
 document.getElementById('topAnaliticas').addEventListener('click', () => analiticas.toggle());
 addEventListener('ao:abrir-anuncios', e => { e.preventDefault(); const d = e.detail || {}; anuncios.open(d.impulsar ? { tab: 'borradores', impulsar: d.impulsar } : { objeto: d.anuncio || d.campana }); }); // A4 (9 oct 2026): «Impulsar» desde Contenido o Analíticas abre el borrador · B1 (9 oct 2026): un comentario «en un anuncio» de la Bandeja lleva a ese anuncio en Anuncios
+cargarDictado(); // el micrófono junto a los campos de texto
 const anuncios = initAnunciosCarga({ servida: SERVED, abrirAjustes: tab => settingsWin.open(tab), agentName: id => (AGENTS.find(a => a.id === id) || {}).name || '', negocio: () => document.title.replace(/ — Agents Office$/, ''), estudio: (t, onPick) => studio.forTarget({ ...t, para: 'anuncio' }, onPick) }); // Fase A1 (9 oct 2026) · A3: el Estudio «para el anuncio»
 document.getElementById('topAnuncios').addEventListener('click', () => anuncios.toggle());
 document.getElementById('topBrain').addEventListener('click', () => brain.toggle()); // V4.5: the Brain joins the dock (it was only the centre's tag, or G)

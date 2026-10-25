@@ -20,7 +20,7 @@ export function crearD1() {
     all: async () => ({ results: db.prepare(sql).all(...args) }),
     run: async () => { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: r.changes } }; },
   });
-  return { prepare: (sql) => sentencia(sql), _db: db };
+  return { prepare: (sql) => sentencia(sql), batch: async (lista) => { const r = []; for (const x of lista) r.push(await x.run()); return r; }, _db: db };
 }
 export async function sembrar(d1, { email = 'dueno@panaclaw.test', clave = 'una-clave-larga-123' /* secrets-ok */, rol = 'admin' } = {}) {
   const { hashearContrasena } = await import('../worker/lib/sesion.js');
@@ -28,6 +28,21 @@ export async function sembrar(d1, { email = 'dueno@panaclaw.test', clave = 'una-
   d1._db.prepare('insert into users (id,email,rol,password_hash,salt) values (?,?,?,?,?)').run(crypto.randomUUID(), email, rol, password_hash, salt);
   return { email, clave };
 }
-export const envDePrueba = (d1, extra = {}) => ({ DB: d1, ASSETS: { fetch: async () => new Response('<html>', { headers: { 'content-type': 'text/html' } }) }, ...extra });
+export const envDePrueba = (d1, extra = {}) => ({ DB: d1, ASSETS: { fetch: async (req) => new Response('ASSET:' + new URL(req.url).pathname, { headers: { 'content-type': 'text/html' } }) }, ...extra });
 export const pedir = (manejar, env, ruta, { metodo = 'GET', cuerpo, cookie } = {}) =>
   manejar(new Request(`https://oficina.test${ruta}`, { method: metodo, headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }), env);
+
+/** Una D1 con latencia ALEATORIA antes y después de cada sentencia (con semilla: el mismo desorden en cada corrida). Hace que dos peticiones «a la vez» de verdad se intercalen:
+ *  sin esto, node:sqlite es síncrono y una carrera entre dos `await` nunca ocurre, y un test de concurrencia pasa aunque el código esté mal. */
+export function conLatencia(d1, { max = 6, semilla = 12345 } = {}) {
+  let s = semilla >>> 0;
+  const azar = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  const espera = () => new Promise((r) => setTimeout(r, Math.floor(azar() * max)));
+  const envolver = (st) => ({
+    bind: (...a) => envolver(st.bind(...a)),
+    first: async () => { await espera(); const r = await st.first(); await espera(); return r; },
+    all: async () => { await espera(); const r = await st.all(); await espera(); return r; },
+    run: async () => { await espera(); const r = await st.run(); await espera(); return r; },
+  });
+  return { ...d1, prepare: (sql) => envolver(d1.prepare(sql)) };
+}

@@ -9,10 +9,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { normalizar } from './modelo.mjs';
-import { diferencias, mezclar, quienPorDefecto } from './cambios.mjs';
+import { mezclar } from './cambios.mjs';
+import { calcularGuardado, mesDe } from './guardado.mjs';
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
 
-const mes = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+const mes = mesDe;
 
 export function crearAlmacenTareas({ file, dataDir = path.dirname(file), bus = null, avisarRestaurado = () => {}, ahora = () => Date.now() } = {}) {
   const BIT = path.join(dataDir, 'tareas', 'bitacora');
@@ -48,24 +49,10 @@ export function crearAlmacenTareas({ file, dataDir = path.dirname(file), bus = n
     } catch (e) { console.warn('bitácora:', e.message); }
   }
 
-  // save(list, { por, motivo }): guarda y cuenta lo que cambió. `por` = quién (si no lo dice, se deduce del paso de estado).
+  // save(list, { por, motivo }): guarda y cuenta lo que cambió (tareas/guardado.mjs, la misma cuenta que usa el almacén del Worker). `por` = quién (si no lo dice, se deduce del paso de estado).
   function save(list, { por = null, motivo = null } = {}) {
-    let antes = []; try { antes = leerCrudo().map(normalizar); } catch {} // normalizadas: la migración v1→v2 no cuenta como cambio
-    const viejas = new Map(antes.map(t => [t.id, t])), t0 = ahora(), lineas = [], eventos = [];
-    for (const t of list) {
-      const a = viejas.get(t.id); viejas.delete(t.id);
-      const d = diferencias(a, t); if (!d.length) continue;
-      if (a) t.version = Math.max(t.version || 1, (a.version || 1) + 1);
-      const quien = por || t._por || quienPorDefecto(a, t);
-      for (const x of d) lineas.push({ t: t0, tarea: t.id, por: quien, ...(motivo ? { motivo } : {}), ...x });
-      if (!a) eventos.push(['tarea.creada', { tarea: t, por: quien }]);
-      else {
-        const est = d.find(x => x.tipo === 'estado'); if (est) eventos.push(['tarea.estado', { tarea: t, de: est.de, a: est.a, por: quien }]);
-        eventos.push(['tarea.cambio', { tarea: t, antes: a, cambios: d, por: quien }]);
-      }
-    }
-    for (const a of viejas.values()) { const quien = por || 'dueno'; lineas.push({ t: t0, tarea: a.id, por: quien, ...(motivo ? { motivo } : {}), tipo: 'borrada', titulo: String(a.title || '').slice(0, 200) }); eventos.push(['tarea.borrada', { tarea: a, por: quien }]); }
-    for (const t of list) delete t._por;
+    let antes = []; try { antes = leerCrudo(); } catch {}
+    const { lineas, eventos } = calcularGuardado(antes, list, { por, motivo, t0: ahora() });
     escribir(list); anotar(lineas);
     if (bus) for (const [tipo, datos] of eventos) setImmediate(() => bus.emit(tipo, datos));
     return lineas.length;

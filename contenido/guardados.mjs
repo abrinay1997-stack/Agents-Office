@@ -8,40 +8,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { renombrar } from '../fs-seguro.mjs'; // 9 oct 2026: renombrar con reintento (Windows: EPERM/EBUSY al pisar un archivo abierto)
-
-export const NOTA_GUARDADOS = path.join('Contenido', 'Textos guardados.md');
-export const MAX_GUARDADOS = 40, MAX_NOMBRE = 60, MAX_TEXTO = 2200;
-const TAG = /^#[\p{L}\p{N}_]+$/u;
-const soloHashtags = t => { const w = String(t ?? '').trim().split(/\s+/).filter(Boolean); return w.length > 0 && w.every(x => TAG.test(x)); };
-const limpioNombre = n => String(n ?? '').replace(/[\r\n#]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_NOMBRE);
-
-/** La nota → [{ nombre, texto, hashtags }], en su orden. Lo que va antes de la primera sección es la explicación de la nota. */
-export function parsearGuardados(md) {
-  const cuerpo = String(md ?? '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
-  const out = []; let cur = null;
-  for (const line of cuerpo.split(/\r?\n/)) {
-    const h = /^##\s+(.+?)\s*$/.exec(line);
-    if (h) { cur = { nombre: limpioNombre(h[1]), lineas: [] }; if (cur.nombre) out.push(cur); continue; }
-    if (cur) cur.lineas.push(line);
-  }
-  return out.map(x => { const texto = x.lineas.join('\n').trim().slice(0, MAX_TEXTO); return { nombre: x.nombre, texto, hashtags: soloHashtags(texto) }; }).filter(x => x.texto);
-}
-
-/** [{ nombre, texto }] → la nota. `parsearGuardados(serializarGuardados(l))` devuelve lo mismo. */
-export function serializarGuardados(lista, { hoy = new Date().toISOString().slice(0, 10) } = {}) {
-  const secciones = lista.map(x => `## ${limpioNombre(x.nombre)}\n${String(x.texto ?? '').replace(/^##(\s)/gm, '#$1').trim()}`);
-  return `---\ntipo: textos-guardados\nactualizado: ${hoy}\n---\n# Textos guardados\n\nLo que se reutiliza al escribir una publicación en Contenido (la firma, una llamada a la acción, los hashtags de siempre). Cada sección es un texto; una hecha solo de hashtags va al campo «Hashtags». Se edita aquí o desde Contenido → Textos guardados. Viaja con las notas del equipo: nada privado.\n\n${secciones.join('\n\n')}\n`;
-}
-
-/** Los hashtags que más se usan en las piezas (el campo «Hashtags» y el texto), del más usado al menos: los del dueño, no unos genéricos. */
-export function hashtagsUsados(piezas = [], n = 12) {
-  const c = new Map();
-  for (const p of piezas) {
-    const vistos = new Set(`${p.hashtags || ''} ${p.texto || ''}`.match(/(^|\s)#[\p{L}\p{N}_]+/gu)?.map(x => x.trim().toLowerCase()) || []);
-    for (const t of vistos) c.set(t, (c.get(t) || 0) + 1);
-  }
-  return [...c].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, n).map(([t]) => t);
-}
+import { NOTA_GUARDADOS as NOTA_REL, MAX_GUARDADOS, MAX_NOMBRE, MAX_TEXTO, soloHashtags, limpioNombre, parsearGuardados, serializarGuardados, hashtagsUsados, guardarEnLista, borrarDeLista } from './guardados-core.mjs';
+export { MAX_GUARDADOS, MAX_NOMBRE, MAX_TEXTO, parsearGuardados, serializarGuardados, hashtagsUsados }; // el núcleo puro salió a guardados-core.mjs (lo usa también el Worker)
+export const NOTA_GUARDADOS = path.join(...NOTA_REL.split('/'));
 
 export function crearGuardados({ cerebro, ahora = Date.now } = {}) {
   const archivo = path.join(cerebro, NOTA_GUARDADOS);
@@ -54,21 +23,7 @@ export function crearGuardados({ cerebro, ahora = Date.now } = {}) {
     archivo,
     listar: leer,
     /** Guarda (o cambia, por su nombre) un texto. → { ok, lista } o { error } en palabras. */
-    guardar({ nombre, texto } = {}) {
-      const n = limpioNombre(nombre), t = String(texto ?? '').replace(/\r\n/g, '\n').trim();
-      if (!n) return { error: 'ponle un nombre (por ejemplo «Firma»)' };
-      if (!t) return { error: 'el texto está vacío' };
-      if (t.length > MAX_TEXTO) return { error: `un texto guardado tiene como mucho ${MAX_TEXTO} caracteres` };
-      const lista = leer(), i = lista.findIndex(x => x.nombre.toLowerCase() === n.toLowerCase());
-      if (i < 0 && lista.length >= MAX_GUARDADOS) return { error: `ya hay ${MAX_GUARDADOS} textos guardados: borra alguno antes` };
-      const nuevo = { nombre: n, texto: t, hashtags: soloHashtags(t) };
-      if (i >= 0) lista[i] = nuevo; else lista.push(nuevo);
-      escribir(lista); return { ok: true, lista };
-    },
-    borrar(nombre) {
-      const lista = leer(), n = limpioNombre(nombre).toLowerCase(), queda = lista.filter(x => x.nombre.toLowerCase() !== n);
-      if (queda.length === lista.length) return { error: 'ese texto guardado ya no está', nada: true };
-      escribir(queda); return { ok: true, lista: queda };
-    },
+    guardar(d = {}) { const r = guardarEnLista(leer(), d); if (r.ok) escribir(r.lista); return r; },
+    borrar(nombre) { const r = borrarDeLista(leer(), nombre); if (r.ok) escribir(r.lista); return r; },
   };
 }

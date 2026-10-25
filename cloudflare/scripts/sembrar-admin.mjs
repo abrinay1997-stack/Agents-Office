@@ -13,7 +13,9 @@ if (clave.length < 12) { console.error('La contraseña debe tener 12 caracteres 
 if (!/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(email)) { console.error('El correo no es válido.'); process.exit(1); }
 const { salt, password_hash } = await hashearContrasena(clave);
 const sql = `insert into users (id, email, rol, password_hash, salt, created_at) values ('${crypto.randomUUID()}','${email}','admin','${password_hash}','${salt}','${new Date().toISOString()}') ` +
-  `on conflict (email) do update set password_hash = excluded.password_hash, salt = excluded.salt, rol = 'admin';`;
+  `on conflict (email) do update set password_hash = excluded.password_hash, salt = excluded.salt, rol = 'admin'; ` +
+  // cambiar la clave cierra TODAS las sesiones de esa persona (recuperar una cuenta no debe dejar entrar a quien tenía una cookie)
+  `delete from sessions where user_id = (select id from users where email = '${email}');`;
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 execFileSync('npx', ['wrangler', 'd1', 'execute', 'agents-office-db', remoto ? '--remote' : '--local', '--command', sql], { cwd: raiz, stdio: 'inherit' });
 console.log(`Administrador listo: ${email}`);

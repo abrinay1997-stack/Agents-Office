@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es" data-tema="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Entrar · Agents Office</title>
+<script src="/acceso-tema.js"></script>
+<link rel="stylesheet" href="/acceso.css">
+</head>
+<body>
+<main>
+  <div class="marca">AGENTS OFFICE<span class="co">PanaClaw</span></div>
+  <h1>Entra a tu oficina</h1>
+  <p class="sub">Tu equipo de agentes te espera.</p>
+  <form id="f" method="post" action="/login.html" novalidate>
+    <div class="campo"><label for="email">Correo</label>
+      <input id="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required autofocus></div>
+    <div class="campo"><label for="pass">Contraseña</label>
+      <div class="con-ojo"><input id="pass" type="password" autocomplete="current-password" required>
+      <button type="button" class="ojo" id="ojo" aria-pressed="false" aria-label="Mostrar contraseña" aria-controls="pass"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="tachado" d="M4 4l16 16"/></svg></button></div></div>
+    <button class="principal" id="entrar" type="submit">Entrar</button>
+    <p class="aviso" id="msg" role="alert"></p>
+  </form>
+  <p class="nota">¿Sin cuenta? Entra con el enlace de invitación que te dio quien administra la oficina.</p>
+  <noscript><p class="aviso">Esta página necesita JavaScript para iniciar sesión.</p></noscript>
+</main>
+<script src="/login.js"></script>
+</body></html>

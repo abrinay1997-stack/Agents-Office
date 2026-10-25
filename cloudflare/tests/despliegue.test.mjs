@@ -13,9 +13,9 @@ const quitaComentarios = (t) => t.replace(/^\s*\/\/.*$/gm, '');
 const wrangler = JSON.parse(quitaComentarios(leer('wrangler.jsonc')));
 const archivos = (d = RAIZ, acc = []) => { for (const f of readdirSync(d)) { if (f === 'node_modules') continue; const p = join(d, f); statSync(p).isDirectory() ? archivos(p, acc) : acc.push(p); } return acc; };
 
-test('wrangler: /api/* va primero al Worker, hay cron, D1 y R2', () => {
-  assert.deepEqual(wrangler.assets.run_worker_first, ['/api/*']);
-  assert.equal(wrangler.assets.not_found_handling, 'single-page-application');
+test('wrangler: todo va primero al Worker (portero), hay cron, D1 y R2', () => {
+  assert.deepEqual(wrangler.assets.run_worker_first, ['/*']); // todo pasa por el portero: nada de la oficina sale sin sesión
+  assert.equal(wrangler.assets.html_handling, 'none');
   assert.ok(wrangler.triggers.crons.length);
   assert.equal(wrangler.d1_databases[0].binding, 'DB');
   assert.equal(wrangler.r2_buckets[0].binding, 'MEDIA');
@@ -31,18 +31,23 @@ test('ningún secreto va en wrangler.jsonc ni en el código: solo nombres', () =
   assert.ok(!Object.keys(wrangler.vars).some((k) => /KEY|SECRET|TOKEN|PASSWORD/i.test(k)));
 });
 
-test('la CSP de la página es estricta y la API no se abre a terceros', () => {
+test('la CSP: el acceso y el panel son estrictos; solo la oficina real admite scripts en línea, y ninguna habla con terceros', () => {
   const h = leer('public/_headers');
-  assert.match(h, /connect-src 'self'/); assert.match(h, /frame-ancestors 'none'/);
-  assert.ok(!/script-src[^;]*unsafe-inline/.test(h));
-  assert.ok(!/<script>[^<]/.test(leer('public/index.html')), 'sin scripts en línea');
+  const bloques = Object.fromEntries(h.split(/\n(?=\/)/).map((b) => [b.split('\n')[0].trim(), b]));
+  for (const ruta of ['/login.html', '/panel.html', '/oficina/*']) {
+    assert.ok(bloques[ruta], `falta el bloque de ${ruta}`);
+    assert.match(bloques[ruta], /connect-src 'self'/); assert.match(bloques[ruta], /frame-ancestors 'none'/);
+  }
+  for (const ruta of ['/login.html', '/panel.html']) assert.ok(!/script-src[^;]*unsafe-inline/.test(bloques[ruta]), `${ruta} sin scripts en línea`);
+  assert.ok(!/default-src[^;]*\*|script-src[^;]*https?:/.test(h), 'ningún origen de fuera');
+  for (const f of ['login.html', 'panel.html']) assert.ok(!/<script>[^<]/.test(leer('public/' + f)), `${f} sin scripts en línea`);
 });
 
 test('todo secreto que lee el Worker (env.X) está declarado en secretos.json', () => {
   const cfg = JSON.parse(leer('secretos.json'));
   const declarados = new Set([...cfg.obligatorios, ...cfg.opcionales]);
   const vars = new Set(Object.keys(wrangler.vars));
-  const propios = new Set(['DB', 'ASSETS', 'MEDIA']);
+  const propios = new Set(['DB', 'ASSETS', 'MEDIA', 'HUB', 'RELOJ_MS']); // RELOJ_MS: solo lo pone una prueba (el reloj de los topes de acceso)
   for (const f of archivos(join(RAIZ, 'worker')).filter((x) => x.endsWith('.js'))) {
     for (const m of leer(f.slice(RAIZ.length + 1)).matchAll(/\benv\.([A-Z][A-Z0-9_]+)/g))
       assert.ok(declarados.has(m[1]) || vars.has(m[1]) || propios.has(m[1]), `${f}: env.${m[1]} no está en secretos.json`);
@@ -66,14 +71,35 @@ test('preparar-cuenta escribe el database_id y las migraciones son reaplicables'
 
 test('el workflow de despliegue verifica antes de publicar y nunca imprime secretos', () => {
   const w = readFileSync(join(RAIZ, '..', '.github/workflows/cloudflare-desplegar.yml'), 'utf8');
-  assert.ok(w.indexOf('npm test') < w.indexOf('wrangler deploy'), 'los tests van antes del despliegue');
-  assert.ok(w.indexOf('migrations apply') < w.indexOf('wrangler deploy'), 'las migraciones van antes del código');
+  assert.ok(w.indexOf('node --test') < w.indexOf('npx wrangler deploy\n'), 'los tests van antes del despliegue');
+  assert.ok(w.indexOf('copiar-oficina.mjs') < w.indexOf('npx wrangler deploy\n'), 'la interfaz se copia antes de desplegar');
+  assert.ok(w.indexOf('migrations apply') < w.indexOf('npx wrangler deploy\n'), 'las migraciones van antes del código');
   assert.ok(w.includes('subir-secretos.mjs'), 'los secretos se suben');
   assert.ok(!/echo.*secrets\./.test(w));
 });
 
-test('worker/index.js solo exporta el handler por defecto (workerd rechaza otras constantes exportadas)', () => {
-  const t = leer('worker/index.js');
+test('worker/index.js exporta el handler por defecto y SOLO la clase del Durable Object (workerd rechaza cualquier otra constante exportada)', () => {
+  const t = quitaComentarios(leer('worker/index.js'));
   assert.ok(!/^export\s+(const|let|var|function|class)\b/m.test(t));
-  assert.equal((t.match(/^export\s/gm) || []).length, 1);
+  const salidas = t.match(/^export\s.*$/gm) || [];
+  assert.equal(salidas.length, 2);
+  assert.ok(salidas.some((l) => /^export default\b/.test(l)));
+  assert.ok(salidas.some((l) => /^export\s*\{\s*Hub\s*\}\s*from\s*'\.\/hub\.js'/.test(l)), 'la clase Hub se reexporta desde el módulo main');
+});
+
+test('el Durable Object Hub: binding HUB y migración con new_sqlite_classes (new_classes pediría plan de pago)', () => {
+  assert.deepEqual(wrangler.durable_objects.bindings, [{ name: 'HUB', class_name: 'Hub' }]);
+  const mig = wrangler.migrations;
+  assert.ok(mig.length && mig.every((x) => !x.new_classes), 'ninguna migración usa new_classes');
+  assert.ok(mig.some((x) => (x.new_sqlite_classes || []).includes('Hub')));
+  assert.match(leer('worker/hub.js'), /acceptWebSocket/); // hibernación
+  assert.doesNotMatch(leer('worker/hub.js').replace(/\/\/.*$/gm, ''), /\.accept\(\)/);
+});
+
+test('inventario: lista los grupos que usa la interfaz y marca los portados', async () => {
+  const { gruposUsados } = await import('../scripts/inventario.mjs');
+  const g = gruposUsados("fetch('/api/brain'); fetch(`/api/note/x`); fetch('/api/brain/graph')");
+  assert.deepEqual([...g], [['brain', 2], ['note', 1]]);
+  const { PORTADAS } = await import('../worker/lib/portadas.js');
+  assert.ok(PORTADAS.includes('health'));
 });

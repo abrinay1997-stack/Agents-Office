@@ -1,0 +1,43 @@
+# Conecta el bot de Telegram con la oficina en la nube (o lo desconecta). Se lanza a mano, después de desplegar con TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_ID y TELEGRAM_WEBHOOK_SECRET en los secretos.
+# Nunca imprime un secreto.
+name: Cloudflare · conectar Telegram
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Dirección de la oficina (https://agents-office.<tu>.workers.dev)'
+        required: true
+      accion:
+        description: 'conectar · quitar · estado'
+        default: conectar
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  telegram:
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Comprobar que hay secretos
+        run: |
+          falta=""
+          for v in TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET; do [ -z "${!v}" ] && falta="$falta $v"; done
+          if [ -n "$falta" ]; then echo "Faltan secretos del repositorio:$falta"; exit 1; fi
+      - name: Hacerlo
+        env:
+          URL_OFICINA: ${{ inputs.url }}
+          ACCION: ${{ inputs.accion }}
+        run: |
+          case "$ACCION" in
+            quitar) node cloudflare/scripts/telegram-webhook.mjs --quitar ;;
+            estado) node cloudflare/scripts/telegram-webhook.mjs --estado ;;
+            *) node cloudflare/scripts/telegram-webhook.mjs "$URL_OFICINA" ;;
+          esac

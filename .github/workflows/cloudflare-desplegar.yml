@@ -36,6 +36,12 @@ jobs:
         with: { node-version: 22 }
       - name: Tests de Cloudflare
         run: node --test cloudflare/tests/*.test.mjs
+      - name: Tests de lo que el Worker comparte con la oficina (búsqueda, memoria, migración)
+        run: node --test tests/cerebro-busqueda.test.mjs tests/migracion-nube.test.mjs
+      # Simulacro de empaquetado: rompe aquí, no en el despliegue, si el Worker importa algo que no cabe en Workers.
+      - name: Empaquetar el Worker (sin publicar)
+        working-directory: cloudflare
+        run: npm install --no-audit --no-fund && npx wrangler deploy --dry-run --outdir /tmp/ao-worker
 
   desplegar:
     needs: probar
@@ -58,6 +64,13 @@ jobs:
           [ -z "$CLOUDFLARE_ACCOUNT_ID" ] && falta="$falta CLOUDFLARE_ACCOUNT_ID"
           if [ -n "$falta" ]; then echo "Faltan secretos del repositorio:$falta"; exit 1; fi
       - run: npm install --no-audit --no-fund
+      # La interfaz REAL de la oficina (la misma de npm start): se construye en cada despliegue y el Worker la sirve detrás del login.
+      - name: Construir la interfaz de la oficina
+        working-directory: .
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          node build.mjs
+          node cloudflare/scripts/copiar-oficina.mjs
       - name: Preparar la cuenta (D1 y R2, si no existen)
         run: node scripts/preparar-cuenta.mjs
       - name: Aplicar migraciones de D1 (antes que el código)

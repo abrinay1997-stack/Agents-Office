@@ -57,8 +57,10 @@ export function resolverCuentas({ ajustes = {}, cuentas = [], paginaContenido = 
  * @param {Function} o.cuentas     () → { pagina, instagram } (resolverCuentas con lo de Meta y Contenido)
  * @param {Function} o.aJpeg       (Buffer) → Buffer JPEG (sharp), para una imagen que no es JPEG ni PNG
  * @param {Function} o.auditar     (entrada) → data/audit/ (serve.mjs)
+ * @param {boolean}  o.diferir     Cloudflare (fase 7): un Worker no sigue trabajando tras contestar. Con `diferir`, `crear` solo valida, apunta el diario
+ *                                 y deja el borrador «creando»; lo crea en Meta el cron, con `alArrancar` (que ya sabe retomar lo apuntado).
  */
-export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = () => ({}), defaults = {}, cuentas = () => ({}), aJpeg = null, auditar = () => {}, ahora = () => Date.now(), dormir = ms => new Promise(r => setTimeout(r, ms)), videoCadaMs = VIDEO_CADA_MS, videoMaxMs = VIDEO_MAX_MS }) {
+export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = () => ({}), defaults = {}, cuentas = () => ({}), aJpeg = null, auditar = () => {}, ahora = () => Date.now(), dormir = ms => new Promise(r => setTimeout(r, ms)), videoCadaMs = VIDEO_CADA_MS, videoMaxMs = VIDEO_MAX_MS, diferir = false }) {
   const F = path.join(dir, 'creaciones.json');
   const diario = () => leerJSON(F, {});
   const apuntar = (bid, j) => { const d = diario(); d[bid] = j; escribirJSON(F, d); };
@@ -103,7 +105,7 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
     // un intento nuevo (tras un fallo, los de antes están archivados: la búsqueda por nombre no los toma)
     apuntar(id, { intento: (diario()[id]?.intento || 0) + 1, empezado: new Date(ahora()).toISOString(), pasos: { imagenes: {}, videos: {}, creativos: {}, campana: null, conjunto: null, anuncios: {} }, enCurso: null, creados: [] });
     borradores.poner(id, { estado: 'creando', error: null, progreso: { paso: 'imagenes', texto: PASO_TEXTO.imagenes } });
-    lanzar(id);
+    if (!diferir) lanzar(id);
     return R(202, { ok: true });
   }
 
@@ -114,13 +116,14 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
   }
 
   /** Al arrancar la oficina (y cuando Meta vuelve): sigue lo que quedó «creando». Lo hecho se reconoce en Meta por su nombre. */
-  function alArrancar() {
+  function alArrancar(soloIds = null) { // `soloIds` (Cloudflare): solo esos borradores (el cron toma un candado por cada uno)
     if (!sync.listo().ok) return [];
-    const ids = borradores.lista().filter(b => b.estado === 'creando').map(b => b.id);
+    const ids = borradores.lista().filter(b => b.estado === 'creando' && (!soloIds || soloIds.includes(b.id))).map(b => b.id);
     for (const id of ids) { if (!diario()[id]) apuntar(id, { intento: 1, empezado: new Date(ahora()).toISOString(), pasos: { imagenes: {}, videos: {}, creativos: {}, campana: null, conjunto: null, anuncios: {} }, enCurso: null, creados: [] }); lanzar(id); }
     return ids;
   }
 
+  const permanente = (m) => Object.assign(new Error(m), { permanente: true }); // un fallo de verdad (no de infraestructura): hay que decirlo y archivar lo creado
   async function ejecutar(id) {
     const b0 = borradores.leer(id); if (!b0 || b0.estado !== 'creando') return;
     const b = b0, ctx = { ...ctxDe(), sinInstagram: b0.validacion?.impulsable?.instagram === false }, act = sync.cuenta(), N = nombres(b); // A4: un post de FB que Meta no deja en Instagram
@@ -151,12 +154,12 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
       for (const c of b.origen ? [] : b.creativos) { // A4: una publicación impulsada no sube nada (ya está en Meta)
         if (medios[c.media]) continue;
         const it = medio(c.media), archivo = galeria.ruta(c.media);
-        if (!it || !archivo || !fs.existsSync(archivo)) throw new Error(`la imagen o el video «${c.media}» ya no está en la galería del Estudio`);
+        if (!it || !archivo || !fs.existsSync(archivo)) throw permanente(`la imagen o el video «${c.media}» ya no está en la galería del Estudio`);
         const ext = path.extname(archivo).toLowerCase();
         if (it.kind === 'video') {
           let v = j.pasos.videos[c.media];
           if (!v) {
-            if (!TIPO_VIDEO[ext]) throw new Error(`Meta pide el video en MP4 o MOV (este es ${ext || 'sin extensión'})`);
+            if (!TIPO_VIDEO[ext]) throw permanente(`Meta pide el video en MP4 o MOV (este es ${ext || 'sin extensión'})`);
             j.enCurso = { nivel: 'video', clave: c.media, at: new Date(ahora()).toISOString() }; guardar();
             const up = await ads.subirVideo(act, { datos: fs.readFileSync(archivo), nombre: `${b.id}-${path.basename(archivo)}`, tipo: TIPO_VIDEO[ext] });
             v = j.pasos.videos[c.media] = { id: up.id, listo: false }; j.enCurso = null; guardar();
@@ -166,8 +169,8 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
             for (;;) {
               const s = await ads.leerVideo(v.id);
               if (s.estado === 'ready') { v.listo = true; v.miniatura = s.miniatura || null; guardar(); break; }
-              if (s.estado === 'error') throw new Error('Meta no pudo procesar el video: prueba con otro (MP4, H.264)');
-              if (ahora() - t0 > videoMaxMs) throw new Error(`Meta sigue procesando el video tras ${Math.round(videoMaxMs / 60e3)} minutos: reinténtalo más tarde`);
+              if (s.estado === 'error') throw permanente('Meta no pudo procesar el video: prueba con otro (MP4, H.264)');
+              if (ahora() - t0 > videoMaxMs) throw permanente(`Meta sigue procesando el video tras ${Math.round(videoMaxMs / 60e3)} minutos: reinténtalo más tarde`);
               await dormir(videoCadaMs);
             }
           }
@@ -176,7 +179,7 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
           let h = j.pasos.imagenes[c.media];
           if (!h) {
             let datos = fs.readFileSync(archivo), nombre = path.basename(archivo);
-            if (!TIPO_IMAGEN[ext]) { if (!aJpeg) throw new Error(`Meta pide la imagen en JPEG o PNG (esta es ${ext})`); datos = await aJpeg(datos); nombre = nombre.replace(/\.[^.]+$/, '') + '.jpg'; }
+            if (!TIPO_IMAGEN[ext]) { if (!aJpeg) throw permanente(`Meta pide la imagen en JPEG o PNG (esta es ${ext})`); datos = await aJpeg(datos); nombre = nombre.replace(/\.[^.]+$/, '') + '.jpg'; }
             h = j.pasos.imagenes[c.media] = (await ads.subirImagen(act, { datos, nombre })).hash; guardar(); // el hash es del contenido: subirla otra vez da el mismo
           }
           medios[c.media] = { hash: h };
@@ -205,6 +208,13 @@ export function crearCreador({ dir, ads, sync, borradores, galeria, ajustes = ()
     } catch (e) {
       // lo creado en ESTE intento se archiva (nunca DELETE): primero lo que pudo quedar a medias (Meta lo creó y la respuesta se perdió)
       const motivo = e instanceof ErrorMeta ? motivoMeta(e) : mensajeMeta(e);
+      // Cloudflare (`diferir`): un fallo de la INFRAESTRUCTURA (D1, «Too many subrequests», un corte) o un fallo pasajero de Meta no es un fallo de
+      // la creación: no se archiva nada ni se deja el borrador en `fallo`. Queda «creando», sale de este intento y el reloj lo retoma (lo ya hecho se
+      // reconoce en Meta por su etiqueta `· AO:`). Tras 5 intentos seguidos así, se rinde como cualquier otro fallo.
+      if (diferir && !e?.permanente && (!(e instanceof ErrorMeta) || e.transitorio) && (j.reintentosInfra || 0) < 5) {
+        j.reintentosInfra = (j.reintentosInfra || 0) + 1; j.ultimoError = { at: new Date(ahora()).toISOString(), motivo }; try { guardar(); } catch { /* si ni eso se puede apuntar, el reloj retoma igual por la etiqueta */ }
+        return { ok: null, pendiente: true, motivo };
+      }
       try { if (j.enCurso && ['campana', 'conjunto', 'anuncio'].includes(j.enCurso.nivel)) for (const x of await ads.buscarPorNombre(act, j.enCurso.nivel, j.enCurso.nombre, `AO:${b.id}`)) j.creados.push({ nivel: j.enCurso.nivel, id: x.id }); } catch { /* sin poder mirar: se dice abajo */ }
       const archivados = [], sinArchivar = [];
       for (const x of [...j.creados].reverse()) {

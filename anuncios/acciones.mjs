@@ -166,6 +166,25 @@ export function planear({ tipo, r, raw = null, valor, fin, inicio, copiar = fals
 }
 
 /**
+ * Dónde viven los tokens de confirmación (2 min, un solo uso) y los de deshacer. En la oficina local, en memoria. En Cloudflare (fase 7,
+ * 25 oct 2026) el Worker no recuerda nada entre peticiones: los guarda D1 (cloudflare/worker/lib/tokens.js) con la MISMA interfaz, y
+ * `tomar` es atómico (solo una petición se lleva el token). La interfaz puede ser asíncrona: aquí se espera siempre.
+ *   poner(tipo, clave, valor, caduca) · leer(tipo, clave) · tomar(tipo, clave) (lo lee y lo quita; null si no está) · quitar(tipo, clave) ·
+ *   limpiar(ahora) · cuenta()
+ */
+export function tokensEnMemoria() {
+  const m = { conf: new Map(), desh: new Map() };
+  return {
+    poner: (tipo, k, v, caduca) => { m[tipo].set(k, { v, caduca }); },
+    leer: (tipo, k) => m[tipo].get(k)?.v ?? null,
+    tomar: (tipo, k) => { const e = m[tipo].get(k); m[tipo].delete(k); return e?.v ?? null; },
+    quitar: (tipo, k) => { m[tipo].delete(k); },
+    limpiar: ahora => { for (const t of Object.values(m)) for (const [k, e] of t) if (e.caduca <= ahora) t.delete(k); },
+    cuenta: () => ({ confirmaciones: m.conf.size, deshaceres: m.desh.size }),
+  };
+}
+
+/**
  * @param {object} o
  * @param {object} o.sync         anuncios/sincronizar.mjs (vista, listo, topes, hoy, ponerObjeto, anotar, sincronizar)
  * @param {object} o.ads          anuncios/meta-ads.mjs (leer, cambiar, copiar)
@@ -173,12 +192,12 @@ export function planear({ tipo, r, raw = null, valor, fin, inicio, copiar = fals
  * @param {Function} o.auditar    (entrada) → data/audit/ (serve.mjs)
  * @param {Function} o.refrescar  () → relee la estructura entera (un lote), sin esperar: lo de debajo de una campaña cambió de estado
  */
-export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds = () => 30, auditar = () => {}, refrescar = () => {}, confirmarMs = CONFIRMAR_MS }) {
-  const confirmaciones = new Map(), deshaceres = new Map();
+export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds = () => 30, auditar = () => {}, refrescar = () => {}, confirmarMs = CONFIRMAR_MS, tokens = null }) {
+  const T = tokens || tokensEnMemoria();
   let cola = Promise.resolve();
   /** Una acción a la vez: dos clics seguidos (o la página y Telegram a la vez) no se pisan. */
   const enFila = fn => { const p = cola.then(fn, fn); cola = p.catch(() => {}); return p; };
-  const limpiar = () => { const t = ahora(); for (const [k, v] of confirmaciones) if (v.vence + 10 * 60e3 <= t) confirmaciones.delete(k); for (const [k, v] of deshaceres) if (v.hasta <= t) deshaceres.delete(k); };
+  const limpiar = () => T.limpiar(ahora());
   const R = (status, cuerpo) => ({ status, cuerpo });
   const token = () => crypto.randomBytes(9).toString('base64url');
 
@@ -252,12 +271,11 @@ export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds
   }
 
   async function hacer(b) {
-    limpiar();
+    await limpiar();
     let conf = null;
     if (b.gasto && b.confirmacion) { // el token primero: es barato y no gasta cuota de Meta
-      const k = String(b.confirmacion), c = confirmaciones.get(k);
+      const k = String(b.confirmacion), c = await T.tomar('conf', k); // de un solo uso, también si lo de abajo falla (tomar lo quita; en D1, atómico)
       if (!c) return R(409, { error: 'confirmacion', motivo: 'Esa confirmación no existe o ya se usó: vuelve a pedirla para ver la cifra de ahora.' });
-      confirmaciones.delete(k); // de un solo uso, también si lo de abajo falla
       if (c.vence <= ahora()) return R(409, { error: 'confirmacion', motivo: `La confirmación venció (dura ${Math.round(confirmarMs / 60e3)} minutos): vuelve a pedirla para ver la cifra de ahora.` });
       if (c.firma !== firmaDe(b)) return R(409, { error: 'confirmacion', motivo: 'Esa confirmación es de otra acción (otro objeto, otro importe u otra fecha): pide la de esta.' });
       conf = c;
@@ -290,7 +308,7 @@ export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds
     // de gasto, primera llamada: nada cambia; la cifra y el token para el segundo clic
     if (b.gasto && !conf) {
       const k = token(), vence = ahora() + confirmarMs;
-      confirmaciones.set(k, { firma: firmaDe(b), vence, pidio: b.quien, tipo: b.tipo, id: b.id });
+      await T.poner('conf', k, { firma: firmaDe(b), vence, pidio: b.quien, tipo: b.tipo, id: b.id }, vence + 10 * 60e3);
       const cifras = p.copia ? { dia: 0, semana: 0, mes: 0, campana: 0, alActivar: p.diarioCopia } : t.cifras;
       return R(200, { confirmar: { token: k, texto: textoConfirmar(b.tipo, p, r, t, moneda, zona), cifras, vence: new Date(vence).toISOString(), tipo: b.tipo, id: b.id, ...(p.valorUsd !== undefined ? { valor: p.valorUsd } : {}), ...(p.finIso ? { fin: p.finIso } : {}), objeto, moneda }, ...(avisos.length ? { aviso: avisos.join(' ') } : {}) });
     }
@@ -320,7 +338,7 @@ export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds
     const seg = Math.max(0, Number(undoSeconds()) || 0);
     if (p.revertir && seg > 0 && (b.quien === 'dueno' || b.quien === 'dimitri')) {
       const k = token(), hasta = ahora() + seg * 1000;
-      deshaceres.set(k, { tipo: b.tipo, id: b.id, objeto, antes: p.antes, despues: p.despues, revertir: p.revertir, hasta });
+      await T.poner('desh', k, { tipo: b.tipo, id: b.id, objeto, antes: p.antes, despues: p.despues, revertir: p.revertir, hasta }, hasta);
       deshacer = { token: k, hasta: new Date(hasta).toISOString() };
     }
     const texto = textoHecho(b.tipo === 'relanzar' && !p.copia ? 'reanudar' : b.tipo, p, r, moneda, zona, { copia: copia?.campana, dia: t?.cifras?.dia });
@@ -332,19 +350,19 @@ export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds
     const quien = quienDe(b.por);
     if (quien !== 'dueno') return R(403, { error: quien === 'agente' || quien === 'otro' ? 'Los agentes no cambian nada en Meta.' : 'Deshacer una pausa o una bajada vuelve a gastar: lo hace el dueño, en Anuncios (J), en Telegram o en la tarjeta de Dimitri.' });
     return enFila(async () => {
-      const k = String(b.token || ''), d = deshaceres.get(k);
-      if (!d) { limpiar(); return R(409, { error: 'deshacer', motivo: 'Eso ya no se puede deshacer: pasó el tiempo, ya se deshizo o la oficina se reinició.' }); }
-      if (d.hasta <= ahora()) { deshaceres.delete(k); return R(409, { error: 'deshacer', motivo: `Pasó el tiempo para deshacerlo (${Number(undoSeconds()) || 0} s): cámbialo en Anuncios.` }); }
+      const k = String(b.token || ''), d = await T.leer('desh', k);
+      if (!d) { await limpiar(); return R(409, { error: 'deshacer', motivo: 'Eso ya no se puede deshacer: pasó el tiempo, ya se deshizo o la oficina se reinició.' }); }
+      if (d.hasta <= ahora()) { await T.quitar('desh', k); return R(409, { error: 'deshacer', motivo: `Pasó el tiempo para deshacerlo (${Number(undoSeconds()) || 0} s): cámbialo en Anuncios.` }); }
       const l = sync.listo(); if (!l.ok) return R(409, { error: 'conexion', motivo: l.motivo });
       const f = await fresco(d.id); if (f.error) return f.error;
       const { v, r, raw } = f, moneda = v.cuenta?.moneda || 'USD', propio = propioRaw(raw, r), pres = presupuestoDe(r.objeto);
-      if (d.tipo === 'pausar' && propio !== 'PAUSED') { deshaceres.delete(k); return R(409, { error: 'deshacer', motivo: `«${r.objeto.nombre}» ya no está en pausa: alguien lo cambió después.` }); }
-      if (d.tipo === 'bajar_presupuesto' && (!pres || Math.abs(pres.usd - d.despues.presupuesto.usd) > 0.004)) { deshaceres.delete(k); return R(409, { error: 'deshacer', motivo: `El presupuesto de «${r.objeto.nombre}» cambió después: ya no se deshace solo.` }); }
+      if (d.tipo === 'pausar' && propio !== 'PAUSED') { await T.quitar('desh', k); return R(409, { error: 'deshacer', motivo: `«${r.objeto.nombre}» ya no está en pausa: alguien lo cambió después.` }); }
+      if (d.tipo === 'bajar_presupuesto' && (!pres || Math.abs(pres.usd - d.despues.presupuesto.usd) > 0.004)) { await T.quitar('desh', k); return R(409, { error: 'deshacer', motivo: `El presupuesto de «${r.objeto.nombre}» cambió después: ya no se deshace solo.` }); }
       const t = evaluar({ vista: v, tipo: d.tipo === 'pausar' ? 'reanudar' : 'subir_presupuesto', id: d.id, valor: d.antes.presupuesto?.usd, topes: sync.topes(), hoy: sync.hoy(), ahora: ahora(), verbo: d.tipo === 'pausar' ? 'Deshacer la pausa' : 'Deshacer la bajada' });
       if (!t.ok) { auditar({ quien, que: 'deshacer:' + d.tipo, objeto: d.objeto, ok: false, motivo: t.motivo }); return R(409, { error: 'tope', motivo: t.motivo, cual: t.cual, tope: t.tope, quedaria: t.quedaria, cifras: t.cifras }); }
       try { for (const w of d.revertir) await ads.cambiar(w.id, w.campos, { validar: true }); for (const w of d.revertir) await ads.cambiar(w.id, w.campos); }
       catch (e) { auditar({ quien, que: 'deshacer:' + d.tipo, objeto: d.objeto, ok: false, motivo: motivoMeta(e) }); return R(422, { error: 'meta', motivo: motivoMeta(e) }); }
-      deshaceres.delete(k);
+      await T.quitar('desh', k);
       await releer(d.revertir); if (d.objeto.nivel !== 'anuncio' && d.tipo === 'pausar') refrescar();
       const entrada = { quien, que: 'deshacer:' + d.tipo, objeto: d.objeto, antes: d.despues, despues: d.antes };
       sync.anotar(entrada); auditar({ ...entrada, ok: true });
@@ -352,5 +370,5 @@ export function crearAcciones({ sync, ads, ahora = () => Date.now(), undoSeconds
     });
   }
 
-  return { accion, deshacer, TIPOS, LIBRES, DE_GASTO, pendientes: () => ({ confirmaciones: confirmaciones.size, deshaceres: deshaceres.size }) };
+  return { accion, deshacer, TIPOS, LIBRES, DE_GASTO, pendientes: () => T.cuenta() };
 }

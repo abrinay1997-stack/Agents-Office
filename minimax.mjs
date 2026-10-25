@@ -19,9 +19,13 @@
 import fs from 'node:fs';
 
 export const MINIMAX = { name: 'MiniMax', env: 'MINIMAX_API_KEY', site: 'platform.minimax.io', how: 'setx MINIMAX_API_KEY "tu-key"' };
-const BASE = () => (process.env.MINIMAX_API_BASE || 'https://api.minimax.io').replace(/\/$/, '');
-const KEY = () => process.env.MINIMAX_API_KEY || '';
-const GROUP = () => process.env.MINIMAX_GROUP_ID || '';
+/** Dónde se leen la key y la base: process.env (la oficina local) o, en el Worker de Cloudflare, los secretos de ese Worker (setEnv(env)). */
+let ENTORNO = null;
+export const setEnv = o => { ENTORNO = o && typeof o === 'object' ? o : null; };
+const V = () => ENTORNO || process.env;
+const BASE = () => (V().MINIMAX_API_BASE || 'https://api.minimax.io').replace(/\/$/, '');
+const KEY = () => V().MINIMAX_API_KEY || '';
+const GROUP = () => V().MINIMAX_GROUP_ID || '';
 export const minimaxOn = () => !!KEY();
 const qs = () => (GROUP() ? `?GroupId=${encodeURIComponent(GROUP())}` : '');
 

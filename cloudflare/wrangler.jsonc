@@ -9,9 +9,9 @@
 
   "assets": {
     "directory": "./public/",
-    "not_found_handling": "single-page-application",
+    "html_handling": "none",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": ["/*"]
   },
 
   // El database_id lo rellena el workflow «Cloudflare · preparar» (crea la base en la cuenta nueva). No es un secreto.
@@ -19,11 +19,17 @@
     { "binding": "DB", "database_name": "agents-office-db", "database_id": "REEMPLAZAR_CON_EL_ID_DE_D1", "migrations_dir": "migraciones" }
   ],
 
+  // Fase 10: presencia y cambios en vivo. Un Durable Object (clase Hub, reexportada desde el módulo main) con almacenamiento SQLite
+  // (`new_sqlite_classes`: entra en el plan gratuito; con `new_classes` el despliegue pide plan de pago).
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }] },
+  "migrations": [{ "tag": "v1-hub", "new_sqlite_classes": ["Hub"] }],
+
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "agents-office-contenido" }],
 
-  "vars": { "AI_MODELO": "claude-sonnet-5-5" },
+  "vars": { "AI_MODELO": "claude-sonnet-5-5", "CONTENIDO_MAX_LLAMADAS": "40", "CONTENIDO_MAX_CONSULTAS": "40", "CONTENIDO_MAX_ACCIONES": "6", "AGENTES_MAX_LLAMADAS": "60", "AGENTES_MAX_CONSULTAS": "300" },
 
   "triggers": { "crons": ["* * * * *"] },
   "workers_dev": true,
-  "observability": { "enabled": true }
+  // Los registros de invocación (con la URL de cada petición) se apagan: un enlace de invitación es una URL con un testigo dentro. Los console.error del código siguen.
+  "observability": { "enabled": true, "logs": { "invocation_logs": false } }
 }

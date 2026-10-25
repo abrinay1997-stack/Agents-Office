@@ -101,8 +101,10 @@ export function mismoMensaje(a = {}, b = {}) {
  * @param o.avisarComentario (texto, { key }) → el aviso de un comentario nuevo (Telegram lo manda si telegram.notify.comentarios)
  * @param o.avisarMensaje (texto, { key }) → B2: el aviso de un mensaje privado nuevo (Telegram lo manda si telegram.notify.mensajes)
  * @param o.undoSeconds () → approvals.undoSeconds: cuánto dura el DESHACER de ocultar
+ * @param o.tokens      Cloudflare (fase 7): dónde viven los tokens de DESHACER (D1; la misma interfaz que `tokensEnMemoria` de anuncios/acciones.mjs, tipo 'bandeja'). En local, en memoria.
+ * @param o.abiertaAtInicial Cloudflare: cuándo se miró la Bandeja por última vez (el Worker no lo recuerda entre peticiones; se devuelve con `abiertaAtAhora`)
  */
-export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, avisarMensaje = null, injectionIn = () => null, undoSeconds = () => 30 } = {}) {
+export function crearBandeja({ metricool = null, meta = null, elegir = () => 'auto', archivo, modo = () => 'simulacro', ahora = Date.now, avisar = () => {}, avisarComentario = null, avisarMensaje = null, injectionIn = () => null, undoSeconds = () => 30, tokens = null, abiertaAtInicial = 0 } = {}) {
   const F = { ...(meta ? { meta } : {}), ...(metricool ? { metricool: fuenteMetricool(metricool) } : {}) };
   const leer = () => { const d = leerJSON(archivo, {}); return { items: {}, ultimo: null, error: '', alias: {}, fuentes: {}, aviso: { at: null, cola: [] }, avisoMensajes: { at: null, cola: [] }, ...d }; };
   const guardar = d => {
@@ -112,8 +114,8 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
   };
   const ahoraIso = () => new Date(ahora()).toJSON();
   const resolver = (d, id) => d.alias?.[id] || id;
-  let abiertaAt = 0, enMarcha = null;
-  const enviando = new Set(), deshacerTokens = new Map();
+  let abiertaAt = abiertaAtInicial, enMarcha = null;
+  const enviando = new Set(), deshacerTokens = new Map(); // (los tokens de DESHACER: `tokens`, si se da; si no, en memoria)
 
   /** La fuente elegida, ya resuelta: «auto» = Meta si hay token, si no Metricool. */
   function elegida() {
@@ -355,21 +357,22 @@ export function crearBandeja({ metricool = null, meta = null, elegir = () => 'au
     const r = { ok: true, item: m, simulada: md !== 'real' };
     if (!deshaciendo) {
       const token = crypto.randomBytes(12).toString('hex'), hasta = ahora() + Math.max(5, Number(undoSeconds()) || 30) * 1000;
-      for (const [k, v] of deshacerTokens) if (v.hasta < ahora()) deshacerTokens.delete(k);
-      deshacerTokens.set(token, { id, a: !si, hasta }); r.deshacer = { token, hasta: new Date(hasta).toJSON() };
+      if (tokens) { await tokens.limpiar(ahora()); await tokens.poner('bandeja', token, { id, a: !si, hasta }, hasta); }
+      else { for (const [k, v] of deshacerTokens) if (v.hasta < ahora()) deshacerTokens.delete(k); deshacerTokens.set(token, { id, a: !si, hasta }); }
+      r.deshacer = { token, hasta: new Date(hasta).toJSON() };
     }
     return r;
   }
   /** DESHACER lo último de ocultar/mostrar, dentro de su tiempo (una vez). */
   async function deshacer(token) {
-    const e = deshacerTokens.get(String(token || ''));
+    const e = tokens ? await tokens.tomar('bandeja', String(token || '')) : deshacerTokens.get(String(token || '')); // de un solo uso (en D1, atómico)
     if (!e) return { error: 'no hay nada que deshacer (o ya se deshizo)', nada: true };
-    deshacerTokens.delete(String(token));
+    if (!tokens) deshacerTokens.delete(String(token));
     if (e.hasta < ahora()) return { error: 'ya pasó el tiempo para deshacer: usa el botón otra vez' };
     return ocultar(e.id, e.a, { deshaciendo: true });
   }
 
   function descartar(id) { const d = leer(), m = d.items[resolver(d, id)]; if (!m) return { error: 'ese mensaje ya no está', nada: true }; if (m.estado === 'respondido') return { error: 'ya está respondido' }; m.estado = 'descartado'; guardar(d); return { ok: true, item: m }; }
   function reabrir(id) { const d = leer(), m = d.items[resolver(d, id)]; if (!m) return { error: 'ese mensaje ya no está', nada: true }; if (m.estado !== 'descartado') return { error: 'solo se reabre lo descartado' }; m.estado = m.borrador ? 'borrador' : 'nuevo'; guardar(d); return { ok: true, item: m }; }
-  return { sincronizar, tick, listar, leer: uno, borrador, sugerirOcultar, enviar, ocultar, deshacer, descartar, reabrir, listo, estado, elegida, abierta: () => { abiertaAt = ahora(); } };
+  return { sincronizar, tick, listar, leer: uno, borrador, sugerirOcultar, enviar, ocultar, deshacer, descartar, reabrir, listo, estado, elegida, abierta: () => { abiertaAt = ahora(); }, abiertaAtAhora: () => abiertaAt };
 }

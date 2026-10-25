@@ -71,6 +71,7 @@ import { progresoProyecto } from './tareas/progreso.mjs';
 import { resumenTareas } from './tareas/resumen.mjs';
 import { siguiente as siguienteRepeticion, avisosLimite } from './tareas/ritmo.mjs';
 import { crearRutasTareas, despachadorDependencias } from './tareas/rutas.mjs';
+import { icsFeed as icsFeedPuro } from './calendario-ics.mjs';
 import { crearRutasDueno } from './tareas/rutas-dueno.mjs'; // plan D (7 oct 2026): las tareas del dueño — las suyas, tomar, delegar
 import { resumenDueno, DUENO } from './tareas/dueno.mjs';
 import { crearWebhooks } from './tareas/webhooks.mjs';
@@ -100,11 +101,11 @@ import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from './anuncios
 import { crearBorradores as crearBorradoresAnuncios } from './anuncios/borradores.mjs'; // Fase A3 (9 oct 2026): borradores de campaña y crear en Meta EN PAUSA
 import { crearCreador as crearCreadorAnuncios, resolverCuentas as resolverCuentasAnuncios } from './anuncios/crear.mjs';
 import { agenteDeAnuncios, promptMejorarAnuncio, leerPropuesta as leerPropuestaAnuncio } from './anuncios/mejorar.mjs';
-import { diagnosticar as diagnosticarAnuncios, cpaObjetivo as cpaObjetivoDeAnuncios, medirResultado as medirResultadoAnuncio, tipoDe as tipoDeAnuncio } from './anuncios/diagnostico.mjs'; // Fase A5 (9 oct 2026): la IA que mejora las campañas
+import { cpaObjetivo as cpaObjetivoDeAnuncios } from './anuncios/diagnostico.mjs'; // Fase A5 (9 oct 2026): la IA que mejora las campañas
 import { crearSugerencias as crearSugerenciasAnuncios, crearAplicador as crearAplicadorAnuncios, cargarUmbrales as cargarUmbralesAnuncios } from './anuncios/sugerencias.mjs';
 import { crearPiloto as crearPilotoAnuncios } from './anuncios/piloto.mjs';
+import { trasSondeo as trasSondeoAnuncios } from './anuncios/tras-sondeo.mjs';
 import { crearImpulsor as crearImpulsorAnuncios } from './anuncios/impulsar.mjs'; // Fase A4 (9 oct 2026): impulsar lo que ya salió en Contenido
-import { fechaEn as fechaEnAnuncios } from './anuncios/modelo.mjs';
 import { crearIndicadoresAnuncios } from './anuncios/indicadores.mjs'; // Fase A6 (9 oct 2026): gasto, costo por resultado y ROAS en «Cómo va el negocio»
 import { crearInforme as crearInformeAnuncios } from './anuncios/informe.mjs';
 import { crearConversiones, deDisparador as conversionDeDisparador } from './anuncios/conversiones.mjs'; // Fase A6 (10 oct 2026): la API de conversiones, apagada por defecto // Fase A7 (9 oct 2026): el informe de anuncios del mes, sin modelo
@@ -122,6 +123,7 @@ import * as rel from './reliability.mjs';
 import * as telegram from './telegram.mjs';
 import * as triggers from './triggers.mjs';
 import * as costs from './costs.mjs';
+import { HANDOFF, modeLineFor, pasosLine as pasosLineCore, reanudaLine, needsReview as needsReviewCore, reviewPrompt as reviewPromptCore, TAREAS_TEXT, CONTENIDO_TEXT } from './agente-core.mjs'; // lo puro de hablarle a un agente (también lo usa el Worker de Cloudflare)
 import * as approvals from './approvals.mjs';
 import * as quality from './quality.mjs';
 import * as history from './history.mjs';
@@ -130,6 +132,7 @@ import * as aprenderContenido from './contenido/aprender.mjs'; // F4 (9 oct 2026
 import { emparejar as emparejarPublicadas } from './src/contenido-publicadas.js';
 import { huecos as huecosContenido, queVuelven as queVuelvenContenido } from './src/contenido-llenar.js';
 import * as memory from './memory.mjs'; // V4.6: mentions, summaries, a context budget, the neighbourhood, synapses that learn
+import { buscarEnCerebro } from './cerebro-busqueda.mjs'; // the Brain's search (the same code answers in the Cloudflare Worker)
 import * as settings from './settings.mjs';
 import * as documents from './documents.mjs';
 import * as business from './business.mjs';
@@ -263,30 +266,15 @@ function anunciosTrasSondeo() {
   if (anunciosDiagEnMarcha) return anunciosDiagEnMarcha;
   anunciosDiagEnMarcha = (async () => {
     try {
-      if (!anuncios.conexion().cifrasAt) return null;
-      const U = umbralesAnuncios();
-      if (U.problemas.length && U.problemas.join() !== anunciosUmbralesAvisados) { anunciosUmbralesAvisados = U.problemas.join(); for (const p of U.problemas) console.warn('anuncios (umbrales):', p); }
-      if (!U.valores.fatigaFrecuencia) return null;
-      const d = anuncios.datosDiagnostico(), topes = anuncios.topes();
-      let publicaciones = []; try { publicaciones = metricas.leer({ dias: 45 }).publicaciones || []; } catch { /* sin Analíticas, no hay «impulsar» */ }
-      const diag = diagnosticarAnuncios({ vista: d.vista, filas: d.filas, hoy: d.hoy, cpa: cpaObjetivoAnuncios(), umbrales: U.valores, ahora: Date.now(), subidas: anuncios.subidas(), topes, pixel: d.pixel, publicaciones });
-      const piloto = await anunciosPiloto.correr({ sugerencias: diag.sugerencias, vista: d.vistaHoy, topes });
-      anunciosSug.actualizar(diag);
-      for (const h of piloto.hechas) if (h.ok && h.sugerencia) anunciosSug.marcarAplicada(h.sugerencia, { quien: 'piloto', hecho: h.hecho });
-      const moneda = d.vista.cuenta?.moneda || 'USD';
-      anunciosSug.cerrarResultados({
-        medir: h => {
-          if (!['campana', 'conjunto', 'anuncio'].includes(h.objeto?.nivel)) return { mejoro: null, r: null, texto: 'Esto no se mide con las cifras de un anuncio.' };
-          return medirResultadoAnuncio({ filas: d.filas, nivel: h.objeto.nivel, id: h.objeto.id, tipo: tipoDeAnuncio(buscarAnuncio(d.vista, h.objeto.id)), aplicadaEl: fechaEnAnuncios(d.zona, Date.parse(h.aplicadaAt)), hoy: d.hoy, dias: U.valores.resultadoDias, cambio: h.cambio?.tipo, moneda });
-        },
+      return await trasSondeoAnuncios({ sync: anuncios, sug: anunciosSug, piloto: anunciosPiloto, umbrales: umbralesAnuncios, cpa: cpaObjetivoAnuncios,
+        avisarUmbrales: U => { if (U.problemas.length && U.problemas.join() !== anunciosUmbralesAvisados) { anunciosUmbralesAvisados = U.problemas.join(); for (const p of U.problemas) console.warn('anuncios (umbrales):', p); } },
+        publicaciones: () => metricas.leer({ dias: 45 }).publicaciones || [], // sin Analíticas, no hay «impulsar»
         aprender: (h, r) => { // como Contenido F4: las notas que citó la tarea de ada se acercan (o se alejan) según cómo le fue
           const t = load().find(x => x.id === h.tarea); if (!t) return;
           const cited = memory.cited(t.result, t.read || []); if (!cited.length) return;
           memory.reinforce(MEM, { id: 'anuncios:' + h.id, r: r.r, cited, read: t.read || [] }); saveMem();
-        } });
-      const hora = new Date().getHours();
-      if (hora >= 9 && hora < 20) { const x = anunciosSug.escalarDelDia(d.hoy); if (x) notice('anuncios', `📈 «${x.objeto.nombre}» rinde bien: ${x.dato} Propuesta: subir su presupuesto un 20 %, hasta US$${x.cambio.valor}. Gasta más: son tus dos toques, dentro de tus topes. (Anuncios → Sugerencias, J)`, { level: 'info', key: `anuncios-escalar:${x.id}@${x.cambio.valor}` }); }
-      return diag;
+        },
+        avisar: (texto, o) => notice('anuncios', texto, o) }); // fase 7 de Cloudflare: la lógica vive en anuncios/tras-sondeo.mjs, la misma que corre el Worker
     } catch (e) { console.warn('anuncios (diagnóstico):', e.message); return null; }
     finally { anunciosDiagEnMarcha = null; }
   })();
@@ -719,18 +707,12 @@ function contextoMarketingText(a, index) {
 }
 function tareasText() { // plan T3 (6 oct 2026): the desk's own task, as tools (tareas-mcp.mjs)
   if (backend !== 'claude-cli') return '';
-  return '\n- TAREAS (mcp__tareas__*): ver_mi_tarea al empezar (pasos con su id, fecha límite, comentarios del dueño); marcar_paso en cuanto termines cada paso (el dueño ve el avance); anotar_en_bitacora para lo que encontraste o decidiste; ' +
-    'pedir_bloqueo si NO puedes seguir sin un dato, una decisión o que otra tarea termine (no lo inventes: tu tarea se para con lo que llevas y sigue sola después); crear_borrador_tarea para pedirle trabajo a otro departamento (nace idea); registrar_trabajo para algo hecho fuera de una tarea. ' +
-    'El DUEÑO también tiene su propia lista de tareas: las que ver_tareas marca «DEL DUEÑO» las hace él en persona — no las ejecutes, no las repitas ni las cambies; si tu trabajo depende de una, pide_bloqueo con su id. Si algo solo lo puede hacer o decidir él y no te bloquea (una llamada, una firma, un precio), sugerir_al_dueno se lo deja en su Bandeja. ' + // plan D (7 oct 2026)
-    'Nada de esto aprueba ni envía.';
+  return TAREAS_TEXT;
 }
 function contenidoText(a) { // V4.7: what an agent of these departments may do with the content calendar
   if (!CONTENIDO_DEPTS.includes(a.department) || backend !== 'claude-cli') return '';
-  return '\n- CONTENIDO (mcp__contenido__*): el calendario de lo que se va a publicar en Instagram y Facebook. ver_calendario_contenido y ver_pieza LEEN lo que hay (míralo antes de proponer, para no repetir ni pisar); crear_borrador deja una pieza como BORRADOR con su día, hora, formato, redes, texto y las imágenes del Estudio (pasa sus ids en `medios`); mejorar_borrador corrige un borrador tuyo. ' +
-    'Tú NO apruebas, NO programas y NO publicas: el dueño revisa cada borrador y lo aprueba en Contenido, y solo lo aprobado sale. Escribe el texto completo y listo para salir, con la voz de la marca (sus notas del cerebro). Para una imagen, genérala primero con el Estudio y usa su id. Termina tu entregable diciendo qué borradores dejaste y para qué días.';
+  return CONTENIDO_TEXT;
 }
-const modeLineFor = (mode, task) => mode === 'draft' ? '\nPrepare everything, but send, post, pay or change NOTHING outside this machine: the owner reads this first and approves it. Name every recipient with the exact email address or phone number, and every amount: after the OK the office only lets a send reach the addresses written in this draft. End with one line saying exactly what will go out when approved (or that nothing needs to).'
-  : mode === 'approve' ? `\nThe owner has APPROVED the draft below. Carry out the outbound step now, exactly as drafted, with your tools (send, post, update). If a tool you need is not connected, say so and show what you would have sent. Then report in one short section: what went out, to whom, and anything that did not.\nApproved draft:\n${task.draft || task.result}` : '';
 const timeoutFor = task => Math.min(3600, (task.timeout || RUN_TIMEOUT / 1000) * (task.timeoutMul || 1)) * 1000; // V4.4 (B4): a routine's own clock; a retry after a timeout gets twice as long
 const runModeOf = (mode, task) => mode === 'approve' ? 'approve' : mode === 'draft' ? 'draft' : task?.autonomous ? 'autonomous' : 'task';
 const APPR = () => approvals.config(cfg.approvals); // V4.4 (G): undo window, reminders, expiry, amount limit, autonomy // V4.4: safety.writesAllowed decides from this and the policy
@@ -766,19 +748,7 @@ async function run(task, feedback, mode) { // mode: undefined (a task from the b
 }
 
 // T1/T3 (6 oct 2026): the steps the agent marks as it goes (tareas-mcp → marcar_paso), its deadline and priority, and — after a block — what it had
-function pasosLine(task) {
-  const p = task.pasos || [], bits = [];
-  if (p.length) bits.push(`\nSteps (mark each one with the tool marcar_paso as soon as it is done; if one cannot be done, say why in anotar_en_bitacora):\n${p.map((x, i) => `${i + 1}. ${x.hecho ? '[done] ' : ''}${x.texto} (id ${x.id})`).join('\n')}`);
-  else if (task.plan?.length) bits.push(`\nAgreed plan: ${task.plan.join(' → ')}`);
-  if (task.limite) bits.push(`\nDeadline: ${task.limite.replace('T', ' ')}.`);
-  if (task.prioridad === 'alta') bits.push('\nThe owner marked this HIGH priority.');
-  if (task.proyecto) { const pr = catalogoT.proyecto(task.proyecto); if (pr) bits.push(`\nPart of the project «${pr.nombre}»${pr.objetivo ? ' — goal: ' + pr.objetivo : ''}.`); }
-  return bits.join('');
-}
-function reanudaLine(task) {
-  const b = task.pidioBloqueo; if (!b || !task.partial) return '';
-  return `\n\nYou paused this task earlier because: ${b.porque}. That is resolved now. What you had so far:\n${String(task.partial).slice(0, 6000)}\nContinue from there.`;
-}
+const pasosLine = task => pasosLineCore(task, id => catalogoT.proyecto(id));
 /* ---------- V3.2 (16 Sep) Agent Teams: the lead plans, the desks work at once, the lead writes the final ---------- */
 const nameOf = id => id === 'lead' ? 'the lead' : (AGENTS.find(a => a.id === id)?.name || id);
 const routineLineFor = task => task.routine ? `\nThis is a routine (${task.when}): it runs on the office's own clock and the owner is not at the keyboard. It is now ${new Date().toLocaleString([], { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}. Do the work for now.`
@@ -947,10 +917,11 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
   if (studioish) { try { const f = presets.fabrica(); bancoBlock = [estudioPlan.presetsBlock({ presets: presets.todos().presets, canales: f.canales || [], grupos: f.grupos || [], ask: text, lotes: lotesL }), estudioPlan.LOTE_REGLAS, H ? hojaTexto(H) : ''].filter(Boolean).join('\n\n'); } catch (e) { console.warn('dimitri presets:', e.message); } }
   const studioBlock = studioish ? estudioPlan.studioPromptBlock({ models: media.models(), budget: media.budget(), folders: media.folders(), attach: attach.map(id => { const it = media.item(id) || {}; return { id, prompt: it.prompt, folder: it.folder ? media.folderOf(it.folder)?.name : null }; }), approved, voices, ask: text, defaults: k => media.defaultModel(k) }) + (bancoBlock ? '\n\n' + bancoBlock : '') : '';
   const recent = sub.recentText(list, AGENTS), viewing = dimitriViewing(context, list), notes = businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : '') + extra; // the DATA, read again by the injection check below
+  const win = sub.historyWindow(st.messages, { name: DEPUTY, depts: DEPTS }, 12); // sesiones largas: the last turns, bounded; what does not fit goes to <hilo>
   const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => `${DEPTS[k].name} (${k})`),
     status: sub.statusText(list, AGENTS, DEPTS), office: dimitriOffice(list), recent, notes,
-    studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing, older: sub.olderText(st.messages, 12) });
-  const convo = sub.historyText(st.messages, { name: DEPUTY, depts: DEPTS }, 12); // DIM-05: with what Dimitri asked and what the owner chose · DIM-18: each creative's prompt, settings and files
+    studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing, hilo: sub.hiloText(st.messages, st.hilo, { depts: DEPTS, shown: win.shown }) });
+  const convo = win.text; // DIM-05: with what Dimitri asked and what the owner chose · DIM-18: each creative's prompt, settings and files
   const userMsg = (convo ? convo + '\n' : '') + `Dueño: ${text}${H ? ` [adjuntó la hoja «${H.nombre}» (id ${H.id}, ${H.filas} filas): la ves en <estudio>]` : ''}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${DEPUTY} (solo JSON):`;
   let shown = ''; const stopped = () => !!run && subStopped.has(run);
   const live = onText ? raw => { const r = replyFromPartial(raw); if (r.reply) shown = r.reply; onText(r); } : null; // DIM-14: only the «reply» being written reaches the page
@@ -1003,7 +974,7 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
   const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   const st2 = sub.load(DATA); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
   if (picked) { const q = st2.messages.find(x => x.id === answers.msg); if (q?.plan) q.plan.answers = picked.answers; }
-  st2.messages.push(u, m); sub.save(DATA, st2);
+  st2.messages.push(u, m); sub.save(DATA, st2, { depts: DEPTS });
   console.log(`◆ ${DEPUTY.toLowerCase()}: ${plan.mode}${plan.tasks.length ? ' · ' + plan.tasks.length + ' piece' + (plan.tasks.length > 1 ? 's' : '') + ' → ' + plan.tasks.map(t => t.dept).join(', ') : ''}${studio ? ` · ${studio.creatives.length} creative(s)${studio.estimate ? `, aprox. US$${studio.estimate.total}` : ''}${studio.lote ? ` · lote ${studio.lote.n} fotos ~US$${studio.lote.estimate.total} (${studio.lote.state})` : ''}` : ''}${ops.length ? ` · ${ops.length} op(s)` : ''}${plan.questions.length ? ` · ${plan.questions.length} question(s)` : ''}${images.length ? ` · saw ${images.length} image(s)` : ''}${plan.bad ? ' · unreadable answer' : plan.cut ? ' · mended a cut answer' : ''}${shield ? ' · 🛡 ' + shield : ''}`);
   return { messages: [u, m], ...(picked ? { answered: { msg: answers.msg, answers: picked.answers } } : {}) };
 }
@@ -1482,34 +1453,7 @@ async function subOpUndo(msgId, k) {
 /* ---------- routines: the office's own clock (V3.5) ---------- */
 const RSTATE = routines.loadState(DATA);
 let rlist = { routines: [], problems: [], path: routines.file(BRAIN) };
-function icsFeed() {
-  const p2 = n => String(n).padStart(2, '0'), stamp = d => `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}T${p2(d.getHours())}${p2(d.getMinutes())}00`;
-  const txt = s => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\r?\n/g, '\\n');
-  const BY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'], now = new Date(), ev = [];
-  const fold = l => l.length <= 60 ? l : l.match(/.{1,60}/gu).join('\r\n ');
-  for (const r of loadRoutines()) {
-    const w = r.when; if (!w || r.paused || w.kind === 'minutes') continue;
-    const start = w.start ? new Date(w.start + 'T00:00:00') : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const [h, m] = String(w.at || w.from || '09:00').split(':').map(Number); start.setHours(h, m, 0, 0);
-    const rule = w.kind === 'daily' ? 'FREQ=DAILY' : w.kind === 'weekdays' ? 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR' : w.kind === 'weekly' ? `FREQ=WEEKLY;BYDAY=${w.days.map(d => BY[d]).join(',')}`
-      : w.kind === 'monthly' ? `FREQ=MONTHLY;${w.nth ? `BYDAY=${w.nth}${BY[w.weekday]}` : `BYMONTHDAY=${w.day}`}` // plan T5
-      : w.kind === 'hourly' ? (() => { const a = +String(w.from).split(':')[0], b = +String(w.to).split(':')[0], hs = []; for (let x = a; x <= b; x += Math.max(1, w.every || 1)) hs.push(x); return `FREQ=WEEKLY;BYDAY=${w.weekdaysOnly ? 'MO,TU,WE,TH,FR' : BY.join(',')};BYHOUR=${hs.join(',')};BYMINUTE=${+String(w.from).split(':')[1] || 0}`; })() : null;
-    if (!rule) continue;
-    const a = AGENTS.find(x => x.id === r.agent);
-    const fin = w.end ? `;UNTIL=${w.end.replace(/-/g, '')}T235959` : w.count ? `;COUNT=${w.count}` : ''; // plan T5
-    ev.push(['BEGIN:VEVENT', `UID:rutina-${r.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(start)}`, 'DURATION:PT30M', `RRULE:${rule}${fin}`, `SUMMARY:${txt('⏱ ' + r.title)}`, `DESCRIPTION:${txt(`${r.text || r.title}\n${DEPTS[r.dept]?.name || r.dept} · ${a ? a.name : r.agent}${r.needsOk ? ' · pide tu OK' : ''}`)}`, 'END:VEVENT']);
-  }
-  const dur = min => `DURATION:PT${Math.max(5, Math.min(24 * 60, Math.round(min || 30)))}M`; // plan T2: the task's estimate (30 min when it has none)
-  for (const t of load()) {
-    const a = AGENTS.find(x => x.id === t.agent), mia = t.person === DUENO, quien = mia ? `Tuya${DEPTS[t.dept] ? ' · ' + DEPTS[t.dept].name : ''}${t.prioridad === 'alta' ? ' · prioridad alta' : ''}` : t.person ? `${t.person} (persona)${t.prioridad === 'alta' ? ' · prioridad alta' : ''}` : `${DEPTS[t.dept]?.name || t.dept} · ${a ? a.name : t.agent}${t.prioridad === 'alta' ? ' · prioridad alta' : ''}`; // plan D: lo tuyo dice «Tuya»
-    if (t.state === 'scheduled' && t.dueAt) ev.push(['BEGIN:VEVENT', `UID:tarea-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, `DTSTART:${stamp(new Date(t.dueAt))}`, dur(t.estimacion), `SUMMARY:${txt('◷ ' + t.title)}`, `DESCRIPTION:${txt(`${t.text || t.title}\n${quien}`)}`, 'END:VEVENT']);
-    if (t.limite && t.state !== 'done' && !t.archived) { // the deadline: an all-day event (or at its hour)
-      const s = String(t.limite), d = s.slice(0, 10).replace(/-/g, '');
-      ev.push(['BEGIN:VEVENT', `UID:limite-${t.id}@agents-office`, `DTSTAMP:${stamp(now)}`, ...(s.length > 10 ? [`DTSTART:${stamp(new Date(s))}`, mia ? dur(t.estimacion) : 'DURATION:PT15M'] : [`DTSTART;VALUE=DATE:${d}`]), `SUMMARY:${txt((mia ? '☐ ' : '⚑ Vence: ') + t.title)}`, `DESCRIPTION:${txt(mia && t.text ? `${t.text}\n${quien}` : quien)}`, 'END:VEVENT']); // plan D: una tarea tuya es un pendiente tuyo («☐»)
-    }
-  }
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Agents Office//Calendario//ES', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${txt(cfg.name + ' · oficina')}`, ...ev.flat(), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
-}
+const icsFeed = () => icsFeedPuro({ rutinas: loadRoutines(), tareas: load(), agentes: AGENTS, depts: DEPTS, nombre: cfg.name }); // el texto del .ics vive en calendario-ics.mjs (también lo usa el Worker de Cloudflare)
 function loadRoutines() { // re-read from disk every time: a routine written by Claude Code, or by hand, lands without a restart
   const r = routines.load(BRAIN, AGENTS);
   if (r.problems.join() !== rlist.problems.join()) for (const w of r.problems) console.warn('routines:', w);
@@ -1553,16 +1497,10 @@ function fire(r, { due = Date.now(), late = false, by = 'routine', missed = 0 } 
 // V4.4 (D5): a second opinion on sensitive work — the department lead reads the draft before it reaches the owner, and the
 // desk fixes what the lead flags (one pass). office.config.json → quality.review { enabled, departments, words }
 const REVIEW = () => ({ enabled: true, departments: ['fin'], words: ['contrato', 'propuesta', 'cotización', 'cotizacion', 'factura', 'presupuesto', 'legal', 'contract', 'proposal', 'invoice'], ...(cfg.quality?.review || {}) });
-function needsReview(task, result) {
-  const r = REVIEW(); if (!r.enabled || task.piece || task.team) return false;
-  const a = AGENTS.find(x => x.id === task.agent); if (!a || a.lead) return false;
-  const hay = `${task.title} ${task.text}`.toLowerCase();
-  return r.departments.includes(task.dept) || r.words.some(w => hay.includes(String(w).toLowerCase())) || approvals.overLimit(result, APPR().amountLimit).length > 0;
-}
+function needsReview(task, result) { return needsReviewCore(task, result, { agent: AGENTS.find(x => x.id === task.agent), cfgReview: cfg.quality?.review, amountLimit: APPR().amountLimit }); }
 async function reviewDraft(task, result) {
   const lead = leadOf(task.dept), a = AGENTS.find(x => x.id === task.agent);
-  const system = `Eres ${lead.name}, jefe de ${DEPTS[task.dept].name} en ${cfg.name}. Revisas el trabajo de ${a.name} antes de que llegue al dueño. Devuelve SOLO JSON, sin texto alrededor.`;
-  const user = `Pedido del dueño: ${task.text}\n\nBorrador de ${a.name}:\n${result.slice(0, 12000)}\n\nRevisa: datos o cifras sin fuente, importes o cálculos que no cuadran, destinatarios o nombres dudosos, partes del pedido que faltan, promesas que la empresa no puede cumplir, tono.\nDevuelve {"ok": true} si puede ir al dueño tal cual, o {"ok": false, "fixes": ["<corrección concreta>", …]} (máximo 5).`;
+  const { system, user } = reviewPromptCore({ task, lead, agent: a, deptName: DEPTS[task.dept].name, negocio: cfg.name, result });
   try { const j = parseJSON(await ask(system, user, { maxTokens: 700, timeout: 120000, model: 'sonnet', taskId: task.id, kind: 'revision' })); return { ok: !!j.ok, fixes: Array.isArray(j.fixes) ? j.fixes.slice(0, 5).map(String) : [], by: lead.id, at: Date.now() }; }
   catch (e) { console.warn('review:', e.message); return null; }
 }
@@ -2229,7 +2167,6 @@ async function weeklyReport(force = false) {
   return text;
 }
 setInterval(() => weeklyReport().catch(e => console.warn('weekly:', e.message)), 15 * 60e3);
-const HANDOFF = /^\s*(?:\*\*)?PASAR A UNA PERSONA\s*:?\s*(?:\*\*)?\s*/i;
 const HOST = cfg.host || '127.0.0.1';
 /* ---------- V4.4 (E1, E2): triggers — a webhook turns an event (a form, a payment, a WhatsApp, a new email) into a task ---------- */
 const TRIG_STATE = path.join(DATA, 'triggers.json');
@@ -2529,6 +2466,11 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', etag: x.etag, vary: 'accept-encoding', 'x-content-type-options': 'nosniff', ...(gz ? { 'content-encoding': 'gzip' } : {}) });
       return res.end(req.method === 'HEAD' ? undefined : gz ? x.gz : x.raw);
     }
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/dictado.js') { // dictado por voz (src/dictado.js → dist/dictado.js): un script suelto; la página solo lo pide si el navegador sabe dictar
+      let t; try { t = fs.readFileSync(path.join(ROOT, 'dist', 'dictado.js')); } catch { await rebuildOffice(); try { t = fs.readFileSync(path.join(ROOT, 'dist', 'dictado.js')); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/dictado.js no está: node build.mjs'); } }
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
+      return res.end(req.method === 'HEAD' ? undefined : t);
+    }
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/anuncios-vista.js') { // Fase A1: el panel de Anuncios, on demand (build-anuncios.mjs → dist/anuncios-vista.js)
       let x; try { x = anunciosVistaFile(); if (!anunciosVistaAlDia(x)) throw new Error('otra construcción'); } catch { if (fs.existsSync(path.join(ROOT, 'build-anuncios.mjs'))) await rebuildOffice(); try { x = anunciosVistaFile(); } catch { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); return res.end('dist/anuncios-vista.js no está: node build.mjs'); } }
       if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(x.etag)) { res.writeHead(304, { etag: x.etag, 'cache-control': 'no-cache', vary: 'accept-encoding' }); return res.end(); }
@@ -2592,21 +2534,7 @@ const server = http.createServer(async (req, res) => {
       const learned = memory.learnedLinks(MEM, now).filter(([a, b]) => at.has(a) && at.has(b)).map(([a, b, x]) => [at.get(a), at.get(b), x]);
       return json(res, 200, { ...graph, learned: { w, links: learned } });
     }
-    if (url.pathname === '/api/brain/search' && req.method === 'GET') { // the Brain's search: names AND text, accents ignored, a snippet around the hit
-      const fold = s => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-      const q = fold(url.searchParams.get('q') || '').trim().slice(0, 120); if (q.length < 2) return json(res, 200, { q, hits: [] });
-      const words = q.split(/\s+/).filter(Boolean), hits = [];
-      for (const [name, raw] of vaultIndex()) {
-        const body = String(raw).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, ''), fn = fold(name), fb = fold(body);
-        if (!words.every(w => fn.includes(w) || fb.includes(w))) continue;
-        let score = 0; for (const w of words) { if (fn.includes(w)) score += 10; let i = -1, c = 0; while ((i = fb.indexOf(w, i + 1)) >= 0 && c < 20) c++; score += c; }
-        const at = Math.max(0, fb.indexOf(words.find(w => fb.includes(w)) || words[0]));
-        const snippet = at >= 0 && fb.includes(words[0]) || words.some(w => fb.includes(w)) ? (at > 50 ? '…' : '') + body.slice(Math.max(0, at - 50), at + 110).replace(/\s+/g, ' ').trim() + '…' : '';
-        hits.push({ name, score, snippet, inName: words.every(w => fn.includes(w)) });
-      }
-      hits.sort((a, b) => b.score - a.score);
-      return json(res, 200, { q, total: hits.length, hits: hits.slice(0, 40) });
-    }
+    if (url.pathname === '/api/brain/search' && req.method === 'GET') return json(res, 200, buscarEnCerebro(vaultIndex(), url.searchParams.get('q'))); // the Brain's search: names AND text, accents ignored, a snippet around the hit (cerebro-busqueda.mjs, shared with the Cloudflare Worker)
     if (url.pathname === '/api/note' && req.method === 'GET') { // read one note of the brain, by name (the Brain's reader)
       const id = url.searchParams.get('id') || ''; const n = noteIndex().get(id);
       if (!n || !insideBrain(n.path)) return json(res, 404, { error: 'esa nota no existe' });
@@ -3173,6 +3101,10 @@ const server = http.createServer(async (req, res) => {
       const r = await subSend(String(msg || ''), items);
       return json(res, r.error ? 404 : 200, r);
     }
+    if (url.pathname === '/api/sub/conversaciones' && req.method === 'GET') return json(res, 200, sub.listar(DATA)); // historial: las conversaciones de Dimitri
+    { const mc = url.pathname.match(/^\/api\/sub\/conversaciones\/([a-z0-9]{3,24})$/); if (mc && req.method === 'GET') { const c = sub.ver(DATA, mc[1]); return c ? json(res, 200, c) : json(res, 404, { error: 'esa conversación ya no está' }); } }
+    if (url.pathname === '/api/sub/abrir' && req.method === 'POST') { const { id } = await body(req); const r = sub.abrir(DATA, String(id || '')); return r ? json(res, 200, r) : json(res, 404, { error: 'esa conversación ya no está' }); }
+    if (url.pathname === '/api/sub/borrar' && req.method === 'POST') { const { id } = await body(req); return sub.borrar(DATA, String(id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'esa conversación ya no está' }); }
     if (url.pathname === '/api/sub/clear' && req.method === 'POST') { const id = sub.archive(DATA); return json(res, 200, { ok: true, archived: id }); } // V4.11: archived (data/subgerente-archivo.json), not deleted
     if (url.pathname === '/api/chat' && req.method === 'POST') {
       const { agent, text, history } = await body(req);
