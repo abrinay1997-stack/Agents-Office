@@ -88,7 +88,7 @@ await step('tests: npm test (safety rules, the guard, the secrets check)', async
   // 25 oct 2026: los tests con Chromium (varios navegadores a la vez) se mueren de hambre en un runner de 2 núcleos: van aparte, de uno en uno.
   const todos = ['tests', 'cloudflare/tests'].filter(existsSync).flatMap(d => readdirSync(d).filter(f => f.endsWith('.test.mjs') || f.endsWith('.test.js')).map(f => d + '/' + f));
   const navegador = todos.filter(f => /navegador|-ui\.test/.test(f)), resto = todos.filter(f => !navegador.includes(f));
-  const mal = e => { const malos = [...String(e.out || e.message).matchAll(/^\s*not ok \d+ - (.+)$/gm)].map(m => m[1].trim()).slice(0, 6); throw new Error('a test failed' + (malos.length ? ': ' + malos.join(' | ') : ' — run npm test to see which: ' + e.message.slice(-300))); };
+  const mal = e => { const texto = String(e.out || e.message), malos = [...texto.matchAll(/^\s*not ok \d+ - (.+)$/gm)].map(m => m[1].trim()).slice(0, 6); for (const m of [...texto.matchAll(/^\s*error: (.{0,400})/gm)].slice(0, 6)) console.error('  ↳ ' + m[1]); /* el motivo de cada fallo, para leerlo en el CI */ throw new Error('a test failed' + (malos.length ? ': ' + malos.join(' | ') : ' — run npm test to see which: ' + e.message.slice(-300))); };
   // en el CI el paso «Unit tests» ya corrió todo lo demás (AO_TESTS_YA=1): aquí solo las de navegador
   const r1 = process.env.AO_TESTS_YA ? '' : await sh('node', ['--test', '--test-concurrency=4', ...resto]).catch(mal);
   const r2 = await sh('node', ['--test', '--test-concurrency=1', ...navegador]).catch(mal), out = r1 + r2;
