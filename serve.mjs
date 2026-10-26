@@ -2658,7 +2658,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/restablecer/confirmar' && req.method === 'POST') { const b = await body(req); const r = await restablecer.confirmar({ token: String(b.token || ''), escribio: String(b.escribio || '') }); return r.error ? json(res, r.status || 400, { error: r.error }) : json(res, 200, r); }
     if (url.pathname === '/api/restablecer/deshacer' && req.method === 'POST') { const b = await body(req); const r = await restablecer.restaurar({ id: String(b.id || '') }); return r.error ? json(res, r.status || 400, { error: r.error }) : json(res, 200, r); }
     if (url.pathname === '/api/sub/weekly' && req.method === 'POST') { try { const t = await weeklyReport(true); return json(res, 200, { ok: true, text: t }); } catch (e) { return json(res, 500, { error: e.message }); } } // J8, on demand
-    if (url.pathname === '/api/team' && req.method === 'GET') return json(res, 200, { people: PEOPLE().map(p => ({ name: p.name, depts: p.depts || [], telegram: !!p.telegram })) });
+    if (url.pathname === '/api/team' && req.method === 'GET') return json(res, 200, { people: PEOPLE().map(p => ({ name: p.name, depts: p.depts || [], telegram: !!p.telegram })), yo: null }); // `yo`: la cuenta que pregunta; la oficina local no tiene cuentas (en la nube lo trae, 26 oct 2026)
     if (url.pathname === '/api/history' && req.method === 'GET') { // V4.4 (D7)
       const kind = url.searchParams.get('kind') === 'brief' ? 'brief' : 'skill', name = String(url.searchParams.get('name') || ''), at = url.searchParams.get('at');
       if (at) { const t = history.read(DATA, kind, name, at); return t === null ? json(res, 404, { error: 'esa versión no existe' }) : json(res, 200, { kind, name, at: +at, text: t }); }

@@ -114,7 +114,8 @@ test('las mismas peticiones a la oficina local y al Worker dan la misma forma de
   await dos('GET', '/api/tareas/agenda?dias=7');
   await dos('GET', '/api/tareas/resumen?dias=30');
   const mia = await dos('POST', '/api/tareas/mias', { title: 'Llamar al contador', limite: '2026-12-02', etiquetas: [] });
-  assert.equal(mia.nube.tarea.person, 'Tú');
+  assert.equal(mia.local.tarea.person, 'Tú'); // la oficina local no tiene cuentas
+  assert.ok(mia.nube.tarea.person && mia.nube.tarea.person !== 'Tú', 'en la nube «para mí» es de la cuenta que lo pide (26 oct 2026)');
   await dos('GET', '/api/tareas/mias');
   await dos('GET', '/api/tareas/mias?desde=2026-12-01&hasta=2026-12-31');
 

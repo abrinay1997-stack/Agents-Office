@@ -328,7 +328,7 @@ test('/api/calendar.ics: las rutinas con su repetición y las tareas con fecha, 
   const r = await o.api('GET', '/api/calendar.ics');
   assert.equal(r.r.headers.get('content-type'), 'text/calendar; charset=utf-8');
   assert.match(r.j, /^BEGIN:VCALENDAR\r\n/); assert.match(r.j, /RRULE:FREQ=WEEKLY;BYDAY=MO/); assert.match(r.j, /DTSTART:\d{8}T090000\r\n/); // las 9 de Panamá, no las 14 de UTC
-  assert.match(r.j, /DTSTART:20261202T100000/); assert.match(r.j, /SUMMARY:☐ Llamar al contador/);
+  assert.match(r.j, /DTSTART:20261202T100000/); assert.match(r.j, /SUMMARY:⚑ Vence: Llamar al contador/); // (26 oct 2026: en la nube «para mí» es de la cuenta —«Dueno»—, no el «Tú» del dueño: sale como la tarea de una persona)
   assert.equal((await pedir(manejar, o.env, '/api/calendar.ics')).status, 401);
 });
 
