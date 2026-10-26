@@ -15,6 +15,7 @@ import * as restablecer from './restablecer.js';
 import * as modelos from './modelos.js';
 import * as conectores from './conectores.js';
 import * as imagenMeta from './imagen-meta.js';
+import * as chatAgente from './chat-agente.js';
 export const MODULOS = [
   tareas,
   bandeja, // ANTES que contenido: solo contesta /api/contenido/bandeja*, y contenido contesta el resto de /api/contenido/* (si va antes, se come la Bandeja)
@@ -32,5 +33,6 @@ export const MODULOS = [
   conectores, // Ajustes → Conectores: añadir, probar, token cifrado, plantillas
   modelos, // Ajustes → Modelos: catálogo, asignación por función, probar y comparar
   imagenMeta, // /api/imagen-meta: las fotos de Meta por el mismo origen (CSP)
+  chatAgente, // POST /api/chat: hablar con un agente (un turno, solo herramientas de lectura)
   equipo, // fase 10: /api/equipo · /api/yo/* · /api/live (las rutas públicas de las invitaciones las llama lib/rutas.js antes de pedir sesión)
 ];
