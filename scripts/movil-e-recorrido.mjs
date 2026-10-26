@@ -186,10 +186,13 @@ export async function correr({ capturas = false } = {}) {
     paso(await page.evaluate(() => { const l = document.querySelector('.mv-ahora').getBoundingClientRect(), s = document.querySelector('#mvRoot [data-vista="calendario"] .mv-scroll').getBoundingClientRect(); return l.top >= s.top && l.bottom <= s.bottom; }), 'Día: al abrir, la línea de «ahora» queda a la vista');
     await foto('calendario-dia'); await medir('Calendario · Día'); await axe('Calendario · Día'); await sinDesborde('Calendario · Día');
     {
-      await page.locator('.mv-hr[data-hora="10:00"]').evaluate(e => e.scrollIntoView({ block: 'center' })); await espera(200);
-      const b = await page.locator('.mv-hr[data-hora="10:00"]').boundingBox(); await page.touchscreen.tap(b.x + 120, b.y + 10); await espera(350);
+      // una hora VACÍA (sin tarjetas encima): lo que hay en el día depende de la hora a la que corre la prueba
+      // el desplazamiento del día es suave: se espera a que se quede quieto antes de elegir dónde tocar
+      await page.evaluate(() => document.querySelector('.mv-hr[data-hora="10:00"]').scrollIntoView({ block: 'center', behavior: 'instant' })); await espera(900);
+      const punto = await page.evaluate(() => { for (const h of [10, 11, 9, 12, 8, 14, 15, 16, 7, 17, 13, 18, 6, 19, 5, 20, 4, 21, 3, 22, 2, 1]) { const hr = document.querySelector('.mv-hr[data-hora="' + String(h).padStart(2, '0') + ':00"]'); if (!hr) continue; const r = hr.getBoundingClientRect(); for (const dx of [120, 200, 260, 90]) { const x = r.left + dx, y = r.top + 10, el = document.elementFromPoint(x, y); const ocupada = [...document.querySelectorAll('.mv-ev, .mv-evb')].some(ev => { const q = ev.getBoundingClientRect(); return q.bottom > r.top - 2 && q.top < r.bottom + 2 && q.right > r.left && q.left < r.right; }); if (!ocupada && el && el.closest('.mv-hr') === hr) return { x, y, h }; } } return null; });
+      await espera(250); await page.touchscreen.tap(punto.x, punto.y); await espera(350);
       await hojaAbierta('[data-k="tarea"]'); await page.locator('.mv-hoja [data-k="tarea"]').tap(); await hojaAbierta('#mvNh'); await espera(300);
-      paso((await page.inputValue('.mv-hoja #mvNh')) === '10:00', 'Día: tocar una hora vacía crea algo a esa hora (10:00)'); await cerrarHoja();
+      paso((await page.inputValue('.mv-hoja #mvNh')) .startsWith(String(punto.h).padStart(2, '0') + ':'), 'Día: tocar una hora vacía crea algo a esa hora (' + punto.h + ':00)'); await cerrarHoja();
     }
     // crear una rutina semanal
     toques = 0; await tocar('.mv-tab[data-tab="calendario"]'); await tocar('.mv-fab'); await hojaAbierta('[data-k="rutina"]'); await tocar('.mv-hoja [data-k="rutina"]'); await hojaAbierta('#mvRt');

@@ -56,7 +56,7 @@ async function huella(page) {
   return page.evaluate(() => {
     const ids = [...document.body.children].map(e => e.id || e.tagName.toLowerCase()).filter(i => !/^script|style|link$/.test(i));
     const dock = [...document.querySelectorAll('#topdock > *')].map(e => `${e.tagName.toLowerCase()}#${e.id}|${e.getAttribute('aria-label') || ''}`);
-    return { cuerpo: ids.filter(i => i !== 'mvRoot' && !/^(topMoreMenu|connPanel)$/.test(i)).sort(), dock, tieneCanvas: !!document.getElementById('scene'), movil: !!document.getElementById('mvRoot') || document.body.classList.contains('movil'), topbarVisible: getComputedStyle(document.getElementById('topbar')).display !== 'none' };
+    return { cuerpo: ids.filter(i => i !== 'mvRoot' && !/^(topMoreMenu|connPanel|aoDictado|aoDictadoEstado)$/.test(i)).sort(), dock, tieneCanvas: !!document.getElementById('scene'), movil: !!document.getElementById('mvRoot') || document.body.classList.contains('movil'), topbarVisible: getComputedStyle(document.getElementById('topbar')).display !== 'none' };
   });
 }
 

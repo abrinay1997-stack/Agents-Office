@@ -31,7 +31,7 @@ body.movil.subOpen #subOv, body.movil.subOpen #subOv * { visibility: visible; }
 .mv-atras + .mv-titulo { margin-left: 0; }
 .mv-bar-der { display: flex; align-items: center; gap: 2px; }
 .mv-acc { display: flex; }
-.mv-ic { width: 44px; height: 44px; display: inline-grid; place-items: center; border: 0; border-radius: 12px; background: none; padding: 0; }
+.mv-ic { width: 44px; min-width: 44px; flex: none; height: 44px; display: inline-grid; place-items: center; border: 0; border-radius: 12px; background: none; padding: 0; }
 .mv-ic:active { background: var(--mv-surf2); }
 .mv-pend { min-height: 44px; min-width: 56px; padding: 0 12px 0 8px; display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 22px; background: var(--mv-ambar-bg); color: var(--mv-ambar); font-weight: 800; font-size: 15px; }
 .mv-pend .mv-i { width: 20px; height: 20px; }
