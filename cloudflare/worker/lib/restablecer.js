@@ -81,11 +81,13 @@ export async function volcar(db, ambitos) {
 
 /** Cuánto hay ahora de cada cosa (una sola consulta). → { ambito: 'texto' } */
 export async function cuentasDe(db) {
-  const { results } = await db.prepare(`select 'notas' k, count(*) n from notas union all select 'tareas', count(*) from filas where coleccion = 'tareas' union all select 'rutinas', count(*) from filas where coleccion = 'rutinas'
-    union all select 'skills', count(*) from filas where coleccion = 'skills' union all select 'propias', count(*) from filas where coleccion = 'biblioteca' union all select 'dimitri', count(*) from filas where coleccion = 'subgerente'
-    union all select 'estudio', count(*) from estudio_archivos union all select 'contenido', count(*) from contenido_piezas
-    union all select 'cifras', count(*) from docs where clave in ('cifras','cifras.porconfirmar') union all select 'kpis', count(*) from docs where clave = 'kpis' union all select 'equipo', count(*) from docs where clave in ('agentes.cerebro','agentes.local')`).all();
-  const n = Object.fromEntries(results.map((r) => [r.k, r.n]));
+  // UNA fila con subconsultas, NO `union all`: D1 admite como mucho 5 términos en una consulta compuesta («too many terms in compound SELECT»), y SQLite de Node (las pruebas) admite 500.
+  const n = await db.prepare(`select (select count(*) from notas) notas,
+    (select count(*) from filas where coleccion = 'tareas') tareas, (select count(*) from filas where coleccion = 'rutinas') rutinas,
+    (select count(*) from filas where coleccion = 'skills') skills, (select count(*) from filas where coleccion = 'biblioteca') propias, (select count(*) from filas where coleccion = 'subgerente') dimitri,
+    (select count(*) from estudio_archivos) estudio, (select count(*) from contenido_piezas) contenido,
+    (select count(*) from docs where clave in ('cifras','cifras.porconfirmar')) cifras, (select count(*) from docs where clave = 'kpis') kpis,
+    (select count(*) from docs where clave in ('agentes.cerebro','agentes.local')) equipo`).first();
   const pl = (x, uno, varios) => `${x} ${x === 1 ? uno : varios}`;
   return {
     cerebro: n.notas ? pl(n.notas, 'nota', 'notas') : 'vacío', habilidades: n.skills + n.propias ? pl(n.skills + n.propias, 'skill o habilidad', 'skills y habilidades') : 'ninguna', equipo: n.equipo ? 'con cambios' : 'de fábrica',
