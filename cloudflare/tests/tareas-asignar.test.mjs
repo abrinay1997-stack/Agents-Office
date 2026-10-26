@@ -147,3 +147,30 @@ test('un editor también puede asignarle una tarea a un administrador', { skip: 
   assert.ok(idsDe(await mias(ana), 'todas').includes(r.j.tarea.id), 'le llega a la administradora');
   assert.ok(idsDe(await mias(carla), 'delegadas').includes(r.j.tarea.id), 'y Carla la sigue');
 });
+
+test('cambiarse el nombre en «Mi perfil» no pierde lo asignado: Mías, Delegadas y quién la delegó siguen siendo de esa cuenta', { skip: SALTAR }, async () => {
+  const { ana, carla } = await oficina();
+  const aCarla = (await ana('POST', '/api/tareas/mias', { title: 'Revisar el catálogo', persona: 'Carla' })).j.tarea;   // Ana → Carla
+  const deAna = (await ana('POST', '/api/tareas/mias', { title: 'Llamar al proveedor' })).j.tarea;                      // de Ana
+  const pasada = (await carla('POST', '/api/tareas/mias', { title: 'Pedir las cifras' })).j.tarea;
+  await carla('POST', `/api/tareas/${pasada.id}/delegar`, { a: 'persona', persona: 'Ana admin' });                       // Carla → Ana
+  // Carla cambia de nombre
+  assert.equal((await carla('PATCH', '/api/yo', { nombre: 'Carla Pérez' })).status, 200);
+  const m = await mias(carla);
+  assert.ok(idsDe(m, 'todas').includes(aCarla.id), 'lo que le asignaron sigue en su Mías con el nombre nuevo');
+  assert.ok(idsDe(m, 'delegadas').includes(pasada.id), 'y lo que ella delegó sigue en sus Delegadas');
+  assert.equal((await carla('POST', `/api/tareas/${aCarla.id}/estado`, { a: 'done' })).j.tarea.hechaPor, 'Carla Pérez');
+  // Ana ve lo que Carla le pasó y sigue viendo lo que ella le dio a Carla (que ahora se llama distinto)
+  const mAna = await mias(ana);
+  assert.ok(idsDe(mAna, 'todas').includes(pasada.id) && idsDe(mAna, 'todas').includes(deAna.id));
+  assert.equal((await ana('GET', '/api/team')).j.people.some(p => p.name === 'Carla Pérez'), true);
+  // y Ana puede asignarle a Carla con su nombre nuevo
+  assert.equal((await ana('POST', '/api/tareas/mias', { title: 'Otra', persona: 'Carla Pérez' })).j.tarea.person, 'Carla Pérez');
+  // Ana también se cambia: lo que ella delegó (y quién la delegó) no se pierde
+  const antes = (await ana('POST', '/api/tareas/mias', { title: 'Para Carla de nuevo', persona: 'Carla Pérez' })).j.tarea.id;
+  assert.equal((await ana('PATCH', '/api/yo', { nombre: 'Ana Ruiz' })).status, 200);
+  const mAna2 = await mias(ana);
+  assert.ok(idsDe(mAna2, 'delegadas').includes(antes), 'Ana sigue viendo en Delegadas lo que le asignó a Carla');
+  assert.ok(idsDe(mAna2, 'todas').includes(deAna.id), 'y lo suyo');
+  assert.equal((await ana('POST', `/api/tareas/${deAna.id}/estado`, { a: 'done' })).status, 200);
+});

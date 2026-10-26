@@ -40,3 +40,40 @@ test('la selección: se alterna y solo vale lo que sigue en la vista', () => {
   assert.deepEqual([...s], ['b']);
   assert.deepEqual([...seleccionVigente(new Set(['a', 'b', 'z']), [{ file: 'a' }, { file: 'b' }])].sort(), ['a', 'b']);
 });
+
+test('la hoja de mover y el deshacer de eliminar respetan los 2.000 archivos que mueve el servidor de una vez', async () => {
+  const { mover, MAX_MOVER } = await import('../src/movil/vistas/estudio-carpetas.js');
+  assert.equal(MAX_MOVER, 2000);
+  const avisos = [], llamadas = [], ctx = { toast: t => avisos.push(t), api: async (...a) => { llamadas.push(a); return { folders: [] }; } };
+  const E = { items: [], folders: [{ id: 'c1', name: 'Navidad' }] };
+  assert.equal(await mover(ctx, E, Array.from({ length: 2001 }, (_, i) => 'f' + i), { carpeta: 'c1' }), false, 'más de 2.000 no se manda');
+  assert.deepEqual(llamadas, [], 'y no se llama al servidor');
+  assert.match(avisos[0], /como mucho 2000/);
+});
+
+test('eliminar una carpeta de más de 600 imágenes: pide todas las páginas antes y el deshacer las devuelve todas', async () => {
+  const { eliminar } = await import('../src/movil/vistas/estudio-carpetas.js');
+  globalThis.dispatchEvent = () => true; // (en el navegador existe)
+  try {
+    const todas = Array.from({ length: 1300 }, (_, i) => ({ file: 'f' + i })), pagina = n => todas.slice(n * 600, n * 600 + 600);
+    const pedidas = [], toasts = []; let deshacer = null, creada = null;
+    const ctx = {
+      confirmar: async () => true, toast: (t, o) => { toasts.push(t); if (o?.alAccion) deshacer = o.alAccion; },
+      api: async (ruta, o = {}) => {
+        if (ruta.startsWith('/api/media?')) { const q = new URLSearchParams(ruta.split('?')[1]), n = q.get('before') ? +q.get('before') : 0; pedidas.push(n); return { items: pagina(n), next: (n + 1) * 600 < todas.length ? String(n + 1) : null }; }
+        if (o.method === 'DELETE') return { ok: true, folders: [] };
+        if (o.method === 'POST' && ruta === '/api/media/folders') { creada = o.body; return { folder: { id: 'c2', name: o.body.name }, folders: [{ id: 'c2', name: o.body.name }] }; }
+        throw new Error('ruta inesperada ' + ruta);
+      } };
+    const E = { items: [], folders: [{ id: 'c1', name: 'Navidad', n: 1300 }] };
+    assert.equal(await eliminar(ctx, E, 'c1'), true);
+    assert.deepEqual(pedidas, [0, 1, 2], 'las tres páginas, no solo la primera');
+    assert.ok(deshacer, 'con la lista entera hay Deshacer'); await deshacer();
+    assert.equal(creada.files.length, 1300, 'y devuelve las 1.300, no las primeras 600');
+    // si la lista no se puede traer entera, se elimina igual pero SIN Deshacer (y se dice)
+    deshacer = null; toasts.length = 0;
+    const ctx2 = { ...ctx, api: async (ruta, o = {}) => { if (ruta.startsWith('/api/media?')) throw new Error('sin red'); return { ok: true, folders: [] }; } };
+    assert.equal(await eliminar(ctx2, { items: [], folders: [{ id: 'c1', name: 'Navidad', n: 5 }] }, 'c1'), true);
+    assert.equal(deshacer, null); assert.match(toasts[0], /siguen en el Estudio, sin carpeta/);
+  } finally { delete globalThis.dispatchEvent; }
+});

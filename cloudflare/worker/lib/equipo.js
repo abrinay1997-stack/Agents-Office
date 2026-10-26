@@ -175,8 +175,15 @@ export async function guardarNombre(db, id, nombre) {
   if (!n) return { estado: 422, error: 'Escribe tu nombre.' };
   if (nombreReservado(n)) return { estado: 422, error: RESERVADO };
   if (await nombreOcupado(db, n, id)) return { estado: 422, error: 'Ya hay alguien con ese nombre en la oficina: añade tu apellido o una inicial.' };
+  const antes = await db.prepare('select u.email, p.nombre from users u left join perfiles p on p.user_id = u.id where u.id = ?').bind(String(id)).first();
+  const viejo = ((antes?.nombre || '').trim()) || (antes ? nombrePorCorreo(antes.email) : '');
   const t = ahora();
-  await db.prepare(`insert into perfiles (user_id, nombre, color, updated_at) values (?,?,?,?) on conflict (user_id) do update set nombre = excluded.nombre, color = excluded.color, updated_at = excluded.updated_at`).bind(id, n, colorDeNombre(n), t).run();
+  const lote = [db.prepare(`insert into perfiles (user_id, nombre, color, updated_at) values (?,?,?,?) on conflict (user_id) do update set nombre = excluded.nombre, color = excluded.color, updated_at = excluded.updated_at`).bind(id, n, colorDeNombre(n), t)];
+  // Una tarea guarda el NOMBRE de quien la tiene (`person`), de quien la delegó (`delegada.por`) y de quien la pasó (`handoff.from`): al cambiar de nombre se cambian ahí
+  // (con la versión subida: una petición que leyó la tarea antes choca y vuelve a empezar, no la pisa), o la cuenta dejaría de ver lo suyo en Mías y Delegadas.
+  if (viejo && viejo !== n) for (const col of ['tareas', 'tareas-archivo']) for (const ruta of ['person', 'delegada.por', 'handoff.from'])
+    lote.push(db.prepare(`update filas set json = json_set(json, '$.${ruta}', ?, '$.version', coalesce(json_extract(json,'$.version'),1) + 1) where coleccion = ? and json_extract(json,'$.${ruta}') = ?`).bind(n, col, viejo));
+  await db.batch(lote);
   return { ok: true, nombre: n };
 }
 export async function guardarFoto(db, id, clave, tipo) {

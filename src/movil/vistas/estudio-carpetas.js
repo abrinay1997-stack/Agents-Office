@@ -51,8 +51,10 @@ export function elegirCarpeta(ctx, E, { titulo = 'Mover a una carpeta', actual }
 
 /** Mueve archivos a una carpeta (o a ninguna: `destino.carpeta === null`) o a una nueva (`destino.nueva`), actualiza las fichas y avisa con DESHACER.
  *  → Promise<boolean>. `alCambiar` se llama cuando la galería debe volver a pedirse (el filtro de carpeta puede dejar de verlos). */
+export const MAX_MOVER = 2000; // lo que el servidor mueve de una vez (media.moveTo): más se dejaría sin mover aunque el aviso dijera que sí
 export async function mover(ctx, E, files, destino, { alCambiar = () => {} } = {}) {
   if (!files.length) return false;
+  if (files.length > MAX_MOVER) { ctx.toast(`Se mueven como mucho ${MAX_MOVER} a la vez: elige menos.`); return false; }
   const antes = origenes(E.items, files, E.folders);
   try {
     let id = destino.carpeta ?? null;
@@ -96,13 +98,20 @@ export async function eliminar(ctx, E, id, { alCambiar = () => {} } = {}) {
   const f = E.folders.find(x => x.id === id); if (!f) return false;
   const n = f.n ?? E.items.filter(i => i.folder === id).length;
   if (!(await ctx.confirmar({ titulo: `¿Eliminar «${f.name}»?`, texto: n ? `Sus ${n} ${n === 1 ? 'archivo se queda' : 'archivos se quedan'} en el Estudio, sin carpeta. No se borra ninguna imagen.` : 'Está vacía. No se borra ninguna imagen.', ok: 'Eliminar la carpeta', cancelar: 'Conservarla', peligro: true }))) return false;
-  const dentro = E.items.filter(i => i.folder === id).map(i => i.file);
   try {
-    let todos = dentro;
-    // lo que tiene en la galería entera (no solo lo cargado): para poder deshacer, se pide antes de borrar
-    try { const j = await ctx.api('/api/media?n=2000&folder=' + encodeURIComponent(id)); todos = (j.items || []).map(i => i.file); } catch { /* con lo cargado basta */ }
+    // para poder deshacer hace falta TODO lo que tiene la carpeta (no solo lo cargado): se pide página a página antes de eliminar (el servidor da hasta 600 por página)
+    const todos = []; let completo = false, antes = null;
+    try {
+      for (let i = 0; i < 30; i++) {
+        const j = await ctx.api('/api/media?n=600&folder=' + encodeURIComponent(id) + (antes ? '&before=' + encodeURIComponent(antes) : ''));
+        for (const it of j.items || []) todos.push(it.file);
+        if (!j.next) { completo = true; break; } antes = j.next;
+      }
+    } catch { /* sin la lista entera no hay deshacer: se dice abajo */ }
+    completo = completo && todos.length <= MAX_MOVER; // el servidor devuelve a la carpeta hasta 2.000 archivos de una vez
     const r = await ctx.api(`/api/media/folders/${encodeURIComponent(id)}`, { method: 'DELETE' }); E.folders = r.folders || E.folders.filter(x => x.id !== id);
     for (const it of E.items) if (it.folder === id) it.folder = null;
+    if (!completo) { ctx.toast(`Carpeta «${f.name}» eliminada. Sus imágenes siguen en el Estudio, sin carpeta.`); alCambiar(); dispatchEvent(new Event('ao:media-changed')); return true; }
     ctx.toast(`Carpeta «${f.name}» eliminada.`, { accion: 'Deshacer', alAccion: async () => {
       try { const c = await ctx.api('/api/media/folders', { method: 'POST', body: { name: f.name, files: todos } }); E.folders = c.folders || E.folders; for (const it of E.items) if (todos.includes(it.file)) it.folder = c.folder.id; ctx.toast(`Carpeta «${f.name}» de vuelta.`); }
       catch (er) { ctx.toast('No se pudo deshacer: ' + er.message); }
