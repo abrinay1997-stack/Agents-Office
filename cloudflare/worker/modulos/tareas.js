@@ -10,7 +10,7 @@ import { resumenDe } from '../../../biblioteca-core.mjs';
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { conSesion, cargarTareas } from '../lib/tareas/sesion.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
-import { armarServicios, correrRuta } from '../lib/tareas/servicios.js';
+import { armarServicios, correrRuta, yoDe } from '../lib/tareas/servicios.js';
 import { manejarTasks, sinMarca } from '../lib/tareas/tasks-api.js';
 import { crearEnrutador } from '../lib/tareas/enrutar.js';
 import { guardarAgente, cargarRoster, agentesSalida, DEPTS } from '../lib/tareas/roster.js';
@@ -61,7 +61,8 @@ async function manejarGrupo(ctx) {
 
   if (g === 'team' && req.method === 'GET') {
     const C = await leerContexto(db);
-    return json({ people: C.personas.map(p => ({ name: p.name, depts: p.depts || [], telegram: !!p.telegram })) });
+    // 26 oct 2026: las personas a quienes asignar son las de Ajustes → Equipo Y las cuentas de la plataforma (`usuario: true`, con su rol); `yo` es quien pregunta.
+    return json({ people: C.personas.map(p => ({ name: p.name, depts: p.depts || [], telegram: !!p.telegram, ...(p.usuario ? { usuario: true, rol: p.rol, id: p.id } : {}) })), yo: yoDe(usuario) ? { id: usuario.id, nombre: usuario.nombre, rol: usuario.rol } : null });
   }
   if (g === 'agents') return manejarAgentes({ req, env, db, ruta, usuario, b });
   if (g === 'routines') return manejarRutinas({ req, env, db, ruta, usuario, b });
@@ -116,7 +117,7 @@ async function manejarTareas({ req, env, db, ruta, url, usuario, b, g }) {
   const C = await leerContexto(db);
   const ligera = g === 'tasks' && ruta === '/api/tasks' && req.method === 'GET' && url.searchParams.get('light') === '1';
   const respuesta = await conSesion(db, { bitacora: bitacoraNecesaria(ruta, url), ligera }, async s => {
-    const serv = armarServicios(s, { env, contexto: C, fetchFn: env.__pruebas?.fetchIA }, b);
+    const serv = armarServicios(s, { env, contexto: C, fetchFn: env.__pruebas?.fetchIA, usuario }, b);
     const choque = req.method === 'GET' ? null : tareaConAprobacion(s, ruta, b); // el OK ya dado vale para ese borrador: mientras corre la ventana de «deshacer», nada lo mueve
     if (choque) return json({ error: `«${choque.title}» ya tiene tu visto bueno y se envía en unos segundos: deshaz la aprobación primero si quieres cambiarla.` }, 409);
     if (g === 'tasks') return await manejarTasks({ req, url, ruta, usuario, db, s, serv, b });

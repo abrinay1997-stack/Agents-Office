@@ -3,7 +3,7 @@
 // varios departamentos con una meta y una fecha. Los datos son /api/tareas/catalogo (el progreso lo calcula tareas/progreso.mjs).
 import { esc, svg, vacio, falla, esqueleto, limiteTexto, ymd } from '../ui.js';
 import { porEstado, bloqueos } from '../tareas-puro.js';
-import { catalogo, olvidarCatalogo, hacer, hacerYa, recorte, ESTADO_AG, DEPTS, COLOR_PROY, filaMini } from './tareas-comun.js';
+import { catalogo, olvidarCatalogo, hacer, hacerYa, recorte, ESTADO_AG, DEPTS, COLOR_PROY, filaMini, gente, opcionesPara, ayudaPara } from './tareas-comun.js';
 
 const COLORES = Object.keys(COLOR_PROY);
 const NOMBRE_COLOR = { azul: 'Azul', verde: 'Verde', ambar: 'Ámbar', rojo: 'Rojo', violeta: 'Violeta', cian: 'Cian', rosa: 'Rosa', gris: 'Gris' };
@@ -57,15 +57,16 @@ export function montarProyectos(cont, ctx, { abrir, alCambiar }) {
     return h;
   }
 
-  function anadir(p, hPadre, repintar) {
+  async function anadir(p, hPadre, repintar) {
+    const g = await gente(ctx); // 26 oct 2026: la tarea del proyecto también puede ser de una persona del equipo
     const h = ctx.hoja({ titulo: 'Tarea para este proyecto', cuerpo: `<label class="mv-lab" for="mvPT">Qué hay que hacer</label><textarea id="mvPT" class="mv-campo" rows="2" placeholder="Diseñar las fotos del lanzamiento" autofocus></textarea>
-      <label class="mv-lab" for="mvPQ">Quién la hace</label><select id="mvPQ" class="mv-campo"><option value="yo">Yo (queda en mi lista)</option>${Object.entries(DEPTS).map(([k, n]) => `<option value="${k}">Un agente de ${esc(n)}</option>`).join('')}</select><p class="mv-meta" id="mvPA">Queda en tu lista, dentro de «${esc(p.nombre)}».</p>`,
+      <label class="mv-lab" for="mvPQ">Quién la hace</label><select id="mvPQ" class="mv-campo">${opcionesPara(g, { yoTexto: 'Yo (queda en mi lista)' })}</select><p class="mv-meta" id="mvPA">Queda en tu lista, dentro de «${esc(p.nombre)}».</p>`,
       acciones: [{ texto: 'Cancelar', alTocar: x => x.cerrar() }, { texto: 'Añadir', tipo: 'primario', alTocar: async (x, b) => {
         const txt = x.cuerpo.querySelector('#mvPT').value.trim(), q = x.cuerpo.querySelector('#mvPQ').value; if (!txt) { x.cuerpo.querySelector('#mvPT').focus(); return; }
-        const r = await hacer(ctx, b, () => (q === 'yo' ? ctx.api('/api/tareas/mias', { method: 'POST', body: { title: txt, proyecto: p.id } }) : ctx.api('/api/tasks', { method: 'POST', body: { dept: q, text: txt, proyecto: p.id } })), { ocupado: 'Añadiendo…', hecho: 'Añadida', ms: 400, aviso: `Añadida a «${recorte(p.nombre)}».` });
+        const r = await hacer(ctx, b, () => (q === 'yo' || q.startsWith('p:') ? ctx.api('/api/tareas/mias', { method: 'POST', body: { title: txt, proyecto: p.id, ...(q.startsWith('p:') ? { persona: q.slice(2) } : {}) } }) : ctx.api('/api/tasks', { method: 'POST', body: { dept: q, text: txt, proyecto: p.id } })), { ocupado: 'Añadiendo…', hecho: 'Añadida', ms: 400, aviso: `Añadida a «${recorte(p.nombre)}».` });
         if (r.ok) { await ctx.store.refrescar(); olvidarCatalogo(ctx); setTimeout(() => x.cerrar(), 350); repintar(); alCambiar(); }
       } }] });
-    h.cuerpo.querySelector('#mvPQ').addEventListener('change', e => { h.cuerpo.querySelector('#mvPA').textContent = e.target.value === 'yo' ? `Queda en tu lista, dentro de «${p.nombre}».` : 'Un agente la hace; lo que envíe espera tu OK.'; });
+    h.cuerpo.querySelector('#mvPQ').addEventListener('change', e => { h.cuerpo.querySelector('#mvPA').textContent = e.target.value === 'yo' ? `Queda en tu lista, dentro de «${p.nombre}».` : ayudaPara(e.target.value); });
   }
 
   function formulario(p, { alTerminar = () => {} } = {}) {

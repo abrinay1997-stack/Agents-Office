@@ -415,6 +415,7 @@ export function initTasks(ctx) {
   const membersText = t => (t.team?.members || []).map(id => agentOf(id)?.name || id).join(', ');
   let dept = 'marketing', filter = 'all';
   let mine = false; // 8 oct 2026: «Para mí» in the department menu — what is typed is the owner's own task (Tareas → Mías), no desk takes it
+  let aPersona = null; // 26 oct 2026: «Para mí» can also be a person of the team (an account of the platform): the task is hers, and shows in her Mías
   const MINE_ON = !!(ctx.mias && ctx.mias.create);
   // V4.1 (audit 92): the department menu is a real menu — aria-expanded, ↑ ↓ Home End to move, Enter to pick, Esc or Tab to leave
   P_.dd.type = 'button'; P_.dd.setAttribute('aria-haspopup', 'menu'); P_.dd.setAttribute('aria-expanded', 'false'); P_.dd.setAttribute('aria-controls', 'tpMenu');
@@ -424,11 +425,22 @@ export function initTasks(ctx) {
   function menuOpen(on, focusWhich) {
     P_.menu.classList.toggle('on', on); P_.dd.setAttribute('aria-expanded', on);
     if (!on) return;
-    const on_ = mine ? 'yo' : dept, items = menuItems(), cur = items.findIndex(b => b.dataset.k === on_);
+    const on_ = mine ? (aPersona ? 'p:' + aPersona : 'yo') : dept, items = menuItems(), cur = items.findIndex(b => b.dataset.k === on_);
     items.forEach(b => b.setAttribute('aria-checked', b.dataset.k === on_));
     (items[focusWhich === 'last' ? items.length - 1 : cur >= 0 ? cur : 0]).focus();
   }
   P_.menu.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { if (b.dataset.k === 'yo') setMine(); else setDept(b.dataset.k); menuOpen(false); P_.input.focus(); }));
+  // 26 oct 2026: the people of the team (accounts of the platform and Ajustes → Equipo) join the menu under «PARA MÍ»
+  P_.menu.addEventListener('click', e => { const b = e.target.closest('button[data-k^="p:"]'); if (!b) return; setMine(b.dataset.k.slice(2)); menuOpen(false); P_.input.focus(); });
+  async function cargarPersonas() {
+    if (!MINE_ON) return;
+    let j; try { j = await (await fetch(API + '/team')).json(); } catch { return; }
+    const yoN = globalThis.AO_NUBE?.yo?.()?.nombre, otros = (j.people || []).filter(p => p && p.name && p.name !== 'Tú' && p.name !== yoN);
+    P_.menu.querySelectorAll('button[data-k^="p:"]').forEach(b => b.remove());
+    const ref = P_.menu.querySelector('.tp-yo-item');
+    for (const p of otros.slice().reverse()) { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitemradio'); b.setAttribute('aria-checked', 'false'); b.tabIndex = -1; b.dataset.k = 'p:' + p.name; b.className = 'tp-yo-item'; b.innerHTML = '<span class="dot tp-yo-dot"></span>'; b.append(`${p.name}${p.usuario && p.rol === 'admin' ? ' (admin)' : ''}`); ref?.after(b); }
+  }
+  cargarPersonas(); addEventListener('ao:yo', cargarPersonas);
   P_.dd.addEventListener('click', (e) => { e.stopPropagation(); menuOpen(!P_.menu.classList.contains('on')); });
   P_.dd.addEventListener('keydown', e => { if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); menuOpen(true, e.key === 'ArrowUp' ? 'last' : null); } });
   P_.menu.addEventListener('keydown', e => {
@@ -442,17 +454,18 @@ export function initTasks(ctx) {
     else if (e.key === 'Tab') menuOpen(false);
   });
   document.addEventListener('click', () => { if (P_.menu.classList.contains('on')) menuOpen(false); });
-  function setMine() { // 8 oct 2026: «Para mí» — no router, agent, model, effort, REPETIR or team: a task of yours, like Tareas → Mías
-    mine = true; panel.classList.add('tp-yo');
+  function setMine(persona = null) { // 8 oct 2026: «Para mí» — no router, agent, model, effort, REPETIR or team: a task of yours, like Tareas → Mías · 26 oct 2026: or of a person of the team
+    mine = true; aPersona = persona || null; panel.classList.add('tp-yo');
     if (repeat) P_.rep.click(); if (teamOn) resetTeam();
-    P_.ddName.textContent = 'PARA MÍ'; P_.ddDot.style.background = '';
-    P_.dd.setAttribute('aria-label', 'Para quién: para mí. Cambiar'); P_.dd.title = 'Elige para quién es (↓ abre la lista)';
-    B_.dept.textContent = 'PARA MÍ'; B_.dot.style.background = '';
-    P_.input.placeholder = 'Algo tuyo… («para el viernes», «!alta»)'; P_.input.setAttribute('aria-label', 'Nueva tarea tuya: Enter la apunta en Tareas → Mías; «para el viernes» le pone fecha');
+    const quien = aPersona ? aPersona.slice(0, 16).toUpperCase() : 'PARA MÍ';
+    P_.ddName.textContent = quien; P_.ddDot.style.background = '';
+    P_.dd.setAttribute('aria-label', `Para quién: ${aPersona ? aPersona : 'para mí'}. Cambiar`); P_.dd.title = 'Elige para quién es (↓ abre la lista)';
+    B_.dept.textContent = quien; B_.dot.style.background = '';
+    P_.input.placeholder = aPersona ? `Algo para ${aPersona}… («para el viernes», «!alta»)` : 'Algo tuyo… («para el viernes», «!alta»)'; P_.input.setAttribute('aria-label', aPersona ? `Nueva tarea para ${aPersona}: Enter se la asigna; le sale en su lista de Mías` : 'Nueva tarea tuya: Enter la apunta en Tareas → Mías; «para el viernes» le pone fecha');
     updateHint();
   }
   function setDept(k) {
-    dept = k; mine = false; panel.classList.remove('tp-yo');
+    dept = k; mine = false; aPersona = null; panel.classList.remove('tp-yo');
     P_.ddName.textContent = DEPTS[k].short;
     P_.ddDot.style.background = DEPTS[k].chip;
     P_.dd.setAttribute('aria-label', `Departamento: ${DEPTS[k].name}. Cambiar`); P_.dd.title = 'Elige el departamento de la tarea (↓ abre la lista)';
@@ -531,11 +544,11 @@ export function initTasks(ctx) {
     P_.input.value = ''; P_.input.disabled = true; P_.add.disabled = true; say('Apuntando…', 'busy');
     const etiquetas = [];
     for (const n of r.etiquetas || []) { try { const j = await (await fetch(API + '/tareas/etiquetas', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nombre: n }) })).json(); if (j.etiqueta) etiquetas.push(j.etiqueta.id); } catch {} }
-    const res = await ctx.mias.create({ title: r.texto.charAt(0).toUpperCase() + r.texto.slice(1), ...(r.prioridad ? { prioridad: r.prioridad } : {}), ...(r.limite ? { limite: r.limite } : {}), ...(r.at ? { at: r.at } : {}), ...(etiquetas.length ? { etiquetas } : {}) });
+    const res = await ctx.mias.create({ title: r.texto.charAt(0).toUpperCase() + r.texto.slice(1), ...(r.prioridad ? { prioridad: r.prioridad } : {}), ...(r.limite ? { limite: r.limite } : {}), ...(r.at ? { at: r.at } : {}), ...(etiquetas.length ? { etiquetas } : {}), ...(aPersona ? { persona: aPersona } : {}) });
     P_.input.disabled = false; P_.add.disabled = false;
     if (!res.ok) { P_.input.value = raw; say(esc(res.error), 'amber'); return; }
     const lim = res.task.limite;
-    say(`<span>Apuntada para ti: <b>${esc(res.task.title)}</b>${lim ? ' · para el ' + esc(fechaMia(lim)) : ''} · <button type="button" class="tp-lnk" data-mias="${lim ? 'todas' : 'bandeja'}">verla en Tareas → Mías</button></span>`); // one span: the hint is a flex row
+    say(aPersona ? `<span>Asignada a ${esc(res.task.person || aPersona)}: <b>${esc(res.task.title)}</b>${lim ? ' · para el ' + esc(fechaMia(lim)) : ''} · <button type="button" class="tp-lnk" data-mias="delegadas">seguirla en Tareas → Mías → Delegadas</button></span>` : `<span>Apuntada para ti: <b>${esc(res.task.title)}</b>${lim ? ' · para el ' + esc(fechaMia(lim)) : ''} · <button type="button" class="tp-lnk" data-mias="${lim ? 'todas' : 'bandeja'}">verla en Tareas → Mías</button></span>`); // one span: the hint is a flex row
     P_.input.blur(); poll();
   }
   async function submit() {

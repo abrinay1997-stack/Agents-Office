@@ -14,6 +14,7 @@ const P = {
   varita: '<path d="m5 19 9.5-9.5M14 6.5l.8-2 .8 2 2 .8-2 .8-.8 2-.8-2-2-.8zM17.5 14l.6-1.5.6 1.5 1.5.6-1.5.6-.6 1.5-.6-1.5-1.5-.6z"/>',
   anim: '<rect x="3.5" y="9" width="17" height="10.5" rx="2"/><path d="m10.5 12.2 3.6 2.1-3.6 2.1z"/><path d="m3.8 9 15.4-4.2"/>',
   mas_c: '<circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/>',
+  carpeta: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/>',
 };
 /** svg de ui.js, o uno de aquí */
 export const ic = (n, cls = '') => P[n] ? `<svg class="mv-i${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${P[n]}</svg>` : svg(n, cls);

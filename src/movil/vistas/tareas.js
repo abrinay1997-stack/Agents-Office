@@ -9,11 +9,12 @@ import { leerRapida } from '../../../tareas/rapida.mjs';
 import { gestoFila } from '../nav.js';
 import { esc, svg, vacio, esqueleto, falla, limiteTexto, ymd } from '../ui.js';
 import { aplicarFiltro, filtroVacio, contarFiltro, filtroTexto, guardarFiltro, quitarFiltro, conCronometro, reloj } from '../tareas-puro.js';
-import { ESTADO_AG, catalogo, hacerYa, hacer, recorte, pastilla } from './tareas-comun.js';
+import { ESTADO_AG, catalogo, hacerYa, hacer, recorte, pastilla, elegirPara, paraTexto, ayudaPara } from './tareas-comun.js';
 import { abrirDetalle } from './tareas-detalle.js';
 import { montarTablero } from './tareas-tablero.js';
 import { montarProyectos } from './tareas-proyectos.js';
 import { montarMedidas } from './tareas-medidas.js';
+import { miNombre } from '../../../tareas/identidad.mjs';
 
 const CHIPS = [['hoy', 'Hoy'], ['proximos', 'Próximos 7 días'], ['todas', 'Todas'], ['bandeja', 'Bandeja'], ['delegadas', 'Delegadas'], ['hechas', 'Hechas'], ['agentes', 'De los agentes']];
 const VISTAS = [['lista', 'Lista'], ['tablero', 'Tablero'], ['proyectos', 'Proyectos'], ['medidas', 'Medidas']];
@@ -31,11 +32,11 @@ export function registrar(shell) {
   shell.registrarVista({
     id: 'tareas', titulo: 'Tareas', icono: 'tareas', grupo: 'tab',
     montar(el, ctx) {
-      let lista = 'hoy', vista = 'lista', cargando = true, cat = null, filtro = FILTRO0(), guardados = guardado('ao.mv.filtros', []), tic = 0;
+      let lista = 'hoy', vista = 'lista', cargando = true, cat = null, filtro = FILTRO0(), guardados = guardado('ao.mv.filtros', []), tic = 0, para = 'yo'; // para: a quién va lo que escribo abajo ('yo' · 'p:Nombre' · un departamento)
       el.innerHTML = `<div class="mv-scroll" id="mvTareasSc"><div class="mv-crono" role="status" hidden></div><div class="mv-seg mv-seg-vistas" role="group" aria-label="Cómo ver las tareas">${VISTAS.map(([k, t]) => `<button type="button" data-tv="${k}" aria-pressed="${k === 'lista'}">${t}</button>`).join('')}</div>
         <div class="mv-sec-lista"><nav class="mv-chips" aria-label="Listas de tareas"></nav><div class="mv-filtros"></div></div>
         <div class="mv-cuerpo mv-cuerpo-l" aria-live="polite"></div><div class="mv-cuerpo mv-cuerpo-t" hidden></div><div class="mv-cuerpo mv-cuerpo-p" hidden></div><div class="mv-cuerpo mv-cuerpo-m" hidden></div></div>
-        <form class="mv-anadir" autocomplete="off"><div class="mv-entiende" aria-live="polite"></div><div class="mv-anadir-fila"><label class="mv-sr" for="mvNueva">Añadir una tarea</label>
+        <form class="mv-anadir" autocomplete="off"><div class="mv-entiende" aria-live="polite"></div><div class="mv-anadir-fila"><button type="button" class="mv-para" data-para aria-haspopup="dialog" aria-label="¿Para quién es la tarea? Ahora: para mí"><span>Para mí</span><i aria-hidden="true">▾</i></button><label class="mv-sr" for="mvNueva">Añadir una tarea</label>
         <input id="mvNueva" type="text" enterkeyhint="send" autocapitalize="sentences" placeholder="Añadir tarea… (para el viernes #ventas !alta)"><button type="submit" class="mv-enviar" aria-label="Añadir tarea" disabled>${svg('mas1')}</button></div></form>`;
       const chips = el.querySelector('.mv-chips'), cuerpo = el.querySelector('.mv-cuerpo-l'), entrada = el.querySelector('#mvNueva'), forma = el.querySelector('.mv-anadir'), pista = el.querySelector('.mv-entiende'), sc = el.querySelector('.mv-scroll');
       const secLista = el.querySelector('.mv-sec-lista'), barraFiltros = el.querySelector('.mv-filtros'), crono = el.querySelector('.mv-crono'), segV = el.querySelector('.mv-seg-vistas');
@@ -90,7 +91,7 @@ export function registrar(shell) {
         cuerpo.innerHTML = h;
       }
       function pintarCrono() {
-        const c = conCronometro(st.tareas, 'Tú'); clearInterval(tic);
+        const c = conCronometro(st.tareas, miNombre()); clearInterval(tic);
         if (!c) { crono.hidden = true; return; }
         crono.hidden = false;
         crono.innerHTML = `<span class="mv-crono-t"><small>Contando tu tiempo</small><b>${esc(recorte(c.tarea.title, 48))}</b></span><time>${reloj(Date.now() - c.desde)}</time><button type="button" class="mv-btn" data-parar="${esc(c.tarea.id)}">Parar</button>`;
@@ -140,8 +141,10 @@ export function registrar(shell) {
         const r = leerRapida(raw); if (!r.texto) { ctx.toast('Escribe qué tienes que hacer.'); return; }
         const etiquetas = await etiquetasDe(r.etiquetas);
         const cuerpoPost = { title: r.texto, ...preset(), ...(r.prioridad ? { prioridad: r.prioridad } : {}), ...(r.limite ? { limite: r.limite } : {}), ...(r.at ? { at: r.at } : {}), ...(etiquetas.length ? { etiquetas } : {}) };
-        const res = await ctx.api('/api/tareas/mias', { method: 'POST', body: cuerpoPost });
-        const t = res.tarea; ctx.toast(`Añadida: «${recorte(t.title)}»`, { accion: 'Deshacer', alAccion: async () => { try { await ctx.api(`/api/tasks/${t.id}`, { method: 'DELETE' }); } catch { /* ya no estaba */ } ctx.store.refrescar(); } });
+        const aPersona = para.startsWith('p:'), aAgente = para !== 'yo' && !aPersona; // 26 oct 2026: también se asigna a una cuenta del equipo o a un agente
+        const res = aAgente ? { tarea: await ctx.api('/api/tasks', { method: 'POST', body: { dept: para, text: r.texto, ...(cuerpoPost.prioridad ? { prioridad: cuerpoPost.prioridad } : {}), ...(cuerpoPost.limite ? { limite: cuerpoPost.limite } : {}), ...(cuerpoPost.at ? { at: cuerpoPost.at } : {}), ...(etiquetas.length ? { etiquetas } : {}) } }) }
+          : await ctx.api('/api/tareas/mias', { method: 'POST', body: aPersona ? { ...cuerpoPost, persona: para.slice(2) } : cuerpoPost });
+        const t = res.tarea; ctx.toast(aPersona ? `Asignada a ${t.person || para.slice(2)}: «${recorte(t.title)}»` : aAgente ? `Para ${paraTexto(para)}: «${recorte(t.title)}»` : `Añadida: «${recorte(t.title)}»`, { accion: 'Deshacer', alAccion: async () => { try { await ctx.api(`/api/tasks/${t.id}`, { method: 'DELETE' }); } catch { /* ya no estaba */ } ctx.store.refrescar(); } });
         await ctx.store.refrescar();
       }
       forma.addEventListener('submit', async e => {
@@ -150,6 +153,11 @@ export function registrar(shell) {
         try { await anadir(v); } catch (err) { entrada.value = v; entiende(); ctx.toast('No se pudo añadir: ' + err.message, { accion: 'Reintentar', alAccion: () => forma.requestSubmit() }); }
       });
       entrada.addEventListener('input', entiende);
+      forma.querySelector('[data-para]').addEventListener('click', async e => {
+        const b = e.currentTarget, v = await elegirPara(ctx, para); if (!v) return;
+        para = v; b.querySelector('span').textContent = paraTexto(v); b.setAttribute('aria-label', `¿Para quién es la tarea? Ahora: ${v === 'yo' ? 'para mí' : paraTexto(v)}`); b.classList.toggle('otro', v !== 'yo');
+        pista.textContent = v === 'yo' ? '' : ayudaPara(v); entrada.focus();
+      });
 
       // ---- filtros ----
       async function abrirFiltros() {

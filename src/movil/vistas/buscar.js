@@ -3,6 +3,7 @@
 // las notas y las imágenes se buscan en el servidor (/api/brain/search, /api/media?q=), como en escritorio. Recientes si el campo está vacío.
 import { esc, svg, vacio } from '../ui.js';
 import { ic, sinTildes, mediaSrc } from '../b-comun.js';
+import { esMia } from '../../../tareas/identidad.mjs';
 
 const REC = 'ao.mv.recientes';
 const leer = () => { try { return JSON.parse(localStorage.getItem(REC) || '[]').filter(x => typeof x === 'string').slice(0, 6); } catch { return []; } };
@@ -38,7 +39,7 @@ export function registrar(shell) {
         const fila = (k, i, titulo, sub, extra = '') => `<li><button type="button" class="mv-lista-b" data-k="${k}" data-i="${i}">${extra || ''}<span><b>${esc(titulo)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span>${svg('der', 'mv-der')}</button></li>`;
         const bloque = (t, n, filas) => filas ? `<h3 class="mv-gh">${t}<span>${n}</span></h3><ul class="mv-lista">${filas}</ul>` : '';
         const L = local;
-        const subTarea = t => [t.person === 'Tú' ? 'Tuya' : nombreAg(t.agent), fragmento([t.text, t.result].join(' '), L.palabras)].filter(Boolean).join(' · ');
+        const subTarea = t => [esMia(t) ? 'Tuya' : nombreAg(t.agent), fragmento([t.text, t.result].join(' '), L.palabras)].filter(Boolean).join(' · ');
         const hTar = L.tareas.map(t => fila('t', t.id, t.title, subTarea(t)));
         const hAg = L.agentes.map(a => fila('a', a.id, a.name, a.role || a.does || ''));
         const hRu = L.rutinas.map(r => fila('r', r.id, r.title, r.desc || ''));

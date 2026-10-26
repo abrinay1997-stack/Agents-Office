@@ -46,6 +46,9 @@ const ACTIVO = 'p.baja_at is null';
 export const limpiarNombre = (n) => String(n ?? '').normalize('NFC').replace(/[\u0000-\u001f\u007f-\u009f<>\u200b-\u200f\u202a-\u202e\u2060-\u2069\u061c\ufeff]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
 /** Para comparar nombres: sin mayúsculas, acentos ni espacios de más. */
 export const claveNombre = (n) => limpiarNombre(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+/** «Tú» es el dueño en las tareas (person: 'Tú'): ninguna cuenta puede llamarse así, o se quedaría con las tareas del dueño. */
+export const nombreReservado = (n) => claveNombre(n) === 'tu';
+const RESERVADO = 'Ese nombre está reservado para el dueño de la oficina: elige otro.';
 /** ¿Hay otra persona activa que se vea con ese nombre? (nadie puede hacerse pasar por el fundador con un nombre idéntico). */
 export async function nombreOcupado(db, nombre, exceptoId = null) {
   const k = claveNombre(nombre);
@@ -116,6 +119,7 @@ export async function aceptarInvitacion(db, bruto, { nombre, contrasena }) {
   const mala = validarClave(contrasena, inv.email);
   if (mala) return { estado: 422, error: mala };
   const visible0 = limpiarNombre(nombre) || inv.nombre || nombrePorCorreo(inv.email);
+  if (nombreReservado(visible0)) return { estado: 422, error: RESERVADO };
   if (await nombreOcupado(db, visible0)) return { estado: 422, error: 'Ya hay alguien con ese nombre en la oficina: añade tu apellido o una inicial.' };
   // se gasta primero: solo una petición cambia la fila; la segunda ve 0 cambios
   const t = ahora();
@@ -169,6 +173,7 @@ export async function quitarMiembro(db, id, { yo = null } = {}) {
 export async function guardarNombre(db, id, nombre) {
   const n = limpiarNombre(nombre);
   if (!n) return { estado: 422, error: 'Escribe tu nombre.' };
+  if (nombreReservado(n)) return { estado: 422, error: RESERVADO };
   if (await nombreOcupado(db, n, id)) return { estado: 422, error: 'Ya hay alguien con ese nombre en la oficina: añade tu apellido o una inicial.' };
   const t = ahora();
   await db.prepare(`insert into perfiles (user_id, nombre, color, updated_at) values (?,?,?,?) on conflict (user_id) do update set nombre = excluded.nombre, color = excluded.color, updated_at = excluded.updated_at`).bind(id, n, colorDeNombre(n), t).run();

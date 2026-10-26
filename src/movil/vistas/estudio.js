@@ -10,13 +10,15 @@ import { conEstado } from '../../accion.js';
 import { esc, svg, vacio, esqueleto, falla, hace } from '../ui.js';
 import { ic, mediaSrc, esVideo, esAudio, leerDataURL } from '../b-comun.js';
 import { usd } from '../../sub-studio.js';
-import { KINDS, FILTROS, ROLES, RATIO, ETIQ, CALIDAD, agruparPorDia, modelosDe, ajustesDe, costoDe, unidadesDe, queFalta, pedido, dineroQueda, maxCantidad, avance, desdeFicha, UMBRAL } from '../estudio-puro.js';
+import { KINDS, FILTROS, ROLES, RATIO, ETIQ, CALIDAD, agruparPorDia, modelosDe, ajustesDe, costoDe, unidadesDe, queFalta, pedido, dineroQueda, maxCantidad, avance, desdeFicha, UMBRAL, carpetaDeFicha, alternarSeleccion, seleccionVigente } from '../estudio-puro.js';
+import * as CP from './estudio-carpetas.js';
 
 const PAGINA = 48;
-const E = { items: [], next: null, total: 0, counts: {}, folders: [], models: [], engines: [], budget: null, defaults: {}, voices: null, jobs: [], filtro: 'all', carpeta: 'all', q: '', cargado: false, error: '', cargando: false, hojaVisor: null, lotes: null,
+const E = { items: [], next: null, total: 0, counts: {}, folders: [], models: [], engines: [], budget: null, defaults: {}, voices: null, jobs: [], filtro: 'all', carpeta: 'all', q: '', cargado: false, error: '', cargando: false, hojaVisor: null, lotes: null, sel: new Set(), seleccionando: false, sucio: false, // sel: archivos elegidos para mover a una carpeta (26 oct 2026)
   c: { kind: 'image', modelo: {}, texto: '', qty: 1, set: {}, material: { start: [], end: [], reference: [], video: [] }, armado: null, sugerido: null, aviso: '', error: '' } };
 const nombreMod = id => E.models.find(m => m.id === id)?.name || id;
 const unaFicha = f => E.items.find(i => i.file === f);
+const nombreCarp = id => (E.folders.find(f => f.id === id) || {}).name || '';
 
 export function registrar(shell) {
   shell.registrarVista({
@@ -37,7 +39,7 @@ export function registrar(shell) {
           const j = await ctx.api('/api/media?' + p); if (mi !== rev) return;
           E.items = mas ? E.items.concat(j.items || []) : j.items || []; E.next = j.next || null; E.total = j.total || 0; E.counts = j.counts || E.counts; E.folders = j.folders || E.folders;
           if (j.models) { E.models = j.models; E.engines = j.engines || []; E.defaults = j.default || {}; E.voices = j.voices || null; E.jobs = j.jobs || E.jobs; }
-          if (j.budget) E.budget = j.budget; E.cargado = true; E.error = '';
+          if (j.budget) E.budget = j.budget; E.cargado = true; E.error = ''; E.sel = seleccionVigente(E.sel, E.items);
         } catch (e) { if (mi === rev) E.error = e.message; }
         E.cargando = false; if (tab === 'galeria') galeria(); if (tab === 'crear') crear();
       }
@@ -59,24 +61,53 @@ export function registrar(shell) {
         if (!E.cargado) { box.innerHTML = E.error ? falla(E.error) : esqueleto(4); return; }
         const cnt = k => (E.counts[k === 'all' ? 'all' : k] ?? ''), grupos = agruparPorDia(E.items);
         const filtros = FILTROS.filter(([k]) => k === 'all' || cnt(k) > 0 || E.filtro === k);
-        const carp = E.folders.length ? `<div class="mv-chips" role="group" aria-label="Carpeta"><button type="button" class="mv-chip" data-carp="all" aria-pressed="${E.carpeta === 'all'}">Todas</button><button type="button" class="mv-chip" data-carp="none" aria-pressed="${E.carpeta === 'none'}">Sin carpeta</button>${E.folders.map(f => `<button type="button" class="mv-chip" data-carp="${esc(f.id)}" aria-pressed="${E.carpeta === f.id}">${esc(f.name)}</button>`).join('')}</div>` : '';
+        // las carpetas (26 oct 2026): siempre a la vista, con cuántas tiene cada una y «+ Carpeta» al final; la abierta trae Renombrar y Eliminar
+        const carp = !E.folders.length ? '' : `<div class="mv-chips" role="group" aria-label="Carpetas"><button type="button" class="mv-chip" data-carp="all" aria-pressed="${E.carpeta === 'all'}">Todas</button><button type="button" class="mv-chip" data-carp="none" aria-pressed="${E.carpeta === 'none'}">Sin carpeta</button>${E.folders.map(f => `<button type="button" class="mv-chip" data-carp="${esc(f.id)}" aria-pressed="${E.carpeta === f.id}">${ic('carpeta')}${esc(f.name)}<b>${f.n ?? 0}</b></button>`).join('')}</div>`;
+        const fa = E.folders.find(f => f.id === E.carpeta);
+        const cab = fa ? `<div class="mv-carp-cab"><span class="mv-carp-t">${ic('carpeta')}<b>${esc(fa.name)}</b><small>${fa.n ?? 0} ${fa.n === 1 ? 'archivo' : 'archivos'}</small></span><button type="button" class="mv-btn" data-carp-ren>Renombrar</button><button type="button" class="mv-btn peligro" data-carp-del>Eliminar</button></div>` : '';
+        // «+ Carpeta» va aquí y no entre los chips: con varias carpetas el chip se salía de la pantalla y no se veía
+        const selFila = `<div class="mv-sel-fila">${E.items.length ? `<button type="button" class="mv-chip" data-sel-modo aria-pressed="${E.seleccionando}">${E.seleccionando ? 'Listo' : 'Seleccionar'}</button>` : ''}<button type="button" class="mv-chip mv-chip-nuevo" data-carp-nueva>${svg('mas1')} Carpeta</button>${E.seleccionando ? '<button type="button" class="mv-link" data-sel-todo>Elegir todas las de la pantalla</button>' : ''}</div>`;
         const tile = it => { const i = E.items.indexOf(it), src = mediaSrc(it.file, it.at), rot = String(it.prompt || it.file).slice(0, 80);
           const cuerpo = it.kind === 'video' ? `<video src="${esc(src)}#t=0.1" muted playsinline preload="metadata"></video><span class="mv-ins">${ic('play')}</span>` : it.kind === 'audio' ? `<span class="mv-aud">${ic('nota_s')}<small>${it.wanted === 'music' ? 'Música' : 'Voz'}</small></span>` : `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">`;
-          return `<button type="button" class="mv-tile" data-i="${i}" aria-label="${esc((it.kind === 'video' ? 'Video: ' : it.kind === 'audio' ? 'Audio: ' : 'Imagen: ') + rot)}">${cuerpo}${it.fav ? `<span class="mv-fav" aria-label="Favorita">${ic('estrella')}</span>` : ''}</button>`; };
+          const on = E.seleccionando && E.sel.has(it.file);
+          return `<button type="button" class="mv-tile${on ? ' sel' : ''}" data-i="${i}"${E.seleccionando ? ` aria-pressed="${on}"` : ''} aria-label="${esc((it.kind === 'video' ? 'Video: ' : it.kind === 'audio' ? 'Audio: ' : 'Imagen: ') + rot)}${carpetaDeFicha(it, E.folders) ? esc(' (en «' + (E.folders.find(f => f.id === it.folder) || {}).name + '»)') : ''}">${cuerpo}${E.seleccionando ? `<span class="mv-chk-b" aria-hidden="true">${on ? svg('check') : ''}</span>` : ''}${it.fav ? `<span class="mv-fav" aria-label="Favorita">${ic('estrella')}</span>` : ''}</button>`; };
         box.innerHTML = `<form class="mv-busca" role="search" data-qf><label class="mv-sr" for="mvEq">Buscar en el Estudio</label>${svg('buscar', 'mv-busca-i')}<input id="mvEq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Buscar por idea, modelo o agente…" value="${esc(E.q)}"></form>
-          <div class="mv-chips" role="group" aria-label="Qué ver">${filtros.map(([k, n]) => `<button type="button" class="mv-chip" data-f="${k}" aria-pressed="${E.filtro === k}">${n}${cnt(k) !== '' ? `<b>${cnt(k)}</b>` : ''}</button>`).join('')}</div>${carp}
+          <div class="mv-chips" role="group" aria-label="Qué ver">${filtros.map(([k, n]) => `<button type="button" class="mv-chip" data-f="${k}" aria-pressed="${E.filtro === k}">${n}${cnt(k) !== '' ? `<b>${cnt(k)}</b>` : ''}</button>`).join('')}</div>${carp}${cab}${selFila}
           ${E.error ? `<p class="mv-aviso-caja" role="alert">No pude actualizar: ${esc(E.error)} <button type="button" class="mv-link" data-reint>Reintentar</button></p>` : ''}
-          ${E.items.length ? grupos.map(g => `<h3 class="mv-gh">${esc(g.dia)}<span>${g.items.length}</span></h3><div class="mv-grid">${g.items.map(tile).join('')}</div>`).join('') + (E.next ? '<div class="mv-cuerpo"><button type="button" class="mv-btn" data-mas>Ver más</button></div>' : '') : vacio(E.q || E.filtro !== 'all' ? 'Nada con ese filtro' : 'El Estudio está vacío', E.q || E.filtro !== 'all' ? 'Quita el filtro o cambia la búsqueda.' : 'Crea tu primera imagen: es un toque.', { icono: 'estudio', boton: E.q || E.filtro !== 'all' ? '' : 'Crear', accion: 'data-crear' })}`;
+          ${E.items.length ? grupos.map(g => `<h3 class="mv-gh">${esc(g.dia)}<span>${g.items.length}</span></h3><div class="mv-grid">${g.items.map(tile).join('')}</div>`).join('') + (E.next ? '<div class="mv-cuerpo"><button type="button" class="mv-btn" data-mas>Ver más</button></div>' : '') + (E.seleccionando ? `<div class="mv-selbar" role="region" aria-label="Acciones sobre lo elegido">${selbar()}</div>` : '') : (E.carpeta !== 'all' && !E.q && E.filtro === 'all') ? vacio(E.carpeta === 'none' ? 'Todo está en alguna carpeta' : 'Esta carpeta está vacía', E.carpeta === 'none' ? 'Aquí salen las imágenes que no están en ninguna carpeta.' : 'Pasa imágenes a ella con «Seleccionar», o desde cada imagen con «Acciones → Mover a una carpeta».', { icono: 'estudio' }) : vacio(E.q || E.filtro !== 'all' ? 'Nada con ese filtro' : 'El Estudio está vacío', E.q || E.filtro !== 'all' ? 'Quita el filtro o cambia la búsqueda.' : 'Crea tu primera imagen: es un toque.', { icono: 'estudio', boton: E.q || E.filtro !== 'all' ? '' : 'Crear', accion: 'data-crear' })}`;
       }
       P('galeria').addEventListener('submit', e => { if (e.target.matches('[data-qf]')) { e.preventDefault(); e.target.querySelector('input').blur(); } });
       P('galeria').addEventListener('input', e => { if (e.target.id !== 'mvEq') return; clearTimeout(tq); tq = setTimeout(() => { E.q = e.target.value.trim(); traer().then(() => { const i = P('galeria').querySelector('#mvEq'); if (i && !i.matches(':focus')) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }); }, 300); });
       P('galeria').addEventListener('click', e => {
         const b = e.target.closest('button'); if (!b) return;
         if (b.dataset.f) { E.filtro = b.dataset.f; return traer(); } if (b.dataset.carp) { E.carpeta = b.dataset.carp; return traer(); }
+        if (b.hasAttribute('data-carp-nueva')) return void CP.crear(ctx, E, { files: E.seleccionando ? [...E.sel] : [], alCambiar: () => { if (E.seleccionando && E.sel.size) salirDeSeleccion(); traer(); } }); // «+ Carpeta»; con imágenes elegidas, las lleva dentro
+        if (b.hasAttribute('data-carp-ren')) return void CP.renombrar(ctx, E, E.carpeta, { alCambiar: () => galeria() });
+        if (b.hasAttribute('data-carp-del')) return void CP.eliminar(ctx, E, E.carpeta, { alCambiar: () => { if (!E.folders.some(f => f.id === E.carpeta)) E.carpeta = 'all'; traer(); } });
+        if (b.hasAttribute('data-sel-modo')) { if (E.seleccionando) salirDeSeleccion(); else E.seleccionando = true; return galeria(); }
+        if (b.hasAttribute('data-sel-todo')) { for (const it of E.items) E.sel.add(it.file); return pintaSel(); }
+        if (b.hasAttribute('data-sel-mover')) return void moverSeleccion();
         if (b.hasAttribute('data-mas')) return traer(true); if (b.hasAttribute('data-reint') || b.hasAttribute('data-reintentar')) return traer(); if (b.hasAttribute('data-crear')) return ir('crear');
-        if (b.dataset.i) abrirVisor(ctx, +b.dataset.i, { traer, volverACrear: usarEnCrear, pedirDimitri });
+        if (b.dataset.i) { if (E.seleccionando) { const it = E.items[+b.dataset.i]; if (it) alternarSeleccion(E.sel, it.file); return pintaSel(); } abrirVisor(ctx, +b.dataset.i, { traer, volverACrear: usarEnCrear, pedirDimitri }); }
       });
       function pedirDimitri(file) { ctx.navegar('dimitri', { adjuntar: file }); }
+
+      // ---------- CARPETAS y selección (26 oct 2026) ----------
+      const selbar = () => { const n = E.sel.size; return `<span role="status">${n ? `${n} ${n === 1 ? 'elegida' : 'elegidas'}` : 'Toca las imágenes'}</span><button type="button" class="mv-btn primario" data-sel-mover${n ? '' : ' aria-disabled="true"'}>${ic('carpeta')} Mover a…</button>`; };
+      function pintaSel() { // sin redibujar la galería: solo las marcas y la barra (así el dedo no pierde su sitio)
+        const box = P('galeria');
+        for (const t of box.querySelectorAll('.mv-tile[data-i]')) { const it = E.items[+t.dataset.i], on = !!it && E.sel.has(it.file); t.classList.toggle('sel', on); t.setAttribute('aria-pressed', String(on)); const c = t.querySelector('.mv-chk-b'); if (c) c.innerHTML = on ? svg('check') : ''; }
+        const bar = box.querySelector('.mv-selbar'); if (bar) bar.innerHTML = selbar();
+      }
+      const salirDeSeleccion = () => { E.seleccionando = false; E.sel.clear(); };
+      const recargar = () => { traer(); };
+      async function moverSeleccion() {
+        const files = [...E.sel]; if (!files.length) { ctx.toast('Toca primero las imágenes que quieres mover.'); return; }
+        const previas = new Set(files.map(f => carpetaDeFicha(unaFicha(f), E.folders)));
+        const d = await CP.elegirCarpeta(ctx, E, { titulo: `Mover ${files.length} ${files.length === 1 ? 'archivo' : 'archivos'} a…`, actual: previas.size === 1 ? [...previas][0] : undefined });
+        if (!d) return;
+        if (await CP.mover(ctx, E, files, d, { alCambiar: recargar })) { salirDeSeleccion(); galeria(); }
+      }
 
       // ---------- CREAR ----------
       const C = E.c;
@@ -117,6 +148,7 @@ export function registrar(shell) {
         const armado = C.armado && Date.now() - C.armado.at < 6000;
         g.innerHTML = `<p class="mv-meta mv-gen-l${fuera ? ' rojo' : ''}" role="status">${falta ? esc(falta) : fuera ? `Pasa del tope: quedan ${usd(queda)}.` : `${SV.countOf(C.kind, uds)} · ${costo ? 'aprox. ' + usd(costo) : 'gratis'}${E.budget ? ` · hoy llevas ${usd(E.budget.cost)}${queda != null ? ` · quedan ${usd(queda)}` : ''}` : ''}`}</p>
           ${C.error ? `<p class="mv-err" role="alert">${esc(C.error)}</p>` : ''}
+          ${E.folders.some(f => f.id === E.carpeta) ? `<p class="mv-meta">Se guarda en la carpeta «${esc(nombreCarp(E.carpeta))}».</p>` : ''}
           <button type="button" class="mv-btn primario mv-generar${armado ? ' armado' : ''}" data-generar ${falta ? 'aria-disabled="true"' : ''}>${armado ? `Confirmar · ${usd(costo)}` : `${SV.goLabel(C.kind, uds)}${costo ? ' · ' + usd(costo) : ' · gratis'}`}</button>`;
       }
       const reflejar = () => { const t = P('crear').querySelector('#mvIdea'); if (t) C.texto = t.value; };
@@ -246,7 +278,7 @@ export { elegirArchivos };
 /** El visor: una hoja que cubre todo. Deslizar a los lados cambia de pieza; el pellizco acerca; las acciones, en otra hoja. */
 function abrirVisor(ctx, i0, { traer, volverACrear, pedirDimitri }) {
   let i = i0, s = Z.fitted(), img = null, bw = 1, bh = 1;
-  const h = ctx.hoja({ titulo: '', lleno: true, clase: 'mv-visor', cuerpo: '<div class="mv-vis"><div class="mv-stage" data-stage></div><div class="mv-vis-pie" data-pie></div></div>' });
+  const h = ctx.hoja({ titulo: '', lleno: true, clase: 'mv-visor', alCerrar: () => { if (E.sucio) { E.sucio = false; traer(); } }, cuerpo: '<div class="mv-vis"><div class="mv-stage" data-stage></div><div class="mv-vis-pie" data-pie></div></div>' }); // alCerrar: si moviste algo de carpeta, la galería se vuelve a pedir al salir (dentro del visor no se mueven las piezas)
   E.hojaVisor = h; const stage = h.cuerpo.querySelector('[data-stage]'), pie = h.cuerpo.querySelector('[data-pie]');
   const dims = () => ({ nw: img && img.naturalWidth || bw, nh: img && img.naturalHeight || bh, bw, bh });
   const fichaAct = () => E.items[i];
@@ -257,7 +289,7 @@ function abrirVisor(ctx, i0, { traer, volverACrear, pedirDimitri }) {
     stage.innerHTML = it.kind === 'video' ? `<video src="${esc(src)}" controls playsinline preload="metadata"></video>` : it.kind === 'audio' ? `<div class="mv-aud mv-aud-g">${ic('nota_s')}<audio src="${esc(src)}" controls preload="none"></audio></div>` : `<img src="${esc(src)}" alt="${esc(String(it.prompt || 'Imagen del Estudio').slice(0, 150))}" draggable="false">`;
     img = stage.querySelector('img'); if (img) { img.style.transformOrigin = 'center'; }
     const r = stage.getBoundingClientRect(); bw = r.width || 1; bh = r.height || 1;
-    pie.innerHTML = `<div class="mv-vis-info"><p class="mv-vis-p" data-p>${esc(it.prompt || 'Sin idea escrita')}</p><small>${esc([it.modelName || nombreMod(it.model), it.ratio, hace(it.at), it.cost ? usd(it.cost) : '', it.by === 'agent' ? 'de un agente' : it.by === 'dimitri' ? 'de Dimitri' : ''].filter(Boolean).join(' · '))}</small></div>
+    pie.innerHTML = `<div class="mv-vis-info"><p class="mv-vis-p" data-p>${esc(it.prompt || 'Sin idea escrita')}</p><small>${esc([it.modelName || nombreMod(it.model), it.ratio, hace(it.at), it.cost ? usd(it.cost) : '', it.by === 'agent' ? 'de un agente' : it.by === 'dimitri' ? 'de Dimitri' : '', carpetaDeFicha(it, E.folders) ? 'en «' + (E.folders.find(f => f.id === it.folder) || {}).name + '»' : ''].filter(Boolean).join(' · '))}</small></div>
       <div class="mv-vis-barra"><button type="button" class="mv-ic" data-prev aria-label="Anterior"${i === 0 ? ' disabled' : ''}>${svg('izq')}</button>
       <button type="button" class="mv-ic" data-fav aria-pressed="${!!it.fav}" aria-label="${it.fav ? 'Quitar de favoritas' : 'Marcar como favorita'}">${ic('estrella')}</button>
       <button type="button" class="mv-btn" data-acc>Acciones</button>
@@ -291,11 +323,17 @@ function abrirVisor(ctx, i0, { traer, volverACrear, pedirDimitri }) {
   h.cuerpo.addEventListener('keydown', e => { if (e.key === 'ArrowLeft') ir(-1); else if (e.key === 'ArrowRight') ir(1); });
   function acciones(it) {
     const img0 = it.kind === 'image', fila = (k, ico, t, sub, cls = '') => `<li><button type="button" class="mv-lista-b ${cls}" data-a="${k}">${ic(ico, 'mv-lista-i')}<span><b>${t}</b>${sub ? `<small>${sub}</small>` : ''}</span></button></li>`;
-    const a = ctx.hoja({ titulo: 'Qué hacer con esto', cuerpo: `<ul class="mv-lista">${img0 ? fila('ref', 'varias', 'Usar de referencia', 'La lleva al compositor') + fila('variar', 'varita', 'Variar', 'Mismo pedido, otra versión') + fila('animar', 'anim', 'Animar', 'La convierte en video') + fila('dimitri', 'dimitri', 'Pedírselo a Dimitri', 'Se la enseñas en su chat') : it.kind === 'video' ? fila('variar', 'varita', 'Repetir el pedido', 'Lo deja listo para generar') : ''}${fila('descargar', 'bajar', 'Descargar', 'Se guarda en tu teléfono')}${fila('papelera', 'borrar', 'A la papelera', 'La puedes recuperar 30 días', 'rojo')}</ul>` });
+    const a = ctx.hoja({ titulo: 'Qué hacer con esto', cuerpo: `<ul class="mv-lista">${img0 ? fila('ref', 'varias', 'Usar de referencia', 'La lleva al compositor') + fila('variar', 'varita', 'Variar', 'Mismo pedido, otra versión') + fila('animar', 'anim', 'Animar', 'La convierte en video') + fila('dimitri', 'dimitri', 'Pedírselo a Dimitri', 'Se la enseñas en su chat') : it.kind === 'video' ? fila('variar', 'varita', 'Repetir el pedido', 'Lo deja listo para generar') : ''}${fila('carpeta', 'carpeta', 'Mover a una carpeta…', carpetaDeFicha(it, E.folders) ? 'Ahora en «' + (E.folders.find(f => f.id === it.folder) || {}).name + '»' : 'Ahora sin carpeta')}${fila('descargar', 'bajar', 'Descargar', 'Se guarda en tu teléfono')}${fila('papelera', 'borrar', 'A la papelera', 'La puedes recuperar 30 días', 'rojo')}</ul>` });
     a.cuerpo.addEventListener('click', async e => {
       const b = e.target.closest('[data-a]'); if (!b) return; const k = b.dataset.a;
       if (k === 'descargar') { const l = document.createElement('a'); l.href = mediaSrc(it.file, it.at); l.download = it.file.split('/').pop(); document.body.append(l); l.click(); l.remove(); return a.cerrar(); }
       if (k === 'dimitri') { a.cerrar(); h.cerrar(); return setTimeout(() => pedirDimitri(it.file), 300); }
+      if (k === 'carpeta') {
+        a.cerrar(); await CP.esperarHoja(a); // una hoja a la vez: la de acciones se cierra y luego se abre la de carpetas
+        const d = await CP.elegirCarpeta(ctx, E, { titulo: 'Mover a una carpeta', actual: carpetaDeFicha(it, E.folders) }); if (!d) return;
+        if (await CP.mover(ctx, E, [it.file], d, { alCambiar: () => { E.sucio = true; } })) mostrar(); // se queda en la imagen; la galería se rehace al salir
+        return;
+      }
       if (k === 'papelera') {
         const r = await conEstado(b.querySelector('b') ? b : b, () => ctx.api('/api/media/item/' + encodeURIComponent(it.file), { method: 'DELETE' }), { ocupado: 'Moviendo…', hecho: 'En la papelera', ms: 200 });
         if (!r.ok) return; a.cerrar(); E.items = E.items.filter(x => x !== it); ctx.toast('A la papelera.', { accion: 'Deshacer', alAccion: async () => { try { if (r.valor.undo) await ctx.api('/api/media/restore', { method: 'POST', body: r.valor.undo }); await traer(); ctx.toast('Recuperada.'); } catch (er) { ctx.toast('No se pudo: ' + er.message); } } });

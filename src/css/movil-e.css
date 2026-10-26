@@ -169,3 +169,9 @@
 .mv-compone-fila textarea { width: 100%; min-width: 0; box-sizing: border-box; }
 .mv-viendo { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
 .mv-viendo > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- «Para quién» de la entrada de abajo (26 oct 2026): a mí, a una persona del equipo o a un agente ---- */
+.mv-para { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 48px; max-width: 38%; padding: 0 12px; border-radius: 24px; border: 1.5px solid var(--mv-line); background: var(--mv-surf); color: var(--mv-ink); font-size: 15px; font-weight: 700; }
+.mv-para span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mv-para i { flex: none; font-style: normal; font-size: 13px; }
+.mv-para.otro { border-color: var(--mv-acc); color: var(--mv-acc); }

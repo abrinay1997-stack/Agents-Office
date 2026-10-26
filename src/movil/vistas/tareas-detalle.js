@@ -10,6 +10,7 @@ import { lineaBitacora } from '../../tareas/detalle.js';
 import { esc, svg, falla, hace, limiteTexto, ymd, esqueleto } from '../ui.js';
 import { ESTADO_UNO, DEPTS, catalogo, olvidarCatalogo, personas, hacer, hacerYa, recorte, pastilla } from './tareas-comun.js';
 import { abrirDelegar } from './tareas-delegar.js';
+import { miNombre } from '../../../tareas/identidad.mjs';
 
 const ESTIMAS = [15, 30, 45, 60, 90, 120, 240, 480];
 const minTxt = m => (m < 60 ? `${m} min` : m % 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m / 60} h`);
@@ -91,7 +92,7 @@ export function abrirDetalle(ctx, id, { alCambiar = () => {}, alCerrar = () => {
     const ets = (cat.etiquetas || []);
     const pasos = t.pasos || [], ph = pasos.filter(p => p.hecho).length;
     const estimas = [...new Set([...ESTIMAS, ...(t.estimacion ? [+t.estimacion] : [])])].sort((x, y) => x - y);
-    const cron = (t.cronometro || []).some(c => c.quien === 'Tú' && !c.fin), tiempo = total(t, ahora, 'Tú');
+    const yoN = miNombre(), cron = (t.cronometro || []).some(c => c.quien === yoN && !c.fin), tiempo = total(t, ahora, yoN);
     const abiertas = ctx.store.st.tareas.filter(x => x.id !== t.id && x.state !== 'done' && !x.archived && !(t.bloqueadaPor || []).includes(x.id));
     const camposHTML = [
       campo('Para cuándo', `<div class="mv-pastillas" role="group" aria-labelledby="mvL_limite">${chipsLim}</div>

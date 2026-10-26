@@ -14,11 +14,12 @@ import { COLORES, ESTADOS_PROYECTO } from './catalogo-core.mjs'; // (la parte si
 import { resumenTareas } from './resumen.mjs';
 import { iniciar as iniciarCrono, parar as pararCrono, activo as activoCrono } from './cronometro.mjs';
 import { DUENO, esDelDueno, dia } from './dueno.mjs';
+import { miNombre } from './identidad.mjs';
 
 const ID = /^[a-z0-9]{4,24}$/i;
 const MAX_NOTAS = 60;
 
-export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump = () => {}, agentes = [], depts = {}, leadOf = () => null, avisar = () => {}, altaTarea, nombre = id => id, ahora = () => Date.now() }) {
+export function crearRutasTareas({ alm, cat, json, body, yo = () => null, webhooks = null, pump = () => {}, agentes = [], depts = {}, leadOf = () => null, avisar = () => {}, altaTarea, nombre = id => id, ahora = () => Date.now() }) {
   const agente = id => agentes.find(a => a.id === id);
   // quién llama: un agente (su MCP manda por: 'agente' y su id), Dimitri, Telegram (cabecera) o el dueño (la página)
   function quien(req, b = {}) {
@@ -26,7 +27,7 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
     if (b.por === 'dimitri') return { rol: 'dimitri', por: 'dimitri' };
     if (b.por === 'jefe' && agente(b.agente)?.lead) return { rol: 'jefe', id: b.agente, por: 'jefe:' + b.agente };
     if (req.headers['x-office-by']) return { rol: 'telegram', por: 'telegram:' + String(req.headers['x-office-by']).slice(0, 40) };
-    return { rol: 'dueno', por: 'dueno' };
+    return { rol: 'dueno', por: 'dueno', yo: yo() }; // 26 oct 2026: en la nube, la cuenta que llama (null en la oficina local: «Tú»)
   }
   const catalogo = () => {
     const tareas = alm.load(), t0 = ahora();
@@ -60,7 +61,7 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
       antes = t.state;
       const p = puede(t.state, a, q.rol === 'telegram' ? 'telegram' : q.rol); if (!p.ok) return { error: p.motivo, status: p.codigo === 'permiso' ? 403 : 409 };
       if (t.routine && a === 'idea') return { error: 'una ejecución de rutina no vuelve a ideas', status: 409 };
-      if (a === 'done' && esDelDueno(t)) { pararCrono(t, DUENO, ahora()); delete t.empezada; Object.assign(t, { doneAt: ahora(), manual: true, hechaPor: q.rol === 'telegram' ? q.por : DUENO, ...(t.result ? {} : { result: 'Hecha por ti.' }) }); } // plan D: la hizo él
+      if (a === 'done' && esDelDueno(t, q.yo || null)) { pararCrono(t, miNombre(q.yo || null), ahora()); delete t.empezada; Object.assign(t, { doneAt: ahora(), manual: true, hechaPor: q.rol === 'telegram' ? q.por : miNombre(q.yo || null), ...(t.result ? {} : { result: 'Hecha por ti.' }) }); } // plan D: la hizo él
       else if (a === 'done') Object.assign(t, { doneAt: ahora(), result: t.result || 'Marcada como hecha, sin ejecutarla.', manual: true });
       if (a === 'next') { t.addedAt = ahora(); delete t.dueAt; delete t.doneAt; delete t.error; if (t.hechaPor) { delete t.hechaPor; delete t.manual; if (t.result === 'Hecha por ti.') delete t.result; } }
       t.state = a;
@@ -82,7 +83,7 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
         const pl = l => l.map(t => ({ id: t.id, title: t.title, agent: t.agent, dept: t.dept, person: t.person || null, state: t.state, prioridad: t.prioridad, limite: t.limite || null, dueAt: t.dueAt || null, pasos: t.pasos ? [t.pasos.filter(x => x.hecho).length, t.pasos.length] : null }));
         return json(res, 200, { ...Object.fromEntries(['esperanOk', 'hoy', 'vencidas', 'enCurso', 'bloqueadas', 'proximas', 'recientes'].map(k => [k, pl(a[k])])), texto: agendaTexto(a, { nombre }) }), true;
       }
-      if (p === '/api/tareas/cronometro' && req.method === 'GET') { const a = activoCrono(alm.load(), String(url.searchParams.get('quien') || 'Tú')); return json(res, 200, { activo: a ? { id: a.tarea.id, title: a.tarea.title, desde: a.desde } : null }), true; }
+      if (p === '/api/tareas/cronometro' && req.method === 'GET') { const a = activoCrono(alm.load(), String(url.searchParams.get('quien') || miNombre(yo()))); return json(res, 200, { activo: a ? { id: a.tarea.id, title: a.tarea.title, desde: a.desde } : null }), true; }
       if (p === '/api/tareas/webhooks' && req.method === 'GET') return json(res, 200, webhooks ? webhooks.estado() : { destinos: [], historial: [], apagados: {} }), true;
       { const wm = p.match(/^\/api\/tareas\/webhooks\/([a-z0-9_-]{1,40})\/encender$/i); if (wm && req.method === 'POST') { if (quien(req, {}).rol !== 'dueno') return json(res, 403, { error: 'solo el dueño' }), true; webhooks?.encender(wm[1]); return json(res, 200, { ok: true }), true; } }
       if (p === '/api/tareas/resumen' && req.method === 'GET') {
@@ -181,7 +182,7 @@ export function crearRutasTareas({ alm, cat, json, body, webhooks = null, pump =
       }
       if (accion === 'cronometro') { // plan T6: el tiempo de una persona (uno activo por persona: empezar otro para el anterior)
         if (q.rol === 'agente') return json(res, 403, { error: 'los agentes miden su tiempo solos' }), true;
-        const quienEs = q.rol === 'telegram' ? q.por.slice(9) || 'Tú' : String(b.quien || 'Tú').slice(0, 60);
+        const quienEs = q.rol === 'telegram' ? q.por.slice(9) || 'Tú' : String(b.quien || miNombre(q.yo || null)).slice(0, 60);
         const l = alm.load(); let r;
         if (b.accion === 'iniciar') { r = iniciarCrono(l, id, quienEs, ahora()); if (r.error) return json(res, 409, r), true; }
         else { const t = l.find(x => x.id === id); if (!t) return json(res, 404, { error: 'esa tarea ya no existe' }), true; r = { paradas: pararCrono(t, quienEs, ahora()) ? [id] : [] }; }

@@ -343,7 +343,7 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
     marcarIncierto();
     delete m.retryAt; delete m.lastError; delete m.partial;
     if (!aprobar && HANDOFF.test(out.result || '')) { // I6: el agente pide a una persona
-      const persona = (C.personas.find(p => !p.depts?.length || p.depts.includes(m.dept)) || {}).name || 'Tú';
+      const persona = (C.personas.find(p => !p.soloCuenta && (!p.depts?.length || p.depts.includes(m.dept))) || {}).name || 'Tú'; // (una cuenta de la plataforma solo recibe lo que se le asigna a ella)
       m.handoff = { at: ahora, from: m.agent, why: out.result.replace(HANDOFF, '').split('\n').slice(0, 3).join(' ').slice(0, 300) };
       Object.assign(m, { person: persona, result: out.result.replace(HANDOFF, ''), state: 'next', needsOk: false, addedAt: ahora, deAgente: m.agent }); comunes(); costo(); delete m.tomadaPor; delete m.corrida; delete m.approving;
       marcarIncierto(); s.alm.guardarEjecucion(base, m, { por: 'agente:' + task.agent });

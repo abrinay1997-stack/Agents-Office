@@ -39,10 +39,10 @@ export function crearStore(api, { cada = 20000 } = {}) {
   function iniciar() {
     detener(); refrescar();
     timer = setInterval(() => { if (vivo()) refrescar(); }, cada);
-    document.addEventListener('visibilitychange', alVolver); addEventListener('online', refrescar);
+    document.addEventListener('visibilitychange', alVolver); addEventListener('online', refrescar); addEventListener('ao:yo', emitir); // 26 oct 2026: al saber quién soy (nube), las listas de «Mías» se rehacen
   }
   const alVolver = () => { if (vivo()) refrescar(); };
-  function detener() { clearInterval(timer); timer = null; document.removeEventListener('visibilitychange', alVolver); removeEventListener('online', refrescar); }
+  function detener() { clearInterval(timer); timer = null; document.removeEventListener('visibilitychange', alVolver); removeEventListener('online', refrescar); removeEventListener('ao:yo', emitir); }
   return {
     st, refrescar, iniciar, detener,
     alCambiar(f) { subs.add(f); return () => subs.delete(f); },
