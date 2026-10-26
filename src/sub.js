@@ -184,6 +184,12 @@ export function initSub(ctx) {
   /* ---------- the conversation ---------- */
   const DUENO_DEPT = { name: 'Tú (tu lista)', short: 'TÚ', chip: '#6B3FB5' }; // plan D (7 oct 2026): una pieza que hace el dueño en persona va a su lista (Tareas → Mías)
   const deptOf = k => (k === 'dueno' ? DUENO_DEPT : DEPTS[k] || { name: k, chip: '#999' });
+  // 26 oct 2026: una pieza puede ir a OTRA PERSONA del equipo (dept 'persona' + su nombre): una cuenta de la plataforma o alguien de Ajustes → Equipo
+  let gente = [];
+  const cargarGente = async () => { if (!/^https?:$/.test(location.protocol)) return; /* la demo (file://) no tiene oficina: ni se intenta */ try { const j = await (await fetch('/api/team')).json(), yo = globalThis.AO_NUBE?.yo?.()?.nombre; gente = (j.people || []).map(p => p.name).filter(n => n && n !== 'Tú' && n !== yo); } catch { /* sin equipo (la demo) */ } };
+  const repinta = () => { if (messages.some(m => m.plan?.tasks?.some(t => t.state === 'proposed'))) render(); }; // solo si hay un plan abierto: su destino ofrece a las personas
+  cargarGente().then(repinta); addEventListener('ao:yo', () => cargarGente().then(repinta));
+  const destName = t => (t.dept === 'persona' ? t.persona || 'una persona' : deptOf(t.dept).name);
   const fechaCorta = ymd => { const d = new Date(String(ymd).slice(0, 10) + 'T12:00'); return Number.isNaN(d.getTime()) ? ymd : d.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }); }; // plan T4
   function planHTML(m) {
     const p = m.plan; if (!p) return '';
@@ -192,29 +198,30 @@ export function initSub(ctx) {
     const unresolved = t => t.state === 'proposed' && (ed.get(t.i)?.include !== false) && ed.get(t.i)?.at === undefined && t.at && t.at <= Date.now() + 30000; // DIM-13: a time that already went must be chosen again
     const items = p.tasks.map(t => {
       const e = ed.get(t.i) || {};
-      const dept = e.dept || t.dept, include = e.include !== false, team = e.team ?? t.team, at = e.at !== undefined ? e.at : t.at, gone = unresolved(t);
+      const dept = e.dept || t.dept, persona = dept === 'persona' ? e.persona || t.persona : null, propia = dept === 'dueno' || dept === 'persona', include = e.include !== false, team = e.team ?? t.team, at = e.at !== undefined ? e.at : t.at, gone = unresolved(t);
       if (t.state === 'proposed') {
         const pc = gone ? pastChoices(t.at) : null;
         return `<div class="sb-item${include ? '' : ' off'}" data-msg="${m.id}" data-i="${t.i}">
           <label class="sb-inc"><input type="checkbox" class="sb-on"${include ? ' checked' : ''} aria-label="Incluir «${esc(t.title)}»"></label>
           <div class="sb-body">
             <div class="sb-t">${esc(t.title)}${include ? '' : ' <span class="sc-offl">no se incluye</span>'}</div>
-            <div class="sb-row"><select class="sb-dept" aria-label="Quién la hace">${[...DEPT_KEYS, 'dueno'].map(k => `<option value="${k}"${k === dept ? ' selected' : ''}>${esc(deptOf(k).name)}</option>`).join('')}</select>
-              ${dept === 'dueno' ? '' : `<label class="sb-team"><input type="checkbox" class="sb-teamc"${team ? ' checked' : ''}> <span>todo el equipo</span></label>`}
+            <div class="sb-row"><select class="sb-dept" aria-label="Quién la hace">${(sel => { const pp = persona && !gente.includes(persona) ? [...gente, persona] : gente, opt = (k, n) => `<option value="${esc(k)}"${k === sel ? ' selected' : ''}>${esc(n)}</option>`; return [...DEPT_KEYS, 'dueno'].map(k => opt(k, deptOf(k).name)).join('') + (pp.length ? `<optgroup label="Personas del equipo">${pp.map(n => opt('p:' + n, n)).join('')}</optgroup>` : ''); })(dept === 'persona' ? 'p:' + persona : dept)}</select>
+              ${propia ? '' : `<label class="sb-team"><input type="checkbox" class="sb-teamc"${team ? ' checked' : ''}> <span>todo el equipo</span></label>`}
               <span class="sb-when"><label class="sb-atl" title="${at && !gone ? 'Se hace el ' + esc(when(at)) : 'Se hace en cuanto lo envíes'}"><span aria-hidden="true">◷</span><input type="datetime-local" class="sb-atin" value="${at && !gone ? toInput(at) : ''}" min="${toInput(Date.now())}" aria-label="Cuándo se hace (vacío: en cuanto lo envíes)"></label>${at && !gone ? '<button type="button" class="sb-atx" aria-label="Quitar la fecha: se hace en cuanto lo envíes" title="Quitar la fecha">✕</button>' : gone ? '' : '<span class="sb-at now">ya</span>'}</span></div>
             ${gone ? `<div class="sb-past" role="note"><span>Esa hora ya pasó (${esc(when(t.at))}). ¿Cuándo la hago?</span><span class="sb-pastb"><button type="button" class="sb-pastt" data-at="${pc.tomorrow}">${esc(pc.label)}</button><button type="button" class="sb-pastn">Ahora</button></span></div>` : ''}
             ${t.error ? `<div class="sb-moved">${esc(t.error)}</div>` : ''}
-            ${t.ownerSaid ? `<div class="sb-moved">La moví de ${esc(deptOf(t.ownerSaid).name)} a ${esc(deptOf(t.dept).name)}.</div>` : ''}
+            ${t.ownerSaid ? `<div class="sb-moved">La moví de ${esc(deptOf(t.ownerSaid).name)} a ${esc(destName(t))}.</div>` : ''}
             ${t.why ? `<div class="sb-why">${esc(t.why)}</div>` : ''}
+            ${t.pasos?.length ? `<ol class="sb-pasos" aria-label="Pasos">${t.pasos.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}
             ${t.prioridad === 'alta' || t.limite || t.espera?.length ? `<div class="sb-org">${t.prioridad === 'alta' ? '<span class="sb-alta">Prioridad alta</span>' : ''}${t.limite ? `<span>Para el ${esc(fechaCorta(t.limite))}</span>` : ''}${(t.espera || []).map(x => p.tasks[x]).filter(Boolean).map(d => `<span>Espera a «${esc(d.title.slice(0, 40))}»</span>`).join('')}</div>` : ''}
-            <details class="sb-det"><summary>${dept === 'dueno' ? 'Notas para ti' : 'Instrucciones para el jefe'}</summary><textarea class="sb-ins" rows="4" aria-label="${dept === 'dueno' ? 'Notas de la tarea para ti' : `Instrucciones para el jefe de ${esc(deptOf(dept).name)}`}">${esc(e.instruction ?? t.instruction)}</textarea></details>
+            <details class="sb-det"><summary>${propia ? (persona ? `Notas para ${esc(persona)}` : 'Notas para ti') : 'Instrucciones para el jefe'}</summary><textarea class="sb-ins" rows="4" aria-label="${propia ? (persona ? `Notas de la tarea para ${esc(persona)}` : 'Notas de la tarea para ti') : `Instrucciones para el jefe de ${esc(deptOf(dept).name)}`}">${esc(e.instruction ?? t.instruction)}</textarea></details>
           </div></div>`;
       }
       const task = t.taskId ? findBySid(t.taskId) : null;
       const st = task ? (task.state === 'done' && task.error ? 'con error' : STATE[task.state] || task.state) : t.state === 'sent' ? 'enviada' : t.state === 'skipped' ? 'descartada' : t.state === 'failed' ? 'no se pudo enviar' : '';
       return `<div class="sb-item sent ${t.state}${task ? ' st-' + task.state + (task.error ? ' err' : '') : ''}"${task ? ` data-sid="${esc(t.taskId)}" role="button" tabindex="0"` : ''}>
-          <span class="sb-dot" style="background:${deptOf(t.dept).chip}"></span>
-          <div class="sb-body"><div class="sb-t">${esc(t.title)}</div><div class="sb-meta">${esc(deptOf(t.dept).name)}${task ? ' · ' + esc(ctx.agentName(task.agent)) : ''} · <b>${esc(st)}</b>${t.error ? ' — ' + esc(t.error) : ''}</div></div></div>`;
+          <span class="sb-dot" style="background:${deptOf(t.dept === 'persona' ? 'dueno' : t.dept).chip}"></span>
+          <div class="sb-body"><div class="sb-t">${esc(t.title)}</div><div class="sb-meta">${esc(destName(t))}${task ? ' · ' + esc(ctx.agentName(task.agent)) : ''} · <b>${esc(st)}</b>${t.error ? ' — ' + esc(t.error) : ''}</div></div></div>`;
     }).join('');
     const n = p.tasks.filter(t => t.state === 'proposed' && (ed.get(t.i)?.include !== false)).length, blocked = p.tasks.some(unresolved);
     const pr = p.proyecto ? `<div class="sb-proy">Proyecto: <b>${esc(p.proyecto.nombre || '')}</b>${p.proyecto.limite ? ` · vence el ${esc(fechaCorta(p.proyecto.limite))}` : ''}${p.proyecto.objetivo ? `<span>${esc(p.proyecto.objetivo)}</span>` : ''}${p.proyecto.id && !open ? '<span>Míralo en Tareas → Proyectos (H).</span>' : ''}</div>` : '';
@@ -224,7 +231,7 @@ export function initSub(ctx) {
   const studioView = m => ({ esc, edits: studioEdits.get(m.id) || new Map(), actionEdits: actionEdits.get(m.id) || new Map(), models: media ? media.models : [], budget: media ? media.budget : null, jobs, voices: media && media.voices ? media.voices : { voices: [], system: [] } });
   const opsView = m => ({ esc, edits: opEdits.get(m.id) || new Map(), deptName: k => (DEPTS[k] ? DEPTS[k].name : k), now: Date.now(), busy: opsBusy.has(m.id) });
   function userHTML(m) {
-    const c = m.context && m.context.label ? `<div class="sb-uctx">Viendo: ${esc(m.context.label)}</div>` : '';
+    const c = (m.por && m.por !== globalThis.AO_NUBE?.yo?.()?.nombre ? `<div class="sb-uctx">${esc(m.por)} escribió:</div>` : '') + (m.context && m.context.label ? `<div class="sb-uctx">Viendo: ${esc(m.context.label)}</div>` : ''); // 26 oct 2026: con varias cuentas, de quién es cada mensaje
     return `<div class="sb-u">${c}${(m.attach || []).length ? stripHTML(m.attach, esc) : ''}${m.text ? `<div>${esc(m.text)}</div>` : ''}</div>`;
   }
   function subHTML(m) {
@@ -571,7 +578,7 @@ export function initSub(ctx) {
     const it = e.target.closest('.sb-item[data-msg]'); if (!it) return;
     const d = edit(it.dataset.msg, +it.dataset.i);
     if (e.target.classList.contains('sb-on')) d.include = e.target.checked;
-    if (e.target.classList.contains('sb-dept')) d.dept = e.target.value;
+    if (e.target.classList.contains('sb-dept')) { const v = e.target.value, p = v.startsWith('p:'); d.dept = p ? 'persona' : v; d.persona = p ? v.slice(2) : undefined; }
     if (e.target.classList.contains('sb-teamc')) d.team = e.target.checked;
     if (e.target.classList.contains('sb-atin')) { // V4.1 (audit 53): the date Dimitri proposed can be changed or removed before SEND
       const v = e.target.value ? new Date(e.target.value).getTime() : null;

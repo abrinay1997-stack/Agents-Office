@@ -68,7 +68,7 @@ export function opLabel(o, { esc = s => s, deptName = k => k } = {}) {
     case 'tarea_cancelar': return `Cancelar la tarea «${esc(o.title || o.id)}»`;
     case 'tarea_editar': return `${o.mia ? 'Tu tarea' : 'La tarea'} «${esc(o.title || o.id)}»: ${[o.prioridad ? `prioridad ${esc(PRIO[o.prioridad] || o.prioridad)}` : '', o.limite !== undefined ? `para el ${esc(limiteText(o.limite))}` : ''].filter(Boolean).join(' · ')}`;
     case 'tarea_repetir': return `${o.fallo ? 'Reintentar' : 'Repetir'} la tarea «${esc(o.title || o.id)}»`;
-    case 'mia_delegar': return `Pasar tu tarea «${esc(o.title || o.id)}» a ${esc(deptName(o.dept))}${o.agentName ? ` (${esc(o.agentName)})` : ''}`;
+    case 'mia_delegar': return `Pasar tu tarea «${esc(o.title || o.id)}» a ${o.persona ? esc(o.persona) : esc(deptName(o.dept))}${o.agentName ? ` (${esc(o.agentName)})` : ''}`;
     case 'mia_hecha': return `Marcar hecha tu tarea «${esc(o.title || o.id)}»`;
     case 'anuncio_pausar': return `Pausar en Meta ${esc(anu(o))}`;
     case 'anuncio_bajar_presupuesto': return `Bajar el presupuesto de ${esc(anu(o))}${o.valor != null ? ' a ' + esc(usd(o.valor, o.moneda)) : ''}`;
@@ -82,7 +82,7 @@ export function opLabel(o, { esc = s => s, deptName = k => k } = {}) {
 }
 const NOTE = { rutina_crear: 'Corre sola en su horario; puedes pausarla en el calendario (P).', pieza_crear: 'Nace como borrador: tú la apruebas en Contenido. Nada se publica.', anuncio_borrador: 'Nace como borrador: crearla en Meta (en pausa) es tu clic en Anuncios (J). Nada gasta.', pieza_mover: 'Si estaba aprobada, pierde el OK y la vuelves a aprobar.', tarea_cancelar: 'La tarea se borra. Tienes 30 s para deshacerlo.',
   rutina_pausar: 'Sigue en el calendario sin correr hasta que la reanudes.', rutina_reanudar: 'La próxima ejecución se cuenta desde ahora.', rutina_editar: 'La próxima ejecución se cuenta con el horario nuevo.', rutina_ahora: 'Empieza en seguida, fuera de su horario. Si el agente ya empezó, no se deshace.',
-  tarea_repetir: 'Una tarea nueva con el mismo pedido y el mismo escritorio.', mia_delegar: 'Sale de tu lista y el agente la empieza en seguida: en cuanto empiece, ya no se deshace.', mia_hecha: 'Si se repite, nace la siguiente; deshacer la quita.',
+  tarea_repetir: 'Una tarea nueva con el mismo pedido y el mismo escritorio.', mia_delegar: 'Sale de tu lista. Si es un agente, la empieza en seguida y en cuanto empiece ya no se deshace; si es una persona, le llega a su lista y la sigues en Delegadas.', mia_hecha: 'Si se repite, nace la siguiente; deshacer la quita.',
   anuncio_pausar: 'Deja de gastar en seguida. Tienes 30 s para deshacerlo.', anuncio_bajar_presupuesto: 'Gasta menos desde ya. Tienes 30 s para deshacerlo.',
   anuncio_activar: 'Gasta: HACER no lo activa; te enseño la cifra y lo activas con un segundo clic. Nunca pasa de tus topes.', anuncio_reanudar: 'Gasta: HACER no lo reanuda; te enseño la cifra y lo reanudas con un segundo clic. Nunca pasa de tus topes.',
   anuncio_subir_presupuesto: 'Gasta: HACER no lo sube; te enseño la cifra y lo subes con un segundo clic. Nunca pasa de tus topes.', anuncio_relanzar: 'La copia nace en pausa: no gasta hasta que la actives.',

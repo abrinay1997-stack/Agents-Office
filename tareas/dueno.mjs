@@ -154,6 +154,10 @@ export function puedeDelegar(t, yo) {
   return { ok: true };
 }
 
+/** Los campos de una tarea que nace ASIGNADA a otra persona (una cuenta de la plataforma o alguien del equipo): es de ella, y quien la asignó la sigue en
+ *  «Delegadas» (`delegada.por`). Los usan las rutas (`POST /api/tareas/mias { persona }`) y Dimitri al enviar un plan: una sola forma de asignar. */
+export const asignadaA = (persona, { por, nota = '', ahora = Date.now() } = {}) => ({ person: persona, delegada: { at: ahora, a: 'persona:' + persona, por, ...(nota ? { nota } : {}) }, handoff: { at: ahora, from: por, why: nota } });
+
 /* ---- en palabras: para los agentes (ver_agenda, ver_tareas) y para Dimitri (<estado>) ---- */
 const clip = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 export function quienTexto(t, nombre = id => id) {

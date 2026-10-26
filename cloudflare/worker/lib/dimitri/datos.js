@@ -66,7 +66,7 @@ export function conectoresTexto(servers = [], depts = {}) {
 }
 
 /** El resto de la oficina para <estado>: Contenido, publicación, Analíticas, anuncios, rutinas, proyectos, agenda, lo del dueño, dinero, indicadores y avisos. */
-export async function oficinaTexto({ db, office, C, lista, cfg }) {
+export async function oficinaTexto({ db, office, C, lista, cfg, yo = null }) {
   const out = [], nombre = C.nombreAgente;
   const probar = async (f, rotulo) => { try { const t = await f(); if (t) out.push(t); } catch (e) { if (rotulo) out.push(`${rotulo}: no lo pude leer (${String(e?.message || e).slice(0, 120)}).`); } };
   const hoy = dia(Date.now()), d13 = new Date(); d13.setDate(d13.getDate() + 13);
@@ -82,7 +82,7 @@ export async function oficinaTexto({ db, office, C, lista, cfg }) {
     const a = agendaTareas(lista, { ahora: Date.now() }), it = (x) => `«${String(x.title).slice(0, 50)}» (${x.person === DUENO ? 'del dueño' : x.person ? x.person : nombre(x.agent)}${x.limite ? ', límite ' + x.limite : ''})`;
     const agenda = [a.vencidas.length ? `Tareas vencidas (${a.vencidas.length}): ${a.vencidas.slice(0, 5).map(it).join('; ')}` : '', a.bloqueadas.length ? `Tareas bloqueadas (${a.bloqueadas.length}): ${a.bloqueadas.slice(0, 5).map(it).join('; ')}` : '', a.hoy.length ? `Para hoy (${a.hoy.length}): ${a.hoy.slice(0, 5).map(it).join('; ')}` : '',
       (v => (v.length ? `Vencen en los próximos 7 días (${v.length}): ${v.slice(0, 6).map((x) => `${it(x)} id ${x.id}`).join('; ')}` : ''))(a.proximas.filter((x) => x.limite))].filter(Boolean).join('\n');
-    return [t1, agenda, resumenDueno(lista, { nombre })].filter(Boolean).join('\n');
+    return [t1, agenda, resumenDueno(lista, { nombre, yo })].filter(Boolean).join('\n'); // `yo`: las listas de QUIEN escribe (su cuenta; 'Tú' si administra)
   });
   await probar(async () => {
     const [kp, avisos, lineas] = [await leerKpis(db), (await avisosTodos(db, 60)).filter((n) => !n.read), await costos.leer(db, Date.now() - 32 * 864e5)];
@@ -115,7 +115,7 @@ export async function calendarioTexto({ db, office, C, lista, desde, hasta, piez
 }
 
 /** «👁 Viendo: …» con sus datos (serve.mjs → dimitriViewing). Lo que no se pueda leer se dice, nunca se inventa. */
-export async function viendoTexto({ c, db, office, C, lista }) {
+export async function viendoTexto({ c, db, office, C, lista, yo = null }) {
   if (!c || !c.view) return '';
   const data = {};
   try {
@@ -136,7 +136,7 @@ export async function viendoTexto({ c, db, office, C, lista }) {
       if (!p) data.none = 'Ese proyecto ya no está.';
       else { const suyas = lista.filter((t) => t.proyecto === p.id && !t.archived); data.proyecto = sub.proyectosText([{ ...p, estado: p.estado === 'activo' || p.estado === 'pausa' ? p.estado : 'activo', progreso: progresoProyecto(p, lista) }], lista, { name: C.nombreAgente }) + `\nSus tareas (${suyas.length}):\n` + suyas.slice(0, 25).map((t) => `- ${t.id} · «${String(t.title).slice(0, 60)}» · ${t.state}${t.person === DUENO ? ' · del dueño' : ''}`).join('\n'); }
     } else if (c.view === 'tareas') {
-      data.texto = `${agendaTexto(agendaTareas(lista, { ahora: Date.now() }), { nombre: C.nombreAgente })}\n\n${resumenDueno(lista, { nombre: C.nombreAgente })}`;
+      data.texto = `${agendaTexto(agendaTareas(lista, { ahora: Date.now() }), { nombre: C.nombreAgente })}\n\n${resumenDueno(lista, { nombre: C.nombreAgente, yo })}`;
     } else if (c.view === 'anuncios') {
       const v = await office(`/api/anuncios?rango=${['hoy', '7d', '30d', 'mes'].includes(c.rango) ? c.rango : '7d'}`);
       if (c.id && ['campana', 'conjunto', 'anuncio'].includes(c.kind)) data.texto = buscarAnuncio(v, String(c.id)) ? textoAnuncio(v, String(c.id)) : 'Eso ya no está en lo leído de Meta.';

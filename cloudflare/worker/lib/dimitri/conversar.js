@@ -18,6 +18,7 @@ import * as galeria from '../estudio/galeria.js';
 import * as chat from './chat.js';
 import { preguntar } from './modelo.js';
 import { contextoDeOps, oficinaDelDueno } from './ops.js';
+import { yoDe } from '../tareas/servicios.js';
 import { conLecturaUnica } from './lectura-unica.js';
 import { notasDelChat, oficinaTexto, viendoTexto, resumenRapido } from './datos.js';
 import { DEPTS_ESTUDIO } from '../agentes/herramientas.js';
@@ -42,6 +43,15 @@ export function leerPeticion(b) {
 
 const estudioDeptos = (cfg, C) => (Array.isArray(cfg.media?.departments) && cfg.media.departments.length ? cfg.media.departments : DEPTS_ESTUDIO).map((k) => C.depts[k]?.name).filter(Boolean).join(', ');
 
+/** Quién escribe (26 oct 2026): la cuenta de la sesión ({ nombre, rol }); por Telegram (`telegram:<id>`), la persona del equipo que tiene ese id; el reloj y lo demás, nadie en particular. → { nombre, rol, via } | null */
+export function quienEs(usuario, C) {
+  if (usuario?.nombre) return { nombre: String(usuario.nombre), rol: usuario.rol, via: '' };
+  const tg = /^telegram:(\d{4,15})$/.exec(String(usuario?.email || ''))?.[1];
+  if (!tg) return null;
+  const p = (C?.personas || []).find((x) => x.telegram && String(x.telegram) === tg);
+  return { nombre: p?.name || null, rol: p?.rol, via: 'Telegram' };
+}
+
 /** Un mensaje del dueño → la respuesta de Dimitri, guardada en el chat. → { messages: [u, m], answered? } */
 export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, signal = null, fetchFn = null }) {
   const db = conLecturaUnica(db0), env = { ...env0, DB: db }; // una consulta idéntica se hace una vez por turno (el límite de 50 de una invocación del plan gratuito)
@@ -50,6 +60,7 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   const todo = await chat.cargar(db, { limite: sub.MAX + chat.HOLGURA }), st = { messages: todo.messages.slice(-sub.MAX) }, fuera = todo.messages.slice(0, Math.max(0, todo.messages.length - sub.MAX));
   const hiloGuardado = await chat.hiloActual(db), hilo0 = fuera.length ? sub.plegarHilo(hiloGuardado, fuera) : hiloGuardado, ultimoId = st.messages.at(-1)?.id || null, C2 = await leerContexto(db), cfg2 = await leerCfg(db), lista2 = await cargarTareas(db);
   const ctxFn = { env, db, cfg: cfg2, fetchFn, signal };
+  const quien = quienEs(usuario, C2); // 26 oct 2026: Dimitri sabe quién le escribe (la cuenta; o la persona del equipo que escribe por Telegram)
   const office = oficinaDelDueno({ env, db, usuario, modulos });
   let { texto: text } = p; const { attach, imagenes, context, answers } = p;
   // las opciones que el dueño tocó: el mensaje dice lo que eligió (con las palabras del SERVIDOR; el texto de la página es solo su vista previa)
@@ -59,27 +70,29 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   const estudioish = !!(attach.length || imagenes.length || context?.view === 'studio' || estudioLote.pideEstudio(text, { hayLotes: false }) || st.messages.slice(-2).some((m) => m.who === 'sub' && m.mode === 'estudio' && m.studio?.creatives?.some((c) => c.state === 'proposed' || c.state === 'sent')));
   const { notes, read } = await notasDelChat(db, { texto: text, historia, context, conCifras: estudioish, conVoz: estudioish });
   const studioBlock = estudioish ? await bloqueEstudio({ env, db, office, attach, text }) : '';
-  const recent = sub.recentText(lista2, C2.agents), viewing = await viendoTexto({ c: context, db, office, C: C2, lista: lista2 });
+  const recent = sub.recentText(lista2, C2.agents), viewing = await viendoTexto({ c: context, db, office, C: C2, lista: lista2, yo: yoDe(usuario) });
   const rutDepts = (await import('../../../../routines-core.mjs')).ALLOWED.map((k) => `${C2.depts[k].name} (${k})`);
   const nombre = sub.nameOf(cfg2);
   const win = sub.historyWindow(st.messages, { name: nombre, depts: C2.depts }, 12); // las últimas vueltas, con tope; lo que no cabe entra resumido en <hilo>
+  const equipoTxt = sub.equipoText({ people: C2.personas, yo: quien?.nombre ? { nombre: quien.nombre, rol: quien.rol } : null, tasks: lista2, via: quien?.via, depts: C2.depts });
   const system = sub.systemPrompt({ name: nombre, business: cfg2.name || 'PanaClaw', depts: C2.depts, agents: C2.agents, skillsOf: () => [], routineDepts: rutDepts,
-    status: sub.statusText(lista2, C2.agents, C2.depts), office: await oficinaTexto({ db, office, C: C2, lista: lista2, cfg: cfg2 }), recent, notes, studio: estudioDeptos(cfg2, C2), studioBlock, viewing, hilo: sub.hiloText(st.messages, hilo0, { depts: C2.depts, shown: win.shown }) });
+    status: sub.statusText(lista2, C2.agents, C2.depts), office: await oficinaTexto({ db, office, C: C2, lista: lista2, cfg: cfg2, yo: yoDe(usuario) }), recent, notes, studio: estudioDeptos(cfg2, C2), studioBlock, viewing, hilo: sub.hiloText(st.messages, hilo0, { depts: C2.depts, shown: win.shown }),
+    equipo: equipoTxt });
   const convo = win.text;
-  const userMsg = (convo ? convo + '\n' : '') + `Dueño: ${text}${imagenes.length ? ` [adjuntó ${imagenes.length} ${imagenes.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${nombre} (solo JSON):`;
+  const userMsg = (convo ? convo + '\n' : '') + `${quien?.nombre || 'Dueño'}: ${text}${imagenes.length ? ` [adjuntó ${imagenes.length} ${imagenes.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${nombre} (solo JSON):`;
   const opts = { maxTokens: 6000, tipo: 'dimitri', imagenes: imagenes.length ? imagenes : null };
   let out = (await preguntar(ctxFn, system, userMsg, opts)).text;
   db.olvidar(); // pasaron segundos: lo que se valide abajo (tareas, rutinas, piezas) se lee como está AHORA, no como estaba al empezar
-  if (signal?.aborted) return detenido({ db, text, attach, context });
-  let plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents });
+  if (signal?.aborted) return detenido({ db, text, attach, context, quien });
+  let plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents, personas: sub.nombresDe(C2.personas) });
   if (plan.bad) { // la respuesta llegó rota sin arreglo: una vez más, pidiendo menos (nunca el JSON crudo en el chat)
     out = await preguntar(ctxFn, system, userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)', opts).then((r) => r.text, () => '');
     db.olvidar();
-    if (signal?.aborted) return detenido({ db, text, attach, context });
-    plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents });
+    if (signal?.aborted) return detenido({ db, text, attach, context, quien });
+    plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents, personas: sub.nombresDe(C2.personas) });
   }
   // EL ESCUDO: una imagen, el resultado de una tarea (un correo, un webhook), lo que está abierto o una nota con órdenes escondidas marca el mensaje y la respuesta no trae cambios
-  const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes }, safety.injectionIn);
+  const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes, equipo: equipoTxt }, safety.injectionIn); // los nombres de las cuentas los pone cada persona: también son datos
   let studio = null;
   if (plan.mode === 'estudio') {
     const ctxE = await contextoEstudio({ env, db, office, creativos: plan.creatives });
@@ -87,13 +100,13 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
     studio = { creatives, actions: shield ? [] : estudioPlan.parseActions(plan.actions, { galleryHas: ctxE.parse.galleryHas }), estimate: estudioPlan.estimatePlan(creatives, { estimate: catalogo.estimate, budget: ctxE.budget, models: ctxE.parse.models }) };
     if (plan.lote) { plan.questions = [...plan.questions, ...[]].slice(0, sub.MAX_QUESTIONS); plan.loteNoEsta = true; } // los lotes de fotos siguen en la oficina de la computadora (fase 8b)
   }
-  const ctxO = plan.ops.length && !shield ? await contextoDeOps({ office, C: C2, db, ops: plan.ops }) : null;
+  const ctxO = plan.ops.length && !shield ? await contextoDeOps({ office, C: C2, db, ops: plan.ops, usuario }) : null;
   const parsedOps = ctxO ? sub.parseOps(plan.ops, ctxO) : { ops: [], motivos: [] };
   const ops = parsedOps.ops, opsFuera = sub.motivosText(parsedOps.motivos); // lo que no se pudo leer se dice, nunca se tira en silencio
-  const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
+  const u = sub.message('user', text, { ...(quien?.nombre ? { por: quien.nombre } : {}), ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : studio.actions.length ? 'Esto puedo hacer; pulsa HACER si te parece.' : plan.loteNoEsta ? 'Los lotes de fotos todavía no están en la nube: siguen en la oficina de tu computadora.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
   const reply = (plan.reply || fallback) + (opsFuera ? '\n\n' + opsFuera : '') + (plan.loteNoEsta ? '\n\n_(Los lotes de fotos todavía no están en la nube: siguen en la oficina de tu computadora.)_' : '') + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
-  const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
+  const m = sub.message('sub', reply, { mode: plan.mode, ...(quien?.nombre ? { para: quien.nombre } : {}), ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   // si mientras pensaba el dueño abrió otra conversación o empezó una nueva, esta respuesta es de otra charla: no se mete en la que está viendo
   if (ultimoId && !(await chat.mensaje(db, ultimoId))) throw new Error('Cambiaste de conversación mientras yo pensaba, así que no guardé esa respuesta. Vuelve a enviar tu mensaje donde quieras seguir.');
   if (picked) { const q = await chat.mensaje(db, answers.msg); if (q?.plan) { q.plan.answers = picked.answers; await chat.reemplazar(db, q); } }
@@ -102,8 +115,8 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
 }
 
 /** «Detener»: el mensaje queda «Detenido por ti» y nada de lo que propuso se guarda. */
-async function detenido({ db, text, attach, context }) {
-  const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
+async function detenido({ db, text, attach, context, quien = null }) {
+  const u = sub.message('user', text, { ...(quien?.nombre ? { por: quien.nombre } : {}), ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
   const m = sub.message('sub', '_Detenido por ti._', { mode: 'charla', stopped: true });
   await chat.anexar(db, u, m);
   return { messages: [u, m], stopped: true };

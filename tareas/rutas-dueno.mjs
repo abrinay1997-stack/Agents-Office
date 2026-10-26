@@ -12,7 +12,7 @@
 // marca hecha una tarea del dueño: solo SUGIERE. Estas rutas van ANTES que las de tareas/rutas.mjs (que leería «mias» como un id).
 import { leerCampos, pasosDe, PRIORIDADES, MAX } from './modelo.mjs';
 import { puede } from './estados.mjs';
-import { DUENO, esDelDueno, puedeTomar, puedeDelegar, deLista, cuentas, LISTAS, dia, resumenDueno } from './dueno.mjs';
+import { DUENO, esDelDueno, puedeTomar, puedeDelegar, deLista, cuentas, LISTAS, dia, resumenDueno, asignadaA } from './dueno.mjs';
 import { nombresMios, miNombre } from './identidad.mjs';
 import { iniciar as iniciarCrono, parar as pararCrono } from './cronometro.mjs';
 
@@ -52,7 +52,7 @@ export function crearRutasDueno({ alm, cat, json, body, yo = () => null, pump = 
     if (!c.limite && Number.isFinite(+b.at) && +b.at > 0) c.limite = `${dia(+b.at)}T${hhmm(+b.at)}`; // «el lunes a las 9»: para una tarea tuya, es la hora a la que la tienes
     const nota = String(b.nota || '').trim().slice(0, 600), por = nom(q);
     const t = altaTarea({ person: para || (q.rol === 'dueno' ? nom(q) : DUENO), dept: deptOk(b.dept) ? b.dept : undefined, title, text: text || '', by: q.rol === 'telegram' ? 'telegram' : q.rol === 'dimitri' ? 'sub' : 'you', ...c,
-      ...(para ? { delegada: { at: ahora(), a: 'persona:' + para, por, ...(nota ? { nota } : {}) }, handoff: { at: ahora(), from: por, why: nota } } : {}),
+      ...(para ? asignadaA(para, { por, nota, ahora: ahora() }) : {}),
       ...(b.empezar && !para ? { empezada: ahora() } : {}) }, { por: q.por, arrancar: false });
     if (para) { if (nota) alm.cambiar(t.id, x => { comentar(x, nota, q); }, { por: q.por }); avisarPersona(para, `👤 ${dice(q)} te asignó «${t.title}»${nota ? ': ' + nota : ''}.`); }
     else if (b.empezar) alm.cambiar(t.id, (x, l) => { iniciarCrono(l, x.id, nom(q), ahora()); }, { por: q.por });

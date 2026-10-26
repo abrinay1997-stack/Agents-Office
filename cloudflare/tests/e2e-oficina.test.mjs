@@ -14,7 +14,7 @@ import { cargarTareas } from '../worker/lib/tareas/sesion.js';
 let O; // la oficina
 const sesion = {}; // { bruno: {id, cookie}, carla: {...} }
 
-before(async () => { if (!SALTAR) O = await montarOficina({ ajustes: { approvals: { undoSeconds: 0 } } }); }, { timeout: 60000 });
+before(async () => { if (!SALTAR) O = await montarOficina({ ajustes: { approvals: { undoSeconds: 0 }, deputy: { weekly: false } } }); }, { timeout: 60000 }); // sin el informe del lunes de Dimitri: los lunes (desde las 8) el reloj lo escribiría con una llamada al modelo y se comería una respuesta del guion
 
 const invitar = async (email, rol, nombre) => {
   const inv = await O.ana('POST', '/api/equipo/invitaciones', { email, nombre, rol });

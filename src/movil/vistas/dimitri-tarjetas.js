@@ -7,6 +7,8 @@ import { opLabel, UNDO_MS } from '../../sub-ops.js';
 import { DEPTS } from './tareas-comun.js';
 
 export const NOMBRE_DEPT = { ...DEPTS, dueno: 'Tú (tu lista)' };
+/** A dónde va una pieza, en palabras: el departamento, o la persona del equipo a la que se le asigna (26 oct 2026). */
+export const destinoNombre = (dept, persona) => (dept === 'persona' ? persona || 'una persona' : NOMBRE_DEPT[dept] || dept);
 const whenText = ms => new Date(ms).toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 export const aInput = ms => { const d = new Date(ms), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 const fechaCorta = s => (s ? new Date(String(s).slice(0, 10) + 'T12:00').toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' }) : '');
@@ -25,15 +27,15 @@ export function planHTML(m, edits = new Map(), { ahora = Date.now(), tareaDe = (
   const filas = p.tasks.map(t => {
     const e = edits.get(t.i) || {};
     if (t.state === 'proposed') {
-      const inc = e.include !== false, dept = e.dept || t.dept, gone = sinResolver(t, e, ahora), at = e.at !== undefined ? e.at : t.at;
+      const inc = e.include !== false, dept = e.dept || t.dept, persona = e.persona ?? t.persona, gone = sinResolver(t, e, ahora), at = e.at !== undefined ? e.at : t.at;
       const cuando = at ? (gone ? 'esa hora ya pasó' : whenText(at)) : 'en cuanto la envíes';
-      const extra = [t.prioridad === 'alta' && 'prioridad alta', t.limite && 'para el ' + fechaCorta(t.limite), ...(t.espera || []).map(x => p.tasks[x]).filter(Boolean).map(d => `espera a «${d.title.slice(0, 30)}»`)].filter(Boolean).join(' · ');
+      const extra = [t.prioridad === 'alta' && 'prioridad alta', t.limite && 'para el ' + fechaCorta(t.limite), (t.pasos || []).length > 0 && `${t.pasos.length} ${t.pasos.length === 1 ? 'paso' : 'pasos'}`, ...(t.espera || []).map(x => p.tasks[x]).filter(Boolean).map(d => `espera a «${d.title.slice(0, 30)}»`)].filter(Boolean).join(' · ');
       return `<li class="mv-pieza${inc ? '' : ' off'}${gone && inc ? ' alerta' : ''}" data-msg="${esc(m.id)}" data-i="${t.i}">
         <button type="button" class="mv-check${inc ? ' on' : ''}" data-pz-inc aria-pressed="${inc}" aria-label="Incluir «${esc(t.title)}»"><i>${svg('check')}</i></button>
-        <button type="button" class="mv-pz-cuerpo" data-pz-ed aria-label="Revisar «${esc(t.title)}»"><b>${esc(t.title)}${inc ? '' : ' · no se incluye'}</b><small>${esc(NOMBRE_DEPT[dept] || dept)}${(e.team ?? t.team) && dept !== 'dueno' ? ' · todo el equipo' : ''} · ${esc(cuando)}${extra ? ' · ' + esc(extra) : ''}</small>${t.error ? `<small class="rojo">${esc(t.error)}</small>` : ''}</button>${svg('der', 'mv-der')}</li>`;
+        <button type="button" class="mv-pz-cuerpo" data-pz-ed aria-label="Revisar «${esc(t.title)}»"><b>${esc(t.title)}${inc ? '' : ' · no se incluye'}</b><small>${esc(destinoNombre(dept, persona))}${(e.team ?? t.team) && dept !== 'dueno' && dept !== 'persona' ? ' · todo el equipo' : ''} · ${esc(cuando)}${extra ? ' · ' + esc(extra) : ''}</small>${t.error ? `<small class="rojo">${esc(t.error)}</small>` : ''}</button>${svg('der', 'mv-der')}</li>`;
     }
     const tarea = t.taskId ? tareaDe(t.taskId) : null, est = tarea ? (tarea.state === 'done' && tarea.error ? 'con error' : ESTADO_TAREA[tarea.state] || tarea.state) : t.state === 'sent' ? 'enviada' : t.state === 'skipped' ? 'descartada' : t.state === 'failed' ? 'no se pudo enviar' : '';
-    return `<li class="mv-pieza hecha ${esc(t.state)}">${tarea ? `<button type="button" class="mv-pz-cuerpo" data-pz-abrir="${esc(tarea.id)}">` : '<div class="mv-pz-cuerpo">'}<b>${esc(t.title)}</b><small>${esc(NOMBRE_DEPT[t.dept] || t.dept)} · <em>${esc(est)}</em>${t.error ? ' — ' + esc(t.error) : ''}</small>${tarea ? '</button>' + svg('der', 'mv-der') : '</div>'}</li>`;
+    return `<li class="mv-pieza hecha ${esc(t.state)}">${tarea ? `<button type="button" class="mv-pz-cuerpo" data-pz-abrir="${esc(tarea.id)}">` : '<div class="mv-pz-cuerpo">'}<b>${esc(t.title)}</b><small>${esc(destinoNombre(t.dept, t.persona))} · <em>${esc(est)}</em>${t.error ? ' — ' + esc(t.error) : ''}</small>${tarea ? '</button>' + svg('der', 'mv-der') : '</div>'}</li>`;
   }).join('');
   const n = abiertas.filter(t => (edits.get(t.i) || {}).include !== false).length, bloqueado = abiertas.some(t => (edits.get(t.i) || {}).include !== false && sinResolver(t, edits.get(t.i) || {}, ahora));
   const pr = p.proyecto ? `<p class="mv-meta mv-proy-l">Proyecto: <b>${esc(p.proyecto.nombre || '')}</b>${p.proyecto.limite ? ` · vence el ${esc(fechaCorta(p.proyecto.limite))}` : ''}</p>` : '';

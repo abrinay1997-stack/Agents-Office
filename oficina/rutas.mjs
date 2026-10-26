@@ -24,7 +24,7 @@ export const ACCIONES = {
   rutina_editar: 'id, when?, text?',
   tarea_mover: 'id (de un agente, sin empezar), at "YYYY-MM-DDTHH:MM"', tarea_cancelar: 'id (de un agente, sin empezar)',
   tarea_editar: 'id, prioridad? alta|media|baja, limite? "YYYY-MM-DD[THH:MM]" o null', tarea_repetir: 'id (hecha o que falló)',
-  mia_delegar: 'id (del dueño), dept, agent?, nota?', mia_hecha: 'id (del dueño)',
+  mia_delegar: 'id (del dueño), dept, agent? | persona, nota?', mia_hecha: 'id (del dueño)',
   pieza_crear: 'titulo, texto, fecha?, hora?, formato? post|reel|carrusel|historia, redes? — nace BORRADOR',
   pieza_mover: 'id, fecha, hora? — si estaba aprobada pierde el OK',
   contenido_llenar: 'dias? 1-14, redes?, pide? — los días sin publicación, como «Llenar la semana»',
