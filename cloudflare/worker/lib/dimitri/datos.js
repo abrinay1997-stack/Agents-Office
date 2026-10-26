@@ -53,11 +53,24 @@ export async function analiticasResumen(office, { dias = 30, red = 'todas' } = {
 
 async function proyectosDe(db) { const v = (await leerDoc(db, DOC_PROYECTOS, { lista: [] })).valor; return Array.isArray(v?.lista) ? v.lista : []; }
 
+/** Los conectores MCP que hay y a qué departamentos sirven, para <estado>. Dimitri NO los llama (los usan los agentes de esos departamentos, con el guardián):
+ *  aquí aprende a decirlo y a encargar el trabajo con un plan en vez de contestar «no tengo GitHub». `servers` = GET /api/mcp → servers. */
+export function conectoresTexto(servers = [], depts = {}) {
+  const listos = servers.filter((s) => s.status === 'connected' && s.allowed && !s.office);
+  if (!listos.length) return '';
+  const lin = listos.slice(0, 12).map((s) => {
+    const ds = (s.depts || []).map((d) => depts[d]?.name || d), lee = Object.values(s.kinds || {}).filter((k) => k === 'read').length, envia = Object.values(s.kinds || {}).filter((k) => k !== 'read').length;
+    return `- ${s.name}: ${ds.length ? ds.join(', ') : 'SIN departamento (ningún agente lo usa todavía: se asigna en Ajustes → Conectores MCP)'}${lee || envia ? ` · ${lee} herramientas de lectura, ${envia} que envían (esas esperan el OK del dueño)` : ''}`;
+  });
+  return `Conectores MCP conectados (${listos.length}) — los usan los AGENTES de esos departamentos, tú no puedes llamarlos desde este chat. Si el dueño pide algo que necesita uno (ver repositorios, leer un servicio…), no digas que no lo tienes: propón un plan con una pieza para el departamento que lo tiene:\n${lin.join('\n')}`;
+}
+
 /** El resto de la oficina para <estado>: Contenido, publicación, Analíticas, anuncios, rutinas, proyectos, agenda, lo del dueño, dinero, indicadores y avisos. */
 export async function oficinaTexto({ db, office, C, lista, cfg }) {
   const out = [], nombre = C.nombreAgente;
   const probar = async (f, rotulo) => { try { const t = await f(); if (t) out.push(t); } catch (e) { if (rotulo) out.push(`${rotulo}: no lo pude leer (${String(e?.message || e).slice(0, 120)}).`); } };
   const hoy = dia(Date.now()), d13 = new Date(); d13.setDate(d13.getDate() + 13);
+  await probar(async () => conectoresTexto((await office('/api/mcp')).servers || [], C.depts));
   await probar(async () => sub.contenidoText((await office(`/api/contenido?desde=${hoy}&hasta=${dia(d13.getTime())}&sinFecha=1`)).piezas || [], { now: new Date(), dias: 7 }), 'Contenido');
   await probar(async () => sub.publicacionText(await office('/api/contenido/cola')));
   await probar(async () => sub.analiticasText(await analiticasResumen(office)));

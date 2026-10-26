@@ -3,6 +3,8 @@
 .nb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .nb-grupo, .nb-yo { display: inline-flex; align-items: center; background: none; border: 0; padding: 2px; border-radius: 999px; cursor: pointer; color: inherit; min-height: 32px; min-width: 32px; }
 .nb-grupo[hidden] { display: none; }
+/* .sg-f (la oficina) fija display:flex y le gana al [hidden] del navegador: sin esto, «Nombre de la cabecera» y «Nombre del secreto» salían siempre en el formulario de conectores */
+.sg-f[hidden], .cn-chk[hidden], fieldset[hidden] { display: none; }
 .nb-grupo .nb-av + .nb-av, .nb-grupo .nb-av + .nb-mas { margin-left: -8px; }
 .nb-mas { font-size: 11px; color: var(--grey); margin-left: 4px; }
 .nb-av { position: relative; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--c, #555); color: #fff; font: 700 11px/1 var(--ui); letter-spacing: .02em; border: 2px solid var(--cream); flex: none; }
