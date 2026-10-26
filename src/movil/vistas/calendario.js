@@ -10,7 +10,7 @@ import { scrollInicial, horaDeToque, PX_HORA } from '../dia-puro.js';
 import { diaHTML, DEPTS_C as DEPTS } from './calendario-dia.js';
 import { abrirRutina, abrirFormulario } from './calendario-rutinas.js';
 import { abrirDetalle } from './tareas-detalle.js';
-import { hacer, interruptor, alternar, recorte } from './tareas-comun.js';
+import { hacer, interruptor, alternar, recorte, gente, opcionesPara, ayudaPara } from './tareas-comun.js';
 
 const DIA = 864e5;
 const TIPO = { rutina: 'Rutina', tarea: 'Tarea', limite: 'Vence', mia: 'Tuya', contenido: 'Contenido' };
@@ -133,19 +133,19 @@ export function registrar(shell) {
         const h = ctx.hoja({ titulo: 'Crear', cuerpo: `<div class="mv-det-acc"><button type="button" class="mv-btn primario" data-k="tarea">Una tarea<br><small>Para ti o para un agente, en un día y una hora</small></button><button type="button" class="mv-btn" data-k="rutina">Una rutina<br><small>Algo que la oficina hace sola, cada cierto tiempo</small></button></div>` });
         h.cuerpo.addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; h.cerrar(); setTimeout(() => (b.dataset.k === 'tarea' ? crearTarea(dia, horaS) : abrirFormulario(ctx, null, { dia, hora: horaS, alTerminar: alCambiar })), 280); });
       }
-      function crearTarea(dia = diaSel, horaS = '') {
-        const hoy = hoyS();
+      async function crearTarea(dia = diaSel, horaS = '') {
+        const hoy = hoyS(), g = await gente(ctx); // 26 oct 2026: «Para» también elige a una persona del equipo
         const h = ctx.hoja({ titulo: 'Nueva tarea', cuerpo: `<label class="mv-lab" for="mvNt">Qué hay que hacer</label><textarea id="mvNt" class="mv-campo" rows="2" placeholder="Llamar al banco" autofocus></textarea>
             <label class="mv-lab" for="mvNd">Día</label><input id="mvNd" type="date" class="mv-campo" value="${dia < hoy ? hoy : dia}" min="${hoy}"><label class="mv-lab" for="mvNh">Hora (opcional)</label><input id="mvNh" type="time" class="mv-campo" value="${horaS}">
-            <label class="mv-lab" for="mvNq">Para</label><select id="mvNq" class="mv-campo"><option value="yo">Para mí</option>${Object.entries(DEPTS).map(([k, n]) => `<option value="${k}">Un agente de ${n}</option>`).join('')}</select><p class="mv-meta" id="mvNa">Queda en tu lista, con esa fecha.</p>`,
+            <label class="mv-lab" for="mvNq">Para</label><select id="mvNq" class="mv-campo">${opcionesPara(g)}</select><p class="mv-meta" id="mvNa">Queda en tu lista, con esa fecha.</p>`,
           acciones: [{ texto: 'Cancelar', alTocar: x => x.cerrar() }, { texto: 'Crear', tipo: 'primario', alTocar: async (x, bt) => {
             const c = x.cuerpo, texto = c.querySelector('#mvNt').value.trim(), d = c.querySelector('#mvNd').value, hh = c.querySelector('#mvNh').value, q = c.querySelector('#mvNq').value;
             if (!texto) { c.querySelector('#mvNt').focus(); ctx.toast('Escribe qué hay que hacer.'); return; }
-            const ms = new Date(`${d}T${hh || '09:00'}`).getTime(); if (q !== 'yo' && !(ms > Date.now())) { ctx.toast('Elige una hora que aún no pasó.'); return; }
-            const r = await hacer(ctx, bt, () => (q === 'yo' ? ctx.api('/api/tareas/mias', { method: 'POST', body: { title: texto, limite: hh ? `${d}T${hh}` : d } }) : ctx.api('/api/tasks', { method: 'POST', body: { dept: q, text: texto, at: ms } })), { ocupado: 'Creando…', hecho: 'Creada', ms: 500, aviso: 'Creada.', deshacer: j => ctx.api(`/api/tasks/${(j.tarea || j).id}`, { method: 'DELETE' }), despues: () => { diaSel = d; ctx.store.refrescar(); } });
+            const ms = new Date(`${d}T${hh || '09:00'}`).getTime(), aPersona = q.startsWith('p:'); if (q !== 'yo' && !aPersona && !(ms > Date.now())) { ctx.toast('Elige una hora que aún no pasó.'); return; }
+            const r = await hacer(ctx, bt, () => (q === 'yo' || aPersona ? ctx.api('/api/tareas/mias', { method: 'POST', body: { title: texto, limite: hh ? `${d}T${hh}` : d, ...(aPersona ? { persona: q.slice(2) } : {}) } }) : ctx.api('/api/tasks', { method: 'POST', body: { dept: q, text: texto, at: ms } })), { ocupado: 'Creando…', hecho: 'Creada', ms: 500, aviso: 'Creada.', deshacer: j => ctx.api(`/api/tasks/${(j.tarea || j).id}`, { method: 'DELETE' }), despues: () => { diaSel = d; ctx.store.refrescar(); } });
             if (r.ok) setTimeout(() => x.cerrar(), 450);
           } }] });
-        h.cuerpo.querySelector('#mvNq').addEventListener('change', e => { h.cuerpo.querySelector('#mvNa').textContent = e.target.value === 'yo' ? 'Queda en tu lista, con esa fecha.' : 'Un agente la hará a esa hora; lo que envíe espera tu OK.'; });
+        h.cuerpo.querySelector('#mvNq').addEventListener('change', e => { h.cuerpo.querySelector('#mvNa').textContent = e.target.value === 'yo' ? 'Queda en tu lista, con esa fecha.' : e.target.value.startsWith('p:') ? ayudaPara(e.target.value) : 'Un agente la hará a esa hora; lo que envíe espera tu OK.'; });
       }
 
       // ---- capas, suscribirse y buscar ----

@@ -18,6 +18,7 @@ import { views } from './views.js'; // V4.5: the Estudio, the calendar and the B
 import { DOW, MONTHS, DOW_LONG, DAY, pad, ymd, hm, startOfDay, fmtDay, fmtLong, weekStart, rangeOf, stepAnchor, titleHTML, dowHTML, monthHTML, timeGridHTML, agendaHTML, fitMonth, timeOpts, dateOpts } from './calendar-core.js';
 import { attachDnd } from './calendar-dnd.js';
 import { ESTADO as PIEZA_ESTADO } from './pieza-base.js'; // V4.7: the «Contenido» layer paints the pieces with their own colours
+import { esMia } from '../tareas/identidad.mjs';
 const LIVE = ['doing', 'waiting', 'next']; // work under way: it has no hour, it sits in the «en marcha» row
 const isLive_ = ev => LIVE.includes(ev.kind);
 const CADENCES = [['daily', 'Todos los días'], ['weekdays', 'Cada día hábil'], ['days', 'Algunos días…'], ['hourly', 'Cada hora, 9–5, días hábiles']];
@@ -88,7 +89,7 @@ export function initCalendar(ctx) {
       if (t.state === 'done') { if (showDone && t.doneAt >= from && t.doneAt < to) push({ kind: 'done', at: t.doneAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'scheduled') { if (showSched && t.dueAt >= from && t.dueAt < to) push({ kind: 'sched', at: t.dueAt, title: t.title, dept: t.dept, agent: t.agent, t }); }
       else if (t.state === 'waiting' || t.state === 'doing' || t.state === 'next') { if (today >= from && today < to) push({ kind: t.state, at: Math.max(today + 1, Math.min(today + DAY - 1, t.changedAt || Date.now())), title: t.title, dept: t.dept, agent: t.agent, t }); }
-      if (t.limite && t.state !== 'done' && showSched && !(mias && t.person === 'Tú')) { // plan T2 (6 oct 2026): the DEADLINE is its own mark (when it is due), apart from when it starts · plan D: the owner's own go in the «Tuyas» layer
+      if (t.limite && t.state !== 'done' && showSched && !(mias && esMia(t))) { // plan T2 (6 oct 2026): the DEADLINE is its own mark (when it is due), apart from when it starts · plan D: the owner's own go in the «Tuyas» layer
         const s = String(t.limite), at = new Date(s.length > 10 ? s : s + 'T23:59').getTime();
         if (at >= from && at < to) push({ kind: 'limite', at, title: t.title, dept: t.dept, agent: t.agent, t, conHora: s.length > 10 });
       }

@@ -3,6 +3,7 @@
 // (sus próximas ejecuciones, con when.js). Es la misma regla que calendar.js, sin su cuadrícula.
 import { occurrences } from '../when.js';
 import { ymd, pad, startOfDay, DOW_LONG, DOW_SHORT, MONTHS } from '../calendar-core.js';
+import { esMia } from '../../tareas/identidad.mjs';
 
 const DIA = 864e5;
 const limiteMs = s => { s = String(s || ''); if (!s) return null; const t = new Date(s.length > 10 ? s : s + 'T23:59').getTime(); return Number.isFinite(t) ? t : null; };
@@ -23,7 +24,7 @@ export function eventos({ tareas = [], rutinas = [], desde, hasta, hechas = fals
   const out = [];
   for (const t of tareas) {
     if (!t || t.archived || t.piece) continue;
-    const mia = t.person === 'Tú';
+    const mia = esMia(t); // 26 oct 2026: mía = de mi cuenta (o del dueño si administro)
     if (t.state === 'done') { if (hechas && t.doneAt >= desde && t.doneAt < hasta) out.push({ tipo: mia ? 'mia' : 'tarea', at: t.doneAt, titulo: t.title, dept: t.dept, agente: t.agent, id: t.id, hecha: true, conHora: true, estado: t.state }); continue; }
     if (!mia && t.state === 'scheduled' && t.dueAt >= desde && t.dueAt < hasta) out.push({ tipo: 'tarea', at: t.dueAt, titulo: t.title, dept: t.dept, agente: t.agent, id: t.id, conHora: true, estado: t.state });
     if (t.limite) {

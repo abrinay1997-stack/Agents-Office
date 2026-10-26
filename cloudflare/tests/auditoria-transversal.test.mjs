@@ -126,7 +126,7 @@ test('MATRIZ: toda ruta de escritura escrita en un módulo aparece en la lista d
 /* ---------- 2) atajos entre módulos: /api/tareas/* ---------- */
 test('TAREAS: un editor no puede saltarse «necesita el visto bueno» delegando (delegar con needsOk:false es del administrador)', { skip: SALTAR }, async () => {
   const o = await oficina();
-  const id = (await o.admin('POST', '/api/tareas/mias', { title: 'Cosa mía', notas: 'detalle' })).j.tarea.id;
+  const id = (await o.editor('POST', '/api/tareas/mias', { title: 'Cosa mía', notas: 'detalle' })).j.tarea.id; // (26 oct 2026: una tarea «mía» es de cada cuenta; el editor delega la SUYA)
   const e = await o.editor('POST', `/api/tareas/${id}/delegar`, { a: 'agente', dept: 'ops', needsOk: false });
   assert.equal(e.status, 403); assert.match(e.j.error, /administrador/);
   assert.equal((await con(o, async (s) => s.alm.load().find((t) => t.id === id))).agent, undefined, 'la tarea no se delegó');

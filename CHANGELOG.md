@@ -1,5 +1,14 @@
 # Changelog
 
+## Asignar tareas a las personas de la plataforma y carpetas del Estudio en el teléfono — 26 oct 2026
+
+Pedido del dueño: «no se pueden asignar las tareas a los usuarios que son administradores o aparte del equipo; en Mías deberían estar las tareas que se asignan… yo puedo definir quién va a ser esa tarea, no solo el equipo de agentes sino los usuarios de la plataforma», y «en la versión móvil poder crear carpetas en el Estudio y organizar imágenes fácil».
+
+- **Asignar a una persona:** «Quién la hace» (campo de Tareas, menú del panel T, campo del teléfono, hoja de nueva tarea del calendario y «Añadir tarea» de un proyecto) ofrece **Para mí**, **Personas del equipo** (las cuentas de la plataforma —administradores, editores, solo lectura— y las de Ajustes → Equipo) y **Un agente de…**. La tarea asignada es de esa persona: le sale en SU Mías, quien la asignó la sigue en **Delegadas** (`delegada.por`), y a la persona le llega un aviso. «Delegar…» en el detalle (escritorio y teléfono) lista a las mismas personas. API: `POST /api/tareas/mias { persona }` y `/delegar { a: 'persona' }`; `GET /api/team` trae las cuentas (`usuario`, `rol`) y `yo`.
+- **Mías es de cada cuenta (nube):** `tareas/identidad.mjs` — sin cuentas (oficina local) mis tareas son las de `'Tú'`, como siempre; en la nube son las de mi nombre y, si soy administrador, también las del dueño (Telegram, Dimitri, un agente bloqueado). «Para mí» ahora es de la cuenta que lo pide, el cronómetro y «hecha» firman con su nombre, un editor no se lleva la tarea que otra cuenta tiene (quien la delegó la recupera con DESHACER) y «Tú» es un nombre reservado. La página rehace sus listas al saber quién eres (`ao:yo`).
+- **Estudio en el teléfono:** `+ Carpeta` y **Seleccionar** a la vista; con varias imágenes elegidas, **Mover a…** (una carpeta, «Sin carpeta» o «Nueva carpeta…» que ya las lleva dentro); desde el visor, «Mover a una carpeta…»; cada carpeta abierta trae **Renombrar** y **Eliminar** (sus imágenes se quedan, sin carpeta). Todo avisa con DESHACER; lo que se crea dentro de una carpeta abierta se guarda ahí y la pestaña Crear lo dice.
+- **Pruebas:** `tests/tareas-identidad.test.mjs`, `cloudflare/tests/tareas-asignar.test.mjs`, `tests/movil-estudio-carpetas.test.mjs`, y en navegador de teléfono `scripts/tareas-asignar-recorrido.mjs` y `scripts/movil-carpetas-recorrido.mjs`. Se adaptaron cuatro pruebas viejas que daban por hecho que «para mí» era siempre «Tú» en la nube.
+
 ## MiniMax con tu key: la música está cerrada — 10 oct 2026
 
 - **Probado con tu key de MiniMax:** la imagen, la voz en español y la lista de voces (332, 47 en español) funcionan.

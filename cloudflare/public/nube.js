@@ -377,6 +377,7 @@
   // ---------- arranque ----------
   async function iniciar() {
     try { yo = (await api('/api/yo')).usuario; } catch { return; }
+    window.dispatchEvent(new Event('ao:yo')); // las tareas «mías» son de cada cuenta: la página rehace sus listas ahora que sabe quién eres
     pintarBarra(); vigilarVista(); conectar(); cargarEquipo();
     for (let i = 0; i < 20 && !enMenuMas(); i++) await new Promise((r) => setTimeout(r, 250)); // el menú «⋯» lo crea la página al arrancar
   }

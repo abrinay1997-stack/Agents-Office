@@ -8,6 +8,7 @@ import { esc, svg, limiteTexto, fechaCorta, horaCorta, haceTexto, ymd, minutosTe
 import { proximas, baseDe, NOMBRE_CADA } from '../../tareas/ritmo.mjs';
 import { total, textoDuracion } from '../../tareas/cronometro.mjs';
 import { esDelDueno, delegadaPorMi, agenteDeOrigen, puedeTomar } from '../../tareas/dueno.mjs';
+import { nombresMios } from '../../tareas/identidad.mjs';
 
 const QUIEN = (por, ctx) => { const p = String(por || ''); if (!p || p === 'dueno' || p === 'you') return 'Tú'; if (p === 'oficina') return 'La oficina'; if (p.startsWith('agente:')) return ctx.agente(p.slice(7))?.name || 'Un agente'; if (p.startsWith('jefe:')) return (ctx.agente(p.slice(5))?.name || 'El jefe') + ' (jefe)'; if (p.startsWith('telegram')) return 'Telegram'; return { dimitri: 'Dimitri', asistente: 'Tu asistente (IA conectada)', rutina: 'Una rutina', disparador: 'Un disparador', persona: 'Una persona' }[p] || p; };
 const ESTADO_G = { idea: 'Idea', scheduled: 'Programada', next: 'En cola', doing: 'En curso', waiting: 'Espera tu OK', done: 'Hecha' };
@@ -20,7 +21,7 @@ export function lineaBitacora(l, ctx) {
     case 'estado': return `${q}: ${est(l.de)} → ${est(l.a)}`;
     case 'campo':
       if (l.campo === 'tomadaPor') return l.despues ? `${QUIEN(l.despues, ctx)} la tomó` : 'Quedó libre';
-      if (l.campo === 'person') return l.despues === 'Tú' ? `${q === 'Tú' ? 'La tomaste tú' : q + ' te la pasó'}` : l.despues ? `${q} se la pasó a ${l.despues}` : `${q} se la devolvió a los agentes`; // plan D
+      if (l.campo === 'person') return nombresMios().includes(l.despues) ? `${q === 'Tú' || nombresMios().includes(q) ? 'La tomaste tú' : q + ' te la pasó'}` : l.despues ? `${q} se la pasó a ${l.despues}` : `${q} se la devolvió a los agentes`; // plan D · 26 oct 2026: cada cuenta es «yo» con su nombre
       if (l.campo === 'empezada') return l.despues ? `${q} la empezó` : `${q} la dejó para luego`;
       if (l.campo === 'delegada') return l.despues ? `${q} la delegó${l.despues.a ? ' a ' + (String(l.despues.a).startsWith('agente:') ? ctx.agente(String(l.despues.a).slice(7))?.name || 'un agente' : String(l.despues.a).slice(8)) : ''}` : `${q} dejó de delegarla`;
       return `${q} cambió ${CAMPO[l.campo] || l.campo}${typeof l.despues === 'string' && l.despues.length < 40 ? `: ${l.antes ?? '—'} → ${l.despues}` : ''}`;

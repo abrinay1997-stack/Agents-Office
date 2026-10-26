@@ -185,11 +185,11 @@ test('la cola: tomarSiguiente reserva por prioridad, un agente a la vez, sin toc
 test('lo del dueño por /api/tareas/*: crear la suya, tomar la de un agente, delegarla, y un agente nunca lo hace por su cuenta', { skip: SALTAR }, async () => {
   const o = await oficina();
   const mia = (await o.api('POST', '/api/tareas/mias', { title: 'Llamar al contador', limite: '2026-12-02' })).j.tarea;
-  assert.deepEqual([mia.person, mia.agent], ['Tú', undefined]);
+  assert.deepEqual([mia.person, mia.agent], ['Dueno', undefined], 'en la nube «para mí» es de la cuenta que lo pide (26 oct 2026), no del «Tú» compartido');
   assert.equal((await o.api('POST', '/api/tareas/mias', { por: 'agente', agente: 'piper', title: 'x' })).status, 403);
   const de = (await o.api('POST', '/api/tasks', { dept: 'sales', text: 'Arma la propuesta de Acme' })).j;
   const tom = await o.api('POST', `/api/tareas/${de.id}/tomar`, {});
-  assert.deepEqual([tom.status, tom.j.tarea.person, tom.j.tarea.deAgente], [200, 'Tú', 'piper']);
+  assert.deepEqual([tom.status, tom.j.tarea.person, tom.j.tarea.deAgente], [200, 'Dueno', 'piper']);
   const del = await o.api('POST', `/api/tareas/${de.id}/delegar`, { a: 'agente', dept: 'sales', agente: 'enzo' });
   assert.equal(del.status, 200);
   const lista = (await o.api('GET', '/api/tareas/mias')).j; assert.ok(lista.cuentas.todas >= 1);
@@ -277,7 +277,7 @@ test('una tarea que se repite: al terminar bien nace la siguiente, una sola abie
   assert.equal(m.repetir.cada, 'mes');
   assert.equal((await o.api('POST', `/api/tareas/${m.id}/estado`, { a: 'done' })).status, 200);
   const l = await cargarTareas(o.d1); assert.equal(l.length, 2);
-  const sig = l.find(t => t.repeatOf === m.id); assert.ok(sig && sig.state === 'next' && sig.person === 'Tú' && sig.limite > ymd(hoy));
+  const sig = l.find(t => t.repeatOf === m.id); assert.ok(sig && sig.state === 'next' && sig.person === 'Dueno' && sig.limite > ymd(hoy));
   assert.equal((await o.api('POST', `/api/tareas/${m.id}/estado`, { a: 'next' })).status, 200);
   assert.equal((await o.api('POST', `/api/tareas/${m.id}/estado`, { a: 'done' })).status, 200);
   assert.equal((await cargarTareas(o.d1)).length, 2, 'ya había una abierta: no nace otra');
@@ -328,7 +328,7 @@ test('/api/calendar.ics: las rutinas con su repetición y las tareas con fecha, 
   const r = await o.api('GET', '/api/calendar.ics');
   assert.equal(r.r.headers.get('content-type'), 'text/calendar; charset=utf-8');
   assert.match(r.j, /^BEGIN:VCALENDAR\r\n/); assert.match(r.j, /RRULE:FREQ=WEEKLY;BYDAY=MO/); assert.match(r.j, /DTSTART:\d{8}T090000\r\n/); // las 9 de Panamá, no las 14 de UTC
-  assert.match(r.j, /DTSTART:20261202T100000/); assert.match(r.j, /SUMMARY:☐ Llamar al contador/);
+  assert.match(r.j, /DTSTART:20261202T100000/); assert.match(r.j, /SUMMARY:⚑ Vence: Llamar al contador/); // (26 oct 2026: en la nube «para mí» es de la cuenta —«Dueno»—, no el «Tú» del dueño: sale como la tarea de una persona)
   assert.equal((await pedir(manejar, o.env, '/api/calendar.ics')).status, 401);
 });
 

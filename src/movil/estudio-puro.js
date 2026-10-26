@@ -66,3 +66,33 @@ export function desdeFicha(modo, it, models, defaults = {}) {
   const ajustes = {}; for (const [k, v] of Object.entries(it.settings || {})) if (m.settings && m.settings[k]) ajustes[k] = v;
   return { kind: it.kind === 'video' ? 'video' : 'image', modelo: m.id, texto: it.prompt || '', ajustes, material: m.roles && m.roles.reference ? { reference: [it.file] } : {}, sinRef: !(m.roles && m.roles.reference) };
 }
+
+/* ---------- carpetas de la galería (26 oct 2026): crear, renombrar, eliminar y mover desde el teléfono ----------
+   Una carpeta es una etiqueta de la ficha, no un directorio (media/galeria.mjs): moverla no toca el archivo. El servidor repite estas reglas. */
+export const MAX_CARPETAS = 200;
+/** Igual que media/galeria-core.mjs → cleanName (un test lo compara): sin controles ni <>, espacios colapsados, 60 letras. */
+export const limpiarNombreCarpeta = n => String(n ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+/** Por qué ese nombre no vale (en palabras), o '' si vale. `exceptoId`: la carpeta que se está renombrando (puede quedar con el mismo nombre). */
+export function errorNombreCarpeta(nombre, carpetas = [], exceptoId = null) {
+  const n = limpiarNombreCarpeta(nombre); if (!n) return 'Ponle un nombre a la carpeta.';
+  if (carpetas.some(f => f.id !== exceptoId && String(f.name).toLowerCase() === n.toLowerCase())) return `Ya hay una carpeta «${n}».`;
+  if (!exceptoId && carpetas.length >= MAX_CARPETAS) return `Como mucho ${MAX_CARPETAS} carpetas.`;
+  return '';
+}
+/** La carpeta de verdad de una ficha (una carpeta borrada en otro sitio ya no cuenta), o null. */
+export const carpetaDeFicha = (it, carpetas = []) => (it && it.folder && carpetas.some(f => f.id === it.folder) ? it.folder : null);
+/** De dónde viene cada archivo que se va a mover: Map carpeta-de-antes (o null) → archivos. Sirve para DESHACER mover. */
+export function origenes(items, files, carpetas = []) {
+  const m = new Map(), por = new Map(items.map(i => [i.file, i]));
+  for (const f of files) { const k = carpetaDeFicha(por.get(f), carpetas); (m.get(k) || m.set(k, []).get(k)).push(f); }
+  return m;
+}
+/** «3 archivos movidos a «Navidad».» · «1 imagen sacada de su carpeta.» */
+export function textoMovida(n, carpeta) {
+  const q = n === 1 ? 'Un archivo' : `${n} archivos`;
+  return carpeta ? `${q} ${n === 1 ? 'movido' : 'movidos'} a «${carpeta.name}».` : `${q} ${n === 1 ? 'sacado' : 'sacados'} de su carpeta.`;
+}
+/** Elegir/quitar una ficha de la selección múltiple (un Set de archivos). → el mismo Set */
+export function alternarSeleccion(sel, file) { if (sel.has(file)) sel.delete(file); else sel.add(file); return sel; }
+/** La selección que sigue valiendo: solo los archivos que aún están en la vista. */
+export const seleccionVigente = (sel, items) => new Set([...sel].filter(f => items.some(i => i.file === f)));

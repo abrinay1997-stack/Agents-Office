@@ -12,10 +12,13 @@
 // Sin `dept` ni `agent` es una tarea personal («llamar al banco»): ningún escritorio la tiene. Puro, con test (tests/tareas-dueno.test.mjs).
 import { limiteMs } from './modelo.mjs';
 import { ordenCola } from './cola.mjs';
+import { DUENO, esMia, delegoYo, yoPagina } from './identidad.mjs';
 
-export const DUENO = 'Tú';
-export const esDelDueno = t => !!t && t.person === DUENO;
-export const delegadaPorMi = t => !!t?.delegada && !esDelDueno(t); // la pasó él y ya la tiene otro
+// 26 oct 2026: «del dueño» es «mía». Sin cuentas (la oficina local) sigue siendo `person: 'Tú'`; en la nube, `yo` es quien mira (tareas/identidad.mjs):
+// su nombre, y si es administrador también 'Tú'. `yo` omitido = el de la página; el servidor lo pasa siempre (null = sin cuentas).
+export { DUENO };
+export const esDelDueno = (t, yo) => esMia(t, yo);
+export const delegadaPorMi = (t, yo) => !!t?.delegada && !esDelDueno(t, yo) && delegoYo(t, yo); // la pasé yo y ya la tiene otro
 const pad = n => String(n).padStart(2, '0');
 export const dia = ms => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const diaDe = t => (t.limite ? String(t.limite).slice(0, 10) : null);
@@ -54,10 +57,10 @@ export const LISTAS = [
  * Una lista del dueño → { pendientes, hechas } (las dos ya ordenadas). `k`: una de LISTAS, o 'p:<id de proyecto>'.
  * Las «hechas» son las que van bajo el separador COMPLETADAS · N de esa lista (Hoy: las de hoy; Todas: 7 días; un proyecto: todas).
  */
-export function deLista(tareas, k, { ahora = Date.now() } = {}) {
+export function deLista(tareas, k, { ahora = Date.now(), yo } = {}) {
   const hoy = dia(ahora), fin = dia(ahora + 7 * 864e5), hace = n => ahora - n * 864e5;
   const vivas = tareas.filter(t => t && !t.archived);
-  const mias = vivas.filter(esDelDueno);
+  const mias = vivas.filter(t => esDelDueno(t, yo));
   const abiertas = mias.filter(abierta), hechas = mias.filter(t => !abierta(t));
   const hechaDesde = ms => hechas.filter(t => (t.doneAt || 0) >= ms).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
   const inicioHoy = new Date(hoy + 'T00:00').getTime();
@@ -66,7 +69,7 @@ export function deLista(tareas, k, { ahora = Date.now() } = {}) {
   else if (k === 'hoy') { p = abiertas.filter(t => t.empezada || (diaDe(t) && diaDe(t) <= hoy)); h = hechaDesde(inicioHoy); }
   else if (k === 'proximos') { p = abiertas.filter(t => diaDe(t) && diaDe(t) > hoy && diaDe(t) <= fin); }
   else if (k === 'todas') { p = abiertas; h = hechaDesde(hace(7)); }
-  else if (k === 'delegadas') { const d = vivas.filter(delegadaPorMi); p = d.filter(t => abierta(t) || fallo(t)); h = d.filter(t => t.state === 'done' && !t.error && (t.doneAt || 0) >= hace(14)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)); }
+  else if (k === 'delegadas') { const d = vivas.filter(t => delegadaPorMi(t, yo)); p = d.filter(t => abierta(t) || fallo(t)); h = d.filter(t => t.state === 'done' && !t.error && (t.doneAt || 0) >= hace(14)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)); }
   else if (k === 'hechas') { h = hechaDesde(hace(30)); }
   else if (String(k).startsWith('p:')) { const id = String(k).slice(2); p = abiertas.filter(t => t.proyecto === id); h = hechas.filter(t => t.proyecto === id).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)); }
   if (k === 'proximos') p.sort((a, b) => (diaDe(a) || '').localeCompare(diaDe(b) || '') || ordenMio(a, b));
@@ -76,12 +79,12 @@ export function deLista(tareas, k, { ahora = Date.now() } = {}) {
 }
 
 // cuántas hay en cada lista (el número del rail) y los proyectos que tienen alguna tarea del dueño abierta
-export function cuentas(tareas, { ahora = Date.now() } = {}) {
-  const out = {}; for (const l of LISTAS) { const r = deLista(tareas, l.k, { ahora }); out[l.k] = l.k === 'hechas' ? r.hechas.filter(t => dia(t.doneAt || 0) === dia(ahora)).length : r.pendientes.length; }
-  const hoy = dia(ahora); out.vencidas = tareas.filter(t => esDelDueno(t) && !t.archived && abierta(t) && limiteMs(t.limite) != null && limiteMs(t.limite) < ahora).length;
-  out.delegadasFallidas = tareas.filter(t => delegadaPorMi(t) && !t.archived && fallo(t)).length;
-  out.hechasHoy = tareas.filter(t => esDelDueno(t) && !t.archived && !abierta(t) && t.doneAt && dia(t.doneAt) === hoy).length;
-  const pr = {}; for (const t of tareas) if (esDelDueno(t) && !t.archived && abierta(t) && t.proyecto) pr[t.proyecto] = (pr[t.proyecto] || 0) + 1;
+export function cuentas(tareas, { ahora = Date.now(), yo } = {}) {
+  const out = {}; for (const l of LISTAS) { const r = deLista(tareas, l.k, { ahora, yo }); out[l.k] = l.k === 'hechas' ? r.hechas.filter(t => dia(t.doneAt || 0) === dia(ahora)).length : r.pendientes.length; }
+  const hoy = dia(ahora); out.vencidas = tareas.filter(t => esDelDueno(t, yo) && !t.archived && abierta(t) && limiteMs(t.limite) != null && limiteMs(t.limite) < ahora).length;
+  out.delegadasFallidas = tareas.filter(t => delegadaPorMi(t, yo) && !t.archived && fallo(t)).length;
+  out.hechasHoy = tareas.filter(t => esDelDueno(t, yo) && !t.archived && !abierta(t) && t.doneAt && dia(t.doneAt) === hoy).length;
+  const pr = {}; for (const t of tareas) if (esDelDueno(t, yo) && !t.archived && abierta(t) && t.proyecto) pr[t.proyecto] = (pr[t.proyecto] || 0) + 1;
   out.proyectos = pr;
   return out;
 }
@@ -132,9 +135,11 @@ export function movimientoMio(de, a) {
 
 /* ---- qué se puede hacer con una tarea, según de quién es (lo usan la API y el detalle: una sola regla) ---- */
 // ¿puede el dueño TOMAR esta tarea de un agente? → { ok } | { ok: false, motivo }
-export function puedeTomar(t) {
+export function puedeTomar(t, yo = yoPagina()) {
   if (!t) return { ok: false, motivo: 'esa tarea ya no existe' };
-  if (esDelDueno(t)) return { ok: false, motivo: 'ya es tuya' };
+  if (esDelDueno(t, yo)) return { ok: false, motivo: 'ya es tuya' };
+  // 26 oct 2026: la tarea que otra cuenta tiene en sus manos no se la quita un editor (un administrador sí, y quien la delegó puede recuperarla: es el DESHACER de delegar)
+  if (t.person && yo && !yo.admin && !(t.delegada && delegoYo(t, yo))) return { ok: false, motivo: `la tiene ${t.person}: pídele que te la devuelva` };
   if (t.state === 'doing') return { ok: false, motivo: 'el agente está trabajando en ella: detenla primero, o espera a que entregue' };
   if (t.routine && t.state !== 'done') return { ok: false, motivo: 'es una ejecución de rutina: sáltala en el calendario o pausa la rutina' };
   if (t.team) return { ok: false, motivo: 'la tiene un equipo de agentes: espera a que entregue' };
@@ -142,9 +147,9 @@ export function puedeTomar(t) {
   return { ok: true };
 }
 // ¿puede delegarla? (solo una tarea suya que no está hecha)
-export function puedeDelegar(t) {
+export function puedeDelegar(t, yo) {
   if (!t) return { ok: false, motivo: 'esa tarea ya no existe' };
-  if (!esDelDueno(t)) return { ok: false, motivo: 'solo delegas una tarea tuya' };
+  if (!esDelDueno(t, yo)) return { ok: false, motivo: 'solo delegas una tarea tuya' };
   if (t.state === 'done') return { ok: false, motivo: 'ya está hecha' };
   return { ok: true };
 }
@@ -152,17 +157,17 @@ export function puedeDelegar(t) {
 /* ---- en palabras: para los agentes (ver_agenda, ver_tareas) y para Dimitri (<estado>) ---- */
 const clip = (s, n) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 export function quienTexto(t, nombre = id => id) {
-  if (esDelDueno(t)) return 'EL DUEÑO';
+  if (t.person === DUENO) return 'EL DUEÑO';
   if (t.person) return `${t.person} (persona del equipo)`;
   return nombre(t.agent);
 }
 /** La línea de Dimitri: cómo va la lista del dueño (vencidas, hoy, haciendo, bandeja, sugerencias) y lo que delegó que sigue abierto. */
-export function resumenDueno(tareas, { ahora = Date.now(), nombre = id => id } = {}) {
-  const c = cuentas(tareas, { ahora });
-  const hoy = deLista(tareas, 'hoy', { ahora }).pendientes, venc = hoy.filter(t => limiteMs(t.limite) != null && limiteMs(t.limite) < ahora);
-  const haciendo = tareas.filter(t => esDelDueno(t) && !t.archived && abierta(t) && t.empezada);
-  const sug = tareas.filter(t => esDelDueno(t) && !t.archived && t.state === 'idea' && t.sugeridaPor);
-  const del = deLista(tareas, 'delegadas', { ahora }).pendientes;
+export function resumenDueno(tareas, { ahora = Date.now(), nombre = id => id, yo = null } = {}) { // el servidor cuenta lo del dueño ('Tú'); `yo` solo si alguien lo pide
+  const c = cuentas(tareas, { ahora, yo });
+  const hoy = deLista(tareas, 'hoy', { ahora, yo }).pendientes, venc = hoy.filter(t => limiteMs(t.limite) != null && limiteMs(t.limite) < ahora);
+  const haciendo = tareas.filter(t => esDelDueno(t, yo) && !t.archived && abierta(t) && t.empezada);
+  const sug = tareas.filter(t => esDelDueno(t, yo) && !t.archived && t.state === 'idea' && t.sugeridaPor);
+  const del = deLista(tareas, 'delegadas', { ahora, yo }).pendientes;
   const few = (l, f, n = 3) => l.slice(0, n).map(f).join(', ') + (l.length > n ? ` y ${l.length - n} más` : '');
   const t = x => `«${clip(x.title, 50)}» (${x.id})`;
   const out = [];

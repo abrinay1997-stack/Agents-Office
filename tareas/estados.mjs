@@ -5,6 +5,8 @@
 // Y cada puerta (la página, la API, Telegram, Dimitri, una rutina, un agente) pregunta a `puede()` antes de mover una tarea.
 // Puro, con test (tests/tareas-estados.test.mjs).
 
+import { esMia } from './identidad.mjs';
+
 export const GUARDADOS = ['idea', 'scheduled', 'next', 'doing', 'waiting', 'done'];
 
 // visible → { etiqueta, tono } (el tono es una clase de color de la vista)
@@ -29,14 +31,14 @@ export function bloqueos(t, deps) {
   return ids.map(id => get(id)).filter(d => d && !(d.state === 'done' && !d.error));
 }
 
-export function visible(t, deps) {
+export function visible(t, deps, yo) { // `yo`: quién mira (tareas/identidad.mjs); omitido = el de la página; el servidor pasa null
   if (!t) return 'idea';
   if (t.state === 'done') return t.error ? 'fallida' : 'hecha';
   if (t.state === 'waiting') return 'espera_ok';
   if (t.state === 'doing') return 'en_curso';
   if (t.state === 'idea') return 'idea';
   if (deps && bloqueos(t, deps).length) return 'bloqueada';
-  if (t.person) return t.person === 'Tú' ? 'tuya' : 'en_manos';
+  if (t.person) return esMia(t, yo) ? 'tuya' : 'en_manos';
   if (t.state === 'scheduled') return 'programada';
   return 'en_cola';
 }

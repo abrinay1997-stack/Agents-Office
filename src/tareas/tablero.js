@@ -7,6 +7,7 @@
 import { visible } from '../../tareas/estados.mjs';
 import { ordenCola } from '../../tareas/cola.mjs';
 import { esc, filaHTML } from './comun.js';
+import { esDelDueno } from '../../tareas/dueno.mjs';
 
 export const COLUMNAS = [
   { k: 'idea', titulo: 'Ideas', vis: ['idea'] },
@@ -23,7 +24,7 @@ export const columnaDe = (t, porId) => { const v = visible(t, porId); return COL
 // ¿qué significa soltar `t` en la columna `a` (y el carril `dept`)? → { accion, texto } o null (no se puede)
 export function movimiento(t, de, a, { dept = null } = {}) {
   if (a === 'personas' && de !== 'personas') return ['idea', 'cola', 'programada'].includes(de) && !t.team && !t.routine ? { accion: 'tomar', texto: 'hacerla tú' } : null; // plan D
-  if (de === 'personas' && a === 'cola') return t.person !== 'Tú' || t.deAgente || t.agent ? { accion: 'devolver', texto: 'devolvérsela a los agentes' } : null;
+  if (de === 'personas' && a === 'cola') return !esDelDueno(t) || t.deAgente || t.agent ? { accion: 'devolver', texto: 'devolvérsela a los agentes' } : null;
   if (de === 'personas' && a === 'hecha') return { accion: 'hecha', texto: 'marcarla hecha' };
   if (dept && dept !== t.dept) return ['idea', 'cola', 'programada'].includes(de) && de === a ? { accion: 'departamento', texto: 'pasarla a otro departamento' } : null;
   if (de === a) return de === 'cola' ? { accion: 'orden', texto: 'cambiar su turno' } : null;

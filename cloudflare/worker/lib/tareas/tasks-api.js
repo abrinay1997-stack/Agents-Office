@@ -4,7 +4,8 @@ import { json } from '../respuesta.js';
 import { planear } from '../../../../tareas/cola.mjs';
 import { lightTasks } from '../../../../tareas/ligera.mjs';
 import { normalizarPasos } from '../../../../tareas/modelo.mjs';
-import { DUENO } from '../../../../tareas/dueno.mjs';
+import { DUENO, esDelDueno } from '../../../../tareas/dueno.mjs';
+import { yoDe } from './servicios.js';
 import { guessNeedsOk } from '../../../../routines-core.mjs';
 import { normModel, normEffort } from '../../../../src/models.js';
 import * as approvals from '../../../../approvals.mjs';
@@ -85,17 +86,19 @@ export async function manejarTasks({ req, url, ruta, usuario, db, s, serv, b }) 
       return dePaso(200, { ok: true, comments: comentarios });
     }
     // I3, I6: una persona la toma (o se la devuelve a los agentes)
-    const nombre = String(b.person || '').trim();
-    if (nombre && !C.persona(nombre) && nombre !== DUENO) return dePaso(400, { error: 'esa persona no está en Ajustes → Equipo' });
+    const nombre0 = String(b.person || '').trim(), yoN = yoDe(usuario)?.nombre || null;
+    const aMi = !!nombre0 && (nombre0 === DUENO || nombre0 === yoN); // «a ti» (26 oct 2026: cada cuenta es «yo» con su nombre)
+    const nombre = aMi ? (yoN || DUENO) : (C.persona(nombre0)?.name || nombre0);
+    if (nombre && !aMi && !C.persona(nombre)) return dePaso(400, { error: 'esa persona no está en la oficina (Ajustes → Equipo o las cuentas de la plataforma)' });
     if (t0.state === 'doing' || t0.state === 'waiting') return dePaso(409, { error: 'está en marcha o esperando tu visto bueno: espera a que termine' });
     let person = null;
     alm.cambiar(id, t => {
-      if (nombre === DUENO && t.agent) { t.deAgente = t.agent; t.tomada = { at: ahora(), estado: t.state }; delete t.agent; } // plan D: «a ti» es «Lo hago yo»
+      if (aMi && t.agent) { t.deAgente = t.agent; t.tomada = { at: ahora(), estado: t.state }; delete t.agent; } // plan D: «a ti» es «Lo hago yo»
       if (nombre) { t.person = nombre; if (t.state === 'done') { t.state = 'next'; t.addedAt = ahora(); } t.handoff = t.handoff || { at: ahora(), from: 'la página', why: String(b.why || '').slice(0, 300) }; }
       else delete t.person;
       person = t.person || null;
     }, { por: 'dueno' });
-    if (nombre) s.avisar('persona', `👤 Te asignaron «${t0.title}»${b.why ? ': ' + b.why : ''}.`, { persona: nombre, task: id });
+    if (nombre && !aMi) s.avisar('persona', `👤 Te asignaron «${t0.title}»${b.why ? ': ' + b.why : ''}.`, { persona: nombre, task: id });
     return dePaso(200, { ok: true, person });
   }
 
@@ -208,7 +211,7 @@ async function editarTarea({ s, serv, C, id, b, db, usuario }) {
     let hecha; alm.cambiar(id, t => { Object.assign(t, { state: 'done', doneAt: ahora(), result: 'Marcada como hecha por ti, sin ejecutarla.', manual: true }); hecha = t; }, { por: 'dueno' });
     return dePaso(200, hecha);
   }
-  if (b.dept !== undefined && cur.person === DUENO && !cur.agent) { if (b.dept && (!C.depts[b.dept] || b.dept === 'brain')) return dePaso(400, { error: 'departamento desconocido' }); patch.dept = b.dept || undefined; }
+  if (b.dept !== undefined && esDelDueno(cur, yoDe(usuario)) && !cur.agent) { if (b.dept && (!C.depts[b.dept] || b.dept === 'brain')) return dePaso(400, { error: 'departamento desconocido' }); patch.dept = b.dept || undefined; }
   if (b.agent !== undefined) {
     const a = C.agents.find(x => x.id === b.agent); if (!a) return dePaso(400, { error: 'no existe ese agente' });
     if (cur.team && !a.lead) return dePaso(400, { error: 'una tarea en equipo va al líder del departamento' });
