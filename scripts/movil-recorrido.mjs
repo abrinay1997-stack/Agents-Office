@@ -188,7 +188,10 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
       const asa = await page.locator('.mv-hoja .mv-asa').boundingBox();
       await toque(Array.from({ length: 12 }, (_, i) => ({ x: asa.x + asa.width / 2, y: asa.y + 8 + i * 28 })));
       await page.waitForSelector('.mv-hoja', { state: 'detached', timeout: 3000 }).catch(() => {}); paso(await page.locator('.mv-hoja').count() === 0, 'Gestos: arrastrar la hoja hacia abajo la cierra');
-      await page.waitForSelector('.mv-pend:not([hidden])'); await tocar('.mv-pend'); await page.waitForSelector('[data-vista="aprobaciones"] .mv-aprob');
+      await page.waitForSelector('.mv-pend:not([hidden])');
+      // en un CI lento el arrastre puede no haber cerrado la hoja a tiempo: si sigue ahí, se cierra con «atrás» antes de seguir
+      if (await page.locator('.mv-hoja').count()) { await page.goBack().catch(() => {}); await page.waitForSelector('.mv-hoja', { state: 'detached', timeout: 4000 }).catch(() => {}); }
+      await tocar('.mv-pend'); await page.waitForSelector('[data-vista="aprobaciones"] .mv-aprob', { timeout: 30000 });
       await toque(Array.from({ length: 10 }, (_, i) => ({ x: 6 + i * 18, y: 400 })));
       paso(await page.locator('[data-vista="aprobaciones"]:not([hidden])').count() === 0 && await page.locator('.mv-atras:not([hidden])').count() === 0, 'Gestos: deslizar desde el borde izquierdo vuelve de una pantalla');
       await tocar('.mv-tab[data-tab="tareas"]'); await page.waitForSelector('[data-vista="tareas"] .mv-filas'); await espera(300); let pedidos = 0; const cuenta = r => { if (/\/api\/tasks\?light=1/.test(r.url())) pedidos++; }; page.on('request', cuenta);
