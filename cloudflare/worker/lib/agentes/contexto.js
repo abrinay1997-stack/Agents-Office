@@ -57,8 +57,8 @@ export function notasRelevantes(index, dept, texto, mem, n = 4) {
   names.via = new Map(near.map(x => [x.note, x.via]));
   return names;
 }
-const businessContext = index => ['CLAUDE', 'index', 'business-model', 'voice'].filter(k => index.has(k)).map(k => `--- ${k}.md ---\n${index.get(k).slice(0, 1200)}`).join('\n\n');
-function contextText(index, names, stale, budget = 9000) {
+export const businessContext = index => ['CLAUDE', 'index', 'business-model', 'voice'].filter(k => index.has(k)).map(k => `--- ${k}.md ---\n${index.get(k).slice(0, 1200)}`).join('\n\n');
+export function contextText(index, names, stale, budget = 9000) {
   return memory.pack(names.map(n => { const st = stale.get(n), via = names.via?.get(n); const body = names.passages?.get(n)?.join('\n…\n') || (index.get(n) || '').slice(0, 1800); return { head: `--- ${n}.md ---${via ? ` (relacionada con ${via}: su resumen)` : ''}${st ? ` (nota ${st.why}: confírmala antes de citar cifras de aquí)` : ''}`, body: body.slice(0, 2600) }; }), budget);
 }
 

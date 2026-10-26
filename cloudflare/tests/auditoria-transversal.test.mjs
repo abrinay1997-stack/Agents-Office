@@ -60,7 +60,7 @@ const ESCRIBEN = [
   '/api/contenido/llenar', '/api/contenido/mejorar', '/api/contenido/guardados', '/api/contenido/plantillas', '/api/contenido/bandeja/sincronizar', '/api/contenido/bandeja/abc123/enviar',
   '/api/anuncios/accion', '/api/anuncios/borradores', '/api/anuncios/borradores/abc123/crear', '/api/anuncios/sincronizar', '/api/anuncios/deshacer', '/api/anuncios/conversiones',
   '/api/media/jobs', '/api/media/generate', '/api/media/upload', '/api/media/trash/purge', '/api/voces/design', '/api/voces/clone',
-  '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar', '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
+  '/api/chat', '/api/sub/chat', '/api/sub/ops', '/api/sub/studio', '/api/settings', '/api/settings/telegram', '/api/cifras', '/api/voice', '/api/business/kpi', '/api/triggers', '/api/onboard/company', '/api/onboard/aplicar', '/api/onboard/descartar', '/api/onboard/deshacer', '/api/restablecer', '/api/restablecer/confirmar', '/api/restablecer/deshacer',
   '/api/equipo/invitaciones', '/api/notices/read', '/api/costs/apply', '/api/anuncios/informe', '/api/contenido/analiticas/actualizar', '/api/contenido/meta/sincronizar', '/api/contenido/analiticas/indicadores',
   '/api/media/folders', '/api/media/move', '/api/media/restore', '/api/media/zip', '/api/media/edit', '/api/media/enhance', '/api/business/value', '/api/brain/upload',
 ];

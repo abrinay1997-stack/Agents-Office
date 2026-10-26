@@ -88,6 +88,17 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     page.on('pageerror', e => errores.push('pageerror: ' + e.message)); page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource|favicon|net::ERR/.test(m.text())) errores.push('console: ' + m.text()); });
     await page.goto(o.base); await page.waitForSelector('#mvRoot .mv-tabs'); await page.waitForSelector('[data-vista="inicio"] .mv-card', { timeout: 15000 }); await espera(400);
     let toques = 0; const tocar = async sel => { toques++; await page.locator(sel).first().tap(); await espera(260); };
+    // abre Aprobaciones con reintentos y, si no llega, dice qué había en pantalla
+    const abrirAprobaciones = async () => {
+      let ultimo;
+      for (let i = 0; i < 3; i++) {
+        await tocar('.mv-pend');
+        try { await page.waitForSelector('[data-vista="aprobaciones"] .mv-aprob', { timeout: 8000 }); return; } catch (e) { ultimo = e; }
+        if (await page.locator('.mv-hoja').count()) { await page.goBack().catch(() => {}); await espera(600); }
+      }
+      const diag = await page.evaluate(() => ({ visibles: [...document.querySelectorAll('[data-vista]:not([hidden])')].map(e => e.dataset.vista), hoja: !!document.querySelector('.mv-hoja'), toasts: [...document.querySelectorAll('.mv-toast')].map(e => e.textContent), pend: (document.querySelector('.mv-pend') || {}).outerHTML?.slice(0, 160) }));
+      throw new Error('No abrió Aprobaciones: ' + JSON.stringify(diag) + ' · ' + (ultimo && ultimo.message));
+    };
     const foto = async n => { if (!capturas) return; fs.mkdirSync(OUT, { recursive: true }); await page.screenshot({ path: path.join(OUT, n + '.jpg'), type: 'jpeg', quality: 55 }); };
     const texto = sel => page.locator(sel).first().innerText();
 
@@ -191,7 +202,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
       await page.waitForSelector('.mv-pend:not([hidden])');
       // en un CI lento el arrastre puede no haber cerrado la hoja a tiempo: si sigue ahí, se cierra con «atrás» antes de seguir
       if (await page.locator('.mv-hoja').count()) { await page.goBack().catch(() => {}); await page.waitForSelector('.mv-hoja', { state: 'detached', timeout: 4000 }).catch(() => {}); }
-      await tocar('.mv-pend'); await page.waitForSelector('[data-vista="aprobaciones"] .mv-aprob', { timeout: 30000 });
+      await abrirAprobaciones();
       await toque(Array.from({ length: 10 }, (_, i) => ({ x: 6 + i * 18, y: 400 })));
       paso(await page.locator('[data-vista="aprobaciones"]:not([hidden])').count() === 0 && await page.locator('.mv-atras:not([hidden])').count() === 0, 'Gestos: deslizar desde el borde izquierdo vuelve de una pantalla');
       await tocar('.mv-tab[data-tab="tareas"]'); await page.waitForSelector('[data-vista="tareas"] .mv-filas'); await espera(300); let pedidos = 0; const cuenta = r => { if (/\/api\/tasks\?light=1/.test(r.url())) pedidos++; }; page.on('request', cuenta);
@@ -205,7 +216,7 @@ export async function correr({ capturas = false, escribirHuella = false } = {}) 
     // ---- aprobaciones ----
     await tocar('.mv-tab[data-tab="inicio"]'); await page.waitForSelector('.mv-pend:not([hidden])');
     paso((await page.locator('.mv-pend').getAttribute('aria-label')).startsWith('1 espera'), 'Aprobaciones: el ⚠ de la cabecera dice cuántas esperan (1)');
-    toques = 0; await tocar('.mv-pend'); await page.waitForSelector('[data-vista="aprobaciones"] .mv-aprob'); await foto('06-aprobaciones'); await medir('Aprobaciones');
+    toques = 0; await abrirAprobaciones(); await foto('06-aprobaciones'); await medir('Aprobaciones');
     const tarj = await texto('[data-vista="aprobaciones"] .mv-aprob');
     paso(/compras@acme\.com/i.test(tarj) && /lo que saldrá/i.test(tarj) && /riesgo/i.test(tarj), 'Aprobaciones: la tarjeta dice «Lo que saldrá», a quién y el riesgo');
     await tocar('[data-aprobar]'); await page.waitForSelector('.mv-hoja [data-acc]'); await foto('06b-aprobar-confirmar'); await medir('Confirmar aprobación');
