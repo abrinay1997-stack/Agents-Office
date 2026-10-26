@@ -283,7 +283,7 @@ export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
       proyecto = pp.id ? s.cat.proyecto(pp.id) : s.cat.proyectos().find((x) => x.nombre.toLowerCase() === String(pp.nombre).toLowerCase() && x.estado !== 'archivado') || s.cat.crearProyecto({ nombre: pp.nombre, objetivo: pp.objetivo, limite: pp.limite }).proyecto || null;
       if (proyecto) m.plan.proyecto = { ...pp, id: proyecto.id, nombre: proyecto.nombre };
     }
-    const nombres = sub.nombresDe(C.personas), yoMismo = m.para && sub.personaDe(m.para, nombres) ? m.para : DUENO; // 26 oct 2026: «para mí» es de quien escribió el pedido (su cuenta); sin cuenta (Telegram, el reloj), el dueño
+    const nombres = sub.nombresDe(C.personas), hablante = m.para ? C.persona(m.para) : null, yoMismo = hablante?.usuario ? hablante.name : DUENO, dijo = hablante ? hablante.name : null; // 26 oct 2026: «para mí» es de quien escribió el pedido SI tiene cuenta (es la lista que ve); una persona de Ajustes → Equipo sin cuenta (por Telegram) no tiene Mías: queda en la del dueño ('Tú') y solo firma el aviso
     for (const t of todo) {
       const espera = (t.espera || []).map((x) => ids.get(x)).filter(Boolean);
       const comunes = { title: t.title, text: t.instruction, why: t.why, by: 'sub', sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite || (t.at ? `${localDia(t.at)}T${new Date(t.at).toTimeString().slice(0, 5)}` : undefined), proyecto: proyecto?.id, bloqueadaPor: espera, ...(t.pasos?.length ? { pasos: t.pasos } : {}) };
@@ -294,7 +294,7 @@ export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
         } else if (t.dept === 'persona') { // a otra persona: es de ella y quien lo pidió la sigue en Delegadas; ella recibe el aviso
           const quien = sub.personaDe(t.persona, nombres); if (!quien) throw new Error('esa persona ya no está en el equipo');
           task = serv.altaTarea({ ...asignadaA(quien, { por: yoMismo, nota: String(t.why || '').slice(0, 600) }), ...comunes }, { id: ids.get(t.i), por: 'dimitri', arrancar: false });
-          serv.avisar('persona', `👤 ${yoMismo === DUENO ? 'El dueño' : yoMismo} te asignó «${task.title}»${t.why ? ': ' + String(t.why).slice(0, 300) : ''}.`, { persona: quien });
+          serv.avisar('persona', `👤 ${dijo || 'El dueño'} te asignó «${task.title}»${t.why ? ': ' + String(t.why).slice(0, 300) : ''}.`, { persona: quien });
         } else {
           task = await nuevaTarea(serv, { dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: espera } });
         }

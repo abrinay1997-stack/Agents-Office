@@ -1298,14 +1298,14 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
     if (proyecto) m.plan.proyecto = { ...pp, id: proyecto.id, nombre: proyecto.nombre };
   }
   const ids = new Map(todo.map(t => [t.i, nid()]));
-  const nombres = sub.nombresDe(PEOPLE()), yoMismo = m.para && sub.personaDe(m.para, nombres) ? m.para : DUENO; // 26 oct 2026: quien escribió el pedido (por Telegram, una persona del equipo); si no, el dueño
+  const nombres = sub.nombresDe(PEOPLE()), dijo = m.para && sub.personaDe(m.para, nombres) ? m.para : null; // 26 oct 2026: la oficina local no tiene cuentas: lo «mío» y quien delega son SIEMPRE el dueño ('Tú', lo que ven /api/tareas/mias y Delegadas); `dijo` (la persona que escribió por Telegram) solo firma el aviso
   const comunes = t => ({ title: t.title, text: t.instruction, why: t.why, by: 'sub', sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite || (t.at ? `${localDay(t.at)}T${new Date(t.at).toTimeString().slice(0, 5)}` : undefined), proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean), ...(t.pasos?.length ? { pasos: t.pasos } : {}) });
   const paraPersona = t => { // 26 oct 2026: una pieza para otra persona del equipo: es de ella, y quien la envió la sigue en Delegadas; ella recibe el aviso
     const quien = sub.personaDe(t.persona, nombres); if (!quien) throw new Error('esa persona ya no está en el equipo');
-    const task = altaTarea({ ...asignadaA(quien, { por: yoMismo, nota: String(t.why || '').slice(0, 600) }), ...comunes(t) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false });
-    tellPerson(quien, `👤 ${yoMismo === DUENO ? 'El dueño' : yoMismo} te asignó «${task.title}»${t.why ? ': ' + String(t.why).slice(0, 300) : ''}.`); return task;
+    const task = altaTarea({ ...asignadaA(quien, { por: DUENO, nota: String(t.why || '').slice(0, 600) }), ...comunes(t) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false });
+    tellPerson(quien, `👤 ${dijo || 'El dueño'} te asignó «${task.title}»${t.why ? ': ' + String(t.why).slice(0, 300) : ''}.`); return task;
   };
-  const paraTi = t => altaTarea({ person: yoMismo, ...comunes(t) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false }); // plan D: lo que hace quien escribe en persona, a su lista
+  const paraTi = t => altaTarea({ person: DUENO, ...comunes(t) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false }); // plan D: lo que hace quien escribe en persona, a su lista
   const made = await Promise.all(todo.map(t => (t.dept === 'dueno' ? Promise.resolve().then(() => paraTi(t)) : t.dept === 'persona' ? Promise.resolve().then(() => paraPersona(t)) : newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) } }))
     .then(task => { t.state = 'sent'; t.taskId = task.id; t.agent = task.agent; return task; })
     .catch(err => { t.state = 'failed'; t.error = err.message; return null; })));

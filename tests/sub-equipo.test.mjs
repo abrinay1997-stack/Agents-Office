@@ -142,14 +142,15 @@ test('server: Dimitri ve al equipo y sabe quién le escribe; una lista para Aval
   assert.match(o.dims().at(-1).body.messages[0].content, /envié|propuse: .*→ Avalon/s);
 });
 
-test('server: por Telegram, Dimitri sabe que le escribe Avalon (su id está en Ajustes → Equipo) y lo que es «para mí» es de ella', { timeout: 90000 }, async t => {
+test('server: por Telegram, Dimitri sabe que le escribe Avalon (su id está en Ajustes → Equipo); en la oficina local lo «mío» sigue siendo del dueño', { timeout: 90000 }, async t => {
   const plan = { mode: 'plan', reply: 'Anotado.', tasks: [{ dept: 'dueno', title: 'Llamar a la contadora', instruction: 'Llama a la contadora.', why: 'lo pidió', limite: '2026-10-29' }] };
   const o = await office(t, [JSON.stringify(plan)]);
   const a = await o.call('/api/sub/chat', { text: 'recuérdame llamar a la contadora' }, 'POST', { 'x-office-by': 'telegram:777000' });
   assert.match(o.dims().at(-1).system, /Te escribe ahora: Avalon, por Telegram\./); assert.match(o.dims().at(-1).body.messages[0].content, /Avalon: recuérdame llamar/);
   assert.equal(a.j.messages[0].por, 'Avalon'); assert.equal(a.j.messages[1].para, 'Avalon');
   const e = await o.call('/api/sub/send', { msg: a.j.messages[1].id, items: [{ i: 0, include: true }] }); assert.equal(e.status, 200, JSON.stringify(e.j));
-  const llamar = (await o.call('/api/tasks')).j.find(x => /contadora/.test(x.title)); assert.equal(llamar.person, 'Avalon', '«para mí» de Avalon es de Avalon, no del dueño'); assert.ok(!llamar.delegada, 'nadie se la asignó: es suya');
+  const llamar = (await o.call('/api/tasks')).j.find(x => /contadora/.test(x.title)); assert.equal(llamar.person, 'Tú', 'la oficina local no tiene cuentas: lo «mío» es del dueño (lo que ve /api/tareas/mias), aunque escriba por Telegram una persona del equipo'); assert.ok(!llamar.delegada, 'nadie se la asignó');
+  assert.equal((await o.call('/api/tareas/mias')).j.listas.todas.pendientes.some(x => x.id === llamar.id), true, 'y aparece en Mías');
   // otro id de Telegram (el dueño) sigue siendo «el dueño»
   await o.call('/api/sub/chat', { text: 'hola' }, 'POST', { 'x-office-by': 'telegram:999' });
   assert.match(o.dims().at(-1).system, /Te escribe ahora: el dueño, por Telegram\./);

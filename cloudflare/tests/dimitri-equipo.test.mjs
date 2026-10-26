@@ -125,3 +125,17 @@ test('por Telegram: Dimitri sabe quién escribe (el id de Telegram de una person
   const p = o.m.registro.anthropic.at(-1);
   assert.match(p.system, /<equipo>\nTe escribe ahora: Avalon, por Telegram\./); assert.match(p.messages[0].content, /Avalon: ¿qué tengo pendiente\?/);
 });
+
+test('«para mí» por Telegram: si la persona tiene cuenta, es de SU lista; si solo está en Ajustes → Equipo (sin Mías), queda en la del dueño y ella firma el aviso', { skip: SALTAR }, async () => {
+  const plan = { mode: 'plan', reply: 'Anotado.', tasks: [{ dept: 'dueno', title: 'Llamar a la contadora', instruction: 'Llama a la contadora.', why: 'lo pidió', limite: '2026-10-29' }] };
+  const extraEnv = { TELEGRAM_BOT_TOKEN: TOKEN_BOT, TELEGRAM_OWNER_ID: DUENO_TG, TELEGRAM_WEBHOOK_SECRET: SECRETO_WEBHOOK };
+  const escribe = (o, n) => o.anon('POST', '/api/telegram/webhook', { update_id: n, message: { message_id: 1, from: { id: +DUENO_TG }, chat: { id: +DUENO_TG, type: 'private' }, text: 'recuérdame llamar a la contadora' } }, { 'x-telegram-bot-api-secret-token': SECRETO_WEBHOOK });
+  for (const [ajustes, quien] of [[{ team: { people: [{ name: 'Avalon', telegram: DUENO_TG }] } }, 'Tú'], [{ team: { people: [{ name: 'Dueno', telegram: DUENO_TG }] } }, 'Dueno']]) { // «Dueno» es el nombre de la cuenta administradora de las ayudas: con cuenta
+    const o = await oficina6({ extraEnv, ajustes, guion: [dimitriDice(plan)] });
+    assert.equal((await escribe(o, 6001)).status, 200);
+    const g = (await o.admin('GET', '/api/sub')).j.messages, m = g.find((x) => x.who === 'sub' && x.plan);
+    assert.equal(m.para, ajustes.team.people[0].name);
+    assert.equal((await o.admin('POST', '/api/sub/send', { msg: m.id, items: [{ i: 0, include: true }] })).status, 200);
+    assert.equal((await cargarTareas(o.d1)).find((x) => /contadora/.test(x.title)).person, quien);
+  }
+});
