@@ -207,6 +207,7 @@ body.dark .sb-mode.stopped { color: #FFB4AB; border-color: rgba(255,180,171,.5);
 #subOv .sb-org { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; font-size: 12px; }
 #subOv .sb-org span { padding: 1px 8px; border-radius: 99px; background: rgba(21,20,20,.06); min-height: 22px; display: inline-flex; align-items: center; }
 #subOv .sb-org .sb-alta { color: #B42318; background: rgba(180,35,24,.1); font-weight: 600; }
+#subOv .sb-pasos { margin: 6px 0 0; padding-left: 20px; font-size: 12.5px; line-height: 1.45; } #subOv .sb-pasos li { margin: 1px 0; } /* 26 oct 2026: los pasos de una pieza para una persona */
 body.dark #subOv .sb-proy { background: rgba(143,176,255,.12); } body.dark #subOv .sb-org span { background: rgba(236,234,227,.08); } body.dark #subOv .sb-org .sb-alta { color: #FF8A80; background: rgba(255,138,128,.12); }
 
 /* historial de conversaciones */

@@ -202,10 +202,10 @@ export function crearBot({ cfg, who, approvers, st, saveSt, local, call, send, s
     if (cmd === 'desconocido') return send(chat, 'No conozco ese comando. /ayuda');
     // anything else: Dimitri (E3)
     await call('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => {});
-    const r = await local('POST', '/api/sub/chat', { text: arg });
+    const r = await local('POST', '/api/sub/chat', { text: arg }, 'telegram:' + chat); // 26 oct 2026: Dimitri sabe quién le escribe (el id de Telegram de una persona del equipo)
     const m = (r.messages || []).find(x => x.who === 'sub') || {};
     const pieces = (m.plan?.tasks || []).filter(t => t.state === 'proposed');
-    const body = esc(m.text || '…') + (pieces.length ? '\n\n' + pieces.map((t, i) => `${i + 1}. <b>${esc(t.title)}</b> → ${esc(t.dept)}${t.team ? ' (equipo)' : ''}`).join('\n') : '') + (m.plan?.questions?.length ? '\n\n' + m.plan.questions.map(q => '❓ ' + esc(typeof q === 'string' ? q : q.q + (q.options?.length ? ` — ${q.options.map(o => o.label).join(' / ')}` : ''))).join('\n') : ''); // V4.11: a question may carry options (sub.parseQuestions)
+    const body = esc(m.text || '…') + (pieces.length ? '\n\n' + pieces.map((t, i) => `${i + 1}. <b>${esc(t.title)}</b> → ${esc(t.dept === 'persona' ? t.persona || 'una persona' : t.dept === 'dueno' ? 'tu lista' : t.dept)}${t.team ? ' (equipo)' : ''}`).join('\n') : '') + (m.plan?.questions?.length ? '\n\n' + m.plan.questions.map(q => '❓ ' + esc(typeof q === 'string' ? q : q.q + (q.options?.length ? ` — ${q.options.map(o => o.label).join(' / ')}` : ''))).join('\n') : ''); // V4.11: a question may carry options (sub.parseQuestions)
     return send(chat, body, pieces.length ? { reply_markup: { inline_keyboard: [[{ text: `📤 Enviar ${pieces.length === 1 ? 'la pieza' : 'las ' + pieces.length + ' piezas'} a los jefes`, callback_data: 'sd:' + m.id }]] } } : {});
   }
   async function handleCallback(q) {

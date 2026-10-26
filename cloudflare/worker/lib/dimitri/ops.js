@@ -8,12 +8,13 @@
 //  · CONFIRMAR UN GASTO: las ops de `sub.OPS_GASTO` (activar, reanudar, subir presupuesto, relanzar) solo piden la cifra (la PRIMERA llamada de Anuncios, que no cambia nada);
 //    el segundo clic es del dueño en Anuncios. Si Anuncios contestara que ya lo hizo sin pedir la cifra, la op falla con ese aviso.
 import * as sub from '../../../../sub-core.mjs';
-import { DUENO } from '../../../../tareas/dueno.mjs';
+import { DUENO, asignadaA } from '../../../../tareas/dueno.mjs';
+import { nombresMios } from '../../../../tareas/identidad.mjs';
 import { conSesion, cargarTareas } from '../tareas/sesion.js';
 import * as RT from '../tareas/rutinas.js';
 import { ALLOWED as DEPTS_RUTINAS } from '../../../../routines-core.mjs';
 import { leerContexto } from '../tareas/contexto.js';
-import { armarServicios } from '../tareas/servicios.js';
+import { armarServicios, yoDe } from '../tareas/servicios.js';
 import { nuevaTarea } from '../tareas/tasks-api.js';
 import { crearOffice } from '../agentes/herramientas.js';
 import { localDia, anuncioDeVista } from './datos.js';
@@ -23,18 +24,19 @@ export const OPS_UNDO_MS = 30000;
 
 /** `office(ruta, cuerpo?, método?)` con la sesión del dueño. */
 export function oficinaDelDueno({ env, db, usuario, modulos }) {
-  return crearOffice({ env, db, usuario: { id: usuario.id, email: usuario.email, rol: 'admin' }, modulos });
+  return crearOffice({ env, db, usuario: { id: usuario.id, email: usuario.email, ...(usuario.nombre ? { nombre: usuario.nombre } : {}), rol: 'admin' }, modulos }); // con su nombre: «mías» son las tareas de quien pulsa (26 oct 2026)
 }
 
 /** El contexto con el que `parseOps` valida: la oficina como está AHORA. Lo que se mira por id y es asíncrono se trae antes (solo lo que las ops nombran). */
-export async function contextoDeOps({ office, C, db, ops = [] }) {
+export async function contextoDeOps({ office, C, db, ops = [], usuario = null }) {
   const ids = [...new Set(ops.filter((o) => o?.type === 'pieza_mover' && o.id).map((o) => String(o.id)))];
   const piezas = new Set();
   for (const id of ids) { try { if ((await office(`/api/contenido/piezas/${encodeURIComponent(id)}`)).pieza) piezas.add(id); } catch { /* no está */ } }
   let vista = null;
   if (ops.some((o) => sub.ANUNCIO_TIPO[o?.type])) { try { vista = await office('/api/anuncios?rango=7d'); } catch { vista = null; } }
   const [tasks, rutinas] = [await cargarTareas(db), (await RT.rutinasConEstado(db, C.agents)).list];
-  return { depts: C.depts, agents: C.agents, routineDepts: DEPTS_RUTINAS, routines: rutinas, tasks, piezaHas: (id) => piezas.has(String(id)), anuncio: (id) => (vista ? anuncioDeVista(vista, id) : null) };
+  return { depts: C.depts, agents: C.agents, routineDepts: DEPTS_RUTINAS, routines: rutinas, tasks, piezaHas: (id) => piezas.has(String(id)), anuncio: (id) => (vista ? anuncioDeVista(vista, id) : null),
+    personas: sub.nombresDe(C.personas), mios: nombresMios(yoDe(usuario)) }; // 26 oct 2026: a quién se puede pasar una tarea, y qué nombres cuentan como «mía»
 }
 
 export function crearEjecutor({ env, db, usuario, modulos }) {
@@ -99,8 +101,10 @@ export function crearEjecutor({ env, db, usuario, modulos }) {
     }
     if (o.type === 'tarea_repetir') { const t = await office(`/api/tasks/${encodeURIComponent(o.id)}/repeat`, {}); o.task = t.id; o.undo = { task: t.id }; return; }
     if (o.type === 'mia_delegar') {
-      const r = await office(`/api/tareas/${encodeURIComponent(o.id)}/delegar`, { a: 'agente', dept: o.dept, ...(o.agent ? { agente: o.agent } : {}), ...(o.nota ? { nota: o.nota } : {}) });
-      o.agent = r.a; o.agentName = r.a; o.undo = { deAgente: r.tarea?.deAgente || null }; return;
+      const r = await office(`/api/tareas/${encodeURIComponent(o.id)}/delegar`, o.persona // a una persona del equipo (queda en su lista; tú la sigues en Delegadas)
+        ? { a: 'persona', persona: o.persona, ...(o.nota ? { nota: o.nota } : {}) }
+        : { a: 'agente', dept: o.dept, ...(o.agent ? { agente: o.agent } : {}), ...(o.nota ? { nota: o.nota } : {}) });
+      if (!o.persona) { o.agent = r.a; o.agentName = r.a; } o.undo = { deAgente: r.tarea?.deAgente || null }; return;
     }
     if (o.type === 'mia_hecha') { await office(`/api/tareas/${encodeURIComponent(o.id)}/estado`, { a: 'done' }); o.undo = { reabrir: true, at: Date.now() }; return; }
     if (o.type === 'anuncio_borrador') { // un BORRADOR en la oficina; nada en Meta (crearlo allí, en pausa, es un clic del dueño en Anuncios)
@@ -203,8 +207,8 @@ async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }) {
     if (e.include === false) { o.state = 'skipped'; continue; }
     const pick = (k) => (e[k] !== undefined ? { [k]: e[k] } : {}); // lo que el dueño editó en la tarjeta, comprobado otra vez como la primera
     const base = { ...o }; if (o.type === 'rutina_crear' && !o.titled) delete base.title; // un título que Dimitri no dio es del enrutador
-    const pedido = [{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent'), ...pick('prioridad'), ...pick('limite'), ...pick('dept'), ...pick('nota'), ...pick('dias'), ...pick('pide'), ...pick('valor') }];
-    const ctxP = await contextoDeOps({ office: ej.office, C, db, ops: pedido });
+    const pedido = [{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent'), ...pick('prioridad'), ...pick('limite'), ...pick('dept'), ...pick('persona'), ...pick('nota'), ...pick('dias'), ...pick('pide'), ...pick('valor') }];
+    const ctxP = await contextoDeOps({ office: ej.office, C, db, ops: pedido, usuario });
     const [v] = sub.parseOps(pedido, { ...ctxP, owner: true }).ops; // owner: «pide tu OK» de la tarjeta es del dueño
     if (!v) { o.state = 'failed'; o.error = 'ya no se puede: algo cambió en la oficina, la hora ya pasó o el horario no está completo'; failed++; continue; }
     Object.assign(o, v, { k: o.k, state: 'running', runningAt: o.runningAt });
@@ -257,7 +261,8 @@ export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
     if (t.state !== 'proposed') continue;
     const e = byI.get(t.i) || {};
     if (e.include === false) { t.state = 'skipped'; continue; }
-    if (e.dept && ((C.depts[e.dept] && e.dept !== 'brain') || e.dept === 'dueno')) t.dept = e.dept; // «Tú» es una opción más
+    if (e.dept === 'persona') { const quien = sub.personaDe(e.persona, sub.nombresDe(C.personas)); if (quien) { t.dept = 'persona'; t.persona = quien; } } // 26 oct 2026: otra persona del equipo (una cuenta de la plataforma o de Ajustes → Equipo)
+    else if (e.dept && ((C.depts[e.dept] && e.dept !== 'brain') || e.dept === 'dueno')) { t.dept = e.dept; delete t.persona; } // «Tú» es una opción más
     if (typeof e.instruction === 'string' && e.instruction.trim()) t.instruction = e.instruction.trim().slice(0, 4000);
     if (typeof e.team === 'boolean') t.team = e.team;
     if (e.at === null) t.at = null; else if (typeof e.at === 'number') t.at = e.at;
@@ -278,12 +283,18 @@ export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
       proyecto = pp.id ? s.cat.proyecto(pp.id) : s.cat.proyectos().find((x) => x.nombre.toLowerCase() === String(pp.nombre).toLowerCase() && x.estado !== 'archivado') || s.cat.crearProyecto({ nombre: pp.nombre, objetivo: pp.objetivo, limite: pp.limite }).proyecto || null;
       if (proyecto) m.plan.proyecto = { ...pp, id: proyecto.id, nombre: proyecto.nombre };
     }
+    const nombres = sub.nombresDe(C.personas), yoMismo = m.para && sub.personaDe(m.para, nombres) ? m.para : DUENO; // 26 oct 2026: «para mí» es de quien escribió el pedido (su cuenta); sin cuenta (Telegram, el reloj), el dueño
     for (const t of todo) {
       const espera = (t.espera || []).map((x) => ids.get(x)).filter(Boolean);
+      const comunes = { title: t.title, text: t.instruction, why: t.why, by: 'sub', sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite || (t.at ? `${localDia(t.at)}T${new Date(t.at).toTimeString().slice(0, 5)}` : undefined), proyecto: proyecto?.id, bloqueadaPor: espera, ...(t.pasos?.length ? { pasos: t.pasos } : {}) };
       try {
         let task;
         if (t.dept === 'dueno') {
-          task = serv.altaTarea({ person: DUENO, title: t.title, text: t.instruction, why: t.why, by: 'sub', sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite || (t.at ? `${localDia(t.at)}T${new Date(t.at).toTimeString().slice(0, 5)}` : undefined), proyecto: proyecto?.id, bloqueadaPor: espera }, { id: ids.get(t.i), por: 'dimitri', arrancar: false });
+          task = serv.altaTarea({ person: yoMismo, ...comunes }, { id: ids.get(t.i), por: 'dimitri', arrancar: false });
+        } else if (t.dept === 'persona') { // a otra persona: es de ella y quien lo pidió la sigue en Delegadas; ella recibe el aviso
+          const quien = sub.personaDe(t.persona, nombres); if (!quien) throw new Error('esa persona ya no está en el equipo');
+          task = serv.altaTarea({ ...asignadaA(quien, { por: yoMismo, nota: String(t.why || '').slice(0, 600) }), ...comunes }, { id: ids.get(t.i), por: 'dimitri', arrancar: false });
+          serv.avisar('persona', `👤 ${yoMismo === DUENO ? 'El dueño' : yoMismo} te asignó «${task.title}»${t.why ? ': ' + String(t.why).slice(0, 300) : ''}.`, { persona: quien });
         } else {
           task = await nuevaTarea(serv, { dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: espera } });
         }
@@ -293,7 +304,7 @@ export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
   });
   const sent = enviadas;
   const esperan = sent.filter((t) => t.bloqueadaPor?.length).length;
-  const nombres = [...new Set(sent.map((t) => (t.person === DUENO ? 'tu lista (Tareas → Mías)' : C.depts[t.dept]?.name || t.dept)))].join(', ');
+  const nombres = [...new Set(sent.map((t) => (t.person === DUENO ? 'tu lista (Tareas → Mías)' : t.person ? `la lista de ${t.person}` : C.depts[t.dept]?.name || t.dept)))].join(', ');
   const proyectoTxt = m.plan.proyecto?.nombre && sent.some((t) => t.proyecto) ? `, en el proyecto «${m.plan.proyecto.nombre}»` : '';
   const aviso = sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${nombres}${proyectoTxt}.${esperan ? ` ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} a que termine otra antes de empezar.` : ''} Te aviso aquí cómo van (y en Tareas, H).${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`);
   await chat.reemplazar(db, m);

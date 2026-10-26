@@ -1,5 +1,15 @@
 # Changelog
 
+## Dimitri conoce al equipo, sabe quién le escribe y deja listas de tareas hechas para una persona — 26 oct 2026
+
+Pedido del dueño: le preguntó a Dimitri cuántos usuarios administrativos hay porque quería que le dejara una lista de tareas hecha a su pareja (administrativa); Dimitri contestó que no veía usuarios, solo 35 escritorios, y que no sabía quién le escribía.
+
+- **`<equipo>` en lo que lee Dimitri:** «Te escribe ahora: …» (la cuenta de la sesión con su rol; por Telegram, la persona de Ajustes → Equipo con ese id; en la oficina local sin cuentas, «el dueño») y **las personas del equipo** con su rol y cuántas tareas abiertas tiene cada una (cuentas de la plataforma + Ajustes → Equipo). «Para mí» es quien escribe. Cada mensaje queda firmado: Dimitri lee «Avalon: …» y no «Dueño: …», y la página rotula «Avalon escribió:» en los mensajes de otra cuenta.
+- **Listas de tareas para una persona, hechas:** una pieza del plan puede ir a **una persona** (`"dept":"persona"`, con su nombre; el nombre se comprueba contra el equipo: uno que no existe no se inventa, la pieza queda en la lista de quien escribe y se dice) con sus **pasos** (hasta 12), **prioridad**, **fecha límite**, **«espera a…»** y el **proyecto**, como cualquier tarea. ENVIAR A LOS JEFES las deja en SU lista (Tareas → Mías), le avisa, y quien lo pidió las sigue en **Delegadas**. En la tarjeta del plan, el destino ofrece «Personas del equipo» y los pasos se ven.
+- **«Para mí» de Dimitri es de quien escribe:** en la nube, una pieza «tuya» nace con el nombre de la cuenta que la pidió (antes iba a la lista común del dueño).
+- **`mia_delegar` también a una persona** («pásale a Avalon lo de cobrarle a Sol»): tarjeta que espera el clic, DESHACER la devuelve. Las ops de Dimitri en la nube corren ahora como la cuenta que pulsa HACER (antes, como un dueño genérico: no encontraba las tareas con tu nombre).
+- **Pruebas:** `tests/sub-equipo.test.mjs` (lo puro y el `serve.mjs` real: equipo, quién escribe por Telegram, lista para Avalon con proyecto y pasos, `mia_delegar` a una persona) y `cloudflare/tests/dimitri-equipo.test.mjs` (cuentas de verdad con la D1 en memoria: lo que ve cada quien en su Mías).
+
 ## Asignar tareas a las personas de la plataforma y carpetas del Estudio en el teléfono — 26 oct 2026
 
 Pedido del dueño: «no se pueden asignar las tareas a los usuarios que son administradores o aparte del equipo; en Mías deberían estar las tareas que se asignan… yo puedo definir quién va a ser esa tarea, no solo el equipo de agentes sino los usuarios de la plataforma», y «en la versión móvil poder crear carpetas en el Estudio y organizar imágenes fácil».

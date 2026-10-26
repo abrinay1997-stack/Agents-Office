@@ -63,7 +63,7 @@ test('plan: las piezas se proponen y NADA sale hasta ENVIAR A LOS JEFES; entonce
   assert.equal(t.length, 3);
   const foto = t.find((x) => /Fotos/.test(x.title)), llamar = t.find((x) => /Llamar/.test(x.title)), firmar = t.find((x) => /Firmar/.test(x.title));
   assert.equal(foto.dept, 'marketing'); assert.equal(llamar.dept, 'sales'); assert.deepEqual(llamar.bloqueadaPor, [foto.id], 'espera a las fotos'); assert.equal(llamar.prioridad, 'alta');
-  assert.equal(firmar.person, 'Tú'); assert.ok(!firmar.agent, 'lo del dueño no es de un agente');
+  assert.equal(firmar.person, 'Dueno', 'lo «mío» de quien escribió es de SU cuenta (26 oct 2026), no de la lista común del dueño'); assert.ok(!firmar.agent, 'lo del dueño no es de un agente');
   assert.ok(t.every((x) => x.by === 'sub' || x.by === 'you' || x.sub), 'cada una sabe que la propuso Dimitri');
   const g = (await o.admin('GET', '/api/sub')).j.messages;
   assert.ok(g.find((x) => x.id === m.id).plan.tasks.every((x) => x.state === 'sent'));
@@ -94,7 +94,7 @@ test('preguntas con opciones: se dibujan, la respuesta vuelve con las palabras d
   assert.match(r.j.messages[0].text, /Producto: Combo 2x1/); assert.match(r.j.messages[0].text, /Redes: Instagram, Facebook/);
   assert.ok(r.j.answered.answers.length === 2);
   const g = (await o.admin('GET', '/api/sub')).j.messages.find((x) => x.id === m.id); assert.equal(g.plan.answers.length, 2);
-  assert.match(o.m.registro.anthropic[1].messages[0].content, /pregunté: .*Dueño: Producto: Combo 2x1/s, 'el siguiente turno ve qué se preguntó y qué se eligió');
+  assert.match(o.m.registro.anthropic[1].messages[0].content, /pregunté: .*Dueno: Producto: Combo 2x1/s, 'el siguiente turno ve qué se preguntó y qué se eligió');
 });
 
 test('ops: una rutina nueva pide tu OK aunque Dimitri diga que no, se deshace, y saltar/pausar usan las rutas de la oficina', { skip: SALTAR }, async () => {

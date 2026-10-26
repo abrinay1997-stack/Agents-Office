@@ -77,7 +77,7 @@ import { siguiente as siguienteRepeticion, avisosLimite } from './tareas/ritmo.m
 import { crearRutasTareas, despachadorDependencias } from './tareas/rutas.mjs';
 import { icsFeed as icsFeedPuro } from './calendario-ics.mjs';
 import { crearRutasDueno } from './tareas/rutas-dueno.mjs'; // plan D (7 oct 2026): las tareas del dueño — las suyas, tomar, delegar
-import { resumenDueno, DUENO } from './tareas/dueno.mjs';
+import { resumenDueno, DUENO, asignadaA } from './tareas/dueno.mjs';
 import { crearWebhooks } from './tareas/webhooks.mjs';
 import { revisar as revisarPermisos } from './tareas/permisos.mjs';
 import { limpiar as limpiarBloqueos, ciclo as cicloBloqueos, pendientes as bloqueosPendientes } from './tareas/dependencias.mjs';
@@ -873,9 +873,15 @@ function approvedCreatives(text, n = 4) { // the owner's past approved creatives
 }
 // DIM-14: a chat that streams has a run id; «Detener» (POST /api/sub/stop) marks it and stops its Claude — nothing it proposed is kept
 const subRuns = new Set(), subStopped = new Set();
-async function subChat(text, { attach = [], vision: images = [], context = null, answers = null, onText = null, run = null, hoja = null } = {}) {
+/** 26 oct 2026: quién le escribe a Dimitri. La oficina de la computadora no tiene cuentas: es el dueño, salvo que el mensaje llegue por Telegram desde el id de una persona del equipo
+ *  (Ajustes → Equipo). → { nombre: la persona | null, via: 'Telegram' | '' } */
+function subQuien(req) {
+  const tg = /^telegram:(\S+)$/.exec(String(req.headers['x-office-by'] || ''))?.[1], p = tg ? PEOPLE().find(x => x.telegram && String(x.telegram) === tg) : null;
+  return { nombre: p?.name || null, via: tg ? 'Telegram' : '' };
+}
+async function subChat(text, { attach = [], vision: images = [], context = null, answers = null, onText = null, run = null, hoja = null, quien = null } = {}) {
   if (run) subRuns.add(run);
-  try { return await subChatRun(text, { attach, images, context, answers, onText, run, hoja }); } finally { if (run) { subRuns.delete(run); subStopped.delete(run); } }
+  try { return await subChatRun(text, { attach, images, context, answers, onText, run, hoja, quien }); } finally { if (run) { subRuns.delete(run); subStopped.delete(run); } }
 }
 /* ---------- banco de presets F3 (E7): Dimitri y los lotes ---------- */
 // Un Excel o un CSV adjunto al chat sube por /api/media/lotes/hoja (lotes.leerHoja la guarda 2 h); aquí queda su RESUMEN, que Dimitri lee
@@ -896,7 +902,7 @@ function loteCtx() { // lo que estudio-lote.parseLote necesita del Estudio de ve
     compile: pedido => presets.compilar(pedido).plan, models: media.models(), budget: media.budget(), max: +L.max || 100, muestraDesde: +L.muestraDesde || 10, muestra: +L.muestra || 3 };
 }
 const loteUno = id => { try { return lotes.uno(id); } catch { return null; } };
-async function subChatRun(text, { attach, images, context, answers, onText, run, hoja = null }) {
+async function subChatRun(text, { attach, images, context, answers, onText, run, hoja = null, quien = null }) {
   const st = sub.load(DATA); refreshSkills();
   const list = load(), index = vaultIndex();
   // V4.11 (DIM-06): the owner answered Dimitri's questions with the buttons — the message says what was chosen, and the question keeps it
@@ -920,11 +926,13 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
   const studioBlock = studioish ? estudioPlan.studioPromptBlock({ models: media.models(), budget: media.budget(), folders: media.folders(), attach: attach.map(id => { const it = media.item(id) || {}; return { id, prompt: it.prompt, folder: it.folder ? media.folderOf(it.folder)?.name : null }; }), approved, voices, ask: text, defaults: k => media.defaultModel(k) }) + (bancoBlock ? '\n\n' + bancoBlock : '') : '';
   const recent = sub.recentText(list, AGENTS), viewing = dimitriViewing(context, list), notes = businessContext(index) + (read.length ? '\n\n' + contextText(index, read) : '') + extra; // the DATA, read again by the injection check below
   const win = sub.historyWindow(st.messages, { name: DEPUTY, depts: DEPTS }, 12); // sesiones largas: the last turns, bounded; what does not fit goes to <hilo>
+  const equipoTxt = sub.equipoText({ people: PEOPLE(), yo: quien?.nombre ? { nombre: quien.nombre } : null, tasks: list, via: quien?.via, depts: DEPTS });
   const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => `${DEPTS[k].name} (${k})`),
     status: sub.statusText(list, AGENTS, DEPTS), office: dimitriOffice(list), recent, notes,
-    studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing, hilo: sub.hiloText(st.messages, st.hilo, { depts: DEPTS, shown: win.shown }) });
+    studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing, hilo: sub.hiloText(st.messages, st.hilo, { depts: DEPTS, shown: win.shown }),
+    equipo: equipoTxt }); // 26 oct 2026: las personas del equipo y quién escribe
   const convo = win.text; // DIM-05: with what Dimitri asked and what the owner chose · DIM-18: each creative's prompt, settings and files
-  const userMsg = (convo ? convo + '\n' : '') + `Dueño: ${text}${H ? ` [adjuntó la hoja «${H.nombre}» (id ${H.id}, ${H.filas} filas): la ves en <estudio>]` : ''}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${DEPUTY} (solo JSON):`;
+  const userMsg = (convo ? convo + '\n' : '') + `${quien?.nombre || 'Dueño'}: ${text}${H ? ` [adjuntó la hoja «${H.nombre}» (id ${H.id}, ${H.filas} filas): la ves en <estudio>]` : ''}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${DEPUTY} (solo JSON):`;
   let shown = ''; const stopped = () => !!run && subStopped.has(run);
   const live = onText ? raw => { const r = replyFromPartial(raw); if (r.reply) shown = r.reply; onText(r); } : null; // DIM-14: only the «reply» being written reaches the page
   const opts = { maxTokens: 6000, timeout: 180000, images: images.length ? images : null, kind: 'dimitri', ...(live ? { onText: live, stopKey: run } : {}) }; // DIM-21: his own line in «Costos y retorno»
@@ -937,14 +945,14 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
   };
   let out = await askLive(userMsg);
   if (stopped()) return halt();
-  let plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
+  let plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS, personas: sub.nombresDe(PEOPLE()) });
   if (plan.bad) { // DIM-07: the JSON came back broken beyond repair — once more, asked for less (never the raw JSON in the chat)
     shown = ''; if (live) onText({ reply: '', mode: null, retry: true });
     out = await askLive(userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)').catch(() => '');
     if (stopped()) return halt();
-    plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS });
+    plan = sub.parsePlan(out, { depts: DEPTS, agents: AGENTS, personas: sub.nombresDe(PEOPLE()) });
   }
-  const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes, hoja: H ? hojaTexto(H) : '', lotes: studioish ? estudioLote.lotesText(lotesL) : '' }, safety.injectionIn); // the sheet as Dimitri reads it (its name, headers and rows) and the lotes' names and reasons (an agent may have made one) // an image, a task's result (mail, webhooks), what is open, a note: hidden orders mark the message and take its ops and actions away
+  const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes, equipo: equipoTxt, hoja: H ? hojaTexto(H) : '', lotes: studioish ? estudioLote.lotesText(lotesL) : '' }, safety.injectionIn); // the sheet as Dimitri reads it (its name, headers and rows) and the lotes' names and reasons (an agent may have made one) // an image, a task's result (mail, webhooks), what is open, a note: hidden orders mark the message and take its ops and actions away
   let studio = null;
   let lotePreguntas = [];
   if (plan.mode === 'estudio') {
@@ -968,12 +976,12 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
     plan.mode = studio ? 'estudio' : 'pregunta';
     if (!plan.reply || /GENERAR|PROBAR/.test(plan.reply)) plan.reply = 'Para preparar el lote me falta un dato.';
   }
-  const parsedOps = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe }) : { ops: [], motivos: [] };
+  const parsedOps = plan.ops.length && !shield ? sub.parseOps(plan.ops, { depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: list, piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe, personas: sub.nombresDe(PEOPLE()) }) : { ops: [], motivos: [] };
   const ops = parsedOps.ops, opsFuera = sub.motivosText(parsedOps.motivos); // 9 oct 2026: what could not be read is said, never dropped in silence
-  const u = sub.message('user', text, { ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
+  const u = sub.message('user', text, { ...(quien?.nombre ? { por: quien.nombre } : {}), ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.lote ? 'Te propongo este lote. Nada se gasta hasta que pulses PROBAR o GENERAR.' : studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : studio.actions.length ? 'Esto puedo hacer con el lote; pulsa HACER si te parece.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
   const reply = (plan.reply || fallback) + (opsFuera ? '\n\n' + opsFuera : '') + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
-  const m = sub.message('sub', reply, { mode: plan.mode, ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
+  const m = sub.message('sub', reply, { mode: plan.mode, ...(quien?.nombre ? { para: quien.nombre } : {}), ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   const st2 = sub.load(DATA); // re-read, like subSend: GENERAR (subStudio) and a job's end (subJobDone) may have written while Claude thought
   if (picked) { const q = st2.messages.find(x => x.id === answers.msg); if (q?.plan) q.plan.answers = picked.answers; }
   st2.messages.push(u, m); sub.save(DATA, st2, { depts: DEPTS });
@@ -1271,7 +1279,8 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
     if (t.state !== 'proposed') continue;
     const e = byI.get(t.i) || {};
     if (e.include === false) { t.state = 'skipped'; continue; }
-    if (e.dept && ((DEPTS[e.dept] && e.dept !== 'brain') || e.dept === 'dueno')) t.dept = e.dept; // plan D: «Tú» es una opción más
+    if (e.dept === 'persona') { const quien = sub.personaDe(e.persona, sub.nombresDe(PEOPLE())); if (quien) { t.dept = 'persona'; t.persona = quien; } } // 26 oct 2026: otra persona del equipo
+    else if (e.dept && ((DEPTS[e.dept] && e.dept !== 'brain') || e.dept === 'dueno')) { t.dept = e.dept; delete t.persona; } // plan D: «Tú» es una opción más
     if (typeof e.instruction === 'string' && e.instruction.trim()) t.instruction = e.instruction.trim().slice(0, 4000);
     if (typeof e.team === 'boolean') t.team = e.team;
     if (e.at === null) t.at = null; else if (typeof e.at === 'number' && e.at > Date.now()) t.at = e.at;
@@ -1289,14 +1298,21 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
     if (proyecto) m.plan.proyecto = { ...pp, id: proyecto.id, nombre: proyecto.nombre };
   }
   const ids = new Map(todo.map(t => [t.i, nid()]));
-  const paraTi = t => altaTarea({ person: DUENO, title: t.title, text: t.instruction, why: t.why, by: 'sub', sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite || (t.at ? `${localDay(t.at)}T${new Date(t.at).toTimeString().slice(0, 5)}` : undefined), proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false }); // plan D: lo que hace el dueño en persona, a su lista
-  const made = await Promise.all(todo.map(t => (t.dept === 'dueno' ? Promise.resolve().then(() => paraTi(t)) : newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) } }))
+  const nombres = sub.nombresDe(PEOPLE()), yoMismo = m.para && sub.personaDe(m.para, nombres) ? m.para : DUENO; // 26 oct 2026: quien escribió el pedido (por Telegram, una persona del equipo); si no, el dueño
+  const comunes = t => ({ title: t.title, text: t.instruction, why: t.why, by: 'sub', sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite || (t.at ? `${localDay(t.at)}T${new Date(t.at).toTimeString().slice(0, 5)}` : undefined), proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean), ...(t.pasos?.length ? { pasos: t.pasos } : {}) });
+  const paraPersona = t => { // 26 oct 2026: una pieza para otra persona del equipo: es de ella, y quien la envió la sigue en Delegadas; ella recibe el aviso
+    const quien = sub.personaDe(t.persona, nombres); if (!quien) throw new Error('esa persona ya no está en el equipo');
+    const task = altaTarea({ ...asignadaA(quien, { por: yoMismo, nota: String(t.why || '').slice(0, 600) }), ...comunes(t) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false });
+    tellPerson(quien, `👤 ${yoMismo === DUENO ? 'El dueño' : yoMismo} te asignó «${task.title}»${t.why ? ': ' + String(t.why).slice(0, 300) : ''}.`); return task;
+  };
+  const paraTi = t => altaTarea({ person: yoMismo, ...comunes(t) }, { id: ids.get(t.i), por: 'dimitri', arrancar: false }); // plan D: lo que hace quien escribe en persona, a su lista
+  const made = await Promise.all(todo.map(t => (t.dept === 'dueno' ? Promise.resolve().then(() => paraTi(t)) : t.dept === 'persona' ? Promise.resolve().then(() => paraPersona(t)) : newTask({ dept: t.dept, text: t.instruction, team: t.team, at: t.at, by: 'sub', id: ids.get(t.i), por: 'dimitri', extra: { title: t.title, sub: { msg: m.id, i: t.i }, prioridad: t.prioridad, limite: t.limite, proyecto: proyecto?.id, bloqueadaPor: (t.espera || []).map(x => ids.get(x)).filter(Boolean) } }))
     .then(task => { t.state = 'sent'; t.taskId = task.id; t.agent = task.agent; return task; })
     .catch(err => { t.state = 'failed'; t.error = err.message; return null; })));
   const st2 = sub.load(DATA); const i = st2.messages.findIndex(x => x.id === m.id); if (i >= 0) st2.messages[i] = m; // re-read: another message may have landed while routing
   const sent = made.filter(Boolean);
   const esperan = sent.filter(t => t.bloqueadaPor?.length).length;
-  st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => (t.person === DUENO ? 'tu lista (Tareas → Mías)' : DEPTS[t.dept]?.name || t.dept)))].join(', ')}${proyecto ? `, en el proyecto «${proyecto.nombre}»` : ''}.${esperan ? ` ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} a que termine otra antes de empezar.` : ''} Te aviso aquí cómo van (y en Tareas, H).${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
+  st2.messages.push(sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${[...new Set(sent.map(t => (t.person === DUENO ? 'tu lista (Tareas → Mías)' : t.person ? `la lista de ${t.person}` : DEPTS[t.dept]?.name || t.dept)))].join(', ')}${proyecto ? `, en el proyecto «${proyecto.nombre}»` : ''}.${esperan ? ` ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} a que termine otra antes de empezar.` : ''} Te aviso aquí cómo van (y en Tareas, H).${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`));
   sub.save(DATA, st2);
   return { ok: true, message: m, tasks: sent, messages: st2.messages.slice(-2) };
 }
@@ -1304,7 +1320,7 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
    with the owner's click (POST /api/sub/ops), checked again against the office as it is now, and undoable for UNDO_MS (POST /api/sub/ops/undo).
    Never approve, schedule in Meta or publish: a piece is born a draft and a moved approved piece loses its OK (contenido.guardar). */
 const OPS_UNDO_MS = 30000;
-const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe });
+const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe, personas: sub.nombresDe(PEOPLE()) });
 /* 9 oct 2026 (revisión de control): the same executor for Dimitri's cards and for an assistant connected by MCP (POST /api/oficina/accion,
    oficina-mcp.mjs) — the rules of the routes themselves (tareas/rutas.mjs, tareas/rutas-dueno.mjs, contenido/rutas.mjs), never a copy.
    q.por says who: 'dimitri' (the owner pressed HACER on his card) or 'asistente' (the owner's own AI client). Nothing here approves,
@@ -1357,8 +1373,10 @@ async function runOp(o, { por = 'dimitri' } = {}) {
   if (o.type === 'tarea_repetir') { const src = load().find(x => x.id === o.id); if (!src) throw new Error('esa tarea ya no está'); const t = repetirTarea(src, por); o.task = t.id; o.undo = { task: t.id }; return; }
   if (o.type === 'mia_delegar') {
     const prev = load().find(x => x.id === o.id);
-    const r = await duenoRoutes.delegar(o.id, { a: 'agente', dept: o.dept, ...(o.agent ? { agente: o.agent } : {}), ...(o.nota ? { nota: o.nota } : {}) }, q);
-    if (r.error) throw new Error(r.error); o.agent = r.a; o.agentName = agentName(r.a); o.undo = { deAgente: prev?.deAgente || null }; return;
+    const r = o.persona // 26 oct 2026: a una persona del equipo (queda en su lista y la sigues en Delegadas)
+      ? await duenoRoutes.delegar(o.id, { a: 'persona', persona: o.persona, ...(o.nota ? { nota: o.nota } : {}) }, q)
+      : await duenoRoutes.delegar(o.id, { a: 'agente', dept: o.dept, ...(o.agent ? { agente: o.agent } : {}), ...(o.nota ? { nota: o.nota } : {}) }, q);
+    if (r.error) throw new Error(r.error); if (!o.persona) { o.agent = r.a; o.agentName = agentName(r.a); } o.undo = { deAgente: prev?.deAgente || null }; return;
   }
   if (o.type === 'mia_hecha') { const r = tareasRoutes.cambiarEstado(o.id, 'done', q); if (r.error) throw new Error(r.error); o.undo = { reabrir: true, at: Date.now() }; return; }
   if (o.type === 'anuncio_borrador') { // Fase A3: un BORRADOR en la oficina, nada en Meta (crearlo allí, en pausa, es un clic del dueño en Anuncios)
@@ -1426,7 +1444,7 @@ async function subOpsRun(msgId, items) {
     if (e.include === false) { o.state = 'skipped'; continue; }
     const pick = k => (e[k] !== undefined ? { [k]: e[k] } : {}); // the owner's edits on the card, checked again like the first time
     const base = { ...o }; if (o.type === 'rutina_crear' && !o.titled) delete base.title; // a title Dimitri did not give is the router's to write
-    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent'), ...pick('prioridad'), ...pick('limite'), ...pick('dept'), ...pick('nota'), ...pick('dias'), ...pick('pide'), ...pick('valor') }], { ...opsContext(), owner: true }).ops; // owner: the card's «pide tu OK» is the owner's to untick
+    const [v] = sub.parseOps([{ ...base, ...pick('when'), ...pick('needsOk'), ...pick('text'), ...pick('at'), ...pick('fecha'), ...pick('hora'), ...pick('titulo'), ...pick('texto'), ...pick('formato'), ...pick('redes'), ...pick('agent'), ...pick('prioridad'), ...pick('limite'), ...pick('dept'), ...pick('persona'), ...pick('nota'), ...pick('dias'), ...pick('pide'), ...pick('valor') }], { ...opsContext(), owner: true }).ops; // owner: the card's «pide tu OK» is the owner's to untick
     if (!v) { o.state = 'failed'; o.error = 'ya no se puede: algo cambió en la oficina, la hora ya pasó o el horario no está completo'; failed++; continue; }
     Object.assign(o, v, { k: o.k });
     try {
@@ -3072,7 +3090,7 @@ const server = http.createServer(async (req, res) => {
       const ans = b.answers && typeof b.answers === 'object' && typeof b.answers.msg === 'string' && Array.isArray(b.answers.picks) ? { msg: b.answers.msg.slice(0, 40), picks: b.answers.picks.slice(0, 6) } : null; // V4.11 (DIM-06): the options the owner picked
       const hoja = typeof b.hoja === 'string' && b.hoja ? b.hoja.slice(0, 40) : null; // F3: un Excel o un CSV ya leído por /api/media/lotes/hoja
       if (hoja && !hojaChat(hoja)) return json(res, 400, { error: 'esa hoja ya no está en memoria: vuelve a adjuntarla' });
-      const said = text || (hoja ? 'Mira esta hoja.' : attach.length ? 'Mira esto.' : 'Mira estas imágenes.'), how = { attach, vision: vis.images, context, answers: ans, hoja };
+      const said = text || (hoja ? 'Mira esta hoja.' : attach.length ? 'Mira esto.' : 'Mira estas imágenes.'), how = { attach, vision: vis.images, context, answers: ans, hoja, quien: subQuien(req) };
       if (b.stream !== true) return json(res, 200, await subChat(said, how)); // Telegram and older pages: one JSON at the end
       // DIM-14: NDJSON in chunks — {type:'start', run} · {type:'reply', text, mode} while it writes · {type:'done', messages…} | {type:'error', error}
       const run = 'r' + nid(); res.writeHead(200, { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
