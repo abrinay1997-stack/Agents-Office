@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 700" width="360" height="700" role="img" aria-label="Hoja inferior de conectores"><defs><style>text{font-family:Inter,Arial,sans-serif;fill:#151414}.m{fill:#6b6963;font-size:11px}.b{font-weight:700}.c{fill:#FDFFF8;stroke:#151414;stroke-width:1.5}.k{fill:#151414}.w{fill:#FDFFF8}.line{stroke:#d9d6cc}</style></defs>
+<rect x="2" y="2" width="356" height="696" rx="36" fill="#b9b7ae" stroke="#151414" stroke-width="3"/>
+<rect x="8" y="150" width="344" height="540" rx="28" fill="#FDFFF8" stroke="#151414" stroke-width="2"/><rect x="154" y="160" width="52" height="5" rx="3" fill="#bdb9ae"/>
+<text x="24" y="196" font-size="18" class="b">Conectores</text><text x="336" y="196" class="m" text-anchor="end">6 de 8 · Volver a comprobar</text>
+<g font-size="15">
+<rect x="16" y="214" width="328" height="64" rx="14" class="c"/><circle cx="48" cy="246" r="18" fill="#e7f4ee" stroke="#1d8a63"/><text x="48" y="251" font-size="11" text-anchor="middle">Gm</text><text x="78" y="242" class="b">Gmail</text><text x="78" y="262" class="m">Correos, Ventas · lee y borradores</text><circle cx="324" cy="246" r="6" fill="#1d8a63"/>
+<rect x="16" y="286" width="328" height="64" rx="14" class="c"/><circle cx="48" cy="318" r="18" fill="#e7f4ee" stroke="#1d8a63"/><text x="48" y="323" font-size="11" text-anchor="middle">Cal</text><text x="78" y="314" class="b">Google Calendar</text><text x="78" y="334" class="m">Operaciones · lee y escribe</text><circle cx="324" cy="318" r="6" fill="#1d8a63"/>
+<rect x="16" y="358" width="328" height="64" rx="14" fill="#fbe3d4" stroke="#B3261E" stroke-width="1.5"/><circle cx="48" cy="390" r="18" fill="#fff" stroke="#B3261E"/><text x="48" y="395" font-size="11" text-anchor="middle">St</text><text x="78" y="386" class="b">Stripe</text><text x="78" y="406" class="m" style="fill:#7A2E0B">Falló la comprobación · Reintentar</text><circle cx="324" cy="390" r="6" fill="#B3261E"/>
+<rect x="16" y="430" width="328" height="64" rx="14" fill="none" stroke="#6b6963" stroke-dasharray="4 4"/><circle cx="48" cy="462" r="18" fill="none" stroke="#6b6963" stroke-dasharray="3 3"/><text x="78" y="458" class="b">Slack</text><text x="78" y="478" class="m">No conectado · Cómo conectarlo</text>
+</g>
+<text x="24" y="534" class="m">Toca una fila: herramientas (lee · envía · gasta), mesas y cómo conectarlo.</text>
+<rect x="24" y="620" width="312" height="48" rx="24" class="k"/><text x="180" y="650" text-anchor="middle" font-size="15" style="fill:#FDFFF8" class="b">Cerrar</text>
+</svg>

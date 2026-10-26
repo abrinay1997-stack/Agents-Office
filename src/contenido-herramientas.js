@@ -7,7 +7,7 @@
 //   abrirPlantillas({ host, datos, esc, modal, onUsar })
 //      DESDE UNA PLANTILLA: las plantillas de publicación (notas del Cerebro, Contenido/Plantillas); «Usar» abre una pieza nueva con su
 //      forma y su texto, en el siguiente hueco libre.
-import { RED, FICON } from './pieza-base.js';
+import { RED, FICON, nbRed } from './pieza-base.js';
 import { nombreFormato } from './contenido-reglas.js';
 import { numeroCorto } from './contenido-publicadas.js';
 import { diaCorto, SEMANAS_SIN_REPETIR } from './contenido-llenar.js';
@@ -15,7 +15,7 @@ import { diaCorto, SEMANAS_SIN_REPETIR } from './contenido-llenar.js';
 const pad = n => String(n).padStart(2, '0');
 const hoyYmd = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 const FUENTE = { metricool: 'su mejor hora según Metricool', propia: 'su mejor hora según lo que ya publicaste', mixta: 'su mejor hora según Metricool y lo ya publicado', ejemplo: 'su mejor hora (de ejemplo)', ninguna: 'las 18:00 (aún no hay mejores horas)' };
-const badges = redes => redes.map(r => `<b class="pz-nb ${r}" aria-hidden="true">${RED[r]?.short || r}</b>`).join('');
+const badges = redes => redes.map(r => nbRed(r, { solo: true })).join('');
 const nombresRedes = redes => redes.map(r => RED[r]?.name || r).join(' y ');
 
 /** La caja común: un diálogo sobre Contenido, con su foco atrapado (modal de la página) y Esc para cerrar. */
@@ -57,7 +57,7 @@ export function abrirLlenar({ host, datos, esc, modal, redes = ['instagram', 'fa
         <ul>${p.vuelven.map(v => `<li><span class="ll-vt">${badges(v.redes)}</span><span class="ll-vm"><b>${esc((v.titulo || v.texto || 'sin título').slice(0, 70))}</b><small>Salió el ${esc(diaCorto(v.ultima))} · ${numeroCorto(v.resultado.alcance)} de alcance · ${numeroCorto(v.resultado.interacciones)} interacciones</small></span></li>`).join('')}</ul></section>`
       : `<p class="pz-hn ll-novu">Nada puede volver todavía: hace falta lo ya publicado con sus cifras (Analíticas) y que haya salido hace más de ${SEMANAS_SIN_REPETIR} semanas.</p>`;
     D.body.innerHTML = `<div class="ll-opts"><label>Días <select class="pz-sel" data-ll="dias"><option value="7"${dias === 7 ? ' selected' : ''}>los próximos 7</option><option value="14"${dias === 14 ? ' selected' : ''}>los próximos 14</option></select></label>
-        <div class="ll-redes" role="group" aria-label="En qué redes">${redes.map(r => `<button type="button" class="pz-net" data-ll-red="${r}" aria-pressed="${sel.has(r)}"><b class="pz-nb ${r}" aria-hidden="true">${RED[r]?.short || r}</b> ${esc(RED[r]?.name || r)}</button>`).join('')}</div></div>
+        <div class="ll-redes" role="group" aria-label="En qué redes">${redes.map(r => `<button type="button" class="pz-net" data-ll-red="${r}" aria-pressed="${sel.has(r)}">${nbRed(r)} ${esc(RED[r]?.name || r)}</button>`).join('')}</div></div>
       <p class="ll-intro">${n ? `<b>${n} ${n === 1 ? 'día' : 'días'}</b> sin nada en ${esc(nombresRedes(rs))}. Cada hueco va a ${esc(FUENTE[p.hora?.fuente] || FUENTE.ninguna)}; cámbiala si quieres.` : `No hay huecos en ${dias === 7 ? 'los próximos 7 días' : 'los próximos 14 días'}: todos tienen algo en ${esc(nombresRedes(rs))}.${dias === 7 ? ' Prueba con 14.' : ''}`}</p>
       ${n ? `<ol class="ll-list">${p.huecos.map(fila).join('')}</ol>` : ''}
       ${vu}

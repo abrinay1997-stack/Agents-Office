@@ -6,6 +6,7 @@ import { cargarFabrica } from './presets/fabrica.mjs';
 import { construirExtra, CSS_APARTE } from './build-extra.mjs';
 import { construirTareas, CSS_TAREAS } from './build-tareas.mjs'; // plan T2 (6 oct 2026): la vista Tareas, también aparte
 import { construirAnuncios, CSS_ANUNCIOS } from './build-anuncios.mjs'; // Fase A1 (9 oct 2026): la vista Anuncios, también aparte
+import { construirMovil, construirMovilD, CSS_MOVIL, CSS_MOVIL_D } from './build-movil.mjs'; // 25 oct 2026: la versión móvil, también aparte
 import { construirPieza, CSS_PIEZA, SOLO_AQUI as SOLO_PIEZA } from './build-pieza.mjs'; // C1 (8 oct 2026): el editor de una pieza de Contenido, también aparte
 await buildBrainGraph(); // V3.6: bake the vault's wiki-link graph into src/braingraph.js
 
@@ -21,7 +22,9 @@ const cssCorto = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ').re
 const extra = await construirExtra({ cssCorto });
 const tareasV = await construirTareas({ cssCorto }); // dist/tareas-vista.js: la página la trae al abrir Tareas (src/tareas-carga.js)
 const anunciosV = await construirAnuncios({ cssCorto }); // dist/anuncios-vista.js: la página la trae al abrir Anuncios (src/anuncios-carga.js)
-const piezaE = await construirPieza({ cssCorto }); // dist/pieza-editor.js: la página lo trae al abrir Contenido (src/pieza-carga.js)
+const piezaE = await construirPieza({ cssCorto });
+const movilD = await construirMovilD({ cssCorto }); // dist/movil-d.js: Contenido, Analíticas y Anuncios de la versión móvil, que se traen al abrirlos (src/movil/vistas/diferidas.js)
+const movilV = await construirMovil({ cssCorto }); // dist/movil.js: la página lo trae solo en un teléfono (src/movil-carga.js) // dist/pieza-editor.js: la página lo trae al abrir Contenido (src/pieza-carga.js)
 const res = await build({
   entryPoints: ['src/main.js'],
   bundle: true,
@@ -41,6 +44,8 @@ const js = res.outputFiles[0].text;
   if (coladoT.length) throw new Error(`la página volvió a llevar la vista Tareas (${coladoT.join(', ')}): impórtala solo desde src/tareas/vista.js y ábrela con src/tareas-carga.js`);
   const coladoA = dentro.filter(f => anunciosV.aparte.includes(f) || f.startsWith('src/anuncios/'));
   if (coladoA.length) throw new Error(`la página volvió a llevar la vista Anuncios (${coladoA.join(', ')}): impórtala solo desde src/anuncios/vista.js y ábrela con src/anuncios-carga.js`);
+  const coladoM = dentro.filter(f => movilV.aparte.includes(f) || movilD.aparte.includes(f) || f.startsWith('src/movil/'));
+  if (coladoM.length) throw new Error(`la página volvió a llevar la versión móvil (${coladoM.join(', ')}): impórtala solo desde src/movil/index.js y ábrela con src/movil-carga.js`);
   const coladoP = dentro.filter(f => SOLO_PIEZA.includes(f));
   if (coladoP.length) throw new Error(`la página volvió a llevar el editor de piezas (${coladoP.join(', ')}): lo pequeño va en src/pieza-base.js; el editor, solo por src/pieza-carga.js`);
 }
@@ -49,10 +54,11 @@ const js = res.outputFiles[0].text;
 // Banco de presets F2 (1 oct 2026): sin sus comentarios ni espacios de más (~36 KB), para que la página quepa en su presupuesto (check.mjs,
 // INF-09) con la pestaña Lotes. Solo comentarios y blancos: los espacios que separan selectores (`.lt :is(…)`) y los de los valores quedan.
 // (cssCorto, arriba). Los de CSS_APARTE no: viajan con dist/estudio-extra.js.
-const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css') && !CSS_APARTE.includes(f) && !CSS_TAREAS.includes(f) && !CSS_ANUNCIOS.includes(f) && !CSS_PIEZA.includes(f)).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
+const vistasCss = existsSync('src/css') ? readdirSync('src/css').filter(f => f.endsWith('.css') && !CSS_APARTE.includes(f) && !CSS_TAREAS.includes(f) && !CSS_ANUNCIOS.includes(f) && !CSS_PIEZA.includes(f) && !CSS_MOVIL.includes(f) && !CSS_MOVIL_D.includes(f)).sort().map(f => `/* ---- src/css/${f} ---- */\n${cssCorto(readFileSync('src/css/' + f, 'utf8'))}`).join('\n') : '';
 // Banco de presets F5 (1 oct 2026): el <style> de shell.html también llega sin sus comentarios (~16 KB; los blancos y lo demás,
 // tal cual) para que el compilador de video quepa en el presupuesto sin subir el tope. El marcador se queda para el reemplazo.
-const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => `<style>${css.replace(/\/\*(?! <css-vistas> \*\/)[\s\S]*?\*\//g, '')}</style>`);
+// 25 oct 2026: y sin la sangría ni los saltos de línea (cssCorto, ~22 KB): la página tenía 5 KB de margen y cada mejora de la interfaz se los comía. Antes del marcador, que se queda.
+const sinComentarios = s => s.replace(/<style>([\s\S]*?)<\/style>/, (m, css) => `<style>${css.split('/* <css-vistas> */').map(cssCorto).join('/* <css-vistas> */')}</style>`);
 const shell = sinComentarios(readFileSync('src/shell.html', 'utf8')).replace('/* <css-vistas> */', () => vistasCss);
 const html = shell.replace('<!--APP-->', () => `<script>${js}</script>`);
 mkdirSync('dist', { recursive: true });
@@ -66,9 +72,13 @@ escribirEntero('dist/estudio-extra.js', extra.js);
 escribirEntero('dist/tareas-vista.js', tareasV.js); // la vista Tareas, antes que la página por la misma razón
 escribirEntero('dist/anuncios-vista.js', anunciosV.js); // la vista Anuncios, igual
 escribirEntero('dist/pieza-editor.js', piezaE.js); // el editor de piezas de Contenido, igual
+escribirEntero('dist/movil.js', movilV.js); // la versión móvil, igual
+escribirEntero('dist/movil-d.js', movilD.js); // y su paquete de Contenido, Analíticas y Anuncios
 escribirEntero('dist/command-centre-v2.html', html);
 // dictado por voz (fase 10): un script suelto junto a la página (src/dictado-carga.js lo pide solo si el navegador sabe dictar); sin versión: no comparte nada con la página
 escribirEntero('dist/dictado.js', (await build({ entryPoints: ['src/dictado-app.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text);
+// Ajustes: «Restablecer oficina» y «Revisar lo que leí» (25 oct 2026): otro script suelto; el servidor lo añade al final de la página (serve.mjs en local, el Worker en la nube), así la página no crece
+escribirEntero('dist/ajustes-extra.js', (await build({ entryPoints: ['src/ajustes-extra.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' })).outputFiles[0].text);
 
 // dev variant with external script for faster iteration
 mkdirSync('dist', { recursive: true });

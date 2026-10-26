@@ -40,7 +40,7 @@ export async function salidaRutinas(db, agents, now = Date.now()) {
 const idUnico = (base, lista) => { let id = base || 'routine', n = 2; while (lista.some(r => r.id === id)) id = `${base}-${n++}`; return id; };
 
 /** Una frase (o el selector de REPETIR) → una rutina. El enrutador (IA) pone agente y título, como en la local. → { ok, routine, why, guessed } o { error } */
-export async function crearRutina(db, { agents, enrutar }, { dept, text, when, agent, needsOk, model, effort }) {
+export async function crearRutina(db, { agents, enrutar }, { dept, text, when, agent, needsOk, model, effort, team }) {
   let taskText = String(text || '').trim(), w = when, parsed = null;
   if (!w) {
     parsed = parseWhen(taskText);
@@ -54,7 +54,7 @@ export async function crearRutina(db, { agents, enrutar }, { dept, text, when, a
   const { routines } = await cargarRutinas(db, agents);
   const r = await enrutar(dept, taskText);
   const a = agent && agents.find(x => x.id === agent && x.department === dept) ? agent : r.agent;
-  const v = R.validate({ id: idUnico(slug(r.title).slice(0, 40), routines), dept, agent: a, title: r.title, text: taskText, when: w, needsOk: typeof needsOk === 'boolean' ? needsOk : r.needsOk, plan: r.plan, model: normModel(model) || undefined, effort: normEffort(effort) || undefined }, agents, routines);
+  const v = R.validate({ id: idUnico(slug(r.title).slice(0, 40), routines), dept, agent: a, title: r.title, text: taskText, when: w, needsOk: typeof needsOk === 'boolean' ? needsOk : r.needsOk, plan: r.plan, model: normModel(model) || undefined, effort: normEffort(effort) || undefined, team: team === true ? true : undefined }, agents, routines);
   if (v.problems.length) return { error: v.problems.join('; ') };
   const s = v.routine;
   await guardarFila(db, COLECCION, s.id, { id: s.id, dept: s.dept, agent: s.agent, title: s.title, text: s.text, when: s.when, needsOk: s.needsOk, paused: s.paused, ...(s.team ? { team: true } : {}), ...(s.model ? { model: s.model } : {}), ...(s.effort ? { effort: s.effort } : {}), ...(s.plan ? { plan: s.plan } : {}) }, Date.now());

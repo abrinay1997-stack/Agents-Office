@@ -84,7 +84,7 @@ test('HERRAMIENTAS INTERNAS: por departamento, ninguna aprueba ni publica, y se 
   assert.ok(e.defs.every(d => d.servidor === 'tareas') && m.defs.some(d => d.servidor === 'contenido') && m.defs.some(d => d.servidor === 'estudio'));
   for (const d of [...e.defs, ...m.defs]) { assert.match(d.nombre, /^mcp__(tareas|contenido|estudio)__[a-z_]+$/); assert.ok(!/aprob|publicar|programar|pagar|borrar|enviar/.test(d.nombre), d.nombre); }
   assert.ok(!m.defs.some(d => /bandeja|ocultar/.test(d.nombre)), 'la Bandeja no se ofrece (fase 7)');
-  assert.ok(m.omitidas.includes(OMITIDAS.anuncios) && m.omitidas.includes(OMITIDAS.habilidades));
+  assert.ok(m.omitidas.includes(OMITIDAS.anuncios) && !('habilidades' in OMITIDAS), 'la Biblioteca ya está en la nube: no se anuncia como faltante');
   assert.ok(m.defs.every(d => d.esquema && d.esquema.type === 'object'));
 });
 
@@ -130,7 +130,7 @@ test('RUTAS: /api/costs, /api/costs.csv, /api/quality y /api/status contestan co
   const c = (await web.admin('GET', '/api/costs')).j;
   for (const k of ['month', 'usd', 'budget', 'runs', 'tasksDone', 'perTask', 'hours', 'prices', 'priceSources', 'config', 'provider', 'subscription', 'publicidad']) assert.ok(k in c, k);
   assert.ok(c.usd > 0 && c.runs === 1 && c.tasksDone === 1);
-  const u = (await web.admin('GET', '/api/usage')).j; assert.equal(u.ok, true); assert.equal(u.source, 'office'); assert.ok(u.window.tokens > 0 && u.window.runs === 1, 'el medidor de la esquina cuenta lo de las últimas 5 horas (antes: 501 y «USO NO DISPONIBLE»)');
+  const u = (await web.admin('GET', '/api/usage')).j; assert.equal(u.ok, true); assert.equal(u.source, 'nube'); assert.ok(u.today.tokens > 0 && u.today.runs === 1 && u.today.usd > 0, 'el medidor de la esquina cuenta el gasto de HOY (no hay ventana de 5 h en la nube)'); assert.ok(u.month.usd >= u.today.usd); assert.equal(u.month.percent, null, 'sin tope del mes no hay porcentaje'); assert.equal('window' in u, false, 'nada de «se reinicia»');
   const csv = await web.admin('GET', '/api/costs.csv'); assert.equal(csv.status, 200); assert.match(csv.texto, new RegExp(t.id.slice(0, 4)) || /./);
   const q = (await web.admin('GET', '/api/quality')).j; assert.deepEqual(Object.keys(q).sort(), ['agents', 'drops', 'reviews', 'routing']); assert.ok(q.agents.some(a => a.id === 'elead'));
   const s = (await web.admin('GET', '/api/status')).j; assert.deepEqual(Object.keys(s).sort(), ['at', 'checks', 'notices', 'overall', 'unread']);

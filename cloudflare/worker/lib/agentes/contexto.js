@@ -7,6 +7,7 @@ import * as knowledge from '../../../../knowledge.mjs';
 import * as memory from '../../../../memory.mjs';
 import { agentBrief, instruccionesBase, cifrasLine, TAREAS_TEXT, CONTENIDO_TEXT, modeLineFor, pasosLine, reanudaLine } from '../../../../agente-core.mjs';
 import { leerDoc, listarFilas, guardarDoc } from '../almacen.js';
+import { cargarBibliotecaNube, textoParaAgente, contextoMarketingTexto } from '../biblioteca.js';
 
 export const DOC_MEMORIA = 'memoria';
 export const MOC = { emails: 'MOC-Emails', sales: 'MOC-Sales', marketing: 'MOC-Marketing', ops: 'MOC-Operations', fin: 'MOC-Finance', delivery: 'MOC-Delivery' };
@@ -68,13 +69,16 @@ const textoDeHerramientas = (a, { tieneContenido }) => TAREAS_TEXT + (tieneConte
  * El sistema y el pedido de UNA ejecución. → { sistema, usuario, leidas: [nombres de notas] }
  * `C`: leerContexto(db). `feedback`: lo que el dueño pidió cambiar (revise). `tareas`: la lista (para «mismo cliente»).
  */
-export async function armarEjecucion({ db, C, agente: a, tarea: task, modo, feedback, tareas = [], tieneContenido = false, tieneEstudio = false, proyectoDe = () => null, ahora = Date.now() }) {
+export async function armarEjecucion({ db, env = null, C, agente: a, tarea: task, modo, feedback, tareas = [], tieneContenido = false, tieneEstudio = false, tieneHabilidades = false, proyectoDe = () => null, ahora = Date.now() }) {
   const [skills, rules, cifras, ejemplos, mem, { index, stale }] = await Promise.all([skillsDe(db, a), leccionesDe(db, a.id).then(l => l.rules || []), cifrasDe(db), ejemplosDe(db, a.id), leerMemoria(db), indiceDeNotas(db)]);
   const leidas = notasRelevantes(index, a.department, task.title + ' ' + task.text, mem);
   const deptName = C.depts[a.department]?.name || a.department;
+  // la Biblioteca (biblioteca-core.mjs): el índice de las habilidades de este puesto, la que encaja con la tarea entera y la nota contexto-marketing, base de todas
+  let bibliotecaTexto = '', marketingTexto = '';
+  if (tieneHabilidades && env) { const lib = await cargarBibliotecaNube({ env, db, agentes: C.agents }); const t = await textoParaAgente(lib, a, task.title + ' ' + task.text); if (t) { bibliotecaTexto = '\n' + t; marketingTexto = contextoMarketingTexto(index.get('contexto-marketing')); } }
   const sistema = `You are ${a.name}, ${a.role || 'an agent'}, in the ${deptName} department of ${C.nombre}. ${a.does}\n${agentBrief(a, { skills, rules })}` + instruccionesBase(260) +
     textoDeHerramientas(a, { tieneContenido }) + (tieneEstudio ? '\n- ESTUDIO (mcp__estudio__*): generar_imagen crea imágenes REALES; buscar_en_galeria, estado_trabajo y estado_estudio las consultan. Pon en tu entregable, tal cual, las líneas que devuelve la herramienta. El gasto en motores de pago solo corre en la ejecución que sigue al OK del dueño; antes, deja el prompt listo.' : '') +
-    cifrasLine(cifras) + ejemplos +
+    bibliotecaTexto + cifrasLine(cifras) + ejemplos + marketingTexto +
     `\n\nCOMPANY NOTES\n${businessContext(index)}\n\nNOTES YOU READ FOR THIS TASK\n${contextText(index, leidas, stale)}` +
     knowledge.sameClientText(knowledge.sameClient(tareas, task), id => C.nombreAgente(id), d => C.depts[d]?.name || d);
   const hoy = new Date(ahora).toLocaleString('es-PA', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });

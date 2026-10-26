@@ -22,7 +22,7 @@ export function crearEnrutador({ env, agents, depts, nombre = 'la empresa', fetc
       const sistema = `You are the router for ${nombre}, a business whose departments are run by AI agents. Pick the single best agent for the owner's request — an agent whose skills match the request is the right one — and return ONLY a JSON object — no prose, no code fences.`;
       const usuario = `Department: ${d.name}\nAgents (id · name · role · what they do):\n${lista(dept)}\nOwner's request: "${text}"\n\n` +
         'Return: {"agent":"<id from the list>","title":"<clean imperative task title, max 70 characters>","plan":["<step>","<step>","<step>"],"eta_minutes":<integer>,"why":"<one short sentence>","needs_ok":<true if doing this involves sending, posting, paying, deleting or changing anything outside this machine; false if it only reads and reports>}';
-      try { j = sacarJSON((await texto(env, { sistema, usuario, maxTokens: 800, ...(fetchFn ? { fetchFn } : {}) })).texto) || {}; }
+      try { j = sacarJSON((await texto(env, { sistema, usuario, maxTokens: 800, funcion: 'enrutador', ...(fetchFn ? { fetchFn } : {}) })).texto) || {}; }
       catch (e) { console.warn('enrutador: sin respuesta usable, lo toma el jefe:', e?.message); j = {}; }
       if (!Object.keys(j).length) j = { why: 'El enrutador no dio una respuesta clara: la tiene el jefe del departamento.' };
     } else j = { why: hayIA ? '' : 'El enrutador (la IA) no está conectado en la nube: la tiene el jefe del departamento.' };

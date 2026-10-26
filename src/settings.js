@@ -9,6 +9,7 @@
 // carries its light; with something amber or red, the gear opens here. Key O opens it straight away.
 import { modal } from './modal.js';
 import { unaTeclaOn, setUnaTecla } from './teclas1.js'; // IMG-26 (6 Oct 2026)
+import { conEstado, pedir, enviar } from './accion.js'; // 25 oct 2026: Guardar y las demás acciones dicen qué pasa
 
 const DEPT = { emails: 'Correos', sales: 'Ventas', marketing: 'Marketing', ops: 'Operaciones', fin: 'Finanzas', delivery: 'Entregas' };
 export function initSettings({ served, esc, keys = [], runKey, theme, health = null }) {
@@ -17,9 +18,9 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'setT');
   el.innerHTML = `<div class="sg-box"><div class="sg-head"><h2 id="setT">Ajustes</h2><span class="sp"></span><button type="button" class="sg-x" aria-label="Cerrar" title="Cerrar (Esc)">✕</button></div>
     <div class="sg-wrap"><div class="sg-tabs" role="tablist" aria-label="Secciones"></div><div class="sg-pane" role="tabpanel" tabindex="-1"></div></div>
-    <div class="sg-foot"><span class="sg-msg" role="status" aria-live="polite"></span><span class="sp"></span><button type="button" class="sg-btn pri" data-a="save">Guardar</button></div></div>`;
+    <div class="sg-foot"><span class="sg-msg" role="status" aria-live="polite"></span><span class="sg-st"></span><span class="sp"></span><button type="button" class="sg-btn pri ac" data-a="save">Guardar</button></div></div>`;
   document.body.appendChild(el);
-  let data = null, sinAjustes = false, tab = served ? 'general' : 'apariencia', opener = null, dirty = {}, cifras = null, voice = null;
+  let data = null, sinAjustes = false, loadErr = '', extraSucia = false, tab = served ? 'general' : 'apariencia', opener = null, dirty = {}, cifras = null, voice = null;
   const EXTRA = [['cifras', 'Cifras de la empresa'], ['voz', 'Voz de marca'], ['empresa', 'Preparar desde mi web']];
   const LOCAL = ['estado', 'apariencia', 'atajos'], NO_SAVE = ['empresa', ...LOCAL];
   const ESTADO = health ? [['estado', 'Estado']] : [];
@@ -32,6 +33,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     const opt = (v, note) => `<label class="sg-th"><input type="radio" name="sgTheme" value="${v}"${cur === v ? ' checked' : ''}><span class="sg-sw ${v}" aria-hidden="true"><i class="l"></i><i class="d"></i></span><b>${THEME_NAME[v]}</b><small>${note}</small><span class="sg-ok" aria-hidden="true">✓</span></label>`;
     return `<p class="sg-lead">Cómo se ve la oficina en este navegador. Se aplica al instante y se recuerda aquí: cada computadora elige el suyo.</p>
       <fieldset class="sg-theme"><legend>Tema</legend>${opt('light', 'El de siempre. Es el predeterminado.')}${opt('dark', 'Para la noche o una sala a oscuras.')}${opt('auto', `Sigue a tu sistema y cambia con él (ahora: ${sys}).`)}</fieldset>
+      <fieldset class="sg-theme"><legend>Versión</legend>${[['auto', 'Automática'], ['movil', 'Móvil'], ['escritorio', 'Escritorio']].map(([v, t]) => `<label class="sg-th"><input type="radio" name="sgMv" value="${v}"${(localStorage.getItem('ao.movil') || 'auto') === v ? ' checked' : ''}><b>${t}</b></label>`).join('')}</fieldset>
       <p class="sg-lead">¿Grabas la pantalla? El modo cámara (tecla V) pone un fondo neutro que no se quema en video.</p>`;
   }
   const keysHTML = () => `<div class="sg-keys"><label class="sg-k1"><input type="checkbox" class="sg-k1c"${unaTeclaOn() ? ' checked' : ''}> <span><b>Atajos de una tecla</b> (una letra sola, sin Ctrl). Apágalos si usas control por voz o si a veces pulsas teclas sin querer: Ctrl + K, Esc y las flechas siguen.</span></label><p class="sg-lead">Funcionan cuando no estás escribiendo. Pulsa una línea para hacerlo ahora. <kbd>?</kbd> abre esta lista desde cualquier sitio.</p>
@@ -39,6 +41,9 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
       ? `<button type="button" class="ks-row" data-key="${esc(key)}"><kbd>${esc(k)}</kbd><span>${esc(t)}</span></button>`
       : `<div class="ks-row"><kbd>${esc(k)}</kbd><span>${esc(t)}</span></div>`).join('')}</section>`).join('')}</div></div>`;
   const msg = (t, bad) => { const m = el.querySelector('.sg-msg'); m.textContent = t || ''; m.classList.toggle('bad', !!bad); };
+  const pendientes = () => { if (!served || el.hidden) return 0; if (tab === 'cifras' || tab === 'voz') return extraSucia ? 1 : 0; if (data && !NO_SAVE.includes(tab)) collect(); return Object.keys(dirty).length + (extraSucia ? 1 : 0); }; // lo editado y aún sin guardar
+  const estado = (t, cls) => { const s = el.querySelector('.sg-st'); s.textContent = t || ''; s.className = 'sg-st' + (cls ? ' ' + cls : ''); };
+  const marcar = () => { const n = pendientes(); estado(n ? 'Sin guardar' : '', n ? 'sin' : ''); if (n) msg(''); };
   const val = p => (p in dirty ? dirty[p] : data.values[p]);
   function field(f) {
     const id = 'sg-' + f.path.replace(/\W/g, '-'), v = val(f.path), help = f.help ? `<small id="${id}-h">${esc(f.help)}</small>` : '', desc = f.help ? ` aria-describedby="${id}-h"` : '';
@@ -67,7 +72,7 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     if (tab === 'apariencia') { pane.innerHTML = themeHTML(); return; }
     if (tab === 'atajos') { pane.innerHTML = keysHTML(); return; }
     if (!served) { pane.innerHTML = '<p class="sg-lead">Esta es la demo: el resto de los ajustes se cambia en la oficina real (<code>npm start</code>).</p>'; return; }
-    if (!data) { pane.innerHTML = '<p class="sg-lead">Leyendo…</p>'; return; }
+    if (!data) { pane.innerHTML = loadErr ? `<p class="sg-lead" role="alert">${esc(loadErr)}</p><button type="button" class="sg-btn pri ac" data-a="reload">Reintentar</button>` : '<p class="sg-lead">Leyendo…</p>'; return; }
     if (tab === 'cifras') { pane.innerHTML = `<p class="sg-lead">Precios, comisiones, metas, horarios: los agentes los leen antes de cada trabajo y los usan tal cual, en vez de adivinarlos. Se guardan en el cerebro de esta máquina.</p>${cifras === null ? '<p>Leyendo…</p>' : `<div class="sg-tw"><table class="sg-cif"><thead><tr><th>Nombre</th><th>Valor</th><th>Unidad</th><th>Nota</th><th><span class="sr">Quitar</span></th></tr></thead><tbody>${cifras.map((c, i) => `<tr><td><input aria-label="Nombre" value="${esc(c.name)}" data-c="name"></td><td><input aria-label="Valor" value="${esc(c.value)}" data-c="value"></td><td><input aria-label="Unidad" value="${esc(c.unit || '')}" data-c="unit"></td><td><input aria-label="Nota" value="${esc(c.note || '')}" data-c="note"></td><td><button type="button" class="sg-del" data-a="del-cifra" aria-label="Quitar ${esc(c.name)}">✕</button></td></tr>`).join('')}</tbody></table></div><button type="button" class="sg-btn" data-a="add-cifra">+ Añadir una cifra</button>`}`; return; }
     if (tab === 'voz') { pane.innerHTML = `<p class="sg-lead">Cómo habla tu marca: el tono, las palabras que usa y las que nunca, cómo firma. Todos los agentes la leen. Se guarda como la nota «voice» del Cerebro.</p>${voice === null ? '<p>Leyendo…</p>' : `<label for="sgVoice" class="sg-l">Voz de marca</label><textarea id="sgVoice" rows="16">${esc(voice)}</textarea>`}`; return; }
     if (tab === 'empresa') { pane.innerHTML = `<p class="sg-lead">Dame tu web y la oficina la lee: escribe en el Cerebro el perfil de tu empresa, tu oferta y precios, tu voz y las preguntas frecuentes; da instrucciones a cada jefe que aún no las tenga y propone cifras para confirmar. Tarda unos minutos; te aviso al terminar.</p>
@@ -80,12 +85,13 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
   }
   async function load() {
     if (!served) return render();
-    try { const r = await fetch('/api/settings'), j = await r.json(); if (r.ok && Array.isArray(j.groups)) data = j; else { sinAjustes = true; msg('Los demás ajustes todavía no están en esta oficina de la nube: se cambian en la de tu computadora.', true); } } catch { msg('Sin conexión con la oficina.', true); }
+    loadErr = '';
+    try { const r = await fetch('/api/settings'), j = await r.json(); if (r.ok && Array.isArray(j.groups)) data = j; else { sinAjustes = true; msg('Los demás ajustes todavía no están en esta oficina de la nube: se cambian en la de tu computadora.', true); } } catch { loadErr = 'No pude cargar los ajustes: sin conexión con la oficina.'; }
     render();
   }
   async function loadTab() {
-    if (tab === 'cifras' && cifras === null) { try { cifras = (await (await fetch('/api/cifras')).json()).items; } catch { cifras = []; } render(); }
-    if (tab === 'voz' && voice === null) { try { voice = (await (await fetch('/api/voice')).json()).text; } catch { voice = ''; } render(); }
+    if (tab === 'cifras' && cifras === null) { try { cifras = (await pedir('/api/cifras')).items; } catch (e) { cifras = []; msg('No pude leer las cifras: ' + e.message, true); } render(); }
+    if (tab === 'voz' && voice === null) { try { voice = (await pedir('/api/voice')).text; } catch (e) { voice = ''; msg('No pude leer la voz de marca: ' + e.message, true); } render(); }
   }
   function collect() {
     for (const i of el.querySelectorAll('.sg-pane [data-p]')) {
@@ -107,42 +113,66 @@ export function initSettings({ served, esc, keys = [], runKey, theme, health = n
     }
   }
   const readCifras = () => [...el.querySelectorAll('.sg-cif tbody tr')].map(tr => Object.fromEntries([...tr.querySelectorAll('[data-c]')].map(i => [i.dataset.c, i.value.trim()])));
-  async function save() {
-    if (tab === 'cifras') { const r = await fetch('/api/cifras', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items: readCifras() }) }); const j = await r.json(); if (r.ok) { cifras = j.items; render(); msg(`Guardadas ${j.items.length} cifras. Los agentes las usan desde su próxima tarea.`); } else msg(j.error || 'No se pudo.', true); return; }
-    if (tab === 'voz') { const r = await fetch('/api/voice', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: el.querySelector('#sgVoice').value }) }); const j = await r.json(); if (r.ok) msg('Guardada. Los agentes hablan así desde su próxima tarea.'); else msg(j.error || 'No se pudo.', true); return; }
-    collect(); if (!Object.keys(dirty).length) return msg('No hay cambios.');
-    const r = await fetch('/api/settings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ changes: dirty }) }); const j = await r.json();
-    if (j.errors?.length) msg(j.errors.join(' · '), true); else msg(j.restart ? 'Guardado. Algunos cambios (↻) se aplican al reiniciar la oficina.' : 'Guardado y aplicado.');
-    dirty = {}; await load();
+  // Guardar devuelve el texto de lo hecho o lanza el motivo; conEstado lo muestra en el botón y lo anuncia (src/accion.js)
+  async function guardar() {
+    if (tab === 'cifras') { const j = await enviar('/api/cifras', { items: readCifras() }); cifras = j.items; extraSucia = false; render(); return { hecho: `Guardadas ${j.items.length} cifras. Los agentes las usan desde su próxima tarea.` }; }
+    if (tab === 'voz') { await enviar('/api/voice', { text: el.querySelector('#sgVoice').value }); extraSucia = false; return { hecho: 'Guardada. Los agentes hablan así desde su próxima tarea.' }; }
+    collect(); if (!Object.keys(dirty).length) return { hecho: 'No hay cambios que guardar.' };
+    const j = await enviar('/api/settings', { changes: dirty });
+    if (j.errors?.length) throw new Error(j.errors.join(' · '));
+    dirty = {}; extraSucia = false; await load();
+    return { hecho: j.restart ? 'Guardado. Algunos cambios (↻) se aplican al reiniciar la oficina.' : 'Guardado y aplicado.' };
   }
-  function showTab(t) { if (t === tab) return; collect(); tab = t; render(); loadTab(); el.querySelector(`[data-tab="${tab}"]`)?.focus(); }
-  function open(at) { if (!el.hidden) { if (at) showTab(at); return; } opener = document.activeElement; if (at) tab = at; el.hidden = false; modal.open(el); btn?.setAttribute('aria-expanded', 'true'); msg(''); render(); /* 8 oct 2026: at once, not after /api/settings — the tab it was on showed for a moment */ load().then(loadTab); if (tab === 'estado' && health) health.refresh(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.sg-x').focus({ preventScroll: true }); }
-  function close() { if (el.hidden) return; if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); el.hidden = true; btn?.setAttribute('aria-expanded', 'false'); dirty = {}; if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
+  async function save(b = el.querySelector('[data-a="save"]')) {
+    if (b.getAttribute('aria-busy') === 'true') return false; // un segundo clic mientras guarda no hace nada
+    msg(''); estado('Guardando…');
+    const r = await conEstado(b, guardar, { ocupado: 'Guardando…', hecho: 'Guardado' });
+    if (r.ok) { msg(r.valor.hecho); estado(r.valor.hecho.startsWith('No hay') ? '' : 'Guardado ✓', 'ok'); setTimeout(() => { if (el.querySelector('.sg-st.ok')) estado(''); }, 4000); } else { msg(r.error, true); estado('Sin guardar', 'sin'); }
+    return r.ok;
+  }
+  function showTab(t) { if (t === tab) return; if (tab === 'cifras' && cifras) cifras = readCifras(); if (tab === 'voz' && voice !== null) voice = el.querySelector('#sgVoice')?.value ?? voice; /* lo escrito se queda al cambiar de pestaña */ if (data) collect(); tab = t; render(); loadTab(); marcar(); el.querySelector(`[data-tab="${tab}"]`)?.focus(); }
+  function open(at) { if (!el.hidden) { if (at) showTab(at); return; } opener = document.activeElement; if (at) tab = at; el.hidden = false; modal.open(el); btn?.setAttribute('aria-expanded', 'true'); msg(''); estado(''); render(); /* 8 oct 2026: at once, not after /api/settings — the tab it was on showed for a moment */ load().then(loadTab); if (tab === 'estado' && health) health.refresh(); requestAnimationFrame(() => el.classList.add('on')); el.querySelector('.sg-x').focus({ preventScroll: true }); }
+  function close(fuerza) {
+    if (el.hidden) return;
+    if (!fuerza && pendientes()) { // cambios sin guardar: no se pierden sin decirlo
+      if (el.querySelector('.sg-warn')) return el.querySelector('.sg-warn button').focus();
+      const w = document.createElement('div'); w.className = 'sg-warn'; w.setAttribute('role', 'alertdialog'); w.setAttribute('aria-label', 'Cambios sin guardar');
+      w.innerHTML = '<span>Tienes cambios sin guardar.</span><button type="button" class="sg-btn pri ac" data-a="warn-save">Guardar y cerrar</button><button type="button" class="sg-btn" data-a="warn-drop">Descartar</button><button type="button" class="sg-btn" data-a="warn-stay">Seguir editando</button>';
+      el.querySelector('.sg-box').appendChild(w); w.querySelector('button').focus(); return;
+    }
+    el.querySelector('.sg-warn')?.remove(); extraSucia = false; estado(''); if (el.contains(document.activeElement)) document.activeElement.blur(); modal.close(el); el.classList.remove('on'); el.hidden = true; btn?.setAttribute('aria-expanded', 'false'); dirty = {}; if (opener && document.contains(opener) && opener.focus) opener.focus({ preventScroll: true }); }
   el.addEventListener('click', async e => {
     if (e.target === el || e.target.closest('.sg-x')) return close();
     const t = e.target.closest('[data-tab]'); if (t) { showTab(t.dataset.tab); return; }
     const kr = e.target.closest('.ks-row[data-key]'); if (kr) { close(); if (runKey) runKey(kr.dataset.key); return; } // a shortcut pressed from the list does what the key does
     const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
     if (a === 'save') return save();
-    if ((a === 'probe' || a === 'read') && health) { await health.act(a, e.target.closest('button')); return; } // Estado: it repaints itself (onData)
+    if (a === 'reload') { const b = e.target.closest('button'); await conEstado(b, async () => { await load(); if (!data && !sinAjustes) throw new Error(loadErr); }, { ocupado: 'Cargando…', hecho: 'Listo' }); return; }
+    if (a === 'warn-stay') { el.querySelector('.sg-warn')?.remove(); return; }
+    if (a === 'warn-drop') { dirty = {}; return close(true); }
+    if (a === 'warn-save') { if (await save(e.target.closest('button'))) { el.querySelector('.sg-warn')?.remove(); close(true); } return; }
+    if ((a === 'probe' || a === 'read' || a === 'retry') && health) { await health.act(a, e.target.closest('button')); return; } // Estado: it repaints itself (onData)
     if (a === 'add-person') { collect(); const p = data.fields.find(f => f.type === 'people').path; dirty[p] = [...readPeople(), { name: '', telegram: '', depts: [] }]; render(); const rows = el.querySelectorAll('.sg-person [data-k=name]'); rows[rows.length - 1]?.focus(); return; }
-    if (a === 'del-person') { e.target.closest('.sg-person').remove(); return; }
-    if (a === 'add-cifra') { cifras = [...readCifras(), { name: '', value: '', unit: '', note: '' }]; render(); const r = el.querySelectorAll('.sg-cif [data-c=name]'); r[r.length - 1]?.focus(); return; }
-    if (a === 'del-cifra') { e.target.closest('tr').remove(); return; }
-    if (a === 'bootstrap') { const b = e.target.closest('button'); b.disabled = true; const r = await fetch('/api/onboard/company', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url: el.querySelector('#sgUrl').value.trim(), about: el.querySelector('#sgAbout').value.trim() }) }); const j = await r.json(); b.disabled = false; msg(r.ok ? 'En marcha: te aviso en el semáforo (y por Telegram) cuando termine.' : j.error || 'No se pudo.', !r.ok); }
+    if (a === 'del-person') { e.target.closest('.sg-person').remove(); marcar(); return; }
+    if (a === 'add-cifra') { cifras = [...readCifras(), { name: '', value: '', unit: '', note: '' }]; extraSucia = true; render(); marcar(); const r = el.querySelectorAll('.sg-cif [data-c=name]'); r[r.length - 1]?.focus(); return; }
+    if (a === 'del-cifra') { e.target.closest('tr').remove(); extraSucia = true; marcar(); return; }
+    if (a === 'bootstrap') { const b = e.target.closest('button'); b.classList.add('ac'); const r = await conEstado(b, () => enviar('/api/onboard/company', { url: el.querySelector('#sgUrl').value.trim(), about: el.querySelector('#sgAbout').value.trim() }), { ocupado: 'Enviando…', hecho: 'En marcha' }); msg(r.ok ? 'En marcha: te aviso en el semáforo (y por Telegram) cuando termine.' : r.error, !r.ok); }
   });
   el.addEventListener('keydown', e => {
     if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
     const t = e.target.closest('[role=tab]'); if (t && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); const l = [...el.querySelectorAll('[role=tab]')], i = l.indexOf(t), n = l[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + l.length) % l.length]; n.click(); }
     if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
   });
+  el.addEventListener('input', e => { if (e.target.closest('.sg-pane') && (e.target.closest('#sgVoice, .sg-cif, .sg-person'))) extraSucia = true; if (e.target.closest('.sg-pane')) marcar(); });
+  el.addEventListener('change', e => { if (e.target.closest('.sg-pane') && !e.target.classList?.contains('sg-k1c') && e.target.name !== 'sgTheme') marcar(); });
   el.addEventListener('change', e => { if (e.target.classList?.contains('sg-k1c')) { setUnaTecla(e.target.checked); msg(e.target.checked ? 'Atajos de una tecla encendidos.' : 'Atajos de una tecla apagados: solo Ctrl + K, Esc y las flechas.'); return; } }); // IMG-26
   el.addEventListener('change', e => { // Apariencia: the theme applies at once, remembered in this browser
+    if (e.target.name === 'sgMv') { localStorage.setItem('ao.movil', e.target.value); dispatchEvent(new Event('ao:movil')); return; }
     if (e.target.name !== 'sgTheme' || !theme) return;
     theme.set(e.target.value); msg(`Tema: ${THEME_NAME[e.target.value] || e.target.value}. Se recuerda en este navegador.`);
   });
   if (health) health.onData(() => { // a fresh reading repaints the Estado tab if it is the one showing; the keyboard stays on its button
-    if (el.hidden || tab !== 'estado') return;
+    if (el.hidden || tab !== 'estado' || el.querySelector('.sg-pane .ac-busy, .sg-pane .ac-ok, .sg-pane .ac-bad')) return; // mientras el botón muestra su ✓, no se repinta
     const pane = el.querySelector('.sg-pane'), was = pane.contains(document.activeElement) ? document.activeElement.dataset.a : null;
     pane.innerHTML = health.html(); if (was) (pane.querySelector(`[data-a="${was}"]`) || pane).focus({ preventScroll: true });
   });

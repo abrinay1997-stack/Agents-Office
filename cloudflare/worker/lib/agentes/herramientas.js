@@ -4,9 +4,11 @@
 //  · Las de tareas y contenido son las MISMAS definiciones y el mismo texto que en local (`tareas-tools.mjs`, `contenido-tools.mjs`, extraídas de los MCP).
 //  · Ninguna aprueba, programa ni publica (tests/contenido-mcp.test.mjs y tests/nube-agentes-herramientas.test.mjs lo vigilan).
 //  · El Estudio gasta: un motor de pago solo corre en una ejecución APROBADA (aunque safety.mjs lo deje pasar antes del OK en local); la «Prueba» es gratis.
-//  · Lo que no está portado (anuncios, habilidades/biblioteca, la bandeja, lotes y presets) no se ofrece, y `omitidas` dice por qué.
+//  · La Biblioteca de habilidades (ver_habilidades, leer_habilidad: solo leen) se ofrece al agente que tiene habilidades (`habilidades: true`, lo decide el ejecutor).
+//  · Lo que no está portado (anuncios, la bandeja, lotes y presets) no se ofrece, y `omitidas` dice por qué.
 import { TOOLS as TOOLS_TAREAS, crearLlamador as llamadorTareas } from '../../../../tareas-tools.mjs';
 import { TOOLS as TOOLS_CONTENIDO, crearLlamador as llamadorContenido } from '../../../../contenido-tools.mjs';
+import { TOOLS as TOOLS_HABILIDADES, crearLlamador as llamadorHabilidades } from '../../../../habilidades-tools.mjs';
 import { json, error, prohibido, cuerpo } from '../respuesta.js';
 import { uuid, ahora } from '../ids.js';
 
@@ -17,7 +19,6 @@ const SIN_BANDEJA = new Set(['ver_bandeja', 'crear_borrador_respuesta', 'sugerir
 
 export const OMITIDAS = Object.freeze({
   anuncios: 'Anuncios de Meta todavía no está en la nube (fase 7).',
-  habilidades: 'La Biblioteca de habilidades todavía no está en la nube: el agente trabaja con su brief, sus skills y las notas del Cerebro.',
   bandeja: 'La Bandeja (responder comentarios y mensajes) es de la fase 7.',
   'estudio:lotes y presets': 'Los presets, los lotes y entender video o audio del Estudio todavía no están en la nube (fase 8b).',
 });
@@ -93,7 +94,7 @@ function herramientasEstudio({ office, tarea, gasto }) {
  * Todo lo que un agente puede llamar además de los conectores MCP remotos.
  * → { defs: [{ nombre: 'mcp__servidor__herramienta', servidor, descripcion, esquema }], omitidas: [motivo], llamar(nombre, args) → texto }
  */
-export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = false, quien = null, deptsEstudio = DEPTS_ESTUDIO, deptsContenido = DEPTS_CONTENIDO }) {
+export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = false, quien = null, deptsEstudio = DEPTS_ESTUDIO, deptsContenido = DEPTS_CONTENIDO, habilidades = false }) {
   const usuario = { id: 'agente:' + agente.id, email: `agente:${agente.id}`, rol: gasto ? 'admin' : 'editor', agente: agente.id }; // `agente`: el Estudio anota que lo pidió este agente (by: 'agent')
   // Con rol «admin» solo para el Estudio y solo en una ejecución aprobada: los demás módulos reciben siempre un editor (un agente nunca aprueba en Contenido).
   const office = crearOffice({ env, db, usuario: { ...usuario, rol: 'editor' }, modulos });
@@ -102,6 +103,7 @@ export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = 
   const sumar = (servidor, lista, llamar) => { for (const t of lista) { const nombre = `mcp__${servidor}__${t.name}`; defs.push({ nombre, servidor, descripcion: t.description, esquema: esquema(t) }); rutas.set(nombre, { llamar, original: t.name }); } };
 
   sumar('tareas', TOOLS_TAREAS, llamadorTareas({ office, agente: agente.id, tarea }));
+  if (habilidades) sumar('habilidades', TOOLS_HABILIDADES, llamadorHabilidades({ office, agente: agente.id })); // la Biblioteca: solo lee (el agente que tiene habilidades)
   if (deptsContenido.includes(agente.department)) sumar('contenido', TOOLS_CONTENIDO.filter(t => !SIN_BANDEJA.has(t.name)), llamadorContenido({ office, agente: agente.id, tarea }));
   if (deptsEstudio.includes(agente.department)) {
     const e = herramientasEstudio({ office: gasto ? officeGasto : office, tarea, gasto });
@@ -109,7 +111,7 @@ export function herramientasInternas({ env, db, agente, tarea, modulos, gasto = 
     omitidas.push(OMITIDAS['estudio:lotes y presets']);
   }
   if (deptsContenido.includes(agente.department)) omitidas.push(OMITIDAS.bandeja);
-  omitidas.push(OMITIDAS.anuncios, OMITIDAS.habilidades);
+  omitidas.push(OMITIDAS.anuncios);
 
   return {
     defs, omitidas,

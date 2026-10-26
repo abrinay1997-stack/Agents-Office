@@ -5,6 +5,7 @@
 //   initSheet(ctx) → { open(id), close(), isOpen() }
 //   ctx: host (element the sheet lives in) · esc · isLive() · onSaved(agent) · openTask(sid) · MODEL_KEYS · modelName · EFFORT_KEYS
 import { mdToHtml } from './md.js';
+import { conEstado, enviar } from './accion.js';
 
 const STATE = { next: 'pendiente', scheduled: 'programada', doing: 'en curso', waiting: 'espera tu OK', done: 'lista' };
 
@@ -72,12 +73,9 @@ export function initSheet(ctx) {
     const v = s => el.querySelector(s).value;
     const patch = { name: v('.ag-name').trim(), role: v('.ag-role').trim(), does: v('.ag-does').trim(), brief: v('.ag-brief').trim(), model: v('.ag-model'), effort: v('.ag-effort'), tools: v('.ag-tools').split(',').map(x => x.trim().toLowerCase()).filter(Boolean) };
     if (!patch.name) { busy = false; return msg('El nombre no puede quedar vacío.', true); }
-    msg('Guardando…');
-    try {
-      const r = await fetch('/api/agents/' + encodeURIComponent(cur), { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) });
-      const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText);
-      data.agent = j.agent; if (onSaved) onSaved(j.agent); render(); msg('Guardado. Vale desde la próxima tarea.');
-    } catch (e) { msg('No se guardó: ' + e.message, true); }
+    msg('');
+    const c = await conEstado(el.querySelector('.ag-save'), () => enviar('/api/agents/' + encodeURIComponent(cur), patch, 'PATCH'), { ocupado: 'Guardando…', hecho: 'Guardado' });
+    if (c.ok) { data.agent = c.valor.agent; if (onSaved) onSaved(c.valor.agent); render(); msg('Guardado. Vale desde la próxima tarea.'); } else msg('No se guardó: ' + c.error, true);
     busy = false;
   }
   el.addEventListener('toggle', e => { const d = e.target.closest('.ag-sec'); if (d && e.target === d) open[d.dataset.k] = d.open;
@@ -89,12 +87,10 @@ export function initSheet(ctx) {
     if (e.target.closest('.ag-save')) return save();
     const f = e.target.closest('.ag-forget');
     if (f) { if (!confirm('¿Olvidar esta lección? El agente dejará de tenerla en cuenta.')) return;
-      const r = await fetch(`/api/agents/${encodeURIComponent(cur)}/forget`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ line: f.dataset.line }) });
-      const j = await r.json(); if (r.ok) { data.lessons = j.lessons; render(); } else alert(j.error || 'No se pudo'); return; }
+      const c = await conEstado(f, () => enviar(`/api/agents/${encodeURIComponent(cur)}/forget`, { line: f.dataset.line }), { ocupado: 'Olvidando…', hecho: 'Olvidada', ms: 600 }); if (c.ok) { data.lessons = c.valor.lessons; render(); } return; }
     const rs = e.target.closest('.ag-restore');
     if (rs) { if (!confirm(`¿Volver a la versión del ${when(+rs.dataset.at)}? La actual queda guardada en el historial.`)) return;
-      const r = await fetch('/api/history/restore', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: rs.dataset.kind, name: rs.dataset.name, at: +rs.dataset.at }) });
-      const j = await r.json(); alert(r.ok ? j.text : j.error || 'No se pudo'); if (r.ok) load(cur); return; }
+      const c = await conEstado(rs, () => enviar('/api/history/restore', { kind: rs.dataset.kind, name: rs.dataset.name, at: +rs.dataset.at }), { ocupado: 'Restaurando…', hecho: 'Restaurada', ms: 600 }); if (c.ok) { msg(c.valor.text || 'Restaurada.'); load(cur); } return; }
     const t = e.target.closest('[data-sid]'); if (t && openTask) openTask(t.dataset.sid);
   });
   el.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Escape') close(); if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); } });

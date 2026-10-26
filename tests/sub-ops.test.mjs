@@ -44,7 +44,7 @@ test('ops: a card per op with its fields, HACER counts what is included; done on
   const h = opsHTML(m, { esc, edits: ed, deptName: k => ({ fin: 'Finanzas' })[k], now });
   assert.match(h, /Rutina nueva en Finanzas: «Resumen de cobros»/); assert.match(h, /cada lunes, jueves a las 09:00/);
   assert.match(h, /class="so-day" data-d="1" aria-pressed="true" aria-label="lunes">L</); assert.match(h, /data-d="0" aria-pressed="false" aria-label="domingo">D</);
-  assert.match(h, /Borrador en Contenido: .* · 18:00 · reel IG — «Combo»/); assert.match(h, /no se hace/);
+  assert.match(h, /Borrador en Contenido: .* · 18:00 · reel Instagram — «Combo»/); assert.match(h, /no se hace/);
   assert.match(h, /HACER \(1\)/);
   assert.match(h, /class="so-undo" data-msg="m1" data-k="2"/); assert.doesNotMatch(h, /data-k="3">Deshacer/, 'past its 30 s');
   const b = opsBody('m1', m.ops, new Map([[0, { when: { kind: 'weekly', days: [1], at: '08:00' } }], [1, { include: false }]]));

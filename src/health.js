@@ -4,10 +4,11 @@
 // 8 oct 2026 (the owner: «¿el botón de estado debería estar en Negocio o en Ajustes?»): it is no longer a button and a window of its
 // own but the first tab of Ajustes, «Estado». The traffic light moved to the gear (#topSettings): amber or red when something needs
 // attention, and the gear then opens Ajustes on Estado. Key O still opens it straight away.
+import { conEstado, pedir, enviar, fallaHTML } from './accion.js';
 const STATE = { ok: ['Bien', '●'], info: ['Aviso', '●'], warn: ['Revisar', '▲'], bad: ['Falla', '■'] };
 export function initHealth({ served, esc }) {
   const light = () => document.getElementById('topSettings'); // the gear carries the light (the «⋯» copies it on a phone, src/dock.js)
-  let data = null, onData = () => {};
+  let data = null, onData = () => {}, err = '';
 
   const code = t => esc(t).replace(/`([^`]+)`/g, '<code>$1</code>');
   const dot = s => `<span class="hl-dot s-${s}" aria-hidden="true">${STATE[s][1]}</span>`;
@@ -16,7 +17,7 @@ export function initHealth({ served, esc }) {
   function html() {
     const probe = served ? '<div class="hl-tools"><button type="button" class="hl-btn" data-a="probe">Probar conexiones ahora</button></div>' : '';
     if (!served) return '<p class="hl-lead">Esta es la demo: el estado real aparece cuando la oficina corre con <code>npm start</code>.</p>';
-    if (!data) return probe + '<p class="hl-lead">Leyendo el estado…</p>';
+    if (!data) return probe + (err ? fallaHTML(err, 'No pude leer el estado.').replace('data-ac-re', 'data-a="retry"') : '<p class="hl-lead">Leyendo el estado…</p>');
     const worst = data.checks.filter(c => c.state === 'bad' || c.state === 'warn');
     return `${probe}<p class="hl-lead">${worst.length ? `${dot(data.overall)} <b>${worst.length === 1 ? 'Una cosa necesita' : worst.length + ' cosas necesitan'} atención.</b>` : `${dot('ok')} <b>Todo en orden.</b>`} Actualizado ${ago(data.at)}.</p>
       <ul class="hl-list">${data.checks.map(c => `<li class="hl-row s-${c.state}">${dot(c.state)}<div><b>${esc(c.label)}</b> <span class="hl-st">${STATE[c.state][0]}</span><p>${code(c.detail)}</p>${c.fix ? `<p class="hl-fix">${code(c.fix)}</p>` : ''}</div></li>`).join('')}</ul>
@@ -33,12 +34,14 @@ export function initHealth({ served, esc }) {
   }
   async function load() {
     if (!served) return;
-    try { const r = await fetch('/api/status'); if (r.ok) { data = await r.json(); paintLight(); onData(); } } catch {}
+    try { data = await pedir('/api/status'); err = ''; paintLight(); onData(); } catch (e) { if (!data) { err = e.message; onData(); } }
   }
   // the two buttons of the tab; resolves once the new state is in (Ajustes repaints the tab)
   async function act(a, b) {
-    if (a === 'read') { try { await fetch('/api/notices/read', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }); } catch {} return load(); }
-    if (a === 'probe') { if (b) { b.disabled = true; b.textContent = 'Probando…'; } try { await fetch('/api/mcp?refresh=1'); } catch {} return load(); }
+    if (a === 'retry') { err = ''; onData(); return load(); }
+    const hacer = fn => (b ? conEstado(b, async () => { await fn(); await load(); }, { ocupado: a === 'read' ? 'Marcando…' : 'Probando…', hecho: a === 'read' ? 'Leídos' : 'Probadas' }).then(r => { if (r.ok) setTimeout(onData, 1900); return r; }) : fn().then(load)); // el ✓ se ve antes de repintar la pestaña
+    if (a === 'read') return hacer(() => enviar('/api/notices/read', {}));
+    if (a === 'probe') return hacer(() => pedir('/api/mcp?refresh=1'));
   }
   paintLight();
   if (served) { load(); setInterval(() => { if (!document.hidden) load(); }, 60000); }

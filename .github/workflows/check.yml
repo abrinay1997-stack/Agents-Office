@@ -7,12 +7,12 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - name: Secrets (keys, cards, ID cards)
@@ -31,4 +31,6 @@ jobs:
           done
           exit 1
       - name: Full check (build, roster, skills, routines, Estudio, server, page)
+        env:
+          AO_TESTS_YA: '1' # el paso «Unit tests» de arriba ya corrió las pruebas sin navegador
         run: npm run check

@@ -188,7 +188,9 @@ test('el dinero: una op de gasto la hace otra persona = error; si Anuncios no pi
 /* ---------- H7 / H8 / H9 / H10 / H11 ---------- */
 test('H8: las cifras que sugiere la web esperan en «por confirmar»: los agentes no las leen hasta que el dueño las confirma', { skip: SALTAR }, async () => {
   const o = await oficina6({ guion: [dimitriDice({ perfil: 'Somos X.', cifras: [{ name: 'Combo', value: '12', unit: 'US$' }] })] });
-  assert.equal((await o.admin('POST', '/api/onboard/company', { about: 'Vendemos combos en Panamá.' })).status, 200);
+  assert.equal((await o.admin('POST', '/api/onboard/company', { about: 'Vendemos combos en Panamá. El combo cuesta US$ 12.' })).status, 200);
+  assert.equal((await o.admin('GET', '/api/cifras')).j.porConfirmar.length, 0, 'mientras es solo una propuesta, nada espera en «por confirmar»');
+  const prop = (await o.admin('GET', '/api/onboard/propuesta')).j.propuesta; assert.equal((await o.admin('POST', '/api/onboard/aplicar', { id: prop.id, decisiones: {} })).status, 200);
   const g = (await o.admin('GET', '/api/cifras')).j; assert.equal(g.items.length, 0, 'lo que leen los agentes sigue vacío'); assert.equal(g.porConfirmar.length, 1);
   assert.equal((await o.editor('POST', '/api/cifras/confirmar', { names: ['Combo'] })).status, 403);
   assert.equal((await o.admin('POST', '/api/cifras/confirmar', { names: ['Combo'] })).j.confirmadas, 1);

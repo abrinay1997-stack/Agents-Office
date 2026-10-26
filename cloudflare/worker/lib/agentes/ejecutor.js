@@ -19,9 +19,13 @@ import { leerContexto } from '../tareas/contexto.js';
 import { crearGuardian, informe as informeGuardian } from './guardian.js';
 import { crearClienteMcp } from './mcp-cliente.js';
 import { secretoPermitido, AVISO_SECRETO } from '../conectores.js';
-import { elegirModelo, llamarModelo, aliasDeHerramienta, textoDe, usosDe } from './llm.js';
+import { elegirModelo, modeloPorId, llamarModelo, aliasDeHerramienta, textoDe, usosDe } from './llm.js';
+import { leerModelos } from '../modelos.js';
+import { conectoresActivos } from '../conectores-acceso.js';
+import { capazDe, sirvePara, delAjuste } from '../../../../modelos-core.mjs';
 import { herramientasInternas } from './herramientas.js';
 import { armarEjecucion, leerMemoria, guardarMemoria } from './contexto.js';
+import { cargarBibliotecaNube } from '../biblioteca.js';
 import { anotar as anotarCosto, estadoDelMes } from './costos.js';
 import { draftFacts, huellaDe, registrar as registrarAprobacion } from './aprobaciones.js';
 import { registrarLeccion } from './lecciones.js';
@@ -105,15 +109,17 @@ async function aprender(db, task) { // learnFrom: lo que se leyó enseña al Cer
 /* ---------- lo que corre en un paso ---------- */
 
 /** Las herramientas que se le dan al modelo: las internas y las de los conectores remotos de su departamento (allowlist; las de envío solo si esta ejecución puede enviar). */
-async function armarHerramientas({ db, env, agente, tarea, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido }) {
-  const internas = herramientasInternas({ env, db, agente, tarea: tarea.id, modulos, gasto, quien, deptsEstudio, deptsContenido });
+async function armarHerramientas({ db, env, agente, tarea, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido, C }) {
+  const habilidades = (await cargarBibliotecaNube({ env, db, agentes: C.agents })).b.de(agente).length > 0; // solo el puesto que tiene habilidades recibe las dos herramientas de la Biblioteca
+  const internas = herramientasInternas({ env, db, agente, tarea: tarea.id, modulos, gasto, quien, deptsEstudio, deptsContenido, habilidades });
   const defs = internas.defs.map(d => ({ nombre: d.nombre, servidor: d.servidor, descripcion: d.descripcion, esquema: d.esquema, remota: false }));
   const remotas = [];
-  const { results: conectores } = await db.prepare('select * from conectores where activo = 1').all();
+  const conectores = await conectoresActivos(db, env);
   for (const c of conectores) {
     if (!JSON.parse(c.departamentos || '[]').includes(agente.department)) continue;
     if (c.secreto && !secretoPermitido(c.secreto)) { remotas.push({ servidor: c.nombre, motivo: AVISO_SECRETO(c.secreto) }); continue; }
     if (c.secreto && !env[c.secreto]) { remotas.push({ servidor: c.nombre, motivo: `falta el secreto ${c.secreto}` }); continue; }
+    if (!c.secreto && c.auth_tipo && c.auth_tipo !== 'ninguna' && !c._token) { remotas.push({ servidor: c.nombre, motivo: c.token_cifrado ? 'su token guardado ya no se puede abrir (cambió AO_CLAVE_CIFRADO): ponlo otra vez en Ajustes → Conectores MCP' : 'falta su token (Ajustes → Conectores MCP)' }); continue; }
     const permitidas = new Set([...JSON.parse(c.herramientas_lectura || '[]'), ...(writes ? JSON.parse(c.herramientas_envio || '[]') : [])]);
     if (!permitidas.size) continue;
     try {
@@ -194,22 +200,31 @@ async function trabajar(deps, { fila, token, datos, task, lista }) {
       datos.aprobado = String(task.draft || task.result || '');
       datos.textoDeAdmin = task.textoAdmin && task.textoAdmin === await sha256(String(task.text || '')) ? String(task.text) : ''; // el texto amplía los destinatarios solo si sigue siendo EXACTAMENTE el que escribió un administrador
     }
-    const modelo = elegirModelo({ task, agent: agente, env, cfgModelo: aj.model });
+    const modelos = await leerModelos(db);
+    let modelo = elegirModelo({ task, agent: agente, env, cfgModelo: aj.model, modelos });
     const deptsContenido = Array.isArray(aj.contenido?.departments) && aj.contenido.departments.length ? aj.contenido.departments : undefined;
     const deptsEstudio = Array.isArray(aj.media?.departments) && aj.media.departments.length ? aj.media.departments : undefined;
     const quien = [...(task.approvals || [])].reverse().find(x => x.action === 'approve')?.by || null;
-    const h = await armarHerramientas({ db, env, agente, tarea: task, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido });
-    const e = await armarEjecucion({ db, C, agente, tarea: task, modo, feedback: fila.feedback, tareas: lista, tieneContenido: h.defs.some(d => d.servidor === 'contenido'), tieneEstudio: h.defs.some(d => d.servidor === 'estudio'), ahora: reloj() });
+    const h = await armarHerramientas({ db, env, agente, tarea: task, modo, writes, gasto, quien, modulos, presupuesto, fetchFn, deptsEstudio, deptsContenido, C });
+    // Un modelo sin herramientas (Muse) NO falla en silencio: si el agente tiene conectores a su alcance, la tarea cae a un modelo capaz y la entrega lo dice; si no hay uno, se rechaza con el motivo.
+    let avisoModelo = '';
+    if (h.defs.some(d => d.remota) && !sirvePara({ herramientas: modelo.caps.herramientas }, { herramientas: true }).ok) {
+      const capaz = capazDe(modelos, { tieneAnthropic: !!env.ANTHROPIC_API_KEY });
+      if (!capaz) throw new FalloFatal(`El modelo ${modelo.id} no usa herramientas y este agente necesita sus conectores. Elige un modelo de Claude para este agente en Ajustes → Modelos (y guarda ANTHROPIC_API_KEY).`);
+      avisoModelo = `ℹ Esta tarea necesitaba los conectores del agente y ${modelo.id} no usa herramientas: la hizo ${capaz.id}. Cámbialo en Ajustes → Modelos si prefieres otra cosa.`;
+      modelo = modeloPorId(capaz.id, modelos, 'caída por falta de herramientas');
+    } else if (modelo.meta && h.defs.length) avisoModelo = `ℹ ${modelo.id} no usa herramientas: esta tarea se redactó sin ellas.`;
+    const e = await armarEjecucion({ db, env, C, agente, tarea: task, modo, feedback: fila.feedback, tareas: lista, tieneContenido: h.defs.some(d => d.servidor === 'contenido'), tieneEstudio: h.defs.some(d => d.servidor === 'estudio'), tieneHabilidades: h.defs.some(d => d.servidor === 'habilidades'), ahora: reloj() });
     Object.assign(datos, {
-      base: clonar(task), sistema: e.sistema, usuario: e.usuario, leidas: e.leidas, modelo: { id: modelo.id, meta: modelo.meta, pick: modelo.pick },
+      base: clonar(task), sistema: e.sistema, usuario: e.usuario, leidas: e.leidas, modelo: { id: modelo.id, meta: modelo.meta, pick: modelo.pick }, avisoModelo,
       herramientas: modelo.meta ? [] : h.defs, fallosConectores: h.fallos, omitidas: h.internas.omitidas, mensajes: [{ role: 'user', content: e.usuario }],
       usd: 0, vueltas: 0, usadas: [], skills: [], texto: '', ctx: { deptsEstudio, deptsContenido, quien, writes, gasto },
     });
     await guardarAvance(db, task.id, token, datos, reloj());
   }
   const ctxEj = datos.ctx || {};
-  const internas = herramientasInternas({ env, db, agente, tarea: task.id, modulos, gasto: !!ctxEj.gasto, quien: ctxEj.quien, deptsEstudio: ctxEj.deptsEstudio, deptsContenido: ctxEj.deptsContenido });
-  const { results: conectores } = await db.prepare('select * from conectores where activo = 1').all();
+  const internas = herramientasInternas({ env, db, agente, tarea: task.id, modulos, gasto: !!ctxEj.gasto, quien: ctxEj.quien, deptsEstudio: ctxEj.deptsEstudio, deptsContenido: ctxEj.deptsContenido, habilidades: datos.herramientas.some(d => d.servidor === 'habilidades') });
+  const conectores = await conectoresActivos(db, env);
   const conectoresPorNombre = new Map(conectores.map(c => [c.nombre, c])), clientes = new Map();
   const servers = [...new Set(datos.herramientas.map(d => d.servidor))];
   const guardian = crearGuardian({ db, estado: datos, ahora: reloj, ctx: { run: fila.run, tarea: task.id, agente: agente.id, dept: agente.department, writes: !!ctxEj.writes, runMode: modo, policy: pol, known: modo === 'approve' ? `${datos.textoDeAdmin ?? ''}\n${datos.aprobado ?? ''}` : null, safety: aj.safety || {}, amountLimit: apr.amountLimit, servers } });
@@ -289,14 +304,15 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
       const { system, user } = reviewPrompt({ task, lead, agent: agente, deptName: C.depts[task.dept].name, negocio: C.nombre, result: texto });
       try {
         const t1 = reloj();
-        const resp = await llamarModelo({ env, modelo: { id: datos.modelo.meta ? datos.modelo.id : (datos.modelo.id), meta: datos.modelo.meta }, sistema: system, mensajes: [{ role: 'user', content: user }], maxTokens: 700, fetchFn, presupuesto });
-        datos.usd += await anotarCosto(db, { tarea: task.id, agente: lead.id, dept: task.dept, tipo: 'revision', modelo: resp.model, proveedor: datos.modelo.meta ? 'meta' : 'anthropic', usage: resp.usage, cfgPrices: aj.costs?.prices, ms: reloj() - t1 });
+        const modelosRev = await leerModelos(db), delJefe = delAjuste(modelosRev, { funcion: 'revision' }), mRev = delJefe ? modeloPorId(delJefe.id, modelosRev, delJefe.de) : datos.modelo; // el jefe puede revisar con otro modelo (Ajustes → Modelos → Revisión del jefe)
+        const resp = await llamarModelo({ env, modelo: { id: mRev.id, meta: mRev.meta }, sistema: system, mensajes: [{ role: 'user', content: user }], maxTokens: 700, fetchFn, presupuesto });
+        datos.usd += await anotarCosto(db, { tarea: task.id, agente: lead.id, dept: task.dept, tipo: 'revision', modelo: resp.model, proveedor: mRev.meta ? 'meta' : 'anthropic', usage: resp.usage, cfgPrices: aj.costs?.prices, ms: reloj() - t1 });
         const j = parseJSON(textoDe(resp.content));
         datos.review = { ok: !!j.ok, fixes: Array.isArray(j.fixes) ? j.fixes.slice(0, 5).map(String) : [], by: lead.id, at: reloj() };
       } catch (e) { datos.review = null; }
       if (datos.review && !datos.review.ok && datos.review.fixes.length) { // el agente corrige lo que el jefe marcó: otra corrida de trabajo desde su texto
         const aviso = `Revisión de ${C.nombreAgente(datos.review.by)} (tu jefe) antes de mostrarlo al dueño:\n- ${datos.review.fixes.join('\n- ')}`;
-        const e = await armarEjecucion({ db, C, agente, tarea: { ...task, result: texto }, modo, feedback: aviso, tareas: [], tieneContenido: datos.herramientas.some(d => d.servidor === 'contenido'), tieneEstudio: datos.herramientas.some(d => d.servidor === 'estudio'), ahora: reloj() });
+        const e = await armarEjecucion({ db, env, C, agente, tarea: { ...task, result: texto }, modo, feedback: aviso, tareas: [], tieneContenido: datos.herramientas.some(d => d.servidor === 'contenido'), tieneEstudio: datos.herramientas.some(d => d.servidor === 'estudio'), tieneHabilidades: datos.herramientas.some(d => d.servidor === 'habilidades'), ahora: reloj() });
         Object.assign(datos, { sistema: e.sistema, usuario: e.usuario, mensajes: [{ role: 'user', content: e.usuario }], texto: '', turno: undefined, vueltas: 0 });
         await guardarAvance(db, task.id, token, datos, reloj(), { soltar: true });
         return { estado: 'pausada', motivo: 'el jefe pidió correcciones' };
@@ -304,7 +320,7 @@ async function finalizar(deps, { fila, token, datos, task, C, agente, aj, apr, m
     }
   }
   // --- la tarea, como la deja runServerTask ---
-  const ahora = reloj(), out = { result: texto, usd: datos.usd, read: datos.leidas, tools: [...new Set(datos.usadas.map(n => n.split('__')[1]).filter(Boolean))], used: datos.usadas, skills: [], modelUsed: datos.modelo.pick?.model, modelFrom: datos.modelo.pick?.from, modelId: datos.modelo.id };
+  const ahora = reloj(), out = { result: texto + (datos.avisoModelo && !aprobar ? `\n\n---\n${datos.avisoModelo}` : ''), usd: datos.usd, read: datos.leidas, tools: [...new Set(datos.usadas.map(n => n.split('__')[1]).filter(Boolean))], used: datos.usadas, skills: [], modelUsed: datos.modelo.pick?.model, modelFrom: datos.modelo.pick?.from, modelId: datos.modelo.id };
   const base = datos.base, mio = clonar(task); mio.startedAt = mio.startedAt || ahora;
   let resultado;
   await conSesion(db, {}, async s => {

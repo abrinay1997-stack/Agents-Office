@@ -5,6 +5,8 @@
 //   /api/team · /api/agents · /api/calendar.ics
 // y, cada minuto, el reloj de serve.mjs: las rutinas que tocan se vuelven tareas, las programadas para ahora pasan a la cola y los avisos de fecha límite.
 // Los agentes NO se ejecutan aquí (fase 4): la cola queda lista y la fase 4 la lee con tomarSiguiente(db) y devuelve lo que hizo con guardarEjecucion(db, …).
+import { cargarBibliotecaNube } from '../lib/biblioteca.js';
+import { resumenDe } from '../../../biblioteca-core.mjs';
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { conSesion, cargarTareas } from '../lib/tareas/sesion.js';
 import { leerContexto } from '../lib/tareas/contexto.js';
@@ -127,7 +129,7 @@ async function manejarTareas({ req, env, db, ruta, url, usuario, b, g }) {
 }
 
 /* ---------- agentes (el roster) ---------- */
-async function manejarAgentes({ req, db, ruta, usuario, b }) {
+async function manejarAgentes({ req, env, db, ruta, usuario, b }) {
   const C = await leerContexto(db);
   if (ruta === '/api/agents' && req.method === 'GET') {
     const { listarFilas } = await import('../lib/almacen.js');
@@ -163,6 +165,7 @@ async function manejarAgentes({ req, db, ruta, usuario, b }) {
     agent: C.salida().find(x => x.id === a.id), skills: (await skillsDe(db, a)).map(s => ({ name: s.name, description: s.description || '', agents: s.agents || [], departments: s.departments || [], everyone: !!s.everyone, files: (s.files || []).map(f => f.name), source: 'brain', path: '' })), biblioteca: [], lessons: await leccionesDe(db, a.id),
     stats: { done: bien.length, failed: hechas.length - bien.length, running: tareas.filter(t => t.state === 'doing').length, waiting: tareas.filter(t => t.state === 'waiting').length, pending: tareas.filter(t => t.state === 'next' || t.state === 'scheduled').length, avgMinutes: dur.length ? Math.round(dur.reduce((x, y) => x + y, 0) / dur.length / 60000) : null },
     recent: tareas.filter(t => !t.archived).sort((x, y) => (y.doneAt || y.addedAt || 0) - (x.doneAt || x.addedAt || 0)).slice(0, 10).map(t => ({ id: t.id, title: t.title, state: t.state, error: !!t.error, at: t.doneAt || t.addedAt })),
+    biblioteca: (await cargarBibliotecaNube({ env, db, agentes: C.agents })).b.de(a).map(h => ({ ...resumenDe(h), suya: h.agents.includes(a.id) })), // las habilidades que puede leer (como la ficha local)
     connectors: [], studio: false, contenido: false,
   });
 }
@@ -187,7 +190,7 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
     if (typeof b.text !== 'string' || b.text.trim().length > MAX_TEXTO_RUTINA) return json({ error: 'el texto de la rutina debe tener entre 1 y 4000 caracteres' }, 400);
     let when = b.when; if (when !== undefined && when !== null) { when = limpiarWhen(when); if (!when) return json({ error: 'ese horario no está completo' }, 400); }
     const enrutar = crearEnrutador({ env, agents: C.agents, depts: C.depts, nombre: C.nombre, fetchFn: env.__pruebas?.fetchIA });
-    const r = await RT.crearRutina(db, { agents: C.agents, enrutar }, { dept: b.dept, text: b.text, when: when ?? undefined, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort });
+    const r = await RT.crearRutina(db, { agents: C.agents, enrutar }, { dept: b.dept, text: b.text, when: when ?? undefined, agent: b.agent, needsOk: b.needsOk, model: b.model, effort: b.effort, team: b.team === true });
     return json(r, r.error ? 400 : 200);
   }
   const m = ruta.match(/^\/api\/routines\/([^/]+)(?:\/(run|pause|resume|skip|unskip))?$/);
@@ -234,6 +237,7 @@ async function manejarRutinas({ req, env, db, ruta, usuario, b }) {
   if (b.agent !== undefined) { const a = C.agents.find(x => x.id === b.agent && x.department === r.dept); if (!a) return json({ error: 'ese agente no está en el departamento de la rutina' }, 400); patch.agent = a.id; }
   if (b.model !== undefined) patch.model = normModel(b.model) || '';
   if (b.effort !== undefined) patch.effort = normEffort(b.effort) || '';
+  if (typeof b.team === 'boolean') { patch.team = b.team ? true : undefined; if (b.team) { const lead = C.agents.find(x => x.department === r.dept && x.lead); if (lead) patch.agent = lead.id; } } // todo el equipo: el jefe la lleva
   const out = await RT.editarRutina(db, C.agents, r.id, patch);
   return salida({ ok: true, routine: out });
 }
