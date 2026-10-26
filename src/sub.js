@@ -186,7 +186,7 @@ export function initSub(ctx) {
   const deptOf = k => (k === 'dueno' ? DUENO_DEPT : DEPTS[k] || { name: k, chip: '#999' });
   // 26 oct 2026: una pieza puede ir a OTRA PERSONA del equipo (dept 'persona' + su nombre): una cuenta de la plataforma o alguien de Ajustes → Equipo
   let gente = [];
-  const cargarGente = async () => { try { const j = await (await fetch('/api/team')).json(), yo = globalThis.AO_NUBE?.yo?.()?.nombre; gente = (j.people || []).map(p => p.name).filter(n => n && n !== 'Tú' && n !== yo); } catch { /* sin equipo (la demo) */ } };
+  const cargarGente = async () => { if (!/^https?:$/.test(location.protocol)) return; /* la demo (file://) no tiene oficina: ni se intenta */ try { const j = await (await fetch('/api/team')).json(), yo = globalThis.AO_NUBE?.yo?.()?.nombre; gente = (j.people || []).map(p => p.name).filter(n => n && n !== 'Tú' && n !== yo); } catch { /* sin equipo (la demo) */ } };
   const repinta = () => { if (messages.some(m => m.plan?.tasks?.some(t => t.state === 'proposed'))) render(); }; // solo si hay un plan abierto: su destino ofrece a las personas
   cargarGente().then(repinta); addEventListener('ao:yo', () => cargarGente().then(repinta));
   const destName = t => (t.dept === 'persona' ? t.persona || 'una persona' : deptOf(t.dept).name);
