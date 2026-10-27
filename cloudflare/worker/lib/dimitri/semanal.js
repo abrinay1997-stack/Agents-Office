@@ -57,9 +57,8 @@ async function redactar({ env, db, cfg, ahora, fetchFn }) {
     `Indicadores: ${k.defs.map((d) => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`,
     `Sugerencias de costo: ${c.suggestions.map((x) => x.text).join(' | ') || 'ninguna'}`, await tareasSemana(db, l, C)].filter(Boolean).join('\n');
   const nombre = sub.nameOf(cfg);
-  const { text } = await preguntar({ env, db, cfg, fetchFn }, `Eres ${nombre}, la mano derecha del dueño de ${cfg.name || 'PanaClaw'}. Escribes el informe del lunes: claro, concreto, en español, 180–260 palabras, sin relleno.`,
-    `Datos de la semana:\n${facts}\n\nEscribe: 1) cómo fue la semana en tres líneas, 2) lo que salió bien, 3) lo que falló o se atasca, 4) tres decisiones que el dueño debería tomar esta semana, cada una con el porqué. Solo texto.`, { maxTokens: 1200, tipo: 'informe', model: 'sonnet' });
-  await chat.anexar(db, sub.message('sub', '📋 Informe de la semana\n\n' + text, { mode: 'analisis' }));
-  await avisar(db, { kind: 'weekly', text: `📋 Informe de la semana de ${nombre}:\n${text}` });
+  const { text } = await preguntar({ env, db, cfg, fetchFn }, sub.informeSistema(nombre, cfg.name || 'PanaClaw'), sub.informePedido(facts), { maxTokens: 600, tipo: 'informe', model: 'sonnet' });
+  await chat.anexar(db, sub.message('sub', '📋 Resumen de la semana\n\n' + text, { mode: 'analisis' }));
+  await avisar(db, { kind: 'weekly', text: `📋 Resumen de la semana de ${nombre}:\n${text}` });
   return text;
 }

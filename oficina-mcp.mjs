@@ -12,7 +12,7 @@ import { tareasTexto, agendaTexto, rutinasTexto, publicadasTexto, huecosTexto, c
 const OFFICE = (process.env.AO_OFFICE || 'http://127.0.0.1:4520').replace(/\/+$/, '');
 const DEPTS = ['emails', 'sales', 'marketing', 'ops', 'fin', 'delivery'];
 const TIPOS = ['rutina_crear', 'rutina_saltar', 'rutina_pausar', 'rutina_reanudar', 'rutina_editar', 'rutina_ahora', 'tarea_mover', 'tarea_cancelar', 'tarea_editar', 'tarea_repetir', 'mia_delegar', 'mia_hecha', 'pieza_crear', 'pieza_mover', 'contenido_llenar',
-  'anuncio_pausar', 'anuncio_bajar_presupuesto', 'anuncio_borrador']; // A3: un borrador de campaña en la oficina (nada en Meta) · Fase A2 de Anuncios: bajar el gasto sí; lo que gasta (sub.OPS_GASTO) no está aquí y la API le da 403
+  'anuncio_pausar', 'anuncio_bajar_presupuesto', 'anuncio_borrador', 'nota_crear', 'nota_agregar']; // 27 oct 2026: el Cerebro (nota nueva o añadir a una; nunca reemplazar ni borrar) · A3: un borrador de campaña en la oficina (nada en Meta) · Fase A2 de Anuncios: bajar el gasto sí; lo que gasta (sub.OPS_GASTO) no está aquí y la API le da 403
 
 async function office(pathname, body, method) {
   let r;

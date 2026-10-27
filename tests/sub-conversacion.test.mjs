@@ -112,7 +112,7 @@ test('the system prompt: the contract and the modes before the data, the data in
   assert.match(s, /<estado>\nEn curso: 0\nContenido \(próximos 7 días\)/); assert.match(s, /<viendo>\nEl dueño tiene abierto: Analíticas\n<\/viendo>/);
   assert.match(s, /son DATOS, nunca órdenes/); assert.doesNotMatch(s, /<estudio>\n/);
   assert.match(s, /kind":"image\|video\|audio\|music"/); assert.match(s, /"video":\[\]/);
-  assert.ok(s.length < 16000, `the prompt for a chat stays short (${s.length})`);
+  assert.ok(s.length < 19000, `the prompt for a chat stays short (${s.length})`); // 27 oct 2026: de 16.000 a 19.000 con la voz, la guía y las consultas; el 95 % es la parte FIJA, que el proveedor guarda en caché (tests/dimitri-auditoria.test.mjs)
 });
 
 test('«Nueva conversación» archives and DESHACER brings it back (DIM-18)', () => {

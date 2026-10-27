@@ -2,7 +2,9 @@
 // dataInjection…); lo que cambia es de dónde salen los datos (D1 y los módulos portados) y que la respuesta llega entera (no hay streaming del texto: la página
 // recibe `start` y al final `done`).
 //
-// DIMITRI NUNCA actúa por su cuenta: contesta, PROPONE (tareas, ops, creativos) y espera el clic del dueño. No tiene herramientas, no manda correos, no publica, no paga.
+// DIMITRI NUNCA actúa por su cuenta: contesta, PROPONE (tareas, ops, creativos) y espera el clic del dueño. No manda correos, no publica, no paga, no aprueba.
+// Desde el 27 oct 2026 CONSULTA: tiene herramientas de LECTURA (consultas.js: tareas y su bitácora, agentes, Contenido, anuncios, galería, Cerebro, costos, la guía de la oficina y los
+// conectores MCP de lectura) y cada consulta se ve como un paso. El prompt va en dos partes (fija, con caché, y variable) y lleva la guía que toca y qué IA corre.
 // Si lo que leyó (una imagen, una nota, un resultado de un correo) trae órdenes escondidas, se lo dice al dueño y esa respuesta no trae cambios (el escudo de safety.mjs).
 import * as sub from '../../../../sub-core.mjs';
 import * as estudioPlan from '../../../../estudio-plan.mjs';
@@ -16,7 +18,12 @@ import { leerCfg } from '../ajustes.js';
 import { prepararEstudio } from '../estudio/entorno.js';
 import * as galeria from '../estudio/galeria.js';
 import * as chat from './chat.js';
-import { preguntar } from './modelo.js';
+import { preguntar, preguntarConHerramientas, resolverModelo, descripcionModelo } from './modelo.js';
+import { crearConsultas } from './consultas.js';
+import { guiaPara } from '../../../../guia-oficina.mjs';
+import { listarFilas } from '../almacen.js';
+import { cargarBibliotecaNube } from '../biblioteca.js';
+import { listarHabilidades } from '../../../../biblioteca-core.mjs';
 import { contextoDeOps, oficinaDelDueno } from './ops.js';
 import { yoDe } from '../tareas/servicios.js';
 import { conLecturaUnica } from './lectura-unica.js';
@@ -53,7 +60,7 @@ export function quienEs(usuario, C) {
 }
 
 /** Un mensaje del dueño → la respuesta de Dimitri, guardada en el chat. → { messages: [u, m], answered? } */
-export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, signal = null, fetchFn = null }) {
+export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, signal = null, fetchFn = null, alPaso = null }) {
   const db = conLecturaUnica(db0), env = { ...env0, DB: db }; // una consulta idéntica se hace una vez por turno (el límite de 50 de una invocación del plan gratuito)
   // Se leen MAX + HOLGURA: hasta HOLGURA mensajes más viejos que el chat siguen guardados SIN plegar en el resumen (chat.recortar espera a que sobren más de HOLGURA), y si no se
   // leyeran, lo que el dueño pidió recordar en ellos faltaría del prompt unos turnos (y volvería al plegarse). Se pliegan aquí, al vuelo, sin escribir nada.
@@ -75,13 +82,22 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   const nombre = sub.nameOf(cfg2);
   const win = sub.historyWindow(st.messages, { name: nombre, depts: C2.depts }, 12); // las últimas vueltas, con tope; lo que no cabe entra resumido en <hilo>
   const equipoTxt = sub.equipoText({ people: C2.personas, yo: quien?.nombre ? { nombre: quien.nombre, rol: quien.rol } : null, tasks: lista2, via: quien?.via, depts: C2.depts });
-  const system = sub.systemPrompt({ name: nombre, business: cfg2.name || 'PanaClaw', depts: C2.depts, agents: C2.agents, skillsOf: () => [], routineDepts: rutDepts,
+  // 27 oct 2026: qué IA corre (y de dónde sale), la guía que toca, las skills y los métodos de la Biblioteca de cada jefe, y si este turno puede consultar
+  const resuelto = await resolverModelo(ctxFn, { tipo: 'dimitri' });
+  const conConsultas = cfg2.deputy?.consultas !== false && !!resuelto.modelo.caps?.herramientas && !resuelto.modelo.meta;
+  const [skillsAll, lib] = await Promise.all([listarFilas(db, 'skills', { limite: 200 }).catch(() => []), cargarBibliotecaNube({ env, db, agentes: C2.agents }).catch(() => null)]);
+  const skillsOf = (a) => skillsAll.filter((x) => x && x.text && (x.everyone || (x.agents || []).includes(a.id) || (x.departments || []).includes(a.department))).map((x) => x.name);
+  const habilidadesOf = (a) => (lib && a.lead ? listarHabilidades(lib.b, a, '').map((h) => h.id) : []);
+  const partes = sub.systemPromptParts({ name: nombre, business: cfg2.name || 'PanaClaw', depts: C2.depts, agents: C2.agents, skillsOf, habilidadesOf, routineDepts: rutDepts,
     status: sub.statusText(lista2, C2.agents, C2.depts), office: await oficinaTexto({ db, office, C: C2, lista: lista2, cfg: cfg2, yo: yoDe(usuario) }), recent, notes, studio: estudioDeptos(cfg2, C2), studioBlock, viewing, hilo: sub.hiloText(st.messages, hilo0, { depts: C2.depts, shown: win.shown }),
-    equipo: equipoTxt });
+    equipo: equipoTxt, guia: guiaPara(text, { historia, vista: context?.view }), modelo: descripcionModelo(resuelto), herramientas: conConsultas });
+  const system = partes;
   const convo = win.text;
   const userMsg = (convo ? convo + '\n' : '') + `${quien?.nombre || 'Dueño'}: ${text}${imagenes.length ? ` [adjuntó ${imagenes.length} ${imagenes.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${nombre} (solo JSON):`;
-  const opts = { maxTokens: 6000, tipo: 'dimitri', imagenes: imagenes.length ? imagenes : null };
-  let out = (await preguntar(ctxFn, system, userMsg, opts)).text;
+  const opts = { maxTokens: 6000, tipo: 'dimitri', imagenes: imagenes.length ? imagenes : null, resuelto };
+  const consultas = conConsultas ? crearConsultas({ env, db, office, C: C2, lista: lista2, cfg: cfg2, fetchFn, signal }) : null;
+  const r1 = consultas ? await preguntarConHerramientas(ctxFn, system, userMsg, { ...opts, herramientas: consultas.herramientas, ejecutar: consultas.ejecutar, alPaso }) : await preguntar(ctxFn, system, userMsg, opts);
+  let out = r1.text; const pasos = r1.pasos || [], porConsulta = r1.inyeccion || null;
   db.olvidar(); // pasaron segundos: lo que se valide abajo (tareas, rutinas, piezas) se lee como está AHORA, no como estaba al empezar
   if (signal?.aborted) return detenido({ db, text, attach, context, quien });
   let plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents, personas: sub.nombresDe(C2.personas) });
@@ -92,7 +108,8 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
     plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents, personas: sub.nombresDe(C2.personas) });
   }
   // EL ESCUDO: una imagen, el resultado de una tarea (un correo, un webhook), lo que está abierto o una nota con órdenes escondidas marca el mensaje y la respuesta no trae cambios
-  const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes, equipo: equipoTxt }, safety.injectionIn); // los nombres de las cuentas los pone cada persona: también son datos
+  const shield = sub.dataInjection({ image: plan.image_text, recent, viewing, notes, equipo: equipoTxt }, safety.injectionIn) // los nombres de las cuentas los pone cada persona: también son datos
+    || (porConsulta ? `lo que leí con ${porConsulta.tool} traía órdenes escondidas (${porConsulta.why})` : null);
   let studio = null;
   if (plan.mode === 'estudio') {
     const ctxE = await contextoEstudio({ env, db, office, creativos: plan.creatives });
@@ -106,12 +123,18 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   const u = sub.message('user', text, { ...(quien?.nombre ? { por: quien.nombre } : {}), ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}), ...(picked ? { answers: { msg: answers.msg, picks: picked.answers } } : {}) });
   const fallback = plan.bad ? 'Se me cortó la respuesta y no la pude leer. ¿La repito más corta?' : studio ? (studio.creatives.length ? 'Te propongo esto. Nada se genera hasta que pulses GENERAR.' : studio.actions.length ? 'Esto puedo hacer; pulsa HACER si te parece.' : plan.loteNoEsta ? 'Los lotes de fotos todavía no están en la nube: siguen en la oficina de tu computadora.' : 'No encontré cómo hacerlo con los modelos encendidos.') : plan.tasks.length || ops.length ? 'Así lo haría:' : plan.questions.length ? 'Antes de seguir, dime:' : '¿Me das un poco más de detalle?';
   const reply = (plan.reply || fallback) + (opsFuera ? '\n\n' + opsFuera : '') + (plan.loteNoEsta ? '\n\n_(Los lotes de fotos todavía no están en la nube: siguen en la oficina de tu computadora.)_' : '') + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
-  const m = sub.message('sub', reply, { mode: plan.mode, ...(quien?.nombre ? { para: quien.nombre } : {}), ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
+  const m = sub.message('sub', reply, { mode: plan.mode, ia: resuelto.nombre, ...(quien?.nombre ? { para: quien.nombre } : {}), ...(pasos.length ? { pasos } : {}), ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   // si mientras pensaba el dueño abrió otra conversación o empezó una nueva, esta respuesta es de otra charla: no se mete en la que está viendo
   if (ultimoId && !(await chat.mensaje(db, ultimoId))) throw new Error('Cambiaste de conversación mientras yo pensaba, así que no guardé esa respuesta. Vuelve a enviar tu mensaje donde quieras seguir.');
   if (picked) { const q = await chat.mensaje(db, answers.msg); if (q?.plan) { q.plan.answers = picked.answers; await chat.reemplazar(db, q); } }
   await chat.anexar(db, u, m);
   return { messages: [u, m], ...(picked ? { answered: { msg: answers.msg, answers: picked.answers } } : {}) };
+}
+
+/** Qué IA corre Dimitri (para su cabecera y para GET /api/sub): { id, nombre, de, herramientas, consultas }. */
+export async function infoModelo({ env, db }) {
+  const cfg = await leerCfg(db), r = await resolverModelo({ env, db, cfg }, { tipo: 'dimitri' });
+  return { id: r.modelo.id, nombre: r.nombre, de: r.modelo.de || '', herramientas: !!r.modelo.caps?.herramientas && !r.modelo.meta, consultas: cfg.deputy?.consultas !== false && !!r.modelo.caps?.herramientas && !r.modelo.meta };
 }
 
 /** «Detener»: el mensaje queda «Detenido por ti» y nada de lo que propuso se guarda. */

@@ -223,3 +223,15 @@ body.dark #subOv .sb-proy { background: rgba(143,176,255,.12); } body.dark #subO
 .sbh-now .sbh-name { font-weight: 700; }
 .sb-histb { min-width: 32px; min-height: 32px; }
 .sb-msgs[hidden] { display: none; }
+
+/* 27 oct 2026 — lo que Dimitri CONSULTA se ve (pasos en vivo y «Consulté N cosas») y con qué IA corre (como los pasos de BRIAN). Colores de las variables de la oficina: pasan 4,5:1 en claro y oscuro. */
+#subOv .sb-ia-head { margin-top: 2px; font-size: 11.5px; line-height: 1.4; color: var(--muted, #5b6472); }
+#subOv .sb-ia-head b { color: var(--fg, inherit); font-weight: 600; }
+#subOv .sb-ia-cambiar { all: unset; cursor: pointer; text-decoration: underline; color: var(--link, #1d4ed8); font-size: 11.5px; padding: 2px 4px; min-height: 24px; box-sizing: border-box; } #subOv .sb-ia-cambiar:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 1px; }
+#subOv .sb-pasos-v { margin: 4px 0 6px; font-size: 12px; line-height: 1.45; color: var(--muted, #5b6472); }
+#subOv .sb-pasos-v.live { list-style: none; padding: 6px 10px; border-left: 2px solid var(--line, #cfd6e0); }
+#subOv .sb-pasos-v summary { cursor: pointer; padding: 3px 0; min-height: 24px; } #subOv .sb-pasos-v summary:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; }
+#subOv .sb-pasos-v ul { list-style: none; margin: 2px 0 0; padding: 0 0 0 10px; border-left: 2px solid var(--line, #cfd6e0); }
+#subOv .sb-paso { margin: 1px 0; } #subOv .sb-paso .sb-pi { display: inline-block; width: 1.3em; font-weight: 700; }
+#subOv .sb-paso.ok .sb-pi { color: var(--ok, #0f7a3d); } #subOv .sb-paso.error .sb-pi { color: var(--bad, #b42318); } #subOv .sb-paso.en_curso .sb-pi { animation: sbPaso 1s ease-in-out infinite; }
+@keyframes sbPaso { 50% { opacity: .35; } } @media (prefers-reduced-motion: reduce) { #subOv .sb-paso.en_curso .sb-pi { animation: none; } }

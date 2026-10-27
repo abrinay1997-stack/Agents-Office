@@ -1,5 +1,17 @@
 # Changelog
 
+## Auditoría de Dimitri: consulta, habla claro, se le ve trabajar, y el Cerebro se escribe — 27 oct 2026
+
+Pedido del dueño: que Dimitri conozca la oficina «absolutamente toda», sepa quién hizo cada cosa, hable natural y corto, diga qué IA usa, use los conectores y pueda añadir a una nota; y poder escribir, editar y borrar notas propias en el Cerebro. Informe y plan por fases: `docs/auditoria-dimitri-2026-10-27.md` (estudiando a BRIAN, el asistente de D'CASA; solo ideas, nada de código).
+
+- **La guía de la oficina** (`guia-oficina.mjs`, 45 entradas) en el prompt por mensaje (`<guia>`), con índice siempre y la herramienta `buscar_en_guia`. Regla nueva: una función nueva entra a la guía en el mismo cambio (prueba de cobertura).
+- **Consultas** (nube): 18 herramientas de lectura en un bucle corto (6 llamadas, 10 consultas) —tareas y su bitácora, quién hizo qué, agentes con sus skills y su Biblioteca, equipo, Cerebro, Contenido, anuncios, analíticas, galería, rutinas, costos, aprobaciones y conectores de lectura—, todas por el escudo contra órdenes escondidas y el guardián; ninguna escribe.
+- **Se ve trabajar:** pasos en vivo (NDJSON `paso`) y «Consulté N cosas» guardado, en escritorio y celular; «IA: … · cambiar» en la cabecera y «Corres con …» en su prompt.
+- **Voz:** bloque «CÓMO HABLAS» primero en el prompt; el resumen del lunes, de ≤ 110 palabras y sin títulos (nube y local).
+- **Prompt en dos partes** (`systemPromptParts`): lo fijo con marca de caché del proveedor; lo variable (hora, equipo, notas, estado, guía) aparte. El roster trae las skills y los métodos de la Biblioteca de cada jefe (en la nube no veía ninguno).
+- **El Cerebro se escribe:** `POST|PUT /api/note`, `/api/note/append`, papelera para **cualquier** nota (30 días, vuelve a su carpeta) en local y nube (migración `0100_notas_papelera.sql`), editor y «✎ Nueva nota» en escritorio y celular, sin pisar lo que otra persona cambió. Dimitri: `nota_crear` y `nota_agregar` (nunca reemplazar ni borrar), con clic y DESHACER.
+- **Pruebas nuevas:** `tests/guia-oficina`, `tests/dimitri-auditoria`, `tests/cerebro-escribir`, `cloudflare/tests/dimitri-consultas` (13 casos con un modelo de mentira que pide herramientas) y `cloudflare/tests/cerebro-escribir`.
+
 ## Dimitri conoce al equipo, sabe quién le escribe y deja listas de tareas hechas para una persona — 26 oct 2026
 
 Pedido del dueño: le preguntó a Dimitri cuántos usuarios administrativos hay porque quería que le dejara una lista de tareas hecha a su pareja (administrativa); Dimitri contestó que no veía usuarios, solo 35 escritorios, y que no sabía quién le escribía.

@@ -1,0 +1,5 @@
+/* 27 oct 2026 — escribir en el Cerebro: el editor de una nota y el formulario de la nota nueva (el panel del Cerebro es oscuro siempre). */
+.bv-ed, .bv-in { width: 100%; box-sizing: border-box; color: inherit; background: rgba(253,255,248,.07); border: 1px solid rgba(253,255,248,.3); border-radius: 8px; padding: 8px 10px; font: 13px/1.5 var(--ui, system-ui, sans-serif); }
+.bv-ed { min-height: 240px; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+.bv-ed:focus-visible, .bv-in:focus-visible { outline: 2px solid var(--focus, #9ec5ff); outline-offset: 1px; }
+.bv-edn { margin-left: 8px; font-size: 12px; }

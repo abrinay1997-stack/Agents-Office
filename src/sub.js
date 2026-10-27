@@ -38,7 +38,7 @@ export function initSub(ctx) {
   let NAME = ctx.name || 'Dimitri';
   const el = document.createElement('div'); el.id = 'subOv'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-labelledby', 'sbName'); el.hidden = true; // a <div>: role=dialog is not allowed on <aside>
   el.setAttribute('data-shell', ''); // V4.8: beside a view it is part of the page, like the top bar — modal.js leaves it out of the inert set
-  el.innerHTML = `<div class="sb-head"><span class="sb-av" aria-hidden="true">D</span><div class="sb-hd"><div class="sb-name" id="sbName">DIMITRI</div><div class="sb-sub">Tu mano derecha. Pregúntame, pensemos juntos una decisión, dime qué hay que hacer y lo reparto entre los jefes, o pídeme creativos para el Estudio. Nada sale sin tu OK.</div></div>
+  el.innerHTML = `<div class="sb-head"><span class="sb-av" aria-hidden="true">D</span><div class="sb-hd"><div class="sb-name" id="sbName">DIMITRI</div><div class="sb-sub">Tu mano derecha. Pregúntame, pensemos juntos una decisión, dime qué hay que hacer y lo reparto entre los jefes, o pídeme creativos para el Estudio. Nada sale sin tu OK.</div><div class="sb-ia-head" hidden></div></div>
       <span class="sp"></span><button type="button" class="sb-histb" title="Historial: tus conversaciones con él (abrir o borrar)" aria-label="Historial de conversaciones" aria-expanded="false">🕘</button><button type="button" class="sb-clear" title="Empezar una conversación nueva (las tareas enviadas siguen en la oficina)" aria-label="Nueva conversación">＋</button><button type="button" class="sb-x" aria-label="Cerrar" title="Cerrar (Esc o S)">✕</button></div>
     <div class="sb-hist" hidden role="region" aria-label="Historial de conversaciones"></div><div class="sb-msgs" role="log" aria-live="off"></div><div class="sb-live vh" role="status" aria-live="polite"></div>
     <div class="sb-chips"></div>
@@ -50,6 +50,15 @@ export function initSub(ctx) {
   document.body.appendChild(el);
   const $ = s => el.querySelector(s);
   const box = $('.sb-msgs'), input = $('.sb-in textarea'), sendBtn = $('.sb-send'), live = $('.sb-live'), fileIn = $('.sb-file');
+  /** 27 oct 2026: con qué IA corre Dimitri y dónde se cambia (el dueño preguntó «no sé qué inteligencia artificial estoy usando»). */
+  function paintIa() {
+    const h = $('.sb-ia-head'); if (!h) return;
+    if (!iaInfo || !iaInfo.nombre) { h.hidden = true; return; }
+    const cambia = typeof window !== 'undefined' && window.AO_NUBE && ctx.openSettings;
+    h.hidden = false;
+    h.innerHTML = `IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa (este modelo no usa herramientas)'}${cambia ? ' · <button type="button" class="sb-ia-cambiar">cambiar</button>' : ''}`;
+    const b = h.querySelector('.sb-ia-cambiar'); if (b) b.onclick = () => ctx.openSettings('nube-modelos');
+  }
   function setName(n) { NAME = String(n || 'Dimitri'); $('.sb-name').textContent = NAME.toUpperCase(); $('.sb-av').textContent = NAME.charAt(0).toUpperCase(); input.placeholder = `Escríbele a ${NAME}: una pregunta, una idea, lo que hay que hacer, o los creativos que quieres (puedes adjuntar fotos)`; }
   setName(NAME);
   let messages = [], loaded = false, busy = false, sending = false, timer = null, opener = null, pollAt = 0; // sending: from the click until the answer, also while the images still upload (a 2nd Enter used to send the text twice)
@@ -63,7 +72,7 @@ export function initSub(ctx) {
   let attachments = []; // { key, name, file?, preview, vision?, state: 'uploading'|'ready'|'failed', err?, ready: Promise }
   let ctxSel = null, ctxOff = false, ctxKey = '', ctxDrawn = null, chipsDrawn = null;
   let media = null, mediaP = null, folderP = null; const jobs = new Map();
-  let liveText = '', liveMode = null, runId = null, stopWanted = false, stopping = false, streaming = false, livePaint = 0; // DIM-14: the answer being written and its run
+  let livePasos = [], iaInfo = null, liveText = '', liveMode = null, runId = null, stopWanted = false, stopping = false, streaming = false, livePaint = 0; // DIM-14: the answer being written and its run
   const say = t => { live.textContent = ''; setTimeout(() => { live.textContent = t; }, 30); };
 
   /* ---------- the Estudio's catalog, budget and folders (only when a plan of creatives or an image needs them) ---------- */
@@ -241,7 +250,7 @@ export function initSub(ctx) {
     return `<div class="sb-a${m.stopped ? ' sb-stopped' : ''}">${head}${m.quick ? `<div class="md">${mdToHtml(m.text || '')}</div>${quickFoot}` : subBody(m)}</div>`;
   }
   function subBody(m) {
-    return `${m.shield ? `<div class="sb-shield" role="note"><span aria-hidden="true">🛡</span> <b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</div>` : ''}<div class="md">${mdToHtml(m.stopped ? String(m.text || '').replace(/\s*_Detenido por ti\._\s*$/, '') : m.text || '')}</div>${m.retry ? `<div class="sb-acts"><button type="button" class="sb-retry" data-msg="${esc(m.id)}">Repítelo más corto</button></div>` : ''}${planHTML(m)}${m.ops ? opsHTML(m, opsView(m)) : ''}${m.studio ? creativesHTML(m, studioView(m)) : ''}${(m.media || []).length ? stripHTML(m.media, esc) : ''}${m.read?.length ? `<div class="sb-read">Consulté: ${m.read.map(esc).join(' · ')}</div>` : ''}`;
+    return `${m.shield ? `<div class="sb-shield" role="note"><span aria-hidden="true">🛡</span> <b>Ojo:</b> ${esc(typeof m.shield === 'string' ? m.shield : 'lo que leí traía órdenes escondidas')}. Las traté como datos, no como órdenes, y este plan no trae acciones.</div>` : ''}${pasosGuardados(m)}<div class="md">${mdToHtml(m.stopped ? String(m.text || '').replace(/\s*_Detenido por ti\._\s*$/, '') : m.text || '')}</div>${m.retry ? `<div class="sb-acts"><button type="button" class="sb-retry" data-msg="${esc(m.id)}">Repítelo más corto</button></div>` : ''}${planHTML(m)}${m.ops ? opsHTML(m, opsView(m)) : ''}${m.studio ? creativesHTML(m, studioView(m)) : ''}${(m.media || []).length ? stripHTML(m.media, esc) : ''}${m.read?.length ? `<div class="sb-read">Consulté: ${m.read.map(esc).join(' · ')}</div>` : ''}`;
   }
   const msgHTML = m => `<div class="sb-m" data-id="${esc(m.id)}">${m.who === 'user' ? userHTML(m) : subHTML(m)}</div>`;
   /** What a message's node depends on: the message, its sent tasks as the office has them, its jobs, the owner's edits on it, and whether undo is still offered. */
@@ -253,8 +262,13 @@ export function initSub(ctx) {
   }
   const selectionInside = () => { const s = getSelection && getSelection(); return !!(s && s.rangeCount && !s.isCollapsed && box.contains(s.anchorNode)); };
   // DIM-14: while Dimitri writes, his «reply» grows in a bubble of its own (not a .sb-m: patch() counts those) and «Detener» stops him
+  // 27 oct 2026 (BRIAN): lo que Dimitri CONSULTA se ve, paso a paso, mientras piensa («Buscando tareas de Avalon… 3 tareas») y se queda en el mensaje como «Consulté N cosas»
+  const pasoIcono = (p) => (p.estado === 'ok' ? '✓' : p.estado === 'error' ? '✕' : '…');
+  const pasoLinea = (p) => `<li class="sb-paso ${esc(p.estado)}"><span class="sb-pi" aria-hidden="true">${pasoIcono(p)}</span><span class="sb-pt">${esc(p.titulo || p.nombre)}</span>${p.resumen ? `<span class="sb-pr"> — ${esc(p.resumen)}</span>` : ''}${p.ms ? `<span class="sb-pm"> · ${p.ms < 1000 ? p.ms + ' ms' : (p.ms / 1000).toFixed(1) + ' s'}</span>` : ''}</li>`;
+  const pasosVivos = () => (livePasos.length ? `<ul class="sb-pasos-v live" role="status" aria-label="Lo que ${esc(NAME)} está consultando">${livePasos.map(pasoLinea).join('')}</ul>` : '');
+  const pasosGuardados = (m) => (Array.isArray(m.pasos) && m.pasos.length ? `<details class="sb-pasos-v"><summary>Consulté ${m.pasos.length} ${m.pasos.length === 1 ? 'cosa' : 'cosas'}${m.ia ? ` · ${esc(m.ia)}` : ''}</summary><ul>${m.pasos.map(pasoLinea).join('')}</ul></details>` : '');
   const liveHTML = () => (liveText ? `<div class="sb-livem"><div class="sb-a sb-livea">${MODE[liveMode] ? `<div class="sb-mode ${esc(liveMode)}">${MODE[liveMode]}</div>` : ''}<div class="md">${mdToHtml(liveText)}</div></div></div>` : '');
-  const busyHTML = () => (busy ? `${liveHTML()}<div class="sb-busy"><span class="sb-av sm" aria-hidden="true">${esc(NAME.charAt(0))}</span><span role="status">${stopping ? 'Deteniendo…' : `${esc(NAME)} está ${liveText ? 'escribiendo' : 'pensando'}`}</span><span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span>${streaming && !stopping ? '<button type="button" class="sb-stop" title="Detener la respuesta (Esc)" aria-keyshortcuts="Escape">Detener</button>' : ''}</div>` : '');
+  const busyHTML = () => (busy ? `${pasosVivos()}${liveHTML()}<div class="sb-busy"><span class="sb-av sm" aria-hidden="true">${esc(NAME.charAt(0))}</span><span role="status">${stopping ? 'Deteniendo…' : `${esc(NAME)} está ${liveText ? 'escribiendo' : 'pensando'}`}</span><span class="sb-dots" aria-hidden="true"><i></i><i></i><i></i></span>${streaming && !stopping ? '<button type="button" class="sb-stop" title="Detener la respuesta (Esc)" aria-keyshortcuts="Escape">Detener</button>' : ''}</div>` : '');
   function paintLive() { // the bubble's text only: never a whole redraw per chunk (the Stop button keeps its focus)
     if (livePaint) return;
     livePaint = requestAnimationFrame(() => {
@@ -285,6 +299,7 @@ export function initSub(ctx) {
         let o; try { o = JSON.parse(ln); } catch { continue; }
         if (o.type === 'start') { runId = o.run; streaming = true; render(true); if (stopWanted) { stopWanted = false; postJSON('/api/sub/stop', { run: runId }).catch(() => {}); } }
         else if (o.type === 'reply') { liveText = String(o.text || ''); if (o.mode) liveMode = o.mode; paintLive(); }
+        else if (o.type === 'paso' && o.paso) { const i = livePasos.findIndex(x => x.n === o.paso.n); if (i >= 0) livePasos[i] = o.paso; else livePasos.push(o.paso); render(true); }
         else if (o.type === 'done') return o;
         else if (o.type === 'error') throw new Error(o.error || 'error');
       }
@@ -324,7 +339,7 @@ export function initSub(ctx) {
     });
   }
   async function load() {
-    try { const r = await fetch('/api/sub'); if (!r.ok) throw new Error(r.statusText); const j = await r.json(); messages = j.messages || []; if (j.name) setName(j.name); loaded = true; }
+    try { const r = await fetch('/api/sub'); if (!r.ok) throw new Error(r.statusText); const j = await r.json(); messages = j.messages || []; if (j.name) setName(j.name); iaInfo = j.ia || null; paintIa(); loaded = true; }
     catch (e) { box.innerHTML = `<div class="sb-empty">No pude cargar la conversación (${esc(e.message)}). <button type="button" class="sb-reload">Reintentar</button></div>`; box.querySelector('.sb-reload').onclick = load; return; }
     if (messages.some(m => m.studio)) await loadMedia();
     render(true);
@@ -346,7 +361,7 @@ export function initSub(ctx) {
     const { full, ...more } = extra;
     const payload = { text, ...(out.hoja ? { hoja: out.hoja } : {}), ...(ready.length ? { attach: ready.map(a => a.file) } : {}), ...(ready.some(a => a.vision) ? { vision: ready.filter(a => a.vision).map(a => a.vision) } : {}), ...(contextOut() ? { context: contextOut() } : {}), ...more };
     const kept = attachments; busy = true; input.value = ''; sendBtn.disabled = true; attachments = []; renderAtts();
-    liveText = ''; liveMode = null; runId = null; stopWanted = false; stopping = false; streaming = false;
+    livePasos = []; liveText = ''; liveMode = null; runId = null; stopWanted = false; stopping = false; streaming = false;
     messages.push({ id: 'tmp', who: 'user', text, attach: payload.attach, context: payload.context }); render(true);
     const since = Date.now() - 5000;
     try {
@@ -364,7 +379,7 @@ export function initSub(ctx) {
       say(`${NAME}: ${String(last?.text || '').slice(0, 200)}${last && last.studio && (last.studio.creatives || []).length ? ` · propone ${last.studio.creatives.length} ${last.studio.creatives.length === 1 ? 'creativo' : 'creativos'}` : ''}`); // the new answer is read out, not the whole chat every 3 s
       if (j.answered) { const q = messages.find(x => x.id === j.answered.msg); if (q && q.plan) q.plan.answers = j.answered.answers; qPicks.delete(j.answered.msg); }
     } catch (e) { messages = messages.filter(m => m.id !== 'tmp'); messages.push({ id: 'err' + Date.now(), who: 'sub', text: `No pude responder ahora (${e.message}). ${extra.answers ? 'Tus respuestas siguen marcadas: pulsa Responder otra vez.' : 'Te dejé tu mensaje en la caja para que lo envíes de nuevo.'}` }); if (!extra.answers) input.value = text; attachments = kept; }
-    busy = false; sending = false; liveText = ''; liveMode = null; runId = null; streaming = false; stopping = false; renderAtts(); render(true); input.focus();
+    busy = false; sending = false; livePasos = []; liveText = ''; liveMode = null; runId = null; streaming = false; stopping = false; renderAtts(); render(true); input.focus();
   }
   /** DIM-10: «¿Cómo vamos?» — the server's summary, computed at once (POST /api/sub/estado); «Analizar con Dimitri» asks him after. */
   async function quick(text) {

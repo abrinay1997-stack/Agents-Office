@@ -58,6 +58,9 @@ import * as routines from './routines.mjs';
 import * as usage from './usage.mjs';
 import * as teams from './teams.mjs';
 import * as sub from './sub.mjs';
+import { guiaPara } from './guia-oficina.mjs';
+import { crearNotasLocal } from './cerebro-local.mjs';
+import { esClave as notaClave, quitarTexto, tieneSeccion } from './notas-core.mjs';
 import { cliDelta, replyFromPartial } from './src/sub-stream.js'; // DIM-14: Dimitri's answer while it is written
 import * as estudioPlan from './estudio-plan.mjs'; import * as vision from './vision.mjs';
 import * as estudioLote from './estudio-lote.mjs'; // banco de presets F3 (E7): el lote que propone Dimitri, validado y con su costo (puro) // V4.8: Dimitri's «estudio» mode and the images in its chat
@@ -930,7 +933,9 @@ async function subChatRun(text, { attach, images, context, answers, onText, run,
   const system = sub.systemPrompt({ name: DEPUTY, business: cfg.name, depts: DEPTS, agents: AGENTS, skillsOf: a => skills.names(a), routineDepts: routines.ALLOWED.map(k => `${DEPTS[k].name} (${k})`),
     status: sub.statusText(list, AGENTS, DEPTS), office: dimitriOffice(list), recent, notes,
     studio: STUDIO_DEPTS.map(k => DEPTS[k]?.name).filter(Boolean).join(', '), studioBlock, viewing, hilo: sub.hiloText(st.messages, st.hilo, { depts: DEPTS, shown: win.shown }),
-    equipo: equipoTxt }); // 26 oct 2026: las personas del equipo y quién escribe
+    equipo: equipoTxt, guia: guiaPara(text, { historia: st.messages.slice(-4).map(m => m.text).join(' '), vista: context?.view }), herramientas: false, // 26 oct 2026: las personas del equipo y quién escribe · 27 oct: la guía que toca, los métodos de la Biblioteca de cada jefe y con qué IA corre
+    habilidadesOf: a => (a.lead ? biblio.todas.filter(h => h.agents.includes(a.id)).map(h => h.id) : []),
+    modelo: `Claude (${cfg.model || 'sonnet'}) por Claude Code en esta computadora — el «Modelo por defecto» de la oficina, que se cambia en Ajustes (,) → La oficina; una tarea, una rutina o un agente puede traer el suyo` });
   const convo = win.text; // DIM-05: with what Dimitri asked and what the owner chose · DIM-18: each creative's prompt, settings and files
   const userMsg = (convo ? convo + '\n' : '') + `${quien?.nombre || 'Dueño'}: ${text}${H ? ` [adjuntó la hoja «${H.nombre}» (id ${H.id}, ${H.filas} filas): la ves en <estudio>]` : ''}${images.length ? ` [adjuntó ${images.length} ${images.length === 1 ? 'imagen' : 'imágenes'}: las ves arriba${attach.length ? '; sus ids: ' + attach.join(', ') : ''}]` : attach.length ? ` [adjuntó: ${attach.join(', ')}]` : ''}\n${DEPUTY} (solo JSON):`;
   let shown = ''; const stopped = () => !!run && subStopped.has(run);
@@ -1320,7 +1325,7 @@ async function subSend(msgId, edits) { // the owner pressed SEND: each included 
    with the owner's click (POST /api/sub/ops), checked again against the office as it is now, and undoable for UNDO_MS (POST /api/sub/ops/undo).
    Never approve, schedule in Meta or publish: a piece is born a draft and a moved approved piece loses its OK (contenido.guardar). */
 const OPS_UNDO_MS = 30000;
-const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe, personas: sub.nombresDe(PEOPLE()) });
+const opsContext = () => ({ depts: DEPTS, agents: AGENTS, routineDepts: routines.ALLOWED, routines: loadRoutines(), tasks: load(), piezaHas: id => !!contenido.leer(String(id)), anuncio: anuncioDe, personas: sub.nombresDe(PEOPLE()), notaDe: n => { const k = String(n || '').replace(/\s+/g, ' ').trim().toLowerCase(); for (const name of noteIndex().keys()) if (name.toLowerCase() === k) return name; return null; } });
 /* 9 oct 2026 (revisión de control): the same executor for Dimitri's cards and for an assistant connected by MCP (POST /api/oficina/accion,
    oficina-mcp.mjs) — the rules of the routes themselves (tareas/rutas.mjs, tareas/rutas-dueno.mjs, contenido/rutas.mjs), never a copy.
    q.por says who: 'dimitri' (the owner pressed HACER on his card) or 'asistente' (the owner's own AI client). Nothing here approves,
@@ -1379,6 +1384,16 @@ async function runOp(o, { por = 'dimitri' } = {}) {
     if (r.error) throw new Error(r.error); if (!o.persona) { o.agent = r.a; o.agentName = agentName(r.a); } o.undo = { deAgente: prev?.deAgente || null }; return;
   }
   if (o.type === 'mia_hecha') { const r = tareasRoutes.cambiarEstado(o.id, 'done', q); if (r.error) throw new Error(r.error); o.undo = { reabrir: true, at: Date.now() }; return; }
+  if (o.type === 'nota_crear') { // 27 oct 2026: una nota NUEVA en el Cerebro (con el clic del dueño); se deshace mandándola a la papelera
+    const r = notasLocal.crear({ nombre: o.nombre, texto: o.texto, grupo: o.grupo }); if (r.error) throw new Error(r.error);
+    Object.assign(o, { creada: r.nombre, desc: `Nota «${r.nombre}» creada en el Cerebro (carpeta ${o.grupo || 'Notas'}).`, undo: { papelera: r.nombre } }); await rebuildGraph(); return;
+  }
+  if (o.type === 'nota_agregar') { // añade al final (o a una sección) sin tocar lo que decía
+    const h = notasLocal.hallar(o.nombre); if (!h) throw new Error('esa nota ya no existe');
+    const creaSeccion = !!o.seccion && !tieneSeccion(fs.readFileSync(h.path, 'utf8'), o.seccion);
+    const r = notasLocal.agregar({ nombre: o.nombre, texto: o.texto, seccion: o.seccion || '' }); if (r.error) throw new Error(r.error);
+    Object.assign(o, { desc: `Añadí a la nota «${r.nombre}»${o.seccion ? ` (sección «${o.seccion}»)` : ''}: ${String(o.texto).replace(/\s+/g, ' ').slice(0, 90)}${String(o.texto).length > 90 ? '…' : ''}`, undo: { nota: r.nombre, add: String(o.texto).trim(), seccion: o.seccion || '', seccionCreada: creaSeccion, rev: r.modified } }); await rebuildGraph(); return;
+  }
   if (o.type === 'anuncio_borrador') { // Fase A3: un BORRADOR en la oficina, nada en Meta (crearlo allí, en pausa, es un clic del dueño en Anuncios)
     const creativos = (o.media || []).length ? o.media.map(m => ({ media: m, texto: o.texto || '' })) : o.texto ? [{ texto: o.texto }] : [];
     const b = anunciosBorr.crear({ nombre: o.nombre, objetivo: o.objetivo, ...(o.destino ? { destino: o.destino } : {}), ...(o.usd ? { presupuesto: { usd: o.usd } } : {}), creativos }, { de: por === 'asistente' ? 'asistente' : 'dimitri' });
@@ -1404,6 +1419,13 @@ async function undoOp(o, { por = 'dimitri' } = {}) {
     const r = await anunciosAcc.deshacer({ token: u.token, por: 'dueno' }); return r.status === 200 ? {} : { error: r.cuerpo?.motivo || r.cuerpo?.error || 'no se pudo deshacer' };
   }
   if (o.type === 'anuncio_borrador') { const b = anunciosBorr.leer(u.borrador); if (b && (b.estado === 'creado' || b.estado === 'creando')) return { error: 'ya se creó en Meta (en pausa): archívalo desde Anuncios → Campañas' }; if (b) anunciosBorr.quitar(u.borrador, { por }); return {}; } // A3: a la papelera, no se pierde
+  if (o.type === 'nota_crear') { const r = notasLocal.aPapelera(u.papelera); if (r.error) return { error: r.error }; await rebuildGraph(); return {}; }
+  if (o.type === 'nota_agregar') {
+    const h = notasLocal.hallar(u.nota); if (!h) return { error: 'la nota ya no existe' };
+    if (u.rev !== undefined && Math.abs(fs.statSync(h.path).mtimeMs - Number(u.rev)) > 1) return { error: 'la nota cambió después de que añadí eso: revisa lo nuevo en el Cerebro (G) y quítalo a mano si hace falta' }; // alguien la editó: no se pisa su cambio
+    const q = quitarTexto(fs.readFileSync(h.path, 'utf8'), u.add, { seccion: u.seccion, seccionCreada: u.seccionCreada }); if (!q.ok) return { error: 'la nota cambió después de que añadí eso: quítalo a mano en el Cerebro (G)' };
+    const r = notasLocal.guardar({ nombre: u.nota, texto: q.texto, base: fs.statSync(h.path).mtimeMs }); if (r.error) return { error: r.error }; await rebuildGraph(); return {};
+  }
   if (o.type === 'rutina_crear') removeRoutine(u.routine);
   else if (o.type === 'rutina_saltar') { const s = RSTATE[o.id]; if (s) { s.skip = (s.skip || []).filter(x => x !== u.unskip); routines.saveState(DATA, RSTATE); } }
   else if (o.type === 'rutina_pausar' || o.type === 'rutina_reanudar') { if (!editRoutine(o.id, { paused: u.paused })) return { error: 'esa rutina ya no está' }; }
@@ -2168,9 +2190,9 @@ async function weeklyReport(force = false) {
   st.week = wk; fs.mkdirSync(DATA, { recursive: true }); fs.writeFileSync(WEEKLY, JSON.stringify(st));
   const l = load(), c = costs.report(costs.read(DATA, Date.now() - 70 * 864e5), l, AGENTS, cfg.costs), q = quality.byAgent(l, AGENTS), k = loadKpis();
   const facts = [`Estado: ${sub.statusText(l, AGENTS, DEPTS)}`, `Últimos trabajos: ${sub.recentText(l, AGENTS, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`, `Calidad por agente: ${q.filter(a => a.tasks).map(a => `${a.name} ${a.score}/100 (${a.tasks})`).join(', ') || 'sin datos'}`, `Indicadores: ${k.defs.map(d => { const x = business.summary(d, k.values[d.id]); return `${d.name}: ${x.value ?? 'sin dato'}${x.change !== null ? ` (${Math.round(x.change * 100)} %)` : ''}`; }).join('; ') || 'ninguno definido'}`, `Sugerencias de costo: ${c.suggestions.map(x => x.text).join(' | ') || 'ninguna'}`, tareasSemana(l), contenidoSemana(), publicidadSemana().texto, (() => { const x = anunciosInforme.lineaMesAnterior(); return x ? `Informe de anuncios del mes pasado (en el Cerebro): ${x}` : ''; })()].filter(Boolean).join('\n'); // F4: las redes también · A1: la publicidad, aparte del costo de los modelos
-  const text = await ask(`Eres ${DEPUTY}, la mano derecha del dueño de ${cfg.name}. Escribes el informe del lunes: claro, concreto, en español, 180–260 palabras, sin relleno.`, `Datos de la semana:\n${facts}\n\nEscribe: 1) cómo fue la semana en tres líneas, 2) lo que salió bien, 3) lo que falló o se atasca, 4) tres decisiones que el dueño debería tomar esta semana, cada una con el porqué. Solo texto.`, { maxTokens: 1200, timeout: 180000, model: 'sonnet', kind: 'informe' });
-  const ss = sub.load(DATA); ss.messages.push(sub.message('sub', '📋 Informe de la semana\n\n' + text, { mode: 'analisis' })); sub.save(DATA, ss);
-  notice('weekly', `📋 Informe de la semana de ${DEPUTY}:\n${text}`);
+  const text = await ask(sub.informeSistema(DEPUTY, cfg.name), sub.informePedido(facts), { maxTokens: 1200, timeout: 180000, model: 'sonnet', kind: 'informe' });
+  const ss = sub.load(DATA); ss.messages.push(sub.message('sub', '📋 Resumen de la semana\n\n' + text, { mode: 'analisis' })); sub.save(DATA, ss);
+  notice('weekly', `📋 Resumen de la semana de ${DEPUTY}:\n${text}`);
   return text;
 }
 setInterval(() => weeklyReport().catch(e => console.warn('weekly:', e.message)), 15 * 60e3);
@@ -2395,6 +2417,8 @@ function insideBrain(p) { // no symlink, and the real path stays inside the brai
   } catch { return false; }
 }
 
+const notasLocal = crearNotasLocal({ BRAIN, TRASH, indice: noteIndex, dentro: insideBrain, renombrar }); // 27 oct 2026: crear, editar, añadir, papelera y restaurar cualquier nota (cerebro-local.mjs)
+
 await rebuildGraph();
 /** Every finished Estudio job: it reaches its task; V4.4 (C5): its estimated cost joins the ledger, marked «estimado» for the provider's invoice;
  *  V4.9: a creative by Dimitri or an agent, or an edit, leaves its note in the Brain, and Dimitri's chat hears of its own (subJobDone). */
@@ -2563,31 +2587,29 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { name: id, group: n.group, peek: sm || body.slice(0, 260) + (body.length > 260 ? '…' : '') });
       }
       const cut = text.length > 200000; if (cut) text = text.slice(0, 200000);
-      return json(res, 200, { name: id, group: n.group, text, cut, size: st.size, modified: st.mtimeMs, deletable: n.office && /\ntask: /.test(text) });
+      return json(res, 200, { name: id, group: n.group, text, cut, size: st.size, modified: st.mtimeMs, deletable: true, editable: !cut, key: notaClave(id) }); // 27 oct 2026: cualquier nota se edita y va a la papelera (vuelve en 30 días)
     }
-    if (url.pathname === '/api/note/trash' && req.method === 'POST') { // an office deliverable → <brain>/Agents Office/.papelera/ (reversible: /api/note/restore, or move it back by hand)
-      const { id } = await body(req); const n = noteIndex().get(String(id || ''));
-      if (!n || !n.office || !insideBrain(n.path)) return json(res, 404, { error: 'solo las notas que escribió la oficina (Agents Office) van a la papelera' });
-      if (!/\ntask: /.test(fs.readFileSync(n.path, 'utf8'))) return json(res, 400, { error: 'esta nota no la escribió un agente: si quieres borrarla, hazlo tú desde la carpeta' });
-      fs.mkdirSync(TRASH, { recursive: true });
-      const dest = path.join(TRASH, `${path.basename(n.path, '.md')}__${Date.now()}.md`);
-      renombrar(n.path, dest);
-      console.log(`🗑 note to the bin: ${id}`);
-      return json(res, 200, { ok: true, trashed: path.basename(dest), graph: await rebuildGraph() });
+    if (url.pathname === '/api/note' && (req.method === 'POST' || req.method === 'PUT')) { // 27 oct 2026: escribir una nota nueva o reemplazar el texto de una (base = el `modified` que leíste)
+      const b = await body(req), r = req.method === 'POST' ? notasLocal.crear({ nombre: b.name, texto: b.text, grupo: b.group }) : notasLocal.guardar({ nombre: b.name, texto: b.text, base: b.base ?? null });
+      if (r.error) return json(res, r.estado || 400, { error: r.error, ...(r.modified ? { modified: r.modified } : {}) });
+      console.log(`✎ note ${req.method === 'POST' ? 'created' : 'saved'}: ${r.nombre}`); return json(res, 200, { ok: true, name: r.nombre, modified: r.modified, graph: await rebuildGraph() });
+    }
+    if (url.pathname === '/api/note/append' && req.method === 'POST') { const b = await body(req), r = notasLocal.agregar({ nombre: b.name, texto: b.text, seccion: b.section }); if (r.error) return json(res, r.estado || 400, { error: r.error }); return json(res, 200, { ok: true, name: r.nombre, modified: r.modified, graph: await rebuildGraph() }); }
+    if (url.pathname === '/api/note/trash' && req.method === 'POST') { // cualquier nota → <cerebro>/Agents Office/.papelera/ (30 días; vuelve con /api/note/restore a su carpeta de antes)
+      const { id } = await body(req), r = notasLocal.aPapelera(String(id || ''));
+      if (r.error) return json(res, r.estado || 404, { error: r.error });
+      console.log(`🗑 note to the bin: ${r.nombre}`);
+      return json(res, 200, { ok: true, trashed: r.trashed, name: r.nombre, graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/note/trash' && req.method === 'GET') { // V4.1: what is in the bin (newest first) — the Brain's «Papelera» view
       let files = []; try { files = fs.readdirSync(TRASH).filter(f => /__\d+\.md$/.test(f)); } catch {}
       const items = files.map(f => ({ file: f, name: f.replace(/__\d+\.md$/, ''), at: +f.match(/__(\d+)\.md$/)[1] })).sort((a, b) => b.at - a.at).slice(0, 200);
       return json(res, 200, { items, keepDays: 30 });
     }
-    if (url.pathname === '/api/note/restore' && req.method === 'POST') { // one note back out of the bin
-      const { file } = await body(req); const f = path.basename(String(file || ''));
-      const src = path.join(TRASH, f);
-      if (!/__\d+\.md$/.test(f) || !fs.existsSync(src) || !insideBrain(src)) return json(res, 404, { error: 'no está en la papelera' });
-      const name = f.replace(/__\d+\.md$/, ''); let dest = path.join(NOTES_DIR, name + '.md');
-      for (let n = 2; fs.existsSync(dest); n++) dest = path.join(NOTES_DIR, `${name}-${n}.md`);
-      renombrar(src, dest);
-      return json(res, 200, { ok: true, name: path.basename(dest, '.md'), graph: await rebuildGraph() });
+    if (url.pathname === '/api/note/restore' && req.method === 'POST') { // one note back out of the bin, to the folder it came from
+      const { file } = await body(req), r = notasLocal.restaurar(file, { porDefecto: NOTES_DIR });
+      if (r.error) return json(res, r.estado || 404, { error: r.error });
+      return json(res, 200, { ok: true, name: r.nombre, graph: await rebuildGraph() });
     }
     if (url.pathname === '/api/usage') return json(res, 200, await getUsage(url.searchParams.get('refresh') === '1')); // V3.6: the plan's gauge (never a 500: unavailable is an answer)
     if (url.pathname === '/api/tasks' && req.method === 'GET') { const l = load(), q = colaTareas.planear(l, { enVuelo: Math.max(running.size, [...runsOf.values()].reduce((n, x) => n + x.size, 0)), max: MAX_RUNS, sinPresupuesto: budgetLevel === 'over' && COSTS().stopAtBudget }).puestos; for (const t of l) { if (q[t.id]) t.queue = q[t.id]; if (t.state === 'waiting' && !t.preview) draftFacts(t); } return json(res, 200, url.searchParams.get('light') === '1' ? lightTasks(l) : l, { etag: true }); } // INF-04: ?light=1 (the 6 s poll) leaves out the archived tasks' work; the ETag answers 304 when nothing changed // V4.4 (B5): where each waiting task sits
