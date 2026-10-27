@@ -1,5 +1,12 @@
 # Changelog
 
+## Plan del chat interno del equipo — 27 oct 2026
+
+Pedido del dueño: «me interesa tener un chat interno como lo tienen en D'CASA… y dejar el plan escrito de un módulo de chat dentro».
+
+- **Solo un plan, nada construido:** `docs/plan-chat-interno.md`. Estudié el repositorio de D'CASA (solo lectura) y lo primero que cuenta el plan es que **D'CASA no tiene un chat propio entre personas: usa el de Odoo**, con retoques (el contador rojo que late, las notas internas con @mención y aviso por Telegram, la presencia «está escribiendo», los avisos que nunca tumban la acción). El plan copia esa experiencia sobre lo que ya tiene la oficina (cuentas y roles, el `Hub` de presencia, Telegram, las tareas para una persona, R2).
+- Incluye el modelo de datos, las rutas, el tiempo real dirigido, las pantallas, la seguridad, las fases C0–C6 y **siete decisiones que espera del dueño**.
+
 ## «Actualizar conexiones» del Cerebro en la nube — 27 oct 2026
 
 Pedido del dueño: «un botón de actualizar que no esté siempre en vivo: que conecte con IA las notas nuevas y limpie lo que quedó de las notas que borro».
