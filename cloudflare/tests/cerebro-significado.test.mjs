@@ -31,6 +31,15 @@ test('embedder: el de las pruebas manda; luego Workers AI (si da vectores de ver
   assert.equal(embedder({}), null); assert.equal(embedder(null), null);
 });
 
+test('cada modelo de significado tiene precio por defecto: no se anota «sin-precio» y fuera del presupuesto', async () => {
+  const { priceFor, line } = await import('../../costs-core.mjs');
+  const ids = [embedder({ AI: { run() {} } }).id, embedder({ OPENAI_API_KEY: 'x' }).id, embedder({ VOYAGE_API_KEY: 'x' }).id, embedder({ GEMINI_API_KEY: 'x' }).id]; // secrets-ok
+  assert.deepEqual(ids, ['cf-bge-m3', 'openai-text-embedding-3-small', 'voyage-voyage-3-5-lite', 'gemini-text-embedding-004']);
+  for (const id of ids) { assert.ok(priceFor(id), `${id} sin precio`); assert.equal(line({ modelId: id, provider: 'x', usage: { input_tokens: 1000, output_tokens: 0 } }).source, 'tabla'); }
+  assert.ok(line({ modelId: 'cf-bge-m3', provider: 'cloudflare', usage: { input_tokens: 1_000_000, output_tokens: 0 } }).usd > 0, 'un millón de tokens de bge-m3 cuesta algo');
+  assert.equal(priceFor('claude-sonnet-5-5').provider, 'anthropic', 'los precios nuevos no pisan a los de siempre');
+});
+
 test('knowledge.search híbrido: un pasaje sin vector (una entrega nueva) no queda enterrado, y uno con vector parecido sube', () => {
   const notas = new Map([['con-vector', 'La retención de chats es de noventa días.'], ['sin-vector', 'Cuánto cuesta la tienda en línea: mil doscientos dólares.'], ['otra', 'Hablamos de colores y tipografías de la marca.']]);
   const ix = knowledge.buildIndex(notas), vectors = {};
