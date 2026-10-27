@@ -39,7 +39,7 @@ export function registrar(shell) {
     montar(el, ctx) {
       let carpeta = 'todas', edad = 'todas', texto = '', hits = null, seq = 0, tmr = 0, limite = 60;
       el.innerHTML = `<form class="mv-busca" role="search"><label class="mv-sr" for="mvCq">Buscar en las notas</label>${svg('buscar', 'mv-busca-i')}<input id="mvCq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Buscar en tus notas…"></form>
-        <div class="mv-chips mv-herr" role="group" aria-label="Acciones">${window.AO_NUBE?.yo?.()?.rol === 'lectura' ? '' : `<button type="button" class="mv-chip" data-a="nueva">${ic('nota')}Nueva nota</button>`}<button type="button" class="mv-chip" data-a="subir">${ic('subir')}Subir documento</button><button type="button" class="mv-chip" data-a="mapa">${ic('mapa')}Mapa</button><button type="button" class="mv-chip" data-a="papelera">${svg('borrar')}Papelera</button></div>
+        <div class="mv-chips mv-herr" role="group" aria-label="Acciones">${window.AO_NUBE?.yo?.()?.rol === 'lectura' ? '' : `<button type="button" class="mv-chip" data-a="nueva">${ic('nota')}Nueva nota</button>`}<button type="button" class="mv-chip" data-a="subir">${ic('subir')}Subir documento</button><button type="button" class="mv-chip" data-a="mapa">${ic('mapa')}Mapa</button><button type="button" class="mv-chip" data-a="papelera">${svg('borrar')}Papelera</button>${window.AO_NUBE?.actualizarConexiones && window.AO_NUBE.yo?.()?.rol === 'admin' ? `<button type="button" class="mv-chip" data-a="conexiones">${svg('refrescar')}Actualizar conexiones</button>` : ''}</div>
         <div class="mv-chips" role="group" aria-label="Cuándo" data-ce></div><div class="mv-chips" role="group" aria-label="Carpeta" data-cc></div>
         <div class="mv-scroll" tabindex="-1" data-lista></div>`;
       const q = el.querySelector('#mvCq'), lista = el.querySelector('[data-lista]'), cEdad = el.querySelector('[data-ce]'), cCarp = el.querySelector('[data-cc]');
@@ -94,6 +94,7 @@ export function registrar(shell) {
         if (b.dataset.a === 'nueva') return nueva(ctx, cargar);
         if (b.dataset.a === 'subir') return subir(ctx, cargar);
         if (b.dataset.a === 'papelera') return papelera(ctx, cargar);
+        if (b.dataset.a === 'conexiones') return conexiones(ctx, cargar);
         if (b.dataset.a === 'mapa') return mapa(ctx, D, idx, n => abrirNota(ctx, n, vecinas));
       });
       el._cargar = cargar; el._abrir = nota => abrirNota(ctx, nota, vecinas);
@@ -156,6 +157,12 @@ function abrirNota(ctx, nombre, vecinas) {
     }
   });
   ir(nombre);
+}
+
+/** 27 oct 2026 (solo la nube, solo administradores): «Actualizar conexiones» — el flujo es /nube-cerebro.js (lo trae nube.js la primera vez); aquí solo se le da una hoja y se vuelve a leer la lista si el mapa cambió. */
+function conexiones(ctx, recargar) {
+  const h = ctx.hoja({ titulo: 'Actualizar conexiones', lleno: true, cuerpo: '<div class="mv-cuerpo"><div class="mv-cxb"></div></div>' });
+  window.AO_NUBE.actualizarConexiones(h.cuerpo.querySelector('.mv-cxb'), { alGrafo: () => recargar(), alCerrar: () => h.cerrar() });
 }
 
 async function papelera(ctx, recargar) {

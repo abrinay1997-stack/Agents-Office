@@ -1,5 +1,17 @@
 # Changelog
 
+## «Actualizar conexiones» del Cerebro en la nube — 27 oct 2026
+
+Pedido del dueño: «un botón de actualizar que no esté siempre en vivo: que conecte con IA las notas nuevas y limpie lo que quedó de las notas que borro».
+
+- **Un botón a mano** (Cerebro → Herramientas → «🔄 Actualizar conexiones»; en el celular, el chip del mismo nombre; solo administradores, solo en la nube). Nada corre solo: tú decides cuándo.
+- **1 · Limpiar el mapa (gratis).** Las neuronas que ya estaban NO se mueven (un Worker no calcula fuerzas). Se quitan las de notas borradas con sus líneas, se corrige el tamaño de las vecinas, las notas que ganaron o perdieron enlaces pasan de las conectadas al anillo (o al revés), se recalculan las menciones, se olvida lo que los agentes aprendieron de notas que ya no existen y se **enseñan** los `[[enlaces]]` de otras notas que apuntan a una que se fue (sus textos no se tocan). El mapa limpio se guarda en D1.
+- **2 · Conectar con IA (unos centavos, con tu visto bueno).** Para las notas nuevas o editadas desde la última vez (y las que nunca tuvieron enlaces; hasta 24 por vuelta) la búsqueda por palabras preselecciona las ~25 notas más parecidas y el modelo de la función **«Conectar notas del Cerebro»** (Ajustes → Modelos) dice a cuáles enlazarla y por qué. Solo puede elegir de esa lista; lo que lee pasa por el detector de órdenes escondidas. Eliges con casillas, se escribe una sección «Relacionadas» al final de LA NOTA NUEVA y hay **DESHACER** (si nadie la editó después). Se ve el costo aproximado antes y el real después (libro de costos, tipo `cerebro`).
+- **Las 59 notas de fábrica y las notas clave (`CLAUDE`, `index`, `voice`…) nunca se escriben** ni lo intenta la IA: solo se pueden enlazar desde una nota tuya. Las entregas de los agentes entran al mapa pero no se mandan a la IA.
+- Archivos: `cloudflare/worker/lib/conexiones.js` (lo puro y lo de D1), `worker/modulos/conexiones.js` (`/api/brain/actualizar`), `public/nube-cerebro.js` (la pantalla, para escritorio y celular; la trae `nube.js` la primera vez), estilos en `nube.css`. La página de la oficina solo gana un botón (`src/brain.js`, `src/movil/vistas/cerebro.js`).
+- Pruebas: `cloudflare/tests/cerebro-conexiones.test.mjs` (15, con las 59 notas reales y una IA de mentira) y `cloudflare/tests/navegador-conexiones.test.mjs` (la página real: recorrido completo a 1280 px; 320, 360, 390 y 430 px con botones de 44 px y letra de 16 px; un nombre con HTML se pinta como texto; un editor no ve el botón).
+- Pendiente para más adelante (issue en GitHub): un algoritmo de grafo y sinapsis mejor que el actual.
+
 ## Dimitri, un chat por cuenta — 27 oct 2026
 
 Pedido del dueño: «¿ya cada usuario tiene su propio chat con Dimitri? ¿Avalon ve lo que hablo con él?».

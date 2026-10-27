@@ -99,3 +99,33 @@ body.dark .nb-fila select { background: #1B1C21; }
 .nb-mod { display: inline-flex; width: 24px; height: 24px; border-radius: 6px; margin-left: 4px; vertical-align: middle; }
 #topconn button.tc-none { background: none; border: 0; padding: 0 4px; min-height: 28px; cursor: pointer; text-decoration: underline; } #topconn button.tc-none:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .cp-add { min-height: 32px; padding: 0 12px; border: 1px solid var(--ink); border-radius: 8px; background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; } .cp-add:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Cerebro → «Actualizar conexiones» (nube-cerebro.js). Un solo componente en dos casas: el panel oscuro del Cerebro (escritorio) y una hoja del celular. Los colores salen de variables que cada casa fija;
+   por defecto valen sobre fondo claro. Todo botón mide 44 px y el texto nunca baja de 12,5 px; nada se atenúa con opacity (el texto suave es un color que pasa 4,5:1). */
+.cx { --cx-suave: #55554F; --cx-btn: #151414; --cx-btn-ink: #FDFFF8; --cx-ok: #1E7B4F; --cx-mal: #B3261E; --cx-aviso: #7A4F00; --cx-linea: rgba(21,20,20,.22); --cx-foco: #2B6BEB;
+  display: grid; gap: 14px; font: 14px/1.5 var(--ui, system-ui, sans-serif); color: inherit; min-width: 0; }
+.bv-pb .cx { --cx-suave: #A9A7A0; --cx-btn: #E8E6DF; --cx-btn-ink: #1B1C21; --cx-ok: #7FD6A4; --cx-mal: #F2A38F; --cx-aviso: #F2C25B; --cx-linea: rgba(253,255,248,.24); --cx-foco: #8FB0FF; }
+body.movil .cx { --cx-suave: var(--mv-grey); --cx-btn: var(--mv-ink); --cx-btn-ink: var(--mv-bg); --cx-ok: var(--mv-acc); --cx-mal: var(--mv-rojo); --cx-aviso: var(--mv-ambar); --cx-linea: var(--mv-line); --cx-foco: var(--mv-foco); font-size: 16px; }
+.cx p { margin: 0; font-size: inherit; line-height: inherit; color: inherit; } /* (0,1,1) y después de la página: gana a `.bv-pane p` del panel del Cerebro */
+.cx h4 { margin: 0 0 6px; font-size: 14.5px; } .cx h4 small { font-weight: 400; color: var(--cx-suave); }
+body.movil .cx h4 { font-size: 16px; }
+.cx .cx-peq, .cx small { font-size: 12.5px; color: var(--cx-suave); line-height: 1.45; } body.movil .cx .cx-peq, body.movil .cx small { font-size: 13px; }
+.cx .cx-ok { color: var(--cx-ok); font-weight: 600; } .cx .cx-mal { color: var(--cx-mal); font-weight: 600; }
+.cx .cx-aviso { border: 1px solid var(--cx-aviso); color: var(--cx-aviso); border-radius: 10px; padding: 8px 10px; }
+.cx code { font-size: 12.5px; word-break: break-all; }
+.cx-sec { display: grid; gap: 8px; border-top: 1px solid var(--cx-linea); padding-top: 12px; min-width: 0; } .cx-sec:first-of-type { border-top: 0; padding-top: 0; }
+.cx-ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.cx-fila { display: flex; flex-wrap: wrap; gap: 8px; }
+.cx-b { min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--cx-linea); background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.cx-b.pri { background: var(--cx-btn); color: var(--cx-btn-ink); border-color: var(--cx-btn); }
+body.movil .cx-b { flex: 1 1 100%; font-size: 16px; min-height: 48px; }
+.cx-b:focus-visible, .cx summary:focus-visible, .cx-enl:has(input:focus-visible) { outline: 2px solid var(--cx-foco); outline-offset: 2px; }
+.cx-det { border: 1px solid var(--cx-linea); border-radius: 10px; padding: 0 10px; } .cx-det summary { min-height: 44px; padding: 6px 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; } .cx-det summary::before { content: '▸'; flex: none; } .cx-det[open] > summary::before { content: '▾'; } .cx-det[open] { padding-bottom: 10px; }
+.cx-nota { border: 1px solid var(--cx-linea); border-radius: 12px; padding: 8px 12px 4px; margin: 0; min-width: 0; } .cx-nota legend { font-weight: 700; padding: 0 6px; max-width: 100%; overflow-wrap: anywhere; }
+.cx-enl { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 8px 0; cursor: pointer; border-radius: 8px; }
+.cx-enl input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--cx-ok); }
+.cx-enl span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.cx-prog { width: 100%; height: 12px; accent-color: var(--cx-ok); }
+.cx-gira { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--cx-linea); border-top-color: currentColor; border-radius: 50%; animation: cxgira .8s linear infinite; vertical-align: -2px; }
+@keyframes cxgira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cx-gira { animation: none; border-top-color: var(--cx-linea); } }

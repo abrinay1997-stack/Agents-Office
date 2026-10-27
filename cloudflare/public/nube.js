@@ -382,5 +382,22 @@
     for (let i = 0; i < 20 && !enMenuMas(); i++) await new Promise((r) => setTimeout(r, 250)); // el menú «⋯» lo crea la página al arrancar
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
-  window.AO_NUBE = { api, esc, aviso: avisoBreve, yo: () => yo, abrirAjustes, pestana: PESTANA, presentes: () => presentes.map(persona), conexion: () => conexion };
+  /** Cerebro → «Actualizar conexiones» (solo administradores): el flujo vive en /nube-cerebro.js y se trae la primera vez que alguien lo abre; la página y esta ventana no pagan su peso. `cont`: dónde se pinta (el panel del Cerebro o una hoja del celular). */
+  let cargandoCerebro = null;
+  function actualizarConexiones(cont, opciones = {}) {
+    cont.textContent = 'Abriendo…';
+    cargandoCerebro ||= new Promise((ok, mal) => {
+      if (window.AO_NUBE?.cerebroActualizar) return ok(window.AO_NUBE.cerebroActualizar);
+      const s = document.createElement('script'); s.src = '/nube-cerebro.js';
+      s.onload = () => (window.AO_NUBE?.cerebroActualizar ? ok(window.AO_NUBE.cerebroActualizar) : mal(new Error('El actualizador no cargó.')));
+      s.onerror = () => mal(new Error('No pude traer el actualizador. ¿Sin conexión?'));
+      document.head.appendChild(s);
+    });
+    return cargandoCerebro.then((m) => m.abrir(cont, opciones), (e) => {
+      cargandoCerebro = null; if (!cont.isConnected) return;
+      cont.innerHTML = `<p class="nb-msg mal" role="alert">${esc(e.message)}</p><button type="button" class="sg-btn" data-reintentar>Reintentar</button>`;
+      cont.querySelector('[data-reintentar]').addEventListener('click', () => actualizarConexiones(cont, opciones));
+    });
+  }
+  window.AO_NUBE = { api, esc, aviso: avisoBreve, yo: () => yo, abrirAjustes, pestana: PESTANA, presentes: () => presentes.map(persona), conexion: () => conexion, actualizarConexiones };
 })();

@@ -300,6 +300,15 @@ La oficina de la nube se sirve con `img-src 'self' data: blob:` (`cloudflare/pub
 - **`frame-src`:** el único marco permitido es la vista previa de anuncios de Meta, con su origen y ruta exactos (`https://www.facebook.com/ads/api/preview_iframe.php`); la oficina ya solo pinta ese iframe con `sandbox`. `script-src`, `connect-src` y `img-src` no cambian.
 - **Probar:** `node --test cloudflare/tests/imagen-meta.test.mjs` (el proxy), `…/imagen-meta-navegador.test.mjs` (nube.js en Chromium), `…/csp-oficina.test.mjs` (la oficina entera en Chromium con la CSP real y el Meta de mentira: cero violaciones, cero `<img>` rotas; lento, `AO_SIN_NAVEGADOR=1` lo salta) y `node cloudflare/scripts/auditoria-csp.mjs [--antes <nube.js viejo>] [--capturas <carpeta>]` para volver a medir.
 
+## «Actualizar conexiones» del Cerebro (27 oct 2026)
+
+Un botón (Cerebro → Herramientas; en el celular, un chip) que el administrador pulsa a mano. El mapa 3D lo calcula la computadora del dueño y se guarda en D1 (`grafo`): un Worker no tiene CPU para reacomodar neuronas, así que **ninguna neurona que ya estaba se mueve**.
+- `GET /api/brain/actualizar` → qué hay que limpiar (neuronas de notas borradas, líneas, tamaños, memoria de los agentes, `[[enlaces]]` rotos), qué notas se podrían conectar (24 por vuelta), con qué modelo y el costo aproximado. No llama a la IA ni escribe.
+- `POST … { paso: 'proponer', notas: [hasta 3] }` → la IA propone enlaces; solo valen nombres de la lista de ~25 notas parecidas que se le dio (preselección BM25 de los agentes). 12 peticiones por minuto.
+- `POST … { paso: 'aplicar', conexiones, revisadas }` → escribe «## Relacionadas» al final de cada nota NUEVA aceptada (jamás en las de fábrica ni las clave), pone el mapa al día en D1 y poda la memoria; devuelve `deshacer` y el mapa. `POST … { paso: 'deshacer', cambios }` lo quita nota por nota si nadie la editó después.
+- La función **`cerebro`** («Conectar notas del Cerebro») se asigna en Ajustes → Modelos; el gasto queda en el libro con `tipo = 'cerebro'`. La clave `cerebro.conexiones` (lo revisado) se restablece con el ámbito «cerebro».
+- Pantalla: `public/nube-cerebro.js` (la trae `nube.js` la primera vez; se sirve con sesión), estilos `.cx-*` en `nube.css`. Pruebas: `cloudflare/tests/cerebro-conexiones.test.mjs` y `navegador-conexiones.test.mjs`.
+
 ## Siguiente
 
 Falta 8b y 9 (ver `docs/plan-cloudflare-completo.md`). El límite de intentos de acceso por IP ya existe (fase 10).
