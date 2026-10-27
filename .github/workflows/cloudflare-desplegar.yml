@@ -41,9 +41,6 @@ jobs:
       # La semilla «PanaClaw por defecto» (59 notas, mapa, equipo y Biblioteca): rompe aquí, no en el despliegue, si algo no cabe o falta.
       - name: Generar la semilla (sin publicar)
         run: node cloudflare/scripts/semilla.mjs /tmp/ao-semilla
-      # Las librerías de la raíz (d3-force: el mapa del Cerebro) tienen que estar para que este simulacro empaquete lo MISMO que el despliegue.
-      - name: Instalar las librerías de la oficina
-        run: npm ci --ignore-scripts --no-audit --no-fund
       # Simulacro de empaquetado: rompe aquí, no en el despliegue, si el Worker importa algo que no cabe en Workers.
       - name: Empaquetar el Worker (sin publicar)
         working-directory: cloudflare
