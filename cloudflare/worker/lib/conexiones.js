@@ -233,7 +233,7 @@ export async function estadoConexiones({ env, db }) {
       memoria: huerfana.notas.length + huerfana.aristas.length,
       enlacesRotos: r.rotos.slice(0, 40), totalRotos: r.rotos.length,
     },
-    candidatas: lista.map((n) => ({ nombre: n.nombre, grupo: n.grupo })), total: todas.length, pendientes: Math.max(0, todas.length - lista.length),
+    candidatas: lista.map((n) => ({ nombre: n.nombre, grupo: n.grupo, rev: n.actualizado })), total: todas.length, pendientes: Math.max(0, todas.length - lista.length),
     protegidas: fabrica.size,
     modelo, costo: { usd, aprox: true },
     ultima: est.ultima,
@@ -254,16 +254,16 @@ export async function proponerConexiones({ env, db, nombres, fetchFn = undefined
   let entrada = 0, salida = 0;
   const propuestas = await Promise.all(lista.map(async (nombre) => {
     const nota = validas.get(nombre);
-    if (!nota) return { nota: nombre, enlaces: [], aviso: 'Ya no hace falta revisarla (cambió, ya la revisaste o es de fábrica).' };
+    if (!nota) return { nota: nombre, rev: null, enlaces: [], aviso: 'Ya no hace falta revisarla (cambió, ya la revisaste o es de fábrica).' };
     const hallazgo = injectionIn(nota.texto);
-    if (hallazgo) return { nota: nombre, grupo: nota.grupo, enlaces: [], aviso: `Trae órdenes escondidas (${hallazgo}): no la mandé a la IA.`, escudo: true };
+    if (hallazgo) return { nota: nombre, grupo: nota.grupo, rev: nota.actualizado, enlaces: [], aviso: `Trae órdenes escondidas (${hallazgo}): no la mandé a la IA.`, escudo: true };
     const cand = parecidas({ nota, ix, textos, grupos, pares, grado });
-    if (!cand.length) return { nota: nombre, grupo: nota.grupo, enlaces: [], aviso: 'No hay otras notas con las que compararla.' };
+    if (!cand.length) return { nota: nombre, grupo: nota.grupo, rev: nota.actualizado, enlaces: [], aviso: 'No hay otras notas con las que compararla.' };
     try {
       const r = await preguntarIA(env, { sistema: SISTEMA, usuario: pedidoParaNota(nota, cand), maxTokens: 400, funcion: FUNCION_IA, db, fetchFn });
       entrada += r.tokens.entrada || 0; salida += r.tokens.salida || 0;
-      return { nota: nombre, grupo: nota.grupo, enlaces: leerRespuesta(r.texto, cand) };
-    } catch (e) { return { nota: nombre, grupo: nota.grupo, enlaces: [], aviso: 'La IA no contestó: ' + String(e?.message || e).slice(0, 160), fallo: true }; }
+      return { nota: nombre, grupo: nota.grupo, rev: nota.actualizado, enlaces: leerRespuesta(r.texto, cand) };
+    } catch (e) { return { nota: nombre, grupo: nota.grupo, rev: nota.actualizado, enlaces: [], aviso: 'La IA no contestó: ' + String(e?.message || e).slice(0, 160), fallo: true }; }
   }));
   return { ok: true, propuestas, modelo: modelo.nombre, usd: usdDe(modelo.id, entrada, salida, cfg.costs?.prices), tokens: { entrada, salida } };
 }
@@ -286,7 +286,8 @@ async function sincronizar(db, filas) {
 }
 
 /**
- * Aplica lo que el dueño aceptó y deja el mapa limpio. conexiones: [{ nota, enlaces: [{ a, porque? }] }] · revisadas: los nombres que miró en esta vuelta (aunque no aceptara nada).
+ * Aplica lo que el dueño aceptó y deja el mapa limpio. conexiones: [{ nota, rev, enlaces: [{ a, porque? }] }] · revisadas: [{ nota, rev }] lo que miró en esta vuelta (aunque no aceptara nada).
+ * `rev` es la versión de la nota que leyó la IA (`actualizado`): si alguien la editó mientras el dueño revisaba, NO se escribe (la recomendación era de otro texto) y no se da por revisada.
  * Cada cosa se vuelve a validar aquí (las notas existen, no son de fábrica, el enlace no existe ya). → { ok, aplicadas, omitidas, deshacer, limpieza, … }
  */
 export async function aplicarConexiones({ env, db, conexiones, revisadas, por = '' }) {
@@ -298,6 +299,7 @@ export async function aplicarConexiones({ env, db, conexiones, revisadas, por = 
     const filas = leidas, nota = filas.find((f) => f.nombre === nombre);
     if (!nota) { omitidas.push({ nota: nombre, motivo: 'Ya no existe.' }); continue; }
     if (nota.oficina || fabrica.has(nombre) || N.esClave(nombre) || NO_ENLAZAR.has(nombre)) { omitidas.push({ nota: nombre, motivo: 'Es una nota de fábrica, clave o de un agente: no se toca.' }); continue; }
+    if (!Number.isFinite(Number(c?.rev)) || Number(c.rev) !== Number(nota.actualizado)) { omitidas.push({ nota: nombre, motivo: 'Alguien la editó mientras revisabas: lo que la IA proponía era para otro texto. Vuelve a buscarle conexiones.' }); continue; }
     const { pares, resolver } = analizarEnlaces(filas), ya = new Set(pares.filter(([a, b]) => a === nombre || b === nombre).map(([a, b]) => (a === nombre ? b : a)));
     const dados = [], vistos = new Set();
     for (const e of (Array.isArray(c.enlaces) ? c.enlaces : [])) {
@@ -317,7 +319,8 @@ export async function aplicarConexiones({ env, db, conexiones, revisadas, por = 
   const filas = await todasLasNotas(db), s = await sincronizar(db, filas);
   // se apunta lo que se miró: una nota revisada no vuelve a salir hasta que se edite; si ya no queda nada por revisar, la referencia avanza
   const est = await leerEstado(db), porNombre = new Map(filas.map((f) => [f.nombre, f])), marcadas = { ...est.revisadas };
-  for (const n of new Set([...(Array.isArray(revisadas) ? revisadas : []).map(String), ...aplicadas.map((a) => a.nota)])) if (porNombre.has(n)) marcadas[n] = porNombre.get(n).actualizado;
+  for (const r of (Array.isArray(revisadas) ? revisadas : [])) { const n = String(r?.nota ?? ''), rev = Number(r?.rev); if (porNombre.has(n) && Number.isFinite(rev) && rev === Number(porNombre.get(n).actualizado)) marcadas[n] = rev; } // solo si sigue siendo el texto que se miró: una nota editada después vuelve a salir
+  for (const d of deshacer) if (porNombre.has(d.nota)) marcadas[d.nota] = Number(porNombre.get(d.nota).actualizado); // la que acabamos de escribir ya está revisada (su texto cambió por nuestra propia línea)
   for (const n of Object.keys(marcadas)) if (!porNombre.has(n)) delete marcadas[n];
   const { grado } = analizarEnlaces(filas), { calculado } = await leerMapa(db);
   const quedan = elegirCandidatas({ notas: filas, grado, fabrica, revisadas: marcadas, ref: est.ref || calculado });

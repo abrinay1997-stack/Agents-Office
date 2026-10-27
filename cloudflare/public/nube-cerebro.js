@@ -114,9 +114,9 @@
       const con = S.props.filter((p) => p.enlaces.length), conexiones = [];
       if (!soloLimpiar) {
         const marcadas = new Set(elegidos().map((c) => c.dataset.i + ':' + c.dataset.j));
-        con.forEach((p, i) => { const es = p.enlaces.filter((_, j) => marcadas.has(i + ':' + j)); if (es.length) conexiones.push({ nota: p.nota, enlaces: es }); });
+        con.forEach((p, i) => { const es = p.enlaces.filter((_, j) => marcadas.has(i + ':' + j)); if (es.length) conexiones.push({ nota: p.nota, rev: p.rev, enlaces: es }); });
       }
-      const revisadas = soloLimpiar ? [] : S.props.filter((p) => !p.fallo).map((p) => p.nota);
+      const revisadas = soloLimpiar ? [] : S.props.filter((p) => !p.fallo && p.rev != null).map((p) => ({ nota: p.nota, rev: p.rev }));
       S.fase = 'guardando'; pCarga(soloLimpiar ? 'Limpiando el mapa…' : 'Escribiendo las conexiones y limpiando el mapa…');
       try {
         const r = await post({ paso: 'aplicar', conexiones, revisadas });

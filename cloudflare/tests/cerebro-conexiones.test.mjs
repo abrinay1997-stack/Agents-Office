@@ -161,8 +161,9 @@ test('aplicar: escribe «Relacionadas» solo en la nota nueva, jamás en una de 
   const m = await mundo();
   await crear(m, 'Oferta de verano', '# Oferta de verano\n\nDescuento en los combos.');
   const antesFab = textoEnDb(m, 'precios-webs'), posAntes = Object.fromEntries(m.semilla.grafo.nodes.map((n) => [n.id, [n.x, n.y]]));
-  const r = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', revisadas: ['Oferta de verano'], conexiones: [
-    { nota: 'Oferta de verano', enlaces: [{ a: 'precios-webs', porque: 'mismos precios' }, { a: 'MOC-Sales' }, { a: 'no-existe' }, { a: 'index' }] },
+  const rev = (await m.p.admin('GET', '/api/brain/actualizar')).j.candidatas.find((c) => c.nombre === 'Oferta de verano').rev;
+  const r = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', revisadas: [{ nota: 'Oferta de verano', rev }], conexiones: [
+    { nota: 'Oferta de verano', rev, enlaces: [{ a: 'precios-webs', porque: 'mismos precios' }, { a: 'MOC-Sales' }, { a: 'no-existe' }, { a: 'index' }] },
     { nota: 'precios-webs', enlaces: [{ a: 'MOC-Sales' }] },   // intento de escribir en una nota de fábrica
     { nota: 'voice', enlaces: [{ a: 'precios-webs' }] },       // ni en una clave
   ] });
@@ -189,7 +190,7 @@ test('aplicar: escribe «Relacionadas» solo en la nota nueva, jamás en una de 
 test('deshacer: si alguien editó la nota después, no se toca; lo que no es cierto no se quita', { skip: SALTAR }, async () => {
   const m = await mundo();
   await crear(m, 'Nota A', 'Algo de precios.');
-  const r = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', conexiones: [{ nota: 'Nota A', enlaces: [{ a: 'precios-webs' }] }] });
+  const r = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', conexiones: [{ nota: 'Nota A', rev: (await leerNota(m, 'Nota A')).modified, enlaces: [{ a: 'precios-webs' }] }] });
   const rev = (await leerNota(m, 'Nota A')).modified;
   await m.p.admin('PUT', '/api/note', { name: 'Nota A', text: textoEnDb(m, 'Nota A') + '\nUna línea que escribí yo después.', base: rev });
   const d = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'deshacer', cambios: r.j.deshacer });
@@ -228,7 +229,7 @@ test('una nota revisada sin propuestas no vuelve a salir hasta que se edita; el 
   for (let i = 0; i < C.TOPE_NOTAS + 3; i++) await crear(m, 'Nota ' + String(i).padStart(2, '0'), 'Texto ' + i);
   let e = (await m.p.admin('GET', '/api/brain/actualizar')).j; assert.equal(e.candidatas.length, C.TOPE_NOTAS); assert.equal(e.pendientes, 3); assert.equal(e.total, C.TOPE_NOTAS + 3);
   const vistas = e.candidatas.map((c) => c.nombre);
-  await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', conexiones: [], revisadas: vistas });
+  await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', conexiones: [], revisadas: e.candidatas.map((c) => ({ nota: c.nombre, rev: c.rev })) });
   e = (await m.p.admin('GET', '/api/brain/actualizar')).j; assert.equal(e.candidatas.length, 3, 'quedan las tres del final'); assert.equal(e.pendientes, 0);
   const una = vistas[0]; await m.p.admin('PUT', '/api/note', { name: una, text: 'Ahora cambió.' });
   e = (await m.p.admin('GET', '/api/brain/actualizar')).j; assert.ok(e.candidatas.some((c) => c.nombre === una), 'editada después de revisarla, vuelve');
@@ -253,4 +254,24 @@ test('el modelo de este trabajo se elige en Ajustes → Modelos (función «cere
   assert.equal(filas(o.d1, "select modelo from costos where tipo = 'cerebro'").length >= 1, true, 'el gasto se apunta con el modelo elegido');
   let ultimo = 200; for (let i = 0; i < 14; i++) ultimo = (await p.admin('POST', '/api/brain/actualizar', { paso: 'proponer', notas: ['X'] })).status;
   assert.equal(ultimo, 429, 'el minuto se acaba a las 12 peticiones');
+});
+
+test('revisión de Codex: si alguien edita la nota mientras revisas, lo que la IA proponía no se escribe, y la nota vuelve a salir para revisarla de nuevo', { skip: SALTAR }, async () => {
+  const m = await mundo({ ia: { 'Oferta de verano': { enlaces: [{ a: 'precios-webs', porque: 'mismos precios' }] } } });
+  await crear(m, 'Oferta de verano', 'Descuento en los combos con los precios de la web.');
+  const p = (await m.p.admin('POST', '/api/brain/actualizar', { paso: 'proponer', notas: ['Oferta de verano'] })).j.propuestas[0];
+  assert.ok(Number.isFinite(p.rev) && p.rev > 0, 'la propuesta lleva la versión de la nota que leyó la IA');
+  // otra persona la reescribe mientras el dueño mira las casillas
+  const base = (await leerNota(m, 'Oferta de verano')).modified;
+  assert.equal((await m.p.admin('PUT', '/api/note', { name: 'Oferta de verano', text: 'Ahora habla de otra cosa: la garantía de los equipos.', base })).status, 200);
+  const r = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', revisadas: [{ nota: p.nota, rev: p.rev }], conexiones: [{ nota: p.nota, rev: p.rev, enlaces: p.enlaces }] });
+  assert.equal(r.status, 200, r.texto); assert.deepEqual(r.j.aplicadas, []); assert.match(r.j.omitidas[0].motivo, /Alguien la editó mientras revisabas/);
+  assert.equal(textoEnDb(m, 'Oferta de verano'), 'Ahora habla de otra cosa: la garantía de los equipos.', 'el texto nuevo quedó intacto: no se le escribió nada');
+  const e = (await m.p.admin('GET', '/api/brain/actualizar')).j; assert.ok(e.candidatas.some((c) => c.nombre === 'Oferta de verano'), 'no se dio por revisada: vuelve a salir');
+  // sin `rev` tampoco se escribe (nadie puede saltarse la comprobación)
+  const sin = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', conexiones: [{ nota: 'Oferta de verano', enlaces: [{ a: 'precios-webs' }] }] });
+  assert.deepEqual(sin.j.aplicadas, []); assert.doesNotMatch(textoEnDb(m, 'Oferta de verano'), /Relacionadas/);
+  // con la versión de ahora, sí
+  const ok = await m.p.admin('POST', '/api/brain/actualizar', { paso: 'aplicar', conexiones: [{ nota: 'Oferta de verano', rev: e.candidatas.find((c) => c.nombre === 'Oferta de verano').rev, enlaces: [{ a: 'precios-webs' }] }] });
+  assert.deepEqual(ok.j.aplicadas.map((a) => a.nota), ['Oferta de verano']);
 });
