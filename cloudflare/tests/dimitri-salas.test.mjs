@@ -104,12 +104,13 @@ test('la migración 0101 le da la conversación común al administrador más ant
   db.exec(fs.readFileSync(new URL('../migraciones/0101_dimitri_por_cuenta.sql', import.meta.url), 'utf8'));
   assert.deepEqual(filas(o.d1, "select id from filas where coleccion = ? order by id", 'subgerente:' + duenoId).map((x) => x.id), ['m1', 'm2']);
   assert.equal(filas(o.d1, "select count(*) n from filas where coleccion = 'subgerente'")[0].n, 0, 'ya no queda conversación común');
-  assert.deepEqual(filas(o.d1, "select id from filas where coleccion = 'subgerente-hilo' order by id").map((x) => x.id), ['actual:' + duenoId, 'c1abc'], 'su resumen es suyo; el de la archivada sigue con su id');
-  assert.equal(filas(o.d1, "select count(*) n from filas where coleccion = 'subgerente-arch:c1abc'")[0].n, 1);
+  assert.deepEqual(filas(o.d1, "select id from filas where coleccion = 'subgerente-hilo' order by id").map((x) => x.id), ['actual:' + duenoId, 'arch:' + duenoId + ':c1abc'], 'su resumen es suyo; el de la archivada lleva la cuenta en el nombre');
+  assert.equal(filas(o.d1, "select count(*) n from filas where coleccion = ?", 'subgerente-arch:' + duenoId + ':c1abc')[0].n, 1, 'los mensajes de la archivada también');
+  assert.equal(filas(o.d1, "select count(*) n from filas where coleccion = 'subgerente-arch:c1abc'")[0].n, 0);
   assert.equal(filas(o.d1, "select count(*) n from docs where clave = ?", 'subgerente.archivo:' + duenoId)[0].n, 1); assert.equal(filas(o.d1, "select count(*) n from docs where clave = 'subgerente.archivo'")[0].n, 0); // secrets-ok: `clave` es la columna de la tabla de documentos
   // y la página del dueño la ve, con su historial; la del otro administrador, vacía
   assert.deepEqual((await o.admin('GET', '/api/sub')).j.messages.map((m) => m.id), ['m1', 'm2']);
-  assert.equal((await o.admin('GET', '/api/sub/conversaciones')).j.lista[0].titulo, 'vieja');
+  assert.equal((await o.admin('GET', '/api/sub/conversaciones')).j.lista[0].titulo, 'vieja'); assert.deepEqual((await o.admin('GET', '/api/sub/conversaciones/c1abc')).j.messages.map((m) => m.id), ['a1'], 'y se abre con sus mensajes');
   // idempotente: volver a correrla no mueve nada más
   db.exec(fs.readFileSync(new URL('../migraciones/0101_dimitri_por_cuenta.sql', import.meta.url), 'utf8'));
   assert.deepEqual((await o.admin('GET', '/api/sub')).j.messages.map((m) => m.id), ['m1', 'm2']);
@@ -136,3 +137,18 @@ test('los creativos que terminan avisan en el chat de QUIEN los pidió (el reloj
   assert.equal(await chat.mensajeEnCualquierSala(db, 'nadie'), null);
   assert.equal(await chat.mensajeConToken(db, 'x'), null, 'un token corto o raro no busca nada'); assert.equal(await chat.mensajeConToken(db, "x' or '1'='1"), null);
 });
+
+test('revisión de Codex (P1): meter el id de una conversación AJENA en tu propia lista (migrar/docs con forzar) no abre, ni restaura, ni borra la de otro', { skip: SALTAR }, async () => {
+  const o = await oficina6({ guion: [charla('El plan secreto: bajar precios un 30 %.')] }), av = await segundoAdmin(o);
+  await o.admin('POST', '/api/sub/chat', { text: 'Mi plan secreto de precios' });
+  const ajena = (await o.admin('POST', '/api/sub/clear', {})).j.archived; assert.ok(ajena);
+  const meter = await av.llamar('POST', '/api/migrar/docs', { clave: 'subgerente.archivo', forzar: true, valor: { lista: [{ id: ajena, at: 1, n: 2, titulo: 'robada' }] } }); assert.equal(meter.status, 200, meter.texto); // secrets-ok: `clave` es la columna de la tabla de documentos
+  assert.equal((await av.llamar('GET', '/api/sub/conversaciones')).j.lista[0].id, ajena, 'el id sí quedó en su lista (nadie lo impide)');
+  const leer = await av.llamar('GET', `/api/sub/conversaciones/${ajena}`); assert.equal(leer.status, 200); assert.deepEqual(leer.j.messages, [], 'pero no hay NINGÚN mensaje del dueño detrás: las filas llevan la cuenta en el nombre');
+  const abrir = await av.llamar('POST', '/api/sub/abrir', { id: ajena }); assert.equal(abrir.j.messages.length, 0, 'abrirla no le trae nada');
+  await av.llamar('POST', '/api/sub/borrar', { id: ajena }); await av.llamar('POST', '/api/sub/restore', { id: ajena });
+  const suyo = (await o.admin('GET', `/api/sub/conversaciones/${ajena}`)).j; assert.equal(suyo.messages.length, 2, 'la del dueño sigue entera');
+  assert.match(suyo.messages.map((m) => m.text).join('\n'), /plan secreto/); assert.doesNotMatch(JSON.stringify((await av.llamar('GET', '/api/sub')).j), /plan secreto/);
+  assert.equal(filas(o.d1, "select count(*) n from filas where coleccion = ?", 'subgerente-arch:' + dueno(o) + ':' + ajena)[0].n, 2, 'y sus filas, donde estaban');
+});
+

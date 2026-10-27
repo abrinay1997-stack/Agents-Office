@@ -1,6 +1,6 @@
 // La conversación de Dimitri en D1 (en la oficina local es data/subgerente.json). Cada mensaje es UNA fila de `filas`: un plan, unas tarjetas de ops o unos
 // creativos pueden pesar decenas de KB y D1 corta la fila a 2 MB; con una fila por mensaje cambiar uno (marcar una pieza como enviada) no reescribe ni pisa los demás.
-// «Nueva conversación» NO borra: mueve las filas a `subgerente-arch:<id>` (se guardan las últimas 50) y DESHACER las devuelve.
+// «Nueva conversación» NO borra: mueve las filas a `subgerente-arch:<cuenta>:<id>` (se guardan las últimas 50) y DESHACER las devuelve.
 // CADA CUENTA TIENE SU PROPIA SALA (27 oct 2026, pedido del dueño: «que Avalon no vea lo que hablo con Dimitri»): los mensajes viven en `subgerente:<id de la cuenta>`, el resumen de la sesión en
 // `subgerente-hilo` con id `actual:<id>`, y la lista de archivadas en el documento `subgerente.archivo:<id>`. Nadie lee la sala de otro: todo cuelga de `sala(db, uid)`. Lo que había antes
 // (la conversación común) la migración 0101 se la dio a la cuenta de administrador más antigua, que es la del dueño.
@@ -12,7 +12,8 @@ export const PREFIJO_SALA = 'subgerente:';
 export const PREFIJO_DOC_ARCHIVO = 'subgerente.archivo:';
 // Sesiones largas: lo que se cae por el final de la conversación (más de MAX mensajes) no se pierde, se PLIEGA en un resumen pequeño (sub-core.mjs → plegarHilo) que vive
 // en una fila aparte de la MISMA conversación: `actual:<cuenta>` mientras es la de ahora, y el id del archivo cuando se archiva (viaja con ella al archivar, abrir y restaurar).
-export const COL_HILO = 'subgerente-hilo', PREFIJO_HILO = 'actual:';
+export const COL_HILO = 'subgerente-hilo', PREFIJO_HILO = 'actual:', PREFIJO_HILO_ARCH = 'arch:';
+export const PREFIJO_ARCH = 'subgerente-arch:'; // + <cuenta>:<id de la conversación>: las archivadas llevan SU cuenta en el nombre (revisión de Codex: un id ajeno metido en tu lista no abre la conversación de otro)
 export const HOLGURA = 10; // se recorta cuando sobran más de 10 (y se deja en MAX): plegar cuesta unas consultas y no hace falta pagarlas en cada turno
 const iso = (t) => new Date(t).toISOString();
 
@@ -74,6 +75,7 @@ export async function mensajeConToken(db, token) {
 /** La sala de una cuenta: todo lo que se hace con su conversación (leer, escribir, archivar, historial). */
 export function sala(db, uid0) {
   const uid = limpio(uid0), COL = PREFIJO_SALA + uid, HILO = PREFIJO_HILO + uid, DOC_ARCHIVO = PREFIJO_DOC_ARCHIVO + uid;
+  const ARCH = (id) => `${PREFIJO_ARCH}${uid}:${id}`, HA = (id) => `${PREFIJO_HILO_ARCH}${uid}:${id}`; // dónde viven los mensajes y el resumen de una conversación archivada DE ESTA cuenta
 
   async function cargar({ limite = MAX } = {}) {
     const { results } = await db.prepare('select json from filas where coleccion = ? order by orden desc limit ?').bind(COL, limite).all();
@@ -118,11 +120,11 @@ export function sala(db, uid0) {
     const f = await db.prepare('select count(*) n from filas where coleccion = ?').bind(COL).first();
     if (!f?.n) return null;
     const id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4), titulo = tituloConversacion((await cargar()).messages);
-    await db.prepare('update filas set coleccion = ? where coleccion = ?').bind('subgerente-arch:' + id, COL).run();
-    await quitarHilo(id); await moverHilo(HILO, id); // su resumen se va con ella
+    await db.prepare('update filas set coleccion = ? where coleccion = ?').bind(ARCH(id), COL).run();
+    await quitarHilo(HA(id)); await moverHilo(HILO, HA(id)); // su resumen se va con ella
     let fuera = [];
     await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => { const l = [...(d.lista || []), { id, at: Date.now(), n: f.n, titulo }]; fuera = l.slice(0, Math.max(0, l.length - ARCHIVO_MAX)); return { lista: l.slice(-ARCHIVO_MAX) }; });
-    for (const x of fuera) { await db.prepare('delete from filas where coleccion = ?').bind('subgerente-arch:' + x.id).run(); await quitarHilo(x.id); }
+    for (const x of fuera) { await db.prepare('delete from filas where coleccion = ?').bind(ARCH(x.id)).run(); await quitarHilo(HA(x.id)); }
     return id;
   }
   /** Trae de vuelta una conversación archivada (la que se acaba de archivar, por su id): lo dicho después de archivar se queda detrás. */
@@ -130,9 +132,9 @@ export function sala(db, uid0) {
     if (!ID.test(String(id || ''))) return false;
     const lista = (await leerDoc(db, DOC_ARCHIVO, { lista: [] })).valor.lista || [];
     if (!lista.some((x) => x.id === id)) return false;
-    await db.prepare('update filas set coleccion = ? where coleccion = ?').bind(COL, 'subgerente-arch:' + id).run();
+    await db.prepare('update filas set coleccion = ? where coleccion = ?').bind(COL, ARCH(id)).run();
     await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => ({ lista: (d.lista || []).filter((x) => x.id !== id) }));
-    await quitarHilo(HILO); await moverHilo(id, HILO); // la conversación recuperada recupera su resumen (lo dicho después de archivar se queda detrás)
+    await quitarHilo(HILO); await moverHilo(HA(id), HILO); // la conversación recuperada recupera su resumen (lo dicho después de archivar se queda detrás)
     await recortar();
     return true;
   }
@@ -149,7 +151,7 @@ export function sala(db, uid0) {
     return r.meta?.changes ? m : null;
   }
 
-  const mensajesDe = async (id) => { const { results } = await db.prepare('select json from filas where coleccion = ? order by orden asc').bind('subgerente-arch:' + id).all(); const out = []; for (const r of results) { try { out.push(JSON.parse(r.json)); } catch { /* un mensaje roto no tumba el historial */ } } return out; };
+  const mensajesDe = async (id) => { const { results } = await db.prepare('select json from filas where coleccion = ? order by orden asc').bind(ARCH(id)).all(); const out = []; for (const r of results) { try { out.push(JSON.parse(r.json)); } catch { /* un mensaje roto no tumba el historial */ } } return out; };
   /** El historial: la conversación de ahora y las archivadas (la más nueva primero), solo con lo que hace falta para elegir. */
   async function listar() {
     const { messages } = await cargar(), lista = (await leerDoc(db, DOC_ARCHIVO, { lista: [] })).valor.lista || [];
@@ -168,8 +170,8 @@ export function sala(db, uid0) {
     if (!lista.some((x) => x.id === id)) return null;
     await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => ({ lista: (d.lista || []).filter((x) => x.id !== id) })); // primero se saca del archivo: así archivar la de ahora no la recorta ni la pisa
     const archived = await archivar();
-    await db.prepare('update filas set coleccion = ? where coleccion = ?').bind(COL, 'subgerente-arch:' + id).run();
-    await quitarHilo(HILO); await moverHilo(id, HILO); // el resumen es el de ESA conversación
+    await db.prepare('update filas set coleccion = ? where coleccion = ?').bind(COL, ARCH(id)).run();
+    await quitarHilo(HILO); await moverHilo(HA(id), HILO); // el resumen es el de ESA conversación
     return { ...(await cargar()), archived };
   }
   /** Borra una archivada para siempre. */
@@ -177,7 +179,7 @@ export function sala(db, uid0) {
     if (!ID.test(String(id || ''))) return false;
     let estaba = false;
     await mutarDoc(db, DOC_ARCHIVO, { lista: [] }, (d) => { estaba = (d.lista || []).some((x) => x.id === id); return { lista: (d.lista || []).filter((x) => x.id !== id) }; });
-    if (estaba) { await db.prepare('delete from filas where coleccion = ?').bind('subgerente-arch:' + id).run(); await quitarHilo(id); }
+    if (estaba) { await db.prepare('delete from filas where coleccion = ?').bind(ARCH(id)).run(); await quitarHilo(HA(id)); }
     return estaba;
   }
   /** Cambia el título de una conversación archivada (P7). → true si era de esta cuenta. */

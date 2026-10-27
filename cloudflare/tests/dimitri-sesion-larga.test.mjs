@@ -57,7 +57,7 @@ test('conLecturaUnica: un SELECT idéntico se hace una vez, cada lector recibe s
 
 test('el hilo viaja con SU conversación: archivar, abrir, restaurar y borrar; al abrir una vieja el prompt trae el resumen de ESA', { skip: SALTAR }, async () => {
   const o = await oficina6();
-  const hilos = () => filas(o.d1, "select id from filas where coleccion = 'subgerente-hilo' order by id").map((x) => x.id.replace(/^actual:.*/, 'actual')).sort(); // el resumen de ahora es `actual:<cuenta>` (cada cuenta tiene su sala)
+  const hilos = () => filas(o.d1, "select id from filas where coleccion = 'subgerente-hilo' order by id").map((x) => x.id.replace(/^actual:.*/, 'actual').replace(/^arch:[^:]*:/, '')).sort(); // el resumen de ahora es `actual:<cuenta>` y el de una archivada `arch:<cuenta>:<id>` (cada cuenta tiene su sala)
   // conversación A: más de MAX + HOLGURA mensajes → se pliega
   for (let i = 0; i < 75; i++) { o.m.guion.push(dimitriDice({ mode: 'charla', reply: 'ok ' + i })); await turno(o, i === 0 ? PREF : 'relleno A ' + i); }
   assert.deepEqual(hilos(), ['actual']);
