@@ -205,7 +205,7 @@
     }
     async function sig(accion = 'significado', cuerpo = {}) {
       S.fase = 'guardando'; S.aviso = ''; if (accion === 'significado') pCarga('Mirando el significado de tus notas…');
-      try { const r = await post({ paso: accion, ...cuerpo }); if (r.significado) S.sig = r.significado; else if (accion === 'significado') S.sig = r; if (accion === 'significado-medir') { S.sig = { ...S.sig, medido: r }; } S.fase = 'listo'; pSignificado(); }
+      try { const r = await post({ paso: accion, ...cuerpo }); if (accion === 'significado-medir') S.sig = { ...S.sig, medido: r }; /* su respuesta trae un campo «significado» con las cifras: NO es el estado */ else if (r.significado) S.sig = r.significado; else if (accion === 'significado') S.sig = r; S.fase = 'listo'; pSignificado(); }
       catch (e) { S.aviso = e.message; S.fase = 'listo'; if (S.sig) pSignificado(); else { S.fase = 'error'; pError(e.message, 'recargar'); } }
     }
     async function sigIndexar() {
