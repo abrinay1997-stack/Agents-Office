@@ -121,6 +121,7 @@ body.movil .cx h4 { font-size: 16px; }
 body.movil .cx-b { flex: 1 1 100%; font-size: 16px; min-height: 48px; }
 .cx-b:focus-visible, .cx summary:focus-visible, .cx-enl:has(input:focus-visible) { outline: 2px solid var(--cx-foco); outline-offset: 2px; }
 .cx-det { border: 1px solid var(--cx-linea); border-radius: 10px; padding: 0 10px; } .cx-det summary { min-height: 44px; padding: 6px 0; box-sizing: border-box; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; } .cx-det summary::before { content: '▸'; flex: none; } .cx-det[open] > summary::before { content: '▾'; } .cx-det[open] { padding-bottom: 10px; }
+.cx-tab { width: 100%; border-collapse: collapse; font-size: 14px; } .cx-tab caption { text-align: left; padding-bottom: 4px; } .cx-tab th, .cx-tab td { padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--cx-linea); } .cx-tab thead th { font-weight: 600; } body.movil .cx-tab { font-size: 15px; }
 .cx-nota { border: 1px solid var(--cx-linea); border-radius: 12px; padding: 8px 12px 4px; margin: 0; min-width: 0; } .cx-nota legend { font-weight: 700; padding: 0 6px; max-width: 100%; overflow-wrap: anywhere; }
 .cx-enl { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 8px 0; cursor: pointer; border-radius: 8px; }
 .cx-enl input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--cx-ok); }

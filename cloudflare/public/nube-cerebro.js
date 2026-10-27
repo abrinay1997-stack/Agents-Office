@@ -64,7 +64,10 @@
         <section class="cx-sec" aria-labelledby="cx-h4"><h4 id="cx-h4">4 · Reacomodar todo el mapa <small>(gratis)</small></h4>${entero}</section>
         <section class="cx-sec" aria-labelledby="cx-h5"><h4 id="cx-h5">5 · Notas repetidas o que se contradicen <small>(gratis)</small></h4>
           <p>Busca notas que dicen casi lo mismo y cifras (precios, porcentajes, plazos) que una nota da distintas de otra. Solo avisa: no cambia nada. Una nota de fábrica manda sobre la tuya.</p>
-          <div class="cx-fila"><button type="button" class="cx-b" data-a="calidad">Buscar ahora</button></div></section>${ult}`);
+          <div class="cx-fila"><button type="button" class="cx-b" data-a="calidad">Buscar ahora</button></div></section>
+        <section class="cx-sec" aria-labelledby="cx-h6"><h4 id="cx-h6">6 · Buscar por significado</h4>
+          <p>Hoy los agentes encuentran las notas por sus palabras. Con el significado también encuentran las que dicen lo mismo con otras palabras. Se enciende a mano y solo después de medir si de verdad ayuda.</p>
+          ${e.significadoHay ? `<div class="cx-fila"><button type="button" class="cx-b" data-a="sig">Abrir</button></div>` : `<p class="cx-aviso" role="note">Falta un modelo de significado: Workers AI (el binding <code>AI</code> en la configuración de Cloudflare) o uno de los secretos <code>GEMINI_API_KEY</code>, <code>OPENAI_API_KEY</code> o <code>VOYAGE_API_KEY</code>.</p>`}</section>${ult}`);
     }
 
     function pIA() {
@@ -90,6 +93,22 @@
       b.textContent = k ? `Aplicar ${n(k, 'conexión', 'conexiones')} y limpiar el mapa` : 'Marcarlas como revisadas y limpiar el mapa';
     }
 
+    const pct = (x) => (x * 100).toFixed(1).replace('.', ',') + ' %';
+    function pSignificado() {
+      const g = S.sig, med = g.medido, falta = g.faltan > 0, listo = g.cobertura >= 0.8;
+      const filaM = (t, a, b) => `<tr><th scope="row">${t}</th><td>${pct(a)}</td><td>${pct(b)}</td></tr>`;
+      const medido = med ? `<table class="cx-tab"><caption class="cx-peq">${n(med.n, 'pregunta', 'preguntas')} de prueba, ${esc(new Date(med.at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }))}</caption>
+          <thead><tr><th scope="col"><span class="cx-peq">Acierta la nota entre…</span></th><th scope="col">Palabras</th><th scope="col">+ Significado</th></tr></thead><tbody>
+          ${filaM('la 1.ª', med.palabras.recall[1], med.significado.recall[1])}${filaM('las 3 primeras', med.palabras.recall[3], med.significado.recall[3])}${filaM('las 5 primeras', med.palabras.recall[5], med.significado.recall[5])}</tbody></table>
+          <p>${n(med.mejoran.length, 'pregunta mejora', 'preguntas mejoran')} y ${n(med.empeoran.length, 'empeora', 'empeoran')}. ${med.significado.recall[5] > med.palabras.recall[5] || (med.significado.recall[5] === med.palabras.recall[5] && med.significado.mrr > med.palabras.mrr) ? 'El significado ayuda.' : 'El significado no mejora a las palabras con estas preguntas: no vale la pena encenderlo.'}</p>` : '';
+      poner(`<p class="cx-lead">Modelo: ${esc(g.modelo.nombre)}. ${n(g.pasajes, 'pasaje', 'pasajes')} de tus notas escritas; ${n(g.conVector, 'tiene', 'tienen')} significado (${pct(g.cobertura)}).</p>
+        ${!g.cabe ? `<p class="cx-aviso" role="note">Pasa del tope de pasajes que se pueden indexar aquí.</p>` : ''}${S.aviso ? `<p class="cx-aviso" role="note">${esc(S.aviso)}</p>` : ''}
+        <section class="cx-sec"><h4>1 · Indexar</h4>${falta ? `<p>Faltan ${n(g.faltan, 'pasaje', 'pasajes')}. Cuesta unos centavos o nada (Workers AI tiene capa gratis) y se hace de a pocos por vez.</p><div class="cx-fila"><button type="button" class="cx-b pri" data-a="sig-indexar"${g.cabe ? '' : ' disabled'}>Indexar las notas</button></div>` : `<p class="cx-ok">✓ Todas las notas tienen significado.</p>`}</section>
+        <section class="cx-sec"><h4>2 · Medir</h4><p>Con las preguntas de prueba, compara los dos modos. Cuesta unos centavos como mucho.</p>${medido}<div class="cx-fila"><button type="button" class="cx-b" data-a="sig-medir"${listo ? '' : ' disabled'}>${med ? 'Medir otra vez' : 'Medir'}</button></div>${listo ? '' : '<p class="cx-peq">Primero indexa las notas.</p>'}</section>
+        <section class="cx-sec"><h4>3 · Encender para los agentes</h4><p>${g.activo ? '✓ Encendido: los agentes y Dimitri buscan por palabras y significado, y «Actualizar conexiones» suma notas cercanas por significado.' : 'Apagado: los agentes buscan solo por palabras.'} Si el modelo falla, la búsqueda sigue por palabras.</p>
+          <div class="cx-fila"><button type="button" class="cx-b${g.activo ? '' : ' pri'}" data-a="sig-activar" data-v="${g.activo ? '0' : '1'}"${listo || g.activo ? '' : ' disabled'}>${g.activo ? 'Apagar' : 'Encender'}</button></div></section>
+        <div class="cx-fila"><button type="button" class="cx-b" data-a="recargar" data-foco>Volver al inicio</button></div>`);
+    }
     const cifrasDif = (d) => d.map((x) => `${x.a.map(esc).join(' / ')} frente a ${x.b.map(esc).join(' / ')}`).join(' · ');
     const veredicto = (v) => (!v ? '' : v.aviso ? `<p class="cx-aviso" role="note">${esc(v.aviso)}</p>` : `<p class="${v.veredicto === 'contradice' ? 'cx-mal' : 'cx-peq'}" role="status"><b>${v.veredicto === 'contradice' ? 'La IA: sí se contradicen' : v.veredicto === 'distinto' ? 'La IA: hablan de cosas distintas' : 'La IA no está segura'}.</b> ${esc(v.porque || '')}</p>`);
     function pCalidad() {
@@ -184,6 +203,20 @@
         pListo();
       } catch (e) { S.fase = 'error'; pError(e.message, 'recargar'); }
     }
+    async function sig(accion = 'significado', cuerpo = {}) {
+      S.fase = 'guardando'; S.aviso = ''; if (accion === 'significado') pCarga('Mirando el significado de tus notas…');
+      try { const r = await post({ paso: accion, ...cuerpo }); if (r.significado) S.sig = r.significado; else if (accion === 'significado') S.sig = r; if (accion === 'significado-medir') { S.sig = { ...S.sig, medido: r }; } S.fase = 'listo'; pSignificado(); }
+      catch (e) { S.aviso = e.message; S.fase = 'listo'; if (S.sig) pSignificado(); else { S.fase = 'error'; pError(e.message, 'recargar'); } }
+    }
+    async function sigIndexar() {
+      S.fase = 'guardando'; S.aviso = ''; let total = S.sig.faltan, hechos = 0;
+      while (vivo()) {
+        pCarga(`Dando significado a tus notas… ${hechos} de ${total}`);
+        try { const r = await post({ paso: 'significado-indexar' }); hechos += r.hechos; S.sig = r.significado; if (!r.faltan || !r.hechos) break; }
+        catch (e) { S.aviso = `Me detuve: ${e.message}`; break; }
+      }
+      if (vivo()) { S.fase = 'listo'; pSignificado(); }
+    }
     async function calidad() {
       S.fase = 'guardando'; S.veredictos = {}; S.aviso = ''; pCarga('Comparando tus notas…');
       try { S.cal = await post({ paso: 'calidad' }); S.fase = 'listo'; pCalidad(); } catch (e) { S.fase = 'error'; pError(e.message, 'recargar'); }
@@ -228,6 +261,10 @@
       else if (a === 'cerrar') alCerrar();
       else if (a === 'proponer') proponer();
       else if (a === 'uso') verUso();
+      else if (a === 'sig') sig();
+      else if (a === 'sig-indexar') sigIndexar();
+      else if (a === 'sig-medir') { pCarga('Midiendo con las preguntas de prueba…'); sig('significado-medir'); }
+      else if (a === 'sig-activar') sig('significado-activar', { activo: b.dataset.v === '1' });
       else if (a === 'calidad') calidad();
       else if (a === 'cal-ia') calidadIA();
       else if (a === 'cal-ign') ignorar(b.dataset.k);

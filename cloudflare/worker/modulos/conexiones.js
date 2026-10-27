@@ -5,12 +5,14 @@
 //        limpia el mapa y la memoria. `rev` es la versión de la nota que se leyó: si alguien la editó, no se escribe. Con `origen: 'uso'` (parejas que los agentes usaron juntas) no se toca la cola de la IA.
 //   POST /api/brain/actualizar { paso: 'deshacer', cambios: [...] } → quita lo que acaba de añadir «aplicar» (nota por nota, solo si nadie la editó después)
 //   POST /api/brain/actualizar { paso: 'calidad' } → duplicados y contradicciones entre notas (gratis, sin escribir) · { paso: 'calidad-ia', claves } → la IA confirma hasta 3 contradicciones · { paso: 'calidad-ignorar', claves } → «ya lo revisé». Ver lib/cerebro-calidad.js.
+//   POST /api/brain/actualizar { paso: 'significado' } → estado de «buscar por significado» · { paso: 'significado-indexar' } → un lote de vectores (repetir hasta que no falte ninguno) · { paso: 'significado-medir' } → palabras frente a significado con las preguntas de prueba · { paso: 'significado-activar', activo } → encenderlo para los agentes. Ver lib/significado.js.
 //   POST /api/brain/actualizar { paso: 'mapa' } → recalcula el mapa ENTERO con graph-core.mjs (todas las neuronas pueden moverse; guarda el anterior) · { paso: 'mapa-deshacer' } → vuelve al anterior. Ver lib/cerebro-mapa.js.
 // SOLO un administrador (gasta en la IA y escribe en las notas). Las notas de fábrica y las clave nunca se escriben. Todo en lib/conexiones.js.
 import { json, error, prohibido } from '../lib/respuesta.js';
 import { estadoConexiones, proponerConexiones, aplicarConexiones, deshacerConexiones, todasLasNotas, nombresDeFabrica, modeloDe, usdDe } from '../lib/conexiones.js';
 import { revisarCalidad, confirmarConIA, ignorarAvisos, MAX_IA } from '../lib/cerebro-calidad.js';
 import { leerCfg } from '../lib/ajustes.js';
+import { embedder, estadoSignificado, indexarLote, medirSignificado, activarSignificado } from '../lib/significado.js';
 import { leerGrafo } from '../lib/cerebro.js';
 import { recalcularMapa, deshacerMapa, estadoMapaCompleto } from '../lib/cerebro-mapa.js';
 import { tasa, relojDe } from '../lib/equipo.js';
@@ -25,7 +27,7 @@ export async function manejar(ctx) {
   const { req, env, db, ruta, usuario } = ctx;
   if (ruta !== '/api/brain/actualizar') return null;
   if (usuario.rol !== 'admin') return prohibido('Actualizar las conexiones del Cerebro es de un administrador.');
-  if (req.method === 'GET') return json({ ...(await estadoConexiones({ env, db })), mapaCompleto: await estadoMapaCompleto(db) });
+  if (req.method === 'GET') return json({ ...(await estadoConexiones({ env, db })), mapaCompleto: await estadoMapaCompleto(db), significadoHay: !!embedder(env) });
   if (req.method !== 'POST') return json({ error: 'GET o POST' }, 405);
   const b = (await ctx.cuerpo(req)) || {};
   if (b.paso === 'proponer') {
@@ -53,5 +55,11 @@ export async function manejar(ctx) {
     const r = await confirmarConIA({ env, db, claves: b.claves, filas, esFabrica, fetchFn: env.__pruebas?.fetch, usdDe: (e, sa, precios) => usdDe(modelo.id, e, sa, precios) });
     return r.error ? error(r.error, r.estado || 400) : json({ ...r, modelo: modelo.nombre });
   }
-  return error('Dime el paso: proponer, aplicar, deshacer, mapa, mapa-deshacer, calidad, calidad-ia o calidad-ignorar.', 400);
+  if (['significado', 'significado-indexar', 'significado-medir', 'significado-activar'].includes(b.paso)) { // buscar por significado (significado.js): indexar, medir con las preguntas de prueba y, solo entonces, encenderlo para los agentes
+    if (b.paso === 'significado') return json({ ok: true, ...(await estadoSignificado({ db, env })) });
+    if (!(await tasa(db, 'cx:sig:' + b.paso + usuario.id, b.paso === 'significado-indexar' ? 60 : 6, relojDe(env))).ok) return error('Vas muy rápido: espera un minuto y sigue.', 429);
+    const r = b.paso === 'significado-indexar' ? await indexarLote({ db, env }) : b.paso === 'significado-medir' ? await medirSignificado({ db, env }) : await activarSignificado({ db, env, activo: b.activo === true });
+    return r.error ? error(r.error, r.estado || 400) : json({ ...r, ...(b.paso === 'significado-medir' ? {} : { significado: await estadoSignificado({ db, env }) }) });
+  }
+  return error('Dime el paso: proponer, aplicar, deshacer, mapa, mapa-deshacer, calidad, calidad-ia, calidad-ignorar, significado, significado-indexar, significado-medir o significado-activar.', 400);
 }

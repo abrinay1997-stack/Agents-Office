@@ -55,7 +55,10 @@ export function search(index, query, { n = 5, per = 2, vectors = null, queryVec 
   let hits = bm25(index, query);
   if (vectors && queryVec) {
     const top = hits.length ? hits[0].s : 1, lex = new Map(hits.map(h => [h.d.id, h.s / top]));
-    hits = index.docs.map(d => ({ d, s: 0.5 * (lex.get(d.id) || 0) + 0.5 * Math.max(0, vectors[d.hash] ? cos(vectors[d.hash], queryVec) : 0) })).filter(h => h.s > 0.15).sort((a, b) => b.s - a.s);
+    // a passage with no vector yet (a deliverable that was never embedded, a note edited a minute ago) is not buried: its meaning score is the average of the others', so only its words decide
+    const sims = new Map(); let sum = 0, cnt = 0; for (const d of index.docs) { const v = vectors[d.hash]; if (v) { const c = Math.max(0, cos(v, queryVec)); sims.set(d.id, c); sum += c; cnt++; } }
+    const prior = cnt ? sum / cnt : 0;
+    hits = index.docs.map(d => ({ d, s: 0.5 * (lex.get(d.id) || 0) + 0.5 * (sims.has(d.id) ? sims.get(d.id) : prior) })).filter(h => h.s > 0.15).sort((a, b) => b.s - a.s);
   }
   const byNote = new Map();
   for (const h of hits) { const e = byNote.get(h.d.note) || { note: h.d.note, passages: [], score: 0 }; if (e.passages.length < per) { e.passages.push((h.d.head && !h.d.text.startsWith('#') ? '## ' + h.d.head + '\n' : '') + h.d.text); e.score += h.s; } byNote.set(h.d.note, e); }

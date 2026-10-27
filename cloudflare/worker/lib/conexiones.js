@@ -28,6 +28,7 @@ import { notasSemilla } from './semilla.js';
 import { hechosDeNota, guardarGrafo, agregarANota, guardarNota } from './cerebro.js';
 import { ahora } from './ids.js';
 import { enlacesPorUso } from './cerebro-uso.js';
+import { vecinasPorSignificado } from './significado.js';
 
 export const DOC_CONEXIONES = 'cerebro.conexiones';
 export const FUNCION_IA = 'cerebro';
@@ -36,6 +37,7 @@ export const TOPE_NOTAS = 24;     // notas que se revisan por vuelta (el resto q
 export const POR_PETICION = 3;    // notas que el navegador pide de una vez al servidor (la IA tarda unos segundos por cada una)
 export const MAX_ENLACES = 5;     // enlaces nuevos por nota
 const ATAJO = 25;                 // notas parecidas que se le enseñan al modelo
+const SEMANTICAS = 8;             // de ellas, hasta tantas pueden venir del significado (si está encendido)
 const CABEZA = 1500;              // letras de la nota nueva que lee el modelo
 export const NO_ENLAZAR = new Set(['CLAUDE', 'index', 'log']); // un índice enlazado a todo no aporta nada; CLAUDE son instrucciones
 const llave = (a, b) => (a < b ? a + '\u0001' + b : b + '\u0001' + a);
@@ -147,12 +149,13 @@ const sinCabecera = (t) => String(t || '').replace(/^---\r?\n[\s\S]*?\r?\n---\r?
 const una = (s, max) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > max ? t.slice(0, max - 1) + '…' : t; };
 
 /** Las notas más parecidas a `nota` por palabras (la misma búsqueda de los agentes) para que el modelo elija entre ellas. Sin las que ya están enlazadas con ella. → [{ nombre, resumen }] */
-export function parecidas({ nota, ix, textos, grupos, pares, grado = new Map(), tope = ATAJO }) {
+/** `semanticas`: notas cercanas por SIGNIFICADO (significado.js → vecinasPorSignificado) que las palabras no encontraron; entran a la lista (como mucho SEMANTICAS) y el resto lo llenan las palabras. */
+export function parecidas({ nota, ix, textos, grupos, pares, grado = new Map(), tope = ATAJO, semanticas = [] }) {
   const ya = new Set(); for (const [a, b] of pares) { if (a === nota.nombre) ya.add(b); else if (b === nota.nombre) ya.add(a); }
   const valida = (n) => n !== nota.nombre && textos.has(n) && !ya.has(n) && !NO_ENLAZAR.has(n);
   const consulta = (nota.nombre + ' ' + sinCabecera(nota.texto).slice(0, 700)).replace(/\[\[|\]\]/g, ' ');
   const hallazgos = knowledge.search(ix, consulta, { n: tope + 10, per: 1 }).filter((x) => x.score > 0 && valida(x.note)).map((x) => x.note);
-  const out = hallazgos.slice(0, tope);
+  const sem = semanticas.filter(valida).slice(0, SEMANTICAS), out = [...new Set([...hallazgos.slice(0, tope - sem.length), ...sem])];
   if (out.length < 10) for (const [n, g] of grupos) { if (out.length >= 10) break; if (g === nota.grupo && valida(n) && !out.includes(n)) out.push(n); } // pocas coincidencias de palabras: las de su misma carpeta
   if (out.length < 10) for (const [n] of [...grado].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))) { if (out.length >= 10) break; if (valida(n) && !out.includes(n)) out.push(n); } // y, si aún faltan, las más enlazadas (los índices de cada área): un buen sitio donde colgar una nota que no se parece a nada
   return out.map((n) => ({ nombre: n, resumen: una(memory.summary(textos.get(n), 170), 170) }));
@@ -263,7 +266,8 @@ export async function proponerConexiones({ env, db, nombres, fetchFn = undefined
     if (!nota) return { nota: nombre, rev: null, enlaces: [], aviso: 'Ya no hace falta revisarla (cambió, ya la revisaste o es de fábrica).' };
     const hallazgo = injectionIn(nota.texto);
     if (hallazgo) return { nota: nombre, grupo: nota.grupo, rev: nota.actualizado, enlaces: [], aviso: `Trae órdenes escondidas (${hallazgo}): no la mandé a la IA.`, escudo: true };
-    const cand = parecidas({ nota, ix, textos, grupos, pares, grado });
+    const cabeza = (nota.nombre + ' ' + sinCabecera(nota.texto)).replace(/\[\[|\]\]/g, ' ').slice(0, 1200);
+    const cand = parecidas({ nota, ix, textos, grupos, pares, grado, semanticas: await vecinasPorSignificado({ db, env, texto: cabeza, excluir: new Set([nota.nombre, ...NO_ENLAZAR]) }) });
     if (!cand.length) return { nota: nombre, grupo: nota.grupo, rev: nota.actualizado, enlaces: [], aviso: 'No hay otras notas con las que compararla.' };
     try {
       const r = await preguntarIA(env, { sistema: SISTEMA, usuario: pedidoParaNota(nota, cand), maxTokens: 400, funcion: FUNCION_IA, db, fetchFn });

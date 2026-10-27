@@ -54,7 +54,7 @@
 
 **No (por ahora):** llamadas y video, chat con clientes (eso es la Bandeja), bots de terceros, correo hacia el chat, notificaciones push del navegador (C6, aparte), cifrado de extremo a extremo.
 
-## 5. Modelo de datos (D1, migración `0102_chat.sql`)
+## 5. Modelo de datos (D1, migración nueva: la siguiente libre; `0102` ya la ocupó el significado del Cerebro)
 
 ```
 chat_canales   id (texto corto, p. ej. 8 letras)  ·  tipo  general | canal | directo | grupo | registro
@@ -146,7 +146,7 @@ Toda ruta comprueba la pertenencia en D1 (`chat_miembros`) antes de leer o escri
 
 | Fase | Qué entrega | Tamaño | «Hecha» cuando… |
 |---|---|---|---|
-| **C0** | Decisiones del §13, migración `0102`, `chat-core.mjs` (puro: limpiar el cuerpo, leer menciones, clave del directo, contar no leídos), módulo y rutas **sin pantalla**. | M | Tests de rutas con SQLite + matriz de roles; topes declarados en la revisión transversal. |
+| **C0** | Decisiones del §13, la migración, `chat-core.mjs` (puro: limpiar el cuerpo, leer menciones, clave del directo, contar no leídos), módulo y rutas **sin pantalla**. | M | Tests de rutas con SQLite + matriz de roles; topes declarados en la revisión transversal. |
 | **C1** | `#general`, canales, directos, lista e hilo en escritorio y celular, no leídos, marcar leído, sondeo de 30 s (**sin sockets todavía**). | M | Recorridos en navegador a los 4 anchos del celular y a 1280 px; axe sin críticos; entrada en la guía de Dimitri. |
 | **C2** | Tiempo real: `Hub` con envío dirigido, «escribiendo», «viendo», puesta al día al reconectar, contador que late. | M | Prueba con workerd real: la tercera persona no recibe ni el id; el mensaje llega solo; el corte y la vuelta no pierden ninguno. |
 | **C3** | Menciones, avisos (campanita y Telegram), silenciar, «no molestar», mención con tarea. | M | Un aviso por hecho; nunca a quien escribió; el aviso que falla no tumba el mensaje. |

@@ -364,7 +364,7 @@ test('ESCALA: el índice de notas de una ejecución deja fuera los entregables v
 /* ---------- toda tabla que solo crece declara cómo se poda ---------- */
 const TABLAS = {
   // tablas del equipo y la configuración: crecen con las personas y las decisiones del dueño, no con el uso
-  users: 'acotada', perfiles: 'acotada', conectores: 'acotada', conectores_extra: 'acotada (una fila por conector, tope de 40 en modulos/conectores.js)', grafo: 'acotada', docs: 'acotada (config; el espejo de Anuncios se recorta solo)',
+  users: 'acotada', perfiles: 'acotada', notas_vectores: 'acotada (un vector por pasaje de las notas escritas de ahora, tope de 4.000; los de pasajes que ya no existen se borran al indexar: lib/significado.js)', conectores: 'acotada', conectores_extra: 'acotada (una fila por conector, tope de 40 en modulos/conectores.js)', grafo: 'acotada', docs: 'acotada (config; el espejo de Anuncios se recorta solo)',
   // se podan en su uso o por el reloj
   sessions: 'caduca (el reloj las borra cada minuto)', acceso_intentos: 'efímera (ventana de un minuto)', publica_tasa: 'efímera (ventana de un minuto)', anuncios_tasa: 'efímera', anuncios_candados: 'efímera',
   anuncios_tokens: 'caduca en 2 minutos', contenido_candado: 'efímera', telegram_updates: 'poda a los 3 días (lib/telegram.js)', hook_eventos: 'poda cada hora (lib/disparadores.js)',

@@ -8,6 +8,7 @@ import * as memory from '../../../../memory.mjs';
 import { agentBrief, instruccionesBase, cifrasLine, TAREAS_TEXT, CONTENIDO_TEXT, modeLineFor, pasosLine, reanudaLine } from '../../../../agente-core.mjs';
 import { leerDoc, listarFilas, guardarDoc } from '../almacen.js';
 import { cargarBibliotecaNube, textoParaAgente, contextoMarketingTexto } from '../biblioteca.js';
+import { semanticaPara } from '../significado.js';
 
 export const DOC_MEMORIA = 'memoria';
 export const MOC = { emails: 'MOC-Emails', sales: 'MOC-Sales', marketing: 'MOC-Marketing', ops: 'MOC-Operations', fin: 'MOC-Finance', delivery: 'MOC-Delivery' };
@@ -44,10 +45,11 @@ export async function indiceDeNotas(db, ahora = Date.now()) {
 }
 
 /** serve.mjs → relevantNotes: las mejores notas para esta tarea (con las sinapsis que aprenden) y sus vecinas como resumen. */
-export function notasRelevantes(index, dept, texto, mem, n = 4) {
+/** `sem`: { vectors, queryVec } del significado (significado.js → semanticaPara) o null: sin él, solo palabras (BM25), como siempre. */
+export function notasRelevantes(index, dept, texto, mem, n = 4, sem = null) {
   const ix = knowledge.buildIndex(new Map([...index].filter(([k]) => !['CLAUDE', 'index', 'log'].includes(k))));
   const moc = MOC[dept];
-  const r = knowledge.search(ix, texto, { n: n + 2, per: 2, always: moc && index.has(moc) ? [moc] : [] });
+  const r = knowledge.search(ix, texto, { n: n + 2, per: 2, always: moc && index.has(moc) ? [moc] : [], ...(sem ? { vectors: sem.vectors, queryVec: sem.queryVec } : {}) });
   const ranked = r.filter(x => x.score > 0).map(x => ({ ...x, score: x.score * memory.boostOf(mem, x.note) })).sort((a, b) => b.score - a.score).slice(0, n);
   const always = r.filter(x => x.score === 0 && !ranked.some(y => y.note === x.note));
   const adj = memory.linkGraph(new Map([...index].filter(([k]) => !['CLAUDE', 'log'].includes(k))), { extra: memory.learnedLinks(mem) });
@@ -71,7 +73,7 @@ const textoDeHerramientas = (a, { tieneContenido }) => TAREAS_TEXT + (tieneConte
  */
 export async function armarEjecucion({ db, env = null, C, agente: a, tarea: task, modo, feedback, tareas = [], tieneContenido = false, tieneEstudio = false, tieneHabilidades = false, proyectoDe = () => null, ahora = Date.now() }) {
   const [skills, rules, cifras, ejemplos, mem, { index, stale }] = await Promise.all([skillsDe(db, a), leccionesDe(db, a.id).then(l => l.rules || []), cifrasDe(db), ejemplosDe(db, a.id), leerMemoria(db), indiceDeNotas(db)]);
-  const leidas = notasRelevantes(index, a.department, task.title + ' ' + task.text, mem);
+  const leidas = notasRelevantes(index, a.department, task.title + ' ' + task.text, mem, 4, await semanticaPara({ db, env, texto: task.title + ' ' + task.text })); // con el significado encendido en Ajustes del Cerebro; si no, solo palabras
   const deptName = C.depts[a.department]?.name || a.department;
   // la Biblioteca (biblioteca-core.mjs): el índice de las habilidades de este puesto, la que encaja con la tarea entera y la nota contexto-marketing, base de todas
   let bibliotecaTexto = '', marketingTexto = '';
