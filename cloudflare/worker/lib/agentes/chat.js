@@ -20,6 +20,7 @@ import { crearClienteMcp } from './mcp-cliente.js';
 import { crearGuardian } from './guardian.js';
 import { anotar as anotarCosto, estadoDelMes } from './costos.js';
 import { skillsDe, leccionesDe, cifrasDe, leerMemoria, indiceDeNotas, notasRelevantes, businessContext, contextText } from './contexto.js';
+import { semanticaPara } from '../significado.js';
 import * as costsCore from '../../../../costs-core.mjs';
 
 export const MAX_TEXTO = 4000;
@@ -74,7 +75,7 @@ export async function conversar({ env, db, p, fetchFn = null, ahora = Date.now()
   // ---- lo que el agente sabe ----
   const [skills, rules, cifras, mem, { index, stale }, lista] = await Promise.all([skillsDe(db, a), leccionesDe(db, a.id).then((l) => l.rules || []), cifrasDe(db), leerMemoria(db), indiceDeNotas(db), cargarTareas(db)]);
   const historia = historial.slice(-4).map((m) => m.text).join(' ');
-  const candidatas = notasRelevantes(index, a.department, `${historia} ${texto}`.trim(), mem, 3);
+  const candidatas = notasRelevantes(index, a.department, `${historia} ${texto}`.trim(), mem, 3, await semanticaPara({ db, env, texto: `${historia} ${texto}`.trim() }));
   // una nota con órdenes escondidas es un DATO sospechoso: no entra al sistema, no se lee, y esta conversación se queda sin herramientas
   const sospechosas = [];
   const leidas = Object.assign([], { passages: candidatas.passages, via: candidatas.via });

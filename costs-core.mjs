@@ -17,6 +17,7 @@ export const PRICE_SOURCES = [
   'DeepSeek V4.1 Flash: hora pico, benchlm.ai/deepseek/api-pricing (sep 2026)',
   'Kimi (Moonshot): benchlm.ai/moonshot/api-pricing, morphllm.com/kimi-api (sep 2026)',
   'GLM (Z.ai): aipricing.guru/z-ai-pricing, developer.puter.com (sep 2026)',
+  'Búsqueda por significado (Cloudflare bge-m3, OpenAI text-embedding-3-small, Voyage 3.5 lite, Gemini text-embedding-004): precio de lista de cada proveedor SIN verificar en su página (27 oct 2026: la sesión no llegó a esas páginas). Son centavos al mes; si el tuyo difiere, ponlo en Ajustes → Costos → precios propios.',
 ];
 // US$ per million tokens. `match` finds the model in the id Claude Code (or the provider) reports.
 export const PRICES = [
@@ -32,6 +33,11 @@ export const PRICES = [
   { provider: 'moonshot', model: 'kimi-k3', name: 'Kimi K3', match: /kimi-k3/, in: 3, out: 15, cacheRead: 0.30, cacheWrite: 3 },
   { provider: 'moonshot', model: 'kimi-k2.6', name: 'Kimi K2.6', match: /kimi/, in: 0.95, out: 4, cacheRead: 0.095, cacheWrite: 0.95 },
   { provider: 'zai', model: 'glm-5.3', name: 'GLM 5.3', match: /glm/, in: 1.40, out: 4.40, cacheRead: 0.14, cacheWrite: 1.40 },
+  // Embeddings (solo entrada; no tienen salida ni caché). Precios de lista SIN verificar: ver PRICE_SOURCES. Van al final: un id de modelo de lenguaje nunca los alcanza.
+  { provider: 'cloudflare', model: 'cf-bge-m3', name: 'Cloudflare bge-m3 (Workers AI)', match: /bge-m3/, in: 0.012, out: 0, cacheRead: 0, cacheWrite: 0 },
+  { provider: 'openai', model: 'text-embedding-3-small', name: 'OpenAI text-embedding-3-small', match: /text-embedding-3-small/, in: 0.02, out: 0, cacheRead: 0, cacheWrite: 0 },
+  { provider: 'voyage', model: 'voyage-3.5-lite', name: 'Voyage 3.5 lite', match: /voyage/, in: 0.02, out: 0, cacheRead: 0, cacheWrite: 0 },
+  { provider: 'google', model: 'text-embedding-004', name: 'Gemini text-embedding-004', match: /text-embedding-004/, in: 0, out: 0, cacheRead: 0, cacheWrite: 0 }, // gratis en la lista de Google (sin verificar)
 ];
 export const DEFAULTS = { monthlyBudget: 0, alertAt: 0.8, stopAtBudget: false, hourlyRate: 0, minutesPerTask: { emails: 10, sales: 30, marketing: 40, ops: 25, fin: 20, delivery: 35 } };
 export function config(c = {}) { return { ...DEFAULTS, ...c, minutesPerTask: { ...DEFAULTS.minutesPerTask, ...(c.minutesPerTask || {}) } }; }

@@ -12,6 +12,7 @@ import { kpis as cifrasKpis } from '../../../../src/contenido-cifras.js';
 import { sdkContent } from '../../../../vision.mjs';
 import { buscar as buscarAnuncio, textoObjeto as textoAnuncio } from '../../../../anuncios/modelo.mjs';
 import { indiceDeNotas, notasRelevantes, leerMemoria, cifrasDe } from '../agentes/contexto.js';
+import { semanticaPara } from '../significado.js';
 import * as costos from '../agentes/costos.js';
 import * as RT from '../tareas/rutinas.js';
 import { leerDoc } from '../almacen.js';
@@ -28,9 +29,9 @@ function contextText(index, names, stale, budget = 9000) {
 }
 
 /** Las notas que tocan lo que se habla (BM25 × lo que el Cerebro aprendió) + las del negocio, y las cifras si el mensaje es del Estudio. → { notes (texto), read: [nombres], index } */
-export async function notasDelChat(db, { texto, historia = '', context = null, conCifras = false, conVoz = false }) {
+export async function notasDelChat(db, { texto, historia = '', context = null, conCifras = false, conVoz = false, env = null }) {
   const [{ index, stale }, mem] = await Promise.all([indiceDeNotas(db), leerMemoria(db)]);
-  const read = notasRelevantes(index, null, `${historia} ${texto}`.trim(), mem, 4);
+  const read = notasRelevantes(index, null, `${historia} ${texto}`.trim(), mem, 4, await semanticaPara({ db, env, texto: `${historia} ${texto}`.trim() }));
   if (context?.view === 'brain' && context.label && index.has(context.label) && !read.includes(context.label)) read.unshift(context.label); // la nota que el dueño tiene abierta
   let extra = '';
   if (conVoz) for (const k of ['voice', 'oferta', 'clientes']) if (index.has(k) && !read.includes(k)) extra += `\n\n--- ${k}.md ---\n${index.get(k).slice(0, 1800)}`;

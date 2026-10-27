@@ -10,7 +10,7 @@ import { oficina, texto } from './agentes-ayudas.mjs';
 import { semillaEnDisco, assetsDe } from './semilla-ayudas.mjs';
 import { guardarNotas, guardarGrafo } from '../worker/lib/cerebro.js';
 import { guardarDoc } from '../worker/lib/almacen.js';
-import { memoriaCon } from './cerebro-ayudas.mjs';
+import { memoriaCon, modelo } from './cerebro-ayudas.mjs';
 
 let chromium = null;
 for (const base of [import.meta.url, 'file:///opt/node22/lib/node_modules/']) { try { ({ chromium } = createRequire(base)('playwright')); break; } catch { /* siguiente */ } }
@@ -35,9 +35,9 @@ const ia = (pedidos) => async (url, init = {}) => {
   return new Response(JSON.stringify(texto(JSON.stringify(r))), { status: 200 });
 };
 
-async function abrir({ ancho, rol = 'admin', memoria = null, notas = [] }) {
+async function abrir({ ancho, rol = 'admin', memoria = null, notas = [], embedder = null }) {
   const { d1, env } = await oficina({ conector: false }), { dir, semilla } = await semillaEnDisco(), pedidos = [];
-  env.ASSETS = assetsDe(dir); env.__pruebas = { fetch: ia(pedidos) };
+  env.ASSETS = assetsDe(dir); env.__pruebas = { fetch: ia(pedidos), ...(embedder ? { embedder } : {}) };
   await guardarNotas(d1, [...semilla.notas.map((n) => ({ nombre: n.nombre, grupo: n.grupo, oficina: 0, texto: n.texto, actualizado: 1000, tarea: null })),
     { nombre: 'Oferta de verano', grupo: 'Notas', oficina: 0, texto: '# Oferta de verano\n\nDescuento en los combos de la web, con los precios y plazos de entrega.', actualizado: 5000, tarea: null },
     { nombre: 'Idea de reel', grupo: 'Notas', oficina: 0, texto: 'Un reel del taller para Instagram.', actualizado: 5000, tarea: null },
@@ -242,6 +242,50 @@ test('teléfono (390 px): la sección de notas repetidas y su resultado caben, c
   await p.waitForSelector('#cxprueba .cx [data-a=calidad]', { timeout: 30000 });
   await p.click('#cxprueba [data-a=calidad]'); await p.waitForSelector('#cxprueba [data-a=cal-ign]', { timeout: 30000 });
   const medidas = await p.evaluate(() => [...document.querySelectorAll('#cxprueba button')].map((e) => ({ t: e.textContent.trim().slice(0, 30), h: Math.round(e.getBoundingClientRect().height), f: parseFloat(getComputedStyle(e).fontSize) })));
+  for (const m of medidas) assert.ok(m.h >= 44 && m.f >= 15.9, `«${m.t}» mide ${m.h} px con letra de ${m.f}`);
+  assert.equal(await sinDesborde(p), true);
+  const chicas = await p.evaluate(() => [...document.querySelectorAll('#cxprueba .cx *')].filter((e) => e.children.length === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 11).map((e) => e.textContent.trim().slice(0, 20)));
+  assert.deepEqual(chicas, [], 'ningún texto bajo 11 px');
+  await ctx.close();
+});
+
+test('buscar por significado desde el panel: se indexa con avance, se mide contra las palabras y se enciende a mano', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, errores } = await abrir({ ancho: 1280, embedder: modelo() });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.click('#topBrain'); await p.waitForSelector('#brainOv .bv-tools .bv-cx', { timeout: 40000 });
+  await p.click('.bv-cx'); await p.waitForSelector('.bv-pb .cx [data-a=sig]', { timeout: 20000 });
+  assert.match(await p.textContent('.bv-pb .cx'), /6 · Buscar por significado/);
+  await p.click('[data-a=sig]'); await p.waitForSelector('.cx [data-a=sig-indexar]', { timeout: 20000 });
+  let cx = await p.textContent('.cx'); assert.match(cx, /Modelo: Modelo de mentira/); assert.match(cx, /0 %/); assert.equal(await p.locator('[data-a=sig-medir]').isDisabled(), true, 'no se mide sin indexar'); assert.equal(await p.locator('[data-a=sig-activar]').isDisabled(), true, 'ni se enciende');
+  await p.click('[data-a=sig-indexar]'); await p.waitForFunction(() => /Todas las notas tienen significado/.test(document.querySelector('.cx')?.textContent || ''), null, { timeout: 60000 });
+  await p.click('[data-a=sig-medir]'); await p.waitForSelector('.cx table.cx-tab', { timeout: 30000 });
+  cx = await p.textContent('.cx'); assert.match(cx, /54 preguntas de prueba/); assert.match(cx, /Palabras/); assert.match(cx, /\+ Significado/); assert.match(cx, /El significado ayuda\./);
+  await p.click('[data-a=sig-activar]'); await p.waitForFunction(() => /✓ Encendido/.test(document.querySelector('.cx')?.textContent || ''), null, { timeout: 20000 });
+  await p.click('[data-a=sig-activar]'); await p.waitForFunction(() => /Apagado/.test(document.querySelector('.cx')?.textContent || ''), null, { timeout: 20000 });
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('sin modelo de significado, la sección dice qué falta (y no ofrece un botón que no funciona)', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx } = await abrir({ ancho: 1280 });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.click('#topBrain'); await p.waitForSelector('#brainOv .bv-tools .bv-cx', { timeout: 40000 });
+  await p.click('.bv-cx'); await p.waitForSelector('.bv-pb .cx [data-a=proponer]', { timeout: 20000 });
+  const cx = await p.textContent('.bv-pb .cx'); assert.match(cx, /Falta un modelo de significado/); assert.match(cx, /AI/); assert.equal(await p.locator('[data-a=sig]').count(), 0);
+  await ctx.close();
+});
+
+test('teléfono (390 px): la pantalla de significado cabe y sus botones miden 44 px', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx } = await abrir({ ancho: 390, embedder: modelo() });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.evaluate(() => { document.body.classList.add('movil'); const c = document.createElement('div'); c.id = 'cxprueba'; c.style.cssText = 'position:fixed;inset:0;overflow:auto;background:#fff;padding:12px;z-index:9999'; document.body.appendChild(c); window.AO_NUBE.actualizarConexiones(c, { alGrafo() {}, alCerrar() {} }); });
+  await p.waitForSelector('#cxprueba [data-a=sig]', { timeout: 30000 }); await p.click('#cxprueba [data-a=sig]'); await p.waitForSelector('#cxprueba [data-a=sig-indexar]', { timeout: 20000 });
+  await p.click('#cxprueba [data-a=sig-indexar]'); await p.waitForFunction(() => /Todas las notas tienen significado/.test(document.querySelector('#cxprueba')?.textContent || ''), null, { timeout: 60000 });
+  await p.click('#cxprueba [data-a=sig-medir]'); await p.waitForSelector('#cxprueba table.cx-tab', { timeout: 30000 });
+  const medidas = await p.evaluate(() => [...document.querySelectorAll('#cxprueba button')].map((e) => ({ t: e.textContent.trim().slice(0, 24), h: Math.round(e.getBoundingClientRect().height), f: parseFloat(getComputedStyle(e).fontSize) })));
   for (const m of medidas) assert.ok(m.h >= 44 && m.f >= 15.9, `«${m.t}» mide ${m.h} px con letra de ${m.f}`);
   assert.equal(await sinDesborde(p), true);
   const chicas = await p.evaluate(() => [...document.querySelectorAll('#cxprueba .cx *')].filter((e) => e.children.length === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 11).map((e) => e.textContent.trim().slice(0, 20)));

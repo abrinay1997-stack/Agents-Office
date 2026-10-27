@@ -77,7 +77,7 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   if (answers?.msg) { const q = st.messages.find((x) => x.id === answers.msg); if (q?.plan?.questions?.length && !q.plan.answers) { picked = sub.answerText(q.plan.questions, answers.picks); if (picked.answers.length) { if (picked.text) text = picked.text; } else picked = null; } }
   const historia = st.messages.slice(-4).map((m) => m.text).join(' ');
   const estudioish = !!(attach.length || imagenes.length || context?.view === 'studio' || estudioLote.pideEstudio(text, { hayLotes: false }) || st.messages.slice(-2).some((m) => m.who === 'sub' && m.mode === 'estudio' && m.studio?.creatives?.some((c) => c.state === 'proposed' || c.state === 'sent')));
-  const { notes, read } = await notasDelChat(db, { texto: text, historia, context, conCifras: estudioish, conVoz: estudioish });
+  const { notes, read } = await notasDelChat(db, { texto: text, historia, context, conCifras: estudioish, conVoz: estudioish, env });
   const studioBlock = estudioish ? await bloqueEstudio({ env, db, office, attach, text }) : '';
   const recent = sub.recentText(lista2, C2.agents), viewing = await viendoTexto({ c: context, db, office, C: C2, lista: lista2, yo: yoDe(usuario) });
   const rutDepts = (await import('../../../../routines-core.mjs')).ALLOWED.map((k) => `${C2.depts[k].name} (${k})`);
