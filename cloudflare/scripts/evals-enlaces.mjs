@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Mide la preselección de candidatas de «Actualizar conexiones» (cloudflare/worker/lib/conexiones.js → parecidas) sobre las 59 notas de fábrica.
 //   node cloudflare/scripts/evals-enlaces.mjs             → recall@25 de los enlaces escondidos y los que no aparecieron
-//   node cloudflare/scripts/evals-enlaces.mjs --guardar   → deja el resultado como línea base (evals/cerebro-busqueda/linea-base.json → enlaces)
+//   node cloudflare/scripts/evals-enlaces.mjs --guardar   → deja el resultado como línea base (evals-cerebro/linea-base.json → enlaces)
 // Prueba justa: en TODAS las notas los [[enlaces]] se quitan por completo (ni queda el nombre como palabra que delate la respuesta) y la nota sobre la que se pregunta no tiene ningún enlace, como
 // una nota recién escrita. No llama a ningún modelo. La define cerebro-evals.mjs (evaluarEnlaces); la usa cloudflare/tests/cerebro-evals-enlaces.test.mjs.
 import fs from 'node:fs';
@@ -13,7 +13,7 @@ import * as knowledge from '../../knowledge.mjs';
 import { parecidas, analizarEnlaces } from '../worker/lib/conexiones.js';
 
 const NO_ENLAZAR = new Set(['CLAUDE', 'index', 'log']);
-const BASE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'evals', 'cerebro-busqueda', 'linea-base.json');
+const BASE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'evals-cerebro', 'linea-base.json');
 
 /**
  * → { n, recall, fallos }. `candidatasDe(desde, contexto)` (puede ser async) sustituye a parecidas() para medir otra preselección (por ejemplo, con significado);

@@ -1,5 +1,5 @@
 // Cerebro — la preselección de «Actualizar conexiones», medida (issue #45). Se esconde cada enlace que el equipo SÍ escribió entre las 59 notas de fábrica y se mira si la nota enlazada aparece
-// entre las ~25 candidatas que vería la IA. Sin IA, sin red, sin costo. La línea base está en evals/cerebro-busqueda/linea-base.json (`enlaces`); si este número baja, la preselección empeoró.
+// entre las ~25 candidatas que vería la IA. Sin IA, sin red, sin costo. La línea base está en evals-cerebro/linea-base.json (`enlaces`); si este número baja, la preselección empeoró.
 // La medida y sus reglas (los [[enlaces]] se quitan por completo para que el nombre no delate la respuesta) viven en cloudflare/scripts/evals-enlaces.mjs.
 import test from 'node:test';
 import assert from 'node:assert/strict';

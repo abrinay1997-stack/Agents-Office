@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Mide la búsqueda del Cerebro con las preguntas de evals/cerebro-busqueda/preguntas.json (cerebro-evals.mjs).
+// Mide la búsqueda del Cerebro con las preguntas de evals-cerebro/preguntas.json (cerebro-evals.mjs).
 //   node scripts/evals-cerebro.mjs              → imprime recall@1/3/5, MRR y las preguntas que no encontraron su nota
-//   node scripts/evals-cerebro.mjs --guardar    → además deja el resultado como línea base (evals/cerebro-busqueda/linea-base.json)
+//   node scripts/evals-cerebro.mjs --guardar    → además deja el resultado como línea base (evals-cerebro/linea-base.json)
 //   node scripts/evals-cerebro.mjs --vault ruta → otra carpeta de notas (por defecto brain-panaclaw/, las 59 notas de fábrica)
 // No llama a ningún modelo ni cuesta nada.
 import fs from 'node:fs';
@@ -11,7 +11,7 @@ import { readVault } from '../graph-build.mjs';
 import { evaluarBusqueda, enlacesReales } from '../cerebro-evals.mjs';
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const EVALS = path.join(RAIZ, 'evals', 'cerebro-busqueda');
+const EVALS = path.join(RAIZ, 'evals-cerebro');
 
 export const cargarBoveda = (vault = path.join(RAIZ, 'brain-panaclaw')) => readVault(vault).notes; // nombre → { group, path, text }
 export const cargarNotas = (vault) => new Map([...cargarBoveda(vault)].map(([k, v]) => [k, v.text]));

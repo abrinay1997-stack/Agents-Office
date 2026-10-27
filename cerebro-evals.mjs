@@ -1,6 +1,6 @@
 // Cerebro — cómo saber si una mejora de la búsqueda o de las conexiones sirve de verdad (issue #45, «Cómo saber que mejoró»). PURO: sin archivos ni red.
 // Dos medidas, las dos con un número que se compara antes y después:
-//  · BÚSQUEDA — un conjunto de preguntas (evals/cerebro-busqueda/preguntas.json) con la nota que contiene la respuesta. Se mide el recall@k (¿la nota correcta está entre las k primeras?) y el MRR
+//  · BÚSQUEDA — un conjunto de preguntas (evals-cerebro/preguntas.json) con la nota que contiene la respuesta. Se mide el recall@k (¿la nota correcta está entre las k primeras?) y el MRR
 //    con el MISMO buscador que usan los agentes (knowledge.mjs: BM25 por pasajes). Una mejora (significado, enlaces) debe subir estos números; un cambio que los baje, no entra.
 //  · ENLACES — «Actualizar conexiones» preselecciona ~25 notas parecidas para que la IA elija a cuáles enlazar. Se esconde un enlace que el equipo SÍ escribió y se mira si esa nota aparece en la
 //    lista (recall@25 de enlaces escondidos): mide la preselección sin gastar un centavo en IA.

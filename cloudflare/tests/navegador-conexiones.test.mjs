@@ -29,18 +29,20 @@ const XSS = 'Nota <img src=x onerror=window.__xss=1> rara';
 const ia = (pedidos) => async (url, init = {}) => {
   const c = JSON.parse(init.body), pedido = typeof c.messages.at(-1).content === 'string' ? c.messages.at(-1).content : JSON.stringify(c.messages.at(-1).content);
   pedidos.push(pedido);
+  if (/FRASE A:/.test(pedido)) return new Response(JSON.stringify(texto(JSON.stringify({ veredicto: 'contradice', porque: 'El precio de Corporate no coincide.' }))), { status: 200 }); // duplicados y contradicciones: la IA confirma
   const nom = /NOTA: «(.+?)»/.exec(pedido)?.[1];
   const r = nom === 'Oferta de verano' ? { enlaces: [{ a: 'precios-webs', porque: 'habla de los mismos precios' }, { a: 'MOC-Sales', porque: 'es de ventas' }] } : nom === 'Idea de reel' ? { enlaces: [{ a: 'canal-meta', porque: 'sale por Meta' }] } : { enlaces: [] };
   return new Response(JSON.stringify(texto(JSON.stringify(r))), { status: 200 });
 };
 
-async function abrir({ ancho, rol = 'admin', memoria = null }) {
+async function abrir({ ancho, rol = 'admin', memoria = null, notas = [] }) {
   const { d1, env } = await oficina({ conector: false }), { dir, semilla } = await semillaEnDisco(), pedidos = [];
   env.ASSETS = assetsDe(dir); env.__pruebas = { fetch: ia(pedidos) };
   await guardarNotas(d1, [...semilla.notas.map((n) => ({ nombre: n.nombre, grupo: n.grupo, oficina: 0, texto: n.texto, actualizado: 1000, tarea: null })),
     { nombre: 'Oferta de verano', grupo: 'Notas', oficina: 0, texto: '# Oferta de verano\n\nDescuento en los combos de la web, con los precios y plazos de entrega.', actualizado: 5000, tarea: null },
     { nombre: 'Idea de reel', grupo: 'Notas', oficina: 0, texto: 'Un reel del taller para Instagram.', actualizado: 5000, tarea: null },
-    { nombre: XSS, grupo: 'Notas', oficina: 0, texto: 'Una nota con un nombre malicioso.', actualizado: 5000, tarea: null }]);
+    { nombre: XSS, grupo: 'Notas', oficina: 0, texto: 'Una nota con un nombre malicioso.', actualizado: 5000, tarea: null },
+    ...notas.map((n) => ({ grupo: 'Notas', oficina: 0, actualizado: 5000, tarea: null, ...n }))]);
   if (memoria) await guardarDoc(d1, 'memoria', memoria); // lo que los agentes aprendieron del trabajo aprobado
   await guardarGrafo(d1, structuredClone(semilla.grafo)); d1._db.prepare('update grafo set calculado = ? where id = 1').run(new Date(2000).toISOString());
   if (rol !== 'admin') await sembrar(d1, { email: 'otro@panaclaw.test', rol });
@@ -207,5 +209,42 @@ test('teléfono (390 px): el botón de reacomodar el mapa mide 44 px y cabe', { 
   await p.waitForSelector('#cxprueba .cx [data-a=mapa]', { timeout: 30000 });
   const b = await p.locator('#cxprueba [data-a=mapa]').evaluate((e) => ({ h: e.getBoundingClientRect().height, f: parseFloat(getComputedStyle(e).fontSize) }));
   assert.ok(b.h >= 44 && b.f >= 15.9, JSON.stringify(b)); assert.equal(await sinDesborde(p), true);
+  await ctx.close();
+});
+
+const CONTRADICE = [{ nombre: 'Precios 2026', texto: 'PanaClaw Corporate cuesta $950, con hasta 10 páginas, blog y dominio incluido, entrega en 8–12 días.' }];
+
+test('notas repetidas o que se contradicen: se buscan gratis, la de fábrica manda, la IA confirma con tu clic y «ya lo revisé» lo quita', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, d1, errores, pedidos, semilla } = await abrir({ ancho: 1280, notas: CONTRADICE });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.click('#topBrain'); await p.waitForSelector('#brainOv .bv-tools .bv-cx', { timeout: 40000 });
+  await p.click('.bv-cx'); await p.waitForSelector('.bv-pb .cx [data-a=calidad]', { timeout: 20000 });
+  assert.match(await p.textContent('.bv-pb .cx'), /5 · Notas repetidas o que se contradicen/);
+  const antes = pedidos.length;
+  await p.click('[data-a=calidad]'); await p.waitForSelector('.cx [data-a=cal-ign]', { timeout: 30000 });
+  let cx = await p.textContent('.cx'); assert.match(cx, /1 posible contradicción/); assert.match(cx, /«Precios 2026» frente a «precios-webs»|«precios-webs» frente a «Precios 2026»/); assert.match(cx, /\$950 frente a \$850|\$850 frente a \$950/);
+  assert.match(cx, /La nota de fábrica «precios-webs» manda: corrige «Precios 2026»/); assert.equal(pedidos.length, antes, 'buscar es gratis: no llama a la IA'); assert.match(cx, /Pedirle a la IA|puede confirmar/);
+  await p.click('[data-a=cal-ia]'); await p.waitForFunction(() => /La IA: sí se contradicen/.test(document.querySelector('.cx')?.textContent || ''), null, { timeout: 30000 });
+  cx = await p.textContent('.cx'); assert.match(cx, /El precio de Corporate no coincide/); assert.equal(pedidos.length, antes + 1, 'una llamada por aviso');
+  await p.click('[data-a=cal-ign]'); await p.waitForFunction(() => /No encontré notas repetidas/.test(document.querySelector('.cx')?.textContent || ''), null, { timeout: 20000 });
+  assert.match(await p.textContent('.cx'), /Dejé fuera 1 aviso que ya revisaste/);
+  assert.ok(semilla.notas.every((n) => textoEnDb(d1, n.nombre) === n.texto), 'ninguna nota de fábrica cambió'); assert.match(textoEnDb(d1, 'Precios 2026'), /\$950/, 'y la tuya tampoco: solo avisa');
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('teléfono (390 px): la sección de notas repetidas y su resultado caben, con botones de 44 px y letra de 16 px', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx } = await abrir({ ancho: 390, notas: CONTRADICE });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.evaluate(() => { document.body.classList.add('movil'); const c = document.createElement('div'); c.id = 'cxprueba'; c.style.cssText = 'position:fixed;inset:0;overflow:auto;background:#fff;padding:12px;z-index:9999'; document.body.appendChild(c); window.AO_NUBE.actualizarConexiones(c, { alGrafo() {}, alCerrar() {} }); });
+  await p.waitForSelector('#cxprueba .cx [data-a=calidad]', { timeout: 30000 });
+  await p.click('#cxprueba [data-a=calidad]'); await p.waitForSelector('#cxprueba [data-a=cal-ign]', { timeout: 30000 });
+  const medidas = await p.evaluate(() => [...document.querySelectorAll('#cxprueba button')].map((e) => ({ t: e.textContent.trim().slice(0, 30), h: Math.round(e.getBoundingClientRect().height), f: parseFloat(getComputedStyle(e).fontSize) })));
+  for (const m of medidas) assert.ok(m.h >= 44 && m.f >= 15.9, `«${m.t}» mide ${m.h} px con letra de ${m.f}`);
+  assert.equal(await sinDesborde(p), true);
+  const chicas = await p.evaluate(() => [...document.querySelectorAll('#cxprueba .cx *')].filter((e) => e.children.length === 0 && e.textContent.trim() && parseFloat(getComputedStyle(e).fontSize) < 11).map((e) => e.textContent.trim().slice(0, 20)));
+  assert.deepEqual(chicas, [], 'ningún texto bajo 11 px');
   await ctx.close();
 });

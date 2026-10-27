@@ -61,7 +61,10 @@
           ${l.hay ? `<div class="cx-fila"><button type="button" class="cx-b" data-a="limpiar">Limpiar el mapa ahora</button></div>` : ''}</section>
         <section class="cx-sec" aria-labelledby="cx-h2"><h4 id="cx-h2">2 · Conectar notas nuevas con IA</h4>${conectar}</section>
         <section class="cx-sec" aria-labelledby="cx-h3"><h4 id="cx-h3">3 · Notas que tus agentes usan juntas <small>(gratis)</small></h4>${usadas}</section>
-        <section class="cx-sec" aria-labelledby="cx-h4"><h4 id="cx-h4">4 · Reacomodar todo el mapa <small>(gratis)</small></h4>${entero}</section>${ult}`);
+        <section class="cx-sec" aria-labelledby="cx-h4"><h4 id="cx-h4">4 · Reacomodar todo el mapa <small>(gratis)</small></h4>${entero}</section>
+        <section class="cx-sec" aria-labelledby="cx-h5"><h4 id="cx-h5">5 · Notas repetidas o que se contradicen <small>(gratis)</small></h4>
+          <p>Busca notas que dicen casi lo mismo y cifras (precios, porcentajes, plazos) que una nota da distintas de otra. Solo avisa: no cambia nada. Una nota de fábrica manda sobre la tuya.</p>
+          <div class="cx-fila"><button type="button" class="cx-b" data-a="calidad">Buscar ahora</button></div></section>${ult}`);
     }
 
     function pIA() {
@@ -85,6 +88,32 @@
     function rotular() {
       const b = cont.querySelector('[data-a=aplicar]'); if (!b) return; const k = elegidos().length;
       b.textContent = k ? `Aplicar ${n(k, 'conexión', 'conexiones')} y limpiar el mapa` : 'Marcarlas como revisadas y limpiar el mapa';
+    }
+
+    const cifrasDif = (d) => d.map((x) => `${x.a.map(esc).join(' / ')} frente a ${x.b.map(esc).join(' / ')}`).join(' · ');
+    const veredicto = (v) => (!v ? '' : v.aviso ? `<p class="cx-aviso" role="note">${esc(v.aviso)}</p>` : `<p class="${v.veredicto === 'contradice' ? 'cx-mal' : 'cx-peq'}" role="status"><b>${v.veredicto === 'contradice' ? 'La IA: sí se contradicen' : v.veredicto === 'distinto' ? 'La IA: hablan de cosas distintas' : 'La IA no está segura'}.</b> ${esc(v.porque || '')}</p>`);
+    function pCalidad() {
+      const c = S.cal, juzgadas = S.veredictos || {}, sinIA = c.ia.n - Object.keys(juzgadas).length;
+      const tarjetasC = c.contradicciones.map((x) => `<fieldset class="cx-nota"><legend>«${esc(x.a.nota)}» frente a «${esc(x.b.nota)}»</legend>
+          <p class="cx-peq">«${esc(x.a.nota)}»: ${esc(x.a.linea)}</p><p class="cx-peq">«${esc(x.b.nota)}»: ${esc(x.b.linea)}</p>
+          <p><b>${cifrasDif(x.dif)}</b></p>
+          <p class="cx-peq">${x.manda ? `La nota de fábrica «${esc(x.manda === 'a' ? x.a.nota : x.b.nota)}» manda: corrige «${esc(x.manda === 'a' ? x.b.nota : x.a.nota)}».` : x.accionable ? 'Decide tú cuál vale y corrige la otra.' : 'Son dos notas de fábrica: solo para tu información.'}</p>
+          ${veredicto(juzgadas[x.clave])}<div class="cx-fila"><button type="button" class="cx-b" data-a="cal-ign" data-k="${esc(x.clave)}">Ya lo revisé</button></div></fieldset>`).join('');
+      const tarjetasD = c.duplicadas.map((x) => `<fieldset class="cx-nota"><legend>«${esc(x.a.nota)}» y «${esc(x.b.nota)}»</legend>
+          <p>Se parecen un ${Math.round(x.parecido * 100)} %.${x.contiene ? ` «${esc(x.contiene === 'a' ? x.a.nota : x.b.nota)}» está casi entera dentro de la otra.` : ''}</p>
+          <p class="cx-peq">${n(x.a.palabras, 'palabra', 'palabras')} y ${n(x.b.palabras, 'palabra', 'palabras')}. Quizá basta con dejar una.</p>
+          <div class="cx-fila"><button type="button" class="cx-b" data-a="cal-ign" data-k="${esc(x.clave)}">Ya lo revisé</button></div></fieldset>`).join('');
+      const ia = c.contradicciones.length && c.ia.n
+        ? (c.ia.conClave
+          ? `<p class="cx-peq">La IA (${esc(c.ia.modelo)}) puede confirmar si de verdad se contradicen o si hablan de cosas distintas: ${n(c.ia.n, 'aviso', 'avisos')}, ${esc(usd(c.ia.usd))} aprox.</p>${sinIA > 0 ? `<div class="cx-fila"><button type="button" class="cx-b pri" data-a="cal-ia">Pedirle a la IA que confirme</button></div>` : ''}`
+          : `<p class="cx-aviso" role="note">Falta el secreto <code>${esc(c.ia.secreto || '')}</code> en Cloudflare para que la IA confirme. Elige otro modelo en Ajustes → Modelos (función «Conectar notas del Cerebro»).</p>`)
+        : '';
+      const vacio = !c.contradicciones.length && !c.duplicadas.length
+        ? `<p class="cx-ok">✓ No encontré notas repetidas ni cifras que se contradigan en tus ${c.revisadas} notas.</p><p class="cx-peq">Solo veo cifras escritas cerca de las mismas palabras: un dato dicho con otras palabras no lo comparo.${c.ignoradas ? ` Dejé fuera ${n(c.ignoradas, 'aviso que ya revisaste', 'avisos que ya revisaste')}.` : ''}</p>` : '';
+      poner(`${c.contradicciones.length ? `<h4>${n(c.contradicciones.length, 'posible contradicción', 'posibles contradicciones')}</h4>${ia}${tarjetasC}` : ''}
+        ${c.duplicadas.length ? `<h4>${n(c.duplicadas.length, 'pareja de notas repetida', 'parejas de notas repetidas')}</h4>${tarjetasD}` : ''}${vacio}
+        ${S.aviso ? `<p class="cx-aviso" role="note">${esc(S.aviso)}</p>` : ''}<p class="cx-peq">Es un aviso con mis ojos de lector rápido, no una sentencia: lo decides tú y nada se corrige solo.</p>
+        <div class="cx-fila"><button type="button" class="cx-b pri" data-a="recargar" data-foco>Volver al inicio</button></div>`);
     }
 
     function pMapa() { // el mapa entero se recalculó (o se volvió al anterior)
@@ -155,6 +184,23 @@
         pListo();
       } catch (e) { S.fase = 'error'; pError(e.message, 'recargar'); }
     }
+    async function calidad() {
+      S.fase = 'guardando'; S.veredictos = {}; S.aviso = ''; pCarga('Comparando tus notas…');
+      try { S.cal = await post({ paso: 'calidad' }); S.fase = 'listo'; pCalidad(); } catch (e) { S.fase = 'error'; pError(e.message, 'recargar'); }
+    }
+    async function calidadIA() {
+      const pend = S.cal.contradicciones.filter((c) => c.accionable && !S.veredictos[c.clave]).slice(0, S.cal.ia.n).map((c) => c.clave);
+      S.fase = 'guardando'; S.aviso = ''; let hechas = 0;
+      for (let i = 0; i < pend.length && vivo(); i += 3) {
+        pCarga(`Pidiendo confirmación a la IA… ${hechas} de ${pend.length}`);
+        try { const r = await post({ paso: 'calidad-ia', claves: pend.slice(i, i + 3) }); for (const v of r.veredictos) S.veredictos[v.clave] = v; hechas += r.veredictos.length; } catch (e) { S.aviso = `Me detuve en el aviso ${hechas + 1}: ${e.message}`; break; }
+      }
+      if (vivo()) { S.fase = 'listo'; pCalidad(); }
+    }
+    async function ignorar(clave) {
+      try { await post({ paso: 'calidad-ignorar', claves: [clave] }); S.cal.contradicciones = S.cal.contradicciones.filter((c) => c.clave !== clave); S.cal.duplicadas = S.cal.duplicadas.filter((c) => c.clave !== clave); S.cal.ignoradas++; S.cal.ia.n = Math.min(S.cal.ia.n, S.cal.contradicciones.filter((c) => c.accionable).length); pCalidad(); }
+      catch (e) { S.aviso = e.message; pCalidad(); }
+    }
     async function mapa(deshacerlo = false) {
       S.fase = 'guardando'; pCarga(deshacerlo ? 'Volviendo al mapa anterior…' : 'Calculando el mapa entero… puede tardar unos segundos.');
       try {
@@ -182,6 +228,9 @@
       else if (a === 'cerrar') alCerrar();
       else if (a === 'proponer') proponer();
       else if (a === 'uso') verUso();
+      else if (a === 'calidad') calidad();
+      else if (a === 'cal-ia') calidadIA();
+      else if (a === 'cal-ign') ignorar(b.dataset.k);
       else if (a === 'mapa') mapa(false);
       else if (a === 'mapa-deshacer') mapa(true);
       else if (a === 'parar') { S.cancelar = true; b.disabled = true; b.textContent = 'Parando…'; }

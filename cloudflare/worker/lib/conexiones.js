@@ -40,7 +40,7 @@ const CABEZA = 1500;              // letras de la nota nueva que lee el modelo
 export const NO_ENLAZAR = new Set(['CLAUDE', 'index', 'log']); // un índice enlazado a todo no aporta nada; CLAUDE son instrucciones
 const llave = (a, b) => (a < b ? a + '\u0001' + b : b + '\u0001' + a);
 /** La regla de siempre: nunca se escribe en una nota de fábrica, clave, de un agente ni en los índices. */
-const puedeEscribirNota = (f, fabrica) => !f.oficina && !fabrica.has(f.nombre) && !N.esClave(f.nombre) && !NO_ENLAZAR.has(f.nombre);
+export const puedeEscribirNota = (f, fabrica) => !f.oficina && !fabrica.has(f.nombre) && !N.esClave(f.nombre) && !NO_ENLAZAR.has(f.nombre);
 const fold = knowledge.fold;
 
 /* ------------------------------------------------------------------ lo puro ------------------------------------------------------------------ */
@@ -203,18 +203,18 @@ export async function leerMapa(db) {
   let g = null; try { g = JSON.parse(f.json); } catch { /* un mapa dañado cuenta como «sin mapa» */ }
   const t = Date.parse(f.calculado); return { g, calculado: Number.isFinite(t) ? t : 0 };
 }
-async function nombresDeFabrica(env) {
+export async function nombresDeFabrica(env) {
   try { return new Set(((await notasSemilla(env)) || []).map((n) => n.nombre).filter(Boolean)); } catch { return new Set(); }
 }
 export const leerEstado = async (db) => { const v = (await leerDoc(db, DOC_CONEXIONES, {})).valor || {}; return { ref: Number(v.ref) || 0, revisadas: v.revisadas && typeof v.revisadas === 'object' ? v.revisadas : {}, ultima: v.ultima || null }; };
 
 /** El modelo que hace este trabajo (Ajustes → Modelos → «Conectar notas del Cerebro») y si tiene su llave. */
-async function modeloDe(env, db) {
+export async function modeloDe(env, db) {
   const modelo = elegirModelo({ env, modelos: await leerModelos(db), funcion: FUNCION_IA });
   const p = armarLlamada({ env, modelo, sistema: 'x', mensajes: [{ role: 'user', content: 'x' }], maxTokens: 1 });
   return { id: modelo.id, nombre: CATALOGO.find((m) => m.id === modelo.id)?.nombre || modelo.id, proveedor: modelo.proveedor, conClave: !!p.tieneClave, secreto: p.secreto || null };
 }
-const usdDe = (modeloId, entrada, salida, precios) => { const pr = costsCore.priceFor(modeloId, precios); return pr ? +costsCore.usdOf({ input_tokens: entrada, output_tokens: salida }, pr).toFixed(4) : null; };
+export const usdDe = (modeloId, entrada, salida, precios) => { const pr = costsCore.priceFor(modeloId, precios); return pr ? +costsCore.usdOf({ input_tokens: entrada, output_tokens: salida }, pr).toFixed(4) : null; };
 
 /** Lo que se ve al abrir el botón: qué hay que limpiar, qué notas se podrían conectar, con qué modelo y cuánto costaría. No llama a la IA ni escribe nada. */
 export async function estadoConexiones({ env, db }) {

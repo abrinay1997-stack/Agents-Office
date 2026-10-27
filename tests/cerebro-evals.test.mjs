@@ -1,4 +1,4 @@
-// Cerebro — la búsqueda se mide, no se supone (issue #45). Las preguntas son de evals/cerebro-busqueda/preguntas.json y la línea base, de linea-base.json.
+// Cerebro — la búsqueda se mide, no se supone (issue #45). Las preguntas son de evals-cerebro/preguntas.json y la línea base, de linea-base.json.
 // Si este test falla porque la búsqueda EMPEORÓ, el cambio que lo causó no entra. Si mejoró, `node scripts/evals-cerebro.mjs --guardar` sube la línea.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,7 +51,7 @@ test('el conjunto de preguntas es sano: muchas, con id único y todas apuntan a 
 });
 
 test('la búsqueda de los agentes no empeora: recall@5 y MRR contra la línea base', async () => {
-  const base = leerLineaBase(); assert.ok(base?.busqueda, 'falta evals/cerebro-busqueda/linea-base.json (node scripts/evals-cerebro.mjs --guardar)');
+  const base = leerLineaBase(); assert.ok(base?.busqueda, 'falta evals-cerebro/linea-base.json (node scripts/evals-cerebro.mjs --guardar)');
   const r = await evaluarBusqueda(cargarNotas(), cargarPreguntas());
   assert.ok(r.recall[5] >= base.busqueda.recall[5] - 0.02, `recall@5 bajó de ${base.busqueda.recall[5]} a ${r.recall[5]}: ${r.fallos.map((f) => f.id).join(', ')}`);
   assert.ok(r.recall[1] >= base.busqueda.recall[1] - 0.03, `recall@1 bajó de ${base.busqueda.recall[1]} a ${r.recall[1]}`);
