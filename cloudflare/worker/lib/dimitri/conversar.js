@@ -22,6 +22,7 @@ import { preguntar, preguntarConHerramientas, resolverModelo, descripcionModelo 
 import { crearConsultas } from './consultas.js';
 import { guiaPara } from '../../../../guia-oficina.mjs';
 import { listarFilas } from '../almacen.js';
+import { estadoDelMes } from '../agentes/costos.js';
 import { cargarBibliotecaNube } from '../biblioteca.js';
 import { listarHabilidades } from '../../../../biblioteca-core.mjs';
 import { contextoDeOps, oficinaDelDueno } from './ops.js';
@@ -60,12 +61,13 @@ export function quienEs(usuario, C) {
 }
 
 /** Un mensaje del dueño → la respuesta de Dimitri, guardada en el chat. → { messages: [u, m], answered? } */
-export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, signal = null, fetchFn = null, alPaso = null }) {
-  const db = conLecturaUnica(db0), env = { ...env0, DB: db }; // una consulta idéntica se hace una vez por turno (el límite de 50 de una invocación del plan gratuito)
+export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, signal = null, fetchFn = null, alPaso = null, sala: sala0 = null }) {
+  const db = conLecturaUnica(db0), env = { ...env0, DB: db };
+  const sala = sala0 || chat.sala(db, await chat.uidDe(db, usuario) || (() => { throw new Error('Esta cuenta no tiene conversación con Dimitri.'); })()); // la sala de ESTA cuenta (27 oct 2026): nadie lee la de otro // una consulta idéntica se hace una vez por turno (el límite de 50 de una invocación del plan gratuito)
   // Se leen MAX + HOLGURA: hasta HOLGURA mensajes más viejos que el chat siguen guardados SIN plegar en el resumen (chat.recortar espera a que sobren más de HOLGURA), y si no se
   // leyeran, lo que el dueño pidió recordar en ellos faltaría del prompt unos turnos (y volvería al plegarse). Se pliegan aquí, al vuelo, sin escribir nada.
-  const todo = await chat.cargar(db, { limite: sub.MAX + chat.HOLGURA }), st = { messages: todo.messages.slice(-sub.MAX) }, fuera = todo.messages.slice(0, Math.max(0, todo.messages.length - sub.MAX));
-  const hiloGuardado = await chat.hiloActual(db), hilo0 = fuera.length ? sub.plegarHilo(hiloGuardado, fuera) : hiloGuardado, ultimoId = st.messages.at(-1)?.id || null, C2 = await leerContexto(db), cfg2 = await leerCfg(db), lista2 = await cargarTareas(db);
+  const todo = await sala.cargar({ limite: sub.MAX + chat.HOLGURA }), st = { messages: todo.messages.slice(-sub.MAX) }, fuera = todo.messages.slice(0, Math.max(0, todo.messages.length - sub.MAX));
+  const hiloGuardado = await sala.hiloActual(), hilo0 = fuera.length ? sub.plegarHilo(hiloGuardado, fuera) : hiloGuardado, ultimoId = st.messages.at(-1)?.id || null, C2 = await leerContexto(db), cfg2 = await leerCfg(db), lista2 = await cargarTareas(db);
   const ctxFn = { env, db, cfg: cfg2, fetchFn, signal };
   const quien = quienEs(usuario, C2); // 26 oct 2026: Dimitri sabe quién le escribe (la cuenta; o la persona del equipo que escribe por Telegram)
   const office = oficinaDelDueno({ env, db, usuario, modulos });
@@ -99,12 +101,12 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   const r1 = consultas ? await preguntarConHerramientas(ctxFn, system, userMsg, { ...opts, herramientas: consultas.herramientas, ejecutar: consultas.ejecutar, alPaso }) : await preguntar(ctxFn, system, userMsg, opts);
   let out = r1.text; const pasos = r1.pasos || [], porConsulta = r1.inyeccion || null;
   db.olvidar(); // pasaron segundos: lo que se valide abajo (tareas, rutinas, piezas) se lee como está AHORA, no como estaba al empezar
-  if (signal?.aborted) return detenido({ db, text, attach, context, quien });
+  if (signal?.aborted) return detenido({ sala, text, attach, context, quien });
   let plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents, personas: sub.nombresDe(C2.personas) });
   if (plan.bad) { // la respuesta llegó rota sin arreglo: una vez más, pidiendo menos (nunca el JSON crudo en el chat)
     out = await preguntar(ctxFn, system, userMsg + '\n(Tu respuesta anterior no era un JSON válido o se cortó. Devuelve SOLO el objeto JSON, más corto: un reply breve y como mucho 3 creativos.)', opts).then((r) => r.text, () => '');
     db.olvidar();
-    if (signal?.aborted) return detenido({ db, text, attach, context, quien });
+    if (signal?.aborted) return detenido({ sala, text, attach, context, quien });
     plan = sub.parsePlan(out, { depts: C2.depts, agents: C2.agents, personas: sub.nombresDe(C2.personas) });
   }
   // EL ESCUDO: una imagen, el resultado de una tarea (un correo, un webhook), lo que está abierto o una nota con órdenes escondidas marca el mensaje y la respuesta no trae cambios
@@ -125,33 +127,35 @@ export async function conversar({ env: env0, db: db0, usuario, modulos, req: p, 
   const reply = (plan.reply || fallback) + (opsFuera ? '\n\n' + opsFuera : '') + (plan.loteNoEsta ? '\n\n_(Los lotes de fotos todavía no están en la nube: siguen en la oficina de tu computadora.)_' : '') + (plan.cut ? '\n\n_(La respuesta me llegó cortada: puede faltar algo. Si ves algo incompleto, pídemelo de nuevo.)_' : '') + (shield ? `\n\n🛡 ${shield[0].toUpperCase() + shield.slice(1)}: no las sigo, y esta respuesta no trae cambios para hacer.` : '');
   const m = sub.message('sub', reply, { mode: plan.mode, ia: resuelto.nombre, ...(quien?.nombre ? { para: quien.nombre } : {}), ...(pasos.length ? { pasos } : {}), ...(read.length ? { read } : {}), ...(plan.tasks.length || plan.questions.length ? { plan: { tasks: plan.tasks, questions: plan.questions, ...(plan.proyecto ? { proyecto: plan.proyecto } : {}) } } : {}), ...(studio ? { studio } : {}), ...(ops.length ? { ops } : {}), ...(shield ? { shield } : {}), ...(plan.bad ? { retry: true } : {}), ...(plan.cut ? { cut: true } : {}) });
   // si mientras pensaba el dueño abrió otra conversación o empezó una nueva, esta respuesta es de otra charla: no se mete en la que está viendo
-  if (ultimoId && !(await chat.mensaje(db, ultimoId))) throw new Error('Cambiaste de conversación mientras yo pensaba, así que no guardé esa respuesta. Vuelve a enviar tu mensaje donde quieras seguir.');
-  if (picked) { const q = await chat.mensaje(db, answers.msg); if (q?.plan) { q.plan.answers = picked.answers; await chat.reemplazar(db, q); } }
-  await chat.anexar(db, u, m);
+  if (ultimoId && !(await sala.mensaje(ultimoId))) throw new Error('Cambiaste de conversación mientras yo pensaba, así que no guardé esa respuesta. Vuelve a enviar tu mensaje donde quieras seguir.');
+  if (picked) { const q = await sala.mensaje(answers.msg); if (q?.plan) { q.plan.answers = picked.answers; await sala.reemplazar(q); } }
+  await sala.anexar(u, m);
   return { messages: [u, m], ...(picked ? { answered: { msg: answers.msg, answers: picked.answers } } : {}) };
 }
 
-/** Qué IA corre Dimitri (para su cabecera y para GET /api/sub): { id, nombre, de, herramientas, consultas }. */
+/** Qué IA corre Dimitri (para su cabecera y para GET /api/sub): { id, nombre, de, herramientas, consultas, gasto }. `gasto`: lo que lleva gastado la oficina en IA este mes frente a su tope (la pastilla de su cabecera). */
 export async function infoModelo({ env, db }) {
   const cfg = await leerCfg(db), r = await resolverModelo({ env, db, cfg }, { tipo: 'dimitri' });
-  return { id: r.modelo.id, nombre: r.nombre, de: r.modelo.de || '', herramientas: !!r.modelo.caps?.herramientas && !r.modelo.meta, consultas: cfg.deputy?.consultas !== false && !!r.modelo.caps?.herramientas && !r.modelo.meta };
+  const e = await estadoDelMes(db, cfg.costs).catch(() => null);
+  return { id: r.modelo.id, nombre: r.nombre, de: r.modelo.de || '', herramientas: !!r.modelo.caps?.herramientas && !r.modelo.meta, consultas: cfg.deputy?.consultas !== false && !!r.modelo.caps?.herramientas && !r.modelo.meta,
+    ...(e ? { gasto: { usd: Math.round((+e.spent || 0) * 100) / 100, tope: +e.budget > 0 ? +e.budget : null, nivel: e.level || 'none' } } : {}) };
 }
 
 /** «Detener»: el mensaje queda «Detenido por ti» y nada de lo que propuso se guarda. */
-async function detenido({ db, text, attach, context, quien = null }) {
+async function detenido({ sala, text, attach, context, quien = null }) {
   const u = sub.message('user', text, { ...(quien?.nombre ? { por: quien.nombre } : {}), ...(attach.length ? { attach } : {}), ...(context?.view ? { context: { view: context.view, label: context.label || '' } } : {}) });
   const m = sub.message('sub', '_Detenido por ti._', { mode: 'charla', stopped: true });
-  await chat.anexar(db, u, m);
+  await sala.anexar(u, m);
   return { messages: [u, m], stopped: true };
 }
 
 /** «¿Cómo vamos?» al instante, sin modelo, y «Analizar con Dimitri» después (POST /api/sub/estado). */
-export async function estadoRapido({ env, db, usuario, modulos, texto }) {
+export async function estadoRapido({ env, db, usuario, modulos, texto, sala }) {
   const [C, cfg, lista] = [await leerContexto(db), await leerCfg(db), await cargarTareas(db)];
   const office = oficinaDelDueno({ env, db, usuario, modulos });
   const u = sub.message('user', String(texto || '¿Cómo vamos?').trim().slice(0, 200) || '¿Cómo vamos?');
   const m = sub.message('sub', await resumenRapido({ db, office, C, lista, cfg }), { mode: 'estado', quick: true });
-  await chat.anexar(db, u, m);
+  await sala.anexar(u, m);
   return { messages: [u, m] };
 }
 
@@ -177,8 +181,8 @@ async function contextoEstudio({ env, db, office, creativos }) {
 }
 
 /** GENERAR: el clic del dueño. Es la ÚNICA ruta por la que Dimitri gasta, y solo si un administrador la llama (el Estudio vuelve a exigir lo mismo). Los topes del Estudio mandan. */
-export async function generar({ env, db, usuario, modulos, msgId, items, actions }) {
-  const m = await chat.mensaje(db, msgId);
+export async function generar({ env, db, usuario, modulos, msgId, items, actions, sala }) {
+  const m = await sala.mensaje(msgId);
   if (!m || !m.studio) return { error: 'esa propuesta ya no existe' };
   const office = oficinaDelDueno({ env, db, usuario, modulos });
   const ctxE = await contextoEstudio({ env, db, office, creativos: [] });
@@ -209,9 +213,9 @@ export async function generar({ env, db, usuario, modulos, msgId, items, actions
     if (on === undefined) continue;
     try { await accionEstudio({ office, a, fl }); a.state = 'done'; done++; } catch (err) { a.state = 'failed'; a.error = String(err.message || err).slice(0, 300); }
   }
-  await chat.reemplazar(db, m);
+  await sala.reemplazar(m);
   const aviso = (sent || failed || done) ? sub.message('sub', [sent || failed ? `${sent ? `Mandé ${sent} ${sent === 1 ? 'creativo' : 'creativos'} al Estudio (aprox. US$${usd.toFixed(2)}). Te aviso aquí cuando estén.` : 'No mandé nada al Estudio.'}${failed ? ` ${failed} no se pudo: lo dice en su tarjeta.` : ''}` : '', done ? `Ordené ${done} ${done === 1 ? 'cosa' : 'cosas'} en la galería.` : ''].filter(Boolean).join(' ')) : null;
-  if (aviso) await chat.anexar(db, aviso);
+  if (aviso) await sala.anexar(aviso);
   return { ok: true, message: m, messages: aviso ? [aviso] : [] };
 }
 async function accionEstudio({ office, a, fl }) { // las 4 acciones cerradas del contrato (estudio-plan.parseActions ya tiró el resto)
@@ -228,8 +232,8 @@ async function accionEstudio({ office, a, fl }) { // las 4 acciones cerradas del
 }
 
 /** Cada minuto: los creativos que Dimitri mandó y ya terminaron dicen «Listos: …» en su chat (serve.mjs → subJobDone). Una vez por trabajo. */
-export async function trabajosTerminados({ env, db, usuario, modulos }) {
-  const { messages } = await chat.cargar(db, { limite: 40 });
+export async function trabajosTerminados({ env, db, usuario, modulos, sala }) {
+  const { messages } = await sala.cargar({ limite: 40 });
   const office = oficinaDelDueno({ env, db, usuario, modulos });
   let n = 0;
   for (const m of messages) {
@@ -240,8 +244,8 @@ export async function trabajosTerminados({ env, db, usuario, modulos }) {
       Object.assign(c, { state: j.state === 'done' ? 'done' : 'failed', files: j.items || [], doneAt: Date.now() });
       if (j.error) c.error = j.error; if (j.warning) c.warning = j.warning;
       const k = c.files.length, que = estudioPlan.unitWord(c.kind, k);
-      await chat.reemplazar(db, m);
-      await chat.anexar(db, c.state === 'done' ? sub.message('sub', `Listos: «${c.title}» (${k} ${que}${c.folder ? `, en la carpeta «${c.folder}»` : ''}).${j.warning ? ' ' + j.warning : ''}`, { media: c.files, ref: { msg: m.id, i: c.i } }) : sub.message('sub', `No salió «${c.title}»: ${j.error || 'el motor no devolvió nada'}`, { ref: { msg: m.id, i: c.i } }));
+      await sala.reemplazar(m);
+      await sala.anexar(c.state === 'done' ? sub.message('sub', `Listos: «${c.title}» (${k} ${que}${c.folder ? `, en la carpeta «${c.folder}»` : ''}).${j.warning ? ' ' + j.warning : ''}`, { media: c.files, ref: { msg: m.id, i: c.i } }) : sub.message('sub', `No salió «${c.title}»: ${j.error || 'el motor no devolvió nada'}`, { ref: { msg: m.id, i: c.i } }));
       n++;
     }
   }

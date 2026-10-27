@@ -155,7 +155,7 @@ test('NUNCA aprueba, envía, publica, paga ni borra: esas ops no existen, y una 
   // y aunque alguien escriba una op así directamente en el chat guardado, HACER no la hace
   const pz = (await o.admin('POST', '/api/contenido/piezas', { titulo: 'Una', texto: 'Texto', fecha: '2099-01-01', hora: '10:00', redes: ['instagram'], formato: 'post', estado: 'borrador' })).j.pieza;
   const falsa = { id: 'falso1', who: 'sub', text: 'x', at: Date.now(), mode: 'plan', ops: [{ k: 0, type: 'pieza_aprobar', id: pz.id, state: 'proposed' }, { k: 1, type: 'anuncio_confirmar', id: 'a', state: 'proposed' }] };
-  o.d1._db.prepare("insert into filas (coleccion, id, json, orden, actualizado) values ('subgerente', 'falso1', ?, ?, 'x')").run(JSON.stringify(falsa), Date.now());
+  o.d1._db.prepare("insert into filas (coleccion, id, json, orden, actualizado) values ('subgerente:' || (select id from users where rol = 'admin' limit 1), 'falso1', ?, ?, 'x')").run(JSON.stringify(falsa), Date.now()); // en la sala de la cuenta (27 oct 2026: cada cuenta tiene la suya)
   const h = await o.admin('POST', '/api/sub/ops', { msg: 'falso1', items: [{ k: 0 }, { k: 1 }] });
   assert.deepEqual(h.j.message.ops.map((x) => x.state), ['failed', 'failed']);
   assert.equal((await o.admin('GET', `/api/contenido/piezas/${pz.id}`)).j.pieza.estado, 'borrador', 'la pieza sigue sin aprobar');

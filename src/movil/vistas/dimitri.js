@@ -63,7 +63,7 @@ export function registrar(shell) {
         if (!cargado) { hilo.innerHTML = error ? `<div class="mv-vacio" role="alert"><h3>No se pudo abrir el chat</h3><p>${esc(error)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>` : '<div class="mv-esq" aria-hidden="true"><i></i><i></i></div><span class="mv-sr" role="status">Abriendo el chat…</span>'; return; }
         const nuevo = !mensajes.length && !ocupado;
         const ult = mensajes.length ? mensajes[mensajes.length - 1] : null;
-        hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p>${iaInfo?.nombre ? `<p class="mv-ia">IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa'}. Se cambia en Ajustes → Modelos.</p>` : ''}</div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
+        hilo.innerHTML = (nuevo ? `<div class="mv-saludo">${svg('dimitri', 'mv-vacio-i')}<h3>Hola, soy ${esc(nombre)}</h3><p>Tu mano derecha. Pregúntame cómo va la oficina o pídeme que organice trabajo.</p>${iaInfo?.nombre ? `<p class="mv-ia">IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa'}. Se cambia en Ajustes → Modelos.${iaInfo.gasto ? ` Gasto de IA del mes: <b>US$${iaInfo.gasto.usd.toFixed(2).replace('.', ',')}${iaInfo.gasto.tope ? ' de US$' + iaInfo.gasto.tope.toFixed(2).replace('.', ',') : ''}</b>.` : ''}${window.AO_NUBE ? ' 🔒 Solo tú ves este chat.' : ''}</p>` : ''}</div>` : mensajes.map(m => burbuja(m, m === ult)).join(''))
           + (ocupado ? vivoHTML() : '') + (fallo ? falloHTML() : '') + (!ocupado && !fallo ? sugerencias() : '');
         env.disabled = !puede(); chipViendo();
         if (fondo !== false) abajo();
@@ -220,7 +220,7 @@ export function registrar(shell) {
         const pinta = async () => {
           try {
             const j = await ctx.api('/api/sub/conversaciones'), lista = j.lista || [];
-            const fila = c => `<li class="mv-conv" data-id="${esc(c.id)}"><button type="button" class="mv-conv-b" data-abrir><b>${esc(c.titulo)}</b><small>${new Date(c.at).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${c.n} mensajes</small></button><button type="button" class="mv-ic" data-borrar aria-label="Borrar la conversación «${esc(c.titulo)}»">${svg('borrar')}</button></li>`;
+            const fila = c => `<li class="mv-conv" data-id="${esc(c.id)}"><button type="button" class="mv-conv-b" data-abrir><b>${esc(c.titulo)}</b><small>${new Date(c.at).toLocaleString('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${c.n} mensajes</small></button><button type="button" class="mv-ic" data-renombrar aria-label="Cambiar el nombre de «${esc(c.titulo)}»">${svg('lapiz')}</button><button type="button" class="mv-ic" data-borrar aria-label="Borrar la conversación «${esc(c.titulo)}»">${svg('borrar')}</button></li>`;
             h.cuerpo.innerHTML = (j.actual ? `<p class="mv-meta">Ahora: ${esc(j.actual.titulo)} · ${j.actual.n} mensajes</p>` : '') + (lista.length ? `<ul class="mv-convs">${lista.map(fila).join('')}</ul>` : vacio('Sin conversaciones guardadas', 'Cuando empieces una nueva, la de ahora se guarda aquí.', { icono: 'historial' }));
           } catch (e) { h.cuerpo.innerHTML = `<div class="mv-vacio" role="alert"><h3>No pude traer el historial</h3><p>${esc(e.message)}</p><button type="button" class="mv-btn" data-reintentar>Reintentar</button></div>`; }
         };
@@ -228,6 +228,13 @@ export function registrar(shell) {
           if (e.target.closest('[data-reintentar]')) return pinta();
           const li = e.target.closest('.mv-conv'); if (!li) return; const id = li.dataset.id;
           if (e.target.closest('[data-abrir]')) { if (ocupado) { ctx.toast('Espera a que termine de contestar.'); return; } try { const r = await ctx.api('/api/sub/abrir', { method: 'POST', body: { id } }); mensajes = r.messages || []; h.cerrar(); pintar(); } catch (er) { ctx.toast('No se pudo abrir: ' + er.message); } }
+          else if (e.target.closest('[data-renombrar]')) { // el nombre se escribe en su sitio, sin abrir otra hoja encima
+            if (li.querySelector('.mv-conv-ed')) return; const ab = li.querySelector('[data-abrir]'), tit = ab.querySelector('b');
+            const f = document.createElement('form'); f.className = 'mv-conv-ed'; f.style.cssText = 'display:flex;gap:8px;flex:1;align-items:center;padding:6px 0';
+            f.innerHTML = `<label class="mv-sr" for="mvCR">Nuevo nombre de la conversación</label><input id="mvCR" class="mv-campo" type="text" maxlength="80" enterkeyhint="done" autocomplete="off" value="${esc(tit.textContent)}"><button type="submit" class="mv-btn">Guardar</button>`;
+            ab.hidden = true; li.prepend(f); const inp = f.querySelector('input'); inp.focus(); inp.select();
+            f.onsubmit = async ev => { ev.preventDefault(); const v = inp.value.replace(/\s+/g, ' ').trim(); if (!v) return; try { await ctx.api('/api/sub/renombrar', { method: 'POST', body: { id, titulo: v } }); tit.textContent = v; ab.hidden = false; f.remove(); ctx.toast('Nombre cambiado.'); } catch (er) { ctx.toast('No se pudo cambiar el nombre: ' + er.message); } };
+          }
           else if (e.target.closest('[data-borrar]')) { if (!(await ctx.confirmar({ titulo: '¿Borrar esta conversación?', texto: 'Se borra para siempre.', ok: 'Borrar', peligro: true }))) return; try { await ctx.api('/api/sub/borrar', { method: 'POST', body: { id } }); li.remove(); } catch (er) { ctx.toast('No se pudo: ' + er.message); } }
         });
         pinta();

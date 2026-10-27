@@ -247,7 +247,7 @@ export function crearBot({ cfg, who, approvers, st, saveSt, local, call, send, s
         await strip(); await done('Hecho'); return send(chat, `✅ ${esc(r.hecho?.texto || 'Hecho.')}${r.aviso ? `\nℹ ${esc(r.aviso)}` : ''}`);
       }
       if (k === 'xn') { gastos.delete(id); await strip(); await done('No'); return send(chat, 'Vale: no se cambia nada.'); }
-      if (k === 'sd') { const r = await local('POST', '/api/sub/send', { msg: id }); await strip(); await done('Enviado'); return send(chat, `📤 Enviado a los jefes${r.tasks?.filter(Boolean).length ? ': ' + r.tasks.filter(Boolean).length + ' tarea(s)' : ''}.`); }
+      if (k === 'sd') { const r = await local('POST', '/api/sub/send', { msg: id }, 'telegram:' + q.from.id); await strip(); await done('Enviado'); return send(chat, `📤 Enviado a los jefes${r.tasks?.filter(Boolean).length ? ': ' + r.tasks.filter(Boolean).length + ' tarea(s)' : ''}.`); }
       await done('');
     } catch (e) { await done('No se pudo'); return send(chat, '✗ ' + esc(e.message)); }
   }

@@ -38,8 +38,8 @@ test('150 turnos: el prompt no crece, D1 cabe en 50 consultas por turno y lo del
   const ultimo = o.m.registro.anthropic.at(-1);
   assert.match(ultimo.system, /<hilo>\nEsta sesión lleva/); assert.match(ultimo.system, /nunca menciones precios en redes/, 'lo que pidió en el turno 3 sigue en el prompt del 150');
   const g = (await o.admin('GET', '/api/sub')).j.messages; assert.equal(g.length, MAX, 'la página recibe los últimos MAX');
-  assert.ok(filas(o.d1, "select count(*) n from filas where coleccion = 'subgerente'")[0].n <= MAX + chat.HOLGURA, 'en D1 no crece sin tope');
-  assert.ok(filas(o.d1, "select length(json) l from filas where coleccion = 'subgerente-hilo' and id = 'actual'")[0].l < 3500, 'el resumen guardado es pequeño');
+  assert.ok(filas(o.d1, "select count(*) n from filas where coleccion like 'subgerente:%'")[0].n <= MAX + chat.HOLGURA, 'en D1 no crece sin tope');
+  assert.ok(filas(o.d1, "select length(json) l from filas where coleccion = 'subgerente-hilo' and id like 'actual:%'")[0].l < 3500, 'el resumen guardado es pequeño');
 });
 
 test('conLecturaUnica: un SELECT idéntico se hace una vez, cada lector recibe su copia y cualquier escritura (o olvidar) lo suelta', { skip: SALTAR }, async () => {
@@ -57,7 +57,7 @@ test('conLecturaUnica: un SELECT idéntico se hace una vez, cada lector recibe s
 
 test('el hilo viaja con SU conversación: archivar, abrir, restaurar y borrar; al abrir una vieja el prompt trae el resumen de ESA', { skip: SALTAR }, async () => {
   const o = await oficina6();
-  const hilos = () => filas(o.d1, "select id from filas where coleccion = 'subgerente-hilo' order by id").map((x) => x.id);
+  const hilos = () => filas(o.d1, "select id from filas where coleccion = 'subgerente-hilo' order by id").map((x) => x.id.replace(/^actual:.*/, 'actual').replace(/^arch:[^:]*:/, '')).sort(); // el resumen de ahora es `actual:<cuenta>` y el de una archivada `arch:<cuenta>:<id>` (cada cuenta tiene su sala)
   // conversación A: más de MAX + HOLGURA mensajes → se pliega
   for (let i = 0; i < 75; i++) { o.m.guion.push(dimitriDice({ mode: 'charla', reply: 'ok ' + i })); await turno(o, i === 0 ? PREF : 'relleno A ' + i); }
   assert.deepEqual(hilos(), ['actual']);
@@ -88,7 +88,7 @@ test('una respuesta rota o una IA caída no estropean la sesión; una respuesta 
   const caida = await turno(o, 'tercero'); assert.equal(caida.status, 500); assert.equal((await o.admin('GET', '/api/sub')).j.messages.length, n0, 'ni el mensaje del dueño ni media respuesta');
   o.env.__pruebas.fetch = real; o.m.guion.push(dimitriDice({ mode: 'charla', reply: 'de vuelta' })); assert.equal((await turno(o, 'cuarto')).status, 200);
   // el dueño abre «Nueva conversación» mientras Dimitri piensa
-  o.env.__pruebas.fetch = async (u, init) => { if (String(u).startsWith('https://api.anthropic.com/')) await chat.archivar(o.env.DB); return real(u, init); };
+  o.env.__pruebas.fetch = async (u, init) => { if (String(u).startsWith('https://api.anthropic.com/')) await chat.sala(o.env.DB, filas(o.d1, "select id from users where rol = 'admin' limit 1")[0].id).archivar(); return real(u, init); };
   o.m.guion.push(dimitriDice({ mode: 'charla', reply: 'respuesta tardía' }));
   const tarde = await turno(o, 'quinto'); assert.equal(tarde.status, 500); assert.match(tarde.j.error, /Cambiaste de conversación/);
   assert.equal((await o.admin('GET', '/api/sub')).j.messages.length, 0, 'la conversación nueva sigue vacía');

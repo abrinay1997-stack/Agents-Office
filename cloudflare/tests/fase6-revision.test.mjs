@@ -171,8 +171,8 @@ test('hacerOps vuelve a validar lo que el dueño editó; DESHACER solo durante 3
   const mala = await o.admin('POST', '/api/sub/ops', { msg: m1.id, items: [{ k: 0, include: true, when: { kind: 'weekly' } }] }); assert.equal(mala.j.message.ops[0].state, 'failed'); assert.equal(filas(o.d1, "select * from filas where coleccion = 'rutinas'").length, 0);
   const m2 = (await o.admin('POST', '/api/sub/chat', { text: 'dos' })).j.messages.at(-1);
   const h = await o.admin('POST', '/api/sub/ops', { msg: m2.id, items: [{ k: 0, include: true }] }); assert.equal(h.j.message.ops[0].state, 'done');
-  const fila = filas(o.d1, "select json from filas where coleccion = 'subgerente' and id = ?", m2.id)[0], j = JSON.parse(fila.json); j.ops[0].doneAt = Date.now() - 31e3;
-  o.d1._db.prepare("update filas set json = ? where coleccion = 'subgerente' and id = ?").run(JSON.stringify(j), m2.id);
+  const fila = filas(o.d1, "select json from filas where coleccion like 'subgerente:%' and id = ?", m2.id)[0], j = JSON.parse(fila.json); j.ops[0].doneAt = Date.now() - 31e3;
+  o.d1._db.prepare("update filas set json = ? where coleccion like 'subgerente:%' and id = ?").run(JSON.stringify(j), m2.id);
   const u = await o.admin('POST', '/api/sub/ops/undo', { msg: m2.id, k: 0 }); assert.equal(u.status, 409); assert.match(u.j.error, /tiempo/);
 });
 test('el dinero: una op de gasto la hace otra persona = error; si Anuncios no pide la cifra, Dimitri lo trata como fallo', { skip: SALTAR }, async () => {
