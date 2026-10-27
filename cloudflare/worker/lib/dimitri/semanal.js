@@ -36,20 +36,20 @@ async function tareasSemana(db, l, C) {
 }
 
 /** Escribe el informe (si es lunes, desde las 8, no se mandó esta semana y `deputy.weekly` no está apagado; con `force`, siempre). → el texto, o null si no tocaba. */
-export async function informeSemanal({ env, db, force = false, ahora = new Date(), fetchFn = null }) {
+export async function informeSemanal({ env, db, force = false, ahora = new Date(), fetchFn = null, uids = null }) {
   const cfg = await leerCfg(db), wk = claveSemana(ahora);
   if (!force && (ahora.getDay() !== 1 || ahora.getHours() < 8 || !(cfg.deputy?.weekly ?? true))) return null;
   // se reclama la semana ANTES de pensar, con la versión del documento como condición: dos relojes (o dos instancias) a la vez no mandan dos informes
   let mio = false, antes = {};
   await mutarDoc(db, DOC_SEMANA, {}, (ya) => { if (!force && (ya.week === wk || ahora.getTime() - (ya.fallo || 0) < ESPERA_FALLO_MS)) { mio = false; return ya; } mio = true; antes = ya; return { ...ya, week: wk, at: ahora.getTime() }; });
   if (!mio) return null;
-  try { return await redactar({ env, db, cfg, ahora, fetchFn }); }
+  try { return await redactar({ env, db, cfg, ahora, fetchFn, uids }); }
   catch (e) { // la IA falló (sin saldo, saturada, sin red): se SUELTA la semana, o el informe del lunes se perdería hasta el siguiente (el reloj lo reintenta cada minuto)
     await mutarDoc(db, DOC_SEMANA, {}, (ya) => (ya.week === wk && ya.at === ahora.getTime() ? { ...ya, week: antes.week, at: antes.at, fallo: ahora.getTime() } : ya)).catch(() => {});
     throw e;
   }
 }
-async function redactar({ env, db, cfg, ahora, fetchFn }) {
+async function redactar({ env, db, cfg, ahora, fetchFn, uids }) {
   const [C, l, k] = [await leerContexto(db), await cargarTareas(db), await leerKpis(db)];
   const c = costsCore.report(await costos.leer(db, Date.now() - 70 * 864e5), l, C.agents, cfg.costs), q = quality.byAgent(l, C.agents);
   const facts = [`Estado: ${sub.statusText(l, C.agents, C.depts)}`, `Últimos trabajos: ${sub.recentText(l, C.agents, 15)}`, `Costo del mes: US$${c.usd.toFixed(2)}${c.budget.budget ? ' de US$' + c.budget.budget : ''}; horas ahorradas ${c.hours.toFixed(1)}`,
@@ -58,7 +58,9 @@ async function redactar({ env, db, cfg, ahora, fetchFn }) {
     `Sugerencias de costo: ${c.suggestions.map((x) => x.text).join(' | ') || 'ninguna'}`, await tareasSemana(db, l, C)].filter(Boolean).join('\n');
   const nombre = sub.nameOf(cfg);
   const { text } = await preguntar({ env, db, cfg, fetchFn }, sub.informeSistema(nombre, cfg.name || 'PanaClaw'), sub.informePedido(facts), { maxTokens: 600, tipo: 'informe', model: 'sonnet' });
-  await chat.anexar(db, sub.message('sub', '📋 Resumen de la semana\n\n' + text, { mode: 'analisis' }));
+  // a cada administrador le llega en SU chat (cada cuenta tiene el suyo): es el mismo texto, una sola llamada al modelo
+  const m = sub.message('sub', '📋 Resumen de la semana\n\n' + text, { mode: 'analisis' });
+  for (const uid of uids || await chat.uidsAdmins(db)) await chat.sala(db, uid).anexar({ ...m, id: m.id + '-' + uid.slice(0, 8) });
   await avisar(db, { kind: 'weekly', text: `📋 Resumen de la semana de ${nombre}:\n${text}` });
   return text;
 }

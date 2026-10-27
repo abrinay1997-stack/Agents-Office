@@ -16,7 +16,7 @@
 | **Caché de prompts** (marca en lo fijo): cada paso relee lo anterior a ~10 % del precio | la parte fija lleva `cache_control`; con consultas, cada vuelta cuesta una fracción |
 | «**Para cada función nueva**: debe poder usarla Brian» (plantilla de PR) | regla nueva en `CLAUDE.md` + `tests/guia-oficina.test.mjs` falla si una vista no tiene entrada en la guía |
 | Dice **con qué modelo corre** y se configura (`BRIAN_PROVEEDOR`/`MODELO`) | «Corres con …» en el prompt, «IA: …» en la cabecera, `ia` en `GET /api/sub` y en cada respuesta |
-| Pastillas de estado (consumo de IA del mes, Telegram, MCP) | **pendiente** (P4) |
+| Pastillas de estado (consumo de IA del mes, Telegram, MCP) | ✅ **la del gasto de IA del mes** (`ia.gasto`, 27 oct 2026, segunda tanda); Telegram y conectores siguen pendientes |
 | Preselección de herramientas por mensaje para modelos pequeños | **pendiente** (P5): hoy son 18 y se ofrecen todas |
 
 ## Hallazgos
@@ -62,8 +62,10 @@ Estado: ✅ hecho (con prueba) · ⏳ pendiente (con su fase).
 |---|---|---|
 | **D0 (esta noche)** | Guía, consultas, voz, resumen corto, IA visible, conectores de lectura, pasos visibles, caché, Cerebro editable y notas con Dimitri | ✅ desplegado con esta auditoría |
 | **D1** | **P1** Dimitri local con consultas (hoy tiene la guía, la voz, el informe corto y las ops de notas, pero no el bucle). **P3** evaluaciones con el modelo real: 30 preguntas del dueño («¿dónde está la biblioteca?», «¿quién hizo la tarea X?», «analiza esta campaña») con un juez, como `scripts/evals-skill.mjs` | ⏳ |
-| **D2** | **P2** Dimitri propone un envío por un conector (correo, mensaje) y lo hace el servidor al pulsar «Enviar» (guardián con `writes:true` solo para esa llamada, destinatarios = los del borrador). **P4** pastillas de estado en su cabecera (gasto de IA del mes, conectores) | ⏳ |
-| **D3** | **P5** preselección de herramientas por mensaje para modelos pequeños. **P6** leer adjuntos (Excel, PDF) en el chat. **P7** renombrar conversaciones. **P8** recalcular los enlaces del mapa de la nube al guardar una nota | ⏳ |
+| **D2** | **P2** Dimitri propone un envío por un conector (correo, mensaje) y lo hace el servidor al pulsar «Enviar» (guardián con `writes:true` solo para esa llamada, destinatarios = los del borrador) | ⏳ (decisión del dueño: qué conectores y qué herramientas pueden enviar) |
+| **D2b** | **P4** pastilla del gasto de IA del mes en su cabecera ✅ (27 oct, segunda tanda); las de Telegram y conectores ⏳ | ✅ en parte |
+| **D3** | **P5** preselección de herramientas por mensaje para modelos pequeños. **P6** leer adjuntos (Excel, PDF) en el chat. ~~**P7** renombrar conversaciones~~ ✅ (27 oct, segunda tanda: `POST /api/sub/renombrar`, «Renombrar» en el historial, lápiz en el teléfono). ~~**P8** enlaces del mapa de la nube~~ ✅ (una nota nueva con `[[enlaces]]` a notas del mapa entra conectada). | ✅ P7 y P8 · ⏳ P5 y P6 |
+| **Segunda tanda (27 oct, pedido del dueño)** | **Un chat por cuenta**: cada administrador tiene su conversación, su historial y su resumen de sesión; nadie lee los de otro (`dimitri-salas.test.mjs`). Ver «Dimitri, un chat por cuenta» en `CLAUDE.md`. | ✅ |
 
 ## Cómo comprobarlo
 

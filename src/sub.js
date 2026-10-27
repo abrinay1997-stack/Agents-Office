@@ -56,7 +56,8 @@ export function initSub(ctx) {
     if (!iaInfo || !iaInfo.nombre) { h.hidden = true; return; }
     const cambia = typeof window !== 'undefined' && window.AO_NUBE && ctx.openSettings;
     h.hidden = false;
-    h.innerHTML = `IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa (este modelo no usa herramientas)'}${cambia ? ' · <button type="button" class="sb-ia-cambiar">cambiar</button>' : ''}`;
+    const g = iaInfo.gasto, usd = n => 'US$' + n.toFixed(2).replace('.', ','); // la pastilla del mes: lo que lleva gastado la oficina en IA (frente a su tope, si lo hay)
+    h.innerHTML = `IA: <b>${esc(iaInfo.nombre)}</b> · ${iaInfo.consultas ? 'consulta la oficina por sí mismo' : iaInfo.herramientas ? 'sin consultas (apagadas)' : 'solo conversa (este modelo no usa herramientas)'}${cambia ? ' · <button type="button" class="sb-ia-cambiar">cambiar</button>' : ''}${g ? ` · gasto de IA del mes: <b${g.nivel === 'over' || g.nivel === 'alert' ? ' class="sb-ia-alto"' : ''}>${usd(g.usd)}${g.tope ? ' de ' + usd(g.tope) : ''}</b>` : ''}${window.AO_NUBE ? ' · 🔒 solo tú ves este chat' : ''}`;
     const b = h.querySelector('.sb-ia-cambiar'); if (b) b.onclick = () => ctx.openSettings('nube-modelos');
   }
   function setName(n) { NAME = String(n || 'Dimitri'); $('.sb-name').textContent = NAME.toUpperCase(); $('.sb-av').textContent = NAME.charAt(0).toUpperCase(); input.placeholder = `Escríbele a ${NAME}: una pregunta, una idea, lo que hay que hacer, o los creativos que quieres (puedes adjuntar fotos)`; }
@@ -495,7 +496,7 @@ export function initSub(ctx) {
       const r = await fetch('/api/sub/conversaciones'); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText); const j = await r.json(), lista = j.lista || [];
       hist.innerHTML = `<div class="sbh-top"><b>Conversaciones</b><button type="button" class="sbh-back">Volver al chat</button></div>`
         + (j.actual ? `<div class="sbh-row sbh-now"><div class="sbh-t"><span class="sbh-name">${esc(j.actual.titulo)}</span><span class="sbh-meta">Esta conversación · ${j.actual.n} mensajes</span></div></div>` : '')
-        + (lista.length ? lista.map(c => `<div class="sbh-row" data-id="${esc(c.id)}"><div class="sbh-t"><span class="sbh-name">${esc(c.titulo)}</span><span class="sbh-meta">${esc(fechaH(c.at))} · ${c.n} mensajes</span></div><button type="button" class="sbh-open">Abrir</button><button type="button" class="sbh-del" aria-label="Borrar «${esc(c.titulo)}»">Borrar</button></div>`).join('') : '<div class="sb-empty">Aún no hay conversaciones guardadas. Al pulsar ＋ la de ahora se guarda aquí.</div>');
+        + (lista.length ? lista.map(c => `<div class="sbh-row" data-id="${esc(c.id)}"><div class="sbh-t"><span class="sbh-name">${esc(c.titulo)}</span><span class="sbh-meta">${esc(fechaH(c.at))} · ${c.n} mensajes</span></div><button type="button" class="sbh-open">Abrir</button><button type="button" class="sbh-ren" aria-label="Cambiar el nombre de «${esc(c.titulo)}»">Renombrar</button><button type="button" class="sbh-del" aria-label="Borrar «${esc(c.titulo)}»">Borrar</button></div>`).join('') : '<div class="sb-empty">Aún no hay conversaciones guardadas. Al pulsar ＋ la de ahora se guarda aquí.</div>');
       const f = hist.querySelector('.sbh-open') || hist.querySelector('.sbh-back'); if (f) f.focus();
     } catch (e) { hist.innerHTML = `<div class="sb-empty">No pude traer el historial: ${esc(e.message)}</div>`; }
   }
@@ -509,6 +510,15 @@ export function initSub(ctx) {
       const ob = e.target.closest('.sbh-open'); if (ob.disabled) return; ob.disabled = true; // un segundo clic abriría una conversación que ya se movió
       try { const j = await postJSON('/api/sub/abrir', { id }); messages = j.messages || []; el.querySelector('.sb-undo')?.remove(); /* su DESHACER era de la conversación de antes */ drafts.clear(); studioEdits.clear(); actionEdits.clear(); opEdits.clear(); qPicks.clear(); histClose(); render(true); refreshContext(); say('Conversación abierta. La anterior quedó guardada en el historial.'); }
       catch (err) { ob.disabled = false; hist.insertAdjacentHTML('afterbegin', `<div class="sb-empty" role="alert">No se pudo abrir: ${esc(err.message)}</div>`); }
+      return;
+    }
+    if (e.target.closest('.sbh-ren')) { // ponerle un nombre a una conversación guardada: se escribe en su sitio; Enter guarda, Esc deja el que tenía
+      const nm = row.querySelector('.sbh-name'); if (!nm) return;
+      const inp = document.createElement('input'); inp.className = 'sbh-edit'; inp.maxLength = 80; inp.value = nm.textContent; inp.setAttribute('aria-label', 'Nuevo nombre de la conversación');
+      const antes = nm.textContent; nm.replaceWith(inp); inp.focus(); inp.select();
+      const fin = async guardar => { const v = inp.value.replace(/\s+/g, ' ').trim(), span = document.createElement('span'); span.className = 'sbh-name'; span.textContent = antes; inp.replaceWith(span); if (guardar && v && v !== antes) { try { await postJSON('/api/sub/renombrar', { id, titulo: v }); span.textContent = v; say('Nombre cambiado.'); } catch (err) { say('No se pudo cambiar el nombre: ' + err.message); } } };
+      inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); fin(true); } else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); fin(false); } });
+      inp.addEventListener('blur', () => { if (inp.isConnected) fin(true); });
       return;
     }
     const del = e.target.closest('.sbh-del'); if (!del) return;

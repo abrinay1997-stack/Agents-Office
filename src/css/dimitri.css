@@ -214,8 +214,10 @@ body.dark #subOv .sb-proy { background: rgba(143,176,255,.12); } body.dark #subO
 .sb-hist { flex: 1; min-height: 0; overflow: auto; padding: 8px 18px 14px; }
 .sb-hist[hidden] { display: none; }
 .sbh-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0 10px; }
-.sbh-back, .sbh-open, .sbh-del { font: 700 11.5px var(--ui); letter-spacing: .06em; text-transform: uppercase; min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
+.sbh-back, .sbh-open, .sbh-ren, .sbh-del { font: 700 11.5px var(--ui); letter-spacing: .06em; text-transform: uppercase; min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--hairline); background: none; color: var(--ink); cursor: pointer; }
 .sbh-del.sure { border-color: var(--focus); color: var(--ink); font-weight: 800; }
+.sbh-edit { flex: 1; min-width: 0; font: 13.5px var(--ui); min-height: 32px; padding: 0 8px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--paper, transparent); color: var(--ink); }
+.sb-ia-alto { color: var(--ink); text-decoration: underline; text-decoration-style: wavy; }
 .sbh-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--hairline); }
 .sbh-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .sbh-name { font-size: 13.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

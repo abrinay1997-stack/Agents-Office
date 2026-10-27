@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { SALTAR } from './d1-memoria.mjs';
 import { oficina, crearFetch, pagina, texto, filas } from './agentes-ayudas.mjs';
 import * as cerebro from '../worker/lib/cerebro.js';
-import { conNotasNuevas } from '../worker/lib/cerebro.js';
+import { conNotasNuevas, enlacesDe, guardarGrafo } from '../worker/lib/cerebro.js';
 import { podar, RETENCION_DIAS } from '../worker/lib/mantenimiento.js';
 
 const dimitri = (o) => texto(JSON.stringify({ mode: 'plan', ...o }));
@@ -92,4 +92,31 @@ test('revisión de Codex: DESHACER de «añadir a una nota» no pisa lo que algu
   assert.equal((await m.p.editor('PUT', '/api/note', { name: 'precios', text: hoy.text.replace('10%', '10% + IVA'), base: hoy.modified })).status, 200, 'alguien lo mejora después');
   const u = await m.p.admin('POST', '/api/sub/ops/undo', { msg: msg.id, k: 0 }); assert.equal(u.status, 409, u.texto); assert.match(u.j.error, /cambió después/);
   assert.match((await leer(m, 'precios')).j.text, /Descuento: 10% \+ IVA/, 'su versión sigue intacta');
+});
+
+test('P8: una nota nueva que enlaza a notas del mapa entra CONECTADA (junto a ellas, con su enlace); sin tocar ningún índice; lo que enlaza a una suelta o a nada entra suelta', { skip: SALTAR }, async () => {
+  assert.deepEqual(enlacesDe('Mira [[Plan de ventas]], [[Precios|los precios]] y [[Precios#Combos]]; también [[Plan de ventas]] y [[ ]] y [[a\nb]]'), ['Plan de ventas', 'Precios'], 'sin alias, sin apartado, sin repetidos');
+  const g = { notes: 4, nodes: [{ id: 'A', g: 'x', d: 2, x: 0, y: 0 }, { id: 'B', g: 'x', d: 2, x: 1, y: 0 }, { id: 'C', g: 'x', d: 1, x: 0, y: 1 }, { id: 'S', g: 'x', d: 0, x: 1.2, y: 0 }], links: [[0, 1], [1, 2]], extra: [[0, 2]], floor: null };
+  const f = (nombre, enlaces) => ({ nombre, grupo: 'Notas', actualizado: 1, cab: '', ...(enlaces ? { enlaces } : {}) });
+  const base = [f('A'), f('B'), f('C'), f('S')];
+  const r = conNotasNuevas(g, [...base, f('Nueva', ['a', 'B', 'Nadie']), f('Suelta', ['S']), f('Sola')]);
+  assert.deepEqual(r.nodes.slice(0, 3).map((n) => n.id), ['A', 'B', 'C'], 'los índices de las notas que ya tenían enlaces no se mueven');
+  const nueva = r.nodes[3]; assert.equal(nueva.id, 'Nueva'); assert.equal(nueva.d, 2); assert.ok(Math.hypot(nueva.x - 0.5, nueva.y) < 0.2, 'queda junto a las que enlaza (' + nueva.x + ', ' + nueva.y + ')');
+  assert.deepEqual(r.links, [[0, 1], [1, 2], [3, 0], [3, 1]], 'los enlaces de antes igual y los nuevos al final');
+  assert.deepEqual([r.nodes[0].d, r.nodes[1].d, r.nodes[2].d], [3, 3, 1], 'las notas a las que enlaza suben de grado (A y B), la otra no'); assert.deepEqual(r.extra, [[0, 2]]);
+  assert.deepEqual(r.nodes.slice(4).map((n) => [n.id, n.d]).sort(), [['S', 0], ['Sola', 0], ['Suelta', 0]], 'lo que enlaza a una suelta o a nada va al anillo, sin conexión');
+  assert.equal(r.notes, 7);
+  // con una nota enlazada que se manda a la papelera a la vez, los índices se rehacen y la nueva apunta a los de ahora
+  const r2 = conNotasNuevas(g, [f('A'), f('C'), f('S'), f('Nueva', ['C', 'A'])]);
+  assert.deepEqual(r2.nodes.map((n) => n.id).slice(0, 3), ['A', 'C', 'Nueva']); assert.deepEqual(r2.links, [[2, 1], [2, 0]], 'el enlace A–B se fue con B; los nuevos apuntan a los índices de ahora');
+});
+
+test('P8 de punta a punta: crear una nota con [[enlaces]] en la nube la deja conectada en GET /api/brain, y editarla cambia lo que enlaza', { skip: SALTAR }, async () => {
+  const m = await mundo(); nota(m.d1, 'Plan', '# Plan'); nota(m.d1, 'Precios', '# Precios\nVer [[Plan]]');
+  await guardarGrafo(m.env.DB, { notes: 2, nodes: [{ id: 'Plan', g: '10-Business', d: 1, x: 0, y: 0 }, { id: 'Precios', g: '10-Business', d: 1, x: 0.4, y: 0 }], links: [[0, 1]], extra: [], floor: null });
+  let r = await m.p.admin('POST', '/api/note', { name: 'Reunión', text: 'Hablamos del [[plan]] y de [[Precios|los precios]].', group: 'Notas' }); assert.equal(r.status, 200, r.texto);
+  const nodo = r.j.graph.nodes.find((n) => n.id === 'Reunión'); assert.equal(nodo.d, 2, 'conectada a las dos'); assert.deepEqual(r.j.graph.links, [[0, 1], [2, 0], [2, 1]]);
+  r = await m.p.admin('PUT', '/api/note', { name: 'Reunión', text: 'Ahora solo [[Plan]].' }); assert.equal(r.status, 200, r.texto);
+  assert.deepEqual(r.j.graph.links, [[0, 1], [2, 0]], 'lo que enlaza se lee del texto de ahora'); assert.equal(r.j.graph.nodes.find((n) => n.id === 'Reunión').d, 1);
+  await m.p.admin('POST', '/api/note/trash', { id: 'Reunión' }); const g = (await m.p.admin('GET', '/api/brain')).j; assert.deepEqual(g.nodes.map((n) => n.id), ['Plan', 'Precios']); assert.deepEqual(g.links, [[0, 1]], 'al irse, el mapa vuelve a como estaba');
 });

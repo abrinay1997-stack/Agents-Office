@@ -199,18 +199,18 @@ export function crearEjecutor({ env, db, usuario, modulos }) {
 const enCurso = new Set(); // mensajes cuyo HACER corre: un segundo clic (u otra pestaña) mientras tanto se rechaza, nunca corre dos veces
 const claveDe = (msgId) => String(msgId);
 
-export async function hacerOps({ env, db, usuario, modulos, C, msgId, items }) {
+export async function hacerOps({ env, db, usuario, modulos, C, msgId, items, sala }) {
   if (enCurso.has(claveDe(msgId))) return { error: 'ya lo estoy haciendo: espera a que termine', busy: true };
   enCurso.add(claveDe(msgId));
-  try { return await hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }); } finally { enCurso.delete(claveDe(msgId)); }
+  try { return await hacerOpsRun({ env, db, usuario, modulos, C, msgId, items, sala }); } finally { enCurso.delete(claveDe(msgId)); }
 }
-async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }) {
-  const previo = await chat.mensaje(db, msgId);
+async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items, sala }) {
+  const previo = await sala.mensaje(msgId);
   if (!previo || !previo.ops) return { error: 'esa propuesta ya no existe' };
   const byK = new Map((Array.isArray(items) ? items : []).filter((e) => e && Number.isInteger(e.k)).map((e) => [e.k, e]));
   // se RECLAMAN las ops (proposed → running) con compare-and-swap en la fila ANTES de hacerlas: dos peticiones a la vez (o dos instancias del Worker) no pueden hacer la misma. Una «running» de hace más de 2 min se cayó a medias: se puede reclamar otra vez.
   const mias = new Set();
-  const m = await chat.reclamar(db, msgId, (x) => {
+  const m = await sala.reclamar(msgId, (x) => {
     if (!Array.isArray(x.ops)) return false;
     let cambio = false;
     for (const o of x.ops) {
@@ -241,43 +241,43 @@ async function hacerOpsRun({ env, db, usuario, modulos, C, msgId, items }) {
       if (o.pendiente) { delete o.pendiente; o.state = 'confirmar'; delete o.error; segundo++; } // gasta dinero: la tarjeta enseña la cifra y espera el SEGUNDO clic del dueño
       else { o.state = 'done'; o.doneAt = Date.now(); delete o.error; done++; }
     } catch (err) { o.state = 'failed'; o.error = String(err.message || err).slice(0, 300); failed++; }
-    await chat.reemplazar(db, m); // cada cambio queda apuntado al terminar: si el Worker muere ahora, lo ya hecho no se rehace
+    await sala.reemplazar(m); // cada cambio queda apuntado al terminar: si el Worker muere ahora, lo ya hecho no se rehace
   }
   } finally {
     for (const o of m.ops) if (mias.has(o.k)) { if (o.state === 'running') { o.state = 'failed'; o.error = 'se interrumpió a medias: mira el calendario antes de repetirlo'; } delete o.runningAt; }
-    await chat.reemplazar(db, m);
+    await sala.reemplazar(m);
   }
   const cuenta = sub.message('sub', `${done ? `Hecho: ${done} ${done === 1 ? 'cambio' : 'cambios'} en el calendario y la oficina. Puedes deshacerlo en la tarjeta durante ${OPS_UNDO_MS / 1000} s.` : segundo ? '' : 'No cambié nada.'}${segundo ? ` ${segundo === 1 ? 'Un cambio gasta' : segundo + ' cambios gastan'} dinero en anuncios: su tarjeta dice cuánto y espera tu segundo clic (tienes 2 minutos).` : ''}${failed ? ` ${failed} no se pudo: lo dice su tarjeta.` : ''}`.trim());
-  if (done || failed || segundo) await chat.anexar(db, cuenta);
+  if (done || failed || segundo) await sala.anexar(cuenta);
   const confirmar = m.ops.filter((o) => o.state === 'confirmar' && o.confirmar).map((o) => ({ k: o.k, ...o.anuncio, ...o.confirmar, sub: { msg: m.id, k: o.k } })); // lo que la página pide para el segundo clic (/api/anuncios/accion con `confirmacion` y `sub`)
   return { ok: true, message: m, messages: (done || failed || segundo) ? [cuenta] : [], ...(confirmar.length ? { confirmar } : {}) };
 }
 
-export async function deshacerOp({ env, db, usuario, modulos, msgId, k }) {
-  const m = await chat.mensaje(db, msgId), o = m?.ops?.find((x) => x.k === k);
+export async function deshacerOp({ env, db, usuario, modulos, msgId, k, sala }) {
+  const m = await sala.mensaje(msgId), o = m?.ops?.find((x) => x.k === k);
   if (!o || o.state !== 'done' || !o.undo) return { error: 'eso ya no se puede deshacer' };
   if (Date.now() - (o.doneAt || 0) > OPS_UNDO_MS) return { error: 'pasó el tiempo para deshacerlo: cámbialo en el calendario' };
   const r = await crearEjecutor({ env, db, usuario, modulos }).undoOp(o);
   if (r.error) return r;
   o.state = 'undone'; delete o.undo;
-  await chat.reemplazar(db, m);
+  await sala.reemplazar(m);
   return { ok: true, message: m };
 }
 
 /** Lo que Anuncios hace cuando el dueño da el SEGUNDO clic desde la tarjeta de Dimitri: la tarjeta queda hecha (serve.mjs → marcarOpAnuncio). */
 export async function marcarOpAnuncio(db, { sub: ref, confirmacion, hecho, aviso }) {
-  let m = null, o = null;
-  if (ref?.msg) { m = await chat.mensaje(db, String(ref.msg)); o = m?.ops?.find((x) => x.k === Number(ref.k)) || null; }
-  if (!o && confirmacion) { const { messages } = await chat.cargar(db); for (const x of messages) { o = (x.ops || []).find((y) => y.confirmar?.token === String(confirmacion)) || null; if (o) { m = x; break; } } }
+  let m = null, o = null, uid = null; // la segunda mitad del clic no sabe de quién es la tarjeta: se busca por su id (único) o por su token (aleatorio, de un solo uso) en cualquier sala, y se marca en la suya
+  if (ref?.msg) { const h = await chat.mensajeEnCualquierSala(db, String(ref.msg)); if (h) { m = h.m; uid = h.uid; o = m.ops?.find((x) => x.k === Number(ref.k)) || null; } }
+  if (!o && confirmacion) { const h = await chat.mensajeConToken(db, confirmacion); if (h) { m = h.m; uid = h.uid; o = (m.ops || []).find((y) => y.confirmar?.token === String(confirmacion)) || null; } }
   if (!o || !sub.ANUNCIO_TIPO[o.type] || o.state !== 'confirmar') return false;
   o.state = 'done'; o.doneAt = Date.now(); o.hecho = hecho?.texto || ''; o.desc = o.hecho; if (aviso) o.aviso = aviso; delete o.confirmar; o.undo = null;
-  await chat.reemplazar(db, m);
+  await chat.sala(db, uid).reemplazar(m);
   return true;
 }
 
 /** ENVIAR A LOS JEFES: cada pieza incluida se vuelve una tarea (o una tarea del dueño). Nada sale de la oficina: las tareas esperan en su departamento y piden el OK como siempre. */
-export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
-  const m = await chat.mensaje(db, msgId);
+export async function enviarPlan({ env, db, C, msgId, edits, fetchIA, sala }) {
+  const m = await sala.mensaje(msgId);
   if (!m || !m.plan) return { error: 'ese plan ya no existe' };
   const byI = new Map((Array.isArray(edits) ? edits : []).map((e) => [e.i, e]));
   const todo = [];
@@ -294,7 +294,7 @@ export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
     delete t.past; delete t.error;
     todo.push(t);
   }
-  if (!todo.length) { await chat.reemplazar(db, m); return { ok: true, message: m, tasks: [] }; }
+  if (!todo.length) { await sala.reemplazar(m); return { ok: true, message: m, tasks: [] }; }
   const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const ids = new Map(todo.map((t) => [t.i, nid()])); // cada pieza sabe su id antes de que nazca cualquiera: «espera a las fotos» existe antes de que la cola pueda arrancarla
   const enviadas = [];
@@ -331,8 +331,8 @@ export async function enviarPlan({ env, db, C, msgId, edits, fetchIA }) {
   const nombres = [...new Set(sent.map((t) => (t.person === DUENO ? 'tu lista (Tareas → Mías)' : t.person ? `la lista de ${t.person}` : C.depts[t.dept]?.name || t.dept)))].join(', ');
   const proyectoTxt = m.plan.proyecto?.nombre && sent.some((t) => t.proyecto) ? `, en el proyecto «${m.plan.proyecto.nombre}»` : '';
   const aviso = sub.message('sub', `Listo: envié ${sent.length} ${sent.length === 1 ? 'tarea' : 'tareas'} a ${nombres}${proyectoTxt}.${esperan ? ` ${esperan} ${esperan === 1 ? 'espera' : 'esperan'} a que termine otra antes de empezar.` : ''} Te aviso aquí cómo van (y en Tareas, H).${todo.length > sent.length ? ` ${todo.length - sent.length} no se pudo enviar.` : ''}`);
-  await chat.reemplazar(db, m);
-  await chat.anexar(db, aviso);
+  await sala.reemplazar(m);
+  await sala.anexar(aviso);
   return { ok: true, message: m, tasks: sent, messages: [aviso] };
 }
 

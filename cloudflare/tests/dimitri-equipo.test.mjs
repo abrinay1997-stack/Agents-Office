@@ -40,10 +40,11 @@ test('Dimitri ve las cuentas del equipo con su rol y sabe quién le escribe; el 
   assert.match(s, /- Beto admin · cuenta de la plataforma, rol administrador/); assert.match(s, /- Carla · cuenta de la plataforma, rol editor/); assert.match(s, /- Dani · cuenta de la plataforma, rol solo lectura/);
   assert.match(mensaje(o), /Ana admin: ¿Cuántos usuarios administrativos tenemos\?/);
   assert.equal(a.j.messages[0].por, 'Ana admin'); assert.equal(sub(a).para, 'Ana admin');
-  // la misma conversación la sigue otra administradora: el modelo ve de quién es cada cosa
+  // otra administradora le escribe: el modelo sabe que es ELLA quien escribe, y (27 oct 2026: un chat por cuenta) no ve lo que habló Ana
   const b = await o.beto('POST', '/api/sub/chat', { text: 'Y yo, ¿qué puedo hacer?' }); assert.equal(b.status, 200);
   assert.match(sistema(o), /Te escribe ahora: Beto admin \(rol administrador\)\./); assert.match(sistema(o), /es quien te escribe/);
-  assert.match(mensaje(o), /Ana admin: ¿Cuántos usuarios administrativos tenemos\?[\s\S]*Beto admin: Y yo, ¿qué puedo hacer\?/);
+  assert.match(mensaje(o), /Beto admin: Y yo, ¿qué puedo hacer\?/); assert.doesNotMatch(mensaje(o), /Ana admin|usuarios administrativos/, 'la conversación de Ana no llega al prompt de Beto');
+  assert.equal(b.j.messages[0].por, 'Beto admin'); assert.equal(sub(b).para, 'Beto admin');
   // un editor o alguien de solo lectura no habla con Dimitri (como siempre)
   assert.equal((await o.carla('POST', '/api/sub/chat', { text: 'hola' })).status, 403); assert.equal((await o.dani('POST', '/api/sub/chat', { text: 'hola' })).status, 403);
 });

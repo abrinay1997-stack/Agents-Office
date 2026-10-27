@@ -5,6 +5,7 @@
 //
 // REGLAS (los tests las muerden):
 //  · Dimitri es del DUEÑO: todo lo que escribe o gasta (chat, ops, enviar, GENERAR, archivar) es de un administrador. Un editor o un lector no lo usan (403).
+//  · Cada administrador tiene SU conversación (27 oct 2026): el chat, el historial y el resumen de la sesión son de su cuenta (lib/dimitri/chat.js → sala); nadie lee la de otro.
 //  · Dimitri propone y espera el clic; NUNCA aprueba, envía, publica, paga ni borra, y NUNCA confirma un gasto de anuncios (solo pide la cifra; el segundo clic es del dueño en Anuncios).
 //  · Lo que lee de afuera (una imagen, una nota, el resultado de un correo) con órdenes escondidas marca el mensaje y esa respuesta no trae cambios.
 import { json, error, prohibido } from '../lib/respuesta.js';
@@ -44,11 +45,14 @@ export async function manejar(ctx) {
   if (ruta !== '/api/sub' && !ruta.startsWith('/api/sub/')) return null;
   if (usuario.rol !== 'admin') return prohibido('Dimitri es la mano derecha del dueño: solo un administrador habla con él.');
   const metodo = req.method, fetchFn = env.__pruebas?.fetch || null;
-  const deps = { env, db, usuario, modulos: MODULOS_DIMITRI };
+  const uid = await chat.uidDe(db, usuario);
+  if (!uid) return prohibido('Esta cuenta no tiene conversación con Dimitri.');
+  const sala = chat.sala(db, uid);
+  const deps = { env, db, usuario, modulos: MODULOS_DIMITRI, sala };
 
-  if (ruta === '/api/sub' && metodo === 'GET') return json({ ...(await chat.cargar(db)), name: nameOf(await leerCfg(db)), ia: await infoModelo({ env, db }).catch(() => null) }); // `ia`: qué modelo corre (27 oct 2026)
-  if (ruta === '/api/sub/conversaciones' && metodo === 'GET') return json(await chat.listar(db));
-  { const mc = ruta.match(/^\/api\/sub\/conversaciones\/([a-z0-9]{3,24})$/); if (mc && metodo === 'GET') { const c = await chat.ver(db, mc[1]); return c ? json(c) : error('esa conversación ya no está', 404); } }
+  if (ruta === '/api/sub' && metodo === 'GET') return json({ ...(await sala.cargar()), name: nameOf(await leerCfg(db)), ia: await infoModelo({ env, db }).catch(() => null) }); // `ia`: qué modelo corre (27 oct 2026)
+  if (ruta === '/api/sub/conversaciones' && metodo === 'GET') return json(await sala.listar());
+  { const mc = ruta.match(/^\/api\/sub\/conversaciones\/([a-z0-9]{3,24})$/); if (mc && metodo === 'GET') { const c = await sala.ver(mc[1]); return c ? json(c) : error('esa conversación ya no está', 404); } }
   if (metodo !== 'POST') return null;
   const b = await leerCuerpo(req, ruta === '/api/sub/chat' ? MAX_CUERPO : 1 << 20);
   if (b.grande) return error(ruta === '/api/sub/chat' ? 'las imágenes pesan demasiado (máx. 8 MB en total)' : 'el cuerpo es demasiado grande', 413);
@@ -86,13 +90,14 @@ export async function manejar(ctx) {
     return json(r, r.busy ? 409 : r.error ? 404 : 200);
   }
   if (ruta === '/api/sub/ops/undo') { const r = await deshacerOp({ ...deps, msgId: String(b.msg || ''), k: +b.k }); return json(r, r.error ? 409 : 200); }
-  if (ruta === '/api/sub/restore') return (await chat.restaurar(db, String(b.id || ''))) ? json(await chat.cargar(db)) : error('esa conversación ya no se puede recuperar', 404);
-  if (ruta === '/api/sub/abrir') { const r = await chat.abrir(db, String(b.id || '')); return r ? json(r) : error('esa conversación ya no está', 404); }
-  if (ruta === '/api/sub/borrar') return (await chat.borrar(db, String(b.id || ''))) ? json({ ok: true }) : error('esa conversación ya no está', 404);
-  if (ruta === '/api/sub/clear') return json({ ok: true, archived: await chat.archivar(db) }); // se archiva, no se borra
+  if (ruta === '/api/sub/restore') return (await sala.restaurar(String(b.id || ''))) ? json(await sala.cargar()) : error('esa conversación ya no se puede recuperar', 404);
+  if (ruta === '/api/sub/abrir') { const r = await sala.abrir(String(b.id || '')); return r ? json(r) : error('esa conversación ya no está', 404); }
+  if (ruta === '/api/sub/borrar') return (await sala.borrar(String(b.id || ''))) ? json({ ok: true }) : error('esa conversación ya no está', 404);
+  if (ruta === '/api/sub/clear') return json({ ok: true, archived: await sala.archivar() }); // se archiva, no se borra
+  if (ruta === '/api/sub/renombrar') return (await sala.renombrar(String(b.id || ''), b.titulo)) ? json({ ok: true }) : error('esa conversación ya no está, o el título está vacío', 404); // 27 oct 2026: ponerle nombre a una conversación archivada
   if (ruta === '/api/sub/send') {
     const C = await leerContexto(db);
-    const r = await enviarPlan({ env, db, C, msgId: String(b.msg || ''), edits: b.items, fetchIA: env.__pruebas?.fetchIA });
+    const r = await enviarPlan({ env, db, C, msgId: String(b.msg || ''), edits: b.items, fetchIA: env.__pruebas?.fetchIA, sala });
     return json(r, r.error ? 404 : 200);
   }
   if (ruta === '/api/sub/studio') {
@@ -101,7 +106,7 @@ export async function manejar(ctx) {
     return json(r, r.busy || r.conflict ? 409 : r.error ? 404 : 200);
   }
   if (ruta === '/api/sub/weekly') {
-    try { const t = await informeSemanal({ env, db, force: true, fetchFn }); return json({ ok: true, text: t }); } catch (e) { return error(String(e?.message || e).slice(0, 300), 500, e); }
+    try { const t = await informeSemanal({ env, db, force: true, fetchFn, uids: [uid] }); return json({ ok: true, text: t }); } catch (e) { return error(String(e?.message || e).slice(0, 300), 500, e); }
   }
   return null;
 }
@@ -109,8 +114,8 @@ export async function manejar(ctx) {
 /** Cada minuto: los creativos que ya terminaron lo dicen en el chat, y el lunes desde las 8 sale el informe de la semana. */
 export async function cadaMinuto(env) {
   const db = env.DB, fetchFn = env.__pruebas?.fetch || null;
-  const hayEnviados = await db.prepare("select 1 x from filas where coleccion = 'subgerente' and json like '%\"state\":\"sent\"%' limit 1").first();
-  if (hayEnviados) await trabajosTerminados({ env, db, usuario: { id: 'oficina', email: 'oficina', rol: 'editor' }, modulos: MODULOS_DIMITRI }).catch((e) => console.warn('[dimitri] trabajos:', e?.message ?? e));
+  // cada cuenta con creativos esperando: sus «Listos: …» salen en SU chat (una consulta para saber si alguna espera algo; la mayoría de los minutos no hay ninguna)
+  for (const uid of await chat.uidsConSala(db, { enviados: true })) await trabajosTerminados({ env, db, usuario: { id: 'oficina', email: 'oficina', rol: 'editor' }, modulos: MODULOS_DIMITRI, sala: chat.sala(db, uid) }).catch((e) => console.warn('[dimitri] trabajos:', e?.message ?? e));
   const ahora = new Date();
   const hayLlave = !!(env.ANTHROPIC_API_KEY || env.META_API_KEY || env.MODEL_API_KEY);
   if (ahora.getDay() === 1 && ahora.getHours() >= 8 && hayLlave) {

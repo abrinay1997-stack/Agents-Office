@@ -52,7 +52,10 @@ export async function guardarGrafo(db, grafo) {
  * hasta la siguiente migración. Aquí entra como una neurona SIN enlaces, en el anillo exterior (donde graph-core.mjs pone las notas sueltas), sin tocar los enlaces,
  * el suelo ni los índices de las demás: los nodos con enlaces van primero y los sueltos al final, así que reordenar los sueltos no mueve ningún índice.
  * Una nota ya con enlaces que se borra se queda como está (quitarla movería los índices); una suelta que se borra, se va. Puro. → el mismo `g` si no hay nada que cambiar.
- * filas: [{ nombre, grupo, actualizado, cab }] (cab: el principio del texto, para la cabecera).
+ * 27 oct 2026: una nota nueva que ENLAZA a notas que ya están en el mapa (`enlaces`: los nombres de sus [[enlaces]]) entra conectada: junto a ellas (en su centro, sin cálculo de fuerzas), con
+ * su enlace dibujado, y las notas a las que enlaza suben un grado. Se añade después de las que ya tenían enlaces, así que ningún índice cambia. Lo que enlaza a otra nota nueva o a una suelta
+ * sigue entrando como suelta; la próxima migración desde la computadora (que sí calcula el mapa entero) la acomoda.
+ * filas: [{ nombre, grupo, actualizado, cab, enlaces? }] (cab: el principio del texto, para la cabecera).
  */
 export function conNotasNuevas(g, filas) {
   const base = g && Array.isArray(g.nodes) ? g : null;
@@ -63,9 +66,17 @@ export function conNotasNuevas(g, filas) {
   const fantasmas = nodos.some((n) => n.d > 0 && !hay.has(n.id));
   if (!faltan.length && !sobran && !fantasmas) return g;
   const enlazadosTodos = nodos.filter((n) => n.d > 0), sueltos = nodos.filter((n) => !(n.d > 0) && hay.has(n.id));
-  const enlazados = enlazadosTodos.filter((n) => hay.has(n.id));
+  const enlazadosVivos = enlazadosTodos.filter((n) => hay.has(n.id));
+  // las notas nuevas que enlazan a notas que ya están conectadas en el mapa
+  const idxDe = new Map(enlazadosVivos.map((n, i) => [String(n.id).toLowerCase(), i])), nuevasEnlazadas = [], nuevasSueltas = [];
+  for (const f of faltan) {
+    const a = [...new Set((f.enlaces || []).map((e) => idxDe.get(String(e).toLowerCase())).filter((i) => i !== undefined))];
+    (a.length ? nuevasEnlazadas : nuevasSueltas).push({ f, a });
+  }
+  const sube = new Map(); for (const { a } of nuevasEnlazadas) for (const i of a) sube.set(i, (sube.get(i) || 0) + 1);
+  const enlazados = enlazadosVivos.map((n, i) => (sube.has(i) ? { ...n, d: n.d + sube.get(i) } : n));
   const nuevoDe = new Map(); // posición vieja en `nodos` → posición nueva (-1: se fue)
-  nodos.forEach((n, i) => nuevoDe.set(i, n.d > 0 ? enlazados.indexOf(n) : -1));
+  nodos.forEach((n, i) => nuevoDe.set(i, n.d > 0 ? enlazadosVivos.indexOf(n) : -1));
   const rehacer = (pares) => (Array.isArray(pares) ? pares.map((p) => (Array.isArray(p) ? [nuevoDe.get(p[0]) ?? -1, nuevoDe.get(p[1]) ?? -1, ...p.slice(2)] : p)).filter((p) => !Array.isArray(p) || (p[0] >= 0 && p[1] >= 0)) : pares);
   const hechos = (f) => {
     const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(f.cab || ''), o = {};
@@ -74,15 +85,38 @@ export function conNotasNuevas(g, filas) {
     return { t: Math.round(t / 1000), ...(o.agent ? { a: o.agent } : {}), ...(o.department ? { dep: o.department } : {}) };
   };
   const todos = [...sueltos.map((n) => ({ id: n.id, g: n.g, t: n.t, ...(n.a ? { a: n.a } : {}), ...(n.dep ? { dep: n.dep } : {}) })),
-    ...faltan.map((f) => ({ id: f.nombre, g: f.grupo || '00-Meta', ...hechos(f) }))]
+    ...nuevasSueltas.map(({ f }) => ({ id: f.nombre, g: f.grupo || '00-Meta', ...hechos(f) }))]
     .sort((a, b) => String(a.g).localeCompare(String(b.g)) || a.id.localeCompare(b.id));
   const N0 = enlazados.length;
   const anillo = todos.map((n, i) => { const ang = (i / Math.max(1, todos.length)) * Math.PI * 2 + 0.3, r = N0 ? 1.14 + (i % 3) * 0.035 : 0.6; return { ...n, d: 0, x: +(Math.cos(ang) * r).toFixed(3), y: +(Math.sin(ang) * r).toFixed(3) }; });
-  const nodes = [...enlazados, ...anillo];
-  if (!fantasmas) return { ...(base || { links: [], extra: [], floor: null }), notes: nodes.length, nodes };
+  const N1 = enlazados.length, puestas = nuevasEnlazadas.map(({ f, a }, k) => {
+    const cx = a.reduce((t, i) => t + (enlazados[i].x || 0), 0) / a.length, cy = a.reduce((t, i) => t + (enlazados[i].y || 0), 0) / a.length, ang = k * 2.399963 + 0.5; // el ángulo áureo: cada nueva en su sitio, sin encimarse
+    return { id: f.nombre, g: f.grupo || '00-Meta', ...hechos(f), d: a.length, x: +(cx + Math.cos(ang) * 0.06).toFixed(3), y: +(cy + Math.sin(ang) * 0.06).toFixed(3) };
+  });
+  const nuevosEnlaces = nuevasEnlazadas.flatMap(({ a }, k) => a.map((i) => [N1 + k, i]));
+  const nodes = [...enlazados, ...puestas, ...anillo];
+  if (!fantasmas) return { ...(base || { links: [], extra: [], floor: null }), notes: nodes.length, nodes, ...(nuevosEnlaces.length ? { links: [...(base?.links || []), ...nuevosEnlaces] } : {}) };
   // con nodos quitados, `extra` (menciones) pierde las que tocan a un nodo que se fue o a uno suelto (el anillo se reordena siempre): se conservan las demás
   const extra = rehacer((base.extra || []).filter((p) => !Array.isArray(p) || (p[0] < nodos.length && p[1] < nodos.length && nodos[p[0]]?.d > 0 && nodos[p[1]]?.d > 0)));
-  return { ...base, notes: nodes.length, nodes, links: rehacer(base.links), extra };
+  return { ...base, notes: nodes.length, nodes, links: [...rehacer(base.links), ...nuevosEnlaces], extra };
+}
+
+/** Los [[enlaces]] de un texto (sin el alias ni el apartado: `[[Nota|alias]]`, `[[Nota#título]]`). */
+export function enlacesDe(texto) {
+  const out = [], re = /\[\[([^\]|#^\n]{1,120})(?:[|#^][^\]\n]*)?\]\]/g; let m;
+  while ((m = re.exec(String(texto || '')))) out.push(m[1].trim());
+  return [...new Set(out.filter(Boolean))];
+}
+/** A las notas que aún no están en el mapa les pone sus enlaces (`enlaces`), leídos de su texto entero: son pocas y se piden de a 40 (D1 admite 100 parámetros por sentencia). */
+async function ponerEnlaces(db, g, filas) {
+  const tiene = new Set((g?.nodes || []).map((n) => n.id)), nuevas = filas.filter((f) => !tiene.has(f.nombre));
+  if (!nuevas.length || !tiene.size || nuevas.length > 400) return; // sin mapa no hay a qué enlazar; un lote enorme (una migración a medias) entra como sueltas
+  const por = new Map();
+  for (let i = 0; i < nuevas.length; i += 40) {
+    const trozo = nuevas.slice(i, i + 40), { results } = await db.prepare(`select nombre, texto from notas where nombre in (${trozo.map(() => '?').join(',')})`).bind(...trozo.map((f) => f.nombre)).all();
+    for (const r of results) por.set(r.nombre, enlacesDe(r.texto));
+  }
+  for (const f of nuevas) f.enlaces = por.get(f.nombre) || [];
 }
 
 /** Lo que contesta GET /api/brain. Sin mapa todavía ni notas, uno vacío (la página conserva el de muestra); con notas nuevas, también ellas (conNotasNuevas). */
@@ -90,6 +124,7 @@ export async function leerGrafo(db) {
   const f = await db.prepare('select json from grafo where id = 1').first();
   const g = f ? JSON.parse(f.json) : null;
   const { results } = await db.prepare('select nombre, grupo, actualizado, substr(texto, 1, 600) cab from notas').all();
+  await ponerEnlaces(db, g, results);
   const lleno = conNotasNuevas(g, results) ?? { notes: 0, nodes: [], links: [], extra: [], floor: null, vacio: true }; // `vacio`: la página pinta un Cerebro sin notas, no el de muestra
   return { ...lleno, learned: { w: {}, links: [] } }; // lo que aprende la memoria llega con los agentes (fase 4)
 }

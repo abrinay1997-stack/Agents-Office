@@ -20,7 +20,7 @@ const P = {
   estado: '<path d="M3.5 12h4l2.5-6 4 12 2.5-6h4"/>', tema: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>', escritorio: '<rect x="3.5" y="5" width="17" height="11" rx="2"/><path d="M9 20h6M12 16v4"/>',
   salir: '<path d="M10 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H10M14 8l4 4-4 4M18 12H9"/>',
   flecha: '<path d="M12 5v14M6 13l6 6 6-6"/>', pos: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>', mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/>',
-  nube: '<path d="M7 18.5a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6 1.3A3.5 3.5 0 0 1 17 18.5z"/>', refrescar: '<path d="M19 12a7 7 0 1 1-2-5M19 4.5v4h-4"/>', borrar: '<path d="M5 7h14M10 7V4.5h4V7M7 7l.8 12h8.4L17 7"/>', persona: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+  nube: '<path d="M7 18.5a4 4 0 0 1-.5-8 5.5 5.5 0 0 1 10.6 1.3A3.5 3.5 0 0 1 17 18.5z"/>', refrescar: '<path d="M19 12a7 7 0 1 1-2-5M19 4.5v4h-4"/>', borrar: '<path d="M5 7h14M10 7V4.5h4V7M7 7l.8 12h8.4L17 7"/>', lapiz: '<path d="M4.5 19.5l1-4L16 5l3 3L8.5 18.5zM14 7l3 3"/>', persona: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>',
 };
 export const svg = (n, cls = '') => `<svg class="mv-i${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${P[n] || ''}</svg>`;
 export const ICONOS = Object.keys(P);

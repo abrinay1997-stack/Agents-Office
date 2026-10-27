@@ -18,6 +18,7 @@ import { tasa, tasaVer, ipDe, relojDe } from './equipo.js';
 import { cerrarDe } from './vivo.js';
 import { podar, tocaPodar } from './mantenimiento.js';
 import { registrarSecretos } from './secretos.js';
+import { uidDe, PREFIJO_SALA, PREFIJO_DOC_ARCHIVO } from './dimitri/chat.js';
 
 export const VERSION = '0.1.0';
 /** Colecciones de /api/migrar/filas que son estado vivo de la nube (ver arriba): una migración repetida solo agrega las que faltan. */
@@ -132,9 +133,11 @@ export async function manejar(req, env, exec = null) {
     // Las tareas, la conversación con Dimitri y las rutinas son estado VIVO: una migración repetida no las vuelve a como estaban en la computadora (una tarea ya aprobada en la
     // nube volvería a esperar su OK y podría enviarse dos veces; una rutina pausada aquí volvería a dispararse). Solo entran las que la nube no tiene; forzar: true las reemplaza.
     const soloNuevas = b.forzar !== true && FILAS_VIVAS.has(b.coleccion);
-    const n = await almacen.guardarFilas(db, b.coleccion, filas, { soloNuevas });
+    // la conversación con Dimitri de la computadora entra en la sala de quien migra (cada cuenta tiene la suya: lib/dimitri/chat.js)
+    const destino = b.coleccion === 'subgerente' ? PREFIJO_SALA + await uidDe(db, usuario) : b.coleccion;
+    const n = await almacen.guardarFilas(db, destino, filas, { soloNuevas });
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ coleccion: b.coleccion, filas: n })).run();
-    return json({ subidas: n, ...(soloNuevas && n < filas.length ? { omitidas: filas.length - n } : {}), coleccion: b.coleccion, total: await almacen.contarFilas(db, b.coleccion) });
+    return json({ subidas: n, ...(soloNuevas && n < filas.length ? { omitidas: filas.length - n } : {}), coleccion: b.coleccion, total: await almacen.contarFilas(db, destino) });
   }
   if (ruta === '/api/migrar/docs' && req.method === 'POST') {
     if (usuario.rol !== 'admin') return prohibido('Solo un administrador sube datos.');
@@ -143,11 +146,12 @@ export async function manejar(req, env, exec = null) {
     // Lo que ya existe en la nube NO se pisa con una migración repetida: después de la primera, la nube es la copia de trabajo (un aprobador revocado volvería, los indicadores
     // y las cifras perderían lo que se anotó aquí, un agente recuperaría su brief de antes…). Los ajustes, siempre; el resto, mientras tenga algo dentro (una
     // vacía —{} o listas vacías, como las que la propia nube crea al abrirse— se llena). Para reemplazarlo adrede: forzar: true (migrar-a-nube.mjs --forzar).
+    const claveDoc = b.clave === 'subgerente.archivo' ? PREFIJO_DOC_ARCHIVO + await uidDe(db, usuario) : b.clave; // el historial de Dimitri de la computadora es de quien migra
     if (b.forzar !== true) {
-      const actual = (await almacen.leerDoc(db, b.clave, null)).valor;
+      const actual = (await almacen.leerDoc(db, claveDoc, null)).valor;
       if (actual && (b.clave === 'ajustes' || b.clave === 'config-local' || !docVacio(actual))) return error(`Ya hay «${b.clave}» en la nube y la migración lo pisaría (se perderían los cambios hechos aquí, y un aprobador revocado volvería). Si de verdad quieres reemplazarlo, manda forzar: true.`, 409);
     }
-    const version = await almacen.guardarDoc(db, b.clave, b.valor);
+    const version = await almacen.guardarDoc(db, claveDoc, b.valor);
     await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'migracion', usuario.email, JSON.stringify({ doc: b.clave })).run();
     return json({ clave: b.clave, version });
   }

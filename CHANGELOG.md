@@ -1,5 +1,15 @@
 # Changelog
 
+## Dimitri, un chat por cuenta — 27 oct 2026
+
+Pedido del dueño: «¿ya cada usuario tiene su propio chat con Dimitri? ¿Avalon ve lo que hablo con él?».
+
+- **Cada administrador tiene SU conversación** con Dimitri en la nube: su chat, su historial de conversaciones y el resumen de su sesión. Nadie lee la de otro, ni abriéndola por su id (404). Antes eran comunes. La conversación que ya existía pasa a la cuenta del dueño (el administrador más antiguo; migración `0101_dimitri_por_cuenta.sql`).
+- Por Telegram, cada persona usa el chat de su cuenta (la que tiene su id registrado en Ajustes → Telegram; el dueño del bot, el del dueño). El resumen del lunes llega al chat de cada administrador y los «Listos: …» de los creativos, al de quien los pidió.
+- **La cabecera de Dimitri** dice «🔒 solo tú ves este chat» y enseña el **gasto de IA del mes** frente a su tope. **Renombrar** una conversación guardada (escritorio y teléfono).
+- **El mapa del Cerebro en la nube:** una nota nueva con `[[enlaces]]` a notas del mapa entra conectada (antes quedaba suelta hasta migrar).
+- Pruebas: `cloudflare/tests/dimitri-salas.test.mjs` y las de historial, sesión larga, Dimitri, restablecer y Cerebro ya contra salas.
+
 ## Auditoría de Dimitri: consulta, habla claro, se le ve trabajar, y el Cerebro se escribe — 27 oct 2026
 
 Pedido del dueño: que Dimitri conozca la oficina «absolutamente toda», sepa quién hizo cada cosa, hable natural y corto, diga qué IA usa, use los conectores y pueda añadir a una nota; y poder escribir, editar y borrar notas propias en el Cerebro. Informe y plan por fases: `docs/auditoria-dimitri-2026-10-27.md` (estudiando a BRIAN, el asistente de D'CASA; solo ideas, nada de código).
