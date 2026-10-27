@@ -68,7 +68,7 @@ test('lo que escribe una LLEGA a la otra: un cambio de tareas por la API real ap
   const eco = await sAna.esperar((m) => m.tipo === 'cambio' && m.por.tab === 'pestana-de-ana');
   assert.equal(eco.area, 'tareas');
   // el socket es un atajo: lo escrito está en D1 (la verdad)
-  const lista = await (await api(cBruno, '/api/tareas/mias')).json();
+  const lista = await (await api(cAna, '/api/tareas/mias')).json(); // «Mías» es por cuenta desde el 26 oct: la tarea de Ana está en su lista, no en la de Bruno
   assert.ok(JSON.stringify(lista).includes('Cerrar el mes'));
 });
 

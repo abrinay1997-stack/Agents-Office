@@ -1,5 +1,16 @@
 # Changelog
 
+## El Cerebro aprende, se mide y se reacomoda (issue #45, partes A y B) — 27 oct 2026
+
+Pedido del dueño: implementar la mejora del Cerebro (ideas del issue #45): la «base segura» y el mapa entero en la nube.
+
+- **Se mide antes de mejorar.** 54 preguntas sobre las 59 notas de fábrica y un medidor (`node scripts/evals-cerebro.mjs`): hoy la búsqueda de los agentes acierta la nota correcta entre las 5 primeras el 90,7 % de las veces (MRR 0,847). Otro medidor (`node cloudflare/scripts/evals-enlaces.mjs`) esconde cada enlace real y mira si la preselección de «Actualizar conexiones» lo encuentra: 76,7 %. La línea base queda guardada y las pruebas fallan si algo empeora.
+- **El oro del mapa llega a la nube.** `GET /api/brain` ya trae lo que los agentes aprendieron (peso de cada nota y sinapsis doradas); antes iba vacío. La oficina local usa ahora la misma función.
+- **«3 · Notas que tus agentes usan juntas» (gratis, sin IA).** Cuando un agente cita dos notas juntas en varios trabajos buenos y nadie las ha enlazado, «Actualizar conexiones» te las ofrece como enlace: tú eliges y se escribe como «Relacionadas» en la nota que sea tuya (nunca en una de fábrica, clave o de un agente), con DESHACER.
+- **«4 · Reacomodar todo el mapa» (gratis).** El mapa 3D ya no depende de tu computadora ni de migrar: el botón lo recalcula entero en la nube con el mismo cálculo (d3-force), hasta 1.500 notas. **Todas las neuronas pueden moverse**; las notas no se tocan, solo el dibujo. El mapa anterior se guarda y puedes volver a él (una vez). Necesita un Worker de pago (el plan gratuito da 10 ms de CPU y esto usa ~0,3 s con tus 59 notas). Probado también en workerd real.
+- **Un arreglo de paso:** limpiar o aplicar adelantaba la fecha del mapa y las notas editadas que aún esperaban a la IA dejaban de salir; la referencia ahora se fija antes de escribir.
+- Pruebas: `tests/cerebro-evals.test.mjs`, `tests/memory-grafo.test.mjs`, `cloudflare/tests/cerebro-aprendido.test.mjs` (8), `cloudflare/tests/cerebro-evals-enlaces.test.mjs` `cloudflare/tests/cerebro-mapa.test.mjs` (7), `cloudflare/tests/cerebro-mapa-vivo.test.mjs` (workerd real) y 6 recorridos nuevos en `navegador-conexiones.test.mjs`. Además, una prueba de `vivo.test.mjs` estaba desactualizada desde el cambio de «Mías» por cuenta (el 26 oct) y no se notaba porque en CI se salta: ahora mira la lista de quien creó la tarea.
+
 ## Plan del chat interno del equipo — 27 oct 2026
 
 Pedido del dueño: «me interesa tener un chat interno como lo tienen en D'CASA… y dejar el plan escrito de un módulo de chat dentro».

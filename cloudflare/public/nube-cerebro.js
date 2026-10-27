@@ -14,7 +14,7 @@
 
   /** cont: dónde se pinta · alGrafo(mapa): el mapa cambió, que se redibuje · alCerrar(): «Listo» (si no se da, vuelve al inicio del flujo) */
   function abrir(cont, { alGrafo = () => {}, alCerrar = null } = {}) {
-    const S = { fase: 'carga', est: null, props: [], hechas: 0, aviso: '', res: null, undo: null, cancelar: false, error: '' };
+    const S = { fase: 'carga', est: null, props: [], origen: 'ia', hechas: 0, aviso: '', res: null, undo: null, cancelar: false, error: '' };
     const vivo = () => cont.isConnected;
     const poner = (html) => { if (vivo()) { cont.innerHTML = `<div class="cx" data-fase="${S.fase}">${html}</div>`; const h = cont.querySelector('[data-foco]'); if (h) h.focus({ preventScroll: true }); } };
 
@@ -42,11 +42,26 @@
            <p class="cx-peq">La IA (${esc(m.nombre)}) lee cada nota y propone con cuáles de las que ya existen conviene enlazarla. Cuesta ${esc(usd(e.costo.usd))} aprox. Tú eliges qué se escribe. Las ${e.protegidas} notas de fábrica y las notas clave nunca se tocan: solo se escribe en las tuyas.</p>${aviso}
            <div class="cx-fila"><button type="button" class="cx-b pri" data-a="proponer"${m.conClave ? '' : ' disabled'} data-foco>Buscar conexiones con IA</button></div>`
         : `<p class="cx-ok">✓ No hay notas nuevas ni cambiadas por conectar.</p>`;
+      const uso = (e.porUso || []).reduce((t, p) => t + p.enlaces.length, 0);
+      const usadas = uso
+        ? `<p>${n(uso, 'pareja de notas que tus agentes usaron', 'parejas de notas que tus agentes usaron')} juntas en trabajo que aprobaste y nadie ha enlazado:</p>
+           <ul class="cx-ul">${e.porUso.flatMap((p) => p.enlaces.map((x) => `<li>«${esc(p.nota)}» y «${esc(x.a)}» <small>(${n(x.usos, 'trabajo', 'trabajos')})</small></li>`)).slice(0, 6).join('')}</ul>
+           <p class="cx-peq">Es lo que ya pasó, no cuesta nada. Tú eliges cuáles se escriben, como «Relacionadas» al final de la nota que sea tuya.</p>
+           <div class="cx-fila"><button type="button" class="cx-b" data-a="uso">Ver y elegir (gratis)</button></div>`
+        : `<p class="cx-peq">Cuando tus agentes citen dos notas juntas varias veces en trabajo que apruebes, aparecerán aquí para que las enlaces.</p>`;
+      const mc = e.mapaCompleto || {}, fecha = (t) => new Date(t).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      const copia = mc.copia ? `<p class="cx-peq">Hay un mapa anterior guardado (${esc(fecha(mc.copia.at))}${mc.copia.por ? ', ' + esc(mc.copia.por) : ''}).</p><div class="cx-fila"><button type="button" class="cx-b" data-a="mapa-deshacer">Volver al mapa anterior</button></div>` : '';
+      const entero = mc.puede
+        ? `<p>Vuelve a calcular dónde va cada neurona con tus ${mc.notas} notas y sus enlaces de ahora, como hacía tu computadora al migrar. <b>Todas las neuronas pueden moverse.</b> Las notas no se tocan, solo el dibujo; si no te gusta cómo queda, vuelves al anterior.</p>
+           <div class="cx-fila"><button type="button" class="cx-b" data-a="mapa">Reacomodar el mapa entero</button></div>${copia}`
+        : `<p class="cx-peq">${mc.notas ? `Tienes ${mc.notas} notas: pasa del tope de ${mc.tope} para calcularlo aquí. Sigue calculándose desde tu computadora al migrar.` : 'Todavía no hay notas que dibujar.'}</p>${copia}`;
       const ult = e.ultima?.at ? `<p class="cx-peq">Última actualización: ${esc(new Date(e.ultima.at).toLocaleString('es-PA', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }))} · ${n(e.ultima.enlaces || 0, 'conexión', 'conexiones')}.</p>` : '';
       poner(`<p class="cx-lead">No corre solo: tú decides cuándo. Pone el mapa al día con tus notas y, si quieres, la IA propone con qué notas conectar las nuevas. Nada se escribe en una nota sin tu visto bueno.</p>
         <section class="cx-sec" aria-labelledby="cx-h1"><h4 id="cx-h1">1 · Limpiar el mapa <small>(gratis)</small></h4>${limpio}${rotos}
           ${l.hay ? `<div class="cx-fila"><button type="button" class="cx-b" data-a="limpiar">Limpiar el mapa ahora</button></div>` : ''}</section>
-        <section class="cx-sec" aria-labelledby="cx-h2"><h4 id="cx-h2">2 · Conectar notas nuevas con IA</h4>${conectar}</section>${ult}`);
+        <section class="cx-sec" aria-labelledby="cx-h2"><h4 id="cx-h2">2 · Conectar notas nuevas con IA</h4>${conectar}</section>
+        <section class="cx-sec" aria-labelledby="cx-h3"><h4 id="cx-h3">3 · Notas que tus agentes usan juntas <small>(gratis)</small></h4>${usadas}</section>
+        <section class="cx-sec" aria-labelledby="cx-h4"><h4 id="cx-h4">4 · Reacomodar todo el mapa <small>(gratis)</small></h4>${entero}</section>${ult}`);
     }
 
     function pIA() {
@@ -60,7 +75,8 @@
       const con = S.props.filter((p) => p.enlaces.length), sin = S.props.filter((p) => !p.enlaces.length);
       const tarjetas = con.map((p, i) => `<fieldset class="cx-nota"><legend>«${esc(p.nota)}»</legend>${p.enlaces.map((e, j) => `<label class="cx-enl"><input type="checkbox" checked data-i="${i}" data-j="${j}"><span><b>[[${esc(e.a)}]]</b>${e.porque ? `<small>${esc(e.porque)}</small>` : ''}</span></label>`).join('')}</fieldset>`).join('');
       const nada = sin.length ? `<details class="cx-det"><summary>${n(sin.length, 'nota', 'notas')} sin conexiones claras</summary><ul class="cx-ul">${sin.map((p) => `<li>«${esc(p.nota)}»${p.aviso ? ` <small>${esc(p.aviso)}</small>` : ''}</li>`).join('')}</ul><p class="cx-peq">No vuelven a salir hasta que las edites.</p></details>` : '';
-      poner(`<p class="cx-lead">${con.length ? `La IA propone enlaces para ${n(con.length, 'nota', 'notas')}. Quita los que no te sirvan.` : 'La IA no vio conexiones claras en estas notas.'}${S.usd != null ? ` <span class="cx-peq">Costó ${esc(usd(S.usd))}.</span>` : ''}</p>${S.aviso ? `<p class="cx-aviso" role="note">${esc(S.aviso)}</p>` : ''}
+      const deUso = S.origen === 'uso';
+      poner(`<p class="cx-lead">${deUso ? `Tus agentes usaron juntas estas notas en trabajo que aprobaste. Quita las que no quieras enlazar.` : con.length ? `La IA propone enlaces para ${n(con.length, 'nota', 'notas')}. Quita los que no te sirvan.` : 'La IA no vio conexiones claras en estas notas.'}${S.usd != null ? ` <span class="cx-peq">Costó ${esc(usd(S.usd))}.</span>` : ''}</p>${S.aviso ? `<p class="cx-aviso" role="note">${esc(S.aviso)}</p>` : ''}
         <p class="cx-peq">Se añaden al final de cada nota, en una sección «Relacionadas», sin cambiar nada de lo que ya decía.</p>${tarjetas}${nada}
         <div class="cx-fila"><button type="button" class="cx-b pri" data-a="aplicar" data-foco></button><button type="button" class="cx-b" data-a="recargar">Volver</button></div>`);
       rotular();
@@ -69,6 +85,17 @@
     function rotular() {
       const b = cont.querySelector('[data-a=aplicar]'); if (!b) return; const k = elegidos().length;
       b.textContent = k ? `Aplicar ${n(k, 'conexión', 'conexiones')} y limpiar el mapa` : 'Marcarlas como revisadas y limpiar el mapa';
+    }
+
+    function pMapa() { // el mapa entero se recalculó (o se volvió al anterior)
+      const r = S.mapaRes, vuelta = r.vuelta;
+      const cuerpo = vuelta
+        ? `<p class="cx-ok">✓ Volví al mapa anterior.${r.acomodadas ? ` ${n(r.acomodadas, 'nota que llegó', 'notas que llegaron')} después se acomodó junto a sus vecinas, sin mover lo demás.` : ''}</p>`
+        : `<p class="cx-ok">✓ Mapa recalculado: ${n(r.notas, 'neurona', 'neuronas')}, ${n(r.conectadas, 'conectada', 'conectadas')}, ${n(r.lineas, 'línea', 'líneas')}${r.menciones ? ` y ${n(r.menciones, 'mención', 'menciones')} (notas que nombran a otra sin enlazarla)` : ''}.</p>
+           ${r.motor === 'interno' ? `<p class="cx-aviso" role="note">Se usó el cálculo de reserva (no está d3-force en el servidor): el dibujo puede verse distinto al de tu computadora.</p>` : ''}
+           ${r.copia ? '' : `<p class="cx-peq">No había un mapa anterior que guardar, así que esta vez no hay a qué volver.</p>`}
+           ${r.memoria ? `<p class="cx-peq">${n(r.memoria, 'recuerdo olvidado', 'recuerdos olvidados')} de notas que ya no existen.</p>` : ''}`;
+      poner(`${cuerpo}<div class="cx-fila">${!vuelta && r.copia ? `<button type="button" class="cx-b" data-a="mapa-deshacer">Volver al mapa anterior</button>` : ''}<button type="button" class="cx-b pri" data-a="${alCerrar ? 'cerrar' : 'recargar'}" data-foco>${alCerrar ? 'Listo' : 'Volver al inicio'}</button></div>`);
     }
 
     function pListo() {
@@ -93,11 +120,14 @@
 
     /* ---------- lo que hace cada botón ---------- */
     async function cargar() {
-      S.fase = 'carga'; S.undoMsg = ''; pCarga();
+      S.fase = 'carga'; S.undoMsg = ''; S.origen = 'ia'; pCarga();
       try { S.est = await api(RUTA); S.fase = 'resumen'; pResumen(); } catch (e) { S.fase = 'error'; pError(e.message, 'recargar'); }
     }
+    function verUso() { // las parejas que los agentes usaron juntas: ya vienen en el estado, no hay nada que pedir a la IA
+      S.origen = 'uso'; S.props = (S.est.porUso || []).map((p) => ({ ...p, enlaces: p.enlaces.map(({ a, porque }) => ({ a, porque })) })); S.aviso = ''; S.usd = null; S.fase = 'revisar'; pRevisar();
+    }
     async function proponer() {
-      S.fase = 'ia'; S.props = []; S.hechas = 0; S.aviso = ''; S.usd = null; S.cancelar = false;
+      S.origen = 'ia'; S.fase = 'ia'; S.props = []; S.hechas = 0; S.aviso = ''; S.usd = null; S.cancelar = false;
       const nombres = S.est.candidatas.map((c) => c.nombre); pIA();
       let gasto = 0;
       for (let i = 0; i < nombres.length && !S.cancelar && vivo(); i += POR_PETICION) {
@@ -116,13 +146,21 @@
         const marcadas = new Set(elegidos().map((c) => c.dataset.i + ':' + c.dataset.j));
         con.forEach((p, i) => { const es = p.enlaces.filter((_, j) => marcadas.has(i + ':' + j)); if (es.length) conexiones.push({ nota: p.nota, rev: p.rev, enlaces: es }); });
       }
-      const revisadas = soloLimpiar ? [] : S.props.filter((p) => !p.fallo && p.rev != null).map((p) => ({ nota: p.nota, rev: p.rev }));
+      const revisadas = soloLimpiar || S.origen === 'uso' ? [] : S.props.filter((p) => !p.fallo && p.rev != null).map((p) => ({ nota: p.nota, rev: p.rev }));
       S.fase = 'guardando'; pCarga(soloLimpiar ? 'Limpiando el mapa…' : 'Escribiendo las conexiones y limpiando el mapa…');
       try {
-        const r = await post({ paso: 'aplicar', conexiones, revisadas });
+        const r = await post({ paso: 'aplicar', conexiones, revisadas, ...(S.origen === 'uso' && !soloLimpiar ? { origen: 'uso' } : {}) });
         S.res = r; S.undo = r.deshacer || []; S.fase = 'listo'; S.props = [];
         if (r.graph) alGrafo(r.graph);
         pListo();
+      } catch (e) { S.fase = 'error'; pError(e.message, 'recargar'); }
+    }
+    async function mapa(deshacerlo = false) {
+      S.fase = 'guardando'; pCarga(deshacerlo ? 'Volviendo al mapa anterior…' : 'Calculando el mapa entero… puede tardar unos segundos.');
+      try {
+        const r = await post({ paso: deshacerlo ? 'mapa-deshacer' : 'mapa' });
+        S.mapaRes = { ...r, vuelta: deshacerlo }; if (r.graph) alGrafo(r.graph);
+        S.fase = 'listo'; pMapa();
       } catch (e) { S.fase = 'error'; pError(e.message, 'recargar'); }
     }
     async function deshacer() {
@@ -143,6 +181,9 @@
       if (a === 'recargar') cargar();
       else if (a === 'cerrar') alCerrar();
       else if (a === 'proponer') proponer();
+      else if (a === 'uso') verUso();
+      else if (a === 'mapa') mapa(false);
+      else if (a === 'mapa-deshacer') mapa(true);
       else if (a === 'parar') { S.cancelar = true; b.disabled = true; b.textContent = 'Parando…'; }
       else if (a === 'aplicar') aplicar(false);
       else if (a === 'limpiar') aplicar(true);

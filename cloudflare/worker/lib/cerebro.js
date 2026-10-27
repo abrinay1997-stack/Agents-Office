@@ -1,8 +1,9 @@
 // El Cerebro en la nube: las notas viven en D1 (`notas`) y el mapa 3D, ya calculado, en `grafo`.
 // La búsqueda y los resúmenes son los mismos módulos puros que usa la oficina local.
 import { buscarEnCerebro } from '../../../cerebro-busqueda.mjs';
-import { summary } from '../../../memory.mjs';
+import { summary, learnedForGraph } from '../../../memory.mjs';
 import { ahora } from './ids.js';
+import { leerDoc } from './almacen.js';
 import * as N from '../../../notas-core.mjs';
 
 const MAX_NOTA = 200000;            // lo mismo que /api/note local: más largo se corta
@@ -55,8 +56,8 @@ export function hechosDeNota(f) {
 }
 
 /**
- * El mapa con las notas que llegaron DESPUÉS de calcularlo. El cálculo de fuerzas del mapa (graph-core.mjs) gasta más CPU de la que da un Worker, así que lo hace la
- * computadora del dueño al migrar; pero una nota nueva en la nube (un documento subido, la entrega de un agente, una nota de Contenido) no puede quedarse fuera del mapa
+ * El mapa con las notas que llegaron DESPUÉS de calcularlo. El cálculo de fuerzas del mapa (graph-core.mjs) gasta bastante CPU (una petición normal no lo hace): lo hace la
+ * computadora del dueño al migrar o el botón «Reacomodar todo el mapa» a mano (cerebro-mapa.js); pero una nota nueva en la nube (un documento subido, la entrega de un agente, una nota de Contenido) no puede quedarse fuera del mapa
  * hasta la siguiente migración. Aquí entra como una neurona SIN enlaces, en el anillo exterior (donde graph-core.mjs pone las notas sueltas), sin tocar los enlaces,
  * el suelo ni los índices de las demás: los nodos con enlaces van primero y los sueltos al final, así que reordenar los sueltos no mueve ningún índice.
  * Una nota ya con enlaces que se borra se queda como está (quitarla movería los índices); una suelta que se borra, se va. Puro. → el mismo `g` si no hay nada que cambiar.
@@ -129,7 +130,9 @@ export async function leerGrafo(db) {
   const { results } = await db.prepare('select nombre, grupo, actualizado, substr(texto, 1, 600) cab from notas').all();
   await ponerEnlaces(db, g, results);
   const lleno = conNotasNuevas(g, results) ?? { notes: 0, nodes: [], links: [], extra: [], floor: null, vacio: true }; // `vacio`: la página pinta un Cerebro sin notas, no el de muestra
-  return { ...lleno, learned: { w: {}, links: [] } }; // lo que aprende la memoria llega con los agentes (fase 4)
+  // lo que los agentes aprendieron del trabajo aprobado (doc `memoria`, el mismo que usa agentes/contexto.js): el peso de cada nota y las sinapsis doradas, como en la oficina local
+  const mem = (await leerDoc(db, 'memoria', null)).valor;
+  return { ...lleno, learned: learnedForGraph(mem, lleno.nodes) };
 }
 
 export async function buscar(db, q) {

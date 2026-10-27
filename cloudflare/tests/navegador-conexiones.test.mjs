@@ -9,6 +9,8 @@ import { SALTAR as SIN_D1, sembrar } from './d1-memoria.mjs';
 import { oficina, texto } from './agentes-ayudas.mjs';
 import { semillaEnDisco, assetsDe } from './semilla-ayudas.mjs';
 import { guardarNotas, guardarGrafo } from '../worker/lib/cerebro.js';
+import { guardarDoc } from '../worker/lib/almacen.js';
+import { memoriaCon } from './cerebro-ayudas.mjs';
 
 let chromium = null;
 for (const base of [import.meta.url, 'file:///opt/node22/lib/node_modules/']) { try { ({ chromium } = createRequire(base)('playwright')); break; } catch { /* siguiente */ } }
@@ -32,13 +34,14 @@ const ia = (pedidos) => async (url, init = {}) => {
   return new Response(JSON.stringify(texto(JSON.stringify(r))), { status: 200 });
 };
 
-async function abrir({ ancho, rol = 'admin' }) {
+async function abrir({ ancho, rol = 'admin', memoria = null }) {
   const { d1, env } = await oficina({ conector: false }), { dir, semilla } = await semillaEnDisco(), pedidos = [];
   env.ASSETS = assetsDe(dir); env.__pruebas = { fetch: ia(pedidos) };
   await guardarNotas(d1, [...semilla.notas.map((n) => ({ nombre: n.nombre, grupo: n.grupo, oficina: 0, texto: n.texto, actualizado: 1000, tarea: null })),
     { nombre: 'Oferta de verano', grupo: 'Notas', oficina: 0, texto: '# Oferta de verano\n\nDescuento en los combos de la web, con los precios y plazos de entrega.', actualizado: 5000, tarea: null },
     { nombre: 'Idea de reel', grupo: 'Notas', oficina: 0, texto: 'Un reel del taller para Instagram.', actualizado: 5000, tarea: null },
     { nombre: XSS, grupo: 'Notas', oficina: 0, texto: 'Una nota con un nombre malicioso.', actualizado: 5000, tarea: null }]);
+  if (memoria) await guardarDoc(d1, 'memoria', memoria); // lo que los agentes aprendieron del trabajo aprobado
   await guardarGrafo(d1, structuredClone(semilla.grafo)); d1._db.prepare('update grafo set calculado = ? where id = 1').run(new Date(2000).toISOString());
   if (rol !== 'admin') await sembrar(d1, { email: 'otro@panaclaw.test', rol });
   const { manejar } = await import('../worker/lib/rutas.js');
@@ -140,5 +143,69 @@ test('si no se puede traer el actualizador, se dice en palabras y se puede reint
   assert.match(await p.textContent('#cxfalla'), /No pude traer el actualizador/);
   await p.unroute('https://oficina.test/nube-cerebro.js'); await p.route('https://oficina.test/nube-cerebro.js', (r) => r.fulfill({ status: 200, headers: { 'content-type': 'text/javascript' }, body: pub('nube-cerebro.js') }));
   await p.click('#cxfalla [data-reintentar]'); await p.waitForSelector('#cxfalla .cx [data-a=proponer]', { timeout: 20000 });
+  await ctx.close();
+});
+
+const USADAS = () => memoriaCon([['Oferta de verano', 'precios-webs', 0.45, 3]]);
+
+test('las parejas que los agentes usaron juntas se ofrecen gratis: se ven, se eligen y se escriben sin llamar a la IA', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, d1, errores, pedidos, semilla } = await abrir({ ancho: 1280, memoria: USADAS() });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.click('#topBrain'); await p.waitForSelector('#brainOv .bv-tools .bv-cx', { timeout: 40000 });
+  await p.click('.bv-cx'); await p.waitForSelector('.bv-pb .cx [data-a=uso]', { timeout: 20000 });
+  let cx = await p.textContent('.bv-pb .cx');
+  assert.match(cx, /3 · Notas que tus agentes usan juntas/); assert.match(cx, /1 pareja de notas que tus agentes usaron juntas/); assert.match(cx, /«Oferta de verano» y «precios-webs»/); assert.match(cx, /3 trabajos/);
+  await p.click('[data-a=uso]'); await p.waitForSelector('.cx [data-a=aplicar]', { timeout: 20000 });
+  cx = await p.textContent('.cx'); assert.match(cx, /Tus agentes usaron juntas estas notas/); assert.match(cx, /\[\[precios-webs\]\]/); assert.match(cx, /3 trabajos que salieron bien/);
+  assert.equal(await p.locator('.cx input[type=checkbox]:checked').count(), 1); assert.match(await p.textContent('[data-a=aplicar]'), /Aplicar 1 conexión/);
+  await p.click('[data-a=aplicar]'); await p.waitForSelector('.cx [data-a=deshacer]', { timeout: 20000 });
+  assert.match(await p.textContent('.cx'), /1 conexión nueva en 1 nota/);
+  assert.match(textoEnDb(d1, 'Oferta de verano'), /## Relacionadas\n\n- \[\[precios-webs\]\] — los agentes las usaron juntas en 3 trabajos que salieron bien\n$/);
+  assert.equal(pedidos.length, 0, 'ni una llamada a la IA: es lo que ya pasó');
+  assert.ok(semilla.notas.every((n) => textoEnDb(d1, n.nombre) === n.texto), 'ninguna nota de fábrica cambió');
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('teléfono (390 px): la sección de parejas usadas cabe, sus botones miden 44 px y la letra 16 px', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx } = await abrir({ ancho: 390, memoria: USADAS() });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.evaluate(() => { document.body.classList.add('movil'); const c = document.createElement('div'); c.id = 'cxprueba'; c.style.cssText = 'position:fixed;inset:0;overflow:auto;background:#fff;padding:12px;z-index:9999'; document.body.appendChild(c); window.AO_NUBE.actualizarConexiones(c, { alGrafo() {}, alCerrar() {} }); });
+  await p.waitForSelector('#cxprueba .cx [data-a=uso]', { timeout: 30000 });
+  const b = await p.locator('#cxprueba [data-a=uso]').evaluate((e) => ({ h: e.getBoundingClientRect().height, f: parseFloat(getComputedStyle(e).fontSize) }));
+  assert.ok(b.h >= 44 && b.f >= 15.9, JSON.stringify(b)); assert.equal(await sinDesborde(p), true);
+  await ctx.close();
+});
+
+test('reacomodar el mapa entero desde el panel: se calcula, se ve el resultado, el mapa de la página cambia y se puede volver al anterior', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx, d1, errores, semilla } = await abrir({ ancho: 1280 });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.click('#topBrain'); await p.waitForSelector('#brainOv .bv-tools .bv-cx', { timeout: 40000 });
+  await p.click('.bv-cx'); await p.waitForSelector('.bv-pb .cx [data-a=mapa]', { timeout: 20000 });
+  let cx = await p.textContent('.bv-pb .cx'); assert.match(cx, /4 · Reacomodar todo el mapa/); assert.match(cx, /Todas las neuronas pueden moverse/); assert.match(cx, /Las notas no se tocan/);
+  const antes = await p.evaluate(() => fetch('/api/brain').then((r) => r.json()));
+  await p.click('[data-a=mapa]'); await p.waitForSelector('.cx [data-a=mapa-deshacer]', { timeout: 60000 });
+  cx = await p.textContent('.cx'); assert.match(cx, /Mapa recalculado: 62 neuronas/); assert.doesNotMatch(cx, /cálculo de reserva/);
+  const despues = await p.evaluate(() => fetch('/api/brain').then((r) => r.json()));
+  assert.equal(despues.nodes.length, antes.nodes.length); assert.ok(despues.nodes.some((n) => { const a = antes.nodes.find((x) => x.id === n.id); return a && (a.x !== n.x || a.y !== n.y); }), 'las neuronas se reacomodaron');
+  assert.ok(semilla.notas.every((n) => textoEnDb(d1, n.nombre) === n.texto), 'ninguna nota cambió');
+  await p.click('[data-a=mapa-deshacer]'); await p.waitForFunction(() => /Volví al mapa anterior/.test(document.querySelector('.cx')?.textContent || ''), null, { timeout: 30000 });
+  const vuelta = await p.evaluate(() => fetch('/api/brain').then((r) => r.json()));
+  for (const a of antes.nodes) { const v = vuelta.nodes.find((x) => x.id === a.id); assert.deepEqual([v.x, v.y], [a.x, a.y], `«${a.id}» volvió a su sitio`); }
+  assert.deepEqual(errores, [], 'sin errores en la página');
+  await ctx.close();
+});
+
+test('teléfono (390 px): el botón de reacomodar el mapa mide 44 px y cabe', { skip: SALTAR }, async (t0) => {
+  if (!nav) return t0.skip('sin Chromium');
+  const { p, ctx } = await abrir({ ancho: 390 });
+  await p.waitForFunction(() => window.AO_NUBE?.yo?.()?.rol === 'admin', null, { timeout: 40000 });
+  await p.evaluate(() => { document.body.classList.add('movil'); const c = document.createElement('div'); c.id = 'cxprueba'; c.style.cssText = 'position:fixed;inset:0;overflow:auto;background:#fff;padding:12px;z-index:9999'; document.body.appendChild(c); window.AO_NUBE.actualizarConexiones(c, { alGrafo() {}, alCerrar() {} }); });
+  await p.waitForSelector('#cxprueba .cx [data-a=mapa]', { timeout: 30000 });
+  const b = await p.locator('#cxprueba [data-a=mapa]').evaluate((e) => ({ h: e.getBoundingClientRect().height, f: parseFloat(getComputedStyle(e).fontSize) }));
+  assert.ok(b.h >= 44 && b.f >= 15.9, JSON.stringify(b)); assert.equal(await sinDesborde(p), true);
   await ctx.close();
 });
