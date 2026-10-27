@@ -46,6 +46,14 @@ export async function guardarGrafo(db, grafo) {
   return true;
 }
 
+/** Lo que el mapa sabe de una nota además de su sitio: su fecha (`t`, en segundos), quién la escribió (`a`) y de qué departamento (`dep`). f: { cab: el principio del texto, actualizado }. */
+export function hechosDeNota(f) {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(f.cab || ''), o = {};
+  if (fm) for (const l of fm[1].split(/\r?\n/)) { const m = /^(agent|department|done):\s*(.+)$/.exec(l); if (m) o[m[1]] = m[2].trim(); }
+  let t = o.done ? Date.parse(o.done) : NaN; if (!Number.isFinite(t)) t = Number(f.actualizado) || 0;
+  return { t: Math.round(t / 1000), ...(o.agent ? { a: o.agent } : {}), ...(o.department ? { dep: o.department } : {}) };
+}
+
 /**
  * El mapa con las notas que llegaron DESPUÉS de calcularlo. El cálculo de fuerzas del mapa (graph-core.mjs) gasta más CPU de la que da un Worker, así que lo hace la
  * computadora del dueño al migrar; pero una nota nueva en la nube (un documento subido, la entrega de un agente, una nota de Contenido) no puede quedarse fuera del mapa
@@ -78,12 +86,7 @@ export function conNotasNuevas(g, filas) {
   const nuevoDe = new Map(); // posición vieja en `nodos` → posición nueva (-1: se fue)
   nodos.forEach((n, i) => nuevoDe.set(i, n.d > 0 ? enlazadosVivos.indexOf(n) : -1));
   const rehacer = (pares) => (Array.isArray(pares) ? pares.map((p) => (Array.isArray(p) ? [nuevoDe.get(p[0]) ?? -1, nuevoDe.get(p[1]) ?? -1, ...p.slice(2)] : p)).filter((p) => !Array.isArray(p) || (p[0] >= 0 && p[1] >= 0)) : pares);
-  const hechos = (f) => {
-    const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(f.cab || ''), o = {};
-    if (fm) for (const l of fm[1].split(/\r?\n/)) { const m = /^(agent|department|done):\s*(.+)$/.exec(l); if (m) o[m[1]] = m[2].trim(); }
-    let t = o.done ? Date.parse(o.done) : NaN; if (!Number.isFinite(t)) t = Number(f.actualizado) || 0;
-    return { t: Math.round(t / 1000), ...(o.agent ? { a: o.agent } : {}), ...(o.department ? { dep: o.department } : {}) };
-  };
+  const hechos = hechosDeNota;
   const todos = [...sueltos.map((n) => ({ id: n.id, g: n.g, t: n.t, ...(n.a ? { a: n.a } : {}), ...(n.dep ? { dep: n.dep } : {}) })),
     ...nuevasSueltas.map(({ f }) => ({ id: f.nombre, g: f.grupo || '00-Meta', ...hechos(f) }))]
     .sort((a, b) => String(a.g).localeCompare(String(b.g)) || a.id.localeCompare(b.id));

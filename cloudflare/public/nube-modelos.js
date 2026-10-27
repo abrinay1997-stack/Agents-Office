@@ -11,6 +11,7 @@
     ['resumen', 'Resumen del lunes e informes', 'El resumen semanal y los informes del mes.', false],
     ['enrutador', 'Enrutador (a qué agente va una tarea)', 'Una llamada corta: sirve un modelo pequeño y barato.', false],
     ['revision', 'Revisión del jefe', 'El jefe revisa lo delicado antes de que te llegue.', false],
+    ['cerebro', 'Conectar notas del Cerebro', 'El botón «Actualizar conexiones»: propone con qué notas enlazar una nota nueva.', false],
   ];
   const DEPTS = [['emails', 'Emails'], ['sales', 'Ventas'], ['marketing', 'Marketing'], ['ops', 'Operaciones'], ['fin', 'Contabilidad'], ['delivery', 'Entregas']];
   const ROSTER = { sonnet: 'Sonnet', opus: 'Opus', fable: 'Fable' };

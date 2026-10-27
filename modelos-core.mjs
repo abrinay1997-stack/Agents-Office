@@ -35,6 +35,7 @@ export const FUNCIONES = [
   { id: 'resumen', nombre: 'Resumen del lunes e informes', ayuda: 'El resumen semanal y los informes del mes.' },
   { id: 'enrutador', nombre: 'Enrutador (a qué agente va una tarea)', ayuda: 'Una llamada corta y barata: sirve un modelo pequeño.' },
   { id: 'revision', nombre: 'Revisión del jefe', ayuda: 'El jefe del departamento revisa lo delicado antes de que te llegue.' },
+  { id: 'cerebro', nombre: 'Conectar notas del Cerebro', ayuda: 'El botón «Actualizar conexiones» del Cerebro: propone con qué notas enlazar una nota nueva. Una llamada corta: sirve un modelo pequeño y barato.' },
   { id: 'video', nombre: 'Entender video y audio', ayuda: 'Lo hace Muse Spark por una ruta propia (understand.mjs) y todavía no se puede cambiar aquí.', cableado: false },
 ];
 export const FUNCION_IDS = FUNCIONES.filter(f => f.cableado !== false).map(f => f.id);

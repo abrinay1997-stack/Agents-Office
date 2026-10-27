@@ -197,7 +197,7 @@ export function initBrain({ esc }) {
       (hood ? `<section class="bv-sec bv-hood"><h3>Vecindario</h3><div class="bv-hoodc"><span>Lo que está a ${hood.depth} ${hood.depth === 1 ? 'salto' : 'saltos'} de <b>${escHTML(hood.id)}</b></span><button type="button" class="bv-hoodx" aria-label="Quitar el vecindario" title="Quitar el vecindario">✕</button></div>${seg('hd', [['1', '1 salto'], ['2', '2 saltos'], ['3', '3 saltos']])}</section>` : '') +
       (match ? `<section class="bv-sec bv-tgs"><label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo lo que encontré</label></section>` : '') +
       (active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : '') +
-      (SERVED ? '<section class="bv-sec bv-tools"><h3>Herramientas</h3>' + (lector() ? '' : '<button type="button" class="bv-tool bv-new" title="Escribe una nota nueva: la leen todos los agentes">✎ Nueva nota</button>') + '<button type="button" class="bv-tool bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-tool bv-stale" title="Las notas que pueden estar viejas: los agentes las leen con un aviso">⏳ Notas por revisar</button><button type="button" class="bv-tool bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button></section>' : '') +
+      (SERVED ? '<section class="bv-sec bv-tools"><h3>Herramientas</h3>' + (lector() ? '' : '<button type="button" class="bv-tool bv-new" title="Escribe una nota nueva: la leen todos los agentes">✎ Nueva nota</button>') + '<button type="button" class="bv-tool bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-tool bv-stale" title="Las notas que pueden estar viejas: los agentes las leen con un aviso">⏳ Notas por revisar</button><button type="button" class="bv-tool bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button>' + (window.AO_NUBE?.actualizarConexiones && window.AO_NUBE.yo?.()?.rol === 'admin' ? '<button type="button" class="bv-tool bv-cx" title="Limpia el mapa de lo que dejaron las notas borradas y, con IA, propone enlaces para tus notas nuevas (a mano, nunca en vivo)">🔄 Actualizar conexiones</button>' : '') + '</section>' : '') +
       `<details class="bv-sec bv-list"${listOpen ? ' open' : ''}><summary>Lista de notas <b>${shown}</b></summary><div class="bv-lst">${listOpen ? listHTML() : ''}</div></details>`;
     cnt.textContent = `${shown} de ${nodes.length}`;
     emptyEl.hidden = !(openNow && shown === 0);
@@ -219,6 +219,7 @@ export function initBrain({ esc }) {
     if (e.target.closest('.bv-new')) return nueva();
     if (e.target.closest('.bv-up')) return showUpload();
     if (e.target.closest('.bv-stale')) return showStale();
+    if (e.target.closest('.bv-cx')) return conexiones();
     if (e.target.closest('.bv-reset')) return resetF();
     const li = e.target.closest('.bv-li'); if (li) { const n = nodes[+li.dataset.i]; if (n) { select(n); centre(n); } return; }
     if (e.target.closest('.bv-hoodx')) return setHood(null);
@@ -423,6 +424,8 @@ export function initBrain({ esc }) {
   ov.addEventListener('dragover', e => { if (SERVED && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); ov.classList.add('dropping'); } });
   ov.addEventListener('dragleave', e => { if (e.target === ov || !ov.contains(e.relatedTarget)) ov.classList.remove('dropping'); });
   ov.addEventListener('drop', e => { if (!SERVED || !e.dataTransfer?.files?.length) return; e.preventDefault(); ov.classList.remove('dropping'); showUpload([...e.dataTransfer.files]); });
+  // 27 oct 2026 (cloud only): «Actualizar conexiones» lives in /nube-cerebro.js (nube.js loads it the first time); here it only gets the pane to paint in and redraws the map when it changes
+  function conexiones() { sel = null; dirty(); setPane('<h3>Actualizar conexiones</h3><div class="bv-cxb"></div>'); window.AO_NUBE.actualizarConexiones(pane.querySelector('.bv-cxb'), { alGrafo: g => setGraph(g), alCerrar: closePane }); }
   // V4.1 (audit 63): the bin has its own view — «Deshacer» no longer vanishes with the next click: every note thrown away stays here 30 days
   async function showBin() {
     sel = null; dirty();
