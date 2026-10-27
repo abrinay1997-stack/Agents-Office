@@ -129,4 +129,9 @@ test('serve.mjs: /api/note crea, edita sin pisar, añade y manda CUALQUIER nota 
   r = await o.hacer({ type: 'nota_agregar', nombre: 'Ideas de octubre', texto: 'Cinco.' }); const ed = (await o.call('/api/note?id=' + encodeURIComponent('Ideas de octubre'))).j;
   await o.call('/api/note', { name: 'Ideas de octubre', text: ed.text.replace('Cinco.', 'Cinco, editado a mano.'), base: ed.modified }, 'PUT');
   assert.equal((await o.call('/api/oficina/deshacer', { deshacer: r.j.deshacer })).status, 409, 'lo que tocó la persona después no se pierde');
+  // revisión de Codex: aunque lo añadido siga siendo un pedazo del texto nuevo («Seis» dentro de «Seis y siete»), la nota cambió: no se toca
+  r = await o.hacer({ type: 'nota_agregar', nombre: 'Ideas de octubre', texto: 'Seis' }); const ed2 = (await o.call('/api/note?id=' + encodeURIComponent('Ideas de octubre'))).j;
+  await o.call('/api/note', { name: 'Ideas de octubre', text: ed2.text.replace('Seis', 'Seis y siete'), base: ed2.modified }, 'PUT');
+  assert.equal((await o.call('/api/oficina/deshacer', { deshacer: r.j.deshacer })).status, 409, 'cambió después de lo añadido');
+  assert.match((await o.call('/api/note?id=' + encodeURIComponent('Ideas de octubre'))).j.text, /Seis y siete/, 'su edición sigue intacta');
 });

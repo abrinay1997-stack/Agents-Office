@@ -39,7 +39,7 @@ export function registrar(shell) {
     montar(el, ctx) {
       let carpeta = 'todas', edad = 'todas', texto = '', hits = null, seq = 0, tmr = 0, limite = 60;
       el.innerHTML = `<form class="mv-busca" role="search"><label class="mv-sr" for="mvCq">Buscar en las notas</label>${svg('buscar', 'mv-busca-i')}<input id="mvCq" type="search" enterkeyhint="search" autocomplete="off" placeholder="Buscar en tus notas…"></form>
-        <div class="mv-chips mv-herr" role="group" aria-label="Acciones"><button type="button" class="mv-chip" data-a="nueva">${ic('nota')}Nueva nota</button><button type="button" class="mv-chip" data-a="subir">${ic('subir')}Subir documento</button><button type="button" class="mv-chip" data-a="mapa">${ic('mapa')}Mapa</button><button type="button" class="mv-chip" data-a="papelera">${svg('borrar')}Papelera</button></div>
+        <div class="mv-chips mv-herr" role="group" aria-label="Acciones">${window.AO_NUBE?.yo?.()?.rol === 'lectura' ? '' : `<button type="button" class="mv-chip" data-a="nueva">${ic('nota')}Nueva nota</button>`}<button type="button" class="mv-chip" data-a="subir">${ic('subir')}Subir documento</button><button type="button" class="mv-chip" data-a="mapa">${ic('mapa')}Mapa</button><button type="button" class="mv-chip" data-a="papelera">${svg('borrar')}Papelera</button></div>
         <div class="mv-chips" role="group" aria-label="Cuándo" data-ce></div><div class="mv-chips" role="group" aria-label="Carpeta" data-cc></div>
         <div class="mv-scroll" tabindex="-1" data-lista></div>`;
       const q = el.querySelector('#mvCq'), lista = el.querySelector('[data-lista]'), cEdad = el.querySelector('[data-ce]'), cCarp = el.querySelector('[data-cc]');

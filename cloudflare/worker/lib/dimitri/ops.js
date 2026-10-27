@@ -121,7 +121,7 @@ export function crearEjecutor({ env, db, usuario, modulos }) {
       const creaSeccion = !!o.seccion && !tieneSeccion(ya.text, o.seccion);
       const r = await cerebro.agregarANota(db, { nombre: o.nombre, texto: o.texto, seccion: o.seccion || '', por: por === 'dimitri' ? 'Dimitri' : por });
       if (r.error) throw new Error(r.error);
-      Object.assign(o, { desc: `Añadí a la nota «${r.nombre}»${o.seccion ? ` (sección «${o.seccion}»)` : ''}: ${String(o.texto).replace(/\s+/g, ' ').slice(0, 90)}${String(o.texto).length > 90 ? '…' : ''}`, undo: { nota: r.nombre, add: String(o.texto).trim(), seccion: o.seccion || '', seccionCreada: creaSeccion } }); return;
+      Object.assign(o, { desc: `Añadí a la nota «${r.nombre}»${o.seccion ? ` (sección «${o.seccion}»)` : ''}: ${String(o.texto).replace(/\s+/g, ' ').slice(0, 90)}${String(o.texto).length > 90 ? '…' : ''}`, undo: { nota: r.nombre, add: String(o.texto).trim(), seccion: o.seccion || '', seccionCreada: creaSeccion, rev: r.modified } }); return;
     }
     if (o.type === 'anuncio_borrador') { // un BORRADOR en la oficina; nada en Meta (crearlo allí, en pausa, es un clic del dueño en Anuncios)
       const creativos = (o.media || []).length ? o.media.map((m) => ({ media: m, texto: o.texto || '' })) : o.texto ? [{ texto: o.texto }] : [];
@@ -155,6 +155,7 @@ export function crearEjecutor({ env, db, usuario, modulos }) {
       if (o.type === 'nota_crear') { const r = await cerebro.mandarAPapelera(db, u.papelera, { por: 'Dimitri (deshacer)' }); return r.error ? { error: r.error } : {}; }
       if (o.type === 'nota_agregar') {
         const n = await cerebro.leerNota(db, u.nota); if (!n) return { error: 'la nota ya no existe' };
+        if (u.rev !== undefined && Number(n.modified) !== Number(u.rev)) return { error: 'la nota cambió después de que añadí eso: revisa lo nuevo en el Cerebro (G) y quítalo a mano si hace falta' }; // alguien la editó: no se pisa su cambio
         const q = quitarTexto(n.text, u.add, { seccion: u.seccion, seccionCreada: u.seccionCreada });
         if (!q.ok) return { error: 'la nota cambió después de que añadí eso: quítalo a mano en el Cerebro (G)' };
         const r = await cerebro.guardarNota(db, { nombre: u.nota, texto: q.texto, base: n.modified, por: 'Dimitri (deshacer)' }); return r.error ? { error: r.error } : {};

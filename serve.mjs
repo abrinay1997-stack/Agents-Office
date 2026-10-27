@@ -1392,7 +1392,7 @@ async function runOp(o, { por = 'dimitri' } = {}) {
     const h = notasLocal.hallar(o.nombre); if (!h) throw new Error('esa nota ya no existe');
     const creaSeccion = !!o.seccion && !tieneSeccion(fs.readFileSync(h.path, 'utf8'), o.seccion);
     const r = notasLocal.agregar({ nombre: o.nombre, texto: o.texto, seccion: o.seccion || '' }); if (r.error) throw new Error(r.error);
-    Object.assign(o, { desc: `Añadí a la nota «${r.nombre}»${o.seccion ? ` (sección «${o.seccion}»)` : ''}: ${String(o.texto).replace(/\s+/g, ' ').slice(0, 90)}${String(o.texto).length > 90 ? '…' : ''}`, undo: { nota: r.nombre, add: String(o.texto).trim(), seccion: o.seccion || '', seccionCreada: creaSeccion } }); await rebuildGraph(); return;
+    Object.assign(o, { desc: `Añadí a la nota «${r.nombre}»${o.seccion ? ` (sección «${o.seccion}»)` : ''}: ${String(o.texto).replace(/\s+/g, ' ').slice(0, 90)}${String(o.texto).length > 90 ? '…' : ''}`, undo: { nota: r.nombre, add: String(o.texto).trim(), seccion: o.seccion || '', seccionCreada: creaSeccion, rev: r.modified } }); await rebuildGraph(); return;
   }
   if (o.type === 'anuncio_borrador') { // Fase A3: un BORRADOR en la oficina, nada en Meta (crearlo allí, en pausa, es un clic del dueño en Anuncios)
     const creativos = (o.media || []).length ? o.media.map(m => ({ media: m, texto: o.texto || '' })) : o.texto ? [{ texto: o.texto }] : [];
@@ -1422,6 +1422,7 @@ async function undoOp(o, { por = 'dimitri' } = {}) {
   if (o.type === 'nota_crear') { const r = notasLocal.aPapelera(u.papelera); if (r.error) return { error: r.error }; await rebuildGraph(); return {}; }
   if (o.type === 'nota_agregar') {
     const h = notasLocal.hallar(u.nota); if (!h) return { error: 'la nota ya no existe' };
+    if (u.rev !== undefined && Math.abs(fs.statSync(h.path).mtimeMs - Number(u.rev)) > 1) return { error: 'la nota cambió después de que añadí eso: revisa lo nuevo en el Cerebro (G) y quítalo a mano si hace falta' }; // alguien la editó: no se pisa su cambio
     const q = quitarTexto(fs.readFileSync(h.path, 'utf8'), u.add, { seccion: u.seccion, seccionCreada: u.seccionCreada }); if (!q.ok) return { error: 'la nota cambió después de que añadí eso: quítalo a mano en el Cerebro (G)' };
     const r = notasLocal.guardar({ nombre: u.nota, texto: q.texto, base: fs.statSync(h.path).mtimeMs }); if (r.error) return { error: r.error }; await rebuildGraph(); return {};
   }

@@ -100,7 +100,7 @@ export async function buscar(db, q) {
 }
 
 /** Una nota, con la misma forma que /api/note local. null si no existe. */
-export async function leerNota(db, nombre, { peek = false } = {}) {
+export async function leerNota(db, nombre, { peek = false, puedeEscribir = true } = {}) {
   const n = await db.prepare('select nombre, grupo, oficina, texto, bytes, actualizado from notas where nombre = ?').bind(nombre).first();
   if (!n) return null;
   if (peek) {
@@ -109,7 +109,7 @@ export async function leerNota(db, nombre, { peek = false } = {}) {
     return { name: n.nombre, group: n.grupo, peek: summary(n.texto, 300) || cuerpo.slice(0, 260) + (cuerpo.length > 260 ? '…' : '') };
   }
   const corta = n.texto.length > MAX_NOTA;
-  return { name: n.nombre, group: n.grupo, text: corta ? n.texto.slice(0, MAX_NOTA) : n.texto, cut: corta, size: n.bytes, modified: n.actualizado, deletable: true, editable: !corta, key: N.esClave(n.nombre) }; // 27 oct 2026: cualquier nota se puede editar y mandar a la papelera (vuelve en 30 días)
+  return { name: n.nombre, group: n.grupo, text: corta ? n.texto.slice(0, MAX_NOTA) : n.texto, cut: corta, size: n.bytes, modified: n.actualizado, deletable: puedeEscribir, editable: puedeEscribir && !corta, key: N.esClave(n.nombre) }; // 27 oct 2026: cualquier nota se puede editar y mandar a la papelera (vuelve en 30 días)
 }
 
 export async function contar(db) {
@@ -163,10 +163,12 @@ export async function mandarAPapelera(db, nombre, { por = '' } = {}) {
   const n = await db.prepare('select nombre, grupo, oficina, texto, bytes, actualizado, tarea from notas where nombre = ?').bind(String(nombre ?? '')).first();
   if (!n) return { error: 'Esa nota no existe.', estado: 404 };
   const cuando = Date.now();
-  await db.batch([
-    db.prepare('insert into notas_papelera (nombre, grupo, oficina, texto, bytes, actualizado, tarea, borrada, por) values (?,?,?,?,?,?,?,?,?)').bind(n.nombre, n.grupo, n.oficina, n.texto, n.bytes, n.actualizado, n.tarea, cuando, por || null),
-    db.prepare('delete from notas where nombre = ?').bind(n.nombre),
+  // Atómico y atado a la revisión que leímos: si alguien guardó una edición entre el SELECT y esto, no se copia ni se borra nada (409) y su cambio no se pierde.
+  const lote = await db.batch([
+    db.prepare('insert into notas_papelera (nombre, grupo, oficina, texto, bytes, actualizado, tarea, borrada, por) select nombre, grupo, oficina, texto, bytes, actualizado, tarea, ?, ? from notas where nombre = ? and actualizado = ?').bind(cuando, por || null, n.nombre, n.actualizado),
+    db.prepare('delete from notas where nombre = ? and actualizado = ?').bind(n.nombre, n.actualizado),
   ]);
+  if (!lote[1]?.meta?.changes) return { error: 'Alguien cambió esta nota justo ahora. Ábrela de nuevo para ver lo último y vuelve a intentarlo.', estado: 409 };
   await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'nota', por || 'oficina', JSON.stringify({ accion: 'papelera', nota: n.nombre })).run().catch(() => {});
   const fila = await db.prepare('select id from notas_papelera where nombre = ? and borrada = ? order by id desc limit 1').bind(n.nombre, cuando).first();
   return { ok: true, nombre: n.nombre, id: String(fila?.id ?? '') };
@@ -179,7 +181,7 @@ export async function listarPapelera(db) {
 }
 
 /** Saca una nota de la papelera. Si su nombre ya lo usa otra, vuelve con «-2». → { ok, nombre } | { error, estado } */
-export async function restaurarNota(db, id) {
+export async function restaurarNota(db, id, { por = '' } = {}) {
   const n = /^\d{1,12}$/.test(String(id ?? '')) ? await db.prepare('select * from notas_papelera where id = ?').bind(Number(id)).first() : null;
   if (!n) return { error: 'No está en la papelera.', estado: 404 };
   let nombre = n.nombre;
@@ -188,5 +190,6 @@ export async function restaurarNota(db, id) {
     db.prepare('insert into notas (nombre, grupo, oficina, texto, bytes, actualizado, tarea) values (?,?,?,?,?,?,?)').bind(nombre, n.grupo, n.oficina, n.texto, n.bytes, Date.now(), n.tarea),
     db.prepare('delete from notas_papelera where id = ?').bind(n.id),
   ]);
+  await db.prepare('insert into auditoria (at, tipo, quien, detalle) values (?,?,?,?)').bind(ahora(), 'nota', por || 'oficina', JSON.stringify({ accion: 'restaurar', nota: nombre })).run().catch(() => {});
   return { ok: true, nombre };
 }

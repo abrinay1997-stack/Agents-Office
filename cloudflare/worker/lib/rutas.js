@@ -108,7 +108,7 @@ export async function manejar(req, env, exec = null) {
   if (ruta === '/api/brain' && req.method === 'GET') return json(await cerebro.leerGrafo(db));
   if (ruta === '/api/brain/search' && req.method === 'GET') return json(await cerebro.buscar(db, url.searchParams.get('q')));
   if (ruta === '/api/note' && req.method === 'GET') {
-    const n = await cerebro.leerNota(db, url.searchParams.get('id') || '', { peek: url.searchParams.get('peek') === '1' });
+    const n = await cerebro.leerNota(db, url.searchParams.get('id') || '', { peek: url.searchParams.get('peek') === '1', puedeEscribir: usuario?.rol === 'admin' || usuario?.rol === 'editor' });
     return n ? json(n) : error('esa nota no existe', 404);
   }
   { const r = await manejarNotas({ req, db, usuario, ruta, cuerpo }); if (r) return r; } // 27 oct 2026: escribir, añadir, papelera

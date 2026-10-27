@@ -143,6 +143,7 @@ export function initBrain({ esc }) {
      preview under the cursor and the view's buttons. */
   const ov = document.getElementById('brainOv');
   const SERVED = location.protocol.startsWith('http');
+  const lector = () => window.AO_NUBE?.yo?.()?.rol === 'lectura'; // en la nube, quien solo mira no ve «Nueva nota» (el servidor también lo niega)
   const stage = document.getElementById('bvStage'), side = document.getElementById('bvSide'), sideBtn = document.getElementById('bvOpenSide');
   const search = document.getElementById('bvSearch'); const chipsEl = document.getElementById('bvChips');
   const pane = document.getElementById('bvPane'); const meta = document.getElementById('bvMeta');
@@ -196,7 +197,7 @@ export function initBrain({ esc }) {
       (hood ? `<section class="bv-sec bv-hood"><h3>Vecindario</h3><div class="bv-hoodc"><span>Lo que está a ${hood.depth} ${hood.depth === 1 ? 'salto' : 'saltos'} de <b>${escHTML(hood.id)}</b></span><button type="button" class="bv-hoodx" aria-label="Quitar el vecindario" title="Quitar el vecindario">✕</button></div>${seg('hd', [['1', '1 salto'], ['2', '2 saltos'], ['3', '3 saltos']])}</section>` : '') +
       (match ? `<section class="bv-sec bv-tgs"><label class="bv-tg"><input type="checkbox" data-k="onlyHits"${F.onlyHits ? ' checked' : ''}> Solo lo que encontré</label></section>` : '') +
       (active ? '<button type="button" class="bv-reset">↺ Limpiar filtros</button>' : '') +
-      (SERVED ? '<section class="bv-sec bv-tools"><h3>Herramientas</h3><button type="button" class="bv-tool bv-new" title="Escribe una nota nueva: la leen todos los agentes">✎ Nueva nota</button><button type="button" class="bv-tool bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-tool bv-stale" title="Las notas que pueden estar viejas: los agentes las leen con un aviso">⏳ Notas por revisar</button><button type="button" class="bv-tool bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button></section>' : '') +
+      (SERVED ? '<section class="bv-sec bv-tools"><h3>Herramientas</h3>' + (lector() ? '' : '<button type="button" class="bv-tool bv-new" title="Escribe una nota nueva: la leen todos los agentes">✎ Nueva nota</button>') + '<button type="button" class="bv-tool bv-up" title="Un PDF, un Word, un Excel o un CSV se vuelve una nota que todos los agentes leen (también puedes soltarlo encima del Cerebro)">⬆ Subir documento</button><button type="button" class="bv-tool bv-stale" title="Las notas que pueden estar viejas: los agentes las leen con un aviso">⏳ Notas por revisar</button><button type="button" class="bv-tool bv-bin" title="Las notas que mandaste a la papelera: vuelven con un clic durante 30 días">🗑 Papelera</button></section>' : '') +
       `<details class="bv-sec bv-list"${listOpen ? ' open' : ''}><summary>Lista de notas <b>${shown}</b></summary><div class="bv-lst">${listOpen ? listHTML() : ''}</div></details>`;
     cnt.textContent = `${shown} de ${nodes.length}`;
     emptyEl.hidden = !(openNow && shown === 0);

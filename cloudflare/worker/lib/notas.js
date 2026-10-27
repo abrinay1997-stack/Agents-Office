@@ -21,6 +21,6 @@ export async function manejarNotas({ req, db, usuario, ruta, cuerpo }) {
   if (ruta === '/api/note' && metodo === 'PUT') { const r = await cerebro.guardarNota(db, { nombre: b.name, texto: b.text, base: b.base ?? null, por: quien(usuario) }); return sale(r, { name: r.nombre, modified: r.modified }); }
   if (ruta === '/api/note/append' && metodo === 'POST') { const r = await cerebro.agregarANota(db, { nombre: b.name, texto: b.text, seccion: b.section, por: quien(usuario) }); return sale(r, { name: r.nombre, modified: r.modified }); }
   if (ruta === '/api/note/trash' && metodo === 'POST') { const r = await cerebro.mandarAPapelera(db, b.id, { por: quien(usuario) }); return sale(r, { trashed: r.id, name: r.nombre }); }
-  if (ruta === '/api/note/restore' && metodo === 'POST') { const r = await cerebro.restaurarNota(db, b.file); return sale(r, { name: r.nombre }); }
+  if (ruta === '/api/note/restore' && metodo === 'POST') { const r = await cerebro.restaurarNota(db, b.file, { por: quien(usuario) }); return sale(r, { name: r.nombre }); }
   return null;
 }

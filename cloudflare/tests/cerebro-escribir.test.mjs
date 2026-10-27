@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SALTAR } from './d1-memoria.mjs';
 import { oficina, crearFetch, pagina, texto, filas } from './agentes-ayudas.mjs';
+import * as cerebro from '../worker/lib/cerebro.js';
 import { conNotasNuevas } from '../worker/lib/cerebro.js';
 import { podar, RETENCION_DIAS } from '../worker/lib/mantenimiento.js';
 
@@ -65,4 +66,30 @@ test('Dimitri: nota_crear y nota_agregar esperan el clic, se hacen con la sesió
   assert.equal((await leer(m, 'Reunión del lunes')).j.group, 'Reuniones'); assert.match((await leer(m, 'precios')).j.text, /Lista\.\n\n## Combos\n\nEl combo 2x1 vale 15\.\n$/);
   assert.equal((await m.p.admin('POST', '/api/sub/ops/undo', { msg: msg.id, k: 1 })).status, 200); assert.equal((await leer(m, 'precios')).j.text.trim(), '# Precios\n\nLista.', 'quita lo añadido y el título que creó');
   assert.equal((await m.p.admin('POST', '/api/sub/ops/undo', { msg: msg.id, k: 0 })).status, 200); assert.equal((await leer(m, 'Reunión del lunes')).status, 404); assert.equal((await m.p.admin('GET', '/api/note/trash')).j.items.some((i) => i.name === 'Reunión del lunes'), true, 'deshacer = a la papelera, nunca se pierde');
+});
+
+test('revisión de Codex: la papelera no se lleva una edición hecha entre la lectura y el traslado; restaurar queda en la auditoría; un lector no ve los botones de escribir', { skip: SALTAR }, async () => {
+  const m = await mundo(); nota(m.d1, 'precios', 'viejo', '10-Business');
+  const real = m.d1, carrera = { ...real, prepare: (sql) => { const st = real.prepare(sql); if (!/^select nombre, grupo, oficina, texto, bytes, actualizado, tarea from notas where nombre/.test(sql)) return st; return { bind: (...a) => { const b = st.bind(...a); return { first: async () => { const r = await b.first(); real._db.prepare("update notas set texto = 'editado justo ahora', actualizado = 2000 where nombre = 'precios'").run(); return r; } }; } }; } };
+  const r = await cerebro.mandarAPapelera(carrera, 'precios', { por: 'Ana' });
+  assert.equal(r.estado, 409, 'otra persona guardó entre medias: no se traslada'); assert.match(r.error, /cambió esta nota justo ahora/);
+  assert.equal(filas(m.d1, "select texto from notas where nombre = 'precios'")[0].texto, 'editado justo ahora', 'su edición sigue en pie');
+  assert.equal(filas(m.d1, 'select count(*) n from notas_papelera')[0].n, 0, 'y no quedó una copia vieja en la papelera');
+  const ok = await m.p.editor('POST', '/api/note/trash', { id: 'precios' }); assert.equal(ok.status, 200, ok.texto);
+  assert.equal((await m.p.editor('POST', '/api/note/restore', { file: ok.j.trashed })).status, 200);
+  const acciones = filas(m.d1, "select detalle, quien from auditoria where tipo = 'nota' order by id").map((f) => JSON.parse(f.detalle).accion);
+  assert.deepEqual(acciones, ['papelera', 'restaurar'], 'restaurar también deja quién y cuándo'); assert.ok(filas(m.d1, "select quien from auditoria where detalle like '%restaurar%'")[0].quien.length > 0);
+  const vista = (await leer(m, 'precios')).j, lector = await m.p.lectura('GET', '/api/note?id=precios');
+  assert.deepEqual([vista.editable, vista.deletable], [true, true]); assert.deepEqual([lector.j.editable, lector.j.deletable], [false, false], 'un lector solo mira: la página no le ofrece Editar ni la papelera');
+});
+
+test('revisión de Codex: DESHACER de «añadir a una nota» no pisa lo que alguien editó después, aunque lo añadido siga siendo un pedazo del texto', { skip: SALTAR }, async () => {
+  const plan = { reply: 'Lo anoto.', ops: [{ type: 'nota_agregar', nombre: 'precios', texto: 'Descuento: 10%', seccion: 'Combos' }] };
+  const m = await mundo({ guion: [dimitri(plan)] }); nota(m.d1, 'precios', '# Precios\n\nLista.', '10-Business');
+  const c = await m.p.admin('POST', '/api/sub/chat', { text: 'Anota el descuento en precios' }); const msg = c.j.messages.find((x) => x.who === 'sub');
+  assert.equal((await m.p.admin('POST', '/api/sub/ops', { msg: msg.id, items: [{ k: 0, include: true }] })).status, 200);
+  const hoy = (await leer(m, 'precios')).j; assert.match(hoy.text, /Descuento: 10%/);
+  assert.equal((await m.p.editor('PUT', '/api/note', { name: 'precios', text: hoy.text.replace('10%', '10% + IVA'), base: hoy.modified })).status, 200, 'alguien lo mejora después');
+  const u = await m.p.admin('POST', '/api/sub/ops/undo', { msg: msg.id, k: 0 }); assert.equal(u.status, 409, u.texto); assert.match(u.j.error, /cambió después/);
+  assert.match((await leer(m, 'precios')).j.text, /Descuento: 10% \+ IVA/, 'su versión sigue intacta');
 });
